@@ -1,0 +1,23 @@
+[package]
+authors = ["xupremix <xupremix.me@gmail.com>"]
+name = "kindle-macros"
+edition.workspace = true
+version.workspace = true
+readme.workspace = true
+license.workspace = true
+
+[lib]
+proc-macro = true
+
+[lints]
+workspace = true
+
+[features]
+default = ["std"]
+std = []
+nightly = []
+
+[dependencies]
+proc-macro2 = { workspace = true}
+syn = { workspace = true }
+quote = { workspace = true }

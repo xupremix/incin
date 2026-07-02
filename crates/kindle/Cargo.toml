@@ -1,0 +1,22 @@
+[package]
+authors = ["xupremix <xupremix.me@gmail.com>"]
+name = "kindle"
+edition.workspace = true
+version.workspace = true
+readme.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+default = ["std"]
+std = ["kindle-core/std", "kindle-macros/std"]
+nightly = ["kindle-core/nightly", "kindle-macros/nightly"]
+cuda = ["kindle-core/cuda"]
+metal = ["kindle-core/metal"]
+
+[dependencies]
+
+kindle-core = { path = "../kindle-core", version = "0.1.0", default-features = false }
+kindle-macros = { path = "../kindle-macros/", version = "0.1.0", default-features = false }
