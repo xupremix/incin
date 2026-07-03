@@ -7,8 +7,10 @@
 
 pub use kindle_core::*;
 
+pub use kindle_macros::{module, forward};
+
 pub mod macros {
-    pub use kindle_macros::s;
+    pub use kindle_macros::{impl_arg_into, s, idx};
 }
 
 pub mod prelude {
