@@ -19,6 +19,7 @@ pub trait Shape: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
         + IndexMut<usize>
         + AsRef<[usize]>;
     fn init(arg: Self::Arg) -> Self::Field;
+    fn from_dyn(dims: &[usize]) -> Option<Self::Field>;
 }
 
 pub trait DynShape: Shape {
@@ -46,6 +47,9 @@ impl Shape for Dyn {
     type Dims = Vec<usize>;
     fn init(arg: Self::Arg) -> Self::Field {
         arg
+    }
+    fn from_dyn(dims: &[usize]) -> Option<Self::Field> {
+        Some(dims.to_vec())
     }
 }
 
@@ -77,6 +81,14 @@ macro_rules! impl_shape_for_tuple {
             type Dims = [usize; ($n)];
             fn init(arg: Self::Arg) -> Self::Field {
                 ($(Dim::from_arg(arg.$idx),)*)
+            }
+            fn from_dyn(dims: &[usize]) -> Option<Self::Field> {
+                if dims.len() != $n {
+                    return None;
+                }
+                Some(($(
+                    $name::from_size(dims[$idx])?,
+                )*))
             }
         }
         impl< $($name: Dim,)* > PartialDynShape for ( $($name,)*) {
@@ -111,6 +123,9 @@ macro_rules! impl_shape_for_tuple {
             fn init(arg: Self::Arg) -> Self::Field {
                 arg
             }
+            fn from_dyn(dims: &[usize]) -> Option<Self::Field> {
+                dims.try_into().ok()
+            }
         }
         impl DynShape for [usize; ($n)] {
             #[inline(always)]
@@ -139,6 +154,13 @@ impl Shape for () {
     type Field = ();
     type Dims = [usize; 0];
     fn init(_: Self::Arg) {}
+    fn from_dyn(dims: &[usize]) -> Option<Self::Field> {
+        if dims.is_empty() {
+            Some(())
+        } else {
+            None
+        }
+    }
 }
 
 impl PartialDynShape for () {
@@ -181,6 +203,9 @@ impl<D: Dim> Shape for Vec<D> {
     type Dims = Vec<usize>;
     fn init(arg: Self::Arg) -> Self::Field {
         arg
+    }
+    fn from_dyn(dims: &[usize]) -> Option<Self::Field> {
+        dims.iter().map(|&d| D::from_size(d)).collect()
     }
 }
 

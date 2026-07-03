@@ -4,7 +4,32 @@
 //! This ensures at compile time that you can't accidentally add tensors
 //! of different shapes, dtypes, or on different devices.
 
-use crate::prelude::{Backend, DType, Device, RequiresGrad, Result, Shape, Tensor};
+use crate::prelude::{Backend, DType, Device, RequiresGrad, Result, Shape, DynShape, Tensor, Dyn};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IndexSpec {
+    All,
+    Range(usize, usize),
+    RangeFrom(usize),
+    RangeTo(usize),
+    Index(usize),
+}
+
+impl From<usize> for IndexSpec {
+    fn from(idx: usize) -> Self { IndexSpec::Index(idx) }
+}
+impl From<core::ops::Range<usize>> for IndexSpec {
+    fn from(r: core::ops::Range<usize>) -> Self { IndexSpec::Range(r.start, r.end) }
+}
+impl From<core::ops::RangeFrom<usize>> for IndexSpec {
+    fn from(r: core::ops::RangeFrom<usize>) -> Self { IndexSpec::RangeFrom(r.start) }
+}
+impl From<core::ops::RangeTo<usize>> for IndexSpec {
+    fn from(r: core::ops::RangeTo<usize>) -> Self { IndexSpec::RangeTo(r.end) }
+}
+impl From<core::ops::RangeFull> for IndexSpec {
+    fn from(_: core::ops::RangeFull) -> Self { IndexSpec::All }
+}
 
 // ============================================================================
 // Element-wise binary ops via std::ops
@@ -187,6 +212,44 @@ impl<S: Shape, B: Backend, T: DType, D: Device, G: RequiresGrad> Tensor<S, B, T,
         Ok(Tensor::<_, B, _, _, _>::from_parts(
             inner,
             (),
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        ))
+    }
+}
+
+// ============================================================================
+// Slice operations (dynamic shapes)
+// ============================================================================
+
+impl<S: DynShape, B: Backend, T: DType, D: Device, G: RequiresGrad> Tensor<S, B, T, D, G> {
+    pub fn slice(&self, specs: &[IndexSpec]) -> Result<Tensor<Dyn, B, T, D, G>> {
+        let mut inner = self.inner.clone();
+        for (dim, spec) in specs.iter().enumerate() {
+            match spec {
+                IndexSpec::All => {}
+                IndexSpec::Range(start, end) => {
+                    inner = inner.narrow(dim, *start, *end - *start)?;
+                }
+                IndexSpec::RangeFrom(start) => {
+                    let len = inner.dims()[dim] - start;
+                    inner = inner.narrow(dim, *start, len)?;
+                }
+                IndexSpec::RangeTo(end) => {
+                    inner = inner.narrow(dim, 0, *end)?;
+                }
+                IndexSpec::Index(idx) => {
+                    inner = inner.narrow(dim, *idx, 1)?.squeeze(dim)?;
+                }
+            }
+        }
+        
+        let new_shape: alloc::vec::Vec<usize> = inner.dims().to_vec();
+        
+        Ok(Tensor::<Dyn, B, T, D, G>::from_parts(
+            inner,
+            new_shape,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),

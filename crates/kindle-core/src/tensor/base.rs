@@ -320,6 +320,32 @@ where
 }
 
 // ============================================================================
+// Dynamic-to-Static Boundary (TryInto equivalent)
+// ============================================================================
+
+impl<S1: DynShape, B: Backend, T: DType, D: Device, G: RequiresGrad> Tensor<S1, B, T, D, G> {
+    /// Attempt to cast this tensor to a new shape `S2` at runtime.
+    /// This verifies that the dynamic dimensions exactly match the requested static shape.
+    pub fn into_shape<S2: Shape>(self) -> Result<Tensor<S2, B, T, D, G>> {
+        let current_dims = S1::dims(&self._shape);
+        let new_shape = S2::from_dyn(current_dims.as_ref())
+            .ok_or_else(|| candle::Error::Msg(alloc::format!(
+                "Shape mismatch during dynamic-to-static boundary conversion. Expected shape compatible with {:?}, but got {:?}",
+                core::any::type_name::<S2>(),
+                current_dims.as_ref()
+            )))?;
+        
+        Ok(Tensor::<S2, B, T, D, G>::from_parts(
+            self.inner,
+            new_shape,
+            self._dtype,
+            self._device,
+            self._grad,
+        ))
+    }
+}
+
+// ============================================================================
 // Grad transitions — change the gradient tracking at the type level
 // ============================================================================
 

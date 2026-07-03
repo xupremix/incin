@@ -17,4 +17,5 @@ pub mod prelude {
     pub use super::dtype::*;
     pub use super::grad::*;
     pub use super::matmul::*;
+    pub use super::ops::*;
 }

@@ -2,6 +2,7 @@ use proc_macro::TokenStream;
 
 mod arg_into;
 mod shape;
+mod idx;
 
 #[proc_macro]
 pub fn s(input: TokenStream) -> TokenStream {
@@ -11,4 +12,9 @@ pub fn s(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn impl_arg_into(input: TokenStream) -> TokenStream {
     arg_into::impl_arg_into(input)
+}
+
+#[proc_macro]
+pub fn idx(input: TokenStream) -> TokenStream {
+    idx::idx(input)
 }
