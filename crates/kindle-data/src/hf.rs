@@ -1,4 +1,5 @@
 use kindle_core::prelude::*;
+use kindle_backends::candle::CandleBackend;
 use candle_core::safetensors::load;
 use hf_hub::api::tokio::Api;
 use std::path::PathBuf;
@@ -9,21 +10,19 @@ pub struct HuggingFaceHub;
 impl HuggingFaceHub {
     /// Download a file from a HuggingFace repository and return its local path.
     pub async fn download(repo_id: &str, filename: &str) -> Result<PathBuf> {
-        let api = Api::new().map_err(|e| candle_core::Error::Msg(format!("HF Hub Error: {:?}", e)))?;
+        let api = Api::new().map_err(anyhow::Error::from)?;
         let repo = api.model(repo_id.to_string());
         
-        let path = repo.get(filename).await
-            .map_err(|e| candle_core::Error::Msg(format!("Failed to download {}: {:?}", filename, e)))?;
+        let path = repo.get(filename).await.map_err(anyhow::Error::from)?;
             
         Ok(path)
     }
 
     /// Download and load a Safetensors file into a map of dynamic Kindle tensors.
-    pub async fn load_safetensors(repo_id: &str, filename: &str, candle_device: &candle_core::Device) -> Result<std::collections::HashMap<String, Tensor<Dyn>>> {
+    pub async fn load_safetensors(repo_id: &str, filename: &str, candle_device: &candle_core::Device) -> Result<std::collections::HashMap<String, Tensor<Dyn, CandleBackend>>> {
         let path = Self::download(repo_id, filename).await?;
         
-        let loaded = load(&path, candle_device)
-            .map_err(|e| candle_core::Error::Msg(format!("Failed to load safetensors: {:?}", e)))?;
+        let loaded = load(&path, candle_device).map_err(anyhow::Error::from)?;
             
         let mut result = std::collections::HashMap::new();
         

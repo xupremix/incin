@@ -1,17 +1,13 @@
 use core::fmt::Debug;
 use core::marker::PhantomData;
 
-use crate::{
-    candle,
-    prelude::{Dyn, Result},
-};
+use crate::prelude::{Dyn, Result};
 
 pub trait Device: 'static + Send + Sync + Clone + Eq + PartialEq + Debug + Sized {
     type Arg;
     type Field: Debug + Clone;
-    type Device;
     fn init(arg: Self::Arg) -> Self::Field;
-    fn device(dev: &Self::Field) -> Result<Self::Device>;
+    fn to_kindle(dev: &Self::Field) -> Result<KindleDevice>;
 }
 pub trait DynDevice: Device {}
 pub trait ConstDevice: Default + Device<Arg = ()> {}
@@ -19,7 +15,7 @@ pub trait ConstDevice: Default + Device<Arg = ()> {}
 #[cfg(feature = "cuda")]
 pub mod cuda {
 
-    use super::{ConstDevice, Device, PhantomData, Result, candle};
+    use super::{ConstDevice, Device, PhantomData, Result, KindleDevice};
 
     #[derive(Debug, Default, Clone, PartialEq, Eq)]
     pub struct Cuda<const N: usize = 0>;
@@ -29,10 +25,9 @@ pub mod cuda {
     impl<const N: usize> Device for Cuda<N> {
         type Arg = ();
         type Field = PhantomData<Self>;
-        type Device = candle::Device;
 
-        fn device(_: &Self::Field) -> Result<Self::Device> {
-            Ok(candle::Device::new_cuda(N)?)
+        fn to_kindle(_: &Self::Field) -> Result<KindleDevice> {
+            Ok(KindleDevice::cuda(N))
         }
 
         fn init(_: Self::Arg) -> Self::Field {
@@ -48,7 +43,7 @@ pub use cuda::*;
 
 #[cfg(feature = "metal")]
 pub mod metal {
-    use super::{ConstDevice, Device, PhantomData, Result, candle};
+    use super::{ConstDevice, Device, PhantomData, Result, KindleDevice};
 
     #[derive(Debug, Default, Clone, PartialEq, Eq)]
     pub struct Metal<const N: usize = 0>;
@@ -58,10 +53,9 @@ pub mod metal {
     impl<const N: usize> Device for Metal<N> {
         type Arg = ();
         type Field = PhantomData<Self>;
-        type Device = candle::Device;
 
-        fn device(_: &Self::Field) -> Result<Self::Device> {
-            Ok(candle::Device::new_metal(N)?)
+        fn to_kindle(_: &Self::Field) -> Result<KindleDevice> {
+            Ok(KindleDevice::metal(N))
         }
 
         fn init(_: Self::Arg) -> Self::Field {
@@ -83,10 +77,9 @@ impl ConstDevice for Cpu {}
 impl Device for Cpu {
     type Arg = ();
     type Field = PhantomData<Self>;
-    type Device = candle::Device;
 
-    fn device(_: &Self::Field) -> Result<Self::Device> {
-        Ok(candle::Device::Cpu)
+    fn to_kindle(_: &Self::Field) -> Result<KindleDevice> {
+        Ok(KindleDevice::cpu())
     }
 
     fn init(_: Self::Arg) -> Self::Field {
@@ -98,16 +91,9 @@ impl DynDevice for Cpu {}
 impl Device for Dyn {
     type Arg = KindleDevice;
     type Field = KindleDevice;
-    type Device = candle::Device;
 
-    fn device(dev: &Self::Field) -> Result<<Dyn as Device>::Device> {
-        Ok(match &dev.0 {
-            DeviceVariant::Cpu => candle::Device::Cpu,
-            #[cfg(feature = "cuda")]
-            DeviceVariant::Cuda(ord) => candle::Device::new_cuda(ord)?,
-            #[cfg(feature = "metal")]
-            DeviceVariant::Metal(ord) => candle::Device::new_metal(ord)?,
-        })
+    fn to_kindle(dev: &Self::Field) -> Result<KindleDevice> {
+        Ok(dev.clone())
     }
 
     fn init(arg: Self::Arg) -> Self::Field {
@@ -129,6 +115,10 @@ pub enum DeviceVariant {
 pub struct KindleDevice(DeviceVariant);
 
 impl KindleDevice {
+    pub fn variant(&self) -> DeviceVariant {
+        self.0
+    }
+
     pub fn cpu() -> Self {
         Self(DeviceVariant::Cpu)
     }
@@ -149,4 +139,27 @@ pub const fn cuda_is_available() -> bool {
 }
 pub const fn metal_is_available() -> bool {
     cfg!(feature = "metal")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_device_variants() {
+        let cpu = KindleDevice::cpu();
+        assert_eq!(cpu.variant(), DeviceVariant::Cpu);
+        
+        #[cfg(feature = "cuda")]
+        {
+            let cuda = KindleDevice::cuda(0);
+            assert_eq!(cuda.variant(), DeviceVariant::Cuda(0));
+        }
+
+        #[cfg(feature = "metal")]
+        {
+            let metal = KindleDevice::metal(0);
+            assert_eq!(metal.variant(), DeviceVariant::Metal(0));
+        }
+    }
 }

@@ -1,77 +1,15 @@
-error[E0412]: cannot find type `Cuda` in this scope
- --> tests/ui/device_mismatch.rs:5:44
-  |
-5 |     let b: Tensor<Dyn, CandleBackend, f32, Cuda, Grad> = Tensor::zeros(()).unwrap();
-  |                                            ^^^^ not found in this scope
-  |
-help: there is an enum variant `candle_core::Device::Cuda` and 10 others; try using the variant's enum
-  |
-5 -     let b: Tensor<Dyn, CandleBackend, f32, Cuda, Grad> = Tensor::zeros(()).unwrap();
-5 +     let b: Tensor<Dyn, CandleBackend, f32, candle_core::Device, Grad> = Tensor::zeros(()).unwrap();
-  |
-5 -     let b: Tensor<Dyn, CandleBackend, f32, Cuda, Grad> = Tensor::zeros(()).unwrap();
-5 +     let b: Tensor<Dyn, CandleBackend, f32, candle_core::DeviceLocation, Grad> = Tensor::zeros(()).unwrap();
-  |
-5 -     let b: Tensor<Dyn, CandleBackend, f32, Cuda, Grad> = Tensor::zeros(()).unwrap();
-5 +     let b: Tensor<Dyn, CandleBackend, f32, candle_core::Error, Grad> = Tensor::zeros(()).unwrap();
-  |
-5 -     let b: Tensor<Dyn, CandleBackend, f32, Cuda, Grad> = Tensor::zeros(()).unwrap();
-5 +     let b: Tensor<Dyn, CandleBackend, f32, candle_core::Storage, Grad> = Tensor::zeros(()).unwrap();
-  |
-  = and 6 other candidates
-
-error[E0277]: the trait bound `(): ArgInto<Vec<usize>>` is not satisfied
- --> tests/ui/device_mismatch.rs:4:71
-  |
-4 |     let a: Tensor<Dyn, CandleBackend, f32, Cpu, Grad> = Tensor::zeros(()).unwrap();
-  |                                                         ------------- ^^ the trait `ArgInto<Vec<usize>>` is not implemented for `()`
-  |                                                         |
-  |                                                         required by a bound introduced by this call
-  |
-  = help: the following other types implement trait `ArgInto<Target>`:
-            `()` implements `ArgInto<((), (), (), ())>`
-            `()` implements `ArgInto<()>`
-            `()` implements `ArgInto<(kindle_core::prelude::Const<N1>, kindle_core::prelude::Const<N2>)>`
-            `()` implements `ArgInto<(kindle_core::prelude::Const<N1>, kindle_core::prelude::Const<N2>, kindle_core::prelude::Const<N3>)>`
-            `()` implements `ArgInto<(kindle_core::prelude::Const<N1>, kindle_core::prelude::Const<N2>, kindle_core::prelude::Const<N3>, kindle_core::prelude::Const<N4>)>`
-            `()` implements `ArgInto<(kindle_core::prelude::Const<N1>, kindle_core::prelude::Const<N2>, kindle_core::prelude::Const<N3>, kindle_core::prelude::Const<N4>, kindle_core::prelude::Const<N5>)>`
-            `()` implements `ArgInto<(kindle_core::prelude::Const<N1>, kindle_core::prelude::Const<N2>, kindle_core::prelude::Const<N3>, kindle_core::prelude::Const<N4>, kindle_core::prelude::Const<N5>, kindle_core::prelude::Const<N6>)>`
-            `()` implements `ArgInto<(kindle_core::prelude::Const<N1>, kindle_core::prelude::Const<N2>, kindle_core::prelude::Const<N3>, kindle_core::prelude::Const<N4>, kindle_core::prelude::Const<N5>, kindle_core::prelude::Const<N6>, kindle_core::prelude::Const<N7>)>`
-            `()` implements `ArgInto<(kindle_core::prelude::Const<N1>,)>`
-  = note: required for `()` to implement `ArgInto<(Vec<usize>, (), (), ())>`
-note: required by a bound in `kindle_core::prelude::Tensor::<S, B, T, D, G>::zeros`
- --> src/tensor/base.rs
-  |
-  |     pub fn zeros<A>(args: A) -> Result<Self>
-  |            ----- required by a bound in this associated function
-  |     where
-  |         A: ArgInto<<(S, T, D, G) as TensorArgs<S, T, D, G>>::Args>,
-  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `Tensor::<S, B, T, D, G>::zeros`
-
-error[E0277]: the trait bound `(): ArgInto<Vec<usize>>` is not satisfied
- --> tests/ui/device_mismatch.rs:5:72
-  |
-5 |     let b: Tensor<Dyn, CandleBackend, f32, Cuda, Grad> = Tensor::zeros(()).unwrap();
-  |                                                          ------------- ^^ the trait `ArgInto<Vec<usize>>` is not implemented for `()`
-  |                                                          |
-  |                                                          required by a bound introduced by this call
-  |
-  = help: the following other types implement trait `ArgInto<Target>`:
-            `()` implements `ArgInto<((), (), (), ())>`
-            `()` implements `ArgInto<()>`
-            `()` implements `ArgInto<(kindle_core::prelude::Const<N1>, kindle_core::prelude::Const<N2>)>`
-            `()` implements `ArgInto<(kindle_core::prelude::Const<N1>, kindle_core::prelude::Const<N2>, kindle_core::prelude::Const<N3>)>`
-            `()` implements `ArgInto<(kindle_core::prelude::Const<N1>, kindle_core::prelude::Const<N2>, kindle_core::prelude::Const<N3>, kindle_core::prelude::Const<N4>)>`
-            `()` implements `ArgInto<(kindle_core::prelude::Const<N1>, kindle_core::prelude::Const<N2>, kindle_core::prelude::Const<N3>, kindle_core::prelude::Const<N4>, kindle_core::prelude::Const<N5>)>`
-            `()` implements `ArgInto<(kindle_core::prelude::Const<N1>, kindle_core::prelude::Const<N2>, kindle_core::prelude::Const<N3>, kindle_core::prelude::Const<N4>, kindle_core::prelude::Const<N5>, kindle_core::prelude::Const<N6>)>`
-            `()` implements `ArgInto<(kindle_core::prelude::Const<N1>, kindle_core::prelude::Const<N2>, kindle_core::prelude::Const<N3>, kindle_core::prelude::Const<N4>, kindle_core::prelude::Const<N5>, kindle_core::prelude::Const<N6>, kindle_core::prelude::Const<N7>)>`
-            `()` implements `ArgInto<(kindle_core::prelude::Const<N1>,)>`
-  = note: required for `()` to implement `ArgInto<(Vec<usize>, (), {type error}, ())>`
-note: required by a bound in `kindle_core::prelude::Tensor::<S, B, T, D, G>::zeros`
- --> src/tensor/base.rs
-  |
-  |     pub fn zeros<A>(args: A) -> Result<Self>
-  |            ----- required by a bound in this associated function
-  |     where
-  |         A: ArgInto<<(S, T, D, G) as TensorArgs<S, T, D, G>>::Args>,
-  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `Tensor::<S, B, T, D, G>::zeros`
+error[E0308]: mismatched types
+  --> tests/ui/device_mismatch.rs:37:20
+   |
+37 |     let _c = a.add(&b);
+   |                --- ^^ expected `&Tensor<Dyn, DummyBackend>`, found `&Tensor<Dyn, DummyBackend, f32, MockGpu>`
+   |                |
+   |                arguments to this method are incorrect
+   |
+   = note: expected reference `&kindle_core::prelude::Tensor<kindle_core::prelude::Dyn, DummyBackend, f32, kindle_core::prelude::Cpu, kindle_core::prelude::Grad>`
+              found reference `&kindle_core::prelude::Tensor<kindle_core::prelude::Dyn, DummyBackend, f32, MockGpu, kindle_core::prelude::Grad>`
+note: method defined here
+  --> src/tensor/ops.rs
+   |
+   | impl_binary_op!(Add, add, add);
+   |                      ^^^

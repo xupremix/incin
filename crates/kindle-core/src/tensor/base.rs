@@ -1,66 +1,31 @@
-use crate::{
-    candle,
-    prelude::{
-        ArgInto, Backend, CandleBackend, ConstDType, ConstDevice, ConstRequiresGrad, ConstShape, DType, Device,
-        DynShape, Grad, NoGrad, RequiresGrad, Result, Shape, TensorArgs,
-    },
+use crate::prelude::{
+    ArgInto, Backend, ConstDType, ConstDevice, ConstRequiresGrad, ConstShape, DType, Device,
+    DynShape, Grad, NoGrad, RequiresGrad, Result, Shape, TensorArgs, KindleDevice, KindleDType, Error
 };
 
-///
-/// Struct which indicates a dynamic parameter of a tensor,
-/// that can be:
-/// - Shape
-/// - DType
-/// - Device
-/// - RequiresGrad
-///
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Dyn(());
 
-/// A type-safe tensor wrapping a `candle_core::Tensor`.
-///
-/// Generic over four axes:
-/// - `S`: Shape — determines the rank and dimension sizes
-/// - `T`: DType — the element type (f32, f64, u8, etc. or Dyn)
-/// - `D`: Device — where the tensor lives (Cpu, Cuda<N>, or Dyn)
-/// - `G`: RequiresGrad — whether gradients are tracked
-///
-/// Each axis can be either:
-/// - **Static** (compile-time known): `Const<N>`, `f32`, `Cpu`, `Grad`/`NoGrad`
-/// - **Dynamic** (runtime known): `Dyn`, `usize`
-///
-/// Static parameters are zero-cost (PhantomData) and enable compile-time checks.
-/// Dynamic parameters carry runtime values and operations return `Result`.
 #[derive(Debug)]
 pub struct Tensor<
     S: Shape,
-    B: Backend = CandleBackend,
+    B: Backend<S>,
     T: DType = f32,
     #[cfg(feature = "cuda")] D: Device = crate::prelude::Cuda,
     #[cfg(all(not(feature = "cuda"), feature = "metal"))] D: Device = crate::prelude::Metal,
     #[cfg(all(not(feature = "cuda"), not(feature = "metal")))] D: Device = crate::prelude::Cpu,
     G: RequiresGrad = Grad,
 > {
-    pub(crate) inner: candle::Tensor,
+    pub(crate) inner: B::RawTensor,
     pub(crate) _shape: S::Field,
     pub(crate) _dtype: T::Field,
     pub(crate) _device: D::Field,
     pub(crate) _grad: G::Field,
-    pub(crate) _backend: core::marker::PhantomData<B>,
 }
 
-// ============================================================================
-// Core construction
-// ============================================================================
-
-impl<S: Shape, B: Backend, T: DType, D: Device, G: RequiresGrad> Tensor<S, B, T, D, G> {
-    /// Wrap an existing `candle::Tensor` with type-level metadata.
-    ///
-    /// # Safety contract (not unsafe, but the caller must ensure correctness):
-    /// The caller is responsible for ensuring the candle tensor's actual
-    /// shape, dtype, and device match the type parameters S, T, D.
+impl<S: Shape, B: Backend<S>, T: DType, D: Device, G: RequiresGrad> Tensor<S, B, T, D, G> {
     pub fn from_parts(
-        inner: candle::Tensor,
+        inner: B::RawTensor,
         shape: S::Field,
         dtype: T::Field,
         device: D::Field,
@@ -72,268 +37,168 @@ impl<S: Shape, B: Backend, T: DType, D: Device, G: RequiresGrad> Tensor<S, B, T,
             _dtype: dtype,
             _device: device,
             _grad: grad,
-            _backend: core::marker::PhantomData,
         }
     }
 
-    /// Access the underlying `candle::Tensor`.
     #[inline]
-    pub fn inner(&self) -> &candle::Tensor {
+    pub fn inner(&self) -> &B::RawTensor {
         &self.inner
     }
 
-    /// Consume self and return the underlying `candle::Tensor`.
     #[inline]
-    pub fn into_inner(self) -> candle::Tensor {
+    pub fn into_inner(self) -> B::RawTensor {
         self.inner
     }
 
-    /// Get the shape metadata field.
     #[inline]
     pub fn shape_field(&self) -> &S::Field {
         &self._shape
     }
 }
 
-// ============================================================================
-// Factory methods for tensors with DynShape (all practical shapes)
-// ============================================================================
-
-impl<S, B: Backend, T, D, G> Tensor<S, B, T, D, G>
+impl<S, B: Backend<S>, T, D, G> Tensor<S, B, T, D, G>
 where
     S: Shape + DynShape,
-    T: DType<DType = candle::DType>,
-    D: Device<Device = candle::Device>,
+    T: DType,
+    D: Device,
     G: RequiresGrad,
     (S, T, D, G): TensorArgs<S, T, D, G>,
 {
-    /// Create a tensor filled with zeros.
-    ///
-    /// ```ignore
-    /// // Fully static — no args needed
-    /// let t = Tensor::<(Const<2>, Const<3>), f32, Cpu, Grad>::zeros(())?;
-    ///
-    /// // Dynamic shape
-    /// let t = Tensor::<Dyn, f32, Cpu, NoGrad>::zeros([2, 3])?;
-    ///
-    /// // Dynamic shape + grad
-    /// let t = Tensor::<Dyn, f32, Cpu, Dyn>::zeros(([2, 3], true))?;
-    /// ```
     pub fn zeros<A>(args: A) -> Result<Self>
     where
         A: ArgInto<<(S, T, D, G) as TensorArgs<S, T, D, G>>::Args>,
     {
         let (_shape, _dtype, _device, _grad) = <(S, T, D, G)>::construct(args.into_arg());
         let dims: S::Dims = S::dims(&_shape);
-        let device = D::device(&_device)?;
-        let dtype = T::dtype(&_dtype);
-        let inner = candle::Tensor::zeros(dims.as_ref(), dtype, &device)?;
+        let device = D::to_kindle(&_device)?;
+        let dtype = T::to_kindle(&_dtype);
+        let inner = B::zeros(dims.as_ref(), dtype, &device)?;
         Ok(Tensor::<_, B, _, _, _>::from_parts(inner, _shape, _dtype, _device, _grad))
     }
 
-    /// Create a tensor filled with ones.
     pub fn ones<A>(args: A) -> Result<Self>
     where
         A: ArgInto<<(S, T, D, G) as TensorArgs<S, T, D, G>>::Args>,
     {
         let (_shape, _dtype, _device, _grad) = <(S, T, D, G)>::construct(args.into_arg());
         let dims = S::dims(&_shape);
-        let device = D::device(&_device)?;
-        let dtype = T::dtype(&_dtype);
-        let inner = candle::Tensor::ones(dims.as_ref(), dtype, &device)?;
+        let device = D::to_kindle(&_device)?;
+        let dtype = T::to_kindle(&_dtype);
+        let inner = B::ones(dims.as_ref(), dtype, &device)?;
         Ok(Tensor::<_, B, _, _, _>::from_parts(inner, _shape, _dtype, _device, _grad))
     }
 
-    /// Create a tensor with random values drawn from a uniform distribution [0, 1).
     pub fn rand<A>(args: A) -> Result<Self>
     where
         A: ArgInto<<(S, T, D, G) as TensorArgs<S, T, D, G>>::Args>,
     {
         let (_shape, _dtype, _device, _grad) = <(S, T, D, G)>::construct(args.into_arg());
         let dims = S::dims(&_shape);
-        let device = D::device(&_device)?;
-        let dtype = T::dtype(&_dtype);
-        let inner = candle::Tensor::rand(0f32, 1f32, dims.as_ref(), &device)?.to_dtype(dtype)?;
+        let device = D::to_kindle(&_device)?;
+        let dtype = T::to_kindle(&_dtype);
+        let inner = B::rand(dims.as_ref(), dtype, &device)?;
         Ok(Tensor::<_, B, _, _, _>::from_parts(inner, _shape, _dtype, _device, _grad))
     }
 
-    /// Create a tensor with random values from a standard normal distribution.
     pub fn randn<A>(args: A) -> Result<Self>
     where
         A: ArgInto<<(S, T, D, G) as TensorArgs<S, T, D, G>>::Args>,
     {
         let (_shape, _dtype, _device, _grad) = <(S, T, D, G)>::construct(args.into_arg());
         let dims = S::dims(&_shape);
-        let device = D::device(&_device)?;
-        let dtype = T::dtype(&_dtype);
-        let inner =
-            candle::Tensor::randn(0f32, 1f32, dims.as_ref(), &device)?.to_dtype(dtype)?;
+        let device = D::to_kindle(&_device)?;
+        let dtype = T::to_kindle(&_dtype);
+        let inner = B::randn(dims.as_ref(), dtype, &device)?;
         Ok(Tensor::<_, B, _, _, _>::from_parts(inner, _shape, _dtype, _device, _grad))
     }
 
-    /// Wrap an existing candle::Tensor, validating shape metadata.
-    pub fn from_candle<A>(candle_tensor: candle::Tensor, args: A) -> Result<Self>
+    pub fn from_raw<A>(raw_tensor: B::RawTensor, args: A) -> Result<Self>
     where
         A: ArgInto<<(S, T, D, G) as TensorArgs<S, T, D, G>>::Args>,
     {
         let (_shape, _dtype, _device, _grad) = <(S, T, D, G)>::construct(args.into_arg());
-        Ok(Tensor::<_, B, _, _, _>::from_parts(candle_tensor, _shape, _dtype, _device, _grad))
+        Ok(Tensor::<_, B, _, _, _>::from_parts(raw_tensor, _shape, _dtype, _device, _grad))
     }
 }
 
-// ============================================================================
-// from_slice — only for compile-time-known dtype (ConstDType)
-// ============================================================================
-
-impl<S, B: Backend, T, D, G> Tensor<S, B, T, D, G>
-where
-    S: Shape + DynShape,
-    T: ConstDType<DType = candle::DType>,
-    D: Device<Device = candle::Device>,
-    G: RequiresGrad,
-    T::Elem: candle::WithDType,
-    (S, T, D, G): TensorArgs<S, T, D, G>,
-{
-    /// Create a tensor from a data slice.
-    ///
-    /// Only available when DType is statically known (not Dyn),
-    /// so the element type `T::Elem` is compile-time determined.
-    ///
-    /// ```ignore
-    /// let t = Tensor::<(Const<2>, Const<3>), f32, Cpu, NoGrad>::from_slice(
-    ///     &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-    ///     (),
-    /// )?;
-    /// ```
-    pub fn from_slice<A>(data: &[T::Elem], args: A) -> Result<Self>
-    where
-        A: ArgInto<<(S, T, D, G) as TensorArgs<S, T, D, G>>::Args>,
-    {
-        let (_shape, _dtype, _device, _grad) = <(S, T, D, G)>::construct(args.into_arg());
-        let dims = S::dims(&_shape);
-        let device = D::device(&_device)?;
-        let inner = candle::Tensor::new(data, &device)?.reshape(dims.as_ref())?;
-        Ok(Tensor::<_, B, _, _, _>::from_parts(inner, _shape, _dtype, _device, _grad))
-    }
-}
-
-// ============================================================================
-// Fully-static convenience constructors (no args needed at all)
-// ============================================================================
-
-impl<S, B: Backend, T, D, G> Tensor<S, B, T, D, G>
+impl<S, B: Backend<S>, T, D, G> Tensor<S, B, T, D, G>
 where
     S: ConstShape + DynShape,
-    T: ConstDType<DType = candle::DType>,
-    D: ConstDevice<Device = candle::Device>,
+    T: ConstDType,
+    D: ConstDevice,
     G: ConstRequiresGrad,
 {
-    /// Create a zeros tensor with fully compile-time-known parameters.
     pub fn static_zeros() -> Result<Self> {
         let _shape = S::Field::default();
         let _dtype = T::init(());
         let _device = D::init(());
         let _grad = G::init(());
         let dims = S::DIMS;
-        let device = D::device(&_device)?;
+        let device = D::to_kindle(&_device)?;
         let dtype = T::DTYPE;
-        let inner = candle::Tensor::zeros(dims.as_ref(), dtype, &device)?;
+        let inner = B::zeros(dims.as_ref(), dtype, &device)?;
         Ok(Tensor::<_, B, _, _, _>::from_parts(inner, _shape, _dtype, _device, _grad))
     }
 
-    /// Create a ones tensor with fully compile-time-known parameters.
     pub fn static_ones() -> Result<Self> {
         let _shape = S::Field::default();
         let _dtype = T::init(());
         let _device = D::init(());
         let _grad = G::init(());
         let dims = S::DIMS;
-        let device = D::device(&_device)?;
+        let device = D::to_kindle(&_device)?;
         let dtype = T::DTYPE;
-        let inner = candle::Tensor::ones(dims.as_ref(), dtype, &device)?;
+        let inner = B::ones(dims.as_ref(), dtype, &device)?;
         Ok(Tensor::<_, B, _, _, _>::from_parts(inner, _shape, _dtype, _device, _grad))
     }
 }
 
-// ============================================================================
-// Accessor methods
-// ============================================================================
-
-impl<S: Shape + DynShape, B: Backend, T: DType, D: Device, G: RequiresGrad> Tensor<S, B, T, D, G> {
-    /// Runtime rank of the tensor.
+impl<S: Shape + DynShape, B: Backend<S>, T: DType, D: Device, G: RequiresGrad> Tensor<S, B, T, D, G> {
     #[inline]
     pub fn rank(&self) -> usize {
         S::rank(&self._shape)
     }
 
-    /// Runtime number of elements.
     #[inline]
     pub fn numel(&self) -> usize {
         S::numel(&self._shape)
     }
 
-    /// Runtime dimension sizes.
     #[inline]
     pub fn dims(&self) -> S::Dims {
         S::dims(&self._shape)
     }
 }
 
-impl<S: Shape, B: Backend, T: DType<DType = candle::DType>, D: Device, G: RequiresGrad> Tensor<S, B, T, D, G> {
-    /// The candle DType of this tensor.
+impl<S: Shape, B: Backend<S>, T: DType, D: Device, G: RequiresGrad> Tensor<S, B, T, D, G> {
     #[inline]
-    pub fn dtype(&self) -> candle::DType {
-        T::dtype(&self._dtype)
+    pub fn dtype(&self) -> KindleDType {
+        T::to_kindle(&self._dtype)
     }
 }
 
-impl<S: Shape, B: Backend, T: DType, D: Device<Device = candle::Device>, G: RequiresGrad>
-    Tensor<S, B, T, D, G>
+impl<S: Shape, B: Backend<S>, T: DType, D: Device, G: RequiresGrad> Tensor<S, B, T, D, G>
 {
-    /// The candle Device of this tensor.
-    pub fn device(&self) -> Result<candle::Device> {
-        D::device(&self._device)
+    pub fn device(&self) -> Result<KindleDevice> {
+        D::to_kindle(&self._device)
     }
 }
 
-impl<S: Shape, B: Backend, T: DType, D: Device, G: RequiresGrad> Tensor<S, B, T, D, G> {
-    /// Whether this tensor tracks gradients.
+impl<S: Shape, B: Backend<S>, T: DType, D: Device, G: RequiresGrad> Tensor<S, B, T, D, G> {
     #[inline]
     pub fn requires_grad(&self) -> bool {
         G::requires_grad(&self._grad)
     }
 }
 
-// ============================================================================
-// to_vec — extract data (only for const dtype)
-// ============================================================================
-
-impl<S: Shape, B: Backend, T: ConstDType<DType = candle::DType>, D: Device, G: RequiresGrad>
-    Tensor<S, B, T, D, G>
-where
-    T::Elem: candle::WithDType,
-{
-    /// Extract all elements as a flat Vec.
-    pub fn to_vec_flat(&self) -> Result<alloc::vec::Vec<T::Elem>> {
-        Ok(self.inner.flatten_all()?.to_vec1()?)
-    }
-}
-
-// ============================================================================
-// Dynamic-to-Static Boundary (TryInto equivalent)
-// ============================================================================
-
-impl<S1: DynShape, B: Backend, T: DType, D: Device, G: RequiresGrad> Tensor<S1, B, T, D, G> {
-    /// Attempt to cast this tensor to a new shape `S2` at runtime.
-    /// This verifies that the dynamic dimensions exactly match the requested static shape.
-    pub fn into_shape<S2: Shape>(self) -> Result<Tensor<S2, B, T, D, G>> {
+impl<S1: DynShape, B: Backend<S1>, T: DType, D: Device, G: RequiresGrad> Tensor<S1, B, T, D, G> {
+    pub fn into_shape<S2: Shape>(self) -> Result<Tensor<S2, B, T, D, G>> where B: Backend<S2, RawTensor = <B as Backend<S1>>::RawTensor> {
         let current_dims = S1::dims(&self._shape);
         let new_shape = S2::from_dyn(current_dims.as_ref())
-            .ok_or_else(|| candle::Error::Msg(alloc::format!(
-                "Shape mismatch during dynamic-to-static boundary conversion. Expected shape compatible with {:?}, but got {:?}",
-                core::any::type_name::<S2>(),
-                current_dims.as_ref()
-            )))?;
+            .ok_or_else(|| Error::ShapeMismatch {
+                expected: alloc::vec![], // We don't have S2 specific expected shape easily printable
+                got: current_dims.as_ref().to_vec() 
+            })?;
         
         Ok(Tensor::<S2, B, T, D, G>::from_parts(
             self.inner,
@@ -345,12 +210,7 @@ impl<S1: DynShape, B: Backend, T: DType, D: Device, G: RequiresGrad> Tensor<S1, 
     }
 }
 
-// ============================================================================
-// Grad transitions — change the gradient tracking at the type level
-// ============================================================================
-
-impl<S: Shape, B: Backend, T: DType, D: Device> Tensor<S, B, T, D, NoGrad> {
-    /// Enable gradient tracking, changing the type from NoGrad to Grad.
+impl<S: Shape, B: Backend<S>, T: DType, D: Device> Tensor<S, B, T, D, NoGrad> {
     pub fn require_grad(self) -> Tensor<S, B, T, D, Grad> {
         Tensor::<_, B, _, _, _>::from_parts(
             self.inner,
@@ -362,15 +222,54 @@ impl<S: Shape, B: Backend, T: DType, D: Device> Tensor<S, B, T, D, NoGrad> {
     }
 }
 
-impl<S: Shape, B: Backend, T: DType, D: Device> Tensor<S, B, T, D, Grad> {
-    /// Detach from the computation graph, changing Grad to NoGrad.
+impl<S: Shape, B: Backend<S>, T: DType, D: Device> Tensor<S, B, T, D, Grad> {
     pub fn detach(self) -> Tensor<S, B, T, D, NoGrad> {
         Tensor::<_, B, _, _, _>::from_parts(
-            self.inner.detach(),
+            self.inner,
             self._shape,
             self._dtype,
             self._device,
             core::marker::PhantomData,
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloc::vec;
+    use crate::prelude::{KindleDType, KindleDevice};
+
+    pub struct DummyBackend;
+    impl<S: Shape> Backend<S> for DummyBackend {
+        type RawTensor = ();
+        fn zeros(_shape: &[usize], _dtype: KindleDType, _device: &KindleDevice) -> Result<Self::RawTensor> { Ok(()) }
+        fn ones(_shape: &[usize], _dtype: KindleDType, _device: &KindleDevice) -> Result<Self::RawTensor> { Ok(()) }
+        fn rand(_shape: &[usize], _dtype: KindleDType, _device: &KindleDevice) -> Result<Self::RawTensor> { Ok(()) }
+        fn randn(_shape: &[usize], _dtype: KindleDType, _device: &KindleDevice) -> Result<Self::RawTensor> { Ok(()) }
+        fn relu(_t: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(()) }
+        fn gelu(_t: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(()) }
+        fn abs(_t: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(()) }
+        fn add(_lhs: &Self::RawTensor, _rhs: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(()) }
+        fn sub(_lhs: &Self::RawTensor, _rhs: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(()) }
+        fn mul(_lhs: &Self::RawTensor, _rhs: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(()) }
+        fn div(_lhs: &Self::RawTensor, _rhs: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(()) }
+        fn matmul(_lhs: &Self::RawTensor, _rhs: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(()) }
+        fn reshape(_t: &Self::RawTensor, _shape: &[usize]) -> Result<Self::RawTensor> { Ok(()) }
+    }
+
+    #[test]
+    fn test_tensor_creation() {
+        let t: Tensor<Dyn, DummyBackend> = Tensor::zeros(vec![2, 3]).unwrap();
+        assert_eq!(t.rank(), 2);
+        assert_eq!(t.numel(), 6);
+        assert_eq!(t.dims(), vec![2, 3]);
+    }
+    
+    #[test]
+    fn test_tensor_ones() {
+        let t: Tensor<Dyn, DummyBackend> = Tensor::ones(vec![4]).unwrap();
+        assert_eq!(t.rank(), 1);
+        assert_eq!(t.numel(), 4);
     }
 }

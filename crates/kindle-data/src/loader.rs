@@ -2,9 +2,9 @@ use kindle_core::prelude::*;
 use rayon::prelude::*;
 
 /// A strict-typed batch containing features and optional targets.
-pub struct Batch<S1: Shape, S2: Shape = ()> {
-    pub features: Tensor<S1>,
-    pub targets: Option<Tensor<S2>>,
+pub struct Batch<S1: Shape, B1: Backend<S1>, S2: Shape = (), B2: Backend<S2> = B1> {
+    pub features: Tensor<S1, B1>,
+    pub targets: Option<Tensor<S2, B2>>,
 }
 
 /// Extension trait to convert any standard Rust `Iterator` into a multi-threaded Parallel Dataloader.

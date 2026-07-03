@@ -13,19 +13,17 @@ workspace = true
 default = ["std"]
 std = []
 nightly = []
-cuda = ["candle-core/cuda", "candle-nn/cuda"]
+cuda = []
 metal = []
-# metal = ["candle-core/metal", "candle-nn/metal"]
 
 # candle = ["dep:candle-core", "dep:candle-nn"]
 # cuda = ["dep:candle-core?/cuda", "dep:candle-nn?/cuda"]
 
 [dependencies]
 kindle-macros = { path = "../kindle-macros", version = "0.1.0", default-features = false }
-candle-core = { workspace = true }
-candle-nn = { workspace = true }
 thiserror = { workspace = true }
 half = { workspace = true }
+anyhow = "1.0.103"
 
 [dev-dependencies]
 trybuild = "1.0.117"

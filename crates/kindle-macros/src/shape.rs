@@ -51,14 +51,23 @@ pub(crate) fn shape(input: TokenStream) -> TokenStream {
     } else {
         quote! {  kindle::prelude:: }
     };
-    for elem in list {
+    for elem in &list {
         match elem {
             Dim::Dyn => output.push(quote! { usize }),
             Dim::Lit(lit_int) => output.push(quote! { #path Const<#lit_int> }),
         }
     }
-    quote! {
-        ( #(#output,)* )
+    
+    if list.len() <= 7 {
+        quote! {
+            ( #(#output,)* )
+        }
+        .into()
+    } else {
+        let mut expanded = quote! { #path Nil };
+        for out in output.into_iter().rev() {
+            expanded = quote! { #path Cons<#out, #expanded> };
+        }
+        expanded.into()
     }
-    .into()
 }

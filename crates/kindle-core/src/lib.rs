@@ -16,8 +16,3 @@ pub mod prelude {
     pub use super::shapes::prelude::*;
     pub use super::tensor::prelude::*;
 }
-
-pub mod candle {
-    pub use candle_core::*;
-    pub use candle_nn as nn;
-}

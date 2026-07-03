@@ -163,31 +163,20 @@ impl<const M: usize, const K: usize, const N: usize>
 // The matmul method on Tensor
 // ============================================================================
 
-impl<S1, B: Backend, T, D, G> Tensor<S1, B, T, D, G>
+impl<S1, B: Backend<S1>, T, D, G> Tensor<S1, B, T, D, G>
 where
     S1: Shape,
     T: DType,
     D: Device,
     G: RequiresGrad,
 {
-    /// Matrix multiplication with compile-time shape checking.
-    ///
-    /// ```ignore
-    /// // Static: the compiler KNOWS this produces (Const<3>, Const<5>)
-    /// let a: Tensor<(Const<3>, Const<4>), f32, Cpu, Grad> = Tensor::zeros(())?;
-    /// let b: Tensor<(Const<4>, Const<5>), f32, Cpu, Grad> = Tensor::zeros(())?;
-    /// let c: Tensor<(Const<3>, Const<5>), f32, Cpu, Grad> = a.matmul(&b)?;
-    ///
-    /// // This WON'T COMPILE — inner dims don't match:
-    /// // let bad: Tensor<(Const<3>, Const<7>), f32, Cpu, Grad> = Tensor::zeros(())?;
-    /// // let _ = a.matmul(&bad)?; // ERROR: MatMulShape not implemented
-    /// ```
     pub fn matmul<S2>(&self, rhs: &Tensor<S2, B, T, D, G>) -> Result<Tensor<S1::Output, B, T, D, G>>
     where
         S2: Shape,
         S1: MatMulShape<S2>,
+        B: Backend<S2, RawTensor = <B as Backend<S1>>::RawTensor> + Backend<S1::Output, RawTensor = <B as Backend<S1>>::RawTensor>,
     {
-        let inner = self.inner.matmul(&rhs.inner)?;
+        let inner = <B as Backend<S1>>::matmul(&self.inner, &rhs.inner)?;
         let output_shape = S1::output_shape(&self._shape, &rhs._shape);
         Ok(Tensor::<_, B, _, _, _>::from_parts(
             inner,

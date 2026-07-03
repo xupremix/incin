@@ -1,0 +1,27 @@
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `alloc`
+  --> tests/ui/dtype_mismatch.rs:22:60
+   |
+22 |     let t1: Tensor<Dyn, DummyBackend, f32> = Tensor::zeros(alloc::vec![2]).unwrap();
+   |                                                            ^^^^^ use of unresolved module or unlinked crate `alloc`
+
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `alloc`
+  --> tests/ui/dtype_mismatch.rs:23:60
+   |
+23 |     let t2: Tensor<Dyn, DummyBackend, f64> = Tensor::zeros(alloc::vec![2]).unwrap();
+   |                                                            ^^^^^ use of unresolved module or unlinked crate `alloc`
+
+error[E0308]: mismatched types
+  --> tests/ui/dtype_mismatch.rs:26:12
+   |
+26 |     t1.add(&t2).unwrap();
+   |        --- ^^^ expected `&Tensor<Dyn, DummyBackend>`, found `&Tensor<Dyn, DummyBackend, f64>`
+   |        |
+   |        arguments to this method are incorrect
+   |
+   = note: expected reference `&kindle_core::prelude::Tensor<kindle_core::prelude::Dyn, DummyBackend, f32>`
+              found reference `&kindle_core::prelude::Tensor<kindle_core::prelude::Dyn, DummyBackend, f64>`
+note: method defined here
+  --> src/tensor/ops.rs
+   |
+   | impl_binary_op!(Add, add, add);
+   |                      ^^^

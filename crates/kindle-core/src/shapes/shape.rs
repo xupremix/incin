@@ -196,6 +196,12 @@ impl_shape_for_tuple!(4, D0 0, D1 1, D2 2, D3 3);
 impl_shape_for_tuple!(5, D0 0, D1 1, D2 2, D3 3, D4 4);
 impl_shape_for_tuple!(6, D0 0, D1 1, D2 2, D3 3, D4 4, D5 5);
 impl_shape_for_tuple!(7, D0 0, D1 1, D2 2, D3 3, D4 4, D5 5, D6 6);
+impl_shape_for_tuple!(8, D0 0, D1 1, D2 2, D3 3, D4 4, D5 5, D6 6, D7 7);
+impl_shape_for_tuple!(9, D0 0, D1 1, D2 2, D3 3, D4 4, D5 5, D6 6, D7 7, D8 8);
+impl_shape_for_tuple!(10, D0 0, D1 1, D2 2, D3 3, D4 4, D5 5, D6 6, D7 7, D8 8, D9 9);
+impl_shape_for_tuple!(11, D0 0, D1 1, D2 2, D3 3, D4 4, D5 5, D6 6, D7 7, D8 8, D9 9, D10 10);
+// Note: Rust standard library only implements traits (Debug, Eq, etc.) for tuples up to size 12.
+// For dimensions > 12, use `[usize; N]` which is fully supported via const generics.
 
 impl<D: Dim> Shape for Vec<D> {
     type Arg = Self;
@@ -227,3 +233,34 @@ impl<D: Dim> DynShape for Vec<D> {
 }
 
 pub type Scalar = ();
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_scalar_shape() {
+        assert_eq!(<() as DynShape>::rank(&()), 0);
+        assert_eq!(<() as DynShape>::numel(&()), 1);
+        assert_eq!(<() as DynShape>::dims(&()), []);
+        assert_eq!(<() as ConstShape>::NUMEL, 1);
+        assert_eq!(<() as ConstShape>::DIMS, []);
+    }
+
+    #[test]
+    fn test_dyn_shape() {
+        let d = vec![2, 3, 4];
+        assert_eq!(<Dyn as DynShape>::rank(&d), 3);
+        assert_eq!(<Dyn as DynShape>::numel(&d), 24);
+        assert_eq!(<Dyn as DynShape>::dims(&d), vec![2, 3, 4]);
+    }
+
+    #[test]
+    fn test_array_shape() {
+        let shape: [usize; 3] = [2, 3, 4];
+        assert_eq!(<[usize; 3] as DynShape>::rank(&shape), 3);
+        assert_eq!(<[usize; 3] as DynShape>::numel(&shape), 24);
+        assert_eq!(<[usize; 3] as DynShape>::dims(&shape), [2, 3, 4]);
+        assert_eq!(<[usize; 3] as PartialDynShape>::RANK, 3);
+    }
+}

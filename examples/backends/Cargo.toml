@@ -1,0 +1,12 @@
+[package]
+name = "backends"
+edition.workspace = true
+version.workspace = true
+readme.workspace = true
+license.workspace = true
+
+[dependencies]
+kindle = { path = "../../crates/kindle" }
+
+[lints]
+workspace = true

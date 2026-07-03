@@ -3,8 +3,8 @@ use crate::prelude::{DType, Device, RequiresGrad, Shape};
 /// Connects a tensor's type parameters to the runtime arguments
 /// needed for construction. For each parameter (Shape, DType, Device, Grad),
 /// the associated `Arg` type determines what runtime information is needed:
-/// - `()` for fully-static parameters (e.g., Const<N>, f32, Cpu, Grad)
-/// - The actual value for dynamic parameters (e.g., Vec<usize>, KindleDType, KindleDevice, bool)
+/// - `()` for fully-static parameters (e.g., `Const<N>`, f32, Cpu, Grad)
+/// - The actual value for dynamic parameters (e.g., `Vec<usize>`, KindleDType, KindleDevice, bool)
 pub trait TensorArgs<S: Shape, T: DType, D: Device, G: RequiresGrad> {
     type Args;
     fn construct(args: Self::Args) -> (S::Field, T::Field, D::Field, G::Field);

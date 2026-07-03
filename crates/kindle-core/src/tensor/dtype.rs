@@ -1,4 +1,4 @@
-use crate::{candle, prelude::Dyn};
+use crate::prelude::Dyn;
 
 use core::{fmt::Debug, marker::PhantomData};
 pub use half::{bf16, f16};
@@ -6,9 +6,8 @@ pub use half::{bf16, f16};
 pub trait DType: 'static + Clone + Debug + Send + Sync + PartialEq {
     type Arg;
     type Field: Debug + Clone;
-    type DType;
     fn init(arg: Self::Arg) -> Self::Field;
-    fn dtype(dtype: &Self::Field) -> Self::DType;
+    fn to_kindle(dtype: &Self::Field) -> KindleDType;
 }
 
 pub trait DynDType: DType {}
@@ -16,7 +15,7 @@ pub trait DynDType: DType {}
 pub trait ConstDType: DType<Arg = ()> {
     /// The Rust element type corresponding to this dtype.
     type Elem: 'static + Copy + Debug + Send + Sync;
-    const DTYPE: <Self as DType>::DType;
+    const DTYPE: KindleDType;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,9 +35,8 @@ macro_rules! impl_dtype {
             impl DType for $t {
                 type Arg = ();
                 type Field = PhantomData<$t>;
-                type DType = candle::DType;
-                fn dtype(_: &Self::Field) -> Self::DType {
-                    candle::DType::$repr
+                fn to_kindle(_: &Self::Field) -> KindleDType {
+                    KindleDType::$repr
                 }
                 fn init(_: Self::Arg) -> Self::Field {
                     PhantomData
@@ -47,7 +45,7 @@ macro_rules! impl_dtype {
             impl DynDType for $t { }
             impl ConstDType for $t {
                 type Elem = $t;
-                const DTYPE: Self::DType = candle::DType::$repr;
+                const DTYPE: KindleDType = KindleDType::$repr;
             }
         )*
     };
@@ -66,22 +64,13 @@ impl_dtype!(
 impl DType for Dyn {
     type Arg = KindleDType;
     type Field = KindleDType;
-    type DType = candle::DType;
 
     fn init(arg: Self::Arg) -> Self::Field {
         arg
     }
 
-    fn dtype(dtype: &Self::Field) -> Self::DType {
-        match dtype {
-            KindleDType::U8 => candle::DType::U8,
-            KindleDType::U32 => candle::DType::U32,
-            KindleDType::I64 => candle::DType::I64,
-            KindleDType::BF16 => candle::DType::BF16,
-            KindleDType::F16 => candle::DType::F16,
-            KindleDType::F32 => candle::DType::F32,
-            KindleDType::F64 => candle::DType::F64,
-        }
+    fn to_kindle(dtype: &Self::Field) -> KindleDType {
+        *dtype
     }
 }
 impl DynDType for Dyn {}

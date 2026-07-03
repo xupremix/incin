@@ -10,13 +10,16 @@ license.workspace = true
 workspace = true
 
 [features]
-default = ["std"]
+default = ["std", "candle", "ndarray"]
 std = ["kindle-core/std", "kindle-macros/std"]
 nightly = ["kindle-core/nightly", "kindle-macros/nightly"]
-cuda = ["kindle-core/cuda"]
-metal = ["kindle-core/metal"]
+cuda = ["kindle-core/cuda", "kindle-backends/cuda"]
+metal = ["kindle-core/metal", "kindle-backends/metal"]
+candle = ["kindle-backends/candle"]
+ndarray = ["kindle-backends/ndarray"]
+burn = ["kindle-backends/burn"]
 
 [dependencies]
-
 kindle-core = { path = "../kindle-core", version = "0.1.0", default-features = false }
 kindle-macros = { path = "../kindle-macros/", version = "0.1.0", default-features = false }
+kindle-backends = { path = "../kindle-backends", default-features = false }
