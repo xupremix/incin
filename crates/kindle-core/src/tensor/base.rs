@@ -59,7 +59,7 @@ impl<S: Shape, B: Backend, T: DType, D: Device, G: RequiresGrad> Tensor<S, B, T,
     /// # Safety contract (not unsafe, but the caller must ensure correctness):
     /// The caller is responsible for ensuring the candle tensor's actual
     /// shape, dtype, and device match the type parameters S, T, D.
-    pub(crate) fn from_parts(
+    pub fn from_parts(
         inner: candle::Tensor,
         shape: S::Field,
         dtype: T::Field,
