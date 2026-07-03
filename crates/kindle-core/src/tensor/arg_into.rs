@@ -100,7 +100,7 @@ impl<const N: usize> ArgInto<Vec<usize>> for [usize; N] {
     }
 }
 
-impl<'a> ArgInto<Vec<usize>> for &'a [usize] {
+impl ArgInto<Vec<usize>> for &[usize] {
     #[inline(always)]
     fn into_arg(self) -> Vec<usize> {
         self.to_vec()

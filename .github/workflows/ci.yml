@@ -1,0 +1,41 @@
+name: Kindle CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Cache Cargo modules
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      
+    - name: Check Formatting
+      run: cargo fmt --all -- --check
+      
+    - name: Clippy Lints
+      run: cargo clippy --workspace --all-targets -- -D warnings
+      
+    - name: Run Unit & Integration Tests
+      run: cargo test --workspace --all-targets
+      
+    - name: Build Examples
+      run: cargo build --examples --workspace

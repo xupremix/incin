@@ -1,0 +1,12 @@
+[package]
+name = "matmul"
+edition.workspace = true
+version.workspace = true
+readme.workspace = true
+license.workspace = true
+
+[dependencies]
+kindle = { version = "0.1.0", path = "../../crates/kindle" }
+
+[lints]
+workspace = true

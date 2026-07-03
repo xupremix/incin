@@ -22,7 +22,7 @@ impl HuggingFaceHub {
     pub async fn load_safetensors(repo_id: &str, filename: &str, candle_device: &candle_core::Device) -> Result<std::collections::HashMap<String, Tensor<Dyn>>> {
         let path = Self::download(repo_id, filename).await?;
         
-        let loaded = load(&path, &candle_device)
+        let loaded = load(&path, candle_device)
             .map_err(|e| candle_core::Error::Msg(format!("Failed to load safetensors: {:?}", e)))?;
             
         let mut result = std::collections::HashMap::new();
