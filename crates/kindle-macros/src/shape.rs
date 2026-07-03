@@ -49,7 +49,7 @@ fn lit_to_typenum(n: usize, path: &proc_macro2::TokenStream) -> proc_macro2::Tok
     if n == 0 {
         return quote! { #path typenum::UTerm };
     }
-    let bit = if n % 2 == 0 {
+    let bit = if n.is_multiple_of(2) {
         quote! { #path typenum::B0 }
     } else {
         quote! { #path typenum::B1 }

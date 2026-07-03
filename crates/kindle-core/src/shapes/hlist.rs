@@ -2,7 +2,7 @@ use alloc::vec::Vec;
 use core::fmt::Debug;
 use core::marker::PhantomData;
 
-use crate::prelude::{ConstDim, Dim, DynShape, PartialDynShape, Shape, ConstShape};
+use crate::prelude::{Dim, DynShape, PartialDynShape, Shape};
 
 /// The end of an HList shape.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -18,7 +18,7 @@ impl Shape for Nil {
     type Dims = Vec<usize>;
 
     fn init(_arg: Self::Arg) -> Self::Field {
-        ()
+        
     }
 
     fn from_dyn(dims: &[usize]) -> Option<Self::Field> {

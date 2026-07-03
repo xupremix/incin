@@ -30,7 +30,7 @@ pub fn impl_arg_into(input: TokenStream) -> TokenStream {
             let mut tuple_body_items = Vec::new();
             let mut scalar_body_items = Vec::new();
 
-            let mut const_counter = 1u32;
+            let _const_counter = 1u32;
             let mut dyn_counter = 0u32;
 
             for i in 0..rank {

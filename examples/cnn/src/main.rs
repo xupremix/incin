@@ -28,7 +28,7 @@ pub struct SimpleCNN {
 
 impl SimpleCNN {
     pub fn new() -> Result<Self> {
-        let dev = KindleDevice::cpu();
+        let _dev = KindleDevice::cpu();
         Ok(Self {
             conv1_w: Tensor::<Dyn, CandleBackend>::randn([16, 1, 3, 3])?.into_shape()?,
             fc1_w: Tensor::<Dyn, CandleBackend>::randn([16 * 26 * 26, 10])?.into_shape()?,
@@ -66,7 +66,7 @@ impl SimpleCNN {
 
     pub fn load_safetensors(path: &str) -> Result<Self> {
         let dev = candle_core::Device::Cpu;
-        let tensors = candle_core::safetensors::load(path, &dev).map_err(|e| Error::UnsupportedBackendOperation { op: "load", backend: "Candle" })?;
+        let tensors = candle_core::safetensors::load(path, &dev).map_err(|_e| Error::UnsupportedBackendOperation { op: "load", backend: "Candle" })?;
         
         let conv1_w = tensors.get("conv1_w").unwrap().clone();
         let fc1_w = tensors.get("fc1_w").unwrap().clone();

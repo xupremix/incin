@@ -93,7 +93,7 @@ impl Device for Dyn {
     type Field = KindleDevice;
 
     fn to_kindle(dev: &Self::Field) -> Result<KindleDevice> {
-        Ok(dev.clone())
+        Ok(*dev)
     }
 
     fn init(arg: Self::Arg) -> Self::Field {

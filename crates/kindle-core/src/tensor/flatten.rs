@@ -1,7 +1,7 @@
 //! Flattening with compile-time shape verification.
 
 use crate::prelude::*;
-use typenum::{Prod, U1, U0};
+use typenum::Prod;
 
 pub trait FlattenShape: Shape {
     type Output: Shape;
