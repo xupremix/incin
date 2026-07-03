@@ -15,6 +15,20 @@ pub trait Backend<S: Shape> {
     fn relu(t: &Self::RawTensor) -> Result<Self::RawTensor, Error>;
     fn gelu(t: &Self::RawTensor) -> Result<Self::RawTensor, Error>;
     fn abs(t: &Self::RawTensor) -> Result<Self::RawTensor, Error>;
+    fn neg(t: &Self::RawTensor) -> Result<Self::RawTensor, Error>;
+    fn sqrt(t: &Self::RawTensor) -> Result<Self::RawTensor, Error>;
+    fn exp(t: &Self::RawTensor) -> Result<Self::RawTensor, Error>;
+    fn log(t: &Self::RawTensor) -> Result<Self::RawTensor, Error>;
+    fn tanh(t: &Self::RawTensor) -> Result<Self::RawTensor, Error>;
+    fn sigmoid(t: &Self::RawTensor) -> Result<Self::RawTensor, Error>;
+
+    // Scalar Ops
+    fn mul_scalar(t: &Self::RawTensor, scalar: f64) -> Result<Self::RawTensor, Error>;
+    fn add_scalar(t: &Self::RawTensor, scalar: f64) -> Result<Self::RawTensor, Error>;
+
+    // Reductions (0D Scalar output)
+    fn sum_all(t: &Self::RawTensor) -> Result<Self::RawTensor, Error>;
+    fn mean_all(t: &Self::RawTensor) -> Result<Self::RawTensor, Error>;
 
     // Binary Ops
     fn add(lhs: &Self::RawTensor, rhs: &Self::RawTensor) -> Result<Self::RawTensor, Error>;
@@ -25,4 +39,8 @@ pub trait Backend<S: Shape> {
 
     // Tensor ops
     fn reshape(t: &Self::RawTensor, shape: &[usize]) -> Result<Self::RawTensor, Error>;
+    
+    // Slicing primitives
+    fn narrow(t: &Self::RawTensor, dim: usize, start: usize, len: usize) -> Result<Self::RawTensor, Error>;
+    fn squeeze(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor, Error>;
 }
