@@ -15,4 +15,5 @@ pub mod prelude {
     pub use super::err::*;
     pub use super::shapes::prelude::*;
     pub use super::tensor::prelude::*;
+    pub use typenum::{self, consts::*, Prod, Sum, Quot, Diff, Unsigned, UTerm, UInt, Bit, B0, B1};
 }

@@ -76,3 +76,16 @@ impl_op_for_const! {
     Mul mul *
     Div div /
 }
+
+impl<U, B> ConstDim for typenum::UInt<U, B>
+where
+    U: typenum::Unsigned + Dim,
+    B: typenum::Bit + Default + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + PartialEq + 'static,
+    typenum::UInt<U, B>: typenum::Unsigned + Default + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + PartialEq + 'static,
+{
+    const SIZE: usize = <Self as typenum::Unsigned>::USIZE;
+}
+
+impl ConstDim for typenum::UTerm {
+    const SIZE: usize = 0;
+}

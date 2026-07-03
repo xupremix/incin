@@ -24,6 +24,7 @@ kindle-macros = { path = "../kindle-macros", version = "0.1.0", default-features
 thiserror = { workspace = true }
 half = { workspace = true }
 anyhow = "1.0.103"
+typenum = "1.20.1"
 
 [dev-dependencies]
 trybuild = "1.0.117"

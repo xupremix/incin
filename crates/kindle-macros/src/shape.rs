@@ -41,20 +41,36 @@ impl Parse for NumberList {
     }
 }
 
+fn lit_to_typenum(n: usize, path: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
+    if n == 0 {
+        return quote! { #path typenum::UTerm };
+    }
+    let bit = if n % 2 == 0 {
+        quote! { #path typenum::B0 }
+    } else {
+        quote! { #path typenum::B1 }
+    };
+    let rest = lit_to_typenum(n / 2, path);
+    quote! { #path typenum::UInt<#rest, #bit> }
+}
+
 pub(crate) fn shape(input: TokenStream) -> TokenStream {
     let items = parse_macro_input!(input as NumberList);
     let list = items.items;
     let internal = items.internal;
     let mut output = Vec::new();
     let path = if internal {
-        quote! {  crate::prelude:: }
+        quote! { crate::prelude:: }
     } else {
-        quote! {  kindle::prelude:: }
+        quote! { kindle::prelude:: }
     };
     for elem in &list {
         match elem {
             Dim::Dyn => output.push(quote! { usize }),
-            Dim::Lit(lit_int) => output.push(quote! { #path Const<#lit_int> }),
+            Dim::Lit(lit_int) => {
+                let val: usize = lit_int.base10_parse().unwrap();
+                output.push(lit_to_typenum(val, &path));
+            }
         }
     }
     

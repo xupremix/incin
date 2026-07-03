@@ -4097,6 +4097,7 @@ dependencies = [
  "kindle-macros",
  "thiserror 2.0.18",
  "trybuild",
+ "typenum",
 ]
 
 [[package]]
