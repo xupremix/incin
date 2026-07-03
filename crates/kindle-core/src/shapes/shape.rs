@@ -72,9 +72,6 @@ impl DynShape for Dyn {
 
 macro_rules! impl_shape_for_tuple {
     ($n:expr $(, $name:ident $idx:tt)* $(,)?) => {
-        impl< $($name: Dim,)* > NotUnit for ( $($name,)* ) {}
-        impl<D: Dim> NotUnit for [D; ($n)] {}
-        impl<'a, D: Dim> NotUnit for &'a [D; ($n)] {}
         impl< $($name: Dim,)* > Shape for ( $($name,)*) {
             type Arg = ($(<$name as Dim>::Arg,)*);
             type Field = Self;
@@ -155,11 +152,7 @@ impl Shape for () {
     type Dims = [usize; 0];
     fn init(_: Self::Arg) {}
     fn from_dyn(dims: &[usize]) -> Option<Self::Field> {
-        if dims.is_empty() {
-            Some(())
-        } else {
-            None
-        }
+        if dims.is_empty() { Some(()) } else { None }
     }
 }
 
@@ -242,9 +235,10 @@ mod tests {
     fn test_scalar_shape() {
         assert_eq!(<() as DynShape>::rank(&()), 0);
         assert_eq!(<() as DynShape>::numel(&()), 1);
-        assert_eq!(<() as DynShape>::dims(&()), []);
-        assert_eq!(<() as ConstShape>::NUMEL, 1);
-        assert_eq!(<() as ConstShape>::DIMS, []);
+        let empty_dims: [usize; 0] = [];
+        assert_eq!(<() as DynShape>::dims(&()), empty_dims);
+        assert_eq!(<() as DynShape>::rank(&()), 0);
+        assert_eq!(<() as ConstShape>::DIMS, empty_dims);
     }
 
     #[test]

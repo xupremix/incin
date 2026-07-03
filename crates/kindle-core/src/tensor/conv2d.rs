@@ -1,17 +1,21 @@
 //! Conv2d shape verification
 
 use crate::prelude::*;
-use typenum::{Prod, Sum, Quot, Diff, U1, U2};
+use typenum::{Diff, Prod, Quot, Sum, U1, U2};
 
 // ConvOutDim already defined in arithmetic.rs and exposed via prelude
 
 pub trait Conv2dShape<K: Shape, Stride: StaticDim, Padding: StaticDim>: Shape {
     type Output: Shape;
-    fn output_shape(lhs: &<Self as Shape>::Field, kernel: &<K as Shape>::Field) -> <Self::Output as Shape>::Field;
+    fn output_shape(
+        lhs: &<Self as Shape>::Field,
+        kernel: &<K as Shape>::Field,
+    ) -> <Self::Output as Shape>::Field;
 }
 
 // Fully static (B, C_in, H_in, W_in) with Kernel (C_out, C_in, K_h, K_w)
-impl<B, CIn, HIn, WIn, COut, KH, KW, Stride, Padding> Conv2dShape<(COut, CIn, KH, KW), Stride, Padding> for (B, CIn, HIn, WIn)
+impl<B, CIn, HIn, WIn, COut, KH, KW, Stride, Padding>
+    Conv2dShape<(COut, CIn, KH, KW), Stride, Padding> for (B, CIn, HIn, WIn)
 where
     B: StaticDim,
     CIn: StaticDim,
@@ -32,11 +36,24 @@ where
     ConvOutDim<HIn, KH, Stride, Padding>: StaticDim,
     ConvOutDim<WIn, KW, Stride, Padding>: StaticDim,
 {
-    type Output = (B, COut, ConvOutDim<HIn, KH, Stride, Padding>, ConvOutDim<WIn, KW, Stride, Padding>);
-    
+    type Output = (
+        B,
+        COut,
+        ConvOutDim<HIn, KH, Stride, Padding>,
+        ConvOutDim<WIn, KW, Stride, Padding>,
+    );
+
     #[inline(always)]
-    fn output_shape(_: &<Self as Shape>::Field, _: &<(COut, CIn, KH, KW) as Shape>::Field) -> <Self::Output as Shape>::Field {
-        (Default::default(), Default::default(), Default::default(), Default::default())
+    fn output_shape(
+        _: &<Self as Shape>::Field,
+        _: &<(COut, CIn, KH, KW) as Shape>::Field,
+    ) -> <Self::Output as Shape>::Field {
+        (
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+        )
     }
 }
 
@@ -70,14 +87,14 @@ where
             + Backend<S1::Output, RawTensor = <B as Backend<S1>>::RawTensor>,
     {
         let inner = <B as Backend<S1>>::conv2d(
-            &self.inner, 
-            &weight.inner, 
-            bias.map(|b| b.inner()), 
-            <Stride as typenum::Unsigned>::USIZE, 
-            <Padding as typenum::Unsigned>::USIZE, 
-            1 // Default dilation
+            &self.inner,
+            &weight.inner,
+            bias.map(|b| b.inner()),
+            <Stride as typenum::Unsigned>::USIZE,
+            <Padding as typenum::Unsigned>::USIZE,
+            1, // Default dilation
         )?;
-        
+
         let output_shape = S1::output_shape(&self._shape, &weight._shape);
         Ok(Tensor::<_, B, _, _, _>::from_parts(
             inner,

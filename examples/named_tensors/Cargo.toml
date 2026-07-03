@@ -1,0 +1,7 @@
+[package]
+name = "named_tensors"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+kindle = { path = "../../crates/kindle" }

@@ -1,5 +1,5 @@
-use core::marker::PhantomData;
 use crate::prelude::Dim;
+use core::marker::PhantomData;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct NamedDyn<Tag: 'static + Send + Sync + Copy + Clone + core::fmt::Debug + Eq + PartialEq> {
@@ -10,11 +10,16 @@ pub struct NamedDyn<Tag: 'static + Send + Sync + Copy + Clone + core::fmt::Debug
 impl<Tag: 'static + Send + Sync + Copy + Clone + core::fmt::Debug + Eq + PartialEq> NamedDyn<Tag> {
     #[inline(always)]
     pub fn new(size: usize) -> Self {
-        Self { size, _marker: PhantomData }
+        Self {
+            size,
+            _marker: PhantomData,
+        }
     }
 }
 
-impl<Tag: 'static + Send + Sync + Copy + Clone + core::fmt::Debug + Eq + PartialEq> Dim for NamedDyn<Tag> {
+impl<Tag: 'static + Send + Sync + Copy + Clone + core::fmt::Debug + Eq + PartialEq> Dim
+    for NamedDyn<Tag>
+{
     type Arg = usize;
 
     #[inline(always)]

@@ -113,9 +113,12 @@ where
             let rest: usize = current_dims.as_ref()[1..].iter().product();
             new_dims.push(rest);
         } else {
-            return Err(Error::ShapeMismatch { expected: alloc::vec![], got: current_dims.as_ref().to_vec() });
+            return Err(Error::ShapeMismatch {
+                expected: alloc::vec![],
+                got: current_dims.as_ref().to_vec(),
+            });
         }
-        
+
         let inner = <B as Backend<S1>>::reshape(&self.inner, &new_dims)?;
         let output_shape = S1::output_shape(&self._shape);
         Ok(Tensor::<_, B, _, _, _>::from_parts(

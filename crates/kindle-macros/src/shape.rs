@@ -1,16 +1,17 @@
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{
+    Token,
     parse::{Parse, ParseStream},
     parse_macro_input,
     punctuated::Punctuated,
-    Token,
 };
 
 enum Dim {
     Dyn,
     Lit(syn::LitInt),
     Path(syn::Path),
+    Sym(syn::Ident),
 }
 
 impl Parse for Dim {
@@ -22,6 +23,16 @@ impl Parse for Dim {
         if input.peek(syn::LitInt) {
             return Ok(Dim::Lit(input.parse::<syn::LitInt>()?));
         }
+        
+        let fork = input.fork();
+        if fork.peek(syn::Ident) && fork.peek2(syn::Ident) {
+            let first = fork.parse::<syn::Ident>()?;
+            if first == "sym" {
+                input.parse::<syn::Ident>()?; // consume 'sym'
+                return Ok(Dim::Sym(input.parse::<syn::Ident>()?));
+            }
+        }
+        
         Ok(Dim::Path(input.parse::<syn::Path>()?))
     }
 }
@@ -76,9 +87,10 @@ pub(crate) fn shape(input: TokenStream) -> TokenStream {
                 output.push(lit_to_typenum(val, &path));
             }
             Dim::Path(p) => output.push(quote! { #p }),
+            Dim::Sym(ident) => output.push(quote! { #ident }),
         }
     }
-    
+
     if list.len() <= 7 {
         quote! {
             ( #(#output,)* )

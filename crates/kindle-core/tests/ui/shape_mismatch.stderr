@@ -1,27 +1,7 @@
-error[E0046]: not all trait items implemented, missing: `neg`, `sqrt`, `exp`, `log`, `tanh`, `sigmoid`, `mul_scalar`, `add_scalar`, `sum_all`, `mean_all`, `narrow`, `squeeze`, `conv2d`
- --> tests/ui/shape_mismatch.rs:4:1
-  |
-4 | impl<S: Shape> Backend<S> for DummyBackend {
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ missing `neg`, `sqrt`, `exp`, `log`, `tanh`, `sigmoid`, `mul_scalar`, `add_scalar`, `sum_all`, `mean_all`, `narrow`, `squeeze`, `conv2d` in implementation
-  |
-  = help: implement the missing item: `fn neg(_: &<Self as kindle_core::prelude::Backend<S>>::RawTensor) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
-  = help: implement the missing item: `fn sqrt(_: &<Self as kindle_core::prelude::Backend<S>>::RawTensor) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
-  = help: implement the missing item: `fn exp(_: &<Self as kindle_core::prelude::Backend<S>>::RawTensor) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
-  = help: implement the missing item: `fn log(_: &<Self as kindle_core::prelude::Backend<S>>::RawTensor) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
-  = help: implement the missing item: `fn tanh(_: &<Self as kindle_core::prelude::Backend<S>>::RawTensor) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
-  = help: implement the missing item: `fn sigmoid(_: &<Self as kindle_core::prelude::Backend<S>>::RawTensor) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
-  = help: implement the missing item: `fn mul_scalar(_: &<Self as kindle_core::prelude::Backend<S>>::RawTensor, _: f64) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
-  = help: implement the missing item: `fn add_scalar(_: &<Self as kindle_core::prelude::Backend<S>>::RawTensor, _: f64) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
-  = help: implement the missing item: `fn sum_all(_: &<Self as kindle_core::prelude::Backend<S>>::RawTensor) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
-  = help: implement the missing item: `fn mean_all(_: &<Self as kindle_core::prelude::Backend<S>>::RawTensor) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
-  = help: implement the missing item: `fn narrow(_: &<Self as kindle_core::prelude::Backend<S>>::RawTensor, _: usize, _: usize, _: usize) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
-  = help: implement the missing item: `fn squeeze(_: &<Self as kindle_core::prelude::Backend<S>>::RawTensor, _: usize) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
-  = help: implement the missing item: `fn conv2d(_: &<Self as kindle_core::prelude::Backend<S>>::RawTensor, _: &<Self as kindle_core::prelude::Backend<S>>::RawTensor, _: Option<&<Self as kindle_core::prelude::Backend<S>>::RawTensor>, _: usize, _: usize, _: usize) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
-
 error[E0308]: mismatched types
-  --> tests/ui/shape_mismatch.rs:26:12
+  --> tests/ui/shape_mismatch.rs:54:12
    |
-26 |     t1.add(&t2).unwrap();
+54 |     t1.add(&t2).unwrap();
    |        --- ^^^ expected an array with a size of 2, found one with a size of 3
    |        |
    |        arguments to this method are incorrect

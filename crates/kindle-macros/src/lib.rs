@@ -1,9 +1,9 @@
 use proc_macro::TokenStream;
 
 mod arg_into;
-mod shape;
 mod idx;
 mod module;
+mod shape;
 
 #[proc_macro]
 pub fn s(input: TokenStream) -> TokenStream {

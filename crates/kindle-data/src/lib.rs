@@ -1,7 +1,7 @@
-pub mod loader;
 pub mod hf;
+pub mod loader;
 
 pub mod prelude {
-    pub use super::loader::*;
     pub use super::hf::*;
+    pub use super::loader::*;
 }

@@ -17,9 +17,7 @@ impl Shape for Nil {
     type Field = ();
     type Dims = Vec<usize>;
 
-    fn init(_arg: Self::Arg) -> Self::Field {
-        
-    }
+    fn init(_arg: Self::Arg) -> Self::Field {}
 
     fn from_dyn(dims: &[usize]) -> Option<Self::Field> {
         if dims.is_empty() { Some(()) } else { None }
@@ -28,13 +26,19 @@ impl Shape for Nil {
 
 impl DynShape for Nil {
     #[inline(always)]
-    fn rank(_shape: &Self::Field) -> usize { 0 }
+    fn rank(_shape: &Self::Field) -> usize {
+        0
+    }
 
     #[inline(always)]
-    fn numel(_shape: &Self::Field) -> usize { 1 }
+    fn numel(_shape: &Self::Field) -> usize {
+        1
+    }
 
     #[inline(always)]
-    fn dims(_shape: &Self::Field) -> Self::Dims { Vec::new() }
+    fn dims(_shape: &Self::Field) -> Self::Dims {
+        Vec::new()
+    }
 }
 
 impl PartialDynShape for Nil {
@@ -51,7 +55,9 @@ impl<Head: Dim, Tail: Shape<Dims = Vec<usize>>> Shape for Cons<Head, Tail> {
     }
 
     fn from_dyn(dims: &[usize]) -> Option<Self::Field> {
-        if dims.is_empty() { return None; }
+        if dims.is_empty() {
+            return None;
+        }
         Some((Head::from_size(dims[0])?, Tail::from_dyn(&dims[1..])?))
     }
 }

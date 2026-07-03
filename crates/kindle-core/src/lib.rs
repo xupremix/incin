@@ -8,12 +8,26 @@
 pub(crate) extern crate alloc;
 
 pub mod err;
+pub mod nn;
+pub mod optim;
 pub mod shapes;
 pub mod tensor;
 
 pub mod prelude {
     pub use super::err::*;
+    pub use crate::nn::{
+        module::Module,
+        param::Param,
+    };
+    
+    pub use crate::optim::{
+        Gradients, Optimizer, SGD,
+    };
+    pub use crate::shapes::dim::Dim;
+    pub use crate::shapes::shape::{ConstShape, DynShape, PartialDynShape, Shape};
+    pub use crate::symbolic_dim;
+    pub use crate::tensor::backend::Backend;
     pub use super::shapes::prelude::*;
     pub use super::tensor::prelude::*;
-    pub use typenum::{self, consts::*, Prod, Sum, Quot, Diff, Unsigned, UTerm, UInt, Bit, B0, B1};
+    pub use typenum::{self, B0, B1, Bit, Diff, Prod, Quot, Sum, UInt, UTerm, Unsigned, consts::*};
 }

@@ -32,22 +32,42 @@ pub trait StaticDim: Dim<Arg = ()> + Default {}
 impl<U, B> StaticDim for typenum::UInt<U, B>
 where
     U: typenum::Unsigned + Dim,
-    B: typenum::Bit + Default + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + PartialEq + 'static,
-    typenum::UInt<U, B>: typenum::Unsigned + Default + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + PartialEq + 'static,
-{}
+    B: typenum::Bit
+        + Default
+        + Copy
+        + Clone
+        + core::fmt::Debug
+        + Send
+        + Sync
+        + Eq
+        + PartialEq
+        + 'static,
+    typenum::UInt<U, B>: typenum::Unsigned
+        + Default
+        + Copy
+        + Clone
+        + core::fmt::Debug
+        + Send
+        + Sync
+        + Eq
+        + PartialEq
+        + 'static,
+{
+}
 impl StaticDim for typenum::UTerm {}
 impl<const N: usize> StaticDim for Const<N> {}
 
 // ============================================================================
 // Fully static: (M, K) × (K, N) → (M, N)
 // ============================================================================
-impl<M: StaticDim, K: StaticDim, N: StaticDim>
-    MatMulShape<(K, N)> for (M, K)
-{
+impl<M: StaticDim, K: StaticDim, N: StaticDim> MatMulShape<(K, N)> for (M, K) {
     type Output = (M, N);
 
     #[inline(always)]
-    fn output_shape(_: &<Self as Shape>::Field, _: &<(K, N) as Shape>::Field) -> <Self::Output as Shape>::Field {
+    fn output_shape(
+        _: &<Self as Shape>::Field,
+        _: &<(K, N) as Shape>::Field,
+    ) -> <Self::Output as Shape>::Field {
         (Default::default(), Default::default())
     }
 }
@@ -57,34 +77,37 @@ impl<M: StaticDim, K: StaticDim, N: StaticDim>
 // ============================================================================
 
 // (usize, K) × (K, N) → (usize, N)
-impl<K: StaticDim, N: StaticDim>
-    MatMulShape<(K, N)> for (usize, K)
-{
+impl<K: StaticDim, N: StaticDim> MatMulShape<(K, N)> for (usize, K) {
     type Output = (usize, N);
 
-    fn output_shape(lhs: &<Self as Shape>::Field, _: &<(K, N) as Shape>::Field) -> <Self::Output as Shape>::Field {
+    fn output_shape(
+        lhs: &<Self as Shape>::Field,
+        _: &<(K, N) as Shape>::Field,
+    ) -> <Self::Output as Shape>::Field {
         (lhs.0, Default::default())
     }
 }
 
 // (M, K) × (K, usize) → (M, usize)
-impl<M: StaticDim, K: StaticDim>
-    MatMulShape<(K, usize)> for (M, K)
-{
+impl<M: StaticDim, K: StaticDim> MatMulShape<(K, usize)> for (M, K) {
     type Output = (M, usize);
 
-    fn output_shape(_: &<Self as Shape>::Field, rhs: &<(K, usize) as Shape>::Field) -> <Self::Output as Shape>::Field {
+    fn output_shape(
+        _: &<Self as Shape>::Field,
+        rhs: &<(K, usize) as Shape>::Field,
+    ) -> <Self::Output as Shape>::Field {
         (Default::default(), rhs.1)
     }
 }
 
 // (usize, K) × (K, usize) → (usize, usize)
-impl<K: StaticDim>
-    MatMulShape<(K, usize)> for (usize, K)
-{
+impl<K: StaticDim> MatMulShape<(K, usize)> for (usize, K) {
     type Output = (usize, usize);
 
-    fn output_shape(lhs: &<Self as Shape>::Field, rhs: &<(K, usize) as Shape>::Field) -> <Self::Output as Shape>::Field {
+    fn output_shape(
+        lhs: &<Self as Shape>::Field,
+        rhs: &<(K, usize) as Shape>::Field,
+    ) -> <Self::Output as Shape>::Field {
         (lhs.0, rhs.1)
     }
 }
@@ -93,7 +116,10 @@ impl<K: StaticDim>
 impl MatMulShape<(usize, usize)> for (usize, usize) {
     type Output = (usize, usize);
 
-    fn output_shape(lhs: &<Self as Shape>::Field, rhs: &<(usize, usize) as Shape>::Field) -> <Self::Output as Shape>::Field {
+    fn output_shape(
+        lhs: &<Self as Shape>::Field,
+        rhs: &<(usize, usize) as Shape>::Field,
+    ) -> <Self::Output as Shape>::Field {
         (lhs.0, rhs.1)
     }
 }
@@ -104,7 +130,10 @@ impl MatMulShape<(usize, usize)> for (usize, usize) {
 impl MatMulShape<Dyn> for Dyn {
     type Output = Dyn;
 
-    fn output_shape(_lhs: &<Dyn as Shape>::Field, _rhs: &<Dyn as Shape>::Field) -> <Dyn as Shape>::Field {
+    fn output_shape(
+        _lhs: &<Dyn as Shape>::Field,
+        _rhs: &<Dyn as Shape>::Field,
+    ) -> <Dyn as Shape>::Field {
         alloc::vec![]
     }
 }
@@ -114,24 +143,26 @@ impl MatMulShape<Dyn> for Dyn {
 // ============================================================================
 
 // (B, M, K) × (B, K, N) → (B, M, N)
-impl<B: StaticDim, M: StaticDim, K: StaticDim, N: StaticDim>
-    MatMulShape<(B, K, N)> for (B, M, K)
-{
+impl<B: StaticDim, M: StaticDim, K: StaticDim, N: StaticDim> MatMulShape<(B, K, N)> for (B, M, K) {
     type Output = (B, M, N);
 
     #[inline(always)]
-    fn output_shape(_: &<Self as Shape>::Field, _: &<(B, K, N) as Shape>::Field) -> <Self::Output as Shape>::Field {
+    fn output_shape(
+        _: &<Self as Shape>::Field,
+        _: &<(B, K, N) as Shape>::Field,
+    ) -> <Self::Output as Shape>::Field {
         (Default::default(), Default::default(), Default::default())
     }
 }
 
 // (usize, M, K) × (usize, K, N) → (usize, M, N)
-impl<M: StaticDim, K: StaticDim, N: StaticDim>
-    MatMulShape<(usize, K, N)> for (usize, M, K)
-{
+impl<M: StaticDim, K: StaticDim, N: StaticDim> MatMulShape<(usize, K, N)> for (usize, M, K) {
     type Output = (usize, M, N);
 
-    fn output_shape(lhs: &<Self as Shape>::Field, _: &<(usize, K, N) as Shape>::Field) -> <Self::Output as Shape>::Field {
+    fn output_shape(
+        lhs: &<Self as Shape>::Field,
+        _: &<(usize, K, N) as Shape>::Field,
+    ) -> <Self::Output as Shape>::Field {
         (lhs.0, Default::default(), Default::default())
     }
 }
@@ -151,7 +182,8 @@ where
     where
         S2: Shape,
         S1: MatMulShape<S2>,
-        B: Backend<S2, RawTensor = <B as Backend<S1>>::RawTensor> + Backend<S1::Output, RawTensor = <B as Backend<S1>>::RawTensor>,
+        B: Backend<S2, RawTensor = <B as Backend<S1>>::RawTensor>
+            + Backend<S1::Output, RawTensor = <B as Backend<S1>>::RawTensor>,
     {
         let inner = <B as Backend<S1>>::matmul(&self.inner, &rhs.inner)?;
         let output_shape = S1::output_shape(&self._shape, &rhs._shape);

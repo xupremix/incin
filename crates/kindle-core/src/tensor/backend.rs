@@ -1,15 +1,40 @@
-use crate::prelude::{KindleDevice, KindleDType, Shape, Result};
+use crate::prelude::{KindleDType, KindleDevice, Result, Shape};
 
 /// A trait that abstracts the runtime computational engine (Candle, Burn, Ndarray, etc.).
 /// It provides the raw, dynamic memory buffer used by this specific backend.
 pub trait Backend<S: Shape> {
     type RawTensor: Clone;
+    type RawVar: Clone;
+
+    // Var operations
+    fn var_as_tensor(var: &Self::RawVar) -> Result<Self::RawTensor>;
 
     // Constructors
-    fn zeros(shape: &[usize], dtype: KindleDType, device: &KindleDevice) -> Result<Self::RawTensor>;
+    fn zeros(shape: &[usize], dtype: KindleDType, device: &KindleDevice)
+    -> Result<Self::RawTensor>;
     fn ones(shape: &[usize], dtype: KindleDType, device: &KindleDevice) -> Result<Self::RawTensor>;
     fn rand(shape: &[usize], dtype: KindleDType, device: &KindleDevice) -> Result<Self::RawTensor>;
-    fn randn(shape: &[usize], dtype: KindleDType, device: &KindleDevice) -> Result<Self::RawTensor>;
+    fn randn(shape: &[usize], dtype: KindleDType, device: &KindleDevice)
+    -> Result<Self::RawTensor>;
+
+    fn var_zeros(
+        shape: &[usize],
+        dtype: KindleDType,
+        device: &KindleDevice,
+    ) -> Result<Self::RawVar>;
+    fn var_ones(shape: &[usize], dtype: KindleDType, device: &KindleDevice)
+    -> Result<Self::RawVar>;
+    fn var_rand(shape: &[usize], dtype: KindleDType, device: &KindleDevice)
+    -> Result<Self::RawVar>;
+
+    // Device Management
+    fn tensor_to_device(t: &Self::RawTensor, device: &KindleDevice) -> Result<Self::RawTensor>;
+    fn var_to_device(var: &Self::RawVar, device: &KindleDevice) -> Result<Self::RawVar>;
+    fn var_randn(
+        shape: &[usize],
+        dtype: KindleDType,
+        device: &KindleDevice,
+    ) -> Result<Self::RawVar>;
 
     // Unary Ops
     fn relu(t: &Self::RawTensor) -> Result<Self::RawTensor>;
@@ -39,18 +64,26 @@ pub trait Backend<S: Shape> {
 
     // Tensor ops
     fn reshape(t: &Self::RawTensor, shape: &[usize]) -> Result<Self::RawTensor>;
-    
+
     // Slicing primitives
-    fn narrow(t: &Self::RawTensor, dim: usize, start: usize, len: usize) -> Result<Self::RawTensor>;
+    fn narrow(t: &Self::RawTensor, dim: usize, start: usize, len: usize)
+    -> Result<Self::RawTensor>;
     fn squeeze(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor>;
-    
+
     // Convolutions
     fn conv2d(
         t: &Self::RawTensor,
-        weight: &Self::RawTensor,
-        bias: Option<&Self::RawTensor>,
+        w: &Self::RawTensor,
+        b: Option<&Self::RawTensor>,
         stride: usize,
         padding: usize,
         dilation: usize,
     ) -> Result<Self::RawTensor>;
+    
+    type Grads;
+    
+    // Optimization
+    fn backward(loss: &Self::RawTensor) -> Result<Self::Grads>;
+    fn step_sgd(params: &mut [Self::RawVar], grads: &Self::Grads, lr: f64) -> Result<()>;
+    fn step_adamw(params: &mut [Self::RawVar], grads: &Self::Grads, lr: f64) -> Result<()>;
 }

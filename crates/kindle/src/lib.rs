@@ -5,10 +5,10 @@
 //     allow(incomplete_features)
 // )]
 
-pub use kindle_core::*;
 pub use kindle_backends::*;
+pub use kindle_core::*;
 
-pub use kindle_macros::{module, forward};
+pub use kindle_macros::{forward, module};
 
 // We define a type alias to restore the default Backend behavior without cyclical dependencies
 #[cfg(feature = "candle")]
@@ -34,14 +34,14 @@ pub type Tensor<
 > = kindle_core::prelude::Tensor<S, B, T, D, G>;
 
 pub mod macros {
-    pub use kindle_macros::{impl_arg_into, s, idx};
+    pub use kindle_macros::{idx, impl_arg_into, s};
 }
 
 pub mod prelude {
-    pub use kindle_core::prelude::*;
     pub use kindle_backends::prelude::*;
+    pub use kindle_core::prelude::*;
     pub use kindle_macros::*;
-    
+
     // We intentionally overshadow kindle_core::Tensor with our aliased version
     pub use super::Tensor;
 }
@@ -49,7 +49,7 @@ pub mod prelude {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::prelude::*;
+
 
     #[test]
     fn test_tensor_export() {
