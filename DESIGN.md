@@ -1,77 +1,39 @@
-# Dyn Parameters
-Dyn indicates any runtime known parameter
-- Shape
-- RequiresGrad
-- DType
-- Device
+# Kindle Design Document
 
-of course operations with dyn cannot have compile time guarantees and methods will be wrapped in results
-(there is always the problem of running out of memory for allocations when performing operations)
+## Objective
+To build an experimental statically-typed deep learning framework wrapper around dynamic backends (like Candle/Burn), proving that robust mathematical bounds and shapes can be verified at compile-time in Rust, with zero overhead at runtime.
 
-## Shape
-Generic: Dyn
-Field: Dyn
-take as param: anything list-like
+## Architecture
 
-## RequiresGrad
-Generic: Dyn
-Field: bool
-take as param: true or false
+### 1. The Core `Tensor` Wrapper
+```rust
+pub struct Tensor<S: Shape, B: Backend, T: DType, D: Device, G: RequiresGrad> {
+    pub(crate) inner: B::RawTensor,
+    pub(crate) _shape: S::Field,
+    // ...
+}
+```
+All tensor parameters (`S`, `T`, `D`, `G`) use zero-sized `PhantomData` fields to guarantee exact mathematical constraints when compiling, without inflating the size of the underlying backend tensor buffer.
 
-## DType
-Generic: Dyn
-Field: Dyn
-take as param: anything which can be intepreted ad a DType
-( DType enum )
+### 2. Type-Level Shapes & Traits
+Shapes are expressed strictly using const generics:
+```rust
+pub trait Shape {
+    type Field;
+    // Mathematical invariants mapping `s![B, C, H, W]` to behavior
+}
+```
+If a user writes `.add()` between two tensors, the Rust compiler will verify `S1 == S2`.
+If they don't match, `rustc` rejects it immediately, meaning runtime panics are drastically reduced.
 
-## Device
-Generic: Dyn
-Field: Dyn
-take as param: anything which can be intepreted ad a device
-( Device enum )
+### 3. Procedural Macro Ergonomics (`kindle-macros`)
+To compensate for Rust's verbose type signatures, we introduced `proc_macro` attributes.
+- **`s![B, C, H, W]`**: Expands a list of dimensions to a type-level nested generic list.
+- **`idx![.., 1..2, 0]`**: Translates NumPy/PyTorch slicing logic into successive `narrow` and dimension-dropping operations.
+- **`#[kindle::module]` & `#[kindle::forward]`**: In future iterations, these will AST-trace mathematical operations within neural networks to circumvent the type-solver when networks become thousands of layers deep, significantly speeding up compilation times.
 
-# Not Dyn Parameters
+### 4. Backends
+The `Backend` trait delegates computation. Currently, `CandleBackend` implements dynamic execution logic, providing a `candle::Tensor` to `Tensor::inner`.
 
-## Shape
-
-### Partially Dynamic
-Generic: (Const<N>, usize, ...) where usize denotes a dynamic parameter
-Field: (Const<N>, usize, ...)
-take as param: the Field
-
-### Static 
-Generic: (Const<N>, Const<M>, ...) only
-Field: Nothing
-take as param: Nothing
-
-## RequiresGrad
-Generic: Grad / NoGrad
-Field: PhantomData
-take as param: Nothing
-
-## DType
-Generic: f32 / u32 ...
-Field: PhantomData
-take as param: Nothing
-
-## Device
-Generic: Cpu / Cuda<N> ...
-Field: PhantomData
-take as param: Nothing
-
-# Tensor
-Generic over
-- Shape
-- DType
-- Device
-- RequiresGrad
-
-for a fully dynamic tensor
-Tensor<Dyn, Dyn, Dyn, Dyn>
-
--------------
-
-Shapes
-
-
-new() -> Self // no parameters just for const shapes
+### 5. Multi-Threaded DataLoaders
+By utilizing Rayon, `DataLoaderExt` exposes `.into_par_loader()`, effortlessly turning any standard Rust Iterator into a CPU-bound asynchronous worker pool.
