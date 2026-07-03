@@ -1,6 +1,6 @@
 use kindle::prelude::*;
 
 fn main() {
-    let t: Tensor<Dyn, f32, Cpu, Dyn> = Tensor::new(([2, 3], true));
-    println!("{t:#?}");
+    let t: Tensor<Dyn> = Tensor::zeros([2, 3]).unwrap();
+    println!("{t:?}");
 }

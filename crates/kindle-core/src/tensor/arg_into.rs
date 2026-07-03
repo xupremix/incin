@@ -16,7 +16,7 @@ use crate::prelude::Cuda;
 #[cfg(feature = "metal")]
 use crate::prelude::Metal;
 
-use crate::prelude::{Const, ConstDim, Cpu, Dim, Grad, KindleDType, KindleDevice, NoGrad};
+use crate::prelude::{Const, Cpu, Dim, Grad, KindleDType, KindleDevice, NoGrad};
 
 use alloc::vec::Vec;
 
@@ -146,7 +146,7 @@ impl<const N: usize> NotUnit for Cuda<N> {}
 impl<const N: usize> NotUnit for Metal<N> {}
 
 impl<D: Dim> NotUnit for Vec<D> {}
-impl<const N: usize> NotUnit for [usize; N] {}
+// Handled in shape.rs
 
 // ============================================================================
 // Dim tuple self-conversions (identity for shape args)
@@ -161,15 +161,13 @@ macro_rules! impl_dim_tuple_arg_into {
                 self
             }
         }
-        // Dim tuples are NotUnit
-        impl<$($name: Dim,)*> NotUnit for ($($name,)*) {}
     };
 }
 
 impl_dim_tuple_arg_into!(D0);
 impl_dim_tuple_arg_into!(D0, D1);
 impl_dim_tuple_arg_into!(D0, D1, D2);
-impl_dim_tuple_arg_into!(D0, D1, D2, D3);
+// 4-tuple is handled by the generic `impl<A, B, C, D> ArgInto<(TA, TB, TC, TD)>`
 impl_dim_tuple_arg_into!(D0, D1, D2, D3, D4);
 impl_dim_tuple_arg_into!(D0, D1, D2, D3, D4, D5);
 impl_dim_tuple_arg_into!(D0, D1, D2, D3, D4, D5, D6);
@@ -181,12 +179,7 @@ impl_dim_tuple_arg_into!(D0, D1, D2, D3, D4, D5, D6);
 
 macro_rules! impl_const_dim_tuple_from_unit {
     ($($name:ident),+ $(,)?) => {
-        impl<$($name: ConstDim,)*> ArgInto<($($name,)*)> for () {
-            #[inline(always)]
-            fn into_arg(self) -> ($($name,)*) {
-                ($($name::default(),)*)
-            }
-        }
+        // Handled by kindle_macros::impl_arg_into!(7)
     };
 }
 

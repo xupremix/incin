@@ -1,5 +1,6 @@
 pub mod arg;
 pub mod arg_into;
+pub mod backend;
 pub mod base;
 pub mod device;
 pub mod dtype;
@@ -10,6 +11,7 @@ pub mod ops;
 pub mod prelude {
     pub use super::arg::*;
     pub use super::arg_into::*;
+    pub use super::backend::*;
     pub use super::base::*;
     pub use super::device::*;
     pub use super::dtype::*;

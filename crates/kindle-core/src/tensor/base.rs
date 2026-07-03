@@ -1,7 +1,7 @@
 use crate::{
     candle,
     prelude::{
-        ArgInto, ConstDType, ConstDevice, ConstRequiresGrad, ConstShape, DType, Device,
+        ArgInto, Backend, CandleBackend, ConstDType, ConstDevice, ConstRequiresGrad, ConstShape, DType, Device,
         DynShape, Grad, NoGrad, RequiresGrad, Result, Shape, TensorArgs,
     },
 };
@@ -34,24 +34,26 @@ pub struct Dyn(());
 #[derive(Debug)]
 pub struct Tensor<
     S: Shape,
+    B: Backend = CandleBackend,
     T: DType = f32,
     #[cfg(feature = "cuda")] D: Device = crate::prelude::Cuda,
     #[cfg(all(not(feature = "cuda"), feature = "metal"))] D: Device = crate::prelude::Metal,
     #[cfg(all(not(feature = "cuda"), not(feature = "metal")))] D: Device = crate::prelude::Cpu,
     G: RequiresGrad = Grad,
 > {
-    inner: candle::Tensor,
-    _shape: S::Field,
-    _dtype: T::Field,
-    _device: D::Field,
-    _grad: G::Field,
+    pub(crate) inner: candle::Tensor,
+    pub(crate) _shape: S::Field,
+    pub(crate) _dtype: T::Field,
+    pub(crate) _device: D::Field,
+    pub(crate) _grad: G::Field,
+    pub(crate) _backend: core::marker::PhantomData<B>,
 }
 
 // ============================================================================
 // Core construction
 // ============================================================================
 
-impl<S: Shape, T: DType, D: Device, G: RequiresGrad> Tensor<S, T, D, G> {
+impl<S: Shape, B: Backend, T: DType, D: Device, G: RequiresGrad> Tensor<S, B, T, D, G> {
     /// Wrap an existing `candle::Tensor` with type-level metadata.
     ///
     /// # Safety contract (not unsafe, but the caller must ensure correctness):
@@ -70,6 +72,7 @@ impl<S: Shape, T: DType, D: Device, G: RequiresGrad> Tensor<S, T, D, G> {
             _dtype: dtype,
             _device: device,
             _grad: grad,
+            _backend: core::marker::PhantomData,
         }
     }
 
@@ -96,7 +99,7 @@ impl<S: Shape, T: DType, D: Device, G: RequiresGrad> Tensor<S, T, D, G> {
 // Factory methods for tensors with DynShape (all practical shapes)
 // ============================================================================
 
-impl<S, T, D, G> Tensor<S, T, D, G>
+impl<S, B: Backend, T, D, G> Tensor<S, B, T, D, G>
 where
     S: Shape + DynShape,
     T: DType<DType = candle::DType>,
@@ -125,7 +128,7 @@ where
         let device = D::device(&_device)?;
         let dtype = T::dtype(&_dtype);
         let inner = candle::Tensor::zeros(dims.as_ref(), dtype, &device)?;
-        Ok(Self::from_parts(inner, _shape, _dtype, _device, _grad))
+        Ok(Tensor::<_, B, _, _, _>::from_parts(inner, _shape, _dtype, _device, _grad))
     }
 
     /// Create a tensor filled with ones.
@@ -138,7 +141,7 @@ where
         let device = D::device(&_device)?;
         let dtype = T::dtype(&_dtype);
         let inner = candle::Tensor::ones(dims.as_ref(), dtype, &device)?;
-        Ok(Self::from_parts(inner, _shape, _dtype, _device, _grad))
+        Ok(Tensor::<_, B, _, _, _>::from_parts(inner, _shape, _dtype, _device, _grad))
     }
 
     /// Create a tensor with random values drawn from a uniform distribution [0, 1).
@@ -151,7 +154,7 @@ where
         let device = D::device(&_device)?;
         let dtype = T::dtype(&_dtype);
         let inner = candle::Tensor::rand(0f32, 1f32, dims.as_ref(), &device)?.to_dtype(dtype)?;
-        Ok(Self::from_parts(inner, _shape, _dtype, _device, _grad))
+        Ok(Tensor::<_, B, _, _, _>::from_parts(inner, _shape, _dtype, _device, _grad))
     }
 
     /// Create a tensor with random values from a standard normal distribution.
@@ -165,7 +168,7 @@ where
         let dtype = T::dtype(&_dtype);
         let inner =
             candle::Tensor::randn(0f32, 1f32, dims.as_ref(), &device)?.to_dtype(dtype)?;
-        Ok(Self::from_parts(inner, _shape, _dtype, _device, _grad))
+        Ok(Tensor::<_, B, _, _, _>::from_parts(inner, _shape, _dtype, _device, _grad))
     }
 
     /// Wrap an existing candle::Tensor, validating shape metadata.
@@ -174,7 +177,7 @@ where
         A: ArgInto<<(S, T, D, G) as TensorArgs<S, T, D, G>>::Args>,
     {
         let (_shape, _dtype, _device, _grad) = <(S, T, D, G)>::construct(args.into_arg());
-        Ok(Self::from_parts(candle_tensor, _shape, _dtype, _device, _grad))
+        Ok(Tensor::<_, B, _, _, _>::from_parts(candle_tensor, _shape, _dtype, _device, _grad))
     }
 }
 
@@ -182,7 +185,7 @@ where
 // from_slice — only for compile-time-known dtype (ConstDType)
 // ============================================================================
 
-impl<S, T, D, G> Tensor<S, T, D, G>
+impl<S, B: Backend, T, D, G> Tensor<S, B, T, D, G>
 where
     S: Shape + DynShape,
     T: ConstDType<DType = candle::DType>,
@@ -210,7 +213,7 @@ where
         let dims = S::dims(&_shape);
         let device = D::device(&_device)?;
         let inner = candle::Tensor::new(data, &device)?.reshape(dims.as_ref())?;
-        Ok(Self::from_parts(inner, _shape, _dtype, _device, _grad))
+        Ok(Tensor::<_, B, _, _, _>::from_parts(inner, _shape, _dtype, _device, _grad))
     }
 }
 
@@ -218,7 +221,7 @@ where
 // Fully-static convenience constructors (no args needed at all)
 // ============================================================================
 
-impl<S, T, D, G> Tensor<S, T, D, G>
+impl<S, B: Backend, T, D, G> Tensor<S, B, T, D, G>
 where
     S: ConstShape + DynShape,
     T: ConstDType<DType = candle::DType>,
@@ -235,7 +238,7 @@ where
         let device = D::device(&_device)?;
         let dtype = T::DTYPE;
         let inner = candle::Tensor::zeros(dims.as_ref(), dtype, &device)?;
-        Ok(Self::from_parts(inner, _shape, _dtype, _device, _grad))
+        Ok(Tensor::<_, B, _, _, _>::from_parts(inner, _shape, _dtype, _device, _grad))
     }
 
     /// Create a ones tensor with fully compile-time-known parameters.
@@ -248,7 +251,7 @@ where
         let device = D::device(&_device)?;
         let dtype = T::DTYPE;
         let inner = candle::Tensor::ones(dims.as_ref(), dtype, &device)?;
-        Ok(Self::from_parts(inner, _shape, _dtype, _device, _grad))
+        Ok(Tensor::<_, B, _, _, _>::from_parts(inner, _shape, _dtype, _device, _grad))
     }
 }
 
@@ -256,7 +259,7 @@ where
 // Accessor methods
 // ============================================================================
 
-impl<S: Shape + DynShape, T: DType, D: Device, G: RequiresGrad> Tensor<S, T, D, G> {
+impl<S: Shape + DynShape, B: Backend, T: DType, D: Device, G: RequiresGrad> Tensor<S, B, T, D, G> {
     /// Runtime rank of the tensor.
     #[inline]
     pub fn rank(&self) -> usize {
@@ -276,7 +279,7 @@ impl<S: Shape + DynShape, T: DType, D: Device, G: RequiresGrad> Tensor<S, T, D, 
     }
 }
 
-impl<S: Shape, T: DType<DType = candle::DType>, D: Device, G: RequiresGrad> Tensor<S, T, D, G> {
+impl<S: Shape, B: Backend, T: DType<DType = candle::DType>, D: Device, G: RequiresGrad> Tensor<S, B, T, D, G> {
     /// The candle DType of this tensor.
     #[inline]
     pub fn dtype(&self) -> candle::DType {
@@ -284,8 +287,8 @@ impl<S: Shape, T: DType<DType = candle::DType>, D: Device, G: RequiresGrad> Tens
     }
 }
 
-impl<S: Shape, T: DType, D: Device<Device = candle::Device>, G: RequiresGrad>
-    Tensor<S, T, D, G>
+impl<S: Shape, B: Backend, T: DType, D: Device<Device = candle::Device>, G: RequiresGrad>
+    Tensor<S, B, T, D, G>
 {
     /// The candle Device of this tensor.
     pub fn device(&self) -> Result<candle::Device> {
@@ -293,7 +296,7 @@ impl<S: Shape, T: DType, D: Device<Device = candle::Device>, G: RequiresGrad>
     }
 }
 
-impl<S: Shape, T: DType, D: Device, G: RequiresGrad> Tensor<S, T, D, G> {
+impl<S: Shape, B: Backend, T: DType, D: Device, G: RequiresGrad> Tensor<S, B, T, D, G> {
     /// Whether this tensor tracks gradients.
     #[inline]
     pub fn requires_grad(&self) -> bool {
@@ -305,8 +308,8 @@ impl<S: Shape, T: DType, D: Device, G: RequiresGrad> Tensor<S, T, D, G> {
 // to_vec — extract data (only for const dtype)
 // ============================================================================
 
-impl<S: Shape, T: ConstDType<DType = candle::DType>, D: Device, G: RequiresGrad>
-    Tensor<S, T, D, G>
+impl<S: Shape, B: Backend, T: ConstDType<DType = candle::DType>, D: Device, G: RequiresGrad>
+    Tensor<S, B, T, D, G>
 where
     T::Elem: candle::WithDType,
 {
@@ -320,10 +323,10 @@ where
 // Grad transitions — change the gradient tracking at the type level
 // ============================================================================
 
-impl<S: Shape, T: DType, D: Device> Tensor<S, T, D, NoGrad> {
+impl<S: Shape, B: Backend, T: DType, D: Device> Tensor<S, B, T, D, NoGrad> {
     /// Enable gradient tracking, changing the type from NoGrad to Grad.
-    pub fn require_grad(self) -> Tensor<S, T, D, Grad> {
-        Tensor::from_parts(
+    pub fn require_grad(self) -> Tensor<S, B, T, D, Grad> {
+        Tensor::<_, B, _, _, _>::from_parts(
             self.inner,
             self._shape,
             self._dtype,
@@ -333,10 +336,10 @@ impl<S: Shape, T: DType, D: Device> Tensor<S, T, D, NoGrad> {
     }
 }
 
-impl<S: Shape, T: DType, D: Device> Tensor<S, T, D, Grad> {
+impl<S: Shape, B: Backend, T: DType, D: Device> Tensor<S, B, T, D, Grad> {
     /// Detach from the computation graph, changing Grad to NoGrad.
-    pub fn detach(self) -> Tensor<S, T, D, NoGrad> {
-        Tensor::from_parts(
+    pub fn detach(self) -> Tensor<S, B, T, D, NoGrad> {
+        Tensor::<_, B, _, _, _>::from_parts(
             self.inner.detach(),
             self._shape,
             self._dtype,

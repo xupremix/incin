@@ -163,7 +163,7 @@ impl<const M: usize, const K: usize, const N: usize>
 // The matmul method on Tensor
 // ============================================================================
 
-impl<S1, T, D, G> Tensor<S1, T, D, G>
+impl<S1, B: Backend, T, D, G> Tensor<S1, B, T, D, G>
 where
     S1: Shape,
     T: DType,
@@ -182,14 +182,14 @@ where
     /// // let bad: Tensor<(Const<3>, Const<7>), f32, Cpu, Grad> = Tensor::zeros(())?;
     /// // let _ = a.matmul(&bad)?; // ERROR: MatMulShape not implemented
     /// ```
-    pub fn matmul<S2>(&self, rhs: &Tensor<S2, T, D, G>) -> Result<Tensor<S1::Output, T, D, G>>
+    pub fn matmul<S2>(&self, rhs: &Tensor<S2, B, T, D, G>) -> Result<Tensor<S1::Output, B, T, D, G>>
     where
         S2: Shape,
         S1: MatMulShape<S2>,
     {
         let inner = self.inner.matmul(&rhs.inner)?;
         let output_shape = S1::output_shape(&self._shape, &rhs._shape);
-        Ok(Tensor::from_parts(
+        Ok(Tensor::<_, B, _, _, _>::from_parts(
             inner,
             output_shape,
             self._dtype.clone(),
