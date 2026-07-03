@@ -17,7 +17,7 @@ pub struct Const<const N: usize>;
 // }
 
 impl<const N: usize> Dim for Const<N> {
-    type Arg = Self;
+    type Arg = ();
 
     #[inline(always)]
     fn size(&self) -> usize {

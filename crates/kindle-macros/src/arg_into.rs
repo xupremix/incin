@@ -37,17 +37,12 @@ pub fn impl_arg_into(input: TokenStream) -> TokenStream {
                 let is_const = (mask >> i) & 1 == 1;
 
                 if is_const {
-                    // Static: Const<N>
-                    // Generates: const N1: usize
-                    let const_name = format_ident!("N{}", const_counter);
-                    const_counter += 1;
+                    // Static: ()
+                    target_types.push(quote! { () });
 
-                    impl_generics.push(quote! { const #const_name: usize });
-                    target_types.push(quote! { Const<#const_name> });
-
-                    // Body inserts the unit constructor 'Const'
-                    tuple_body_items.push(quote! { Const });
-                    scalar_body_items.push(quote! { Const });
+                    // Body inserts the unit constructor '()'
+                    tuple_body_items.push(quote! { () });
+                    scalar_body_items.push(quote! { () });
                 } else {
                     // Dynamic: Generic Dim
                     // Generates: D0: Dim

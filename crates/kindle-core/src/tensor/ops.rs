@@ -202,6 +202,7 @@ mod tests {
         
         fn narrow(_t: &Self::RawTensor, _dim: usize, _s: usize, _l: usize) -> Result<Self::RawTensor> { Ok(()) }
         fn squeeze(_t: &Self::RawTensor, _dim: usize) -> Result<Self::RawTensor> { Ok(()) }
+        fn conv2d(_t: &Self::RawTensor, _w: &Self::RawTensor, _b: Option<&Self::RawTensor>, _s: usize, _p: usize, _d: usize) -> Result<Self::RawTensor> { Ok(()) }
     }
 
     #[test]

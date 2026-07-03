@@ -43,4 +43,14 @@ pub trait Backend<S: Shape> {
     // Slicing primitives
     fn narrow(t: &Self::RawTensor, dim: usize, start: usize, len: usize) -> Result<Self::RawTensor, Error>;
     fn squeeze(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor, Error>;
+    
+    // Convolutions
+    fn conv2d(
+        t: &Self::RawTensor,
+        weight: &Self::RawTensor,
+        bias: Option<&Self::RawTensor>,
+        stride: usize,
+        padding: usize,
+        dilation: usize,
+    ) -> Result<Self::RawTensor, Error>;
 }

@@ -57,7 +57,7 @@ mod tests {
         #[cfg(feature = "candle")]
         {
             // Verify our alias correctly injects CandleBackend
-            let _t: Tensor<Dyn> = Tensor::zeros(alloc::vec![2, 2]).unwrap();
+            let _t: Tensor<Dyn> = Tensor::zeros(std::vec![2, 2]).unwrap();
         }
     }
 }

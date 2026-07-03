@@ -10,6 +10,7 @@ use syn::{
 enum Dim {
     Dyn,
     Lit(syn::LitInt),
+    Path(syn::Path),
 }
 
 impl Parse for Dim {
@@ -18,7 +19,10 @@ impl Parse for Dim {
             input.parse::<Token![dyn]>()?;
             return Ok(Dim::Dyn);
         }
-        Ok(Dim::Lit(input.parse::<syn::LitInt>()?))
+        if input.peek(syn::LitInt) {
+            return Ok(Dim::Lit(input.parse::<syn::LitInt>()?));
+        }
+        Ok(Dim::Path(input.parse::<syn::Path>()?))
     }
 }
 
@@ -71,6 +75,7 @@ pub(crate) fn shape(input: TokenStream) -> TokenStream {
                 let val: usize = lit_int.base10_parse().unwrap();
                 output.push(lit_to_typenum(val, &path));
             }
+            Dim::Path(p) => output.push(quote! { #p }),
         }
     }
     

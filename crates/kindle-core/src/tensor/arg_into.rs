@@ -26,6 +26,13 @@ pub trait ArgInto<Target> {
     fn into_arg(self) -> Target;
 }
 
+pub struct TensorArgsData<S, T, D, G> {
+    pub shape: S,
+    pub dtype: T,
+    pub device: D,
+    pub grad: G,
+}
+
 /// Marker trait for types that represent non-trivial (non-unit) arguments.
 /// Used to disambiguate the lifting impls so that `()` positions are
 /// correctly identified as "no argument provided".
@@ -137,6 +144,16 @@ impl_not_unit! {
     KindleDevice
 }
 
+// () combinations used for static shapes should also be treated as Non-Unit
+// from the perspective of TensorArgsData lifting (as they represent the shape argument).
+impl NotUnit for ((),) {}
+impl NotUnit for ((), ()) {}
+impl NotUnit for ((), (), ()) {}
+impl NotUnit for ((), (), (), ()) {}
+impl NotUnit for ((), (), (), (), ()) {}
+impl NotUnit for ((), (), (), (), (), ()) {}
+impl NotUnit for ((), (), (), (), (), (), ()) {}
+
 impl<const N: usize> NotUnit for Const<N> {}
 
 #[cfg(feature = "cuda")]
@@ -206,122 +223,118 @@ impl_const_dim_tuple_from_unit!(D0, D1, D2, D3, D4, D5, D6);
 kindle_macros::impl_arg_into!(7);
 
 // ============================================================================
-// 4-tuple lifting: converts user args into (S::Arg, T::Arg, D::Arg, G::Arg)
-//
-// The Tensor constructor expects a 4-tuple of args, one per parameter.
-// These impls "lift" smaller tuples into the full 4-tuple by filling
-// unspecified positions with ().
+// 4-tuple lifting: converts user args into TensorArgsData
 // ============================================================================
 
 // 0 values: fully static tensor, no args needed
-impl ArgInto<((), (), (), ())> for () {
+impl ArgInto<TensorArgsData<(), (), (), ()>> for () {
     #[inline(always)]
-    fn into_arg(self) -> ((), (), (), ()) {
-        ((), (), (), ())
+    fn into_arg(self) -> TensorArgsData<(), (), (), ()> {
+        TensorArgsData { shape: (), dtype: (), device: (), grad: () }
     }
 }
 
 // 1 value: placed in whichever position has a non-() arg type
-impl<A: ArgInto<B>, B: NotUnit> ArgInto<(B, (), (), ())> for A {
+impl<A: ArgInto<B>, B: NotUnit> ArgInto<TensorArgsData<B, (), (), ()>> for A {
     #[inline(always)]
-    fn into_arg(self) -> (B, (), (), ()) {
-        (self.into_arg(), (), (), ())
+    fn into_arg(self) -> TensorArgsData<B, (), (), ()> {
+        TensorArgsData { shape: self.into_arg(), dtype: (), device: (), grad: () }
     }
 }
-impl<A: ArgInto<B>, B: NotUnit> ArgInto<((), B, (), ())> for A {
+impl<A: ArgInto<B>, B: NotUnit> ArgInto<TensorArgsData<(), B, (), ()>> for A {
     #[inline(always)]
-    fn into_arg(self) -> ((), B, (), ()) {
-        ((), self.into_arg(), (), ())
+    fn into_arg(self) -> TensorArgsData<(), B, (), ()> {
+        TensorArgsData { shape: (), dtype: self.into_arg(), device: (), grad: () }
     }
 }
-impl<A: ArgInto<B>, B: NotUnit> ArgInto<((), (), B, ())> for A {
+impl<A: ArgInto<B>, B: NotUnit> ArgInto<TensorArgsData<(), (), B, ()>> for A {
     #[inline(always)]
-    fn into_arg(self) -> ((), (), B, ()) {
-        ((), (), self.into_arg(), ())
+    fn into_arg(self) -> TensorArgsData<(), (), B, ()> {
+        TensorArgsData { shape: (), dtype: (), device: self.into_arg(), grad: () }
     }
 }
-impl<A: ArgInto<B>, B: NotUnit> ArgInto<((), (), (), B)> for A {
+impl<A: ArgInto<B>, B: NotUnit> ArgInto<TensorArgsData<(), (), (), B>> for A {
     #[inline(always)]
-    fn into_arg(self) -> ((), (), (), B) {
-        ((), (), (), self.into_arg())
+    fn into_arg(self) -> TensorArgsData<(), (), (), B> {
+        TensorArgsData { shape: (), dtype: (), device: (), grad: self.into_arg() }
     }
 }
 
 // 2 values: C(4,2) = 6 combinations
-impl<A, B, TA, TB> ArgInto<(TA, TB, (), ())> for (A, B)
+impl<A, B, TA, TB> ArgInto<TensorArgsData<TA, TB, (), ()>> for (A, B)
 where
     A: ArgInto<TA>,
     B: ArgInto<TB>,
     TA: NotUnit,
     TB: NotUnit,
 {
-    fn into_arg(self) -> (TA, TB, (), ()) {
-        (self.0.into_arg(), self.1.into_arg(), (), ())
+    fn into_arg(self) -> TensorArgsData<TA, TB, (), ()> {
+        TensorArgsData { shape: self.0.into_arg(), dtype: self.1.into_arg(), device: (), grad: () }
     }
 }
 
-impl<A, B, TA, TB> ArgInto<(TA, (), TB, ())> for (A, B)
+impl<A, B, TA, TB> ArgInto<TensorArgsData<TA, (), TB, ()>> for (A, B)
 where
     A: ArgInto<TA>,
     B: ArgInto<TB>,
     TA: NotUnit,
     TB: NotUnit,
 {
-    fn into_arg(self) -> (TA, (), TB, ()) {
-        (self.0.into_arg(), (), self.1.into_arg(), ())
+    fn into_arg(self) -> TensorArgsData<TA, (), TB, ()> {
+        TensorArgsData { shape: self.0.into_arg(), dtype: (), device: self.1.into_arg(), grad: () }
     }
 }
 
-impl<A, B, TA, TB> ArgInto<(TA, (), (), TB)> for (A, B)
+impl<A, B, TA, TB> ArgInto<TensorArgsData<TA, (), (), TB>> for (A, B)
 where
     A: ArgInto<TA>,
     B: ArgInto<TB>,
     TA: NotUnit,
     TB: NotUnit,
 {
-    fn into_arg(self) -> (TA, (), (), TB) {
-        (self.0.into_arg(), (), (), self.1.into_arg())
+    fn into_arg(self) -> TensorArgsData<TA, (), (), TB> {
+        TensorArgsData { shape: self.0.into_arg(), dtype: (), device: (), grad: self.1.into_arg() }
     }
 }
 
-impl<A, B, TA, TB> ArgInto<((), TA, TB, ())> for (A, B)
+impl<A, B, TA, TB> ArgInto<TensorArgsData<(), TA, TB, ()>> for (A, B)
 where
     A: ArgInto<TA>,
     B: ArgInto<TB>,
     TA: NotUnit,
     TB: NotUnit,
 {
-    fn into_arg(self) -> ((), TA, TB, ()) {
-        ((), self.0.into_arg(), self.1.into_arg(), ())
+    fn into_arg(self) -> TensorArgsData<(), TA, TB, ()> {
+        TensorArgsData { shape: (), dtype: self.0.into_arg(), device: self.1.into_arg(), grad: () }
     }
 }
 
-impl<A, B, TA, TB> ArgInto<((), TA, (), TB)> for (A, B)
+impl<A, B, TA, TB> ArgInto<TensorArgsData<(), TA, (), TB>> for (A, B)
 where
     A: ArgInto<TA>,
     B: ArgInto<TB>,
     TA: NotUnit,
     TB: NotUnit,
 {
-    fn into_arg(self) -> ((), TA, (), TB) {
-        ((), self.0.into_arg(), (), self.1.into_arg())
+    fn into_arg(self) -> TensorArgsData<(), TA, (), TB> {
+        TensorArgsData { shape: (), dtype: self.0.into_arg(), device: (), grad: self.1.into_arg() }
     }
 }
 
-impl<A, B, TA, TB> ArgInto<((), (), TA, TB)> for (A, B)
+impl<A, B, TA, TB> ArgInto<TensorArgsData<(), (), TA, TB>> for (A, B)
 where
     A: ArgInto<TA>,
     B: ArgInto<TB>,
     TA: NotUnit,
     TB: NotUnit,
 {
-    fn into_arg(self) -> ((), (), TA, TB) {
-        ((), (), self.0.into_arg(), self.1.into_arg())
+    fn into_arg(self) -> TensorArgsData<(), (), TA, TB> {
+        TensorArgsData { shape: (), dtype: (), device: self.0.into_arg(), grad: self.1.into_arg() }
     }
 }
 
 // 3 values: C(4,3) = 4 combinations
-impl<A, B, C, TA, TB, TC> ArgInto<((), TA, TB, TC)> for (A, B, C)
+impl<A, B, C, TA, TB, TC> ArgInto<TensorArgsData<(), TA, TB, TC>> for (A, B, C)
 where
     A: ArgInto<TA>,
     B: ArgInto<TB>,
@@ -330,11 +343,11 @@ where
     TB: NotUnit,
     TC: NotUnit,
 {
-    fn into_arg(self) -> ((), TA, TB, TC) {
-        ((), self.0.into_arg(), self.1.into_arg(), self.2.into_arg())
+    fn into_arg(self) -> TensorArgsData<(), TA, TB, TC> {
+        TensorArgsData { shape: (), dtype: self.0.into_arg(), device: self.1.into_arg(), grad: self.2.into_arg() }
     }
 }
-impl<A, B, C, TA, TB, TC> ArgInto<(TA, (), TB, TC)> for (A, B, C)
+impl<A, B, C, TA, TB, TC> ArgInto<TensorArgsData<TA, (), TB, TC>> for (A, B, C)
 where
     A: ArgInto<TA>,
     B: ArgInto<TB>,
@@ -343,11 +356,11 @@ where
     TB: NotUnit,
     TC: NotUnit,
 {
-    fn into_arg(self) -> (TA, (), TB, TC) {
-        (self.0.into_arg(), (), self.1.into_arg(), self.2.into_arg())
+    fn into_arg(self) -> TensorArgsData<TA, (), TB, TC> {
+        TensorArgsData { shape: self.0.into_arg(), dtype: (), device: self.1.into_arg(), grad: self.2.into_arg() }
     }
 }
-impl<A, B, C, TA, TB, TC> ArgInto<(TA, TB, (), TC)> for (A, B, C)
+impl<A, B, C, TA, TB, TC> ArgInto<TensorArgsData<TA, TB, (), TC>> for (A, B, C)
 where
     A: ArgInto<TA>,
     B: ArgInto<TB>,
@@ -356,11 +369,11 @@ where
     TB: NotUnit,
     TC: NotUnit,
 {
-    fn into_arg(self) -> (TA, TB, (), TC) {
-        (self.0.into_arg(), self.1.into_arg(), (), self.2.into_arg())
+    fn into_arg(self) -> TensorArgsData<TA, TB, (), TC> {
+        TensorArgsData { shape: self.0.into_arg(), dtype: self.1.into_arg(), device: (), grad: self.2.into_arg() }
     }
 }
-impl<A, B, C, TA, TB, TC> ArgInto<(TA, TB, TC, ())> for (A, B, C)
+impl<A, B, C, TA, TB, TC> ArgInto<TensorArgsData<TA, TB, TC, ()>> for (A, B, C)
 where
     A: ArgInto<TA>,
     B: ArgInto<TB>,
@@ -369,13 +382,13 @@ where
     TB: NotUnit,
     TC: NotUnit,
 {
-    fn into_arg(self) -> (TA, TB, TC, ()) {
-        (self.0.into_arg(), self.1.into_arg(), self.2.into_arg(), ())
+    fn into_arg(self) -> TensorArgsData<TA, TB, TC, ()> {
+        TensorArgsData { shape: self.0.into_arg(), dtype: self.1.into_arg(), device: self.2.into_arg(), grad: () }
     }
 }
 
 // 4 values: all positions specified
-impl<A, B, C, D, TA, TB, TC, TD> ArgInto<(TA, TB, TC, TD)> for (A, B, C, D)
+impl<A, B, C, D, TA, TB, TC, TD> ArgInto<TensorArgsData<TA, TB, TC, TD>> for (A, B, C, D)
 where
     A: ArgInto<TA>,
     B: ArgInto<TB>,
@@ -386,13 +399,13 @@ where
     TC: NotUnit,
     TD: NotUnit,
 {
-    fn into_arg(self) -> (TA, TB, TC, TD) {
-        (
-            self.0.into_arg(),
-            self.1.into_arg(),
-            self.2.into_arg(),
-            self.3.into_arg(),
-        )
+    fn into_arg(self) -> TensorArgsData<TA, TB, TC, TD> {
+        TensorArgsData {
+            shape: self.0.into_arg(),
+            dtype: self.1.into_arg(),
+            device: self.2.into_arg(),
+            grad: self.3.into_arg(),
+        }
     }
 }
 

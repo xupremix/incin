@@ -1,0 +1,107 @@
+use kindle::prelude::*;
+use kindle_backends::candle::CandleBackend;
+use typenum::{U1, U10, U16, U26, U28, U3, U0, Prod};
+use std::collections::HashMap;
+
+// Using type aliases for clarity
+type BatchSize = typenum::U4;
+type CIn = U1;
+type COut = U16;
+type HIn = U28;
+type WIn = U28;
+type KernelSize = U3;
+type Stride = U1;
+type Padding = U0;
+
+// Output spatial dimension of our Conv2D layer
+type HOut = U26; // (28 + 0 - 3)/1 + 1 = 26
+type WOut = U26;
+
+// Flattened size: 16 * 26 * 26
+type FlatSize = Prod<COut, Prod<HOut, WOut>>;
+
+#[kindle::module]
+pub struct SimpleCNN {
+    conv1_w: Tensor<(COut, CIn, KernelSize, KernelSize), CandleBackend>,
+    fc1_w: Tensor<(FlatSize, U10), CandleBackend>,
+}
+
+impl SimpleCNN {
+    pub fn new() -> Result<Self> {
+        let dev = KindleDevice::cpu();
+        Ok(Self {
+            conv1_w: Tensor::<Dyn, CandleBackend>::randn([16, 1, 3, 3])?.into_shape()?,
+            fc1_w: Tensor::<Dyn, CandleBackend>::randn([16 * 26 * 26, 10])?.into_shape()?,
+        })
+    }
+
+    #[kindle::forward]
+    pub fn forward(&self, x: Tensor<(BatchSize, CIn, HIn, WIn), CandleBackend>) -> Result<Tensor<(BatchSize, U10), CandleBackend>> {
+        // 1. Conv2D layer
+        // Shapes are verified at compile-time:
+        // Input: (B, 1, 28, 28)
+        // Output: (B, 16, 26, 26)
+        let conv_out = x.conv2d::<Stride, Padding, _>(&self.conv1_w, None)?;
+        
+        // 2. Activation
+        let activated = conv_out.relu()?;
+        
+        // 3. Flatten
+        // (B, 16, 26, 26) -> (B, 16 * 26 * 26)
+        let flat = activated.flatten()?;
+        
+        // 4. Fully Connected (MatMul)
+        // (B, FlatSize) @ (FlatSize, 10) -> (B, 10)
+        let logits = flat.matmul(&self.fc1_w)?;
+        
+        Ok(logits)
+    }
+
+    pub fn save_safetensors(&self, path: &str) -> candle_core::Result<()> {
+        let mut map = HashMap::new();
+        map.insert("conv1_w".to_string(), self.conv1_w.inner().clone());
+        map.insert("fc1_w".to_string(), self.fc1_w.inner().clone());
+        candle_core::safetensors::save(&map, path)
+    }
+
+    pub fn load_safetensors(path: &str) -> Result<Self> {
+        let dev = candle_core::Device::Cpu;
+        let tensors = candle_core::safetensors::load(path, &dev).map_err(|e| Error::UnsupportedBackendOperation { op: "load", backend: "Candle" })?;
+        
+        let conv1_w = tensors.get("conv1_w").unwrap().clone();
+        let fc1_w = tensors.get("fc1_w").unwrap().clone();
+        
+        Ok(Self {
+            conv1_w: Tensor::from_raw(conv1_w, ())?,
+            fc1_w: Tensor::from_raw(fc1_w, ())?,
+        })
+    }
+}
+
+fn main() -> Result<()> {
+    println!("Initializing CNN model...");
+    let model = SimpleCNN::new()?;
+    
+    println!("Creating input tensor of shape (4, 1, 28, 28)...");
+    let input: Tensor<(BatchSize, CIn, HIn, WIn), CandleBackend> = Tensor::<Dyn, CandleBackend>::zeros([4, 1, 28, 28])?.into_shape()?;
+    
+    let logits = model.forward(input)?;
+    println!("✅ Forward pass successful! Output shape: {:?}", logits.dims());
+    
+    let save_path = "simple_cnn.safetensors";
+    model.save_safetensors(save_path).unwrap();
+    println!("✅ Model saved to {}", save_path);
+    
+    let loaded_model = SimpleCNN::load_safetensors(save_path)?;
+    println!("✅ Model loaded successfully from {}", save_path);
+    
+    // Test the loaded model
+    let input2: Tensor<(BatchSize, CIn, HIn, WIn), CandleBackend> = Tensor::<Dyn, CandleBackend>::ones([4, 1, 28, 28])?.into_shape()?;
+    let logits2 = loaded_model.forward(input2)?;
+    println!("✅ Loaded model forward pass successful! Output shape: {:?}", logits2.dims());
+    
+    // Clean up
+    std::fs::remove_file(save_path).unwrap();
+    
+    Ok(())
+}

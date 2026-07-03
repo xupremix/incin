@@ -14,3 +14,4 @@ workspace = true
 
 [dependencies]
 kindle = { path = "../../crates/kindle", features = ["std"], default-features = false }
+kindle-backends = { path = "../../crates/kindle-backends", features = ["candle"] }

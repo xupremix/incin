@@ -247,15 +247,32 @@ mod tests {
         fn ones(_shape: &[usize], _dtype: KindleDType, _device: &KindleDevice) -> Result<Self::RawTensor> { Ok(()) }
         fn rand(_shape: &[usize], _dtype: KindleDType, _device: &KindleDevice) -> Result<Self::RawTensor> { Ok(()) }
         fn randn(_shape: &[usize], _dtype: KindleDType, _device: &KindleDevice) -> Result<Self::RawTensor> { Ok(()) }
+        
+        fn neg(_t: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(()) }
+        fn sqrt(_t: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(()) }
+        fn exp(_t: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(()) }
+        fn log(_t: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(()) }
+        fn tanh(_t: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(()) }
+        fn sigmoid(_t: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(()) }
         fn relu(_t: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(()) }
         fn gelu(_t: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(()) }
         fn abs(_t: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(()) }
+        
         fn add(_lhs: &Self::RawTensor, _rhs: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(()) }
         fn sub(_lhs: &Self::RawTensor, _rhs: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(()) }
         fn mul(_lhs: &Self::RawTensor, _rhs: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(()) }
         fn div(_lhs: &Self::RawTensor, _rhs: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(()) }
+        
+        fn mul_scalar(_t: &Self::RawTensor, _scalar: f64) -> Result<Self::RawTensor> { Ok(()) }
+        fn add_scalar(_t: &Self::RawTensor, _scalar: f64) -> Result<Self::RawTensor> { Ok(()) }
+        fn sum_all(_t: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(()) }
+        fn mean_all(_t: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(()) }
+        
         fn matmul(_lhs: &Self::RawTensor, _rhs: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(()) }
         fn reshape(_t: &Self::RawTensor, _shape: &[usize]) -> Result<Self::RawTensor> { Ok(()) }
+        fn narrow(_t: &Self::RawTensor, _dim: usize, _start: usize, _len: usize) -> Result<Self::RawTensor> { Ok(()) }
+        fn squeeze(_t: &Self::RawTensor, _dim: usize) -> Result<Self::RawTensor> { Ok(()) }
+        fn conv2d(_t: &Self::RawTensor, _w: &Self::RawTensor, _b: Option<&Self::RawTensor>, _s: usize, _p: usize, _d: usize) -> Result<Self::RawTensor> { Ok(()) }
     }
 
     #[test]

@@ -17,15 +17,15 @@ where
     D: Device,
     G: RequiresGrad,
 {
-    type Args = (S::Arg, T::Arg, D::Arg, G::Arg);
+    type Args = crate::prelude::TensorArgsData<S::Arg, T::Arg, D::Arg, G::Arg>;
 
     #[inline]
     fn construct(args: Self::Args) -> (S::Field, T::Field, D::Field, G::Field) {
         (
-            S::init(args.0),
-            T::init(args.1),
-            D::init(args.2),
-            G::init(args.3),
+            S::init(args.shape),
+            T::init(args.dtype),
+            D::init(args.device),
+            G::init(args.grad),
         )
     }
 }

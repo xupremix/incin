@@ -1329,6 +1329,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "cnn"
+version = "0.1.0"
+dependencies = [
+ "candle-core 0.9.1",
+ "kindle",
+ "kindle-backends",
+ "kindle-core",
+]
+
+[[package]]
 name = "codespan-reporting"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6688,7 +6698,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "once_cell",
  "rustix",
  "windows-sys 0.61.2",
@@ -6784,6 +6794,7 @@ name = "testing"
 version = "0.1.0"
 dependencies = [
  "kindle",
+ "kindle-backends",
 ]
 
 [[package]]

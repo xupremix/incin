@@ -26,7 +26,7 @@ impl Dim for usize {
 use typenum::{UTerm, UInt, Bit, Unsigned};
 
 impl Dim for UTerm {
-    type Arg = Self;
+    type Arg = ();
 
     #[inline(always)]
     fn size(&self) -> usize { 0 }
@@ -46,7 +46,7 @@ where
     B: Bit + Default + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + PartialEq + 'static,
     UInt<U, B>: Unsigned + Default + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + PartialEq + 'static,
 {
-    type Arg = Self;
+    type Arg = ();
 
     #[inline(always)]
     fn size(&self) -> usize {

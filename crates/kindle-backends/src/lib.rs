@@ -66,6 +66,18 @@ pub mod candle {
         fn relu(t: &Self::RawTensor) -> Result<Self::RawTensor, Error> { Ok(t.relu().map_err(|e| anyhow::anyhow!(e))?) }
         fn gelu(t: &Self::RawTensor) -> Result<Self::RawTensor, Error> { Ok(t.gelu_erf().map_err(|e| anyhow::anyhow!(e))?) } // using gelu_erf as fallback for general
         fn abs(t: &Self::RawTensor) -> Result<Self::RawTensor, Error> { Ok(t.abs().map_err(|e| anyhow::anyhow!(e))?) }
+        fn neg(t: &Self::RawTensor) -> Result<Self::RawTensor, Error> { Ok(t.neg().map_err(|e| anyhow::anyhow!(e))?) }
+        fn sqrt(t: &Self::RawTensor) -> Result<Self::RawTensor, Error> { Ok(t.sqrt().map_err(|e| anyhow::anyhow!(e))?) }
+        fn exp(t: &Self::RawTensor) -> Result<Self::RawTensor, Error> { Ok(t.exp().map_err(|e| anyhow::anyhow!(e))?) }
+        fn log(t: &Self::RawTensor) -> Result<Self::RawTensor, Error> { Ok(t.log().map_err(|e| anyhow::anyhow!(e))?) }
+        fn tanh(t: &Self::RawTensor) -> Result<Self::RawTensor, Error> { Ok(t.tanh().map_err(|e| anyhow::anyhow!(e))?) }
+        fn sigmoid(t: &Self::RawTensor) -> Result<Self::RawTensor, Error> { Ok(::candle_nn::ops::sigmoid(t).map_err(|e| anyhow::anyhow!(e))?) }
+
+        fn mul_scalar(t: &Self::RawTensor, scalar: f64) -> Result<Self::RawTensor, Error> { Ok((t * scalar).map_err(|e| anyhow::anyhow!(e))?) }
+        fn add_scalar(t: &Self::RawTensor, scalar: f64) -> Result<Self::RawTensor, Error> { Ok((t + scalar).map_err(|e| anyhow::anyhow!(e))?) }
+
+        fn sum_all(t: &Self::RawTensor) -> Result<Self::RawTensor, Error> { Ok(t.sum_all().map_err(|e| anyhow::anyhow!(e))?) }
+        fn mean_all(t: &Self::RawTensor) -> Result<Self::RawTensor, Error> { Ok(t.mean_all().map_err(|e| anyhow::anyhow!(e))?) }
 
         fn add(lhs: &Self::RawTensor, rhs: &Self::RawTensor) -> Result<Self::RawTensor, Error> {
             Ok(lhs.broadcast_add(rhs).map_err(|e| anyhow::anyhow!(e))?)
@@ -84,6 +96,27 @@ pub mod candle {
         }
         fn reshape(t: &Self::RawTensor, shape: &[usize]) -> Result<Self::RawTensor, Error> {
             Ok(t.reshape(shape).map_err(|e| anyhow::anyhow!(e))?)
+        }
+
+        fn narrow(t: &Self::RawTensor, dim: usize, start: usize, len: usize) -> Result<Self::RawTensor, Error> {
+            Ok(t.narrow(dim, start, len).map_err(|e| anyhow::anyhow!(e))?)
+        }
+        
+        fn squeeze(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor, Error> {
+            Ok(t.squeeze(dim).map_err(|e| anyhow::anyhow!(e))?)
+        }
+
+        fn conv2d(
+            t: &Self::RawTensor,
+            weight: &Self::RawTensor,
+            _bias: Option<&Self::RawTensor>,
+            stride: usize,
+            padding: usize,
+            dilation: usize,
+        ) -> Result<Self::RawTensor, Error> {
+            // Candle's conv2d handles dilation and padding through conv2d operation arguments.
+            // Using candle_nn::conv2d or directly the conv2d method if available on Tensor.
+            Ok(t.conv2d(weight, padding, stride, dilation, 1).map_err(|e| anyhow::anyhow!(e))?)
         }
     }
 
@@ -140,6 +173,16 @@ pub mod ndarray_backend {
         fn abs(t: &Self::RawTensor) -> Result<Self::RawTensor, Error> {
             Ok(t.mapv(|x| x.abs()))
         }
+        fn neg(_t: &Self::RawTensor) -> Result<Self::RawTensor, Error> { Err(Error::UnsupportedBackendOperation { op: "neg", backend: "Ndarray" }) }
+        fn sqrt(_t: &Self::RawTensor) -> Result<Self::RawTensor, Error> { Err(Error::UnsupportedBackendOperation { op: "sqrt", backend: "Ndarray" }) }
+        fn exp(_t: &Self::RawTensor) -> Result<Self::RawTensor, Error> { Err(Error::UnsupportedBackendOperation { op: "exp", backend: "Ndarray" }) }
+        fn log(_t: &Self::RawTensor) -> Result<Self::RawTensor, Error> { Err(Error::UnsupportedBackendOperation { op: "log", backend: "Ndarray" }) }
+        fn tanh(_t: &Self::RawTensor) -> Result<Self::RawTensor, Error> { Err(Error::UnsupportedBackendOperation { op: "tanh", backend: "Ndarray" }) }
+        fn sigmoid(_t: &Self::RawTensor) -> Result<Self::RawTensor, Error> { Err(Error::UnsupportedBackendOperation { op: "sigmoid", backend: "Ndarray" }) }
+        fn mul_scalar(_t: &Self::RawTensor, _scalar: f64) -> Result<Self::RawTensor, Error> { Err(Error::UnsupportedBackendOperation { op: "mul_scalar", backend: "Ndarray" }) }
+        fn add_scalar(_t: &Self::RawTensor, _scalar: f64) -> Result<Self::RawTensor, Error> { Err(Error::UnsupportedBackendOperation { op: "add_scalar", backend: "Ndarray" }) }
+        fn sum_all(_t: &Self::RawTensor) -> Result<Self::RawTensor, Error> { Err(Error::UnsupportedBackendOperation { op: "sum_all", backend: "Ndarray" }) }
+        fn mean_all(_t: &Self::RawTensor) -> Result<Self::RawTensor, Error> { Err(Error::UnsupportedBackendOperation { op: "mean_all", backend: "Ndarray" }) }
         fn add(lhs: &Self::RawTensor, rhs: &Self::RawTensor) -> Result<Self::RawTensor, Error> {
             Ok(lhs + rhs)
         }
@@ -158,6 +201,9 @@ pub mod ndarray_backend {
         fn reshape(t: &Self::RawTensor, shape: &[usize]) -> Result<Self::RawTensor, Error> {
             t.to_owned().into_shape_with_order(shape).map_err(|e| anyhow::anyhow!(e).into())
         }
+        fn narrow(_t: &Self::RawTensor, _dim: usize, _start: usize, _len: usize) -> Result<Self::RawTensor, Error> { Err(Error::UnsupportedBackendOperation { op: "narrow", backend: "Ndarray" }) }
+        fn squeeze(_t: &Self::RawTensor, _dim: usize) -> Result<Self::RawTensor, Error> { Err(Error::UnsupportedBackendOperation { op: "squeeze", backend: "Ndarray" }) }
+        fn conv2d(_t: &Self::RawTensor, _w: &Self::RawTensor, _b: Option<&Self::RawTensor>, _s: usize, _p: usize, _d: usize) -> Result<Self::RawTensor, Error> { Err(Error::UnsupportedBackendOperation { op: "conv2d", backend: "Ndarray" }) }
     }
 }
 
@@ -198,6 +244,16 @@ pub mod burn_backend {
                 fn abs(t: &Self::RawTensor) -> Result<Self::RawTensor, Error> {
                     Ok(t.clone().abs())
                 }
+                fn neg(_t: &Self::RawTensor) -> Result<Self::RawTensor, Error> { Err(Error::UnsupportedBackendOperation { op: "neg", backend: "Burn" }) }
+                fn sqrt(_t: &Self::RawTensor) -> Result<Self::RawTensor, Error> { Err(Error::UnsupportedBackendOperation { op: "sqrt", backend: "Burn" }) }
+                fn exp(_t: &Self::RawTensor) -> Result<Self::RawTensor, Error> { Err(Error::UnsupportedBackendOperation { op: "exp", backend: "Burn" }) }
+                fn log(_t: &Self::RawTensor) -> Result<Self::RawTensor, Error> { Err(Error::UnsupportedBackendOperation { op: "log", backend: "Burn" }) }
+                fn tanh(_t: &Self::RawTensor) -> Result<Self::RawTensor, Error> { Err(Error::UnsupportedBackendOperation { op: "tanh", backend: "Burn" }) }
+                fn sigmoid(_t: &Self::RawTensor) -> Result<Self::RawTensor, Error> { Err(Error::UnsupportedBackendOperation { op: "sigmoid", backend: "Burn" }) }
+                fn mul_scalar(_t: &Self::RawTensor, _scalar: f64) -> Result<Self::RawTensor, Error> { Err(Error::UnsupportedBackendOperation { op: "mul_scalar", backend: "Burn" }) }
+                fn add_scalar(_t: &Self::RawTensor, _scalar: f64) -> Result<Self::RawTensor, Error> { Err(Error::UnsupportedBackendOperation { op: "add_scalar", backend: "Burn" }) }
+                fn sum_all(_t: &Self::RawTensor) -> Result<Self::RawTensor, Error> { Err(Error::UnsupportedBackendOperation { op: "sum_all", backend: "Burn" }) }
+                fn mean_all(_t: &Self::RawTensor) -> Result<Self::RawTensor, Error> { Err(Error::UnsupportedBackendOperation { op: "mean_all", backend: "Burn" }) }
                 fn add(lhs: &Self::RawTensor, rhs: &Self::RawTensor) -> Result<Self::RawTensor, Error> {
                     Ok(lhs.clone() + rhs.clone())
                 }
@@ -216,6 +272,9 @@ pub mod burn_backend {
                 fn reshape(_t: &Self::RawTensor, _shape: &[usize]) -> Result<Self::RawTensor, Error> {
                     Err(Error::UnsupportedBackendOperation { op: "reshape", backend: "Burn" })
                 }
+                fn narrow(_t: &Self::RawTensor, _dim: usize, _start: usize, _len: usize) -> Result<Self::RawTensor, Error> { Err(Error::UnsupportedBackendOperation { op: "narrow", backend: "Burn" }) }
+                fn squeeze(_t: &Self::RawTensor, _dim: usize) -> Result<Self::RawTensor, Error> { Err(Error::UnsupportedBackendOperation { op: "squeeze", backend: "Burn" }) }
+                fn conv2d(_t: &Self::RawTensor, _w: &Self::RawTensor, _b: Option<&Self::RawTensor>, _s: usize, _p: usize, _d: usize) -> Result<Self::RawTensor, Error> { Err(Error::UnsupportedBackendOperation { op: "conv2d", backend: "Burn" }) }
             }
         };
     }

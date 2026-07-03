@@ -28,20 +28,27 @@ pub trait MatMulShape<Rhs: Shape>: Shape {
     ) -> <Self::Output as Shape>::Field;
 }
 
-// ============================================================================
-// Fully static: (Const<M>, Const<K>) × (Const<K>, Const<N>) → (Const<M>, Const<N>)
-//
-// The K dimensions MUST match at the type level — the compiler enforces this.
-// ============================================================================
+pub trait StaticDim: Dim<Arg = ()> + Default {}
+impl<U, B> StaticDim for typenum::UInt<U, B>
+where
+    U: typenum::Unsigned + Dim,
+    B: typenum::Bit + Default + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + PartialEq + 'static,
+    typenum::UInt<U, B>: typenum::Unsigned + Default + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + PartialEq + 'static,
+{}
+impl StaticDim for typenum::UTerm {}
+impl<const N: usize> StaticDim for Const<N> {}
 
-impl<const M: usize, const K: usize, const N: usize>
-    MatMulShape<(Const<K>, Const<N>)> for (Const<M>, Const<K>)
+// ============================================================================
+// Fully static: (M, K) × (K, N) → (M, N)
+// ============================================================================
+impl<M: StaticDim, K: StaticDim, N: StaticDim>
+    MatMulShape<(K, N)> for (M, K)
 {
-    type Output = (Const<M>, Const<N>);
+    type Output = (M, N);
 
     #[inline(always)]
-    fn output_shape(_: &Self::Field, _: &<(Const<K>, Const<N>) as Shape>::Field) -> (Const<M>, Const<N>) {
-        (Const, Const)
+    fn output_shape(_: &<Self as Shape>::Field, _: &<(K, N) as Shape>::Field) -> <Self::Output as Shape>::Field {
+        (Default::default(), Default::default())
     }
 }
 
@@ -49,78 +56,55 @@ impl<const M: usize, const K: usize, const N: usize>
 // Partially dynamic: dynamic batch or dynamic inner dims
 // ============================================================================
 
-// (usize, Const<K>) × (Const<K>, Const<N>) → (usize, Const<N>)
-// Dynamic rows, static inner/cols
-impl<const K: usize, const N: usize>
-    MatMulShape<(Const<K>, Const<N>)> for (usize, Const<K>)
+// (usize, K) × (K, N) → (usize, N)
+impl<K: StaticDim, N: StaticDim>
+    MatMulShape<(K, N)> for (usize, K)
 {
-    type Output = (usize, Const<N>);
+    type Output = (usize, N);
 
-    fn output_shape(
-        lhs: &(usize, Const<K>),
-        _: &(Const<K>, Const<N>),
-    ) -> (usize, Const<N>) {
-        (lhs.0, Const)
+    fn output_shape(lhs: &<Self as Shape>::Field, _: &<(K, N) as Shape>::Field) -> <Self::Output as Shape>::Field {
+        (lhs.0, Default::default())
     }
 }
 
-// (Const<M>, Const<K>) × (Const<K>, usize) → (Const<M>, usize)
-// Static rows/inner, dynamic cols
-impl<const M: usize, const K: usize>
-    MatMulShape<(Const<K>, usize)> for (Const<M>, Const<K>)
+// (M, K) × (K, usize) → (M, usize)
+impl<M: StaticDim, K: StaticDim>
+    MatMulShape<(K, usize)> for (M, K)
 {
-    type Output = (Const<M>, usize);
+    type Output = (M, usize);
 
-    fn output_shape(
-        _: &(Const<M>, Const<K>),
-        rhs: &(Const<K>, usize),
-    ) -> (Const<M>, usize) {
-        (Const, rhs.1)
+    fn output_shape(_: &<Self as Shape>::Field, rhs: &<(K, usize) as Shape>::Field) -> <Self::Output as Shape>::Field {
+        (Default::default(), rhs.1)
     }
 }
 
-// (usize, Const<K>) × (Const<K>, usize) → (usize, usize)
-impl<const K: usize>
-    MatMulShape<(Const<K>, usize)> for (usize, Const<K>)
+// (usize, K) × (K, usize) → (usize, usize)
+impl<K: StaticDim>
+    MatMulShape<(K, usize)> for (usize, K)
 {
     type Output = (usize, usize);
 
-    fn output_shape(
-        lhs: &(usize, Const<K>),
-        rhs: &(Const<K>, usize),
-    ) -> (usize, usize) {
+    fn output_shape(lhs: &<Self as Shape>::Field, rhs: &<(K, usize) as Shape>::Field) -> <Self::Output as Shape>::Field {
         (lhs.0, rhs.1)
     }
 }
 
 // (usize, usize) × (usize, usize) → (usize, usize)
-// Both shapes fully dynamic — runtime check only
 impl MatMulShape<(usize, usize)> for (usize, usize) {
     type Output = (usize, usize);
 
-    fn output_shape(
-        lhs: &(usize, usize),
-        rhs: &(usize, usize),
-    ) -> (usize, usize) {
-        // Inner dimension check happens at the candle level
+    fn output_shape(lhs: &<Self as Shape>::Field, rhs: &<(usize, usize) as Shape>::Field) -> <Self::Output as Shape>::Field {
         (lhs.0, rhs.1)
     }
 }
 
 // ============================================================================
 // Fully dynamic: Dyn × Dyn → Dyn
-// No compile-time shape checking, defers everything to candle runtime.
 // ============================================================================
-
 impl MatMulShape<Dyn> for Dyn {
     type Output = Dyn;
 
-    fn output_shape(
-        _lhs: &<Dyn as Shape>::Field,
-        _rhs: &<Dyn as Shape>::Field,
-    ) -> <Dyn as Shape>::Field {
-        // We can't know the output shape without actually doing the matmul.
-        // Return empty — we'll extract the real shape from the candle result.
+    fn output_shape(_lhs: &<Dyn as Shape>::Field, _rhs: &<Dyn as Shape>::Field) -> <Dyn as Shape>::Field {
         alloc::vec![]
     }
 }
@@ -129,33 +113,26 @@ impl MatMulShape<Dyn> for Dyn {
 // Batched matmul: 3D shapes
 // ============================================================================
 
-// (Const<B>, Const<M>, Const<K>) × (Const<B>, Const<K>, Const<N>) → (Const<B>, Const<M>, Const<N>)
-impl<const B: usize, const M: usize, const K: usize, const N: usize>
-    MatMulShape<(Const<B>, Const<K>, Const<N>)> for (Const<B>, Const<M>, Const<K>)
+// (B, M, K) × (B, K, N) → (B, M, N)
+impl<B: StaticDim, M: StaticDim, K: StaticDim, N: StaticDim>
+    MatMulShape<(B, K, N)> for (B, M, K)
 {
-    type Output = (Const<B>, Const<M>, Const<N>);
+    type Output = (B, M, N);
 
     #[inline(always)]
-    fn output_shape(
-        _: &Self::Field,
-        _: &<(Const<B>, Const<K>, Const<N>) as Shape>::Field,
-    ) -> (Const<B>, Const<M>, Const<N>) {
-        (Const, Const, Const)
+    fn output_shape(_: &<Self as Shape>::Field, _: &<(B, K, N) as Shape>::Field) -> <Self::Output as Shape>::Field {
+        (Default::default(), Default::default(), Default::default())
     }
 }
 
-// (usize, Const<M>, Const<K>) × (usize, Const<K>, Const<N>) → (usize, Const<M>, Const<N>)
-// Dynamic batch size, static matrix dims
-impl<const M: usize, const K: usize, const N: usize>
-    MatMulShape<(usize, Const<K>, Const<N>)> for (usize, Const<M>, Const<K>)
+// (usize, M, K) × (usize, K, N) → (usize, M, N)
+impl<M: StaticDim, K: StaticDim, N: StaticDim>
+    MatMulShape<(usize, K, N)> for (usize, M, K)
 {
-    type Output = (usize, Const<M>, Const<N>);
+    type Output = (usize, M, N);
 
-    fn output_shape(
-        lhs: &(usize, Const<M>, Const<K>),
-        _: &(usize, Const<K>, Const<N>),
-    ) -> (usize, Const<M>, Const<N>) {
-        (lhs.0, Const, Const)
+    fn output_shape(lhs: &<Self as Shape>::Field, _: &<(usize, K, N) as Shape>::Field) -> <Self::Output as Shape>::Field {
+        (lhs.0, Default::default(), Default::default())
     }
 }
 
