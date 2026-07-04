@@ -49,8 +49,12 @@ pub mod candle {
 
     impl<S: Shape> Backend<S> for CandleBackend {
         type RawTensor = candle::Tensor;
-        type RawVar = candle::Var;
-        type Grads = candle_core::backprop::GradStore;
+        type RawVar = candle_core::Var;
+        type Grads = std::collections::HashMap<candle_core::TensorId, candle_core::Tensor>;
+
+        fn shape(t: &Self::RawTensor) -> Vec<usize> {
+            t.dims().to_vec()
+        }
 
         fn var_as_tensor(var: &Self::RawVar) -> Result<Self::RawTensor> {
             Ok(var.as_tensor().clone())
@@ -472,8 +476,12 @@ pub mod ndarray_backend {
 
     impl<S: Shape> Backend<S> for NdarrayBackend {
         type RawTensor = ndarray::ArrayD<f32>; // STUB: forced to f32
-        type RawVar = ndarray::ArrayD<f32>;
-        type Grads = ();
+        type RawVar = NdarrayVar;
+        type Grads = NdarrayGrads;
+
+        fn shape(_t: &Self::RawTensor) -> Vec<usize> {
+            Vec::new()
+        }
 
         fn var_as_tensor(var: &Self::RawVar) -> Result<Self::RawTensor> {
             Ok(var.clone())

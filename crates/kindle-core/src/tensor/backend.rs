@@ -6,6 +6,8 @@ pub trait Backend<S: Shape> {
     type RawTensor: Clone;
     type RawVar: Clone;
 
+    fn shape(t: &Self::RawTensor) -> alloc::vec::Vec<usize>;
+
     // Var operations
     fn var_as_tensor(var: &Self::RawVar) -> Result<Self::RawTensor>;
     fn var_from_tensor(t: &Self::RawTensor) -> Result<Self::RawVar>;

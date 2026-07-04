@@ -17,8 +17,13 @@ pub mod prelude {
     pub use super::err::*;
     pub use crate::nn::{
         activation::{GELU, ReLU, Sigmoid, Softmax, Swish, Tanh},
+        avg_pool2d::AvgPool2d,
+        batch_norm::BatchNorm2d,
+        conv1d::Conv1d,
         conv2d::{Conv2d, Conv2dShape},
+        layer_norm::LayerNorm,
         linear::{Linear, LinearShape},
+        max_pool2d::MaxPool2d,
         module::{Module, Parameters, Sequential},
         param::Param,
     };

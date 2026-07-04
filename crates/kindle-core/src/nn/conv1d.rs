@@ -18,23 +18,33 @@ impl<I, W, B> Module<Tensor<I, B>> for Conv1d<W, B>
 where
     I: Shape + Conv1dShape<W>,
     W: Shape,
-    B: Backend<W> + Backend<Dyn> + Backend<I> + Backend<I::Output>,
+    B: Backend<W, RawTensor = <B as Backend<I>>::RawTensor>
+        + Backend<Dyn, RawTensor = <B as Backend<I>>::RawTensor>
+        + Backend<I>
+        + Backend<I::Output, RawTensor = <B as Backend<I>>::RawTensor>,
 {
     type Output = Tensor<I::Output, B>;
     type Error = Error;
 
     #[inline]
-    fn forward(&self, _x: Tensor<I, B>) -> core::result::Result<Self::Output, Error> {
-        let _weight = self.weight.as_tensor()?;
-        let _bias = match &self.bias {
+    fn forward(&self, x: Tensor<I, B>) -> core::result::Result<Self::Output, Error> {
+        let weight = self.weight.as_tensor()?;
+        let bias = match &self.bias {
             Some(b) => Some(b.as_tensor()?),
             None => None,
         };
 
-        // Note: Backend might need conv1d op!
-        // We simulate it using unsupported for now since Candle conv1d is 1d.
-        Err(Error::Msg(
-            "Conv1d forward not implemented on Backend trait yet".to_string(),
-        ))
+        let out = <B as Backend<I>>::conv1d(
+            x.inner(),
+            weight.inner(),
+            bias.as_ref().map(|b| b.inner()),
+            self.stride,
+            self.padding,
+            self.dilation,
+        )?;
+        
+        let shape = I::Output::from_dyn(&<B as Backend<I>>::shape(&out)).unwrap();
+
+        Ok(Tensor::from_parts(out, shape, x._dtype.clone(), weight._device.clone(), core::marker::PhantomData))
     }
 }

@@ -298,6 +298,10 @@ mod tests {
         type RawVar = ();
         type Grads = ();
 
+        fn shape(_t: &Self::RawTensor) -> alloc::vec::Vec<usize> {
+            alloc::vec::Vec::new()
+        }
+
         fn var_as_tensor(_var: &Self::RawVar) -> Result<Self::RawTensor> {
             Ok(())
         }

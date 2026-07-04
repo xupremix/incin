@@ -1,19 +1,23 @@
 pub mod activation;
+pub mod avg_pool2d;
 pub mod batch_norm;
 pub mod conv1d;
 pub mod conv2d;
 pub mod layer_norm;
 pub mod linear;
+pub mod max_pool2d;
 pub mod module;
 pub mod param;
 pub mod save;
 
 pub use activation::*;
+pub use avg_pool2d::*;
 pub use batch_norm::*;
 pub use conv1d::*;
 pub use conv2d::*;
 pub use layer_norm::*;
 pub use linear::*;
+pub use max_pool2d::*;
 pub use module::*;
 pub use param::*;
 pub use save::*;
