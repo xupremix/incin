@@ -11,7 +11,11 @@ pub struct LayerNorm<S: Shape, B: Backend> {
     _phantom: PhantomData<S>,
 }
 
-impl<S: Shape, B: Backend> LayerNorm<S, B> where B::DType: crate::prelude::ConstDType, B::Device: crate::prelude::ConstDevice {
+impl<S: Shape, B: Backend> LayerNorm<S, B>
+where
+    B::DType: crate::prelude::ConstDType,
+    B::Device: crate::prelude::ConstDevice,
+{
     pub fn new<A>(_args: A, _eps: f32) -> Result<Self>
     where
         A: ArgInto<(Dyn, f32, Cpu, Grad)>,
@@ -23,11 +27,7 @@ impl<S: Shape, B: Backend> LayerNorm<S, B> where B::DType: crate::prelude::Const
     }
 }
 
-
-
-impl<S: Shape + DynShape, B: Backend>
-    Module<Tensor<S, B>> for LayerNorm<S, B>
-{
+impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for LayerNorm<S, B> {
     type Output = Tensor<S, B>;
     type Error = Error;
 

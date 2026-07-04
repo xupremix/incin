@@ -13,11 +13,23 @@ pub(crate) fn module(_attr: TokenStream, item: TokenStream) -> TokenStream {
         quote! { crate }
     } else {
     };
-    
-    let k_crate = if is_internal { quote! { crate } } else { quote! { kindle } };
-    
-    let format_mac = if is_internal { quote! { alloc::format! } } else { quote! { std::format! } };
-    let vec_ty = if is_internal { quote! { alloc::vec::Vec } } else { quote! { std::vec::Vec } };
+
+    let k_crate = if is_internal {
+        quote! { crate }
+    } else {
+        quote! { kindle }
+    };
+
+    let format_mac = if is_internal {
+        quote! { alloc::format! }
+    } else {
+        quote! { std::format! }
+    };
+    let vec_ty = if is_internal {
+        quote! { alloc::vec::Vec }
+    } else {
+        quote! { std::vec::Vec }
+    };
 
     let mut generics = input.generics.clone();
     generics

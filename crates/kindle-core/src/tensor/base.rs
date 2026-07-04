@@ -8,11 +8,7 @@ use crate::prelude::{
 pub struct Dyn(());
 
 #[derive(Debug)]
-pub struct Tensor<
-    S: Shape,
-    B: Backend,
-    G: RequiresGrad = Grad,
-> {
+pub struct Tensor<S: Shape, B: Backend, G: RequiresGrad = Grad> {
     pub(crate) inner: B::RawTensor,
     pub(crate) _shape: S::Field,
     pub(crate) _dtype: <B::DType as DType>::Field,
@@ -78,63 +74,60 @@ where
     where
         A: ArgInto<<(S, B::DType, B::Device, G) as TensorArgs<S, B::DType, B::Device, G>>::Args>,
     {
-        let (_shape, _dtype, _device, _grad) = <(S, B::DType, B::Device, G)>::construct(args.into_arg());
+        let (_shape, _dtype, _device, _grad) =
+            <(S, B::DType, B::Device, G)>::construct(args.into_arg());
         let dims: S::Dims = S::dims(&_shape);
         let device = <B::Device as Device>::to_kindle(&_device)?;
         let dtype = <B::DType as DType>::to_kindle(&_dtype);
         let inner = B::zeros(dims.as_ref(), dtype, &device)?;
-        Ok(Tensor::from_parts(
-            inner, _shape, _dtype, _device, _grad,
-        ))
+        Ok(Tensor::from_parts(inner, _shape, _dtype, _device, _grad))
     }
 
     pub fn ones<A>(args: A) -> Result<Self>
     where
         A: ArgInto<<(S, B::DType, B::Device, G) as TensorArgs<S, B::DType, B::Device, G>>::Args>,
     {
-        let (_shape, _dtype, _device, _grad) = <(S, B::DType, B::Device, G)>::construct(args.into_arg());
+        let (_shape, _dtype, _device, _grad) =
+            <(S, B::DType, B::Device, G)>::construct(args.into_arg());
         let dims = S::dims(&_shape);
         let device = <B::Device as Device>::to_kindle(&_device)?;
         let dtype = <B::DType as DType>::to_kindle(&_dtype);
         let inner = B::ones(dims.as_ref(), dtype, &device)?;
-        Ok(Tensor::from_parts(
-            inner, _shape, _dtype, _device, _grad,
-        ))
+        Ok(Tensor::from_parts(inner, _shape, _dtype, _device, _grad))
     }
 
     pub fn rand<A>(args: A) -> Result<Self>
     where
         A: ArgInto<<(S, B::DType, B::Device, G) as TensorArgs<S, B::DType, B::Device, G>>::Args>,
     {
-        let (_shape, _dtype, _device, _grad) = <(S, B::DType, B::Device, G)>::construct(args.into_arg());
+        let (_shape, _dtype, _device, _grad) =
+            <(S, B::DType, B::Device, G)>::construct(args.into_arg());
         let dims = S::dims(&_shape);
         let device = <B::Device as Device>::to_kindle(&_device)?;
         let dtype = <B::DType as DType>::to_kindle(&_dtype);
         let inner = B::rand(dims.as_ref(), dtype, &device)?;
-        Ok(Tensor::from_parts(
-            inner, _shape, _dtype, _device, _grad,
-        ))
+        Ok(Tensor::from_parts(inner, _shape, _dtype, _device, _grad))
     }
 
     pub fn randn<A>(args: A) -> Result<Self>
     where
         A: ArgInto<<(S, B::DType, B::Device, G) as TensorArgs<S, B::DType, B::Device, G>>::Args>,
     {
-        let (_shape, _dtype, _device, _grad) = <(S, B::DType, B::Device, G)>::construct(args.into_arg());
+        let (_shape, _dtype, _device, _grad) =
+            <(S, B::DType, B::Device, G)>::construct(args.into_arg());
         let dims = S::dims(&_shape);
         let device = <B::Device as Device>::to_kindle(&_device)?;
         let dtype = <B::DType as DType>::to_kindle(&_dtype);
         let inner = B::randn(dims.as_ref(), dtype, &device)?;
-        Ok(Tensor::from_parts(
-            inner, _shape, _dtype, _device, _grad,
-        ))
+        Ok(Tensor::from_parts(inner, _shape, _dtype, _device, _grad))
     }
 
     pub fn from_raw<A>(raw_tensor: B::RawTensor, args: A) -> Result<Self>
     where
         A: ArgInto<<(S, B::DType, B::Device, G) as TensorArgs<S, B::DType, B::Device, G>>::Args>,
     {
-        let (_shape, _dtype, _device, _grad) = <(S, B::DType, B::Device, G)>::construct(args.into_arg());
+        let (_shape, _dtype, _device, _grad) =
+            <(S, B::DType, B::Device, G)>::construct(args.into_arg());
         Ok(Tensor::from_parts(
             raw_tensor, _shape, _dtype, _device, _grad,
         ))
@@ -155,9 +148,7 @@ where
         let device = <B::Device as Device>::to_kindle(&_device)?;
         let dtype = <B::DType as ConstDType>::DTYPE;
         let inner = B::zeros(dims.as_ref(), dtype, &device)?;
-        Ok(Tensor::from_parts(
-            inner, _shape, _dtype, _device, _grad,
-        ))
+        Ok(Tensor::from_parts(inner, _shape, _dtype, _device, _grad))
     }
 
     pub fn static_ones() -> Result<Self> {
@@ -169,9 +160,7 @@ where
         let device = <B::Device as Device>::to_kindle(&_device)?;
         let dtype = <B::DType as ConstDType>::DTYPE;
         let inner = B::ones(dims.as_ref(), dtype, &device)?;
-        Ok(Tensor::from_parts(
-            inner, _shape, _dtype, _device, _grad,
-        ))
+        Ok(Tensor::from_parts(inner, _shape, _dtype, _device, _grad))
     }
 }
 
@@ -213,7 +202,10 @@ impl<S: Shape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
     }
 
     /// Moves this tensor to the specified device, returning a new Tensor.
-    pub fn to_device<D2: Device>(&self, _device: &D2::Field) -> Result<Tensor<S, B::BackendWithDevice<D2>, G>> {
+    pub fn to_device<D2: Device>(
+        &self,
+        _device: &D2::Field,
+    ) -> Result<Tensor<S, B::BackendWithDevice<D2>, G>> {
         let kindle_device = D2::to_kindle(_device)?;
         let new_inner = B::tensor_to_device(&self.inner, &kindle_device)?;
         Ok(Tensor {
@@ -278,39 +270,48 @@ mod tests {
     #[derive(Clone)]
     pub struct DummyBackend<T: DType, D: Device>(core::marker::PhantomData<(T, D)>);
     impl<T: DType, D: Device> Backend for DummyBackend<T, D> {
+        fn conv1d(
+            _t: &Self::RawTensor,
+            _w: &Self::RawTensor,
+            _b: Option<&Self::RawTensor>,
+            _stride: usize,
+            _padding: usize,
+            _dilation: usize,
+        ) -> Result<Self::RawTensor> {
+            unimplemented!()
+        }
 
-    fn conv1d(
-        _t: &Self::RawTensor,
-        _w: &Self::RawTensor,
-        _b: Option<&Self::RawTensor>,
-        _stride: usize,
-        _padding: usize,
-        _dilation: usize,
-    ) -> Result<Self::RawTensor> { unimplemented!() }
+        fn conv_transpose2d(
+            _t: &Self::RawTensor,
+            _w: &Self::RawTensor,
+            _b: Option<&Self::RawTensor>,
+            _stride: usize,
+            _padding: usize,
+            _output_padding: usize,
+            _dilation: usize,
+        ) -> Result<Self::RawTensor> {
+            unimplemented!()
+        }
 
-    fn conv_transpose2d(
-        _t: &Self::RawTensor,
-        _w: &Self::RawTensor,
-        _b: Option<&Self::RawTensor>,
-        _stride: usize,
-        _padding: usize,
-        _output_padding: usize,
-        _dilation: usize,
-    ) -> Result<Self::RawTensor> { unimplemented!() }
+        fn max_pool2d(
+            _t: &Self::RawTensor,
+            _kernel_size: (usize, usize),
+            _stride: (usize, usize),
+        ) -> Result<Self::RawTensor> {
+            unimplemented!()
+        }
 
-    fn max_pool2d(
-        _t: &Self::RawTensor,
-        _kernel_size: (usize, usize),
-        _stride: (usize, usize),
-    ) -> Result<Self::RawTensor> { unimplemented!() }
+        fn avg_pool2d(
+            _t: &Self::RawTensor,
+            _kernel_size: (usize, usize),
+            _stride: (usize, usize),
+        ) -> Result<Self::RawTensor> {
+            unimplemented!()
+        }
 
-    fn avg_pool2d(
-        _t: &Self::RawTensor,
-        _kernel_size: (usize, usize),
-        _stride: (usize, usize),
-    ) -> Result<Self::RawTensor> { unimplemented!() }
-
-    fn embedding(_t: &Self::RawTensor, _w: &Self::RawTensor) -> Result<Self::RawTensor> { unimplemented!() }
+        fn embedding(_t: &Self::RawTensor, _w: &Self::RawTensor) -> Result<Self::RawTensor> {
+            unimplemented!()
+        }
 
         type Device = D;
         type DType = T;
@@ -572,7 +573,8 @@ mod tests {
 
     #[test]
     fn test_tensor_creation() {
-        let t: Tensor<Dyn, DummyBackend<f32, crate::prelude::Cpu>> = Tensor::zeros(vec![2, 3]).unwrap();
+        let t: Tensor<Dyn, DummyBackend<f32, crate::prelude::Cpu>> =
+            Tensor::zeros(vec![2, 3]).unwrap();
         assert_eq!(t.rank(), 2);
         assert_eq!(t.numel(), 6);
         assert_eq!(t.dims(), vec![2, 3]);

@@ -123,4 +123,3 @@ impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for Tanh {
         x.tanh()
     }
 }
-

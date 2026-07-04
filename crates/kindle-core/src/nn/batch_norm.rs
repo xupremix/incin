@@ -14,9 +14,15 @@ pub struct BatchNorm2d<S: Shape, B: Backend> {
     _phantom: PhantomData<S>,
 }
 
-impl<S: Shape + DynShape, B: Backend> BatchNorm2d<S, B> where B::DType: crate::prelude::ConstDType, B::Device: crate::prelude::ConstDevice {
+impl<S: Shape + DynShape, B: Backend> BatchNorm2d<S, B>
+where
+    B::DType: crate::prelude::ConstDType,
+    B::Device: crate::prelude::ConstDevice,
+{
     pub fn new(num_features: usize, _device: &KindleDevice) -> Result<Self>
-    where B::DType: crate::prelude::ConstDType, B::Device: crate::prelude::ConstDevice
+    where
+        B::DType: crate::prelude::ConstDType,
+        B::Device: crate::prelude::ConstDevice,
     {
         let _dtype = KindleDType::F32;
         let _dims: &[usize] = &[num_features];
@@ -30,9 +36,7 @@ impl<S: Shape + DynShape, B: Backend> BatchNorm2d<S, B> where B::DType: crate::p
         })
     }
 }
-impl<S: Shape + DynShape, B: Backend>
-    Module<Tensor<S, B>> for BatchNorm2d<S, B>
-{
+impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for BatchNorm2d<S, B> {
     type Output = Tensor<S, B>;
     type Error = Error;
 

@@ -112,12 +112,24 @@ macro_rules! impl_dummy_state {
 impl_dummy_state!(usize, f32);
 
 impl<T: ?Sized, B: Backend> Parameters<B> for core::marker::PhantomData<T>
-where T: crate::prelude::DType {
-    fn parameters(&self) -> Vec<B::RawVar> { Vec::new() }
+where
+    T: crate::prelude::DType,
+{
+    fn parameters(&self) -> Vec<B::RawVar> {
+        Vec::new()
+    }
 }
 impl<T: ?Sized, B: Backend> StateDict<B> for core::marker::PhantomData<T>
-where T: crate::prelude::DType {
-    fn load_state_dict(&mut self, _prefix: &str, _tensors: &HashMap<String, Tensor<Dyn, B>>) -> Result<()> { Ok(()) }
+where
+    T: crate::prelude::DType,
+{
+    fn load_state_dict(
+        &mut self,
+        _prefix: &str,
+        _tensors: &HashMap<String, Tensor<Dyn, B>>,
+    ) -> Result<()> {
+        Ok(())
+    }
     fn state_dict(&self, _prefix: &str, _tensors: &mut HashMap<String, Tensor<Dyn, B>>) {}
 }
 
@@ -131,7 +143,11 @@ impl<L: Parameters<B>, B: Backend> Parameters<B> for Option<L> {
 }
 
 impl<L: StateDict<B>, B: Backend> StateDict<B> for Option<L> {
-    fn load_state_dict(&mut self, prefix: &str, tensors: &HashMap<String, Tensor<Dyn, B>>) -> Result<()> {
+    fn load_state_dict(
+        &mut self,
+        prefix: &str,
+        tensors: &HashMap<String, Tensor<Dyn, B>>,
+    ) -> Result<()> {
         if let Some(v) = self {
             v.load_state_dict(prefix, tensors)?;
         }

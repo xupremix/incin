@@ -9,8 +9,8 @@ pub mod spatial;
 
 pub use dim::*;
 pub use shape::*;
-pub use spatial::*;
 pub use shape_ops::*;
+pub use spatial::*;
 
 pub mod prelude {
     pub use super::arithmetic::*;

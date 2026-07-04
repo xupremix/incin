@@ -294,7 +294,9 @@ impl<S: Shape + DynShape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
         ))
     }
 
-    pub fn to_dtype<T2: crate::prelude::ConstDType>(&self) -> Result<Tensor<S, B::BackendWithDType<T2>, G>> {
+    pub fn to_dtype<T2: crate::prelude::ConstDType>(
+        &self,
+    ) -> Result<Tensor<S, B::BackendWithDType<T2>, G>> {
         let inner = B::to_dtype(&self.inner, T2::DTYPE)?;
         Ok(Tensor::from_parts(
             inner,
@@ -307,9 +309,7 @@ impl<S: Shape + DynShape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
 
     /// Permute the tensor's dimensions by swapping `D1` and `D2`.
     /// Strongly typed output shape via `Transpose<D1, D2>`.
-    pub fn transpose<const D1: usize, const D2: usize>(
-        &self,
-    ) -> Result<Tensor<S::Output, B, G>>
+    pub fn transpose<const D1: usize, const D2: usize>(&self) -> Result<Tensor<S::Output, B, G>>
     where
         S: crate::shapes::Transpose<D1, D2>,
     {
@@ -328,9 +328,7 @@ impl<S: Shape + DynShape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
 
     /// Flattens dimensions from `START` to `END` inclusive.
     /// Uses `ProdDim` algebraically to track shapes.
-    pub fn flatten<const START: usize, const END: usize>(
-        &self,
-    ) -> Result<Tensor<S::Output, B, G>>
+    pub fn flatten<const START: usize, const END: usize>(&self) -> Result<Tensor<S::Output, B, G>>
     where
         S: crate::shapes::Flatten<START, END>,
     {
@@ -415,41 +413,52 @@ mod tests {
     #[derive(Clone)]
     pub struct DummyOpsBackend<T: DType, D: Device>(core::marker::PhantomData<(T, D)>);
     impl<T: DType, D: Device> Backend for DummyOpsBackend<T, D> {
+        fn shape(_t: &Self::RawTensor) -> alloc::vec::Vec<usize> {
+            unimplemented!()
+        }
 
-    fn shape(_t: &Self::RawTensor) -> alloc::vec::Vec<usize> { unimplemented!() }
-    
-    fn conv1d(
-        _t: &Self::RawTensor,
-        _w: &Self::RawTensor,
-        _b: Option<&Self::RawTensor>,
-        _stride: usize,
-        _padding: usize,
-        _dilation: usize,
-    ) -> Result<Self::RawTensor> { unimplemented!() }
+        fn conv1d(
+            _t: &Self::RawTensor,
+            _w: &Self::RawTensor,
+            _b: Option<&Self::RawTensor>,
+            _stride: usize,
+            _padding: usize,
+            _dilation: usize,
+        ) -> Result<Self::RawTensor> {
+            unimplemented!()
+        }
 
-    fn conv_transpose2d(
-        _t: &Self::RawTensor,
-        _w: &Self::RawTensor,
-        _b: Option<&Self::RawTensor>,
-        _stride: usize,
-        _padding: usize,
-        _output_padding: usize,
-        _dilation: usize,
-    ) -> Result<Self::RawTensor> { unimplemented!() }
+        fn conv_transpose2d(
+            _t: &Self::RawTensor,
+            _w: &Self::RawTensor,
+            _b: Option<&Self::RawTensor>,
+            _stride: usize,
+            _padding: usize,
+            _output_padding: usize,
+            _dilation: usize,
+        ) -> Result<Self::RawTensor> {
+            unimplemented!()
+        }
 
-    fn max_pool2d(
-        _t: &Self::RawTensor,
-        _kernel_size: (usize, usize),
-        _stride: (usize, usize),
-    ) -> Result<Self::RawTensor> { unimplemented!() }
+        fn max_pool2d(
+            _t: &Self::RawTensor,
+            _kernel_size: (usize, usize),
+            _stride: (usize, usize),
+        ) -> Result<Self::RawTensor> {
+            unimplemented!()
+        }
 
-    fn avg_pool2d(
-        _t: &Self::RawTensor,
-        _kernel_size: (usize, usize),
-        _stride: (usize, usize),
-    ) -> Result<Self::RawTensor> { unimplemented!() }
+        fn avg_pool2d(
+            _t: &Self::RawTensor,
+            _kernel_size: (usize, usize),
+            _stride: (usize, usize),
+        ) -> Result<Self::RawTensor> {
+            unimplemented!()
+        }
 
-    fn embedding(_t: &Self::RawTensor, _w: &Self::RawTensor) -> Result<Self::RawTensor> { unimplemented!() }
+        fn embedding(_t: &Self::RawTensor, _w: &Self::RawTensor) -> Result<Self::RawTensor> {
+            unimplemented!()
+        }
 
         type Device = D;
         type DType = T;
@@ -705,8 +714,10 @@ mod tests {
 
     #[test]
     fn test_tensor_ops() {
-        let t1: Tensor<Dyn, DummyOpsBackend<f32, crate::prelude::Cpu>> = Tensor::zeros(vec![2, 2]).unwrap();
-        let t2: Tensor<Dyn, DummyOpsBackend<f32, crate::prelude::Cpu>> = Tensor::ones(vec![2, 2]).unwrap();
+        let t1: Tensor<Dyn, DummyOpsBackend<f32, crate::prelude::Cpu>> =
+            Tensor::zeros(vec![2, 2]).unwrap();
+        let t2: Tensor<Dyn, DummyOpsBackend<f32, crate::prelude::Cpu>> =
+            Tensor::ones(vec![2, 2]).unwrap();
 
         // Binary ops
         let _res_add = t1.add(&t2).unwrap();

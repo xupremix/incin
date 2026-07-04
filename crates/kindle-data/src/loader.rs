@@ -1,7 +1,7 @@
 use crate::dataset::Dataset;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
-use std::sync::mpsc::{sync_channel, Receiver};
+use std::sync::mpsc::{Receiver, sync_channel};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
@@ -76,7 +76,7 @@ where
 
         let num_batches = (indices.len() + self.batch_size - 1) / self.batch_size;
         let mut batch_indices = Vec::with_capacity(num_batches);
-        
+
         for i in 0..num_batches {
             let start = i * self.batch_size;
             let end = std::cmp::min(start + self.batch_size, indices.len());
@@ -85,7 +85,7 @@ where
 
         // Bounded channel to prevent over-fetching
         let (tx, rx) = sync_channel(self.num_workers * 2 + 2);
-        
+
         let dataset = self.dataset.clone();
         let collate_fn = self.collate_fn.clone();
 
@@ -110,7 +110,7 @@ where
         } else {
             // Multi-threaded
             let batch_indices = Arc::new(Mutex::new(batch_indices.into_iter()));
-            
+
             for _ in 0..self.num_workers {
                 let dataset = dataset.clone();
                 let collate_fn = collate_fn.clone();

@@ -235,63 +235,165 @@ impl_append_dim_for_tuple!(D0, D1, D2, D3, D4, D5, D6, D7, D8, D9, D10);
 
 macro_rules! impl_replace_last_dim_for_tuple {
     ($last:ident) => {
-        impl< $last: Dim, NewDim: Dim > ReplaceLastDim<NewDim> for ($last,) {
+        impl<$last: Dim, NewDim: Dim> ReplaceLastDim<NewDim> for ($last,) {
             type Output = (NewDim,);
         }
     };
     ($n1:ident, $last:ident) => {
-        impl< $n1: Dim, $last: Dim, NewDim: Dim > ReplaceLastDim<NewDim> for ($n1, $last,) {
-            type Output = ($n1, NewDim,);
+        impl<$n1: Dim, $last: Dim, NewDim: Dim> ReplaceLastDim<NewDim> for ($n1, $last) {
+            type Output = ($n1, NewDim);
         }
     };
     ($n1:ident, $n2:ident, $last:ident) => {
-        impl< $n1: Dim, $n2: Dim, $last: Dim, NewDim: Dim > ReplaceLastDim<NewDim> for ($n1, $n2, $last,) {
-            type Output = ($n1, $n2, NewDim,);
+        impl<$n1: Dim, $n2: Dim, $last: Dim, NewDim: Dim> ReplaceLastDim<NewDim>
+            for ($n1, $n2, $last)
+        {
+            type Output = ($n1, $n2, NewDim);
         }
     };
     ($n1:ident, $n2:ident, $n3:ident, $last:ident) => {
-        impl< $n1: Dim, $n2: Dim, $n3: Dim, $last: Dim, NewDim: Dim > ReplaceLastDim<NewDim> for ($n1, $n2, $n3, $last,) {
-            type Output = ($n1, $n2, $n3, NewDim,);
+        impl<$n1: Dim, $n2: Dim, $n3: Dim, $last: Dim, NewDim: Dim> ReplaceLastDim<NewDim>
+            for ($n1, $n2, $n3, $last)
+        {
+            type Output = ($n1, $n2, $n3, NewDim);
         }
     };
     ($n1:ident, $n2:ident, $n3:ident, $n4:ident, $last:ident) => {
-        impl< $n1: Dim, $n2: Dim, $n3: Dim, $n4: Dim, $last: Dim, NewDim: Dim > ReplaceLastDim<NewDim> for ($n1, $n2, $n3, $n4, $last,) {
-            type Output = ($n1, $n2, $n3, $n4, NewDim,);
+        impl<$n1: Dim, $n2: Dim, $n3: Dim, $n4: Dim, $last: Dim, NewDim: Dim> ReplaceLastDim<NewDim>
+            for ($n1, $n2, $n3, $n4, $last)
+        {
+            type Output = ($n1, $n2, $n3, $n4, NewDim);
         }
     };
     ($n1:ident, $n2:ident, $n3:ident, $n4:ident, $n5:ident, $last:ident) => {
-        impl< $n1: Dim, $n2: Dim, $n3: Dim, $n4: Dim, $n5: Dim, $last: Dim, NewDim: Dim > ReplaceLastDim<NewDim> for ($n1, $n2, $n3, $n4, $n5, $last,) {
-            type Output = ($n1, $n2, $n3, $n4, $n5, NewDim,);
+        impl<$n1: Dim, $n2: Dim, $n3: Dim, $n4: Dim, $n5: Dim, $last: Dim, NewDim: Dim>
+            ReplaceLastDim<NewDim> for ($n1, $n2, $n3, $n4, $n5, $last)
+        {
+            type Output = ($n1, $n2, $n3, $n4, $n5, NewDim);
         }
     };
     ($n1:ident, $n2:ident, $n3:ident, $n4:ident, $n5:ident, $n6:ident, $last:ident) => {
-        impl< $n1: Dim, $n2: Dim, $n3: Dim, $n4: Dim, $n5: Dim, $n6: Dim, $last: Dim, NewDim: Dim > ReplaceLastDim<NewDim> for ($n1, $n2, $n3, $n4, $n5, $n6, $last,) {
-            type Output = ($n1, $n2, $n3, $n4, $n5, $n6, NewDim,);
+        impl<$n1: Dim, $n2: Dim, $n3: Dim, $n4: Dim, $n5: Dim, $n6: Dim, $last: Dim, NewDim: Dim>
+            ReplaceLastDim<NewDim> for ($n1, $n2, $n3, $n4, $n5, $n6, $last)
+        {
+            type Output = ($n1, $n2, $n3, $n4, $n5, $n6, NewDim);
         }
     };
     ($n1:ident, $n2:ident, $n3:ident, $n4:ident, $n5:ident, $n6:ident, $n7:ident, $last:ident) => {
-        impl< $n1: Dim, $n2: Dim, $n3: Dim, $n4: Dim, $n5: Dim, $n6: Dim, $n7: Dim, $last: Dim, NewDim: Dim > ReplaceLastDim<NewDim> for ($n1, $n2, $n3, $n4, $n5, $n6, $n7, $last,) {
-            type Output = ($n1, $n2, $n3, $n4, $n5, $n6, $n7, NewDim,);
+        impl<
+            $n1: Dim,
+            $n2: Dim,
+            $n3: Dim,
+            $n4: Dim,
+            $n5: Dim,
+            $n6: Dim,
+            $n7: Dim,
+            $last: Dim,
+            NewDim: Dim,
+        > ReplaceLastDim<NewDim> for ($n1, $n2, $n3, $n4, $n5, $n6, $n7, $last)
+        {
+            type Output = ($n1, $n2, $n3, $n4, $n5, $n6, $n7, NewDim);
         }
     };
     ($n1:ident, $n2:ident, $n3:ident, $n4:ident, $n5:ident, $n6:ident, $n7:ident, $n8:ident, $last:ident) => {
-        impl< $n1: Dim, $n2: Dim, $n3: Dim, $n4: Dim, $n5: Dim, $n6: Dim, $n7: Dim, $n8: Dim, $last: Dim, NewDim: Dim > ReplaceLastDim<NewDim> for ($n1, $n2, $n3, $n4, $n5, $n6, $n7, $n8, $last,) {
-            type Output = ($n1, $n2, $n3, $n4, $n5, $n6, $n7, $n8, NewDim,);
+        impl<
+            $n1: Dim,
+            $n2: Dim,
+            $n3: Dim,
+            $n4: Dim,
+            $n5: Dim,
+            $n6: Dim,
+            $n7: Dim,
+            $n8: Dim,
+            $last: Dim,
+            NewDim: Dim,
+        > ReplaceLastDim<NewDim> for ($n1, $n2, $n3, $n4, $n5, $n6, $n7, $n8, $last)
+        {
+            type Output = ($n1, $n2, $n3, $n4, $n5, $n6, $n7, $n8, NewDim);
         }
     };
     ($n1:ident, $n2:ident, $n3:ident, $n4:ident, $n5:ident, $n6:ident, $n7:ident, $n8:ident, $n9:ident, $last:ident) => {
-        impl< $n1: Dim, $n2: Dim, $n3: Dim, $n4: Dim, $n5: Dim, $n6: Dim, $n7: Dim, $n8: Dim, $n9: Dim, $last: Dim, NewDim: Dim > ReplaceLastDim<NewDim> for ($n1, $n2, $n3, $n4, $n5, $n6, $n7, $n8, $n9, $last,) {
-            type Output = ($n1, $n2, $n3, $n4, $n5, $n6, $n7, $n8, $n9, NewDim,);
+        impl<
+            $n1: Dim,
+            $n2: Dim,
+            $n3: Dim,
+            $n4: Dim,
+            $n5: Dim,
+            $n6: Dim,
+            $n7: Dim,
+            $n8: Dim,
+            $n9: Dim,
+            $last: Dim,
+            NewDim: Dim,
+        > ReplaceLastDim<NewDim> for ($n1, $n2, $n3, $n4, $n5, $n6, $n7, $n8, $n9, $last)
+        {
+            type Output = ($n1, $n2, $n3, $n4, $n5, $n6, $n7, $n8, $n9, NewDim);
         }
     };
     ($n1:ident, $n2:ident, $n3:ident, $n4:ident, $n5:ident, $n6:ident, $n7:ident, $n8:ident, $n9:ident, $n10:ident, $last:ident) => {
-        impl< $n1: Dim, $n2: Dim, $n3: Dim, $n4: Dim, $n5: Dim, $n6: Dim, $n7: Dim, $n8: Dim, $n9: Dim, $n10: Dim, $last: Dim, NewDim: Dim > ReplaceLastDim<NewDim> for ($n1, $n2, $n3, $n4, $n5, $n6, $n7, $n8, $n9, $n10, $last,) {
-            type Output = ($n1, $n2, $n3, $n4, $n5, $n6, $n7, $n8, $n9, $n10, NewDim,);
+        impl<
+            $n1: Dim,
+            $n2: Dim,
+            $n3: Dim,
+            $n4: Dim,
+            $n5: Dim,
+            $n6: Dim,
+            $n7: Dim,
+            $n8: Dim,
+            $n9: Dim,
+            $n10: Dim,
+            $last: Dim,
+            NewDim: Dim,
+        > ReplaceLastDim<NewDim> for ($n1, $n2, $n3, $n4, $n5, $n6, $n7, $n8, $n9, $n10, $last)
+        {
+            type Output = ($n1, $n2, $n3, $n4, $n5, $n6, $n7, $n8, $n9, $n10, NewDim);
         }
     };
     ($n1:ident, $n2:ident, $n3:ident, $n4:ident, $n5:ident, $n6:ident, $n7:ident, $n8:ident, $n9:ident, $n10:ident, $n11:ident, $last:ident) => {
-        impl< $n1: Dim, $n2: Dim, $n3: Dim, $n4: Dim, $n5: Dim, $n6: Dim, $n7: Dim, $n8: Dim, $n9: Dim, $n10: Dim, $n11: Dim, $last: Dim, NewDim: Dim > ReplaceLastDim<NewDim> for ($n1, $n2, $n3, $n4, $n5, $n6, $n7, $n8, $n9, $n10, $n11, $last,) {
-            type Output = ($n1, $n2, $n3, $n4, $n5, $n6, $n7, $n8, $n9, $n10, $n11, NewDim,);
+        impl<
+            $n1: Dim,
+            $n2: Dim,
+            $n3: Dim,
+            $n4: Dim,
+            $n5: Dim,
+            $n6: Dim,
+            $n7: Dim,
+            $n8: Dim,
+            $n9: Dim,
+            $n10: Dim,
+            $n11: Dim,
+            $last: Dim,
+            NewDim: Dim,
+        > ReplaceLastDim<NewDim>
+            for (
+                $n1,
+                $n2,
+                $n3,
+                $n4,
+                $n5,
+                $n6,
+                $n7,
+                $n8,
+                $n9,
+                $n10,
+                $n11,
+                $last,
+            )
+        {
+            type Output = (
+                $n1,
+                $n2,
+                $n3,
+                $n4,
+                $n5,
+                $n6,
+                $n7,
+                $n8,
+                $n9,
+                $n10,
+                $n11,
+                NewDim,
+            );
         }
     };
 }

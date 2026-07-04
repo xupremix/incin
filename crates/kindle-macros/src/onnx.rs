@@ -1,10 +1,10 @@
+use onnx_pb::ModelProto;
 use proc_macro::TokenStream;
+use prost::Message;
 use quote::{format_ident, quote};
-use syn::Ident;
 use std::fs;
 use std::path::PathBuf;
-use onnx_pb::ModelProto;
-use prost::Message;
+use syn::Ident;
 
 pub(crate) fn parse_onnx(rel_path: &str, root_name: &Ident) -> proc_macro2::TokenStream {
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
@@ -78,7 +78,11 @@ pub(crate) fn parse_onnx(rel_path: &str, root_name: &Ident) -> proc_macro2::Toke
     for node in &graph.node {
         let op_type = &node.op_type;
         let out = format_ident!("_{}", node.output[0].replace(".", "_"));
-        let ins: Vec<_> = node.input.iter().map(|n| format_ident!("_{}", n.replace(".", "_"))).collect();
+        let ins: Vec<_> = node
+            .input
+            .iter()
+            .map(|n| format_ident!("_{}", n.replace(".", "_")))
+            .collect();
 
         let stmt = match op_type.as_str() {
             "Gemm" => {

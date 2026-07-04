@@ -1,10 +1,14 @@
 use proc_macro::TokenStream;
-use quote::{quote, format_ident};
-use syn::{parse_macro_input, LitStr, Ident, Token, Result, parse::{Parse, ParseStream}};
-use std::collections::BTreeMap;
-use std::path::PathBuf;
+use quote::{format_ident, quote};
 use safetensors::SafeTensors;
+use std::collections::BTreeMap;
 use std::fs;
+use std::path::PathBuf;
+use syn::{
+    Ident, LitStr, Result, Token,
+    parse::{Parse, ParseStream},
+    parse_macro_input,
+};
 
 struct ImportModelInput {
     path: LitStr,
@@ -30,13 +34,17 @@ enum Node {
 impl Node {
     fn insert(&mut self, path: &[&str], shape: Vec<usize>) {
         if path.len() == 1 {
-            let is_buffer = path[0] == "running_mean" || path[0] == "running_var" || path[0] == "num_batches_tracked";
+            let is_buffer = path[0] == "running_mean"
+                || path[0] == "running_var"
+                || path[0] == "num_batches_tracked";
             if let Node::Dir(map) = self {
                 map.insert(path[0].to_string(), Node::Leaf { shape, is_buffer });
             }
         } else {
             if let Node::Dir(map) = self {
-                let entry = map.entry(path[0].to_string()).or_insert_with(|| Node::Dir(BTreeMap::new()));
+                let entry = map
+                    .entry(path[0].to_string())
+                    .or_insert_with(|| Node::Dir(BTreeMap::new()));
                 entry.insert(&path[1..], shape);
             }
         }
@@ -49,7 +57,9 @@ fn generate_structs(
     structs: &mut Vec<proc_macro2::TokenStream>,
     bounds: &mut Vec<proc_macro2::TokenStream>,
 ) {
-    let Node::Dir(map) = node else { return; };
+    let Node::Dir(map) = node else {
+        return;
+    };
 
     let mut fields = Vec::new();
 
@@ -69,7 +79,7 @@ fn generate_structs(
                 } else {
                     quote! { kindle::nn::Param<#shape_ty, B> }
                 };
-                
+
                 let common_bound = quote! { RawVar = <B as kindle::prelude::Backend>::RawVar, RawTensor = <B as kindle::prelude::Backend>::RawTensor };
                 bounds.push(quote! { B: kindle::prelude::Backend });
                 fields.push(quote! { pub #field_name_ident: #ty });
@@ -86,8 +96,8 @@ fn generate_structs(
     let def = quote! {
         #[kindle::prelude::module]
         #[allow(non_camel_case_types)]
-        pub struct #name<B: kindle::prelude::Backend> 
-        where 
+        pub struct #name<B: kindle::prelude::Backend>
+        where
             #(#bounds,)*
         {
             #(#fields,)*
@@ -101,11 +111,13 @@ pub(crate) fn import_model(_attr: TokenStream, item: TokenStream) -> TokenStream
 
     let rel_path = input.path.value();
     let root_name = input.name.clone();
-    
+
     if rel_path.ends_with(".onnx") {
         return crate::onnx::parse_onnx(&rel_path, &root_name).into();
     } else if rel_path.ends_with(".pt") || rel_path.ends_with(".pth") {
-        let msg = format!("TorchScript parsing is scheduled for a future update! Use .onnx or .safetensors.");
+        let msg = format!(
+            "TorchScript parsing is scheduled for a future update! Use .onnx or .safetensors."
+        );
         return quote! { compile_error!(#msg); }.into();
     } else if !rel_path.ends_with(".safetensors") {
         let msg = format!("Unsupported model file format: {}", rel_path);
@@ -145,8 +157,8 @@ pub(crate) fn import_model(_attr: TokenStream, item: TokenStream) -> TokenStream
     // root implementation of load_default_weights
     let path_str = input.path.value();
     let root_impl = quote! {
-        impl<B: kindle::prelude::Backend> #root_name<B> 
-        where 
+        impl<B: kindle::prelude::Backend> #root_name<B>
+        where
             #(#bounds,)*
         {
             pub fn load_default_weights(&mut self) -> kindle::prelude::Result<()> {

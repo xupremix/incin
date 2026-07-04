@@ -5,8 +5,20 @@ use crate::prelude::{KindleDType, KindleDevice, Result, Shape};
 pub trait Backend: Clone + 'static {
     type Device: super::device::Device;
     type DType: super::dtype::DType;
-    type BackendWithDType<NewT: super::dtype::DType>: Backend<DType = NewT, Device = Self::Device, RawTensor = Self::RawTensor, RawVar = Self::RawVar, Grads = Self::Grads>;
-    type BackendWithDevice<NewD: super::device::Device>: Backend<Device = NewD, DType = Self::DType, RawTensor = Self::RawTensor, RawVar = Self::RawVar, Grads = Self::Grads>;
+    type BackendWithDType<NewT: super::dtype::DType>: Backend<
+            DType = NewT,
+            Device = Self::Device,
+            RawTensor = Self::RawTensor,
+            RawVar = Self::RawVar,
+            Grads = Self::Grads,
+        >;
+    type BackendWithDevice<NewD: super::device::Device>: Backend<
+            Device = NewD,
+            DType = Self::DType,
+            RawTensor = Self::RawTensor,
+            RawVar = Self::RawVar,
+            Grads = Self::Grads,
+        >;
 
     type RawTensor: Clone;
     type RawVar: Clone;
