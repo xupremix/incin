@@ -16,9 +16,13 @@ pub mod tensor;
 pub mod prelude {
     pub use super::err::*;
     pub use crate::nn::{
-        module::Module,
+        module::{Module, Parameters, Sequential},
         param::Param,
+        linear::{Linear, LinearShape},
+        conv2d::{Conv2d, Conv2dShape},
+        activation::{ReLU, GELU},
     };
+    pub use crate::seq;
     
     pub use crate::optim::{
         Gradients, Optimizer, SGD,

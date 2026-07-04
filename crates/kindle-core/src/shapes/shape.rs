@@ -1,4 +1,4 @@
-use crate::prelude::{ConstDim, Dim, Dyn, NotUnit};
+use crate::prelude::{ConstDim, Dim, Dyn};
 use alloc::vec::Vec;
 use core::fmt::Debug;
 use core::ops::{Index, IndexMut};

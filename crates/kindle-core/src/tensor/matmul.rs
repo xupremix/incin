@@ -132,10 +132,28 @@ impl MatMulShape<Dyn> for Dyn {
     type Output = Dyn;
 
     fn output_shape(
-        _lhs: &<Dyn as Shape>::Field,
-        _rhs: &<Dyn as Shape>::Field,
+        lhs: &<Dyn as Shape>::Field,
+        rhs: &<Dyn as Shape>::Field,
     ) -> <Dyn as Shape>::Field {
-        alloc::vec![]
+        if lhs.len() == 2 && rhs.len() == 2 {
+            alloc::vec![lhs[0], rhs[1]]
+        } else if lhs.len() == 3 && rhs.len() == 3 {
+            alloc::vec![lhs[0], lhs[1], rhs[2]]
+        } else if lhs.len() == 4 && rhs.len() == 2 {
+            // Flattened batch, e.g. [4, 10816] and [10816, 10]
+            alloc::vec![lhs[0], rhs[1]]
+            alloc::vec![]
+        } else {
+            // General broadcasted matmul is complex, but let's do simple ND x 2D
+            if lhs.len() >= 2 && rhs.len() == 2 {
+                let mut out = lhs.clone();
+                let last = out.len() - 1;
+                out[last] = rhs[1];
+                out
+            } else {
+                alloc::vec![]
+            }
+        }
     }
 }
 

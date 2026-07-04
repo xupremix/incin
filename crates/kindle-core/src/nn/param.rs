@@ -10,6 +10,25 @@ pub struct Param<S: Shape, B: Backend<S>, T: DType = f32, D: Device = Cpu> {
     pub(crate) _device: D::Field,
 }
 
+impl<S: Shape, B: Backend<S>, T: DType, D: Device> Clone for Param<S, B, T, D> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            _shape: self._shape.clone(),
+            _dtype: self._dtype.clone(),
+            _device: self._device.clone(),
+        }
+    }
+}
+
+impl<S: Shape, B: Backend<S>, T: DType, D: Device> core::fmt::Debug for Param<S, B, T, D> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Param")
+            .field("inner", &"...")
+            .finish()
+    }
+}
+
 impl<S: Shape, B: Backend<S>, T: DType, D: Device> Param<S, B, T, D> {
     /// Extract a functional Tensor from this variable for forward passes
     pub fn as_tensor(&self) -> Result<Tensor<S, B, T, D, Grad>> {
@@ -92,7 +111,7 @@ where
     }
 }
 
-impl<S: Shape + DynShape, B: Backend<S>, T: DType, D: Device> Module<B> for Param<S, B, T, D>
+impl<S: Shape + DynShape, B: Backend<S>, T: DType, D: Device> Parameters<B> for Param<S, B, T, D>
 where
     B: Backend<Dyn, RawVar = <B as Backend<S>>::RawVar>,
 {

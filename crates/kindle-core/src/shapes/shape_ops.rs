@@ -16,5 +16,9 @@ pub trait Flatten<const START: usize, const END: usize>: Shape {
     type Output: Shape;
 }
 
+impl<const START: usize, const END: usize> Flatten<START, END> for crate::prelude::Dyn {
+    type Output = crate::prelude::Dyn;
+}
+
 // Generate the trait implementations for permutations and reductions
 kindle_macros::generate_shape_ops!();
