@@ -36,6 +36,18 @@ pub trait ReplaceLastDim<NewDim: Dim> {
     type Output: Shape;
 }
 
+pub trait EndsWith<D: Dim>: Shape {}
+pub trait HasChannels1D<D: Dim>: Shape {}
+pub trait HasChannels2D<D: Dim>: Shape {}
+
+impl<D: Dim> EndsWith<D> for Dyn {}
+impl<D: Dim> HasChannels1D<D> for Dyn {}
+impl<D: Dim> HasChannels2D<D> for Dyn {}
+
+
+
+
+
 pub trait PartialDynShape: DynShape {
     const RANK: usize;
 }
@@ -155,6 +167,9 @@ macro_rules! impl_shape_for_tuple {
         impl PartialDynShape for [usize; ($n)] {
             const RANK: usize = ($n);
         }
+        impl EndsWith<usize> for [usize; ($n)] {}
+        impl HasChannels1D<usize> for [usize; ($n)] {}
+        impl HasChannels2D<usize> for [usize; ($n)] {}
     };
 }
 
@@ -477,3 +492,50 @@ mod tests {
         assert_eq!(<[usize; 3] as PartialDynShape>::RANK, 3);
     }
 }
+
+macro_rules! impl_ends_with_for_tuple {
+    ($last:ident) => {
+        impl<$last: Dim> EndsWith<$last> for ($last,) {}
+    };
+    ($n1:ident, $last:ident) => {
+        impl<$n1: Dim, $last: Dim> EndsWith<$last> for ($n1, $last) {}
+    };
+    ($n1:ident, $n2:ident, $last:ident) => {
+        impl<$n1: Dim, $n2: Dim, $last: Dim> EndsWith<$last> for ($n1, $n2, $last) {}
+    };
+    ($n1:ident, $n2:ident, $n3:ident, $last:ident) => {
+        impl<$n1: Dim, $n2: Dim, $n3: Dim, $last: Dim> EndsWith<$last> for ($n1, $n2, $n3, $last) {}
+    };
+    ($n1:ident, $n2:ident, $n3:ident, $n4:ident, $last:ident) => {
+        impl<$n1: Dim, $n2: Dim, $n3: Dim, $n4: Dim, $last: Dim> EndsWith<$last> for ($n1, $n2, $n3, $n4, $last) {}
+    };
+    ($n1:ident, $n2:ident, $n3:ident, $n4:ident, $n5:ident, $last:ident) => {
+        impl<$n1: Dim, $n2: Dim, $n3: Dim, $n4: Dim, $n5: Dim, $last: Dim> EndsWith<$last> for ($n1, $n2, $n3, $n4, $n5, $last) {}
+    };
+}
+
+impl_ends_with_for_tuple!(D0);
+impl_ends_with_for_tuple!(D0, D1);
+impl_ends_with_for_tuple!(D0, D1, D2);
+impl_ends_with_for_tuple!(D0, D1, D2, D3);
+impl_ends_with_for_tuple!(D0, D1, D2, D3, D4);
+impl_ends_with_for_tuple!(D0, D1, D2, D3, D4, D5);
+
+macro_rules! impl_has_channels_1d_for_tuple {
+    ($n1:ident, $c:ident, $n3:ident) => {
+        impl<$n1: Dim, $c: Dim, $n3: Dim> HasChannels1D<$c> for ($n1, $c, $n3) {}
+    };
+}
+
+// Conv1d typically accepts 3D tensors: (Batch, Channels, Length)
+impl_has_channels_1d_for_tuple!(D0, D1, D2);
+
+macro_rules! impl_has_channels_2d_for_tuple {
+    ($n1:ident, $c:ident, $n3:ident, $n4:ident) => {
+        impl<$n1: Dim, $c: Dim, $n3: Dim, $n4: Dim> HasChannels2D<$c> for ($n1, $c, $n3, $n4) {}
+    };
+}
+
+// Conv2d typically accepts 4D tensors: (Batch, Channels, Height, Width)
+impl_has_channels_2d_for_tuple!(D0, D1, D2, D3);
+

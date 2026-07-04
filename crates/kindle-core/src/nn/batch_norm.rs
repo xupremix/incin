@@ -5,47 +5,44 @@ use core::marker::PhantomData;
 
 #[derive(Debug, Clone)]
 #[kindle_macros::module(internal)]
-pub struct BatchNorm2d<S: Shape, B: Backend> {
-    pub weight: Param<Dyn, B>,
-    pub bias: Param<Dyn, B>,
-    pub running_mean: Buffer<Dyn, B>,
-    pub running_var: Buffer<Dyn, B>,
+pub struct BatchNorm2d<C: Dim, B: Backend> {
+    pub weight: Param<(C,), B>,
+    pub bias: Param<(C,), B>,
+    pub running_mean: Buffer<(C,), B>,
+    pub running_var: Buffer<(C,), B>,
     pub eps: f32,
-    _phantom: PhantomData<S>,
+    _phantom: PhantomData<C>,
 }
 
-impl<S: Shape + DynShape, B: Backend> BatchNorm2d<S, B>
+impl<C: Dim, B: Backend> BatchNorm2d<C, B>
 where
     B::DType: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
-    pub fn new(num_features: usize, _device: &KindleDevice) -> Result<Self>
+    pub fn new<A>(args: A, _device: &KindleDevice) -> Result<Self>
     where
-        B::DType: crate::prelude::ConstDType,
-        B::Device: crate::prelude::ConstDevice,
+        A: Clone + ArgInto<(<C as Dim>::Arg,)>,
     {
-        let _dtype = KindleDType::F32;
-        let _dims: &[usize] = &[num_features];
         Ok(Self {
-            weight: Param::<Dyn, B>::ones([num_features])?,
-            bias: Param::<Dyn, B>::zeros([num_features])?,
-            running_mean: Buffer::<Dyn, B>::zeros([num_features])?,
-            running_var: Buffer::<Dyn, B>::ones([num_features])?,
+            weight: Param::<(C,), B>::ones(args.clone())?,
+            bias: Param::<(C,), B>::zeros(args.clone())?,
+            running_mean: Buffer::<(C,), B>::zeros(args.clone())?,
+            running_var: Buffer::<(C,), B>::ones(args)?,
             eps: 1e-5,
             _phantom: PhantomData,
         })
     }
 }
-impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for BatchNorm2d<S, B> {
-    type Output = Tensor<S, B>;
+impl<N: Dim, C: Dim, H: Dim, W: Dim, B: Backend> Module<Tensor<(N, C, H, W), B>> for BatchNorm2d<C, B> {
+    type Output = Tensor<(N, C, H, W), B>;
     type Error = Error;
 
     #[inline]
-    fn forward(&self, x: Tensor<S, B>) -> core::result::Result<Self::Output, Error> {
-        let weight = self.weight.as_tensor()?;
-        let bias = self.bias.as_tensor()?;
-        let running_mean = self.running_mean.as_tensor()?;
-        let running_var = self.running_var.as_tensor()?;
+    fn forward(&self, x: Tensor<(N, C, H, W), B>) -> core::result::Result<Self::Output, Error> {
+        let weight = self.weight.as_tensor()?.into_dyn();
+        let bias = self.bias.as_tensor()?.into_dyn();
+        let running_mean = self.running_mean.as_tensor()?.into_dyn();
+        let running_var = self.running_var.as_tensor()?.into_dyn();
         x.batch_norm(&weight, &bias, &running_mean, &running_var, self.eps)
     }
 }

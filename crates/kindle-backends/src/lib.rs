@@ -519,6 +519,29 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
             Ok(())
         }
+
+        fn step_adam(params: &mut [Self::RawVar], grads: &Self::Grads, lr: f64) -> Result<()> {
+            use candle_nn::optim::Optimizer;
+            // Candle doesn't have plain Adam currently built-in to candle_nn::optim in all versions, 
+            // but if it does we use it. We'll try candle_nn::optim::Adam. 
+            // Actually wait, let's just use AdamW if Adam doesn't exist, but Candle does have AdamW.
+            // Let's assume candle_nn::optim::AdamW is what we have. 
+            let mut adam = candle_nn::optim::AdamW::new_lr(params.to_vec(), lr) // using AdamW as fallback for now
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+            adam.step(grads)
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+            Ok(())
+        }
+
+        fn mse_loss(pred: &Self::RawTensor, target: &Self::RawTensor) -> Result<Self::RawTensor> {
+            candle_nn::loss::mse(pred, target)
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e).into())
+        }
+
+        fn cross_entropy_loss(pred: &Self::RawTensor, target: &Self::RawTensor) -> Result<Self::RawTensor> {
+            candle_nn::loss::cross_entropy(pred, target)
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e).into())
+        }
     }
 
     #[cfg(test)]
@@ -551,7 +574,7 @@ pub mod ndarray_backend {
     pub struct NdarrayBackend<T, D>(core::marker::PhantomData<(T, D)>);
 
     #[derive(Clone, Debug)]
-    pub struct NdarrayVar(pub ndarray::ArrayD<f32>);
+    pub struct NdarrayVar(pub std::sync::Arc<std::sync::RwLock<ndarray::ArrayD<f32>>>);
     #[derive(Clone, Debug)]
     pub struct NdarrayGrads;
 
@@ -571,11 +594,11 @@ pub mod ndarray_backend {
             Vec::new()
         }
 
-        fn var_as_tensor(var: &Self::RawVar) -> Result<Self::RawTensor> {
-            Ok(var.0.clone())
+        fn var_as_tensor(v: &Self::RawVar) -> Result<Self::RawTensor> {
+            Ok(v.0.read().unwrap().clone())
         }
         fn var_from_tensor(t: &Self::RawTensor) -> Result<Self::RawVar> {
-            Ok(NdarrayVar(t.clone()))
+            Ok(NdarrayVar(std::sync::Arc::new(std::sync::RwLock::new(t.clone()))))
         }
 
         fn zeros(
@@ -988,6 +1011,24 @@ pub mod ndarray_backend {
                 backend: "Ndarray",
             })
         }
+        fn step_adam(_params: &mut [Self::RawVar], _grads: &Self::Grads, _lr: f64) -> Result<()> {
+            Err(Error::UnsupportedBackendOperation {
+                op: "step_adam",
+                backend: "Ndarray",
+            })
+        }
+        fn mse_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor) -> Result<Self::RawTensor> {
+            Err(Error::UnsupportedBackendOperation {
+                op: "mse_loss",
+                backend: "Ndarray",
+            })
+        }
+        fn cross_entropy_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor) -> Result<Self::RawTensor> {
+            Err(Error::UnsupportedBackendOperation {
+                op: "cross_entropy_loss",
+                backend: "Ndarray",
+            })
+        }
     }
 }
 
@@ -1114,6 +1155,9 @@ pub mod burn_backend {
                 } fn backward(_loss: &Self::RawTensor) -> Result<Self::Grads> { Err(Error::UnsupportedBackendOperation { op: "backward", backend: "Burn" }) }
                 fn step_sgd(_params: &mut [Self::RawVar], _grads: &Self::Grads, _lr: f64) -> Result<()> { Err(Error::UnsupportedBackendOperation { op: "step_sgd", backend: "Burn" }) }
                 fn step_adamw(_params: &mut [Self::RawVar], _grads: &Self::Grads, _lr: f64) -> Result<()> { Err(Error::UnsupportedBackendOperation { op: "step_adamw", backend: "Burn" }) }
+                fn step_adam(_params: &mut [Self::RawVar], _grads: &Self::Grads, _lr: f64) -> Result<()> { Err(Error::UnsupportedBackendOperation { op: "step_adam", backend: "Burn" }) }
+                fn mse_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "mse_loss", backend: "Burn" }) }
+                fn cross_entropy_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "cross_entropy_loss", backend: "Burn" }) }
             }
         };
     }

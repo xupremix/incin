@@ -5,7 +5,7 @@ use crate::prelude::{
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct Dyn(());
+pub struct Dyn(pub ());
 
 #[derive(Debug)]
 pub struct Tensor<S: Shape, B: Backend, G: RequiresGrad = Grad> {
@@ -219,20 +219,39 @@ impl<S: Shape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
 }
 
 impl<S1: Shape + DynShape, B: Backend, G: RequiresGrad> Tensor<S1, B, G> {
-    pub fn into_shape<S2: Shape>(self) -> Result<Tensor<S2, B, G>> {
-        let current_dims = S1::dims(&self._shape);
-        let new_shape =
-            S2::from_dyn(current_dims.as_ref()).ok_or_else(|| Error::ShapeMismatch {
-                expected: alloc::vec![], // We don't have S2 specific expected shape easily printable
-                got: current_dims.as_ref().to_vec(),
-            })?;
-
-        Ok(Tensor::<S2, B, G>::from_parts(
+    pub fn into_shape<S2: Shape + DynShape>(self) -> Result<Tensor<S2, B, G>> {
+        let dims = S1::dims(&self._shape);
+        let s2_shape = S2::from_dyn(dims.as_ref()).unwrap();
+        Ok(Tensor::from_parts(
             self.inner,
-            new_shape,
+            s2_shape,
             self._dtype,
             self._device,
             self._grad,
+        ))
+    }
+
+    pub fn into_dyn(self) -> Tensor<crate::prelude::Dyn, B, G> {
+        let dims = S1::dims(&self._shape);
+        let s2_shape = <crate::prelude::Dyn as Shape>::from_dyn(dims.as_ref()).unwrap();
+        Tensor::from_parts(
+            self.inner,
+            s2_shape,
+            self._dtype,
+            self._device,
+            self._grad,
+        )
+    }
+
+    pub fn to_shape<S2: Shape + DynShape>(&self) -> Result<Tensor<S2, B, G>> {
+        let dims = S1::dims(&self._shape);
+        let s2_shape = S2::from_dyn(dims.as_ref()).unwrap();
+        Ok(Tensor::from_parts(
+            self.inner.clone(),
+            s2_shape,
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
         ))
     }
 }

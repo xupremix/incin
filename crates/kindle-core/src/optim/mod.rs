@@ -46,3 +46,22 @@ impl<B: Backend> Optimizer<B> for AdamW<B> {
         B::step_adamw(&mut self.params, &grads.0, self.lr)
     }
 }
+
+/// Adam Optimizer.
+pub struct Adam<B: Backend> {
+    params: Vec<B::RawVar>,
+    lr: f64,
+}
+
+impl<B: Backend> Adam<B> {
+    /// Create a new Adam optimizer.
+    pub fn new(params: Vec<B::RawVar>, lr: f64) -> Self {
+        Self { params, lr }
+    }
+}
+
+impl<B: Backend> Optimizer<B> for Adam<B> {
+    fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()> {
+        B::step_adam(&mut self.params, &grads.0, self.lr)
+    }
+}

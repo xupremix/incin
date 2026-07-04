@@ -58,6 +58,7 @@ impl<Kernel, Stride, Padding, Dilation> SpatialOut<Kernel, Stride, Padding, Dila
 
 pub trait Pool2dShape<K, S>: crate::prelude::Shape {
     type Output: crate::prelude::Shape;
+    fn compute_output_shape(input: &Self::Field) -> <Self::Output as crate::prelude::Shape>::Field;
 }
 
 use crate::prelude::{Dim, Dyn};
@@ -69,8 +70,8 @@ impl<B: Dim, C: Dim, HIn: Dim, WIn: Dim, K: Unsigned, S: Unsigned> Pool2dShape<K
 where
     HIn: SpatialOut<K, S, U0, U1>,
     WIn: SpatialOut<K, S, U0, U1>,
-    <HIn as SpatialOut<K, S, U0, U1>>::Output: Dim,
-    <WIn as SpatialOut<K, S, U0, U1>>::Output: Dim,
+    <HIn as SpatialOut<K, S, U0, U1>>::Output: Dim + Default,
+    <WIn as SpatialOut<K, S, U0, U1>>::Output: Dim + Default,
 {
     type Output = (
         B,
@@ -78,51 +79,75 @@ where
         <HIn as SpatialOut<K, S, U0, U1>>::Output,
         <WIn as SpatialOut<K, S, U0, U1>>::Output,
     );
+    fn compute_output_shape(input: &Self::Field) -> <Self::Output as crate::prelude::Shape>::Field {
+        (input.0.clone(), input.1.clone(), Default::default(), Default::default())
+    }
 }
 
 impl<K: Unsigned, S: Unsigned> Pool2dShape<K, S> for Dyn {
     type Output = Dyn;
+    fn compute_output_shape(input: &Self::Field) -> <Self::Output as crate::prelude::Shape>::Field {
+        let mut dims = input.clone();
+        if dims.len() == 4 {
+            dims[2] = (dims[2] - K::USIZE) / S::USIZE + 1;
+            dims[3] = (dims[3] - K::USIZE) / S::USIZE + 1;
+        }
+        dims
+    }
 }
 
-pub trait Conv1dShape<K, S, P, D>: crate::prelude::Shape {
+pub trait Conv1dShape<COut, K, S, P, D>: crate::prelude::Shape {
     type Output: crate::prelude::Shape;
+    fn compute_output_shape(input: &Self::Field, out_channels: usize) -> <Self::Output as crate::prelude::Shape>::Field;
 }
 
 // Implement for (B, CIn, LIn) -> (B, COut, LOut)
-impl<Batch: Dim, CIn: Dim, COut: Dim, LIn: Dim, K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned>
-    Conv1dShape<K, S, P, D> for (Batch, CIn, LIn, COut)
+impl<Batch: Dim, CIn: Dim, COut: Dim + Default, LIn: Dim, K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned>
+    Conv1dShape<COut, K, S, P, D> for (Batch, CIn, LIn)
 where
     LIn: SpatialOut<K, S, P, D>,
-    <LIn as SpatialOut<K, S, P, D>>::Output: Dim,
+    <LIn as SpatialOut<K, S, P, D>>::Output: Dim + Default,
 {
     type Output = (Batch, COut, <LIn as SpatialOut<K, S, P, D>>::Output);
+    fn compute_output_shape(input: &Self::Field, _out_channels: usize) -> <Self::Output as crate::prelude::Shape>::Field {
+        (input.0.clone(), Default::default(), Default::default())
+    }
 }
 
-impl<K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned> Conv1dShape<K, S, P, D> for Dyn {
+impl<COut, K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned> Conv1dShape<COut, K, S, P, D> for Dyn {
     type Output = Dyn;
+    fn compute_output_shape(input: &Self::Field, out_channels: usize) -> <Self::Output as crate::prelude::Shape>::Field {
+        let mut dims = input.clone();
+        if dims.len() == 3 {
+            dims[1] = out_channels;
+            dims[2] = (dims[2] + 2 * P::USIZE - D::USIZE * (K::USIZE - 1) - 1) / S::USIZE + 1;
+        }
+        dims
+    }
 }
 
-pub trait Conv2dShape<K, S, P, D>: crate::prelude::Shape {
+pub trait Conv2dShape<COut, K, S, P, D>: crate::prelude::Shape {
     type Output: crate::prelude::Shape;
+    fn compute_output_shape(input: &Self::Field, out_channels: usize) -> <Self::Output as crate::prelude::Shape>::Field;
 }
 
 // Implement for (B, CIn, HIn, WIn) -> (B, COut, HOut, WOut)
 impl<
     Batch: Dim,
     CIn: Dim,
-    COut: Dim,
+    COut: Dim + Default,
     HIn: Dim,
     WIn: Dim,
     K: Unsigned,
     S: Unsigned,
     P: Unsigned,
     D: Unsigned,
-> Conv2dShape<K, S, P, D> for (Batch, CIn, HIn, WIn, COut)
+> Conv2dShape<COut, K, S, P, D> for (Batch, CIn, HIn, WIn)
 where
     HIn: SpatialOut<K, S, P, D>,
     WIn: SpatialOut<K, S, P, D>,
-    <HIn as SpatialOut<K, S, P, D>>::Output: Dim,
-    <WIn as SpatialOut<K, S, P, D>>::Output: Dim,
+    <HIn as SpatialOut<K, S, P, D>>::Output: Dim + Default,
+    <WIn as SpatialOut<K, S, P, D>>::Output: Dim + Default,
 {
     type Output = (
         Batch,
@@ -130,8 +155,49 @@ where
         <HIn as SpatialOut<K, S, P, D>>::Output,
         <WIn as SpatialOut<K, S, P, D>>::Output,
     );
+    fn compute_output_shape(input: &Self::Field, _out_channels: usize) -> <Self::Output as crate::prelude::Shape>::Field {
+        (input.0.clone(), Default::default(), Default::default(), Default::default())
+    }
 }
 
-impl<K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned> Conv2dShape<K, S, P, D> for Dyn {
+impl<COut, K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned> Conv2dShape<COut, K, S, P, D> for Dyn {
     type Output = Dyn;
+    fn compute_output_shape(input: &Self::Field, out_channels: usize) -> <Self::Output as crate::prelude::Shape>::Field {
+        let mut dims = input.clone();
+        if dims.len() == 4 {
+            dims[1] = out_channels;
+            dims[2] = (dims[2] + 2 * P::USIZE - D::USIZE * (K::USIZE - 1) - 1) / S::USIZE + 1;
+            dims[3] = (dims[3] + 2 * P::USIZE - D::USIZE * (K::USIZE - 1) - 1) / S::USIZE + 1;
+        }
+        dims
+    }
+}
+
+pub trait AdaptiveAvgPool2dShape<HOut, WOut>: crate::prelude::Shape {
+    type Output: crate::prelude::Shape;
+    fn compute_output_shape(input: &Self::Field) -> <Self::Output as crate::prelude::Shape>::Field;
+}
+
+impl<B: Dim, C: Dim, HIn: Dim, WIn: Dim, HOut: Unsigned, WOut: Unsigned> AdaptiveAvgPool2dShape<HOut, WOut>
+    for (B, C, HIn, WIn)
+where
+    HOut: Dim + Default,
+    WOut: Dim + Default,
+{
+    type Output = (B, C, HOut, WOut);
+    fn compute_output_shape(input: &Self::Field) -> <Self::Output as crate::prelude::Shape>::Field {
+        (input.0.clone(), input.1.clone(), Default::default(), Default::default())
+    }
+}
+
+impl<HOut: Unsigned, WOut: Unsigned> AdaptiveAvgPool2dShape<HOut, WOut> for Dyn {
+    type Output = Dyn;
+    fn compute_output_shape(input: &Self::Field) -> <Self::Output as crate::prelude::Shape>::Field {
+        let mut dims = input.clone();
+        if dims.len() == 4 {
+            dims[2] = HOut::USIZE;
+            dims[3] = WOut::USIZE;
+        }
+        dims
+    }
 }

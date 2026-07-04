@@ -4,7 +4,7 @@
 //! This ensures at compile time that you can't accidentally add tensors
 //! of different shapes, dtypes, or on different devices.
 
-use crate::prelude::{Backend, DType, Device, Dyn, DynShape, RequiresGrad, Result, Shape, Tensor};
+use crate::prelude::{Backend, DType, Device, Dyn, DynShape, RequiresGrad, Grad, Result, Shape, Tensor};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IndexSpec {
@@ -97,6 +97,37 @@ impl_binary_op!(Sub, sub, sub);
 impl_binary_op!(Mul, mul, mul);
 impl_binary_op!(Div, div, div);
 
+macro_rules! impl_broadcast_binary_op {
+    ($trait_name:ident, $method:ident, $backend_method:ident) => {
+        impl<S1: Shape + crate::shapes::DynShape, B: Backend, G: RequiresGrad> Tensor<S1, B, G> {
+            #[inline]
+            pub fn $method<S2>(&self, rhs: &Tensor<S2, B, G>) -> Result<Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, G>>
+            where
+                S2: Shape + crate::shapes::DynShape,
+                S1: crate::shapes::broadcast::BroadcastShape<S2>,
+                <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape,
+            {
+                let b_shape = <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::output_shape(self.shape_field(), rhs.shape_field());
+
+                let inner = B::$backend_method(&self.inner, &rhs.inner)?;
+                Ok(Tensor::from_parts(
+                    inner,
+                    b_shape,
+                    self._dtype.clone(),
+                    self._device.clone(),
+                    self._grad.clone(),
+                ))
+            }
+        }
+    };
+}
+
+impl_broadcast_binary_op!(BroadcastAdd, broadcast_add, add);
+impl_broadcast_binary_op!(BroadcastSub, broadcast_sub, sub);
+impl_broadcast_binary_op!(BroadcastMul, broadcast_mul, mul);
+impl_broadcast_binary_op!(BroadcastDiv, broadcast_div, div);
+
+
 macro_rules! impl_unary_op {
     ($method:ident, $backend_method:ident) => {
         pub fn $method(&self) -> Result<Self> {
@@ -175,7 +206,7 @@ macro_rules! impl_reduction_op {
 }
 
 macro_rules! impl_reduction_dim_op {
-    ($method:ident, $backend_method:ident, $trait_bound:ident) => {
+    ($method:ident, $backend_method:ident, $trait_bound:ident, $keep_dim:expr) => {
         pub fn $method<const DIM: usize>(&self) -> Result<Tensor<S::Output, B, G>>
         where
             S: DynShape + crate::shapes::$trait_bound<DIM>,
@@ -185,10 +216,10 @@ macro_rules! impl_reduction_dim_op {
             // We just use from_dyn to construct the resulting shape field dynamically,
             // since we know it's a dimensional reduction.
             let mut out_dims = S::dims(&self._shape).into();
-            if stringify!($trait_bound) == "ReduceDim" {
-                out_dims.remove(DIM);
-            } else {
+            if $keep_dim {
                 out_dims[DIM] = 1;
+            } else {
+                out_dims.remove(DIM);
             }
 
             Ok(Tensor::from_parts(
@@ -208,14 +239,14 @@ impl<S: Shape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
     impl_reduction_op!(max_all, max_all);
     impl_reduction_op!(min_all, min_all);
 
-    impl_reduction_dim_op!(sum_dim, sum_dim, ReduceDim);
-    impl_reduction_dim_op!(sum_keepdim, sum_keepdim, ReduceKeepDim);
-    impl_reduction_dim_op!(mean_dim, mean_dim, ReduceDim);
-    impl_reduction_dim_op!(mean_keepdim, mean_keepdim, ReduceKeepDim);
-    impl_reduction_dim_op!(max_dim, max_dim, ReduceDim);
-    impl_reduction_dim_op!(max_keepdim, max_keepdim, ReduceKeepDim);
-    impl_reduction_dim_op!(min_dim, min_dim, ReduceDim);
-    impl_reduction_dim_op!(min_keepdim, min_keepdim, ReduceKeepDim);
+    impl_reduction_dim_op!(sum_dim, sum_dim, ReduceDim, false);
+    impl_reduction_dim_op!(sum_keepdim, sum_keepdim, ReduceKeepDim, true);
+    impl_reduction_dim_op!(mean_dim, mean_dim, ReduceDim, false);
+    impl_reduction_dim_op!(mean_keepdim, mean_keepdim, ReduceKeepDim, true);
+    impl_reduction_dim_op!(max_dim, max_dim, ReduceDim, false);
+    impl_reduction_dim_op!(max_keepdim, max_keepdim, ReduceKeepDim, true);
+    impl_reduction_dim_op!(min_dim, min_dim, ReduceDim, false);
+    impl_reduction_dim_op!(min_keepdim, min_keepdim, ReduceKeepDim, true);
 }
 
 impl<S: Shape + DynShape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
@@ -258,8 +289,32 @@ impl<S: Shape + DynShape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
 
 impl<S: Shape + DynShape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
     /// Reshape this tensor into explicitly provided shape `S2`.
-    /// The number of elements must be strictly equal.
-    pub fn reshape<S2: Shape + DynShape>(&self, args: S2::Arg) -> Result<Tensor<S2, B, G>> {
+    /// This is guaranteed at compile-time to have matching elements.
+    pub fn reshape<S2>(&self, args: S2::Arg) -> Result<Tensor<S2, B, G>>
+    where
+        S2: Shape + DynShape,
+        S: crate::shapes::reshape::ReshapeShape<S2>,
+    {
+        let new_shape_field = S2::init(args);
+        let new_dims = S2::dims(&new_shape_field);
+
+        let inner = B::reshape(&self.inner, new_dims.as_ref())?;
+        Ok(Tensor::<S2, B, G>::from_parts(
+            inner,
+            new_shape_field,
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        ))
+    }
+
+    /// Try to reshape this tensor into the provided shape `S2`.
+    /// This falls back to a runtime verification for dynamic shapes.
+    pub fn try_reshape<S2>(&self, args: S2::Arg) -> Result<Tensor<S2, B, G>>
+    where
+        S2: Shape + DynShape,
+        S: crate::shapes::reshape::TryReshape<S2>,
+    {
         let new_shape_field = S2::init(args);
         let new_dims = S2::dims(&new_shape_field);
 
@@ -397,6 +452,115 @@ impl<S: Shape + DynShape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
         Ok(Tensor::from_parts(
             inner,
             self._shape.clone(),
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        ))
+    }
+}
+
+
+impl<S: Shape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
+    /// Dynamically concatenates a slice of tensors along `dim`.
+    /// This is fallible at runtime if shapes mismatch or dim is out of bounds.
+    pub fn try_concat_slice(tensors: &[&Tensor<S, B, G>], dim: usize) -> Result<Tensor<Dyn, B, G>> {
+        let raw_tensors: alloc::vec::Vec<&B::RawTensor> = tensors.iter().map(|t| &t.inner).collect();
+        if raw_tensors.is_empty() {
+            return Err(crate::err::Error::Msg("Cannot concat empty list".to_string()));
+        }
+        let inner = B::concat(&raw_tensors, dim)?;
+        let mut out_shape = B::shape(&tensors[0].inner);
+        out_shape[dim] = tensors.iter().map(|t| B::shape(&t.inner)[dim]).sum();
+        Ok(Tensor::from_parts(
+            inner,
+            <Dyn as Shape>::from_dyn(&out_shape).unwrap(),
+            tensors[0]._dtype.clone(),
+            tensors[0]._device.clone(),
+            tensors[0]._grad.clone(),
+        ))
+    }
+
+    /// Statically concatenates `self` with `other` along `Axis`.
+    pub fn concat<S2, Axis>(&self, other: &Tensor<S2, B, G>) -> Result<Tensor<<S as crate::shapes::concat::ConcatShape<S2, Axis>>::Output, B, G>>
+    where
+        S2: Shape,
+        Axis: typenum::Unsigned,
+        S: crate::shapes::concat::ConcatShape<S2, Axis>,
+        <<S as crate::shapes::concat::ConcatShape<S2, Axis>>::Output as Shape>::Field: core::default::Default,
+    {
+        let dim = Axis::USIZE;
+        let inner = B::concat(&[&self.inner, &other.inner], dim)?;
+        Ok(Tensor::from_parts(
+            inner,
+            core::default::Default::default(),
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        ))
+    }
+    
+    /// Dynamically concatenates `self` with `other` along `dim`.
+    pub fn try_concat<S2>(&self, other: &Tensor<S2, B, G>, dim: usize) -> Result<Tensor<Dyn, B, G>>
+    where
+        S2: Shape,
+    {
+        let inner = B::concat(&[&self.inner, &other.inner], dim)?;
+        let mut out_shape = B::shape(&self.inner);
+        out_shape[dim] += B::shape(&other.inner)[dim];
+        Ok(Tensor::from_parts(
+            inner,
+            <Dyn as Shape>::from_dyn(&out_shape).unwrap(),
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        ))
+    }
+
+    /// Dynamically stacks a slice of tensors along `dim`.
+    pub fn try_stack_slice(tensors: &[&Tensor<S, B, G>], dim: usize) -> Result<Tensor<Dyn, B, G>> {
+        let raw_tensors: alloc::vec::Vec<&B::RawTensor> = tensors.iter().map(|t| &t.inner).collect();
+        if raw_tensors.is_empty() {
+            return Err(crate::err::Error::Msg("Cannot stack empty list".to_string()));
+        }
+        let inner = B::stack(&raw_tensors, dim)?;
+        let mut out_shape = B::shape(&tensors[0].inner);
+        out_shape.insert(dim, tensors.len());
+        Ok(Tensor::from_parts(
+            inner,
+            <Dyn as Shape>::from_dyn(&out_shape).unwrap(),
+            tensors[0]._dtype.clone(),
+            tensors[0]._device.clone(),
+            tensors[0]._grad.clone(),
+        ))
+    }
+
+    /// Statically stacks `self` with `other` along `Axis`.
+    pub fn stack<Axis>(&self, other: &Tensor<S, B, G>) -> Result<Tensor<<S as crate::shapes::stack::StackShape<Axis>>::Output, B, G>>
+    where
+        Axis: typenum::Unsigned,
+        S: crate::shapes::stack::StackShape<Axis>,
+        <<S as crate::shapes::stack::StackShape<Axis>>::Output as Shape>::Field: core::default::Default,
+    {
+        let dim = Axis::USIZE;
+        let inner = B::stack(&[&self.inner, &other.inner], dim)?;
+        Ok(Tensor::from_parts(
+            inner,
+            core::default::Default::default(),
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        ))
+    }
+    
+    /// Dynamically stacks `self` with `other` along `dim`.
+    pub fn try_stack(&self, other: &Tensor<S, B, G>, dim: usize) -> Result<Tensor<Dyn, B, G>>
+    {
+        let inner = B::stack(&[&self.inner, &other.inner], dim)?;
+        let mut out_shape = B::shape(&self.inner);
+        out_shape.insert(dim, 2);
+        Ok(Tensor::from_parts(
+            inner,
+            <Dyn as Shape>::from_dyn(&out_shape).unwrap(),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),

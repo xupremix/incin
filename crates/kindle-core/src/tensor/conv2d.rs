@@ -5,7 +5,7 @@ use typenum::{Diff, Prod, Quot, Sum, U1, U2};
 
 // ConvOutDim already defined in arithmetic.rs and exposed via prelude
 
-pub trait Conv2dShape<K: Shape, Stride: StaticDim, Padding: StaticDim>: Shape {
+pub trait KernelConv2dShape<K: Shape, Stride: StaticDim, Padding: StaticDim>: Shape {
     type Output: Shape;
     fn output_shape(
         lhs: &<Self as Shape>::Field,
@@ -15,7 +15,7 @@ pub trait Conv2dShape<K: Shape, Stride: StaticDim, Padding: StaticDim>: Shape {
 
 // Fully static (B, C_in, H_in, W_in) with Kernel (C_out, C_in, K_h, K_w)
 impl<B, CIn, HIn, WIn, COut, KH, KW, Stride, Padding>
-    Conv2dShape<(COut, CIn, KH, KW), Stride, Padding> for (B, CIn, HIn, WIn)
+    KernelConv2dShape<(COut, CIn, KH, KW), Stride, Padding> for (B, CIn, HIn, WIn)
 where
     B: StaticDim,
     CIn: StaticDim,
@@ -61,7 +61,7 @@ where
 impl<
     Stride: crate::tensor::matmul::StaticDim + typenum::Unsigned,
     Padding: crate::tensor::matmul::StaticDim + typenum::Unsigned,
-> Conv2dShape<Dyn, Stride, Padding> for Dyn
+> KernelConv2dShape<Dyn, Stride, Padding> for Dyn
 {
     type Output = Dyn;
     fn output_shape(
@@ -94,7 +94,7 @@ impl<S1: Shape + DynShape, B: Backend, G: RequiresGrad> Tensor<S1, B, G> {
         Stride: StaticDim + typenum::Unsigned,
         Padding: StaticDim + typenum::Unsigned,
         KShape: Shape + DynShape,
-        S1: Conv2dShape<KShape, Stride, Padding>,
+        S1: KernelConv2dShape<KShape, Stride, Padding>,
     {
         let inner = B::conv2d(
             &self.inner,

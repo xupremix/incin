@@ -34,14 +34,7 @@ impl<I: Shape + DynShape + crate::shapes::Pool2dShape<K, S>, K: Unsigned, S: Uns
         let out =
             <B as Backend>::max_pool2d(x.inner(), (K::USIZE, K::USIZE), (S::USIZE, S::USIZE))?;
 
-        let mut dims = <I as DynShape>::dims(x.shape_field()).into();
-        // Fallback for Dyn inputs
-        if dims.len() == 4 {
-            dims[2] = (dims[2] - K::USIZE) / S::USIZE + 1;
-            dims[3] = (dims[3] - K::USIZE) / S::USIZE + 1;
-        }
-
-        let shape = I::Output::from_dyn(&dims).unwrap();
+        let shape = <I as crate::shapes::Pool2dShape<K, S>>::compute_output_shape(x.shape_field());
         Ok(Tensor::from_parts(
             out,
             shape,

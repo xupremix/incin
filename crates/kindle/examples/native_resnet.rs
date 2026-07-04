@@ -3,9 +3,9 @@ use kindle::prelude::*;
 #[module]
 pub struct BasicBlock<B: Backend> {
     pub conv1: kindle::nn::Conv2d<U3, U1, U1, U1, Dyn, B>,
-    pub bn1: kindle::nn::BatchNorm2d<Dyn, B>,
+    pub bn1: kindle::nn::BatchNorm2d<usize, B>,
     pub conv2: kindle::nn::Conv2d<U3, U1, U1, U1, Dyn, B>,
-    pub bn2: kindle::nn::BatchNorm2d<Dyn, B>,
+    pub bn2: kindle::nn::BatchNorm2d<usize, B>,
 }
 
 impl<B: Backend> BasicBlock<B>
@@ -21,9 +21,9 @@ where
     ) -> Result<Self> {
         Ok(Self {
             conv1: kindle::nn::Conv2d::<U3, U1, U1, U1, Dyn, B>::new(in_channels, out_channels)?,
-            bn1: kindle::nn::BatchNorm2d::<Dyn, B>::new(out_channels, device)?,
+            bn1: kindle::nn::BatchNorm2d::<usize, B>::new((out_channels,), device)?,
             conv2: kindle::nn::Conv2d::<U3, U1, U1, U1, Dyn, B>::new(out_channels, out_channels)?,
-            bn2: kindle::nn::BatchNorm2d::<Dyn, B>::new(out_channels, device)?,
+            bn2: kindle::nn::BatchNorm2d::<usize, B>::new((out_channels,), device)?,
         })
     }
 }
@@ -45,7 +45,7 @@ impl<B: Backend> BasicBlock<B> {
 #[module]
 pub struct ResNet<B: Backend> {
     pub conv1: kindle::nn::Conv2d<U7, U2, U3, U1, Dyn, B>,
-    pub bn1: kindle::nn::BatchNorm2d<Dyn, B>,
+    pub bn1: kindle::nn::BatchNorm2d<usize, B>,
     pub layer1: BasicBlock<B>,
     pub fc: kindle::nn::Linear<Dyn, B>,
 }
@@ -58,7 +58,7 @@ where
     pub fn new(num_classes: usize, device: &KindleDevice) -> Result<Self> {
         Ok(Self {
             conv1: kindle::nn::Conv2d::<U7, U2, U3, U1, Dyn, B>::new(3, 64)?,
-            bn1: kindle::nn::BatchNorm2d::<Dyn, B>::new(64, device)?,
+            bn1: kindle::nn::BatchNorm2d::<usize, B>::new((64,), device)?,
             layer1: BasicBlock::<B>::new(64, 64, 1, device)?,
             fc: kindle::nn::Linear::<Dyn, B>::new(64, num_classes)?,
         })

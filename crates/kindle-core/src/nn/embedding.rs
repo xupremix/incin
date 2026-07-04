@@ -6,13 +6,12 @@ use typenum::Unsigned;
 
 #[derive(Debug, Clone)]
 #[kindle_macros::module(internal)]
-pub struct Embedding<E: Unsigned + Dim, S: Shape, B: Backend> {
-    pub weight: Param<Dyn, B>,
-    _phantom: PhantomData<(E, S)>,
+pub struct Embedding<V: Dim, E: Dim, B: Backend> {
+    pub weight: Param<(V, E), B>,
 }
 
-impl<E: Unsigned + Dim, S: Shape + DynShape + AppendDim<E>, B> Module<Tensor<S, B>>
-    for Embedding<E, S, B>
+impl<V: Dim, E: Dim + typenum::Unsigned, S: Shape + DynShape + AppendDim<E>, B> Module<Tensor<S, B>>
+    for Embedding<V, E, B>
 where
     B: Backend,
 {

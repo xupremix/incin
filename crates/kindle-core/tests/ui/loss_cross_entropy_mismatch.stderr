@@ -1,0 +1,62 @@
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `kindle`
+ --> tests/ui/loss_cross_entropy_mismatch.rs:5:22
+  |
+5 |     let pred: Tensor<s![16, 10], DummyBackend<f32, Cpu>> = Tensor::static_zeros().unwrap();
+  |                      ^^^^^^^^^^ use of unresolved module or unlinked crate `kindle`
+  |
+  = help: if you wanted to use a crate named `kindle`, use `cargo add kindle` to add it to your `Cargo.toml`
+  = note: this error originates in the macro `s` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider importing this crate
+  |
+1 + use kindle_core::prelude::typenum;
+  |
+
+error[E0412]: cannot find type `DummyBackend` in this scope
+ --> tests/ui/loss_cross_entropy_mismatch.rs:5:34
+  |
+5 |     let pred: Tensor<s![16, 10], DummyBackend<f32, Cpu>> = Tensor::static_zeros().unwrap();
+  |                                  ^^^^^^^^^^^^ not found in this scope
+  |
+help: consider importing one of these structs
+  |
+1 + use crate::dummy::DummyBackend;
+  |
+1 + use kindle_core::prelude::dummy::DummyBackend;
+  |
+
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `kindle`
+ --> tests/ui/loss_cross_entropy_mismatch.rs:6:24
+  |
+6 |     let target: Tensor<s![16, 5], DummyBackend<u32, Cpu>> = Tensor::static_zeros().unwrap();
+  |                        ^^^^^^^^^ use of unresolved module or unlinked crate `kindle`
+  |
+  = help: if you wanted to use a crate named `kindle`, use `cargo add kindle` to add it to your `Cargo.toml`
+  = note: this error originates in the macro `s` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider importing this crate
+  |
+1 + use kindle_core::prelude::typenum;
+  |
+
+error[E0412]: cannot find type `DummyBackend` in this scope
+ --> tests/ui/loss_cross_entropy_mismatch.rs:6:35
+  |
+6 |     let target: Tensor<s![16, 5], DummyBackend<u32, Cpu>> = Tensor::static_zeros().unwrap();
+  |                                   ^^^^^^^^^^^^ not found in this scope
+  |
+help: consider importing one of these structs
+  |
+1 + use crate::dummy::DummyBackend;
+  |
+1 + use kindle_core::prelude::dummy::DummyBackend;
+  |
+
+error[E0433]: failed to resolve: use of undeclared type `CrossEntropyLoss`
+ --> tests/ui/loss_cross_entropy_mismatch.rs:8:19
+  |
+8 |     let loss_fn = CrossEntropyLoss::new();
+  |                   ^^^^^^^^^^^^^^^^ use of undeclared type `CrossEntropyLoss`
+  |
+help: consider importing this struct
+  |
+1 + use kindle_core::nn::CrossEntropyLoss;
+  |
