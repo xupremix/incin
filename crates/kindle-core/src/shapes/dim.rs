@@ -28,7 +28,7 @@ impl Dim for usize {
 /// ensuring that symbolic dimensions match at compile time.
 /// 
 /// ```rust
-/// kindle::prelude::symbolic_dim!(Batch, Seq);
+/// kindle_core::symbolic_dim!(Batch, Seq);
 /// ```
 #[macro_export]
 macro_rules! symbolic_dim {

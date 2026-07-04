@@ -1,26 +1,28 @@
 error[E0433]: failed to resolve: use of unresolved module or unlinked crate `alloc`
-  --> tests/ui/dtype_mismatch.rs:22:60
+  --> tests/ui/dtype_mismatch.rs:37:60
    |
-22 |     let t1: Tensor<Dyn, DummyBackend, f32> = Tensor::zeros(alloc::vec![2]).unwrap();
+37 |     let t1: Tensor<Dyn, DummyBackend, f32> = Tensor::zeros(alloc::vec![2]).unwrap();
    |                                                            ^^^^^ use of unresolved module or unlinked crate `alloc`
 
 error[E0433]: failed to resolve: use of unresolved module or unlinked crate `alloc`
-  --> tests/ui/dtype_mismatch.rs:23:60
+  --> tests/ui/dtype_mismatch.rs:38:60
    |
-23 |     let t2: Tensor<Dyn, DummyBackend, f64> = Tensor::zeros(alloc::vec![2]).unwrap();
+38 |     let t2: Tensor<Dyn, DummyBackend, f64> = Tensor::zeros(alloc::vec![2]).unwrap();
    |                                                            ^^^^^ use of unresolved module or unlinked crate `alloc`
 
-error[E0046]: not all trait items implemented, missing: `RawVar`, `var_as_tensor`, `var_zeros`, `var_ones`, `var_rand`, `var_randn`, `neg`, `sqrt`, `exp`, `log`, `tanh`, `sigmoid`, `mul_scalar`, `add_scalar`, `sum_all`, `mean_all`, `narrow`, `squeeze`, `conv2d`, `Grads`, `backward`, `step_sgd`, `step_adamw`
+error[E0046]: not all trait items implemented, missing: `RawVar`, `var_as_tensor`, `var_zeros`, `var_ones`, `var_rand`, `tensor_to_device`, `var_to_device`, `var_randn`, `neg`, `sqrt`, `exp`, `log`, `tanh`, `sigmoid`, `mul_scalar`, `add_scalar`, `sum_all`, `mean_all`, `narrow`, `squeeze`, `conv2d`, `Grads`, `backward`, `step_sgd`, `step_adamw`
  --> tests/ui/dtype_mismatch.rs:4:1
   |
 4 | impl<S: Shape> Backend<S> for DummyBackend {
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ missing `RawVar`, `var_as_tensor`, `var_zeros`, `var_ones`, `var_rand`, `var_randn`, `neg`, `sqrt`, `exp`, `log`, `tanh`, `sigmoid`, `mul_scalar`, `add_scalar`, `sum_all`, `mean_all`, `narrow`, `squeeze`, `conv2d`, `Grads`, `backward`, `step_sgd`, `step_adamw` in implementation
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ missing `RawVar`, `var_as_tensor`, `var_zeros`, `var_ones`, `var_rand`, `tensor_to_device`, `var_to_device`, `var_randn`, `neg`, `sqrt`, `exp`, `log`, `tanh`, `sigmoid`, `mul_scalar`, `add_scalar`, `sum_all`, `mean_all`, `narrow`, `squeeze`, `conv2d`, `Grads`, `backward`, `step_sgd`, `step_adamw` in implementation
   |
   = help: implement the missing item: `type RawVar = /* Type */;`
   = help: implement the missing item: `fn var_as_tensor(_: &<Self as kindle_core::prelude::Backend<S>>::RawVar) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
   = help: implement the missing item: `fn var_zeros(_: &[usize], _: kindle_core::prelude::KindleDType, _: &kindle_core::prelude::KindleDevice) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawVar, kindle_core::err::Error> { todo!() }`
   = help: implement the missing item: `fn var_ones(_: &[usize], _: kindle_core::prelude::KindleDType, _: &kindle_core::prelude::KindleDevice) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawVar, kindle_core::err::Error> { todo!() }`
   = help: implement the missing item: `fn var_rand(_: &[usize], _: kindle_core::prelude::KindleDType, _: &kindle_core::prelude::KindleDevice) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawVar, kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn tensor_to_device(_: &<Self as kindle_core::prelude::Backend<S>>::RawTensor, _: &kindle_core::prelude::KindleDevice) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn var_to_device(_: &<Self as kindle_core::prelude::Backend<S>>::RawVar, _: &kindle_core::prelude::KindleDevice) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawVar, kindle_core::err::Error> { todo!() }`
   = help: implement the missing item: `fn var_randn(_: &[usize], _: kindle_core::prelude::KindleDType, _: &kindle_core::prelude::KindleDevice) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawVar, kindle_core::err::Error> { todo!() }`
   = help: implement the missing item: `fn neg(_: &<Self as kindle_core::prelude::Backend<S>>::RawTensor) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
   = help: implement the missing item: `fn sqrt(_: &<Self as kindle_core::prelude::Backend<S>>::RawTensor) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
@@ -41,9 +43,9 @@ error[E0046]: not all trait items implemented, missing: `RawVar`, `var_as_tensor
   = help: implement the missing item: `fn step_adamw(_: &mut [<Self as kindle_core::prelude::Backend<S>>::RawVar], _: &<Self as kindle_core::prelude::Backend<S>>::Grads, _: f64) -> std::result::Result<(), kindle_core::err::Error> { todo!() }`
 
 error[E0308]: mismatched types
-  --> tests/ui/dtype_mismatch.rs:26:12
+  --> tests/ui/dtype_mismatch.rs:41:12
    |
-26 |     t1.add(&t2).unwrap();
+41 |     t1.add(&t2).unwrap();
    |        --- ^^^ expected `&Tensor<Dyn, DummyBackend>`, found `&Tensor<Dyn, DummyBackend, f64>`
    |        |
    |        arguments to this method are incorrect

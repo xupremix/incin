@@ -1,7 +1,7 @@
 error[E0308]: mismatched types
-  --> tests/ui/shape_mismatch.rs:54:12
+  --> tests/ui/shape_mismatch.rs:73:12
    |
-54 |     t1.add(&t2).unwrap();
+73 |     t1.add(&t2).unwrap();
    |        --- ^^^ expected an array with a size of 2, found one with a size of 3
    |        |
    |        arguments to this method are incorrect
