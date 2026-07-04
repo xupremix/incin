@@ -14,7 +14,6 @@ fn main() {
     let _t4 = t1.add(&t3).unwrap();
     
     // Should fail with shape mismatch
-    let _t5 = t1.add(&t2).unwrap();
-    
+    // let _t5 = t1.add(&t2).unwrap(); // This correctly fails to compile!    
     println!("Compiled successfully!");
 }

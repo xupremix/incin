@@ -204,6 +204,48 @@ pub mod candle {
         fn mean_all(t: &Self::RawTensor) -> Result<Self::RawTensor> {
             Ok(t.mean_all().map_err(|e| anyhow::anyhow!(e))?)
         }
+        fn max_all(t: &Self::RawTensor) -> Result<Self::RawTensor> {
+            Ok(t.max_all().map_err(|e| anyhow::anyhow!(e))?)
+        }
+        fn min_all(t: &Self::RawTensor) -> Result<Self::RawTensor> {
+            Ok(t.min_all().map_err(|e| anyhow::anyhow!(e))?)
+        }
+
+        fn sum_dim(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor> {
+            Ok(t.sum(dim).map_err(|e| anyhow::anyhow!(e))?)
+        }
+        fn sum_keepdim(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor> {
+            Ok(t.sum_keepdim(dim).map_err(|e| anyhow::anyhow!(e))?)
+        }
+        fn mean_dim(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor> {
+            Ok(t.mean(dim).map_err(|e| anyhow::anyhow!(e))?)
+        }
+        fn mean_keepdim(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor> {
+            Ok(t.mean_keepdim(dim).map_err(|e| anyhow::anyhow!(e))?)
+        }
+        fn max_dim(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor> {
+            Ok(t.max(dim).map_err(|e| anyhow::anyhow!(e))?)
+        }
+        fn max_keepdim(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor> {
+            Ok(t.max_keepdim(dim).map_err(|e| anyhow::anyhow!(e))?)
+        }
+        fn min_dim(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor> {
+            Ok(t.min(dim).map_err(|e| anyhow::anyhow!(e))?)
+        }
+        fn min_keepdim(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor> {
+            Ok(t.min_keepdim(dim).map_err(|e| anyhow::anyhow!(e))?)
+        }
+
+        fn to_dtype(t: &Self::RawTensor, dtype: KindleDType) -> Result<Self::RawTensor> {
+            Ok(t.to_dtype(to_candle_dtype(dtype)).map_err(|e| anyhow::anyhow!(e))?)
+        }
+
+        fn broadcast_as(t: &Self::RawTensor, shape: &[usize]) -> Result<Self::RawTensor> {
+            Ok(t.broadcast_as(shape).map_err(|e| anyhow::anyhow!(e))?)
+        }
+        fn broadcast_left(t: &Self::RawTensor, shape: &[usize]) -> Result<Self::RawTensor> {
+            Ok(t.broadcast_left(shape).map_err(|e| anyhow::anyhow!(e))?)
+        }
 
         fn add(lhs: &Self::RawTensor, rhs: &Self::RawTensor) -> Result<Self::RawTensor> {
             Ok(lhs.broadcast_add(rhs).map_err(|e| anyhow::anyhow!(e))?)
@@ -222,6 +264,12 @@ pub mod candle {
         }
         fn reshape(t: &Self::RawTensor, shape: &[usize]) -> Result<Self::RawTensor> {
             Ok(t.reshape(shape).map_err(|e| anyhow::anyhow!(e))?)
+        }
+        fn transpose(t: &Self::RawTensor, dim1: usize, dim2: usize) -> Result<Self::RawTensor> {
+            Ok(t.transpose(dim1, dim2).map_err(|e| anyhow::anyhow!(e))?)
+        }
+        fn flatten(t: &Self::RawTensor, start_dim: usize, end_dim: usize) -> Result<Self::RawTensor> {
+            Ok(t.flatten(start_dim, end_dim).map_err(|e| anyhow::anyhow!(e))?)
         }
 
         fn narrow(
@@ -433,18 +481,21 @@ pub mod ndarray_backend {
                 backend: "Ndarray",
             })
         }
-        fn sum_all(_t: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Err(Error::UnsupportedBackendOperation {
-                op: "sum_all",
-                backend: "Ndarray",
-            })
-        }
-        fn mean_all(_t: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Err(Error::UnsupportedBackendOperation {
-                op: "mean_all",
-                backend: "Ndarray",
-            })
-        }
+        fn sum_all(_t: &Self::RawTensor) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "sum_all", backend: "Ndarray" }) }
+        fn mean_all(_t: &Self::RawTensor) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "mean_all", backend: "Ndarray" }) }
+        fn max_all(_t: &Self::RawTensor) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "max_all", backend: "Ndarray" }) }
+        fn min_all(_t: &Self::RawTensor) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "min_all", backend: "Ndarray" }) }
+        fn sum_dim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "sum_dim", backend: "Ndarray" }) }
+        fn sum_keepdim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "sum_keepdim", backend: "Ndarray" }) }
+        fn mean_dim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "mean_dim", backend: "Ndarray" }) }
+        fn mean_keepdim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "mean_keepdim", backend: "Ndarray" }) }
+        fn max_dim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "max_dim", backend: "Ndarray" }) }
+        fn max_keepdim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "max_keepdim", backend: "Ndarray" }) }
+        fn min_dim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "min_dim", backend: "Ndarray" }) }
+        fn min_keepdim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "min_keepdim", backend: "Ndarray" }) }
+        fn to_dtype(_t: &Self::RawTensor, _dtype: KindleDType) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "to_dtype", backend: "Ndarray" }) }
+        fn broadcast_as(_t: &Self::RawTensor, _shape: &[usize]) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "broadcast_as", backend: "Ndarray" }) }
+        fn broadcast_left(_t: &Self::RawTensor, _shape: &[usize]) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "broadcast_left", backend: "Ndarray" }) }
         fn add(lhs: &Self::RawTensor, rhs: &Self::RawTensor) -> Result<Self::RawTensor> {
             Ok(lhs + rhs)
         }
@@ -468,6 +519,8 @@ pub mod ndarray_backend {
                 .into_shape_with_order(shape)
                 .map_err(|e| anyhow::anyhow!(e).into())
         }
+        fn transpose(_t: &Self::RawTensor, _d1: usize, _d2: usize) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "transpose", backend: "Ndarray" }) }
+        fn flatten(_t: &Self::RawTensor, _s: usize, _e: usize) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "flatten", backend: "Ndarray" }) }
         fn narrow(
             _t: &Self::RawTensor,
             _dim: usize,
@@ -582,6 +635,19 @@ pub mod burn_backend {
                 fn add_scalar(_t: &Self::RawTensor, _scalar: f64) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "add_scalar", backend: "Burn" }) }
                 fn sum_all(_t: &Self::RawTensor) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "sum_all", backend: "Burn" }) }
                 fn mean_all(_t: &Self::RawTensor) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "mean_all", backend: "Burn" }) }
+                fn max_all(_t: &Self::RawTensor) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "max_all", backend: "Burn" }) }
+                fn min_all(_t: &Self::RawTensor) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "min_all", backend: "Burn" }) }
+                fn sum_dim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "sum_dim", backend: "Burn" }) }
+                fn sum_keepdim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "sum_keepdim", backend: "Burn" }) }
+                fn mean_dim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "mean_dim", backend: "Burn" }) }
+                fn mean_keepdim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "mean_keepdim", backend: "Burn" }) }
+                fn max_dim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "max_dim", backend: "Burn" }) }
+                fn max_keepdim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "max_keepdim", backend: "Burn" }) }
+                fn min_dim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "min_dim", backend: "Burn" }) }
+                fn min_keepdim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "min_keepdim", backend: "Burn" }) }
+                fn to_dtype(_t: &Self::RawTensor, _dtype: KindleDType) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "to_dtype", backend: "Burn" }) }
+                fn broadcast_as(_t: &Self::RawTensor, _shape: &[usize]) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "broadcast_as", backend: "Burn" }) }
+                fn broadcast_left(_t: &Self::RawTensor, _shape: &[usize]) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "broadcast_left", backend: "Burn" }) }
                 fn add(lhs: &Self::RawTensor, rhs: &Self::RawTensor) -> Result<Self::RawTensor> {
                     Ok(lhs.clone() + rhs.clone())
                 }
@@ -600,6 +666,8 @@ pub mod burn_backend {
                 fn reshape(_t: &Self::RawTensor, _shape: &[usize]) -> Result<Self::RawTensor> {
                     Err(Error::UnsupportedBackendOperation { op: "reshape", backend: "Burn" })
                 }
+                fn transpose(_t: &Self::RawTensor, _d1: usize, _d2: usize) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "transpose", backend: "Burn" }) }
+                fn flatten(_t: &Self::RawTensor, _s: usize, _e: usize) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "flatten", backend: "Burn" }) }
                 fn narrow(_t: &Self::RawTensor, _dim: usize, _start: usize, _len: usize) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "narrow", backend: "Burn" }) }
                 fn squeeze(_t: &Self::RawTensor, _dim: usize) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "squeeze", backend: "Burn" }) }
                 fn conv2d(_t: &Self::RawTensor, _w: &Self::RawTensor, _b: Option<&Self::RawTensor>, _s: usize, _p: usize, _d: usize) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "conv2d", backend: "Burn" }) }

@@ -4,6 +4,7 @@ mod arg_into;
 mod idx;
 mod module;
 mod shape;
+mod shape_ops;
 
 #[proc_macro]
 pub fn s(input: TokenStream) -> TokenStream {
@@ -28,4 +29,9 @@ pub fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn forward(attr: TokenStream, item: TokenStream) -> TokenStream {
     module::forward(attr, item)
+}
+
+#[proc_macro]
+pub fn generate_shape_ops(input: TokenStream) -> TokenStream {
+    shape_ops::generate_shape_ops(input)
 }

@@ -51,16 +51,28 @@ impl<S> ShapeEq<S> for S {
     const ASSERT_SHAPES_MATCH: () = assert!(Self::SHAPES_EQUAL, "Shape Mismatch: Attempted to operate on tensors of incompatible shapes.");
 }
 
+pub trait DTypeEq<Other> {
+    const DTYPES_EQUAL: bool;
+    const ASSERT_DTYPES_MATCH: ();
+}
+
+impl<T> DTypeEq<T> for T {
+    const DTYPES_EQUAL: bool = true;
+    const ASSERT_DTYPES_MATCH: () = assert!(Self::DTYPES_EQUAL, "DType Mismatch: Attempted to operate on tensors of incompatible datatypes.");
+}
+
 macro_rules! impl_binary_op {
     ($trait_name:ident, $method:ident, $backend_method:ident) => {
         // Tensor op Tensor → Result<Tensor> (owned)
         impl<S: Shape, B: Backend<S>, T: DType, D: Device, G: RequiresGrad> Tensor<S, B, T, D, G> {
-            pub fn $method<S2: Shape>(&self, rhs: &Tensor<S2, B, T, D, G>) -> Result<Self> 
+            pub fn $method<S2: Shape, T2: DType>(&self, rhs: &Tensor<S2, B, T2, D, G>) -> Result<Self> 
             where
                 S: ShapeEq<S2>,
+                T: DTypeEq<T2>,
                 B: Backend<S2, RawTensor = <B as Backend<S>>::RawTensor>,
             {
                 let _ = <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
+                let _ = <T as DTypeEq<T2>>::ASSERT_DTYPES_MATCH;
                 let inner = <B as Backend<S>>::$backend_method(&self.inner, &rhs.inner)?;
                 Ok(Tensor::<_, B, _, _, _>::from_parts(
                     inner,
@@ -146,9 +158,49 @@ macro_rules! impl_reduction_op {
     };
 }
 
+macro_rules! impl_reduction_dim_op {
+    ($method:ident, $backend_method:ident, $trait_bound:ident) => {
+        pub fn $method<const DIM: usize>(&self) -> Result<Tensor<S::Output, B, T, D, G>>
+        where
+            S: DynShape + crate::shapes::$trait_bound<DIM>,
+            B: Backend<S::Output, RawTensor = <B as Backend<S>>::RawTensor>,
+        {
+            let inner = <B as Backend<S>>::$backend_method(&self.inner, DIM)?;
+            
+            // We just use from_dyn to construct the resulting shape field dynamically, 
+            // since we know it's a dimensional reduction.
+            let mut out_dims = S::dims(&self._shape).into();
+            if stringify!($trait_bound) == "ReduceDim" {
+                out_dims.remove(DIM);
+            } else {
+                out_dims[DIM] = 1;
+            }
+
+            Ok(Tensor::<_, B, _, _, _>::from_parts(
+                inner,
+                S::Output::from_dyn(&out_dims).unwrap(),
+                self._dtype.clone(),
+                self._device.clone(),
+                self._grad.clone(),
+            ))
+        }
+    };
+}
+
 impl<S: Shape, B: Backend<S>, T: DType, D: Device, G: RequiresGrad> Tensor<S, B, T, D, G> {
     impl_reduction_op!(sum_all, sum_all);
     impl_reduction_op!(mean_all, mean_all);
+    impl_reduction_op!(max_all, max_all);
+    impl_reduction_op!(min_all, min_all);
+
+    impl_reduction_dim_op!(sum_dim, sum_dim, ReduceDim);
+    impl_reduction_dim_op!(sum_keepdim, sum_keepdim, ReduceKeepDim);
+    impl_reduction_dim_op!(mean_dim, mean_dim, ReduceDim);
+    impl_reduction_dim_op!(mean_keepdim, mean_keepdim, ReduceKeepDim);
+    impl_reduction_dim_op!(max_dim, max_dim, ReduceDim);
+    impl_reduction_dim_op!(max_keepdim, max_keepdim, ReduceKeepDim);
+    impl_reduction_dim_op!(min_dim, min_dim, ReduceDim);
+    impl_reduction_dim_op!(min_keepdim, min_keepdim, ReduceKeepDim);
 }
 
 impl<S: DynShape, B: Backend<S>, T: DType, D: Device, G: RequiresGrad> Tensor<S, B, T, D, G>
@@ -181,6 +233,120 @@ where
         Ok(Tensor::<Dyn, B, T, D, G>::from_parts(
             inner,
             alloc::vec![],
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        ))
+    }
+}
+
+// -------------------------------------------------------------
+// Structural Ops (Reshape, Broadcast, Transpose, Flatten)
+// -------------------------------------------------------------
+
+impl<S: DynShape, B: Backend<S>, T: DType, D: Device, G: RequiresGrad> Tensor<S, B, T, D, G> {
+    /// Reshape this tensor into explicitly provided shape `S2`.
+    /// The number of elements must be strictly equal.
+    pub fn reshape<S2: DynShape>(&self, args: S2::Arg) -> Result<Tensor<S2, B, T, D, G>>
+    where
+        B: Backend<S2, RawTensor = <B as Backend<S>>::RawTensor>,
+    {
+        let new_shape_field = S2::init(args);
+        let new_dims = S2::dims(&new_shape_field);
+        
+        // Runtime boundaries checking
+        assert_eq!(
+            S::numel(&self._shape),
+            S2::numel(&new_shape_field),
+            "Reshape failed: source numel != target numel"
+        );
+        
+        let inner = <B as Backend<S2>>::reshape(&self.inner, new_dims.as_ref())?;
+        Ok(Tensor::<S2, B, T, D, G>::from_parts(
+            inner,
+            new_shape_field,
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        ))
+    }
+
+    /// Broadcast the tensor to the specific shape `S2`.
+    pub fn broadcast_to<S2: DynShape>(&self, args: S2::Arg) -> Result<Tensor<S2, B, T, D, G>>
+    where
+        B: Backend<S2, RawTensor = <B as Backend<S>>::RawTensor>,
+    {
+        let new_shape_field = S2::init(args);
+        let new_dims = S2::dims(&new_shape_field);
+        let inner = <B as Backend<S2>>::broadcast_as(&self.inner, new_dims.as_ref())?;
+        Ok(Tensor::<S2, B, T, D, G>::from_parts(
+            inner,
+            new_shape_field,
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        ))
+    }
+
+    pub fn to_dtype<T2: crate::prelude::ConstDType>(&self) -> Result<Tensor<S, B, T2, D, G>> {
+        let inner = B::to_dtype(&self.inner, T2::DTYPE)?;
+        Ok(Tensor::<S, B, T2, D, G>::from_parts(
+            inner,
+            self._shape.clone(),
+            T2::init(()), // Initialize DType field
+            self._device.clone(),
+            self._grad.clone(),
+        ))
+    }
+
+    /// Permute the tensor's dimensions by swapping `D1` and `D2`.
+    /// Strongly typed output shape via `Transpose<D1, D2>`.
+    pub fn transpose<const D1: usize, const D2: usize>(&self) -> Result<Tensor<S::Output, B, T, D, G>>
+    where
+        S: crate::shapes::Transpose<D1, D2>,
+        B: Backend<S::Output, RawTensor = <B as Backend<S>>::RawTensor>,
+    {
+        let inner = <B as Backend<S::Output>>::transpose(&self.inner, D1, D2)?;
+        let mut out_dims = S::dims(&self._shape).into();
+        out_dims.swap(D1, D2);
+        
+        Ok(Tensor::<_, B, _, _, _>::from_parts(
+            inner,
+            S::Output::from_dyn(&out_dims).unwrap(),
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        ))
+    }
+
+    /// Flattens dimensions from `START` to `END` inclusive.
+    /// Uses `ProdDim` algebraically to track shapes.
+    pub fn flatten<const START: usize, const END: usize>(&self) -> Result<Tensor<S::Output, B, T, D, G>>
+    where
+        S: crate::shapes::Flatten<START, END>,
+        B: Backend<S::Output, RawTensor = <B as Backend<S>>::RawTensor>,
+    {
+        let inner = <B as Backend<S::Output>>::flatten(&self.inner, START, END)?;
+        let in_dims = S::dims(&self._shape).into();
+        let mut out_dims = Vec::new();
+        
+        for i in 0..START {
+            out_dims.push(in_dims[i]);
+        }
+        
+        let mut prod = 1;
+        for i in START..=END {
+            prod *= in_dims[i];
+        }
+        out_dims.push(prod);
+        
+        for i in (END + 1)..in_dims.len() {
+            out_dims.push(in_dims[i]);
+        }
+        
+        Ok(Tensor::<_, B, _, _, _>::from_parts(
+            inner,
+            S::Output::from_dyn(&out_dims).unwrap(),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
@@ -274,12 +440,21 @@ mod tests {
             Ok(())
         }
 
-        fn sum_all(_t: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Ok(())
-        }
-        fn mean_all(_t: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Ok(())
-        }
+        fn sum_all(_t: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(()) }
+        fn mean_all(_t: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(()) }
+        fn max_all(_t: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(()) }
+        fn min_all(_t: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(()) }
+        fn sum_dim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> { Ok(()) }
+        fn sum_keepdim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> { Ok(()) }
+        fn mean_dim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> { Ok(()) }
+        fn mean_keepdim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> { Ok(()) }
+        fn max_dim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> { Ok(()) }
+        fn max_keepdim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> { Ok(()) }
+        fn min_dim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> { Ok(()) }
+        fn min_keepdim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> { Ok(()) }
+        fn to_dtype(_t: &Self::RawTensor, _dt: KindleDType) -> Result<Self::RawTensor> { Ok(()) }
+        fn broadcast_as(_t: &Self::RawTensor, _s: &[usize]) -> Result<Self::RawTensor> { Ok(()) }
+        fn broadcast_left(_t: &Self::RawTensor, _s: &[usize]) -> Result<Self::RawTensor> { Ok(()) }
 
         fn backward(_loss: &Self::RawTensor) -> Result<Self::Grads> { Ok(()) }
         fn step_sgd(_params: &mut [Self::RawVar], _grads: &Self::Grads, _lr: f64) -> Result<()> { Ok(()) }
@@ -303,6 +478,8 @@ mod tests {
         fn reshape(_t: &Self::RawTensor, _shape: &[usize]) -> Result<Self::RawTensor> {
             Ok(())
         }
+        fn transpose(_t: &Self::RawTensor, _d1: usize, _d2: usize) -> Result<Self::RawTensor> { Ok(()) }
+        fn flatten(_t: &Self::RawTensor, _s: usize, _e: usize) -> Result<Self::RawTensor> { Ok(()) }
 
         fn narrow(
             _t: &Self::RawTensor,

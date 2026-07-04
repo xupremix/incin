@@ -5,7 +5,6 @@ pub mod base;
 pub mod conv2d;
 pub mod device;
 pub mod dtype;
-pub mod flatten;
 pub mod grad;
 pub mod matmul;
 pub mod ops;
@@ -18,7 +17,6 @@ pub mod prelude {
     pub use super::conv2d::*;
     pub use super::device::*;
     pub use super::dtype::*;
-    pub use super::flatten::*;
     pub use super::grad::*;
     pub use super::matmul::*;
 }

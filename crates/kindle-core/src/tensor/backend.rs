@@ -52,8 +52,21 @@ pub trait Backend<S: Shape> {
     fn add_scalar(t: &Self::RawTensor, scalar: f64) -> Result<Self::RawTensor>;
 
     // Reductions (0D Scalar output)
+    // Reductions (0D Scalar output)
     fn sum_all(t: &Self::RawTensor) -> Result<Self::RawTensor>;
     fn mean_all(t: &Self::RawTensor) -> Result<Self::RawTensor>;
+    fn max_all(t: &Self::RawTensor) -> Result<Self::RawTensor>;
+    fn min_all(t: &Self::RawTensor) -> Result<Self::RawTensor>;
+
+    // Reductions along dimension
+    fn sum_dim(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor>;
+    fn sum_keepdim(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor>;
+    fn mean_dim(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor>;
+    fn mean_keepdim(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor>;
+    fn max_dim(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor>;
+    fn max_keepdim(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor>;
+    fn min_dim(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor>;
+    fn min_keepdim(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor>;
 
     // Binary Ops
     fn add(lhs: &Self::RawTensor, rhs: &Self::RawTensor) -> Result<Self::RawTensor>;
@@ -62,8 +75,15 @@ pub trait Backend<S: Shape> {
     fn div(lhs: &Self::RawTensor, rhs: &Self::RawTensor) -> Result<Self::RawTensor>;
     fn matmul(lhs: &Self::RawTensor, rhs: &Self::RawTensor) -> Result<Self::RawTensor>;
 
+    // Type Casting
+    fn to_dtype(t: &Self::RawTensor, dtype: KindleDType) -> Result<Self::RawTensor>;
+
     // Tensor ops
+    fn broadcast_as(t: &Self::RawTensor, shape: &[usize]) -> Result<Self::RawTensor>;
+    fn broadcast_left(t: &Self::RawTensor, shape: &[usize]) -> Result<Self::RawTensor>;
     fn reshape(t: &Self::RawTensor, shape: &[usize]) -> Result<Self::RawTensor>;
+    fn transpose(t: &Self::RawTensor, dim1: usize, dim2: usize) -> Result<Self::RawTensor>;
+    fn flatten(t: &Self::RawTensor, start_dim: usize, end_dim: usize) -> Result<Self::RawTensor>;
 
     // Slicing primitives
     fn narrow(t: &Self::RawTensor, dim: usize, start: usize, len: usize)

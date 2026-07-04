@@ -59,6 +59,36 @@ macro_rules! symbolic_dim {
     };
 }
 
+/// A mathematical product of two Dimensions `A` and `B`.
+/// Preserves dimensionality statically across flatten operations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProdDim<A, B>(pub usize, core::marker::PhantomData<(A, B)>);
+
+impl<A: Dim, B: Dim> Dim for ProdDim<A, B> {
+    type Arg = ();
+
+    #[inline(always)]
+    fn size(&self) -> usize {
+        self.0
+    }
+
+    #[inline(always)]
+    fn from_size(size: usize) -> Option<Self> {
+        Some(Self(size, core::marker::PhantomData))
+    }
+
+    #[inline(always)]
+    fn from_arg(_: Self::Arg) -> Self {
+        Self(0, core::marker::PhantomData)
+    }
+}
+
+impl<A: Dim + Default, B: Dim + Default> Default for ProdDim<A, B> {
+    fn default() -> Self {
+        Self(A::default().size() * B::default().size(), core::marker::PhantomData)
+    }
+}
+
 use typenum::{Bit, UInt, UTerm, Unsigned};
 
 impl Dim for UTerm {

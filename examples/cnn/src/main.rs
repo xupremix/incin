@@ -52,7 +52,8 @@ impl SimpleCNN {
 
         // 3. Flatten
         // (B, 16, 26, 26) -> (B, 16 * 26 * 26)
-        let flat = activated.flatten()?;
+        // Flatten from dim 1 to 3
+        let flat = activated.flatten::<1, 3>()?.into_shape::<(BatchSize, FlatSize)>()?;
 
         // 4. Fully Connected (MatMul)
         // (B, FlatSize) @ (FlatSize, 10) -> (B, 10)
