@@ -4,14 +4,14 @@ use core::marker::PhantomData;
 
 #[derive(Debug, Clone)]
 #[kindle_macros::module(internal)]
-pub struct LayerNorm<S: Shape, B: Backend<S> + Backend<Dyn>> {
+pub struct LayerNorm<S: Shape, B: Backend> {
     pub weight: Param<Dyn, B>,
     pub bias: Param<Dyn, B>,
     pub eps: f32,
     _phantom: PhantomData<S>,
 }
 
-impl<S: Shape, B: Backend<S> + Backend<Dyn>> LayerNorm<S, B> {
+impl<S: Shape, B: Backend> LayerNorm<S, B> where B::DType: crate::prelude::ConstDType, B::Device: crate::prelude::ConstDevice {
     pub fn new<A>(_args: A, _eps: f32) -> Result<Self>
     where
         A: ArgInto<(Dyn, f32, Cpu, Grad)>,
@@ -25,7 +25,7 @@ impl<S: Shape, B: Backend<S> + Backend<Dyn>> LayerNorm<S, B> {
 
 
 
-impl<S: Shape + DynShape, B: Backend<S> + Backend<Dyn, RawTensor = <B as Backend<S>>::RawTensor>>
+impl<S: Shape + DynShape, B: Backend>
     Module<Tensor<S, B>> for LayerNorm<S, B>
 {
     type Output = Tensor<S, B>;

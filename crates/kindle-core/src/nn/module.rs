@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 /// A trait implemented by all Neural Network modules to manage their state (weights).
 /// Usually automatically derived via `#[kindle::module]`.
-pub trait StateDict<B: Backend<Dyn>> {
+pub trait StateDict<B: Backend> {
     /// Loads the module's state from a dictionary of dynamic tensors.
     fn load_state_dict(
         &mut self,
@@ -18,7 +18,7 @@ pub trait StateDict<B: Backend<Dyn>> {
 
 /// A trait implemented by all Neural Network modules.
 /// Usually automatically derived via `#[kindle::module]`.
-pub trait Parameters<B: Backend<Dyn>> {
+pub trait Parameters<B: Backend> {
     /// Recursively extract all trainable parameters from this module.
     /// The parameters are returned as a list of backend-specific raw variables,
     /// which can be passed to an optimizer (e.g., `candle_nn::optim::SGD`).
@@ -54,7 +54,7 @@ where
     }
 }
 
-impl<B: Backend<Dyn>, L1, L2> Parameters<B> for Sequential<L1, L2>
+impl<B: Backend, L1, L2> Parameters<B> for Sequential<L1, L2>
 where
     L1: Parameters<B>,
     L2: Parameters<B>,
@@ -66,7 +66,7 @@ where
     }
 }
 
-impl<B: Backend<Dyn>, L1, L2> StateDict<B> for Sequential<L1, L2>
+impl<B: Backend, L1, L2> StateDict<B> for Sequential<L1, L2>
 where
     L1: StateDict<B>,
     L2: StateDict<B>,
@@ -91,13 +91,13 @@ where
 macro_rules! impl_dummy_state {
     ($($t:ty),+) => {
         $(
-            impl<B: Backend<Dyn>> Parameters<B> for $t {
+            impl<B: Backend> Parameters<B> for $t {
                 fn parameters(&self) -> Vec<B::RawVar> {
                     Vec::new()
                 }
             }
 
-            impl<B: Backend<Dyn>> StateDict<B> for $t {
+            impl<B: Backend> StateDict<B> for $t {
                 fn load_state_dict(&mut self, _prefix: &str, _tensors: &HashMap<String, Tensor<Dyn, B>>) -> Result<()> {
                     Ok(())
                 }
@@ -111,15 +111,17 @@ macro_rules! impl_dummy_state {
 
 impl_dummy_state!(usize, f32);
 
-impl<T: ?Sized, B: Backend<Dyn>> Parameters<B> for core::marker::PhantomData<T> {
+impl<T: ?Sized, B: Backend> Parameters<B> for core::marker::PhantomData<T>
+where T: crate::prelude::DType {
     fn parameters(&self) -> Vec<B::RawVar> { Vec::new() }
 }
-impl<T: ?Sized, B: Backend<Dyn>> StateDict<B> for core::marker::PhantomData<T> {
+impl<T: ?Sized, B: Backend> StateDict<B> for core::marker::PhantomData<T>
+where T: crate::prelude::DType {
     fn load_state_dict(&mut self, _prefix: &str, _tensors: &HashMap<String, Tensor<Dyn, B>>) -> Result<()> { Ok(()) }
     fn state_dict(&self, _prefix: &str, _tensors: &mut HashMap<String, Tensor<Dyn, B>>) {}
 }
 
-impl<T: Parameters<B>, B: Backend<Dyn>> Parameters<B> for Option<T> {
+impl<L: Parameters<B>, B: Backend> Parameters<B> for Option<L> {
     fn parameters(&self) -> Vec<B::RawVar> {
         match self {
             Some(v) => v.parameters(),
@@ -128,7 +130,7 @@ impl<T: Parameters<B>, B: Backend<Dyn>> Parameters<B> for Option<T> {
     }
 }
 
-impl<T: StateDict<B>, B: Backend<Dyn>> StateDict<B> for Option<T> {
+impl<L: StateDict<B>, B: Backend> StateDict<B> for Option<L> {
     fn load_state_dict(&mut self, prefix: &str, tensors: &HashMap<String, Tensor<Dyn, B>>) -> Result<()> {
         if let Some(v) = self {
             v.load_state_dict(prefix, tensors)?;

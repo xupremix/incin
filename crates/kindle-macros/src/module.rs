@@ -22,7 +22,7 @@ pub(crate) fn module(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut generics = input.generics.clone();
     generics
         .params
-        .push(syn::parse_quote!(__B: #k_crate::prelude::Backend<#k_crate::prelude::Dyn>));
+        .push(syn::parse_quote!(__B: #k_crate::prelude::Backend));
     let (impl_generics, _, _) = generics.split_for_impl();
     let (_, ty_generics, _) = input.generics.split_for_impl();
 
@@ -88,7 +88,7 @@ pub(crate) fn module(_attr: TokenStream, item: TokenStream) -> TokenStream {
         #input
 
         impl #impl_generics #k_crate::nn::Parameters<__B> for #name #ty_generics #where_clause {
-            fn parameters(&self) -> #vec_ty<<__B as #k_crate::prelude::Backend<#k_crate::prelude::Dyn>>::RawVar> {
+            fn parameters(&self) -> #vec_ty<<__B as #k_crate::prelude::Backend>::RawVar> {
                 let mut params = #vec_ty::new();
                 #(#param_calls)*
                 params

@@ -7,7 +7,7 @@ use std::path::Path;
 /// Loads weights into a module from a safetensors file.
 pub fn load_safetensors<B, M, P>(module: &mut M, path: P) -> Result<()>
 where
-    B: Backend<Dyn>,
+    B: Backend,
     M: StateDict<B>,
     P: AsRef<Path>,
 {
@@ -35,7 +35,7 @@ where
 /// Saves the module's weights to a safetensors file.
 pub fn save_safetensors<B, M, P>(module: &M, _path: P) -> Result<()>
 where
-    B: Backend<Dyn>,
+    B: Backend,
     M: StateDict<B>,
     P: AsRef<Path>,
 {

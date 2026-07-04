@@ -84,28 +84,19 @@ impl<
     }
 }
 
-impl<S1, B: Backend<S1>, T, D, G> Tensor<S1, B, T, D, G>
-where
-    S1: Shape + DynShape,
-    T: DType,
-    D: Device,
-    G: RequiresGrad,
-{
+impl<S1: Shape + DynShape, B: Backend, G: RequiresGrad> Tensor<S1, B, G> {
     pub fn conv2d<Stride, Padding, KShape>(
         &self,
-        weight: &Tensor<KShape, B, T, D, G>,
-        bias: Option<&Tensor<Dyn, B, T, D, G>>, // Simplified bias for now
-    ) -> Result<Tensor<S1::Output, B, T, D, G>>
+        weight: &Tensor<KShape, B, G>,
+        bias: Option<&Tensor<Dyn, B, G>>, // Simplified bias for now
+    ) -> Result<Tensor<S1::Output, B, G>>
     where
         Stride: StaticDim + typenum::Unsigned,
         Padding: StaticDim + typenum::Unsigned,
         KShape: Shape + DynShape,
         S1: Conv2dShape<KShape, Stride, Padding>,
-        B: Backend<KShape, RawTensor = <B as Backend<S1>>::RawTensor>
-            + Backend<Dyn, RawTensor = <B as Backend<S1>>::RawTensor>
-            + Backend<S1::Output, RawTensor = <B as Backend<S1>>::RawTensor>,
     {
-        let inner = <B as Backend<S1>>::conv2d(
+        let inner = B::conv2d(
             &self.inner,
             &weight.inner,
             bias.map(|b| b.inner()),
@@ -115,7 +106,7 @@ where
         )?;
 
         let output_shape = S1::output_shape(&self._shape, &weight._shape);
-        Ok(Tensor::<_, B, _, _, _>::from_parts(
+        Ok(Tensor::from_parts(
             inner,
             output_shape,
             self._dtype.clone(),

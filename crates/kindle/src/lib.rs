@@ -11,27 +11,26 @@ pub use kindle_core::*;
 pub use kindle_macros::{forward, module};
 
 // We define a type alias to restore the default Backend behavior without cyclical dependencies
+#[cfg(feature = "cuda")]
+pub type DefaultDevice = crate::prelude::Cuda;
+#[cfg(all(not(feature = "cuda"), feature = "metal"))]
+pub type DefaultDevice = crate::prelude::Metal;
+#[cfg(all(not(feature = "cuda"), not(feature = "metal")))]
+pub type DefaultDevice = crate::prelude::Cpu;
+
 #[cfg(feature = "candle")]
 pub type Tensor<
     S,
-    B = kindle_backends::candle::CandleBackend,
-    T = f32,
-    #[cfg(feature = "cuda")] D = crate::prelude::Cuda,
-    #[cfg(all(not(feature = "cuda"), feature = "metal"))] D = crate::prelude::Metal,
-    #[cfg(all(not(feature = "cuda"), not(feature = "metal")))] D = crate::prelude::Cpu,
+    B = kindle_backends::candle::CandleBackend<f32, DefaultDevice>,
     G = kindle_core::prelude::Grad,
-> = kindle_core::prelude::Tensor<S, B, T, D, G>;
+> = kindle_core::prelude::Tensor<S, B, G>;
 
 #[cfg(not(feature = "candle"))]
 pub type Tensor<
     S,
     B, // User must specify backend if Candle is disabled
-    T = f32,
-    #[cfg(feature = "cuda")] D = crate::prelude::Cuda,
-    #[cfg(all(not(feature = "cuda"), feature = "metal"))] D = crate::prelude::Metal,
-    #[cfg(all(not(feature = "cuda"), not(feature = "metal")))] D = crate::prelude::Cpu,
     G = kindle_core::prelude::Grad,
-> = kindle_core::prelude::Tensor<S, B, T, D, G>;
+> = kindle_core::prelude::Tensor<S, B, G>;
 
 pub mod macros {
     pub use kindle_macros::{idx, impl_arg_into, s};

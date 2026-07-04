@@ -2,7 +2,12 @@ use crate::prelude::{KindleDType, KindleDevice, Result, Shape};
 
 /// A trait that abstracts the runtime computational engine (Candle, Burn, Ndarray, etc.).
 /// It provides the raw, dynamic memory buffer used by this specific backend.
-pub trait Backend<S: Shape> {
+pub trait Backend: Clone + 'static {
+    type Device: super::device::Device;
+    type DType: super::dtype::DType;
+    type BackendWithDType<NewT: super::dtype::DType>: Backend<DType = NewT, Device = Self::Device, RawTensor = Self::RawTensor, RawVar = Self::RawVar, Grads = Self::Grads>;
+    type BackendWithDevice<NewD: super::device::Device>: Backend<Device = NewD, DType = Self::DType, RawTensor = Self::RawTensor, RawVar = Self::RawVar, Grads = Self::Grads>;
+
     type RawTensor: Clone;
     type RawVar: Clone;
 

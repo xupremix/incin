@@ -5,7 +5,7 @@ use core::marker::PhantomData;
 
 #[derive(Debug, Clone)]
 #[kindle_macros::module(internal)]
-pub struct BatchNorm2d<S: Shape, B: Backend<S> + Backend<Dyn>> {
+pub struct BatchNorm2d<S: Shape, B: Backend> {
     pub weight: Param<Dyn, B>,
     pub bias: Param<Dyn, B>,
     pub running_mean: Buffer<Dyn, B>,
@@ -14,41 +14,23 @@ pub struct BatchNorm2d<S: Shape, B: Backend<S> + Backend<Dyn>> {
     _phantom: PhantomData<S>,
 }
 
-impl<S: Shape + DynShape, B: Backend<S> + Backend<Dyn, RawVar = <B as Backend<S>>::RawVar>> BatchNorm2d<S, B> {
-    pub fn new(num_features: usize, device: &KindleDevice) -> Result<Self> {
-        let dtype = KindleDType::F32;
-        let dims: &[usize] = &[num_features];
+impl<S: Shape + DynShape, B: Backend> BatchNorm2d<S, B> where B::DType: crate::prelude::ConstDType, B::Device: crate::prelude::ConstDevice {
+    pub fn new(num_features: usize, _device: &KindleDevice) -> Result<Self>
+    where B::DType: crate::prelude::ConstDType, B::Device: crate::prelude::ConstDevice
+    {
+        let _dtype = KindleDType::F32;
+        let _dims: &[usize] = &[num_features];
         Ok(Self {
-            weight: Param {
-                inner: <B as Backend<Dyn>>::var_ones(dims, dtype, device)?,
-                _shape: dims.to_vec(),
-                _dtype: PhantomData,
-                _device: PhantomData,
-            },
-            bias: Param {
-                inner: <B as Backend<Dyn>>::var_zeros(dims, dtype, device)?,
-                _shape: dims.to_vec(),
-                _dtype: PhantomData,
-                _device: PhantomData,
-            },
-            running_mean: Buffer {
-                inner: <B as Backend<Dyn>>::var_zeros(dims, dtype, device)?,
-                _shape: dims.to_vec(),
-                _dtype: PhantomData,
-                _device: PhantomData,
-            },
-            running_var: Buffer {
-                inner: <B as Backend<Dyn>>::var_ones(dims, dtype, device)?,
-                _shape: dims.to_vec(),
-                _dtype: PhantomData,
-                _device: PhantomData,
-            },
+            weight: Param::<Dyn, B>::ones([num_features])?,
+            bias: Param::<Dyn, B>::zeros([num_features])?,
+            running_mean: Buffer::<Dyn, B>::zeros([num_features])?,
+            running_var: Buffer::<Dyn, B>::ones([num_features])?,
             eps: 1e-5,
             _phantom: PhantomData,
         })
     }
 }
-impl<S: Shape + DynShape, B: Backend<S> + Backend<Dyn, RawTensor = <B as Backend<S>>::RawTensor>>
+impl<S: Shape + DynShape, B: Backend>
     Module<Tensor<S, B>> for BatchNorm2d<S, B>
 {
     type Output = Tensor<S, B>;

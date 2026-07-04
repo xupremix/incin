@@ -123,12 +123,12 @@ pub(crate) fn parse_onnx(rel_path: &str, root_name: &Ident) -> proc_macro2::Toke
 
     let root_impl = quote! {
         #[kindle::prelude::module]
-        pub struct #root_name<B: kindle::prelude::Backend<kindle::prelude::Dyn>> {
+        pub struct #root_name<B: kindle::prelude::Backend> {
             #(#fields,)*
             _marker: std::marker::PhantomData<B>,
         }
 
-        impl<B: kindle::prelude::Backend<kindle::prelude::Dyn>> #root_name<B> {
+        impl<B: kindle::prelude::Backend> #root_name<B> {
             pub fn new() -> Self {
                 Self {
                     #(#inits,)*
@@ -143,7 +143,7 @@ pub(crate) fn parse_onnx(rel_path: &str, root_name: &Ident) -> proc_macro2::Toke
         }
 
         #[kindle::prelude::forward]
-        impl<B: kindle::prelude::Backend<kindle::prelude::Dyn>> #root_name<B> {
+        impl<B: kindle::prelude::Backend> #root_name<B> {
             pub fn forward(&self, #(#user_inputs),*) -> kindle::prelude::Result<kindle::prelude::Tensor<kindle::prelude::Dyn, B>> {
                 #(#forward_stmts)*
                 #last_output

@@ -191,23 +191,15 @@ impl<M: StaticDim, K: StaticDim, N: StaticDim> MatMulShape<(usize, K, N)> for (u
 // The matmul method on Tensor
 // ============================================================================
 
-impl<S1, B: Backend<S1>, T, D, G> Tensor<S1, B, T, D, G>
-where
-    S1: Shape,
-    T: DType,
-    D: Device,
-    G: RequiresGrad,
-{
-    pub fn matmul<S2>(&self, rhs: &Tensor<S2, B, T, D, G>) -> Result<Tensor<S1::Output, B, T, D, G>>
+impl<S1: Shape, B: Backend, G: RequiresGrad> Tensor<S1, B, G> {
+    pub fn matmul<S2>(&self, rhs: &Tensor<S2, B, G>) -> Result<Tensor<S1::Output, B, G>>
     where
         S2: Shape,
         S1: MatMulShape<S2>,
-        B: Backend<S2, RawTensor = <B as Backend<S1>>::RawTensor>
-            + Backend<S1::Output, RawTensor = <B as Backend<S1>>::RawTensor>,
     {
-        let inner = <B as Backend<S1>>::matmul(&self.inner, &rhs.inner)?;
+        let inner = B::matmul(&self.inner, &rhs.inner)?;
         let output_shape = S1::output_shape(&self._shape, &rhs._shape);
-        Ok(Tensor::<_, B, _, _, _>::from_parts(
+        Ok(Tensor::from_parts(
             inner,
             output_shape,
             self._dtype.clone(),

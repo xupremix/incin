@@ -70,8 +70,8 @@ fn generate_structs(
                     quote! { kindle::nn::Param<#shape_ty, B> }
                 };
                 
-                let common_bound = quote! { RawVar = <B as kindle::prelude::Backend<kindle::prelude::Dyn>>::RawVar, RawTensor = <B as kindle::prelude::Backend<kindle::prelude::Dyn>>::RawTensor };
-                bounds.push(quote! { B: kindle::prelude::Backend<#shape_ty, #common_bound> });
+                let common_bound = quote! { RawVar = <B as kindle::prelude::Backend>::RawVar, RawTensor = <B as kindle::prelude::Backend>::RawTensor };
+                bounds.push(quote! { B: kindle::prelude::Backend });
                 fields.push(quote! { pub #field_name_ident: #ty });
             }
             Node::Dir(_) => {
@@ -86,7 +86,7 @@ fn generate_structs(
     let def = quote! {
         #[kindle::prelude::module]
         #[allow(non_camel_case_types)]
-        pub struct #name<B: kindle::prelude::Backend<kindle::prelude::Dyn>> 
+        pub struct #name<B: kindle::prelude::Backend> 
         where 
             #(#bounds,)*
         {
@@ -145,7 +145,7 @@ pub(crate) fn import_model(_attr: TokenStream, item: TokenStream) -> TokenStream
     // root implementation of load_default_weights
     let path_str = input.path.value();
     let root_impl = quote! {
-        impl<B: kindle::prelude::Backend<kindle::prelude::Dyn>> #root_name<B> 
+        impl<B: kindle::prelude::Backend> #root_name<B> 
         where 
             #(#bounds,)*
         {

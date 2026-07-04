@@ -3,14 +3,15 @@ use crate::prelude::*;
 /// A trainable parameter.
 /// Contains the backend-specific dynamic variable (e.g., a `candle_core::Var`)
 /// required to compute gradients and step an optimizer.
-pub struct Param<S: Shape, B: Backend<S>, T: DType = f32, D: Device = Cpu> {
-    pub(crate) inner: B::RawVar,
+pub struct Param<S: Shape, B: Backend>
+{
+    pub(crate) inner: <B as Backend>::RawVar,
     pub(crate) _shape: S::Field,
-    pub(crate) _dtype: T::Field,
-    pub(crate) _device: D::Field,
+    pub(crate) _dtype: <B::DType as DType>::Field,
+    pub(crate) _device: <B::Device as Device>::Field,
 }
 
-impl<S: Shape, B: Backend<S>, T: DType, D: Device> Clone for Param<S, B, T, D> {
+impl<S: Shape, B: Backend> Clone for Param<S, B> {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
@@ -21,15 +22,15 @@ impl<S: Shape, B: Backend<S>, T: DType, D: Device> Clone for Param<S, B, T, D> {
     }
 }
 
-impl<S: Shape, B: Backend<S>, T: DType, D: Device> core::fmt::Debug for Param<S, B, T, D> {
+impl<S: Shape, B: Backend> core::fmt::Debug for Param<S, B> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Param").field("inner", &"...").finish()
     }
 }
 
-impl<S: Shape, B: Backend<S>, T: DType, D: Device> Param<S, B, T, D> {
+impl<S: Shape, B: Backend> Param<S, B> {
     /// Extract a functional Tensor from this variable for forward passes
-    pub fn as_tensor(&self) -> Result<Tensor<S, B, T, D, Grad>> {
+    pub fn as_tensor(&self) -> Result<Tensor<S, B, Grad>> {
         let inner_tensor = B::var_as_tensor(&self.inner)?;
         Ok(Tensor {
             inner: inner_tensor,
@@ -41,21 +42,18 @@ impl<S: Shape, B: Backend<S>, T: DType, D: Device> Param<S, B, T, D> {
     }
 }
 
-impl<S, B: Backend<S>, T, D> Param<S, B, T, D>
+impl<S: Shape + DynShape, B: Backend> Param<S, B>
 where
-    S: Shape + DynShape,
-    T: DType,
-    D: Device,
-    (S, T, D, Grad): TensorArgs<S, T, D, Grad>,
+    (S, B::DType, B::Device, Grad): TensorArgs<S, B::DType, B::Device, Grad>,
 {
     pub fn zeros<A>(args: A) -> Result<Self>
     where
-        A: ArgInto<<(S, T, D, Grad) as TensorArgs<S, T, D, Grad>>::Args>,
+        A: ArgInto<<(S, B::DType, B::Device, Grad) as TensorArgs<S, B::DType, B::Device, Grad>>::Args>,
     {
-        let (_shape, _dtype, _device, _) = <(S, T, D, Grad)>::construct(args.into_arg());
+        let (_shape, _dtype, _device, _) = <(S, B::DType, B::Device, Grad)>::construct(args.into_arg());
         let dims: S::Dims = S::dims(&_shape);
-        let device = D::to_kindle(&_device)?;
-        let dtype = T::to_kindle(&_dtype);
+        let device = <B::Device as Device>::to_kindle(&_device)?;
+        let dtype = <B::DType as DType>::to_kindle(&_dtype);
         let inner = B::var_zeros(dims.as_ref(), dtype, &device)?;
         Ok(Self {
             inner,
@@ -67,12 +65,12 @@ where
 
     pub fn randn<A>(args: A) -> Result<Self>
     where
-        A: ArgInto<<(S, T, D, Grad) as TensorArgs<S, T, D, Grad>>::Args>,
+        A: ArgInto<<(S, B::DType, B::Device, Grad) as TensorArgs<S, B::DType, B::Device, Grad>>::Args>,
     {
-        let (_shape, _dtype, _device, _) = <(S, T, D, Grad)>::construct(args.into_arg());
+        let (_shape, _dtype, _device, _) = <(S, B::DType, B::Device, Grad)>::construct(args.into_arg());
         let dims: S::Dims = S::dims(&_shape);
-        let device = D::to_kindle(&_device)?;
-        let dtype = T::to_kindle(&_dtype);
+        let device = <B::Device as Device>::to_kindle(&_device)?;
+        let dtype = <B::DType as DType>::to_kindle(&_dtype);
         let inner = B::var_randn(dims.as_ref(), dtype, &device)?;
         Ok(Self {
             inner,
@@ -84,12 +82,12 @@ where
 
     pub fn ones<A>(args: A) -> Result<Self>
     where
-        A: ArgInto<<(S, T, D, Grad) as TensorArgs<S, T, D, Grad>>::Args>,
+        A: ArgInto<<(S, B::DType, B::Device, Grad) as TensorArgs<S, B::DType, B::Device, Grad>>::Args>,
     {
-        let (_shape, _dtype, _device, _) = <(S, T, D, Grad)>::construct(args.into_arg());
+        let (_shape, _dtype, _device, _) = <(S, B::DType, B::Device, Grad)>::construct(args.into_arg());
         let dims: S::Dims = S::dims(&_shape);
-        let device = D::to_kindle(&_device)?;
-        let dtype = T::to_kindle(&_dtype);
+        let device = <B::Device as Device>::to_kindle(&_device)?;
+        let dtype = <B::DType as DType>::to_kindle(&_dtype);
         let inner = B::var_ones(dims.as_ref(), dtype, &device)?;
         Ok(Self {
             inner,
@@ -100,11 +98,11 @@ where
     }
 
     /// Construct a Param directly from a backend's RawVar, typically used when loading checkpoints.
-    pub fn from_raw<A>(inner: B::RawVar, args: A) -> Result<Self>
+    pub fn from_raw<A>(inner: <B as Backend>::RawVar, args: A) -> Result<Self>
     where
-        A: ArgInto<<(S, T, D, Grad) as TensorArgs<S, T, D, Grad>>::Args>,
+        A: ArgInto<<(S, B::DType, B::Device, Grad) as TensorArgs<S, B::DType, B::Device, Grad>>::Args>,
     {
-        let (_shape, _dtype, _device, _) = <(S, T, D, Grad)>::construct(args.into_arg());
+        let (_shape, _dtype, _device, _) = <(S, B::DType, B::Device, Grad)>::construct(args.into_arg());
         Ok(Self {
             inner,
             _shape,
@@ -114,7 +112,7 @@ where
     }
 
     /// Moves this parameter to the specified device, returning a new Param.
-    pub fn to_device<D2: Device>(self, _device: &D2::Field) -> Result<Param<S, B, T, D2>> {
+    pub fn to_device<D2: Device>(self, _device: &D2::Field) -> Result<Param<S, B::BackendWithDevice<D2>>> {
         let kindle_device = D2::to_kindle(_device)?;
         let new_inner = B::var_to_device(&self.inner, &kindle_device)?;
         Ok(Param {
@@ -126,19 +124,16 @@ where
     }
 }
 
-impl<S: Shape + DynShape, B: Backend<S>, T: DType, D: Device> Parameters<B> for Param<S, B, T, D>
-where
-    B: Backend<Dyn, RawVar = <B as Backend<S>>::RawVar>,
-{
-    fn parameters(&self) -> alloc::vec::Vec<<B as Backend<Dyn>>::RawVar> {
+impl<S: Shape + DynShape, B: Backend> Parameters<B> for Param<S, B> {
+    fn parameters(&self) -> alloc::vec::Vec<B::RawVar> {
         alloc::vec![self.inner.clone()]
     }
 }
 
-impl<S1: DynShape, B: Backend<S1>, T: DType, D: Device> Param<S1, B, T, D> {
-    pub fn into_shape<S2: Shape>(self) -> Result<Param<S2, B, T, D>>
+impl<S1: DynShape, B: Backend, > Param<S1, B, > {
+    pub fn into_shape<S2: Shape>(self) -> Result<Param<S2, B, >>
     where
-        B: Backend<S2, RawVar = <B as Backend<S1>>::RawVar>,
+        B: Backend,
     {
         let current_dims = S1::dims(&self._shape);
         let new_shape =
@@ -147,7 +142,7 @@ impl<S1: DynShape, B: Backend<S1>, T: DType, D: Device> Param<S1, B, T, D> {
                 got: current_dims.as_ref().to_vec(),
             })?;
 
-        Ok(Param::<S2, B, T, D> {
+        Ok(Param::<S2, B, > {
             inner: self.inner,
             _shape: new_shape,
             _dtype: self._dtype,
@@ -159,9 +154,7 @@ impl<S1: DynShape, B: Backend<S1>, T: DType, D: Device> Param<S1, B, T, D> {
 use crate::nn::module::StateDict;
 use std::collections::HashMap;
 
-impl<S: Shape + DynShape, B: Backend<S>> StateDict<B> for Param<S, B, f32, Cpu>
-where
-    B: Backend<Dyn, RawVar = <B as Backend<S>>::RawVar, RawTensor = <B as Backend<S>>::RawTensor>,
+impl<S: Shape + DynShape, B: Backend> StateDict<B> for Param<S, B>
 {
     fn load_state_dict(
         &mut self,
@@ -172,7 +165,7 @@ where
             // we should replace self.inner or copy values into it.
             // For now, we assume we just replace the RawVar.
             // In a real framework, you might want in-place copy.
-            self.inner = <B as Backend<Dyn>>::var_from_tensor(&t.inner)?;
+            self.inner = B::var_from_tensor(&t.inner)?;
         }
         Ok(())
     }
@@ -187,14 +180,15 @@ where
 }
 
 /// A non-trainable state buffer (e.g. running_mean in BatchNorm).
-pub struct Buffer<S: Shape, B: Backend<S>, T: DType = f32, D: Device = Cpu> {
-    pub(crate) inner: B::RawVar,
+pub struct Buffer<S: Shape, B: Backend>
+{
+    pub(crate) inner: <B as Backend>::RawVar,
     pub(crate) _shape: S::Field,
-    pub(crate) _dtype: T::Field,
-    pub(crate) _device: D::Field,
+    pub(crate) _dtype: <B::DType as DType>::Field,
+    pub(crate) _device: <B::Device as Device>::Field,
 }
 
-impl<S: Shape, B: Backend<S>, T: DType, D: Device> Clone for Buffer<S, B, T, D> {
+impl<S: Shape, B: Backend> Clone for Buffer<S, B> {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
@@ -205,14 +199,14 @@ impl<S: Shape, B: Backend<S>, T: DType, D: Device> Clone for Buffer<S, B, T, D> 
     }
 }
 
-impl<S: Shape, B: Backend<S>, T: DType, D: Device> core::fmt::Debug for Buffer<S, B, T, D> {
+impl<S: Shape, B: Backend> core::fmt::Debug for Buffer<S, B> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Buffer").field("inner", &"...").finish()
     }
 }
 
-impl<S: Shape, B: Backend<S>, T: DType, D: Device> Buffer<S, B, T, D> {
-    pub fn as_tensor(&self) -> Result<Tensor<S, B, T, D, Grad>> {
+impl<S: Shape, B: Backend> Buffer<S, B> {
+    pub fn as_tensor(&self) -> Result<Tensor<S, B, Grad>> {
         let inner_tensor = B::var_as_tensor(&self.inner)?;
         Ok(Tensor {
             inner: inner_tensor,
@@ -224,21 +218,18 @@ impl<S: Shape, B: Backend<S>, T: DType, D: Device> Buffer<S, B, T, D> {
     }
 }
 
-impl<S, B: Backend<S>, T, D> Buffer<S, B, T, D>
+impl<S: Shape + DynShape, B: Backend> Buffer<S, B>
 where
-    S: Shape + DynShape,
-    T: DType,
-    D: Device,
-    (S, T, D, Grad): TensorArgs<S, T, D, Grad>,
+    (S, B::DType, B::Device, Grad): TensorArgs<S, B::DType, B::Device, Grad>,
 {
     pub fn zeros<A>(args: A) -> Result<Self>
     where
-        A: ArgInto<<(S, T, D, Grad) as TensorArgs<S, T, D, Grad>>::Args>,
+        A: ArgInto<<(S, B::DType, B::Device, Grad) as TensorArgs<S, B::DType, B::Device, Grad>>::Args>,
     {
-        let (_shape, _dtype, _device, _) = <(S, T, D, Grad)>::construct(args.into_arg());
+        let (_shape, _dtype, _device, _) = <(S, B::DType, B::Device, Grad)>::construct(args.into_arg());
         let dims: S::Dims = S::dims(&_shape);
-        let device = D::to_kindle(&_device)?;
-        let dtype = T::to_kindle(&_dtype);
+        let device = <B::Device as Device>::to_kindle(&_device)?;
+        let dtype = <B::DType as DType>::to_kindle(&_dtype);
         let inner = B::var_zeros(dims.as_ref(), dtype, &device)?;
         Ok(Self {
             inner,
@@ -250,12 +241,12 @@ where
 
     pub fn ones<A>(args: A) -> Result<Self>
     where
-        A: ArgInto<<(S, T, D, Grad) as TensorArgs<S, T, D, Grad>>::Args>,
+        A: ArgInto<<(S, B::DType, B::Device, Grad) as TensorArgs<S, B::DType, B::Device, Grad>>::Args>,
     {
-        let (_shape, _dtype, _device, _) = <(S, T, D, Grad)>::construct(args.into_arg());
+        let (_shape, _dtype, _device, _) = <(S, B::DType, B::Device, Grad)>::construct(args.into_arg());
         let dims: S::Dims = S::dims(&_shape);
-        let device = D::to_kindle(&_device)?;
-        let dtype = T::to_kindle(&_dtype);
+        let device = <B::Device as Device>::to_kindle(&_device)?;
+        let dtype = <B::DType as DType>::to_kindle(&_dtype);
         let inner = B::var_ones(dims.as_ref(), dtype, &device)?;
         Ok(Self {
             inner,
@@ -266,18 +257,13 @@ where
     }
 }
 
-impl<S: Shape + DynShape, B: Backend<S>, T: DType, D: Device> Parameters<B> for Buffer<S, B, T, D>
-where
-    B: Backend<Dyn, RawVar = <B as Backend<S>>::RawVar>,
-{
-    fn parameters(&self) -> alloc::vec::Vec<<B as Backend<Dyn>>::RawVar> {
+impl<S: Shape + DynShape, B: Backend> Parameters<B> for Buffer<S, B> {
+    fn parameters(&self) -> alloc::vec::Vec<B::RawVar> {
         alloc::vec![]
     }
 }
 
-impl<S: Shape + DynShape, B: Backend<S>> StateDict<B> for Buffer<S, B, f32, Cpu>
-where
-    B: Backend<Dyn, RawVar = <B as Backend<S>>::RawVar, RawTensor = <B as Backend<S>>::RawTensor>,
+impl<S: Shape + DynShape, B: Backend> StateDict<B> for Buffer<S, B>
 {
     fn load_state_dict(
         &mut self,
@@ -285,7 +271,7 @@ where
         tensors: &HashMap<String, Tensor<Dyn, B>>,
     ) -> Result<()> {
         if let Some(t) = tensors.get(prefix) {
-            self.inner = <B as Backend<Dyn>>::var_from_tensor(&t.inner)?;
+            self.inner = B::var_from_tensor(&t.inner)?;
         }
         Ok(())
     }

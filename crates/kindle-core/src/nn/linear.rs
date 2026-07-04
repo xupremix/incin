@@ -19,13 +19,9 @@ pub struct Linear<
     InF: Dim,
     OutF: Dim,
     S: LinearShape<InF, OutF>,
-    B: Backend<Dyn>
-        + Backend<S, RawVar = <B as Backend<Dyn>>::RawVar, RawTensor = <B as Backend<Dyn>>::RawTensor>
-        + Backend<
-            S::BiasShape,
-            RawVar = <B as Backend<Dyn>>::RawVar,
-            RawTensor = <B as Backend<Dyn>>::RawTensor,
-        >,
+    B: Backend
+        + Backend
+        + Backend,
 > {
     pub weight: Param<S, B>,
     pub bias: Option<Param<S::BiasShape, B>>,
@@ -42,19 +38,13 @@ pub struct Linear<
 impl<
     InF: Dim<Arg = ()>,
     OutF: Dim<Arg = ()>,
-    B: Backend<Dyn>
-        + Backend<
-            (InF, OutF),
-            RawVar = <B as Backend<Dyn>>::RawVar,
-            RawTensor = <B as Backend<Dyn>>::RawTensor,
-        > + Backend<
-            (OutF,),
-            RawVar = <B as Backend<Dyn>>::RawVar,
-            RawTensor = <B as Backend<Dyn>>::RawTensor,
-        >,
+    B: Backend
+        + Backend,
 > Linear<InF, OutF, (InF, OutF), B>
 {
-    pub fn new() -> Result<Self> {
+    pub fn new() -> Result<Self>
+    where B::DType: crate::prelude::ConstDType, B::Device: crate::prelude::ConstDevice
+    {
         let weight = Param::<(InF, OutF), B>::zeros(())?;
         let bias = Param::<(OutF,), B>::zeros(())?;
         Ok(Self {
@@ -65,8 +55,10 @@ impl<
     }
 }
 
-impl<InF: Dim, OutF: Dim, B: Backend<Dyn>> Linear<InF, OutF, Dyn, B> {
-    pub fn new(in_features: usize, out_features: usize) -> Result<Self> {
+impl<InF: Dim, OutF: Dim, B: Backend> Linear<InF, OutF, Dyn, B> where B::DType: crate::prelude::ConstDType, B::Device: crate::prelude::ConstDevice {
+    pub fn new(in_features: usize, out_features: usize) -> Result<Self>
+    where B::DType: crate::prelude::ConstDType, B::Device: crate::prelude::ConstDevice
+    {
         let weight = Param::<Dyn, B>::zeros([in_features, out_features])?;
         let bias = Param::<Dyn, B>::zeros([out_features])?;
         Ok(Self {
@@ -81,7 +73,7 @@ impl<InF: Dim, OutF: Dim, B: Backend<Dyn>> Linear<InF, OutF, Dyn, B> {
 // Let's stick to `weight: (InF, OutF)` for simpler `x @ weight`.
 
 // Dynamic input
-impl<InF: Dim, OutF: Dim, B: Backend<Dyn>> Module<Tensor<Dyn, B>> for Linear<InF, OutF, Dyn, B> {
+impl<InF: Dim, OutF: Dim, B: Backend> Module<Tensor<Dyn, B>> for Linear<InF, OutF, Dyn, B> {
     type Output = Tensor<Dyn, B>;
     type Error = Error;
 
@@ -100,17 +92,9 @@ impl<
     InF: Dim,
     OutF: Dim,
     InShape: Shape + DynShape + ReplaceLastDim<OutF>,
-    B: Backend<Dyn>
-        + Backend<
-            (InF, OutF),
-            RawVar = <B as Backend<Dyn>>::RawVar,
-            RawTensor = <B as Backend<Dyn>>::RawTensor,
-        > + Backend<
-            (OutF,),
-            RawVar = <B as Backend<Dyn>>::RawVar,
-            RawTensor = <B as Backend<Dyn>>::RawTensor,
-        > + Backend<InShape, RawTensor = <B as Backend<Dyn>>::RawTensor>
-        + Backend<InShape::Output, RawTensor = <B as Backend<Dyn>>::RawTensor>,
+    B: Backend
+        + Backend
+        + Backend,
 > Module<Tensor<InShape, B>> for Linear<InF, OutF, (InF, OutF), B>
 where
     InShape::Output: DynShape,

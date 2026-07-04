@@ -18,7 +18,7 @@ pub mod candle {
     use candle_core as candle;
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-    pub struct CandleBackend;
+    pub struct CandleBackend<T, D>(core::marker::PhantomData<(T, D)>);
 
     pub fn to_candle_device(dev: &KindleDevice) -> Result<candle::Device> {
         use kindle_core::tensor::device::DeviceVariant;
@@ -26,11 +26,11 @@ pub mod candle {
             DeviceVariant::Cpu => Ok(candle::Device::Cpu),
             #[cfg(feature = "cuda")]
             DeviceVariant::Cuda(ord) => {
-                Ok(candle::Device::new_cuda(ord).map_err(|e| anyhow::anyhow!(e))?)
+                Ok(candle::Device::new_cuda(ord).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
             }
             #[cfg(feature = "metal")]
             DeviceVariant::Metal(ord) => {
-                Ok(candle::Device::new_metal(ord).map_err(|e| anyhow::anyhow!(e))?)
+                Ok(candle::Device::new_metal(ord).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
             }
         }
     }
@@ -47,10 +47,15 @@ pub mod candle {
         }
     }
 
-    impl<S: Shape> Backend<S> for CandleBackend {
-        type RawTensor = candle::Tensor;
+    impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device> kindle_core::prelude::Backend for CandleBackend<T, D> {
+        type Device = D;
+        type DType = T;
+        type BackendWithDType<NewT: kindle_core::prelude::DType> = CandleBackend<NewT, D>;
+        type BackendWithDevice<NewD: kindle_core::prelude::Device> = CandleBackend<T, NewD>;
+        
+        type RawTensor = candle_core::Tensor;
         type RawVar = candle_core::Var;
-        type Grads = std::collections::HashMap<candle_core::TensorId, candle_core::Tensor>;
+        type Grads = candle_core::backprop::GradStore;
 
         fn shape(t: &Self::RawTensor) -> Vec<usize> {
             t.dims().to_vec()
@@ -60,7 +65,7 @@ pub mod candle {
             Ok(var.as_tensor().clone())
         }
         fn var_from_tensor(t: &Self::RawTensor) -> Result<Self::RawVar> {
-            Ok(candle::Var::from_tensor(t).map_err(|e| anyhow::anyhow!(e))?)
+            Ok(candle::Var::from_tensor(t).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
         fn zeros(
@@ -70,7 +75,7 @@ pub mod candle {
         ) -> Result<Self::RawTensor> {
             Ok(
                 candle::Tensor::zeros(shape, to_candle_dtype(dtype), &to_candle_device(device)?)
-                    .map_err(|e| anyhow::anyhow!(e))?,
+                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?,
             )
         }
 
@@ -81,7 +86,7 @@ pub mod candle {
         ) -> Result<Self::RawTensor> {
             Ok(
                 candle::Tensor::ones(shape, to_candle_dtype(dtype), &to_candle_device(device)?)
-                    .map_err(|e| anyhow::anyhow!(e))?,
+                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?,
             )
         }
 
@@ -92,9 +97,9 @@ pub mod candle {
         ) -> Result<Self::RawTensor> {
             Ok(
                 candle::Tensor::rand(0f32, 1f32, shape, &to_candle_device(device)?)
-                    .map_err(|e| anyhow::anyhow!(e))?
+                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?
                     .to_dtype(to_candle_dtype(dtype))
-                    .map_err(|e| anyhow::anyhow!(e))?,
+                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?,
             )
         }
 
@@ -105,9 +110,9 @@ pub mod candle {
         ) -> Result<Self::RawTensor> {
             Ok(
                 candle::Tensor::randn(0f32, 1f32, shape, &to_candle_device(device)?)
-                    .map_err(|e| anyhow::anyhow!(e))?
+                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?
                     .to_dtype(to_candle_dtype(dtype))
-                    .map_err(|e| anyhow::anyhow!(e))?,
+                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?,
             )
         }
 
@@ -118,7 +123,7 @@ pub mod candle {
         ) -> Result<Self::RawVar> {
             Ok(
                 candle::Var::zeros(shape, to_candle_dtype(dtype), &to_candle_device(device)?)
-                    .map_err(|e| anyhow::anyhow!(e))?,
+                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?,
             )
         }
 
@@ -129,7 +134,7 @@ pub mod candle {
         ) -> Result<Self::RawVar> {
             Ok(
                 candle::Var::ones(shape, to_candle_dtype(dtype), &to_candle_device(device)?)
-                    .map_err(|e| anyhow::anyhow!(e))?,
+                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?,
             )
         }
 
@@ -140,13 +145,13 @@ pub mod candle {
         ) -> Result<Self::RawVar> {
             Ok(
                 candle::Var::rand(0f32, 1f32, shape, &to_candle_device(device)?)
-                    .map_err(|e| anyhow::anyhow!(e))?,
+                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?,
             )
         }
 
         fn tensor_to_device(t: &Self::RawTensor, device: &KindleDevice) -> Result<Self::RawTensor> {
             let dev = to_candle_device(device)?;
-            t.to_device(&dev).map_err(|e| anyhow::anyhow!(e).into())
+            t.to_device(&dev).map_err(|e: candle_core::Error| anyhow::anyhow!(e).into())
         }
 
         fn var_to_device(var: &Self::RawVar, device: &KindleDevice) -> Result<Self::RawVar> {
@@ -157,8 +162,8 @@ pub mod candle {
             let t = var
                 .as_tensor()
                 .to_device(&dev)
-                .map_err(|e| anyhow::anyhow!(e))?;
-            candle::Var::from_tensor(&t).map_err(|e| anyhow::anyhow!(e).into())
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+            candle::Var::from_tensor(&t).map_err(|e: candle_core::Error| anyhow::anyhow!(e).into())
         }
 
         fn var_randn(
@@ -167,79 +172,79 @@ pub mod candle {
             device: &KindleDevice,
         ) -> Result<Self::RawVar> {
             let dev = to_candle_device(device)?;
-            Ok(candle::Var::randn(0f32, 1f32, shape, &dev).map_err(|e| anyhow::anyhow!(e))?)
+            Ok(candle::Var::randn(0f32, 1f32, shape, &dev).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
         fn relu(t: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Ok(t.relu().map_err(|e| anyhow::anyhow!(e))?)
+            Ok(t.relu().map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
         fn gelu(t: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Ok(t.gelu_erf().map_err(|e| anyhow::anyhow!(e))?)
+            Ok(t.gelu_erf().map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         } // using gelu_erf as fallback for general
 
         fn softmax(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor> {
-            Ok(candle_nn::ops::softmax(t, dim).map_err(|e| anyhow::anyhow!(e))?)
+            Ok(candle_nn::ops::softmax(t, dim).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
         fn swish(t: &Self::RawTensor) -> Result<Self::RawTensor> {
             // swish is x * sigmoid(x)
-            Ok(candle_nn::ops::silu(t).map_err(|e| anyhow::anyhow!(e))?)
+            Ok(candle_nn::ops::silu(t).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
         fn abs(t: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Ok(t.abs().map_err(|e| anyhow::anyhow!(e))?)
+            Ok(t.abs().map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
         fn neg(t: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Ok(t.neg().map_err(|e| anyhow::anyhow!(e))?)
+            Ok(t.neg().map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
         fn sqrt(t: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Ok(t.sqrt().map_err(|e| anyhow::anyhow!(e))?)
+            Ok(t.sqrt().map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
         fn exp(t: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Ok(t.exp().map_err(|e| anyhow::anyhow!(e))?)
+            Ok(t.exp().map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
         fn log(t: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Ok(t.log().map_err(|e| anyhow::anyhow!(e))?)
+            Ok(t.log().map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
         fn tanh(t: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Ok(t.tanh().map_err(|e| anyhow::anyhow!(e))?)
+            Ok(t.tanh().map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
         fn sigmoid(t: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Ok(::candle_nn::ops::sigmoid(t).map_err(|e| anyhow::anyhow!(e))?)
+            Ok(::candle_nn::ops::sigmoid(t).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
         fn mul_scalar(t: &Self::RawTensor, scalar: f64) -> Result<Self::RawTensor> {
-            Ok((t * scalar).map_err(|e| anyhow::anyhow!(e))?)
+            Ok((t * scalar).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
         fn add_scalar(t: &Self::RawTensor, scalar: f64) -> Result<Self::RawTensor> {
-            Ok((t + scalar).map_err(|e| anyhow::anyhow!(e))?)
+            Ok((t + scalar).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
         fn sum_all(t: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Ok(t.sum_all().map_err(|e| anyhow::anyhow!(e))?)
+            Ok(t.sum_all().map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
         fn mean_all(t: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Ok(t.mean_all().map_err(|e| anyhow::anyhow!(e))?)
+            Ok(t.mean_all().map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
         fn max_all(t: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Ok(t.max_all().map_err(|e| anyhow::anyhow!(e))?)
+            Ok(t.max_all().map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
         fn min_all(t: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Ok(t.min_all().map_err(|e| anyhow::anyhow!(e))?)
+            Ok(t.min_all().map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
         fn sum_dim(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor> {
-            Ok(t.sum(dim).map_err(|e| anyhow::anyhow!(e))?)
+            Ok(t.sum(dim).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
         fn sum_keepdim(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor> {
-            Ok(t.sum_keepdim(dim).map_err(|e| anyhow::anyhow!(e))?)
+            Ok(t.sum_keepdim(dim).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
         fn stack(tensors: &[&Self::RawTensor], dim: usize) -> Result<Self::RawTensor> {
-            Ok(candle_core::Tensor::stack(tensors, dim).map_err(|e| anyhow::anyhow!(e))?)
+            Ok(candle_core::Tensor::stack(tensors, dim).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
         fn concat(tensors: &[&Self::RawTensor], dim: usize) -> Result<Self::RawTensor> {
-            Ok(candle_core::Tensor::cat(tensors, dim).map_err(|e| anyhow::anyhow!(e))?)
+            Ok(candle_core::Tensor::cat(tensors, dim).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
         fn layer_norm(
@@ -248,7 +253,7 @@ pub mod candle {
             bias: &Self::RawTensor,
             eps: f32,
         ) -> Result<Self::RawTensor> {
-            Ok(candle_nn::ops::layer_norm(t, weight, bias, eps).map_err(|e| anyhow::anyhow!(e))?)
+            Ok(candle_nn::ops::layer_norm(t, weight, bias, eps).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
         fn batch_norm(
@@ -261,90 +266,93 @@ pub mod candle {
         ) -> Result<Self::RawTensor> {
             let mut shape = vec![1; t.rank()];
             if t.rank() > 1 {
-                shape[1] = running_mean.dim(0).map_err(|e| anyhow::anyhow!(e))?;
+                shape[1] = running_mean.dim(0).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
             } else {
-                shape[0] = running_mean.dim(0).map_err(|e| anyhow::anyhow!(e))?;
+                shape[0] = running_mean.dim(0).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
             }
             
-            let r_mean = running_mean.reshape(shape.as_slice()).map_err(|e| anyhow::anyhow!(e))?;
-            let r_var = running_var.reshape(shape.as_slice()).map_err(|e| anyhow::anyhow!(e))?;
-            let w = weight.reshape(shape.as_slice()).map_err(|e| anyhow::anyhow!(e))?;
-            let b = bias.reshape(shape.as_slice()).map_err(|e| anyhow::anyhow!(e))?;
+            let r_mean = running_mean.reshape(shape.as_slice()).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+            let r_var = running_var.reshape(shape.as_slice()).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+            let w = weight.reshape(shape.as_slice()).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+            let b = bias.reshape(shape.as_slice()).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
 
             let eps_t =
-                candle_core::Tensor::new(&[eps], t.device()).map_err(|e| anyhow::anyhow!(e))?;
+                candle_core::Tensor::new(&[eps], t.device()).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
             let var_eps = r_var
                 .broadcast_add(&eps_t)
-                .map_err(|e| anyhow::anyhow!(e))?;
-            let std = var_eps.sqrt().map_err(|e| anyhow::anyhow!(e))?;
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+            let std = var_eps.sqrt().map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
             let normalized = t
                 .broadcast_sub(&r_mean)
-                .map_err(|e| anyhow::anyhow!(e))?
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?
                 .broadcast_div(&std)
-                .map_err(|e| anyhow::anyhow!(e))?;
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
 
             let scaled = normalized
                 .broadcast_mul(&w)
-                .map_err(|e| anyhow::anyhow!(e))?;
-            let out = scaled.broadcast_add(&b).map_err(|e| anyhow::anyhow!(e))?;
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+            let out = scaled.broadcast_add(&b).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
             Ok(out)
         }
 
         fn embedding(t: &Self::RawTensor, w: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Ok(candle_nn::ops::embedding(t, w).map_err(|e| anyhow::anyhow!(e))?)
+            use candle_nn::Module;
+            let hidden_size = w.dim(1).map_err(|e| anyhow::anyhow!(e))?;
+            let emb = candle_nn::Embedding::new(w.clone(), hidden_size);
+            Ok(emb.forward(t).map_err(|e| anyhow::anyhow!(e))?)
         }
 
         fn mean_dim(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor> {
-            Ok(t.mean(dim).map_err(|e| anyhow::anyhow!(e))?)
+            Ok(t.mean(dim).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
         fn mean_keepdim(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor> {
-            Ok(t.mean_keepdim(dim).map_err(|e| anyhow::anyhow!(e))?)
+            Ok(t.mean_keepdim(dim).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
         fn max_dim(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor> {
-            Ok(t.max(dim).map_err(|e| anyhow::anyhow!(e))?)
+            Ok(t.max(dim).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
         fn max_keepdim(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor> {
-            Ok(t.max_keepdim(dim).map_err(|e| anyhow::anyhow!(e))?)
+            Ok(t.max_keepdim(dim).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
         fn min_dim(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor> {
-            Ok(t.min(dim).map_err(|e| anyhow::anyhow!(e))?)
+            Ok(t.min(dim).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
         fn min_keepdim(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor> {
-            Ok(t.min_keepdim(dim).map_err(|e| anyhow::anyhow!(e))?)
+            Ok(t.min_keepdim(dim).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
         fn to_dtype(t: &Self::RawTensor, dtype: KindleDType) -> Result<Self::RawTensor> {
             Ok(t.to_dtype(to_candle_dtype(dtype))
-                .map_err(|e| anyhow::anyhow!(e))?)
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
         fn broadcast_as(t: &Self::RawTensor, shape: &[usize]) -> Result<Self::RawTensor> {
-            Ok(t.broadcast_as(shape).map_err(|e| anyhow::anyhow!(e))?)
+            Ok(t.broadcast_as(shape).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
         fn broadcast_left(t: &Self::RawTensor, shape: &[usize]) -> Result<Self::RawTensor> {
-            Ok(t.broadcast_left(shape).map_err(|e| anyhow::anyhow!(e))?)
+            Ok(t.broadcast_left(shape).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
         fn add(lhs: &Self::RawTensor, rhs: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Ok(lhs.broadcast_add(rhs).map_err(|e| anyhow::anyhow!(e))?)
+            Ok(lhs.broadcast_add(rhs).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
         fn sub(lhs: &Self::RawTensor, rhs: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Ok(lhs.broadcast_sub(rhs).map_err(|e| anyhow::anyhow!(e))?)
+            Ok(lhs.broadcast_sub(rhs).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
         fn mul(lhs: &Self::RawTensor, rhs: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Ok(lhs.broadcast_mul(rhs).map_err(|e| anyhow::anyhow!(e))?)
+            Ok(lhs.broadcast_mul(rhs).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
         fn div(lhs: &Self::RawTensor, rhs: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Ok(lhs.broadcast_div(rhs).map_err(|e| anyhow::anyhow!(e))?)
+            Ok(lhs.broadcast_div(rhs).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
         fn matmul(lhs: &Self::RawTensor, rhs: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Ok(lhs.broadcast_matmul(rhs).map_err(|e| anyhow::anyhow!(e))?)
+            Ok(lhs.broadcast_matmul(rhs).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
         fn reshape(t: &Self::RawTensor, shape: &[usize]) -> Result<Self::RawTensor> {
-            Ok(t.reshape(shape).map_err(|e| anyhow::anyhow!(e))?)
+            Ok(t.reshape(shape).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
         fn transpose(t: &Self::RawTensor, dim1: usize, dim2: usize) -> Result<Self::RawTensor> {
-            Ok(t.transpose(dim1, dim2).map_err(|e| anyhow::anyhow!(e))?)
+            Ok(t.transpose(dim1, dim2).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
         fn flatten(
             t: &Self::RawTensor,
@@ -352,7 +360,7 @@ pub mod candle {
             end_dim: usize,
         ) -> Result<Self::RawTensor> {
             Ok(t.flatten(start_dim, end_dim)
-                .map_err(|e| anyhow::anyhow!(e))?)
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
         fn narrow(
@@ -361,11 +369,11 @@ pub mod candle {
             start: usize,
             len: usize,
         ) -> Result<Self::RawTensor> {
-            Ok(t.narrow(dim, start, len).map_err(|e| anyhow::anyhow!(e))?)
+            Ok(t.narrow(dim, start, len).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
         fn squeeze(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor> {
-            Ok(t.squeeze(dim).map_err(|e| anyhow::anyhow!(e))?)
+            Ok(t.squeeze(dim).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
         fn conv1d(
@@ -377,7 +385,7 @@ pub mod candle {
             dilation: usize,
         ) -> Result<Self::RawTensor> {
             Ok(t.conv1d(w, padding, stride, dilation, 1)
-                .map_err(|e| anyhow::anyhow!(e))?)
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
         fn conv2d(
@@ -389,7 +397,7 @@ pub mod candle {
             dilation: usize,
         ) -> Result<Self::RawTensor> {
             Ok(t.conv2d(weight, padding, stride, dilation, 1)
-                .map_err(|e| anyhow::anyhow!(e))?)
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
         fn conv_transpose2d(
@@ -402,7 +410,7 @@ pub mod candle {
             dilation: usize,
         ) -> Result<Self::RawTensor> {
             Ok(t.conv_transpose2d(weight, padding, output_padding, stride, dilation)
-                .map_err(|e| anyhow::anyhow!(e))?)
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
         fn max_pool2d(
@@ -414,7 +422,7 @@ pub mod candle {
                 (kernel_size.0, kernel_size.1),
                 (stride.0, stride.1),
             )
-            .map_err(|e| anyhow::anyhow!(e))?)
+            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
         fn avg_pool2d(
@@ -426,26 +434,26 @@ pub mod candle {
                 (kernel_size.0, kernel_size.1),
                 (stride.0, stride.1),
             )
-            .map_err(|e| anyhow::anyhow!(e))?)
+            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
         fn backward(loss: &Self::RawTensor) -> Result<Self::Grads> {
-            Ok(loss.backward().map_err(|e| anyhow::anyhow!(e))?)
+            Ok(loss.backward().map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
         fn step_sgd(params: &mut [Self::RawVar], grads: &Self::Grads, lr: f64) -> Result<()> {
             use candle_nn::optim::Optimizer;
             let mut sgd =
-                candle_nn::optim::SGD::new(params.to_vec(), lr).map_err(|e| anyhow::anyhow!(e))?;
-            sgd.step(grads).map_err(|e| anyhow::anyhow!(e))?;
+                candle_nn::optim::SGD::new(params.to_vec(), lr).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+            sgd.step(grads).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
             Ok(())
         }
 
         fn step_adamw(params: &mut [Self::RawVar], grads: &Self::Grads, lr: f64) -> Result<()> {
             use candle_nn::optim::Optimizer;
             let mut adamw = candle_nn::optim::AdamW::new_lr(params.to_vec(), lr)
-                .map_err(|e| anyhow::anyhow!(e))?;
-            adamw.step(grads).map_err(|e| anyhow::anyhow!(e))?;
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+            adamw.step(grads).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
             Ok(())
         }
     }
@@ -477,10 +485,20 @@ pub mod ndarray_backend {
     use super::*;
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-    pub struct NdarrayBackend;
+    pub struct NdarrayBackend<T, D>(core::marker::PhantomData<(T, D)>);
 
-    impl<S: Shape> Backend<S> for NdarrayBackend {
-        type RawTensor = ndarray::ArrayD<f32>; // STUB: forced to f32
+#[derive(Clone, Debug)]
+pub struct NdarrayVar(pub ndarray::ArrayD<f32>);
+#[derive(Clone, Debug)]
+pub struct NdarrayGrads;
+
+    impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device> kindle_core::prelude::Backend for NdarrayBackend<T, D> {
+        type Device = D;
+        type DType = T;
+        type BackendWithDType<NewT: kindle_core::prelude::DType> = NdarrayBackend<NewT, D>;
+        type BackendWithDevice<NewD: kindle_core::prelude::Device> = NdarrayBackend<T, NewD>;
+        
+        type RawTensor = ndarray::ArrayD<f32>;
         type RawVar = NdarrayVar;
         type Grads = NdarrayGrads;
 
@@ -489,10 +507,10 @@ pub mod ndarray_backend {
         }
 
         fn var_as_tensor(var: &Self::RawVar) -> Result<Self::RawTensor> {
-            Ok(var.clone())
+            Ok(var.0.clone())
         }
         fn var_from_tensor(t: &Self::RawTensor) -> Result<Self::RawVar> {
-            Ok(t.clone())
+            Ok(NdarrayVar(t.clone()))
         }
 
         fn zeros(
@@ -585,7 +603,7 @@ pub mod ndarray_backend {
             })
         }
         fn abs(t: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Ok(t.mapv(|x| x.abs()))
+            Ok(t.mapv(|x: f32| x.abs()))
         }
         fn neg(_t: &Self::RawTensor) -> Result<Self::RawTensor> {
             Err(Error::UnsupportedBackendOperation {

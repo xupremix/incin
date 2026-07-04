@@ -23,7 +23,7 @@ impl HuggingFaceHub {
         repo_id: &str,
         filename: &str,
         candle_device: &candle_core::Device,
-    ) -> Result<std::collections::HashMap<String, Tensor<Dyn, CandleBackend>>> {
+    ) -> Result<std::collections::HashMap<String, Tensor<Dyn, CandleBackend<f32, Cpu>>>> {
         let path = Self::download(repo_id, filename).await?;
 
         let loaded = load(&path, candle_device).map_err(anyhow::Error::from)?;
@@ -33,7 +33,7 @@ impl HuggingFaceHub {
         for (name, tensor) in loaded {
             let dims = tensor.dims().to_vec();
             // Wrap in our dynamic Tensor
-            let kindle_tensor = Tensor::<Dyn, CandleBackend, f32, Cpu, Grad>::from_parts(
+            let kindle_tensor = Tensor::<Dyn, CandleBackend<f32, Cpu>, Grad>::from_parts(
                 tensor,
                 dims,
                 core::marker::PhantomData,

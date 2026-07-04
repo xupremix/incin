@@ -1,66 +1,785 @@
 error[E0433]: failed to resolve: use of unresolved module or unlinked crate `alloc`
-  --> tests/ui/dtype_mismatch.rs:37:60
+  --> tests/ui/dtype_mismatch.rs:42:60
    |
-37 |     let t1: Tensor<Dyn, DummyBackend, f32> = Tensor::zeros(alloc::vec![2]).unwrap();
+42 |     let t1: Tensor<Dyn, DummyBackend, f32> = Tensor::zeros(alloc::vec![2]).unwrap();
    |                                                            ^^^^^ use of unresolved module or unlinked crate `alloc`
 
 error[E0433]: failed to resolve: use of unresolved module or unlinked crate `alloc`
-  --> tests/ui/dtype_mismatch.rs:38:60
+  --> tests/ui/dtype_mismatch.rs:43:60
    |
-38 |     let t2: Tensor<Dyn, DummyBackend, f64> = Tensor::zeros(alloc::vec![2]).unwrap();
+43 |     let t2: Tensor<Dyn, DummyBackend, f64> = Tensor::zeros(alloc::vec![2]).unwrap();
    |                                                            ^^^^^ use of unresolved module or unlinked crate `alloc`
 
-error[E0046]: not all trait items implemented, missing: `RawVar`, `var_as_tensor`, `var_from_tensor`, `var_zeros`, `var_ones`, `var_rand`, `tensor_to_device`, `var_to_device`, `var_randn`, `exp`, `neg`, `sqrt`, `log`, `tanh`, `sigmoid`, `swish`, `softmax`, `mul_scalar`, `add_scalar`, `sum_all`, `mean_all`, `stack`, `concat`, `layer_norm`, `batch_norm`, `narrow`, `squeeze`, `conv2d`, `Grads`, `backward`, `step_sgd`, `step_adamw`
+error[E0271]: type mismatch resolving `<DummyBackend as Backend>::DType == NewT`
+ --> tests/ui/dtype_mismatch.rs:7:64
+  |
+7 |     type BackendWithDType<NewT: kindle_core::prelude::DType> = DummyBackend;
+  |                           ---- expected this type parameter    ^^^^^^^^^^^^ type mismatch resolving `<DummyBackend as Backend>::DType == NewT`
+  |
+note: expected this to be `NewT`
+ --> tests/ui/dtype_mismatch.rs:6:18
+  |
+6 |     type DType = f32;
+  |                  ^^^
+  = note: expected type parameter `NewT`
+                       found type `f32`
+note: required by a bound in `kindle_core::prelude::Backend::BackendWithDType`
+ --> src/tensor/backend.rs
+  |
+  |     type BackendWithDType<NewT: super::dtype::DType>: Backend<DType = NewT, Device = Self::Device, RawTensor = Self::RawTensor, RawVa...
+  |                                                               ^^^^^^^^^^^^ required by this bound in `Backend::BackendWithDType`
+
+error[E0277]: the trait bound `DummyBackend: Clone` is not satisfied
+ --> tests/ui/dtype_mismatch.rs:7:64
+  |
+7 |     type BackendWithDType<NewT: kindle_core::prelude::DType> = DummyBackend;
+  |                                                                ^^^^^^^^^^^^ the trait `Clone` is not implemented for `DummyBackend`
+  |
+  = help: the trait `kindle_core::prelude::Backend` is implemented for `DummyBackend`
+  = note: required for `<DummyBackend as kindle_core::prelude::Backend>::BackendWithDType<NewT>` to implement `kindle_core::prelude::Backend`
+note: required by a bound in `kindle_core::prelude::Backend::BackendWithDType`
+ --> src/tensor/backend.rs
+  |
+  | ...pe>: Backend<DType = NewT, Device = Self::Device, RawTensor = Self::RawTensor, RawVar = Self::RawVar, Grads = Self::Grads>;
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `Backend::BackendWithDType`
+help: consider annotating `DummyBackend` with `#[derive(Clone)]`
+  |
+3 + #[derive(Clone)]
+4 | pub struct DummyBackend;
+  |
+
+error[E0271]: type mismatch resolving `<DummyBackend as Backend>::Device == NewD`
+ --> tests/ui/dtype_mismatch.rs:8:66
+  |
+8 |     type BackendWithDevice<NewD: kindle_core::prelude::Device> = DummyBackend;
+  |                            ---- expected this type parameter     ^^^^^^^^^^^^ type mismatch resolving `<DummyBackend as Backend>::Device == NewD`
+  |
+note: expected this to be `NewD`
+ --> tests/ui/dtype_mismatch.rs:5:19
+  |
+5 |     type Device = Cpu;
+  |                   ^^^
+  = note: expected type parameter `NewD`
+                     found struct `kindle_core::prelude::Cpu`
+note: required by a bound in `kindle_core::prelude::Backend::BackendWithDevice`
+ --> src/tensor/backend.rs
+  |
+  | ...uper::device::Device>: Backend<Device = NewD, DType = Self::DType, RawTensor = Self::RawTensor, RawVar = Self::RawVar, Grads = Sel...
+  |                                   ^^^^^^^^^^^^^ required by this bound in `Backend::BackendWithDevice`
+
+error[E0277]: the trait bound `DummyBackend: Clone` is not satisfied
+ --> tests/ui/dtype_mismatch.rs:8:66
+  |
+8 |     type BackendWithDevice<NewD: kindle_core::prelude::Device> = DummyBackend;
+  |                                                                  ^^^^^^^^^^^^ the trait `Clone` is not implemented for `DummyBackend`
+  |
+  = help: the trait `kindle_core::prelude::Backend` is implemented for `DummyBackend`
+  = note: required for `<DummyBackend as kindle_core::prelude::Backend>::BackendWithDevice<NewD>` to implement `kindle_core::prelude::Backend`
+note: required by a bound in `kindle_core::prelude::Backend::BackendWithDevice`
+ --> src/tensor/backend.rs
+  |
+  | ...ce>: Backend<Device = NewD, DType = Self::DType, RawTensor = Self::RawTensor, RawVar = Self::RawVar, Grads = Self::Grads>;
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `Backend::BackendWithDevice`
+help: consider annotating `DummyBackend` with `#[derive(Clone)]`
+  |
+3 + #[derive(Clone)]
+4 | pub struct DummyBackend;
+  |
+
+error[E0277]: the trait bound `DummyBackend: Clone` is not satisfied
+  --> tests/ui/dtype_mismatch.rs:11:5
+   |
+11 |     fn zeros(_shape: &[usize], _dtype: KindleDType, _device: &KindleDevice) -> Result<Self::RawTensor> { Ok(()) }
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `DummyBackend`
+   |
+note: required by a bound in `kindle_core::prelude::Backend`
+  --> src/tensor/backend.rs
+   |
+   | pub trait Backend: Clone + 'static {
+   |                    ^^^^^ required by this bound in `Backend`
+help: consider annotating `DummyBackend` with `#[derive(Clone)]`
+   |
+ 3 + #[derive(Clone)]
+ 4 | pub struct DummyBackend;
+   |
+
+error[E0277]: the trait bound `DummyBackend: Clone` is not satisfied
+  --> tests/ui/dtype_mismatch.rs:12:5
+   |
+12 |     fn ones(_shape: &[usize], _dtype: KindleDType, _device: &KindleDevice) -> Result<Self::RawTensor> { Ok(()) }
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `DummyBackend`
+   |
+note: required by a bound in `kindle_core::prelude::Backend`
+  --> src/tensor/backend.rs
+   |
+   | pub trait Backend: Clone + 'static {
+   |                    ^^^^^ required by this bound in `Backend`
+help: consider annotating `DummyBackend` with `#[derive(Clone)]`
+   |
+ 3 + #[derive(Clone)]
+ 4 | pub struct DummyBackend;
+   |
+
+error[E0277]: the trait bound `DummyBackend: Clone` is not satisfied
+  --> tests/ui/dtype_mismatch.rs:13:5
+   |
+13 |     fn rand(_shape: &[usize], _dtype: KindleDType, _device: &KindleDevice) -> Result<Self::RawTensor> { Ok(()) }
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `DummyBackend`
+   |
+note: required by a bound in `kindle_core::prelude::Backend`
+  --> src/tensor/backend.rs
+   |
+   | pub trait Backend: Clone + 'static {
+   |                    ^^^^^ required by this bound in `Backend`
+help: consider annotating `DummyBackend` with `#[derive(Clone)]`
+   |
+ 3 + #[derive(Clone)]
+ 4 | pub struct DummyBackend;
+   |
+
+error[E0277]: the trait bound `DummyBackend: Clone` is not satisfied
+  --> tests/ui/dtype_mismatch.rs:14:5
+   |
+14 |     fn randn(_shape: &[usize], _dtype: KindleDType, _device: &KindleDevice) -> Result<Self::RawTensor> { Ok(()) }
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `DummyBackend`
+   |
+note: required by a bound in `kindle_core::prelude::Backend`
+  --> src/tensor/backend.rs
+   |
+   | pub trait Backend: Clone + 'static {
+   |                    ^^^^^ required by this bound in `Backend`
+help: consider annotating `DummyBackend` with `#[derive(Clone)]`
+   |
+ 3 + #[derive(Clone)]
+ 4 | pub struct DummyBackend;
+   |
+
+error[E0277]: the trait bound `DummyBackend: Clone` is not satisfied
+  --> tests/ui/dtype_mismatch.rs:15:5
+   |
+15 |     fn relu(_t: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(()) }
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `DummyBackend`
+   |
+note: required by a bound in `kindle_core::prelude::Backend`
+  --> src/tensor/backend.rs
+   |
+   | pub trait Backend: Clone + 'static {
+   |                    ^^^^^ required by this bound in `Backend`
+help: consider annotating `DummyBackend` with `#[derive(Clone)]`
+   |
+ 3 + #[derive(Clone)]
+ 4 | pub struct DummyBackend;
+   |
+
+error[E0277]: the trait bound `DummyBackend: Clone` is not satisfied
+  --> tests/ui/dtype_mismatch.rs:16:5
+   |
+16 |     fn gelu(_t: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(()) }
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `DummyBackend`
+   |
+note: required by a bound in `kindle_core::prelude::Backend`
+  --> src/tensor/backend.rs
+   |
+   | pub trait Backend: Clone + 'static {
+   |                    ^^^^^ required by this bound in `Backend`
+help: consider annotating `DummyBackend` with `#[derive(Clone)]`
+   |
+ 3 + #[derive(Clone)]
+ 4 | pub struct DummyBackend;
+   |
+
+error[E0277]: the trait bound `DummyBackend: Clone` is not satisfied
+  --> tests/ui/dtype_mismatch.rs:17:5
+   |
+17 |     fn abs(_t: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(()) }
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `DummyBackend`
+   |
+note: required by a bound in `kindle_core::prelude::Backend`
+  --> src/tensor/backend.rs
+   |
+   | pub trait Backend: Clone + 'static {
+   |                    ^^^^^ required by this bound in `Backend`
+help: consider annotating `DummyBackend` with `#[derive(Clone)]`
+   |
+ 3 + #[derive(Clone)]
+ 4 | pub struct DummyBackend;
+   |
+
+error[E0277]: the trait bound `DummyBackend: Clone` is not satisfied
+  --> tests/ui/dtype_mismatch.rs:18:5
+   |
+18 |     fn add(_lhs: &Self::RawTensor, _rhs: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(()) }
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `DummyBackend`
+   |
+note: required by a bound in `kindle_core::prelude::Backend`
+  --> src/tensor/backend.rs
+   |
+   | pub trait Backend: Clone + 'static {
+   |                    ^^^^^ required by this bound in `Backend`
+help: consider annotating `DummyBackend` with `#[derive(Clone)]`
+   |
+ 3 + #[derive(Clone)]
+ 4 | pub struct DummyBackend;
+   |
+
+error[E0277]: the trait bound `DummyBackend: Clone` is not satisfied
+  --> tests/ui/dtype_mismatch.rs:19:5
+   |
+19 |     fn sub(_lhs: &Self::RawTensor, _rhs: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(()) }
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `DummyBackend`
+   |
+note: required by a bound in `kindle_core::prelude::Backend`
+  --> src/tensor/backend.rs
+   |
+   | pub trait Backend: Clone + 'static {
+   |                    ^^^^^ required by this bound in `Backend`
+help: consider annotating `DummyBackend` with `#[derive(Clone)]`
+   |
+ 3 + #[derive(Clone)]
+ 4 | pub struct DummyBackend;
+   |
+
+error[E0277]: the trait bound `DummyBackend: Clone` is not satisfied
+  --> tests/ui/dtype_mismatch.rs:20:5
+   |
+20 |     fn mul(_lhs: &Self::RawTensor, _rhs: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(()) }
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `DummyBackend`
+   |
+note: required by a bound in `kindle_core::prelude::Backend`
+  --> src/tensor/backend.rs
+   |
+   | pub trait Backend: Clone + 'static {
+   |                    ^^^^^ required by this bound in `Backend`
+help: consider annotating `DummyBackend` with `#[derive(Clone)]`
+   |
+ 3 + #[derive(Clone)]
+ 4 | pub struct DummyBackend;
+   |
+
+error[E0277]: the trait bound `DummyBackend: Clone` is not satisfied
+  --> tests/ui/dtype_mismatch.rs:21:5
+   |
+21 |     fn div(_lhs: &Self::RawTensor, _rhs: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(()) }
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `DummyBackend`
+   |
+note: required by a bound in `kindle_core::prelude::Backend`
+  --> src/tensor/backend.rs
+   |
+   | pub trait Backend: Clone + 'static {
+   |                    ^^^^^ required by this bound in `Backend`
+help: consider annotating `DummyBackend` with `#[derive(Clone)]`
+   |
+ 3 + #[derive(Clone)]
+ 4 | pub struct DummyBackend;
+   |
+
+error[E0277]: the trait bound `DummyBackend: Clone` is not satisfied
+  --> tests/ui/dtype_mismatch.rs:22:5
+   |
+22 |     fn matmul(_lhs: &Self::RawTensor, _rhs: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(()) }
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `DummyBackend`
+   |
+note: required by a bound in `kindle_core::prelude::Backend`
+  --> src/tensor/backend.rs
+   |
+   | pub trait Backend: Clone + 'static {
+   |                    ^^^^^ required by this bound in `Backend`
+help: consider annotating `DummyBackend` with `#[derive(Clone)]`
+   |
+ 3 + #[derive(Clone)]
+ 4 | pub struct DummyBackend;
+   |
+
+error[E0277]: the trait bound `DummyBackend: Clone` is not satisfied
+  --> tests/ui/dtype_mismatch.rs:23:5
+   |
+23 |     fn reshape(_t: &Self::RawTensor, _shape: &[usize]) -> Result<Self::RawTensor> { Ok(()) }
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `DummyBackend`
+   |
+note: required by a bound in `kindle_core::prelude::Backend`
+  --> src/tensor/backend.rs
+   |
+   | pub trait Backend: Clone + 'static {
+   |                    ^^^^^ required by this bound in `Backend`
+help: consider annotating `DummyBackend` with `#[derive(Clone)]`
+   |
+ 3 + #[derive(Clone)]
+ 4 | pub struct DummyBackend;
+   |
+
+error[E0277]: the trait bound `DummyBackend: Clone` is not satisfied
+  --> tests/ui/dtype_mismatch.rs:24:5
+   |
+24 |     fn max_all(_t: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(()) }
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `DummyBackend`
+   |
+note: required by a bound in `kindle_core::prelude::Backend`
+  --> src/tensor/backend.rs
+   |
+   | pub trait Backend: Clone + 'static {
+   |                    ^^^^^ required by this bound in `Backend`
+help: consider annotating `DummyBackend` with `#[derive(Clone)]`
+   |
+ 3 + #[derive(Clone)]
+ 4 | pub struct DummyBackend;
+   |
+
+error[E0277]: the trait bound `DummyBackend: Clone` is not satisfied
+  --> tests/ui/dtype_mismatch.rs:25:5
+   |
+25 |     fn min_all(_t: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(()) }
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `DummyBackend`
+   |
+note: required by a bound in `kindle_core::prelude::Backend`
+  --> src/tensor/backend.rs
+   |
+   | pub trait Backend: Clone + 'static {
+   |                    ^^^^^ required by this bound in `Backend`
+help: consider annotating `DummyBackend` with `#[derive(Clone)]`
+   |
+ 3 + #[derive(Clone)]
+ 4 | pub struct DummyBackend;
+   |
+
+error[E0277]: the trait bound `DummyBackend: Clone` is not satisfied
+  --> tests/ui/dtype_mismatch.rs:26:5
+   |
+26 |     fn sum_dim(_t: &Self::RawTensor, _dim: usize) -> Result<Self::RawTensor> { Ok(()) }
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `DummyBackend`
+   |
+note: required by a bound in `kindle_core::prelude::Backend`
+  --> src/tensor/backend.rs
+   |
+   | pub trait Backend: Clone + 'static {
+   |                    ^^^^^ required by this bound in `Backend`
+help: consider annotating `DummyBackend` with `#[derive(Clone)]`
+   |
+ 3 + #[derive(Clone)]
+ 4 | pub struct DummyBackend;
+   |
+
+error[E0277]: the trait bound `DummyBackend: Clone` is not satisfied
+  --> tests/ui/dtype_mismatch.rs:27:5
+   |
+27 |     fn sum_keepdim(_t: &Self::RawTensor, _dim: usize) -> Result<Self::RawTensor> { Ok(()) }
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `DummyBackend`
+   |
+note: required by a bound in `kindle_core::prelude::Backend`
+  --> src/tensor/backend.rs
+   |
+   | pub trait Backend: Clone + 'static {
+   |                    ^^^^^ required by this bound in `Backend`
+help: consider annotating `DummyBackend` with `#[derive(Clone)]`
+   |
+ 3 + #[derive(Clone)]
+ 4 | pub struct DummyBackend;
+   |
+
+error[E0277]: the trait bound `DummyBackend: Clone` is not satisfied
+  --> tests/ui/dtype_mismatch.rs:28:5
+   |
+28 |     fn mean_dim(_t: &Self::RawTensor, _dim: usize) -> Result<Self::RawTensor> { Ok(()) }
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `DummyBackend`
+   |
+note: required by a bound in `kindle_core::prelude::Backend`
+  --> src/tensor/backend.rs
+   |
+   | pub trait Backend: Clone + 'static {
+   |                    ^^^^^ required by this bound in `Backend`
+help: consider annotating `DummyBackend` with `#[derive(Clone)]`
+   |
+ 3 + #[derive(Clone)]
+ 4 | pub struct DummyBackend;
+   |
+
+error[E0277]: the trait bound `DummyBackend: Clone` is not satisfied
+  --> tests/ui/dtype_mismatch.rs:29:5
+   |
+29 |     fn mean_keepdim(_t: &Self::RawTensor, _dim: usize) -> Result<Self::RawTensor> { Ok(()) }
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `DummyBackend`
+   |
+note: required by a bound in `kindle_core::prelude::Backend`
+  --> src/tensor/backend.rs
+   |
+   | pub trait Backend: Clone + 'static {
+   |                    ^^^^^ required by this bound in `Backend`
+help: consider annotating `DummyBackend` with `#[derive(Clone)]`
+   |
+ 3 + #[derive(Clone)]
+ 4 | pub struct DummyBackend;
+   |
+
+error[E0277]: the trait bound `DummyBackend: Clone` is not satisfied
+  --> tests/ui/dtype_mismatch.rs:30:5
+   |
+30 |     fn max_dim(_t: &Self::RawTensor, _dim: usize) -> Result<Self::RawTensor> { Ok(()) }
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `DummyBackend`
+   |
+note: required by a bound in `kindle_core::prelude::Backend`
+  --> src/tensor/backend.rs
+   |
+   | pub trait Backend: Clone + 'static {
+   |                    ^^^^^ required by this bound in `Backend`
+help: consider annotating `DummyBackend` with `#[derive(Clone)]`
+   |
+ 3 + #[derive(Clone)]
+ 4 | pub struct DummyBackend;
+   |
+
+error[E0277]: the trait bound `DummyBackend: Clone` is not satisfied
+  --> tests/ui/dtype_mismatch.rs:31:5
+   |
+31 |     fn max_keepdim(_t: &Self::RawTensor, _dim: usize) -> Result<Self::RawTensor> { Ok(()) }
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `DummyBackend`
+   |
+note: required by a bound in `kindle_core::prelude::Backend`
+  --> src/tensor/backend.rs
+   |
+   | pub trait Backend: Clone + 'static {
+   |                    ^^^^^ required by this bound in `Backend`
+help: consider annotating `DummyBackend` with `#[derive(Clone)]`
+   |
+ 3 + #[derive(Clone)]
+ 4 | pub struct DummyBackend;
+   |
+
+error[E0277]: the trait bound `DummyBackend: Clone` is not satisfied
+  --> tests/ui/dtype_mismatch.rs:32:5
+   |
+32 |     fn min_dim(_t: &Self::RawTensor, _dim: usize) -> Result<Self::RawTensor> { Ok(()) }
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `DummyBackend`
+   |
+note: required by a bound in `kindle_core::prelude::Backend`
+  --> src/tensor/backend.rs
+   |
+   | pub trait Backend: Clone + 'static {
+   |                    ^^^^^ required by this bound in `Backend`
+help: consider annotating `DummyBackend` with `#[derive(Clone)]`
+   |
+ 3 + #[derive(Clone)]
+ 4 | pub struct DummyBackend;
+   |
+
+error[E0277]: the trait bound `DummyBackend: Clone` is not satisfied
+  --> tests/ui/dtype_mismatch.rs:33:5
+   |
+33 |     fn min_keepdim(_t: &Self::RawTensor, _dim: usize) -> Result<Self::RawTensor> { Ok(()) }
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `DummyBackend`
+   |
+note: required by a bound in `kindle_core::prelude::Backend`
+  --> src/tensor/backend.rs
+   |
+   | pub trait Backend: Clone + 'static {
+   |                    ^^^^^ required by this bound in `Backend`
+help: consider annotating `DummyBackend` with `#[derive(Clone)]`
+   |
+ 3 + #[derive(Clone)]
+ 4 | pub struct DummyBackend;
+   |
+
+error[E0277]: the trait bound `DummyBackend: Clone` is not satisfied
+  --> tests/ui/dtype_mismatch.rs:34:5
+   |
+34 |     fn to_dtype(_t: &Self::RawTensor, _dtype: KindleDType) -> Result<Self::RawTensor> { Ok(()) }
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `DummyBackend`
+   |
+note: required by a bound in `kindle_core::prelude::Backend`
+  --> src/tensor/backend.rs
+   |
+   | pub trait Backend: Clone + 'static {
+   |                    ^^^^^ required by this bound in `Backend`
+help: consider annotating `DummyBackend` with `#[derive(Clone)]`
+   |
+ 3 + #[derive(Clone)]
+ 4 | pub struct DummyBackend;
+   |
+
+error[E0277]: the trait bound `DummyBackend: Clone` is not satisfied
+  --> tests/ui/dtype_mismatch.rs:35:5
+   |
+35 |     fn broadcast_as(_t: &Self::RawTensor, _shape: &[usize]) -> Result<Self::RawTensor> { Ok(()) }
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `DummyBackend`
+   |
+note: required by a bound in `kindle_core::prelude::Backend`
+  --> src/tensor/backend.rs
+   |
+   | pub trait Backend: Clone + 'static {
+   |                    ^^^^^ required by this bound in `Backend`
+help: consider annotating `DummyBackend` with `#[derive(Clone)]`
+   |
+ 3 + #[derive(Clone)]
+ 4 | pub struct DummyBackend;
+   |
+
+error[E0277]: the trait bound `DummyBackend: Clone` is not satisfied
+  --> tests/ui/dtype_mismatch.rs:36:5
+   |
+36 |     fn broadcast_left(_t: &Self::RawTensor, _shape: &[usize]) -> Result<Self::RawTensor> { Ok(()) }
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `DummyBackend`
+   |
+note: required by a bound in `kindle_core::prelude::Backend`
+  --> src/tensor/backend.rs
+   |
+   | pub trait Backend: Clone + 'static {
+   |                    ^^^^^ required by this bound in `Backend`
+help: consider annotating `DummyBackend` with `#[derive(Clone)]`
+   |
+ 3 + #[derive(Clone)]
+ 4 | pub struct DummyBackend;
+   |
+
+error[E0277]: the trait bound `DummyBackend: Clone` is not satisfied
+  --> tests/ui/dtype_mismatch.rs:37:5
+   |
+37 |     fn transpose(_t: &Self::RawTensor, _dim1: usize, _dim2: usize) -> Result<Self::RawTensor> { Ok(()) }
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `DummyBackend`
+   |
+note: required by a bound in `kindle_core::prelude::Backend`
+  --> src/tensor/backend.rs
+   |
+   | pub trait Backend: Clone + 'static {
+   |                    ^^^^^ required by this bound in `Backend`
+help: consider annotating `DummyBackend` with `#[derive(Clone)]`
+   |
+ 3 + #[derive(Clone)]
+ 4 | pub struct DummyBackend;
+   |
+
+error[E0277]: the trait bound `DummyBackend: Clone` is not satisfied
+  --> tests/ui/dtype_mismatch.rs:38:5
+   |
+38 |     fn flatten(_t: &Self::RawTensor, _start: usize, _end: usize) -> Result<Self::RawTensor> { Ok(()) }
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `DummyBackend`
+   |
+note: required by a bound in `kindle_core::prelude::Backend`
+  --> src/tensor/backend.rs
+   |
+   | pub trait Backend: Clone + 'static {
+   |                    ^^^^^ required by this bound in `Backend`
+help: consider annotating `DummyBackend` with `#[derive(Clone)]`
+   |
+ 3 + #[derive(Clone)]
+ 4 | pub struct DummyBackend;
+   |
+
+error[E0046]: not all trait items implemented, missing: `RawVar`, `shape`, `var_as_tensor`, `var_from_tensor`, `var_zeros`, `var_ones`, `var_rand`, `tensor_to_device`, `var_to_device`, `var_randn`, `exp`, `neg`, `sqrt`, `log`, `tanh`, `sigmoid`, `swish`, `softmax`, `mul_scalar`, `add_scalar`, `sum_all`, `mean_all`, `stack`, `concat`, `layer_norm`, `batch_norm`, `embedding`, `narrow`, `squeeze`, `conv1d`, `conv2d`, `conv_transpose2d`, `max_pool2d`, `avg_pool2d`, `Grads`, `backward`, `step_sgd`, `step_adamw`
  --> tests/ui/dtype_mismatch.rs:4:1
   |
-4 | impl<S: Shape> Backend<S> for DummyBackend {
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ missing `RawVar`, `var_as_tensor`, `var_from_tensor`, `var_zeros`, `var_ones`, `var_rand`, `tensor_to_device`, `var_to_device`, `var_randn`, `exp`, `neg`, `sqrt`, `log`, `tanh`, `sigmoid`, `swish`, `softmax`, `mul_scalar`, `add_scalar`, `sum_all`, `mean_all`, `stack`, `concat`, `layer_norm`, `batch_norm`, `narrow`, `squeeze`, `conv2d`, `Grads`, `backward`, `step_sgd`, `step_adamw` in implementation
+4 | impl Backend for DummyBackend {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ missing `RawVar`, `shape`, `var_as_tensor`, `var_from_tensor`, `var_zeros`, `var_ones`, `var_rand`, `tensor_to_device`, `var_to_device`, `var_randn`, `exp`, `neg`, `sqrt`, `log`, `tanh`, `sigmoid`, `swish`, `softmax`, `mul_scalar`, `add_scalar`, `sum_all`, `mean_all`, `stack`, `concat`, `layer_norm`, `batch_norm`, `embedding`, `narrow`, `squeeze`, `conv1d`, `conv2d`, `conv_transpose2d`, `max_pool2d`, `avg_pool2d`, `Grads`, `backward`, `step_sgd`, `step_adamw` in implementation
   |
   = help: implement the missing item: `type RawVar = /* Type */;`
-  = help: implement the missing item: `fn var_as_tensor(_: &<Self as kindle_core::prelude::Backend<S>>::RawVar) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
-  = help: implement the missing item: `fn var_from_tensor(_: &<Self as kindle_core::prelude::Backend<S>>::RawTensor) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawVar, kindle_core::err::Error> { todo!() }`
-  = help: implement the missing item: `fn var_zeros(_: &[usize], _: kindle_core::prelude::KindleDType, _: &kindle_core::prelude::KindleDevice) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawVar, kindle_core::err::Error> { todo!() }`
-  = help: implement the missing item: `fn var_ones(_: &[usize], _: kindle_core::prelude::KindleDType, _: &kindle_core::prelude::KindleDevice) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawVar, kindle_core::err::Error> { todo!() }`
-  = help: implement the missing item: `fn var_rand(_: &[usize], _: kindle_core::prelude::KindleDType, _: &kindle_core::prelude::KindleDevice) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawVar, kindle_core::err::Error> { todo!() }`
-  = help: implement the missing item: `fn tensor_to_device(_: &<Self as kindle_core::prelude::Backend<S>>::RawTensor, _: &kindle_core::prelude::KindleDevice) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
-  = help: implement the missing item: `fn var_to_device(_: &<Self as kindle_core::prelude::Backend<S>>::RawVar, _: &kindle_core::prelude::KindleDevice) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawVar, kindle_core::err::Error> { todo!() }`
-  = help: implement the missing item: `fn var_randn(_: &[usize], _: kindle_core::prelude::KindleDType, _: &kindle_core::prelude::KindleDevice) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawVar, kindle_core::err::Error> { todo!() }`
-  = help: implement the missing item: `fn exp(_: &<Self as kindle_core::prelude::Backend<S>>::RawTensor) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
-  = help: implement the missing item: `fn neg(_: &<Self as kindle_core::prelude::Backend<S>>::RawTensor) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
-  = help: implement the missing item: `fn sqrt(_: &<Self as kindle_core::prelude::Backend<S>>::RawTensor) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
-  = help: implement the missing item: `fn log(_: &<Self as kindle_core::prelude::Backend<S>>::RawTensor) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
-  = help: implement the missing item: `fn tanh(_: &<Self as kindle_core::prelude::Backend<S>>::RawTensor) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
-  = help: implement the missing item: `fn sigmoid(_: &<Self as kindle_core::prelude::Backend<S>>::RawTensor) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
-  = help: implement the missing item: `fn swish(_: &<Self as kindle_core::prelude::Backend<S>>::RawTensor) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
-  = help: implement the missing item: `fn softmax(_: &<Self as kindle_core::prelude::Backend<S>>::RawTensor, _: usize) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
-  = help: implement the missing item: `fn mul_scalar(_: &<Self as kindle_core::prelude::Backend<S>>::RawTensor, _: f64) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
-  = help: implement the missing item: `fn add_scalar(_: &<Self as kindle_core::prelude::Backend<S>>::RawTensor, _: f64) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
-  = help: implement the missing item: `fn sum_all(_: &<Self as kindle_core::prelude::Backend<S>>::RawTensor) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
-  = help: implement the missing item: `fn mean_all(_: &<Self as kindle_core::prelude::Backend<S>>::RawTensor) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
-  = help: implement the missing item: `fn stack(_: &[&<Self as kindle_core::prelude::Backend<S>>::RawTensor], _: usize) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
-  = help: implement the missing item: `fn concat(_: &[&<Self as kindle_core::prelude::Backend<S>>::RawTensor], _: usize) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
-  = help: implement the missing item: `fn layer_norm(_: &<Self as kindle_core::prelude::Backend<S>>::RawTensor, _: &<Self as kindle_core::prelude::Backend<S>>::RawTensor, _: &<Self as kindle_core::prelude::Backend<S>>::RawTensor, _: f32) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
-  = help: implement the missing item: `fn batch_norm(_: &<Self as kindle_core::prelude::Backend<S>>::RawTensor, _: &<Self as kindle_core::prelude::Backend<S>>::RawTensor, _: &<Self as kindle_core::prelude::Backend<S>>::RawTensor, _: &<Self as kindle_core::prelude::Backend<S>>::RawTensor, _: &<Self as kindle_core::prelude::Backend<S>>::RawTensor, _: f32) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
-  = help: implement the missing item: `fn narrow(_: &<Self as kindle_core::prelude::Backend<S>>::RawTensor, _: usize, _: usize, _: usize) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
-  = help: implement the missing item: `fn squeeze(_: &<Self as kindle_core::prelude::Backend<S>>::RawTensor, _: usize) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
-  = help: implement the missing item: `fn conv2d(_: &<Self as kindle_core::prelude::Backend<S>>::RawTensor, _: &<Self as kindle_core::prelude::Backend<S>>::RawTensor, _: Option<&<Self as kindle_core::prelude::Backend<S>>::RawTensor>, _: usize, _: usize, _: usize) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn shape(_: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Vec<usize> { todo!() }`
+  = help: implement the missing item: `fn var_as_tensor(_: &<Self as kindle_core::prelude::Backend>::RawVar) -> std::result::Result<<Self as kindle_core::prelude::Backend>::RawTensor, kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn var_from_tensor(_: &<Self as kindle_core::prelude::Backend>::RawTensor) -> std::result::Result<<Self as kindle_core::prelude::Backend>::RawVar, kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn var_zeros(_: &[usize], _: kindle_core::prelude::KindleDType, _: &kindle_core::prelude::KindleDevice) -> std::result::Result<<Self as kindle_core::prelude::Backend>::RawVar, kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn var_ones(_: &[usize], _: kindle_core::prelude::KindleDType, _: &kindle_core::prelude::KindleDevice) -> std::result::Result<<Self as kindle_core::prelude::Backend>::RawVar, kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn var_rand(_: &[usize], _: kindle_core::prelude::KindleDType, _: &kindle_core::prelude::KindleDevice) -> std::result::Result<<Self as kindle_core::prelude::Backend>::RawVar, kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn tensor_to_device(_: &<Self as kindle_core::prelude::Backend>::RawTensor, _: &kindle_core::prelude::KindleDevice) -> std::result::Result<<Self as kindle_core::prelude::Backend>::RawTensor, kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn var_to_device(_: &<Self as kindle_core::prelude::Backend>::RawVar, _: &kindle_core::prelude::KindleDevice) -> std::result::Result<<Self as kindle_core::prelude::Backend>::RawVar, kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn var_randn(_: &[usize], _: kindle_core::prelude::KindleDType, _: &kindle_core::prelude::KindleDevice) -> std::result::Result<<Self as kindle_core::prelude::Backend>::RawVar, kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn exp(_: &<Self as kindle_core::prelude::Backend>::RawTensor) -> std::result::Result<<Self as kindle_core::prelude::Backend>::RawTensor, kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn neg(_: &<Self as kindle_core::prelude::Backend>::RawTensor) -> std::result::Result<<Self as kindle_core::prelude::Backend>::RawTensor, kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn sqrt(_: &<Self as kindle_core::prelude::Backend>::RawTensor) -> std::result::Result<<Self as kindle_core::prelude::Backend>::RawTensor, kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn log(_: &<Self as kindle_core::prelude::Backend>::RawTensor) -> std::result::Result<<Self as kindle_core::prelude::Backend>::RawTensor, kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn tanh(_: &<Self as kindle_core::prelude::Backend>::RawTensor) -> std::result::Result<<Self as kindle_core::prelude::Backend>::RawTensor, kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn sigmoid(_: &<Self as kindle_core::prelude::Backend>::RawTensor) -> std::result::Result<<Self as kindle_core::prelude::Backend>::RawTensor, kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn swish(_: &<Self as kindle_core::prelude::Backend>::RawTensor) -> std::result::Result<<Self as kindle_core::prelude::Backend>::RawTensor, kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn softmax(_: &<Self as kindle_core::prelude::Backend>::RawTensor, _: usize) -> std::result::Result<<Self as kindle_core::prelude::Backend>::RawTensor, kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn mul_scalar(_: &<Self as kindle_core::prelude::Backend>::RawTensor, _: f64) -> std::result::Result<<Self as kindle_core::prelude::Backend>::RawTensor, kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn add_scalar(_: &<Self as kindle_core::prelude::Backend>::RawTensor, _: f64) -> std::result::Result<<Self as kindle_core::prelude::Backend>::RawTensor, kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn sum_all(_: &<Self as kindle_core::prelude::Backend>::RawTensor) -> std::result::Result<<Self as kindle_core::prelude::Backend>::RawTensor, kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn mean_all(_: &<Self as kindle_core::prelude::Backend>::RawTensor) -> std::result::Result<<Self as kindle_core::prelude::Backend>::RawTensor, kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn stack(_: &[&<Self as kindle_core::prelude::Backend>::RawTensor], _: usize) -> std::result::Result<<Self as kindle_core::prelude::Backend>::RawTensor, kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn concat(_: &[&<Self as kindle_core::prelude::Backend>::RawTensor], _: usize) -> std::result::Result<<Self as kindle_core::prelude::Backend>::RawTensor, kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn layer_norm(_: &<Self as kindle_core::prelude::Backend>::RawTensor, _: &<Self as kindle_core::prelude::Backend>::RawTensor, _: &<Self as kindle_core::prelude::Backend>::RawTensor, _: f32) -> std::result::Result<<Self as kindle_core::prelude::Backend>::RawTensor, kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn batch_norm(_: &<Self as kindle_core::prelude::Backend>::RawTensor, _: &<Self as kindle_core::prelude::Backend>::RawTensor, _: &<Self as kindle_core::prelude::Backend>::RawTensor, _: &<Self as kindle_core::prelude::Backend>::RawTensor, _: &<Self as kindle_core::prelude::Backend>::RawTensor, _: f32) -> std::result::Result<<Self as kindle_core::prelude::Backend>::RawTensor, kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn embedding(_: &<Self as kindle_core::prelude::Backend>::RawTensor, _: &<Self as kindle_core::prelude::Backend>::RawTensor) -> std::result::Result<<Self as kindle_core::prelude::Backend>::RawTensor, kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn narrow(_: &<Self as kindle_core::prelude::Backend>::RawTensor, _: usize, _: usize, _: usize) -> std::result::Result<<Self as kindle_core::prelude::Backend>::RawTensor, kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn squeeze(_: &<Self as kindle_core::prelude::Backend>::RawTensor, _: usize) -> std::result::Result<<Self as kindle_core::prelude::Backend>::RawTensor, kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn conv1d(_: &<Self as kindle_core::prelude::Backend>::RawTensor, _: &<Self as kindle_core::prelude::Backend>::RawTensor, _: Option<&<Self as kindle_core::prelude::Backend>::RawTensor>, _: usize, _: usize, _: usize) -> std::result::Result<<Self as kindle_core::prelude::Backend>::RawTensor, kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn conv2d(_: &<Self as kindle_core::prelude::Backend>::RawTensor, _: &<Self as kindle_core::prelude::Backend>::RawTensor, _: Option<&<Self as kindle_core::prelude::Backend>::RawTensor>, _: usize, _: usize, _: usize) -> std::result::Result<<Self as kindle_core::prelude::Backend>::RawTensor, kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn conv_transpose2d(_: &<Self as kindle_core::prelude::Backend>::RawTensor, _: &<Self as kindle_core::prelude::Backend>::RawTensor, _: Option<&<Self as kindle_core::prelude::Backend>::RawTensor>, _: usize, _: usize, _: usize, _: usize) -> std::result::Result<<Self as kindle_core::prelude::Backend>::RawTensor, kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn max_pool2d(_: &<Self as kindle_core::prelude::Backend>::RawTensor, _: (usize, usize), _: (usize, usize)) -> std::result::Result<<Self as kindle_core::prelude::Backend>::RawTensor, kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn avg_pool2d(_: &<Self as kindle_core::prelude::Backend>::RawTensor, _: (usize, usize), _: (usize, usize)) -> std::result::Result<<Self as kindle_core::prelude::Backend>::RawTensor, kindle_core::err::Error> { todo!() }`
   = help: implement the missing item: `type Grads = /* Type */;`
-  = help: implement the missing item: `fn backward(_: &<Self as kindle_core::prelude::Backend<S>>::RawTensor) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::Grads, kindle_core::err::Error> { todo!() }`
-  = help: implement the missing item: `fn step_sgd(_: &mut [<Self as kindle_core::prelude::Backend<S>>::RawVar], _: &<Self as kindle_core::prelude::Backend<S>>::Grads, _: f64) -> std::result::Result<(), kindle_core::err::Error> { todo!() }`
-  = help: implement the missing item: `fn step_adamw(_: &mut [<Self as kindle_core::prelude::Backend<S>>::RawVar], _: &<Self as kindle_core::prelude::Backend<S>>::Grads, _: f64) -> std::result::Result<(), kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn backward(_: &<Self as kindle_core::prelude::Backend>::RawTensor) -> std::result::Result<<Self as kindle_core::prelude::Backend>::Grads, kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn step_sgd(_: &mut [<Self as kindle_core::prelude::Backend>::RawVar], _: &<Self as kindle_core::prelude::Backend>::Grads, _: f64) -> std::result::Result<(), kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn step_adamw(_: &mut [<Self as kindle_core::prelude::Backend>::RawVar], _: &<Self as kindle_core::prelude::Backend>::Grads, _: f64) -> std::result::Result<(), kindle_core::err::Error> { todo!() }`
 
-error[E0308]: mismatched types
-  --> tests/ui/dtype_mismatch.rs:41:12
+error[E0277]: the trait bound `DummyBackend: Clone` is not satisfied
+ --> tests/ui/dtype_mismatch.rs:4:18
+  |
+4 | impl Backend for DummyBackend {
+  |                  ^^^^^^^^^^^^ the trait `Clone` is not implemented for `DummyBackend`
+  |
+note: required by a bound in `kindle_core::prelude::Backend`
+ --> src/tensor/backend.rs
+  |
+  | pub trait Backend: Clone + 'static {
+  |                    ^^^^^ required by this bound in `Backend`
+help: consider annotating `DummyBackend` with `#[derive(Clone)]`
+  |
+3 + #[derive(Clone)]
+4 | pub struct DummyBackend;
+  |
+
+error[E0277]: the trait bound `f32: RequiresGrad` is not satisfied
+  --> tests/ui/dtype_mismatch.rs:42:13
    |
-41 |     t1.add(&t2).unwrap();
-   |        --- ^^^ expected `&Tensor<Dyn, DummyBackend>`, found `&Tensor<Dyn, DummyBackend, f64>`
-   |        |
-   |        arguments to this method are incorrect
+42 |     let t1: Tensor<Dyn, DummyBackend, f32> = Tensor::zeros(alloc::vec![2]).unwrap();
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `RequiresGrad` is not implemented for `f32`
    |
-   = note: expected reference `&kindle_core::prelude::Tensor<kindle_core::prelude::Dyn, DummyBackend, f32>`
-              found reference `&kindle_core::prelude::Tensor<kindle_core::prelude::Dyn, DummyBackend, f64>`
-note: method defined here
-  --> src/tensor/ops.rs
+   = help: the following other types implement trait `RequiresGrad`:
+             Grad
+             NoGrad
+             kindle_core::prelude::Dyn
+note: required by a bound in `kindle_core::prelude::Tensor`
+  --> src/tensor/base.rs
    |
-   | impl_binary_op!(Add, add, add);
-   |                      ^^^
+   | pub struct Tensor<
+   |            ------ required by a bound in this struct
+...
+   |     G: RequiresGrad = Grad,
+   |        ^^^^^^^^^^^^ required by this bound in `Tensor`
+
+error[E0277]: the trait bound `f32: RequiresGrad` is not satisfied
+  --> tests/ui/dtype_mismatch.rs:42:46
+   |
+42 |     let t1: Tensor<Dyn, DummyBackend, f32> = Tensor::zeros(alloc::vec![2]).unwrap();
+   |                                              ^^^^^^ the trait `RequiresGrad` is not implemented for `f32`
+   |
+   = help: the following other types implement trait `RequiresGrad`:
+             Grad
+             NoGrad
+             kindle_core::prelude::Dyn
+note: required by a bound in `kindle_core::prelude::Tensor`
+  --> src/tensor/base.rs
+   |
+   | pub struct Tensor<
+   |            ------ required by a bound in this struct
+...
+   |     G: RequiresGrad = Grad,
+   |        ^^^^^^^^^^^^ required by this bound in `Tensor`
+
+error[E0277]: the trait bound `f32: RequiresGrad` is not satisfied
+  --> tests/ui/dtype_mismatch.rs:42:46
+   |
+42 |     let t1: Tensor<Dyn, DummyBackend, f32> = Tensor::zeros(alloc::vec![2]).unwrap();
+   |                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `RequiresGrad` is not implemented for `f32`
+   |
+   = help: the following other types implement trait `RequiresGrad`:
+             Grad
+             NoGrad
+             kindle_core::prelude::Dyn
+   = note: required for `(kindle_core::prelude::Dyn, f32, kindle_core::prelude::Cpu, f32)` to implement `TensorArgs<kindle_core::prelude::Dyn, f32, kindle_core::prelude::Cpu, f32>`
+
+error[E0277]: the trait bound `f32: RequiresGrad` is not satisfied in `kindle_core::prelude::Tensor<kindle_core::prelude::Dyn, DummyBackend, f32>`
+  --> tests/ui/dtype_mismatch.rs:42:9
+   |
+42 |     let t1: Tensor<Dyn, DummyBackend, f32> = Tensor::zeros(alloc::vec![2]).unwrap();
+   |         ^^ within `kindle_core::prelude::Tensor<kindle_core::prelude::Dyn, DummyBackend, f32>`, the trait `RequiresGrad` is not implemented for `f32`
+   |
+   = help: the following other types implement trait `RequiresGrad`:
+             Grad
+             NoGrad
+             kindle_core::prelude::Dyn
+note: required because it appears within the type `kindle_core::prelude::Tensor<kindle_core::prelude::Dyn, DummyBackend, f32>`
+  --> src/tensor/base.rs
+   |
+   | pub struct Tensor<
+   |            ^^^^^^
+   = note: all local variables must have a statically known size
+help: consider borrowing here
+   |
+42 |     let t1: &Tensor<Dyn, DummyBackend, f32> = Tensor::zeros(alloc::vec![2]).unwrap();
+   |             +
+
+error[E0277]: the trait bound `f64: RequiresGrad` is not satisfied
+  --> tests/ui/dtype_mismatch.rs:43:13
+   |
+43 |     let t2: Tensor<Dyn, DummyBackend, f64> = Tensor::zeros(alloc::vec![2]).unwrap();
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `RequiresGrad` is not implemented for `f64`
+   |
+   = help: the following other types implement trait `RequiresGrad`:
+             Grad
+             NoGrad
+             kindle_core::prelude::Dyn
+note: required by a bound in `kindle_core::prelude::Tensor`
+  --> src/tensor/base.rs
+   |
+   | pub struct Tensor<
+   |            ------ required by a bound in this struct
+...
+   |     G: RequiresGrad = Grad,
+   |        ^^^^^^^^^^^^ required by this bound in `Tensor`
+
+error[E0599]: the method `add` exists for struct `kindle_core::prelude::Tensor<kindle_core::prelude::Dyn, DummyBackend, f32>`, but its trait bounds were not satisfied
+  --> tests/ui/dtype_mismatch.rs:46:8
+   |
+46 |     t1.add(&t2).unwrap();
+   |     ---^^^-----
+   |     |  |
+   |     |  this is an associated function, not a method
+   |     help: use associated function syntax instead: `kindle_core::prelude::Tensor<kindle_core::prelude::Dyn, DummyBackend, f32>::add(&t2)`
+   |
+   = note: found the following associated functions; to be used as methods, functions must have a `self` parameter
+note: the candidate is defined in the trait `kindle_core::prelude::Backend`
+  --> src/tensor/backend.rs
+   |
+   |     fn add(lhs: &Self::RawTensor, rhs: &Self::RawTensor) -> Result<Self::RawTensor>;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   = note: the following trait bounds were not satisfied:
+           `f32: RequiresGrad`
+
+error[E0277]: the trait bound `f64: RequiresGrad` is not satisfied
+  --> tests/ui/dtype_mismatch.rs:43:46
+   |
+43 |     let t2: Tensor<Dyn, DummyBackend, f64> = Tensor::zeros(alloc::vec![2]).unwrap();
+   |                                              ^^^^^^ the trait `RequiresGrad` is not implemented for `f64`
+   |
+   = help: the following other types implement trait `RequiresGrad`:
+             Grad
+             NoGrad
+             kindle_core::prelude::Dyn
+note: required by a bound in `kindle_core::prelude::Tensor`
+  --> src/tensor/base.rs
+   |
+   | pub struct Tensor<
+   |            ------ required by a bound in this struct
+...
+   |     G: RequiresGrad = Grad,
+   |        ^^^^^^^^^^^^ required by this bound in `Tensor`
+
+error[E0277]: the trait bound `f64: RequiresGrad` is not satisfied
+  --> tests/ui/dtype_mismatch.rs:43:46
+   |
+43 |     let t2: Tensor<Dyn, DummyBackend, f64> = Tensor::zeros(alloc::vec![2]).unwrap();
+   |                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `RequiresGrad` is not implemented for `f64`
+   |
+   = help: the following other types implement trait `RequiresGrad`:
+             Grad
+             NoGrad
+             kindle_core::prelude::Dyn
+   = note: required for `(kindle_core::prelude::Dyn, f32, kindle_core::prelude::Cpu, f64)` to implement `TensorArgs<kindle_core::prelude::Dyn, f32, kindle_core::prelude::Cpu, f64>`
+
+error[E0277]: the trait bound `f64: RequiresGrad` is not satisfied in `kindle_core::prelude::Tensor<kindle_core::prelude::Dyn, DummyBackend, f64>`
+  --> tests/ui/dtype_mismatch.rs:43:9
+   |
+43 |     let t2: Tensor<Dyn, DummyBackend, f64> = Tensor::zeros(alloc::vec![2]).unwrap();
+   |         ^^ within `kindle_core::prelude::Tensor<kindle_core::prelude::Dyn, DummyBackend, f64>`, the trait `RequiresGrad` is not implemented for `f64`
+   |
+   = help: the following other types implement trait `RequiresGrad`:
+             Grad
+             NoGrad
+             kindle_core::prelude::Dyn
+note: required because it appears within the type `kindle_core::prelude::Tensor<kindle_core::prelude::Dyn, DummyBackend, f64>`
+  --> src/tensor/base.rs
+   |
+   | pub struct Tensor<
+   |            ^^^^^^
+   = note: all local variables must have a statically known size
+help: consider borrowing here
+   |
+43 |     let t2: &Tensor<Dyn, DummyBackend, f64> = Tensor::zeros(alloc::vec![2]).unwrap();
+   |             +

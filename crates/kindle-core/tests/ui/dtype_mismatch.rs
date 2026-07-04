@@ -1,7 +1,12 @@
 use kindle_core::prelude::*;
 
 pub struct DummyBackend;
-impl<S: Shape> Backend<S> for DummyBackend {
+impl Backend for DummyBackend {
+    type Device = Cpu;
+    type DType = f32;
+    type BackendWithDType<NewT: kindle_core::prelude::DType> = DummyBackend;
+    type BackendWithDevice<NewD: kindle_core::prelude::Device> = DummyBackend;
+
     type RawTensor = ();
     fn zeros(_shape: &[usize], _dtype: KindleDType, _device: &KindleDevice) -> Result<Self::RawTensor> { Ok(()) }
     fn ones(_shape: &[usize], _dtype: KindleDType, _device: &KindleDevice) -> Result<Self::RawTensor> { Ok(()) }

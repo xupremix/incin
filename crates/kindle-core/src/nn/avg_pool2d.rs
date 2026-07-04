@@ -17,7 +17,7 @@ impl<K: Unsigned, S: Unsigned> AvgPool2d<K, S> {
     }
 }
 
-impl<K: Unsigned, S: Unsigned, B: Backend<Dyn>> Parameters<B> for AvgPool2d<K, S> {
+impl<K: Unsigned, S: Unsigned, B: Backend> Parameters<B> for AvgPool2d<K, S> {
     fn parameters(&self) -> Vec<B::RawVar> {
         Vec::new()
     }
@@ -27,7 +27,7 @@ impl<
     I: Shape + DynShape + crate::shapes::Pool2dShape<K, S>,
     K: Unsigned,
     S: Unsigned,
-    B: Backend<Dyn, RawTensor = <B as Backend<I>>::RawTensor> + Backend<I> + Backend<I::Output, RawTensor = <B as Backend<I>>::RawTensor>
+    B: Backend
 > Module<Tensor<I, B>> for AvgPool2d<K, S>
 {
     type Output = Tensor<I::Output, B>;
@@ -35,7 +35,7 @@ impl<
 
     #[inline]
     fn forward(&self, x: Tensor<I, B>) -> core::result::Result<Self::Output, Error> {
-        let out = <B as Backend<Dyn>>::avg_pool2d(x.inner(), self.kernel_size, self.stride)?;
+        let out = <B as Backend>::avg_pool2d(x.inner(), self.kernel_size, self.stride)?;
         
         let mut dims = <I as DynShape>::dims(x.shape_field()).into();
         // Fallback for Dyn inputs
