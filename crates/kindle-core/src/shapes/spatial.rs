@@ -1,22 +1,40 @@
-use typenum::{U1, U2};
+use typenum::{U1, U2, UInt, UTerm};
 use core::ops::{Add, Sub, Mul, Div};
 
 pub trait SpatialOut<Kernel, Stride, Padding, Dilation> {
     type Output;
 }
 
-impl<In, Kernel, Stride, Padding, Dilation> SpatialOut<Kernel, Stride, Padding, Dilation> for In
+impl<Kernel, Stride, Padding, Dilation> SpatialOut<Kernel, Stride, Padding, Dilation> for UTerm
 where
     Padding: Mul<U2>,
     Kernel: Sub<U1>,
     Dilation: Mul<<Kernel as Sub<U1>>::Output>,
-    In: Add<<Padding as Mul<U2>>::Output>,
-    <In as Add<<Padding as Mul<U2>>::Output>>::Output: Sub<<Dilation as Mul<<Kernel as Sub<U1>>::Output>>::Output>,
-    <<In as Add<<Padding as Mul<U2>>::Output>>::Output as Sub<<Dilation as Mul<<Kernel as Sub<U1>>::Output>>::Output>>::Output: Sub<U1>,
-    <<<In as Add<<Padding as Mul<U2>>::Output>>::Output as Sub<<Dilation as Mul<<Kernel as Sub<U1>>::Output>>::Output>>::Output as Sub<U1>>::Output: Div<Stride>,
-    <<<<In as Add<<Padding as Mul<U2>>::Output>>::Output as Sub<<Dilation as Mul<<Kernel as Sub<U1>>::Output>>::Output>>::Output as Sub<U1>>::Output as Div<Stride>>::Output: Add<U1>,
+    UTerm: Add<<Padding as Mul<U2>>::Output>,
+    <UTerm as Add<<Padding as Mul<U2>>::Output>>::Output: Sub<<Dilation as Mul<<Kernel as Sub<U1>>::Output>>::Output>,
+    <<UTerm as Add<<Padding as Mul<U2>>::Output>>::Output as Sub<<Dilation as Mul<<Kernel as Sub<U1>>::Output>>::Output>>::Output: Sub<U1>,
+    <<<UTerm as Add<<Padding as Mul<U2>>::Output>>::Output as Sub<<Dilation as Mul<<Kernel as Sub<U1>>::Output>>::Output>>::Output as Sub<U1>>::Output: Div<Stride>,
+    <<<<UTerm as Add<<Padding as Mul<U2>>::Output>>::Output as Sub<<Dilation as Mul<<Kernel as Sub<U1>>::Output>>::Output>>::Output as Sub<U1>>::Output as Div<Stride>>::Output: Add<U1>,
 {
-    type Output = <<<<<In as Add<<Padding as Mul<U2>>::Output>>::Output as Sub<<Dilation as Mul<<Kernel as Sub<U1>>::Output>>::Output>>::Output as Sub<U1>>::Output as Div<Stride>>::Output as Add<U1>>::Output;
+    type Output = <<<<<UTerm as Add<<Padding as Mul<U2>>::Output>>::Output as Sub<<Dilation as Mul<<Kernel as Sub<U1>>::Output>>::Output>>::Output as Sub<U1>>::Output as Div<Stride>>::Output as Add<U1>>::Output;
+}
+
+impl<U, B, Kernel, Stride, Padding, Dilation> SpatialOut<Kernel, Stride, Padding, Dilation> for UInt<U, B>
+where
+    Padding: Mul<U2>,
+    Kernel: Sub<U1>,
+    Dilation: Mul<<Kernel as Sub<U1>>::Output>,
+    UInt<U, B>: Add<<Padding as Mul<U2>>::Output>,
+    <UInt<U, B> as Add<<Padding as Mul<U2>>::Output>>::Output: Sub<<Dilation as Mul<<Kernel as Sub<U1>>::Output>>::Output>,
+    <<UInt<U, B> as Add<<Padding as Mul<U2>>::Output>>::Output as Sub<<Dilation as Mul<<Kernel as Sub<U1>>::Output>>::Output>>::Output: Sub<U1>,
+    <<<UInt<U, B> as Add<<Padding as Mul<U2>>::Output>>::Output as Sub<<Dilation as Mul<<Kernel as Sub<U1>>::Output>>::Output>>::Output as Sub<U1>>::Output: Div<Stride>,
+    <<<<UInt<U, B> as Add<<Padding as Mul<U2>>::Output>>::Output as Sub<<Dilation as Mul<<Kernel as Sub<U1>>::Output>>::Output>>::Output as Sub<U1>>::Output as Div<Stride>>::Output: Add<U1>,
+{
+    type Output = <<<<<UInt<U, B> as Add<<Padding as Mul<U2>>::Output>>::Output as Sub<<Dilation as Mul<<Kernel as Sub<U1>>::Output>>::Output>>::Output as Sub<U1>>::Output as Div<Stride>>::Output as Add<U1>>::Output;
+}
+
+impl<Kernel, Stride, Padding, Dilation> SpatialOut<Kernel, Stride, Padding, Dilation> for usize {
+    type Output = usize;
 }
 
 pub trait Pool2dShape<K, S>: crate::prelude::Shape {
