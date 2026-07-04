@@ -289,6 +289,11 @@ pub mod candle {
             let out = scaled.broadcast_add(&b).map_err(|e| anyhow::anyhow!(e))?;
             Ok(out)
         }
+
+        fn embedding(t: &Self::RawTensor, w: &Self::RawTensor) -> Result<Self::RawTensor> {
+            Ok(candle_nn::ops::embedding(t, w).map_err(|e| anyhow::anyhow!(e))?)
+        }
+
         fn mean_dim(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor> {
             Ok(t.mean(dim).map_err(|e| anyhow::anyhow!(e))?)
         }
@@ -696,6 +701,13 @@ pub mod ndarray_backend {
                 backend: "Ndarray",
             })
         }
+
+        fn embedding(_t: &Self::RawTensor, _w: &Self::RawTensor) -> Result<Self::RawTensor> {
+            Err(Error::UnsupportedBackendOperation {
+                op: "embedding",
+                backend: "Ndarray",
+            })
+        }
         fn sum_keepdim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> {
             Err(Error::UnsupportedBackendOperation {
                 op: "sum_keepdim",
@@ -969,6 +981,7 @@ pub mod burn_backend {
                 fn concat(_tensors: &[&Self::RawTensor], _dim: usize) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "concat", backend: "Burn" }) }
                 fn layer_norm(_t: &Self::RawTensor, _w: &Self::RawTensor, _b: &Self::RawTensor, _e: f32) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "layer_norm", backend: "Burn" }) }
                 fn batch_norm(_t: &Self::RawTensor, _w: &Self::RawTensor, _b: &Self::RawTensor, _rm: &Self::RawTensor, _rv: &Self::RawTensor, _e: f32) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "batch_norm", backend: "Burn" }) }
+                fn embedding(_t: &Self::RawTensor, _w: &Self::RawTensor) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "embedding", backend: "Burn" }) }
                 fn sum_keepdim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "sum_keepdim", backend: "Burn" }) }
                 fn mean_dim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "mean_dim", backend: "Burn" }) }
                 fn mean_keepdim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "mean_keepdim", backend: "Burn" }) }

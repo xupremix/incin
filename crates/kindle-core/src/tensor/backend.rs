@@ -94,12 +94,14 @@ pub trait Backend<S: Shape> {
     ) -> Result<Self::RawTensor>;
     fn batch_norm(
         t: &Self::RawTensor,
-        weight: &Self::RawTensor,
-        bias: &Self::RawTensor,
-        running_mean: &Self::RawTensor,
-        running_var: &Self::RawTensor,
-        eps: f32,
+        w: &Self::RawTensor,
+        b: &Self::RawTensor,
+        rm: &Self::RawTensor,
+        rv: &Self::RawTensor,
+        e: f32,
     ) -> Result<Self::RawTensor>;
+
+    fn embedding(t: &Self::RawTensor, w: &Self::RawTensor) -> Result<Self::RawTensor>;
 
     // Tensor ops
     fn broadcast_as(t: &Self::RawTensor, shape: &[usize]) -> Result<Self::RawTensor>;

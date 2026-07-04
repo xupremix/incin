@@ -9,6 +9,7 @@ pub mod max_pool2d;
 pub mod module;
 pub mod param;
 pub mod save;
+pub mod embedding;
 
 pub use activation::*;
 pub use avg_pool2d::*;
@@ -17,6 +18,7 @@ pub use conv1d::*;
 pub use conv2d::*;
 pub use layer_norm::*;
 pub use linear::*;
+pub use embedding::*;
 pub use max_pool2d::*;
 pub use module::*;
 pub use param::*;
