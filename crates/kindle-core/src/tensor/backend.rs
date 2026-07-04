@@ -8,6 +8,7 @@ pub trait Backend<S: Shape> {
 
     // Var operations
     fn var_as_tensor(var: &Self::RawVar) -> Result<Self::RawTensor>;
+    fn var_from_tensor(t: &Self::RawTensor) -> Result<Self::RawVar>;
 
     // Constructors
     fn zeros(shape: &[usize], dtype: KindleDType, device: &KindleDevice)
@@ -40,12 +41,14 @@ pub trait Backend<S: Shape> {
     fn relu(t: &Self::RawTensor) -> Result<Self::RawTensor>;
     fn gelu(t: &Self::RawTensor) -> Result<Self::RawTensor>;
     fn abs(t: &Self::RawTensor) -> Result<Self::RawTensor>;
+    fn exp(t: &Self::RawTensor) -> Result<Self::RawTensor>;
     fn neg(t: &Self::RawTensor) -> Result<Self::RawTensor>;
     fn sqrt(t: &Self::RawTensor) -> Result<Self::RawTensor>;
-    fn exp(t: &Self::RawTensor) -> Result<Self::RawTensor>;
     fn log(t: &Self::RawTensor) -> Result<Self::RawTensor>;
     fn tanh(t: &Self::RawTensor) -> Result<Self::RawTensor>;
     fn sigmoid(t: &Self::RawTensor) -> Result<Self::RawTensor>;
+    fn swish(t: &Self::RawTensor) -> Result<Self::RawTensor>;
+    fn softmax(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor>;
 
     // Scalar Ops
     fn mul_scalar(t: &Self::RawTensor, scalar: f64) -> Result<Self::RawTensor>;
@@ -78,6 +81,24 @@ pub trait Backend<S: Shape> {
     // Type Casting
     fn to_dtype(t: &Self::RawTensor, dtype: KindleDType) -> Result<Self::RawTensor>;
 
+    // Advanced Tensor Ops
+    fn stack(t: &[&Self::RawTensor], dim: usize) -> Result<Self::RawTensor>;
+    fn concat(t: &[&Self::RawTensor], dim: usize) -> Result<Self::RawTensor>;
+    fn layer_norm(
+        t: &Self::RawTensor,
+        weight: &Self::RawTensor,
+        bias: &Self::RawTensor,
+        eps: f32,
+    ) -> Result<Self::RawTensor>;
+    fn batch_norm(
+        t: &Self::RawTensor,
+        weight: &Self::RawTensor,
+        bias: &Self::RawTensor,
+        running_mean: &Self::RawTensor,
+        running_var: &Self::RawTensor,
+        eps: f32,
+    ) -> Result<Self::RawTensor>;
+
     // Tensor ops
     fn broadcast_as(t: &Self::RawTensor, shape: &[usize]) -> Result<Self::RawTensor>;
     fn broadcast_left(t: &Self::RawTensor, shape: &[usize]) -> Result<Self::RawTensor>;
@@ -91,6 +112,15 @@ pub trait Backend<S: Shape> {
     fn squeeze(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor>;
 
     // Convolutions
+    fn conv1d(
+        t: &Self::RawTensor,
+        w: &Self::RawTensor,
+        b: Option<&Self::RawTensor>,
+        stride: usize,
+        padding: usize,
+        dilation: usize,
+    ) -> Result<Self::RawTensor>;
+
     fn conv2d(
         t: &Self::RawTensor,
         w: &Self::RawTensor,
@@ -99,9 +129,32 @@ pub trait Backend<S: Shape> {
         padding: usize,
         dilation: usize,
     ) -> Result<Self::RawTensor>;
-    
+
+    fn conv_transpose2d(
+        t: &Self::RawTensor,
+        w: &Self::RawTensor,
+        b: Option<&Self::RawTensor>,
+        stride: usize,
+        padding: usize,
+        output_padding: usize,
+        dilation: usize,
+    ) -> Result<Self::RawTensor>;
+
+    // Pooling
+    fn max_pool2d(
+        t: &Self::RawTensor,
+        kernel_size: (usize, usize),
+        stride: (usize, usize),
+    ) -> Result<Self::RawTensor>;
+
+    fn avg_pool2d(
+        t: &Self::RawTensor,
+        kernel_size: (usize, usize),
+        stride: (usize, usize),
+    ) -> Result<Self::RawTensor>;
+
     type Grads;
-    
+
     // Optimization
     fn backward(loss: &Self::RawTensor) -> Result<Self::Grads>;
     fn step_sgd(params: &mut [Self::RawVar], grads: &Self::Grads, lr: f64) -> Result<()>;

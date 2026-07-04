@@ -2,6 +2,7 @@ pub mod arg;
 pub mod arg_into;
 pub mod backend;
 pub mod base;
+pub mod conv1d;
 pub mod conv2d;
 pub mod device;
 pub mod dtype;

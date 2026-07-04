@@ -1,3 +1,17 @@
+error[E0046]: not all trait items implemented, missing: `var_from_tensor`, `swish`, `softmax`, `stack`, `concat`, `layer_norm`, `batch_norm`
+ --> tests/ui/shape_mismatch.rs:4:1
+  |
+4 | impl<S: Shape> Backend<S> for DummyBackend {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ missing `var_from_tensor`, `swish`, `softmax`, `stack`, `concat`, `layer_norm`, `batch_norm` in implementation
+  |
+  = help: implement the missing item: `fn var_from_tensor(_: &<Self as kindle_core::prelude::Backend<S>>::RawTensor) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawVar, kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn swish(_: &<Self as kindle_core::prelude::Backend<S>>::RawTensor) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn softmax(_: &<Self as kindle_core::prelude::Backend<S>>::RawTensor, _: usize) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn stack(_: &[&<Self as kindle_core::prelude::Backend<S>>::RawTensor], _: usize) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn concat(_: &[&<Self as kindle_core::prelude::Backend<S>>::RawTensor], _: usize) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn layer_norm(_: &<Self as kindle_core::prelude::Backend<S>>::RawTensor, _: &<Self as kindle_core::prelude::Backend<S>>::RawTensor, _: &<Self as kindle_core::prelude::Backend<S>>::RawTensor, _: f32) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
+  = help: implement the missing item: `fn batch_norm(_: &<Self as kindle_core::prelude::Backend<S>>::RawTensor, _: &<Self as kindle_core::prelude::Backend<S>>::RawTensor, _: &<Self as kindle_core::prelude::Backend<S>>::RawTensor, _: &<Self as kindle_core::prelude::Backend<S>>::RawTensor, _: &<Self as kindle_core::prelude::Backend<S>>::RawTensor, _: f32) -> std::result::Result<<Self as kindle_core::prelude::Backend<S>>::RawTensor, kindle_core::err::Error> { todo!() }`
+
 error[E0308]: mismatched types
   --> tests/ui/shape_mismatch.rs:73:12
    |

@@ -26,6 +26,9 @@ pub enum Error {
 
     #[error("Internal Backend Failure: {0}")]
     BackendFailure(#[from] anyhow::Error),
+
+    #[error("Generic Message: {0}")]
+    Msg(String),
 }
 
 impl Debug for Error {

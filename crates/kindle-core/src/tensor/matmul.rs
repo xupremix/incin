@@ -142,6 +142,7 @@ impl MatMulShape<Dyn> for Dyn {
         } else if lhs.len() == 4 && rhs.len() == 2 {
             // Flattened batch, e.g. [4, 10816] and [10816, 10]
             alloc::vec![lhs[0], rhs[1]]
+        } else if lhs.len() == 2 && rhs.len() == 1 {
             alloc::vec![]
         } else {
             // General broadcasted matmul is complex, but let's do simple ND x 2D

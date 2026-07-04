@@ -23,7 +23,7 @@ impl Parse for Dim {
         if input.peek(syn::LitInt) {
             return Ok(Dim::Lit(input.parse::<syn::LitInt>()?));
         }
-        
+
         let fork = input.fork();
         if fork.peek(syn::Ident) && fork.peek2(syn::Ident) {
             let first = fork.parse::<syn::Ident>()?;
@@ -32,7 +32,7 @@ impl Parse for Dim {
                 return Ok(Dim::Sym(input.parse::<syn::Ident>()?));
             }
         }
-        
+
         Ok(Dim::Path(input.parse::<syn::Path>()?))
     }
 }

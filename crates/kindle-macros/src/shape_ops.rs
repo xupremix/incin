@@ -73,17 +73,20 @@ pub fn generate_shape_ops(_input: TokenStream) -> TokenStream {
         for start in 0..rank {
             for end in start..rank {
                 let in_types: Vec<_> = (0..rank).map(|i| format_ident!("D{}", i)).collect();
-                
-                let before: Vec<_> = in_types[0..start].iter().map(|id| quote!{ #id }).collect();
+
+                let before: Vec<_> = in_types[0..start].iter().map(|id| quote! { #id }).collect();
                 let after: Vec<_> = if end + 1 < rank {
-                    in_types[(end + 1)..rank].iter().map(|id| quote!{ #id }).collect()
+                    in_types[(end + 1)..rank]
+                        .iter()
+                        .map(|id| quote! { #id })
+                        .collect()
                 } else {
                     Vec::new()
                 };
 
                 let start_id = &in_types[start];
                 let mut prod = quote! { #start_id };
-                
+
                 for i in (start + 1)..=end {
                     let next = &in_types[i];
                     prod = quote! { crate::shapes::dim::ProdDim<#prod, #next> };

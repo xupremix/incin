@@ -3,6 +3,8 @@ use proc_macro::TokenStream;
 mod arg_into;
 mod idx;
 mod module;
+mod onnx;
+mod safetensors;
 mod shape;
 mod shape_ops;
 
@@ -34,4 +36,9 @@ pub fn forward(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn generate_shape_ops(input: TokenStream) -> TokenStream {
     shape_ops::generate_shape_ops(input)
+}
+
+#[proc_macro]
+pub fn import_model(item: TokenStream) -> TokenStream {
+    safetensors::import_model(TokenStream::new(), item)
 }

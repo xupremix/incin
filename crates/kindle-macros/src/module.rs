@@ -8,10 +8,21 @@ pub(crate) fn module(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as syn::ItemStruct);
     let name = &input.ident;
 
+    let is_internal = _attr.to_string().contains("internal");
+    let _crate_path = if is_internal {
+        quote! { crate }
+    } else {
+    };
+    
+    let k_crate = if is_internal { quote! { crate } } else { quote! { kindle } };
+    
+    let format_mac = if is_internal { quote! { alloc::format! } } else { quote! { std::format! } };
+    let vec_ty = if is_internal { quote! { alloc::vec::Vec } } else { quote! { std::vec::Vec } };
+
     let mut generics = input.generics.clone();
     generics
         .params
-        .push(syn::parse_quote!(__B: kindle::prelude::Backend<kindle::prelude::Dyn>));
+        .push(syn::parse_quote!(__B: #k_crate::prelude::Backend<#k_crate::prelude::Dyn>));
     let (impl_generics, _, _) = generics.split_for_impl();
     let (_, ty_generics, _) = input.generics.split_for_impl();
 
@@ -22,29 +33,52 @@ pub(crate) fn module(_attr: TokenStream, item: TokenStream) -> TokenStream {
         .clone()
         .unwrap_or_else(|| syn::parse_quote!(where));
 
+    let mut load_state_calls = Vec::new();
+    let mut state_dict_calls = Vec::new();
+
     match &input.fields {
         syn::Fields::Named(fields) => {
             for field in &fields.named {
                 let fname = &field.ident;
                 let fty = &field.ty;
+                let fname_str = fname.as_ref().unwrap().to_string();
                 param_calls.push(quote! {
-                    params.extend(kindle::nn::Parameters::<__B>::parameters(&self.#fname));
+                    params.extend(#k_crate::nn::Parameters::<__B>::parameters(&self.#fname));
+                });
+                load_state_calls.push(quote! {
+                    #k_crate::nn::StateDict::<__B>::load_state_dict(&mut self.#fname, &#format_mac("{}{}.", prefix, #fname_str), tensors)?;
+                });
+                state_dict_calls.push(quote! {
+                    #k_crate::nn::StateDict::<__B>::state_dict(&self.#fname, &#format_mac("{}{}.", prefix, #fname_str), tensors);
                 });
                 where_clause
                     .predicates
-                    .push(syn::parse_quote!(#fty : kindle::nn::Parameters<__B>));
+                    .push(syn::parse_quote!(#fty : #k_crate::nn::Parameters<__B>));
+                where_clause
+                    .predicates
+                    .push(syn::parse_quote!(#fty : #k_crate::nn::StateDict<__B>));
             }
         }
         syn::Fields::Unnamed(fields) => {
             for (i, field) in fields.unnamed.iter().enumerate() {
                 let idx = syn::Index::from(i);
                 let fty = &field.ty;
+                let idx_str = i.to_string();
                 param_calls.push(quote! {
-                    params.extend(kindle::nn::Parameters::<__B>::parameters(&self.#idx));
+                    params.extend(#k_crate::nn::Parameters::<__B>::parameters(&self.#idx));
+                });
+                load_state_calls.push(quote! {
+                    #k_crate::nn::StateDict::<__B>::load_state_dict(&mut self.#idx, &#format_mac("{}{}.", prefix, #idx_str), tensors)?;
+                });
+                state_dict_calls.push(quote! {
+                    #k_crate::nn::StateDict::<__B>::state_dict(&self.#idx, &#format_mac("{}{}.", prefix, #idx_str), tensors);
                 });
                 where_clause
                     .predicates
-                    .push(syn::parse_quote!(#fty : kindle::nn::Parameters<__B>));
+                    .push(syn::parse_quote!(#fty : #k_crate::nn::Parameters<__B>));
+                where_clause
+                    .predicates
+                    .push(syn::parse_quote!(#fty : #k_crate::nn::StateDict<__B>));
             }
         }
         syn::Fields::Unit => {}
@@ -53,11 +87,26 @@ pub(crate) fn module(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let expanded = quote! {
         #input
 
-        impl #impl_generics kindle::nn::Parameters<__B> for #name #ty_generics #where_clause {
-            fn parameters(&self) -> std::vec::Vec<<__B as kindle::prelude::Backend<kindle::prelude::Dyn>>::RawVar> {
-                let mut params = std::vec::Vec::new();
+        impl #impl_generics #k_crate::nn::Parameters<__B> for #name #ty_generics #where_clause {
+            fn parameters(&self) -> #vec_ty<<__B as #k_crate::prelude::Backend<#k_crate::prelude::Dyn>>::RawVar> {
+                let mut params = #vec_ty::new();
                 #(#param_calls)*
                 params
+            }
+        }
+
+        impl #impl_generics #k_crate::nn::StateDict<__B> for #name #ty_generics #where_clause {
+            fn load_state_dict(
+                &mut self,
+                prefix: &str,
+                tensors: &std::collections::HashMap<String, #k_crate::prelude::Tensor<#k_crate::prelude::Dyn, __B>>,
+            ) -> #k_crate::prelude::Result<()> {
+                #(#load_state_calls)*
+                Ok(())
+            }
+
+            fn state_dict(&self, prefix: &str, tensors: &mut std::collections::HashMap<String, #k_crate::prelude::Tensor<#k_crate::prelude::Dyn, __B>>) {
+                #(#state_dict_calls)*
             }
         }
     };
@@ -88,9 +137,13 @@ pub(crate) fn forward(_attr: TokenStream, item: TokenStream) -> TokenStream {
             let _fn_name = &method.sig.ident;
             let ret_type = match &method.sig.output {
                 ReturnType::Type(_, ty) => ty.clone(),
-                _ => return syn::Error::new_spanned(method, "forward must return a Result").to_compile_error().into(),
+                _ => {
+                    return syn::Error::new_spanned(method, "forward must return a Result")
+                        .to_compile_error()
+                        .into();
+                }
             };
-            
+
             // Extract inner Ok type from Result<T, E>
             let mut output_type = quote!(());
             let error_type = quote!(kindle_core::prelude::Error);

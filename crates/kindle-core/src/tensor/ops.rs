@@ -48,7 +48,10 @@ pub trait ShapeEq<Other> {
 
 impl<S> ShapeEq<S> for S {
     const SHAPES_EQUAL: bool = true;
-    const ASSERT_SHAPES_MATCH: () = assert!(Self::SHAPES_EQUAL, "Shape Mismatch: Attempted to operate on tensors of incompatible shapes.");
+    const ASSERT_SHAPES_MATCH: () = assert!(
+        Self::SHAPES_EQUAL,
+        "Shape Mismatch: Attempted to operate on tensors of incompatible shapes."
+    );
 }
 
 pub trait DTypeEq<Other> {
@@ -58,14 +61,20 @@ pub trait DTypeEq<Other> {
 
 impl<T> DTypeEq<T> for T {
     const DTYPES_EQUAL: bool = true;
-    const ASSERT_DTYPES_MATCH: () = assert!(Self::DTYPES_EQUAL, "DType Mismatch: Attempted to operate on tensors of incompatible datatypes.");
+    const ASSERT_DTYPES_MATCH: () = assert!(
+        Self::DTYPES_EQUAL,
+        "DType Mismatch: Attempted to operate on tensors of incompatible datatypes."
+    );
 }
 
 macro_rules! impl_binary_op {
     ($trait_name:ident, $method:ident, $backend_method:ident) => {
         // Tensor op Tensor → Result<Tensor> (owned)
         impl<S: Shape, B: Backend<S>, T: DType, D: Device, G: RequiresGrad> Tensor<S, B, T, D, G> {
-            pub fn $method<S2: Shape, T2: DType>(&self, rhs: &Tensor<S2, B, T2, D, G>) -> Result<Self> 
+            pub fn $method<S2: Shape, T2: DType>(
+                &self,
+                rhs: &Tensor<S2, B, T2, D, G>,
+            ) -> Result<Self>
             where
                 S: ShapeEq<S2>,
                 T: DTypeEq<T2>,
@@ -110,6 +119,19 @@ impl<S: Shape, B: Backend<S>, T: DType, D: Device, G: RequiresGrad> Tensor<S, B,
     impl_unary_op!(abs, abs);
     impl_unary_op!(relu, relu);
     impl_unary_op!(gelu, gelu);
+    impl_unary_op!(swish, swish);
+
+    #[inline]
+    pub fn softmax(&self, dim: usize) -> Result<Tensor<S, B, T, D, G>> {
+        let inner = B::softmax(&self.inner, dim)?;
+        Ok(Tensor::<_, B, _, _, _>::from_parts(
+            inner,
+            self._shape.clone(),
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        ))
+    }
     impl_unary_op!(neg, neg);
     impl_unary_op!(sqrt, sqrt);
     impl_unary_op!(exp, exp);
@@ -166,8 +188,8 @@ macro_rules! impl_reduction_dim_op {
             B: Backend<S::Output, RawTensor = <B as Backend<S>>::RawTensor>,
         {
             let inner = <B as Backend<S>>::$backend_method(&self.inner, DIM)?;
-            
-            // We just use from_dyn to construct the resulting shape field dynamically, 
+
+            // We just use from_dyn to construct the resulting shape field dynamically,
             // since we know it's a dimensional reduction.
             let mut out_dims = S::dims(&self._shape).into();
             if stringify!($trait_bound) == "ReduceDim" {
@@ -253,14 +275,14 @@ impl<S: DynShape, B: Backend<S>, T: DType, D: Device, G: RequiresGrad> Tensor<S,
     {
         let new_shape_field = S2::init(args);
         let new_dims = S2::dims(&new_shape_field);
-        
+
         // Runtime boundaries checking
         assert_eq!(
             S::numel(&self._shape),
             S2::numel(&new_shape_field),
             "Reshape failed: source numel != target numel"
         );
-        
+
         let inner = <B as Backend<S2>>::reshape(&self.inner, new_dims.as_ref())?;
         Ok(Tensor::<S2, B, T, D, G>::from_parts(
             inner,
@@ -301,7 +323,9 @@ impl<S: DynShape, B: Backend<S>, T: DType, D: Device, G: RequiresGrad> Tensor<S,
 
     /// Permute the tensor's dimensions by swapping `D1` and `D2`.
     /// Strongly typed output shape via `Transpose<D1, D2>`.
-    pub fn transpose<const D1: usize, const D2: usize>(&self) -> Result<Tensor<S::Output, B, T, D, G>>
+    pub fn transpose<const D1: usize, const D2: usize>(
+        &self,
+    ) -> Result<Tensor<S::Output, B, T, D, G>>
     where
         S: crate::shapes::Transpose<D1, D2>,
         B: Backend<S::Output, RawTensor = <B as Backend<S>>::RawTensor>,
@@ -309,7 +333,7 @@ impl<S: DynShape, B: Backend<S>, T: DType, D: Device, G: RequiresGrad> Tensor<S,
         let inner = <B as Backend<S::Output>>::transpose(&self.inner, D1, D2)?;
         let mut out_dims = S::dims(&self._shape).into();
         out_dims.swap(D1, D2);
-        
+
         Ok(Tensor::<_, B, _, _, _>::from_parts(
             inner,
             S::Output::from_dyn(&out_dims).unwrap(),
@@ -321,7 +345,9 @@ impl<S: DynShape, B: Backend<S>, T: DType, D: Device, G: RequiresGrad> Tensor<S,
 
     /// Flattens dimensions from `START` to `END` inclusive.
     /// Uses `ProdDim` algebraically to track shapes.
-    pub fn flatten<const START: usize, const END: usize>(&self) -> Result<Tensor<S::Output, B, T, D, G>>
+    pub fn flatten<const START: usize, const END: usize>(
+        &self,
+    ) -> Result<Tensor<S::Output, B, T, D, G>>
     where
         S: crate::shapes::Flatten<START, END>,
         B: Backend<S::Output, RawTensor = <B as Backend<S>>::RawTensor>,
@@ -329,24 +355,76 @@ impl<S: DynShape, B: Backend<S>, T: DType, D: Device, G: RequiresGrad> Tensor<S,
         let inner = <B as Backend<S::Output>>::flatten(&self.inner, START, END)?;
         let in_dims = S::dims(&self._shape).into();
         let mut out_dims = Vec::new();
-        
+
         for i in 0..START {
             out_dims.push(in_dims[i]);
         }
-        
+
         let mut prod = 1;
         for i in START..=END {
             prod *= in_dims[i];
         }
         out_dims.push(prod);
-        
+
         for i in (END + 1)..in_dims.len() {
             out_dims.push(in_dims[i]);
         }
-        
+
         Ok(Tensor::<_, B, _, _, _>::from_parts(
             inner,
             S::Output::from_dyn(&out_dims).unwrap(),
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        ))
+    }
+
+    #[inline]
+    pub fn layer_norm(
+        &self,
+        weight: &Tensor<Dyn, B, T, D, G>,
+        bias: &Tensor<Dyn, B, T, D, G>,
+        eps: f32,
+    ) -> Result<Tensor<S, B, T, D, G>>
+    where
+        S: DynShape,
+        B: Backend<Dyn, RawTensor = <B as Backend<S>>::RawTensor>,
+    {
+        // weight and bias should technically be 1D tensors matching the last dimension, but we use DynShape for now
+        let inner = <B as Backend<S>>::layer_norm(&self.inner, &weight.inner, &bias.inner, eps)?;
+        Ok(Tensor::<_, B, _, _, _>::from_parts(
+            inner,
+            self._shape.clone(),
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        ))
+    }
+
+    #[inline]
+    pub fn batch_norm(
+        &self,
+        weight: &Tensor<Dyn, B, T, D, G>,
+        bias: &Tensor<Dyn, B, T, D, G>,
+        running_mean: &Tensor<Dyn, B, T, D, G>,
+        running_var: &Tensor<Dyn, B, T, D, G>,
+        eps: f32,
+    ) -> Result<Tensor<S, B, T, D, G>>
+    where
+        S: DynShape,
+        B: Backend<Dyn, RawTensor = <B as Backend<S>>::RawTensor>,
+    {
+        let inner = <B as Backend<S>>::batch_norm(
+            &self.inner,
+            &weight.inner,
+            &bias.inner,
+            &running_mean.inner,
+            &running_var.inner,
+            eps,
+        )?;
+        Ok(Tensor::<_, B, _, _, _>::from_parts(
+            inner,
+            self._shape.clone(),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
@@ -365,16 +443,44 @@ mod tests {
         type RawTensor = ();
         type RawVar = ();
         type Grads = ();
-        
-        fn var_as_tensor(_var: &Self::RawVar) -> Result<Self::RawTensor> { Ok(()) }
-        fn var_zeros(_shape: &[usize], _dtype: KindleDType, _device: &KindleDevice) -> Result<Self::RawVar> { Ok(()) }
-        fn var_ones(_shape: &[usize], _dtype: KindleDType, _device: &KindleDevice) -> Result<Self::RawVar> { Ok(()) }
-        fn var_rand(_shape: &[usize], _dtype: KindleDType, _device: &KindleDevice) -> Result<Self::RawVar> { Ok(()) }
-        
-        fn tensor_to_device(_t: &Self::RawTensor, _device: &KindleDevice) -> Result<Self::RawTensor> { Ok(()) }
-        fn var_to_device(_var: &Self::RawVar, _device: &KindleDevice) -> Result<Self::RawVar> { Ok(()) }
 
-        fn var_randn(_shape: &[usize], _dtype: KindleDType, _device: &KindleDevice) -> Result<Self::RawVar> { Ok(()) }
+        fn var_as_tensor(_var: &Self::RawVar) -> Result<Self::RawTensor> {
+            Ok(())
+        }
+        fn var_from_tensor(_t: &Self::RawTensor) -> Result<Self::RawVar> {
+            Ok(())
+        }
+        fn var_to_device(_var: &Self::RawVar, _dev: &KindleDevice) -> Result<Self::RawVar> {
+            Ok(())
+        }
+        fn var_zeros(
+            _shape: &[usize],
+            _dtype: KindleDType,
+            _device: &KindleDevice,
+        ) -> Result<Self::RawVar> {
+            Ok(())
+        }
+        fn var_ones(
+            _shape: &[usize],
+            _dtype: KindleDType,
+            _device: &KindleDevice,
+        ) -> Result<Self::RawVar> {
+            Ok(())
+        }
+        fn var_rand(
+            _shape: &[usize],
+            _dtype: KindleDType,
+            _device: &KindleDevice,
+        ) -> Result<Self::RawVar> {
+            Ok(())
+        }
+        fn var_randn(
+            _shape: &[usize],
+            _dtype: KindleDType,
+            _device: &KindleDevice,
+        ) -> Result<Self::RawVar> {
+            Ok(())
+        }
 
         fn zeros(
             _shape: &[usize],
@@ -405,13 +511,19 @@ mod tests {
             Ok(())
         }
 
+        fn abs(_t: &Self::RawTensor) -> Result<Self::RawTensor> {
+            Ok(())
+        }
         fn relu(_t: &Self::RawTensor) -> Result<Self::RawTensor> {
             Ok(())
         }
         fn gelu(_t: &Self::RawTensor) -> Result<Self::RawTensor> {
             Ok(())
         }
-        fn abs(_t: &Self::RawTensor) -> Result<Self::RawTensor> {
+        fn swish(_t: &Self::RawTensor) -> Result<Self::RawTensor> {
+            Ok(())
+        }
+        fn softmax(_t: &Self::RawTensor, _dim: usize) -> Result<Self::RawTensor> {
             Ok(())
         }
         fn neg(_t: &Self::RawTensor) -> Result<Self::RawTensor> {
@@ -440,25 +552,83 @@ mod tests {
             Ok(())
         }
 
-        fn sum_all(_t: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(()) }
-        fn mean_all(_t: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(()) }
-        fn max_all(_t: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(()) }
-        fn min_all(_t: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(()) }
-        fn sum_dim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> { Ok(()) }
-        fn sum_keepdim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> { Ok(()) }
-        fn mean_dim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> { Ok(()) }
-        fn mean_keepdim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> { Ok(()) }
-        fn max_dim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> { Ok(()) }
-        fn max_keepdim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> { Ok(()) }
-        fn min_dim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> { Ok(()) }
-        fn min_keepdim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> { Ok(()) }
-        fn to_dtype(_t: &Self::RawTensor, _dt: KindleDType) -> Result<Self::RawTensor> { Ok(()) }
-        fn broadcast_as(_t: &Self::RawTensor, _s: &[usize]) -> Result<Self::RawTensor> { Ok(()) }
-        fn broadcast_left(_t: &Self::RawTensor, _s: &[usize]) -> Result<Self::RawTensor> { Ok(()) }
+        fn sum_all(_t: &Self::RawTensor) -> Result<Self::RawTensor> {
+            Ok(())
+        }
+        fn mean_all(_t: &Self::RawTensor) -> Result<Self::RawTensor> {
+            Ok(())
+        }
+        fn max_all(_t: &Self::RawTensor) -> Result<Self::RawTensor> {
+            Ok(())
+        }
+        fn min_all(_t: &Self::RawTensor) -> Result<Self::RawTensor> {
+            Ok(())
+        }
 
-        fn backward(_loss: &Self::RawTensor) -> Result<Self::Grads> { Ok(()) }
-        fn step_sgd(_params: &mut [Self::RawVar], _grads: &Self::Grads, _lr: f64) -> Result<()> { Ok(()) }
-        fn step_adamw(_params: &mut [Self::RawVar], _grads: &Self::Grads, _lr: f64) -> Result<()> { Ok(()) }
+        fn sum_dim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> {
+            Ok(())
+        }
+        fn mean_dim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> {
+            Ok(())
+        }
+        fn max_dim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> {
+            Ok(())
+        }
+        fn min_dim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> {
+            Ok(())
+        }
+
+        fn sum_keepdim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> {
+            Ok(())
+        }
+        fn mean_keepdim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> {
+            Ok(())
+        }
+        fn max_keepdim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> {
+            Ok(())
+        }
+        fn min_keepdim(_t: &Self::RawTensor, _d: usize) -> Result<Self::RawTensor> {
+            Ok(())
+        }
+
+        fn stack(_t: &[&Self::RawTensor], _d: usize) -> Result<Self::RawTensor> {
+            Ok(())
+        }
+        fn concat(_t: &[&Self::RawTensor], _d: usize) -> Result<Self::RawTensor> {
+            Ok(())
+        }
+        fn layer_norm(
+            _t: &Self::RawTensor,
+            _w: &Self::RawTensor,
+            _b: &Self::RawTensor,
+            _e: f32,
+        ) -> Result<Self::RawTensor> {
+            Ok(())
+        }
+        fn batch_norm(
+            _t: &Self::RawTensor,
+            _w: &Self::RawTensor,
+            _b: &Self::RawTensor,
+            _rm: &Self::RawTensor,
+            _rv: &Self::RawTensor,
+            _e: f32,
+        ) -> Result<Self::RawTensor> {
+            Ok(())
+        }
+
+        fn tensor_to_device(_t: &Self::RawTensor, _dev: &KindleDevice) -> Result<Self::RawTensor> {
+            Ok(())
+        }
+        fn to_dtype(_t: &Self::RawTensor, _dt: KindleDType) -> Result<Self::RawTensor> {
+            Ok(())
+        }
+
+        fn broadcast_as(_t: &Self::RawTensor, _s: &[usize]) -> Result<Self::RawTensor> {
+            Ok(())
+        }
+        fn broadcast_left(_t: &Self::RawTensor, _s: &[usize]) -> Result<Self::RawTensor> {
+            Ok(())
+        }
 
         fn add(_lhs: &Self::RawTensor, _rhs: &Self::RawTensor) -> Result<Self::RawTensor> {
             Ok(())
@@ -478,9 +648,12 @@ mod tests {
         fn reshape(_t: &Self::RawTensor, _shape: &[usize]) -> Result<Self::RawTensor> {
             Ok(())
         }
-        fn transpose(_t: &Self::RawTensor, _d1: usize, _d2: usize) -> Result<Self::RawTensor> { Ok(()) }
-        fn flatten(_t: &Self::RawTensor, _s: usize, _e: usize) -> Result<Self::RawTensor> { Ok(()) }
-
+        fn transpose(_t: &Self::RawTensor, _d1: usize, _d2: usize) -> Result<Self::RawTensor> {
+            Ok(())
+        }
+        fn flatten(_t: &Self::RawTensor, _s: usize, _e: usize) -> Result<Self::RawTensor> {
+            Ok(())
+        }
         fn narrow(
             _t: &Self::RawTensor,
             _dim: usize,
@@ -490,6 +663,16 @@ mod tests {
             Ok(())
         }
         fn squeeze(_t: &Self::RawTensor, _dim: usize) -> Result<Self::RawTensor> {
+            Ok(())
+        }
+
+        fn backward(_loss: &Self::RawTensor) -> Result<Self::Grads> {
+            Ok(())
+        }
+        fn step_sgd(_params: &mut [Self::RawVar], _grads: &Self::Grads, _lr: f64) -> Result<()> {
+            Ok(())
+        }
+        fn step_adamw(_params: &mut [Self::RawVar], _grads: &Self::Grads, _lr: f64) -> Result<()> {
             Ok(())
         }
         fn conv2d(

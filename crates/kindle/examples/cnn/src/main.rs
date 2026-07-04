@@ -1,6 +1,6 @@
 use kindle::prelude::*;
 use kindle_backends::candle::CandleBackend;
-use kindle_core::nn::{Linear, Conv2d, ReLU, Sequential};
+use kindle_core::nn::{Conv2d, Linear, ReLU, Sequential};
 use typenum::{U0, U1};
 
 type Features = Sequential<Conv2d<Dyn, U1, U0, CandleBackend>, ReLU>;
@@ -17,7 +17,7 @@ impl SimpleCNN {
         let conv = Conv2d::<Dyn, U1, U0, CandleBackend>::new(16, 1, 3, 3)?;
         let relu = ReLU;
         let features = Sequential(conv, relu);
-        
+
         let classifier = Linear::<Dyn, CandleBackend>::new(16 * 26 * 26, 10)?;
 
         Ok(Self {
@@ -27,16 +27,13 @@ impl SimpleCNN {
     }
 
     #[kindle::forward]
-    pub fn forward(
-        &self,
-        x: Tensor<Dyn, CandleBackend>,
-    ) -> Result<Tensor<Dyn, CandleBackend>> {
+    pub fn forward(&self, x: Tensor<Dyn, CandleBackend>) -> Result<Tensor<Dyn, CandleBackend>> {
         // 1. Feature extraction (Conv2d -> ReLU)
         let f = self.features.forward(x)?;
-        
+
         // 2. Flatten (B, 16, 26, 26) -> (B, 10816)
         let flat = f.flatten::<1, 3>()?;
-        
+
         // 3. Classification
         let logits = self.classifier.forward(flat)?;
 

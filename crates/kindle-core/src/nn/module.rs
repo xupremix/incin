@@ -1,5 +1,20 @@
 use crate::prelude::*;
 use alloc::vec::Vec;
+use std::collections::HashMap;
+
+/// A trait implemented by all Neural Network modules to manage their state (weights).
+/// Usually automatically derived via `#[kindle::module]`.
+pub trait StateDict<B: Backend<Dyn>> {
+    /// Loads the module's state from a dictionary of dynamic tensors.
+    fn load_state_dict(
+        &mut self,
+        prefix: &str,
+        tensors: &HashMap<String, Tensor<Dyn, B>>,
+    ) -> Result<()>;
+
+    /// Collects the module's state into a dictionary of dynamic tensors.
+    fn state_dict(&self, prefix: &str, tensors: &mut HashMap<String, Tensor<Dyn, B>>);
+}
 
 /// A trait implemented by all Neural Network modules.
 /// Usually automatically derived via `#[kindle::module]`.
@@ -48,6 +63,83 @@ where
         let mut p = self.0.parameters();
         p.extend(self.1.parameters());
         p
+    }
+}
+
+impl<B: Backend<Dyn>, L1, L2> StateDict<B> for Sequential<L1, L2>
+where
+    L1: StateDict<B>,
+    L2: StateDict<B>,
+{
+    fn load_state_dict(
+        &mut self,
+        prefix: &str,
+        tensors: &HashMap<String, Tensor<Dyn, B>>,
+    ) -> Result<()> {
+        self.0.load_state_dict(&format!("{}0.", prefix), tensors)?;
+        self.1.load_state_dict(&format!("{}1.", prefix), tensors)?;
+        Ok(())
+    }
+
+    fn state_dict(&self, prefix: &str, tensors: &mut HashMap<String, Tensor<Dyn, B>>) {
+        self.0.state_dict(&format!("{}0.", prefix), tensors);
+        self.1.state_dict(&format!("{}1.", prefix), tensors);
+    }
+}
+
+// Dummy implementations for primitive/marker types that are often fields in modules.
+macro_rules! impl_dummy_state {
+    ($($t:ty),+) => {
+        $(
+            impl<B: Backend<Dyn>> Parameters<B> for $t {
+                fn parameters(&self) -> Vec<B::RawVar> {
+                    Vec::new()
+                }
+            }
+
+            impl<B: Backend<Dyn>> StateDict<B> for $t {
+                fn load_state_dict(&mut self, _prefix: &str, _tensors: &HashMap<String, Tensor<Dyn, B>>) -> Result<()> {
+                    Ok(())
+                }
+
+                fn state_dict(&self, _prefix: &str, _tensors: &mut HashMap<String, Tensor<Dyn, B>>) {
+                }
+            }
+        )+
+    };
+}
+
+impl_dummy_state!(usize, f32);
+
+impl<T: ?Sized, B: Backend<Dyn>> Parameters<B> for core::marker::PhantomData<T> {
+    fn parameters(&self) -> Vec<B::RawVar> { Vec::new() }
+}
+impl<T: ?Sized, B: Backend<Dyn>> StateDict<B> for core::marker::PhantomData<T> {
+    fn load_state_dict(&mut self, _prefix: &str, _tensors: &HashMap<String, Tensor<Dyn, B>>) -> Result<()> { Ok(()) }
+    fn state_dict(&self, _prefix: &str, _tensors: &mut HashMap<String, Tensor<Dyn, B>>) {}
+}
+
+impl<T: Parameters<B>, B: Backend<Dyn>> Parameters<B> for Option<T> {
+    fn parameters(&self) -> Vec<B::RawVar> {
+        match self {
+            Some(v) => v.parameters(),
+            None => Vec::new(),
+        }
+    }
+}
+
+impl<T: StateDict<B>, B: Backend<Dyn>> StateDict<B> for Option<T> {
+    fn load_state_dict(&mut self, prefix: &str, tensors: &HashMap<String, Tensor<Dyn, B>>) -> Result<()> {
+        if let Some(v) = self {
+            v.load_state_dict(prefix, tensors)?;
+        }
+        Ok(())
+    }
+
+    fn state_dict(&self, prefix: &str, tensors: &mut HashMap<String, Tensor<Dyn, B>>) {
+        if let Some(v) = self {
+            v.state_dict(prefix, tensors);
+        }
     }
 }
 

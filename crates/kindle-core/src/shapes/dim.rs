@@ -26,7 +26,7 @@ impl Dim for usize {
 /// Generates a Named Tensor dimension (symbolic dimension).
 /// This creates a strong type that wraps `usize` for runtime shape tracking,
 /// ensuring that symbolic dimensions match at compile time.
-/// 
+///
 /// ```rust
 /// kindle_core::symbolic_dim!(Batch, Seq);
 /// ```
@@ -39,7 +39,7 @@ macro_rules! symbolic_dim {
 
             impl $crate::prelude::Dim for $name {
                 type Arg = usize;
-                
+
                 #[inline(always)]
                 fn size(&self) -> usize {
                     self.0
@@ -85,7 +85,10 @@ impl<A: Dim, B: Dim> Dim for ProdDim<A, B> {
 
 impl<A: Dim + Default, B: Dim + Default> Default for ProdDim<A, B> {
     fn default() -> Self {
-        Self(A::default().size() * B::default().size(), core::marker::PhantomData)
+        Self(
+            A::default().size() * B::default().size(),
+            core::marker::PhantomData,
+        )
     }
 }
 

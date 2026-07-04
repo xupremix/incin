@@ -146,11 +146,15 @@ impl_not_unit! {
 
 impl ArgInto<(usize, ())> for (usize, ()) {
     #[inline(always)]
-    fn into_arg(self) -> (usize, ()) { self }
+    fn into_arg(self) -> (usize, ()) {
+        self
+    }
 }
 impl ArgInto<((), usize)> for ((), usize) {
     #[inline(always)]
-    fn into_arg(self) -> ((), usize) { self }
+    fn into_arg(self) -> ((), usize) {
+        self
+    }
 }
 
 // () combinations used for static shapes should also be treated as Non-Unit

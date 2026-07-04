@@ -58,21 +58,28 @@ where
 }
 
 // Dyn shapes compute output shape dynamically based on the inputs
-impl<Stride: crate::tensor::matmul::StaticDim + typenum::Unsigned, Padding: crate::tensor::matmul::StaticDim + typenum::Unsigned> Conv2dShape<Dyn, Stride, Padding> for Dyn {
+impl<
+    Stride: crate::tensor::matmul::StaticDim + typenum::Unsigned,
+    Padding: crate::tensor::matmul::StaticDim + typenum::Unsigned,
+> Conv2dShape<Dyn, Stride, Padding> for Dyn
+{
     type Output = Dyn;
-    fn output_shape(lhs: &<Dyn as Shape>::Field, kernel: &<Dyn as Shape>::Field) -> <Dyn as Shape>::Field {
+    fn output_shape(
+        lhs: &<Dyn as Shape>::Field,
+        kernel: &<Dyn as Shape>::Field,
+    ) -> <Dyn as Shape>::Field {
         if lhs.len() != 4 || kernel.len() != 4 {
             return alloc::vec![];
         }
         let (n, _c_in, h_in, w_in) = (lhs[0], lhs[1], lhs[2], lhs[3]);
         let (c_out, _c_in_k, k_h, k_w) = (kernel[0], kernel[1], kernel[2], kernel[3]);
-        
+
         let stride = Stride::USIZE;
         let padding = Padding::USIZE;
-        
+
         let h_out = (h_in + 2 * padding - k_h) / stride + 1;
         let w_out = (w_in + 2 * padding - k_w) / stride + 1;
-        
+
         alloc::vec![n, c_out, h_out, w_out]
     }
 }

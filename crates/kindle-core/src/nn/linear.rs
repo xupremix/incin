@@ -1,6 +1,5 @@
+use crate::nn::module::Module;
 use crate::prelude::*;
-use crate::nn::module::{Module, Parameters};
-use alloc::vec::Vec;
 
 pub trait LinearShape: Shape + DynShape {
     type BiasShape: Shape + DynShape;
@@ -15,27 +14,43 @@ impl LinearShape for Dyn {
 }
 
 #[derive(Debug, Clone)]
-pub struct Linear<S: LinearShape, B: Backend<Dyn> + Backend<S, RawVar = <B as Backend<Dyn>>::RawVar, RawTensor = <B as Backend<Dyn>>::RawTensor> + Backend<S::BiasShape, RawVar = <B as Backend<Dyn>>::RawVar, RawTensor = <B as Backend<Dyn>>::RawTensor>> {
+#[kindle_macros::module(internal)]
+pub struct Linear<
+    S: LinearShape,
+    B: Backend<Dyn>
+        + Backend<S, RawVar = <B as Backend<Dyn>>::RawVar, RawTensor = <B as Backend<Dyn>>::RawTensor>
+        + Backend<
+            S::BiasShape,
+            RawVar = <B as Backend<Dyn>>::RawVar,
+            RawTensor = <B as Backend<Dyn>>::RawTensor,
+        >,
+> {
     pub weight: Param<S, B>,
     pub bias: Option<Param<S::BiasShape, B>>,
 }
 
-impl<S: LinearShape, B: Backend<Dyn> + Backend<S, RawVar = <B as Backend<Dyn>>::RawVar, RawTensor = <B as Backend<Dyn>>::RawTensor> + Backend<S::BiasShape, RawVar = <B as Backend<Dyn>>::RawVar, RawTensor = <B as Backend<Dyn>>::RawTensor>> Parameters<B> for Linear<S, B> {
-    fn parameters(&self) -> Vec<<B as Backend<Dyn>>::RawVar> {
-        let mut p = self.weight.parameters();
-        if let Some(b) = &self.bias {
-            p.extend(b.parameters());
-        }
-        p
-    }
-}
+
 
 // Implement `Module` for `Linear` when input shape is `(Batch, In)`.
 // We can use the MatMul bounds for static shape verification.
 // For now, let's keep it simple: input is `Tensor<IS, B>` where `IS` is the input shape.
 // To do this fully statically, we need trait bounds, but since `Tensor::matmul` already requires matching shapes at runtime, we can just defer to `matmul` for now.
 
-impl<InF: Dim<Arg = ()>, OutF: Dim<Arg = ()>, B: Backend<Dyn> + Backend<(InF, OutF), RawVar = <B as Backend<Dyn>>::RawVar, RawTensor = <B as Backend<Dyn>>::RawTensor> + Backend<(OutF,), RawVar = <B as Backend<Dyn>>::RawVar, RawTensor = <B as Backend<Dyn>>::RawTensor> > Linear<(InF, OutF), B> {
+impl<
+    InF: Dim<Arg = ()>,
+    OutF: Dim<Arg = ()>,
+    B: Backend<Dyn>
+        + Backend<
+            (InF, OutF),
+            RawVar = <B as Backend<Dyn>>::RawVar,
+            RawTensor = <B as Backend<Dyn>>::RawTensor,
+        > + Backend<
+            (OutF,),
+            RawVar = <B as Backend<Dyn>>::RawVar,
+            RawTensor = <B as Backend<Dyn>>::RawTensor,
+        >,
+> Linear<(InF, OutF), B>
+{
     pub fn new() -> Result<Self> {
         let weight = Param::<(InF, OutF), B>::zeros(())?;
         let bias = Param::<(OutF,), B>::zeros(())?;
@@ -76,7 +91,21 @@ impl<B: Backend<Dyn>> Module<Tensor<Dyn, B>> for Linear<Dyn, B> {
 }
 
 // Dynamic input for statically sized Linear
-impl<InF: Dim<Arg = ()>, OutF: Dim<Arg = ()>, B: Backend<Dyn> + Backend<(InF, OutF), RawVar = <B as Backend<Dyn>>::RawVar, RawTensor = <B as Backend<Dyn>>::RawTensor> + Backend<(OutF,), RawVar = <B as Backend<Dyn>>::RawVar, RawTensor = <B as Backend<Dyn>>::RawTensor>> Module<Tensor<Dyn, B>> for Linear<(InF, OutF), B> {
+impl<
+    InF: Dim<Arg = ()>,
+    OutF: Dim<Arg = ()>,
+    B: Backend<Dyn>
+        + Backend<
+            (InF, OutF),
+            RawVar = <B as Backend<Dyn>>::RawVar,
+            RawTensor = <B as Backend<Dyn>>::RawTensor,
+        > + Backend<
+            (OutF,),
+            RawVar = <B as Backend<Dyn>>::RawVar,
+            RawTensor = <B as Backend<Dyn>>::RawTensor,
+        >,
+> Module<Tensor<Dyn, B>> for Linear<(InF, OutF), B>
+{
     type Output = Tensor<Dyn, B>;
     type Error = Error;
 

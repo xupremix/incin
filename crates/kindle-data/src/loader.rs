@@ -1,40 +1,150 @@
-use kindle_core::prelude::*;
-use rayon::prelude::*;
+use crate::dataset::Dataset;
+use rand::seq::SliceRandom;
+use rand::thread_rng;
+use std::sync::mpsc::{sync_channel, Receiver};
+use std::sync::{Arc, Mutex};
+use std::thread;
 
-/// A strict-typed batch containing features and optional targets.
-pub struct Batch<S1: Shape, B1: Backend<S1>, S2: Shape = (), B2: Backend<S2> = B1> {
-    pub features: Tensor<S1, B1>,
-    pub targets: Option<Tensor<S2, B2>>,
+pub trait Collate<T>: Send + Sync {
+    type Output: Send + 'static;
+    fn collate(&self, batch: Vec<T>) -> Self::Output;
 }
 
-/// Extension trait to convert any standard Rust `Iterator` into a multi-threaded Parallel Dataloader.
-pub trait DataLoaderExt: Iterator + Send + Sized {
-    /// Converts this iterator into a parallel dataloader using `rayon`.
-    ///
-    /// This effortlessly spreads the data loading across all available CPU cores.
-    fn into_par_loader(self) -> rayon::iter::IterBridge<Self>
-    where
-        Self::Item: Send + Sync,
-    {
-        self.par_bridge()
+pub struct DataLoader<D, C>
+where
+    D: Dataset + 'static,
+    C: Collate<D::Item> + 'static,
+{
+    dataset: Arc<D>,
+    collate_fn: Arc<C>,
+    batch_size: usize,
+    num_workers: usize,
+    shuffle: bool,
+}
+
+impl<D, C> DataLoader<D, C>
+where
+    D: Dataset + 'static,
+    C: Collate<D::Item> + 'static,
+{
+    pub fn new(dataset: D, collate_fn: C, batch_size: usize) -> Self {
+        Self {
+            dataset: Arc::new(dataset),
+            collate_fn: Arc::new(collate_fn),
+            batch_size,
+            num_workers: 0,
+            shuffle: false,
+        }
+    }
+
+    pub fn with_num_workers(mut self, num_workers: usize) -> Self {
+        self.num_workers = num_workers;
+        self
+    }
+
+    pub fn with_shuffle(mut self, shuffle: bool) -> Self {
+        self.shuffle = shuffle;
+        self
     }
 }
 
-// Implement for all standard iterators automatically!
-impl<I: Iterator + Send> DataLoaderExt for I {}
+pub struct DataLoaderIter<T> {
+    receiver: Receiver<T>,
+}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+impl<T> Iterator for DataLoaderIter<T> {
+    type Item = T;
 
-    #[test]
-    fn test_parallel_loader() {
-        let items: Vec<i32> = (0..100).collect();
-        let iter = items.into_iter();
+    fn next(&mut self) -> Option<Self::Item> {
+        self.receiver.recv().ok()
+    }
+}
 
-        // Convert the iterator into a rayon Parallel Iterator natively
-        let sum: i32 = iter.into_par_loader().map(|x| x * 2).sum();
+impl<D, C> IntoIterator for &DataLoader<D, C>
+where
+    D: Dataset + 'static,
+    C: Collate<D::Item> + 'static,
+{
+    type Item = C::Output;
+    type IntoIter = DataLoaderIter<C::Output>;
 
-        assert_eq!(sum, 9900);
+    fn into_iter(self) -> Self::IntoIter {
+        let mut indices: Vec<usize> = (0..self.dataset.len()).collect();
+        if self.shuffle {
+            indices.shuffle(&mut thread_rng());
+        }
+
+        let num_batches = (indices.len() + self.batch_size - 1) / self.batch_size;
+        let mut batch_indices = Vec::with_capacity(num_batches);
+        
+        for i in 0..num_batches {
+            let start = i * self.batch_size;
+            let end = std::cmp::min(start + self.batch_size, indices.len());
+            batch_indices.push(indices[start..end].to_vec());
+        }
+
+        // Bounded channel to prevent over-fetching
+        let (tx, rx) = sync_channel(self.num_workers * 2 + 2);
+        
+        let dataset = self.dataset.clone();
+        let collate_fn = self.collate_fn.clone();
+
+        if self.num_workers == 0 {
+            // Single-threaded
+            thread::spawn(move || {
+                for batch_idx in batch_indices {
+                    let mut batch = Vec::with_capacity(batch_idx.len());
+                    for idx in batch_idx {
+                        if let Some(item) = dataset.get(idx) {
+                            batch.push(item);
+                        }
+                    }
+                    if !batch.is_empty() {
+                        let collated = collate_fn.collate(batch);
+                        if tx.send(collated).is_err() {
+                            break;
+                        }
+                    }
+                }
+            });
+        } else {
+            // Multi-threaded
+            let batch_indices = Arc::new(Mutex::new(batch_indices.into_iter()));
+            
+            for _ in 0..self.num_workers {
+                let dataset = dataset.clone();
+                let collate_fn = collate_fn.clone();
+                let tx = tx.clone();
+                let batch_indices = batch_indices.clone();
+
+                thread::spawn(move || {
+                    loop {
+                        let next_batch = {
+                            let mut iter = batch_indices.lock().unwrap();
+                            iter.next()
+                        };
+
+                        if let Some(batch_idx) = next_batch {
+                            let mut batch = Vec::with_capacity(batch_idx.len());
+                            for idx in batch_idx {
+                                if let Some(item) = dataset.get(idx) {
+                                    batch.push(item);
+                                }
+                            }
+                            if !batch.is_empty() {
+                                let collated = collate_fn.collate(batch);
+                                if tx.send(collated).is_err() {
+                                    break;
+                                }
+                            }
+                        } else {
+                            break;
+                        }
+                    }
+                });
+            }
+        }
+
+        DataLoaderIter { receiver: rx }
     }
 }

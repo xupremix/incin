@@ -1,6 +1,5 @@
+use crate::nn::module::Module;
 use crate::prelude::*;
-use crate::nn::module::{Module, Parameters};
-use alloc::vec::Vec;
 use typenum::Unsigned;
 
 pub trait Conv2dShape: Shape + DynShape {
@@ -16,25 +15,47 @@ impl Conv2dShape for Dyn {
 }
 
 #[derive(Debug, Clone)]
-pub struct Conv2d<S: Conv2dShape, Stride: Unsigned + Default, Padding: Unsigned + Default, B: Backend<Dyn> + Backend<S, RawVar = <B as Backend<Dyn>>::RawVar, RawTensor = <B as Backend<Dyn>>::RawTensor> + Backend<S::BiasShape, RawVar = <B as Backend<Dyn>>::RawVar, RawTensor = <B as Backend<Dyn>>::RawTensor>> {
+#[kindle_macros::module(internal)]
+pub struct Conv2d<
+    S: Conv2dShape,
+    Stride: Unsigned + Default,
+    Padding: Unsigned + Default,
+    B: Backend<Dyn>
+        + Backend<S, RawVar = <B as Backend<Dyn>>::RawVar, RawTensor = <B as Backend<Dyn>>::RawTensor>
+        + Backend<
+            S::BiasShape,
+            RawVar = <B as Backend<Dyn>>::RawVar,
+            RawTensor = <B as Backend<Dyn>>::RawTensor,
+        >,
+> {
     pub weight: Param<S, B>,
     pub bias: Option<Param<S::BiasShape, B>>,
     _stride: core::marker::PhantomData<Stride>,
     _padding: core::marker::PhantomData<Padding>,
 }
 
-impl<S: Conv2dShape, Stride: Unsigned + Default, Padding: Unsigned + Default, B: Backend<Dyn> + Backend<S, RawVar = <B as Backend<Dyn>>::RawVar, RawTensor = <B as Backend<Dyn>>::RawTensor> + Backend<S::BiasShape, RawVar = <B as Backend<Dyn>>::RawVar, RawTensor = <B as Backend<Dyn>>::RawTensor>> Parameters<B> for Conv2d<S, Stride, Padding, B> {
-    fn parameters(&self) -> Vec<<B as Backend<Dyn>>::RawVar> {
-        let mut p = self.weight.parameters();
-        if let Some(b) = &self.bias {
-            p.extend(b.parameters());
-        }
-        p
-    }
-}
+
 
 // Static initialization
-impl<COut: Dim<Arg = ()>, CIn: Dim<Arg = ()>, KH: Dim<Arg = ()>, KW: Dim<Arg = ()>, Stride: Unsigned + Default, Padding: Unsigned + Default, B: Backend<Dyn> + Backend<(COut, CIn, KH, KW), RawVar = <B as Backend<Dyn>>::RawVar, RawTensor = <B as Backend<Dyn>>::RawTensor> + Backend<(COut,), RawVar = <B as Backend<Dyn>>::RawVar, RawTensor = <B as Backend<Dyn>>::RawTensor> > Conv2d<(COut, CIn, KH, KW), Stride, Padding, B> {
+impl<
+    COut: Dim<Arg = ()>,
+    CIn: Dim<Arg = ()>,
+    KH: Dim<Arg = ()>,
+    KW: Dim<Arg = ()>,
+    Stride: Unsigned + Default,
+    Padding: Unsigned + Default,
+    B: Backend<Dyn>
+        + Backend<
+            (COut, CIn, KH, KW),
+            RawVar = <B as Backend<Dyn>>::RawVar,
+            RawTensor = <B as Backend<Dyn>>::RawTensor,
+        > + Backend<
+            (COut,),
+            RawVar = <B as Backend<Dyn>>::RawVar,
+            RawTensor = <B as Backend<Dyn>>::RawTensor,
+        >,
+> Conv2d<(COut, CIn, KH, KW), Stride, Padding, B>
+{
     pub fn new() -> core::result::Result<Self, Error> {
         let weight = Param::<(COut, CIn, KH, KW), B>::zeros(())?;
         let bias = Param::<(COut,), B>::zeros(())?;
@@ -48,7 +69,9 @@ impl<COut: Dim<Arg = ()>, CIn: Dim<Arg = ()>, KH: Dim<Arg = ()>, KW: Dim<Arg = (
 }
 
 // Dynamic initialization
-impl<Stride: Unsigned + Default, Padding: Unsigned + Default, B: Backend<Dyn>> Conv2d<Dyn, Stride, Padding, B> {
+impl<Stride: Unsigned + Default, Padding: Unsigned + Default, B: Backend<Dyn>>
+    Conv2d<Dyn, Stride, Padding, B>
+{
     pub fn new(cout: usize, cin: usize, kh: usize, kw: usize) -> core::result::Result<Self, Error> {
         let weight = Param::<Dyn, B>::zeros([cout, cin, kh, kw])?;
         let bias = Param::<Dyn, B>::zeros([cout])?;
@@ -62,7 +85,12 @@ impl<Stride: Unsigned + Default, Padding: Unsigned + Default, B: Backend<Dyn>> C
 }
 
 // Forward Dynamic for dynamically-initialized Conv2d
-impl<Stride: Unsigned + Default + StaticDim, Padding: Unsigned + Default + StaticDim, B: Backend<Dyn>> Module<Tensor<Dyn, B>> for Conv2d<Dyn, Stride, Padding, B> {
+impl<
+    Stride: Unsigned + Default + StaticDim,
+    Padding: Unsigned + Default + StaticDim,
+    B: Backend<Dyn>,
+> Module<Tensor<Dyn, B>> for Conv2d<Dyn, Stride, Padding, B>
+{
     type Output = Tensor<Dyn, B>;
     type Error = Error;
 
@@ -77,7 +105,25 @@ impl<Stride: Unsigned + Default + StaticDim, Padding: Unsigned + Default + Stati
 }
 
 // Forward Dynamic for statically-initialized Conv2d
-impl<COut: Dim<Arg = ()>, CIn: Dim<Arg = ()>, KH: Dim<Arg = ()>, KW: Dim<Arg = ()>, Stride: Unsigned + Default + StaticDim, Padding: Unsigned + Default + StaticDim, B: Backend<Dyn> + Backend<(COut, CIn, KH, KW), RawVar = <B as Backend<Dyn>>::RawVar, RawTensor = <B as Backend<Dyn>>::RawTensor> + Backend<(COut,), RawVar = <B as Backend<Dyn>>::RawVar, RawTensor = <B as Backend<Dyn>>::RawTensor> > Module<Tensor<Dyn, B>> for Conv2d<(COut, CIn, KH, KW), Stride, Padding, B> {
+impl<
+    COut: Dim<Arg = ()>,
+    CIn: Dim<Arg = ()>,
+    KH: Dim<Arg = ()>,
+    KW: Dim<Arg = ()>,
+    Stride: Unsigned + Default + StaticDim,
+    Padding: Unsigned + Default + StaticDim,
+    B: Backend<Dyn>
+        + Backend<
+            (COut, CIn, KH, KW),
+            RawVar = <B as Backend<Dyn>>::RawVar,
+            RawTensor = <B as Backend<Dyn>>::RawTensor,
+        > + Backend<
+            (COut,),
+            RawVar = <B as Backend<Dyn>>::RawVar,
+            RawTensor = <B as Backend<Dyn>>::RawTensor,
+        >,
+> Module<Tensor<Dyn, B>> for Conv2d<(COut, CIn, KH, KW), Stride, Padding, B>
+{
     type Output = Tensor<Dyn, B>;
     type Error = Error;
 
@@ -100,6 +146,3 @@ impl<COut: Dim<Arg = ()>, CIn: Dim<Arg = ()>, KH: Dim<Arg = ()>, KW: Dim<Arg = (
 // This is because compile-time arithmetic (HOut = (HIn + 2P - K)/S + 1) requires `typenum` math.
 // Let's implement it by returning `Tensor<Dyn, B>` and letting the user cast it, OR we just implement `Module` for `Tensor<Dyn, B>` for all cases for now?
 // Let's implement the math!
-
-
-

@@ -1,5 +1,5 @@
-use crate::prelude::*;
 use crate::nn::module::{Module, Parameters};
+use crate::prelude::*;
 use alloc::vec::Vec;
 
 #[derive(Debug, Clone, Default)]
@@ -39,3 +39,88 @@ impl<S: Shape, B: Backend<Dyn> + Backend<S>> Module<Tensor<S, B>> for GELU {
         x.gelu()
     }
 }
+
+#[derive(Debug, Clone, Default)]
+pub struct Swish;
+
+impl<B: Backend<Dyn>> Parameters<B> for Swish {
+    fn parameters(&self) -> Vec<B::RawVar> {
+        Vec::new()
+    }
+}
+
+impl<S: Shape, B: Backend<Dyn> + Backend<S>> Module<Tensor<S, B>> for Swish {
+    type Output = Tensor<S, B>;
+    type Error = Error;
+
+    #[inline]
+    fn forward(&self, x: Tensor<S, B>) -> core::result::Result<Tensor<S, B>, Error> {
+        x.swish()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Softmax {
+    pub dim: usize,
+}
+
+impl Softmax {
+    pub fn new(dim: usize) -> Self {
+        Self { dim }
+    }
+}
+
+impl<B: Backend<Dyn>> Parameters<B> for Softmax {
+    fn parameters(&self) -> Vec<B::RawVar> {
+        Vec::new()
+    }
+}
+
+impl<S: Shape, B: Backend<Dyn> + Backend<S>> Module<Tensor<S, B>> for Softmax {
+    type Output = Tensor<S, B>;
+    type Error = Error;
+
+    #[inline]
+    fn forward(&self, x: Tensor<S, B>) -> core::result::Result<Tensor<S, B>, Error> {
+        x.softmax(self.dim)
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct Sigmoid;
+
+impl<B: Backend<Dyn>> Parameters<B> for Sigmoid {
+    fn parameters(&self) -> Vec<B::RawVar> {
+        Vec::new()
+    }
+}
+
+impl<S: Shape, B: Backend<Dyn> + Backend<S>> Module<Tensor<S, B>> for Sigmoid {
+    type Output = Tensor<S, B>;
+    type Error = Error;
+
+    #[inline]
+    fn forward(&self, x: Tensor<S, B>) -> core::result::Result<Tensor<S, B>, Error> {
+        x.sigmoid()
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct Tanh;
+
+impl<B: Backend<Dyn>> Parameters<B> for Tanh {
+    fn parameters(&self) -> Vec<B::RawVar> {
+        Vec::new()
+    }
+}
+
+impl<S: Shape, B: Backend<Dyn> + Backend<S>> Module<Tensor<S, B>> for Tanh {
+    type Output = Tensor<S, B>;
+    type Error = Error;
+
+    #[inline]
+    fn forward(&self, x: Tensor<S, B>) -> core::result::Result<Tensor<S, B>, Error> {
+        x.tanh()
+    }
+}
+
