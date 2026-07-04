@@ -1,148 +1,62 @@
-use crate::nn::module::Module;
+use crate::nn::{Module, Param};
 use crate::prelude::*;
+use crate::shapes::Conv2dShape;
 use typenum::Unsigned;
-
-pub trait Conv2dShape: Shape + DynShape {
-    type BiasShape: Shape + DynShape;
-}
-
-impl<COut: Dim, CIn: Dim, KH: Dim, KW: Dim> Conv2dShape for (COut, CIn, KH, KW) {
-    type BiasShape = (COut,);
-}
-
-impl Conv2dShape for Dyn {
-    type BiasShape = Dyn;
-}
 
 #[derive(Debug, Clone)]
 #[kindle_macros::module(internal)]
-pub struct Conv2d<
-    S: Conv2dShape,
-    Stride: Unsigned + Default,
-    Padding: Unsigned + Default,
-    B: Backend<Dyn>
-        + Backend<S, RawVar = <B as Backend<Dyn>>::RawVar, RawTensor = <B as Backend<Dyn>>::RawTensor>
-        + Backend<
-            S::BiasShape,
-            RawVar = <B as Backend<Dyn>>::RawVar,
-            RawTensor = <B as Backend<Dyn>>::RawTensor,
-        >,
-> {
-    pub weight: Param<S, B>,
-    pub bias: Option<Param<S::BiasShape, B>>,
-    _stride: core::marker::PhantomData<Stride>,
-    _padding: core::marker::PhantomData<Padding>,
+pub struct Conv2d<K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned, W: Shape, B: Backend<W> + Backend<Dyn>> {
+    pub weight: Param<W, B>,
+    pub bias: Option<Param<Dyn, B>>,
+    pub stride: usize,
+    pub padding: usize,
+    pub dilation: usize,
+    _phantom: core::marker::PhantomData<(K, S, P, D)>,
 }
 
-
-
-// Static initialization
-impl<
-    COut: Dim<Arg = ()>,
-    CIn: Dim<Arg = ()>,
-    KH: Dim<Arg = ()>,
-    KW: Dim<Arg = ()>,
-    Stride: Unsigned + Default,
-    Padding: Unsigned + Default,
-    B: Backend<Dyn>
-        + Backend<
-            (COut, CIn, KH, KW),
-            RawVar = <B as Backend<Dyn>>::RawVar,
-            RawTensor = <B as Backend<Dyn>>::RawTensor,
-        > + Backend<
-            (COut,),
-            RawVar = <B as Backend<Dyn>>::RawVar,
-            RawTensor = <B as Backend<Dyn>>::RawTensor,
-        >,
-> Conv2d<(COut, CIn, KH, KW), Stride, Padding, B>
+impl<I, K, S, P, D, W, B> Module<Tensor<I, B>> for Conv2d<K, S, P, D, W, B>
+where
+    K: Unsigned,
+    S: Unsigned,
+    P: Unsigned,
+    D: Unsigned,
+    I: Shape + DynShape + Conv2dShape<K, S, P, D>,
+    W: Shape,
+    B: Backend<W, RawTensor = <B as Backend<I>>::RawTensor>
+        + Backend<Dyn, RawTensor = <B as Backend<I>>::RawTensor>
+        + Backend<I>
+        + Backend<I::Output, RawTensor = <B as Backend<I>>::RawTensor>,
 {
-    pub fn new() -> core::result::Result<Self, Error> {
-        let weight = Param::<(COut, CIn, KH, KW), B>::zeros(())?;
-        let bias = Param::<(COut,), B>::zeros(())?;
-        Ok(Self {
-            weight,
-            bias: Some(bias),
-            _stride: core::marker::PhantomData,
-            _padding: core::marker::PhantomData,
-        })
-    }
-}
-
-// Dynamic initialization
-impl<Stride: Unsigned + Default, Padding: Unsigned + Default, B: Backend<Dyn>>
-    Conv2d<Dyn, Stride, Padding, B>
-{
-    pub fn new(cout: usize, cin: usize, kh: usize, kw: usize) -> core::result::Result<Self, Error> {
-        let weight = Param::<Dyn, B>::zeros([cout, cin, kh, kw])?;
-        let bias = Param::<Dyn, B>::zeros([cout])?;
-        Ok(Self {
-            weight,
-            bias: Some(bias),
-            _stride: core::marker::PhantomData,
-            _padding: core::marker::PhantomData,
-        })
-    }
-}
-
-// Forward Dynamic for dynamically-initialized Conv2d
-impl<
-    Stride: Unsigned + Default + StaticDim,
-    Padding: Unsigned + Default + StaticDim,
-    B: Backend<Dyn>,
-> Module<Tensor<Dyn, B>> for Conv2d<Dyn, Stride, Padding, B>
-{
-    type Output = Tensor<Dyn, B>;
+    type Output = Tensor<I::Output, B>;
     type Error = Error;
 
-    fn forward(&self, x: Tensor<Dyn, B>) -> core::result::Result<Tensor<Dyn, B>, Error> {
-        let bias_ref = match &self.bias {
+    #[inline]
+    fn forward(&self, x: Tensor<I, B>) -> core::result::Result<Self::Output, Error> {
+        let weight = self.weight.as_tensor()?;
+        let bias = match &self.bias {
             Some(b) => Some(b.as_tensor()?),
             None => None,
         };
-        let b = bias_ref.as_ref();
-        x.conv2d::<Stride, Padding, _>(&self.weight.as_tensor()?, b)
+
+        // Note: the backend conv2d currently expects a single usize for symmetric params
+        // or we need to update it if we switch to asymmetric.
+        let out = <B as Backend<I>>::conv2d(
+            x.inner(),
+            weight.inner(),
+            bias.as_ref().map(|b| b.inner()),
+            self.stride,
+            self.padding,
+            self.dilation,
+        )?;
+        
+        let mut dims = <I as DynShape>::dims(x.shape_field()).into();
+        if dims.len() == 4 {
+            dims[2] = (dims[2] + 2 * P::USIZE - D::USIZE * (K::USIZE - 1) - 1) / S::USIZE + 1;
+            dims[3] = (dims[3] + 2 * P::USIZE - D::USIZE * (K::USIZE - 1) - 1) / S::USIZE + 1;
+        }
+        
+        let shape = I::Output::from_dyn(&dims).unwrap();
+
+        Ok(Tensor::from_parts(out, shape, x._dtype.clone(), weight._device.clone(), core::marker::PhantomData))
     }
 }
-
-// Forward Dynamic for statically-initialized Conv2d
-impl<
-    COut: Dim<Arg = ()>,
-    CIn: Dim<Arg = ()>,
-    KH: Dim<Arg = ()>,
-    KW: Dim<Arg = ()>,
-    Stride: Unsigned + Default + StaticDim,
-    Padding: Unsigned + Default + StaticDim,
-    B: Backend<Dyn>
-        + Backend<
-            (COut, CIn, KH, KW),
-            RawVar = <B as Backend<Dyn>>::RawVar,
-            RawTensor = <B as Backend<Dyn>>::RawTensor,
-        > + Backend<
-            (COut,),
-            RawVar = <B as Backend<Dyn>>::RawVar,
-            RawTensor = <B as Backend<Dyn>>::RawTensor,
-        >,
-> Module<Tensor<Dyn, B>> for Conv2d<(COut, CIn, KH, KW), Stride, Padding, B>
-{
-    type Output = Tensor<Dyn, B>;
-    type Error = Error;
-
-    fn forward(&self, x: Tensor<Dyn, B>) -> core::result::Result<Tensor<Dyn, B>, Error> {
-        let weight_dyn = self.weight.as_tensor()?.into_shape::<Dyn>()?;
-        let bias_dyn = match &self.bias {
-            Some(b) => Some(b.as_tensor()?.into_shape::<Dyn>()?),
-            None => None,
-        };
-        let b = bias_dyn.as_ref();
-        x.conv2d::<Stride, Padding, _>(&weight_dyn, b)
-    }
-}
-
-// Forward Static
-// (Batch, CIn, HIn, WIn) -> (Batch, COut, HOut, WOut)
-// We need to know HOut and WOut based on HIn and WIn.
-// For now, let's keep it simple and defer to dynamic or let the user explicitly specify the output shape?
-// The current tensor `conv2d` returns `Tensor<Dyn, B>` when called on static shapes and then requires `.into_shape()`.
-// This is because compile-time arithmetic (HOut = (HIn + 2P - K)/S + 1) requires `typenum` math.
-// Let's implement it by returning `Tensor<Dyn, B>` and letting the user cast it, OR we just implement `Module` for `Tensor<Dyn, B>` for all cases for now?
-// Let's implement the math!

@@ -1,22 +1,28 @@
 use crate::nn::{Module, Param};
 use crate::prelude::*;
-use crate::tensor::conv1d::Conv1dShape;
+use crate::shapes::Conv1dShape;
+use typenum::Unsigned;
 
 #[derive(Debug, Clone)]
 #[kindle_macros::module(internal)]
-pub struct Conv1d<W: Shape, B: Backend<W> + Backend<Dyn>> {
+pub struct Conv1d<K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned, W: Shape, B: Backend<W> + Backend<Dyn>> {
     pub weight: Param<W, B>,
     pub bias: Option<Param<Dyn, B>>,
     pub stride: usize,
     pub padding: usize,
     pub dilation: usize,
+    _phantom: core::marker::PhantomData<(K, S, P, D)>,
 }
 
 
 
-impl<I, W, B> Module<Tensor<I, B>> for Conv1d<W, B>
+impl<I, K, S, P, D, W, B> Module<Tensor<I, B>> for Conv1d<K, S, P, D, W, B>
 where
-    I: Shape + Conv1dShape<W>,
+    K: Unsigned,
+    S: Unsigned,
+    P: Unsigned,
+    D: Unsigned,
+    I: Shape + DynShape + Conv1dShape<K, S, P, D>,
     W: Shape,
     B: Backend<W, RawTensor = <B as Backend<I>>::RawTensor>
         + Backend<Dyn, RawTensor = <B as Backend<I>>::RawTensor>
@@ -43,7 +49,12 @@ where
             self.dilation,
         )?;
         
-        let shape = I::Output::from_dyn(&<B as Backend<I>>::shape(&out)).unwrap();
+        let mut dims = <I as DynShape>::dims(x.shape_field()).into();
+        if dims.len() == 3 {
+            dims[2] = (dims[2] + 2 * P::USIZE - D::USIZE * (K::USIZE - 1) - 1) / S::USIZE + 1;
+        }
+        
+        let shape = I::Output::from_dyn(&dims).unwrap();
 
         Ok(Tensor::from_parts(out, shape, x._dtype.clone(), weight._device.clone(), core::marker::PhantomData))
     }

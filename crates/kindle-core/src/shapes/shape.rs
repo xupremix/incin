@@ -28,6 +28,10 @@ pub trait DynShape: Shape {
     fn dims(shape: &Self::Field) -> Self::Dims;
 }
 
+pub trait AppendDim<D: Dim> {
+    type Output: Shape;
+}
+
 pub trait PartialDynShape: DynShape {
     const RANK: usize;
 }
@@ -68,6 +72,10 @@ impl DynShape for Dyn {
     fn dims(shape: &Self::Field) -> Self::Dims {
         shape.clone()
     }
+}
+
+impl<D: Dim> AppendDim<D> for Dyn {
+    type Output = Dyn;
 }
 
 macro_rules! impl_shape_for_tuple {
@@ -160,6 +168,10 @@ impl PartialDynShape for () {
     const RANK: usize = 0;
 }
 
+impl<D: Dim> AppendDim<D> for () {
+    type Output = (D,);
+}
+
 impl ConstShape for () {
     const NUMEL: usize = 1;
     const DIMS: <Self as Shape>::Dims = [];
@@ -193,6 +205,27 @@ impl_shape_for_tuple!(8, D0 0, D1 1, D2 2, D3 3, D4 4, D5 5, D6 6, D7 7);
 impl_shape_for_tuple!(9, D0 0, D1 1, D2 2, D3 3, D4 4, D5 5, D6 6, D7 7, D8 8);
 impl_shape_for_tuple!(10, D0 0, D1 1, D2 2, D3 3, D4 4, D5 5, D6 6, D7 7, D8 8, D9 9);
 impl_shape_for_tuple!(11, D0 0, D1 1, D2 2, D3 3, D4 4, D5 5, D6 6, D7 7, D8 8, D9 9, D10 10);
+impl_shape_for_tuple!(12, D0 0, D1 1, D2 2, D3 3, D4 4, D5 5, D6 6, D7 7, D8 8, D9 9, D10 10, D11 11);
+
+macro_rules! impl_append_dim_for_tuple {
+    ($($name:ident),*) => {
+        impl< $($name: Dim,)* Append: Dim > AppendDim<Append> for ( $($name,)*) {
+            type Output = ( $($name,)* Append);
+        }
+    };
+}
+
+impl_append_dim_for_tuple!(D0);
+impl_append_dim_for_tuple!(D0, D1);
+impl_append_dim_for_tuple!(D0, D1, D2);
+impl_append_dim_for_tuple!(D0, D1, D2, D3);
+impl_append_dim_for_tuple!(D0, D1, D2, D3, D4);
+impl_append_dim_for_tuple!(D0, D1, D2, D3, D4, D5);
+impl_append_dim_for_tuple!(D0, D1, D2, D3, D4, D5, D6);
+impl_append_dim_for_tuple!(D0, D1, D2, D3, D4, D5, D6, D7);
+impl_append_dim_for_tuple!(D0, D1, D2, D3, D4, D5, D6, D7, D8);
+impl_append_dim_for_tuple!(D0, D1, D2, D3, D4, D5, D6, D7, D8, D9);
+impl_append_dim_for_tuple!(D0, D1, D2, D3, D4, D5, D6, D7, D8, D9, D10);
 // Note: Rust standard library only implements traits (Debug, Eq, etc.) for tuples up to size 12.
 // For dimensions > 12, use `[usize; N]` which is fully supported via const generics.
 

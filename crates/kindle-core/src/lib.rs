@@ -20,7 +20,7 @@ pub mod prelude {
         avg_pool2d::AvgPool2d,
         batch_norm::BatchNorm2d,
         conv1d::Conv1d,
-        conv2d::{Conv2d, Conv2dShape},
+        conv2d::Conv2d,
         layer_norm::LayerNorm,
         linear::{Linear, LinearShape},
         max_pool2d::MaxPool2d,

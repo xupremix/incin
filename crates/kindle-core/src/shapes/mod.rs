@@ -5,9 +5,11 @@ pub mod hlist;
 pub mod named;
 pub mod shape;
 pub mod shape_ops;
+pub mod spatial;
 
 pub use dim::*;
 pub use shape::*;
+pub use spatial::*;
 pub use shape_ops::*;
 
 pub mod prelude {
