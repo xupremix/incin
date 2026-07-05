@@ -498,6 +498,52 @@ pub fn try_reshape<S2>(&self, args: S2::Arg) -> Result<Tensor<S2, B, G>>
             self._grad.clone(),
         ))
     }
+
+
+
+    pub fn cross_entropy_loss<S2: Shape>(&self, target: &Tensor<S2, B, G>) -> Result<Tensor<Dyn, B, G>> {
+        let inner = B::cross_entropy_loss(&self.inner, &target.inner)?;
+        Ok(Tensor::from_parts_unchecked(
+            inner,
+            vec![],
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        ))
+    }
+
+    pub fn mse_loss<S2: Shape>(&self, target: &Tensor<S2, B, G>) -> Result<Tensor<Dyn, B, G>> {
+        let inner = B::mse_loss(&self.inner, &target.inner)?;
+        Ok(Tensor::from_parts_unchecked(
+            inner,
+            vec![],
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        ))
+    }
+
+    pub fn l1_loss<S2: Shape>(&self, target: &Tensor<S2, B, G>) -> Result<Tensor<Dyn, B, G>> {
+        let inner = B::l1_loss(&self.inner, &target.inner)?;
+        Ok(Tensor::from_parts_unchecked(
+            inner,
+            vec![],
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        ))
+    }
+
+    pub fn bce_with_logits_loss<S2: Shape>(&self, target: &Tensor<S2, B, G>) -> Result<Tensor<Dyn, B, G>> {
+        let inner = B::bce_with_logits_loss(&self.inner, &target.inner)?;
+        Ok(Tensor::from_parts_unchecked(
+            inner,
+            vec![],
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        ))
+    }
 }
 
 
