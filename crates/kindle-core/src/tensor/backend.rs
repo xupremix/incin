@@ -246,10 +246,10 @@ pub mod dummy {
         fn sigmoid(t: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(t.clone()) }
         fn mul_scalar(t: &Self::RawTensor, _s: f64) -> Result<Self::RawTensor> { Ok(t.clone()) }
         fn add_scalar(t: &Self::RawTensor, _s: f64) -> Result<Self::RawTensor> { Ok(t.clone()) }
-        fn sum_all(t: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(alloc::vec![]) }
-        fn mean_all(t: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(alloc::vec![]) }
-        fn max_all(t: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(alloc::vec![]) }
-        fn min_all(t: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(alloc::vec![]) }
+        fn sum_all(_t: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(alloc::vec![]) }
+        fn mean_all(_t: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(alloc::vec![]) }
+        fn max_all(_t: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(alloc::vec![]) }
+        fn min_all(_t: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(alloc::vec![]) }
         fn sum_dim(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor> { let mut s = t.clone(); s.remove(dim); Ok(s) }
         fn sum_keepdim(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor> { let mut s = t.clone(); s[dim] = 1; Ok(s) }
         fn mean_dim(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor> { let mut s = t.clone(); s.remove(dim); Ok(s) }

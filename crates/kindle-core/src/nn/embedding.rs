@@ -1,8 +1,6 @@
 use crate::nn::{Module, Param};
 use crate::prelude::*;
 
-use typenum::Unsigned;
-
 #[derive(Debug, Clone)]
 #[kindle_macros::module(internal)]
 pub struct Embedding<V: Dim, E: Dim, B: Backend> {

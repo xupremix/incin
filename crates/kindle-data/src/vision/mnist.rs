@@ -1,7 +1,6 @@
 use std::fs::File;
 use std::io::Read;
-use std::path::{Path, PathBuf};
-use flate2::read::GzDecoder;
+use std::path::Path;
 
 pub struct MnistDataset {
     pub images: Vec<u8>,
@@ -29,8 +28,12 @@ impl MnistDataset {
         
         std::fs::create_dir_all(dir)?;
         
-        Self::download_if_not_exists(&images_file, images_url)?;
-        Self::download_if_not_exists(&labels_file, labels_url)?;
+        crate::downloader::Downloader::download_and_extract_gz(images_url, dir, images_file.file_name().unwrap().to_str().unwrap().strip_suffix(".gz").unwrap_or(images_file.file_name().unwrap().to_str().unwrap()))?;
+        crate::downloader::Downloader::download_and_extract_gz(labels_url, dir, labels_file.file_name().unwrap().to_str().unwrap().strip_suffix(".gz").unwrap_or(labels_file.file_name().unwrap().to_str().unwrap()))?;
+        
+        // Adjust the parsed file path to the extracted file, without .gz
+        let images_file = dir.join(images_file.file_name().unwrap().to_str().unwrap().strip_suffix(".gz").unwrap());
+        let labels_file = dir.join(labels_file.file_name().unwrap().to_str().unwrap().strip_suffix(".gz").unwrap());
         
         let images = Self::parse_images(&images_file)?;
         let labels = Self::parse_labels(&labels_file)?;
@@ -38,19 +41,10 @@ impl MnistDataset {
         Ok(Self { images, labels, train })
     }
     
-    fn download_if_not_exists(path: &Path, url: &str) -> anyhow::Result<()> {
-        if !path.exists() {
-            println!("Downloading {}...", url);
-            let resp = ureq::get(url).call().map_err(|e| anyhow::anyhow!("Download failed: {}", e))?;
-            let mut reader = resp.into_body().into_reader();
-            let mut out = File::create(path)?;
-            std::io::copy(&mut reader, &mut out)?;
-        }
-        Ok(())
-    }
+
     
     fn parse_images(path: &Path) -> anyhow::Result<Vec<u8>> {
-        let mut f = GzDecoder::new(File::open(path)?);
+        let mut f = File::open(path)?;
         let mut magic = [0u8; 4];
         let mut count = [0u8; 4];
         let mut rows = [0u8; 4];
@@ -72,7 +66,7 @@ impl MnistDataset {
     }
     
     fn parse_labels(path: &Path) -> anyhow::Result<Vec<u8>> {
-        let mut f = GzDecoder::new(File::open(path)?);
+        let mut f = File::open(path)?;
         let mut magic = [0u8; 4];
         let mut count = [0u8; 4];
         

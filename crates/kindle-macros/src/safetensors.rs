@@ -80,7 +80,7 @@ fn generate_structs(
                     quote! { kindle::nn::Param<#shape_ty, B> }
                 };
 
-                let common_bound = quote! { RawVar = <B as kindle::prelude::Backend>::RawVar, RawTensor = <B as kindle::prelude::Backend>::RawTensor };
+                let _common_bound = quote! { RawVar = <B as kindle::prelude::Backend>::RawVar, RawTensor = <B as kindle::prelude::Backend>::RawTensor };
                 bounds.push(quote! { B: kindle::prelude::Backend });
                 fields.push(quote! { pub #field_name_ident: #ty });
             }

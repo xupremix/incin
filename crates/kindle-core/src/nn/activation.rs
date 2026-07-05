@@ -123,3 +123,28 @@ impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for Tanh {
         x.tanh()
     }
 }
+
+impl<B: Backend> crate::nn::module::StateDict<B> for ReLU {
+    fn load_state_dict(&mut self, _: &str, _: &std::collections::HashMap<String, Tensor<Dyn, B>>) -> crate::prelude::Result<()> { Ok(()) }
+    fn state_dict(&self, _: &str, _: &mut std::collections::HashMap<String, Tensor<Dyn, B>>) {}
+}
+impl<B: Backend> crate::nn::module::StateDict<B> for GELU {
+    fn load_state_dict(&mut self, _: &str, _: &std::collections::HashMap<String, Tensor<Dyn, B>>) -> crate::prelude::Result<()> { Ok(()) }
+    fn state_dict(&self, _: &str, _: &mut std::collections::HashMap<String, Tensor<Dyn, B>>) {}
+}
+impl<B: Backend> crate::nn::module::StateDict<B> for Swish {
+    fn load_state_dict(&mut self, _: &str, _: &std::collections::HashMap<String, Tensor<Dyn, B>>) -> crate::prelude::Result<()> { Ok(()) }
+    fn state_dict(&self, _: &str, _: &mut std::collections::HashMap<String, Tensor<Dyn, B>>) {}
+}
+impl<B: Backend> crate::nn::module::StateDict<B> for Softmax {
+    fn load_state_dict(&mut self, _: &str, _: &std::collections::HashMap<String, Tensor<Dyn, B>>) -> crate::prelude::Result<()> { Ok(()) }
+    fn state_dict(&self, _: &str, _: &mut std::collections::HashMap<String, Tensor<Dyn, B>>) {}
+}
+impl<B: Backend> crate::nn::module::StateDict<B> for Sigmoid {
+    fn load_state_dict(&mut self, _: &str, _: &std::collections::HashMap<String, Tensor<Dyn, B>>) -> crate::prelude::Result<()> { Ok(()) }
+    fn state_dict(&self, _: &str, _: &mut std::collections::HashMap<String, Tensor<Dyn, B>>) {}
+}
+impl<B: Backend> crate::nn::module::StateDict<B> for Tanh {
+    fn load_state_dict(&mut self, _: &str, _: &std::collections::HashMap<String, Tensor<Dyn, B>>) -> crate::prelude::Result<()> { Ok(()) }
+    fn state_dict(&self, _: &str, _: &mut std::collections::HashMap<String, Tensor<Dyn, B>>) {}
+}

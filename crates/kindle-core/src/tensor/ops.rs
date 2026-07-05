@@ -4,7 +4,7 @@
 //! This ensures at compile time that you can't accidentally add tensors
 //! of different shapes, dtypes, or on different devices.
 
-use crate::prelude::{Backend, DType, Device, Dyn, DynShape, RequiresGrad, Result, Shape, Tensor};
+use crate::prelude::{Backend, Dyn, DynShape, RequiresGrad, Result, Shape, Tensor};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IndexSpec {
@@ -612,6 +612,7 @@ impl<S: Shape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::prelude::{DType, Device};
     use crate::prelude::{KindleDType, KindleDevice};
     use alloc::vec;
 
@@ -716,7 +717,7 @@ mod tests {
             Ok(alloc::vec::Vec::new())
         }
         
-        fn from_bytes(bytes: &[u8], shape: &[usize], dtype: KindleDType, device: &KindleDevice) -> Result<Self::RawTensor> {
+        fn from_bytes(_bytes: &[u8], shape: &[usize], _dtype: KindleDType, _device: &KindleDevice) -> Result<Self::RawTensor> {
             Ok(shape.to_vec())
         }
 

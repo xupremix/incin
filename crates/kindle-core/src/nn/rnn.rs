@@ -98,3 +98,23 @@ where
         Ok((stacked, h))
     }
 }
+
+impl<In: Dim, Out: Dim, B: Backend> crate::nn::module::StateDict<B> for RNNCell<In, Out, B> {
+    fn load_state_dict(&mut self, prefix: &str, tensors: &std::collections::HashMap<String, Tensor<Dyn, B>>) -> crate::prelude::Result<()> {
+        self.wi.load_state_dict(&format!("{}wi.", prefix), tensors)?;
+        self.wh.load_state_dict(&format!("{}wh.", prefix), tensors)?;
+        Ok(())
+    }
+    fn state_dict(&self, prefix: &str, tensors: &mut std::collections::HashMap<String, Tensor<Dyn, B>>) {
+        self.wi.state_dict(&format!("{}wi.", prefix), tensors);
+        self.wh.state_dict(&format!("{}wh.", prefix), tensors);
+    }
+}
+impl<In: Dim, Out: Dim, B: Backend> crate::nn::module::StateDict<B> for RNN<In, Out, B> {
+    fn load_state_dict(&mut self, prefix: &str, tensors: &std::collections::HashMap<String, Tensor<Dyn, B>>) -> crate::prelude::Result<()> {
+        self.cell.load_state_dict(&format!("{}cell.", prefix), tensors)
+    }
+    fn state_dict(&self, prefix: &str, tensors: &mut std::collections::HashMap<String, Tensor<Dyn, B>>) {
+        self.cell.state_dict(&format!("{}cell.", prefix), tensors)
+    }
+}

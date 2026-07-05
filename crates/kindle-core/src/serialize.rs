@@ -40,7 +40,7 @@ impl<'a> Serializer for SafetensorsSerializer<'a> {
     where
         <<B as Backend>::DType as DType>::Field: Default,
         <<B as Backend>::Device as Device>::Field: Default {
-        use safetensors::tensor::{Dtype, SafeTensors, TensorView};
+        use safetensors::tensor::{Dtype, TensorView};
         let mut data_map = HashMap::new();
         let mut bytes_store = Vec::new();
 
@@ -217,5 +217,61 @@ impl<'a> Deserializer for BincodeDeserializer<'a> {
         }
         
         Ok(state_dict)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Format {
+    Safetensors,
+    ONNX,
+}
+
+pub trait ModelExt<B: Backend> {
+    fn save(&self, format: Format, path: &std::path::Path) -> Result<()>
+    where
+        <<B as Backend>::DType as DType>::Field: Default,
+        <<B as Backend>::Device as Device>::Field: Default;
+        
+    fn load(&mut self, format: Format, path: &std::path::Path, device: &KindleDevice) -> Result<()>
+    where
+        <<B as Backend>::DType as DType>::Field: Default,
+        <<B as Backend>::Device as Device>::Field: Default;
+}
+
+impl<B: Backend, T: crate::nn::module::StateDict<B>> ModelExt<B> for T {
+    fn save(&self, format: Format, path: &std::path::Path) -> Result<()> 
+    where
+        <<B as Backend>::DType as DType>::Field: Default,
+        <<B as Backend>::Device as Device>::Field: Default 
+    {
+        match format {
+            Format::Safetensors => {
+                let mut serializer = SafetensorsSerializer::new(path);
+                self.save_to(&mut serializer).map_err(|e| anyhow::anyhow!(e))?
+            }
+            Format::ONNX => {
+                let mut serializer = crate::onnx_exporter::OnnxExporter::new(path);
+                self.save_to(&mut serializer).map_err(|e| anyhow::anyhow!(e))?
+            }
+        }
+        Ok(())
+    }
+
+    fn load(&mut self, format: Format, path: &std::path::Path, device: &KindleDevice) -> Result<()> 
+    where
+        <<B as Backend>::DType as DType>::Field: Default,
+        <<B as Backend>::Device as Device>::Field: Default 
+    {
+        match format {
+            Format::Safetensors => {
+                let mut deserializer = SafetensorsDeserializer::new(path);
+                self.load_from(&mut deserializer, device)?;
+            }
+            Format::ONNX => {
+                let mut deserializer = crate::onnx_exporter::OnnxImporter::new(path);
+                self.load_from(&mut deserializer, device)?;
+            }
+        }
+        Ok(())
     }
 }

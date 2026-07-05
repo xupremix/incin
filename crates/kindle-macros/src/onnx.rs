@@ -1,5 +1,4 @@
 use onnx_pb::ModelProto;
-use proc_macro::TokenStream;
 use prost::Message;
 use quote::{format_ident, quote};
 use std::fs;
