@@ -1,4 +1,4 @@
-use kindle::prelude::*;
+
 
 // import_model! reads the safetensors file AT COMPILE TIME to build the nested module struct.
 // For this example to compile, `resnet18.safetensors` must exist locally during compilation.

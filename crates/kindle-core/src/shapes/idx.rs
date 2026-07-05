@@ -55,7 +55,7 @@ macro_rules! impl_reshape_target {
                 let mut infer_idx = None;
                 
                 // Collect specified sizes and find the InferDim
-                let mut current_idx = 0;
+                let mut _current_idx = 0usize;
                 $(
                     let size = $D::size();
                     if size.is_none() {
@@ -69,12 +69,12 @@ macro_rules! impl_reshape_target {
                         if infer_idx.is_some() {
                             panic!("Only one inferred dimension (-1 or NamedDyn) is allowed in reshape");
                         }
-                        infer_idx = Some(current_idx);
+                        infer_idx = Some(_current_idx);
                         resolved_sizes.push(0); // placeholder
                     } else {
                         resolved_sizes.push(size.unwrap());
                     }
-                    current_idx += 1;
+                    _current_idx += 1;
                 )*
                 
                 if let Some(idx) = infer_idx {
@@ -149,11 +149,11 @@ macro_rules! impl_slice_target {
             
             fn calculate_bounds(in_shape_vec: &[usize]) -> Vec<(usize, usize)> {
                 let mut bounds = vec![];
-                let mut current_idx = 0;
+                let mut _current_idx = 0usize;
                 $(
-                    let size = in_shape_vec.get(current_idx).copied().unwrap_or(0);
+                    let size = in_shape_vec.get(_current_idx).copied().unwrap_or(0);
                     bounds.push($D::bounds(size));
-                    current_idx += 1;
+                    _current_idx += 1;
                 )*
                 bounds
             }

@@ -3,7 +3,7 @@ use quote::{format_ident, quote};
 
 pub fn generate_shape_ops(_input: TokenStream) -> TokenStream {
     let mut tokens = proc_macro2::TokenStream::new();
-    let max_rank = 7;
+    let max_rank = 8;
 
     // 1. Generate Transpose<D1, D2>
     for rank in 1..=max_rank {

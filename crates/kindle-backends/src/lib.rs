@@ -506,8 +506,8 @@ pub mod candle {
             t: &Self::RawTensor,
             kernel_size: (usize, usize),
             stride: (usize, usize),
-            padding: (usize, usize),
-            dilation: (usize, usize),
+            _padding: (usize, usize),
+            _dilation: (usize, usize),
         ) -> Result<Self::RawTensor> {
             Ok(
                 t.max_pool2d_with_stride((kernel_size.0, kernel_size.1), (stride.0, stride.1))
@@ -519,7 +519,7 @@ pub mod candle {
             t: &Self::RawTensor,
             kernel_size: (usize, usize),
             stride: (usize, usize),
-            padding: (usize, usize),
+            _padding: (usize, usize),
         ) -> Result<Self::RawTensor> {
             Ok(
                 t.avg_pool2d_with_stride((kernel_size.0, kernel_size.1), (stride.0, stride.1))

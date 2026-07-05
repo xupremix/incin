@@ -2,7 +2,6 @@ pub mod arithmetic;
 pub mod broadcast;
 pub mod const_dim;
 pub mod dim;
-pub mod hlist;
 pub mod named;
 pub mod shape;
 pub mod shape_ops;
@@ -26,7 +25,6 @@ pub mod prelude {
     pub use super::broadcast::*;
     pub use super::const_dim::*;
     pub use super::dim::*;
-    pub use super::hlist::*;
     pub use super::named::*;
     pub use super::shape::*;
 }

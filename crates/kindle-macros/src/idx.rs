@@ -1,7 +1,7 @@
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{
-    Expr, Token, parse::Parse, parse::ParseStream, parse_macro_input, punctuated::Punctuated, ExprRange, RangeLimits
+    Expr, Token, parse::Parse, parse::ParseStream, parse_macro_input, punctuated::Punctuated, RangeLimits
 };
 
 struct IdxList {

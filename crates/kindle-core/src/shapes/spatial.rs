@@ -62,7 +62,7 @@ pub trait Pool2dShape<K, S, P, D>: crate::prelude::Shape {
 }
 
 use crate::prelude::{Dim, Dyn};
-use typenum::{U0, Unsigned};
+use typenum::Unsigned;
 
 // Implement for (B, C, H, W) -> (B, C, HOut, WOut)
 impl<B: Dim, C: Dim, HIn: Dim, WIn: Dim, K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned> Pool2dShape<K, S, P, D>

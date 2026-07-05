@@ -221,10 +221,6 @@ impl_shape_for_tuple!(5, D0 0, D1 1, D2 2, D3 3, D4 4);
 impl_shape_for_tuple!(6, D0 0, D1 1, D2 2, D3 3, D4 4, D5 5);
 impl_shape_for_tuple!(7, D0 0, D1 1, D2 2, D3 3, D4 4, D5 5, D6 6);
 impl_shape_for_tuple!(8, D0 0, D1 1, D2 2, D3 3, D4 4, D5 5, D6 6, D7 7);
-impl_shape_for_tuple!(9, D0 0, D1 1, D2 2, D3 3, D4 4, D5 5, D6 6, D7 7, D8 8);
-impl_shape_for_tuple!(10, D0 0, D1 1, D2 2, D3 3, D4 4, D5 5, D6 6, D7 7, D8 8, D9 9);
-impl_shape_for_tuple!(11, D0 0, D1 1, D2 2, D3 3, D4 4, D5 5, D6 6, D7 7, D8 8, D9 9, D10 10);
-impl_shape_for_tuple!(12, D0 0, D1 1, D2 2, D3 3, D4 4, D5 5, D6 6, D7 7, D8 8, D9 9, D10 10, D11 11);
 
 macro_rules! impl_append_dim_for_tuple {
     ($($name:ident),*) => {
@@ -241,12 +237,8 @@ impl_append_dim_for_tuple!(D0, D1, D2, D3);
 impl_append_dim_for_tuple!(D0, D1, D2, D3, D4);
 impl_append_dim_for_tuple!(D0, D1, D2, D3, D4, D5);
 impl_append_dim_for_tuple!(D0, D1, D2, D3, D4, D5, D6);
-impl_append_dim_for_tuple!(D0, D1, D2, D3, D4, D5, D6, D7);
-impl_append_dim_for_tuple!(D0, D1, D2, D3, D4, D5, D6, D7, D8);
-impl_append_dim_for_tuple!(D0, D1, D2, D3, D4, D5, D6, D7, D8, D9);
-impl_append_dim_for_tuple!(D0, D1, D2, D3, D4, D5, D6, D7, D8, D9, D10);
 // Note: Rust standard library only implements traits (Debug, Eq, etc.) for tuples up to size 12.
-// For dimensions > 12, use `[usize; N]` which is fully supported via const generics.
+// We cap at rank 8 — appending to a 7-dim tuple yields rank 8, the maximum.
 
 macro_rules! impl_replace_last_dim_for_tuple {
     ($last:ident) => {
@@ -421,10 +413,6 @@ impl_replace_last_dim_for_tuple!(D0, D1, D2, D3, D4);
 impl_replace_last_dim_for_tuple!(D0, D1, D2, D3, D4, D5);
 impl_replace_last_dim_for_tuple!(D0, D1, D2, D3, D4, D5, D6);
 impl_replace_last_dim_for_tuple!(D0, D1, D2, D3, D4, D5, D6, D7);
-impl_replace_last_dim_for_tuple!(D0, D1, D2, D3, D4, D5, D6, D7, D8);
-impl_replace_last_dim_for_tuple!(D0, D1, D2, D3, D4, D5, D6, D7, D8, D9);
-impl_replace_last_dim_for_tuple!(D0, D1, D2, D3, D4, D5, D6, D7, D8, D9, D10);
-impl_replace_last_dim_for_tuple!(D0, D1, D2, D3, D4, D5, D6, D7, D8, D9, D10, D11);
 
 impl<NewDim: Dim> ReplaceLastDim<NewDim> for Dyn {
     type Output = Dyn;

@@ -91,16 +91,8 @@ pub(crate) fn shape(input: TokenStream) -> TokenStream {
         }
     }
 
-    if list.len() <= 7 {
-        quote! {
-            ( #(#output,)* )
-        }
-        .into()
-    } else {
-        let mut expanded = quote! { #path Nil };
-        for out in output.into_iter().rev() {
-            expanded = quote! { #path Cons<#out, #expanded> };
-        }
-        expanded.into()
+    quote! {
+        ( #(#output,)* )
     }
+    .into()
 }
