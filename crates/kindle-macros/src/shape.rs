@@ -56,7 +56,7 @@ impl Parse for NumberList {
     }
 }
 
-fn lit_to_typenum(n: usize, path: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
+pub(crate) fn lit_to_typenum(n: usize, path: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
     if n == 0 {
         return quote! { #path typenum::UTerm };
     }

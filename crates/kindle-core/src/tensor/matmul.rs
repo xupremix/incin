@@ -55,7 +55,7 @@ where
 {
 }
 impl StaticDim for typenum::UTerm {}
-impl<const N: usize> StaticDim for Const<N> {}
+
 impl<A: StaticDim, B: StaticDim> StaticDim for ProdDim<A, B> {}
 
 // ============================================================================

@@ -93,7 +93,10 @@ fn generate_structs(
 
         match v {
             Node::Leaf { shape, is_buffer } => {
-                let shape_tokens = shape.iter().map(|&d| quote! { kindle::prelude::Const<#d> });
+                let shape_tokens = shape.iter().map(|&d| {
+                    let path = quote! { kindle::prelude:: };
+                    crate::shape::lit_to_typenum(d, &path)
+                });
                 let shape_ty = quote! { (#(#shape_tokens,)*) };
                 let ty = if *is_buffer {
                     quote! { kindle::nn::Buffer<#shape_ty, B> }

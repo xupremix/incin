@@ -1,4 +1,5 @@
-use crate::prelude::{ConstDim, Dim, Dyn};
+use crate::prelude::{Dim, Dyn};
+use typenum::Unsigned;
 use alloc::vec::Vec;
 use core::fmt::Debug;
 use core::ops::{Index, IndexMut};
@@ -132,9 +133,9 @@ macro_rules! impl_shape_for_tuple {
             }
         }
 
-        impl<$($name: ConstDim, )*> ConstShape for ($($name, )*) {
-            const NUMEL: usize = $($name::SIZE * )* 1;
-            const DIMS: Self::Dims = [$($name::SIZE),*];
+        impl<$($name: Unsigned + Dim, )*> ConstShape for ($($name, )*) {
+            const NUMEL: usize = $($name::USIZE * )* 1;
+            const DIMS: Self::Dims = [$($name::USIZE),*];
         }
 
         impl Shape for [usize; ($n)] {

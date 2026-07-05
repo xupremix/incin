@@ -25,7 +25,8 @@ pub(crate) fn idx(input: TokenStream) -> TokenStream {
             Expr::Lit(expr_lit) => {
                 if let syn::Lit::Int(lit_int) = &expr_lit.lit {
                     let val: usize = lit_int.base10_parse().unwrap();
-                    quote! { kindle::prelude::Const<#val> }
+                    let path = quote! { kindle::prelude:: };
+                    crate::shape::lit_to_typenum(val, &path)
                 } else {
                     panic!("idx! only supports integers, identifiers, -1, and ranges");
                 }
@@ -81,8 +82,12 @@ pub(crate) fn idx(input: TokenStream) -> TokenStream {
                         }
                         
                         
-    let diff = end_val - start_val;
-    quote! { kindle::shapes::Slice<#start_val, #end_val, #diff> }
+                        let diff = end_val - start_val;
+                        let path = quote! { kindle::prelude:: };
+                        let start_type = crate::shape::lit_to_typenum(start_val, &path);
+                        let end_type = crate::shape::lit_to_typenum(end_val, &path);
+                        let diff_type = crate::shape::lit_to_typenum(diff, &path);
+                        quote! { kindle::shapes::Slice<#start_type, #end_type, #diff_type> }
     
                     }
                     _ => panic!("idx! currently only supports `..` or `start..end`"),

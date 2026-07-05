@@ -368,7 +368,10 @@ pub(crate) fn parse_onnx(rel_path: &str, root_name: &Ident, no_meta: bool) -> pr
     let mut inits = Vec::new();
     for (i, raw_name) in meta.param_names.iter().enumerate() {
         let ident = format_ident!("_{}", raw_name.replace(".", "_").replace("/", "_").replace("-", "_"));
-        let p_dims = meta.param_shapes[i].iter().map(|&d| quote! { kindle::prelude::Const<#d> });
+        let p_dims = meta.param_shapes[i].iter().map(|&d| {
+            let path = quote! { kindle::prelude:: };
+            crate::shape::lit_to_typenum(d, &path)
+        });
         fields.push(quote! { pub #ident: kindle::nn::Param<(#(#p_dims,)*), B> });
 
         inits.push(quote! {
@@ -380,7 +383,10 @@ pub(crate) fn parse_onnx(rel_path: &str, root_name: &Ident, no_meta: bool) -> pr
     for (raw_name, shape) in &meta.user_inputs {
         let ident = format_ident!("_{}", raw_name.replace(".", "_").replace("/", "_").replace("-", "_"));
         let dims = shape.iter().map(|d| match d {
-            OnnxDim::Const(v) => quote! { kindle::prelude::Const<#v> },
+            OnnxDim::Const(v) => {
+                let path = quote! { kindle::prelude:: };
+                crate::shape::lit_to_typenum(*v, &path)
+            },
             OnnxDim::Dyn => quote! { usize },
         });
         user_inputs.push(quote! { #ident: kindle::prelude::Tensor<(#(#dims,)*), B> });
@@ -400,7 +406,10 @@ pub(crate) fn parse_onnx(rel_path: &str, root_name: &Ident, no_meta: bool) -> pr
     let last_output: proc_macro2::TokenStream = meta.last_output.parse().unwrap();
 
     let out_dims = meta.last_output_shape.iter().map(|d| match d {
-        OnnxDim::Const(v) => quote! { kindle::prelude::Const<#v> },
+        OnnxDim::Const(v) => {
+            let path = quote! { kindle::prelude:: };
+            crate::shape::lit_to_typenum(*v, &path)
+        },
         OnnxDim::Dyn => quote! { usize },
     });
     let out_shape_type = quote! { (#(#out_dims,)*) };

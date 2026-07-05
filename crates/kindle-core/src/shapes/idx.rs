@@ -7,7 +7,9 @@ pub struct InferDim;
 pub struct Ellipsis;
 
 /// A slice spanning a range `[START, END)`.
-pub struct Slice<const START: usize, const END: usize, const DIFF: usize>;
+pub struct Slice<Start, End, Diff> {
+    _marker: core::marker::PhantomData<(Start, End, Diff)>,
+}
 
 /// A trait for types that can appear in an index macro `idx![...]` for reshape.
 pub trait DimIdx {
@@ -18,9 +20,21 @@ pub trait DimIdx {
     fn size() -> Option<usize>;
 }
 
-impl<const N: usize> DimIdx for Const<N> {
-    type Resolved = Const<N>;
-    fn size() -> Option<usize> { Some(N) }
+use typenum::{UInt, UTerm, Unsigned, Bit};
+
+impl DimIdx for UTerm {
+    type Resolved = UTerm;
+    fn size() -> Option<usize> { Some(0) }
+}
+
+impl<U, B> DimIdx for UInt<U, B>
+where
+    U: Unsigned + Dim,
+    B: Bit + Default + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + PartialEq + 'static,
+    UInt<U, B>: Unsigned + Default + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + PartialEq + 'static,
+{
+    type Resolved = UInt<U, B>;
+    fn size() -> Option<usize> { Some(Self::USIZE) }
 }
 
 impl DimIdx for InferDim {
@@ -109,17 +123,29 @@ pub trait SliceIdx {
     fn bounds(size: usize) -> (usize, usize);
 }
 
-impl<const START: usize, const END: usize, const DIFF: usize> SliceIdx for Slice<START, END, DIFF> {
-    type Resolved = Const<DIFF>;
+impl<Start: Unsigned, End: Unsigned, Diff: Dim> SliceIdx for Slice<Start, End, Diff> {
+    type Resolved = Diff;
     fn bounds(_size: usize) -> (usize, usize) {
-        (START, END)
+        (Start::USIZE, End::USIZE)
     }
 }
 
-impl<const N: usize> SliceIdx for Const<N> {
-    type Resolved = Const<1>;
+impl SliceIdx for UTerm {
+    type Resolved = typenum::U1;
     fn bounds(_size: usize) -> (usize, usize) {
-        (N, N + 1)
+        (0, 1)
+    }
+}
+
+impl<U, B> SliceIdx for UInt<U, B>
+where
+    U: Unsigned + Dim,
+    B: Bit + Default + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + PartialEq + 'static,
+    UInt<U, B>: Unsigned + Default + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + PartialEq + 'static,
+{
+    type Resolved = typenum::U1;
+    fn bounds(_size: usize) -> (usize, usize) {
+        (Self::USIZE, Self::USIZE + 1)
     }
 }
 
@@ -169,26 +195,27 @@ impl_slice_target!(D1, D2, D3, D4);
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::prelude::{Const, Shape};
+    use crate::prelude::{Shape};
+    use typenum::{U1, U2, U3, U4, U8, U0};
 
     fn assert_shape_eq<S1: Shape, S2: Shape>() {}
 
     #[test]
     fn slice_range_output_shape() {
-        // idx![1..3, .., 0..2] on (Const<4>, Const<4>, Const<3>) → (Const<2>, usize, Const<2>)
-        type IdxT = (Slice<1, 3, 2>, Ellipsis, Slice<0, 2, 2>);
+        // idx![1..3, .., 0..2] on (U4, U4, U3) → (U2, usize, U2)
+        type IdxT = (Slice<U1, U3, U2>, Ellipsis, Slice<U0, U2, U2>);
         assert_shape_eq::<
-            <IdxT as SliceTarget<(Const<4>, Const<4>, Const<3>)>>::Output,
-            (Const<2>, usize, Const<2>),
+            <IdxT as SliceTarget<(U4, U4, U3)>>::Output,
+            (U2, usize, U2),
         >();
     }
 
     #[test]
     fn slice_full_passthrough() {
-        // idx![.., .., ..] on (Const<4>, Const<4>, Const<3>) → (usize, usize, usize)
+        // idx![.., .., ..] on (U4, U4, U3) → (usize, usize, usize)
         type IdxT = (Ellipsis, Ellipsis, Ellipsis);
         assert_shape_eq::<
-            <IdxT as SliceTarget<(Const<4>, Const<4>, Const<3>)>>::Output,
+            <IdxT as SliceTarget<(U4, U4, U3)>>::Output,
             (usize, usize, usize),
         >();
     }
