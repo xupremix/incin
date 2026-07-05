@@ -15,6 +15,8 @@ pub mod serialize;
 pub mod onnx_exporter;
 pub mod shapes;
 pub mod tensor;
+pub mod graph;
+pub mod onnx_pb;
 
 pub mod prelude {
     pub use super::err::*;

@@ -12,6 +12,20 @@ It wraps robust tensor engines (like `candle` and `burn`) and enforces strict ma
 - **Backend Agnostic API Design**: While natively using HuggingFace's `candle`, the abstract `Backend` trait enables plugging in Burn or wgpu engines effortlessly.
 - **Zero-Cost Abstractions**: The static types `S`, `T`, `D`, `G` map entirely to `PhantomData` markers, imposing ZERO overhead on runtime buffers.
 
+## 🛠️ Setup & Requirements
+
+Because Kindle supports ONNX protocol graph serialization natively, you must have the **Protocol Buffers Compiler (`protoc`)** installed on your system to build the crate.
+
+### Ubuntu / Debian
+```bash
+sudo apt-get install -y protobuf-compiler
+```
+
+### macOS (Homebrew)
+```bash
+brew install protobuf
+```
+
 ## 🌟 Quick Tour
 
 ### Type-Safe ResNet Definition

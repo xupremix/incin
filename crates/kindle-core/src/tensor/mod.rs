@@ -8,6 +8,7 @@ pub mod dtype;
 pub mod grad;
 pub mod matmul;
 pub mod ops;
+pub mod tracing;
 
 pub mod prelude {
     pub use super::arg::*;
