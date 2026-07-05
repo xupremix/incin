@@ -6,3 +6,10 @@ scratch/
 .idea/
 .vscode/
 Cargo.lock
+*.onnx
+*.safetensors
+*.kindle_meta
+expanded.rs
+data/
+wip/
+
