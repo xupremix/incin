@@ -40,7 +40,7 @@ impl<
         let shape = <I as crate::shapes::AdaptiveAvgPool2dShape<HOut, WOut>>::compute_output_shape(
             x.shape_field(),
         );
-        Ok(Tensor::from_parts(
+        Ok(Tensor::from_parts_unchecked(
             out,
             shape,
             x._dtype.clone(),

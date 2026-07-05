@@ -33,7 +33,7 @@ impl HuggingFaceHub {
         for (name, tensor) in loaded {
             let dims = tensor.dims().to_vec();
             // Wrap in our dynamic Tensor
-            let kindle_tensor = Tensor::<Dyn, CandleBackend<f32, Cpu>, Grad>::from_parts(
+            let kindle_tensor = Tensor::<Dyn, CandleBackend<f32, Cpu>, Grad>::from_parts_unchecked(
                 tensor,
                 dims,
                 core::marker::PhantomData,

@@ -6,10 +6,12 @@ pub type Result<T> = core::result::Result<T, Error>;
 
 #[derive(thiserror::Error)]
 pub enum Error {
-    #[error("Shape mismatch at runtime: expected {expected:?}, got {got:?}")]
+    #[error("Shape mismatch during '{op}': expected {expected:?}, got {got:?}. {msg}")]
     ShapeMismatch {
+        op: &'static str,
         expected: Vec<usize>,
         got: Vec<usize>,
+        msg: String,
     },
 
     #[error("Out of Memory error on device: {device}")]

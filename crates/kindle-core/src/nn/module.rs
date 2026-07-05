@@ -14,6 +14,25 @@ pub trait StateDict<B: Backend> {
 
     /// Collects the module's state into a dictionary of dynamic tensors.
     fn state_dict(&self, prefix: &str, tensors: &mut HashMap<String, Tensor<Dyn, B>>);
+    
+    /// Helper: Serializes this module's state to a given serializer.
+    fn save_to<S: crate::serialize::Serializer>(&self, serializer: &mut S) -> core::result::Result<(), S::Error> 
+    where
+        <<B as Backend>::DType as DType>::Field: Default,
+        <<B as Backend>::Device as Device>::Field: Default {
+        let mut map = HashMap::new();
+        self.state_dict("", &mut map);
+        serializer.serialize(&map)
+    }
+    
+    /// Helper: Deserializes this module's state from a given deserializer.
+    fn load_from<D: crate::serialize::Deserializer>(&mut self, deserializer: &mut D, device: &KindleDevice) -> Result<()> 
+    where
+        <<B as Backend>::DType as DType>::Field: Default,
+        <<B as Backend>::Device as Device>::Field: Default {
+        let map = deserializer.deserialize(device).map_err(|e| Error::ShapeMismatch { op: "Deserialization", expected: vec![], got: vec![], msg: format!("{:?}", e) })?;
+        self.load_state_dict("", &map)
+    }
 }
 
 /// A trait implemented by all Neural Network modules.

@@ -78,7 +78,7 @@ impl<B: Backend> ResNet<B> {
         let dims = x.dims();
         let b = dims[0];
         let c = dims[1];
-        let x = x.reshape(vec![b, c * dims[2] * dims[3]])?;
+        let x = x.try_reshape(vec![b, c * dims[2] * dims[3]])?;
 
         self.fc.forward(x)
     }

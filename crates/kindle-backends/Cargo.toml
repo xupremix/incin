@@ -21,7 +21,8 @@ anyhow = "1.0.103"
 candle-core = { workspace = true, optional = true }
 candle-nn = { workspace = true, optional = true }
 ndarray = { version = "0.17.2", optional = true }
-burn = { version = "0.21.0", optional = true }
+burn = { version = "0.21.0", optional = true, features = ["autodiff"] }
+burn-ndarray = "0.21.0"
 
 [lints]
 workspace = true

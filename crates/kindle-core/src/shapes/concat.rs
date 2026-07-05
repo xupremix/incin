@@ -1,6 +1,6 @@
 use crate::prelude::*;
 use core::ops::Add;
-use typenum::{Unsigned, U0, U1, U2, U3, U4, U5, U6};
+use typenum::{U0, U1, U2, U3, U4, U5};
 
 pub trait ConcatShape<S2, Axis> {
     type Output: Shape;

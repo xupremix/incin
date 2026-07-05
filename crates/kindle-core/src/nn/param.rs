@@ -152,8 +152,10 @@ impl<S1: DynShape, B: Backend> Param<S1, B> {
         let current_dims = S1::dims(&self._shape);
         let new_shape =
             S2::from_dyn(current_dims.as_ref()).ok_or_else(|| Error::ShapeMismatch {
+                op: "into_shape",
                 expected: alloc::vec![],
                 got: current_dims.as_ref().to_vec(),
+                msg: alloc::format!("Cannot convert from {} to new shape.", current_dims.as_ref().len()),
             })?;
 
         Ok(Param::<S2, B> {

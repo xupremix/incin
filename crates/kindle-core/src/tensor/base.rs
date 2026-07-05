@@ -29,7 +29,7 @@ impl<S: Shape, B: Backend, G: RequiresGrad> Clone for Tensor<S, B, G> {
 }
 
 impl<S: Shape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
-    pub fn from_parts(
+    pub fn from_parts_unchecked(
         inner: B::RawTensor,
         shape: S::Field,
         dtype: <B::DType as DType>::Field,
@@ -70,6 +70,26 @@ impl<S: Shape + DynShape, B: Backend, G: RequiresGrad> Tensor<S, B, G>
 where
     (S, B::DType, B::Device, G): TensorArgs<S, B::DType, B::Device, G>,
 {
+    pub fn from_parts(
+        inner: B::RawTensor,
+        shape: S::Field,
+        dtype: <B::DType as DType>::Field,
+        device: <B::Device as Device>::Field,
+        grad: G::Field,
+    ) -> Result<Self> {
+        let expected = S::dims(&shape).as_ref().to_vec();
+        let got = B::shape(&inner);
+        if expected != got {
+            return Err(Error::ShapeMismatch {
+                op: "from_parts",
+                expected,
+                got,
+                msg: alloc::format!("Runtime shape doesn't match expected static/dynamic shape"),
+            });
+        }
+        Ok(Self::from_parts_unchecked(inner, shape, dtype, device, grad))
+    }
+
     pub fn zeros<A>(args: A) -> Result<Self>
     where
         A: ArgInto<<(S, B::DType, B::Device, G) as TensorArgs<S, B::DType, B::Device, G>>::Args>,
@@ -80,7 +100,7 @@ where
         let device = <B::Device as Device>::to_kindle(&_device)?;
         let dtype = <B::DType as DType>::to_kindle(&_dtype);
         let inner = B::zeros(dims.as_ref(), dtype, &device)?;
-        Ok(Tensor::from_parts(inner, _shape, _dtype, _device, _grad))
+        Self::from_parts(inner, _shape, _dtype, _device, _grad)
     }
 
     pub fn ones<A>(args: A) -> Result<Self>
@@ -93,7 +113,7 @@ where
         let device = <B::Device as Device>::to_kindle(&_device)?;
         let dtype = <B::DType as DType>::to_kindle(&_dtype);
         let inner = B::ones(dims.as_ref(), dtype, &device)?;
-        Ok(Tensor::from_parts(inner, _shape, _dtype, _device, _grad))
+        Self::from_parts(inner, _shape, _dtype, _device, _grad)
     }
 
     pub fn rand<A>(args: A) -> Result<Self>
@@ -106,7 +126,7 @@ where
         let device = <B::Device as Device>::to_kindle(&_device)?;
         let dtype = <B::DType as DType>::to_kindle(&_dtype);
         let inner = B::rand(dims.as_ref(), dtype, &device)?;
-        Ok(Tensor::from_parts(inner, _shape, _dtype, _device, _grad))
+        Self::from_parts(inner, _shape, _dtype, _device, _grad)
     }
 
     pub fn randn<A>(args: A) -> Result<Self>
@@ -119,7 +139,7 @@ where
         let device = <B::Device as Device>::to_kindle(&_device)?;
         let dtype = <B::DType as DType>::to_kindle(&_dtype);
         let inner = B::randn(dims.as_ref(), dtype, &device)?;
-        Ok(Tensor::from_parts(inner, _shape, _dtype, _device, _grad))
+        Self::from_parts(inner, _shape, _dtype, _device, _grad)
     }
 
     pub fn from_raw<A>(raw_tensor: B::RawTensor, args: A) -> Result<Self>
@@ -128,9 +148,9 @@ where
     {
         let (_shape, _dtype, _device, _grad) =
             <(S, B::DType, B::Device, G)>::construct(args.into_arg());
-        Ok(Tensor::from_parts(
+        Self::from_parts(
             raw_tensor, _shape, _dtype, _device, _grad,
-        ))
+        )
     }
 }
 
@@ -148,7 +168,7 @@ where
         let device = <B::Device as Device>::to_kindle(&_device)?;
         let dtype = <B::DType as ConstDType>::DTYPE;
         let inner = B::zeros(dims.as_ref(), dtype, &device)?;
-        Ok(Tensor::from_parts(inner, _shape, _dtype, _device, _grad))
+        Self::from_parts(inner, _shape, _dtype, _device, _grad)
     }
 
     pub fn static_ones() -> Result<Self> {
@@ -160,7 +180,7 @@ where
         let device = <B::Device as Device>::to_kindle(&_device)?;
         let dtype = <B::DType as ConstDType>::DTYPE;
         let inner = B::ones(dims.as_ref(), dtype, &device)?;
-        Ok(Tensor::from_parts(inner, _shape, _dtype, _device, _grad))
+        Self::from_parts(inner, _shape, _dtype, _device, _grad)
     }
 }
 
@@ -222,19 +242,19 @@ impl<S1: Shape + DynShape, B: Backend, G: RequiresGrad> Tensor<S1, B, G> {
     pub fn into_shape<S2: Shape + DynShape>(self) -> Result<Tensor<S2, B, G>> {
         let dims = S1::dims(&self._shape);
         let s2_shape = S2::from_dyn(dims.as_ref()).unwrap();
-        Ok(Tensor::from_parts(
+        Tensor::from_parts(
             self.inner,
             s2_shape,
             self._dtype,
             self._device,
             self._grad,
-        ))
+        )
     }
 
     pub fn into_dyn(self) -> Tensor<crate::prelude::Dyn, B, G> {
         let dims = S1::dims(&self._shape);
         let s2_shape = <crate::prelude::Dyn as Shape>::from_dyn(dims.as_ref()).unwrap();
-        Tensor::from_parts(
+        Tensor::from_parts_unchecked(
             self.inner,
             s2_shape,
             self._dtype,
@@ -246,19 +266,19 @@ impl<S1: Shape + DynShape, B: Backend, G: RequiresGrad> Tensor<S1, B, G> {
     pub fn to_shape<S2: Shape + DynShape>(&self) -> Result<Tensor<S2, B, G>> {
         let dims = S1::dims(&self._shape);
         let s2_shape = S2::from_dyn(dims.as_ref()).unwrap();
-        Ok(Tensor::from_parts(
+        Tensor::from_parts(
             self.inner.clone(),
             s2_shape,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 }
 
 impl<S: Shape, B: Backend> Tensor<S, B, NoGrad> {
     pub fn require_grad(self) -> Tensor<S, B, Grad> {
-        Tensor::from_parts(
+        Tensor::from_parts_unchecked(
             self.inner,
             self._shape,
             self._dtype,
@@ -270,7 +290,7 @@ impl<S: Shape, B: Backend> Tensor<S, B, NoGrad> {
 
 impl<S: Shape, B: Backend> Tensor<S, B, Grad> {
     pub fn detach(self) -> Tensor<S, B, NoGrad> {
-        Tensor::from_parts(
+        Tensor::from_parts_unchecked(
             self.inner,
             self._shape,
             self._dtype,
@@ -336,16 +356,24 @@ mod tests {
         type DType = T;
         type BackendWithDType<NewT: DType> = DummyBackend<NewT, D>;
         type BackendWithDevice<NewD: Device> = DummyBackend<T, NewD>;
-        type RawTensor = ();
+        type RawTensor = alloc::vec::Vec<usize>;
         type RawVar = ();
         type Grads = ();
 
-        fn shape(_t: &Self::RawTensor) -> alloc::vec::Vec<usize> {
-            alloc::vec::Vec::new()
+        fn shape(t: &Self::RawTensor) -> alloc::vec::Vec<usize> {
+            t.clone()
+        }
+        
+        fn to_bytes(_t: &Self::RawTensor) -> Result<alloc::vec::Vec<u8>> {
+            Ok(alloc::vec::Vec::new())
+        }
+        
+        fn from_bytes(_bytes: &[u8], shape: &[usize], _dtype: KindleDType, _device: &KindleDevice) -> Result<Self::RawTensor> {
+            Ok(shape.to_vec())
         }
 
         fn var_as_tensor(_var: &Self::RawVar) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new()) // returns RawTensor = Vec<usize>
         }
         fn var_from_tensor(_t: &Self::RawTensor) -> Result<Self::RawVar> {
             Ok(())
@@ -377,7 +405,7 @@ mod tests {
             _t: &Self::RawTensor,
             _device: &KindleDevice,
         ) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
         fn var_to_device(_var: &Self::RawVar, _device: &KindleDevice) -> Result<Self::RawVar> {
             Ok(())
@@ -392,100 +420,100 @@ mod tests {
         }
 
         fn zeros(
-            _shape: &[usize],
+            shape: &[usize],
             _dtype: KindleDType,
             _device: &KindleDevice,
         ) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(shape.to_vec())
         }
         fn ones(
-            _shape: &[usize],
+            shape: &[usize],
             _dtype: KindleDType,
             _device: &KindleDevice,
         ) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(shape.to_vec())
         }
         fn rand(
-            _shape: &[usize],
+            shape: &[usize],
             _dtype: KindleDType,
             _device: &KindleDevice,
         ) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(shape.to_vec())
         }
         fn randn(
-            _shape: &[usize],
+            shape: &[usize],
             _dtype: KindleDType,
             _device: &KindleDevice,
         ) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(shape.to_vec())
         }
 
         fn neg(_t: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
         fn sqrt(_t: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
         fn exp(_t: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
         fn log(_t: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
         fn tanh(_t: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
         fn sigmoid(_t: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
         fn swish(_t: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
         fn softmax(_t: &Self::RawTensor, _dim: usize) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
 
         fn relu(_t: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
         fn gelu(_t: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
         fn abs(_t: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
 
         fn add(_lhs: &Self::RawTensor, _rhs: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
         fn sub(_lhs: &Self::RawTensor, _rhs: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
         fn mul(_lhs: &Self::RawTensor, _rhs: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
         fn div(_lhs: &Self::RawTensor, _rhs: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
 
         fn mul_scalar(_t: &Self::RawTensor, _scalar: f64) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
         fn add_scalar(_t: &Self::RawTensor, _scalar: f64) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
         fn sum_all(_t: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
         fn mean_all(_t: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
 
         fn matmul(_lhs: &Self::RawTensor, _rhs: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
         fn reshape(_t: &Self::RawTensor, _shape: &[usize]) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
         fn narrow(
             _t: &Self::RawTensor,
@@ -493,10 +521,10 @@ mod tests {
             _start: usize,
             _len: usize,
         ) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
         fn squeeze(_t: &Self::RawTensor, _dim: usize) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
         fn conv2d(
             _t: &Self::RawTensor,
@@ -506,52 +534,52 @@ mod tests {
             _p: usize,
             _d: usize,
         ) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
         fn max_all(_t: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
         fn min_all(_t: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
         fn sum_dim(_t: &Self::RawTensor, _dim: usize) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
         fn sum_keepdim(_t: &Self::RawTensor, _dim: usize) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
         fn mean_dim(_t: &Self::RawTensor, _dim: usize) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
         fn mean_keepdim(_t: &Self::RawTensor, _dim: usize) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
         fn max_dim(_t: &Self::RawTensor, _dim: usize) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
         fn max_keepdim(_t: &Self::RawTensor, _dim: usize) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
         fn min_dim(_t: &Self::RawTensor, _dim: usize) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
         fn min_keepdim(_t: &Self::RawTensor, _dim: usize) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
         fn to_dtype(_t: &Self::RawTensor, _dtype: KindleDType) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
         fn broadcast_as(_t: &Self::RawTensor, _shape: &[usize]) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
         fn broadcast_left(_t: &Self::RawTensor, _shape: &[usize]) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
         fn transpose(_t: &Self::RawTensor, _dim1: usize, _dim2: usize) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
         fn flatten(_t: &Self::RawTensor, _start: usize, _end: usize) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
 
         fn backward(_loss: &Self::RawTensor) -> Result<Self::Grads> {
@@ -565,10 +593,10 @@ mod tests {
         }
 
         fn stack(_t: &[&Self::RawTensor], _d: usize) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
         fn concat(_t: &[&Self::RawTensor], _d: usize) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
         fn layer_norm(
             _t: &Self::RawTensor,
@@ -576,7 +604,7 @@ mod tests {
             _b: &Self::RawTensor,
             _e: f32,
         ) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
         fn batch_norm(
             _t: &Self::RawTensor,
@@ -586,8 +614,40 @@ mod tests {
             _rv: &Self::RawTensor,
             _e: f32,
         ) -> Result<Self::RawTensor> {
-            Ok(())
+            Ok(alloc::vec::Vec::new())
         }
+
+        fn adaptive_avg_pool2d(
+            _t: &Self::RawTensor,
+            _output_size: (usize, usize),
+        ) -> Result<Self::RawTensor> {
+            unimplemented!()
+        }
+
+        fn step_adam(_params: &mut [Self::RawVar], _grads: &Self::Grads, _lr: f64) -> Result<()> {
+            unimplemented!()
+        }
+
+        fn mse_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor) -> Result<Self::RawTensor> {
+            unimplemented!()
+        }
+
+        fn l1_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor) -> Result<Self::RawTensor> {
+            unimplemented!()
+        }
+
+        fn bce_with_logits_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor) -> Result<Self::RawTensor> {
+            unimplemented!()
+        }
+
+        fn cross_entropy_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor) -> Result<Self::RawTensor> {
+            unimplemented!()
+        }
+        
+        fn format_tensor(t: &Self::RawTensor) -> alloc::string::String {
+            alloc::format!("Tensor(shape={:?})", t)
+        }
+
     }
 
     #[test]
@@ -604,5 +664,11 @@ mod tests {
         let t: Tensor<Dyn, DummyBackend<f32, crate::prelude::Cpu>> = Tensor::ones(vec![4]).unwrap();
         assert_eq!(t.rank(), 1);
         assert_eq!(t.numel(), 4);
+    }
+}
+
+impl<S: crate::prelude::Shape, B: crate::prelude::Backend> core::fmt::Display for Tensor<S, B> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "Tensor({}, shape={:?})\n{}", core::any::type_name::<B>(), B::shape(&self.inner), B::format_tensor(&self.inner))
     }
 }

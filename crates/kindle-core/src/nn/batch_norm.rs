@@ -46,3 +46,17 @@ impl<N: Dim, C: Dim, H: Dim, W: Dim, B: Backend> Module<Tensor<(N, C, H, W), B>>
         x.batch_norm(&weight, &bias, &running_mean, &running_var, self.eps)
     }
 }
+
+impl<C: Dim, B: Backend> Module<Tensor<Dyn, B>> for BatchNorm2d<C, B> {
+    type Output = Tensor<Dyn, B>;
+    type Error = Error;
+
+    #[inline]
+    fn forward(&self, x: Tensor<Dyn, B>) -> core::result::Result<Self::Output, Error> {
+        let weight = self.weight.as_tensor()?.into_dyn();
+        let bias = self.bias.as_tensor()?.into_dyn();
+        let running_mean = self.running_mean.as_tensor()?.into_dyn();
+        let running_var = self.running_var.as_tensor()?.into_dyn();
+        x.batch_norm(&weight, &bias, &running_mean, &running_var, self.eps)
+    }
+}

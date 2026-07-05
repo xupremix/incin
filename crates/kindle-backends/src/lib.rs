@@ -61,6 +61,26 @@ pub mod candle {
             t.dims().to_vec()
         }
 
+        fn format_tensor(t: &Self::RawTensor) -> std::string::String {
+            std::format!("{:?}", t)
+        }
+
+        fn adaptive_avg_pool2d(
+            _t: &Self::RawTensor,
+            _output_size: (usize, usize),
+        ) -> Result<Self::RawTensor> {
+            unimplemented!("adaptive_avg_pool2d not implemented for CandleBackend")
+        }
+
+        fn l1_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor) -> Result<Self::RawTensor> {
+            unimplemented!("l1_loss not implemented for CandleBackend")
+        }
+
+        fn bce_with_logits_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor) -> Result<Self::RawTensor> {
+            unimplemented!("bce_with_logits_loss not implemented for CandleBackend")
+        }
+
+
         fn var_as_tensor(var: &Self::RawVar) -> Result<Self::RawTensor> {
             Ok(var.as_tensor().clone())
         }
@@ -510,6 +530,21 @@ pub mod candle {
             Ok(())
         }
 
+        fn to_bytes(t: &Self::RawTensor) -> Result<std::vec::Vec<u8>> {
+            let v = t.flatten_all().map_err(|e| anyhow::anyhow!(e))?.to_vec1::<f32>().map_err(|e| anyhow::anyhow!(e))?;
+            let bytes = unsafe { std::slice::from_raw_parts(v.as_ptr() as *const u8, v.len() * std::mem::size_of::<f32>()) };
+            Ok(bytes.to_vec())
+        }
+        
+        fn from_bytes(bytes: &[u8], shape: &[usize], dtype: KindleDType, device: &KindleDevice) -> Result<Self::RawTensor> {
+            let floats = unsafe { std::slice::from_raw_parts(bytes.as_ptr() as *const f32, bytes.len() / std::mem::size_of::<f32>()) };
+            let d = to_candle_device(device).map_err(|e| anyhow::anyhow!(e))?;
+            let c_dtype = to_candle_dtype(dtype);
+            let t = candle_core::Tensor::from_slice(floats, shape, &d).map_err(|e| anyhow::anyhow!(e))?;
+            let t = t.to_dtype(c_dtype).map_err(|e| anyhow::anyhow!(e))?;
+            Ok(t)
+        }
+
         fn step_adamw(params: &mut [Self::RawVar], grads: &Self::Grads, lr: f64) -> Result<()> {
             use candle_nn::optim::Optimizer;
             let mut adamw = candle_nn::optim::AdamW::new_lr(params.to_vec(), lr)
@@ -590,8 +625,46 @@ pub mod ndarray_backend {
         type RawVar = NdarrayVar;
         type Grads = NdarrayGrads;
 
-        fn shape(_t: &Self::RawTensor) -> Vec<usize> {
-            Vec::new()
+                fn to_bytes(t: &Self::RawTensor) -> Result<std::vec::Vec<u8>> {
+            let slice = t.as_slice().ok_or_else(|| {
+                let err: kindle_core::err::Error = anyhow::anyhow!("Ndarray is not contiguous").into();
+                err
+            })?;
+            let bytes = unsafe { std::slice::from_raw_parts(slice.as_ptr() as *const u8, slice.len() * std::mem::size_of::<f32>()) };
+            Ok(bytes.to_vec())
+        }
+        
+        fn from_bytes(bytes: &[u8], shape: &[usize], dtype: KindleDType, _device: &KindleDevice) -> Result<Self::RawTensor> {
+            if dtype != KindleDType::F32 { 
+                let err: kindle_core::err::Error = anyhow::anyhow!("NdarrayBackend only supports f32").into();
+                return Err(err); 
+            }
+            let floats = unsafe { std::slice::from_raw_parts(bytes.as_ptr() as *const f32, bytes.len() / std::mem::size_of::<f32>()) };
+            let arr = ndarray::Array::from_vec(floats.to_vec()).into_shape_with_order(shape).map_err(|e| anyhow::anyhow!(e))?.into_dyn();
+            Ok(arr)
+        }
+
+        fn shape(t: &Self::RawTensor) -> Vec<usize> {
+            t.shape().to_vec()
+        }
+
+        fn format_tensor(t: &Self::RawTensor) -> std::string::String {
+            std::format!("{:?}", t)
+        }
+
+        fn adaptive_avg_pool2d(
+            _t: &Self::RawTensor,
+            _output_size: (usize, usize),
+        ) -> Result<Self::RawTensor> {
+            unimplemented!("adaptive_avg_pool2d not implemented for NdarrayBackend")
+        }
+
+        fn l1_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor) -> Result<Self::RawTensor> {
+            unimplemented!("l1_loss not implemented for NdarrayBackend")
+        }
+
+        fn bce_with_logits_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor) -> Result<Self::RawTensor> {
+            unimplemented!("bce_with_logits_loss not implemented for NdarrayBackend")
         }
 
         fn var_as_tensor(v: &Self::RawVar) -> Result<Self::RawTensor> {

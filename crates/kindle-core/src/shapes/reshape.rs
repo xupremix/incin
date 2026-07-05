@@ -1,6 +1,5 @@
 //! Compile-time shape reshaping and element count verification.
 use crate::prelude::*;
-use crate::prelude::*;
 use std::ops::Mul;
 use typenum::{Prod, U1, Unsigned};
 

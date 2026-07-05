@@ -199,7 +199,7 @@ impl<S1: Shape, B: Backend, G: RequiresGrad> Tensor<S1, B, G> {
     {
         let inner = B::matmul(&self.inner, &rhs.inner)?;
         let output_shape = S1::output_shape(&self._shape, &rhs._shape);
-        Ok(Tensor::from_parts(
+        Ok(Tensor::from_parts_unchecked(
             inner,
             output_shape,
             self._dtype.clone(),

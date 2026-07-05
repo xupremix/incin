@@ -20,7 +20,7 @@ impl MSELoss {
         target: &Tensor<S, B, NoGrad>,
     ) -> Result<Tensor<(), B, G>> {
         let inner = B::mse_loss(&pred.inner, &target.inner)?;
-        Ok(Tensor::from_parts(
+        Ok(Tensor::from_parts_unchecked(
             inner,
             Default::default(),
             pred._dtype.clone(),
@@ -64,7 +64,67 @@ impl CrossEntropyLoss {
         // We can pass `target.inner` directly here because the `Backend` trait explicitly
         // binds `BackendWithDType<u32>::RawTensor` to be identical to `Self::RawTensor`.
         let inner = B::cross_entropy_loss(&pred.inner, &target.inner)?;
-        Ok(Tensor::from_parts(
+        Ok(Tensor::from_parts_unchecked(
+            inner,
+            Default::default(),
+            pred._dtype.clone(),
+            pred._device.clone(),
+            pred._grad.clone(),
+        ))
+    }
+}
+
+/// Trait to statically verify that two shapes are identical for L1 loss.
+pub trait L1Shape<S2: crate::prelude::Shape> {}
+impl<S: crate::prelude::Shape> L1Shape<S> for S {}
+
+/// Mean Absolute Error (L1) Loss.
+#[derive(Debug, Clone, Default)]
+pub struct L1Loss;
+
+impl L1Loss {
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Forward pass computing the L1 Loss between predictions and targets.
+    pub fn forward<S: crate::prelude::Shape, B: crate::prelude::Backend, G: crate::prelude::RequiresGrad>(
+        &self,
+        pred: &crate::prelude::Tensor<S, B, G>,
+        target: &crate::prelude::Tensor<S, B, crate::prelude::NoGrad>,
+    ) -> crate::prelude::Result<crate::prelude::Tensor<(), B, G>> {
+        let inner = B::l1_loss(&pred.inner, &target.inner)?;
+        Ok(crate::prelude::Tensor::from_parts_unchecked(
+            inner,
+            Default::default(),
+            pred._dtype.clone(),
+            pred._device.clone(),
+            pred._grad.clone(),
+        ))
+    }
+}
+
+/// Trait to statically verify that two shapes are identical for BCEWithLogits loss.
+pub trait BCEWithLogitsShape<S2: crate::prelude::Shape> {}
+impl<S: crate::prelude::Shape> BCEWithLogitsShape<S> for S {}
+
+/// Binary Cross Entropy with Logits Loss.
+#[derive(Debug, Clone, Default)]
+pub struct BCEWithLogitsLoss;
+
+impl BCEWithLogitsLoss {
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Forward pass computing the BCE With Logits Loss between predictions and targets.
+    pub fn forward<S: crate::prelude::Shape, B: crate::prelude::Backend, G: crate::prelude::RequiresGrad>(
+        &self,
+        pred: &crate::prelude::Tensor<S, B, G>,
+        target: &crate::prelude::Tensor<S, B, crate::prelude::NoGrad>,
+    ) -> crate::prelude::Result<crate::prelude::Tensor<(), B, G>> {
+        let inner = B::bce_with_logits_loss(&pred.inner, &target.inner)?;
+        Ok(crate::prelude::Tensor::from_parts_unchecked(
             inner,
             Default::default(),
             pred._dtype.clone(),

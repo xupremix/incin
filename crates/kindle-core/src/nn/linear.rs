@@ -90,8 +90,8 @@ where
     B::Device: crate::prelude::ConstDevice,
 {
     pub fn new(in_features: usize, out_features: usize) -> Result<Self> {
-        let weight = Param::<Dyn, B>::zeros([out_features, in_features])?;
-        let bias = Param::<Dyn, B>::zeros([out_features])?;
+        let weight = crate::prelude::Param::<Dyn, B>::zeros([out_features, in_features])?;
+        let bias = crate::prelude::Param::<Dyn, B>::zeros([out_features])?;
         Ok(Self { weight, bias: Some(bias) })
     }
 }
@@ -150,7 +150,7 @@ where
             out_dyn
         };
 
-        Ok(Tensor::from_parts(
+        Ok(Tensor::from_parts_unchecked(
             out_final.into_inner(),
             shape,
             dtype,

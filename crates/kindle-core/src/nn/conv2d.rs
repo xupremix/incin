@@ -25,38 +25,38 @@ where
     }
 }
 
-impl<K: Unsigned + crate::prelude::Dim<Arg = ()>, S: Unsigned, P: Unsigned, D: Unsigned, C_in: Dim<Arg = ()>, B: Backend> Conv2d<K, S, P, D, (usize, C_in, K, K), B>
+impl<K: Unsigned + crate::prelude::Dim<Arg = ()>, S: Unsigned, P: Unsigned, D: Unsigned, CIn: Dim<Arg = ()>, B: Backend> Conv2d<K, S, P, D, (usize, CIn, K, K), B>
 where
     B::DType: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
     pub fn new(out_channels: usize) -> Result<Self> {
-        let weight = Param::<(usize, C_in, K, K), B>::zeros(out_channels)?;
+        let weight = Param::<(usize, CIn, K, K), B>::zeros(out_channels)?;
         let bias = Param::<Dyn, B>::zeros([out_channels])?;
         Ok(Self { weight, bias: Some(bias), _phantom: core::marker::PhantomData })
     }
 }
 
-impl<K: Unsigned + crate::prelude::Dim<Arg = ()>, S: Unsigned, P: Unsigned, D: Unsigned, C_out: Dim<Arg = ()> + Default, B: Backend> Conv2d<K, S, P, D, (C_out, usize, K, K), B>
+impl<K: Unsigned + crate::prelude::Dim<Arg = ()>, S: Unsigned, P: Unsigned, D: Unsigned, COut: Dim<Arg = ()> + Default, B: Backend> Conv2d<K, S, P, D, (COut, usize, K, K), B>
 where
     B::DType: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
     pub fn new(in_channels: usize) -> Result<Self> {
-        let weight = Param::<(C_out, usize, K, K), B>::zeros(in_channels)?;
-        let bias = Param::<Dyn, B>::zeros([C_out::default().size()])?;
+        let weight = Param::<(COut, usize, K, K), B>::zeros(in_channels)?;
+        let bias = Param::<Dyn, B>::zeros([COut::default().size()])?;
         Ok(Self { weight, bias: Some(bias), _phantom: core::marker::PhantomData })
     }
 }
 
-impl<K: Unsigned + crate::prelude::Dim<Arg = ()>, S: Unsigned, P: Unsigned, D: Unsigned, C_out: Dim<Arg = ()> + Default, C_in: Dim<Arg = ()>, B: Backend> Conv2d<K, S, P, D, (C_out, C_in, K, K), B>
+impl<K: Unsigned + crate::prelude::Dim<Arg = ()>, S: Unsigned, P: Unsigned, D: Unsigned, COut: Dim<Arg = ()> + Default, CIn: Dim<Arg = ()>, B: Backend> Conv2d<K, S, P, D, (COut, CIn, K, K), B>
 where
     B::DType: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
     pub fn new() -> Result<Self> {
-        let weight = Param::<(C_out, C_in, K, K), B>::zeros(())?;
-        let bias = Param::<Dyn, B>::zeros([C_out::default().size()])?;
+        let weight = Param::<(COut, CIn, K, K), B>::zeros(())?;
+        let bias = Param::<Dyn, B>::zeros([COut::default().size()])?;
         Ok(Self { weight, bias: Some(bias), _phantom: core::marker::PhantomData })
     }
 }
@@ -73,13 +73,13 @@ where
     }
 }
 
-impl<I, K, S, P, D, B, C_out: Dim, C_in: Dim> Module<Tensor<I, B>> for Conv2d<K, S, P, D, (C_out, C_in, K, K), B>
+impl<I, K, S, P, D, B, COut: Dim, CIn: Dim> Module<Tensor<I, B>> for Conv2d<K, S, P, D, (COut, CIn, K, K), B>
 where
     K: Unsigned + crate::prelude::Dim,
     S: Unsigned,
     P: Unsigned,
     D: Unsigned,
-    I: Shape + DynShape + Conv2dShape<C_out, K, S, P, D> + crate::shapes::HasChannels2D<C_in>,
+    I: Shape + DynShape + Conv2dShape<COut, K, S, P, D> + crate::shapes::HasChannels2D<CIn>,
     B: Backend,
 {
     type Output = Tensor<I::Output, B>;
@@ -92,25 +92,43 @@ where
             Some(b) => Some(b.as_tensor()?.detach()),
             None => None,
         };
+        
+        let x_shape = x.dims();
+        let x_shape = x_shape.as_ref();
+        let rank = x_shape.len();
+        let batch_size: usize = x_shape[0..rank - 3].iter().product();
+        let in_channels = x_shape[rank - 3];
+        let h = x_shape[rank - 2];
+        let w = x_shape[rank - 1];
 
-        // Note: the backend conv2d currently expects a single usize for symmetric params
-        // or we need to update it if we switch to asymmetric.
+        let x_inner = if rank > 4 {
+            <B as Backend>::reshape(&x.inner, &[batch_size, in_channels, h, w])?
+        } else {
+            x.inner.clone()
+        };
+
         let out = <B as Backend>::conv2d(
-            &x.inner,
+            &x_inner,
             &weight.inner,
-            bias.as_ref()
-                .map(|b: &Tensor<Dyn, B, crate::tensor::grad::NoGrad>| b.inner()),
+            bias.as_ref().map(|b| b.inner()),
             S::USIZE,
             P::USIZE,
             D::USIZE,
         )?;
 
-        let shape = <I as Conv2dShape<C_out, K, S, P, D>>::compute_output_shape(
+        let shape = <I as Conv2dShape<COut, K, S, P, D>>::compute_output_shape(
             x.shape_field(),
             weight.dims()[0],
         );
+        
+        let out_shape = <I::Output as DynShape>::dims(&shape);
+        let out = if rank > 4 {
+            <B as Backend>::reshape(&out, out_shape.as_ref())?
+        } else {
+            out
+        };
 
-        Ok(Tensor::from_parts(
+        Ok(Tensor::from_parts_unchecked(
             out,
             shape,
             x._dtype.clone(),
@@ -140,11 +158,25 @@ where
             Some(b) => Some(b.as_tensor()?.detach()),
             None => None,
         };
+        
+        let x_shape = x.dims();
+        let x_shape = x_shape.as_ref();
+        let rank = x_shape.len();
+        let batch_size: usize = x_shape[0..rank - 3].iter().product();
+        let in_channels = x_shape[rank - 3];
+        let h = x_shape[rank - 2];
+        let w = x_shape[rank - 1];
+
+        let x_inner = if rank > 4 {
+            <B as Backend>::reshape(&x.inner, &[batch_size, in_channels, h, w])?
+        } else {
+            x.inner.clone()
+        };
 
         let out = <B as Backend>::conv2d(
-            &x.inner,
+            &x_inner,
             &weight.inner,
-            bias.as_ref().map(|b| &b.inner),
+            bias.as_ref().map(|b| b.inner()),
             S::USIZE,
             P::USIZE,
             D::USIZE,
@@ -154,8 +186,15 @@ where
             x.shape_field(),
             weight.dims()[0],
         );
+        
+        let out_shape = <I::Output as DynShape>::dims(&shape);
+        let out = if rank > 4 {
+            <B as Backend>::reshape(&out, out_shape.as_ref())?
+        } else {
+            out
+        };
 
-        Ok(Tensor::from_parts(
+        Ok(Tensor::from_parts_unchecked(
             out,
             shape,
             x._dtype.clone(),

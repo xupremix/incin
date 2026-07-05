@@ -17,7 +17,7 @@ fn test_try_concat_dynamic() {
     let t2: Tensor<(usize, U3), DummyBackend> = Tensor::zeros((4,)).unwrap();
 
     let out = t1.try_concat(&t2, 0).unwrap();
-    assert_eq!(out.shape_field().as_slice(), &[12]);
+    assert_eq!(out.shape_field().as_slice(), &[6, 3]);
 }
 
 #[test]
@@ -35,5 +35,5 @@ fn test_try_stack_dynamic() {
     let t2: Tensor<Dyn, DummyBackend> = Tensor::zeros([2, 3]).unwrap();
 
     let out = t1.try_stack(&t2, 1).unwrap();
-    assert_eq!(out.shape_field().as_slice(), &[6, 2]);
+    assert_eq!(out.shape_field().as_slice(), &[2, 2, 3]);
 }

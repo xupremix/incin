@@ -35,7 +35,7 @@ impl<I: Shape + DynShape + crate::shapes::Pool2dShape<K, S>, K: Unsigned, S: Uns
             <B as Backend>::avg_pool2d(x.inner(), (K::USIZE, K::USIZE), (S::USIZE, S::USIZE))?;
 
         let shape = <I as crate::shapes::Pool2dShape<K, S>>::compute_output_shape(x.shape_field());
-        Ok(Tensor::from_parts(
+        Ok(Tensor::from_parts_unchecked(
             out,
             shape,
             x._dtype.clone(),

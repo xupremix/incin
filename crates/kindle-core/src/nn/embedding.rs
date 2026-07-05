@@ -1,6 +1,5 @@
 use crate::nn::{Module, Param};
 use crate::prelude::*;
-use core::marker::PhantomData;
 
 use typenum::Unsigned;
 
@@ -28,7 +27,7 @@ where
 
         let shape = <S as AppendDim<E>>::Output::from_dyn(&dims).unwrap();
 
-        Ok(Tensor::from_parts(
+        Ok(Tensor::from_parts_unchecked(
             out,
             shape,
             x._dtype.clone(),

@@ -1,0 +1,46 @@
+warning: unused import: `proc_macro::TokenStream`
+ --> crates/kindle-macros/src/onnx.rs:2:5
+  |
+2 | use proc_macro::TokenStream;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `common_bound`
+  --> crates/kindle-macros/src/safetensors.rs:83:21
+   |
+83 |                 let common_bound = quote! { RawVar = <B as kindle::prelu...
+   |                     ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_common_bound`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: `kindle-macros` (lib) generated 2 warnings (run `cargo fix --lib -p kindle-macros` to apply 2 suggestions)
+    Checking kindle-core v0.1.0 (/home/xupremix/kindle/crates/kindle-core)
+warning: unused import: `SafeTensors`
+  --> crates/kindle-core/src/serialize.rs:43:42
+   |
+43 |         use safetensors::tensor::{Dtype, SafeTensors, TensorView};
+   |                                          ^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `Device`
+ --> crates/kindle-core/src/tensor/ops.rs:7:38
+  |
+7 | use crate::prelude::{Backend, DType, Device, Dyn, DynShape, RequiresGrad, Result, Shape, Tensor};
+  |                                      ^^^^^^
+
+warning: unused import: `DType`
+ --> crates/kindle-core/src/tensor/ops.rs:7:31
+  |
+7 | use crate::prelude::{Backend, DType, Device, Dyn, DynShape, RequiresGrad, Result, Shape, Tensor};
+  |                               ^^^^^
+
+warning: unused import: `typenum::Unsigned`
+ --> crates/kindle-core/src/nn/embedding.rs:4:5
+  |
+4 | use typenum::Unsigned;
+  |     ^^^^^^^^^^^^^^^^^
+
+warning: `kindle-core` (lib) generated 4 warnings (run `cargo fix --lib -p kindle-core` to apply 1 suggestion)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.33s
