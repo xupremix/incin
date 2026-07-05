@@ -1,0 +1,69 @@
+error[E0774]: `derive` may only be applied to `struct`s, `enum`s and `union`s
+  --> tests/compile_fail/forward_linear_static_mismatch.rs:5:1
+   |
+ 5 |   #[derive(Clone, Default)]
+   |   ^^^^^^^^^^^^^^^^^^^^^^^^^ not applicable here
+ 6 |
+ 7 | / fn main() {
+ 8 | |     let layer = Linear::<s![3, 4], DummyBackend>::new().unwrap();
+ 9 | |     // 5 != 3
+10 | |     let input = Tensor::<s![2, 5], DummyBackend>::zeros(()).unwrap();
+11 | |     layer.forward(input).unwrap();
+12 | | }
+   | |_- not a `struct`, `enum` or `union`
+
+error: cannot find macro `s` in this scope
+ --> tests/compile_fail/forward_linear_static_mismatch.rs:8:26
+  |
+8 |     let layer = Linear::<s![3, 4], DummyBackend>::new().unwrap();
+  |                          ^
+  |
+help: consider importing this macro
+  |
+1 + use kindle_macros::s;
+  |
+
+error: cannot find macro `s` in this scope
+  --> tests/compile_fail/forward_linear_static_mismatch.rs:10:26
+   |
+10 |     let input = Tensor::<s![2, 5], DummyBackend>::zeros(()).unwrap();
+   |                          ^
+   |
+help: consider importing this macro
+   |
+ 1 + use kindle_macros::s;
+   |
+
+warning: unused import: `kindle_core::nn::*`
+ --> tests/compile_fail/forward_linear_static_mismatch.rs:3:5
+  |
+3 | use kindle_core::nn::*;
+  |     ^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+error[E0277]: the trait bound `(): LinearShape` is not satisfied
+ --> tests/compile_fail/forward_linear_static_mismatch.rs:8:17
+  |
+8 |     let layer = Linear::<s![3, 4], DummyBackend>::new().unwrap();
+  |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `LinearShape` is not implemented for `()`
+  |
+  = help: the trait `LinearShape` is implemented for `(InF, OutF)`
+note: required by a bound in `kindle_core::nn::Linear`
+ --> src/nn/linear.rs
+  |
+  | pub struct Linear<S: LinearShape, B: Backend> {
+  |                      ^^^^^^^^^^^ required by this bound in `Linear`
+
+error[E0599]: no function or associated item named `new` found for struct `kindle_core::nn::Linear<(), DummyBackend>` in the current scope
+ --> tests/compile_fail/forward_linear_static_mismatch.rs:8:51
+  |
+8 |     let layer = Linear::<s![3, 4], DummyBackend>::new().unwrap();
+  |                                                   ^^^ function or associated item not found in `kindle_core::nn::Linear<(), DummyBackend>`
+  |
+  = note: the function or associated item was found for
+          - `kindle_core::nn::Linear<(InF, OutF), B>`
+          - `kindle_core::nn::Linear<(InF, usize), B>`
+          - `kindle_core::nn::Linear<(usize, OutF), B>`
+          - `kindle_core::nn::Linear<(usize, usize), B>`
+          - `kindle_core::nn::Linear<Dyn, B>`

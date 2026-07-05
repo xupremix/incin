@@ -59,3 +59,25 @@ pub trait TryReshape<Target: Shape>: Shape {}
 // Any pair of dynamic shapes can attempt to reshape at runtime.
 impl<S1: DynShape, S2: DynShape> TryReshape<S2> for S1 {}
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use typenum::{U2, U4, U8};
+
+    fn assert_reshape_eq<S1: Shape, S2: Shape>() where S1: ReshapeShape<S2> {}
+
+    #[test]
+    fn reshape_same_rank_same_numel() {
+        type S1 = (U2, U8);
+        type S2 = (U4, U4);
+        assert_reshape_eq::<S1, S2>();
+    }
+
+    #[test]
+    fn reshape_different_rank_same_numel() {
+        type S1 = (U2, U2, U4);
+        type S2 = (U4, U4);
+        assert_reshape_eq::<S1, S2>();
+    }
+}
+

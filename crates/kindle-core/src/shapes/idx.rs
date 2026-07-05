@@ -165,3 +165,31 @@ impl_slice_target!(D1);
 impl_slice_target!(D1, D2);
 impl_slice_target!(D1, D2, D3);
 impl_slice_target!(D1, D2, D3, D4);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::prelude::{Const, Shape};
+
+    fn assert_shape_eq<S1: Shape, S2: Shape>() {}
+
+    #[test]
+    fn slice_range_output_shape() {
+        // idx![1..3, .., 0..2] on (Const<4>, Const<4>, Const<3>) → (Const<2>, usize, Const<2>)
+        type IdxT = (Slice<1, 3, 2>, Ellipsis, Slice<0, 2, 2>);
+        assert_shape_eq::<
+            <IdxT as SliceTarget<(Const<4>, Const<4>, Const<3>)>>::Output,
+            (Const<2>, usize, Const<2>),
+        >();
+    }
+
+    #[test]
+    fn slice_full_passthrough() {
+        // idx![.., .., ..] on (Const<4>, Const<4>, Const<3>) → (usize, usize, usize)
+        type IdxT = (Ellipsis, Ellipsis, Ellipsis);
+        assert_shape_eq::<
+            <IdxT as SliceTarget<(Const<4>, Const<4>, Const<3>)>>::Output,
+            (usize, usize, usize),
+        >();
+    }
+}

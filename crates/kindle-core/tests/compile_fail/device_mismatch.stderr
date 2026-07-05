@@ -1,0 +1,15 @@
+error: visibility `pub` is not followed by an item
+ --> tests/compile_fail/device_mismatch.rs:4:1
+  |
+4 | pub
+  | ^^^ the visibility
+  |
+  = help: you likely meant to define an item, e.g., `pub fn foo() {}`
+
+error: expected item, found `#`
+ --> tests/compile_fail/device_mismatch.rs:6:1
+  |
+6 | #[derive(Debug, Default, Clone, PartialEq, Eq)]
+  | ^ expected item
+  |
+  = note: for a full list of items that can appear in modules, see <https://doc.rust-lang.org/reference/items.html>
