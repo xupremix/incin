@@ -145,7 +145,6 @@ impl MatMulShape<Dyn> for Dyn {
         } else if lhs.len() == 2 && rhs.len() == 1 {
             alloc::vec![]
         } else {
-            // General broadcasted matmul is complex, but let's do simple ND x 2D
             if lhs.len() >= 2 && rhs.len() == 2 {
                 let mut out = lhs.clone();
                 let last = out.len() - 1;

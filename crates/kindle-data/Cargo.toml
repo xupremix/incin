@@ -7,7 +7,7 @@ license.workspace = true
 
 [dependencies]
 candle-core.workspace = true
-hf-hub = { version = "0.5.0", default-features = false, features = ["tokio", "rustls-tls"] }
+hf-hub = { version = "0.5.0", default-features = false, features = ["tokio", "rustls-tls", "ureq"] }
 kindle-core = { version = "0.1.0", path = "../kindle-core" }
 kindle-backends = { version = "0.1.0", path = "../kindle-backends", features = ["candle"] }
 rayon = "1.12.0"

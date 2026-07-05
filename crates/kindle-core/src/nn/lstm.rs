@@ -5,8 +5,6 @@ use alloc::vec::Vec;
 #[derive(Debug, Clone)]
 pub struct LSTMCell<In: Dim, Out: Dim, B: Backend> {
     // We combine the 4 gates into one linear layer for efficiency if we want,
-    // but for simplicity we can just use 4 separate linear layers or 1 big one.
-    // Let's use 4 separate for clarity: i, f, g, o.
     pub wi: Linear<(In, Out), B>,
     pub wh: Linear<(Out, Out), B>,
 

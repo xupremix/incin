@@ -42,7 +42,7 @@ impl OpType {
             OpType::Transpose => "Transpose",
             OpType::Softmax => "Softmax",
             OpType::Concat => "Concat",
-            OpType::Stack => "Concat", // Stack is concat with unsqueeze in ONNX but we'll map later
+            OpType::Stack => "Concat",
             OpType::Input => "Input",
             OpType::Constant => "Constant",
         }

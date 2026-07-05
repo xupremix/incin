@@ -179,7 +179,6 @@ pub mod candle {
             let dev = to_candle_device(device)?;
             // Candle variables are fundamentally tensors inside a refcell. To move a Var,
             // we have to get the underlying tensor, move it, and wrap it in a new Var.
-            // Let's create a new Var from the moved tensor.
             let t = var
                 .as_tensor()
                 .to_device(&dev)
@@ -557,11 +556,7 @@ pub mod candle {
 
         fn step_adam(params: &mut [Self::RawVar], grads: &Self::Grads, lr: f64) -> Result<()> {
             use candle_nn::optim::Optimizer;
-            // Candle doesn't have plain Adam currently built-in to candle_nn::optim in all versions, 
-            // but if it does we use it. We'll try candle_nn::optim::Adam. 
-            // Actually wait, let's just use AdamW if Adam doesn't exist, but Candle does have AdamW.
-            // Let's assume candle_nn::optim::AdamW is what we have. 
-            let mut adam = candle_nn::optim::AdamW::new_lr(params.to_vec(), lr) // using AdamW as fallback for now
+            let mut adam = candle_nn::optim::AdamW::new_lr(params.to_vec(), lr)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
             adam.step(grads)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;

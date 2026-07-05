@@ -1,6 +1,9 @@
 use crate::prelude::{KindleDType, KindleDevice, Result};
 
-/// A trait that abstracts the runtime computational engine (Candle, Burn, Ndarray, etc.).
+/// An abstraction layer that defines how tensor operations are executed.
+/// 
+/// `Backend` encapsulates the execution engine (e.g. Candle, NdArray, Burn), bridging generic
+/// tensor operations in Kindle to concrete backend-specific implementations.
 /// It provides the raw, dynamic memory buffer used by this specific backend.
 pub trait Backend: Clone + 'static {
     type Device: super::device::Device;

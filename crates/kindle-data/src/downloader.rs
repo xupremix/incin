@@ -15,8 +15,6 @@ impl Downloader {
 
         std::fs::create_dir_all(cache_dir)?;
         
-        // In ureq 2.x, it's `.call()?.into_reader()`. Let's just use `reqwest::blocking` instead if ureq fails, but we only have ureq.
-        // Actually we can just do:
         let response = ureq::get(url).call().map_err(|e| anyhow::anyhow!("Failed to download {}: {}", url, e))?;
         let mut reader = response.into_body().into_reader();
         

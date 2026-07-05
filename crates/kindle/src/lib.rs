@@ -8,7 +8,11 @@
 pub use kindle_backends::*;
 pub use kindle_core::*;
 
-pub use kindle_macros::{forward, module};
+pub use kindle_macros::{forward, module, import_model};
+
+pub mod hub {
+    pub use kindle_data::hub::*;
+}
 
 // We define a type alias to restore the default Backend behavior without cyclical dependencies
 #[cfg(feature = "cuda")]

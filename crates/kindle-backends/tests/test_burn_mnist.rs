@@ -23,7 +23,6 @@ fn test_burn_mnist_mock() -> Result<()> {
     let w2 = BurnNdarrayBackend::var_ones(&[128, 10], KindleDType::F32, &k_device)?;
     let b2 = BurnNdarrayBackend::var_zeros(&[10], KindleDType::F32, &k_device)?;
     
-    // Let's create some dummy data
     let batch_size = 32;
     let x = BurnNdarrayBackend::ones(&[batch_size, 784], KindleDType::F32, &k_device)?;
     let target = BurnNdarrayBackend::zeros(&[batch_size], KindleDType::F32, &k_device)?; 

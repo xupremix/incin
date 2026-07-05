@@ -7,6 +7,10 @@ use crate::prelude::{
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Dyn(pub ());
 
+/// The core `Tensor` type representing an n-dimensional array.
+///
+/// It holds a reference to a backend-specific tensor representation, while statically tracking
+/// its `Shape`, `Backend` (which includes `DType` and `Device`), and its `Grad` requirements.
 #[derive(Debug)]
 pub struct Tensor<S: Shape, B: Backend, G: RequiresGrad = Grad> {
     pub(crate) inner: B::RawTensor,

@@ -9,10 +9,6 @@ pub(crate) fn module(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let name = &input.ident;
 
     let is_internal = _attr.to_string().contains("internal");
-    let _crate_path = if is_internal {
-        quote! { crate }
-    } else {
-    };
 
     let k_crate = if is_internal {
         quote! { crate }

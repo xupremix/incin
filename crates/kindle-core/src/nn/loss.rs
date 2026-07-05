@@ -61,7 +61,6 @@ impl CrossEntropyLoss {
     where
         S1: CrossEntropyShape<S2>,
     {
-        // We can pass `target.inner` directly here because the `Backend` trait explicitly
         // binds `BackendWithDType<u32>::RawTensor` to be identical to `Self::RawTensor`.
         let inner = B::cross_entropy_loss(&pred.inner, &target.inner)?;
         Ok(Tensor::from_parts_unchecked(

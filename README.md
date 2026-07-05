@@ -26,6 +26,12 @@ sudo apt-get install -y protobuf-compiler
 brew install protobuf
 ```
 
+### Environment Variables
+You can configure internal macro and Hub behavior using the following environment variables:
+- `KINDLE_HUB_CACHE_DIR`: Specifies a custom cache directory for downloaded models (overrides `~/.cache/huggingface/hub`).
+- `KINDLE_HUB_TOKEN`: Sets your HuggingFace authorization token for accessing private or gated repositories.
+- `KINDLE_DISABLE_META_CACHE`: Set to `1` or `true` to force `import_model!` to bypass the lightning-fast `.kindle_meta` JSON cache and do a full `.safetensors`/`.onnx` graph re-parse during `cargo build`.
+
 ## 🌟 Quick Tour
 
 ### Type-Safe ResNet Definition

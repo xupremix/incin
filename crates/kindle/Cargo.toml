@@ -25,3 +25,11 @@ kindle-macros = { path = "../kindle-macros/", version = "0.1.0", default-feature
 kindle-backends = { path = "../kindle-backends", default-features = false }
 kindle-data = { version = "0.1.0", path = "../kindle-data" }
 anyhow = "1.0.103"
+
+[dev-dependencies]
+criterion = { version = "0.5", default-features = false }
+candle-core = { workspace = true }
+
+[[bench]]
+name = "matmul_bench"
+harness = false

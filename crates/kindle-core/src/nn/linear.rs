@@ -31,9 +31,6 @@ pub struct Linear<S: LinearShape, B: Backend> {
 }
 
 // Implement `Module` for `Linear` when input shape is `(Batch, In)`.
-// We can use the MatMul bounds for static shape verification.
-// For now, let's keep it simple: input is `Tensor<IS, B>` where `IS` is the input shape.
-// To do this fully statically, we need trait bounds, but since `Tensor::matmul` already requires matching shapes at runtime, we can just defer to `matmul` for now.
 
 
 impl<B: Backend> Linear<(usize, usize), B>
@@ -98,7 +95,6 @@ where
 
 // In PyTorch, input is typically (*, InF) and weight is (OutF, InF).
 // In PyTorch, input is typically (*, InF) and weight is (OutF, InF).
-// Let's stick to `weight: (InF, OutF)` for simpler `x @ weight`.
 
 // Dynamic input
 impl<B: Backend> Module<Tensor<Dyn, B>> for Linear<Dyn, B> {
