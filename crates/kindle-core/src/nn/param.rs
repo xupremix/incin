@@ -45,6 +45,74 @@ impl<S: Shape + DynShape, B: Backend> Param<S, B>
 where
     (S, B::DType, B::Device, Grad): TensorArgs<S, B::DType, B::Device, Grad>,
 {
+    
+    pub fn new_init<A>(args: A, init: crate::nn::init::Init) -> Result<Self>
+    where
+        A: ArgInto<
+            <(S, B::DType, B::Device, Grad) as TensorArgs<S, B::DType, B::Device, Grad>>::Args,
+        >,
+    {
+        use crate::nn::init::Init;
+        let (_shape, _dtype, _device, _) =
+            <(S, B::DType, B::Device, Grad)>::construct(args.into_arg());
+        let dims: S::Dims = S::dims(&_shape);
+        let device = <B::Device as Device>::to_kindle(&_device)?;
+        let dtype = <B::DType as DType>::to_kindle(&_dtype);
+
+        let inner = match init {
+            Init::Zeros => B::var_zeros(dims.as_ref(), dtype, &device)?,
+            Init::Ones => B::var_ones(dims.as_ref(), dtype, &device)?,
+            Init::Rand => B::var_rand(dims.as_ref(), dtype, &device)?,
+            Init::Randn => B::var_randn(dims.as_ref(), dtype, &device)?,
+            
+            Init::Uniform { bound } => {
+                let t_rand = B::rand(dims.as_ref(), dtype, &device)?;
+                let t_scaled = B::mul_scalar(&t_rand, 2.0 * bound)?;
+                let t_final = B::add_scalar(&t_scaled, -bound)?;
+                B::var_from_tensor(&t_final)?
+            }
+            Init::Constant(c) => {
+                let ones = B::ones(dims.as_ref(), dtype, &device)?;
+                let c_tensor = B::mul_scalar(&ones, c)?;
+                B::var_from_tensor(&c_tensor)?
+            }
+            Init::KaimingUniform { fan_in, a } => {
+                let std = f64::sqrt(2.0 / ((1.0 + a * a) * fan_in as f64));
+                let bound = f64::sqrt(3.0) * std;
+                let t_rand = B::rand(dims.as_ref(), dtype, &device)?;
+                let t_scaled = B::mul_scalar(&t_rand, 2.0 * bound)?;
+                let t_final = B::add_scalar(&t_scaled, -bound)?;
+                B::var_from_tensor(&t_final)?
+            }
+            Init::KaimingNormal { fan_in, a } => {
+                let std = f64::sqrt(2.0 / ((1.0 + a * a) * fan_in as f64));
+                let t_randn = B::randn(dims.as_ref(), dtype, &device)?;
+                let t_final = B::mul_scalar(&t_randn, std)?;
+                B::var_from_tensor(&t_final)?
+            }
+            Init::XavierUniform { fan_in, fan_out } => {
+                let bound = f64::sqrt(6.0 / (fan_in as f64 + fan_out as f64));
+                let t_rand = B::rand(dims.as_ref(), dtype, &device)?;
+                let t_scaled = B::mul_scalar(&t_rand, 2.0 * bound)?;
+                let t_final = B::add_scalar(&t_scaled, -bound)?;
+                B::var_from_tensor(&t_final)?
+            }
+            Init::XavierNormal { fan_in, fan_out } => {
+                let std = f64::sqrt(2.0 / (fan_in as f64 + fan_out as f64));
+                let t_randn = B::randn(dims.as_ref(), dtype, &device)?;
+                let t_final = B::mul_scalar(&t_randn, std)?;
+                B::var_from_tensor(&t_final)?
+            }
+        };
+
+        Ok(Self {
+            inner,
+            _shape,
+            _dtype,
+            _device,
+        })
+    }
+
     pub fn zeros<A>(args: A) -> Result<Self>
     where
         A: ArgInto<
@@ -236,6 +304,74 @@ impl<S: Shape + DynShape, B: Backend> Buffer<S, B>
 where
     (S, B::DType, B::Device, Grad): TensorArgs<S, B::DType, B::Device, Grad>,
 {
+    
+    pub fn new_init<A>(args: A, init: crate::nn::init::Init) -> Result<Self>
+    where
+        A: ArgInto<
+            <(S, B::DType, B::Device, Grad) as TensorArgs<S, B::DType, B::Device, Grad>>::Args,
+        >,
+    {
+        use crate::nn::init::Init;
+        let (_shape, _dtype, _device, _) =
+            <(S, B::DType, B::Device, Grad)>::construct(args.into_arg());
+        let dims: S::Dims = S::dims(&_shape);
+        let device = <B::Device as Device>::to_kindle(&_device)?;
+        let dtype = <B::DType as DType>::to_kindle(&_dtype);
+
+        let inner = match init {
+            Init::Zeros => B::var_zeros(dims.as_ref(), dtype, &device)?,
+            Init::Ones => B::var_ones(dims.as_ref(), dtype, &device)?,
+            Init::Rand => B::var_rand(dims.as_ref(), dtype, &device)?,
+            Init::Randn => B::var_randn(dims.as_ref(), dtype, &device)?,
+            
+            Init::Uniform { bound } => {
+                let t_rand = B::rand(dims.as_ref(), dtype, &device)?;
+                let t_scaled = B::mul_scalar(&t_rand, 2.0 * bound)?;
+                let t_final = B::add_scalar(&t_scaled, -bound)?;
+                B::var_from_tensor(&t_final)?
+            }
+            Init::Constant(c) => {
+                let ones = B::ones(dims.as_ref(), dtype, &device)?;
+                let c_tensor = B::mul_scalar(&ones, c)?;
+                B::var_from_tensor(&c_tensor)?
+            }
+            Init::KaimingUniform { fan_in, a } => {
+                let std = f64::sqrt(2.0 / ((1.0 + a * a) * fan_in as f64));
+                let bound = f64::sqrt(3.0) * std;
+                let t_rand = B::rand(dims.as_ref(), dtype, &device)?;
+                let t_scaled = B::mul_scalar(&t_rand, 2.0 * bound)?;
+                let t_final = B::add_scalar(&t_scaled, -bound)?;
+                B::var_from_tensor(&t_final)?
+            }
+            Init::KaimingNormal { fan_in, a } => {
+                let std = f64::sqrt(2.0 / ((1.0 + a * a) * fan_in as f64));
+                let t_randn = B::randn(dims.as_ref(), dtype, &device)?;
+                let t_final = B::mul_scalar(&t_randn, std)?;
+                B::var_from_tensor(&t_final)?
+            }
+            Init::XavierUniform { fan_in, fan_out } => {
+                let bound = f64::sqrt(6.0 / (fan_in as f64 + fan_out as f64));
+                let t_rand = B::rand(dims.as_ref(), dtype, &device)?;
+                let t_scaled = B::mul_scalar(&t_rand, 2.0 * bound)?;
+                let t_final = B::add_scalar(&t_scaled, -bound)?;
+                B::var_from_tensor(&t_final)?
+            }
+            Init::XavierNormal { fan_in, fan_out } => {
+                let std = f64::sqrt(2.0 / (fan_in as f64 + fan_out as f64));
+                let t_randn = B::randn(dims.as_ref(), dtype, &device)?;
+                let t_final = B::mul_scalar(&t_randn, std)?;
+                B::var_from_tensor(&t_final)?
+            }
+        };
+
+        Ok(Self {
+            inner,
+            _shape,
+            _dtype,
+            _device,
+        })
+    }
+
     pub fn zeros<A>(args: A) -> Result<Self>
     where
         A: ArgInto<

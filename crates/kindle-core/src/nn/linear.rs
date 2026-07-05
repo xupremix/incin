@@ -42,8 +42,8 @@ where
     B::Device: crate::prelude::ConstDevice,
 {
     pub fn new(in_features: usize, out_features: usize) -> Result<Self> {
-        let weight = Param::<(usize, usize), B>::zeros((out_features, in_features))?;
-        let bias = Param::<(usize,), B>::zeros((out_features,))?;
+        let weight = Param::<(usize, usize), B>::new_init((out_features, in_features), crate::nn::init::Init::KaimingUniform { fan_in: in_features, a: f64::sqrt(5.0) })?;
+        let bias = Param::<(usize,), B>::new_init((out_features,), crate::nn::init::Init::Uniform { bound: 1.0 / (in_features as f64).sqrt() })?;
         Ok(Self { weight, bias: Some(bias) })
     }
 }
@@ -54,8 +54,8 @@ where
     B::Device: crate::prelude::ConstDevice,
 {
     pub fn new(out_features: usize) -> Result<Self> {
-        let weight = Param::<(usize, InF), B>::zeros((out_features, ()))?;
-        let bias = Param::<(usize,), B>::zeros((out_features,))?;
+        let weight = Param::<(usize, InF), B>::new_init((out_features, ()), crate::nn::init::Init::KaimingUniform { fan_in: InF::from_arg(()).size(), a: f64::sqrt(5.0) })?;
+        let bias = Param::<(usize,), B>::new_init((out_features,), crate::nn::init::Init::Uniform { bound: 1.0 / (InF::from_arg(()).size() as f64).sqrt() })?;
         Ok(Self { weight, bias: Some(bias) })
     }
 }
@@ -66,8 +66,8 @@ where
     B::Device: crate::prelude::ConstDevice,
 {
     pub fn new(in_features: usize) -> Result<Self> {
-        let weight = Param::<(OutF, usize), B>::zeros(((), in_features))?;
-        let bias = Param::<(OutF,), B>::zeros(())?;
+        let weight = Param::<(OutF, usize), B>::new_init(((), in_features), crate::nn::init::Init::KaimingUniform { fan_in: in_features, a: f64::sqrt(5.0) })?;
+        let bias = Param::<(OutF,), B>::new_init((), crate::nn::init::Init::Uniform { bound: 1.0 / (in_features as f64).sqrt() })?;
         Ok(Self { weight, bias: Some(bias) })
     }
 }
@@ -78,8 +78,8 @@ where
     B::Device: crate::prelude::ConstDevice,
 {
     pub fn new() -> Result<Self> {
-        let weight = Param::<(OutF, InF), B>::zeros(())?;
-        let bias = Param::<(OutF,), B>::zeros(())?;
+        let weight = Param::<(OutF, InF), B>::new_init((), crate::nn::init::Init::KaimingUniform { fan_in: InF::from_arg(()).size(), a: f64::sqrt(5.0) })?;
+        let bias = Param::<(OutF,), B>::new_init((), crate::nn::init::Init::Uniform { bound: 1.0 / (InF::from_arg(()).size() as f64).sqrt() })?;
         Ok(Self { weight, bias: Some(bias) })
     }
 }
@@ -90,12 +90,13 @@ where
     B::Device: crate::prelude::ConstDevice,
 {
     pub fn new(in_features: usize, out_features: usize) -> Result<Self> {
-        let weight = crate::prelude::Param::<Dyn, B>::zeros([out_features, in_features])?;
-        let bias = crate::prelude::Param::<Dyn, B>::zeros([out_features])?;
+        let weight = crate::prelude::Param::<Dyn, B>::new_init([out_features, in_features], crate::nn::init::Init::KaimingUniform { fan_in: in_features, a: f64::sqrt(5.0) })?;
+        let bias = crate::prelude::Param::<Dyn, B>::new_init([out_features], crate::nn::init::Init::Uniform { bound: 1.0 / (in_features as f64).sqrt() })?;
         Ok(Self { weight, bias: Some(bias) })
     }
 }
 
+// In PyTorch, input is typically (*, InF) and weight is (OutF, InF).
 // In PyTorch, input is typically (*, InF) and weight is (OutF, InF).
 // Let's stick to `weight: (InF, OutF)` for simpler `x @ weight`.
 

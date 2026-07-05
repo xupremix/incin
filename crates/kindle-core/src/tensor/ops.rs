@@ -320,7 +320,33 @@ impl<S: Shape + DynShape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
 
     /// Try to reshape this tensor into the provided shape `S2`.
     /// This falls back to a runtime verification for dynamic shapes.
-    pub fn try_reshape<S2>(&self, args: S2::Arg) -> Result<Tensor<S2, B, G>>
+    
+    pub fn try_narrow(self, dim: usize, start: usize, len: usize) -> Result<Tensor<Dyn, B, G>> {
+        let inner = B::narrow(&self.inner, dim, start, len)?;
+        let mut shape = S::dims(&self._shape).as_ref().to_vec();
+        shape[dim] = len;
+        Ok(Tensor {
+            inner,
+            _shape: shape,
+            _dtype: self._dtype,
+            _device: self._device,
+            _grad: self._grad.clone(),
+        })
+    }
+
+    pub fn try_squeeze(self, dim: usize) -> Result<Tensor<Dyn, B, G>> {
+        let inner = B::squeeze(&self.inner, dim)?;
+        let mut shape = S::dims(&self._shape).as_ref().to_vec();
+        shape.remove(dim);
+        Ok(Tensor {
+            inner,
+            _shape: shape,
+            _dtype: self._dtype,
+            _device: self._device,
+            _grad: self._grad.clone(),
+        })
+    }
+pub fn try_reshape<S2>(&self, args: S2::Arg) -> Result<Tensor<S2, B, G>>
     where
         S2: Shape + DynShape,
         S: crate::shapes::reshape::TryReshape<S2>,
@@ -958,4 +984,26 @@ mod tests {
             .dyn_slice(&[IndexSpec::All, IndexSpec::Index(0)])
             .unwrap();
     }
+}
+
+pub fn try_stack_tensors<S: Shape + DynShape, B: Backend, G: crate::tensor::grad::RequiresGrad>(tensors: &[&Tensor<S, B, G>], dim: usize) -> Result<Tensor<Dyn, B, G>> where G::Field: Clone {
+    if tensors.is_empty() {
+        return Err(crate::prelude::Error::ShapeMismatch {
+            op: "stack_tensors",
+            expected: alloc::vec![],
+            got: alloc::vec![],
+            msg: alloc::string::String::from("Cannot stack empty list of tensors"),
+        });
+    }
+    let raw_tensors: alloc::vec::Vec<&B::RawTensor> = tensors.iter().map(|t| &t.inner).collect();
+    let inner = B::stack(&raw_tensors, dim)?;
+    let mut shape = S::dims(&tensors[0]._shape).as_ref().to_vec();
+    shape.insert(dim, tensors.len());
+    Ok(Tensor {
+        inner,
+        _shape: shape,
+        _dtype: tensors[0]._dtype.clone(),
+        _device: tensors[0]._device.clone(),
+        _grad: tensors[0]._grad.clone(),
+    })
 }

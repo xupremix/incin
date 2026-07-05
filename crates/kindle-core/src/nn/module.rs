@@ -184,10 +184,10 @@ impl<L: StateDict<B>, B: Backend> StateDict<B> for Option<L> {
 /// `seq!(L1, L2, L3)` expands to `Sequential(L1, Sequential(L2, L3))`.
 #[macro_export]
 macro_rules! seq {
-    ($l1:expr, $l2:expr) => {
-        $crate::nn::Sequential($l1, $l2)
+    ($l1:expr) => {
+        $l1
     };
-    ($l1:expr, $l2:expr, $($tail:expr),+ $(,)?) => {
-        $crate::nn::Sequential($l1, $crate::seq!($l2, $($tail),+))
+    ($l1:expr, $($tail:expr),+ $(,)?) => {
+        $crate::nn::Sequential($l1, $crate::seq!($($tail),+))
     };
 }
