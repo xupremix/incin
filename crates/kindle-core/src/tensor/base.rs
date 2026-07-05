@@ -245,7 +245,7 @@ impl<S: Shape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
 impl<S1: Shape + DynShape, B: Backend, G: RequiresGrad> Tensor<S1, B, G> {
     pub fn into_shape<S2: Shape + DynShape>(self) -> Result<Tensor<S2, B, G>> {
         let dims = S1::dims(&self._shape);
-        let s2_shape = S2::from_dyn(dims.as_ref()).unwrap();
+        let s2_shape = S2::from_dyn(dims.as_ref()).ok_or_else(|| crate::err::Error::Msg(alloc::format!("into_shape failed: cannot parse {:?} into {}", dims, core::any::type_name::<S2>())))?;
         Tensor::from_parts(
             self.inner,
             s2_shape,
@@ -269,7 +269,7 @@ impl<S1: Shape + DynShape, B: Backend, G: RequiresGrad> Tensor<S1, B, G> {
 
     pub fn to_shape<S2: Shape + DynShape>(&self) -> Result<Tensor<S2, B, G>> {
         let dims = S1::dims(&self._shape);
-        let s2_shape = S2::from_dyn(dims.as_ref()).unwrap();
+        let s2_shape = S2::from_dyn(dims.as_ref()).ok_or_else(|| crate::err::Error::Msg(alloc::format!("to_shape failed: cannot parse {:?} into {}", dims, core::any::type_name::<S2>())))?;
         Tensor::from_parts(
             self.inner.clone(),
             s2_shape,
@@ -336,19 +336,11 @@ mod tests {
             unimplemented!()
         }
 
-        fn max_pool2d(
-            _t: &Self::RawTensor,
-            _kernel_size: (usize, usize),
-            _stride: (usize, usize),
-        ) -> Result<Self::RawTensor> {
+        fn max_pool2d(_t: &Self::RawTensor, _kernel_size: (usize, usize), _stride: (usize, usize), _padding: (usize, usize), _dilation: (usize, usize)) -> Result<Self::RawTensor> {
             unimplemented!()
         }
 
-        fn avg_pool2d(
-            _t: &Self::RawTensor,
-            _kernel_size: (usize, usize),
-            _stride: (usize, usize),
-        ) -> Result<Self::RawTensor> {
+        fn avg_pool2d(_t: &Self::RawTensor, _kernel_size: (usize, usize), _stride: (usize, usize), _padding: (usize, usize)) -> Result<Self::RawTensor> {
             unimplemented!()
         }
 
@@ -570,6 +562,8 @@ mod tests {
         fn min_keepdim(_t: &Self::RawTensor, _dim: usize) -> Result<Self::RawTensor> {
             Ok(alloc::vec::Vec::new())
         }
+        fn slice(_t: &Self::RawTensor, _ranges: &[(usize, usize)]) -> Result<Self::RawTensor> { unimplemented!() }
+
         fn to_dtype(_t: &Self::RawTensor, _dtype: KindleDType) -> Result<Self::RawTensor> {
             Ok(alloc::vec::Vec::new())
         }

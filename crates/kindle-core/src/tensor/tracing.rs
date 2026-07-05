@@ -455,8 +455,10 @@ impl<B: Backend> Backend for TracingBackend<B> {
         x: &Self::RawTensor,
         kernel_size: (usize, usize),
         stride: (usize, usize),
+        padding: (usize, usize),
+        dilation: (usize, usize),
     ) -> Result<Self::RawTensor> {
-        let inner = B::max_pool2d(&x.inner, kernel_size, stride)?;
+        let inner = B::max_pool2d(&x.inner, kernel_size, stride, padding, dilation)?;
         Ok(Self::trace_unary(OpType::Add, x, &inner))
     }
 
@@ -464,8 +466,9 @@ impl<B: Backend> Backend for TracingBackend<B> {
         x: &Self::RawTensor,
         kernel_size: (usize, usize),
         stride: (usize, usize),
+        padding: (usize, usize),
     ) -> Result<Self::RawTensor> {
-        let inner = B::avg_pool2d(&x.inner, kernel_size, stride)?;
+        let inner = B::avg_pool2d(&x.inner, kernel_size, stride, padding)?;
         Ok(Self::trace_unary(OpType::Add, x, &inner))
     }
 
@@ -511,6 +514,11 @@ impl<B: Backend> Backend for TracingBackend<B> {
 
     fn to_bytes(t: &Self::RawTensor) -> Result<alloc::vec::Vec<u8>> {
         B::to_bytes(&t.inner)
+    }
+
+    fn slice(t: &Self::RawTensor, ranges: &[(usize, usize)]) -> Result<Self::RawTensor> {
+        let inner = B::slice(&t.inner, ranges)?;
+        Ok(Self::trace_unary(OpType::Relu, t, &inner))
     }
 
     fn to_dtype(t: &Self::RawTensor, dtype: KindleDType) -> Result<Self::RawTensor> {

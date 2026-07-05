@@ -26,3 +26,4 @@ serde_json = "1.0.150"
 serde = { version = "1.0", features = ["derive"] }
 onnx-pb = "0.1.4"
 prost = "0.6"
+

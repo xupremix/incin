@@ -429,6 +429,16 @@ pub mod candle {
             Ok(t.transpose(dim1, dim2)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
+                fn slice(t: &Self::RawTensor, ranges: &[(usize, usize)]) -> Result<Self::RawTensor> {
+            let mut out = t.clone();
+            for (dim, &(start, end)) in ranges.iter().enumerate() {
+                out = out.narrow(dim, start, end - start).map_err(|e| Error::Msg(
+                    format!("Candle narrow failed for slice: {}", e)
+                ))?;
+            }
+            Ok(out)
+        }
+        
         fn flatten(
             t: &Self::RawTensor,
             start_dim: usize,
@@ -496,6 +506,8 @@ pub mod candle {
             t: &Self::RawTensor,
             kernel_size: (usize, usize),
             stride: (usize, usize),
+            padding: (usize, usize),
+            dilation: (usize, usize),
         ) -> Result<Self::RawTensor> {
             Ok(
                 t.max_pool2d_with_stride((kernel_size.0, kernel_size.1), (stride.0, stride.1))
@@ -507,6 +519,7 @@ pub mod candle {
             t: &Self::RawTensor,
             kernel_size: (usize, usize),
             stride: (usize, usize),
+            padding: (usize, usize),
         ) -> Result<Self::RawTensor> {
             Ok(
                 t.avg_pool2d_with_stride((kernel_size.0, kernel_size.1), (stride.0, stride.1))
@@ -704,17 +717,11 @@ pub mod ndarray_backend {
             })
         }
 
-        fn var_zeros(_s: &[usize], _dt: KindleDType, _dev: &KindleDevice) -> Result<Self::RawVar> {
-            Err(Error::UnsupportedBackendOperation {
-                op: "var_zeros",
-                backend: "Ndarray",
-            })
+        fn var_zeros(s: &[usize], _dt: KindleDType, _dev: &KindleDevice) -> Result<Self::RawVar> {
+            Ok(NdarrayVar(std::sync::Arc::new(std::sync::RwLock::new(ndarray::ArrayD::<f32>::zeros(s)))))
         }
-        fn var_ones(_s: &[usize], _dt: KindleDType, _dev: &KindleDevice) -> Result<Self::RawVar> {
-            Err(Error::UnsupportedBackendOperation {
-                op: "var_ones",
-                backend: "Ndarray",
-            })
+        fn var_ones(s: &[usize], _dt: KindleDType, _dev: &KindleDevice) -> Result<Self::RawVar> {
+            Ok(NdarrayVar(std::sync::Arc::new(std::sync::RwLock::new(ndarray::ArrayD::<f32>::ones(s)))))
         }
         fn var_rand(_s: &[usize], _dt: KindleDType, _dev: &KindleDevice) -> Result<Self::RawVar> {
             Err(Error::UnsupportedBackendOperation {
@@ -971,6 +978,14 @@ pub mod ndarray_backend {
                 backend: "Ndarray",
             })
         }
+                fn slice(t: &Self::RawTensor, ranges: &[(usize, usize)]) -> Result<Self::RawTensor> {
+            let mut out = t.clone();
+            for (dim, &(start, end)) in ranges.iter().enumerate() {
+                out = out.slice_axis(ndarray::Axis(dim), ndarray::Slice::from(start..end)).to_owned();
+            }
+            Ok(out)
+        }
+        
         fn flatten(_t: &Self::RawTensor, _s: usize, _e: usize) -> Result<Self::RawTensor> {
             Err(Error::UnsupportedBackendOperation {
                 op: "flatten",
@@ -1041,6 +1056,8 @@ pub mod ndarray_backend {
             _t: &Self::RawTensor,
             _k: (usize, usize),
             _s: (usize, usize),
+            _p: (usize, usize),
+            _d: (usize, usize),
         ) -> Result<Self::RawTensor> {
             Err(Error::UnsupportedBackendOperation {
                 op: "max_pool2d",
@@ -1052,6 +1069,7 @@ pub mod ndarray_backend {
             _t: &Self::RawTensor,
             _k: (usize, usize),
             _s: (usize, usize),
+            _p: (usize, usize),
         ) -> Result<Self::RawTensor> {
             Err(Error::UnsupportedBackendOperation {
                 op: "avg_pool2d",

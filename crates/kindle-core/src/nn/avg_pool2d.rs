@@ -5,26 +5,26 @@ use alloc::vec::Vec;
 use typenum::Unsigned;
 
 #[derive(Debug, Clone)]
-pub struct AvgPool2d<K: Unsigned, S: Unsigned> {
-    _phantom: core::marker::PhantomData<(K, S)>,
+pub struct AvgPool2d<K: Unsigned, S: Unsigned, P: Unsigned = typenum::U0, D: Unsigned = typenum::U1> {
+    _phantom: core::marker::PhantomData<(K, S, P, D)>,
 }
 
-impl<K: Unsigned, S: Unsigned> AvgPool2d<K, S> {
-    pub fn new() -> Self {
-        Self {
+impl<K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned> AvgPool2d<K, S, P, D> {
+    pub fn new() -> Result<Self> {
+        Ok(Self {
             _phantom: core::marker::PhantomData,
-        }
+        })
     }
 }
 
-impl<K: Unsigned, S: Unsigned, B: Backend> Parameters<B> for AvgPool2d<K, S> {
+impl<K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned, B: Backend> Parameters<B> for AvgPool2d<K, S, P, D> {
     fn parameters(&self) -> Vec<B::RawVar> {
         Vec::new()
     }
 }
 
-impl<I: Shape + DynShape + crate::shapes::Pool2dShape<K, S>, K: Unsigned, S: Unsigned, B: Backend>
-    Module<Tensor<I, B>> for AvgPool2d<K, S>
+impl<I: Shape + DynShape + crate::shapes::Pool2dShape<K, S, P, D>, K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned, B: Backend>
+    Module<Tensor<I, B>> for AvgPool2d<K, S, P, D>
 {
     type Output = Tensor<I::Output, B>;
     type Error = Error;
@@ -32,9 +32,9 @@ impl<I: Shape + DynShape + crate::shapes::Pool2dShape<K, S>, K: Unsigned, S: Uns
     #[inline]
     fn forward(&self, x: Tensor<I, B>) -> core::result::Result<Self::Output, Error> {
         let out =
-            <B as Backend>::avg_pool2d(x.inner(), (K::USIZE, K::USIZE), (S::USIZE, S::USIZE))?;
+            <B as Backend>::avg_pool2d(x.inner(), (K::USIZE, K::USIZE), (S::USIZE, S::USIZE), (P::USIZE, P::USIZE))?;
 
-        let shape = <I as crate::shapes::Pool2dShape<K, S>>::compute_output_shape(x.shape_field());
+        let shape = <I as crate::shapes::Pool2dShape<K, S, P, D>>::compute_output_shape(x.shape_field());
         Ok(Tensor::from_parts_unchecked(
             out,
             shape,

@@ -1,0 +1,25 @@
+:“
+?
+Xpool_out"MaxPool*
+kernel_shape@@ *
+strides@@ 
+
+pool_outflat_out"Flatten
+&
+pool_outgap_out"GlobalAveragePooltest_ops*:ÿÿÿÿÿÿÿÿÿBshapeZ
+X
+
+
+
+à
+àb#
+flat_out
+
+
+ÿÿÿÿÿÿÿÿÿb!
+gap_out
+
+
+
+
+B

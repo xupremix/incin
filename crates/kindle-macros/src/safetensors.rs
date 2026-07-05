@@ -14,14 +14,35 @@ struct ImportModelInput {
     path: LitStr,
     _comma: Token![,],
     name: Ident,
+    no_meta: bool,
 }
 
 impl Parse for ImportModelInput {
     fn parse(input: ParseStream) -> Result<Self> {
+        let path: LitStr = input.parse()?;
+        let _comma: Token![,] = input.parse()?;
+        let name: Ident = input.parse()?;
+        let mut no_meta = false;
+
+        if input.peek(Token![,]) {
+            let _c: Token![,] = input.parse()?;
+            if input.peek(syn::token::Brace) {
+                let content;
+                syn::braced!(content in input);
+                let ident: Ident = content.parse()?;
+                if ident == "no_meta" {
+                    let _c2: Token![:] = content.parse()?;
+                    let lit: syn::LitBool = content.parse()?;
+                    no_meta = lit.value;
+                }
+            }
+        }
+
         Ok(Self {
-            path: input.parse()?,
-            _comma: input.parse()?,
-            name: input.parse()?,
+            path,
+            _comma,
+            name,
+            no_meta,
         })
     }
 }
@@ -113,7 +134,7 @@ pub(crate) fn import_model(_attr: TokenStream, item: TokenStream) -> TokenStream
     let root_name = input.name.clone();
 
     if rel_path.ends_with(".onnx") {
-        return crate::onnx::parse_onnx(&rel_path, &root_name).into();
+        return crate::onnx::parse_onnx(&rel_path, &root_name, input.no_meta).into();
     } else if rel_path.ends_with(".pt") || rel_path.ends_with(".pth") {
         let msg = format!(
             "TorchScript parsing is scheduled for a future update! Use .onnx or .safetensors."

@@ -104,6 +104,8 @@ pub trait Backend: Clone + 'static {
     fn matmul(lhs: &Self::RawTensor, rhs: &Self::RawTensor) -> Result<Self::RawTensor>;
 
     // Type Casting
+
+
     fn to_dtype(t: &Self::RawTensor, dtype: KindleDType) -> Result<Self::RawTensor>;
 
     // Advanced Tensor Ops
@@ -131,7 +133,8 @@ pub trait Backend: Clone + 'static {
     fn broadcast_left(t: &Self::RawTensor, shape: &[usize]) -> Result<Self::RawTensor>;
     fn reshape(t: &Self::RawTensor, shape: &[usize]) -> Result<Self::RawTensor>;
     fn transpose(t: &Self::RawTensor, dim1: usize, dim2: usize) -> Result<Self::RawTensor>;
-    fn flatten(t: &Self::RawTensor, start_dim: usize, end_dim: usize) -> Result<Self::RawTensor>;
+        fn flatten(t: &Self::RawTensor, start_dim: usize, end_dim: usize) -> Result<Self::RawTensor>;
+    fn slice(t: &Self::RawTensor, ranges: &[(usize, usize)]) -> Result<Self::RawTensor>;
 
     // Slicing primitives
     fn narrow(t: &Self::RawTensor, dim: usize, start: usize, len: usize)
@@ -172,12 +175,15 @@ pub trait Backend: Clone + 'static {
         t: &Self::RawTensor,
         kernel_size: (usize, usize),
         stride: (usize, usize),
+        padding: (usize, usize),
+        dilation: (usize, usize),
     ) -> Result<Self::RawTensor>;
 
     fn avg_pool2d(
         t: &Self::RawTensor,
         kernel_size: (usize, usize),
         stride: (usize, usize),
+        padding: (usize, usize),
     ) -> Result<Self::RawTensor>;
 
     fn adaptive_avg_pool2d(
@@ -261,7 +267,13 @@ pub mod dummy {
         fn max_keepdim(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor> { let mut s = t.clone(); s[dim] = 1; Ok(s) }
         fn min_dim(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor> { let mut s = t.clone(); s.remove(dim); Ok(s) }
         fn min_keepdim(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor> { let mut s = t.clone(); s[dim] = 1; Ok(s) }
-        fn to_dtype(t: &Self::RawTensor, _d: KindleDType) -> Result<Self::RawTensor> { Ok(t.clone()) }
+        
+
+        fn slice(t: &Self::RawTensor, _ranges: &[(usize, usize)]) -> Result<Self::RawTensor> {
+        Ok(t.clone())
+    }
+
+    fn to_dtype(t: &Self::RawTensor, _d: KindleDType) -> Result<Self::RawTensor> { Ok(t.clone()) }
         fn broadcast_as(_t: &Self::RawTensor, s: &[usize]) -> Result<Self::RawTensor> { Ok(s.to_vec()) }
         fn broadcast_left(_t: &Self::RawTensor, s: &[usize]) -> Result<Self::RawTensor> { Ok(s.to_vec()) }
         fn add(t1: &Self::RawTensor, _t2: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(t1.clone()) }
@@ -305,8 +317,8 @@ pub mod dummy {
         fn conv_transpose2d(t: &Self::RawTensor, w: &Self::RawTensor, _b: Option<&Self::RawTensor>, _s: usize, _p: usize, _op: usize, _d: usize) -> Result<Self::RawTensor> { 
             Ok(alloc::vec![t[0], w[1], t[2], t[3]]) 
         }
-        fn max_pool2d(t: &Self::RawTensor, _k: (usize, usize), _s: (usize, usize)) -> Result<Self::RawTensor> { Ok(t.clone()) }
-        fn avg_pool2d(t: &Self::RawTensor, _k: (usize, usize), _s: (usize, usize)) -> Result<Self::RawTensor> { Ok(t.clone()) }
+        fn max_pool2d(t: &Self::RawTensor, _k: (usize, usize), _s: (usize, usize), _p: (usize, usize), _d: (usize, usize)) -> Result<Self::RawTensor> { Ok(t.clone()) }
+        fn avg_pool2d(t: &Self::RawTensor, _k: (usize, usize), _s: (usize, usize), _p: (usize, usize)) -> Result<Self::RawTensor> { Ok(t.clone()) }
         fn adaptive_avg_pool2d(t: &Self::RawTensor, out: (usize, usize)) -> Result<Self::RawTensor> { 
             Ok(alloc::vec![t[0], t[1], out.0, out.1]) 
         }

@@ -30,7 +30,7 @@ brew install protobuf
 You can configure internal macro and Hub behavior using the following environment variables:
 - `KINDLE_HUB_CACHE_DIR`: Specifies a custom cache directory for downloaded models (overrides `~/.cache/huggingface/hub`).
 - `KINDLE_HUB_TOKEN`: Sets your HuggingFace authorization token for accessing private or gated repositories.
-- `KINDLE_DISABLE_META_CACHE`: Set to `1` or `true` to force `import_model!` to bypass the lightning-fast `.kindle_meta` JSON cache and do a full `.safetensors`/`.onnx` graph re-parse during `cargo build`.
+- `KINDLE_NO_META`: Set to `1` or `true` to force `import_model!` to bypass the lightning-fast `.kindle_meta` JSON cache and do a full `.safetensors`/`.onnx` graph re-parse during `cargo build`. You can also configure this directly in the macro using `import_model!("model.onnx", { no_meta: true })`.
 
 ## 🌟 Quick Tour
 

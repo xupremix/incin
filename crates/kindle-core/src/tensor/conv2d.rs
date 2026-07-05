@@ -17,7 +17,7 @@ pub trait KernelConv2dShape<K: Shape, Stride: StaticDim, Padding: StaticDim>: Sh
 impl<B, CIn, HIn, WIn, COut, KH, KW, Stride, Padding>
     KernelConv2dShape<(COut, CIn, KH, KW), Stride, Padding> for (B, CIn, HIn, WIn)
 where
-    B: StaticDim,
+    B: Dim + Default,
     CIn: StaticDim,
     HIn: StaticDim + core::ops::Add<Prod<U2, Padding>>,
     Sum<HIn, Prod<U2, Padding>>: core::ops::Sub<KH>,

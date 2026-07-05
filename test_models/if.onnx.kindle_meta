@@ -1,0 +1,1 @@
+{"param_names":[],"param_shapes":[],"user_inputs":[["cond",[{"Const":1}]],["X",[{"Const":1}]]],"forward_stmts":["let mut _out = if _cond.to_scalar :: < bool > () ?\n{ let mut _then_out = _X.clone(); _then_out } else\n{ let mut _else_out = _X.clone(); _else_out };"],"last_output":"_out","last_output_shape":[{"Const":1}]}

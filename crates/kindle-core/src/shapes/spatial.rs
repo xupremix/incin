@@ -56,7 +56,7 @@ impl<Kernel, Stride, Padding, Dilation> SpatialOut<Kernel, Stride, Padding, Dila
     type Output = usize;
 }
 
-pub trait Pool2dShape<K, S>: crate::prelude::Shape {
+pub trait Pool2dShape<K, S, P, D>: crate::prelude::Shape {
     type Output: crate::prelude::Shape + crate::prelude::DynShape;
     fn compute_output_shape(input: &Self::Field) -> <Self::Output as crate::prelude::Shape>::Field;
 }
@@ -65,32 +65,32 @@ use crate::prelude::{Dim, Dyn};
 use typenum::{U0, Unsigned};
 
 // Implement for (B, C, H, W) -> (B, C, HOut, WOut)
-impl<B: Dim, C: Dim, HIn: Dim, WIn: Dim, K: Unsigned, S: Unsigned> Pool2dShape<K, S>
+impl<B: Dim, C: Dim, HIn: Dim, WIn: Dim, K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned> Pool2dShape<K, S, P, D>
     for (B, C, HIn, WIn)
 where
-    HIn: SpatialOut<K, S, U0, U1>,
-    WIn: SpatialOut<K, S, U0, U1>,
-    <HIn as SpatialOut<K, S, U0, U1>>::Output: Dim + Default,
-    <WIn as SpatialOut<K, S, U0, U1>>::Output: Dim + Default,
+    HIn: SpatialOut<K, S, P, D>,
+    WIn: SpatialOut<K, S, P, D>,
+    <HIn as SpatialOut<K, S, P, D>>::Output: Dim + Default,
+    <WIn as SpatialOut<K, S, P, D>>::Output: Dim + Default,
 {
     type Output = (
         B,
         C,
-        <HIn as SpatialOut<K, S, U0, U1>>::Output,
-        <WIn as SpatialOut<K, S, U0, U1>>::Output,
+        <HIn as SpatialOut<K, S, P, D>>::Output,
+        <WIn as SpatialOut<K, S, P, D>>::Output,
     );
     fn compute_output_shape(input: &Self::Field) -> <Self::Output as crate::prelude::Shape>::Field {
         (input.0.clone(), input.1.clone(), Default::default(), Default::default())
     }
 }
 
-impl<K: Unsigned, S: Unsigned> Pool2dShape<K, S> for Dyn {
+impl<K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned> Pool2dShape<K, S, P, D> for Dyn {
     type Output = Dyn;
     fn compute_output_shape(input: &Self::Field) -> <Self::Output as crate::prelude::Shape>::Field {
         let mut dims = input.clone();
         if dims.len() == 4 {
-            dims[2] = (dims[2] - K::USIZE) / S::USIZE + 1;
-            dims[3] = (dims[3] - K::USIZE) / S::USIZE + 1;
+            dims[2] = (dims[2] + 2 * P::USIZE - D::USIZE * (K::USIZE - 1) - 1) / S::USIZE + 1;
+            dims[3] = (dims[3] + 2 * P::USIZE - D::USIZE * (K::USIZE - 1) - 1) / S::USIZE + 1;
         }
         dims
     }
