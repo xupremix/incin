@@ -18,7 +18,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
     } else {
         quote! { std::format! }
     };
-    let vec_ty = if is_internal {
+    let _vec_ty = if is_internal {
         quote! { alloc::vec::Vec }
     } else {
         quote! { std::vec::Vec }
@@ -293,6 +293,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
+#[allow(dead_code)]
 pub(crate) fn forward(_attr: TokenStream, item: TokenStream) -> TokenStream {
     item
 }

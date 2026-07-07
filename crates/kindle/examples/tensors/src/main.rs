@@ -9,6 +9,7 @@ struct MyModel {
 }
 
 impl MyModel {
+    #[allow(dead_code)]
     pub fn forward(&self, x: Tensor<s![dyn, 10]>) -> kindle::Result<Tensor<s![dyn, 10]>> {
         let x = self.l1.forward(x)?;
         let x = self.l2.forward(x)?;

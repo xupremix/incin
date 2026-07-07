@@ -1,5 +1,4 @@
 use kindle::prelude::*;
-use kindle_data::prelude::*;
 use rayon::prelude::*;
 use std::time::Instant;
 

@@ -3,10 +3,10 @@ use kindle::prelude::*;
 symbolic_dim!(Batch, Seq, Feature);
 
 fn main() {
-    let dev = KindleDevice::cpu();
+    let _dev = KindleDevice::cpu();
 
     let t1: Tensor<s![sym Batch, 10]> = Tensor::zeros((32usize, ())).unwrap();
-    let t2: Tensor<s![sym Batch, 20]> = Tensor::zeros((32usize, ())).unwrap();
+    let _t2: Tensor<s![sym Batch, 20]> = Tensor::zeros((32usize, ())).unwrap();
     let t3: Tensor<s![sym Batch, 10]> = Tensor::zeros((32usize, ())).unwrap();
 
     // Should compile
