@@ -1,5 +1,14 @@
 use crate::prelude::*;
 
+/// Specifies the reduction to apply to the output of a loss function.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Reduction {
+    #[default]
+    Mean,
+    Sum,
+    None,
+}
+
 /// Trait to statically verify that two shapes are identical for MSE loss.
 pub trait MSEShape<S2: Shape> {}
 impl<S: Shape> MSEShape<S> for S {}
@@ -18,8 +27,9 @@ impl MSELoss {
         &self,
         pred: &Tensor<S, B, G>,
         target: &Tensor<S, B, NoGrad>,
+        reduction: Reduction,
     ) -> Result<Tensor<(), B, G>> {
-        let inner = B::mse_loss(&pred.inner, &target.inner)?;
+        let inner = B::mse_loss(&pred.inner, &target.inner, reduction)?;
         Ok(Tensor::from_parts_unchecked(
             inner,
             Default::default(),
@@ -31,7 +41,7 @@ impl MSELoss {
 }
 
 /// Trait to statically verify the shapes for CrossEntropyLoss.
-/// Ensures the prediction tensor is [Batch, Classes] and the target is [Batch].
+/// Ensures the prediction tensor is `[Batch, Classes]` and the target is `[Batch]`.
 pub trait CrossEntropyShape<S2: Shape> {}
 
 // Static implementation: [Batch, Classes] vs [Batch]
@@ -57,12 +67,13 @@ impl CrossEntropyLoss {
         &self,
         pred: &Tensor<S1, B, G>,
         target: &Tensor<S2, B::BackendWithDType<u32>, NoGrad>,
+        reduction: Reduction,
     ) -> Result<Tensor<(), B, G>>
     where
         S1: CrossEntropyShape<S2>,
     {
         // binds `BackendWithDType<u32>::RawTensor` to be identical to `Self::RawTensor`.
-        let inner = B::cross_entropy_loss(&pred.inner, &target.inner)?;
+        let inner = B::cross_entropy_loss(&pred.inner, &target.inner, reduction)?;
         Ok(Tensor::from_parts_unchecked(
             inner,
             Default::default(),
@@ -91,8 +102,9 @@ impl L1Loss {
         &self,
         pred: &crate::prelude::Tensor<S, B, G>,
         target: &crate::prelude::Tensor<S, B, crate::prelude::NoGrad>,
+        reduction: Reduction,
     ) -> crate::prelude::Result<crate::prelude::Tensor<(), B, G>> {
-        let inner = B::l1_loss(&pred.inner, &target.inner)?;
+        let inner = B::l1_loss(&pred.inner, &target.inner, reduction)?;
         Ok(crate::prelude::Tensor::from_parts_unchecked(
             inner,
             Default::default(),
@@ -121,8 +133,9 @@ impl BCEWithLogitsLoss {
         &self,
         pred: &crate::prelude::Tensor<S, B, G>,
         target: &crate::prelude::Tensor<S, B, crate::prelude::NoGrad>,
+        reduction: Reduction,
     ) -> crate::prelude::Result<crate::prelude::Tensor<(), B, G>> {
-        let inner = B::bce_with_logits_loss(&pred.inner, &target.inner)?;
+        let inner = B::bce_with_logits_loss(&pred.inner, &target.inner, reduction)?;
         Ok(crate::prelude::Tensor::from_parts_unchecked(
             inner,
             Default::default(),

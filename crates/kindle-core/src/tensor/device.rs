@@ -4,7 +4,7 @@ use core::marker::PhantomData;
 use crate::prelude::{Dyn, Result};
 
 pub trait Device: 'static + Send + Sync + Clone + Eq + PartialEq + Debug + Sized {
-    type Arg;
+    type Arg: Clone;
     type Field: Debug + Clone;
     fn init(arg: Self::Arg) -> Self::Field;
     fn to_kindle(dev: &Self::Field) -> Result<KindleDevice>;

@@ -645,47 +645,79 @@ pub fn try_reshape<S2>(&self, args: S2::Arg) -> Result<Tensor<S2, B, G>>
 
 
 
-    pub fn cross_entropy_loss<S2: Shape>(&self, target: &Tensor<S2, B, G>) -> Result<Tensor<Dyn, B, G>> {
-        let inner = B::cross_entropy_loss(&self.inner, &target.inner)?;
+    pub fn cross_entropy_loss<S2: Shape>(&self, target: &Tensor<S2, B, G>, reduction: crate::nn::loss::Reduction) -> Result<Tensor<Dyn, B, G>> {
+        let inner = B::cross_entropy_loss(&self.inner, &target.inner, reduction)?;
+        let mut out_shape = vec![];
+        if reduction == crate::nn::loss::Reduction::None {
+            out_shape = S::dims(&self._shape).as_ref().to_vec();
+        }
         Ok(Tensor::from_parts_unchecked(
             inner,
-            vec![],
+            out_shape,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
         ))
     }
 
-    pub fn mse_loss<S2: Shape>(&self, target: &Tensor<S2, B, G>) -> Result<Tensor<Dyn, B, G>> {
-        let inner = B::mse_loss(&self.inner, &target.inner)?;
+    pub fn mse_loss<S2: Shape>(&self, target: &Tensor<S2, B, G>, reduction: crate::nn::loss::Reduction) -> Result<Tensor<Dyn, B, G>> {
+        let inner = B::mse_loss(&self.inner, &target.inner, reduction)?;
+        let mut out_shape = vec![];
+        if reduction == crate::nn::loss::Reduction::None {
+            out_shape = S::dims(&self._shape).as_ref().to_vec();
+        }
         Ok(Tensor::from_parts_unchecked(
             inner,
-            vec![],
+            out_shape,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
         ))
     }
 
-    pub fn l1_loss<S2: Shape>(&self, target: &Tensor<S2, B, G>) -> Result<Tensor<Dyn, B, G>> {
-        let inner = B::l1_loss(&self.inner, &target.inner)?;
+    pub fn l1_loss<S2: Shape>(&self, target: &Tensor<S2, B, G>, reduction: crate::nn::loss::Reduction) -> Result<Tensor<Dyn, B, G>> {
+        let inner = B::l1_loss(&self.inner, &target.inner, reduction)?;
+        let mut out_shape = vec![];
+        if reduction == crate::nn::loss::Reduction::None {
+            out_shape = S::dims(&self._shape).as_ref().to_vec();
+        }
         Ok(Tensor::from_parts_unchecked(
             inner,
-            vec![],
+            out_shape,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
         ))
     }
 
-    pub fn bce_with_logits_loss<S2: Shape>(&self, target: &Tensor<S2, B, G>) -> Result<Tensor<Dyn, B, G>> {
-        let inner = B::bce_with_logits_loss(&self.inner, &target.inner)?;
+    pub fn bce_with_logits_loss<S2: Shape>(&self, target: &Tensor<S2, B, G>, reduction: crate::nn::loss::Reduction) -> Result<Tensor<Dyn, B, G>> {
+        let inner = B::bce_with_logits_loss(&self.inner, &target.inner, reduction)?;
+        let mut out_shape = vec![];
+        if reduction == crate::nn::loss::Reduction::None {
+            out_shape = S::dims(&self._shape).as_ref().to_vec();
+        }
         Ok(Tensor::from_parts_unchecked(
             inner,
-            vec![],
+            out_shape,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
+        ))
+    }
+}
+
+impl<S: Shape, B: Backend, G: RequiresGrad, NewD: crate::prelude::Device> crate::nn::module::ToDevice<B, NewD> for Tensor<S, B, G> {
+    type Output = Tensor<S, B::BackendWithDevice<NewD>, G>;
+    fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output> {
+        let field = NewD::init(arg.clone());
+        let kindle_dev = NewD::to_kindle(&field)?;
+        let inner = B::tensor_to_device(&self.inner, &kindle_dev)?;
+        Ok(Tensor::from_parts_unchecked(
+            inner,
+            self._shape,
+            self._dtype,
+            field,
+            self._grad,
         ))
     }
 }
@@ -1192,3 +1224,63 @@ pub fn try_stack_tensors<S: Shape + DynShape, B: Backend, G: crate::tensor::grad
         _grad: tensors[0]._grad.clone(),
     })
 }
+macro_rules! impl_std_ops {
+    ($trait:ident, $method:ident, $backend_method:ident) => {
+        // Tensor + Tensor
+        impl<S1: Shape + crate::shapes::DynShape, S2: Shape + crate::shapes::DynShape, B: Backend, G: RequiresGrad> core::ops::$trait<Tensor<S2, B, G>> for Tensor<S1, B, G>
+        where
+            S1: crate::shapes::broadcast::BroadcastShape<S2>,
+            <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape,
+        {
+            type Output = Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, G>;
+            #[inline]
+            fn $method(self, rhs: Tensor<S2, B, G>) -> Self::Output {
+                self.$backend_method(&rhs).unwrap()
+            }
+        }
+
+        // &Tensor + &Tensor
+        impl<'a, 'b, S1: Shape + crate::shapes::DynShape, S2: Shape + crate::shapes::DynShape, B: Backend, G: RequiresGrad> core::ops::$trait<&'b Tensor<S2, B, G>> for &'a Tensor<S1, B, G>
+        where
+            S1: crate::shapes::broadcast::BroadcastShape<S2>,
+            <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape,
+        {
+            type Output = Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, G>;
+            #[inline]
+            fn $method(self, rhs: &'b Tensor<S2, B, G>) -> Self::Output {
+                self.$backend_method(rhs).unwrap()
+            }
+        }
+
+        // Tensor + &Tensor
+        impl<'a, S1: Shape + crate::shapes::DynShape, S2: Shape + crate::shapes::DynShape, B: Backend, G: RequiresGrad> core::ops::$trait<&'a Tensor<S2, B, G>> for Tensor<S1, B, G>
+        where
+            S1: crate::shapes::broadcast::BroadcastShape<S2>,
+            <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape,
+        {
+            type Output = Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, G>;
+            #[inline]
+            fn $method(self, rhs: &'a Tensor<S2, B, G>) -> Self::Output {
+                self.$backend_method(rhs).unwrap()
+            }
+        }
+
+        // &Tensor + Tensor
+        impl<'a, S1: Shape + crate::shapes::DynShape, S2: Shape + crate::shapes::DynShape, B: Backend, G: RequiresGrad> core::ops::$trait<Tensor<S2, B, G>> for &'a Tensor<S1, B, G>
+        where
+            S1: crate::shapes::broadcast::BroadcastShape<S2>,
+            <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape,
+        {
+            type Output = Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, G>;
+            #[inline]
+            fn $method(self, rhs: Tensor<S2, B, G>) -> Self::Output {
+                self.$backend_method(&rhs).unwrap()
+            }
+        }
+    };
+}
+
+impl_std_ops!(Add, add, broadcast_add);
+impl_std_ops!(Sub, sub, broadcast_sub);
+impl_std_ops!(Mul, mul, broadcast_mul);
+impl_std_ops!(Div, div, broadcast_div);

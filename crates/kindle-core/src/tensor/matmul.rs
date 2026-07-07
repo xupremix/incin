@@ -28,7 +28,7 @@ pub trait MatMulShape<Rhs: Shape>: Shape {
     ) -> <Self::Output as Shape>::Field;
 }
 
-pub trait StaticDim: Dim<Arg = ()> + Default {}
+pub trait StaticDim: Dim + Default {}
 impl<U, B> StaticDim for typenum::UInt<U, B>
 where
     U: typenum::Unsigned + Dim,
@@ -157,32 +157,98 @@ impl MatMulShape<Dyn> for Dyn {
     }
 }
 
+// Handled by impl_batched_matmul macro
+
 // ============================================================================
-// Batched matmul: 3D shapes
+// Batched MatMul: (Batch..., M, K) x (Batch..., K, N) -> (Batch..., M, N)
 // ============================================================================
 
-// (B, M, K) × (B, K, N) → (B, M, N)
-impl<B: StaticDim, M: StaticDim, K: StaticDim, N: StaticDim> MatMulShape<(B, K, N)> for (B, M, K) {
-    type Output = (B, M, N);
-
-    #[inline(always)]
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        _: &<(B, K, N) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        (Default::default(), Default::default(), Default::default())
-    }
+macro_rules! impl_batched_matmul {
+    // Both have same batch
+    ( $( $batch:ident ),+ ) => {
+        impl< $($batch: StaticDim,)* M: StaticDim, K: StaticDim, N: StaticDim> MatMulShape<( $($batch,)* K, N)> for ( $($batch,)* M, K) {
+            type Output = ( $($batch,)* M, N);
+            #[inline(always)]
+            fn output_shape(
+                _: &<Self as Shape>::Field,
+                _: &<( $($batch,)* K, N) as Shape>::Field,
+            ) -> <Self::Output as Shape>::Field {
+                Default::default()
+            }
+        }
+        // Lhs has batch
+        impl< $($batch: StaticDim,)* M: StaticDim, K: StaticDim, N: StaticDim> MatMulShape<(K, N)> for ( $($batch,)* M, K) {
+            type Output = ( $($batch,)* M, N);
+            #[inline(always)]
+            fn output_shape(
+                _: &<Self as Shape>::Field,
+                _: &<(K, N) as Shape>::Field,
+            ) -> <Self::Output as Shape>::Field {
+                Default::default()
+            }
+        }
+        // Rhs has batch
+        impl< $($batch: StaticDim,)* M: StaticDim, K: StaticDim, N: StaticDim> MatMulShape<( $($batch,)* K, N)> for (M, K) {
+            type Output = ( $($batch,)* M, N);
+            #[inline(always)]
+            fn output_shape(
+                _: &<Self as Shape>::Field,
+                _: &<( $($batch,)* K, N) as Shape>::Field,
+            ) -> <Self::Output as Shape>::Field {
+                Default::default()
+            }
+        }
+    };
 }
 
-// (usize, M, K) × (usize, K, N) → (usize, M, N)
+impl_batched_matmul!(B1);
+impl_batched_matmul!(B1, B2);
+impl_batched_matmul!(B1, B2, B3);
+
+// Dynamic batch implementation
 impl<M: StaticDim, K: StaticDim, N: StaticDim> MatMulShape<(usize, K, N)> for (usize, M, K) {
     type Output = (usize, M, N);
-
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         _: &<(usize, K, N) as Shape>::Field,
     ) -> <Self::Output as Shape>::Field {
         (lhs.0, Default::default(), Default::default())
+    }
+}
+impl<M: StaticDim, K: StaticDim, N: StaticDim> MatMulShape<(K, N)> for (usize, M, K) {
+    type Output = (usize, M, N);
+    fn output_shape(
+        lhs: &<Self as Shape>::Field,
+        _: &<(K, N) as Shape>::Field,
+    ) -> <Self::Output as Shape>::Field {
+        (lhs.0, Default::default(), Default::default())
+    }
+}
+impl<M: StaticDim, K: StaticDim, N: StaticDim> MatMulShape<(K, N)> for (usize, usize, M, K) {
+    type Output = (usize, usize, M, N);
+    fn output_shape(
+        lhs: &<Self as Shape>::Field,
+        _: &<(K, N) as Shape>::Field,
+    ) -> <Self::Output as Shape>::Field {
+        (lhs.0, lhs.1, Default::default(), Default::default())
+    }
+}
+impl<M: StaticDim, K: StaticDim, N: StaticDim> MatMulShape<(usize, K, N)> for (M, K) {
+    type Output = (usize, M, N);
+    fn output_shape(
+        _: &<Self as Shape>::Field,
+        rhs: &<(usize, K, N) as Shape>::Field,
+    ) -> <Self::Output as Shape>::Field {
+        (rhs.0, Default::default(), Default::default())
+    }
+}
+impl<M: StaticDim, K: StaticDim, N: StaticDim> MatMulShape<(usize, usize, K, N)> for (M, K) {
+    type Output = (usize, usize, M, N);
+    fn output_shape(
+        _: &<Self as Shape>::Field,
+        rhs: &<(usize, usize, K, N) as Shape>::Field,
+    ) -> <Self::Output as Shape>::Field {
+        (rhs.0, rhs.1, Default::default(), Default::default())
     }
 }
 

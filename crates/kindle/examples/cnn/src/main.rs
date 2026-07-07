@@ -1,24 +1,22 @@
 use kindle::prelude::*;
-use kindle_backends::candle::CandleBackend;
-use kindle_core::nn::{Conv2d, Linear, ReLU, Sequential};
-use typenum::{U0, U1};
+use typenum::{U0, U1, U3};
 
-type Features = Sequential<Conv2d<Dyn, U1, U0, CandleBackend>, ReLU>;
+type Features = Sequential<Conv2d<(usize, usize, U3, U1, U0, U1)>, ReLU>;
 
-#[kindle::module]
+#[module]
 pub struct SimpleCNN {
     features: Features,
-    classifier: Linear<Dyn, CandleBackend>,
+    classifier: Linear<Dyn>,
 }
 
 impl SimpleCNN {
     pub fn new() -> Result<Self> {
-        // Init 16 out_channels, 1 in_channel, 3x3 kernel
-        let conv = Conv2d::<Dyn, U1, U0, CandleBackend>::new(16, 1, 3, 3)?;
+        // Init 16 out_channels, 1 in_channel
+        let conv = Conv2d::<(usize, usize, U3, U1, U0, U1)>::new_dyn((16, 1))?;
         let relu = ReLU;
         let features = Sequential(conv, relu);
 
-        let classifier = Linear::<Dyn, CandleBackend>::new(16 * 26 * 26, 10)?;
+        let classifier = Linear::<Dyn>::new_dyn((16 * 26 * 26, 10))?;
 
         Ok(Self {
             features,
@@ -26,8 +24,7 @@ impl SimpleCNN {
         })
     }
 
-    #[kindle::forward]
-    pub fn forward(&self, x: Tensor<Dyn, CandleBackend>) -> Result<Tensor<Dyn, CandleBackend>> {
+    pub fn forward(&self, x: Tensor<Dyn>) -> Result<Tensor<Dyn>> {
         // 1. Feature extraction (Conv2d -> ReLU)
         let f = self.features.forward(x)?;
 
@@ -46,7 +43,7 @@ fn main() -> Result<()> {
     let model = SimpleCNN::new()?;
 
     println!("Creating input tensor of shape (4, 1, 28, 28)...");
-    let input: Tensor<Dyn, CandleBackend> = Tensor::<Dyn, CandleBackend>::zeros([4, 1, 28, 28])?;
+    let input: Tensor<Dyn> = Tensor::<Dyn>::zeros([4, 1, 28, 28])?;
 
     let logits = model.forward(input)?;
     println!(

@@ -44,8 +44,104 @@ pub trait Parameters<B: Backend> {
     fn parameters(&self) -> Vec<B::RawVar>;
 }
 
+/// A trait to transfer ownership of a module to a new device.
+pub trait ToDevice<B: Backend, NewD: Device> {
+    type Output;
+    fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output>;
+}
+
+impl<T: ToDevice<B, NewD>, B: Backend, NewD: Device> ToDevice<B, NewD> for Option<T> {
+    type Output = Option<T::Output>;
+    fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output> {
+        self.map(|t| t.to_device(arg)).transpose()
+    }
+}
+
+#[doc(hidden)]
+pub trait AutorefParametersFallback<B: Backend> {
+    fn maybe_parameters(&self, _phantom: core::marker::PhantomData<B>) -> Vec<B::RawVar> { Vec::new() }
+}
+impl<T, B: Backend> AutorefParametersFallback<B> for &&T {}
+
+#[doc(hidden)]
+pub trait AutorefParameters<B: Backend> {
+    fn maybe_parameters(&self, _phantom: core::marker::PhantomData<B>) -> Vec<B::RawVar>;
+}
+impl<T: Parameters<B>, B: Backend> AutorefParameters<B> for &T {
+    #[inline]
+    fn maybe_parameters(&self, _phantom: core::marker::PhantomData<B>) -> Vec<B::RawVar> {
+        (*self).parameters()
+    }
+}
+
+#[doc(hidden)]
+pub trait AutorefStateDictFallback<B: Backend> {
+    fn maybe_load_state_dict(&mut self, _phantom: core::marker::PhantomData<B>, _prefix: &str, _tensors: &HashMap<String, Tensor<Dyn, B>>) -> Result<()> { Ok(()) }
+    fn maybe_state_dict(&self, _phantom: core::marker::PhantomData<B>, _prefix: &str, _tensors: &mut HashMap<String, Tensor<Dyn, B>>) {}
+}
+impl<T, B: Backend> AutorefStateDictFallback<B> for &mut &mut T {}
+impl<T, B: Backend> AutorefStateDictFallback<B> for &&T {}
+
+#[doc(hidden)]
+pub trait AutorefStateDict<B: Backend> {
+    fn maybe_load_state_dict(&mut self, _phantom: core::marker::PhantomData<B>, prefix: &str, tensors: &HashMap<String, Tensor<Dyn, B>>) -> Result<()>;
+    fn maybe_state_dict(&self, _phantom: core::marker::PhantomData<B>, prefix: &str, tensors: &mut HashMap<String, Tensor<Dyn, B>>);
+}
+
+// For mutable operations
+impl<T: StateDict<B>, B: Backend> AutorefStateDict<B> for &mut T {
+    #[inline]
+    fn maybe_load_state_dict(&mut self, _phantom: core::marker::PhantomData<B>, prefix: &str, tensors: &HashMap<String, Tensor<Dyn, B>>) -> Result<()> {
+        (*self).load_state_dict(prefix, tensors)
+    }
+    #[inline]
+    fn maybe_state_dict(&self, _phantom: core::marker::PhantomData<B>, prefix: &str, tensors: &mut HashMap<String, Tensor<Dyn, B>>) {
+        (**self).state_dict(prefix, tensors)
+    }
+}
+
+// For immutable operations (state_dict uses &self)
+impl<T: StateDict<B>, B: Backend> AutorefStateDict<B> for &T {
+    #[inline]
+    fn maybe_load_state_dict(&mut self, _phantom: core::marker::PhantomData<B>, _prefix: &str, _tensors: &HashMap<String, Tensor<Dyn, B>>) -> Result<()> {
+        Ok(()) // Should not be called
+    }
+    #[inline]
+    fn maybe_state_dict(&self, _phantom: core::marker::PhantomData<B>, prefix: &str, tensors: &mut HashMap<String, Tensor<Dyn, B>>) {
+        (*self).state_dict(prefix, tensors)
+    }
+}
+
 /// A generic Neural Network Layer or Module.
 /// Capable of taking an input and returning an output or error.
+/// 
+/// `Module` is the fundamental building block of neural networks in Kindle.
+/// Any layer, from a simple ReLU to an entire ResNet architecture, implements `Module`.
+/// 
+/// ## Deriving Modules
+/// 
+/// While you can implement `Module` manually, the recommended approach is to use the `#[module]` attribute macro
+/// provided by `kindle-macros`. This automatically derives `Parameters`, `StateDict`, and generates structural boilerplate.
+/// 
+/// ```rust,ignore
+/// use kindle::prelude::*;
+/// 
+/// #[module]
+/// pub struct MyLayer<B: Backend> {
+///     weight: Param<Tensor<s![128, 128], B>>,
+///     bias: Param<Tensor<s![128], B>>,
+/// }
+/// 
+/// impl<B: Backend> Module<Tensor<s![1, 128], B>> for MyLayer<B> {
+///     type Output = Tensor<s![1, 128], B>;
+///     type Error = Error;
+/// 
+///     fn forward(&self, x: Tensor<s![1, 128], B>) -> Result<Self::Output> {
+///         // Custom logic here
+///         Ok(x)
+///     }
+/// }
+/// ```
 pub trait Module<Input> {
     type Output;
     type Error;
@@ -70,6 +166,17 @@ where
     fn forward(&self, input: I) -> core::result::Result<Self::Output, Self::Error> {
         let out1 = self.0.forward(input)?;
         self.1.forward(out1)
+    }
+}
+
+impl<B: Backend, NewD: Device, L1, L2> ToDevice<B, NewD> for Sequential<L1, L2>
+where
+    L1: ToDevice<B, NewD>,
+    L2: ToDevice<B, NewD>,
+{
+    type Output = Sequential<L1::Output, L2::Output>;
+    fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output> {
+        Ok(Sequential(self.0.to_device(arg)?, self.1.to_device(arg)?))
     }
 }
 

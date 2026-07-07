@@ -1,15 +1,12 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{ItemFn, ReturnType, parse_macro_input};
+use syn::{parse_macro_input, DeriveInput};
 
-/// The `#[kindle::module]` macro.
-/// Automatically implements the `Module` trait for the annotated struct.
-pub(crate) fn module(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(item as syn::ItemStruct);
+pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let mut input = parse_macro_input!(item as DeriveInput);
     let name = &input.ident;
 
-    let is_internal = _attr.to_string().contains("internal");
-
+    let is_internal = attr.to_string().contains("internal");
     let k_crate = if is_internal {
         quote! { crate }
     } else {
@@ -27,199 +24,276 @@ pub(crate) fn module(_attr: TokenStream, item: TokenStream) -> TokenStream {
         quote! { std::vec::Vec }
     };
 
+    let backend_generic = input.generics.params.iter().find_map(|p| {
+        if let syn::GenericParam::Type(t) = p {
+            if t.bounds.iter().any(|b| {
+                if let syn::TypeParamBound::Trait(tb) = b {
+                    tb.path.segments.last().unwrap().ident == "Backend"
+                } else {
+                    false
+                }
+            }) {
+                Some(t.ident.clone())
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    });
+
     let mut generics = input.generics.clone();
-    generics
-        .params
-        .push(syn::parse_quote!(__B: #k_crate::prelude::Backend));
-    let (impl_generics, _, _) = generics.split_for_impl();
+    let b_ident = if let Some(ref b) = backend_generic {
+        quote! { #b }
+    } else {
+        if is_internal {
+            generics.params.push(syn::parse_quote!(__B: #k_crate::prelude::Backend));
+            quote! { __B }
+        } else {
+            quote! { #k_crate::prelude::DefaultBackend }
+        }
+    };
+
+    let (impl_generics, _, where_clause) = generics.split_for_impl();
     let (_, ty_generics, _) = input.generics.split_for_impl();
 
     let mut param_calls = Vec::new();
-    let mut where_clause = input
-        .generics
-        .where_clause
-        .clone()
-        .unwrap_or_else(|| syn::parse_quote!(where));
-
     let mut load_state_calls = Vec::new();
     let mut state_dict_calls = Vec::new();
+    let mut to_device_fields = Vec::new();
 
-    match &input.fields {
-        syn::Fields::Named(fields) => {
-            for field in &fields.named {
-                let fname = &field.ident;
-                let fty = &field.ty;
-                let fname_str = fname.as_ref().unwrap().to_string();
-                param_calls.push(quote! {
-                    params.extend(#k_crate::nn::Parameters::<__B>::parameters(&self.#fname));
-                });
-                load_state_calls.push(quote! {
-                    #k_crate::nn::StateDict::<__B>::load_state_dict(&mut self.#fname, &#format_mac("{}{}.", prefix, #fname_str), tensors)?;
-                });
-                state_dict_calls.push(quote! {
-                    #k_crate::nn::StateDict::<__B>::state_dict(&self.#fname, &#format_mac("{}{}.", prefix, #fname_str), tensors);
-                });
-                where_clause
-                    .predicates
-                    .push(syn::parse_quote!(#fty : #k_crate::nn::Parameters<__B>));
-                where_clause
-                    .predicates
-                    .push(syn::parse_quote!(#fty : #k_crate::nn::StateDict<__B>));
+    if let syn::Data::Struct(ref mut data) = input.data {
+        match &mut data.fields {
+            syn::Fields::Named(fields) => {
+                for field in &mut fields.named {
+                    let mut ignore = false;
+                    let mut error_tokens = None;
+                    field.attrs.retain(|a| {
+                        if a.path().segments.last().unwrap().ident == "module" {
+                            match a.parse_args::<syn::Ident>() {
+                                Ok(i) if i == "ignore" => {
+                                    ignore = true;
+                                    false
+                                }
+                                Ok(i) => {
+                                    error_tokens = Some(syn::Error::new_spanned(i, "unknown attribute argument for #[module], expected `ignore`").to_compile_error());
+                                    false
+                                }
+                                Err(e) => {
+                                    error_tokens = Some(syn::Error::new_spanned(a, format!("invalid #[module] attribute: {}", e)).to_compile_error());
+                                    false
+                                }
+                            }
+                        } else {
+                            true
+                        }
+                    });
+
+                    if let Some(err) = error_tokens {
+                        return TokenStream::from(err);
+                    }
+                    
+                    let fname = &field.ident;
+                    let fname_str = fname.as_ref().unwrap().to_string();
+
+                    if ignore {
+                        let is_phantom = match &field.ty {
+                            syn::Type::Path(p) => p.path.segments.last().map(|s| s.ident == "PhantomData").unwrap_or(false),
+                            _ => false,
+                        };
+                        if is_phantom {
+                            to_device_fields.push(quote! { #fname: core::marker::PhantomData });
+                        } else {
+                            to_device_fields.push(quote! { #fname: self.#fname.clone() });
+                        }
+                        continue;
+                    }
+                    
+                    param_calls.push(quote! {
+                        {
+                            use #k_crate::nn::module::{AutorefParameters, AutorefParametersFallback};
+                            params.extend((&&self.#fname).maybe_parameters(core::marker::PhantomData::<#b_ident>));
+                        }
+                    });
+                    load_state_calls.push(quote! {
+                        {
+                            use #k_crate::nn::module::{AutorefStateDict, AutorefStateDictFallback};
+                            (&mut &mut self.#fname).maybe_load_state_dict(core::marker::PhantomData::<#b_ident>, &#format_mac("{}{}.", prefix, #fname_str), tensors)?;
+                        }
+                    });
+                    state_dict_calls.push(quote! {
+                        {
+                            use #k_crate::nn::module::{AutorefStateDict, AutorefStateDictFallback};
+                            (&&self.#fname).maybe_state_dict(core::marker::PhantomData::<#b_ident>, &#format_mac("{}{}.", prefix, #fname_str), tensors);
+                        }
+                    });
+                    to_device_fields.push(quote! {
+                        #fname: #k_crate::nn::module::ToDevice::to_device(self.#fname, arg)?
+                    });
+                }
             }
-        }
-        syn::Fields::Unnamed(fields) => {
-            for (i, field) in fields.unnamed.iter().enumerate() {
-                let idx = syn::Index::from(i);
-                let fty = &field.ty;
-                let idx_str = i.to_string();
-                param_calls.push(quote! {
-                    params.extend(#k_crate::nn::Parameters::<__B>::parameters(&self.#idx));
-                });
-                load_state_calls.push(quote! {
-                    #k_crate::nn::StateDict::<__B>::load_state_dict(&mut self.#idx, &#format_mac("{}{}.", prefix, #idx_str), tensors)?;
-                });
-                state_dict_calls.push(quote! {
-                    #k_crate::nn::StateDict::<__B>::state_dict(&self.#idx, &#format_mac("{}{}.", prefix, #idx_str), tensors);
-                });
-                where_clause
-                    .predicates
-                    .push(syn::parse_quote!(#fty : #k_crate::nn::Parameters<__B>));
-                where_clause
-                    .predicates
-                    .push(syn::parse_quote!(#fty : #k_crate::nn::StateDict<__B>));
+            syn::Fields::Unnamed(fields) => {
+                for (i, field) in fields.unnamed.iter_mut().enumerate() {
+                    let mut ignore = false;
+                    let mut error_tokens = None;
+                    field.attrs.retain(|a| {
+                        if a.path().segments.last().unwrap().ident == "module" {
+                            match a.parse_args::<syn::Ident>() {
+                                Ok(i) if i == "ignore" => {
+                                    ignore = true;
+                                    false
+                                }
+                                Ok(i) => {
+                                    error_tokens = Some(syn::Error::new_spanned(i, "unknown attribute argument for #[module], expected `ignore`").to_compile_error());
+                                    false
+                                }
+                                Err(e) => {
+                                    error_tokens = Some(syn::Error::new_spanned(a, format!("invalid #[module] attribute: {}", e)).to_compile_error());
+                                    false
+                                }
+                            }
+                        } else {
+                            true
+                        }
+                    });
+
+                    if let Some(err) = error_tokens {
+                        return TokenStream::from(err);
+                    }
+                    
+                    let idx = syn::Index::from(i);
+                    let idx_str = i.to_string();
+
+                    if ignore {
+                        let is_phantom = match &field.ty {
+                            syn::Type::Path(p) => p.path.segments.last().map(|s| s.ident == "PhantomData").unwrap_or(false),
+                            _ => false,
+                        };
+                        if is_phantom {
+                            to_device_fields.push(quote! { core::marker::PhantomData });
+                        } else {
+                            to_device_fields.push(quote! { self.#idx.clone() });
+                        }
+                        continue;
+                    }
+                    
+                    param_calls.push(quote! {
+                        {
+                            use #k_crate::nn::module::{AutorefParameters, AutorefParametersFallback};
+                            params.extend((&&self.#idx).maybe_parameters(core::marker::PhantomData::<#b_ident>));
+                        }
+                    });
+                    load_state_calls.push(quote! {
+                        {
+                            use #k_crate::nn::module::{AutorefStateDict, AutorefStateDictFallback};
+                            (&mut &mut self.#idx).maybe_load_state_dict(core::marker::PhantomData::<#b_ident>, &#format_mac("{}{}.", prefix, #idx_str), tensors)?;
+                        }
+                    });
+                    state_dict_calls.push(quote! {
+                        {
+                            use #k_crate::nn::module::{AutorefStateDict, AutorefStateDictFallback};
+                            (&&self.#idx).maybe_state_dict(core::marker::PhantomData::<#b_ident>, &#format_mac("{}{}.", prefix, #idx_str), tensors);
+                        }
+                    });
+                    to_device_fields.push(quote! {
+                        #k_crate::nn::module::ToDevice::to_device(self.#idx, arg)?
+                    });
+                }
             }
+            syn::Fields::Unit => {}
         }
-        syn::Fields::Unit => {}
+    } else {
+        return syn::Error::new_spanned(input, "module macro only applies to structs")
+            .to_compile_error()
+            .into();
     }
+
+    let output_ty_generics = {
+        let mut args = Vec::new();
+        for param in &input.generics.params {
+            match param {
+                syn::GenericParam::Type(t) => {
+                    let ident = &t.ident;
+                    if backend_generic.as_ref() == Some(ident) {
+                        args.push(quote! { <#ident as #k_crate::prelude::Backend>::BackendWithDevice<__NewD> });
+                    } else {
+                        args.push(quote! { #ident });
+                    }
+                }
+                syn::GenericParam::Lifetime(l) => {
+                    let ident = &l.lifetime;
+                    args.push(quote! { #ident });
+                }
+                syn::GenericParam::Const(c) => {
+                    let ident = &c.ident;
+                    args.push(quote! { #ident });
+                }
+            }
+        }
+        if args.is_empty() {
+            quote! {}
+        } else {
+            quote! { <#(#args),*> }
+        }
+    };
+
+    let to_device_instantiation = match &input.data {
+        syn::Data::Struct(data) => match &data.fields {
+            syn::Fields::Named(_) => quote! { Ok(Self::Output { #(#to_device_fields),* }) },
+            syn::Fields::Unnamed(_) => quote! { Ok(Self::Output ( #(#to_device_fields),* )) },
+            syn::Fields::Unit => quote! { Ok(Self::Output) },
+        },
+        _ => unreachable!(),
+    };
+
+    let to_device_impl = if backend_generic.is_some() || is_internal {
+        let mut impl_generics_with_newd = generics.clone();
+        impl_generics_with_newd.params.push(syn::parse_quote!(__NewD: #k_crate::prelude::Device));
+        let (impl_g, _, _) = impl_generics_with_newd.split_for_impl();
+        quote! {
+            impl #impl_g #k_crate::nn::module::ToDevice<#b_ident, __NewD> for #name #ty_generics #where_clause {
+                type Output = #name #output_ty_generics;
+                fn to_device(self, arg: &__NewD::Arg) -> #k_crate::prelude::Result<Self::Output> {
+                    #to_device_instantiation
+                }
+            }
+        }
+    } else {
+        quote! {}
+    };
 
     let expanded = quote! {
         #input
 
-        impl #impl_generics #k_crate::nn::Parameters<__B> for #name #ty_generics #where_clause {
-            fn parameters(&self) -> #vec_ty<<__B as #k_crate::prelude::Backend>::RawVar> {
+        impl #impl_generics #k_crate::nn::Parameters<#b_ident> for #name #ty_generics #where_clause {
+            fn parameters(&self) -> #vec_ty<<#b_ident as #k_crate::prelude::Backend>::RawVar> {
                 let mut params = #vec_ty::new();
                 #(#param_calls)*
                 params
             }
         }
 
-        impl #impl_generics #k_crate::nn::StateDict<__B> for #name #ty_generics #where_clause {
+        impl #impl_generics #k_crate::nn::StateDict<#b_ident> for #name #ty_generics #where_clause {
             fn load_state_dict(
                 &mut self,
                 prefix: &str,
-                tensors: &std::collections::HashMap<String, #k_crate::prelude::Tensor<#k_crate::prelude::Dyn, __B>>,
+                tensors: &std::collections::HashMap<String, #k_crate::prelude::Tensor<#k_crate::prelude::Dyn, #b_ident>>,
             ) -> #k_crate::prelude::Result<()> {
                 #(#load_state_calls)*
                 Ok(())
             }
 
-            fn state_dict(&self, prefix: &str, tensors: &mut std::collections::HashMap<String, #k_crate::prelude::Tensor<#k_crate::prelude::Dyn, __B>>) {
+            fn state_dict(&self, prefix: &str, tensors: &mut std::collections::HashMap<String, #k_crate::prelude::Tensor<#k_crate::prelude::Dyn, #b_ident>>) {
                 #(#state_dict_calls)*
             }
         }
+
+        #to_device_impl
     };
 
     TokenStream::from(expanded)
 }
 
-/// The `#[kindle::forward]` macro.
-/// Can be applied to an `impl` block to automatically generate `Module<Input>` for it,
-/// and applies AST rewriting to enforce shape boundaries.
 pub(crate) fn forward(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    if let Ok(mut item_impl) = syn::parse::<syn::ItemImpl>(item.clone()) {
-        let self_ty = &item_impl.self_ty;
-        let generics = &item_impl.generics;
-        let (impl_generics, _ty_generics, where_clause) = generics.split_for_impl();
-
-        let mut forward_method = None;
-        for item in &mut item_impl.items {
-            if let syn::ImplItem::Fn(method) = item {
-                if method.sig.ident == "forward" {
-                    forward_method = Some(method);
-                    break;
-                }
-            }
-        }
-
-        if let Some(method) = forward_method {
-            let _fn_name = &method.sig.ident;
-            let ret_type = match &method.sig.output {
-                ReturnType::Type(_, ty) => ty.clone(),
-                _ => {
-                    return syn::Error::new_spanned(method, "forward must return a Result")
-                        .to_compile_error()
-                        .into();
-                }
-            };
-
-            // Extract inner Ok type from Result<T, E>
-            let mut output_type = quote!(());
-            let error_type = quote!(kindle_core::prelude::Error);
-            if let syn::Type::Path(p) = &*ret_type {
-                if let Some(segment) = p.path.segments.last() {
-                    if segment.ident == "Result" {
-                        if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-                            if let Some(syn::GenericArgument::Type(t)) = args.args.first() {
-                                output_type = quote!(#t);
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Extract Input type (second argument after &self)
-            let mut input_type = quote!(());
-            if method.sig.inputs.len() >= 2 {
-                if let syn::FnArg::Typed(pat_type) = &method.sig.inputs[1] {
-                    let ty = &pat_type.ty;
-                    input_type = quote!(#ty);
-                }
-            }
-
-            // Rewrite AST
-            if let Some(last_stmt) = method.block.stmts.last_mut()
-                && let syn::Stmt::Expr(expr, _semi) = last_stmt
-                && let syn::Expr::Call(call) = expr
-                && let syn::Expr::Path(path) = &*call.func
-                && path.path.is_ident("Ok")
-                && let Some(arg) = call.args.first_mut()
-            {
-                let rewritten_arg: syn::Expr = syn::parse_quote! {
-                    (#arg).into_shape()?
-                };
-                *arg = rewritten_arg;
-            }
-
-            let expanded = quote! {
-                #item_impl
-
-                impl #impl_generics kindle::nn::Module<#input_type> for #self_ty #where_clause {
-                    type Output = #output_type;
-                    type Error = #error_type;
-
-                    #[inline]
-                    fn forward(&self, input: #input_type) -> std::result::Result<Self::Output, Self::Error> {
-                        self.forward(input)
-                    }
-                }
-            };
-            return TokenStream::from(expanded);
-        }
-    }
-
-    // Fallback for older code if they put it directly on the function
-    let mut func = parse_macro_input!(item as ItemFn);
-    if let Some(last_stmt) = func.block.stmts.last_mut()
-        && let syn::Stmt::Expr(expr, _semi) = last_stmt
-        && let syn::Expr::Call(call) = expr
-        && let syn::Expr::Path(path) = &*call.func
-        && path.path.is_ident("Ok")
-        && let Some(arg) = call.args.first_mut()
-    {
-        let rewritten_arg: syn::Expr = syn::parse_quote! {
-            (#arg).into_shape()?
-        };
-        *arg = rewritten_arg;
-    }
-    TokenStream::from(quote!(#func))
+    item
 }

@@ -8,12 +8,11 @@ fn main() -> Result<()> {
 
     // 1. Dataloader Extension
     let items: Vec<i32> = (0..10_000).collect();
-    let iter = items.into_iter();
 
     let start = Instant::now();
-    // `.into_par_loader()` effortlessly utilizes Rayon's threadpool to process data
-    let sum: i32 = iter
-        .into_par_loader()
+    // `.into_par_iter()` effortlessly utilizes Rayon's threadpool to process data
+    let sum: i32 = items
+        .into_par_iter()
         .map(|x: i32| {
             // Simulate complex parsing/loading
             let mut temp = x;

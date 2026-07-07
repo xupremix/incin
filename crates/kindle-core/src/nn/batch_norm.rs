@@ -3,60 +3,99 @@ use crate::prelude::*;
 
 use core::marker::PhantomData;
 
-#[derive(Debug, Clone)]
-#[kindle_macros::module(internal)]
-pub struct BatchNorm2d<C: Dim, B: Backend> {
-    pub weight: Param<(C,), B>,
-    pub bias: Param<(C,), B>,
-    pub running_mean: Buffer<(C,), B>,
-    pub running_var: Buffer<(C,), B>,
-    pub eps: f32,
-    _phantom: PhantomData<C>,
+/// A 2D Batch Normalization layer, as described in [Batch Normalization: Accelerating Deep Network Training by Reducing Internal Covariate Shift](https://arxiv.org/abs/1502.03167).
+/// 
+/// Normalizes the input tensor across the batch and spatial dimensions for each channel independently,
+/// applying learnable affine scaling (`weight`) and shift (`bias`) parameters.
+/// 
+/// The type parameter `S` is the shape marker.
+/// 
+/// ## Running Statistics
+/// `running_mean` and `running_var` are non-trainable buffers updated during training (training mode
+/// must be handled at the backend level). During inference, these stored statistics are used.
+/// 
+/// ## Examples
+/// ```rust,ignore
+/// use kindle::prelude::*;
+/// 
+/// // BatchNorm for 64-channel feature maps
+/// let bn = BatchNorm2d::<(typenum::U64,), MyBackend>::new(typenum::U64::new(), 1e-5, 0.1)?;
+/// ```
+pub trait BatchNormShape: Shape + DynShape {
+    type Channels: Dim;
 }
 
-impl<C: Dim, B: Backend> BatchNorm2d<C, B>
+impl<C: Dim> BatchNormShape for (C,) {
+    type Channels = C;
+}
+
+#[derive(Debug, Clone)]
+#[kindle_macros::module(internal)]
+pub struct BatchNorm2d<S: BatchNormShape, B: Backend> {
+    pub weight: Param<(S::Channels,), B>,
+    pub bias: Param<(S::Channels,), B>,
+    pub running_mean: Buffer<(S::Channels,), B>,
+    pub running_var: Buffer<(S::Channels,), B>,
+    #[module(ignore)]
+    pub eps: f32,
+    #[module(ignore)]
+    pub momentum: f32,
+    #[module(ignore)]
+    _phantom: PhantomData<B>,
+}
+
+impl<S: BatchNormShape, B: Backend> BatchNorm2d<S, B>
 where
     B::DType: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
-    pub fn new<A>(args: A, _device: &KindleDevice) -> Result<Self>
-    where
-        A: Clone + ArgInto<(<C as Dim>::Arg,)>,
-    {
+    pub fn new(args: <S::Channels as Dim>::Arg, eps: f32, momentum: f32) -> Result<Self> {
+        let _c = S::Channels::from_arg(args.clone());
         Ok(Self {
-            weight: Param::<(C,), B>::ones(args.clone())?,
-            bias: Param::<(C,), B>::zeros(args.clone())?,
-            running_mean: Buffer::<(C,), B>::zeros(args.clone())?,
-            running_var: Buffer::<(C,), B>::ones(args)?,
-            eps: 1e-5,
+            weight: Param::<(S::Channels,), B>::ones((args.clone(),))?,
+            bias: Param::<(S::Channels,), B>::zeros((args.clone(),))?,
+            running_mean: Buffer::<(S::Channels,), B>::zeros((args.clone(),))?,
+            running_var: Buffer::<(S::Channels,), B>::ones((args,))?,
+            eps,
+            momentum,
             _phantom: PhantomData,
         })
     }
-}
-impl<N: Dim, C: Dim, H: Dim, W: Dim, B: Backend> Module<Tensor<(N, C, H, W), B>> for BatchNorm2d<C, B> {
-    type Output = Tensor<(N, C, H, W), B>;
-    type Error = Error;
 
-    #[inline]
-    fn forward(&self, x: Tensor<(N, C, H, W), B>) -> core::result::Result<Self::Output, Error> {
-        let weight = self.weight.as_tensor()?.into_dyn();
-        let bias = self.bias.as_tensor()?.into_dyn();
-        let running_mean = self.running_mean.as_tensor()?.into_dyn();
-        let running_var = self.running_var.as_tensor()?.into_dyn();
-        x.batch_norm(&weight, &bias, &running_mean, &running_var, self.eps)
+    pub fn new_dyn(c_size: usize, eps: f32, momentum: f32) -> Result<Self> {
+        let c = S::Channels::from_size(c_size)
+            .ok_or_else(|| Error::Msg("Invalid channel size".into()))?;
+        Self::new(c.arg(), eps, momentum)
     }
 }
 
-impl<C: Dim, B: Backend> Module<Tensor<Dyn, B>> for BatchNorm2d<C, B> {
-    type Output = Tensor<Dyn, B>;
+impl<S: BatchNormShape, InS: Shape + HasChannels2D<S::Channels>, B: Backend> Module<Tensor<InS, B>>
+    for BatchNorm2d<S, B>
+{
+    type Output = Tensor<InS, B>;
     type Error = Error;
 
     #[inline]
-    fn forward(&self, x: Tensor<Dyn, B>) -> core::result::Result<Self::Output, Error> {
+    fn forward(&self, x: Tensor<InS, B>) -> core::result::Result<Self::Output, Self::Error> {
         let weight = self.weight.as_tensor()?.into_dyn();
         let bias = self.bias.as_tensor()?.into_dyn();
         let running_mean = self.running_mean.as_tensor()?.into_dyn();
         let running_var = self.running_var.as_tensor()?.into_dyn();
-        x.batch_norm(&weight, &bias, &running_mean, &running_var, self.eps)
+        
+        let out = B::batch_norm(
+            x.inner(),
+            weight.inner(),
+            bias.inner(),
+            running_mean.inner(),
+            running_var.inner(),
+            self.eps,
+        )?;
+        Ok(Tensor::from_parts_unchecked(
+            out,
+            x._shape.clone(),
+            x._dtype.clone(),
+            x._device.clone(),
+            x._grad.clone(),
+        ))
     }
 }

@@ -1,8 +1,17 @@
+/// The core dimension trait, implemented by all types that can represent a single tensor axis.
+/// 
+/// A `Dim` is a type-level description of a single tensor dimension. It can be a compile-time
+/// constant dimension (e.g. `typenum::U128` for a static 128-element axis), or a runtime value
+/// (`usize` for a fully dynamic axis).
+/// 
+/// In practice, you rarely need to implement or use `Dim` directly. The `s![]` macro generates
+/// the correct implementations automatically. Custom symbolic dimensions can be created via `symbolic_dim!`.
 pub trait Dim: 'static + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + PartialEq {
-    type Arg;
+    type Arg: Clone + Default + core::fmt::Debug;
     fn size(&self) -> usize;
     fn from_size(size: usize) -> Option<Self>;
     fn from_arg(arg: Self::Arg) -> Self;
+    fn arg(&self) -> Self::Arg;
 }
 
 impl Dim for usize {
@@ -20,6 +29,11 @@ impl Dim for usize {
     #[inline(always)]
     fn from_arg(arg: Self::Arg) -> Self {
         arg
+    }
+
+    #[inline(always)]
+    fn arg(&self) -> Self::Arg {
+        *self
     }
 }
 
@@ -54,18 +68,26 @@ macro_rules! symbolic_dim {
                 fn from_arg(arg: Self::Arg) -> Self {
                     Self(arg)
                 }
+
+                #[inline(always)]
+                fn arg(&self) -> Self::Arg {
+                    self.0
+                }
             }
         )+
     };
 }
 
 /// A mathematical product of two Dimensions `A` and `B`.
-/// Preserves dimensionality statically across flatten operations.
+/// 
+/// Used internally to track the resulting size when two dimensions are flattened or multiplied.
+/// For example, after `t.reshape::<s![-1, A_times_B]>()`, the last dimension's type would be `ProdDim<A, B>`.
+/// It preserves static dimensionality information across such operations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ProdDim<A, B>(pub usize, core::marker::PhantomData<(A, B)>);
 
 impl<A: Dim, B: Dim> Dim for ProdDim<A, B> {
-    type Arg = ();
+    type Arg = (A::Arg, B::Arg);
 
     #[inline(always)]
     fn size(&self) -> usize {
@@ -78,8 +100,18 @@ impl<A: Dim, B: Dim> Dim for ProdDim<A, B> {
     }
 
     #[inline(always)]
-    fn from_arg(_: Self::Arg) -> Self {
-        Self(0, core::marker::PhantomData)
+    fn from_arg(arg: Self::Arg) -> Self {
+        let a = A::from_arg(arg.0);
+        let b = B::from_arg(arg.1);
+        Self(a.size() * b.size(), core::marker::PhantomData)
+    }
+
+    #[inline(always)]
+    fn arg(&self) -> Self::Arg {
+        (
+            <A::Arg as core::default::Default>::default(),
+            <B::Arg as core::default::Default>::default(),
+        )
     }
 }
 
@@ -110,6 +142,11 @@ impl Dim for UTerm {
     #[inline(always)]
     fn from_arg(_: Self::Arg) -> Self {
         UTerm
+    }
+
+    #[inline(always)]
+    fn arg(&self) -> Self::Arg {
+        ()
     }
 }
 
@@ -147,5 +184,10 @@ where
     #[inline(always)]
     fn from_arg(_: Self::Arg) -> Self {
         Default::default()
+    }
+
+    #[inline(always)]
+    fn arg(&self) -> Self::Arg {
+        ()
     }
 }

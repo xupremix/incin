@@ -1,8 +1,23 @@
 use crate::prelude::*;
 
-/// A trainable parameter.
-/// Contains the backend-specific dynamic variable (e.g., a `candle_core::Var`)
-/// required to compute gradients and step an optimizer.
+/// A trainable parameter storing an underlying backend variable that supports gradient computation.
+/// 
+/// `Param` is the typed wrapper around a backend's gradient-tracking variable (e.g. `candle_core::Var`).
+/// All learnable weights and biases in Kindle modules are stored as `Param` values.
+/// 
+/// Unlike a regular `Tensor`, a `Param` requires gradient tracking. Gradients are accumulated
+/// by the backend during the backward pass and read by the optimizer during a training step.
+/// 
+/// ## Examples
+/// ```rust,ignore
+/// use kindle::prelude::*;
+/// 
+/// // A 128×256 weight matrix initialized with Kaiming uniform
+/// let w: Param<s![128, 256], MyBackend> = Param::zeros(())?;
+/// 
+/// // Convert to a tensor for use in a forward pass
+/// let w_tensor = w.as_tensor()?;
+/// ```
 pub struct Param<S: Shape, B: Backend> {
     pub(crate) inner: <B as Backend>::RawVar,
     pub(crate) _shape: S::Field,
@@ -41,20 +56,32 @@ impl<S: Shape, B: Backend> Param<S, B> {
     }
 }
 
+impl<S: Shape, B: Backend, NewD: crate::prelude::Device> crate::nn::module::ToDevice<B, NewD> for Param<S, B> {
+    type Output = Param<S, B::BackendWithDevice<NewD>>;
+    fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output> {
+        let field = NewD::init(arg.clone());
+        let kindle_dev = NewD::to_kindle(&field)?;
+        let inner = B::var_to_device(&self.inner, &kindle_dev)?;
+        Ok(Param {
+            inner,
+            _shape: self._shape,
+            _dtype: self._dtype,
+            _device: field,
+        })
+    }
+}
+
 impl<S: Shape + DynShape, B: Backend> Param<S, B>
 where
     (S, B::DType, B::Device, Grad): TensorArgs<S, B::DType, B::Device, Grad>,
 {
     
-    pub fn new_init<A>(args: A, init: crate::nn::init::Init) -> Result<Self>
-    where
-        A: ArgInto<
-            <(S, B::DType, B::Device, Grad) as TensorArgs<S, B::DType, B::Device, Grad>>::Args,
-        >,
-    {
+    pub fn new_init_raw(
+        args: <(S, B::DType, B::Device, Grad) as TensorArgs<S, B::DType, B::Device, Grad>>::Args,
+        init: crate::nn::init::Init,
+    ) -> Result<Self> {
         use crate::nn::init::Init;
-        let (_shape, _dtype, _device, _) =
-            <(S, B::DType, B::Device, Grad)>::construct(args.into_arg());
+        let (_shape, _dtype, _device, _) = <(S, B::DType, B::Device, Grad)>::construct(args);
         let dims: S::Dims = S::dims(&_shape);
         let device = <B::Device as Device>::to_kindle(&_device)?;
         let dtype = <B::DType as DType>::to_kindle(&_dtype);
@@ -105,12 +132,27 @@ where
             }
         };
 
-        Ok(Self {
-            inner,
-            _shape,
-            _dtype,
-            _device,
-        })
+        Ok(Self { inner, _shape, _dtype, _device })
+    }
+
+    pub fn new_init<A>(args: A, init: crate::nn::init::Init) -> Result<Self>
+    where
+        A: ArgInto<
+            <(S, B::DType, B::Device, Grad) as TensorArgs<S, B::DType, B::Device, Grad>>::Args,
+        >,
+    {
+        Self::new_init_raw(args.into_arg(), init)
+    }
+
+    pub fn zeros_raw(
+        args: <(S, B::DType, B::Device, Grad) as TensorArgs<S, B::DType, B::Device, Grad>>::Args,
+    ) -> Result<Self> {
+        let (_shape, _dtype, _device, _) = <(S, B::DType, B::Device, Grad)>::construct(args);
+        let dims: S::Dims = S::dims(&_shape);
+        let device = <B::Device as Device>::to_kindle(&_device)?;
+        let dtype = <B::DType as DType>::to_kindle(&_dtype);
+        let inner = B::var_zeros(dims.as_ref(), dtype, &device)?;
+        Ok(Self { inner, _shape, _dtype, _device })
     }
 
     pub fn zeros<A>(args: A) -> Result<Self>
@@ -119,18 +161,7 @@ where
             <(S, B::DType, B::Device, Grad) as TensorArgs<S, B::DType, B::Device, Grad>>::Args,
         >,
     {
-        let (_shape, _dtype, _device, _) =
-            <(S, B::DType, B::Device, Grad)>::construct(args.into_arg());
-        let dims: S::Dims = S::dims(&_shape);
-        let device = <B::Device as Device>::to_kindle(&_device)?;
-        let dtype = <B::DType as DType>::to_kindle(&_dtype);
-        let inner = B::var_zeros(dims.as_ref(), dtype, &device)?;
-        Ok(Self {
-            inner,
-            _shape,
-            _dtype,
-            _device,
-        })
+        Self::zeros_raw(args.into_arg())
     }
 
     pub fn randn<A>(args: A) -> Result<Self>
@@ -153,24 +184,24 @@ where
         })
     }
 
+    pub fn ones_raw(
+        args: <(S, B::DType, B::Device, Grad) as TensorArgs<S, B::DType, B::Device, Grad>>::Args,
+    ) -> Result<Self> {
+        let (_shape, _dtype, _device, _) = <(S, B::DType, B::Device, Grad)>::construct(args);
+        let dims: S::Dims = S::dims(&_shape);
+        let device = <B::Device as Device>::to_kindle(&_device)?;
+        let dtype = <B::DType as DType>::to_kindle(&_dtype);
+        let inner = B::var_ones(dims.as_ref(), dtype, &device)?;
+        Ok(Self { inner, _shape, _dtype, _device })
+    }
+
     pub fn ones<A>(args: A) -> Result<Self>
     where
         A: ArgInto<
             <(S, B::DType, B::Device, Grad) as TensorArgs<S, B::DType, B::Device, Grad>>::Args,
         >,
     {
-        let (_shape, _dtype, _device, _) =
-            <(S, B::DType, B::Device, Grad)>::construct(args.into_arg());
-        let dims: S::Dims = S::dims(&_shape);
-        let device = <B::Device as Device>::to_kindle(&_device)?;
-        let dtype = <B::DType as DType>::to_kindle(&_dtype);
-        let inner = B::var_ones(dims.as_ref(), dtype, &device)?;
-        Ok(Self {
-            inner,
-            _shape,
-            _dtype,
-            _device,
-        })
+        Self::ones_raw(args.into_arg())
     }
 
     /// Construct a Param directly from a backend's RawVar, typically used when loading checkpoints.
@@ -262,7 +293,11 @@ impl<S: Shape + DynShape, B: Backend> StateDict<B> for Param<S, B> {
     }
 }
 
-/// A non-trainable state buffer (e.g. running_mean in BatchNorm).
+/// A non-trainable state buffer for values that must persist between passes but do not receive gradients.
+/// 
+/// `Buffer` has the same internal structure as [`Param`], but [`Parameters::parameters`] returns an
+/// empty vector, preventing the optimizer from ever updating it. Use this for statistics like
+/// `running_mean` and `running_var` in batch normalization layers.
 pub struct Buffer<S: Shape, B: Backend> {
     pub(crate) inner: <B as Backend>::RawVar,
     pub(crate) _shape: S::Field,
@@ -300,20 +335,32 @@ impl<S: Shape, B: Backend> Buffer<S, B> {
     }
 }
 
+impl<S: Shape, B: Backend, NewD: crate::prelude::Device> crate::nn::module::ToDevice<B, NewD> for Buffer<S, B> {
+    type Output = Buffer<S, B::BackendWithDevice<NewD>>;
+    fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output> {
+        let field = NewD::init(arg.clone());
+        let kindle_dev = NewD::to_kindle(&field)?;
+        let inner = B::var_to_device(&self.inner, &kindle_dev)?;
+        Ok(Buffer {
+            inner,
+            _shape: self._shape,
+            _dtype: self._dtype,
+            _device: field,
+        })
+    }
+}
+
 impl<S: Shape + DynShape, B: Backend> Buffer<S, B>
 where
     (S, B::DType, B::Device, Grad): TensorArgs<S, B::DType, B::Device, Grad>,
 {
     
-    pub fn new_init<A>(args: A, init: crate::nn::init::Init) -> Result<Self>
-    where
-        A: ArgInto<
-            <(S, B::DType, B::Device, Grad) as TensorArgs<S, B::DType, B::Device, Grad>>::Args,
-        >,
-    {
+    pub fn new_init_raw(
+        args: <(S, B::DType, B::Device, Grad) as TensorArgs<S, B::DType, B::Device, Grad>>::Args,
+        init: crate::nn::init::Init,
+    ) -> Result<Self> {
         use crate::nn::init::Init;
-        let (_shape, _dtype, _device, _) =
-            <(S, B::DType, B::Device, Grad)>::construct(args.into_arg());
+        let (_shape, _dtype, _device, _) = <(S, B::DType, B::Device, Grad)>::construct(args);
         let dims: S::Dims = S::dims(&_shape);
         let device = <B::Device as Device>::to_kindle(&_device)?;
         let dtype = <B::DType as DType>::to_kindle(&_dtype);
@@ -364,12 +411,27 @@ where
             }
         };
 
-        Ok(Self {
-            inner,
-            _shape,
-            _dtype,
-            _device,
-        })
+        Ok(Self { inner, _shape, _dtype, _device })
+    }
+
+    pub fn new_init<A>(args: A, init: crate::nn::init::Init) -> Result<Self>
+    where
+        A: ArgInto<
+            <(S, B::DType, B::Device, Grad) as TensorArgs<S, B::DType, B::Device, Grad>>::Args,
+        >,
+    {
+        Self::new_init_raw(args.into_arg(), init)
+    }
+
+    pub fn zeros_raw(
+        args: <(S, B::DType, B::Device, Grad) as TensorArgs<S, B::DType, B::Device, Grad>>::Args,
+    ) -> Result<Self> {
+        let (_shape, _dtype, _device, _) = <(S, B::DType, B::Device, Grad)>::construct(args);
+        let dims: S::Dims = S::dims(&_shape);
+        let device = <B::Device as Device>::to_kindle(&_device)?;
+        let dtype = <B::DType as DType>::to_kindle(&_dtype);
+        let inner = B::var_zeros(dims.as_ref(), dtype, &device)?;
+        Ok(Self { inner, _shape, _dtype, _device })
     }
 
     pub fn zeros<A>(args: A) -> Result<Self>
@@ -378,18 +440,18 @@ where
             <(S, B::DType, B::Device, Grad) as TensorArgs<S, B::DType, B::Device, Grad>>::Args,
         >,
     {
-        let (_shape, _dtype, _device, _) =
-            <(S, B::DType, B::Device, Grad)>::construct(args.into_arg());
+        Self::zeros_raw(args.into_arg())
+    }
+
+    pub fn ones_raw(
+        args: <(S, B::DType, B::Device, Grad) as TensorArgs<S, B::DType, B::Device, Grad>>::Args,
+    ) -> Result<Self> {
+        let (_shape, _dtype, _device, _) = <(S, B::DType, B::Device, Grad)>::construct(args);
         let dims: S::Dims = S::dims(&_shape);
         let device = <B::Device as Device>::to_kindle(&_device)?;
         let dtype = <B::DType as DType>::to_kindle(&_dtype);
-        let inner = B::var_zeros(dims.as_ref(), dtype, &device)?;
-        Ok(Self {
-            inner,
-            _shape,
-            _dtype,
-            _device,
-        })
+        let inner = B::var_ones(dims.as_ref(), dtype, &device)?;
+        Ok(Self { inner, _shape, _dtype, _device })
     }
 
     pub fn ones<A>(args: A) -> Result<Self>
@@ -398,18 +460,7 @@ where
             <(S, B::DType, B::Device, Grad) as TensorArgs<S, B::DType, B::Device, Grad>>::Args,
         >,
     {
-        let (_shape, _dtype, _device, _) =
-            <(S, B::DType, B::Device, Grad)>::construct(args.into_arg());
-        let dims: S::Dims = S::dims(&_shape);
-        let device = <B::Device as Device>::to_kindle(&_device)?;
-        let dtype = <B::DType as DType>::to_kindle(&_dtype);
-        let inner = B::var_ones(dims.as_ref(), dtype, &device)?;
-        Ok(Self {
-            inner,
-            _shape,
-            _dtype,
-            _device,
-        })
+        Self::ones_raw(args.into_arg())
     }
 }
 

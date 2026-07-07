@@ -2,6 +2,9 @@ use crate::nn::module::{Module, Parameters};
 use crate::prelude::*;
 use alloc::vec::Vec;
 
+/// The Rectified Linear Unit (ReLU) activation function: `f(x) = max(0, x)`.
+/// 
+/// This is a stateless module with no learnable parameters.
 #[derive(Debug, Clone, Default)]
 pub struct ReLU;
 
@@ -21,6 +24,10 @@ impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for ReLU {
     }
 }
 
+/// The Gaussian Error Linear Unit (GELU) activation function.
+/// 
+/// GELU is a smooth approximation to ReLU commonly used in transformer architectures.
+/// This is a stateless module with no learnable parameters.
 #[derive(Debug, Clone, Default)]
 pub struct GELU;
 
@@ -40,6 +47,10 @@ impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for GELU {
     }
 }
 
+/// The Swish (SiLU) activation function: `f(x) = x * sigmoid(x)`.
+/// 
+/// Swish is a smooth, non-monotonic function that consistently performs better than ReLU
+/// in deeper networks. This is a stateless module with no learnable parameters.
 #[derive(Debug, Clone, Default)]
 pub struct Swish;
 
@@ -59,8 +70,15 @@ impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for Swish {
     }
 }
 
+/// The Softmax activation function, applied along a specified axis.
+/// 
+/// Converts a vector of raw logits into a probability distribution that sums to 1.
+/// 
+/// ## Parameters
+/// * `dim` — The axis along which the softmax normalization is applied.
 #[derive(Debug, Clone)]
 pub struct Softmax {
+    /// The axis along which softmax is applied.
     pub dim: usize,
 }
 
@@ -86,6 +104,9 @@ impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for Softmax {
     }
 }
 
+/// The Sigmoid activation function: `f(x) = 1 / (1 + exp(-x))`.
+/// 
+/// Squashes each element into the range `(0, 1)`. This is a stateless module.
 #[derive(Debug, Clone, Default)]
 pub struct Sigmoid;
 
@@ -105,6 +126,9 @@ impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for Sigmoid {
     }
 }
 
+/// The Hyperbolic Tangent (Tanh) activation function: `f(x) = tanh(x)`.
+/// 
+/// Squashes each element into the range `(-1, 1)`. This is a stateless module.
 #[derive(Debug, Clone, Default)]
 pub struct Tanh;
 

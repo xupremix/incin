@@ -4,4 +4,4 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-kindle = { path = "../../crates/kindle" }
+kindle = { path = "../.." }

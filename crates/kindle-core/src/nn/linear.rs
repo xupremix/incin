@@ -1,28 +1,82 @@
 use crate::nn::module::Module;
 use crate::prelude::*;
 
+/// A shape marker trait specifying the input and output features of a [`Linear`] layer.
+/// 
+/// The typical usage is to supply a 2-tuple `(InF, OutF)` where:
+/// * `InF` — Number of input features (the last dimension of the input tensor).
+/// * `OutF` — Number of output features.
+/// 
+/// ## Examples
+/// ```rust,ignore
+/// // Static linear layer: 784 inputs → 256 outputs
+/// type S = s![784, 256];
+/// ```
 pub trait LinearShape: Shape + DynShape {
     type InF;
     type OutF;
-    type WeightShape: Shape + DynShape;
-    type BiasShape: Shape + DynShape;
+    type WeightArg: crate::tensor::arg_into::NotUnit;
+    type BiasArg: crate::tensor::arg_into::NotUnit;
+    type WeightShape: Shape<Arg = Self::WeightArg> + DynShape;
+    type BiasShape: Shape<Arg = Self::BiasArg> + DynShape;
+    
+    type Target;
+    fn build_args(target: Self::Target) -> (usize, usize, Self::WeightArg, Self::BiasArg);
 }
 
 
 impl<InF: Dim, OutF: Dim> LinearShape for (InF, OutF) {
     type InF = InF;
     type OutF = OutF;
+    type WeightArg = (<OutF as Dim>::Arg, <InF as Dim>::Arg);
+    type BiasArg = (<OutF as Dim>::Arg,);
     type WeightShape = (OutF, InF);
     type BiasShape = (OutF,);
+    
+    type Target = (InF::Arg, OutF::Arg);
+    
+    #[inline]
+    fn build_args(target: Self::Target) -> (usize, usize, Self::WeightArg, Self::BiasArg) {
+        let in_f = InF::from_arg(target.0.clone()).size();
+        let out_f = OutF::from_arg(target.1.clone()).size();
+        (in_f, out_f, (target.1.clone(), target.0), (target.1,))
+    }
 }
 
 impl LinearShape for Dyn {
     type InF = Dyn;
     type OutF = Dyn;
+    type WeightArg = alloc::vec::Vec<usize>;
+    type BiasArg = alloc::vec::Vec<usize>;
     type WeightShape = Dyn;
     type BiasShape = Dyn;
+    
+    type Target = (usize, usize);
+    
+    #[inline]
+    fn build_args(target: Self::Target) -> (usize, usize, Self::WeightArg, Self::BiasArg) {
+        let in_f = target.0;
+        let out_f = target.1;
+        (in_f, out_f, alloc::vec![out_f, in_f], alloc::vec![out_f])
+    }
 }
 
+/// A fully connected (dense) linear layer: `y = x @ Wᵀ + b`.
+/// 
+/// `S` encodes both the input and output feature dimensions via [`LinearShape`]. The most common
+/// form is `s![InF, OutF]`. For dynamic feature sizes use `Dyn` or mixed partial types.
+/// 
+/// ## Examples
+/// 
+/// ```rust,ignore
+/// use kindle::prelude::*;
+/// 
+/// // A fully static linear layer: 512 inputs → 256 outputs
+/// let layer = Linear::<s![512, 256], MyBackend>::new()?;
+/// 
+/// // A dynamic linear layer — shape known only at runtime
+/// let layer = Linear::<Dyn, MyBackend>::new(512, 256)?;
+/// ```
 #[derive(Debug, Clone)]
 #[kindle_macros::module(internal)]
 pub struct Linear<S: LinearShape, B: Backend> {
@@ -33,62 +87,43 @@ pub struct Linear<S: LinearShape, B: Backend> {
 // Implement `Module` for `Linear` when input shape is `(Batch, In)`.
 
 
-impl<B: Backend> Linear<(usize, usize), B>
+impl<S: LinearShape, B: Backend> Linear<S, B>
 where
     B::DType: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
-    pub fn new(in_features: usize, out_features: usize) -> Result<Self> {
-        let weight = Param::<(usize, usize), B>::new_init((out_features, in_features), crate::nn::init::Init::KaimingUniform { fan_in: in_features, a: f64::sqrt(5.0) })?;
-        let bias = Param::<(usize,), B>::new_init((out_features,), crate::nn::init::Init::Uniform { bound: 1.0 / (in_features as f64).sqrt() })?;
-        Ok(Self { weight, bias: Some(bias) })
+    pub fn new() -> Result<Self>
+    where
+        (): crate::tensor::arg_into::ArgInto<S::Target>,
+    {
+        Self::new_dyn(())
     }
-}
 
-impl<InF: Dim<Arg = ()>, B: Backend> Linear<(InF, usize), B>
-where
-    B::DType: crate::prelude::ConstDType,
-    B::Device: crate::prelude::ConstDevice,
-{
-    pub fn new(out_features: usize) -> Result<Self> {
-        let weight = Param::<(usize, InF), B>::new_init((out_features, ()), crate::nn::init::Init::KaimingUniform { fan_in: InF::from_arg(()).size(), a: f64::sqrt(5.0) })?;
-        let bias = Param::<(usize,), B>::new_init((out_features,), crate::nn::init::Init::Uniform { bound: 1.0 / (InF::from_arg(()).size() as f64).sqrt() })?;
-        Ok(Self { weight, bias: Some(bias) })
-    }
-}
+    pub fn new_dyn<A: crate::tensor::arg_into::ArgInto<S::Target>>(args: A) -> Result<Self> {
+        let target = args.into_arg();
+        let (in_f, _out_f, w_args, b_args) = S::build_args(target);
+        
+        let w_args_data = crate::tensor::arg_into::TensorArgsData {
+            shape: w_args,
+            dtype: (),
+            device: (),
+            grad: (),
+        };
+        let b_args_data = crate::tensor::arg_into::TensorArgsData {
+            shape: b_args,
+            dtype: (),
+            device: (),
+            grad: (),
+        };
 
-impl<OutF: Dim<Arg = ()>, B: Backend> Linear<(usize, OutF), B>
-where
-    B::DType: crate::prelude::ConstDType,
-    B::Device: crate::prelude::ConstDevice,
-{
-    pub fn new(in_features: usize) -> Result<Self> {
-        let weight = Param::<(OutF, usize), B>::new_init(((), in_features), crate::nn::init::Init::KaimingUniform { fan_in: in_features, a: f64::sqrt(5.0) })?;
-        let bias = Param::<(OutF,), B>::new_init((), crate::nn::init::Init::Uniform { bound: 1.0 / (in_features as f64).sqrt() })?;
-        Ok(Self { weight, bias: Some(bias) })
-    }
-}
-
-impl<InF: Dim<Arg = ()>, OutF: Dim<Arg = ()>, B: Backend> Linear<(InF, OutF), B>
-where
-    B::DType: crate::prelude::ConstDType,
-    B::Device: crate::prelude::ConstDevice,
-{
-    pub fn new() -> Result<Self> {
-        let weight = Param::<(OutF, InF), B>::new_init((), crate::nn::init::Init::KaimingUniform { fan_in: InF::from_arg(()).size(), a: f64::sqrt(5.0) })?;
-        let bias = Param::<(OutF,), B>::new_init((), crate::nn::init::Init::Uniform { bound: 1.0 / (InF::from_arg(()).size() as f64).sqrt() })?;
-        Ok(Self { weight, bias: Some(bias) })
-    }
-}
-
-impl<B: Backend> Linear<Dyn, B>
-where
-    B::DType: crate::prelude::ConstDType,
-    B::Device: crate::prelude::ConstDevice,
-{
-    pub fn new(in_features: usize, out_features: usize) -> Result<Self> {
-        let weight = crate::prelude::Param::<Dyn, B>::new_init([out_features, in_features], crate::nn::init::Init::KaimingUniform { fan_in: in_features, a: f64::sqrt(5.0) })?;
-        let bias = crate::prelude::Param::<Dyn, B>::new_init([out_features], crate::nn::init::Init::Uniform { bound: 1.0 / (in_features as f64).sqrt() })?;
+        let weight = Param::<S::WeightShape, B>::new_init_raw(w_args_data, crate::nn::init::Init::KaimingUniform {
+            fan_in: in_f,
+            a: f64::sqrt(5.0),
+        })?;
+        let bias = Param::<S::BiasShape, B>::new_init_raw(b_args_data, crate::nn::init::Init::KaimingUniform {
+            fan_in: in_f,
+            a: f64::sqrt(5.0),
+        })?;
         Ok(Self { weight, bias: Some(bias) })
     }
 }

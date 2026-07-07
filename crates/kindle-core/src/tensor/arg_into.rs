@@ -157,18 +157,7 @@ impl_not_unit! {
     KindleDevice
 }
 
-impl ArgInto<(usize, ())> for (usize, ()) {
-    #[inline(always)]
-    fn into_arg(self) -> (usize, ()) {
-        self
-    }
-}
-impl ArgInto<((), usize)> for ((), usize) {
-    #[inline(always)]
-    fn into_arg(self) -> ((), usize) {
-        self
-    }
-}
+
 
 // () combinations used for static shapes should also be treated as Non-Unit
 // from the perspective of TensorArgsData lifting (as they represent the shape argument).
@@ -206,7 +195,7 @@ impl<D: Dim> NotUnit for Vec<D> {}
 macro_rules! impl_dim_tuple_arg_into {
     ($($name:ident),+ $(,)?) => {
         // Self -> Self identity
-        impl<$($name: Dim,)*> ArgInto<($($name,)*)> for ($($name,)*) {
+        impl<$($name,)*> ArgInto<($($name,)*)> for ($($name,)*) {
             #[inline(always)]
             fn into_arg(self) -> ($($name,)*) {
                 self

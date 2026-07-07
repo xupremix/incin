@@ -1,15 +1,31 @@
 use crate::prelude::*;
 
 /// Encapsulates the backend-specific gradients obtained from a backward pass.
+/// 
+/// This is a newtype wrapper around the backend's raw gradient container (e.g., `candle_core::backprop::GradStore`).
+/// Obtain it by calling `.backward()` on a scalar loss tensor. Pass it to [`Optimizer::step`] to update parameters.
 pub struct Gradients<G>(pub G);
 
 /// Trait defining a generic optimization algorithm.
+/// 
+/// Implementors receive a reference to the [`Gradients`] computed from a backward pass
+/// and apply the appropriate parameter update rule to all tracked variables.
 pub trait Optimizer<B: Backend> {
     /// Steps the optimizer using the given gradients, updating the tracked parameters.
     fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()>;
 }
 
-/// Stochastic Gradient Descent Optimizer.
+/// Stochastic Gradient Descent (SGD) optimizer.
+/// 
+/// Applies the update rule: `w ← w - lr * ∂L/∂w`.
+/// 
+/// ## Examples
+/// ```rust,ignore
+/// use kindle::prelude::*;
+/// 
+/// let optimizer = SGD::new(model.parameters(), 0.01);
+/// optimizer.step(&gradients)?;
+/// ```
 pub struct SGD<B: Backend> {
     params: Vec<B::RawVar>,
     lr: f64,
@@ -28,7 +44,10 @@ impl<B: Backend> Optimizer<B> for SGD<B> {
     }
 }
 
-/// AdamW Optimizer.
+/// AdamW optimizer (Adam with decoupled weight decay).
+/// 
+/// Implements the optimizer from [Decoupled Weight Decay Regularization](https://arxiv.org/abs/1711.05101).
+/// Unlike standard Adam, weight decay is applied directly to the parameters, not the gradients.
 pub struct AdamW<B: Backend> {
     params: Vec<B::RawVar>,
     lr: f64,
@@ -47,7 +66,10 @@ impl<B: Backend> Optimizer<B> for AdamW<B> {
     }
 }
 
-/// Adam Optimizer.
+/// Adam optimizer.
+/// 
+/// Implements the optimizer from [Adam: A Method for Stochastic Optimization](https://arxiv.org/abs/1412.6980).
+/// Uses first and second moment estimates of the gradient to compute adaptive learning rates.
 pub struct Adam<B: Backend> {
     params: Vec<B::RawVar>,
     lr: f64,

@@ -1,3 +1,18 @@
+//! # Kindle Backends
+//!
+//! `kindle-backends` provides concrete implementations of the `Backend` trait defined in `kindle-core`.
+//! It acts as the bridge between Kindle's high-level strongly-typed abstractions and the low-level compute engines that actually perform tensor operations.
+//! 
+//! ## Available Backends
+//! 
+//! * **`candle`**: Integrates with [Hugging Face's Candle](https://github.com/huggingface/candle), a minimalist machine learning framework for Rust. It supports CUDA, Metal, and CPU acceleration. Enable this with the `candle` feature.
+//! * **`ndarray`**: Integrates with the [ndarray](https://github.com/rust-ndarray/ndarray) ecosystem for pure Rust, CPU-bound multi-dimensional array operations. Enable this with the `ndarray` feature.
+//! * **`dummy`**: A mock backend strictly used for testing compile-time shape verification and basic operation traversal without executing real compute.
+//! 
+//! ## Creating Custom Backends
+//! 
+//! If you wish to plug in your own compute engine, you simply need to implement the `kindle_core::tensor::backend::Backend` trait and the associated operation traits (`MatMulOp`, `Conv2dOp`, etc.). 
+
 pub use kindle_core::prelude::*;
 
 pub mod prelude {
@@ -72,11 +87,11 @@ pub mod candle {
             unimplemented!("adaptive_avg_pool2d not implemented for CandleBackend")
         }
 
-        fn l1_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor) -> Result<Self::RawTensor> {
+        fn l1_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor, _reduction: kindle_core::nn::loss::Reduction) -> Result<Self::RawTensor> {
             unimplemented!("l1_loss not implemented for CandleBackend")
         }
 
-        fn bce_with_logits_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor) -> Result<Self::RawTensor> {
+        fn bce_with_logits_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor, _reduction: kindle_core::nn::loss::Reduction) -> Result<Self::RawTensor> {
             unimplemented!("bce_with_logits_loss not implemented for CandleBackend")
         }
 
@@ -576,12 +591,12 @@ pub mod candle {
             Ok(())
         }
 
-        fn mse_loss(pred: &Self::RawTensor, target: &Self::RawTensor) -> Result<Self::RawTensor> {
-            candle_nn::loss::mse(pred, target)
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e).into())
+        fn mse_loss(pred: &Self::RawTensor, target: &Self::RawTensor, _reduction: kindle_core::nn::loss::Reduction) -> Result<Self::RawTensor> {
+            let loss = candle_nn::loss::mse(pred, target).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+            Ok(loss)
         }
 
-        fn cross_entropy_loss(pred: &Self::RawTensor, target: &Self::RawTensor) -> Result<Self::RawTensor> {
+        fn cross_entropy_loss(pred: &Self::RawTensor, target: &Self::RawTensor, _reduction: kindle_core::nn::loss::Reduction) -> Result<Self::RawTensor> {
             candle_nn::loss::cross_entropy(pred, target)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e).into())
         }
@@ -667,11 +682,11 @@ pub mod ndarray_backend {
             unimplemented!("adaptive_avg_pool2d not implemented for NdarrayBackend")
         }
 
-        fn l1_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor) -> Result<Self::RawTensor> {
-            unimplemented!("l1_loss not implemented for NdarrayBackend")
+        fn l1_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor, _reduction: kindle_core::nn::loss::Reduction) -> Result<Self::RawTensor> {
+            unimplemented!("l1_loss not implemented for NdArrayBackend")
         }
 
-        fn bce_with_logits_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor) -> Result<Self::RawTensor> {
+        fn bce_with_logits_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor, _reduction: kindle_core::nn::loss::Reduction) -> Result<Self::RawTensor> {
             unimplemented!("bce_with_logits_loss not implemented for NdarrayBackend")
         }
 
@@ -1103,13 +1118,13 @@ pub mod ndarray_backend {
                 backend: "Ndarray",
             })
         }
-        fn mse_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor) -> Result<Self::RawTensor> {
-            Err(Error::UnsupportedBackendOperation {
-                op: "mse_loss",
-                backend: "Ndarray",
-            })
+        fn mse_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor, _reduction: kindle_core::nn::loss::Reduction) -> Result<Self::RawTensor> {
+            // let diff = pred - target;
+            // let sq = diff.mapv(|a| a.powi(2));
+            // Ok(arr0(sq.mean().unwrap()).into_dyn())
+            unimplemented!("mse_loss not implemented for NdArrayBackend")
         }
-        fn cross_entropy_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor) -> Result<Self::RawTensor> {
+        fn cross_entropy_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor, _reduction: kindle_core::nn::loss::Reduction) -> Result<Self::RawTensor> {
             Err(Error::UnsupportedBackendOperation {
                 op: "cross_entropy_loss",
                 backend: "Ndarray",
@@ -1242,8 +1257,10 @@ pub mod burn_backend {
                 fn step_sgd(_params: &mut [Self::RawVar], _grads: &Self::Grads, _lr: f64) -> Result<()> { Err(Error::UnsupportedBackendOperation { op: "step_sgd", backend: "Burn" }) }
                 fn step_adamw(_params: &mut [Self::RawVar], _grads: &Self::Grads, _lr: f64) -> Result<()> { Err(Error::UnsupportedBackendOperation { op: "step_adamw", backend: "Burn" }) }
                 fn step_adam(_params: &mut [Self::RawVar], _grads: &Self::Grads, _lr: f64) -> Result<()> { Err(Error::UnsupportedBackendOperation { op: "step_adam", backend: "Burn" }) }
-                fn mse_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "mse_loss", backend: "Burn" }) }
-                fn cross_entropy_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "cross_entropy_loss", backend: "Burn" }) }
+                fn l1_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor, _reduction: kindle_core::nn::loss::Reduction) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "l1_loss", backend: "Burn" }) }
+                fn bce_with_logits_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor, _reduction: kindle_core::nn::loss::Reduction) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "bce_with_logits_loss", backend: "Burn" }) }
+                fn mse_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor, _reduction: kindle_core::nn::loss::Reduction) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "mse_loss", backend: "Burn" }) }
+                fn cross_entropy_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor, _reduction: kindle_core::nn::loss::Reduction) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "cross_entropy_loss", backend: "Burn" }) }
             }
         };
     }

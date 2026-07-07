@@ -200,10 +200,10 @@ pub trait Backend: Clone + 'static {
     fn step_adam(params: &mut [Self::RawVar], grads: &Self::Grads, lr: f64) -> Result<()>;
 
     // Loss Functions
-    fn mse_loss(pred: &Self::RawTensor, target: &Self::RawTensor) -> Result<Self::RawTensor>;
-    fn l1_loss(pred: &Self::RawTensor, target: &Self::RawTensor) -> Result<Self::RawTensor>;
-    fn bce_with_logits_loss(pred: &Self::RawTensor, target: &Self::RawTensor) -> Result<Self::RawTensor>;
-    fn cross_entropy_loss(pred: &Self::RawTensor, target: &Self::RawTensor) -> Result<Self::RawTensor>;
+    fn mse_loss(pred: &Self::RawTensor, target: &Self::RawTensor, reduction: crate::nn::loss::Reduction) -> Result<Self::RawTensor>;
+    fn l1_loss(pred: &Self::RawTensor, target: &Self::RawTensor, reduction: crate::nn::loss::Reduction) -> Result<Self::RawTensor>;
+    fn bce_with_logits_loss(pred: &Self::RawTensor, target: &Self::RawTensor, reduction: crate::nn::loss::Reduction) -> Result<Self::RawTensor>;
+    fn cross_entropy_loss(pred: &Self::RawTensor, target: &Self::RawTensor, reduction: crate::nn::loss::Reduction) -> Result<Self::RawTensor>;
 
     // Serialization
     fn to_bytes(t: &Self::RawTensor) -> Result<alloc::vec::Vec<u8>>;
@@ -327,10 +327,10 @@ pub mod dummy {
         fn step_adamw(_p: &mut [Self::RawVar], _g: &Self::Grads, _lr: f64) -> Result<()> { Ok(()) }
         fn step_adam(_p: &mut [Self::RawVar], _g: &Self::Grads, _lr: f64) -> Result<()> { Ok(()) }
 
-        fn mse_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(alloc::vec![]) }
-        fn l1_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(alloc::vec![]) }
-        fn bce_with_logits_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(alloc::vec![]) }
-        fn cross_entropy_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor) -> Result<Self::RawTensor> { Ok(alloc::vec![]) }
+        fn mse_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor, _r: crate::nn::loss::Reduction) -> Result<Self::RawTensor> { Ok(alloc::vec![]) }
+        fn l1_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor, _r: crate::nn::loss::Reduction) -> Result<Self::RawTensor> { Ok(alloc::vec![]) }
+        fn bce_with_logits_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor, _r: crate::nn::loss::Reduction) -> Result<Self::RawTensor> { Ok(alloc::vec![]) }
+        fn cross_entropy_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor, _r: crate::nn::loss::Reduction) -> Result<Self::RawTensor> { Ok(alloc::vec![]) }
         fn stack(t: &[&Self::RawTensor], d: usize) -> Result<Self::RawTensor> { 
             let mut out = t[0].clone(); 
             out.insert(d, t.len()); 

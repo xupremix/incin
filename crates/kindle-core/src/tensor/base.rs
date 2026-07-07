@@ -11,6 +11,39 @@ pub struct Dyn(pub ());
 ///
 /// It holds a reference to a backend-specific tensor representation, while statically tracking
 /// its `Shape`, `Backend` (which includes `DType` and `Device`), and its `Grad` requirements.
+/// 
+/// `Tensor` is the primary workhorse of the Kindle framework. By maintaining shape information
+/// directly in the type signature, Kindle ensures that tensor operations such as matrix multiplication
+/// or convolutions are strictly verified at compile time.
+/// 
+/// ## Type Parameters
+/// * `S`: The [`Shape`] of the tensor. This can be static (e.g., `s![2, 3, 224, 224]`), dynamic (`Dyn`), or partially dynamic.
+/// * `B`: The underlying compute [`Backend`]. It defines how the tensor is stored in memory and how mathematical operations are executed.
+/// * `G`: Trait marker representing whether the tensor requires gradients ([`Grad`] or [`NoGrad`]). Defaults to `Grad`.
+/// 
+/// ## Examples
+/// 
+/// Creating and inspecting statically shaped tensors:
+/// ```rust,ignore
+/// use kindle::prelude::*;
+/// type Backend = kindle_backends::candle::CandleBackend<f32, Cpu>;
+/// 
+/// // Compile-time 3D tensor of shape [2, 5, 10]
+/// let t = Tensor::<s![2, 5, 10], Backend>::zeros(()).unwrap();
+/// 
+/// assert_eq!(t.dims(), vec![2, 5, 10]);
+/// ```
+/// 
+/// Using dynamically shaped tensors:
+/// ```rust,ignore
+/// use kindle::prelude::*;
+/// type Backend = kindle_backends::candle::CandleBackend<f32, Cpu>;
+/// 
+/// // Shape determined at runtime
+/// let dyn_t = Tensor::<Dyn, Backend>::ones(vec![32, 64]).unwrap();
+/// 
+/// assert_eq!(dyn_t.dims(), vec![32, 64]);
+/// ```
 #[derive(Debug)]
 pub struct Tensor<S: Shape, B: Backend, G: RequiresGrad = Grad> {
     pub(crate) inner: B::RawTensor,
@@ -626,19 +659,19 @@ mod tests {
             unimplemented!()
         }
 
-        fn mse_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor) -> Result<Self::RawTensor> {
+        fn mse_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor, _reduction: crate::nn::loss::Reduction) -> Result<Self::RawTensor> {
             unimplemented!()
         }
 
-        fn l1_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor) -> Result<Self::RawTensor> {
+        fn l1_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor, _reduction: crate::nn::loss::Reduction) -> Result<Self::RawTensor> {
             unimplemented!()
         }
 
-        fn bce_with_logits_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor) -> Result<Self::RawTensor> {
+        fn bce_with_logits_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor, _reduction: crate::nn::loss::Reduction) -> Result<Self::RawTensor> {
             unimplemented!()
         }
 
-        fn cross_entropy_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor) -> Result<Self::RawTensor> {
+        fn cross_entropy_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor, _reduction: crate::nn::loss::Reduction) -> Result<Self::RawTensor> {
             unimplemented!()
         }
         

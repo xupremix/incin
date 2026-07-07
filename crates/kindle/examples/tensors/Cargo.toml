@@ -1,5 +1,5 @@
 [package]
-name = "matmul"
+name = "tensors"
 edition.workspace = true
 version.workspace = true
 readme.workspace = true

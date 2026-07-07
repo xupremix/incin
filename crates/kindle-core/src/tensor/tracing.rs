@@ -220,72 +220,72 @@ impl<B: Backend> Backend for TracingBackend<B> {
 
     fn mul_scalar(t: &Self::RawTensor, scalar: f64) -> Result<Self::RawTensor> {
         let inner = B::mul_scalar(&t.inner, scalar)?;
-        Ok(Self::trace_unary(OpType::Mul, t, &inner))
+        Ok(Self::trace_unary(OpType::MulScalar, t, &inner))
     }
 
     fn add_scalar(t: &Self::RawTensor, scalar: f64) -> Result<Self::RawTensor> {
         let inner = B::add_scalar(&t.inner, scalar)?;
-        Ok(Self::trace_unary(OpType::Add, t, &inner))
+        Ok(Self::trace_unary(OpType::AddScalar, t, &inner))
     }
 
     fn sum_all(t: &Self::RawTensor) -> Result<Self::RawTensor> {
         let inner = B::sum_all(&t.inner)?;
-        Ok(Self::trace_unary(OpType::Add, t, &inner))
+        Ok(Self::trace_unary(OpType::SumAll, t, &inner))
     }
 
     fn mean_all(t: &Self::RawTensor) -> Result<Self::RawTensor> {
         let inner = B::mean_all(&t.inner)?;
-        Ok(Self::trace_unary(OpType::Add, t, &inner))
+        Ok(Self::trace_unary(OpType::MeanAll, t, &inner))
     }
 
     fn max_all(t: &Self::RawTensor) -> Result<Self::RawTensor> {
         let inner = B::max_all(&t.inner)?;
-        Ok(Self::trace_unary(OpType::Add, t, &inner))
+        Ok(Self::trace_unary(OpType::MaxAll, t, &inner))
     }
 
     fn min_all(t: &Self::RawTensor) -> Result<Self::RawTensor> {
         let inner = B::min_all(&t.inner)?;
-        Ok(Self::trace_unary(OpType::Add, t, &inner))
+        Ok(Self::trace_unary(OpType::MinAll, t, &inner))
     }
 
     fn sum_dim(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor> {
         let inner = B::sum_dim(&t.inner, dim)?;
-        Ok(Self::trace_unary(OpType::Add, t, &inner))
+        Ok(Self::trace_unary(OpType::SumDim, t, &inner))
     }
 
     fn sum_keepdim(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor> {
         let inner = B::sum_keepdim(&t.inner, dim)?;
-        Ok(Self::trace_unary(OpType::Add, t, &inner))
+        Ok(Self::trace_unary(OpType::SumDim, t, &inner))
     }
 
     fn mean_dim(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor> {
         let inner = B::mean_dim(&t.inner, dim)?;
-        Ok(Self::trace_unary(OpType::Add, t, &inner))
+        Ok(Self::trace_unary(OpType::MeanDim, t, &inner))
     }
 
     fn mean_keepdim(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor> {
         let inner = B::mean_keepdim(&t.inner, dim)?;
-        Ok(Self::trace_unary(OpType::Add, t, &inner))
+        Ok(Self::trace_unary(OpType::MeanDim, t, &inner))
     }
 
     fn max_dim(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor> {
         let inner = B::max_dim(&t.inner, dim)?;
-        Ok(Self::trace_unary(OpType::Add, t, &inner))
+        Ok(Self::trace_unary(OpType::MaxDim, t, &inner))
     }
 
     fn max_keepdim(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor> {
         let inner = B::max_keepdim(&t.inner, dim)?;
-        Ok(Self::trace_unary(OpType::Add, t, &inner))
+        Ok(Self::trace_unary(OpType::MaxDim, t, &inner))
     }
 
     fn min_dim(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor> {
         let inner = B::min_dim(&t.inner, dim)?;
-        Ok(Self::trace_unary(OpType::Add, t, &inner))
+        Ok(Self::trace_unary(OpType::MinDim, t, &inner))
     }
 
     fn min_keepdim(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor> {
         let inner = B::min_keepdim(&t.inner, dim)?;
-        Ok(Self::trace_unary(OpType::Add, t, &inner))
+        Ok(Self::trace_unary(OpType::MinDim, t, &inner))
     }
 
     fn add(lhs: &Self::RawTensor, rhs: &Self::RawTensor) -> Result<Self::RawTensor> {
@@ -315,7 +315,7 @@ impl<B: Backend> Backend for TracingBackend<B> {
 
     fn broadcast_as(t: &Self::RawTensor, shape: &[usize]) -> Result<Self::RawTensor> {
         let inner = B::broadcast_as(&t.inner, shape)?;
-        Ok(Self::trace_unary(OpType::Add, t, &inner)) // Use Add for now
+        Ok(Self::trace_unary(OpType::Broadcast, t, &inner))
     }
 
     fn reshape(t: &Self::RawTensor, shape: &[usize]) -> Result<Self::RawTensor> {
@@ -358,7 +358,7 @@ impl<B: Backend> Backend for TracingBackend<B> {
 
     fn narrow(t: &Self::RawTensor, dim: usize, start: usize, len: usize) -> Result<Self::RawTensor> {
         let inner = B::narrow(&t.inner, dim, start, len)?;
-        Ok(Self::trace_unary(OpType::Add, t, &inner))
+        Ok(Self::trace_unary(OpType::Narrow, t, &inner))
     }
 
     fn concat(tensors: &[&Self::RawTensor], dim: usize) -> Result<Self::RawTensor> {
@@ -459,7 +459,7 @@ impl<B: Backend> Backend for TracingBackend<B> {
         dilation: (usize, usize),
     ) -> Result<Self::RawTensor> {
         let inner = B::max_pool2d(&x.inner, kernel_size, stride, padding, dilation)?;
-        Ok(Self::trace_unary(OpType::Add, x, &inner))
+        Ok(Self::trace_unary(OpType::MaxPool2d, x, &inner))
     }
 
     fn avg_pool2d(
@@ -469,7 +469,7 @@ impl<B: Backend> Backend for TracingBackend<B> {
         padding: (usize, usize),
     ) -> Result<Self::RawTensor> {
         let inner = B::avg_pool2d(&x.inner, kernel_size, stride, padding)?;
-        Ok(Self::trace_unary(OpType::Add, x, &inner))
+        Ok(Self::trace_unary(OpType::AvgPool2d, x, &inner))
     }
 
     fn adaptive_avg_pool2d(
@@ -477,7 +477,7 @@ impl<B: Backend> Backend for TracingBackend<B> {
         output_size: (usize, usize),
     ) -> Result<Self::RawTensor> {
         let inner = B::adaptive_avg_pool2d(&x.inner, output_size)?;
-        Ok(Self::trace_unary(OpType::Add, x, &inner))
+        Ok(Self::trace_unary(OpType::AdaptiveAvgPool2d, x, &inner))
     }
 
     fn backward(t: &Self::RawTensor) -> Result<Self::Grads> {
@@ -518,44 +518,48 @@ impl<B: Backend> Backend for TracingBackend<B> {
 
     fn slice(t: &Self::RawTensor, ranges: &[(usize, usize)]) -> Result<Self::RawTensor> {
         let inner = B::slice(&t.inner, ranges)?;
-        Ok(Self::trace_unary(OpType::Relu, t, &inner))
+        Ok(Self::trace_unary(OpType::Slice, t, &inner))
     }
 
     fn to_dtype(t: &Self::RawTensor, dtype: KindleDType) -> Result<Self::RawTensor> {
         let inner = B::to_dtype(&t.inner, dtype)?;
-        Ok(Self::trace_unary(OpType::Add, t, &inner))
+        Ok(Self::trace_unary(OpType::ToDtype, t, &inner))
     }
 
     fn cross_entropy_loss(
         logits: &Self::RawTensor,
         targets: &Self::RawTensor,
+        reduction: crate::nn::loss::Reduction,
     ) -> Result<Self::RawTensor> {
-        let inner = B::cross_entropy_loss(&logits.inner, &targets.inner)?;
-        Ok(Self::trace_binary(OpType::Add, logits, targets, &inner))
+        let inner = B::cross_entropy_loss(&logits.inner, &targets.inner, reduction)?;
+        Ok(Self::trace_binary(OpType::CrossEntropyLoss, logits, targets, &inner))
     }
 
     fn mse_loss(
         predictions: &Self::RawTensor,
         targets: &Self::RawTensor,
+        reduction: crate::nn::loss::Reduction,
     ) -> Result<Self::RawTensor> {
-        let inner = B::mse_loss(&predictions.inner, &targets.inner)?;
-        Ok(Self::trace_binary(OpType::Add, predictions, targets, &inner))
+        let inner = B::mse_loss(&predictions.inner, &targets.inner, reduction)?;
+        Ok(Self::trace_binary(OpType::MseLoss, predictions, targets, &inner))
     }
 
     fn l1_loss(
         predictions: &Self::RawTensor,
         targets: &Self::RawTensor,
+        reduction: crate::nn::loss::Reduction,
     ) -> Result<Self::RawTensor> {
-        let inner = B::l1_loss(&predictions.inner, &targets.inner)?;
-        Ok(Self::trace_binary(OpType::Add, predictions, targets, &inner))
+        let inner = B::l1_loss(&predictions.inner, &targets.inner, reduction)?;
+        Ok(Self::trace_binary(OpType::L1Loss, predictions, targets, &inner))
     }
 
     fn bce_with_logits_loss(
         logits: &Self::RawTensor,
         targets: &Self::RawTensor,
+        reduction: crate::nn::loss::Reduction,
     ) -> Result<Self::RawTensor> {
-        let inner = B::bce_with_logits_loss(&logits.inner, &targets.inner)?;
-        Ok(Self::trace_binary(OpType::Add, logits, targets, &inner))
+        let inner = B::bce_with_logits_loss(&logits.inner, &targets.inner, reduction)?;
+        Ok(Self::trace_binary(OpType::BceWithLogitsLoss, logits, targets, &inner))
     }
 
     fn embedding(
@@ -563,7 +567,7 @@ impl<B: Backend> Backend for TracingBackend<B> {
         indices: &Self::RawTensor,
     ) -> Result<Self::RawTensor> {
         let inner = B::embedding(&weight.inner, &indices.inner)?;
-        Ok(Self::trace_binary(OpType::Add, weight, indices, &inner))
+        Ok(Self::trace_binary(OpType::Embedding, weight, indices, &inner))
     }
 
     fn layer_norm(
@@ -573,7 +577,7 @@ impl<B: Backend> Backend for TracingBackend<B> {
         eps: f32,
     ) -> Result<Self::RawTensor> {
         let inner = B::layer_norm(&x.inner, &weight.inner, &bias.inner, eps)?;
-        Ok(Self::trace_unary(OpType::Add, x, &inner))
+        Ok(Self::trace_unary(OpType::LayerNorm, x, &inner))
     }
 
     fn batch_norm(
@@ -585,7 +589,7 @@ impl<B: Backend> Backend for TracingBackend<B> {
         e: f32,
     ) -> Result<Self::RawTensor> {
         let inner = B::batch_norm(&t.inner, &w.inner, &b.inner, &rm.inner, &rv.inner, e)?;
-        Ok(Self::trace_unary(OpType::Add, t, &inner))
+        Ok(Self::trace_unary(OpType::BatchNorm, t, &inner))
     }
 
     fn flatten(t: &Self::RawTensor, start_dim: usize, end_dim: usize) -> Result<Self::RawTensor> {
@@ -600,7 +604,7 @@ impl<B: Backend> Backend for TracingBackend<B> {
     
     fn broadcast_left(t: &Self::RawTensor, shape: &[usize]) -> Result<Self::RawTensor> {
         let inner = B::broadcast_left(&t.inner, shape)?;
-        Ok(Self::trace_unary(OpType::Add, t, &inner))
+        Ok(Self::trace_unary(OpType::Broadcast, t, &inner))
     }
     
     fn conv_transpose2d(
@@ -614,6 +618,6 @@ impl<B: Backend> Backend for TracingBackend<B> {
     ) -> Result<Self::RawTensor> {
         let inner_b = b.map(|b| &b.inner);
         let inner = B::conv_transpose2d(&t.inner, &w.inner, inner_b, stride, padding, output_padding, dilation)?;
-        Ok(Self::trace_unary(OpType::Add, t, &inner))
+        Ok(Self::trace_unary(OpType::ConvTranspose2d, t, &inner))
     }
 }

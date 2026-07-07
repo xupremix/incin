@@ -4,6 +4,16 @@ use alloc::vec::Vec;
 use core::fmt::Debug;
 use core::ops::{Index, IndexMut};
 
+/// The fundamental trait for all tensor shape types.
+/// 
+/// A `Shape` encodes the rank (number of dimensions) and, optionally, the static size of each
+/// dimension into the type system. The three primary implementors are:
+/// 
+/// * **Tuple of `Dim` types** (e.g., `(U2, U3)`) — Fully static. All dimension sizes are known at compile time.
+/// * **`Dyn`** — Fully dynamic. Shape is determined at runtime.
+/// * **Tuples mixing `usize` and `typenum`** — Partially static (e.g., `(U3, usize)`).
+/// 
+/// In practice, shapes are most often constructed via the `s![]` macro.
 pub trait Shape: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
     type Arg;
     type Field: Debug + Clone + Send + Sync;
@@ -23,6 +33,11 @@ pub trait Shape: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
     fn from_dyn(dims: &[usize]) -> Option<Self::Field>;
 }
 
+/// A shape with runtime-accessible dimension information (rank, total elements, per-axis sizes).
+/// 
+/// All implementors of `Shape` that support dynamic rank queries also implement `DynShape`.
+/// This includes both `Dyn` and fully static shapes (tuples). Operations that need to introspect
+/// the shape at runtime (e.g., computing strides) require a `DynShape` bound.
 pub trait DynShape: Shape {
     fn rank(shape: &Self::Field) -> usize;
     fn numel(shape: &Self::Field) -> usize;
@@ -53,6 +68,18 @@ pub trait PartialDynShape: DynShape {
     const RANK: usize;
 }
 
+/// A fully static shape whose total number of elements and dimension sizes are available as compile-time constants.
+/// 
+/// This is implemented for all shapes built exclusively from `typenum` types (e.g., `(U2, U3, U4)`).
+/// The key property is that `NUMEL` and `DIMS` are `const`, enabling the compiler to verify
+/// that operations (like reshape) are element-count-preserving without any runtime checks.
+/// 
+/// ## Example
+/// ```rust,ignore
+/// use kindle_core::shapes::shape::ConstShape;
+/// type MyShape = s![2, 3, 4];
+/// assert_eq!(<MyShape as ConstShape>::NUMEL, 24);
+/// ```
 pub trait ConstShape: Shape<Field: Default> {
     // const RANK: usize; // impl PartialDynShape for it and DynShape
     const NUMEL: usize;

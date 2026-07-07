@@ -1,3 +1,30 @@
+//! # Kindle Core
+//!
+//! `kindle-core` provides the fundamental abstractions, traits, and types for the Kindle framework. 
+//! It encapsulates the tensor representation, neural network layers, shape systems, optimization traits, and serialization support.
+//! 
+//! ## Architecture
+//! 
+//! The core is divided into several essential modules:
+//! * **`shapes`**: Implements the type-level shapes using `typenum`. This allows Kindle to perform compile-time shape verification for all common tensor operations, ensuring operations like matrix multiplication, convolution, and concatenation are mathematically sound before the code even runs.
+//! * **`tensor`**: Defines the central `Tensor<S: Shape, B: Backend>` abstraction. It defines how tensors interact with their underlying compute backends and defines all the mathematical operations available.
+//! * **`nn`**: Provides high-level neural network components (Modules, Linear, Conv2d, BatchNorm2d) which can be composed to build larger models.
+//! * **`optim`**: Interfaces for optimization (e.g., SGD).
+//! * **`serialize`**: Defines `Serializer` and `Deserializer` traits for loading weights from disk (e.g., SafeTensors).
+//! 
+//! ## Shapes Overview
+//! 
+//! Kindle uses type-level lists (tuples of `typenum::Unsigned`) to represent static shapes, along with specialized types like `Dyn` for dynamic shapes.
+//! 
+//! ```rust,ignore
+//! use kindle_core::prelude::*;
+//! 
+//! // A fully static 3D shape: [2, 3, 224]
+//! type MyShape = (typenum::U2, typenum::U3, typenum::U224);
+//! 
+//! // The same shape constructed via the `s![]` macro (provided by `kindle-macros`):
+//! // type MyShape = s![2, 3, 224];
+//! ```
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(
     feature = "nightly",

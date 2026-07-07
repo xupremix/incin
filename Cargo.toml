@@ -2,7 +2,13 @@
 resolver = "2"
 
 members = [
-	"crates/*",
+    "crates/kindle",
+    "crates/kindle-backends",
+    "crates/kindle-core",
+    "crates/kindle-data",
+    "crates/kindle-macros",
+    "crates/kindle/examples/*",
+    "crates/kindle-core/examples/*"
 ]
 
 exclude = []
@@ -16,11 +22,11 @@ license = "MIT OR Apache-2.0"
 [workspace.lints.clippy]
 
 [workspace.dependencies]
-proc-macro2 = { version = "1.0.103", default-features = false }
-syn = { version = "2.0.111", features = ["full"] }
-quote = { version = "1.0.42", default-features = false }
+proc-macro2 = { version = "1.0.106", default-features = false }
+syn = { version = "2.0.118", features = ["full"] }
+quote = { version = "1.0.46", default-features = false }
 candle-core = { version = "0.9.1", default-features = false }
 candle-nn = { version = "0.9.1", default-features = false }
-thiserror = { version = "2.0.17", default-features = false }
+thiserror = { version = "2.0.18", default-features = false }
 half = { version = "2.7.1", default-features = false }
 # miette = "7.6.0"

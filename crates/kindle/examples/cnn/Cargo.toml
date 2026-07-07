@@ -5,7 +5,4 @@ edition = "2021"
 publish = false
 
 [dependencies]
-kindle = { path = "../../crates/kindle" }
-kindle-core = { path = "../../crates/kindle-core" }
-kindle-backends = { path = "../../crates/kindle-backends", features = ["candle"] }
-candle-core = { version = "0.9.1", default-features = false }
+kindle = { path = "../.." }

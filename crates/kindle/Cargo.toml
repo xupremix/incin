@@ -10,7 +10,7 @@ license.workspace = true
 workspace = true
 
 [features]
-default = ["std", "candle", "ndarray"]
+default = ["std", "candle"]
 std = ["kindle-core/std", "kindle-macros/std"]
 nightly = ["kindle-core/nightly", "kindle-macros/nightly"]
 cuda = ["kindle-core/cuda", "kindle-backends/cuda"]

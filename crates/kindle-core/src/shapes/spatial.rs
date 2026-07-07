@@ -96,7 +96,7 @@ impl<K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned> Pool2dShape<K, S, P, D>
     }
 }
 
-pub trait Conv1dShape<COut, K, S, P, D>: crate::prelude::Shape {
+pub trait SpatialConv1d<COut, K, S, P, D>: crate::prelude::Shape {
     type Output: crate::prelude::Shape + crate::prelude::DynShape;
     fn compute_output_shape(input: &Self::Field, out_channels: usize) -> <Self::Output as crate::prelude::Shape>::Field;
 }
@@ -105,7 +105,7 @@ pub trait Conv1dShape<COut, K, S, P, D>: crate::prelude::Shape {
 macro_rules! impl_conv1d_shape {
     ($($B:ident : $idx:tt),*) => {
         impl<$($B: Dim,)* CIn: Dim, COut: Dim + Default, LIn: Dim, K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned>
-            Conv1dShape<COut, K, S, P, D> for ($($B,)* CIn, LIn)
+            SpatialConv1d<COut, K, S, P, D> for ($($B,)* CIn, LIn)
         where
             LIn: SpatialOut<K, S, P, D>,
             <LIn as SpatialOut<K, S, P, D>>::Output: Dim + Default,
@@ -125,7 +125,7 @@ impl_conv1d_shape!(B0: 0, B1: 1, B2: 2, B3: 3);
 impl_conv1d_shape!(B0: 0, B1: 1, B2: 2, B3: 3, B4: 4);
 
 
-impl<COut, K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned> Conv1dShape<COut, K, S, P, D> for Dyn {
+impl<COut, K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned> SpatialConv1d<COut, K, S, P, D> for Dyn {
     type Output = Dyn;
     fn compute_output_shape(input: &Self::Field, out_channels: usize) -> <Self::Output as crate::prelude::Shape>::Field {
         let mut dims = input.clone();
@@ -137,7 +137,7 @@ impl<COut, K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned> Conv1dShape<COut,
     }
 }
 
-pub trait Conv2dShape<COut, K, S, P, D>: crate::prelude::Shape {
+pub trait SpatialConv2d<COut, K, S, P, D>: crate::prelude::Shape {
     type Output: crate::prelude::Shape + crate::prelude::DynShape;
     fn compute_output_shape(input: &Self::Field, out_channels: usize) -> <Self::Output as crate::prelude::Shape>::Field;
 }
@@ -146,7 +146,7 @@ pub trait Conv2dShape<COut, K, S, P, D>: crate::prelude::Shape {
 macro_rules! impl_conv2d_shape {
     ($($B:ident : $idx:tt),*) => {
         impl<$($B: Dim,)* CIn: Dim, COut: Dim + Default, HIn: Dim, WIn: Dim, K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned>
-            Conv2dShape<COut, K, S, P, D> for ($($B,)* CIn, HIn, WIn)
+            SpatialConv2d<COut, K, S, P, D> for ($($B,)* CIn, HIn, WIn)
         where
             HIn: SpatialOut<K, S, P, D>,
             WIn: SpatialOut<K, S, P, D>,
@@ -167,7 +167,7 @@ impl_conv2d_shape!(B0: 0, B1: 1, B2: 2);
 impl_conv2d_shape!(B0: 0, B1: 1, B2: 2, B3: 3);
 
 
-impl<COut, K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned> Conv2dShape<COut, K, S, P, D> for Dyn {
+impl<COut, K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned> SpatialConv2d<COut, K, S, P, D> for Dyn {
     type Output = Dyn;
     fn compute_output_shape(input: &Self::Field, out_channels: usize) -> <Self::Output as crate::prelude::Shape>::Field {
         let mut dims = input.clone();

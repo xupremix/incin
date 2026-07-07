@@ -6,8 +6,8 @@ readme.workspace = true
 license.workspace = true
 
 [dependencies]
-kindle = { version = "0.1.0", path = "../../crates/kindle" }
-kindle-data = { version = "0.1.0", path = "../../crates/kindle-data" }
+kindle = { path = "../.." }
+kindle-data = { path = "../../../kindle-data" }
 rayon = "1.12.0"
 
 [lints]

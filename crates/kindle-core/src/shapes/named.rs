@@ -36,4 +36,9 @@ impl<Tag: 'static + Send + Sync + Copy + Clone + core::fmt::Debug + Eq + Partial
     fn from_arg(arg: Self::Arg) -> Self {
         Self::new(arg)
     }
+
+    #[inline(always)]
+    fn arg(&self) -> Self::Arg {
+        self.size
+    }
 }

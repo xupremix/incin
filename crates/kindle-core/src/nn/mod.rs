@@ -1,3 +1,52 @@
+//! Neural network layers, modules, and utilities.
+//! 
+//! This module provides the building blocks for constructing neural networks in Kindle.
+//! All layers implement the [`Module`] trait, which defines a strongly-typed `forward` method.
+//! 
+//! ## Layers
+//! 
+//! | Layer | Description |
+//! |-------|-------------|
+//! | [`Linear`] | Fully-connected layer: `y = xWᵀ + b` |
+//! | [`Conv2d`] | 2D Convolutional layer |
+//! | [`Conv1d`] | 1D Convolutional layer |
+//! | [`BatchNorm2d`] | 2D Batch Normalization |
+//! | [`LayerNorm`] | Layer Normalization |
+//! | [`MaxPool2d`] | 2D Max Pooling |
+//! | [`AvgPool2d`] | 2D Average Pooling |
+//! | [`Embedding`] | Embedding lookup table |
+//! 
+//! ## Activations
+//! 
+//! | Activation | Description |
+//! |------------|-------------|
+//! | [`ReLU`] | `max(0, x)` |
+//! | [`GELU`] | Gaussian Error Linear Unit |
+//! | [`Swish`] | `x * sigmoid(x)` |
+//! | [`Sigmoid`] | `1 / (1 + e^{-x})` |
+//! | [`Tanh`] | Hyperbolic Tangent |
+//! | [`Softmax`] | Normalized exponentials along an axis |
+//! 
+//! ## Loss Functions
+//! 
+//! | Loss | Description |
+//! |------|-------------|
+//! | [`MSELoss`] | Mean Squared Error |
+//! | [`CrossEntropyLoss`] | Softmax + NLL Loss |
+//! | [`L1Loss`] | Mean Absolute Error |
+//! | [`BCEWithLogitsLoss`] | Binary Cross Entropy with Logits |
+//! 
+//! ## Recurrent Modules
+//! 
+//! | Module | Description |
+//! |--------|-------------|
+//! | [`RNNCell`] | Single Elman RNN step |
+//! | [`RNN`] | Multi-step sequence RNN |
+//! 
+//! ## Parameters & Buffers
+//! 
+//! * [`Param`] — A trainable parameter (gradients are computed and updated by an optimizer).
+//! * [`Buffer`] — A non-trainable state buffer (e.g., running statistics in BatchNorm).
 pub mod activation;
 pub mod adaptive_avg_pool2d;
 pub mod avg_pool2d;
