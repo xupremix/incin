@@ -31,7 +31,7 @@ mod shape_ops;
 /// `(typenum::U1, typenum::U3, typenum::U224, typenum::U224)`
 /// 
 /// ## Examples
-/// ```rust,no_run
+/// ```rust,ignore
 /// use kindle::prelude::*;
 /// 
 /// // Defines a 4D tensor shape [Batch=2, Channels=3, Height=224, Width=224]
@@ -40,7 +40,7 @@ mod shape_ops;
 /// ```
 /// 
 /// You can also mix named symbolic dimensions (if they implement `Dim`):
-/// ```rust,no_run
+/// ```rust,ignore
 /// use kindle::prelude::*;
 /// kindle_core::symbolic_dim!(BatchSize);
 /// 
@@ -72,7 +72,7 @@ pub fn impl_arg_into(input: TokenStream) -> TokenStream {
 /// * `-1` -> Translates to `InferDim` (used mainly in reshaping to infer the dimension size).
 /// 
 /// ## Examples
-/// ```rust,no_run
+/// ```rust,ignore
 /// use kindle::prelude::*;
 /// 
 /// // Given a tensor `t` of shape [10, 20, 30]

@@ -370,7 +370,15 @@ pub mod candle {
             use candle_nn::Module;
             let hidden_size = w.dim(1).map_err(|e| anyhow::anyhow!(e))?;
             let emb = candle_nn::Embedding::new(w.clone(), hidden_size);
-            Ok(emb.forward(t).map_err(|e| anyhow::anyhow!(e))?)
+            
+            // Candle requires U32 or I64 for embedding indices
+            let t_idx = if t.dtype() != candle_core::DType::U32 && t.dtype() != candle_core::DType::I64 {
+                t.to_dtype(candle_core::DType::U32).map_err(|e| anyhow::anyhow!(e))?
+            } else {
+                t.clone()
+            };
+            
+            Ok(emb.forward(&t_idx).map_err(|e| anyhow::anyhow!(e))?)
         }
 
         fn mean_dim(t: &Self::RawTensor, dim: usize) -> Result<Self::RawTensor> {

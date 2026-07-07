@@ -128,6 +128,7 @@ pub type Sequential<L1, L2> = kindle_core::nn::Sequential<L1, L2>;
 pub type Param<T, B = DefaultBackend> = kindle_core::nn::Param<T, B>;
 pub type RNNCell<S, B = DefaultBackend> = kindle_core::nn::rnn::RNNCell<S, B>;
 pub type RNN<S, B = DefaultBackend> = kindle_core::nn::rnn::RNN<S, B>;
+pub type Embedding<S, B = DefaultBackend> = kindle_core::nn::Embedding<S, B>;
 
 pub mod macros {
     pub use kindle_macros::{idx, impl_arg_into, s};
@@ -141,7 +142,7 @@ pub mod prelude {
     // We intentionally overshadow kindle_core::Tensor and NN modules with our aliased versions
     pub use super::Tensor;
     pub use super::{Linear, Conv1d, Conv2d, BatchNorm2d, LayerNorm, AvgPool2d, MaxPool2d, Param, DefaultBackend};
-    pub use super::{RNNCell, RNN};
+    pub use super::{RNNCell, RNN, Embedding};
 }
 
 #[cfg(test)]
