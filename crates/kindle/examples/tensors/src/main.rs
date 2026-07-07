@@ -1,16 +1,21 @@
 use kindle::prelude::*;
 
+type B = DefaultBackend;
+
 #[module]
 struct MyModel {
-    l1: Linear<s![10, 20]>,
-    l2: Linear<s![20, 20]>,
-    l3: Linear<s![20, 20]>,
-    l4: Linear<s![20, 10]>,
+    l1: Linear<s![10, 20], B>,
+    l2: Linear<s![20, 20], B>,
+    l3: Linear<s![20, 20], B>,
+    l4: Linear<s![20, 10], B>,
 }
 
 impl MyModel {
     #[allow(dead_code)]
-    pub fn forward(&self, x: Tensor<s![dyn, 10]>) -> kindle::Result<Tensor<s![dyn, 10]>> {
+    pub fn forward(
+        &self,
+        x: Tensor<s![2, 2, 2, dyn, 10]>,
+    ) -> kindle::Result<Tensor<s![2, 2, 2, dyn, 10]>> {
         let x = self.l1.forward(x)?;
         let x = self.l2.forward(x)?;
         let x = self.l3.forward(x)?;
@@ -21,12 +26,17 @@ impl MyModel {
 }
 
 fn main() -> kindle::Result<()> {
-    let _model: MyModel = MyModel {
+    let model = MyModel {
         l1: Linear::new()?,
         l2: Linear::new()?,
         l3: Linear::new()?,
         l4: Linear::new()?,
     };
+
+    let t: Tensor<s![2, 2, 2, dyn, 10], B> = Tensor::randn(10)? * 2.;
+
+    let out = model.forward(t)?;
+    println!("{out:}");
 
     Ok(())
 }
