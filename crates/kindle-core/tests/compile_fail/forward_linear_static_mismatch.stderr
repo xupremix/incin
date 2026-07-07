@@ -55,15 +55,11 @@ note: required by a bound in `kindle_core::nn::Linear`
   | pub struct Linear<S: LinearShape, B: Backend> {
   |                      ^^^^^^^^^^^ required by this bound in `Linear`
 
-error[E0599]: no function or associated item named `new` found for struct `kindle_core::nn::Linear<(), DummyBackend>` in the current scope
+error[E0599]: the function or associated item `new` exists for struct `kindle_core::nn::Linear<(), DummyBackend>`, but its trait bounds were not satisfied
  --> tests/compile_fail/forward_linear_static_mismatch.rs:8:51
   |
 8 |     let layer = Linear::<s![3, 4], DummyBackend>::new().unwrap();
-  |                                                   ^^^ function or associated item not found in `kindle_core::nn::Linear<(), DummyBackend>`
+  |                                                   ^^^ function or associated item cannot be called on `kindle_core::nn::Linear<(), DummyBackend>` due to unsatisfied trait bounds
   |
-  = note: the function or associated item was found for
-          - `kindle_core::nn::Linear<(InF, OutF), B>`
-          - `kindle_core::nn::Linear<(InF, usize), B>`
-          - `kindle_core::nn::Linear<(usize, OutF), B>`
-          - `kindle_core::nn::Linear<(usize, usize), B>`
-          - `kindle_core::nn::Linear<Dyn, B>`
+  = note: the following trait bounds were not satisfied:
+          `(): LinearShape`

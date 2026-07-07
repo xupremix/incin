@@ -1,15 +1,14 @@
-//! Element-wise tensor operations with compile-time shape checking.
+//! Shape manipulation and restructuring operations.
 //!
-//! Operations require matching Shape, DType, Device, and RequiresGrad.
-//! This ensures at compile time that you can't accidentally add tensors
-//! of different shapes, dtypes, or on different devices.
-
+//! This module provides methods to change the logical or physical shape of a tensor 
+//! without necessarily changing the underlying data. It includes reshaping, transposition, 
+//! squeezing, flattening, and broadcasting. These operations heavily leverage the 
+//! compile-time type system to ensure the resulting shapes are strictly valid.
 use crate::tensor::ops::*;
 use crate::prelude::{Backend, Dyn, DynShape, RequiresGrad, Result, Shape, Tensor};
 use crate::nn::loss::{Mean, ReductionMode, CrossEntropyReductionShape, MseReductionShape, L1ReductionShape, BceReductionShape, Reduction};
 
 use alloc::vec::Vec;
-use alloc::format;
 
 impl<S: Shape + DynShape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
     pub fn slice(&self, specs: &[IndexSpec]) -> Result<Tensor<Dyn, B, G>> {

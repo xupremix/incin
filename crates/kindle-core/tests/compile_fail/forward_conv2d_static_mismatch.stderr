@@ -42,8 +42,16 @@ warning: unused import: `kindle_core::nn::*`
   |
   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
 
-error[E0747]: constant provided when a type was expected
- --> tests/compile_fail/forward_conv2d_static_mismatch.rs:8:26
+error[E0107]: struct takes 2 generic arguments but 6 generic arguments were supplied
+ --> tests/compile_fail/forward_conv2d_static_mismatch.rs:8:17
   |
 8 |     let layer = Conv2d::<3, 1, 0, 1, s![16, 3, 3, 3], DummyBackend>::new().unwrap();
-  |                          ^
+  |                 ^^^^^^       ------------------------------------- help: remove the unnecessary generic arguments
+  |                 |
+  |                 expected 2 generic arguments
+  |
+note: struct defined here, with 2 generic parameters: `S`, `B`
+ --> src/nn/conv2d.rs
+  |
+  | pub struct Conv2d<S: Conv2dShape, B: Backend> {
+  |            ^^^^^^ -               -

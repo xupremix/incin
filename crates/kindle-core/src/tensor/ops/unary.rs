@@ -1,15 +1,10 @@
-//! Element-wise tensor operations with compile-time shape checking.
+//! Unary tensor operations.
 //!
-//! Operations require matching Shape, DType, Device, and RequiresGrad.
-//! This ensures at compile time that you can't accidentally add tensors
-//! of different shapes, dtypes, or on different devices.
+//! This module provides element-wise unary operations (e.g., `abs`, `relu`, `exp`) that act 
+//! on a single tensor and return a new tensor with the exact same shape. It also includes 
+//! operations that interact with a scalar (e.g., `mul_scalar`, `add_scalar`).
+use crate::prelude::{Backend, RequiresGrad, Result, Shape, Tensor};
 
-use crate::tensor::ops::*;
-use crate::prelude::{Backend, Dyn, DynShape, RequiresGrad, Result, Shape, Tensor};
-use crate::nn::loss::{Mean, ReductionMode, CrossEntropyReductionShape, MseReductionShape, L1ReductionShape, BceReductionShape, Reduction};
-
-use alloc::vec::Vec;
-use alloc::format;
 
 macro_rules! impl_unary_op {
     ($method:ident, $backend_method:ident) => {

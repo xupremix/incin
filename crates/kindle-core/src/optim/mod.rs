@@ -52,6 +52,19 @@ impl<B: Backend> Optimizer<B> for SGD<B> {
     }
 }
 
+/// AdamW optimizer (Adam with decoupled weight decay).
+/// 
+/// AdamW modifies the standard Adam algorithm by decoupling the weight decay from the 
+/// gradient updates. This leads to better generalization performance, particularly when 
+/// training transformer models and deep networks.
+/// 
+/// ## Examples
+/// ```rust,ignore
+/// use kindle::prelude::*;
+/// 
+/// let optimizer = AdamW::new(model.parameters(), 1e-4);
+/// optimizer.step(&gradients)?;
+/// ```
 pub struct AdamW<B: Backend> {
     params: std::collections::HashMap<String, B::RawVar>,
     pub lr: f64,
@@ -97,7 +110,7 @@ impl<B: Backend> Optimizer<B> for AdamW<B> {
                     t = B::sub(&t, &decay)?;
                 }
                 
-                let mut m_t = if let Some(m) = self.m.get(name) {
+                let m_t = if let Some(m) = self.m.get(name) {
                     let term1 = B::mul_scalar(m, self.beta1)?;
                     let term2 = B::mul_scalar(&grad, 1.0 - self.beta1)?;
                     B::add(&term1, &term2)?
@@ -106,7 +119,7 @@ impl<B: Backend> Optimizer<B> for AdamW<B> {
                 };
 
                 let grad_sq = B::mul(&grad, &grad)?;
-                let mut v_t = if let Some(v) = self.v.get(name) {
+                let v_t = if let Some(v) = self.v.get(name) {
                     let term1 = B::mul_scalar(v, self.beta2)?;
                     let term2 = B::mul_scalar(&grad_sq, 1.0 - self.beta2)?;
                     B::add(&term1, &term2)?
@@ -132,6 +145,18 @@ impl<B: Backend> Optimizer<B> for AdamW<B> {
     }
 }
 
+/// Adam optimization algorithm.
+/// 
+/// Implements the standard Adam optimizer with momentum and variance tracking.
+/// For models sensitive to weight decay (like Transformers), prefer [`AdamW`].
+/// 
+/// ## Examples
+/// ```rust,ignore
+/// use kindle::prelude::*;
+/// 
+/// let optimizer = Adam::new(model.parameters(), 1e-3);
+/// optimizer.step(&gradients)?;
+/// ```
 pub struct Adam<B: Backend> {
     params: std::collections::HashMap<String, B::RawVar>,
     pub lr: f64,
@@ -169,7 +194,7 @@ impl<B: Backend> Optimizer<B> for Adam<B> {
             if let Some(grad) = B::get_grad(var, &grads.0)? {
                 let t = B::var_as_tensor(var)?;
                 
-                let mut m_t = if let Some(m) = self.m.get(name) {
+                let m_t = if let Some(m) = self.m.get(name) {
                     let term1 = B::mul_scalar(m, self.beta1)?;
                     let term2 = B::mul_scalar(&grad, 1.0 - self.beta1)?;
                     B::add(&term1, &term2)?
@@ -178,7 +203,7 @@ impl<B: Backend> Optimizer<B> for Adam<B> {
                 };
 
                 let grad_sq = B::mul(&grad, &grad)?;
-                let mut v_t = if let Some(v) = self.v.get(name) {
+                let v_t = if let Some(v) = self.v.get(name) {
                     let term1 = B::mul_scalar(v, self.beta2)?;
                     let term2 = B::mul_scalar(&grad_sq, 1.0 - self.beta2)?;
                     B::add(&term1, &term2)?

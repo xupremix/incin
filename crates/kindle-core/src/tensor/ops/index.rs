@@ -1,14 +1,10 @@
-//! Element-wise tensor operations with compile-time shape checking.
+//! Tensor indexing, slicing, and dynamic stacking operations.
 //!
-//! Operations require matching Shape, DType, Device, and RequiresGrad.
-//! This ensures at compile time that you can't accidentally add tensors
-//! of different shapes, dtypes, or on different devices.
+//! This module provides methods to interact with sub-regions of tensors (e.g. slicing, narrowing)
+//! as well as operations to concatenate or stack multiple tensors together. These methods ensure
+//! that the resulting dimensions are verified and computed either at compile-time (using `Axis`) 
+//! or dynamically (using `try_stack` / `dyn_slice`) depending on the operation chosen.
 
-use crate::prelude::{Backend, Dyn, DynShape, RequiresGrad, Result, Shape, Tensor};
-use crate::nn::loss::{Mean, ReductionMode, CrossEntropyReductionShape, MseReductionShape, L1ReductionShape, BceReductionShape, Reduction};
-
-use alloc::vec::Vec;
-use alloc::format;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IndexSpec {

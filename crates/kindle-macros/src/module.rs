@@ -28,7 +28,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
         if let syn::GenericParam::Type(t) = p {
             if t.bounds.iter().any(|b| {
                 if let syn::TypeParamBound::Trait(tb) = b {
-                    tb.path.segments.last().unwrap().ident == "Backend"
+                    tb.path.segments.last().map(|s| s.ident == "Backend").unwrap_or(false)
                 } else {
                     false
                 }
@@ -69,7 +69,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                     let mut ignore = false;
                     let mut error_tokens = None;
                     field.attrs.retain(|a| {
-                        if a.path().segments.last().unwrap().ident == "module" {
+                        if a.path().segments.last().map(|s| s.ident == "module").unwrap_or(false) {
                             match a.parse_args::<syn::Ident>() {
                                 Ok(i) if i == "ignore" => {
                                     ignore = true;
@@ -94,7 +94,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                     }
                     
                     let fname = &field.ident;
-                    let fname_str = fname.as_ref().unwrap().to_string();
+                    let fname_str = fname.as_ref().map(|i| i.to_string()).unwrap_or_else(|| "".to_string());
 
                     if ignore {
                         let is_phantom = match &field.ty {
@@ -137,7 +137,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                     let mut ignore = false;
                     let mut error_tokens = None;
                     field.attrs.retain(|a| {
-                        if a.path().segments.last().unwrap().ident == "module" {
+                        if a.path().segments.last().map(|s| s.ident == "module").unwrap_or(false) {
                             match a.parse_args::<syn::Ident>() {
                                 Ok(i) if i == "ignore" => {
                                     ignore = true;

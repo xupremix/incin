@@ -1,6 +1,5 @@
 use crate::nn::module::{Module, Parameters};
 use crate::prelude::*;
-use alloc::vec::Vec;
 
 /// The Rectified Linear Unit (ReLU) activation function: `f(x) = max(0, x)`.
 /// 

@@ -83,7 +83,10 @@ pub(crate) fn shape(input: TokenStream) -> TokenStream {
         match elem {
             Dim::Dyn => output.push(quote! { usize }),
             Dim::Lit(lit_int) => {
-                let val: usize = lit_int.base10_parse().unwrap();
+                let val: usize = match lit_int.base10_parse() {
+                    Ok(v) => v,
+                    Err(e) => return syn::Error::new_spanned(lit_int, format!("Invalid integer: {}", e)).to_compile_error().into(),
+                };
                 output.push(lit_to_typenum(val, &path));
             }
             Dim::Path(p) => output.push(quote! { #p }),

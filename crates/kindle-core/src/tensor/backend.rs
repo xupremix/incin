@@ -232,7 +232,18 @@ pub mod dummy {
         fn format_tensor(t: &Self::RawTensor) -> alloc::string::String { alloc::format!("Tensor(shape={:?})", t) }
         fn var_as_tensor(var: &Self::RawVar) -> Result<Self::RawTensor> { Ok(var.clone()) }
         fn var_from_tensor(t: &Self::RawTensor) -> Result<Self::RawVar> { Ok(t.clone()) }
-        fn assign_var(var: &mut Self::RawVar, tensor: &Self::RawTensor) -> Result<()> { *var = tensor.clone(); Ok(()) }
+        fn assign_var(var: &mut Self::RawVar, tensor: &Self::RawTensor) -> Result<()> {
+            if var != tensor {
+                return Err(crate::err::Error::ShapeMismatch {
+                    op: "assign_var",
+                    expected: var.clone(),
+                    got: tensor.clone(),
+                    msg: alloc::string::String::from("shape mismatch during assign_var"),
+                });
+            }
+            *var = tensor.clone(); 
+            Ok(()) 
+        }
         fn zeros(s: &[usize], _dt: KindleDType, _d: &KindleDevice) -> Result<Self::RawTensor> { Ok(s.to_vec()) }
         fn ones(s: &[usize], _dt: KindleDType, _d: &KindleDevice) -> Result<Self::RawTensor> { Ok(s.to_vec()) }
         fn rand(s: &[usize], _dt: KindleDType, _d: &KindleDevice) -> Result<Self::RawTensor> { Ok(s.to_vec()) }

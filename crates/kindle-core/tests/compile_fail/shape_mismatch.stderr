@@ -9,7 +9,7 @@ error[E0308]: mismatched types
   = note: expected reference `&kindle_core::prelude::Tensor<[usize; 2], DummyBackend, _>`
              found reference `&kindle_core::prelude::Tensor<[usize; 3], DummyBackend, Grad>`
 note: method defined here
- --> src/tensor/ops.rs
+ --> src/tensor/ops/binary.rs
   |
   | impl_binary_op!(Add, add, add);
   |                      ^^^

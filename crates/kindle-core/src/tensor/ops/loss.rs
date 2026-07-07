@@ -1,15 +1,11 @@
-//! Element-wise tensor operations with compile-time shape checking.
+//! Common loss functions (MSE, L1, BCE, CrossEntropy) for training.
 //!
-//! Operations require matching Shape, DType, Device, and RequiresGrad.
-//! This ensures at compile time that you can't accidentally add tensors
-//! of different shapes, dtypes, or on different devices.
-
-use crate::tensor::ops::*;
+//! This module provides standard loss functions used to train neural networks.
+//! Loss functions automatically compute and track their required reduction shape 
+//! (e.g. reducing down to a scalar or maintaining a batched shape) using type-level 
+//! logic to ensure that backpropagation can flow correctly from the scalar loss.
 use crate::prelude::{Backend, Dyn, DynShape, RequiresGrad, Result, Shape, Tensor};
-use crate::nn::loss::{Mean, ReductionMode, CrossEntropyReductionShape, MseReductionShape, L1ReductionShape, BceReductionShape, Reduction};
 
-use alloc::vec::Vec;
-use alloc::format;
 
 impl<S: Shape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
     /// Dynamically concatenates a slice of tensors along `dim`.
@@ -174,45 +170,45 @@ mod tests {
         type BackendWithDevice<NewD: Device> = DummyOpsBackend<T, NewD>;
 
         type RawTensor = alloc::vec::Vec<usize>;
-        type RawVar = ();
+        type RawVar = alloc::vec::Vec<usize>;
         type Grads = ();
 
-        fn var_as_tensor(_var: &Self::RawVar) -> Result<Self::RawTensor> {
-            Ok(alloc::vec::Vec::new())
+        fn var_as_tensor(var: &Self::RawVar) -> Result<Self::RawTensor> {
+            Ok(var.clone())
         }
-        fn var_from_tensor(_t: &Self::RawTensor) -> Result<Self::RawVar> {
-            Ok(())
+        fn var_from_tensor(t: &Self::RawTensor) -> Result<Self::RawVar> {
+            Ok(t.clone())
         }
-        fn var_to_device(_var: &Self::RawVar, _dev: &KindleDevice) -> Result<Self::RawVar> {
-            Ok(())
+        fn var_to_device(var: &Self::RawVar, _dev: &KindleDevice) -> Result<Self::RawVar> {
+            Ok(var.clone())
         }
         fn var_zeros(
-            _shape: &[usize],
+            shape: &[usize],
             _dtype: KindleDType,
             _device: &KindleDevice,
         ) -> Result<Self::RawVar> {
-            Ok(())
+            Ok(shape.to_vec())
         }
         fn var_ones(
-            _shape: &[usize],
+            shape: &[usize],
             _dtype: KindleDType,
             _device: &KindleDevice,
         ) -> Result<Self::RawVar> {
-            Ok(())
+            Ok(shape.to_vec())
         }
         fn var_rand(
-            _shape: &[usize],
+            shape: &[usize],
             _dtype: KindleDType,
             _device: &KindleDevice,
         ) -> Result<Self::RawVar> {
-            Ok(())
+            Ok(shape.to_vec())
         }
         fn var_randn(
-            _shape: &[usize],
+            shape: &[usize],
             _dtype: KindleDType,
             _device: &KindleDevice,
         ) -> Result<Self::RawVar> {
-            Ok(())
+            Ok(shape.to_vec())
         }
         
         fn to_bytes(_t: &Self::RawTensor) -> Result<alloc::vec::Vec<u8>> {
@@ -412,8 +408,17 @@ mod tests {
         fn backward(_loss: &Self::RawTensor) -> Result<Self::Grads> {
             Ok(())
         }
-        fn assign_var(_var: &mut Self::RawVar, _tensor: &Self::RawTensor) -> Result<()> {
-            unimplemented!()
+        fn assign_var(var: &mut Self::RawVar, tensor: &Self::RawTensor) -> Result<()> {
+            if var != tensor {
+                return Err(crate::err::Error::ShapeMismatch {
+                    op: "assign_var",
+                    expected: var.clone(),
+                    got: tensor.clone(),
+                    msg: alloc::string::String::from("shape mismatch during assign_var"),
+                });
+            }
+            *var = tensor.clone();
+            Ok(())
         }
         fn get_grad(_var: &Self::RawVar, _grads: &Self::Grads) -> Result<Option<Self::RawTensor>> {
             unimplemented!()
@@ -483,7 +488,7 @@ mod tests {
 
         // Slicing
         let _res_slice = t1
-            .dyn_slice(&[IndexSpec::All, IndexSpec::Index(0)])
+            .dyn_slice(&[crate::tensor::ops::IndexSpec::All, crate::tensor::ops::IndexSpec::Index(0)])
             .unwrap();
     }
 }

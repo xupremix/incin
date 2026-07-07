@@ -1,5 +1,4 @@
 use crate::prelude::*;
-use alloc::vec::Vec;
 use std::collections::HashMap;
 
 /// A trait implemented by all Neural Network modules to manage their state (weights).

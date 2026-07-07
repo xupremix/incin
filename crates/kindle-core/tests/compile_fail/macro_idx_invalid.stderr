@@ -1,0 +1,18 @@
+error: expected `..=`
+ --> tests/compile_fail/macro_idx_invalid.rs:7:28
+  |
+7 |     let _ = t.slice::<idx![..., -2]>();
+  |                            ^
+
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `kindle`
+ --> tests/compile_fail/macro_idx_invalid.rs:6:22
+  |
+6 |     let t = Tensor::<s![10, 20], DummyBackend>::zeros(()).unwrap();
+  |                      ^^^^^^^^^^ use of unresolved module or unlinked crate `kindle`
+  |
+  = help: if you wanted to use a crate named `kindle`, use `cargo add kindle` to add it to your `Cargo.toml`
+  = note: this error originates in the macro `s` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider importing this crate
+  |
+1 + use kindle_core::prelude::typenum;
+  |

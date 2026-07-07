@@ -1,15 +1,11 @@
-//! Element-wise tensor operations with compile-time shape checking.
+//! Tensor reduction operations (sum, mean, max, min).
 //!
-//! Operations require matching Shape, DType, Device, and RequiresGrad.
-//! This ensures at compile time that you can't accidentally add tensors
-//! of different shapes, dtypes, or on different devices.
+//! This module provides methods to reduce tensors across all dimensions (resulting in a scalar, 
+//! or dimensionless tensor) as well as along specific axes. It supports both static type-level 
+//! dimensional reductions using `Axis` where the shape statically changes, and dynamic 
+//! dimensional reductions where the shape becomes `Dyn`.
+use crate::prelude::{Backend, DynShape, RequiresGrad, Result, Shape, Tensor};
 
-use crate::tensor::ops::*;
-use crate::prelude::{Backend, Dyn, DynShape, RequiresGrad, Result, Shape, Tensor};
-use crate::nn::loss::{Mean, ReductionMode, CrossEntropyReductionShape, MseReductionShape, L1ReductionShape, BceReductionShape, Reduction};
-
-use alloc::vec::Vec;
-use alloc::format;
 
 macro_rules! impl_reduction_op {
     ($method:ident, $backend_method:ident) => {

@@ -1,0 +1,96 @@
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `kindle`
+ --> tests/compile_fail/macro_module_invalid.rs:4:1
+  |
+4 | #[module(foo = "bar")]
+  | ^^^^^^^^^^^^^^^^^^^^^^ use of unresolved module or unlinked crate `kindle`
+  |
+  = help: if you wanted to use a crate named `kindle`, use `cargo add kindle` to add it to your `Cargo.toml`
+  = note: this error originates in the attribute macro `module` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `kindle`
+ --> tests/compile_fail/macro_module_invalid.rs:6:24
+  |
+6 |     pub linear: Linear<s![10, 10], B>,
+  |                        ^^^^^^^^^^ use of unresolved module or unlinked crate `kindle`
+  |
+  = help: if you wanted to use a crate named `kindle`, use `cargo add kindle` to add it to your `Cargo.toml`
+  = note: this error originates in the macro `s` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider importing this crate
+  |
+1 + use kindle_core::prelude::typenum;
+  |
+
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `kindle`
+ --> tests/compile_fail/macro_module_invalid.rs:4:1
+  |
+4 | #[module(foo = "bar")]
+  | ^^^^^^^^^^^^^^^^^^^^^^ use of unresolved module or unlinked crate `kindle`
+  |
+  = help: if you wanted to use a crate named `kindle`, use `cargo add kindle` to add it to your `Cargo.toml`
+  = note: this error originates in the attribute macro `module` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider importing this module
+  |
+1 + use kindle_core::nn::module;
+  |
+
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `kindle`
+ --> tests/compile_fail/macro_module_invalid.rs:4:1
+  |
+4 | #[module(foo = "bar")]
+  | ^^^^^^^^^^^^^^^^^^^^^^ use of unresolved module or unlinked crate `kindle`
+  |
+  = help: if you wanted to use a crate named `kindle`, use `cargo add kindle` to add it to your `Cargo.toml`
+  = note: this error originates in the attribute macro `module` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider importing one of these modules
+  |
+1 + use kindle_core::prelude;
+  |
+1 + use kindle_core::tensor::prelude;
+  |
+
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `kindle`
+ --> tests/compile_fail/macro_module_invalid.rs:4:1
+  |
+4 | #[module(foo = "bar")]
+  | ^^^^^^^^^^^^^^^^^^^^^^ use of unresolved module or unlinked crate `kindle`
+  |
+  = help: if you wanted to use a crate named `kindle`, use `cargo add kindle` to add it to your `Cargo.toml`
+  = note: this error originates in the attribute macro `module` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider importing this module
+  |
+1 + use kindle_core::nn;
+  |
+
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `kindle`
+ --> tests/compile_fail/macro_module_invalid.rs:4:1
+  |
+4 | #[module(foo = "bar")]
+  | ^^^^^^^^^^^^^^^^^^^^^^ use of unresolved module or unlinked crate `kindle`
+  |
+  = help: if you wanted to use a crate named `kindle`, use `cargo add kindle` to add it to your `Cargo.toml`
+  = note: this error originates in the attribute macro `module` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider importing this module
+  |
+1 + use kindle_core::prelude;
+  |
+
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `kindle`
+ --> tests/compile_fail/macro_module_invalid.rs:4:1
+  |
+4 | #[module(foo = "bar")]
+  | ^^^^^^^^^^^^^^^^^^^^^^ use of unresolved module or unlinked crate `kindle`
+  |
+  = help: if you wanted to use a crate named `kindle`, use `cargo add kindle` to add it to your `Cargo.toml`
+  = note: this error originates in the attribute macro `module` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider importing this trait
+  |
+1 + use kindle_core::nn::ToDevice;
+  |
+
+error[E0220]: associated type `Arg` not found for `__NewD`
+ --> tests/compile_fail/macro_module_invalid.rs:4:1
+  |
+4 | #[module(foo = "bar")]
+  | ^^^^^^^^^^^^^^^^^^^^^^ associated type `Arg` not found
+  |
+  = note: this error originates in the attribute macro `module` (in Nightly builds, run with -Z macro-backtrace for more info)

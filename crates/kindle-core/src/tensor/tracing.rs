@@ -148,8 +148,8 @@ impl<B: Backend> Backend for TracingBackend<B> {
         Ok(TracingVar { inner, value_id: var.value_id })
     }
 
-    fn assign_var(_var: &mut Self::RawVar, _tensor: &Self::RawTensor) -> Result<()> {
-        Ok(())
+    fn assign_var(var: &mut Self::RawVar, tensor: &Self::RawTensor) -> Result<()> {
+        B::assign_var(&mut var.inner, &tensor.inner)
     }
 
     fn var_randn(shape: &[usize], dtype: KindleDType, device: &KindleDevice) -> Result<Self::RawVar> {

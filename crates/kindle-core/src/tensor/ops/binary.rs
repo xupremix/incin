@@ -1,15 +1,14 @@
-//! Element-wise tensor operations with compile-time shape checking.
+//! Binary tensor operations with static and dynamic shape checking.
 //!
-//! Operations require matching Shape, DType, Device, and RequiresGrad.
-//! This ensures at compile time that you can't accidentally add tensors
-//! of different shapes, dtypes, or on different devices.
-
+//! This module provides strict element-wise binary operations (`add`, `sub`, `mul`, `div`)
+//! that require exactly matching shapes at compile time via the `ShapeEq` trait. 
+//! 
+//! It also provides broadcasting variants (`broadcast_add`, etc.) and implements standard 
+//! `core::ops` traits (like `std::ops::Add`) which automatically leverage compile-time 
+//! broadcast shape resolution (`BroadcastShape`).
 use crate::tensor::ops::*;
-use crate::prelude::{Backend, Dyn, DynShape, RequiresGrad, Result, Shape, Tensor};
-use crate::nn::loss::{Mean, ReductionMode, CrossEntropyReductionShape, MseReductionShape, L1ReductionShape, BceReductionShape, Reduction};
+use crate::prelude::{Backend, RequiresGrad, Result, Shape, Tensor};
 
-use alloc::vec::Vec;
-use alloc::format;
 
 macro_rules! impl_binary_op {
     ($trait_name:ident, $method:ident, $backend_method:ident) => {

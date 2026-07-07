@@ -1,0 +1,5 @@
+error: expected identifier
+ --> tests/compile_fail/macro_s_invalid.rs:3:24
+  |
+3 | type BadShape = s![10, "foo"];
+  |                        ^^^^^

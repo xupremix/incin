@@ -1,6 +1,5 @@
 use crate::nn::{Module, Parameters};
 use crate::prelude::*;
-use alloc::vec::Vec;
 
 use typenum::Unsigned;
 
