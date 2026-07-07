@@ -2,10 +2,10 @@ use kindle::prelude::*;
 
 #[module]
 pub struct BasicBlock<B: Backend> {
-    pub conv1: kindle::nn::Conv2d::<(usize, usize, U3, U1, U1, U1), B>,
-    pub bn1: kindle::nn::BatchNorm2d::<(usize,), B>,
-    pub conv2: kindle::nn::Conv2d::<(usize, usize, U3, U1, U1, U1), B>,
-    pub bn2: kindle::nn::BatchNorm2d::<(usize,), B>,
+    pub conv1: kindle::nn::Conv2d<(usize, usize, U3, U1, U1, U1), B>,
+    pub bn1: kindle::nn::BatchNorm2d<(usize,), B>,
+    pub conv2: kindle::nn::Conv2d<(usize, usize, U3, U1, U1, U1), B>,
+    pub bn2: kindle::nn::BatchNorm2d<(usize,), B>,
 }
 
 impl<B: Backend> BasicBlock<B>
@@ -20,9 +20,15 @@ where
         device: &KindleDevice,
     ) -> Result<Self> {
         Ok(Self {
-            conv1: kindle::nn::Conv2d::<(usize, usize, U3, U1, U1, U1), B>::new_dyn((out_channels, in_channels))?,
+            conv1: kindle::nn::Conv2d::<(usize, usize, U3, U1, U1, U1), B>::new_dyn((
+                out_channels,
+                in_channels,
+            ))?,
             bn1: kindle::nn::BatchNorm2d::<(usize,), B>::new(out_channels, 1e-5, 0.1)?,
-            conv2: kindle::nn::Conv2d::<(usize, usize, U3, U1, U1, U1), B>::new_dyn((out_channels, out_channels))?,
+            conv2: kindle::nn::Conv2d::<(usize, usize, U3, U1, U1, U1), B>::new_dyn((
+                out_channels,
+                out_channels,
+            ))?,
             bn2: kindle::nn::BatchNorm2d::<(usize,), B>::new(out_channels, 1e-5, 0.1)?,
         })
     }
@@ -43,8 +49,8 @@ impl<B: Backend> BasicBlock<B> {
 
 #[module]
 pub struct ResNet<B: Backend> {
-    pub conv1: kindle::nn::Conv2d::<(usize, usize, U7, U2, U3, U1), B>,
-    pub bn1: kindle::nn::BatchNorm2d::<(usize,), B>,
+    pub conv1: kindle::nn::Conv2d<(usize, usize, U7, U2, U3, U1), B>,
+    pub bn1: kindle::nn::BatchNorm2d<(usize,), B>,
     pub layer1: BasicBlock<B>,
     pub fc: kindle::nn::Linear<Dyn, B>,
 }

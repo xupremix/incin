@@ -5,6 +5,12 @@ use crate::prelude::*;
 #[kindle_macros::module(internal)]
 pub struct Flatten<const START: usize, const END: usize> {}
 
+impl<const START: usize, const END: usize> Default for Flatten<START, END> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<const START: usize, const END: usize> Flatten<START, END> {
     pub fn new() -> Self {
         Self {}

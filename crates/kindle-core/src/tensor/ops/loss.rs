@@ -1,19 +1,21 @@
 //! Common loss functions (MSE, L1, BCE, CrossEntropy) for training.
 //!
 //! This module provides standard loss functions used to train neural networks.
-//! Loss functions automatically compute and track their required reduction shape 
-//! (e.g. reducing down to a scalar or maintaining a batched shape) using type-level 
+//! Loss functions automatically compute and track their required reduction shape
+//! (e.g. reducing down to a scalar or maintaining a batched shape) using type-level
 //! logic to ensure that backpropagation can flow correctly from the scalar loss.
 use crate::prelude::{Backend, Dyn, DynShape, RequiresGrad, Result, Shape, Tensor};
-
 
 impl<S: Shape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
     /// Dynamically concatenates a slice of tensors along `dim`.
     /// This is fallible at runtime if shapes mismatch or dim is out of bounds.
     pub fn try_concat_slice(tensors: &[&Tensor<S, B, G>], dim: usize) -> Result<Tensor<Dyn, B, G>> {
-        let raw_tensors: alloc::vec::Vec<&B::RawTensor> = tensors.iter().map(|t| &t.inner).collect();
+        let raw_tensors: alloc::vec::Vec<&B::RawTensor> =
+            tensors.iter().map(|t| &t.inner).collect();
         if raw_tensors.is_empty() {
-            return Err(crate::err::Error::Msg("Cannot concat empty list".to_string()));
+            return Err(crate::err::Error::Msg(
+                "Cannot concat empty list".to_string(),
+            ));
         }
         let inner = B::concat(&raw_tensors, dim)?;
         let mut out_shape = B::shape(&tensors[0].inner);
@@ -28,12 +30,16 @@ impl<S: Shape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
     }
 
     /// Statically concatenates `self` with `other` along `Axis`.
-    pub fn concat<S2, Axis>(&self, other: &Tensor<S2, B, G>) -> Result<Tensor<<S as crate::shapes::concat::ConcatShape<S2, Axis>>::Output, B, G>>
+    pub fn concat<S2, Axis>(
+        &self,
+        other: &Tensor<S2, B, G>,
+    ) -> Result<Tensor<<S as crate::shapes::concat::ConcatShape<S2, Axis>>::Output, B, G>>
     where
         S2: Shape,
         Axis: typenum::Unsigned,
         S: crate::shapes::concat::ConcatShape<S2, Axis>,
-        <<S as crate::shapes::concat::ConcatShape<S2, Axis>>::Output as Shape>::Field: core::default::Default,
+        <<S as crate::shapes::concat::ConcatShape<S2, Axis>>::Output as Shape>::Field:
+            core::default::Default,
     {
         let dim = Axis::USIZE;
         let inner = B::concat(&[&self.inner, &other.inner], dim)?;
@@ -45,7 +51,7 @@ impl<S: Shape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
             self._grad.clone(),
         ))
     }
-    
+
     /// Dynamically concatenates `self` with `other` along `dim`.
     pub fn try_concat<S2>(&self, other: &Tensor<S2, B, G>, dim: usize) -> Result<Tensor<Dyn, B, G>>
     where
@@ -65,9 +71,12 @@ impl<S: Shape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
 
     /// Dynamically stacks a slice of tensors along `dim`.
     pub fn try_stack_slice(tensors: &[&Tensor<S, B, G>], dim: usize) -> Result<Tensor<Dyn, B, G>> {
-        let raw_tensors: alloc::vec::Vec<&B::RawTensor> = tensors.iter().map(|t| &t.inner).collect();
+        let raw_tensors: alloc::vec::Vec<&B::RawTensor> =
+            tensors.iter().map(|t| &t.inner).collect();
         if raw_tensors.is_empty() {
-            return Err(crate::err::Error::Msg("Cannot stack empty list".to_string()));
+            return Err(crate::err::Error::Msg(
+                "Cannot stack empty list".to_string(),
+            ));
         }
         let inner = B::stack(&raw_tensors, dim)?;
         let mut out_shape = B::shape(&tensors[0].inner);
@@ -82,11 +91,15 @@ impl<S: Shape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
     }
 
     /// Statically stacks `self` with `other` along `Axis`.
-    pub fn stack<Axis>(&self, other: &Tensor<S, B, G>) -> Result<Tensor<<S as crate::shapes::stack::StackShape<Axis>>::Output, B, G>>
+    pub fn stack<Axis>(
+        &self,
+        other: &Tensor<S, B, G>,
+    ) -> Result<Tensor<<S as crate::shapes::stack::StackShape<Axis>>::Output, B, G>>
     where
         Axis: typenum::Unsigned,
         S: crate::shapes::stack::StackShape<Axis>,
-        <<S as crate::shapes::stack::StackShape<Axis>>::Output as Shape>::Field: core::default::Default,
+        <<S as crate::shapes::stack::StackShape<Axis>>::Output as Shape>::Field:
+            core::default::Default,
     {
         let dim = Axis::USIZE;
         let inner = B::stack(&[&self.inner, &other.inner], dim)?;
@@ -98,10 +111,9 @@ impl<S: Shape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
             self._grad.clone(),
         ))
     }
-    
+
     /// Dynamically stacks `self` with `other` along `dim`.
-    pub fn try_stack(&self, other: &Tensor<S, B, G>, dim: usize) -> Result<Tensor<Dyn, B, G>>
-    {
+    pub fn try_stack(&self, other: &Tensor<S, B, G>, dim: usize) -> Result<Tensor<Dyn, B, G>> {
         let inner = B::stack(&[&self.inner, &other.inner], dim)?;
         let mut out_shape = B::shape(&self.inner);
         out_shape.insert(dim, 2);
@@ -152,11 +164,22 @@ mod tests {
             unimplemented!()
         }
 
-        fn max_pool2d(_t: &Self::RawTensor, _kernel_size: (usize, usize), _stride: (usize, usize), _padding: (usize, usize), _dilation: (usize, usize)) -> Result<Self::RawTensor> {
+        fn max_pool2d(
+            _t: &Self::RawTensor,
+            _kernel_size: (usize, usize),
+            _stride: (usize, usize),
+            _padding: (usize, usize),
+            _dilation: (usize, usize),
+        ) -> Result<Self::RawTensor> {
             unimplemented!()
         }
 
-        fn avg_pool2d(_t: &Self::RawTensor, _kernel_size: (usize, usize), _stride: (usize, usize), _padding: (usize, usize)) -> Result<Self::RawTensor> {
+        fn avg_pool2d(
+            _t: &Self::RawTensor,
+            _kernel_size: (usize, usize),
+            _stride: (usize, usize),
+            _padding: (usize, usize),
+        ) -> Result<Self::RawTensor> {
             unimplemented!()
         }
 
@@ -210,12 +233,17 @@ mod tests {
         ) -> Result<Self::RawVar> {
             Ok(shape.to_vec())
         }
-        
+
         fn to_bytes(_t: &Self::RawTensor) -> Result<alloc::vec::Vec<u8>> {
             Ok(alloc::vec::Vec::new())
         }
-        
-        fn from_bytes(_bytes: &[u8], shape: &[usize], _dtype: KindleDType, _device: &KindleDevice) -> Result<Self::RawTensor> {
+
+        fn from_bytes(
+            _bytes: &[u8],
+            shape: &[usize],
+            _dtype: KindleDType,
+            _device: &KindleDevice,
+        ) -> Result<Self::RawTensor> {
             Ok(shape.to_vec())
         }
 
@@ -356,7 +384,9 @@ mod tests {
         fn tensor_to_device(_t: &Self::RawTensor, _dev: &KindleDevice) -> Result<Self::RawTensor> {
             Ok(alloc::vec::Vec::new())
         }
-        fn slice(_t: &Self::RawTensor, _ranges: &[(usize, usize)]) -> Result<Self::RawTensor> { unimplemented!() }
+        fn slice(_t: &Self::RawTensor, _ranges: &[(usize, usize)]) -> Result<Self::RawTensor> {
+            unimplemented!()
+        }
 
         fn to_dtype(_t: &Self::RawTensor, _dt: KindleDType) -> Result<Self::RawTensor> {
             Ok(alloc::vec::Vec::new())
@@ -424,8 +454,6 @@ mod tests {
             unimplemented!()
         }
 
-
-
         fn conv2d(
             _t: &Self::RawTensor,
             _w: &Self::RawTensor,
@@ -448,21 +476,34 @@ mod tests {
             unimplemented!()
         }
 
-
-
-        fn mse_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor, _reduction: crate::nn::Reduction) -> Result<Self::RawTensor> {
+        fn mse_loss(
+            _pred: &Self::RawTensor,
+            _target: &Self::RawTensor,
+            _reduction: crate::nn::Reduction,
+        ) -> Result<Self::RawTensor> {
             unimplemented!()
         }
-        fn l1_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor, _reduction: crate::nn::Reduction) -> Result<Self::RawTensor> {
+        fn l1_loss(
+            _pred: &Self::RawTensor,
+            _target: &Self::RawTensor,
+            _reduction: crate::nn::Reduction,
+        ) -> Result<Self::RawTensor> {
             unimplemented!()
         }
-        fn bce_with_logits_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor, _reduction: crate::nn::Reduction) -> Result<Self::RawTensor> {
+        fn bce_with_logits_loss(
+            _pred: &Self::RawTensor,
+            _target: &Self::RawTensor,
+            _reduction: crate::nn::Reduction,
+        ) -> Result<Self::RawTensor> {
             unimplemented!()
         }
-        fn cross_entropy_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor, _reduction: crate::nn::Reduction) -> Result<Self::RawTensor> {
+        fn cross_entropy_loss(
+            _pred: &Self::RawTensor,
+            _target: &Self::RawTensor,
+            _reduction: crate::nn::Reduction,
+        ) -> Result<Self::RawTensor> {
             unimplemented!()
         }
-
     }
 
     #[test]
@@ -488,12 +529,21 @@ mod tests {
 
         // Slicing
         let _res_slice = t1
-            .dyn_slice(&[crate::tensor::ops::IndexSpec::All, crate::tensor::ops::IndexSpec::Index(0)])
+            .dyn_slice(&[
+                crate::tensor::ops::IndexSpec::All,
+                crate::tensor::ops::IndexSpec::Index(0),
+            ])
             .unwrap();
     }
 }
 
-pub fn try_stack_tensors<S: Shape + DynShape, B: Backend, G: crate::tensor::grad::RequiresGrad>(tensors: &[&Tensor<S, B, G>], dim: usize) -> Result<Tensor<Dyn, B, G>> where G::Field: Clone {
+pub fn try_stack_tensors<S: Shape + DynShape, B: Backend, G: crate::tensor::grad::RequiresGrad>(
+    tensors: &[&Tensor<S, B, G>],
+    dim: usize,
+) -> Result<Tensor<Dyn, B, G>>
+where
+    G::Field: Clone,
+{
     if tensors.is_empty() {
         return Err(crate::prelude::Error::ShapeMismatch {
             op: "stack_tensors",

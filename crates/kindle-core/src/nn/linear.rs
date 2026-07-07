@@ -2,11 +2,11 @@ use crate::nn::module::Module;
 use crate::prelude::*;
 
 /// A shape marker trait specifying the input and output features of a [`Linear`] layer.
-/// 
+///
 /// The typical usage is to supply a 2-tuple `(InF, OutF)` where:
 /// * `InF` — Number of input features (the last dimension of the input tensor).
 /// * `OutF` — Number of output features.
-/// 
+///
 /// ## Examples
 /// ```rust,ignore
 /// // Static linear layer: 784 inputs → 256 outputs
@@ -19,11 +19,10 @@ pub trait LinearShape: Shape + DynShape {
     type BiasArg: crate::tensor::arg_into::NotUnit;
     type WeightShape: Shape<Arg = Self::WeightArg> + DynShape;
     type BiasShape: Shape<Arg = Self::BiasArg> + DynShape;
-    
+
     type Target;
     fn build_args(target: Self::Target) -> (usize, usize, Self::WeightArg, Self::BiasArg);
 }
-
 
 impl<InF: Dim, OutF: Dim> LinearShape for (InF, OutF) {
     type InF = InF;
@@ -32,9 +31,9 @@ impl<InF: Dim, OutF: Dim> LinearShape for (InF, OutF) {
     type BiasArg = (<OutF as Dim>::Arg,);
     type WeightShape = (OutF, InF);
     type BiasShape = (OutF,);
-    
+
     type Target = (InF::Arg, OutF::Arg);
-    
+
     #[inline]
     fn build_args(target: Self::Target) -> (usize, usize, Self::WeightArg, Self::BiasArg) {
         let in_f = InF::from_arg(target.0.clone()).size();
@@ -50,9 +49,9 @@ impl LinearShape for Dyn {
     type BiasArg = alloc::vec::Vec<usize>;
     type WeightShape = Dyn;
     type BiasShape = Dyn;
-    
+
     type Target = (usize, usize);
-    
+
     #[inline]
     fn build_args(target: Self::Target) -> (usize, usize, Self::WeightArg, Self::BiasArg) {
         let in_f = target.0;
@@ -62,18 +61,18 @@ impl LinearShape for Dyn {
 }
 
 /// A fully connected (dense) linear layer: `y = x @ Wᵀ + b`.
-/// 
+///
 /// `S` encodes both the input and output feature dimensions via [`LinearShape`]. The most common
 /// form is `s![InF, OutF]`. For dynamic feature sizes use `Dyn` or mixed partial types.
-/// 
+///
 /// ## Examples
-/// 
+///
 /// ```rust,ignore
 /// use kindle::prelude::*;
-/// 
+///
 /// // A fully static linear layer: 512 inputs → 256 outputs
 /// let layer = Linear::<s![512, 256], MyBackend>::new()?;
-/// 
+///
 /// // A dynamic linear layer — shape known only at runtime
 /// let layer = Linear::<Dyn, MyBackend>::new(512, 256)?;
 /// ```
@@ -86,15 +85,11 @@ pub struct Linear<S: LinearShape, B: Backend> {
 
 // Implement `Module` for `Linear` when input shape is `(Batch, In)`.
 
-
 impl<S: LinearShape, B: Backend> Linear<S, B>
 where
     B::DType: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
-    
-
-    
     pub fn new() -> Result<Self>
     where
         (): crate::tensor::arg_into::ArgInto<S::Target>,
@@ -105,7 +100,7 @@ where
     pub fn new_dyn<A: crate::tensor::arg_into::ArgInto<S::Target>>(args: A) -> Result<Self> {
         let target = args.into_arg();
         let (in_f, _out_f, w_args, b_args) = S::build_args(target);
-        
+
         let w_args_data = crate::tensor::arg_into::TensorArgsData {
             shape: w_args,
             dtype: (),
@@ -119,15 +114,24 @@ where
             grad: (),
         };
 
-        let weight = Param::<S::WeightShape, B>::new_init_raw(w_args_data, crate::nn::init::Init::KaimingUniform {
-            fan_in: in_f,
-            a: f64::sqrt(5.0),
-        })?;
-        let bias = Param::<S::BiasShape, B>::new_init_raw(b_args_data, crate::nn::init::Init::KaimingUniform {
-            fan_in: in_f,
-            a: f64::sqrt(5.0),
-        })?;
-        Ok(Self { weight, bias: Some(bias) })
+        let weight = Param::<S::WeightShape, B>::new_init_raw(
+            w_args_data,
+            crate::nn::init::Init::KaimingUniform {
+                fan_in: in_f,
+                a: f64::sqrt(5.0),
+            },
+        )?;
+        let bias = Param::<S::BiasShape, B>::new_init_raw(
+            b_args_data,
+            crate::nn::init::Init::KaimingUniform {
+                fan_in: in_f,
+                a: f64::sqrt(5.0),
+            },
+        )?;
+        Ok(Self {
+            weight,
+            bias: Some(bias),
+        })
     }
 }
 
@@ -151,8 +155,12 @@ impl<B: Backend> Module<Tensor<Dyn, B>> for Linear<Dyn, B> {
 }
 
 // Statically typed input utilizing ReplaceLastDim
-impl<InF: Dim, OutF: Dim, InShape: Shape + DynShape + ReplaceLastDim<OutF> + crate::shapes::EndsWith<InF>, B: Backend>
-    Module<Tensor<InShape, B>> for Linear<(InF, OutF), B>
+impl<
+    InF: Dim,
+    OutF: Dim,
+    InShape: Shape + DynShape + ReplaceLastDim<OutF> + crate::shapes::EndsWith<InF>,
+    B: Backend,
+> Module<Tensor<InShape, B>> for Linear<(InF, OutF), B>
 where
     InShape::Output: DynShape,
 {

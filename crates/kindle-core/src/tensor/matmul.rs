@@ -144,15 +144,13 @@ impl MatMulShape<Dyn> for Dyn {
             alloc::vec![lhs[0], rhs[1]]
         } else if lhs.len() == 2 && rhs.len() == 1 {
             alloc::vec![]
+        } else if lhs.len() >= 2 && rhs.len() == 2 {
+            let mut out = lhs.clone();
+            let last = out.len() - 1;
+            out[last] = rhs[1];
+            out
         } else {
-            if lhs.len() >= 2 && rhs.len() == 2 {
-                let mut out = lhs.clone();
-                let last = out.len() - 1;
-                out[last] = rhs[1];
-                out
-            } else {
-                alloc::vec![]
-            }
+            alloc::vec![]
         }
     }
 }

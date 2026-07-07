@@ -17,7 +17,7 @@ use crate::prelude::Cuda;
 use crate::prelude::Metal;
 
 use crate::prelude::{Cpu, Dim, Grad, KindleDType, KindleDevice, NoGrad};
-use typenum::{UInt, UTerm, Unsigned, Bit};
+use typenum::{Bit, UInt, UTerm, Unsigned};
 
 use alloc::vec::Vec;
 
@@ -78,7 +78,16 @@ impl<U, B> ArgInto<UInt<U, B>> for UInt<U, B>
 where
     U: Unsigned + Dim,
     B: Bit + Default + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + PartialEq + 'static,
-    UInt<U, B>: Unsigned + Default + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + PartialEq + 'static,
+    UInt<U, B>: Unsigned
+        + Default
+        + Copy
+        + Clone
+        + core::fmt::Debug
+        + Send
+        + Sync
+        + Eq
+        + PartialEq
+        + 'static,
 {
     #[inline(always)]
     fn into_arg(self) -> UInt<U, B> {
@@ -157,8 +166,6 @@ impl_not_unit! {
     KindleDevice
 }
 
-
-
 // () combinations used for static shapes should also be treated as Non-Unit
 // from the perspective of TensorArgsData lifting (as they represent the shape argument).
 impl<T1> NotUnit for (T1,) {}
@@ -169,15 +176,25 @@ impl<T1, T2, T3, T4, T5> NotUnit for (T1, T2, T3, T4, T5) {}
 impl<T1, T2, T3, T4, T5, T6, T7> NotUnit for (T1, T2, T3, T4, T5, T6, T7) {}
 
 impl<T, const N: usize> NotUnit for [T; N] {}
-impl<'a, T, const N: usize> NotUnit for &'a [T; N] {}
+impl<T, const N: usize> NotUnit for &[T; N] {}
 
 impl NotUnit for UTerm {}
 impl<U, B> NotUnit for UInt<U, B>
 where
     U: Unsigned + Dim,
     B: Bit + Default + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + PartialEq + 'static,
-    UInt<U, B>: Unsigned + Default + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + PartialEq + 'static,
-{}
+    UInt<U, B>: Unsigned
+        + Default
+        + Copy
+        + Clone
+        + core::fmt::Debug
+        + Send
+        + Sync
+        + Eq
+        + PartialEq
+        + 'static,
+{
+}
 
 #[cfg(feature = "cuda")]
 impl<const N: usize> NotUnit for Cuda<N> {}

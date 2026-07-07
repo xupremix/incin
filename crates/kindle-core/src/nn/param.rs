@@ -1,20 +1,20 @@
 use crate::prelude::*;
 
 /// A trainable parameter storing an underlying backend variable that supports gradient computation.
-/// 
+///
 /// `Param` is the typed wrapper around a backend's gradient-tracking variable (e.g. `candle_core::Var`).
 /// All learnable weights and biases in Kindle modules are stored as `Param` values.
-/// 
+///
 /// Unlike a regular `Tensor`, a `Param` requires gradient tracking. Gradients are accumulated
 /// by the backend during the backward pass and read by the optimizer during a training step.
-/// 
+///
 /// ## Examples
 /// ```rust,ignore
 /// use kindle::prelude::*;
-/// 
+///
 /// // A 128×256 weight matrix initialized with Kaiming uniform
 /// let w: Param<s![128, 256], MyBackend> = Param::zeros(())?;
-/// 
+///
 /// // Convert to a tensor for use in a forward pass
 /// let w_tensor = w.as_tensor()?;
 /// ```
@@ -56,7 +56,9 @@ impl<S: Shape, B: Backend> Param<S, B> {
     }
 }
 
-impl<S: Shape, B: Backend, NewD: crate::prelude::Device> crate::nn::module::ToDevice<B, NewD> for Param<S, B> {
+impl<S: Shape, B: Backend, NewD: crate::prelude::Device> crate::nn::module::ToDevice<B, NewD>
+    for Param<S, B>
+{
     type Output = Param<S, B::BackendWithDevice<NewD>>;
     fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output> {
         let field = NewD::init(arg.clone());
@@ -75,7 +77,6 @@ impl<S: Shape + DynShape, B: Backend> Param<S, B>
 where
     (S, B::DType, B::Device, Grad): TensorArgs<S, B::DType, B::Device, Grad>,
 {
-    
     pub fn new_init_raw(
         args: <(S, B::DType, B::Device, Grad) as TensorArgs<S, B::DType, B::Device, Grad>>::Args,
         init: crate::nn::init::Init,
@@ -91,7 +92,7 @@ where
             Init::Ones => B::var_ones(dims.as_ref(), dtype, &device)?,
             Init::Rand => B::var_rand(dims.as_ref(), dtype, &device)?,
             Init::Randn => B::var_randn(dims.as_ref(), dtype, &device)?,
-            
+
             Init::Uniform { bound } => {
                 let t_rand = B::rand(dims.as_ref(), dtype, &device)?;
                 let t_scaled = B::mul_scalar(&t_rand, 2.0 * bound)?;
@@ -132,7 +133,12 @@ where
             }
         };
 
-        Ok(Self { inner, _shape, _dtype, _device })
+        Ok(Self {
+            inner,
+            _shape,
+            _dtype,
+            _device,
+        })
     }
 
     pub fn new_init<A>(args: A, init: crate::nn::init::Init) -> Result<Self>
@@ -152,7 +158,12 @@ where
         let device = <B::Device as Device>::to_kindle(&_device)?;
         let dtype = <B::DType as DType>::to_kindle(&_dtype);
         let inner = B::var_zeros(dims.as_ref(), dtype, &device)?;
-        Ok(Self { inner, _shape, _dtype, _device })
+        Ok(Self {
+            inner,
+            _shape,
+            _dtype,
+            _device,
+        })
     }
 
     pub fn zeros<A>(args: A) -> Result<Self>
@@ -192,7 +203,12 @@ where
         let device = <B::Device as Device>::to_kindle(&_device)?;
         let dtype = <B::DType as DType>::to_kindle(&_dtype);
         let inner = B::var_ones(dims.as_ref(), dtype, &device)?;
-        Ok(Self { inner, _shape, _dtype, _device })
+        Ok(Self {
+            inner,
+            _shape,
+            _dtype,
+            _device,
+        })
     }
 
     pub fn ones<A>(args: A) -> Result<Self>
@@ -238,7 +254,11 @@ where
 }
 
 impl<S: Shape + DynShape, B: Backend> Parameters<B> for Param<S, B> {
-    fn named_parameters(&self, prefix: &str, map: &mut std::collections::HashMap<String, B::RawVar>) {
+    fn named_parameters(
+        &self,
+        prefix: &str,
+        map: &mut std::collections::HashMap<String, B::RawVar>,
+    ) {
         map.insert(prefix.to_string(), self.inner.clone());
     }
 }
@@ -254,7 +274,10 @@ impl<S1: DynShape, B: Backend> Param<S1, B> {
                 op: "into_shape",
                 expected: alloc::vec![],
                 got: current_dims.as_ref().to_vec(),
-                msg: alloc::format!("Cannot convert from {} to new shape.", current_dims.as_ref().len()),
+                msg: alloc::format!(
+                    "Cannot convert from {} to new shape.",
+                    current_dims.as_ref().len()
+                ),
             })?;
 
         Ok(Param::<S2, B> {
@@ -285,16 +308,16 @@ impl<S: Shape + DynShape, B: Backend> StateDict<B> for Param<S, B> {
     }
 
     fn state_dict(&self, prefix: &str, tensors: &mut HashMap<String, Tensor<Dyn, B>>) {
-        if let Ok(t) = self.as_tensor() {
-            if let Ok(dyn_t) = t.into_shape::<Dyn>() {
-                tensors.insert(prefix.to_string(), dyn_t);
-            }
+        if let Ok(t) = self.as_tensor()
+            && let Ok(dyn_t) = t.into_shape::<Dyn>()
+        {
+            tensors.insert(prefix.to_string(), dyn_t);
         }
     }
 }
 
 /// A non-trainable state buffer for values that must persist between passes but do not receive gradients.
-/// 
+///
 /// `Buffer` has the same internal structure as [`Param`], but [`Parameters::parameters`] returns an
 /// empty vector, preventing the optimizer from ever updating it. Use this for statistics like
 /// `running_mean` and `running_var` in batch normalization layers.
@@ -335,7 +358,9 @@ impl<S: Shape, B: Backend> Buffer<S, B> {
     }
 }
 
-impl<S: Shape, B: Backend, NewD: crate::prelude::Device> crate::nn::module::ToDevice<B, NewD> for Buffer<S, B> {
+impl<S: Shape, B: Backend, NewD: crate::prelude::Device> crate::nn::module::ToDevice<B, NewD>
+    for Buffer<S, B>
+{
     type Output = Buffer<S, B::BackendWithDevice<NewD>>;
     fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output> {
         let field = NewD::init(arg.clone());
@@ -354,7 +379,6 @@ impl<S: Shape + DynShape, B: Backend> Buffer<S, B>
 where
     (S, B::DType, B::Device, Grad): TensorArgs<S, B::DType, B::Device, Grad>,
 {
-    
     pub fn new_init_raw(
         args: <(S, B::DType, B::Device, Grad) as TensorArgs<S, B::DType, B::Device, Grad>>::Args,
         init: crate::nn::init::Init,
@@ -370,7 +394,7 @@ where
             Init::Ones => B::var_ones(dims.as_ref(), dtype, &device)?,
             Init::Rand => B::var_rand(dims.as_ref(), dtype, &device)?,
             Init::Randn => B::var_randn(dims.as_ref(), dtype, &device)?,
-            
+
             Init::Uniform { bound } => {
                 let t_rand = B::rand(dims.as_ref(), dtype, &device)?;
                 let t_scaled = B::mul_scalar(&t_rand, 2.0 * bound)?;
@@ -411,7 +435,12 @@ where
             }
         };
 
-        Ok(Self { inner, _shape, _dtype, _device })
+        Ok(Self {
+            inner,
+            _shape,
+            _dtype,
+            _device,
+        })
     }
 
     pub fn new_init<A>(args: A, init: crate::nn::init::Init) -> Result<Self>
@@ -431,7 +460,12 @@ where
         let device = <B::Device as Device>::to_kindle(&_device)?;
         let dtype = <B::DType as DType>::to_kindle(&_dtype);
         let inner = B::var_zeros(dims.as_ref(), dtype, &device)?;
-        Ok(Self { inner, _shape, _dtype, _device })
+        Ok(Self {
+            inner,
+            _shape,
+            _dtype,
+            _device,
+        })
     }
 
     pub fn zeros<A>(args: A) -> Result<Self>
@@ -451,7 +485,12 @@ where
         let device = <B::Device as Device>::to_kindle(&_device)?;
         let dtype = <B::DType as DType>::to_kindle(&_dtype);
         let inner = B::var_ones(dims.as_ref(), dtype, &device)?;
-        Ok(Self { inner, _shape, _dtype, _device })
+        Ok(Self {
+            inner,
+            _shape,
+            _dtype,
+            _device,
+        })
     }
 
     pub fn ones<A>(args: A) -> Result<Self>
@@ -465,7 +504,12 @@ where
 }
 
 impl<S: Shape + DynShape, B: Backend> Parameters<B> for Buffer<S, B> {
-    fn named_parameters(&self, _prefix: &str, _map: &mut std::collections::HashMap<String, B::RawVar>) {}
+    fn named_parameters(
+        &self,
+        _prefix: &str,
+        _map: &mut std::collections::HashMap<String, B::RawVar>,
+    ) {
+    }
 }
 
 impl<S: Shape + DynShape, B: Backend> StateDict<B> for Buffer<S, B> {
@@ -481,10 +525,10 @@ impl<S: Shape + DynShape, B: Backend> StateDict<B> for Buffer<S, B> {
     }
 
     fn state_dict(&self, prefix: &str, tensors: &mut HashMap<String, Tensor<Dyn, B>>) {
-        if let Ok(t) = self.as_tensor() {
-            if let Ok(dyn_t) = t.into_shape::<Dyn>() {
-                tensors.insert(prefix.to_string(), dyn_t);
-            }
+        if let Ok(t) = self.as_tensor()
+            && let Ok(dyn_t) = t.into_shape::<Dyn>()
+        {
+            tensors.insert(prefix.to_string(), dyn_t);
         }
     }
 }

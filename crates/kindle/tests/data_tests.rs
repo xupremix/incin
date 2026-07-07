@@ -1,5 +1,5 @@
 use kindle::prelude::*;
-use kindle_data::{Dataset, DataLoader}; // Assumed standard paths, although I might need to check if they exist
+use kindle_data::{DataLoader, Dataset}; // Assumed standard paths, although I might need to check if they exist
 
 #[test]
 fn test_dataset() {

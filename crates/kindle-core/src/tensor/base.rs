@@ -11,37 +11,37 @@ pub struct Dyn(pub ());
 ///
 /// It holds a reference to a backend-specific tensor representation, while statically tracking
 /// its `Shape`, `Backend` (which includes `DType` and `Device`), and its `Grad` requirements.
-/// 
+///
 /// `Tensor` is the primary workhorse of the Kindle framework. By maintaining shape information
 /// directly in the type signature, Kindle ensures that tensor operations such as matrix multiplication
 /// or convolutions are strictly verified at compile time.
-/// 
+///
 /// ## Type Parameters
 /// * `S`: The [`Shape`] of the tensor. This can be static (e.g., `s![2, 3, 224, 224]`), dynamic (`Dyn`), or partially dynamic.
 /// * `B`: The underlying compute [`Backend`]. It defines how the tensor is stored in memory and how mathematical operations are executed.
 /// * `G`: Trait marker representing whether the tensor requires gradients ([`Grad`] or [`NoGrad`]). Defaults to `Grad`.
-/// 
+///
 /// ## Examples
-/// 
+///
 /// Creating and inspecting statically shaped tensors:
 /// ```rust,ignore
 /// use kindle::prelude::*;
 /// type Backend = kindle_backends::candle::CandleBackend<f32, Cpu>;
-/// 
+///
 /// // Compile-time 3D tensor of shape [2, 5, 10]
 /// let t = Tensor::<s![2, 5, 10], Backend>::zeros(()).unwrap();
-/// 
+///
 /// assert_eq!(t.dims(), vec![2, 5, 10]);
 /// ```
-/// 
+///
 /// Using dynamically shaped tensors:
 /// ```rust,ignore
 /// use kindle::prelude::*;
 /// type Backend = kindle_backends::candle::CandleBackend<f32, Cpu>;
-/// 
+///
 /// // Shape determined at runtime
 /// let dyn_t = Tensor::<Dyn, Backend>::ones(vec![32, 64]).unwrap();
-/// 
+///
 /// assert_eq!(dyn_t.dims(), vec![32, 64]);
 /// ```
 #[derive(Debug)]
@@ -121,10 +121,12 @@ where
                 op: "from_parts",
                 expected,
                 got,
-                msg: alloc::format!("Runtime shape doesn't match expected static/dynamic shape"),
+                msg: "Runtime shape doesn't match expected static/dynamic shape".to_string(),
             });
         }
-        Ok(Self::from_parts_unchecked(inner, shape, dtype, device, grad))
+        Ok(Self::from_parts_unchecked(
+            inner, shape, dtype, device, grad,
+        ))
     }
 
     pub fn zeros<A>(args: A) -> Result<Self>
@@ -150,6 +152,20 @@ where
         let device = <B::Device as Device>::to_kindle(&_device)?;
         let dtype = <B::DType as DType>::to_kindle(&_dtype);
         let inner = B::ones(dims.as_ref(), dtype, &device)?;
+        Self::from_parts(inner, _shape, _dtype, _device, _grad)
+    }
+
+    pub fn from_slice<A>(data: &[f32], args: A) -> Result<Self>
+    where
+        A: ArgInto<<(S, B::DType, B::Device, G) as TensorArgs<S, B::DType, B::Device, G>>::Args>,
+    {
+        let (_shape, _dtype, _device, _grad) =
+            <(S, B::DType, B::Device, G)>::construct(args.into_arg());
+        let dims = S::dims(&_shape);
+        let device = <B::Device as Device>::to_kindle(&_device)?;
+        let bytes =
+            unsafe { core::slice::from_raw_parts(data.as_ptr() as *const u8, data.len() * 4) };
+        let inner = B::from_bytes(bytes, dims.as_ref(), KindleDType::F32, &device)?;
         Self::from_parts(inner, _shape, _dtype, _device, _grad)
     }
 
@@ -185,9 +201,7 @@ where
     {
         let (_shape, _dtype, _device, _grad) =
             <(S, B::DType, B::Device, G)>::construct(args.into_arg());
-        Self::from_parts(
-            raw_tensor, _shape, _dtype, _device, _grad,
-        )
+        Self::from_parts(raw_tensor, _shape, _dtype, _device, _grad)
     }
 }
 
@@ -278,31 +292,31 @@ impl<S: Shape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
 impl<S1: Shape + DynShape, B: Backend, G: RequiresGrad> Tensor<S1, B, G> {
     pub fn into_shape<S2: Shape + DynShape>(self) -> Result<Tensor<S2, B, G>> {
         let dims = S1::dims(&self._shape);
-        let s2_shape = S2::from_dyn(dims.as_ref()).ok_or_else(|| crate::err::Error::Msg(alloc::format!("into_shape failed: cannot parse {:?} into {}", dims, core::any::type_name::<S2>())))?;
-        Tensor::from_parts(
-            self.inner,
-            s2_shape,
-            self._dtype,
-            self._device,
-            self._grad,
-        )
+        let s2_shape = S2::from_dyn(dims.as_ref()).ok_or_else(|| {
+            crate::err::Error::Msg(alloc::format!(
+                "into_shape failed: cannot parse {:?} into {}",
+                dims,
+                core::any::type_name::<S2>()
+            ))
+        })?;
+        Tensor::from_parts(self.inner, s2_shape, self._dtype, self._device, self._grad)
     }
 
     pub fn into_dyn(self) -> Tensor<crate::prelude::Dyn, B, G> {
         let dims = S1::dims(&self._shape);
         let s2_shape = <crate::prelude::Dyn as Shape>::from_dyn(dims.as_ref()).unwrap();
-        Tensor::from_parts_unchecked(
-            self.inner,
-            s2_shape,
-            self._dtype,
-            self._device,
-            self._grad,
-        )
+        Tensor::from_parts_unchecked(self.inner, s2_shape, self._dtype, self._device, self._grad)
     }
 
     pub fn to_shape<S2: Shape + DynShape>(&self) -> Result<Tensor<S2, B, G>> {
         let dims = S1::dims(&self._shape);
-        let s2_shape = S2::from_dyn(dims.as_ref()).ok_or_else(|| crate::err::Error::Msg(alloc::format!("to_shape failed: cannot parse {:?} into {}", dims, core::any::type_name::<S2>())))?;
+        let s2_shape = S2::from_dyn(dims.as_ref()).ok_or_else(|| {
+            crate::err::Error::Msg(alloc::format!(
+                "to_shape failed: cannot parse {:?} into {}",
+                dims,
+                core::any::type_name::<S2>()
+            ))
+        })?;
         Tensor::from_parts(
             self.inner.clone(),
             s2_shape,
@@ -346,7 +360,6 @@ mod tests {
     #[derive(Clone)]
     pub struct DummyBackend<T: DType, D: Device>(core::marker::PhantomData<(T, D)>);
     impl<T: DType, D: Device> Backend for DummyBackend<T, D> {
-        
         fn get_grad(_var: &Self::RawVar, _grads: &Self::Grads) -> Result<Option<Self::RawTensor>> {
             unimplemented!()
         }
@@ -376,11 +389,22 @@ mod tests {
             unimplemented!()
         }
 
-        fn max_pool2d(_t: &Self::RawTensor, _kernel_size: (usize, usize), _stride: (usize, usize), _padding: (usize, usize), _dilation: (usize, usize)) -> Result<Self::RawTensor> {
+        fn max_pool2d(
+            _t: &Self::RawTensor,
+            _kernel_size: (usize, usize),
+            _stride: (usize, usize),
+            _padding: (usize, usize),
+            _dilation: (usize, usize),
+        ) -> Result<Self::RawTensor> {
             unimplemented!()
         }
 
-        fn avg_pool2d(_t: &Self::RawTensor, _kernel_size: (usize, usize), _stride: (usize, usize), _padding: (usize, usize)) -> Result<Self::RawTensor> {
+        fn avg_pool2d(
+            _t: &Self::RawTensor,
+            _kernel_size: (usize, usize),
+            _stride: (usize, usize),
+            _padding: (usize, usize),
+        ) -> Result<Self::RawTensor> {
             unimplemented!()
         }
 
@@ -399,12 +423,17 @@ mod tests {
         fn shape(t: &Self::RawTensor) -> alloc::vec::Vec<usize> {
             t.clone()
         }
-        
+
         fn to_bytes(_t: &Self::RawTensor) -> Result<alloc::vec::Vec<u8>> {
             Ok(alloc::vec::Vec::new())
         }
-        
-        fn from_bytes(_bytes: &[u8], shape: &[usize], _dtype: KindleDType, _device: &KindleDevice) -> Result<Self::RawTensor> {
+
+        fn from_bytes(
+            _bytes: &[u8],
+            shape: &[usize],
+            _dtype: KindleDType,
+            _device: &KindleDevice,
+        ) -> Result<Self::RawTensor> {
             Ok(shape.to_vec())
         }
 
@@ -602,7 +631,9 @@ mod tests {
         fn min_keepdim(_t: &Self::RawTensor, _dim: usize) -> Result<Self::RawTensor> {
             Ok(alloc::vec::Vec::new())
         }
-        fn slice(_t: &Self::RawTensor, _ranges: &[(usize, usize)]) -> Result<Self::RawTensor> { unimplemented!() }
+        fn slice(_t: &Self::RawTensor, _ranges: &[(usize, usize)]) -> Result<Self::RawTensor> {
+            unimplemented!()
+        }
 
         fn to_dtype(_t: &Self::RawTensor, _dtype: KindleDType) -> Result<Self::RawTensor> {
             Ok(alloc::vec::Vec::new())
@@ -623,8 +654,6 @@ mod tests {
         fn backward(_loss: &Self::RawTensor) -> Result<Self::Grads> {
             Ok(())
         }
-
-
 
         fn stack(_t: &[&Self::RawTensor], _d: usize) -> Result<Self::RawTensor> {
             Ok(alloc::vec::Vec::new())
@@ -658,30 +687,41 @@ mod tests {
             unimplemented!()
         }
 
-
-
-        fn mse_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor, _reduction: crate::nn::loss::Reduction) -> Result<Self::RawTensor> {
+        fn mse_loss(
+            _pred: &Self::RawTensor,
+            _target: &Self::RawTensor,
+            _reduction: crate::nn::loss::Reduction,
+        ) -> Result<Self::RawTensor> {
             unimplemented!()
         }
 
-        fn l1_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor, _reduction: crate::nn::loss::Reduction) -> Result<Self::RawTensor> {
+        fn l1_loss(
+            _pred: &Self::RawTensor,
+            _target: &Self::RawTensor,
+            _reduction: crate::nn::loss::Reduction,
+        ) -> Result<Self::RawTensor> {
             unimplemented!()
         }
 
-        fn bce_with_logits_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor, _reduction: crate::nn::loss::Reduction) -> Result<Self::RawTensor> {
+        fn bce_with_logits_loss(
+            _pred: &Self::RawTensor,
+            _target: &Self::RawTensor,
+            _reduction: crate::nn::loss::Reduction,
+        ) -> Result<Self::RawTensor> {
             unimplemented!()
         }
 
-        fn cross_entropy_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor, _reduction: crate::nn::loss::Reduction) -> Result<Self::RawTensor> {
+        fn cross_entropy_loss(
+            _pred: &Self::RawTensor,
+            _target: &Self::RawTensor,
+            _reduction: crate::nn::loss::Reduction,
+        ) -> Result<Self::RawTensor> {
             unimplemented!()
         }
 
-
-        
         fn format_tensor(t: &Self::RawTensor) -> alloc::string::String {
             alloc::format!("Tensor(shape={:?})", t)
         }
-
     }
 
     #[test]
@@ -703,6 +743,12 @@ mod tests {
 
 impl<S: crate::prelude::Shape, B: crate::prelude::Backend> core::fmt::Display for Tensor<S, B> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "Tensor({}, shape={:?})\n{}", core::any::type_name::<B>(), B::shape(&self.inner), B::format_tensor(&self.inner))
+        write!(
+            f,
+            "Tensor({}, shape={:?})\n{}",
+            core::any::type_name::<B>(),
+            B::shape(&self.inner),
+            B::format_tensor(&self.inner)
+        )
     }
 }

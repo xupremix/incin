@@ -1,5 +1,5 @@
-use crate::prelude::*;
 use crate::graph::{Graph, OpType, ValueId};
+use crate::prelude::*;
 use std::cell::RefCell;
 
 thread_local! {
@@ -32,12 +32,22 @@ pub struct TracingVar<V> {
 
 impl<B: Backend> TracingBackend<B> {
     // A helper for binary ops
-    fn trace_binary(op: OpType, lhs: &TracingTensor<B::RawTensor>, rhs: &TracingTensor<B::RawTensor>, inner_res: &B::RawTensor) -> TracingTensor<B::RawTensor> {
+    fn trace_binary(
+        op: OpType,
+        lhs: &TracingTensor<B::RawTensor>,
+        rhs: &TracingTensor<B::RawTensor>,
+        inner_res: &B::RawTensor,
+    ) -> TracingTensor<B::RawTensor> {
         let shape = B::shape(inner_res);
         let value_id = TRACING_GRAPH.with(|g| {
             let mut g = g.borrow_mut();
             let out_id = g.add_value(shape, KindleDType::F32, None); // default F32 for now
-            g.add_node(op, vec![lhs.value_id, rhs.value_id], vec![out_id], std::collections::HashMap::new());
+            g.add_node(
+                op,
+                vec![lhs.value_id, rhs.value_id],
+                vec![out_id],
+                std::collections::HashMap::new(),
+            );
             out_id
         });
         TracingTensor {
@@ -47,12 +57,21 @@ impl<B: Backend> TracingBackend<B> {
     }
 
     // A helper for unary ops
-    fn trace_unary(op: OpType, t: &TracingTensor<B::RawTensor>, inner_res: &B::RawTensor) -> TracingTensor<B::RawTensor> {
+    fn trace_unary(
+        op: OpType,
+        t: &TracingTensor<B::RawTensor>,
+        inner_res: &B::RawTensor,
+    ) -> TracingTensor<B::RawTensor> {
         let shape = B::shape(inner_res);
         let value_id = TRACING_GRAPH.with(|g| {
             let mut g = g.borrow_mut();
             let out_id = g.add_value(shape, KindleDType::F32, None);
-            g.add_node(op, vec![t.value_id], vec![out_id], std::collections::HashMap::new());
+            g.add_node(
+                op,
+                vec![t.value_id],
+                vec![out_id],
+                std::collections::HashMap::new(),
+            );
             out_id
         });
         TracingTensor {
@@ -65,8 +84,10 @@ impl<B: Backend> TracingBackend<B> {
 impl<B: Backend> Backend for TracingBackend<B> {
     type Device = B::Device;
     type DType = B::DType;
-    type BackendWithDType<NewT: crate::tensor::dtype::DType> = TracingBackend<B::BackendWithDType<NewT>>;
-    type BackendWithDevice<NewD: crate::tensor::device::Device> = TracingBackend<B::BackendWithDevice<NewD>>;
+    type BackendWithDType<NewT: crate::tensor::dtype::DType> =
+        TracingBackend<B::BackendWithDType<NewT>>;
+    type BackendWithDevice<NewD: crate::tensor::device::Device> =
+        TracingBackend<B::BackendWithDevice<NewD>>;
 
     type RawTensor = TracingTensor<B::RawTensor>;
     type RawVar = TracingVar<B::RawVar>;
@@ -96,65 +117,103 @@ impl<B: Backend> Backend for TracingBackend<B> {
         })
     }
 
-    fn zeros(shape: &[usize], dtype: KindleDType, device: &KindleDevice) -> Result<Self::RawTensor> {
+    fn zeros(
+        shape: &[usize],
+        dtype: KindleDType,
+        device: &KindleDevice,
+    ) -> Result<Self::RawTensor> {
         let inner = B::zeros(shape, dtype, device)?;
-        let value_id = TRACING_GRAPH.with(|g| g.borrow_mut().add_value(shape.to_vec(), dtype, None));
+        let value_id =
+            TRACING_GRAPH.with(|g| g.borrow_mut().add_value(shape.to_vec(), dtype, None));
         Ok(TracingTensor { inner, value_id })
     }
 
     fn ones(shape: &[usize], dtype: KindleDType, device: &KindleDevice) -> Result<Self::RawTensor> {
         let inner = B::ones(shape, dtype, device)?;
-        let value_id = TRACING_GRAPH.with(|g| g.borrow_mut().add_value(shape.to_vec(), dtype, None));
+        let value_id =
+            TRACING_GRAPH.with(|g| g.borrow_mut().add_value(shape.to_vec(), dtype, None));
         Ok(TracingTensor { inner, value_id })
     }
 
     fn rand(shape: &[usize], dtype: KindleDType, device: &KindleDevice) -> Result<Self::RawTensor> {
         let inner = B::rand(shape, dtype, device)?;
-        let value_id = TRACING_GRAPH.with(|g| g.borrow_mut().add_value(shape.to_vec(), dtype, None));
+        let value_id =
+            TRACING_GRAPH.with(|g| g.borrow_mut().add_value(shape.to_vec(), dtype, None));
         Ok(TracingTensor { inner, value_id })
     }
 
-    fn randn(shape: &[usize], dtype: KindleDType, device: &KindleDevice) -> Result<Self::RawTensor> {
+    fn randn(
+        shape: &[usize],
+        dtype: KindleDType,
+        device: &KindleDevice,
+    ) -> Result<Self::RawTensor> {
         let inner = B::randn(shape, dtype, device)?;
-        let value_id = TRACING_GRAPH.with(|g| g.borrow_mut().add_value(shape.to_vec(), dtype, None));
+        let value_id =
+            TRACING_GRAPH.with(|g| g.borrow_mut().add_value(shape.to_vec(), dtype, None));
         Ok(TracingTensor { inner, value_id })
     }
 
-    fn var_zeros(shape: &[usize], dtype: KindleDType, device: &KindleDevice) -> Result<Self::RawVar> {
+    fn var_zeros(
+        shape: &[usize],
+        dtype: KindleDType,
+        device: &KindleDevice,
+    ) -> Result<Self::RawVar> {
         let inner = B::var_zeros(shape, dtype, device)?;
-        let value_id = TRACING_GRAPH.with(|g| g.borrow_mut().add_value(shape.to_vec(), dtype, None));
+        let value_id =
+            TRACING_GRAPH.with(|g| g.borrow_mut().add_value(shape.to_vec(), dtype, None));
         Ok(TracingVar { inner, value_id })
     }
 
-    fn var_ones(shape: &[usize], dtype: KindleDType, device: &KindleDevice) -> Result<Self::RawVar> {
+    fn var_ones(
+        shape: &[usize],
+        dtype: KindleDType,
+        device: &KindleDevice,
+    ) -> Result<Self::RawVar> {
         let inner = B::var_ones(shape, dtype, device)?;
-        let value_id = TRACING_GRAPH.with(|g| g.borrow_mut().add_value(shape.to_vec(), dtype, None));
+        let value_id =
+            TRACING_GRAPH.with(|g| g.borrow_mut().add_value(shape.to_vec(), dtype, None));
         Ok(TracingVar { inner, value_id })
     }
 
-    fn var_rand(shape: &[usize], dtype: KindleDType, device: &KindleDevice) -> Result<Self::RawVar> {
+    fn var_rand(
+        shape: &[usize],
+        dtype: KindleDType,
+        device: &KindleDevice,
+    ) -> Result<Self::RawVar> {
         let inner = B::var_rand(shape, dtype, device)?;
-        let value_id = TRACING_GRAPH.with(|g| g.borrow_mut().add_value(shape.to_vec(), dtype, None));
+        let value_id =
+            TRACING_GRAPH.with(|g| g.borrow_mut().add_value(shape.to_vec(), dtype, None));
         Ok(TracingVar { inner, value_id })
     }
 
     fn tensor_to_device(t: &Self::RawTensor, device: &KindleDevice) -> Result<Self::RawTensor> {
         let inner = B::tensor_to_device(&t.inner, device)?;
-        Ok(TracingTensor { inner, value_id: t.value_id })
+        Ok(TracingTensor {
+            inner,
+            value_id: t.value_id,
+        })
     }
 
     fn var_to_device(var: &Self::RawVar, device: &KindleDevice) -> Result<Self::RawVar> {
         let inner = B::var_to_device(&var.inner, device)?;
-        Ok(TracingVar { inner, value_id: var.value_id })
+        Ok(TracingVar {
+            inner,
+            value_id: var.value_id,
+        })
     }
 
     fn assign_var(var: &mut Self::RawVar, tensor: &Self::RawTensor) -> Result<()> {
         B::assign_var(&mut var.inner, &tensor.inner)
     }
 
-    fn var_randn(shape: &[usize], dtype: KindleDType, device: &KindleDevice) -> Result<Self::RawVar> {
+    fn var_randn(
+        shape: &[usize],
+        dtype: KindleDType,
+        device: &KindleDevice,
+    ) -> Result<Self::RawVar> {
         let inner = B::var_randn(shape, dtype, device)?;
-        let value_id = TRACING_GRAPH.with(|g| g.borrow_mut().add_value(shape.to_vec(), dtype, None));
+        let value_id =
+            TRACING_GRAPH.with(|g| g.borrow_mut().add_value(shape.to_vec(), dtype, None));
         Ok(TracingVar { inner, value_id })
     }
 
@@ -215,7 +274,10 @@ impl<B: Backend> Backend for TracingBackend<B> {
             let mut g = g.borrow_mut();
             let out_id = g.add_value(shape, KindleDType::F32, None);
             let mut attrs = std::collections::HashMap::new();
-            attrs.insert("axis".to_string(), crate::graph::AttributeValue::Int(dim as i64));
+            attrs.insert(
+                "axis".to_string(),
+                crate::graph::AttributeValue::Int(dim as i64),
+            );
             g.add_node(OpType::Softmax, vec![t.value_id], vec![out_id], attrs);
             out_id
         });
@@ -328,7 +390,7 @@ impl<B: Backend> Backend for TracingBackend<B> {
         let value_id = TRACING_GRAPH.with(|g| {
             let mut g = g.borrow_mut();
             let out_id = g.add_value(shape_out.clone(), KindleDType::F32, None);
-            
+
             // Add reshape parameters as a constant value
             let shape_val_id = g.add_value(vec![shape.len()], KindleDType::I64, None);
             let mut bytes = Vec::new();
@@ -336,8 +398,13 @@ impl<B: Backend> Backend for TracingBackend<B> {
                 bytes.extend_from_slice(&(s as i64).to_le_bytes());
             }
             g.initializers.insert(shape_val_id, bytes);
-            
-            g.add_node(OpType::Reshape, vec![t.value_id, shape_val_id], vec![out_id], std::collections::HashMap::new());
+
+            g.add_node(
+                OpType::Reshape,
+                vec![t.value_id, shape_val_id],
+                vec![out_id],
+                std::collections::HashMap::new(),
+            );
             out_id
         });
         Ok(TracingTensor { inner, value_id })
@@ -360,7 +427,12 @@ impl<B: Backend> Backend for TracingBackend<B> {
         Ok(TracingTensor { inner, value_id })
     }
 
-    fn narrow(t: &Self::RawTensor, dim: usize, start: usize, len: usize) -> Result<Self::RawTensor> {
+    fn narrow(
+        t: &Self::RawTensor,
+        dim: usize,
+        start: usize,
+        len: usize,
+    ) -> Result<Self::RawTensor> {
         let inner = B::narrow(&t.inner, dim, start, len)?;
         Ok(Self::trace_unary(OpType::Narrow, t, &inner))
     }
@@ -374,7 +446,10 @@ impl<B: Backend> Backend for TracingBackend<B> {
             let out_id = g.add_value(shape_out, KindleDType::F32, None);
             let inputs = tensors.iter().map(|t| t.value_id).collect();
             let mut attrs = std::collections::HashMap::new();
-            attrs.insert("axis".to_string(), crate::graph::AttributeValue::Int(dim as i64));
+            attrs.insert(
+                "axis".to_string(),
+                crate::graph::AttributeValue::Int(dim as i64),
+            );
             g.add_node(OpType::Concat, inputs, vec![out_id], attrs);
             out_id
         });
@@ -390,7 +465,10 @@ impl<B: Backend> Backend for TracingBackend<B> {
             let out_id = g.add_value(shape_out, KindleDType::F32, None);
             let inputs = tensors.iter().map(|t| t.value_id).collect();
             let mut attrs = std::collections::HashMap::new();
-            attrs.insert("axis".to_string(), crate::graph::AttributeValue::Int(dim as i64));
+            attrs.insert(
+                "axis".to_string(),
+                crate::graph::AttributeValue::Int(dim as i64),
+            );
             g.add_node(OpType::Stack, inputs, vec![out_id], attrs);
             out_id
         });
@@ -406,7 +484,14 @@ impl<B: Backend> Backend for TracingBackend<B> {
         dilation: usize,
     ) -> Result<Self::RawTensor> {
         let inner_bias = bias.map(|b| &b.inner);
-        let inner = B::conv1d(&x.inner, &weight.inner, inner_bias, stride, padding, dilation)?;
+        let inner = B::conv1d(
+            &x.inner,
+            &weight.inner,
+            inner_bias,
+            stride,
+            padding,
+            dilation,
+        )?;
         let shape_out = B::shape(&inner);
         let value_id = TRACING_GRAPH.with(|g| {
             let mut g = g.borrow_mut();
@@ -416,10 +501,19 @@ impl<B: Backend> Backend for TracingBackend<B> {
                 inputs.push(b.value_id);
             }
             let mut attrs = std::collections::HashMap::new();
-            attrs.insert("strides".to_string(), crate::graph::AttributeValue::Ints(vec![stride as i64]));
-            attrs.insert("pads".to_string(), crate::graph::AttributeValue::Ints(vec![padding as i64, padding as i64]));
-            attrs.insert("dilations".to_string(), crate::graph::AttributeValue::Ints(vec![dilation as i64]));
-            
+            attrs.insert(
+                "strides".to_string(),
+                crate::graph::AttributeValue::Ints(vec![stride as i64]),
+            );
+            attrs.insert(
+                "pads".to_string(),
+                crate::graph::AttributeValue::Ints(vec![padding as i64, padding as i64]),
+            );
+            attrs.insert(
+                "dilations".to_string(),
+                crate::graph::AttributeValue::Ints(vec![dilation as i64]),
+            );
+
             g.add_node(OpType::Conv1d, inputs, vec![out_id], attrs);
             out_id
         });
@@ -435,7 +529,14 @@ impl<B: Backend> Backend for TracingBackend<B> {
         dilation: usize,
     ) -> Result<Self::RawTensor> {
         let inner_bias = bias.map(|b| &b.inner);
-        let inner = B::conv2d(&x.inner, &weight.inner, inner_bias, stride, padding, dilation)?;
+        let inner = B::conv2d(
+            &x.inner,
+            &weight.inner,
+            inner_bias,
+            stride,
+            padding,
+            dilation,
+        )?;
         let shape_out = B::shape(&inner);
         let value_id = TRACING_GRAPH.with(|g| {
             let mut g = g.borrow_mut();
@@ -445,10 +546,24 @@ impl<B: Backend> Backend for TracingBackend<B> {
                 inputs.push(b.value_id);
             }
             let mut attrs = std::collections::HashMap::new();
-            attrs.insert("strides".to_string(), crate::graph::AttributeValue::Ints(vec![stride as i64, stride as i64]));
-            attrs.insert("pads".to_string(), crate::graph::AttributeValue::Ints(vec![padding as i64, padding as i64, padding as i64, padding as i64]));
-            attrs.insert("dilations".to_string(), crate::graph::AttributeValue::Ints(vec![dilation as i64, dilation as i64]));
-            
+            attrs.insert(
+                "strides".to_string(),
+                crate::graph::AttributeValue::Ints(vec![stride as i64, stride as i64]),
+            );
+            attrs.insert(
+                "pads".to_string(),
+                crate::graph::AttributeValue::Ints(vec![
+                    padding as i64,
+                    padding as i64,
+                    padding as i64,
+                    padding as i64,
+                ]),
+            );
+            attrs.insert(
+                "dilations".to_string(),
+                crate::graph::AttributeValue::Ints(vec![dilation as i64, dilation as i64]),
+            );
+
             g.add_node(OpType::Conv2d, inputs, vec![out_id], attrs);
             out_id
         });
@@ -528,7 +643,12 @@ impl<B: Backend> Backend for TracingBackend<B> {
         reduction: crate::nn::loss::Reduction,
     ) -> Result<Self::RawTensor> {
         let inner = B::cross_entropy_loss(&logits.inner, &targets.inner, reduction)?;
-        Ok(Self::trace_binary(OpType::CrossEntropyLoss, logits, targets, &inner))
+        Ok(Self::trace_binary(
+            OpType::CrossEntropyLoss,
+            logits,
+            targets,
+            &inner,
+        ))
     }
 
     fn mse_loss(
@@ -537,7 +657,12 @@ impl<B: Backend> Backend for TracingBackend<B> {
         reduction: crate::nn::loss::Reduction,
     ) -> Result<Self::RawTensor> {
         let inner = B::mse_loss(&predictions.inner, &targets.inner, reduction)?;
-        Ok(Self::trace_binary(OpType::MseLoss, predictions, targets, &inner))
+        Ok(Self::trace_binary(
+            OpType::MseLoss,
+            predictions,
+            targets,
+            &inner,
+        ))
     }
 
     fn l1_loss(
@@ -546,7 +671,12 @@ impl<B: Backend> Backend for TracingBackend<B> {
         reduction: crate::nn::loss::Reduction,
     ) -> Result<Self::RawTensor> {
         let inner = B::l1_loss(&predictions.inner, &targets.inner, reduction)?;
-        Ok(Self::trace_binary(OpType::L1Loss, predictions, targets, &inner))
+        Ok(Self::trace_binary(
+            OpType::L1Loss,
+            predictions,
+            targets,
+            &inner,
+        ))
     }
 
     fn bce_with_logits_loss(
@@ -555,15 +685,22 @@ impl<B: Backend> Backend for TracingBackend<B> {
         reduction: crate::nn::loss::Reduction,
     ) -> Result<Self::RawTensor> {
         let inner = B::bce_with_logits_loss(&logits.inner, &targets.inner, reduction)?;
-        Ok(Self::trace_binary(OpType::BceWithLogitsLoss, logits, targets, &inner))
+        Ok(Self::trace_binary(
+            OpType::BceWithLogitsLoss,
+            logits,
+            targets,
+            &inner,
+        ))
     }
 
-    fn embedding(
-        weight: &Self::RawTensor,
-        indices: &Self::RawTensor,
-    ) -> Result<Self::RawTensor> {
+    fn embedding(weight: &Self::RawTensor, indices: &Self::RawTensor) -> Result<Self::RawTensor> {
         let inner = B::embedding(&weight.inner, &indices.inner)?;
-        Ok(Self::trace_binary(OpType::Embedding, weight, indices, &inner))
+        Ok(Self::trace_binary(
+            OpType::Embedding,
+            weight,
+            indices,
+            &inner,
+        ))
     }
 
     fn layer_norm(
@@ -597,12 +734,12 @@ impl<B: Backend> Backend for TracingBackend<B> {
         let inner = B::squeeze(&t.inner, dim)?;
         Ok(Self::trace_unary(OpType::Reshape, t, &inner))
     }
-    
+
     fn broadcast_left(t: &Self::RawTensor, shape: &[usize]) -> Result<Self::RawTensor> {
         let inner = B::broadcast_left(&t.inner, shape)?;
         Ok(Self::trace_unary(OpType::Broadcast, t, &inner))
     }
-    
+
     fn conv_transpose2d(
         t: &Self::RawTensor,
         w: &Self::RawTensor,
@@ -613,7 +750,15 @@ impl<B: Backend> Backend for TracingBackend<B> {
         dilation: usize,
     ) -> Result<Self::RawTensor> {
         let inner_b = b.map(|b| &b.inner);
-        let inner = B::conv_transpose2d(&t.inner, &w.inner, inner_b, stride, padding, output_padding, dilation)?;
+        let inner = B::conv_transpose2d(
+            &t.inner,
+            &w.inner,
+            inner_b,
+            stride,
+            padding,
+            output_padding,
+            dilation,
+        )?;
         Ok(Self::trace_unary(OpType::ConvTranspose2d, t, &inner))
     }
 }

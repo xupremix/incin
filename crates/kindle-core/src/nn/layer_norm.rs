@@ -43,7 +43,9 @@ where
     }
 }
 
-impl<S: LayerNormShape, InS: Shape + DynShape + crate::shapes::EndsWith<S::Channels>, B: Backend> Module<Tensor<InS, B>> for LayerNorm<S, B> {
+impl<S: LayerNormShape, InS: Shape + DynShape + crate::shapes::EndsWith<S::Channels>, B: Backend>
+    Module<Tensor<InS, B>> for LayerNorm<S, B>
+{
     type Output = Tensor<InS, B>;
     type Error = Error;
 
@@ -51,18 +53,13 @@ impl<S: LayerNormShape, InS: Shape + DynShape + crate::shapes::EndsWith<S::Chann
     fn forward(&self, x: Tensor<InS, B>) -> core::result::Result<Self::Output, Error> {
         let weight = self.weight.as_tensor()?.into_dyn();
         let bias = self.bias.as_tensor()?.into_dyn();
-        let out = B::layer_norm(
-            x.inner(),
-            weight.inner(),
-            bias.inner(),
-            self.eps,
-        )?;
+        let out = B::layer_norm(x.inner(), weight.inner(), bias.inner(), self.eps)?;
         Ok(Tensor::from_parts_unchecked(
             out,
             x._shape.clone(),
             x._dtype.clone(),
             x._device.clone(),
-            x._grad.clone(),
+            x._grad,
         ))
     }
 }

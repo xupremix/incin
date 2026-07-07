@@ -1,5 +1,5 @@
 use kindle::prelude::*;
-use kindle::shapes::{DynShape, ConstShape, Shape};
+use kindle::shapes::{ConstShape, DynShape, Shape};
 
 type CpuBackend = DefaultBackend;
 
@@ -8,13 +8,13 @@ fn test_s_macro() {
     // Static dimensions
     type StaticShape = s![10, 20];
     assert_eq!(<StaticShape as ConstShape>::DIMS, [10, 20]);
-    
+
     // Dynamic dimensions
     type DynShapeType = s![dyn, dyn];
     let arg = (10, 20); // Arg depends on the dynamic fields
     let field = <DynShapeType as Shape>::init(arg);
     assert_eq!(<DynShapeType as DynShape>::dims(&field), [10, 20]);
-    
+
     // Mixed dimensions
     type MixedShape = s![2, dyn, 5, dyn];
     let mixed_arg = ((), 3, (), 7);
@@ -42,10 +42,10 @@ fn test_module_macro() -> Result<()> {
         linear: Linear::new()?,
         ln: LayerNorm::new((), 1e-5)?,
     };
-    
+
     // Since #[module] implements Parameters, this should compile:
     let params = layer.parameters();
     assert_eq!(params.len(), 4); // linear.weight, linear.bias, ln.weight, ln.bias
-    
+
     Ok(())
 }

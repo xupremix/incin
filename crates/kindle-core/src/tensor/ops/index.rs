@@ -2,9 +2,8 @@
 //!
 //! This module provides methods to interact with sub-regions of tensors (e.g. slicing, narrowing)
 //! as well as operations to concatenate or stack multiple tensors together. These methods ensure
-//! that the resulting dimensions are verified and computed either at compile-time (using `Axis`) 
+//! that the resulting dimensions are verified and computed either at compile-time (using `Axis`)
 //! or dynamically (using `try_stack` / `dyn_slice`) depending on the operation chosen.
-
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IndexSpec {
@@ -108,4 +107,3 @@ impl<T> DTypeEq<T> for T {
         "DType Mismatch: Attempted to operate on tensors of incompatible datatypes."
     );
 }
-

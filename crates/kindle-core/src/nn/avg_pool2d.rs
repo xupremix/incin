@@ -4,7 +4,8 @@ use crate::prelude::*;
 use typenum::Unsigned;
 
 #[derive(Debug, Clone)]
-pub struct AvgPool2d<K: Unsigned, S: Unsigned, P: Unsigned = typenum::U0, D: Unsigned = typenum::U1> {
+pub struct AvgPool2d<K: Unsigned, S: Unsigned, P: Unsigned = typenum::U0, D: Unsigned = typenum::U1>
+{
     _phantom: core::marker::PhantomData<(K, S, P, D)>,
 }
 
@@ -16,22 +17,40 @@ impl<K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned> AvgPool2d<K, S, P, D> {
     }
 }
 
-impl<K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned, B: Backend> Parameters<B> for AvgPool2d<K, S, P, D> {
-    fn named_parameters(&self, _prefix: &str, _map: &mut std::collections::HashMap<String, B::RawVar>) {}
+impl<K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned, B: Backend> Parameters<B>
+    for AvgPool2d<K, S, P, D>
+{
+    fn named_parameters(
+        &self,
+        _prefix: &str,
+        _map: &mut std::collections::HashMap<String, B::RawVar>,
+    ) {
+    }
 }
 
-impl<I: Shape + DynShape + crate::shapes::Pool2dShape<K, S, P, D>, K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned, B: Backend>
-    Module<Tensor<I, B>> for AvgPool2d<K, S, P, D>
+impl<
+    I: Shape + DynShape + crate::shapes::Pool2dShape<K, S, P, D>,
+    K: Unsigned,
+    S: Unsigned,
+    P: Unsigned,
+    D: Unsigned,
+    B: Backend,
+> Module<Tensor<I, B>> for AvgPool2d<K, S, P, D>
 {
     type Output = Tensor<I::Output, B>;
     type Error = Error;
 
     #[inline]
     fn forward(&self, x: Tensor<I, B>) -> core::result::Result<Self::Output, Error> {
-        let out =
-            <B as Backend>::avg_pool2d(x.inner(), (K::USIZE, K::USIZE), (S::USIZE, S::USIZE), (P::USIZE, P::USIZE))?;
+        let out = <B as Backend>::avg_pool2d(
+            x.inner(),
+            (K::USIZE, K::USIZE),
+            (S::USIZE, S::USIZE),
+            (P::USIZE, P::USIZE),
+        )?;
 
-        let shape = <I as crate::shapes::Pool2dShape<K, S, P, D>>::compute_output_shape(x.shape_field());
+        let shape =
+            <I as crate::shapes::Pool2dShape<K, S, P, D>>::compute_output_shape(x.shape_field());
         Ok(Tensor::from_parts_unchecked(
             out,
             shape,

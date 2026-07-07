@@ -44,7 +44,11 @@ impl<In: Dim, Out: Dim, B: Backend> LSTMCell<In, Out, B> {
 }
 
 impl<In: Dim, Out: Dim, B: Backend> Parameters<B> for LSTMCell<In, Out, B> {
-    fn named_parameters(&self, prefix: &str, map: &mut std::collections::HashMap<String, B::RawVar>) {
+    fn named_parameters(
+        &self,
+        prefix: &str,
+        map: &mut std::collections::HashMap<String, B::RawVar>,
+    ) {
         self.wi.named_parameters(&format!("{}wi.", prefix), map);
         self.wh.named_parameters(&format!("{}wh.", prefix), map);
         self.wf_i.named_parameters(&format!("{}wf_i.", prefix), map);
@@ -56,12 +60,7 @@ impl<In: Dim, Out: Dim, B: Backend> Parameters<B> for LSTMCell<In, Out, B> {
     }
 }
 
-impl<
-        In: Dim,
-        Out: Dim,
-        Batch: Dim,
-        B: Backend,
-    >
+impl<In: Dim, Out: Dim, Batch: Dim, B: Backend>
     Module<(
         Tensor<(Batch, In), B>,
         (Tensor<(Batch, Out), B>, Tensor<(Batch, Out), B>),
@@ -80,16 +79,32 @@ impl<
         ),
     ) -> core::result::Result<Self::Output, Error> {
         // i_t = sigmoid(W_{ii} x_t + b_{ii} + W_{hi} h_{t-1} + b_{hi})
-        let i = self.wi.forward(x.clone())?.add(&self.wh.forward(h_prev.clone())?)?.sigmoid()?;
-        
+        let i = self
+            .wi
+            .forward(x.clone())?
+            .add(&self.wh.forward(h_prev.clone())?)?
+            .sigmoid()?;
+
         // f_t = sigmoid(W_{if} x_t + b_{if} + W_{hf} h_{t-1} + b_{hf})
-        let f = self.wf_i.forward(x.clone())?.add(&self.wf_h.forward(h_prev.clone())?)?.sigmoid()?;
-        
+        let f = self
+            .wf_i
+            .forward(x.clone())?
+            .add(&self.wf_h.forward(h_prev.clone())?)?
+            .sigmoid()?;
+
         // g_t = tanh(W_{ig} x_t + b_{ig} + W_{hg} h_{t-1} + b_{hg})
-        let g = self.wg_i.forward(x.clone())?.add(&self.wg_h.forward(h_prev.clone())?)?.tanh()?;
-        
+        let g = self
+            .wg_i
+            .forward(x.clone())?
+            .add(&self.wg_h.forward(h_prev.clone())?)?
+            .tanh()?;
+
         // o_t = sigmoid(W_{io} x_t + b_{io} + W_{ho} h_{t-1} + b_{ho})
-        let o = self.wo_i.forward(x)?.add(&self.wo_h.forward(h_prev)?)?.sigmoid()?;
+        let o = self
+            .wo_i
+            .forward(x)?
+            .add(&self.wo_h.forward(h_prev)?)?
+            .sigmoid()?;
 
         // c_t = f_t * c_{t-1} + i_t * g_t
         let c = f.mul(&c_prev)?.add(&i.mul(&g)?)?;
@@ -113,18 +128,17 @@ impl<In: Dim, Out: Dim, B: Backend> LSTM<In, Out, B> {
 }
 
 impl<In: Dim, Out: Dim, B: Backend> Parameters<B> for LSTM<In, Out, B> {
-    fn named_parameters(&self, prefix: &str, map: &mut std::collections::HashMap<String, B::RawVar>) {
+    fn named_parameters(
+        &self,
+        prefix: &str,
+        map: &mut std::collections::HashMap<String, B::RawVar>,
+    ) {
         self.cell.named_parameters(&format!("{}cell.", prefix), map);
     }
 }
 
-impl<
-        In: Dim<Arg = ()>,
-        Out: Dim<Arg = ()>,
-        Batch: Dim<Arg = ()>,
-        Seq: Dim<Arg = ()>,
-        B: Backend,
-    > Module<(
+impl<In: Dim<Arg = ()>, Out: Dim<Arg = ()>, Batch: Dim<Arg = ()>, Seq: Dim<Arg = ()>, B: Backend>
+    Module<(
         Tensor<(Batch, Seq, In), B>,
         (Tensor<(Batch, Out), B>, Tensor<(Batch, Out), B>),
     )> for LSTM<In, Out, B>
@@ -152,18 +166,18 @@ where
         for i in 0..seq_len {
             let x_step = x.clone().try_narrow(1, i, 1)?.try_squeeze(1)?;
             let x_step_static: Tensor<(Batch, In), B> = x_step.into_shape()?;
-            
+
             let (h_next, c_next) = self.cell.forward((x_step_static, (h, c)))?;
             h = h_next;
             c = c_next;
-            
+
             outputs.push(h.clone().into_shape::<Dyn>()?);
         }
 
         let refs: Vec<&Tensor<Dyn, B>> = outputs.iter().collect();
         let stacked_dyn = crate::tensor::ops::try_stack_tensors(&refs, 1)?;
         let stacked: Tensor<(Batch, Seq, Out), B> = stacked_dyn.into_shape()?;
-        
+
         Ok((stacked, (h, c)))
     }
 }

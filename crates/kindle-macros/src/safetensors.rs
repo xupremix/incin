@@ -61,13 +61,11 @@ impl Node {
             if let Node::Dir(map) = self {
                 map.insert(path[0].to_string(), Node::Leaf { shape, is_buffer });
             }
-        } else {
-            if let Node::Dir(map) = self {
-                let entry = map
-                    .entry(path[0].to_string())
-                    .or_insert_with(|| Node::Dir(BTreeMap::new()));
-                entry.insert(&path[1..], shape);
-            }
+        } else if let Node::Dir(map) = self {
+            let entry = map
+                .entry(path[0].to_string())
+                .or_insert_with(|| Node::Dir(BTreeMap::new()));
+            entry.insert(&path[1..], shape);
         }
     }
 }
@@ -139,9 +137,9 @@ pub(crate) fn import_model(_attr: TokenStream, item: TokenStream) -> TokenStream
     if rel_path.ends_with(".onnx") {
         return crate::onnx::parse_onnx(&rel_path, &root_name, input.no_meta).into();
     } else if rel_path.ends_with(".pt") || rel_path.ends_with(".pth") {
-        let msg = format!(
+        let msg =
             "TorchScript parsing is scheduled for a future update! Use .onnx or .safetensors."
-        );
+                .to_string();
         return quote! { compile_error!(#msg); }.into();
     } else if !rel_path.ends_with(".safetensors") {
         let msg = format!("Unsupported model file format: {}", rel_path);
@@ -150,13 +148,18 @@ pub(crate) fn import_model(_attr: TokenStream, item: TokenStream) -> TokenStream
 
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
     let full_path = PathBuf::from(manifest_dir).join(&rel_path);
-    let meta_path = full_path.with_extension(format!("{}.kindle_meta", full_path.extension().unwrap().to_str().unwrap()));
+    let meta_path = full_path.with_extension(format!(
+        "{}.kindle_meta",
+        full_path.extension().unwrap().to_str().unwrap()
+    ));
 
     let mut root = Node::Dir(BTreeMap::new());
 
     let use_cache = if std::env::var("KINDLE_DISABLE_META_CACHE").unwrap_or_default() == "1" {
         false
-    } else if let (Ok(orig_meta), Ok(cache_meta)) = (fs::metadata(&full_path), fs::metadata(&meta_path)) {
+    } else if let (Ok(orig_meta), Ok(cache_meta)) =
+        (fs::metadata(&full_path), fs::metadata(&meta_path))
+    {
         if let (Ok(orig_time), Ok(cache_time)) = (orig_meta.modified(), cache_meta.modified()) {
             cache_time >= orig_time
         } else {
@@ -166,48 +169,47 @@ pub(crate) fn import_model(_attr: TokenStream, item: TokenStream) -> TokenStream
         false
     };
 
-    if use_cache {
-        if let Ok(cache_buffer) = fs::read_to_string(&meta_path) {
-            if let Ok(map) = serde_json::from_str::<BTreeMap<String, Vec<usize>>>(&cache_buffer) {
-                for (tname, shape) in map {
-                    let parts: Vec<&str> = tname.split('.').collect();
-                    root.insert(&parts, shape);
-                }
-            }
+    if use_cache
+        && let Ok(cache_buffer) = fs::read_to_string(&meta_path)
+        && let Ok(map) = serde_json::from_str::<BTreeMap<String, Vec<usize>>>(&cache_buffer)
+    {
+        for (tname, shape) in map {
+            let parts: Vec<&str> = tname.split('.').collect();
+            root.insert(&parts, shape);
         }
     }
 
-    if let Node::Dir(ref map) = root {
-        if map.is_empty() {
-            // Need to parse from original file
-            let buffer = match fs::read(&full_path) {
-                Ok(b) => b,
-                Err(e) => {
-                    let msg = format!("Failed to read safetensors file {:?}: {}", full_path, e);
-                    return quote! { compile_error!(#msg); }.into();
-                }
-            };
-
-            let st = match SafeTensors::deserialize(&buffer) {
-                Ok(st) => st,
-                Err(e) => {
-                    let msg = format!("Failed to parse safetensors file {:?}: {:?}", full_path, e);
-                    return quote! { compile_error!(#msg); }.into();
-                }
-            };
-
-            let mut meta_map = BTreeMap::new();
-            for (tname, tensor) in st.tensors() {
-                let shape = tensor.shape().to_vec();
-                let parts: Vec<&str> = tname.split('.').collect();
-                root.insert(&parts, shape.clone());
-                meta_map.insert(tname.clone(), shape);
+    if let Node::Dir(ref map) = root
+        && map.is_empty()
+    {
+        // Need to parse from original file
+        let buffer = match fs::read(&full_path) {
+            Ok(b) => b,
+            Err(e) => {
+                let msg = format!("Failed to read safetensors file {:?}: {}", full_path, e);
+                return quote! { compile_error!(#msg); }.into();
             }
+        };
 
-            // Save cache
-            if let Ok(json) = serde_json::to_string(&meta_map) {
-                let _ = fs::write(&meta_path, json);
+        let st = match SafeTensors::deserialize(&buffer) {
+            Ok(st) => st,
+            Err(e) => {
+                let msg = format!("Failed to parse safetensors file {:?}: {:?}", full_path, e);
+                return quote! { compile_error!(#msg); }.into();
             }
+        };
+
+        let mut meta_map = BTreeMap::new();
+        for (tname, tensor) in st.tensors() {
+            let shape = tensor.shape().to_vec();
+            let parts: Vec<&str> = tname.split('.').collect();
+            root.insert(&parts, shape.clone());
+            meta_map.insert(tname.clone(), shape);
+        }
+
+        // Save cache
+        if let Ok(json) = serde_json::to_string(&meta_map) {
+            let _ = fs::write(&meta_path, json);
         }
     }
 

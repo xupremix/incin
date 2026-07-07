@@ -1,13 +1,13 @@
 use crate::prelude::*;
 
 /// Encapsulates the backend-specific gradients obtained from a backward pass.
-/// 
+///
 /// This is a newtype wrapper around the backend's raw gradient container (e.g., `candle_core::backprop::GradStore`).
 /// Obtain it by calling `.backward()` on a scalar loss tensor. Pass it to [`Optimizer::step`] to update parameters.
 pub struct Gradients<G>(pub G);
 
 /// Trait defining a generic optimization algorithm.
-/// 
+///
 /// Implementors receive a reference to the [`Gradients`] computed from a backward pass
 /// and apply the appropriate parameter update rule to all tracked variables.
 pub trait Optimizer<B: Backend> {
@@ -16,13 +16,13 @@ pub trait Optimizer<B: Backend> {
 }
 
 /// Stochastic Gradient Descent (SGD) optimizer.
-/// 
+///
 /// Applies the update rule: `w ← w - lr * ∂L/∂w`.
-/// 
+///
 /// ## Examples
 /// ```rust,ignore
 /// use kindle::prelude::*;
-/// 
+///
 /// let optimizer = SGD::new(model.parameters(), 0.01);
 /// optimizer.step(&gradients)?;
 /// ```
@@ -53,15 +53,15 @@ impl<B: Backend> Optimizer<B> for SGD<B> {
 }
 
 /// AdamW optimizer (Adam with decoupled weight decay).
-/// 
-/// AdamW modifies the standard Adam algorithm by decoupling the weight decay from the 
-/// gradient updates. This leads to better generalization performance, particularly when 
+///
+/// AdamW modifies the standard Adam algorithm by decoupling the weight decay from the
+/// gradient updates. This leads to better generalization performance, particularly when
 /// training transformer models and deep networks.
-/// 
+///
 /// ## Examples
 /// ```rust,ignore
 /// use kindle::prelude::*;
-/// 
+///
 /// let optimizer = AdamW::new(model.parameters(), 1e-4);
 /// optimizer.step(&gradients)?;
 /// ```
@@ -103,13 +103,13 @@ impl<B: Backend> Optimizer<B> for AdamW<B> {
         for (name, var) in self.params.iter_mut() {
             if let Some(grad) = B::get_grad(var, &grads.0)? {
                 let mut t = B::var_as_tensor(var)?;
-                
+
                 // Weight decay
                 if self.weight_decay > 0.0 {
                     let decay = B::mul_scalar(&t, self.weight_decay * self.lr)?;
                     t = B::sub(&t, &decay)?;
                 }
-                
+
                 let m_t = if let Some(m) = self.m.get(name) {
                     let term1 = B::mul_scalar(m, self.beta1)?;
                     let term2 = B::mul_scalar(&grad, 1.0 - self.beta1)?;
@@ -136,7 +136,7 @@ impl<B: Backend> Optimizer<B> for AdamW<B> {
                 // step = lr * m_hat / (sqrt(v_hat) + eps)
                 let denom = B::add_scalar(&B::sqrt(&v_hat)?, self.eps)?;
                 let step = B::mul_scalar(&B::div(&m_hat, &denom)?, self.lr)?;
-                
+
                 let updated = B::sub(&t, &step)?;
                 B::assign_var(var, &updated)?;
             }
@@ -146,14 +146,14 @@ impl<B: Backend> Optimizer<B> for AdamW<B> {
 }
 
 /// Adam optimization algorithm.
-/// 
+///
 /// Implements the standard Adam optimizer with momentum and variance tracking.
 /// For models sensitive to weight decay (like Transformers), prefer [`AdamW`].
-/// 
+///
 /// ## Examples
 /// ```rust,ignore
 /// use kindle::prelude::*;
-/// 
+///
 /// let optimizer = Adam::new(model.parameters(), 1e-3);
 /// optimizer.step(&gradients)?;
 /// ```
@@ -193,7 +193,7 @@ impl<B: Backend> Optimizer<B> for Adam<B> {
         for (name, var) in self.params.iter_mut() {
             if let Some(grad) = B::get_grad(var, &grads.0)? {
                 let t = B::var_as_tensor(var)?;
-                
+
                 let m_t = if let Some(m) = self.m.get(name) {
                     let term1 = B::mul_scalar(m, self.beta1)?;
                     let term2 = B::mul_scalar(&grad, 1.0 - self.beta1)?;
@@ -220,7 +220,7 @@ impl<B: Backend> Optimizer<B> for Adam<B> {
                 // step = lr * m_hat / (sqrt(v_hat) + eps)
                 let denom = B::add_scalar(&B::sqrt(&v_hat)?, self.eps)?;
                 let step = B::mul_scalar(&B::div(&m_hat, &denom)?, self.lr)?;
-                
+
                 let updated = B::sub(&t, &step)?;
                 B::assign_var(var, &updated)?;
             }

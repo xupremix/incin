@@ -1,8 +1,8 @@
-use kindle::prelude::*;
-use kindle::nn::Flatten;
 use kindle::Backend as _;
+use kindle::nn::Flatten;
+use kindle::prelude::*;
 use kindle_data::vision::mnist::MnistDataset;
-use kindle_data::{Dataset, DataLoader, Collate};
+use kindle_data::{Collate, DataLoader, Dataset};
 use std::path::PathBuf;
 
 #[cfg(feature = "candle")]
@@ -31,7 +31,7 @@ impl Collate<(Vec<f32>, u8)> for MnistCollate {
                 images.len() * std::mem::size_of::<f32>(),
             )
         };
-        
+
         let labels_bytes = unsafe {
             std::slice::from_raw_parts(
                 labels.as_ptr() as *const u8,
@@ -40,8 +40,15 @@ impl Collate<(Vec<f32>, u8)> for MnistCollate {
         };
 
         let device = KindleDevice::cpu();
-        let images_raw = Backend::from_bytes(images_bytes, &[batch_size, 1, 28, 28], KindleDType::F32, &device).unwrap();
-        let labels_raw = Backend::from_bytes(labels_bytes, &[batch_size], KindleDType::U32, &device).unwrap();
+        let images_raw = Backend::from_bytes(
+            images_bytes,
+            &[batch_size, 1, 28, 28],
+            KindleDType::F32,
+            &device,
+        )
+        .unwrap();
+        let labels_raw =
+            Backend::from_bytes(labels_bytes, &[batch_size], KindleDType::U32, &device).unwrap();
 
         (
             Tensor::<Dyn, Backend>::from_raw(images_raw, vec![batch_size, 1, 28, 28]).unwrap(),
@@ -52,18 +59,18 @@ impl Collate<(Vec<f32>, u8)> for MnistCollate {
 
 fn main() -> anyhow::Result<()> {
     println!("Starting MNIST Training Example");
-    
+
     // 1. Dataset loading
     let data_dir = PathBuf::from("./data/mnist");
     println!("Loading dataset into {:?}...", data_dir);
     let train_data = MnistDataset::new(&data_dir, true)?;
     println!("Loaded {} training images", train_data.len());
-    
+
     // Create DataLoader
     let dataloader = DataLoader::new(train_data, MnistCollate, 32)
         .with_shuffle(true)
         .with_num_workers(0); // Using 0 for simple blocking execution
-    
+
     // 2. Model definition (MLP using the seq! macro and Flatten)
     let model = seq![
         Flatten::<1, 3>::new(), // Flattens (B, 1, 28, 28) -> (B, 784)
@@ -71,40 +78,45 @@ fn main() -> anyhow::Result<()> {
         ReLU,
         Linear::<Dyn, Backend>::new_dyn((128, 10))?
     ];
-    
+
     // 3. Optimizer setup
     let mut optim = kindle::optim::AdamW::<Backend>::new(model.parameters(), 0.001);
-    
+
     // 4. Real Training Loop
     println!("Starting training...");
     let mut batch_idx = 0;
     for (images, labels) in &dataloader {
         // Forward pass
         let output = model.forward(images)?;
-        
+
         // Compute loss
         let loss = output.cross_entropy_loss(&labels)?;
-        
+
         // Backward pass
         let grads = loss.backward()?;
-        
+
         // Optimizer step
         optim.step(&grads)?;
-        
+
         if batch_idx % 100 == 0 {
             println!("Processed {} batches", batch_idx);
         }
         batch_idx += 1;
-        
+
         if batch_idx >= 500 {
             break; // Stop early for the demo
         }
     }
-    
+
     // 5. Save Checkpoint
     println!("Saving checkpoint to Safetensors format...");
-    model.save(Format::Safetensors, std::path::Path::new("mnist_model.safetensors")).unwrap();
+    model
+        .save(
+            Format::Safetensors,
+            std::path::Path::new("mnist_model.safetensors"),
+        )
+        .unwrap();
     println!("Saved successfully!");
-    
+
     Ok(())
 }

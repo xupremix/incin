@@ -65,8 +65,8 @@ use crate::prelude::{Dim, Dyn};
 use typenum::Unsigned;
 
 // Implement for (B, C, H, W) -> (B, C, HOut, WOut)
-impl<B: Dim, C: Dim, HIn: Dim, WIn: Dim, K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned> Pool2dShape<K, S, P, D>
-    for (B, C, HIn, WIn)
+impl<B: Dim, C: Dim, HIn: Dim, WIn: Dim, K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned>
+    Pool2dShape<K, S, P, D> for (B, C, HIn, WIn)
 where
     HIn: SpatialOut<K, S, P, D>,
     WIn: SpatialOut<K, S, P, D>,
@@ -80,7 +80,7 @@ where
         <WIn as SpatialOut<K, S, P, D>>::Output,
     );
     fn compute_output_shape(input: &Self::Field) -> <Self::Output as crate::prelude::Shape>::Field {
-        (input.0.clone(), input.1.clone(), Default::default(), Default::default())
+        (input.0, input.1, Default::default(), Default::default())
     }
 }
 
@@ -98,9 +98,11 @@ impl<K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned> Pool2dShape<K, S, P, D>
 
 pub trait SpatialConv1d<COut, K, S, P, D>: crate::prelude::Shape {
     type Output: crate::prelude::Shape + crate::prelude::DynShape;
-    fn compute_output_shape(input: &Self::Field, out_channels: usize) -> <Self::Output as crate::prelude::Shape>::Field;
+    fn compute_output_shape(
+        input: &Self::Field,
+        out_channels: usize,
+    ) -> <Self::Output as crate::prelude::Shape>::Field;
 }
-
 
 macro_rules! impl_conv1d_shape {
     ($($B:ident : $idx:tt),*) => {
@@ -124,10 +126,14 @@ impl_conv1d_shape!(B0: 0, B1: 1, B2: 2);
 impl_conv1d_shape!(B0: 0, B1: 1, B2: 2, B3: 3);
 impl_conv1d_shape!(B0: 0, B1: 1, B2: 2, B3: 3, B4: 4);
 
-
-impl<COut, K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned> SpatialConv1d<COut, K, S, P, D> for Dyn {
+impl<COut, K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned> SpatialConv1d<COut, K, S, P, D>
+    for Dyn
+{
     type Output = Dyn;
-    fn compute_output_shape(input: &Self::Field, out_channels: usize) -> <Self::Output as crate::prelude::Shape>::Field {
+    fn compute_output_shape(
+        input: &Self::Field,
+        out_channels: usize,
+    ) -> <Self::Output as crate::prelude::Shape>::Field {
         let mut dims = input.clone();
         if dims.len() == 3 {
             dims[1] = out_channels;
@@ -139,9 +145,11 @@ impl<COut, K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned> SpatialConv1d<COu
 
 pub trait SpatialConv2d<COut, K, S, P, D>: crate::prelude::Shape {
     type Output: crate::prelude::Shape + crate::prelude::DynShape;
-    fn compute_output_shape(input: &Self::Field, out_channels: usize) -> <Self::Output as crate::prelude::Shape>::Field;
+    fn compute_output_shape(
+        input: &Self::Field,
+        out_channels: usize,
+    ) -> <Self::Output as crate::prelude::Shape>::Field;
 }
-
 
 macro_rules! impl_conv2d_shape {
     ($($B:ident : $idx:tt),*) => {
@@ -166,10 +174,14 @@ impl_conv2d_shape!(B0: 0, B1: 1);
 impl_conv2d_shape!(B0: 0, B1: 1, B2: 2);
 impl_conv2d_shape!(B0: 0, B1: 1, B2: 2, B3: 3);
 
-
-impl<COut, K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned> SpatialConv2d<COut, K, S, P, D> for Dyn {
+impl<COut, K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned> SpatialConv2d<COut, K, S, P, D>
+    for Dyn
+{
     type Output = Dyn;
-    fn compute_output_shape(input: &Self::Field, out_channels: usize) -> <Self::Output as crate::prelude::Shape>::Field {
+    fn compute_output_shape(
+        input: &Self::Field,
+        out_channels: usize,
+    ) -> <Self::Output as crate::prelude::Shape>::Field {
         let mut dims = input.clone();
         if dims.len() == 4 {
             dims[1] = out_channels;
@@ -185,15 +197,15 @@ pub trait AdaptiveAvgPool2dShape<HOut, WOut>: crate::prelude::Shape {
     fn compute_output_shape(input: &Self::Field) -> <Self::Output as crate::prelude::Shape>::Field;
 }
 
-impl<B: Dim, C: Dim, HIn: Dim, WIn: Dim, HOut: Unsigned, WOut: Unsigned> AdaptiveAvgPool2dShape<HOut, WOut>
-    for (B, C, HIn, WIn)
+impl<B: Dim, C: Dim, HIn: Dim, WIn: Dim, HOut: Unsigned, WOut: Unsigned>
+    AdaptiveAvgPool2dShape<HOut, WOut> for (B, C, HIn, WIn)
 where
     HOut: Dim + Default,
     WOut: Dim + Default,
 {
     type Output = (B, C, HOut, WOut);
     fn compute_output_shape(input: &Self::Field) -> <Self::Output as crate::prelude::Shape>::Field {
-        (input.0.clone(), input.1.clone(), Default::default(), Default::default())
+        (input.0, input.1, Default::default(), Default::default())
     }
 }
 

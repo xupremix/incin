@@ -1,10 +1,10 @@
 //! Neural network layers, modules, and utilities.
-//! 
+//!
 //! This module provides the building blocks for constructing neural networks in Kindle.
 //! All layers implement the [`Module`] trait, which defines a strongly-typed `forward` method.
-//! 
+//!
 //! ## Layers
-//! 
+//!
 //! | Layer | Description |
 //! |-------|-------------|
 //! | [`Linear`] | Fully-connected layer: `y = xWᵀ + b` |
@@ -15,9 +15,9 @@
 //! | [`MaxPool2d`] | 2D Max Pooling |
 //! | [`AvgPool2d`] | 2D Average Pooling |
 //! | [`Embedding`] | Embedding lookup table |
-//! 
+//!
 //! ## Activations
-//! 
+//!
 //! | Activation | Description |
 //! |------------|-------------|
 //! | [`ReLU`] | `max(0, x)` |
@@ -26,25 +26,25 @@
 //! | [`Sigmoid`] | `1 / (1 + e^{-x})` |
 //! | [`Tanh`] | Hyperbolic Tangent |
 //! | [`Softmax`] | Normalized exponentials along an axis |
-//! 
+//!
 //! ## Loss Functions
-//! 
+//!
 //! | Loss | Description |
 //! |------|-------------|
 //! | [`MSELoss`] | Mean Squared Error |
 //! | [`CrossEntropyLoss`] | Softmax + NLL Loss |
 //! | [`L1Loss`] | Mean Absolute Error |
 //! | [`BCEWithLogitsLoss`] | Binary Cross Entropy with Logits |
-//! 
+//!
 //! ## Recurrent Modules
-//! 
+//!
 //! | Module | Description |
 //! |--------|-------------|
 //! | [`RNNCell`] | Single Elman RNN step |
 //! | [`RNN`] | Multi-step sequence RNN |
-//! 
+//!
 //! ## Parameters & Buffers
-//! 
+//!
 //! * [`Param`] — A trainable parameter (gradients are computed and updated by an optimizer).
 //! * [`Buffer`] — A non-trainable state buffer (e.g., running statistics in BatchNorm).
 pub mod activation;
@@ -59,12 +59,12 @@ pub mod init;
 pub mod layer_norm;
 pub mod linear;
 pub mod loss;
+pub mod lstm;
 pub mod max_pool2d;
 pub mod module;
 pub mod param;
-pub mod save;
 pub mod rnn;
-pub mod lstm;
+pub mod save;
 
 pub use activation::*;
 pub use adaptive_avg_pool2d::*;
@@ -78,9 +78,9 @@ pub use init::*;
 pub use layer_norm::*;
 pub use linear::*;
 pub use loss::*;
+pub use lstm::*;
 pub use max_pool2d::*;
 pub use module::*;
 pub use param::*;
-pub use save::*;
 pub use rnn::*;
-pub use lstm::*;
+pub use save::*;

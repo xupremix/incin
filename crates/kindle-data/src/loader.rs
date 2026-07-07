@@ -74,7 +74,7 @@ where
             indices.shuffle(&mut thread_rng());
         }
 
-        let num_batches = (indices.len() + self.batch_size - 1) / self.batch_size;
+        let num_batches = indices.len().div_ceil(self.batch_size);
         let mut batch_indices = Vec::with_capacity(num_batches);
 
         for i in 0..num_batches {

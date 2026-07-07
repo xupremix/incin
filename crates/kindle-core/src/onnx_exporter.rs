@@ -1,6 +1,6 @@
-use crate::prelude::*;
-use crate::graph::{Graph, AttributeValue};
+use crate::graph::{AttributeValue, Graph};
 use crate::onnx_pb::onnx;
+use crate::prelude::*;
 use prost::Message;
 use std::collections::HashMap;
 use std::path::Path;
@@ -48,7 +48,7 @@ pub fn export_to_onnx(graph: &Graph, path: &Path) -> anyhow::Result<()> {
         n.op_type = Some(node.op.as_str().to_string());
         n.input = node.inputs.iter().map(|x| x.to_string()).collect();
         n.output = node.outputs.iter().map(|x| x.to_string()).collect();
-        
+
         for (k, v) in &node.attributes {
             let mut attr = onnx::AttributeProto::default();
             attr.name = Some(k.clone());
@@ -109,18 +109,20 @@ fn dtype_to_onnx(dt: KindleDType) -> onnx::tensor_proto::DataType {
 fn value_to_value_info(val: &crate::graph::Value) -> onnx::ValueInfoProto {
     let mut vi = onnx::ValueInfoProto::default();
     vi.name = Some(val.id.to_string());
-    
+
     let mut tensor_type = onnx::type_proto::Tensor::default();
     tensor_type.elem_type = Some(dtype_to_onnx(val.dtype) as i32);
-    
+
     let mut shape = onnx::TensorShapeProto::default();
     for &d in &val.shape {
         let mut dim = onnx::tensor_shape_proto::Dimension::default();
-        dim.value = Some(onnx::tensor_shape_proto::dimension::Value::DimValue(d as i64));
+        dim.value = Some(onnx::tensor_shape_proto::dimension::Value::DimValue(
+            d as i64,
+        ));
         shape.dim.push(dim);
     }
     tensor_type.shape = Some(shape);
-    
+
     let mut t = onnx::TypeProto::default();
     t.value = Some(onnx::type_proto::Value::TensorType(tensor_type));
     vi.r#type = Some(t);
@@ -130,15 +132,16 @@ fn value_to_value_info(val: &crate::graph::Value) -> onnx::ValueInfoProto {
 impl<'a> crate::serialize::Serializer for OnnxExporter<'a> {
     type Error = anyhow::Error;
 
-    fn serialize<B: Backend>(&mut self, _state_dict: &HashMap<String, Tensor<Dyn, B>>) -> core::result::Result<(), Self::Error> 
+    fn serialize<B: Backend>(
+        &mut self,
+        _state_dict: &HashMap<String, Tensor<Dyn, B>>,
+    ) -> core::result::Result<(), Self::Error>
     where
         <<B as Backend>::DType as DType>::Field: Default,
-        <<B as Backend>::Device as Device>::Field: Default 
+        <<B as Backend>::Device as Device>::Field: Default,
     {
         // Try to run export_to_onnx with thread local graph
-        crate::tensor::tracing::TRACING_GRAPH.with(|g| {
-            export_to_onnx(&g.borrow(), self._path)
-        })
+        crate::tensor::tracing::TRACING_GRAPH.with(|g| export_to_onnx(&g.borrow(), self._path))
     }
 }
 
@@ -155,11 +158,16 @@ impl<'a> OnnxImporter<'a> {
 impl<'a> crate::serialize::Deserializer for OnnxImporter<'a> {
     type Error = anyhow::Error;
 
-    fn deserialize<B: Backend>(&mut self, _device: &KindleDevice) -> core::result::Result<HashMap<String, Tensor<Dyn, B>>, Self::Error>
+    fn deserialize<B: Backend>(
+        &mut self,
+        _device: &KindleDevice,
+    ) -> core::result::Result<HashMap<String, Tensor<Dyn, B>>, Self::Error>
     where
         <<B as Backend>::DType as DType>::Field: Default,
-        <<B as Backend>::Device as Device>::Field: Default 
+        <<B as Backend>::Device as Device>::Field: Default,
     {
-        Err(anyhow::anyhow!("ONNX loading is currently unsupported. Please use Format::Safetensors instead."))
+        Err(anyhow::anyhow!(
+            "ONNX loading is currently unsupported. Please use Format::Safetensors instead."
+        ))
     }
 }

@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, DeriveInput};
+use syn::{DeriveInput, parse_macro_input};
 
 pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut input = parse_macro_input!(item as DeriveInput);
@@ -28,7 +28,11 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
         if let syn::GenericParam::Type(t) = p {
             if t.bounds.iter().any(|b| {
                 if let syn::TypeParamBound::Trait(tb) = b {
-                    tb.path.segments.last().map(|s| s.ident == "Backend").unwrap_or(false)
+                    tb.path
+                        .segments
+                        .last()
+                        .map(|s| s.ident == "Backend")
+                        .unwrap_or(false)
                 } else {
                     false
                 }
@@ -45,13 +49,13 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut generics = input.generics.clone();
     let b_ident = if let Some(ref b) = backend_generic {
         quote! { #b }
+    } else if is_internal {
+        generics
+            .params
+            .push(syn::parse_quote!(__B: #k_crate::prelude::Backend));
+        quote! { __B }
     } else {
-        if is_internal {
-            generics.params.push(syn::parse_quote!(__B: #k_crate::prelude::Backend));
-            quote! { __B }
-        } else {
-            quote! { #k_crate::prelude::DefaultBackend }
-        }
+        quote! { #k_crate::prelude::DefaultBackend }
     };
 
     let (impl_generics, _, where_clause) = generics.split_for_impl();
@@ -92,13 +96,21 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                     if let Some(err) = error_tokens {
                         return TokenStream::from(err);
                     }
-                    
+
                     let fname = &field.ident;
-                    let fname_str = fname.as_ref().map(|i| i.to_string()).unwrap_or_else(|| "".to_string());
+                    let fname_str = fname
+                        .as_ref()
+                        .map(|i| i.to_string())
+                        .unwrap_or_else(|| "".to_string());
 
                     if ignore {
                         let is_phantom = match &field.ty {
-                            syn::Type::Path(p) => p.path.segments.last().map(|s| s.ident == "PhantomData").unwrap_or(false),
+                            syn::Type::Path(p) => p
+                                .path
+                                .segments
+                                .last()
+                                .map(|s| s.ident == "PhantomData")
+                                .unwrap_or(false),
                             _ => false,
                         };
                         if is_phantom {
@@ -108,7 +120,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                         }
                         continue;
                     }
-                    
+
                     param_calls.push(quote! {
                         {
                             use #k_crate::nn::module::{AutorefParameters, AutorefParametersFallback};
@@ -160,13 +172,18 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                     if let Some(err) = error_tokens {
                         return TokenStream::from(err);
                     }
-                    
+
                     let idx = syn::Index::from(i);
                     let idx_str = i.to_string();
 
                     if ignore {
                         let is_phantom = match &field.ty {
-                            syn::Type::Path(p) => p.path.segments.last().map(|s| s.ident == "PhantomData").unwrap_or(false),
+                            syn::Type::Path(p) => p
+                                .path
+                                .segments
+                                .last()
+                                .map(|s| s.ident == "PhantomData")
+                                .unwrap_or(false),
                             _ => false,
                         };
                         if is_phantom {
@@ -176,7 +193,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                         }
                         continue;
                     }
-                    
+
                     param_calls.push(quote! {
                         {
                             use #k_crate::nn::module::{AutorefParameters, AutorefParametersFallback};
@@ -248,7 +265,9 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let to_device_impl = if backend_generic.is_some() || is_internal {
         let mut impl_generics_with_newd = generics.clone();
-        impl_generics_with_newd.params.push(syn::parse_quote!(__NewD: #k_crate::prelude::Device));
+        impl_generics_with_newd
+            .params
+            .push(syn::parse_quote!(__NewD: #k_crate::prelude::Device));
         let (impl_g, _, _) = impl_generics_with_newd.split_for_impl();
         quote! {
             impl #impl_g #k_crate::nn::module::ToDevice<#b_ident, __NewD> for #name #ty_generics #where_clause {

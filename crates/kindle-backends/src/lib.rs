@@ -2,16 +2,16 @@
 //!
 //! `kindle-backends` provides concrete implementations of the `Backend` trait defined in `kindle-core`.
 //! It acts as the bridge between Kindle's high-level strongly-typed abstractions and the low-level compute engines that actually perform tensor operations.
-//! 
+//!
 //! ## Available Backends
-//! 
+//!
 //! * **`candle`**: Integrates with [Hugging Face's Candle](https://github.com/huggingface/candle), a minimalist machine learning framework for Rust. It supports CUDA, Metal, and CPU acceleration. Enable this with the `candle` feature.
 //! * **`ndarray`**: Integrates with the [ndarray](https://github.com/rust-ndarray/ndarray) ecosystem for pure Rust, CPU-bound multi-dimensional array operations. Enable this with the `ndarray` feature.
 //! * **`dummy`**: A mock backend strictly used for testing compile-time shape verification and basic operation traversal without executing real compute.
-//! 
+//!
 //! ## Creating Custom Backends
-//! 
-//! If you wish to plug in your own compute engine, you simply need to implement the `kindle_core::tensor::backend::Backend` trait and the associated operation traits (`MatMulOp`, `Conv2dOp`, etc.). 
+//!
+//! If you wish to plug in your own compute engine, you simply need to implement the `kindle_core::tensor::backend::Backend` trait and the associated operation traits (`MatMulOp`, `Conv2dOp`, etc.).
 
 pub use kindle_core::prelude::*;
 
@@ -87,14 +87,21 @@ pub mod candle {
             unimplemented!("adaptive_avg_pool2d not implemented for CandleBackend")
         }
 
-        fn l1_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor, _reduction: kindle_core::nn::loss::Reduction) -> Result<Self::RawTensor> {
+        fn l1_loss(
+            _pred: &Self::RawTensor,
+            _target: &Self::RawTensor,
+            _reduction: kindle_core::nn::loss::Reduction,
+        ) -> Result<Self::RawTensor> {
             unimplemented!("l1_loss not implemented for CandleBackend")
         }
 
-        fn bce_with_logits_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor, _reduction: kindle_core::nn::loss::Reduction) -> Result<Self::RawTensor> {
+        fn bce_with_logits_loss(
+            _pred: &Self::RawTensor,
+            _target: &Self::RawTensor,
+            _reduction: kindle_core::nn::loss::Reduction,
+        ) -> Result<Self::RawTensor> {
             unimplemented!("bce_with_logits_loss not implemented for CandleBackend")
         }
-
 
         fn var_as_tensor(var: &Self::RawVar) -> Result<Self::RawTensor> {
             Ok(var.as_tensor().clone())
@@ -190,7 +197,10 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e).into())
         }
 
-        fn var_to_device(var: &Self::RawVar, device: &kindle_core::prelude::KindleDevice) -> Result<Self::RawVar> {
+        fn var_to_device(
+            var: &Self::RawVar,
+            device: &kindle_core::prelude::KindleDevice,
+        ) -> Result<Self::RawVar> {
             let dev = to_candle_device(device)?;
             var.as_tensor()
                 .to_device(&dev)
@@ -370,14 +380,16 @@ pub mod candle {
             use candle_nn::Module;
             let hidden_size = w.dim(1).map_err(|e| anyhow::anyhow!(e))?;
             let emb = candle_nn::Embedding::new(w.clone(), hidden_size);
-            
+
             // Candle requires U32 or I64 for embedding indices
-            let t_idx = if t.dtype() != candle_core::DType::U32 && t.dtype() != candle_core::DType::I64 {
-                t.to_dtype(candle_core::DType::U32).map_err(|e| anyhow::anyhow!(e))?
-            } else {
-                t.clone()
-            };
-            
+            let t_idx =
+                if t.dtype() != candle_core::DType::U32 && t.dtype() != candle_core::DType::I64 {
+                    t.to_dtype(candle_core::DType::U32)
+                        .map_err(|e| anyhow::anyhow!(e))?
+                } else {
+                    t.clone()
+                };
+
             Ok(emb.forward(&t_idx).map_err(|e| anyhow::anyhow!(e))?)
         }
 
@@ -453,16 +465,16 @@ pub mod candle {
             Ok(t.transpose(dim1, dim2)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-                fn slice(t: &Self::RawTensor, ranges: &[(usize, usize)]) -> Result<Self::RawTensor> {
+        fn slice(t: &Self::RawTensor, ranges: &[(usize, usize)]) -> Result<Self::RawTensor> {
             let mut out = t.clone();
             for (dim, &(start, end)) in ranges.iter().enumerate() {
-                out = out.narrow(dim, start, end - start).map_err(|e| Error::Msg(
-                    format!("Candle narrow failed for slice: {}", e)
-                ))?;
+                out = out
+                    .narrow(dim, start, end - start)
+                    .map_err(|e| Error::Msg(format!("Candle narrow failed for slice: {}", e)))?;
             }
             Ok(out)
         }
-        
+
         fn flatten(
             t: &Self::RawTensor,
             start_dim: usize,
@@ -562,26 +574,55 @@ pub mod candle {
         }
 
         fn to_bytes(t: &Self::RawTensor) -> Result<std::vec::Vec<u8>> {
-            let v = t.flatten_all().map_err(|e| anyhow::anyhow!(e))?.to_vec1::<f32>().map_err(|e| anyhow::anyhow!(e))?;
-            let bytes = unsafe { std::slice::from_raw_parts(v.as_ptr() as *const u8, v.len() * std::mem::size_of::<f32>()) };
+            let v = t
+                .flatten_all()
+                .map_err(|e| anyhow::anyhow!(e))?
+                .to_vec1::<f32>()
+                .map_err(|e| anyhow::anyhow!(e))?;
+            let bytes = unsafe {
+                std::slice::from_raw_parts(
+                    v.as_ptr() as *const u8,
+                    v.len() * std::mem::size_of::<f32>(),
+                )
+            };
             Ok(bytes.to_vec())
         }
-        
-        fn from_bytes(bytes: &[u8], shape: &[usize], dtype: KindleDType, device: &KindleDevice) -> Result<Self::RawTensor> {
-            let floats = unsafe { std::slice::from_raw_parts(bytes.as_ptr() as *const f32, bytes.len() / std::mem::size_of::<f32>()) };
+
+        fn from_bytes(
+            bytes: &[u8],
+            shape: &[usize],
+            dtype: KindleDType,
+            device: &KindleDevice,
+        ) -> Result<Self::RawTensor> {
+            let floats = unsafe {
+                std::slice::from_raw_parts(
+                    bytes.as_ptr() as *const f32,
+                    bytes.len() / std::mem::size_of::<f32>(),
+                )
+            };
             let d = to_candle_device(device).map_err(|e| anyhow::anyhow!(e))?;
             let c_dtype = to_candle_dtype(dtype);
-            let t = candle_core::Tensor::from_slice(floats, shape, &d).map_err(|e| anyhow::anyhow!(e))?;
+            let t = candle_core::Tensor::from_slice(floats, shape, &d)
+                .map_err(|e| anyhow::anyhow!(e))?;
             let t = t.to_dtype(c_dtype).map_err(|e| anyhow::anyhow!(e))?;
             Ok(t)
         }
 
-        fn mse_loss(pred: &Self::RawTensor, target: &Self::RawTensor, _reduction: kindle_core::nn::loss::Reduction) -> Result<Self::RawTensor> {
-            let loss = candle_nn::loss::mse(pred, target).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+        fn mse_loss(
+            pred: &Self::RawTensor,
+            target: &Self::RawTensor,
+            _reduction: kindle_core::nn::loss::Reduction,
+        ) -> Result<Self::RawTensor> {
+            let loss = candle_nn::loss::mse(pred, target)
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
             Ok(loss)
         }
 
-        fn cross_entropy_loss(pred: &Self::RawTensor, target: &Self::RawTensor, _reduction: kindle_core::nn::loss::Reduction) -> Result<Self::RawTensor> {
+        fn cross_entropy_loss(
+            pred: &Self::RawTensor,
+            target: &Self::RawTensor,
+            _reduction: kindle_core::nn::loss::Reduction,
+        ) -> Result<Self::RawTensor> {
             candle_nn::loss::cross_entropy(pred, target)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e).into())
         }
@@ -633,22 +674,42 @@ pub mod ndarray_backend {
         type RawVar = NdarrayVar;
         type Grads = NdarrayGrads;
 
-                fn to_bytes(t: &Self::RawTensor) -> Result<std::vec::Vec<u8>> {
+        fn to_bytes(t: &Self::RawTensor) -> Result<std::vec::Vec<u8>> {
             let slice = t.as_slice().ok_or_else(|| {
-                let err: kindle_core::err::Error = anyhow::anyhow!("Ndarray is not contiguous").into();
+                let err: kindle_core::err::Error =
+                    anyhow::anyhow!("Ndarray is not contiguous").into();
                 err
             })?;
-            let bytes = unsafe { std::slice::from_raw_parts(slice.as_ptr() as *const u8, slice.len() * std::mem::size_of::<f32>()) };
+            let bytes = unsafe {
+                std::slice::from_raw_parts(
+                    slice.as_ptr() as *const u8,
+                    std::mem::size_of_val(slice),
+                )
+            };
             Ok(bytes.to_vec())
         }
-        
-        fn from_bytes(bytes: &[u8], shape: &[usize], dtype: KindleDType, _device: &KindleDevice) -> Result<Self::RawTensor> {
-            if dtype != KindleDType::F32 { 
-                let err: kindle_core::err::Error = anyhow::anyhow!("NdarrayBackend only supports f32").into();
-                return Err(err); 
+
+        fn from_bytes(
+            bytes: &[u8],
+            shape: &[usize],
+            dtype: KindleDType,
+            _device: &KindleDevice,
+        ) -> Result<Self::RawTensor> {
+            if dtype != KindleDType::F32 {
+                let err: kindle_core::err::Error =
+                    anyhow::anyhow!("NdarrayBackend only supports f32").into();
+                return Err(err);
             }
-            let floats = unsafe { std::slice::from_raw_parts(bytes.as_ptr() as *const f32, bytes.len() / std::mem::size_of::<f32>()) };
-            let arr = ndarray::Array::from_vec(floats.to_vec()).into_shape_with_order(shape).map_err(|e| anyhow::anyhow!(e))?.into_dyn();
+            let floats = unsafe {
+                std::slice::from_raw_parts(
+                    bytes.as_ptr() as *const f32,
+                    bytes.len() / std::mem::size_of::<f32>(),
+                )
+            };
+            let arr = ndarray::Array::from_vec(floats.to_vec())
+                .into_shape_with_order(shape)
+                .map_err(|e| anyhow::anyhow!(e))?
+                .into_dyn();
             Ok(arr)
         }
 
@@ -667,11 +728,19 @@ pub mod ndarray_backend {
             unimplemented!("adaptive_avg_pool2d not implemented for NdarrayBackend")
         }
 
-        fn l1_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor, _reduction: kindle_core::nn::loss::Reduction) -> Result<Self::RawTensor> {
+        fn l1_loss(
+            _pred: &Self::RawTensor,
+            _target: &Self::RawTensor,
+            _reduction: kindle_core::nn::loss::Reduction,
+        ) -> Result<Self::RawTensor> {
             unimplemented!("l1_loss not implemented for NdArrayBackend")
         }
 
-        fn bce_with_logits_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor, _reduction: kindle_core::nn::loss::Reduction) -> Result<Self::RawTensor> {
+        fn bce_with_logits_loss(
+            _pred: &Self::RawTensor,
+            _target: &Self::RawTensor,
+            _reduction: kindle_core::nn::loss::Reduction,
+        ) -> Result<Self::RawTensor> {
             unimplemented!("bce_with_logits_loss not implemented for NdarrayBackend")
         }
 
@@ -679,7 +748,9 @@ pub mod ndarray_backend {
             Ok(v.0.read().unwrap().clone())
         }
         fn var_from_tensor(t: &Self::RawTensor) -> Result<Self::RawVar> {
-            Ok(NdarrayVar(std::sync::Arc::new(std::sync::RwLock::new(t.clone()))))
+            Ok(NdarrayVar(std::sync::Arc::new(std::sync::RwLock::new(
+                t.clone(),
+            ))))
         }
 
         fn assign_var(var: &mut Self::RawVar, tensor: &Self::RawTensor) -> Result<()> {
@@ -724,10 +795,14 @@ pub mod ndarray_backend {
         }
 
         fn var_zeros(s: &[usize], _dt: KindleDType, _dev: &KindleDevice) -> Result<Self::RawVar> {
-            Ok(NdarrayVar(std::sync::Arc::new(std::sync::RwLock::new(ndarray::ArrayD::<f32>::zeros(s)))))
+            Ok(NdarrayVar(std::sync::Arc::new(std::sync::RwLock::new(
+                ndarray::ArrayD::<f32>::zeros(s),
+            ))))
         }
         fn var_ones(s: &[usize], _dt: KindleDType, _dev: &KindleDevice) -> Result<Self::RawVar> {
-            Ok(NdarrayVar(std::sync::Arc::new(std::sync::RwLock::new(ndarray::ArrayD::<f32>::ones(s)))))
+            Ok(NdarrayVar(std::sync::Arc::new(std::sync::RwLock::new(
+                ndarray::ArrayD::<f32>::ones(s),
+            ))))
         }
         fn var_rand(_s: &[usize], _dt: KindleDType, _dev: &KindleDevice) -> Result<Self::RawVar> {
             Err(Error::UnsupportedBackendOperation {
@@ -741,7 +816,10 @@ pub mod ndarray_backend {
         ) -> Result<Self::RawTensor> {
             Ok(t.clone())
         }
-        fn var_to_device(var: &Self::RawVar, _device: &kindle_core::prelude::KindleDevice) -> Result<Self::RawVar> {
+        fn var_to_device(
+            var: &Self::RawVar,
+            _device: &kindle_core::prelude::KindleDevice,
+        ) -> Result<Self::RawVar> {
             Ok(var.clone())
         }
         fn var_randn(_s: &[usize], _dt: KindleDType, _dev: &KindleDevice) -> Result<Self::RawVar> {
@@ -984,14 +1062,16 @@ pub mod ndarray_backend {
                 backend: "Ndarray",
             })
         }
-                fn slice(t: &Self::RawTensor, ranges: &[(usize, usize)]) -> Result<Self::RawTensor> {
+        fn slice(t: &Self::RawTensor, ranges: &[(usize, usize)]) -> Result<Self::RawTensor> {
             let mut out = t.clone();
             for (dim, &(start, end)) in ranges.iter().enumerate() {
-                out = out.slice_axis(ndarray::Axis(dim), ndarray::Slice::from(start..end)).to_owned();
+                out = out
+                    .slice_axis(ndarray::Axis(dim), ndarray::Slice::from(start..end))
+                    .to_owned();
             }
             Ok(out)
         }
-        
+
         fn flatten(_t: &Self::RawTensor, _s: usize, _e: usize) -> Result<Self::RawTensor> {
             Err(Error::UnsupportedBackendOperation {
                 op: "flatten",
@@ -1094,13 +1174,21 @@ pub mod ndarray_backend {
             Ok(None)
         }
 
-        fn mse_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor, _reduction: kindle_core::nn::loss::Reduction) -> Result<Self::RawTensor> {
+        fn mse_loss(
+            _pred: &Self::RawTensor,
+            _target: &Self::RawTensor,
+            _reduction: kindle_core::nn::loss::Reduction,
+        ) -> Result<Self::RawTensor> {
             // let diff = pred - target;
             // let sq = diff.mapv(|a| a.powi(2));
             // Ok(arr0(sq.mean().unwrap()).into_dyn())
             unimplemented!("mse_loss not implemented for NdArrayBackend")
         }
-        fn cross_entropy_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor, _reduction: kindle_core::nn::loss::Reduction) -> Result<Self::RawTensor> {
+        fn cross_entropy_loss(
+            _pred: &Self::RawTensor,
+            _target: &Self::RawTensor,
+            _reduction: kindle_core::nn::loss::Reduction,
+        ) -> Result<Self::RawTensor> {
             Err(Error::UnsupportedBackendOperation {
                 op: "cross_entropy_loss",
                 backend: "Ndarray",
@@ -1229,7 +1317,7 @@ pub mod burn_backend {
                 }
                 fn avg_pool2d(_: &Self::RawTensor, _: (usize, usize), _: (usize, usize)) -> Result<Self::RawTensor> {
                     Err(Error::UnsupportedBackendOperation { op: "avg_pool2d", backend: "Burn" })
-                } 
+                }
                 fn backward(_loss: &Self::RawTensor) -> Result<Self::Grads> { Err(Error::UnsupportedBackendOperation { op: "backward", backend: "Burn" }) }
                 fn get_grad(_var: &Self::RawVar, _grads: &Self::Grads) -> Result<Option<Self::RawTensor>> { Ok(None) }
 

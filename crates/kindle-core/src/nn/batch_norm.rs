@@ -4,20 +4,20 @@ use crate::prelude::*;
 use core::marker::PhantomData;
 
 /// A 2D Batch Normalization layer, as described in [Batch Normalization: Accelerating Deep Network Training by Reducing Internal Covariate Shift](https://arxiv.org/abs/1502.03167).
-/// 
+///
 /// Normalizes the input tensor across the batch and spatial dimensions for each channel independently,
 /// applying learnable affine scaling (`weight`) and shift (`bias`) parameters.
-/// 
+///
 /// The type parameter `S` is the shape marker.
-/// 
+///
 /// ## Running Statistics
 /// `running_mean` and `running_var` are non-trainable buffers updated during training (training mode
 /// must be handled at the backend level). During inference, these stored statistics are used.
-/// 
+///
 /// ## Examples
 /// ```rust,ignore
 /// use kindle::prelude::*;
-/// 
+///
 /// // BatchNorm for 64-channel feature maps
 /// let bn = BatchNorm2d::<(typenum::U64,), MyBackend>::new(typenum::U64::new(), 1e-5, 0.1)?;
 /// ```
@@ -81,7 +81,7 @@ impl<S: BatchNormShape, InS: Shape + HasChannels2D<S::Channels>, B: Backend> Mod
         let bias = self.bias.as_tensor()?.into_dyn();
         let running_mean = self.running_mean.as_tensor()?.into_dyn();
         let running_var = self.running_var.as_tensor()?.into_dyn();
-        
+
         let out = B::batch_norm(
             x.inner(),
             weight.inner(),
@@ -95,7 +95,7 @@ impl<S: BatchNormShape, InS: Shape + HasChannels2D<S::Channels>, B: Backend> Mod
             x._shape.clone(),
             x._dtype.clone(),
             x._device.clone(),
-            x._grad.clone(),
+            x._grad,
         ))
     }
 }

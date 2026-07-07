@@ -51,7 +51,8 @@ impl<S1, S2> ReshapeShape<S2> for S1
 where
     S1: Shape + ElementCount,
     S2: Shape + ElementCount<Count = <S1 as ElementCount>::Count>,
-{}
+{
+}
 
 /// A hybrid trait for dynamic and partial dynamic reshaping.
 pub trait TryReshape<Target: Shape>: Shape {}
@@ -64,7 +65,11 @@ mod tests {
     use super::*;
     use typenum::{U2, U4, U8};
 
-    fn assert_reshape_eq<S1: Shape, S2: Shape>() where S1: ReshapeShape<S2> {}
+    fn assert_reshape_eq<S1: Shape, S2: Shape>()
+    where
+        S1: ReshapeShape<S2>,
+    {
+    }
 
     #[test]
     fn reshape_same_rank_same_numel() {
@@ -80,4 +85,3 @@ mod tests {
         assert_reshape_eq::<S1, S2>();
     }
 }
-

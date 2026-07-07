@@ -37,25 +37,59 @@ impl ReductionMode for NoneReduction {
     }
 }
 
-pub trait MseReductionShape<S: Shape> { type Output: Shape; }
-impl<S: Shape> MseReductionShape<S> for Mean { type Output = (); }
-impl<S: Shape> MseReductionShape<S> for Sum { type Output = (); }
-impl<S: Shape> MseReductionShape<S> for NoneReduction { type Output = S; }
+pub trait MseReductionShape<S: Shape> {
+    type Output: Shape;
+}
+impl<S: Shape> MseReductionShape<S> for Mean {
+    type Output = ();
+}
+impl<S: Shape> MseReductionShape<S> for Sum {
+    type Output = ();
+}
+impl<S: Shape> MseReductionShape<S> for NoneReduction {
+    type Output = S;
+}
 
-pub trait CrossEntropyReductionShape<S: Shape> { type Output: Shape; }
-impl<S: Shape> CrossEntropyReductionShape<S> for Mean { type Output = (); }
-impl<S: Shape> CrossEntropyReductionShape<S> for Sum { type Output = (); }
-impl<S: Shape + crate::shapes::shape_ops::ReduceDim<1>> CrossEntropyReductionShape<S> for NoneReduction { type Output = S::Output; }
+pub trait CrossEntropyReductionShape<S: Shape> {
+    type Output: Shape;
+}
+impl<S: Shape> CrossEntropyReductionShape<S> for Mean {
+    type Output = ();
+}
+impl<S: Shape> CrossEntropyReductionShape<S> for Sum {
+    type Output = ();
+}
+impl<S: Shape + crate::shapes::shape_ops::ReduceDim<1>> CrossEntropyReductionShape<S>
+    for NoneReduction
+{
+    type Output = S::Output;
+}
 
-pub trait BceReductionShape<S: Shape> { type Output: Shape; }
-impl<S: Shape> BceReductionShape<S> for Mean { type Output = (); }
-impl<S: Shape> BceReductionShape<S> for Sum { type Output = (); }
-impl<S: Shape> BceReductionShape<S> for NoneReduction { type Output = S; }
+pub trait BceReductionShape<S: Shape> {
+    type Output: Shape;
+}
+impl<S: Shape> BceReductionShape<S> for Mean {
+    type Output = ();
+}
+impl<S: Shape> BceReductionShape<S> for Sum {
+    type Output = ();
+}
+impl<S: Shape> BceReductionShape<S> for NoneReduction {
+    type Output = S;
+}
 
-pub trait L1ReductionShape<S: Shape> { type Output: Shape; }
-impl<S: Shape> L1ReductionShape<S> for Mean { type Output = (); }
-impl<S: Shape> L1ReductionShape<S> for Sum { type Output = (); }
-impl<S: Shape> L1ReductionShape<S> for NoneReduction { type Output = S; }
+pub trait L1ReductionShape<S: Shape> {
+    type Output: Shape;
+}
+impl<S: Shape> L1ReductionShape<S> for Mean {
+    type Output = ();
+}
+impl<S: Shape> L1ReductionShape<S> for Sum {
+    type Output = ();
+}
+impl<S: Shape> L1ReductionShape<S> for NoneReduction {
+    type Output = S;
+}
 
 /// Trait to statically verify that two shapes are identical for MSE loss.
 pub trait MSEShape<S2: Shape> {}

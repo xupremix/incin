@@ -1,9 +1,9 @@
 /// The core dimension trait, implemented by all types that can represent a single tensor axis.
-/// 
+///
 /// A `Dim` is a type-level description of a single tensor dimension. It can be a compile-time
 /// constant dimension (e.g. `typenum::U128` for a static 128-element axis), or a runtime value
 /// (`usize` for a fully dynamic axis).
-/// 
+///
 /// In practice, you rarely need to implement or use `Dim` directly. The `s![]` macro generates
 /// the correct implementations automatically. Custom symbolic dimensions can be created via `symbolic_dim!`.
 pub trait Dim: 'static + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + PartialEq {
@@ -79,7 +79,7 @@ macro_rules! symbolic_dim {
 }
 
 /// A mathematical product of two Dimensions `A` and `B`.
-/// 
+///
 /// Used internally to track the resulting size when two dimensions are flattened or multiplied.
 /// For example, after `t.reshape::<s![-1, A_times_B]>()`, the last dimension's type would be `ProdDim<A, B>`.
 /// It preserves static dimensionality information across such operations.
@@ -145,9 +145,7 @@ impl Dim for UTerm {
     }
 
     #[inline(always)]
-    fn arg(&self) -> Self::Arg {
-        ()
-    }
+    fn arg(&self) -> Self::Arg {}
 }
 
 impl<U, B> Dim for UInt<U, B>
@@ -187,7 +185,5 @@ where
     }
 
     #[inline(always)]
-    fn arg(&self) -> Self::Arg {
-        ()
-    }
+    fn arg(&self) -> Self::Arg {}
 }

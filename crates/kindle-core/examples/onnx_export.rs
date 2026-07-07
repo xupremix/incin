@@ -1,9 +1,9 @@
-use kindle_core::prelude::*;
 use kindle_core::nn::{Linear, Module};
-use kindle_core::tensor::tracing::{TracingBackend, TRACING_GRAPH};
-use kindle_core::tensor::backend::dummy::DummyBackend;
-use kindle_core::serialize::Serializer;
 use kindle_core::onnx_exporter::OnnxExporter;
+use kindle_core::prelude::*;
+use kindle_core::serialize::Serializer;
+use kindle_core::tensor::backend::dummy::DummyBackend;
+use kindle_core::tensor::tracing::{TRACING_GRAPH, TracingBackend};
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -15,7 +15,7 @@ fn main() -> anyhow::Result<()> {
 
     // Create a dummy input
     let input = Tensor::<Dyn, B>::zeros([2, 10])?;
-    
+
     // Mark input in the computation graph
     TRACING_GRAPH.with(|g| {
         let mut g = g.borrow_mut();
@@ -35,7 +35,7 @@ fn main() -> anyhow::Result<()> {
     // Export to ONNX
     let path = Path::new("model.onnx");
     let mut exporter = OnnxExporter::new(&path);
-    
+
     // State dict is irrelevant here since the tracing graph already captured everything
     exporter.serialize::<B>(&HashMap::new())?;
 

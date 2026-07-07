@@ -12,7 +12,7 @@ impl HubApi {
     /// Can be configured via `KINDLE_HUB_CACHE_DIR` and `KINDLE_HUB_TOKEN` environment variables.
     pub fn new() -> Result<Self> {
         let mut builder = hf_hub::api::sync::ApiBuilder::new();
-        
+
         if let Ok(dir) = std::env::var("KINDLE_HUB_CACHE_DIR") {
             builder = builder.with_cache_dir(PathBuf::from(dir));
         }

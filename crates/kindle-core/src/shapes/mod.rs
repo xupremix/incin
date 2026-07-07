@@ -1,7 +1,7 @@
 //! Type-level shape definitions, dimension arithmetic, and shape verification traits.
-//! 
+//!
 //! The `shapes` module is the type-theoretic core of Kindle. It contains:
-//! 
+//!
 //! * [`dim`] — The [`Dim`] trait, `typenum` implementations, [`ProdDim`], and the `symbolic_dim!` macro.
 //! * [`shape`] — The [`Shape`], [`DynShape`], [`ConstShape`], and [`PartialDynShape`] traits.
 //! * [`reshape`] — The [`ReshapeShape`] trait for compile-time element-count preservation.
@@ -13,24 +13,24 @@
 pub mod arithmetic;
 pub mod broadcast;
 
+pub mod concat;
 pub mod dim;
+pub mod idx;
 pub mod named;
+pub mod reshape;
 pub mod shape;
 pub mod shape_ops;
 pub mod spatial;
-pub mod reshape;
-pub mod concat;
 pub mod stack;
-pub mod idx;
 
 pub use arithmetic::*;
 pub use broadcast::BroadcastShape;
 pub use dim::*;
+pub use idx::*;
+pub use reshape::*;
 pub use shape::*;
 pub use shape_ops::*;
 pub use spatial::*;
-pub use reshape::*;
-pub use idx::*;
 
 pub mod prelude {
     pub use super::arithmetic::*;

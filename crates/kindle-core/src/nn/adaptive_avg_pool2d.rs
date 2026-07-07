@@ -8,6 +8,12 @@ pub struct AdaptiveAvgPool2d<HOut: Unsigned, WOut: Unsigned> {
     _phantom: core::marker::PhantomData<(HOut, WOut)>,
 }
 
+impl<HOut: Unsigned, WOut: Unsigned> Default for AdaptiveAvgPool2d<HOut, WOut> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<HOut: Unsigned, WOut: Unsigned> AdaptiveAvgPool2d<HOut, WOut> {
     pub fn new() -> Self {
         Self {
@@ -17,15 +23,20 @@ impl<HOut: Unsigned, WOut: Unsigned> AdaptiveAvgPool2d<HOut, WOut> {
 }
 
 impl<HOut: Unsigned, WOut: Unsigned, B: Backend> Parameters<B> for AdaptiveAvgPool2d<HOut, WOut> {
-    fn named_parameters(&self, _prefix: &str, _map: &mut std::collections::HashMap<String, B::RawVar>) {}
+    fn named_parameters(
+        &self,
+        _prefix: &str,
+        _map: &mut std::collections::HashMap<String, B::RawVar>,
+    ) {
+    }
 }
 
 impl<
-        I: Shape + DynShape + crate::shapes::AdaptiveAvgPool2dShape<HOut, WOut>,
-        HOut: Unsigned,
-        WOut: Unsigned,
-        B: Backend,
-    > Module<Tensor<I, B>> for AdaptiveAvgPool2d<HOut, WOut>
+    I: Shape + DynShape + crate::shapes::AdaptiveAvgPool2dShape<HOut, WOut>,
+    HOut: Unsigned,
+    WOut: Unsigned,
+    B: Backend,
+> Module<Tensor<I, B>> for AdaptiveAvgPool2d<HOut, WOut>
 {
     type Output = Tensor<I::Output, B>;
     type Error = Error;

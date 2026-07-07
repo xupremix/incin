@@ -1,34 +1,47 @@
 //! Shape manipulation and restructuring operations.
 //!
-//! This module provides methods to change the logical or physical shape of a tensor 
-//! without necessarily changing the underlying data. It includes reshaping, transposition, 
-//! squeezing, flattening, and broadcasting. These operations heavily leverage the 
+//! This module provides methods to change the logical or physical shape of a tensor
+//! without necessarily changing the underlying data. It includes reshaping, transposition,
+//! squeezing, flattening, and broadcasting. These operations heavily leverage the
 //! compile-time type system to ensure the resulting shapes are strictly valid.
-use crate::tensor::ops::*;
+use crate::nn::loss::{
+    BceReductionShape, CrossEntropyReductionShape, L1ReductionShape, Mean, MseReductionShape,
+    Reduction, ReductionMode,
+};
 use crate::prelude::{Backend, Dyn, DynShape, RequiresGrad, Result, Shape, Tensor};
-use crate::nn::loss::{Mean, ReductionMode, CrossEntropyReductionShape, MseReductionShape, L1ReductionShape, BceReductionShape, Reduction};
+use crate::tensor::ops::*;
 
 use alloc::vec::Vec;
 
 impl<S: Shape + DynShape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
+    /// Slices a tensor dynamically based on a slice of `IndexSpec` configurations.
+    /// Returns a dynamically shaped tensor (`Dyn`).
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use kindle::prelude::*;
+    /// let t = Tensor::<s![3, 3], DefaultBackend>::ones(()).unwrap();
+    /// let s = t.slice(&[IndexSpec::All, IndexSpec::Index(0)]).unwrap();
+    /// ```
     pub fn slice(&self, specs: &[IndexSpec]) -> Result<Tensor<Dyn, B, G>> {
         self.dyn_slice(specs)
     }
 
+    /// Internal alias for `slice`.
     pub fn dyn_slice(&self, specs: &[IndexSpec]) -> Result<Tensor<Dyn, B, G>> {
         let current_dims = S::dims(&self._shape);
         if specs.len() > current_dims.as_ref().len() {
-             return Err(crate::err::Error::Msg(alloc::format!(
-                 "Too many slicing specs ({}) for tensor of rank {}",
-                 specs.len(),
-                 current_dims.as_ref().len()
-             )));
+            return Err(crate::err::Error::Msg(alloc::format!(
+                "Too many slicing specs ({}) for tensor of rank {}",
+                specs.len(),
+                current_dims.as_ref().len()
+            )));
         }
 
         let mut inner = self.inner.clone();
         for (dim, spec) in specs.iter().enumerate() {
             let dim_len = current_dims.as_ref()[dim] as isize;
-            
+
             let resolve = |idx: isize| -> usize {
                 if idx < 0 {
                     (dim_len + idx) as usize
@@ -36,7 +49,7 @@ impl<S: Shape + DynShape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
                     idx as usize
                 }
             };
-            
+
             match spec {
                 IndexSpec::All => {}
                 IndexSpec::Range(start, end) => {
@@ -73,11 +86,11 @@ impl<S: Shape + DynShape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
     }
 }
 
-
-
 impl<S: Shape + DynShape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
     /// Functional `max_pool2d` operation.
-    pub fn max_pool2d<KShape, SShape, P, D>(&self) -> Result<Tensor<<S as crate::shapes::Pool2dShape<KShape, SShape, P, D>>::Output, B, G>>
+    pub fn max_pool2d<KShape, SShape, P, D>(
+        &self,
+    ) -> Result<Tensor<<S as crate::shapes::Pool2dShape<KShape, SShape, P, D>>::Output, B, G>>
     where
         KShape: typenum::Unsigned,
         SShape: typenum::Unsigned,
@@ -93,8 +106,10 @@ impl<S: Shape + DynShape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
             (P::USIZE, P::USIZE),
             (D::USIZE, D::USIZE),
         )?;
-        
-        let shape = <S as crate::shapes::Pool2dShape<KShape, SShape, P, D>>::compute_output_shape(&self._shape);
+
+        let shape = <S as crate::shapes::Pool2dShape<KShape, SShape, P, D>>::compute_output_shape(
+            &self._shape,
+        );
         Ok(Tensor::from_parts_unchecked(
             out,
             shape,
@@ -112,6 +127,13 @@ impl<S: Shape + DynShape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
 impl<S: Shape + DynShape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
     /// Reshape this tensor into explicitly provided shape `S2`.
     /// This is guaranteed at compile-time to have matching elements.
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use kindle::prelude::*;
+    /// let t = Tensor::<s![2, 3], DefaultBackend>::ones(()).unwrap();
+    /// let r = t.reshape::<s![6]>(()).unwrap();
+    /// ```
     pub fn reshape<S2>(&self, args: S2::Arg) -> Result<Tensor<S2, B, G>>
     where
         S2: Shape + DynShape,
@@ -131,7 +153,16 @@ impl<S: Shape + DynShape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
     }
 
     /// Reshapes a tensor based on python-like slicing syntax via the `idx!` macro.
-    pub fn reshape_idx<T: crate::shapes::idx::ReshapeTarget<S>>(&self) -> Result<Tensor<T::Output, B, G>> {
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use kindle::prelude::*;
+    /// let t = Tensor::<s![2, 3], DefaultBackend>::ones(()).unwrap();
+    /// let r = t.reshape_idx::<idx![6]>().unwrap();
+    /// ```
+    pub fn reshape_idx<T: crate::shapes::idx::ReshapeTarget<S>>(
+        &self,
+    ) -> Result<Tensor<T::Output, B, G>> {
         let in_shape_vec = S::dims(&self._shape);
         let out_shape_vec = T::calculate_shape(in_shape_vec.as_ref());
         let inner = B::reshape(&self.inner, &out_shape_vec)?;
@@ -144,18 +175,19 @@ impl<S: Shape + DynShape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
         ))
     }
 
-
     /// Slices a tensor based on python-like slicing syntax via the `idx!` macro.
-    pub fn slice_idx<T: crate::shapes::idx::SliceTarget<S>>(&self) -> Result<Tensor<T::Output, B, G>> {
+    pub fn slice_idx<T: crate::shapes::idx::SliceTarget<S>>(
+        &self,
+    ) -> Result<Tensor<T::Output, B, G>> {
         let in_shape_vec = S::dims(&self._shape);
         let ranges = T::calculate_bounds(in_shape_vec.as_ref());
         let inner = B::slice(&self.inner, &ranges)?;
-        
+
         let mut out_shape_vec = Vec::new();
         for &(start, end) in &ranges {
             out_shape_vec.push(end - start);
         }
-        
+
         Ok(Tensor::from_parts_unchecked(
             inner,
             T::Output::from_dyn(&out_shape_vec).unwrap(),
@@ -167,7 +199,15 @@ impl<S: Shape + DynShape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
 
     /// Try to reshape this tensor into the provided shape `S2`.
     /// This falls back to a runtime verification for dynamic shapes.
-    
+
+    /// Narrows the tensor dynamically, returning a tensor with `Dyn` shape.
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use kindle::prelude::*;
+    /// let t = Tensor::<s![10], DefaultBackend>::ones(()).unwrap();
+    /// let n = t.try_narrow(0, 2, 5).unwrap(); // shape [5]
+    /// ```
     pub fn try_narrow(self, dim: usize, start: usize, len: usize) -> Result<Tensor<Dyn, B, G>> {
         let inner = B::narrow(&self.inner, dim, start, len)?;
         let mut shape = S::dims(&self._shape).as_ref().to_vec();
@@ -181,6 +221,14 @@ impl<S: Shape + DynShape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
         })
     }
 
+    /// Squeezes the tensor dynamically by removing the dimension `dim` if its size is 1.
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use kindle::prelude::*;
+    /// let t = Tensor::<s![1, 5], DefaultBackend>::ones(()).unwrap();
+    /// let sq = t.try_squeeze(0).unwrap(); // shape [5]
+    /// ```
     pub fn try_squeeze(self, dim: usize) -> Result<Tensor<Dyn, B, G>> {
         let inner = B::squeeze(&self.inner, dim)?;
         let mut shape = S::dims(&self._shape).as_ref().to_vec();
@@ -193,7 +241,7 @@ impl<S: Shape + DynShape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
             _grad: self._grad.clone(),
         })
     }
-pub fn try_reshape<S2>(&self, args: S2::Arg) -> Result<Tensor<S2, B, G>>
+    pub fn try_reshape<S2>(&self, args: S2::Arg) -> Result<Tensor<S2, B, G>>
     where
         S2: Shape + DynShape,
         S: crate::shapes::reshape::TryReshape<S2>,
@@ -209,7 +257,11 @@ pub fn try_reshape<S2>(&self, args: S2::Arg) -> Result<Tensor<S2, B, G>>
                 op: "try_reshape",
                 expected: alloc::vec![source_numel], // We use numels here
                 got: alloc::vec![target_numel],
-                msg: alloc::format!("Reshape failed: source numel ({}) != target numel ({})", source_numel, target_numel),
+                msg: alloc::format!(
+                    "Reshape failed: source numel ({}) != target numel ({})",
+                    source_numel,
+                    target_numel
+                ),
             });
         }
 
@@ -252,12 +304,14 @@ pub fn try_reshape<S2>(&self, args: S2::Arg) -> Result<Tensor<S2, B, G>>
 
     /// Permute the tensor's dimensions by swapping `D1` and `D2`.
     /// Strongly typed output shape via `Transpose<D1, D2>`.
-    
+
     pub fn to_scalar<E: Copy>(&self) -> Result<E> {
         // Fallback generic implementation
         let bytes = B::to_bytes(&self.inner)?;
         if bytes.is_empty() {
-            return Err(crate::err::Error::Msg("Cannot convert empty tensor to scalar".to_string()));
+            return Err(crate::err::Error::Msg(
+                "Cannot convert empty tensor to scalar".to_string(),
+            ));
         }
         // Assume for tests it's either an f32 castable to bool, or a direct matching byte size.
         if core::mem::size_of::<E>() == 1 {
@@ -268,6 +322,15 @@ pub fn try_reshape<S2>(&self, args: S2::Arg) -> Result<Tensor<S2, B, G>>
         Ok(unsafe { core::ptr::read(ptr) })
     }
 
+    /// Permutes the tensor's dimensions by swapping `D1` and `D2`.
+    /// Strongly typed output shape via `Transpose<D1, D2>`.
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use kindle::prelude::*;
+    /// let t = Tensor::<s![2, 3], DefaultBackend>::ones(()).unwrap();
+    /// let tr = t.transpose::<0, 1>().unwrap(); // shape [3, 2]
+    /// ```
     pub fn transpose<const D1: usize, const D2: usize>(&self) -> Result<Tensor<S::Output, B, G>>
     where
         S: crate::shapes::Transpose<D1, D2>,
@@ -287,6 +350,13 @@ pub fn try_reshape<S2>(&self, args: S2::Arg) -> Result<Tensor<S2, B, G>>
 
     /// Flattens dimensions from `START` to `END` inclusive.
     /// Uses `ProdDim` algebraically to track shapes.
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use kindle::prelude::*;
+    /// let t = Tensor::<s![2, 3, 4], DefaultBackend>::ones(()).unwrap();
+    /// let f = t.flatten::<1, 2>().unwrap(); // shape [2, 12]
+    /// ```
     pub fn flatten<const START: usize, const END: usize>(&self) -> Result<Tensor<S::Output, B, G>>
     where
         S: crate::shapes::Flatten<START, END>,
@@ -362,13 +432,27 @@ pub fn try_reshape<S2>(&self, args: S2::Arg) -> Result<Tensor<S2, B, G>>
         ))
     }
 
-
-
-    pub fn cross_entropy_loss<S2: Shape>(&self, target: &Tensor<S2, B, G>) -> Result<Tensor<(), B, G>> {
+    /// Computes the Cross Entropy loss between predictions and target labels.
+    /// Uses the default `Mean` reduction.
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use kindle::prelude::*;
+    /// let pred = Tensor::<s![2, 10], DefaultBackend>::zeros(()).unwrap();
+    /// let target = Tensor::<s![2], DefaultBackend>::zeros(()).unwrap();
+    /// let loss = pred.cross_entropy_loss(&target).unwrap();
+    /// ```
+    pub fn cross_entropy_loss<S2: Shape>(
+        &self,
+        target: &Tensor<S2, B, G>,
+    ) -> Result<Tensor<(), B, G>> {
         self.cross_entropy_loss_with::<Mean, S2>(target)
     }
 
-    pub fn cross_entropy_loss_with<R: ReductionMode, S2: Shape>(&self, target: &Tensor<S2, B, G>) -> Result<Tensor<R::Output, B, G>> 
+    pub fn cross_entropy_loss_with<R: ReductionMode, S2: Shape>(
+        &self,
+        target: &Tensor<S2, B, G>,
+    ) -> Result<Tensor<R::Output, B, G>>
     where
         R: CrossEntropyReductionShape<S>,
     {
@@ -390,11 +474,23 @@ pub fn try_reshape<S2>(&self, args: S2::Arg) -> Result<Tensor<S2, B, G>>
         ))
     }
 
+    /// Computes the Mean Squared Error (MSE) loss.
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use kindle::prelude::*;
+    /// let pred = Tensor::<s![2], DefaultBackend>::ones(()).unwrap();
+    /// let target = Tensor::<s![2], DefaultBackend>::zeros(()).unwrap();
+    /// let loss = pred.mse_loss(&target).unwrap();
+    /// ```
     pub fn mse_loss<S2: Shape>(&self, target: &Tensor<S2, B, G>) -> Result<Tensor<(), B, G>> {
         self.mse_loss_with::<Mean, S2>(target)
     }
 
-    pub fn mse_loss_with<R: ReductionMode, S2: Shape>(&self, target: &Tensor<S2, B, G>) -> Result<Tensor<R::Output, B, G>> 
+    pub fn mse_loss_with<R: ReductionMode, S2: Shape>(
+        &self,
+        target: &Tensor<S2, B, G>,
+    ) -> Result<Tensor<R::Output, B, G>>
     where
         R: MseReductionShape<S>,
     {
@@ -417,7 +513,10 @@ pub fn try_reshape<S2>(&self, args: S2::Arg) -> Result<Tensor<S2, B, G>>
         self.l1_loss_with::<Mean, S2>(target)
     }
 
-    pub fn l1_loss_with<R: ReductionMode, S2: Shape>(&self, target: &Tensor<S2, B, G>) -> Result<Tensor<R::Output, B, G>> 
+    pub fn l1_loss_with<R: ReductionMode, S2: Shape>(
+        &self,
+        target: &Tensor<S2, B, G>,
+    ) -> Result<Tensor<R::Output, B, G>>
     where
         R: L1ReductionShape<S>,
     {
@@ -436,11 +535,17 @@ pub fn try_reshape<S2>(&self, args: S2::Arg) -> Result<Tensor<S2, B, G>>
         ))
     }
 
-    pub fn bce_with_logits_loss<S2: Shape>(&self, target: &Tensor<S2, B, G>) -> Result<Tensor<(), B, G>> {
+    pub fn bce_with_logits_loss<S2: Shape>(
+        &self,
+        target: &Tensor<S2, B, G>,
+    ) -> Result<Tensor<(), B, G>> {
         self.bce_with_logits_loss_with::<Mean, S2>(target)
     }
 
-    pub fn bce_with_logits_loss_with<R: ReductionMode, S2: Shape>(&self, target: &Tensor<S2, B, G>) -> Result<Tensor<R::Output, B, G>> 
+    pub fn bce_with_logits_loss_with<R: ReductionMode, S2: Shape>(
+        &self,
+        target: &Tensor<S2, B, G>,
+    ) -> Result<Tensor<R::Output, B, G>>
     where
         R: BceReductionShape<S>,
     {
@@ -460,7 +565,9 @@ pub fn try_reshape<S2>(&self, args: S2::Arg) -> Result<Tensor<S2, B, G>>
     }
 }
 
-impl<S: Shape, B: Backend, G: RequiresGrad, NewD: crate::prelude::Device> crate::nn::module::ToDevice<B, NewD> for Tensor<S, B, G> {
+impl<S: Shape, B: Backend, G: RequiresGrad, NewD: crate::prelude::Device>
+    crate::nn::module::ToDevice<B, NewD> for Tensor<S, B, G>
+{
     type Output = Tensor<S, B::BackendWithDevice<NewD>, G>;
     fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output> {
         let field = NewD::init(arg.clone());
@@ -475,5 +582,3 @@ impl<S: Shape, B: Backend, G: RequiresGrad, NewD: crate::prelude::Device> crate:
         ))
     }
 }
-
-

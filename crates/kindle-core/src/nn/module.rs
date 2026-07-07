@@ -13,23 +13,39 @@ pub trait StateDict<B: Backend> {
 
     /// Collects the module's state into a dictionary of dynamic tensors.
     fn state_dict(&self, prefix: &str, tensors: &mut HashMap<String, Tensor<Dyn, B>>);
-    
+
     /// Helper: Serializes this module's state to a given serializer.
-    fn save_to<S: crate::serialize::Serializer>(&self, serializer: &mut S) -> core::result::Result<(), S::Error> 
+    fn save_to<S: crate::serialize::Serializer>(
+        &self,
+        serializer: &mut S,
+    ) -> core::result::Result<(), S::Error>
     where
         <<B as Backend>::DType as DType>::Field: Default,
-        <<B as Backend>::Device as Device>::Field: Default {
+        <<B as Backend>::Device as Device>::Field: Default,
+    {
         let mut map = HashMap::new();
         self.state_dict("", &mut map);
         serializer.serialize(&map)
     }
-    
+
     /// Helper: Deserializes this module's state from a given deserializer.
-    fn load_from<D: crate::serialize::Deserializer>(&mut self, deserializer: &mut D, device: &KindleDevice) -> Result<()> 
+    fn load_from<D: crate::serialize::Deserializer>(
+        &mut self,
+        deserializer: &mut D,
+        device: &KindleDevice,
+    ) -> Result<()>
     where
         <<B as Backend>::DType as DType>::Field: Default,
-        <<B as Backend>::Device as Device>::Field: Default {
-        let map = deserializer.deserialize(device).map_err(|e| Error::ShapeMismatch { op: "Deserialization", expected: vec![], got: vec![], msg: format!("{:?}", e) })?;
+        <<B as Backend>::Device as Device>::Field: Default,
+    {
+        let map = deserializer
+            .deserialize(device)
+            .map_err(|e| Error::ShapeMismatch {
+                op: "Deserialization",
+                expected: vec![],
+                got: vec![],
+                msg: format!("{:?}", e),
+            })?;
         self.load_state_dict("", &map)
     }
 }
@@ -38,8 +54,12 @@ pub trait StateDict<B: Backend> {
 /// Usually automatically derived via `#[kindle::module]`.
 pub trait Parameters<B: Backend> {
     /// Recursively extract all trainable parameters from this module into a named map.
-    fn named_parameters(&self, prefix: &str, map: &mut std::collections::HashMap<String, B::RawVar>);
-    
+    fn named_parameters(
+        &self,
+        prefix: &str,
+        map: &mut std::collections::HashMap<String, B::RawVar>,
+    );
+
     /// Helper to retrieve all parameters as a new map.
     fn parameters(&self) -> std::collections::HashMap<String, B::RawVar> {
         let mut map = std::collections::HashMap::new();
@@ -63,43 +83,92 @@ impl<T: ToDevice<B, NewD>, B: Backend, NewD: Device> ToDevice<B, NewD> for Optio
 
 #[doc(hidden)]
 pub trait AutorefParametersFallback<B: Backend> {
-    fn maybe_parameters(&self, _phantom: core::marker::PhantomData<B>, _prefix: &str, _map: &mut std::collections::HashMap<String, B::RawVar>) {}
+    fn maybe_parameters(
+        &self,
+        _phantom: core::marker::PhantomData<B>,
+        _prefix: &str,
+        _map: &mut std::collections::HashMap<String, B::RawVar>,
+    ) {
+    }
 }
 impl<T, B: Backend> AutorefParametersFallback<B> for &&T {}
 
 #[doc(hidden)]
 pub trait AutorefParameters<B: Backend> {
-    fn maybe_parameters(&self, _phantom: core::marker::PhantomData<B>, prefix: &str, map: &mut std::collections::HashMap<String, B::RawVar>);
+    fn maybe_parameters(
+        &self,
+        _phantom: core::marker::PhantomData<B>,
+        prefix: &str,
+        map: &mut std::collections::HashMap<String, B::RawVar>,
+    );
 }
 impl<T: Parameters<B>, B: Backend> AutorefParameters<B> for &T {
     #[inline]
-    fn maybe_parameters(&self, _marker: core::marker::PhantomData<B>, prefix: &str, map: &mut std::collections::HashMap<String, B::RawVar>) {
+    fn maybe_parameters(
+        &self,
+        _marker: core::marker::PhantomData<B>,
+        prefix: &str,
+        map: &mut std::collections::HashMap<String, B::RawVar>,
+    ) {
         self.named_parameters(prefix, map);
     }
 }
 
 #[doc(hidden)]
 pub trait AutorefStateDictFallback<B: Backend> {
-    fn maybe_load_state_dict(&mut self, _phantom: core::marker::PhantomData<B>, _prefix: &str, _tensors: &HashMap<String, Tensor<Dyn, B>>) -> Result<()> { Ok(()) }
-    fn maybe_state_dict(&self, _phantom: core::marker::PhantomData<B>, _prefix: &str, _tensors: &mut HashMap<String, Tensor<Dyn, B>>) {}
+    fn maybe_load_state_dict(
+        &mut self,
+        _phantom: core::marker::PhantomData<B>,
+        _prefix: &str,
+        _tensors: &HashMap<String, Tensor<Dyn, B>>,
+    ) -> Result<()> {
+        Ok(())
+    }
+    fn maybe_state_dict(
+        &self,
+        _phantom: core::marker::PhantomData<B>,
+        _prefix: &str,
+        _tensors: &mut HashMap<String, Tensor<Dyn, B>>,
+    ) {
+    }
 }
 impl<T, B: Backend> AutorefStateDictFallback<B> for &mut &mut T {}
 impl<T, B: Backend> AutorefStateDictFallback<B> for &&T {}
 
 #[doc(hidden)]
 pub trait AutorefStateDict<B: Backend> {
-    fn maybe_load_state_dict(&mut self, _phantom: core::marker::PhantomData<B>, prefix: &str, tensors: &HashMap<String, Tensor<Dyn, B>>) -> Result<()>;
-    fn maybe_state_dict(&self, _phantom: core::marker::PhantomData<B>, prefix: &str, tensors: &mut HashMap<String, Tensor<Dyn, B>>);
+    fn maybe_load_state_dict(
+        &mut self,
+        _phantom: core::marker::PhantomData<B>,
+        prefix: &str,
+        tensors: &HashMap<String, Tensor<Dyn, B>>,
+    ) -> Result<()>;
+    fn maybe_state_dict(
+        &self,
+        _phantom: core::marker::PhantomData<B>,
+        prefix: &str,
+        tensors: &mut HashMap<String, Tensor<Dyn, B>>,
+    );
 }
 
 // For mutable operations
 impl<T: StateDict<B>, B: Backend> AutorefStateDict<B> for &mut T {
     #[inline]
-    fn maybe_load_state_dict(&mut self, _phantom: core::marker::PhantomData<B>, prefix: &str, tensors: &HashMap<String, Tensor<Dyn, B>>) -> Result<()> {
+    fn maybe_load_state_dict(
+        &mut self,
+        _phantom: core::marker::PhantomData<B>,
+        prefix: &str,
+        tensors: &HashMap<String, Tensor<Dyn, B>>,
+    ) -> Result<()> {
         (*self).load_state_dict(prefix, tensors)
     }
     #[inline]
-    fn maybe_state_dict(&self, _phantom: core::marker::PhantomData<B>, prefix: &str, tensors: &mut HashMap<String, Tensor<Dyn, B>>) {
+    fn maybe_state_dict(
+        &self,
+        _phantom: core::marker::PhantomData<B>,
+        prefix: &str,
+        tensors: &mut HashMap<String, Tensor<Dyn, B>>,
+    ) {
         (**self).state_dict(prefix, tensors)
     }
 }
@@ -107,39 +176,49 @@ impl<T: StateDict<B>, B: Backend> AutorefStateDict<B> for &mut T {
 // For immutable operations (state_dict uses &self)
 impl<T: StateDict<B>, B: Backend> AutorefStateDict<B> for &T {
     #[inline]
-    fn maybe_load_state_dict(&mut self, _phantom: core::marker::PhantomData<B>, _prefix: &str, _tensors: &HashMap<String, Tensor<Dyn, B>>) -> Result<()> {
+    fn maybe_load_state_dict(
+        &mut self,
+        _phantom: core::marker::PhantomData<B>,
+        _prefix: &str,
+        _tensors: &HashMap<String, Tensor<Dyn, B>>,
+    ) -> Result<()> {
         Ok(()) // Should not be called
     }
     #[inline]
-    fn maybe_state_dict(&self, _phantom: core::marker::PhantomData<B>, prefix: &str, tensors: &mut HashMap<String, Tensor<Dyn, B>>) {
+    fn maybe_state_dict(
+        &self,
+        _phantom: core::marker::PhantomData<B>,
+        prefix: &str,
+        tensors: &mut HashMap<String, Tensor<Dyn, B>>,
+    ) {
         (*self).state_dict(prefix, tensors)
     }
 }
 
 /// A generic Neural Network Layer or Module.
 /// Capable of taking an input and returning an output or error.
-/// 
+///
 /// `Module` is the fundamental building block of neural networks in Kindle.
 /// Any layer, from a simple ReLU to an entire ResNet architecture, implements `Module`.
-/// 
+///
 /// ## Deriving Modules
-/// 
+///
 /// While you can implement `Module` manually, the recommended approach is to use the `#[module]` attribute macro
 /// provided by `kindle-macros`. This automatically derives `Parameters`, `StateDict`, and generates structural boilerplate.
-/// 
+///
 /// ```rust,ignore
 /// use kindle::prelude::*;
-/// 
+///
 /// #[module]
 /// pub struct MyLayer<B: Backend> {
 ///     weight: Param<Tensor<s![128, 128], B>>,
 ///     bias: Param<Tensor<s![128], B>>,
 /// }
-/// 
+///
 /// impl<B: Backend> Module<Tensor<s![1, 128], B>> for MyLayer<B> {
 ///     type Output = Tensor<s![1, 128], B>;
 ///     type Error = Error;
-/// 
+///
 ///     fn forward(&self, x: Tensor<s![1, 128], B>) -> Result<Self::Output> {
 ///         // Custom logic here
 ///         Ok(x)
@@ -189,7 +268,11 @@ where
     L1: Parameters<B>,
     L2: Parameters<B>,
 {
-    fn named_parameters(&self, prefix: &str, map: &mut std::collections::HashMap<String, B::RawVar>) {
+    fn named_parameters(
+        &self,
+        prefix: &str,
+        map: &mut std::collections::HashMap<String, B::RawVar>,
+    ) {
         self.0.named_parameters(&format!("{}0.", prefix), map);
         self.1.named_parameters(&format!("{}1.", prefix), map);
     }
@@ -242,7 +325,12 @@ impl<T: ?Sized, B: Backend> Parameters<B> for core::marker::PhantomData<T>
 where
     T: crate::prelude::DType,
 {
-    fn named_parameters(&self, _prefix: &str, _map: &mut std::collections::HashMap<String, B::RawVar>) {}
+    fn named_parameters(
+        &self,
+        _prefix: &str,
+        _map: &mut std::collections::HashMap<String, B::RawVar>,
+    ) {
+    }
 }
 impl<T: ?Sized, B: Backend> StateDict<B> for core::marker::PhantomData<T>
 where
@@ -259,7 +347,11 @@ where
 }
 
 impl<T: Parameters<B>, B: Backend> Parameters<B> for Option<T> {
-    fn named_parameters(&self, prefix: &str, map: &mut std::collections::HashMap<String, B::RawVar>) {
+    fn named_parameters(
+        &self,
+        prefix: &str,
+        map: &mut std::collections::HashMap<String, B::RawVar>,
+    ) {
         if let Some(v) = self {
             v.named_parameters(prefix, map);
         }

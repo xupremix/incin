@@ -1,19 +1,22 @@
 //! Binary tensor operations with static and dynamic shape checking.
 //!
 //! This module provides strict element-wise binary operations (`add`, `sub`, `mul`, `div`)
-//! that require exactly matching shapes at compile time via the `ShapeEq` trait. 
-//! 
-//! It also provides broadcasting variants (`broadcast_add`, etc.) and implements standard 
-//! `core::ops` traits (like `std::ops::Add`) which automatically leverage compile-time 
+//! that require exactly matching shapes at compile time via the `ShapeEq` trait.
+//!
+//! It also provides broadcasting variants (`broadcast_add`, etc.) and implements standard
+//! `core::ops` traits (like `std::ops::Add`) which automatically leverage compile-time
 //! broadcast shape resolution (`BroadcastShape`).
-use crate::tensor::ops::*;
 use crate::prelude::{Backend, RequiresGrad, Result, Shape, Tensor};
-
+use crate::tensor::ops::*;
 
 macro_rules! impl_binary_op {
-    ($trait_name:ident, $method:ident, $backend_method:ident) => {
+    (
+        $(#[$meta:meta])*
+        $trait_name:ident, $method:ident, $backend_method:ident
+    ) => {
         // Tensor op Tensor → Result<Tensor> (owned)
         impl<S: Shape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
+            $(#[$meta])*
             pub fn $method<S2: Shape, G2: RequiresGrad>(
                 &self,
                 rhs: &Tensor<S2, B, G2>,
@@ -35,14 +38,65 @@ macro_rules! impl_binary_op {
     };
 }
 
-impl_binary_op!(Add, add, add);
-impl_binary_op!(Sub, sub, sub);
-impl_binary_op!(Mul, mul, mul);
-impl_binary_op!(Div, div, div);
+impl_binary_op!(
+    /// Adds another tensor element-wise.
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use kindle::prelude::*;
+    /// let a = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
+    /// let b = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
+    /// let c = a.add(&b).unwrap(); // Elements are 2.0
+    /// ```
+    Add, add, add
+);
+
+impl_binary_op!(
+    /// Subtracts another tensor element-wise.
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use kindle::prelude::*;
+    /// let a = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
+    /// let b = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
+    /// let c = a.sub(&b).unwrap(); // Elements are 0.0
+    /// ```
+    Sub, sub, sub
+);
+
+impl_binary_op!(
+    /// Multiplies by another tensor element-wise.
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use kindle::prelude::*;
+    /// let a = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
+    /// let b = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
+    /// let c = a.mul(&b).unwrap(); // Elements are 1.0
+    /// ```
+    Mul, mul, mul
+);
+
+impl_binary_op!(
+    /// Divides by another tensor element-wise.
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use kindle::prelude::*;
+    /// let a = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
+    /// let b = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
+    /// let c = a.div(&b).unwrap(); // Elements are 1.0
+    /// ```
+    Div, div, div
+);
 
 macro_rules! impl_broadcast_binary_op {
-    ($trait_name:ident, $method:ident, $backend_method:ident) => {
+    (
+        $(#[$meta:meta])*
+        $trait_name:ident, $method:ident, $backend_method:ident
+    ) => {
         impl<S1: Shape + crate::shapes::DynShape, B: Backend, G: RequiresGrad> Tensor<S1, B, G> {
+            $(#[$meta])*
             #[inline]
             pub fn $method<S2>(&self, rhs: &Tensor<S2, B, G>) -> Result<Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, G>>
             where
@@ -65,21 +119,73 @@ macro_rules! impl_broadcast_binary_op {
     };
 }
 
-impl_broadcast_binary_op!(BroadcastAdd, broadcast_add, add);
-impl_broadcast_binary_op!(BroadcastSub, broadcast_sub, sub);
-impl_broadcast_binary_op!(BroadcastMul, broadcast_mul, mul);
-impl_broadcast_binary_op!(BroadcastDiv, broadcast_div, div);
+impl_broadcast_binary_op!(
+    /// Adds two tensors, broadcasting their shapes if necessary according to NumPy semantics.
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use kindle::prelude::*;
+    /// let a = Tensor::<s![2, 1], DefaultBackend>::ones(()).unwrap();
+    /// let b = Tensor::<s![1, 2], DefaultBackend>::ones(()).unwrap();
+    /// let c = a.broadcast_add(&b).unwrap(); // shape is [2, 2]
+    /// ```
+    BroadcastAdd, broadcast_add, add
+);
 
+impl_broadcast_binary_op!(
+    /// Subtracts the right tensor from the left tensor, broadcasting shapes if necessary.
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use kindle::prelude::*;
+    /// let a = Tensor::<s![2, 1], DefaultBackend>::ones(()).unwrap();
+    /// let b = Tensor::<s![1, 2], DefaultBackend>::ones(()).unwrap();
+    /// let c = a.broadcast_sub(&b).unwrap(); // shape is [2, 2]
+    /// ```
+    BroadcastSub, broadcast_sub, sub
+);
+
+impl_broadcast_binary_op!(
+    /// Multiplies two tensors element-wise, broadcasting shapes if necessary.
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use kindle::prelude::*;
+    /// let a = Tensor::<s![2, 1], DefaultBackend>::ones(()).unwrap();
+    /// let b = Tensor::<s![1, 2], DefaultBackend>::ones(()).unwrap();
+    /// let c = a.broadcast_mul(&b).unwrap(); // shape is [2, 2]
+    /// ```
+    BroadcastMul, broadcast_mul, mul
+);
+
+impl_broadcast_binary_op!(
+    /// Divides the left tensor by the right tensor, broadcasting shapes if necessary.
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use kindle::prelude::*;
+    /// let a = Tensor::<s![2, 1], DefaultBackend>::ones(()).unwrap();
+    /// let b = Tensor::<s![1, 2], DefaultBackend>::ones(()).unwrap();
+    /// let c = a.broadcast_div(&b).unwrap(); // shape is [2, 2]
+    /// ```
+    BroadcastDiv, broadcast_div, div
+);
 
 macro_rules! impl_std_ops {
     ($trait:ident, $method:ident, $backend_method:ident) => {
         // Tensor + Tensor
-        impl<S1: Shape + crate::shapes::DynShape, S2: Shape + crate::shapes::DynShape, B: Backend, G: RequiresGrad> core::ops::$trait<Tensor<S2, B, G>> for Tensor<S1, B, G>
+        impl<
+            S1: Shape + crate::shapes::DynShape,
+            S2: Shape + crate::shapes::DynShape,
+            B: Backend,
+            G: RequiresGrad,
+        > core::ops::$trait<Tensor<S2, B, G>> for Tensor<S1, B, G>
         where
             S1: crate::shapes::broadcast::BroadcastShape<S2>,
             <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape,
         {
-            type Output = Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, G>;
+            type Output =
+                Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, G>;
             #[inline]
             fn $method(self, rhs: Tensor<S2, B, G>) -> Self::Output {
                 self.$backend_method(&rhs).unwrap()
@@ -87,12 +193,20 @@ macro_rules! impl_std_ops {
         }
 
         // &Tensor + &Tensor
-        impl<'a, 'b, S1: Shape + crate::shapes::DynShape, S2: Shape + crate::shapes::DynShape, B: Backend, G: RequiresGrad> core::ops::$trait<&'b Tensor<S2, B, G>> for &'a Tensor<S1, B, G>
+        impl<
+            'a,
+            'b,
+            S1: Shape + crate::shapes::DynShape,
+            S2: Shape + crate::shapes::DynShape,
+            B: Backend,
+            G: RequiresGrad,
+        > core::ops::$trait<&'b Tensor<S2, B, G>> for &'a Tensor<S1, B, G>
         where
             S1: crate::shapes::broadcast::BroadcastShape<S2>,
             <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape,
         {
-            type Output = Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, G>;
+            type Output =
+                Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, G>;
             #[inline]
             fn $method(self, rhs: &'b Tensor<S2, B, G>) -> Self::Output {
                 self.$backend_method(rhs).unwrap()
@@ -100,12 +214,19 @@ macro_rules! impl_std_ops {
         }
 
         // Tensor + &Tensor
-        impl<'a, S1: Shape + crate::shapes::DynShape, S2: Shape + crate::shapes::DynShape, B: Backend, G: RequiresGrad> core::ops::$trait<&'a Tensor<S2, B, G>> for Tensor<S1, B, G>
+        impl<
+            'a,
+            S1: Shape + crate::shapes::DynShape,
+            S2: Shape + crate::shapes::DynShape,
+            B: Backend,
+            G: RequiresGrad,
+        > core::ops::$trait<&'a Tensor<S2, B, G>> for Tensor<S1, B, G>
         where
             S1: crate::shapes::broadcast::BroadcastShape<S2>,
             <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape,
         {
-            type Output = Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, G>;
+            type Output =
+                Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, G>;
             #[inline]
             fn $method(self, rhs: &'a Tensor<S2, B, G>) -> Self::Output {
                 self.$backend_method(rhs).unwrap()
@@ -113,12 +234,19 @@ macro_rules! impl_std_ops {
         }
 
         // &Tensor + Tensor
-        impl<'a, S1: Shape + crate::shapes::DynShape, S2: Shape + crate::shapes::DynShape, B: Backend, G: RequiresGrad> core::ops::$trait<Tensor<S2, B, G>> for &'a Tensor<S1, B, G>
+        impl<
+            'a,
+            S1: Shape + crate::shapes::DynShape,
+            S2: Shape + crate::shapes::DynShape,
+            B: Backend,
+            G: RequiresGrad,
+        > core::ops::$trait<Tensor<S2, B, G>> for &'a Tensor<S1, B, G>
         where
             S1: crate::shapes::broadcast::BroadcastShape<S2>,
             <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape,
         {
-            type Output = Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, G>;
+            type Output =
+                Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, G>;
             #[inline]
             fn $method(self, rhs: Tensor<S2, B, G>) -> Self::Output {
                 self.$backend_method(&rhs).unwrap()

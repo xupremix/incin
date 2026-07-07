@@ -1,5 +1,3 @@
-
-
 // import_model! reads the safetensors file AT COMPILE TIME to build the nested module struct.
 // For this example to compile, `resnet18.safetensors` must exist locally during compilation.
 // In a real workflow, you would typically download it once in a build.rs script,
@@ -28,5 +26,7 @@
 // }
 
 fn main() {
-    println!("See source code for Hub import example. You need a local .safetensors file for the macro to parse at compile time!");
+    println!(
+        "See source code for Hub import example. You need a local .safetensors file for the macro to parse at compile time!"
+    );
 }

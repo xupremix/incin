@@ -1,5 +1,5 @@
+use kindle::nn::{Conv2d, Linear};
 use kindle::prelude::*;
-use kindle::nn::{Linear, Conv2d};
 use kindle_backends::candle::CandleBackend;
 
 type B = CandleBackend<f32, kindle::prelude::Cpu>;

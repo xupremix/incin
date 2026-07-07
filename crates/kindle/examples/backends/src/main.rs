@@ -1,5 +1,5 @@
-use kindle::{Tensor, DefaultDevice};
 use kindle::prelude::*;
+use kindle::{DefaultDevice, Tensor};
 
 fn main() -> Result<()> {
     // 1. Using the default Candle Backend

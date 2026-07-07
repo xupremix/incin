@@ -143,26 +143,51 @@ impl Graph {
         Self::default()
     }
 
-    pub fn add_value(&mut self, shape: Vec<usize>, dtype: KindleDType, name: Option<String>) -> ValueId {
+    pub fn add_value(
+        &mut self,
+        shape: Vec<usize>,
+        dtype: KindleDType,
+        name: Option<String>,
+    ) -> ValueId {
         let id = self.next_value_id;
         self.next_value_id += 1;
-        self.values.insert(id, Value { id, shape, dtype, name });
+        self.values.insert(
+            id,
+            Value {
+                id,
+                shape,
+                dtype,
+                name,
+            },
+        );
         id
     }
 
-    pub fn add_node(&mut self, op: OpType, inputs: Vec<ValueId>, outputs: Vec<ValueId>, attributes: HashMap<String, AttributeValue>) -> NodeId {
+    pub fn add_node(
+        &mut self,
+        op: OpType,
+        inputs: Vec<ValueId>,
+        outputs: Vec<ValueId>,
+        attributes: HashMap<String, AttributeValue>,
+    ) -> NodeId {
         let id = self.next_node_id;
         self.next_node_id += 1;
-        self.nodes.push(Node { id, op, inputs, outputs, attributes });
+        self.nodes.push(Node {
+            id,
+            op,
+            inputs,
+            outputs,
+            attributes,
+        });
         id
     }
-    
+
     pub fn mark_input(&mut self, value_id: ValueId) {
         if !self.inputs.contains(&value_id) {
             self.inputs.push(value_id);
         }
     }
-    
+
     pub fn mark_output(&mut self, value_id: ValueId) {
         if !self.outputs.contains(&value_id) {
             self.outputs.push(value_id);

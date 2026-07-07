@@ -1,5 +1,5 @@
 //! # Kindle
-//! 
+//!
 //! Kindle is a lightweight, strictly-typed neural network framework for Rust, built with an emphasis on **shape safety** at compile time, while remaining fully compatible with dynamic runtime shapes. It is designed to catch tensor dimension mismatches during compilation using Rust's powerful type system, rather than failing at runtime.
 //!
 //! ## Key Features
@@ -10,31 +10,31 @@
 //! * **Zero-Cost Abstractions**: The static shape information (`typenum`) exists entirely in the type system and evaporates at runtime, introducing zero overhead to the underlying backend operations.
 //!
 //! ## Quick Start
-//! 
+//!
 //! Basic tensor creation and operations:
-//! 
+//!
 //! ```rust
 //! use kindle::prelude::*;
-//! 
+//!
 //! // Create a backend alias for convenience (requires `candle` feature)
 //! type Backend = kindle_backends::candle::CandleBackend<f32, Cpu>;
-//! 
+//!
 //! // Create a statically shaped tensor: (Batch=2, Channels=3, Height=224, Width=224)
 //! let x = Tensor::<s![2, 3, 224, 224], Backend>::zeros(()).unwrap();
-//! 
+//!
 //! // Dynamic shapes are also supported using the `Dyn` type:
 //! let y = Tensor::<Dyn, Backend>::ones(vec![2, 3, 224, 224]).unwrap();
 //! ```
-//! 
+//!
 //! ## Neural Network Modules
-//! 
+//!
 //! Building and running a model is straightforward using the `#[module]` attribute and the `seq!` macro:
-//! 
+//!
 //! ```rust,no_run
 //! use kindle::prelude::*;
-//! 
+//!
 //! type Backend = kindle_backends::candle::CandleBackend<f32, Cpu>;
-//! 
+//!
 //! #[module]
 //! pub struct MLP {
 //!     net: Sequential<
@@ -42,7 +42,7 @@
 //!         Sequential<ReLU, Linear<s![256, 10], Backend>>
 //!     >,
 //! }
-//! 
+//!
 //! impl MLP {
 //!     pub fn new() -> Result<Self> {
 //!         Ok(Self {
@@ -53,8 +53,8 @@
 //!             )
 //!         })
 //!     }
-//! 
-//!     pub fn forward(&self, x: Tensor<s![2, 768], Backend>) -> Result<Tensor<s![2, 10], Backend>> 
+//!
+//!     pub fn forward(&self, x: Tensor<s![2, 768], Backend>) -> Result<Tensor<s![2, 10], Backend>>
 //!     {
 //!         self.net.forward(x)
 //!     }
@@ -62,16 +62,16 @@
 //! ```
 //!
 //! ## ONNX Import
-//! 
+//!
 //! Kindle can automatically generate a strongly-typed Rust struct representing an ONNX graph at compile time:
-//! 
+//!
 //! ```rust,no_run
 //! use kindle::prelude::*;
-//! 
+//!
 //! // Reads the ONNX file at compile time, parses the graph, and generates
 //! // a struct `ResNet18` with all weights, biases, and a fully typed `forward` method.
 //! import_model!("resnet18.onnx", ResNet18);
-//! 
+//!
 //! fn main() {
 //!     // The generated struct requires you to provide the parameters,
 //!     // typically loaded via safetensors or other deserializers.
@@ -82,7 +82,7 @@
 pub use kindle_backends::*;
 pub use kindle_core::*;
 
-pub use kindle_macros::{module, import_model};
+pub use kindle_macros::{import_model, module};
 
 pub mod hub {
     pub use kindle_data::hub::*;
@@ -103,11 +103,8 @@ pub type DefaultBackend = kindle_backends::candle::CandleBackend<f32, DefaultDev
 pub type DefaultBackend = (); // Fallback
 
 #[cfg(feature = "candle")]
-pub type Tensor<
-    S,
-    B = DefaultBackend,
-    G = kindle_core::prelude::Grad,
-> = kindle_core::prelude::Tensor<S, B, G>;
+pub type Tensor<S, B = DefaultBackend, G = kindle_core::prelude::Grad> =
+    kindle_core::prelude::Tensor<S, B, G>;
 
 #[cfg(not(feature = "candle"))]
 pub type Tensor<
@@ -141,8 +138,10 @@ pub mod prelude {
 
     // We intentionally overshadow kindle_core::Tensor and NN modules with our aliased versions
     pub use super::Tensor;
-    pub use super::{Linear, Conv1d, Conv2d, BatchNorm2d, LayerNorm, AvgPool2d, MaxPool2d, Param, DefaultBackend};
-    pub use super::{RNNCell, RNN, Embedding};
+    pub use super::{
+        AvgPool2d, BatchNorm2d, Conv1d, Conv2d, DefaultBackend, LayerNorm, Linear, MaxPool2d, Param,
+    };
+    pub use super::{Embedding, RNN, RNNCell};
 }
 
 #[cfg(test)]

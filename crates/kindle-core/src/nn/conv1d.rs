@@ -11,7 +11,6 @@ pub struct Conv1d<S: Conv1dShape, B: Backend> {
     _phantom: core::marker::PhantomData<(S, B)>,
 }
 
-
 pub trait Conv1dShape: Shape + DynShape {
     type OutC: Dim;
     type InC: Dim;
@@ -28,7 +27,15 @@ pub trait Conv1dShape: Shape + DynShape {
     fn build_args(target: Self::Target) -> (usize, usize, Self::WeightArg, Self::BiasArg);
 }
 
-impl<OutC: Dim, InC: Dim, K: Unsigned + Dim<Arg=()>, S: Unsigned + Dim<Arg=()>, P: Unsigned + Dim<Arg=()>, D: Unsigned + Dim<Arg=()>> Conv1dShape for (OutC, InC, K, S, P, D) {
+impl<
+    OutC: Dim,
+    InC: Dim,
+    K: Unsigned + Dim<Arg = ()>,
+    S: Unsigned + Dim<Arg = ()>,
+    P: Unsigned + Dim<Arg = ()>,
+    D: Unsigned + Dim<Arg = ()>,
+> Conv1dShape for (OutC, InC, K, S, P, D)
+{
     type OutC = OutC;
     type InC = InC;
     type K = K;
@@ -48,7 +55,7 @@ impl<OutC: Dim, InC: Dim, K: Unsigned + Dim<Arg=()>, S: Unsigned + Dim<Arg=()>, 
         (
             out_channels,
             in_channels,
-            (target.0, target.1, K::from_arg(Default::default()).arg()),
+            (target.0, target.1, K::from_arg(()).arg()),
             (Default::default(),),
         )
     }
@@ -59,9 +66,6 @@ where
     B::DType: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
-    
-
-    
     pub fn new() -> Result<Self>
     where
         (): crate::tensor::arg_into::ArgInto<S::Target>,
@@ -72,7 +76,7 @@ where
     pub fn new_dyn<A: crate::tensor::arg_into::ArgInto<S::Target>>(args: A) -> Result<Self> {
         let target = args.into_arg();
         let (_cout, _cin, w_args, b_args) = S::build_args(target);
-        
+
         let w_args_data = crate::tensor::arg_into::TensorArgsData {
             shape: w_args,
             dtype: (),
@@ -88,14 +92,21 @@ where
 
         let weight = Param::<S::WeightShape, B>::zeros_raw(w_args_data)?;
         let bias = Param::<S::BiasShape, B>::zeros_raw(b_args_data)?;
-        Ok(Self { weight, bias: Some(bias), _phantom: core::marker::PhantomData })
+        Ok(Self {
+            weight,
+            bias: Some(bias),
+            _phantom: core::marker::PhantomData,
+        })
     }
 }
 
 impl<I, S, B, COut: Dim, CIn: Dim> Module<Tensor<I, B>> for Conv1d<S, B>
 where
     S: Conv1dShape<OutC = COut, InC = CIn>,
-    I: Shape + DynShape + crate::shapes::SpatialConv1d<COut, S::K, S::S, S::P, S::D> + crate::shapes::HasChannels1D<CIn>,
+    I: Shape
+        + DynShape
+        + crate::shapes::SpatialConv1d<COut, S::K, S::S, S::P, S::D>
+        + crate::shapes::HasChannels1D<CIn>,
     B: Backend,
 {
     type Output = Tensor<I::Output, B>;
@@ -108,7 +119,7 @@ where
             Some(b) => Some(b.as_tensor()?.detach()),
             None => None,
         };
-        
+
         let x_shape = x.dims();
         let x_shape = x_shape.as_ref();
         let rank = x_shape.len();
@@ -131,11 +142,12 @@ where
             S::D::USIZE,
         )?;
 
-        let shape = <I as crate::shapes::SpatialConv1d<COut, S::K, S::S, S::P, S::D>>::compute_output_shape(
-            x.shape_field(),
-            weight.dims()[0],
-        );
-        
+        let shape =
+            <I as crate::shapes::SpatialConv1d<COut, S::K, S::S, S::P, S::D>>::compute_output_shape(
+                x.shape_field(),
+                weight.dims()[0],
+            );
+
         let out_shape = <I::Output as DynShape>::dims(&shape);
         let out = if rank > 3 {
             <B as Backend>::reshape(&out, out_shape.as_ref())?
@@ -148,10 +160,7 @@ where
             shape,
             x._dtype.clone(),
             weight._device.clone(),
-            x.grad_field().clone(),
+            *x.grad_field(),
         ))
     }
 }
-
-
-

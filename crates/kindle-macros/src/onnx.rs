@@ -31,15 +31,29 @@ fn get_ints_attr(node: &onnx_pb::NodeProto, name: &str) -> Option<Vec<i64>> {
     None
 }
 
-fn parse_graph_nodes(nodes: &[onnx_pb::NodeProto], shape_map: &std::collections::HashMap<String, Vec<OnnxDim>>) -> Vec<String> {
+fn parse_graph_nodes(
+    nodes: &[onnx_pb::NodeProto],
+    shape_map: &std::collections::HashMap<String, Vec<OnnxDim>>,
+) -> Vec<String> {
     let mut stmts = Vec::new();
     for node in nodes {
         let op_type = &node.op_type;
-        let out = quote::format_ident!("_{}", node.output[0].replace(".", "_").replace("/", "_").replace("-", "_"));
+        let out = quote::format_ident!(
+            "_{}",
+            node.output[0]
+                .replace(".", "_")
+                .replace("/", "_")
+                .replace("-", "_")
+        );
         let ins: Vec<_> = node
             .input
             .iter()
-            .map(|n| quote::format_ident!("_{}", n.replace(".", "_").replace("/", "_").replace("-", "_")))
+            .map(|n| {
+                quote::format_ident!(
+                    "_{}",
+                    n.replace(".", "_").replace("/", "_").replace("-", "_")
+                )
+            })
             .collect();
 
         let stmt = match op_type.as_str() {
@@ -53,7 +67,10 @@ fn parse_graph_nodes(nodes: &[onnx_pb::NodeProto], shape_map: &std::collections:
                     quote::quote! { let mut #out = #a.matmul(&#b.transpose::<0, 1>()?)?; }
                 }
             }
-            "Identity" => { let x = &ins[0]; quote::quote! { let mut #out = #x.clone(); } }
+            "Identity" => {
+                let x = &ins[0];
+                quote::quote! { let mut #out = #x.clone(); }
+            }
             "Relu" => {
                 let x = &ins[0];
                 quote::quote! { let mut #out = #x.relu()?; }
@@ -107,13 +124,16 @@ fn parse_graph_nodes(nodes: &[onnx_pb::NodeProto], shape_map: &std::collections:
                 let b = &ins[2];
                 let mean = &ins[3];
                 let var = &ins[4];
-                let epsilon = 1e-5f32; 
+                let epsilon = 1e-5f32;
                 quote::quote! { let mut #out = #x.batch_norm(&#scale, &#b, &#mean, &#var, #epsilon)?; }
             }
             "Flatten" | "Reshape" => {
                 let x = &ins[0];
                 let in_name = node.input[0].clone();
-                let in_shape = shape_map.get(&in_name).cloned().unwrap_or(vec![OnnxDim::Dyn; 4]);
+                let in_shape = shape_map
+                    .get(&in_name)
+                    .cloned()
+                    .unwrap_or(vec![OnnxDim::Dyn; 4]);
                 let rank = in_shape.len();
                 if rank == 2 {
                     quote::quote! { let mut #out = #x.flatten::<1, 1>()?; }
@@ -127,22 +147,29 @@ fn parse_graph_nodes(nodes: &[onnx_pb::NodeProto], shape_map: &std::collections:
             }
             "GlobalAveragePool" => {
                 let x = &ins[0];
-                quote::quote! { 
-                    let mut #out = #x.mean_keepdim::<2>()?; 
-                    let mut #out = #out.mean_keepdim::<3>()?; 
+                quote::quote! {
+                    let mut #out = #x.mean_keepdim::<2>()?;
+                    let mut #out = #out.mean_keepdim::<3>()?;
                 }
             }
             "If" => {
                 let cond = &ins[0];
                 let then_attr = node.attribute.iter().find(|a| a.name == "then_branch");
                 let else_attr = node.attribute.iter().find(|a| a.name == "else_branch");
-                
+
                 let then_stmts = if let Some(a) = then_attr {
                     if let Some(ref g) = a.g {
                         let stmts = parse_graph_nodes(&g.node, shape_map);
-                        let s: proc_macro2::TokenStream = stmts.join("\n").parse().unwrap_or(quote::quote!{});
+                        let s: proc_macro2::TokenStream =
+                            stmts.join("\n").parse().unwrap_or(quote::quote! {});
                         let last_out = if let Some(n) = g.node.last() {
-                            quote::format_ident!("_{}", n.output[0].replace(".", "_").replace("/", "_").replace("-", "_"))
+                            quote::format_ident!(
+                                "_{}",
+                                n.output[0]
+                                    .replace(".", "_")
+                                    .replace("/", "_")
+                                    .replace("-", "_")
+                            )
                         } else {
                             quote::format_ident!("_{}", "dummy")
                         };
@@ -150,15 +177,26 @@ fn parse_graph_nodes(nodes: &[onnx_pb::NodeProto], shape_map: &std::collections:
                             #s
                             #last_out
                         }
-                    } else { quote::quote!{ panic!("If node missing then_branch graph") } }
-                } else { quote::quote!{ panic!("If node missing then_branch") } };
+                    } else {
+                        quote::quote! { panic!("If node missing then_branch graph") }
+                    }
+                } else {
+                    quote::quote! { panic!("If node missing then_branch") }
+                };
 
                 let else_stmts = if let Some(a) = else_attr {
                     if let Some(ref g) = a.g {
                         let stmts = parse_graph_nodes(&g.node, shape_map);
-                        let s: proc_macro2::TokenStream = stmts.join("\n").parse().unwrap_or(quote::quote!{});
+                        let s: proc_macro2::TokenStream =
+                            stmts.join("\n").parse().unwrap_or(quote::quote! {});
                         let last_out = if let Some(n) = g.node.last() {
-                            quote::format_ident!("_{}", n.output[0].replace(".", "_").replace("/", "_").replace("-", "_"))
+                            quote::format_ident!(
+                                "_{}",
+                                n.output[0]
+                                    .replace(".", "_")
+                                    .replace("/", "_")
+                                    .replace("-", "_")
+                            )
                         } else {
                             quote::format_ident!("_{}", "dummy")
                         };
@@ -166,8 +204,12 @@ fn parse_graph_nodes(nodes: &[onnx_pb::NodeProto], shape_map: &std::collections:
                             #s
                             #last_out
                         }
-                    } else { quote::quote!{ panic!("If node missing else_branch graph") } }
-                } else { quote::quote!{ panic!("If node missing else_branch") } };
+                    } else {
+                        quote::quote! { panic!("If node missing else_branch graph") }
+                    }
+                } else {
+                    quote::quote! { panic!("If node missing else_branch") }
+                };
 
                 quote::quote! {
                     let mut #out = if #cond.to_scalar::<bool>()? {
@@ -181,14 +223,21 @@ fn parse_graph_nodes(nodes: &[onnx_pb::NodeProto], shape_map: &std::collections:
                 let max_trip_count = &ins[0];
                 let cond = &ins[1];
                 let v_initial = &ins[2];
-                
+
                 let body_attr = node.attribute.iter().find(|a| a.name == "body");
                 let body_stmts = if let Some(a) = body_attr {
                     if let Some(ref g) = a.g {
                         let stmts = parse_graph_nodes(&g.node, shape_map);
-                        let s: proc_macro2::TokenStream = stmts.join("\n").parse().unwrap_or(quote::quote!{});
+                        let s: proc_macro2::TokenStream =
+                            stmts.join("\n").parse().unwrap_or(quote::quote! {});
                         let last_out = if let Some(n) = g.node.last() {
-                            quote::format_ident!("_{}", n.output[0].replace(".", "_").replace("/", "_").replace("-", "_"))
+                            quote::format_ident!(
+                                "_{}",
+                                n.output[0]
+                                    .replace(".", "_")
+                                    .replace("/", "_")
+                                    .replace("-", "_")
+                            )
                         } else {
                             quote::format_ident!("_{}", "dummy")
                         };
@@ -196,8 +245,12 @@ fn parse_graph_nodes(nodes: &[onnx_pb::NodeProto], shape_map: &std::collections:
                             #s
                             #last_out
                         }
-                    } else { quote::quote!{ panic!("Loop node missing body graph") } }
-                } else { quote::quote!{ panic!("Loop node missing body attribute") } };
+                    } else {
+                        quote::quote! { panic!("Loop node missing body graph") }
+                    }
+                } else {
+                    quote::quote! { panic!("Loop node missing body attribute") }
+                };
 
                 quote::quote! {
                     let mut _trip = 0;
@@ -221,14 +274,26 @@ fn parse_graph_nodes(nodes: &[onnx_pb::NodeProto], shape_map: &std::collections:
     stmts
 }
 
-pub(crate) fn parse_onnx(rel_path: &str, root_name: &Ident, no_meta: bool) -> proc_macro2::TokenStream {
+pub(crate) fn parse_onnx(
+    rel_path: &str,
+    root_name: &Ident,
+    no_meta: bool,
+) -> proc_macro2::TokenStream {
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
     let full_path = PathBuf::from(manifest_dir).join(rel_path);
-    let meta_path = full_path.with_extension(format!("{}.kindle_meta", full_path.extension().unwrap().to_str().unwrap()));
+    let meta_path = full_path.with_extension(format!(
+        "{}.kindle_meta",
+        full_path.extension().unwrap().to_str().unwrap()
+    ));
 
-    let use_cache = if no_meta || std::env::var("KINDLE_NO_META").unwrap_or_default() == "1" || std::env::var("KINDLE_DISABLE_META_CACHE").unwrap_or_default() == "1" {
+    let use_cache = if no_meta
+        || std::env::var("KINDLE_NO_META").unwrap_or_default() == "1"
+        || std::env::var("KINDLE_DISABLE_META_CACHE").unwrap_or_default() == "1"
+    {
         false
-    } else if let (Ok(orig_meta), Ok(cache_meta)) = (fs::metadata(&full_path), fs::metadata(&meta_path)) {
+    } else if let (Ok(orig_meta), Ok(cache_meta)) =
+        (fs::metadata(&full_path), fs::metadata(&meta_path))
+    {
         if let (Ok(orig_time), Ok(cache_time)) = (orig_meta.modified(), cache_meta.modified()) {
             cache_time >= orig_time
         } else {
@@ -286,21 +351,21 @@ pub(crate) fn parse_onnx(rel_path: &str, root_name: &Ident, no_meta: bool) -> pr
             param_shapes.push(shape);
         }
 
-
         let mut shape_map = std::collections::HashMap::new();
-        
+
         let extract_shape = |v: &onnx_pb::ValueInfoProto| -> Vec<OnnxDim> {
             let mut dims = Vec::new();
-            if let Some(t) = &v.r#type {
-                if let Some(onnx_pb::type_proto::Value::TensorType(tt)) = &t.value {
-                    if let Some(shape) = &tt.shape {
-                        for dim in &shape.dim {
-                            if let Some(onnx_pb::tensor_shape_proto::dimension::Value::DimValue(val)) = &dim.value {
-                                dims.push(OnnxDim::Const(*val as usize));
-                            } else {
-                                dims.push(OnnxDim::Dyn);
-                            }
-                        }
+            if let Some(t) = &v.r#type
+                && let Some(onnx_pb::type_proto::Value::TensorType(tt)) = &t.value
+                && let Some(shape) = &tt.shape
+            {
+                for dim in &shape.dim {
+                    if let Some(onnx_pb::tensor_shape_proto::dimension::Value::DimValue(val)) =
+                        &dim.value
+                    {
+                        dims.push(OnnxDim::Const(*val as usize));
+                    } else {
+                        dims.push(OnnxDim::Dyn);
                     }
                 }
             }
@@ -321,18 +386,29 @@ pub(crate) fn parse_onnx(rel_path: &str, root_name: &Ident, no_meta: bool) -> pr
         for input in &graph.input {
             let raw_name = input.name.clone();
             if !param_set.contains(&raw_name) {
-                let shape = shape_map.get(&raw_name).cloned().unwrap_or(vec![OnnxDim::Dyn; 4]);
+                let shape = shape_map
+                    .get(&raw_name)
+                    .cloned()
+                    .unwrap_or(vec![OnnxDim::Dyn; 4]);
                 user_inputs.push((raw_name, shape));
             }
         }
 
-
         let mut forward_stmts = Vec::new();
-                for raw_name in &param_names {
-            let ident = format_ident!("_{}", raw_name.replace(".", "_").replace("/", "_").replace("-", "_"));
-            forward_stmts.push(quote! {
-                let #ident = self.#ident.as_tensor()?.into_shape::<kindle::prelude::Dyn>()?;
-            }.to_string());
+        for raw_name in &param_names {
+            let ident = format_ident!(
+                "_{}",
+                raw_name
+                    .replace(".", "_")
+                    .replace("/", "_")
+                    .replace("-", "_")
+            );
+            forward_stmts.push(
+                quote! {
+                    let #ident = self.#ident.as_tensor()?.into_shape::<kindle::prelude::Dyn>()?;
+                }
+                .to_string(),
+            );
         }
 
         let parsed_stmts = parse_graph_nodes(&graph.node, &shape_map);
@@ -342,11 +418,23 @@ pub(crate) fn parse_onnx(rel_path: &str, root_name: &Ident, no_meta: bool) -> pr
 
         let (last_output, last_output_shape) = if let Some(last_node) = graph.node.last() {
             let out_name = last_node.output[0].clone();
-            let shape = shape_map.get(&out_name).cloned().unwrap_or(vec![OnnxDim::Dyn; 4]);
-            let out_ident = format_ident!("_{}", out_name.replace(".", "_").replace("/", "_").replace("-", "_"));
+            let shape = shape_map
+                .get(&out_name)
+                .cloned()
+                .unwrap_or(vec![OnnxDim::Dyn; 4]);
+            let out_ident = format_ident!(
+                "_{}",
+                out_name
+                    .replace(".", "_")
+                    .replace("/", "_")
+                    .replace("-", "_")
+            );
             (quote! { #out_ident }.to_string(), shape)
         } else {
-            (quote! { compile_error!("ONNX graph has no nodes."); }.to_string(), vec![])
+            (
+                quote! { compile_error!("ONNX graph has no nodes."); }.to_string(),
+                vec![],
+            )
         };
 
         let m = OnnxMeta {
@@ -367,7 +455,13 @@ pub(crate) fn parse_onnx(rel_path: &str, root_name: &Ident, no_meta: bool) -> pr
     let mut fields = Vec::new();
     let mut inits = Vec::new();
     for (i, raw_name) in meta.param_names.iter().enumerate() {
-        let ident = format_ident!("_{}", raw_name.replace(".", "_").replace("/", "_").replace("-", "_"));
+        let ident = format_ident!(
+            "_{}",
+            raw_name
+                .replace(".", "_")
+                .replace("/", "_")
+                .replace("-", "_")
+        );
         let p_dims = meta.param_shapes[i].iter().map(|&d| {
             let path = quote! { kindle::prelude:: };
             crate::shape::lit_to_typenum(d, &path)
@@ -381,12 +475,18 @@ pub(crate) fn parse_onnx(rel_path: &str, root_name: &Ident, no_meta: bool) -> pr
 
     let mut user_inputs = Vec::new();
     for (raw_name, shape) in &meta.user_inputs {
-        let ident = format_ident!("_{}", raw_name.replace(".", "_").replace("/", "_").replace("-", "_"));
+        let ident = format_ident!(
+            "_{}",
+            raw_name
+                .replace(".", "_")
+                .replace("/", "_")
+                .replace("-", "_")
+        );
         let dims = shape.iter().map(|d| match d {
             OnnxDim::Const(v) => {
                 let path = quote! { kindle::prelude:: };
                 crate::shape::lit_to_typenum(*v, &path)
-            },
+            }
             OnnxDim::Dyn => quote! { usize },
         });
         user_inputs.push(quote! { #ident: kindle::prelude::Tensor<(#(#dims,)*), B> });
@@ -394,7 +494,13 @@ pub(crate) fn parse_onnx(rel_path: &str, root_name: &Ident, no_meta: bool) -> pr
 
     let mut forward_stmts = Vec::new();
     for (raw_name, _) in &meta.user_inputs {
-        let ident = format_ident!("_{}", raw_name.replace(".", "_").replace("/", "_").replace("-", "_"));
+        let ident = format_ident!(
+            "_{}",
+            raw_name
+                .replace(".", "_")
+                .replace("/", "_")
+                .replace("-", "_")
+        );
         forward_stmts.push(quote! {
             let #ident = #ident.into_shape::<kindle::prelude::Dyn>()?;
         });
@@ -409,11 +515,10 @@ pub(crate) fn parse_onnx(rel_path: &str, root_name: &Ident, no_meta: bool) -> pr
         OnnxDim::Const(v) => {
             let path = quote! { kindle::prelude:: };
             crate::shape::lit_to_typenum(*v, &path)
-        },
+        }
         OnnxDim::Dyn => quote! { usize },
     });
     let out_shape_type = quote! { (#(#out_dims,)*) };
-
 
     let forward_attr = quote! {};
 

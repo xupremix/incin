@@ -21,7 +21,6 @@ impl MyModel {
 }
 
 fn main() -> kindle::Result<()> {
-
     let _model: MyModel = MyModel {
         l1: Linear::new()?,
         l2: Linear::new()?,

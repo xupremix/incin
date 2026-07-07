@@ -1,6 +1,6 @@
-use kindle_core::prelude::*;
 use kindle_backends::Backend;
 use kindle_backends::candle::CandleBackend;
+use kindle_core::prelude::*;
 
 type CBackend = CandleBackend<f32, kindle_core::tensor::device::Cpu>;
 
