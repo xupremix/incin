@@ -87,63 +87,97 @@ pub struct Linear<S: LinearShape, B: Backend, Bias: crate::nn::optional::Optiona
 
 // Implement `Module` for `Linear` when input shape is `(Batch, In)`.
 
-impl<S: LinearShape, B: Backend, Bias: crate::nn::optional::OptionalField> Linear<S, B, Bias>
+// ── Bias = True: always creates bias ────────────────────────────────────────
+impl<S: LinearShape, B: Backend> Linear<S, B, crate::nn::optional::True>
 where
     B::DType: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
-    pub fn new_with(args: S::Target, bias_args: Bias::BuildArgs) -> Result<Self> {
+    pub fn new_with(args: S::Target) -> Result<Self> {
         let (in_f, _out_f, w_args, b_args) = S::build_args(args);
-
-        let w_args_data = crate::tensor::arg_into::TensorArgsData {
-            shape: w_args,
-            dtype: (),
-            device: (),
-            grad: (),
-        };
-        let b_args_data = crate::tensor::arg_into::TensorArgsData {
-            shape: b_args,
-            dtype: (),
-            device: (),
-            grad: (),
-        };
-
+        let init = crate::nn::init::Init::KaimingUniform { fan_in: in_f, a: f64::sqrt(5.0) };
         let weight = Param::<S::WeightShape, B>::new_init_raw(
-            w_args_data,
-            crate::nn::init::Init::KaimingUniform {
-                fan_in: in_f,
-                a: f64::sqrt(5.0),
-            },
+            crate::tensor::arg_into::TensorArgsData { shape: w_args, dtype: (), device: (), grad: () },
+            init,
         )?;
-        
-        let bias = Bias::build(
-            b_args_data,
-            crate::nn::init::Init::KaimingUniform {
-                fan_in: in_f,
-                a: f64::sqrt(5.0),
-            },
-            bias_args,
-        )?;
-        
-        Ok(Self {
-            weight,
-            bias,
-            _phantom: core::marker::PhantomData,
-        })
+        let bias = Some(Param::<S::BiasShape, B>::new_init_raw(
+            crate::tensor::arg_into::TensorArgsData { shape: b_args, dtype: (), device: (), grad: () },
+            init,
+        )?);
+        Ok(Self { weight, bias, _phantom: core::marker::PhantomData })
     }
 }
 
-impl<S, B, Bias> Linear<S, B, Bias>
+impl<S, B> Linear<S, B, crate::nn::optional::True>
 where
     S: LinearShape<Target = ((), ())>,
     B: Backend,
     B::DType: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
-    Bias: crate::nn::optional::OptionalField<BuildArgs = ()>,
 {
-    pub fn new() -> Result<Self> {
-        Self::new_with(((), ()), ())
+    pub fn new() -> Result<Self> { Self::new_with(((), ())) }
+}
+
+// ── Bias = False: never creates bias ─────────────────────────────────────────
+impl<S: LinearShape, B: Backend> Linear<S, B, crate::nn::optional::False>
+where
+    B::DType: crate::prelude::ConstDType,
+    B::Device: crate::prelude::ConstDevice,
+{
+    pub fn new_with(args: S::Target) -> Result<Self> {
+        let (in_f, _out_f, w_args, _b_args) = S::build_args(args);
+        let init = crate::nn::init::Init::KaimingUniform { fan_in: in_f, a: f64::sqrt(5.0) };
+        let weight = Param::<S::WeightShape, B>::new_init_raw(
+            crate::tensor::arg_into::TensorArgsData { shape: w_args, dtype: (), device: (), grad: () },
+            init,
+        )?;
+        Ok(Self { weight, bias: None, _phantom: core::marker::PhantomData })
     }
+}
+
+impl<S, B> Linear<S, B, crate::nn::optional::False>
+where
+    S: LinearShape<Target = ((), ())>,
+    B: Backend,
+    B::DType: crate::prelude::ConstDType,
+    B::Device: crate::prelude::ConstDevice,
+{
+    pub fn new() -> Result<Self> { Self::new_with(((), ())) }
+}
+
+// ── Bias = Dyn: decides at runtime via `has_bias: bool` ──────────────────────
+impl<S: LinearShape, B: Backend> Linear<S, B, Dyn>
+where
+    B::DType: crate::prelude::ConstDType,
+    B::Device: crate::prelude::ConstDevice,
+{
+    pub fn new_with(args: S::Target, has_bias: bool) -> Result<Self> {
+        let (in_f, _out_f, w_args, b_args) = S::build_args(args);
+        let init = crate::nn::init::Init::KaimingUniform { fan_in: in_f, a: f64::sqrt(5.0) };
+        let weight = Param::<S::WeightShape, B>::new_init_raw(
+            crate::tensor::arg_into::TensorArgsData { shape: w_args, dtype: (), device: (), grad: () },
+            init,
+        )?;
+        let bias = if has_bias {
+            Some(Param::<S::BiasShape, B>::new_init_raw(
+                crate::tensor::arg_into::TensorArgsData { shape: b_args, dtype: (), device: (), grad: () },
+                init,
+            )?)
+        } else {
+            None
+        };
+        Ok(Self { weight, bias, _phantom: core::marker::PhantomData })
+    }
+}
+
+impl<S, B> Linear<S, B, Dyn>
+where
+    S: LinearShape<Target = ((), ())>,
+    B: Backend,
+    B::DType: crate::prelude::ConstDType,
+    B::Device: crate::prelude::ConstDevice,
+{
+    pub fn new(has_bias: bool) -> Result<Self> { Self::new_with(((), ()), has_bias) }
 }
 
 // In PyTorch, input is typically (*, InF) and weight is (OutF, InF).
@@ -171,7 +205,7 @@ impl<B: Backend> Module<Tensor<Dyn, B>> for Linear<Dyn, B, crate::nn::optional::
     }
 }
 
-impl<B: Backend> Module<Tensor<Dyn, B>> for Linear<Dyn, B, crate::nn::optional::DynParam> {
+impl<B: Backend> Module<Tensor<Dyn, B>> for Linear<Dyn, B, Dyn> {
     type Output = Tensor<Dyn, B>;
     type Error = Error;
 
@@ -273,7 +307,7 @@ impl<
     OutF: Dim,
     InShape: Shape + DynShape + ReplaceLastDim<OutF> + crate::shapes::EndsWith<InF>,
     B: Backend,
-> Module<Tensor<InShape, B>> for Linear<(InF, OutF), B, crate::nn::optional::DynParam>
+> Module<Tensor<InShape, B>> for Linear<(InF, OutF), B, Dyn>
 where
     InShape::Output: DynShape,
 {

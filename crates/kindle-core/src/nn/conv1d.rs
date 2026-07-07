@@ -69,69 +69,79 @@ impl<
     }
 }
 
-impl<S: Conv1dShape, B: Backend, Bias: crate::nn::optional::OptionalField> Conv1d<S, B, Bias>
+// ── Bias = True ────────────────────────────────────────────────────────────────
+impl<S: Conv1dShape, B: Backend> Conv1d<S, B, crate::nn::optional::True>
 where
     B::DType: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
-    pub fn new_with(args: S::Target, bias_args: Bias::BuildArgs) -> Result<Self> {
+    pub fn new_with(args: S::Target) -> Result<Self> {
         let (_cout, _cin, w_args, b_args) = S::build_args(args);
-
-        let w_args_data = crate::tensor::arg_into::TensorArgsData {
-            shape: w_args,
-            dtype: (),
-            device: (),
-            grad: (),
-        };
-        let b_args_data = crate::tensor::arg_into::TensorArgsData {
-            shape: b_args,
-            dtype: (),
-            device: (),
-            grad: (),
-        };
-
-        // Standard Kaiming uniform init for conv1d
         let fan_in = _cin * S::K::USIZE;
+        let init = crate::nn::init::Init::KaimingUniform { fan_in, a: f64::sqrt(5.0) };
         let weight = Param::<S::WeightShape, B>::new_init_raw(
-            w_args_data,
-            crate::nn::init::Init::KaimingUniform {
-                fan_in,
-                a: f64::sqrt(5.0),
-            },
-        )?;
-        
-        let bias = Bias::build(
-            b_args_data,
-            crate::nn::init::Init::KaimingUniform {
-                fan_in,
-                a: f64::sqrt(5.0),
-            },
-            bias_args,
-        )?;
-        
-        Ok(Self {
-            weight,
-            bias,
-            stride: S::S::USIZE,
-            padding: S::P::USIZE,
-            dilation: S::D::USIZE,
-            groups: 1,
-            _phantom: core::marker::PhantomData,
-        })
+            crate::tensor::arg_into::TensorArgsData { shape: w_args, dtype: (), device: (), grad: () }, init)?;
+        let bias = Some(Param::<S::BiasShape, B>::new_init_raw(
+            crate::tensor::arg_into::TensorArgsData { shape: b_args, dtype: (), device: (), grad: () }, init)?);
+        Ok(Self { weight, bias, stride: S::S::USIZE, padding: S::P::USIZE, dilation: S::D::USIZE, groups: 1, _phantom: core::marker::PhantomData })
     }
 }
-
-impl<S, B, Bias> Conv1d<S, B, Bias>
+impl<S, B> Conv1d<S, B, crate::nn::optional::True>
 where
     S: Conv1dShape<Target = ((), ())>,
-    B: Backend,
+    B: Backend, B::DType: crate::prelude::ConstDType, B::Device: crate::prelude::ConstDevice,
+{
+    pub fn new() -> Result<Self> { Self::new_with(((), ())) }
+}
+
+// ── Bias = False ───────────────────────────────────────────────────────────────
+impl<S: Conv1dShape, B: Backend> Conv1d<S, B, crate::nn::optional::False>
+where
     B::DType: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
-    Bias: crate::nn::optional::OptionalField<BuildArgs = ()>,
 {
-    pub fn new() -> Result<Self> {
-        Self::new_with(((), ()), ())
+    pub fn new_with(args: S::Target) -> Result<Self> {
+        let (_cout, _cin, w_args, _b_args) = S::build_args(args);
+        let fan_in = _cin * S::K::USIZE;
+        let init = crate::nn::init::Init::KaimingUniform { fan_in, a: f64::sqrt(5.0) };
+        let weight = Param::<S::WeightShape, B>::new_init_raw(
+            crate::tensor::arg_into::TensorArgsData { shape: w_args, dtype: (), device: (), grad: () }, init)?;
+        Ok(Self { weight, bias: None, stride: S::S::USIZE, padding: S::P::USIZE, dilation: S::D::USIZE, groups: 1, _phantom: core::marker::PhantomData })
     }
+}
+impl<S, B> Conv1d<S, B, crate::nn::optional::False>
+where
+    S: Conv1dShape<Target = ((), ())>,
+    B: Backend, B::DType: crate::prelude::ConstDType, B::Device: crate::prelude::ConstDevice,
+{
+    pub fn new() -> Result<Self> { Self::new_with(((), ())) }
+}
+
+// ── Bias = Dyn ─────────────────────────────────────────────────────────────────
+impl<S: Conv1dShape, B: Backend> Conv1d<S, B, Dyn>
+where
+    B::DType: crate::prelude::ConstDType,
+    B::Device: crate::prelude::ConstDevice,
+{
+    pub fn new_with(args: S::Target, has_bias: bool) -> Result<Self> {
+        let (_cout, _cin, w_args, b_args) = S::build_args(args);
+        let fan_in = _cin * S::K::USIZE;
+        let init = crate::nn::init::Init::KaimingUniform { fan_in, a: f64::sqrt(5.0) };
+        let weight = Param::<S::WeightShape, B>::new_init_raw(
+            crate::tensor::arg_into::TensorArgsData { shape: w_args, dtype: (), device: (), grad: () }, init)?;
+        let bias = if has_bias {
+            Some(Param::<S::BiasShape, B>::new_init_raw(
+                crate::tensor::arg_into::TensorArgsData { shape: b_args, dtype: (), device: (), grad: () }, init)?)
+        } else { None };
+        Ok(Self { weight, bias, stride: S::S::USIZE, padding: S::P::USIZE, dilation: S::D::USIZE, groups: 1, _phantom: core::marker::PhantomData })
+    }
+}
+impl<S, B> Conv1d<S, B, Dyn>
+where
+    S: Conv1dShape<Target = ((), ())>,
+    B: Backend, B::DType: crate::prelude::ConstDType, B::Device: crate::prelude::ConstDevice,
+{
+    pub fn new(has_bias: bool) -> Result<Self> { Self::new_with(((), ()), has_bias) }
 }
 
 impl<I, S, B, COut: Dim, CIn: Dim> Module<Tensor<I, B>> for Conv1d<S, B, crate::nn::optional::True>
@@ -257,7 +267,7 @@ where
     }
 }
 
-impl<I, S, B, COut: Dim, CIn: Dim> Module<Tensor<I, B>> for Conv1d<S, B, crate::nn::optional::DynParam>
+impl<I, S, B, COut: Dim, CIn: Dim> Module<Tensor<I, B>> for Conv1d<S, B, Dyn>
 where
     S: Conv1dShape<OutC = COut, InC = CIn>,
     I: Shape

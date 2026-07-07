@@ -43,18 +43,38 @@ impl RnnShape for Dyn {
 ///
 /// For a multi-step sequence model, wrap this in [`RNN`].
 #[derive(Debug, Clone)]
-pub struct RNNCell<S: RnnShape, B: Backend> {
-    pub wi: Linear<(S::In, S::Out), B>,
-    pub wh: Linear<(S::Out, S::Out), B>,
+pub struct RNNCell<
+    S: RnnShape,
+    B: Backend,
+    BiasIh: crate::nn::optional::OptionalField = crate::nn::optional::True,
+    BiasHh: crate::nn::optional::OptionalField = crate::nn::optional::True,
+> {
+    pub wi: Linear<(S::In, S::Out), B, BiasIh>,
+    pub wh: Linear<(S::Out, S::Out), B, BiasHh>,
 }
 
-impl<S: RnnShape, B: Backend> RNNCell<S, B> {
-    pub fn new(wi: Linear<(S::In, S::Out), B>, wh: Linear<(S::Out, S::Out), B>) -> Self {
+impl<
+        S: RnnShape,
+        B: Backend,
+        BiasIh: crate::nn::optional::OptionalField,
+        BiasHh: crate::nn::optional::OptionalField,
+    > RNNCell<S, B, BiasIh, BiasHh>
+{
+    pub fn new(wi: Linear<(S::In, S::Out), B, BiasIh>, wh: Linear<(S::Out, S::Out), B, BiasHh>) -> Self {
         Self { wi, wh }
     }
 }
 
-impl<S: RnnShape, B: Backend> Parameters<B> for RNNCell<S, B> {
+impl<
+        S: RnnShape,
+        B: Backend,
+        BiasIh: crate::nn::optional::OptionalField,
+        BiasHh: crate::nn::optional::OptionalField,
+    > Parameters<B> for RNNCell<S, B, BiasIh, BiasHh>
+where
+    Linear<(S::In, S::Out), B, BiasIh>: Parameters<B>,
+    Linear<(S::Out, S::Out), B, BiasHh>: Parameters<B>,
+{
     fn named_parameters(
         &self,
         prefix: &str,
@@ -65,8 +85,17 @@ impl<S: RnnShape, B: Backend> Parameters<B> for RNNCell<S, B> {
     }
 }
 
-impl<S: RnnShape, Batch: Dim, B: Backend>
-    Module<(Tensor<(Batch, S::In), B>, Tensor<(Batch, S::Out), B>)> for RNNCell<S, B>
+impl<
+        S: RnnShape,
+        Batch: Dim,
+        B: Backend,
+        BiasIh: crate::nn::optional::OptionalField,
+        BiasHh: crate::nn::optional::OptionalField,
+    > Module<(Tensor<(Batch, S::In), B>, Tensor<(Batch, S::Out), B>)>
+    for RNNCell<S, B, BiasIh, BiasHh>
+where
+    Linear<(S::In, S::Out), B, BiasIh>: Module<Tensor<(Batch, S::In), B>, Output = Tensor<(Batch, S::Out), B>, Error = Error>,
+    Linear<(S::Out, S::Out), B, BiasHh>: Module<Tensor<(Batch, S::Out), B>, Output = Tensor<(Batch, S::Out), B>, Error = Error>,
 {
     type Output = Tensor<(Batch, S::Out), B>;
     type Error = Error;
@@ -108,17 +137,36 @@ impl<S: RnnShape, Batch: Dim, B: Backend>
 /// // output shape: [2, 5, 20], h_n shape: [2, 20]
 /// ```
 #[derive(Debug, Clone)]
-pub struct RNN<S: RnnShape, B: Backend> {
-    pub cell: RNNCell<S, B>,
+pub struct RNN<
+    S: RnnShape,
+    B: Backend,
+    BiasIh: crate::nn::optional::OptionalField = crate::nn::optional::True,
+    BiasHh: crate::nn::optional::OptionalField = crate::nn::optional::True,
+> {
+    pub cell: RNNCell<S, B, BiasIh, BiasHh>,
 }
 
-impl<S: RnnShape, B: Backend> RNN<S, B> {
-    pub fn new(cell: RNNCell<S, B>) -> Self {
+impl<
+        S: RnnShape,
+        B: Backend,
+        BiasIh: crate::nn::optional::OptionalField,
+        BiasHh: crate::nn::optional::OptionalField,
+    > RNN<S, B, BiasIh, BiasHh>
+{
+    pub fn new(cell: RNNCell<S, B, BiasIh, BiasHh>) -> Self {
         Self { cell }
     }
 }
 
-impl<S: RnnShape, B: Backend> Parameters<B> for RNN<S, B> {
+impl<
+        S: RnnShape,
+        B: Backend,
+        BiasIh: crate::nn::optional::OptionalField,
+        BiasHh: crate::nn::optional::OptionalField,
+    > Parameters<B> for RNN<S, B, BiasIh, BiasHh>
+where
+    RNNCell<S, B, BiasIh, BiasHh>: Parameters<B>,
+{
     fn named_parameters(
         &self,
         prefix: &str,
@@ -128,13 +176,21 @@ impl<S: RnnShape, B: Backend> Parameters<B> for RNN<S, B> {
     }
 }
 
-impl<S: RnnShape, Batch: Dim<Arg = ()>, Seq: Dim<Arg = ()>, B: Backend>
-    Module<(Tensor<(Batch, Seq, S::In), B>, Tensor<(Batch, S::Out), B>)> for RNN<S, B>
+impl<
+        S: RnnShape,
+        Batch: Dim<Arg = ()>,
+        Seq: Dim<Arg = ()>,
+        B: Backend,
+        BiasIh: crate::nn::optional::OptionalField,
+        BiasHh: crate::nn::optional::OptionalField,
+    > Module<(Tensor<(Batch, Seq, S::In), B>, Tensor<(Batch, S::Out), B>)>
+    for RNN<S, B, BiasIh, BiasHh>
 where
     S::In: Dim<Arg = ()>,
     S::Out: Dim<Arg = ()>,
     B::DType: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
+    RNNCell<S, B, BiasIh, BiasHh>: Module<(Tensor<(Batch, S::In), B>, Tensor<(Batch, S::Out), B>), Output = Tensor<(Batch, S::Out), B>, Error = Error>,
 {
     type Output = (Tensor<(Batch, Seq, S::Out), B>, Tensor<(Batch, S::Out), B>);
     type Error = Error;
@@ -162,7 +218,13 @@ where
     }
 }
 
-impl<S: RnnShape, B: Backend> crate::nn::module::StateDict<B> for RNNCell<S, B> {
+impl<
+        S: RnnShape,
+        B: Backend,
+        BiasIh: crate::nn::optional::OptionalField,
+        BiasHh: crate::nn::optional::OptionalField,
+    > crate::nn::module::StateDict<B> for RNNCell<S, B, BiasIh, BiasHh>
+{
     fn load_state_dict(
         &mut self,
         prefix: &str,
@@ -183,7 +245,13 @@ impl<S: RnnShape, B: Backend> crate::nn::module::StateDict<B> for RNNCell<S, B> 
         self.wh.state_dict(&format!("{}wh.", prefix), tensors);
     }
 }
-impl<S: RnnShape, B: Backend> crate::nn::module::StateDict<B> for RNN<S, B> {
+impl<
+        S: RnnShape,
+        B: Backend,
+        BiasIh: crate::nn::optional::OptionalField,
+        BiasHh: crate::nn::optional::OptionalField,
+    > crate::nn::module::StateDict<B> for RNN<S, B, BiasIh, BiasHh>
+{
     fn load_state_dict(
         &mut self,
         prefix: &str,
