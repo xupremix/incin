@@ -623,7 +623,9 @@ pub mod candle {
             target: &Self::RawTensor,
             _reduction: kindle_core::nn::loss::Reduction,
         ) -> Result<Self::RawTensor> {
-            candle_nn::loss::cross_entropy(pred, target)
+            let target_u32 = target.to_dtype(candle_core::DType::U32)
+                .map_err(|e| anyhow::anyhow!(e))?;
+            candle_nn::loss::cross_entropy(pred, &target_u32)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e).into())
         }
     }
