@@ -4,13 +4,24 @@ use core::marker::PhantomData;
 
 pub trait LayerNormShape: Shape + DynShape {
     type Channels: Dim;
+    type BuildArg: crate::tensor::arg_into::NotUnit + Clone;
+    type Target;
+    fn build_args(target: Self::Target) -> Self::BuildArg;
 }
 
 impl<C: Dim> LayerNormShape for (C,) {
     type Channels = C;
+    type BuildArg = (<C as Dim>::Arg,);
+    type Target = (<C as Dim>::Arg,);
+    
+    fn build_args(target: Self::Target) -> Self::BuildArg {
+        target
+    }
 }
 
-#[derive(Debug, Clone)]
+
+
+#[derive(Debug)]
 #[kindle_macros::module(internal)]
 pub struct LayerNorm<S: LayerNormShape, B: Backend> {
     pub weight: Param<(S::Channels,), B>,
@@ -18,28 +29,48 @@ pub struct LayerNorm<S: LayerNormShape, B: Backend> {
     #[module(ignore)]
     pub eps: f32,
     #[module(ignore)]
-    _phantom: PhantomData<B>,
+    _phantom: PhantomData<(S, B)>,
 }
 
 impl<S: LayerNormShape, B: Backend> LayerNorm<S, B>
 where
     B::DType: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
+    (S::Channels,): Shape<Arg = S::BuildArg>,
 {
-    pub fn new(args: <S::Channels as Dim>::Arg, eps: f32) -> Result<Self> {
-        let _c = S::Channels::from_arg(args.clone());
+    pub fn new_with(args: S::Target, eps: f32) -> Result<Self> {
+        let b_args = S::build_args(args);
+        
+        let args_data = crate::tensor::arg_into::TensorArgsData {
+            shape: b_args,
+            dtype: (),
+            device: (),
+            grad: (),
+        };
+
+        let weight = Param::<(S::Channels,), B>::ones_raw(args_data.clone())?;
+        
+        let bias = Param::<(S::Channels,), B>::zeros_raw(args_data.clone())?;
+        
         Ok(Self {
-            weight: Param::<(S::Channels,), B>::ones((args.clone(),))?,
-            bias: Param::<(S::Channels,), B>::zeros((args.clone(),))?,
+            weight,
+            bias,
             eps,
             _phantom: PhantomData,
         })
     }
+}
 
-    pub fn new_dyn(c_size: usize, eps: f32) -> Result<Self> {
-        let c = S::Channels::from_size(c_size)
-            .ok_or_else(|| Error::Msg("Invalid channel size".into()))?;
-        Self::new(c.arg(), eps)
+impl<S, B> LayerNorm<S, B>
+where
+    S: LayerNormShape<Target = ((),)>,
+    B: Backend,
+    B::DType: crate::prelude::ConstDType,
+    B::Device: crate::prelude::ConstDevice,
+    (S::Channels,): Shape<Arg = S::BuildArg>,
+{
+    pub fn new(eps: f32) -> Result<Self> {
+        Self::new_with(((),), eps)
     }
 }
 

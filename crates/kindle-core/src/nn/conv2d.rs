@@ -24,11 +24,11 @@ use typenum::Unsigned;
 /// ```
 #[derive(Debug, Clone)]
 #[kindle_macros::module(internal)]
-pub struct Conv2d<S: Conv2dShape, B: Backend> {
+pub struct Conv2d<S: Conv2dShape, B: Backend, Bias: crate::nn::optional::OptionalField = crate::nn::optional::True> {
     pub weight: Param<S::WeightShape, B>,
     pub bias: Option<Param<S::BiasShape, B>>,
     #[module(ignore)]
-    _phantom: core::marker::PhantomData<(S, B)>,
+    _phantom: core::marker::PhantomData<(S, B, Bias)>,
 }
 
 pub trait Conv2dShape: Shape + DynShape {
@@ -87,21 +87,13 @@ impl<
     }
 }
 
-impl<S: Conv2dShape, B: Backend> Conv2d<S, B>
+impl<S: Conv2dShape, B: Backend, Bias: crate::nn::optional::OptionalField> Conv2d<S, B, Bias>
 where
     B::DType: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
-    pub fn new() -> Result<Self>
-    where
-        (): crate::tensor::arg_into::ArgInto<S::Target>,
-    {
-        Self::new_dyn(())
-    }
-
-    pub fn new_dyn<A: crate::tensor::arg_into::ArgInto<S::Target>>(args: A) -> Result<Self> {
-        let target = args.into_arg();
-        let (_cout, _cin, w_args, b_args) = S::build_args(target);
+    pub fn new_with(args: S::Target, bias_args: Bias::BuildArgs) -> Result<Self> {
+        let (_cout, _cin, w_args, b_args) = S::build_args(args);
 
         let w_args_data = crate::tensor::arg_into::TensorArgsData {
             shape: w_args,
@@ -116,17 +108,169 @@ where
             grad: (),
         };
 
-        let weight = Param::<S::WeightShape, B>::zeros_raw(w_args_data)?;
-        let bias = Param::<S::BiasShape, B>::zeros_raw(b_args_data)?;
+        // Standard Kaiming uniform init for conv2d
+        let fan_in = _cin * S::K::USIZE * S::K::USIZE;
+        let weight = Param::<S::WeightShape, B>::new_init_raw(
+            w_args_data,
+            crate::nn::init::Init::KaimingUniform {
+                fan_in,
+                a: f64::sqrt(5.0),
+            },
+        )?;
+        let bias = Bias::build(
+            b_args_data,
+            crate::nn::init::Init::KaimingUniform {
+                fan_in,
+                a: f64::sqrt(5.0),
+            },
+            bias_args,
+        )?;
         Ok(Self {
             weight,
-            bias: Some(bias),
+            bias,
             _phantom: core::marker::PhantomData,
         })
     }
 }
 
-impl<I, S, B, COut: Dim, CIn: Dim> Module<Tensor<I, B>> for Conv2d<S, B>
+impl<S, B, Bias> Conv2d<S, B, Bias>
+where
+    S: Conv2dShape<Target = ((), ())>,
+    B: Backend,
+    B::DType: crate::prelude::ConstDType,
+    B::Device: crate::prelude::ConstDevice,
+    Bias: crate::nn::optional::OptionalField<BuildArgs = ()>,
+{
+    pub fn new() -> Result<Self> {
+        Self::new_with(((), ()), ())
+    }
+}
+
+impl<I, S, B, COut: Dim, CIn: Dim> Module<Tensor<I, B>> for Conv2d<S, B, crate::nn::optional::True>
+where
+    S: Conv2dShape<OutC = COut, InC = CIn>,
+    I: Shape
+        + DynShape
+        + crate::shapes::SpatialConv2d<COut, S::K, S::S, S::P, S::D>
+        + crate::shapes::HasChannels2D<CIn>,
+    B: Backend,
+{
+    type Output = Tensor<I::Output, B>;
+    type Error = Error;
+
+    #[inline]
+    fn forward(&self, x: Tensor<I, B>) -> core::result::Result<Self::Output, Error> {
+        let weight = self.weight.as_tensor()?;
+
+        let x_shape = x.dims();
+        let x_shape = x_shape.as_ref();
+        let rank = x_shape.len();
+        let batch_size: usize = x_shape[0..rank - 3].iter().product();
+        let in_channels = x_shape[rank - 3];
+        let height = x_shape[rank - 2];
+        let width = x_shape[rank - 1];
+
+        let x_inner = if rank > 4 {
+            <B as Backend>::reshape(&x.inner, &[batch_size, in_channels, height, width])?
+        } else {
+            x.inner.clone()
+        };
+
+        let out = <B as Backend>::conv2d(
+            &x_inner,
+            &weight.inner,
+            Some(self.bias.as_ref().unwrap().as_tensor()?.inner()),
+            S::S::USIZE,
+            S::P::USIZE,
+            S::D::USIZE,
+        )?;
+
+        let shape =
+            <I as crate::shapes::SpatialConv2d<COut, S::K, S::S, S::P, S::D>>::compute_output_shape(
+                x.shape_field(),
+                weight.dims()[0],
+            );
+
+        let out_shape = <I::Output as DynShape>::dims(&shape);
+        let out = if rank > 4 {
+            <B as Backend>::reshape(&out, out_shape.as_ref())?
+        } else {
+            out
+        };
+
+        Ok(Tensor::from_parts_unchecked(
+            out,
+            shape,
+            x._dtype.clone(),
+            weight._device.clone(),
+            *x.grad_field(),
+        ))
+    }
+}
+
+impl<I, S, B, COut: Dim, CIn: Dim> Module<Tensor<I, B>> for Conv2d<S, B, crate::nn::optional::False>
+where
+    S: Conv2dShape<OutC = COut, InC = CIn>,
+    I: Shape
+        + DynShape
+        + crate::shapes::SpatialConv2d<COut, S::K, S::S, S::P, S::D>
+        + crate::shapes::HasChannels2D<CIn>,
+    B: Backend,
+{
+    type Output = Tensor<I::Output, B>;
+    type Error = Error;
+
+    #[inline]
+    fn forward(&self, x: Tensor<I, B>) -> core::result::Result<Self::Output, Error> {
+        let weight = self.weight.as_tensor()?;
+
+        let x_shape = x.dims();
+        let x_shape = x_shape.as_ref();
+        let rank = x_shape.len();
+        let batch_size: usize = x_shape[0..rank - 3].iter().product();
+        let in_channels = x_shape[rank - 3];
+        let height = x_shape[rank - 2];
+        let width = x_shape[rank - 1];
+
+        let x_inner = if rank > 4 {
+            <B as Backend>::reshape(&x.inner, &[batch_size, in_channels, height, width])?
+        } else {
+            x.inner.clone()
+        };
+
+        let out = <B as Backend>::conv2d(
+            &x_inner,
+            &weight.inner,
+            None,
+            S::S::USIZE,
+            S::P::USIZE,
+            S::D::USIZE,
+        )?;
+
+        let shape =
+            <I as crate::shapes::SpatialConv2d<COut, S::K, S::S, S::P, S::D>>::compute_output_shape(
+                x.shape_field(),
+                weight.dims()[0],
+            );
+
+        let out_shape = <I::Output as DynShape>::dims(&shape);
+        let out = if rank > 4 {
+            <B as Backend>::reshape(&out, out_shape.as_ref())?
+        } else {
+            out
+        };
+
+        Ok(Tensor::from_parts_unchecked(
+            out,
+            shape,
+            x._dtype.clone(),
+            weight._device.clone(),
+            *x.grad_field(),
+        ))
+    }
+}
+
+impl<I, S, B, COut: Dim, CIn: Dim> Module<Tensor<I, B>> for Conv2d<S, B, crate::nn::optional::DynParam>
 where
     S: Conv2dShape<OutC = COut, InC = CIn>,
     I: Shape

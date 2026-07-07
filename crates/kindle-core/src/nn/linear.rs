@@ -78,28 +78,22 @@ impl LinearShape for Dyn {
 /// ```
 #[derive(Debug, Clone)]
 #[kindle_macros::module(internal)]
-pub struct Linear<S: LinearShape, B: Backend> {
+pub struct Linear<S: LinearShape, B: Backend, Bias: crate::nn::optional::OptionalField = crate::nn::optional::True> {
     pub weight: Param<S::WeightShape, B>,
     pub bias: Option<Param<S::BiasShape, B>>,
+    #[module(ignore)]
+    _phantom: core::marker::PhantomData<(S, B, Bias)>,
 }
 
 // Implement `Module` for `Linear` when input shape is `(Batch, In)`.
 
-impl<S: LinearShape, B: Backend> Linear<S, B>
+impl<S: LinearShape, B: Backend, Bias: crate::nn::optional::OptionalField> Linear<S, B, Bias>
 where
     B::DType: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
-    pub fn new() -> Result<Self>
-    where
-        (): crate::tensor::arg_into::ArgInto<S::Target>,
-    {
-        Self::new_dyn(())
-    }
-
-    pub fn new_dyn<A: crate::tensor::arg_into::ArgInto<S::Target>>(args: A) -> Result<Self> {
-        let target = args.into_arg();
-        let (in_f, _out_f, w_args, b_args) = S::build_args(target);
+    pub fn new_with(args: S::Target, bias_args: Bias::BuildArgs) -> Result<Self> {
+        let (in_f, _out_f, w_args, b_args) = S::build_args(args);
 
         let w_args_data = crate::tensor::arg_into::TensorArgsData {
             shape: w_args,
@@ -121,17 +115,34 @@ where
                 a: f64::sqrt(5.0),
             },
         )?;
-        let bias = Param::<S::BiasShape, B>::new_init_raw(
+        
+        let bias = Bias::build(
             b_args_data,
             crate::nn::init::Init::KaimingUniform {
                 fan_in: in_f,
                 a: f64::sqrt(5.0),
             },
+            bias_args,
         )?;
+        
         Ok(Self {
             weight,
-            bias: Some(bias),
+            bias,
+            _phantom: core::marker::PhantomData,
         })
+    }
+}
+
+impl<S, B, Bias> Linear<S, B, Bias>
+where
+    S: LinearShape<Target = ((), ())>,
+    B: Backend,
+    B::DType: crate::prelude::ConstDType,
+    B::Device: crate::prelude::ConstDevice,
+    Bias: crate::nn::optional::OptionalField<BuildArgs = ()>,
+{
+    pub fn new() -> Result<Self> {
+        Self::new_with(((), ()), ())
     }
 }
 
@@ -139,7 +150,28 @@ where
 // In PyTorch, input is typically (*, InF) and weight is (OutF, InF).
 
 // Dynamic input
-impl<B: Backend> Module<Tensor<Dyn, B>> for Linear<Dyn, B> {
+impl<B: Backend> Module<Tensor<Dyn, B>> for Linear<Dyn, B, crate::nn::optional::True> {
+    type Output = Tensor<Dyn, B>;
+    type Error = Error;
+
+    fn forward(&self, x: Tensor<Dyn, B>) -> core::result::Result<Tensor<Dyn, B>, Error> {
+        let weight_t = self.weight.as_tensor()?.transpose::<0, 1>()?;
+        let out = x.matmul(&weight_t)?;
+        out.add(&self.bias.as_ref().unwrap().as_tensor()?)
+    }
+}
+
+impl<B: Backend> Module<Tensor<Dyn, B>> for Linear<Dyn, B, crate::nn::optional::False> {
+    type Output = Tensor<Dyn, B>;
+    type Error = Error;
+
+    fn forward(&self, x: Tensor<Dyn, B>) -> core::result::Result<Tensor<Dyn, B>, Error> {
+        let weight_t = self.weight.as_tensor()?.transpose::<0, 1>()?;
+        x.matmul(&weight_t)
+    }
+}
+
+impl<B: Backend> Module<Tensor<Dyn, B>> for Linear<Dyn, B, crate::nn::optional::DynParam> {
     type Output = Tensor<Dyn, B>;
     type Error = Error;
 
@@ -160,7 +192,7 @@ impl<
     OutF: Dim,
     InShape: Shape + DynShape + ReplaceLastDim<OutF> + crate::shapes::EndsWith<InF>,
     B: Backend,
-> Module<Tensor<InShape, B>> for Linear<(InF, OutF), B>
+> Module<Tensor<InShape, B>> for Linear<(InF, OutF), B, crate::nn::optional::True>
 where
     InShape::Output: DynShape,
 {
@@ -171,7 +203,6 @@ where
         let dtype = x._dtype.clone();
         let device = x._device.clone();
 
-        // Resolve output shape structurally before consuming x
         let mut dims = <InShape as DynShape>::dims(x.shape_field()).into();
         let last_idx = dims.len().saturating_sub(1);
         if last_idx < dims.len() {
@@ -180,7 +211,87 @@ where
         }
         let shape = <InShape::Output as Shape>::from_dyn(&dims).unwrap();
 
-        // Convert to dyn for computation
+        let weight_dyn = self.weight.as_tensor()?.into_shape::<Dyn>()?;
+        let weight_t = weight_dyn.transpose::<0, 1>()?;
+        let x_dyn = x.into_shape::<Dyn>()?;
+        let out_dyn = x_dyn.matmul(&weight_t)?;
+        
+        let bias_dyn = self.bias.as_ref().unwrap().as_tensor()?.into_shape::<Dyn>()?;
+        let out_final = out_dyn.broadcast_add(&bias_dyn)?;
+
+        Ok(Tensor::from_parts_unchecked(
+            out_final.into_inner(),
+            shape,
+            dtype,
+            device,
+            core::marker::PhantomData,
+        ))
+    }
+}
+
+impl<
+    InF: Dim,
+    OutF: Dim,
+    InShape: Shape + DynShape + ReplaceLastDim<OutF> + crate::shapes::EndsWith<InF>,
+    B: Backend,
+> Module<Tensor<InShape, B>> for Linear<(InF, OutF), B, crate::nn::optional::False>
+where
+    InShape::Output: DynShape,
+{
+    type Output = Tensor<InShape::Output, B>;
+    type Error = Error;
+
+    fn forward(&self, x: Tensor<InShape, B>) -> core::result::Result<Self::Output, Error> {
+        let dtype = x._dtype.clone();
+        let device = x._device.clone();
+
+        let mut dims = <InShape as DynShape>::dims(x.shape_field()).into();
+        let last_idx = dims.len().saturating_sub(1);
+        if last_idx < dims.len() {
+            let w_dims = <(OutF, InF) as DynShape>::dims(self.weight.as_tensor()?.shape_field());
+            dims[last_idx] = w_dims[0];
+        }
+        let shape = <InShape::Output as Shape>::from_dyn(&dims).unwrap();
+
+        let weight_dyn = self.weight.as_tensor()?.into_shape::<Dyn>()?;
+        let weight_t = weight_dyn.transpose::<0, 1>()?;
+        let x_dyn = x.into_shape::<Dyn>()?;
+        let out_final = x_dyn.matmul(&weight_t)?;
+
+        Ok(Tensor::from_parts_unchecked(
+            out_final.into_inner(),
+            shape,
+            dtype,
+            device,
+            core::marker::PhantomData,
+        ))
+    }
+}
+
+impl<
+    InF: Dim,
+    OutF: Dim,
+    InShape: Shape + DynShape + ReplaceLastDim<OutF> + crate::shapes::EndsWith<InF>,
+    B: Backend,
+> Module<Tensor<InShape, B>> for Linear<(InF, OutF), B, crate::nn::optional::DynParam>
+where
+    InShape::Output: DynShape,
+{
+    type Output = Tensor<InShape::Output, B>;
+    type Error = Error;
+
+    fn forward(&self, x: Tensor<InShape, B>) -> core::result::Result<Self::Output, Error> {
+        let dtype = x._dtype.clone();
+        let device = x._device.clone();
+
+        let mut dims = <InShape as DynShape>::dims(x.shape_field()).into();
+        let last_idx = dims.len().saturating_sub(1);
+        if last_idx < dims.len() {
+            let w_dims = <(OutF, InF) as DynShape>::dims(self.weight.as_tensor()?.shape_field());
+            dims[last_idx] = w_dims[0];
+        }
+        let shape = <InShape::Output as Shape>::from_dyn(&dims).unwrap();
+
         let weight_dyn = self.weight.as_tensor()?.into_shape::<Dyn>()?;
         let weight_t = weight_dyn.transpose::<0, 1>()?;
         let x_dyn = x.into_shape::<Dyn>()?;

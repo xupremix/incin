@@ -65,6 +65,7 @@ pub mod module;
 pub mod param;
 pub mod rnn;
 pub mod save;
+pub mod optional;
 
 pub use activation::*;
 pub use adaptive_avg_pool2d::*;
@@ -84,3 +85,4 @@ pub use module::*;
 pub use param::*;
 pub use rnn::*;
 pub use save::*;
+pub use optional::*;

@@ -42,16 +42,16 @@ warning: unused import: `kindle_core::nn::*`
   |
   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
 
-error[E0107]: struct takes 2 generic arguments but 6 generic arguments were supplied
+error[E0107]: struct takes at most 3 generic arguments but 6 generic arguments were supplied
  --> tests/compile_fail/forward_conv1d_static_mismatch.rs:8:17
   |
 8 |     let layer = Conv1d::<3, 1, 0, 1, s![16, 3, 3], DummyBackend>::new().unwrap();
-  |                 ^^^^^^       ---------------------------------- help: remove the unnecessary generic arguments
+  |                 ^^^^^^          ------------------------------- help: remove the unnecessary generic arguments
   |                 |
-  |                 expected 2 generic arguments
+  |                 expected at most 3 generic arguments
   |
-note: struct defined here, with 2 generic parameters: `S`, `B`
+note: struct defined here, with at most 3 generic parameters: `S`, `B`, `Bias`
  --> src/nn/conv1d.rs
   |
-  | pub struct Conv1d<S: Conv1dShape, B: Backend> {
-  |            ^^^^^^ -               -
+  | pub struct Conv1d<S: Conv1dShape, B: Backend, Bias: crate::nn::optional::OptionalField = crate::nn::optional::True> {
+  |            ^^^^^^ -               -           --------------------------------------------------------------------

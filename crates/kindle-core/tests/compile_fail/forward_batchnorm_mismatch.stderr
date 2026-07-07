@@ -11,25 +11,19 @@ note: required by a bound in `BatchNorm2d`
   | pub struct BatchNorm2d<S: BatchNormShape, B: Backend> {
   |                           ^^^^^^^^^^^^^^ required by this bound in `BatchNorm2d`
 
-error[E0061]: this function takes 3 arguments but 2 arguments were supplied
+error[E0308]: arguments to this function are incorrect
  --> tests/compile_fail/forward_batchnorm_mismatch.rs:9:49
   |
 9 |     let layer: BatchNorm2d<U32, DummyBackend> = BatchNorm2d::new((), &device).unwrap();
-  |                                                 ^^^^^^^^^^^^^^^^-------------
-  |                                                                 |    |
-  |                                                                 |    expected `f32`, found `&Cpu`
-  |                                                                 argument #3 of type `f32` is missing
+  |                                                 ^^^^^^^^^^^^^^^^ --  ------- expected `f32`, found `&Cpu`
+  |                                                                  |
+  |                                                                  expected `f32`, found `()`
   |
 note: associated function defined here
  --> src/nn/batch_norm.rs
   |
-  |     pub fn new(args: <S::Channels as Dim>::Arg, eps: f32, momentum: f32) -> Result<Self> {
+  |     pub fn new(eps: f32, momentum: f32) -> Result<Self> {
   |            ^^^
-help: provide the argument
-  |
-9 -     let layer: BatchNorm2d<U32, DummyBackend> = BatchNorm2d::new((), &device).unwrap();
-9 +     let layer: BatchNorm2d<U32, DummyBackend> = BatchNorm2d::new((), /* f32 */, /* f32 */).unwrap();
-  |
 
 error[E0277]: the trait bound `UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>: BatchNormShape` is not satisfied
  --> tests/compile_fail/forward_batchnorm_mismatch.rs:9:49
@@ -54,10 +48,10 @@ error[E0277]: the trait bound `UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0
 note: required by a bound in `BatchNorm2d::<S, B>::new`
  --> src/nn/batch_norm.rs
   |
-  | impl<S: BatchNormShape, B: Backend> BatchNorm2d<S, B>
-  |         ^^^^^^^^^^^^^^ required by this bound in `BatchNorm2d::<S, B>::new`
+  |     S: BatchNormShape<Target = ((),)>,
+  |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `BatchNorm2d::<S, B>::new`
 ...
-  |     pub fn new(args: <S::Channels as Dim>::Arg, eps: f32, momentum: f32) -> Result<Self> {
+  |     pub fn new(eps: f32, momentum: f32) -> Result<Self> {
   |            --- required by a bound in this associated function
 
 error[E0599]: the method `forward` exists for struct `BatchNorm2d<UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>, DummyBackend>`, but its trait bounds were not satisfied
@@ -79,11 +73,3 @@ error[E0599]: the method `forward` exists for struct `BatchNorm2d<UInt<UInt<UInt
    = note: the following trait bounds were not satisfied:
            `UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>: BatchNormShape`
            which is required by `BatchNorm2d<UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>, DummyBackend>: Module<kindle_core::prelude::Tensor<_, DummyBackend>>`
-
-error[E0277]: the trait bound `UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>: BatchNormShape` is not satisfied
- --> tests/compile_fail/forward_batchnorm_mismatch.rs:9:66
-  |
-9 |     let layer: BatchNorm2d<U32, DummyBackend> = BatchNorm2d::new((), &device).unwrap();
-  |                                                                  ^^ the trait `BatchNormShape` is not implemented for `UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>`
-  |
-  = help: the trait `BatchNormShape` is implemented for `(C,)`

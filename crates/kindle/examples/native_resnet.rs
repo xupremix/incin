@@ -20,16 +20,16 @@ where
         device: &KindleDevice,
     ) -> Result<Self> {
         Ok(Self {
-            conv1: kindle::nn::Conv2d::<(usize, usize, U3, U1, U1, U1), B>::new_dyn((
+            conv1: kindle::nn::Conv2d::<(usize, usize, U3, U1, U1, U1), B>::new_with((
                 out_channels,
                 in_channels,
-            ))?,
-            bn1: kindle::nn::BatchNorm2d::<(usize,), B>::new(out_channels, 1e-5, 0.1)?,
-            conv2: kindle::nn::Conv2d::<(usize, usize, U3, U1, U1, U1), B>::new_dyn((
+            ), ())?,
+            bn1: kindle::nn::BatchNorm2d::<(usize,), B>::new_with((out_channels,), 1e-5, 0.1)?,
+            conv2: kindle::nn::Conv2d::<(usize, usize, U3, U1, U1, U1), B>::new_with((
                 out_channels,
                 out_channels,
-            ))?,
-            bn2: kindle::nn::BatchNorm2d::<(usize,), B>::new(out_channels, 1e-5, 0.1)?,
+            ), ())?,
+            bn2: kindle::nn::BatchNorm2d::<(usize,), B>::new_with((out_channels,), 1e-5, 0.1)?,
         })
     }
 }
@@ -62,10 +62,10 @@ where
 {
     pub fn new(num_classes: usize, device: &KindleDevice) -> Result<Self> {
         Ok(Self {
-            conv1: kindle::nn::Conv2d::<(usize, usize, U7, U2, U3, U1), B>::new_dyn((64, 3))?,
-            bn1: kindle::nn::BatchNorm2d::<(usize,), B>::new(64, 1e-5, 0.1)?,
+            conv1: kindle::nn::Conv2d::<(usize, usize, U7, U2, U3, U1), B>::new_with((64, 3), ())?,
+            bn1: kindle::nn::BatchNorm2d::<(usize,), B>::new_with((64,), 1e-5, 0.1)?,
             layer1: BasicBlock::<B>::new(64, 64, 1, device)?,
-            fc: kindle::nn::Linear::<Dyn, B>::new_dyn((64, num_classes))?,
+            fc: kindle::nn::Linear::<Dyn, B>::new_with((64, num_classes), ())?,
         })
     }
 }

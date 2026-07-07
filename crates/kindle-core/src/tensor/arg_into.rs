@@ -27,6 +27,7 @@ pub trait ArgInto<Target> {
     fn into_arg(self) -> Target;
 }
 
+#[derive(Debug, Clone)]
 pub struct TensorArgsData<S, T, D, G> {
     pub shape: S,
     pub dtype: T,

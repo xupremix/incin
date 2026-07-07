@@ -26,6 +26,15 @@ impl<In: Dim, Out: Dim> RnnShape for (In, Out) {
     }
 }
 
+impl RnnShape for Dyn {
+    type In = usize;
+    type Out = usize;
+    type Target = (usize, usize);
+    fn build_args(target: (usize, usize)) -> (usize, usize) {
+        target
+    }
+}
+
 /// A single RNN step cell computing `h_t = tanh(W_ih * x_t + W_hh * h_{t-1})`.
 ///
 /// This implements the basic Elman RNN cell (no gating mechanism). Each time step,

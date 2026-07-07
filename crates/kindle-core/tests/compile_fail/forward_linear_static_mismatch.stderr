@@ -52,7 +52,7 @@ error[E0277]: the trait bound `(): LinearShape` is not satisfied
 note: required by a bound in `kindle_core::nn::Linear`
  --> src/nn/linear.rs
   |
-  | pub struct Linear<S: LinearShape, B: Backend> {
+  | pub struct Linear<S: LinearShape, B: Backend, Bias: crate::nn::optional::OptionalField = crate::nn::optional::True> {
   |                      ^^^^^^^^^^^ required by this bound in `Linear`
 
 error[E0599]: the function or associated item `new` exists for struct `kindle_core::nn::Linear<(), DummyBackend>`, but its trait bounds were not satisfied

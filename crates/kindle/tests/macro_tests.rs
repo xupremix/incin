@@ -40,7 +40,7 @@ fn test_module_macro() -> Result<()> {
     // Verify that #[module] derived Parameters and StateDict automatically
     let layer = MyCustomLayer::<CpuBackend> {
         linear: Linear::new()?,
-        ln: LayerNorm::new((), 1e-5)?,
+        ln: LayerNorm::new(1e-5)?,
     };
 
     // Since #[module] implements Parameters, this should compile:

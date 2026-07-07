@@ -54,7 +54,7 @@ fn test_conv2d() -> Result<()> {
 
 #[test]
 fn test_layer_norm() -> Result<()> {
-    let ln = LayerNorm::<s![20], CpuBackend>::new((), 1e-5)?;
+    let ln = LayerNorm::<s![20], CpuBackend>::new(1e-5)?;
     let input = Tensor::<s![5, 10, 20], CpuBackend>::ones(())?;
 
     let out = ln.forward(input)?;
@@ -67,7 +67,7 @@ fn test_layer_norm() -> Result<()> {
 #[test]
 fn test_batch_norm2d() -> Result<()> {
     // 16 Channels
-    let bn = BatchNorm2d::<s![16], CpuBackend>::new((), 1e-5, 0.1)?;
+    let bn = BatchNorm2d::<s![16], CpuBackend>::new(1e-5, 0.1)?;
 
     // Input: Batch=2, Channels=16, H=32, W=32
     let input = Tensor::<s![2, 16, 32, 32], CpuBackend>::ones(())?;

@@ -2,7 +2,6 @@ use kindle_core::prelude::*;
 use kindle_core::tensor::backend::dummy::DummyBackend;
 use kindle_core::nn::*;
 
-#[derive(Clone, Default)]
 
 fn main() {
     let l1 = Linear::<s![10, 20], DummyBackend>::new().unwrap();

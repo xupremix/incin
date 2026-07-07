@@ -12,11 +12,11 @@ pub struct SimpleCNN {
 impl SimpleCNN {
     pub fn new() -> Result<Self> {
         // Init 16 out_channels, 1 in_channel
-        let conv = Conv2d::<(usize, usize, U3, U1, U0, U1)>::new_dyn((16, 1))?;
+        let conv = Conv2d::<(usize, usize, U3, U1, U0, U1)>::new_with((16, 1), ())?;
         let relu = ReLU;
         let features = Sequential(conv, relu);
 
-        let classifier = Linear::<Dyn>::new_dyn((16 * 26 * 26, 10))?;
+        let classifier = Linear::<Dyn>::new_with((16 * 26 * 26, 10), ())?;
 
         Ok(Self {
             features,

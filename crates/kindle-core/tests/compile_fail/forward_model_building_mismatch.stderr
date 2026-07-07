@@ -1,21 +1,18 @@
-error[E0774]: `derive` may only be applied to `struct`s, `enum`s and `union`s
-  --> tests/compile_fail/forward_model_building_mismatch.rs:5:1
-   |
- 5 |   #[derive(Clone, Default)]
-   |   ^^^^^^^^^^^^^^^^^^^^^^^^^ not applicable here
- 6 |
- 7 | / fn main() {
- 8 | |     let l1 = Linear::<s![10, 20], DummyBackend>::new().unwrap();
- 9 | |     let l2 = Linear::<s![30, 40], DummyBackend>::new().unwrap();
-...  |
-17 | |     let _y = l2.forward(x).unwrap();
-18 | | }
-   | |_- not a `struct`, `enum` or `union`
+error: cannot find macro `s` in this scope
+ --> tests/compile_fail/forward_model_building_mismatch.rs:7:23
+  |
+7 |     let l1 = Linear::<s![10, 20], DummyBackend>::new().unwrap();
+  |                       ^
+  |
+help: consider importing this macro
+  |
+1 + use kindle_macros::s;
+  |
 
 error: cannot find macro `s` in this scope
  --> tests/compile_fail/forward_model_building_mismatch.rs:8:23
   |
-8 |     let l1 = Linear::<s![10, 20], DummyBackend>::new().unwrap();
+8 |     let l2 = Linear::<s![30, 40], DummyBackend>::new().unwrap();
   |                       ^
   |
 help: consider importing this macro
@@ -24,20 +21,9 @@ help: consider importing this macro
   |
 
 error: cannot find macro `s` in this scope
- --> tests/compile_fail/forward_model_building_mismatch.rs:9:23
-  |
-9 |     let l2 = Linear::<s![30, 40], DummyBackend>::new().unwrap();
-  |                       ^
-  |
-help: consider importing this macro
-  |
-1 + use kindle_macros::s;
-  |
-
-error: cannot find macro `s` in this scope
-  --> tests/compile_fail/forward_model_building_mismatch.rs:11:26
+  --> tests/compile_fail/forward_model_building_mismatch.rs:10:26
    |
-11 |     let input = Tensor::<s![2, 10], DummyBackend>::zeros(()).unwrap();
+10 |     let input = Tensor::<s![2, 10], DummyBackend>::zeros(()).unwrap();
    |                          ^
    |
 help: consider importing this macro
@@ -54,44 +40,44 @@ warning: unused import: `kindle_core::nn::*`
   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
 
 error[E0277]: the trait bound `(): LinearShape` is not satisfied
- --> tests/compile_fail/forward_model_building_mismatch.rs:8:14
+ --> tests/compile_fail/forward_model_building_mismatch.rs:7:14
   |
-8 |     let l1 = Linear::<s![10, 20], DummyBackend>::new().unwrap();
+7 |     let l1 = Linear::<s![10, 20], DummyBackend>::new().unwrap();
   |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `LinearShape` is not implemented for `()`
   |
   = help: the trait `LinearShape` is implemented for `(InF, OutF)`
 note: required by a bound in `kindle_core::nn::Linear`
  --> src/nn/linear.rs
   |
-  | pub struct Linear<S: LinearShape, B: Backend> {
+  | pub struct Linear<S: LinearShape, B: Backend, Bias: crate::nn::optional::OptionalField = crate::nn::optional::True> {
   |                      ^^^^^^^^^^^ required by this bound in `Linear`
 
 error[E0599]: the function or associated item `new` exists for struct `kindle_core::nn::Linear<(), DummyBackend>`, but its trait bounds were not satisfied
- --> tests/compile_fail/forward_model_building_mismatch.rs:8:50
+ --> tests/compile_fail/forward_model_building_mismatch.rs:7:50
   |
-8 |     let l1 = Linear::<s![10, 20], DummyBackend>::new().unwrap();
+7 |     let l1 = Linear::<s![10, 20], DummyBackend>::new().unwrap();
   |                                                  ^^^ function or associated item cannot be called on `kindle_core::nn::Linear<(), DummyBackend>` due to unsatisfied trait bounds
   |
   = note: the following trait bounds were not satisfied:
           `(): LinearShape`
 
 error[E0277]: the trait bound `(): LinearShape` is not satisfied
- --> tests/compile_fail/forward_model_building_mismatch.rs:9:14
+ --> tests/compile_fail/forward_model_building_mismatch.rs:8:14
   |
-9 |     let l2 = Linear::<s![30, 40], DummyBackend>::new().unwrap();
+8 |     let l2 = Linear::<s![30, 40], DummyBackend>::new().unwrap();
   |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `LinearShape` is not implemented for `()`
   |
   = help: the trait `LinearShape` is implemented for `(InF, OutF)`
 note: required by a bound in `kindle_core::nn::Linear`
  --> src/nn/linear.rs
   |
-  | pub struct Linear<S: LinearShape, B: Backend> {
+  | pub struct Linear<S: LinearShape, B: Backend, Bias: crate::nn::optional::OptionalField = crate::nn::optional::True> {
   |                      ^^^^^^^^^^^ required by this bound in `Linear`
 
 error[E0599]: the function or associated item `new` exists for struct `kindle_core::nn::Linear<(), DummyBackend>`, but its trait bounds were not satisfied
- --> tests/compile_fail/forward_model_building_mismatch.rs:9:50
+ --> tests/compile_fail/forward_model_building_mismatch.rs:8:50
   |
-9 |     let l2 = Linear::<s![30, 40], DummyBackend>::new().unwrap();
+8 |     let l2 = Linear::<s![30, 40], DummyBackend>::new().unwrap();
   |                                                  ^^^ function or associated item cannot be called on `kindle_core::nn::Linear<(), DummyBackend>` due to unsatisfied trait bounds
   |
   = note: the following trait bounds were not satisfied:

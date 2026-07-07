@@ -81,6 +81,14 @@ impl<T: ToDevice<B, NewD>, B: Backend, NewD: Device> ToDevice<B, NewD> for Optio
     }
 }
 
+impl<B: Backend, NewD: Device> ToDevice<B, NewD> for () {
+    type Output = ();
+
+    fn to_device(self, _arg: &NewD::Arg) -> Result<Self::Output> {
+        Ok(())
+    }
+}
+
 #[doc(hidden)]
 pub trait AutorefParametersFallback<B: Backend> {
     fn maybe_parameters(
