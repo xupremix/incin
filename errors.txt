@@ -1,0 +1,328 @@
+warning: unused variable: `vec_ty`
+  --> crates/kindle-macros/src/module.rs:21:9
+   |
+21 |     let vec_ty = if is_internal {
+   |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_vec_ty`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `forward` is never used
+   --> crates/kindle-macros/src/module.rs:296:15
+    |
+296 | pub(crate) fn forward(_attr: TokenStream, item: TokenStream) -> TokenSt...
+    |               ^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `kindle-macros` (lib) generated 2 warnings (run `cargo fix --lib -p kindle-macros` to apply 1 suggestion)
+warning: unused import: `alloc::vec::Vec`
+ --> crates/kindle-core/src/nn/activation.rs:3:5
+  |
+3 | use alloc::vec::Vec;
+  |     ^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `alloc::vec::Vec`
+ --> crates/kindle-core/src/nn/adaptive_avg_pool2d.rs:3:5
+  |
+3 | use alloc::vec::Vec;
+  |     ^^^^^^^^^^^^^^^
+
+warning: unused import: `alloc::vec::Vec`
+ --> crates/kindle-core/src/nn/avg_pool2d.rs:3:5
+  |
+3 | use alloc::vec::Vec;
+  |     ^^^^^^^^^^^^^^^
+
+warning: unused import: `alloc::vec::Vec`
+ --> crates/kindle-core/src/nn/max_pool2d.rs:3:5
+  |
+3 | use alloc::vec::Vec;
+  |     ^^^^^^^^^^^^^^^
+
+warning: unused import: `alloc::vec::Vec`
+ --> crates/kindle-core/src/nn/module.rs:2:5
+  |
+2 | use alloc::vec::Vec;
+  |     ^^^^^^^^^^^^^^^
+
+warning: unused imports: `Backend`, `DynShape`, `Dyn`, `RequiresGrad`, `Result`, `Shape`, and `Tensor`
+ --> crates/kindle-core/src/tensor/ops/index.rs:7:22
+  |
+7 | ...de::{Backend, Dyn, DynShape, RequiresGrad, Result, Shape, Tensor};
+  |         ^^^^^^^  ^^^  ^^^^^^^^  ^^^^^^^^^^^^  ^^^^^^  ^^^^^  ^^^^^^
+
+warning: unused imports: `BceReductionShape`, `CrossEntropyReductionShape`, `L1ReductionShape`, `Mean`, `MseReductionShape`, `ReductionMode`, and `Reduction`
+ --> crates/kindle-core/src/tensor/ops/index.rs:8:23
+  |
+8 | ...::{Mean, ReductionMode, CrossEntropyReductionShape, MseReductionShape, L1ReductionShape, BceReductionShape, Reduction};
+  |       ^^^^  ^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^  ^^^^^^^^^
+
+warning: unused import: `alloc::vec::Vec`
+  --> crates/kindle-core/src/tensor/ops/index.rs:10:5
+   |
+10 | use alloc::vec::Vec;
+   |     ^^^^^^^^^^^^^^^
+
+warning: unused import: `alloc::format`
+  --> crates/kindle-core/src/tensor/ops/index.rs:11:5
+   |
+11 | use alloc::format;
+   |     ^^^^^^^^^^^^^
+
+warning: unused imports: `DynShape` and `Dyn`
+ --> crates/kindle-core/src/tensor/ops/binary.rs:8:31
+  |
+8 | use crate::prelude::{Backend, Dyn, DynShape, RequiresGrad, Result, Shape,...
+  |                               ^^^  ^^^^^^^^
+
+warning: unused imports: `BceReductionShape`, `CrossEntropyReductionShape`, `L1ReductionShape`, `Mean`, `MseReductionShape`, `ReductionMode`, and `Reduction`
+ --> crates/kindle-core/src/tensor/ops/binary.rs:9:23
+  |
+9 | ...::{Mean, ReductionMode, CrossEntropyReductionShape, MseReductionShape, L1ReductionShape, BceReductionShape, Reduction};
+  |       ^^^^  ^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^  ^^^^^^^^^
+
+warning: unused import: `alloc::vec::Vec`
+  --> crates/kindle-core/src/tensor/ops/binary.rs:11:5
+   |
+11 | use alloc::vec::Vec;
+   |     ^^^^^^^^^^^^^^^
+
+warning: unused import: `alloc::format`
+  --> crates/kindle-core/src/tensor/ops/binary.rs:12:5
+   |
+12 | use alloc::format;
+   |     ^^^^^^^^^^^^^
+
+warning: unused import: `crate::tensor::ops::*`
+ --> crates/kindle-core/src/tensor/ops/unary.rs:7:5
+  |
+7 | use crate::tensor::ops::*;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `DynShape` and `Dyn`
+ --> crates/kindle-core/src/tensor/ops/unary.rs:8:31
+  |
+8 | use crate::prelude::{Backend, Dyn, DynShape, RequiresGrad, Result, Shape,...
+  |                               ^^^  ^^^^^^^^
+
+warning: unused imports: `BceReductionShape`, `CrossEntropyReductionShape`, `L1ReductionShape`, `Mean`, `MseReductionShape`, `ReductionMode`, and `Reduction`
+ --> crates/kindle-core/src/tensor/ops/unary.rs:9:23
+  |
+9 | ...::{Mean, ReductionMode, CrossEntropyReductionShape, MseReductionShape, L1ReductionShape, BceReductionShape, Reduction};
+  |       ^^^^  ^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^  ^^^^^^^^^
+
+warning: unused import: `alloc::vec::Vec`
+  --> crates/kindle-core/src/tensor/ops/unary.rs:11:5
+   |
+11 | use alloc::vec::Vec;
+   |     ^^^^^^^^^^^^^^^
+
+warning: unused import: `alloc::format`
+  --> crates/kindle-core/src/tensor/ops/unary.rs:12:5
+   |
+12 | use alloc::format;
+   |     ^^^^^^^^^^^^^
+
+warning: unused import: `crate::tensor::ops::*`
+ --> crates/kindle-core/src/tensor/ops/reduce.rs:7:5
+  |
+7 | use crate::tensor::ops::*;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `Dyn`
+ --> crates/kindle-core/src/tensor/ops/reduce.rs:8:31
+  |
+8 | use crate::prelude::{Backend, Dyn, DynShape, RequiresGrad, Result, Shape,...
+  |                               ^^^
+
+warning: unused imports: `BceReductionShape`, `CrossEntropyReductionShape`, `L1ReductionShape`, `Mean`, `MseReductionShape`, `ReductionMode`, and `Reduction`
+ --> crates/kindle-core/src/tensor/ops/reduce.rs:9:23
+  |
+9 | ...::{Mean, ReductionMode, CrossEntropyReductionShape, MseReductionShape, L1ReductionShape, BceReductionShape, Reduction};
+  |       ^^^^  ^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^  ^^^^^^^^^
+
+warning: unused import: `alloc::vec::Vec`
+  --> crates/kindle-core/src/tensor/ops/reduce.rs:11:5
+   |
+11 | use alloc::vec::Vec;
+   |     ^^^^^^^^^^^^^^^
+
+warning: unused import: `alloc::format`
+  --> crates/kindle-core/src/tensor/ops/reduce.rs:12:5
+   |
+12 | use alloc::format;
+   |     ^^^^^^^^^^^^^
+
+warning: unused import: `alloc::format`
+  --> crates/kindle-core/src/tensor/ops/manipulation.rs:12:5
+   |
+12 | use alloc::format;
+   |     ^^^^^^^^^^^^^
+
+warning: unused import: `crate::tensor::ops::*`
+ --> crates/kindle-core/src/tensor/ops/loss.rs:7:5
+  |
+7 | use crate::tensor::ops::*;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `BceReductionShape`, `CrossEntropyReductionShape`, `L1ReductionShape`, `Mean`, `MseReductionShape`, `ReductionMode`, and `Reduction`
+ --> crates/kindle-core/src/tensor/ops/loss.rs:9:23
+  |
+9 | ...::{Mean, ReductionMode, CrossEntropyReductionShape, MseReductionShape, L1ReductionShape, BceReductionShape, Reduction};
+  |       ^^^^  ^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^  ^^^^^^^^^
+
+warning: unused import: `alloc::vec::Vec`
+  --> crates/kindle-core/src/tensor/ops/loss.rs:11:5
+   |
+11 | use alloc::vec::Vec;
+   |     ^^^^^^^^^^^^^^^
+
+warning: unused import: `alloc::format`
+  --> crates/kindle-core/src/tensor/ops/loss.rs:12:5
+   |
+12 | use alloc::format;
+   |     ^^^^^^^^^^^^^
+
+warning: unused import: `binary::*`
+ --> crates/kindle-core/src/tensor/ops/mod.rs:9:9
+  |
+9 | pub use binary::*;
+  |         ^^^^^^^^^
+
+warning: unused import: `unary::*`
+  --> crates/kindle-core/src/tensor/ops/mod.rs:10:9
+   |
+10 | pub use unary::*;
+   |         ^^^^^^^^
+
+warning: unused import: `reduce::*`
+  --> crates/kindle-core/src/tensor/ops/mod.rs:11:9
+   |
+11 | pub use reduce::*;
+   |         ^^^^^^^^^
+
+warning: unused import: `manipulation::*`
+  --> crates/kindle-core/src/tensor/ops/mod.rs:12:9
+   |
+12 | pub use manipulation::*;
+   |         ^^^^^^^^^^^^^^^
+
+warning: variable does not need to be mutable
+   --> crates/kindle-core/src/optim/mod.rs:100:21
+    |
+100 |                 let mut m_t = if let Some(m) = self.m.get(name) {
+    |                     ----^^^
+    |                     |
+    |                     help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates/kindle-core/src/optim/mod.rs:109:21
+    |
+109 |                 let mut v_t = if let Some(v) = self.v.get(name) {
+    |                     ----^^^
+    |                     |
+    |                     help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/kindle-core/src/optim/mod.rs:172:21
+    |
+172 |                 let mut m_t = if let Some(m) = self.m.get(name) {
+    |                     ----^^^
+    |                     |
+    |                     help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/kindle-core/src/optim/mod.rs:181:21
+    |
+181 |                 let mut v_t = if let Some(v) = self.v.get(name) {
+    |                     ----^^^
+    |                     |
+    |                     help: remove this `mut`
+
+    Checking kindle-core v0.1.0 (/home/xupremix/kindle/crates/kindle-core)
+warning: `kindle-core` (lib) generated 36 warnings (run `cargo fix --lib -p kindle-core` to apply 36 suggestions)
+error[E0407]: method `step_sgd` is not a member of trait `Backend`
+   --> crates/kindle-core/src/tensor/base.rs:626:9
+    |
+626 | /         fn step_sgd(_params: &mut [Self::RawVar], _grads: &Self::Grads, _lr: f64) -> Result<()> {
+627 | |             Ok(())
+628 | |         }
+    | |_________^ not a member of trait `Backend`
+
+error[E0407]: method `step_adamw` is not a member of trait `Backend`
+   --> crates/kindle-core/src/tensor/base.rs:629:9
+    |
+629 | /         fn step_adamw(_params: &mut [Self::RawVar], _grads: &Self::Grads, _lr: f64) -> Result<()> {
+630 | |             Ok(())
+631 | |         }
+    | |_________^ not a member of trait `Backend`
+
+error[E0407]: method `step_adam` is not a member of trait `Backend`
+   --> crates/kindle-core/src/tensor/base.rs:665:9
+    |
+665 | /         fn step_adam(_params: &mut [Self::RawVar], _grads: &Self::Grads, _lr: f64) -> Result<()> {
+666 | |             unimplemented!()
+667 | |         }
+    | |_________^ not a member of trait `Backend`
+
+warning: unused imports: `Backend`, `DynShape`, `Dyn`, `RequiresGrad`, `Result`, `Shape`, and `Tensor`
+ --> crates/kindle-core/src/tensor/ops/index.rs:7:22
+  |
+7 | use crate::prelude::{Backend, Dyn, DynShape, RequiresGrad, Result, Shape, Tensor};
+  |                      ^^^^^^^  ^^^  ^^^^^^^^  ^^^^^^^^^^^^  ^^^^^^  ^^^^^  ^^^^^^
+
+warning: unused imports: `BceReductionShape`, `CrossEntropyReductionShape`, `L1ReductionShape`, `Mean`, `MseReductionShape`, `ReductionMode`, and `Reduction`
+ --> crates/kindle-core/src/tensor/ops/index.rs:8:23
+  |
+8 | use crate::nn::loss::{Mean, ReductionMode, CrossEntropyReductionShape, MseReductionShape, L1ReductionShape, BceReductionShape, Reduction};
+  |                       ^^^^  ^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^  ^^^^^^^^^
+
+warning: unused imports: `DynShape` and `Dyn`
+ --> crates/kindle-core/src/tensor/ops/binary.rs:8:31
+  |
+8 | use crate::prelude::{Backend, Dyn, DynShape, RequiresGrad, Result, Shape, Tensor};
+  |                               ^^^  ^^^^^^^^
+
+warning: unused imports: `BceReductionShape`, `CrossEntropyReductionShape`, `L1ReductionShape`, `Mean`, `MseReductionShape`, `ReductionMode`, and `Reduction`
+ --> crates/kindle-core/src/tensor/ops/binary.rs:9:23
+  |
+9 | use crate::nn::loss::{Mean, ReductionMode, CrossEntropyReductionShape, MseReductionShape, L1ReductionShape, BceReductionShape, Reduction};
+  |                       ^^^^  ^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^  ^^^^^^^^^
+
+warning: unused imports: `DynShape` and `Dyn`
+ --> crates/kindle-core/src/tensor/ops/unary.rs:8:31
+  |
+8 | use crate::prelude::{Backend, Dyn, DynShape, RequiresGrad, Result, Shape, Tensor};
+  |                               ^^^  ^^^^^^^^
+
+warning: unused imports: `BceReductionShape`, `CrossEntropyReductionShape`, `L1ReductionShape`, `Mean`, `MseReductionShape`, `ReductionMode`, and `Reduction`
+ --> crates/kindle-core/src/tensor/ops/unary.rs:9:23
+  |
+9 | use crate::nn::loss::{Mean, ReductionMode, CrossEntropyReductionShape, MseReductionShape, L1ReductionShape, BceReductionShape, Reduction};
+  |                       ^^^^  ^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^  ^^^^^^^^^
+
+warning: unused import: `Dyn`
+ --> crates/kindle-core/src/tensor/ops/reduce.rs:8:31
+  |
+8 | use crate::prelude::{Backend, Dyn, DynShape, RequiresGrad, Result, Shape, Tensor};
+  |                               ^^^
+
+warning: unused imports: `BceReductionShape`, `CrossEntropyReductionShape`, `L1ReductionShape`, `Mean`, `MseReductionShape`, `ReductionMode`, and `Reduction`
+ --> crates/kindle-core/src/tensor/ops/reduce.rs:9:23
+  |
+9 | use crate::nn::loss::{Mean, ReductionMode, CrossEntropyReductionShape, MseReductionShape, L1ReductionShape, BceReductionShape, Reduction};
+  |                       ^^^^  ^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^  ^^^^^^^^^
+
+warning: unused imports: `BceReductionShape`, `CrossEntropyReductionShape`, `L1ReductionShape`, `Mean`, `MseReductionShape`, `ReductionMode`, and `Reduction`
+ --> crates/kindle-core/src/tensor/ops/loss.rs:9:23
+  |
+9 | use crate::nn::loss::{Mean, ReductionMode, CrossEntropyReductionShape, MseReductionShape, L1ReductionShape, BceReductionShape, Reduction};
+  |                       ^^^^  ^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^  ^^^^^^^^^
+
+For more information about this error, try `rustc --explain E0407`.
+warning: `kindle-core` (lib test) generated 35 warnings (26 duplicates)
+error: could not compile `kindle-core` (lib test) due to 3 previous errors; 35 warnings emitted

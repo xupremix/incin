@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-/// Specifies the reduction to apply to the output of a loss function.
+/// Specifies the runtime reduction to apply to the output of a loss function.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Reduction {
     #[default]
@@ -9,30 +9,85 @@ pub enum Reduction {
     None,
 }
 
+pub trait ReductionMode: Clone + Default + 'static {
+    fn as_enum() -> Reduction;
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Mean;
+impl ReductionMode for Mean {
+    fn as_enum() -> Reduction {
+        Reduction::Mean
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Sum;
+impl ReductionMode for Sum {
+    fn as_enum() -> Reduction {
+        Reduction::Sum
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoneReduction;
+impl ReductionMode for NoneReduction {
+    fn as_enum() -> Reduction {
+        Reduction::None
+    }
+}
+
+pub trait MseReductionShape<S: Shape> { type Output: Shape; }
+impl<S: Shape> MseReductionShape<S> for Mean { type Output = (); }
+impl<S: Shape> MseReductionShape<S> for Sum { type Output = (); }
+impl<S: Shape> MseReductionShape<S> for NoneReduction { type Output = S; }
+
+pub trait CrossEntropyReductionShape<S: Shape> { type Output: Shape; }
+impl<S: Shape> CrossEntropyReductionShape<S> for Mean { type Output = (); }
+impl<S: Shape> CrossEntropyReductionShape<S> for Sum { type Output = (); }
+impl<S: Shape + crate::shapes::shape_ops::ReduceDim<1>> CrossEntropyReductionShape<S> for NoneReduction { type Output = S::Output; }
+
+pub trait BceReductionShape<S: Shape> { type Output: Shape; }
+impl<S: Shape> BceReductionShape<S> for Mean { type Output = (); }
+impl<S: Shape> BceReductionShape<S> for Sum { type Output = (); }
+impl<S: Shape> BceReductionShape<S> for NoneReduction { type Output = S; }
+
+pub trait L1ReductionShape<S: Shape> { type Output: Shape; }
+impl<S: Shape> L1ReductionShape<S> for Mean { type Output = (); }
+impl<S: Shape> L1ReductionShape<S> for Sum { type Output = (); }
+impl<S: Shape> L1ReductionShape<S> for NoneReduction { type Output = S; }
+
 /// Trait to statically verify that two shapes are identical for MSE loss.
 pub trait MSEShape<S2: Shape> {}
 impl<S: Shape> MSEShape<S> for S {}
 
 /// Mean Squared Error Loss.
 #[derive(Debug, Clone, Default)]
-pub struct MSELoss;
+pub struct MSELoss<R: ReductionMode = Mean>(core::marker::PhantomData<R>);
 
-impl MSELoss {
+impl<R: ReductionMode> MSELoss<R> {
     pub fn new() -> Self {
-        Self
+        Self(core::marker::PhantomData)
     }
 
     /// Forward pass computing the Mean Squared Error between predictions and targets.
-    pub fn forward<S: Shape, B: Backend, G: RequiresGrad>(
+    pub fn forward<S: Shape + crate::prelude::DynShape, B: Backend, G: RequiresGrad>(
         &self,
         pred: &Tensor<S, B, G>,
         target: &Tensor<S, B, NoGrad>,
-        reduction: Reduction,
-    ) -> Result<Tensor<(), B, G>> {
-        let inner = B::mse_loss(&pred.inner, &target.inner, reduction)?;
+    ) -> Result<Tensor<R::Output, B, G>>
+    where
+        R: MseReductionShape<S>,
+    {
+        let inner = B::mse_loss(&pred.inner, &target.inner, R::as_enum())?;
+        let mut out_shape_dims: Vec<usize> = vec![];
+        if R::as_enum() == Reduction::None {
+            out_shape_dims = pred.dims().into();
+        }
+        let out_shape = <R::Output as Shape>::from_dyn(&out_shape_dims).unwrap();
         Ok(Tensor::from_parts_unchecked(
             inner,
-            Default::default(),
+            out_shape,
             pred._dtype.clone(),
             pred._device.clone(),
             pred._grad.clone(),
@@ -54,29 +109,37 @@ impl<Batch: Dim> CrossEntropyShape<(Batch,)> for Dyn {}
 
 /// Cross Entropy Loss.
 #[derive(Debug, Clone, Default)]
-pub struct CrossEntropyLoss;
+pub struct CrossEntropyLoss<R: ReductionMode = Mean>(core::marker::PhantomData<R>);
 
-impl CrossEntropyLoss {
+impl<R: ReductionMode> CrossEntropyLoss<R> {
     pub fn new() -> Self {
-        Self
+        Self(core::marker::PhantomData)
     }
 
     /// Forward pass computing the Cross Entropy Loss between predictions and targets.
     /// The target tensor MUST have `u32` elements at compile time.
-    pub fn forward<S1: Shape, S2: Shape, B: Backend, G: RequiresGrad>(
+    pub fn forward<S1: Shape + crate::prelude::DynShape, S2: Shape, B: Backend, G: RequiresGrad>(
         &self,
         pred: &Tensor<S1, B, G>,
         target: &Tensor<S2, B::BackendWithDType<u32>, NoGrad>,
-        reduction: Reduction,
-    ) -> Result<Tensor<(), B, G>>
+    ) -> Result<Tensor<R::Output, B, G>>
     where
         S1: CrossEntropyShape<S2>,
+        R: CrossEntropyReductionShape<S1>,
     {
         // binds `BackendWithDType<u32>::RawTensor` to be identical to `Self::RawTensor`.
-        let inner = B::cross_entropy_loss(&pred.inner, &target.inner, reduction)?;
+        let inner = B::cross_entropy_loss(&pred.inner, &target.inner, R::as_enum())?;
+        let mut out_shape_dims: Vec<usize> = vec![];
+        if R::as_enum() == Reduction::None {
+            out_shape_dims = pred.dims().into();
+            if !out_shape_dims.is_empty() {
+                out_shape_dims.remove(1); // Usually class dim
+            }
+        }
+        let out_shape = <R::Output as Shape>::from_dyn(&out_shape_dims).unwrap();
         Ok(Tensor::from_parts_unchecked(
             inner,
-            Default::default(),
+            out_shape,
             pred._dtype.clone(),
             pred._device.clone(),
             pred._grad.clone(),
@@ -90,24 +153,31 @@ impl<S: crate::prelude::Shape> L1Shape<S> for S {}
 
 /// Mean Absolute Error (L1) Loss.
 #[derive(Debug, Clone, Default)]
-pub struct L1Loss;
+pub struct L1Loss<R: ReductionMode = Mean>(core::marker::PhantomData<R>);
 
-impl L1Loss {
+impl<R: ReductionMode> L1Loss<R> {
     pub fn new() -> Self {
-        Self
+        Self(core::marker::PhantomData)
     }
 
     /// Forward pass computing the L1 Loss between predictions and targets.
-    pub fn forward<S: crate::prelude::Shape, B: crate::prelude::Backend, G: crate::prelude::RequiresGrad>(
+    pub fn forward<S: Shape + crate::prelude::DynShape, B: Backend, G: RequiresGrad>(
         &self,
-        pred: &crate::prelude::Tensor<S, B, G>,
-        target: &crate::prelude::Tensor<S, B, crate::prelude::NoGrad>,
-        reduction: Reduction,
-    ) -> crate::prelude::Result<crate::prelude::Tensor<(), B, G>> {
-        let inner = B::l1_loss(&pred.inner, &target.inner, reduction)?;
-        Ok(crate::prelude::Tensor::from_parts_unchecked(
+        pred: &Tensor<S, B, G>,
+        target: &Tensor<S, B, NoGrad>,
+    ) -> Result<Tensor<R::Output, B, G>>
+    where
+        R: L1ReductionShape<S>,
+    {
+        let inner = B::l1_loss(&pred.inner, &target.inner, R::as_enum())?;
+        let mut out_shape_dims: Vec<usize> = vec![];
+        if R::as_enum() == Reduction::None {
+            out_shape_dims = pred.dims().into();
+        }
+        let out_shape = <R::Output as Shape>::from_dyn(&out_shape_dims).unwrap();
+        Ok(Tensor::from_parts_unchecked(
             inner,
-            Default::default(),
+            out_shape,
             pred._dtype.clone(),
             pred._device.clone(),
             pred._grad.clone(),
@@ -121,24 +191,31 @@ impl<S: crate::prelude::Shape> BCEWithLogitsShape<S> for S {}
 
 /// Binary Cross Entropy with Logits Loss.
 #[derive(Debug, Clone, Default)]
-pub struct BCEWithLogitsLoss;
+pub struct BCEWithLogitsLoss<R: ReductionMode = Mean>(core::marker::PhantomData<R>);
 
-impl BCEWithLogitsLoss {
+impl<R: ReductionMode> BCEWithLogitsLoss<R> {
     pub fn new() -> Self {
-        Self
+        Self(core::marker::PhantomData)
     }
 
     /// Forward pass computing the BCE With Logits Loss between predictions and targets.
-    pub fn forward<S: crate::prelude::Shape, B: crate::prelude::Backend, G: crate::prelude::RequiresGrad>(
+    pub fn forward<S: Shape + crate::prelude::DynShape, B: Backend, G: RequiresGrad>(
         &self,
-        pred: &crate::prelude::Tensor<S, B, G>,
-        target: &crate::prelude::Tensor<S, B, crate::prelude::NoGrad>,
-        reduction: Reduction,
-    ) -> crate::prelude::Result<crate::prelude::Tensor<(), B, G>> {
-        let inner = B::bce_with_logits_loss(&pred.inner, &target.inner, reduction)?;
-        Ok(crate::prelude::Tensor::from_parts_unchecked(
+        pred: &Tensor<S, B, G>,
+        target: &Tensor<S, B, NoGrad>,
+    ) -> Result<Tensor<R::Output, B, G>>
+    where
+        R: BceReductionShape<S>,
+    {
+        let inner = B::bce_with_logits_loss(&pred.inner, &target.inner, R::as_enum())?;
+        let mut out_shape_dims: Vec<usize> = vec![];
+        if R::as_enum() == Reduction::None {
+            out_shape_dims = pred.dims().into();
+        }
+        let out_shape = <R::Output as Shape>::from_dyn(&out_shape_dims).unwrap();
+        Ok(Tensor::from_parts_unchecked(
             inner,
-            Default::default(),
+            out_shape,
             pred._dtype.clone(),
             pred._device.clone(),
             pred._grad.clone(),

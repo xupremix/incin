@@ -56,6 +56,7 @@ pub trait Backend: Clone + 'static {
     // Device Management
     fn tensor_to_device(t: &Self::RawTensor, device: &KindleDevice) -> Result<Self::RawTensor>;
     fn var_to_device(var: &Self::RawVar, device: &KindleDevice) -> Result<Self::RawVar>;
+    fn assign_var(var: &mut Self::RawVar, tensor: &Self::RawTensor) -> Result<()>;
     fn var_randn(
         shape: &[usize],
         dtype: KindleDType,
@@ -195,9 +196,8 @@ pub trait Backend: Clone + 'static {
 
     /// Computes the backward pass starting from this tensor, returning the gradients.
     fn backward(loss: &Self::RawTensor) -> Result<Self::Grads>;
-    fn step_sgd(params: &mut [Self::RawVar], grads: &Self::Grads, lr: f64) -> Result<()>;
-    fn step_adamw(params: &mut [Self::RawVar], grads: &Self::Grads, lr: f64) -> Result<()>;
-    fn step_adam(params: &mut [Self::RawVar], grads: &Self::Grads, lr: f64) -> Result<()>;
+    /// Retrieve the gradient for a specific variable.
+    fn get_grad(var: &Self::RawVar, grads: &Self::Grads) -> Result<Option<Self::RawTensor>>;
 
     // Loss Functions
     fn mse_loss(pred: &Self::RawTensor, target: &Self::RawTensor, reduction: crate::nn::loss::Reduction) -> Result<Self::RawTensor>;
@@ -232,6 +232,7 @@ pub mod dummy {
         fn format_tensor(t: &Self::RawTensor) -> alloc::string::String { alloc::format!("Tensor(shape={:?})", t) }
         fn var_as_tensor(var: &Self::RawVar) -> Result<Self::RawTensor> { Ok(var.clone()) }
         fn var_from_tensor(t: &Self::RawTensor) -> Result<Self::RawVar> { Ok(t.clone()) }
+        fn assign_var(var: &mut Self::RawVar, tensor: &Self::RawTensor) -> Result<()> { *var = tensor.clone(); Ok(()) }
         fn zeros(s: &[usize], _dt: KindleDType, _d: &KindleDevice) -> Result<Self::RawTensor> { Ok(s.to_vec()) }
         fn ones(s: &[usize], _dt: KindleDType, _d: &KindleDevice) -> Result<Self::RawTensor> { Ok(s.to_vec()) }
         fn rand(s: &[usize], _dt: KindleDType, _d: &KindleDevice) -> Result<Self::RawTensor> { Ok(s.to_vec()) }
@@ -323,9 +324,7 @@ pub mod dummy {
             Ok(alloc::vec![t[0], t[1], out.0, out.1]) 
         }
         fn backward(_loss: &Self::RawTensor) -> Result<Self::Grads> { Ok(()) }
-        fn step_sgd(_p: &mut [Self::RawVar], _g: &Self::Grads, _lr: f64) -> Result<()> { Ok(()) }
-        fn step_adamw(_p: &mut [Self::RawVar], _g: &Self::Grads, _lr: f64) -> Result<()> { Ok(()) }
-        fn step_adam(_p: &mut [Self::RawVar], _g: &Self::Grads, _lr: f64) -> Result<()> { Ok(()) }
+        fn get_grad(_var: &Self::RawVar, _grads: &Self::Grads) -> Result<Option<Self::RawTensor>> { Ok(None) }
 
         fn mse_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor, _r: crate::nn::loss::Reduction) -> Result<Self::RawTensor> { Ok(alloc::vec![]) }
         fn l1_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor, _r: crate::nn::loss::Reduction) -> Result<Self::RawTensor> { Ok(alloc::vec![]) }

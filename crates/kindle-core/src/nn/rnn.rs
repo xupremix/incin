@@ -46,10 +46,9 @@ impl<S: RnnShape, B: Backend> RNNCell<S, B> {
 }
 
 impl<S: RnnShape, B: Backend> Parameters<B> for RNNCell<S, B> {
-    fn parameters(&self) -> Vec<B::RawVar> {
-        let mut params = self.wi.parameters();
-        params.extend(self.wh.parameters());
-        params
+    fn named_parameters(&self, prefix: &str, map: &mut std::collections::HashMap<String, B::RawVar>) {
+        self.wi.named_parameters(&format!("{}wi.", prefix), map);
+        self.wh.named_parameters(&format!("{}wh.", prefix), map);
     }
 }
 
@@ -110,8 +109,8 @@ impl<S: RnnShape, B: Backend> RNN<S, B> {
 }
 
 impl<S: RnnShape, B: Backend> Parameters<B> for RNN<S, B> {
-    fn parameters(&self) -> Vec<B::RawVar> {
-        self.cell.parameters()
+    fn named_parameters(&self, prefix: &str, map: &mut std::collections::HashMap<String, B::RawVar>) {
+        self.cell.named_parameters(&format!("{}cell.", prefix), map);
     }
 }
 

@@ -18,9 +18,7 @@ impl<K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned> AvgPool2d<K, S, P, D> {
 }
 
 impl<K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned, B: Backend> Parameters<B> for AvgPool2d<K, S, P, D> {
-    fn parameters(&self) -> Vec<B::RawVar> {
-        Vec::new()
-    }
+    fn named_parameters(&self, _prefix: &str, _map: &mut std::collections::HashMap<String, B::RawVar>) {}
 }
 
 impl<I: Shape + DynShape + crate::shapes::Pool2dShape<K, S, P, D>, K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned, B: Backend>

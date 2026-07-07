@@ -59,6 +59,9 @@ where
     B::DType: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
+    
+
+    
     pub fn new() -> Result<Self>
     where
         (): crate::tensor::arg_into::ArgInto<S::Target>,

@@ -190,15 +190,16 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e).into())
         }
 
-        fn var_to_device(var: &Self::RawVar, device: &KindleDevice) -> Result<Self::RawVar> {
+        fn var_to_device(var: &Self::RawVar, device: &kindle_core::prelude::KindleDevice) -> Result<Self::RawVar> {
             let dev = to_candle_device(device)?;
-            // Candle variables are fundamentally tensors inside a refcell. To move a Var,
-            // we have to get the underlying tensor, move it, and wrap it in a new Var.
-            let t = var
-                .as_tensor()
+            var.as_tensor()
                 .to_device(&dev)
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
-            candle::Var::from_tensor(&t).map_err(|e: candle_core::Error| anyhow::anyhow!(e).into())
+                .and_then(|t| candle::Var::from_tensor(&t))
+                .map_err(|e| anyhow::anyhow!(e).into())
+        }
+
+        fn assign_var(var: &mut Self::RawVar, tensor: &Self::RawTensor) -> Result<()> {
+            var.set(tensor).map_err(|e| anyhow::anyhow!(e).into())
         }
 
         fn var_randn(
@@ -543,18 +544,13 @@ pub mod candle {
         }
 
         fn backward(loss: &Self::RawTensor) -> Result<Self::Grads> {
-            Ok(loss
-                .backward()
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+            loss.backward()
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e).into())
         }
 
-        fn step_sgd(params: &mut [Self::RawVar], grads: &Self::Grads, lr: f64) -> Result<()> {
-            use candle_nn::optim::Optimizer;
-            let mut sgd = candle_nn::optim::SGD::new(params.to_vec(), lr)
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
-            sgd.step(grads)
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
-            Ok(())
+        fn get_grad(var: &Self::RawVar, grads: &Self::Grads) -> Result<Option<Self::RawTensor>> {
+            let t = var.as_tensor();
+            Ok(grads.get(t).cloned())
         }
 
         fn to_bytes(t: &Self::RawTensor) -> Result<std::vec::Vec<u8>> {
@@ -570,25 +566,6 @@ pub mod candle {
             let t = candle_core::Tensor::from_slice(floats, shape, &d).map_err(|e| anyhow::anyhow!(e))?;
             let t = t.to_dtype(c_dtype).map_err(|e| anyhow::anyhow!(e))?;
             Ok(t)
-        }
-
-        fn step_adamw(params: &mut [Self::RawVar], grads: &Self::Grads, lr: f64) -> Result<()> {
-            use candle_nn::optim::Optimizer;
-            let mut adamw = candle_nn::optim::AdamW::new_lr(params.to_vec(), lr)
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
-            adamw
-                .step(grads)
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
-            Ok(())
-        }
-
-        fn step_adam(params: &mut [Self::RawVar], grads: &Self::Grads, lr: f64) -> Result<()> {
-            use candle_nn::optim::Optimizer;
-            let mut adam = candle_nn::optim::AdamW::new_lr(params.to_vec(), lr)
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
-            adam.step(grads)
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
-            Ok(())
         }
 
         fn mse_loss(pred: &Self::RawTensor, target: &Self::RawTensor, _reduction: kindle_core::nn::loss::Reduction) -> Result<Self::RawTensor> {
@@ -697,6 +674,12 @@ pub mod ndarray_backend {
             Ok(NdarrayVar(std::sync::Arc::new(std::sync::RwLock::new(t.clone()))))
         }
 
+        fn assign_var(var: &mut Self::RawVar, tensor: &Self::RawTensor) -> Result<()> {
+            let mut w = var.0.write().unwrap();
+            *w = tensor.clone();
+            Ok(())
+        }
+
         fn zeros(
             shape: &[usize],
             _dtype: KindleDType,
@@ -750,7 +733,7 @@ pub mod ndarray_backend {
         ) -> Result<Self::RawTensor> {
             Ok(t.clone())
         }
-        fn var_to_device(var: &Self::RawVar, _device: &KindleDevice) -> Result<Self::RawVar> {
+        fn var_to_device(var: &Self::RawVar, _device: &kindle_core::prelude::KindleDevice) -> Result<Self::RawVar> {
             Ok(var.clone())
         }
         fn var_randn(_s: &[usize], _dt: KindleDType, _dev: &KindleDevice) -> Result<Self::RawVar> {
@@ -1099,25 +1082,10 @@ pub mod ndarray_backend {
             })
         }
 
-        fn step_sgd(_params: &mut [Self::RawVar], _grads: &Self::Grads, _lr: f64) -> Result<()> {
-            Err(Error::UnsupportedBackendOperation {
-                op: "step_sgd",
-                backend: "Ndarray",
-            })
+        fn get_grad(_var: &Self::RawVar, _grads: &Self::Grads) -> Result<Option<Self::RawTensor>> {
+            Ok(None)
         }
 
-        fn step_adamw(_params: &mut [Self::RawVar], _grads: &Self::Grads, _lr: f64) -> Result<()> {
-            Err(Error::UnsupportedBackendOperation {
-                op: "step_adamw",
-                backend: "Ndarray",
-            })
-        }
-        fn step_adam(_params: &mut [Self::RawVar], _grads: &Self::Grads, _lr: f64) -> Result<()> {
-            Err(Error::UnsupportedBackendOperation {
-                op: "step_adam",
-                backend: "Ndarray",
-            })
-        }
         fn mse_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor, _reduction: kindle_core::nn::loss::Reduction) -> Result<Self::RawTensor> {
             // let diff = pred - target;
             // let sq = diff.mapv(|a| a.powi(2));
@@ -1253,10 +1221,10 @@ pub mod burn_backend {
                 }
                 fn avg_pool2d(_: &Self::RawTensor, _: (usize, usize), _: (usize, usize)) -> Result<Self::RawTensor> {
                     Err(Error::UnsupportedBackendOperation { op: "avg_pool2d", backend: "Burn" })
-                } fn backward(_loss: &Self::RawTensor) -> Result<Self::Grads> { Err(Error::UnsupportedBackendOperation { op: "backward", backend: "Burn" }) }
-                fn step_sgd(_params: &mut [Self::RawVar], _grads: &Self::Grads, _lr: f64) -> Result<()> { Err(Error::UnsupportedBackendOperation { op: "step_sgd", backend: "Burn" }) }
-                fn step_adamw(_params: &mut [Self::RawVar], _grads: &Self::Grads, _lr: f64) -> Result<()> { Err(Error::UnsupportedBackendOperation { op: "step_adamw", backend: "Burn" }) }
-                fn step_adam(_params: &mut [Self::RawVar], _grads: &Self::Grads, _lr: f64) -> Result<()> { Err(Error::UnsupportedBackendOperation { op: "step_adam", backend: "Burn" }) }
+                } 
+                fn backward(_loss: &Self::RawTensor) -> Result<Self::Grads> { Err(Error::UnsupportedBackendOperation { op: "backward", backend: "Burn" }) }
+                fn get_grad(_var: &Self::RawVar, _grads: &Self::Grads) -> Result<Option<Self::RawTensor>> { Ok(None) }
+
                 fn l1_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor, _reduction: kindle_core::nn::loss::Reduction) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "l1_loss", backend: "Burn" }) }
                 fn bce_with_logits_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor, _reduction: kindle_core::nn::loss::Reduction) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "bce_with_logits_loss", backend: "Burn" }) }
                 fn mse_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor, _reduction: kindle_core::nn::loss::Reduction) -> Result<Self::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "mse_loss", backend: "Burn" }) }

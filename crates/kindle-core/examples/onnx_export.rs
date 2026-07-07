@@ -11,7 +11,7 @@ type B = TracingBackend<DummyBackend<f32>>;
 
 fn main() -> anyhow::Result<()> {
     // Create a simple model
-    let linear = Linear::<Dyn, B>::new(10, 5)?;
+    let linear = Linear::<Dyn, B>::new_dyn((10, 5))?;
 
     // Create a dummy input
     let input = Tensor::<Dyn, B>::zeros([2, 10])?;

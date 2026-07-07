@@ -9,9 +9,7 @@ use alloc::vec::Vec;
 pub struct ReLU;
 
 impl<B: Backend> Parameters<B> for ReLU {
-    fn parameters(&self) -> Vec<B::RawVar> {
-        Vec::new()
-    }
+    fn named_parameters(&self, _prefix: &str, _map: &mut std::collections::HashMap<String, B::RawVar>) {}
 }
 
 impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for ReLU {
@@ -32,9 +30,7 @@ impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for ReLU {
 pub struct GELU;
 
 impl<B: Backend> Parameters<B> for GELU {
-    fn parameters(&self) -> Vec<B::RawVar> {
-        Vec::new()
-    }
+    fn named_parameters(&self, _prefix: &str, _map: &mut std::collections::HashMap<String, B::RawVar>) {}
 }
 
 impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for GELU {
@@ -55,9 +51,7 @@ impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for GELU {
 pub struct Swish;
 
 impl<B: Backend> Parameters<B> for Swish {
-    fn parameters(&self) -> Vec<B::RawVar> {
-        Vec::new()
-    }
+    fn named_parameters(&self, _prefix: &str, _map: &mut std::collections::HashMap<String, B::RawVar>) {}
 }
 
 impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for Swish {
@@ -89,9 +83,7 @@ impl Softmax {
 }
 
 impl<B: Backend> Parameters<B> for Softmax {
-    fn parameters(&self) -> Vec<B::RawVar> {
-        Vec::new()
-    }
+    fn named_parameters(&self, _prefix: &str, _map: &mut std::collections::HashMap<String, B::RawVar>) {}
 }
 
 impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for Softmax {
@@ -111,9 +103,7 @@ impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for Softmax {
 pub struct Sigmoid;
 
 impl<B: Backend> Parameters<B> for Sigmoid {
-    fn parameters(&self) -> Vec<B::RawVar> {
-        Vec::new()
-    }
+    fn named_parameters(&self, _prefix: &str, _map: &mut std::collections::HashMap<String, B::RawVar>) {}
 }
 
 impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for Sigmoid {
@@ -133,9 +123,7 @@ impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for Sigmoid {
 pub struct Tanh;
 
 impl<B: Backend> Parameters<B> for Tanh {
-    fn parameters(&self) -> Vec<B::RawVar> {
-        Vec::new()
-    }
+    fn named_parameters(&self, _prefix: &str, _map: &mut std::collections::HashMap<String, B::RawVar>) {}
 }
 
 impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for Tanh {

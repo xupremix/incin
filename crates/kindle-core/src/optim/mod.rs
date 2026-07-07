@@ -27,63 +27,179 @@ pub trait Optimizer<B: Backend> {
 /// optimizer.step(&gradients)?;
 /// ```
 pub struct SGD<B: Backend> {
-    params: Vec<B::RawVar>,
-    lr: f64,
+    params: std::collections::HashMap<String, B::RawVar>,
+    pub lr: f64,
 }
 
 impl<B: Backend> SGD<B> {
-    /// Create a new SGD optimizer.
-    pub fn new(params: Vec<B::RawVar>, lr: f64) -> Self {
+    pub fn new(params: std::collections::HashMap<String, B::RawVar>, lr: f64) -> Self {
         Self { params, lr }
     }
 }
 
 impl<B: Backend> Optimizer<B> for SGD<B> {
     fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()> {
-        B::step_sgd(&mut self.params, &grads.0, self.lr)
+        for var in self.params.values_mut() {
+            if let Some(grad) = B::get_grad(var, &grads.0)? {
+                let t = B::var_as_tensor(var)?;
+                // t = t - lr * grad
+                let grad_scaled = B::mul_scalar(&grad, self.lr)?;
+                let updated = B::sub(&t, &grad_scaled)?;
+                B::assign_var(var, &updated)?;
+            }
+        }
+        Ok(())
     }
 }
 
-/// AdamW optimizer (Adam with decoupled weight decay).
-/// 
-/// Implements the optimizer from [Decoupled Weight Decay Regularization](https://arxiv.org/abs/1711.05101).
-/// Unlike standard Adam, weight decay is applied directly to the parameters, not the gradients.
 pub struct AdamW<B: Backend> {
-    params: Vec<B::RawVar>,
-    lr: f64,
+    params: std::collections::HashMap<String, B::RawVar>,
+    pub lr: f64,
+    pub beta1: f64,
+    pub beta2: f64,
+    pub eps: f64,
+    pub weight_decay: f64,
+    m: std::collections::HashMap<String, B::RawTensor>,
+    v: std::collections::HashMap<String, B::RawTensor>,
+    step: usize,
 }
 
 impl<B: Backend> AdamW<B> {
-    /// Create a new AdamW optimizer.
-    pub fn new(params: Vec<B::RawVar>, lr: f64) -> Self {
-        Self { params, lr }
+    pub fn new(params: std::collections::HashMap<String, B::RawVar>, lr: f64) -> Self {
+        Self {
+            params,
+            lr,
+            beta1: 0.9,
+            beta2: 0.999,
+            eps: 1e-8,
+            weight_decay: 0.01,
+            m: std::collections::HashMap::new(),
+            v: std::collections::HashMap::new(),
+            step: 0,
+        }
     }
 }
 
 impl<B: Backend> Optimizer<B> for AdamW<B> {
     fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()> {
-        B::step_adamw(&mut self.params, &grads.0, self.lr)
+        self.step += 1;
+        let t_step = self.step as f64;
+        let bias_correction1 = 1.0 - self.beta1.powf(t_step);
+        let bias_correction2 = 1.0 - self.beta2.powf(t_step);
+
+        for (name, var) in self.params.iter_mut() {
+            if let Some(grad) = B::get_grad(var, &grads.0)? {
+                let mut t = B::var_as_tensor(var)?;
+                
+                // Weight decay
+                if self.weight_decay > 0.0 {
+                    let decay = B::mul_scalar(&t, self.weight_decay * self.lr)?;
+                    t = B::sub(&t, &decay)?;
+                }
+                
+                let mut m_t = if let Some(m) = self.m.get(name) {
+                    let term1 = B::mul_scalar(m, self.beta1)?;
+                    let term2 = B::mul_scalar(&grad, 1.0 - self.beta1)?;
+                    B::add(&term1, &term2)?
+                } else {
+                    B::mul_scalar(&grad, 1.0 - self.beta1)?
+                };
+
+                let grad_sq = B::mul(&grad, &grad)?;
+                let mut v_t = if let Some(v) = self.v.get(name) {
+                    let term1 = B::mul_scalar(v, self.beta2)?;
+                    let term2 = B::mul_scalar(&grad_sq, 1.0 - self.beta2)?;
+                    B::add(&term1, &term2)?
+                } else {
+                    B::mul_scalar(&grad_sq, 1.0 - self.beta2)?
+                };
+
+                self.m.insert(name.clone(), m_t.clone());
+                self.v.insert(name.clone(), v_t.clone());
+
+                let m_hat = B::mul_scalar(&m_t, 1.0 / bias_correction1)?;
+                let v_hat = B::mul_scalar(&v_t, 1.0 / bias_correction2)?;
+
+                // step = lr * m_hat / (sqrt(v_hat) + eps)
+                let denom = B::add_scalar(&B::sqrt(&v_hat)?, self.eps)?;
+                let step = B::mul_scalar(&B::div(&m_hat, &denom)?, self.lr)?;
+                
+                let updated = B::sub(&t, &step)?;
+                B::assign_var(var, &updated)?;
+            }
+        }
+        Ok(())
     }
 }
 
-/// Adam optimizer.
-/// 
-/// Implements the optimizer from [Adam: A Method for Stochastic Optimization](https://arxiv.org/abs/1412.6980).
-/// Uses first and second moment estimates of the gradient to compute adaptive learning rates.
 pub struct Adam<B: Backend> {
-    params: Vec<B::RawVar>,
-    lr: f64,
+    params: std::collections::HashMap<String, B::RawVar>,
+    pub lr: f64,
+    pub beta1: f64,
+    pub beta2: f64,
+    pub eps: f64,
+    m: std::collections::HashMap<String, B::RawTensor>,
+    v: std::collections::HashMap<String, B::RawTensor>,
+    step: usize,
 }
 
 impl<B: Backend> Adam<B> {
-    /// Create a new Adam optimizer.
-    pub fn new(params: Vec<B::RawVar>, lr: f64) -> Self {
-        Self { params, lr }
+    pub fn new(params: std::collections::HashMap<String, B::RawVar>, lr: f64) -> Self {
+        Self {
+            params,
+            lr,
+            beta1: 0.9,
+            beta2: 0.999,
+            eps: 1e-8,
+            m: std::collections::HashMap::new(),
+            v: std::collections::HashMap::new(),
+            step: 0,
+        }
     }
 }
 
 impl<B: Backend> Optimizer<B> for Adam<B> {
     fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()> {
-        B::step_adam(&mut self.params, &grads.0, self.lr)
+        self.step += 1;
+        let t_step = self.step as f64;
+        let bias_correction1 = 1.0 - self.beta1.powf(t_step);
+        let bias_correction2 = 1.0 - self.beta2.powf(t_step);
+
+        for (name, var) in self.params.iter_mut() {
+            if let Some(grad) = B::get_grad(var, &grads.0)? {
+                let t = B::var_as_tensor(var)?;
+                
+                let mut m_t = if let Some(m) = self.m.get(name) {
+                    let term1 = B::mul_scalar(m, self.beta1)?;
+                    let term2 = B::mul_scalar(&grad, 1.0 - self.beta1)?;
+                    B::add(&term1, &term2)?
+                } else {
+                    B::mul_scalar(&grad, 1.0 - self.beta1)?
+                };
+
+                let grad_sq = B::mul(&grad, &grad)?;
+                let mut v_t = if let Some(v) = self.v.get(name) {
+                    let term1 = B::mul_scalar(v, self.beta2)?;
+                    let term2 = B::mul_scalar(&grad_sq, 1.0 - self.beta2)?;
+                    B::add(&term1, &term2)?
+                } else {
+                    B::mul_scalar(&grad_sq, 1.0 - self.beta2)?
+                };
+
+                self.m.insert(name.clone(), m_t.clone());
+                self.v.insert(name.clone(), v_t.clone());
+
+                let m_hat = B::mul_scalar(&m_t, 1.0 / bias_correction1)?;
+                let v_hat = B::mul_scalar(&v_t, 1.0 / bias_correction2)?;
+
+                // step = lr * m_hat / (sqrt(v_hat) + eps)
+                let denom = B::add_scalar(&B::sqrt(&v_hat)?, self.eps)?;
+                let step = B::mul_scalar(&B::div(&m_hat, &denom)?, self.lr)?;
+                
+                let updated = B::sub(&t, &step)?;
+                B::assign_var(var, &updated)?;
+            }
+        }
+        Ok(())
     }
 }

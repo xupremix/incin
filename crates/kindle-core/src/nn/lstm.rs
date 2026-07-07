@@ -44,16 +44,15 @@ impl<In: Dim, Out: Dim, B: Backend> LSTMCell<In, Out, B> {
 }
 
 impl<In: Dim, Out: Dim, B: Backend> Parameters<B> for LSTMCell<In, Out, B> {
-    fn parameters(&self) -> Vec<B::RawVar> {
-        let mut params = self.wi.parameters();
-        params.extend(self.wh.parameters());
-        params.extend(self.wf_i.parameters());
-        params.extend(self.wf_h.parameters());
-        params.extend(self.wg_i.parameters());
-        params.extend(self.wg_h.parameters());
-        params.extend(self.wo_i.parameters());
-        params.extend(self.wo_h.parameters());
-        params
+    fn named_parameters(&self, prefix: &str, map: &mut std::collections::HashMap<String, B::RawVar>) {
+        self.wi.named_parameters(&format!("{}wi.", prefix), map);
+        self.wh.named_parameters(&format!("{}wh.", prefix), map);
+        self.wf_i.named_parameters(&format!("{}wf_i.", prefix), map);
+        self.wf_h.named_parameters(&format!("{}wf_h.", prefix), map);
+        self.wg_i.named_parameters(&format!("{}wg_i.", prefix), map);
+        self.wg_h.named_parameters(&format!("{}wg_h.", prefix), map);
+        self.wo_i.named_parameters(&format!("{}wo_i.", prefix), map);
+        self.wo_h.named_parameters(&format!("{}wo_h.", prefix), map);
     }
 }
 
@@ -114,8 +113,8 @@ impl<In: Dim, Out: Dim, B: Backend> LSTM<In, Out, B> {
 }
 
 impl<In: Dim, Out: Dim, B: Backend> Parameters<B> for LSTM<In, Out, B> {
-    fn parameters(&self) -> Vec<B::RawVar> {
-        self.cell.parameters()
+    fn named_parameters(&self, prefix: &str, map: &mut std::collections::HashMap<String, B::RawVar>) {
+        self.cell.named_parameters(&format!("{}cell.", prefix), map);
     }
 }
 

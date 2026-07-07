@@ -38,10 +38,15 @@ pub trait StateDict<B: Backend> {
 /// A trait implemented by all Neural Network modules.
 /// Usually automatically derived via `#[kindle::module]`.
 pub trait Parameters<B: Backend> {
-    /// Recursively extract all trainable parameters from this module.
-    /// The parameters are returned as a list of backend-specific raw variables,
-    /// which can be passed to an optimizer (e.g., `candle_nn::optim::SGD`).
-    fn parameters(&self) -> Vec<B::RawVar>;
+    /// Recursively extract all trainable parameters from this module into a named map.
+    fn named_parameters(&self, prefix: &str, map: &mut std::collections::HashMap<String, B::RawVar>);
+    
+    /// Helper to retrieve all parameters as a new map.
+    fn parameters(&self) -> std::collections::HashMap<String, B::RawVar> {
+        let mut map = std::collections::HashMap::new();
+        self.named_parameters("", &mut map);
+        map
+    }
 }
 
 /// A trait to transfer ownership of a module to a new device.
@@ -59,18 +64,18 @@ impl<T: ToDevice<B, NewD>, B: Backend, NewD: Device> ToDevice<B, NewD> for Optio
 
 #[doc(hidden)]
 pub trait AutorefParametersFallback<B: Backend> {
-    fn maybe_parameters(&self, _phantom: core::marker::PhantomData<B>) -> Vec<B::RawVar> { Vec::new() }
+    fn maybe_parameters(&self, _phantom: core::marker::PhantomData<B>, _prefix: &str, _map: &mut std::collections::HashMap<String, B::RawVar>) {}
 }
 impl<T, B: Backend> AutorefParametersFallback<B> for &&T {}
 
 #[doc(hidden)]
 pub trait AutorefParameters<B: Backend> {
-    fn maybe_parameters(&self, _phantom: core::marker::PhantomData<B>) -> Vec<B::RawVar>;
+    fn maybe_parameters(&self, _phantom: core::marker::PhantomData<B>, prefix: &str, map: &mut std::collections::HashMap<String, B::RawVar>);
 }
 impl<T: Parameters<B>, B: Backend> AutorefParameters<B> for &T {
     #[inline]
-    fn maybe_parameters(&self, _phantom: core::marker::PhantomData<B>) -> Vec<B::RawVar> {
-        (*self).parameters()
+    fn maybe_parameters(&self, _marker: core::marker::PhantomData<B>, prefix: &str, map: &mut std::collections::HashMap<String, B::RawVar>) {
+        self.named_parameters(prefix, map);
     }
 }
 
@@ -185,10 +190,9 @@ where
     L1: Parameters<B>,
     L2: Parameters<B>,
 {
-    fn parameters(&self) -> Vec<B::RawVar> {
-        let mut p = self.0.parameters();
-        p.extend(self.1.parameters());
-        p
+    fn named_parameters(&self, prefix: &str, map: &mut std::collections::HashMap<String, B::RawVar>) {
+        self.0.named_parameters(&format!("{}0.", prefix), map);
+        self.1.named_parameters(&format!("{}1.", prefix), map);
     }
 }
 
@@ -218,9 +222,7 @@ macro_rules! impl_dummy_state {
     ($($t:ty),+) => {
         $(
             impl<B: Backend> Parameters<B> for $t {
-                fn parameters(&self) -> Vec<B::RawVar> {
-                    Vec::new()
-                }
+                fn named_parameters(&self, _prefix: &str, _map: &mut std::collections::HashMap<String, B::RawVar>) {}
             }
 
             impl<B: Backend> StateDict<B> for $t {
@@ -241,9 +243,7 @@ impl<T: ?Sized, B: Backend> Parameters<B> for core::marker::PhantomData<T>
 where
     T: crate::prelude::DType,
 {
-    fn parameters(&self) -> Vec<B::RawVar> {
-        Vec::new()
-    }
+    fn named_parameters(&self, _prefix: &str, _map: &mut std::collections::HashMap<String, B::RawVar>) {}
 }
 impl<T: ?Sized, B: Backend> StateDict<B> for core::marker::PhantomData<T>
 where
@@ -259,11 +259,10 @@ where
     fn state_dict(&self, _prefix: &str, _tensors: &mut HashMap<String, Tensor<Dyn, B>>) {}
 }
 
-impl<L: Parameters<B>, B: Backend> Parameters<B> for Option<L> {
-    fn parameters(&self) -> Vec<B::RawVar> {
-        match self {
-            Some(v) => v.parameters(),
-            None => Vec::new(),
+impl<T: Parameters<B>, B: Backend> Parameters<B> for Option<T> {
+    fn named_parameters(&self, prefix: &str, map: &mut std::collections::HashMap<String, B::RawVar>) {
+        if let Some(v) = self {
+            v.named_parameters(prefix, map);
         }
     }
 }

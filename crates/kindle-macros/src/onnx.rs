@@ -415,16 +415,13 @@ pub(crate) fn parse_onnx(rel_path: &str, root_name: &Ident, no_meta: bool) -> pr
     let out_shape_type = quote! { (#(#out_dims,)*) };
 
 
-    let forward_attr = if user_inputs.len() == 1 {
-        quote! { #[kindle::prelude::forward] }
-    } else {
-        quote! {}
-    };
+    let forward_attr = quote! {};
 
     let root_impl = quote! {
         #[kindle::prelude::module]
         pub struct #root_name<B: kindle::prelude::Backend> {
             #(#fields,)*
+            #[module(ignore)]
             _marker: std::marker::PhantomData<B>,
         }
 

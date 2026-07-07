@@ -18,9 +18,7 @@ impl<HOut: Unsigned, WOut: Unsigned> AdaptiveAvgPool2d<HOut, WOut> {
 }
 
 impl<HOut: Unsigned, WOut: Unsigned, B: Backend> Parameters<B> for AdaptiveAvgPool2d<HOut, WOut> {
-    fn parameters(&self) -> Vec<B::RawVar> {
-        Vec::new()
-    }
+    fn named_parameters(&self, _prefix: &str, _map: &mut std::collections::HashMap<String, B::RawVar>) {}
 }
 
 impl<

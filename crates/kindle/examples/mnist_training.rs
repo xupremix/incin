@@ -67,9 +67,9 @@ fn main() -> anyhow::Result<()> {
     // 2. Model definition (MLP using the seq! macro and Flatten)
     let model = seq![
         Flatten::<1, 3>::new(), // Flattens (B, 1, 28, 28) -> (B, 784)
-        Linear::<Dyn, Backend>::new(784, 128)?,
+        Linear::<Dyn, Backend>::new_dyn((784, 128))?,
         ReLU,
-        Linear::<Dyn, Backend>::new(128, 10)?
+        Linear::<Dyn, Backend>::new_dyn((128, 10))?
     ];
     
     // 3. Optimizer setup

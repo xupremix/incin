@@ -346,6 +346,13 @@ mod tests {
     #[derive(Clone)]
     pub struct DummyBackend<T: DType, D: Device>(core::marker::PhantomData<(T, D)>);
     impl<T: DType, D: Device> Backend for DummyBackend<T, D> {
+        
+        fn get_grad(_var: &Self::RawVar, _grads: &Self::Grads) -> Result<Option<Self::RawTensor>> {
+            unimplemented!()
+        }
+        fn assign_var(_var: &mut Self::RawVar, _tensor: &Self::RawTensor) -> Result<()> {
+            unimplemented!()
+        }
         fn conv1d(
             _t: &Self::RawTensor,
             _w: &Self::RawTensor,
@@ -616,12 +623,8 @@ mod tests {
         fn backward(_loss: &Self::RawTensor) -> Result<Self::Grads> {
             Ok(())
         }
-        fn step_sgd(_params: &mut [Self::RawVar], _grads: &Self::Grads, _lr: f64) -> Result<()> {
-            Ok(())
-        }
-        fn step_adamw(_params: &mut [Self::RawVar], _grads: &Self::Grads, _lr: f64) -> Result<()> {
-            Ok(())
-        }
+
+
 
         fn stack(_t: &[&Self::RawTensor], _d: usize) -> Result<Self::RawTensor> {
             Ok(alloc::vec::Vec::new())
@@ -655,9 +658,7 @@ mod tests {
             unimplemented!()
         }
 
-        fn step_adam(_params: &mut [Self::RawVar], _grads: &Self::Grads, _lr: f64) -> Result<()> {
-            unimplemented!()
-        }
+
 
         fn mse_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor, _reduction: crate::nn::loss::Reduction) -> Result<Self::RawTensor> {
             unimplemented!()
@@ -674,6 +675,8 @@ mod tests {
         fn cross_entropy_loss(_pred: &Self::RawTensor, _target: &Self::RawTensor, _reduction: crate::nn::loss::Reduction) -> Result<Self::RawTensor> {
             unimplemented!()
         }
+
+
         
         fn format_tensor(t: &Self::RawTensor) -> alloc::string::String {
             alloc::format!("Tensor(shape={:?})", t)

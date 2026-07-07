@@ -238,8 +238,8 @@ where
 }
 
 impl<S: Shape + DynShape, B: Backend> Parameters<B> for Param<S, B> {
-    fn parameters(&self) -> alloc::vec::Vec<B::RawVar> {
-        alloc::vec![self.inner.clone()]
+    fn named_parameters(&self, prefix: &str, map: &mut std::collections::HashMap<String, B::RawVar>) {
+        map.insert(prefix.to_string(), self.inner.clone());
     }
 }
 
@@ -465,9 +465,7 @@ where
 }
 
 impl<S: Shape + DynShape, B: Backend> Parameters<B> for Buffer<S, B> {
-    fn parameters(&self) -> alloc::vec::Vec<B::RawVar> {
-        alloc::vec![]
-    }
+    fn named_parameters(&self, _prefix: &str, _map: &mut std::collections::HashMap<String, B::RawVar>) {}
 }
 
 impl<S: Shape + DynShape, B: Backend> StateDict<B> for Buffer<S, B> {

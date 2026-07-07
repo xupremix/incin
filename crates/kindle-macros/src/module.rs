@@ -112,7 +112,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                     param_calls.push(quote! {
                         {
                             use #k_crate::nn::module::{AutorefParameters, AutorefParametersFallback};
-                            params.extend((&&self.#fname).maybe_parameters(core::marker::PhantomData::<#b_ident>));
+                            (&&self.#fname).maybe_parameters(core::marker::PhantomData::<#b_ident>, &#format_mac("{}{}", prefix, #fname_str), map);
                         }
                     });
                     load_state_calls.push(quote! {
@@ -180,7 +180,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                     param_calls.push(quote! {
                         {
                             use #k_crate::nn::module::{AutorefParameters, AutorefParametersFallback};
-                            params.extend((&&self.#idx).maybe_parameters(core::marker::PhantomData::<#b_ident>));
+                            (&&self.#idx).maybe_parameters(core::marker::PhantomData::<#b_ident>, &#format_mac("{}{}", prefix, #idx_str), map);
                         }
                     });
                     load_state_calls.push(quote! {
@@ -265,11 +265,10 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
     let expanded = quote! {
         #input
 
-        impl #impl_generics #k_crate::nn::Parameters<#b_ident> for #name #ty_generics #where_clause {
-            fn parameters(&self) -> #vec_ty<<#b_ident as #k_crate::prelude::Backend>::RawVar> {
-                let mut params = #vec_ty::new();
+        impl #impl_generics #k_crate::nn::module::Parameters<#b_ident> for #name #ty_generics #where_clause {
+            fn named_parameters(&self, prefix: &str, map: &mut std::collections::HashMap<String, <#b_ident as #k_crate::prelude::Backend>::RawVar>) {
+                let prefix = if prefix.is_empty() { "".to_string() } else { format!("{}.", prefix) };
                 #(#param_calls)*
-                params
             }
         }
 

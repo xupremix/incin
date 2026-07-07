@@ -148,6 +148,10 @@ impl<B: Backend> Backend for TracingBackend<B> {
         Ok(TracingVar { inner, value_id: var.value_id })
     }
 
+    fn assign_var(_var: &mut Self::RawVar, _tensor: &Self::RawTensor) -> Result<()> {
+        Ok(())
+    }
+
     fn var_randn(shape: &[usize], dtype: KindleDType, device: &KindleDevice) -> Result<Self::RawVar> {
         let inner = B::var_randn(shape, dtype, device)?;
         let value_id = TRACING_GRAPH.with(|g| g.borrow_mut().add_value(shape.to_vec(), dtype, None));
@@ -480,20 +484,12 @@ impl<B: Backend> Backend for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::AdaptiveAvgPool2d, x, &inner))
     }
 
-    fn backward(t: &Self::RawTensor) -> Result<Self::Grads> {
-        B::backward(&t.inner)
+    fn backward(loss: &Self::RawTensor) -> Result<Self::Grads> {
+        B::backward(&loss.inner)
     }
 
-    fn step_sgd(_params: &mut [Self::RawVar], _grads: &Self::Grads, _lr: f64) -> Result<()> {
-        Ok(())
-    }
-
-    fn step_adamw(_params: &mut [Self::RawVar], _grads: &Self::Grads, _lr: f64) -> Result<()> {
-        Ok(())
-    }
-
-    fn step_adam(_params: &mut [Self::RawVar], _grads: &Self::Grads, _lr: f64) -> Result<()> {
-        Ok(())
+    fn get_grad(_var: &Self::RawVar, _grads: &Self::Grads) -> Result<Option<Self::RawTensor>> {
+        Ok(None)
     }
 
     fn from_bytes(
