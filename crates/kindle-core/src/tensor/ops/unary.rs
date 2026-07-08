@@ -174,8 +174,8 @@ impl<S: Shape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
     /// let t = Tensor::<s![2], DefaultBackend>::from_slice(&[1.0, 2.0]).unwrap();
     /// let res = t.mul_scalar(3.0).unwrap(); // [3.0, 6.0]
     /// ```
-    pub fn mul_scalar(&self, scalar: f64) -> Result<Self> {
-        let inner = B::mul_scalar(&self.inner, scalar)?;
+    pub fn mul_scalar<Sc: Into<crate::tensor::backend::ScalarValue>>(&self, scalar: Sc) -> Result<Self> {
+        let inner = B::mul_scalar(&self.inner, scalar.into())?;
         Ok(Tensor::from_parts_unchecked(
             inner,
             self._shape.clone(),
@@ -193,8 +193,8 @@ impl<S: Shape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
     /// let t = Tensor::<s![2], DefaultBackend>::from_slice(&[1.0, 2.0]).unwrap();
     /// let res = t.add_scalar(3.0).unwrap(); // [4.0, 5.0]
     /// ```
-    pub fn add_scalar(&self, scalar: f64) -> Result<Self> {
-        let inner = B::add_scalar(&self.inner, scalar)?;
+    pub fn add_scalar<Sc: Into<crate::tensor::backend::ScalarValue>>(&self, scalar: Sc) -> Result<Self> {
+        let inner = B::add_scalar(&self.inner, scalar.into())?;
         Ok(Tensor::from_parts_unchecked(
             inner,
             self._shape.clone(),
@@ -204,3 +204,41 @@ impl<S: Shape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
         ))
     }
 }
+
+macro_rules! impl_std_scalar_ops {
+    ($t:ty) => {
+        impl<S: Shape, B: Backend, G: RequiresGrad> core::ops::Mul<$t> for Tensor<S, B, G> {
+            type Output = Tensor<S, B, G>;
+            #[inline]
+            fn mul(self, rhs: $t) -> Self::Output {
+                self.mul_scalar(rhs).unwrap()
+            }
+        }
+        impl<'a, S: Shape, B: Backend, G: RequiresGrad> core::ops::Mul<$t> for &'a Tensor<S, B, G> {
+            type Output = Tensor<S, B, G>;
+            #[inline]
+            fn mul(self, rhs: $t) -> Self::Output {
+                self.mul_scalar(rhs).unwrap()
+            }
+        }
+        impl<S: Shape, B: Backend, G: RequiresGrad> core::ops::Add<$t> for Tensor<S, B, G> {
+            type Output = Tensor<S, B, G>;
+            #[inline]
+            fn add(self, rhs: $t) -> Self::Output {
+                self.add_scalar(rhs).unwrap()
+            }
+        }
+        impl<'a, S: Shape, B: Backend, G: RequiresGrad> core::ops::Add<$t> for &'a Tensor<S, B, G> {
+            type Output = Tensor<S, B, G>;
+            #[inline]
+            fn add(self, rhs: $t) -> Self::Output {
+                self.add_scalar(rhs).unwrap()
+            }
+        }
+    };
+}
+
+impl_std_scalar_ops!(f32);
+impl_std_scalar_ops!(f64);
+impl_std_scalar_ops!(i32);
+impl_std_scalar_ops!(i64);

@@ -42,7 +42,7 @@ impl<
 
     #[inline]
     fn forward(&self, x: Tensor<I, B>) -> core::result::Result<Self::Output, Error> {
-        let out = <B as Backend>::max_pool2d(
+        let out = B::max_pool2d(
             x.inner(),
             (K::USIZE, K::USIZE),
             (S::USIZE, S::USIZE),

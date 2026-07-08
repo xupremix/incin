@@ -62,11 +62,11 @@ error[E0599]: the method `concat` exists for struct `kindle_core::prelude::Tenso
   |             help: use associated function syntax instead: `kindle_core::prelude::Tensor<(), DummyBackend>::concat(&t2)`
   |
   = note: found the following associated functions; to be used as methods, functions must have a `self` parameter
-note: the candidate is defined in the trait `kindle_core::prelude::Backend`
+note: the candidate is defined in the trait `kindle_core::prelude::TensorOps`
  --> src/tensor/backend.rs
   |
-  |     fn concat(t: &[&Self::RawTensor], dim: usize) -> Result<Self::RawTensor>;
-  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |     fn concat(t: &[&B::RawTensor], dim: usize) -> Result<B::RawTensor>;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   = note: the following trait bounds were not satisfied:
           `(): ConcatShape<_, _>`
 

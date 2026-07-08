@@ -6,6 +6,8 @@ pub type NodeId = usize;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum OpType {
+    ArgMax,
+    ArgMin,
     Add,
     Sub,
     Mul,
@@ -54,6 +56,8 @@ pub enum OpType {
 impl OpType {
     pub fn as_str(&self) -> &'static str {
         match self {
+            OpType::ArgMax => "ArgMax",
+            OpType::ArgMin => "ArgMin",
             OpType::Add => "Add",
             OpType::Sub => "Sub",
             OpType::Mul => "Mul",

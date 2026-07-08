@@ -68,6 +68,6 @@ pub mod prelude {
     pub use crate::shapes::dim::Dim;
     pub use crate::shapes::shape::{ConstShape, DynShape, PartialDynShape, Shape};
     pub use crate::symbolic_dim;
-    pub use crate::tensor::backend::Backend;
+    pub use crate::tensor::backend::*;
     pub use typenum::{self, B0, B1, Bit, Diff, Prod, Quot, Sum, UInt, UTerm, Unsigned, consts::*};
 }

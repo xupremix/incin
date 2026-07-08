@@ -169,12 +169,12 @@ where
         let length = x_shape[rank - 1];
 
         let x_inner = if rank > 3 {
-            <B as Backend>::reshape(&x.inner, &[batch_size, in_channels, length])?
+            B::reshape(&x.inner, &[batch_size, in_channels, length])?
         } else {
             x.inner.clone()
         };
 
-        let out = <B as Backend>::conv1d(
+        let out = B::conv1d(
             &x_inner,
             &weight.inner,
             bias.as_ref().map(|b| b.inner()),
@@ -191,7 +191,7 @@ where
 
         let out_shape = <I::Output as DynShape>::dims(&shape);
         let out = if rank > 3 {
-            <B as Backend>::reshape(&out, out_shape.as_ref())?
+            B::reshape(&out, out_shape.as_ref())?
         } else {
             out
         };
@@ -230,12 +230,12 @@ where
         let length = x_shape[rank - 1];
 
         let x_inner = if rank > 3 {
-            <B as Backend>::reshape(&x.inner, &[batch_size, in_channels, length])?
+            B::reshape(&x.inner, &[batch_size, in_channels, length])?
         } else {
             x.inner.clone()
         };
 
-        let out = <B as Backend>::conv1d(
+        let out = B::conv1d(
             &x_inner,
             &weight.inner,
             None,
@@ -252,7 +252,7 @@ where
 
         let out_shape = <I::Output as DynShape>::dims(&shape);
         let out = if rank > 3 {
-            <B as Backend>::reshape(&out, out_shape.as_ref())?
+            B::reshape(&out, out_shape.as_ref())?
         } else {
             out
         };
@@ -295,12 +295,12 @@ where
         let length = x_shape[rank - 1];
 
         let x_inner = if rank > 3 {
-            <B as Backend>::reshape(&x.inner, &[batch_size, in_channels, length])?
+            B::reshape(&x.inner, &[batch_size, in_channels, length])?
         } else {
             x.inner.clone()
         };
 
-        let out = <B as Backend>::conv1d(
+        let out = B::conv1d(
             &x_inner,
             &weight.inner,
             bias.as_ref().map(|b| b.inner()),
@@ -317,7 +317,7 @@ where
 
         let out_shape = <I::Output as DynShape>::dims(&shape);
         let out = if rank > 3 {
-            <B as Backend>::reshape(&out, out_shape.as_ref())?
+            B::reshape(&out, out_shape.as_ref())?
         } else {
             out
         };

@@ -43,7 +43,7 @@ impl<
 
     #[inline]
     fn forward(&self, x: Tensor<I, B>) -> core::result::Result<Self::Output, Error> {
-        let out = <B as Backend>::adaptive_avg_pool2d(x.inner(), (HOut::USIZE, WOut::USIZE))?;
+        let out = B::adaptive_avg_pool2d(x.inner(), (HOut::USIZE, WOut::USIZE))?;
 
         let shape = <I as crate::shapes::AdaptiveAvgPool2dShape<HOut, WOut>>::compute_output_shape(
             x.shape_field(),

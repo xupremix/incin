@@ -87,7 +87,7 @@ where
     #[inline]
     fn forward(&self, x: Tensor<InS, B>) -> core::result::Result<Self::Output, Error> {
         let weight = self.weight.as_tensor()?;
-        let out = <B as Backend>::embedding(x.inner(), weight.inner())?;
+        let out = B::embedding(x.inner(), weight.inner())?;
 
         let mut dims = <InS as DynShape>::dims(x.shape_field()).into();
         dims.push(<S::Embed as typenum::Unsigned>::USIZE);

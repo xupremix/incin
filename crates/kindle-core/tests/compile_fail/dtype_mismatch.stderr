@@ -101,11 +101,11 @@ error[E0599]: the method `add` exists for struct `kindle_core::prelude::Tensor<k
   |     help: use associated function syntax instead: `kindle_core::prelude::Tensor<kindle_core::prelude::Dyn, DummyBackend, f32>::add(&t2)`
   |
   = note: found the following associated functions; to be used as methods, functions must have a `self` parameter
-note: the candidate is defined in the trait `kindle_core::prelude::Backend`
+note: the candidate is defined in the trait `kindle_core::prelude::NumericOps`
  --> src/tensor/backend.rs
   |
-  |     fn add(lhs: &Self::RawTensor, rhs: &Self::RawTensor) -> Result<Self::RawTensor>;
-  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |     fn add(lhs: &B::RawTensor, rhs: &B::RawTensor) -> Result<B::RawTensor>;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   = note: the following trait bounds were not satisfied:
           `f32: RequiresGrad`
 

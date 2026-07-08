@@ -12,6 +12,10 @@ pub trait DType: 'static + Clone + Debug + Send + Sync + PartialEq {
 
 pub trait DynDType: DType {}
 
+pub trait FloatDType: DType {}
+pub trait IntDType: DType {}
+pub trait BoolDType: DType {}
+
 pub trait ConstDType: DType<Arg = ()> {
     /// The Rust element type corresponding to this dtype.
     type Elem: 'static + Copy + Debug + Send + Sync;
@@ -60,6 +64,15 @@ impl_dtype!(
     F16 f16,
     BF16 bf16,
 );
+
+impl FloatDType for f32 {}
+impl FloatDType for f64 {}
+impl FloatDType for f16 {}
+impl FloatDType for bf16 {}
+
+impl IntDType for u8 {}
+impl IntDType for u32 {}
+impl IntDType for i64 {}
 
 impl DType for Dyn {
     type Arg = KindleDType;

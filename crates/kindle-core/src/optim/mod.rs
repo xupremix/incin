@@ -43,7 +43,7 @@ impl<B: Backend> Optimizer<B> for SGD<B> {
             if let Some(grad) = B::get_grad(var, &grads.0)? {
                 let t = B::var_as_tensor(var)?;
                 // t = t - lr * grad
-                let grad_scaled = B::mul_scalar(&grad, self.lr)?;
+                let grad_scaled = B::mul_scalar(&grad, self.lr.into())?;
                 let updated = B::sub(&t, &grad_scaled)?;
                 B::assign_var(var, &updated)?;
             }
@@ -106,36 +106,36 @@ impl<B: Backend> Optimizer<B> for AdamW<B> {
 
                 // Weight decay
                 if self.weight_decay > 0.0 {
-                    let decay = B::mul_scalar(&t, self.weight_decay * self.lr)?;
+                    let decay = B::mul_scalar(&t, (self.weight_decay * self.lr).into())?;
                     t = B::sub(&t, &decay)?;
                 }
 
                 let m_t = if let Some(m) = self.m.get(name) {
-                    let term1 = B::mul_scalar(m, self.beta1)?;
-                    let term2 = B::mul_scalar(&grad, 1.0 - self.beta1)?;
+                    let term1 = B::mul_scalar(m, self.beta1.into())?;
+                    let term2 = B::mul_scalar(&grad, (1.0 - self.beta1).into())?;
                     B::add(&term1, &term2)?
                 } else {
-                    B::mul_scalar(&grad, 1.0 - self.beta1)?
+                    B::mul_scalar(&grad, (1.0 - self.beta1).into())?
                 };
 
                 let grad_sq = B::mul(&grad, &grad)?;
                 let v_t = if let Some(v) = self.v.get(name) {
-                    let term1 = B::mul_scalar(v, self.beta2)?;
-                    let term2 = B::mul_scalar(&grad_sq, 1.0 - self.beta2)?;
+                    let term1 = B::mul_scalar(v, self.beta2.into())?;
+                    let term2 = B::mul_scalar(&grad_sq, (1.0 - self.beta2).into())?;
                     B::add(&term1, &term2)?
                 } else {
-                    B::mul_scalar(&grad_sq, 1.0 - self.beta2)?
+                    B::mul_scalar(&grad_sq, (1.0 - self.beta2).into())?
                 };
 
                 self.m.insert(name.clone(), m_t.clone());
                 self.v.insert(name.clone(), v_t.clone());
 
-                let m_hat = B::mul_scalar(&m_t, 1.0 / bias_correction1)?;
-                let v_hat = B::mul_scalar(&v_t, 1.0 / bias_correction2)?;
+                let m_hat = B::mul_scalar(&m_t, (1.0 / bias_correction1).into())?;
+                let v_hat = B::mul_scalar(&v_t, (1.0 / bias_correction2).into())?;
 
                 // step = lr * m_hat / (sqrt(v_hat) + eps)
-                let denom = B::add_scalar(&B::sqrt(&v_hat)?, self.eps)?;
-                let step = B::mul_scalar(&B::div(&m_hat, &denom)?, self.lr)?;
+                let denom = B::add_scalar(&B::sqrt(&v_hat)?, self.eps.into())?;
+                let step = B::mul_scalar(&B::div(&m_hat, &denom)?, self.lr.into())?;
 
                 let updated = B::sub(&t, &step)?;
                 B::assign_var(var, &updated)?;
@@ -195,31 +195,31 @@ impl<B: Backend> Optimizer<B> for Adam<B> {
                 let t = B::var_as_tensor(var)?;
 
                 let m_t = if let Some(m) = self.m.get(name) {
-                    let term1 = B::mul_scalar(m, self.beta1)?;
-                    let term2 = B::mul_scalar(&grad, 1.0 - self.beta1)?;
+                    let term1 = B::mul_scalar(m, self.beta1.into())?;
+                    let term2 = B::mul_scalar(&grad, (1.0 - self.beta1).into())?;
                     B::add(&term1, &term2)?
                 } else {
-                    B::mul_scalar(&grad, 1.0 - self.beta1)?
+                    B::mul_scalar(&grad, (1.0 - self.beta1).into())?
                 };
 
                 let grad_sq = B::mul(&grad, &grad)?;
                 let v_t = if let Some(v) = self.v.get(name) {
-                    let term1 = B::mul_scalar(v, self.beta2)?;
-                    let term2 = B::mul_scalar(&grad_sq, 1.0 - self.beta2)?;
+                    let term1 = B::mul_scalar(v, self.beta2.into())?;
+                    let term2 = B::mul_scalar(&grad_sq, (1.0 - self.beta2).into())?;
                     B::add(&term1, &term2)?
                 } else {
-                    B::mul_scalar(&grad_sq, 1.0 - self.beta2)?
+                    B::mul_scalar(&grad_sq, (1.0 - self.beta2).into())?
                 };
 
                 self.m.insert(name.clone(), m_t.clone());
                 self.v.insert(name.clone(), v_t.clone());
 
-                let m_hat = B::mul_scalar(&m_t, 1.0 / bias_correction1)?;
-                let v_hat = B::mul_scalar(&v_t, 1.0 / bias_correction2)?;
+                let m_hat = B::mul_scalar(&m_t, (1.0 / bias_correction1).into())?;
+                let v_hat = B::mul_scalar(&v_t, (1.0 / bias_correction2).into())?;
 
                 // step = lr * m_hat / (sqrt(v_hat) + eps)
-                let denom = B::add_scalar(&B::sqrt(&v_hat)?, self.eps)?;
-                let step = B::mul_scalar(&B::div(&m_hat, &denom)?, self.lr)?;
+                let denom = B::add_scalar(&B::sqrt(&v_hat)?, self.eps.into())?;
+                let step = B::mul_scalar(&B::div(&m_hat, &denom)?, self.lr.into())?;
 
                 let updated = B::sub(&t, &step)?;
                 B::assign_var(var, &updated)?;

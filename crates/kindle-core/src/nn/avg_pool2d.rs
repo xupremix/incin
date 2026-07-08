@@ -42,7 +42,7 @@ impl<
 
     #[inline]
     fn forward(&self, x: Tensor<I, B>) -> core::result::Result<Self::Output, Error> {
-        let out = <B as Backend>::avg_pool2d(
+        let out = B::avg_pool2d(
             x.inner(),
             (K::USIZE, K::USIZE),
             (S::USIZE, S::USIZE),

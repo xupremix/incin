@@ -95,40 +95,40 @@ where
 
             Init::Uniform { bound } => {
                 let t_rand = B::rand(dims.as_ref(), dtype, &device)?;
-                let t_scaled = B::mul_scalar(&t_rand, 2.0 * bound)?;
-                let t_final = B::add_scalar(&t_scaled, -bound)?;
+                let t_scaled = B::mul_scalar(&t_rand, (2.0 * bound).into())?;
+                let t_final = B::add_scalar(&t_scaled, (-bound).into())?;
                 B::var_from_tensor(&t_final)?
             }
             Init::Constant(c) => {
                 let ones = B::ones(dims.as_ref(), dtype, &device)?;
-                let c_tensor = B::mul_scalar(&ones, c)?;
+                let c_tensor = B::mul_scalar(&ones, c.into())?;
                 B::var_from_tensor(&c_tensor)?
             }
             Init::KaimingUniform { fan_in, a } => {
                 let std = f64::sqrt(2.0 / ((1.0 + a * a) * fan_in as f64));
                 let bound = f64::sqrt(3.0) * std;
                 let t_rand = B::rand(dims.as_ref(), dtype, &device)?;
-                let t_scaled = B::mul_scalar(&t_rand, 2.0 * bound)?;
-                let t_final = B::add_scalar(&t_scaled, -bound)?;
+                let t_scaled = B::mul_scalar(&t_rand, (2.0 * bound).into())?;
+                let t_final = B::add_scalar(&t_scaled, (-bound).into())?;
                 B::var_from_tensor(&t_final)?
             }
             Init::KaimingNormal { fan_in, a } => {
                 let std = f64::sqrt(2.0 / ((1.0 + a * a) * fan_in as f64));
                 let t_randn = B::randn(dims.as_ref(), dtype, &device)?;
-                let t_final = B::mul_scalar(&t_randn, std)?;
+                let t_final = B::mul_scalar(&t_randn, std.into())?;
                 B::var_from_tensor(&t_final)?
             }
             Init::XavierUniform { fan_in, fan_out } => {
                 let bound = f64::sqrt(6.0 / (fan_in as f64 + fan_out as f64));
                 let t_rand = B::rand(dims.as_ref(), dtype, &device)?;
-                let t_scaled = B::mul_scalar(&t_rand, 2.0 * bound)?;
-                let t_final = B::add_scalar(&t_scaled, -bound)?;
+                let t_scaled = B::mul_scalar(&t_rand, (2.0 * bound).into())?;
+                let t_final = B::add_scalar(&t_scaled, (-bound).into())?;
                 B::var_from_tensor(&t_final)?
             }
             Init::XavierNormal { fan_in, fan_out } => {
                 let std = f64::sqrt(2.0 / (fan_in as f64 + fan_out as f64));
                 let t_randn = B::randn(dims.as_ref(), dtype, &device)?;
-                let t_final = B::mul_scalar(&t_randn, std)?;
+                let t_final = B::mul_scalar(&t_randn, std.into())?;
                 B::var_from_tensor(&t_final)?
             }
         };
@@ -397,40 +397,40 @@ where
 
             Init::Uniform { bound } => {
                 let t_rand = B::rand(dims.as_ref(), dtype, &device)?;
-                let t_scaled = B::mul_scalar(&t_rand, 2.0 * bound)?;
-                let t_final = B::add_scalar(&t_scaled, -bound)?;
+                let t_scaled = B::mul_scalar(&t_rand, (2.0 * bound).into())?;
+                let t_final = B::add_scalar(&t_scaled, (-bound).into())?;
                 B::var_from_tensor(&t_final)?
             }
             Init::Constant(c) => {
                 let ones = B::ones(dims.as_ref(), dtype, &device)?;
-                let c_tensor = B::mul_scalar(&ones, c)?;
+                let c_tensor = B::mul_scalar(&ones, c.into())?;
                 B::var_from_tensor(&c_tensor)?
             }
             Init::KaimingUniform { fan_in, a } => {
                 let std = f64::sqrt(2.0 / ((1.0 + a * a) * fan_in as f64));
                 let bound = f64::sqrt(3.0) * std;
                 let t_rand = B::rand(dims.as_ref(), dtype, &device)?;
-                let t_scaled = B::mul_scalar(&t_rand, 2.0 * bound)?;
-                let t_final = B::add_scalar(&t_scaled, -bound)?;
+                let t_scaled = B::mul_scalar(&t_rand, (2.0 * bound).into())?;
+                let t_final = B::add_scalar(&t_scaled, (-bound).into())?;
                 B::var_from_tensor(&t_final)?
             }
             Init::KaimingNormal { fan_in, a } => {
                 let std = f64::sqrt(2.0 / ((1.0 + a * a) * fan_in as f64));
                 let t_randn = B::randn(dims.as_ref(), dtype, &device)?;
-                let t_final = B::mul_scalar(&t_randn, std)?;
+                let t_final = B::mul_scalar(&t_randn, std.into())?;
                 B::var_from_tensor(&t_final)?
             }
             Init::XavierUniform { fan_in, fan_out } => {
                 let bound = f64::sqrt(6.0 / (fan_in as f64 + fan_out as f64));
                 let t_rand = B::rand(dims.as_ref(), dtype, &device)?;
-                let t_scaled = B::mul_scalar(&t_rand, 2.0 * bound)?;
-                let t_final = B::add_scalar(&t_scaled, -bound)?;
+                let t_scaled = B::mul_scalar(&t_rand, (2.0 * bound).into())?;
+                let t_final = B::add_scalar(&t_scaled, (-bound).into())?;
                 B::var_from_tensor(&t_final)?
             }
             Init::XavierNormal { fan_in, fan_out } => {
                 let std = f64::sqrt(2.0 / (fan_in as f64 + fan_out as f64));
                 let t_randn = B::randn(dims.as_ref(), dtype, &device)?;
-                let t_final = B::mul_scalar(&t_randn, std)?;
+                let t_final = B::mul_scalar(&t_randn, std.into())?;
                 B::var_from_tensor(&t_final)?
             }
         };
