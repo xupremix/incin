@@ -82,6 +82,40 @@ impl From<core::ops::RangeFull> for IndexSpec {
     }
 }
 
+pub trait IndexArgs {
+    fn into_specs(self) -> alloc::vec::Vec<IndexSpec>;
+}
+
+impl<T: Into<IndexSpec>> IndexArgs for T {
+    fn into_specs(self) -> alloc::vec::Vec<IndexSpec> {
+        alloc::vec![self.into()]
+    }
+}
+
+macro_rules! impl_index_args_tuple {
+    ($($t:ident),+) => {
+        impl<$($t: Into<IndexSpec>),+> IndexArgs for ($($t,)+) {
+            fn into_specs(self) -> alloc::vec::Vec<IndexSpec> {
+                let mut specs = alloc::vec::Vec::new();
+                #[allow(non_snake_case)]
+                let ($($t,)+) = self;
+                $(
+                    specs.push($t.into());
+                )+
+                specs
+            }
+        }
+    };
+}
+
+impl_index_args_tuple!(A);
+impl_index_args_tuple!(A, B);
+impl_index_args_tuple!(A, B, C);
+impl_index_args_tuple!(A, B, C, D);
+impl_index_args_tuple!(A, B, C, D, E);
+impl_index_args_tuple!(A, B, C, D, E, F);
+impl_index_args_tuple!(A, B, C, D, E, F, G);
+
 pub trait ShapeEq<Other> {
     const SHAPES_EQUAL: bool;
     const ASSERT_SHAPES_MATCH: ();

@@ -201,4 +201,71 @@ impl<S: Shape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
         /// ```
         min_keepdim, min_keepdim, ReduceKeepDim, true
     );
+
+}
+
+impl<S: crate::prelude::Shape + crate::prelude::DynShape, B: crate::prelude::Backend, G: crate::prelude::RequiresGrad> Tensor<S, B, G> {
+    /// Computes the argmax of the tensor.
+    /// If `dim` is `None`, the tensor is flattened and the argmax over the entire tensor is returned as a 0D scalar.
+    /// If `dim` is `Some(d)`, the argmax is computed along that dimension.
+    pub fn argmax(&self, dim: Option<usize>) -> Result<Tensor<crate::prelude::Dyn, B::BackendWithDType<u32>, crate::prelude::NoGrad>> {
+        let inner = match dim {
+            Some(d) => B::argmax(&self.inner, d)?,
+            None => {
+                let rank = self.rank();
+                let flat = if rank == 0 {
+                    self.inner.clone()
+                } else {
+                    B::flatten(&self.inner, 0, rank - 1)?
+                };
+                B::argmax(&flat, 0)?
+            }
+        };
+        let mut out_dims = S::dims(&self._shape).into();
+        if let Some(d) = dim {
+            out_dims.remove(d);
+        } else {
+            out_dims = alloc::vec![];
+        }
+        
+        Ok(Tensor::from_parts_unchecked(
+            inner,
+            crate::prelude::Dyn::from_dyn(&out_dims).unwrap(),
+            core::marker::PhantomData,
+            self._device.clone(),
+            crate::prelude::NoGrad::init(()),
+        ))
+    }
+
+    /// Computes the argmin of the tensor.
+    /// If `dim` is `None`, the tensor is flattened and the argmin over the entire tensor is returned as a 0D scalar.
+    /// If `dim` is `Some(d)`, the argmin is computed along that dimension.
+    pub fn argmin(&self, dim: Option<usize>) -> Result<Tensor<crate::prelude::Dyn, B::BackendWithDType<u32>, crate::prelude::NoGrad>> {
+        let inner = match dim {
+            Some(d) => B::argmin(&self.inner, d)?,
+            None => {
+                let rank = self.rank();
+                let flat = if rank == 0 {
+                    self.inner.clone()
+                } else {
+                    B::flatten(&self.inner, 0, rank - 1)?
+                };
+                B::argmin(&flat, 0)?
+            }
+        };
+        let mut out_dims = S::dims(&self._shape).into();
+        if let Some(d) = dim {
+            out_dims.remove(d);
+        } else {
+            out_dims = alloc::vec![];
+        }
+        
+        Ok(Tensor::from_parts_unchecked(
+            inner,
+            crate::prelude::Dyn::from_dyn(&out_dims).unwrap(),
+            core::marker::PhantomData,
+            self._device.clone(),
+            crate::prelude::NoGrad::init(()),
+        ))
+    }
 }

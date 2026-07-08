@@ -27,6 +27,16 @@ impl<S: Shape + DynShape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
         self.dyn_slice(specs)
     }
 
+    /// Ergonomic slicing and indexing API using `IndexArgs`.
+    /// 
+    /// # Examples
+    /// ```rust,ignore
+    /// let sliced = tensor.get((0, 1..3, ..))?;
+    /// ```
+    pub fn get<I: crate::tensor::ops::index::IndexArgs>(&self, index: I) -> Result<Tensor<Dyn, B, G>> {
+        self.dyn_slice(&index.into_specs())
+    }
+
     /// Internal alias for `slice`.
     pub fn dyn_slice(&self, specs: &[IndexSpec]) -> Result<Tensor<Dyn, B, G>> {
         let current_dims = S::dims(&self._shape);
@@ -305,21 +315,48 @@ impl<S: Shape + DynShape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
     /// Permute the tensor's dimensions by swapping `D1` and `D2`.
     /// Strongly typed output shape via `Transpose<D1, D2>`.
 
+    /// Extracts a single scalar value from a 0D or 1D tensor.
+    /// This will bring the tensor data to the CPU and read the bytes.
     pub fn to_scalar<E: Copy>(&self) -> Result<E> {
-        // Fallback generic implementation
         let bytes = B::to_bytes(&self.inner)?;
-        if bytes.is_empty() {
-            return Err(crate::err::Error::Msg(
-                "Cannot convert empty tensor to scalar".to_string(),
-            ));
+        if bytes.len() != core::mem::size_of::<E>() {
+            // Attempt to dynamically cast f32 -> bool if requested, to keep old fallback working
+            if core::mem::size_of::<E>() == 1 && bytes.len() > 0 {
+                let val = bytes[0] != 0;
+                return Ok(unsafe { core::ptr::read_unaligned(&val as *const bool as *const E) });
+            }
+            return Err(crate::err::Error::Msg(alloc::format!(
+                "Size mismatch when converting to scalar. Tensor dtype bytes: {}, expected: {}",
+                bytes.len(),
+                core::mem::size_of::<E>()
+            )));
         }
-        // Assume for tests it's either an f32 castable to bool, or a direct matching byte size.
-        if core::mem::size_of::<E>() == 1 {
-            let val = bytes[0] != 0;
-            return Ok(unsafe { core::ptr::read(&val as *const bool as *const E) });
+        let val = unsafe { core::ptr::read_unaligned(bytes.as_ptr() as *const E) };
+        Ok(val)
+    }
+
+    /// Extracts a 1D vector of scalars from this tensor.
+    pub fn to_vec1<E: Copy>(&self) -> Result<alloc::vec::Vec<E>> {
+        let bytes = B::to_bytes(&self.inner)?;
+        let num_elements = S::numel(&self._shape);
+        let expected_bytes = num_elements * core::mem::size_of::<E>();
+        if bytes.len() != expected_bytes {
+            return Err(crate::err::Error::Msg(alloc::format!(
+                "Size mismatch when converting to vec. Tensor dtype bytes: {}, expected: {}",
+                bytes.len(),
+                expected_bytes
+            )));
         }
-        let ptr = bytes.as_ptr() as *const E;
-        Ok(unsafe { core::ptr::read(ptr) })
+        let mut out = alloc::vec::Vec::with_capacity(num_elements);
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                bytes.as_ptr() as *const E,
+                out.as_mut_ptr(),
+                num_elements,
+            );
+            out.set_len(num_elements);
+        }
+        Ok(out)
     }
 
     /// Permutes the tensor's dimensions by swapping `D1` and `D2`.

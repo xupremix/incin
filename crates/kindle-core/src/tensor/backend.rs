@@ -20,124 +20,141 @@ impl From<f64> for ScalarValue { fn from(v: f64) -> Self { ScalarValue::Float(v)
 impl From<i32> for ScalarValue { fn from(v: i32) -> Self { ScalarValue::Int(v as i64) } }
 impl From<i64> for ScalarValue { fn from(v: i64) -> Self { ScalarValue::Int(v) } }
 
+
 pub trait Backend:
     Clone
     + 'static
     + CreationOps<Self>
     + NumericOps<Self>
     + TensorOps<Self>
-    + ReductionOps<Self>
-    + FloatOps<Self>
-    + ModuleOps<Self>
-    + LossOps<Self>
 {
     type Device: super::device::Device;
-    type DType: super::dtype::DType;
-    type BackendWithDType<NewT: super::dtype::DType>: Backend<
-            DType = NewT,
-            Device = Self::Device,
-            RawTensor = Self::RawTensor,
-            RawVar = Self::RawVar,
-            Grads = Self::Grads,
-        >;
-    type BackendWithDevice<NewD: super::device::Device>: Backend<
-            Device = NewD,
-            DType = Self::DType,
-            RawTensor = Self::RawTensor,
-            RawVar = Self::RawVar,
-            Grads = Self::Grads,
-        >;
+    type FloatElem: super::dtype::FloatDType;
+    type IntElem: super::dtype::IntDType;
+    type BoolElem: super::dtype::BoolDType;
 
-    type RawTensor: Clone;
+    type FloatTensorPrimitive: Clone;
+    type IntTensorPrimitive: Clone;
+    type BoolTensorPrimitive: Clone;
+
     type RawVar: Clone;
     type Grads;
     type InnerBackend: Backend;
 
-    fn shape(t: &<Self as Backend>::RawTensor) -> alloc::vec::Vec<usize>;
-    fn format_tensor_display(t: &<Self as Backend>::RawTensor) -> alloc::string::String;
-    fn format_tensor_debug(t: &<Self as Backend>::RawTensor) -> alloc::string::String;
-    fn var_as_tensor(var: &Self::RawVar) -> Result<<Self as Backend>::RawTensor>;
-    fn var_from_tensor(t: &<Self as Backend>::RawTensor) -> Result<Self::RawVar>;
-    fn assign_var(var: &mut Self::RawVar, tensor: &<Self as Backend>::RawTensor) -> Result<()>;
-    fn tensor_to_device(t: &<Self as Backend>::RawTensor, device: &KindleDevice) -> Result<<Self as Backend>::RawTensor>;
-    fn var_to_device(var: &Self::RawVar, device: &KindleDevice) -> Result<Self::RawVar>;
-    fn to_dtype(t: &<Self as Backend>::RawTensor, dtype: KindleDType) -> Result<<Self as Backend>::RawTensor>;
-    fn backward(loss: &<Self as Backend>::RawTensor) -> Result<Self::Grads>;
-    fn get_grad(var: &Self::RawVar, grads: &Self::Grads) -> Result<Option<Self::RawTensor>>;
-    fn to_bytes(t: &<Self as Backend>::RawTensor) -> Result<alloc::vec::Vec<u8>>;
-    fn from_bytes(
-        bytes: &[u8],
-        shape: &[usize],
-        dtype: KindleDType,
-        device: &KindleDevice,
-    ) -> Result<<Self as Backend>::RawTensor>;
+    fn shape<K: super::kind::TensorKind>(t: &K::Primitive<Self>) -> alloc::vec::Vec<usize>;
+    fn format_tensor_display<K: super::kind::TensorKind>(t: &K::Primitive<Self>) -> alloc::string::String;
+    fn format_tensor_debug<K: super::kind::TensorKind>(t: &K::Primitive<Self>) -> alloc::string::String;
+
+    fn from_inner<K: super::kind::TensorKind>(
+        inner: K::Primitive<Self>,
+        shape: alloc::vec::Vec<usize>,
+        device: Self::Device,
+    ) -> crate::tensor::base::Tensor<crate::shapes::Dyn, Self, crate::tensor::grad::NoneGrad>
+    where
+        Self: Sized;
+
+    fn backward<K: super::kind::TensorKind>(t: &K::Primitive<Self>) -> Result<Self::Grads>;
+    fn get_grad<K: super::kind::TensorKind>(t: &K::Primitive<Self>, grads: &Self::Grads) -> Result<Option<K::Primitive<Self>>>;
+
+    fn to_bytes<K: super::kind::TensorKind>(t: &K::Primitive<Self>) -> Result<std::vec::Vec<u8>>;
+    
+    // We provide from_bytes separated by primitive
+    fn float_from_bytes(bytes: &[u8], shape: &[usize], device: &Self::Device) -> Result<Self::FloatTensorPrimitive>;
+    fn int_from_bytes(bytes: &[u8], shape: &[usize], device: &Self::Device) -> Result<Self::IntTensorPrimitive>;
+    fn bool_from_bytes(bytes: &[u8], shape: &[usize], device: &Self::Device) -> Result<Self::BoolTensorPrimitive>;
 }
 
-pub trait CreationOps<B: Backend> {
-    fn zeros(shape: &[usize], dtype: KindleDType, device: &KindleDevice) -> Result<B::RawTensor>;
-    fn ones(shape: &[usize], dtype: KindleDType, device: &KindleDevice) -> Result<B::RawTensor>;
-    fn rand(shape: &[usize], dtype: KindleDType, device: &KindleDevice) -> Result<B::RawTensor>;
-    fn randn(shape: &[usize], dtype: KindleDType, device: &KindleDevice) -> Result<B::RawTensor>;
-    fn var_zeros(shape: &[usize], dtype: KindleDType, device: &KindleDevice) -> Result<B::RawVar>;
-    fn var_ones(shape: &[usize], dtype: KindleDType, device: &KindleDevice) -> Result<B::RawVar>;
-    fn var_rand(shape: &[usize], dtype: KindleDType, device: &KindleDevice) -> Result<B::RawVar>;
-    fn var_randn(shape: &[usize], dtype: KindleDType, device: &KindleDevice) -> Result<B::RawVar>;
-}
-
-pub trait NumericOps<B: Backend> {
-    fn add(lhs: &B::RawTensor, rhs: &B::RawTensor) -> Result<B::RawTensor>;
-    fn sub(lhs: &B::RawTensor, rhs: &B::RawTensor) -> Result<B::RawTensor>;
-    fn mul(lhs: &B::RawTensor, rhs: &B::RawTensor) -> Result<B::RawTensor>;
-    fn div(lhs: &B::RawTensor, rhs: &B::RawTensor) -> Result<B::RawTensor>;
-    fn matmul(lhs: &B::RawTensor, rhs: &B::RawTensor) -> Result<B::RawTensor>;
-    fn mul_scalar(t: &B::RawTensor, scalar: ScalarValue) -> Result<B::RawTensor>;
-    fn add_scalar(t: &B::RawTensor, scalar: ScalarValue) -> Result<B::RawTensor>;
-}
-
+// FloatOps only requires Backend, operates on FloatTensorPrimitive
 pub trait FloatOps<B: Backend> {
-    fn relu(t: &B::RawTensor) -> Result<B::RawTensor>;
-    fn gelu(t: &B::RawTensor) -> Result<B::RawTensor>;
-    fn abs(t: &B::RawTensor) -> Result<B::RawTensor>;
-    fn exp(t: &B::RawTensor) -> Result<B::RawTensor>;
-    fn neg(t: &B::RawTensor) -> Result<B::RawTensor>;
-    fn sqrt(t: &B::RawTensor) -> Result<B::RawTensor>;
-    fn log(t: &B::RawTensor) -> Result<B::RawTensor>;
-    fn tanh(t: &B::RawTensor) -> Result<B::RawTensor>;
-    fn sigmoid(t: &B::RawTensor) -> Result<B::RawTensor>;
-    fn swish(t: &B::RawTensor) -> Result<B::RawTensor>;
-    fn softmax(t: &B::RawTensor, dim: usize) -> Result<B::RawTensor>;
+    fn abs(t: &B::FloatTensorPrimitive) -> Result<B::FloatTensorPrimitive>;
+    fn exp(t: &B::FloatTensorPrimitive) -> Result<B::FloatTensorPrimitive>;
+    fn neg(t: &B::FloatTensorPrimitive) -> Result<B::FloatTensorPrimitive>;
+    fn sqrt(t: &B::FloatTensorPrimitive) -> Result<B::FloatTensorPrimitive>;
+    fn log(t: &B::FloatTensorPrimitive) -> Result<B::FloatTensorPrimitive>;
+    fn tanh(t: &B::FloatTensorPrimitive) -> Result<B::FloatTensorPrimitive>;
+    fn sigmoid(t: &B::FloatTensorPrimitive) -> Result<B::FloatTensorPrimitive>;
+    fn swish(t: &B::FloatTensorPrimitive) -> Result<B::FloatTensorPrimitive>;
+    fn softmax(t: &B::FloatTensorPrimitive, dim: usize) -> Result<B::FloatTensorPrimitive>;
+    fn add_scalar_float(t: &B::FloatTensorPrimitive, scalar: f64) -> Result<B::FloatTensorPrimitive>;
+    fn mul_scalar_float(t: &B::FloatTensorPrimitive, scalar: f64) -> Result<B::FloatTensorPrimitive>;
 }
 
-pub trait ReductionOps<B: Backend> {
-    fn sum_all(t: &B::RawTensor) -> Result<B::RawTensor>;
-    fn mean_all(t: &B::RawTensor) -> Result<B::RawTensor>;
-    fn max_all(t: &B::RawTensor) -> Result<B::RawTensor>;
-    fn min_all(t: &B::RawTensor) -> Result<B::RawTensor>;
-    fn sum_dim(t: &B::RawTensor, dim: usize) -> Result<B::RawTensor>;
-    fn sum_keepdim(t: &B::RawTensor, dim: usize) -> Result<B::RawTensor>;
-    fn mean_dim(t: &B::RawTensor, dim: usize) -> Result<B::RawTensor>;
-    fn mean_keepdim(t: &B::RawTensor, dim: usize) -> Result<B::RawTensor>;
-    fn max_dim(t: &B::RawTensor, dim: usize) -> Result<B::RawTensor>;
-    fn max_keepdim(t: &B::RawTensor, dim: usize) -> Result<B::RawTensor>;
-    fn min_dim(t: &B::RawTensor, dim: usize) -> Result<B::RawTensor>;
-    fn min_keepdim(t: &B::RawTensor, dim: usize) -> Result<B::RawTensor>;
-    fn argmax(t: &B::RawTensor, dim: usize) -> Result<B::RawTensor>;
-    fn argmin(t: &B::RawTensor, dim: usize) -> Result<B::RawTensor>;
+// NumericOps operates generically over any TensorKind! 
+pub trait NumericOps<B: Backend> {
+    fn add<K: super::kind::TensorKind>(lhs: &K::Primitive<B>, rhs: &K::Primitive<B>) -> Result<K::Primitive<B>>;
+    fn sub<K: super::kind::TensorKind>(lhs: &K::Primitive<B>, rhs: &K::Primitive<B>) -> Result<K::Primitive<B>>;
+    fn mul<K: super::kind::TensorKind>(lhs: &K::Primitive<B>, rhs: &K::Primitive<B>) -> Result<K::Primitive<B>>;
+    fn div<K: super::kind::TensorKind>(lhs: &K::Primitive<B>, rhs: &K::Primitive<B>) -> Result<K::Primitive<B>>;
 }
 
 pub trait TensorOps<B: Backend> {
-    fn broadcast_as(t: &B::RawTensor, shape: &[usize]) -> Result<B::RawTensor>;
-    fn broadcast_left(t: &B::RawTensor, shape: &[usize]) -> Result<B::RawTensor>;
-    fn reshape(t: &B::RawTensor, shape: &[usize]) -> Result<B::RawTensor>;
-    fn transpose(t: &B::RawTensor, dim1: usize, dim2: usize) -> Result<B::RawTensor>;
-    fn flatten(t: &B::RawTensor, start_dim: usize, end_dim: usize) -> Result<B::RawTensor>;
-    fn slice(t: &B::RawTensor, ranges: &[(usize, usize)]) -> Result<B::RawTensor>;
-    fn narrow(t: &B::RawTensor, dim: usize, start: usize, len: usize) -> Result<B::RawTensor>;
-    fn squeeze(t: &B::RawTensor, dim: usize) -> Result<B::RawTensor>;
-    fn stack(t: &[&B::RawTensor], dim: usize) -> Result<B::RawTensor>;
-    fn concat(t: &[&B::RawTensor], dim: usize) -> Result<B::RawTensor>;
+    fn reshape<K: super::kind::TensorKind>(t: &K::Primitive<B>, shape: &[usize]) -> Result<K::Primitive<B>>;
+    fn transpose<K: super::kind::TensorKind>(t: &K::Primitive<B>, dim1: usize, dim2: usize) -> Result<K::Primitive<B>>;
+    fn matmul<K: super::kind::TensorKind>(lhs: &K::Primitive<B>, rhs: &K::Primitive<B>) -> Result<K::Primitive<B>>;
+    fn broadcast_as<K: super::kind::TensorKind>(t: &K::Primitive<B>, shape: &[usize]) -> Result<K::Primitive<B>>;
+    fn narrow<K: super::kind::TensorKind>(t: &K::Primitive<B>, dim: usize, start: usize, len: usize) -> Result<K::Primitive<B>>;
+    fn squeeze<K: super::kind::TensorKind>(t: &K::Primitive<B>, dim: usize) -> Result<K::Primitive<B>>;
+    fn stack<K: super::kind::TensorKind>(t: &[&K::Primitive<B>], dim: usize) -> Result<K::Primitive<B>>;
+    fn concat<K: super::kind::TensorKind>(t: &[&K::Primitive<B>], dim: usize) -> Result<K::Primitive<B>>;
 }
 
+pub trait CreationOps<B: Backend> {
+    fn float_zeros(shape: &[usize], device: &B::Device) -> Result<B::FloatTensorPrimitive>;
+    fn float_ones(shape: &[usize], device: &B::Device) -> Result<B::FloatTensorPrimitive>;
+    fn float_rand(shape: &[usize], device: &B::Device) -> Result<B::FloatTensorPrimitive>;
+    fn float_randn(shape: &[usize], device: &B::Device) -> Result<B::FloatTensorPrimitive>;
+    
+    fn int_zeros(shape: &[usize], device: &B::Device) -> Result<B::IntTensorPrimitive>;
+    fn int_ones(shape: &[usize], device: &B::Device) -> Result<B::IntTensorPrimitive>;
+    
+    fn bool_zeros(shape: &[usize], device: &B::Device) -> Result<B::BoolTensorPrimitive>;
+    fn bool_ones(shape: &[usize], device: &B::Device) -> Result<B::BoolTensorPrimitive>;
+
+    fn tensor_to_device<K: super::kind::TensorKind>(t: &K::Primitive<B>, device: &B::Device) -> Result<K::Primitive<B>>;
+}
+
+pub trait ReductionOps<B: Backend> {
+    fn sum_all<K: super::kind::TensorKind>(t: &K::Primitive<B>) -> Result<K::Primitive<B>>;
+    fn mean_all<K: super::kind::TensorKind>(t: &K::Primitive<B>) -> Result<K::Primitive<B>>;
+    fn max_all<K: super::kind::TensorKind>(t: &K::Primitive<B>) -> Result<K::Primitive<B>>;
+    fn min_all<K: super::kind::TensorKind>(t: &K::Primitive<B>) -> Result<K::Primitive<B>>;
+    fn sum_dim<K: super::kind::TensorKind>(t: &K::Primitive<B>, dim: usize) -> Result<K::Primitive<B>>;
+    fn sum_keepdim<K: super::kind::TensorKind>(t: &K::Primitive<B>, dim: usize) -> Result<K::Primitive<B>>;
+    fn mean_dim<K: super::kind::TensorKind>(t: &K::Primitive<B>, dim: usize) -> Result<K::Primitive<B>>;
+    fn mean_keepdim<K: super::kind::TensorKind>(t: &K::Primitive<B>, dim: usize) -> Result<K::Primitive<B>>;
+    fn max_dim<K: super::kind::TensorKind>(t: &K::Primitive<B>, dim: usize) -> Result<K::Primitive<B>>;
+    fn max_keepdim<K: super::kind::TensorKind>(t: &K::Primitive<B>, dim: usize) -> Result<K::Primitive<B>>;
+    fn min_dim<K: super::kind::TensorKind>(t: &K::Primitive<B>, dim: usize) -> Result<K::Primitive<B>>;
+    fn min_keepdim<K: super::kind::TensorKind>(t: &K::Primitive<B>, dim: usize) -> Result<K::Primitive<B>>;
+    fn argmax<K: super::kind::TensorKind>(t: &K::Primitive<B>, dim: Option<usize>) -> Result<B::IntTensorPrimitive>;
+    fn argmin<K: super::kind::TensorKind>(t: &K::Primitive<B>, dim: Option<usize>) -> Result<B::IntTensorPrimitive>;
+}
+
+pub trait ModuleOps<B: Backend> {
+    fn conv2d(
+        x: &B::FloatTensorPrimitive,
+        weight: &B::FloatTensorPrimitive,
+        bias: Option<&B::FloatTensorPrimitive>,
+        stride: usize,
+        padding: usize,
+        dilation: usize,
+        groups: usize,
+    ) -> Result<B::FloatTensorPrimitive>;
+}
+
+pub trait LossOps<B: Backend> {
+    fn mse_loss(
+        pred: &B::FloatTensorPrimitive,
+        target: &B::FloatTensorPrimitive,
+        reduction: crate::tensor::ops::loss::Reduction,
+    ) -> Result<B::FloatTensorPrimitive>;
+
+    fn cross_entropy_loss(
+        pred: &B::FloatTensorPrimitive,
+        target: &B::IntTensorPrimitive, // target is typically Int!
+        reduction: crate::tensor::ops::loss::Reduction,
+    ) -> Result<B::FloatTensorPrimitive>;
+}
 pub trait ModuleOps<B: Backend> {
     fn layer_norm(t: &B::RawTensor, weight: &B::RawTensor, bias: &B::RawTensor, eps: f32) -> Result<B::RawTensor>;
     fn batch_norm(t: &B::RawTensor, w: &B::RawTensor, b: &B::RawTensor, rm: &B::RawTensor, rv: &B::RawTensor, e: f32) -> Result<B::RawTensor>;
