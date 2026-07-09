@@ -22,6 +22,13 @@ pub mod prelude {
     pub use super::candle::*;
     #[cfg(feature = "ndarray")]
     pub use super::ndarray_backend::*;
+    /// `NativeBackend<T, D>`, `NativeStorage`, `NativeVar`, `NativeGrads`, and
+    /// all re-exported `kindle_core::prelude::*` items are available when the
+    /// `native` feature is enabled. Unlike `candle`/`ndarray`/`burn` which are
+    /// defined as inline submodules of this file, `kindle-native` is a separate
+    /// crate, so this is a direct `pub use` rather than `super::native_module::*`.
+    #[cfg(feature = "native")]
+    pub use kindle_native::*;
 }
 
 // ----------------------------------------------------------------------------
@@ -63,37 +70,31 @@ pub mod candle {
     impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device>
         kindle_core::prelude::Backend for CandleBackend<T, D> {
         type Device = D;
-        type DType = T;
-        type BackendWithDType<NewT: kindle_core::prelude::DType> = CandleBackend<NewT, D>;
+        type FloatElem = f32;
+        type IntElem = i64;
         type BackendWithDevice<NewD: kindle_core::prelude::Device> = CandleBackend<T, NewD>;
 
-        type RawTensor = candle_core::Tensor;
+        type Storage<K: kindle_core::prelude::DType> = candle_core::Tensor;
         type RawVar = candle_core::Var;
         type Grads = candle_core::backprop::GradStore;
         type InnerBackend = Self;
 
-        fn shape(t: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Vec<usize> {
+        fn shape<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Vec<usize> {
             t.dims().to_vec()
         }
 
-        fn format_tensor_display(t: &<Self as kindle_core::prelude::Backend>::RawTensor) -> std::string::String {
+        fn format_tensor_display<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> std::string::String {
             std::format!("{}", t)
         }
-        fn format_tensor_debug(t: &<Self as kindle_core::prelude::Backend>::RawTensor) -> std::string::String {
+        fn format_tensor_debug<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> std::string::String {
             std::format!("Raw Tensor: {:?}, Strides: {:?}", t, t.stride())
         }
 
-        fn var_as_tensor(var: &<Self as kindle_core::prelude::Backend>::RawVar) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn var_as_tensor<K: kindle_core::prelude::DType>(var: &<Self as kindle_core::prelude::Backend>::RawVar) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(var.as_tensor().clone())
         }
-        fn var_from_tensor(t: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawVar> {
+        fn var_from_tensor<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::RawVar> {
             Ok(candle::Var::from_tensor(t).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
-        }
-
-        fn tensor_to_device(t: &<Self as kindle_core::prelude::Backend>::RawTensor, device: &KindleDevice) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
-            let dev = to_candle_device(device)?;
-            t.to_device(&dev)
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e).into())
         }
 
         fn var_to_device(
@@ -107,26 +108,23 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e).into())
         }
 
-        fn assign_var(var: &mut <Self as kindle_core::prelude::Backend>::RawVar, tensor: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<()> {
+        fn assign_var<K: kindle_core::prelude::DType>(var: &mut <Self as kindle_core::prelude::Backend>::RawVar, tensor: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<()> {
             var.set(tensor).map_err(|e: candle_core::Error| anyhow::anyhow!(e).into())
         }
 
-        fn to_dtype(t: &<Self as kindle_core::prelude::Backend>::RawTensor, dtype: KindleDType) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
-            Ok(t.to_dtype(to_candle_dtype(dtype))
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
-        }
-
-        fn backward(loss: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::Grads> {
+        fn backward<K: kindle_core::prelude::DType>(loss: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::Grads> {
             loss.backward()
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e).into())
         }
 
-        fn get_grad(var: &<Self as kindle_core::prelude::Backend>::RawVar, grads: &<Self as kindle_core::prelude::Backend>::Grads) -> Result<Option<<Self as kindle_core::prelude::Backend>::RawTensor>> {
-            let t = var.as_tensor();
+        fn get_grad<K: kindle_core::prelude::DType>(
+            t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
+            grads: &<Self as kindle_core::prelude::Backend>::Grads,
+        ) -> Result<Option<<Self as kindle_core::prelude::Backend>::Storage<K>>> {
             Ok(grads.get(t).cloned())
         }
 
-        fn to_bytes(t: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<std::vec::Vec<u8>> {
+        fn to_bytes<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<std::vec::Vec<u8>> {
             let v = t
                 .flatten_all()
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?
@@ -141,12 +139,12 @@ pub mod candle {
             Ok(bytes.to_vec())
         }
 
-        fn from_bytes(
+        fn from_bytes<K: kindle_core::prelude::DType>(
             bytes: &[u8],
             shape: &[usize],
             dtype: KindleDType,
             device: &KindleDevice,
-        ) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             let floats = unsafe {
                 std::slice::from_raw_parts(
                     bytes.as_ptr() as *const f32,
@@ -164,33 +162,33 @@ pub mod candle {
     }
 
     impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device> kindle_core::prelude::CreationOps<Self> for CandleBackend<T, D> {
-        fn zeros(
+        fn zeros<K: kindle_core::prelude::DType>(
             shape: &[usize],
             dtype: KindleDType,
             device: &KindleDevice,
-        ) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(
                 candle::Tensor::zeros(shape, to_candle_dtype(dtype), &to_candle_device(device)?)
                     .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?,
             )
         }
 
-        fn ones(
+        fn ones<K: kindle_core::prelude::DType>(
             shape: &[usize],
             dtype: KindleDType,
             device: &KindleDevice,
-        ) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(
                 candle::Tensor::ones(shape, to_candle_dtype(dtype), &to_candle_device(device)?)
                     .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?,
             )
         }
 
-        fn rand(
+        fn rand<K: kindle_core::prelude::DType>(
             shape: &[usize],
             dtype: KindleDType,
             device: &KindleDevice,
-        ) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(
                 candle::Tensor::rand(0f32, 1f32, shape, &to_candle_device(device)?)
                     .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?
@@ -199,11 +197,11 @@ pub mod candle {
             )
         }
 
-        fn randn(
+        fn randn<K: kindle_core::prelude::DType>(
             shape: &[usize],
             dtype: KindleDType,
             device: &KindleDevice,
-        ) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(
                 candle::Tensor::randn(0f32, 1f32, shape, &to_candle_device(device)?)
                     .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?
@@ -212,7 +210,7 @@ pub mod candle {
             )
         }
 
-        fn var_zeros(
+        fn var_zeros<K: kindle_core::prelude::DType>(
             shape: &[usize],
             dtype: KindleDType,
             device: &KindleDevice,
@@ -223,7 +221,7 @@ pub mod candle {
             )
         }
 
-        fn var_ones(
+        fn var_ones<K: kindle_core::prelude::DType>(
             shape: &[usize],
             dtype: KindleDType,
             device: &KindleDevice,
@@ -234,7 +232,7 @@ pub mod candle {
             )
         }
 
-        fn var_rand(
+        fn var_rand<K: kindle_core::prelude::DType>(
             shape: &[usize],
             _dtype: KindleDType,
             device: &KindleDevice,
@@ -245,7 +243,7 @@ pub mod candle {
             )
         }
 
-        fn var_randn(
+        fn var_randn<K: kindle_core::prelude::DType>(
             shape: &[usize],
             _dtype: KindleDType,
             device: &KindleDevice,
@@ -255,37 +253,39 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
+        fn tensor_to_device<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>, device: &KindleDevice) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
+            let dev = to_candle_device(device)?;
+            t.to_device(&dev)
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e).into())
+        }
+
     }
 
     impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device> kindle_core::prelude::NumericOps<Self> for CandleBackend<T, D> {
-        fn mul_scalar(t: &<Self as kindle_core::prelude::Backend>::RawTensor, scalar: kindle_core::tensor::backend::ScalarValue) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
-            Ok((t * scalar.to_f64()).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
-        }
-        fn add_scalar(t: &<Self as kindle_core::prelude::Backend>::RawTensor, scalar: kindle_core::tensor::backend::ScalarValue) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
-            Ok((t + scalar.to_f64()).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
-        }
-
-        fn add(lhs: &<Self as kindle_core::prelude::Backend>::RawTensor, rhs: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn add<K: kindle_core::prelude::DType>(lhs: &<Self as kindle_core::prelude::Backend>::Storage<K>, rhs: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(lhs
                 .broadcast_add(rhs)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        fn sub(lhs: &<Self as kindle_core::prelude::Backend>::RawTensor, rhs: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn sub<K: kindle_core::prelude::DType>(lhs: &<Self as kindle_core::prelude::Backend>::Storage<K>, rhs: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(lhs
                 .broadcast_sub(rhs)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        fn mul(lhs: &<Self as kindle_core::prelude::Backend>::RawTensor, rhs: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn mul<K: kindle_core::prelude::DType>(lhs: &<Self as kindle_core::prelude::Backend>::Storage<K>, rhs: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(lhs
                 .broadcast_mul(rhs)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        fn div(lhs: &<Self as kindle_core::prelude::Backend>::RawTensor, rhs: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn div<K: kindle_core::prelude::DType>(lhs: &<Self as kindle_core::prelude::Backend>::Storage<K>, rhs: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(lhs
                 .broadcast_div(rhs)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        fn matmul(lhs: &<Self as kindle_core::prelude::Backend>::RawTensor, rhs: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+    }
+
+    impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device> kindle_core::prelude::TensorOps<Self> for CandleBackend<T, D> {
+        fn matmul<K: kindle_core::prelude::DType>(lhs: &<Self as kindle_core::prelude::Backend>::Storage<K>, rhs: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             let lhs_contig = lhs.contiguous().map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
             let rhs_contig = rhs.contiguous().map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
             
@@ -333,150 +333,35 @@ pub mod candle {
                 .broadcast_matmul(&rhs_contig)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-    }
 
-    impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device> kindle_core::prelude::FloatOps<Self> for CandleBackend<T, D> {
-        fn relu(t: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
-            Ok(t.relu()
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
-        }
-        fn gelu(t: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
-            Ok(t.gelu_erf()
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
-        } // using gelu_erf as fallback for general
-
-        fn softmax(t: &<Self as kindle_core::prelude::Backend>::RawTensor, dim: usize) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
-            Ok(candle_nn::ops::softmax(t, dim)
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
-        }
-
-        fn swish(t: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
-            // swish is x * sigmoid(x)
-            Ok(candle_nn::ops::silu(t).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
-        }
-        fn abs(t: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
-            Ok(t.abs()
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
-        }
-        fn neg(t: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
-            Ok(t.neg()
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
-        }
-        fn sqrt(t: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
-            Ok(t.sqrt()
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
-        }
-        fn exp(t: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
-            Ok(t.exp()
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
-        }
-        fn log(t: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
-            Ok(t.log()
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
-        }
-        fn tanh(t: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
-            Ok(t.tanh()
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
-        }
-        fn sigmoid(t: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
-            Ok(::candle_nn::ops::sigmoid(t).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
-        }
-
-    }
-
-    impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device> kindle_core::prelude::ReductionOps<Self> for CandleBackend<T, D> {
-        fn sum_all(t: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
-            Ok(t.sum_all()
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
-        }
-        fn mean_all(t: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
-            Ok(t.mean_all()
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
-        }
-        fn max_all(t: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
-            Ok(t.max_all()
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
-        }
-        fn min_all(t: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
-            Ok(t.min_all()
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
-        }
-
-        fn sum_dim(t: &<Self as kindle_core::prelude::Backend>::RawTensor, dim: usize) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
-            Ok(t.sum(dim)
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
-        }
-        fn sum_keepdim(t: &<Self as kindle_core::prelude::Backend>::RawTensor, dim: usize) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
-            Ok(t.sum_keepdim(dim)
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
-        }
-
-        fn mean_dim(t: &<Self as kindle_core::prelude::Backend>::RawTensor, dim: usize) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
-            Ok(t.mean(dim)
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
-        }
-        fn mean_keepdim(t: &<Self as kindle_core::prelude::Backend>::RawTensor, dim: usize) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
-            Ok(t.mean_keepdim(dim)
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
-        }
-        fn max_dim(t: &<Self as kindle_core::prelude::Backend>::RawTensor, dim: usize) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
-            Ok(t.max(dim)
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
-        }
-        fn max_keepdim(t: &<Self as kindle_core::prelude::Backend>::RawTensor, dim: usize) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
-            Ok(t.max_keepdim(dim)
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
-        }
-        fn min_dim(t: &<Self as kindle_core::prelude::Backend>::RawTensor, dim: usize) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
-            Ok(t.min(dim)
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
-        }
-        fn min_keepdim(t: &<Self as kindle_core::prelude::Backend>::RawTensor, dim: usize) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
-            Ok(t.min_keepdim(dim)
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
-        }
-
-        fn argmax(t: &<Self as kindle_core::prelude::Backend>::RawTensor, dim: usize) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
-            Ok(t.argmax(dim)
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
-        }
-
-        fn argmin(t: &<Self as kindle_core::prelude::Backend>::RawTensor, dim: usize) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
-            Ok(t.argmin(dim)
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
-        }
-
-    }
-
-    impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device> kindle_core::prelude::TensorOps<Self> for CandleBackend<T, D> {
-        fn stack(tensors: &[&<Self as kindle_core::prelude::Backend>::RawTensor], dim: usize) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn stack<K: kindle_core::prelude::DType>(tensors: &[&<Self as kindle_core::prelude::Backend>::Storage<K>], dim: usize) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(candle_core::Tensor::stack(tensors, dim)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
-        fn concat(tensors: &[&<Self as kindle_core::prelude::Backend>::RawTensor], dim: usize) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn concat<K: kindle_core::prelude::DType>(tensors: &[&<Self as kindle_core::prelude::Backend>::Storage<K>], dim: usize) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(candle_core::Tensor::cat(tensors, dim)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
-        fn broadcast_as(t: &<Self as kindle_core::prelude::Backend>::RawTensor, shape: &[usize]) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn broadcast_as<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>, shape: &[usize]) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(t.broadcast_as(shape)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        fn broadcast_left(t: &<Self as kindle_core::prelude::Backend>::RawTensor, shape: &[usize]) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn broadcast_left<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>, shape: &[usize]) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(t.broadcast_left(shape)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
-        fn reshape(t: &<Self as kindle_core::prelude::Backend>::RawTensor, shape: &[usize]) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn reshape<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>, shape: &[usize]) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(t.reshape(shape)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        fn transpose(t: &<Self as kindle_core::prelude::Backend>::RawTensor, dim1: usize, dim2: usize) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn transpose<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>, dim1: usize, dim2: usize) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(t.transpose(dim1, dim2)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        fn slice(t: &<Self as kindle_core::prelude::Backend>::RawTensor, ranges: &[(usize, usize)]) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn slice<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>, ranges: &[(usize, usize)]) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             let mut out = t.clone();
             for (dim, &(start, end)) in ranges.iter().enumerate() {
                 out = out
@@ -486,81 +371,295 @@ pub mod candle {
             Ok(out)
         }
 
-        fn flatten(
-            t: &<Self as kindle_core::prelude::Backend>::RawTensor,
+        fn flatten<K: kindle_core::prelude::DType>(
+            t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             start_dim: usize,
             end_dim: usize,
-        ) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(t.flatten(start_dim, end_dim)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
-        fn narrow(
-            t: &<Self as kindle_core::prelude::Backend>::RawTensor,
+        fn narrow<K: kindle_core::prelude::DType>(
+            t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             dim: usize,
             start: usize,
             len: usize,
-        ) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(t.narrow(dim, start, len)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
-        fn squeeze(t: &<Self as kindle_core::prelude::Backend>::RawTensor, dim: usize) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn squeeze<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>, dim: usize) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(t.squeeze(dim)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+        }
+
+        fn float_to_scalar<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<f64> {
+            let v = t.to_dtype(candle_core::DType::F32).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+            let s: f32 = v.to_scalar().map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+            Ok(s as f64)
+        }
+        fn float_to_vec1<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<Vec<f64>> {
+            let v = t.to_dtype(candle_core::DType::F32).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+            let vec: Vec<f32> = v.to_vec1().map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+            Ok(vec.into_iter().map(|x| x as f64).collect())
+        }
+        fn int_to_scalar<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<i64> {
+            let v = t.to_dtype(candle_core::DType::I64).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+            let s: i64 = v.to_scalar().map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+            Ok(s)
+        }
+        fn int_to_vec1<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<Vec<i64>> {
+            let v = t.to_dtype(candle_core::DType::I64).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+            let vec: Vec<i64> = v.to_vec1().map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+            Ok(vec)
+        }
+        fn tensor_to_dtype<K: kindle_core::prelude::DType, K2: kindle_core::prelude::DType>(
+            t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
+            dtype: KindleDType,
+        ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K2>> {
+            Ok(t.to_dtype(to_candle_dtype(dtype))
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+        }
+    }
+
+    impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device> kindle_core::prelude::FloatOps<Self> for CandleBackend<T, D> {
+        fn add_scalar_float<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>, scalar: f64) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
+            Ok((t + scalar).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+        }
+        fn mul_scalar_float<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>, scalar: f64) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
+            Ok((t * scalar).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+        }
+        fn relu<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
+            Ok(t.relu()
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+        }
+        fn gelu<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
+            Ok(t.gelu_erf()
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+        } // using gelu_erf as fallback for general
+
+        fn softmax<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>, dim: usize) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
+            Ok(candle_nn::ops::softmax(t, dim)
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+        }
+
+        fn swish<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
+            // swish is x * sigmoid(x)
+            Ok(candle_nn::ops::silu(t).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+        }
+        fn abs<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
+            Ok(t.abs()
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+        }
+        fn neg<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
+            Ok(t.neg()
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+        }
+        fn sqrt<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
+            Ok(t.sqrt()
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+        }
+        fn exp<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
+            Ok(t.exp()
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+        }
+        fn log<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
+            Ok(t.log()
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+        }
+        fn tanh<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
+            Ok(t.tanh()
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+        }
+        fn sigmoid<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
+            Ok(::candle_nn::ops::sigmoid(t).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+        }
+
+    }
+
+    impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device> kindle_core::prelude::ReductionOps<Self> for CandleBackend<T, D> {
+        fn sum_all<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
+            Ok(t.sum_all()
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+        }
+        fn mean_all<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
+            Ok(t.mean_all()
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+        }
+        fn max_all<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
+            Ok(t.max_all()
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+        }
+        fn min_all<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
+            Ok(t.min_all()
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+        }
+
+        fn sum_dim<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>, dim: usize) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
+            Ok(t.sum(dim)
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+        }
+        fn sum_keepdim<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>, dim: usize) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
+            Ok(t.sum_keepdim(dim)
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+        }
+
+        fn mean_dim<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>, dim: usize) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
+            Ok(t.mean(dim)
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+        }
+        fn mean_keepdim<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>, dim: usize) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
+            Ok(t.mean_keepdim(dim)
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+        }
+        fn max_dim<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>, dim: usize) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
+            Ok(t.max(dim)
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+        }
+        fn max_keepdim<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>, dim: usize) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
+            Ok(t.max_keepdim(dim)
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+        }
+        fn min_dim<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>, dim: usize) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
+            Ok(t.min(dim)
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+        }
+        fn min_keepdim<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>, dim: usize) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
+            Ok(t.min_keepdim(dim)
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+        }
+
+        fn argmax<K: kindle_core::prelude::DType, KInt: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>, dim: Option<usize>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<KInt>> {
+            match dim {
+                Some(d) => Ok(t.argmax(d).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?),
+                None => Ok(t
+                    .flatten_all()
+                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?
+                    .argmax(0)
+                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?),
+            }
+        }
+
+        fn argmin<K: kindle_core::prelude::DType, KInt: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>, dim: Option<usize>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<KInt>> {
+            match dim {
+                Some(d) => Ok(t.argmin(d).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?),
+                None => Ok(t
+                    .flatten_all()
+                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?
+                    .argmin(0)
+                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?),
+            }
         }
 
     }
 
     impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device> kindle_core::prelude::ModuleOps<Self> for CandleBackend<T, D> {
-        fn adaptive_avg_pool2d(
-            _t: &<Self as kindle_core::prelude::Backend>::RawTensor,
+        fn adaptive_avg_pool2d<K: kindle_core::prelude::DType>(
+            _t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             _output_size: (usize, usize),
-        ) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             unimplemented!("adaptive_avg_pool2d not implemented for CandleBackend")
         }
 
-        fn layer_norm(
-            t: &<Self as kindle_core::prelude::Backend>::RawTensor,
-            weight: &<Self as kindle_core::prelude::Backend>::RawTensor,
-            bias: &<Self as kindle_core::prelude::Backend>::RawTensor,
+        fn layer_norm<K: kindle_core::prelude::DType>(
+            t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
+            weight: &<Self as kindle_core::prelude::Backend>::Storage<K>,
+            bias: Option<&<Self as kindle_core::prelude::Backend>::Storage<K>>,
             eps: f32,
-        ) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
+            let zero_bias;
+            let bias = match bias {
+                Some(b) => b,
+                None => {
+                    zero_bias = weight
+                        .zeros_like()
+                        .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+                    &zero_bias
+                }
+            };
             Ok(candle_nn::ops::layer_norm(t, weight, bias, eps)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
-        fn batch_norm(
-            t: &<Self as kindle_core::prelude::Backend>::RawTensor,
-            weight: &<Self as kindle_core::prelude::Backend>::RawTensor,
-            bias: &<Self as kindle_core::prelude::Backend>::RawTensor,
-            running_mean: &<Self as kindle_core::prelude::Backend>::RawTensor,
-            running_var: &<Self as kindle_core::prelude::Backend>::RawTensor,
+        fn batch_norm<K: kindle_core::prelude::DType>(
+            t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
+            weight: Option<&<Self as kindle_core::prelude::Backend>::Storage<K>>,
+            bias: Option<&<Self as kindle_core::prelude::Backend>::Storage<K>>,
+            running_mean: Option<&<Self as kindle_core::prelude::Backend>::Storage<K>>,
+            running_var: Option<&<Self as kindle_core::prelude::Backend>::Storage<K>>,
             eps: f32,
-        ) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
-            let mut shape = vec![1; t.rank()];
-            if t.rank() > 1 {
-                shape[1] = running_mean
-                    .dim(0)
-                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
-            } else {
-                shape[0] = running_mean
-                    .dim(0)
-                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
-            }
+            _momentum: f64,
+        ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
+            let channel_dim = if t.rank() > 1 { 1 } else { 0 };
+            let num_channels = t
+                .dim(channel_dim)
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
 
-            let r_mean = running_mean
-                .reshape(shape.as_slice())
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
-            let r_var = running_var
-                .reshape(shape.as_slice())
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
-            let w = weight
-                .reshape(shape.as_slice())
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
-            let b = bias
-                .reshape(shape.as_slice())
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+            let mut shape = vec![1; t.rank()];
+            shape[channel_dim] = num_channels;
+
+            let owned_rm;
+            let r_mean = match running_mean {
+                Some(rm) => rm
+                    .reshape(shape.as_slice())
+                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?,
+                None => {
+                    owned_rm = candle_core::Tensor::zeros(
+                        shape.as_slice(),
+                        t.dtype(),
+                        t.device(),
+                    )
+                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+                    owned_rm
+                }
+            };
+            let owned_rv;
+            let r_var = match running_var {
+                Some(rv) => rv
+                    .reshape(shape.as_slice())
+                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?,
+                None => {
+                    owned_rv = candle_core::Tensor::ones(
+                        shape.as_slice(),
+                        t.dtype(),
+                        t.device(),
+                    )
+                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+                    owned_rv
+                }
+            };
+            let owned_w;
+            let w = match weight {
+                Some(w) => w
+                    .reshape(shape.as_slice())
+                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?,
+                None => {
+                    owned_w = candle_core::Tensor::ones(
+                        shape.as_slice(),
+                        t.dtype(),
+                        t.device(),
+                    )
+                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+                    owned_w
+                }
+            };
+            let owned_b;
+            let b = match bias {
+                Some(b) => b
+                    .reshape(shape.as_slice())
+                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?,
+                None => {
+                    owned_b = candle_core::Tensor::zeros(
+                        shape.as_slice(),
+                        t.dtype(),
+                        t.device(),
+                    )
+                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+                    owned_b
+                }
+            };
 
             let eps_t = candle_core::Tensor::new(&[eps], t.device())
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
@@ -585,7 +684,7 @@ pub mod candle {
             Ok(out)
         }
 
-        fn embedding(t: &<Self as kindle_core::prelude::Backend>::RawTensor, w: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn embedding<K: kindle_core::prelude::DType, KInt: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<KInt>, w: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             use candle_nn::Module;
             let hidden_size = w.dim(1).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
             let emb = candle_nn::Embedding::new(w.clone(), hidden_size);
@@ -602,64 +701,67 @@ pub mod candle {
             Ok(emb.forward(&t_idx).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
-        fn conv1d(
-            t: &<Self as kindle_core::prelude::Backend>::RawTensor,
-            w: &<Self as kindle_core::prelude::Backend>::RawTensor,
-            _b: Option<&<Self as kindle_core::prelude::Backend>::RawTensor>,
+        fn conv1d<K: kindle_core::prelude::DType>(
+            t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
+            w: &<Self as kindle_core::prelude::Backend>::Storage<K>,
+            _b: Option<&<Self as kindle_core::prelude::Backend>::Storage<K>>,
             stride: usize,
             padding: usize,
             dilation: usize,
-        ) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
-            Ok(t.conv1d(w, padding, stride, dilation, 1)
+            groups: usize,
+        ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
+            Ok(t.conv1d(w, padding, stride, dilation, groups)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
-        fn conv2d(
-            t: &<Self as kindle_core::prelude::Backend>::RawTensor,
-            weight: &<Self as kindle_core::prelude::Backend>::RawTensor,
-            _bias: Option<&<Self as kindle_core::prelude::Backend>::RawTensor>,
+        fn conv2d<K: kindle_core::prelude::DType>(
+            t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
+            weight: &<Self as kindle_core::prelude::Backend>::Storage<K>,
+            _bias: Option<&<Self as kindle_core::prelude::Backend>::Storage<K>>,
             stride: usize,
             padding: usize,
             dilation: usize,
-        ) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
-            Ok(t.conv2d(weight, padding, stride, dilation, 1)
+            groups: usize,
+        ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
+            Ok(t.conv2d(weight, padding, stride, dilation, groups)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
-        fn conv_transpose2d(
-            t: &<Self as kindle_core::prelude::Backend>::RawTensor,
-            weight: &<Self as kindle_core::prelude::Backend>::RawTensor,
-            _bias: Option<&<Self as kindle_core::prelude::Backend>::RawTensor>,
+        fn conv_transpose2d<K: kindle_core::prelude::DType>(
+            t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
+            weight: &<Self as kindle_core::prelude::Backend>::Storage<K>,
+            _bias: Option<&<Self as kindle_core::prelude::Backend>::Storage<K>>,
             stride: usize,
             padding: usize,
             output_padding: usize,
             dilation: usize,
-        ) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+            _groups: usize,
+        ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(
                 t.conv_transpose2d(weight, padding, output_padding, stride, dilation)
                     .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?,
             )
         }
 
-        fn max_pool2d(
-            t: &<Self as kindle_core::prelude::Backend>::RawTensor,
+        fn max_pool2d<K: kindle_core::prelude::DType>(
+            t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             kernel_size: (usize, usize),
             stride: (usize, usize),
             _padding: (usize, usize),
             _dilation: (usize, usize),
-        ) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(
                 t.max_pool2d_with_stride((kernel_size.0, kernel_size.1), (stride.0, stride.1))
                     .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?,
             )
         }
 
-        fn avg_pool2d(
-            t: &<Self as kindle_core::prelude::Backend>::RawTensor,
+        fn avg_pool2d<K: kindle_core::prelude::DType>(
+            t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             kernel_size: (usize, usize),
             stride: (usize, usize),
             _padding: (usize, usize),
-        ) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(
                 t.avg_pool2d_with_stride((kernel_size.0, kernel_size.1), (stride.0, stride.1))
                     .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?,
@@ -669,43 +771,43 @@ pub mod candle {
     }
 
     impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device> kindle_core::prelude::LossOps<Self> for CandleBackend<T, D> {
-        fn l1_loss(
-            _pred: &<Self as kindle_core::prelude::Backend>::RawTensor,
-            _target: &<Self as kindle_core::prelude::Backend>::RawTensor,
+        fn l1_loss<K: kindle_core::prelude::DType>(
+            _pred: &<Self as kindle_core::prelude::Backend>::Storage<K>,
+            _target: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             _reduction: kindle_core::nn::loss::Reduction,
-        ) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             unimplemented!("l1_loss not implemented for CandleBackend")
         }
 
-        fn bce_with_logits_loss(
-            _pred: &<Self as kindle_core::prelude::Backend>::RawTensor,
-            _target: &<Self as kindle_core::prelude::Backend>::RawTensor,
+        fn bce_with_logits_loss<K: kindle_core::prelude::DType>(
+            _pred: &<Self as kindle_core::prelude::Backend>::Storage<K>,
+            _target: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             _reduction: kindle_core::nn::loss::Reduction,
-        ) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             unimplemented!("bce_with_logits_loss not implemented for CandleBackend")
         }
 
-        fn mse_loss(
-            pred: &<Self as kindle_core::prelude::Backend>::RawTensor,
-            target: &<Self as kindle_core::prelude::Backend>::RawTensor,
+        fn mse_loss<K: kindle_core::prelude::DType>(
+            pred: &<Self as kindle_core::prelude::Backend>::Storage<K>,
+            target: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             _reduction: kindle_core::nn::loss::Reduction,
-        ) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             let loss = candle_nn::loss::mse(pred, target)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
             Ok(loss)
         }
 
-        fn cross_entropy_loss(
-            pred: &<Self as kindle_core::prelude::Backend>::RawTensor,
-            target: &<Self as kindle_core::prelude::Backend>::RawTensor,
+        fn cross_entropy_loss<K: kindle_core::prelude::DType, KInt: kindle_core::prelude::DType>(
+            pred: &<Self as kindle_core::prelude::Backend>::Storage<K>,
+            target: &<Self as kindle_core::prelude::Backend>::Storage<KInt>,
             _reduction: kindle_core::nn::loss::Reduction,
-        ) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             let target_u32 = target.to_dtype(candle_core::DType::U32)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
             candle_nn::loss::cross_entropy(pred, &target_u32)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e).into())
         }
-    
+
     }
 
 
@@ -747,16 +849,16 @@ pub mod ndarray_backend {
     impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device>
         kindle_core::prelude::Backend for NdarrayBackend<T, D> {
         type Device = D;
-        type DType = T;
-        type BackendWithDType<NewT: kindle_core::prelude::DType> = NdarrayBackend<NewT, D>;
+        type FloatElem = f32;
+        type IntElem = i64;
         type BackendWithDevice<NewD: kindle_core::prelude::Device> = NdarrayBackend<T, NewD>;
 
-        type RawTensor = ndarray::ArrayD<f32>;
+        type Storage<K: kindle_core::prelude::DType> = ndarray::ArrayD<f32>;
         type RawVar = NdarrayVar;
         type Grads = NdarrayGrads;
         type InnerBackend = Self;
 
-        fn to_bytes(t: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<std::vec::Vec<u8>> {
+        fn to_bytes<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<std::vec::Vec<u8>> {
             let slice = t.as_slice().ok_or_else(|| {
                 let err: kindle_core::err::Error =
                     anyhow::anyhow!("Ndarray is not contiguous").into();
@@ -771,12 +873,12 @@ pub mod ndarray_backend {
             Ok(bytes.to_vec())
         }
 
-        fn from_bytes(
+        fn from_bytes<K: kindle_core::prelude::DType>(
             bytes: &[u8],
             shape: &[usize],
             dtype: KindleDType,
             _device: &KindleDevice,
-        ) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             if dtype != KindleDType::F32 {
                 let err: kindle_core::err::Error =
                     anyhow::anyhow!("NdarrayBackend only supports f32").into();
@@ -795,212 +897,195 @@ pub mod ndarray_backend {
             Ok(arr)
         }
 
-        fn shape(t: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Vec<usize> {
+        fn shape<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Vec<usize> {
             t.shape().to_vec()
         }
 
-        fn format_tensor_display(t: &<Self as kindle_core::prelude::Backend>::RawTensor) -> std::string::String {
+        fn format_tensor_display<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> std::string::String {
             std::format!("{}", t)
         }
-        fn format_tensor_debug(t: &<Self as kindle_core::prelude::Backend>::RawTensor) -> std::string::String {
+        fn format_tensor_debug<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> std::string::String {
             std::format!("Raw Tensor: {:?}, Strides: {:?}", t, t.strides())
         }
 
-        fn var_as_tensor(v: &<Self as kindle_core::prelude::Backend>::RawVar) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn var_as_tensor<K: kindle_core::prelude::DType>(v: &<Self as kindle_core::prelude::Backend>::RawVar) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(v.0.read().unwrap().clone())
         }
-        fn var_from_tensor(t: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawVar> {
+        fn var_from_tensor<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::RawVar> {
             Ok(NdarrayVar(std::sync::Arc::new(std::sync::RwLock::new(
                 t.clone(),
             ))))
         }
 
-        fn assign_var(var: &mut <Self as kindle_core::prelude::Backend>::RawVar, tensor: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<()> {
+        fn assign_var<K: kindle_core::prelude::DType>(var: &mut <Self as kindle_core::prelude::Backend>::RawVar, tensor: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<()> {
             let mut w = var.0.write().unwrap();
             *w = tensor.clone();
             Ok(())
         }
 
-        fn tensor_to_device(
-            t: &<Self as kindle_core::prelude::Backend>::RawTensor,
-            _device: &KindleDevice,
-        ) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
-            Ok(t.clone())
-        }
         fn var_to_device(
             var: &<Self as kindle_core::prelude::Backend>::RawVar,
             _device: &kindle_core::prelude::KindleDevice,
         ) -> Result<<Self as kindle_core::prelude::Backend>::RawVar> {
             Ok(var.clone())
         }
-        fn to_dtype(_t: &<Self as kindle_core::prelude::Backend>::RawTensor, _dtype: KindleDType) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
-            Err(Error::UnsupportedBackendOperation {
-                op: "to_dtype",
-                backend: "Ndarray",
-            })
-        }
-        fn backward(_loss: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::Grads> {
+        fn backward<K: kindle_core::prelude::DType>(_loss: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::Grads> {
             Err(Error::UnsupportedBackendOperation {
                 op: "backward",
                 backend: "Ndarray",
             })
         }
 
-        fn get_grad(_var: &<Self as kindle_core::prelude::Backend>::RawVar, _grads: &<Self as kindle_core::prelude::Backend>::Grads) -> Result<Option<<Self as kindle_core::prelude::Backend>::RawTensor>> {
+        fn get_grad<K: kindle_core::prelude::DType>(_t: &<Self as kindle_core::prelude::Backend>::Storage<K>, _grads: &<Self as kindle_core::prelude::Backend>::Grads) -> Result<Option<<Self as kindle_core::prelude::Backend>::Storage<K>>> {
             Ok(None)
         }
 
     }
 
     impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device> kindle_core::prelude::CreationOps<Self> for NdarrayBackend<T, D> {
-        fn zeros(
+        fn zeros<K: kindle_core::prelude::DType>(
             shape: &[usize],
             _dtype: KindleDType,
             _device: &KindleDevice,
-        ) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(ndarray::ArrayD::<f32>::zeros(shape))
         }
-        fn ones(
+        fn ones<K: kindle_core::prelude::DType>(
             shape: &[usize],
             _dtype: KindleDType,
             _device: &KindleDevice,
-        ) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(ndarray::ArrayD::<f32>::ones(shape))
         }
-        fn rand(
+        fn rand<K: kindle_core::prelude::DType>(
             _shape: &[usize],
             _dtype: KindleDType,
             _device: &KindleDevice,
-        ) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Err(Error::UnsupportedBackendOperation {
                 op: "rand",
                 backend: "Ndarray",
             })
         }
-        fn randn(
+        fn randn<K: kindle_core::prelude::DType>(
             _shape: &[usize],
             _dtype: KindleDType,
             _device: &KindleDevice,
-        ) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Err(Error::UnsupportedBackendOperation {
                 op: "randn",
                 backend: "Ndarray",
             })
         }
 
-        fn var_zeros(s: &[usize], _dt: KindleDType, _dev: &KindleDevice) -> Result<<Self as kindle_core::prelude::Backend>::RawVar> {
+        fn var_zeros<K: kindle_core::prelude::DType>(s: &[usize], _dt: KindleDType, _dev: &KindleDevice) -> Result<<Self as kindle_core::prelude::Backend>::RawVar> {
             Ok(NdarrayVar(std::sync::Arc::new(std::sync::RwLock::new(
                 ndarray::ArrayD::<f32>::zeros(s),
             ))))
         }
-        fn var_ones(s: &[usize], _dt: KindleDType, _dev: &KindleDevice) -> Result<<Self as kindle_core::prelude::Backend>::RawVar> {
+        fn var_ones<K: kindle_core::prelude::DType>(s: &[usize], _dt: KindleDType, _dev: &KindleDevice) -> Result<<Self as kindle_core::prelude::Backend>::RawVar> {
             Ok(NdarrayVar(std::sync::Arc::new(std::sync::RwLock::new(
                 ndarray::ArrayD::<f32>::ones(s),
             ))))
         }
-        fn var_rand(_s: &[usize], _dt: KindleDType, _dev: &KindleDevice) -> Result<<Self as kindle_core::prelude::Backend>::RawVar> {
+        fn var_rand<K: kindle_core::prelude::DType>(_s: &[usize], _dt: KindleDType, _dev: &KindleDevice) -> Result<<Self as kindle_core::prelude::Backend>::RawVar> {
             Err(Error::UnsupportedBackendOperation {
                 op: "var_rand",
                 backend: "Ndarray",
             })
         }
-        fn var_randn(_s: &[usize], _dt: KindleDType, _dev: &KindleDevice) -> Result<<Self as kindle_core::prelude::Backend>::RawVar> {
+        fn var_randn<K: kindle_core::prelude::DType>(_s: &[usize], _dt: KindleDType, _dev: &KindleDevice) -> Result<<Self as kindle_core::prelude::Backend>::RawVar> {
             Err(Error::UnsupportedBackendOperation {
                 op: "var_randn",
                 backend: "Ndarray",
             })
         }
+
+        fn tensor_to_device<K: kindle_core::prelude::DType>(
+            t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
+            _device: &KindleDevice,
+        ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
+            Ok(t.clone())
+        }
     }
 
     impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device> kindle_core::prelude::NumericOps<Self> for NdarrayBackend<T, D> {
-        fn mul_scalar(_t: &<Self as kindle_core::prelude::Backend>::RawTensor, _scalar: kindle_core::tensor::backend::ScalarValue) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
-            Err(Error::UnsupportedBackendOperation {
-                op: "mul_scalar",
-                backend: "Ndarray",
-            })
-        }
-        fn add_scalar(_t: &<Self as kindle_core::prelude::Backend>::RawTensor, _scalar: kindle_core::tensor::backend::ScalarValue) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
-            Err(Error::UnsupportedBackendOperation {
-                op: "add_scalar",
-                backend: "Ndarray",
-            })
-        }
-        fn add(lhs: &<Self as kindle_core::prelude::Backend>::RawTensor, rhs: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn add<K: kindle_core::prelude::DType>(lhs: &<Self as kindle_core::prelude::Backend>::Storage<K>, rhs: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(lhs + rhs)
         }
-        fn sub(lhs: &<Self as kindle_core::prelude::Backend>::RawTensor, rhs: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn sub<K: kindle_core::prelude::DType>(lhs: &<Self as kindle_core::prelude::Backend>::Storage<K>, rhs: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(lhs - rhs)
         }
-        fn mul(lhs: &<Self as kindle_core::prelude::Backend>::RawTensor, rhs: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn mul<K: kindle_core::prelude::DType>(lhs: &<Self as kindle_core::prelude::Backend>::Storage<K>, rhs: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(lhs * rhs)
         }
-        fn div(lhs: &<Self as kindle_core::prelude::Backend>::RawTensor, rhs: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn div<K: kindle_core::prelude::DType>(lhs: &<Self as kindle_core::prelude::Backend>::Storage<K>, rhs: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(lhs / rhs)
-        }
-        fn matmul(_lhs: &<Self as kindle_core::prelude::Backend>::RawTensor, _rhs: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
-            Err(Error::UnsupportedBackendOperation {
-                op: "matmul",
-                backend: "Ndarray",
-            })
         }
     }
 
     impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device> kindle_core::prelude::FloatOps<Self> for NdarrayBackend<T, D> {
-        fn relu(t: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn add_scalar_float<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>, scalar: f64) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
+            Ok(t.mapv(|x| x + scalar as f32))
+        }
+        fn mul_scalar_float<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>, scalar: f64) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
+            Ok(t.mapv(|x| x * scalar as f32))
+        }
+        fn relu<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(t.mapv(|x| if x > 0.0 { x } else { 0.0 }))
         }
-        fn gelu(_t: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn gelu<K: kindle_core::prelude::DType>(_t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Err(Error::UnsupportedBackendOperation {
                 op: "gelu",
                 backend: "Ndarray",
             })
         }
-        fn softmax(_t: &<Self as kindle_core::prelude::Backend>::RawTensor, _dim: usize) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn softmax<K: kindle_core::prelude::DType>(_t: &<Self as kindle_core::prelude::Backend>::Storage<K>, _dim: usize) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Err(Error::UnsupportedBackendOperation {
                 op: "softmax",
                 backend: "Ndarray",
             })
         }
-        fn swish(_t: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn swish<K: kindle_core::prelude::DType>(_t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Err(Error::UnsupportedBackendOperation {
                 op: "swish",
                 backend: "Ndarray",
             })
         }
-        fn abs(t: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn abs<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(t.mapv(|x: f32| x.abs()))
         }
-        fn neg(_t: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn neg<K: kindle_core::prelude::DType>(_t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Err(Error::UnsupportedBackendOperation {
                 op: "neg",
                 backend: "Ndarray",
             })
         }
-        fn sqrt(_t: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn sqrt<K: kindle_core::prelude::DType>(_t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Err(Error::UnsupportedBackendOperation {
                 op: "sqrt",
                 backend: "Ndarray",
             })
         }
-        fn exp(_t: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn exp<K: kindle_core::prelude::DType>(_t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Err(Error::UnsupportedBackendOperation {
                 op: "exp",
                 backend: "Ndarray",
             })
         }
-        fn log(_t: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn log<K: kindle_core::prelude::DType>(_t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Err(Error::UnsupportedBackendOperation {
                 op: "log",
                 backend: "Ndarray",
             })
         }
-        fn tanh(_t: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn tanh<K: kindle_core::prelude::DType>(_t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Err(Error::UnsupportedBackendOperation {
                 op: "tanh",
                 backend: "Ndarray",
             })
         }
-        fn sigmoid(_t: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn sigmoid<K: kindle_core::prelude::DType>(_t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Err(Error::UnsupportedBackendOperation {
                 op: "sigmoid",
                 backend: "Ndarray",
@@ -1009,124 +1094,130 @@ pub mod ndarray_backend {
     }
 
     impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device> kindle_core::prelude::ReductionOps<Self> for NdarrayBackend<T, D> {
-        fn sum_all(_t: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn sum_all<K: kindle_core::prelude::DType>(_t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Err(Error::UnsupportedBackendOperation {
                 op: "sum_all",
                 backend: "Ndarray",
             })
         }
-        fn mean_all(_t: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn mean_all<K: kindle_core::prelude::DType>(_t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Err(Error::UnsupportedBackendOperation {
                 op: "mean_all",
                 backend: "Ndarray",
             })
         }
-        fn max_all(_t: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn max_all<K: kindle_core::prelude::DType>(_t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Err(Error::UnsupportedBackendOperation {
                 op: "max_all",
                 backend: "Ndarray",
             })
         }
-        fn min_all(_t: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn min_all<K: kindle_core::prelude::DType>(_t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Err(Error::UnsupportedBackendOperation {
                 op: "min_all",
                 backend: "Ndarray",
             })
         }
-        fn sum_dim(_t: &<Self as kindle_core::prelude::Backend>::RawTensor, _d: usize) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn sum_dim<K: kindle_core::prelude::DType>(_t: &<Self as kindle_core::prelude::Backend>::Storage<K>, _d: usize) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Err(Error::UnsupportedBackendOperation {
                 op: "sum_dim",
                 backend: "Ndarray",
             })
         }
-        fn sum_keepdim(_t: &<Self as kindle_core::prelude::Backend>::RawTensor, _d: usize) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn sum_keepdim<K: kindle_core::prelude::DType>(_t: &<Self as kindle_core::prelude::Backend>::Storage<K>, _d: usize) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Err(Error::UnsupportedBackendOperation {
                 op: "sum_keepdim",
                 backend: "Ndarray",
             })
         }
-        fn mean_dim(_t: &<Self as kindle_core::prelude::Backend>::RawTensor, _d: usize) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn mean_dim<K: kindle_core::prelude::DType>(_t: &<Self as kindle_core::prelude::Backend>::Storage<K>, _d: usize) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Err(Error::UnsupportedBackendOperation {
                 op: "mean_dim",
                 backend: "Ndarray",
             })
         }
-        fn mean_keepdim(_t: &<Self as kindle_core::prelude::Backend>::RawTensor, _d: usize) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn mean_keepdim<K: kindle_core::prelude::DType>(_t: &<Self as kindle_core::prelude::Backend>::Storage<K>, _d: usize) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Err(Error::UnsupportedBackendOperation {
                 op: "mean_keepdim",
                 backend: "Ndarray",
             })
         }
-        fn max_dim(_t: &<Self as kindle_core::prelude::Backend>::RawTensor, _d: usize) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn max_dim<K: kindle_core::prelude::DType>(_t: &<Self as kindle_core::prelude::Backend>::Storage<K>, _d: usize) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Err(Error::UnsupportedBackendOperation {
                 op: "max_dim",
                 backend: "Ndarray",
             })
         }
-        fn max_keepdim(_t: &<Self as kindle_core::prelude::Backend>::RawTensor, _d: usize) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn max_keepdim<K: kindle_core::prelude::DType>(_t: &<Self as kindle_core::prelude::Backend>::Storage<K>, _d: usize) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Err(Error::UnsupportedBackendOperation {
                 op: "max_keepdim",
                 backend: "Ndarray",
             })
         }
-        fn min_dim(_t: &<Self as kindle_core::prelude::Backend>::RawTensor, _d: usize) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn min_dim<K: kindle_core::prelude::DType>(_t: &<Self as kindle_core::prelude::Backend>::Storage<K>, _d: usize) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Err(Error::UnsupportedBackendOperation {
                 op: "min_dim",
                 backend: "Ndarray",
             })
         }
-        fn min_keepdim(_t: &<Self as kindle_core::prelude::Backend>::RawTensor, _d: usize) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn min_keepdim<K: kindle_core::prelude::DType>(_t: &<Self as kindle_core::prelude::Backend>::Storage<K>, _d: usize) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Err(Error::UnsupportedBackendOperation {
                 op: "min_keepdim",
                 backend: "Ndarray",
             })
         }
-        fn argmax(_t: &<Self as kindle_core::prelude::Backend>::RawTensor, _dim: usize) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn argmax<K: kindle_core::prelude::DType, KInt: kindle_core::prelude::DType>(_t: &<Self as kindle_core::prelude::Backend>::Storage<K>, _dim: Option<usize>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<KInt>> {
             Err(Error::UnsupportedBackendOperation { op: "argmax", backend: "Ndarray" })
         }
-        fn argmin(_t: &<Self as kindle_core::prelude::Backend>::RawTensor, _dim: usize) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn argmin<K: kindle_core::prelude::DType, KInt: kindle_core::prelude::DType>(_t: &<Self as kindle_core::prelude::Backend>::Storage<K>, _dim: Option<usize>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<KInt>> {
             Err(Error::UnsupportedBackendOperation { op: "argmin", backend: "Ndarray" })
         }
 
     }
 
     impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device> kindle_core::prelude::TensorOps<Self> for NdarrayBackend<T, D> {
-        fn stack(_tensors: &[&<Self as kindle_core::prelude::Backend>::RawTensor], _dim: usize) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn matmul<K: kindle_core::prelude::DType>(_lhs: &<Self as kindle_core::prelude::Backend>::Storage<K>, _rhs: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
+            Err(Error::UnsupportedBackendOperation {
+                op: "matmul",
+                backend: "Ndarray",
+            })
+        }
+        fn stack<K: kindle_core::prelude::DType>(_tensors: &[&<Self as kindle_core::prelude::Backend>::Storage<K>], _dim: usize) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Err(Error::UnsupportedBackendOperation {
                 op: "stack",
                 backend: "Ndarray",
             })
         }
-        fn concat(_tensors: &[&<Self as kindle_core::prelude::Backend>::RawTensor], _dim: usize) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn concat<K: kindle_core::prelude::DType>(_tensors: &[&<Self as kindle_core::prelude::Backend>::Storage<K>], _dim: usize) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Err(Error::UnsupportedBackendOperation {
                 op: "concat",
                 backend: "Ndarray",
             })
         }
-        fn broadcast_as(_t: &<Self as kindle_core::prelude::Backend>::RawTensor, _shape: &[usize]) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn broadcast_as<K: kindle_core::prelude::DType>(_t: &<Self as kindle_core::prelude::Backend>::Storage<K>, _shape: &[usize]) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Err(Error::UnsupportedBackendOperation {
                 op: "broadcast_as",
                 backend: "Ndarray",
             })
         }
-        fn broadcast_left(_t: &<Self as kindle_core::prelude::Backend>::RawTensor, _shape: &[usize]) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn broadcast_left<K: kindle_core::prelude::DType>(_t: &<Self as kindle_core::prelude::Backend>::Storage<K>, _shape: &[usize]) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Err(Error::UnsupportedBackendOperation {
                 op: "broadcast_left",
                 backend: "Ndarray",
             })
         }
-        fn reshape(t: &<Self as kindle_core::prelude::Backend>::RawTensor, shape: &[usize]) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn reshape<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>, shape: &[usize]) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             t.to_owned()
                 .into_shape_with_order(shape)
                 .map_err(|e: ndarray::ShapeError| anyhow::anyhow!(e).into())
         }
-        fn transpose(_t: &<Self as kindle_core::prelude::Backend>::RawTensor, _d1: usize, _d2: usize) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn transpose<K: kindle_core::prelude::DType>(_t: &<Self as kindle_core::prelude::Backend>::Storage<K>, _d1: usize, _d2: usize) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Err(Error::UnsupportedBackendOperation {
                 op: "transpose",
                 backend: "Ndarray",
             })
         }
-        fn slice(t: &<Self as kindle_core::prelude::Backend>::RawTensor, ranges: &[(usize, usize)]) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn slice<K: kindle_core::prelude::DType>(t: &<Self as kindle_core::prelude::Backend>::Storage<K>, ranges: &[(usize, usize)]) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             let mut out = t.clone();
             for (dim, &(start, end)) in ranges.iter().enumerate() {
                 out = out
@@ -1136,132 +1227,155 @@ pub mod ndarray_backend {
             Ok(out)
         }
 
-        fn flatten(_t: &<Self as kindle_core::prelude::Backend>::RawTensor, _s: usize, _e: usize) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn flatten<K: kindle_core::prelude::DType>(_t: &<Self as kindle_core::prelude::Backend>::Storage<K>, _s: usize, _e: usize) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Err(Error::UnsupportedBackendOperation {
                 op: "flatten",
                 backend: "Ndarray",
             })
         }
-        fn narrow(
-            _t: &<Self as kindle_core::prelude::Backend>::RawTensor,
+        fn narrow<K: kindle_core::prelude::DType>(
+            _t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             _dim: usize,
             _start: usize,
             _len: usize,
-        ) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Err(Error::UnsupportedBackendOperation {
                 op: "narrow",
                 backend: "Ndarray",
             })
         }
-        fn squeeze(_t: &<Self as kindle_core::prelude::Backend>::RawTensor, _dim: usize) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn squeeze<K: kindle_core::prelude::DType>(_t: &<Self as kindle_core::prelude::Backend>::Storage<K>, _dim: usize) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Err(Error::UnsupportedBackendOperation {
                 op: "squeeze",
                 backend: "Ndarray",
             })
         }
+
+        fn float_to_scalar<K: kindle_core::prelude::DType>(_t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<f64> {
+            Err(Error::UnsupportedBackendOperation { op: "float_to_scalar", backend: "Ndarray" })
+        }
+        fn float_to_vec1<K: kindle_core::prelude::DType>(_t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<Vec<f64>> {
+            Err(Error::UnsupportedBackendOperation { op: "float_to_vec1", backend: "Ndarray" })
+        }
+        fn int_to_scalar<K: kindle_core::prelude::DType>(_t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<i64> {
+            Err(Error::UnsupportedBackendOperation { op: "int_to_scalar", backend: "Ndarray" })
+        }
+        fn int_to_vec1<K: kindle_core::prelude::DType>(_t: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<Vec<i64>> {
+            Err(Error::UnsupportedBackendOperation { op: "int_to_vec1", backend: "Ndarray" })
+        }
+        fn tensor_to_dtype<K: kindle_core::prelude::DType, K2: kindle_core::prelude::DType>(
+            _t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
+            _dtype: KindleDType,
+        ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K2>> {
+            Err(Error::UnsupportedBackendOperation { op: "tensor_to_dtype", backend: "Ndarray" })
+        }
     }
 
     impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device> kindle_core::prelude::ModuleOps<Self> for NdarrayBackend<T, D> {
-        fn adaptive_avg_pool2d(
-            _t: &<Self as kindle_core::prelude::Backend>::RawTensor,
+        fn adaptive_avg_pool2d<K: kindle_core::prelude::DType>(
+            _t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             _output_size: (usize, usize),
-        ) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             unimplemented!("adaptive_avg_pool2d not implemented for NdarrayBackend")
         }
 
-        fn layer_norm(
-            _t: &<Self as kindle_core::prelude::Backend>::RawTensor,
-            _w: &<Self as kindle_core::prelude::Backend>::RawTensor,
-            _b: &<Self as kindle_core::prelude::Backend>::RawTensor,
+        fn layer_norm<K: kindle_core::prelude::DType>(
+            _t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
+            _w: &<Self as kindle_core::prelude::Backend>::Storage<K>,
+            _b: Option<&<Self as kindle_core::prelude::Backend>::Storage<K>>,
             _e: f32,
-        ) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Err(Error::UnsupportedBackendOperation {
                 op: "layer_norm",
                 backend: "Ndarray",
             })
         }
-        fn batch_norm(
-            _t: &<Self as kindle_core::prelude::Backend>::RawTensor,
-            _w: &<Self as kindle_core::prelude::Backend>::RawTensor,
-            _b: &<Self as kindle_core::prelude::Backend>::RawTensor,
-            _rm: &<Self as kindle_core::prelude::Backend>::RawTensor,
-            _rv: &<Self as kindle_core::prelude::Backend>::RawTensor,
+        fn batch_norm<K: kindle_core::prelude::DType>(
+            _t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
+            _w: Option<&<Self as kindle_core::prelude::Backend>::Storage<K>>,
+            _b: Option<&<Self as kindle_core::prelude::Backend>::Storage<K>>,
+            _rm: Option<&<Self as kindle_core::prelude::Backend>::Storage<K>>,
+            _rv: Option<&<Self as kindle_core::prelude::Backend>::Storage<K>>,
             _e: f32,
-        ) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+            _momentum: f64,
+        ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Err(Error::UnsupportedBackendOperation {
                 op: "batch_norm",
                 backend: "Ndarray",
             })
         }
 
-        fn embedding(_t: &<Self as kindle_core::prelude::Backend>::RawTensor, _w: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        fn embedding<K: kindle_core::prelude::DType, KInt: kindle_core::prelude::DType>(_t: &<Self as kindle_core::prelude::Backend>::Storage<KInt>, _w: &<Self as kindle_core::prelude::Backend>::Storage<K>) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Err(Error::UnsupportedBackendOperation {
                 op: "embedding",
                 backend: "Ndarray",
             })
         }
-        fn conv2d(
-            _t: &<Self as kindle_core::prelude::Backend>::RawTensor,
-            _w: &<Self as kindle_core::prelude::Backend>::RawTensor,
-            _b: Option<&<Self as kindle_core::prelude::Backend>::RawTensor>,
+        fn conv2d<K: kindle_core::prelude::DType>(
+            _t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
+            _w: &<Self as kindle_core::prelude::Backend>::Storage<K>,
+            _b: Option<&<Self as kindle_core::prelude::Backend>::Storage<K>>,
             _s: usize,
             _p: usize,
             _d: usize,
-        ) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+            _groups: usize,
+        ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Err(Error::UnsupportedBackendOperation {
                 op: "conv2d",
                 backend: "Ndarray",
             })
         }
 
-        fn conv1d(
-            _t: &<Self as kindle_core::prelude::Backend>::RawTensor,
-            _w: &<Self as kindle_core::prelude::Backend>::RawTensor,
-            _b: Option<&<Self as kindle_core::prelude::Backend>::RawTensor>,
+        fn conv1d<K: kindle_core::prelude::DType>(
+            _t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
+            _w: &<Self as kindle_core::prelude::Backend>::Storage<K>,
+            _b: Option<&<Self as kindle_core::prelude::Backend>::Storage<K>>,
             _s: usize,
             _p: usize,
             _d: usize,
-        ) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+            _groups: usize,
+        ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Err(Error::UnsupportedBackendOperation {
                 op: "conv1d",
                 backend: "Ndarray",
             })
         }
 
-        fn conv_transpose2d(
-            _t: &<Self as kindle_core::prelude::Backend>::RawTensor,
-            _w: &<Self as kindle_core::prelude::Backend>::RawTensor,
-            _b: Option<&<Self as kindle_core::prelude::Backend>::RawTensor>,
+        fn conv_transpose2d<K: kindle_core::prelude::DType>(
+            _t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
+            _w: &<Self as kindle_core::prelude::Backend>::Storage<K>,
+            _b: Option<&<Self as kindle_core::prelude::Backend>::Storage<K>>,
             _s: usize,
             _p: usize,
             _op: usize,
             _d: usize,
-        ) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+            _groups: usize,
+        ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Err(Error::UnsupportedBackendOperation {
                 op: "conv_transpose2d",
                 backend: "Ndarray",
             })
         }
 
-        fn max_pool2d(
-            _t: &<Self as kindle_core::prelude::Backend>::RawTensor,
+        fn max_pool2d<K: kindle_core::prelude::DType>(
+            _t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             _k: (usize, usize),
             _s: (usize, usize),
             _p: (usize, usize),
             _d: (usize, usize),
-        ) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Err(Error::UnsupportedBackendOperation {
                 op: "max_pool2d",
                 backend: "Ndarray",
             })
         }
 
-        fn avg_pool2d(
-            _t: &<Self as kindle_core::prelude::Backend>::RawTensor,
+        fn avg_pool2d<K: kindle_core::prelude::DType>(
+            _t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             _k: (usize, usize),
             _s: (usize, usize),
             _p: (usize, usize),
-        ) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Err(Error::UnsupportedBackendOperation {
                 op: "avg_pool2d",
                 backend: "Ndarray",
@@ -1271,43 +1385,40 @@ pub mod ndarray_backend {
     }
 
     impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device> kindle_core::prelude::LossOps<Self> for NdarrayBackend<T, D> {
-        fn l1_loss(
-            _pred: &<Self as kindle_core::prelude::Backend>::RawTensor,
-            _target: &<Self as kindle_core::prelude::Backend>::RawTensor,
+        fn l1_loss<K: kindle_core::prelude::DType>(
+            _pred: &<Self as kindle_core::prelude::Backend>::Storage<K>,
+            _target: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             _reduction: kindle_core::nn::loss::Reduction,
-        ) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             unimplemented!("l1_loss not implemented for NdArrayBackend")
         }
 
-        fn bce_with_logits_loss(
-            _pred: &<Self as kindle_core::prelude::Backend>::RawTensor,
-            _target: &<Self as kindle_core::prelude::Backend>::RawTensor,
+        fn bce_with_logits_loss<K: kindle_core::prelude::DType>(
+            _pred: &<Self as kindle_core::prelude::Backend>::Storage<K>,
+            _target: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             _reduction: kindle_core::nn::loss::Reduction,
-        ) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             unimplemented!("bce_with_logits_loss not implemented for NdarrayBackend")
         }
 
-        fn mse_loss(
-            _pred: &<Self as kindle_core::prelude::Backend>::RawTensor,
-            _target: &<Self as kindle_core::prelude::Backend>::RawTensor,
+        fn mse_loss<K: kindle_core::prelude::DType>(
+            _pred: &<Self as kindle_core::prelude::Backend>::Storage<K>,
+            _target: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             _reduction: kindle_core::nn::loss::Reduction,
-        ) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
-            // let diff = pred - target;
-            // let sq = diff.mapv(|a| a.powi(2));
-            // Ok(arr0(sq.mean().unwrap()).into_dyn())
+        ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             unimplemented!("mse_loss not implemented for NdArrayBackend")
         }
-        fn cross_entropy_loss(
-            _pred: &<Self as kindle_core::prelude::Backend>::RawTensor,
-            _target: &<Self as kindle_core::prelude::Backend>::RawTensor,
+        fn cross_entropy_loss<K: kindle_core::prelude::DType, KInt: kindle_core::prelude::DType>(
+            _pred: &<Self as kindle_core::prelude::Backend>::Storage<K>,
+            _target: &<Self as kindle_core::prelude::Backend>::Storage<KInt>,
             _reduction: kindle_core::nn::loss::Reduction,
-        ) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
+        ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Err(Error::UnsupportedBackendOperation {
                 op: "cross_entropy_loss",
                 backend: "Ndarray",
             })
         }
-    
+
     }
 
 
