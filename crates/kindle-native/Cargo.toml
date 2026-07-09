@@ -13,5 +13,8 @@ half = { workspace = true }
 bytemuck = { version = "1.25", features = ["derive"] }
 anyhow = "1.0.103"
 
+[dev-dependencies]
+kindle-backends = { path = "../kindle-backends", features = ["candle"] }
+
 [lints]
 workspace = true
