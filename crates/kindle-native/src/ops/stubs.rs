@@ -1,18 +1,15 @@
-//! Trait-completeness stubs for `NativeBackend<T, D>`.
+//! Trait-completeness stubs for `NativeBackend<T, D>` — `ModuleOps` only.
 //!
-//! `Backend` requires `CreationOps + NumericOps + TensorOps + FloatOps +
-//! ReductionOps + ModuleOps + LossOps` as a single supertrait bound (see
-//! `kindle-core/src/tensor/backend.rs`), so the crate cannot compile without
-//! *some* implementation of every method on every sub-trait.
-//!
-//! **Plan 04 update:** `TensorOps` is now implemented in `ops/shape_ops.rs`
-//! and `ReductionOps` is now implemented in `ops/reduce.rs`. This file
-//! retains only `ModuleOps` and `LossOps` — both remain out of Phase 1 scope
-//! except for `mse_loss` which composes from already-tape-tracked primitives.
+//! **Plan 05 update:** `LossOps` is now implemented in `ops/loss.rs`.
+//! `TensorOps` lives in `ops/shape_ops.rs`, `ReductionOps` in `ops/reduce.rs`.
+//! This file retains only `ModuleOps` — all methods return a typed
+//! `Error::UnsupportedBackendOperation` since no `ModuleOps` method is
+//! reachable by `Linear::forward` + `mse_loss`'s actual call graph (confirmed
+//! by direct read of `nn/linear.rs` in RESEARCH.md — `Linear` is implemented
+//! as `matmul` + `add`, with no `ModuleOps` calls).
 
 use kindle_core::err::Error;
-use kindle_core::nn::Reduction;
-use kindle_core::prelude::{Backend, DType, LossOps, ModuleOps, ReductionOps, Result};
+use kindle_core::prelude::{Backend, DType, ModuleOps, Result};
 
 use crate::NativeBackend;
 
@@ -133,48 +130,5 @@ impl<T: DType, D: kindle_core::prelude::Device> ModuleOps<Self> for NativeBacken
             op: "adaptive_avg_pool2d",
             backend: "Native",
         })
-    }
-}
-
-impl<T: DType, D: kindle_core::prelude::Device> LossOps<Self> for NativeBackend<T, D> {
-    fn mse_loss<K: DType>(
-        pred: &<Self as Backend>::Storage<K>,
-        target: &<Self as Backend>::Storage<K>,
-        reduction: Reduction,
-    ) -> Result<<Self as Backend>::Storage<K>> {
-        // Composed from already-tape-tracked primitives (sub, mul,
-        // mean_all/sum_all) per the anti-pattern warning — never a fused
-        // hand-derived backward formula.
-        let diff = <Self as kindle_core::prelude::NumericOps<Self>>::sub::<K>(pred, target)?;
-        let sq = <Self as kindle_core::prelude::NumericOps<Self>>::mul::<K>(&diff, &diff)?;
-        match reduction {
-            Reduction::Mean => <Self as ReductionOps<Self>>::mean_all::<K>(&sq),
-            Reduction::Sum => <Self as ReductionOps<Self>>::sum_all::<K>(&sq),
-            Reduction::None => Ok(sq),
-        }
-    }
-
-    fn l1_loss<K: DType>(
-        _pred: &<Self as Backend>::Storage<K>,
-        _target: &<Self as Backend>::Storage<K>,
-        _reduction: Reduction,
-    ) -> Result<<Self as Backend>::Storage<K>> {
-        unimplemented!("l1_loss not implemented for NativeBackend")
-    }
-
-    fn bce_with_logits_loss<K: DType>(
-        _pred: &<Self as Backend>::Storage<K>,
-        _target: &<Self as Backend>::Storage<K>,
-        _reduction: Reduction,
-    ) -> Result<<Self as Backend>::Storage<K>> {
-        unimplemented!("bce_with_logits_loss not implemented for NativeBackend")
-    }
-
-    fn cross_entropy_loss<K: DType, KInt: DType>(
-        _pred: &<Self as Backend>::Storage<K>,
-        _target: &<Self as Backend>::Storage<K>,
-        _reduction: Reduction,
-    ) -> Result<<Self as Backend>::Storage<K>> {
-        unimplemented!("cross_entropy_loss not implemented for NativeBackend")
     }
 }
