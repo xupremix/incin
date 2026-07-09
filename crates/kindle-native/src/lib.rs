@@ -15,13 +15,11 @@
 
 pub use kindle_core::prelude::*;
 
+pub mod creation;
 pub mod storage;
 pub mod stride;
 pub mod tape;
 pub mod var;
-
-use kindle_core::err::Error;
-use kindle_core::prelude::{DType, Device, KindleDType, KindleDevice, Result};
 
 /// The native, pure-Rust `Backend` implementor. `T` genuinely drives
 /// `Backend::FloatElem` (NATBACK-01, D-03) — unlike `CandleBackend`/
@@ -41,16 +39,16 @@ impl<T: DType, D: Device> kindle_core::prelude::Backend for NativeBackend<T, D> 
     type InnerBackend = Self;
     type BackendWithDevice<NewD: Device> = NativeBackend<T, NewD>;
 
-    fn shape<K: DType>(t: &Self::Storage<K>) -> alloc::vec::Vec<usize> {
+    fn shape<K: DType>(t: &Self::Storage<K>) -> std::vec::Vec<usize> {
         t.shape.clone()
     }
 
-    fn format_tensor_display<K: DType>(t: &Self::Storage<K>) -> alloc::string::String {
-        alloc::format!("NativeStorage(shape={:?})", t.shape)
+    fn format_tensor_display<K: DType>(t: &Self::Storage<K>) -> std::string::String {
+        std::format!("NativeStorage(shape={:?})", t.shape)
     }
 
-    fn format_tensor_debug<K: DType>(t: &Self::Storage<K>) -> alloc::string::String {
-        alloc::format!(
+    fn format_tensor_debug<K: DType>(t: &Self::Storage<K>) -> std::string::String {
+        std::format!(
             "NativeStorage(shape={:?}, strides={:?}, offset={})",
             t.shape,
             t.strides,
