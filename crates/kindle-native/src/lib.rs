@@ -14,3 +14,4 @@ pub use kindle_core::prelude::*;
 
 pub mod storage;
 pub mod stride;
+pub mod tape;

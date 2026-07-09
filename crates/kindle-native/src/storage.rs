@@ -120,6 +120,28 @@ impl NativeStorage {
         }
     }
 
+    /// Build a fresh, contiguous, all-ones `NativeStorage` with the same
+    /// shape and dtype variant as `other`. Used by `tape::backward()` to
+    /// seed the loss tensor's gradient before walking the tape.
+    pub fn ones_like(other: &NativeStorage) -> Self {
+        // `Iterator::product()` over an empty shape (scalar / 0-d) already
+        // yields `1`, so this correctly handles both the scalar and
+        // N-dimensional cases with no special-casing needed.
+        let total: usize = other.shape.iter().product();
+
+        let new_buffer = match &*other.buffer {
+            NativeBuffer::F32(_) => NativeBuffer::F32(vec![1.0f32; total]),
+            NativeBuffer::F64(_) => NativeBuffer::F64(vec![1.0f64; total]),
+            NativeBuffer::U8(_) => NativeBuffer::U8(vec![1u8; total]),
+            NativeBuffer::U32(_) => NativeBuffer::U32(vec![1u32; total]),
+            NativeBuffer::I64(_) => NativeBuffer::I64(vec![1i64; total]),
+            NativeBuffer::F16(_) => NativeBuffer::F16(vec![half::f16::from_f64(1.0); total]),
+            NativeBuffer::BF16(_) => NativeBuffer::BF16(vec![half::bf16::from_f64(1.0); total]),
+        };
+
+        NativeStorage::from_contiguous(new_buffer, other.shape.clone())
+    }
+
     /// Resolve a logical multi-index through `self.strides`/`self.offset`
     /// into the underlying `NativeBuffer`, returning the value as `f64`.
     ///

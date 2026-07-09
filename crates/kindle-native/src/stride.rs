@@ -36,12 +36,8 @@ pub fn broadcast_shape(a: &[usize], b: &[usize]) -> Result<Vec<usize>> {
     let max_len = a.len().max(b.len());
     let mut out = Vec::with_capacity(max_len);
     for i in 0..max_len {
-        let da = *a
-            .get(a.len().wrapping_sub(max_len - i))
-            .unwrap_or(&1usize);
-        let db = *b
-            .get(b.len().wrapping_sub(max_len - i))
-            .unwrap_or(&1usize);
+        let da = *a.get(a.len().wrapping_sub(max_len - i)).unwrap_or(&1usize);
+        let db = *b.get(b.len().wrapping_sub(max_len - i)).unwrap_or(&1usize);
         if da != db && da != 1 && db != 1 {
             return Err(Error::ShapeMismatch {
                 op: "broadcast_shape",
