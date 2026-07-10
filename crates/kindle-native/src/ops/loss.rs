@@ -15,8 +15,14 @@
 //! `sum_dim` → `neg` → Reduction dispatch, all already-tape-tracked, so no
 //! hand-derived backward is written here.
 //!
-//! `l1_loss` and `bce_with_logits_loss` remain `unimplemented!()` stubs —
-//! out of Plan 04-01's scope; they are addressed in Plans 04-02 and 04-03.
+//! `l1_loss` (mean absolute error) and `bce_with_logits_loss` (numerically-stable
+//! binary cross-entropy) are both real, composed implementations landed in
+//! Phase 4 Plan 04-02. `l1_loss` composes from `sub`/`abs`/`mean_all`/`sum_all`;
+//! `bce_with_logits_loss` composes from the numerically-stable
+//! `max(x,0) - x*z + log(1+exp(-|x|))` formula (`relu`/`mul`/`sub`/`abs`/`neg`/
+//! `exp`/`add_scalar_float`/`log`/`add`/`mean_all`/`sum_all`). Both inherit
+//! correct backward by composition with zero new tape entries of their own,
+//! exactly like `mse_loss`/`cross_entropy_loss` above.
 
 use kindle_core::nn::Reduction;
 use kindle_core::prelude::{Backend, DType, FloatOps, LossOps, NumericOps, ReductionOps, Result};
