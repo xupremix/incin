@@ -20,6 +20,8 @@ pub mod ops;
 pub mod storage;
 pub mod stride;
 pub mod tape;
+#[cfg(test)]
+mod testutil;
 pub mod var;
 
 /// The native, pure-Rust `Backend` implementor. `T` genuinely drives
