@@ -17,9 +17,14 @@
 //!   (shared by `module`'s trait methods).
 //! * `embedding` — free-function helper: `embedding_impl` (per-row gather
 //!   forward + scatter-add backward, shared by `module`'s `embedding` method).
-//! * `module` — `ModuleOps` only: real `layer_norm`/`batch_norm`/`embedding`;
-//!   6 remaining methods typed `Error::UnsupportedBackendOperation`.
+//! * `conv` — free-function helpers: `conv1d_impl`/`conv2d_impl` (im2col +
+//!   `matmul::batched_matmul_impl` forward, hand-composed col2im-fold
+//!   backward, shared by `module`'s `conv1d`/`conv2d` methods — Plan 04-05).
+//! * `module` — `ModuleOps`: real `layer_norm`/`batch_norm`/`embedding`/
+//!   `conv1d`/`conv2d`; 4 remaining methods typed
+//!   `Error::UnsupportedBackendOperation`.
 
+pub mod conv;
 pub mod elementwise;
 pub mod embedding;
 pub mod loss;

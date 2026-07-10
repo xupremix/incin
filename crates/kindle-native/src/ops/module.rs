@@ -1,13 +1,15 @@
 //! `ModuleOps` for `NativeBackend<T, D>` — the crate's single `impl ModuleOps`
 //! block (Rust disallows splitting one trait impl across multiple files).
 //!
-//! As of Plan 04-04, three of the nine `ModuleOps` methods are real:
+//! As of Plan 04-05, five of the nine `ModuleOps` methods are real:
 //!   - `layer_norm` — delegates to `ops::norm::layer_norm_impl`
 //!   - `batch_norm`  — delegates to `ops::norm::batch_norm_impl`
 //!   - `embedding`  — delegates to `ops::embedding::embedding_impl`
+//!   - `conv1d`  — delegates to `ops::conv::conv1d_impl`
+//!   - `conv2d`  — delegates to `ops::conv::conv2d_impl`
 //!
-//! The remaining six methods return `Error::UnsupportedBackendOperation`
-//! and will be replaced by later plans in this phase (conv, pooling).
+//! The remaining four methods return `Error::UnsupportedBackendOperation`
+//! and will be replaced by later plans in this phase (conv_transpose2d, pooling).
 
 use kindle_core::err::Error;
 use kindle_core::prelude::{Backend, DType, ModuleOps, Result};
@@ -44,33 +46,27 @@ impl<T: DType, D: kindle_core::prelude::Device> ModuleOps<Self> for NativeBacken
     }
 
     fn conv1d<K: DType>(
-        _t: &<Self as Backend>::Storage<K>,
-        _w: &<Self as Backend>::Storage<K>,
-        _b: Option<&<Self as Backend>::Storage<K>>,
-        _stride: usize,
-        _padding: usize,
-        _dilation: usize,
-        _groups: usize,
+        t: &<Self as Backend>::Storage<K>,
+        w: &<Self as Backend>::Storage<K>,
+        b: Option<&<Self as Backend>::Storage<K>>,
+        stride: usize,
+        padding: usize,
+        dilation: usize,
+        groups: usize,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        Err(Error::UnsupportedBackendOperation {
-            op: "conv1d",
-            backend: "Native",
-        })
+        crate::ops::conv::conv1d_impl::<T, D, K>(t, w, b, stride, padding, dilation, groups)
     }
 
     fn conv2d<K: DType>(
-        _t: &<Self as Backend>::Storage<K>,
-        _w: &<Self as Backend>::Storage<K>,
-        _b: Option<&<Self as Backend>::Storage<K>>,
-        _stride: usize,
-        _padding: usize,
-        _dilation: usize,
-        _groups: usize,
+        t: &<Self as Backend>::Storage<K>,
+        w: &<Self as Backend>::Storage<K>,
+        b: Option<&<Self as Backend>::Storage<K>>,
+        stride: usize,
+        padding: usize,
+        dilation: usize,
+        groups: usize,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        Err(Error::UnsupportedBackendOperation {
-            op: "conv2d",
-            backend: "Native",
-        })
+        crate::ops::conv::conv2d_impl::<T, D, K>(t, w, b, stride, padding, dilation, groups)
     }
 
     fn conv_transpose2d<K: DType>(
