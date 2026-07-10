@@ -15,7 +15,6 @@
 //! `Error::UnsupportedBackendOperation` and will be replaced by a later plan
 //! in this phase.
 
-use kindle_core::err::Error;
 use kindle_core::prelude::{Backend, DType, ModuleOps, Result};
 
 use crate::NativeBackend;
@@ -74,19 +73,25 @@ impl<T: DType, D: kindle_core::prelude::Device> ModuleOps<Self> for NativeBacken
     }
 
     fn conv_transpose2d<K: DType>(
-        _t: &<Self as Backend>::Storage<K>,
-        _w: &<Self as Backend>::Storage<K>,
-        _b: Option<&<Self as Backend>::Storage<K>>,
-        _stride: usize,
-        _padding: usize,
-        _output_padding: usize,
-        _dilation: usize,
-        _groups: usize,
+        t: &<Self as Backend>::Storage<K>,
+        w: &<Self as Backend>::Storage<K>,
+        b: Option<&<Self as Backend>::Storage<K>>,
+        stride: usize,
+        padding: usize,
+        output_padding: usize,
+        dilation: usize,
+        groups: usize,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        Err(Error::UnsupportedBackendOperation {
-            op: "conv_transpose2d",
-            backend: "Native",
-        })
+        crate::ops::conv::conv_transpose2d_impl::<T, D, K>(
+            t,
+            w,
+            b,
+            stride,
+            padding,
+            output_padding,
+            dilation,
+            groups,
+        )
     }
 
     fn max_pool2d<K: DType>(

@@ -33,7 +33,7 @@ use kindle_core::prelude::{DType, NumericOps, Result, TensorOps};
 
 use crate::NativeBackend;
 use crate::ops::matmul::{batched_matmul_impl, transpose_last2};
-use crate::storage::{NativeBuffer, NativeStorage, increment_index};
+use crate::storage::{NativeBuffer, NativeStorage, increment_index, scatter_into_zeros};
 use crate::tape::{self, TapeEntry};
 
 // ---------------------------------------------------------------------------
@@ -54,6 +54,19 @@ fn out_size(
     let padded = len + 2 * padding;
     let effective_kernel = dilation * kernel_size.saturating_sub(1) + 1;
     padded.saturating_sub(effective_kernel) / stride + 1
+}
+
+/// The "natural" (no `output_padding`) `conv_transpose2d` output size:
+/// `(len - 1) * stride - 2*padding + dilation*(kernel_size-1) + 1`, i.e.
+/// `conv2d`'s own forward-shape formula (`out_size` above) inverted. Uses
+/// `saturating_sub` throughout (T-04-11) so a pathological small-input
+/// combination underflows to `0` rather than panicking. `output_padding` is
+/// deliberately NOT part of this formula (Pitfall 4) — it is applied as a
+/// separate final allocate-larger step by the caller.
+fn natural_transpose_out_size(len: usize, kernel_size: usize, stride: usize, padding: usize, dilation: usize) -> usize {
+    let unstrided = (len.saturating_sub(1)) * stride;
+    let effective_kernel = dilation * kernel_size.saturating_sub(1);
+    (unstrided + effective_kernel + 1).saturating_sub(2 * padding)
 }
 
 /// Validate that `groups` evenly divides both `cin`/`cout`, returning
@@ -536,6 +549,186 @@ pub(crate) fn conv2d_impl<T: DType, D: kindle_core::prelude::Device, K: DType>(
 }
 
 // ---------------------------------------------------------------------------
+// conv_transpose2d_impl
+// ---------------------------------------------------------------------------
+
+/// `ModuleOps::conv_transpose2d`'s `NativeBackend` implementation (RESEARCH.md
+/// Pattern 4): transposed convolution's forward pass is exactly `conv2d`'s
+/// own backward-data (grad-w.r.t.-input) formula applied directly to
+/// `input` (renamed "output" in transposed-conv terminology) instead of to a
+/// gradient — so this reuses `col2im_2d` (built in Plan 04-05 for
+/// `conv2d_impl`'s backward) VERBATIM as its forward fold subroutine,
+/// rather than a separate im2col-style forward.
+///
+/// `weight` arrives in Candle's confirmed `conv_transpose2d` layout
+/// `[Cin, Cout, Kh, Kw]` — already the "transposed channel order" relative
+/// to `conv2d`'s own `[Cout, Cin, Kh, Kw]` convention that the backward-data
+/// formula needs, so no additional channel-axis transpose is required.
+///
+/// `output_padding` (Pitfall 4) is handled as its OWN final step, separate
+/// from `padding`'s symmetric fold-size arithmetic: the natural
+/// (no-`output_padding`) fold output is computed first via
+/// `natural_transpose_out_size`, then — only if `output_padding > 0` — the
+/// final output buffer is allocated `output_padding` larger (added once, not
+/// doubled) in H and W via `scatter_into_zeros`, copying the natural result
+/// into the leading `[0..H_nat, 0..W_nat]` sub-region and leaving the
+/// trailing rows/columns at exactly `0.0`.
+///
+/// Only `groups == 1` is supported (an accepted narrower-scope
+/// simplification matching `CandleBackend::conv_transpose2d`'s own
+/// confirmed behavior, which likewise ignores `groups`); a `groups != 1`
+/// call returns a typed `Error::ShapeMismatch` rather than silently ignoring
+/// the parameter or asserting via `debug_assert_eq!`.
+pub(crate) fn conv_transpose2d_impl<T: DType, D: kindle_core::prelude::Device, K: DType>(
+    input: &NativeStorage,
+    weight: &NativeStorage,
+    bias: Option<&NativeStorage>,
+    stride: usize,
+    padding: usize,
+    output_padding: usize,
+    dilation: usize,
+    groups: usize,
+) -> Result<NativeStorage> {
+    type B<T, D> = NativeBackend<T, D>;
+
+    if groups != 1 {
+        return Err(Error::ShapeMismatch {
+            op: "conv_transpose2d",
+            expected: vec![1],
+            got: vec![groups],
+            msg: format!(
+                "conv_transpose2d: only groups == 1 is supported on NativeBackend, got groups={groups}"
+            ),
+        });
+    }
+
+    let (b, cin, h, w) = (
+        input.shape[0],
+        input.shape[1],
+        input.shape[2],
+        input.shape[3],
+    );
+    // weight: [Cin, Cout, Kh, Kw] (Candle's conv_transpose2d convention).
+    let (w_cin, cout, kh, kw) = (
+        weight.shape[0],
+        weight.shape[1],
+        weight.shape[2],
+        weight.shape[3],
+    );
+    if w_cin != cin {
+        return Err(Error::ShapeMismatch {
+            op: "conv_transpose2d",
+            expected: vec![cin],
+            got: vec![w_cin],
+            msg: format!(
+                "conv_transpose2d: weight's Cin ({w_cin}) does not match input Cin ({cin})"
+            ),
+        });
+    }
+
+    let h_nat = natural_transpose_out_size(h, kh, stride, padding, dilation);
+    let w_nat = natural_transpose_out_size(w, kw, stride, padding, dilation);
+
+    // input: [B, Cin, H, W] -> [B, Cin, H*W] -> [B, H*W, Cin] (mirrors
+    // conv2d_impl's backward: "grad_out_t" role, but played by `input` here).
+    let input_flat = input.reshape(&[b, cin, h * w])?;
+    let input_t = input_flat.transpose(1, 2)?;
+    // weight: [Cin, Cout, Kh, Kw] -> [Cin, Cout*Kh*Kw] ("weight_mat" role).
+    let weight_mat = weight.reshape(&[cin, cout * kh * kw])?;
+    // cols = input_t @ weight_mat : [B, H*W, Cin] @ [Cin, Cout*Kh*Kw] -> [B, H*W, Cout*Kh*Kw]
+    let cols = batched_matmul_impl(&input_t, &weight_mat)?;
+
+    // Fold cols into the natural (no output_padding) [B, Cout, H_nat, W_nat]
+    // output, reusing col2im_2d verbatim (Pattern 4).
+    let natural_out = col2im_2d(&cols, &[b, cout, h_nat, w_nat], kh, kw, stride, padding, dilation);
+
+    let conv_out = if output_padding == 0 {
+        natural_out
+    } else {
+        let final_shape = vec![b, cout, h_nat + output_padding, w_nat + output_padding];
+        scatter_into_zeros(&final_shape, &[0, 0, 0, 0], &natural_out)
+    };
+
+    let (input_capture, weight_capture) = (input.clone(), weight.clone());
+    let (input_id, weight_id, out_id) = (input.id, weight.id, conv_out.id);
+    tape::push(TapeEntry {
+        output_id: out_id,
+        input_ids: vec![input_id, weight_id],
+        backward: Box::new(move |grad_out: &NativeStorage| {
+            // grad_out is shaped like conv_out ([B, Cout, H_nat+op, W_nat+op]);
+            // narrow away any trailing output_padding rows/columns first so
+            // every downstream step operates on the natural [B, Cout, H_nat,
+            // W_nat] fold shape (output_padding contributes nothing to
+            // grad_input/grad_weight, matching its forward role as a
+            // trailing-zero region only).
+            let grad_out_nat = if output_padding == 0 {
+                grad_out.clone()
+            } else {
+                grad_out
+                    .narrow(2, 0, h_nat)
+                    .and_then(|t| t.narrow(3, 0, w_nat))
+                    .expect("conv_transpose2d backward: narrow away output_padding cannot fail")
+            };
+
+            // conv_transpose2d's OWN backward w.r.t. its input is exactly
+            // conv2d's FORWARD formula (im2col_2d + matmul) applied to
+            // grad_out_nat against the same weight (the exact inverse
+            // relationship of this op's forward being conv2d's
+            // backward-data formula): im2col_2d unfolds grad_out_nat using
+            // the SAME window geometry the forward fold used, then matmuls
+            // against weight_mat (transposed relative to the forward's own
+            // orientation) to recover grad_input.
+            let grad_out_cols = im2col_2d(&grad_out_nat, kh, kw, stride, padding, dilation);
+            // grad_out_cols: [B, H*W, Cout*Kh*Kw] @ weight_mat^T: [Cout*Kh*Kw, Cin] -> [B, H*W, Cin]
+            let weight_mat = weight_capture
+                .reshape(&[cin, cout * kh * kw])
+                .expect("conv_transpose2d backward: reshape weight cannot fail");
+            let grad_input_flat =
+                batched_matmul_impl(&grad_out_cols, &transpose_last2(&weight_mat))
+                    .expect("conv_transpose2d backward: grad_input matmul cannot fail");
+            // [B, H*W, Cin] -> [B, Cin, H*W] -> [B, Cin, H, W]
+            let grad_input = grad_input_flat
+                .transpose(1, 2)
+                .expect("conv_transpose2d backward: transpose grad_input cannot fail")
+                .reshape(&[b, cin, h, w])
+                .expect("conv_transpose2d backward: reshape grad_input cannot fail");
+
+            // grad_weight follows the same per-position outer-product-and-sum
+            // structure conv2d_impl's own grad_weight closure uses, with
+            // `input` and `grad_out` swapped relative to conv2d's own
+            // convention (conv_transpose2d's forward played `input`'s role
+            // where conv2d's backward played `grad_out`'s role, and vice
+            // versa) — this swap is the least-obvious part of this reuse:
+            // grad_weight_mat = input_t^T @ grad_out_cols :
+            // [Cin, B*H*W] view via batched matmul against [B, H*W, Cout*Kh*Kw].
+            let input_flat = input_capture
+                .reshape(&[b, cin, h * w])
+                .expect("conv_transpose2d backward: reshape input cannot fail");
+            let input_t = input_flat
+                .transpose(1, 2)
+                .expect("conv_transpose2d backward: transpose input cannot fail");
+            let grad_weight_mat = batched_matmul_impl(&transpose_last2(&input_t), &grad_out_cols)
+                .expect("conv_transpose2d backward: grad_weight matmul cannot fail");
+            // grad_weight_mat: [B, Cin, Cout*Kh*Kw] -> sum over batch -> [Cin, Cout*Kh*Kw]
+            let grad_weight_summed = sum_batch_dim(&grad_weight_mat);
+            let grad_weight = grad_weight_summed
+                .reshape(&[cin, cout, kh, kw])
+                .expect("conv_transpose2d backward: reshape grad_weight cannot fail");
+
+            vec![grad_input, grad_weight]
+        }),
+    });
+
+    match bias {
+        Some(bias) => {
+            let bias_shaped = bias.reshape(&[1, cout, 1, 1])?;
+            <B<T, D> as NumericOps<B<T, D>>>::add::<K>(&conv_out, &bias_shaped)
+        }
+        None => Ok(conv_out),
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Shared backward-composition helpers (plain, non-tape-tracked — operate on
 // already-materialized NativeStorage values inside the hand-composed
 // backward closures above, mirroring the forward's own per-group narrow/
@@ -830,6 +1023,120 @@ mod tests {
         let weight_data: Vec<f32> = (1..=4).map(|x| x as f32 * 0.1).collect();
         let weight = tensor(weight_data, vec![1, 1, 2, 2]);
         let max_rel_err = gradcheck(conv2d_sum_op, &[input, weight], 1e-4);
+        assert!(
+            max_rel_err < 1e-2,
+            "gradcheck max relative error too high: {max_rel_err}"
+        );
+    }
+
+    // --- conv_transpose2d forward ---
+
+    /// Forward test (basic, stride=1, padding=0, output_padding=0,
+    /// dilation=1, groups=1): a small [1,1,2,2] input with a [1,1,2,2]
+    /// weight (Cin=1,Cout=1) produces the hand-computed transposed-conv
+    /// output (verified against a manually-derived scatter-add-of-weighted-
+    /// patches reference, not just shape).
+    #[test]
+    fn conv_transpose2d_forward_hand_computed_basic() {
+        // input = [[1,2],[3,4]], weight = [[1,1],[1,1]]
+        let input = tensor(vec![1.0, 2.0, 3.0, 4.0], vec![1, 1, 2, 2]);
+        let weight = tensor(vec![1.0, 1.0, 1.0, 1.0], vec![1, 1, 2, 2]);
+        let out =
+            conv_transpose2d_impl::<f32, Cpu, f32>(&input, &weight, None, 1, 0, 0, 1, 1).unwrap();
+        assert_eq!(out.shape, vec![1, 1, 3, 3]);
+        // Hand-computed scatter-add of weighted 2x2 patches:
+        // out[i+kh, j+kw] += input[i,j] * weight[kh,kw] for i,j,kh,kw in 0..2
+        assert_eq!(
+            f32_vec(&out),
+            vec![1.0, 3.0, 2.0, 4.0, 10.0, 6.0, 3.0, 7.0, 4.0]
+        );
+    }
+
+    /// Forward test (stride>1, the common upsampling case): a [1,1,2,2]
+    /// input with stride=2 produces an output shape matching Candle's exact
+    /// formula `(i_h - 1) * stride + dilation*(k_h-1) + output_padding + 1 -
+    /// 2*padding` for both H and W, with hand-computed values.
+    #[test]
+    fn conv_transpose2d_forward_stride_upsamples() {
+        let input = tensor(vec![1.0, 2.0, 3.0, 4.0], vec![1, 1, 2, 2]);
+        let weight = tensor(vec![1.0, 1.0, 1.0, 1.0], vec![1, 1, 2, 2]);
+        let out =
+            conv_transpose2d_impl::<f32, Cpu, f32>(&input, &weight, None, 2, 0, 0, 1, 1).unwrap();
+        // (2-1)*2 + 1*(2-1) + 1 - 0 = 4
+        assert_eq!(out.shape, vec![1, 1, 4, 4]);
+        assert_eq!(
+            f32_vec(&out),
+            vec![
+                1.0, 1.0, 2.0, 2.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0, 3.0, 3.0, 4.0, 4.0
+            ]
+        );
+    }
+
+    /// Forward test (output_padding>0, Pitfall 4): explicitly constructs a
+    /// case with non-zero `output_padding` and confirms the extra
+    /// rows/columns are allocated on the correct (bottom/right) side ONLY,
+    /// at exactly value 0.0 — confirming the natural fold-output size is
+    /// computed first using `padding` symmetrically, THEN `output_padding`
+    /// extra rows/columns are appended afterward (not folded into the same
+    /// offset arithmetic as `padding`).
+    #[test]
+    fn conv_transpose2d_forward_output_padding_appends_trailing_zeros_only() {
+        let input = tensor(vec![1.0, 2.0, 3.0, 4.0], vec![1, 1, 2, 2]);
+        let weight = tensor(vec![1.0, 1.0, 1.0, 1.0], vec![1, 1, 2, 2]);
+        let out =
+            conv_transpose2d_impl::<f32, Cpu, f32>(&input, &weight, None, 2, 0, 1, 1, 1).unwrap();
+        // natural (output_padding=0) shape was [1,1,4,4]; output_padding=1
+        // appends ONE extra trailing row and column -> [1,1,5,5].
+        assert_eq!(out.shape, vec![1, 1, 5, 5]);
+        let vals = f32_vec(&out);
+        let natural = vec![
+            1.0, 1.0, 2.0, 2.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0, 3.0, 3.0, 4.0, 4.0,
+        ];
+        // Leading [0..4, 0..4] sub-region matches the natural (no
+        // output_padding) result exactly.
+        for row in 0..4 {
+            for col in 0..4 {
+                assert_eq!(vals[row * 5 + col], natural[row * 4 + col]);
+            }
+        }
+        // The trailing row (row=4) and trailing column (col=4) are exactly
+        // 0.0 for every position.
+        for col in 0..5 {
+            assert_eq!(vals[4 * 5 + col], 0.0, "trailing row must be zero");
+        }
+        for row in 0..5 {
+            assert_eq!(vals[row * 5 + 4], 0.0, "trailing column must be zero");
+        }
+    }
+
+    /// Forward test (groups != 1 rejected): calling with `groups=2` returns
+    /// a typed `Error::ShapeMismatch` rather than silently ignoring the
+    /// parameter or panicking via `debug_assert_eq!`.
+    #[test]
+    fn conv_transpose2d_rejects_groups_other_than_one() {
+        let input = tensor(vec![1.0, 2.0, 3.0, 4.0], vec![1, 1, 2, 2]);
+        let weight = tensor(vec![1.0, 1.0, 1.0, 1.0], vec![1, 1, 2, 2]);
+        let result = conv_transpose2d_impl::<f32, Cpu, f32>(&input, &weight, None, 1, 0, 0, 1, 2);
+        assert!(matches!(result, Err(Error::ShapeMismatch { .. })));
+    }
+
+    // --- conv_transpose2d backward ---
+
+    fn conv_transpose2d_sum_op(inputs: &[NativeStorage]) -> NativeStorage {
+        let out =
+            conv_transpose2d_impl::<f32, Cpu, f32>(&inputs[0], &inputs[1], None, 1, 0, 0, 1, 1)
+                .unwrap();
+        TestBackend::sum_all::<f32>(&out).unwrap()
+    }
+
+    /// Backward test: gradcheck on the basic [1,1,2,2]/[1,1,2,2] case
+    /// (stride=1, padding=0, output_padding=0, dilation=1),
+    /// max_relative_error < 1e-2 for both grad_input and grad_weight.
+    #[test]
+    fn conv_transpose2d_gradcheck_input_and_weight() {
+        let input = tensor(vec![0.1, 0.2, 0.3, 0.4], vec![1, 1, 2, 2]);
+        let weight = tensor(vec![0.5, 0.6, 0.7, 0.8], vec![1, 1, 2, 2]);
+        let max_rel_err = gradcheck(conv_transpose2d_sum_op, &[input, weight], 1e-4);
         assert!(
             max_rel_err < 1e-2,
             "gradcheck max relative error too high: {max_rel_err}"
