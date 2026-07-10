@@ -17,6 +17,7 @@ use kindle_core::err::Error;
 use kindle_core::prelude::Result;
 
 use crate::storage::{NativeBuffer, NativeStorage};
+use crate::stride;
 use crate::tape::{self, TapeEntry};
 
 /// Swap the two axes of a 2D `NativeStorage` (thin wrapper over
@@ -26,6 +27,106 @@ use crate::tape::{self, TapeEntry};
 fn transpose_2d(t: &NativeStorage) -> NativeStorage {
     t.transpose(0, 1)
         .expect("2D transpose of a 2D matmul operand cannot fail")
+}
+
+/// Swap ONLY the last two axes of an N-D (`N >= 2`) `NativeStorage`, leaving
+/// every leading batch axis untouched. Generalizes `transpose_2d` to the
+/// batched case; both are thin wrappers over the same
+/// `NativeStorage::transpose(dim1, dim2)` primitive.
+pub(crate) fn transpose_last2(t: &NativeStorage) -> NativeStorage {
+    let r = t.shape.len();
+    t.transpose(r - 2, r - 1)
+        .expect("transpose of the last two axes of a rank>=2 tensor cannot fail")
+}
+
+/// Batched matmul: broadcasts both operands' batch dims (every axis except
+/// the trailing 2), flattens to `[batch, M, K]`/`[batch, K, N]`, and loops
+/// calling `matmul_impl` per batch index (D-01: naive, no rayon).
+///
+/// Handles the unbatched case too (`lhs.shape.len() == 2 && rhs.shape.len()
+/// == 2`) as the degenerate `batch_total == 1` case — ONE uniform code path
+/// for all batch ranks, no `<=3D` vs `>3D` special-casing.
+///
+/// This function ONLY implements the forward computation (Task 1). Task 2
+/// adds this op's own hand-composed top-level `TapeEntry` (using
+/// `transpose_last2` + recursive `batched_matmul_impl` calls +
+/// `tape::unbroadcast`), layered on top of this forward result.
+pub(crate) fn batched_matmul_impl(
+    lhs: &NativeStorage,
+    rhs: &NativeStorage,
+) -> Result<NativeStorage> {
+    let (l_rank, r_rank) = (lhs.shape.len(), rhs.shape.len());
+    if l_rank < 2 || r_rank < 2 {
+        return Err(Error::ShapeMismatch {
+            op: "matmul",
+            expected: vec![2],
+            got: vec![l_rank, r_rank],
+            msg: format!(
+                "batched matmul requires both operands to have rank >= 2; got lhs.shape={:?}, rhs.shape={:?}",
+                lhs.shape, rhs.shape
+            ),
+        });
+    }
+
+    let (m, k_lhs) = (lhs.shape[l_rank - 2], lhs.shape[l_rank - 1]);
+    let (k_rhs, n) = (rhs.shape[r_rank - 2], rhs.shape[r_rank - 1]);
+    if k_lhs != k_rhs {
+        return Err(Error::ShapeMismatch {
+            op: "matmul",
+            expected: vec![k_lhs],
+            got: vec![k_rhs],
+            msg: format!(
+                "matmul inner dims must match: lhs.shape={:?} (K={k_lhs}), rhs.shape={:?} (K={k_rhs})",
+                lhs.shape, rhs.shape
+            ),
+        });
+    }
+
+    // Batch dims = every axis except the trailing 2, right-aligned per
+    // stride::broadcast_shape's existing NumPy-style rule (REUSED, not
+    // reimplemented).
+    let lhs_batch = &lhs.shape[..l_rank - 2];
+    let rhs_batch = &rhs.shape[..r_rank - 2];
+    let out_batch = stride::broadcast_shape(lhs_batch, rhs_batch)?;
+
+    let mut lhs_target = out_batch.clone();
+    lhs_target.extend_from_slice(&[m, k_lhs]);
+    let mut rhs_target = out_batch.clone();
+    rhs_target.extend_from_slice(&[k_rhs, n]);
+
+    let lhs_b = lhs.broadcast_as(&lhs_target)?;
+    let rhs_b = rhs.broadcast_as(&rhs_target)?;
+
+    // `Iterator::product()` over an empty `out_batch` (the unbatched,
+    // no-batch-dims-at-all case) already correctly yields `1` (empty
+    // product) with no `.max(1)` guard needed — and a genuine size-0 batch
+    // axis correctly yields `batch_total == 0` via the same plain product,
+    // so this does NOT conflate a size-0 axis with the unbatched case
+    // (Pitfall 6).
+    let batch_total: usize = out_batch.iter().product();
+
+    let lhs_flat = lhs_b.reshape(&[batch_total, m, k_lhs])?;
+    let rhs_flat = rhs_b.reshape(&[batch_total, k_rhs, n])?;
+
+    let mut out_data: Vec<f32> = Vec::with_capacity(batch_total * m * n);
+    for b in 0..batch_total {
+        let lhs_slice = lhs_flat.narrow(0, b, 1)?.reshape(&[m, k_lhs])?;
+        let rhs_slice = rhs_flat.narrow(0, b, 1)?.reshape(&[k_rhs, n])?;
+        let out_slice = matmul_impl(&lhs_slice, &rhs_slice)?;
+        for mi in 0..m {
+            for ni in 0..n {
+                out_data.push(out_slice.get(&[mi, ni]) as f32);
+            }
+        }
+    }
+
+    let mut out_shape = out_batch;
+    out_shape.extend_from_slice(&[m, n]);
+
+    Ok(NativeStorage::from_contiguous(
+        NativeBuffer::F32(out_data),
+        out_shape,
+    ))
 }
 
 /// Naive triple-nested-loop 2D matmul: `lhs` (`[M,K]`) @ `rhs` (`[K,N]`) ->
@@ -198,5 +299,192 @@ mod tests {
         let rhs = matrix(vec![0.0; 20], 4, 5);
         let result = matmul_impl(&lhs, &rhs);
         assert!(result.is_err());
+    }
+
+    fn tensor(v: Vec<f32>, shape: Vec<usize>) -> NativeStorage {
+        NativeStorage::from_contiguous(NativeBuffer::F32(v), shape)
+    }
+
+    /// Test 1 (unbatched, degenerate case): `batched_matmul_impl` on a
+    /// `[2,3]`/`[3,4]` pair (both rank 2, `batch_total == 1` degenerate case
+    /// flowing through the SAME code path as any batched call) produces
+    /// identical values to `matmul_impl` on the same inputs.
+    #[test]
+    fn batched_matmul_unbatched_degenerate_matches_matmul_impl() {
+        let lhs = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
+        let rhs = matrix(
+            vec![
+                7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0,
+            ],
+            3,
+            4,
+        );
+        let expected = matmul_impl(&lhs, &rhs).unwrap();
+        let out = batched_matmul_impl(&lhs, &rhs).unwrap();
+        assert_eq!(out.shape, expected.shape);
+        assert_eq!(f32_vec(&out), f32_vec(&expected));
+    }
+
+    /// Test 2 (equal-batch): `[2,3,4]`/`[2,4,5]` operands produce shape
+    /// `[2,3,5]` matching a hand-computed per-batch-slice reference (2
+    /// independent `[3,4]@[4,5]` matmuls).
+    #[test]
+    fn batched_matmul_equal_batch_matches_per_slice_reference() {
+        // Batch 0: lhs = [[1..12]] reshaped [3,4], rhs = [1..20] reshaped [4,5]
+        let lhs_b0: Vec<f32> = (1..=12).map(|x| x as f32).collect();
+        let lhs_b1: Vec<f32> = (13..=24).map(|x| x as f32).collect();
+        let rhs_b0: Vec<f32> = (1..=20).map(|x| x as f32).collect();
+        let rhs_b1: Vec<f32> = (21..=40).map(|x| x as f32).collect();
+
+        let mut lhs_data = lhs_b0.clone();
+        lhs_data.extend(lhs_b1.clone());
+        let mut rhs_data = rhs_b0.clone();
+        rhs_data.extend(rhs_b1.clone());
+
+        let lhs = tensor(lhs_data, vec![2, 3, 4]);
+        let rhs = tensor(rhs_data, vec![2, 4, 5]);
+
+        let out = batched_matmul_impl(&lhs, &rhs).unwrap();
+        assert_eq!(out.shape, vec![2, 3, 5]);
+
+        let ref0 = matmul_impl(&matrix(lhs_b0, 3, 4), &matrix(rhs_b0, 4, 5)).unwrap();
+        let ref1 = matmul_impl(&matrix(lhs_b1, 3, 4), &matrix(rhs_b1, 4, 5)).unwrap();
+
+        let out_data = f32_vec(&out);
+        assert_eq!(&out_data[0..15], &f32_vec(&ref0)[..]);
+        assert_eq!(&out_data[15..30], &f32_vec(&ref1)[..]);
+    }
+
+    /// Test 3 (batch-broadcast-left): `[1,3,4]`/`[2,4,5]` operands produce
+    /// shape `[2,3,5]`, with the `[1,...]` operand's single batch slice
+    /// correctly reused for both output batch indices.
+    #[test]
+    fn batched_matmul_batch_broadcast_left_reuses_single_slice() {
+        let lhs_data: Vec<f32> = (1..=12).map(|x| x as f32).collect();
+        let rhs_b0: Vec<f32> = (1..=20).map(|x| x as f32).collect();
+        let rhs_b1: Vec<f32> = (21..=40).map(|x| x as f32).collect();
+        let mut rhs_data = rhs_b0.clone();
+        rhs_data.extend(rhs_b1.clone());
+
+        let lhs = tensor(lhs_data.clone(), vec![1, 3, 4]);
+        let rhs = tensor(rhs_data, vec![2, 4, 5]);
+
+        let out = batched_matmul_impl(&lhs, &rhs).unwrap();
+        assert_eq!(out.shape, vec![2, 3, 5]);
+
+        let ref0 = matmul_impl(&matrix(lhs_data.clone(), 3, 4), &matrix(rhs_b0, 4, 5)).unwrap();
+        let ref1 = matmul_impl(&matrix(lhs_data, 3, 4), &matrix(rhs_b1, 4, 5)).unwrap();
+
+        let out_data = f32_vec(&out);
+        assert_eq!(&out_data[0..15], &f32_vec(&ref0)[..]);
+        assert_eq!(&out_data[15..30], &f32_vec(&ref1)[..]);
+    }
+
+    /// Test 4 (batch-broadcast-right): `[2,3,4]`/`[1,4,5]` mirrors Test 3
+    /// with the broadcast on the other operand.
+    #[test]
+    fn batched_matmul_batch_broadcast_right_reuses_single_slice() {
+        let lhs_b0: Vec<f32> = (1..=12).map(|x| x as f32).collect();
+        let lhs_b1: Vec<f32> = (13..=24).map(|x| x as f32).collect();
+        let rhs_data: Vec<f32> = (1..=20).map(|x| x as f32).collect();
+        let mut lhs_data = lhs_b0.clone();
+        lhs_data.extend(lhs_b1.clone());
+
+        let lhs = tensor(lhs_data, vec![2, 3, 4]);
+        let rhs = tensor(rhs_data.clone(), vec![1, 4, 5]);
+
+        let out = batched_matmul_impl(&lhs, &rhs).unwrap();
+        assert_eq!(out.shape, vec![2, 3, 5]);
+
+        let ref0 = matmul_impl(&matrix(lhs_b0, 3, 4), &matrix(rhs_data.clone(), 4, 5)).unwrap();
+        let ref1 = matmul_impl(&matrix(lhs_b1, 3, 4), &matrix(rhs_data, 4, 5)).unwrap();
+
+        let out_data = f32_vec(&out);
+        assert_eq!(&out_data[0..15], &f32_vec(&ref0)[..]);
+        assert_eq!(&out_data[15..30], &f32_vec(&ref1)[..]);
+    }
+
+    /// Test 5 (>3D): `[2,2,3,4]`/`[2,2,4,5]` (rank 4, two batch dims)
+    /// produces shape `[2,2,3,5]` matching a hand-computed reference for at
+    /// least one specific batch index (batch index (1,1), i.e. flattened
+    /// batch index 3).
+    #[test]
+    fn batched_matmul_rank4_matches_reference_at_one_batch_index() {
+        let total_batches = 4; // 2*2
+        let mut lhs_data = Vec::new();
+        let mut rhs_data = Vec::new();
+        let mut lhs_slices = Vec::new();
+        let mut rhs_slices = Vec::new();
+        for b in 0..total_batches {
+            let l: Vec<f32> = (0..12).map(|x| (x + b * 100) as f32).collect();
+            let r: Vec<f32> = (0..20).map(|x| (x + b * 100) as f32).collect();
+            lhs_data.extend(l.clone());
+            rhs_data.extend(r.clone());
+            lhs_slices.push(l);
+            rhs_slices.push(r);
+        }
+
+        let lhs = tensor(lhs_data, vec![2, 2, 3, 4]);
+        let rhs = tensor(rhs_data, vec![2, 2, 4, 5]);
+
+        let out = batched_matmul_impl(&lhs, &rhs).unwrap();
+        assert_eq!(out.shape, vec![2, 2, 3, 5]);
+
+        // Flattened batch index 3 corresponds to (1,1).
+        let batch_idx = 3;
+        let reference = matmul_impl(
+            &matrix(lhs_slices[batch_idx].clone(), 3, 4),
+            &matrix(rhs_slices[batch_idx].clone(), 4, 5),
+        )
+        .unwrap();
+        let out_data = f32_vec(&out);
+        let start = batch_idx * 15;
+        assert_eq!(&out_data[start..start + 15], &f32_vec(&reference)[..]);
+    }
+
+    /// Test 6 (>3D with batch-dim broadcast): a rank-3 operand (`[1,3,4]`)
+    /// broadcasting against a rank-4 operand (`[2,1,4,5]`) via
+    /// `stride::broadcast_shape`'s existing leading-dim-insertion rule,
+    /// producing the correctly-broadcast `[2,1,3,5]` output shape.
+    #[test]
+    fn batched_matmul_rank3_broadcasts_against_rank4_leading_dim_insertion() {
+        let lhs_data: Vec<f32> = (1..=12).map(|x| x as f32).collect();
+        let rhs_data: Vec<f32> = (1..=40).map(|x| x as f32).collect();
+
+        let lhs = tensor(lhs_data, vec![1, 3, 4]);
+        let rhs = tensor(rhs_data, vec![2, 1, 4, 5]);
+
+        let out = batched_matmul_impl(&lhs, &rhs).unwrap();
+        // lhs_batch = [1] right-aligned against rhs_batch = [2,1] ->
+        // broadcast_shape([1], [2,1]) = [2,1] (leading dim inserted for lhs).
+        assert_eq!(out.shape, vec![2, 1, 3, 5]);
+    }
+
+    /// Test 7 (Pitfall 6, size-0 batch): a `[0,3,4]`/`[0,4,5]` pair produces
+    /// an empty (`[0,3,5]`) output without panicking.
+    #[test]
+    fn batched_matmul_size_zero_batch_produces_empty_output_without_panic() {
+        let lhs = tensor(vec![], vec![0, 3, 4]);
+        let rhs = tensor(vec![], vec![0, 4, 5]);
+        let out = batched_matmul_impl(&lhs, &rhs).unwrap();
+        assert_eq!(out.shape, vec![0, 3, 5]);
+        assert_eq!(f32_vec(&out).len(), 0);
+    }
+
+    /// Test 8 (Pitfall 6, size-1 batch NOT unwrapped): a `[1,3,4]` operand
+    /// batched against a `[5,4,6]` operand produces a `[5,3,6]` output (the
+    /// size-1 batch dim is broadcast, not silently treated as
+    /// unbatched-rank-2).
+    #[test]
+    fn batched_matmul_size_one_batch_is_broadcast_not_unwrapped() {
+        let lhs_data: Vec<f32> = (1..=12).map(|x| x as f32).collect();
+        let rhs_data: Vec<f32> = (1..=120).map(|x| x as f32).collect();
+
+        let lhs = tensor(lhs_data, vec![1, 3, 4]);
+        let rhs = tensor(rhs_data, vec![5, 4, 6]);
+
+        let out = batched_matmul_impl(&lhs, &rhs).unwrap();
+        assert_eq!(out.shape, vec![5, 3, 6]);
+        assert_eq!(f32_vec(&out).len(), 5 * 3 * 6);
     }
 }
