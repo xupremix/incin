@@ -1,19 +1,20 @@
 //! `ModuleOps` for `NativeBackend<T, D>` — the crate's single `impl ModuleOps`
 //! block (Rust disallows splitting one trait impl across multiple files).
 //!
-//! As of Plan 04-06, eight of the nine `ModuleOps` methods are real:
+//! As of Plan 04-07, ALL NINE `ModuleOps` methods are real — no unsupported-
+//! operation stubs remain on `NativeBackend`:
 //!   - `layer_norm` — delegates to `ops::norm::layer_norm_impl`
 //!   - `batch_norm`  — delegates to `ops::norm::batch_norm_impl`
 //!   - `embedding`  — delegates to `ops::embedding::embedding_impl`
 //!   - `conv1d`  — delegates to `ops::conv::conv1d_impl`
 //!   - `conv2d`  — delegates to `ops::conv::conv2d_impl`
+//!   - `conv_transpose2d`  — delegates to `ops::conv::conv_transpose2d_impl`
 //!   - `max_pool2d`  — delegates to `ops::pool::max_pool2d_impl`
 //!   - `avg_pool2d`  — delegates to `ops::pool::avg_pool2d_impl`
 //!   - `adaptive_avg_pool2d`  — delegates to `ops::pool::adaptive_avg_pool2d_impl`
 //!
-//! The remaining method (`conv_transpose2d`) returns
-//! `Error::UnsupportedBackendOperation` and will be replaced by a later plan
-//! in this phase.
+//! This closes out `ModuleOps`'s full trait surface for Phase 4
+//! (NATBACK-08).
 
 use kindle_core::prelude::{Backend, DType, ModuleOps, Result};
 

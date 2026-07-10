@@ -27,6 +27,18 @@
 //! the hand-composed conv math, so `grad_bias` falls out of that op's own
 //! existing backward + `unbroadcast` for free — it is never hand-derived
 //! inside `conv1d_impl`/`conv2d_impl`'s own closure.
+//!
+//! `conv_transpose2d_impl` (Plan 04-07, RESEARCH.md Pattern 4) reuses
+//! `col2im_2d` VERBATIM as its own forward fold subroutine — transposed
+//! convolution's forward pass is exactly `conv2d`'s own backward-data
+//! (grad-w.r.t.-input) formula applied to `input` directly instead of to a
+//! gradient. Its own backward, symmetrically, reuses `im2col_2d` +
+//! `batched_matmul_impl` (i.e. `conv2d`'s FORWARD formula) to recover
+//! `grad_input`. `output_padding` is handled as a separate final
+//! allocate-larger-then-copy-into-leading-sub-region step (via
+//! `scatter_into_zeros`), never folded into `padding`'s own symmetric
+//! offset arithmetic (Pitfall 4). Only `groups == 1` is supported, matching
+//! `CandleBackend::conv_transpose2d`'s own confirmed effective behavior.
 
 use kindle_core::err::Error;
 use kindle_core::prelude::{DType, NumericOps, Result, TensorOps};
@@ -63,7 +75,13 @@ fn out_size(
 /// combination underflows to `0` rather than panicking. `output_padding` is
 /// deliberately NOT part of this formula (Pitfall 4) — it is applied as a
 /// separate final allocate-larger step by the caller.
-fn natural_transpose_out_size(len: usize, kernel_size: usize, stride: usize, padding: usize, dilation: usize) -> usize {
+fn natural_transpose_out_size(
+    len: usize,
+    kernel_size: usize,
+    stride: usize,
+    padding: usize,
+    dilation: usize,
+) -> usize {
     let unstrided = (len.saturating_sub(1)) * stride;
     let effective_kernel = dilation * kernel_size.saturating_sub(1);
     (unstrided + effective_kernel + 1).saturating_sub(2 * padding)
@@ -640,7 +658,15 @@ pub(crate) fn conv_transpose2d_impl<T: DType, D: kindle_core::prelude::Device, K
 
     // Fold cols into the natural (no output_padding) [B, Cout, H_nat, W_nat]
     // output, reusing col2im_2d verbatim (Pattern 4).
-    let natural_out = col2im_2d(&cols, &[b, cout, h_nat, w_nat], kh, kw, stride, padding, dilation);
+    let natural_out = col2im_2d(
+        &cols,
+        &[b, cout, h_nat, w_nat],
+        kh,
+        kw,
+        stride,
+        padding,
+        dilation,
+    );
 
     let conv_out = if output_padding == 0 {
         natural_out

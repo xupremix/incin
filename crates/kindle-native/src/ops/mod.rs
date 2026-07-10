@@ -19,7 +19,10 @@
 //!   forward + scatter-add backward, shared by `module`'s `embedding` method).
 //! * `conv` — free-function helpers: `conv1d_impl`/`conv2d_impl` (im2col +
 //!   `matmul::batched_matmul_impl` forward, hand-composed col2im-fold
-//!   backward, shared by `module`'s `conv1d`/`conv2d` methods — Plan 04-05).
+//!   backward, shared by `module`'s `conv1d`/`conv2d` methods — Plan 04-05)
+//!   and `conv_transpose2d_impl` (reuses `conv2d_impl`'s own internal
+//!   `col2im_2d` fold subroutine directly as its forward, per the standard
+//!   conv-transpose-is-conv2d's-backward-data equivalence — Plan 04-07).
 //! * `pool` — free-function helpers: `max_pool2d_impl`/`avg_pool2d_impl`/
 //!   `adaptive_avg_pool2d_impl` (2D sliding-window max/mean reductions,
 //!   generalizing `reduce.rs`'s `max_axis_with_indices`/`scatter_axis_grad`
@@ -27,10 +30,10 @@
 //!   overlapping windows require — Plan 04-06). `adaptive_avg_pool2d_impl`
 //!   computes per-output-position variable window boundaries rather than a
 //!   fixed kernel_size/stride derivation.
-//! * `module` — `ModuleOps`: real `layer_norm`/`batch_norm`/`embedding`/
-//!   `conv1d`/`conv2d`/`max_pool2d`/`avg_pool2d`/`adaptive_avg_pool2d`; only
-//!   `conv_transpose2d` remains typed `Error::UnsupportedBackendOperation`
-//!   (pending a later plan in this phase).
+//! * `module` — `ModuleOps`: ALL NINE methods are real as of Plan 04-07
+//!   (`layer_norm`/`batch_norm`/`embedding`/`conv1d`/`conv2d`/
+//!   `conv_transpose2d`/`max_pool2d`/`avg_pool2d`/`adaptive_avg_pool2d`) —
+//!   zero `Error::UnsupportedBackendOperation` stubs remain.
 
 pub mod conv;
 pub mod elementwise;
