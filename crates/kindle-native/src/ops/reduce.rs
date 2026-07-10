@@ -1,6 +1,9 @@
-//! `ReductionOps` for `NativeBackend<T, D>`: tape-tracked `sum_all`,
-//! `mean_all`, `sum_dim`, `sum_keepdim`; typed `Error::UnsupportedBackendOperation`
-//! stubs for all other methods.
+//! `ReductionOps` for `NativeBackend<T, D>`: every method now has a real
+//! implementation — `sum_all`/`mean_all`/`sum_dim`/`sum_keepdim` (Phase 1),
+//! `mean_dim`/`mean_keepdim`/`max_dim`/`max_keepdim`/`min_dim`/`min_keepdim`/
+//! `max_all`/`min_all` (Phase 2, gradcheck-verified backward), and
+//! `argmax`/`argmin` (Phase 2, forward-only by structural design). Zero
+//! remaining `Err(Error::UnsupportedBackendOperation)` stubs.
 //!
 //! ## Design Notes
 //!
@@ -20,9 +23,25 @@
 //!   tape.rs's private versions, independent in scope, so that neither side
 //!   regresses the other's tests.
 //!
-//! * Every other `ReductionOps` method returns
-//!   `Err(Error::UnsupportedBackendOperation)` — never a silent
-//!   `Ok(t.clone())` placeholder (T-01-15 mitigation).
+//! * `mean_dim` / `mean_keepdim` are thin wrappers over `sum_axis_squeeze` /
+//!   `sum_axis_keepdim`, divided by axis length (forward and backward both).
+//!
+//! * `max_dim` / `min_dim` / `max_keepdim` / `min_keepdim` / `max_all` /
+//!   `min_all` route gradient to exactly one winning element per output
+//!   position via `max_axis_with_indices` / `min_axis_with_indices` (strict
+//!   `>`/`<` comparison — first-encountered winner on ties, never splitting
+//!   or duplicating gradient mass) and the shared `scatter_axis_grad`
+//!   backward helper.
+//!
+//! * `argmax` / `argmin` are forward-only — `kindle-core`'s
+//!   `Tensor::argmax`/`argmin` structurally force `G = NoGrad` on their
+//!   output regardless of the input's own `G`, so neither method calls
+//!   `tape::push` (the one deliberate exception to this file's
+//!   every-other-method unconditional-push convention).
+//!
+//! * Any leftover unimplemented method (there are none as of Phase 2) would
+//!   keep returning `Err(Error::UnsupportedBackendOperation)` — never a
+//!   silent `Ok(t.clone())` placeholder (T-01-15 mitigation).
 
 use kindle_core::err::Error;
 use kindle_core::prelude::{Backend, DType, ReductionOps, Result};
@@ -41,6 +60,25 @@ use crate::tape::{self, TapeEntry};
 fn flatten_index(idx: &[usize], shape: &[usize]) -> usize {
     let strides = contiguous_strides(shape);
     idx.iter().zip(strides.iter()).map(|(i, s)| i * s).sum()
+}
+
+/// Inverse of `flatten_index`: recover the multi-index within `shape`
+/// corresponding to flat row-major index `flat`. Used by `argmax`/`argmin`
+/// to resolve a winning FLAT source index into its coordinate along the
+/// reduced axis.
+fn unflatten_index(flat: usize, shape: &[usize]) -> Vec<usize> {
+    let strides = contiguous_strides(shape);
+    let mut remaining = flat;
+    let mut idx = vec![0usize; shape.len()];
+    for i in 0..shape.len() {
+        if strides[i] == 0 {
+            idx[i] = 0;
+        } else {
+            idx[i] = remaining / strides[i];
+            remaining %= strides[i];
+        }
+    }
+    idx
 }
 
 /// Sum-reduce `storage` over `axis`, *keeping* that axis as size 1
@@ -725,24 +763,127 @@ impl<T: DType, D: kindle_core::prelude::Device> ReductionOps<Self> for NativeBac
         Ok(out)
     }
 
+    /// Index of the maximum element. `Some(d)`: per-axis, axis removed from
+    /// the output shape (mirrors `max_dim`'s squeeze shape). `None`: fully
+    /// flattened, returns a scalar (shape `[]`) holding the single winning
+    /// flat index. Forward-only — `kindle-core`'s `Tensor::argmax`
+    /// structurally forces `G = NoGrad` on the output regardless of the
+    /// input's own `G`, so this deliberately never calls `tape::push`
+    /// (T-02-09 mitigation; the one exception to this file's
+    /// every-other-method unconditional-push convention).
     fn argmax<K: DType, KInt: DType>(
-        _t: &<Self as Backend>::Storage<K>,
-        _dim: Option<usize>,
+        t: &<Self as Backend>::Storage<K>,
+        dim: Option<usize>,
     ) -> Result<<Self as Backend>::Storage<KInt>> {
-        Err(Error::UnsupportedBackendOperation {
-            op: "argmax",
-            backend: "Native",
-        })
+        match dim {
+            Some(d) => {
+                if d >= t.shape.len() {
+                    return Err(Error::ShapeMismatch {
+                        op: "argmax",
+                        expected: t.shape.clone(),
+                        got: vec![d],
+                        msg: format!("argmax: axis {d} out of range for shape {:?}", t.shape),
+                    });
+                }
+                let (_, winning_flat_src_idx) = max_axis_with_indices(t, d);
+                let mut out_shape = t.shape.clone();
+                out_shape[d] = 1;
+                // Convert each winning FLAT source index into its coordinate
+                // along `d` (the axis-position the winner occupied), not the
+                // flat index itself.
+                let idx_vals: Vec<i64> = winning_flat_src_idx
+                    .iter()
+                    .map(|&flat_src| {
+                        let multi = unflatten_index(flat_src, &t.shape);
+                        multi[d] as i64
+                    })
+                    .collect();
+                let keepdim_out =
+                    NativeStorage::from_contiguous(NativeBuffer::I64(idx_vals), out_shape);
+                let mut squeeze_shape = keepdim_out.shape.clone();
+                squeeze_shape.remove(d);
+                Ok(keepdim_out
+                    .reshape(&squeeze_shape)
+                    .expect("argmax: squeeze reshape of size-1 keepdim result cannot fail"))
+            }
+            None => {
+                let total: usize = t.shape.iter().product();
+                let mut idx = vec![0usize; t.shape.len()];
+                let mut best_val = f64::NEG_INFINITY;
+                let mut best_flat_idx = 0i64;
+                for flat in 0..total {
+                    let v = t.get(&idx);
+                    if v > best_val {
+                        best_val = v;
+                        best_flat_idx = flat as i64;
+                    }
+                    if !t.shape.is_empty() {
+                        increment_index(&mut idx, &t.shape);
+                    }
+                }
+                Ok(NativeStorage::from_contiguous(
+                    NativeBuffer::I64(vec![best_flat_idx]),
+                    vec![],
+                ))
+            }
+        }
     }
 
+    /// Index of the minimum element. Mirror of `argmax` using
+    /// `min_axis_with_indices`. Forward-only, no `tape::push` (T-02-09).
     fn argmin<K: DType, KInt: DType>(
-        _t: &<Self as Backend>::Storage<K>,
-        _dim: Option<usize>,
+        t: &<Self as Backend>::Storage<K>,
+        dim: Option<usize>,
     ) -> Result<<Self as Backend>::Storage<KInt>> {
-        Err(Error::UnsupportedBackendOperation {
-            op: "argmin",
-            backend: "Native",
-        })
+        match dim {
+            Some(d) => {
+                if d >= t.shape.len() {
+                    return Err(Error::ShapeMismatch {
+                        op: "argmin",
+                        expected: t.shape.clone(),
+                        got: vec![d],
+                        msg: format!("argmin: axis {d} out of range for shape {:?}", t.shape),
+                    });
+                }
+                let (_, winning_flat_src_idx) = min_axis_with_indices(t, d);
+                let mut out_shape = t.shape.clone();
+                out_shape[d] = 1;
+                let idx_vals: Vec<i64> = winning_flat_src_idx
+                    .iter()
+                    .map(|&flat_src| {
+                        let multi = unflatten_index(flat_src, &t.shape);
+                        multi[d] as i64
+                    })
+                    .collect();
+                let keepdim_out =
+                    NativeStorage::from_contiguous(NativeBuffer::I64(idx_vals), out_shape);
+                let mut squeeze_shape = keepdim_out.shape.clone();
+                squeeze_shape.remove(d);
+                Ok(keepdim_out
+                    .reshape(&squeeze_shape)
+                    .expect("argmin: squeeze reshape of size-1 keepdim result cannot fail"))
+            }
+            None => {
+                let total: usize = t.shape.iter().product();
+                let mut idx = vec![0usize; t.shape.len()];
+                let mut best_val = f64::INFINITY;
+                let mut best_flat_idx = 0i64;
+                for flat in 0..total {
+                    let v = t.get(&idx);
+                    if v < best_val {
+                        best_val = v;
+                        best_flat_idx = flat as i64;
+                    }
+                    if !t.shape.is_empty() {
+                        increment_index(&mut idx, &t.shape);
+                    }
+                }
+                Ok(NativeStorage::from_contiguous(
+                    NativeBuffer::I64(vec![best_flat_idx]),
+                    vec![],
+                ))
+            }
+        }
     }
 }
 
@@ -1048,5 +1189,71 @@ mod tests {
             vals[0],
             vals[2]
         );
+    }
+
+    // --- argmax / argmin ---
+
+    fn i64_vec(s: &NativeStorage) -> Vec<i64> {
+        match &*s.buffer {
+            NativeBuffer::I64(v) => v.clone(),
+            _ => panic!("expected I64 buffer"),
+        }
+    }
+
+    #[test]
+    fn argmax_dim0_returns_row_index_of_column_max() {
+        let t = matrix(vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0], 2, 3);
+        let out = B::argmax::<f32, i64>(&t, Some(0)).unwrap();
+        assert_eq!(out.shape, vec![3]);
+        // col0 max is row1's 4 -> idx 1; col1 max is row0's 5 -> idx 0;
+        // col2 max is row1's 6 -> idx 1.
+        assert_eq!(i64_vec(&out), vec![1, 0, 1]);
+    }
+
+    #[test]
+    fn argmax_dim_none_returns_scalar_flat_index_of_global_max() {
+        let t = matrix(vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0], 2, 3);
+        let out = B::argmax::<f32, i64>(&t, None).unwrap();
+        assert_eq!(out.shape, Vec::<usize>::new());
+        // global max 6.0 is at flat index 5.
+        assert_eq!(i64_vec(&out), vec![5]);
+    }
+
+    #[test]
+    fn argmin_dim0_and_dim_none_mirror_argmax() {
+        let t = matrix(vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0], 2, 3);
+        let out_dim0 = B::argmin::<f32, i64>(&t, Some(0)).unwrap();
+        assert_eq!(out_dim0.shape, vec![3]);
+        // col0 min is row0's 1 -> idx 0; col1 min is row1's 2 -> idx 1;
+        // col2 min is row0's 3 -> idx 0.
+        assert_eq!(i64_vec(&out_dim0), vec![0, 1, 0]);
+
+        let out_none = B::argmin::<f32, i64>(&t, None).unwrap();
+        assert_eq!(out_none.shape, Vec::<usize>::new());
+        // global min 1.0 is at flat index 0.
+        assert_eq!(i64_vec(&out_none), vec![0]);
+    }
+
+    /// argmax/argmin must push NO TapeEntry (structural NoGrad, T-02-09):
+    /// calling them, then immediately running `tape::backward` on an
+    /// unrelated small graph, must succeed cleanly with no interference
+    /// from a spurious entry either method might have left behind.
+    #[test]
+    fn argmax_argmin_do_not_push_tape_entries() {
+        let t = matrix(vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0], 2, 3);
+        let _ = B::argmax::<f32, i64>(&t, Some(0)).unwrap();
+        let _ = B::argmax::<f32, i64>(&t, None).unwrap();
+        let _ = B::argmin::<f32, i64>(&t, Some(0)).unwrap();
+        let _ = B::argmin::<f32, i64>(&t, None).unwrap();
+
+        // Build and run an unrelated small graph immediately after; if
+        // argmax/argmin had pushed spurious TapeEntry values, this
+        // unrelated backward() would either panic or produce a corrupted
+        // gradient for `unrelated`.
+        let unrelated = vector(vec![10.0, 20.0, 30.0]);
+        let sum_out = B::sum_all::<f32>(&unrelated).unwrap();
+        let grads = tape::backward(&sum_out).unwrap();
+        let g = grads.get(unrelated.id).expect("unrelated should have gradient");
+        assert_eq!(f32_vec(g), vec![1.0, 1.0, 1.0]);
     }
 }
