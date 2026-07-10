@@ -15,7 +15,16 @@
 //! NOT a max-pooling candidate (skipped entirely, never substituted with
 //! `0.0`), mirroring PyTorch/Candle's "padding contributes -inf to max-pool"
 //! convention — a real negative-valued input must not lose to an artificial
-//! zero.
+//! zero. `avg_pool2d`/`adaptive_avg_pool2d`, by contrast, treat the padded
+//! region as `0.0` contributing to BOTH the sum and the divisor
+//! (`count_include_pad=True`, PyTorch's default).
+//!
+//! `adaptive_avg_pool2d` computes per-output-position variable window
+//! boundaries (`start = floor(i*input_size/output_size)`,
+//! `end = ceil((i+1)*input_size/output_size)`), independently per H/W axis —
+//! NOT a fixed kernel_size/stride derivation, which produces wrong results
+//! whenever `input_size` doesn't evenly divide `output_size` (Pitfall 6 /
+//! T-04-15's sibling correctness concern for adaptive's own window sizing).
 
 use kindle_core::prelude::{DType, Result};
 
@@ -141,6 +150,207 @@ pub(crate) fn max_pool2d_impl<T: DType, D: kindle_core::prelude::Device, K: DTyp
                 grad_out,
                 &winning_flat_src_idx,
                 &input_shape,
+            )]
+        }),
+    });
+
+    Ok(out)
+}
+
+// ---------------------------------------------------------------------------
+// avg_pool2d
+// ---------------------------------------------------------------------------
+
+/// `ModuleOps::avg_pool2d`'s `NativeBackend` implementation: for each output
+/// position, sums the window's values (padded-region positions contribute
+/// `0.0` to both the sum and the fixed `kernel_size.0 * kernel_size.1`
+/// divisor — PyTorch's `count_include_pad=True` default) divided by the
+/// window element count. Backward distributes `grad_out`'s per-position
+/// value UNIFORMLY (divided by the window's element count) into every input
+/// position the window covered, `+=`-accumulating across overlapping
+/// windows.
+pub(crate) fn avg_pool2d_impl<T: DType, D: kindle_core::prelude::Device, K: DType>(
+    t: &NativeStorage,
+    kernel_size: (usize, usize),
+    stride: (usize, usize),
+    padding: (usize, usize),
+) -> Result<NativeStorage> {
+    let (b, c, h, w) = (t.shape[0], t.shape[1], t.shape[2], t.shape[3]);
+    let (kh, kw) = kernel_size;
+    let (sh, sw) = stride;
+    let (ph, pw) = padding;
+
+    let h_out = out_size(h, kh, sh, ph, 1);
+    let w_out = out_size(w, kw, sw, pw, 1);
+
+    let window_count = (kh * kw) as f64;
+    let mut out_vals = vec![0.0f32; b * c * h_out * w_out];
+    for bi in 0..b {
+        for ci in 0..c {
+            for oh in 0..h_out {
+                for ow in 0..w_out {
+                    let mut sum = 0.0f64;
+                    for khi in 0..kh {
+                        for kwi in 0..kw {
+                            let src_h = oh * sh + khi;
+                            let src_w = ow * sw + kwi;
+                            let v =
+                                if src_h >= ph && src_h - ph < h && src_w >= pw && src_w - pw < w {
+                                    t.get(&[bi, ci, src_h - ph, src_w - pw])
+                                } else {
+                                    0.0
+                                };
+                            sum += v;
+                        }
+                    }
+                    let flat_out = ((bi * c + ci) * h_out + oh) * w_out + ow;
+                    out_vals[flat_out] = (sum / window_count) as f32;
+                }
+            }
+        }
+    }
+    let out = NativeStorage::from_contiguous(NativeBuffer::F32(out_vals), vec![b, c, h_out, w_out]);
+
+    let input_shape = t.shape.clone();
+    let (t_id, out_id) = (t.id, out.id);
+    tape::push(TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &NativeStorage| {
+            let (b, c, h, w) = (
+                input_shape[0],
+                input_shape[1],
+                input_shape[2],
+                input_shape[3],
+            );
+            let mut vals = vec![0.0f32; b * c * h * w];
+            let in_strides = crate::stride::contiguous_strides(&input_shape);
+            let h_out = grad_out.shape[2];
+            let w_out = grad_out.shape[3];
+            for bi in 0..b {
+                for ci in 0..c {
+                    for oh in 0..h_out {
+                        for ow in 0..w_out {
+                            let g = grad_out.get(&[bi, ci, oh, ow]) / window_count;
+                            for khi in 0..kh {
+                                for kwi in 0..kw {
+                                    let src_h = oh * sh + khi;
+                                    let src_w = ow * sw + kwi;
+                                    if src_h >= ph
+                                        && src_h - ph < h
+                                        && src_w >= pw
+                                        && src_w - pw < w
+                                    {
+                                        let ih = src_h - ph;
+                                        let iw = src_w - pw;
+                                        let flat = bi * in_strides[0]
+                                            + ci * in_strides[1]
+                                            + ih * in_strides[2]
+                                            + iw * in_strides[3];
+                                        vals[flat] += g as f32;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            vec![NativeStorage::from_contiguous(
+                NativeBuffer::F32(vals),
+                input_shape.clone(),
+            )]
+        }),
+    });
+
+    Ok(out)
+}
+
+// ---------------------------------------------------------------------------
+// adaptive_avg_pool2d
+// ---------------------------------------------------------------------------
+
+/// Per RESEARCH.md Pitfall 6: computes PER-OUTPUT-POSITION window boundaries
+/// via `start = floor(i * input_size / output_size)`,
+/// `end = ceil((i+1) * input_size / output_size)`, independently per axis.
+/// Never derives an equivalent fixed `kernel_size`/`stride` — that produces
+/// wrong results whenever `input_size` does not evenly divide `output_size`
+/// (e.g. 5 -> 3 produces window sizes `[2, 3, 2]`, not a uniform kernel).
+fn adaptive_window_bounds(input_size: usize, output_size: usize, i: usize) -> (usize, usize) {
+    let start = (i * input_size) / output_size;
+    let end = ((i + 1) * input_size).div_ceil(output_size);
+    (start, end)
+}
+
+/// `ModuleOps::adaptive_avg_pool2d`'s `NativeBackend` implementation.
+pub(crate) fn adaptive_avg_pool2d_impl<T: DType, D: kindle_core::prelude::Device, K: DType>(
+    t: &NativeStorage,
+    output_size: (usize, usize),
+) -> Result<NativeStorage> {
+    let (b, c, h, w) = (t.shape[0], t.shape[1], t.shape[2], t.shape[3]);
+    let (h_out, w_out) = output_size;
+
+    let mut out_vals = vec![0.0f32; b * c * h_out * w_out];
+    for bi in 0..b {
+        for ci in 0..c {
+            for oh in 0..h_out {
+                let (h_start, h_end) = adaptive_window_bounds(h, h_out, oh);
+                for ow in 0..w_out {
+                    let (w_start, w_end) = adaptive_window_bounds(w, w_out, ow);
+                    let mut sum = 0.0f64;
+                    for ih in h_start..h_end {
+                        for iw in w_start..w_end {
+                            sum += t.get(&[bi, ci, ih, iw]);
+                        }
+                    }
+                    let count = ((h_end - h_start) * (w_end - w_start)) as f64;
+                    let flat_out = ((bi * c + ci) * h_out + oh) * w_out + ow;
+                    out_vals[flat_out] = (sum / count) as f32;
+                }
+            }
+        }
+    }
+    let out = NativeStorage::from_contiguous(NativeBuffer::F32(out_vals), vec![b, c, h_out, w_out]);
+
+    let input_shape = t.shape.clone();
+    let (t_id, out_id) = (t.id, out.id);
+    tape::push(TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &NativeStorage| {
+            let (b, c, h, w) = (
+                input_shape[0],
+                input_shape[1],
+                input_shape[2],
+                input_shape[3],
+            );
+            let mut vals = vec![0.0f32; b * c * h * w];
+            let in_strides = crate::stride::contiguous_strides(&input_shape);
+            let h_out = grad_out.shape[2];
+            let w_out = grad_out.shape[3];
+            for bi in 0..b {
+                for ci in 0..c {
+                    for oh in 0..h_out {
+                        let (h_start, h_end) = adaptive_window_bounds(h, h_out, oh);
+                        for ow in 0..w_out {
+                            let (w_start, w_end) = adaptive_window_bounds(w, w_out, ow);
+                            let count = ((h_end - h_start) * (w_end - w_start)) as f64;
+                            let g = grad_out.get(&[bi, ci, oh, ow]) / count;
+                            for ih in h_start..h_end {
+                                for iw in w_start..w_end {
+                                    let flat = bi * in_strides[0]
+                                        + ci * in_strides[1]
+                                        + ih * in_strides[2]
+                                        + iw * in_strides[3];
+                                    vals[flat] += g as f32;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            vec![NativeStorage::from_contiguous(
+                NativeBuffer::F32(vals),
+                input_shape.clone(),
             )]
         }),
     });
@@ -292,6 +502,129 @@ mod tests {
         assert!(
             max_rel_err < 1e-2,
             "max_pool2d gradcheck max relative error too high: {max_rel_err}"
+        );
+    }
+
+    // --- avg_pool2d forward ---
+
+    #[test]
+    fn avg_pool2d_forward_no_overlap_hand_computed() {
+        let input_data: Vec<f32> = vec![
+            1.0, 2.0, 3.0, 4.0, //
+            5.0, 6.0, 7.0, 8.0, //
+            9.0, 10.0, 11.0, 12.0, //
+            13.0, 14.0, 15.0, 16.0,
+        ];
+        let input = tensor(input_data, vec![1, 1, 4, 4]);
+        let out = avg_pool2d_impl::<f32, Cpu, f32>(&input, (2, 2), (2, 2), (0, 0)).unwrap();
+        assert_eq!(out.shape, vec![1, 1, 2, 2]);
+        // window(0,0) mean of {1,2,5,6} = 3.5
+        // window(0,1) mean of {3,4,7,8} = 5.5
+        // window(1,0) mean of {9,10,13,14} = 11.5
+        // window(1,1) mean of {11,12,15,16} = 13.5
+        assert_eq!(f32_vec(&out), vec![3.5, 5.5, 11.5, 13.5]);
+    }
+
+    // --- avg_pool2d backward ---
+
+    #[test]
+    fn avg_pool2d_backward_overlapping_windows_sums_grad_contributions() {
+        // [1,1,1,3] input, kernel=1x2, stride=1x1 (overlapping): 2 output
+        // windows, middle position covered by both.
+        let input = tensor(vec![1.0, 2.0, 3.0], vec![1, 1, 1, 3]);
+        let out = avg_pool2d_impl::<f32, Cpu, f32>(&input, (1, 2), (1, 1), (0, 0)).unwrap();
+        assert_eq!(out.shape, vec![1, 1, 1, 2]);
+        // window0 mean{1,2}=1.5, window1 mean{2,3}=2.5
+        assert_eq!(f32_vec(&out), vec![1.5, 2.5]);
+
+        let loss = TestBackend::sum_all::<f32>(&out).unwrap();
+        let grads = tape::backward(&loss).unwrap();
+        let g = grads.get(input.id).expect("grad_input should exist");
+        let vals = f32_vec(g);
+        // grad_input[0] = 1/2 (only window0) = 0.5
+        // grad_input[1] = 1/2 (window0) + 1/2 (window1) = 1.0 (overlap sum)
+        // grad_input[2] = 1/2 (only window1) = 0.5
+        assert_eq!(vals, vec![0.5, 1.0, 0.5]);
+    }
+
+    #[test]
+    fn avg_pool2d_gradcheck_overlapping() {
+        let input = tensor(
+            vec![0.1, 0.5, 0.3, 0.9, 0.2, 0.4, 0.7, 0.6, 0.8],
+            vec![1, 1, 3, 3],
+        );
+        let op = |inputs: &[NativeStorage]| -> NativeStorage {
+            let out = avg_pool2d_impl::<f32, Cpu, f32>(&inputs[0], (2, 2), (1, 1), (0, 0)).unwrap();
+            TestBackend::sum_all::<f32>(&out).unwrap()
+        };
+        let max_rel_err = gradcheck(op, &[input], 1e-4);
+        assert!(
+            max_rel_err < 1e-2,
+            "avg_pool2d gradcheck max relative error too high: {max_rel_err}"
+        );
+    }
+
+    // --- adaptive_avg_pool2d forward ---
+
+    #[test]
+    fn adaptive_avg_pool2d_evenly_dividing_matches_avg_pool2d() {
+        let input_data: Vec<f32> = vec![
+            1.0, 2.0, 3.0, 4.0, //
+            5.0, 6.0, 7.0, 8.0, //
+            9.0, 10.0, 11.0, 12.0, //
+            13.0, 14.0, 15.0, 16.0,
+        ];
+        let input = tensor(input_data, vec![1, 1, 4, 4]);
+        let adaptive = adaptive_avg_pool2d_impl::<f32, Cpu, f32>(&input, (2, 2)).unwrap();
+        let fixed = avg_pool2d_impl::<f32, Cpu, f32>(&input, (2, 2), (2, 2), (0, 0)).unwrap();
+        assert_eq!(adaptive.shape, fixed.shape);
+        assert_eq!(f32_vec(&adaptive), f32_vec(&fixed));
+    }
+
+    /// Non-evenly-dividing case (Pitfall 6): input H=5, output H=3 must
+    /// produce per-output-position window sizes [2,3,2] (not a uniform
+    /// fixed kernel), matching PyTorch's documented
+    /// `start=floor(i*in/out), end=ceil((i+1)*in/out)` formula. (Using
+    /// input=5/output=3 here rather than 7/3, since 7/3's own boundaries —
+    /// `start=floor(i*7/3), end=ceil((i+1)*7/3)` — evaluate to windows
+    /// [0,3),[2,5),[4,7), i.e. sizes [3,3,3] with genuine inter-window
+    /// overlap, not the [3,2,2] figure RESEARCH.md's prose used as its
+    /// illustrative example; 5/3 is the textbook non-uniform case and
+    /// exercises the exact same variable-boundary formula.)
+    #[test]
+    fn adaptive_avg_pool2d_non_evenly_dividing_produces_variable_windows() {
+        // H=5 -> output 3: windows [0,2), [1,4), [3,5) -> sizes [2,3,2].
+        assert_eq!(adaptive_window_bounds(5, 3, 0), (0, 2));
+        assert_eq!(adaptive_window_bounds(5, 3, 1), (1, 4));
+        assert_eq!(adaptive_window_bounds(5, 3, 2), (3, 5));
+
+        // Build a [1,1,5,1] input (W axis trivial, size 1) with distinct
+        // values so each H-window's mean is hand-verifiable.
+        let input_data: Vec<f32> = (1..=5).map(|x| x as f32).collect(); // 1..5
+        let input = tensor(input_data, vec![1, 1, 5, 1]);
+        let out = adaptive_avg_pool2d_impl::<f32, Cpu, f32>(&input, (3, 1)).unwrap();
+        assert_eq!(out.shape, vec![1, 1, 3, 1]);
+        let vals = f32_vec(&out);
+        // window0 = mean(1,2) = 1.5
+        // window1 = mean(2,3,4) = 3.0
+        // window2 = mean(4,5) = 4.5
+        assert_eq!(vals, vec![1.5, 3.0, 4.5]);
+    }
+
+    // --- adaptive_avg_pool2d backward ---
+
+    #[test]
+    fn adaptive_avg_pool2d_gradcheck_non_evenly_dividing() {
+        let input_data: Vec<f32> = (1..=7).map(|x| x as f32 * 0.1).collect();
+        let input = tensor(input_data, vec![1, 1, 7, 1]);
+        let op = |inputs: &[NativeStorage]| -> NativeStorage {
+            let out = adaptive_avg_pool2d_impl::<f32, Cpu, f32>(&inputs[0], (3, 1)).unwrap();
+            TestBackend::sum_all::<f32>(&out).unwrap()
+        };
+        let max_rel_err = gradcheck(op, &[input], 1e-4);
+        assert!(
+            max_rel_err < 1e-2,
+            "adaptive_avg_pool2d gradcheck max relative error too high: {max_rel_err}"
         );
     }
 }
