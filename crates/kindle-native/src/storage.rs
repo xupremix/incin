@@ -247,6 +247,36 @@ impl NativeStorage {
         })
     }
 
+    /// Narrow dimension `dim` to the half-open range `[start, start + len)`.
+    /// Metadata-only: shares the same `Rc<NativeBuffer>`, keeps `strides`
+    /// completely unchanged (this is the load-bearing O(1) correctness
+    /// property — never recompute strides from `contiguous_strides`, since
+    /// that would silently produce wrong results on an already-transposed
+    /// or otherwise non-contiguous source view), and only adjusts `offset`
+    /// (by `start * strides[dim]`) and `shape[dim]` (to `len`).
+    pub fn narrow(&self, dim: usize, start: usize, len: usize) -> Result<Self> {
+        if dim >= self.shape.len() || start + len > self.shape[dim] {
+            return Err(Error::ShapeMismatch {
+                op: "narrow",
+                expected: self.shape.clone(),
+                got: vec![dim, start, len],
+                msg: format!(
+                    "narrow(dim={dim}, start={start}, len={len}) out of bounds for shape {:?}",
+                    self.shape
+                ),
+            });
+        }
+        let mut shape = self.shape.clone();
+        shape[dim] = len;
+        Ok(NativeStorage {
+            buffer: self.buffer.clone(),
+            shape,
+            strides: self.strides.clone(),
+            offset: self.offset + start * self.strides[dim],
+            id: TensorId::next(),
+        })
+    }
+
     /// Materialize a fresh, contiguous copy of this storage by walking the
     /// current shape/strides/offset and copying element-by-element in
     /// row-major order. Used only on the non-contiguous fallback path of
@@ -401,6 +431,68 @@ mod tests {
             assert_eq!(b.get(&[row, 1]), 2.0);
             assert_eq!(b.get(&[row, 2]), 3.0);
         }
+    }
+
+    #[test]
+    fn narrow_contiguous_shares_buffer_and_slices_correct_values() {
+        // [3,2] storage: [[1,4],[2,5],[3,6]]
+        let s = NativeStorage::from_contiguous(
+            NativeBuffer::F32(vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0]),
+            vec![3, 2],
+        );
+        let strong_count_before = Rc::strong_count(&s.buffer);
+        let n = s.narrow(0, 1, 1).unwrap();
+        assert_eq!(n.shape, vec![1, 2]);
+        assert!(Rc::ptr_eq(&s.buffer, &n.buffer));
+        assert_eq!(Rc::strong_count(&s.buffer), strong_count_before + 1);
+        assert_eq!(n.get(&[0, 0]), 2.0);
+        assert_eq!(n.get(&[0, 1]), 5.0);
+        assert_ne!(s.id, n.id);
+    }
+
+    #[test]
+    fn narrow_on_transposed_view_reads_correct_values_without_materializing() {
+        let s = storage_2x3(); // [[1,2,3],[4,5,6]]
+        let t = s.transpose(0, 1).unwrap(); // [[1,4],[2,5],[3,6]], non-contiguous
+        let n = t.narrow(0, 1, 1).unwrap(); // row 1 of the transposed view -> [2,5]
+        // Proves no materialization occurred: the narrowed view still shares
+        // the transposed view's own Rc<NativeBuffer>.
+        assert!(Rc::ptr_eq(&t.buffer, &n.buffer));
+        assert_eq!(n.shape, vec![1, 2]);
+        assert_eq!(n.get(&[0, 0]), 2.0);
+        assert_eq!(n.get(&[0, 1]), 5.0);
+    }
+
+    #[test]
+    fn narrow_out_of_bounds_length_errors() {
+        let s = storage_2x3();
+        let result = s.narrow(0, 1, 2); // start=1, len=2 -> needs shape[0] >= 3, but it's 2
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn narrow_dim_out_of_range_errors() {
+        let s = storage_2x3();
+        let result = s.narrow(5, 0, 1);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn narrow_boundary_values_succeed() {
+        let s = storage_2x3(); // shape [2,3]
+        // Full-length narrow (a no-op in effect).
+        let full = s.narrow(1, 0, 3).unwrap();
+        assert_eq!(full.shape, vec![2, 3]);
+        assert_eq!(full.get(&[0, 0]), 1.0);
+        assert_eq!(full.get(&[1, 2]), 6.0);
+
+        // start + len == shape[dim] exactly.
+        let edge = s.narrow(1, 1, 2).unwrap();
+        assert_eq!(edge.shape, vec![2, 2]);
+        assert_eq!(edge.get(&[0, 0]), 2.0);
+        assert_eq!(edge.get(&[0, 1]), 3.0);
+        assert_eq!(edge.get(&[1, 0]), 5.0);
+        assert_eq!(edge.get(&[1, 1]), 6.0);
     }
 
     #[test]
