@@ -340,6 +340,78 @@ fn increment_index(idx: &mut [usize], shape: &[usize]) {
     }
 }
 
+/// Build a zero-filled, freshly-allocated, contiguous `NativeStorage` of
+/// `original_shape` (dtype-matched to `values`), then copy `values`'s data
+/// into the sub-region starting at `region_start` (one offset per axis).
+/// Every position outside that sub-region is left exactly zero.
+///
+/// This is the shared zero-pad-scatter backward primitive for `narrow`/
+/// `slice`: `grad_out` (shaped like the narrowed region) is scattered back
+/// into a zero buffer shaped like the original (pre-narrow) tensor, at the
+/// same offset the forward narrow started from. It is a module-level free
+/// function (not a `NativeStorage` method) because it constructs a NEW
+/// storage from two independent shape/value inputs, rather than adjusting
+/// `self`'s own metadata.
+pub fn scatter_into_zeros(
+    original_shape: &[usize],
+    region_start: &[usize],
+    values: &NativeStorage,
+) -> NativeStorage {
+    let total: usize = original_shape.iter().product();
+    let out_strides = stride::contiguous_strides(original_shape);
+    let mut multi_idx = vec![0usize; values.shape.len()];
+    let value_count: usize = values.shape.iter().product();
+
+    macro_rules! scatter_variant {
+        ($variant:ident, $ty:ty, $zero:expr) => {{
+            let mut out: Vec<$ty> = vec![$zero; total];
+            for _ in 0..value_count {
+                let mut flat_dest = 0usize;
+                for (axis, i) in multi_idx.iter().enumerate() {
+                    flat_dest += (region_start[axis] + i) * out_strides[axis];
+                }
+                out[flat_dest] = values.get(&multi_idx) as $ty;
+                increment_index(&mut multi_idx, &values.shape);
+            }
+            NativeBuffer::$variant(out)
+        }};
+    }
+
+    let new_buffer = match &*values.buffer {
+        NativeBuffer::F32(_) => scatter_variant!(F32, f32, 0.0f32),
+        NativeBuffer::F64(_) => scatter_variant!(F64, f64, 0.0f64),
+        NativeBuffer::U8(_) => scatter_variant!(U8, u8, 0u8),
+        NativeBuffer::U32(_) => scatter_variant!(U32, u32, 0u32),
+        NativeBuffer::I64(_) => scatter_variant!(I64, i64, 0i64),
+        NativeBuffer::F16(_) => {
+            let mut out: Vec<f16> = vec![f16::from_f64(0.0); total];
+            for _ in 0..value_count {
+                let mut flat_dest = 0usize;
+                for (axis, i) in multi_idx.iter().enumerate() {
+                    flat_dest += (region_start[axis] + i) * out_strides[axis];
+                }
+                out[flat_dest] = f16::from_f64(values.get(&multi_idx));
+                increment_index(&mut multi_idx, &values.shape);
+            }
+            NativeBuffer::F16(out)
+        }
+        NativeBuffer::BF16(_) => {
+            let mut out: Vec<bf16> = vec![bf16::from_f64(0.0); total];
+            for _ in 0..value_count {
+                let mut flat_dest = 0usize;
+                for (axis, i) in multi_idx.iter().enumerate() {
+                    flat_dest += (region_start[axis] + i) * out_strides[axis];
+                }
+                out[flat_dest] = bf16::from_f64(values.get(&multi_idx));
+                increment_index(&mut multi_idx, &values.shape);
+            }
+            NativeBuffer::BF16(out)
+        }
+    };
+
+    NativeStorage::from_contiguous(new_buffer, original_shape.to_vec())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -501,6 +573,54 @@ mod tests {
         for _ in 0..1000 {
             let id = TensorId::next();
             assert!(ids.insert(id), "TensorId::next() produced a duplicate");
+        }
+    }
+
+    #[test]
+    fn scatter_into_zeros_partial_overlap_writes_only_target_region() {
+        let values =
+            NativeStorage::from_contiguous(NativeBuffer::F32(vec![7.0, 8.0, 9.0]), vec![1, 3]);
+        let result = scatter_into_zeros(&[4, 3], &[1, 0], &values);
+        assert_eq!(result.shape, vec![4, 3]);
+        for col in 0..3 {
+            assert_eq!(result.get(&[1, col]), values.get(&[0, col]));
+        }
+        for row in [0usize, 2, 3] {
+            for col in 0..3 {
+                assert_eq!(result.get(&[row, col]), 0.0);
+            }
+        }
+    }
+
+    #[test]
+    fn scatter_into_zeros_full_overlap_matches_values_exactly() {
+        let values =
+            NativeStorage::from_contiguous(NativeBuffer::F32(vec![1.0, 2.0, 3.0, 4.0]), vec![2, 2]);
+        let result = scatter_into_zeros(&[2, 2], &[0, 0], &values);
+        assert_eq!(result.shape, vec![2, 2]);
+        for row in 0..2 {
+            for col in 0..2 {
+                assert_eq!(result.get(&[row, col]), values.get(&[row, col]));
+            }
+        }
+    }
+
+    #[test]
+    fn scatter_into_zeros_returns_fresh_buffer_not_sharing_values_rc() {
+        let values =
+            NativeStorage::from_contiguous(NativeBuffer::F32(vec![7.0, 8.0, 9.0]), vec![1, 3]);
+        let result = scatter_into_zeros(&[4, 3], &[1, 0], &values);
+        assert!(!Rc::ptr_eq(&values.buffer, &result.buffer));
+    }
+
+    #[test]
+    fn scatter_into_zeros_1d_case() {
+        let values = NativeStorage::from_contiguous(NativeBuffer::F32(vec![9.0, 10.0]), vec![2]);
+        let result = scatter_into_zeros(&[5], &[2], &values);
+        assert_eq!(result.shape, vec![5]);
+        let expected = [0.0, 0.0, 9.0, 10.0, 0.0];
+        for (i, exp) in expected.iter().enumerate() {
+            assert_eq!(result.get(&[i]), *exp);
         }
     }
 }
