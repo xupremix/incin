@@ -1,12 +1,13 @@
 //! `ModuleOps` for `NativeBackend<T, D>` — the crate's single `impl ModuleOps`
 //! block (Rust disallows splitting one trait impl across multiple files).
 //!
-//! As of Plan 04-03, two of the nine `ModuleOps` methods are real:
+//! As of Plan 04-04, three of the nine `ModuleOps` methods are real:
 //!   - `layer_norm` — delegates to `ops::norm::layer_norm_impl`
 //!   - `batch_norm`  — delegates to `ops::norm::batch_norm_impl`
+//!   - `embedding`  — delegates to `ops::embedding::embedding_impl`
 //!
-//! The remaining seven methods return `Error::UnsupportedBackendOperation`
-//! and will be replaced by later plans in this phase (embedding, conv, pooling).
+//! The remaining six methods return `Error::UnsupportedBackendOperation`
+//! and will be replaced by later plans in this phase (conv, pooling).
 
 use kindle_core::err::Error;
 use kindle_core::prelude::{Backend, DType, ModuleOps, Result};
@@ -36,13 +37,10 @@ impl<T: DType, D: kindle_core::prelude::Device> ModuleOps<Self> for NativeBacken
     }
 
     fn embedding<K: DType, KInt: DType>(
-        _t: &<Self as Backend>::Storage<KInt>,
-        _w: &<Self as Backend>::Storage<K>,
+        t: &<Self as Backend>::Storage<KInt>,
+        w: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        Err(Error::UnsupportedBackendOperation {
-            op: "embedding",
-            backend: "Native",
-        })
+        crate::ops::embedding::embedding_impl::<T, D, K, KInt>(t, w)
     }
 
     fn conv1d<K: DType>(

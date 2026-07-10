@@ -15,10 +15,13 @@
 //!   no stubs remain — Plan 04-01/02).
 //! * `norm` — free-function helpers: `layer_norm_impl`/`batch_norm_impl`
 //!   (shared by `module`'s trait methods).
-//! * `module` — `ModuleOps` only: real `layer_norm`/`batch_norm`; 7 remaining
-//!   methods typed `Error::UnsupportedBackendOperation`.
+//! * `embedding` — free-function helper: `embedding_impl` (per-row gather
+//!   forward + scatter-add backward, shared by `module`'s `embedding` method).
+//! * `module` — `ModuleOps` only: real `layer_norm`/`batch_norm`/`embedding`;
+//!   6 remaining methods typed `Error::UnsupportedBackendOperation`.
 
 pub mod elementwise;
+pub mod embedding;
 pub mod loss;
 pub mod matmul;
 pub mod module;
