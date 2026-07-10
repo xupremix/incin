@@ -20,8 +20,8 @@ pub trait StateDict<B: Backend> {
         serializer: &mut S,
     ) -> core::result::Result<(), S::Error>
     where
-        <<B as Backend>::DType as DType>::Field: Default,
         <<B as Backend>::Device as Device>::Field: Default,
+        <<B as Backend>::FloatElem as crate::tensor::dtype::DType>::Field: Default,
     {
         let mut map = HashMap::new();
         self.state_dict("", &mut map);
@@ -35,8 +35,8 @@ pub trait StateDict<B: Backend> {
         device: &KindleDevice,
     ) -> Result<()>
     where
-        <<B as Backend>::DType as DType>::Field: Default,
         <<B as Backend>::Device as Device>::Field: Default,
+        <<B as Backend>::FloatElem as crate::tensor::dtype::DType>::Field: Default,
     {
         let map = deserializer
             .deserialize(device)

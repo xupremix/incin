@@ -21,7 +21,7 @@ use crate::prelude::*;
 pub struct Param<S: Shape, B: Backend> {
     pub(crate) inner: <B as Backend>::RawVar,
     pub(crate) _shape: S::Field,
-    pub(crate) _dtype: <B::DType as DType>::Field,
+    pub(crate) _dtype: <B::FloatElem as DType>::Field,
     pub(crate) _device: <B::Device as Device>::Field,
 }
 
@@ -44,7 +44,7 @@ impl<S: Shape, B: Backend> core::fmt::Debug for Param<S, B> {
 
 impl<S: Shape, B: Backend> Param<S, B> {
     /// Extract a functional Tensor from this variable for forward passes
-    pub fn as_tensor(&self) -> Result<Tensor<S, B, Grad>> {
+    pub fn as_tensor(&self) -> Result<Tensor<S, B, B::FloatElem>> {
         let inner_tensor = B::var_as_tensor(&self.inner)?;
         Ok(Tensor {
             inner: inner_tensor,
@@ -75,60 +75,60 @@ impl<S: Shape, B: Backend, NewD: crate::prelude::Device> crate::nn::module::ToDe
 
 impl<S: Shape + DynShape, B: Backend> Param<S, B>
 where
-    (S, B::DType, B::Device, Grad): TensorArgs<S, B::DType, B::Device, Grad>,
+    (S, B::FloatElem, B::Device, Grad): TensorArgs<S, B::FloatElem, B::Device, Grad>,
 {
     pub fn new_init_raw(
-        args: <(S, B::DType, B::Device, Grad) as TensorArgs<S, B::DType, B::Device, Grad>>::Args,
+        args: <(S, B::FloatElem, B::Device, Grad) as TensorArgs<S, B::FloatElem, B::Device, Grad>>::Args,
         init: crate::nn::init::Init,
     ) -> Result<Self> {
         use crate::nn::init::Init;
-        let (_shape, _dtype, _device, _) = <(S, B::DType, B::Device, Grad)>::construct(args);
+        let (_shape, _dtype, _device, _) = <(S, B::FloatElem, B::Device, Grad)>::construct(args);
         let dims: S::Dims = S::dims(&_shape);
         let device = <B::Device as Device>::to_kindle(&_device)?;
-        let dtype = <B::DType as DType>::to_kindle(&_dtype);
+        let dtype = <B::FloatElem as DType>::to_kindle(&_dtype);
 
         let inner = match init {
-            Init::Zeros => B::var_zeros(dims.as_ref(), dtype, &device)?,
-            Init::Ones => B::var_ones(dims.as_ref(), dtype, &device)?,
-            Init::Rand => B::var_rand(dims.as_ref(), dtype, &device)?,
-            Init::Randn => B::var_randn(dims.as_ref(), dtype, &device)?,
+            Init::Zeros => B::var_zeros::<B::FloatElem>(dims.as_ref(), dtype, &device)?,
+            Init::Ones => B::var_ones::<B::FloatElem>(dims.as_ref(), dtype, &device)?,
+            Init::Rand => B::var_rand::<B::FloatElem>(dims.as_ref(), dtype, &device)?,
+            Init::Randn => B::var_randn::<B::FloatElem>(dims.as_ref(), dtype, &device)?,
 
             Init::Uniform { bound } => {
-                let t_rand = B::rand(dims.as_ref(), dtype, &device)?;
-                let t_scaled = B::mul_scalar(&t_rand, (2.0 * bound).into())?;
-                let t_final = B::add_scalar(&t_scaled, (-bound).into())?;
+                let t_rand = B::rand::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
+                let t_scaled = B::mul_scalar_float(&t_rand, (2.0 * bound).into())?;
+                let t_final = B::add_scalar_float(&t_scaled, (-bound).into())?;
                 B::var_from_tensor(&t_final)?
             }
             Init::Constant(c) => {
-                let ones = B::ones(dims.as_ref(), dtype, &device)?;
-                let c_tensor = B::mul_scalar(&ones, c.into())?;
+                let ones = B::ones::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
+                let c_tensor = B::mul_scalar_float(&ones, c.into())?;
                 B::var_from_tensor(&c_tensor)?
             }
             Init::KaimingUniform { fan_in, a } => {
                 let std = f64::sqrt(2.0 / ((1.0 + a * a) * fan_in as f64));
                 let bound = f64::sqrt(3.0) * std;
-                let t_rand = B::rand(dims.as_ref(), dtype, &device)?;
-                let t_scaled = B::mul_scalar(&t_rand, (2.0 * bound).into())?;
-                let t_final = B::add_scalar(&t_scaled, (-bound).into())?;
+                let t_rand = B::rand::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
+                let t_scaled = B::mul_scalar_float(&t_rand, (2.0 * bound).into())?;
+                let t_final = B::add_scalar_float(&t_scaled, (-bound).into())?;
                 B::var_from_tensor(&t_final)?
             }
             Init::KaimingNormal { fan_in, a } => {
                 let std = f64::sqrt(2.0 / ((1.0 + a * a) * fan_in as f64));
-                let t_randn = B::randn(dims.as_ref(), dtype, &device)?;
-                let t_final = B::mul_scalar(&t_randn, std.into())?;
+                let t_randn = B::randn::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
+                let t_final = B::mul_scalar_float(&t_randn, std.into())?;
                 B::var_from_tensor(&t_final)?
             }
             Init::XavierUniform { fan_in, fan_out } => {
                 let bound = f64::sqrt(6.0 / (fan_in as f64 + fan_out as f64));
-                let t_rand = B::rand(dims.as_ref(), dtype, &device)?;
-                let t_scaled = B::mul_scalar(&t_rand, (2.0 * bound).into())?;
-                let t_final = B::add_scalar(&t_scaled, (-bound).into())?;
+                let t_rand = B::rand::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
+                let t_scaled = B::mul_scalar_float(&t_rand, (2.0 * bound).into())?;
+                let t_final = B::add_scalar_float(&t_scaled, (-bound).into())?;
                 B::var_from_tensor(&t_final)?
             }
             Init::XavierNormal { fan_in, fan_out } => {
                 let std = f64::sqrt(2.0 / (fan_in as f64 + fan_out as f64));
-                let t_randn = B::randn(dims.as_ref(), dtype, &device)?;
-                let t_final = B::mul_scalar(&t_randn, std.into())?;
+                let t_randn = B::randn::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
+                let t_final = B::mul_scalar_float(&t_randn, std.into())?;
                 B::var_from_tensor(&t_final)?
             }
         };
@@ -144,20 +144,20 @@ where
     pub fn new_init<A>(args: A, init: crate::nn::init::Init) -> Result<Self>
     where
         A: ArgInto<
-            <(S, B::DType, B::Device, Grad) as TensorArgs<S, B::DType, B::Device, Grad>>::Args,
+            <(S, B::FloatElem, B::Device, Grad) as TensorArgs<S, B::FloatElem, B::Device, Grad>>::Args,
         >,
     {
         Self::new_init_raw(args.into_arg(), init)
     }
 
     pub fn zeros_raw(
-        args: <(S, B::DType, B::Device, Grad) as TensorArgs<S, B::DType, B::Device, Grad>>::Args,
+        args: <(S, B::FloatElem, B::Device, Grad) as TensorArgs<S, B::FloatElem, B::Device, Grad>>::Args,
     ) -> Result<Self> {
-        let (_shape, _dtype, _device, _) = <(S, B::DType, B::Device, Grad)>::construct(args);
+        let (_shape, _dtype, _device, _) = <(S, B::FloatElem, B::Device, Grad)>::construct(args);
         let dims: S::Dims = S::dims(&_shape);
         let device = <B::Device as Device>::to_kindle(&_device)?;
-        let dtype = <B::DType as DType>::to_kindle(&_dtype);
-        let inner = B::var_zeros(dims.as_ref(), dtype, &device)?;
+        let dtype = <B::FloatElem as DType>::to_kindle(&_dtype);
+        let inner = B::var_zeros::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
         Ok(Self {
             inner,
             _shape,
@@ -169,7 +169,7 @@ where
     pub fn zeros<A>(args: A) -> Result<Self>
     where
         A: ArgInto<
-            <(S, B::DType, B::Device, Grad) as TensorArgs<S, B::DType, B::Device, Grad>>::Args,
+            <(S, B::FloatElem, B::Device, Grad) as TensorArgs<S, B::FloatElem, B::Device, Grad>>::Args,
         >,
     {
         Self::zeros_raw(args.into_arg())
@@ -178,15 +178,15 @@ where
     pub fn randn<A>(args: A) -> Result<Self>
     where
         A: ArgInto<
-            <(S, B::DType, B::Device, Grad) as TensorArgs<S, B::DType, B::Device, Grad>>::Args,
+            <(S, B::FloatElem, B::Device, Grad) as TensorArgs<S, B::FloatElem, B::Device, Grad>>::Args,
         >,
     {
         let (_shape, _dtype, _device, _) =
-            <(S, B::DType, B::Device, Grad)>::construct(args.into_arg());
+            <(S, B::FloatElem, B::Device, Grad)>::construct(args.into_arg());
         let dims: S::Dims = S::dims(&_shape);
         let device = <B::Device as Device>::to_kindle(&_device)?;
-        let dtype = <B::DType as DType>::to_kindle(&_dtype);
-        let inner = B::var_randn(dims.as_ref(), dtype, &device)?;
+        let dtype = <B::FloatElem as DType>::to_kindle(&_dtype);
+        let inner = B::var_randn::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
         Ok(Self {
             inner,
             _shape,
@@ -196,13 +196,13 @@ where
     }
 
     pub fn ones_raw(
-        args: <(S, B::DType, B::Device, Grad) as TensorArgs<S, B::DType, B::Device, Grad>>::Args,
+        args: <(S, B::FloatElem, B::Device, Grad) as TensorArgs<S, B::FloatElem, B::Device, Grad>>::Args,
     ) -> Result<Self> {
-        let (_shape, _dtype, _device, _) = <(S, B::DType, B::Device, Grad)>::construct(args);
+        let (_shape, _dtype, _device, _) = <(S, B::FloatElem, B::Device, Grad)>::construct(args);
         let dims: S::Dims = S::dims(&_shape);
         let device = <B::Device as Device>::to_kindle(&_device)?;
-        let dtype = <B::DType as DType>::to_kindle(&_dtype);
-        let inner = B::var_ones(dims.as_ref(), dtype, &device)?;
+        let dtype = <B::FloatElem as DType>::to_kindle(&_dtype);
+        let inner = B::var_ones::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
         Ok(Self {
             inner,
             _shape,
@@ -214,7 +214,7 @@ where
     pub fn ones<A>(args: A) -> Result<Self>
     where
         A: ArgInto<
-            <(S, B::DType, B::Device, Grad) as TensorArgs<S, B::DType, B::Device, Grad>>::Args,
+            <(S, B::FloatElem, B::Device, Grad) as TensorArgs<S, B::FloatElem, B::Device, Grad>>::Args,
         >,
     {
         Self::ones_raw(args.into_arg())
@@ -224,11 +224,11 @@ where
     pub fn from_raw<A>(inner: <B as Backend>::RawVar, args: A) -> Result<Self>
     where
         A: ArgInto<
-            <(S, B::DType, B::Device, Grad) as TensorArgs<S, B::DType, B::Device, Grad>>::Args,
+            <(S, B::FloatElem, B::Device, Grad) as TensorArgs<S, B::FloatElem, B::Device, Grad>>::Args,
         >,
     {
         let (_shape, _dtype, _device, _) =
-            <(S, B::DType, B::Device, Grad)>::construct(args.into_arg());
+            <(S, B::FloatElem, B::Device, Grad)>::construct(args.into_arg());
         Ok(Self {
             inner,
             _shape,
@@ -241,7 +241,10 @@ where
     pub fn to_device<D2: Device>(
         self,
         _device: &D2::Field,
-    ) -> Result<Param<S, B::BackendWithDevice<D2>>> {
+    ) -> Result<Param<S, B::BackendWithDevice<D2>>>
+    where
+        B::BackendWithDevice<D2>: Backend<RawVar = B::RawVar>,
+    {
         let kindle_device = D2::to_kindle(_device)?;
         let new_inner = B::var_to_device(&self.inner, &kindle_device)?;
         Ok(Param {
@@ -324,7 +327,7 @@ impl<S: Shape + DynShape, B: Backend> StateDict<B> for Param<S, B> {
 pub struct Buffer<S: Shape, B: Backend> {
     pub(crate) inner: <B as Backend>::RawVar,
     pub(crate) _shape: S::Field,
-    pub(crate) _dtype: <B::DType as DType>::Field,
+    pub(crate) _dtype: <B::FloatElem as DType>::Field,
     pub(crate) _device: <B::Device as Device>::Field,
 }
 
@@ -346,7 +349,7 @@ impl<S: Shape, B: Backend> core::fmt::Debug for Buffer<S, B> {
 }
 
 impl<S: Shape, B: Backend> Buffer<S, B> {
-    pub fn as_tensor(&self) -> Result<Tensor<S, B, Grad>> {
+    pub fn as_tensor(&self) -> Result<Tensor<S, B, B::FloatElem>> {
         let inner_tensor = B::var_as_tensor(&self.inner)?;
         Ok(Tensor {
             inner: inner_tensor,
@@ -358,8 +361,8 @@ impl<S: Shape, B: Backend> Buffer<S, B> {
     }
 }
 
-impl<S: Shape, B: Backend, NewD: crate::prelude::Device> crate::nn::module::ToDevice<B, NewD>
-    for Buffer<S, B>
+impl<S: Shape, B: Backend, NewD: crate::prelude::Device>
+    crate::nn::module::ToDevice<B, NewD> for Buffer<S, B>
 {
     type Output = Buffer<S, B::BackendWithDevice<NewD>>;
     fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output> {
@@ -377,60 +380,60 @@ impl<S: Shape, B: Backend, NewD: crate::prelude::Device> crate::nn::module::ToDe
 
 impl<S: Shape + DynShape, B: Backend> Buffer<S, B>
 where
-    (S, B::DType, B::Device, Grad): TensorArgs<S, B::DType, B::Device, Grad>,
+    (S, B::FloatElem, B::Device, Grad): TensorArgs<S, B::FloatElem, B::Device, Grad>,
 {
     pub fn new_init_raw(
-        args: <(S, B::DType, B::Device, Grad) as TensorArgs<S, B::DType, B::Device, Grad>>::Args,
+        args: <(S, B::FloatElem, B::Device, Grad) as TensorArgs<S, B::FloatElem, B::Device, Grad>>::Args,
         init: crate::nn::init::Init,
     ) -> Result<Self> {
         use crate::nn::init::Init;
-        let (_shape, _dtype, _device, _) = <(S, B::DType, B::Device, Grad)>::construct(args);
+        let (_shape, _dtype, _device, _) = <(S, B::FloatElem, B::Device, Grad)>::construct(args);
         let dims: S::Dims = S::dims(&_shape);
         let device = <B::Device as Device>::to_kindle(&_device)?;
-        let dtype = <B::DType as DType>::to_kindle(&_dtype);
+        let dtype = <B::FloatElem as DType>::to_kindle(&_dtype);
 
         let inner = match init {
-            Init::Zeros => B::var_zeros(dims.as_ref(), dtype, &device)?,
-            Init::Ones => B::var_ones(dims.as_ref(), dtype, &device)?,
-            Init::Rand => B::var_rand(dims.as_ref(), dtype, &device)?,
-            Init::Randn => B::var_randn(dims.as_ref(), dtype, &device)?,
+            Init::Zeros => B::var_zeros::<B::FloatElem>(dims.as_ref(), dtype, &device)?,
+            Init::Ones => B::var_ones::<B::FloatElem>(dims.as_ref(), dtype, &device)?,
+            Init::Rand => B::var_rand::<B::FloatElem>(dims.as_ref(), dtype, &device)?,
+            Init::Randn => B::var_randn::<B::FloatElem>(dims.as_ref(), dtype, &device)?,
 
             Init::Uniform { bound } => {
-                let t_rand = B::rand(dims.as_ref(), dtype, &device)?;
-                let t_scaled = B::mul_scalar(&t_rand, (2.0 * bound).into())?;
-                let t_final = B::add_scalar(&t_scaled, (-bound).into())?;
+                let t_rand = B::rand::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
+                let t_scaled = B::mul_scalar_float(&t_rand, (2.0 * bound).into())?;
+                let t_final = B::add_scalar_float(&t_scaled, (-bound).into())?;
                 B::var_from_tensor(&t_final)?
             }
             Init::Constant(c) => {
-                let ones = B::ones(dims.as_ref(), dtype, &device)?;
-                let c_tensor = B::mul_scalar(&ones, c.into())?;
+                let ones = B::ones::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
+                let c_tensor = B::mul_scalar_float(&ones, c.into())?;
                 B::var_from_tensor(&c_tensor)?
             }
             Init::KaimingUniform { fan_in, a } => {
                 let std = f64::sqrt(2.0 / ((1.0 + a * a) * fan_in as f64));
                 let bound = f64::sqrt(3.0) * std;
-                let t_rand = B::rand(dims.as_ref(), dtype, &device)?;
-                let t_scaled = B::mul_scalar(&t_rand, (2.0 * bound).into())?;
-                let t_final = B::add_scalar(&t_scaled, (-bound).into())?;
+                let t_rand = B::rand::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
+                let t_scaled = B::mul_scalar_float(&t_rand, (2.0 * bound).into())?;
+                let t_final = B::add_scalar_float(&t_scaled, (-bound).into())?;
                 B::var_from_tensor(&t_final)?
             }
             Init::KaimingNormal { fan_in, a } => {
                 let std = f64::sqrt(2.0 / ((1.0 + a * a) * fan_in as f64));
-                let t_randn = B::randn(dims.as_ref(), dtype, &device)?;
-                let t_final = B::mul_scalar(&t_randn, std.into())?;
+                let t_randn = B::randn::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
+                let t_final = B::mul_scalar_float(&t_randn, std.into())?;
                 B::var_from_tensor(&t_final)?
             }
             Init::XavierUniform { fan_in, fan_out } => {
                 let bound = f64::sqrt(6.0 / (fan_in as f64 + fan_out as f64));
-                let t_rand = B::rand(dims.as_ref(), dtype, &device)?;
-                let t_scaled = B::mul_scalar(&t_rand, (2.0 * bound).into())?;
-                let t_final = B::add_scalar(&t_scaled, (-bound).into())?;
+                let t_rand = B::rand::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
+                let t_scaled = B::mul_scalar_float(&t_rand, (2.0 * bound).into())?;
+                let t_final = B::add_scalar_float(&t_scaled, (-bound).into())?;
                 B::var_from_tensor(&t_final)?
             }
             Init::XavierNormal { fan_in, fan_out } => {
                 let std = f64::sqrt(2.0 / (fan_in as f64 + fan_out as f64));
-                let t_randn = B::randn(dims.as_ref(), dtype, &device)?;
-                let t_final = B::mul_scalar(&t_randn, std.into())?;
+                let t_randn = B::randn::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
+                let t_final = B::mul_scalar_float(&t_randn, std.into())?;
                 B::var_from_tensor(&t_final)?
             }
         };
@@ -446,20 +449,20 @@ where
     pub fn new_init<A>(args: A, init: crate::nn::init::Init) -> Result<Self>
     where
         A: ArgInto<
-            <(S, B::DType, B::Device, Grad) as TensorArgs<S, B::DType, B::Device, Grad>>::Args,
+            <(S, B::FloatElem, B::Device, Grad) as TensorArgs<S, B::FloatElem, B::Device, Grad>>::Args,
         >,
     {
         Self::new_init_raw(args.into_arg(), init)
     }
 
     pub fn zeros_raw(
-        args: <(S, B::DType, B::Device, Grad) as TensorArgs<S, B::DType, B::Device, Grad>>::Args,
+        args: <(S, B::FloatElem, B::Device, Grad) as TensorArgs<S, B::FloatElem, B::Device, Grad>>::Args,
     ) -> Result<Self> {
-        let (_shape, _dtype, _device, _) = <(S, B::DType, B::Device, Grad)>::construct(args);
+        let (_shape, _dtype, _device, _) = <(S, B::FloatElem, B::Device, Grad)>::construct(args);
         let dims: S::Dims = S::dims(&_shape);
         let device = <B::Device as Device>::to_kindle(&_device)?;
-        let dtype = <B::DType as DType>::to_kindle(&_dtype);
-        let inner = B::var_zeros(dims.as_ref(), dtype, &device)?;
+        let dtype = <B::FloatElem as DType>::to_kindle(&_dtype);
+        let inner = B::var_zeros::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
         Ok(Self {
             inner,
             _shape,
@@ -471,20 +474,20 @@ where
     pub fn zeros<A>(args: A) -> Result<Self>
     where
         A: ArgInto<
-            <(S, B::DType, B::Device, Grad) as TensorArgs<S, B::DType, B::Device, Grad>>::Args,
+            <(S, B::FloatElem, B::Device, Grad) as TensorArgs<S, B::FloatElem, B::Device, Grad>>::Args,
         >,
     {
         Self::zeros_raw(args.into_arg())
     }
 
     pub fn ones_raw(
-        args: <(S, B::DType, B::Device, Grad) as TensorArgs<S, B::DType, B::Device, Grad>>::Args,
+        args: <(S, B::FloatElem, B::Device, Grad) as TensorArgs<S, B::FloatElem, B::Device, Grad>>::Args,
     ) -> Result<Self> {
-        let (_shape, _dtype, _device, _) = <(S, B::DType, B::Device, Grad)>::construct(args);
+        let (_shape, _dtype, _device, _) = <(S, B::FloatElem, B::Device, Grad)>::construct(args);
         let dims: S::Dims = S::dims(&_shape);
         let device = <B::Device as Device>::to_kindle(&_device)?;
-        let dtype = <B::DType as DType>::to_kindle(&_dtype);
-        let inner = B::var_ones(dims.as_ref(), dtype, &device)?;
+        let dtype = <B::FloatElem as DType>::to_kindle(&_dtype);
+        let inner = B::var_ones::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
         Ok(Self {
             inner,
             _shape,
@@ -496,7 +499,7 @@ where
     pub fn ones<A>(args: A) -> Result<Self>
     where
         A: ArgInto<
-            <(S, B::DType, B::Device, Grad) as TensorArgs<S, B::DType, B::Device, Grad>>::Args,
+            <(S, B::FloatElem, B::Device, Grad) as TensorArgs<S, B::FloatElem, B::Device, Grad>>::Args,
         >,
     {
         Self::ones_raw(args.into_arg())

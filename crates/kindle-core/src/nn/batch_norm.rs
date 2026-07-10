@@ -57,7 +57,7 @@ pub struct BatchNorm2d<S: BatchNormShape, B: Backend> {
 
 impl<S: BatchNormShape, B: Backend> BatchNorm2d<S, B>
 where
-    B::DType: crate::prelude::ConstDType,
+    B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
     (S::Channels,): Shape<Arg = S::BuildArg>,
 {
@@ -92,7 +92,7 @@ impl<S, B> BatchNorm2d<S, B>
 where
     S: BatchNormShape<Target = ((),)>,
     B: Backend,
-    B::DType: crate::prelude::ConstDType,
+    B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
     (S::Channels,): Shape<Arg = S::BuildArg>,
 {
@@ -116,11 +116,12 @@ impl<S: BatchNormShape, InS: Shape + HasChannels2D<S::Channels>, B: Backend> Mod
 
         let out = B::batch_norm(
             x.inner(),
-            weight.inner(),
-            bias.inner(),
-            running_mean.inner(),
-            running_var.inner(),
+            Some(weight.inner()),
+            Some(bias.inner()),
+            Some(running_mean.inner()),
+            Some(running_var.inner()),
             self.eps,
+            self.momentum as f64,
         )?;
         Ok(Tensor::from_parts_unchecked(
             out,

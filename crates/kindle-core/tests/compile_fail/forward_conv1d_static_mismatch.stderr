@@ -5,9 +5,9 @@ error[E0774]: `derive` may only be applied to `struct`s, `enum`s and `union`s
    |   ^^^^^^^^^^^^^^^^^^^^^^^^^ not applicable here
  6 |
  7 | / fn main() {
- 8 | |     let layer = Conv1d::<3, 1, 0, 1, s![16, 3, 3], DummyBackend>::new().unwrap();
+ 8 | |     let layer = Conv1d::<3, 1, 0, 1, s![16, 3, 3], DummyBackend<f32, Cpu>>::new().unwrap();
  9 | |     // 3 != 1 (in_channels)
-10 | |     let input = Tensor::<s![2, 1, 32], DummyBackend>::zeros(()).unwrap();
+10 | |     let input = Tensor::<s![2, 1, 32], DummyBackend<f32, Cpu>>::zeros(()).unwrap();
 11 | |     layer.forward(input).unwrap();
 12 | | }
    | |_- not a `struct`, `enum` or `union`
@@ -15,7 +15,7 @@ error[E0774]: `derive` may only be applied to `struct`s, `enum`s and `union`s
 error: cannot find macro `s` in this scope
  --> tests/compile_fail/forward_conv1d_static_mismatch.rs:8:38
   |
-8 |     let layer = Conv1d::<3, 1, 0, 1, s![16, 3, 3], DummyBackend>::new().unwrap();
+8 |     let layer = Conv1d::<3, 1, 0, 1, s![16, 3, 3], DummyBackend<f32, Cpu>>::new().unwrap();
   |                                      ^
   |
 help: consider importing this macro
@@ -26,7 +26,7 @@ help: consider importing this macro
 error: cannot find macro `s` in this scope
   --> tests/compile_fail/forward_conv1d_static_mismatch.rs:10:26
    |
-10 |     let input = Tensor::<s![2, 1, 32], DummyBackend>::zeros(()).unwrap();
+10 |     let input = Tensor::<s![2, 1, 32], DummyBackend<f32, Cpu>>::zeros(()).unwrap();
    |                          ^
    |
 help: consider importing this macro
@@ -45,8 +45,8 @@ warning: unused import: `kindle_core::nn::*`
 error[E0107]: struct takes at most 3 generic arguments but 6 generic arguments were supplied
  --> tests/compile_fail/forward_conv1d_static_mismatch.rs:8:17
   |
-8 |     let layer = Conv1d::<3, 1, 0, 1, s![16, 3, 3], DummyBackend>::new().unwrap();
-  |                 ^^^^^^          ------------------------------- help: remove the unnecessary generic arguments
+8 |     let layer = Conv1d::<3, 1, 0, 1, s![16, 3, 3], DummyBackend<f32, Cpu>>::new().unwrap();
+  |                 ^^^^^^          ----------------------------------------- help: remove the unnecessary generic arguments
   |                 |
   |                 expected at most 3 generic arguments
   |

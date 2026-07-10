@@ -6,11 +6,12 @@
 //! logic to ensure that backpropagation can flow correctly from the scalar loss.
 use crate::prelude::{Backend, Dyn, DynShape, RequiresGrad, Result, Shape, Tensor};
 
-impl<S: Shape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
+impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, D: crate::tensor::device::Device, G: RequiresGrad> Tensor<S, B, K, D, G>
+{
     /// Dynamically concatenates a slice of tensors along `dim`.
     /// This is fallible at runtime if shapes mismatch or dim is out of bounds.
-    pub fn try_concat_slice(tensors: &[&Tensor<S, B, G>], dim: usize) -> Result<Tensor<Dyn, B, G>> {
-        let raw_tensors: alloc::vec::Vec<&B::RawTensor> =
+    pub fn try_concat_slice(tensors: &[&Tensor<S, B, K, D, G>], dim: usize) -> Result<Tensor<Dyn, B, K, D, G>> {
+        let raw_tensors: alloc::vec::Vec<&B::Storage<K>> =
             tensors.iter().map(|t| &t.inner).collect();
         if raw_tensors.is_empty() {
             return Err(crate::err::Error::Msg(
@@ -32,8 +33,8 @@ impl<S: Shape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
     /// Statically concatenates `self` with `other` along `Axis`.
     pub fn concat<S2, Axis>(
         &self,
-        other: &Tensor<S2, B, G>,
-    ) -> Result<Tensor<<S as crate::shapes::concat::ConcatShape<S2, Axis>>::Output, B, G>>
+        other: &Tensor<S2, B, K, D, G>,
+    ) -> Result<Tensor<<S as crate::shapes::concat::ConcatShape<S2, Axis>>::Output, B, K, D, G>>
     where
         S2: Shape,
         Axis: typenum::Unsigned,
@@ -53,7 +54,7 @@ impl<S: Shape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
     }
 
     /// Dynamically concatenates `self` with `other` along `dim`.
-    pub fn try_concat<S2>(&self, other: &Tensor<S2, B, G>, dim: usize) -> Result<Tensor<Dyn, B, G>>
+    pub fn try_concat<S2>(&self, other: &Tensor<S2, B, K, D, G>, dim: usize) -> Result<Tensor<Dyn, B, K, D, G>>
     where
         S2: Shape,
     {
@@ -70,8 +71,8 @@ impl<S: Shape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
     }
 
     /// Dynamically stacks a slice of tensors along `dim`.
-    pub fn try_stack_slice(tensors: &[&Tensor<S, B, G>], dim: usize) -> Result<Tensor<Dyn, B, G>> {
-        let raw_tensors: alloc::vec::Vec<&B::RawTensor> =
+    pub fn try_stack_slice(tensors: &[&Tensor<S, B, K, D, G>], dim: usize) -> Result<Tensor<Dyn, B, K, D, G>> {
+        let raw_tensors: alloc::vec::Vec<&B::Storage<K>> =
             tensors.iter().map(|t| &t.inner).collect();
         if raw_tensors.is_empty() {
             return Err(crate::err::Error::Msg(
@@ -93,8 +94,8 @@ impl<S: Shape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
     /// Statically stacks `self` with `other` along `Axis`.
     pub fn stack<Axis>(
         &self,
-        other: &Tensor<S, B, G>,
-    ) -> Result<Tensor<<S as crate::shapes::stack::StackShape<Axis>>::Output, B, G>>
+        other: &Tensor<S, B, K, D, G>,
+    ) -> Result<Tensor<<S as crate::shapes::stack::StackShape<Axis>>::Output, B, K, D, G>>
     where
         Axis: typenum::Unsigned,
         S: crate::shapes::stack::StackShape<Axis>,
@@ -113,7 +114,7 @@ impl<S: Shape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
     }
 
     /// Dynamically stacks `self` with `other` along `dim`.
-    pub fn try_stack(&self, other: &Tensor<S, B, G>, dim: usize) -> Result<Tensor<Dyn, B, G>> {
+    pub fn try_stack(&self, other: &Tensor<S, B, K, D, G>, dim: usize) -> Result<Tensor<Dyn, B, K, D, G>> {
         let inner = B::stack(&[&self.inner, &other.inner], dim)?;
         let mut out_shape = B::shape(&self.inner);
         out_shape.insert(dim, 2);
@@ -164,10 +165,10 @@ mod tests {
     }
 }
 
-pub fn try_stack_tensors<S: Shape + DynShape, B: Backend, G: crate::tensor::grad::RequiresGrad>(
-    tensors: &[&Tensor<S, B, G>],
+pub fn try_stack_tensors<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, D: crate::tensor::device::Device, G: crate::tensor::grad::RequiresGrad>(
+    tensors: &[&Tensor<S, B, K, D, G>],
     dim: usize,
-) -> Result<Tensor<Dyn, B, G>>
+) -> Result<Tensor<Dyn, B, K, D, G>>
 where
     G::Field: Clone,
 {
@@ -179,7 +180,7 @@ where
             msg: alloc::string::String::from("Cannot stack empty list of tensors"),
         });
     }
-    let raw_tensors: alloc::vec::Vec<&B::RawTensor> = tensors.iter().map(|t| &t.inner).collect();
+    let raw_tensors: alloc::vec::Vec<&B::Storage<K>> = tensors.iter().map(|t| &t.inner).collect();
     let inner = B::stack(&raw_tensors, dim)?;
     let mut shape = S::dims(&tensors[0]._shape).as_ref().to_vec();
     shape.insert(dim, tensors.len());

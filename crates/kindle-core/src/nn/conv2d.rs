@@ -90,7 +90,7 @@ impl<
 // ── Bias = True ────────────────────────────────────────────────────────────────
 impl<S: Conv2dShape, B: Backend> Conv2d<S, B, crate::nn::optional::True>
 where
-    B::DType: crate::prelude::ConstDType,
+    B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
     pub fn new_with(args: S::Target) -> Result<Self> {
@@ -107,7 +107,7 @@ where
 impl<S, B> Conv2d<S, B, crate::nn::optional::True>
 where
     S: Conv2dShape<Target = ((), ())>,
-    B: Backend, B::DType: crate::prelude::ConstDType, B::Device: crate::prelude::ConstDevice,
+    B: Backend, B::FloatElem: crate::prelude::ConstDType, B::Device: crate::prelude::ConstDevice,
 {
     pub fn new() -> Result<Self> { Self::new_with(((), ())) }
 }
@@ -115,7 +115,7 @@ where
 // ── Bias = False ───────────────────────────────────────────────────────────────
 impl<S: Conv2dShape, B: Backend> Conv2d<S, B, crate::nn::optional::False>
 where
-    B::DType: crate::prelude::ConstDType,
+    B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
     pub fn new_with(args: S::Target) -> Result<Self> {
@@ -130,7 +130,7 @@ where
 impl<S, B> Conv2d<S, B, crate::nn::optional::False>
 where
     S: Conv2dShape<Target = ((), ())>,
-    B: Backend, B::DType: crate::prelude::ConstDType, B::Device: crate::prelude::ConstDevice,
+    B: Backend, B::FloatElem: crate::prelude::ConstDType, B::Device: crate::prelude::ConstDevice,
 {
     pub fn new() -> Result<Self> { Self::new_with(((), ())) }
 }
@@ -138,7 +138,7 @@ where
 // ── Bias = Dyn ─────────────────────────────────────────────────────────────────
 impl<S: Conv2dShape, B: Backend> Conv2d<S, B, Dyn>
 where
-    B::DType: crate::prelude::ConstDType,
+    B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
     pub fn new_with(args: S::Target, has_bias: bool) -> Result<Self> {
@@ -157,7 +157,7 @@ where
 impl<S, B> Conv2d<S, B, Dyn>
 where
     S: Conv2dShape<Target = ((), ())>,
-    B: Backend, B::DType: crate::prelude::ConstDType, B::Device: crate::prelude::ConstDevice,
+    B: Backend, B::FloatElem: crate::prelude::ConstDType, B::Device: crate::prelude::ConstDevice,
 {
     pub fn new(has_bias: bool) -> Result<Self> { Self::new_with(((), ()), has_bias) }
 }
@@ -199,6 +199,7 @@ where
             S::S::USIZE,
             S::P::USIZE,
             S::D::USIZE,
+            1,
         )?;
 
         let shape =
@@ -261,6 +262,7 @@ where
             S::S::USIZE,
             S::P::USIZE,
             S::D::USIZE,
+            1,
         )?;
 
         let shape =
@@ -327,6 +329,7 @@ where
             S::S::USIZE,
             S::P::USIZE,
             S::D::USIZE,
+            1,
         )?;
 
         let shape =

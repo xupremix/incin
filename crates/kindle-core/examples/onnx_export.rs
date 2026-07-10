@@ -7,7 +7,7 @@ use kindle_core::tensor::tracing::{TRACING_GRAPH, TracingBackend};
 use std::collections::HashMap;
 use std::path::Path;
 
-type B = TracingBackend<DummyBackend<f32>>;
+type B = TracingBackend<DummyBackend<f32, Cpu>>;
 
 fn main() -> anyhow::Result<()> {
     // Create a simple model

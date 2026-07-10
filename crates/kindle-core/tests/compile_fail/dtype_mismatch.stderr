@@ -1,159 +1,27 @@
 error[E0433]: failed to resolve: use of unresolved module or unlinked crate `alloc`
- --> tests/compile_fail/dtype_mismatch.rs:5:60
+ --> tests/compile_fail/dtype_mismatch.rs:5:70
   |
-5 |     let t1: Tensor<Dyn, DummyBackend, f32> = Tensor::zeros(alloc::vec![2]).unwrap();
-  |                                                            ^^^^^ use of unresolved module or unlinked crate `alloc`
+5 |     let t1: Tensor<Dyn, DummyBackend<f32, Cpu>, f32> = Tensor::zeros(alloc::vec![2]).unwrap();
+  |                                                                      ^^^^^ use of unresolved module or unlinked crate `alloc`
 
 error[E0433]: failed to resolve: use of unresolved module or unlinked crate `alloc`
- --> tests/compile_fail/dtype_mismatch.rs:6:60
+ --> tests/compile_fail/dtype_mismatch.rs:6:70
   |
-6 |     let t2: Tensor<Dyn, DummyBackend, f64> = Tensor::zeros(alloc::vec![2]).unwrap();
-  |                                                            ^^^^^ use of unresolved module or unlinked crate `alloc`
+6 |     let t2: Tensor<Dyn, DummyBackend<f32, Cpu>, f64> = Tensor::zeros(alloc::vec![2]).unwrap();
+  |                                                                      ^^^^^ use of unresolved module or unlinked crate `alloc`
 
-error[E0277]: the trait bound `f32: RequiresGrad` is not satisfied
- --> tests/compile_fail/dtype_mismatch.rs:5:13
-  |
-5 |     let t1: Tensor<Dyn, DummyBackend, f32> = Tensor::zeros(alloc::vec![2]).unwrap();
-  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `RequiresGrad` is not implemented for `f32`
-  |
-  = help: the following other types implement trait `RequiresGrad`:
-            Grad
-            NoGrad
-            kindle_core::prelude::Dyn
-note: required by a bound in `kindle_core::prelude::Tensor`
- --> src/tensor/base.rs
-  |
-  | pub struct Tensor<S: Shape, B: Backend, G: RequiresGrad = Grad> {
-  |                                            ^^^^^^^^^^^^ required by this bound in `Tensor`
-
-error[E0277]: the trait bound `f32: RequiresGrad` is not satisfied
- --> tests/compile_fail/dtype_mismatch.rs:5:46
-  |
-5 |     let t1: Tensor<Dyn, DummyBackend, f32> = Tensor::zeros(alloc::vec![2]).unwrap();
-  |                                              ^^^^^^ the trait `RequiresGrad` is not implemented for `f32`
-  |
-  = help: the following other types implement trait `RequiresGrad`:
-            Grad
-            NoGrad
-            kindle_core::prelude::Dyn
-note: required by a bound in `kindle_core::prelude::Tensor`
- --> src/tensor/base.rs
-  |
-  | pub struct Tensor<S: Shape, B: Backend, G: RequiresGrad = Grad> {
-  |                                            ^^^^^^^^^^^^ required by this bound in `Tensor`
-
-error[E0277]: the trait bound `f32: RequiresGrad` is not satisfied
- --> tests/compile_fail/dtype_mismatch.rs:5:46
-  |
-5 |     let t1: Tensor<Dyn, DummyBackend, f32> = Tensor::zeros(alloc::vec![2]).unwrap();
-  |                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `RequiresGrad` is not implemented for `f32`
-  |
-  = help: the following other types implement trait `RequiresGrad`:
-            Grad
-            NoGrad
-            kindle_core::prelude::Dyn
-  = note: required for `(kindle_core::prelude::Dyn, f32, kindle_core::prelude::Cpu, f32)` to implement `TensorArgs<kindle_core::prelude::Dyn, f32, kindle_core::prelude::Cpu, f32>`
-
-error[E0277]: the trait bound `f32: RequiresGrad` is not satisfied in `kindle_core::prelude::Tensor<kindle_core::prelude::Dyn, DummyBackend, f32>`
- --> tests/compile_fail/dtype_mismatch.rs:5:9
-  |
-5 |     let t1: Tensor<Dyn, DummyBackend, f32> = Tensor::zeros(alloc::vec![2]).unwrap();
-  |         ^^ within `kindle_core::prelude::Tensor<kindle_core::prelude::Dyn, DummyBackend, f32>`, the trait `RequiresGrad` is not implemented for `f32`
-  |
-  = help: the following other types implement trait `RequiresGrad`:
-            Grad
-            NoGrad
-            kindle_core::prelude::Dyn
-note: required because it appears within the type `kindle_core::prelude::Tensor<kindle_core::prelude::Dyn, DummyBackend, f32>`
- --> src/tensor/base.rs
-  |
-  | pub struct Tensor<S: Shape, B: Backend, G: RequiresGrad = Grad> {
-  |            ^^^^^^
-  = note: all local variables must have a statically known size
-help: consider borrowing here
-  |
-5 |     let t1: &Tensor<Dyn, DummyBackend, f32> = Tensor::zeros(alloc::vec![2]).unwrap();
-  |             +
-
-error[E0277]: the trait bound `f64: RequiresGrad` is not satisfied
- --> tests/compile_fail/dtype_mismatch.rs:6:13
-  |
-6 |     let t2: Tensor<Dyn, DummyBackend, f64> = Tensor::zeros(alloc::vec![2]).unwrap();
-  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `RequiresGrad` is not implemented for `f64`
-  |
-  = help: the following other types implement trait `RequiresGrad`:
-            Grad
-            NoGrad
-            kindle_core::prelude::Dyn
-note: required by a bound in `kindle_core::prelude::Tensor`
- --> src/tensor/base.rs
-  |
-  | pub struct Tensor<S: Shape, B: Backend, G: RequiresGrad = Grad> {
-  |                                            ^^^^^^^^^^^^ required by this bound in `Tensor`
-
-error[E0599]: the method `add` exists for struct `kindle_core::prelude::Tensor<kindle_core::prelude::Dyn, DummyBackend, f32>`, but its trait bounds were not satisfied
- --> tests/compile_fail/dtype_mismatch.rs:9:8
+error[E0308]: mismatched types
+ --> tests/compile_fail/dtype_mismatch.rs:9:12
   |
 9 |     t1.add(&t2).unwrap();
-  |     ---^^^-----
-  |     |  |
-  |     |  this is an associated function, not a method
-  |     help: use associated function syntax instead: `kindle_core::prelude::Tensor<kindle_core::prelude::Dyn, DummyBackend, f32>::add(&t2)`
+  |        --- ^^^ expected `&Tensor<Dyn, ..., f32, ..., _>`, found `&Tensor<Dyn, ..., f64, ...>`
+  |        |
+  |        arguments to this method are incorrect
   |
-  = note: found the following associated functions; to be used as methods, functions must have a `self` parameter
-note: the candidate is defined in the trait `kindle_core::prelude::NumericOps`
- --> src/tensor/backend.rs
+  = note: expected reference `&kindle_core::prelude::Tensor<kindle_core::prelude::Dyn, DummyBackend<f32, kindle_core::prelude::Cpu>, f32, kindle_core::prelude::Cpu, _>`
+             found reference `&kindle_core::prelude::Tensor<kindle_core::prelude::Dyn, DummyBackend<f32, kindle_core::prelude::Cpu>, f64, kindle_core::prelude::Cpu, Grad>`
+note: method defined here
+ --> src/tensor/ops/binary.rs
   |
-  |     fn add(lhs: &B::RawTensor, rhs: &B::RawTensor) -> Result<B::RawTensor>;
-  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  = note: the following trait bounds were not satisfied:
-          `f32: RequiresGrad`
-
-error[E0277]: the trait bound `f64: RequiresGrad` is not satisfied
- --> tests/compile_fail/dtype_mismatch.rs:6:46
-  |
-6 |     let t2: Tensor<Dyn, DummyBackend, f64> = Tensor::zeros(alloc::vec![2]).unwrap();
-  |                                              ^^^^^^ the trait `RequiresGrad` is not implemented for `f64`
-  |
-  = help: the following other types implement trait `RequiresGrad`:
-            Grad
-            NoGrad
-            kindle_core::prelude::Dyn
-note: required by a bound in `kindle_core::prelude::Tensor`
- --> src/tensor/base.rs
-  |
-  | pub struct Tensor<S: Shape, B: Backend, G: RequiresGrad = Grad> {
-  |                                            ^^^^^^^^^^^^ required by this bound in `Tensor`
-
-error[E0277]: the trait bound `f64: RequiresGrad` is not satisfied
- --> tests/compile_fail/dtype_mismatch.rs:6:46
-  |
-6 |     let t2: Tensor<Dyn, DummyBackend, f64> = Tensor::zeros(alloc::vec![2]).unwrap();
-  |                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `RequiresGrad` is not implemented for `f64`
-  |
-  = help: the following other types implement trait `RequiresGrad`:
-            Grad
-            NoGrad
-            kindle_core::prelude::Dyn
-  = note: required for `(kindle_core::prelude::Dyn, f32, kindle_core::prelude::Cpu, f64)` to implement `TensorArgs<kindle_core::prelude::Dyn, f32, kindle_core::prelude::Cpu, f64>`
-
-error[E0277]: the trait bound `f64: RequiresGrad` is not satisfied in `kindle_core::prelude::Tensor<kindle_core::prelude::Dyn, DummyBackend, f64>`
- --> tests/compile_fail/dtype_mismatch.rs:6:9
-  |
-6 |     let t2: Tensor<Dyn, DummyBackend, f64> = Tensor::zeros(alloc::vec![2]).unwrap();
-  |         ^^ within `kindle_core::prelude::Tensor<kindle_core::prelude::Dyn, DummyBackend, f64>`, the trait `RequiresGrad` is not implemented for `f64`
-  |
-  = help: the following other types implement trait `RequiresGrad`:
-            Grad
-            NoGrad
-            kindle_core::prelude::Dyn
-note: required because it appears within the type `kindle_core::prelude::Tensor<kindle_core::prelude::Dyn, DummyBackend, f64>`
- --> src/tensor/base.rs
-  |
-  | pub struct Tensor<S: Shape, B: Backend, G: RequiresGrad = Grad> {
-  |            ^^^^^^
-  = note: all local variables must have a statically known size
-help: consider borrowing here
-  |
-6 |     let t2: &Tensor<Dyn, DummyBackend, f64> = Tensor::zeros(alloc::vec![2]).unwrap();
-  |             +
+  |     Add, add, add
+  |          ^^^

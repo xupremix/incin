@@ -40,7 +40,7 @@ impl Collate<(Vec<f32>, u8)> for MnistCollate {
         };
 
         let device = KindleDevice::cpu();
-        let images_raw = Backend::from_bytes(
+        let images_raw = Backend::from_bytes::<f32>(
             images_bytes,
             &[batch_size, 1, 28, 28],
             KindleDType::F32,
@@ -48,7 +48,7 @@ impl Collate<(Vec<f32>, u8)> for MnistCollate {
         )
         .unwrap();
         let labels_raw =
-            Backend::from_bytes(labels_bytes, &[batch_size], KindleDType::U32, &device).unwrap();
+            Backend::from_bytes::<u32>(labels_bytes, &[batch_size], KindleDType::U32, &device).unwrap();
 
         (
             Tensor::<Dyn, Backend>::from_raw(images_raw, vec![batch_size, 1, 28, 28]).unwrap(),

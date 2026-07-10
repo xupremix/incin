@@ -137,7 +137,6 @@ impl<'a> crate::serialize::Serializer for OnnxExporter<'a> {
         _state_dict: &HashMap<String, Tensor<Dyn, B>>,
     ) -> core::result::Result<(), Self::Error>
     where
-        <<B as Backend>::DType as DType>::Field: Default,
         <<B as Backend>::Device as Device>::Field: Default,
     {
         // Try to run export_to_onnx with thread local graph
@@ -163,7 +162,6 @@ impl<'a> crate::serialize::Deserializer for OnnxImporter<'a> {
         _device: &KindleDevice,
     ) -> core::result::Result<HashMap<String, Tensor<Dyn, B>>, Self::Error>
     where
-        <<B as Backend>::DType as DType>::Field: Default,
         <<B as Backend>::Device as Device>::Field: Default,
     {
         Err(anyhow::anyhow!(

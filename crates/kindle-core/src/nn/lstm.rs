@@ -70,7 +70,7 @@ pub struct LSTMCell<
 
 impl<In: Dim, Out: Dim, B: Backend> LSTMCell<(In, Out), B, True, True>
 where
-    B::DType: ConstDType,
+    B::FloatElem: ConstDType,
     B::Device: ConstDevice,
     (In, Out): LstmShape<In = In, Out = Out>,
     (Out, Out): LstmShape<In = Out, Out = Out>,
@@ -95,7 +95,7 @@ where
 
 impl<In: Dim<Arg = ()>, Out: Dim<Arg = ()>, B: Backend> LSTMCell<(In, Out), B, True, True>
 where
-    B::DType: ConstDType,
+    B::FloatElem: ConstDType,
     B::Device: ConstDevice,
     (In, Out): LstmShape<In = In, Out = Out>,
     (Out, Out): LstmShape<In = Out, Out = Out>,
@@ -107,7 +107,7 @@ where
 
 impl<In: Dim, Out: Dim, B: Backend> LSTMCell<(In, Out), B, True, False>
 where
-    B::DType: ConstDType,
+    B::FloatElem: ConstDType,
     B::Device: ConstDevice,
     (In, Out): LstmShape<In = In, Out = Out>,
     (Out, Out): LstmShape<In = Out, Out = Out>,
@@ -132,7 +132,7 @@ where
 
 impl<In: Dim<Arg = ()>, Out: Dim<Arg = ()>, B: Backend> LSTMCell<(In, Out), B, True, False>
 where
-    B::DType: ConstDType,
+    B::FloatElem: ConstDType,
     B::Device: ConstDevice,
     (In, Out): LstmShape<In = In, Out = Out>,
     (Out, Out): LstmShape<In = Out, Out = Out>,
@@ -144,7 +144,7 @@ where
 
 impl<In: Dim, Out: Dim, B: Backend> LSTMCell<(In, Out), B, False, True>
 where
-    B::DType: ConstDType,
+    B::FloatElem: ConstDType,
     B::Device: ConstDevice,
     (In, Out): LstmShape<In = In, Out = Out>,
     (Out, Out): LstmShape<In = Out, Out = Out>,
@@ -169,7 +169,7 @@ where
 
 impl<In: Dim<Arg = ()>, Out: Dim<Arg = ()>, B: Backend> LSTMCell<(In, Out), B, False, True>
 where
-    B::DType: ConstDType,
+    B::FloatElem: ConstDType,
     B::Device: ConstDevice,
     (In, Out): LstmShape<In = In, Out = Out>,
     (Out, Out): LstmShape<In = Out, Out = Out>,
@@ -181,7 +181,7 @@ where
 
 impl<In: Dim, Out: Dim, B: Backend> LSTMCell<(In, Out), B, False, False>
 where
-    B::DType: ConstDType,
+    B::FloatElem: ConstDType,
     B::Device: ConstDevice,
     (In, Out): LstmShape<In = In, Out = Out>,
     (Out, Out): LstmShape<In = Out, Out = Out>,
@@ -206,7 +206,7 @@ where
 
 impl<In: Dim<Arg = ()>, Out: Dim<Arg = ()>, B: Backend> LSTMCell<(In, Out), B, False, False>
 where
-    B::DType: ConstDType,
+    B::FloatElem: ConstDType,
     B::Device: ConstDevice,
     (In, Out): LstmShape<In = In, Out = Out>,
     (Out, Out): LstmShape<In = Out, Out = Out>,
@@ -218,7 +218,7 @@ where
 
 impl<B: Backend> LSTMCell<Dyn, B, True, True>
 where
-    B::DType: ConstDType,
+    B::FloatElem: ConstDType,
     B::Device: ConstDevice,
 {
     pub fn new_with(in_f: usize, out_f: usize) -> Result<Self> {
@@ -239,7 +239,7 @@ where
 
 impl<B: Backend> LSTMCell<Dyn, B, False, False>
 where
-    B::DType: ConstDType,
+    B::FloatElem: ConstDType,
     B::Device: ConstDevice,
 {
     pub fn new_with(in_f: usize, out_f: usize) -> Result<Self> {
@@ -260,7 +260,7 @@ where
 
 impl<B: Backend> LSTMCell<Dyn, B, True, False>
 where
-    B::DType: ConstDType,
+    B::FloatElem: ConstDType,
     B::Device: ConstDevice,
 {
     pub fn new_with(in_f: usize, out_f: usize) -> Result<Self> {
@@ -392,7 +392,7 @@ impl<
     (Tensor<(Batch, Out), B>, Tensor<(Batch, Out), B>),
 )> for LSTM<(In, Out), B, BiasIh, BiasHh>
 where
-    B::DType: ConstDType,
+    B::FloatElem: ConstDType,
     B::Device: ConstDevice,
     LSTMCell<(In, Out), B, BiasIh, BiasHh>: Module<
         (Tensor<(Batch, In), B>, (Tensor<(Batch, Out), B>, Tensor<(Batch, Out), B>)),

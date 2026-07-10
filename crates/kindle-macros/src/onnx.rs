@@ -532,7 +532,7 @@ pub(crate) fn parse_onnx(
 
         impl<B: kindle::prelude::Backend> #root_name<B>
         where
-            B::DType: kindle::prelude::ConstDType,
+            B::FloatElem: kindle::prelude::ConstDType,
             B::Device: kindle::prelude::ConstDevice,
         {
             pub fn new() -> Self {
@@ -550,7 +550,7 @@ pub(crate) fn parse_onnx(
         #forward_attr
         impl<B: kindle::prelude::Backend> #root_name<B>
         where
-            B::DType: kindle::prelude::ConstDType,
+            B::FloatElem: kindle::prelude::ConstDType,
             B::Device: kindle::prelude::ConstDevice,
         {
             pub fn forward(&self, #(#user_inputs),*) -> kindle::prelude::Result<kindle::prelude::Tensor<#out_shape_type, B>> {

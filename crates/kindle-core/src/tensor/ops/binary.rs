@@ -15,11 +15,12 @@ macro_rules! impl_binary_op {
         $trait_name:ident, $method:ident, $backend_method:ident
     ) => {
         // Tensor op Tensor → Result<Tensor> (owned)
-        impl<S: Shape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
+        impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, D: crate::tensor::device::Device, G: RequiresGrad> Tensor<S, B, K, D, G>
+{
             $(#[$meta])*
             pub fn $method<S2: Shape, G2: RequiresGrad>(
                 &self,
-                rhs: &Tensor<S2, B, G2>,
+                rhs: &Tensor<S2, B, K, D, G2>,
             ) -> Result<Self>
             where
                 S: ShapeEq<S2>,
@@ -95,10 +96,11 @@ macro_rules! impl_broadcast_binary_op {
         $(#[$meta:meta])*
         $trait_name:ident, $method:ident, $backend_method:ident
     ) => {
-        impl<S1: Shape + crate::shapes::DynShape, B: Backend, G: RequiresGrad> Tensor<S1, B, G> {
+        impl<S1: Shape + crate::shapes::DynShape, B: Backend, K: crate::tensor::dtype::DType, D: crate::tensor::device::Device, G: RequiresGrad> Tensor<S1, B, K, D, G>
+        {
             $(#[$meta])*
             #[inline]
-            pub fn $method<S2>(&self, rhs: &Tensor<S2, B, G>) -> Result<Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, G>>
+            pub fn $method<S2>(&self, rhs: &Tensor<S2, B, K, D, G>) -> Result<Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, D, G>>
             where
                 S2: Shape + crate::shapes::DynShape,
                 S1: crate::shapes::broadcast::BroadcastShape<S2>,
@@ -178,16 +180,18 @@ macro_rules! impl_std_ops {
             S1: Shape + crate::shapes::DynShape,
             S2: Shape + crate::shapes::DynShape,
             B: Backend,
+            K: crate::tensor::dtype::DType,
+            D: crate::tensor::device::Device,
             G: RequiresGrad,
-        > core::ops::$trait<Tensor<S2, B, G>> for Tensor<S1, B, G>
+        > core::ops::$trait<Tensor<S2, B, K, D, G>> for Tensor<S1, B, K, D, G>
         where
             S1: crate::shapes::broadcast::BroadcastShape<S2>,
             <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape,
         {
             type Output =
-                Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, G>;
+                Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, D, G>;
             #[inline]
-            fn $method(self, rhs: Tensor<S2, B, G>) -> Self::Output {
+            fn $method(self, rhs: Tensor<S2, B, K, D, G>) -> Self::Output {
                 self.$backend_method(&rhs).unwrap()
             }
         }
@@ -199,16 +203,18 @@ macro_rules! impl_std_ops {
             S1: Shape + crate::shapes::DynShape,
             S2: Shape + crate::shapes::DynShape,
             B: Backend,
+            K: crate::tensor::dtype::DType,
+            D: crate::tensor::device::Device,
             G: RequiresGrad,
-        > core::ops::$trait<&'b Tensor<S2, B, G>> for &'a Tensor<S1, B, G>
+        > core::ops::$trait<&'b Tensor<S2, B, K, D, G>> for &'a Tensor<S1, B, K, D, G>
         where
             S1: crate::shapes::broadcast::BroadcastShape<S2>,
             <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape,
         {
             type Output =
-                Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, G>;
+                Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, D, G>;
             #[inline]
-            fn $method(self, rhs: &'b Tensor<S2, B, G>) -> Self::Output {
+            fn $method(self, rhs: &'b Tensor<S2, B, K, D, G>) -> Self::Output {
                 self.$backend_method(rhs).unwrap()
             }
         }
@@ -219,16 +225,18 @@ macro_rules! impl_std_ops {
             S1: Shape + crate::shapes::DynShape,
             S2: Shape + crate::shapes::DynShape,
             B: Backend,
+            K: crate::tensor::dtype::DType,
+            D: crate::tensor::device::Device,
             G: RequiresGrad,
-        > core::ops::$trait<&'a Tensor<S2, B, G>> for Tensor<S1, B, G>
+        > core::ops::$trait<&'a Tensor<S2, B, K, D, G>> for Tensor<S1, B, K, D, G>
         where
             S1: crate::shapes::broadcast::BroadcastShape<S2>,
             <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape,
         {
             type Output =
-                Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, G>;
+                Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, D, G>;
             #[inline]
-            fn $method(self, rhs: &'a Tensor<S2, B, G>) -> Self::Output {
+            fn $method(self, rhs: &'a Tensor<S2, B, K, D, G>) -> Self::Output {
                 self.$backend_method(rhs).unwrap()
             }
         }
@@ -239,16 +247,18 @@ macro_rules! impl_std_ops {
             S1: Shape + crate::shapes::DynShape,
             S2: Shape + crate::shapes::DynShape,
             B: Backend,
+            K: crate::tensor::dtype::DType,
+            D: crate::tensor::device::Device,
             G: RequiresGrad,
-        > core::ops::$trait<Tensor<S2, B, G>> for &'a Tensor<S1, B, G>
+        > core::ops::$trait<Tensor<S2, B, K, D, G>> for &'a Tensor<S1, B, K, D, G>
         where
             S1: crate::shapes::broadcast::BroadcastShape<S2>,
             <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape,
         {
             type Output =
-                Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, G>;
+                Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, D, G>;
             #[inline]
-            fn $method(self, rhs: Tensor<S2, B, G>) -> Self::Output {
+            fn $method(self, rhs: Tensor<S2, B, K, D, G>) -> Self::Output {
                 self.$backend_method(&rhs).unwrap()
             }
         }

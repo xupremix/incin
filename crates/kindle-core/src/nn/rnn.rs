@@ -188,7 +188,7 @@ impl<
 where
     S::In: Dim<Arg = ()>,
     S::Out: Dim<Arg = ()>,
-    B::DType: crate::prelude::ConstDType,
+    B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
     RNNCell<S, B, BiasIh, BiasHh>: Module<(Tensor<(Batch, S::In), B>, Tensor<(Batch, S::Out), B>), Output = Tensor<(Batch, S::Out), B>, Error = Error>,
 {

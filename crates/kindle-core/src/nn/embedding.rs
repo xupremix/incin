@@ -40,7 +40,7 @@ pub struct Embedding<S: EmbeddingShape, B: Backend> {
 
 impl<S: EmbeddingShape, B: Backend> Embedding<S, B>
 where
-    B::DType: crate::prelude::ConstDType,
+    B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
     (S::Vocab, S::Embed): Shape<Arg = S::BuildArg>,
 {
@@ -66,7 +66,7 @@ impl<S, B> Embedding<S, B>
 where
     S: EmbeddingShape<Target = ()>,
     B: Backend,
-    B::DType: crate::prelude::ConstDType,
+    B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
     (S::Vocab, S::Embed): Shape<Arg = S::BuildArg>,
 {

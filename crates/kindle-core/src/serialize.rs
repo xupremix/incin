@@ -11,8 +11,8 @@ pub trait Serializer {
         state_dict: &HashMap<String, Tensor<Dyn, B>>,
     ) -> core::result::Result<(), Self::Error>
     where
-        <<B as Backend>::DType as DType>::Field: Default,
-        <<B as Backend>::Device as Device>::Field: Default;
+        <<B as Backend>::Device as Device>::Field: Default,
+        <<B as Backend>::FloatElem as crate::tensor::dtype::DType>::Field: Default;
 }
 
 /// A trait for deserializing a collection of dynamic tensors from a specific format.
@@ -25,8 +25,8 @@ pub trait Deserializer {
         device: &KindleDevice,
     ) -> core::result::Result<HashMap<String, Tensor<Dyn, B>>, Self::Error>
     where
-        <<B as Backend>::DType as DType>::Field: Default,
-        <<B as Backend>::Device as Device>::Field: Default;
+        <<B as Backend>::Device as Device>::Field: Default,
+        <<B as Backend>::FloatElem as crate::tensor::dtype::DType>::Field: Default;
 }
 
 pub struct SafetensorsSerializer<'a> {
@@ -47,8 +47,8 @@ impl<'a> Serializer for SafetensorsSerializer<'a> {
         state_dict: &HashMap<String, Tensor<Dyn, B>>,
     ) -> core::result::Result<(), Self::Error>
     where
-        <<B as Backend>::DType as DType>::Field: Default,
         <<B as Backend>::Device as Device>::Field: Default,
+        <<B as Backend>::FloatElem as crate::tensor::dtype::DType>::Field: Default,
     {
         use safetensors::tensor::{Dtype, TensorView};
         let mut data_map = HashMap::new();
@@ -101,8 +101,8 @@ impl<'a> Deserializer for SafetensorsDeserializer<'a> {
         device: &KindleDevice,
     ) -> core::result::Result<HashMap<String, Tensor<Dyn, B>>, Self::Error>
     where
-        <<B as Backend>::DType as DType>::Field: Default,
         <<B as Backend>::Device as Device>::Field: Default,
+        <<B as Backend>::FloatElem as crate::tensor::dtype::DType>::Field: Default,
     {
         let buffer =
             std::fs::read(self.path).map_err(|e| anyhow::anyhow!("Failed to read file: {}", e))?;
@@ -132,7 +132,7 @@ impl<'a> Deserializer for SafetensorsDeserializer<'a> {
             let _device = Default::default();
             let _grad = Default::default();
 
-            let tensor: Tensor<Dyn, B, crate::prelude::Grad> =
+            let tensor: Tensor<Dyn, B> =
                 Tensor::from_parts_unchecked(raw_tensor, dyn_shape, _dtype, _device, _grad);
             state_dict.insert(name, tensor);
         }
@@ -166,8 +166,8 @@ impl<'a> Serializer for BincodeSerializer<'a> {
         state_dict: &HashMap<String, Tensor<Dyn, B>>,
     ) -> core::result::Result<(), Self::Error>
     where
-        <<B as Backend>::DType as DType>::Field: Default,
         <<B as Backend>::Device as Device>::Field: Default,
+        <<B as Backend>::FloatElem as crate::tensor::dtype::DType>::Field: Default,
     {
         let mut map: HashMap<String, SerializedTensor> = HashMap::new();
         for (k, v) in state_dict.iter() {
@@ -217,8 +217,8 @@ impl<'a> Deserializer for BincodeDeserializer<'a> {
         device: &KindleDevice,
     ) -> core::result::Result<HashMap<String, Tensor<Dyn, B>>, Self::Error>
     where
-        <<B as Backend>::DType as DType>::Field: Default,
         <<B as Backend>::Device as Device>::Field: Default,
+        <<B as Backend>::FloatElem as crate::tensor::dtype::DType>::Field: Default,
     {
         let file = std::fs::File::open(self.path)?;
         let map: HashMap<String, SerializedTensor> = bincode::deserialize_from(file)?;
@@ -243,7 +243,7 @@ impl<'a> Deserializer for BincodeDeserializer<'a> {
             let _device = Default::default();
             let _grad = Default::default();
 
-            let tensor: Tensor<Dyn, B, crate::prelude::Grad> =
+            let tensor: Tensor<Dyn, B> =
                 Tensor::from_parts_unchecked(raw_tensor, dyn_shape, _dtype, _device, _grad);
             state_dict.insert(k, tensor);
         }
@@ -261,20 +261,20 @@ pub enum Format {
 pub trait ModelExt<B: Backend> {
     fn save(&self, format: Format, path: &std::path::Path) -> Result<()>
     where
-        <<B as Backend>::DType as DType>::Field: Default,
-        <<B as Backend>::Device as Device>::Field: Default;
+        <<B as Backend>::Device as Device>::Field: Default,
+        <<B as Backend>::FloatElem as crate::tensor::dtype::DType>::Field: Default;
 
     fn load(&mut self, format: Format, path: &std::path::Path, device: &KindleDevice) -> Result<()>
     where
-        <<B as Backend>::DType as DType>::Field: Default,
-        <<B as Backend>::Device as Device>::Field: Default;
+        <<B as Backend>::Device as Device>::Field: Default,
+        <<B as Backend>::FloatElem as crate::tensor::dtype::DType>::Field: Default;
 }
 
 impl<B: Backend, T: crate::nn::module::StateDict<B>> ModelExt<B> for T {
     fn save(&self, format: Format, path: &std::path::Path) -> Result<()>
     where
-        <<B as Backend>::DType as DType>::Field: Default,
         <<B as Backend>::Device as Device>::Field: Default,
+        <<B as Backend>::FloatElem as crate::tensor::dtype::DType>::Field: Default,
     {
         match format {
             Format::Safetensors => {
@@ -293,8 +293,8 @@ impl<B: Backend, T: crate::nn::module::StateDict<B>> ModelExt<B> for T {
 
     fn load(&mut self, format: Format, path: &std::path::Path, device: &KindleDevice) -> Result<()>
     where
-        <<B as Backend>::DType as DType>::Field: Default,
         <<B as Backend>::Device as Device>::Field: Default,
+        <<B as Backend>::FloatElem as crate::tensor::dtype::DType>::Field: Default,
     {
         match format {
             Format::Safetensors => {

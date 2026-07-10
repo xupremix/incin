@@ -3,7 +3,7 @@ use kindle_core::prelude::*;
 use kindle_core::tensor::backend::dummy::DummyBackend;
 use kindle_macros::s;
 
-type B = DummyBackend<f32>;
+type B = DummyBackend<f32, kindle_core::tensor::device::Cpu>;
 
 #[test]
 fn test_linear_permutations() {

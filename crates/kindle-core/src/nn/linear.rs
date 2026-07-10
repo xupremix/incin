@@ -90,7 +90,7 @@ pub struct Linear<S: LinearShape, B: Backend, Bias: crate::nn::optional::Optiona
 // ── Bias = True: always creates bias ────────────────────────────────────────
 impl<S: LinearShape, B: Backend> Linear<S, B, crate::nn::optional::True>
 where
-    B::DType: crate::prelude::ConstDType,
+    B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
     pub fn new_with(args: S::Target) -> Result<Self> {
@@ -112,7 +112,7 @@ impl<S, B> Linear<S, B, crate::nn::optional::True>
 where
     S: LinearShape<Target = ((), ())>,
     B: Backend,
-    B::DType: crate::prelude::ConstDType,
+    B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
     pub fn new() -> Result<Self> { Self::new_with(((), ())) }
@@ -121,7 +121,7 @@ where
 // ── Bias = False: never creates bias ─────────────────────────────────────────
 impl<S: LinearShape, B: Backend> Linear<S, B, crate::nn::optional::False>
 where
-    B::DType: crate::prelude::ConstDType,
+    B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
     pub fn new_with(args: S::Target) -> Result<Self> {
@@ -139,7 +139,7 @@ impl<S, B> Linear<S, B, crate::nn::optional::False>
 where
     S: LinearShape<Target = ((), ())>,
     B: Backend,
-    B::DType: crate::prelude::ConstDType,
+    B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
     pub fn new() -> Result<Self> { Self::new_with(((), ())) }
@@ -148,7 +148,7 @@ where
 // ── Bias = Dyn: decides at runtime via `has_bias: bool` ──────────────────────
 impl<S: LinearShape, B: Backend> Linear<S, B, Dyn>
 where
-    B::DType: crate::prelude::ConstDType,
+    B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
     pub fn new_with(args: S::Target, has_bias: bool) -> Result<Self> {
@@ -174,7 +174,7 @@ impl<S, B> Linear<S, B, Dyn>
 where
     S: LinearShape<Target = ((), ())>,
     B: Backend,
-    B::DType: crate::prelude::ConstDType,
+    B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
     pub fn new(has_bias: bool) -> Result<Self> { Self::new_with(((), ()), has_bias) }

@@ -45,15 +45,15 @@ pub struct Dyn(pub ());
 /// assert_eq!(dyn_t.dims(), vec![32, 64]);
 /// ```
 
-pub struct Tensor<S: Shape, B: Backend, G: RequiresGrad = Grad> {
-    pub(crate) inner: B::RawTensor,
+pub struct Tensor<S: Shape, B: Backend, K: DType = <B as Backend>::FloatElem, D: Device = <B as Backend>::Device, G: RequiresGrad = Grad> {
+    pub(crate) inner: B::Storage<K>,
     pub(crate) _shape: S::Field,
-    pub(crate) _dtype: <B::DType as DType>::Field,
-    pub(crate) _device: <B::Device as Device>::Field,
+    pub(crate) _dtype: K::Field,
+    pub(crate) _device: D::Field,
     pub(crate) _grad: G::Field,
 }
 
-impl<S: Shape, B: Backend, G: RequiresGrad> Clone for Tensor<S, B, G> {
+impl<S: Shape, B: Backend, K: DType, D: Device, G: RequiresGrad> Clone for Tensor<S, B, K, D, G> {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
@@ -65,12 +65,12 @@ impl<S: Shape, B: Backend, G: RequiresGrad> Clone for Tensor<S, B, G> {
     }
 }
 
-impl<S: Shape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
+impl<S: Shape, B: Backend, K: DType, D: Device, G: RequiresGrad> Tensor<S, B, K, D, G> {
     pub fn from_parts_unchecked(
-        inner: B::RawTensor,
+        inner: B::Storage<K>,
         shape: S::Field,
-        dtype: <B::DType as DType>::Field,
-        device: <B::Device as Device>::Field,
+        dtype: K::Field,
+        device: D::Field,
         grad: G::Field,
     ) -> Self {
         Self {
@@ -83,12 +83,12 @@ impl<S: Shape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
     }
 
     #[inline]
-    pub fn inner(&self) -> &B::RawTensor {
+    pub fn inner(&self) -> &B::Storage<K> {
         &self.inner
     }
 
     #[inline]
-    pub fn into_inner(self) -> B::RawTensor {
+    pub fn into_inner(self) -> B::Storage<K> {
         self.inner
     }
 
@@ -103,15 +103,16 @@ impl<S: Shape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
     }
 }
 
-impl<S: Shape + DynShape, B: Backend, G: RequiresGrad> Tensor<S, B, G>
+impl<S: Shape + DynShape, B: Backend, K: DType, D: Device, G: RequiresGrad> Tensor<S, B, K, D, G>
 where
-    (S, B::DType, B::Device, G): TensorArgs<S, B::DType, B::Device, G>,
+    (S, K, D, G): TensorArgs<S, K, D, G>,
+
 {
     pub fn from_parts(
-        inner: B::RawTensor,
+        inner: B::Storage<K>,
         shape: S::Field,
-        dtype: <B::DType as DType>::Field,
-        device: <B::Device as Device>::Field,
+        dtype: K::Field,
+        device: D::Field,
         grad: G::Field,
     ) -> Result<Self> {
         let expected = S::dims(&shape).as_ref().to_vec();
@@ -131,38 +132,44 @@ where
 
     pub fn zeros<A>(args: A) -> Result<Self>
     where
-        A: ArgInto<<(S, B::DType, B::Device, G) as TensorArgs<S, B::DType, B::Device, G>>::Args>,
+        A: ArgInto<<(S, K, D, G) as TensorArgs<S, K, D, G>>::Args>,
+        K: ConstDType,
+        D: ConstDevice,
     {
         let (_shape, _dtype, _device, _grad) =
-            <(S, B::DType, B::Device, G)>::construct(args.into_arg());
+            <(S, K, D, G)>::construct(args.into_arg());
         let dims: S::Dims = S::dims(&_shape);
-        let device = <B::Device as Device>::to_kindle(&_device)?;
-        let dtype = <B::DType as DType>::to_kindle(&_dtype);
+        let device = <D as Device>::to_kindle(&_device)?;
+        let dtype = <K as ConstDType>::DTYPE;
         let inner = B::zeros(dims.as_ref(), dtype, &device)?;
         Self::from_parts(inner, _shape, _dtype, _device, _grad)
     }
 
     pub fn ones<A>(args: A) -> Result<Self>
     where
-        A: ArgInto<<(S, B::DType, B::Device, G) as TensorArgs<S, B::DType, B::Device, G>>::Args>,
+        A: ArgInto<<(S, K, D, G) as TensorArgs<S, K, D, G>>::Args>,
+        K: ConstDType,
+        D: ConstDevice,
     {
         let (_shape, _dtype, _device, _grad) =
-            <(S, B::DType, B::Device, G)>::construct(args.into_arg());
+            <(S, K, D, G)>::construct(args.into_arg());
         let dims = S::dims(&_shape);
-        let device = <B::Device as Device>::to_kindle(&_device)?;
-        let dtype = <B::DType as DType>::to_kindle(&_dtype);
+        let device = <D as Device>::to_kindle(&_device)?;
+        let dtype = <K as ConstDType>::DTYPE;
         let inner = B::ones(dims.as_ref(), dtype, &device)?;
         Self::from_parts(inner, _shape, _dtype, _device, _grad)
     }
 
     pub fn from_slice<A>(data: &[f32], args: A) -> Result<Self>
     where
-        A: ArgInto<<(S, B::DType, B::Device, G) as TensorArgs<S, B::DType, B::Device, G>>::Args>,
+        A: ArgInto<<(S, K, D, G) as TensorArgs<S, K, D, G>>::Args>,
+        K: ConstDType,
+        D: ConstDevice,
     {
         let (_shape, _dtype, _device, _grad) =
-            <(S, B::DType, B::Device, G)>::construct(args.into_arg());
+            <(S, K, D, G)>::construct(args.into_arg());
         let dims = S::dims(&_shape);
-        let device = <B::Device as Device>::to_kindle(&_device)?;
+        let device = <D as Device>::to_kindle(&_device)?;
         let bytes =
             unsafe { core::slice::from_raw_parts(data.as_ptr() as *const u8, data.len() * 4) };
         let inner = B::from_bytes(bytes, dims.as_ref(), KindleDType::F32, &device)?;
@@ -171,71 +178,77 @@ where
 
     pub fn rand<A>(args: A) -> Result<Self>
     where
-        A: ArgInto<<(S, B::DType, B::Device, G) as TensorArgs<S, B::DType, B::Device, G>>::Args>,
+        A: ArgInto<<(S, K, D, G) as TensorArgs<S, K, D, G>>::Args>,
+        K: ConstDType,
+        D: ConstDevice,
     {
         let (_shape, _dtype, _device, _grad) =
-            <(S, B::DType, B::Device, G)>::construct(args.into_arg());
+            <(S, K, D, G)>::construct(args.into_arg());
         let dims = S::dims(&_shape);
-        let device = <B::Device as Device>::to_kindle(&_device)?;
-        let dtype = <B::DType as DType>::to_kindle(&_dtype);
+        let device = <D as Device>::to_kindle(&_device)?;
+        let dtype = <K as ConstDType>::DTYPE;
         let inner = B::rand(dims.as_ref(), dtype, &device)?;
         Self::from_parts(inner, _shape, _dtype, _device, _grad)
     }
 
     pub fn randn<A>(args: A) -> Result<Self>
     where
-        A: ArgInto<<(S, B::DType, B::Device, G) as TensorArgs<S, B::DType, B::Device, G>>::Args>,
+        A: ArgInto<<(S, K, D, G) as TensorArgs<S, K, D, G>>::Args>,
+        K: ConstDType,
+        D: ConstDevice,
     {
         let (_shape, _dtype, _device, _grad) =
-            <(S, B::DType, B::Device, G)>::construct(args.into_arg());
+            <(S, K, D, G)>::construct(args.into_arg());
         let dims = S::dims(&_shape);
-        let device = <B::Device as Device>::to_kindle(&_device)?;
-        let dtype = <B::DType as DType>::to_kindle(&_dtype);
+        let device = <D as Device>::to_kindle(&_device)?;
+        let dtype = <K as ConstDType>::DTYPE;
         let inner = B::randn(dims.as_ref(), dtype, &device)?;
         Self::from_parts(inner, _shape, _dtype, _device, _grad)
     }
 
-    pub fn from_raw<A>(raw_tensor: B::RawTensor, args: A) -> Result<Self>
+    pub fn from_raw<A>(raw_tensor: B::Storage<K>, args: A) -> Result<Self>
     where
-        A: ArgInto<<(S, B::DType, B::Device, G) as TensorArgs<S, B::DType, B::Device, G>>::Args>,
+        A: ArgInto<<(S, K, D, G) as TensorArgs<S, K, D, G>>::Args>,
+        K: ConstDType,
+        D: ConstDevice,
     {
         let (_shape, _dtype, _device, _grad) =
-            <(S, B::DType, B::Device, G)>::construct(args.into_arg());
+            <(S, K, D, G)>::construct(args.into_arg());
         Self::from_parts(raw_tensor, _shape, _dtype, _device, _grad)
     }
 }
 
-impl<S: ConstShape + DynShape, B: Backend, G: ConstRequiresGrad> Tensor<S, B, G>
+impl<S: ConstShape + DynShape, B: Backend, K: ConstDType, D: ConstDevice, G: ConstRequiresGrad> Tensor<S, B, K, D, G>
 where
-    B::DType: ConstDType,
-    B::Device: ConstDevice,
+
+    (S, K, D, G): TensorArgs<S, K, D, G>,
 {
     pub fn static_zeros() -> Result<Self> {
         let _shape = S::Field::default();
-        let _dtype = <B::DType as DType>::init(());
-        let _device = <B::Device as Device>::init(());
+        let _dtype = <K as DType>::init(());
+        let _device = <D as Device>::init(());
         let _grad = G::init(());
         let dims = S::DIMS;
-        let device = <B::Device as Device>::to_kindle(&_device)?;
-        let dtype = <B::DType as ConstDType>::DTYPE;
+        let device = <D as Device>::to_kindle(&_device)?;
+        let dtype = <K as ConstDType>::DTYPE;
         let inner = B::zeros(dims.as_ref(), dtype, &device)?;
         Self::from_parts(inner, _shape, _dtype, _device, _grad)
     }
 
     pub fn static_ones() -> Result<Self> {
         let _shape = S::Field::default();
-        let _dtype = <B::DType as DType>::init(());
-        let _device = <B::Device as Device>::init(());
+        let _dtype = <K as DType>::init(());
+        let _device = <D as Device>::init(());
         let _grad = G::init(());
         let dims = S::DIMS;
-        let device = <B::Device as Device>::to_kindle(&_device)?;
-        let dtype = <B::DType as ConstDType>::DTYPE;
+        let device = <D as Device>::to_kindle(&_device)?;
+        let dtype = <K as ConstDType>::DTYPE;
         let inner = B::ones(dims.as_ref(), dtype, &device)?;
         Self::from_parts(inner, _shape, _dtype, _device, _grad)
     }
 }
 
-impl<S: Shape + DynShape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
+impl<S: Shape + DynShape, B: Backend, K: DType, D: Device, G: RequiresGrad> Tensor<S, B, K, D, G> {
     #[inline]
     pub fn rank(&self) -> usize {
         S::rank(&self._shape)
@@ -252,14 +265,14 @@ impl<S: Shape + DynShape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
     }
 }
 
-impl<S: Shape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
+impl<S: Shape, B: Backend, K: DType, D: Device, G: RequiresGrad> Tensor<S, B, K, D, G> {
     #[inline]
     pub fn dtype(&self) -> KindleDType {
-        <B::DType as DType>::to_kindle(&self._dtype)
+        K::to_kindle(&self._dtype)
     }
 
     pub fn device(&self) -> Result<KindleDevice> {
-        <B::Device as Device>::to_kindle(&self._device)
+        D::to_kindle(&self._device)
     }
 
     #[inline]
@@ -276,21 +289,21 @@ impl<S: Shape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
     pub fn to_device<D2: Device>(
         &self,
         _device: &D2::Field,
-    ) -> Result<Tensor<S, B::BackendWithDevice<D2>, G>> {
+    ) -> Result<Tensor<S, B::BackendWithDevice<D2>, K, D2, G>>
+    where
+        B::BackendWithDevice<D2>: Backend<Storage<K> = B::Storage<K>>,
+    {
         let kindle_device = D2::to_kindle(_device)?;
         let new_inner = B::tensor_to_device(&self.inner, &kindle_device)?;
-        Ok(Tensor {
-            inner: new_inner,
-            _shape: self._shape.clone(),
-            _dtype: self._dtype.clone(),
-            _device: _device.clone(),
-            _grad: self._grad.clone(),
-        })
+        Ok(Tensor::from_parts_unchecked(new_inner, self._shape.clone(), self._dtype.clone(), _device.clone(), self._grad.clone()))
     }
 }
 
-impl<S1: Shape + DynShape, B: Backend, G: RequiresGrad> Tensor<S1, B, G> {
-    pub fn into_shape<S2: Shape + DynShape>(self) -> Result<Tensor<S2, B, G>> {
+impl<S1: Shape + DynShape, B: Backend, K: DType, D: Device, G: RequiresGrad> Tensor<S1, B, K, D, G>
+where
+
+{
+    pub fn into_shape<S2: Shape + DynShape>(self) -> Result<Tensor<S2, B, K, D, G>> {
         let dims = S1::dims(&self._shape);
         let s2_shape = S2::from_dyn(dims.as_ref()).ok_or_else(|| {
             crate::err::Error::Msg(alloc::format!(
@@ -302,13 +315,13 @@ impl<S1: Shape + DynShape, B: Backend, G: RequiresGrad> Tensor<S1, B, G> {
         Tensor::from_parts(self.inner, s2_shape, self._dtype, self._device, self._grad)
     }
 
-    pub fn into_dyn(self) -> Tensor<crate::prelude::Dyn, B, G> {
+    pub fn into_dyn(self) -> Tensor<crate::prelude::Dyn, B, K, D, G> {
         let dims = S1::dims(&self._shape);
         let s2_shape = <crate::prelude::Dyn as Shape>::from_dyn(dims.as_ref()).unwrap();
         Tensor::from_parts_unchecked(self.inner, s2_shape, self._dtype, self._device, self._grad)
     }
 
-    pub fn to_shape<S2: Shape + DynShape>(&self) -> Result<Tensor<S2, B, G>> {
+    pub fn to_shape<S2: Shape + DynShape>(&self) -> Result<Tensor<S2, B, K, D, G>> {
         let dims = S1::dims(&self._shape);
         let s2_shape = S2::from_dyn(dims.as_ref()).ok_or_else(|| {
             crate::err::Error::Msg(alloc::format!(
@@ -327,8 +340,8 @@ impl<S1: Shape + DynShape, B: Backend, G: RequiresGrad> Tensor<S1, B, G> {
     }
 }
 
-impl<S: Shape, B: Backend> Tensor<S, B, NoGrad> {
-    pub fn require_grad(self) -> Tensor<S, B, Grad> {
+impl<S: Shape, B: Backend, K: DType, D: Device> Tensor<S, B, K, D, NoGrad> {
+    pub fn require_grad(self) -> Tensor<S, B, K, D, Grad> {
         Tensor::from_parts_unchecked(
             self.inner,
             self._shape,
@@ -339,8 +352,8 @@ impl<S: Shape, B: Backend> Tensor<S, B, NoGrad> {
     }
 }
 
-impl<S: Shape, B: Backend> Tensor<S, B, Grad> {
-    pub fn detach(self) -> Tensor<S, B, NoGrad> {
+impl<S: Shape, B: Backend, K: DType, D: Device> Tensor<S, B, K, D, Grad> {
+    pub fn detach(self) -> Tensor<S, B, K, D, NoGrad> {
         Tensor::from_parts_unchecked(
             self.inner,
             self._shape,
@@ -374,7 +387,7 @@ mod tests {
     }
 }
 
-impl<S: crate::prelude::Shape, B: crate::prelude::Backend> core::fmt::Display for Tensor<S, B> {
+impl<S: crate::prelude::Shape, B: crate::prelude::Backend, K: DType, D: Device, G: RequiresGrad> core::fmt::Display for Tensor<S, B, K, D, G> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(
             f,
@@ -384,7 +397,7 @@ impl<S: crate::prelude::Shape, B: crate::prelude::Backend> core::fmt::Display fo
     }
 }
 
-impl<S: crate::prelude::Shape, B: crate::prelude::Backend> core::fmt::Debug for Tensor<S, B> {
+impl<S: crate::prelude::Shape, B: crate::prelude::Backend, K: DType, D: Device, G: RequiresGrad> core::fmt::Debug for Tensor<S, B, K, D, G> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(
             f,

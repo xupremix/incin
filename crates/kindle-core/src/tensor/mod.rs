@@ -7,7 +7,6 @@ pub mod device;
 pub mod dtype;
 pub mod grad;
 pub mod matmul;
-pub mod kind;
 pub mod ops;
 pub mod tracing;
 
@@ -20,6 +19,5 @@ pub mod prelude {
     pub use super::device::*;
     pub use super::dtype::*;
     pub use super::grad::*;
-    pub use super::kind::*;
     pub use super::matmul::*;
 }

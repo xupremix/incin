@@ -4182,6 +4182,7 @@ dependencies = [
  "candle-core 0.9.1",
  "candle-nn",
  "kindle-core",
+ "kindle-native",
  "ndarray 0.17.2",
 ]
 
@@ -4240,6 +4241,7 @@ dependencies = [
  "anyhow",
  "bytemuck",
  "half",
+ "kindle-backends",
  "kindle-core",
  "rand 0.8.6",
  "rand_distr 0.4.3",
@@ -4712,6 +4714,16 @@ name = "named_tensors"
 version = "0.1.0"
 dependencies = [
  "kindle",
+]
+
+[[package]]
+name = "native_training_demo"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "kindle",
+ "kindle-backends",
+ "kindle-native",
 ]
 
 [[package]]

@@ -2,7 +2,7 @@ use kindle::prelude::*;
 use kindle_backends::dummy::DummyBackend;
 
 fn main() {
-    let t: Tensor<s![2, 3, 4], DummyBackend<f32, Cpu>, Grad> = Tensor::zeros(()).unwrap();
+    let t: Tensor<s![2, 3, 4], DummyBackend<f32, Cpu>> = Tensor::zeros(()).unwrap();
     println!("Original shape: {:?}", t.dims());
 
     // reshape to (2, 12)

@@ -33,12 +33,12 @@ pub struct TracingVar<V> {
 
 impl<B: Backend> TracingBackend<B> {
     // A helper for binary ops
-    fn trace_binary(
+    fn trace_binary<K1: super::dtype::DType, K2: super::dtype::DType, KOut: super::dtype::DType>(
         op: OpType,
-        lhs: &TracingTensor<B::RawTensor>,
-        rhs: &TracingTensor<B::RawTensor>,
-        inner_res: &B::RawTensor,
-    ) -> TracingTensor<B::RawTensor> {
+        lhs: &TracingTensor<B::Storage<K1>>,
+        rhs: &TracingTensor<B::Storage<K2>>,
+        inner_res: &B::Storage<KOut>,
+    ) -> TracingTensor<B::Storage<KOut>> {
         let shape = B::shape(inner_res);
         let value_id = TRACING_GRAPH.with(|g| {
             let mut g = g.borrow_mut();
@@ -58,11 +58,11 @@ impl<B: Backend> TracingBackend<B> {
     }
 
     // A helper for unary ops
-    fn trace_unary(
+    fn trace_unary<K: super::dtype::DType, KOut: super::dtype::DType>(
         op: OpType,
-        t: &TracingTensor<B::RawTensor>,
-        inner_res: &B::RawTensor,
-    ) -> TracingTensor<B::RawTensor> {
+        t: &TracingTensor<B::Storage<K>>,
+        inner_res: &B::Storage<KOut>,
+    ) -> TracingTensor<B::Storage<KOut>> {
         let shape = B::shape(inner_res);
         let value_id = TRACING_GRAPH.with(|g| {
             let mut g = g.borrow_mut();
@@ -83,30 +83,30 @@ impl<B: Backend> TracingBackend<B> {
 }
 
 impl<B: Backend> Backend for TracingBackend<B> {
+    type Storage<K: super::dtype::DType> = TracingTensor<B::Storage<K>>;
     type Device = B::Device;
-    type DType = B::DType;
-    type BackendWithDType<NewT: crate::tensor::dtype::DType> =
-        TracingBackend<B::BackendWithDType<NewT>>;
+    type FloatElem = B::FloatElem;
+    type IntElem = B::IntElem;
+
     type BackendWithDevice<NewD: crate::tensor::device::Device> =
         TracingBackend<B::BackendWithDevice<NewD>>;
 
-    type RawTensor = TracingTensor<B::RawTensor>;
     type RawVar = TracingVar<B::RawVar>;
-    type Grads = B::Grads; // For now
+    type Grads = B::Grads;
     type InnerBackend = B::InnerBackend;
 
-    fn shape(t: &<Self as Backend>::RawTensor) -> alloc::vec::Vec<usize> {
+    fn shape<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>) -> alloc::vec::Vec<usize> {
         B::shape(&t.inner)
     }
 
-    fn format_tensor_display(t: &<Self as Backend>::RawTensor) -> alloc::string::String {
+    fn format_tensor_display<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>) -> alloc::string::String {
         B::format_tensor_display(&t.inner)
     }
-    fn format_tensor_debug(t: &<Self as Backend>::RawTensor) -> alloc::string::String {
+    fn format_tensor_debug<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>) -> alloc::string::String {
         B::format_tensor_debug(&t.inner)
     }
 
-    fn var_as_tensor(var: &<Self as Backend>::RawVar) -> Result<<Self as Backend>::RawTensor> {
+    fn var_as_tensor<K: super::dtype::DType>(var: &<Self as Backend>::RawVar) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::var_as_tensor(&var.inner)?;
         Ok(TracingTensor {
             inner,
@@ -114,7 +114,7 @@ impl<B: Backend> Backend for TracingBackend<B> {
         })
     }
 
-    fn var_from_tensor(t: &<Self as Backend>::RawTensor) -> Result<<Self as Backend>::RawVar> {
+    fn var_from_tensor<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::RawVar> {
         let inner = B::var_from_tensor(&t.inner)?;
         Ok(TracingVar {
             inner,
@@ -128,15 +128,6 @@ impl<B: Backend> Backend for TracingBackend<B> {
 
 
 
-
-    fn tensor_to_device(t: &<Self as Backend>::RawTensor, device: &KindleDevice) -> Result<<Self as Backend>::RawTensor> {
-        let inner = B::tensor_to_device(&t.inner, device)?;
-        Ok(TracingTensor {
-            inner,
-            value_id: t.value_id,
-        })
-    }
-
     fn var_to_device(var: &<Self as Backend>::RawVar, device: &KindleDevice) -> Result<<Self as Backend>::RawVar> {
         let inner = B::var_to_device(&var.inner, device)?;
         Ok(TracingVar {
@@ -145,7 +136,7 @@ impl<B: Backend> Backend for TracingBackend<B> {
         })
     }
 
-    fn assign_var(var: &mut <Self as Backend>::RawVar, tensor: &<Self as Backend>::RawTensor) -> Result<()> {
+    fn assign_var<K: super::dtype::DType>(var: &mut <Self as Backend>::RawVar, tensor: &<Self as Backend>::Storage<K>) -> Result<()> {
         B::assign_var(&mut var.inner, &tensor.inner)
     }
 
@@ -191,39 +182,31 @@ impl<B: Backend> Backend for TracingBackend<B> {
 
 
 
-    fn backward(loss: &<Self as Backend>::RawTensor) -> Result<<Self as Backend>::Grads> {
+    fn backward<K: super::dtype::DType>(loss: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Grads> {
         B::backward(&loss.inner)
     }
 
-    fn get_grad(_var: &<Self as Backend>::RawVar, _grads: &<Self as Backend>::Grads) -> Result<Option<<Self as Backend>::RawTensor>> {
+    fn get_grad<K: super::dtype::DType>(_var: &<Self as Backend>::Storage<K>, _grads: &<Self as Backend>::Grads) -> Result<Option<<Self as Backend>::Storage<K>>> {
         Ok(None)
     }
 
-    fn from_bytes(
-        bytes: &[u8],
-        shape: &[usize],
-        dtype: KindleDType,
-        device: &KindleDevice,
-    ) -> Result<<Self as Backend>::RawTensor> {
+    fn from_bytes<K: super::dtype::DType>(bytes: &[u8], shape: &[usize], dtype: KindleDType, device: &KindleDevice) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::from_bytes(bytes, shape, dtype, device)?;
         let value_id = TRACING_GRAPH.with(|g| {
             let mut g = g.borrow_mut();
-            let id = g.add_value(shape.to_vec(), dtype, None);
+            let id = g.add_value(shape.to_vec(), KindleDType::F32, None);
             g.initializers.insert(id, bytes.to_vec());
             id
         });
         Ok(TracingTensor { inner, value_id })
     }
 
-    fn to_bytes(t: &<Self as Backend>::RawTensor) -> Result<alloc::vec::Vec<u8>> {
+    fn to_bytes<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>) -> Result<alloc::vec::Vec<u8>> {
         B::to_bytes(&t.inner)
     }
 
 
-    fn to_dtype(t: &<Self as Backend>::RawTensor, dtype: KindleDType) -> Result<<Self as Backend>::RawTensor> {
-        let inner = B::to_dtype(&t.inner, dtype)?;
-        Ok(Self::trace_unary(OpType::ToDtype, t, &inner))
-    }
+    
 
 
 
@@ -238,176 +221,176 @@ impl<B: Backend> Backend for TracingBackend<B> {
 }
 
 impl<B: Backend> CreationOps<Self> for TracingBackend<B> {
-    fn zeros(
+    fn zeros<K: super::dtype::DType>(
         shape: &[usize],
         dtype: KindleDType,
         device: &KindleDevice,
-    ) -> Result<<Self as Backend>::RawTensor> {
+    ) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::zeros(shape, dtype, device)?;
         let value_id =
             TRACING_GRAPH.with(|g| g.borrow_mut().add_value(shape.to_vec(), dtype, None));
         Ok(TracingTensor { inner, value_id })
     }
 
-    fn ones(shape: &[usize], dtype: KindleDType, device: &KindleDevice) -> Result<<Self as Backend>::RawTensor> {
+    fn ones<K: super::dtype::DType>(shape: &[usize], dtype: KindleDType, device: &KindleDevice) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::ones(shape, dtype, device)?;
         let value_id =
             TRACING_GRAPH.with(|g| g.borrow_mut().add_value(shape.to_vec(), dtype, None));
         Ok(TracingTensor { inner, value_id })
     }
 
-    fn rand(shape: &[usize], dtype: KindleDType, device: &KindleDevice) -> Result<<Self as Backend>::RawTensor> {
+    fn rand<K: super::dtype::DType>(shape: &[usize], dtype: KindleDType, device: &KindleDevice) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::rand(shape, dtype, device)?;
         let value_id =
             TRACING_GRAPH.with(|g| g.borrow_mut().add_value(shape.to_vec(), dtype, None));
         Ok(TracingTensor { inner, value_id })
     }
 
-    fn randn(
+    fn randn<K: super::dtype::DType>(
         shape: &[usize],
         dtype: KindleDType,
         device: &KindleDevice,
-    ) -> Result<<Self as Backend>::RawTensor> {
+    ) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::randn(shape, dtype, device)?;
         let value_id =
             TRACING_GRAPH.with(|g| g.borrow_mut().add_value(shape.to_vec(), dtype, None));
         Ok(TracingTensor { inner, value_id })
     }
 
-    fn var_zeros(
+    fn var_zeros<K: super::dtype::DType>(
         shape: &[usize],
         dtype: KindleDType,
         device: &KindleDevice,
     ) -> Result<<Self as Backend>::RawVar> {
-        let inner = B::var_zeros(shape, dtype, device)?;
+        let inner = B::var_zeros::<K>(shape, dtype, device)?;
         let value_id =
             TRACING_GRAPH.with(|g| g.borrow_mut().add_value(shape.to_vec(), dtype, None));
         Ok(TracingVar { inner, value_id })
     }
 
-    fn var_ones(
+    fn var_ones<K: super::dtype::DType>(
         shape: &[usize],
         dtype: KindleDType,
         device: &KindleDevice,
     ) -> Result<<Self as Backend>::RawVar> {
-        let inner = B::var_ones(shape, dtype, device)?;
+        let inner = B::var_ones::<K>(shape, dtype, device)?;
         let value_id =
             TRACING_GRAPH.with(|g| g.borrow_mut().add_value(shape.to_vec(), dtype, None));
         Ok(TracingVar { inner, value_id })
     }
 
-    fn var_rand(
+    fn var_rand<K: super::dtype::DType>(
         shape: &[usize],
         dtype: KindleDType,
         device: &KindleDevice,
     ) -> Result<<Self as Backend>::RawVar> {
-        let inner = B::var_rand(shape, dtype, device)?;
+        let inner = B::var_rand::<K>(shape, dtype, device)?;
         let value_id =
             TRACING_GRAPH.with(|g| g.borrow_mut().add_value(shape.to_vec(), dtype, None));
         Ok(TracingVar { inner, value_id })
     }
 
-    fn var_randn(
+    fn var_randn<K: super::dtype::DType>(
         shape: &[usize],
         dtype: KindleDType,
         device: &KindleDevice,
     ) -> Result<<Self as Backend>::RawVar> {
-        let inner = B::var_randn(shape, dtype, device)?;
+        let inner = B::var_randn::<K>(shape, dtype, device)?;
         let value_id =
             TRACING_GRAPH.with(|g| g.borrow_mut().add_value(shape.to_vec(), dtype, None));
         Ok(TracingVar { inner, value_id })
+    }
+
+    fn tensor_to_device<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>, device: &KindleDevice) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::tensor_to_device(&t.inner, device)?;
+        Ok(TracingTensor { inner, value_id: t.value_id })
     }
 }
 
 impl<B: Backend> NumericOps<Self> for TracingBackend<B> {
-    fn mul_scalar(t: &<Self as Backend>::RawTensor, scalar: crate::tensor::backend::ScalarValue) -> Result<<Self as Backend>::RawTensor> {
-        let inner = B::mul_scalar(&t.inner, scalar)?;
-        Ok(Self::trace_unary(OpType::MulScalar, t, &inner))
-    }
-
-    fn add_scalar(t: &<Self as Backend>::RawTensor, scalar: crate::tensor::backend::ScalarValue) -> Result<<Self as Backend>::RawTensor> {
-        let inner = B::add_scalar(&t.inner, scalar)?;
-        Ok(Self::trace_unary(OpType::AddScalar, t, &inner))
-    }
-
-    fn add(lhs: &<Self as Backend>::RawTensor, rhs: &<Self as Backend>::RawTensor) -> Result<<Self as Backend>::RawTensor> {
+    fn add<K: super::dtype::DType>(lhs: &<Self as Backend>::Storage<K>, rhs: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::add(&lhs.inner, &rhs.inner)?;
         Ok(Self::trace_binary(OpType::Add, lhs, rhs, &inner))
     }
 
-    fn sub(lhs: &<Self as Backend>::RawTensor, rhs: &<Self as Backend>::RawTensor) -> Result<<Self as Backend>::RawTensor> {
+    fn sub<K: super::dtype::DType>(lhs: &<Self as Backend>::Storage<K>, rhs: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::sub(&lhs.inner, &rhs.inner)?;
         Ok(Self::trace_binary(OpType::Sub, lhs, rhs, &inner))
     }
 
-    fn mul(lhs: &<Self as Backend>::RawTensor, rhs: &<Self as Backend>::RawTensor) -> Result<<Self as Backend>::RawTensor> {
+    fn mul<K: super::dtype::DType>(lhs: &<Self as Backend>::Storage<K>, rhs: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::mul(&lhs.inner, &rhs.inner)?;
         Ok(Self::trace_binary(OpType::Mul, lhs, rhs, &inner))
     }
 
-    fn div(lhs: &<Self as Backend>::RawTensor, rhs: &<Self as Backend>::RawTensor) -> Result<<Self as Backend>::RawTensor> {
+    fn div<K: super::dtype::DType>(lhs: &<Self as Backend>::Storage<K>, rhs: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::div(&lhs.inner, &rhs.inner)?;
         Ok(Self::trace_binary(OpType::Div, lhs, rhs, &inner))
-    }
-
-    fn matmul(lhs: &<Self as Backend>::RawTensor, rhs: &<Self as Backend>::RawTensor) -> Result<<Self as Backend>::RawTensor> {
-        let inner = B::matmul(&lhs.inner, &rhs.inner)?;
-        Ok(Self::trace_binary(OpType::MatMul, lhs, rhs, &inner))
     }
 }
 
 impl<B: Backend> FloatOps<Self> for TracingBackend<B> {
-    fn relu(t: &<Self as Backend>::RawTensor) -> Result<<Self as Backend>::RawTensor> {
+    fn add_scalar_float<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>, scalar: f64) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::add_scalar_float(&t.inner, scalar)?;
+        Ok(Self::trace_unary(OpType::AddScalar, t, &inner))
+    }
+
+    fn mul_scalar_float<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>, scalar: f64) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::mul_scalar_float(&t.inner, scalar)?;
+        Ok(Self::trace_unary(OpType::MulScalar, t, &inner))
+    }
+
+    fn relu<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::relu(&t.inner)?;
         Ok(Self::trace_unary(OpType::Relu, t, &inner))
     }
 
-    fn gelu(t: &<Self as Backend>::RawTensor) -> Result<<Self as Backend>::RawTensor> {
+    fn gelu<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::gelu(&t.inner)?;
         Ok(Self::trace_unary(OpType::Gelu, t, &inner))
     }
 
-    fn abs(t: &<Self as Backend>::RawTensor) -> Result<<Self as Backend>::RawTensor> {
+    fn abs<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::abs(&t.inner)?;
-        Ok(Self::trace_unary(OpType::Relu, t, &inner)) // Replace with Abs later
+        Ok(Self::trace_unary(OpType::Relu, t, &inner))
     }
 
-    fn exp(t: &<Self as Backend>::RawTensor) -> Result<<Self as Backend>::RawTensor> {
+    fn exp<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::exp(&t.inner)?;
         Ok(Self::trace_unary(OpType::Relu, t, &inner))
     }
 
-    fn neg(t: &<Self as Backend>::RawTensor) -> Result<<Self as Backend>::RawTensor> {
+    fn neg<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::neg(&t.inner)?;
         Ok(Self::trace_unary(OpType::Relu, t, &inner))
     }
 
-    fn sqrt(t: &<Self as Backend>::RawTensor) -> Result<<Self as Backend>::RawTensor> {
+    fn sqrt<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::sqrt(&t.inner)?;
         Ok(Self::trace_unary(OpType::Relu, t, &inner))
     }
 
-    fn log(t: &<Self as Backend>::RawTensor) -> Result<<Self as Backend>::RawTensor> {
+    fn log<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::log(&t.inner)?;
         Ok(Self::trace_unary(OpType::Relu, t, &inner))
     }
 
-    fn tanh(t: &<Self as Backend>::RawTensor) -> Result<<Self as Backend>::RawTensor> {
+    fn tanh<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::tanh(&t.inner)?;
         Ok(Self::trace_unary(OpType::Relu, t, &inner))
     }
 
-    fn sigmoid(t: &<Self as Backend>::RawTensor) -> Result<<Self as Backend>::RawTensor> {
+    fn sigmoid<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::sigmoid(&t.inner)?;
         Ok(Self::trace_unary(OpType::Relu, t, &inner))
     }
 
-    fn swish(t: &<Self as Backend>::RawTensor) -> Result<<Self as Backend>::RawTensor> {
+    fn swish<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::swish(&t.inner)?;
         Ok(Self::trace_unary(OpType::Relu, t, &inner))
     }
 
-    fn softmax(t: &<Self as Backend>::RawTensor, dim: usize) -> Result<<Self as Backend>::RawTensor> {
+    fn softmax<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>, dim: usize) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::softmax(&t.inner, dim)?;
         let shape = B::shape(&inner);
         let value_id = TRACING_GRAPH.with(|g| {
@@ -426,84 +409,104 @@ impl<B: Backend> FloatOps<Self> for TracingBackend<B> {
 }
 
 impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
-    fn sum_all(t: &<Self as Backend>::RawTensor) -> Result<<Self as Backend>::RawTensor> {
+    fn sum_all<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::sum_all(&t.inner)?;
         Ok(Self::trace_unary(OpType::SumAll, t, &inner))
     }
 
-    fn mean_all(t: &<Self as Backend>::RawTensor) -> Result<<Self as Backend>::RawTensor> {
+    fn mean_all<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::mean_all(&t.inner)?;
         Ok(Self::trace_unary(OpType::MeanAll, t, &inner))
     }
 
-    fn max_all(t: &<Self as Backend>::RawTensor) -> Result<<Self as Backend>::RawTensor> {
+    fn max_all<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::max_all(&t.inner)?;
         Ok(Self::trace_unary(OpType::MaxAll, t, &inner))
     }
 
-    fn min_all(t: &<Self as Backend>::RawTensor) -> Result<<Self as Backend>::RawTensor> {
+    fn min_all<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::min_all(&t.inner)?;
         Ok(Self::trace_unary(OpType::MinAll, t, &inner))
     }
 
-    fn sum_dim(t: &<Self as Backend>::RawTensor, dim: usize) -> Result<<Self as Backend>::RawTensor> {
+    fn sum_dim<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>, dim: usize) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::sum_dim(&t.inner, dim)?;
         Ok(Self::trace_unary(OpType::SumDim, t, &inner))
     }
 
-    fn sum_keepdim(t: &<Self as Backend>::RawTensor, dim: usize) -> Result<<Self as Backend>::RawTensor> {
+    fn sum_keepdim<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>, dim: usize) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::sum_keepdim(&t.inner, dim)?;
         Ok(Self::trace_unary(OpType::SumDim, t, &inner))
     }
 
-    fn mean_dim(t: &<Self as Backend>::RawTensor, dim: usize) -> Result<<Self as Backend>::RawTensor> {
+    fn mean_dim<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>, dim: usize) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::mean_dim(&t.inner, dim)?;
         Ok(Self::trace_unary(OpType::MeanDim, t, &inner))
     }
 
-    fn mean_keepdim(t: &<Self as Backend>::RawTensor, dim: usize) -> Result<<Self as Backend>::RawTensor> {
+    fn mean_keepdim<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>, dim: usize) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::mean_keepdim(&t.inner, dim)?;
         Ok(Self::trace_unary(OpType::MeanDim, t, &inner))
     }
 
-    fn max_dim(t: &<Self as Backend>::RawTensor, dim: usize) -> Result<<Self as Backend>::RawTensor> {
+    fn max_dim<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>, dim: usize) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::max_dim(&t.inner, dim)?;
         Ok(Self::trace_unary(OpType::MaxDim, t, &inner))
     }
 
-    fn max_keepdim(t: &<Self as Backend>::RawTensor, dim: usize) -> Result<<Self as Backend>::RawTensor> {
+    fn max_keepdim<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>, dim: usize) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::max_keepdim(&t.inner, dim)?;
         Ok(Self::trace_unary(OpType::MaxDim, t, &inner))
     }
 
-    fn min_dim(t: &<Self as Backend>::RawTensor, dim: usize) -> Result<<Self as Backend>::RawTensor> {
+    fn min_dim<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>, dim: usize) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::min_dim(&t.inner, dim)?;
         Ok(Self::trace_unary(OpType::MinDim, t, &inner))
     }
 
-    fn min_keepdim(t: &<Self as Backend>::RawTensor, dim: usize) -> Result<<Self as Backend>::RawTensor> {
+    fn min_keepdim<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>, dim: usize) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::min_keepdim(&t.inner, dim)?;
         Ok(Self::trace_unary(OpType::MinDim, t, &inner))
     }
 
-    fn argmax(t: &<Self as Backend>::RawTensor, dim: usize) -> Result<<Self as Backend>::RawTensor> {
+    fn argmax<K: super::dtype::DType, KInt: super::dtype::DType>(t: &<Self as Backend>::Storage<K>, dim: Option<usize>) -> Result<<Self as Backend>::Storage<KInt>> {
         let inner = B::argmax(&t.inner, dim)?;
         Ok(Self::trace_unary(OpType::ArgMax, t, &inner))
     }
 
-    fn argmin(t: &<Self as Backend>::RawTensor, dim: usize) -> Result<<Self as Backend>::RawTensor> {
+    fn argmin<K: super::dtype::DType, KInt: super::dtype::DType>(t: &<Self as Backend>::Storage<K>, dim: Option<usize>) -> Result<<Self as Backend>::Storage<KInt>> {
         let inner = B::argmin(&t.inner, dim)?;
         Ok(Self::trace_unary(OpType::ArgMin, t, &inner))
     }
 }
 
 impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
-    fn broadcast_as(t: &<Self as Backend>::RawTensor, shape: &[usize]) -> Result<<Self as Backend>::RawTensor> {
+    fn tensor_to_dtype<K1: super::dtype::DType, K2: super::dtype::DType>(
+        t: &<Self as Backend>::Storage<K1>,
+        dtype: KindleDType,
+    ) -> Result<<Self as Backend>::Storage<K2>> {
+        let inner = B::tensor_to_dtype::<K1, K2>(&t.inner, dtype)?;
+        let shape = B::shape(&inner);
+        let value_id = TRACING_GRAPH.with(|g| {
+            let mut g = g.borrow_mut();
+            let out_id = g.add_value(shape, dtype, None);
+            g.add_node(
+                OpType::ToDtype,
+                vec![t.value_id],
+                vec![out_id],
+                std::collections::HashMap::new(),
+            );
+            out_id
+        });
+        Ok(TracingTensor { inner, value_id })
+    }
+
+    fn broadcast_as<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>, shape: &[usize]) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::broadcast_as(&t.inner, shape)?;
         Ok(Self::trace_unary(OpType::Broadcast, t, &inner))
     }
 
-    fn reshape(t: &<Self as Backend>::RawTensor, shape: &[usize]) -> Result<<Self as Backend>::RawTensor> {
+    fn reshape<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>, shape: &[usize]) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::reshape(&t.inner, shape)?;
         let shape_out = B::shape(&inner);
         let value_id = TRACING_GRAPH.with(|g| {
@@ -529,7 +532,7 @@ impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
         Ok(TracingTensor { inner, value_id })
     }
 
-    fn transpose(t: &<Self as Backend>::RawTensor, dim1: usize, dim2: usize) -> Result<<Self as Backend>::RawTensor> {
+    fn transpose<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>, dim1: usize, dim2: usize) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::transpose(&t.inner, dim1, dim2)?;
         let shape_out = B::shape(&inner);
         let value_id = TRACING_GRAPH.with(|g| {
@@ -546,18 +549,18 @@ impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
         Ok(TracingTensor { inner, value_id })
     }
 
-    fn narrow(
-        t: &<Self as Backend>::RawTensor,
+    fn narrow<K: super::dtype::DType>(
+        t: &<Self as Backend>::Storage<K>,
         dim: usize,
         start: usize,
         len: usize,
-    ) -> Result<<Self as Backend>::RawTensor> {
+    ) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::narrow(&t.inner, dim, start, len)?;
         Ok(Self::trace_unary(OpType::Narrow, t, &inner))
     }
 
-    fn concat(tensors: &[&<Self as Backend>::RawTensor], dim: usize) -> Result<<Self as Backend>::RawTensor> {
-        let inners: Vec<&B::RawTensor> = tensors.iter().map(|t| &t.inner).collect();
+    fn concat<K: super::dtype::DType>(tensors: &[&<Self as Backend>::Storage<K>], dim: usize) -> Result<<Self as Backend>::Storage<K>> {
+        let inners: Vec<&B::Storage<K>> = tensors.iter().map(|t| &t.inner).collect();
         let inner = B::concat(&inners, dim)?;
         let shape_out = B::shape(&inner);
         let value_id = TRACING_GRAPH.with(|g| {
@@ -575,8 +578,8 @@ impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
         Ok(TracingTensor { inner, value_id })
     }
 
-    fn stack(tensors: &[&<Self as Backend>::RawTensor], dim: usize) -> Result<<Self as Backend>::RawTensor> {
-        let inners: Vec<&B::RawTensor> = tensors.iter().map(|t| &t.inner).collect();
+    fn stack<K: super::dtype::DType>(tensors: &[&<Self as Backend>::Storage<K>], dim: usize) -> Result<<Self as Backend>::Storage<K>> {
+        let inners: Vec<&B::Storage<K>> = tensors.iter().map(|t| &t.inner).collect();
         let inner = B::stack(&inners, dim)?;
         let shape_out = B::shape(&inner);
         let value_id = TRACING_GRAPH.with(|g| {
@@ -594,36 +597,54 @@ impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
         Ok(TracingTensor { inner, value_id })
     }
 
-    fn slice(t: &<Self as Backend>::RawTensor, ranges: &[(usize, usize)]) -> Result<<Self as Backend>::RawTensor> {
+    fn slice<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>, ranges: &[(usize, usize)]) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::slice(&t.inner, ranges)?;
         Ok(Self::trace_unary(OpType::Slice, t, &inner))
     }
 
-    fn flatten(t: &<Self as Backend>::RawTensor, start_dim: usize, end_dim: usize) -> Result<<Self as Backend>::RawTensor> {
+    fn flatten<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>, start_dim: usize, end_dim: usize) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::flatten(&t.inner, start_dim, end_dim)?;
         Ok(Self::trace_unary(OpType::Reshape, t, &inner))
     }
 
-    fn squeeze(t: &<Self as Backend>::RawTensor, dim: usize) -> Result<<Self as Backend>::RawTensor> {
+    fn squeeze<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>, dim: usize) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::squeeze(&t.inner, dim)?;
         Ok(Self::trace_unary(OpType::Reshape, t, &inner))
     }
 
-    fn broadcast_left(t: &<Self as Backend>::RawTensor, shape: &[usize]) -> Result<<Self as Backend>::RawTensor> {
+    fn broadcast_left<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>, shape: &[usize]) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::broadcast_left(&t.inner, shape)?;
         Ok(Self::trace_unary(OpType::Broadcast, t, &inner))
+    }
+
+    fn matmul<K: super::dtype::DType>(lhs: &<Self as Backend>::Storage<K>, rhs: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::matmul(&lhs.inner, &rhs.inner)?;
+        Ok(Self::trace_binary(OpType::MatMul, lhs, rhs, &inner))
+    }
+    fn float_to_scalar<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>) -> Result<f64> {
+        B::float_to_scalar(&t.inner)
+    }
+    fn float_to_vec1<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>) -> Result<alloc::vec::Vec<f64>> {
+        B::float_to_vec1(&t.inner)
+    }
+    fn int_to_scalar<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>) -> Result<i64> {
+        B::int_to_scalar(&t.inner)
+    }
+    fn int_to_vec1<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>) -> Result<alloc::vec::Vec<i64>> {
+        B::int_to_vec1(&t.inner)
     }
 }
 
 impl<B: Backend> ModuleOps<Self> for TracingBackend<B> {
-    fn conv1d(
-        x: &<Self as Backend>::RawTensor,
-        weight: &<Self as Backend>::RawTensor,
-        bias: Option<&<Self as Backend>::RawTensor>,
+    fn conv1d<K: super::dtype::DType>(
+        x: &<Self as Backend>::Storage<K>,
+        weight: &<Self as Backend>::Storage<K>,
+        bias: Option<&<Self as Backend>::Storage<K>>,
         stride: usize,
         padding: usize,
         dilation: usize,
-    ) -> Result<<Self as Backend>::RawTensor> {
+        groups: usize,
+    ) -> Result<<Self as Backend>::Storage<K>> {
         let inner_bias = bias.map(|b| &b.inner);
         let inner = B::conv1d(
             &x.inner,
@@ -632,6 +653,7 @@ impl<B: Backend> ModuleOps<Self> for TracingBackend<B> {
             stride,
             padding,
             dilation,
+            groups,
         )?;
         let shape_out = B::shape(&inner);
         let value_id = TRACING_GRAPH.with(|g| {
@@ -661,14 +683,15 @@ impl<B: Backend> ModuleOps<Self> for TracingBackend<B> {
         Ok(TracingTensor { inner, value_id })
     }
 
-    fn conv2d(
-        x: &<Self as Backend>::RawTensor,
-        weight: &<Self as Backend>::RawTensor,
-        bias: Option<&<Self as Backend>::RawTensor>,
+    fn conv2d<K: super::dtype::DType>(
+        x: &<Self as Backend>::Storage<K>,
+        weight: &<Self as Backend>::Storage<K>,
+        bias: Option<&<Self as Backend>::Storage<K>>,
         stride: usize,
         padding: usize,
         dilation: usize,
-    ) -> Result<<Self as Backend>::RawTensor> {
+        groups: usize,
+    ) -> Result<<Self as Backend>::Storage<K>> {
         let inner_bias = bias.map(|b| &b.inner);
         let inner = B::conv2d(
             &x.inner,
@@ -677,6 +700,7 @@ impl<B: Backend> ModuleOps<Self> for TracingBackend<B> {
             stride,
             padding,
             dilation,
+            groups,
         )?;
         let shape_out = B::shape(&inner);
         let value_id = TRACING_GRAPH.with(|g| {
@@ -711,76 +735,88 @@ impl<B: Backend> ModuleOps<Self> for TracingBackend<B> {
         Ok(TracingTensor { inner, value_id })
     }
 
-    fn max_pool2d(
-        x: &<Self as Backend>::RawTensor,
+    fn max_pool2d<K: super::dtype::DType>(
+        x: &<Self as Backend>::Storage<K>,
         kernel_size: (usize, usize),
         stride: (usize, usize),
         padding: (usize, usize),
         dilation: (usize, usize),
-    ) -> Result<<Self as Backend>::RawTensor> {
+    ) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::max_pool2d(&x.inner, kernel_size, stride, padding, dilation)?;
         Ok(Self::trace_unary(OpType::MaxPool2d, x, &inner))
     }
 
-    fn avg_pool2d(
-        x: &<Self as Backend>::RawTensor,
+    fn avg_pool2d<K: super::dtype::DType>(
+        x: &<Self as Backend>::Storage<K>,
         kernel_size: (usize, usize),
         stride: (usize, usize),
         padding: (usize, usize),
-    ) -> Result<<Self as Backend>::RawTensor> {
+    ) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::avg_pool2d(&x.inner, kernel_size, stride, padding)?;
         Ok(Self::trace_unary(OpType::AvgPool2d, x, &inner))
     }
 
-    fn adaptive_avg_pool2d(
-        x: &<Self as Backend>::RawTensor,
+    fn adaptive_avg_pool2d<K: super::dtype::DType>(
+        x: &<Self as Backend>::Storage<K>,
         output_size: (usize, usize),
-    ) -> Result<<Self as Backend>::RawTensor> {
+    ) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::adaptive_avg_pool2d(&x.inner, output_size)?;
         Ok(Self::trace_unary(OpType::AdaptiveAvgPool2d, x, &inner))
     }
 
-    fn embedding(weight: &<Self as Backend>::RawTensor, indices: &<Self as Backend>::RawTensor) -> Result<<Self as Backend>::RawTensor> {
-        let inner = B::embedding(&weight.inner, &indices.inner)?;
-        Ok(Self::trace_binary(
-            OpType::Embedding,
-            weight,
-            indices,
-            &inner,
-        ))
+    fn embedding<K: super::dtype::DType, KInt: super::dtype::DType>(t: &<Self as Backend>::Storage<KInt>, w: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::embedding(&t.inner, &w.inner)?;
+        let shape = B::shape(&inner);
+        let value_id = TRACING_GRAPH.with(|g| {
+            let mut g = g.borrow_mut();
+            let out_id = g.add_value(shape, KindleDType::F32, None);
+            g.add_node(
+                OpType::Embedding,
+                vec![t.value_id, w.value_id],
+                vec![out_id],
+                std::collections::HashMap::new(),
+            );
+            out_id
+        });
+        Ok(TracingTensor {
+            inner,
+            value_id,
+        })
     }
 
-    fn layer_norm(
-        x: &<Self as Backend>::RawTensor,
-        weight: &<Self as Backend>::RawTensor,
-        bias: &<Self as Backend>::RawTensor,
+    fn layer_norm<K: super::dtype::DType>(
+        x: &<Self as Backend>::Storage<K>,
+        weight: &<Self as Backend>::Storage<K>,
+        bias: Option<&<Self as Backend>::Storage<K>>,
         eps: f32,
-    ) -> Result<<Self as Backend>::RawTensor> {
-        let inner = B::layer_norm(&x.inner, &weight.inner, &bias.inner, eps)?;
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::layer_norm(&x.inner, &weight.inner, bias.map(|b| &b.inner), eps)?;
         Ok(Self::trace_unary(OpType::LayerNorm, x, &inner))
     }
 
-    fn batch_norm(
-        t: &<Self as Backend>::RawTensor,
-        w: &<Self as Backend>::RawTensor,
-        b: &<Self as Backend>::RawTensor,
-        rm: &<Self as Backend>::RawTensor,
-        rv: &<Self as Backend>::RawTensor,
+    fn batch_norm<K: super::dtype::DType>(
+        t: &<Self as Backend>::Storage<K>,
+        w: Option<&<Self as Backend>::Storage<K>>,
+        b: Option<&<Self as Backend>::Storage<K>>,
+        rm: Option<&<Self as Backend>::Storage<K>>,
+        rv: Option<&<Self as Backend>::Storage<K>>,
         e: f32,
-    ) -> Result<<Self as Backend>::RawTensor> {
-        let inner = B::batch_norm(&t.inner, &w.inner, &b.inner, &rm.inner, &rv.inner, e)?;
+        momentum: f64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::batch_norm(&t.inner, w.map(|x| &x.inner), b.map(|x| &x.inner), rm.map(|x| &x.inner), rv.map(|x| &x.inner), e, momentum)?;
         Ok(Self::trace_unary(OpType::BatchNorm, t, &inner))
     }
 
-    fn conv_transpose2d(
-        t: &<Self as Backend>::RawTensor,
-        w: &<Self as Backend>::RawTensor,
-        b: Option<&<Self as Backend>::RawTensor>,
+    fn conv_transpose2d<K: super::dtype::DType>(
+        t: &<Self as Backend>::Storage<K>,
+        w: &<Self as Backend>::Storage<K>,
+        b: Option<&<Self as Backend>::Storage<K>>,
         stride: usize,
         padding: usize,
         output_padding: usize,
         dilation: usize,
-    ) -> Result<<Self as Backend>::RawTensor> {
+        groups: usize,
+    ) -> Result<<Self as Backend>::Storage<K>> {
         let inner_b = b.map(|b| &b.inner);
         let inner = B::conv_transpose2d(
             &t.inner,
@@ -790,17 +826,18 @@ impl<B: Backend> ModuleOps<Self> for TracingBackend<B> {
             padding,
             output_padding,
             dilation,
+            groups,
         )?;
         Ok(Self::trace_unary(OpType::ConvTranspose2d, t, &inner))
     }
 }
 
 impl<B: Backend> LossOps<Self> for TracingBackend<B> {
-    fn cross_entropy_loss(
-        logits: &<Self as Backend>::RawTensor,
-        targets: &<Self as Backend>::RawTensor,
+    fn cross_entropy_loss<K: super::dtype::DType, KInt: super::dtype::DType>(
+        logits: &<Self as Backend>::Storage<K>,
+        targets: &<Self as Backend>::Storage<KInt>,
         reduction: crate::nn::loss::Reduction,
-    ) -> Result<<Self as Backend>::RawTensor> {
+    ) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::cross_entropy_loss(&logits.inner, &targets.inner, reduction)?;
         Ok(Self::trace_binary(
             OpType::CrossEntropyLoss,
@@ -810,11 +847,11 @@ impl<B: Backend> LossOps<Self> for TracingBackend<B> {
         ))
     }
 
-    fn mse_loss(
-        predictions: &<Self as Backend>::RawTensor,
-        targets: &<Self as Backend>::RawTensor,
+    fn mse_loss<K: super::dtype::DType>(
+        predictions: &<Self as Backend>::Storage<K>,
+        targets: &<Self as Backend>::Storage<K>,
         reduction: crate::nn::loss::Reduction,
-    ) -> Result<<Self as Backend>::RawTensor> {
+    ) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::mse_loss(&predictions.inner, &targets.inner, reduction)?;
         Ok(Self::trace_binary(
             OpType::MseLoss,
@@ -824,11 +861,11 @@ impl<B: Backend> LossOps<Self> for TracingBackend<B> {
         ))
     }
 
-    fn l1_loss(
-        predictions: &<Self as Backend>::RawTensor,
-        targets: &<Self as Backend>::RawTensor,
+    fn l1_loss<K: super::dtype::DType>(
+        predictions: &<Self as Backend>::Storage<K>,
+        targets: &<Self as Backend>::Storage<K>,
         reduction: crate::nn::loss::Reduction,
-    ) -> Result<<Self as Backend>::RawTensor> {
+    ) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::l1_loss(&predictions.inner, &targets.inner, reduction)?;
         Ok(Self::trace_binary(
             OpType::L1Loss,
@@ -838,11 +875,11 @@ impl<B: Backend> LossOps<Self> for TracingBackend<B> {
         ))
     }
 
-    fn bce_with_logits_loss(
-        logits: &<Self as Backend>::RawTensor,
-        targets: &<Self as Backend>::RawTensor,
+    fn bce_with_logits_loss<K: super::dtype::DType>(
+        logits: &<Self as Backend>::Storage<K>,
+        targets: &<Self as Backend>::Storage<K>,
         reduction: crate::nn::loss::Reduction,
-    ) -> Result<<Self as Backend>::RawTensor> {
+    ) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::bce_with_logits_loss(&logits.inner, &targets.inner, reduction)?;
         Ok(Self::trace_binary(
             OpType::BceWithLogitsLoss,

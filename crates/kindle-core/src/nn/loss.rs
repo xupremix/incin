@@ -105,11 +105,11 @@ impl<R: ReductionMode> MSELoss<R> {
     }
 
     /// Forward pass computing the Mean Squared Error between predictions and targets.
-    pub fn forward<S: Shape + crate::prelude::DynShape, B: Backend, G: RequiresGrad>(
+    pub fn forward<S: Shape + crate::prelude::DynShape, B: Backend, K: crate::tensor::dtype::DType, D: crate::tensor::device::Device, G: RequiresGrad>(
         &self,
-        pred: &Tensor<S, B, G>,
-        target: &Tensor<S, B, NoGrad>,
-    ) -> Result<Tensor<R::Output, B, G>>
+        pred: &Tensor<S, B, K, D, G>,
+        target: &Tensor<S, B, K, D, NoGrad>,
+    ) -> Result<Tensor<R::Output, B, K, D, G>>
     where
         R: MseReductionShape<S>,
     {
@@ -152,11 +152,11 @@ impl<R: ReductionMode> CrossEntropyLoss<R> {
 
     /// Forward pass computing the Cross Entropy Loss between predictions and targets.
     /// The target tensor MUST have `u32` elements at compile time.
-    pub fn forward<S1: Shape + crate::prelude::DynShape, S2: Shape, B: Backend, G: RequiresGrad>(
+    pub fn forward<S1: Shape + crate::prelude::DynShape, S2: Shape, B: Backend, K: crate::tensor::dtype::DType, D: crate::tensor::device::Device, G: RequiresGrad>(
         &self,
-        pred: &Tensor<S1, B, G>,
-        target: &Tensor<S2, B::BackendWithDType<u32>, NoGrad>,
-    ) -> Result<Tensor<R::Output, B, G>>
+        pred: &Tensor<S1, B, K, D, G>,
+        target: &Tensor<S2, B, u32, D, NoGrad>,
+    ) -> Result<Tensor<R::Output, B, K, D, G>>
     where
         S1: CrossEntropyShape<S2>,
         R: CrossEntropyReductionShape<S1>,
@@ -195,11 +195,11 @@ impl<R: ReductionMode> L1Loss<R> {
     }
 
     /// Forward pass computing the L1 Loss between predictions and targets.
-    pub fn forward<S: Shape + crate::prelude::DynShape, B: Backend, G: RequiresGrad>(
+    pub fn forward<S: Shape + crate::prelude::DynShape, B: Backend, K: crate::tensor::dtype::DType, D: crate::tensor::device::Device, G: RequiresGrad>(
         &self,
-        pred: &Tensor<S, B, G>,
-        target: &Tensor<S, B, NoGrad>,
-    ) -> Result<Tensor<R::Output, B, G>>
+        pred: &Tensor<S, B, K, D, G>,
+        target: &Tensor<S, B, K, D, NoGrad>,
+    ) -> Result<Tensor<R::Output, B, K, D, G>>
     where
         R: L1ReductionShape<S>,
     {
@@ -233,11 +233,11 @@ impl<R: ReductionMode> BCEWithLogitsLoss<R> {
     }
 
     /// Forward pass computing the BCE With Logits Loss between predictions and targets.
-    pub fn forward<S: Shape + crate::prelude::DynShape, B: Backend, G: RequiresGrad>(
+    pub fn forward<S: Shape + crate::prelude::DynShape, B: Backend, K: crate::tensor::dtype::DType, D: crate::tensor::device::Device, G: RequiresGrad>(
         &self,
-        pred: &Tensor<S, B, G>,
-        target: &Tensor<S, B, NoGrad>,
-    ) -> Result<Tensor<R::Output, B, G>>
+        pred: &Tensor<S, B, K, D, G>,
+        target: &Tensor<S, B, K, D, NoGrad>,
+    ) -> Result<Tensor<R::Output, B, K, D, G>>
     where
         R: BceReductionShape<S>,
     {

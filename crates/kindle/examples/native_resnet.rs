@@ -10,14 +10,14 @@ pub struct BasicBlock<B: Backend> {
 
 impl<B: Backend> BasicBlock<B>
 where
-    B::DType: ConstDType,
+    B::FloatElem: ConstDType,
     B::Device: ConstDevice,
 {
     pub fn new(
         in_channels: usize,
         out_channels: usize,
         _stride: usize,
-        device: &KindleDevice,
+        _device: &KindleDevice,
     ) -> Result<Self> {
         Ok(Self {
             conv1: kindle::nn::Conv2d::<(usize, usize, U3, U1, U1, U1), B>::new_with((
@@ -57,7 +57,7 @@ pub struct ResNet<B: Backend> {
 
 impl<B: Backend> ResNet<B>
 where
-    B::DType: ConstDType,
+    B::FloatElem: ConstDType,
     B::Device: ConstDevice,
 {
     pub fn new(num_classes: usize, device: &KindleDevice) -> Result<Self> {

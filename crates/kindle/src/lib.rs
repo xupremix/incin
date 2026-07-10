@@ -103,15 +103,22 @@ pub type DefaultBackend = kindle_backends::candle::CandleBackend<f32, DefaultDev
 pub type DefaultBackend = (); // Fallback
 
 #[cfg(feature = "candle")]
-pub type Tensor<S, B = DefaultBackend, G = kindle_core::prelude::Grad> =
-    kindle_core::prelude::Tensor<S, B, G>;
+pub type Tensor<
+    S,
+    B = DefaultBackend,
+    K = <B as kindle_core::prelude::Backend>::FloatElem,
+    D = <B as kindle_core::prelude::Backend>::Device,
+    G = kindle_core::prelude::Grad,
+> = kindle_core::prelude::Tensor<S, B, K, D, G>;
 
 #[cfg(not(feature = "candle"))]
 pub type Tensor<
     S,
     B, // User must specify backend if Candle is disabled
+    K = <B as kindle_core::prelude::Backend>::FloatElem,
+    D = <B as kindle_core::prelude::Backend>::Device,
     G = kindle_core::prelude::Grad,
-> = kindle_core::prelude::Tensor<S, B, G>;
+> = kindle_core::prelude::Tensor<S, B, K, D, G>;
 
 // Neural Network Layer Aliases
 pub type Linear<S, B = DefaultBackend> = kindle_core::nn::Linear<S, B>;

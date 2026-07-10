@@ -1,7 +1,7 @@
 error: cannot find macro `s` in this scope
  --> tests/compile_fail/stack_static_mismatch.rs:5:20
   |
-5 |     let t1: Tensor<s![U2, U3], DummyBackend> = Tensor::zeros([2, 3]).unwrap();
+5 |     let t1: Tensor<s![U2, U3], DummyBackend<f32, Cpu>> = Tensor::zeros([2, 3]).unwrap();
   |                    ^
   |
 help: consider importing this macro
@@ -12,7 +12,7 @@ help: consider importing this macro
 error: cannot find macro `s` in this scope
  --> tests/compile_fail/stack_static_mismatch.rs:6:20
   |
-6 |     let t2: Tensor<s![U4, U3], DummyBackend> = Tensor::zeros([4, 3]).unwrap();
+6 |     let t2: Tensor<s![U4, U3], DummyBackend<f32, Cpu>> = Tensor::zeros([4, 3]).unwrap();
   |                    ^
   |
 help: consider importing this macro
@@ -21,43 +21,43 @@ help: consider importing this macro
   |
 
 error[E0277]: the trait bound `[{integer}; 2]: ArgInto<TensorArgsData<(), (), (), ()>>` is not satisfied
- --> tests/compile_fail/stack_static_mismatch.rs:5:62
+ --> tests/compile_fail/stack_static_mismatch.rs:5:72
   |
-5 |     let t1: Tensor<s![U2, U3], DummyBackend> = Tensor::zeros([2, 3]).unwrap();
-  |                                                ------------- ^^^^^^ the trait `ArgInto<TensorArgsData<(), (), (), ()>>` is not implemented for `[{integer}; 2]`
-  |                                                |
-  |                                                required by a bound introduced by this call
+5 |     let t1: Tensor<s![U2, U3], DummyBackend<f32, Cpu>> = Tensor::zeros([2, 3]).unwrap();
+  |                                                          ------------- ^^^^^^ the trait `ArgInto<TensorArgsData<(), (), (), ()>>` is not implemented for `[{integer}; 2]`
+  |                                                          |
+  |                                                          required by a bound introduced by this call
   |
   = help: the following other types implement trait `ArgInto<Target>`:
             `&[usize]` implements `ArgInto<Vec<usize>>`
             `[usize; N]` implements `ArgInto<Vec<usize>>`
             `[usize; N]` implements `ArgInto<[usize; N]>`
-note: required by a bound in `kindle_core::prelude::Tensor::<S, B, G>::zeros`
+note: required by a bound in `kindle_core::prelude::Tensor::<S, B, K, D, G>::zeros`
  --> src/tensor/base.rs
   |
   |     pub fn zeros<A>(args: A) -> Result<Self>
   |            ----- required by a bound in this associated function
   |     where
-  |         A: ArgInto<<(S, B::DType, B::Device, G) as TensorArgs<S, B::DType, B::Device, G>>::Args>,
-  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `Tensor::<S, B, G>::zeros`
+  |         A: ArgInto<<(S, K, D, G) as TensorArgs<S, K, D, G>>::Args>,
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `Tensor::<S, B, K, D, G>::zeros`
 
 error[E0277]: the trait bound `[{integer}; 2]: ArgInto<TensorArgsData<(), (), (), ()>>` is not satisfied
- --> tests/compile_fail/stack_static_mismatch.rs:6:62
+ --> tests/compile_fail/stack_static_mismatch.rs:6:72
   |
-6 |     let t2: Tensor<s![U4, U3], DummyBackend> = Tensor::zeros([4, 3]).unwrap();
-  |                                                ------------- ^^^^^^ the trait `ArgInto<TensorArgsData<(), (), (), ()>>` is not implemented for `[{integer}; 2]`
-  |                                                |
-  |                                                required by a bound introduced by this call
+6 |     let t2: Tensor<s![U4, U3], DummyBackend<f32, Cpu>> = Tensor::zeros([4, 3]).unwrap();
+  |                                                          ------------- ^^^^^^ the trait `ArgInto<TensorArgsData<(), (), (), ()>>` is not implemented for `[{integer}; 2]`
+  |                                                          |
+  |                                                          required by a bound introduced by this call
   |
   = help: the following other types implement trait `ArgInto<Target>`:
             `&[usize]` implements `ArgInto<Vec<usize>>`
             `[usize; N]` implements `ArgInto<Vec<usize>>`
             `[usize; N]` implements `ArgInto<[usize; N]>`
-note: required by a bound in `kindle_core::prelude::Tensor::<S, B, G>::zeros`
+note: required by a bound in `kindle_core::prelude::Tensor::<S, B, K, D, G>::zeros`
  --> src/tensor/base.rs
   |
   |     pub fn zeros<A>(args: A) -> Result<Self>
   |            ----- required by a bound in this associated function
   |     where
-  |         A: ArgInto<<(S, B::DType, B::Device, G) as TensorArgs<S, B::DType, B::Device, G>>::Args>,
-  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `Tensor::<S, B, G>::zeros`
+  |         A: ArgInto<<(S, K, D, G) as TensorArgs<S, K, D, G>>::Args>,
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `Tensor::<S, B, K, D, G>::zeros`

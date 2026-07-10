@@ -233,6 +233,15 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                     let ident = &t.ident;
                     if backend_generic.as_ref() == Some(ident) {
                         args.push(quote! { <#ident as #k_crate::prelude::Backend>::BackendWithDevice<__NewD> });
+                    } else if t.bounds.iter().any(|b| {
+                        if let syn::TypeParamBound::Trait(tb) = b {
+                            tb.path.segments.last().map(|s| s.ident == "Device").unwrap_or(false)
+                        } else {
+                            false
+                        }
+                    }) {
+                        // This is a Device-bounded generic, substitute it with __NewD
+                        args.push(quote! { __NewD });
                     } else {
                         args.push(quote! { #ident });
                     }

@@ -34,7 +34,7 @@ pub struct LayerNorm<S: LayerNormShape, B: Backend> {
 
 impl<S: LayerNormShape, B: Backend> LayerNorm<S, B>
 where
-    B::DType: crate::prelude::ConstDType,
+    B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
     (S::Channels,): Shape<Arg = S::BuildArg>,
 {
@@ -65,7 +65,7 @@ impl<S, B> LayerNorm<S, B>
 where
     S: LayerNormShape<Target = ((),)>,
     B: Backend,
-    B::DType: crate::prelude::ConstDType,
+    B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
     (S::Channels,): Shape<Arg = S::BuildArg>,
 {
@@ -84,7 +84,7 @@ impl<S: LayerNormShape, InS: Shape + DynShape + crate::shapes::EndsWith<S::Chann
     fn forward(&self, x: Tensor<InS, B>) -> core::result::Result<Self::Output, Error> {
         let weight = self.weight.as_tensor()?.into_dyn();
         let bias = self.bias.as_tensor()?.into_dyn();
-        let out = B::layer_norm(x.inner(), weight.inner(), bias.inner(), self.eps)?;
+        let out = B::layer_norm(x.inner(), weight.inner(), Some(bias.inner()), self.eps)?;
         Ok(Tensor::from_parts_unchecked(
             out,
             x._shape.clone(),

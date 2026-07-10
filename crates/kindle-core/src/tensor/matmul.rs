@@ -254,13 +254,13 @@ impl<M: StaticDim, K: StaticDim, N: StaticDim> MatMulShape<(usize, usize, K, N)>
 // The matmul method on Tensor
 // ============================================================================
 
-impl<S1: Shape, B: Backend, G: RequiresGrad> Tensor<S1, B, G> {
-    pub fn matmul<S2>(&self, rhs: &Tensor<S2, B, G>) -> Result<Tensor<S1::Output, B, G>>
+impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, D: crate::tensor::device::Device, G: RequiresGrad> Tensor<S1, B, K, D, G> {
+    pub fn matmul<S2>(&self, rhs: &Tensor<S2, B, K, D, G>) -> Result<Tensor<S1::Output, B, K, D, G>>
     where
         S2: Shape,
         S1: MatMulShape<S2>,
     {
-        let inner = B::matmul(&self.inner, &rhs.inner)?;
+        let inner = B::matmul::<K>(&self.inner, &rhs.inner)?;
         let output_shape = S1::output_shape(&self._shape, &rhs._shape);
         Ok(Tensor::from_parts_unchecked(
             inner,

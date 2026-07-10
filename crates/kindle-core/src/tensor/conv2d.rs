@@ -84,25 +84,26 @@ impl<
     }
 }
 
-impl<S1: Shape + DynShape, B: Backend, G: RequiresGrad> Tensor<S1, B, G> {
+impl<S1: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, D: crate::tensor::device::Device, G: RequiresGrad> Tensor<S1, B, K, D, G> {
     pub fn conv2d<Stride, Padding, KShape>(
         &self,
-        weight: &Tensor<KShape, B, G>,
-        bias: Option<&Tensor<Dyn, B, G>>, // Simplified bias for now
-    ) -> Result<Tensor<S1::Output, B, G>>
+        weight: &Tensor<KShape, B, K, D, G>,
+        bias: Option<&Tensor<Dyn, B, K, D, G>>, // Simplified bias for now
+    ) -> Result<Tensor<S1::Output, B, K, D, G>>
     where
         Stride: StaticDim + typenum::Unsigned,
         Padding: StaticDim + typenum::Unsigned,
         KShape: Shape + DynShape,
         S1: KernelConv2dShape<KShape, Stride, Padding>,
     {
-        let inner = B::conv2d(
+        let inner = B::conv2d::<K>(
             &self.inner,
             &weight.inner,
             bias.map(|b| b.inner()),
             <Stride as typenum::Unsigned>::USIZE,
             <Padding as typenum::Unsigned>::USIZE,
             1, // Default dilation
+            1, // Default groups
         )?;
 
         let output_shape = S1::output_shape(&self._shape, &weight._shape);

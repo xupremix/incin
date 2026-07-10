@@ -12,7 +12,7 @@ macro_rules! impl_unary_op {
     ) => {
         $(#[$meta])*
         pub fn $method(&self) -> Result<Self> {
-            let inner = B::$backend_method(&self.inner)?;
+            let inner = B::$backend_method::<K>(&self.inner)?;
             Ok(Tensor::from_parts_unchecked(
                 inner,
                 self._shape.clone(),
@@ -24,7 +24,8 @@ macro_rules! impl_unary_op {
     };
 }
 
-impl<S: Shape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
+impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, D: crate::tensor::device::Device, G: RequiresGrad> Tensor<S, B, K, D, G>
+{
     impl_unary_op!(
         /// Computes the absolute value of each element in the tensor.
         ///
@@ -84,8 +85,8 @@ impl<S: Shape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
     /// let sm = t.softmax(1).unwrap();
     /// ```
     #[inline]
-    pub fn softmax(&self, dim: usize) -> Result<Tensor<S, B, G>> {
-        let inner = B::softmax(&self.inner, dim)?;
+    pub fn softmax(&self, dim: usize) -> Result<Tensor<S, B, K, D, G>> {
+        let inner = B::softmax::<K>(&self.inner, dim)?;
         Ok(Tensor::from_parts_unchecked(
             inner,
             self._shape.clone(),
@@ -175,7 +176,8 @@ impl<S: Shape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
     /// let res = t.mul_scalar(3.0).unwrap(); // [3.0, 6.0]
     /// ```
     pub fn mul_scalar<Sc: Into<crate::tensor::backend::ScalarValue>>(&self, scalar: Sc) -> Result<Self> {
-        let inner = B::mul_scalar(&self.inner, scalar.into())?;
+        let scalar_val = scalar.into();
+        let inner = B::mul_scalar_float(&self.inner, scalar_val.to_f64())?;
         Ok(Tensor::from_parts_unchecked(
             inner,
             self._shape.clone(),
@@ -194,7 +196,8 @@ impl<S: Shape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
     /// let res = t.add_scalar(3.0).unwrap(); // [4.0, 5.0]
     /// ```
     pub fn add_scalar<Sc: Into<crate::tensor::backend::ScalarValue>>(&self, scalar: Sc) -> Result<Self> {
-        let inner = B::add_scalar(&self.inner, scalar.into())?;
+        let scalar_val = scalar.into();
+        let inner = B::add_scalar_float(&self.inner, scalar_val.to_f64())?;
         Ok(Tensor::from_parts_unchecked(
             inner,
             self._shape.clone(),
@@ -207,29 +210,29 @@ impl<S: Shape, B: Backend, G: RequiresGrad> Tensor<S, B, G> {
 
 macro_rules! impl_std_scalar_ops {
     ($t:ty) => {
-        impl<S: Shape, B: Backend, G: RequiresGrad> core::ops::Mul<$t> for Tensor<S, B, G> {
-            type Output = Tensor<S, B, G>;
+        impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, D: crate::tensor::device::Device, G: RequiresGrad> core::ops::Mul<$t> for Tensor<S, B, K, D, G> {
+            type Output = Tensor<S, B, K, D, G>;
             #[inline]
             fn mul(self, rhs: $t) -> Self::Output {
                 self.mul_scalar(rhs).unwrap()
             }
         }
-        impl<'a, S: Shape, B: Backend, G: RequiresGrad> core::ops::Mul<$t> for &'a Tensor<S, B, G> {
-            type Output = Tensor<S, B, G>;
+        impl<'a, S: Shape, B: Backend, K: crate::tensor::dtype::DType, D: crate::tensor::device::Device, G: RequiresGrad> core::ops::Mul<$t> for &'a Tensor<S, B, K, D, G> {
+            type Output = Tensor<S, B, K, D, G>;
             #[inline]
             fn mul(self, rhs: $t) -> Self::Output {
                 self.mul_scalar(rhs).unwrap()
             }
         }
-        impl<S: Shape, B: Backend, G: RequiresGrad> core::ops::Add<$t> for Tensor<S, B, G> {
-            type Output = Tensor<S, B, G>;
+        impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, D: crate::tensor::device::Device, G: RequiresGrad> core::ops::Add<$t> for Tensor<S, B, K, D, G> {
+            type Output = Tensor<S, B, K, D, G>;
             #[inline]
             fn add(self, rhs: $t) -> Self::Output {
                 self.add_scalar(rhs).unwrap()
             }
         }
-        impl<'a, S: Shape, B: Backend, G: RequiresGrad> core::ops::Add<$t> for &'a Tensor<S, B, G> {
-            type Output = Tensor<S, B, G>;
+        impl<'a, S: Shape, B: Backend, K: crate::tensor::dtype::DType, D: crate::tensor::device::Device, G: RequiresGrad> core::ops::Add<$t> for &'a Tensor<S, B, K, D, G> {
+            type Output = Tensor<S, B, K, D, G>;
             #[inline]
             fn add(self, rhs: $t) -> Self::Output {
                 self.add_scalar(rhs).unwrap()
