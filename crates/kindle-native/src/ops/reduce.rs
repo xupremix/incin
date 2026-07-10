@@ -3,7 +3,7 @@
 //! `mean_dim`/`mean_keepdim`/`max_dim`/`max_keepdim`/`min_dim`/`min_keepdim`/
 //! `max_all`/`min_all` (Phase 2, gradcheck-verified backward), and
 //! `argmax`/`argmin` (Phase 2, forward-only by structural design). Zero
-//! remaining `Err(Error::UnsupportedBackendOperation)` stubs.
+//! remaining unsupported-backend-operation error stubs.
 //!
 //! ## Design Notes
 //!
@@ -40,7 +40,7 @@
 //!   every-other-method unconditional-push convention).
 //!
 //! * Any leftover unimplemented method (there are none as of Phase 2) would
-//!   keep returning `Err(Error::UnsupportedBackendOperation)` — never a
+//!   keep returning the typed unsupported-backend-operation error — never a
 //!   silent `Ok(t.clone())` placeholder (T-01-15 mitigation).
 
 use kindle_core::err::Error;
