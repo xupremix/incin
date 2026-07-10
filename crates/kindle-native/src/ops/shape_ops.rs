@@ -426,7 +426,9 @@ mod tests {
     #[test]
     fn slice_matches_manual_sequential_narrow_calls() {
         let t = matrix(
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0],
+            vec![
+                1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0,
+            ],
             4,
             3,
         );
@@ -458,7 +460,9 @@ mod tests {
     #[test]
     fn slice_backward_zero_pads_grad_to_original_shape() {
         let t = matrix(
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0],
+            vec![
+                1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0,
+            ],
             4,
             3,
         );
@@ -477,7 +481,9 @@ mod tests {
     #[test]
     fn slice_out_of_bounds_range_returns_err_not_panic() {
         let t = matrix(
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0],
+            vec![
+                1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0,
+            ],
             4,
             3,
         );
