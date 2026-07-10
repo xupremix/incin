@@ -125,13 +125,25 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for NativeBacken
     }
 
     fn squeeze<K: DType>(
-        _t: &<Self as Backend>::Storage<K>,
-        _dim: usize,
+        t: &<Self as Backend>::Storage<K>,
+        dim: usize,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        Err(Error::UnsupportedBackendOperation {
-            op: "squeeze",
-            backend: "Native",
-        })
+        if dim >= t.shape.len() || t.shape[dim] != 1 {
+            return Err(Error::ShapeMismatch {
+                op: "squeeze",
+                expected: vec![1],
+                got: t.shape.clone(),
+                msg: format!(
+                    "squeeze requires axis {dim} to have size 1, got size {} in shape {:?}",
+                    t.shape.get(dim).copied().unwrap_or(0),
+                    t.shape
+                ),
+            });
+        }
+
+        let mut target_shape = t.shape.clone();
+        target_shape.remove(dim);
+        Self::reshape::<K>(t, &target_shape)
     }
 
     fn stack<K: DType>(
@@ -166,14 +178,28 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for NativeBacken
     }
 
     fn flatten<K: DType>(
-        _t: &<Self as Backend>::Storage<K>,
-        _start_dim: usize,
-        _end_dim: usize,
+        t: &<Self as Backend>::Storage<K>,
+        start_dim: usize,
+        end_dim: usize,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        Err(Error::UnsupportedBackendOperation {
-            op: "flatten",
-            backend: "Native",
-        })
+        if start_dim > end_dim || end_dim >= t.shape.len() {
+            return Err(Error::ShapeMismatch {
+                op: "flatten",
+                expected: t.shape.clone(),
+                got: vec![start_dim, end_dim],
+                msg: format!(
+                    "flatten(start_dim={start_dim}, end_dim={end_dim}) out of bounds for shape {:?}",
+                    t.shape
+                ),
+            });
+        }
+
+        let merged: usize = t.shape[start_dim..=end_dim].iter().product();
+        let mut target_shape = t.shape[..start_dim].to_vec();
+        target_shape.push(merged);
+        target_shape.extend_from_slice(&t.shape[end_dim + 1..]);
+
+        Self::reshape::<K>(t, &target_shape)
     }
 
     fn broadcast_left<K: DType>(
@@ -457,6 +483,82 @@ mod tests {
         );
         let result = TestBackend::slice::<f32>(&t, &[(1, 3), (0, 5)]);
         assert!(matches!(result, Err(Error::ShapeMismatch { .. })));
+    }
+
+    fn tensor3(v: Vec<f32>, d0: usize, d1: usize, d2: usize) -> NativeStorage {
+        NativeStorage::from_contiguous(NativeBuffer::F32(v), vec![d0, d1, d2])
+    }
+
+    /// Task 3 Test 1: `squeeze(t, 1)` on a `[3,1,4]` storage produces shape
+    /// `[3,4]` with unchanged (row-major) values.
+    #[test]
+    fn squeeze_removes_size_one_axis_and_preserves_values() {
+        let data: Vec<f32> = (1..=12).map(|x| x as f32).collect();
+        let t = tensor3(data.clone(), 3, 1, 4);
+        let out = TestBackend::squeeze::<f32>(&t, 1).unwrap();
+        assert_eq!(out.shape, vec![3, 4]);
+        assert_eq!(f32_vec(&out), data);
+    }
+
+    /// Task 3 Test 2: `squeeze(t, 0)` on a `[3,1,4]` storage (dim 0 has size
+    /// 3, not 1) returns a clear squeeze-specific `Error::ShapeMismatch`.
+    #[test]
+    fn squeeze_on_non_one_sized_axis_returns_shape_mismatch() {
+        let data: Vec<f32> = (1..=12).map(|x| x as f32).collect();
+        let t = tensor3(data, 3, 1, 4);
+        let result = TestBackend::squeeze::<f32>(&t, 0);
+        match result {
+            Err(Error::ShapeMismatch { op, .. }) => assert_eq!(op, "squeeze"),
+            other => panic!("expected squeeze-specific ShapeMismatch, got {other:?}"),
+        }
+    }
+
+    /// Task 3 Test 3: `squeeze`'s backward reshapes `grad_out` back to the
+    /// original `[3,1,4]` shape, delegated entirely to `reshape`'s backward.
+    #[test]
+    fn squeeze_backward_reshapes_grad_to_original_shape() {
+        let data: Vec<f32> = (1..=12).map(|x| x as f32).collect();
+        let t = tensor3(data, 3, 1, 4);
+        let out = TestBackend::squeeze::<f32>(&t, 1).unwrap();
+        let grads = tape::backward(&out).unwrap();
+        let g = grads.get(t.id).expect("t should have a gradient");
+        assert_eq!(g.shape, vec![3, 1, 4]);
+        assert_eq!(f32_vec(g), vec![1.0; 12]);
+    }
+
+    /// Task 3 Test 4: `flatten(t, 1, 2)` on a `[2,3,4]` storage produces
+    /// shape `[2,12]` (merging dims 1..=2).
+    #[test]
+    fn flatten_merges_middle_dims() {
+        let data: Vec<f32> = (1..=24).map(|x| x as f32).collect();
+        let t = tensor3(data.clone(), 2, 3, 4);
+        let out = TestBackend::flatten::<f32>(&t, 1, 2).unwrap();
+        assert_eq!(out.shape, vec![2, 12]);
+        assert_eq!(f32_vec(&out), data);
+    }
+
+    /// Task 3 Test 5: `flatten(t, 0, 2)` on a `[2,3,4]` storage (flattening
+    /// all dims) produces shape `[24]`.
+    #[test]
+    fn flatten_all_dims_produces_1d_shape() {
+        let data: Vec<f32> = (1..=24).map(|x| x as f32).collect();
+        let t = tensor3(data.clone(), 2, 3, 4);
+        let out = TestBackend::flatten::<f32>(&t, 0, 2).unwrap();
+        assert_eq!(out.shape, vec![24]);
+        assert_eq!(f32_vec(&out), data);
+    }
+
+    /// Task 3 Test 6: `flatten`'s backward reshapes `grad_out` back to the
+    /// original shape, delegated entirely to `reshape`'s backward.
+    #[test]
+    fn flatten_backward_reshapes_grad_to_original_shape() {
+        let data: Vec<f32> = (1..=24).map(|x| x as f32).collect();
+        let t = tensor3(data, 2, 3, 4);
+        let out = TestBackend::flatten::<f32>(&t, 1, 2).unwrap();
+        let grads = tape::backward(&out).unwrap();
+        let g = grads.get(t.id).expect("t should have a gradient");
+        assert_eq!(g.shape, vec![2, 3, 4]);
+        assert_eq!(f32_vec(g), vec![1.0; 24]);
     }
 
     /// Test 6: `TensorOps::matmul` called through the trait on two rank-2
