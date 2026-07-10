@@ -7,16 +7,22 @@
 //! `TapeEntry`, the backward gradient through MSE is automatically correct
 //! by composition without any additional code here (T-01-17 mitigation).
 //!
-//! `l1_loss`, `bce_with_logits_loss`, and `cross_entropy_loss` are
-//! `unimplemented!()` stubs matching `CandleBackend`'s exact convention for
-//! the same three methods — they are out of Phase 1 scope per the Minimal
-//! Phase 1 Op Set table and are not reachable by `Linear::forward` +
-//! `mse_loss`'s actual call graph.
+//! `cross_entropy_loss` (Plan 04-01 Task 2): numerically-stable implementation
+//! using the shared `log_softmax` kernel (D-02) plus a one-hot-multiply
+//! target gather.  The one-hot buffer is a constant w.r.t. the loss (it holds
+//! integer-derived zeros/ones, not a differentiable value), so it does NOT
+//! need a tape entry.  The gradient flows through `log_probs` → `mul` →
+//! `sum_dim` → `neg` → Reduction dispatch, all already-tape-tracked, so no
+//! hand-derived backward is written here.
+//!
+//! `l1_loss` and `bce_with_logits_loss` remain `unimplemented!()` stubs —
+//! out of Plan 04-01's scope; they are addressed in Plans 04-02 and 04-03.
 
 use kindle_core::nn::Reduction;
-use kindle_core::prelude::{Backend, DType, LossOps, NumericOps, ReductionOps, Result};
+use kindle_core::prelude::{Backend, DType, FloatOps, LossOps, NumericOps, ReductionOps, Result};
 
 use crate::NativeBackend;
+use crate::storage::{NativeBuffer, NativeStorage};
 
 impl<T: DType, D: kindle_core::prelude::Device> LossOps<Self> for NativeBackend<T, D> {
     /// Mean (or sum, or elementwise) squared error, composed from
@@ -55,12 +61,74 @@ impl<T: DType, D: kindle_core::prelude::Device> LossOps<Self> for NativeBackend<
         unimplemented!("bce_with_logits_loss not implemented for NativeBackend")
     }
 
+    /// Numerically-stable cross-entropy loss via the shared `log_softmax`
+    /// kernel (D-02, Plan 04-01).
+    ///
+    /// `pred`   — logit matrix, shape `[Batch, Classes]`
+    /// `target` — integer class indices held as `f64` in an
+    ///            `I64`-typed `NativeStorage`, shape `[Batch]`.
+    ///            Each value `target[b]` is read as `… as i64 as usize`
+    ///            (matching the existing codebase convention from
+    ///            `argmax`/`argmin`/`embedding` — Pitfall 8).
+    ///
+    /// Algorithm:
+    /// 1. `log_probs = log_softmax(pred, class_dim=1)` — tape-tracked via the
+    ///    shared kernel (max_keepdim/sub/exp/sum_keepdim/log/sub composition).
+    /// 2. Build a `one_hot` constant buffer (same shape as `pred`) with `1.0`
+    ///    at `[b, target[b]]`, `0.0` elsewhere.  Not tape-tracked (it is a
+    ///    constant w.r.t. the gradient, derived from integer labels).
+    /// 3. `picked  = log_probs * one_hot` — tape-tracked `mul`.
+    /// 4. `per_nll = -sum_dim(picked, 1)` — shape `[Batch]`.
+    /// 5. Dispatch on `reduction`: mean / sum / none.
     fn cross_entropy_loss<K: DType, KInt: DType>(
-        _pred: &<Self as Backend>::Storage<K>,
-        _target: &<Self as Backend>::Storage<K>,
-        _reduction: Reduction,
+        pred: &<Self as Backend>::Storage<K>,
+        target: &<Self as Backend>::Storage<KInt>,
+        reduction: Reduction,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        unimplemented!("cross_entropy_loss not implemented for NativeBackend")
+        debug_assert_eq!(
+            pred.shape.len(),
+            2,
+            "cross_entropy_loss: pred must be 2-D [Batch, Classes], got {:?}",
+            pred.shape
+        );
+        let batch = pred.shape[0];
+        let classes = pred.shape[1];
+
+        // Step 1: log_softmax over the class dimension (axis 1).
+        let log_probs = crate::ops::elementwise::log_softmax::<T, D, K>(pred, 1)?;
+
+        // Step 2: Build one-hot constant. Read target indices as i64→usize
+        // (Pitfall 8 convention). No tape entry — it's a constant.
+        let mut one_hot_buf = vec![0.0f32; batch * classes];
+        for b in 0..batch {
+            let class_idx = target.get(&[b]) as i64 as usize;
+            debug_assert!(
+                class_idx < classes,
+                "cross_entropy_loss: target[{b}]={class_idx} out of range [0,{classes})"
+            );
+            one_hot_buf[b * classes + class_idx] = 1.0;
+        }
+        // Transmit one_hot as the same dtype K by reading through f32 bytes.
+        // Since K is the float dtype of pred (typically f32), and NativeBuffer::F32
+        // is what get() always reads as f64, we build it as F32 and let the
+        // type system treat it as K-typed (NativeStorage is untyped at the
+        // buffer level — `get()` always returns f64 regardless of K).
+        let one_hot =
+            NativeStorage::from_contiguous(NativeBuffer::F32(one_hot_buf), vec![batch, classes]);
+
+        // Step 3: tape-tracked mul — gradient flows through log_probs here.
+        let picked = <Self as NumericOps<Self>>::mul::<K>(&log_probs, &one_hot)?;
+
+        // Step 4: sum over class axis → shape [Batch], then negate.
+        let sum_picked = <Self as ReductionOps<Self>>::sum_dim::<K>(&picked, 1)?;
+        let per_nll = <Self as FloatOps<Self>>::neg::<K>(&sum_picked)?;
+
+        // Step 5: reduce per Reduction.
+        match reduction {
+            Reduction::Mean => <Self as ReductionOps<Self>>::mean_all::<K>(&per_nll),
+            Reduction::Sum => <Self as ReductionOps<Self>>::sum_all::<K>(&per_nll),
+            Reduction::None => Ok(per_nll),
+        }
     }
 }
 
@@ -73,11 +141,18 @@ mod tests {
     use super::*;
     use crate::storage::{NativeBuffer, NativeStorage};
     use crate::tape;
+    use crate::testutil::gradcheck;
 
     type B = NativeBackend<f32, kindle_core::prelude::Cpu>;
 
     fn matrix(v: Vec<f32>, rows: usize, cols: usize) -> NativeStorage {
         NativeStorage::from_contiguous(NativeBuffer::F32(v), vec![rows, cols])
+    }
+
+    fn vector_i64(v: Vec<i64>) -> NativeStorage {
+        let n = v.len();
+        let floats: Vec<f32> = v.iter().map(|&x| x as f32).collect();
+        NativeStorage::from_contiguous(NativeBuffer::F32(floats), vec![n])
     }
 
     fn f32_vec(s: &NativeStorage) -> Vec<f32> {
@@ -86,11 +161,6 @@ mod tests {
             _ => panic!("expected F32 buffer"),
         }
     }
-
-    // pred = [[1, 2, 3], [4, 5, 6]], target = [[1, 1, 1], [2, 2, 2]]
-    // diff = [[0, 1, 2], [2, 3, 4]]
-    // sq   = [[0, 1, 4], [4, 9, 16]]
-    // sum  = 34,  mean = 34/6 ≈ 5.666…
 
     fn pred() -> NativeStorage {
         matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3)
@@ -105,7 +175,6 @@ mod tests {
         let out = B::mse_loss::<f32>(&pred(), &target(), Reduction::Mean).unwrap();
         assert_eq!(out.shape, Vec::<usize>::new()); // scalar
         let v = out.get(&[]);
-        // 34 / 6 ≈ 5.6667
         assert!((v - 34.0 / 6.0).abs() < 1e-4, "mse mean: got {v}");
     }
 
@@ -121,7 +190,6 @@ mod tests {
     fn mse_loss_none_produces_elementwise_squared_diff() {
         let out = B::mse_loss::<f32>(&pred(), &target(), Reduction::None).unwrap();
         assert_eq!(out.shape, vec![2, 3]);
-        // diff^2 = [[0, 1, 4], [4, 9, 16]]
         let got = f32_vec(&out);
         let expected = vec![0.0f32, 1.0, 4.0, 4.0, 9.0, 16.0];
         for (g, e) in got.iter().zip(expected.iter()) {
@@ -131,10 +199,6 @@ mod tests {
 
     #[test]
     fn mse_loss_mean_backward_matches_analytic_formula_2_times_pred_minus_target_over_n() {
-        // Analytic MSE gradient w.r.t. pred: d(MSE)/d(pred_i) = 2*(pred_i - target_i)/n
-        // For our example with n=6:
-        // diff = [[0, 1, 2], [2, 3, 4]]
-        // grad = 2 * diff / 6 = [[0, 1/3, 2/3], [2/3, 1, 4/3]]
         let p = pred();
         let t = target();
         let pred_id = p.id;
@@ -153,7 +217,7 @@ mod tests {
         }
     }
 
-    // --- #[should_panic] tests for the three stub methods ---
+    // --- #[should_panic] tests for the two remaining stub methods ---
 
     #[test]
     #[should_panic(expected = "l1_loss not implemented for NativeBackend")]
@@ -167,9 +231,153 @@ mod tests {
         let _ = B::bce_with_logits_loss::<f32>(&pred(), &target(), Reduction::Mean);
     }
 
+    // ---------------------------------------------------------------------------
+    // cross_entropy_loss tests (Plan 04-01 Task 2)
+    // ---------------------------------------------------------------------------
+
+    /// Hand-compute expected log_softmax for a [2,3] pred.
+    fn cross_pred() -> NativeStorage {
+        matrix(vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3)
+    }
+
+    /// target = [0, 2] as I64-typed (class 0 for sample 0, class 2 for sample 1)
+    fn cross_target_0_2() -> NativeStorage {
+        vector_i64(vec![0, 2])
+    }
+
+    fn log_softmax_row(row: &[f32]) -> Vec<f32> {
+        let max = row.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+        let shifted: Vec<f32> = row.iter().map(|x| x - max).collect();
+        let sum_exp: f32 = shifted.iter().map(|x| x.exp()).sum();
+        let log_sum_exp = sum_exp.ln();
+        shifted.iter().map(|x| x - log_sum_exp).collect()
+    }
+
+    fn expected_ce_mean(pred_rows: &[&[f32]], targets: &[usize]) -> f32 {
+        let n = pred_rows.len() as f32;
+        pred_rows
+            .iter()
+            .zip(targets.iter())
+            .map(|(row, &t)| {
+                let ls = log_softmax_row(row);
+                -ls[t]
+            })
+            .sum::<f32>()
+            / n
+    }
+
     #[test]
-    #[should_panic(expected = "cross_entropy_loss not implemented for NativeBackend")]
-    fn cross_entropy_loss_panics_with_expected_message() {
-        let _ = B::cross_entropy_loss::<f32, i64>(&pred(), &target(), Reduction::Mean);
+    fn cross_entropy_loss_mean_matches_hand_computed_nll() {
+        let pred_row0 = [1.0f32, 2.0, 3.0];
+        let pred_row1 = [4.0f32, 5.0, 6.0];
+        let expected = expected_ce_mean(&[&pred_row0, &pred_row1], &[0, 2]);
+
+        let out =
+            B::cross_entropy_loss::<f32, i64>(&cross_pred(), &cross_target_0_2(), Reduction::Mean)
+                .unwrap();
+        assert_eq!(
+            out.shape,
+            Vec::<usize>::new(),
+            "Mean output should be scalar"
+        );
+        let got = out.get(&[]) as f32;
+        assert!(
+            (got - expected).abs() < 1e-4,
+            "CE mean: got {got:.6}, expected {expected:.6}"
+        );
+    }
+
+    #[test]
+    fn cross_entropy_loss_sum_equals_batch_times_mean() {
+        let mean_out =
+            B::cross_entropy_loss::<f32, i64>(&cross_pred(), &cross_target_0_2(), Reduction::Mean)
+                .unwrap();
+        let sum_out =
+            B::cross_entropy_loss::<f32, i64>(&cross_pred(), &cross_target_0_2(), Reduction::Sum)
+                .unwrap();
+
+        let mean_val = mean_out.get(&[]) as f32;
+        let sum_val = sum_out.get(&[]) as f32;
+        assert!(
+            (sum_val - 2.0 * mean_val).abs() < 1e-4,
+            "CE sum should be 2 * mean: sum={sum_val:.6}, 2*mean={:.6}",
+            2.0 * mean_val
+        );
+    }
+
+    #[test]
+    fn cross_entropy_loss_none_produces_per_sample_nll_vector() {
+        let out =
+            B::cross_entropy_loss::<f32, i64>(&cross_pred(), &cross_target_0_2(), Reduction::None)
+                .unwrap();
+        assert_eq!(out.shape, vec![2], "None output should be [Batch]");
+        let vals = f32_vec(&out);
+
+        let pred_row0 = [1.0f32, 2.0, 3.0];
+        let pred_row1 = [4.0f32, 5.0, 6.0];
+        let exp0 = -log_softmax_row(&pred_row0)[0];
+        let exp1 = -log_softmax_row(&pred_row1)[2];
+
+        assert!(
+            (vals[0] - exp0).abs() < 1e-4,
+            "per-sample[0]: got {:.6}, expected {exp0:.6}",
+            vals[0]
+        );
+        assert!(
+            (vals[1] - exp1).abs() < 1e-4,
+            "per-sample[1]: got {:.6}, expected {exp1:.6}",
+            vals[1]
+        );
+    }
+
+    #[test]
+    fn cross_entropy_loss_gradcheck() {
+        let tgt = cross_target_0_2();
+        let op = |inputs: &[NativeStorage]| -> NativeStorage {
+            B::cross_entropy_loss::<f32, i64>(&inputs[0], &tgt, Reduction::Mean).unwrap()
+        };
+        let max_rel_err = gradcheck(op, &[cross_pred()], 1e-4);
+        assert!(
+            max_rel_err < 1e-2,
+            "cross_entropy_loss gradcheck error too high: {max_rel_err:.6}"
+        );
+    }
+
+    #[test]
+    fn cross_entropy_loss_finite_on_extreme_logits() {
+        let pred_extreme = matrix(vec![1000.0f32, -1000.0, 0.0, -1000.0, 1000.0, 0.0], 2, 3);
+        let target = vector_i64(vec![0, 1]);
+        let out =
+            B::cross_entropy_loss::<f32, i64>(&pred_extreme, &target, Reduction::Mean).unwrap();
+        let loss_val = out.get(&[]) as f32;
+        assert!(
+            loss_val.is_finite(),
+            "CE loss should be finite on extreme logits: {loss_val}"
+        );
+
+        let grads = tape::backward(&out).unwrap();
+        let g = grads
+            .get(pred_extreme.id)
+            .expect("pred should have gradient");
+        for (i, v) in f32_vec(g).iter().enumerate() {
+            assert!(
+                v.is_finite(),
+                "CE backward grad[{i}] should be finite on extreme logits: {v}"
+            );
+        }
+    }
+
+    #[test]
+    fn cross_entropy_loss_uniform_logits_equal_log_num_classes() {
+        let pred_uniform = matrix(vec![5.0f32, 5.0, 5.0, 5.0, 5.0, 5.0], 2, 3);
+        let target = vector_i64(vec![0, 1]);
+        let out =
+            B::cross_entropy_loss::<f32, i64>(&pred_uniform, &target, Reduction::Mean).unwrap();
+        let loss_val = out.get(&[]) as f32;
+        let expected = 3.0f32.ln();
+        assert!(
+            (loss_val - expected).abs() < 1e-4,
+            "CE on uniform logits should be ln(3)={expected:.6}: got {loss_val:.6}"
+        );
     }
 }

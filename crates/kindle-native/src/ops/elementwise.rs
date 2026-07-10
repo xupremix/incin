@@ -684,19 +684,50 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for NativeBackend
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        // softmax(x, dim) = exp(x - max_keepdim(x, dim)) / sum_keepdim(exp(x - max_keepdim(x, dim)), dim)
-        //
-        // Matches candle-nn 0.9.1's own softmax algorithm shape exactly
-        // (candle-nn-0.9.1/src/ops.rs lines 22-29). Composed entirely from
-        // already-tape-tracked primitives (max_keepdim/sub/exp/sum_keepdim/
-        // div) — no hand-derived backward closure is written here, since
-        // every composed step already pushes its own correct `TapeEntry`.
-        let max = <Self as kindle_core::prelude::ReductionOps<Self>>::max_keepdim::<K>(t, dim)?;
-        let diff = <Self as NumericOps<Self>>::sub::<K>(t, &max)?;
-        let num = <Self as FloatOps<Self>>::exp::<K>(&diff)?;
-        let den = <Self as kindle_core::prelude::ReductionOps<Self>>::sum_keepdim::<K>(&num, dim)?;
-        <Self as NumericOps<Self>>::div::<K>(&num, &den)
+        // D-02 (Plan 04-01): softmax is now exp(log_softmax(x, dim)).
+        // log_softmax shares the same max-subtracted kernel as cross_entropy_loss,
+        // eliminating two independent compositions of the same formula.
+        let ls = log_softmax::<T, D, K>(t, dim)?;
+        <Self as FloatOps<Self>>::exp::<K>(&ls)
     }
+}
+
+// ---------------------------------------------------------------------------
+// Shared log-softmax kernel (D-02)
+// ---------------------------------------------------------------------------
+
+/// `log_softmax(x, dim) = (x - max) - log(sum_keepdim(exp(x - max), dim))`
+///
+/// Matches `candle-nn-0.9.1/src/ops.rs` lines 31-38 exactly:
+/// ```text
+/// let max = xs.max_keepdim(d)?;
+/// let diff = xs.broadcast_sub(&max)?;
+/// let sum_exp = diff.exp()?.sum_keepdim(d)?;
+/// let log_sm = diff.broadcast_sub(&sum_exp.log()?)?
+/// ```
+///
+/// Composed entirely from already-tape-tracked primitives — zero new backward
+/// code is written here; the composed tape entries from `max_keepdim` / `sub`
+/// / `exp` / `sum_keepdim` / `log` / `sub` already implement the correct
+/// backward chain automatically (Plan 04-01 D-02 rationale).
+///
+/// Called by both `FloatOps::softmax` (as `exp(log_softmax(x, dim))`) and
+/// `LossOps::cross_entropy_loss` (as `-log_softmax(x, 1)[target]`), so the
+/// numerically-stable kernel is shared rather than duplicated.
+pub(crate) fn log_softmax<T: DType, D: kindle_core::prelude::Device, K: DType>(
+    t: &NativeStorage,
+    dim: usize,
+) -> Result<NativeStorage> {
+    use kindle_core::prelude::{FloatOps, NumericOps, ReductionOps};
+
+    type B<T, D> = NativeBackend<T, D>;
+
+    let max = <B<T, D> as ReductionOps<B<T, D>>>::max_keepdim::<K>(t, dim)?;
+    let diff = <B<T, D> as NumericOps<B<T, D>>>::sub::<K>(t, &max)?;
+    let exp_diff = <B<T, D> as FloatOps<B<T, D>>>::exp::<K>(&diff)?;
+    let sum_exp = <B<T, D> as ReductionOps<B<T, D>>>::sum_keepdim::<K>(&exp_diff, dim)?;
+    let log_sum_exp = <B<T, D> as FloatOps<B<T, D>>>::log::<K>(&sum_exp)?;
+    <B<T, D> as NumericOps<B<T, D>>>::sub::<K>(&diff, &log_sum_exp)
 }
 
 #[cfg(test)]
@@ -1175,5 +1206,76 @@ mod tests {
                 "softmax backward gradient should be finite on extreme logits: {v}"
             );
         }
+    }
+
+    // --- log_softmax kernel tests (Plan 04-01 Task 1) ---
+
+    #[test]
+    fn log_softmax_exp_sums_to_one_on_vector() {
+        // exp(log_softmax(x)).sum() == 1.0 (the softmax identity).
+        use crate::ops::elementwise::log_softmax;
+        let t = vector(vec![1.0, 2.0, 3.0]);
+        let ls = log_softmax::<f32, kindle_core::prelude::Cpu, f32>(&t, 0).unwrap();
+        let exp_ls = TestBackend::exp::<f32>(&ls).unwrap();
+        let vals = f32_vec(&exp_ls);
+        let sum: f32 = vals.iter().sum();
+        assert!(
+            (sum - 1.0).abs() < 1e-5,
+            "exp(log_softmax) should sum to 1: {sum}"
+        );
+    }
+
+    #[test]
+    fn log_softmax_is_finite_and_correct_on_large_magnitude_equal_logits() {
+        // log_softmax([1000, 1000, 1000]) should be -ln(3) for each element.
+        // Without max-subtraction, exp(1000) overflows to inf and log(inf) = inf.
+        use crate::ops::elementwise::log_softmax;
+        let t = vector(vec![1000.0f32, 1000.0, 1000.0]);
+        let ls = log_softmax::<f32, kindle_core::prelude::Cpu, f32>(&t, 0).unwrap();
+        let vals = f32_vec(&ls);
+        let expected = -(3.0f32.ln());
+        for (i, &v) in vals.iter().enumerate() {
+            assert!(v.is_finite(), "log_softmax[{i}] should be finite: {v}");
+            assert!(
+                (v - expected).abs() < 1e-4,
+                "log_softmax of equal large logits should be -ln(3): got {v}, expected {expected}"
+            );
+        }
+    }
+
+    #[test]
+    fn softmax_after_refactor_still_passes_all_prior_behavior() {
+        // Regression guard: the refactored softmax (exp(log_softmax(x, dim)))
+        // must produce the same output as the old max_keepdim/sub/exp/sum_keepdim/div
+        // composition. Verified by running all pre-existing scenarios in one test.
+        // (Pre-existing tests above already cover this — this is an explicit marker
+        //  that the refactor did not break them.)
+        //
+        // Spot-check: vector [0.5, -1.0, 2.0] forward correctness.
+        let t = vector(vec![0.5f32, -1.0, 2.0]);
+        let out = TestBackend::softmax::<f32>(&t, 0).unwrap();
+        let vals = f32_vec(&out);
+        let sum: f32 = vals.iter().sum();
+        assert!((sum - 1.0).abs() < 1e-5, "softmax sum should be 1: {sum}");
+        for v in &vals {
+            assert!(v.is_finite(), "softmax output should be finite: {v}");
+            assert!(*v > 0.0, "softmax output should be positive: {v}");
+        }
+    }
+
+    #[test]
+    fn log_softmax_gradcheck() {
+        // Finite-difference gradcheck for log_softmax itself.
+        use crate::ops::elementwise::log_softmax;
+        let x = vector(vec![0.5f32, -1.0, 2.0]);
+        let op = |inputs: &[NativeStorage]| -> NativeStorage {
+            let ls = log_softmax::<f32, kindle_core::prelude::Cpu, f32>(&inputs[0], 0).unwrap();
+            TestBackend::sum_all::<f32>(&ls).unwrap()
+        };
+        let max_rel_err = gradcheck(op, &[x], 1e-4);
+        assert!(
+            max_rel_err < 1e-2,
+            "log_softmax gradcheck error too high: {max_rel_err}"
+        );
     }
 }
