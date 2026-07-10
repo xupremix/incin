@@ -330,7 +330,7 @@ impl NativeStorage {
 
 /// Increment a row-major multi-index in place (odometer-style), matching the
 /// iteration order `contiguous_strides` assumes.
-fn increment_index(idx: &mut [usize], shape: &[usize]) {
+pub(crate) fn increment_index(idx: &mut [usize], shape: &[usize]) {
     for i in (0..idx.len()).rev() {
         idx[i] += 1;
         if idx[i] < shape[i] {

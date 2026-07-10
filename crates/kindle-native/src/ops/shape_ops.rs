@@ -16,7 +16,7 @@ use kindle_core::prelude::{Backend, DType, KindleDType, Result, TensorOps};
 
 use crate::NativeBackend;
 use crate::ops::matmul::{batched_matmul_impl, matmul_impl};
-use crate::storage::NativeStorage;
+use crate::storage::{NativeBuffer, NativeStorage};
 use crate::tape::{self, TapeEntry};
 
 impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for NativeBackend<T, D> {
@@ -157,13 +157,162 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for NativeBacken
     }
 
     fn concat<K: DType>(
-        _t: &[&<Self as Backend>::Storage<K>],
-        _dim: usize,
+        tensors: &[&<Self as Backend>::Storage<K>],
+        dim: usize,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        Err(Error::UnsupportedBackendOperation {
-            op: "concat",
-            backend: "Native",
-        })
+        if tensors.is_empty() {
+            return Err(Error::ShapeMismatch {
+                op: "concat",
+                expected: vec![],
+                got: vec![],
+                msg: "concat requires at least one input tensor".to_string(),
+            });
+        }
+
+        let rank = tensors[0].shape.len();
+        if dim >= rank {
+            return Err(Error::ShapeMismatch {
+                op: "concat",
+                expected: tensors[0].shape.clone(),
+                got: vec![dim],
+                msg: format!(
+                    "concat dim {dim} out of range for rank-{rank} shape {:?}",
+                    tensors[0].shape
+                ),
+            });
+        }
+
+        for t in tensors.iter().skip(1) {
+            if t.shape.len() != rank {
+                return Err(Error::ShapeMismatch {
+                    op: "concat",
+                    expected: tensors[0].shape.clone(),
+                    got: t.shape.clone(),
+                    msg: format!(
+                        "concat requires every input to have the same rank; expected rank {rank}, got shape {:?}",
+                        t.shape
+                    ),
+                });
+            }
+            // Every axis EXCEPT `dim` must match EXACTLY — never
+            // broadcast-compatible (Pitfall 5: a size-1-vs-larger mismatch
+            // here must be REJECTED, not silently accepted the way
+            // stride::broadcast_shape would treat it).
+            for (axis, (&a, &b)) in tensors[0].shape.iter().zip(t.shape.iter()).enumerate() {
+                if axis != dim && a != b {
+                    return Err(Error::ShapeMismatch {
+                        op: "concat",
+                        expected: tensors[0].shape.clone(),
+                        got: t.shape.clone(),
+                        msg: format!(
+                            "concat requires exact equality on every non-concat axis; axis {axis} has size {a} vs {b}"
+                        ),
+                    });
+                }
+            }
+        }
+
+        let mut out_shape = tensors[0].shape.clone();
+        out_shape[dim] = tensors.iter().map(|t| t.shape[dim]).sum();
+        let out_strides = crate::stride::contiguous_strides(&out_shape);
+        let total: usize = out_shape.iter().product();
+
+        // Cumulative offset of each input along `dim`, needed by both the
+        // forward copy and the backward narrow-based scatter.
+        let mut cumulative_offsets = Vec::with_capacity(tensors.len());
+        let mut running = 0usize;
+        for t in tensors.iter() {
+            cumulative_offsets.push(running);
+            running += t.shape[dim];
+        }
+
+        macro_rules! concat_variant {
+            ($variant:ident, $ty:ty) => {{
+                let mut out: Vec<$ty> = vec![Default::default(); total];
+                for (t, &offset) in tensors.iter().zip(cumulative_offsets.iter()) {
+                    // Read this input through ITS OWN strides directly — no
+                    // prior `.contiguous()` materialization.
+                    let value_count: usize = t.shape.iter().product();
+                    let mut multi_idx = vec![0usize; t.shape.len()];
+                    for _ in 0..value_count {
+                        let mut flat_dest = 0usize;
+                        for (axis, &i) in multi_idx.iter().enumerate() {
+                            let dest_i = if axis == dim { i + offset } else { i };
+                            flat_dest += dest_i * out_strides[axis];
+                        }
+                        out[flat_dest] = t.get(&multi_idx) as $ty;
+                        crate::storage::increment_index(&mut multi_idx, &t.shape);
+                    }
+                }
+                NativeBuffer::$variant(out)
+            }};
+        }
+
+        let new_buffer = match &*tensors[0].buffer {
+            NativeBuffer::F32(_) => concat_variant!(F32, f32),
+            NativeBuffer::F64(_) => concat_variant!(F64, f64),
+            NativeBuffer::U8(_) => concat_variant!(U8, u8),
+            NativeBuffer::U32(_) => concat_variant!(U32, u32),
+            NativeBuffer::I64(_) => concat_variant!(I64, i64),
+            NativeBuffer::F16(_) => {
+                let mut out: Vec<half::f16> = vec![half::f16::from_f64(0.0); total];
+                for (t, &offset) in tensors.iter().zip(cumulative_offsets.iter()) {
+                    let value_count: usize = t.shape.iter().product();
+                    let mut multi_idx = vec![0usize; t.shape.len()];
+                    for _ in 0..value_count {
+                        let mut flat_dest = 0usize;
+                        for (axis, &i) in multi_idx.iter().enumerate() {
+                            let dest_i = if axis == dim { i + offset } else { i };
+                            flat_dest += dest_i * out_strides[axis];
+                        }
+                        out[flat_dest] = half::f16::from_f64(t.get(&multi_idx));
+                        crate::storage::increment_index(&mut multi_idx, &t.shape);
+                    }
+                }
+                NativeBuffer::F16(out)
+            }
+            NativeBuffer::BF16(_) => {
+                let mut out: Vec<half::bf16> = vec![half::bf16::from_f64(0.0); total];
+                for (t, &offset) in tensors.iter().zip(cumulative_offsets.iter()) {
+                    let value_count: usize = t.shape.iter().product();
+                    let mut multi_idx = vec![0usize; t.shape.len()];
+                    for _ in 0..value_count {
+                        let mut flat_dest = 0usize;
+                        for (axis, &i) in multi_idx.iter().enumerate() {
+                            let dest_i = if axis == dim { i + offset } else { i };
+                            flat_dest += dest_i * out_strides[axis];
+                        }
+                        out[flat_dest] = half::bf16::from_f64(t.get(&multi_idx));
+                        crate::storage::increment_index(&mut multi_idx, &t.shape);
+                    }
+                }
+                NativeBuffer::BF16(out)
+            }
+        };
+
+        let out = NativeStorage::from_contiguous(new_buffer, out_shape);
+
+        let out_id = out.id;
+        let input_ids: Vec<_> = tensors.iter().map(|t| t.id).collect();
+        let input_dim_sizes: Vec<usize> = tensors.iter().map(|t| t.shape[dim]).collect();
+        let offsets = cumulative_offsets.clone();
+        tape::push(TapeEntry {
+            output_id: out_id,
+            input_ids,
+            backward: Box::new(move |grad_out: &NativeStorage| {
+                offsets
+                    .iter()
+                    .zip(input_dim_sizes.iter())
+                    .map(|(&offset, &len)| {
+                        grad_out
+                            .narrow(dim, offset, len)
+                            .expect("concat backward: narrow of grad_out at a valid cumulative offset cannot fail")
+                    })
+                    .collect()
+            }),
+        });
+
+        Ok(out)
     }
 
     fn slice<K: DType>(
@@ -262,7 +411,6 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for NativeBacken
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::NativeBuffer;
 
     type TestBackend = NativeBackend<f32, kindle_core::prelude::Cpu>;
 
@@ -601,5 +749,127 @@ mod tests {
         let via_trait = TestBackend::matmul::<f32>(&lhs, &rhs).unwrap();
         assert_eq!(via_trait.shape, direct.shape);
         assert_eq!(f32_vec(&via_trait), f32_vec(&direct));
+    }
+
+    /// Task 1 Test 1: `concat(&[a, b], 0)` where `a` is `[2,3]` and `b` is
+    /// `[3,3]` produces shape `[5,3]`, rows 0-1 matching `a`, rows 2-4
+    /// matching `b`.
+    #[test]
+    fn concat_dim0_stacks_rows_in_input_order() {
+        let a = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
+        let b = matrix(
+            vec![7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0],
+            3,
+            3,
+        );
+        let out = TestBackend::concat::<f32>(&[&a, &b], 0).unwrap();
+        assert_eq!(out.shape, vec![5, 3]);
+        assert_eq!(
+            f32_vec(&out),
+            vec![
+                1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0
+            ]
+        );
+    }
+
+    /// Task 1 Test 2: `concat(&[a, b], 1)` where `a` is `[2,3]` and `b` is
+    /// `[2,2]` produces shape `[2,5]`, columns correctly interleaved by row.
+    #[test]
+    fn concat_dim1_interleaves_columns_by_row() {
+        let a = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
+        let b = matrix(vec![7.0, 8.0, 9.0, 10.0], 2, 2);
+        let out = TestBackend::concat::<f32>(&[&a, &b], 1).unwrap();
+        assert_eq!(out.shape, vec![2, 5]);
+        assert_eq!(
+            f32_vec(&out),
+            vec![1.0, 2.0, 3.0, 7.0, 8.0, 4.0, 5.0, 6.0, 9.0, 10.0]
+        );
+    }
+
+    /// Task 1 Test 3 (Pitfall 5 regression): a size-1-vs-size-larger
+    /// mismatch at a NON-concat axis is REJECTED with `Err(ShapeMismatch)`,
+    /// proving the validation uses exact equality, not
+    /// `stride::broadcast_shape`'s size-1-is-compatible-with-anything rule.
+    #[test]
+    fn concat_rejects_non_concat_axis_size_mismatch_even_when_broadcast_compatible() {
+        // a: [3,1], b: [3,4] -- dim 1 sizes differ (1 vs 4), concatenating on
+        // dim 0. stride::broadcast_shape would treat size-1 as compatible
+        // with anything; concat must NOT.
+        let a = matrix(vec![1.0, 2.0, 3.0], 3, 1);
+        let b = matrix(
+            vec![
+                1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0,
+            ],
+            3,
+            4,
+        );
+        let result = TestBackend::concat::<f32>(&[&a, &b], 0);
+        assert!(matches!(result, Err(Error::ShapeMismatch { .. })));
+    }
+
+    /// Task 1 Test 4: `concat(&[], 0)` (empty input list) returns
+    /// `Err(Error::ShapeMismatch)`, not a panic.
+    #[test]
+    fn concat_empty_input_list_returns_err_not_panic() {
+        let result: Result<NativeStorage> = TestBackend::concat::<f32>(&[], 0);
+        assert!(matches!(result, Err(Error::ShapeMismatch { .. })));
+    }
+
+    /// Task 1 Test 5: `concat` called with `dim >= rank` returns
+    /// `Err(Error::ShapeMismatch)`.
+    #[test]
+    fn concat_dim_out_of_bounds_returns_err() {
+        let a = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
+        let b = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
+        let result = TestBackend::concat::<f32>(&[&a, &b], 2);
+        assert!(matches!(result, Err(Error::ShapeMismatch { .. })));
+    }
+
+    /// Task 1 Test 6: `concat`'s backward correctly narrows `grad_out` back
+    /// to each input's own shape at its cumulative `dim`-offset, with 2
+    /// inputs of DIFFERENT sizes along the concat dim.
+    #[test]
+    fn concat_backward_narrows_grad_to_each_inputs_own_shape_and_values() {
+        let a = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
+        let b = matrix(
+            vec![7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0],
+            3,
+            3,
+        );
+        let out = TestBackend::concat::<f32>(&[&a, &b], 0).unwrap();
+        let grads = tape::backward(&out).unwrap();
+
+        let ga = grads.get(a.id).expect("a should have a gradient");
+        assert_eq!(ga.shape, vec![2, 3]);
+        for r in 0..2 {
+            for c in 0..3 {
+                assert_eq!(ga.get(&[r, c]), 1.0);
+            }
+        }
+
+        let gb = grads.get(b.id).expect("b should have a gradient");
+        assert_eq!(gb.shape, vec![3, 3]);
+        for r in 0..3 {
+            for c in 0..3 {
+                assert_eq!(gb.get(&[r, c]), 1.0);
+            }
+        }
+    }
+
+    /// Task 1 Test 7: each input to `concat` is read through its OWN
+    /// strides without being materialized first — one input is a
+    /// TRANSPOSED (non-contiguous) view, output values are still correct.
+    #[test]
+    fn concat_on_transposed_input_produces_correct_values_without_materializing() {
+        let a = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
+        let transposed = TestBackend::transpose::<f32>(&a, 0, 1).unwrap();
+        // transposed: [[1,4],[2,5],[3,6]], shape [3,2]
+        let b = matrix(vec![100.0, 200.0], 1, 2);
+        let out = TestBackend::concat::<f32>(&[&transposed, &b], 0).unwrap();
+        assert_eq!(out.shape, vec![4, 2]);
+        assert_eq!(
+            f32_vec(&out),
+            vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0, 100.0, 200.0]
+        );
     }
 }
