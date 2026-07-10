@@ -155,13 +155,14 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for NativeBacken
     }
 
     fn slice<K: DType>(
-        _t: &<Self as Backend>::Storage<K>,
-        _ranges: &[(usize, usize)],
+        t: &<Self as Backend>::Storage<K>,
+        ranges: &[(usize, usize)],
     ) -> Result<<Self as Backend>::Storage<K>> {
-        Err(Error::UnsupportedBackendOperation {
-            op: "slice",
-            backend: "Native",
-        })
+        let mut out = t.clone();
+        for (dim, &(start, end)) in ranges.iter().enumerate() {
+            out = Self::narrow::<K>(&out, dim, start, end - start)?;
+        }
+        Ok(out)
     }
 
     fn flatten<K: DType>(
@@ -392,6 +393,70 @@ mod tests {
         assert_eq!(narrowed.shape, vec![1, 2]);
         assert_eq!(narrowed.get(&[0, 0]), 2.0);
         assert_eq!(narrowed.get(&[0, 1]), 5.0);
+    }
+
+    /// Task 2 Test 1: `slice(t, &[(1,3),(0,2)])` on a `[4,3]` matrix matches
+    /// manually narrowing dim 0 to `(1,3)` then dim 1 to `(0,2)` in sequence.
+    #[test]
+    fn slice_matches_manual_sequential_narrow_calls() {
+        let t = matrix(
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0],
+            4,
+            3,
+        );
+        let manual = TestBackend::narrow::<f32>(&t, 0, 1, 2).unwrap();
+        let manual = TestBackend::narrow::<f32>(&manual, 1, 0, 2).unwrap();
+
+        let via_slice = TestBackend::slice::<f32>(&t, &[(1, 3), (0, 2)]).unwrap();
+        assert_eq!(via_slice.shape, manual.shape);
+        assert_eq!(f32_vec(&via_slice), f32_vec(&manual));
+    }
+
+    /// Task 2 Test 2: `slice` on a pre-transposed (non-contiguous) input,
+    /// across multiple dims, produces correct values without a
+    /// `.contiguous()` call happening internally.
+    #[test]
+    fn slice_on_transposed_input_across_multiple_dims_produces_correct_values() {
+        let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
+        let transposed = TestBackend::transpose::<f32>(&t, 0, 1).unwrap();
+        // transposed: [[1,4],[2,5],[3,6]], shape [3,2]
+        // slice rows [1,3) and cols [0,1) -> [[2],[3]]
+        let out = TestBackend::slice::<f32>(&transposed, &[(1, 3), (0, 1)]).unwrap();
+        assert_eq!(out.shape, vec![2, 1]);
+        assert_eq!(out.get(&[0, 0]), 2.0);
+        assert_eq!(out.get(&[1, 0]), 3.0);
+    }
+
+    /// Task 2 Test 3: `slice`'s backward correctly zero-pads back to the
+    /// original shape, composed entirely from `narrow`'s own backward.
+    #[test]
+    fn slice_backward_zero_pads_grad_to_original_shape() {
+        let t = matrix(
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0],
+            4,
+            3,
+        );
+        let out = TestBackend::slice::<f32>(&t, &[(1, 3), (0, 2)]).unwrap();
+        let grads = tape::backward(&out).unwrap();
+        let g = grads.get(t.id).expect("t should have a gradient");
+        assert_eq!(g.shape, vec![4, 3]);
+        assert_eq!(
+            f32_vec(g),
+            vec![0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0]
+        );
+    }
+
+    /// Task 2 Test 4: an out-of-bounds range in any dim of a multi-dim
+    /// `slice` call returns `Err`, not a panic.
+    #[test]
+    fn slice_out_of_bounds_range_returns_err_not_panic() {
+        let t = matrix(
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0],
+            4,
+            3,
+        );
+        let result = TestBackend::slice::<f32>(&t, &[(1, 3), (0, 5)]);
+        assert!(matches!(result, Err(Error::ShapeMismatch { .. })));
     }
 
     /// Test 6: `TensorOps::matmul` called through the trait on two rank-2
