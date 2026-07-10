@@ -123,10 +123,51 @@ pub(crate) fn batched_matmul_impl(
     let mut out_shape = out_batch;
     out_shape.extend_from_slice(&[m, n]);
 
-    Ok(NativeStorage::from_contiguous(
-        NativeBuffer::F32(out_data),
-        out_shape,
-    ))
+    let out = NativeStorage::from_contiguous(NativeBuffer::F32(out_data), out_shape);
+
+    // Backward: hand-composed from transpose_last2 + recursive
+    // batched_matmul_impl calls + tape::unbroadcast per operand (Pattern 2),
+    // not a bespoke gradient derivation. Capture BOTH the original
+    // (pre-broadcast) and broadcast-expanded operands: the matmul formula
+    // below needs lhs_b/rhs_b (same batch shape as grad_out), while
+    // unbroadcast's target is each operand's OWN full original shape
+    // (trailing [M,K]/[K,N] dims included, per Pitfall 2).
+    let (lhs_orig_shape, rhs_orig_shape) = (lhs.shape.clone(), rhs.shape.clone());
+    let (lhs_b_capture, rhs_b_capture) = (lhs_b.clone(), rhs_b.clone());
+    let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
+    tape::push(TapeEntry {
+        output_id: out_id,
+        input_ids: vec![lhs_id, rhs_id],
+        backward: Box::new(move |grad_out: &NativeStorage| {
+            // grad_lhs_broadcast = grad_out @ rhs_b^T (at the BROADCAST out_batch shape)
+            let grad_lhs_broadcast = batched_matmul_impl(
+                grad_out,
+                &transpose_last2(&rhs_b_capture),
+            )
+            .expect(
+                "grad_lhs_broadcast = grad_out @ rhs_b^T cannot fail (shapes proven compatible)",
+            );
+            // grad_rhs_broadcast = lhs_b^T @ grad_out (at the BROADCAST out_batch shape)
+            let grad_rhs_broadcast = batched_matmul_impl(
+                &transpose_last2(&lhs_b_capture),
+                grad_out,
+            )
+            .expect(
+                "grad_rhs_broadcast = lhs_b^T @ grad_out cannot fail (shapes proven compatible)",
+            );
+
+            let grad_lhs = tape::unbroadcast(&grad_lhs_broadcast, &lhs_orig_shape).expect(
+                "batched matmul backward: unbroadcast grad_lhs to lhs's own original shape",
+            );
+            let grad_rhs = tape::unbroadcast(&grad_rhs_broadcast, &rhs_orig_shape).expect(
+                "batched matmul backward: unbroadcast grad_rhs to rhs's own original shape",
+            );
+
+            vec![grad_lhs, grad_rhs]
+        }),
+    });
+
+    Ok(out)
 }
 
 /// Naive triple-nested-loop 2D matmul: `lhs` (`[M,K]`) @ `rhs` (`[K,N]`) ->
@@ -486,5 +527,131 @@ mod tests {
         let out = batched_matmul_impl(&lhs, &rhs).unwrap();
         assert_eq!(out.shape, vec![5, 3, 6]);
         assert_eq!(f32_vec(&out).len(), 5 * 3 * 6);
+    }
+
+    // --- Task 2: batched matmul backward (gradcheck) ---
+
+    use crate::NativeBackend;
+    use crate::testutil::gradcheck;
+    use kindle_core::prelude::{Cpu, ReductionOps};
+
+    type TestBackend = NativeBackend<f32, Cpu>;
+
+    /// Wraps `batched_matmul_impl` with `sum_all` so `gradcheck` (which
+    /// requires a scalar-output op) can drive it.
+    fn batched_matmul_sum_op(inputs: &[NativeStorage]) -> NativeStorage {
+        let out = batched_matmul_impl(&inputs[0], &inputs[1]).unwrap();
+        TestBackend::sum_all::<f32>(&out).unwrap()
+    }
+
+    /// Test 1: gradcheck on `batched_matmul_impl` for the UNBATCHED
+    /// degenerate case (`[2,3]`/`[3,4]`) reports `max_relative_error < 1e-2`.
+    ///
+    /// Uses small-magnitude values (not the 1..18 range used by the
+    /// hand-computed forward/backward tests above): `sum_all` over the full
+    /// batch*M*N output accumulates enough terms that larger-magnitude
+    /// inputs push the f32 finite-difference numerator into
+    /// catastrophic-cancellation noise at `eps=1e-4` (observed empirically:
+    /// values up to 18 produced ~5% relative error purely from f32
+    /// subtraction rounding, not a gradient bug — confirmed by the
+    /// analytic gradient exactly matching the hand-computed reference in
+    /// `batched_matmul_gradcheck_*`'s sibling forward/backward tests above).
+    #[test]
+    fn batched_matmul_gradcheck_unbatched_degenerate() {
+        let lhs = matrix(vec![0.1, 0.2, 0.3, 0.4, 0.5, 0.6], 2, 3);
+        let rhs = matrix(
+            vec![0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8],
+            3,
+            4,
+        );
+        let max_rel_err = gradcheck(batched_matmul_sum_op, &[lhs, rhs], 1e-4);
+        assert!(
+            max_rel_err < 1e-2,
+            "gradcheck max relative error too high: {max_rel_err}"
+        );
+    }
+
+    /// Test 2: gradcheck on `batched_matmul_impl` for the EQUAL-BATCH case
+    /// (`[2,3,4]`/`[2,4,5]`) reports `max_relative_error < 1e-2`.
+    #[test]
+    fn batched_matmul_gradcheck_equal_batch() {
+        let lhs_data: Vec<f32> = (1..=24).map(|x| x as f32 * 0.01).collect();
+        let rhs_data: Vec<f32> = (1..=40).map(|x| x as f32 * 0.01).collect();
+        let lhs = tensor(lhs_data, vec![2, 3, 4]);
+        let rhs = tensor(rhs_data, vec![2, 4, 5]);
+        let max_rel_err = gradcheck(batched_matmul_sum_op, &[lhs, rhs], 1e-4);
+        assert!(
+            max_rel_err < 1e-2,
+            "gradcheck max relative error too high: {max_rel_err}"
+        );
+    }
+
+    /// Test 3: gradcheck on `batched_matmul_impl` for the
+    /// BATCH-BROADCAST-LEFT case (`[1,3,4]`/`[2,4,5]`) reports
+    /// `max_relative_error < 1e-2`, AND `grad_lhs`'s shape equals the
+    /// operand's OWN original `[1,3,4]` shape (proving `unbroadcast`
+    /// correctly reduced the broadcast-expanded `[2,3,4]`-shaped
+    /// intermediate gradient back down, not left at the broadcast shape).
+    #[test]
+    fn batched_matmul_gradcheck_batch_broadcast_left() {
+        let lhs_data: Vec<f32> = (1..=12).map(|x| x as f32 * 0.01).collect();
+        let rhs_data: Vec<f32> = (1..=40).map(|x| x as f32 * 0.01).collect();
+        let lhs = tensor(lhs_data, vec![1, 3, 4]);
+        let rhs = tensor(rhs_data, vec![2, 4, 5]);
+        let (lhs_id, rhs_id) = (lhs.id, rhs.id);
+
+        let max_rel_err = gradcheck(batched_matmul_sum_op, &[lhs.clone(), rhs.clone()], 1e-4);
+        assert!(
+            max_rel_err < 1e-2,
+            "gradcheck max relative error too high: {max_rel_err}"
+        );
+
+        // Re-run once more, outside gradcheck's internal tape usage, to
+        // directly inspect grad_lhs's shape after a real backward() walk.
+        let out = batched_matmul_impl(&lhs, &rhs).unwrap();
+        let sum = TestBackend::sum_all::<f32>(&out).unwrap();
+        let grads = tape::backward(&sum).unwrap();
+        let grad_lhs = grads.get(lhs_id).expect("grad_lhs should exist");
+        let _ = rhs_id;
+        assert_eq!(grad_lhs.shape, vec![1, 3, 4]);
+    }
+
+    /// Test 4: gradcheck on `batched_matmul_impl` for the
+    /// BATCH-BROADCAST-RIGHT case (`[2,3,4]`/`[1,4,5]`) mirrors Test 3 for
+    /// `grad_rhs`.
+    #[test]
+    fn batched_matmul_gradcheck_batch_broadcast_right() {
+        let lhs_data: Vec<f32> = (1..=24).map(|x| x as f32 * 0.01).collect();
+        let rhs_data: Vec<f32> = (1..=20).map(|x| x as f32 * 0.01).collect();
+        let lhs = tensor(lhs_data, vec![2, 3, 4]);
+        let rhs = tensor(rhs_data, vec![1, 4, 5]);
+        let rhs_id = rhs.id;
+
+        let max_rel_err = gradcheck(batched_matmul_sum_op, &[lhs.clone(), rhs.clone()], 1e-4);
+        assert!(
+            max_rel_err < 1e-2,
+            "gradcheck max relative error too high: {max_rel_err}"
+        );
+
+        let out = batched_matmul_impl(&lhs, &rhs).unwrap();
+        let sum = TestBackend::sum_all::<f32>(&out).unwrap();
+        let grads = tape::backward(&sum).unwrap();
+        let grad_rhs = grads.get(rhs_id).expect("grad_rhs should exist");
+        assert_eq!(grad_rhs.shape, vec![1, 4, 5]);
+    }
+
+    /// Test 5: gradcheck on `batched_matmul_impl` for a `>3D` case
+    /// (`[2,2,3,4]`/`[2,2,4,5]`) reports `max_relative_error < 1e-2`.
+    #[test]
+    fn batched_matmul_gradcheck_rank4() {
+        let lhs_data: Vec<f32> = (1..=48).map(|x| x as f32 * 0.002).collect();
+        let rhs_data: Vec<f32> = (1..=80).map(|x| x as f32 * 0.002).collect();
+        let lhs = tensor(lhs_data, vec![2, 2, 3, 4]);
+        let rhs = tensor(rhs_data, vec![2, 2, 4, 5]);
+        let max_rel_err = gradcheck(batched_matmul_sum_op, &[lhs, rhs], 1e-4);
+        assert!(
+            max_rel_err < 1e-2,
+            "gradcheck max relative error too high: {max_rel_err}"
+        );
     }
 }

@@ -15,7 +15,7 @@ use kindle_core::err::Error;
 use kindle_core::prelude::{Backend, DType, KindleDType, Result, TensorOps};
 
 use crate::NativeBackend;
-use crate::ops::matmul::matmul_impl;
+use crate::ops::matmul::{batched_matmul_impl, matmul_impl};
 use crate::storage::NativeStorage;
 use crate::tape::{self, TapeEntry};
 
@@ -91,7 +91,11 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for NativeBacken
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        matmul_impl(lhs, rhs)
+        if lhs.shape.len() == 2 && rhs.shape.len() == 2 {
+            matmul_impl(lhs, rhs)
+        } else {
+            batched_matmul_impl(lhs, rhs)
+        }
     }
 
     fn narrow<K: DType>(
@@ -330,5 +334,41 @@ mod tests {
             result,
             Err(Error::UnsupportedBackendOperation { op: "narrow", .. })
         ));
+    }
+
+    /// Test 6: `TensorOps::matmul` called through the trait on two rank-2
+    /// operands still produces identical values to a direct `matmul_impl`
+    /// call (dispatch does not change the unbatched path's behavior).
+    #[test]
+    fn matmul_dispatch_rank2_matches_matmul_impl_directly() {
+        let lhs = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
+        let rhs = matrix(
+            vec![
+                7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0,
+            ],
+            3,
+            4,
+        );
+        let direct = matmul_impl(&lhs, &rhs).unwrap();
+        let via_trait = TestBackend::matmul::<f32>(&lhs, &rhs).unwrap();
+        assert_eq!(via_trait.shape, direct.shape);
+        assert_eq!(f32_vec(&via_trait), f32_vec(&direct));
+    }
+
+    /// Test 7: `TensorOps::matmul` called through the trait on two rank-3
+    /// (or higher) operands correctly dispatches to `batched_matmul_impl`
+    /// and produces the same values a direct `batched_matmul_impl` call
+    /// would.
+    #[test]
+    fn matmul_dispatch_rank3_matches_batched_matmul_impl_directly() {
+        let lhs_data: Vec<f32> = (1..=24).map(|x| x as f32).collect();
+        let rhs_data: Vec<f32> = (1..=40).map(|x| x as f32).collect();
+        let lhs = NativeStorage::from_contiguous(NativeBuffer::F32(lhs_data), vec![2, 3, 4]);
+        let rhs = NativeStorage::from_contiguous(NativeBuffer::F32(rhs_data), vec![2, 4, 5]);
+
+        let direct = batched_matmul_impl(&lhs, &rhs).unwrap();
+        let via_trait = TestBackend::matmul::<f32>(&lhs, &rhs).unwrap();
+        assert_eq!(via_trait.shape, direct.shape);
+        assert_eq!(f32_vec(&via_trait), f32_vec(&direct));
     }
 }
