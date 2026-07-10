@@ -681,10 +681,21 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for NativeBackend
         Ok(out)
     }
     fn softmax<K: DType>(
-        _t: &<Self as Backend>::Storage<K>,
-        _dim: usize,
+        t: &<Self as Backend>::Storage<K>,
+        dim: usize,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        unimplemented!("softmax not implemented for NativeBackend")
+        // softmax(x, dim) = exp(x - max_keepdim(x, dim)) / sum_keepdim(exp(x - max_keepdim(x, dim)), dim)
+        //
+        // Matches candle-nn 0.9.1's own softmax algorithm shape exactly
+        // (candle-nn-0.9.1/src/ops.rs lines 22-29). Composed entirely from
+        // already-tape-tracked primitives (max_keepdim/sub/exp/sum_keepdim/
+        // div) — no hand-derived backward closure is written here, since
+        // every composed step already pushes its own correct `TapeEntry`.
+        let max = <Self as kindle_core::prelude::ReductionOps<Self>>::max_keepdim::<K>(t, dim)?;
+        let diff = <Self as NumericOps<Self>>::sub::<K>(t, &max)?;
+        let num = <Self as FloatOps<Self>>::exp::<K>(&diff)?;
+        let den = <Self as kindle_core::prelude::ReductionOps<Self>>::sum_keepdim::<K>(&num, dim)?;
+        <Self as NumericOps<Self>>::div::<K>(&num, &den)
     }
 }
 
@@ -1067,5 +1078,102 @@ mod tests {
             max_rel_err < 1e-2,
             "gelu gradcheck error too high: {max_rel_err}"
         );
+    }
+
+    // --- Task 1 (plan 02-04): softmax by composition ---
+
+    #[test]
+    fn softmax_forward_sums_to_one_on_vector() {
+        let t = vector(vec![1.0, 2.0, 3.0]);
+        let out = TestBackend::softmax::<f32>(&t, 0).unwrap();
+        let vals = f32_vec(&out);
+
+        let sum: f32 = vals.iter().sum();
+        assert!((sum - 1.0).abs() < 1e-5, "softmax should sum to 1: {sum}");
+
+        // Largest input gets largest probability, monotonic ordering preserved.
+        assert!(vals[0] < vals[1]);
+        assert!(vals[1] < vals[2]);
+    }
+
+    #[test]
+    fn softmax_forward_sums_to_one_per_row_on_matrix() {
+        let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
+        let out = TestBackend::softmax::<f32>(&t, 1).unwrap();
+        let vals = f32_vec(&out);
+
+        let row0_sum: f32 = vals[0..3].iter().sum();
+        let row1_sum: f32 = vals[3..6].iter().sum();
+        assert!(
+            (row0_sum - 1.0).abs() < 1e-5,
+            "row 0 should sum to 1: {row0_sum}"
+        );
+        assert!(
+            (row1_sum - 1.0).abs() < 1e-5,
+            "row 1 should sum to 1: {row1_sum}"
+        );
+    }
+
+    #[test]
+    fn softmax_forward_stable_on_large_magnitude_equal_logits() {
+        // Without max-subtraction, exp(1000.0) overflows to inf, producing
+        // NaN (inf/inf) instead of a finite uniform distribution.
+        let t = vector(vec![1000.0, 1000.0, 1000.0]);
+        let out = TestBackend::softmax::<f32>(&t, 0).unwrap();
+        let vals = f32_vec(&out);
+
+        for v in &vals {
+            assert!(v.is_finite(), "softmax output should be finite: {v}");
+            assert!(
+                (v - 1.0 / 3.0).abs() < 1e-4,
+                "softmax(equal large logits) should be uniform: {v}"
+            );
+        }
+    }
+
+    #[test]
+    fn softmax_forward_uniform_on_all_zero_logits() {
+        let t = vector(vec![0.0, 0.0, 0.0]);
+        let out = TestBackend::softmax::<f32>(&t, 0).unwrap();
+        let vals = f32_vec(&out);
+
+        for v in &vals {
+            assert!(v.is_finite(), "softmax output should be finite: {v}");
+            assert!(
+                (v - 1.0 / 3.0).abs() < 1e-4,
+                "softmax(all-zero logits) should be uniform: {v}"
+            );
+        }
+    }
+
+    #[test]
+    fn softmax_gradcheck() {
+        let x = vector(vec![0.5, -1.0, 2.0]);
+        let op = |inputs: &[NativeStorage]| -> NativeStorage {
+            let s = TestBackend::softmax::<f32>(&inputs[0], 0).unwrap();
+            TestBackend::sum_all::<f32>(&s).unwrap()
+        };
+        let max_rel_err = gradcheck(op, &[x], 1e-4);
+        assert!(
+            max_rel_err < 1e-2,
+            "softmax gradcheck error too high: {max_rel_err}"
+        );
+    }
+
+    #[test]
+    fn softmax_backward_finite_on_large_magnitude_equal_logits() {
+        // Proves both forward AND backward are numerically stable under the
+        // composition, not just forward (Test 3's finite-forward twin).
+        let t = vector(vec![1000.0, 1000.0, 1000.0]);
+        let out = TestBackend::softmax::<f32>(&t, 0).unwrap();
+
+        let grads = tape::backward(&out).unwrap();
+        let t_grad = grads.get(t.id).unwrap();
+        for v in f32_vec(t_grad) {
+            assert!(
+                v.is_finite(),
+                "softmax backward gradient should be finite on extreme logits: {v}"
+            );
+        }
     }
 }

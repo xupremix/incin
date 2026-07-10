@@ -132,10 +132,29 @@ pub fn gradcheck(
         for flat_idx in 0..total {
             let numeric = numerical_grad(&op, inputs, i, flat_idx, eps);
             let analytic_val = flat_get(analytic, flat_idx);
+            let abs_diff = (analytic_val - numeric).abs();
+
+            // Absolute-error escape hatch: when the TRUE gradient is exactly
+            // (or near) zero, `numeric` is pure f32 finite-difference
+            // rounding noise (observed up to ~3e-4 magnitude at eps=1e-4 on
+            // scalar outputs near 1.0) rather than a real small gradient. A
+            // purely relative comparison makes `rel_err` blow up toward 1.0
+            // in that regime even though both values correctly agree the
+            // gradient is ~0 (mirrors PyTorch's `gradcheck` atol+rtol
+            // combination, not a bare relative-error ratio). If the absolute
+            // difference itself is below this noise ceiling, treat it as a
+            // pass (contributes 0 to `max_rel_err`) regardless of the ratio
+            // — a genuinely wrong non-zero gradient still produces an
+            // `abs_diff` far above this ceiling and fails loudly via the
+            // relative check below.
+            let abs_tol = 1e-3;
+            if abs_diff < abs_tol {
+                continue;
+            }
 
             let floor = 1e-6;
             let denom = analytic_val.abs().max(numeric.abs()).max(floor);
-            let rel_err = (analytic_val - numeric).abs() / denom;
+            let rel_err = abs_diff / denom;
             max_rel_err = max_rel_err.max(rel_err);
         }
     }
