@@ -45,20 +45,62 @@ impl<T: DType, D: kindle_core::prelude::Device> LossOps<Self> for NativeBackend<
         }
     }
 
+    /// L1 loss (mean absolute error), composed from already-tape-tracked
+    /// `sub` / `abs` + `mean_all` / `sum_all` primitives, mirroring `mse_loss`'s
+    /// structure with `abs` substituted for `mul(diff, diff)`. Zero new
+    /// backward code needed — both `sub` and `abs` already push correct
+    /// `TapeEntry` closures (Phase 1/2).
     fn l1_loss<K: DType>(
-        _pred: &<Self as Backend>::Storage<K>,
-        _target: &<Self as Backend>::Storage<K>,
-        _reduction: Reduction,
+        pred: &<Self as Backend>::Storage<K>,
+        target: &<Self as Backend>::Storage<K>,
+        reduction: Reduction,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        unimplemented!("l1_loss not implemented for NativeBackend")
+        let diff = <Self as NumericOps<Self>>::sub::<K>(pred, target)?;
+        let abs_diff = <Self as FloatOps<Self>>::abs::<K>(&diff)?;
+        match reduction {
+            Reduction::Mean => <Self as ReductionOps<Self>>::mean_all::<K>(&abs_diff),
+            Reduction::Sum => <Self as ReductionOps<Self>>::sum_all::<K>(&abs_diff),
+            Reduction::None => Ok(abs_diff),
+        }
     }
 
+    /// Binary cross-entropy with logits, using the numerically-stable formula:
+    /// `loss = max(x, 0) - x * z + log(1 + exp(-|x|))`
+    /// (where `x` = logit prediction, `z` = target in [0,1]).
+    ///
+    /// This is NOT Candle 0.9.1's own `binary_cross_entropy_with_logit`, which
+    /// uses the naive `sigmoid(x)` + `log` form that overflows to `-inf` on
+    /// large positive logits (RESEARCH.md Pitfall 1). `NativeBackend` exceeds
+    /// `CandleBackend`'s coverage here by implementing the stable formula
+    /// directly, composed entirely from already-tape-tracked Phase 2 primitives
+    /// (`relu`/`mul`/`sub`/`abs`/`neg`/`exp`/`add_scalar_float`/`log`/`add`)
+    /// — zero hand-derived backward (Plan 04-02, ROADMAP.md Phase 4 criterion 2).
     fn bce_with_logits_loss<K: DType>(
-        _pred: &<Self as Backend>::Storage<K>,
-        _target: &<Self as Backend>::Storage<K>,
-        _reduction: Reduction,
+        pred: &<Self as Backend>::Storage<K>,
+        target: &<Self as Backend>::Storage<K>,
+        reduction: Reduction,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        unimplemented!("bce_with_logits_loss not implemented for NativeBackend")
+        // term1 = relu(x) - x * z   [= max(x,0) - x*z]
+        let max_x_0 = <Self as FloatOps<Self>>::relu::<K>(pred)?;
+        let x_times_z = <Self as NumericOps<Self>>::mul::<K>(pred, target)?;
+        let term1 = <Self as NumericOps<Self>>::sub::<K>(&max_x_0, &x_times_z)?;
+
+        // term2 = log(1 + exp(-|x|))  — numerically stable: |x| bounded
+        // so exp(-|x|) is in (0, 1], never overflowing.
+        let abs_x = <Self as FloatOps<Self>>::abs::<K>(pred)?;
+        let neg_abs_x = <Self as FloatOps<Self>>::neg::<K>(&abs_x)?;
+        let exp_neg_abs_x = <Self as FloatOps<Self>>::exp::<K>(&neg_abs_x)?;
+        let one_plus = <Self as FloatOps<Self>>::add_scalar_float::<K>(&exp_neg_abs_x, 1.0)?;
+        let term2 = <Self as FloatOps<Self>>::log::<K>(&one_plus)?;
+
+        // elementwise BCE loss = term1 + term2
+        let loss_elem = <Self as NumericOps<Self>>::add::<K>(&term1, &term2)?;
+
+        match reduction {
+            Reduction::Mean => <Self as ReductionOps<Self>>::mean_all::<K>(&loss_elem),
+            Reduction::Sum => <Self as ReductionOps<Self>>::sum_all::<K>(&loss_elem),
+            Reduction::None => Ok(loss_elem),
+        }
     }
 
     /// Numerically-stable cross-entropy loss via the shared `log_softmax`
@@ -217,20 +259,166 @@ mod tests {
         }
     }
 
-    // --- #[should_panic] tests for the two remaining stub methods ---
+    // ---------------------------------------------------------------------------
+    // l1_loss tests (Plan 04-02 Task 1)
+    // ---------------------------------------------------------------------------
+
+    // pred = [[1,2,3],[4,5,6]], target = [[1,1,1],[2,2,2]]
+    // |diff| = [[0,1,2],[2,3,4]], sum = 12, mean = 2.0
 
     #[test]
-    #[should_panic(expected = "l1_loss not implemented for NativeBackend")]
-    fn l1_loss_panics_with_expected_message() {
-        let _ = B::l1_loss::<f32>(&pred(), &target(), Reduction::Mean);
+    fn l1_loss_mean_produces_correct_scalar() {
+        let out = B::l1_loss::<f32>(&pred(), &target(), Reduction::Mean).unwrap();
+        assert_eq!(out.shape, Vec::<usize>::new());
+        let v = out.get(&[]) as f32;
+        assert!((v - 2.0).abs() < 1e-4, "l1 mean: got {v:.6}");
     }
 
     #[test]
-    #[should_panic(expected = "bce_with_logits_loss not implemented for NativeBackend")]
-    fn bce_with_logits_loss_panics_with_expected_message() {
-        let _ = B::bce_with_logits_loss::<f32>(&pred(), &target(), Reduction::Mean);
+    fn l1_loss_sum_produces_correct_scalar() {
+        let out = B::l1_loss::<f32>(&pred(), &target(), Reduction::Sum).unwrap();
+        assert_eq!(out.shape, Vec::<usize>::new());
+        let v = out.get(&[]) as f32;
+        assert!((v - 12.0).abs() < 1e-4, "l1 sum: got {v:.6}");
     }
 
+    #[test]
+    fn l1_loss_none_produces_elementwise_absolute_diff() {
+        let out = B::l1_loss::<f32>(&pred(), &target(), Reduction::None).unwrap();
+        assert_eq!(out.shape, vec![2, 3]);
+        let got = f32_vec(&out);
+        let expected = vec![0.0f32, 1.0, 2.0, 2.0, 3.0, 4.0];
+        for (i, (g, e)) in got.iter().zip(expected.iter()).enumerate() {
+            assert!((g - e).abs() < 1e-5, "l1 none[{i}]: got {g}, expected {e}");
+        }
+    }
+
+    #[test]
+    fn l1_loss_gradcheck() {
+        let p = matrix(vec![1.0f32, 2.0, 3.0], 1, 3);
+        let t = matrix(vec![0.5f32, 0.5, 0.5], 1, 3);
+        let op = |inputs: &[NativeStorage]| -> NativeStorage {
+            B::l1_loss::<f32>(&inputs[0], &t, Reduction::Mean).unwrap()
+        };
+        let max_rel_err = gradcheck(op, &[p], 1e-4);
+        assert!(
+            max_rel_err < 1e-2,
+            "l1 gradcheck too high: {max_rel_err:.6}"
+        );
+    }
+
+    // ---------------------------------------------------------------------------
+    // bce_with_logits_loss tests (Plan 04-02 Task 2)
+    // ---------------------------------------------------------------------------
+
+    fn bce_scalar(x: f32, z: f32) -> f32 {
+        // Stable formula: max(x,0) - x*z + log(1 + exp(-|x|))
+        x.max(0.0) - x * z + (1.0 + (-x.abs()).exp()).ln()
+    }
+
+    #[test]
+    fn bce_with_logits_mean_at_zero_logit_equals_log2() {
+        // x=0, z=1 → max(0,0) - 0*1 + log(1+exp(0)) = 0 + log(2) ≈ 0.6931
+        let pred_zero = matrix(vec![0.0f32], 1, 1);
+        let tgt_one = matrix(vec![1.0f32], 1, 1);
+        let out = B::bce_with_logits_loss::<f32>(&pred_zero, &tgt_one, Reduction::Mean).unwrap();
+        let v = out.get(&[]) as f32;
+        let expected = bce_scalar(0.0, 1.0);
+        assert!(
+            (v - expected).abs() < 1e-4,
+            "bce at x=0,z=1: got {v:.6}, expected {expected:.6} (≈ ln(2))"
+        );
+    }
+
+    #[test]
+    fn bce_with_logits_sum_and_none_dispatch_correctly() {
+        // Two-element test to verify Sum == 2*element and None preserves shape.
+        let p = matrix(vec![0.0f32, 1.0], 1, 2);
+        let z = matrix(vec![1.0f32, 0.0], 1, 2);
+        let mean_out = B::bce_with_logits_loss::<f32>(&p, &z, Reduction::Mean).unwrap();
+        let sum_out = B::bce_with_logits_loss::<f32>(&p, &z, Reduction::Sum).unwrap();
+        let none_out = B::bce_with_logits_loss::<f32>(&p, &z, Reduction::None).unwrap();
+
+        assert_eq!(
+            none_out.shape,
+            vec![1, 2],
+            "None should preserve shape [1,2]"
+        );
+        let mean_v = mean_out.get(&[]) as f32;
+        let sum_v = sum_out.get(&[]) as f32;
+        assert!(
+            (sum_v - 2.0 * mean_v).abs() < 1e-4,
+            "bce sum should be 2*mean: sum={sum_v:.6}, 2*mean={:.6}",
+            2.0 * mean_v
+        );
+    }
+
+    #[test]
+    fn bce_with_logits_finite_on_large_positive_logit() {
+        // Naive sigmoid+log form: log(1 - sigmoid(50)) = log(~0) = -inf.
+        // Stable formula: max(50,0) - 50*0 + log(1+exp(-50)) ≈ 50 + ~0 (finite).
+        let p = matrix(vec![50.0f32], 1, 1);
+        let z = matrix(vec![0.0f32], 1, 1);
+        let out = B::bce_with_logits_loss::<f32>(&p, &z, Reduction::Mean).unwrap();
+        let v = out.get(&[]) as f32;
+        assert!(v.is_finite(), "bce on x=50,z=0 should be finite: {v}");
+        let expected = bce_scalar(50.0, 0.0);
+        assert!(
+            (v - expected).abs() < 1e-2,
+            "bce x=50,z=0: got {v:.4}, expected {expected:.4}"
+        );
+    }
+
+    #[test]
+    fn bce_with_logits_finite_on_large_negative_logit() {
+        // Naive sigmoid+log form: log(sigmoid(-50)) = log(~0) = -inf.
+        // Stable formula: max(-50,0) - (-50)*1 + log(1+exp(-50)) ≈ 0 + 50 + ~0.
+        let p = matrix(vec![-50.0f32], 1, 1);
+        let z = matrix(vec![1.0f32], 1, 1);
+        let out = B::bce_with_logits_loss::<f32>(&p, &z, Reduction::Mean).unwrap();
+        let v = out.get(&[]) as f32;
+        assert!(v.is_finite(), "bce on x=-50,z=1 should be finite: {v}");
+        let expected = bce_scalar(-50.0, 1.0);
+        assert!(
+            (v - expected).abs() < 1e-2,
+            "bce x=-50,z=1: got {v:.4}, expected {expected:.4}"
+        );
+    }
+
+    #[test]
+    fn bce_with_logits_gradcheck() {
+        let p = matrix(vec![0.5f32, -0.3, 1.2], 1, 3);
+        let z = matrix(vec![1.0f32, 0.0, 1.0], 1, 3);
+        let op = |inputs: &[NativeStorage]| -> NativeStorage {
+            B::bce_with_logits_loss::<f32>(&inputs[0], &z, Reduction::Mean).unwrap()
+        };
+        let max_rel_err = gradcheck(op, &[p], 1e-4);
+        assert!(
+            max_rel_err < 1e-2,
+            "bce gradcheck too high: {max_rel_err:.6}"
+        );
+    }
+
+    #[test]
+    fn bce_with_logits_backward_finite_on_extreme_logits() {
+        // Both forward and backward should be finite on large-magnitude logits.
+        let p = matrix(vec![50.0f32, -50.0], 1, 2);
+        let z = matrix(vec![0.0f32, 1.0], 1, 2);
+        let out = B::bce_with_logits_loss::<f32>(&p, &z, Reduction::Mean).unwrap();
+        assert!(
+            out.get(&[]).is_finite(),
+            "bce extreme logits: forward should be finite"
+        );
+
+        let grads = tape::backward(&out).unwrap();
+        let g = grads.get(p.id).expect("pred should have gradient");
+        for (i, v) in f32_vec(g).iter().enumerate() {
+            assert!(
+                v.is_finite(),
+                "bce backward grad[{i}] should be finite on extreme logits: {v}"
+            );
+        }
+    }
     // ---------------------------------------------------------------------------
     // cross_entropy_loss tests (Plan 04-01 Task 2)
     // ---------------------------------------------------------------------------
