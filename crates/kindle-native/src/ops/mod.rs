@@ -20,6 +20,10 @@
 //! * `conv` — free-function helpers: `conv1d_impl`/`conv2d_impl` (im2col +
 //!   `matmul::batched_matmul_impl` forward, hand-composed col2im-fold
 //!   backward, shared by `module`'s `conv1d`/`conv2d` methods — Plan 04-05).
+//! * `pool` — free-function helpers: `max_pool2d_impl` (2D sliding-window
+//!   max reduction, generalizing `reduce.rs`'s `max_axis_with_indices`/
+//!   `scatter_axis_grad` pattern to 2D with the overlap-safe `+=`
+//!   accumulation fix pooling's overlapping windows require — Plan 04-06).
 //! * `module` — `ModuleOps`: real `layer_norm`/`batch_norm`/`embedding`/
 //!   `conv1d`/`conv2d`; 4 remaining methods typed
 //!   `Error::UnsupportedBackendOperation`.
@@ -31,5 +35,6 @@ pub mod loss;
 pub mod matmul;
 pub mod module;
 pub mod norm;
+pub mod pool;
 pub mod reduce;
 pub mod shape_ops;
