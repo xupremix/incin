@@ -104,9 +104,7 @@ fn fill_like(like: &NativeStorage, shape: &[usize], scalar_value: f64) -> Native
         NativeBuffer::U8(_) => NativeBuffer::U8(vec![scalar_value as u8; total]),
         NativeBuffer::U32(_) => NativeBuffer::U32(vec![scalar_value as u32; total]),
         NativeBuffer::I64(_) => NativeBuffer::I64(vec![scalar_value as i64; total]),
-        NativeBuffer::F16(_) => {
-            NativeBuffer::F16(vec![half::f16::from_f64(scalar_value); total])
-        }
+        NativeBuffer::F16(_) => NativeBuffer::F16(vec![half::f16::from_f64(scalar_value); total]),
         NativeBuffer::BF16(_) => {
             NativeBuffer::BF16(vec![half::bf16::from_f64(scalar_value); total])
         }
@@ -169,8 +167,7 @@ impl<T: DType, D: kindle_core::prelude::Device> ReductionOps<Self> for NativeBac
             }
         }
         let mean = if total > 0 { sum / total as f64 } else { 0.0 };
-        let out =
-            NativeStorage::from_contiguous(NativeBuffer::F32(vec![mean as f32]), vec![]);
+        let out = NativeStorage::from_contiguous(NativeBuffer::F32(vec![mean as f32]), vec![]);
 
         let original_shape = t.shape.clone();
         let t_clone = t.clone();
@@ -219,10 +216,7 @@ impl<T: DType, D: kindle_core::prelude::Device> ReductionOps<Self> for NativeBac
                 op: "sum_dim",
                 expected: t.shape.clone(),
                 got: vec![dim],
-                msg: format!(
-                    "sum_dim: axis {dim} out of range for shape {:?}",
-                    t.shape
-                ),
+                msg: format!("sum_dim: axis {dim} out of range for shape {:?}", t.shape),
             });
         }
         let out = sum_axis_squeeze(t, dim);
@@ -311,24 +305,125 @@ impl<T: DType, D: kindle_core::prelude::Device> ReductionOps<Self> for NativeBac
         Ok(out)
     }
 
+    /// Mean over `dim`, removing that axis from the output shape.
+    /// Thin wrapper over `sum_axis_squeeze`, divided by the axis length.
+    /// (e.g. `[2, 3]` over dim 0 → `[3]`, each value = column sum / 2)
     fn mean_dim<K: DType>(
-        _t: &<Self as Backend>::Storage<K>,
-        _dim: usize,
+        t: &<Self as Backend>::Storage<K>,
+        dim: usize,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        Err(Error::UnsupportedBackendOperation {
-            op: "mean_dim",
-            backend: "Native",
-        })
+        if dim >= t.shape.len() {
+            return Err(Error::ShapeMismatch {
+                op: "mean_dim",
+                expected: t.shape.clone(),
+                got: vec![dim],
+                msg: format!("mean_dim: axis {dim} out of range for shape {:?}", t.shape),
+            });
+        }
+        let axis_len = t.shape[dim] as f64;
+        let summed = sum_axis_squeeze(t, dim);
+        let out_shape = summed.shape.clone();
+        let total: usize = out_shape.iter().product();
+        let mut idx = vec![0usize; out_shape.len()];
+        let mut vals = Vec::with_capacity(total);
+        for _ in 0..total {
+            vals.push((summed.get(&idx) / axis_len) as f32);
+            increment_index(&mut idx, &out_shape);
+        }
+        let out = NativeStorage::from_contiguous(NativeBuffer::F32(vals), out_shape);
+
+        let original_shape = t.shape.clone();
+        let (t_id, out_id) = (t.id, out.id);
+        tape::push(TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id],
+            backward: Box::new(move |grad_out: &NativeStorage| {
+                // Backward of mean_dim (squeeze): reinsert the axis with size
+                // 1, broadcast back to the original shape, then scale every
+                // materialized value by 1/axis_len (mirrors mean_all's 1/n
+                // relationship to sum_all).
+                let mut keepdim_shape = grad_out.shape.clone();
+                keepdim_shape.insert(dim, 1);
+                let keepdim = grad_out
+                    .reshape(&keepdim_shape)
+                    .expect("mean_dim backward: reinserting squeezed axis cannot fail");
+                let expanded = keepdim
+                    .broadcast_as(&original_shape)
+                    .expect("mean_dim backward: broadcast to original shape cannot fail");
+                let total: usize = original_shape.iter().product();
+                let mut idx = vec![0usize; original_shape.len()];
+                let mut vals = Vec::with_capacity(total);
+                for _ in 0..total {
+                    vals.push((expanded.get(&idx) / axis_len) as f32);
+                    increment_index(&mut idx, &original_shape);
+                }
+                vec![NativeStorage::from_contiguous(
+                    NativeBuffer::F32(vals),
+                    original_shape.clone(),
+                )]
+            }),
+        });
+
+        Ok(out)
     }
 
+    /// Mean over `dim`, keeping that axis as size 1.
+    /// Thin wrapper over `sum_axis_keepdim`, divided by the axis length.
+    /// (e.g. `[2, 3]` over dim 0 → `[1, 3]`)
     fn mean_keepdim<K: DType>(
-        _t: &<Self as Backend>::Storage<K>,
-        _dim: usize,
+        t: &<Self as Backend>::Storage<K>,
+        dim: usize,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        Err(Error::UnsupportedBackendOperation {
-            op: "mean_keepdim",
-            backend: "Native",
-        })
+        if dim >= t.shape.len() {
+            return Err(Error::ShapeMismatch {
+                op: "mean_keepdim",
+                expected: t.shape.clone(),
+                got: vec![dim],
+                msg: format!(
+                    "mean_keepdim: axis {dim} out of range for shape {:?}",
+                    t.shape
+                ),
+            });
+        }
+        let axis_len = t.shape[dim] as f64;
+        let summed = sum_axis_keepdim(t, dim);
+        let out_shape = summed.shape.clone();
+        let total: usize = out_shape.iter().product();
+        let mut idx = vec![0usize; out_shape.len()];
+        let mut vals = Vec::with_capacity(total);
+        for _ in 0..total {
+            vals.push((summed.get(&idx) / axis_len) as f32);
+            increment_index(&mut idx, &out_shape);
+        }
+        let out = NativeStorage::from_contiguous(NativeBuffer::F32(vals), out_shape);
+
+        let original_shape = t.shape.clone();
+        let (t_id, out_id) = (t.id, out.id);
+        tape::push(TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id],
+            backward: Box::new(move |grad_out: &NativeStorage| {
+                // Backward of mean_keepdim: broadcast the keepdim gradient
+                // (already size 1 on `dim`) back to the original shape, then
+                // scale by 1/axis_len.
+                let expanded = grad_out
+                    .broadcast_as(&original_shape)
+                    .expect("mean_keepdim backward: broadcast to original shape cannot fail");
+                let total: usize = original_shape.iter().product();
+                let mut idx = vec![0usize; original_shape.len()];
+                let mut vals = Vec::with_capacity(total);
+                for _ in 0..total {
+                    vals.push((expanded.get(&idx) / axis_len) as f32);
+                    increment_index(&mut idx, &original_shape);
+                }
+                vec![NativeStorage::from_contiguous(
+                    NativeBuffer::F32(vals),
+                    original_shape.clone(),
+                )]
+            }),
+        });
+
+        Ok(out)
     }
 
     fn max_dim<K: DType>(
@@ -400,6 +495,7 @@ impl<T: DType, D: kindle_core::prelude::Device> ReductionOps<Self> for NativeBac
 mod tests {
     use super::*;
     use crate::tape;
+    use crate::testutil::gradcheck;
 
     type B = NativeBackend<f32, kindle_core::prelude::Cpu>;
 
@@ -530,8 +626,7 @@ mod tests {
         let t = vector(vec![1.0, 2.0, 3.0]);
         let sum_out = B::sum_all::<f32>(&t).unwrap();
         // Manually build a loss = 2.0 * sum_out by pushing a tape entry
-        let loss =
-            NativeStorage::from_contiguous(NativeBuffer::F32(vec![0.0f32]), vec![]);
+        let loss = NativeStorage::from_contiguous(NativeBuffer::F32(vec![0.0f32]), vec![]);
         let (sum_id, loss_id) = (sum_out.id, loss.id);
         tape::push(TapeEntry {
             output_id: loss_id,
@@ -551,26 +646,55 @@ mod tests {
         assert_eq!(f32_vec(g), vec![2.0, 2.0, 2.0]);
     }
 
-    // --- unsupported method returns typed error, not panic ---
+    // --- mean_dim / mean_keepdim ---
 
     #[test]
-    fn unsupported_reduction_methods_return_typed_error() {
-        let t = matrix(vec![1.0, 2.0, 3.0, 4.0], 2, 2);
-        assert!(matches!(
-            B::max_all::<f32>(&t),
-            Err(Error::UnsupportedBackendOperation { op: "max_all", .. })
-        ));
-        assert!(matches!(
-            B::min_all::<f32>(&t),
-            Err(Error::UnsupportedBackendOperation { op: "min_all", .. })
-        ));
-        assert!(matches!(
-            B::mean_dim::<f32>(&t, 0),
-            Err(Error::UnsupportedBackendOperation { op: "mean_dim", .. })
-        ));
-        assert!(matches!(
-            B::argmax::<f32, i64>(&t, None),
-            Err(Error::UnsupportedBackendOperation { op: "argmax", .. })
-        ));
+    fn mean_dim_column_means_on_2x3() {
+        let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
+        let out = B::mean_dim::<f32>(&t, 0).unwrap();
+        assert_eq!(out.shape, vec![3]);
+        let vals = f32_vec(&out);
+        for (v, expected) in vals.iter().zip([2.5, 3.5, 4.5].iter()) {
+            assert!((v - expected).abs() < 1e-5, "got {v}, expected {expected}");
+        }
+    }
+
+    #[test]
+    fn mean_keepdim_column_means_on_2x3() {
+        let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
+        let out = B::mean_keepdim::<f32>(&t, 0).unwrap();
+        assert_eq!(out.shape, vec![1, 3]);
+        let vals = f32_vec(&out);
+        for (v, expected) in vals.iter().zip([2.5, 3.5, 4.5].iter()) {
+            assert!((v - expected).abs() < 1e-5, "got {v}, expected {expected}");
+        }
+    }
+
+    #[test]
+    fn mean_dim_gradcheck_dim0() {
+        let x = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
+        let op = |inputs: &[NativeStorage]| -> NativeStorage {
+            let reduced = B::mean_dim::<f32>(&inputs[0], 0).unwrap();
+            B::sum_all::<f32>(&reduced).unwrap()
+        };
+        let max_rel_err = gradcheck(op, &[x], 1e-4);
+        assert!(
+            max_rel_err < 1e-2,
+            "mean_dim gradcheck max relative error too high: {max_rel_err}"
+        );
+    }
+
+    #[test]
+    fn mean_keepdim_gradcheck_dim1() {
+        let x = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
+        let op = |inputs: &[NativeStorage]| -> NativeStorage {
+            let reduced = B::mean_keepdim::<f32>(&inputs[0], 1).unwrap();
+            B::sum_all::<f32>(&reduced).unwrap()
+        };
+        let max_rel_err = gradcheck(op, &[x], 1e-4);
+        assert!(
+            max_rel_err < 1e-2,
+            "mean_keepdim gradcheck max relative error too high: {max_rel_err}"
+        );
     }
 }
