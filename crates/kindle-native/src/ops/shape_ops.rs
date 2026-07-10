@@ -147,13 +147,59 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for NativeBacken
     }
 
     fn stack<K: DType>(
-        _t: &[&<Self as Backend>::Storage<K>],
-        _dim: usize,
+        tensors: &[&<Self as Backend>::Storage<K>],
+        dim: usize,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        Err(Error::UnsupportedBackendOperation {
-            op: "stack",
-            backend: "Native",
-        })
+        if tensors.is_empty() {
+            return Err(Error::ShapeMismatch {
+                op: "stack",
+                expected: vec![],
+                got: vec![],
+                msg: "stack requires at least one input tensor".to_string(),
+            });
+        }
+
+        let rank = tensors[0].shape.len();
+        if dim > rank {
+            return Err(Error::ShapeMismatch {
+                op: "stack",
+                expected: tensors[0].shape.clone(),
+                got: vec![dim],
+                msg: format!(
+                    "stack dim {dim} out of range for rank-{rank} shape {:?} (dim may equal rank to append at the end)",
+                    tensors[0].shape
+                ),
+            });
+        }
+
+        for t in tensors.iter().skip(1) {
+            if t.shape != tensors[0].shape {
+                return Err(Error::ShapeMismatch {
+                    op: "stack",
+                    expected: tensors[0].shape.clone(),
+                    got: t.shape.clone(),
+                    msg: format!(
+                        "stack requires every input to have an IDENTICAL shape; expected {:?}, got {:?}",
+                        tensors[0].shape, t.shape
+                    ),
+                });
+            }
+        }
+
+        // Unsqueeze each input by reshaping to a target shape with a new
+        // size-1 axis spliced in at `dim` (the TensorOps trait has no
+        // dedicated `unsqueeze` method), then delegate to Self::concat —
+        // this composition needs zero new backward code: reshape's and
+        // concat's own tape entries compose correctly on their own.
+        let mut unsqueezed = Vec::with_capacity(tensors.len());
+        for t in tensors.iter() {
+            let mut target_shape = t.shape.clone();
+            target_shape.insert(dim, 1);
+            unsqueezed.push(Self::reshape::<K>(t, &target_shape)?);
+        }
+
+        let refs: Vec<&<Self as Backend>::Storage<K>> = unsqueezed.iter().collect();
+        Self::concat::<K>(&refs, dim)
     }
 
     fn concat<K: DType>(
@@ -518,10 +564,19 @@ mod tests {
     #[test]
     fn unsupported_methods_return_typed_error_not_silent_placeholder() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
-        let result = TestBackend::stack::<f32>(&[&t], 0);
+        // `stack`/`concat`/`broadcast_left` all become real `TensorOps`
+        // implementations in this plan (03-04) — repointed to `int_to_scalar`,
+        // a genuinely still-unimplemented method (out of this phase's scope:
+        // `ModuleOps`/dtype-conversion methods are not part of TensorOps'
+        // closure target), preserving this smoke test's original intent of
+        // proving stub methods return typed errors, not silent placeholders.
+        let result = TestBackend::int_to_scalar::<f32>(&t);
         assert!(matches!(
             result,
-            Err(Error::UnsupportedBackendOperation { op: "stack", .. })
+            Err(Error::UnsupportedBackendOperation {
+                op: "int_to_scalar",
+                ..
+            })
         ));
     }
 
@@ -871,5 +926,85 @@ mod tests {
             f32_vec(&out),
             vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0, 100.0, 200.0]
         );
+    }
+
+    /// Task 2 Test 1: `stack(&[a, b], 0)` where `a`/`b` are both `[2,3]`
+    /// produces shape `[2,2,3]`, with the new axis-0 slices matching `a`/`b`
+    /// respectively.
+    #[test]
+    fn stack_dim0_inserts_new_leading_axis() {
+        let a = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
+        let b = matrix(vec![7.0, 8.0, 9.0, 10.0, 11.0, 12.0], 2, 3);
+        let out = TestBackend::stack::<f32>(&[&a, &b], 0).unwrap();
+        assert_eq!(out.shape, vec![2, 2, 3]);
+        assert_eq!(
+            f32_vec(&out),
+            vec![
+                1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0
+            ]
+        );
+    }
+
+    /// Task 2 Test 2: `stack(&[a, b], 2)` (dim equal to rank, appending at
+    /// the very end) where `a`/`b` are both `[2,3]` produces shape `[2,3,2]`.
+    #[test]
+    fn stack_dim_equal_to_rank_appends_new_trailing_axis() {
+        let a = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
+        let b = matrix(vec![7.0, 8.0, 9.0, 10.0, 11.0, 12.0], 2, 3);
+        let out = TestBackend::stack::<f32>(&[&a, &b], 2).unwrap();
+        assert_eq!(out.shape, vec![2, 3, 2]);
+        // Element [r,c,0] == a[r,c], [r,c,1] == b[r,c]
+        for r in 0..2 {
+            for c in 0..3 {
+                assert_eq!(out.get(&[r, c, 0]), a.get(&[r, c]));
+                assert_eq!(out.get(&[r, c, 1]), b.get(&[r, c]));
+            }
+        }
+    }
+
+    /// Task 2 Test 3: `stack` with mismatched-shape inputs returns
+    /// `Err(Error::ShapeMismatch)` — stack requires IDENTICAL shapes,
+    /// stricter than concat's "all-but-one-axis" rule.
+    #[test]
+    fn stack_rejects_mismatched_shapes() {
+        let a = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
+        let b = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0], 2, 4);
+        let result = TestBackend::stack::<f32>(&[&a, &b], 0);
+        assert!(matches!(result, Err(Error::ShapeMismatch { .. })));
+    }
+
+    /// Task 2 Test 4: `stack(&[], 0)` (empty input list) returns
+    /// `Err(Error::ShapeMismatch)`, not a panic.
+    #[test]
+    fn stack_empty_input_list_returns_err_not_panic() {
+        let result: Result<NativeStorage> = TestBackend::stack::<f32>(&[], 0);
+        assert!(matches!(result, Err(Error::ShapeMismatch { .. })));
+    }
+
+    /// Task 2 Test 5: `stack`'s backward correctly narrows-then-squeezes
+    /// `grad_out` back to each input's own ORIGINAL shape (the inserted
+    /// axis removed), with 2 distinct inputs.
+    #[test]
+    fn stack_backward_narrows_and_squeezes_grad_to_original_shape() {
+        let a = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
+        let b = matrix(vec![7.0, 8.0, 9.0, 10.0, 11.0, 12.0], 2, 3);
+        let out = TestBackend::stack::<f32>(&[&a, &b], 0).unwrap();
+        let grads = tape::backward(&out).unwrap();
+
+        let ga = grads.get(a.id).expect("a should have a gradient");
+        assert_eq!(ga.shape, vec![2, 3]);
+        for r in 0..2 {
+            for c in 0..3 {
+                assert_eq!(ga.get(&[r, c]), 1.0);
+            }
+        }
+
+        let gb = grads.get(b.id).expect("b should have a gradient");
+        assert_eq!(gb.shape, vec![2, 3]);
+        for r in 0..2 {
+            for c in 0..3 {
+                assert_eq!(gb.get(&[r, c]), 1.0);
+            }
+        }
     }
 }
