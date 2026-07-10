@@ -10,15 +10,18 @@
 //!   `float_to_vec1`, typed stubs for the rest.
 //! * `reduce` — full `ReductionOps` impl: real
 //!   `sum_all`/`mean_all`/`sum_dim`/`sum_keepdim`, typed stubs for the rest.
-//! * `loss` — full `LossOps` impl: real (composed) `mse_loss`;
-//!   `unimplemented!()` stubs for `l1_loss`/`bce_with_logits_loss`/
-//!   `cross_entropy_loss`.
-//! * `stubs` — `ModuleOps` only (all methods typed
-//!   `Error::UnsupportedBackendOperation`).
+//! * `loss` — full `LossOps` impl: real `mse_loss`/`l1_loss`/
+//!   `bce_with_logits_loss`/`cross_entropy_loss` (all 4 methods real,
+//!   no stubs remain — Plan 04-01/02).
+//! * `norm` — free-function helpers: `layer_norm_impl`/`batch_norm_impl`
+//!   (shared by `module`'s trait methods).
+//! * `module` — `ModuleOps` only: real `layer_norm`/`batch_norm`; 7 remaining
+//!   methods typed `Error::UnsupportedBackendOperation`.
 
 pub mod elementwise;
 pub mod loss;
 pub mod matmul;
+pub mod module;
+pub mod norm;
 pub mod reduce;
 pub mod shape_ops;
-pub mod stubs;

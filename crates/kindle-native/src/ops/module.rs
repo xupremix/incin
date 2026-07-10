@@ -1,12 +1,12 @@
-//! Trait-completeness stubs for `NativeBackend<T, D>` — `ModuleOps` only.
+//! `ModuleOps` for `NativeBackend<T, D>` — the crate's single `impl ModuleOps`
+//! block (Rust disallows splitting one trait impl across multiple files).
 //!
-//! **Plan 05 update:** `LossOps` is now implemented in `ops/loss.rs`.
-//! `TensorOps` lives in `ops/shape_ops.rs`, `ReductionOps` in `ops/reduce.rs`.
-//! This file retains only `ModuleOps` — all methods return a typed
-//! `Error::UnsupportedBackendOperation` since no `ModuleOps` method is
-//! reachable by `Linear::forward` + `mse_loss`'s actual call graph (confirmed
-//! by direct read of `nn/linear.rs` in RESEARCH.md — `Linear` is implemented
-//! as `matmul` + `add`, with no `ModuleOps` calls).
+//! As of Plan 04-03, two of the nine `ModuleOps` methods are real:
+//!   - `layer_norm` — delegates to `ops::norm::layer_norm_impl`
+//!   - `batch_norm`  — delegates to `ops::norm::batch_norm_impl`
+//!
+//! The remaining seven methods return `Error::UnsupportedBackendOperation`
+//! and will be replaced by later plans in this phase (embedding, conv, pooling).
 
 use kindle_core::err::Error;
 use kindle_core::prelude::{Backend, DType, ModuleOps, Result};
@@ -15,30 +15,24 @@ use crate::NativeBackend;
 
 impl<T: DType, D: kindle_core::prelude::Device> ModuleOps<Self> for NativeBackend<T, D> {
     fn layer_norm<K: DType>(
-        _t: &<Self as Backend>::Storage<K>,
-        _weight: &<Self as Backend>::Storage<K>,
-        _bias: Option<&<Self as Backend>::Storage<K>>,
-        _eps: f32,
+        t: &<Self as Backend>::Storage<K>,
+        weight: &<Self as Backend>::Storage<K>,
+        bias: Option<&<Self as Backend>::Storage<K>>,
+        eps: f32,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        Err(Error::UnsupportedBackendOperation {
-            op: "layer_norm",
-            backend: "Native",
-        })
+        crate::ops::norm::layer_norm_impl::<T, D, K>(t, weight, bias, eps)
     }
 
     fn batch_norm<K: DType>(
-        _t: &<Self as Backend>::Storage<K>,
-        _w: Option<&<Self as Backend>::Storage<K>>,
-        _b: Option<&<Self as Backend>::Storage<K>>,
-        _rm: Option<&<Self as Backend>::Storage<K>>,
-        _rv: Option<&<Self as Backend>::Storage<K>>,
-        _e: f32,
-        _momentum: f64,
+        t: &<Self as Backend>::Storage<K>,
+        w: Option<&<Self as Backend>::Storage<K>>,
+        b: Option<&<Self as Backend>::Storage<K>>,
+        rm: Option<&<Self as Backend>::Storage<K>>,
+        rv: Option<&<Self as Backend>::Storage<K>>,
+        e: f32,
+        momentum: f64,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        Err(Error::UnsupportedBackendOperation {
-            op: "batch_norm",
-            backend: "Native",
-        })
+        crate::ops::norm::batch_norm_impl::<T, D, K>(t, w, b, rm, rv, e, momentum)
     }
 
     fn embedding<K: DType, KInt: DType>(
