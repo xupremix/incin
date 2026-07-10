@@ -99,15 +99,29 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for NativeBacken
     }
 
     fn narrow<K: DType>(
-        _t: &<Self as Backend>::Storage<K>,
-        _dim: usize,
-        _start: usize,
-        _len: usize,
+        t: &<Self as Backend>::Storage<K>,
+        dim: usize,
+        start: usize,
+        len: usize,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        Err(Error::UnsupportedBackendOperation {
-            op: "narrow",
-            backend: "Native",
-        })
+        let out = t.narrow(dim, start, len)?;
+
+        let original_shape = t.shape.clone();
+        let mut region_start = vec![0usize; original_shape.len()];
+        region_start[dim] = start;
+        let (t_id, out_id) = (t.id, out.id);
+        tape::push(TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id],
+            backward: Box::new(move |grad_out: &NativeStorage| {
+                vec![crate::storage::scatter_into_zeros(
+                    &original_shape,
+                    &region_start,
+                    grad_out,
+                )]
+            }),
+        });
+        Ok(out)
     }
 
     fn squeeze<K: DType>(
@@ -329,11 +343,55 @@ mod tests {
     #[test]
     fn unsupported_methods_return_typed_error_not_silent_placeholder() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
-        let result = TestBackend::narrow::<f32>(&t, 0, 0, 1);
+        let result = TestBackend::stack::<f32>(&[&t], 0);
         assert!(matches!(
             result,
-            Err(Error::UnsupportedBackendOperation { op: "narrow", .. })
+            Err(Error::UnsupportedBackendOperation { op: "stack", .. })
         ));
+    }
+
+    /// Task 1 Test 1: `TensorOps::narrow` called through the trait matches
+    /// calling `NativeStorage::narrow` directly (thin-wrapper equivalence).
+    #[test]
+    fn narrow_through_trait_matches_direct_storage_call() {
+        let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 3, 2);
+        let direct = t.narrow(0, 1, 1).unwrap();
+        let via_trait = TestBackend::narrow::<f32>(&t, 0, 1, 1).unwrap();
+        assert_eq!(via_trait.shape, direct.shape);
+        assert_eq!(f32_vec(&via_trait), f32_vec(&direct));
+    }
+
+    /// Task 1 Test 2: `narrow`'s backward zero-pads `grad_out` back to the
+    /// original shape at the correct region.
+    #[test]
+    fn narrow_backward_zero_pads_grad_to_original_shape() {
+        let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 3, 2);
+        let out = TestBackend::narrow::<f32>(&t, 0, 1, 1).unwrap();
+        let grads = tape::backward(&out).unwrap();
+        let g = grads.get(t.id).expect("t should have a gradient");
+        assert_eq!(g.shape, vec![3, 2]);
+        assert_eq!(f32_vec(g), vec![0.0, 0.0, 1.0, 1.0, 0.0, 0.0]);
+    }
+
+    /// Task 1 Test 3: out-of-bounds narrow range returns `Err`, not a panic.
+    #[test]
+    fn narrow_out_of_bounds_returns_err_not_panic() {
+        let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 3, 2);
+        let result = TestBackend::narrow::<f32>(&t, 0, 2, 2);
+        assert!(matches!(result, Err(Error::ShapeMismatch { .. })));
+    }
+
+    /// Task 1 Test 4: `narrow`'s forward value on a pre-transposed
+    /// (non-contiguous) input still produces correct values.
+    #[test]
+    fn narrow_on_transposed_input_produces_correct_values_without_materializing() {
+        let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
+        let transposed = TestBackend::transpose::<f32>(&t, 0, 1).unwrap();
+        // transposed is logically [[1,4],[2,5],[3,6]], shape [3,2]
+        let narrowed = TestBackend::narrow::<f32>(&transposed, 0, 1, 1).unwrap();
+        assert_eq!(narrowed.shape, vec![1, 2]);
+        assert_eq!(narrowed.get(&[0, 0]), 2.0);
+        assert_eq!(narrowed.get(&[0, 1]), 5.0);
     }
 
     /// Test 6: `TensorOps::matmul` called through the trait on two rank-2
