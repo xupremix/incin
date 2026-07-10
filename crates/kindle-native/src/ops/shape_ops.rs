@@ -398,13 +398,12 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for NativeBacken
     }
 
     fn broadcast_left<K: DType>(
-        _t: &<Self as Backend>::Storage<K>,
-        _shape: &[usize],
+        t: &<Self as Backend>::Storage<K>,
+        shape: &[usize],
     ) -> Result<<Self as Backend>::Storage<K>> {
-        Err(Error::UnsupportedBackendOperation {
-            op: "broadcast_left",
-            backend: "Native",
-        })
+        let mut target_shape = shape.to_vec();
+        target_shape.extend_from_slice(&t.shape);
+        Self::broadcast_as::<K>(t, &target_shape)
     }
 
     fn float_to_scalar<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<f64> {
@@ -1006,5 +1005,62 @@ mod tests {
                 assert_eq!(gb.get(&[r, c]), 1.0);
             }
         }
+    }
+
+    /// Task 3 Test 1: `broadcast_left(t, &[4])` on a `[3]` vector produces
+    /// shape `[4,3]` (the `[4]` prepended as a new leading dim, `t`'s own
+    /// `[3]` shape unchanged and trailing).
+    #[test]
+    fn broadcast_left_prepends_single_new_leading_dim() {
+        let t = NativeStorage::from_contiguous(NativeBuffer::F32(vec![1.0, 2.0, 3.0]), vec![3]);
+        let out = TestBackend::broadcast_left::<f32>(&t, &[4]).unwrap();
+        assert_eq!(out.shape, vec![4, 3]);
+        for row in 0..4 {
+            assert_eq!(out.get(&[row, 0]), 1.0);
+            assert_eq!(out.get(&[row, 1]), 2.0);
+            assert_eq!(out.get(&[row, 2]), 3.0);
+        }
+    }
+
+    /// Task 3 Test 2: `broadcast_left(t, &[2,4])` on a `[3]` vector produces
+    /// shape `[2,4,3]` (multiple new leading dims prepended at once).
+    #[test]
+    fn broadcast_left_prepends_multiple_new_leading_dims() {
+        let t = NativeStorage::from_contiguous(NativeBuffer::F32(vec![1.0, 2.0, 3.0]), vec![3]);
+        let out = TestBackend::broadcast_left::<f32>(&t, &[2, 4]).unwrap();
+        assert_eq!(out.shape, vec![2, 4, 3]);
+        for i in 0..2 {
+            for j in 0..4 {
+                assert_eq!(out.get(&[i, j, 0]), 1.0);
+                assert_eq!(out.get(&[i, j, 1]), 2.0);
+                assert_eq!(out.get(&[i, j, 2]), 3.0);
+            }
+        }
+    }
+
+    /// Task 3 Test 3: `broadcast_left`'s backward correctly unbroadcasts
+    /// `grad_out` back to `t`'s own original shape, with ZERO new backward
+    /// code (delegates entirely to `Self::broadcast_as`).
+    #[test]
+    fn broadcast_left_backward_unbroadcasts_to_original_shape() {
+        let t = NativeStorage::from_contiguous(NativeBuffer::F32(vec![1.0, 2.0, 3.0]), vec![3]);
+        let out = TestBackend::broadcast_left::<f32>(&t, &[4]).unwrap();
+        let grads = tape::backward(&out).unwrap();
+        let g = grads.get(t.id).expect("t should have a gradient");
+        assert_eq!(g.shape, vec![3]);
+        // ones_like(out) [4,3] summed over the broadcast axis -> [4,4,4]
+        assert_eq!(f32_vec(g), vec![4.0, 4.0, 4.0]);
+    }
+
+    /// Task 3 Test 4: `broadcast_left` called through the trait matches
+    /// calling `NativeStorage::broadcast_as` directly with the manually
+    /// prepended target shape (thin-wrapper equivalence).
+    #[test]
+    fn broadcast_left_through_trait_matches_direct_broadcast_as_call() {
+        let t = NativeStorage::from_contiguous(NativeBuffer::F32(vec![1.0, 2.0, 3.0]), vec![3]);
+        let direct = t.broadcast_as(&[4, 3]).unwrap();
+        let via_trait = TestBackend::broadcast_left::<f32>(&t, &[4]).unwrap();
+        assert_eq!(via_trait.shape, direct.shape);
+        assert_eq!(via_trait.strides, direct.strides);
     }
 }
