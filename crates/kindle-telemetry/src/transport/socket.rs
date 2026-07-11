@@ -128,12 +128,22 @@ impl Transport for SocketTransport {
         line.push('\n');
         let bytes = line.as_bytes();
 
-        // Broadcast to every connected client, silently pruning ones whose
-        // write fails (disconnected client) -- a per-client write failure is
-        // not a transport-level failure (per behavior spec's 4th case), so
-        // this always returns Ok regardless of how many clients were
-        // pruned.
-        self.clients.retain_mut(|c| c.write_all(bytes).is_ok());
+        // Broadcast to every connected client, pruning ones whose write
+        // fails -- a per-client write failure is not a transport-level
+        // failure (per behavior spec's 4th case), so this always returns Ok
+        // regardless of how many clients were pruned. Unlike a clean
+        // disconnect, the failure is logged (WR-05, matching
+        // `write_to_all`'s existing `eprintln!` pattern for `FileTransport`
+        // failures) so a client pruned due to a genuine I/O error (e.g. a
+        // transient `EPIPE` unrelated to disconnecting) isn't completely
+        // invisible relative to file-transport failures.
+        self.clients.retain_mut(|c| match c.write_all(bytes) {
+            Ok(()) => true,
+            Err(e) => {
+                eprintln!("kindle-telemetry: socket client write failed, pruning client: {e}");
+                false
+            }
+        });
 
         Ok(())
     }
