@@ -4,7 +4,9 @@
 //! implements against. No concrete transport or emitter lives in this crate.
 
 pub mod events;
+pub mod reporter;
 
 pub mod prelude {
     pub use crate::events::*;
+    pub use crate::reporter::Reporter;
 }
