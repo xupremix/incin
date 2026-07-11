@@ -22,7 +22,7 @@ pub trait ConstDType: DType<Arg = ()> {
     const DTYPE: KindleDType;
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum KindleDType {
     U8,
     U32,

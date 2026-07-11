@@ -4,7 +4,7 @@ use std::collections::HashMap;
 pub type ValueId = usize;
 pub type NodeId = usize;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum OpType {
     ArgMax,
     ArgMin,
@@ -105,7 +105,7 @@ impl OpType {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Value {
     pub id: ValueId,
     pub shape: Vec<usize>,
@@ -113,7 +113,7 @@ pub struct Value {
     pub name: Option<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Node {
     pub id: NodeId,
     pub op: OpType,
@@ -122,7 +122,7 @@ pub struct Node {
     pub attributes: HashMap<String, AttributeValue>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum AttributeValue {
     Int(i64),
     Float(f32),
@@ -131,7 +131,7 @@ pub enum AttributeValue {
     Floats(Vec<f32>),
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Graph {
     pub values: HashMap<ValueId, Value>,
     pub nodes: Vec<Node>,
