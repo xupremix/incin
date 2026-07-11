@@ -4,7 +4,10 @@
 use clap::Parser;
 
 #[derive(Parser)]
-#[command(name = "kindle-viz", about = "Terminal UI for observing live Kindle training runs")]
+#[command(
+    name = "kindle-viz",
+    about = "Terminal UI for observing live Kindle training runs"
+)]
 struct Cli {
     /// Run id to attach to, resolved against kindle-telemetry's default
     /// (XDG) run directory.
