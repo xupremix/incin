@@ -33,6 +33,39 @@ use interprocess::local_socket::{
 use crate::events::Event;
 use crate::transport::Transport;
 
+/// Maximum accepted length for `run_id` in [`SocketTransport::bind`]
+/// (WR-02) -- generous relative to a UUIDv7's 36-character string form, but
+/// still bounded so a pathological caller can't construct an
+/// arbitrarily-long OS-level namespace string.
+const MAX_RUN_ID_LEN: usize = 128;
+
+/// Validates `run_id` before it is formatted into an OS-level socket
+/// namespace (WR-02): rejects empty, overly long, or path-like input (path
+/// separators or NUL bytes), since every current call site supplies a
+/// UUIDv7 from [`crate::run_dir::generate_run_id`] and `bind` is a `pub`
+/// API that should not silently accept arbitrary untrusted strings.
+fn validate_run_id(run_id: &str) -> std::io::Result<()> {
+    if run_id.is_empty() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "run_id must not be empty",
+        ));
+    }
+    if run_id.len() > MAX_RUN_ID_LEN {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("run_id must not exceed {MAX_RUN_ID_LEN} characters"),
+        ));
+    }
+    if run_id.contains(['/', '\\', '\0']) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "run_id must not contain path separators or NUL bytes",
+        ));
+    }
+    Ok(())
+}
+
 /// Broadcasts one JSONL line per [`Event`] to every currently-connected
 /// client stream. Byte-identical framing to [`super::file::FileTransport`]
 /// (TELEM-05's "same event schema" requirement): exactly one
@@ -48,7 +81,16 @@ impl SocketTransport {
     /// `kindle-viz-{run_id}.sock`), in non-blocking-accept mode. Does not
     /// block: `.accept()` will immediately return `WouldBlock` when no
     /// client is currently trying to connect.
+    ///
+    /// **`run_id` constraint (WR-02):** every current call site passes a
+    /// UUIDv7 from [`crate::run_dir::generate_run_id`], so `run_id` must be
+    /// non-empty, reasonably short, and free of path separators (`/`, `\`)
+    /// and NUL bytes before being formatted into an OS-level socket
+    /// namespace -- this is validated defensively here since `bind` is
+    /// `pub` and part of the crate's external API surface, not just an
+    /// internal helper restricted to `generate_run_id`'s output.
     pub fn bind(run_id: &str) -> std::io::Result<Self> {
+        validate_run_id(run_id)?;
         let name = format!("kindle-viz-{run_id}.sock").to_ns_name::<GenericNamespaced>()?;
         let listener = ListenerOptions::new().name(name).create_sync()?;
         // `Accept`: only `.accept()` is nonblocking -- the resulting `Stream`
@@ -142,6 +184,26 @@ mod tests {
             start.elapsed() < Duration::from_millis(500),
             "bind must not block"
         );
+    }
+
+    #[test]
+    fn bind_rejects_empty_run_id() {
+        let err = SocketTransport::bind("").expect_err("empty run_id must be rejected");
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
+    }
+
+    #[test]
+    fn bind_rejects_overly_long_run_id() {
+        let run_id = "a".repeat(MAX_RUN_ID_LEN + 1);
+        let err = SocketTransport::bind(&run_id).expect_err("overly long run_id must be rejected");
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
+    }
+
+    #[test]
+    fn bind_rejects_path_like_run_id() {
+        let err = SocketTransport::bind("../../etc/passwd")
+            .expect_err("path-like run_id must be rejected");
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
     }
 
     #[test]
