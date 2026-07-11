@@ -1,7 +1,10 @@
-//! `kindle-viz` binary entry point: CLI argument parsing and run-path
-//! resolution against `kindle-telemetry`'s XDG run-dir convention.
+//! `kindle-viz` binary entry point: CLI argument parsing, run-path
+//! resolution against `kindle-telemetry`'s XDG run-dir convention, and the
+//! panic-safe terminal lifecycle around the async event loop.
 
 use clap::Parser;
+use kindle_viz::app::{self, App};
+use kindle_viz::transport_reader::FileTransportReader;
 
 #[derive(Parser)]
 #[command(
@@ -20,7 +23,22 @@ struct Cli {
     run_dir: Option<std::path::PathBuf>,
 }
 
-fn main() -> anyhow::Result<()> {
+/// Installs a panic hook (before raw mode begins) that best-effort restores
+/// the terminal -- disable raw mode, leave the alternate screen -- so a
+/// genuine host-level panic (not a caught panel panic; see `dispatch.rs`)
+/// never leaves the user's terminal in raw/alternate-screen mode
+/// (RESEARCH.md Pitfall 5 / T-08-06).
+fn install_panic_hook() {
+    let previous_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |panic_info| {
+        previous_hook(panic_info);
+        let _ = crossterm::terminal::disable_raw_mode();
+        let _ = crossterm::execute!(std::io::stdout(), crossterm::terminal::LeaveAlternateScreen);
+    }));
+}
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     let run_path: Option<std::path::PathBuf> = if let Some(run_dir) = cli.run_dir {
@@ -36,8 +54,15 @@ fn main() -> anyhow::Result<()> {
         std::process::exit(0);
     };
 
-    println!("kindle-viz: resolved run path: {}", run_path.display());
-    // TODO(08-04): tokio::select! event loop + ratatui terminal setup
+    let reader = FileTransportReader::open(&run_path)?;
+    let app = App::new(Box::new(reader), run_path.display().to_string());
 
-    Ok(())
+    // Panic hook must be installed before ratatui::init() enters raw mode.
+    install_panic_hook();
+    let terminal = ratatui::init();
+    let result = app::run(app, terminal).await;
+    // Normal-exit terminal restore; the panic hook above covers the
+    // abnormal-exit path.
+    ratatui::restore();
+    result
 }
