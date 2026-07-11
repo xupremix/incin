@@ -1,4 +1,15 @@
 //! Crash-durable, append-only JSONL file transport (TELEM-04).
+//!
+//! **Durability scope (WR-04):** "crash-durable" here means durable against
+//! a *process* crash (or `kill`) mid-write -- `write_all`'s stdlib contract
+//! guarantees it either writes every byte or returns an `Err` before any
+//! partial write is externally observable via a *separate* read of the
+//! same file, so a crash can only ever truncate the tail of the last line,
+//! never corrupt a prior record. This does **not** cover power-loss / OS
+//! crash durability: there is no `fsync`/`sync_data()` call after
+//! `write_all`, so data that is only in the OS page cache (not yet flushed
+//! to physical storage) can still be lost on a hard power cut, even though
+//! ordering and prior-record integrity are preserved either way.
 
 use std::fs::{File, OpenOptions};
 use std::io::Write;
@@ -8,9 +19,11 @@ use crate::events::Event;
 use crate::transport::Transport;
 
 /// Appends one complete, self-delimited JSONL line per [`Event`] written.
-/// Opens with `O_APPEND` semantics so a crash mid-write can only ever
-/// truncate the tail of the *last* line, never corrupt prior records
-/// (T-07-02).
+/// Opens with `O_APPEND` semantics so a *process* crash mid-write can only
+/// ever truncate the tail of the *last* line, never corrupt prior records
+/// (T-07-02). See the module-level doc comment (WR-04) for the precise
+/// scope of this durability guarantee -- it does not cover power-loss/OS
+/// crash durability (no `fsync`/`sync_data()` is performed).
 pub struct FileTransport {
     file: File,
 }
