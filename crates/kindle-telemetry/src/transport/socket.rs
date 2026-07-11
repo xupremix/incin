@@ -196,23 +196,35 @@ mod tests {
         );
     }
 
+    // `SocketTransport` intentionally does not implement `Debug` (its fields —
+    // `interprocess`'s `Listener`/`Stream` — don't either), so these tests use an
+    // explicit `match` instead of `expect_err`/`unwrap_err`, both of which require
+    // `T: Debug` on the `Ok` side even when only the `Err` value is used.
     #[test]
     fn bind_rejects_empty_run_id() {
-        let err = SocketTransport::bind("").expect_err("empty run_id must be rejected");
+        let err = match SocketTransport::bind("") {
+            Err(e) => e,
+            Ok(_) => panic!("empty run_id must be rejected"),
+        };
         assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
     }
 
     #[test]
     fn bind_rejects_overly_long_run_id() {
         let run_id = "a".repeat(MAX_RUN_ID_LEN + 1);
-        let err = SocketTransport::bind(&run_id).expect_err("overly long run_id must be rejected");
+        let err = match SocketTransport::bind(&run_id) {
+            Err(e) => e,
+            Ok(_) => panic!("overly long run_id must be rejected"),
+        };
         assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
     }
 
     #[test]
     fn bind_rejects_path_like_run_id() {
-        let err = SocketTransport::bind("../../etc/passwd")
-            .expect_err("path-like run_id must be rejected");
+        let err = match SocketTransport::bind("../../etc/passwd") {
+            Err(e) => e,
+            Ok(_) => panic!("path-like run_id must be rejected"),
+        };
         assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
     }
 
