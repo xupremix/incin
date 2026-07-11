@@ -435,7 +435,64 @@ fn run_bench_telemetry(
     throughput_ok && loss_curve_identical
 }
 
+/// Runs a single, long-lived, telemetry-emitting training run suitable for a
+/// human to attach `kindle-viz` to *while it is still training* (D-03's
+/// live-attach proof). Unlike `--bench-telemetry` (three back-to-back runs
+/// that finish and exit), this prints the run-id/attach-command up front,
+/// then trains for `live_epochs` (200) epochs with a per-epoch sleep so the
+/// whole run takes on the order of tens of seconds -- long enough to launch
+/// `kindle-viz` mid-run and observe live updates.
+///
+/// Loss-curve-only proof (no gradient-norm sampling) per D-01/D-02 --
+/// gradient-norm panels are Phase 9 scope.
+///
+/// `train()` has no built-in per-epoch sleep hook and this plan's
+/// `files_modified` is scoped to this file only, so the delay is achieved by
+/// calling `train::<NB>()` once per single epoch in a loop here, threading
+/// the model's `state_dict()` forward between iterations via
+/// `StateDict::state_dict`/`load_state_dict` so training genuinely continues
+/// (loss keeps decreasing) across the per-epoch sleep rather than restarting
+/// from scratch each iteration.
+fn run_live(images_bytes: &[u8], labels: &[u32], n_samples: usize, lr: f64) -> anyhow::Result<()> {
+    let run_dir = kindle_telemetry::run_dir::default_run_dir()?;
+    let run_id = kindle_telemetry::run_dir::generate_run_id();
+    let file_transport = kindle_telemetry::transport::file::FileTransport::open(
+        &run_dir.join(format!("{run_id}.jsonl")),
+    )?;
+    let emitter = kindle_telemetry::emitter::Emitter::new(vec![Box::new(file_transport)]);
+
+    println!("live run-id: {run_id}");
+    println!("kindle-viz --run-id {run_id}");
+
+    const LIVE_EPOCHS: usize = 200;
+    let mut state: Option<std::collections::HashMap<String, Tensor<Dyn, NB>>> = None;
+
+    for _ in 0..LIVE_EPOCHS {
+        let (_losses, _elapsed, model) = train::<NB>(
+            images_bytes,
+            labels,
+            n_samples,
+            1,
+            lr,
+            Some(&emitter),
+            None,
+            state.as_ref(),
+        );
+
+        let mut next_state = std::collections::HashMap::new();
+        model.state_dict("", &mut next_state);
+        state = Some(next_state);
+
+        std::thread::sleep(std::time::Duration::from_millis(200));
+    }
+
+    emitter.shutdown();
+
+    Ok(())
+}
+
 fn main() -> anyhow::Result<()> {
+    let live = std::env::args().any(|a| a == "--live");
     let bench_telemetry = std::env::args().any(|a| a == "--bench-telemetry");
 
     println!("Starting native_training_demo (NATBACK-11 definition-of-done example)");
@@ -450,6 +507,10 @@ fn main() -> anyhow::Result<()> {
         "Training SimpleCnn (conv2d->batch_norm->relu->max_pool2d->flatten->linear) \
          on {n_samples} synthetic 8x8 samples for {n_epochs} epochs (lr={lr})"
     );
+
+    if live {
+        return run_live(&images_bytes, &labels, n_samples, lr);
+    }
 
     if bench_telemetry {
         let ok = run_bench_telemetry(&images_bytes, &labels, n_samples, n_epochs, lr);
