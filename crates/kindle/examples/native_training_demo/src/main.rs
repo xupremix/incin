@@ -9,7 +9,7 @@
 //! `Tensor<S,B,K,D,G>` / `Module` / `Optimizer` API end-to-end, not raw
 //! `Backend::Storage` calls.
 
-use kindle::nn::{CrossEntropyLoss, Mean};
+use kindle::nn::{CrossEntropyLoss, Mean, StateDict};
 use kindle::optim::SGD;
 use kindle::prelude::*;
 use kindle_backends::candle::CandleBackend;
@@ -204,6 +204,13 @@ impl MakeLabels for CB {
 /// mean-pixel-value separability rule without needing Adam's adaptive
 /// per-parameter learning rates -- a plain fixed learning rate is enough for
 /// a 2-class linearly-separable-after-conv problem this small.
+///
+/// `clippy::too_many_arguments` is allowed here: this is example/test-harness
+/// code (not library `src/`), and the extra `reporter`/`grad_sample_every_n`/
+/// `init_state` parameters are this plan's (07-04) telemetry-dogfooding
+/// extension of an otherwise-unchanged existing function -- bundling them
+/// into a config struct would be pure ceremony for a single call site.
+#[allow(clippy::too_many_arguments)]
 fn train<B: MakeLabels>(
     images_bytes: &[u8],
     label_values: &[u32],
@@ -212,7 +219,8 @@ fn train<B: MakeLabels>(
     lr: f64,
     reporter: Option<&kindle_telemetry::emitter::Emitter>,
     grad_sample_every_n: Option<usize>,
-) -> (Vec<f64>, std::time::Duration)
+    init_state: Option<&std::collections::HashMap<String, Tensor<Dyn, B>>>,
+) -> (Vec<f64>, std::time::Duration, SimpleCnn<B>)
 where
     B::FloatElem: ConstDType,
     B::Device: ConstDevice,
@@ -235,7 +243,23 @@ where
 
     // conv1: 1 -> 4 channels, 3x3/stride1/pad1 keeps spatial size at 8x8.
     // pool: 2x2/stride2 halves spatial size to 4x4 -> flattened_dim = 4*4*4 = 64.
-    let model = SimpleCnn::<B>::new(1, 4, 2, 64).expect("model init");
+    let mut model = SimpleCnn::<B>::new(1, 4, 2, 64).expect("model init");
+
+    // `--bench-telemetry`'s loss-curve-identity check (ARCH-02/TELEM-07)
+    // requires the *same* initial weights across the compared runs --
+    // `SimpleCnn::new`'s `randn`/`rand`-based weight init is otherwise
+    // unseeded and differs across independent calls, which would make any
+    // loss-curve difference ambiguous (telemetry effect vs. random-init
+    // effect). When `init_state` is provided, load it over the freshly
+    // initialized model before training so both compared runs start from
+    // bit-identical weights; the non-bench call sites in `main()` pass
+    // `None` and are unaffected.
+    if let Some(state) = init_state {
+        model
+            .load_state_dict("", state)
+            .expect("load_state_dict (shared init weights)");
+    }
+
     let mut optim = SGD::<B>::new(model.parameters(), lr);
     let ce_loss = CrossEntropyLoss::<Mean>::new();
 
@@ -295,10 +319,125 @@ where
     }
     let elapsed = start.elapsed();
 
-    (losses, elapsed)
+    (losses, elapsed, model)
+}
+
+/// Runs `train::<NB>()` three ways back-to-back on the identical dataset and
+/// hyperparameters -- telemetry off, telemetry on at recommended defaults
+/// (file transport only, gradient sampling off), and telemetry on with
+/// worst-case gradient sampling every step -- printing wall-clock timing for
+/// each, and asserting the off/on-default loss curves are bit-for-bit
+/// identical (per this plan's ARCH-02/TELEM-07 proof requirement).
+///
+/// Returns `true` iff both the throughput-regression bar (run 2 vs run 1,
+/// <= 2.0%) and the loss-curve-identity check (run 1 == run 2, exactly) pass.
+/// Run 3 (worst-case gradient sampling) is printed but never gates
+/// pass/fail -- per RESEARCH.md's Code Example 5, worst-case sampling is
+/// explicitly expected to cost more.
+fn run_bench_telemetry(
+    images_bytes: &[u8],
+    labels: &[u32],
+    n_samples: usize,
+    n_epochs: usize,
+    lr: f64,
+) -> bool {
+    println!("Running --bench-telemetry (TELEM-07/ARCH-02 dogfooding proof)");
+    println!();
+
+    // `SimpleCnn::new`'s weight init (`randn`/`rand`) is unseeded, so two
+    // independent `train()` calls would start from different initial weights
+    // and produce different loss curves regardless of telemetry -- which
+    // would make the loss-curve-identity check meaningless (telemetry effect
+    // vs. random-init effect, indistinguishable). To isolate telemetry as the
+    // only variable, build one throwaway model here purely to snapshot its
+    // freshly initialized weights via `state_dict`, then pass that same
+    // snapshot as `init_state` into all three runs below so they all start
+    // from bit-identical weights.
+    let init_model = SimpleCnn::<NB>::new(1, 4, 2, 64).expect("init snapshot model");
+    let mut init_state = std::collections::HashMap::new();
+    init_model.state_dict("", &mut init_state);
+
+    // Run 1: baseline, telemetry off entirely.
+    let (losses_1, elapsed_1, _model_1) = train::<NB>(
+        images_bytes,
+        labels,
+        n_samples,
+        n_epochs,
+        lr,
+        None,
+        None,
+        Some(&init_state),
+    );
+
+    // Run 2: telemetry on at recommended defaults -- file transport only,
+    // gradient sampling off. Constructed via the same run_dir/generate_run_id
+    // + FileTransport::open + Emitter::new path a real caller would use.
+    let run_dir = kindle_telemetry::run_dir::default_run_dir()
+        .expect("default_run_dir should succeed for --bench-telemetry");
+    let run_id_2 = kindle_telemetry::run_dir::generate_run_id();
+    let file_transport_2 = kindle_telemetry::transport::file::FileTransport::open(
+        &run_dir.join(format!("{run_id_2}.jsonl")),
+    )
+    .expect("FileTransport::open should succeed for --bench-telemetry run 2");
+    let emitter_2 = kindle_telemetry::emitter::Emitter::new(vec![Box::new(file_transport_2)]);
+    let (losses_2, elapsed_2, _model_2) = train::<NB>(
+        images_bytes,
+        labels,
+        n_samples,
+        n_epochs,
+        lr,
+        Some(&emitter_2),
+        None,
+        Some(&init_state),
+    );
+
+    // Run 3: worst case -- telemetry on, gradient-norm sampling every step.
+    // A separate Emitter instance, own run_id, same file-transport setup.
+    let run_id_3 = kindle_telemetry::run_dir::generate_run_id();
+    let file_transport_3 = kindle_telemetry::transport::file::FileTransport::open(
+        &run_dir.join(format!("{run_id_3}.jsonl")),
+    )
+    .expect("FileTransport::open should succeed for --bench-telemetry run 3");
+    let emitter_3 = kindle_telemetry::emitter::Emitter::new(vec![Box::new(file_transport_3)]);
+    let (_losses_3, elapsed_3, _model_3) = train::<NB>(
+        images_bytes,
+        labels,
+        n_samples,
+        n_epochs,
+        lr,
+        Some(&emitter_3),
+        Some(1),
+        Some(&init_state),
+    );
+
+    let pct_regression =
+        (elapsed_2.as_secs_f64() - elapsed_1.as_secs_f64()) / elapsed_1.as_secs_f64() * 100.0;
+
+    println!("telemetry off                         : {elapsed_1:?}");
+    println!(
+        "telemetry on (default, no grad sample) : {elapsed_2:?}  ({pct_regression:+.2}% vs off)"
+    );
+    println!("telemetry on (worst case, every step)  : {elapsed_3:?}  (not gated, informational)");
+    println!();
+
+    let throughput_ok = pct_regression <= 2.0;
+    println!(
+        "Throughput regression (<= 2.0% bar, off vs default-on): {}",
+        if throughput_ok { "PASS" } else { "FAIL" }
+    );
+
+    let loss_curve_identical = losses_1 == losses_2;
+    println!(
+        "Loss-curve identity (off vs default-on, exact equality): {}",
+        if loss_curve_identical { "PASS" } else { "FAIL" }
+    );
+
+    throughput_ok && loss_curve_identical
 }
 
 fn main() -> anyhow::Result<()> {
+    let bench_telemetry = std::env::args().any(|a| a == "--bench-telemetry");
+
     println!("Starting native_training_demo (NATBACK-11 definition-of-done example)");
 
     let (images, labels, n_samples) = make_dataset();
@@ -312,10 +451,34 @@ fn main() -> anyhow::Result<()> {
          on {n_samples} synthetic 8x8 samples for {n_epochs} epochs (lr={lr})"
     );
 
-    let (native_losses, native_elapsed) =
-        train::<NB>(&images_bytes, &labels, n_samples, n_epochs, lr, None, None);
-    let (candle_losses, candle_elapsed) =
-        train::<CB>(&images_bytes, &labels, n_samples, n_epochs, lr, None, None);
+    if bench_telemetry {
+        let ok = run_bench_telemetry(&images_bytes, &labels, n_samples, n_epochs, lr);
+        if !ok {
+            std::process::exit(1);
+        }
+        return Ok(());
+    }
+
+    let (native_losses, native_elapsed, _native_model) = train::<NB>(
+        &images_bytes,
+        &labels,
+        n_samples,
+        n_epochs,
+        lr,
+        None,
+        None,
+        None,
+    );
+    let (candle_losses, candle_elapsed, _candle_model) = train::<CB>(
+        &images_bytes,
+        &labels,
+        n_samples,
+        n_epochs,
+        lr,
+        None,
+        None,
+        None,
+    );
 
     println!();
     for i in 0..n_epochs {
