@@ -39,15 +39,39 @@ const BULK_DRAIN_BATCH: usize = 256;
 /// busy-spin when both channels are empty; never used for dequeue ordering.
 const IDLE_WAIT: Duration = Duration::from_millis(200);
 
-/// Fire-and-forget, non-blocking [`Reporter`] implementation. Holds two
+/// Non-blocking [`Reporter`] implementation. Holds two
 /// `crossbeam_channel::Sender<Event>` handles -- one small, always-delivered
 /// priority lane, one larger, drop-eligible bulk lane -- plus an atomic
 /// dropped-event counter. Construction spawns exactly one background thread
 /// that owns both `Receiver`s and drains them into the given [`Transport`]s.
+///
+/// Dropping an `Emitter` (or calling [`Emitter::shutdown`]) drops both
+/// `Sender`s, which lets the writer thread observe `Disconnected` on both
+/// channels and exit its loop, and then joins that thread so all in-flight
+/// events are guaranteed to have been drained and written before the drop
+/// (or `shutdown` call) returns -- see `Drop for Emitter`.
 pub struct Emitter {
-    priority_tx: Sender<Event>,
-    bulk_tx: Sender<Event>,
+    // Wrapped in `Option` solely so `Drop::drop` can `.take()` (drop) them
+    // *before* joining the writer thread -- `Drop::drop` runs before a
+    // struct's own fields are dropped, so without this the writer thread
+    // would never observe `Disconnected` and `join()` would block forever.
+    // Always `Some` outside of `Drop::drop`; `send_bulk`/`send_priority`
+    // rely on this via `.as_ref().expect(...)`.
+    priority_tx: Option<Sender<Event>>,
+    bulk_tx: Option<Sender<Event>>,
+    // A second handle onto the same bulk channel (crossbeam channels are
+    // MPMC, so this is a cheap clone of the `Receiver` also held by the
+    // writer thread), used exclusively by `send_bulk` to evict the oldest
+    // queued event on overflow (true drop-oldest per D-05). Never used to
+    // consume events destined for a `Transport` -- that's the writer
+    // thread's job via its own `Receiver` handle.
+    bulk_rx_for_eviction: Receiver<Event>,
     dropped_count: Arc<AtomicU64>,
+    /// Count of `Transport::write_event` failures across all transports and
+    /// the whole run (WR-01) -- distinct from `dropped_count`, which only
+    /// tracks channel-overflow drops, never write failures.
+    write_error_count: Arc<AtomicU64>,
+    writer_handle: Option<std::thread::JoinHandle<()>>,
 }
 
 impl Emitter {
@@ -68,33 +92,69 @@ impl Emitter {
     ) -> Self {
         let (priority_tx, priority_rx) = bounded::<Event>(priority_cap);
         let (bulk_tx, bulk_rx) = bounded::<Event>(bulk_cap);
+        let bulk_rx_for_eviction = bulk_rx.clone();
         let dropped_count = Arc::new(AtomicU64::new(0));
+        let write_error_count = Arc::new(AtomicU64::new(0));
+        let write_error_count_writer = Arc::clone(&write_error_count);
 
-        std::thread::spawn(move || {
-            writer_loop(priority_rx, bulk_rx, &mut transports);
+        let writer_handle = std::thread::spawn(move || {
+            writer_loop(
+                priority_rx,
+                bulk_rx,
+                &mut transports,
+                &write_error_count_writer,
+            );
         });
 
         Self {
-            priority_tx,
-            bulk_tx,
+            priority_tx: Some(priority_tx),
+            bulk_tx: Some(bulk_tx),
+            bulk_rx_for_eviction,
             dropped_count,
+            write_error_count,
+            writer_handle: Some(writer_handle),
         }
     }
 
+    /// Explicitly drains and shuts down this `Emitter`: drops both senders
+    /// (letting the writer thread observe `Disconnected` on both channels
+    /// and exit its loop), then joins the writer thread so all buffered
+    /// events are guaranteed to have been drained and written to every
+    /// [`Transport`] before this call returns.
+    ///
+    /// Equivalent to simply dropping the `Emitter` (see `Drop for Emitter`),
+    /// but named/callable explicitly so callers who care about durability
+    /// (e.g. `--bench-telemetry`, or any real training run) have a
+    /// self-documenting way to block until the writer thread has drained
+    /// everything, rather than relying on implicit scope-exit behavior.
+    pub fn shutdown(self) {
+        // `self` is consumed and its `Drop` impl runs at the end of this
+        // function, which drops both senders and joins the writer thread.
+    }
+
     /// Drop-eligible enqueue for high-frequency events (D-05/D-07). On a
-    /// full channel, increments `dropped_count` and attempts one best-effort
-    /// retry `try_send`. Never blocks the calling thread.
+    /// full channel, increments `dropped_count`, evicts the oldest queued
+    /// event via `try_recv`, then retries `try_send` with the new (freshest)
+    /// event -- true drop-oldest semantics per D-05: the channel stays full
+    /// of the most recent events, and the stalest queued item is discarded
+    /// first. Never blocks the calling thread.
     fn send_bulk(&self, event: Event) {
-        match self.bulk_tx.try_send(event) {
+        // `.expect`: only `None` during/after `Drop::drop`, at which point
+        // no caller can still hold a live `&self` to invoke this method.
+        let bulk_tx = self.bulk_tx.as_ref().expect("bulk_tx taken before drop");
+        match bulk_tx.try_send(event) {
             Ok(()) => {}
             Err(TrySendError::Full(event)) => {
-                // Drop-oldest intent (D-05): best-effort retry after
-                // counting the drop. If the retry also fails (raced by
-                // another producer), the event is dropped outright -- still
-                // correct, just less precise about which element was
-                // evicted.
+                // Drop-oldest (D-05): count the drop, then evict the oldest
+                // queued item via try_recv to make room, then retry
+                // try_send with the new (freshest) event. If the evict-then-
+                // retry also fails (raced by another concurrent producer
+                // refilling the slot first), the new event is dropped
+                // outright -- still correct, just less precise about which
+                // element ultimately ends up evicted under contention.
                 self.dropped_count.fetch_add(1, Ordering::Relaxed);
-                let _ = self.bulk_tx.try_send(event);
+                let _ = self.bulk_rx_for_eviction.try_recv();
+                let _ = bulk_tx.try_send(event);
             }
             Err(TrySendError::Disconnected(_)) => {
                 // Writer thread died -- nothing more we can do; never panic
@@ -108,12 +168,46 @@ impl Emitter {
     /// `Result` is discarded because `Reporter` methods are infallible by
     /// contract (see `reporter.rs`).
     fn send_priority(&self, event: Event) {
-        let _ = self.priority_tx.send_timeout(event, PRIORITY_SEND_TIMEOUT);
+        // `.expect`: only `None` during/after `Drop::drop`, at which point
+        // no caller can still hold a live `&self` to invoke this method.
+        let priority_tx = self
+            .priority_tx
+            .as_ref()
+            .expect("priority_tx taken before drop");
+        let _ = priority_tx.send_timeout(event, PRIORITY_SEND_TIMEOUT);
     }
 
     /// Reads the monotonic dropped-events counter (D-06).
     pub fn dropped_count(&self) -> u64 {
         self.dropped_count.load(Ordering::Relaxed)
+    }
+
+    /// Reads the monotonic transport write-failure counter (WR-01) --
+    /// incremented once per failing `Transport::write_event` call, across
+    /// every transport and the whole run. Distinct from `dropped_count`,
+    /// which only tracks channel-overflow drops on the training-thread
+    /// side, never writer-thread I/O failures.
+    pub fn write_error_count(&self) -> u64 {
+        self.write_error_count.load(Ordering::Relaxed)
+    }
+}
+
+impl Drop for Emitter {
+    /// Drops both senders (via `.take()`) *before* joining the writer
+    /// thread. `Drop::drop` runs before a struct's own fields are dropped,
+    /// so without this explicit `.take()` the writer thread would never
+    /// observe `Disconnected` on either channel and `join()` would block
+    /// forever. Dropping the senders here first lets the writer thread's
+    /// `try_recv` loop see both channels disconnect, drain whatever was
+    /// left, and return -- at which point `join()` is guaranteed to
+    /// complete promptly.
+    fn drop(&mut self) {
+        drop(self.priority_tx.take());
+        drop(self.bulk_tx.take());
+
+        if let Some(handle) = self.writer_handle.take() {
+            let _ = handle.join();
+        }
     }
 }
 
@@ -169,6 +263,7 @@ fn writer_loop(
     priority_rx: Receiver<Event>,
     bulk_rx: Receiver<Event>,
     transports: &mut [Box<dyn Transport>],
+    write_error_count: &AtomicU64,
 ) {
     loop {
         // Drain priority fully every iteration -- biased toward priority.
@@ -179,7 +274,7 @@ fn writer_loop(
         let mut priority_disconnected = false;
         loop {
             match priority_rx.try_recv() {
-                Ok(event) => write_to_all(transports, &event),
+                Ok(event) => write_to_all(transports, &event, write_error_count),
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => {
                     priority_disconnected = true;
@@ -194,7 +289,7 @@ fn writer_loop(
         let mut bulk_disconnected = false;
         for _ in 0..BULK_DRAIN_BATCH {
             match bulk_rx.try_recv() {
-                Ok(event) => write_to_all(transports, &event),
+                Ok(event) => write_to_all(transports, &event, write_error_count),
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => {
                     bulk_disconnected = true;
@@ -223,13 +318,34 @@ fn writer_loop(
     }
 }
 
+/// Cap on how many `eprintln!` lines `write_to_all` will emit for
+/// transport-write failures (WR-01) -- beyond this, failures are still
+/// counted in `write_error_count` but no longer printed, so a persistently
+/// broken transport doesn't spam stderr for the rest of the run.
+const MAX_WRITE_ERROR_PRINTS: u64 = 10;
+
 /// Writes `event` to every transport, never panicking on a single
-/// transport's I/O error -- logs via `eprintln!` and continues to the next
-/// transport so one broken transport doesn't stop the others.
-fn write_to_all(transports: &mut [Box<dyn Transport>], event: &Event) {
+/// transport's I/O error. Every failure increments `write_error_count`
+/// (WR-01) so a caller can observe persistent transport breakage even when
+/// stderr isn't captured; the `eprintln!` itself is rate-limited to the
+/// first `MAX_WRITE_ERROR_PRINTS` occurrences to avoid unbounded stderr
+/// spam from a transport that fails on every subsequent write.
+fn write_to_all(
+    transports: &mut [Box<dyn Transport>],
+    event: &Event,
+    write_error_count: &AtomicU64,
+) {
     for t in transports.iter_mut() {
         if let Err(e) = t.write_event(event) {
-            eprintln!("kindle-telemetry: transport write failed: {e}");
+            let prior_count = write_error_count.fetch_add(1, Ordering::Relaxed);
+            if prior_count < MAX_WRITE_ERROR_PRINTS {
+                eprintln!("kindle-telemetry: transport write failed: {e}");
+            } else if prior_count == MAX_WRITE_ERROR_PRINTS {
+                eprintln!(
+                    "kindle-telemetry: transport write failed {MAX_WRITE_ERROR_PRINTS} times; \
+                     suppressing further messages for this run (see Emitter::write_error_count)"
+                );
+            }
         }
     }
 }
