@@ -6,4 +6,5 @@
 pub mod app;
 pub mod dispatch;
 pub mod err;
+pub mod panels;
 pub mod transport_reader;
