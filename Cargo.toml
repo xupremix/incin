@@ -7,6 +7,7 @@ members = [
     "crates/kindle-core",
     "crates/kindle-data",
     "crates/kindle-macros",
+    "crates/kindle-telemetry",
     "crates/kindle-native",
     "crates/kindle/examples/*",
     "crates/kindle-core/examples/*"
