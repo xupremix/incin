@@ -6,10 +6,16 @@
 
 pub mod err;
 pub mod event;
+pub mod keymap;
+pub mod panel;
+pub mod plugin;
 pub mod render_ctx;
 
 pub mod prelude {
     pub use crate::err::{Error, Result};
     pub use crate::event::*;
+    pub use crate::keymap::{Action, KeymapProvider};
+    pub use crate::panel::Panel;
+    pub use crate::plugin::Plugin;
     pub use crate::render_ctx::{HitId, RenderCtx};
 }
