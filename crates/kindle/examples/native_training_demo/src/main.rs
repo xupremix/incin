@@ -14,6 +14,7 @@ use kindle::optim::SGD;
 use kindle::prelude::*;
 use kindle_backends::candle::CandleBackend;
 use kindle_native::NativeBackend;
+use kindle_telemetry::reporter::Reporter;
 
 type NB = NativeBackend<f32, Cpu>;
 type CB = CandleBackend<f32, Cpu>;
@@ -34,7 +35,18 @@ pub struct SimpleCnn<B: Backend> {
     // applies its own learned affine shift, so a conv bias is redundant
     // here regardless -- disabling it sidesteps the bug with no loss of
     // model expressiveness.
-    pub conv1: kindle::nn::Conv2d<(usize, usize, U3, U1, U1, U1), B, kindle::nn::optional::False>,
+    pub conv1: kindle::nn::Conv2d<
+        (
+            usize,
+            usize,
+            typenum::U3,
+            typenum::U1,
+            typenum::U1,
+            typenum::U1,
+        ),
+        B,
+        kindle::nn::optional::False,
+    >,
     pub bn1: kindle::nn::BatchNorm2d<(usize,), B>,
     // MaxPool2d is a zero-sized, stateless module (no parameters, no
     // device-bound buffers) and does not implement `ToDevice` -- it is
@@ -42,7 +54,7 @@ pub struct SimpleCnn<B: Backend> {
     // impls, which is semantically correct since it has nothing to collect
     // or move across devices.
     #[module(ignore)]
-    pub pool: kindle::nn::MaxPool2d<U2, U2>,
+    pub pool: kindle::nn::MaxPool2d<typenum::U2, typenum::U2>,
     pub fc: kindle::nn::Linear<Dyn, B>,
 }
 
@@ -59,12 +71,19 @@ where
     ) -> Result<Self> {
         Ok(Self {
             conv1: kindle::nn::Conv2d::<
-                (usize, usize, U3, U1, U1, U1),
+                (
+                    usize,
+                    usize,
+                    typenum::U3,
+                    typenum::U1,
+                    typenum::U1,
+                    typenum::U1,
+                ),
                 B,
                 kindle::nn::optional::False,
             >::new_with((conv_out_channels, in_channels))?,
             bn1: kindle::nn::BatchNorm2d::<(usize,), B>::new_with((conv_out_channels,), 1e-5, 0.1)?,
-            pool: kindle::nn::MaxPool2d::<U2, U2>::new()?,
+            pool: kindle::nn::MaxPool2d::<typenum::U2, typenum::U2>::new()?,
             fc: kindle::nn::Linear::<Dyn, B>::new_with((flattened_dim, num_classes))?,
         })
     }
@@ -191,6 +210,8 @@ fn train<B: MakeLabels>(
     n_samples: usize,
     n_epochs: usize,
     lr: f64,
+    reporter: Option<&kindle_telemetry::emitter::Emitter>,
+    grad_sample_every_n: Option<usize>,
 ) -> (Vec<f64>, std::time::Duration)
 where
     B::FloatElem: ConstDType,
@@ -220,7 +241,7 @@ where
 
     let mut losses = Vec::with_capacity(n_epochs);
     let start = std::time::Instant::now();
-    for _ in 0..n_epochs {
+    for step in 0..n_epochs {
         let output = model.forward(images.clone()).expect("forward");
         let loss = ce_loss
             .forward(&output, &labels)
@@ -228,7 +249,48 @@ where
         let loss_val: f32 = loss.to_scalar().expect("loss scalar");
         losses.push(loss_val as f64);
 
+        if let Some(r) = reporter {
+            r.log_scalar(kindle_telemetry::events::ScalarEvent {
+                schema_version: kindle_telemetry::events::CURRENT_SCHEMA_VERSION,
+                step,
+                name: "loss".to_string(),
+                value: loss_val as f64,
+            });
+        }
+
         let grads = loss.backward().expect("backward");
+
+        // Gradient-norm sampling is strictly opt-in and synchronous: only
+        // ever computed when the caller explicitly requests it via
+        // `grad_sample_every_n`, and only on the requested cadence -- never
+        // an unconditional per-step device-to-host copy (per this plan's
+        // must_haves and ARCH-02).
+        if let (Some(r), Some(n)) = (reporter, grad_sample_every_n)
+            && n > 0
+            && step % n == 0
+        {
+            for (name, var) in model.parameters().iter() {
+                let t = B::var_as_tensor::<f32>(var).expect("var_as_tensor");
+                if let Some(grad) = B::get_grad::<f32>(&t, &grads.0).expect("get_grad") {
+                    // L2 norm of the raw gradient storage, computed directly
+                    // via the existing NumericOps/ReductionOps/TensorOps
+                    // backend methods (no new backend trait surface):
+                    // sqrt(sum(grad * grad)).
+                    let grad_sq = B::mul::<f32>(&grad, &grad).expect("mul (grad^2)");
+                    let sum_sq = B::sum_all::<f32>(&grad_sq).expect("sum_all (grad^2)");
+                    let sum_sq_val = B::float_to_scalar::<f32>(&sum_sq).expect("float_to_scalar");
+                    let l2_norm = sum_sq_val.sqrt();
+
+                    r.log_gradient_norm(kindle_telemetry::events::GradientNormEvent {
+                        schema_version: kindle_telemetry::events::CURRENT_SCHEMA_VERSION,
+                        step,
+                        param_name: name.clone(),
+                        l2_norm: l2_norm as f32,
+                    });
+                }
+            }
+        }
+
         optim.step(&grads).expect("optimizer step");
     }
     let elapsed = start.elapsed();
@@ -251,9 +313,9 @@ fn main() -> anyhow::Result<()> {
     );
 
     let (native_losses, native_elapsed) =
-        train::<NB>(&images_bytes, &labels, n_samples, n_epochs, lr);
+        train::<NB>(&images_bytes, &labels, n_samples, n_epochs, lr, None, None);
     let (candle_losses, candle_elapsed) =
-        train::<CB>(&images_bytes, &labels, n_samples, n_epochs, lr);
+        train::<CB>(&images_bytes, &labels, n_samples, n_epochs, lr, None, None);
 
     println!();
     for i in 0..n_epochs {

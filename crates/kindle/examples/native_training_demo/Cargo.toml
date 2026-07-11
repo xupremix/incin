@@ -9,6 +9,7 @@ license.workspace = true
 kindle = { path = "../.." }
 kindle-backends = { path = "../../../kindle-backends", features = ["candle", "native"] }
 kindle-native = { path = "../../../kindle-native" }
+kindle-telemetry = { path = "../../../kindle-telemetry" }
 anyhow = "1.0.103"
 
 [lints]
