@@ -55,7 +55,7 @@ pub mod prelude {
         layer_norm::LayerNorm,
         linear::{Linear, LinearShape},
         max_pool2d::MaxPool2d,
-        module::{Module, Parameters, Sequential},
+        module::{Module, Parameters, Sequential, NamedLayers, LayerNode},
         param::Param,
     };
     pub use crate::seq;
@@ -68,5 +68,5 @@ pub mod prelude {
     pub use crate::shapes::dim::Dim;
     pub use crate::shapes::shape::{ConstShape, DynShape, PartialDynShape, Shape};
     pub use crate::symbolic_dim;
-    pub use typenum::{self, B0, B1, Bit, Diff, Prod, Quot, Sum, UInt, UTerm, Unsigned, consts::*};
+    pub use typenum::{self, B0, B1, Bit, Diff, Prod, Quot, Sum, UInt, UTerm, Unsigned};
 }
