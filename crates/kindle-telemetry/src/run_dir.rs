@@ -7,12 +7,20 @@ use std::path::{Path, PathBuf};
 /// (XDG data dir, D-03). Creates the directory if it does not already
 /// exist.
 ///
-/// A `KINDLE_TELEMETRY_RUN_DIR` env-var override is checked first, purely
-/// for hermetic testability — this is not a user-facing/stable API
-/// surface; D-01/D-03 remain the user-facing contract (fixed XDG default,
-/// no user-facing path override).
+/// A `KINDLE_TELEMETRY_RUN_DIR` env-var override is checked first in test
+/// builds only (`#[cfg(test)]`, WR-03), purely for hermetic testability —
+/// this is not a user-facing/stable API surface, and gating it behind
+/// `cfg(test)` ensures it can never affect production path resolution
+/// (e.g. an attacker- or misconfiguration-controlled env var redirecting
+/// telemetry output to an arbitrary writable path). D-01/D-03 remain the
+/// user-facing contract (fixed XDG default, no user-facing path override).
 pub fn default_run_dir() -> crate::err::Result<PathBuf> {
-    let dir = if let Ok(override_dir) = std::env::var("KINDLE_TELEMETRY_RUN_DIR") {
+    #[cfg(test)]
+    let override_dir = std::env::var("KINDLE_TELEMETRY_RUN_DIR").ok();
+    #[cfg(not(test))]
+    let override_dir: Option<String> = None;
+
+    let dir = if let Some(override_dir) = override_dir {
         PathBuf::from(override_dir)
     } else {
         let base = dirs::data_dir()
