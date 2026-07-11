@@ -4282,6 +4282,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "kindle-viz-plugin-api"
+version = "0.1.0"
+dependencies = [
+ "kindle-telemetry",
+ "ratatui-core",
+ "ratatui-widgets",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "kstat-rs"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4758,6 +4768,7 @@ dependencies = [
  "kindle",
  "kindle-backends",
  "kindle-native",
+ "kindle-telemetry",
 ]
 
 [[package]]
