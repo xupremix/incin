@@ -55,7 +55,11 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let reader = FileTransportReader::open(&run_path)?;
-    let app = App::new(Box::new(reader), run_path.display().to_string());
+    let mut app = App::new(Box::new(reader), run_path.display().to_string());
+    // Loss first so it lands in the left 50% column per UI-SPEC.md's
+    // layout; panic-test second/right.
+    app.register_panel(Box::new(kindle_viz::panels::loss::LossPanel::new()));
+    app.register_panel(Box::new(kindle_viz::panels::panic_test::PanicTestPanel));
 
     // Panic hook must be installed before ratatui::init() enters raw mode.
     install_panic_hook();

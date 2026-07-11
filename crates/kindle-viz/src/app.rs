@@ -12,13 +12,14 @@ use std::time::Duration;
 
 use crossterm::event::{Event as CrosstermEvent, EventStream, KeyCode as CtKeyCode, KeyEvent};
 use futures_util::StreamExt;
-use kindle_viz_plugin_api::event::{KeyCode, KeyModifiers, PanelKeyEvent};
+use kindle_viz_plugin_api::event::{KeyCode, KeyModifiers, PanelEvent, PanelKeyEvent};
 use kindle_viz_plugin_api::keymap::{Action, KeymapProvider};
 use kindle_viz_plugin_api::panel::Panel;
 use kindle_viz_plugin_api::render_ctx::RenderCtx;
-use ratatui::layout::{Constraint, Direction, Layout};
-use ratatui::style::{Modifier, Style};
-use ratatui::widgets::Paragraph;
+use ratatui::layout::{Alignment, Constraint, Direction, Layout};
+use ratatui::style::{Color, Modifier, Style};
+use ratatui::text::Span;
+use ratatui::widgets::{Block, Borders, Paragraph};
 use tokio::time::interval;
 
 use crate::dispatch::{self, DispatchOutcome};
@@ -32,6 +33,10 @@ const TRANSPORT_POLL: Duration = Duration::from_millis(50);
 
 /// Exact UI-SPEC.md footer copy.
 const FOOTER_HINTS: &str = "q: quit  Tab: focus next  p: trigger panic (test panel)";
+
+/// Exact UI-SPEC.md crashed-panel placeholder copy (Red/Bold, rendered
+/// inside the crashed panel's still-intact border/title).
+const CRASHED_PLACEHOLDER: &str = "⚠ panel crashed — press r to retry";
 
 /// The host application: panel registry, per-panel crash state, focus, and
 /// the transport being tailed.
@@ -84,9 +89,38 @@ impl App {
                 let len = self.panels.len().max(1);
                 self.focused = (self.focused + len - 1) % len;
             }
-            // Plan 08-05 wires retry/panel-local dispatch once real panels
-            // exist.
-            Action::RetryPanel | Action::PanelLocal => {}
+            Action::RetryPanel => {
+                // Scoped to the focused panel, only active post-crash
+                // (UI-SPEC.md 'r' contract) -- no-op otherwise.
+                if !self.panels.is_empty() && self.crashed[self.focused] {
+                    match dispatch::dispatch_reset(self.panels[self.focused].as_mut()) {
+                        DispatchOutcome::Ok(()) => self.crashed[self.focused] = false,
+                        // A panel whose reset() itself panics stays visibly
+                        // crashed -- no silent panic-retry-panic loop
+                        // (T-08-07).
+                        DispatchOutcome::Panicked => {}
+                    }
+                }
+            }
+            // PanelLocal is routed directly via `handle_panel_local_key`
+            // from the event loop, never through the keymap resolver.
+            Action::PanelLocal => {}
+        }
+    }
+
+    /// Routes a key the default keymap does NOT map to a global action to
+    /// the focused panel's `handle_event` (panic-contained). This is how
+    /// 'p' reaches `PanicTestPanel` (D-04/PLUGIN-03).
+    pub fn handle_panel_local_key(&mut self, key: PanelKeyEvent) {
+        if self.panels.is_empty() || self.crashed[self.focused] {
+            // A crashed panel is never re-invoked until an explicit retry.
+            return;
+        }
+        if let DispatchOutcome::Panicked = dispatch::dispatch_handle_event(
+            self.panels[self.focused].as_mut(),
+            &PanelEvent::Key(key),
+        ) {
+            self.crashed[self.focused] = true;
         }
     }
 
@@ -148,15 +182,43 @@ impl App {
 
         let mut hit_regions = Vec::new();
         for (i, panel) in self.panels.iter_mut().enumerate() {
+            // Focus border/title color rule applies to every panel's block
+            // regardless of crashed state (UI-SPEC.md: White focused /
+            // DarkGray unfocused; Cyan is reserved for the loss chart line).
+            let focus_color = if i == self.focused {
+                Color::White
+            } else {
+                Color::DarkGray
+            };
+            let focus_block = Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(focus_color))
+                .title(Span::styled(
+                    panel.title().to_string(),
+                    Style::default()
+                        .fg(focus_color)
+                        .add_modifier(Modifier::BOLD),
+                ));
+
             if self.crashed[i] {
-                // Render nothing further into a crashed panel's region this
-                // plan -- Plan 08-05 adds the "⚠ panel crashed" placeholder.
+                // Placeholder without re-invoking the panicked panel until
+                // the user explicitly retries ('r') -- border/title intact.
+                let placeholder = Paragraph::new(CRASHED_PLACEHOLDER)
+                    .style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
+                    .alignment(Alignment::Center)
+                    .block(focus_block);
+                frame.render_widget(placeholder, panel_areas[i]);
                 continue;
             }
             let mut ctx = RenderCtx::new(frame, panel_areas[i], &mut hit_regions);
             if let DispatchOutcome::Panicked = dispatch::dispatch_render(panel.as_mut(), &mut ctx) {
                 self.crashed[i] = true;
+                continue;
             }
+            // Re-draw only the border/title chrome over the panel's own
+            // block so the focus color rule holds without the Panel trait
+            // needing a focus parameter (Block leaves inner content intact).
+            frame.render_widget(focus_block, panel_areas[i]);
         }
     }
 }
@@ -174,6 +236,9 @@ impl KeymapProvider for DefaultKeymap {
             KeyCode::Char('c') if key.modifiers.ctrl => Some(Action::Quit),
             KeyCode::Tab => Some(Action::FocusNext),
             KeyCode::BackTab => Some(Action::FocusPrev),
+            // Retry the focused panel post-crash (no-op when not crashed,
+            // guarded in App::handle_key per UI-SPEC.md's 'r' scoping).
+            KeyCode::Char('r') => Some(Action::RetryPanel),
             _ => None,
         }
     }
@@ -215,12 +280,17 @@ pub async fn run(mut app: App, mut terminal: ratatui::DefaultTerminal) -> anyhow
             maybe_event = term_events.next() => {
                 match maybe_event {
                     Some(Ok(CrosstermEvent::Key(key))) => {
-                        if let Some(panel_key) = convert_key(key)
-                            && let Some(action) = keymap.resolve(panel_key)
-                        {
-                            app.handle_key(action);
-                            if app.should_quit {
-                                break;
+                        if let Some(panel_key) = convert_key(key) {
+                            if let Some(action) = keymap.resolve(panel_key) {
+                                app.handle_key(action);
+                                if app.should_quit {
+                                    break;
+                                }
+                            } else {
+                                // Keys unmapped by the global keymap route
+                                // to the focused panel (Action::PanelLocal
+                                // path) -- how 'p' reaches PanicTestPanel.
+                                app.handle_panel_local_key(panel_key);
                             }
                         }
                     }
@@ -297,10 +367,86 @@ mod tests {
         );
         assert_eq!(
             keymap.resolve(PanelKeyEvent {
+                code: KeyCode::Char('r'),
+                modifiers: no_mods
+            }),
+            Some(Action::RetryPanel)
+        );
+        assert_eq!(
+            keymap.resolve(PanelKeyEvent {
                 code: KeyCode::Char('x'),
                 modifiers: no_mods
             }),
             None
         );
+    }
+
+    /// Panel that deliberately panics on 'p' in handle_event, mirroring
+    /// PanicTestPanel's shape for exercising App's crash/retry state.
+    struct CrashOnP;
+
+    impl Panel for CrashOnP {
+        fn id(&self) -> &'static str {
+            "crash-on-p"
+        }
+        fn title(&self) -> &str {
+            "Crash On P"
+        }
+        fn update(&mut self, _event: &kindle_telemetry::events::Event) {}
+        fn render(&mut self, _ctx: &mut RenderCtx<'_, '_>) {}
+        fn handle_event(&mut self, event: &PanelEvent) -> bool {
+            let PanelEvent::Key(k) = event;
+            if k.code == KeyCode::Char('p') {
+                panic!("deliberate test panic");
+            }
+            false
+        }
+        fn reset(&mut self) {}
+    }
+
+    struct NoopTransport;
+
+    impl crate::transport_reader::TransportReader for NoopTransport {
+        fn poll_new_events(&mut self) -> crate::err::Result<Vec<kindle_telemetry::events::Event>> {
+            Ok(Vec::new())
+        }
+    }
+
+    #[test]
+    fn panel_local_panic_marks_crashed_and_retry_recovers() {
+        let previous_hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|_| {}));
+
+        let mut app = App::new(Box::new(NoopTransport), "test".to_string());
+        app.register_panel(Box::new(CrashOnP));
+        let no_mods = KeyModifiers {
+            ctrl: false,
+            shift: false,
+            alt: false,
+        };
+
+        // 'p' routed panel-locally panics the panel -> marked crashed.
+        app.handle_panel_local_key(PanelKeyEvent {
+            code: KeyCode::Char('p'),
+            modifiers: no_mods,
+        });
+        assert!(app.crashed[0], "panicking handle_event must mark crashed");
+
+        // While crashed, panel-local keys are dropped (never re-invoked).
+        app.handle_panel_local_key(PanelKeyEvent {
+            code: KeyCode::Char('p'),
+            modifiers: no_mods,
+        });
+        assert!(app.crashed[0]);
+
+        // RetryPanel resets the panel and clears the crashed flag.
+        app.handle_key(Action::RetryPanel);
+        assert!(!app.crashed[0], "retry must recover a resettable panel");
+
+        // RetryPanel on a non-crashed panel is a no-op.
+        app.handle_key(Action::RetryPanel);
+        assert!(!app.crashed[0]);
+
+        std::panic::set_hook(previous_hook);
     }
 }
