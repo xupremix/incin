@@ -39,8 +39,8 @@ fn test_backward_with_nan_check_success() -> Result<()> {
 
     let pred = model.forward(x.clone())?;
     let loss = pred.mse_loss(&y)?;
-    let raw_grads = CpuBackend::backward_with_nan_check(loss.inner())?; // Should succeed
-    let grads = kindle_core::optim::Gradients::try_from(raw_grads).expect("Failed to convert raw gradients to Gradients");
+    let raw_grads = CpuBackend::backward_with_nan_check::<f32>(loss.inner())?; // Should succeed
+    let grads = kindle_core::optim::Gradients(raw_grads);
     optim.step(&grads)?;
 
     Ok(())

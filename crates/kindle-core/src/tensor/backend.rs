@@ -60,6 +60,8 @@ pub trait Backend:
     + ReductionOps<Self>
     + QuantizedOps<Self>
     + OptimizerOps<Self>
+    + crate::tensor::backend::ModuleOps<Self>
+    + crate::tensor::backend::LossOps<Self>
 {
     type Device: Device;
     type FloatElem: DType;

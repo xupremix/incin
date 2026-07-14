@@ -58,7 +58,7 @@ fn scalar<B: Backend>(t: &B::Storage<f32>) -> f64 {
 
 /// Hand-rolled linear regression: y_hat = x @ w.T + b (matmul + add).
 /// Returns the per-epoch loss values (f64 scalars for easy comparison).
-fn train<B: Backend>(n_epochs: usize, lr: f64) -> Vec<f64> {
+fn train<B: Backend + kindle_core::tensor::backend::LossOps<B>>(n_epochs: usize, lr: f64) -> Vec<f64> {
     let x = make_storage::<B>(&X_DATA, &[4, 2]);
     let target = make_storage::<B>(&TARGET_DATA, &[4, 1]);
 

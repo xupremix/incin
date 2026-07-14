@@ -63,6 +63,7 @@ pub mod prelude {
         param::Param,
     };
     pub use crate::seq;
+    pub use kindle_macros::{s, idx, module};
 
     pub use super::shapes::prelude::*;
     pub use super::tensor::prelude::*;

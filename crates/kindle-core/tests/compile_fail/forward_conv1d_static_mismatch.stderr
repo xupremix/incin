@@ -22,28 +22,6 @@ error[E0774]: `derive` may only be applied to `struct`s, `enum`s and `union`s
 14 | | }
    | |_- not a `struct`, `enum` or `union`
 
-error: cannot find macro `s` in this scope
-  --> tests/compile_fail/forward_conv1d_static_mismatch.rs:10:38
-   |
-10 |     let layer = Conv1d::<3, 1, 0, 1, s![16, 3, 3], DummyBackend<f32, Cpu>>::new().unwrap();
-   |                                      ^
-   |
-help: consider importing this macro
-   |
- 2 + use kindle_macros::s;
-   |
-
-error: cannot find macro `s` in this scope
-  --> tests/compile_fail/forward_conv1d_static_mismatch.rs:12:26
-   |
-12 |     let input = Tensor::<s![2, 1, 32], DummyBackend<f32, Cpu>>::zeros(()).unwrap();
-   |                          ^
-   |
-help: consider importing this macro
-   |
- 2 + use kindle_macros::s;
-   |
-
 warning: unused import: `kindle_core as kindle`
  --> tests/compile_fail/forward_conv1d_static_mismatch.rs:2:5
   |
@@ -69,5 +47,11 @@ error[E0107]: struct takes at most 3 generic arguments but 6 generic arguments w
 note: struct defined here, with at most 3 generic parameters: `S`, `B`, `Bias`
   --> src/nn/conv1d.rs
    |
-   | pub struct Conv1d<S: Conv1dShape, B: Backend, Bias: crate::nn::optional::OptionalField = crate::nn::optional::True> {
-   |            ^^^^^^ -               -           --------------------------------------------------------------------
+   | pub struct Conv1d<
+   |            ^^^^^^
+   |     S: Conv1dShape,
+   |     -
+   |     B: Backend,
+   |     -
+   |     Bias: crate::nn::optional::OptionalField = crate::nn::optional::True,
+   |     --------------------------------------------------------------------

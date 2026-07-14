@@ -13,9 +13,8 @@
 //! never overwritten (a bare `.insert()`) — this is NATBACK-05's literal
 //! correctness gate.
 
-// unused import removed
-use spin::Mutex;
 use hashbrown::HashMap;
+use std::cell::RefCell;
 
 use kindle_core::prelude::Result;
 
@@ -52,18 +51,20 @@ impl NativeGrads {
     }
 }
 
-static TAPE: Mutex<Vec<TapeEntry>> = Mutex::new(Vec::new());
+thread_local! {
+    static TAPE: RefCell<Vec<TapeEntry>> = RefCell::new(Vec::new());
+}
 
 /// Push a `TapeEntry` onto the thread-local tape, unconditionally (D-05).
 pub fn push(entry: TapeEntry) {
-    TAPE.lock().push(entry);
+    TAPE.with(|t| t.borrow_mut().push(entry));
 }
 
 /// Number of entries currently on the tape. Exposed for tests proving the
 /// tape drains fully between `backward()` calls (D-06).
 #[cfg(test)]
 fn len() -> usize {
-    TAPE.lock().len()
+    TAPE.with(|t| t.borrow().len())
 }
 
 /// Walk the tape backward, seeding `loss`'s gradient with ones, accumulating
@@ -85,7 +86,7 @@ pub fn backward(loss: &NativeStorage) -> Result<NativeGrads> {
 
     // Drain BEFORE walking (D-06) — mirrors tracing.rs's extract_graph()
     // mem::take idiom, but on an independent thread-local (D-04).
-    let entries = core::mem::take(&mut *TAPE.lock());
+    let entries = TAPE.with(|t| core::mem::take(&mut *t.borrow_mut()));
 
     for entry in entries.into_iter().rev() {
         let Some(grad_out) = grads.get(&entry.output_id).cloned() else {
@@ -126,7 +127,7 @@ pub fn backward_with_nan_check(loss: &NativeStorage) -> Result<NativeGrads> {
     let mut grads: HashMap<TensorId, NativeStorage> = HashMap::new();
     grads.insert(loss.id, NativeStorage::ones_like(loss));
 
-    let entries = core::mem::take(&mut *TAPE.lock());
+    let entries = TAPE.with(|t| core::mem::take(&mut *t.borrow_mut()));
 
     for entry in entries.into_iter().rev() {
         let Some(grad_out) = grads.get(&entry.output_id).cloned() else {

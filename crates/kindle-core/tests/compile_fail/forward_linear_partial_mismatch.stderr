@@ -22,28 +22,6 @@ error[E0774]: `derive` may only be applied to `struct`s, `enum`s and `union`s
 14 | | }
    | |_- not a `struct`, `enum` or `union`
 
-error: cannot find macro `s` in this scope
-  --> tests/compile_fail/forward_linear_partial_mismatch.rs:10:26
-   |
-10 |     let layer = Linear::<s![3, 4], DummyBackend<f32, Cpu>>::new().unwrap();
-   |                          ^
-   |
-help: consider importing this macro
-   |
- 2 + use kindle_macros::s;
-   |
-
-error: cannot find macro `s` in this scope
-  --> tests/compile_fail/forward_linear_partial_mismatch.rs:12:26
-   |
-12 |     let input = Tensor::<s![dyn, 5], DummyBackend<f32, Cpu>>::zeros([2, 5]).unwrap();
-   |                          ^
-   |
-help: consider importing this macro
-   |
- 2 + use kindle_macros::s;
-   |
-
 warning: unused import: `kindle_core as kindle`
  --> tests/compile_fail/forward_linear_partial_mismatch.rs:2:5
   |
@@ -58,40 +36,23 @@ warning: unused import: `kindle_core::nn::*`
 5 | use kindle_core::nn::*;
   |     ^^^^^^^^^^^^^^^^^^
 
-error[E0277]: the trait bound `(): LinearShape` is not satisfied
-  --> tests/compile_fail/forward_linear_partial_mismatch.rs:10:17
-   |
-10 |     let layer = Linear::<s![3, 4], DummyBackend<f32, Cpu>>::new().unwrap();
-   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `LinearShape` is not implemented for `()`
-   |
-   = help: the trait `LinearShape` is implemented for `(InF, OutF)`
-note: required by a bound in `kindle::nn::Linear`
-  --> src/nn/linear.rs
-   |
-   | pub struct Linear<S: LinearShape, B: Backend, Bias: crate::nn::optional::OptionalField = crate::nn::optional::True> {
-   |                      ^^^^^^^^^^^ required by this bound in `Linear`
-
-error[E0599]: the function or associated item `new` exists for struct `kindle::nn::Linear<(), DummyBackend<f32, kindle::prelude::Cpu>>`, but its trait bounds were not satisfied
-  --> tests/compile_fail/forward_linear_partial_mismatch.rs:10:61
-   |
-10 |     let layer = Linear::<s![3, 4], DummyBackend<f32, Cpu>>::new().unwrap();
-   |                                                             ^^^ function or associated item cannot be called due to unsatisfied trait bounds
-   |
-   = note: the following trait bounds were not satisfied:
-           `(): LinearShape`
-
-error[E0277]: the trait bound `[{integer}; 2]: ArgInto<TensorArgsData<(), (), (), ()>>` is not satisfied
+error[E0277]: the trait bound `[{integer}; 2]: ArgInto<TensorArgsData<(usize, ()), (), (), ()>>` is not satisfied
   --> tests/compile_fail/forward_linear_partial_mismatch.rs:12:69
    |
 12 |     let input = Tensor::<s![dyn, 5], DummyBackend<f32, Cpu>>::zeros([2, 5]).unwrap();
-   |                 --------------------------------------------------- ^^^^^^ the trait `ArgInto<TensorArgsData<(), (), (), ()>>` is not implemented for `[{integer}; 2]`
+   |                 --------------------------------------------------- ^^^^^^ the trait `kindle::shapes::Dim` is not implemented for `[{integer}; 2]`
    |                 |
    |                 required by a bound introduced by this call
    |
-   = help: the following other types implement trait `ArgInto<Target>`:
-             `&[usize]` implements `ArgInto<Vec<usize>>`
-             `[usize; N]` implements `ArgInto<Vec<usize>>`
-             `[usize; N]` implements `ArgInto<[usize; N]>`
+   = help: the following other types implement trait `kindle::shapes::Dim`:
+             NamedDyn<Tag>
+             ProdDim<A, B>
+             UInt<U, B>
+             UTerm
+             usize
+   = note: required for `[{integer}; 2]` to implement `ArgInto<(usize, ())>`
+   = note: 1 redundant requirement hidden
+   = note: required for `[{integer}; 2]` to implement `ArgInto<TensorArgsData<(usize, ()), (), (), ()>>`
 note: required by a bound in `kindle::prelude::Tensor::<S, B, K, D, G>::zeros`
   --> src/tensor/base.rs
    |
@@ -100,3 +61,20 @@ note: required by a bound in `kindle::prelude::Tensor::<S, B, K, D, G>::zeros`
    |     where
    |         A: ArgInto<<(S, K, D, G) as TensorArgs<S, K, D, G>>::Args>,
    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `Tensor::<S, B, K, D, G>::zeros`
+
+error[E0277]: the trait bound `(usize, UInt<UInt<UInt<UTerm, B1>, B0>, B1>): EndsWith<UInt<UInt<UTerm, B1>, B1>>` is not satisfied
+  --> tests/compile_fail/forward_linear_partial_mismatch.rs:13:19
+   |
+13 |     layer.forward(input).unwrap();
+   |           ------- ^^^^^ the trait `EndsWith<UInt<UInt<UTerm, B1>, B1>>` is not implemented for `(usize, UInt<UInt<UInt<UTerm, B1>, B0>, B1>)`
+   |           |
+   |           required by a bound introduced by this call
+   |
+   = help: the following other types implement trait `EndsWith<D>`:
+             `(D0, D1)` implements `EndsWith<D1>`
+             `(D0, D1, D2)` implements `EndsWith<D2>`
+             `(D0, D1, D2, D3)` implements `EndsWith<D3>`
+             `(D0, D1, D2, D3, D4)` implements `EndsWith<D4>`
+             `(D0, D1, D2, D3, D4, D5)` implements `EndsWith<D5>`
+             `(D0,)` implements `EndsWith<D0>`
+   = note: required for `kindle::nn::Linear<(UInt<UInt<UTerm, B1>, B1>, UInt<UInt<UInt<UTerm, B1>, B0>, B0>), DummyBackend<f32, kindle::prelude::Cpu>>` to implement `kindle::nn::Module<kindle::prelude::Tensor<(usize, UInt<UInt<UInt<UTerm, B1>, B0>, B1>), DummyBackend<f32, kindle::prelude::Cpu>, f32, kindle::prelude::Cpu>>`
