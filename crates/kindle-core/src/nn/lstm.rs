@@ -472,7 +472,7 @@ where
         }
 
         let refs: Vec<&Tensor<Dyn, B>> = outputs.iter().collect();
-        let stacked_dyn = crate::tensor::ops::try_stack_tensors(&refs, 1)?;
+        let stacked_dyn = crate::tensor::ops::manipulation::try_stack_tensors(&refs, 1)?;
         let stacked: Tensor<(Batch, Seq, Out), B> = stacked_dyn.into_shape()?;
         Ok((stacked, (h, c)))
     }

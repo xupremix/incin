@@ -15,7 +15,7 @@ pub trait ConstDevice: Default + Device<Arg = ()> {}
 #[cfg(feature = "cuda")]
 pub mod cuda {
 
-    use super::{ConstDevice, Device, KindleDevice, PhantomData, Result};
+    use super::{ConstDevice, Device, DynDevice, KindleDevice, PhantomData, Result};
 
     #[derive(Debug, Default, Clone, PartialEq, Eq)]
     pub struct Cuda<const N: usize = 0>;
@@ -43,7 +43,7 @@ pub use cuda::*;
 
 #[cfg(feature = "metal")]
 pub mod metal {
-    use super::{ConstDevice, Device, KindleDevice, PhantomData, Result};
+    use super::{ConstDevice, Device, DynDevice, KindleDevice, PhantomData, Result};
 
     #[derive(Debug, Default, Clone, PartialEq, Eq)]
     pub struct Metal<const N: usize = 0>;

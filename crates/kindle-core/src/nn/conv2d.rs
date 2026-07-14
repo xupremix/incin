@@ -26,7 +26,7 @@ use typenum::Unsigned;
 #[kindle_macros::module(internal)]
 pub struct Conv2d<
     S: Conv2dShape,
-    B: Backend + crate::tensor::backend::ModuleOps<B>,
+    B: Backend,
     Bias: crate::nn::optional::OptionalField = crate::nn::optional::True,
 > {
     pub weight: Param<S::WeightShape, B>,

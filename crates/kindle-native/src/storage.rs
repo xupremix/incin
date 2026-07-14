@@ -51,6 +51,29 @@ pub struct BlockQ8_0 {
     pub qs: [i8; 32],
 }
 
+#[cfg(feature = "cuda")]
+#[derive(Debug)]
+pub struct NativeCudaBuffer {
+    pub len: usize,
+    pub data: std::sync::Arc<cudarc::driver::CudaSlice<u8>>,
+    pub device: std::sync::Arc<cudarc::driver::CudaContext>,
+}
+
+#[cfg(feature = "cuda")]
+impl PartialEq for NativeCudaBuffer {
+    fn eq(&self, other: &Self) -> bool {
+        self.len == other.len && std::sync::Arc::ptr_eq(&self.data, &other.data)
+    }
+}
+
+#[cfg(feature = "cuda")]
+impl Clone for NativeCudaBuffer {
+    fn clone(&self) -> Self {
+        panic!("Cloning NativeCudaBuffer directly is not supported");
+    }
+}
+
+#[cfg(not(feature = "cuda"))]
 #[derive(Debug, Clone, PartialEq)]
 pub struct NativeCudaBuffer {
     pub len: usize,
@@ -96,6 +119,24 @@ impl NativeBuffer {
     /// True if this buffer holds zero elements.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    /// Read raw bytes of this buffer (useful for sending to GPU).
+    pub fn as_bytes(&self) -> &[u8] {
+        unsafe {
+            match self {
+                NativeBuffer::F32(v) => core::slice::from_raw_parts(v.as_ptr() as *const u8, v.len() * 4),
+                NativeBuffer::F64(v) => core::slice::from_raw_parts(v.as_ptr() as *const u8, v.len() * 8),
+                NativeBuffer::U8(v) => v.as_slice(),
+                NativeBuffer::U32(v) => core::slice::from_raw_parts(v.as_ptr() as *const u8, v.len() * 4),
+                NativeBuffer::I64(v) => core::slice::from_raw_parts(v.as_ptr() as *const u8, v.len() * 8),
+                NativeBuffer::F16(v) => core::slice::from_raw_parts(v.as_ptr() as *const u8, v.len() * 2),
+                NativeBuffer::BF16(v) => core::slice::from_raw_parts(v.as_ptr() as *const u8, v.len() * 2),
+                NativeBuffer::Q8_0(v) => core::slice::from_raw_parts(v.as_ptr() as *const u8, v.len() * core::mem::size_of::<BlockQ8_0>()),
+                NativeBuffer::Cuda(_) => panic!("as_bytes not supported on CUDA buffer"),
+                NativeBuffer::Metal(_) => panic!("as_bytes not supported on Metal buffer"),
+            }
+        }
     }
 
     /// Read the scalar at flat buffer index `i` as an `f64`, regardless of

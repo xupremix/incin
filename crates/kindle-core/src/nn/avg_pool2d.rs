@@ -34,7 +34,7 @@ impl<
     S: Unsigned,
     P: Unsigned,
     D: Unsigned,
-    B: Backend,
+    B: Backend + crate::tensor::backend::ModuleOps<B>,
 > Module<Tensor<I, B>> for AvgPool2d<K, S, P, D>
 {
     type Output = Tensor<I::Output, B>;

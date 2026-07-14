@@ -99,7 +99,7 @@ where
     }
 }
 
-impl<S: BatchNormShape, InS: Shape + HasChannels2D<S::Channels>, B: Backend> Module<Tensor<InS, B>>
+impl<S: BatchNormShape, InS: Shape + HasChannels2D<S::Channels>, B: Backend + crate::tensor::backend::ModuleOps<B>> Module<Tensor<InS, B>>
     for BatchNorm2d<S, B>
 {
     type Output = Tensor<InS, B>;

@@ -35,7 +35,7 @@ impl<
     I: Shape + DynShape + crate::shapes::AdaptiveAvgPool2dShape<HOut, WOut>,
     HOut: Unsigned,
     WOut: Unsigned,
-    B: Backend,
+    B: Backend + crate::tensor::backend::ModuleOps<B>,
 > Module<Tensor<I, B>> for AdaptiveAvgPool2d<HOut, WOut>
 {
     type Output = Tensor<I::Output, B>;

@@ -1,27 +1,26 @@
-# Phase 11: Pseudo-3D Model-Graph Visualization
+# Phase 1: Full CUDA Implementation using cudarc
 
 ## Phase Goals
-A user can explore a run's model graph as an interactive, mouse-driven pseudo-3D structure instead of only the flat text/tree view.
+A high-performance CUDA backend exists in `kindle-native` that supports dynamic kernel compilation (NVRTC) and features state-of-the-art fused kernels (MatMul+Activation, MHA, AdamW). The `wgpu` path is retained as a fallback.
 
 ## Architecture & Implementation Choices
-1. **Target Architecture**: We will use `ratatui`'s `Canvas` widget for drawing the graph.
-2. **Projection**: We'll implement a simple 3D to 2D projection mathematics (e.g. isometric or perspective projection) to map 3D coordinate space to the 2D terminal canvas.
-3. **Graph Layout**:
-   - `Z-axis`: Network layers / execution sequence depth.
-   - `X/Y-plane`: Individual nodes spread out to minimize overlap.
-4. **Interactivity**: We will hook into the `PanelMouseEvent::Drag` and `PanelMouseEvent::Scroll*` events already supported by the plugin API to manipulate a virtual "camera" (pan, zoom, rotate).
+1. **Target Architecture**: We will use the `cudarc` crate to safely interface with the CUDA Driver API and NVRTC for dynamic PTX compilation.
+2. **Buffer Management**: `CudaStorage` will hold `cudarc::driver::CudaSlice<T>`.
+3. **Execution**: We will construct a `CudaBackend` that implements `kindle_core::tensor::backend::Backend`.
+4. **Kernels**: We will prioritize fused kernels for performance, writing CUDA C++ code as strings compiled at runtime by `nvrtc`.
 
 ## Tasks
-- [x] Determine a basic graph layout algorithm that maps the `GraphSnapshotEvent` node topological order to 3D `(x, y, z)` coordinates.
-- [x] Write 3D to 2D projection math for the camera.
-- [x] Implement `ratatui` `Canvas` drawing logic inside `graph.rs` to render nodes as braille dots or shapes, and edges as lines between them.
-- [x] Hook up mouse `Drag` events to adjust camera angles (rotation) and translation (pan).
-- [x] Hook up mouse `ScrollUp` and `ScrollDown` events to adjust camera zoom.
-- [x] Integrate into the main TUI loop and ensure performance remains acceptable (no blocking rendering).
-- [x] Ensure the panel remains reachable and dismissible via standard keybindings.
+- [ ] Add `cudarc` dependency to `kindle-native` under a `cuda` feature flag.
+- [ ] Implement `CudaStorage` wrapping `CudaSlice`.
+- [ ] Implement `CudaBackend` core struct (Device selection, stream management).
+- [ ] Write NVRTC dynamic compilation wrapper.
+- [ ] Implement fused kernel for MatMul + GeLU.
+- [ ] Implement fused kernel for MHA (FlashAttention style).
+- [ ] Implement fused kernel for AdamW optimizer step.
+- [ ] Integrate `CudaBackend` with all trait bounds in `kindle-core/src/tensor/backend.rs`.
+- [ ] Run test suites comparing `CudaBackend` output to `CpuBackend`.
 
 ## Verification
-- Unit test the 3D-to-2D projection math with known coordinates.
-- Attach `kindle-viz` to a running `native_training_demo` with telemetry enabled.
-- Verify the graph visually represents the underlying CNN architecture.
-- Verify dragging rotates the structure, and scrolling zooms in/out without breaking other panels.
+- Unit test all fused kernels against their un-fused equivalents.
+- Ensure the `cuda` feature flag isolates dependencies cleanly.
+- Verify `cargo test --features cuda` passes perfectly.

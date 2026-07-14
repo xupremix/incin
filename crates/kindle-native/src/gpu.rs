@@ -60,3 +60,23 @@ impl NativeMetalDispatcher {
         Ok(())
     }
 }
+
+#[cfg(feature = "cuda")]
+pub mod cuda_cache {
+    use cudarc::driver::CudaContext;
+    use std::collections::HashMap;
+    use std::sync::{Arc, Mutex, OnceLock};
+
+    static CUDA_DEVICES: OnceLock<Mutex<HashMap<usize, Arc<CudaContext>>>> = OnceLock::new();
+
+    pub fn get_cuda_device(id: usize) -> Arc<CudaContext> {
+        let map_mutex = CUDA_DEVICES.get_or_init(|| Mutex::new(HashMap::new()));
+        let mut map = map_mutex.lock().unwrap();
+        if let Some(dev) = map.get(&id) {
+            return dev.clone();
+        }
+        let dev = CudaContext::new(id).expect("Failed to initialize CUDA context");
+        map.insert(id, dev.clone());
+        dev
+    }
+}
