@@ -63,12 +63,19 @@ fn read_broadcast(storage: &NativeStorage, out_idx: &[usize], out_shape: &[usize
 /// broadcast-resolved index (no pre-materialized broadcast copy).
 use rayon::prelude::*;
 
-fn elementwise_binary(
+pub(crate) fn elementwise_binary(
+    op_name: &str,
+    op_expr: &str,
     lhs: &NativeStorage,
     rhs: &NativeStorage,
     out_shape: &[usize],
     f: impl Fn(f64, f64) -> f64 + Send + Sync,
-) -> NativeStorage {
+) -> Result<NativeStorage> {
+    #[cfg(feature = "cuda")]
+    if let (NativeBuffer::Cuda(_), NativeBuffer::Cuda(_)) = (&*lhs.buffer, &*rhs.buffer) {
+        return crate::ops::cuda_elementwise::launch_binary_op(op_name, op_expr, lhs, rhs, out_shape);
+    }
+
     let total: usize = out_shape.iter().product();
     let out: Vec<f32> = (0..total)
         .into_par_iter()
@@ -79,15 +86,22 @@ fn elementwise_binary(
             f(a, b) as f32
         })
         .collect();
-    NativeStorage::from_contiguous(NativeBuffer::F32(out), out_shape.to_vec())
+    Ok(NativeStorage::from_contiguous(NativeBuffer::F32(out), out_shape.to_vec()))
 }
 
 /// Elementwise negate (used by `sub`'s backward rule: rhs receives the
 /// negated incoming gradient before unbroadcasting).
-fn elementwise_unary(
+pub(crate) fn elementwise_unary(
+    op_name: &str,
+    op_expr: &str,
     t: &NativeStorage,
     f: impl Fn(f64) -> f64 + Send + Sync,
-) -> NativeStorage {
+) -> Result<NativeStorage> {
+    #[cfg(feature = "cuda")]
+    if let NativeBuffer::Cuda(_) = &*t.buffer {
+        return crate::ops::cuda_elementwise::launch_unary_op(op_name, op_expr, t);
+    }
+
     let total: usize = t.shape.iter().product();
     let out: Vec<f32> = (0..total)
         .into_par_iter()
@@ -96,18 +110,18 @@ fn elementwise_unary(
             f(t.get(&nd_idx)) as f32
         })
         .collect();
-    NativeStorage::from_contiguous(NativeBuffer::F32(out), t.shape.clone())
+    Ok(NativeStorage::from_contiguous(NativeBuffer::F32(out), t.shape.clone()))
 }
 
 fn negate(t: &NativeStorage) -> NativeStorage {
-    elementwise_unary(t, |x| -x)
+    elementwise_unary("neg", "-x", t, |x| -x).unwrap()
 }
 
 /// Elementwise multiply of two ALREADY-shape-matching (or one of them
 /// broadcastable to the other's shape) storages — used by `mul`'s backward
 /// rule to compute `grad_out * other_operand`, aligned to `grad_out`'s shape.
 fn mul_elementwise_broadcast(grad_out: &NativeStorage, other: &NativeStorage) -> NativeStorage {
-    elementwise_binary(grad_out, other, &grad_out.shape, |a, b| a * b)
+    elementwise_binary("mul", "a * b", grad_out, other, &grad_out.shape, |a, b| a * b).unwrap()
 }
 
 /// Abramowitz & Stegun 7.1.26 rational polynomial approximation of the
@@ -133,7 +147,7 @@ impl<T: DType, D: kindle_core::prelude::Device> NumericOps<Self> for NativeBacke
         rhs: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
         let out_shape = crate::stride::broadcast_shape(&lhs.shape, &rhs.shape)?;
-        let out = elementwise_binary(lhs, rhs, &out_shape, |a, b| a + b);
+        let out = elementwise_binary("add", "a + b", lhs, rhs, &out_shape, |a, b| a + b)?;
 
         let (lhs_shape, rhs_shape) = (lhs.shape.clone(), rhs.shape.clone());
         let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
@@ -155,7 +169,7 @@ impl<T: DType, D: kindle_core::prelude::Device> NumericOps<Self> for NativeBacke
         rhs: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
         let out_shape = crate::stride::broadcast_shape(&lhs.shape, &rhs.shape)?;
-        let out = elementwise_binary(lhs, rhs, &out_shape, |a, b| a - b);
+        let out = elementwise_binary("sub", "a - b", lhs, rhs, &out_shape, |a, b| a - b)?;
 
         let (lhs_shape, rhs_shape) = (lhs.shape.clone(), rhs.shape.clone());
         let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
@@ -178,7 +192,7 @@ impl<T: DType, D: kindle_core::prelude::Device> NumericOps<Self> for NativeBacke
         rhs: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
         let out_shape = crate::stride::broadcast_shape(&lhs.shape, &rhs.shape)?;
-        let out = elementwise_binary(lhs, rhs, &out_shape, |a, b| a * b);
+        let out = elementwise_binary("mul", "a * b", lhs, rhs, &out_shape, |a, b| a * b)?;
 
         // Capture cloned copies of lhs/rhs's NativeStorage (cheap, Rc-backed)
         // since the backward closure needs their VALUES, not just shapes.
@@ -189,8 +203,8 @@ impl<T: DType, D: kindle_core::prelude::Device> NumericOps<Self> for NativeBacke
             output_id: out_id,
             input_ids: vec![lhs_id, rhs_id],
             backward: Box::new(move |grad_out: &NativeStorage| {
-                let grad_lhs = mul_elementwise_broadcast(grad_out, &rhs_capture);
-                let grad_rhs = mul_elementwise_broadcast(grad_out, &lhs_capture);
+                let grad_lhs = elementwise_binary("mul", "a * b", grad_out, &rhs_capture, &grad_out.shape, |a, b| a * b).unwrap();
+                let grad_rhs = elementwise_binary("mul", "a * b", grad_out, &lhs_capture, &grad_out.shape, |a, b| a * b).unwrap();
                 vec![
                     tape::unbroadcast(&grad_lhs, &lhs_shape).expect("unbroadcast lhs (mul)"),
                     tape::unbroadcast(&grad_rhs, &rhs_shape).expect("unbroadcast rhs (mul)"),
@@ -205,7 +219,7 @@ impl<T: DType, D: kindle_core::prelude::Device> NumericOps<Self> for NativeBacke
         rhs: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
         let out_shape = crate::stride::broadcast_shape(&lhs.shape, &rhs.shape)?;
-        let out = elementwise_binary(lhs, rhs, &out_shape, |a, b| a / b);
+        let out = elementwise_binary("div", "a / b", lhs, rhs, &out_shape, |a, b| a / b)?;
 
         // Per Assumption A2 (RESEARCH.md): implemented for trait-completeness
         // via the standard quotient rule (1/rhs, -lhs/rhs^2), each
@@ -220,16 +234,17 @@ impl<T: DType, D: kindle_core::prelude::Device> NumericOps<Self> for NativeBacke
             backward: Box::new(move |grad_out: &NativeStorage| {
                 // d(lhs/rhs)/dlhs = 1/rhs -> grad_lhs = grad_out / rhs
                 let grad_lhs =
-                    elementwise_binary(grad_out, &rhs_capture, &grad_out.shape, |g, r| g / r);
+                    elementwise_binary("div_g_r", "a / b", grad_out, &rhs_capture, &grad_out.shape, |g, r| g / r).unwrap();
                 // d(lhs/rhs)/drhs = -lhs/rhs^2 -> grad_rhs = grad_out * (-lhs/rhs^2)
                 let grad_rhs = elementwise_binary(
+                    "mul_g_dr", "a * b",
                     grad_out,
-                    &elementwise_binary(&lhs_capture, &rhs_capture, &grad_out.shape, |l, r| {
+                    &elementwise_binary("div_grad_rhs_inner", "-a / (b * b)", &lhs_capture, &rhs_capture, &grad_out.shape, |l, r| {
                         -l / (r * r)
-                    }),
+                    }).unwrap(),
                     &grad_out.shape,
                     |g, dr| g * dr,
-                );
+                ).unwrap();
                 vec![
                     tape::unbroadcast(&grad_lhs, &lhs_shape).expect("unbroadcast lhs (div)"),
                     tape::unbroadcast(&grad_rhs, &rhs_shape).expect("unbroadcast rhs (div)"),
@@ -245,7 +260,7 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for NativeBackend
         t: &<Self as Backend>::Storage<K>,
         scalar: f64,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let out = elementwise_unary(t, |x| x + scalar);
+        let out = elementwise_unary(&format!("add_scalar_{}", scalar), &format!("x + {}", scalar), t, |x| x + scalar)?;
 
         let (t_id, out_id) = (t.id, out.id);
         tape::push(TapeEntry {
@@ -262,7 +277,7 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for NativeBackend
         t: &<Self as Backend>::Storage<K>,
         scalar: f64,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let out = elementwise_unary(t, |x| x * scalar);
+        let out = elementwise_unary(&format!("mul_scalar_{}", scalar), &format!("x * {}", scalar), t, |x| x * scalar)?;
 
         let (t_id, out_id) = (t.id, out.id);
         tape::push(TapeEntry {
@@ -290,7 +305,7 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for NativeBackend
     }
 
     fn relu<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        let out = elementwise_unary(t, |x| x.max(0.0));
+        let out = elementwise_unary("relu", "x > 0.0 ? x : 0.0", t, |x| x.max(0.0))?;
 
         // relu'(x) = 1 if x > 0 else 0 (input-based; strict `>`, zero
         // gradient at the x=0 boundary).
@@ -300,11 +315,11 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for NativeBackend
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &NativeStorage| {
-                let grad = elementwise_binary(grad_out, &t_capture, &grad_out.shape, |g, x| {
+                let grad = elementwise_binary("relu_grad", "b > 0.0 ? a : 0.0", grad_out, &t_capture, &grad_out.shape, |g, x| {
                     let x = x;
                     let deriv = if x > 0.0 { 1.0 } else { 0.0 };
                     g * deriv
-                });
+                }).unwrap();
                 vec![grad]
             }),
         });
@@ -312,7 +327,7 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for NativeBackend
     }
 
     fn gelu<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        let out = elementwise_unary(t, |x| x * 0.5 * (1.0 + erf_approx(x / core::f64::consts::SQRT_2)));
+        let out = elementwise_unary("gelu", "x * 0.5f * (1.0f + erff(x / 1.41421356f))", t, |x| x * 0.5 * (1.0 + erf_approx(x / core::f64::consts::SQRT_2)))?;
 
         // gelu(x) = x * 0.5 * (1 + erf(x/sqrt(2)))
         // gelu'(x) = 0.5*(1+erf(x/sqrt(2))) + x * (1/sqrt(2*pi)) * exp(-x^2/2)
@@ -323,13 +338,13 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for NativeBackend
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &NativeStorage| {
-                let grad = elementwise_binary(grad_out, &t_capture, &grad_out.shape, |g, x| {
+                let grad = elementwise_binary("gelu_grad", "a * (0.5 * (1.0 + erff(b / 1.41421356)) + b * (0.39894228 * expf(-0.5 * b * b)))", grad_out, &t_capture, &grad_out.shape, |g, x| {
                     let x = x;
                     let cdf = 0.5 * (1.0 + erf_approx(x / core::f64::consts::SQRT_2));
                     let pdf = (1.0 / (2.0 * core::f64::consts::PI).sqrt()) * (-x * x / 2.0).exp();
                     let deriv = cdf + x * pdf;
                     g * deriv
-                });
+                }).unwrap();
                 vec![grad]
             }),
         });
@@ -337,7 +352,7 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for NativeBackend
     }
 
     fn abs<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        let out = elementwise_unary(t, |x| x.abs());
+        let out = elementwise_unary("abs", "fabsf(x)", t, |x| x.abs())?;
 
         // abs'(x) = sign(x) (input-based).
         let t_capture = t.clone();
@@ -346,7 +361,7 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for NativeBackend
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &NativeStorage| {
-                let grad = elementwise_binary(grad_out, &t_capture, &grad_out.shape, |g, x| {
+                let grad = elementwise_binary("abs_grad", "b > 0.0 ? a : (b < 0.0 ? -a : 0.0)", grad_out, &t_capture, &grad_out.shape, |g, x| {
                     let x = x;
                     let deriv = if x > 0.0 {
                         1.0
@@ -356,7 +371,7 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for NativeBackend
                         0.0
                     };
                     g * deriv
-                });
+                }).unwrap();
                 vec![grad]
             }),
         });
@@ -364,7 +379,7 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for NativeBackend
     }
 
     fn exp<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        let out = elementwise_unary(t, |x| x.exp());
+        let out = elementwise_unary("exp", "expf(x)", t, |x| x.exp())?;
 
         // exp'(x) = out (output-based).
         let out_capture = out.clone();
@@ -373,10 +388,10 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for NativeBackend
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &NativeStorage| {
-                let grad = elementwise_binary(grad_out, &out_capture, &grad_out.shape, |g, o| {
+                let grad = elementwise_binary("exp_grad", "a * b", grad_out, &out_capture, &grad_out.shape, |g, o| {
                     let deriv = o;
                     g * deriv
-                });
+                }).unwrap();
                 vec![grad]
             }),
         });
@@ -397,7 +412,7 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for NativeBackend
     }
 
     fn sqrt<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        let out = elementwise_unary(t, |x| x.sqrt());
+        let out = elementwise_unary("sqrt", "sqrtf(x)", t, |x| x.sqrt())?;
 
         // sqrt'(x) = 1/(2*out) (output-based).
         let out_capture = out.clone();
@@ -406,10 +421,10 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for NativeBackend
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &NativeStorage| {
-                let grad = elementwise_binary(grad_out, &out_capture, &grad_out.shape, |g, o| {
+                let grad = elementwise_binary("sqrt_grad", "a / (2.0 * b)", grad_out, &out_capture, &grad_out.shape, |g, o| {
                     let deriv = 1.0 / (2.0 * o);
                     g * deriv
-                });
+                }).unwrap();
                 vec![grad]
             }),
         });
@@ -417,7 +432,7 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for NativeBackend
     }
 
     fn log<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        let out = elementwise_unary(t, |x| x.ln());
+        let out = elementwise_unary("log", "logf(x)", t, |x| x.ln())?;
 
         // log'(x) = 1/x (input-based, NOT output-based).
         let t_capture = t.clone();
@@ -426,10 +441,10 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for NativeBackend
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &NativeStorage| {
-                let grad = elementwise_binary(grad_out, &t_capture, &grad_out.shape, |g, x| {
+                let grad = elementwise_binary("log_grad", "a / b", grad_out, &t_capture, &grad_out.shape, |g, x| {
                     let deriv = 1.0 / x;
                     g * deriv
-                });
+                }).unwrap();
                 vec![grad]
             }),
         });
@@ -437,7 +452,7 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for NativeBackend
     }
 
     fn tanh<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        let out = elementwise_unary(t, |x| x.tanh());
+        let out = elementwise_unary("tanh", "tanhf(x)", t, |x| x.tanh())?;
 
         // tanh'(x) = 1 - out^2 (output-based).
         let out_capture = out.clone();
@@ -446,10 +461,10 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for NativeBackend
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &NativeStorage| {
-                let grad = elementwise_binary(grad_out, &out_capture, &grad_out.shape, |g, o| {
+                let grad = elementwise_binary("tanh_grad", "a * (1.0 - b * b)", grad_out, &out_capture, &grad_out.shape, |g, o| {
                     let deriv = 1.0 - o * o;
                     g * deriv
-                });
+                }).unwrap();
                 vec![grad]
             }),
         });
@@ -459,7 +474,7 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for NativeBackend
     fn sigmoid<K: DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let out = elementwise_unary(t, |x| 1.0 / (1.0 + (-x).exp()));
+        let out = elementwise_unary("sigmoid", "1.0f / (1.0f + expf(-x))", t, |x| 1.0 / (1.0 + (-x).exp()))?;
 
         // sigmoid'(x) = out*(1-out) (output-based).
         let out_capture = out.clone();
@@ -468,10 +483,10 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for NativeBackend
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &NativeStorage| {
-                let grad = elementwise_binary(grad_out, &out_capture, &grad_out.shape, |g, o| {
+                let grad = elementwise_binary("sigmoid_grad", "a * b * (1.0 - b)", grad_out, &out_capture, &grad_out.shape, |g, o| {
                     let deriv = o * (1.0 - o);
                     g * deriv
-                });
+                }).unwrap();
                 vec![grad]
             }),
         });
@@ -479,10 +494,10 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for NativeBackend
     }
 
     fn swish<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        let out = elementwise_unary(t, |x| {
+        let out = elementwise_unary("swish", "x / (1.0f + expf(-x))", t, |x| {
             let sig = 1.0 / (1.0 + (-x).exp());
             x * sig
-        });
+        })?;
 
         // swish(x) = x * sigmoid(x)
         // swish'(x) = out + sigmoid(x)*(1-out) — needs BOTH the output and

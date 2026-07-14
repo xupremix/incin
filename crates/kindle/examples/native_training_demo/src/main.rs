@@ -58,7 +58,7 @@ pub struct SimpleCnn<B: Backend> {
     pub fc: kindle::nn::Linear<Dyn, B>,
 }
 
-impl<B: Backend> SimpleCnn<B>
+impl<B: Backend + kindle::ModuleOps<B>> SimpleCnn<B>
 where
     B::FloatElem: ConstDType,
     B::Device: ConstDevice,
@@ -89,7 +89,7 @@ where
     }
 }
 
-impl<B: Backend> SimpleCnn<B> {
+impl<B: Backend + kindle::ModuleOps<B>> SimpleCnn<B> {
     pub fn forward(&self, x: Tensor<Dyn, B>) -> Result<Tensor<Dyn, B>> {
         let x = self.conv1.forward(x)?;
         let x = self.bn1.forward(x)?;
@@ -211,7 +211,7 @@ impl MakeLabels for CB {
 /// extension of an otherwise-unchanged existing function -- bundling them
 /// into a config struct would be pure ceremony for a single call site.
 #[allow(clippy::too_many_arguments)]
-fn train<B: MakeLabels>(
+fn train<B: MakeLabels + kindle::LossOps<B> + kindle::ModuleOps<B>>(
     images_bytes: &[u8],
     label_values: &[u32],
     n_samples: usize,

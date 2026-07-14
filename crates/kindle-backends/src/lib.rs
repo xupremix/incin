@@ -1054,6 +1054,9 @@ pub mod candle {
             assert!(matches!(c_dev, candle::Device::Cpu));
         }
     }
+
+    impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device>
+        kindle_core::tensor::backend::OptimizerOps<Self> for CandleBackend<T, D> {}
 }
 
 // ----------------------------------------------------------------------------
@@ -1871,6 +1874,9 @@ pub mod ndarray_backend {
             })
         }
     }
+
+    impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device>
+        kindle_core::tensor::backend::OptimizerOps<Self> for NdarrayBackend<T, D> {}
 }
 
 // ----------------------------------------------------------------------------
@@ -2039,3 +2045,6 @@ pub mod burn_backend {
     impl_burn_backend!(4, D0, D1, D2, D3);
     impl_burn_backend!(5, D0, D1, D2, D3, D4);
 }
+
+
+

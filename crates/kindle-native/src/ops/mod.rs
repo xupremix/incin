@@ -47,5 +47,7 @@ pub mod pool;
 pub mod quant;
 pub mod reduce;
 #[cfg(feature = "cuda")]
+pub mod cuda_elementwise;
+#[cfg(feature = "cuda")]
 pub mod cuda_kernels;
 pub mod shape_ops;
