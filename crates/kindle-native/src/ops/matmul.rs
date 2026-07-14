@@ -192,6 +192,79 @@ pub(crate) fn matmul_impl(lhs: &NativeStorage, rhs: &NativeStorage) -> Result<Na
         });
     }
 
+    #[cfg(all(feature = "cuda", feature = "fused"))]
+    if let (NativeBuffer::Cuda(lhs_b), NativeBuffer::Cuda(rhs_b)) = (&*lhs.buffer, &*rhs.buffer) {
+        let m = lhs.shape[0];
+        let k = lhs.shape[1];
+        let n = rhs.shape[1];
+
+        // Need to ensure the kernel is loaded
+        let device_id = lhs_b.device_id;
+        let dispatcher = crate::gpu::NativeCudaDispatcher::new(device_id);
+
+        if crate::gpu::cuda_cache::get_module(device_id, "matmul").is_none() {
+            dispatcher.compile_and_load_kernel("matmul", crate::ops::cuda_kernels::MATMUL_KERNEL, "matmul")?;
+        }
+
+        let f = dispatcher.get_function("matmul", "matmul")?;
+
+        let stream = lhs_b.device.default_stream();
+        let mut out_b = crate::storage::NativeCudaBuffer {
+            len: m * n,
+            data: std::sync::Arc::new(stream.alloc_zeros::<u8>(m * n * 4).unwrap()),
+            device: lhs_b.device.clone(),
+            device_id: device_id,
+        };
+
+        // Launch kernel
+        let cfg = cudarc::driver::LaunchConfig {
+            grid_dim: ((n as u32 + 15) / 16, (m as u32 + 15) / 16, 1),
+            block_dim: (16, 16, 1),
+            shared_mem_bytes: 0,
+        };
+
+        unsafe {
+            let lhs_f32 = lhs_b.data.transmute::<f32>(m * k).unwrap();
+            let rhs_f32 = rhs_b.data.transmute::<f32>(k * n).unwrap();
+            
+            let mut out_data_arc = out_b.data.clone();
+            let out_slice_u8: &mut cudarc::driver::CudaSlice<u8> = std::sync::Arc::get_mut(&mut out_data_arc).expect("Failed to get mut to output buffer");
+            let mut out_f32 = out_slice_u8.transmute_mut::<f32>(m * n).unwrap();
+
+            use cudarc::driver::PushKernelArg;
+            let stream = lhs_b.device.default_stream();
+            stream.launch_builder(&f)
+                .arg(&lhs_f32)
+                .arg(&rhs_f32)
+                .arg(&mut out_f32)
+                .arg(&(m as i32))
+                .arg(&(k as i32))
+                .arg(&(n as i32))
+                .launch(cfg)
+                .map_err(|e| kindle_core::err::Error::Msg(format!("Kernel launch failed: {:?}", e)))?;
+                
+            out_b.data = out_data_arc;
+        }
+
+        let out = NativeStorage::from_contiguous(NativeBuffer::Cuda(out_b), vec![m, n]);
+        
+        let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
+        let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
+        crate::tape::push(crate::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![lhs_id, rhs_id],
+            backward: Box::new(move |grad_out: &NativeStorage| {
+                let grad_lhs = matmul_impl(grad_out, &transpose_2d(&rhs_capture))
+                    .expect("grad_lhs = grad_out @ rhs^T cannot fail");
+                let grad_rhs = matmul_impl(&transpose_2d(&lhs_capture), grad_out)
+                    .expect("grad_rhs = lhs^T @ grad_out cannot fail");
+                vec![grad_lhs, grad_rhs]
+            }),
+        });
+
+        return Ok(out);
+    }
+
     let m = lhs.shape[0];
     let k = lhs.shape[1];
     let n = rhs.shape[1];

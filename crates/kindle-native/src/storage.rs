@@ -57,6 +57,7 @@ pub struct NativeCudaBuffer {
     pub len: usize,
     pub data: std::sync::Arc<cudarc::driver::CudaSlice<u8>>,
     pub device: std::sync::Arc<cudarc::driver::CudaContext>,
+    pub device_id: usize,
 }
 
 #[cfg(feature = "cuda")]
@@ -69,7 +70,12 @@ impl PartialEq for NativeCudaBuffer {
 #[cfg(feature = "cuda")]
 impl Clone for NativeCudaBuffer {
     fn clone(&self) -> Self {
-        panic!("Cloning NativeCudaBuffer directly is not supported");
+        NativeCudaBuffer {
+            len: self.len,
+            data: self.data.clone(),
+            device: self.device.clone(),
+            device_id: self.device_id,
+        }
     }
 }
 

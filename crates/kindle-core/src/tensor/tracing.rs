@@ -1026,3 +1026,5 @@ impl<B: Backend> QuantizedOps<Self> for TracingBackend<B> {
         })
     }
 }
+
+impl<B: Backend> OptimizerOps<Self> for TracingBackend<B> {}

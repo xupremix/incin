@@ -102,47 +102,39 @@ impl<B: Backend, K: DType> Optimizer<B> for AdamW<B, K> {
     fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()> {
         self.step += 1;
         let t_step = self.step as f64;
-        let bias_correction1 = 1.0 - self.beta1.powf(t_step);
-        let bias_correction2 = 1.0 - self.beta2.powf(t_step);
+        let _bias_correction1 = 1.0 - self.beta1.powf(t_step);
+        let _bias_correction2 = 1.0 - self.beta2.powf(t_step);
 
         for (name, var) in self.params.iter_mut() {
-            let mut t = B::var_as_tensor::<K>(var)?;
+            let t = B::var_as_tensor::<K>(var)?;
             if let Some(grad) = B::get_grad::<K>(&t, &grads.0)? {
-                // Weight decay
-                if self.weight_decay > 0.0 {
-                    let decay = B::mul_scalar_float::<K>(&t, self.weight_decay * self.lr)?;
-                    t = B::sub::<K>(&t, &decay)?;
+                if !self.m.contains_key(name) {
+                    let zero = B::var_zeros::<K>(B::shape::<K>(&t).as_slice(), KindleDType::F32, &KindleDevice::cpu()).unwrap(); // Fallback device
+                    self.m.insert(name.clone(), B::var_as_tensor::<K>(&zero)?);
+                }
+                if !self.v.contains_key(name) {
+                    let zero = B::var_zeros::<K>(B::shape::<K>(&t).as_slice(), KindleDType::F32, &KindleDevice::cpu()).unwrap();
+                    self.v.insert(name.clone(), B::var_as_tensor::<K>(&zero)?);
                 }
 
-                let m_t = if let Some(m) = self.m.get(name) {
-                    let term1 = B::mul_scalar_float::<K>(m, self.beta1)?;
-                    let term2 = B::mul_scalar_float::<K>(&grad, 1.0 - self.beta1)?;
-                    B::add::<K>(&term1, &term2)?
-                } else {
-                    B::mul_scalar_float::<K>(&grad, 1.0 - self.beta1)?
-                };
+                let mut m_t = self.m.remove(name).unwrap();
+                let mut v_t = self.v.remove(name).unwrap();
 
-                let grad_sq = B::mul::<K>(&grad, &grad)?;
-                let v_t = if let Some(v) = self.v.get(name) {
-                    let term1 = B::mul_scalar_float::<K>(v, self.beta2)?;
-                    let term2 = B::mul_scalar_float::<K>(&grad_sq, 1.0 - self.beta2)?;
-                    B::add::<K>(&term1, &term2)?
-                } else {
-                    B::mul_scalar_float::<K>(&grad_sq, 1.0 - self.beta2)?
-                };
+                B::adamw_step::<K>(
+                    var,
+                    &grad,
+                    &mut m_t,
+                    &mut v_t,
+                    self.lr,
+                    self.beta1,
+                    self.beta2,
+                    self.eps,
+                    self.weight_decay,
+                    self.step,
+                )?;
 
-                self.m.insert(name.clone(), m_t.clone());
-                self.v.insert(name.clone(), v_t.clone());
-
-                let m_hat = B::mul_scalar_float::<K>(&m_t, 1.0 / bias_correction1)?;
-                let v_hat = B::mul_scalar_float::<K>(&v_t, 1.0 / bias_correction2)?;
-
-                // step = lr * m_hat / (sqrt(v_hat) + eps)
-                let denom = B::add_scalar_float::<K>(&B::sqrt::<K>(&v_hat)?, self.eps)?;
-                let step = B::mul_scalar_float::<K>(&B::div::<K>(&m_hat, &denom)?, self.lr)?;
-
-                let updated = B::sub::<K>(&t, &step)?;
-                B::assign_var::<K>(&mut *var, &updated)?;
+                self.m.insert(name.clone(), m_t);
+                self.v.insert(name.clone(), v_t);
             }
         }
         Ok(())

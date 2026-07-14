@@ -35,3 +35,4 @@ std = [
     "anyhow/std",
 ]
 cuda = ["dep:cudarc", "kindle-core/cuda"]
+fused = []

@@ -42,7 +42,10 @@ pub mod loss;
 pub mod matmul;
 pub mod module;
 pub mod norm;
+pub mod optimizer;
 pub mod pool;
 pub mod quant;
 pub mod reduce;
+#[cfg(feature = "cuda")]
+pub mod cuda_kernels;
 pub mod shape_ops;

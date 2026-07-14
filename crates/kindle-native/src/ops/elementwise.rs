@@ -245,7 +245,7 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for NativeBackend
         t: &<Self as Backend>::Storage<K>,
         scalar: f64,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let out = elementwise_unary(t, |x| (x + scalar));
+        let out = elementwise_unary(t, |x| x + scalar);
 
         let (t_id, out_id) = (t.id, out.id);
         tape::push(TapeEntry {
@@ -262,7 +262,7 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for NativeBackend
         t: &<Self as Backend>::Storage<K>,
         scalar: f64,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let out = elementwise_unary(t, |x| (x * scalar));
+        let out = elementwise_unary(t, |x| x * scalar);
 
         let (t_id, out_id) = (t.id, out.id);
         tape::push(TapeEntry {
@@ -312,7 +312,7 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for NativeBackend
     }
 
     fn gelu<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        let out = elementwise_unary(t, |x| (x * 0.5 * (1.0 + erf_approx(x / core::f64::consts::SQRT_2))));
+        let out = elementwise_unary(t, |x| x * 0.5 * (1.0 + erf_approx(x / core::f64::consts::SQRT_2)));
 
         // gelu(x) = x * 0.5 * (1 + erf(x/sqrt(2)))
         // gelu'(x) = 0.5*(1+erf(x/sqrt(2))) + x * (1/sqrt(2*pi)) * exp(-x^2/2)
@@ -459,7 +459,7 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for NativeBackend
     fn sigmoid<K: DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let out = elementwise_unary(t, |x| (1.0 / (1.0 + (-x).exp())));
+        let out = elementwise_unary(t, |x| 1.0 / (1.0 + (-x).exp()));
 
         // sigmoid'(x) = out*(1-out) (output-based).
         let out_capture = out.clone();

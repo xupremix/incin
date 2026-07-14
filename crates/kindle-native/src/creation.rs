@@ -44,14 +44,11 @@ fn fill_buffer(total: usize, value: f64, dtype: KindleDType, device: &KindleDevi
                 len: total,
                 data: std::sync::Arc::new(dev_slice),
                 device: ctx.clone(),
+                device_id: id,
             }))
         }
-        #[cfg(not(feature = "cuda"))]
-        kindle_core::prelude::DeviceVariant::Cuda(_) => Err(Error::UnsupportedBackendOperation { op: "fill", backend: "CUDA (not compiled)" }),
-        #[cfg(feature = "metal")]
-        kindle_core::prelude::DeviceVariant::Metal(_) => Err(Error::UnsupportedBackendOperation { op: "fill", backend: "Metal (not implemented)" }),
-        #[cfg(not(feature = "metal"))]
-        _ => Err(Error::UnsupportedBackendOperation { op: "fill", backend: "Unknown device variant" }),
+
+
     }
 }
 
@@ -107,14 +104,11 @@ impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for NativeBack
                     len: total,
                     data: std::sync::Arc::new(dev_slice),
                     device: ctx.clone(),
+                    device_id: id,
                 })
             }
-            #[cfg(not(feature = "cuda"))]
-            kindle_core::prelude::DeviceVariant::Cuda(_) => return Err(Error::UnsupportedBackendOperation { op: "rand", backend: "CUDA (not compiled)" }),
-            #[cfg(feature = "metal")]
-            kindle_core::prelude::DeviceVariant::Metal(_) => return Err(Error::UnsupportedBackendOperation { op: "rand", backend: "Metal (not implemented)" }),
-            #[cfg(not(feature = "metal"))]
-            _ => return Err(Error::UnsupportedBackendOperation { op: "rand", backend: "Unknown device variant" }),
+
+
         };
 
         Ok(NativeStorage::from_contiguous(
@@ -154,14 +148,11 @@ impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for NativeBack
                     len: total,
                     data: std::sync::Arc::new(dev_slice),
                     device: ctx.clone(),
+                    device_id: id,
                 })
             }
-            #[cfg(not(feature = "cuda"))]
-            kindle_core::prelude::DeviceVariant::Cuda(_) => return Err(Error::UnsupportedBackendOperation { op: "randn", backend: "CUDA (not compiled)" }),
-            #[cfg(feature = "metal")]
-            kindle_core::prelude::DeviceVariant::Metal(_) => return Err(Error::UnsupportedBackendOperation { op: "randn", backend: "Metal (not implemented)" }),
-            #[cfg(not(feature = "metal"))]
-            _ => return Err(Error::UnsupportedBackendOperation { op: "randn", backend: "Unknown device variant" }),
+
+
         };
 
         Ok(NativeStorage::from_contiguous(
@@ -214,26 +205,21 @@ impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for NativeBack
 
         match (is_cpu, device.variant()) {
             (true, kindle_core::prelude::DeviceVariant::Cpu) => Ok(t.clone()),
+            #[cfg(feature = "cuda")]
             (true, kindle_core::prelude::DeviceVariant::Cuda(id)) => {
-                #[cfg(feature = "cuda")]
-                {
-                    let ctx = crate::gpu::cuda_cache::get_cuda_device(id);
-                    let stream = ctx.default_stream();
-                    let bytes = t.buffer.as_bytes();
-                    let dev_slice = stream.clone_htod(bytes).map_err(|e| Error::Msg(format!("CUDA alloc/copy failed: {:?}", e)))?;
-                    
-                    let mut cloned = t.clone();
-                    cloned.buffer = std::sync::Arc::new(NativeBuffer::Cuda(crate::storage::NativeCudaBuffer {
-                        len: t.buffer.len(),
-                        data: std::sync::Arc::new(dev_slice),
-                        device: ctx.clone(),
-                    }));
-                    Ok(cloned)
-                }
-                #[cfg(not(feature = "cuda"))]
-                {
-                    Err(Error::UnsupportedBackendOperation { op: "tensor_to_device", backend: "CUDA (not compiled)" })
-                }
+                let ctx = crate::gpu::cuda_cache::get_cuda_device(id);
+                let stream = ctx.default_stream();
+                let bytes = t.buffer.as_bytes();
+                let dev_slice = stream.clone_htod(bytes).map_err(|e| Error::Msg(format!("CUDA alloc/copy failed: {:?}", e)))?;
+                
+                let mut cloned = t.clone();
+                cloned.buffer = std::sync::Arc::new(NativeBuffer::Cuda(crate::storage::NativeCudaBuffer {
+                    len: t.buffer.len(),
+                    data: std::sync::Arc::new(dev_slice),
+                    device: ctx.clone(),
+                    device_id: id,
+                }));
+                Ok(cloned)
             }
             (false, kindle_core::prelude::DeviceVariant::Cpu) => {
                 #[cfg(feature = "cuda")]
