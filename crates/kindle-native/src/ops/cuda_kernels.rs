@@ -70,34 +70,71 @@ extern "C" __global__ void flash_attention_lite(
 
 pub const FUSED_ADAMW_KERNEL: &str = r#"
 extern "C" __global__ void fused_adamw_step(
-    const float* params, float* new_params, const float* grads, float* m, float* v,
-    float lr, float beta1, float beta2, float eps, float weight_decay,
-    int step, int num_elements
+    const float* __restrict__ p,
+    float* __restrict__ p_out,
+    const float* __restrict__ g,
+    float* __restrict__ m,
+    float* __restrict__ v,
+    const float lr,
+    const float beta1,
+    const float beta2,
+    const float eps,
+    const float wd,
+    const int step,
+    const int num_elements
 ) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx >= num_elements) return;
-
-    float p = params[idx];
-    float g = grads[idx];
     
-    // Apply weight decay
-    p -= lr * weight_decay * p;
+    // Vectorized loads with float4
+    if (idx < num_elements / 4) {
+        float4 p_vec = reinterpret_cast<const float4*>(p)[idx];
+        float4 g_vec = reinterpret_cast<const float4*>(g)[idx];
+        float4 m_vec = reinterpret_cast<const float4*>(m)[idx];
+        float4 v_vec = reinterpret_cast<const float4*>(v)[idx];
+        float4 p_out_vec;
+        
+        #pragma unroll
+        for (int i = 0; i < 4; i++) {
+            float p_val = ((float*)&p_vec)[i];
+            float g_val = ((float*)&g_vec)[i];
+            float m_val = ((float*)&m_vec)[i];
+            float v_val = ((float*)&v_vec)[i];
+            
+            p_val = p_val - lr * wd * p_val; // weight decay
+            m_val = beta1 * m_val + (1.0f - beta1) * g_val; // moment 1
+            v_val = beta2 * v_val + (1.0f - beta2) * g_val * g_val; // moment 2
+            float p_new = p_val - lr * m_val / (sqrtf(v_val) + eps); // update
+            
+            ((float*)&m_vec)[i] = m_val;
+            ((float*)&v_vec)[i] = v_val;
+            ((float*)&p_out_vec)[i] = p_new;
+        }
+        
+        reinterpret_cast<float4*>(m)[idx] = m_vec;
+        reinterpret_cast<float4*>(v)[idx] = v_vec;
+        reinterpret_cast<float4*>(p_out)[idx] = p_out_vec;
+    } 
     
-    // Update biased first moment estimate
-    float mt = beta1 * m[idx] + (1.0f - beta1) * g;
-    m[idx] = mt;
-    
-    // Update biased second raw moment estimate
-    float vt = beta2 * v[idx] + (1.0f - beta2) * g * g;
-    v[idx] = vt;
-    
-    // Compute bias-corrected estimates (assumed done on CPU and passed via lr)
-    // Here we assume lr is already step-adjusted, or we do it here:
-    // float bias_correction1 = 1.0f - powf(beta1, step);
-    // float bias_correction2 = 1.0f - powf(beta2, step);
-    
-    // params[idx] = p - lr * (mt / bias_correction1) / (sqrtf(vt / bias_correction2) + eps);
-    new_params[idx] = p - lr * mt / (sqrtf(vt) + eps);
+    // Tail
+    int tail_start = (num_elements / 4) * 4;
+    int tail_idx = tail_start + idx;
+    if (idx == 0 && tail_idx < num_elements) {
+        for(int i = tail_start; i < num_elements; i++) {
+            float p_val = p[i];
+            float g_val = g[i];
+            float m_val = m[i];
+            float v_val = v[i];
+            
+            p_val = p_val - lr * wd * p_val;
+            m_val = beta1 * m_val + (1.0f - beta1) * g_val;
+            v_val = beta2 * v_val + (1.0f - beta2) * g_val * g_val;
+            float p_new = p_val - lr * m_val / (sqrtf(v_val) + eps);
+            
+            m[i] = m_val;
+            v[i] = v_val;
+            p_out[i] = p_new;
+        }
+    }
 }
 "#;
 
