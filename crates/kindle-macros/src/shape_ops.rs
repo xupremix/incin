@@ -50,11 +50,10 @@ pub fn generate_shape_ops(_input: TokenStream) -> TokenStream {
         for d in 0..rank {
             let in_types: Vec<_> = (0..rank).map(|i| format_ident!("D{}", i)).collect();
             let mut out_types = Vec::new();
-            for i in 0..rank {
+            for (i, ty) in in_types.iter().enumerate() {
                 if i == d {
                     out_types.push(quote! { crate::prelude::typenum::U1 });
                 } else {
-                    let ty = &in_types[i];
                     out_types.push(quote! { #ty });
                 }
             }
@@ -87,8 +86,7 @@ pub fn generate_shape_ops(_input: TokenStream) -> TokenStream {
                 let start_id = &in_types[start];
                 let mut prod = quote! { #start_id };
 
-                for i in (start + 1)..=end {
-                    let next = &in_types[i];
+                for next in in_types.iter().take(end + 1).skip(start + 1) {
                     prod = quote! { crate::shapes::dim::ProdDim<#prod, #next> };
                 }
 

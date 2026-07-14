@@ -56,6 +56,11 @@ impl<Kernel, Stride, Padding, Dilation> SpatialOut<Kernel, Stride, Padding, Dila
     type Output = usize;
 }
 
+#[diagnostic::on_unimplemented(
+    message = "Cannot apply 2D pooling to shape `{Self}`",
+    label = "Invalid shape for 2D pooling",
+    note = "Pool2D requires a 3D or 4D tensor (C, H, W) or (B, C, H, W)"
+)]
 pub trait Pool2dShape<K, S, P, D>: crate::prelude::Shape {
     type Output: crate::prelude::Shape + crate::prelude::DynShape;
     fn compute_output_shape(input: &Self::Field) -> <Self::Output as crate::prelude::Shape>::Field;
@@ -96,6 +101,11 @@ impl<K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned> Pool2dShape<K, S, P, D>
     }
 }
 
+#[diagnostic::on_unimplemented(
+    message = "Cannot apply 1D convolution to shape `{Self}`",
+    label = "Invalid shape for 1D convolution",
+    note = "Conv1D requires a 2D or 3D tensor (C, L) or (B, C, L)"
+)]
 pub trait SpatialConv1d<COut, K, S, P, D>: crate::prelude::Shape {
     type Output: crate::prelude::Shape + crate::prelude::DynShape;
     fn compute_output_shape(
@@ -143,6 +153,11 @@ impl<COut, K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned> SpatialConv1d<COu
     }
 }
 
+#[diagnostic::on_unimplemented(
+    message = "Cannot apply 2D convolution to shape `{Self}`",
+    label = "Invalid shape for 2D convolution",
+    note = "Conv2D requires a 3D or 4D tensor (C, H, W) or (B, C, H, W)"
+)]
 pub trait SpatialConv2d<COut, K, S, P, D>: crate::prelude::Shape {
     type Output: crate::prelude::Shape + crate::prelude::DynShape;
     fn compute_output_shape(
@@ -192,6 +207,11 @@ impl<COut, K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned> SpatialConv2d<COu
     }
 }
 
+#[diagnostic::on_unimplemented(
+    message = "Cannot apply adaptive 2D pooling to shape `{Self}`",
+    label = "Invalid shape for adaptive 2D pooling",
+    note = "AdaptiveAvgPool2D requires a 3D or 4D tensor (C, H, W) or (B, C, H, W)"
+)]
 pub trait AdaptiveAvgPool2dShape<HOut, WOut>: crate::prelude::Shape {
     type Output: crate::prelude::Shape + crate::prelude::DynShape;
     fn compute_output_shape(input: &Self::Field) -> <Self::Output as crate::prelude::Shape>::Field;

@@ -155,7 +155,7 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for NativeBacken
                 op: "stack",
                 expected: vec![],
                 got: vec![],
-                msg: "stack requires at least one input tensor".to_string(),
+                msg: alloc::string::String::from("stack requires at least one input tensor"),
             });
         }
 
@@ -211,7 +211,7 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for NativeBacken
                 op: "concat",
                 expected: vec![],
                 got: vec![],
-                msg: "concat requires at least one input tensor".to_string(),
+                msg: alloc::string::String::from("concat requires at least one input tensor"),
             });
         }
 
@@ -334,6 +334,9 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for NativeBacken
                 }
                 NativeBuffer::BF16(out)
             }
+            NativeBuffer::Cuda(_) => panic!("concat not supported on CUDA buffer"),
+            NativeBuffer::Metal(_) => panic!("concat not supported on Metal buffer"),
+            NativeBuffer::Q8_0(_) => panic!("concat not supported on Q8_0 buffer"),
         };
 
         let out = NativeStorage::from_contiguous(new_buffer, out_shape);
@@ -412,44 +415,103 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for NativeBacken
                 op: "float_to_scalar",
                 expected: vec![1],
                 got: t.shape.clone(),
-                msg: "float_to_scalar requires a single-element tensor".to_string(),
+                msg: alloc::string::String::from("float_to_scalar requires a single-element tensor"),
             });
         }
         Ok(t.get(&vec![0usize; t.shape.len()]))
     }
 
-    fn float_to_vec1<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<std::vec::Vec<f64>> {
-        if t.shape.len() != 1 {
-            return Err(Error::UnsupportedBackendOperation {
-                op: "float_to_vec1",
-                backend: "Native",
+    fn float_to_vec1<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<alloc::vec::Vec<f64>> {
+        let total: usize = t.shape.iter().product();
+        let mut out = alloc::vec::Vec::with_capacity(total);
+        let mut idx = vec![0usize; t.shape.len()];
+        for _ in 0..total {
+            out.push(t.get(&idx));
+            if !t.shape.is_empty() {
+                crate::storage::increment_index(&mut idx, &t.shape);
+            }
+        }
+        Ok(out)
+    }
+
+    fn int_to_scalar<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<i64> {
+        if t.shape.iter().product::<usize>() != 1 {
+            return Err(Error::ShapeMismatch {
+                op: "int_to_scalar",
+                expected: vec![1],
+                got: t.shape.clone(),
+                msg: alloc::string::String::from("int_to_scalar requires a single-element tensor"),
             });
         }
-        Ok((0..t.shape[0]).map(|i| t.get(&[i])).collect())
+        Ok(t.get(&vec![0usize; t.shape.len()]) as i64)
     }
 
-    fn int_to_scalar<K: DType>(_t: &<Self as Backend>::Storage<K>) -> Result<i64> {
-        Err(Error::UnsupportedBackendOperation {
-            op: "int_to_scalar",
-            backend: "Native",
-        })
-    }
-
-    fn int_to_vec1<K: DType>(_t: &<Self as Backend>::Storage<K>) -> Result<std::vec::Vec<i64>> {
-        Err(Error::UnsupportedBackendOperation {
-            op: "int_to_vec1",
-            backend: "Native",
-        })
+    fn int_to_vec1<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<alloc::vec::Vec<i64>> {
+        let total: usize = t.shape.iter().product();
+        let mut out = alloc::vec::Vec::with_capacity(total);
+        let mut idx = vec![0usize; t.shape.len()];
+        for _ in 0..total {
+            out.push(t.get(&idx) as i64);
+            if !t.shape.is_empty() {
+                crate::storage::increment_index(&mut idx, &t.shape);
+            }
+        }
+        Ok(out)
     }
 
     fn tensor_to_dtype<K: DType, K2: DType>(
-        _t: &<Self as Backend>::Storage<K>,
-        _dtype: KindleDType,
+        t: &<Self as Backend>::Storage<K>,
+        dtype: KindleDType,
     ) -> Result<<Self as Backend>::Storage<K2>> {
-        Err(Error::UnsupportedBackendOperation {
-            op: "tensor_to_dtype",
-            backend: "Native",
-        })
+        let total: usize = t.shape.iter().product();
+        let mut multi_idx = vec![0usize; t.shape.len()];
+        
+        macro_rules! convert_variant {
+            ($variant:ident, $ty:ty) => {{
+                let mut out: alloc::vec::Vec<$ty> = alloc::vec::Vec::with_capacity(total);
+                for _ in 0..total {
+                    out.push(t.get(&multi_idx) as $ty);
+                    if !t.shape.is_empty() {
+                        crate::storage::increment_index(&mut multi_idx, &t.shape);
+                    }
+                }
+                NativeBuffer::$variant(out)
+            }};
+        }
+
+        let new_buffer = match dtype {
+            KindleDType::F32 => convert_variant!(F32, f32),
+            KindleDType::F64 => convert_variant!(F64, f64),
+            KindleDType::U8 => convert_variant!(U8, u8),
+            KindleDType::U32 => convert_variant!(U32, u32),
+            KindleDType::I64 => convert_variant!(I64, i64),
+            KindleDType::F16 => {
+                let mut out: alloc::vec::Vec<half::f16> = alloc::vec::Vec::with_capacity(total);
+                for _ in 0..total {
+                    out.push(half::f16::from_f64(t.get(&multi_idx)));
+                    if !t.shape.is_empty() {
+                        crate::storage::increment_index(&mut multi_idx, &t.shape);
+                    }
+                }
+                NativeBuffer::F16(out)
+            }
+            KindleDType::BF16 => {
+                let mut out: alloc::vec::Vec<half::bf16> = alloc::vec::Vec::with_capacity(total);
+                for _ in 0..total {
+                    out.push(half::bf16::from_f64(t.get(&multi_idx)));
+                    if !t.shape.is_empty() {
+                        crate::storage::increment_index(&mut multi_idx, &t.shape);
+                    }
+                }
+                NativeBuffer::BF16(out)
+            }
+            KindleDType::Q8_0 => return Err(Error::UnsupportedBackendOperation {
+                op: "tensor_to_dtype(Q8_0)",
+                backend: "Native",
+            }),
+        };
+
+        Ok(NativeStorage::from_contiguous(new_buffer, t.shape.clone()))
     }
 }
 
@@ -563,17 +625,14 @@ mod tests {
     #[test]
     fn unsupported_methods_return_typed_error_not_silent_placeholder() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
-        // `stack`/`concat`/`broadcast_left` all become real `TensorOps`
-        // implementations in this plan (03-04) — repointed to `int_to_scalar`,
-        // a genuinely still-unimplemented method (out of this phase's scope:
-        // `ModuleOps`/dtype-conversion methods are not part of TensorOps'
-        // closure target), preserving this smoke test's original intent of
-        // proving stub methods return typed errors, not silent placeholders.
-        let result = TestBackend::int_to_scalar::<f32>(&t);
+        // All other TensorOps methods are now fully implemented. We prove that
+        // unsupported operations return typed errors by attempting to convert
+        // to Q8_0, which is intentionally left unsupported in the Native backend.
+        let result = TestBackend::tensor_to_dtype::<f32, f32>(&t, KindleDType::Q8_0);
         assert!(matches!(
             result,
             Err(Error::UnsupportedBackendOperation {
-                op: "int_to_scalar",
+                op: "tensor_to_dtype(Q8_0)",
                 ..
             })
         ));

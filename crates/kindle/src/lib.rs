@@ -94,7 +94,7 @@ pub type DefaultDevice = crate::prelude::Cuda;
 #[cfg(all(not(feature = "cuda"), feature = "metal"))]
 pub type DefaultDevice = crate::prelude::Metal;
 #[cfg(all(not(feature = "cuda"), not(feature = "metal")))]
-pub type DefaultDevice = crate::prelude::Cpu;
+pub type DefaultDevice = kindle_core::prelude::Cpu;
 
 #[cfg(feature = "candle")]
 pub type DefaultBackend = kindle_backends::candle::CandleBackend<f32, DefaultDevice>;
@@ -138,9 +138,11 @@ pub mod macros {
     pub use kindle_macros::{idx, impl_arg_into, s};
 }
 
+#[allow(unused_imports)]
 pub mod prelude {
     pub use kindle_backends::prelude::*;
     pub use kindle_core::prelude::*;
+
     pub use kindle_macros::*;
 
     // We intentionally overshadow kindle_core::Tensor and NN modules with our aliased versions

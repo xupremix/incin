@@ -1,9 +1,13 @@
-//! Source: signatures derived from UI-SPEC.md's render-context primitives
-//! + ARCHITECTURE.md's Panel responsibility list (render/handle_event/
-//! title/id) + Pitfall 6's explicit call-out that "does a plugin own
-//! persistent state across frames" must be answered by the trait shape
-//! (answered here: yes, via `&mut self` on every method -- a Panel is a
-//! stateful, owned object, not a stateless render function).
+//! Contains the `Panel` trait which defines the core interface for UI plugins.
+//! 
+//! A [`Panel`] acts as a single, self-contained view within the `kindle-viz` dashboard.
+//! It is responsible for tracking its own state, responding to incoming telemetry events,
+//! handling user input (like mouse clicks or key presses when focused), and rendering
+//! its contents into a designated region on the screen.
+//!
+//! Because `kindle-viz` may spawn background tasks, panels must be `Send` and are 
+//! updated using mutable references (`&mut self`), clearly defining ownership and 
+//! allowing them to hold persistent state across frames without global mutability or locks.
 
 use crate::event::PanelEvent;
 use crate::render_ctx::RenderCtx;
@@ -28,6 +32,11 @@ pub trait Panel: Send {
 
     /// Handles an input event routed to this panel; returns whether it was consumed.
     fn handle_event(&mut self, event: &PanelEvent) -> bool;
+
+    /// Returns hover context text for a registered hit region.
+    fn hover_text(&self, _id: crate::render_ctx::HitId) -> Option<String> {
+        None
+    }
 
     /// Re-initializes this panel's internal state in place, for the
     /// 'r'-key retry UX. Required -- no default no-op body.

@@ -12,5 +12,13 @@ Cargo.lock
 expanded.rs
 data/
 wip/
+.venv/
+graphify-out/
 
+CLAUDE.md
+DESIGN.md
+FUTURE_ROADMAP.md
+NATIVE_BACKEND_PLAN.md
 .planning/
+.claude/
+.gemini/

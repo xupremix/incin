@@ -43,5 +43,6 @@ pub mod matmul;
 pub mod module;
 pub mod norm;
 pub mod pool;
+pub mod quant;
 pub mod reduce;
 pub mod shape_ops;

@@ -32,11 +32,16 @@ const RENDER_TICK: Duration = Duration::from_millis(33);
 const TRANSPORT_POLL: Duration = Duration::from_millis(50);
 
 /// Exact UI-SPEC.md footer copy.
-const FOOTER_HINTS: &str = "q: quit  Tab: focus next  p: trigger panic (test panel)";
+const FOOTER_HINTS: &str = "q: quit  Tab: focus next  l: toggle layout  f: fullscreen  p: trigger panic";
 
 /// Exact UI-SPEC.md crashed-panel placeholder copy (Red/Bold, rendered
-/// inside the crashed panel's still-intact border/title).
 const CRASHED_PLACEHOLDER: &str = "⚠ panel crashed — press r to retry";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LayoutMode {
+    Grid,
+    Maximized,
+}
 
 /// The host application: panel registry, per-panel crash state, focus, and
 /// the transport being tailed.
@@ -56,6 +61,15 @@ pub struct App {
     run_id_or_path: String,
     /// Set by `Action::Quit`; the event loop exits when true.
     should_quit: bool,
+    layout_mode: LayoutMode,
+    /// Log of conflict warnings (panel-local vs active keymap).
+    pub conflicts: Vec<String>,
+    /// Global hover text dynamically populated by hit-testing.
+    pub hover_text: Option<String>,
+    /// Panel areas from the last render pass, mapping panel index to its rendered area.
+    last_panel_areas: Vec<(usize, ratatui::layout::Rect)>,
+    /// Hit regions from the last render pass, with the panel index attached.
+    last_hit_regions: Vec<(ratatui::layout::Rect, kindle_viz_plugin_api::render_ctx::HitId, usize)>,
 }
 
 impl App {
@@ -68,6 +82,11 @@ impl App {
             transport,
             run_id_or_path,
             should_quit: false,
+            layout_mode: LayoutMode::Grid,
+            conflicts: Vec::new(),
+            hover_text: None,
+            last_panel_areas: Vec::new(),
+            last_hit_regions: Vec::new(),
         }
     }
 
@@ -82,12 +101,45 @@ impl App {
     pub fn handle_key(&mut self, action: Action) {
         match action {
             Action::Quit => self.should_quit = true,
-            Action::FocusNext => {
+            Action::FocusNext | Action::FocusRight => {
                 self.focused = (self.focused + 1) % self.panels.len().max(1);
             }
-            Action::FocusPrev => {
+            Action::FocusPrev | Action::FocusLeft => {
                 let len = self.panels.len().max(1);
                 self.focused = (self.focused + len - 1) % len;
+            }
+            Action::FocusUp => {
+                if self.layout_mode == LayoutMode::Grid {
+                    let len = self.panels.len();
+                    if len > 0 {
+                        let col = self.focused % 3;
+                        let row = self.focused / 3;
+                        if row > 0 {
+                            self.focused = (row - 1) * 3 + col;
+                        }
+                    }
+                } else {
+                    let len = self.panels.len().max(1);
+                    self.focused = (self.focused + len - 1) % len;
+                }
+            }
+            Action::FocusDown => {
+                if self.layout_mode == LayoutMode::Grid {
+                    let len = self.panels.len();
+                    if len > 0 {
+                        let col = self.focused % 3;
+                        let row = self.focused / 3;
+                        let next = (row + 1) * 3 + col;
+                        if next < len {
+                            self.focused = next;
+                        } else {
+                            // If straight down is out of bounds, go to the very last panel
+                            self.focused = len - 1;
+                        }
+                    }
+                } else {
+                    self.focused = (self.focused + 1) % self.panels.len().max(1);
+                }
             }
             Action::RetryPanel => {
                 // Scoped to the focused panel, only active post-crash
@@ -102,25 +154,29 @@ impl App {
                     }
                 }
             }
+            Action::ToggleLayout => {
+                self.layout_mode = match self.layout_mode {
+                    LayoutMode::Grid => LayoutMode::Maximized,
+                    LayoutMode::Maximized => LayoutMode::Grid,
+                };
+            }
             // PanelLocal is routed directly via `handle_panel_local_key`
             // from the event loop, never through the keymap resolver.
             Action::PanelLocal => {}
         }
     }
 
-    /// Routes a key the default keymap does NOT map to a global action to
-    /// the focused panel's `handle_event` (panic-contained). This is how
-    /// 'p' reaches `PanicTestPanel` (D-04/PLUGIN-03).
-    pub fn handle_panel_local_key(&mut self, key: PanelKeyEvent) {
+    /// Routes an event to the focused panel (panic-contained). Returns whether the panel consumed it.
+    pub fn handle_panel_local_event(&mut self, event: PanelEvent) -> bool {
         if self.panels.is_empty() || self.crashed[self.focused] {
-            // A crashed panel is never re-invoked until an explicit retry.
-            return;
+            return false;
         }
-        if let DispatchOutcome::Panicked = dispatch::dispatch_handle_event(
-            self.panels[self.focused].as_mut(),
-            &PanelEvent::Key(key),
-        ) {
-            self.crashed[self.focused] = true;
+        match dispatch::dispatch_handle_event(self.panels[self.focused].as_mut(), &event) {
+            DispatchOutcome::Ok(consumed) => consumed,
+            DispatchOutcome::Panicked => {
+                self.crashed[self.focused] = true;
+                false
+            }
         }
     }
 
@@ -169,57 +225,127 @@ impl App {
             return;
         }
 
-        let share = (100 / self.panels.len().max(1)) as u16;
-        let constraints: Vec<Constraint> = self
-            .panels
-            .iter()
-            .map(|_| Constraint::Percentage(share))
-            .collect();
-        let panel_areas = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints(constraints)
-            .split(rows[1]);
+        let mut panel_areas = Vec::new();
+        match self.layout_mode {
+            LayoutMode::Grid => {
+                let row_constraints = vec![Constraint::Ratio(1, 3); 3];
+                let grid_rows = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints(row_constraints)
+                    .split(rows[1]);
 
-        let mut hit_regions = Vec::new();
+                let col_constraints = vec![Constraint::Ratio(1, 3); 3];
+                for r in 0..3 {
+                    let cols = Layout::default()
+                        .direction(Direction::Horizontal)
+                        .constraints(col_constraints.clone())
+                        .split(grid_rows[r as usize]);
+                    for c in 0..3 {
+                        panel_areas.push(cols[c as usize]);
+                    }
+                }
+            }
+            LayoutMode::Maximized => {
+                panel_areas.push(rows[1]);
+            }
+        }
+
+        let mut panel_hit_regions = Vec::new();
+        let mut alerts = Vec::new();
+
+        self.last_hit_regions.clear();
+        self.last_panel_areas.clear();
+
         for (i, panel) in self.panels.iter_mut().enumerate() {
-            // Focus border/title color rule applies to every panel's block
-            // regardless of crashed state (UI-SPEC.md: White focused /
-            // DarkGray unfocused; Cyan is reserved for the loss chart line).
+            if self.layout_mode == LayoutMode::Maximized && i != self.focused {
+                continue;
+            }
+            let area_idx = if self.layout_mode == LayoutMode::Maximized { 0 } else { i };
+
+            if area_idx >= panel_areas.len() {
+                break; // Beyond allocated grid or scroll area
+            }
+            
+            // Re-draw only the border/title chrome over the panel's own
+            // block so the focus color rule holds without the Panel trait
+            // needing a focus parameter (Block leaves inner content intact).
             let focus_color = if i == self.focused {
                 Color::White
             } else {
                 Color::DarkGray
             };
-            let focus_block = Block::default()
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(focus_color))
-                .title(Span::styled(
-                    panel.title().to_string(),
-                    Style::default()
-                        .fg(focus_color)
-                        .add_modifier(Modifier::BOLD),
-                ));
+            
+            let panel_title = panel.title().to_string();
 
             if self.crashed[i] {
                 // Placeholder without re-invoking the panicked panel until
                 // the user explicitly retries ('r') -- border/title intact.
+                let focus_block = Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(focus_color))
+                    .title(Span::styled(
+                        panel_title,
+                        Style::default()
+                            .fg(focus_color)
+                            .add_modifier(Modifier::BOLD),
+                    ));
                 let placeholder = Paragraph::new(CRASHED_PLACEHOLDER)
                     .style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
                     .alignment(Alignment::Center)
                     .block(focus_block);
-                frame.render_widget(placeholder, panel_areas[i]);
+                frame.render_widget(placeholder, panel_areas[area_idx]);
                 continue;
             }
-            let mut ctx = RenderCtx::new(frame, panel_areas[i], &mut hit_regions);
+            
+            panel_hit_regions.clear();
+            let mut ctx = RenderCtx::new(frame, panel_areas[area_idx], &mut panel_hit_regions);
             if let DispatchOutcome::Panicked = dispatch::dispatch_render(panel.as_mut(), &mut ctx) {
                 self.crashed[i] = true;
                 continue;
             }
-            // Re-draw only the border/title chrome over the panel's own
-            // block so the focus color rule holds without the Panel trait
-            // needing a focus parameter (Block leaves inner content intact).
-            frame.render_widget(focus_block, panel_areas[i]);
+            let alert = ctx.take_alert();
+            drop(ctx);
+
+            for (rect, id) in &panel_hit_regions {
+                self.last_hit_regions.push((*rect, *id, i));
+            }
+            
+            let mut title_style = Style::default().fg(focus_color).add_modifier(Modifier::BOLD);
+            let mut border_style = Style::default().fg(focus_color);
+            
+            if let Some(msg) = alert {
+                alerts.push(format!("{}: {}", panel_title, msg));
+                border_style = border_style.fg(Color::Red).add_modifier(Modifier::BOLD);
+                title_style = title_style.fg(Color::Red);
+            }
+            
+            let focus_block = Block::default()
+                .borders(Borders::ALL)
+                .border_style(border_style)
+                .title(Span::styled(panel_title, title_style));
+
+            frame.render_widget(focus_block, panel_areas[area_idx]);
+            self.last_panel_areas.push((i, panel_areas[area_idx]));
         }
+        
+        let footer_text = if let Some(hover) = self.hover_text.take() {
+            hover
+        } else if !alerts.is_empty() {
+            format!("ALERTS: {}", alerts.join(" | "))
+        } else if !self.conflicts.is_empty() {
+            format!("CONFLICTS: {}", self.conflicts.join(" | "))
+        } else {
+            FOOTER_HINTS.to_string()
+        };
+        
+        let footer_style = if !alerts.is_empty() || !self.conflicts.is_empty() {
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().add_modifier(Modifier::DIM)
+        };
+        
+        let footer = Paragraph::new(footer_text).style(footer_style);
+        frame.render_widget(footer, rows[2]);
     }
 }
 
@@ -232,13 +358,34 @@ impl KeymapProvider for DefaultKeymap {
     fn resolve(&self, key: PanelKeyEvent) -> Option<Action> {
         match key.code {
             KeyCode::Char('q') | KeyCode::Esc => Some(Action::Quit),
-            // crossterm delivers Ctrl+C as a regular key event in raw mode.
             KeyCode::Char('c') if key.modifiers.ctrl => Some(Action::Quit),
             KeyCode::Tab => Some(Action::FocusNext),
             KeyCode::BackTab => Some(Action::FocusPrev),
-            // Retry the focused panel post-crash (no-op when not crashed,
-            // guarded in App::handle_key per UI-SPEC.md's 'r' scoping).
+            KeyCode::Up => Some(Action::FocusUp),
+            KeyCode::Down => Some(Action::FocusDown),
+            KeyCode::Left => Some(Action::FocusLeft),
+            KeyCode::Right => Some(Action::FocusRight),
             KeyCode::Char('r') => Some(Action::RetryPanel),
+            KeyCode::Char('l') | KeyCode::Char('f') | KeyCode::Enter => Some(Action::ToggleLayout),
+            _ => None,
+        }
+    }
+}
+
+/// Vim-style keymap replacing arrows/tabs with hjkl equivalents.
+pub struct VimKeymap;
+
+impl KeymapProvider for VimKeymap {
+    fn resolve(&self, key: PanelKeyEvent) -> Option<Action> {
+        match key.code {
+            KeyCode::Char('q') | KeyCode::Esc => Some(Action::Quit),
+            KeyCode::Char('c') if key.modifiers.ctrl => Some(Action::Quit),
+            KeyCode::Char('j') => Some(Action::FocusDown),
+            KeyCode::Char('k') => Some(Action::FocusUp),
+            KeyCode::Char('h') => Some(Action::FocusLeft),
+            KeyCode::Char('l') => Some(Action::FocusRight),
+            KeyCode::Char('r') => Some(Action::RetryPanel),
+            KeyCode::Char('t') | KeyCode::Char('f') | KeyCode::Enter => Some(Action::ToggleLayout),
             _ => None,
         }
     }
@@ -247,12 +394,19 @@ impl KeymapProvider for DefaultKeymap {
 /// Converts a crossterm key event into the plugin-api's crossterm-free
 /// `PanelKeyEvent` newtype. Unmapped key codes return `None` (ignored).
 fn convert_key(key: KeyEvent) -> Option<PanelKeyEvent> {
+    if key.kind != crossterm::event::KeyEventKind::Press {
+        return None;
+    }
     let code = match key.code {
         CtKeyCode::Char(c) => KeyCode::Char(c),
         CtKeyCode::Tab => KeyCode::Tab,
         CtKeyCode::BackTab => KeyCode::BackTab,
         CtKeyCode::Esc => KeyCode::Esc,
         CtKeyCode::Enter => KeyCode::Enter,
+        CtKeyCode::Up => KeyCode::Up,
+        CtKeyCode::Down => KeyCode::Down,
+        CtKeyCode::Left => KeyCode::Left,
+        CtKeyCode::Right => KeyCode::Right,
         _ => return None,
     };
     let modifiers = KeyModifiers {
@@ -267,10 +421,28 @@ fn convert_key(key: KeyEvent) -> Option<PanelKeyEvent> {
     Some(PanelKeyEvent { code, modifiers })
 }
 
+/// Converts a crossterm mouse event into the plugin-api's `PanelMouseEvent`.
+fn convert_mouse(mouse: crossterm::event::MouseEvent) -> Option<kindle_viz_plugin_api::event::PanelMouseEvent> {
+    use crossterm::event::MouseEventKind;
+    use kindle_viz_plugin_api::event::{KeyModifiers, PanelMouseEvent};
+    let modifiers = KeyModifiers {
+        ctrl: mouse.modifiers.contains(crossterm::event::KeyModifiers::CONTROL),
+        shift: mouse.modifiers.contains(crossterm::event::KeyModifiers::SHIFT),
+        alt: mouse.modifiers.contains(crossterm::event::KeyModifiers::ALT),
+    };
+    match mouse.kind {
+        MouseEventKind::Down(_) => Some(PanelMouseEvent::Down { x: mouse.column, y: mouse.row, modifiers }),
+        MouseEventKind::Up(_) => Some(PanelMouseEvent::Up { x: mouse.column, y: mouse.row, modifiers }),
+        MouseEventKind::Drag(_) => Some(PanelMouseEvent::Drag { x: mouse.column, y: mouse.row, modifiers }),
+        MouseEventKind::ScrollDown => Some(PanelMouseEvent::ScrollDown { x: mouse.column, y: mouse.row, modifiers }),
+        MouseEventKind::ScrollUp => Some(PanelMouseEvent::ScrollUp { x: mouse.column, y: mouse.row, modifiers }),
+        MouseEventKind::Moved | MouseEventKind::ScrollLeft | MouseEventKind::ScrollRight => None,
+    }
+}
+
 /// Runs the event loop until quit: multiplexes terminal input, transport
 /// polling, and the fixed render tick -- no branch blocks the others.
-pub async fn run(mut app: App, mut terminal: ratatui::DefaultTerminal) -> anyhow::Result<()> {
-    let keymap = DefaultKeymap;
+pub async fn run(mut app: App, mut terminal: ratatui::DefaultTerminal, keymap: Box<dyn KeymapProvider>) -> anyhow::Result<()> {
     let mut term_events = EventStream::new();
     let mut render_interval = interval(RENDER_TICK);
     let mut transport_interval = interval(TRANSPORT_POLL);
@@ -281,17 +453,45 @@ pub async fn run(mut app: App, mut terminal: ratatui::DefaultTerminal) -> anyhow
                 match maybe_event {
                     Some(Ok(CrosstermEvent::Key(key))) => {
                         if let Some(panel_key) = convert_key(key) {
+                            let consumed = app.handle_panel_local_event(PanelEvent::Key(panel_key));
                             if let Some(action) = keymap.resolve(panel_key) {
-                                app.handle_key(action);
-                                if app.should_quit {
-                                    break;
+                                if consumed {
+                                    app.conflicts.push(format!("Panel {} intercepted {:?}", app.panels[app.focused].title(), panel_key.code));
+                                } else {
+                                    app.handle_key(action);
+                                    if app.should_quit {
+                                        break;
+                                    }
                                 }
-                            } else {
-                                // Keys unmapped by the global keymap route
-                                // to the focused panel (Action::PanelLocal
-                                // path) -- how 'p' reaches PanicTestPanel.
-                                app.handle_panel_local_key(panel_key);
                             }
+                        }
+                    }
+                    Some(Ok(CrosstermEvent::Mouse(mouse))) => {
+                        use crossterm::event::MouseEventKind;
+                        // Determine which panel was hovered/clicked
+                        if let MouseEventKind::Moved = mouse.kind {
+                            app.hover_text = None;
+                            for (rect, id, panel_idx) in &app.last_hit_regions {
+                                if mouse.column >= rect.x && mouse.column < rect.x + rect.width &&
+                                   mouse.row >= rect.y && mouse.row < rect.y + rect.height {
+                                   if let Some(text) = app.panels[*panel_idx].hover_text(*id) {
+                                       app.hover_text = Some(text);
+                                   }
+                                   break;
+                                }
+                            }
+                        } else if let MouseEventKind::Down(_) = mouse.kind {
+                            for &(i, area) in &app.last_panel_areas {
+                                if mouse.column >= area.x && mouse.column < area.x + area.width &&
+                                   mouse.row >= area.y && mouse.row < area.y + area.height {
+                                   app.focused = i;
+                                   break;
+                                }
+                            }
+                        }
+
+                        if let Some(panel_mouse) = convert_mouse(mouse) {
+                            let _consumed = app.handle_panel_local_event(PanelEvent::Mouse(panel_mouse));
                         }
                     }
                     // Resize is handled by the next render's layout
@@ -395,9 +595,10 @@ mod tests {
         fn update(&mut self, _event: &kindle_telemetry::events::Event) {}
         fn render(&mut self, _ctx: &mut RenderCtx<'_, '_>) {}
         fn handle_event(&mut self, event: &PanelEvent) -> bool {
-            let PanelEvent::Key(k) = event;
-            if k.code == KeyCode::Char('p') {
-                panic!("deliberate test panic");
+            if let PanelEvent::Key(k) = event {
+                if k.code == KeyCode::Char('p') {
+                    panic!("deliberate test panic");
+                }
             }
             false
         }
@@ -417,7 +618,7 @@ mod tests {
         let previous_hook = std::panic::take_hook();
         std::panic::set_hook(Box::new(|_| {}));
 
-        let mut app = App::new(Box::new(NoopTransport), "test".to_string());
+        let mut app = App::new(Box::new(NoopTransport), String::from("test"));
         app.register_panel(Box::new(CrashOnP));
         let no_mods = KeyModifiers {
             ctrl: false,
@@ -426,17 +627,17 @@ mod tests {
         };
 
         // 'p' routed panel-locally panics the panel -> marked crashed.
-        app.handle_panel_local_key(PanelKeyEvent {
+        app.handle_panel_local_event(PanelEvent::Key(PanelKeyEvent {
             code: KeyCode::Char('p'),
             modifiers: no_mods,
-        });
+        }));
         assert!(app.crashed[0], "panicking handle_event must mark crashed");
 
         // While crashed, panel-local keys are dropped (never re-invoked).
-        app.handle_panel_local_key(PanelKeyEvent {
+        app.handle_panel_local_event(PanelEvent::Key(PanelKeyEvent {
             code: KeyCode::Char('p'),
             modifiers: no_mods,
-        });
+        }));
         assert!(app.crashed[0]);
 
         // RetryPanel resets the panel and clears the crashed flag.

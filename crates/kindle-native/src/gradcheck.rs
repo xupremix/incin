@@ -1,15 +1,10 @@
-//! `#[cfg(test)]`-only shared finite-difference gradient-check helper (D-01,
-//! D-02). Every op implemented from Phase 2 onward imports `gradcheck` via
-//! `use crate::testutil::gradcheck;` from its own `#[cfg(test)] mod tests`
-//! block instead of hand-rolling a one-off central-difference check.
+//! Shared finite-difference gradient-check helper (D-01, D-02).
+//! Used to verify analytic gradients against numerical finite-difference approximations.
 //!
-//! Not part of the public `Backend` trait surface — this module is declared
-//! `#[cfg(test)] mod testutil;` in `lib.rs` (crate-internal, no `pub`).
+//! Exposed as a public API in `kindle-native` for users who implement custom operations
+//! and want to verify their backward rules using standard central-difference checks.
 //!
-//! `gradcheck` calls the REAL Phase 1 API (`tape::backward`, `NativeGrads::
-//! get`), not a hypothetical one — a bug in this helper could mask a real
-//! backward-rule bug in a later op's own test (see this plan's threat model,
-//! T-02-01).
+//! `gradcheck` calls the REAL Phase 1 API (`tape::backward`, `NativeGrads::get`).
 
 use crate::storage::{NativeBuffer, NativeStorage};
 use crate::stride;

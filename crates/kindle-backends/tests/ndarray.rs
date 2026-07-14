@@ -14,7 +14,7 @@ fn test_ndarray_interior_mutability() {
 
     // Mutate the variable directly through the Arc<RwLock>
     {
-        let mut array = params[0].0.write().unwrap();
+        let mut array = params[0].0.write();
         array[[0, 0]] = 42.0;
     }
 

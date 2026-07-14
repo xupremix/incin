@@ -1,8 +1,16 @@
+error[E0432]: unresolved imports `typenum::typenum`, `typenum::typenum`
+ --> tests/compile_fail/forward_batchnorm_mismatch.rs:4:15
+  |
+4 | use typenum::{typenum::U16, typenum::U32};
+  |               ^^^^^^^       ^^^^^^^ could not find `typenum` in `typenum`
+  |               |
+  |               could not find `typenum` in `typenum`
+
 error[E0277]: the trait bound `UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>: BatchNormShape` is not satisfied
  --> tests/compile_fail/forward_batchnorm_mismatch.rs:9:16
   |
-9 |     let layer: BatchNorm2d<U32, DummyBackend<f32, Cpu>> = BatchNorm2d::new((), &device).unwrap();
-  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `BatchNormShape` is not implemented for `UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>`
+9 |     let layer: BatchNorm2d<typenum::U32, DummyBackend<f32, Cpu>> = BatchNorm2d::new((), &device).unwrap();
+  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `BatchNormShape` is not implemented for `UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>`
   |
   = help: the trait `BatchNormShape` is implemented for `(C,)`
 note: required by a bound in `BatchNorm2d`
@@ -12,12 +20,12 @@ note: required by a bound in `BatchNorm2d`
   |                           ^^^^^^^^^^^^^^ required by this bound in `BatchNorm2d`
 
 error[E0308]: arguments to this function are incorrect
- --> tests/compile_fail/forward_batchnorm_mismatch.rs:9:59
+ --> tests/compile_fail/forward_batchnorm_mismatch.rs:9:68
   |
-9 |     let layer: BatchNorm2d<U32, DummyBackend<f32, Cpu>> = BatchNorm2d::new((), &device).unwrap();
-  |                                                           ^^^^^^^^^^^^^^^^ --  ------- expected `f32`, found `&Cpu`
-  |                                                                            |
-  |                                                                            expected `f32`, found `()`
+9 |     let layer: BatchNorm2d<typenum::U32, DummyBackend<f32, Cpu>> = BatchNorm2d::new((), &device).unwrap();
+  |                                                                    ^^^^^^^^^^^^^^^^ --  ------- expected `f32`, found `&Cpu`
+  |                                                                                     |
+  |                                                                                     expected `f32`, found `()`
   |
 note: associated function defined here
  --> src/nn/batch_norm.rs
@@ -26,10 +34,10 @@ note: associated function defined here
   |            ^^^
 
 error[E0277]: the trait bound `UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>: BatchNormShape` is not satisfied
- --> tests/compile_fail/forward_batchnorm_mismatch.rs:9:59
+ --> tests/compile_fail/forward_batchnorm_mismatch.rs:9:68
   |
-9 |     let layer: BatchNorm2d<U32, DummyBackend<f32, Cpu>> = BatchNorm2d::new((), &device).unwrap();
-  |                                                           ^^^^^^^^^^^ the trait `BatchNormShape` is not implemented for `UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>`
+9 |     let layer: BatchNorm2d<typenum::U32, DummyBackend<f32, Cpu>> = BatchNorm2d::new((), &device).unwrap();
+  |                                                                    ^^^^^^^^^^^ the trait `BatchNormShape` is not implemented for `UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>`
   |
   = help: the trait `BatchNormShape` is implemented for `(C,)`
 note: required by a bound in `BatchNorm2d`
@@ -39,10 +47,10 @@ note: required by a bound in `BatchNorm2d`
   |                           ^^^^^^^^^^^^^^ required by this bound in `BatchNorm2d`
 
 error[E0277]: the trait bound `UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>: BatchNormShape` is not satisfied
- --> tests/compile_fail/forward_batchnorm_mismatch.rs:9:59
+ --> tests/compile_fail/forward_batchnorm_mismatch.rs:9:68
   |
-9 |     let layer: BatchNorm2d<U32, DummyBackend<f32, Cpu>> = BatchNorm2d::new((), &device).unwrap();
-  |                                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `BatchNormShape` is not implemented for `UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>`
+9 |     let layer: BatchNorm2d<typenum::U32, DummyBackend<f32, Cpu>> = BatchNorm2d::new((), &device).unwrap();
+  |                                                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `BatchNormShape` is not implemented for `UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>`
   |
   = help: the trait `BatchNormShape` is implemented for `(C,)`
 note: required by a bound in `BatchNorm2d::<S, B>::new`

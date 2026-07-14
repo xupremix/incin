@@ -105,7 +105,13 @@ impl<R: ReductionMode> MSELoss<R> {
     }
 
     /// Forward pass computing the Mean Squared Error between predictions and targets.
-    pub fn forward<S: Shape + crate::prelude::DynShape, B: Backend, K: crate::tensor::dtype::DType, D: crate::tensor::device::Device, G: RequiresGrad>(
+    pub fn forward<
+        S: Shape + crate::prelude::DynShape,
+        B: Backend + crate::tensor::backend::LossOps<B>,
+        K: crate::tensor::dtype::DType,
+        D: crate::tensor::device::Device,
+        G: RequiresGrad,
+    >(
         &self,
         pred: &Tensor<S, B, K, D, G>,
         target: &Tensor<S, B, K, D, NoGrad>,
@@ -152,7 +158,14 @@ impl<R: ReductionMode> CrossEntropyLoss<R> {
 
     /// Forward pass computing the Cross Entropy Loss between predictions and targets.
     /// The target tensor MUST have `u32` elements at compile time.
-    pub fn forward<S1: Shape + crate::prelude::DynShape, S2: Shape, B: Backend, K: crate::tensor::dtype::DType, D: crate::tensor::device::Device, G: RequiresGrad>(
+    pub fn forward<
+        S1: Shape + crate::prelude::DynShape,
+        S2: Shape,
+        B: Backend + crate::tensor::backend::LossOps<B>,
+        K: crate::tensor::dtype::DType,
+        D: crate::tensor::device::Device,
+        G: RequiresGrad,
+    >(
         &self,
         pred: &Tensor<S1, B, K, D, G>,
         target: &Tensor<S2, B, u32, D, NoGrad>,
@@ -195,7 +208,13 @@ impl<R: ReductionMode> L1Loss<R> {
     }
 
     /// Forward pass computing the L1 Loss between predictions and targets.
-    pub fn forward<S: Shape + crate::prelude::DynShape, B: Backend, K: crate::tensor::dtype::DType, D: crate::tensor::device::Device, G: RequiresGrad>(
+    pub fn forward<
+        S: Shape + crate::prelude::DynShape,
+        B: Backend + crate::tensor::backend::LossOps<B>,
+        K: crate::tensor::dtype::DType,
+        D: crate::tensor::device::Device,
+        G: RequiresGrad,
+    >(
         &self,
         pred: &Tensor<S, B, K, D, G>,
         target: &Tensor<S, B, K, D, NoGrad>,
@@ -233,7 +252,13 @@ impl<R: ReductionMode> BCEWithLogitsLoss<R> {
     }
 
     /// Forward pass computing the BCE With Logits Loss between predictions and targets.
-    pub fn forward<S: Shape + crate::prelude::DynShape, B: Backend, K: crate::tensor::dtype::DType, D: crate::tensor::device::Device, G: RequiresGrad>(
+    pub fn forward<
+        S: Shape + crate::prelude::DynShape,
+        B: Backend + crate::tensor::backend::LossOps<B>,
+        K: crate::tensor::dtype::DType,
+        D: crate::tensor::device::Device,
+        G: RequiresGrad,
+    >(
         &self,
         pred: &Tensor<S, B, K, D, G>,
         target: &Tensor<S, B, K, D, NoGrad>,

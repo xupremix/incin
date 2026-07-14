@@ -62,10 +62,11 @@ pub mod loss;
 pub mod lstm;
 pub mod max_pool2d;
 pub mod module;
+pub mod optional;
 pub mod param;
 pub mod rnn;
+#[cfg(feature = "std")]
 pub mod save;
-pub mod optional;
 
 pub use activation::*;
 pub use adaptive_avg_pool2d::*;
@@ -82,7 +83,8 @@ pub use loss::*;
 pub use lstm::*;
 pub use max_pool2d::*;
 pub use module::*;
+pub use optional::*;
 pub use param::*;
 pub use rnn::*;
+#[cfg(feature = "std")]
 pub use save::*;
-pub use optional::*;

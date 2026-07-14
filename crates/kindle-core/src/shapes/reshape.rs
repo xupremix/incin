@@ -1,6 +1,6 @@
 //! Compile-time shape reshaping and element count verification.
 use crate::prelude::*;
-use std::ops::Mul;
+use core::ops::Mul;
 use typenum::{Prod, U1, Unsigned};
 
 /// Computes the total number of elements in a static shape.
@@ -44,6 +44,11 @@ where
 }
 
 /// A trait that guarantees two shapes have the exact same number of elements at compile-time.
+#[diagnostic::on_unimplemented(
+    message = "Cannot reshape from `{Self}` to `{Target}`",
+    label = "Element count mismatch for reshape",
+    note = "Reshape requires the total number of elements to remain constant"
+)]
 pub trait ReshapeShape<Target: Shape>: Shape {}
 
 // Blanket implementation for any two static shapes that share the exact same ElementCount.

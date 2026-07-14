@@ -1,4 +1,5 @@
 use kindle::prelude::*;
+use typenum::consts::*;
 
 #[module]
 pub struct BasicBlock<B: Backend> {

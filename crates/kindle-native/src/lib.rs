@@ -13,15 +13,18 @@
 //! after this plan — `TensorOps`/`ReductionOps`/`ModuleOps`/`LossOps` land in
 //! later plans.
 
+#[macro_use]
+extern crate alloc;
+
 pub use kindle_core::prelude::*;
 
 pub mod creation;
+pub mod gpu;
+pub mod gradcheck;
 pub mod ops;
 pub mod storage;
 pub mod stride;
 pub mod tape;
-#[cfg(test)]
-mod testutil;
 pub mod var;
 
 /// The native, pure-Rust `Backend` implementor. `T` genuinely drives
@@ -42,16 +45,16 @@ impl<T: DType, D: Device> kindle_core::prelude::Backend for NativeBackend<T, D> 
     type InnerBackend = Self;
     type BackendWithDevice<NewD: Device> = NativeBackend<T, NewD>;
 
-    fn shape<K: DType>(t: &Self::Storage<K>) -> std::vec::Vec<usize> {
+    fn shape<K: DType>(t: &Self::Storage<K>) -> alloc::vec::Vec<usize> {
         t.shape.clone()
     }
 
-    fn format_tensor_display<K: DType>(t: &Self::Storage<K>) -> std::string::String {
-        std::format!("NativeStorage(shape={:?})", t.shape)
+    fn format_tensor_display<K: DType>(t: &Self::Storage<K>) -> alloc::string::String {
+        alloc::format!("NativeStorage(shape={:?})", t.shape)
     }
 
-    fn format_tensor_debug<K: DType>(t: &Self::Storage<K>) -> std::string::String {
-        std::format!(
+    fn format_tensor_debug<K: DType>(t: &Self::Storage<K>) -> alloc::string::String {
+        alloc::format!(
             "NativeStorage(shape={:?}, strides={:?}, offset={})",
             t.shape,
             t.strides,
@@ -63,6 +66,10 @@ impl<T: DType, D: Device> kindle_core::prelude::Backend for NativeBackend<T, D> 
         tape::backward(t)
     }
 
+    fn backward_with_nan_check<K: DType>(t: &Self::Storage<K>) -> Result<Self::Grads> {
+        tape::backward_with_nan_check(t)
+    }
+
     fn get_grad<K: DType>(
         t: &Self::Storage<K>,
         grads: &Self::Grads,
@@ -70,9 +77,9 @@ impl<T: DType, D: Device> kindle_core::prelude::Backend for NativeBackend<T, D> 
         Ok(grads.grads.get(&t.id).cloned())
     }
 
-    fn to_bytes<K: DType>(t: &Self::Storage<K>) -> Result<std::vec::Vec<u8>> {
+    fn to_bytes<K: DType>(t: &Self::Storage<K>) -> Result<alloc::vec::Vec<u8>> {
         match &*t.buffer {
-            storage::NativeBuffer::F32(v) => Ok(bytemuck::cast_slice(v).to_vec()),
+            storage::NativeBuffer::F32(v) => Ok(bytemuck::cast_slice(&v).to_vec()),
             _ => Err(Error::UnsupportedBackendOperation {
                 op: "to_bytes",
                 backend: "Native",

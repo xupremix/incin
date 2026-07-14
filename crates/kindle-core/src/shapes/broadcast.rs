@@ -3,6 +3,11 @@ use crate::prelude::*;
 use crate::tensor::matmul::StaticDim;
 
 /// Trait that verifies two shapes are broadcastable and determines the output shape.
+#[diagnostic::on_unimplemented(
+    message = "Cannot broadcast shape `{Self}` to `{Rhs}`",
+    label = "Shape mismatch during broadcast",
+    note = "Broadcast requires dimensions to be equal, or one of them to be 1"
+)]
 pub trait BroadcastShape<Rhs: Shape>: Shape {
     type Output: Shape;
     fn output_shape(

@@ -382,7 +382,7 @@ fn out_size(
 mod tests {
     use super::*;
     use crate::NativeBackend;
-    use crate::testutil::gradcheck;
+    use crate::gradcheck::gradcheck;
     use kindle_core::prelude::{Cpu, ReductionOps};
 
     type TestBackend = NativeBackend<f32, Cpu>;

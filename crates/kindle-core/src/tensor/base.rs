@@ -367,7 +367,7 @@ impl<S: Shape, B: Backend, K: DType, D: Device> Tensor<S, B, K, D, Grad> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::prelude::{KindleDType, KindleDevice};
+
     use alloc::vec;
 
     #[test]

@@ -46,7 +46,7 @@ impl TransportReader for FileTransportReader {
 
         let mut events = Vec::new();
         loop {
-            let mut line = std::mem::take(&mut self.partial_line);
+            let mut line = core::mem::take(&mut self.partial_line);
             let bytes_read = self.reader.read_line(&mut line)?;
             if bytes_read == 0 {
                 // EOF for now. If `line` is non-empty, it's a partial line

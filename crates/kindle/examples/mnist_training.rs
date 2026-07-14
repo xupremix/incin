@@ -26,16 +26,16 @@ impl Collate<(Vec<f32>, u8)> for MnistCollate {
         }
 
         let images_bytes = unsafe {
-            std::slice::from_raw_parts(
+            core::slice::from_raw_parts(
                 images.as_ptr() as *const u8,
-                images.len() * std::mem::size_of::<f32>(),
+                images.len() * core::mem::size_of::<f32>(),
             )
         };
 
         let labels_bytes = unsafe {
-            std::slice::from_raw_parts(
+            core::slice::from_raw_parts(
                 labels.as_ptr() as *const u8,
-                labels.len() * std::mem::size_of::<u32>(),
+                labels.len() * core::mem::size_of::<u32>(),
             )
         };
 
@@ -48,7 +48,8 @@ impl Collate<(Vec<f32>, u8)> for MnistCollate {
         )
         .unwrap();
         let labels_raw =
-            Backend::from_bytes::<u32>(labels_bytes, &[batch_size], KindleDType::U32, &device).unwrap();
+            Backend::from_bytes::<u32>(labels_bytes, &[batch_size], KindleDType::U32, &device)
+                .unwrap();
 
         (
             Tensor::<Dyn, Backend>::from_raw(images_raw, vec![batch_size, 1, 28, 28]).unwrap(),

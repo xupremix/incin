@@ -32,12 +32,16 @@
     allow(incomplete_features)
 )]
 
+#[macro_use]
 pub(crate) extern crate alloc;
 
 pub mod err;
+
 pub mod graph;
 pub mod nn;
+#[cfg(feature = "std")]
 pub mod onnx_exporter;
+#[cfg(feature = "std")]
 pub mod onnx_pb;
 pub mod optim;
 pub mod serialize;
@@ -55,16 +59,24 @@ pub mod prelude {
         layer_norm::LayerNorm,
         linear::{Linear, LinearShape},
         max_pool2d::MaxPool2d,
-        module::{Module, Parameters, Sequential, NamedLayers, LayerNode},
+        module::{LayerNode, Module, NamedLayers, Parameters, Sequential},
         param::Param,
     };
     pub use crate::seq;
 
     pub use super::shapes::prelude::*;
     pub use super::tensor::prelude::*;
+    pub use alloc::string::{String, ToString};
+    pub use alloc::vec::{self, Vec};
+    pub use alloc::format;
+    pub use alloc::boxed::Box;
+    pub use hashbrown::HashMap;
+    #[cfg(feature = "std")]
     pub use crate::onnx_exporter::{OnnxExporter, OnnxImporter};
     pub use crate::optim::{Gradients, Optimizer, SGD};
-    pub use crate::serialize::{Deserializer, Format, ModelExt, Serializer};
+    #[cfg(feature = "std")]
+    pub use crate::serialize::{Format, ModelExt};
+    pub use crate::serialize::{Deserializer, Serializer};
     pub use crate::shapes::dim::Dim;
     pub use crate::shapes::shape::{ConstShape, DynShape, PartialDynShape, Shape};
     pub use crate::symbolic_dim;

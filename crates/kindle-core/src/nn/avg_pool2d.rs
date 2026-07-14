@@ -23,7 +23,7 @@ impl<K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned, B: Backend> Parameters<
     fn named_parameters(
         &self,
         _prefix: &str,
-        _map: &mut std::collections::HashMap<String, B::RawVar>,
+        _map: &mut hashbrown::HashMap<String, B::RawVar>,
     ) {
     }
 }

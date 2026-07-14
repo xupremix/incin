@@ -1,3 +1,5 @@
+extern crate kindle_core as kindle;
+use kindle_core as kindle;
 use kindle_core::prelude::*;
 use kindle_core::tensor::backend::dummy::DummyBackend;
 use kindle_core::nn::*;

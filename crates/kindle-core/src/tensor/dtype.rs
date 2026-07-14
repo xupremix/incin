@@ -22,6 +22,12 @@ pub trait ConstDType: DType<Arg = ()> {
     const DTYPE: KindleDType;
 }
 
+pub trait QuantDType: DType {}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Q8_0;
+
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum KindleDType {
     U8,
@@ -31,6 +37,7 @@ pub enum KindleDType {
     F16,
     F32,
     F64,
+    Q8_0,
 }
 
 macro_rules! impl_dtype {
@@ -63,6 +70,7 @@ impl_dtype!(
     I64 i64,
     F16 f16,
     BF16 bf16,
+    Q8_0 Q8_0,
 );
 
 impl FloatDType for f32 {}
@@ -73,6 +81,8 @@ impl FloatDType for bf16 {}
 impl IntDType for u8 {}
 impl IntDType for u32 {}
 impl IntDType for i64 {}
+
+impl QuantDType for Q8_0 {}
 
 impl DType for Dyn {
     type Arg = KindleDType;

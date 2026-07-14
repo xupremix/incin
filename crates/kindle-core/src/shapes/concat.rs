@@ -2,6 +2,11 @@ use crate::prelude::*;
 use core::ops::Add;
 use typenum::{U0, U1, U2, U3, U4, U5};
 
+#[diagnostic::on_unimplemented(
+    message = "Cannot concatenate shape `{Self}` with `{S2}` along axis `{Axis}`",
+    label = "Shape mismatch during concatenation",
+    note = "Concatenation requires all dimensions except the given axis to match exactly"
+)]
 pub trait ConcatShape<S2, Axis> {
     type Output: Shape;
 }

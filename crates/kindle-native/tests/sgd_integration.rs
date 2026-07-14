@@ -16,13 +16,13 @@
 //! a clone shares the same `RefCell`, so `assign_var` through SGD's owned
 //! copy is visible through the clone the test holds.
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 use kindle_core::prelude::*;
 use kindle_native::{
+    NativeBackend,
     storage::{NativeBuffer, NativeStorage},
     var::{var_as_tensor, var_from_tensor},
-    NativeBackend,
 };
 
 type B = NativeBackend<f32, Cpu>;
@@ -64,7 +64,7 @@ fn sgd_step_updates_native_params_in_correct_direction() {
     let w_var_clone = w_var.clone(); // our read-back handle
 
     let mut params: HashMap<String, <B as Backend>::RawVar> = HashMap::new();
-    params.insert("w".to_string(), w_var);
+    params.insert(String::from("w"), w_var);
     let mut sgd = SGD::<B, f32>::new(params, lr);
 
     // --- Step 1 ---
@@ -144,7 +144,7 @@ fn sgd_mutation_is_restricted_to_assign_var_boundary() {
     let w_var_clone = w_var.clone();
 
     let mut params: HashMap<String, <B as Backend>::RawVar> = HashMap::new();
-    params.insert("w".to_string(), w_var);
+    params.insert(String::from("w"), w_var);
     let mut sgd = SGD::<B, f32>::new(params, lr);
 
     let n_steps = 5usize;

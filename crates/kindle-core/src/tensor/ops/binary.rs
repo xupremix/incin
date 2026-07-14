@@ -4,7 +4,7 @@
 //! that require exactly matching shapes at compile time via the `ShapeEq` trait.
 //!
 //! It also provides broadcasting variants (`broadcast_add`, etc.) and implements standard
-//! `core::ops` traits (like `std::ops::Add`) which automatically leverage compile-time
+//! `core::ops` traits (like `core::ops::Add`) which automatically leverage compile-time
 //! broadcast shape resolution (`BroadcastShape`).
 use crate::prelude::{Backend, RequiresGrad, Result, Shape, Tensor};
 use crate::tensor::ops::*;

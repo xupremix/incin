@@ -1,84 +1,100 @@
-error: cannot find macro `s` in this scope
- --> tests/compile_fail/forward_model_building_mismatch.rs:7:23
+error[E0254]: the name `kindle` is defined multiple times
+ --> tests/compile_fail/forward_model_building_mismatch.rs:2:5
   |
-7 |     let l1 = Linear::<s![10, 20], DummyBackend<f32, Cpu>>::new().unwrap();
+1 | extern crate kindle_core as kindle;
+  | ----------------------------------- previous import of the extern crate `kindle` here
+2 | use kindle_core as kindle;
+  |     ^^^^^^^^^^^^^^^^^^^^^ `kindle` reimported here
+  |
+  = note: `kindle` must be defined only once in the type namespace of this module
+
+error: cannot find macro `s` in this scope
+ --> tests/compile_fail/forward_model_building_mismatch.rs:9:23
+  |
+9 |     let l1 = Linear::<s![10, 20], DummyBackend<f32, Cpu>>::new().unwrap();
   |                       ^
   |
 help: consider importing this macro
   |
-1 + use kindle_macros::s;
+2 + use kindle_macros::s;
   |
 
 error: cannot find macro `s` in this scope
- --> tests/compile_fail/forward_model_building_mismatch.rs:8:23
-  |
-8 |     let l2 = Linear::<s![30, 40], DummyBackend<f32, Cpu>>::new().unwrap();
-  |                       ^
-  |
-help: consider importing this macro
-  |
-1 + use kindle_macros::s;
-  |
-
-error: cannot find macro `s` in this scope
-  --> tests/compile_fail/forward_model_building_mismatch.rs:10:26
+  --> tests/compile_fail/forward_model_building_mismatch.rs:10:23
    |
-10 |     let input = Tensor::<s![2, 10], DummyBackend<f32, Cpu>>::zeros(()).unwrap();
+10 |     let l2 = Linear::<s![30, 40], DummyBackend<f32, Cpu>>::new().unwrap();
+   |                       ^
+   |
+help: consider importing this macro
+   |
+ 2 + use kindle_macros::s;
+   |
+
+error: cannot find macro `s` in this scope
+  --> tests/compile_fail/forward_model_building_mismatch.rs:12:26
+   |
+12 |     let input = Tensor::<s![2, 10], DummyBackend<f32, Cpu>>::zeros(()).unwrap();
    |                          ^
    |
 help: consider importing this macro
    |
- 1 + use kindle_macros::s;
+ 2 + use kindle_macros::s;
    |
 
-warning: unused import: `kindle_core::nn::*`
- --> tests/compile_fail/forward_model_building_mismatch.rs:3:5
+warning: unused import: `kindle_core as kindle`
+ --> tests/compile_fail/forward_model_building_mismatch.rs:2:5
   |
-3 | use kindle_core::nn::*;
-  |     ^^^^^^^^^^^^^^^^^^
+2 | use kindle_core as kindle;
+  |     ^^^^^^^^^^^^^^^^^^^^^
   |
   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
 
-error[E0277]: the trait bound `(): LinearShape` is not satisfied
- --> tests/compile_fail/forward_model_building_mismatch.rs:7:14
+warning: unused import: `kindle_core::nn::*`
+ --> tests/compile_fail/forward_model_building_mismatch.rs:5:5
   |
-7 |     let l1 = Linear::<s![10, 20], DummyBackend<f32, Cpu>>::new().unwrap();
+5 | use kindle_core::nn::*;
+  |     ^^^^^^^^^^^^^^^^^^
+
+error[E0277]: the trait bound `(): LinearShape` is not satisfied
+ --> tests/compile_fail/forward_model_building_mismatch.rs:9:14
+  |
+9 |     let l1 = Linear::<s![10, 20], DummyBackend<f32, Cpu>>::new().unwrap();
   |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `LinearShape` is not implemented for `()`
   |
   = help: the trait `LinearShape` is implemented for `(InF, OutF)`
-note: required by a bound in `kindle_core::nn::Linear`
+note: required by a bound in `kindle::nn::Linear`
  --> src/nn/linear.rs
   |
   | pub struct Linear<S: LinearShape, B: Backend, Bias: crate::nn::optional::OptionalField = crate::nn::optional::True> {
   |                      ^^^^^^^^^^^ required by this bound in `Linear`
 
-error[E0599]: the function or associated item `new` exists for struct `kindle_core::nn::Linear<(), DummyBackend<f32, kindle_core::prelude::Cpu>>`, but its trait bounds were not satisfied
- --> tests/compile_fail/forward_model_building_mismatch.rs:7:60
+error[E0599]: the function or associated item `new` exists for struct `kindle::nn::Linear<(), DummyBackend<f32, kindle::prelude::Cpu>>`, but its trait bounds were not satisfied
+ --> tests/compile_fail/forward_model_building_mismatch.rs:9:60
   |
-7 |     let l1 = Linear::<s![10, 20], DummyBackend<f32, Cpu>>::new().unwrap();
+9 |     let l1 = Linear::<s![10, 20], DummyBackend<f32, Cpu>>::new().unwrap();
   |                                                            ^^^ function or associated item cannot be called due to unsatisfied trait bounds
   |
   = note: the following trait bounds were not satisfied:
           `(): LinearShape`
 
 error[E0277]: the trait bound `(): LinearShape` is not satisfied
- --> tests/compile_fail/forward_model_building_mismatch.rs:8:14
-  |
-8 |     let l2 = Linear::<s![30, 40], DummyBackend<f32, Cpu>>::new().unwrap();
-  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `LinearShape` is not implemented for `()`
-  |
-  = help: the trait `LinearShape` is implemented for `(InF, OutF)`
-note: required by a bound in `kindle_core::nn::Linear`
- --> src/nn/linear.rs
-  |
-  | pub struct Linear<S: LinearShape, B: Backend, Bias: crate::nn::optional::OptionalField = crate::nn::optional::True> {
-  |                      ^^^^^^^^^^^ required by this bound in `Linear`
+  --> tests/compile_fail/forward_model_building_mismatch.rs:10:14
+   |
+10 |     let l2 = Linear::<s![30, 40], DummyBackend<f32, Cpu>>::new().unwrap();
+   |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `LinearShape` is not implemented for `()`
+   |
+   = help: the trait `LinearShape` is implemented for `(InF, OutF)`
+note: required by a bound in `kindle::nn::Linear`
+  --> src/nn/linear.rs
+   |
+   | pub struct Linear<S: LinearShape, B: Backend, Bias: crate::nn::optional::OptionalField = crate::nn::optional::True> {
+   |                      ^^^^^^^^^^^ required by this bound in `Linear`
 
-error[E0599]: the function or associated item `new` exists for struct `kindle_core::nn::Linear<(), DummyBackend<f32, kindle_core::prelude::Cpu>>`, but its trait bounds were not satisfied
- --> tests/compile_fail/forward_model_building_mismatch.rs:8:60
-  |
-8 |     let l2 = Linear::<s![30, 40], DummyBackend<f32, Cpu>>::new().unwrap();
-  |                                                            ^^^ function or associated item cannot be called due to unsatisfied trait bounds
-  |
-  = note: the following trait bounds were not satisfied:
-          `(): LinearShape`
+error[E0599]: the function or associated item `new` exists for struct `kindle::nn::Linear<(), DummyBackend<f32, kindle::prelude::Cpu>>`, but its trait bounds were not satisfied
+  --> tests/compile_fail/forward_model_building_mismatch.rs:10:60
+   |
+10 |     let l2 = Linear::<s![30, 40], DummyBackend<f32, Cpu>>::new().unwrap();
+   |                                                            ^^^ function or associated item cannot be called due to unsatisfied trait bounds
+   |
+   = note: the following trait bounds were not satisfied:
+           `(): LinearShape`

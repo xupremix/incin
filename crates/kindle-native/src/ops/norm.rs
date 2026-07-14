@@ -11,8 +11,8 @@
 
 use kindle_core::prelude::{DType, FloatOps, NumericOps, ReductionOps, Result};
 
-use crate::storage::{NativeBuffer, NativeStorage};
 use crate::NativeBackend;
+use crate::storage::{NativeBuffer, NativeStorage};
 
 // ---------------------------------------------------------------------------
 // layer_norm
@@ -122,9 +122,7 @@ pub(crate) fn batch_norm_impl<T: DType, D: kindle_core::prelude::Device, K: DTyp
     // Reshape a provided storage to bcast_shape (it arrives as a flat [C] vector).
     // NativeStorage::reshape is the inherent method (not tape-tracked here —
     // these are treated as fixed parameters, not differentiated inputs).
-    let reshape_to_bcast = |s: &NativeStorage| -> Result<NativeStorage> {
-        s.reshape(&bcast_shape)
-    };
+    let reshape_to_bcast = |s: &NativeStorage| -> Result<NativeStorage> { s.reshape(&bcast_shape) };
 
     let rm_s;
     let rm_ref: NativeStorage = match rm {
@@ -164,8 +162,7 @@ pub(crate) fn batch_norm_impl<T: DType, D: kindle_core::prelude::Device, K: DTyp
 
     // (t - rm) / sqrt(rv + eps) * w + b — all broadcast via existing tape-tracked ops.
     let centered = <B<T, D> as NumericOps<B<T, D>>>::sub::<K>(t, &rm_ref)?;
-    let rv_eps =
-        <B<T, D> as FloatOps<B<T, D>>>::add_scalar_float::<K>(&rv_ref, eps as f64)?;
+    let rv_eps = <B<T, D> as FloatOps<B<T, D>>>::add_scalar_float::<K>(&rv_ref, eps as f64)?;
     let std = <B<T, D> as FloatOps<B<T, D>>>::sqrt::<K>(&rv_eps)?;
     let normalized = <B<T, D> as NumericOps<B<T, D>>>::div::<K>(&centered, &std)?;
     let scaled = <B<T, D> as NumericOps<B<T, D>>>::mul::<K>(&normalized, &w_ref)?;
@@ -179,9 +176,9 @@ pub(crate) fn batch_norm_impl<T: DType, D: kindle_core::prelude::Device, K: DTyp
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::gradcheck::gradcheck;
     use crate::storage::{NativeBuffer, NativeStorage};
-    use crate::tape;
-    use crate::testutil::gradcheck;
+
 
     type TestB = NativeBackend<f32, kindle_core::prelude::Cpu>;
 
@@ -242,8 +239,7 @@ mod tests {
         for row in 0..2usize {
             let row_vals = &vals[row * 3..(row + 1) * 3];
             let row_mean: f32 = row_vals.iter().sum::<f32>() / 3.0;
-            let row_var: f32 =
-                row_vals.iter().map(|v| (v - row_mean).powi(2)).sum::<f32>() / 3.0;
+            let row_var: f32 = row_vals.iter().map(|v| (v - row_mean).powi(2)).sum::<f32>() / 3.0;
             assert!(
                 row_mean.abs() < 1e-4,
                 "row{row} mean should be ~0: {row_mean:.6}"
@@ -294,9 +290,13 @@ mod tests {
         let bias_zeros = vec1(vec![0.0f32, 0.0, 0.0]);
         let eps = 1e-5f32;
 
-        let with_explicit_zero =
-            layer_norm_impl::<f32, kindle_core::prelude::Cpu, f32>(&t, &weight, Some(&bias_zeros), eps)
-                .unwrap();
+        let with_explicit_zero = layer_norm_impl::<f32, kindle_core::prelude::Cpu, f32>(
+            &t,
+            &weight,
+            Some(&bias_zeros),
+            eps,
+        )
+        .unwrap();
         let with_none_bias =
             layer_norm_impl::<f32, kindle_core::prelude::Cpu, f32>(&t, &weight, None, eps).unwrap();
 
@@ -395,8 +395,16 @@ mod tests {
         let b = vec1(vec![0.0f32, 0.0, 0.0]);
         let eps = 1e-5f32;
 
-        let out =
-            batch_norm_impl::<f32, kindle_core::prelude::Cpu, f32>(&t, Some(&w), Some(&b), Some(&rm), Some(&rv), eps, 0.0).unwrap();
+        let out = batch_norm_impl::<f32, kindle_core::prelude::Cpu, f32>(
+            &t,
+            Some(&w),
+            Some(&b),
+            Some(&rm),
+            Some(&rv),
+            eps,
+            0.0,
+        )
+        .unwrap();
         assert_eq!(out.shape, vec![2, 3, 2, 2]);
         let vals = f32_vec(&out);
 
@@ -433,10 +441,26 @@ mod tests {
         let b = vec1(vec![0.0f32, 0.0, 0.0]);
         let eps = 1e-5f32;
 
-        let out0 =
-            batch_norm_impl::<f32, kindle_core::prelude::Cpu, f32>(&t, Some(&w), Some(&b), Some(&rm), Some(&rv), eps, 0.0).unwrap();
-        let out1 =
-            batch_norm_impl::<f32, kindle_core::prelude::Cpu, f32>(&t, Some(&w), Some(&b), Some(&rm), Some(&rv), eps, 0.9).unwrap();
+        let out0 = batch_norm_impl::<f32, kindle_core::prelude::Cpu, f32>(
+            &t,
+            Some(&w),
+            Some(&b),
+            Some(&rm),
+            Some(&rv),
+            eps,
+            0.0,
+        )
+        .unwrap();
+        let out1 = batch_norm_impl::<f32, kindle_core::prelude::Cpu, f32>(
+            &t,
+            Some(&w),
+            Some(&b),
+            Some(&rm),
+            Some(&rv),
+            eps,
+            0.9,
+        )
+        .unwrap();
 
         let v0 = f32_vec(&out0);
         let v1 = f32_vec(&out1);
@@ -453,9 +477,14 @@ mod tests {
         // Passing None for all four optional args should equal explicit
         // rm=0, rv=1, w=1, b=0 (Candle's convention — T-04-08 mitigation).
         let t = tensor4(
-            vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0,
-                 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0],
-            2, 3, 2, 2,
+            vec![
+                1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 2.0, 3.0, 4.0,
+                5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0,
+            ],
+            2,
+            3,
+            2,
+            2,
         );
         let rm_zeros = vec1(vec![0.0f32; 3]);
         let rv_ones = vec1(vec![1.0f32; 3]);
@@ -463,10 +492,20 @@ mod tests {
         let b_zeros = vec1(vec![0.0f32; 3]);
         let eps = 1e-5f32;
 
-        let with_explicit =
-            batch_norm_impl::<f32, kindle_core::prelude::Cpu, f32>(&t, Some(&w_ones), Some(&b_zeros), Some(&rm_zeros), Some(&rv_ones), eps, 0.0).unwrap();
-        let with_none =
-            batch_norm_impl::<f32, kindle_core::prelude::Cpu, f32>(&t, None, None, None, None, eps, 0.0).unwrap();
+        let with_explicit = batch_norm_impl::<f32, kindle_core::prelude::Cpu, f32>(
+            &t,
+            Some(&w_ones),
+            Some(&b_zeros),
+            Some(&rm_zeros),
+            Some(&rv_ones),
+            eps,
+            0.0,
+        )
+        .unwrap();
+        let with_none = batch_norm_impl::<f32, kindle_core::prelude::Cpu, f32>(
+            &t, None, None, None, None, eps, 0.0,
+        )
+        .unwrap();
 
         let a = f32_vec(&with_explicit);
         let b = f32_vec(&with_none);
@@ -498,9 +537,21 @@ mod tests {
         let b = vec1(vec![0.0f32; 3]);
         let eps = 1e-5f32;
 
-        let out =
-            batch_norm_impl::<f32, kindle_core::prelude::Cpu, f32>(&t, Some(&w), Some(&b), Some(&rm), Some(&rv), eps, 0.0).unwrap();
-        assert_eq!(out.shape, vec![4, 3], "rank-2 batch_norm output shape should be [4,3]");
+        let out = batch_norm_impl::<f32, kindle_core::prelude::Cpu, f32>(
+            &t,
+            Some(&w),
+            Some(&b),
+            Some(&rm),
+            Some(&rv),
+            eps,
+            0.0,
+        )
+        .unwrap();
+        assert_eq!(
+            out.shape,
+            vec![4, 3],
+            "rank-2 batch_norm output shape should be [4,3]"
+        );
         let vals = f32_vec(&out);
 
         // Sample 0, channel 0: (1 - 0) / sqrt(1+eps) * 2 + 0 ≈ 2.0
@@ -524,10 +575,13 @@ mod tests {
         // Gradcheck on [2,3,2,2] with fixed rm/rv/w/b.
         let t = tensor4(
             vec![
-                0.5, 1.0, -0.5, 0.2, 1.5, -1.0, 0.3, -0.3, 0.8, -0.8, 1.2, -1.2,
-                0.1, 0.9, -0.1, 0.4, 1.1, -0.9, 0.7, -0.7, 0.6, -0.6, 1.3, -1.3,
+                0.5, 1.0, -0.5, 0.2, 1.5, -1.0, 0.3, -0.3, 0.8, -0.8, 1.2, -1.2, 0.1, 0.9, -0.1,
+                0.4, 1.1, -0.9, 0.7, -0.7, 0.6, -0.6, 1.3, -1.3,
             ],
-            2, 3, 2, 2,
+            2,
+            3,
+            2,
+            2,
         );
         let rm = vec1(vec![0.0f32; 3]);
         let rv = vec1(vec![1.0f32; 3]);

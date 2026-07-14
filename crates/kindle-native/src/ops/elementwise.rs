@@ -42,6 +42,15 @@ pub(crate) fn increment_index(idx: &mut [usize], shape: &[usize]) {
     }
 }
 
+pub(crate) fn flat_to_nd(mut flat_idx: usize, shape: &[usize]) -> Vec<usize> {
+    let mut nd = vec![0; shape.len()];
+    for i in (0..shape.len()).rev() {
+        nd[i] = flat_idx % shape[i];
+        flat_idx /= shape[i];
+    }
+    nd
+}
+
 /// Read `storage` as `f64` at `storage`'s own (already-resolved) logical
 /// index, given the output-space index and shape.
 fn read_broadcast(storage: &NativeStorage, out_idx: &[usize], out_shape: &[usize]) -> f64 {
@@ -52,39 +61,46 @@ fn read_broadcast(storage: &NativeStorage, out_idx: &[usize], out_shape: &[usize
 /// Build a contiguous `NativeStorage` by applying `f(lhs_val, rhs_val)` over
 /// every logical index in `out_shape`, reading each operand through its own
 /// broadcast-resolved index (no pre-materialized broadcast copy).
+use rayon::prelude::*;
+
 fn elementwise_binary(
     lhs: &NativeStorage,
     rhs: &NativeStorage,
     out_shape: &[usize],
-    f: impl Fn(f64, f64) -> f64,
+    f: impl Fn(f64, f64) -> f64 + Send + Sync,
 ) -> NativeStorage {
     let total: usize = out_shape.iter().product();
-    let mut out = Vec::with_capacity(total);
-    let mut idx = vec![0usize; out_shape.len()];
-    for _ in 0..total {
-        let a = read_broadcast(lhs, &idx, out_shape);
-        let b = read_broadcast(rhs, &idx, out_shape);
-        out.push(f(a, b) as f32);
-        if !out_shape.is_empty() {
-            increment_index(&mut idx, out_shape);
-        }
-    }
+    let out: Vec<f32> = (0..total)
+        .into_par_iter()
+        .map(|flat_idx| {
+            let nd_idx = flat_to_nd(flat_idx, out_shape);
+            let a = read_broadcast(lhs, &nd_idx, out_shape);
+            let b = read_broadcast(rhs, &nd_idx, out_shape);
+            f(a, b) as f32
+        })
+        .collect();
     NativeStorage::from_contiguous(NativeBuffer::F32(out), out_shape.to_vec())
 }
 
 /// Elementwise negate (used by `sub`'s backward rule: rhs receives the
 /// negated incoming gradient before unbroadcasting).
-fn negate(t: &NativeStorage) -> NativeStorage {
+fn elementwise_unary(
+    t: &NativeStorage,
+    f: impl Fn(f64) -> f64 + Send + Sync,
+) -> NativeStorage {
     let total: usize = t.shape.iter().product();
-    let mut out = Vec::with_capacity(total);
-    let mut idx = vec![0usize; t.shape.len()];
-    for _ in 0..total {
-        out.push(-t.get(&idx) as f32);
-        if !t.shape.is_empty() {
-            increment_index(&mut idx, &t.shape);
-        }
-    }
+    let out: Vec<f32> = (0..total)
+        .into_par_iter()
+        .map(|flat_idx| {
+            let nd_idx = flat_to_nd(flat_idx, &t.shape);
+            f(t.get(&nd_idx)) as f32
+        })
+        .collect();
     NativeStorage::from_contiguous(NativeBuffer::F32(out), t.shape.clone())
+}
+
+fn negate(t: &NativeStorage) -> NativeStorage {
+    elementwise_unary(t, |x| -x)
 }
 
 /// Elementwise multiply of two ALREADY-shape-matching (or one of them
@@ -229,16 +245,7 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for NativeBackend
         t: &<Self as Backend>::Storage<K>,
         scalar: f64,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let total: usize = t.shape.iter().product();
-        let mut out = Vec::with_capacity(total);
-        let mut idx = vec![0usize; t.shape.len()];
-        for _ in 0..total {
-            out.push((t.get(&idx) + scalar) as f32);
-            if !t.shape.is_empty() {
-                increment_index(&mut idx, &t.shape);
-            }
-        }
-        let out = NativeStorage::from_contiguous(NativeBuffer::F32(out), t.shape.clone());
+        let out = elementwise_unary(t, |x| (x + scalar));
 
         let (t_id, out_id) = (t.id, out.id);
         tape::push(TapeEntry {
@@ -255,16 +262,7 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for NativeBackend
         t: &<Self as Backend>::Storage<K>,
         scalar: f64,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let total: usize = t.shape.iter().product();
-        let mut out = Vec::with_capacity(total);
-        let mut idx = vec![0usize; t.shape.len()];
-        for _ in 0..total {
-            out.push((t.get(&idx) * scalar) as f32);
-            if !t.shape.is_empty() {
-                increment_index(&mut idx, &t.shape);
-            }
-        }
-        let out = NativeStorage::from_contiguous(NativeBuffer::F32(out), t.shape.clone());
+        let out = elementwise_unary(t, |x| (x * scalar));
 
         let (t_id, out_id) = (t.id, out.id);
         tape::push(TapeEntry {
@@ -292,16 +290,7 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for NativeBackend
     }
 
     fn relu<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        let total: usize = t.shape.iter().product();
-        let mut out = Vec::with_capacity(total);
-        let mut idx = vec![0usize; t.shape.len()];
-        for _ in 0..total {
-            out.push(t.get(&idx).max(0.0) as f32);
-            if !t.shape.is_empty() {
-                increment_index(&mut idx, &t.shape);
-            }
-        }
-        let out = NativeStorage::from_contiguous(NativeBuffer::F32(out), t.shape.clone());
+        let out = elementwise_unary(t, |x| x.max(0.0));
 
         // relu'(x) = 1 if x > 0 else 0 (input-based; strict `>`, zero
         // gradient at the x=0 boundary).
@@ -311,38 +300,19 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for NativeBackend
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &NativeStorage| {
-                let total: usize = grad_out.shape.iter().product();
-                let mut grad = Vec::with_capacity(total);
-                let mut idx = vec![0usize; grad_out.shape.len()];
-                for _ in 0..total {
-                    let x = t_capture.get(&idx);
+                let grad = elementwise_binary(grad_out, &t_capture, &grad_out.shape, |g, x| {
+                    let x = x;
                     let deriv = if x > 0.0 { 1.0 } else { 0.0 };
-                    grad.push((grad_out.get(&idx) * deriv) as f32);
-                    if !grad_out.shape.is_empty() {
-                        increment_index(&mut idx, &grad_out.shape);
-                    }
-                }
-                vec![NativeStorage::from_contiguous(
-                    NativeBuffer::F32(grad),
-                    grad_out.shape.clone(),
-                )]
+                    g * deriv
+                });
+                vec![grad]
             }),
         });
         Ok(out)
     }
 
     fn gelu<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        let total: usize = t.shape.iter().product();
-        let mut out = Vec::with_capacity(total);
-        let mut idx = vec![0usize; t.shape.len()];
-        for _ in 0..total {
-            let x = t.get(&idx);
-            out.push((x * 0.5 * (1.0 + erf_approx(x / std::f64::consts::SQRT_2))) as f32);
-            if !t.shape.is_empty() {
-                increment_index(&mut idx, &t.shape);
-            }
-        }
-        let out = NativeStorage::from_contiguous(NativeBuffer::F32(out), t.shape.clone());
+        let out = elementwise_unary(t, |x| (x * 0.5 * (1.0 + erf_approx(x / core::f64::consts::SQRT_2))));
 
         // gelu(x) = x * 0.5 * (1 + erf(x/sqrt(2)))
         // gelu'(x) = 0.5*(1+erf(x/sqrt(2))) + x * (1/sqrt(2*pi)) * exp(-x^2/2)
@@ -353,39 +323,21 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for NativeBackend
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &NativeStorage| {
-                let total: usize = grad_out.shape.iter().product();
-                let mut grad = Vec::with_capacity(total);
-                let mut idx = vec![0usize; grad_out.shape.len()];
-                for _ in 0..total {
-                    let x = t_capture.get(&idx);
-                    let cdf = 0.5 * (1.0 + erf_approx(x / std::f64::consts::SQRT_2));
-                    let pdf = (1.0 / (2.0 * std::f64::consts::PI).sqrt()) * (-x * x / 2.0).exp();
+                let grad = elementwise_binary(grad_out, &t_capture, &grad_out.shape, |g, x| {
+                    let x = x;
+                    let cdf = 0.5 * (1.0 + erf_approx(x / core::f64::consts::SQRT_2));
+                    let pdf = (1.0 / (2.0 * core::f64::consts::PI).sqrt()) * (-x * x / 2.0).exp();
                     let deriv = cdf + x * pdf;
-                    grad.push((grad_out.get(&idx) * deriv) as f32);
-                    if !grad_out.shape.is_empty() {
-                        increment_index(&mut idx, &grad_out.shape);
-                    }
-                }
-                vec![NativeStorage::from_contiguous(
-                    NativeBuffer::F32(grad),
-                    grad_out.shape.clone(),
-                )]
+                    g * deriv
+                });
+                vec![grad]
             }),
         });
         Ok(out)
     }
 
     fn abs<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        let total: usize = t.shape.iter().product();
-        let mut out = Vec::with_capacity(total);
-        let mut idx = vec![0usize; t.shape.len()];
-        for _ in 0..total {
-            out.push(t.get(&idx).abs() as f32);
-            if !t.shape.is_empty() {
-                increment_index(&mut idx, &t.shape);
-            }
-        }
-        let out = NativeStorage::from_contiguous(NativeBuffer::F32(out), t.shape.clone());
+        let out = elementwise_unary(t, |x| x.abs());
 
         // abs'(x) = sign(x) (input-based).
         let t_capture = t.clone();
@@ -394,11 +346,8 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for NativeBackend
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &NativeStorage| {
-                let total: usize = grad_out.shape.iter().product();
-                let mut grad = Vec::with_capacity(total);
-                let mut idx = vec![0usize; grad_out.shape.len()];
-                for _ in 0..total {
-                    let x = t_capture.get(&idx);
+                let grad = elementwise_binary(grad_out, &t_capture, &grad_out.shape, |g, x| {
+                    let x = x;
                     let deriv = if x > 0.0 {
                         1.0
                     } else if x < 0.0 {
@@ -406,31 +355,16 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for NativeBackend
                     } else {
                         0.0
                     };
-                    grad.push((grad_out.get(&idx) * deriv) as f32);
-                    if !grad_out.shape.is_empty() {
-                        increment_index(&mut idx, &grad_out.shape);
-                    }
-                }
-                vec![NativeStorage::from_contiguous(
-                    NativeBuffer::F32(grad),
-                    grad_out.shape.clone(),
-                )]
+                    g * deriv
+                });
+                vec![grad]
             }),
         });
         Ok(out)
     }
 
     fn exp<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        let total: usize = t.shape.iter().product();
-        let mut out = Vec::with_capacity(total);
-        let mut idx = vec![0usize; t.shape.len()];
-        for _ in 0..total {
-            out.push(t.get(&idx).exp() as f32);
-            if !t.shape.is_empty() {
-                increment_index(&mut idx, &t.shape);
-            }
-        }
-        let out = NativeStorage::from_contiguous(NativeBuffer::F32(out), t.shape.clone());
+        let out = elementwise_unary(t, |x| x.exp());
 
         // exp'(x) = out (output-based).
         let out_capture = out.clone();
@@ -439,20 +373,11 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for NativeBackend
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &NativeStorage| {
-                let total: usize = grad_out.shape.iter().product();
-                let mut grad = Vec::with_capacity(total);
-                let mut idx = vec![0usize; grad_out.shape.len()];
-                for _ in 0..total {
-                    let deriv = out_capture.get(&idx);
-                    grad.push((grad_out.get(&idx) * deriv) as f32);
-                    if !grad_out.shape.is_empty() {
-                        increment_index(&mut idx, &grad_out.shape);
-                    }
-                }
-                vec![NativeStorage::from_contiguous(
-                    NativeBuffer::F32(grad),
-                    grad_out.shape.clone(),
-                )]
+                let grad = elementwise_binary(grad_out, &out_capture, &grad_out.shape, |g, o| {
+                    let deriv = o;
+                    g * deriv
+                });
+                vec![grad]
             }),
         });
         Ok(out)
@@ -472,18 +397,7 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for NativeBackend
     }
 
     fn sqrt<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        let total: usize = t.shape.iter().product();
-        let mut out = Vec::with_capacity(total);
-        let mut idx = vec![0usize; t.shape.len()];
-        for _ in 0..total {
-            // No domain guard: `f64::sqrt`'s native NaN propagation on
-            // negative input flows through unchanged (RESEARCH.md Pitfall 2).
-            out.push(t.get(&idx).sqrt() as f32);
-            if !t.shape.is_empty() {
-                increment_index(&mut idx, &t.shape);
-            }
-        }
-        let out = NativeStorage::from_contiguous(NativeBuffer::F32(out), t.shape.clone());
+        let out = elementwise_unary(t, |x| x.sqrt());
 
         // sqrt'(x) = 1/(2*out) (output-based).
         let out_capture = out.clone();
@@ -492,39 +406,18 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for NativeBackend
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &NativeStorage| {
-                let total: usize = grad_out.shape.iter().product();
-                let mut grad = Vec::with_capacity(total);
-                let mut idx = vec![0usize; grad_out.shape.len()];
-                for _ in 0..total {
-                    let deriv = 1.0 / (2.0 * out_capture.get(&idx));
-                    grad.push((grad_out.get(&idx) * deriv) as f32);
-                    if !grad_out.shape.is_empty() {
-                        increment_index(&mut idx, &grad_out.shape);
-                    }
-                }
-                vec![NativeStorage::from_contiguous(
-                    NativeBuffer::F32(grad),
-                    grad_out.shape.clone(),
-                )]
+                let grad = elementwise_binary(grad_out, &out_capture, &grad_out.shape, |g, o| {
+                    let deriv = 1.0 / (2.0 * o);
+                    g * deriv
+                });
+                vec![grad]
             }),
         });
         Ok(out)
     }
 
     fn log<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        let total: usize = t.shape.iter().product();
-        let mut out = Vec::with_capacity(total);
-        let mut idx = vec![0usize; t.shape.len()];
-        for _ in 0..total {
-            // No domain guard: `f64::ln`'s native NaN/-inf propagation on
-            // zero/negative input flows through unchanged (RESEARCH.md
-            // Pitfall 2).
-            out.push(t.get(&idx).ln() as f32);
-            if !t.shape.is_empty() {
-                increment_index(&mut idx, &t.shape);
-            }
-        }
-        let out = NativeStorage::from_contiguous(NativeBuffer::F32(out), t.shape.clone());
+        let out = elementwise_unary(t, |x| x.ln());
 
         // log'(x) = 1/x (input-based, NOT output-based).
         let t_capture = t.clone();
@@ -533,36 +426,18 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for NativeBackend
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &NativeStorage| {
-                let total: usize = grad_out.shape.iter().product();
-                let mut grad = Vec::with_capacity(total);
-                let mut idx = vec![0usize; grad_out.shape.len()];
-                for _ in 0..total {
-                    let deriv = 1.0 / t_capture.get(&idx);
-                    grad.push((grad_out.get(&idx) * deriv) as f32);
-                    if !grad_out.shape.is_empty() {
-                        increment_index(&mut idx, &grad_out.shape);
-                    }
-                }
-                vec![NativeStorage::from_contiguous(
-                    NativeBuffer::F32(grad),
-                    grad_out.shape.clone(),
-                )]
+                let grad = elementwise_binary(grad_out, &t_capture, &grad_out.shape, |g, x| {
+                    let deriv = 1.0 / x;
+                    g * deriv
+                });
+                vec![grad]
             }),
         });
         Ok(out)
     }
 
     fn tanh<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        let total: usize = t.shape.iter().product();
-        let mut out = Vec::with_capacity(total);
-        let mut idx = vec![0usize; t.shape.len()];
-        for _ in 0..total {
-            out.push(t.get(&idx).tanh() as f32);
-            if !t.shape.is_empty() {
-                increment_index(&mut idx, &t.shape);
-            }
-        }
-        let out = NativeStorage::from_contiguous(NativeBuffer::F32(out), t.shape.clone());
+        let out = elementwise_unary(t, |x| x.tanh());
 
         // tanh'(x) = 1 - out^2 (output-based).
         let out_capture = out.clone();
@@ -571,21 +446,11 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for NativeBackend
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &NativeStorage| {
-                let total: usize = grad_out.shape.iter().product();
-                let mut grad = Vec::with_capacity(total);
-                let mut idx = vec![0usize; grad_out.shape.len()];
-                for _ in 0..total {
-                    let o = out_capture.get(&idx);
+                let grad = elementwise_binary(grad_out, &out_capture, &grad_out.shape, |g, o| {
                     let deriv = 1.0 - o * o;
-                    grad.push((grad_out.get(&idx) * deriv) as f32);
-                    if !grad_out.shape.is_empty() {
-                        increment_index(&mut idx, &grad_out.shape);
-                    }
-                }
-                vec![NativeStorage::from_contiguous(
-                    NativeBuffer::F32(grad),
-                    grad_out.shape.clone(),
-                )]
+                    g * deriv
+                });
+                vec![grad]
             }),
         });
         Ok(out)
@@ -594,17 +459,7 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for NativeBackend
     fn sigmoid<K: DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let total: usize = t.shape.iter().product();
-        let mut out = Vec::with_capacity(total);
-        let mut idx = vec![0usize; t.shape.len()];
-        for _ in 0..total {
-            let x = t.get(&idx);
-            out.push((1.0 / (1.0 + (-x).exp())) as f32);
-            if !t.shape.is_empty() {
-                increment_index(&mut idx, &t.shape);
-            }
-        }
-        let out = NativeStorage::from_contiguous(NativeBuffer::F32(out), t.shape.clone());
+        let out = elementwise_unary(t, |x| (1.0 / (1.0 + (-x).exp())));
 
         // sigmoid'(x) = out*(1-out) (output-based).
         let out_capture = out.clone();
@@ -613,39 +468,21 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for NativeBackend
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &NativeStorage| {
-                let total: usize = grad_out.shape.iter().product();
-                let mut grad = Vec::with_capacity(total);
-                let mut idx = vec![0usize; grad_out.shape.len()];
-                for _ in 0..total {
-                    let o = out_capture.get(&idx);
+                let grad = elementwise_binary(grad_out, &out_capture, &grad_out.shape, |g, o| {
                     let deriv = o * (1.0 - o);
-                    grad.push((grad_out.get(&idx) * deriv) as f32);
-                    if !grad_out.shape.is_empty() {
-                        increment_index(&mut idx, &grad_out.shape);
-                    }
-                }
-                vec![NativeStorage::from_contiguous(
-                    NativeBuffer::F32(grad),
-                    grad_out.shape.clone(),
-                )]
+                    g * deriv
+                });
+                vec![grad]
             }),
         });
         Ok(out)
     }
 
     fn swish<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        let total: usize = t.shape.iter().product();
-        let mut out = Vec::with_capacity(total);
-        let mut idx = vec![0usize; t.shape.len()];
-        for _ in 0..total {
-            let x = t.get(&idx);
+        let out = elementwise_unary(t, |x| {
             let sig = 1.0 / (1.0 + (-x).exp());
-            out.push((x * sig) as f32);
-            if !t.shape.is_empty() {
-                increment_index(&mut idx, &t.shape);
-            }
-        }
-        let out = NativeStorage::from_contiguous(NativeBuffer::F32(out), t.shape.clone());
+            x * sig
+        });
 
         // swish(x) = x * sigmoid(x)
         // swish'(x) = out + sigmoid(x)*(1-out) — needs BOTH the output and
@@ -660,22 +497,16 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for NativeBackend
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &NativeStorage| {
                 let total: usize = grad_out.shape.iter().product();
-                let mut grad = Vec::with_capacity(total);
-                let mut idx = vec![0usize; grad_out.shape.len()];
-                for _ in 0..total {
-                    let x = t_capture.get(&idx);
-                    let o = out_capture.get(&idx);
+                let grad: Vec<f32> = (0..total).into_par_iter().map(|flat_idx| {
+                    let nd_idx = flat_to_nd(flat_idx, &grad_out.shape);
+                    let x = t_capture.get(&nd_idx);
+                    let o = out_capture.get(&nd_idx);
+                    let g = grad_out.get(&nd_idx);
                     let sig = 1.0 / (1.0 + (-x).exp());
                     let deriv = o + sig * (1.0 - o);
-                    grad.push((grad_out.get(&idx) * deriv) as f32);
-                    if !grad_out.shape.is_empty() {
-                        increment_index(&mut idx, &grad_out.shape);
-                    }
-                }
-                vec![NativeStorage::from_contiguous(
-                    NativeBuffer::F32(grad),
-                    grad_out.shape.clone(),
-                )]
+                    (g * deriv) as f32
+                }).collect();
+                vec![NativeStorage::from_contiguous(NativeBuffer::F32(grad), grad_out.shape.clone())]
             }),
         });
         Ok(out)
@@ -733,8 +564,8 @@ pub(crate) fn log_softmax<T: DType, D: kindle_core::prelude::Device, K: DType>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::gradcheck::gradcheck;
     use crate::tape;
-    use crate::testutil::gradcheck;
     use kindle_core::prelude::ReductionOps;
 
     fn matrix(v: Vec<f32>, rows: usize, cols: usize) -> NativeStorage {
@@ -951,7 +782,7 @@ mod tests {
     fn exp_forward_and_gradcheck() {
         let t = vector(vec![0.0, 1.0]);
         let out = TestBackend::exp::<f32>(&t).unwrap();
-        let expect = [1.0f32, std::f64::consts::E as f32];
+        let expect = [1.0f32, core::f64::consts::E as f32];
         for (a, b) in f32_vec(&out).iter().zip(expect.iter()) {
             assert!((a - b).abs() < 1e-5, "exp forward mismatch: {a} vs {b}");
         }
@@ -994,7 +825,7 @@ mod tests {
 
     #[test]
     fn log_forward_gradcheck_and_domain_propagation() {
-        let t = vector(vec![1.0, std::f64::consts::E as f32]);
+        let t = vector(vec![1.0, core::f64::consts::E as f32]);
         let out = TestBackend::log::<f32>(&t).unwrap();
         let expect = [0.0f32, 1.0f32];
         for (a, b) in f32_vec(&out).iter().zip(expect.iter()) {

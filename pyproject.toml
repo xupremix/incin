@@ -1,0 +1,7 @@
+[project]
+name = "kindle"
+version = "0.1.0"
+description = "python deps for kindle and management tools"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []

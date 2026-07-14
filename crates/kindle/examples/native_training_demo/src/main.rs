@@ -219,7 +219,7 @@ fn train<B: MakeLabels>(
     lr: f64,
     reporter: Option<&kindle_telemetry::emitter::Emitter>,
     grad_sample_every_n: Option<usize>,
-    init_state: Option<&std::collections::HashMap<String, Tensor<Dyn, B>>>,
+    init_state: Option<&HashMap<String, Tensor<Dyn, B>>>,
 ) -> (Vec<f64>, std::time::Duration, SimpleCnn<B>)
 where
     B::FloatElem: ConstDType,
@@ -277,7 +277,7 @@ where
             r.log_scalar(kindle_telemetry::events::ScalarEvent {
                 schema_version: kindle_telemetry::events::CURRENT_SCHEMA_VERSION,
                 step,
-                name: "loss".to_string(),
+                name: String::from("loss"),
                 value: loss_val as f64,
             });
         }
@@ -354,7 +354,7 @@ fn run_bench_telemetry(
     // snapshot as `init_state` into all three runs below so they all start
     // from bit-identical weights.
     let init_model = SimpleCnn::<NB>::new(1, 4, 2, 64).expect("init snapshot model");
-    let mut init_state = std::collections::HashMap::new();
+    let mut init_state = HashMap::new();
     init_model.state_dict("", &mut init_state);
 
     // Run 1: baseline, telemetry off entirely.
@@ -465,7 +465,7 @@ fn run_live(images_bytes: &[u8], labels: &[u32], n_samples: usize, lr: f64) -> a
     println!("kindle-viz --run-id {run_id}");
 
     const LIVE_EPOCHS: usize = 200;
-    let mut state: Option<std::collections::HashMap<String, Tensor<Dyn, NB>>> = None;
+    let mut state: Option<HashMap<String, Tensor<Dyn, NB>>> = None;
 
     for _ in 0..LIVE_EPOCHS {
         let (_losses, _elapsed, model) = train::<NB>(
@@ -479,7 +479,7 @@ fn run_live(images_bytes: &[u8], labels: &[u32], n_samples: usize, lr: f64) -> a
             state.as_ref(),
         );
 
-        let mut next_state = std::collections::HashMap::new();
+        let mut next_state = HashMap::new();
         model.state_dict("", &mut next_state);
         state = Some(next_state);
 

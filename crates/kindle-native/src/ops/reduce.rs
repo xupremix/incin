@@ -112,6 +112,9 @@ pub(crate) fn sum_axis_keepdim(storage: &NativeStorage, axis: usize) -> NativeSt
         NativeBuffer::I64(_) => reduce_variant!(I64, |v: f64| v as i64),
         NativeBuffer::F16(_) => reduce_variant!(F16, |v: f64| half::f16::from_f64(v)),
         NativeBuffer::BF16(_) => reduce_variant!(BF16, |v: f64| half::bf16::from_f64(v)),
+        NativeBuffer::Cuda(_) => panic!("sum_axis_keepdim not supported on CUDA buffer"),
+        NativeBuffer::Metal(_) => panic!("sum_axis_keepdim not supported on Metal buffer"),
+        NativeBuffer::Q8_0(_) => panic!("sum_axis_keepdim not supported on Q8_0 buffer"),
     };
 
     NativeStorage::from_contiguous(new_buffer, out_shape)
@@ -146,6 +149,9 @@ fn fill_like(like: &NativeStorage, shape: &[usize], scalar_value: f64) -> Native
         NativeBuffer::BF16(_) => {
             NativeBuffer::BF16(vec![half::bf16::from_f64(scalar_value); total])
         }
+        NativeBuffer::Cuda(_) => panic!("fill_like not supported on CUDA buffer"),
+        NativeBuffer::Metal(_) => panic!("fill_like not supported on Metal buffer"),
+        NativeBuffer::Q8_0(_) => panic!("fill_like not supported on Q8_0 buffer"),
     };
     NativeStorage::from_contiguous(new_buffer, shape.to_vec())
 }
@@ -329,8 +335,7 @@ impl<T: DType, D: kindle_core::prelude::Device> ReductionOps<Self> for NativeBac
                 increment_index(&mut idx, &t.shape);
             }
         }
-        let out =
-            NativeStorage::from_contiguous(NativeBuffer::F32(vec![best_val as f32]), vec![]);
+        let out = NativeStorage::from_contiguous(NativeBuffer::F32(vec![best_val as f32]), vec![]);
 
         let original_shape = t.shape.clone();
         let (t_id, out_id) = (t.id, out.id);
@@ -371,8 +376,7 @@ impl<T: DType, D: kindle_core::prelude::Device> ReductionOps<Self> for NativeBac
                 increment_index(&mut idx, &t.shape);
             }
         }
-        let out =
-            NativeStorage::from_contiguous(NativeBuffer::F32(vec![best_val as f32]), vec![]);
+        let out = NativeStorage::from_contiguous(NativeBuffer::F32(vec![best_val as f32]), vec![]);
 
         let original_shape = t.shape.clone();
         let (t_id, out_id) = (t.id, out.id);
@@ -894,8 +898,8 @@ impl<T: DType, D: kindle_core::prelude::Device> ReductionOps<Self> for NativeBac
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::gradcheck::gradcheck;
     use crate::tape;
-    use crate::testutil::gradcheck;
 
     type B = NativeBackend<f32, kindle_core::prelude::Cpu>;
 
@@ -1253,7 +1257,9 @@ mod tests {
         let unrelated = vector(vec![10.0, 20.0, 30.0]);
         let sum_out = B::sum_all::<f32>(&unrelated).unwrap();
         let grads = tape::backward(&sum_out).unwrap();
-        let g = grads.get(unrelated.id).expect("unrelated should have gradient");
+        let g = grads
+            .get(unrelated.id)
+            .expect("unrelated should have gradient");
         assert_eq!(f32_vec(g), vec![1.0, 1.0, 1.0]);
     }
 }

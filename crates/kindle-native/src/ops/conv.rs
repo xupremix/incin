@@ -825,7 +825,7 @@ fn concat_along_dim(parts: &[NativeStorage], dim: usize) -> NativeStorage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testutil::gradcheck;
+    use crate::gradcheck::gradcheck;
     use kindle_core::prelude::{Cpu, ReductionOps};
 
     type TestBackend = NativeBackend<f32, Cpu>;

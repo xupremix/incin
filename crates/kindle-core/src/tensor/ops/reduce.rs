@@ -57,7 +57,13 @@ macro_rules! impl_reduction_dim_op {
     };
 }
 
-impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, D: crate::tensor::device::Device, G: RequiresGrad> Tensor<S, B, K, D, G>
+impl<
+    S: Shape,
+    B: Backend,
+    K: crate::tensor::dtype::DType,
+    D: crate::tensor::device::Device,
+    G: RequiresGrad,
+> Tensor<S, B, K, D, G>
 {
     impl_reduction_op!(
         /// Computes the sum of all elements in the tensor, reducing it to a scalar tensor.
@@ -202,14 +208,23 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, D: crate::tensor::dev
         /// ```
         min_keepdim, min_keepdim, ReduceKeepDim, true
     );
-
 }
 
-impl<S: crate::prelude::Shape + crate::prelude::DynShape, B: crate::prelude::Backend, K: crate::prelude::DType, D: crate::prelude::Device, G: crate::prelude::RequiresGrad> Tensor<S, B, K, D, G> {
+impl<
+    S: crate::prelude::Shape + crate::prelude::DynShape,
+    B: crate::prelude::Backend,
+    K: crate::prelude::DType,
+    D: crate::prelude::Device,
+    G: crate::prelude::RequiresGrad,
+> Tensor<S, B, K, D, G>
+{
     /// Computes the argmax of the tensor.
     /// If `dim` is `None`, the tensor is flattened and the argmax over the entire tensor is returned as a 0D scalar.
     /// If `dim` is `Some(d)`, the argmax is computed along that dimension.
-    pub fn argmax(&self, dim: Option<usize>) -> Result<Tensor<crate::prelude::Dyn, B, u32, D, crate::prelude::NoGrad>> {
+    pub fn argmax(
+        &self,
+        dim: Option<usize>,
+    ) -> Result<Tensor<crate::prelude::Dyn, B, u32, D, crate::prelude::NoGrad>> {
         let inner = match dim {
             Some(d) => B::argmax::<K, u32>(&self.inner, Some(d))?,
             None => {
@@ -228,7 +243,7 @@ impl<S: crate::prelude::Shape + crate::prelude::DynShape, B: crate::prelude::Bac
         } else {
             out_dims = alloc::vec![];
         }
-        
+
         Ok(Tensor::from_parts_unchecked(
             inner,
             crate::prelude::Dyn::from_dyn(&out_dims).unwrap(),
@@ -241,7 +256,10 @@ impl<S: crate::prelude::Shape + crate::prelude::DynShape, B: crate::prelude::Bac
     /// Computes the argmin of the tensor.
     /// If `dim` is `None`, the tensor is flattened and the argmin over the entire tensor is returned as a 0D scalar.
     /// If `dim` is `Some(d)`, the argmin is computed along that dimension.
-    pub fn argmin(&self, dim: Option<usize>) -> Result<Tensor<crate::prelude::Dyn, B, u32, D, crate::prelude::NoGrad>> {
+    pub fn argmin(
+        &self,
+        dim: Option<usize>,
+    ) -> Result<Tensor<crate::prelude::Dyn, B, u32, D, crate::prelude::NoGrad>> {
         let inner = match dim {
             Some(d) => B::argmin::<K, u32>(&self.inner, Some(d))?,
             None => {
@@ -260,7 +278,7 @@ impl<S: crate::prelude::Shape + crate::prelude::DynShape, B: crate::prelude::Bac
         } else {
             out_dims = alloc::vec![];
         }
-        
+
         Ok(Tensor::from_parts_unchecked(
             inner,
             crate::prelude::Dyn::from_dyn(&out_dims).unwrap(),

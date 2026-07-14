@@ -1,6 +1,6 @@
 use crate::prelude::{KindleDType, KindleDevice, Result};
 use crate::tensor::device::Device;
-use crate::tensor::dtype::DType;
+use crate::tensor::dtype::{DType, FloatDType, QuantDType};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ScalarValue {
@@ -48,15 +48,17 @@ impl From<i64> for ScalarValue {
 pub trait SupportsDType<K: DType> {}
 
 pub trait Backend:
-    Clone
+    Sized
+    + Clone
+    + Send
+    + Sync
     + 'static
-    + CreationOps<Self>
-    + NumericOps<Self>
     + TensorOps<Self>
+    + NumericOps<Self>
     + FloatOps<Self>
+    + CreationOps<Self>
     + ReductionOps<Self>
-    + ModuleOps<Self>
-    + LossOps<Self>
+    + QuantizedOps<Self>
 {
     type Device: Device;
     type FloatElem: DType;
@@ -75,12 +77,13 @@ pub trait Backend:
     fn format_tensor_debug<K: DType>(t: &Self::Storage<K>) -> alloc::string::String;
 
     fn backward<K: DType>(t: &Self::Storage<K>) -> Result<Self::Grads>;
+    fn backward_with_nan_check<K: DType>(t: &Self::Storage<K>) -> Result<Self::Grads>;
     fn get_grad<K: DType>(
         t: &Self::Storage<K>,
         grads: &Self::Grads,
     ) -> Result<Option<Self::Storage<K>>>;
 
-    fn to_bytes<K: DType>(t: &Self::Storage<K>) -> Result<std::vec::Vec<u8>>;
+    fn to_bytes<K: DType>(t: &Self::Storage<K>) -> Result<alloc::vec::Vec<u8>>;
     fn from_bytes<K: DType>(
         bytes: &[u8],
         shape: &[usize],
@@ -292,27 +295,70 @@ pub trait ModuleOps<B: Backend> {
     ) -> Result<B::Storage<K>>;
 }
 
-pub trait LossOps<B: Backend> {
+pub trait LossOps<B: Backend>: NumericOps<B> + FloatOps<B> + ReductionOps<B> {
     fn mse_loss<K: DType>(
         pred: &B::Storage<K>,
         target: &B::Storage<K>,
         reduction: crate::nn::loss::Reduction,
-    ) -> Result<B::Storage<K>>;
+    ) -> Result<B::Storage<K>> {
+        let diff = <B as NumericOps<B>>::sub::<K>(pred, target)?;
+        let sq = <B as NumericOps<B>>::mul::<K>(&diff, &diff)?;
+        match reduction {
+            crate::nn::loss::Reduction::Mean => <B as ReductionOps<B>>::mean_all::<K>(&sq),
+            crate::nn::loss::Reduction::Sum => <B as ReductionOps<B>>::sum_all::<K>(&sq),
+            crate::nn::loss::Reduction::None => Ok(sq),
+        }
+    }
+
     fn l1_loss<K: DType>(
         pred: &B::Storage<K>,
         target: &B::Storage<K>,
         reduction: crate::nn::loss::Reduction,
-    ) -> Result<B::Storage<K>>;
+    ) -> Result<B::Storage<K>> {
+        let diff = <B as NumericOps<B>>::sub::<K>(pred, target)?;
+        let abs_diff = <B as FloatOps<B>>::abs::<K>(&diff)?;
+        match reduction {
+            crate::nn::loss::Reduction::Mean => <B as ReductionOps<B>>::mean_all::<K>(&abs_diff),
+            crate::nn::loss::Reduction::Sum => <B as ReductionOps<B>>::sum_all::<K>(&abs_diff),
+            crate::nn::loss::Reduction::None => Ok(abs_diff),
+        }
+    }
+
     fn bce_with_logits_loss<K: DType>(
         pred: &B::Storage<K>,
         target: &B::Storage<K>,
         reduction: crate::nn::loss::Reduction,
-    ) -> Result<B::Storage<K>>;
+    ) -> Result<B::Storage<K>> {
+        let max_x_0 = <B as FloatOps<B>>::relu::<K>(pred)?;
+        let x_times_z = <B as NumericOps<B>>::mul::<K>(pred, target)?;
+        let term1 = <B as NumericOps<B>>::sub::<K>(&max_x_0, &x_times_z)?;
+
+        let abs_x = <B as FloatOps<B>>::abs::<K>(pred)?;
+        let neg_abs_x = <B as FloatOps<B>>::neg::<K>(&abs_x)?;
+        let exp_neg_abs_x = <B as FloatOps<B>>::exp::<K>(&neg_abs_x)?;
+        let one_plus = <B as FloatOps<B>>::add_scalar_float::<K>(&exp_neg_abs_x, 1.0)?;
+        let term2 = <B as FloatOps<B>>::log::<K>(&one_plus)?;
+
+        let loss_elem = <B as NumericOps<B>>::add::<K>(&term1, &term2)?;
+
+        match reduction {
+            crate::nn::loss::Reduction::Mean => <B as ReductionOps<B>>::mean_all::<K>(&loss_elem),
+            crate::nn::loss::Reduction::Sum => <B as ReductionOps<B>>::sum_all::<K>(&loss_elem),
+            crate::nn::loss::Reduction::None => Ok(loss_elem),
+        }
+    }
+
     fn cross_entropy_loss<K: DType, KInt: DType>(
         pred: &B::Storage<K>,
         target: &B::Storage<KInt>,
         reduction: crate::nn::loss::Reduction,
     ) -> Result<B::Storage<K>>;
+}
+
+pub trait QuantizedOps<B: Backend> {
+    fn quantize<K: FloatDType, Q: QuantDType>(t: &B::Storage<K>) -> Result<B::Storage<Q>>;
+    fn dequantize<Q: QuantDType, K: FloatDType>(t: &B::Storage<Q>) -> Result<B::Storage<K>>;
+    fn quantized_matmul<Q: QuantDType>(lhs: &B::Storage<Q>, rhs: &B::Storage<Q>) -> Result<B::Storage<f32>>;
 }
 pub mod dummy {
     use super::*;
@@ -356,14 +402,17 @@ pub mod dummy {
         fn backward<K: DType>(_t: &Self::Storage<K>) -> Result<Self::Grads> {
             Ok(())
         }
+        fn backward_with_nan_check<K: DType>(_t: &Self::Storage<K>) -> Result<Self::Grads> {
+            Ok(())
+        }
         fn get_grad<K: DType>(
             _t: &Self::Storage<K>,
             _grads: &Self::Grads,
         ) -> Result<Option<Self::Storage<K>>> {
             Ok(None)
         }
-        fn to_bytes<K: DType>(_t: &Self::Storage<K>) -> Result<std::vec::Vec<u8>> {
-            Ok(std::vec::Vec::new())
+        fn to_bytes<K: DType>(_t: &Self::Storage<K>) -> Result<alloc::vec::Vec<u8>> {
+            Ok(alloc::vec::Vec::new())
         }
         fn from_bytes<K: DType>(
             _bytes: &[u8],
@@ -888,6 +937,18 @@ pub mod dummy {
             _target: &<Self as Backend>::Storage<KInt>,
             _r: Reduction,
         ) -> Result<<Self as Backend>::Storage<K>> {
+            Ok(alloc::vec![])
+        }
+    }
+
+    impl<T: DType, D: Device + Clone + 'static> QuantizedOps<Self> for DummyBackend<T, D> {
+        fn quantize<K: FloatDType, Q: QuantDType>(_t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<Q>> {
+            Ok(alloc::vec![])
+        }
+        fn dequantize<Q: QuantDType, K: FloatDType>(_t: &<Self as Backend>::Storage<Q>) -> Result<<Self as Backend>::Storage<K>> {
+            Ok(alloc::vec![])
+        }
+        fn quantized_matmul<Q: QuantDType>(_lhs: &<Self as Backend>::Storage<Q>, _rhs: &<Self as Backend>::Storage<Q>) -> Result<<Self as Backend>::Storage<f32>> {
             Ok(alloc::vec![])
         }
     }

@@ -13,13 +13,11 @@ impl<C: Dim> LayerNormShape for (C,) {
     type Channels = C;
     type BuildArg = (<C as Dim>::Arg,);
     type Target = (<C as Dim>::Arg,);
-    
+
     fn build_args(target: Self::Target) -> Self::BuildArg {
         target
     }
 }
-
-
 
 #[derive(Debug)]
 #[kindle_macros::module(internal)]
@@ -40,7 +38,7 @@ where
 {
     pub fn new_with(args: S::Target, eps: f32) -> Result<Self> {
         let b_args = S::build_args(args);
-        
+
         let args_data = crate::tensor::arg_into::TensorArgsData {
             shape: b_args,
             dtype: (),
@@ -49,9 +47,9 @@ where
         };
 
         let weight = Param::<(S::Channels,), B>::ones_raw(args_data.clone())?;
-        
+
         let bias = Param::<(S::Channels,), B>::zeros_raw(args_data.clone())?;
-        
+
         Ok(Self {
             weight,
             bias,
@@ -64,7 +62,7 @@ where
 impl<S, B> LayerNorm<S, B>
 where
     S: LayerNormShape<Target = ((),)>,
-    B: Backend,
+    B: Backend + crate::tensor::backend::ModuleOps<B>,
     B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
     (S::Channels,): Shape<Arg = S::BuildArg>,
@@ -74,7 +72,7 @@ where
     }
 }
 
-impl<S: LayerNormShape, InS: Shape + DynShape + crate::shapes::EndsWith<S::Channels>, B: Backend>
+impl<S: LayerNormShape, InS: Shape + DynShape + crate::shapes::EndsWith<S::Channels>, B: Backend + crate::tensor::backend::ModuleOps<B>>
     Module<Tensor<InS, B>> for LayerNorm<S, B>
 {
     type Output = Tensor<InS, B>;

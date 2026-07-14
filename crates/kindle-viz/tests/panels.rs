@@ -15,7 +15,7 @@ fn loss_event(step: usize, value: f64) -> Event {
     Event::Scalar(ScalarEvent {
         schema_version: CURRENT_SCHEMA_VERSION,
         step,
-        name: "loss".to_string(),
+        name: String::from("loss"),
         value,
     })
 }
@@ -73,7 +73,7 @@ fn loss_panel_accumulates_only_loss_scalars_and_renders_chart() {
     panel.update(&Event::Scalar(ScalarEvent {
         schema_version: CURRENT_SCHEMA_VERSION,
         step: 1,
-        name: "lr".to_string(),
+        name: String::from("lr"),
         value: 0.01,
     }));
     panel.update(&Event::Memory(MemoryEvent {

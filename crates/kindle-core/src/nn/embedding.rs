@@ -65,7 +65,7 @@ where
 impl<S, B> Embedding<S, B>
 where
     S: EmbeddingShape<Target = ()>,
-    B: Backend,
+    B: Backend + crate::tensor::backend::ModuleOps<B>,
     B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
     (S::Vocab, S::Embed): Shape<Arg = S::BuildArg>,
@@ -79,7 +79,7 @@ impl<S: EmbeddingShape, InS: Shape + DynShape + AppendDim<S::Embed>, B> Module<T
     for Embedding<S, B>
 where
     S::Embed: typenum::Unsigned,
-    B: Backend,
+    B: Backend + crate::tensor::backend::ModuleOps<B>,
 {
     type Output = Tensor<<InS as AppendDim<S::Embed>>::Output, B>;
     type Error = Error;

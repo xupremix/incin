@@ -33,12 +33,10 @@ impl Panel for PanicTestPanel {
     }
 
     fn handle_event(&mut self, event: &PanelEvent) -> bool {
-        // `PanelEvent` is single-variant this phase (Key only; Mouse is
-        // Phase 10), so destructure directly rather than an irrefutable
-        // `if let` chain.
-        let PanelEvent::Key(k) = event;
-        if k.code == KeyCode::Char('p') {
-            panic!("deliberate panic-test panel panic (PLUGIN-03 proof)");
+        if let PanelEvent::Key(k) = event {
+            if k.code == KeyCode::Char('p') {
+                panic!("Manual panic triggered from PanicTestPanel");
+            }
         }
         false
     }

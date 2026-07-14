@@ -56,6 +56,13 @@ impl<S: Shape, B: Backend> Param<S, B> {
     }
 }
 
+impl<S: Shape + DynShape, B: Backend> Param<S, B> {
+    /// Returns the shape dimensions of this parameter.
+    pub fn shape_dims(&self) -> Vec<usize> {
+        S::dims(&self._shape).as_ref().to_vec()
+    }
+}
+
 impl<S: Shape, B: Backend, NewD: crate::prelude::Device> crate::nn::module::ToDevice<B, NewD>
     for Param<S, B>
 {
@@ -78,7 +85,12 @@ where
     (S, B::FloatElem, B::Device, Grad): TensorArgs<S, B::FloatElem, B::Device, Grad>,
 {
     pub fn new_init_raw(
-        args: <(S, B::FloatElem, B::Device, Grad) as TensorArgs<S, B::FloatElem, B::Device, Grad>>::Args,
+        args: <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
+            S,
+            B::FloatElem,
+            B::Device,
+            Grad,
+        >>::Args,
         init: crate::nn::init::Init,
     ) -> Result<Self> {
         use crate::nn::init::Init;
@@ -143,15 +155,26 @@ where
 
     pub fn new_init<A>(args: A, init: crate::nn::init::Init) -> Result<Self>
     where
-        A: ArgInto<
-            <(S, B::FloatElem, B::Device, Grad) as TensorArgs<S, B::FloatElem, B::Device, Grad>>::Args,
-        >,
+        A:
+            ArgInto<
+                <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
+                    S,
+                    B::FloatElem,
+                    B::Device,
+                    Grad,
+                >>::Args,
+            >,
     {
         Self::new_init_raw(args.into_arg(), init)
     }
 
     pub fn zeros_raw(
-        args: <(S, B::FloatElem, B::Device, Grad) as TensorArgs<S, B::FloatElem, B::Device, Grad>>::Args,
+        args: <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
+            S,
+            B::FloatElem,
+            B::Device,
+            Grad,
+        >>::Args,
     ) -> Result<Self> {
         let (_shape, _dtype, _device, _) = <(S, B::FloatElem, B::Device, Grad)>::construct(args);
         let dims: S::Dims = S::dims(&_shape);
@@ -168,18 +191,30 @@ where
 
     pub fn zeros<A>(args: A) -> Result<Self>
     where
-        A: ArgInto<
-            <(S, B::FloatElem, B::Device, Grad) as TensorArgs<S, B::FloatElem, B::Device, Grad>>::Args,
-        >,
+        A:
+            ArgInto<
+                <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
+                    S,
+                    B::FloatElem,
+                    B::Device,
+                    Grad,
+                >>::Args,
+            >,
     {
         Self::zeros_raw(args.into_arg())
     }
 
     pub fn randn<A>(args: A) -> Result<Self>
     where
-        A: ArgInto<
-            <(S, B::FloatElem, B::Device, Grad) as TensorArgs<S, B::FloatElem, B::Device, Grad>>::Args,
-        >,
+        A:
+            ArgInto<
+                <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
+                    S,
+                    B::FloatElem,
+                    B::Device,
+                    Grad,
+                >>::Args,
+            >,
     {
         let (_shape, _dtype, _device, _) =
             <(S, B::FloatElem, B::Device, Grad)>::construct(args.into_arg());
@@ -196,7 +231,12 @@ where
     }
 
     pub fn ones_raw(
-        args: <(S, B::FloatElem, B::Device, Grad) as TensorArgs<S, B::FloatElem, B::Device, Grad>>::Args,
+        args: <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
+            S,
+            B::FloatElem,
+            B::Device,
+            Grad,
+        >>::Args,
     ) -> Result<Self> {
         let (_shape, _dtype, _device, _) = <(S, B::FloatElem, B::Device, Grad)>::construct(args);
         let dims: S::Dims = S::dims(&_shape);
@@ -213,9 +253,15 @@ where
 
     pub fn ones<A>(args: A) -> Result<Self>
     where
-        A: ArgInto<
-            <(S, B::FloatElem, B::Device, Grad) as TensorArgs<S, B::FloatElem, B::Device, Grad>>::Args,
-        >,
+        A:
+            ArgInto<
+                <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
+                    S,
+                    B::FloatElem,
+                    B::Device,
+                    Grad,
+                >>::Args,
+            >,
     {
         Self::ones_raw(args.into_arg())
     }
@@ -223,9 +269,15 @@ where
     /// Construct a Param directly from a backend's RawVar, typically used when loading checkpoints.
     pub fn from_raw<A>(inner: <B as Backend>::RawVar, args: A) -> Result<Self>
     where
-        A: ArgInto<
-            <(S, B::FloatElem, B::Device, Grad) as TensorArgs<S, B::FloatElem, B::Device, Grad>>::Args,
-        >,
+        A:
+            ArgInto<
+                <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
+                    S,
+                    B::FloatElem,
+                    B::Device,
+                    Grad,
+                >>::Args,
+            >,
     {
         let (_shape, _dtype, _device, _) =
             <(S, B::FloatElem, B::Device, Grad)>::construct(args.into_arg());
@@ -260,7 +312,7 @@ impl<S: Shape + DynShape, B: Backend> Parameters<B> for Param<S, B> {
     fn named_parameters(
         &self,
         prefix: &str,
-        map: &mut std::collections::HashMap<String, B::RawVar>,
+        map: &mut hashbrown::HashMap<String, B::RawVar>,
     ) {
         map.insert(prefix.to_string(), self.inner.clone());
     }
@@ -293,7 +345,7 @@ impl<S1: DynShape, B: Backend> Param<S1, B> {
 }
 
 use crate::nn::module::StateDict;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 impl<S: Shape + DynShape, B: Backend> StateDict<B> for Param<S, B> {
     fn load_state_dict(
@@ -361,8 +413,15 @@ impl<S: Shape, B: Backend> Buffer<S, B> {
     }
 }
 
-impl<S: Shape, B: Backend, NewD: crate::prelude::Device>
-    crate::nn::module::ToDevice<B, NewD> for Buffer<S, B>
+impl<S: Shape + DynShape, B: Backend> Buffer<S, B> {
+    /// Returns the shape dimensions of this buffer.
+    pub fn shape_dims(&self) -> Vec<usize> {
+        S::dims(&self._shape).as_ref().to_vec()
+    }
+}
+
+impl<S: Shape, B: Backend, NewD: crate::prelude::Device> crate::nn::module::ToDevice<B, NewD>
+    for Buffer<S, B>
 {
     type Output = Buffer<S, B::BackendWithDevice<NewD>>;
     fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output> {
@@ -383,7 +442,12 @@ where
     (S, B::FloatElem, B::Device, Grad): TensorArgs<S, B::FloatElem, B::Device, Grad>,
 {
     pub fn new_init_raw(
-        args: <(S, B::FloatElem, B::Device, Grad) as TensorArgs<S, B::FloatElem, B::Device, Grad>>::Args,
+        args: <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
+            S,
+            B::FloatElem,
+            B::Device,
+            Grad,
+        >>::Args,
         init: crate::nn::init::Init,
     ) -> Result<Self> {
         use crate::nn::init::Init;
@@ -448,15 +512,26 @@ where
 
     pub fn new_init<A>(args: A, init: crate::nn::init::Init) -> Result<Self>
     where
-        A: ArgInto<
-            <(S, B::FloatElem, B::Device, Grad) as TensorArgs<S, B::FloatElem, B::Device, Grad>>::Args,
-        >,
+        A:
+            ArgInto<
+                <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
+                    S,
+                    B::FloatElem,
+                    B::Device,
+                    Grad,
+                >>::Args,
+            >,
     {
         Self::new_init_raw(args.into_arg(), init)
     }
 
     pub fn zeros_raw(
-        args: <(S, B::FloatElem, B::Device, Grad) as TensorArgs<S, B::FloatElem, B::Device, Grad>>::Args,
+        args: <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
+            S,
+            B::FloatElem,
+            B::Device,
+            Grad,
+        >>::Args,
     ) -> Result<Self> {
         let (_shape, _dtype, _device, _) = <(S, B::FloatElem, B::Device, Grad)>::construct(args);
         let dims: S::Dims = S::dims(&_shape);
@@ -473,15 +548,26 @@ where
 
     pub fn zeros<A>(args: A) -> Result<Self>
     where
-        A: ArgInto<
-            <(S, B::FloatElem, B::Device, Grad) as TensorArgs<S, B::FloatElem, B::Device, Grad>>::Args,
-        >,
+        A:
+            ArgInto<
+                <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
+                    S,
+                    B::FloatElem,
+                    B::Device,
+                    Grad,
+                >>::Args,
+            >,
     {
         Self::zeros_raw(args.into_arg())
     }
 
     pub fn ones_raw(
-        args: <(S, B::FloatElem, B::Device, Grad) as TensorArgs<S, B::FloatElem, B::Device, Grad>>::Args,
+        args: <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
+            S,
+            B::FloatElem,
+            B::Device,
+            Grad,
+        >>::Args,
     ) -> Result<Self> {
         let (_shape, _dtype, _device, _) = <(S, B::FloatElem, B::Device, Grad)>::construct(args);
         let dims: S::Dims = S::dims(&_shape);
@@ -498,9 +584,15 @@ where
 
     pub fn ones<A>(args: A) -> Result<Self>
     where
-        A: ArgInto<
-            <(S, B::FloatElem, B::Device, Grad) as TensorArgs<S, B::FloatElem, B::Device, Grad>>::Args,
-        >,
+        A:
+            ArgInto<
+                <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
+                    S,
+                    B::FloatElem,
+                    B::Device,
+                    Grad,
+                >>::Args,
+            >,
     {
         Self::ones_raw(args.into_arg())
     }
@@ -510,7 +602,7 @@ impl<S: Shape + DynShape, B: Backend> Parameters<B> for Buffer<S, B> {
     fn named_parameters(
         &self,
         _prefix: &str,
-        _map: &mut std::collections::HashMap<String, B::RawVar>,
+        _map: &mut hashbrown::HashMap<String, B::RawVar>,
     ) {
     }
 }

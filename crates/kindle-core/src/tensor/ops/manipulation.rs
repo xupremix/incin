@@ -4,16 +4,18 @@
 //! without necessarily changing the underlying data. It includes reshaping, transposition,
 //! squeezing, flattening, and broadcasting. These operations heavily leverage the
 //! compile-time type system to ensure the resulting shapes are strictly valid.
-use crate::nn::loss::{
-    BceReductionShape, CrossEntropyReductionShape, L1ReductionShape, Mean, MseReductionShape,
-    Reduction, ReductionMode,
-};
 use crate::prelude::{Backend, Dyn, DynShape, RequiresGrad, Result, Shape, Tensor};
 use crate::tensor::ops::*;
 
 use alloc::vec::Vec;
 
-impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, D: crate::tensor::device::Device, G: RequiresGrad> Tensor<S, B, K, D, G>
+impl<
+    S: Shape + DynShape,
+    B: Backend,
+    K: crate::tensor::dtype::DType,
+    D: crate::tensor::device::Device,
+    G: RequiresGrad,
+> Tensor<S, B, K, D, G>
 {
     /// Slices a tensor dynamically based on a slice of `IndexSpec` configurations.
     /// Returns a dynamically shaped tensor (`Dyn`).
@@ -29,12 +31,15 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, D: crate::
     }
 
     /// Ergonomic slicing and indexing API using `IndexArgs`.
-    /// 
+    ///
     /// # Examples
     /// ```rust,ignore
     /// let sliced = tensor.get((0, 1..3, ..))?;
     /// ```
-    pub fn get<I: crate::tensor::ops::index::IndexArgs>(&self, index: I) -> Result<Tensor<Dyn, B, K, D, G>> {
+    pub fn get<I: crate::tensor::ops::index::IndexArgs>(
+        &self,
+        index: I,
+    ) -> Result<Tensor<Dyn, B, K, D, G>> {
         self.dyn_slice(&index.into_specs())
     }
 
@@ -97,12 +102,20 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, D: crate::
     }
 }
 
-impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, D: crate::tensor::device::Device, G: RequiresGrad> Tensor<S, B, K, D, G>
+impl<
+    S: Shape + DynShape,
+    B: Backend + crate::tensor::backend::ModuleOps<B>,
+    K: crate::tensor::dtype::DType,
+    D: crate::tensor::device::Device,
+    G: RequiresGrad,
+> Tensor<S, B, K, D, G>
 {
     /// Functional `max_pool2d` operation.
     pub fn max_pool2d<KShape, SShape, P, Dilation>(
         &self,
-    ) -> Result<Tensor<<S as crate::shapes::Pool2dShape<KShape, SShape, P, Dilation>>::Output, B, K, D, G>>
+    ) -> Result<
+        Tensor<<S as crate::shapes::Pool2dShape<KShape, SShape, P, Dilation>>::Output, B, K, D, G>,
+    >
     where
         KShape: typenum::Unsigned,
         SShape: typenum::Unsigned,
@@ -119,9 +132,10 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, D: crate::
             (Dilation::USIZE, Dilation::USIZE),
         )?;
 
-        let shape = <S as crate::shapes::Pool2dShape<KShape, SShape, P, Dilation>>::compute_output_shape(
-            &self._shape,
-        );
+        let shape =
+            <S as crate::shapes::Pool2dShape<KShape, SShape, P, Dilation>>::compute_output_shape(
+                &self._shape,
+            );
         Ok(Tensor::from_parts_unchecked(
             out,
             shape,
@@ -136,7 +150,13 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, D: crate::
 // Structural Ops (Reshape, Broadcast, Transpose, Flatten)
 // -------------------------------------------------------------
 
-impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, D: crate::tensor::device::Device, G: RequiresGrad> Tensor<S, B, K, D, G>
+impl<
+    S: Shape + DynShape,
+    B: Backend,
+    K: crate::tensor::dtype::DType,
+    D: crate::tensor::device::Device,
+    G: RequiresGrad,
+> Tensor<S, B, K, D, G>
 {
     /// Reshape this tensor into explicitly provided shape `S2`.
     /// This is guaranteed at compile-time to have matching elements.
@@ -221,7 +241,12 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, D: crate::
     /// let t = Tensor::<s![10], DefaultBackend>::ones(()).unwrap();
     /// let n = t.try_narrow(0, 2, 5).unwrap(); // shape [5]
     /// ```
-    pub fn try_narrow(self, dim: usize, start: usize, len: usize) -> Result<Tensor<Dyn, B, K, D, G>> {
+    pub fn try_narrow(
+        self,
+        dim: usize,
+        start: usize,
+        len: usize,
+    ) -> Result<Tensor<Dyn, B, K, D, G>> {
         let inner = B::narrow(&self.inner, dim, start, len)?;
         let mut shape = S::dims(&self._shape).as_ref().to_vec();
         shape[dim] = len;
@@ -289,7 +314,10 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, D: crate::
     }
 
     /// Broadcast the tensor to the specific shape `S2`.
-    pub fn broadcast_to<S2: Shape + DynShape>(&self, args: S2::Arg) -> Result<Tensor<S2, B, K, D, G>> {
+    pub fn broadcast_to<S2: Shape + DynShape>(
+        &self,
+        args: S2::Arg,
+    ) -> Result<Tensor<S2, B, K, D, G>> {
         let new_shape_field = S2::init(args);
         let new_dims = S2::dims(&new_shape_field);
         let inner = B::broadcast_as(&self.inner, new_dims.as_ref())?;
@@ -373,7 +401,9 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, D: crate::
     /// let t = Tensor::<s![2, 3], DefaultBackend>::ones(()).unwrap();
     /// let tr = t.transpose::<0, 1>().unwrap(); // shape [3, 2]
     /// ```
-    pub fn transpose<const D1: usize, const D2: usize>(&self) -> Result<Tensor<S::Output, B, K, D, G>>
+    pub fn transpose<const D1: usize, const D2: usize>(
+        &self,
+    ) -> Result<Tensor<S::Output, B, K, D, G>>
     where
         S: crate::shapes::Transpose<D1, D2>,
     {
@@ -399,7 +429,9 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, D: crate::
     /// let t = Tensor::<s![2, 3, 4], DefaultBackend>::ones(()).unwrap();
     /// let f = t.flatten::<1, 2>().unwrap(); // shape [2, 12]
     /// ```
-    pub fn flatten<const START: usize, const END: usize>(&self) -> Result<Tensor<S::Output, B, K, D, G>>
+    pub fn flatten<const START: usize, const END: usize>(
+        &self,
+    ) -> Result<Tensor<S::Output, B, K, D, G>>
     where
         S: crate::shapes::Flatten<START, END>,
     {
@@ -430,177 +462,119 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, D: crate::
         ))
     }
 
-    #[inline]
-    pub fn layer_norm(
-        &self,
-        weight: &Tensor<Dyn, B, K, D, G>,
-        bias: &Tensor<Dyn, B, K, D, G>,
-        eps: f32,
-    ) -> Result<Tensor<S, B, K, D, G>> {
-        // weight and bias should technically be 1D tensors matching the last dimension, but we use DynShape for now
-        let inner = B::layer_norm::<K>(&self.inner, &weight.inner, Some(&bias.inner), eps)?;
-        Ok(Tensor::from_parts_unchecked(
-            inner,
-            self._shape.clone(),
-            self._dtype.clone(),
-            self._device.clone(),
-            self._grad.clone(),
-        ))
-    }
-
-    #[inline]
-    pub fn batch_norm(
-        &self,
-        weight: &Tensor<Dyn, B, K, D, G>,
-        bias: &Tensor<Dyn, B, K, D, G>,
-        running_mean: &Tensor<Dyn, B, K, D, G>,
-        running_var: &Tensor<Dyn, B, K, D, G>,
-        eps: f32,
-    ) -> Result<Tensor<S, B, K, D, G>> {
-        let inner = B::batch_norm::<K>(
-            &self.inner,
-            Some(&weight.inner),
-            Some(&bias.inner),
-            Some(&running_mean.inner),
-            Some(&running_var.inner),
-            eps,
-            0.1,
-        )?;
-        Ok(Tensor::from_parts_unchecked(
-            inner,
-            self._shape.clone(),
-            self._dtype.clone(),
-            self._device.clone(),
-            self._grad.clone(),
-        ))
-    }
-
-    /// Computes the Cross Entropy loss between predictions and target labels.
-    /// Uses the default `Mean` reduction.
-    ///
-    /// # Examples
-    /// ```rust,ignore
-    /// use kindle::prelude::*;
-    /// let pred = Tensor::<s![2, 10], DefaultBackend>::zeros(()).unwrap();
-    /// let target = Tensor::<s![2], DefaultBackend>::zeros(()).unwrap();
-    /// let loss = pred.cross_entropy_loss(&target).unwrap();
-    /// ```
-    pub fn cross_entropy_loss<S2: Shape>(
-        &self,
-        target: &Tensor<S2, B, K, D, G>,
-    ) -> Result<Tensor<(), B, K, D, G>> {
-        self.cross_entropy_loss_with::<Mean, S2>(target)
-    }
-
-    pub fn cross_entropy_loss_with<R: ReductionMode, S2: Shape>(
-        &self,
-        target: &Tensor<S2, B, K, D, G>,
-    ) -> Result<Tensor<R::Output, B, K, D, G>>
-    where
-        R: CrossEntropyReductionShape<S>,
-    {
-        let inner = B::cross_entropy_loss(&self.inner, &target.inner, R::as_enum())?;
-        let mut out_shape_dims: Vec<usize> = vec![];
-        if R::as_enum() == Reduction::None {
-            out_shape_dims = self.dims().into();
-            if !out_shape_dims.is_empty() {
-                out_shape_dims.remove(1); // usually class dim
-            }
+    /// Dynamically concatenates a slice of tensors along `dim`.
+    /// This is fallible at runtime if shapes mismatch or dim is out of bounds.
+    pub fn try_concat_slice(tensors: &[&Tensor<S, B, K, D, G>], dim: usize) -> Result<Tensor<Dyn, B, K, D, G>> {
+        let raw_tensors: alloc::vec::Vec<&B::Storage<K>> =
+            tensors.iter().map(|t| &t.inner).collect();
+        if raw_tensors.is_empty() {
+            return Err(crate::err::Error::Msg(
+                "Cannot concat empty list".to_string(),
+            ));
         }
-        let out_shape = <R::Output as Shape>::from_dyn(&out_shape_dims).unwrap();
+        let inner = B::concat(&raw_tensors, dim)?;
+        let mut out_shape = B::shape(&tensors[0].inner);
+        out_shape[dim] = tensors.iter().map(|t| B::shape(&t.inner)[dim]).sum();
         Ok(Tensor::from_parts_unchecked(
             inner,
-            out_shape,
+            <Dyn as Shape>::from_dyn(&out_shape).unwrap(),
+            tensors[0]._dtype.clone(),
+            tensors[0]._device.clone(),
+            tensors[0]._grad.clone(),
+        ))
+    }
+
+    /// Statically concatenates `self` with `other` along `Axis`.
+    pub fn concat<S2, Axis>(
+        &self,
+        other: &Tensor<S2, B, K, D, G>,
+    ) -> Result<Tensor<<S as crate::shapes::concat::ConcatShape<S2, Axis>>::Output, B, K, D, G>>
+    where
+        S2: Shape,
+        Axis: typenum::Unsigned,
+        S: crate::shapes::concat::ConcatShape<S2, Axis>,
+        <<S as crate::shapes::concat::ConcatShape<S2, Axis>>::Output as Shape>::Field:
+            core::default::Default,
+    {
+        let dim = Axis::USIZE;
+        let inner = B::concat(&[&self.inner, &other.inner], dim)?;
+        Ok(Tensor::from_parts_unchecked(
+            inner,
+            core::default::Default::default(),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
         ))
     }
 
-    /// Computes the Mean Squared Error (MSE) loss.
-    ///
-    /// # Examples
-    /// ```rust,ignore
-    /// use kindle::prelude::*;
-    /// let pred = Tensor::<s![2], DefaultBackend>::ones(()).unwrap();
-    /// let target = Tensor::<s![2], DefaultBackend>::zeros(()).unwrap();
-    /// let loss = pred.mse_loss(&target).unwrap();
-    /// ```
-    pub fn mse_loss<S2: Shape>(&self, target: &Tensor<S2, B, K, D, G>) -> Result<Tensor<(), B, K, D, G>> {
-        self.mse_loss_with::<Mean, S2>(target)
-    }
-
-    pub fn mse_loss_with<R: ReductionMode, S2: Shape>(
-        &self,
-        target: &Tensor<S2, B, K, D, G>,
-    ) -> Result<Tensor<R::Output, B, K, D, G>>
+    /// Dynamically concatenates `self` with `other` along `dim`.
+    pub fn try_concat<S2>(&self, other: &Tensor<S2, B, K, D, G>, dim: usize) -> Result<Tensor<Dyn, B, K, D, G>>
     where
-        R: MseReductionShape<S>,
+        S2: Shape,
     {
-        let inner = B::mse_loss(&self.inner, &target.inner, R::as_enum())?;
-        let mut out_shape_dims: Vec<usize> = vec![];
-        if R::as_enum() == Reduction::None {
-            out_shape_dims = self.dims().into();
-        }
-        let out_shape = <R::Output as Shape>::from_dyn(&out_shape_dims).unwrap();
+        let inner = B::concat(&[&self.inner, &other.inner], dim)?;
+        let mut out_shape = B::shape(&self.inner);
+        out_shape[dim] += B::shape(&other.inner)[dim];
         Ok(Tensor::from_parts_unchecked(
             inner,
-            out_shape,
+            <Dyn as Shape>::from_dyn(&out_shape).unwrap(),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
         ))
     }
 
-    pub fn l1_loss<S2: Shape>(&self, target: &Tensor<S2, B, K, D, G>) -> Result<Tensor<(), B, K, D, G>> {
-        self.l1_loss_with::<Mean, S2>(target)
-    }
-
-    pub fn l1_loss_with<R: ReductionMode, S2: Shape>(
-        &self,
-        target: &Tensor<S2, B, K, D, G>,
-    ) -> Result<Tensor<R::Output, B, K, D, G>>
-    where
-        R: L1ReductionShape<S>,
-    {
-        let inner = B::l1_loss(&self.inner, &target.inner, R::as_enum())?;
-        let mut out_shape_dims: Vec<usize> = vec![];
-        if R::as_enum() == Reduction::None {
-            out_shape_dims = self.dims().into();
+    /// Dynamically stacks a slice of tensors along `dim`.
+    pub fn try_stack_slice(tensors: &[&Tensor<S, B, K, D, G>], dim: usize) -> Result<Tensor<Dyn, B, K, D, G>> {
+        let raw_tensors: alloc::vec::Vec<&B::Storage<K>> =
+            tensors.iter().map(|t| &t.inner).collect();
+        if raw_tensors.is_empty() {
+            return Err(crate::err::Error::Msg(
+                "Cannot stack empty list".to_string(),
+            ));
         }
-        let out_shape = <R::Output as Shape>::from_dyn(&out_shape_dims).unwrap();
+        let inner = B::stack(&raw_tensors, dim)?;
+        let mut out_shape = B::shape(&tensors[0].inner);
+        out_shape.insert(dim, tensors.len());
         Ok(Tensor::from_parts_unchecked(
             inner,
-            out_shape,
+            <Dyn as Shape>::from_dyn(&out_shape).unwrap(),
+            tensors[0]._dtype.clone(),
+            tensors[0]._device.clone(),
+            tensors[0]._grad.clone(),
+        ))
+    }
+
+    /// Statically stacks `self` with `other` along `Axis`.
+    pub fn stack<Axis>(
+        &self,
+        other: &Tensor<S, B, K, D, G>,
+    ) -> Result<Tensor<<S as crate::shapes::stack::StackShape<Axis>>::Output, B, K, D, G>>
+    where
+        Axis: typenum::Unsigned,
+        S: crate::shapes::stack::StackShape<Axis>,
+        <<S as crate::shapes::stack::StackShape<Axis>>::Output as Shape>::Field:
+            core::default::Default,
+    {
+        let dim = Axis::USIZE;
+        let inner = B::stack(&[&self.inner, &other.inner], dim)?;
+        Ok(Tensor::from_parts_unchecked(
+            inner,
+            core::default::Default::default(),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
         ))
     }
 
-    pub fn bce_with_logits_loss<S2: Shape>(
-        &self,
-        target: &Tensor<S2, B, K, D, G>,
-    ) -> Result<Tensor<(), B, K, D, G>> {
-        self.bce_with_logits_loss_with::<Mean, S2>(target)
-    }
-
-    pub fn bce_with_logits_loss_with<R: ReductionMode, S2: Shape>(
-        &self,
-        target: &Tensor<S2, B, K, D, G>,
-    ) -> Result<Tensor<R::Output, B, K, D, G>>
-    where
-        R: BceReductionShape<S>,
-    {
-        let inner = B::bce_with_logits_loss(&self.inner, &target.inner, R::as_enum())?;
-        let mut out_shape_dims: Vec<usize> = vec![];
-        if R::as_enum() == Reduction::None {
-            out_shape_dims = self.dims().into();
-        }
-        let out_shape = <R::Output as Shape>::from_dyn(&out_shape_dims).unwrap();
+    /// Dynamically stacks `self` with `other` along `dim`.
+    pub fn try_stack(&self, other: &Tensor<S, B, K, D, G>, dim: usize) -> Result<Tensor<Dyn, B, K, D, G>> {
+        let inner = B::stack(&[&self.inner, &other.inner], dim)?;
+        let mut out_shape = B::shape(&self.inner);
+        out_shape.insert(dim, 2);
         Ok(Tensor::from_parts_unchecked(
             inner,
-            out_shape,
+            <Dyn as Shape>::from_dyn(&out_shape).unwrap(),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
@@ -608,8 +582,42 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, D: crate::
     }
 }
 
-impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, D: crate::tensor::device::Device, G: RequiresGrad, NewD: crate::prelude::Device>
-    crate::nn::module::ToDevice<B, NewD> for Tensor<S, B, K, D, G>
+pub fn try_stack_tensors<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, D: crate::tensor::device::Device, G: crate::tensor::grad::RequiresGrad>(
+    tensors: &[&Tensor<S, B, K, D, G>],
+    dim: usize,
+) -> Result<Tensor<Dyn, B, K, D, G>>
+where
+    G::Field: Clone,
+{
+    if tensors.is_empty() {
+        return Err(crate::prelude::Error::ShapeMismatch {
+            op: "stack_tensors",
+            expected: alloc::vec![],
+            got: alloc::vec![],
+            msg: alloc::string::String::from("Cannot stack empty list of tensors"),
+        });
+    }
+    let raw_tensors: alloc::vec::Vec<&B::Storage<K>> = tensors.iter().map(|t| &t.inner).collect();
+    let inner = B::stack(&raw_tensors, dim)?;
+    let mut shape = S::dims(&tensors[0]._shape).as_ref().to_vec();
+    shape.insert(dim, tensors.len());
+    Ok(Tensor {
+        inner,
+        _shape: shape,
+        _dtype: tensors[0]._dtype.clone(),
+        _device: tensors[0]._device.clone(),
+        _grad: tensors[0]._grad.clone(),
+    })
+}
+
+impl<
+    S: Shape,
+    B: Backend,
+    K: crate::tensor::dtype::DType,
+    D: crate::tensor::device::Device,
+    G: RequiresGrad,
+    NewD: crate::prelude::Device,
+> crate::nn::module::ToDevice<B, NewD> for Tensor<S, B, K, D, G>
 where
     B: Backend<BackendWithDevice<NewD> = B>,
 {

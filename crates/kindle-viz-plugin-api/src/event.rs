@@ -11,6 +11,10 @@ pub enum KeyCode {
     BackTab,
     Esc,
     Enter,
+    Up,
+    Down,
+    Left,
+    Right,
 }
 
 /// Modifier keys held alongside a [`KeyCode`].
@@ -28,6 +32,16 @@ pub struct PanelKeyEvent {
     pub modifiers: KeyModifiers,
 }
 
+/// Subset of mouse events panels need.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PanelMouseEvent {
+    Down { x: u16, y: u16, modifiers: KeyModifiers },
+    Up { x: u16, y: u16, modifiers: KeyModifiers },
+    Drag { x: u16, y: u16, modifiers: KeyModifiers },
+    ScrollDown { x: u16, y: u16, modifiers: KeyModifiers },
+    ScrollUp { x: u16, y: u16, modifiers: KeyModifiers },
+}
+
 /// Events a panel may receive via `Panel::handle_event`. Kept distinct from
 /// telemetry `Event`s (which arrive via `Panel::update`) per the "how does
 /// a plugin request a re-render only when new data arrives" question
@@ -36,5 +50,5 @@ pub struct PanelKeyEvent {
 #[derive(Debug, Clone)]
 pub enum PanelEvent {
     Key(PanelKeyEvent),
-    // Mouse(PanelMouseEvent) -- Phase 10
+    Mouse(PanelMouseEvent),
 }

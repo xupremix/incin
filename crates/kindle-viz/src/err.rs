@@ -1,7 +1,7 @@
 //! Centralized error type for `kindle-viz`, mirroring
 //! `kindle-telemetry`'s `err.rs` convention.
 
-use std::fmt::Debug;
+use core::fmt::Debug;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -21,7 +21,7 @@ pub enum Error {
 }
 
 impl Debug for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{self}")
     }
 }
@@ -32,11 +32,11 @@ mod tests {
 
     #[test]
     fn test_error_formatting() {
-        let err = Error::Transport("connection reset".to_string());
+        let err = Error::Transport(String::from("connection reset"));
         let formatted = format!("{err}");
         assert_eq!(formatted, "Transport error: connection reset");
 
-        let err_msg = Error::Msg("generic failure".to_string());
+        let err_msg = Error::Msg(String::from("generic failure"));
         let formatted = format!("{err_msg}");
         assert_eq!(formatted, "Generic Message: generic failure");
     }

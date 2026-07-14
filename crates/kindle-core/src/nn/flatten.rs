@@ -17,7 +17,8 @@ impl<const START: usize, const END: usize> Flatten<START, END> {
     }
 }
 
-impl<S, B, K, D, G, const START: usize, const END: usize> Module<Tensor<S, B, K, D, G>> for Flatten<START, END>
+impl<S, B, K, D, G, const START: usize, const END: usize> Module<Tensor<S, B, K, D, G>>
+    for Flatten<START, END>
 where
     S: Shape + crate::shapes::DynShape + crate::shapes::Flatten<START, END>,
     B: Backend,

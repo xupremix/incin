@@ -28,3 +28,4 @@ anyhow = "1.0.103"
 
 [dev-dependencies]
 candle-core = { workspace = true }
+hashbrown = "0.14.5"

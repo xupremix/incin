@@ -18,6 +18,11 @@ use crate::prelude::*;
 ///
 /// Implement this for shape pairs that can be multiplied together.
 /// The compiler will reject any `matmul` call where this trait is not implemented.
+#[diagnostic::on_unimplemented(
+    message = "Cannot matrix-multiply shape `{Self}` with `{Rhs}`",
+    label = "Shape mismatch for matrix multiplication",
+    note = "Matrix multiplication requires the inner dimensions (last dim of lhs, second-to-last of rhs) to match"
+)]
 pub trait MatMulShape<Rhs: Shape>: Shape {
     type Output: Shape;
 
@@ -254,7 +259,14 @@ impl<M: StaticDim, K: StaticDim, N: StaticDim> MatMulShape<(usize, usize, K, N)>
 // The matmul method on Tensor
 // ============================================================================
 
-impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, D: crate::tensor::device::Device, G: RequiresGrad> Tensor<S1, B, K, D, G> {
+impl<
+    S1: Shape,
+    B: Backend,
+    K: crate::tensor::dtype::DType,
+    D: crate::tensor::device::Device,
+    G: RequiresGrad,
+> Tensor<S1, B, K, D, G>
+{
     pub fn matmul<S2>(&self, rhs: &Tensor<S2, B, K, D, G>) -> Result<Tensor<S1::Output, B, K, D, G>>
     where
         S2: Shape,

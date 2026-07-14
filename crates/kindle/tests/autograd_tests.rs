@@ -1,3 +1,4 @@
+use kindle::DefaultBackend;
 use kindle::optim::{Optimizer, SGD};
 use kindle::prelude::*;
 
@@ -5,7 +6,7 @@ type CpuBackend = DefaultBackend;
 
 #[test]
 fn test_simple_linear_regression() -> Result<()> {
-    let mut model = Linear::<s![1, 1], CpuBackend>::new()?;
+    let model = Linear::<s![1, 1], CpuBackend>::new()?;
     let mut optim = SGD::<CpuBackend>::new(model.parameters(), 0.01);
 
     // We just create zeros to test the autograd and optimizer pipeline
@@ -24,6 +25,23 @@ fn test_simple_linear_regression() -> Result<()> {
 
     // We just verify it compiles and runs without panicking.
     let _loss_val = loss.to_scalar::<f32>()?;
+
+    Ok(())
+}
+
+#[test]
+fn test_backward_with_nan_check_success() -> Result<()> {
+    let model = Linear::<s![1, 1], CpuBackend>::new()?;
+    let mut optim = SGD::<CpuBackend>::new(model.parameters(), 0.01);
+
+    let x = Tensor::<s![4, 1], CpuBackend>::zeros(())?;
+    let y = Tensor::<s![4, 1], CpuBackend>::zeros(())?;
+
+    let pred = model.forward(x.clone())?;
+    let loss = pred.mse_loss(&y)?;
+    let raw_grads = CpuBackend::backward_with_nan_check(loss.inner())?; // Should succeed
+    let grads = kindle_core::optim::Gradients::try_from(raw_grads).expect("Failed to convert raw gradients to Gradients");
+    optim.step(&grads)?;
 
     Ok(())
 }

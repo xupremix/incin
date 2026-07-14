@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 pub type ValueId = usize;
 pub type NodeId = usize;
@@ -133,13 +133,43 @@ pub enum AttributeValue {
 
 #[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Graph {
+    #[serde(with = "string_key_map")]
     pub values: HashMap<ValueId, Value>,
     pub nodes: Vec<Node>,
     pub inputs: Vec<ValueId>,
     pub outputs: Vec<ValueId>,
+    #[serde(with = "string_key_map")]
     pub initializers: HashMap<ValueId, Vec<u8>>, // raw bytes for constants/weights
     next_value_id: usize,
     next_node_id: usize,
+}
+
+mod string_key_map {
+    use hashbrown::HashMap;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    pub fn serialize<K, V, S>(map: &HashMap<K, V>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        K: ToString,
+        V: Serialize,
+        S: Serializer,
+    {
+        let string_map: std::collections::HashMap<String, &V> = map.iter().map(|(k, v)| (k.to_string(), v)).collect();
+        string_map.serialize(serializer)
+    }
+
+    pub fn deserialize<'de, K, V, D>(deserializer: D) -> Result<HashMap<K, V>, D::Error>
+    where
+        K: std::str::FromStr + std::hash::Hash + Eq,
+        K::Err: std::fmt::Display,
+        V: Deserialize<'de>,
+        D: Deserializer<'de>,
+    {
+        let string_map: std::collections::HashMap<String, V> = std::collections::HashMap::deserialize(deserializer)?;
+        string_map.into_iter().map(|(k, v)| {
+            k.parse::<K>().map_err(serde::de::Error::custom).map(|k| (k, v))
+        }).collect()
+    }
 }
 
 impl Graph {

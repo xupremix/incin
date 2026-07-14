@@ -1,49 +1,67 @@
-error: cannot find macro `s` in this scope
- --> tests/compile_fail/concat_static_mismatch.rs:5:20
+error[E0254]: the name `kindle` is defined multiple times
+ --> tests/compile_fail/concat_static_mismatch.rs:2:5
   |
-5 |     let t1: Tensor<s![U2, U3], DummyBackend<f32, Cpu>> = Tensor::zeros([2, 3]).unwrap();
+1 | extern crate kindle_core as kindle;
+  | ----------------------------------- previous import of the extern crate `kindle` here
+2 | use kindle_core as kindle;
+  |     ^^^^^^^^^^^^^^^^^^^^^ `kindle` reimported here
+  |
+  = note: `kindle` must be defined only once in the type namespace of this module
+
+error: cannot find macro `s` in this scope
+ --> tests/compile_fail/concat_static_mismatch.rs:7:20
+  |
+7 |     let t1: Tensor<s![2, 3], DummyBackend<f32, Cpu>> = Tensor::zeros([2, 3]).unwrap();
   |                    ^
   |
 help: consider importing this macro
   |
-1 + use kindle_macros::s;
+2 + use kindle_macros::s;
   |
 
 error: cannot find macro `s` in this scope
- --> tests/compile_fail/concat_static_mismatch.rs:6:20
+ --> tests/compile_fail/concat_static_mismatch.rs:8:20
   |
-6 |     let t2: Tensor<s![U4, U3], DummyBackend<f32, Cpu>> = Tensor::zeros([4, 3]).unwrap();
+8 |     let t2: Tensor<s![4, 3], DummyBackend<f32, Cpu>> = Tensor::zeros([4, 3]).unwrap();
   |                    ^
   |
 help: consider importing this macro
   |
-1 + use kindle_macros::s;
+2 + use kindle_macros::s;
   |
 
 error: cannot find macro `s` in this scope
- --> tests/compile_fail/concat_static_mismatch.rs:9:25
-  |
-9 |     let _ = t1.concat::<s![U4, U3], U1>(&t2);
-  |                         ^
-  |
+  --> tests/compile_fail/concat_static_mismatch.rs:11:25
+   |
+11 |     let _ = t1.concat::<s![4, 3], typenum::U1>(&t2);
+   |                         ^
+   |
 help: consider importing this macro
+   |
+ 2 + use kindle_macros::s;
+   |
+
+warning: unused import: `kindle_core as kindle`
+ --> tests/compile_fail/concat_static_mismatch.rs:2:5
   |
-1 + use kindle_macros::s;
+2 | use kindle_core as kindle;
+  |     ^^^^^^^^^^^^^^^^^^^^^
   |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
 
 error[E0277]: the trait bound `[{integer}; 2]: ArgInto<TensorArgsData<(), (), (), ()>>` is not satisfied
- --> tests/compile_fail/concat_static_mismatch.rs:5:72
+ --> tests/compile_fail/concat_static_mismatch.rs:7:70
   |
-5 |     let t1: Tensor<s![U2, U3], DummyBackend<f32, Cpu>> = Tensor::zeros([2, 3]).unwrap();
-  |                                                          ------------- ^^^^^^ the trait `ArgInto<TensorArgsData<(), (), (), ()>>` is not implemented for `[{integer}; 2]`
-  |                                                          |
-  |                                                          required by a bound introduced by this call
+7 |     let t1: Tensor<s![2, 3], DummyBackend<f32, Cpu>> = Tensor::zeros([2, 3]).unwrap();
+  |                                                        ------------- ^^^^^^ the trait `ArgInto<TensorArgsData<(), (), (), ()>>` is not implemented for `[{integer}; 2]`
+  |                                                        |
+  |                                                        required by a bound introduced by this call
   |
   = help: the following other types implement trait `ArgInto<Target>`:
             `&[usize]` implements `ArgInto<Vec<usize>>`
             `[usize; N]` implements `ArgInto<Vec<usize>>`
             `[usize; N]` implements `ArgInto<[usize; N]>`
-note: required by a bound in `kindle_core::prelude::Tensor::<S, B, K, D, G>::zeros`
+note: required by a bound in `kindle::prelude::Tensor::<S, B, K, D, G>::zeros`
  --> src/tensor/base.rs
   |
   |     pub fn zeros<A>(args: A) -> Result<Self>
@@ -52,37 +70,37 @@ note: required by a bound in `kindle_core::prelude::Tensor::<S, B, K, D, G>::zer
   |         A: ArgInto<<(S, K, D, G) as TensorArgs<S, K, D, G>>::Args>,
   |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `Tensor::<S, B, K, D, G>::zeros`
 
-error[E0599]: the method `concat` exists for struct `kindle_core::prelude::Tensor<(), DummyBackend<f32, kindle_core::prelude::Cpu>, f32, kindle_core::prelude::Cpu>`, but its trait bounds were not satisfied
- --> tests/compile_fail/concat_static_mismatch.rs:9:16
-  |
-9 |     let _ = t1.concat::<s![U4, U3], U1>(&t2);
-  |             ---^^^^^^-----------------------
-  |             |  |
-  |             |  this is an associated function, not a method
-  |             help: use associated function syntax instead: `kindle_core::prelude::Tensor<(), DummyBackend<f32, kindle_core::prelude::Cpu>, f32, kindle_core::prelude::Cpu>::concat(&t2)`
-  |
-  = note: found the following associated functions; to be used as methods, functions must have a `self` parameter
-note: the candidate is defined in the trait `kindle_core::prelude::TensorOps`
- --> src/tensor/backend.rs
-  |
-  |     fn concat<K: DType>(t: &[&B::Storage<K>], dim: usize) -> Result<B::Storage<K>>;
-  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  = note: the following trait bounds were not satisfied:
-          `(): ConcatShape<_, _>`
+error[E0599]: the method `concat` exists for struct `kindle::prelude::Tensor<(), DummyBackend<f32, kindle::prelude::Cpu>, f32, kindle::prelude::Cpu>`, but its trait bounds were not satisfied
+  --> tests/compile_fail/concat_static_mismatch.rs:11:16
+   |
+11 |     let _ = t1.concat::<s![4, 3], typenum::U1>(&t2);
+   |             ---^^^^^^------------------------------
+   |             |  |
+   |             |  this is an associated function, not a method
+   |             help: use associated function syntax instead: `kindle::prelude::Tensor<(), DummyBackend<f32, kindle::prelude::Cpu>, f32, kindle::prelude::Cpu>::concat(&t2)`
+   |
+   = note: found the following associated functions; to be used as methods, functions must have a `self` parameter
+note: the candidate is defined in the trait `kindle::prelude::TensorOps`
+  --> src/tensor/backend.rs
+   |
+   |     fn concat<K: DType>(t: &[&B::Storage<K>], dim: usize) -> Result<B::Storage<K>>;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   = note: the following trait bounds were not satisfied:
+           `(): ConcatShape<_, _>`
 
 error[E0277]: the trait bound `[{integer}; 2]: ArgInto<TensorArgsData<(), (), (), ()>>` is not satisfied
- --> tests/compile_fail/concat_static_mismatch.rs:6:72
+ --> tests/compile_fail/concat_static_mismatch.rs:8:70
   |
-6 |     let t2: Tensor<s![U4, U3], DummyBackend<f32, Cpu>> = Tensor::zeros([4, 3]).unwrap();
-  |                                                          ------------- ^^^^^^ the trait `ArgInto<TensorArgsData<(), (), (), ()>>` is not implemented for `[{integer}; 2]`
-  |                                                          |
-  |                                                          required by a bound introduced by this call
+8 |     let t2: Tensor<s![4, 3], DummyBackend<f32, Cpu>> = Tensor::zeros([4, 3]).unwrap();
+  |                                                        ------------- ^^^^^^ the trait `ArgInto<TensorArgsData<(), (), (), ()>>` is not implemented for `[{integer}; 2]`
+  |                                                        |
+  |                                                        required by a bound introduced by this call
   |
   = help: the following other types implement trait `ArgInto<Target>`:
             `&[usize]` implements `ArgInto<Vec<usize>>`
             `[usize; N]` implements `ArgInto<Vec<usize>>`
             `[usize; N]` implements `ArgInto<[usize; N]>`
-note: required by a bound in `kindle_core::prelude::Tensor::<S, B, K, D, G>::zeros`
+note: required by a bound in `kindle::prelude::Tensor::<S, B, K, D, G>::zeros`
  --> src/tensor/base.rs
   |
   |     pub fn zeros<A>(args: A) -> Result<Self>

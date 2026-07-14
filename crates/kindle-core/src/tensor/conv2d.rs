@@ -84,7 +84,14 @@ impl<
     }
 }
 
-impl<S1: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, D: crate::tensor::device::Device, G: RequiresGrad> Tensor<S1, B, K, D, G> {
+impl<
+    S1: Shape + DynShape,
+    B: Backend + crate::tensor::backend::ModuleOps<B>,
+    K: crate::tensor::dtype::DType,
+    D: crate::tensor::device::Device,
+    G: RequiresGrad,
+> Tensor<S1, B, K, D, G>
+{
     pub fn conv2d<Stride, Padding, KShape>(
         &self,
         weight: &Tensor<KShape, B, K, D, G>,

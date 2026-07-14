@@ -1,73 +1,89 @@
-error[E0774]: `derive` may only be applied to `struct`s, `enum`s and `union`s
-  --> tests/compile_fail/forward_linear_partial_mismatch.rs:5:1
-   |
- 5 |   #[derive(Clone, Default)]
-   |   ^^^^^^^^^^^^^^^^^^^^^^^^^ not applicable here
- 6 |
- 7 | / fn main() {
- 8 | |     let layer = Linear::<s![3, 4], DummyBackend<f32, Cpu>>::new().unwrap();
- 9 | |     // Partially dynamic, but the end dimension is still known and wrong!
-10 | |     let input = Tensor::<s![dyn, 5], DummyBackend<f32, Cpu>>::zeros([2, 5]).unwrap();
-11 | |     layer.forward(input).unwrap();
-12 | | }
-   | |_- not a `struct`, `enum` or `union`
+error[E0254]: the name `kindle` is defined multiple times
+ --> tests/compile_fail/forward_linear_partial_mismatch.rs:2:5
+  |
+1 | extern crate kindle_core as kindle;
+  | ----------------------------------- previous import of the extern crate `kindle` here
+2 | use kindle_core as kindle;
+  |     ^^^^^^^^^^^^^^^^^^^^^ `kindle` reimported here
+  |
+  = note: `kindle` must be defined only once in the type namespace of this module
 
-error: cannot find macro `s` in this scope
- --> tests/compile_fail/forward_linear_partial_mismatch.rs:8:26
-  |
-8 |     let layer = Linear::<s![3, 4], DummyBackend<f32, Cpu>>::new().unwrap();
-  |                          ^
-  |
-help: consider importing this macro
-  |
-1 + use kindle_macros::s;
-  |
+error[E0774]: `derive` may only be applied to `struct`s, `enum`s and `union`s
+  --> tests/compile_fail/forward_linear_partial_mismatch.rs:7:1
+   |
+ 7 |   #[derive(Clone, Default)]
+   |   ^^^^^^^^^^^^^^^^^^^^^^^^^ not applicable here
+ 8 |
+ 9 | / fn main() {
+10 | |     let layer = Linear::<s![3, 4], DummyBackend<f32, Cpu>>::new().unwrap();
+11 | |     // Partially dynamic, but the end dimension is still known and wrong!
+12 | |     let input = Tensor::<s![dyn, 5], DummyBackend<f32, Cpu>>::zeros([2, 5]).unwrap();
+13 | |     layer.forward(input).unwrap();
+14 | | }
+   | |_- not a `struct`, `enum` or `union`
 
 error: cannot find macro `s` in this scope
   --> tests/compile_fail/forward_linear_partial_mismatch.rs:10:26
    |
-10 |     let input = Tensor::<s![dyn, 5], DummyBackend<f32, Cpu>>::zeros([2, 5]).unwrap();
+10 |     let layer = Linear::<s![3, 4], DummyBackend<f32, Cpu>>::new().unwrap();
    |                          ^
    |
 help: consider importing this macro
    |
- 1 + use kindle_macros::s;
+ 2 + use kindle_macros::s;
    |
 
-warning: unused import: `kindle_core::nn::*`
- --> tests/compile_fail/forward_linear_partial_mismatch.rs:3:5
+error: cannot find macro `s` in this scope
+  --> tests/compile_fail/forward_linear_partial_mismatch.rs:12:26
+   |
+12 |     let input = Tensor::<s![dyn, 5], DummyBackend<f32, Cpu>>::zeros([2, 5]).unwrap();
+   |                          ^
+   |
+help: consider importing this macro
+   |
+ 2 + use kindle_macros::s;
+   |
+
+warning: unused import: `kindle_core as kindle`
+ --> tests/compile_fail/forward_linear_partial_mismatch.rs:2:5
   |
-3 | use kindle_core::nn::*;
-  |     ^^^^^^^^^^^^^^^^^^
+2 | use kindle_core as kindle;
+  |     ^^^^^^^^^^^^^^^^^^^^^
   |
   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
 
-error[E0277]: the trait bound `(): LinearShape` is not satisfied
- --> tests/compile_fail/forward_linear_partial_mismatch.rs:8:17
+warning: unused import: `kindle_core::nn::*`
+ --> tests/compile_fail/forward_linear_partial_mismatch.rs:5:5
   |
-8 |     let layer = Linear::<s![3, 4], DummyBackend<f32, Cpu>>::new().unwrap();
-  |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `LinearShape` is not implemented for `()`
-  |
-  = help: the trait `LinearShape` is implemented for `(InF, OutF)`
-note: required by a bound in `kindle_core::nn::Linear`
- --> src/nn/linear.rs
-  |
-  | pub struct Linear<S: LinearShape, B: Backend, Bias: crate::nn::optional::OptionalField = crate::nn::optional::True> {
-  |                      ^^^^^^^^^^^ required by this bound in `Linear`
+5 | use kindle_core::nn::*;
+  |     ^^^^^^^^^^^^^^^^^^
 
-error[E0599]: the function or associated item `new` exists for struct `kindle_core::nn::Linear<(), DummyBackend<f32, kindle_core::prelude::Cpu>>`, but its trait bounds were not satisfied
- --> tests/compile_fail/forward_linear_partial_mismatch.rs:8:61
-  |
-8 |     let layer = Linear::<s![3, 4], DummyBackend<f32, Cpu>>::new().unwrap();
-  |                                                             ^^^ function or associated item cannot be called due to unsatisfied trait bounds
-  |
-  = note: the following trait bounds were not satisfied:
-          `(): LinearShape`
+error[E0277]: the trait bound `(): LinearShape` is not satisfied
+  --> tests/compile_fail/forward_linear_partial_mismatch.rs:10:17
+   |
+10 |     let layer = Linear::<s![3, 4], DummyBackend<f32, Cpu>>::new().unwrap();
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `LinearShape` is not implemented for `()`
+   |
+   = help: the trait `LinearShape` is implemented for `(InF, OutF)`
+note: required by a bound in `kindle::nn::Linear`
+  --> src/nn/linear.rs
+   |
+   | pub struct Linear<S: LinearShape, B: Backend, Bias: crate::nn::optional::OptionalField = crate::nn::optional::True> {
+   |                      ^^^^^^^^^^^ required by this bound in `Linear`
+
+error[E0599]: the function or associated item `new` exists for struct `kindle::nn::Linear<(), DummyBackend<f32, kindle::prelude::Cpu>>`, but its trait bounds were not satisfied
+  --> tests/compile_fail/forward_linear_partial_mismatch.rs:10:61
+   |
+10 |     let layer = Linear::<s![3, 4], DummyBackend<f32, Cpu>>::new().unwrap();
+   |                                                             ^^^ function or associated item cannot be called due to unsatisfied trait bounds
+   |
+   = note: the following trait bounds were not satisfied:
+           `(): LinearShape`
 
 error[E0277]: the trait bound `[{integer}; 2]: ArgInto<TensorArgsData<(), (), (), ()>>` is not satisfied
-  --> tests/compile_fail/forward_linear_partial_mismatch.rs:10:69
+  --> tests/compile_fail/forward_linear_partial_mismatch.rs:12:69
    |
-10 |     let input = Tensor::<s![dyn, 5], DummyBackend<f32, Cpu>>::zeros([2, 5]).unwrap();
+12 |     let input = Tensor::<s![dyn, 5], DummyBackend<f32, Cpu>>::zeros([2, 5]).unwrap();
    |                 --------------------------------------------------- ^^^^^^ the trait `ArgInto<TensorArgsData<(), (), (), ()>>` is not implemented for `[{integer}; 2]`
    |                 |
    |                 required by a bound introduced by this call
@@ -76,7 +92,7 @@ error[E0277]: the trait bound `[{integer}; 2]: ArgInto<TensorArgsData<(), (), ()
              `&[usize]` implements `ArgInto<Vec<usize>>`
              `[usize; N]` implements `ArgInto<Vec<usize>>`
              `[usize; N]` implements `ArgInto<[usize; N]>`
-note: required by a bound in `kindle_core::prelude::Tensor::<S, B, K, D, G>::zeros`
+note: required by a bound in `kindle::prelude::Tensor::<S, B, K, D, G>::zeros`
   --> src/tensor/base.rs
    |
    |     pub fn zeros<A>(args: A) -> Result<Self>

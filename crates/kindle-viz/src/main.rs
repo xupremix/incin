@@ -5,6 +5,12 @@
 use clap::Parser;
 use kindle_viz::app::{self, App};
 use kindle_viz::transport_reader::FileTransportReader;
+use serde::Deserialize;
+
+#[derive(Deserialize, Default)]
+struct Config {
+    keymap: Option<String>,
+}
 
 #[derive(Parser)]
 #[command(
@@ -32,6 +38,7 @@ fn install_panic_hook() {
     let previous_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |panic_info| {
         previous_hook(panic_info);
+        let _ = crossterm::execute!(std::io::stdout(), crossterm::event::DisableMouseCapture);
         let _ = crossterm::terminal::disable_raw_mode();
         let _ = crossterm::execute!(std::io::stdout(), crossterm::terminal::LeaveAlternateScreen);
     }));
@@ -46,27 +53,68 @@ async fn main() -> anyhow::Result<()> {
     } else if let Some(run_id) = cli.run_id {
         Some(kindle_telemetry::run_dir::default_run_dir()?.join(format!("{run_id}.jsonl")))
     } else {
-        None
+        let dir = kindle_telemetry::run_dir::default_run_dir()?;
+        let mut latest_run = None;
+        let mut latest_time = std::time::SystemTime::UNIX_EPOCH;
+        if let Ok(entries) = std::fs::read_dir(&dir) {
+            for entry in entries.filter_map(Result::ok) {
+                let path = entry.path();
+                if path.extension().and_then(|s| s.to_str()) == Some("jsonl") {
+                    if let Ok(meta) = entry.metadata() {
+                        if let Ok(modified) = meta.modified() {
+                            if modified > latest_time {
+                                latest_time = modified;
+                                latest_run = Some(path);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        latest_run
     };
 
     let Some(run_path) = run_path else {
-        println!("kindle-viz — no run specified. Pass --run-id <id> or --run-dir <path>.");
+        println!("kindle-viz — no runs found in default directory. Pass --run-id <id> or --run-dir <path>.");
         std::process::exit(0);
     };
 
     let reader = FileTransportReader::open(&run_path)?;
     let mut app = App::new(Box::new(reader), run_path.display().to_string());
-    // Loss first so it lands in the left 50% column per UI-SPEC.md's
-    // layout; panic-test second/right.
     app.register_panel(Box::new(kindle_viz::panels::loss::LossPanel::new()));
-    app.register_panel(Box::new(kindle_viz::panels::panic_test::PanicTestPanel));
+    app.register_panel(Box::new(kindle_viz::panels::scalar::ScalarPanel::new("throughput", "Throughput", "throughput")));
+    app.register_panel(Box::new(kindle_viz::panels::scalar::ScalarPanel::new("lr", "Learning Rate", "lr")));
+    app.register_panel(Box::new(kindle_viz::panels::norms::NormsPanel::new(kindle_viz::panels::norms::NormType::Gradient, "Gradient Norms", "gradient_norms", Some(1e5))));
+    app.register_panel(Box::new(kindle_viz::panels::norms::NormsPanel::new(kindle_viz::panels::norms::NormType::Weight, "Weight Norms", "weight_norms", None)));
+    app.register_panel(Box::new(kindle_viz::panels::system::MemoryPanel::new("Memory (RSS MB)", "memory1", Some(8000.0))));
+    app.register_panel(Box::new(kindle_viz::panels::system::MemoryPanel::new("Memory (RSS MB)", "memory2", Some(8000.0))));
+    app.register_panel(Box::new(kindle_viz::panels::system::MemoryPanel::new("Memory (RSS MB)", "memory3", Some(8000.0))));
+    app.register_panel(Box::new(kindle_viz::panels::graph::GraphModuleListPanel::new()));
+
+    // Load config if exists
+    let mut config = Config::default();
+    if let Ok(content) = std::fs::read_to_string("kindle-viz.toml") {
+        if let Ok(parsed) = toml::from_str::<Config>(&content) {
+            config = parsed;
+        }
+    }
+
+    let keymap: Box<dyn kindle_viz_plugin_api::keymap::KeymapProvider> = if config.keymap.as_deref() == Some("vim") {
+        Box::new(app::VimKeymap)
+    } else {
+        Box::new(app::DefaultKeymap)
+    };
 
     // Panic hook must be installed before ratatui::init() enters raw mode.
     install_panic_hook();
     let terminal = ratatui::init();
-    let result = app::run(app, terminal).await;
+    let _ = crossterm::execute!(std::io::stdout(), crossterm::event::EnableMouseCapture);
+    
+    let result = app::run(app, terminal, keymap).await;
+    
     // Normal-exit terminal restore; the panic hook above covers the
     // abnormal-exit path.
+    let _ = crossterm::execute!(std::io::stdout(), crossterm::event::DisableMouseCapture);
     ratatui::restore();
     result
 }

@@ -11,7 +11,16 @@ workspace = true
 
 [features]
 default = ["std"]
-std = []
+std = [
+    "thiserror/std",
+    "half/std",
+    "anyhow/std",
+    "serde/std",
+    "prost/std",
+    "bytes/std",
+    "safetensors",
+    "bincode",
+]
 nightly = []
 cuda = []
 metal = []
@@ -20,16 +29,20 @@ metal = []
 # cuda = ["dep:candle-core?/cuda", "dep:candle-nn?/cuda"]
 
 [dependencies]
+spin = { version = "0.9.8", default-features = false, features = ["mutex", "spin_mutex", "lazy"] }
 kindle-macros = { path = "../kindle-macros", version = "0.1.0", default-features = false }
-thiserror = { workspace = true }
-half = { workspace = true }
-anyhow = "1.0.103"
-typenum = "1.20.1"
-safetensors = "0.4.1"
-bincode = "1.3.3"
-serde = { version = "1.0.228", features = ["derive"] }
-prost = "0.14.4"
-bytes = "1.12.0"
+thiserror = { workspace = true, default-features = false }
+half = { workspace = true, default-features = false }
+anyhow = { version = "1.0.103", default-features = false }
+typenum = { version = "1.20.1", default-features = false }
+safetensors = { version = "0.4.1", optional = true } # safetensors requires std
+bincode = { version = "1.3.3", optional = true }
+serde = { version = "1.0.228", default-features = false, features = ["derive", "alloc"] }
+prost = { version = "0.14.4", default-features = false, features = ["derive"] }
+bytes = { version = "1.12.0", default-features = false }
+ggml-quants = "0.1.0"
+hashbrown = { version = "0.14", default-features = false, features = ["alloc", "inline-more", "ahash", "serde"] }
+
 
 [dev-dependencies]
 trybuild = "1.0.117"

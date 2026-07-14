@@ -27,14 +27,18 @@ pub trait Optimizer<B: Backend> {
 /// optimizer.step(&gradients)?;
 /// ```
 pub struct SGD<B: Backend, K: DType = f32> {
-    params: std::collections::HashMap<String, B::RawVar>,
+    params: hashbrown::HashMap<String, B::RawVar>,
     pub lr: f64,
     _marker: core::marker::PhantomData<K>,
 }
 
 impl<B: Backend, K: DType> SGD<B, K> {
-    pub fn new(params: std::collections::HashMap<String, B::RawVar>, lr: f64) -> Self {
-        Self { params, lr, _marker: core::marker::PhantomData }
+    pub fn new(params: hashbrown::HashMap<String, B::RawVar>, lr: f64) -> Self {
+        Self {
+            params,
+            lr,
+            _marker: core::marker::PhantomData,
+        }
     }
 }
 
@@ -46,7 +50,7 @@ impl<B: Backend, K: DType> Optimizer<B> for SGD<B, K> {
                 // t = t - lr * grad
                 let grad_scaled = B::mul_scalar_float::<K>(&grad, self.lr)?;
                 let updated = B::sub::<K>(&t, &grad_scaled)?;
-                B::assign_var::<K>(var, &updated)?;
+                B::assign_var::<K>(&mut *var, &updated)?;
             }
         }
         Ok(())
@@ -67,19 +71,19 @@ impl<B: Backend, K: DType> Optimizer<B> for SGD<B, K> {
 /// optimizer.step(&gradients)?;
 /// ```
 pub struct AdamW<B: Backend, K: DType = f32> {
-    params: std::collections::HashMap<String, B::RawVar>,
+    params: hashbrown::HashMap<String, B::RawVar>,
     pub lr: f64,
     pub beta1: f64,
     pub beta2: f64,
     pub eps: f64,
     pub weight_decay: f64,
-    m: std::collections::HashMap<String, B::Storage<K>>,
-    v: std::collections::HashMap<String, B::Storage<K>>,
+    m: hashbrown::HashMap<String, B::Storage<K>>,
+    v: hashbrown::HashMap<String, B::Storage<K>>,
     step: usize,
 }
 
 impl<B: Backend, K: DType> AdamW<B, K> {
-    pub fn new(params: std::collections::HashMap<String, B::RawVar>, lr: f64) -> Self {
+    pub fn new(params: hashbrown::HashMap<String, B::RawVar>, lr: f64) -> Self {
         Self {
             params,
             lr,
@@ -87,8 +91,8 @@ impl<B: Backend, K: DType> AdamW<B, K> {
             beta2: 0.999,
             eps: 1e-8,
             weight_decay: 0.01,
-            m: std::collections::HashMap::new(),
-            v: std::collections::HashMap::new(),
+            m: hashbrown::HashMap::new(),
+            v: hashbrown::HashMap::new(),
             step: 0,
         }
     }
@@ -104,7 +108,6 @@ impl<B: Backend, K: DType> Optimizer<B> for AdamW<B, K> {
         for (name, var) in self.params.iter_mut() {
             let mut t = B::var_as_tensor::<K>(var)?;
             if let Some(grad) = B::get_grad::<K>(&t, &grads.0)? {
-
                 // Weight decay
                 if self.weight_decay > 0.0 {
                     let decay = B::mul_scalar_float::<K>(&t, self.weight_decay * self.lr)?;
@@ -139,7 +142,7 @@ impl<B: Backend, K: DType> Optimizer<B> for AdamW<B, K> {
                 let step = B::mul_scalar_float::<K>(&B::div::<K>(&m_hat, &denom)?, self.lr)?;
 
                 let updated = B::sub::<K>(&t, &step)?;
-                B::assign_var::<K>(var, &updated)?;
+                B::assign_var::<K>(&mut *var, &updated)?;
             }
         }
         Ok(())
@@ -159,26 +162,26 @@ impl<B: Backend, K: DType> Optimizer<B> for AdamW<B, K> {
 /// optimizer.step(&gradients)?;
 /// ```
 pub struct Adam<B: Backend, K: DType = f32> {
-    params: std::collections::HashMap<String, B::RawVar>,
+    params: hashbrown::HashMap<String, B::RawVar>,
     pub lr: f64,
     pub beta1: f64,
     pub beta2: f64,
     pub eps: f64,
-    m: std::collections::HashMap<String, B::Storage<K>>,
-    v: std::collections::HashMap<String, B::Storage<K>>,
+    m: hashbrown::HashMap<String, B::Storage<K>>,
+    v: hashbrown::HashMap<String, B::Storage<K>>,
     step: usize,
 }
 
 impl<B: Backend, K: DType> Adam<B, K> {
-    pub fn new(params: std::collections::HashMap<String, B::RawVar>, lr: f64) -> Self {
+    pub fn new(params: hashbrown::HashMap<String, B::RawVar>, lr: f64) -> Self {
         Self {
             params,
             lr,
             beta1: 0.9,
             beta2: 0.999,
             eps: 1e-8,
-            m: std::collections::HashMap::new(),
-            v: std::collections::HashMap::new(),
+            m: hashbrown::HashMap::new(),
+            v: hashbrown::HashMap::new(),
             step: 0,
         }
     }
@@ -194,7 +197,6 @@ impl<B: Backend, K: DType> Optimizer<B> for Adam<B, K> {
         for (name, var) in self.params.iter_mut() {
             let t = B::var_as_tensor::<K>(var)?;
             if let Some(grad) = B::get_grad::<K>(&t, &grads.0)? {
-
                 let m_t = if let Some(m) = self.m.get(name) {
                     let term1 = B::mul_scalar_float::<K>(m, self.beta1)?;
                     let term2 = B::mul_scalar_float::<K>(&grad, 1.0 - self.beta1)?;
@@ -223,7 +225,7 @@ impl<B: Backend, K: DType> Optimizer<B> for Adam<B, K> {
                 let step = B::mul_scalar_float::<K>(&B::div::<K>(&m_hat, &denom)?, self.lr)?;
 
                 let updated = B::sub::<K>(&t, &step)?;
-                B::assign_var::<K>(var, &updated)?;
+                B::assign_var::<K>(&mut *var, &updated)?;
             }
         }
         Ok(())

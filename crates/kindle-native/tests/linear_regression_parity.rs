@@ -33,9 +33,7 @@ const B_INIT: [f32; 1] = [0.0];
 
 /// Convert a `&[f32]` to the raw bytes needed by `Backend::from_bytes`.
 fn as_bytes(v: &[f32]) -> Vec<u8> {
-    v.iter()
-        .flat_map(|x| x.to_ne_bytes())
-        .collect()
+    v.iter().flat_map(|x| x.to_ne_bytes()).collect()
 }
 
 /// Build a `Backend::Storage<f32>` from literal float data using `from_bytes`
@@ -76,8 +74,8 @@ fn train<B: Backend>(n_epochs: usize, lr: f64) -> Vec<f64> {
         let w_t = B::var_as_tensor::<f32>(&w_var).unwrap();
         let b_t = B::var_as_tensor::<f32>(&b_var).unwrap();
         let w_tr = B::transpose::<f32>(&w_t, 0, 1).unwrap(); // [2, 1]
-        let y_hat = B::matmul::<f32>(&x, &w_tr).unwrap();    // [4, 1]
-        let y_hat = B::add::<f32>(&y_hat, &b_t).unwrap();    // broadcast bias
+        let y_hat = B::matmul::<f32>(&x, &w_tr).unwrap(); // [4, 1]
+        let y_hat = B::add::<f32>(&y_hat, &b_t).unwrap(); // broadcast bias
 
         // Loss = MSE Mean
         let loss = B::mse_loss::<f32>(&y_hat, &target, Reduction::Mean).unwrap();
@@ -91,12 +89,14 @@ fn train<B: Backend>(n_epochs: usize, lr: f64) -> Vec<f64> {
         // iteration over (w, b)).
         let w_now = B::var_as_tensor::<f32>(&w_var).unwrap();
         if let Some(gw) = B::get_grad::<f32>(&w_now, &grads).unwrap() {
-            let updated_w = B::sub::<f32>(&w_now, &B::mul_scalar_float::<f32>(&gw, lr).unwrap()).unwrap();
+            let updated_w =
+                B::sub::<f32>(&w_now, &B::mul_scalar_float::<f32>(&gw, lr).unwrap()).unwrap();
             B::assign_var::<f32>(&mut w_var, &updated_w).unwrap();
         }
         let b_now = B::var_as_tensor::<f32>(&b_var).unwrap();
         if let Some(gb) = B::get_grad::<f32>(&b_now, &grads).unwrap() {
-            let updated_b = B::sub::<f32>(&b_now, &B::mul_scalar_float::<f32>(&gb, lr).unwrap()).unwrap();
+            let updated_b =
+                B::sub::<f32>(&b_now, &B::mul_scalar_float::<f32>(&gb, lr).unwrap()).unwrap();
             B::assign_var::<f32>(&mut b_var, &updated_b).unwrap();
         }
     }
@@ -151,7 +151,7 @@ fn gradient_accumulation_sums_on_reuse_end_to_end() {
 
     // Use x twice in the same graph.
     let y = NB::add::<f32>(&x_stor, &x_stor).unwrap(); // y = 2x, tape records two reads of x
-    let loss = NB::mean_all::<f32>(&y).unwrap();        // scalar
+    let loss = NB::mean_all::<f32>(&y).unwrap(); // scalar
 
     let grads = NB::backward::<f32>(&loss).unwrap();
     let g = grads.grads.get(&x_id).expect("x should have a gradient");

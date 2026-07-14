@@ -18,6 +18,7 @@ pub struct RenderCtx<'a, 'b> {
     frame: &'a mut Frame<'b>,
     area: Rect,
     hit_regions: &'a mut Vec<(Rect, HitId)>,
+    alert_msg: Option<String>,
 }
 
 impl<'a, 'b> RenderCtx<'a, 'b> {
@@ -29,6 +30,7 @@ impl<'a, 'b> RenderCtx<'a, 'b> {
             frame,
             area,
             hit_regions,
+            alert_msg: None,
         }
     }
 
@@ -44,5 +46,15 @@ impl<'a, 'b> RenderCtx<'a, 'b> {
     /// -- does not change how panels call `frame_mut().render_widget(...)`.
     pub fn register_hit_region(&mut self, rect: Rect, id: HitId) {
         self.hit_regions.push((rect, id));
+    }
+
+    /// Set an alert message to be displayed for this panel.
+    pub fn set_alert(&mut self, msg: String) {
+        self.alert_msg = Some(msg);
+    }
+
+    /// Takes the alert message, consuming it.
+    pub fn take_alert(&mut self) -> Option<String> {
+        self.alert_msg.take()
     }
 }

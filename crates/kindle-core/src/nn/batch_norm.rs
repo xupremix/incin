@@ -32,13 +32,11 @@ impl<C: Dim> BatchNormShape for (C,) {
     type Channels = C;
     type BuildArg = (<C as Dim>::Arg,);
     type Target = (<C as Dim>::Arg,);
-    
+
     fn build_args(target: Self::Target) -> Self::BuildArg {
         target
     }
 }
-
-
 
 #[derive(Debug, Clone)]
 #[kindle_macros::module(internal)]
@@ -63,7 +61,7 @@ where
 {
     pub fn new_with(args: S::Target, eps: f32, momentum: f32) -> Result<Self> {
         let b_args = S::build_args(args);
-        
+
         let args_data = crate::tensor::arg_into::TensorArgsData {
             shape: b_args,
             dtype: (),

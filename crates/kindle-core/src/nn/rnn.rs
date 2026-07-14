@@ -54,23 +54,26 @@ pub struct RNNCell<
 }
 
 impl<
-        S: RnnShape,
-        B: Backend,
-        BiasIh: crate::nn::optional::OptionalField,
-        BiasHh: crate::nn::optional::OptionalField,
-    > RNNCell<S, B, BiasIh, BiasHh>
+    S: RnnShape,
+    B: Backend,
+    BiasIh: crate::nn::optional::OptionalField,
+    BiasHh: crate::nn::optional::OptionalField,
+> RNNCell<S, B, BiasIh, BiasHh>
 {
-    pub fn new(wi: Linear<(S::In, S::Out), B, BiasIh>, wh: Linear<(S::Out, S::Out), B, BiasHh>) -> Self {
+    pub fn new(
+        wi: Linear<(S::In, S::Out), B, BiasIh>,
+        wh: Linear<(S::Out, S::Out), B, BiasHh>,
+    ) -> Self {
         Self { wi, wh }
     }
 }
 
 impl<
-        S: RnnShape,
-        B: Backend,
-        BiasIh: crate::nn::optional::OptionalField,
-        BiasHh: crate::nn::optional::OptionalField,
-    > Parameters<B> for RNNCell<S, B, BiasIh, BiasHh>
+    S: RnnShape,
+    B: Backend,
+    BiasIh: crate::nn::optional::OptionalField,
+    BiasHh: crate::nn::optional::OptionalField,
+> Parameters<B> for RNNCell<S, B, BiasIh, BiasHh>
 where
     Linear<(S::In, S::Out), B, BiasIh>: Parameters<B>,
     Linear<(S::Out, S::Out), B, BiasHh>: Parameters<B>,
@@ -78,7 +81,7 @@ where
     fn named_parameters(
         &self,
         prefix: &str,
-        map: &mut std::collections::HashMap<String, B::RawVar>,
+        map: &mut hashbrown::HashMap<String, B::RawVar>,
     ) {
         self.wi.named_parameters(&format!("{}wi.", prefix), map);
         self.wh.named_parameters(&format!("{}wh.", prefix), map);
@@ -86,16 +89,17 @@ where
 }
 
 impl<
-        S: RnnShape,
-        Batch: Dim,
-        B: Backend,
-        BiasIh: crate::nn::optional::OptionalField,
-        BiasHh: crate::nn::optional::OptionalField,
-    > Module<(Tensor<(Batch, S::In), B>, Tensor<(Batch, S::Out), B>)>
-    for RNNCell<S, B, BiasIh, BiasHh>
+    S: RnnShape,
+    Batch: Dim,
+    B: Backend,
+    BiasIh: crate::nn::optional::OptionalField,
+    BiasHh: crate::nn::optional::OptionalField,
+> Module<(Tensor<(Batch, S::In), B>, Tensor<(Batch, S::Out), B>)> for RNNCell<S, B, BiasIh, BiasHh>
 where
-    Linear<(S::In, S::Out), B, BiasIh>: Module<Tensor<(Batch, S::In), B>, Output = Tensor<(Batch, S::Out), B>, Error = Error>,
-    Linear<(S::Out, S::Out), B, BiasHh>: Module<Tensor<(Batch, S::Out), B>, Output = Tensor<(Batch, S::Out), B>, Error = Error>,
+    Linear<(S::In, S::Out), B, BiasIh>:
+        Module<Tensor<(Batch, S::In), B>, Output = Tensor<(Batch, S::Out), B>, Error = Error>,
+    Linear<(S::Out, S::Out), B, BiasHh>:
+        Module<Tensor<(Batch, S::Out), B>, Output = Tensor<(Batch, S::Out), B>, Error = Error>,
 {
     type Output = Tensor<(Batch, S::Out), B>;
     type Error = Error;
@@ -147,11 +151,11 @@ pub struct RNN<
 }
 
 impl<
-        S: RnnShape,
-        B: Backend,
-        BiasIh: crate::nn::optional::OptionalField,
-        BiasHh: crate::nn::optional::OptionalField,
-    > RNN<S, B, BiasIh, BiasHh>
+    S: RnnShape,
+    B: Backend,
+    BiasIh: crate::nn::optional::OptionalField,
+    BiasHh: crate::nn::optional::OptionalField,
+> RNN<S, B, BiasIh, BiasHh>
 {
     pub fn new(cell: RNNCell<S, B, BiasIh, BiasHh>) -> Self {
         Self { cell }
@@ -159,38 +163,41 @@ impl<
 }
 
 impl<
-        S: RnnShape,
-        B: Backend,
-        BiasIh: crate::nn::optional::OptionalField,
-        BiasHh: crate::nn::optional::OptionalField,
-    > Parameters<B> for RNN<S, B, BiasIh, BiasHh>
+    S: RnnShape,
+    B: Backend,
+    BiasIh: crate::nn::optional::OptionalField,
+    BiasHh: crate::nn::optional::OptionalField,
+> Parameters<B> for RNN<S, B, BiasIh, BiasHh>
 where
     RNNCell<S, B, BiasIh, BiasHh>: Parameters<B>,
 {
     fn named_parameters(
         &self,
         prefix: &str,
-        map: &mut std::collections::HashMap<String, B::RawVar>,
+        map: &mut hashbrown::HashMap<String, B::RawVar>,
     ) {
         self.cell.named_parameters(&format!("{}cell.", prefix), map);
     }
 }
 
 impl<
-        S: RnnShape,
-        Batch: Dim<Arg = ()>,
-        Seq: Dim<Arg = ()>,
-        B: Backend,
-        BiasIh: crate::nn::optional::OptionalField,
-        BiasHh: crate::nn::optional::OptionalField,
-    > Module<(Tensor<(Batch, Seq, S::In), B>, Tensor<(Batch, S::Out), B>)>
-    for RNN<S, B, BiasIh, BiasHh>
+    S: RnnShape,
+    Batch: Dim<Arg = ()>,
+    Seq: Dim<Arg = ()>,
+    B: Backend,
+    BiasIh: crate::nn::optional::OptionalField,
+    BiasHh: crate::nn::optional::OptionalField,
+> Module<(Tensor<(Batch, Seq, S::In), B>, Tensor<(Batch, S::Out), B>)> for RNN<S, B, BiasIh, BiasHh>
 where
     S::In: Dim<Arg = ()>,
     S::Out: Dim<Arg = ()>,
     B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
-    RNNCell<S, B, BiasIh, BiasHh>: Module<(Tensor<(Batch, S::In), B>, Tensor<(Batch, S::Out), B>), Output = Tensor<(Batch, S::Out), B>, Error = Error>,
+    RNNCell<S, B, BiasIh, BiasHh>: Module<
+            (Tensor<(Batch, S::In), B>, Tensor<(Batch, S::Out), B>),
+            Output = Tensor<(Batch, S::Out), B>,
+            Error = Error,
+        >,
 {
     type Output = (Tensor<(Batch, Seq, S::Out), B>, Tensor<(Batch, S::Out), B>);
     type Error = Error;
@@ -219,16 +226,16 @@ where
 }
 
 impl<
-        S: RnnShape,
-        B: Backend,
-        BiasIh: crate::nn::optional::OptionalField,
-        BiasHh: crate::nn::optional::OptionalField,
-    > crate::nn::module::StateDict<B> for RNNCell<S, B, BiasIh, BiasHh>
+    S: RnnShape,
+    B: Backend,
+    BiasIh: crate::nn::optional::OptionalField,
+    BiasHh: crate::nn::optional::OptionalField,
+> crate::nn::module::StateDict<B> for RNNCell<S, B, BiasIh, BiasHh>
 {
     fn load_state_dict(
         &mut self,
         prefix: &str,
-        tensors: &std::collections::HashMap<String, Tensor<Dyn, B>>,
+        tensors: &hashbrown::HashMap<String, Tensor<Dyn, B>>,
     ) -> crate::prelude::Result<()> {
         self.wi
             .load_state_dict(&format!("{}wi.", prefix), tensors)?;
@@ -239,23 +246,23 @@ impl<
     fn state_dict(
         &self,
         prefix: &str,
-        tensors: &mut std::collections::HashMap<String, Tensor<Dyn, B>>,
+        tensors: &mut hashbrown::HashMap<String, Tensor<Dyn, B>>,
     ) {
         self.wi.state_dict(&format!("{}wi.", prefix), tensors);
         self.wh.state_dict(&format!("{}wh.", prefix), tensors);
     }
 }
 impl<
-        S: RnnShape,
-        B: Backend,
-        BiasIh: crate::nn::optional::OptionalField,
-        BiasHh: crate::nn::optional::OptionalField,
-    > crate::nn::module::StateDict<B> for RNN<S, B, BiasIh, BiasHh>
+    S: RnnShape,
+    B: Backend,
+    BiasIh: crate::nn::optional::OptionalField,
+    BiasHh: crate::nn::optional::OptionalField,
+> crate::nn::module::StateDict<B> for RNN<S, B, BiasIh, BiasHh>
 {
     fn load_state_dict(
         &mut self,
         prefix: &str,
-        tensors: &std::collections::HashMap<String, Tensor<Dyn, B>>,
+        tensors: &hashbrown::HashMap<String, Tensor<Dyn, B>>,
     ) -> crate::prelude::Result<()> {
         self.cell
             .load_state_dict(&format!("{}cell.", prefix), tensors)
@@ -263,8 +270,79 @@ impl<
     fn state_dict(
         &self,
         prefix: &str,
-        tensors: &mut std::collections::HashMap<String, Tensor<Dyn, B>>,
+        tensors: &mut hashbrown::HashMap<String, Tensor<Dyn, B>>,
     ) {
         self.cell.state_dict(&format!("{}cell.", prefix), tensors)
+    }
+}
+
+impl<
+    S: RnnShape,
+    B: Backend,
+    BiasIh: crate::nn::optional::OptionalField,
+    BiasHh: crate::nn::optional::OptionalField,
+> crate::nn::module::NamedLayers for RNNCell<S, B, BiasIh, BiasHh>
+where
+    Linear<(S::In, S::Out), B, BiasIh>: crate::nn::module::NamedLayers,
+    Linear<(S::Out, S::Out), B, BiasHh>: crate::nn::module::NamedLayers,
+{
+    fn layer_structure(&self, prefix: &str) -> Vec<crate::nn::module::LayerNode> {
+        let mut children = Vec::new();
+        let p_wi = if prefix.is_empty() {
+            alloc::string::String::from("wi")
+        } else {
+            format!("{}.wi", prefix)
+        };
+        children.extend(self.wi.layer_structure(&p_wi));
+        let p_wh = if prefix.is_empty() {
+            alloc::string::String::from("wh")
+        } else {
+            format!("{}.wh", prefix)
+        };
+        children.extend(self.wh.layer_structure(&p_wh));
+
+        let node_name = if prefix.is_empty() {
+            alloc::string::String::from("RNNCell")
+        } else {
+            prefix.to_string()
+        };
+        vec![crate::nn::module::LayerNode {
+            name: node_name,
+            type_name: alloc::string::String::from("RNNCell"),
+            shape_info: "".to_string(),
+            children,
+        }]
+    }
+}
+
+impl<
+    S: RnnShape,
+    B: Backend,
+    BiasIh: crate::nn::optional::OptionalField,
+    BiasHh: crate::nn::optional::OptionalField,
+> crate::nn::module::NamedLayers for RNN<S, B, BiasIh, BiasHh>
+where
+    RNNCell<S, B, BiasIh, BiasHh>: crate::nn::module::NamedLayers,
+{
+    fn layer_structure(&self, prefix: &str) -> Vec<crate::nn::module::LayerNode> {
+        let mut children = Vec::new();
+        let p_cell = if prefix.is_empty() {
+            alloc::string::String::from("cell")
+        } else {
+            format!("{}.cell", prefix)
+        };
+        children.extend(self.cell.layer_structure(&p_cell));
+
+        let node_name = if prefix.is_empty() {
+            alloc::string::String::from("RNN")
+        } else {
+            prefix.to_string()
+        };
+        vec![crate::nn::module::LayerNode {
+            name: node_name,
+            type_name: alloc::string::String::from("RNN"),
+            shape_info: "".to_string(),
+            children,
+        }]
     }
 }

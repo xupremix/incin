@@ -10,7 +10,12 @@ pub enum Action {
     Quit,
     FocusNext,
     FocusPrev,
+    FocusUp,
+    FocusDown,
+    FocusLeft,
+    FocusRight,
     RetryPanel,
+    ToggleLayout,
     /// Delegates to the focused panel's own `handle_event`.
     PanelLocal,
 }

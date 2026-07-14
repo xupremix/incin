@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 /// A trait implemented by all Neural Network modules to manage their state (weights).
 /// Usually automatically derived via `#[kindle::module]`.
@@ -57,12 +57,12 @@ pub trait Parameters<B: Backend> {
     fn named_parameters(
         &self,
         prefix: &str,
-        map: &mut std::collections::HashMap<String, B::RawVar>,
+        map: &mut hashbrown::HashMap<String, B::RawVar>,
     );
 
     /// Helper to retrieve all parameters as a new map.
-    fn parameters(&self) -> std::collections::HashMap<String, B::RawVar> {
-        let mut map = std::collections::HashMap::new();
+    fn parameters(&self) -> hashbrown::HashMap<String, B::RawVar> {
+        let mut map = hashbrown::HashMap::new();
         self.named_parameters("", &mut map);
         map
     }
@@ -95,7 +95,7 @@ pub trait AutorefParametersFallback<B: Backend> {
         &self,
         _phantom: core::marker::PhantomData<B>,
         _prefix: &str,
-        _map: &mut std::collections::HashMap<String, B::RawVar>,
+        _map: &mut hashbrown::HashMap<String, B::RawVar>,
     ) {
     }
 }
@@ -107,7 +107,7 @@ pub trait AutorefParameters<B: Backend> {
         &self,
         _phantom: core::marker::PhantomData<B>,
         prefix: &str,
-        map: &mut std::collections::HashMap<String, B::RawVar>,
+        map: &mut hashbrown::HashMap<String, B::RawVar>,
     );
 }
 impl<T: Parameters<B>, B: Backend> AutorefParameters<B> for &T {
@@ -116,7 +116,7 @@ impl<T: Parameters<B>, B: Backend> AutorefParameters<B> for &T {
         &self,
         _marker: core::marker::PhantomData<B>,
         prefix: &str,
-        map: &mut std::collections::HashMap<String, B::RawVar>,
+        map: &mut hashbrown::HashMap<String, B::RawVar>,
     ) {
         self.named_parameters(prefix, map);
     }
@@ -279,7 +279,7 @@ where
     fn named_parameters(
         &self,
         prefix: &str,
-        map: &mut std::collections::HashMap<String, B::RawVar>,
+        map: &mut hashbrown::HashMap<String, B::RawVar>,
     ) {
         self.0.named_parameters(&format!("{}0.", prefix), map);
         self.1.named_parameters(&format!("{}1.", prefix), map);
@@ -312,7 +312,7 @@ macro_rules! impl_dummy_state {
     ($($t:ty),+) => {
         $(
             impl<B: Backend> Parameters<B> for $t {
-                fn named_parameters(&self, _prefix: &str, _map: &mut std::collections::HashMap<String, B::RawVar>) {}
+                fn named_parameters(&self, _prefix: &str, _map: &mut hashbrown::HashMap<String, B::RawVar>) {}
             }
 
             impl<B: Backend> StateDict<B> for $t {
@@ -336,7 +336,7 @@ where
     fn named_parameters(
         &self,
         _prefix: &str,
-        _map: &mut std::collections::HashMap<String, B::RawVar>,
+        _map: &mut hashbrown::HashMap<String, B::RawVar>,
     ) {
     }
 }
@@ -358,7 +358,7 @@ impl<T: Parameters<B>, B: Backend> Parameters<B> for Option<T> {
     fn named_parameters(
         &self,
         prefix: &str,
-        map: &mut std::collections::HashMap<String, B::RawVar>,
+        map: &mut hashbrown::HashMap<String, B::RawVar>,
     ) {
         if let Some(v) = self {
             v.named_parameters(prefix, map);
@@ -381,6 +381,161 @@ impl<L: StateDict<B>, B: Backend> StateDict<B> for Option<L> {
     fn state_dict(&self, prefix: &str, tensors: &mut HashMap<String, Tensor<Dyn, B>>) {
         if let Some(v) = self {
             v.state_dict(prefix, tensors);
+        }
+    }
+}
+
+/// Represents a node in the neural network layer structure metadata tree.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct LayerNode {
+    pub name: String,
+    pub type_name: String,
+    pub shape_info: String,
+    pub children: Vec<LayerNode>,
+}
+
+/// A trait implemented by all Neural Network modules to report their structural architecture.
+pub trait NamedLayers {
+    fn layer_structure(&self, prefix: &str) -> Vec<LayerNode>;
+}
+
+/// Cleans a fully qualified Rust type path into a simple name (e.g. `kindle::nn::linear::Linear<...>` -> `Linear`).
+pub fn clean_type_name(raw: &str) -> String {
+    let without_generics = match raw.find('<') {
+        Some(idx) => &raw[..idx],
+        None => raw,
+    };
+    let name = match without_generics.rfind("::") {
+        Some(idx) => &without_generics[idx + 2..],
+        None => without_generics,
+    };
+    name.trim().to_string()
+}
+
+/// Recursively updates child node prefixes when a parent node is renamed.
+pub fn update_node_name_prefix(node: &mut LayerNode, new_name: &str) {
+    let old_name = node.name.clone();
+    node.name = new_name.to_string();
+    for child in &mut node.children {
+        let child_suffix = if old_name.is_empty() {
+            &child.name
+        } else if child.name.starts_with(&old_name) {
+            let prefix_len = old_name.len();
+            if child.name.len() > prefix_len && child.name.as_bytes()[prefix_len] == b'.' {
+                &child.name[prefix_len + 1..]
+            } else {
+                &child.name[prefix_len..]
+            }
+        } else {
+            &child.name
+        };
+        let new_child_name = if new_name.is_empty() {
+            child_suffix.to_string()
+        } else {
+            format!("{}.{}", new_name, child_suffix)
+        };
+        update_node_name_prefix(child, &new_child_name);
+    }
+}
+
+/// Flatten helper to assign sequential names (e.g. Linear1, ReLU1, Linear2) to a slice of child nodes.
+pub fn assign_sequential_names(nodes: &mut [LayerNode], prefix: &str) {
+    let mut type_counts = hashbrown::HashMap::new();
+    for (i, node) in nodes.iter_mut().enumerate() {
+        let clean_type = clean_type_name(&node.type_name);
+        let count = type_counts.entry(clean_type.clone()).or_insert(0);
+        *count += 1;
+
+        let seq_name = if !clean_type.is_empty() && clean_type != "LayerNode" {
+            format!("{}{}", clean_type, count)
+        } else {
+            format!("{}", i)
+        };
+
+        let new_name = if prefix.is_empty() {
+            seq_name
+        } else {
+            format!("{}.{}", prefix, seq_name)
+        };
+
+        update_node_name_prefix(node, &new_name);
+    }
+}
+
+impl<L1: NamedLayers, L2: NamedLayers> NamedLayers for Sequential<L1, L2> {
+    fn layer_structure(&self, prefix: &str) -> Vec<LayerNode> {
+        let mut nodes = Vec::new();
+        nodes.extend(self.0.layer_structure(""));
+        nodes.extend(self.1.layer_structure(""));
+
+        assign_sequential_names(&mut nodes, prefix);
+        nodes
+    }
+}
+
+impl<T: NamedLayers> NamedLayers for Option<T> {
+    fn layer_structure(&self, prefix: &str) -> Vec<LayerNode> {
+        if let Some(layer) = self {
+            layer.layer_structure(prefix)
+        } else {
+            Vec::new()
+        }
+    }
+}
+
+#[doc(hidden)]
+pub trait AutorefNamedLayersFallback {
+    fn maybe_layer_structure(&self, _prefix: &str) -> Option<Vec<LayerNode>> {
+        None
+    }
+}
+impl<T> AutorefNamedLayersFallback for &&T {}
+
+#[doc(hidden)]
+pub trait AutorefNamedLayers {
+    fn maybe_layer_structure(&self, prefix: &str) -> Option<Vec<LayerNode>>;
+}
+impl<T: NamedLayers> AutorefNamedLayers for &T {
+    #[inline]
+    fn maybe_layer_structure(&self, prefix: &str) -> Option<Vec<LayerNode>> {
+        Some(self.layer_structure(prefix))
+    }
+}
+
+#[doc(hidden)]
+pub trait AutorefShapeInfoFallback {
+    fn maybe_shape_info(&self) -> Option<String> {
+        None
+    }
+}
+impl<T> AutorefShapeInfoFallback for &&T {}
+
+#[doc(hidden)]
+pub trait AutorefShapeInfo {
+    fn maybe_shape_info(&self) -> Option<String>;
+}
+impl<S: Shape + DynShape, B: Backend> AutorefShapeInfo for &crate::nn::param::Param<S, B> {
+    #[inline]
+    fn maybe_shape_info(&self) -> Option<String> {
+        Some(format!("{:?}", self.shape_dims()))
+    }
+}
+impl<S: Shape + DynShape, B: Backend> AutorefShapeInfo for &crate::nn::param::Buffer<S, B> {
+    #[inline]
+    fn maybe_shape_info(&self) -> Option<String> {
+        Some(format!("{:?}", self.shape_dims()))
+    }
+}
+impl<T> AutorefShapeInfo for &Option<T>
+where
+    for<'a> &'a T: AutorefShapeInfo,
+{
+    #[inline]
+    fn maybe_shape_info(&self) -> Option<String> {
+        if let Some(val) = self {
+            (&val).maybe_shape_info()
+        } else {
+            None
         }
     }
 }

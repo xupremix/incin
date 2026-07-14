@@ -1,6 +1,11 @@
 use crate::prelude::*;
 use typenum::{U0, U1, U2, U3, U4, U5, U6};
 
+#[diagnostic::on_unimplemented(
+    message = "Cannot stack shape `{Self}` along axis `{Axis}`",
+    label = "Invalid axis for stacking",
+    note = "Stacking requires the axis to be <= the rank of the tensor"
+)]
 pub trait StackShape<Axis> {
     type Output: Shape;
 }

@@ -23,7 +23,7 @@ impl<K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned, B: Backend> Parameters<
     fn named_parameters(
         &self,
         _prefix: &str,
-        _map: &mut std::collections::HashMap<String, B::RawVar>,
+        _map: &mut hashbrown::HashMap<String, B::RawVar>,
     ) {
     }
 }
@@ -34,7 +34,7 @@ impl<
     S: Unsigned,
     P: Unsigned,
     D: Unsigned,
-    B: Backend,
+    B: Backend + crate::tensor::backend::ModuleOps<B>,
 > Module<Tensor<I, B>> for MaxPool2d<K, S, P, D>
 {
     type Output = Tensor<I::Output, B>;

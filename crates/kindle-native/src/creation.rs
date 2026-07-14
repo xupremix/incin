@@ -15,27 +15,21 @@ use crate::NativeBackend;
 use crate::storage::{NativeBuffer, NativeStorage};
 use crate::var;
 
-fn zeros_buffer(total: usize, dtype: KindleDType) -> Result<NativeBuffer> {
+fn fill_buffer(total: usize, value: f64, dtype: KindleDType) -> Result<NativeBuffer> {
     Ok(match dtype {
-        KindleDType::F32 => NativeBuffer::F32(vec![0.0f32; total]),
-        KindleDType::F64 => NativeBuffer::F64(vec![0.0f64; total]),
-        KindleDType::U8 => NativeBuffer::U8(vec![0u8; total]),
-        KindleDType::U32 => NativeBuffer::U32(vec![0u32; total]),
-        KindleDType::I64 => NativeBuffer::I64(vec![0i64; total]),
-        KindleDType::F16 => NativeBuffer::F16(vec![half::f16::from_f64(0.0); total]),
-        KindleDType::BF16 => NativeBuffer::BF16(vec![half::bf16::from_f64(0.0); total]),
-    })
-}
-
-fn ones_buffer(total: usize, dtype: KindleDType) -> Result<NativeBuffer> {
-    Ok(match dtype {
-        KindleDType::F32 => NativeBuffer::F32(vec![1.0f32; total]),
-        KindleDType::F64 => NativeBuffer::F64(vec![1.0f64; total]),
-        KindleDType::U8 => NativeBuffer::U8(vec![1u8; total]),
-        KindleDType::U32 => NativeBuffer::U32(vec![1u32; total]),
-        KindleDType::I64 => NativeBuffer::I64(vec![1i64; total]),
-        KindleDType::F16 => NativeBuffer::F16(vec![half::f16::from_f64(1.0); total]),
-        KindleDType::BF16 => NativeBuffer::BF16(vec![half::bf16::from_f64(1.0); total]),
+        KindleDType::F32 => NativeBuffer::F32(vec![value as f32; total]),
+        KindleDType::F64 => NativeBuffer::F64(vec![value; total]),
+        KindleDType::U8 => NativeBuffer::U8(vec![value as u8; total]),
+        KindleDType::U32 => NativeBuffer::U32(vec![value as u32; total]),
+        KindleDType::I64 => NativeBuffer::I64(vec![value as i64; total]),
+        KindleDType::F16 => NativeBuffer::F16(vec![half::f16::from_f64(value); total]),
+        KindleDType::BF16 => NativeBuffer::BF16(vec![half::bf16::from_f64(value); total]),
+        KindleDType::Q8_0 => {
+            return Err(Error::UnsupportedBackendOperation {
+                op: "fill",
+                backend: "Native Q8_0",
+            });
+        }
     })
 }
 
@@ -46,7 +40,7 @@ impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for NativeBack
         _device: &KindleDevice,
     ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
         let total: usize = shape.iter().product();
-        let buffer = zeros_buffer(total, dtype)?;
+        let buffer = fill_buffer(total, 0.0, dtype)?;
         Ok(NativeStorage::from_contiguous(buffer, shape.to_vec()))
     }
 
@@ -56,7 +50,7 @@ impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for NativeBack
         _device: &KindleDevice,
     ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
         let total: usize = shape.iter().product();
-        let buffer = ones_buffer(total, dtype)?;
+        let buffer = fill_buffer(total, 1.0, dtype)?;
         Ok(NativeStorage::from_contiguous(buffer, shape.to_vec()))
     }
 
@@ -72,7 +66,10 @@ impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for NativeBack
             });
         }
         let total: usize = shape.iter().product();
+        #[cfg(feature = "std")]
         let mut rng = rand::thread_rng();
+        #[cfg(not(feature = "std"))]
+        let mut rng = rand::rngs::SmallRng::seed_from_u64(0x1337);
         let data: Vec<f32> = (0..total).map(|_| rng.gen_range(0.0f32..1.0f32)).collect();
         Ok(NativeStorage::from_contiguous(
             NativeBuffer::F32(data),
@@ -92,7 +89,10 @@ impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for NativeBack
             });
         }
         let total: usize = shape.iter().product();
+        #[cfg(feature = "std")]
         let mut rng = rand::thread_rng();
+        #[cfg(not(feature = "std"))]
+        let mut rng = rand::rngs::SmallRng::seed_from_u64(0x1337);
         let data: Vec<f32> = (0..total).map(|_| rng.sample(StandardNormal)).collect();
         Ok(NativeStorage::from_contiguous(
             NativeBuffer::F32(data),

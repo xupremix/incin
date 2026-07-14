@@ -1,12 +1,22 @@
-error[E0277]: the trait bound `(UInt<UTerm, B1>, UInt<UInt<UTerm, B1>, B0>): BroadcastShape<(UInt<UInt<UTerm, B1>, B1>, UInt<UInt<UTerm, B1>, B1>)>` is not satisfied
+error[E0432]: unresolved imports `typenum::typenum`, `typenum::typenum`, `typenum::typenum`
+ --> tests/compile_fail/forward_broadcast_mismatch.rs:3:15
+  |
+3 | use typenum::{typenum::U1, typenum::U2, typenum::U3};
+  |               ^^^^^^^      ^^^^^^^      ^^^^^^^ could not find `typenum` in `typenum`
+  |               |            |
+  |               |            could not find `typenum` in `typenum`
+  |               could not find `typenum` in `typenum`
+
+error[E0277]: Cannot broadcast shape `(UInt<UTerm, B1>, UInt<UInt<UTerm, B1>, B0>)` to `(UInt<UInt<UTerm, B1>, B1>, UInt<UInt<UTerm, B1>, B1>)`
   --> tests/compile_fail/forward_broadcast_mismatch.rs:10:33
    |
 10 |     let _out = t1.broadcast_add(&t2).unwrap();
-   |                   ------------- ^^^ unsatisfied trait bound
+   |                   ------------- ^^^ Shape mismatch during broadcast
    |                   |
    |                   required by a bound introduced by this call
    |
    = help: the trait `BroadcastShape<(UInt<UInt<UTerm, B1>, B1>, UInt<UInt<UTerm, B1>, B1>)>` is not implemented for `(UInt<UTerm, B1>, UInt<UInt<UTerm, B1>, B0>)`
+   = note: Broadcast requires dimensions to be equal, or one of them to be 1
    = help: the following other types implement trait `BroadcastShape<Rhs>`:
              `()` implements `BroadcastShape<()>`
              `()` implements `BroadcastShape<(A, B)>`

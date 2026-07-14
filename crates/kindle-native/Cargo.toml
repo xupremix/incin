@@ -6,15 +6,30 @@ readme.workspace = true
 license.workspace = true
 
 [dependencies]
-kindle-core = { path = "../kindle-core" }
-rand = "0.8"
-rand_distr = "0.4"
-half = { workspace = true }
-bytemuck = { version = "1.25", features = ["derive"] }
-anyhow = "1.0.103"
+spin = { version = "0.9.8", default-features = false, features = ["mutex", "spin_mutex"] }
+kindle-core = { path = "../kindle-core", default-features = false }
+rand = { version = "0.8", default-features = false, features = ["alloc", "small_rng"] }
+rand_distr = { version = "0.4", default-features = false, features = ["alloc"] }
+half = { workspace = true, default-features = false }
+bytemuck = { version = "1.25", default-features = false, features = ["derive"] }
+anyhow = { version = "1.0.103", default-features = false }
+ggml-quants = "0.1.0"
+hashbrown = { version = "0.14", default-features = false, features = ["alloc", "inline-more", "ahash"] }
+rayon = "1.10.0"
 
 [dev-dependencies]
 kindle-backends = { path = "../kindle-backends", features = ["candle"] }
 
 [lints]
 workspace = true
+
+[features]
+default = ["std"]
+std = [
+    "kindle-core/std",
+    "rand/std",
+    "rand/std_rng",
+    "rand_distr/std",
+    "half/std",
+    "anyhow/std",
+]

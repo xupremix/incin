@@ -2,7 +2,7 @@
 //! `kindle-telemetry`'s `err.rs` convention. This crate has no JSON or
 //! socket I/O of its own, so its variant set is smaller.
 
-use std::fmt::Debug;
+use core::fmt::Debug;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -16,7 +16,7 @@ pub enum Error {
 }
 
 impl Debug for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{self}")
     }
 }

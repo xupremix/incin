@@ -61,10 +61,13 @@ fn test_unary_swish() -> Result<()> {
 fn test_unary_softmax() -> Result<()> {
     // dim 0, dim 1, very large/small values
     // Softmax along dim 1
-    let t_2d = Tensor::<s![2, 3], CpuBackend>::from_slice(&[
-        1000.0, 1000.0, 1000.0, // Should be 0.333, 0.333, 0.333
-        -1000.0, 0.0, 1000.0    // Should be 0, 0, 1
-    ], ())?;
+    let t_2d = Tensor::<s![2, 3], CpuBackend>::from_slice(
+        &[
+            1000.0, 1000.0, 1000.0, // Should be 0.333, 0.333, 0.333
+            -1000.0, 0.0, 1000.0, // Should be 0, 0, 1
+        ],
+        (),
+    )?;
     let r_dim1 = to_vec(&t_2d.softmax(1)?.into_dyn());
     assert!((r_dim1[0] - 0.3333).abs() < 1e-3);
     assert!((r_dim1[4] - 0.0).abs() < 1e-4);
@@ -184,7 +187,8 @@ fn test_broadcast_scalar() -> Result<()> {
 
 #[test]
 fn test_broadcast_1d_to_2d() -> Result<()> {
-    let t_2d = Tensor::<s![2, 3], CpuBackend>::from_slice(&[1.0, 1.0, 1.0, 2.0, 2.0, 2.0], ())?.into_dyn();
+    let t_2d =
+        Tensor::<s![2, 3], CpuBackend>::from_slice(&[1.0, 1.0, 1.0, 2.0, 2.0, 2.0], ())?.into_dyn();
     let t_1d = Tensor::<s![3], CpuBackend>::from_slice(&[1.0, 2.0, 3.0], ())?.into_dyn();
     let r = t_2d.broadcast_mul(&t_1d)?;
     assert_eq!(to_vec(&r.into_dyn()), vec![1.0, 2.0, 3.0, 2.0, 4.0, 6.0]);
@@ -235,11 +239,20 @@ fn test_reduction_max_min() -> Result<()> {
     let t = Tensor::<s![2, 2], CpuBackend>::from_slice(&[-1.0, 5.0, 0.0, 3.0], ())?;
     // max
     assert_eq!(to_vec(&t.clone().max_all()?.into_dyn())[0], 5.0);
-    assert_eq!(to_vec(&t.clone().max_dim::<0>()?.into_dyn()), vec![0.0, 5.0]);
-    assert_eq!(to_vec(&t.clone().max_dim::<1>()?.into_dyn()), vec![5.0, 3.0]);
+    assert_eq!(
+        to_vec(&t.clone().max_dim::<0>()?.into_dyn()),
+        vec![0.0, 5.0]
+    );
+    assert_eq!(
+        to_vec(&t.clone().max_dim::<1>()?.into_dyn()),
+        vec![5.0, 3.0]
+    );
     // min
     assert_eq!(to_vec(&t.clone().min_all()?.into_dyn())[0], -1.0);
-    assert_eq!(to_vec(&t.clone().min_dim::<0>()?.into_dyn()), vec![-1.0, 3.0]);
+    assert_eq!(
+        to_vec(&t.clone().min_dim::<0>()?.into_dyn()),
+        vec![-1.0, 3.0]
+    );
     Ok(())
 }
 
@@ -249,7 +262,7 @@ fn test_reduction_max_min() -> Result<()> {
 #[test]
 fn test_manipulation_reshape_flatten() -> Result<()> {
     let t = Tensor::<s![2, 3], CpuBackend>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
-    
+
     // reshape
     let r = t.clone().reshape_idx::<idx![3, 2]>()?;
     let r_dims: [usize; 2] = r.dims().into();
@@ -272,7 +285,7 @@ fn test_manipulation_reshape_flatten() -> Result<()> {
 #[test]
 fn test_manipulation_transpose_squeeze() -> Result<()> {
     let t = Tensor::<s![2, 3], CpuBackend>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
-    
+
     // transpose
     let tr = t.clone().transpose::<0, 1>()?;
     let tr_dims: [usize; 2] = tr.dims().into();
@@ -295,9 +308,11 @@ fn test_manipulation_transpose_squeeze() -> Result<()> {
 fn test_indexing_concat() -> Result<()> {
     let t1 = Tensor::<s![2, 2], CpuBackend>::from_slice(&[1.0, 2.0, 3.0, 4.0], ())?;
     let t2 = Tensor::<s![2, 2], CpuBackend>::from_slice(&[5.0, 6.0, 7.0, 8.0], ())?;
-    
+
     // concat dim 0
-    let c0 = t1.clone().concat::<s![2, 2], kindle::prelude::typenum::U0>(&t2)?;
+    let c0 = t1
+        .clone()
+        .concat::<s![2, 2], kindle::prelude::typenum::U0>(&t2)?;
     let c0_dims: [usize; 2] = c0.dims().into();
     assert_eq!(c0_dims, [4, 2]);
     assert_eq!(to_vec(&c0.into_dyn()), vec![1., 2., 3., 4., 5., 6., 7., 8.]);
@@ -315,7 +330,7 @@ fn test_indexing_concat() -> Result<()> {
 fn test_indexing_stack() -> Result<()> {
     let t1 = Tensor::<s![2], CpuBackend>::from_slice(&[1.0, 2.0], ())?;
     let t2 = Tensor::<s![2], CpuBackend>::from_slice(&[3.0, 4.0], ())?;
-    
+
     // stack dim 0
     let s0 = t1.clone().stack::<kindle::prelude::typenum::U0>(&t2)?;
     let s0_dims: [usize; 2] = s0.dims().into();
@@ -338,11 +353,10 @@ fn test_indexing_stack() -> Result<()> {
 
 #[test]
 fn test_indexing_narrow() -> Result<()> {
-    let t = Tensor::<s![3, 3], CpuBackend>::from_slice(&[
-        1.0, 2.0, 3.0,
-        4.0, 5.0, 6.0,
-        7.0, 8.0, 9.0
-    ], ())?;
+    let t = Tensor::<s![3, 3], CpuBackend>::from_slice(
+        &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
+        (),
+    )?;
 
     // Narrow dim 0
     let n0 = t.clone().try_narrow(0, 1, 2)?; // elements from index 1, len 2
@@ -371,7 +385,7 @@ fn test_loss_mse() -> Result<()> {
 
     assert_eq!(to_vec(&pred.mse_loss(&target1)?.into_dyn())[0], 0.0);
     assert_eq!(to_vec(&pred.mse_loss(&target2)?.into_dyn())[0], 10.0); // ((2)^2 + (4)^2)/2 = (4+16)/2 = 10
-    
+
     let loss3 = to_vec(&pred.mse_loss(&target3)?.into_dyn())[0];
     assert!((loss3 - 0.01).abs() < 1e-4); // (0.01 + 0.01)/2 = 0.01
 
@@ -381,17 +395,18 @@ fn test_loss_mse() -> Result<()> {
 #[test]
 fn test_loss_cross_entropy() -> Result<()> {
     // 2 samples, 3 classes
-    let logits = Tensor::<s![2, 3], CpuBackend>::from_slice(&[
-        10.0, 0.0, 0.0, // confident class 0
-        0.0, 10.0, 0.0, // confident class 1
-    ], ())?;
-    
+    let logits = Tensor::<s![2, 3], CpuBackend>::from_slice(
+        &[
+            10.0, 0.0, 0.0, // confident class 0
+            0.0, 10.0, 0.0, // confident class 1
+        ],
+        (),
+    )?;
+
     // target integers: class 0, class 1
     // The framework uses one-hot float targets or indices?
     // Let's assume standard float targets for one-hot cross entropy
-    let targets = Tensor::<s![2], CpuBackend>::from_slice(&[
-        0.0, 1.0
-    ], ())?;
+    let targets = Tensor::<s![2], CpuBackend>::from_slice(&[0.0, 1.0], ())?;
 
     let loss = logits.cross_entropy_loss(&targets)?;
     let val = to_vec(&loss.into_dyn())[0];
@@ -399,10 +414,7 @@ fn test_loss_cross_entropy() -> Result<()> {
     assert!(val < 1e-3);
 
     // Uniform distribution
-    let uniform = Tensor::<s![2, 3], CpuBackend>::from_slice(&[
-        0.0, 0.0, 0.0,
-        0.0, 0.0, 0.0,
-    ], ())?;
+    let uniform = Tensor::<s![2, 3], CpuBackend>::from_slice(&[0.0, 0.0, 0.0, 0.0, 0.0, 0.0], ())?;
     let loss_u = uniform.cross_entropy_loss(&targets)?;
     let val_u = to_vec(&loss_u.into_dyn())[0];
     // -log(1/3) = 1.0986

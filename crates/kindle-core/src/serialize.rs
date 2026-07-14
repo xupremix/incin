@@ -1,9 +1,9 @@
 use crate::prelude::*;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 /// A trait for serializing a collection of dynamic tensors to a specific format.
 pub trait Serializer {
-    type Error: std::fmt::Debug + std::fmt::Display;
+    type Error: core::fmt::Debug + core::fmt::Display;
 
     /// Serializes the state dict to the given path or stream.
     fn serialize<B: Backend>(
@@ -17,7 +17,7 @@ pub trait Serializer {
 
 /// A trait for deserializing a collection of dynamic tensors from a specific format.
 pub trait Deserializer {
-    type Error: std::fmt::Debug + std::fmt::Display;
+    type Error: core::fmt::Debug + core::fmt::Display;
 
     /// Deserializes the state dict from the given path or stream.
     fn deserialize<B: Backend>(
@@ -29,16 +29,19 @@ pub trait Deserializer {
         <<B as Backend>::FloatElem as crate::tensor::dtype::DType>::Field: Default;
 }
 
+#[cfg(feature = "std")]
 pub struct SafetensorsSerializer<'a> {
     path: &'a std::path::Path,
 }
 
+#[cfg(feature = "std")]
 impl<'a> SafetensorsSerializer<'a> {
     pub fn new(path: &'a std::path::Path) -> Self {
         Self { path }
     }
 }
 
+#[cfg(feature = "std")]
 impl<'a> Serializer for SafetensorsSerializer<'a> {
     type Error = anyhow::Error;
 
@@ -51,8 +54,8 @@ impl<'a> Serializer for SafetensorsSerializer<'a> {
         <<B as Backend>::FloatElem as crate::tensor::dtype::DType>::Field: Default,
     {
         use safetensors::tensor::{Dtype, TensorView};
-        let mut data_map = HashMap::new();
-        let mut bytes_store = Vec::new();
+        let mut bytes_store: Vec<(String, Vec<u8>, Vec<usize>, KindleDType)> = Vec::new();
+        let mut data_map: HashMap<String, TensorView<'_>> = HashMap::new();
 
         // First extract all bytes because TensorView needs references to the bytes.
         for (k, v) in state_dict.iter() {
@@ -70,6 +73,7 @@ impl<'a> Serializer for SafetensorsSerializer<'a> {
                 KindleDType::U32 => Dtype::U32,
                 KindleDType::I64 => Dtype::I64,
                 KindleDType::U8 => Dtype::U8,
+                KindleDType::Q8_0 => panic!("Safetensors does not support Q8_0 dtype natively"),
             };
             let view = TensorView::new(safe_dtype, shape.clone(), bytes.as_slice())
                 .map_err(|e| anyhow::anyhow!("Failed to create TensorView: {:?}", e))?;
@@ -83,16 +87,19 @@ impl<'a> Serializer for SafetensorsSerializer<'a> {
     }
 }
 
+#[cfg(feature = "std")]
 pub struct SafetensorsDeserializer<'a> {
     path: &'a std::path::Path,
 }
 
+#[cfg(feature = "std")]
 impl<'a> SafetensorsDeserializer<'a> {
     pub fn new(path: &'a std::path::Path) -> Self {
         Self { path }
     }
 }
 
+#[cfg(feature = "std")]
 impl<'a> Deserializer for SafetensorsDeserializer<'a> {
     type Error = anyhow::Error;
 
@@ -142,22 +149,26 @@ impl<'a> Deserializer for SafetensorsDeserializer<'a> {
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
+#[allow(dead_code)]
 struct SerializedTensor {
     shape: Vec<usize>,
     dtype: String,
     data: Vec<u8>,
 }
 
+#[cfg(feature = "std")]
 pub struct BincodeSerializer<'a> {
     path: &'a std::path::Path,
 }
 
+#[cfg(feature = "std")]
 impl<'a> BincodeSerializer<'a> {
     pub fn new(path: &'a std::path::Path) -> Self {
         Self { path }
     }
 }
 
+#[cfg(feature = "std")]
 impl<'a> Serializer for BincodeSerializer<'a> {
     type Error = anyhow::Error;
 
@@ -181,6 +192,7 @@ impl<'a> Serializer for BincodeSerializer<'a> {
                 KindleDType::U32 => "U32",
                 KindleDType::I64 => "I64",
                 KindleDType::U8 => "U8",
+                KindleDType::Q8_0 => "Q8_0",
             }
             .to_string();
             map.insert(
@@ -199,16 +211,19 @@ impl<'a> Serializer for BincodeSerializer<'a> {
     }
 }
 
+#[cfg(feature = "std")]
 pub struct BincodeDeserializer<'a> {
     path: &'a std::path::Path,
 }
 
+#[cfg(feature = "std")]
 impl<'a> BincodeDeserializer<'a> {
     pub fn new(path: &'a std::path::Path) -> Self {
         Self { path }
     }
 }
 
+#[cfg(feature = "std")]
 impl<'a> Deserializer for BincodeDeserializer<'a> {
     type Error = anyhow::Error;
 
@@ -233,6 +248,7 @@ impl<'a> Deserializer for BincodeDeserializer<'a> {
                 "U32" => KindleDType::U32,
                 "I64" => KindleDType::I64,
                 "U8" => KindleDType::U8,
+                "Q8_0" => KindleDType::Q8_0,
                 _ => return Err(anyhow::anyhow!("Unsupported dtype in bincode")),
             };
             let raw_tensor = <B as Backend>::from_bytes(&st.data, &st.shape, dtype, device)
@@ -252,12 +268,14 @@ impl<'a> Deserializer for BincodeDeserializer<'a> {
     }
 }
 
+#[cfg(feature = "std")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Format {
     Safetensors,
     ONNX,
 }
 
+#[cfg(feature = "std")]
 pub trait ModelExt<B: Backend> {
     fn save(&self, format: Format, path: &std::path::Path) -> Result<()>
     where
@@ -270,6 +288,7 @@ pub trait ModelExt<B: Backend> {
         <<B as Backend>::FloatElem as crate::tensor::dtype::DType>::Field: Default;
 }
 
+#[cfg(feature = "std")]
 impl<B: Backend, T: crate::nn::module::StateDict<B>> ModelExt<B> for T {
     fn save(&self, format: Format, path: &std::path::Path) -> Result<()>
     where

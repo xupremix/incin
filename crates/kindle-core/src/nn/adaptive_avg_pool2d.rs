@@ -26,7 +26,7 @@ impl<HOut: Unsigned, WOut: Unsigned, B: Backend> Parameters<B> for AdaptiveAvgPo
     fn named_parameters(
         &self,
         _prefix: &str,
-        _map: &mut std::collections::HashMap<String, B::RawVar>,
+        _map: &mut hashbrown::HashMap<String, B::RawVar>,
     ) {
     }
 }

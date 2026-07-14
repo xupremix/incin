@@ -2,7 +2,7 @@ use crate::graph::{AttributeValue, Graph};
 use crate::onnx_pb::onnx;
 use crate::prelude::*;
 use prost::Message;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::path::Path;
 
 pub struct OnnxExporter<'a> {
@@ -17,7 +17,7 @@ impl<'a> OnnxExporter<'a> {
 
 pub fn export_to_onnx(graph: &Graph, path: &Path) -> anyhow::Result<()> {
     let mut onnx_graph = onnx::GraphProto::default();
-    onnx_graph.name = Some("kindle_graph".to_string());
+    onnx_graph.name = Some(alloc::string::String::from("kindle_graph"));
 
     // Add inputs
     for &in_id in &graph.inputs {
@@ -84,7 +84,7 @@ pub fn export_to_onnx(graph: &Graph, path: &Path) -> anyhow::Result<()> {
     let mut opset = onnx::OperatorSetIdProto::default();
     opset.version = Some(14);
     model.opset_import.push(opset);
-    model.producer_name = Some("kindle".to_string());
+    model.producer_name = Some(alloc::string::String::from("kindle"));
     model.graph = Some(onnx_graph);
 
     let mut buf = Vec::new();
@@ -103,6 +103,7 @@ fn dtype_to_onnx(dt: KindleDType) -> onnx::tensor_proto::DataType {
         KindleDType::U32 => onnx::tensor_proto::DataType::Uint32,
         KindleDType::I64 => onnx::tensor_proto::DataType::Int64,
         KindleDType::U8 => onnx::tensor_proto::DataType::Uint8,
+        KindleDType::Q8_0 => unimplemented!("ONNX does not natively support Q8_0"),
     }
 }
 
@@ -140,7 +141,8 @@ impl<'a> crate::serialize::Serializer for OnnxExporter<'a> {
         <<B as Backend>::Device as Device>::Field: Default,
     {
         // Try to run export_to_onnx with thread local graph
-        crate::tensor::tracing::TRACING_GRAPH.with(|g| export_to_onnx(&g.borrow(), self._path))
+        let g = crate::tensor::tracing::TRACING_GRAPH.lock();
+        export_to_onnx(&g, self._path)
     }
 }
 

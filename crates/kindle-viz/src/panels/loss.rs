@@ -48,9 +48,14 @@ impl Panel for LossPanel {
 
     fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) {
         let area = ctx.area();
-        let frame = ctx.frame_mut();
 
-        let block = Block::default().title("Loss").borders(Borders::ALL);
+        if let Some(last_val) = self.points.last().map(|p| p.1) {
+            if !last_val.is_finite() {
+                ctx.set_alert(format!("NaN/Inf detected"));
+            }
+        }
+
+        let frame = ctx.frame_mut();
 
         if self.points.is_empty() {
             // Exact UI-SPEC.md copy -- distinguishes "no data yet" from a
@@ -58,7 +63,7 @@ impl Panel for LossPanel {
             let placeholder = Paragraph::new("waiting for loss events…")
                 .style(Style::default().add_modifier(Modifier::DIM))
                 .alignment(Alignment::Center)
-                .block(block);
+                .block(Block::default().title(self.title()).borders(Borders::ALL));
             frame.render_widget(placeholder, area);
             return;
         }
@@ -75,9 +80,9 @@ impl Panel for LossPanel {
         let y_bounds = [0.0, y_max.max(0.01)];
 
         let chart = Chart::new(vec![dataset])
-            .block(block)
             .x_axis(Axis::default().title(Span::raw("step")).bounds(x_bounds))
-            .y_axis(Axis::default().title(Span::raw("loss")).bounds(y_bounds));
+            .y_axis(Axis::default().title(Span::raw("loss")).bounds(y_bounds))
+            .block(Block::default().title(self.title()).borders(Borders::ALL));
 
         frame.render_widget(chart, area);
     }

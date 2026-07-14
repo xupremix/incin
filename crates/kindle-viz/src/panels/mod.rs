@@ -6,3 +6,7 @@
 
 pub mod loss;
 pub mod panic_test;
+pub mod scalar;
+pub mod norms;
+pub mod system;
+pub mod graph;

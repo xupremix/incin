@@ -13,16 +13,8 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
         quote! { kindle }
     };
 
-    let format_mac = if is_internal {
-        quote! { alloc::format! }
-    } else {
-        quote! { std::format! }
-    };
-    let _vec_ty = if is_internal {
-        quote! { alloc::vec::Vec }
-    } else {
-        quote! { std::vec::Vec }
-    };
+    let format_mac = quote! { #k_crate::prelude::format! };
+    let _vec_ty = quote! { #k_crate::prelude::Vec };
 
     let backend_generic = input.generics.params.iter().find_map(|p| {
         if let syn::GenericParam::Type(t) = p {
@@ -60,11 +52,14 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let (impl_generics, _, where_clause) = generics.split_for_impl();
     let (_, ty_generics, _) = input.generics.split_for_impl();
+    let (orig_impl_generics, orig_ty_generics, orig_where_clause) = input.generics.split_for_impl();
 
     let mut param_calls = Vec::new();
     let mut load_state_calls = Vec::new();
     let mut state_dict_calls = Vec::new();
     let mut to_device_fields = Vec::new();
+    let mut named_layer_calls = Vec::new();
+    let mut shape_info_calls = Vec::new();
 
     if let syn::Data::Struct(ref mut data) = input.data {
         match &mut data.fields {
@@ -137,6 +132,27 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                         {
                             use #k_crate::nn::module::{AutorefStateDict, AutorefStateDictFallback};
                             (&&self.#fname).maybe_state_dict(core::marker::PhantomData::<#b_ident>, &#format_mac("{}{}.", prefix, #fname_str), tensors);
+                        }
+                    });
+                    named_layer_calls.push(quote! {
+                        {
+                            use #k_crate::nn::module::{AutorefNamedLayers, AutorefNamedLayersFallback};
+                            let child_prefix = if prefix.is_empty() {
+                                #k_crate::prelude::String::from(#fname_str)
+                            } else {
+                                #format_mac("{}.{}", prefix, #fname_str)
+                            };
+                            if let Some(nodes) = (&&self.#fname).maybe_layer_structure(&child_prefix) {
+                                children.extend(nodes);
+                            }
+                        }
+                    });
+                    shape_info_calls.push(quote! {
+                        {
+                            use #k_crate::nn::module::{AutorefShapeInfo, AutorefShapeInfoFallback};
+                            if let Some(sh) = (&&self.#fname).maybe_shape_info() {
+                                shape_parts.push(#format_mac("{}: {}", #fname_str, sh));
+                            }
                         }
                     });
                     to_device_fields.push(quote! {
@@ -212,6 +228,27 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                             (&&self.#idx).maybe_state_dict(core::marker::PhantomData::<#b_ident>, &#format_mac("{}{}.", prefix, #idx_str), tensors);
                         }
                     });
+                    named_layer_calls.push(quote! {
+                        {
+                            use #k_crate::nn::module::{AutorefNamedLayers, AutorefNamedLayersFallback};
+                            let child_prefix = if prefix.is_empty() {
+                                #k_crate::prelude::String::from(#idx_str)
+                            } else {
+                                #format_mac("{}.{}", prefix, #idx_str)
+                            };
+                            if let Some(nodes) = (&&self.#idx).maybe_layer_structure(&child_prefix) {
+                                children.extend(nodes);
+                            }
+                        }
+                    });
+                    shape_info_calls.push(quote! {
+                        {
+                            use #k_crate::nn::module::{AutorefShapeInfo, AutorefShapeInfoFallback};
+                            if let Some(sh) = (&&self.#idx).maybe_shape_info() {
+                                shape_parts.push(#format_mac("{}: {}", #idx_str, sh));
+                            }
+                        }
+                    });
                     to_device_fields.push(quote! {
                         #k_crate::nn::module::ToDevice::to_device(self.#idx, arg)?
                     });
@@ -235,7 +272,11 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                         args.push(quote! { <#ident as #k_crate::prelude::Backend>::BackendWithDevice<__NewD> });
                     } else if t.bounds.iter().any(|b| {
                         if let syn::TypeParamBound::Trait(tb) = b {
-                            tb.path.segments.last().map(|s| s.ident == "Device").unwrap_or(false)
+                            tb.path
+                                .segments
+                                .last()
+                                .map(|s| s.ident == "Device")
+                                .unwrap_or(false)
                         } else {
                             false
                         }
@@ -294,8 +335,8 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
         #input
 
         impl #impl_generics #k_crate::nn::module::Parameters<#b_ident> for #name #ty_generics #where_clause {
-            fn named_parameters(&self, prefix: &str, map: &mut std::collections::HashMap<String, <#b_ident as #k_crate::prelude::Backend>::RawVar>) {
-                let prefix = if prefix.is_empty() { "".to_string() } else { format!("{}.", prefix) };
+            fn named_parameters(&self, prefix: &str, map: &mut #k_crate::prelude::HashMap<#k_crate::prelude::String, <#b_ident as #k_crate::prelude::Backend>::RawVar>) {
+                let prefix = if prefix.is_empty() { #k_crate::prelude::String::new() } else { #k_crate::prelude::format!("{}.", prefix) };
                 #(#param_calls)*
             }
         }
@@ -304,14 +345,38 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
             fn load_state_dict(
                 &mut self,
                 prefix: &str,
-                tensors: &std::collections::HashMap<String, #k_crate::prelude::Tensor<#k_crate::prelude::Dyn, #b_ident>>,
+                tensors: &#k_crate::prelude::HashMap<#k_crate::prelude::String, #k_crate::prelude::Tensor<#k_crate::prelude::Dyn, #b_ident>>,
             ) -> #k_crate::prelude::Result<()> {
                 #(#load_state_calls)*
                 Ok(())
             }
 
-            fn state_dict(&self, prefix: &str, tensors: &mut std::collections::HashMap<String, #k_crate::prelude::Tensor<#k_crate::prelude::Dyn, #b_ident>>) {
+            fn state_dict(&self, prefix: &str, tensors: &mut #k_crate::prelude::HashMap<#k_crate::prelude::String, #k_crate::prelude::Tensor<#k_crate::prelude::Dyn, #b_ident>>) {
                 #(#state_dict_calls)*
+            }
+        }
+
+        impl #orig_impl_generics #k_crate::nn::module::NamedLayers for #name #orig_ty_generics #orig_where_clause {
+            fn layer_structure(&self, prefix: &str) -> #k_crate::prelude::Vec<#k_crate::nn::module::LayerNode> {
+                let node_name = if prefix.is_empty() {
+                    #k_crate::prelude::String::from(stringify!(#name))
+                } else {
+                    #k_crate::prelude::String::from(prefix)
+                };
+
+                let mut children: #k_crate::prelude::Vec<#k_crate::nn::module::LayerNode> = #k_crate::prelude::Vec::new();
+                #(#named_layer_calls)*
+
+                let mut shape_parts: #k_crate::prelude::Vec<#k_crate::prelude::String> = #k_crate::prelude::Vec::new();
+                #(#shape_info_calls)*
+                let shape_info = shape_parts.join(", ");
+
+                #k_crate::prelude::Vec::from([#k_crate::nn::module::LayerNode {
+                    name: node_name,
+                    type_name: #k_crate::prelude::String::from(stringify!(#name)),
+                    shape_info,
+                    children,
+                }])
             }
         }
 

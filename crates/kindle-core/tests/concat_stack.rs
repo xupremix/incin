@@ -1,3 +1,5 @@
+extern crate kindle_core as kindle;
+
 use kindle_core::prelude::*;
 use kindle_core::tensor::backend::dummy::DummyBackend;
 use kindle_core::tensor::device::Cpu;
@@ -5,17 +7,17 @@ use kindle_macros::s;
 
 #[test]
 fn test_concat_static_success() {
-    let t1: Tensor<s![U2, U3], DummyBackend<f32, Cpu>> = Tensor::zeros(()).unwrap();
-    let t2: Tensor<s![U4, U3], DummyBackend<f32, Cpu>> = Tensor::zeros(()).unwrap();
+    let t1: Tensor<s![2, 3], DummyBackend<f32, Cpu>> = Tensor::zeros(()).unwrap();
+    let t2: Tensor<s![4, 3], DummyBackend<f32, Cpu>> = Tensor::zeros(()).unwrap();
 
-    let _out = t1.concat::<s![U4, U3], U0>(&t2).unwrap();
+    let _out = t1.concat::<s![4, 3], typenum::U0>(&t2).unwrap();
     // Static shape is verified by compilation
 }
 
 #[test]
 fn test_try_concat_dynamic() {
-    let t1: Tensor<(usize, U3), DummyBackend<f32, Cpu>> = Tensor::zeros((2,)).unwrap();
-    let t2: Tensor<(usize, U3), DummyBackend<f32, Cpu>> = Tensor::zeros((4,)).unwrap();
+    let t1: Tensor<(usize, typenum::U3), DummyBackend<f32, Cpu>> = Tensor::zeros((2,)).unwrap();
+    let t2: Tensor<(usize, typenum::U3), DummyBackend<f32, Cpu>> = Tensor::zeros((4,)).unwrap();
 
     let out = t1.try_concat(&t2, 0).unwrap();
     assert_eq!(out.shape_field().as_slice(), &[6, 3]);
@@ -23,10 +25,10 @@ fn test_try_concat_dynamic() {
 
 #[test]
 fn test_stack_static_success() {
-    let t1: Tensor<s![U2, U3], DummyBackend<f32, Cpu>> = Tensor::zeros(()).unwrap();
-    let t2: Tensor<s![U2, U3], DummyBackend<f32, Cpu>> = Tensor::zeros(()).unwrap();
+    let t1: Tensor<s![2, 3], DummyBackend<f32, Cpu>> = Tensor::zeros(()).unwrap();
+    let t2: Tensor<s![2, 3], DummyBackend<f32, Cpu>> = Tensor::zeros(()).unwrap();
 
-    let _out = t1.stack::<U1>(&t2).unwrap();
+    let _out = t1.stack::<typenum::U1>(&t2).unwrap();
     // Static shape is verified by compilation
 }
 

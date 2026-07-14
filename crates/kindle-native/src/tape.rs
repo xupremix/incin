@@ -13,8 +13,9 @@
 //! never overwritten (a bare `.insert()`) — this is NATBACK-05's literal
 //! correctness gate.
 
-use std::cell::RefCell;
-use std::collections::HashMap;
+// unused import removed
+use spin::Mutex;
+use hashbrown::HashMap;
 
 use kindle_core::prelude::Result;
 
@@ -23,7 +24,7 @@ use crate::storage::{NativeBuffer, NativeStorage, TensorId};
 /// A boxed backward closure: receives the accumulated gradient for a
 /// `TapeEntry`'s `output_id` and returns one gradient per `input_id`, in
 /// the same order.
-pub type BackwardFn = Box<dyn Fn(&NativeStorage) -> Vec<NativeStorage>>;
+pub type BackwardFn = Box<dyn Fn(&NativeStorage) -> Vec<NativeStorage> + Send + Sync>;
 
 /// One recorded operation: the output it produced, the inputs it consumed,
 /// and a boxed backward closure mapping an accumulated output-gradient to
@@ -51,22 +52,18 @@ impl NativeGrads {
     }
 }
 
-thread_local! {
-    // Independent from `kindle_core::tensor::tracing::TRACING_GRAPH` (D-04) —
-    // do not import or reference it here.
-    static TAPE: RefCell<Vec<TapeEntry>> = const { RefCell::new(Vec::new()) };
-}
+static TAPE: Mutex<Vec<TapeEntry>> = Mutex::new(Vec::new());
 
 /// Push a `TapeEntry` onto the thread-local tape, unconditionally (D-05).
 pub fn push(entry: TapeEntry) {
-    TAPE.with(|t| t.borrow_mut().push(entry));
+    TAPE.lock().push(entry);
 }
 
 /// Number of entries currently on the tape. Exposed for tests proving the
 /// tape drains fully between `backward()` calls (D-06).
 #[cfg(test)]
 fn len() -> usize {
-    TAPE.with(|t| t.borrow().len())
+    TAPE.lock().len()
 }
 
 /// Walk the tape backward, seeding `loss`'s gradient with ones, accumulating
@@ -88,7 +85,7 @@ pub fn backward(loss: &NativeStorage) -> Result<NativeGrads> {
 
     // Drain BEFORE walking (D-06) — mirrors tracing.rs's extract_graph()
     // mem::take idiom, but on an independent thread-local (D-04).
-    let entries = TAPE.with(|t| std::mem::take(&mut *t.borrow_mut()));
+    let entries = core::mem::take(&mut *TAPE.lock());
 
     for entry in entries.into_iter().rev() {
         let Some(grad_out) = grads.get(&entry.output_id).cloned() else {
@@ -103,6 +100,48 @@ pub fn backward(loss: &NativeStorage) -> Result<NativeGrads> {
             //           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
             // NEVER a bare `.insert()` here — that's the literal
             // NATBACK-05 overwrite bug this loop must not reintroduce.
+        }
+    }
+
+    Ok(NativeGrads { grads })
+}
+
+/// Helper to check if a tensor contains NaN or Infinity
+fn check_nan(storage: &NativeStorage, id: TensorId) {
+    let has_nan = match &*storage.buffer {
+        NativeBuffer::F32(v) => v.iter().any(|x| x.is_nan() || x.is_infinite()),
+        NativeBuffer::F64(v) => v.iter().any(|x| x.is_nan() || x.is_infinite()),
+        NativeBuffer::F16(v) => v.iter().any(|x| x.is_nan() || x.is_infinite()),
+        NativeBuffer::BF16(v) => v.iter().any(|x| x.is_nan() || x.is_infinite()),
+        _ => false,
+    };
+    if has_nan {
+        panic!("NaN or Infinity detected in gradient for TensorId {:?}", id);
+    }
+}
+
+/// Same as `backward()`, but aggressively validates every intermediate gradient
+/// for NaN or Infinity values, panicking immediately to pinpoint the exact operation.
+pub fn backward_with_nan_check(loss: &NativeStorage) -> Result<NativeGrads> {
+    let mut grads: HashMap<TensorId, NativeStorage> = HashMap::new();
+    grads.insert(loss.id, NativeStorage::ones_like(loss));
+
+    let entries = core::mem::take(&mut *TAPE.lock());
+
+    for entry in entries.into_iter().rev() {
+        let Some(grad_out) = grads.get(&entry.output_id).cloned() else {
+            continue;
+        };
+        let input_grads = (entry.backward)(&grad_out);
+        for (input_id, g) in entry.input_ids.into_iter().zip(input_grads) {
+            check_nan(&g, input_id);
+            grads
+                .entry(input_id)
+                .and_modify(|acc| {
+                    *acc = add_native_storage(acc, &g);
+                    check_nan(acc, input_id);
+                })
+                .or_insert(g);
         }
     }
 
@@ -240,6 +279,9 @@ fn sum_dim_keepdim(storage: &NativeStorage, axis: usize) -> NativeStorage {
         NativeBuffer::I64(_) => reduce_variant!(I64, |v: f64| v as i64),
         NativeBuffer::F16(_) => reduce_variant!(F16, |v: f64| half::f16::from_f64(v)),
         NativeBuffer::BF16(_) => reduce_variant!(BF16, |v: f64| half::bf16::from_f64(v)),
+        NativeBuffer::Cuda(_) => panic!("sum_dim_keepdim not supported on CUDA buffer"),
+        NativeBuffer::Metal(_) => panic!("sum_dim_keepdim not supported on Metal buffer"),
+        NativeBuffer::Q8_0(_) => panic!("sum_dim_keepdim not supported on Q8_0 buffer"),
     };
 
     NativeStorage::from_contiguous(new_buffer, out_shape)
@@ -458,5 +500,18 @@ mod tests {
         });
         let _ = backward(&out).unwrap();
         assert_eq!(len(), 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "NaN or Infinity detected in gradient")]
+    fn backward_with_nan_check_panics_on_nan() {
+        let x = scalar(1.0);
+        let out = scalar(2.0);
+        push(TapeEntry {
+            output_id: out.id,
+            input_ids: vec![x.id],
+            backward: Box::new(|_grad_out: &NativeStorage| vec![scalar(f32::NAN)]),
+        });
+        let _ = backward_with_nan_check(&out);
     }
 }

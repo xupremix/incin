@@ -24,6 +24,8 @@ kindle-viz-plugin-api = { path = "../kindle-viz-plugin-api" }
 serde_json = "1.0.120"
 anyhow = "1.0.103"
 thiserror.workspace = true
+toml = "1.1.2"
+serde = { version = "1.0.228", features = ["derive"] }
 
 [dev-dependencies]
 uuid = { version = "1.23.4", features = ["v7"] }

@@ -141,6 +141,28 @@ pub const fn metal_is_available() -> bool {
     cfg!(feature = "metal")
 }
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub struct CudaDevice {
+    pub id: usize,
+}
+
+impl CudaDevice {
+    pub fn new(id: usize) -> Self {
+        Self { id }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub struct MetalDevice {
+    pub id: usize,
+}
+
+impl MetalDevice {
+    pub fn new(id: usize) -> Self {
+        Self { id }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

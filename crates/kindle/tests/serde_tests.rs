@@ -1,6 +1,6 @@
 use kindle::nn::StateDict;
 use kindle::prelude::*;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 type CpuBackend = DefaultBackend;
 

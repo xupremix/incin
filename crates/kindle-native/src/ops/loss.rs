@@ -31,83 +31,7 @@ use crate::NativeBackend;
 use crate::storage::{NativeBuffer, NativeStorage};
 
 impl<T: DType, D: kindle_core::prelude::Device> LossOps<Self> for NativeBackend<T, D> {
-    /// Mean (or sum, or elementwise) squared error, composed from
-    /// already-tape-tracked `sub` / `mul` / `mean_all` / `sum_all`
-    /// primitives. The backward chain is correct by composition — no
-    /// separate fused backward formula is needed or used.
-    fn mse_loss<K: DType>(
-        pred: &<Self as Backend>::Storage<K>,
-        target: &<Self as Backend>::Storage<K>,
-        reduction: Reduction,
-    ) -> Result<<Self as Backend>::Storage<K>> {
-        // diff = pred - target  (tape-tracked by NumericOps::sub)
-        let diff = <Self as NumericOps<Self>>::sub::<K>(pred, target)?;
-        // sq = diff * diff  (tape-tracked by NumericOps::mul; captures diff's values)
-        let sq = <Self as NumericOps<Self>>::mul::<K>(&diff, &diff)?;
-        match reduction {
-            Reduction::Mean => <Self as ReductionOps<Self>>::mean_all::<K>(&sq),
-            Reduction::Sum => <Self as ReductionOps<Self>>::sum_all::<K>(&sq),
-            Reduction::None => Ok(sq),
-        }
-    }
 
-    /// L1 loss (mean absolute error), composed from already-tape-tracked
-    /// `sub` / `abs` + `mean_all` / `sum_all` primitives, mirroring `mse_loss`'s
-    /// structure with `abs` substituted for `mul(diff, diff)`. Zero new
-    /// backward code needed — both `sub` and `abs` already push correct
-    /// `TapeEntry` closures (Phase 1/2).
-    fn l1_loss<K: DType>(
-        pred: &<Self as Backend>::Storage<K>,
-        target: &<Self as Backend>::Storage<K>,
-        reduction: Reduction,
-    ) -> Result<<Self as Backend>::Storage<K>> {
-        let diff = <Self as NumericOps<Self>>::sub::<K>(pred, target)?;
-        let abs_diff = <Self as FloatOps<Self>>::abs::<K>(&diff)?;
-        match reduction {
-            Reduction::Mean => <Self as ReductionOps<Self>>::mean_all::<K>(&abs_diff),
-            Reduction::Sum => <Self as ReductionOps<Self>>::sum_all::<K>(&abs_diff),
-            Reduction::None => Ok(abs_diff),
-        }
-    }
-
-    /// Binary cross-entropy with logits, using the numerically-stable formula:
-    /// `loss = max(x, 0) - x * z + log(1 + exp(-|x|))`
-    /// (where `x` = logit prediction, `z` = target in [0,1]).
-    ///
-    /// This is NOT Candle 0.9.1's own `binary_cross_entropy_with_logit`, which
-    /// uses the naive `sigmoid(x)` + `log` form that overflows to `-inf` on
-    /// large positive logits (RESEARCH.md Pitfall 1). `NativeBackend` exceeds
-    /// `CandleBackend`'s coverage here by implementing the stable formula
-    /// directly, composed entirely from already-tape-tracked Phase 2 primitives
-    /// (`relu`/`mul`/`sub`/`abs`/`neg`/`exp`/`add_scalar_float`/`log`/`add`)
-    /// — zero hand-derived backward (Plan 04-02, ROADMAP.md Phase 4 criterion 2).
-    fn bce_with_logits_loss<K: DType>(
-        pred: &<Self as Backend>::Storage<K>,
-        target: &<Self as Backend>::Storage<K>,
-        reduction: Reduction,
-    ) -> Result<<Self as Backend>::Storage<K>> {
-        // term1 = relu(x) - x * z   [= max(x,0) - x*z]
-        let max_x_0 = <Self as FloatOps<Self>>::relu::<K>(pred)?;
-        let x_times_z = <Self as NumericOps<Self>>::mul::<K>(pred, target)?;
-        let term1 = <Self as NumericOps<Self>>::sub::<K>(&max_x_0, &x_times_z)?;
-
-        // term2 = log(1 + exp(-|x|))  — numerically stable: |x| bounded
-        // so exp(-|x|) is in (0, 1], never overflowing.
-        let abs_x = <Self as FloatOps<Self>>::abs::<K>(pred)?;
-        let neg_abs_x = <Self as FloatOps<Self>>::neg::<K>(&abs_x)?;
-        let exp_neg_abs_x = <Self as FloatOps<Self>>::exp::<K>(&neg_abs_x)?;
-        let one_plus = <Self as FloatOps<Self>>::add_scalar_float::<K>(&exp_neg_abs_x, 1.0)?;
-        let term2 = <Self as FloatOps<Self>>::log::<K>(&one_plus)?;
-
-        // elementwise BCE loss = term1 + term2
-        let loss_elem = <Self as NumericOps<Self>>::add::<K>(&term1, &term2)?;
-
-        match reduction {
-            Reduction::Mean => <Self as ReductionOps<Self>>::mean_all::<K>(&loss_elem),
-            Reduction::Sum => <Self as ReductionOps<Self>>::sum_all::<K>(&loss_elem),
-            Reduction::None => Ok(loss_elem),
-        }
-    }
 
     /// Numerically-stable cross-entropy loss via the shared `log_softmax`
     /// kernel (D-02, Plan 04-01).
@@ -187,9 +111,9 @@ impl<T: DType, D: kindle_core::prelude::Device> LossOps<Self> for NativeBackend<
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::gradcheck::gradcheck;
     use crate::storage::{NativeBuffer, NativeStorage};
     use crate::tape;
-    use crate::testutil::gradcheck;
 
     type B = NativeBackend<f32, kindle_core::prelude::Cpu>;
 

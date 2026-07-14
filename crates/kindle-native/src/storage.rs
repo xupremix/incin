@@ -1,15 +1,15 @@
-//! `NativeBuffer`/`NativeStorage`: the `Rc`-backed, `TensorId`-tagged data
+//! `NativeBuffer`/`NativeStorage`: the `Arc`-backed, `TensorId`-tagged data
 //! structure every later op builds on.
 //!
 //! `NativeStorage` flows as an immutable, cheaply-cloned value: the `Rc`
 //! clone is cheap, and view operations (`reshape`/`transpose`/`broadcast_as`)
 //! never allocate a new buffer when the source is already contiguous — they
-//! construct new shape/stride/offset metadata sharing the same `Rc<NativeBuffer>`.
+//! construct new shape/stride/offset metadata sharing the same `Arc<NativeBuffer>`.
 //! This is NOT the `NativeVar` mutation boundary (a separate later plan);
 //! nothing in this file mutates a `NativeBuffer` in place.
 
-use std::rc::Rc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use alloc::sync::Arc;
+use core::sync::atomic::{AtomicU64, Ordering};
 
 use half::{bf16, f16};
 use kindle_core::err::Error;
@@ -46,6 +46,22 @@ impl TensorId {
 /// data-holding shapes since `storage.rs` itself doesn't perform arithmetic,
 /// only shape/stride bookkeeping.
 #[derive(Debug, Clone, PartialEq)]
+pub struct BlockQ8_0 {
+    pub d: half::f16,
+    pub qs: [i8; 32],
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct NativeCudaBuffer {
+    pub len: usize,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct NativeMetalBuffer {
+    pub len: usize,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum NativeBuffer {
     F32(Vec<f32>),
     F64(Vec<f64>),
@@ -54,6 +70,9 @@ pub enum NativeBuffer {
     I64(Vec<i64>),
     F16(Vec<f16>),
     BF16(Vec<bf16>),
+    Q8_0(Vec<BlockQ8_0>),
+    Cuda(NativeCudaBuffer),
+    Metal(NativeMetalBuffer),
 }
 
 impl NativeBuffer {
@@ -68,6 +87,9 @@ impl NativeBuffer {
             NativeBuffer::I64(v) => v.len(),
             NativeBuffer::F16(v) => v.len(),
             NativeBuffer::BF16(v) => v.len(),
+            NativeBuffer::Q8_0(v) => v.len() * 32,
+            NativeBuffer::Cuda(b) => b.len,
+            NativeBuffer::Metal(b) => b.len,
         }
     }
 
@@ -88,18 +110,23 @@ impl NativeBuffer {
             NativeBuffer::I64(v) => v[i] as f64,
             NativeBuffer::F16(v) => v[i].to_f64(),
             NativeBuffer::BF16(v) => v[i].to_f64(),
+            NativeBuffer::Q8_0(_) => {
+                panic!("get_f64 not supported directly on Q8_0 quantized buffer")
+            }
+            NativeBuffer::Cuda(_) => panic!("get_f64 not supported directly on CUDA buffer"),
+            NativeBuffer::Metal(_) => panic!("get_f64 not supported directly on Metal buffer"),
         }
     }
 }
 
-/// A strided, `Rc`-backed view into a `NativeBuffer`.
+/// A strided, `Arc`-backed view into a `NativeBuffer`.
 ///
 /// `NativeStorage` is `Clone`-able cheaply: cloning only clones the `Rc`
 /// pointer (increments the strong count) plus small `Vec<usize>` shape/stride
 /// metadata, never the underlying buffer contents.
 #[derive(Debug, Clone)]
 pub struct NativeStorage {
-    pub buffer: Rc<NativeBuffer>,
+    pub buffer: Arc<NativeBuffer>,
     pub shape: Vec<usize>,
     pub strides: Vec<usize>,
     pub offset: usize,
@@ -112,7 +139,7 @@ impl NativeStorage {
     pub fn from_contiguous(data: NativeBuffer, shape: Vec<usize>) -> Self {
         let strides = stride::contiguous_strides(&shape);
         NativeStorage {
-            buffer: Rc::new(data),
+            buffer: Arc::new(data),
             shape,
             strides,
             offset: 0,
@@ -137,6 +164,9 @@ impl NativeStorage {
             NativeBuffer::I64(_) => NativeBuffer::I64(vec![1i64; total]),
             NativeBuffer::F16(_) => NativeBuffer::F16(vec![half::f16::from_f64(1.0); total]),
             NativeBuffer::BF16(_) => NativeBuffer::BF16(vec![half::bf16::from_f64(1.0); total]),
+            NativeBuffer::Q8_0(_) => panic!("ones_like not supported on Q8_0 buffer"),
+            NativeBuffer::Cuda(_) => panic!("ones_like not supported on CUDA buffer"),
+            NativeBuffer::Metal(_) => panic!("ones_like not supported on Metal buffer"),
         };
 
         NativeStorage::from_contiguous(new_buffer, other.shape.clone())
@@ -157,7 +187,7 @@ impl NativeStorage {
     }
 
     /// Reshape to `new_shape`, per Pattern 1: metadata-only (sharing the
-    /// same `Rc<NativeBuffer>`, no allocation) when `self` is already
+    /// same `Arc<NativeBuffer>`, no allocation) when `self` is already
     /// contiguous; otherwise materializes a contiguous copy first, then
     /// recurses.
     pub fn reshape(&self, new_shape: &[usize]) -> Result<Self> {
@@ -248,7 +278,7 @@ impl NativeStorage {
     }
 
     /// Narrow dimension `dim` to the half-open range `[start, start + len)`.
-    /// Metadata-only: shares the same `Rc<NativeBuffer>`, keeps `strides`
+    /// Metadata-only: shares the same `Arc<NativeBuffer>`, keeps `strides`
     /// completely unchanged (this is the load-bearing O(1) correctness
     /// property — never recompute strides from `contiguous_strides`, since
     /// that would silently produce wrong results on an already-transposed
@@ -322,6 +352,9 @@ impl NativeStorage {
                 }
                 NativeBuffer::BF16(out)
             }
+            NativeBuffer::Q8_0(_) => panic!("materialize not supported on Q8_0 buffer"),
+            NativeBuffer::Cuda(_) => panic!("materialize not supported on CUDA buffer"),
+            NativeBuffer::Metal(_) => panic!("materialize not supported on Metal buffer"),
         };
 
         NativeStorage::from_contiguous(new_buffer, self.shape.clone())
@@ -407,6 +440,9 @@ pub fn scatter_into_zeros(
             }
             NativeBuffer::BF16(out)
         }
+        NativeBuffer::Cuda(_) => panic!("scatter_into_zeros not supported on CUDA buffer"),
+        NativeBuffer::Metal(_) => panic!("scatter_into_zeros not supported on Metal buffer"),
+        NativeBuffer::Q8_0(_) => panic!("scatter_into_zeros not supported on Q8_0 buffer"),
     };
 
     NativeStorage::from_contiguous(new_buffer, original_shape.to_vec())
@@ -433,11 +469,11 @@ mod tests {
     #[test]
     fn reshape_contiguous_shares_buffer_and_gets_new_id() {
         let s = storage_2x3();
-        let strong_count_before = Rc::strong_count(&s.buffer);
+        let strong_count_before = Arc::strong_count(&s.buffer);
         let r = s.reshape(&[3, 2]).unwrap();
         assert_eq!(r.shape, vec![3, 2]);
-        assert!(Rc::ptr_eq(&s.buffer, &r.buffer));
-        assert_eq!(Rc::strong_count(&s.buffer), strong_count_before + 1);
+        assert!(Arc::ptr_eq(&s.buffer, &r.buffer));
+        assert_eq!(Arc::strong_count(&s.buffer), strong_count_before + 1);
         assert_ne!(s.id, r.id);
     }
 
@@ -446,9 +482,9 @@ mod tests {
         let s = storage_2x3();
         let t = s.transpose(0, 1).unwrap(); // [3,2], non-contiguous
         // Reshape a non-contiguous storage: must NOT share the original
-        // buffer's Rc (a materialized copy is required).
+        // buffer's Arc (a materialized copy is required).
         let r = t.reshape(&[6]).unwrap();
-        assert!(!Rc::ptr_eq(&t.buffer, &r.buffer));
+        assert!(!Arc::ptr_eq(&t.buffer, &r.buffer));
         assert_eq!(r.shape, vec![6]);
         // Values should match manual transposed-read order:
         // transposed [3,2] view of original [2,3] = [[1,4],[2,5],[3,6]]
@@ -463,11 +499,11 @@ mod tests {
     #[test]
     fn transpose_shares_buffer_and_swaps_shape_strides() {
         let s = storage_2x3();
-        let strong_count_before = Rc::strong_count(&s.buffer);
+        let strong_count_before = Arc::strong_count(&s.buffer);
         let t = s.transpose(0, 1).unwrap();
         assert_eq!(t.shape, vec![3, 2]);
-        assert!(Rc::ptr_eq(&s.buffer, &t.buffer));
-        assert_eq!(Rc::strong_count(&s.buffer), strong_count_before + 1);
+        assert!(Arc::ptr_eq(&s.buffer, &t.buffer));
+        assert_eq!(Arc::strong_count(&s.buffer), strong_count_before + 1);
         assert!(!stride::is_contiguous(&t.shape, &t.strides));
         assert_ne!(s.id, t.id);
     }
@@ -487,11 +523,11 @@ mod tests {
     #[test]
     fn broadcast_as_expands_and_shares_buffer() {
         let s = NativeStorage::from_contiguous(NativeBuffer::F32(vec![1.0, 2.0, 3.0]), vec![1, 3]);
-        let strong_count_before = Rc::strong_count(&s.buffer);
+        let strong_count_before = Arc::strong_count(&s.buffer);
         let b = s.broadcast_as(&[4, 3]).unwrap();
         assert_eq!(b.shape, vec![4, 3]);
-        assert!(Rc::ptr_eq(&s.buffer, &b.buffer));
-        assert_eq!(Rc::strong_count(&s.buffer), strong_count_before + 1);
+        assert!(Arc::ptr_eq(&s.buffer, &b.buffer));
+        assert_eq!(Arc::strong_count(&s.buffer), strong_count_before + 1);
         // Expanded axis (axis 0, size 1 -> 4) must have stride 0.
         assert_eq!(b.strides[0], 0);
         // Non-expanded axis keeps its original stride.
@@ -512,11 +548,11 @@ mod tests {
             NativeBuffer::F32(vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0]),
             vec![3, 2],
         );
-        let strong_count_before = Rc::strong_count(&s.buffer);
+        let strong_count_before = Arc::strong_count(&s.buffer);
         let n = s.narrow(0, 1, 1).unwrap();
         assert_eq!(n.shape, vec![1, 2]);
-        assert!(Rc::ptr_eq(&s.buffer, &n.buffer));
-        assert_eq!(Rc::strong_count(&s.buffer), strong_count_before + 1);
+        assert!(Arc::ptr_eq(&s.buffer, &n.buffer));
+        assert_eq!(Arc::strong_count(&s.buffer), strong_count_before + 1);
         assert_eq!(n.get(&[0, 0]), 2.0);
         assert_eq!(n.get(&[0, 1]), 5.0);
         assert_ne!(s.id, n.id);
@@ -528,8 +564,8 @@ mod tests {
         let t = s.transpose(0, 1).unwrap(); // [[1,4],[2,5],[3,6]], non-contiguous
         let n = t.narrow(0, 1, 1).unwrap(); // row 1 of the transposed view -> [2,5]
         // Proves no materialization occurred: the narrowed view still shares
-        // the transposed view's own Rc<NativeBuffer>.
-        assert!(Rc::ptr_eq(&t.buffer, &n.buffer));
+        // the transposed view's own Arc<NativeBuffer>.
+        assert!(Arc::ptr_eq(&t.buffer, &n.buffer));
         assert_eq!(n.shape, vec![1, 2]);
         assert_eq!(n.get(&[0, 0]), 2.0);
         assert_eq!(n.get(&[0, 1]), 5.0);
@@ -569,7 +605,7 @@ mod tests {
 
     #[test]
     fn tensor_id_never_repeats_across_many_calls() {
-        let mut ids = std::collections::HashSet::new();
+        let mut ids = hashbrown::HashSet::new();
         for _ in 0..1000 {
             let id = TensorId::next();
             assert!(ids.insert(id), "TensorId::next() produced a duplicate");
@@ -610,7 +646,7 @@ mod tests {
         let values =
             NativeStorage::from_contiguous(NativeBuffer::F32(vec![7.0, 8.0, 9.0]), vec![1, 3]);
         let result = scatter_into_zeros(&[4, 3], &[1, 0], &values);
-        assert!(!Rc::ptr_eq(&values.buffer, &result.buffer));
+        assert!(!Arc::ptr_eq(&values.buffer, &result.buffer));
     }
 
     #[test]

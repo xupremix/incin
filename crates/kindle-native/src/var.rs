@@ -10,8 +10,8 @@
 //! drives this exact `var_as_tensor` (read) -> ... -> `assign_var` (write)
 //! sequence once per parameter per optimizer step.
 
-use std::cell::RefCell;
-use std::rc::Rc;
+use core::cell::RefCell;
+use alloc::rc::Rc;
 
 use kindle_core::prelude::Result;
 

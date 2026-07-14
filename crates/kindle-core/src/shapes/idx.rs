@@ -38,6 +38,8 @@ pub trait DimIdx {
     fn size() -> Option<usize>;
 }
 
+use super::dim::Dim;
+use typenum::consts::*;
 use typenum::{Bit, UInt, UTerm, Unsigned};
 
 impl DimIdx for UTerm {
@@ -86,6 +88,11 @@ impl<Tag: 'static + Send + Sync + Copy + Clone + core::fmt::Debug + Eq + Partial
 }
 
 /// Computes the new shape resulting from a reshape.
+#[diagnostic::on_unimplemented(
+    message = "Cannot reshape dimension into `{Self}`",
+    label = "Invalid dimension for reshape",
+    note = "The element count must remain constant during reshape"
+)]
 pub trait ReshapeTarget<In: Shape> {
     type Output: Shape;
     fn calculate_shape(in_shape_vec: &[usize]) -> Vec<usize>;
@@ -207,6 +214,11 @@ impl SliceIdx for Ellipsis {
     }
 }
 
+#[diagnostic::on_unimplemented(
+    message = "Cannot slice dimension with `{Self}`",
+    label = "Invalid slice target",
+    note = "The slice range must be within the bounds of the original dimension"
+)]
 pub trait SliceTarget<In: Shape> {
     type Output: Shape;
     /// Returns the bounds (start, end) for each dimension in `in_shape_vec`

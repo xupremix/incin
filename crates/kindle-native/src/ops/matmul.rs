@@ -196,18 +196,29 @@ pub(crate) fn matmul_impl(lhs: &NativeStorage, rhs: &NativeStorage) -> Result<Na
     let k = lhs.shape[1];
     let n = rhs.shape[1];
 
-    let mut out = Vec::with_capacity(m * n);
-    for mi in 0..m {
-        for ni in 0..n {
-            let mut acc = 0f64;
-            for ki in 0..k {
-                acc += lhs.get(&[mi, ki]) * rhs.get(&[ki, ni]);
-            }
-            out.push(acc as f32);
+    let mut out_data = vec![0.0f32; m * n];
+
+    // Check if rhs is contiguous in N and both buffers are F32
+    let can_use_avx2 = rhs.strides[1] == 1
+        && matches!(*lhs.buffer, NativeBuffer::F32(_))
+        && matches!(*rhs.buffer, NativeBuffer::F32(_));
+
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    let has_avx2 = is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma");
+    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+    let has_avx2 = false;
+
+    if can_use_avx2 && has_avx2 {
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        {
+            // SAFETY: CPU feature checked, arrays are F32.
+            unsafe { f32_matmul_avx2(m, k, n, lhs, rhs, &mut out_data) }
         }
+    } else {
+        f32_matmul_scalar(m, k, n, lhs, rhs, &mut out_data);
     }
 
-    let out = NativeStorage::from_contiguous(NativeBuffer::F32(out), vec![m, n]);
+    let out = NativeStorage::from_contiguous(NativeBuffer::F32(out_data), vec![m, n]);
 
     let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
     let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
@@ -532,7 +543,7 @@ mod tests {
     // --- Task 2: batched matmul backward (gradcheck) ---
 
     use crate::NativeBackend;
-    use crate::testutil::gradcheck;
+    use crate::gradcheck::gradcheck;
     use kindle_core::prelude::{Cpu, ReductionOps};
 
     type TestBackend = NativeBackend<f32, Cpu>;
@@ -653,5 +664,93 @@ mod tests {
             max_rel_err < 1e-2,
             "gradcheck max relative error too high: {max_rel_err}"
         );
+    }
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[target_feature(enable = "avx2", enable = "fma")]
+#[inline]
+unsafe fn f32_matmul_avx2(
+    m: usize,
+    k: usize,
+    n: usize,
+    lhs: &NativeStorage,
+    rhs: &NativeStorage,
+    out: &mut [f32],
+) {
+    #[cfg(target_arch = "x86")]
+    use core::arch::x86::*;
+    #[cfg(target_arch = "x86_64")]
+    use core::arch::x86_64::*;
+
+    let rhs_stride_k = rhs.strides[0];
+    let rhs_data = match &*rhs.buffer {
+        NativeBuffer::F32(v) => v,
+        _ => return,
+    };
+
+    let n_vec = n - (n % 8);
+
+    for mi in 0..m {
+        for ki in 0..k {
+            let a_val = lhs.get(&[mi, ki]) as f32;
+            let a_vec = _mm256_set1_ps(a_val);
+
+            let rhs_row_start = rhs.offset + ki * rhs_stride_k;
+            let out_row_start = mi * n;
+
+            for ni in (0..n_vec).step_by(8) {
+                unsafe {
+                    let b = _mm256_loadu_ps(rhs_data.as_ptr().add(rhs_row_start + ni));
+                    let mut c = _mm256_loadu_ps(out.as_ptr().add(out_row_start + ni));
+                    c = _mm256_fmadd_ps(a_vec, b, c);
+                    _mm256_storeu_ps(out.as_mut_ptr().add(out_row_start + ni), c);
+                }
+            }
+
+            for ni in n_vec..n {
+                out[out_row_start + ni] += a_val * rhs_data[rhs_row_start + ni];
+            }
+        }
+    }
+}
+
+#[inline]
+fn f32_matmul_scalar(
+    m: usize,
+    k: usize,
+    n: usize,
+    lhs: &NativeStorage,
+    rhs: &NativeStorage,
+    out: &mut [f32],
+) {
+    if rhs.strides[1] == 1 {
+        let rhs_data = match &*rhs.buffer {
+            NativeBuffer::F32(v) => v,
+            _ => return,
+        };
+        let rhs_stride_k = rhs.strides[0];
+
+        for mi in 0..m {
+            for ki in 0..k {
+                let a_val = lhs.get(&[mi, ki]) as f32;
+                let rhs_row_start = rhs.offset + ki * rhs_stride_k;
+                let out_row_start = mi * n;
+
+                for ni in 0..n {
+                    out[out_row_start + ni] += a_val * rhs_data[rhs_row_start + ni];
+                }
+            }
+        }
+    } else {
+        for mi in 0..m {
+            for ni in 0..n {
+                let mut acc = 0f64;
+                for ki in 0..k {
+                    acc += lhs.get(&[mi, ki]) * rhs.get(&[ki, ni]);
+                }
+                out[mi * n + ni] = acc as f32;
+            }
+        }
     }
 }
