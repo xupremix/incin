@@ -3,8 +3,8 @@ use crate::{
     storage::{BlockQ8_0, NativeBuffer, NativeStorage},
 };
 use kindle_core::prelude::*;
-use kindle_core::tensor::backend::{Backend, QuantizedOps};
-use kindle_core::tensor::dtype::{FloatDType, QuantDType};
+use kindle_core::prelude::{Backend, QuantizedOps};
+use kindle_core::prelude::{FloatDType, QuantDType};
 
 extern crate alloc;
 use alloc::vec::Vec;

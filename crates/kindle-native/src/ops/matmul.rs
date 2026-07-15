@@ -13,7 +13,7 @@
 //! across two files, so `ops/shape_ops.rs`'s single `TensorOps` impl block
 //! calls into `matmul_impl` for its `matmul` method.
 
-use kindle_core::err::Error;
+use kindle_core::prelude::Error;
 use kindle_core::prelude::Result;
 
 use crate::storage::{NativeBuffer, NativeStorage};
@@ -211,7 +211,7 @@ pub(crate) fn matmul_impl(lhs: &NativeStorage, rhs: &NativeStorage) -> Result<Na
         let stream = lhs_b.device.default_stream();
         let mut out_b = crate::storage::NativeCudaBuffer {
             len: m * n,
-            data: std::sync::Arc::new(stream.alloc_zeros::<u8>(m * n * 4).unwrap()),
+            data: alloc::sync::Arc::new(stream.alloc_zeros::<u8>(m * n * 4).unwrap()),
             device: lhs_b.device.clone(),
             device_id: device_id,
         };
@@ -228,7 +228,7 @@ pub(crate) fn matmul_impl(lhs: &NativeStorage, rhs: &NativeStorage) -> Result<Na
             let rhs_f32 = rhs_b.data.transmute::<f32>(k * n).unwrap();
             
             let mut out_data_arc = out_b.data.clone();
-            let out_slice_u8: &mut cudarc::driver::CudaSlice<u8> = std::sync::Arc::get_mut(&mut out_data_arc).expect("Failed to get mut to output buffer");
+            let out_slice_u8: &mut cudarc::driver::CudaSlice<u8> = alloc::sync::Arc::get_mut(&mut out_data_arc).expect("Failed to get mut to output buffer");
             let mut out_f32 = out_slice_u8.transmute_mut::<f32>(m * n).unwrap();
 
             use cudarc::driver::PushKernelArg;
@@ -241,7 +241,7 @@ pub(crate) fn matmul_impl(lhs: &NativeStorage, rhs: &NativeStorage) -> Result<Na
                 .arg(&(k as i32))
                 .arg(&(n as i32))
                 .launch(cfg)
-                .map_err(|e| kindle_core::err::Error::Msg(format!("Kernel launch failed: {:?}", e)))?;
+                .map_err(|e| kindle_core::prelude::Error::Msg(format!("Kernel launch failed: {:?}", e)))?;
                 
             out_b.data = out_data_arc;
         }

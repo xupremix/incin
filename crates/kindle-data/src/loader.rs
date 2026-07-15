@@ -79,7 +79,7 @@ where
 
         for i in 0..num_batches {
             let start = i * self.batch_size;
-            let end = std::cmp::min(start + self.batch_size, indices.len());
+            let end = core::cmp::min(start + self.batch_size, indices.len());
             batch_indices.push(indices[start..end].to_vec());
         }
 

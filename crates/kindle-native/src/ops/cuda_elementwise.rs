@@ -1,6 +1,6 @@
 use crate::storage::{NativeBuffer, NativeStorage, NativeCudaBuffer};
 use kindle_core::prelude::Result;
-use std::sync::Arc;
+use alloc::sync::Arc;
 
 pub const ELEMENTWISE_UNARY_TEMPLATE: &str = r#"
 extern "C" __global__ void unary_op_{OP_NAME}(
@@ -129,14 +129,14 @@ pub fn launch_unary_op(op_name: &str, op_expr: &str, t: &NativeStorage) -> Resul
                 .arg(&(numel as i32))
                 .arg(&(ndim as i32))
                 .launch(cfg)
-                .map_err(|e| kindle_core::err::Error::Msg(format!("Kernel launch failed: {:?}", e)))?;
+                .map_err(|e| kindle_core::prelude::Error::Msg(format!("Kernel launch failed: {:?}", e)))?;
                 
             out_b.data = out_data_arc;
         }
         
         Ok(NativeStorage::from_contiguous(NativeBuffer::Cuda(out_b), t.shape.clone()))
     } else {
-        Err(kindle_core::err::Error::Msg("Not a CUDA buffer".into()))
+        Err(kindle_core::prelude::Error::Msg("Not a CUDA buffer".into()))
     }
 }
 
@@ -217,13 +217,13 @@ pub fn launch_binary_op(op_name: &str, op_expr: &str, lhs: &NativeStorage, rhs: 
                 .arg(&(numel as i32))
                 .arg(&(ndim as i32))
                 .launch(cfg)
-                .map_err(|e| kindle_core::err::Error::Msg(format!("Kernel launch failed: {:?}", e)))?;
+                .map_err(|e| kindle_core::prelude::Error::Msg(format!("Kernel launch failed: {:?}", e)))?;
                 
             out_b.data = out_data_arc;
         }
         
         Ok(NativeStorage::from_contiguous(NativeBuffer::Cuda(out_b), out_shape.to_vec()))
     } else {
-        Err(kindle_core::err::Error::Msg("Not a CUDA buffer".into()))
+        Err(kindle_core::prelude::Error::Msg("Not a CUDA buffer".into()))
     }
 }

@@ -16,29 +16,28 @@
 //! a clone shares the same `RefCell`, so `assign_var` through SGD's owned
 //! copy is visible through the clone the test holds.
 
-use hashbrown::HashMap;
+extern crate alloc;
+use alloc::collections::BTreeMap;
 
 use kindle_core::prelude::*;
-use kindle_native::{
-    NativeBackend,
-    storage::{NativeBuffer, NativeStorage},
-    var::{var_as_tensor, var_from_tensor},
-};
+use kindle_native::NativeBackend;
 
 type B = NativeBackend<f32, Cpu>;
 
-/// Build a flat F32 `NativeStorage` from a literal vec, shape `[n]`.
-fn storage1d(v: Vec<f32>) -> NativeStorage {
-    let n = v.len();
-    NativeStorage::from_contiguous(NativeBuffer::F32(v), vec![n])
+/// Build a flat F32 `Storage` from a literal vec, shape `[n]`.
+fn storage1d(v: Vec<f32>) -> <B as Backend>::Storage<f32> {
+    let bytes: Vec<u8> = v.iter().flat_map(|x| x.to_ne_bytes()).collect();
+    B::from_bytes::<f32>(&bytes, &[v.len()], KindleDType::F32, &KindleDevice::cpu()).unwrap()
 }
 
-/// Extract the raw F32 values from a `NativeStorage`.
-fn f32_vec(s: &NativeStorage) -> Vec<f32> {
-    match &*s.buffer {
-        NativeBuffer::F32(v) => v.clone(),
-        _ => panic!("expected F32 buffer"),
+/// Extract the raw F32 values from a `Storage`.
+fn f32_vec(s: &<B as Backend>::Storage<f32>) -> Vec<f32> {
+    let bytes = B::to_bytes::<f32>(s).unwrap();
+    let mut vec = Vec::with_capacity(bytes.len() / 4);
+    for chunk in bytes.chunks_exact(4) {
+        vec.push(f32::from_ne_bytes(chunk.try_into().unwrap()));
     }
+    vec
 }
 
 // ---------------------------------------------------------------------------
@@ -60,24 +59,24 @@ fn sgd_step_updates_native_params_in_correct_direction() {
     // Keep a clone of the NativeVar so we can read back through it after SGD updates it
     // (NativeVar is Rc<RefCell<_>>, so clone shares the same inner storage).
     let w_storage = storage1d(w_init.clone());
-    let w_var = var_from_tensor(&w_storage).unwrap();
+    let w_var = B::var_from_tensor::<f32>(&w_storage).unwrap();
     let w_var_clone = w_var.clone(); // our read-back handle
 
-    let mut params: HashMap<String, <B as Backend>::RawVar> = HashMap::new();
+    let mut params: BTreeMap<String, <B as Backend>::RawVar> = BTreeMap::new();
     params.insert(String::from("w"), w_var);
     let mut sgd = SGD::<B, f32>::new(params, lr);
 
     // --- Step 1 ---
     // Forward: w_t through a tape-tracked loss = mean(w * w) * 0.5
-    let w_t = var_as_tensor(&w_var_clone).unwrap();
+    let w_t = B::var_as_tensor::<f32>(&w_var_clone).unwrap();
     let sq = B::mul::<f32>(&w_t, &w_t).unwrap();
     let half_sq = B::mul_scalar_float::<f32>(&sq, 0.5).unwrap();
     let loss = B::mean_all::<f32>(&half_sq).unwrap();
     let grads = B::backward::<f32>(&loss).unwrap();
 
     // grad_w = w / n (d(mean(w^2)*0.5)/dw_i = w_i/n)
-    let grad_w = grads.grads.get(&w_t.id).expect("w should have gradient");
-    for (i, (&gv, &wv)) in f32_vec(grad_w).iter().zip(w_init.iter()).enumerate() {
+    let grad_w = B::get_grad::<f32>(&w_t, &grads).unwrap().expect("w should have gradient");
+    for (i, (&gv, &wv)) in f32_vec(&grad_w).iter().zip(w_init.iter()).enumerate() {
         let expected_grad = wv / n as f32;
         assert!(
             (gv - expected_grad).abs() < 1e-4,
@@ -88,7 +87,7 @@ fn sgd_step_updates_native_params_in_correct_direction() {
     sgd.step(&Gradients(grads)).unwrap();
 
     // Read back through our clone: assign_var updated the shared RefCell.
-    let w_after_1 = f32_vec(&var_as_tensor(&w_var_clone).unwrap());
+    let w_after_1 = f32_vec(&B::var_as_tensor::<f32>(&w_var_clone).unwrap());
     let expected_1: Vec<f32> = w_init
         .iter()
         .map(|&x| x - lr as f32 * (x / n as f32))
@@ -101,14 +100,14 @@ fn sgd_step_updates_native_params_in_correct_direction() {
     }
 
     // --- Step 2 ---
-    let w_t2 = var_as_tensor(&w_var_clone).unwrap();
+    let w_t2 = B::var_as_tensor::<f32>(&w_var_clone).unwrap();
     let sq2 = B::mul::<f32>(&w_t2, &w_t2).unwrap();
     let half_sq2 = B::mul_scalar_float::<f32>(&sq2, 0.5).unwrap();
     let loss2 = B::mean_all::<f32>(&half_sq2).unwrap();
     let grads2 = B::backward::<f32>(&loss2).unwrap();
     sgd.step(&Gradients(grads2)).unwrap();
 
-    let w_after_2 = f32_vec(&var_as_tensor(&w_var_clone).unwrap());
+    let w_after_2 = f32_vec(&B::var_as_tensor::<f32>(&w_var_clone).unwrap());
     let expected_2: Vec<f32> = expected_1
         .iter()
         .map(|&x| x - lr as f32 * (x / n as f32))
@@ -140,16 +139,16 @@ fn sgd_mutation_is_restricted_to_assign_var_boundary() {
     let w_init = 4.0f32;
 
     let w_storage = storage1d(vec![w_init]);
-    let w_var = var_from_tensor(&w_storage).unwrap();
+    let w_var = B::var_from_tensor::<f32>(&w_storage).unwrap();
     let w_var_clone = w_var.clone();
 
-    let mut params: HashMap<String, <B as Backend>::RawVar> = HashMap::new();
+    let mut params: BTreeMap<String, <B as Backend>::RawVar> = BTreeMap::new();
     params.insert(String::from("w"), w_var);
     let mut sgd = SGD::<B, f32>::new(params, lr);
 
     let n_steps = 5usize;
     for _ in 0..n_steps {
-        let w_t = var_as_tensor(&w_var_clone).unwrap();
+        let w_t = B::var_as_tensor::<f32>(&w_var_clone).unwrap();
         let sq = B::mul::<f32>(&w_t, &w_t).unwrap();
         let half_sq = B::mul_scalar_float::<f32>(&sq, 0.5).unwrap();
         let loss = B::mean_all::<f32>(&half_sq).unwrap();
@@ -157,7 +156,7 @@ fn sgd_mutation_is_restricted_to_assign_var_boundary() {
         sgd.step(&Gradients(grads)).unwrap();
     }
 
-    let w_final = f32_vec(&var_as_tensor(&w_var_clone).unwrap());
+    let w_final = f32_vec(&B::var_as_tensor::<f32>(&w_var_clone).unwrap());
     // Expected: 4.0 * (1 - 0.5)^5 = 4.0 / 32 = 0.125
     let expected = w_init * (1.0 - lr as f32).powi(n_steps as i32);
     assert!(

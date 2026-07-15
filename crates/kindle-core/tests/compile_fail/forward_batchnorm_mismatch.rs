@@ -1,5 +1,5 @@
 use kindle_core::prelude::*;
-use kindle_core::tensor::backend::dummy::DummyBackend;
+use kindle_core::prelude::dummy::DummyBackend;
 use kindle_core::nn::{BatchNorm2d, Module};
 use typenum::{typenum::U16, typenum::U32};
 

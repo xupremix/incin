@@ -78,9 +78,11 @@
 //!     // let model = ResNet18 { ... };
 //! }
 //! ```
+#[macro_use]
+extern crate alloc;
 
 pub use kindle_backends::*;
-pub use kindle_core::*;
+pub use kindle_core::prelude::*;
 
 pub use kindle_macros::{import_model, module};
 
@@ -121,18 +123,18 @@ pub type Tensor<
 > = kindle_core::prelude::Tensor<S, B, K, D, G>;
 
 // Neural Network Layer Aliases
-pub type Linear<S, B = DefaultBackend> = kindle_core::nn::Linear<S, B>;
-pub type Conv1d<S, B = DefaultBackend> = kindle_core::nn::Conv1d<S, B>;
-pub type Conv2d<S, B = DefaultBackend> = kindle_core::nn::Conv2d<S, B>;
-pub type BatchNorm2d<C, B = DefaultBackend> = kindle_core::nn::BatchNorm2d<C, B>;
-pub type LayerNorm<C, B = DefaultBackend> = kindle_core::nn::LayerNorm<C, B>;
-pub type AvgPool2d<K, S, P = typenum::U0, D = typenum::U1> = kindle_core::nn::AvgPool2d<K, S, P, D>;
-pub type MaxPool2d<K, S, P = typenum::U0, D = typenum::U1> = kindle_core::nn::MaxPool2d<K, S, P, D>;
-pub type Sequential<L1, L2> = kindle_core::nn::Sequential<L1, L2>;
-pub type Param<T, B = DefaultBackend> = kindle_core::nn::Param<T, B>;
-pub type RNNCell<S, B = DefaultBackend> = kindle_core::nn::rnn::RNNCell<S, B>;
-pub type RNN<S, B = DefaultBackend> = kindle_core::nn::rnn::RNN<S, B>;
-pub type Embedding<S, B = DefaultBackend> = kindle_core::nn::Embedding<S, B>;
+pub type Linear<S, B = DefaultBackend> = kindle_core::prelude::Linear<S, B>;
+pub type Conv1d<S, B = DefaultBackend> = kindle_core::prelude::Conv1d<S, B>;
+pub type Conv2d<S, B = DefaultBackend> = kindle_core::prelude::Conv2d<S, B>;
+pub type BatchNorm2d<C, B = DefaultBackend> = kindle_core::prelude::BatchNorm2d<C, B>;
+pub type LayerNorm<C, B = DefaultBackend> = kindle_core::prelude::LayerNorm<C, B>;
+pub type AvgPool2d<K, S, P = typenum::U0, D = typenum::U1> = kindle_core::prelude::AvgPool2d<K, S, P, D>;
+pub type MaxPool2d<K, S, P = typenum::U0, D = typenum::U1> = kindle_core::prelude::MaxPool2d<K, S, P, D>;
+pub type Sequential<L1, L2> = kindle_core::prelude::Sequential<L1, L2>;
+pub type Param<T, B = DefaultBackend> = kindle_core::prelude::Param<T, B>;
+pub type RNNCell<S, B = DefaultBackend> = kindle_core::prelude::RNNCell<S, B>;
+pub type RNN<S, B = DefaultBackend> = kindle_core::prelude::RNN<S, B>;
+pub type Embedding<S, B = DefaultBackend> = kindle_core::prelude::Embedding<S, B>;
 
 pub mod macros {
     pub use kindle_macros::{idx, impl_arg_into, s};

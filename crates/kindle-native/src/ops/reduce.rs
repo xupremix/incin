@@ -43,7 +43,7 @@
 //!   keep returning the typed unsupported-backend-operation error — never a
 //!   silent `Ok(t.clone())` placeholder (T-01-15 mitigation).
 
-use kindle_core::err::Error;
+use kindle_core::prelude::Error;
 use kindle_core::prelude::{Backend, DType, ReductionOps, Result};
 
 use crate::NativeBackend;

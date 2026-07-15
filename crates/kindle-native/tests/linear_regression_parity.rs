@@ -8,7 +8,7 @@
 //! sequence, identical literal data.
 
 use kindle_backends::candle::CandleBackend;
-use kindle_core::nn::Reduction;
+use kindle_core::prelude::Reduction;
 use kindle_core::prelude::*;
 use kindle_native::NativeBackend;
 
@@ -58,7 +58,7 @@ fn scalar<B: Backend>(t: &B::Storage<f32>) -> f64 {
 
 /// Hand-rolled linear regression: y_hat = x @ w.T + b (matmul + add).
 /// Returns the per-epoch loss values (f64 scalars for easy comparison).
-fn train<B: Backend + kindle_core::tensor::backend::LossOps<B>>(n_epochs: usize, lr: f64) -> Vec<f64> {
+fn train<B: Backend + kindle_core::prelude::LossOps<B>>(n_epochs: usize, lr: f64) -> Vec<f64> {
     let x = make_storage::<B>(&X_DATA, &[4, 2]);
     let target = make_storage::<B>(&TARGET_DATA, &[4, 1]);
 
@@ -84,7 +84,7 @@ fn train<B: Backend + kindle_core::tensor::backend::LossOps<B>>(n_epochs: usize,
         // Backward
         let grads = B::backward::<f32>(&loss).unwrap();
 
-        // Manual SGD update (avoids needing to fight with the params HashMap's
+        // Manual SGD update (avoids needing to fight with the params BTreeMap's
         // private-field constraint again — equivalent to SGD::step with a single
         // iteration over (w, b)).
         let w_now = B::var_as_tensor::<f32>(&w_var).unwrap();
@@ -142,32 +142,28 @@ fn gradient_accumulation_sums_on_reuse_end_to_end() {
     // Build a graph where x is used TWICE: loss = mean(x + x) = mean(2x).
     // d(mean(2x))/d(x_i) = 2/n.
     // Proves accumulation is summed, not overwritten, through the public API.
-    use kindle_native::storage::{NativeBuffer, NativeStorage};
+
 
     let n = 4usize;
     let vals = vec![1.0f32, 2.0, 3.0, 4.0];
-    let x_stor = NativeStorage::from_contiguous(NativeBuffer::F32(vals), vec![n]);
-    let x_id = x_stor.id;
+    let x_stor = make_storage::<NB>(&vals, &[n]);
 
     // Use x twice in the same graph.
     let y = NB::add::<f32>(&x_stor, &x_stor).unwrap(); // y = 2x, tape records two reads of x
     let loss = NB::mean_all::<f32>(&y).unwrap(); // scalar
 
     let grads = NB::backward::<f32>(&loss).unwrap();
-    let g = grads.grads.get(&x_id).expect("x should have a gradient");
+    let g = NB::get_grad::<f32>(&x_stor, &grads).unwrap().expect("x should have a gradient");
 
     // Each element's expected gradient: d(mean(x+x))/d(x_i) = 2/n
     let expected = 2.0f32 / n as f32;
-    match &*g.buffer {
-        NativeBuffer::F32(v) => {
-            for (i, &gv) in v.iter().enumerate() {
-                assert!(
-                    (gv - expected).abs() < 1e-5,
-                    "grad[{i}]: expected {expected:.6}, got {gv:.6} \
-                     (must be 2/n from accumulation, not 1/n from overwrite)"
-                );
-            }
-        }
-        _ => panic!("expected F32 gradient buffer"),
+    let g_bytes = NB::to_bytes::<f32>(&g).unwrap();
+    for (i, chunk) in g_bytes.chunks_exact(4).enumerate() {
+        let gv = f32::from_ne_bytes(chunk.try_into().unwrap());
+        assert!(
+            (gv - expected).abs() < 1e-5,
+            "grad[{i}]: expected {expected:.6}, got {gv:.6} \
+             (must be 2/n from accumulation, not 1/n from overwrite)"
+        );
     }
 }

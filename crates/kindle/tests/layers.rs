@@ -1,4 +1,4 @@
-use kindle::nn::{Conv2d, Linear};
+use kindle::{Conv2d, Linear};
 use kindle::prelude::*;
 use kindle_backends::candle::CandleBackend;
 

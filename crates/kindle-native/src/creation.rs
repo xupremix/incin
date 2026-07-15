@@ -6,10 +6,12 @@
 //! `randn` uses `rand_distr::StandardNormal` (standard-normal samples) — per
 //! the "Don't Hand-Roll" guidance, never a hand-written Box-Muller.
 
-use kindle_core::err::Error;
+use kindle_core::prelude::Error;
 use kindle_core::prelude::{CreationOps, DType, KindleDType, KindleDevice, Result};
 use rand::Rng;
-use rand_distr::StandardNormal;
+use rand::SeedableRng;
+use rand_distr::{Distribution, StandardNormal};
+use rayon::prelude::*;
 
 use crate::NativeBackend;
 use crate::storage::{NativeBuffer, NativeStorage};
@@ -30,6 +32,7 @@ fn fill_buffer(total: usize, value: f64, dtype: KindleDType, device: &KindleDevi
                 backend: "Native Q8_0",
             });
         }
+        _ => return Err(Error::UnsupportedBackendOperation { op: "fill", backend: "Native unknown dtype" }),
     };
 
     match device.variant() {
@@ -42,13 +45,12 @@ fn fill_buffer(total: usize, value: f64, dtype: KindleDType, device: &KindleDevi
             let dev_slice = stream.clone_htod(bytes).map_err(|e| Error::Msg(format!("CUDA alloc/copy failed: {:?}", e)))?;
             Ok(NativeBuffer::Cuda(crate::storage::NativeCudaBuffer {
                 len: total,
-                data: std::sync::Arc::new(dev_slice),
+                data: alloc::sync::Arc::new(dev_slice),
                 device: ctx.clone(),
                 device_id: id,
             }))
         }
-
-
+        _ => Err(Error::UnsupportedBackendOperation { op: "fill", backend: "Native unknown device" }),
     }
 }
 
@@ -102,13 +104,12 @@ impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for NativeBack
                 let dev_slice = stream.clone_htod(bytes).map_err(|e| Error::Msg(format!("CUDA alloc/copy failed: {:?}", e)))?;
                 NativeBuffer::Cuda(crate::storage::NativeCudaBuffer {
                     len: total,
-                    data: std::sync::Arc::new(dev_slice),
+                    data: alloc::sync::Arc::new(dev_slice),
                     device: ctx.clone(),
                     device_id: id,
                 })
             }
-
-
+            _ => panic!("Unsupported device"),
         };
 
         Ok(NativeStorage::from_contiguous(
@@ -146,13 +147,12 @@ impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for NativeBack
                 let dev_slice = stream.clone_htod(bytes).map_err(|e| Error::Msg(format!("CUDA alloc/copy failed: {:?}", e)))?;
                 NativeBuffer::Cuda(crate::storage::NativeCudaBuffer {
                     len: total,
-                    data: std::sync::Arc::new(dev_slice),
+                    data: alloc::sync::Arc::new(dev_slice),
                     device: ctx.clone(),
                     device_id: id,
                 })
             }
-
-
+            _ => panic!("Unsupported device"),
         };
 
         Ok(NativeStorage::from_contiguous(
@@ -213,9 +213,9 @@ impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for NativeBack
                 let dev_slice = stream.clone_htod(bytes).map_err(|e| Error::Msg(format!("CUDA alloc/copy failed: {:?}", e)))?;
                 
                 let mut cloned = t.clone();
-                cloned.buffer = std::sync::Arc::new(NativeBuffer::Cuda(crate::storage::NativeCudaBuffer {
+                cloned.buffer = alloc::sync::Arc::new(NativeBuffer::Cuda(crate::storage::NativeCudaBuffer {
                     len: t.buffer.len(),
-                    data: std::sync::Arc::new(dev_slice),
+                    data: alloc::sync::Arc::new(dev_slice),
                     device: ctx.clone(),
                     device_id: id,
                 }));
@@ -233,7 +233,7 @@ impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for NativeBack
                         if core::any::TypeId::of::<K>() == core::any::TypeId::of::<f32>() {
                             let floats: Vec<f32> = bytemuck::cast_slice(&bytes).to_vec();
                             let mut cloned = t.clone();
-                            cloned.buffer = std::sync::Arc::new(NativeBuffer::F32(floats));
+                            cloned.buffer = alloc::sync::Arc::new(NativeBuffer::F32(floats));
                             return Ok(cloned);
                         } else {
                             return Err(Error::UnsupportedBackendOperation { op: "dtoh only supports F32 for now", backend: "Native" });

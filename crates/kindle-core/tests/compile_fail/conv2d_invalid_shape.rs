@@ -4,7 +4,7 @@ use kindle_core::prelude::*;
 use kindle_macros::s;
 use kindle_core::prelude::dummy::DummyBackend;
 
-type Backend = DummyBackend<f32, kindle_core::tensor::device::Cpu>;
+type Backend = DummyBackend<f32, kindle_core::prelude::Cpu>;
 
 fn main() {
     let t = Tensor::<s![1, 3, 2, 2], Backend>::zeros(()).unwrap();

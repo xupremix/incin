@@ -1,3 +1,5 @@
+#[macro_use]
+extern crate alloc;
 pub mod dataset;
 pub mod downloader;
 pub mod hub;

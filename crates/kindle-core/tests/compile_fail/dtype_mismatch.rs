@@ -1,5 +1,5 @@
 use kindle_core::prelude::*;
-use kindle_core::tensor::backend::dummy::DummyBackend;
+use kindle_core::prelude::dummy::DummyBackend;
 
 fn main() {
     let t1: Tensor<Dyn, DummyBackend<f32, Cpu>, f32> = Tensor::zeros(alloc::vec![2]).unwrap();

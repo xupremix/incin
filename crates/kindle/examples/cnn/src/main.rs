@@ -1,3 +1,5 @@
+#[macro_use]
+extern crate alloc;
 use kindle::prelude::*;
 use typenum::{U0, U1, U3};
 

@@ -1,5 +1,5 @@
 use kindle::prelude::*;
-use kindle::shapes::{ConstShape, DynShape, Shape};
+use kindle::{ConstShape, DynShape, Shape};
 
 type CpuBackend = DefaultBackend;
 

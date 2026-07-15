@@ -1,5 +1,5 @@
 use kindle_core::prelude::*;
-use kindle_core::tensor::backend::dummy::DummyBackend;
+use kindle_core::prelude::dummy::DummyBackend;
 use typenum::{typenum::U1, typenum::U2, typenum::U3};
 
 fn main() {

@@ -22,7 +22,7 @@ pub struct ScalarEvent {
 }
 
 /// Per-parameter gradient L2-norm sample, salvaging `StepData.gradients:
-/// HashMap<String, f32>`'s per-param-name-to-norm shape and the retired
+/// BTreeMap<String, f32>`'s per-param-name-to-norm shape and the retired
 /// `log_step_with_grads`'s L2-norm algorithm (`sum_sq: f64 =
 /// vec.iter().map(|&x| x*x).sum(); magnitude = sum_sq.sqrt() as f32`) as the
 /// reference computation.
@@ -52,12 +52,12 @@ pub struct MemoryEvent {
 }
 
 /// Epoch-level aggregate metrics, salvaging `EpochData`'s exact
-/// `epoch`/`metrics: HashMap<String, f32>` shape.
+/// `epoch`/`metrics: BTreeMap<String, f32>` shape.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct EpochEvent {
     pub schema_version: u32,
     pub epoch: usize,
-    pub metrics: std::collections::HashMap<String, f32>,
+    pub metrics: alloc::collections::BTreeMap<String, f32>,
 }
 
 /// Static hyperparameter/config snapshot, emitted once per run. Values are
@@ -66,7 +66,7 @@ pub struct EpochEvent {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct HyperparamEvent {
     pub schema_version: u32,
-    pub params: std::collections::HashMap<String, String>,
+    pub params: alloc::collections::BTreeMap<String, String>,
 }
 
 /// A snapshot of the traced computation graph, wrapping the now-serializable
@@ -74,7 +74,7 @@ pub struct HyperparamEvent {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct GraphSnapshotEvent {
     pub schema_version: u32,
-    pub graph: kindle_core::graph::Graph,
+    pub graph: kindle_core::prelude::Graph,
 }
 
 /// Forward-compatible envelope wrapping every wire event variant.

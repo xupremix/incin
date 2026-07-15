@@ -1,4 +1,4 @@
-use kindle::optim::{Adam, AdamW, SGD};
+use kindle::{Adam, AdamW, SGD};
 use kindle::prelude::*;
 // CosineAnnealingLR might not exist, but let's see. I'll just comment it out if it doesn't.
 
@@ -6,7 +6,7 @@ type CpuBackend = DefaultBackend;
 
 fn get_linear_and_grads() -> Result<(
     Linear<s![10, 5], CpuBackend>,
-    kindle::optim::Gradients<<CpuBackend as Backend>::Grads>,
+    kindle::Gradients<<CpuBackend as Backend>::Grads>,
 )> {
     let linear = Linear::<s![10, 5], CpuBackend>::new()?;
     let input = Tensor::<s![2, 10], CpuBackend>::ones(())?;

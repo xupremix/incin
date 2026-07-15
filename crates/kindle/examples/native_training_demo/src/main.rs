@@ -8,9 +8,11 @@
 //! This is the one artifact in Phase 5 that exercises the full typed
 //! `Tensor<S,B,K,D,G>` / `Module` / `Optimizer` API end-to-end, not raw
 //! `Backend::Storage` calls.
+#[macro_use]
+extern crate alloc;
 
-use kindle::nn::{CrossEntropyLoss, Mean, StateDict};
-use kindle::optim::SGD;
+use kindle::prelude::{StateDict, Reduction, CrossEntropyLoss, Mean};
+use kindle::SGD;
 use kindle::prelude::*;
 use kindle_backends::candle::CandleBackend;
 use kindle_native::NativeBackend;
@@ -35,7 +37,7 @@ pub struct SimpleCnn<B: Backend> {
     // applies its own learned affine shift, so a conv bias is redundant
     // here regardless -- disabling it sidesteps the bug with no loss of
     // model expressiveness.
-    pub conv1: kindle::nn::Conv2d<
+    pub conv1: kindle_core::prelude::Conv2d<
         (
             usize,
             usize,
@@ -45,17 +47,17 @@ pub struct SimpleCnn<B: Backend> {
             typenum::U1,
         ),
         B,
-        kindle::nn::optional::False,
+        kindle_core::prelude::False,
     >,
-    pub bn1: kindle::nn::BatchNorm2d<(usize,), B>,
+    pub bn1: kindle::BatchNorm2d<(usize,), B>,
     // MaxPool2d is a zero-sized, stateless module (no parameters, no
     // device-bound buffers) and does not implement `ToDevice` -- it is
     // excluded from the `#[module]`-derived Parameters/StateDict/ToDevice
     // impls, which is semantically correct since it has nothing to collect
     // or move across devices.
     #[module(ignore)]
-    pub pool: kindle::nn::MaxPool2d<typenum::U2, typenum::U2>,
-    pub fc: kindle::nn::Linear<Dyn, B>,
+    pub pool: kindle::MaxPool2d<typenum::U2, typenum::U2>,
+    pub fc: kindle::Linear<Dyn, B>,
 }
 
 impl<B: Backend + kindle::ModuleOps<B>> SimpleCnn<B>
@@ -70,7 +72,7 @@ where
         flattened_dim: usize,
     ) -> Result<Self> {
         Ok(Self {
-            conv1: kindle::nn::Conv2d::<
+            conv1: kindle_core::prelude::Conv2d::<
                 (
                     usize,
                     usize,
@@ -80,11 +82,11 @@ where
                     typenum::U1,
                 ),
                 B,
-                kindle::nn::optional::False,
+                kindle_core::prelude::False,
             >::new_with((conv_out_channels, in_channels))?,
-            bn1: kindle::nn::BatchNorm2d::<(usize,), B>::new_with((conv_out_channels,), 1e-5, 0.1)?,
-            pool: kindle::nn::MaxPool2d::<typenum::U2, typenum::U2>::new()?,
-            fc: kindle::nn::Linear::<Dyn, B>::new_with((flattened_dim, num_classes))?,
+            bn1: kindle::BatchNorm2d::<(usize,), B>::new_with((conv_out_channels,), 1e-5, 0.1)?,
+            pool: kindle::MaxPool2d::<typenum::U2, typenum::U2>::new()?,
+            fc: kindle::Linear::<Dyn, B>::new_with((flattened_dim, num_classes))?,
         })
     }
 }
@@ -219,7 +221,7 @@ fn train<B: MakeLabels + kindle::LossOps<B> + kindle::ModuleOps<B>>(
     lr: f64,
     reporter: Option<&kindle_telemetry::emitter::Emitter>,
     grad_sample_every_n: Option<usize>,
-    init_state: Option<&HashMap<String, Tensor<Dyn, B>>>,
+    init_state: Option<&BTreeMap<String, Tensor<Dyn, B>>>,
 ) -> (Vec<f64>, std::time::Duration, SimpleCnn<B>)
 where
     B::FloatElem: ConstDType,
@@ -354,7 +356,7 @@ fn run_bench_telemetry(
     // snapshot as `init_state` into all three runs below so they all start
     // from bit-identical weights.
     let init_model = SimpleCnn::<NB>::new(1, 4, 2, 64).expect("init snapshot model");
-    let mut init_state = HashMap::new();
+    let mut init_state = BTreeMap::new();
     init_model.state_dict("", &mut init_state);
 
     // Run 1: baseline, telemetry off entirely.
@@ -465,7 +467,7 @@ fn run_live(images_bytes: &[u8], labels: &[u32], n_samples: usize, lr: f64) -> a
     println!("kindle-viz --run-id {run_id}");
 
     const LIVE_EPOCHS: usize = 200;
-    let mut state: Option<HashMap<String, Tensor<Dyn, NB>>> = None;
+    let mut state: Option<BTreeMap<String, Tensor<Dyn, NB>>> = None;
 
     for _ in 0..LIVE_EPOCHS {
         let (_losses, _elapsed, model) = train::<NB>(
@@ -479,7 +481,7 @@ fn run_live(images_bytes: &[u8], labels: &[u32], n_samples: usize, lr: f64) -> a
             state.as_ref(),
         );
 
-        let mut next_state = HashMap::new();
+        let mut next_state = BTreeMap::new();
         model.state_dict("", &mut next_state);
         state = Some(next_state);
 

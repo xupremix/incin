@@ -33,7 +33,7 @@ fn get_ints_attr(node: &onnx_pb::NodeProto, name: &str) -> Option<Vec<i64>> {
 
 fn parse_graph_nodes(
     nodes: &[onnx_pb::NodeProto],
-    shape_map: &std::collections::HashMap<String, Vec<OnnxDim>>,
+    shape_map: &alloc::collections::BTreeMap<String, Vec<OnnxDim>>,
 ) -> Vec<String> {
     let mut stmts = Vec::new();
     for node in nodes {
@@ -351,7 +351,7 @@ pub(crate) fn parse_onnx(
             param_shapes.push(shape);
         }
 
-        let mut shape_map = std::collections::HashMap::new();
+        let mut shape_map = alloc::collections::BTreeMap::new();
 
         let extract_shape = |v: &onnx_pb::ValueInfoProto| -> Vec<OnnxDim> {
             let mut dims = Vec::new();
@@ -466,10 +466,10 @@ pub(crate) fn parse_onnx(
             let path = quote! { kindle::prelude:: };
             crate::shape::lit_to_typenum(d, &path)
         });
-        fields.push(quote! { pub #ident: kindle::nn::Param<(#(#p_dims,)*), B> });
+        fields.push(quote! { pub #ident: kindle::prelude::Param<(#(#p_dims,)*), B> });
 
         inits.push(quote! {
-            #ident: kindle::nn::Param::zeros(()).unwrap()
+            #ident: kindle::prelude::Param::zeros(()).unwrap()
         });
     }
 

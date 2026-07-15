@@ -102,6 +102,7 @@ impl Device for Dyn {
 }
 impl DynDevice for Dyn {}
 
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum DeviceVariant {
     Cpu,

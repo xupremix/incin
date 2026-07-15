@@ -13,7 +13,7 @@
 //! accumulate-not-overwrite requirement, done inside ONE backward closure
 //! rather than via multiple `TapeEntry` pushes.
 
-use kindle_core::err::Error;
+use kindle_core::prelude::Error;
 use kindle_core::prelude::{DType, Result};
 
 use crate::storage::{NativeBuffer, NativeStorage};

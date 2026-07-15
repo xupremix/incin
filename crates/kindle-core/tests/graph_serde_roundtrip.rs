@@ -1,6 +1,6 @@
 extern crate kindle_core as kindle;
 
-use kindle_core::graph::{Graph, OpType};
+use kindle_core::prelude::{Graph, OpType};
 use kindle_core::prelude::*;
 
 #[test]

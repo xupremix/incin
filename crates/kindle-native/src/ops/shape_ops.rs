@@ -11,7 +11,7 @@
 //! duplicate that logic, only add tape tracking (D-05: every op is a graph
 //! node, unconditionally recorded).
 
-use kindle_core::err::Error;
+use kindle_core::prelude::Error;
 use kindle_core::prelude::{Backend, DType, KindleDType, Result, TensorOps};
 
 use crate::NativeBackend;
@@ -507,6 +507,10 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for NativeBacken
             }
             KindleDType::Q8_0 => return Err(Error::UnsupportedBackendOperation {
                 op: "tensor_to_dtype(Q8_0)",
+                backend: "Native",
+            }),
+            _ => return Err(Error::UnsupportedBackendOperation {
+                op: "tensor_to_dtype(unknown)",
                 backend: "Native",
             }),
         };

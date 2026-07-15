@@ -12,20 +12,20 @@
 //! subset. `NativeBackend` is not yet a fully `Backend`-complete implementor
 //! after this plan — `TensorOps`/`ReductionOps`/`ModuleOps`/`LossOps` land in
 //! later plans.
-
 #[macro_use]
 extern crate alloc;
 
+
 pub use kindle_core::prelude::*;
 
-pub mod creation;
+pub(crate) mod creation;
 pub mod gpu;
-pub mod gradcheck;
-pub mod ops;
+pub(crate) mod gradcheck;
+pub(crate) mod ops;
 pub mod storage;
-pub mod stride;
-pub mod tape;
-pub mod var;
+pub(crate) mod stride;
+pub(crate) mod tape;
+pub(crate) mod var;
 
 /// The native, pure-Rust `Backend` implementor. `T` genuinely drives
 /// `Backend::FloatElem` (NATBACK-01, D-03) — unlike `CandleBackend`/

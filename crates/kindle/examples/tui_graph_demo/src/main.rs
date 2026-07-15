@@ -1,6 +1,8 @@
+#[macro_use]
+extern crate alloc;
 use kindle::prelude::*;
-use kindle::nn::{Linear, Module};
-use kindle_core::tensor::tracing::{TRACING_GRAPH, TracingBackend, extract_graph};
+use kindle::{Linear, Module};
+use kindle_core::prelude::{TRACING_GRAPH, TracingBackend, extract_graph};
 use kindle_native::NativeBackend;
 use kindle_telemetry::reporter::Reporter;
 use kindle_telemetry::events::GraphSnapshotEvent;

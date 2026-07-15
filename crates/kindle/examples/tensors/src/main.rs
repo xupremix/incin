@@ -1,3 +1,5 @@
+#[macro_use]
+extern crate alloc;
 use kindle::prelude::*;
 
 type B = DefaultBackend;

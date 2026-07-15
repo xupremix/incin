@@ -14,7 +14,7 @@
 //! Requires `--features native,candle`.
 
 use kindle_backends::candle::CandleBackend;
-use kindle_core::nn::Reduction;
+use kindle_core::prelude::Reduction;
 use kindle_core::prelude::*;
 use kindle_native::NativeBackend;
 

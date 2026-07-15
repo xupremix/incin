@@ -37,6 +37,7 @@ pub mod prelude {
     pub use super::broadcast::*;
 
     pub use super::dim::*;
+    pub use super::idx::*;
     pub use super::named::*;
     pub use super::shape::*;
 }

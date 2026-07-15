@@ -12,7 +12,7 @@ use alloc::sync::Arc;
 use core::sync::atomic::{AtomicU64, Ordering};
 
 use half::{bf16, f16};
-use kindle_core::err::Error;
+use kindle_core::prelude::Error;
 use kindle_core::prelude::Result;
 
 use crate::stride;
@@ -55,15 +55,15 @@ pub struct BlockQ8_0 {
 #[derive(Debug)]
 pub struct NativeCudaBuffer {
     pub len: usize,
-    pub data: std::sync::Arc<cudarc::driver::CudaSlice<u8>>,
-    pub device: std::sync::Arc<cudarc::driver::CudaContext>,
+    pub data: alloc::sync::Arc<cudarc::driver::CudaSlice<u8>>,
+    pub device: alloc::sync::Arc<cudarc::driver::CudaContext>,
     pub device_id: usize,
 }
 
 #[cfg(feature = "cuda")]
 impl PartialEq for NativeCudaBuffer {
     fn eq(&self, other: &Self) -> bool {
-        self.len == other.len && std::sync::Arc::ptr_eq(&self.data, &other.data)
+        self.len == other.len && alloc::sync::Arc::ptr_eq(&self.data, &other.data)
     }
 }
 
@@ -173,11 +173,11 @@ impl NativeBuffer {
 /// metadata, never the underlying buffer contents.
 #[derive(Debug, Clone)]
 pub struct NativeStorage {
-    pub buffer: Arc<NativeBuffer>,
-    pub shape: Vec<usize>,
-    pub strides: Vec<usize>,
-    pub offset: usize,
-    pub id: TensorId,
+    pub(crate) buffer: Arc<NativeBuffer>,
+    pub(crate) shape: Vec<usize>,
+    pub(crate) strides: Vec<usize>,
+    pub(crate) offset: usize,
+    pub(crate) id: TensorId,
 }
 
 impl NativeStorage {

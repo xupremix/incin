@@ -3,6 +3,7 @@ use crate::prelude::{
     DynShape, Error, Grad, KindleDType, KindleDevice, NoGrad, RequiresGrad, Result, Shape,
     TensorArgs,
 };
+use alloc::string::ToString;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Dyn(pub ());

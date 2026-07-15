@@ -4,7 +4,7 @@
 //! operation (`reshape`/`transpose`/`broadcast_as`) is built on. They must be
 //! correct and standalone-tested before any storage/tape code touches them.
 
-use kindle_core::err::Error;
+use kindle_core::prelude::Error;
 use kindle_core::prelude::Result;
 
 /// Compute row-major (C-contiguous) strides for `shape`.

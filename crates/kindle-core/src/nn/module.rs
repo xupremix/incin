@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use hashbrown::HashMap;
+use alloc::collections::BTreeMap;
 
 /// A trait implemented by all Neural Network modules to manage their state (weights).
 /// Usually automatically derived via `#[kindle::module]`.
@@ -8,11 +8,11 @@ pub trait StateDict<B: Backend> {
     fn load_state_dict(
         &mut self,
         prefix: &str,
-        tensors: &HashMap<String, Tensor<Dyn, B>>,
+        tensors: &BTreeMap<String, Tensor<Dyn, B>>,
     ) -> Result<()>;
 
     /// Collects the module's state into a dictionary of dynamic tensors.
-    fn state_dict(&self, prefix: &str, tensors: &mut HashMap<String, Tensor<Dyn, B>>);
+    fn state_dict(&self, prefix: &str, tensors: &mut BTreeMap<String, Tensor<Dyn, B>>);
 
     /// Helper: Serializes this module's state to a given serializer.
     fn save_to<S: crate::serialize::Serializer>(
@@ -23,7 +23,7 @@ pub trait StateDict<B: Backend> {
         <<B as Backend>::Device as Device>::Field: Default,
         <<B as Backend>::FloatElem as crate::tensor::dtype::DType>::Field: Default,
     {
-        let mut map = HashMap::new();
+        let mut map = BTreeMap::new();
         self.state_dict("", &mut map);
         serializer.serialize(&map)
     }
@@ -57,12 +57,12 @@ pub trait Parameters<B: Backend> {
     fn named_parameters(
         &self,
         prefix: &str,
-        map: &mut hashbrown::HashMap<String, B::RawVar>,
+        map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
     );
 
     /// Helper to retrieve all parameters as a new map.
-    fn parameters(&self) -> hashbrown::HashMap<String, B::RawVar> {
-        let mut map = hashbrown::HashMap::new();
+    fn parameters(&self) -> alloc::collections::BTreeMap<String, B::RawVar> {
+        let mut map = alloc::collections::BTreeMap::new();
         self.named_parameters("", &mut map);
         map
     }
@@ -95,7 +95,7 @@ pub trait AutorefParametersFallback<B: Backend> {
         &self,
         _phantom: core::marker::PhantomData<B>,
         _prefix: &str,
-        _map: &mut hashbrown::HashMap<String, B::RawVar>,
+        _map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
     ) {
     }
 }
@@ -107,7 +107,7 @@ pub trait AutorefParameters<B: Backend> {
         &self,
         _phantom: core::marker::PhantomData<B>,
         prefix: &str,
-        map: &mut hashbrown::HashMap<String, B::RawVar>,
+        map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
     );
 }
 impl<T: Parameters<B>, B: Backend> AutorefParameters<B> for &T {
@@ -116,7 +116,7 @@ impl<T: Parameters<B>, B: Backend> AutorefParameters<B> for &T {
         &self,
         _marker: core::marker::PhantomData<B>,
         prefix: &str,
-        map: &mut hashbrown::HashMap<String, B::RawVar>,
+        map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
     ) {
         self.named_parameters(prefix, map);
     }
@@ -128,7 +128,7 @@ pub trait AutorefStateDictFallback<B: Backend> {
         &mut self,
         _phantom: core::marker::PhantomData<B>,
         _prefix: &str,
-        _tensors: &HashMap<String, Tensor<Dyn, B>>,
+        _tensors: &BTreeMap<String, Tensor<Dyn, B>>,
     ) -> Result<()> {
         Ok(())
     }
@@ -136,7 +136,7 @@ pub trait AutorefStateDictFallback<B: Backend> {
         &self,
         _phantom: core::marker::PhantomData<B>,
         _prefix: &str,
-        _tensors: &mut HashMap<String, Tensor<Dyn, B>>,
+        _tensors: &mut BTreeMap<String, Tensor<Dyn, B>>,
     ) {
     }
 }
@@ -149,13 +149,13 @@ pub trait AutorefStateDict<B: Backend> {
         &mut self,
         _phantom: core::marker::PhantomData<B>,
         prefix: &str,
-        tensors: &HashMap<String, Tensor<Dyn, B>>,
+        tensors: &BTreeMap<String, Tensor<Dyn, B>>,
     ) -> Result<()>;
     fn maybe_state_dict(
         &self,
         _phantom: core::marker::PhantomData<B>,
         prefix: &str,
-        tensors: &mut HashMap<String, Tensor<Dyn, B>>,
+        tensors: &mut BTreeMap<String, Tensor<Dyn, B>>,
     );
 }
 
@@ -166,7 +166,7 @@ impl<T: StateDict<B>, B: Backend> AutorefStateDict<B> for &mut T {
         &mut self,
         _phantom: core::marker::PhantomData<B>,
         prefix: &str,
-        tensors: &HashMap<String, Tensor<Dyn, B>>,
+        tensors: &BTreeMap<String, Tensor<Dyn, B>>,
     ) -> Result<()> {
         (*self).load_state_dict(prefix, tensors)
     }
@@ -175,7 +175,7 @@ impl<T: StateDict<B>, B: Backend> AutorefStateDict<B> for &mut T {
         &self,
         _phantom: core::marker::PhantomData<B>,
         prefix: &str,
-        tensors: &mut HashMap<String, Tensor<Dyn, B>>,
+        tensors: &mut BTreeMap<String, Tensor<Dyn, B>>,
     ) {
         (**self).state_dict(prefix, tensors)
     }
@@ -188,7 +188,7 @@ impl<T: StateDict<B>, B: Backend> AutorefStateDict<B> for &T {
         &mut self,
         _phantom: core::marker::PhantomData<B>,
         _prefix: &str,
-        _tensors: &HashMap<String, Tensor<Dyn, B>>,
+        _tensors: &BTreeMap<String, Tensor<Dyn, B>>,
     ) -> Result<()> {
         Ok(()) // Should not be called
     }
@@ -197,7 +197,7 @@ impl<T: StateDict<B>, B: Backend> AutorefStateDict<B> for &T {
         &self,
         _phantom: core::marker::PhantomData<B>,
         prefix: &str,
-        tensors: &mut HashMap<String, Tensor<Dyn, B>>,
+        tensors: &mut BTreeMap<String, Tensor<Dyn, B>>,
     ) {
         (*self).state_dict(prefix, tensors)
     }
@@ -279,7 +279,7 @@ where
     fn named_parameters(
         &self,
         prefix: &str,
-        map: &mut hashbrown::HashMap<String, B::RawVar>,
+        map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
     ) {
         self.0.named_parameters(&format!("{}0.", prefix), map);
         self.1.named_parameters(&format!("{}1.", prefix), map);
@@ -294,14 +294,14 @@ where
     fn load_state_dict(
         &mut self,
         prefix: &str,
-        tensors: &HashMap<String, Tensor<Dyn, B>>,
+        tensors: &BTreeMap<String, Tensor<Dyn, B>>,
     ) -> Result<()> {
         self.0.load_state_dict(&format!("{}0.", prefix), tensors)?;
         self.1.load_state_dict(&format!("{}1.", prefix), tensors)?;
         Ok(())
     }
 
-    fn state_dict(&self, prefix: &str, tensors: &mut HashMap<String, Tensor<Dyn, B>>) {
+    fn state_dict(&self, prefix: &str, tensors: &mut BTreeMap<String, Tensor<Dyn, B>>) {
         self.0.state_dict(&format!("{}0.", prefix), tensors);
         self.1.state_dict(&format!("{}1.", prefix), tensors);
     }
@@ -312,15 +312,15 @@ macro_rules! impl_dummy_state {
     ($($t:ty),+) => {
         $(
             impl<B: Backend> Parameters<B> for $t {
-                fn named_parameters(&self, _prefix: &str, _map: &mut hashbrown::HashMap<String, B::RawVar>) {}
+                fn named_parameters(&self, _prefix: &str, _map: &mut alloc::collections::BTreeMap<String, B::RawVar>) {}
             }
 
             impl<B: Backend> StateDict<B> for $t {
-                fn load_state_dict(&mut self, _prefix: &str, _tensors: &HashMap<String, Tensor<Dyn, B>>) -> Result<()> {
+                fn load_state_dict(&mut self, _prefix: &str, _tensors: &BTreeMap<String, Tensor<Dyn, B>>) -> Result<()> {
                     Ok(())
                 }
 
-                fn state_dict(&self, _prefix: &str, _tensors: &mut HashMap<String, Tensor<Dyn, B>>) {
+                fn state_dict(&self, _prefix: &str, _tensors: &mut BTreeMap<String, Tensor<Dyn, B>>) {
                 }
             }
         )+
@@ -336,7 +336,7 @@ where
     fn named_parameters(
         &self,
         _prefix: &str,
-        _map: &mut hashbrown::HashMap<String, B::RawVar>,
+        _map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
     ) {
     }
 }
@@ -347,18 +347,18 @@ where
     fn load_state_dict(
         &mut self,
         _prefix: &str,
-        _tensors: &HashMap<String, Tensor<Dyn, B>>,
+        _tensors: &BTreeMap<String, Tensor<Dyn, B>>,
     ) -> Result<()> {
         Ok(())
     }
-    fn state_dict(&self, _prefix: &str, _tensors: &mut HashMap<String, Tensor<Dyn, B>>) {}
+    fn state_dict(&self, _prefix: &str, _tensors: &mut BTreeMap<String, Tensor<Dyn, B>>) {}
 }
 
 impl<T: Parameters<B>, B: Backend> Parameters<B> for Option<T> {
     fn named_parameters(
         &self,
         prefix: &str,
-        map: &mut hashbrown::HashMap<String, B::RawVar>,
+        map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
     ) {
         if let Some(v) = self {
             v.named_parameters(prefix, map);
@@ -370,7 +370,7 @@ impl<L: StateDict<B>, B: Backend> StateDict<B> for Option<L> {
     fn load_state_dict(
         &mut self,
         prefix: &str,
-        tensors: &HashMap<String, Tensor<Dyn, B>>,
+        tensors: &BTreeMap<String, Tensor<Dyn, B>>,
     ) -> Result<()> {
         if let Some(v) = self {
             v.load_state_dict(prefix, tensors)?;
@@ -378,7 +378,7 @@ impl<L: StateDict<B>, B: Backend> StateDict<B> for Option<L> {
         Ok(())
     }
 
-    fn state_dict(&self, prefix: &str, tensors: &mut HashMap<String, Tensor<Dyn, B>>) {
+    fn state_dict(&self, prefix: &str, tensors: &mut BTreeMap<String, Tensor<Dyn, B>>) {
         if let Some(v) = self {
             v.state_dict(prefix, tensors);
         }
@@ -440,7 +440,7 @@ pub fn update_node_name_prefix(node: &mut LayerNode, new_name: &str) {
 
 /// Flatten helper to assign sequential names (e.g. Linear1, ReLU1, Linear2) to a slice of child nodes.
 pub fn assign_sequential_names(nodes: &mut [LayerNode], prefix: &str) {
-    let mut type_counts = hashbrown::HashMap::new();
+    let mut type_counts = alloc::collections::BTreeMap::new();
     for (i, node) in nodes.iter_mut().enumerate() {
         let clean_type = clean_type_name(&node.type_name);
         let count = type_counts.entry(clean_type.clone()).or_insert(0);
@@ -548,6 +548,6 @@ macro_rules! seq {
         $l1
     };
     ($l1:expr, $($tail:expr),+ $(,)?) => {
-        $crate::nn::Sequential($l1, $crate::seq!($($tail),+))
+        $crate::prelude::Sequential($l1, $crate::seq!($($tail),+))
     };
 }

@@ -11,12 +11,11 @@
 //!
 //! ## Creating Custom Backends
 //!
-//! If you wish to plug in your own compute engine, you simply need to implement the `kindle_core::tensor::backend::Backend` trait and the associated operation traits (`MatMulOp`, `Conv2dOp`, etc.).
-
+//! If you wish to plug in your own compute engine, you simply need to implement the `kindle_core::prelude::Backend` trait and the associated operation traits (`MatMulOp`, `Conv2dOp`, etc.).
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[macro_use]
-pub(crate) extern crate alloc;
+extern crate alloc;
 
 pub use kindle_core::prelude::*;
 
@@ -44,11 +43,15 @@ pub mod candle {
     use super::*;
     use candle_core as candle;
 
+    /// # Backend Float Element Limitation (B-4)
+    /// **Known Limitation:** `CandleBackend` ignores its compile-time `T` generic
+    /// for inner allocation precision and relies on the dynamic `KindleDType`
+    /// supplied to creation methods.
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct CandleBackend<T, D>(core::marker::PhantomData<(T, D)>);
 
     pub fn to_candle_device(dev: &KindleDevice) -> Result<candle::Device> {
-        use kindle_core::tensor::device::DeviceVariant;
+        use kindle_core::prelude::DeviceVariant;
         match dev.variant() {
             DeviceVariant::Cpu => Ok(candle::Device::Cpu),
             #[cfg(feature = "cuda")]
@@ -57,6 +60,7 @@ pub mod candle {
             #[cfg(feature = "metal")]
             DeviceVariant::Metal(ord) => Ok(candle::Device::new_metal(ord)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?),
+            _ => Err(Error::UnsupportedBackendOperation { op: "to_candle_device", backend: "Candle" }),
         }
     }
 
@@ -70,6 +74,7 @@ pub mod candle {
             KindleDType::F32 => candle::DType::F32,
             KindleDType::F64 => candle::DType::F64,
             KindleDType::Q8_0 => unimplemented!("Q8_0 is not natively supported in candle yet"),
+            _ => unimplemented!("Unsupported dtype in candle"),
         }
     }
 
@@ -77,7 +82,7 @@ pub mod candle {
         kindle_core::prelude::Backend for CandleBackend<T, D>
     {
         type Device = D;
-        type FloatElem = f32;
+        type FloatElem = T;
         type IntElem = i64;
         type BackendWithDevice<NewD: kindle_core::prelude::Device> = CandleBackend<T, NewD>;
 
@@ -1001,7 +1006,7 @@ pub mod candle {
         fn l1_loss<K: kindle_core::prelude::DType>(
             _pred: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             _target: &<Self as kindle_core::prelude::Backend>::Storage<K>,
-            _reduction: kindle_core::nn::loss::Reduction,
+            _reduction: kindle_core::prelude::Reduction,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             unimplemented!("l1_loss not implemented for CandleBackend")
         }
@@ -1009,7 +1014,7 @@ pub mod candle {
         fn bce_with_logits_loss<K: kindle_core::prelude::DType>(
             _pred: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             _target: &<Self as kindle_core::prelude::Backend>::Storage<K>,
-            _reduction: kindle_core::nn::loss::Reduction,
+            _reduction: kindle_core::prelude::Reduction,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             unimplemented!("bce_with_logits_loss not implemented for CandleBackend")
         }
@@ -1017,7 +1022,7 @@ pub mod candle {
         fn mse_loss<K: kindle_core::prelude::DType>(
             pred: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             target: &<Self as kindle_core::prelude::Backend>::Storage<K>,
-            _reduction: kindle_core::nn::loss::Reduction,
+            _reduction: kindle_core::prelude::Reduction,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             let loss = candle_nn::loss::mse(pred, target)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
@@ -1027,7 +1032,7 @@ pub mod candle {
         fn cross_entropy_loss<K: kindle_core::prelude::DType, KInt: kindle_core::prelude::DType>(
             pred: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             target: &<Self as kindle_core::prelude::Backend>::Storage<KInt>,
-            _reduction: kindle_core::nn::loss::Reduction,
+            _reduction: kindle_core::prelude::Reduction,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             let target_u32 = target
                 .to_dtype(candle_core::DType::U32)
@@ -1056,7 +1061,7 @@ pub mod candle {
     }
 
     impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device>
-        kindle_core::tensor::backend::OptimizerOps<Self> for CandleBackend<T, D> {}
+        kindle_core::prelude::OptimizerOps<Self> for CandleBackend<T, D> {}
 }
 
 // ----------------------------------------------------------------------------
@@ -1067,6 +1072,11 @@ pub mod ndarray_backend {
     use super::*;
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    /// # Backend Float Element Limitation (B-4)
+    /// **Known Limitation:** `NdarrayBackend` ignores its compile-time `T` generic
+    /// for inner allocation precision, hardcoding its backing tensor storage to `f32`
+    /// (`ndarray::ArrayD<f32>`). Using this backend with `f64` types will silently
+    /// downcast or allocate `f32` internally.
     pub struct NdarrayBackend<T, D>(core::marker::PhantomData<(T, D)>);
 
     #[derive(Clone, Debug)]
@@ -1078,7 +1088,7 @@ pub mod ndarray_backend {
         kindle_core::prelude::Backend for NdarrayBackend<T, D>
     {
         type Device = D;
-        type FloatElem = f32;
+        type FloatElem = T;
         type IntElem = i64;
         type BackendWithDevice<NewD: kindle_core::prelude::Device> = NdarrayBackend<T, NewD>;
 
@@ -1091,7 +1101,7 @@ pub mod ndarray_backend {
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<alloc::vec::Vec<u8>> {
             let slice = t.as_slice().ok_or_else(|| {
-                let err: kindle_core::err::Error =
+                let err: kindle_core::prelude::Error =
                     anyhow::anyhow!("Ndarray is not contiguous").into();
                 err
             })?;
@@ -1111,7 +1121,7 @@ pub mod ndarray_backend {
             _device: &KindleDevice,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             if dtype != KindleDType::F32 {
-                let err: kindle_core::err::Error =
+                let err: kindle_core::prelude::Error =
                     anyhow::anyhow!("NdarrayBackend only supports f32").into();
                 return Err(err);
             }
@@ -1843,7 +1853,7 @@ pub mod ndarray_backend {
         fn l1_loss<K: kindle_core::prelude::DType>(
             _pred: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             _target: &<Self as kindle_core::prelude::Backend>::Storage<K>,
-            _reduction: kindle_core::nn::loss::Reduction,
+            _reduction: kindle_core::prelude::Reduction,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             unimplemented!("l1_loss not implemented for NdArrayBackend")
         }
@@ -1851,7 +1861,7 @@ pub mod ndarray_backend {
         fn bce_with_logits_loss<K: kindle_core::prelude::DType>(
             _pred: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             _target: &<Self as kindle_core::prelude::Backend>::Storage<K>,
-            _reduction: kindle_core::nn::loss::Reduction,
+            _reduction: kindle_core::prelude::Reduction,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             unimplemented!("bce_with_logits_loss not implemented for NdarrayBackend")
         }
@@ -1859,14 +1869,14 @@ pub mod ndarray_backend {
         fn mse_loss<K: kindle_core::prelude::DType>(
             _pred: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             _target: &<Self as kindle_core::prelude::Backend>::Storage<K>,
-            _reduction: kindle_core::nn::loss::Reduction,
+            _reduction: kindle_core::prelude::Reduction,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             unimplemented!("mse_loss not implemented for NdArrayBackend")
         }
         fn cross_entropy_loss<K: kindle_core::prelude::DType, KInt: kindle_core::prelude::DType>(
             _pred: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             _target: &<Self as kindle_core::prelude::Backend>::Storage<KInt>,
-            _reduction: kindle_core::nn::loss::Reduction,
+            _reduction: kindle_core::prelude::Reduction,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Err(Error::UnsupportedBackendOperation {
                 op: "cross_entropy_loss",
@@ -1876,7 +1886,7 @@ pub mod ndarray_backend {
     }
 
     impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device>
-        kindle_core::tensor::backend::OptimizerOps<Self> for NdarrayBackend<T, D> {}
+        kindle_core::prelude::OptimizerOps<Self> for NdarrayBackend<T, D> {}
 }
 
 // ----------------------------------------------------------------------------
@@ -1931,8 +1941,8 @@ pub mod burn_backend {
     }
 
     impl<B: burn::tensor::backend::Backend, $($D: kindle_core::prelude::Dim),*> kindle_core::prelude::NumericOps<Self> for BurnBackend<B> {
-                fn mul_scalar(_t: &<Self as kindle_core::prelude::Backend>::RawTensor, _scalar: kindle_core::tensor::backend::ScalarValue) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "mul_scalar", backend: "Burn" }) }
-                fn add_scalar(_t: &<Self as kindle_core::prelude::Backend>::RawTensor, _scalar: kindle_core::tensor::backend::ScalarValue) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "add_scalar", backend: "Burn" }) }
+                fn mul_scalar(_t: &<Self as kindle_core::prelude::Backend>::RawTensor, _scalar: kindle_core::prelude::ScalarValue) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "mul_scalar", backend: "Burn" }) }
+                fn add_scalar(_t: &<Self as kindle_core::prelude::Backend>::RawTensor, _scalar: kindle_core::prelude::ScalarValue) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "add_scalar", backend: "Burn" }) }
                 fn add(lhs: &<Self as kindle_core::prelude::Backend>::RawTensor, rhs: &<Self as kindle_core::prelude::Backend>::RawTensor) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> {
                     Ok(lhs.clone() + rhs.clone())
                 }
@@ -2028,10 +2038,10 @@ pub mod burn_backend {
     }
 
     impl<B: burn::tensor::backend::Backend, $($D: kindle_core::prelude::Dim),*> kindle_core::prelude::LossOps<Self> for BurnBackend<B> {
-                fn l1_loss(_pred: &<Self as kindle_core::prelude::Backend>::RawTensor, _target: &<Self as kindle_core::prelude::Backend>::RawTensor, _reduction: kindle_core::nn::loss::Reduction) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "l1_loss", backend: "Burn" }) }
-                fn bce_with_logits_loss(_pred: &<Self as kindle_core::prelude::Backend>::RawTensor, _target: &<Self as kindle_core::prelude::Backend>::RawTensor, _reduction: kindle_core::nn::loss::Reduction) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "bce_with_logits_loss", backend: "Burn" }) }
-                fn mse_loss(_pred: &<Self as kindle_core::prelude::Backend>::RawTensor, _target: &<Self as kindle_core::prelude::Backend>::RawTensor, _reduction: kindle_core::nn::loss::Reduction) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "mse_loss", backend: "Burn" }) }
-                fn cross_entropy_loss(_pred: &<Self as kindle_core::prelude::Backend>::RawTensor, _target: &<Self as kindle_core::prelude::Backend>::RawTensor, _reduction: kindle_core::nn::loss::Reduction) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "cross_entropy_loss", backend: "Burn" }) }
+                fn l1_loss(_pred: &<Self as kindle_core::prelude::Backend>::RawTensor, _target: &<Self as kindle_core::prelude::Backend>::RawTensor, _reduction: kindle_core::prelude::Reduction) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "l1_loss", backend: "Burn" }) }
+                fn bce_with_logits_loss(_pred: &<Self as kindle_core::prelude::Backend>::RawTensor, _target: &<Self as kindle_core::prelude::Backend>::RawTensor, _reduction: kindle_core::prelude::Reduction) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "bce_with_logits_loss", backend: "Burn" }) }
+                fn mse_loss(_pred: &<Self as kindle_core::prelude::Backend>::RawTensor, _target: &<Self as kindle_core::prelude::Backend>::RawTensor, _reduction: kindle_core::prelude::Reduction) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "mse_loss", backend: "Burn" }) }
+                fn cross_entropy_loss(_pred: &<Self as kindle_core::prelude::Backend>::RawTensor, _target: &<Self as kindle_core::prelude::Backend>::RawTensor, _reduction: kindle_core::prelude::Reduction) -> Result<<Self as kindle_core::prelude::Backend>::RawTensor> { Err(Error::UnsupportedBackendOperation { op: "cross_entropy_loss", backend: "Burn" }) }
 
     }
 

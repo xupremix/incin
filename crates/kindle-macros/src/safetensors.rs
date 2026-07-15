@@ -97,9 +97,9 @@ fn generate_structs(
                 });
                 let shape_ty = quote! { (#(#shape_tokens,)*) };
                 let ty = if *is_buffer {
-                    quote! { kindle::nn::Buffer<#shape_ty, B> }
+                    quote! { kindle::prelude::Buffer<#shape_ty, B> }
                 } else {
-                    quote! { kindle::nn::Param<#shape_ty, B> }
+                    quote! { kindle::prelude::Param<#shape_ty, B> }
                 };
 
                 let _common_bound = quote! { RawVar = <B as kindle::prelude::Backend>::RawVar, RawTensor = <B as kindle::prelude::Backend>::RawTensor };
@@ -226,7 +226,7 @@ pub(crate) fn import_model(_attr: TokenStream, item: TokenStream) -> TokenStream
             #(#bounds,)*
         {
             pub fn load_default_weights(&mut self) -> kindle::prelude::Result<()> {
-                kindle::nn::load_safetensors(self, #path_str)
+                kindle::prelude::load_safetensors(self, #path_str)
             }
         }
     };

@@ -1,5 +1,5 @@
 use kindle_core::prelude::*;
-use kindle_core::tensor::backend::dummy::DummyBackend;
+use kindle_core::prelude::dummy::DummyBackend;
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct MockGpu;

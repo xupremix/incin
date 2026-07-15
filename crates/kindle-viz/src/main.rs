@@ -1,6 +1,8 @@
 //! `kindle-viz` binary entry point: CLI argument parsing, run-path
 //! resolution against `kindle-telemetry`'s XDG run-dir convention, and the
 //! panic-safe terminal lifecycle around the async event loop.
+#[macro_use]
+extern crate alloc;
 
 use clap::Parser;
 use kindle_viz::app::{self, App};

@@ -1,7 +1,7 @@
 use crate::nn::StateDict;
 use crate::prelude::*;
 use safetensors::SafeTensors;
-use hashbrown::HashMap;
+use alloc::collections::BTreeMap;
 use std::path::Path;
 
 /// Loads weights into a module from a safetensors file.
@@ -16,7 +16,7 @@ where
     let tensors = SafeTensors::deserialize(&buffer)
         .map_err(|e| Error::Msg(format!("Safetensors deserialization failed: {:?}", e)))?;
 
-    let mapped_tensors = HashMap::new();
+    let mapped_tensors = BTreeMap::new();
 
     for (_name, _view) in tensors.tensors() {
         // Convert to a Candle Tensor and then to RawVar?
@@ -39,7 +39,7 @@ where
     M: StateDict<B>,
     P: AsRef<Path>,
 {
-    let mut mapped_tensors = HashMap::new();
+    let mut mapped_tensors = BTreeMap::new();
     module.state_dict("", &mut mapped_tensors);
 
     // TODO: Serialize mapped_tensors to safetensors.

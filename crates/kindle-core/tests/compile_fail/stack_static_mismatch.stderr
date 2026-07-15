@@ -17,9 +17,9 @@ warning: unused import: `kindle_core as kindle`
   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
 
 error[E0277]: the trait bound `[{integer}; 2]: ArgInto<((), ())>` is not satisfied
- --> tests/compile_fail/stack_static_mismatch.rs:7:70
+ --> tests/compile_fail/stack_static_mismatch.rs:8:70
   |
-7 |     let t1: Tensor<s![2, 3], DummyBackend<f32, Cpu>> = Tensor::zeros([2, 3]).unwrap();
+8 |     let t1: Tensor<s![2, 3], DummyBackend<f32, Cpu>> = Tensor::zeros([2, 3]).unwrap();
   |                                                        ------------- ^^^^^^ the trait `ArgInto<((), ())>` is not implemented for `[{integer}; 2]`
   |                                                        |
   |                                                        required by a bound introduced by this call
@@ -39,9 +39,9 @@ note: required by a bound in `kindle::prelude::Tensor::<S, B, K, D, G>::zeros`
   |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `Tensor::<S, B, K, D, G>::zeros`
 
 error[E0277]: the trait bound `[{integer}; 2]: ArgInto<((), ())>` is not satisfied
- --> tests/compile_fail/stack_static_mismatch.rs:8:70
+ --> tests/compile_fail/stack_static_mismatch.rs:9:70
   |
-8 |     let t2: Tensor<s![4, 3], DummyBackend<f32, Cpu>> = Tensor::zeros([4, 3]).unwrap();
+9 |     let t2: Tensor<s![4, 3], DummyBackend<f32, Cpu>> = Tensor::zeros([4, 3]).unwrap();
   |                                                        ------------- ^^^^^^ the trait `ArgInto<((), ())>` is not implemented for `[{integer}; 2]`
   |                                                        |
   |                                                        required by a bound introduced by this call
@@ -61,9 +61,9 @@ note: required by a bound in `kindle::prelude::Tensor::<S, B, K, D, G>::zeros`
   |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `Tensor::<S, B, K, D, G>::zeros`
 
 error[E0308]: mismatched types
-  --> tests/compile_fail/stack_static_mismatch.rs:11:37
+  --> tests/compile_fail/stack_static_mismatch.rs:12:37
    |
-11 |     let _ = t1.stack::<typenum::U0>(&t2);
+12 |     let _ = t1.stack::<typenum::U0>(&t2);
    |                -------------------- ^^^ expected `UTerm`, found `UInt<UTerm, B1>`
    |                |
    |                arguments to this method are incorrect

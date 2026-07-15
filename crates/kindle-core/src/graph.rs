@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use hashbrown::HashMap;
+use alloc::collections::BTreeMap;
 
 pub type ValueId = usize;
 pub type NodeId = usize;
@@ -119,7 +119,7 @@ pub struct Node {
     pub op: OpType,
     pub inputs: Vec<ValueId>,
     pub outputs: Vec<ValueId>,
-    pub attributes: HashMap<String, AttributeValue>,
+    pub attributes: BTreeMap<String, AttributeValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -134,38 +134,39 @@ pub enum AttributeValue {
 #[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Graph {
     #[serde(with = "string_key_map")]
-    pub values: HashMap<ValueId, Value>,
+    pub values: BTreeMap<ValueId, Value>,
     pub nodes: Vec<Node>,
     pub inputs: Vec<ValueId>,
     pub outputs: Vec<ValueId>,
     #[serde(with = "string_key_map")]
-    pub initializers: HashMap<ValueId, Vec<u8>>, // raw bytes for constants/weights
+    pub initializers: BTreeMap<ValueId, Vec<u8>>, // raw bytes for constants/weights
     next_value_id: usize,
     next_node_id: usize,
 }
 
 mod string_key_map {
-    use hashbrown::HashMap;
+    use alloc::collections::BTreeMap;
+    use alloc::string::{String, ToString};
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-    pub fn serialize<K, V, S>(map: &HashMap<K, V>, serializer: S) -> Result<S::Ok, S::Error>
+    pub fn serialize<K, V, S>(map: &BTreeMap<K, V>, serializer: S) -> Result<S::Ok, S::Error>
     where
         K: ToString,
         V: Serialize,
         S: Serializer,
     {
-        let string_map: std::collections::HashMap<String, &V> = map.iter().map(|(k, v)| (k.to_string(), v)).collect();
+        let string_map: alloc::collections::BTreeMap<String, &V> = map.iter().map(|(k, v)| (k.to_string(), v)).collect();
         string_map.serialize(serializer)
     }
 
-    pub fn deserialize<'de, K, V, D>(deserializer: D) -> Result<HashMap<K, V>, D::Error>
+    pub fn deserialize<'de, K, V, D>(deserializer: D) -> Result<BTreeMap<K, V>, D::Error>
     where
-        K: std::str::FromStr + std::hash::Hash + Eq,
-        K::Err: std::fmt::Display,
+        K: core::str::FromStr + core::hash::Hash + Eq + core::cmp::Ord,
+        K::Err: core::fmt::Display,
         V: Deserialize<'de>,
         D: Deserializer<'de>,
     {
-        let string_map: std::collections::HashMap<String, V> = std::collections::HashMap::deserialize(deserializer)?;
+        let string_map: alloc::collections::BTreeMap<String, V> = alloc::collections::BTreeMap::deserialize(deserializer)?;
         string_map.into_iter().map(|(k, v)| {
             k.parse::<K>().map_err(serde::de::Error::custom).map(|k| (k, v))
         }).collect()
@@ -202,7 +203,7 @@ impl Graph {
         op: OpType,
         inputs: Vec<ValueId>,
         outputs: Vec<ValueId>,
-        attributes: HashMap<String, AttributeValue>,
+        attributes: BTreeMap<String, AttributeValue>,
     ) -> NodeId {
         let id = self.next_node_id;
         self.next_node_id += 1;

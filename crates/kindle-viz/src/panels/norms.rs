@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use alloc::collections::BTreeMap;
 use kindle_telemetry::events::{Event, GradientNormEvent, WeightNormEvent};
 use kindle_viz_plugin_api::event::PanelEvent;
 use kindle_viz_plugin_api::panel::Panel;
@@ -19,7 +19,7 @@ pub struct NormsPanel {
     title: String,
     id: &'static str,
     // (step, sum_sq_of_norms)
-    step_aggregates: HashMap<usize, f64>,
+    step_aggregates: BTreeMap<usize, f64>,
     points: Vec<(f64, f64)>, // (step, global_l2_norm)
     alert_threshold: Option<f64>,
 }
@@ -30,7 +30,7 @@ impl NormsPanel {
             norm_type,
             title: title.to_string(),
             id,
-            step_aggregates: HashMap::new(),
+            step_aggregates: BTreeMap::new(),
             points: Vec::new(),
             alert_threshold,
         }

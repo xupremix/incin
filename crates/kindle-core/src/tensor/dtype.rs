@@ -28,6 +28,7 @@ pub trait QuantDType: DType {}
 pub struct Q8_0;
 
 
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum KindleDType {
     U8,

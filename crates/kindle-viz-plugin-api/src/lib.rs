@@ -50,6 +50,8 @@
 //! ```
 //! 
 //! Once implemented, you can register it with `kindle-viz`'s `App` at startup.
+#[macro_use]
+extern crate alloc;
 pub mod err;
 pub mod event;
 pub mod keymap;

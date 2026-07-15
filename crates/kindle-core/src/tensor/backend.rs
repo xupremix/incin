@@ -432,7 +432,7 @@ pub mod dummy {
 
     impl<T: DType, D: Device + Clone + 'static> Backend for DummyBackend<T, D> {
         type Device = D;
-        type FloatElem = f32;
+        type FloatElem = T;
         type IntElem = i64;
         type RawVar = alloc::vec::Vec<usize>;
         type Grads = ();
@@ -768,9 +768,14 @@ pub mod dummy {
     impl<T: DType, D: Device + Clone + 'static> TensorOps<Self> for DummyBackend<T, D> {
         fn matmul<K: DType>(
             lhs: &<Self as Backend>::Storage<K>,
-            _rhs: &<Self as Backend>::Storage<K>,
+            rhs: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
-            Ok(lhs.clone())
+            let mut out = lhs.clone();
+            if out.len() >= 2 && rhs.len() >= 2 {
+                let len = out.len();
+                out[len - 1] = rhs[rhs.len() - 1];
+            }
+            Ok(out)
         }
         fn float_to_scalar<K: DType>(_t: &<Self as Backend>::Storage<K>) -> Result<f64> {
             Ok(0.0)
@@ -790,22 +795,24 @@ pub mod dummy {
         }
 
         fn broadcast_as<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
-            _s: &[usize],
+            _t: &<Self as Backend>::Storage<K>,
+            s: &[usize],
         ) -> Result<<Self as Backend>::Storage<K>> {
-            Ok(t.clone())
+            Ok(s.to_vec())
         }
         fn broadcast_left<K: DType>(
             t: &<Self as Backend>::Storage<K>,
-            _s: &[usize],
+            s: &[usize],
         ) -> Result<<Self as Backend>::Storage<K>> {
-            Ok(t.clone())
+            let mut out = s.to_vec();
+            out.extend_from_slice(t);
+            Ok(out)
         }
         fn reshape<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
-            _s: &[usize],
+            _t: &<Self as Backend>::Storage<K>,
+            s: &[usize],
         ) -> Result<<Self as Backend>::Storage<K>> {
-            Ok(t.clone())
+            Ok(s.to_vec())
         }
         fn transpose<K: DType>(
             t: &<Self as Backend>::Storage<K>,
@@ -820,24 +827,40 @@ pub mod dummy {
         }
         fn flatten<K: DType>(
             t: &<Self as Backend>::Storage<K>,
-            _s: usize,
-            _e: usize,
+            s: usize,
+            e: usize,
         ) -> Result<<Self as Backend>::Storage<K>> {
-            Ok(t.clone())
+            if s > e || e >= t.len() {
+                return Ok(t.clone());
+            }
+            let mut out = t[..s].to_vec();
+            out.push(t[s..=e].iter().product());
+            out.extend_from_slice(&t[e + 1..]);
+            Ok(out)
         }
         fn slice<K: DType>(
             t: &<Self as Backend>::Storage<K>,
-            _ranges: &[(usize, usize)],
+            ranges: &[(usize, usize)],
         ) -> Result<<Self as Backend>::Storage<K>> {
-            Ok(t.clone())
+            let mut out = t.clone();
+            for (dim, &(start, end)) in ranges.iter().enumerate() {
+                if dim < out.len() {
+                    out[dim] = end.saturating_sub(start);
+                }
+            }
+            Ok(out)
         }
         fn narrow<K: DType>(
             t: &<Self as Backend>::Storage<K>,
-            _d: usize,
+            d: usize,
             _s: usize,
-            _l: usize,
+            l: usize,
         ) -> Result<<Self as Backend>::Storage<K>> {
-            Ok(t.clone())
+            let mut out = t.clone();
+            if d < out.len() {
+                out[d] = l;
+            }
+            Ok(out)
         }
         fn squeeze<K: DType>(
             t: &<Self as Backend>::Storage<K>,
@@ -851,21 +874,31 @@ pub mod dummy {
         }
         fn stack<K: DType>(
             t: &[&<Self as Backend>::Storage<K>],
-            _d: usize,
+            d: usize,
         ) -> Result<<Self as Backend>::Storage<K>> {
-            Ok(t[0].clone())
+            if t.is_empty() { return Ok(alloc::vec![]); }
+            let mut out = t[0].clone();
+            if d <= out.len() {
+                out.insert(d, t.len());
+            }
+            Ok(out)
         }
         fn concat<K: DType>(
             t: &[&<Self as Backend>::Storage<K>],
-            _d: usize,
+            d: usize,
         ) -> Result<<Self as Backend>::Storage<K>> {
-            Ok(t[0].clone())
+            if t.is_empty() { return Ok(alloc::vec![]); }
+            let mut out = t[0].clone();
+            if d < out.len() {
+                out[d] = t.iter().map(|s| s.get(d).copied().unwrap_or(0)).sum();
+            }
+            Ok(out)
         }
         fn tensor_to_dtype<K: DType, K2: DType>(
-            _t: &<Self as Backend>::Storage<K>,
+            t: &<Self as Backend>::Storage<K>,
             _dtype: KindleDType,
         ) -> Result<<Self as Backend>::Storage<K2>> {
-            Ok(alloc::vec![])
+            Ok(t.clone())
         }
     }
 
@@ -897,54 +930,103 @@ pub mod dummy {
         }
         fn conv1d<K: DType>(
             t: &<Self as Backend>::Storage<K>,
-            _w: &<Self as Backend>::Storage<K>,
+            w: &<Self as Backend>::Storage<K>,
             _b: Option<&<Self as Backend>::Storage<K>>,
-            _s: usize,
-            _p: usize,
-            _d: usize,
+            s: usize,
+            p: usize,
+            d: usize,
             _groups: usize,
         ) -> Result<<Self as Backend>::Storage<K>> {
-            Ok(t.clone())
+            let mut out = t.clone();
+            let len = out.len();
+            if len >= 3 && w.len() >= 3 {
+                let l_in = out[len - 1];
+                let k = w[w.len() - 1];
+                let c_out = w[0]; // Assuming [C_out, C_in / groups, K]
+                out[len - 2] = c_out;
+                out[len - 1] = (l_in + 2 * p - d * (k - 1) - 1) / s + 1;
+            }
+            Ok(out)
         }
         fn conv2d<K: DType>(
             t: &<Self as Backend>::Storage<K>,
-            _w: &<Self as Backend>::Storage<K>,
+            w: &<Self as Backend>::Storage<K>,
             _b: Option<&<Self as Backend>::Storage<K>>,
-            _s: usize,
-            _p: usize,
-            _d: usize,
+            s: usize,
+            p: usize,
+            d: usize,
             _groups: usize,
         ) -> Result<<Self as Backend>::Storage<K>> {
-            Ok(t.clone())
+            let mut out = t.clone();
+            let len = out.len();
+            if len >= 4 && w.len() >= 4 {
+                let h_in = out[len - 2];
+                let w_in = out[len - 1];
+                let k_h = w[w.len() - 2];
+                let k_w = w[w.len() - 1];
+                let c_out = w[0]; // [C_out, C_in / groups, K_H, K_W]
+                out[len - 3] = c_out;
+                out[len - 2] = (h_in + 2 * p - d * (k_h - 1) - 1) / s + 1;
+                out[len - 1] = (w_in + 2 * p - d * (k_w - 1) - 1) / s + 1;
+            }
+            Ok(out)
         }
         fn conv_transpose2d<K: DType>(
             t: &<Self as Backend>::Storage<K>,
-            _w: &<Self as Backend>::Storage<K>,
+            w: &<Self as Backend>::Storage<K>,
             _b: Option<&<Self as Backend>::Storage<K>>,
-            _s: usize,
-            _p: usize,
-            _op: usize,
-            _d: usize,
+            s: usize,
+            p: usize,
+            op: usize,
+            d: usize,
             _groups: usize,
         ) -> Result<<Self as Backend>::Storage<K>> {
-            Ok(t.clone())
+            let mut out = t.clone();
+            let len = out.len();
+            if len >= 4 && w.len() >= 4 {
+                let h_in = out[len - 2];
+                let w_in = out[len - 1];
+                let k_h = w[w.len() - 2];
+                let k_w = w[w.len() - 1];
+                let c_out = w[1]; // [C_in, C_out / groups, K_H, K_W]
+                out[len - 3] = c_out;
+                out[len - 2] = (h_in - 1) * s - 2 * p + d * (k_h - 1) + op + 1;
+                out[len - 1] = (w_in - 1) * s - 2 * p + d * (k_w - 1) + op + 1;
+            }
+            Ok(out)
         }
         fn max_pool2d<K: DType>(
             t: &<Self as Backend>::Storage<K>,
-            _k: (usize, usize),
-            _s: (usize, usize),
-            _p: (usize, usize),
-            _d: (usize, usize),
+            k: (usize, usize),
+            s: (usize, usize),
+            p: (usize, usize),
+            d: (usize, usize),
         ) -> Result<<Self as Backend>::Storage<K>> {
-            Ok(t.clone())
+            let mut out = t.clone();
+            let len = out.len();
+            if len >= 2 {
+                let h_in = out[len - 2];
+                let w_in = out[len - 1];
+                out[len - 2] = (h_in + 2 * p.0 - d.0 * (k.0 - 1) - 1) / s.0 + 1;
+                out[len - 1] = (w_in + 2 * p.1 - d.1 * (k.1 - 1) - 1) / s.1 + 1;
+            }
+            Ok(out)
         }
         fn avg_pool2d<K: DType>(
             t: &<Self as Backend>::Storage<K>,
-            _k: (usize, usize),
-            _s: (usize, usize),
-            _p: (usize, usize),
+            k: (usize, usize),
+            s: (usize, usize),
+            p: (usize, usize),
         ) -> Result<<Self as Backend>::Storage<K>> {
-            Ok(t.clone())
+            let mut out = t.clone();
+            let len = out.len();
+            if len >= 2 {
+                let h_in = out[len - 2];
+                let w_in = out[len - 1];
+                out[len - 2] = (h_in + 2 * p.0 - (k.0 - 1) - 1) / s.0 + 1;
+                out[len - 1] = (w_in + 2 * p.1 - (k.1 - 1) - 1) / s.1 + 1;
+            }
+            Ok(out)
         }
         fn adaptive_avg_pool2d<K: DType>(
             t: &<Self as Backend>::Storage<K>,

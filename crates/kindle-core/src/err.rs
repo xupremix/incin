@@ -4,6 +4,7 @@ use core::fmt::Debug;
 
 pub type Result<T> = core::result::Result<T, Error>;
 
+#[non_exhaustive]
 #[derive(thiserror::Error)]
 pub enum Error {
     #[error("Shape mismatch during '{op}': expected {expected:?}, got {got:?}. {msg}")]

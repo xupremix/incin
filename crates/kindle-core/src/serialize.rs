@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use hashbrown::HashMap;
+use alloc::collections::BTreeMap;
 
 /// A trait for serializing a collection of dynamic tensors to a specific format.
 pub trait Serializer {
@@ -8,7 +8,7 @@ pub trait Serializer {
     /// Serializes the state dict to the given path or stream.
     fn serialize<B: Backend>(
         &mut self,
-        state_dict: &HashMap<String, Tensor<Dyn, B>>,
+        state_dict: &BTreeMap<String, Tensor<Dyn, B>>,
     ) -> core::result::Result<(), Self::Error>
     where
         <<B as Backend>::Device as Device>::Field: Default,
@@ -23,7 +23,7 @@ pub trait Deserializer {
     fn deserialize<B: Backend>(
         &mut self,
         device: &KindleDevice,
-    ) -> core::result::Result<HashMap<String, Tensor<Dyn, B>>, Self::Error>
+    ) -> core::result::Result<BTreeMap<String, Tensor<Dyn, B>>, Self::Error>
     where
         <<B as Backend>::Device as Device>::Field: Default,
         <<B as Backend>::FloatElem as crate::tensor::dtype::DType>::Field: Default;
@@ -47,7 +47,7 @@ impl<'a> Serializer for SafetensorsSerializer<'a> {
 
     fn serialize<B: Backend>(
         &mut self,
-        state_dict: &HashMap<String, Tensor<Dyn, B>>,
+        state_dict: &BTreeMap<String, Tensor<Dyn, B>>,
     ) -> core::result::Result<(), Self::Error>
     where
         <<B as Backend>::Device as Device>::Field: Default,
@@ -55,7 +55,7 @@ impl<'a> Serializer for SafetensorsSerializer<'a> {
     {
         use safetensors::tensor::{Dtype, TensorView};
         let mut bytes_store: Vec<(String, Vec<u8>, Vec<usize>, KindleDType)> = Vec::new();
-        let mut data_map: HashMap<String, TensorView<'_>> = HashMap::new();
+        let mut data_map: BTreeMap<String, TensorView<'_>> = BTreeMap::new();
 
         // First extract all bytes because TensorView needs references to the bytes.
         for (k, v) in state_dict.iter() {
@@ -106,7 +106,7 @@ impl<'a> Deserializer for SafetensorsDeserializer<'a> {
     fn deserialize<B: Backend>(
         &mut self,
         device: &KindleDevice,
-    ) -> core::result::Result<HashMap<String, Tensor<Dyn, B>>, Self::Error>
+    ) -> core::result::Result<BTreeMap<String, Tensor<Dyn, B>>, Self::Error>
     where
         <<B as Backend>::Device as Device>::Field: Default,
         <<B as Backend>::FloatElem as crate::tensor::dtype::DType>::Field: Default,
@@ -116,7 +116,7 @@ impl<'a> Deserializer for SafetensorsDeserializer<'a> {
         let st = safetensors::SafeTensors::deserialize(&buffer)
             .map_err(|e| anyhow::anyhow!("Failed to parse safetensors: {:?}", e))?;
 
-        let mut state_dict = HashMap::new();
+        let mut state_dict = BTreeMap::new();
 
         for (name, tensor_view) in st.tensors() {
             let dtype = match tensor_view.dtype() {
@@ -174,13 +174,13 @@ impl<'a> Serializer for BincodeSerializer<'a> {
 
     fn serialize<B: Backend>(
         &mut self,
-        state_dict: &HashMap<String, Tensor<Dyn, B>>,
+        state_dict: &BTreeMap<String, Tensor<Dyn, B>>,
     ) -> core::result::Result<(), Self::Error>
     where
         <<B as Backend>::Device as Device>::Field: Default,
         <<B as Backend>::FloatElem as crate::tensor::dtype::DType>::Field: Default,
     {
-        let mut map: HashMap<String, SerializedTensor> = HashMap::new();
+        let mut map: BTreeMap<String, SerializedTensor> = BTreeMap::new();
         for (k, v) in state_dict.iter() {
             let bytes = <B as Backend>::to_bytes(&v.inner)
                 .map_err(|e| anyhow::anyhow!("Backend to_bytes failed: {}", e))?;
@@ -230,15 +230,15 @@ impl<'a> Deserializer for BincodeDeserializer<'a> {
     fn deserialize<B: Backend>(
         &mut self,
         device: &KindleDevice,
-    ) -> core::result::Result<HashMap<String, Tensor<Dyn, B>>, Self::Error>
+    ) -> core::result::Result<BTreeMap<String, Tensor<Dyn, B>>, Self::Error>
     where
         <<B as Backend>::Device as Device>::Field: Default,
         <<B as Backend>::FloatElem as crate::tensor::dtype::DType>::Field: Default,
     {
         let file = std::fs::File::open(self.path)?;
-        let map: HashMap<String, SerializedTensor> = bincode::deserialize_from(file)?;
+        let map: BTreeMap<String, SerializedTensor> = bincode::deserialize_from(file)?;
 
-        let mut state_dict = HashMap::new();
+        let mut state_dict = BTreeMap::new();
         for (k, st) in map {
             let dtype = match st.dtype.as_str() {
                 "F32" => KindleDType::F32,

@@ -1,3 +1,5 @@
+#[macro_use]
+extern crate alloc;
 use kindle::prelude::*;
 use rayon::prelude::*;
 use std::time::Instant;

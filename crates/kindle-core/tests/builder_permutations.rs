@@ -1,11 +1,11 @@
 extern crate kindle_core as kindle;
 
-use kindle_core::nn::*;
 use kindle_core::prelude::*;
-use kindle_core::tensor::backend::dummy::DummyBackend;
+use kindle_core::prelude::*;
+use kindle_core::prelude::dummy::DummyBackend;
 use kindle_macros::s;
 
-type B = DummyBackend<f32, kindle_core::tensor::device::Cpu>;
+type B = DummyBackend<f32, kindle_core::prelude::Cpu>;
 
 #[test]
 fn test_linear_permutations() {
@@ -13,7 +13,7 @@ fn test_linear_permutations() {
     let _l1 = Linear::<s![10, 20], B>::new().unwrap();
 
     // 2. Fully static, Bias = False
-    let _l2 = Linear::<s![10, 20], B, kindle_core::nn::optional::False>::new().unwrap();
+    let _l2 = Linear::<s![10, 20], B, kindle_core::prelude::False>::new().unwrap();
 
     // 3. Fully static, Bias = Dyn (true)
     let _l3 = Linear::<s![10, 20], B, Dyn>::new_with(((), ()), true).unwrap();
@@ -31,7 +31,7 @@ fn test_linear_permutations() {
     let _l6 = Linear::<Dyn, B>::new_with((10, 20)).unwrap();
 
     // 8. Fully dynamic, Bias = False
-    let _l7 = Linear::<Dyn, B, kindle_core::nn::optional::False>::new_with((10, 20)).unwrap();
+    let _l7 = Linear::<Dyn, B, kindle_core::prelude::False>::new_with((10, 20)).unwrap();
 
     // 9. Fully dynamic, Bias = Dyn (true)
     let _l8 = Linear::<Dyn, B, Dyn>::new_with((10, 20), true).unwrap();
@@ -47,7 +47,7 @@ fn test_conv1d_permutations() {
     let _c1 = Conv1d::<s![16, 3, 3, 1, 1, 1], B>::new().unwrap();
 
     // 2. Fully static, Bias = False
-    let _c2 = Conv1d::<s![16, 3, 3, 1, 1, 1], B, kindle_core::nn::optional::False>::new().unwrap();
+    let _c2 = Conv1d::<s![16, 3, 3, 1, 1, 1], B, kindle_core::prelude::False>::new().unwrap();
 
     // 3. Fully static, Bias = Dyn
     let _c3b = Conv1d::<s![16, 3, 3, 1, 1, 1], B, Dyn>::new(true).unwrap();
@@ -57,7 +57,7 @@ fn test_conv1d_permutations() {
 
     // 5. Dynamic channels, Bias = False
     let _c4 =
-        Conv1d::<s![dyn, dyn, 3, 1, 1, 1], B, kindle_core::nn::optional::False>::new_with((16, 3))
+        Conv1d::<s![dyn, dyn, 3, 1, 1, 1], B, kindle_core::prelude::False>::new_with((16, 3))
             .unwrap();
 
     // 6. Dynamic channels, Bias = Dyn
@@ -74,7 +74,7 @@ fn test_conv2d_permutations() {
     let _c1 = Conv2d::<s![16, 3, 3, 1, 1, 1], B>::new().unwrap();
 
     // 2. Fully static, Bias = False
-    let _c2 = Conv2d::<s![16, 3, 3, 1, 1, 1], B, kindle_core::nn::optional::False>::new().unwrap();
+    let _c2 = Conv2d::<s![16, 3, 3, 1, 1, 1], B, kindle_core::prelude::False>::new().unwrap();
 
     // 3. Fully static, Bias = Dyn
     let _c3b = Conv2d::<s![16, 3, 3, 1, 1, 1], B, Dyn>::new(true).unwrap();
@@ -84,7 +84,7 @@ fn test_conv2d_permutations() {
 
     // 5. Dynamic channels, Bias = False
     let _c4 =
-        Conv2d::<s![dyn, dyn, 3, 1, 1, 1], B, kindle_core::nn::optional::False>::new_with((16, 3))
+        Conv2d::<s![dyn, dyn, 3, 1, 1, 1], B, kindle_core::prelude::False>::new_with((16, 3))
             .unwrap();
 
     // 6. Dynamic channels, Bias = Dyn

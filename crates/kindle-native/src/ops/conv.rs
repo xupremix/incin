@@ -40,7 +40,7 @@
 //! offset arithmetic (Pitfall 4). Only `groups == 1` is supported, matching
 //! `CandleBackend::conv_transpose2d`'s own confirmed effective behavior.
 
-use kindle_core::err::Error;
+use kindle_core::prelude::Error;
 use kindle_core::prelude::{DType, NumericOps, Result, TensorOps};
 
 use crate::NativeBackend;

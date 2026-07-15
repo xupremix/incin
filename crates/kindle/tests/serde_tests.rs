@@ -1,13 +1,14 @@
-use kindle::nn::StateDict;
+use kindle::StateDict;
 use kindle::prelude::*;
-use hashbrown::HashMap;
+extern crate alloc;
+use alloc::collections::BTreeMap;
 
 type CpuBackend = DefaultBackend;
 
 #[test]
 fn test_state_dict_extraction() -> Result<()> {
     let layer = Linear::<s![10, 5], CpuBackend>::new()?;
-    let mut map = HashMap::new();
+    let mut map = BTreeMap::new();
 
     // Extract state
     layer.state_dict("linear.", &mut map);

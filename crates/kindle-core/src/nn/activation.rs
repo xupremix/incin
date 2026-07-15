@@ -11,7 +11,7 @@ impl<B: Backend> Parameters<B> for ReLU {
     fn named_parameters(
         &self,
         _prefix: &str,
-        _map: &mut hashbrown::HashMap<String, B::RawVar>,
+        _map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
     ) {
     }
 }
@@ -37,7 +37,7 @@ impl<B: Backend> Parameters<B> for GELU {
     fn named_parameters(
         &self,
         _prefix: &str,
-        _map: &mut hashbrown::HashMap<String, B::RawVar>,
+        _map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
     ) {
     }
 }
@@ -63,7 +63,7 @@ impl<B: Backend> Parameters<B> for Swish {
     fn named_parameters(
         &self,
         _prefix: &str,
-        _map: &mut hashbrown::HashMap<String, B::RawVar>,
+        _map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
     ) {
     }
 }
@@ -100,7 +100,7 @@ impl<B: Backend> Parameters<B> for Softmax {
     fn named_parameters(
         &self,
         _prefix: &str,
-        _map: &mut hashbrown::HashMap<String, B::RawVar>,
+        _map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
     ) {
     }
 }
@@ -125,7 +125,7 @@ impl<B: Backend> Parameters<B> for Sigmoid {
     fn named_parameters(
         &self,
         _prefix: &str,
-        _map: &mut hashbrown::HashMap<String, B::RawVar>,
+        _map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
     ) {
     }
 }
@@ -150,7 +150,7 @@ impl<B: Backend> Parameters<B> for Tanh {
     fn named_parameters(
         &self,
         _prefix: &str,
-        _map: &mut hashbrown::HashMap<String, B::RawVar>,
+        _map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
     ) {
     }
 }
@@ -169,61 +169,61 @@ impl<B: Backend> crate::nn::module::StateDict<B> for ReLU {
     fn load_state_dict(
         &mut self,
         _: &str,
-        _: &hashbrown::HashMap<String, Tensor<Dyn, B>>,
+        _: &alloc::collections::BTreeMap<String, Tensor<Dyn, B>>,
     ) -> crate::prelude::Result<()> {
         Ok(())
     }
-    fn state_dict(&self, _: &str, _: &mut hashbrown::HashMap<String, Tensor<Dyn, B>>) {}
+    fn state_dict(&self, _: &str, _: &mut alloc::collections::BTreeMap<String, Tensor<Dyn, B>>) {}
 }
 impl<B: Backend> crate::nn::module::StateDict<B> for GELU {
     fn load_state_dict(
         &mut self,
         _: &str,
-        _: &hashbrown::HashMap<String, Tensor<Dyn, B>>,
+        _: &alloc::collections::BTreeMap<String, Tensor<Dyn, B>>,
     ) -> crate::prelude::Result<()> {
         Ok(())
     }
-    fn state_dict(&self, _: &str, _: &mut hashbrown::HashMap<String, Tensor<Dyn, B>>) {}
+    fn state_dict(&self, _: &str, _: &mut alloc::collections::BTreeMap<String, Tensor<Dyn, B>>) {}
 }
 impl<B: Backend> crate::nn::module::StateDict<B> for Swish {
     fn load_state_dict(
         &mut self,
         _: &str,
-        _: &hashbrown::HashMap<String, Tensor<Dyn, B>>,
+        _: &alloc::collections::BTreeMap<String, Tensor<Dyn, B>>,
     ) -> crate::prelude::Result<()> {
         Ok(())
     }
-    fn state_dict(&self, _: &str, _: &mut hashbrown::HashMap<String, Tensor<Dyn, B>>) {}
+    fn state_dict(&self, _: &str, _: &mut alloc::collections::BTreeMap<String, Tensor<Dyn, B>>) {}
 }
 impl<B: Backend> crate::nn::module::StateDict<B> for Softmax {
     fn load_state_dict(
         &mut self,
         _: &str,
-        _: &hashbrown::HashMap<String, Tensor<Dyn, B>>,
+        _: &alloc::collections::BTreeMap<String, Tensor<Dyn, B>>,
     ) -> crate::prelude::Result<()> {
         Ok(())
     }
-    fn state_dict(&self, _: &str, _: &mut hashbrown::HashMap<String, Tensor<Dyn, B>>) {}
+    fn state_dict(&self, _: &str, _: &mut alloc::collections::BTreeMap<String, Tensor<Dyn, B>>) {}
 }
 impl<B: Backend> crate::nn::module::StateDict<B> for Sigmoid {
     fn load_state_dict(
         &mut self,
         _: &str,
-        _: &hashbrown::HashMap<String, Tensor<Dyn, B>>,
+        _: &alloc::collections::BTreeMap<String, Tensor<Dyn, B>>,
     ) -> crate::prelude::Result<()> {
         Ok(())
     }
-    fn state_dict(&self, _: &str, _: &mut hashbrown::HashMap<String, Tensor<Dyn, B>>) {}
+    fn state_dict(&self, _: &str, _: &mut alloc::collections::BTreeMap<String, Tensor<Dyn, B>>) {}
 }
 impl<B: Backend> crate::nn::module::StateDict<B> for Tanh {
     fn load_state_dict(
         &mut self,
         _: &str,
-        _: &hashbrown::HashMap<String, Tensor<Dyn, B>>,
+        _: &alloc::collections::BTreeMap<String, Tensor<Dyn, B>>,
     ) -> crate::prelude::Result<()> {
         Ok(())
     }
-    fn state_dict(&self, _: &str, _: &mut hashbrown::HashMap<String, Tensor<Dyn, B>>) {}
+    fn state_dict(&self, _: &str, _: &mut alloc::collections::BTreeMap<String, Tensor<Dyn, B>>) {}
 }
 
 impl crate::nn::module::NamedLayers for ReLU {

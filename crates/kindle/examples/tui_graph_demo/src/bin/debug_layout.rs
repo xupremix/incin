@@ -1,8 +1,9 @@
+extern crate alloc;
 use kindle::prelude::*;
-use kindle::nn::{Linear, Module};
-use kindle_core::tensor::tracing::{TRACING_GRAPH, TracingBackend, extract_graph};
+use kindle::{Linear, Module};
+use kindle_core::prelude::{TRACING_GRAPH, TracingBackend, extract_graph};
 use kindle_native::NativeBackend;
-use std::collections::HashMap;
+use alloc::collections::BTreeMap;
 
 type NB = NativeBackend<f32, Cpu>;
 type TB = TracingBackend<NB>;
@@ -54,8 +55,8 @@ fn main() -> anyhow::Result<()> {
 
     println!("Graph has {} nodes.", graph.nodes.len());
 
-    let mut value_depths: HashMap<usize, usize> = HashMap::new();
-    let mut node_depths: HashMap<usize, usize> = HashMap::new();
+    let mut value_depths: BTreeMap<usize, usize> = BTreeMap::new();
+    let mut node_depths: BTreeMap<usize, usize> = BTreeMap::new();
     let mut max_depth = 0;
     
     for node in &graph.nodes {
@@ -76,7 +77,7 @@ fn main() -> anyhow::Result<()> {
         }
     }
 
-    let mut positions = HashMap::new();
+    let mut positions = BTreeMap::new();
     let spacing_z = 20.0;
     let spacing_x = 20.0;
     let spacing_y = 15.0; 

@@ -8,6 +8,7 @@ use crate::prelude::{Backend, Dyn, DynShape, RequiresGrad, Result, Shape, Tensor
 use crate::tensor::ops::*;
 
 use alloc::vec::Vec;
+use alloc::string::ToString;
 
 impl<
     S: Shape + DynShape,

@@ -1,5 +1,5 @@
 extern crate kindle_core as kindle;
-use kindle_core as kindle;
+use kindle_core::prelude::dummy::DummyBackend;
 use kindle_core::prelude::*;
 use kindle_macros::s;
 

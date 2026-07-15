@@ -44,7 +44,7 @@ impl<B: Backend> TracingBackend<B> {
                 op,
                 vec![lhs.value_id, rhs.value_id],
                 vec![out_id],
-                hashbrown::HashMap::new(),
+                alloc::collections::BTreeMap::new(),
             );
             out_id
         };
@@ -68,7 +68,7 @@ impl<B: Backend> TracingBackend<B> {
                 op,
                 vec![t.value_id],
                 vec![out_id],
-                hashbrown::HashMap::new(),
+                alloc::collections::BTreeMap::new(),
             );
             out_id
         };
@@ -418,7 +418,7 @@ impl<B: Backend> FloatOps<Self> for TracingBackend<B> {
         let value_id = {
             let mut g = TRACING_GRAPH.lock();
             let out_id = g.add_value(shape, KindleDType::F32, None);
-            let mut attrs = hashbrown::HashMap::new();
+            let mut attrs = alloc::collections::BTreeMap::new();
             attrs.insert(
                 alloc::string::String::from("axis"),
                 crate::graph::AttributeValue::Int(dim as i64),
@@ -554,7 +554,7 @@ impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
                 OpType::ToDtype,
                 vec![t.value_id],
                 vec![out_id],
-                hashbrown::HashMap::new(),
+                alloc::collections::BTreeMap::new(),
             );
             out_id
         };
@@ -591,7 +591,7 @@ impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
                 OpType::Reshape,
                 vec![t.value_id, shape_val_id],
                 vec![out_id],
-                hashbrown::HashMap::new(),
+                alloc::collections::BTreeMap::new(),
             );
             out_id
         };
@@ -608,7 +608,7 @@ impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
         let value_id = {
             let mut g = TRACING_GRAPH.lock();
             let out_id = g.add_value(shape_out.clone(), KindleDType::F32, None);
-            let mut attrs = hashbrown::HashMap::new();
+            let mut attrs = alloc::collections::BTreeMap::new();
             // simple perm vector building for ONNX
             let mut perm: Vec<i64> = (0..shape_out.len() as i64).collect();
             perm.swap(dim1, dim2);
@@ -640,7 +640,7 @@ impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
             let mut g = TRACING_GRAPH.lock();
             let out_id = g.add_value(shape_out, KindleDType::F32, None);
             let inputs = tensors.iter().map(|t| t.value_id).collect();
-            let mut attrs = hashbrown::HashMap::new();
+            let mut attrs = alloc::collections::BTreeMap::new();
             attrs.insert(
                 alloc::string::String::from("axis"),
                 crate::graph::AttributeValue::Int(dim as i64),
@@ -662,7 +662,7 @@ impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
             let mut g = TRACING_GRAPH.lock();
             let out_id = g.add_value(shape_out, KindleDType::F32, None);
             let inputs = tensors.iter().map(|t| t.value_id).collect();
-            let mut attrs = hashbrown::HashMap::new();
+            let mut attrs = alloc::collections::BTreeMap::new();
             attrs.insert(
                 alloc::string::String::from("axis"),
                 crate::graph::AttributeValue::Int(dim as i64),
@@ -759,7 +759,7 @@ impl<B: Backend + crate::tensor::backend::ModuleOps<B>> ModuleOps<Self> for Trac
             if let Some(b) = bias {
                 inputs.push(b.value_id);
             }
-            let mut attrs = hashbrown::HashMap::new();
+            let mut attrs = alloc::collections::BTreeMap::new();
             attrs.insert(
                 alloc::string::String::from("strides"),
                 crate::graph::AttributeValue::Ints(vec![stride as i64]),
@@ -806,7 +806,7 @@ impl<B: Backend + crate::tensor::backend::ModuleOps<B>> ModuleOps<Self> for Trac
             if let Some(b) = bias {
                 inputs.push(b.value_id);
             }
-            let mut attrs = hashbrown::HashMap::new();
+            let mut attrs = alloc::collections::BTreeMap::new();
             attrs.insert(
                 alloc::string::String::from("strides"),
                 crate::graph::AttributeValue::Ints(vec![stride as i64, stride as i64]),
@@ -873,7 +873,7 @@ impl<B: Backend + crate::tensor::backend::ModuleOps<B>> ModuleOps<Self> for Trac
                 OpType::Embedding,
                 vec![t.value_id, w.value_id],
                 vec![out_id],
-                hashbrown::HashMap::new(),
+                alloc::collections::BTreeMap::new(),
             );
             out_id
         };

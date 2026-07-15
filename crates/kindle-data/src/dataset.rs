@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use alloc::sync::Arc;
 
 pub trait Dataset: Send + Sync {
     type Item: Send + 'static;

@@ -27,13 +27,13 @@ pub trait Optimizer<B: Backend> {
 /// optimizer.step(&gradients)?;
 /// ```
 pub struct SGD<B: Backend, K: DType = f32> {
-    params: hashbrown::HashMap<String, B::RawVar>,
+    params: alloc::collections::BTreeMap<String, B::RawVar>,
     pub lr: f64,
     _marker: core::marker::PhantomData<K>,
 }
 
 impl<B: Backend, K: DType> SGD<B, K> {
-    pub fn new(params: hashbrown::HashMap<String, B::RawVar>, lr: f64) -> Self {
+    pub fn new(params: alloc::collections::BTreeMap<String, B::RawVar>, lr: f64) -> Self {
         Self {
             params,
             lr,
@@ -71,19 +71,19 @@ impl<B: Backend, K: DType> Optimizer<B> for SGD<B, K> {
 /// optimizer.step(&gradients)?;
 /// ```
 pub struct AdamW<B: Backend, K: DType = f32> {
-    params: hashbrown::HashMap<String, B::RawVar>,
+    params: alloc::collections::BTreeMap<String, B::RawVar>,
     pub lr: f64,
     pub beta1: f64,
     pub beta2: f64,
     pub eps: f64,
     pub weight_decay: f64,
-    m: hashbrown::HashMap<String, B::Storage<K>>,
-    v: hashbrown::HashMap<String, B::Storage<K>>,
+    m: alloc::collections::BTreeMap<String, B::Storage<K>>,
+    v: alloc::collections::BTreeMap<String, B::Storage<K>>,
     step: usize,
 }
 
 impl<B: Backend, K: DType> AdamW<B, K> {
-    pub fn new(params: hashbrown::HashMap<String, B::RawVar>, lr: f64) -> Self {
+    pub fn new(params: alloc::collections::BTreeMap<String, B::RawVar>, lr: f64) -> Self {
         Self {
             params,
             lr,
@@ -91,8 +91,8 @@ impl<B: Backend, K: DType> AdamW<B, K> {
             beta2: 0.999,
             eps: 1e-8,
             weight_decay: 0.01,
-            m: hashbrown::HashMap::new(),
-            v: hashbrown::HashMap::new(),
+            m: alloc::collections::BTreeMap::new(),
+            v: alloc::collections::BTreeMap::new(),
             step: 0,
         }
     }
@@ -154,26 +154,26 @@ impl<B: Backend, K: DType> Optimizer<B> for AdamW<B, K> {
 /// optimizer.step(&gradients)?;
 /// ```
 pub struct Adam<B: Backend, K: DType = f32> {
-    params: hashbrown::HashMap<String, B::RawVar>,
+    params: alloc::collections::BTreeMap<String, B::RawVar>,
     pub lr: f64,
     pub beta1: f64,
     pub beta2: f64,
     pub eps: f64,
-    m: hashbrown::HashMap<String, B::Storage<K>>,
-    v: hashbrown::HashMap<String, B::Storage<K>>,
+    m: alloc::collections::BTreeMap<String, B::Storage<K>>,
+    v: alloc::collections::BTreeMap<String, B::Storage<K>>,
     step: usize,
 }
 
 impl<B: Backend, K: DType> Adam<B, K> {
-    pub fn new(params: hashbrown::HashMap<String, B::RawVar>, lr: f64) -> Self {
+    pub fn new(params: alloc::collections::BTreeMap<String, B::RawVar>, lr: f64) -> Self {
         Self {
             params,
             lr,
             beta1: 0.9,
             beta2: 0.999,
             eps: 1e-8,
-            m: hashbrown::HashMap::new(),
-            v: hashbrown::HashMap::new(),
+            m: alloc::collections::BTreeMap::new(),
+            v: alloc::collections::BTreeMap::new(),
             step: 0,
         }
     }

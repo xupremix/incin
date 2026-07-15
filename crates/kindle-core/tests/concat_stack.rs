@@ -1,8 +1,8 @@
 extern crate kindle_core as kindle;
 
 use kindle_core::prelude::*;
-use kindle_core::tensor::backend::dummy::DummyBackend;
-use kindle_core::tensor::device::Cpu;
+use kindle_core::prelude::dummy::DummyBackend;
+use kindle_core::prelude::Cpu;
 use kindle_macros::s;
 
 #[test]

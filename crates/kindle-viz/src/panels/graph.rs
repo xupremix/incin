@@ -11,7 +11,7 @@ use ratatui::{
         Cell, Paragraph, Row, Table,
     },
 };
-use std::collections::HashMap;
+use alloc::collections::BTreeMap;
 
 #[derive(PartialEq, Eq)]
 pub enum ViewMode {
@@ -50,9 +50,9 @@ impl GraphModuleListPanel {
         }
     }
 
-    fn calculate_3d_layout(&self, snapshot: &GraphSnapshotEvent) -> HashMap<usize, (f64, f64, f64)> {
-        let mut value_depths: HashMap<usize, usize> = HashMap::new();
-        let mut node_depths: HashMap<usize, usize> = HashMap::new();
+    fn calculate_3d_layout(&self, snapshot: &GraphSnapshotEvent) -> BTreeMap<usize, (f64, f64, f64)> {
+        let mut value_depths: BTreeMap<usize, usize> = BTreeMap::new();
+        let mut node_depths: BTreeMap<usize, usize> = BTreeMap::new();
         let mut max_depth = 0;
         
         // Compute depth
@@ -73,7 +73,7 @@ impl GraphModuleListPanel {
             }
         }
 
-        let mut positions = HashMap::new();
+        let mut positions = BTreeMap::new();
         let spacing_z = 30.0;
         let spacing_x = 25.0;
 
@@ -190,7 +190,7 @@ impl Panel for GraphModuleListPanel {
                 }
             };
 
-            let mut value_to_node: HashMap<usize, usize> = HashMap::new();
+            let mut value_to_node: BTreeMap<usize, usize> = BTreeMap::new();
             for node in &snapshot.graph.nodes {
                 for &out in &node.outputs {
                     value_to_node.insert(out, node.id);

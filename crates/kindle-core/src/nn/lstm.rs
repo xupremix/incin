@@ -303,7 +303,7 @@ where
     fn named_parameters(
         &self,
         prefix: &str,
-        map: &mut hashbrown::HashMap<String, B::RawVar>,
+        map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
     ) {
         self.wi_i.named_parameters(&format!("{}wi_i.", prefix), map);
         self.wi_f.named_parameters(&format!("{}wi_f.", prefix), map);
@@ -414,7 +414,7 @@ where
     fn named_parameters(
         &self,
         prefix: &str,
-        map: &mut hashbrown::HashMap<String, B::RawVar>,
+        map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
     ) {
         self.cell.named_parameters(&format!("{}cell.", prefix), map);
     }

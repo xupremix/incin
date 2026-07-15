@@ -13,8 +13,8 @@
 //! never overwritten (a bare `.insert()`) — this is NATBACK-05's literal
 //! correctness gate.
 
-use hashbrown::HashMap;
-use std::cell::RefCell;
+use alloc::collections::BTreeMap;
+use core::cell::RefCell;
 
 use kindle_core::prelude::Result;
 
@@ -39,9 +39,9 @@ pub struct TapeEntry {
 }
 
 /// The backend's gradient container: `Backend::Grads` in a later plan's
-/// `lib.rs` impl. Wraps a plain `HashMap` keyed by `TensorId`.
+/// `lib.rs` impl. Wraps a plain `BTreeMap` keyed by `TensorId`.
 pub struct NativeGrads {
-    pub grads: HashMap<TensorId, NativeStorage>,
+    pub grads: BTreeMap<TensorId, NativeStorage>,
 }
 
 impl NativeGrads {
@@ -81,7 +81,7 @@ fn len() -> usize {
 ///    closure and accumulate each resulting gradient via
 ///    `entry(id).and_modify(sum).or_insert(new)` — never a bare `.insert()`.
 pub fn backward(loss: &NativeStorage) -> Result<NativeGrads> {
-    let mut grads: HashMap<TensorId, NativeStorage> = HashMap::new();
+    let mut grads: BTreeMap<TensorId, NativeStorage> = BTreeMap::new();
     grads.insert(loss.id, NativeStorage::ones_like(loss));
 
     // Drain BEFORE walking (D-06) — mirrors tracing.rs's extract_graph()
@@ -124,7 +124,7 @@ fn check_nan(storage: &NativeStorage, id: TensorId) {
 /// Same as `backward()`, but aggressively validates every intermediate gradient
 /// for NaN or Infinity values, panicking immediately to pinpoint the exact operation.
 pub fn backward_with_nan_check(loss: &NativeStorage) -> Result<NativeGrads> {
-    let mut grads: HashMap<TensorId, NativeStorage> = HashMap::new();
+    let mut grads: BTreeMap<TensorId, NativeStorage> = BTreeMap::new();
     grads.insert(loss.id, NativeStorage::ones_like(loss));
 
     let entries = TAPE.with(|t| core::mem::take(&mut *t.borrow_mut()));

@@ -1,6 +1,6 @@
 use crate::{NativeBackend, storage::NativeBuffer};
-use kindle_core::tensor::backend::{Backend, OptimizerOps};
-use kindle_core::tensor::dtype::DType;
+use kindle_core::prelude::{Backend, OptimizerOps};
+use kindle_core::prelude::DType;
 use kindle_core::prelude::Result;
 
 impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device + Clone + 'static> OptimizerOps<NativeBackend<T, D>> for NativeBackend<T, D> {
@@ -50,16 +50,16 @@ impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device + Clone + '
                     .ok_or(kindle_core::prelude::Error::UnsupportedBackendOperation { op: "adamw", backend: "Cuda requires f32" })? };
 
                 // Mutate m and v in place
-                // Note: Arc::get_mut is used on &mut m.buffer because we removed them from the HashMap in AdamW::step
-                let m_buffer = std::sync::Arc::get_mut(&mut m.buffer).expect("m is not uniquely owned");
-                let v2_buffer = std::sync::Arc::get_mut(&mut v.buffer).expect("v is not uniquely owned");
+                // Note: Arc::get_mut is used on &mut m.buffer because we removed them from the BTreeMap in AdamW::step
+                let m_buffer = alloc::sync::Arc::get_mut(&mut m.buffer).expect("m is not uniquely owned");
+                let v2_buffer = alloc::sync::Arc::get_mut(&mut v.buffer).expect("v is not uniquely owned");
 
                 if let (NativeBuffer::Cuda(m_buf_mut), NativeBuffer::Cuda(v2_buf_mut)) = (m_buffer, v2_buffer) {
-                    let m_slice_u8: &mut cudarc::driver::CudaSlice<u8> = std::sync::Arc::get_mut(&mut m_buf_mut.data).expect("Failed to get mut to m buffer data");
+                    let m_slice_u8: &mut cudarc::driver::CudaSlice<u8> = alloc::sync::Arc::get_mut(&mut m_buf_mut.data).expect("Failed to get mut to m buffer data");
                     let mut m_f32 = unsafe { m_slice_u8.transmute_mut::<f32>(num_elements)
                         .ok_or(kindle_core::prelude::Error::UnsupportedBackendOperation { op: "adamw", backend: "Cuda requires f32" })? };
 
-                    let v2_slice_u8: &mut cudarc::driver::CudaSlice<u8> = std::sync::Arc::get_mut(&mut v2_buf_mut.data).expect("Failed to get mut to v buffer data");
+                    let v2_slice_u8: &mut cudarc::driver::CudaSlice<u8> = alloc::sync::Arc::get_mut(&mut v2_buf_mut.data).expect("Failed to get mut to v buffer data");
                     let mut v2_f32 = unsafe { v2_slice_u8.transmute_mut::<f32>(num_elements)
                         .ok_or(kindle_core::prelude::Error::UnsupportedBackendOperation { op: "adamw", backend: "Cuda requires f32" })? };
 
@@ -97,13 +97,13 @@ impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device + Clone + '
                     }
                     let new_var_buf = crate::storage::NativeCudaBuffer {
                         len: num_elements,
-                        data: std::sync::Arc::new(new_dev_slice),
+                        data: alloc::sync::Arc::new(new_dev_slice),
                         device: v_buf.device.clone(),
                         device_id: v_buf.device_id,
                     };
                     
                     let updated_storage = crate::storage::NativeStorage {
-                        buffer: std::sync::Arc::new(NativeBuffer::Cuda(new_var_buf)),
+                        buffer: alloc::sync::Arc::new(NativeBuffer::Cuda(new_var_buf)),
                         shape: var_storage.shape.clone(),
                         strides: var_storage.strides.clone(),
                         offset: var_storage.offset,

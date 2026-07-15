@@ -63,7 +63,7 @@ pub(crate) fn idx(input: TokenStream) -> TokenStream {
                                 }
                             };
                             if val == 1 {
-                                quote! { kindle::shapes::InferDim }
+                                quote! { kindle::prelude::InferDim }
                             } else {
                                 return syn::Error::new_spanned(
                                     lit_int,
@@ -90,7 +90,7 @@ pub(crate) fn idx(input: TokenStream) -> TokenStream {
             }
             Expr::Path(expr_path) => {
                 if let Some(ident) = expr_path.path.get_ident() {
-                    quote! { kindle::shapes::NamedDyn<#ident> }
+                    quote! { kindle::prelude::NamedDyn<#ident> }
                 } else {
                     return syn::Error::new_spanned(
                         &expr_path,
@@ -102,7 +102,7 @@ pub(crate) fn idx(input: TokenStream) -> TokenStream {
             }
             Expr::Range(expr_range) => match (&expr_range.start, &expr_range.end) {
                 (None, None) => {
-                    quote! { kindle::shapes::Ellipsis }
+                    quote! { kindle::prelude::Ellipsis }
                 }
                 (Some(start), Some(end)) => {
                     let start_val = if let Expr::Lit(expr_lit) = &**start {
@@ -177,7 +177,7 @@ pub(crate) fn idx(input: TokenStream) -> TokenStream {
                     let start_type = crate::shape::lit_to_typenum(start_val, &path);
                     let end_type = crate::shape::lit_to_typenum(end_val, &path);
                     let diff_type = crate::shape::lit_to_typenum(diff, &path);
-                    quote! { kindle::shapes::Slice<#start_type, #end_type, #diff_type> }
+                    quote! { kindle::prelude::Slice<#start_type, #end_type, #diff_type> }
                 }
                 _ => {
                     return syn::Error::new_spanned(

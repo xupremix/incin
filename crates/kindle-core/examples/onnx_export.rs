@@ -1,9 +1,8 @@
-use kindle_core::nn::{Linear, Module};
-use kindle_core::onnx_exporter::OnnxExporter;
 use kindle_core::prelude::*;
-use kindle_core::tensor::backend::dummy::DummyBackend;
-use kindle_core::tensor::tracing::{TRACING_GRAPH, TracingBackend};
-use hashbrown::HashMap;
+use kindle_core::prelude::dummy::DummyBackend;
+use kindle_core::prelude::{TRACING_GRAPH, TracingBackend};
+extern crate alloc;
+use alloc::collections::BTreeMap;
 use std::path::Path;
 
 type B = TracingBackend<DummyBackend<f32, Cpu>>;
@@ -30,7 +29,7 @@ fn main() -> anyhow::Result<()> {
     let mut exporter = OnnxExporter::new(&path);
 
     // State dict is irrelevant here since the tracing graph already captured everything
-    exporter.serialize::<B>(&HashMap::new())?;
+    exporter.serialize::<B>(&BTreeMap::new())?;
 
     println!("ONNX export successful: {:?}", path);
 

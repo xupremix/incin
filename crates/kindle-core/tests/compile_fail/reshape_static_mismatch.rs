@@ -1,7 +1,7 @@
 extern crate kindle_core as kindle;
 use kindle_core as kindle;
 use kindle_core::prelude::*;
-use kindle_core::tensor::backend::dummy::DummyBackend;
+use kindle_core::prelude::dummy::DummyBackend;
 use kindle_macros::s;
 use typenum::{typenum::U2, typenum::U3, typenum::U4, typenum::U6};
 

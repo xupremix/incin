@@ -4,6 +4,8 @@
 //! implements against. `emitter` provides the non-blocking, dual-channel
 //! `Reporter` implementation; `transport` provides the I/O sinks it drains
 //! into.
+#[macro_use]
+extern crate alloc;
 
 pub mod emitter;
 pub mod err;

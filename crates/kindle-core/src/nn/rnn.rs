@@ -81,7 +81,7 @@ where
     fn named_parameters(
         &self,
         prefix: &str,
-        map: &mut hashbrown::HashMap<String, B::RawVar>,
+        map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
     ) {
         self.wi.named_parameters(&format!("{}wi.", prefix), map);
         self.wh.named_parameters(&format!("{}wh.", prefix), map);
@@ -174,7 +174,7 @@ where
     fn named_parameters(
         &self,
         prefix: &str,
-        map: &mut hashbrown::HashMap<String, B::RawVar>,
+        map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
     ) {
         self.cell.named_parameters(&format!("{}cell.", prefix), map);
     }
@@ -235,7 +235,7 @@ impl<
     fn load_state_dict(
         &mut self,
         prefix: &str,
-        tensors: &hashbrown::HashMap<String, Tensor<Dyn, B>>,
+        tensors: &alloc::collections::BTreeMap<String, Tensor<Dyn, B>>,
     ) -> crate::prelude::Result<()> {
         self.wi
             .load_state_dict(&format!("{}wi.", prefix), tensors)?;
@@ -246,7 +246,7 @@ impl<
     fn state_dict(
         &self,
         prefix: &str,
-        tensors: &mut hashbrown::HashMap<String, Tensor<Dyn, B>>,
+        tensors: &mut alloc::collections::BTreeMap<String, Tensor<Dyn, B>>,
     ) {
         self.wi.state_dict(&format!("{}wi.", prefix), tensors);
         self.wh.state_dict(&format!("{}wh.", prefix), tensors);
@@ -262,7 +262,7 @@ impl<
     fn load_state_dict(
         &mut self,
         prefix: &str,
-        tensors: &hashbrown::HashMap<String, Tensor<Dyn, B>>,
+        tensors: &alloc::collections::BTreeMap<String, Tensor<Dyn, B>>,
     ) -> crate::prelude::Result<()> {
         self.cell
             .load_state_dict(&format!("{}cell.", prefix), tensors)
@@ -270,7 +270,7 @@ impl<
     fn state_dict(
         &self,
         prefix: &str,
-        tensors: &mut hashbrown::HashMap<String, Tensor<Dyn, B>>,
+        tensors: &mut alloc::collections::BTreeMap<String, Tensor<Dyn, B>>,
     ) {
         self.cell.state_dict(&format!("{}cell.", prefix), tensors)
     }

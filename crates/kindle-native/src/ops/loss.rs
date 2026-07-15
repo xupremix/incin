@@ -24,7 +24,7 @@
 //! correct backward by composition with zero new tape entries of their own,
 //! exactly like `mse_loss`/`cross_entropy_loss` above.
 
-use kindle_core::nn::Reduction;
+use kindle_core::prelude::Reduction;
 use kindle_core::prelude::{Backend, DType, FloatOps, LossOps, NumericOps, ReductionOps, Result};
 
 use crate::NativeBackend;

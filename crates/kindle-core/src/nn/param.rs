@@ -312,7 +312,7 @@ impl<S: Shape + DynShape, B: Backend> Parameters<B> for Param<S, B> {
     fn named_parameters(
         &self,
         prefix: &str,
-        map: &mut hashbrown::HashMap<String, B::RawVar>,
+        map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
     ) {
         map.insert(prefix.to_string(), self.inner.clone());
     }
@@ -345,13 +345,13 @@ impl<S1: DynShape, B: Backend> Param<S1, B> {
 }
 
 use crate::nn::module::StateDict;
-use hashbrown::HashMap;
+use alloc::collections::BTreeMap;
 
 impl<S: Shape + DynShape, B: Backend> StateDict<B> for Param<S, B> {
     fn load_state_dict(
         &mut self,
         prefix: &str,
-        tensors: &HashMap<String, Tensor<Dyn, B>>,
+        tensors: &BTreeMap<String, Tensor<Dyn, B>>,
     ) -> Result<()> {
         if let Some(t) = tensors.get(prefix) {
             // we should replace self.inner or copy values into it.
@@ -362,7 +362,7 @@ impl<S: Shape + DynShape, B: Backend> StateDict<B> for Param<S, B> {
         Ok(())
     }
 
-    fn state_dict(&self, prefix: &str, tensors: &mut HashMap<String, Tensor<Dyn, B>>) {
+    fn state_dict(&self, prefix: &str, tensors: &mut BTreeMap<String, Tensor<Dyn, B>>) {
         if let Ok(t) = self.as_tensor()
             && let Ok(dyn_t) = t.into_shape::<Dyn>()
         {
@@ -602,7 +602,7 @@ impl<S: Shape + DynShape, B: Backend> Parameters<B> for Buffer<S, B> {
     fn named_parameters(
         &self,
         _prefix: &str,
-        _map: &mut hashbrown::HashMap<String, B::RawVar>,
+        _map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
     ) {
     }
 }
@@ -611,7 +611,7 @@ impl<S: Shape + DynShape, B: Backend> StateDict<B> for Buffer<S, B> {
     fn load_state_dict(
         &mut self,
         prefix: &str,
-        tensors: &HashMap<String, Tensor<Dyn, B>>,
+        tensors: &BTreeMap<String, Tensor<Dyn, B>>,
     ) -> Result<()> {
         if let Some(t) = tensors.get(prefix) {
             self.inner = B::var_from_tensor(&t.inner)?;
@@ -619,7 +619,7 @@ impl<S: Shape + DynShape, B: Backend> StateDict<B> for Buffer<S, B> {
         Ok(())
     }
 
-    fn state_dict(&self, prefix: &str, tensors: &mut HashMap<String, Tensor<Dyn, B>>) {
+    fn state_dict(&self, prefix: &str, tensors: &mut BTreeMap<String, Tensor<Dyn, B>>) {
         if let Ok(t) = self.as_tensor()
             && let Ok(dyn_t) = t.into_shape::<Dyn>()
         {

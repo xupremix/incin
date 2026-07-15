@@ -1,5 +1,5 @@
 use kindle::Backend as _;
-use kindle::nn::Flatten;
+use kindle::Flatten;
 use kindle::prelude::*;
 use kindle_data::vision::mnist::MnistDataset;
 use kindle_data::{Collate, DataLoader, Dataset};
@@ -81,7 +81,7 @@ fn main() -> anyhow::Result<()> {
     ];
 
     // 3. Optimizer setup
-    let mut optim = kindle::optim::AdamW::<Backend>::new(model.parameters(), 0.001);
+    let mut optim = kindle::AdamW::<Backend>::new(model.parameters(), 0.001);
 
     // 4. Real Training Loop
     println!("Starting training...");

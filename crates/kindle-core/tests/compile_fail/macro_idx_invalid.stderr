@@ -40,7 +40,7 @@ error[E0061]: this method takes 1 argument but 0 arguments were supplied
  --> tests/compile_fail/macro_idx_invalid.rs:9:15
   |
 9 |     let _ = t.slice::<idx![..., -2]>();
-  |               ^^^^^^^^^^^^^^^^^^^^^^-- argument #1 of type `&[IndexSpec]` is missing
+  |               ^^^^^^^^^^^^^^^^^^^^^^-- argument #1 of type `&[kindle::tensor::ops::index::IndexSpec]` is missing
   |
 note: method defined here
  --> src/tensor/ops/manipulation.rs
@@ -49,5 +49,5 @@ note: method defined here
   |            ^^^^^
 help: provide the argument
   |
-9 |     let _ = t.slice::<idx![..., -2]>(/* &[IndexSpec] */);
-  |                                      ++++++++++++++++++
+9 |     let _ = t.slice::<idx![..., -2]>(/* &[kindle::tensor::ops::index::IndexSpec] */);
+  |                                      ++++++++++++++++++++++++++++++++++++++++++++++

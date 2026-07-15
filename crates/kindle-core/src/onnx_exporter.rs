@@ -2,7 +2,7 @@ use crate::graph::{AttributeValue, Graph};
 use crate::onnx_pb::onnx;
 use crate::prelude::*;
 use prost::Message;
-use hashbrown::HashMap;
+use alloc::collections::BTreeMap;
 use std::path::Path;
 
 pub struct OnnxExporter<'a> {
@@ -135,7 +135,7 @@ impl<'a> crate::serialize::Serializer for OnnxExporter<'a> {
 
     fn serialize<B: Backend>(
         &mut self,
-        _state_dict: &HashMap<String, Tensor<Dyn, B>>,
+        _state_dict: &BTreeMap<String, Tensor<Dyn, B>>,
     ) -> core::result::Result<(), Self::Error>
     where
         <<B as Backend>::Device as Device>::Field: Default,
@@ -162,7 +162,7 @@ impl<'a> crate::serialize::Deserializer for OnnxImporter<'a> {
     fn deserialize<B: Backend>(
         &mut self,
         _device: &KindleDevice,
-    ) -> core::result::Result<HashMap<String, Tensor<Dyn, B>>, Self::Error>
+    ) -> core::result::Result<BTreeMap<String, Tensor<Dyn, B>>, Self::Error>
     where
         <<B as Backend>::Device as Device>::Field: Default,
     {

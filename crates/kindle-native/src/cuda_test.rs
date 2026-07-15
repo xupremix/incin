@@ -1,7 +1,7 @@
 use kindle_core::prelude::{Backend, DType, NumericOps, Result};
 use crate::NativeBackend;
 use crate::storage::{NativeBuffer, NativeStorage, NativeCudaBuffer};
-use std::sync::Arc;
+use alloc::sync::Arc;
 use cudarc::driver::{CudaDevice, CudaSlice};
 
 pub fn test_cuda_add() -> Result<()> {

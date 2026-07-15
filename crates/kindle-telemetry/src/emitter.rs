@@ -10,7 +10,7 @@
 //! dedicated capacity).
 
 use crossbeam_channel::{Receiver, Sender, TryRecvError, TrySendError, bounded};
-use std::sync::Arc;
+use alloc::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
@@ -394,7 +394,7 @@ mod tests {
     }
 
     fn hyperparam_event() -> HyperparamEvent {
-        let mut params = std::collections::HashMap::new();
+        let mut params = alloc::collections::BTreeMap::new();
         params.insert("lr".to_string(), "0.001".to_string());
         HyperparamEvent {
             schema_version: CURRENT_SCHEMA_VERSION,
@@ -519,7 +519,7 @@ mod tests {
         emitter.log_epoch(EpochEvent {
             schema_version: CURRENT_SCHEMA_VERSION,
             epoch: 0,
-            metrics: std::collections::HashMap::new(),
+            metrics: alloc::collections::BTreeMap::new(),
         });
         emitter.log_memory(MemoryEvent {
             schema_version: CURRENT_SCHEMA_VERSION,
@@ -528,7 +528,7 @@ mod tests {
         });
         emitter.log_graph_snapshot(GraphSnapshotEvent {
             schema_version: CURRENT_SCHEMA_VERSION,
-            graph: kindle_core::graph::Graph::default(),
+            graph: kindle_core::prelude::Graph::default(),
         });
 
         // Bounded well beyond PRIORITY_SEND_TIMEOUT/IDLE_WAIT so the test is

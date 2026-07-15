@@ -35,18 +35,23 @@
 #[macro_use]
 pub(crate) extern crate alloc;
 
-pub mod err;
+pub(crate) mod err;
 
-pub mod graph;
-pub mod nn;
+pub(crate) mod graph;
+pub(crate) mod nn;
 #[cfg(feature = "std")]
-pub mod onnx_exporter;
+pub(crate) mod onnx_exporter;
 #[cfg(feature = "std")]
-pub mod onnx_pb;
-pub mod optim;
-pub mod serialize;
-pub mod shapes;
-pub mod tensor;
+pub(crate) mod onnx_pb;
+pub(crate) mod optim;
+pub(crate) mod serialize;
+pub(crate) mod shapes;
+pub(crate) mod tensor;
+
+pub mod loss {
+    pub use crate::nn::loss::*;
+}
+
 
 pub mod prelude {
     pub use super::err::*;
@@ -56,12 +61,24 @@ pub mod prelude {
         batch_norm::BatchNorm2d,
         conv1d::Conv1d,
         conv2d::Conv2d,
+        embedding::Embedding,
+        flatten::Flatten,
         layer_norm::LayerNorm,
         linear::{Linear, LinearShape},
+        loss::{Reduction, CrossEntropyLoss, Mean, NoneReduction, MSELoss, L1Loss, BCEWithLogitsLoss},
         max_pool2d::MaxPool2d,
-        module::{LayerNode, Module, NamedLayers, Parameters, Sequential},
+        module::{
+            AutorefNamedLayers, AutorefNamedLayersFallback, AutorefParameters,
+            AutorefParametersFallback, AutorefShapeInfo, AutorefShapeInfoFallback,
+            AutorefStateDict, AutorefStateDictFallback, LayerNode, Module, NamedLayers,
+            Parameters, Sequential, StateDict, ToDevice,
+        },
         param::Param,
+        rnn::{RNN, RNNCell},
+        optional::{False, OptionalField, True},
+        init::Init,
     };
+    pub use crate::graph::{Graph, OpType};
     pub use crate::seq;
     pub use kindle_macros::{s, idx, module};
 
@@ -71,10 +88,10 @@ pub mod prelude {
     pub use alloc::vec::{self, Vec};
     pub use alloc::format;
     pub use alloc::boxed::Box;
-    pub use hashbrown::HashMap;
+    pub use alloc::collections::BTreeMap;
     #[cfg(feature = "std")]
     pub use crate::onnx_exporter::{OnnxExporter, OnnxImporter};
-    pub use crate::optim::{Gradients, Optimizer, SGD};
+    pub use crate::optim::{Adam, AdamW, Gradients, Optimizer, SGD};
     #[cfg(feature = "std")]
     pub use crate::serialize::{Format, ModelExt};
     pub use crate::serialize::{Deserializer, Serializer};
