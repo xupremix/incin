@@ -1,6 +1,6 @@
 # PROJECT MEMORY: Kindle Deep Learning Framework
 
-> **Instructions for Claude / AI Assistants**: Copy-paste this entire document into your initial prompt context when continuing work on another PC or session. It contains the complete architectural blueprint, workspace structure, autotuning design, and current status.
+> **Instructions for Claude / AI Assistants**: Copy-paste this entire document into your initial prompt context when continuing work on another PC or session. It contains the complete architectural blueprint, workspace structure, autotuning design, tensor shape ranges & indexing syntax, recent changelog, and current status.
 
 ---
 
@@ -52,7 +52,35 @@ pub trait BackendDevice<T: DType>: Device {
 
 ---
 
-## 3. CUDA GPU Autotuning Engine
+## 3. Shape Syntax, Ranges, & Slicing (`s![]`, `idx![]`)
+
+Kindle features compile-time type-checked shape bounds and multidimensional range slicing:
+
+### A. Static Shape Declarations (`s![]`)
+```rust
+// Static 4D Tensor: [Batch=2, Channels=3, Height=224, Width=224]
+type ImageBatch = s![2, 3, 224, 224];
+
+// Dynamic shapes or symbolic dimensions:
+type DynamicBatch = s![Dyn, 3, 224, 224];
+```
+
+### B. Multi-Dimensional Indexing & Slicing Ranges (`idx![]`)
+Ranges translate into zero-allocation type bounds:
+- `0..5`: Range slice along a dimension (`Slice<U0, U5>`).
+- `..`: Take full dimension (`Full`).
+- `...` or `..`: Fill missing dimensions (`Ellipsis`).
+- `-1`: Inferred dimension size in `reshape`.
+
+```rust
+// Slice tensor `t` of shape [10, 20, 30]:
+// Takes 0..5 on dim 0, full dim 1, and 15..30 on dim 2 -> output shape [5, 20, 15]
+let view = t.slice::<idx![0..5, .., 15..30]>()?;
+```
+
+---
+
+## 4. CUDA GPU Autotuning Engine
 
 GPU kernel execution is automatically optimized using a **3-tier autotuning engine** without requiring any macros or launch boilerplate from the end-user:
 
@@ -60,24 +88,9 @@ GPU kernel execution is automatically optimized using a **3-tier autotuning engi
 2. **Tier 2: Hardware Occupancy (`cudaOccupancyMaxPotentialBlockSize`)**: Computes optimal block sizes ($32 \dots 1024$) and grid sizes ($N_{\text{SM}} \times 8$) based on CUDA device attributes.
 3. **Tier 3: Empirical Profiling (`features = ["autotune"]`)**: Benchmarks matrix/kernel shape candidates on iteration 1 and caches the fastest configuration in `LRUCache<KernelKey, LaunchConfig>`.
 
-### Grid-Stride CUDA Kernels
-All CUDA C++ kernels in `crates/kindle-backends/src/cuda/ops/kernels/` utilize **Grid-Stride Loops** to natively handle any tensor shape (1D to N-D, odd dimensions, small or massive memory sizes):
-
-```cpp
-extern "C" __global__ void elementwise_binary(
-    const float* lhs, const float* rhs, float* out, unsigned int numel, unsigned int op_type
-) {
-    unsigned int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    unsigned int stride = blockDim.x * gridDim.x;
-    for (unsigned int i = idx; i < numel; i += stride) {
-        // Compute operation
-    }
-}
-```
-
 ---
 
-## 4. End-User API Experience
+## 5. End-User API Experience
 
 End-users write standard high-level Rust code. All hardware selection, autotuning, and tape tracking happen automatically behind the scenes:
 
@@ -91,11 +104,9 @@ type B = KindleBackend<f32, Cuda>;
 fn main() -> Result<()> {
     let device = CudaDevice::new(0)?;
     
-    // Create tensors with static shape bounds
     let a = Tensor::<s![32, 512], B>::ones(&device)?;
     let b = Tensor::<s![32, 512], B>::ones(&device)?;
 
-    // High-level operations automatically use autotuned GPU launches:
     let c = a.add(&b)?;
     let z = c.relu()?;
 
@@ -105,7 +116,22 @@ fn main() -> Result<()> {
 
 ---
 
-## 5. Development & Verification Commands
+## 6. Recent Project Changelog
+
+- **`c48c530`**: `docs: add PROJECT_MEMORY.md, autotuning spec, and fix training demo & doctests`.
+- **`1c8cb35`**: `chore: clean up obsolete Claude info and legacy planning files`.
+- **`a93ca32`**: `feat: complete CudaBackend integration and test/example fixes`.
+- **`74f197b`**: `feat: complete Phase 4 and Phase 5`.
+- **`243e6a5`**: `Fix compilation: remove orphaned CpuBuffer::Cuda references in cpu backend`.
+- **`f854c18`**: `Phase 4: Replaced metal config with wgpu in core, backends, and app lib`.
+- **`5c49e09`**: `Fix tests and examples after backend refactoring`.
+- **`68bc1f6`**: `feat: complete wgpu conv implementations and telemetry wiring`.
+- **Crate Consolidation**: Deleted `kindle-native` & `kindle-wgpu`, moving CPU, CUDA, and WGPU implementations under `kindle-backends`.
+- **Legacy Cleanup**: Removed deprecated `metal` and `candle` dependencies from default build targets.
+
+---
+
+## 7. Development & Verification Commands
 
 - **Build Workspace**: `cargo build --workspace`
 - **Run All Unit Tests**: `cargo test --workspace`
@@ -115,7 +141,7 @@ fn main() -> Result<()> {
 
 ---
 
-## 6. Current Status & Next Milestones
+## 8. Current Status & Next Milestones
 
 - [x] Unify CPU, CUDA, and WGPU backends under `kindle-backends`.
 - [x] Implement CUDA memory management (`CudaStorage`) via `cudarc`.
