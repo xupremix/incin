@@ -37,14 +37,6 @@
 
 /// Auto-generated documentation for conv.
 pub mod conv;
-#[cfg(feature = "cuda")]
-/// Auto-generated documentation for #[cfg(feature = "cuda")]
-#[cfg(feature = "cuda")]
-#[cfg(feature = "cuda")]
-#[cfg(feature = "cuda")]
-#[cfg(feature = "cuda")]
-#[cfg(feature = "cuda")]
-#[cfg(feature = "cuda")]
 /// Auto-generated documentation for elementwise.
 pub mod elementwise;
 /// Auto-generated documentation for embedding.

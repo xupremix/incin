@@ -8,7 +8,7 @@ license.workspace = true
 [dependencies]
 kindle = { path = "../.." }
 kindle-core = { path = "../../../kindle-core" }
-kindle-backends = { path = "../../../kindle-backends", features = ["cpu", "wgpu", ] }
+kindle-backends = { path = "../../../kindle-backends", default-features = false, features = ["cpu", "wgpu"] }
 kindle-telemetry = { path = "../../../kindle-telemetry" }
 anyhow = "1.0.103"
 
