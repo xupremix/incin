@@ -18,8 +18,19 @@ thread_local! {
     static TAPE: RefCell<Vec<TapeEntry>> = RefCell::new(Vec::new());
 }
 
+#[cfg(feature = "telemetry")]
+thread_local! {
+    static BACKWARD_STEP: RefCell<usize> = RefCell::new(0);
+}
+
 pub fn push(entry: TapeEntry) {
     TAPE.with(|t| t.borrow_mut().push(entry));
+    #[cfg(feature = "telemetry")]
+    {
+        let depth = TAPE.with(|t| t.borrow().len()) as f64;
+        let step = BACKWARD_STEP.with(|s| *s.borrow());
+        crate::telemetry::emit_scalar(step, "tape/depth", depth);
+    }
 }
 
 pub struct WgpuGrads {
@@ -36,6 +47,8 @@ pub fn backward(loss: &WgpuStorage) -> Result<WgpuGrads> {
     grads.insert(loss.id, WgpuStorage::new(buf, loss.shape.clone()));
 
     let entries = TAPE.with(|t| core::mem::take(&mut *t.borrow_mut()));
+    #[cfg(feature = "telemetry")]
+    let n_ops = entries.len();
 
     for entry in entries.into_iter().rev() {
         let Some(grad_out) = grads.get(&entry.output_id).cloned() else {
@@ -49,8 +62,29 @@ pub fn backward(loss: &WgpuStorage) -> Result<WgpuGrads> {
                 .or_insert(g);
         }
     }
+    #[cfg(feature = "telemetry")]
+    {
+        let step = BACKWARD_STEP.with(|s| {
+            let cur = *s.borrow();
+            *s.borrow_mut() += 1;
+            cur
+        });
+        emit_backward_telemetry(step, n_ops);
+    }
 
     Ok(WgpuGrads { grads })
+}
+
+#[cfg(feature = "telemetry")]
+fn emit_backward_telemetry(step: usize, n_ops: usize) {
+    crate::telemetry::emit_scalar(step, "tape/ops", n_ops as f64);
+    #[cfg(feature = "std")]
+    {
+        use kindle_core::prelude::TRACING_GRAPH;
+        if let Some(g) = TRACING_GRAPH.try_lock() {
+            crate::telemetry::emit_graph_snapshot((*g).clone());
+        }
+    }
 }
 
 fn check_nan(storage: &WgpuStorage, id: TensorId) {

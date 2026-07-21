@@ -10,6 +10,7 @@ pub mod prelude {
     pub use super::cpu::CpuBackend;
     
     #[cfg(feature = "cuda")]
+    #[allow(unused_imports)]
     pub use super::cuda::*;
 
     #[cfg(feature = "wgpu")]
@@ -30,3 +31,9 @@ pub mod wgpu;
 
 #[cfg(feature = "legacy")]
 pub mod legacy;
+
+#[cfg(feature = "telemetry")]
+pub mod telemetry;
+
+#[cfg(feature = "telemetry")]
+pub use telemetry::set_emitter;

@@ -20,6 +20,12 @@ use kindle_core::prelude::Result;
 
 use crate::cpu::storage::{CpuBuffer, CpuStorage, TensorId};
 
+// A thread-local backward-call counter for telemetry step tracking.
+#[cfg(feature = "telemetry")]
+thread_local! {
+    static BACKWARD_STEP: RefCell<usize> = RefCell::new(0);
+}
+
 /// A boxed backward closure: receives the accumulated gradient for a
 /// `TapeEntry`'s `output_id` and returns one gradient per `input_id`, in
 /// the same order.
@@ -63,6 +69,13 @@ thread_local! {
 /// Push a `TapeEntry` onto the thread-local tape, unconditionally (D-05).
 pub(crate) fn push(entry: TapeEntry) {
     TAPE.with(|t| t.borrow_mut().push(entry));
+    // Emit a scalar tracking tape depth when telemetry is enabled.
+    #[cfg(feature = "telemetry")]
+    {
+        let depth = TAPE.with(|t| t.borrow().len()) as f64;
+        let step = BACKWARD_STEP.with(|s| *s.borrow());
+        crate::telemetry::emit_scalar(step, "tape/depth", depth);
+    }
 }
 
 /// Number of entries currently on the tape. Exposed for tests proving the
@@ -92,6 +105,8 @@ pub fn backward(loss: &CpuStorage) -> Result<CpuGrads> {
     // Drain BEFORE walking (D-06) — mirrors tracing.rs's extract_graph()
     // mem::take idiom, but on an independent thread-local (D-04).
     let entries = TAPE.with(|t| core::mem::take(&mut *t.borrow_mut()));
+    #[cfg(feature = "telemetry")]
+    let n_ops = entries.len();
 
     for entry in entries.into_iter().rev() {
         let Some(grad_out) = grads.get(&entry.output_id).cloned() else {
@@ -109,7 +124,31 @@ pub fn backward(loss: &CpuStorage) -> Result<CpuGrads> {
         }
     }
 
+    #[cfg(feature = "telemetry")]
+    {
+        let step = BACKWARD_STEP.with(|s| {
+            let cur = *s.borrow();
+            *s.borrow_mut() += 1;
+            cur
+        });
+        emit_backward_telemetry(step, n_ops);
+    }
+
     Ok(CpuGrads { grads })
+}
+
+/// Emit telemetry post-backward when the feature is enabled.
+#[cfg(feature = "telemetry")]
+fn emit_backward_telemetry(step: usize, n_ops: usize) {
+    crate::telemetry::emit_scalar(step, "tape/ops", n_ops as f64);
+    // Snapshot the current tracing graph and ship it to kindle-viz.
+    #[cfg(feature = "std")]
+    {
+        use kindle_core::prelude::TRACING_GRAPH;
+        if let Some(g) = TRACING_GRAPH.try_lock() {
+            crate::telemetry::emit_graph_snapshot((*g).clone());
+        }
+    }
 }
 
 /// Helper to check if a tensor contains NaN or Infinity

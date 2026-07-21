@@ -4367,6 +4367,7 @@ dependencies = [
  "half",
  "hashbrown 0.14.5",
  "kindle-core",
+ "kindle-telemetry",
  "log",
  "ndarray 0.17.2",
  "pollster",
