@@ -1,6 +1,6 @@
 # PROJECT MEMORY: Kindle Deep Learning Framework
 
-> **Instructions for Claude / AI Assistants**: Copy-paste this entire document into your initial prompt context when continuing work on another PC or session. It contains the complete architectural blueprint, workspace structure, autotuning design, tensor shape ranges & indexing syntax, recent changelog, and current status.
+> **Instructions for Claude / AI Assistants**: Copy-paste this entire document into your initial prompt context when continuing work on another PC or session. It contains the complete architectural blueprint, workspace structure, autotuning design, tensor shape ranges & indexing syntax, API encapsulation rules, recent changelog, and current status.
 
 ---
 
@@ -18,6 +18,7 @@ kindle/
 │   ├── kindle-telemetry/      # Real-time event logging and execution tracing
 │   ├── kindle-data/           # DataLoader and Dataset utilities
 │   └── kindle-viz/            # TUI & visualization dashboard (ratatui)
+├── .agents/                   # Agent rules, workflows, and API guidelines
 └── docs/                      # Documentation and architecture specs
 ```
 
@@ -90,7 +91,17 @@ GPU kernel execution is automatically optimized using a **3-tier autotuning engi
 
 ---
 
-## 5. End-User API Experience
+## 5. Agent Guidelines & Public API Encapsulation (`.agents`)
+
+All AI agents working on this repository MUST follow these strict encapsulation rules:
+
+1. **`pub(crate)` is Default**: Never expose internal dispatch functions, kernel state, or raw buffers as `pub`. Always default to `pub(crate)` unless an item is explicitly required by end-users.
+2. **Private Struct Fields**: Even for public trait types (e.g. `CudaStorage`), internal fields like `buffer` or `shape` must be `pub(crate)` to prevent downstream mutation or memory safety leaks.
+3. **Graphify Workflow**: Run `graphify update .` after code modifications to keep `graphify-out/` current. (Note: `graphify-out/` is ignored by `.gitignore`).
+
+---
+
+## 6. End-User API Experience
 
 End-users write standard high-level Rust code. All hardware selection, autotuning, and tape tracking happen automatically behind the scenes:
 
@@ -116,8 +127,9 @@ fn main() -> Result<()> {
 
 ---
 
-## 6. Recent Project Changelog
+## 7. Recent Project Changelog
 
+- **`d3601a4`**: `docs: add tensor shape ranges, index syntax, and changelog to PROJECT_MEMORY.md`.
 - **`c48c530`**: `docs: add PROJECT_MEMORY.md, autotuning spec, and fix training demo & doctests`.
 - **`1c8cb35`**: `chore: clean up obsolete Claude info and legacy planning files`.
 - **`a93ca32`**: `feat: complete CudaBackend integration and test/example fixes`.
@@ -131,7 +143,7 @@ fn main() -> Result<()> {
 
 ---
 
-## 7. Development & Verification Commands
+## 8. Development & Verification Commands
 
 - **Build Workspace**: `cargo build --workspace`
 - **Run All Unit Tests**: `cargo test --workspace`
@@ -141,7 +153,7 @@ fn main() -> Result<()> {
 
 ---
 
-## 8. Current Status & Next Milestones
+## 9. Current Status & Next Milestones
 
 - [x] Unify CPU, CUDA, and WGPU backends under `kindle-backends`.
 - [x] Implement CUDA memory management (`CudaStorage`) via `cudarc`.
