@@ -101,8 +101,11 @@ pub type DefaultDevice = crate::prelude::Wgpu;
 pub type DefaultDevice = kindle_core::prelude::Cpu;
 
 #[cfg(feature = "cpu")]
-/// Default backend.
-pub type DefaultBackend = kindle_backends::cpu::CpuBackend<f32, kindle_core::prelude::Cpu>;
+/// Default backend (CPU with f32). Equivalent to `KindleBackend<f32, Cpu>`.
+pub type DefaultBackend = kindle_backends::KindleBackend<f32, kindle_core::prelude::Cpu>;
+
+/// Re-export of the unified backend type.
+pub use kindle_backends::KindleBackend;
 
 // No `DefaultBackend` fallback when `cpu` is disabled: a `()` placeholder
 // (the previous approach) doesn't implement `Backend`, so every type alias

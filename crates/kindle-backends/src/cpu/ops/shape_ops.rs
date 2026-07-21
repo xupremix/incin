@@ -11,15 +11,16 @@
 //! duplicate that logic, only add tape tracking (D-05: every op is a graph
 //! node, unconditionally recorded).
 
+use crate::cpu::CpuBackend;
 use kindle_core::prelude::Error;
+use kindle_core::prelude::*;
 use kindle_core::prelude::{Backend, DType, KindleDType, Result, TensorOps};
 
-use crate::cpu::CpuBackend;
 use crate::cpu::ops::matmul::{batched_matmul_impl, matmul_impl};
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
 use crate::cpu::tape::{self, TapeEntry};
 
-impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for CpuBackend<T, D> {
+impl<T: DType, D: Device> TensorOps<Self> for CpuBackend<T, D> {
     /// `reshape`.
     fn reshape<K: DType>(
         t: &<Self as Backend>::Storage<K>,

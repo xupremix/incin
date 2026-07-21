@@ -10,9 +10,10 @@
 //! whose backward closure calls `tape::unbroadcast` on the ORIGINAL
 //! (pre-broadcast) operand shapes.
 
+use crate::cpu::CpuBackend;
+use kindle_core::prelude::*;
 use kindle_core::prelude::{Backend, DType, FloatOps, NumericOps, Result};
 
-use crate::cpu::CpuBackend;
 use crate::cpu::storage::CpuStorage;
 use crate::cpu::tape::{self, TapeEntry};
 
@@ -141,7 +142,7 @@ fn erf_approx(x: f64) -> f64 {
     sign * y
 }
 
-impl<T: DType, D: kindle_core::prelude::Device> NumericOps<Self> for CpuBackend<T, D> {
+impl<T: DType, D: Device> NumericOps<Self> for CpuBackend<T, D> {
     /// `add`.
     fn add<K: DType>(
         lhs: &<Self as Backend>::Storage<K>,
@@ -290,7 +291,7 @@ impl<T: DType, D: kindle_core::prelude::Device> NumericOps<Self> for CpuBackend<
     }
 }
 
-impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for CpuBackend<T, D> {
+impl<T: DType, D: Device> FloatOps<Self> for CpuBackend<T, D> {
     /// `add_scalar_float`.
     fn add_scalar_float<K: DType>(
         t: &<Self as Backend>::Storage<K>,

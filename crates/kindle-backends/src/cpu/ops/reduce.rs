@@ -43,10 +43,11 @@
 //!   keep returning the typed unsupported-backend-operation error — never a
 //!   silent `Ok(t.clone())` placeholder (T-01-15 mitigation).
 
+use crate::cpu::CpuBackend;
 use kindle_core::prelude::Error;
+use kindle_core::prelude::*;
 use kindle_core::prelude::{Backend, DType, ReductionOps, Result};
 
-use crate::cpu::CpuBackend;
 use crate::cpu::ops::elementwise::increment_index;
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
 use crate::cpu::stride::contiguous_strides;
@@ -238,7 +239,7 @@ fn scatter_axis_grad(
 // ReductionOps impl
 // ---------------------------------------------------------------------------
 
-impl<T: DType, D: kindle_core::prelude::Device> ReductionOps<Self> for CpuBackend<T, D> {
+impl<T: DType, D: Device> ReductionOps<Self> for CpuBackend<T, D> {
     /// Sum every element of `t` into a single-element scalar storage (shape
     /// `[]`). Pushes a `TapeEntry` whose backward broadcasts the incoming
     /// scalar gradient uniformly back across `t`'s original shape.

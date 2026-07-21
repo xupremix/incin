@@ -1,7 +1,5 @@
-use crate::cpu::{
-    CpuBackend,
-    storage::{BlockQ8_0, CpuBuffer, CpuStorage},
-};
+use crate::cpu::CpuBackend;
+use crate::cpu::storage::{BlockQ8_0, CpuBuffer, CpuStorage};
 use kindle_core::prelude::*;
 use kindle_core::prelude::{Backend, QuantizedOps};
 use kindle_core::prelude::{FloatDType, QuantDType};

@@ -2,11 +2,9 @@ use crate::wgpu::dispatch;
 use crate::wgpu::storage::{WgpuBuffer, WgpuStorage};
 use kindle_core::prelude::*;
 
-/// WebGPU compute backend for Kindle.
-/// This backend evaluates tensor operations by compiling WGSL compute shaders
-/// and dispatching them to the user's primary GPU adapter via `wgpu`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct WgpuBackend<T, D>(core::marker::PhantomData<(T, D)>);
+/// WebGPU compute backend for Kindle. Type alias for `KindleBackend<T, D>`.
+#[derive(Clone)]
+pub struct WgpuBackend<T = f32, D = Wgpu>(core::marker::PhantomData<(T, D)>);
 
 #[derive(Clone)]
 /// Implementation of `WgpuVar` for the respective backend..
@@ -263,7 +261,7 @@ impl<T: DType, D: Device> CreationOps<Self> for WgpuBackend<T, D> {
 // ─────────────────────────────────────────────────────────────────────────────
 /// `binary_op`.
 #[allow(clippy::extra_unused_type_parameters)]
-fn binary_op<T: DType, D: Device>(
+fn binary_op<T: DType>(
     lhs: &WgpuStorage,
     rhs: &WgpuStorage,
     op_mode: u32,
@@ -290,7 +288,7 @@ impl<T: DType, D: Device> NumericOps<Self> for WgpuBackend<T, D> {
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let out = binary_op::<T, D>(lhs, rhs, 0, "add")?;
+        let out = binary_op::<T>(lhs, rhs, 0, "add")?;
         let (lhs_shape, rhs_shape) = (lhs.shape.clone(), rhs.shape.clone());
         let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
         crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
@@ -312,14 +310,14 @@ impl<T: DType, D: Device> NumericOps<Self> for WgpuBackend<T, D> {
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let out = binary_op::<T, D>(lhs, rhs, 1, "sub")?;
+        let out = binary_op::<T>(lhs, rhs, 1, "sub")?;
         let (lhs_shape, rhs_shape) = (lhs.shape.clone(), rhs.shape.clone());
         let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
         crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
             output_id: out_id,
             input_ids: vec![lhs_id, rhs_id],
             backward: Box::new(move |grad_out: &WgpuStorage| {
-                let neg_grad = unary_op::<T, D>(grad_out, 5).expect("neg (sub backward)");
+                let neg_grad = unary_op::<T>(grad_out, 5).expect("neg (sub backward)");
                 vec![
                     crate::wgpu::tape::unbroadcast(grad_out, &lhs_shape)
                         .expect("unbroadcast lhs (sub)"),
@@ -335,7 +333,7 @@ impl<T: DType, D: Device> NumericOps<Self> for WgpuBackend<T, D> {
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let out = binary_op::<T, D>(lhs, rhs, 2, "mul")?;
+        let out = binary_op::<T>(lhs, rhs, 2, "mul")?;
         let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
         let (lhs_shape, rhs_shape) = (lhs.shape.clone(), rhs.shape.clone());
         let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
@@ -343,9 +341,9 @@ impl<T: DType, D: Device> NumericOps<Self> for WgpuBackend<T, D> {
             output_id: out_id,
             input_ids: vec![lhs_id, rhs_id],
             backward: Box::new(move |grad_out: &WgpuStorage| {
-                let grad_lhs = binary_op::<T, D>(grad_out, &rhs_capture, 2, "mul_grad")
+                let grad_lhs = binary_op::<T>(grad_out, &rhs_capture, 2, "mul_grad")
                     .expect("mul backward (lhs)");
-                let grad_rhs = binary_op::<T, D>(grad_out, &lhs_capture, 2, "mul_grad")
+                let grad_rhs = binary_op::<T>(grad_out, &lhs_capture, 2, "mul_grad")
                     .expect("mul backward (rhs)");
                 vec![
                     crate::wgpu::tape::unbroadcast(&grad_lhs, &lhs_shape)
@@ -362,7 +360,7 @@ impl<T: DType, D: Device> NumericOps<Self> for WgpuBackend<T, D> {
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let out = binary_op::<T, D>(lhs, rhs, 3, "div")?;
+        let out = binary_op::<T>(lhs, rhs, 3, "div")?;
         let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
         let (lhs_shape, rhs_shape) = (lhs.shape.clone(), rhs.shape.clone());
         let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
@@ -371,16 +369,16 @@ impl<T: DType, D: Device> NumericOps<Self> for WgpuBackend<T, D> {
             input_ids: vec![lhs_id, rhs_id],
             backward: Box::new(move |grad_out: &WgpuStorage| {
                 // d(lhs/rhs)/dlhs = 1/rhs -> grad_lhs = grad_out / rhs
-                let grad_lhs = binary_op::<T, D>(grad_out, &rhs_capture, 3, "div_grad_lhs")
+                let grad_lhs = binary_op::<T>(grad_out, &rhs_capture, 3, "div_grad_lhs")
                     .expect("div backward (lhs)");
                 // d(lhs/rhs)/drhs = -lhs/rhs^2 -> grad_rhs = grad_out * (-lhs/rhs^2)
-                let rhs_sq = binary_op::<T, D>(&rhs_capture, &rhs_capture, 2, "div_grad_rhs_sq")
+                let rhs_sq = binary_op::<T>(&rhs_capture, &rhs_capture, 2, "div_grad_rhs_sq")
                     .expect("rhs^2 (div backward)");
                 let lhs_over_rhs_sq =
-                    binary_op::<T, D>(&lhs_capture, &rhs_sq, 3, "div_grad_rhs_ratio")
+                    binary_op::<T>(&lhs_capture, &rhs_sq, 3, "div_grad_rhs_ratio")
                         .expect("lhs/rhs^2 (div backward)");
-                let neg_ratio = unary_op::<T, D>(&lhs_over_rhs_sq, 5).expect("neg (div backward)");
-                let grad_rhs = binary_op::<T, D>(grad_out, &neg_ratio, 2, "div_grad_rhs")
+                let neg_ratio = unary_op::<T>(&lhs_over_rhs_sq, 5).expect("neg (div backward)");
+                let grad_rhs = binary_op::<T>(grad_out, &neg_ratio, 2, "div_grad_rhs")
                     .expect("div backward (rhs)");
                 vec![
                     crate::wgpu::tape::unbroadcast(&grad_lhs, &lhs_shape)
@@ -399,7 +397,7 @@ impl<T: DType, D: Device> NumericOps<Self> for WgpuBackend<T, D> {
 // ─────────────────────────────────────────────────────────────────────────────
 /// `unary_op`.
 #[allow(clippy::extra_unused_type_parameters)]
-fn unary_op<T: DType, D: Device>(t: &WgpuStorage, op_mode: u32) -> Result<WgpuStorage> {
+fn unary_op<T: DType>(t: &WgpuStorage, op_mode: u32) -> Result<WgpuStorage> {
     let n = num_elements(&t.shape) as u32;
     let out_buf = WgpuBuffer::new_zeros(t.buffer.size);
     let params = [op_mode, n];
@@ -409,11 +407,7 @@ fn unary_op<T: DType, D: Device>(t: &WgpuStorage, op_mode: u32) -> Result<WgpuSt
 
 /// `scalar_op`.
 #[allow(clippy::extra_unused_type_parameters)]
-fn scalar_op<T: DType, D: Device>(
-    t: &WgpuStorage,
-    scalar: f64,
-    op_mode: u32,
-) -> Result<WgpuStorage> {
+fn scalar_op<T: DType>(t: &WgpuStorage, scalar: f64, op_mode: u32) -> Result<WgpuStorage> {
     let n = num_elements(&t.shape) as u32;
     let out_buf = WgpuBuffer::new_zeros(t.buffer.size);
     let scalar_bits = (scalar as f32).to_bits();
@@ -444,7 +438,7 @@ impl<T: DType, D: Device> FloatOps<Self> for WgpuBackend<T, D> {
         t: &<Self as Backend>::Storage<K>,
         scalar: f64,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let out = scalar_op::<T, D>(t, scalar, 0)?;
+        let out = scalar_op::<T>(t, scalar, 0)?;
         // Gradient passes through unchanged (same shape, no unbroadcast
         // needed — scalar ops don't change shape).
         push_unary_tape_entry(t.id, out.id, |grad_out| grad_out.clone());
@@ -455,69 +449,69 @@ impl<T: DType, D: Device> FloatOps<Self> for WgpuBackend<T, D> {
         t: &<Self as Backend>::Storage<K>,
         scalar: f64,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let out = scalar_op::<T, D>(t, scalar, 1)?;
+        let out = scalar_op::<T>(t, scalar, 1)?;
         // Gradient scales by the same constant.
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
-            scalar_op::<T, D>(grad_out, scalar, 1).expect("mul_scalar_float backward")
+            scalar_op::<T>(grad_out, scalar, 1).expect("mul_scalar_float backward")
         });
         Ok(out)
     }
     /// `relu`.
     fn relu<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        let out = unary_op::<T, D>(t, 0)?;
+        let out = unary_op::<T>(t, 0)?;
         // relu'(x) = step(x) (1 if x>0 else 0) — input-based.
         let t_capture = t.clone();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
-            let deriv = unary_op::<T, D>(&t_capture, 10).expect("step (relu backward)");
-            binary_op::<T, D>(grad_out, &deriv, 2, "relu_grad").expect("relu backward")
+            let deriv = unary_op::<T>(&t_capture, 10).expect("step (relu backward)");
+            binary_op::<T>(grad_out, &deriv, 2, "relu_grad").expect("relu backward")
         });
         Ok(out)
     }
     /// `step`.
     fn step<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        let out = unary_op::<T, D>(t, 10)?;
+        let out = unary_op::<T>(t, 10)?;
         // step'(x) = 0 almost everywhere.
         push_unary_tape_entry(t.id, out.id, |grad_out| {
-            scalar_op::<T, D>(grad_out, 0.0, 1).expect("step backward (zero grad)")
+            scalar_op::<T>(grad_out, 0.0, 1).expect("step backward (zero grad)")
         });
         Ok(out)
     }
     /// `elu`.
     fn elu<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        let out = unary_op::<T, D>(t, 12)?;
+        let out = unary_op::<T>(t, 12)?;
         let t_capture = t.clone();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
-            binary_op::<T, D>(grad_out, &t_capture, 5, "elu_grad").expect("elu backward")
+            binary_op::<T>(grad_out, &t_capture, 5, "elu_grad").expect("elu backward")
         });
         Ok(out)
     }
     fn gelu<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        let out = unary_op::<T, D>(t, 1)?;
+        let out = unary_op::<T>(t, 1)?;
         let t_capture = t.clone();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
-            binary_op::<T, D>(grad_out, &t_capture, 4, "gelu_grad").expect("gelu backward")
+            binary_op::<T>(grad_out, &t_capture, 4, "gelu_grad").expect("gelu backward")
         });
         Ok(out)
     }
     fn mish<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        let out = unary_op::<T, D>(t, 11)?;
+        let out = unary_op::<T>(t, 11)?;
         let t_capture = t.clone();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
-            binary_op::<T, D>(grad_out, &t_capture, 6, "mish_grad").expect("mish backward")
+            binary_op::<T>(grad_out, &t_capture, 6, "mish_grad").expect("mish backward")
         });
         Ok(out)
     }
     /// `tanh`.
     fn tanh<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        let out = unary_op::<T, D>(t, 2)?;
+        let out = unary_op::<T>(t, 2)?;
         // tanh'(x) = 1 - out^2 (output-based).
         let out_capture = out.clone();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
-            let out_sq = binary_op::<T, D>(&out_capture, &out_capture, 2, "tanh_grad_sq")
+            let out_sq = binary_op::<T>(&out_capture, &out_capture, 2, "tanh_grad_sq")
                 .expect("out^2 (tanh backward)");
-            let neg_out_sq = unary_op::<T, D>(&out_sq, 5).expect("neg (tanh backward)");
-            let deriv = scalar_op::<T, D>(&neg_out_sq, 1.0, 0).expect("1 - out^2 (tanh backward)");
-            binary_op::<T, D>(grad_out, &deriv, 2, "tanh_grad").expect("tanh backward")
+            let neg_out_sq = unary_op::<T>(&out_sq, 5).expect("neg (tanh backward)");
+            let deriv = scalar_op::<T>(&neg_out_sq, 1.0, 0).expect("1 - out^2 (tanh backward)");
+            binary_op::<T>(grad_out, &deriv, 2, "tanh_grad").expect("tanh backward")
         });
         Ok(out)
     }
@@ -525,93 +519,92 @@ impl<T: DType, D: Device> FloatOps<Self> for WgpuBackend<T, D> {
     fn sigmoid<K: DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let out = unary_op::<T, D>(t, 3)?;
+        let out = unary_op::<T>(t, 3)?;
         // sigmoid'(x) = out*(1-out) (output-based).
         let out_capture = out.clone();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
-            let neg_out = unary_op::<T, D>(&out_capture, 5).expect("neg (sigmoid backward)");
+            let neg_out = unary_op::<T>(&out_capture, 5).expect("neg (sigmoid backward)");
             let one_minus_out =
-                scalar_op::<T, D>(&neg_out, 1.0, 0).expect("1 - out (sigmoid backward)");
-            let deriv = binary_op::<T, D>(&out_capture, &one_minus_out, 2, "sigmoid_grad_deriv")
+                scalar_op::<T>(&neg_out, 1.0, 0).expect("1 - out (sigmoid backward)");
+            let deriv = binary_op::<T>(&out_capture, &one_minus_out, 2, "sigmoid_grad_deriv")
                 .expect("out*(1-out) (sigmoid backward)");
-            binary_op::<T, D>(grad_out, &deriv, 2, "sigmoid_grad").expect("sigmoid backward")
+            binary_op::<T>(grad_out, &deriv, 2, "sigmoid_grad").expect("sigmoid backward")
         });
         Ok(out)
     }
     /// `abs`.
     fn abs<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        let out = unary_op::<T, D>(t, 4)?;
+        let out = unary_op::<T>(t, 4)?;
         // abs'(x) = sign(x) (input-based), computed as step(x) - step(-x):
         // 1 if x>0, -1 if x<0, 0 if x==0 — matches the CPU backend exactly.
         let t_capture = t.clone();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
-            let neg_t = unary_op::<T, D>(&t_capture, 5).expect("neg (abs backward)");
-            let step_pos = unary_op::<T, D>(&t_capture, 10).expect("step(x) (abs backward)");
-            let step_neg = unary_op::<T, D>(&neg_t, 10).expect("step(-x) (abs backward)");
-            let neg_step_neg = unary_op::<T, D>(&step_neg, 5).expect("neg (abs backward)");
-            let sign = binary_op::<T, D>(&step_pos, &neg_step_neg, 0, "abs_grad_sign")
+            let neg_t = unary_op::<T>(&t_capture, 5).expect("neg (abs backward)");
+            let step_pos = unary_op::<T>(&t_capture, 10).expect("step(x) (abs backward)");
+            let step_neg = unary_op::<T>(&neg_t, 10).expect("step(-x) (abs backward)");
+            let neg_step_neg = unary_op::<T>(&step_neg, 5).expect("neg (abs backward)");
+            let sign = binary_op::<T>(&step_pos, &neg_step_neg, 0, "abs_grad_sign")
                 .expect("sign(x) (abs backward)");
-            binary_op::<T, D>(grad_out, &sign, 2, "abs_grad").expect("abs backward")
+            binary_op::<T>(grad_out, &sign, 2, "abs_grad").expect("abs backward")
         });
         Ok(out)
     }
     /// `neg`.
     fn neg<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        let out = unary_op::<T, D>(t, 5)?;
+        let out = unary_op::<T>(t, 5)?;
         // neg'(x) = -1 (constant; no input capture needed).
         push_unary_tape_entry(t.id, out.id, |grad_out| {
-            unary_op::<T, D>(grad_out, 5).expect("neg backward")
+            unary_op::<T>(grad_out, 5).expect("neg backward")
         });
         Ok(out)
     }
     /// `sqrt`.
     fn sqrt<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        let out = unary_op::<T, D>(t, 6)?;
+        let out = unary_op::<T>(t, 6)?;
         // sqrt'(x) = 1/(2*out) (output-based) -> grad = grad_out/out * 0.5.
         let out_capture = out.clone();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
-            let ratio = binary_op::<T, D>(grad_out, &out_capture, 3, "sqrt_grad_ratio")
+            let ratio = binary_op::<T>(grad_out, &out_capture, 3, "sqrt_grad_ratio")
                 .expect("sqrt backward");
-            scalar_op::<T, D>(&ratio, 0.5, 1).expect("sqrt backward (halve)")
+            scalar_op::<T>(&ratio, 0.5, 1).expect("sqrt backward (halve)")
         });
         Ok(out)
     }
     /// `exp`.
     fn exp<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        let out = unary_op::<T, D>(t, 7)?;
+        let out = unary_op::<T>(t, 7)?;
         // exp'(x) = out (output-based).
         let out_capture = out.clone();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
-            binary_op::<T, D>(grad_out, &out_capture, 2, "exp_grad").expect("exp backward")
+            binary_op::<T>(grad_out, &out_capture, 2, "exp_grad").expect("exp backward")
         });
         Ok(out)
     }
     /// `log`.
     fn log<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        let out = unary_op::<T, D>(t, 8)?;
+        let out = unary_op::<T>(t, 8)?;
         // log'(x) = 1/x (input-based, NOT output-based).
         let t_capture = t.clone();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
-            binary_op::<T, D>(grad_out, &t_capture, 3, "log_grad").expect("log backward")
+            binary_op::<T>(grad_out, &t_capture, 3, "log_grad").expect("log backward")
         });
         Ok(out)
     }
     /// `swish`.
     fn swish<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        let out = unary_op::<T, D>(t, 9)?;
+        let out = unary_op::<T>(t, 9)?;
         // swish(x) = x*sigmoid(x); swish'(x) = out + sigmoid(x)*(1-out).
         let t_capture = t.clone();
         let out_capture = out.clone();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
-            let sig = unary_op::<T, D>(&t_capture, 3).expect("sigmoid(x) (swish backward)");
-            let neg_out = unary_op::<T, D>(&out_capture, 5).expect("neg (swish backward)");
-            let one_minus_out =
-                scalar_op::<T, D>(&neg_out, 1.0, 0).expect("1 - out (swish backward)");
-            let sig_term = binary_op::<T, D>(&sig, &one_minus_out, 2, "swish_grad_sig_term")
+            let sig = unary_op::<T>(&t_capture, 3).expect("sigmoid(x) (swish backward)");
+            let neg_out = unary_op::<T>(&out_capture, 5).expect("neg (swish backward)");
+            let one_minus_out = scalar_op::<T>(&neg_out, 1.0, 0).expect("1 - out (swish backward)");
+            let sig_term = binary_op::<T>(&sig, &one_minus_out, 2, "swish_grad_sig_term")
                 .expect("sigmoid(x)*(1-out) (swish backward)");
-            let deriv = binary_op::<T, D>(&out_capture, &sig_term, 0, "swish_grad_deriv")
+            let deriv = binary_op::<T>(&out_capture, &sig_term, 0, "swish_grad_deriv")
                 .expect("swish backward deriv");
-            binary_op::<T, D>(grad_out, &deriv, 2, "swish_grad").expect("swish backward")
+            binary_op::<T>(grad_out, &deriv, 2, "swish_grad").expect("swish backward")
         });
         Ok(out)
     }
@@ -621,24 +614,21 @@ impl<T: DType, D: Device> FloatOps<Self> for WgpuBackend<T, D> {
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let ls = log_softmax::<T, D, K>(t, dim)?;
+        let ls = log_softmax::<T, K>(t, dim)?;
         Self::exp::<K>(&ls)
     }
 }
 
 /// Helper function to compute log_softmax composed from primitives.
-pub(crate) fn log_softmax<T: DType, D: Device, K: DType>(
-    t: &WgpuStorage,
-    dim: usize,
-) -> Result<WgpuStorage> {
-    let max = WgpuBackend::<T, D>::max_keepdim::<K>(t, dim)?;
-    let max_b = WgpuBackend::<T, D>::broadcast_as::<K>(&max, &t.shape)?;
-    let diff = WgpuBackend::<T, D>::sub::<K>(t, &max_b)?;
-    let exp_diff = WgpuBackend::<T, D>::exp::<K>(&diff)?;
-    let sum_exp = WgpuBackend::<T, D>::sum_keepdim::<K>(&exp_diff, dim)?;
-    let sum_exp_b = WgpuBackend::<T, D>::broadcast_as::<K>(&sum_exp, &t.shape)?;
-    let log_sum = WgpuBackend::<T, D>::log::<K>(&sum_exp_b)?;
-    WgpuBackend::<T, D>::sub::<K>(&diff, &log_sum)
+pub(crate) fn log_softmax<T: DType, K: DType>(t: &WgpuStorage, dim: usize) -> Result<WgpuStorage> {
+    let max = WgpuBackend::<T>::max_keepdim::<K>(t, dim)?;
+    let max_b = WgpuBackend::<T>::broadcast_as::<K>(&max, &t.shape)?;
+    let diff = WgpuBackend::<T>::sub::<K>(t, &max_b)?;
+    let exp_diff = WgpuBackend::<T>::exp::<K>(&diff)?;
+    let sum_exp = WgpuBackend::<T>::sum_keepdim::<K>(&exp_diff, dim)?;
+    let sum_exp_b = WgpuBackend::<T>::broadcast_as::<K>(&sum_exp, &t.shape)?;
+    let log_sum = WgpuBackend::<T>::log::<K>(&sum_exp_b)?;
+    WgpuBackend::<T>::sub::<K>(&diff, &log_sum)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1181,14 +1171,14 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackend<T, D> {
     ) -> Result<<Self as Backend>::Storage<K>> {
         let sum = reduce_all_to_storage(t, 0);
         let n = num_elements(&t.shape) as f64;
-        let out = scalar_op::<T, D>(&sum, 1.0 / n, 1)?;
+        let out = scalar_op::<T>(&sum, 1.0 / n, 1)?;
         let original_shape = t.shape.clone();
         let (t_id, out_id) = (t.id, out.id);
         crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
-                let scaled = scalar_op::<T, D>(grad_out, 1.0 / n, 1).unwrap();
+                let scaled = scalar_op::<T>(grad_out, 1.0 / n, 1).unwrap();
                 vec![
                     Self::broadcast_as::<K>(&scaled, &original_shape)
                         .expect("mean_all backward failed"),
@@ -1260,7 +1250,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackend<T, D> {
     ) -> Result<<Self as Backend>::Storage<K>> {
         let sum = reduce_dim_to_storage(t, dim, 0, false);
         let n = t.shape[dim] as f64;
-        let out = scalar_op::<T, D>(&sum, 1.0 / n, 1)?;
+        let out = scalar_op::<T>(&sum, 1.0 / n, 1)?;
         let original_shape = t.shape.clone();
         let (t_id, out_id) = (t.id, out.id);
         crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
@@ -1271,7 +1261,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackend<T, D> {
                 keepdim_shape.insert(dim, 1);
                 let keepdim = Self::reshape::<K>(grad_out, &keepdim_shape).unwrap();
                 let expanded = Self::broadcast_as::<K>(&keepdim, &original_shape).unwrap();
-                vec![scalar_op::<T, D>(&expanded, 1.0 / n, 1).unwrap()]
+                vec![scalar_op::<T>(&expanded, 1.0 / n, 1).unwrap()]
             }),
         });
         Ok(out)
@@ -1283,7 +1273,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackend<T, D> {
     ) -> Result<<Self as Backend>::Storage<K>> {
         let sum = reduce_dim_to_storage(t, dim, 0, true);
         let n = t.shape[dim] as f64;
-        let out = scalar_op::<T, D>(&sum, 1.0 / n, 1)?;
+        let out = scalar_op::<T>(&sum, 1.0 / n, 1)?;
         let original_shape = t.shape.clone();
         let (t_id, out_id) = (t.id, out.id);
         crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
@@ -1291,7 +1281,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackend<T, D> {
             input_ids: vec![t_id],
             backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
                 let expanded = Self::broadcast_as::<K>(grad_out, &original_shape).unwrap();
-                vec![scalar_op::<T, D>(&expanded, 1.0 / n, 1).unwrap()]
+                vec![scalar_op::<T>(&expanded, 1.0 / n, 1).unwrap()]
             }),
         });
         Ok(out)
@@ -2578,7 +2568,7 @@ impl<T: DType, D: Device> LossOps<Self> for WgpuBackend<T, D> {
         let classes = pred.shape[1];
 
         // 1. log_probs = log_softmax(pred, 1)
-        let log_probs = log_softmax::<T, D, K>(pred, 1)?;
+        let log_probs = log_softmax::<T, K>(pred, 1)?;
 
         // 2. Build one_hot constant WgpuStorage
         let target_data = target.buffer.to_vec::<u32>();

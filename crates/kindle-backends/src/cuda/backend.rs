@@ -2,11 +2,10 @@ use crate::cuda::storage::CudaStorage;
 use kindle_core::prelude::*;
 use std::fmt::Debug;
 
-/// A dedicated Cuda backend.
-#[derive(Debug, Clone, Copy)]
-pub struct CudaBackend<T: DType, D: Device> {
-    _marker: core::marker::PhantomData<(T, D)>,
-}
+/// Type alias for `KindleBackend<T, D>` with a CUDA device. Kept for backwards
+/// compatibility — prefer `KindleBackend<T, Cuda>` in new code.
+#[derive(Clone)]
+pub struct CudaBackend<T = f32, D = Cuda>(core::marker::PhantomData<(T, D)>);
 
 #[derive(Clone)]
 pub struct CudaVar {

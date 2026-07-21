@@ -36,12 +36,12 @@ pub use storage::{CpuBuffer, CpuStorage};
 pub use tape::CpuGrads;
 pub use var::CpuVar;
 
-/// The cpu, pure-Rust `Backend` implementor. `T` genuinely drives
-/// `Backend::FloatElem` (CPUBACK-01, D-03) — unlike `CandleBackend`/
-/// `NdarrayBackend`, which hardcode `type FloatElem = f32;` regardless of
-/// their own `T` generic.
+/// The CPU pure-Rust `Backend` implementor. `T` genuinely drives
+/// `Backend::FloatElem` (CPUBACK-01, D-03).
+/// Also accessible as `KindleBackend<T, D>` from the `kindle` facade
+/// when only the `cpu` feature is active.
 #[derive(Clone)]
-pub struct CpuBackend<T, D>(core::marker::PhantomData<(T, D)>);
+pub struct CpuBackend<T = f32, D = Cpu>(core::marker::PhantomData<(T, D)>);
 
 impl<T: DType, D: Device> kindle_core::prelude::Backend for CpuBackend<T, D> {
     /// `Device`.

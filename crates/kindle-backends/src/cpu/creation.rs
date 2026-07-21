@@ -6,7 +6,9 @@
 //! `randn` uses `rand_distr::StandardNormal` (standard-normal samples) — per
 //! the "Don't Hand-Roll" guidance, never a hand-written Box-Muller.
 
+use crate::cpu::CpuBackend;
 use kindle_core::prelude::Error;
+use kindle_core::prelude::*;
 use kindle_core::prelude::{CreationOps, DType, KindleDType, KindleDevice, Result};
 #[allow(unused_imports)]
 use rand::Rng;
@@ -17,7 +19,6 @@ use rand_distr::{Distribution, StandardNormal};
 #[allow(unused_imports)]
 use rayon::prelude::*;
 
-use crate::cpu::CpuBackend;
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
 use crate::cpu::var;
 
@@ -60,7 +61,7 @@ fn fill_buffer(
     }
 }
 
-impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for CpuBackend<T, D> {
+impl<T: DType, D: Device> CreationOps<Self> for CpuBackend<T, D> {
     /// `zeros`.
     fn zeros<K: DType>(
         shape: &[usize],
@@ -218,10 +219,10 @@ impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for CpuBackend
 /// `tests`.
 mod tests {
     use super::*;
-    use kindle_core::prelude::Backend;
+    use kindle_core::prelude::{Backend, Cpu};
 
     /// `TestBackend`.
-    type TestBackend = CpuBackend<f32, kindle_core::prelude::Cpu>;
+    type TestBackend = CpuBackend<f32, Cpu>;
 
     /// `dev`.
     fn dev() -> KindleDevice {

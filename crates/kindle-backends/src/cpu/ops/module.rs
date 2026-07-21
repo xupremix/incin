@@ -16,11 +16,11 @@
 //! This closes out `ModuleOps`'s full trait surface for Phase 4
 //! (CPUBACK-08).
 
+use crate::cpu::CpuBackend;
+use kindle_core::prelude::*;
 use kindle_core::prelude::{Backend, DType, ModuleOps, Result};
 
-use crate::cpu::CpuBackend;
-
-impl<T: DType, D: kindle_core::prelude::Device> ModuleOps<Self> for CpuBackend<T, D> {
+impl<T: DType, D: Device> ModuleOps<Self> for CpuBackend<T, D> {
     /// `layer_norm`.
     fn layer_norm<K: DType>(
         t: &<Self as Backend>::Storage<K>,

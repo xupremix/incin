@@ -24,13 +24,14 @@
 //! correct backward by composition with zero new tape entries of their own,
 //! exactly like `mse_loss`/`cross_entropy_loss` above.
 
+use crate::cpu::CpuBackend;
 use kindle_core::prelude::Reduction;
+use kindle_core::prelude::*;
 use kindle_core::prelude::{Backend, DType, FloatOps, LossOps, NumericOps, ReductionOps, Result};
 
-use crate::cpu::CpuBackend;
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
 
-impl<T: DType, D: kindle_core::prelude::Device> LossOps<Self> for CpuBackend<T, D> {
+impl<T: DType, D: Device> LossOps<Self> for CpuBackend<T, D> {
     /// Numerically-stable cross-entropy loss via the shared `log_softmax`
     /// kernel (D-02, Plan 04-01).
     ///

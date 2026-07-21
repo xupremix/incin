@@ -1,11 +1,7 @@
 use crate::cpu::{CpuBackend, CpuBuffer};
-use kindle_core::prelude::DType;
-use kindle_core::prelude::Result;
-use kindle_core::prelude::{Backend, OptimizerOps};
+use kindle_core::prelude::{Backend, DType, Device, OptimizerOps, Result};
 
-impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device + Clone + 'static>
-    OptimizerOps<CpuBackend<T, D>> for CpuBackend<T, D>
-{
+impl<T: DType, D: Device> OptimizerOps<Self> for CpuBackend<T, D> {
     /// Applies a fused AdamW optimization step on the backend.
     ///
     /// This directly modifies the buffers (`var`, `m`, `v`) in place. If `fused`
