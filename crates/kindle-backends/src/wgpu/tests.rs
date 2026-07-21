@@ -932,3 +932,14 @@ fn chained_ops_accumulate_gradient_through_multiple_hops() {
     assert!(vec_approx_eq(&readback(ga), &[4.0], 1e-4));
     assert!(vec_approx_eq(&readback(gb), &[2.0], 1e-4));
 }
+
+#[test]
+fn softmax_backward_is_tape_tracked() {
+    let t = storage(vec![1.0, 2.0, 3.0], vec![1, 3]);
+    let out = <B as FloatOps<B>>::softmax::<f32>(&t, 1).unwrap();
+    let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+    let gt = grads.get(t.id).expect("t should have a gradient");
+    // Softmax output sum is 1, and backward seeded with 1 should sum to 0
+    let sum: f32 = readback(gt).iter().sum();
+    assert!(approx_eq(sum, 0.0, 1e-4));
+}

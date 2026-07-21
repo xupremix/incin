@@ -154,6 +154,7 @@ pub(crate) fn dispatch_reduce_all(inp: &WgpuBuffer, n: u32, reduce_mode: u32) ->
 }
 
 /// Dispatch softmax: shape [batch, n]
+#[allow(dead_code)]
 pub(crate) fn dispatch_softmax(inp: &WgpuBuffer, out: &Arc<WgpuBuffer>, batch: u32, n: u32) {
     let state = get_device_state();
     let shader = include_str!("shaders/softmax.wgsl");
@@ -724,6 +725,7 @@ pub(crate) fn dispatch_conv2d_direct(
     run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "Conv2DDirect");
 }
 
+#[allow(dead_code)]
 pub(crate) fn dispatch_nll_loss(
     log_sm: &WgpuBuffer,
     target: &WgpuBuffer,

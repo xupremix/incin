@@ -613,18 +613,24 @@ impl<T: DType, D: Device> FloatOps<Self> for WgpuBackend<T, D> {
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        // NOT tape-wired yet: this is a single monolithic GPU kernel (not
-        // composed from log_softmax like the CPU backend), so its backward
-        // needs its own dedicated implementation — see ROADMAP.md C-3
-        // follow-up.
-        let shape = &t.shape;
-        // Flatten to [batch, n] where n = shape[dim..] product
-        let n: usize = shape[dim..].iter().product();
-        let batch: usize = shape[..dim].iter().product::<usize>().max(1);
-        let out_buf = WgpuBuffer::new_zeros(t.buffer.size);
-        dispatch::dispatch_softmax(&t.buffer, &out_buf, batch as u32, n as u32);
-        Ok(WgpuStorage::new(out_buf, shape.clone()))
+        let ls = log_softmax::<T, D, K>(t, dim)?;
+        Self::exp::<K>(&ls)
     }
+}
+
+/// Helper function to compute log_softmax composed from primitives.
+pub(crate) fn log_softmax<T: DType, D: Device, K: DType>(
+    t: &WgpuStorage,
+    dim: usize,
+) -> Result<WgpuStorage> {
+    let max = WgpuBackend::<T, D>::max_keepdim::<K>(t, dim)?;
+    let max_b = WgpuBackend::<T, D>::broadcast_as::<K>(&max, &t.shape)?;
+    let diff = WgpuBackend::<T, D>::sub::<K>(t, &max_b)?;
+    let exp_diff = WgpuBackend::<T, D>::exp::<K>(&diff)?;
+    let sum_exp = WgpuBackend::<T, D>::sum_keepdim::<K>(&exp_diff, dim)?;
+    let sum_exp_b = WgpuBackend::<T, D>::broadcast_as::<K>(&sum_exp, &t.shape)?;
+    let log_sum = WgpuBackend::<T, D>::log::<K>(&sum_exp_b)?;
+    WgpuBackend::<T, D>::sub::<K>(&diff, &log_sum)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2000,48 +2006,36 @@ impl<T: DType, D: Device> LossOps<Self> for WgpuBackend<T, D> {
         target: &<Self as Backend>::Storage<KInt>,
         reduction: kindle_core::prelude::Reduction,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        // Compute softmax then nll
-        let softmax = <Self as FloatOps<Self>>::softmax::<K>(pred, pred.shape.len() - 1)?;
-        let log_sm = <Self as FloatOps<Self>>::log::<K>(&softmax)?;
+        let batch = pred.shape[0];
+        let classes = pred.shape[1];
 
-        let batch = num_elements(&target.shape);
-        let n_classes = pred.shape.last().copied().unwrap_or(1);
+        // 1. log_probs = log_softmax(pred, 1)
+        let log_probs = log_softmax::<T, D, K>(pred, 1)?;
 
-        let nll_buf = WgpuBuffer::new_zeros(batch * 4);
-        dispatch::dispatch_nll_loss(
-            &log_sm.buffer,
-            &target.buffer,
-            &nll_buf,
-            batch as u32,
-            n_classes as u32,
-        );
+        // 2. Build one_hot constant WgpuStorage
+        let target_data = target.buffer.to_vec::<u32>();
+        let mut one_hot_data = vec![0.0f32; batch * classes];
+        for b_idx in 0..batch {
+            let class_idx = target_data[b_idx] as usize;
+            if class_idx < classes {
+                one_hot_data[b_idx * classes + class_idx] = 1.0;
+            }
+        }
+        let one_hot_buf = WgpuBuffer::from_slice(&one_hot_data);
+        let one_hot = WgpuStorage::new(one_hot_buf, vec![batch, classes]);
 
+        // 3. picked = log_probs * one_hot
+        let picked = Self::mul::<K>(&log_probs, &one_hot)?;
+
+        // 4. per_nll = -sum_dim(picked, 1)
+        let sum_picked = Self::sum_dim::<K>(&picked, 1)?;
+        let per_nll = Self::neg::<K>(&sum_picked)?;
+
+        // 5. Dispatch reduction
         match reduction {
-            kindle_core::prelude::Reduction::None => Ok(WgpuStorage::new(nll_buf, vec![batch])),
-            kindle_core::prelude::Reduction::Mean => {
-                let out_buf = WgpuBuffer::new_zeros(4);
-                dispatch::dispatch_reduce_dim(
-                    &nll_buf,
-                    &out_buf,
-                    1, // mean
-                    batch as u32,
-                    1,
-                    1,
-                );
-                Ok(WgpuStorage::new(out_buf, vec![1]))
-            }
-            kindle_core::prelude::Reduction::Sum => {
-                let out_buf = WgpuBuffer::new_zeros(4);
-                dispatch::dispatch_reduce_dim(
-                    &nll_buf,
-                    &out_buf,
-                    0, // sum
-                    batch as u32,
-                    1,
-                    1,
-                );
-                Ok(WgpuStorage::new(out_buf, vec![1]))
-            }
+            kindle_core::prelude::Reduction::Mean => Self::mean_all::<K>(&per_nll),
+            kindle_core::prelude::Reduction::Sum => Self::sum_all::<K>(&per_nll),
+            kindle_core::prelude::Reduction::None => Ok(per_nll),
         }
     }
 }
