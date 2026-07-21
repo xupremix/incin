@@ -1,10 +1,11 @@
-use kindle_core::prelude::*;
 use kindle_core::prelude::dummy::DummyBackend;
+use kindle_core::prelude::*;
 use kindle_core::prelude::{TRACING_GRAPH, TracingBackend};
 extern crate alloc;
 use alloc::collections::BTreeMap;
 use std::path::Path;
 
+/// Auto-generated documentation for B.
 type B = TracingBackend<DummyBackend<f32, Cpu>>;
 
 fn main() -> anyhow::Result<()> {

@@ -25,7 +25,11 @@ impl<'a, 'b> RenderCtx<'a, 'b> {
     /// Constructs a new render context for the given frame/area. This is
     /// the crate's public construction path -- the host (kindle-viz's
     /// dispatch.rs/app.rs) builds one per panel per render tick.
-    pub fn new(frame: &'a mut Frame<'b>, area: Rect, hit_regions: &'a mut Vec<(Rect, HitId)>) -> Self {
+    pub fn new(
+        frame: &'a mut Frame<'b>,
+        area: Rect,
+        hit_regions: &'a mut Vec<(Rect, HitId)>,
+    ) -> Self {
         Self {
             frame,
             area,
@@ -34,10 +38,12 @@ impl<'a, 'b> RenderCtx<'a, 'b> {
         }
     }
 
+    /// Auto-generated documentation for frame_mut.
     pub fn frame_mut(&mut self) -> &mut Frame<'b> {
         self.frame
     }
 
+    /// Auto-generated documentation for area.
     pub fn area(&self) -> Rect {
         self.area
     }

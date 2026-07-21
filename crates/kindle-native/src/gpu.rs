@@ -1,49 +1,72 @@
-use crate::storage::NativeMetalBuffer;
-use kindle_core::prelude::Result;
-
 #[cfg(feature = "cuda")]
 pub(crate) mod cuda {
-    use kindle_core::prelude::Result;
     use alloc::sync::Arc;
     use cudarc::driver::CudaContext;
+    use kindle_core::prelude::Result;
 
     /// Native CUDA kernel compiler and execution dispatcher.
     pub(crate) struct NativeCudaDispatcher {
+        /// Auto-generated documentation for device_id.
         pub device_id: usize,
+        /// Auto-generated documentation for ctx.
         pub ctx: Arc<CudaContext>,
     }
 
     impl NativeCudaDispatcher {
+        /// Auto-generated documentation for new.
         pub fn new(device_id: usize) -> Self {
             let ctx = cuda_cache::get_cuda_device(device_id);
             Self { device_id, ctx }
         }
 
         /// Compile a CUDA C/C++ kernel source string and load it into the device context.
-        pub fn compile_and_load_kernel(&self, _name: &str, src: &str, module_name: &str) -> Result<()> {
-            let ptx = cudarc::nvrtc::compile_ptx(src).map_err(|e| kindle_core::prelude::Error::Msg(format!("PTX compile failed: {:?}", e)))?;
-            let module = self.ctx.load_module(ptx).map_err(|e| kindle_core::prelude::Error::Msg(format!("Load PTX failed: {:?}", e)))?;
+        pub fn compile_and_load_kernel(
+            &self,
+            _name: &str,
+            src: &str,
+            module_name: &str,
+        ) -> Result<()> {
+            let ptx = cudarc::nvrtc::compile_ptx(src).map_err(|e| {
+                kindle_core::prelude::Error::Msg(format!("PTX compile failed: {:?}", e))
+            })?;
+            let module = self.ctx.load_module(ptx).map_err(|e| {
+                kindle_core::prelude::Error::Msg(format!("Load PTX failed: {:?}", e))
+            })?;
             cuda_cache::cache_module(self.device_id, module_name.to_string(), module);
             Ok(())
         }
 
         /// Retrieve a loaded function from the context.
-        pub fn get_function(&self, module_name: &str, entry_point: &str) -> Result<cudarc::driver::CudaFunction> {
-            let module = cuda_cache::get_module(self.device_id, module_name)
-                .ok_or_else(|| kindle_core::prelude::Error::Msg(format!("Module {} not found", module_name)))?;
-            let f = module.load_function(entry_point).map_err(|e| kindle_core::prelude::Error::Msg(format!("Function {} not found: {:?}", entry_point, e)))?;
+        pub fn get_function(
+            &self,
+            module_name: &str,
+            entry_point: &str,
+        ) -> Result<cudarc::driver::CudaFunction> {
+            let module = cuda_cache::get_module(self.device_id, module_name).ok_or_else(|| {
+                kindle_core::prelude::Error::Msg(format!("Module {} not found", module_name))
+            })?;
+            let f = module.load_function(entry_point).map_err(|e| {
+                kindle_core::prelude::Error::Msg(format!(
+                    "Function {} not found: {:?}",
+                    entry_point, e
+                ))
+            })?;
             Ok(f)
         }
     }
 
     pub(crate) mod cuda_cache {
-        use cudarc::driver::{CudaContext, CudaModule};
         use alloc::collections::BTreeMap;
+        use cudarc::driver::{CudaContext, CudaModule};
         use std::sync::{Arc, Mutex, OnceLock};
 
+        /// Auto-generated documentation for CUDA_DEVICES.
         static CUDA_DEVICES: OnceLock<Mutex<BTreeMap<usize, Arc<CudaContext>>>> = OnceLock::new();
-        static CUDA_MODULES: OnceLock<Mutex<BTreeMap<(usize, String), Arc<CudaModule>>>> = OnceLock::new();
+        /// Auto-generated documentation for CUDA_MODULES.
+        static CUDA_MODULES: OnceLock<Mutex<BTreeMap<(usize, String), Arc<CudaModule>>>> =
+            OnceLock::new();
 
+        /// Auto-generated documentation for get_cuda_device.
         pub fn get_cuda_device(id: usize) -> Arc<CudaContext> {
             let map_mutex = CUDA_DEVICES.get_or_init(|| Mutex::new(BTreeMap::new()));
             let mut map = map_mutex.lock().unwrap();
@@ -55,12 +78,14 @@ pub(crate) mod cuda {
             dev
         }
 
+        /// Auto-generated documentation for cache_module.
         pub fn cache_module(device_id: usize, module_name: String, module: Arc<CudaModule>) {
             let map_mutex = CUDA_MODULES.get_or_init(|| Mutex::new(BTreeMap::new()));
             let mut map = map_mutex.lock().unwrap();
             map.insert((device_id, module_name), module);
         }
 
+        /// Auto-generated documentation for get_module.
         pub fn get_module(device_id: usize, module_name: &str) -> Option<Arc<CudaModule>> {
             let map_mutex = CUDA_MODULES.get_or_init(|| Mutex::new(BTreeMap::new()));
             let map = map_mutex.lock().unwrap();
@@ -74,15 +99,17 @@ pub(crate) use cuda::*;
 
 #[cfg(feature = "metal")]
 pub(crate) mod metal {
-    use kindle_core::prelude::Result;
     use crate::storage::NativeMetalBuffer;
+    use kindle_core::prelude::Result;
 
     /// Native Apple Metal shading compiler and execution dispatcher.
     pub(crate) struct NativeMetalDispatcher {
+        /// Auto-generated documentation for device_id.
         pub device_id: usize,
     }
 
     impl NativeMetalDispatcher {
+        /// Auto-generated documentation for new.
         pub fn new(device_id: usize) -> Self {
             Self { device_id }
         }

@@ -123,22 +123,27 @@ pub(crate) fn embedding_impl<T: DType, D: kindle_core::prelude::Device, K: DType
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
+/// Auto-generated documentation for tests.
 mod tests {
     use super::*;
     use crate::NativeBackend;
     use crate::tape;
     use kindle_core::prelude::{Cpu, ReductionOps};
 
+    /// Auto-generated documentation for B.
     type B = NativeBackend<f32, Cpu>;
 
+    /// Auto-generated documentation for weight.
     fn weight(v: Vec<f32>, vocab: usize, hidden: usize) -> NativeStorage {
         NativeStorage::from_contiguous(NativeBuffer::F32(v), vec![vocab, hidden])
     }
 
+    /// Auto-generated documentation for indices_i64.
     fn indices_i64(v: Vec<i64>, shape: Vec<usize>) -> NativeStorage {
         NativeStorage::from_contiguous(NativeBuffer::I64(v), shape)
     }
 
+    /// Auto-generated documentation for f32_vec.
     fn f32_vec(s: &NativeStorage) -> Vec<f32> {
         match &*s.buffer {
             NativeBuffer::F32(v) => v.clone(),
@@ -147,6 +152,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for forward_1d_indices_gathers_correct_rows_with_repeats.
     fn forward_1d_indices_gathers_correct_rows_with_repeats() {
         // weight [3,2]: row0=[1,2], row1=[3,4], row2=[5,6]
         let w = weight(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 3, 2);
@@ -159,6 +165,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for forward_2d_indices_gathers_correct_rows.
     fn forward_2d_indices_gathers_correct_rows() {
         // weight [4,3]
         let w = weight(
@@ -187,6 +194,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for backward_repeated_index_accumulates_not_overwrites.
     fn backward_repeated_index_accumulates_not_overwrites() {
         // weight [2,2]: row0, row1
         let w = weight(vec![1.0, 2.0, 3.0, 4.0], 2, 2);
@@ -206,6 +214,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for backward_unaddressed_rows_get_exactly_zero_gradient.
     fn backward_unaddressed_rows_get_exactly_zero_gradient() {
         // weight [3,2]; only row 1 is addressed.
         let w = weight(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 3, 2);
@@ -221,6 +230,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for out_of_range_index_returns_shape_mismatch_error.
     fn out_of_range_index_returns_shape_mismatch_error() {
         let w = weight(vec![1.0, 2.0, 3.0, 4.0], 2, 2);
         let idx = indices_i64(vec![5], vec![1]);
@@ -229,6 +239,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for negative_index_returns_shape_mismatch_error_not_panic.
     fn negative_index_returns_shape_mismatch_error_not_panic() {
         let w = weight(vec![1.0, 2.0, 3.0, 4.0], 2, 2);
         let idx = indices_i64(vec![-1], vec![1]);

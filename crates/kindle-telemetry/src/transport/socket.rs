@@ -119,6 +119,7 @@ impl SocketTransport {
 }
 
 impl Transport for SocketTransport {
+    /// Auto-generated documentation for write_event.
     fn write_event(&mut self, event: &Event) -> crate::err::Result<()> {
         self.accept_pending();
 
@@ -150,6 +151,7 @@ impl Transport for SocketTransport {
 }
 
 #[cfg(test)]
+/// Auto-generated documentation for tests.
 mod tests {
     use super::*;
     use crate::events::ScalarEvent;
@@ -157,10 +159,12 @@ mod tests {
     use std::io::Read;
     use std::time::Duration;
 
+    /// Auto-generated documentation for unique_run_id.
     fn unique_run_id(label: &str) -> String {
         format!("test-{label}-{}", uuid::Uuid::now_v7())
     }
 
+    /// Auto-generated documentation for scalar_event.
     fn scalar_event(step: usize, name: &str, value: f64) -> Event {
         Event::Scalar(ScalarEvent {
             schema_version: crate::events::CURRENT_SCHEMA_VERSION,
@@ -186,6 +190,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for bind_with_fresh_run_id_succeeds_without_blocking.
     fn bind_with_fresh_run_id_succeeds_without_blocking() {
         let run_id = unique_run_id("bind");
         let start = std::time::Instant::now();
@@ -201,6 +206,7 @@ mod tests {
     // explicit `match` instead of `expect_err`/`unwrap_err`, both of which require
     // `T: Debug` on the `Ok` side even when only the `Err` value is used.
     #[test]
+    /// Auto-generated documentation for bind_rejects_empty_run_id.
     fn bind_rejects_empty_run_id() {
         let err = match SocketTransport::bind("") {
             Err(e) => e,
@@ -210,6 +216,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for bind_rejects_overly_long_run_id.
     fn bind_rejects_overly_long_run_id() {
         let run_id = "a".repeat(MAX_RUN_ID_LEN + 1);
         let err = match SocketTransport::bind(&run_id) {
@@ -220,6 +227,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for bind_rejects_path_like_run_id.
     fn bind_rejects_path_like_run_id() {
         let err = match SocketTransport::bind("../../etc/passwd") {
             Err(e) => e,
@@ -229,6 +237,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for write_event_with_zero_clients_connected_succeeds.
     fn write_event_with_zero_clients_connected_succeeds() {
         let run_id = unique_run_id("no-clients");
         let mut transport = SocketTransport::bind(&run_id).expect("bind should succeed");
@@ -239,6 +248,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for connected_client_receives_byte_identical_jsonl_line_to_file_transport.
     fn connected_client_receives_byte_identical_jsonl_line_to_file_transport() {
         let run_id = unique_run_id("byte-identical");
         let mut socket_transport = SocketTransport::bind(&run_id).expect("bind should succeed");
@@ -296,6 +306,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for disconnected_client_is_pruned_without_write_event_returning_err.
     fn disconnected_client_is_pruned_without_write_event_returning_err() {
         let run_id = unique_run_id("disconnect");
         let mut transport = SocketTransport::bind(&run_id).expect("bind should succeed");

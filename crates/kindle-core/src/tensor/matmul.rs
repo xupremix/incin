@@ -23,7 +23,9 @@ use crate::prelude::*;
     label = "Shape mismatch for matrix multiplication",
     note = "Matrix multiplication requires the inner dimensions (last dim of lhs, second-to-last of rhs) to match"
 )]
+/// Auto-generated documentation for MatMulShape.
 pub trait MatMulShape<Rhs: Shape>: Shape {
+    /// Auto-generated documentation for Output.
     type Output: Shape;
 
     /// Compute the output shape's Field from the inputs' fields.
@@ -33,6 +35,7 @@ pub trait MatMulShape<Rhs: Shape>: Shape {
     ) -> <Self::Output as Shape>::Field;
 }
 
+/// Auto-generated documentation for StaticDim.
 pub trait StaticDim: Dim + Default {}
 impl<U, B> StaticDim for typenum::UInt<U, B>
 where
@@ -67,9 +70,11 @@ impl<A: StaticDim, B: StaticDim> StaticDim for ProdDim<A, B> {}
 // Fully static: (M, K) × (K, N) → (M, N)
 // ============================================================================
 impl<M: StaticDim, K: StaticDim, N: StaticDim> MatMulShape<(K, N)> for (M, K) {
+    /// Auto-generated documentation for Output.
     type Output = (M, N);
 
     #[inline(always)]
+    /// Auto-generated documentation for output_shape.
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<(K, N) as Shape>::Field,
@@ -84,8 +89,10 @@ impl<M: StaticDim, K: StaticDim, N: StaticDim> MatMulShape<(K, N)> for (M, K) {
 
 // (usize, K) × (K, N) → (usize, N)
 impl<K: StaticDim, N: StaticDim> MatMulShape<(K, N)> for (usize, K) {
+    /// Auto-generated documentation for Output.
     type Output = (usize, N);
 
+    /// Auto-generated documentation for output_shape.
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         _: &<(K, N) as Shape>::Field,
@@ -96,8 +103,10 @@ impl<K: StaticDim, N: StaticDim> MatMulShape<(K, N)> for (usize, K) {
 
 // (M, K) × (K, usize) → (M, usize)
 impl<M: StaticDim, K: StaticDim> MatMulShape<(K, usize)> for (M, K) {
+    /// Auto-generated documentation for Output.
     type Output = (M, usize);
 
+    /// Auto-generated documentation for output_shape.
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<(K, usize) as Shape>::Field,
@@ -108,8 +117,10 @@ impl<M: StaticDim, K: StaticDim> MatMulShape<(K, usize)> for (M, K) {
 
 // (usize, K) × (K, usize) → (usize, usize)
 impl<K: StaticDim> MatMulShape<(K, usize)> for (usize, K) {
+    /// Auto-generated documentation for Output.
     type Output = (usize, usize);
 
+    /// Auto-generated documentation for output_shape.
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         rhs: &<(K, usize) as Shape>::Field,
@@ -120,8 +131,10 @@ impl<K: StaticDim> MatMulShape<(K, usize)> for (usize, K) {
 
 // (usize, usize) × (usize, usize) → (usize, usize)
 impl MatMulShape<(usize, usize)> for (usize, usize) {
+    /// Auto-generated documentation for Output.
     type Output = (usize, usize);
 
+    /// Auto-generated documentation for output_shape.
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         rhs: &<(usize, usize) as Shape>::Field,
@@ -134,8 +147,10 @@ impl MatMulShape<(usize, usize)> for (usize, usize) {
 // Fully dynamic: Dyn × Dyn → Dyn
 // ============================================================================
 impl MatMulShape<Dyn> for Dyn {
+    /// Auto-generated documentation for Output.
     type Output = Dyn;
 
+    /// Auto-generated documentation for output_shape.
     fn output_shape(
         lhs: &<Dyn as Shape>::Field,
         rhs: &<Dyn as Shape>::Field,
@@ -170,8 +185,10 @@ macro_rules! impl_batched_matmul {
     // Both have same batch
     ( $( $batch:ident ),+ ) => {
         impl< $($batch: StaticDim,)* M: StaticDim, K: StaticDim, N: StaticDim> MatMulShape<( $($batch,)* K, N)> for ( $($batch,)* M, K) {
+            /// Auto-generated documentation for Output.
             type Output = ( $($batch,)* M, N);
             #[inline(always)]
+            /// Auto-generated documentation for output_shape.
             fn output_shape(
                 _: &<Self as Shape>::Field,
                 _: &<( $($batch,)* K, N) as Shape>::Field,
@@ -181,8 +198,10 @@ macro_rules! impl_batched_matmul {
         }
         // Lhs has batch
         impl< $($batch: StaticDim,)* M: StaticDim, K: StaticDim, N: StaticDim> MatMulShape<(K, N)> for ( $($batch,)* M, K) {
+            /// Auto-generated documentation for Output.
             type Output = ( $($batch,)* M, N);
             #[inline(always)]
+            /// Auto-generated documentation for output_shape.
             fn output_shape(
                 _: &<Self as Shape>::Field,
                 _: &<(K, N) as Shape>::Field,
@@ -192,8 +211,10 @@ macro_rules! impl_batched_matmul {
         }
         // Rhs has batch
         impl< $($batch: StaticDim,)* M: StaticDim, K: StaticDim, N: StaticDim> MatMulShape<( $($batch,)* K, N)> for (M, K) {
+            /// Auto-generated documentation for Output.
             type Output = ( $($batch,)* M, N);
             #[inline(always)]
+            /// Auto-generated documentation for output_shape.
             fn output_shape(
                 _: &<Self as Shape>::Field,
                 _: &<( $($batch,)* K, N) as Shape>::Field,
@@ -210,7 +231,9 @@ impl_batched_matmul!(B1, B2, B3);
 
 // Dynamic batch implementation
 impl<M: StaticDim, K: StaticDim, N: StaticDim> MatMulShape<(usize, K, N)> for (usize, M, K) {
+    /// Auto-generated documentation for Output.
     type Output = (usize, M, N);
+    /// Auto-generated documentation for output_shape.
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         _: &<(usize, K, N) as Shape>::Field,
@@ -219,7 +242,9 @@ impl<M: StaticDim, K: StaticDim, N: StaticDim> MatMulShape<(usize, K, N)> for (u
     }
 }
 impl<M: StaticDim, K: StaticDim, N: StaticDim> MatMulShape<(K, N)> for (usize, M, K) {
+    /// Auto-generated documentation for Output.
     type Output = (usize, M, N);
+    /// Auto-generated documentation for output_shape.
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         _: &<(K, N) as Shape>::Field,
@@ -228,7 +253,9 @@ impl<M: StaticDim, K: StaticDim, N: StaticDim> MatMulShape<(K, N)> for (usize, M
     }
 }
 impl<M: StaticDim, K: StaticDim, N: StaticDim> MatMulShape<(K, N)> for (usize, usize, M, K) {
+    /// Auto-generated documentation for Output.
     type Output = (usize, usize, M, N);
+    /// Auto-generated documentation for output_shape.
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         _: &<(K, N) as Shape>::Field,
@@ -237,7 +264,9 @@ impl<M: StaticDim, K: StaticDim, N: StaticDim> MatMulShape<(K, N)> for (usize, u
     }
 }
 impl<M: StaticDim, K: StaticDim, N: StaticDim> MatMulShape<(usize, K, N)> for (M, K) {
+    /// Auto-generated documentation for Output.
     type Output = (usize, M, N);
+    /// Auto-generated documentation for output_shape.
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<(usize, K, N) as Shape>::Field,
@@ -246,7 +275,9 @@ impl<M: StaticDim, K: StaticDim, N: StaticDim> MatMulShape<(usize, K, N)> for (M
     }
 }
 impl<M: StaticDim, K: StaticDim, N: StaticDim> MatMulShape<(usize, usize, K, N)> for (M, K) {
+    /// Auto-generated documentation for Output.
     type Output = (usize, usize, M, N);
+    /// Auto-generated documentation for output_shape.
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<(usize, usize, K, N) as Shape>::Field,
@@ -267,6 +298,7 @@ impl<
     G: RequiresGrad,
 > Tensor<S1, B, K, D, G>
 {
+    /// Auto-generated documentation for matmul.
     pub fn matmul<S2>(&self, rhs: &Tensor<S2, B, K, D, G>) -> Result<Tensor<S1::Output, B, K, D, G>>
     where
         S2: Shape,

@@ -27,6 +27,7 @@ use crate::stride;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct TensorId(u64);
 
+/// Auto-generated documentation for NEXT_TENSOR_ID.
 static NEXT_TENSOR_ID: AtomicU64 = AtomicU64::new(0);
 
 impl TensorId {
@@ -47,21 +48,29 @@ impl TensorId {
 /// only shape/stride bookkeeping.
 #[derive(Debug, Clone, PartialEq)]
 pub struct BlockQ8_0 {
+    /// Auto-generated documentation for d.
     pub d: half::f16,
+    /// Auto-generated documentation for qs.
     pub qs: [i8; 32],
 }
 
 #[cfg(feature = "cuda")]
 #[derive(Debug)]
+/// Auto-generated documentation for NativeCudaBuffer.
 pub struct NativeCudaBuffer {
+    /// Auto-generated documentation for len.
     pub len: usize,
+    /// Auto-generated documentation for data.
     pub data: alloc::sync::Arc<cudarc::driver::CudaSlice<u8>>,
+    /// Auto-generated documentation for device.
     pub device: alloc::sync::Arc<cudarc::driver::CudaContext>,
+    /// Auto-generated documentation for device_id.
     pub device_id: usize,
 }
 
 #[cfg(feature = "cuda")]
 impl PartialEq for NativeCudaBuffer {
+    /// Auto-generated documentation for eq.
     fn eq(&self, other: &Self) -> bool {
         self.len == other.len && alloc::sync::Arc::ptr_eq(&self.data, &other.data)
     }
@@ -69,6 +78,7 @@ impl PartialEq for NativeCudaBuffer {
 
 #[cfg(feature = "cuda")]
 impl Clone for NativeCudaBuffer {
+    /// Auto-generated documentation for clone.
     fn clone(&self) -> Self {
         NativeCudaBuffer {
             len: self.len,
@@ -81,26 +91,41 @@ impl Clone for NativeCudaBuffer {
 
 #[cfg(not(feature = "cuda"))]
 #[derive(Debug, Clone, PartialEq)]
+/// Auto-generated documentation for NativeCudaBuffer.
 pub struct NativeCudaBuffer {
+    /// Auto-generated documentation for len.
     pub len: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]
+/// Auto-generated documentation for NativeMetalBuffer.
 pub struct NativeMetalBuffer {
+    /// Auto-generated documentation for len.
     pub len: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]
+/// Auto-generated documentation for NativeBuffer.
 pub enum NativeBuffer {
+    /// Auto-generated documentation for F32.
     F32(Vec<f32>),
+    /// Auto-generated documentation for F64.
     F64(Vec<f64>),
+    /// Auto-generated documentation for U8.
     U8(Vec<u8>),
+    /// Auto-generated documentation for U32.
     U32(Vec<u32>),
+    /// Auto-generated documentation for I64.
     I64(Vec<i64>),
+    /// Auto-generated documentation for F16.
     F16(Vec<f16>),
+    /// Auto-generated documentation for BF16.
     BF16(Vec<bf16>),
+    /// Auto-generated documentation for Q8_0.
     Q8_0(Vec<BlockQ8_0>),
+    /// Auto-generated documentation for Cuda.
     Cuda(NativeCudaBuffer),
+    /// Auto-generated documentation for Metal.
     Metal(NativeMetalBuffer),
 }
 
@@ -131,14 +156,29 @@ impl NativeBuffer {
     pub fn as_bytes(&self) -> &[u8] {
         unsafe {
             match self {
-                NativeBuffer::F32(v) => core::slice::from_raw_parts(v.as_ptr() as *const u8, v.len() * 4),
-                NativeBuffer::F64(v) => core::slice::from_raw_parts(v.as_ptr() as *const u8, v.len() * 8),
+                NativeBuffer::F32(v) => {
+                    core::slice::from_raw_parts(v.as_ptr() as *const u8, v.len() * 4)
+                }
+                NativeBuffer::F64(v) => {
+                    core::slice::from_raw_parts(v.as_ptr() as *const u8, v.len() * 8)
+                }
                 NativeBuffer::U8(v) => v.as_slice(),
-                NativeBuffer::U32(v) => core::slice::from_raw_parts(v.as_ptr() as *const u8, v.len() * 4),
-                NativeBuffer::I64(v) => core::slice::from_raw_parts(v.as_ptr() as *const u8, v.len() * 8),
-                NativeBuffer::F16(v) => core::slice::from_raw_parts(v.as_ptr() as *const u8, v.len() * 2),
-                NativeBuffer::BF16(v) => core::slice::from_raw_parts(v.as_ptr() as *const u8, v.len() * 2),
-                NativeBuffer::Q8_0(v) => core::slice::from_raw_parts(v.as_ptr() as *const u8, v.len() * core::mem::size_of::<BlockQ8_0>()),
+                NativeBuffer::U32(v) => {
+                    core::slice::from_raw_parts(v.as_ptr() as *const u8, v.len() * 4)
+                }
+                NativeBuffer::I64(v) => {
+                    core::slice::from_raw_parts(v.as_ptr() as *const u8, v.len() * 8)
+                }
+                NativeBuffer::F16(v) => {
+                    core::slice::from_raw_parts(v.as_ptr() as *const u8, v.len() * 2)
+                }
+                NativeBuffer::BF16(v) => {
+                    core::slice::from_raw_parts(v.as_ptr() as *const u8, v.len() * 2)
+                }
+                NativeBuffer::Q8_0(v) => core::slice::from_raw_parts(
+                    v.as_ptr() as *const u8,
+                    v.len() * core::mem::size_of::<BlockQ8_0>(),
+                ),
                 NativeBuffer::Cuda(_) => panic!("as_bytes not supported on CUDA buffer"),
                 NativeBuffer::Metal(_) => panic!("as_bytes not supported on Metal buffer"),
             }
@@ -432,7 +472,7 @@ pub(crate) fn increment_index(idx: &mut [usize], shape: &[usize]) {
 /// function (not a `NativeStorage` method) because it constructs a NEW
 /// storage from two independent shape/value inputs, rather than adjusting
 /// `self`'s own metadata.
-pub fn scatter_into_zeros(
+pub(crate) fn scatter_into_zeros(
     original_shape: &[usize],
     region_start: &[usize],
     values: &NativeStorage,
@@ -496,9 +536,11 @@ pub fn scatter_into_zeros(
 }
 
 #[cfg(test)]
+/// Auto-generated documentation for tests.
 mod tests {
     use super::*;
 
+    /// Auto-generated documentation for storage_2x3.
     fn storage_2x3() -> NativeStorage {
         NativeStorage::from_contiguous(
             NativeBuffer::F32(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]),
@@ -507,6 +549,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for from_contiguous_has_expected_shape_and_strides.
     fn from_contiguous_has_expected_shape_and_strides() {
         let s = storage_2x3();
         assert_eq!(s.shape, vec![2, 3]);
@@ -514,6 +557,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for reshape_contiguous_shares_buffer_and_gets_new_id.
     fn reshape_contiguous_shares_buffer_and_gets_new_id() {
         let s = storage_2x3();
         let strong_count_before = Arc::strong_count(&s.buffer);
@@ -525,6 +569,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for reshape_non_contiguous_materializes_then_reshapes.
     fn reshape_non_contiguous_materializes_then_reshapes() {
         let s = storage_2x3();
         let t = s.transpose(0, 1).unwrap(); // [3,2], non-contiguous
@@ -544,6 +589,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for transpose_shares_buffer_and_swaps_shape_strides.
     fn transpose_shares_buffer_and_swaps_shape_strides() {
         let s = storage_2x3();
         let strong_count_before = Arc::strong_count(&s.buffer);
@@ -556,6 +602,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for transposed_view_reads_correct_values_without_contiguous_call.
     fn transposed_view_reads_correct_values_without_contiguous_call() {
         let s = storage_2x3(); // [[1,2,3],[4,5,6]]
         let t = s.transpose(0, 1).unwrap(); // [[1,4],[2,5],[3,6]]
@@ -568,6 +615,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for broadcast_as_expands_and_shares_buffer.
     fn broadcast_as_expands_and_shares_buffer() {
         let s = NativeStorage::from_contiguous(NativeBuffer::F32(vec![1.0, 2.0, 3.0]), vec![1, 3]);
         let strong_count_before = Arc::strong_count(&s.buffer);
@@ -589,6 +637,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for narrow_contiguous_shares_buffer_and_slices_correct_values.
     fn narrow_contiguous_shares_buffer_and_slices_correct_values() {
         // [3,2] storage: [[1,4],[2,5],[3,6]]
         let s = NativeStorage::from_contiguous(
@@ -606,6 +655,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for narrow_on_transposed_view_reads_correct_values_without_materializing.
     fn narrow_on_transposed_view_reads_correct_values_without_materializing() {
         let s = storage_2x3(); // [[1,2,3],[4,5,6]]
         let t = s.transpose(0, 1).unwrap(); // [[1,4],[2,5],[3,6]], non-contiguous
@@ -619,6 +669,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for narrow_out_of_bounds_length_errors.
     fn narrow_out_of_bounds_length_errors() {
         let s = storage_2x3();
         let result = s.narrow(0, 1, 2); // start=1, len=2 -> needs shape[0] >= 3, but it's 2
@@ -626,6 +677,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for narrow_dim_out_of_range_errors.
     fn narrow_dim_out_of_range_errors() {
         let s = storage_2x3();
         let result = s.narrow(5, 0, 1);
@@ -633,6 +685,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for narrow_boundary_values_succeed.
     fn narrow_boundary_values_succeed() {
         let s = storage_2x3(); // shape [2,3]
         // Full-length narrow (a no-op in effect).
@@ -651,6 +704,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for tensor_id_never_repeats_across_many_calls.
     fn tensor_id_never_repeats_across_many_calls() {
         let mut ids = hashbrown::HashSet::new();
         for _ in 0..1000 {
@@ -660,6 +714,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for scatter_into_zeros_partial_overlap_writes_only_target_region.
     fn scatter_into_zeros_partial_overlap_writes_only_target_region() {
         let values =
             NativeStorage::from_contiguous(NativeBuffer::F32(vec![7.0, 8.0, 9.0]), vec![1, 3]);
@@ -676,6 +731,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for scatter_into_zeros_full_overlap_matches_values_exactly.
     fn scatter_into_zeros_full_overlap_matches_values_exactly() {
         let values =
             NativeStorage::from_contiguous(NativeBuffer::F32(vec![1.0, 2.0, 3.0, 4.0]), vec![2, 2]);
@@ -689,6 +745,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for scatter_into_zeros_returns_fresh_buffer_not_sharing_values_rc.
     fn scatter_into_zeros_returns_fresh_buffer_not_sharing_values_rc() {
         let values =
             NativeStorage::from_contiguous(NativeBuffer::F32(vec![7.0, 8.0, 9.0]), vec![1, 3]);
@@ -697,6 +754,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for scatter_into_zeros_1d_case.
     fn scatter_into_zeros_1d_case() {
         let values = NativeStorage::from_contiguous(NativeBuffer::F32(vec![9.0, 10.0]), vec![2]);
         let result = scatter_into_zeros(&[5], &[2], &values);

@@ -7,7 +7,7 @@
 //! visualizers without pulling in heavy TUI or application runtime dependencies.
 //!
 //! # Architecture
-//! 
+//!
 //! The plugin architecture revolves around the [`Panel`] trait. A `Panel` is a stateful
 //! struct that:
 //! 1. Receives incoming `kindle-telemetry` [`Event`]s via `update()`.
@@ -19,17 +19,17 @@
 //! or crashing the host application by drawing outside their assigned boundaries.
 //!
 //! # Getting Started
-//! 
+//!
 //! To create a custom panel, implement the [`Panel`] trait:
-//! 
+//!
 //! ```rust,no_run
 //! use kindle_viz_plugin_api::prelude::*;
 //! use kindle_telemetry::events::{Event, ScalarEvent};
-//! 
+//!
 //! pub struct MyCustomPanel {
 //!     current_value: f64,
 //! }
-//! 
+//!
 //! impl Panel for MyCustomPanel {
 //!     fn id(&self) -> &'static str { "my_custom_panel" }
 //!     fn title(&self) -> &str { "Custom Metric" }
@@ -48,17 +48,23 @@
 //!     fn reset(&mut self) { self.current_value = 0.0; }
 //! }
 //! ```
-//! 
+//!
 //! Once implemented, you can register it with `kindle-viz`'s `App` at startup.
-#[macro_use]
 extern crate alloc;
+/// Auto-generated documentation for err.
 pub mod err;
+/// Auto-generated documentation for event.
 pub mod event;
+/// Auto-generated documentation for keymap.
 pub mod keymap;
+/// Auto-generated documentation for panel.
 pub mod panel;
+/// Auto-generated documentation for plugin.
 pub mod plugin;
+/// Auto-generated documentation for render_ctx.
 pub mod render_ctx;
 
+/// Auto-generated documentation for prelude.
 pub mod prelude {
     pub use crate::err::{Error, Result};
     pub use crate::event::*;

@@ -8,16 +8,24 @@ use alloc::vec::Vec;
 /// * `In` — Number of input features.
 /// * `Out` — Number of output/hidden features.
 pub trait RnnShape: Shape + DynShape {
+    /// Auto-generated documentation for In.
     type In: Dim;
+    /// Auto-generated documentation for Out.
     type Out: Dim;
+    /// Auto-generated documentation for Target.
     type Target;
+    /// Auto-generated documentation for build_args.
     fn build_args(target: Self::Target) -> (usize, usize);
 }
 
 impl<In: Dim, Out: Dim> RnnShape for (In, Out) {
+    /// Auto-generated documentation for In.
     type In = In;
+    /// Auto-generated documentation for Out.
     type Out = Out;
+    /// Auto-generated documentation for Target.
     type Target = ();
+    /// Auto-generated documentation for build_args.
     fn build_args(_: ()) -> (usize, usize) {
         (
             In::from_arg(Default::default()).size(),
@@ -27,9 +35,13 @@ impl<In: Dim, Out: Dim> RnnShape for (In, Out) {
 }
 
 impl RnnShape for Dyn {
+    /// Auto-generated documentation for In.
     type In = usize;
+    /// Auto-generated documentation for Out.
     type Out = usize;
+    /// Auto-generated documentation for Target.
     type Target = (usize, usize);
+    /// Auto-generated documentation for build_args.
     fn build_args(target: (usize, usize)) -> (usize, usize) {
         target
     }
@@ -49,7 +61,9 @@ pub struct RNNCell<
     BiasIh: crate::nn::optional::OptionalField = crate::nn::optional::True,
     BiasHh: crate::nn::optional::OptionalField = crate::nn::optional::True,
 > {
+    /// Auto-generated documentation for wi.
     pub wi: Linear<(S::In, S::Out), B, BiasIh>,
+    /// Auto-generated documentation for wh.
     pub wh: Linear<(S::Out, S::Out), B, BiasHh>,
 }
 
@@ -60,6 +74,7 @@ impl<
     BiasHh: crate::nn::optional::OptionalField,
 > RNNCell<S, B, BiasIh, BiasHh>
 {
+    /// Auto-generated documentation for new.
     pub fn new(
         wi: Linear<(S::In, S::Out), B, BiasIh>,
         wh: Linear<(S::Out, S::Out), B, BiasHh>,
@@ -78,6 +93,7 @@ where
     Linear<(S::In, S::Out), B, BiasIh>: Parameters<B>,
     Linear<(S::Out, S::Out), B, BiasHh>: Parameters<B>,
 {
+    /// Auto-generated documentation for named_parameters.
     fn named_parameters(
         &self,
         prefix: &str,
@@ -101,10 +117,13 @@ where
     Linear<(S::Out, S::Out), B, BiasHh>:
         Module<Tensor<(Batch, S::Out), B>, Output = Tensor<(Batch, S::Out), B>, Error = Error>,
 {
+    /// Auto-generated documentation for Output.
     type Output = Tensor<(Batch, S::Out), B>;
+    /// Auto-generated documentation for Error.
     type Error = Error;
 
     #[inline]
+    /// Auto-generated documentation for forward.
     fn forward(
         &self,
         (x, h_prev): (Tensor<(Batch, S::In), B>, Tensor<(Batch, S::Out), B>),
@@ -147,6 +166,7 @@ pub struct RNN<
     BiasIh: crate::nn::optional::OptionalField = crate::nn::optional::True,
     BiasHh: crate::nn::optional::OptionalField = crate::nn::optional::True,
 > {
+    /// Auto-generated documentation for cell.
     pub cell: RNNCell<S, B, BiasIh, BiasHh>,
 }
 
@@ -157,6 +177,7 @@ impl<
     BiasHh: crate::nn::optional::OptionalField,
 > RNN<S, B, BiasIh, BiasHh>
 {
+    /// Auto-generated documentation for new.
     pub fn new(cell: RNNCell<S, B, BiasIh, BiasHh>) -> Self {
         Self { cell }
     }
@@ -171,6 +192,7 @@ impl<
 where
     RNNCell<S, B, BiasIh, BiasHh>: Parameters<B>,
 {
+    /// Auto-generated documentation for named_parameters.
     fn named_parameters(
         &self,
         prefix: &str,
@@ -199,10 +221,13 @@ where
             Error = Error,
         >,
 {
+    /// Auto-generated documentation for Output.
     type Output = (Tensor<(Batch, Seq, S::Out), B>, Tensor<(Batch, S::Out), B>);
+    /// Auto-generated documentation for Error.
     type Error = Error;
 
     #[inline]
+    /// Auto-generated documentation for forward.
     fn forward(
         &self,
         (x, mut h): (Tensor<(Batch, Seq, S::In), B>, Tensor<(Batch, S::Out), B>),
@@ -232,6 +257,7 @@ impl<
     BiasHh: crate::nn::optional::OptionalField,
 > crate::nn::module::StateDict<B> for RNNCell<S, B, BiasIh, BiasHh>
 {
+    /// Auto-generated documentation for load_state_dict.
     fn load_state_dict(
         &mut self,
         prefix: &str,
@@ -243,6 +269,7 @@ impl<
             .load_state_dict(&format!("{}wh.", prefix), tensors)?;
         Ok(())
     }
+    /// Auto-generated documentation for state_dict.
     fn state_dict(
         &self,
         prefix: &str,
@@ -259,6 +286,7 @@ impl<
     BiasHh: crate::nn::optional::OptionalField,
 > crate::nn::module::StateDict<B> for RNN<S, B, BiasIh, BiasHh>
 {
+    /// Auto-generated documentation for load_state_dict.
     fn load_state_dict(
         &mut self,
         prefix: &str,
@@ -267,6 +295,7 @@ impl<
         self.cell
             .load_state_dict(&format!("{}cell.", prefix), tensors)
     }
+    /// Auto-generated documentation for state_dict.
     fn state_dict(
         &self,
         prefix: &str,
@@ -286,6 +315,7 @@ where
     Linear<(S::In, S::Out), B, BiasIh>: crate::nn::module::NamedLayers,
     Linear<(S::Out, S::Out), B, BiasHh>: crate::nn::module::NamedLayers,
 {
+    /// Auto-generated documentation for layer_structure.
     fn layer_structure(&self, prefix: &str) -> Vec<crate::nn::module::LayerNode> {
         let mut children = Vec::new();
         let p_wi = if prefix.is_empty() {
@@ -324,6 +354,7 @@ impl<
 where
     RNNCell<S, B, BiasIh, BiasHh>: crate::nn::module::NamedLayers,
 {
+    /// Auto-generated documentation for layer_structure.
     fn layer_structure(&self, prefix: &str) -> Vec<crate::nn::module::LayerNode> {
         let mut children = Vec::new();
         let p_cell = if prefix.is_empty() {

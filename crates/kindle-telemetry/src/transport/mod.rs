@@ -3,7 +3,9 @@
 //! caller indefinitely (the future `emitter.rs`'s writer thread is the
 //! only caller — Plan 07-02).
 
+/// Auto-generated documentation for file.
 pub mod file;
+/// The `socket` module.
 pub mod socket;
 
 use crate::events::Event;
@@ -12,5 +14,6 @@ use crate::events::Event;
 /// because `Emitter::new` moves `Vec<Box<dyn Transport>>` into the
 /// exclusively-owning background writer thread (Plan 07-02).
 pub trait Transport: Send {
+    /// Auto-generated documentation for write_event.
     fn write_event(&mut self, event: &Event) -> crate::err::Result<()>;
 }

@@ -1,21 +1,25 @@
 use kindle::prelude::*;
 use kindle_backends::candle::CandleBackend;
 
+/// Auto-generated documentation for B.
 type B = CandleBackend<f32, kindle::prelude::Cpu>;
 
 #[module]
+/// Auto-generated documentation for SubModule.
 struct SubModule {
     fc: Linear<s![100, 50], B>,
     act: ReLU,
 }
 
 #[module]
+/// Auto-generated documentation for TestMLP.
 struct TestMLP {
     sub: SubModule,
     fc_out: Linear<s![50, 10], B>,
 }
 
 #[test]
+/// Auto-generated documentation for test_named_layers_derivation.
 fn test_named_layers_derivation() {
     let sub = SubModule {
         fc: Linear::new().unwrap(),
@@ -59,6 +63,7 @@ fn test_named_layers_derivation() {
 }
 
 #[test]
+/// Auto-generated documentation for test_sequential_named_layers.
 fn test_sequential_named_layers() {
     let net = seq!(
         Linear::<s![768, 256], B>::new().unwrap(),

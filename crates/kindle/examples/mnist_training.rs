@@ -6,15 +6,20 @@ use kindle_data::{Collate, DataLoader, Dataset};
 use std::path::PathBuf;
 
 #[cfg(feature = "candle")]
+/// Auto-generated documentation for Backend.
 type Backend = kindle_backends::candle::CandleBackend<f32, Cpu>;
 #[cfg(not(feature = "candle"))]
+/// Auto-generated documentation for Backend.
 type Backend = kindle_core::tensor::backend::DummyBackend<f32, Cpu>;
 
+/// Auto-generated documentation for MnistCollate.
 struct MnistCollate;
 
 impl Collate<(Vec<f32>, u8)> for MnistCollate {
+    /// Auto-generated documentation for Output.
     type Output = (Tensor<Dyn, Backend>, Tensor<Dyn, Backend>);
 
+    /// Auto-generated documentation for collate.
     fn collate(&self, batch: Vec<(Vec<f32>, u8)>) -> Self::Output {
         let batch_size = batch.len();
         let mut images = Vec::with_capacity(batch_size * 784);

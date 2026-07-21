@@ -1,32 +1,48 @@
 use crate::nn::{Module, Param};
 use crate::prelude::*;
 
+/// Auto-generated documentation for EmbeddingShape.
 pub trait EmbeddingShape: Shape + DynShape {
+    /// Auto-generated documentation for Vocab.
     type Vocab: Dim;
+    /// Auto-generated documentation for Embed.
     type Embed: Dim;
+    /// Auto-generated documentation for BuildArg.
     type BuildArg: crate::tensor::arg_into::NotUnit;
+    /// Auto-generated documentation for Target.
     type Target;
 
+    /// Auto-generated documentation for build_args.
     fn build_args(target: Self::Target) -> Self::BuildArg;
 }
 
 impl<V: Dim, E: Dim> EmbeddingShape for (V, E) {
+    /// Auto-generated documentation for Vocab.
     type Vocab = V;
+    /// Auto-generated documentation for Embed.
     type Embed = E;
+    /// Auto-generated documentation for BuildArg.
     type BuildArg = (<V as Dim>::Arg, <E as Dim>::Arg);
+    /// Auto-generated documentation for Target.
     type Target = (<V as Dim>::Arg, <E as Dim>::Arg);
 
+    /// Auto-generated documentation for build_args.
     fn build_args(target: Self::Target) -> Self::BuildArg {
         target
     }
 }
 
 impl EmbeddingShape for Dyn {
+    /// Auto-generated documentation for Vocab.
     type Vocab = usize;
+    /// Auto-generated documentation for Embed.
     type Embed = usize;
+    /// Auto-generated documentation for BuildArg.
     type BuildArg = alloc::vec::Vec<usize>;
+    /// Auto-generated documentation for Target.
     type Target = (usize, usize);
 
+    /// Auto-generated documentation for build_args.
     fn build_args(target: Self::Target) -> Self::BuildArg {
         alloc::vec![target.0, target.1]
     }
@@ -34,7 +50,9 @@ impl EmbeddingShape for Dyn {
 
 #[derive(Debug, Clone)]
 #[kindle_macros::module(internal)]
+/// Auto-generated documentation for Embedding.
 pub struct Embedding<S: EmbeddingShape, B: Backend> {
+    /// Auto-generated documentation for weight.
     pub weight: Param<(S::Vocab, S::Embed), B>,
 }
 
@@ -44,6 +62,7 @@ where
     B::Device: crate::prelude::ConstDevice,
     (S::Vocab, S::Embed): Shape<Arg = S::BuildArg>,
 {
+    /// Auto-generated documentation for new_with.
     pub fn new_with(args: S::Target) -> Result<Self> {
         let w_args = S::build_args(args);
         let w_args_data = crate::tensor::arg_into::TensorArgsData {
@@ -70,6 +89,7 @@ where
     B::Device: crate::prelude::ConstDevice,
     (S::Vocab, S::Embed): Shape<Arg = S::BuildArg>,
 {
+    /// Auto-generated documentation for new.
     pub fn new() -> Result<Self> {
         Self::new_with(())
     }
@@ -81,10 +101,13 @@ where
     S::Embed: typenum::Unsigned,
     B: Backend + crate::tensor::backend::ModuleOps<B>,
 {
+    /// Auto-generated documentation for Output.
     type Output = Tensor<<InS as AppendDim<S::Embed>>::Output, B>;
+    /// Auto-generated documentation for Error.
     type Error = Error;
 
     #[inline]
+    /// Auto-generated documentation for forward.
     fn forward(&self, x: Tensor<InS, B>) -> core::result::Result<Self::Output, Error> {
         let weight = self.weight.as_tensor()?;
         let out = B::embedding(x.inner(), weight.inner())?;

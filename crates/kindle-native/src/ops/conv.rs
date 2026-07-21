@@ -309,6 +309,7 @@ pub(crate) fn conv1d_impl<T: DType, D: kindle_core::prelude::Device, K: DType>(
     dilation: usize,
     groups: usize,
 ) -> Result<NativeStorage> {
+    /// Auto-generated documentation for B.
     type B<T, D> = NativeBackend<T, D>;
 
     let (b, cin, len) = (input.shape[0], input.shape[1], input.shape[2]);
@@ -438,6 +439,7 @@ pub(crate) fn conv2d_impl<T: DType, D: kindle_core::prelude::Device, K: DType>(
     dilation: usize,
     groups: usize,
 ) -> Result<NativeStorage> {
+    /// Auto-generated documentation for B.
     type B<T, D> = NativeBackend<T, D>;
 
     let (b, cin, h, w) = (
@@ -607,6 +609,7 @@ pub(crate) fn conv_transpose2d_impl<T: DType, D: kindle_core::prelude::Device, K
     dilation: usize,
     groups: usize,
 ) -> Result<NativeStorage> {
+    /// Auto-generated documentation for B.
     type B<T, D> = NativeBackend<T, D>;
 
     if groups != 1 {
@@ -791,6 +794,7 @@ fn concat_along_dim0(parts: &[NativeStorage]) -> NativeStorage {
     concat_along_dim(parts, 0)
 }
 
+/// Auto-generated documentation for concat_along_dim.
 fn concat_along_dim(parts: &[NativeStorage], dim: usize) -> NativeStorage {
     let rank = parts[0].shape.len();
     let mut out_shape = parts[0].shape.clone();
@@ -823,17 +827,21 @@ fn concat_along_dim(parts: &[NativeStorage], dim: usize) -> NativeStorage {
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
+/// Auto-generated documentation for tests.
 mod tests {
     use super::*;
     use crate::gradcheck::gradcheck;
     use kindle_core::prelude::{Cpu, ReductionOps};
 
+    /// Auto-generated documentation for TestBackend.
     type TestBackend = NativeBackend<f32, Cpu>;
 
+    /// Auto-generated documentation for tensor.
     fn tensor(v: Vec<f32>, shape: Vec<usize>) -> NativeStorage {
         NativeStorage::from_contiguous(NativeBuffer::F32(v), shape)
     }
 
+    /// Auto-generated documentation for f32_vec.
     fn f32_vec(s: &NativeStorage) -> Vec<f32> {
         match &*s.buffer {
             NativeBuffer::F32(v) => v.clone(),
@@ -916,6 +924,7 @@ mod tests {
 
     // --- conv1d backward ---
 
+    /// Auto-generated documentation for conv1d_sum_op.
     fn conv1d_sum_op(inputs: &[NativeStorage]) -> NativeStorage {
         let out = conv1d_impl::<f32, Cpu, f32>(&inputs[0], &inputs[1], None, 1, 0, 1, 1).unwrap();
         TestBackend::sum_all::<f32>(&out).unwrap()
@@ -1034,6 +1043,7 @@ mod tests {
 
     // --- conv2d backward ---
 
+    /// Auto-generated documentation for conv2d_sum_op.
     fn conv2d_sum_op(inputs: &[NativeStorage]) -> NativeStorage {
         let out = conv2d_impl::<f32, Cpu, f32>(&inputs[0], &inputs[1], None, 1, 0, 1, 1).unwrap();
         TestBackend::sum_all::<f32>(&out).unwrap()
@@ -1148,6 +1158,7 @@ mod tests {
 
     // --- conv_transpose2d backward ---
 
+    /// Auto-generated documentation for conv_transpose2d_sum_op.
     fn conv_transpose2d_sum_op(inputs: &[NativeStorage]) -> NativeStorage {
         let out =
             conv_transpose2d_impl::<f32, Cpu, f32>(&inputs[0], &inputs[1], None, 1, 0, 0, 1, 1)

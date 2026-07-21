@@ -21,20 +21,28 @@ impl WgpuBuffer {
                 | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        Arc::new(Self { buffer, size: size_bytes })
+        Arc::new(Self {
+            buffer,
+            size: size_bytes,
+        })
     }
 
     pub(crate) fn from_slice<T: bytemuck::Pod>(data: &[T]) -> Arc<Self> {
         let state = get_device_state();
         let bytes = bytemuck::cast_slice(data);
-        let buffer = state.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("WgpuBuffer Init"),
-            contents: bytes,
-            usage: wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::COPY_SRC
-                | wgpu::BufferUsages::COPY_DST,
-        });
-        Arc::new(Self { buffer, size: bytes.len() })
+        let buffer = state
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("WgpuBuffer Init"),
+                contents: bytes,
+                usage: wgpu::BufferUsages::STORAGE
+                    | wgpu::BufferUsages::COPY_SRC
+                    | wgpu::BufferUsages::COPY_DST,
+            });
+        Arc::new(Self {
+            buffer,
+            size: bytes.len(),
+        })
     }
 
     pub(crate) fn to_vec<T: bytemuck::Pod>(&self) -> Vec<T> {
@@ -45,9 +53,11 @@ impl WgpuBuffer {
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let mut enc = state.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("ToVec"),
-        });
+        let mut enc = state
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("ToVec"),
+            });
         enc.copy_buffer_to_buffer(&self.buffer, 0, &staging, 0, self.size as u64);
         state.queue.submit(core::iter::once(enc.finish()));
 
@@ -83,6 +93,10 @@ impl WgpuStorage {
         for i in (0..ndim.saturating_sub(1)).rev() {
             strides[i] = strides[i + 1] * shape[i + 1];
         }
-        Self { buffer, shape, strides }
+        Self {
+            buffer,
+            shape,
+            strides,
+        }
     }
 }

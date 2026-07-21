@@ -10,6 +10,7 @@ extern crate alloc;
 use alloc::vec::Vec;
 
 impl<T: DType, D: Device> QuantizedOps<Self> for NativeBackend<T, D> {
+    /// Auto-generated documentation for quantize.
     fn quantize<K: FloatDType, Q: QuantDType>(
         _t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<Q>> {
@@ -70,6 +71,7 @@ impl<T: DType, D: Device> QuantizedOps<Self> for NativeBackend<T, D> {
         ))
     }
 
+    /// Auto-generated documentation for dequantize.
     fn dequantize<Q: QuantDType, K: FloatDType>(
         _t: &<Self as Backend>::Storage<Q>,
     ) -> Result<<Self as Backend>::Storage<K>> {
@@ -107,6 +109,7 @@ impl<T: DType, D: Device> QuantizedOps<Self> for NativeBackend<T, D> {
         ))
     }
 
+    /// Auto-generated documentation for quantized_matmul.
     fn quantized_matmul<Q: QuantDType>(
         _lhs: &<Self as Backend>::Storage<Q>,
         _rhs: &<Self as Backend>::Storage<Q>,
@@ -226,13 +229,15 @@ impl<T: DType, D: Device> QuantizedOps<Self> for NativeBackend<T, D> {
 }
 
 #[cfg(test)]
+/// Auto-generated documentation for tests.
 mod tests {
     use super::*;
 
-
+    /// Auto-generated documentation for TestBackend.
     type TestBackend = NativeBackend<f32, kindle_core::prelude::Cpu>;
 
     #[test]
+    /// Auto-generated documentation for test_quantize_dequantize_fidelity.
     fn test_quantize_dequantize_fidelity() {
         let mut data = vec![0.0f32; 64];
         for i in 0..64 {
@@ -256,6 +261,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for test_quantized_matmul.
     fn test_quantized_matmul() {
         // LHS: 2x32
         let mut lhs_data = vec![0.0f32; 64];
@@ -296,6 +302,7 @@ mod tests {
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[target_feature(enable = "avx2")]
 #[inline]
+/// Auto-generated documentation for vec_dot_q8_0_avx2.
 unsafe fn vec_dot_q8_0_avx2(
     n: usize,
     lhs: &[crate::storage::BlockQ8_0],
@@ -349,6 +356,7 @@ unsafe fn vec_dot_q8_0_avx2(
 }
 
 #[inline]
+/// Auto-generated documentation for vec_dot_q8_0_scalar.
 fn vec_dot_q8_0_scalar(
     n: usize,
     lhs: &[crate::storage::BlockQ8_0],

@@ -1,20 +1,23 @@
 use crate::graph::{AttributeValue, Graph};
 use crate::onnx_pb::onnx;
 use crate::prelude::*;
-use prost::Message;
 use alloc::collections::BTreeMap;
+use prost::Message;
 use std::path::Path;
 
+/// Auto-generated documentation for OnnxExporter.
 pub struct OnnxExporter<'a> {
     _path: &'a Path,
 }
 
 impl<'a> OnnxExporter<'a> {
+    /// Auto-generated documentation for new.
     pub fn new(path: &'a Path) -> Self {
         Self { _path: path }
     }
 }
 
+/// Auto-generated documentation for export_to_onnx.
 pub fn export_to_onnx(graph: &Graph, path: &Path) -> anyhow::Result<()> {
     let mut onnx_graph = onnx::GraphProto::default();
     onnx_graph.name = Some(alloc::string::String::from("kindle_graph"));
@@ -94,6 +97,7 @@ pub fn export_to_onnx(graph: &Graph, path: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Auto-generated documentation for dtype_to_onnx.
 fn dtype_to_onnx(dt: KindleDType) -> onnx::tensor_proto::DataType {
     match dt {
         KindleDType::F32 => onnx::tensor_proto::DataType::Float,
@@ -107,6 +111,7 @@ fn dtype_to_onnx(dt: KindleDType) -> onnx::tensor_proto::DataType {
     }
 }
 
+/// Auto-generated documentation for value_to_value_info.
 fn value_to_value_info(val: &crate::graph::Value) -> onnx::ValueInfoProto {
     let mut vi = onnx::ValueInfoProto::default();
     vi.name = Some(val.id.to_string());
@@ -131,8 +136,10 @@ fn value_to_value_info(val: &crate::graph::Value) -> onnx::ValueInfoProto {
 }
 
 impl<'a> crate::serialize::Serializer for OnnxExporter<'a> {
+    /// Auto-generated documentation for Error.
     type Error = anyhow::Error;
 
+    /// Auto-generated documentation for serialize.
     fn serialize<B: Backend>(
         &mut self,
         _state_dict: &BTreeMap<String, Tensor<Dyn, B>>,
@@ -146,19 +153,23 @@ impl<'a> crate::serialize::Serializer for OnnxExporter<'a> {
     }
 }
 
+/// Auto-generated documentation for OnnxImporter.
 pub struct OnnxImporter<'a> {
     _path: &'a Path,
 }
 
 impl<'a> OnnxImporter<'a> {
+    /// Auto-generated documentation for new.
     pub fn new(path: &'a Path) -> Self {
         Self { _path: path }
     }
 }
 
 impl<'a> crate::serialize::Deserializer for OnnxImporter<'a> {
+    /// Auto-generated documentation for Error.
     type Error = anyhow::Error;
 
+    /// Auto-generated documentation for deserialize.
     fn deserialize<B: Backend>(
         &mut self,
         _device: &KindleDevice,

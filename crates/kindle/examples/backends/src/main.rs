@@ -1,4 +1,3 @@
-#[macro_use]
 extern crate alloc;
 use kindle::prelude::*;
 use kindle::{DefaultDevice, Tensor};

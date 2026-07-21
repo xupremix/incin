@@ -3,15 +3,18 @@ use quote::{format_ident, quote};
 use syn::parse::{Parse, ParseStream};
 use syn::{LitInt, parse_macro_input};
 
+/// Auto-generated documentation for MaxRank.
 struct MaxRank(usize);
 
 impl Parse for MaxRank {
+    /// Auto-generated documentation for parse.
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let lit: LitInt = input.parse()?;
         Ok(MaxRank(lit.base10_parse()?))
     }
 }
 
+/// Auto-generated documentation for impl_arg_into.
 pub fn impl_arg_into(input: TokenStream) -> TokenStream {
     let MaxRank(max_rank) = parse_macro_input!(input as MaxRank);
     let mut output = quote!();
@@ -64,6 +67,7 @@ pub fn impl_arg_into(input: TokenStream) -> TokenStream {
             // e.g. impl<D0: Dim, const N1: usize> ArgInto<(usize, Const<N1>)> for (D0,)
             output.extend(quote! {
                 impl<#(#impl_generics),*> ArgInto<(#(#target_types,)*)> for (#(#source_types,)*) {
+                    /// Auto-generated documentation for into_arg.
                     fn into_arg(self) -> (#(#target_types,)*) {
                         (#(#tuple_body_items,)*)
                     }
@@ -77,6 +81,7 @@ pub fn impl_arg_into(input: TokenStream) -> TokenStream {
                 let single_source = &source_types[0];
                 output.extend(quote! {
                     impl<#(#impl_generics),*> ArgInto<(#(#target_types,)*)> for #single_source {
+                        /// Auto-generated documentation for into_arg.
                         fn into_arg(self) -> (#(#target_types,)*) {
                             (#(#scalar_body_items,)*)
                         }

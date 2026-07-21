@@ -4,90 +4,121 @@ use crate::prelude::*;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Reduction {
     #[default]
+    /// Auto-generated documentation for Mean.
     Mean,
+    /// Auto-generated documentation for Sum.
     Sum,
+    /// Auto-generated documentation for None.
     None,
 }
 
+/// Auto-generated documentation for ReductionMode.
 pub trait ReductionMode: Clone + Default + 'static {
+    /// Auto-generated documentation for as_enum.
     fn as_enum() -> Reduction;
 }
 
 #[derive(Debug, Clone, Copy, Default)]
+/// Auto-generated documentation for Mean.
 pub struct Mean;
 impl ReductionMode for Mean {
+    /// Auto-generated documentation for as_enum.
     fn as_enum() -> Reduction {
         Reduction::Mean
     }
 }
 
 #[derive(Debug, Clone, Copy, Default)]
+/// Auto-generated documentation for Sum.
 pub struct Sum;
 impl ReductionMode for Sum {
+    /// Auto-generated documentation for as_enum.
     fn as_enum() -> Reduction {
         Reduction::Sum
     }
 }
 
 #[derive(Debug, Clone, Copy, Default)]
+/// Auto-generated documentation for NoneReduction.
 pub struct NoneReduction;
 impl ReductionMode for NoneReduction {
+    /// Auto-generated documentation for as_enum.
     fn as_enum() -> Reduction {
         Reduction::None
     }
 }
 
+/// Auto-generated documentation for MseReductionShape.
 pub trait MseReductionShape<S: Shape> {
+    /// Auto-generated documentation for Output.
     type Output: Shape;
 }
 impl<S: Shape> MseReductionShape<S> for Mean {
+    /// Auto-generated documentation for Output.
     type Output = ();
 }
 impl<S: Shape> MseReductionShape<S> for Sum {
+    /// Auto-generated documentation for Output.
     type Output = ();
 }
 impl<S: Shape> MseReductionShape<S> for NoneReduction {
+    /// Auto-generated documentation for Output.
     type Output = S;
 }
 
+/// Auto-generated documentation for CrossEntropyReductionShape.
 pub trait CrossEntropyReductionShape<S: Shape> {
+    /// Auto-generated documentation for Output.
     type Output: Shape;
 }
 impl<S: Shape> CrossEntropyReductionShape<S> for Mean {
+    /// Auto-generated documentation for Output.
     type Output = ();
 }
 impl<S: Shape> CrossEntropyReductionShape<S> for Sum {
+    /// Auto-generated documentation for Output.
     type Output = ();
 }
 impl<S: Shape + crate::shapes::shape_ops::ReduceDim<1>> CrossEntropyReductionShape<S>
     for NoneReduction
 {
+    /// Auto-generated documentation for Output.
     type Output = S::Output;
 }
 
+/// Auto-generated documentation for BceReductionShape.
 pub trait BceReductionShape<S: Shape> {
+    /// Auto-generated documentation for Output.
     type Output: Shape;
 }
 impl<S: Shape> BceReductionShape<S> for Mean {
+    /// Auto-generated documentation for Output.
     type Output = ();
 }
 impl<S: Shape> BceReductionShape<S> for Sum {
+    /// Auto-generated documentation for Output.
     type Output = ();
 }
 impl<S: Shape> BceReductionShape<S> for NoneReduction {
+    /// Auto-generated documentation for Output.
     type Output = S;
 }
 
+/// Auto-generated documentation for L1ReductionShape.
 pub trait L1ReductionShape<S: Shape> {
+    /// Auto-generated documentation for Output.
     type Output: Shape;
 }
 impl<S: Shape> L1ReductionShape<S> for Mean {
+    /// Auto-generated documentation for Output.
     type Output = ();
 }
 impl<S: Shape> L1ReductionShape<S> for Sum {
+    /// Auto-generated documentation for Output.
     type Output = ();
 }
 impl<S: Shape> L1ReductionShape<S> for NoneReduction {
+    /// Auto-generated documentation for Output.
     type Output = S;
 }
 
@@ -100,6 +131,7 @@ impl<S: Shape> MSEShape<S> for S {}
 pub struct MSELoss<R: ReductionMode = Mean>(core::marker::PhantomData<R>);
 
 impl<R: ReductionMode> MSELoss<R> {
+    /// Auto-generated documentation for new.
     pub fn new() -> Self {
         Self(core::marker::PhantomData)
     }
@@ -152,6 +184,7 @@ impl<Batch: Dim> CrossEntropyShape<(Batch,)> for Dyn {}
 pub struct CrossEntropyLoss<R: ReductionMode = Mean>(core::marker::PhantomData<R>);
 
 impl<R: ReductionMode> CrossEntropyLoss<R> {
+    /// Auto-generated documentation for new.
     pub fn new() -> Self {
         Self(core::marker::PhantomData)
     }
@@ -203,6 +236,7 @@ impl<S: crate::prelude::Shape> L1Shape<S> for S {}
 pub struct L1Loss<R: ReductionMode = Mean>(core::marker::PhantomData<R>);
 
 impl<R: ReductionMode> L1Loss<R> {
+    /// Auto-generated documentation for new.
     pub fn new() -> Self {
         Self(core::marker::PhantomData)
     }
@@ -247,6 +281,7 @@ impl<S: crate::prelude::Shape> BCEWithLogitsShape<S> for S {}
 pub struct BCEWithLogitsLoss<R: ReductionMode = Mean>(core::marker::PhantomData<R>);
 
 impl<R: ReductionMode> BCEWithLogitsLoss<R> {
+    /// Auto-generated documentation for new.
     pub fn new() -> Self {
         Self(core::marker::PhantomData)
     }

@@ -287,4 +287,159 @@ impl<
             crate::prelude::NoGrad::init(()),
         ))
     }
+
+    /// Computes the top `k` elements of the tensor along the given dimension.
+    /// Returns a tuple of `(values, indices)`.
+    pub fn topk(
+        &self,
+        k: usize,
+        dim: usize,
+        largest: bool,
+    ) -> Result<(
+        Tensor<crate::prelude::Dyn, B, K, D, crate::prelude::NoGrad>,
+        Tensor<crate::prelude::Dyn, B, u32, D, crate::prelude::NoGrad>,
+    )> {
+        let (values_inner, indices_inner) = B::topk::<K, u32>(&self.inner, k, dim, largest)?;
+        let mut out_dims = S::dims(&self._shape).into();
+        out_dims[dim] = k;
+        let out_shape = crate::prelude::Dyn::from_dyn(&out_dims).unwrap();
+
+        let values = Tensor::from_parts_unchecked(
+            values_inner,
+            out_shape.clone(),
+            self._dtype.clone(),
+            self._device.clone(),
+            crate::prelude::NoGrad::init(()),
+        );
+        let indices = Tensor::from_parts_unchecked(
+            indices_inner,
+            out_shape,
+            core::marker::PhantomData,
+            self._device.clone(),
+            crate::prelude::NoGrad::init(()),
+        );
+        Ok((values, indices))
+    }
+
+    /// Sorts the elements of the tensor along the given dimension and returns the sorted indices.
+    pub fn argsort(
+        &self,
+        dim: usize,
+        descending: bool,
+    ) -> Result<Tensor<S, B, u32, D, crate::prelude::NoGrad>> {
+        let indices_inner = B::argsort::<K, u32>(&self.inner, dim, descending)?;
+        Ok(Tensor::from_parts_unchecked(
+            indices_inner,
+            self._shape.clone(),
+            core::marker::PhantomData,
+            self._device.clone(),
+            crate::prelude::NoGrad::init(()),
+        ))
+    }
+}
+
+// -------------------------------------------------------------------------
+// Variance and Standard Deviation Reducers
+// -------------------------------------------------------------------------
+
+impl<
+    S: crate::prelude::Shape + crate::shapes::DynShape,
+    B: crate::prelude::Backend + crate::tensor::backend::ReductionOps<B> + crate::tensor::backend::FloatOps<B>,
+    K: crate::prelude::DType,
+    D: crate::prelude::Device,
+    G: crate::prelude::RequiresGrad,
+> Tensor<S, B, K, D, G> {
+    /// Computes the variance over all elements.
+    pub fn var_all(&self, unbiased: bool) -> Result<Tensor<(), B, K, D, G>> {
+        let mean = self.clone().mean_all()?;
+        let dyn_self = self.clone().into_dyn();
+        let dyn_mean = mean.into_dyn();
+        let diff = dyn_self.broadcast_sub(&dyn_mean)?;
+        let sq_diff = diff.mul(&diff)?;
+        let sum_sq = sq_diff.sum_all()?;
+        
+        let n = S::numel(&self._shape) as f32;
+        let denom = if unbiased {
+            if n <= 1.0 { 0.0 } else { n - 1.0 }
+        } else {
+            n
+        };
+        let scalar = if denom > 0.0 { 1.0 / denom } else { 0.0 };
+        sum_sq.mul_scalar(scalar)
+    }
+
+    /// Computes the standard deviation over all elements.
+    pub fn std_all(&self, unbiased: bool) -> Result<Tensor<(), B, K, D, G>> {
+        self.var_all(unbiased)?.sqrt()
+    }
+
+    /// Computes the variance along a specific dimension, removing that dimension.
+    pub fn var_dim<const DIM: usize>(&self, unbiased: bool) -> Result<Tensor<<S as crate::shapes::ReduceDim<DIM>>::Output, B, K, D, G>> 
+    where
+        S: crate::shapes::DynShape + crate::shapes::ReduceDim<DIM> + crate::shapes::ReduceKeepDim<DIM>,
+        <S as crate::shapes::ReduceDim<DIM>>::Output: crate::shapes::DynShape,
+        <S as crate::shapes::ReduceKeepDim<DIM>>::Output: crate::shapes::DynShape,
+    {
+        let mean = self.mean_keepdim::<DIM>()?;
+        let dyn_self = self.clone().into_dyn();
+        let dyn_mean = mean.into_dyn();
+        let diff = dyn_self.broadcast_sub(&dyn_mean)?;
+        let sq_diff = diff.mul(&diff)?;
+        let sum_sq = sq_diff.sum_dim::<DIM>()?;
+        
+        let dims = S::dims(&self._shape);
+        let n = dims.as_ref()[DIM] as f32;
+        let denom = if unbiased {
+            if n <= 1.0 { 0.0 } else { n - 1.0 }
+        } else {
+            n
+        };
+        let scalar = if denom > 0.0 { 1.0 / denom } else { 0.0 };
+        let res = sum_sq.mul_scalar(scalar)?;
+        res.into_shape::<<S as crate::shapes::ReduceDim<DIM>>::Output>()
+    }
+
+    /// Computes the standard deviation along a specific dimension, removing that dimension.
+    pub fn std_dim<const DIM: usize>(&self, unbiased: bool) -> Result<Tensor<<S as crate::shapes::ReduceDim<DIM>>::Output, B, K, D, G>> 
+    where
+        S: crate::shapes::DynShape + crate::shapes::ReduceDim<DIM> + crate::shapes::ReduceKeepDim<DIM>,
+        <S as crate::shapes::ReduceDim<DIM>>::Output: crate::shapes::DynShape,
+        <S as crate::shapes::ReduceKeepDim<DIM>>::Output: crate::shapes::DynShape,
+    {
+        self.var_dim::<DIM>(unbiased)?.sqrt()
+    }
+
+    /// Computes the variance along a specific dimension, keeping it with size 1.
+    pub fn var_keepdim<const DIM: usize>(&self, unbiased: bool) -> Result<Tensor<<S as crate::shapes::ReduceKeepDim<DIM>>::Output, B, K, D, G>> 
+    where
+        S: crate::shapes::DynShape + crate::shapes::ReduceKeepDim<DIM>,
+        <S as crate::shapes::ReduceKeepDim<DIM>>::Output: crate::shapes::DynShape,
+    {
+        let mean = self.mean_keepdim::<DIM>()?;
+        let dyn_self = self.clone().into_dyn();
+        let dyn_mean = mean.into_dyn();
+        let diff = dyn_self.broadcast_sub(&dyn_mean)?;
+        let sq_diff = diff.mul(&diff)?;
+        let sum_sq = sq_diff.sum_keepdim::<DIM>()?;
+        
+        let dims = S::dims(&self._shape);
+        let n = dims.as_ref()[DIM] as f32;
+        let denom = if unbiased {
+            if n <= 1.0 { 0.0 } else { n - 1.0 }
+        } else {
+            n
+        };
+        let scalar = if denom > 0.0 { 1.0 / denom } else { 0.0 };
+        let res = sum_sq.mul_scalar(scalar)?;
+        res.into_shape::<<S as crate::shapes::ReduceKeepDim<DIM>>::Output>()
+    }
+
+    /// Computes the standard deviation along a specific dimension, keeping it with size 1.
+    pub fn std_keepdim<const DIM: usize>(&self, unbiased: bool) -> Result<Tensor<<S as crate::shapes::ReduceKeepDim<DIM>>::Output, B, K, D, G>> 
+    where
+        S: crate::shapes::DynShape + crate::shapes::ReduceKeepDim<DIM>,
+        <S as crate::shapes::ReduceKeepDim<DIM>>::Output: crate::shapes::DynShape,
+    {
+        self.var_keepdim::<DIM>(unbiased)?.sqrt()
+    }
 }

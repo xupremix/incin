@@ -35,19 +35,33 @@
 //!   `conv_transpose2d`/`max_pool2d`/`avg_pool2d`/`adaptive_avg_pool2d`) —
 //!   zero `Error::UnsupportedBackendOperation` stubs remain.
 
+/// Auto-generated documentation for conv.
 pub mod conv;
-pub mod elementwise;
-pub mod embedding;
-pub mod loss;
-pub mod matmul;
-pub mod module;
-pub mod norm;
-pub mod optimizer;
-pub mod pool;
-pub mod quant;
-pub mod reduce;
 #[cfg(feature = "cuda")]
+/// Auto-generated documentation for cuda_elementwise.
 pub mod cuda_elementwise;
 #[cfg(feature = "cuda")]
+/// Auto-generated documentation for cuda_kernels.
 pub mod cuda_kernels;
+/// Auto-generated documentation for elementwise.
+pub mod elementwise;
+/// Auto-generated documentation for embedding.
+pub mod embedding;
+/// Auto-generated documentation for loss.
+pub mod loss;
+/// Auto-generated documentation for matmul.
+pub mod matmul;
+/// Auto-generated documentation for module.
+pub mod module;
+/// Auto-generated documentation for norm.
+pub mod norm;
+/// Auto-generated documentation for optimizer.
+pub mod optimizer;
+/// Auto-generated documentation for pool.
+pub mod pool;
+/// Auto-generated documentation for quant.
+pub mod quant;
+/// Auto-generated documentation for reduce.
+pub mod reduce;
+/// Auto-generated documentation for shape_ops.
 pub mod shape_ops;

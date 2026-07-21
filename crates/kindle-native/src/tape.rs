@@ -33,14 +33,18 @@ pub type BackwardFn = Box<dyn Fn(&NativeStorage) -> Vec<NativeStorage> + Send + 
 /// visibility into whether the surrounding `Tensor<..., G>`'s `G` is `Grad`
 /// or `NoGrad`.
 pub struct TapeEntry {
+    /// Auto-generated documentation for output_id.
     pub output_id: TensorId,
+    /// Auto-generated documentation for input_ids.
     pub input_ids: Vec<TensorId>,
+    /// Auto-generated documentation for backward.
     pub backward: BackwardFn,
 }
 
 /// The backend's gradient container: `Backend::Grads` in a later plan's
 /// `lib.rs` impl. Wraps a plain `BTreeMap` keyed by `TensorId`.
 pub struct NativeGrads {
+    /// Auto-generated documentation for grads.
     pub grads: BTreeMap<TensorId, NativeStorage>,
 }
 
@@ -52,6 +56,7 @@ impl NativeGrads {
 }
 
 thread_local! {
+    /// Auto-generated documentation for TAPE.
     static TAPE: RefCell<Vec<TapeEntry>> = RefCell::new(Vec::new());
 }
 
@@ -307,19 +312,23 @@ fn increment_index(idx: &mut [usize], shape: &[usize]) {
 }
 
 #[cfg(test)]
+/// Auto-generated documentation for tests.
 mod tests {
     use super::*;
     use crate::storage::NativeBuffer;
 
+    /// Auto-generated documentation for scalar.
     fn scalar(v: f32) -> NativeStorage {
         NativeStorage::from_contiguous(NativeBuffer::F32(vec![v]), vec![])
     }
 
+    /// Auto-generated documentation for vector.
     fn vector(v: Vec<f32>) -> NativeStorage {
         let len = v.len();
         NativeStorage::from_contiguous(NativeBuffer::F32(v), vec![len])
     }
 
+    /// Auto-generated documentation for matrix.
     fn matrix(v: Vec<f32>, rows: usize, cols: usize) -> NativeStorage {
         NativeStorage::from_contiguous(NativeBuffer::F32(v), vec![rows, cols])
     }
@@ -327,6 +336,7 @@ mod tests {
     // --- unbroadcast standalone tests (NATBACK-06) ---
 
     #[test]
+    /// Auto-generated documentation for unbroadcast_bias_vector_b_n_to_n.
     fn unbroadcast_bias_vector_b_n_to_n() {
         // grad shape [4,3] (B=4, N=3), summed back to [3] (bias vector case).
         let grad = matrix(
@@ -345,6 +355,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for unbroadcast_scalar_target_sums_all_axes.
     fn unbroadcast_scalar_target_sums_all_axes() {
         // grad shape [4,3], forward-broadcast from a scalar `[]`, summed
         // back to `[]` (scalar case).
@@ -355,6 +366,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for unbroadcast_same_shape_is_noop.
     fn unbroadcast_same_shape_is_noop() {
         let grad = vector(vec![1.0, 2.0, 3.0]);
         let result = unbroadcast(&grad, &[3]).unwrap();
@@ -367,6 +379,7 @@ mod tests {
     // --- tape accumulation tests (NATBACK-05) ---
 
     #[test]
+    /// Auto-generated documentation for backward_seeds_loss_gradient_with_ones.
     fn backward_seeds_loss_gradient_with_ones() {
         let loss = scalar(5.0);
         let grads = backward(&loss).unwrap();
@@ -375,6 +388,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for backward_accumulates_not_overwrites_on_tensor_reuse.
     fn backward_accumulates_not_overwrites_on_tensor_reuse() {
         // Hand-built two-op graph: a single input tensor `x` is consumed
         // twice (mirrors `x.add(&x)`-shaped reuse). Two independent
@@ -454,6 +468,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for backward_drains_tape_and_second_call_is_not_contaminated.
     fn backward_drains_tape_and_second_call_is_not_contaminated() {
         // First independent small graph.
         let x1 = scalar(1.0);
@@ -491,6 +506,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for tape_len_is_zero_immediately_after_any_backward_call.
     fn tape_len_is_zero_immediately_after_any_backward_call() {
         let x = scalar(1.0);
         let out = scalar(2.0);
@@ -505,6 +521,7 @@ mod tests {
 
     #[test]
     #[should_panic(expected = "NaN or Infinity detected in gradient")]
+    /// Auto-generated documentation for backward_with_nan_check_panics_on_nan.
     fn backward_with_nan_check_panics_on_nan() {
         let x = scalar(1.0);
         let out = scalar(2.0);

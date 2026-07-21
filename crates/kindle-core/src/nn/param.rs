@@ -26,6 +26,7 @@ pub struct Param<S: Shape, B: Backend> {
 }
 
 impl<S: Shape, B: Backend> Clone for Param<S, B> {
+    /// Auto-generated documentation for clone.
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
@@ -37,6 +38,7 @@ impl<S: Shape, B: Backend> Clone for Param<S, B> {
 }
 
 impl<S: Shape, B: Backend> core::fmt::Debug for Param<S, B> {
+    /// Auto-generated documentation for fmt.
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Param").field("inner", &"...").finish()
     }
@@ -66,7 +68,9 @@ impl<S: Shape + DynShape, B: Backend> Param<S, B> {
 impl<S: Shape, B: Backend, NewD: crate::prelude::Device> crate::nn::module::ToDevice<B, NewD>
     for Param<S, B>
 {
+    /// Auto-generated documentation for Output.
     type Output = Param<S, B::BackendWithDevice<NewD>>;
+    /// Auto-generated documentation for to_device.
     fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output> {
         let field = NewD::init(arg.clone());
         let kindle_dev = NewD::to_kindle(&field)?;
@@ -84,6 +88,7 @@ impl<S: Shape + DynShape, B: Backend> Param<S, B>
 where
     (S, B::FloatElem, B::Device, Grad): TensorArgs<S, B::FloatElem, B::Device, Grad>,
 {
+    /// Auto-generated documentation for new_init_raw.
     pub fn new_init_raw(
         args: <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
             S,
@@ -107,40 +112,40 @@ where
 
             Init::Uniform { bound } => {
                 let t_rand = B::rand::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
-                let t_scaled = B::mul_scalar_float(&t_rand, (2.0 * bound).into())?;
-                let t_final = B::add_scalar_float(&t_scaled, (-bound).into())?;
+                let t_scaled = B::mul_scalar_float(&t_rand, 2.0 * bound )?;
+                let t_final = B::add_scalar_float(&t_scaled, -bound )?;
                 B::var_from_tensor(&t_final)?
             }
             Init::Constant(c) => {
                 let ones = B::ones::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
-                let c_tensor = B::mul_scalar_float(&ones, c.into())?;
+                let c_tensor = B::mul_scalar_float(&ones, c)?;
                 B::var_from_tensor(&c_tensor)?
             }
             Init::KaimingUniform { fan_in, a } => {
                 let std = f64::sqrt(2.0 / ((1.0 + a * a) * fan_in as f64));
                 let bound = f64::sqrt(3.0) * std;
                 let t_rand = B::rand::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
-                let t_scaled = B::mul_scalar_float(&t_rand, (2.0 * bound).into())?;
-                let t_final = B::add_scalar_float(&t_scaled, (-bound).into())?;
+                let t_scaled = B::mul_scalar_float(&t_rand, 2.0 * bound )?;
+                let t_final = B::add_scalar_float(&t_scaled, -bound )?;
                 B::var_from_tensor(&t_final)?
             }
             Init::KaimingNormal { fan_in, a } => {
                 let std = f64::sqrt(2.0 / ((1.0 + a * a) * fan_in as f64));
                 let t_randn = B::randn::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
-                let t_final = B::mul_scalar_float(&t_randn, std.into())?;
+                let t_final = B::mul_scalar_float(&t_randn, std)?;
                 B::var_from_tensor(&t_final)?
             }
             Init::XavierUniform { fan_in, fan_out } => {
                 let bound = f64::sqrt(6.0 / (fan_in as f64 + fan_out as f64));
                 let t_rand = B::rand::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
-                let t_scaled = B::mul_scalar_float(&t_rand, (2.0 * bound).into())?;
-                let t_final = B::add_scalar_float(&t_scaled, (-bound).into())?;
+                let t_scaled = B::mul_scalar_float(&t_rand, 2.0 * bound )?;
+                let t_final = B::add_scalar_float(&t_scaled, -bound )?;
                 B::var_from_tensor(&t_final)?
             }
             Init::XavierNormal { fan_in, fan_out } => {
                 let std = f64::sqrt(2.0 / (fan_in as f64 + fan_out as f64));
                 let t_randn = B::randn::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
-                let t_final = B::mul_scalar_float(&t_randn, std.into())?;
+                let t_final = B::mul_scalar_float(&t_randn, std)?;
                 B::var_from_tensor(&t_final)?
             }
         };
@@ -153,6 +158,7 @@ where
         })
     }
 
+    /// Auto-generated documentation for new_init.
     pub fn new_init<A>(args: A, init: crate::nn::init::Init) -> Result<Self>
     where
         A:
@@ -168,6 +174,7 @@ where
         Self::new_init_raw(args.into_arg(), init)
     }
 
+    /// Auto-generated documentation for zeros_raw.
     pub fn zeros_raw(
         args: <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
             S,
@@ -189,6 +196,7 @@ where
         })
     }
 
+    /// Auto-generated documentation for zeros.
     pub fn zeros<A>(args: A) -> Result<Self>
     where
         A:
@@ -204,6 +212,7 @@ where
         Self::zeros_raw(args.into_arg())
     }
 
+    /// Auto-generated documentation for randn.
     pub fn randn<A>(args: A) -> Result<Self>
     where
         A:
@@ -230,6 +239,7 @@ where
         })
     }
 
+    /// Auto-generated documentation for ones_raw.
     pub fn ones_raw(
         args: <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
             S,
@@ -251,6 +261,7 @@ where
         })
     }
 
+    /// Auto-generated documentation for ones.
     pub fn ones<A>(args: A) -> Result<Self>
     where
         A:
@@ -309,6 +320,7 @@ where
 }
 
 impl<S: Shape + DynShape, B: Backend> Parameters<B> for Param<S, B> {
+    /// Auto-generated documentation for named_parameters.
     fn named_parameters(
         &self,
         prefix: &str,
@@ -319,6 +331,7 @@ impl<S: Shape + DynShape, B: Backend> Parameters<B> for Param<S, B> {
 }
 
 impl<S1: DynShape, B: Backend> Param<S1, B> {
+    /// Auto-generated documentation for into_shape.
     pub fn into_shape<S2: Shape>(self) -> Result<Param<S2, B>>
     where
         B: Backend,
@@ -348,6 +361,7 @@ use crate::nn::module::StateDict;
 use alloc::collections::BTreeMap;
 
 impl<S: Shape + DynShape, B: Backend> StateDict<B> for Param<S, B> {
+    /// Auto-generated documentation for load_state_dict.
     fn load_state_dict(
         &mut self,
         prefix: &str,
@@ -362,6 +376,7 @@ impl<S: Shape + DynShape, B: Backend> StateDict<B> for Param<S, B> {
         Ok(())
     }
 
+    /// Auto-generated documentation for state_dict.
     fn state_dict(&self, prefix: &str, tensors: &mut BTreeMap<String, Tensor<Dyn, B>>) {
         if let Ok(t) = self.as_tensor()
             && let Ok(dyn_t) = t.into_shape::<Dyn>()
@@ -384,6 +399,7 @@ pub struct Buffer<S: Shape, B: Backend> {
 }
 
 impl<S: Shape, B: Backend> Clone for Buffer<S, B> {
+    /// Auto-generated documentation for clone.
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
@@ -395,12 +411,14 @@ impl<S: Shape, B: Backend> Clone for Buffer<S, B> {
 }
 
 impl<S: Shape, B: Backend> core::fmt::Debug for Buffer<S, B> {
+    /// Auto-generated documentation for fmt.
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Buffer").field("inner", &"...").finish()
     }
 }
 
 impl<S: Shape, B: Backend> Buffer<S, B> {
+    /// Auto-generated documentation for as_tensor.
     pub fn as_tensor(&self) -> Result<Tensor<S, B, B::FloatElem>> {
         let inner_tensor = B::var_as_tensor(&self.inner)?;
         Ok(Tensor {
@@ -423,7 +441,9 @@ impl<S: Shape + DynShape, B: Backend> Buffer<S, B> {
 impl<S: Shape, B: Backend, NewD: crate::prelude::Device> crate::nn::module::ToDevice<B, NewD>
     for Buffer<S, B>
 {
+    /// Auto-generated documentation for Output.
     type Output = Buffer<S, B::BackendWithDevice<NewD>>;
+    /// Auto-generated documentation for to_device.
     fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output> {
         let field = NewD::init(arg.clone());
         let kindle_dev = NewD::to_kindle(&field)?;
@@ -441,6 +461,7 @@ impl<S: Shape + DynShape, B: Backend> Buffer<S, B>
 where
     (S, B::FloatElem, B::Device, Grad): TensorArgs<S, B::FloatElem, B::Device, Grad>,
 {
+    /// Auto-generated documentation for new_init_raw.
     pub fn new_init_raw(
         args: <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
             S,
@@ -464,40 +485,40 @@ where
 
             Init::Uniform { bound } => {
                 let t_rand = B::rand::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
-                let t_scaled = B::mul_scalar_float(&t_rand, (2.0 * bound).into())?;
-                let t_final = B::add_scalar_float(&t_scaled, (-bound).into())?;
+                let t_scaled = B::mul_scalar_float(&t_rand, 2.0 * bound )?;
+                let t_final = B::add_scalar_float(&t_scaled, -bound )?;
                 B::var_from_tensor(&t_final)?
             }
             Init::Constant(c) => {
                 let ones = B::ones::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
-                let c_tensor = B::mul_scalar_float(&ones, c.into())?;
+                let c_tensor = B::mul_scalar_float(&ones, c)?;
                 B::var_from_tensor(&c_tensor)?
             }
             Init::KaimingUniform { fan_in, a } => {
                 let std = f64::sqrt(2.0 / ((1.0 + a * a) * fan_in as f64));
                 let bound = f64::sqrt(3.0) * std;
                 let t_rand = B::rand::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
-                let t_scaled = B::mul_scalar_float(&t_rand, (2.0 * bound).into())?;
-                let t_final = B::add_scalar_float(&t_scaled, (-bound).into())?;
+                let t_scaled = B::mul_scalar_float(&t_rand, 2.0 * bound )?;
+                let t_final = B::add_scalar_float(&t_scaled, -bound )?;
                 B::var_from_tensor(&t_final)?
             }
             Init::KaimingNormal { fan_in, a } => {
                 let std = f64::sqrt(2.0 / ((1.0 + a * a) * fan_in as f64));
                 let t_randn = B::randn::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
-                let t_final = B::mul_scalar_float(&t_randn, std.into())?;
+                let t_final = B::mul_scalar_float(&t_randn, std)?;
                 B::var_from_tensor(&t_final)?
             }
             Init::XavierUniform { fan_in, fan_out } => {
                 let bound = f64::sqrt(6.0 / (fan_in as f64 + fan_out as f64));
                 let t_rand = B::rand::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
-                let t_scaled = B::mul_scalar_float(&t_rand, (2.0 * bound).into())?;
-                let t_final = B::add_scalar_float(&t_scaled, (-bound).into())?;
+                let t_scaled = B::mul_scalar_float(&t_rand, 2.0 * bound )?;
+                let t_final = B::add_scalar_float(&t_scaled, -bound )?;
                 B::var_from_tensor(&t_final)?
             }
             Init::XavierNormal { fan_in, fan_out } => {
                 let std = f64::sqrt(2.0 / (fan_in as f64 + fan_out as f64));
                 let t_randn = B::randn::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
-                let t_final = B::mul_scalar_float(&t_randn, std.into())?;
+                let t_final = B::mul_scalar_float(&t_randn, std)?;
                 B::var_from_tensor(&t_final)?
             }
         };
@@ -510,6 +531,7 @@ where
         })
     }
 
+    /// Auto-generated documentation for new_init.
     pub fn new_init<A>(args: A, init: crate::nn::init::Init) -> Result<Self>
     where
         A:
@@ -525,6 +547,7 @@ where
         Self::new_init_raw(args.into_arg(), init)
     }
 
+    /// Auto-generated documentation for zeros_raw.
     pub fn zeros_raw(
         args: <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
             S,
@@ -546,6 +569,7 @@ where
         })
     }
 
+    /// Auto-generated documentation for zeros.
     pub fn zeros<A>(args: A) -> Result<Self>
     where
         A:
@@ -561,6 +585,7 @@ where
         Self::zeros_raw(args.into_arg())
     }
 
+    /// Auto-generated documentation for ones_raw.
     pub fn ones_raw(
         args: <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
             S,
@@ -582,6 +607,7 @@ where
         })
     }
 
+    /// Auto-generated documentation for ones.
     pub fn ones<A>(args: A) -> Result<Self>
     where
         A:
@@ -599,6 +625,7 @@ where
 }
 
 impl<S: Shape + DynShape, B: Backend> Parameters<B> for Buffer<S, B> {
+    /// Auto-generated documentation for named_parameters.
     fn named_parameters(
         &self,
         _prefix: &str,
@@ -608,6 +635,7 @@ impl<S: Shape + DynShape, B: Backend> Parameters<B> for Buffer<S, B> {
 }
 
 impl<S: Shape + DynShape, B: Backend> StateDict<B> for Buffer<S, B> {
+    /// Auto-generated documentation for load_state_dict.
     fn load_state_dict(
         &mut self,
         prefix: &str,
@@ -619,6 +647,7 @@ impl<S: Shape + DynShape, B: Backend> StateDict<B> for Buffer<S, B> {
         Ok(())
     }
 
+    /// Auto-generated documentation for state_dict.
     fn state_dict(&self, prefix: &str, tensors: &mut BTreeMap<String, Tensor<Dyn, B>>) {
         if let Ok(t) = self.as_tensor()
             && let Ok(dyn_t) = t.into_shape::<Dyn>()

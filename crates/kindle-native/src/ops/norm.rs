@@ -42,6 +42,7 @@ pub(crate) fn layer_norm_impl<T: DType, D: kindle_core::prelude::Device, K: DTyp
     bias: Option<&NativeStorage>,
     eps: f32,
 ) -> Result<NativeStorage> {
+    /// Auto-generated documentation for B.
     type B<T, D> = NativeBackend<T, D>;
 
     let rank = t.shape.len();
@@ -103,6 +104,7 @@ pub(crate) fn batch_norm_impl<T: DType, D: kindle_core::prelude::Device, K: DTyp
     eps: f32,
     _momentum: f64, // deliberately unused — inference-mode-only (CONTEXT.md carried-forward decision)
 ) -> Result<NativeStorage> {
+    /// Auto-generated documentation for B.
     type B<T, D> = NativeBackend<T, D>;
 
     let rank = t.shape.len();
@@ -174,31 +176,37 @@ pub(crate) fn batch_norm_impl<T: DType, D: kindle_core::prelude::Device, K: DTyp
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
+/// Auto-generated documentation for tests.
 mod tests {
     use super::*;
     use crate::gradcheck::gradcheck;
     use crate::storage::{NativeBuffer, NativeStorage};
 
-
+    /// Auto-generated documentation for TestB.
     type TestB = NativeBackend<f32, kindle_core::prelude::Cpu>;
 
+    /// Auto-generated documentation for matrix.
     fn matrix(v: Vec<f32>, rows: usize, cols: usize) -> NativeStorage {
         NativeStorage::from_contiguous(NativeBuffer::F32(v), vec![rows, cols])
     }
 
+    /// Auto-generated documentation for tensor3.
     fn tensor3(v: Vec<f32>, d0: usize, d1: usize, d2: usize) -> NativeStorage {
         NativeStorage::from_contiguous(NativeBuffer::F32(v), vec![d0, d1, d2])
     }
 
+    /// Auto-generated documentation for tensor4.
     fn tensor4(v: Vec<f32>, d0: usize, d1: usize, d2: usize, d3: usize) -> NativeStorage {
         NativeStorage::from_contiguous(NativeBuffer::F32(v), vec![d0, d1, d2, d3])
     }
 
+    /// Auto-generated documentation for vec1.
     fn vec1(v: Vec<f32>) -> NativeStorage {
         let n = v.len();
         NativeStorage::from_contiguous(NativeBuffer::F32(v), vec![n])
     }
 
+    /// Auto-generated documentation for f32_vec.
     fn f32_vec(s: &NativeStorage) -> Vec<f32> {
         match &*s.buffer {
             NativeBuffer::F32(v) => v.clone(),
@@ -252,6 +260,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for layer_norm_custom_weight_and_bias_applies_affine.
     fn layer_norm_custom_weight_and_bias_applies_affine() {
         // Row 0: [1,2,3] → normalized ≈ [-1.225, 0, 1.225]
         // weight=[2, 0.5, 1], bias=[1, 1, 1]
@@ -282,6 +291,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for layer_norm_none_bias_matches_explicit_zero_bias.
     fn layer_norm_none_bias_matches_explicit_zero_bias() {
         // Default-fallback: passing None for bias should produce the same result
         // as passing an explicit all-zeros bias of the trailing-dim size.
@@ -311,6 +321,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for layer_norm_gradcheck.
     fn layer_norm_gradcheck() {
         // NOTE: with identity weight, sum(layer_norm(x)) = 0 for all x (normalized
         // values always sum to 0 by definition), so we must use a non-identity weight
@@ -337,6 +348,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for layer_norm_rank3_normalizes_per_batch_seq_position.
     fn layer_norm_rank3_normalizes_per_batch_seq_position() {
         // t shape [2, 2, 4]: batch=2, seq=2, hidden=4
         // For each (b, s) position, the 4-dim hidden vector should be normalized.
@@ -379,11 +391,13 @@ mod tests {
 
     // --- batch_norm tests (Plan 04-03 Task 2) ---
 
+    /// Auto-generated documentation for bn_expected.
     fn bn_expected(x: f32, rm: f32, rv: f32, w: f32, b: f32, eps: f32) -> f32 {
         (x - rm) / (rv + eps).sqrt() * w + b
     }
 
     #[test]
+    /// Auto-generated documentation for batch_norm_all_args_provided_matches_hand_computed_formula.
     fn batch_norm_all_args_provided_matches_hand_computed_formula() {
         // Input [2, 3, 2, 2] — batch=2, channels=3, 2×2 spatial.
         // running_mean = [1, 2, 3], running_var = [1, 1, 1], weight = [1, 1, 1], bias = [0, 0, 0].
@@ -432,6 +446,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for batch_norm_momentum_has_no_effect_on_output.
     fn batch_norm_momentum_has_no_effect_on_output() {
         // Proves momentum is genuinely ignored (inference-mode-only, T-04-07).
         let t = tensor4(vec![1.0f32; 2 * 3 * 2 * 2], 2, 3, 2, 2);
@@ -473,6 +488,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for batch_norm_none_args_match_explicit_default_fallback.
     fn batch_norm_none_args_match_explicit_default_fallback() {
         // Passing None for all four optional args should equal explicit
         // rm=0, rv=1, w=1, b=0 (Candle's convention — T-04-08 mitigation).
@@ -518,6 +534,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for batch_norm_rank2_uses_channel_dim_1.
     fn batch_norm_rank2_uses_channel_dim_1() {
         // rank=2 → channel_dim = if rank > 1 { 1 } else { 0 } = 1.
         // Input [4, 3]: 4 samples, 3 channels.
@@ -571,6 +588,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for batch_norm_gradcheck.
     fn batch_norm_gradcheck() {
         // Gradcheck on [2,3,2,2] with fixed rm/rv/w/b.
         let t = tensor4(

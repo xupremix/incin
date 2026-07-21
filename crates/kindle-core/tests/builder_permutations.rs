@@ -1,13 +1,16 @@
+#![allow(unused_imports)]
 extern crate kindle_core as kindle;
 
-use kindle_core::prelude::*;
-use kindle_core::prelude::*;
 use kindle_core::prelude::dummy::DummyBackend;
+use kindle_core::prelude::*;
+use kindle_core::prelude::*;
 use kindle_macros::s;
 
+/// Auto-generated documentation for B.
 type B = DummyBackend<f32, kindle_core::prelude::Cpu>;
 
 #[test]
+/// Auto-generated documentation for test_linear_permutations.
 fn test_linear_permutations() {
     // 1. Fully static, Bias = True (default)
     let _l1 = Linear::<s![10, 20], B>::new().unwrap();
@@ -41,6 +44,7 @@ fn test_linear_permutations() {
 }
 
 #[test]
+/// Auto-generated documentation for test_conv1d_permutations.
 fn test_conv1d_permutations() {
     // Conv1dShape: (OutC, InC, K, S, P, D)
     // 1. Fully static, Bias = True (default)
@@ -56,9 +60,8 @@ fn test_conv1d_permutations() {
     let _c3 = Conv1d::<s![dyn, dyn, 3, 1, 1, 1], B>::new_with((16, 3)).unwrap();
 
     // 5. Dynamic channels, Bias = False
-    let _c4 =
-        Conv1d::<s![dyn, dyn, 3, 1, 1, 1], B, kindle_core::prelude::False>::new_with((16, 3))
-            .unwrap();
+    let _c4 = Conv1d::<s![dyn, dyn, 3, 1, 1, 1], B, kindle_core::prelude::False>::new_with((16, 3))
+        .unwrap();
 
     // 6. Dynamic channels, Bias = Dyn
     let _c5 = Conv1d::<s![dyn, dyn, 3, 1, 1, 1], B, Dyn>::new_with((16, 3), true).unwrap();
@@ -68,6 +71,7 @@ fn test_conv1d_permutations() {
 }
 
 #[test]
+/// Auto-generated documentation for test_conv2d_permutations.
 fn test_conv2d_permutations() {
     // Conv2dShape: (OutC, InC, K, S, P, D)
     // 1. Fully static, Bias = True (default)
@@ -83,9 +87,8 @@ fn test_conv2d_permutations() {
     let _c3 = Conv2d::<s![dyn, dyn, 3, 1, 1, 1], B>::new_with((16, 3)).unwrap();
 
     // 5. Dynamic channels, Bias = False
-    let _c4 =
-        Conv2d::<s![dyn, dyn, 3, 1, 1, 1], B, kindle_core::prelude::False>::new_with((16, 3))
-            .unwrap();
+    let _c4 = Conv2d::<s![dyn, dyn, 3, 1, 1, 1], B, kindle_core::prelude::False>::new_with((16, 3))
+        .unwrap();
 
     // 6. Dynamic channels, Bias = Dyn
     let _c5 = Conv2d::<s![dyn, dyn, 3, 1, 1, 1], B, Dyn>::new_with((16, 3), true).unwrap();
@@ -95,6 +98,7 @@ fn test_conv2d_permutations() {
 }
 
 #[test]
+/// Auto-generated documentation for test_norm_permutations.
 fn test_norm_permutations() {
     // LayerNorm — static
     let _ln1 = LayerNorm::<s![10], B>::new(1e-5).unwrap();
@@ -108,6 +112,7 @@ fn test_norm_permutations() {
 }
 
 #[test]
+/// Auto-generated documentation for test_rnn_permutations.
 fn test_rnn_permutations() {
     // RNNCell — static
     let _wi = Linear::<s![10, 20], B>::new().unwrap();

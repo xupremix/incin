@@ -47,25 +47,46 @@
 //!
 //! * [`Param`] — A trainable parameter (gradients are computed and updated by an optimizer).
 //! * [`Buffer`] — A non-trainable state buffer (e.g., running statistics in BatchNorm).
+/// Auto-generated documentation for activation.
 pub mod activation;
+/// Auto-generated documentation for adaptive_avg_pool2d.
 pub mod adaptive_avg_pool2d;
+/// Auto-generated documentation for avg_pool2d.
 pub mod avg_pool2d;
+/// Auto-generated documentation for batch_norm.
 pub mod batch_norm;
+/// Auto-generated documentation for conv1d.
 pub mod conv1d;
+/// Auto-generated documentation for conv2d.
 pub mod conv2d;
+pub mod dropout;
+/// Auto-generated documentation for embedding.
 pub mod embedding;
+/// Auto-generated documentation for flatten.
 pub mod flatten;
+/// Auto-generated documentation for init.
 pub mod init;
+/// Auto-generated documentation for layer_norm.
 pub mod layer_norm;
+/// Auto-generated documentation for linear.
 pub mod linear;
+/// Auto-generated documentation for loss.
 pub mod loss;
+/// Auto-generated documentation for lstm.
 pub mod lstm;
+/// Auto-generated documentation for max_pool2d.
 pub mod max_pool2d;
+/// Auto-generated documentation for module.
 pub mod module;
+/// Auto-generated documentation for optional.
 pub mod optional;
+/// Auto-generated documentation for param.
 pub mod param;
+/// Auto-generated documentation for rnn.
+pub mod rms_norm;
 pub mod rnn;
 #[cfg(feature = "std")]
+/// Auto-generated documentation for save.
 pub mod save;
 
 pub use activation::*;
@@ -74,6 +95,7 @@ pub use avg_pool2d::*;
 pub use batch_norm::*;
 pub use conv1d::*;
 pub use conv2d::*;
+pub use dropout::*;
 pub use embedding::*;
 pub use flatten::*;
 pub use init::*;
@@ -85,6 +107,7 @@ pub use max_pool2d::*;
 pub use module::*;
 pub use optional::*;
 pub use param::*;
+pub use rms_norm::*;
 pub use rnn::*;
 #[cfg(feature = "std")]
 pub use save::*;

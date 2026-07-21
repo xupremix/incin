@@ -12,7 +12,7 @@ use kindle_core::prelude::Result;
 /// The last dimension has stride 1; each earlier dimension's stride is the
 /// product of all later dimensions' sizes. An empty shape (scalar / 0-d)
 /// returns an empty stride vector.
-pub fn contiguous_strides(shape: &[usize]) -> Vec<usize> {
+pub(crate) fn contiguous_strides(shape: &[usize]) -> Vec<usize> {
     let mut strides = vec![1usize; shape.len()];
     for i in (0..shape.len().saturating_sub(1)).rev() {
         strides[i] = strides[i + 1] * shape[i + 1];
@@ -22,7 +22,7 @@ pub fn contiguous_strides(shape: &[usize]) -> Vec<usize> {
 
 /// Returns true if `strides` matches the contiguous (row-major) strides for
 /// `shape`.
-pub fn is_contiguous(shape: &[usize], strides: &[usize]) -> bool {
+pub(crate) fn is_contiguous(shape: &[usize], strides: &[usize]) -> bool {
     strides == contiguous_strides(shape)
 }
 
@@ -32,7 +32,7 @@ pub fn is_contiguous(shape: &[usize], strides: &[usize]) -> bool {
 /// For each axis (right-aligned), a missing dimension (shorter shape) is
 /// treated as `1`. If the two dims differ and neither is `1`, returns
 /// `Error::ShapeMismatch`.
-pub fn broadcast_shape(a: &[usize], b: &[usize]) -> Result<Vec<usize>> {
+pub(crate) fn broadcast_shape(a: &[usize], b: &[usize]) -> Result<Vec<usize>> {
     let max_len = a.len().max(b.len());
     let mut out = Vec::with_capacity(max_len);
     for i in 0..max_len {
@@ -55,21 +55,25 @@ pub fn broadcast_shape(a: &[usize], b: &[usize]) -> Result<Vec<usize>> {
 }
 
 #[cfg(test)]
+/// Auto-generated documentation for tests.
 mod tests {
     use super::*;
 
     #[test]
+    /// Auto-generated documentation for contiguous_strides_row_major.
     fn contiguous_strides_row_major() {
         assert_eq!(contiguous_strides(&[2, 3, 4]), vec![12, 4, 1]);
     }
 
     #[test]
+    /// Auto-generated documentation for contiguous_strides_scalar.
     fn contiguous_strides_scalar() {
         let empty: &[usize] = &[];
         assert_eq!(contiguous_strides(empty), Vec::<usize>::new());
     }
 
     #[test]
+    /// Auto-generated documentation for is_contiguous_true_for_fresh_strides.
     fn is_contiguous_true_for_fresh_strides() {
         let shape = vec![2, 3, 4];
         let strides = contiguous_strides(&shape);
@@ -77,6 +81,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for is_contiguous_false_for_transposed_strides.
     fn is_contiguous_false_for_transposed_strides() {
         // [2,3] contiguous strides are [3,1]; a transposed view swaps shape
         // to [3,2] but keeps strides [1,3] (permuted, non-contiguous).
@@ -86,22 +91,26 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for broadcast_shape_both_expand.
     fn broadcast_shape_both_expand() {
         assert_eq!(broadcast_shape(&[3, 1], &[1, 4]).unwrap(), vec![3, 4]);
     }
 
     #[test]
+    /// Auto-generated documentation for broadcast_shape_right_aligned_leading_dim_insert.
     fn broadcast_shape_right_aligned_leading_dim_insert() {
         assert_eq!(broadcast_shape(&[5], &[3, 5]).unwrap(), vec![3, 5]);
     }
 
     #[test]
+    /// Auto-generated documentation for broadcast_shape_incompatible_errors.
     fn broadcast_shape_incompatible_errors() {
         let result = broadcast_shape(&[3, 4], &[3, 5]);
         assert!(result.is_err());
     }
 
     #[test]
+    /// Auto-generated documentation for broadcast_shape_scalar_broadcast.
     fn broadcast_shape_scalar_broadcast() {
         let empty: &[usize] = &[];
         assert_eq!(broadcast_shape(empty, &[3, 4]).unwrap(), vec![3, 4]);

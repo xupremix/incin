@@ -9,11 +9,15 @@ use ratatui::symbols;
 use ratatui::text::Span;
 use ratatui::widgets::{Axis, Chart, Dataset, Paragraph};
 
+/// Auto-generated documentation for NormType.
 pub enum NormType {
+    /// Auto-generated documentation for Gradient.
     Gradient,
+    /// Auto-generated documentation for Weight.
     Weight,
 }
 
+/// Auto-generated documentation for NormsPanel.
 pub struct NormsPanel {
     norm_type: NormType,
     title: String,
@@ -25,7 +29,13 @@ pub struct NormsPanel {
 }
 
 impl NormsPanel {
-    pub fn new(norm_type: NormType, title: &str, id: &'static str, alert_threshold: Option<f64>) -> Self {
+    /// Auto-generated documentation for new.
+    pub fn new(
+        norm_type: NormType,
+        title: &str,
+        id: &'static str,
+        alert_threshold: Option<f64>,
+    ) -> Self {
         Self {
             norm_type,
             title: title.to_string(),
@@ -38,14 +48,17 @@ impl NormsPanel {
 }
 
 impl Panel for NormsPanel {
+    /// Auto-generated documentation for id.
     fn id(&self) -> &'static str {
         self.id
     }
 
+    /// Auto-generated documentation for title.
     fn title(&self) -> &str {
         &self.title
     }
 
+    /// Auto-generated documentation for update.
     fn update(&mut self, event: &Event) {
         let (step, l2_norm) = match (&self.norm_type, event) {
             (NormType::Gradient, Event::GradientNorm(GradientNormEvent { step, l2_norm, .. })) => {
@@ -63,7 +76,7 @@ impl Panel for NormsPanel {
         // Update the points array with the latest global norm for this step.
         // We'll just rebuild the points vector or update the last point if it's the same step.
         let global_norm = sum_sq.sqrt();
-        
+
         if let Some(last) = self.points.last_mut() {
             if last.0 as usize == step {
                 last.1 = global_norm;
@@ -75,16 +88,15 @@ impl Panel for NormsPanel {
         }
     }
 
+    /// Auto-generated documentation for render.
     fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) {
         let area = ctx.area();
 
-        if let Some(threshold) = self.alert_threshold {
-            if let Some(last_val) = self.points.last().map(|p| p.1) {
-                if !last_val.is_finite() || last_val > threshold {
+        if let Some(threshold) = self.alert_threshold
+            && let Some(last_val) = self.points.last().map(|p| p.1)
+                && (!last_val.is_finite() || last_val > threshold) {
                     ctx.set_alert(format!("Spike detected ({:.2} > {})", last_val, threshold));
                 }
-            }
-        }
 
         let frame = ctx.frame_mut();
 
@@ -104,20 +116,26 @@ impl Panel for NormsPanel {
 
         let x_bounds = [0.0, self.points.last().map(|p| p.0).unwrap_or(1.0)];
         let y_max = self.points.iter().map(|p| p.1).fold(f64::MIN, f64::max);
-        
+
         let y_bounds = [0.0, y_max.max(0.01)];
 
         let chart = Chart::new(vec![dataset])
             .x_axis(Axis::default().title(Span::raw("step")).bounds(x_bounds))
-            .y_axis(Axis::default().title(Span::raw(&self.title)).bounds(y_bounds));
+            .y_axis(
+                Axis::default()
+                    .title(Span::raw(&self.title))
+                    .bounds(y_bounds),
+            );
 
         frame.render_widget(chart, area);
     }
 
+    /// Auto-generated documentation for handle_event.
     fn handle_event(&mut self, _event: &PanelEvent) -> bool {
         false
     }
 
+    /// Auto-generated documentation for reset.
     fn reset(&mut self) {
         self.points.clear();
         self.step_aggregates.clear();

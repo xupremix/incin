@@ -70,6 +70,43 @@ impl<
     );
 
     impl_unary_op!(
+        /// Applies the Step function element-wise (1.0 if x > 0.0 else 0.0).
+        ///
+        /// # Examples
+        /// ```rust,ignore
+        /// use kindle::prelude::*;
+        /// let t = Tensor::<s![2], DefaultBackend>::from_slice(&[-1.0, 2.0]).unwrap();
+        /// let step_t = t.step().unwrap(); // [0.0, 1.0]
+        /// ```
+        step, step
+    );
+
+    impl_unary_op!(
+        /// Applies the Mish function element-wise.
+        /// $\text{Mish}(x) = x \cdot \text{tanh}(\text{softplus}(x))$
+        ///
+        /// # Examples
+        /// ```rust,ignore
+        /// use kindle::prelude::*;
+        /// let t = Tensor::<s![2], DefaultBackend>::from_slice(&[-1.0, 2.0]).unwrap();
+        /// let mish_t = t.mish().unwrap();
+        /// ```
+        mish, mish
+    );
+
+    impl_unary_op!(
+        /// Applies the Exponential Linear Unit (ELU) function element-wise with alpha=1.0.
+        ///
+        /// # Examples
+        /// ```rust,ignore
+        /// use kindle::prelude::*;
+        /// let t = Tensor::<s![2], DefaultBackend>::from_slice(&[-1.0, 2.0]).unwrap();
+        /// let elu_t = t.elu().unwrap();
+        /// ```
+        elu, elu
+    );
+
+    impl_unary_op!(
         /// Applies the Swish function element-wise (also known as SiLU).
         /// $\text{Swish}(x) = x \cdot \text{sigmoid}(x)$
         ///
@@ -230,8 +267,10 @@ macro_rules! impl_std_scalar_ops {
             G: RequiresGrad,
         > core::ops::Mul<$t> for Tensor<S, B, K, D, G>
         {
+            /// Auto-generated documentation for Output.
             type Output = Tensor<S, B, K, D, G>;
             #[inline]
+            /// Auto-generated documentation for mul.
             fn mul(self, rhs: $t) -> Self::Output {
                 self.mul_scalar(rhs).unwrap()
             }
@@ -245,8 +284,10 @@ macro_rules! impl_std_scalar_ops {
             G: RequiresGrad,
         > core::ops::Mul<$t> for &'a Tensor<S, B, K, D, G>
         {
+            /// Auto-generated documentation for Output.
             type Output = Tensor<S, B, K, D, G>;
             #[inline]
+            /// Auto-generated documentation for mul.
             fn mul(self, rhs: $t) -> Self::Output {
                 self.mul_scalar(rhs).unwrap()
             }
@@ -259,8 +300,10 @@ macro_rules! impl_std_scalar_ops {
             G: RequiresGrad,
         > core::ops::Add<$t> for Tensor<S, B, K, D, G>
         {
+            /// Auto-generated documentation for Output.
             type Output = Tensor<S, B, K, D, G>;
             #[inline]
+            /// Auto-generated documentation for add.
             fn add(self, rhs: $t) -> Self::Output {
                 self.add_scalar(rhs).unwrap()
             }
@@ -274,8 +317,10 @@ macro_rules! impl_std_scalar_ops {
             G: RequiresGrad,
         > core::ops::Add<$t> for &'a Tensor<S, B, K, D, G>
         {
+            /// Auto-generated documentation for Output.
             type Output = Tensor<S, B, K, D, G>;
             #[inline]
+            /// Auto-generated documentation for add.
             fn add(self, rhs: $t) -> Self::Output {
                 self.add_scalar(rhs).unwrap()
             }

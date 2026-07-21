@@ -6,6 +6,7 @@
 //!
 //! `gradcheck` calls the REAL Phase 1 API (`tape::backward`, `NativeGrads::get`).
 
+#![allow(dead_code)]
 use crate::storage::{NativeBuffer, NativeStorage};
 use crate::stride;
 use crate::tape;
@@ -157,13 +158,16 @@ pub fn gradcheck(
 }
 
 #[cfg(test)]
+/// Auto-generated documentation for tests.
 mod tests {
     use super::*;
     use crate::NativeBackend;
     use kindle_core::prelude::{Cpu, NumericOps, ReductionOps};
 
+    /// Auto-generated documentation for TestBackend.
     type TestBackend = NativeBackend<f32, Cpu>;
 
+    /// Auto-generated documentation for vector.
     fn vector(v: Vec<f32>) -> NativeStorage {
         let len = v.len();
         NativeStorage::from_contiguous(NativeBuffer::F32(v), vec![len])

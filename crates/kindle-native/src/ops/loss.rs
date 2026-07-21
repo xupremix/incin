@@ -31,8 +31,6 @@ use crate::NativeBackend;
 use crate::storage::{NativeBuffer, NativeStorage};
 
 impl<T: DType, D: kindle_core::prelude::Device> LossOps<Self> for NativeBackend<T, D> {
-
-
     /// Numerically-stable cross-entropy loss via the shared `log_softmax`
     /// kernel (D-02, Plan 04-01).
     ///
@@ -109,24 +107,29 @@ impl<T: DType, D: kindle_core::prelude::Device> LossOps<Self> for NativeBackend<
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
+/// Auto-generated documentation for tests.
 mod tests {
     use super::*;
     use crate::gradcheck::gradcheck;
     use crate::storage::{NativeBuffer, NativeStorage};
     use crate::tape;
 
+    /// Auto-generated documentation for B.
     type B = NativeBackend<f32, kindle_core::prelude::Cpu>;
 
+    /// Auto-generated documentation for matrix.
     fn matrix(v: Vec<f32>, rows: usize, cols: usize) -> NativeStorage {
         NativeStorage::from_contiguous(NativeBuffer::F32(v), vec![rows, cols])
     }
 
+    /// Auto-generated documentation for vector_i64.
     fn vector_i64(v: Vec<i64>) -> NativeStorage {
         let n = v.len();
         let floats: Vec<f32> = v.iter().map(|&x| x as f32).collect();
         NativeStorage::from_contiguous(NativeBuffer::F32(floats), vec![n])
     }
 
+    /// Auto-generated documentation for f32_vec.
     fn f32_vec(s: &NativeStorage) -> Vec<f32> {
         match &*s.buffer {
             NativeBuffer::F32(v) => v.clone(),
@@ -134,15 +137,18 @@ mod tests {
         }
     }
 
+    /// Auto-generated documentation for pred.
     fn pred() -> NativeStorage {
         matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3)
     }
 
+    /// Auto-generated documentation for target.
     fn target() -> NativeStorage {
         matrix(vec![1.0, 1.0, 1.0, 2.0, 2.0, 2.0], 2, 3)
     }
 
     #[test]
+    /// Auto-generated documentation for mse_loss_mean_produces_correct_scalar.
     fn mse_loss_mean_produces_correct_scalar() {
         let out = B::mse_loss::<f32>(&pred(), &target(), Reduction::Mean).unwrap();
         assert_eq!(out.shape, Vec::<usize>::new()); // scalar
@@ -151,6 +157,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for mse_loss_sum_produces_correct_scalar.
     fn mse_loss_sum_produces_correct_scalar() {
         let out = B::mse_loss::<f32>(&pred(), &target(), Reduction::Sum).unwrap();
         assert_eq!(out.shape, Vec::<usize>::new());
@@ -159,6 +166,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for mse_loss_none_produces_elementwise_squared_diff.
     fn mse_loss_none_produces_elementwise_squared_diff() {
         let out = B::mse_loss::<f32>(&pred(), &target(), Reduction::None).unwrap();
         assert_eq!(out.shape, vec![2, 3]);
@@ -170,6 +178,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for mse_loss_mean_backward_matches_analytic_formula_2_times_pred_minus_target_over_n.
     fn mse_loss_mean_backward_matches_analytic_formula_2_times_pred_minus_target_over_n() {
         let p = pred();
         let t = target();
@@ -197,6 +206,7 @@ mod tests {
     // |diff| = [[0,1,2],[2,3,4]], sum = 12, mean = 2.0
 
     #[test]
+    /// Auto-generated documentation for l1_loss_mean_produces_correct_scalar.
     fn l1_loss_mean_produces_correct_scalar() {
         let out = B::l1_loss::<f32>(&pred(), &target(), Reduction::Mean).unwrap();
         assert_eq!(out.shape, Vec::<usize>::new());
@@ -205,6 +215,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for l1_loss_sum_produces_correct_scalar.
     fn l1_loss_sum_produces_correct_scalar() {
         let out = B::l1_loss::<f32>(&pred(), &target(), Reduction::Sum).unwrap();
         assert_eq!(out.shape, Vec::<usize>::new());
@@ -213,6 +224,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for l1_loss_none_produces_elementwise_absolute_diff.
     fn l1_loss_none_produces_elementwise_absolute_diff() {
         let out = B::l1_loss::<f32>(&pred(), &target(), Reduction::None).unwrap();
         assert_eq!(out.shape, vec![2, 3]);
@@ -224,6 +236,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for l1_loss_gradcheck.
     fn l1_loss_gradcheck() {
         let p = matrix(vec![1.0f32, 2.0, 3.0], 1, 3);
         let t = matrix(vec![0.5f32, 0.5, 0.5], 1, 3);
@@ -241,12 +254,14 @@ mod tests {
     // bce_with_logits_loss tests (Plan 04-02 Task 2)
     // ---------------------------------------------------------------------------
 
+    /// Auto-generated documentation for bce_scalar.
     fn bce_scalar(x: f32, z: f32) -> f32 {
         // Stable formula: max(x,0) - x*z + log(1 + exp(-|x|))
         x.max(0.0) - x * z + (1.0 + (-x.abs()).exp()).ln()
     }
 
     #[test]
+    /// Auto-generated documentation for bce_with_logits_mean_at_zero_logit_equals_log2.
     fn bce_with_logits_mean_at_zero_logit_equals_log2() {
         // x=0, z=1 → max(0,0) - 0*1 + log(1+exp(0)) = 0 + log(2) ≈ 0.6931
         let pred_zero = matrix(vec![0.0f32], 1, 1);
@@ -261,6 +276,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for bce_with_logits_sum_and_none_dispatch_correctly.
     fn bce_with_logits_sum_and_none_dispatch_correctly() {
         // Two-element test to verify Sum == 2*element and None preserves shape.
         let p = matrix(vec![0.0f32, 1.0], 1, 2);
@@ -284,6 +300,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for bce_with_logits_finite_on_large_positive_logit.
     fn bce_with_logits_finite_on_large_positive_logit() {
         // Naive sigmoid+log form: log(1 - sigmoid(50)) = log(~0) = -inf.
         // Stable formula: max(50,0) - 50*0 + log(1+exp(-50)) ≈ 50 + ~0 (finite).
@@ -300,6 +317,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for bce_with_logits_finite_on_large_negative_logit.
     fn bce_with_logits_finite_on_large_negative_logit() {
         // Naive sigmoid+log form: log(sigmoid(-50)) = log(~0) = -inf.
         // Stable formula: max(-50,0) - (-50)*1 + log(1+exp(-50)) ≈ 0 + 50 + ~0.
@@ -316,6 +334,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for bce_with_logits_gradcheck.
     fn bce_with_logits_gradcheck() {
         let p = matrix(vec![0.5f32, -0.3, 1.2], 1, 3);
         let z = matrix(vec![1.0f32, 0.0, 1.0], 1, 3);
@@ -330,6 +349,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for bce_with_logits_backward_finite_on_extreme_logits.
     fn bce_with_logits_backward_finite_on_extreme_logits() {
         // Both forward and backward should be finite on large-magnitude logits.
         let p = matrix(vec![50.0f32, -50.0], 1, 2);
@@ -363,6 +383,7 @@ mod tests {
         vector_i64(vec![0, 2])
     }
 
+    /// Auto-generated documentation for log_softmax_row.
     fn log_softmax_row(row: &[f32]) -> Vec<f32> {
         let max = row.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
         let shifted: Vec<f32> = row.iter().map(|x| x - max).collect();
@@ -371,6 +392,7 @@ mod tests {
         shifted.iter().map(|x| x - log_sum_exp).collect()
     }
 
+    /// Auto-generated documentation for expected_ce_mean.
     fn expected_ce_mean(pred_rows: &[&[f32]], targets: &[usize]) -> f32 {
         let n = pred_rows.len() as f32;
         pred_rows
@@ -385,6 +407,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for cross_entropy_loss_mean_matches_hand_computed_nll.
     fn cross_entropy_loss_mean_matches_hand_computed_nll() {
         let pred_row0 = [1.0f32, 2.0, 3.0];
         let pred_row1 = [4.0f32, 5.0, 6.0];
@@ -406,6 +429,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for cross_entropy_loss_sum_equals_batch_times_mean.
     fn cross_entropy_loss_sum_equals_batch_times_mean() {
         let mean_out =
             B::cross_entropy_loss::<f32, i64>(&cross_pred(), &cross_target_0_2(), Reduction::Mean)
@@ -424,6 +448,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for cross_entropy_loss_none_produces_per_sample_nll_vector.
     fn cross_entropy_loss_none_produces_per_sample_nll_vector() {
         let out =
             B::cross_entropy_loss::<f32, i64>(&cross_pred(), &cross_target_0_2(), Reduction::None)
@@ -449,6 +474,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for cross_entropy_loss_gradcheck.
     fn cross_entropy_loss_gradcheck() {
         let tgt = cross_target_0_2();
         let op = |inputs: &[NativeStorage]| -> NativeStorage {
@@ -462,6 +488,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for cross_entropy_loss_finite_on_extreme_logits.
     fn cross_entropy_loss_finite_on_extreme_logits() {
         let pred_extreme = matrix(vec![1000.0f32, -1000.0, 0.0, -1000.0, 1000.0, 0.0], 2, 3);
         let target = vector_i64(vec![0, 1]);
@@ -486,6 +513,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for cross_entropy_loss_uniform_logits_equal_log_num_classes.
     fn cross_entropy_loss_uniform_logits_equal_log_num_classes() {
         let pred_uniform = matrix(vec![5.0f32, 5.0, 5.0, 5.0, 5.0, 5.0], 2, 3);
         let target = vector_i64(vec![0, 1]);

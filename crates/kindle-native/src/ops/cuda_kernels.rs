@@ -1,5 +1,7 @@
+/// Auto-generated documentation for MATMUL_SWIGLU_KERNEL.
 pub const MATMUL_SWIGLU_KERNEL: &str = r#"
 extern "C" __global__ void fused_matmul_swiglu(
+    /// Auto-generated documentation for float.
     const float* A, const float* B, float* C, 
     int M, int K, int N
 ) {
@@ -23,8 +25,10 @@ extern "C" __global__ void fused_matmul_swiglu(
 }
 "#;
 
+/// Auto-generated documentation for FLASH_ATTENTION_LITE_KERNEL.
 pub const FLASH_ATTENTION_LITE_KERNEL: &str = r#"
 extern "C" __global__ void flash_attention_lite(
+    /// Auto-generated documentation for float.
     const float* Q, const float* K, const float* V, float* O,
     int seq_len, int head_dim
 ) {
@@ -68,19 +72,29 @@ extern "C" __global__ void flash_attention_lite(
 }
 "#;
 
+/// Auto-generated documentation for FUSED_ADAMW_KERNEL.
 pub const FUSED_ADAMW_KERNEL: &str = r#"
 extern "C" __global__ void fused_adamw_step(
+    /// Auto-generated documentation for float.
     const float* __restrict__ p,
     float* __restrict__ p_out,
+    /// Auto-generated documentation for float.
     const float* __restrict__ g,
     float* __restrict__ m,
     float* __restrict__ v,
+    /// Auto-generated documentation for float.
     const float lr,
+    /// Auto-generated documentation for float.
     const float beta1,
+    /// Auto-generated documentation for float.
     const float beta2,
+    /// Auto-generated documentation for float.
     const float eps,
+    /// Auto-generated documentation for float.
     const float wd,
+    /// Auto-generated documentation for int.
     const int step,
+    /// Auto-generated documentation for int.
     const int num_elements
 ) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -138,8 +152,10 @@ extern "C" __global__ void fused_adamw_step(
 }
 "#;
 
+/// Auto-generated documentation for MATMUL_KERNEL.
 pub const MATMUL_KERNEL: &str = r#"
 extern "C" __global__ void matmul(
+    /// Auto-generated documentation for float.
     const float* A, const float* B, float* C, 
     int M, int K, int N
 ) {

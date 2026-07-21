@@ -4,38 +4,58 @@ use typenum::Unsigned;
 
 #[derive(Debug, Clone)]
 #[kindle_macros::module(internal)]
+/// Auto-generated documentation for Conv1d.
 pub struct Conv1d<
     S: Conv1dShape,
     B: Backend,
     Bias: crate::nn::optional::OptionalField = crate::nn::optional::True,
 > {
+    /// Auto-generated documentation for weight.
     pub weight: Param<S::WeightShape, B>,
+    /// Auto-generated documentation for bias.
     pub bias: Option<Param<S::BiasShape, B>>,
     #[module(ignore)]
+    /// Auto-generated documentation for stride.
     pub stride: usize,
     #[module(ignore)]
+    /// Auto-generated documentation for padding.
     pub padding: usize,
     #[module(ignore)]
+    /// Auto-generated documentation for dilation.
     pub dilation: usize,
     #[module(ignore)]
+    /// Auto-generated documentation for groups.
     pub groups: usize,
     #[module(ignore)]
     _phantom: core::marker::PhantomData<(S, B, Bias)>,
 }
 
+/// Auto-generated documentation for Conv1dShape.
 pub trait Conv1dShape: Shape + DynShape {
+    /// Auto-generated documentation for OutC.
     type OutC: Dim;
+    /// Auto-generated documentation for InC.
     type InC: Dim;
+    /// Auto-generated documentation for K.
     type K: Unsigned + Dim<Arg = ()>;
+    /// Auto-generated documentation for S.
     type S: Unsigned + Dim<Arg = ()>;
+    /// Auto-generated documentation for P.
     type P: Unsigned + Dim<Arg = ()>;
+    /// Auto-generated documentation for D.
     type D: Unsigned + Dim<Arg = ()>;
+    /// Auto-generated documentation for WeightArg.
     type WeightArg: crate::tensor::arg_into::NotUnit;
+    /// Auto-generated documentation for BiasArg.
     type BiasArg: crate::tensor::arg_into::NotUnit;
+    /// Auto-generated documentation for WeightShape.
     type WeightShape: Shape<Arg = Self::WeightArg> + DynShape;
+    /// Auto-generated documentation for BiasShape.
     type BiasShape: Shape<Arg = Self::BiasArg> + DynShape;
+    /// Auto-generated documentation for Target.
     type Target;
 
+    /// Auto-generated documentation for build_args.
     fn build_args(target: Self::Target) -> (usize, usize, Self::WeightArg, Self::BiasArg);
 }
 
@@ -48,19 +68,31 @@ impl<
     D: Unsigned + Dim<Arg = ()>,
 > Conv1dShape for (OutC, InC, K, S, P, D)
 {
+    /// Auto-generated documentation for OutC.
     type OutC = OutC;
+    /// Auto-generated documentation for InC.
     type InC = InC;
+    /// Auto-generated documentation for K.
     type K = K;
+    /// Auto-generated documentation for S.
     type S = S;
+    /// Auto-generated documentation for P.
     type P = P;
+    /// Auto-generated documentation for D.
     type D = D;
+    /// Auto-generated documentation for WeightArg.
     type WeightArg = (<OutC as Dim>::Arg, <InC as Dim>::Arg, <K as Dim>::Arg);
+    /// Auto-generated documentation for BiasArg.
     type BiasArg = (<OutC as Dim>::Arg,);
+    /// Auto-generated documentation for WeightShape.
     type WeightShape = (OutC, InC, K);
+    /// Auto-generated documentation for BiasShape.
     type BiasShape = (OutC,);
+    /// Auto-generated documentation for Target.
     type Target = (OutC::Arg, InC::Arg);
 
     #[inline]
+    /// Auto-generated documentation for build_args.
     fn build_args(target: Self::Target) -> (usize, usize, Self::WeightArg, Self::BiasArg) {
         let out_channels = OutC::from_arg(target.0.clone()).size();
         let in_channels = InC::from_arg(target.1.clone()).size();
@@ -74,11 +106,13 @@ impl<
 }
 
 // ── Bias = True ────────────────────────────────────────────────────────────────
-impl<S: Conv1dShape, B: Backend + crate::tensor::backend::ModuleOps<B>> Conv1d<S, B, crate::nn::optional::True>
+impl<S: Conv1dShape, B: Backend + crate::tensor::backend::ModuleOps<B>>
+    Conv1d<S, B, crate::nn::optional::True>
 where
     B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
+    /// Auto-generated documentation for new_with.
     pub fn new_with(args: S::Target) -> Result<Self> {
         let (_cout, _cin, w_args, b_args) = S::build_args(args);
         let fan_in = _cin * S::K::USIZE;
@@ -122,17 +156,20 @@ where
     B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
+    /// Auto-generated documentation for new.
     pub fn new() -> Result<Self> {
         Self::new_with(((), ()))
     }
 }
 
 // ── Bias = False ───────────────────────────────────────────────────────────────
-impl<S: Conv1dShape, B: Backend + crate::tensor::backend::ModuleOps<B>> Conv1d<S, B, crate::nn::optional::False>
+impl<S: Conv1dShape, B: Backend + crate::tensor::backend::ModuleOps<B>>
+    Conv1d<S, B, crate::nn::optional::False>
 where
     B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
+    /// Auto-generated documentation for new_with.
     pub fn new_with(args: S::Target) -> Result<Self> {
         let (_cout, _cin, w_args, _b_args) = S::build_args(args);
         let fan_in = _cin * S::K::USIZE;
@@ -167,6 +204,7 @@ where
     B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
+    /// Auto-generated documentation for new.
     pub fn new() -> Result<Self> {
         Self::new_with(((), ()))
     }
@@ -178,6 +216,7 @@ where
     B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
+    /// Auto-generated documentation for new_with.
     pub fn new_with(args: S::Target, has_bias: bool) -> Result<Self> {
         let (_cout, _cin, w_args, b_args) = S::build_args(args);
         let fan_in = _cin * S::K::USIZE;
@@ -225,6 +264,7 @@ where
     B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
+    /// Auto-generated documentation for new.
     pub fn new(has_bias: bool) -> Result<Self> {
         Self::new_with(((), ()), has_bias)
     }
@@ -239,10 +279,13 @@ where
         + crate::shapes::HasChannels1D<CIn>,
     B: Backend + crate::tensor::backend::ModuleOps<B>,
 {
+    /// Auto-generated documentation for Output.
     type Output = Tensor<I::Output, B>;
+    /// Auto-generated documentation for Error.
     type Error = Error;
 
     #[inline]
+    /// Auto-generated documentation for forward.
     fn forward(&self, x: Tensor<I, B>) -> core::result::Result<Self::Output, Error> {
         let weight = self.weight.as_tensor()?;
         let bias = Some(self.bias.as_ref().unwrap().as_tensor()?.detach());
@@ -302,10 +345,13 @@ where
         + crate::shapes::HasChannels1D<CIn>,
     B: Backend + crate::tensor::backend::ModuleOps<B>,
 {
+    /// Auto-generated documentation for Output.
     type Output = Tensor<I::Output, B>;
+    /// Auto-generated documentation for Error.
     type Error = Error;
 
     #[inline]
+    /// Auto-generated documentation for forward.
     fn forward(&self, x: Tensor<I, B>) -> core::result::Result<Self::Output, Error> {
         let weight = self.weight.as_tensor()?;
 
@@ -364,10 +410,13 @@ where
         + crate::shapes::HasChannels1D<CIn>,
     B: Backend + crate::tensor::backend::ModuleOps<B>,
 {
+    /// Auto-generated documentation for Output.
     type Output = Tensor<I::Output, B>;
+    /// Auto-generated documentation for Error.
     type Error = Error;
 
     #[inline]
+    /// Auto-generated documentation for forward.
     fn forward(&self, x: Tensor<I, B>) -> core::result::Result<Self::Output, Error> {
         let weight = self.weight.as_tensor()?;
         let bias = match &self.bias {

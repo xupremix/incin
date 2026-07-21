@@ -5,11 +5,13 @@ use syn::{
     punctuated::Punctuated,
 };
 
+/// Auto-generated documentation for IdxList.
 struct IdxList {
     items: Punctuated<Expr, Token![,]>,
 }
 
 impl Parse for IdxList {
+    /// Auto-generated documentation for parse.
     fn parse(input: ParseStream) -> syn::Result<Self> {
         Ok(IdxList {
             items: Punctuated::parse_terminated(input)?,

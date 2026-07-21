@@ -43,7 +43,9 @@ use typenum::consts::*;
 use typenum::{Bit, UInt, UTerm, Unsigned};
 
 impl DimIdx for UTerm {
+    /// Auto-generated documentation for Resolved.
     type Resolved = UTerm;
+    /// Auto-generated documentation for size.
     fn size() -> Option<usize> {
         Some(0)
     }
@@ -64,14 +66,18 @@ where
         + PartialEq
         + 'static,
 {
+    /// Auto-generated documentation for Resolved.
     type Resolved = UInt<U, B>;
+    /// Auto-generated documentation for size.
     fn size() -> Option<usize> {
         Some(Self::USIZE)
     }
 }
 
 impl DimIdx for InferDim {
+    /// Auto-generated documentation for Resolved.
     type Resolved = usize;
+    /// Auto-generated documentation for size.
     fn size() -> Option<usize> {
         None
     }
@@ -81,7 +87,9 @@ impl DimIdx for InferDim {
 impl<Tag: 'static + Send + Sync + Copy + Clone + core::fmt::Debug + Eq + PartialEq> DimIdx
     for NamedDyn<Tag>
 {
+    /// Auto-generated documentation for Resolved.
     type Resolved = NamedDyn<Tag>;
+    /// Auto-generated documentation for size.
     fn size() -> Option<usize> {
         None
     } // Not a static known size, but handled specially
@@ -93,8 +101,11 @@ impl<Tag: 'static + Send + Sync + Copy + Clone + core::fmt::Debug + Eq + Partial
     label = "Invalid dimension for reshape",
     note = "The element count must remain constant during reshape"
 )]
+/// Auto-generated documentation for ReshapeTarget.
 pub trait ReshapeTarget<In: Shape> {
+    /// Auto-generated documentation for Output.
     type Output: Shape;
+    /// Auto-generated documentation for calculate_shape.
     fn calculate_shape(in_shape_vec: &[usize]) -> Vec<usize>;
 }
 
@@ -105,8 +116,10 @@ macro_rules! impl_reshape_target {
         where
             ($($D::Resolved,)*): Shape,
         {
+            /// Auto-generated documentation for Output.
             type Output = ($($D::Resolved,)*);
 
+            /// Auto-generated documentation for calculate_shape.
             fn calculate_shape(in_shape_vec: &[usize]) -> Vec<usize> {
                 let total_elements: usize = in_shape_vec.iter().product();
                 let mut resolved_sizes = vec![];
@@ -117,12 +130,8 @@ macro_rules! impl_reshape_target {
                 $(
                     let size = $D::size();
                     if size.is_none() {
-                        // Wait, NamedDyn also has None! We need a way to differentiate.
-                        // Actually, NamedDyn shouldn't be None if we want to infer it.
-                        // But we don't have access to runtime values of NamedDyn here.
-                        // Let's just say InferDim is the only one we infer for Reshape.
-                        // For NamedDyn in Reshape, we must either pass its value, OR if it's the
-                        // ONLY unknown, we can infer it!
+                        // Both InferDim and NamedDyn can lack a statically known size (returning None).
+                        // In Reshape contexts, InferDim acts as the unique auto-inferred dimension.
 
                         if infer_idx.is_some() {
                             panic!("Only one inferred dimension (-1 or NamedDyn) is allowed in reshape");
@@ -170,14 +179,18 @@ pub trait SliceIdx {
 }
 
 impl<Start: Unsigned, End: Unsigned, Diff: Dim> SliceIdx for Slice<Start, End, Diff> {
+    /// Auto-generated documentation for Resolved.
     type Resolved = Diff;
+    /// Auto-generated documentation for bounds.
     fn bounds(_size: usize) -> (usize, usize) {
         (Start::USIZE, End::USIZE)
     }
 }
 
 impl SliceIdx for UTerm {
+    /// Auto-generated documentation for Resolved.
     type Resolved = U1;
+    /// Auto-generated documentation for bounds.
     fn bounds(_size: usize) -> (usize, usize) {
         (0, 1)
     }
@@ -198,7 +211,9 @@ where
         + PartialEq
         + 'static,
 {
+    /// Auto-generated documentation for Resolved.
     type Resolved = U1;
+    /// Auto-generated documentation for bounds.
     fn bounds(_size: usize) -> (usize, usize) {
         (Self::USIZE, Self::USIZE + 1)
     }
@@ -208,7 +223,9 @@ where
 // We can't easily implement a variadic Ellipsis in simple tuple traits without
 // advanced macro work. For now, we assume `..` is a single full dimension slice.
 impl SliceIdx for Ellipsis {
+    /// Auto-generated documentation for Resolved.
     type Resolved = usize; // Dyn size since it depends on the input
+    /// Auto-generated documentation for bounds.
     fn bounds(size: usize) -> (usize, usize) {
         (0, size)
     }
@@ -219,7 +236,9 @@ impl SliceIdx for Ellipsis {
     label = "Invalid slice target",
     note = "The slice range must be within the bounds of the original dimension"
 )]
+/// Auto-generated documentation for SliceTarget.
 pub trait SliceTarget<In: Shape> {
+    /// Auto-generated documentation for Output.
     type Output: Shape;
     /// Returns the bounds (start, end) for each dimension in `in_shape_vec`
     fn calculate_bounds(in_shape_vec: &[usize]) -> Vec<(usize, usize)>;
@@ -231,8 +250,10 @@ macro_rules! impl_slice_target {
         where
             ($($D::Resolved,)*): Shape,
         {
+            /// Auto-generated documentation for Output.
             type Output = ($($D::Resolved,)*);
 
+            /// Auto-generated documentation for calculate_bounds.
             fn calculate_bounds(in_shape_vec: &[usize]) -> Vec<(usize, usize)> {
                 let mut bounds = vec![];
                 let mut _current_idx = 0usize;
@@ -253,23 +274,29 @@ impl_slice_target!(D1, D2, D3);
 impl_slice_target!(D1, D2, D3, D4);
 
 #[cfg(test)]
+/// Auto-generated documentation for tests.
 mod tests {
     use super::*;
     use crate::prelude::Shape;
     use typenum::{U0, U1, U2, U3, U4};
 
+    /// Auto-generated documentation for assert_shape_eq.
     fn assert_shape_eq<S1: Shape, S2: Shape>() {}
 
     #[test]
+    /// Auto-generated documentation for slice_range_output_shape.
     fn slice_range_output_shape() {
         // idx![1..3, .., 0..2] on (U4, U4, U3) → (U2, usize, U2)
+        /// Auto-generated documentation for IdxT.
         type IdxT = (Slice<U1, U3, U2>, Ellipsis, Slice<U0, U2, U2>);
         assert_shape_eq::<<IdxT as SliceTarget<(U4, U4, U3)>>::Output, (U2, usize, U2)>();
     }
 
     #[test]
+    /// Auto-generated documentation for slice_full_passthrough.
     fn slice_full_passthrough() {
         // idx![.., .., ..] on (U4, U4, U3) → (usize, usize, usize)
+        /// Auto-generated documentation for IdxT.
         type IdxT = (Ellipsis, Ellipsis, Ellipsis);
         assert_shape_eq::<<IdxT as SliceTarget<(U4, U4, U3)>>::Output, (usize, usize, usize)>();
     }

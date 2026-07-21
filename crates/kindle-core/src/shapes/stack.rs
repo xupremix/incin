@@ -6,7 +6,9 @@ use typenum::{U0, U1, U2, U3, U4, U5, U6};
     label = "Invalid axis for stacking",
     note = "Stacking requires the axis to be <= the rank of the tensor"
 )]
+/// Auto-generated documentation for StackShape.
 pub trait StackShape<Axis> {
+    /// Auto-generated documentation for Output.
     type Output: Shape;
 }
 
@@ -14,6 +16,7 @@ impl<D0> StackShape<U0> for (D0,)
 where
     D0: Dim,
 {
+    /// Auto-generated documentation for Output.
     type Output = (U2, D0);
 }
 
@@ -21,6 +24,7 @@ impl<D0> StackShape<U1> for (D0,)
 where
     D0: Dim,
 {
+    /// Auto-generated documentation for Output.
     type Output = (D0, U2);
 }
 
@@ -29,6 +33,7 @@ where
     D0: Dim,
     D1: Dim,
 {
+    /// Auto-generated documentation for Output.
     type Output = (U2, D0, D1);
 }
 
@@ -37,6 +42,7 @@ where
     D0: Dim,
     D1: Dim,
 {
+    /// Auto-generated documentation for Output.
     type Output = (D0, U2, D1);
 }
 
@@ -45,6 +51,7 @@ where
     D0: Dim,
     D1: Dim,
 {
+    /// Auto-generated documentation for Output.
     type Output = (D0, D1, U2);
 }
 
@@ -54,6 +61,7 @@ where
     D1: Dim,
     D2: Dim,
 {
+    /// Auto-generated documentation for Output.
     type Output = (U2, D0, D1, D2);
 }
 
@@ -63,6 +71,7 @@ where
     D1: Dim,
     D2: Dim,
 {
+    /// Auto-generated documentation for Output.
     type Output = (D0, U2, D1, D2);
 }
 
@@ -72,6 +81,7 @@ where
     D1: Dim,
     D2: Dim,
 {
+    /// Auto-generated documentation for Output.
     type Output = (D0, D1, U2, D2);
 }
 
@@ -81,6 +91,7 @@ where
     D1: Dim,
     D2: Dim,
 {
+    /// Auto-generated documentation for Output.
     type Output = (D0, D1, D2, U2);
 }
 
@@ -91,6 +102,7 @@ where
     D2: Dim,
     D3: Dim,
 {
+    /// Auto-generated documentation for Output.
     type Output = (U2, D0, D1, D2, D3);
 }
 
@@ -101,6 +113,7 @@ where
     D2: Dim,
     D3: Dim,
 {
+    /// Auto-generated documentation for Output.
     type Output = (D0, U2, D1, D2, D3);
 }
 
@@ -111,6 +124,7 @@ where
     D2: Dim,
     D3: Dim,
 {
+    /// Auto-generated documentation for Output.
     type Output = (D0, D1, U2, D2, D3);
 }
 
@@ -121,6 +135,7 @@ where
     D2: Dim,
     D3: Dim,
 {
+    /// Auto-generated documentation for Output.
     type Output = (D0, D1, D2, U2, D3);
 }
 
@@ -131,6 +146,7 @@ where
     D2: Dim,
     D3: Dim,
 {
+    /// Auto-generated documentation for Output.
     type Output = (D0, D1, D2, D3, U2);
 }
 
@@ -142,6 +158,7 @@ where
     D3: Dim,
     D4: Dim,
 {
+    /// Auto-generated documentation for Output.
     type Output = (U2, D0, D1, D2, D3, D4);
 }
 
@@ -153,6 +170,7 @@ where
     D3: Dim,
     D4: Dim,
 {
+    /// Auto-generated documentation for Output.
     type Output = (D0, U2, D1, D2, D3, D4);
 }
 
@@ -164,6 +182,7 @@ where
     D3: Dim,
     D4: Dim,
 {
+    /// Auto-generated documentation for Output.
     type Output = (D0, D1, U2, D2, D3, D4);
 }
 
@@ -175,6 +194,7 @@ where
     D3: Dim,
     D4: Dim,
 {
+    /// Auto-generated documentation for Output.
     type Output = (D0, D1, D2, U2, D3, D4);
 }
 
@@ -186,6 +206,7 @@ where
     D3: Dim,
     D4: Dim,
 {
+    /// Auto-generated documentation for Output.
     type Output = (D0, D1, D2, D3, U2, D4);
 }
 
@@ -197,6 +218,7 @@ where
     D3: Dim,
     D4: Dim,
 {
+    /// Auto-generated documentation for Output.
     type Output = (D0, D1, D2, D3, D4, U2);
 }
 
@@ -209,6 +231,7 @@ where
     D4: Dim,
     D5: Dim,
 {
+    /// Auto-generated documentation for Output.
     type Output = (U2, D0, D1, D2, D3, D4, D5);
 }
 
@@ -221,6 +244,7 @@ where
     D4: Dim,
     D5: Dim,
 {
+    /// Auto-generated documentation for Output.
     type Output = (D0, U2, D1, D2, D3, D4, D5);
 }
 
@@ -233,6 +257,7 @@ where
     D4: Dim,
     D5: Dim,
 {
+    /// Auto-generated documentation for Output.
     type Output = (D0, D1, U2, D2, D3, D4, D5);
 }
 
@@ -245,6 +270,7 @@ where
     D4: Dim,
     D5: Dim,
 {
+    /// Auto-generated documentation for Output.
     type Output = (D0, D1, D2, U2, D3, D4, D5);
 }
 
@@ -257,6 +283,7 @@ where
     D4: Dim,
     D5: Dim,
 {
+    /// Auto-generated documentation for Output.
     type Output = (D0, D1, D2, D3, U2, D4, D5);
 }
 
@@ -269,6 +296,7 @@ where
     D4: Dim,
     D5: Dim,
 {
+    /// Auto-generated documentation for Output.
     type Output = (D0, D1, D2, D3, D4, U2, D5);
 }
 
@@ -281,9 +309,11 @@ where
     D4: Dim,
     D5: Dim,
 {
+    /// Auto-generated documentation for Output.
     type Output = (D0, D1, D2, D3, D4, D5, U2);
 }
 
 impl StackShape<U0> for () {
+    /// Auto-generated documentation for Output.
     type Output = (U2,);
 }

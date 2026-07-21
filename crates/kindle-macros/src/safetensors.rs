@@ -10,6 +10,7 @@ use syn::{
     parse_macro_input,
 };
 
+/// Auto-generated documentation for ImportModelInput.
 struct ImportModelInput {
     path: LitStr,
     _comma: Token![,],
@@ -18,6 +19,7 @@ struct ImportModelInput {
 }
 
 impl Parse for ImportModelInput {
+    /// Auto-generated documentation for parse.
     fn parse(input: ParseStream) -> Result<Self> {
         let path: LitStr = input.parse()?;
         let _comma: Token![,] = input.parse()?;
@@ -47,12 +49,16 @@ impl Parse for ImportModelInput {
     }
 }
 
+/// Auto-generated documentation for Node.
 enum Node {
+    /// Auto-generated documentation for Leaf.
     Leaf { shape: Vec<usize>, is_buffer: bool },
+    /// Auto-generated documentation for Dir.
     Dir(BTreeMap<String, Node>),
 }
 
 impl Node {
+    /// Auto-generated documentation for insert.
     fn insert(&mut self, path: &[&str], shape: Vec<usize>) {
         if path.len() == 1 {
             let is_buffer = path[0] == "running_mean"
@@ -70,6 +76,7 @@ impl Node {
     }
 }
 
+/// Auto-generated documentation for generate_structs.
 fn generate_structs(
     name: &Ident,
     node: &Node,
@@ -225,6 +232,7 @@ pub(crate) fn import_model(_attr: TokenStream, item: TokenStream) -> TokenStream
         where
             #(#bounds,)*
         {
+            /// Auto-generated documentation for load_default_weights.
             pub fn load_default_weights(&mut self) -> kindle::prelude::Result<()> {
                 kindle::prelude::load_safetensors(self, #path_str)
             }

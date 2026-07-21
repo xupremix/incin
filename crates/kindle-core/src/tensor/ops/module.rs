@@ -10,6 +10,7 @@ impl<
 > Tensor<S, B, K, D, G>
 {
     #[inline]
+    /// Auto-generated documentation for layer_norm.
     pub fn layer_norm(
         &self,
         weight: &Tensor<Dyn, B, K, D, G>,
@@ -28,6 +29,7 @@ impl<
     }
 
     #[inline]
+    /// Auto-generated documentation for batch_norm.
     pub fn batch_norm(
         &self,
         weight: &Tensor<Dyn, B, K, D, G>,

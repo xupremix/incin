@@ -15,16 +15,20 @@ use ratatui::widgets::{Block, Borders, Paragraph};
 pub struct PanicTestPanel;
 
 impl Panel for PanicTestPanel {
+    /// Auto-generated documentation for id.
     fn id(&self) -> &'static str {
         "panic-test"
     }
 
+    /// Auto-generated documentation for title.
     fn title(&self) -> &str {
         "Panic Test"
     }
 
+    /// Auto-generated documentation for update.
     fn update(&mut self, _event: &Event) {}
 
+    /// Auto-generated documentation for render.
     fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) {
         let area = ctx.area();
         let block = Block::default().title("Panic Test").borders(Borders::ALL);
@@ -32,15 +36,16 @@ impl Panel for PanicTestPanel {
         ctx.frame_mut().render_widget(text, area);
     }
 
+    /// Auto-generated documentation for handle_event.
     fn handle_event(&mut self, event: &PanelEvent) -> bool {
-        if let PanelEvent::Key(k) = event {
-            if k.code == KeyCode::Char('p') {
+        if let PanelEvent::Key(k) = event
+            && k.code == KeyCode::Char('p') {
                 panic!("Manual panic triggered from PanicTestPanel");
             }
-        }
         false
     }
 
+    /// Auto-generated documentation for reset.
     fn reset(&mut self) {
         // stateless -- nothing to reset
     }

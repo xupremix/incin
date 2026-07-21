@@ -1,7 +1,9 @@
 use kindle::prelude::*;
 
+/// Auto-generated documentation for CpuBackend.
 type CpuBackend = DefaultBackend;
 
+/// Auto-generated documentation for to_vec.
 fn to_vec(t: &Tensor<Dyn, CpuBackend>) -> Vec<f32> {
     t.inner().flatten_all().unwrap().to_vec1::<f32>().unwrap()
 }
@@ -10,6 +12,7 @@ fn to_vec(t: &Tensor<Dyn, CpuBackend>) -> Vec<f32> {
 // 1.1 Unary Operations
 // -----------------------------------------------------------------------------
 #[test]
+/// Auto-generated documentation for test_unary_abs.
 fn test_unary_abs() -> Result<()> {
     // permutations: positive, negative, zero, very small numbers, very large numbers, NaN, Inf
     let t = Tensor::<s![7], CpuBackend>::from_slice(
@@ -28,6 +31,7 @@ fn test_unary_abs() -> Result<()> {
 }
 
 #[test]
+/// Auto-generated documentation for test_unary_relu.
 fn test_unary_relu() -> Result<()> {
     // positive (unchanged), negative (zeroed), zero
     let t = Tensor::<s![3], CpuBackend>::from_slice(&[5.0, -5.0, 0.0], ())?;
@@ -37,6 +41,7 @@ fn test_unary_relu() -> Result<()> {
 }
 
 #[test]
+/// Auto-generated documentation for test_unary_gelu.
 fn test_unary_gelu() -> Result<()> {
     // standard normal values, extreme negatives/positives
     let t = Tensor::<s![3], CpuBackend>::from_slice(&[0.0, -10.0, 10.0], ())?;
@@ -48,6 +53,7 @@ fn test_unary_gelu() -> Result<()> {
 }
 
 #[test]
+/// Auto-generated documentation for test_unary_swish.
 fn test_unary_swish() -> Result<()> {
     // beta=1 definitions
     let t = Tensor::<s![2], CpuBackend>::from_slice(&[0.0, 1.0], ())?;
@@ -58,6 +64,7 @@ fn test_unary_swish() -> Result<()> {
 }
 
 #[test]
+/// Auto-generated documentation for test_unary_softmax.
 fn test_unary_softmax() -> Result<()> {
     // dim 0, dim 1, very large/small values
     // Softmax along dim 1
@@ -81,6 +88,7 @@ fn test_unary_softmax() -> Result<()> {
 }
 
 #[test]
+/// Auto-generated documentation for test_unary_misc.
 fn test_unary_misc() -> Result<()> {
     // neg
     let t_neg = Tensor::<s![3], CpuBackend>::from_slice(&[0.0, 1.0, -1.0], ())?;
@@ -128,6 +136,7 @@ fn test_unary_misc() -> Result<()> {
 // 1.2 Binary Operations
 // -----------------------------------------------------------------------------
 #[test]
+/// Auto-generated documentation for test_binary_add.
 fn test_binary_add() -> Result<()> {
     // positive + positive, negative + negative, zeroes, very large (overflow potential but f32 handles it)
     let a = Tensor::<s![4], CpuBackend>::from_slice(&[1.0, -1.0, 0.0, 3e38], ())?;
@@ -141,6 +150,7 @@ fn test_binary_add() -> Result<()> {
 }
 
 #[test]
+/// Auto-generated documentation for test_binary_sub.
 fn test_binary_sub() -> Result<()> {
     // lhs > rhs, lhs < rhs, identical tensors
     let a = Tensor::<s![3], CpuBackend>::from_slice(&[5.0, 1.0, 3.0], ())?;
@@ -151,6 +161,7 @@ fn test_binary_sub() -> Result<()> {
 }
 
 #[test]
+/// Auto-generated documentation for test_binary_mul.
 fn test_binary_mul() -> Result<()> {
     // zeroes, element-wise identity, negative terms
     let a = Tensor::<s![3], CpuBackend>::from_slice(&[0.0, 1.0, -2.0], ())?;
@@ -161,6 +172,7 @@ fn test_binary_mul() -> Result<()> {
 }
 
 #[test]
+/// Auto-generated documentation for test_binary_div.
 fn test_binary_div() -> Result<()> {
     // standard division, division by zero, precision limits
     let a = Tensor::<s![3], CpuBackend>::from_slice(&[6.0, 1.0, 1.0], ())?;
@@ -176,6 +188,7 @@ fn test_binary_div() -> Result<()> {
 // 1.3 Broadcasting Operations
 // -----------------------------------------------------------------------------
 #[test]
+/// Auto-generated documentation for test_broadcast_scalar.
 fn test_broadcast_scalar() -> Result<()> {
     let t = Tensor::<s![2, 2], CpuBackend>::from_slice(&[1.0, 2.0, 3.0, 4.0], ())?.into_dyn();
     let s = Tensor::<s![1], CpuBackend>::from_slice(&[10.0], ())?.into_dyn();
@@ -186,6 +199,7 @@ fn test_broadcast_scalar() -> Result<()> {
 }
 
 #[test]
+/// Auto-generated documentation for test_broadcast_1d_to_2d.
 fn test_broadcast_1d_to_2d() -> Result<()> {
     let t_2d =
         Tensor::<s![2, 3], CpuBackend>::from_slice(&[1.0, 1.0, 1.0, 2.0, 2.0, 2.0], ())?.into_dyn();
@@ -196,6 +210,7 @@ fn test_broadcast_1d_to_2d() -> Result<()> {
 }
 
 #[test]
+/// Auto-generated documentation for test_broadcast_trailing_dims.
 fn test_broadcast_trailing_dims() -> Result<()> {
     let t_3d = Tensor::<s![2, 2, 2], CpuBackend>::ones(())?.into_dyn();
     let t_2d = Tensor::<s![2, 2], CpuBackend>::ones(())?.into_dyn();
@@ -208,6 +223,7 @@ fn test_broadcast_trailing_dims() -> Result<()> {
 // 1.4 Reduction Operations
 // -----------------------------------------------------------------------------
 #[test]
+/// Auto-generated documentation for test_reduction_sum.
 fn test_reduction_sum() -> Result<()> {
     let t = Tensor::<s![2, 3], CpuBackend>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
     // sum_all
@@ -226,6 +242,7 @@ fn test_reduction_sum() -> Result<()> {
 }
 
 #[test]
+/// Auto-generated documentation for test_reduction_mean.
 fn test_reduction_mean() -> Result<()> {
     let t = Tensor::<s![2, 2], CpuBackend>::from_slice(&[1.0, 2.0, 3.0, 4.0], ())?;
     assert_eq!(to_vec(&t.clone().mean_all()?.into_dyn())[0], 2.5);
@@ -235,6 +252,7 @@ fn test_reduction_mean() -> Result<()> {
 }
 
 #[test]
+/// Auto-generated documentation for test_reduction_max_min.
 fn test_reduction_max_min() -> Result<()> {
     let t = Tensor::<s![2, 2], CpuBackend>::from_slice(&[-1.0, 5.0, 0.0, 3.0], ())?;
     // max
@@ -260,6 +278,7 @@ fn test_reduction_max_min() -> Result<()> {
 // 1.5 Manipulation Operations
 // -----------------------------------------------------------------------------
 #[test]
+/// Auto-generated documentation for test_manipulation_reshape_flatten.
 fn test_manipulation_reshape_flatten() -> Result<()> {
     let t = Tensor::<s![2, 3], CpuBackend>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
 
@@ -283,6 +302,7 @@ fn test_manipulation_reshape_flatten() -> Result<()> {
 }
 
 #[test]
+/// Auto-generated documentation for test_manipulation_transpose_squeeze.
 fn test_manipulation_transpose_squeeze() -> Result<()> {
     let t = Tensor::<s![2, 3], CpuBackend>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
 
@@ -305,6 +325,7 @@ fn test_manipulation_transpose_squeeze() -> Result<()> {
 // 1.6 Indexing & Slicing
 // -----------------------------------------------------------------------------
 #[test]
+/// Auto-generated documentation for test_indexing_concat.
 fn test_indexing_concat() -> Result<()> {
     let t1 = Tensor::<s![2, 2], CpuBackend>::from_slice(&[1.0, 2.0, 3.0, 4.0], ())?;
     let t2 = Tensor::<s![2, 2], CpuBackend>::from_slice(&[5.0, 6.0, 7.0, 8.0], ())?;
@@ -327,6 +348,7 @@ fn test_indexing_concat() -> Result<()> {
 }
 
 #[test]
+/// Auto-generated documentation for test_indexing_stack.
 fn test_indexing_stack() -> Result<()> {
     let t1 = Tensor::<s![2], CpuBackend>::from_slice(&[1.0, 2.0], ())?;
     let t2 = Tensor::<s![2], CpuBackend>::from_slice(&[3.0, 4.0], ())?;
@@ -352,6 +374,7 @@ fn test_indexing_stack() -> Result<()> {
 }
 
 #[test]
+/// Auto-generated documentation for test_indexing_narrow.
 fn test_indexing_narrow() -> Result<()> {
     let t = Tensor::<s![3, 3], CpuBackend>::from_slice(
         &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
@@ -377,6 +400,7 @@ fn test_indexing_narrow() -> Result<()> {
 // 1.7 Loss Functions
 // -----------------------------------------------------------------------------
 #[test]
+/// Auto-generated documentation for test_loss_mse.
 fn test_loss_mse() -> Result<()> {
     let pred = Tensor::<s![2], CpuBackend>::from_slice(&[1.0, 2.0], ())?;
     let target1 = Tensor::<s![2], CpuBackend>::from_slice(&[1.0, 2.0], ())?; // identical
@@ -393,6 +417,7 @@ fn test_loss_mse() -> Result<()> {
 }
 
 #[test]
+/// Auto-generated documentation for test_loss_cross_entropy.
 fn test_loss_cross_entropy() -> Result<()> {
     // 2 samples, 3 classes
     let logits = Tensor::<s![2, 3], CpuBackend>::from_slice(
@@ -405,7 +430,7 @@ fn test_loss_cross_entropy() -> Result<()> {
 
     // target integers: class 0, class 1
     // The framework uses one-hot float targets or indices?
-    // Let's assume standard float targets for one-hot cross entropy
+    // Standard float targets for one-hot cross entropy
     let targets = Tensor::<s![2], CpuBackend>::from_slice(&[0.0, 1.0], ())?;
 
     let loss = logits.cross_entropy_loss(&targets)?;

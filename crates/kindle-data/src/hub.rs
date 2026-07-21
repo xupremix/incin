@@ -33,6 +33,7 @@ impl HubApi {
     }
 }
 
+/// Auto-generated documentation for HubRepo.
 pub struct HubRepo {
     inner: hf_hub::api::sync::ApiRepo,
 }

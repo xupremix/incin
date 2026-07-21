@@ -38,6 +38,7 @@ impl FileTransport {
 }
 
 impl Transport for FileTransport {
+    /// Auto-generated documentation for write_event.
     fn write_event(&mut self, event: &Event) -> crate::err::Result<()> {
         // Build the complete line in memory first, then issue exactly one
         // write_all call -- never split the JSON body and the trailing
@@ -50,11 +51,13 @@ impl Transport for FileTransport {
 }
 
 #[cfg(test)]
+/// Auto-generated documentation for tests.
 mod tests {
     use super::*;
     use crate::events::ScalarEvent;
     use std::io::{BufRead, BufReader};
 
+    /// Auto-generated documentation for unique_test_path.
     fn unique_test_path(label: &str) -> std::path::PathBuf {
         std::env::temp_dir().join(format!(
             "kindle-telemetry-file-transport-test-{label}-{}.jsonl",
@@ -62,6 +65,7 @@ mod tests {
         ))
     }
 
+    /// Auto-generated documentation for scalar_event.
     fn scalar_event(step: usize, name: &str, value: f64) -> Event {
         Event::Scalar(ScalarEvent {
             schema_version: crate::events::CURRENT_SCHEMA_VERSION,
@@ -72,6 +76,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for open_on_nonexistent_path_creates_file_and_succeeds.
     fn open_on_nonexistent_path_creates_file_and_succeeds() {
         let path = unique_test_path("open-creates");
         assert!(!path.exists());
@@ -84,6 +89,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for write_event_three_times_round_trips_through_readback.
     fn write_event_three_times_round_trips_through_readback() {
         let path = unique_test_path("round-trip");
         let mut transport = FileTransport::open(&path).expect("open should succeed");
@@ -123,6 +129,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for each_line_ends_with_exactly_one_newline_and_no_embedded_newline.
     fn each_line_ends_with_exactly_one_newline_and_no_embedded_newline() {
         let path = unique_test_path("single-newline");
         let mut transport = FileTransport::open(&path).expect("open should succeed");
@@ -142,6 +149,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for second_transport_at_same_path_appends_rather_than_truncates.
     fn second_transport_at_same_path_appends_rather_than_truncates() {
         let path = unique_test_path("append-not-truncate");
 
@@ -165,6 +173,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for truncated_trailing_line_yields_prior_complete_records_only.
     fn truncated_trailing_line_yields_prior_complete_records_only() {
         let path = unique_test_path("crash-truncation");
 
@@ -203,6 +212,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for detach_reattach_sees_all_events_in_order.
     fn detach_reattach_sees_all_events_in_order() {
         let path = unique_test_path("detach-reattach");
         let mut transport = FileTransport::open(&path).expect("open should succeed");

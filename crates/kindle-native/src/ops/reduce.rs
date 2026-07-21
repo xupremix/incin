@@ -889,6 +889,113 @@ impl<T: DType, D: kindle_core::prelude::Device> ReductionOps<Self> for NativeBac
             }
         }
     }
+
+    /// Auto-generated documentation for topk.
+    fn topk<K: DType, KInt: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        k: usize,
+        dim: usize,
+        largest: bool,
+    ) -> Result<(<Self as Backend>::Storage<K>, <Self as Backend>::Storage<KInt>)> {
+        let shape = &t.shape;
+        if dim >= shape.len() {
+            return Err(Error::ShapeMismatch {
+                op: "topk",
+                expected: shape.clone(),
+                got: vec![dim],
+                msg: format!("topk: axis {} out of range", dim),
+            });
+        }
+        let k = k.min(shape[dim]);
+        let mut out_shape = shape.clone();
+        out_shape[dim] = k;
+
+        let mut base_shape = shape.clone();
+        base_shape[dim] = 1;
+        let n_slices = base_shape.iter().product::<usize>();
+
+        let mut out_vals = vec![0.0f32; out_shape.iter().product()];
+        let mut out_indices = vec![0u32; out_shape.iter().product()];
+
+        for i in 0..n_slices {
+            let mut rem = i;
+            let mut coords = vec![0usize; shape.len()];
+            for dd in (0..shape.len()).rev() {
+                coords[dd] = rem % base_shape[dd];
+                rem /= base_shape[dd];
+            }
+
+            let mut slice_vals = Vec::with_capacity(shape[dim]);
+            for j in 0..shape[dim] {
+                coords[dim] = j;
+                slice_vals.push((t.get(&coords), j as u32));
+            }
+            if largest {
+                slice_vals.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(core::cmp::Ordering::Equal));
+            } else {
+                slice_vals.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(core::cmp::Ordering::Equal));
+            }
+
+            let mut out_coords = coords.clone();
+            for j in 0..k {
+                out_coords[dim] = j;
+                let flat = flatten_index(&out_coords, &out_shape);
+                out_vals[flat] = slice_vals[j].0 as f32;
+                out_indices[flat] = slice_vals[j].1;
+            }
+        }
+        Ok((
+            NativeStorage::from_contiguous(NativeBuffer::F32(out_vals), out_shape.clone()),
+            NativeStorage::from_contiguous(NativeBuffer::U32(out_indices), out_shape),
+        ))
+    }
+
+    /// Auto-generated documentation for argsort.
+    fn argsort<K: DType, KInt: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        dim: usize,
+        descending: bool,
+    ) -> Result<<Self as Backend>::Storage<KInt>> {
+        let shape = &t.shape;
+        if dim >= shape.len() {
+            return Err(Error::ShapeMismatch {
+                op: "argsort",
+                expected: shape.clone(),
+                got: vec![dim],
+                msg: format!("argsort: axis {} out of range", dim),
+            });
+        }
+        let mut base_shape = shape.clone();
+        base_shape[dim] = 1;
+        let n_slices = base_shape.iter().product::<usize>();
+        let mut out = vec![0u32; shape.iter().product()];
+
+        for i in 0..n_slices {
+            let mut rem = i;
+            let mut coords = vec![0usize; shape.len()];
+            for dd in (0..shape.len()).rev() {
+                coords[dd] = rem % base_shape[dd];
+                rem /= base_shape[dd];
+            }
+
+            let mut slice_vals = Vec::with_capacity(shape[dim]);
+            for k in 0..shape[dim] {
+                coords[dim] = k;
+                slice_vals.push((t.get(&coords), k as u32));
+            }
+            if descending {
+                slice_vals.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(core::cmp::Ordering::Equal));
+            } else {
+                slice_vals.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(core::cmp::Ordering::Equal));
+            }
+            for k in 0..shape[dim] {
+                coords[dim] = k;
+                let flat = flatten_index(&coords, shape);
+                out[flat] = slice_vals[k].1;
+            }
+        }
+        Ok(NativeStorage::from_contiguous(NativeBuffer::U32(out), shape.clone()))
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -896,22 +1003,27 @@ impl<T: DType, D: kindle_core::prelude::Device> ReductionOps<Self> for NativeBac
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
+/// Auto-generated documentation for tests.
 mod tests {
     use super::*;
     use crate::gradcheck::gradcheck;
     use crate::tape;
 
+    /// Auto-generated documentation for B.
     type B = NativeBackend<f32, kindle_core::prelude::Cpu>;
 
+    /// Auto-generated documentation for matrix.
     fn matrix(v: Vec<f32>, rows: usize, cols: usize) -> NativeStorage {
         NativeStorage::from_contiguous(NativeBuffer::F32(v), vec![rows, cols])
     }
 
+    /// Auto-generated documentation for vector.
     fn vector(v: Vec<f32>) -> NativeStorage {
         let len = v.len();
         NativeStorage::from_contiguous(NativeBuffer::F32(v), vec![len])
     }
 
+    /// Auto-generated documentation for f32_vec.
     fn f32_vec(s: &NativeStorage) -> Vec<f32> {
         match &*s.buffer {
             NativeBuffer::F32(v) => v.clone(),
@@ -922,6 +1034,7 @@ mod tests {
     // --- sum_all ---
 
     #[test]
+    /// Auto-generated documentation for sum_all_on_2x3_returns_correct_scalar.
     fn sum_all_on_2x3_returns_correct_scalar() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let out = B::sum_all::<f32>(&t).unwrap();
@@ -930,6 +1043,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for sum_all_backward_distributes_grad_uniformly.
     fn sum_all_backward_distributes_grad_uniformly() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let out = B::sum_all::<f32>(&t).unwrap();
@@ -943,6 +1057,7 @@ mod tests {
     // --- mean_all ---
 
     #[test]
+    /// Auto-generated documentation for mean_all_on_2x3_returns_correct_scalar.
     fn mean_all_on_2x3_returns_correct_scalar() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let out = B::mean_all::<f32>(&t).unwrap();
@@ -953,6 +1068,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for mean_all_backward_distributes_grad_scaled_by_1_over_n.
     fn mean_all_backward_distributes_grad_scaled_by_1_over_n() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let out = B::mean_all::<f32>(&t).unwrap();
@@ -971,6 +1087,7 @@ mod tests {
     // --- sum_dim ---
 
     #[test]
+    /// Auto-generated documentation for sum_dim_removes_axis_0_on_2x3.
     fn sum_dim_removes_axis_0_on_2x3() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let out = B::sum_dim::<f32>(&t, 0).unwrap();
@@ -980,6 +1097,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for sum_dim_removes_axis_1_on_2x3.
     fn sum_dim_removes_axis_1_on_2x3() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let out = B::sum_dim::<f32>(&t, 1).unwrap();
@@ -989,6 +1107,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for sum_dim_backward_broadcasts_grad_back_to_original_shape.
     fn sum_dim_backward_broadcasts_grad_back_to_original_shape() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let out = B::sum_dim::<f32>(&t, 0).unwrap(); // shape [3]
@@ -1002,6 +1121,7 @@ mod tests {
     // --- sum_keepdim ---
 
     #[test]
+    /// Auto-generated documentation for sum_keepdim_retains_axis_0_on_2x3.
     fn sum_keepdim_retains_axis_0_on_2x3() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let out = B::sum_keepdim::<f32>(&t, 0).unwrap();
@@ -1010,6 +1130,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for sum_keepdim_backward_broadcasts_grad_to_original_shape.
     fn sum_keepdim_backward_broadcasts_grad_to_original_shape() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let out = B::sum_keepdim::<f32>(&t, 0).unwrap(); // shape [1, 3]
@@ -1023,6 +1144,7 @@ mod tests {
     // --- sum_all backward with non-trivial incoming gradient (tape chain) ---
 
     #[test]
+    /// Auto-generated documentation for sum_all_backward_scales_by_incoming_gradient.
     fn sum_all_backward_scales_by_incoming_gradient() {
         // Build a small graph: out = sum_all(t), then seed with grad = 2.0
         // instead of 1.0 by composing with a scalar mul.
@@ -1053,6 +1175,7 @@ mod tests {
     // --- mean_dim / mean_keepdim ---
 
     #[test]
+    /// Auto-generated documentation for mean_dim_column_means_on_2x3.
     fn mean_dim_column_means_on_2x3() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let out = B::mean_dim::<f32>(&t, 0).unwrap();
@@ -1064,6 +1187,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for mean_keepdim_column_means_on_2x3.
     fn mean_keepdim_column_means_on_2x3() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let out = B::mean_keepdim::<f32>(&t, 0).unwrap();
@@ -1075,6 +1199,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for mean_dim_gradcheck_dim0.
     fn mean_dim_gradcheck_dim0() {
         let x = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let op = |inputs: &[NativeStorage]| -> NativeStorage {
@@ -1089,6 +1214,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for mean_keepdim_gradcheck_dim1.
     fn mean_keepdim_gradcheck_dim1() {
         let x = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let op = |inputs: &[NativeStorage]| -> NativeStorage {
@@ -1105,6 +1231,7 @@ mod tests {
     // --- max_dim / min_dim / max_keepdim / min_keepdim / max_all / min_all ---
 
     #[test]
+    /// Auto-generated documentation for max_dim_column_maxima_on_2x3.
     fn max_dim_column_maxima_on_2x3() {
         let t = matrix(vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0], 2, 3);
         let out = B::max_dim::<f32>(&t, 0).unwrap();
@@ -1113,6 +1240,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for max_keepdim_column_maxima_on_2x3.
     fn max_keepdim_column_maxima_on_2x3() {
         let t = matrix(vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0], 2, 3);
         let out = B::max_keepdim::<f32>(&t, 0).unwrap();
@@ -1121,6 +1249,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for min_dim_column_minima_on_2x3.
     fn min_dim_column_minima_on_2x3() {
         let t = matrix(vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0], 2, 3);
         let out = B::min_dim::<f32>(&t, 0).unwrap();
@@ -1129,6 +1258,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for min_keepdim_column_minima_on_2x3.
     fn min_keepdim_column_minima_on_2x3() {
         let t = matrix(vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0], 2, 3);
         let out = B::min_keepdim::<f32>(&t, 0).unwrap();
@@ -1137,6 +1267,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for max_all_and_min_all_on_flat_vector.
     fn max_all_and_min_all_on_flat_vector() {
         let t = vector(vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0]);
         let max_out = B::max_all::<f32>(&t).unwrap();
@@ -1149,6 +1280,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for max_dim_gradcheck_all_distinct_values.
     fn max_dim_gradcheck_all_distinct_values() {
         let x = matrix(vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0], 2, 3);
         let op = |inputs: &[NativeStorage]| -> NativeStorage {
@@ -1197,6 +1329,7 @@ mod tests {
 
     // --- argmax / argmin ---
 
+    /// Auto-generated documentation for i64_vec.
     fn i64_vec(s: &NativeStorage) -> Vec<i64> {
         match &*s.buffer {
             NativeBuffer::I64(v) => v.clone(),
@@ -1205,6 +1338,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for argmax_dim0_returns_row_index_of_column_max.
     fn argmax_dim0_returns_row_index_of_column_max() {
         let t = matrix(vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0], 2, 3);
         let out = B::argmax::<f32, i64>(&t, Some(0)).unwrap();
@@ -1215,6 +1349,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for argmax_dim_none_returns_scalar_flat_index_of_global_max.
     fn argmax_dim_none_returns_scalar_flat_index_of_global_max() {
         let t = matrix(vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0], 2, 3);
         let out = B::argmax::<f32, i64>(&t, None).unwrap();
@@ -1224,6 +1359,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for argmin_dim0_and_dim_none_mirror_argmax.
     fn argmin_dim0_and_dim_none_mirror_argmax() {
         let t = matrix(vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0], 2, 3);
         let out_dim0 = B::argmin::<f32, i64>(&t, Some(0)).unwrap();

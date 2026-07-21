@@ -7,14 +7,20 @@ use syn::{
     punctuated::Punctuated,
 };
 
+/// Auto-generated documentation for Dim.
 enum Dim {
+    /// Auto-generated documentation for Dyn.
     Dyn,
+    /// Auto-generated documentation for Lit.
     Lit(syn::LitInt),
+    /// Auto-generated documentation for Path.
     Path(syn::Path),
+    /// Auto-generated documentation for Sym.
     Sym(syn::Ident),
 }
 
 impl Parse for Dim {
+    /// Auto-generated documentation for parse.
     fn parse(input: ParseStream) -> syn::Result<Self> {
         if input.peek(Token![dyn]) {
             input.parse::<Token![dyn]>()?;
@@ -37,12 +43,14 @@ impl Parse for Dim {
     }
 }
 
+/// Auto-generated documentation for NumberList.
 struct NumberList {
     internal: bool,
     items: Punctuated<Dim, Token![,]>,
 }
 
 impl Parse for NumberList {
+    /// Auto-generated documentation for parse.
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let mut internal = false;
         if input.peek(Token![@]) {

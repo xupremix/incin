@@ -2,6 +2,7 @@ use kindle_backends::ndarray_backend::NdarrayBackend;
 use kindle_core::prelude::*;
 
 #[test]
+/// Auto-generated documentation for test_ndarray_interior_mutability.
 fn test_ndarray_interior_mutability() {
     let backend_tensor = ndarray::ArrayD::zeros(ndarray::IxDyn(&[2, 2]));
 

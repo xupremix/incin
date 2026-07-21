@@ -15,13 +15,14 @@
 #[macro_use]
 extern crate alloc;
 
-
 pub use kindle_core::prelude::*;
 
 pub(crate) mod creation;
+/// Auto-generated documentation for gpu.
 pub mod gpu;
 pub(crate) mod gradcheck;
 pub(crate) mod ops;
+/// Auto-generated documentation for storage.
 pub mod storage;
 pub(crate) mod stride;
 pub(crate) mod tape;
@@ -35,24 +36,35 @@ pub(crate) mod var;
 pub struct NativeBackend<T, D>(core::marker::PhantomData<(T, D)>);
 
 impl<T: DType, D: Device> kindle_core::prelude::Backend for NativeBackend<T, D> {
+    /// Auto-generated documentation for Device.
     type Device = D;
     // NATBACK-01: genuinely dispatched from T, NOT hardcoded f32.
+    /// Auto-generated documentation for FloatElem.
     type FloatElem = T;
+    /// Auto-generated documentation for IntElem.
     type IntElem = i64;
+    /// Auto-generated documentation for Storage.
     type Storage<K: DType> = storage::NativeStorage;
+    /// Auto-generated documentation for RawVar.
     type RawVar = var::NativeVar;
+    /// Auto-generated documentation for Grads.
     type Grads = tape::NativeGrads;
+    /// Auto-generated documentation for InnerBackend.
     type InnerBackend = Self;
+    /// Auto-generated documentation for BackendWithDevice.
     type BackendWithDevice<NewD: Device> = NativeBackend<T, NewD>;
 
+    /// Auto-generated documentation for shape.
     fn shape<K: DType>(t: &Self::Storage<K>) -> alloc::vec::Vec<usize> {
         t.shape.clone()
     }
 
+    /// Auto-generated documentation for format_tensor_display.
     fn format_tensor_display<K: DType>(t: &Self::Storage<K>) -> alloc::string::String {
         alloc::format!("NativeStorage(shape={:?})", t.shape)
     }
 
+    /// Auto-generated documentation for format_tensor_debug.
     fn format_tensor_debug<K: DType>(t: &Self::Storage<K>) -> alloc::string::String {
         alloc::format!(
             "NativeStorage(shape={:?}, strides={:?}, offset={})",
@@ -62,14 +74,17 @@ impl<T: DType, D: Device> kindle_core::prelude::Backend for NativeBackend<T, D> 
         )
     }
 
+    /// Auto-generated documentation for backward.
     fn backward<K: DType>(t: &Self::Storage<K>) -> Result<Self::Grads> {
         tape::backward(t)
     }
 
+    /// Auto-generated documentation for backward_with_nan_check.
     fn backward_with_nan_check<K: DType>(t: &Self::Storage<K>) -> Result<Self::Grads> {
         tape::backward_with_nan_check(t)
     }
 
+    /// Auto-generated documentation for get_grad.
     fn get_grad<K: DType>(
         t: &Self::Storage<K>,
         grads: &Self::Grads,
@@ -77,6 +92,7 @@ impl<T: DType, D: Device> kindle_core::prelude::Backend for NativeBackend<T, D> 
         Ok(grads.grads.get(&t.id).cloned())
     }
 
+    /// Auto-generated documentation for to_bytes.
     fn to_bytes<K: DType>(t: &Self::Storage<K>) -> Result<alloc::vec::Vec<u8>> {
         match &*t.buffer {
             storage::NativeBuffer::F32(v) => Ok(bytemuck::cast_slice(&v).to_vec()),
@@ -87,6 +103,7 @@ impl<T: DType, D: Device> kindle_core::prelude::Backend for NativeBackend<T, D> 
         }
     }
 
+    /// Auto-generated documentation for from_bytes.
     fn from_bytes<K: DType>(
         bytes: &[u8],
         shape: &[usize],
@@ -108,14 +125,17 @@ impl<T: DType, D: Device> kindle_core::prelude::Backend for NativeBackend<T, D> 
         }
     }
 
+    /// Auto-generated documentation for var_as_tensor.
     fn var_as_tensor<K: DType>(var: &Self::RawVar) -> Result<Self::Storage<K>> {
         var::var_as_tensor(var)
     }
 
+    /// Auto-generated documentation for var_from_tensor.
     fn var_from_tensor<K: DType>(t: &Self::Storage<K>) -> Result<Self::RawVar> {
         var::var_from_tensor(t)
     }
 
+    /// Auto-generated documentation for var_to_device.
     fn var_to_device(var: &Self::RawVar, _device: &KindleDevice) -> Result<Self::RawVar> {
         // CPU-only no-op this phase (single-device target) — matches
         // CandleBackend's real to_device call structurally, but as a plain
@@ -123,6 +143,7 @@ impl<T: DType, D: Device> kindle_core::prelude::Backend for NativeBackend<T, D> 
         Ok(var.clone())
     }
 
+    /// Auto-generated documentation for assign_var.
     fn assign_var<K: DType>(var: &mut Self::RawVar, tensor: &Self::Storage<K>) -> Result<()> {
         var::assign_var(var, tensor)
     }

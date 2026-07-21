@@ -70,27 +70,35 @@ pub trait Parameters<B: Backend> {
 
 /// A trait to transfer ownership of a module to a new device.
 pub trait ToDevice<B: Backend, NewD: Device> {
+    /// Auto-generated documentation for Output.
     type Output;
+    /// Auto-generated documentation for to_device.
     fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output>;
 }
 
 impl<T: ToDevice<B, NewD>, B: Backend, NewD: Device> ToDevice<B, NewD> for Option<T> {
+    /// Auto-generated documentation for Output.
     type Output = Option<T::Output>;
+    /// Auto-generated documentation for to_device.
     fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output> {
         self.map(|t| t.to_device(arg)).transpose()
     }
 }
 
 impl<B: Backend, NewD: Device> ToDevice<B, NewD> for () {
+    /// Auto-generated documentation for Output.
     type Output = ();
 
+    /// Auto-generated documentation for to_device.
     fn to_device(self, _arg: &NewD::Arg) -> Result<Self::Output> {
         Ok(())
     }
 }
 
 #[doc(hidden)]
+/// Auto-generated documentation for AutorefParametersFallback.
 pub trait AutorefParametersFallback<B: Backend> {
+    /// Auto-generated documentation for maybe_parameters.
     fn maybe_parameters(
         &self,
         _phantom: core::marker::PhantomData<B>,
@@ -102,7 +110,9 @@ pub trait AutorefParametersFallback<B: Backend> {
 impl<T, B: Backend> AutorefParametersFallback<B> for &&T {}
 
 #[doc(hidden)]
+/// Auto-generated documentation for AutorefParameters.
 pub trait AutorefParameters<B: Backend> {
+    /// Auto-generated documentation for maybe_parameters.
     fn maybe_parameters(
         &self,
         _phantom: core::marker::PhantomData<B>,
@@ -112,6 +122,7 @@ pub trait AutorefParameters<B: Backend> {
 }
 impl<T: Parameters<B>, B: Backend> AutorefParameters<B> for &T {
     #[inline]
+    /// Auto-generated documentation for maybe_parameters.
     fn maybe_parameters(
         &self,
         _marker: core::marker::PhantomData<B>,
@@ -123,7 +134,9 @@ impl<T: Parameters<B>, B: Backend> AutorefParameters<B> for &T {
 }
 
 #[doc(hidden)]
+/// Auto-generated documentation for AutorefStateDictFallback.
 pub trait AutorefStateDictFallback<B: Backend> {
+    /// Auto-generated documentation for maybe_load_state_dict.
     fn maybe_load_state_dict(
         &mut self,
         _phantom: core::marker::PhantomData<B>,
@@ -132,6 +145,7 @@ pub trait AutorefStateDictFallback<B: Backend> {
     ) -> Result<()> {
         Ok(())
     }
+    /// Auto-generated documentation for maybe_state_dict.
     fn maybe_state_dict(
         &self,
         _phantom: core::marker::PhantomData<B>,
@@ -144,13 +158,16 @@ impl<T, B: Backend> AutorefStateDictFallback<B> for &mut &mut T {}
 impl<T, B: Backend> AutorefStateDictFallback<B> for &&T {}
 
 #[doc(hidden)]
+/// Auto-generated documentation for AutorefStateDict.
 pub trait AutorefStateDict<B: Backend> {
+    /// Auto-generated documentation for maybe_load_state_dict.
     fn maybe_load_state_dict(
         &mut self,
         _phantom: core::marker::PhantomData<B>,
         prefix: &str,
         tensors: &BTreeMap<String, Tensor<Dyn, B>>,
     ) -> Result<()>;
+    /// Auto-generated documentation for maybe_state_dict.
     fn maybe_state_dict(
         &self,
         _phantom: core::marker::PhantomData<B>,
@@ -162,6 +179,7 @@ pub trait AutorefStateDict<B: Backend> {
 // For mutable operations
 impl<T: StateDict<B>, B: Backend> AutorefStateDict<B> for &mut T {
     #[inline]
+    /// Auto-generated documentation for maybe_load_state_dict.
     fn maybe_load_state_dict(
         &mut self,
         _phantom: core::marker::PhantomData<B>,
@@ -171,6 +189,7 @@ impl<T: StateDict<B>, B: Backend> AutorefStateDict<B> for &mut T {
         (*self).load_state_dict(prefix, tensors)
     }
     #[inline]
+    /// Auto-generated documentation for maybe_state_dict.
     fn maybe_state_dict(
         &self,
         _phantom: core::marker::PhantomData<B>,
@@ -184,6 +203,7 @@ impl<T: StateDict<B>, B: Backend> AutorefStateDict<B> for &mut T {
 // For immutable operations (state_dict uses &self)
 impl<T: StateDict<B>, B: Backend> AutorefStateDict<B> for &T {
     #[inline]
+    /// Auto-generated documentation for maybe_load_state_dict.
     fn maybe_load_state_dict(
         &mut self,
         _phantom: core::marker::PhantomData<B>,
@@ -193,6 +213,7 @@ impl<T: StateDict<B>, B: Backend> AutorefStateDict<B> for &T {
         Ok(()) // Should not be called
     }
     #[inline]
+    /// Auto-generated documentation for maybe_state_dict.
     fn maybe_state_dict(
         &self,
         _phantom: core::marker::PhantomData<B>,
@@ -234,9 +255,12 @@ impl<T: StateDict<B>, B: Backend> AutorefStateDict<B> for &T {
 /// }
 /// ```
 pub trait Module<Input> {
+    /// Auto-generated documentation for Output.
     type Output;
+    /// Auto-generated documentation for Error.
     type Error;
 
+    /// Auto-generated documentation for forward.
     fn forward(&self, input: Input) -> core::result::Result<Self::Output, Self::Error>;
 }
 
@@ -250,10 +274,13 @@ where
     L1: Module<I>,
     L2: Module<L1::Output, Error = L1::Error>,
 {
+    /// Auto-generated documentation for Output.
     type Output = L2::Output;
+    /// Auto-generated documentation for Error.
     type Error = L1::Error;
 
     #[inline]
+    /// Auto-generated documentation for forward.
     fn forward(&self, input: I) -> core::result::Result<Self::Output, Self::Error> {
         let out1 = self.0.forward(input)?;
         self.1.forward(out1)
@@ -265,7 +292,9 @@ where
     L1: ToDevice<B, NewD>,
     L2: ToDevice<B, NewD>,
 {
+    /// Auto-generated documentation for Output.
     type Output = Sequential<L1::Output, L2::Output>;
+    /// Auto-generated documentation for to_device.
     fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output> {
         Ok(Sequential(self.0.to_device(arg)?, self.1.to_device(arg)?))
     }
@@ -276,6 +305,7 @@ where
     L1: Parameters<B>,
     L2: Parameters<B>,
 {
+    /// Auto-generated documentation for named_parameters.
     fn named_parameters(
         &self,
         prefix: &str,
@@ -291,6 +321,7 @@ where
     L1: StateDict<B>,
     L2: StateDict<B>,
 {
+    /// Auto-generated documentation for load_state_dict.
     fn load_state_dict(
         &mut self,
         prefix: &str,
@@ -301,6 +332,7 @@ where
         Ok(())
     }
 
+    /// Auto-generated documentation for state_dict.
     fn state_dict(&self, prefix: &str, tensors: &mut BTreeMap<String, Tensor<Dyn, B>>) {
         self.0.state_dict(&format!("{}0.", prefix), tensors);
         self.1.state_dict(&format!("{}1.", prefix), tensors);
@@ -312,14 +344,17 @@ macro_rules! impl_dummy_state {
     ($($t:ty),+) => {
         $(
             impl<B: Backend> Parameters<B> for $t {
+                /// Auto-generated documentation for named_parameters.
                 fn named_parameters(&self, _prefix: &str, _map: &mut alloc::collections::BTreeMap<String, B::RawVar>) {}
             }
 
             impl<B: Backend> StateDict<B> for $t {
+                /// Auto-generated documentation for load_state_dict.
                 fn load_state_dict(&mut self, _prefix: &str, _tensors: &BTreeMap<String, Tensor<Dyn, B>>) -> Result<()> {
                     Ok(())
                 }
 
+                /// Auto-generated documentation for state_dict.
                 fn state_dict(&self, _prefix: &str, _tensors: &mut BTreeMap<String, Tensor<Dyn, B>>) {
                 }
             }
@@ -333,6 +368,7 @@ impl<T: ?Sized, B: Backend> Parameters<B> for core::marker::PhantomData<T>
 where
     T: crate::prelude::DType,
 {
+    /// Auto-generated documentation for named_parameters.
     fn named_parameters(
         &self,
         _prefix: &str,
@@ -344,6 +380,7 @@ impl<T: ?Sized, B: Backend> StateDict<B> for core::marker::PhantomData<T>
 where
     T: crate::prelude::DType,
 {
+    /// Auto-generated documentation for load_state_dict.
     fn load_state_dict(
         &mut self,
         _prefix: &str,
@@ -351,10 +388,12 @@ where
     ) -> Result<()> {
         Ok(())
     }
+    /// Auto-generated documentation for state_dict.
     fn state_dict(&self, _prefix: &str, _tensors: &mut BTreeMap<String, Tensor<Dyn, B>>) {}
 }
 
 impl<T: Parameters<B>, B: Backend> Parameters<B> for Option<T> {
+    /// Auto-generated documentation for named_parameters.
     fn named_parameters(
         &self,
         prefix: &str,
@@ -367,6 +406,7 @@ impl<T: Parameters<B>, B: Backend> Parameters<B> for Option<T> {
 }
 
 impl<L: StateDict<B>, B: Backend> StateDict<B> for Option<L> {
+    /// Auto-generated documentation for load_state_dict.
     fn load_state_dict(
         &mut self,
         prefix: &str,
@@ -378,6 +418,7 @@ impl<L: StateDict<B>, B: Backend> StateDict<B> for Option<L> {
         Ok(())
     }
 
+    /// Auto-generated documentation for state_dict.
     fn state_dict(&self, prefix: &str, tensors: &mut BTreeMap<String, Tensor<Dyn, B>>) {
         if let Some(v) = self {
             v.state_dict(prefix, tensors);
@@ -388,14 +429,19 @@ impl<L: StateDict<B>, B: Backend> StateDict<B> for Option<L> {
 /// Represents a node in the neural network layer structure metadata tree.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct LayerNode {
+    /// Auto-generated documentation for name.
     pub name: String,
+    /// Auto-generated documentation for type_name.
     pub type_name: String,
+    /// Auto-generated documentation for shape_info.
     pub shape_info: String,
+    /// Auto-generated documentation for children.
     pub children: Vec<LayerNode>,
 }
 
 /// A trait implemented by all Neural Network modules to report their structural architecture.
 pub trait NamedLayers {
+    /// Auto-generated documentation for layer_structure.
     fn layer_structure(&self, prefix: &str) -> Vec<LayerNode>;
 }
 
@@ -463,6 +509,7 @@ pub fn assign_sequential_names(nodes: &mut [LayerNode], prefix: &str) {
 }
 
 impl<L1: NamedLayers, L2: NamedLayers> NamedLayers for Sequential<L1, L2> {
+    /// Auto-generated documentation for layer_structure.
     fn layer_structure(&self, prefix: &str) -> Vec<LayerNode> {
         let mut nodes = Vec::new();
         nodes.extend(self.0.layer_structure(""));
@@ -474,6 +521,7 @@ impl<L1: NamedLayers, L2: NamedLayers> NamedLayers for Sequential<L1, L2> {
 }
 
 impl<T: NamedLayers> NamedLayers for Option<T> {
+    /// Auto-generated documentation for layer_structure.
     fn layer_structure(&self, prefix: &str) -> Vec<LayerNode> {
         if let Some(layer) = self {
             layer.layer_structure(prefix)
@@ -484,7 +532,9 @@ impl<T: NamedLayers> NamedLayers for Option<T> {
 }
 
 #[doc(hidden)]
+/// Auto-generated documentation for AutorefNamedLayersFallback.
 pub trait AutorefNamedLayersFallback {
+    /// Auto-generated documentation for maybe_layer_structure.
     fn maybe_layer_structure(&self, _prefix: &str) -> Option<Vec<LayerNode>> {
         None
     }
@@ -492,18 +542,23 @@ pub trait AutorefNamedLayersFallback {
 impl<T> AutorefNamedLayersFallback for &&T {}
 
 #[doc(hidden)]
+/// Auto-generated documentation for AutorefNamedLayers.
 pub trait AutorefNamedLayers {
+    /// Auto-generated documentation for maybe_layer_structure.
     fn maybe_layer_structure(&self, prefix: &str) -> Option<Vec<LayerNode>>;
 }
 impl<T: NamedLayers> AutorefNamedLayers for &T {
     #[inline]
+    /// Auto-generated documentation for maybe_layer_structure.
     fn maybe_layer_structure(&self, prefix: &str) -> Option<Vec<LayerNode>> {
         Some(self.layer_structure(prefix))
     }
 }
 
 #[doc(hidden)]
+/// Auto-generated documentation for AutorefShapeInfoFallback.
 pub trait AutorefShapeInfoFallback {
+    /// Auto-generated documentation for maybe_shape_info.
     fn maybe_shape_info(&self) -> Option<String> {
         None
     }
@@ -511,17 +566,21 @@ pub trait AutorefShapeInfoFallback {
 impl<T> AutorefShapeInfoFallback for &&T {}
 
 #[doc(hidden)]
+/// Auto-generated documentation for AutorefShapeInfo.
 pub trait AutorefShapeInfo {
+    /// Auto-generated documentation for maybe_shape_info.
     fn maybe_shape_info(&self) -> Option<String>;
 }
 impl<S: Shape + DynShape, B: Backend> AutorefShapeInfo for &crate::nn::param::Param<S, B> {
     #[inline]
+    /// Auto-generated documentation for maybe_shape_info.
     fn maybe_shape_info(&self) -> Option<String> {
         Some(format!("{:?}", self.shape_dims()))
     }
 }
 impl<S: Shape + DynShape, B: Backend> AutorefShapeInfo for &crate::nn::param::Buffer<S, B> {
     #[inline]
+    /// Auto-generated documentation for maybe_shape_info.
     fn maybe_shape_info(&self) -> Option<String> {
         Some(format!("{:?}", self.shape_dims()))
     }
@@ -531,6 +590,7 @@ where
     for<'a> &'a T: AutorefShapeInfo,
 {
     #[inline]
+    /// Auto-generated documentation for maybe_shape_info.
     fn maybe_shape_info(&self) -> Option<String> {
         if let Some(val) = self {
             (&val).maybe_shape_info()

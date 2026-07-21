@@ -4,6 +4,7 @@ use crate::prelude::*;
 use typenum::Unsigned;
 
 #[derive(Debug, Clone)]
+/// Auto-generated documentation for AdaptiveAvgPool2d.
 pub struct AdaptiveAvgPool2d<HOut: Unsigned, WOut: Unsigned> {
     _phantom: core::marker::PhantomData<(HOut, WOut)>,
 }
@@ -15,6 +16,7 @@ impl<HOut: Unsigned, WOut: Unsigned> Default for AdaptiveAvgPool2d<HOut, WOut> {
 }
 
 impl<HOut: Unsigned, WOut: Unsigned> AdaptiveAvgPool2d<HOut, WOut> {
+    /// Auto-generated documentation for new.
     pub fn new() -> Self {
         Self {
             _phantom: core::marker::PhantomData,
@@ -23,6 +25,7 @@ impl<HOut: Unsigned, WOut: Unsigned> AdaptiveAvgPool2d<HOut, WOut> {
 }
 
 impl<HOut: Unsigned, WOut: Unsigned, B: Backend> Parameters<B> for AdaptiveAvgPool2d<HOut, WOut> {
+    /// Auto-generated documentation for named_parameters.
     fn named_parameters(
         &self,
         _prefix: &str,
@@ -38,10 +41,13 @@ impl<
     B: Backend + crate::tensor::backend::ModuleOps<B>,
 > Module<Tensor<I, B>> for AdaptiveAvgPool2d<HOut, WOut>
 {
+    /// Auto-generated documentation for Output.
     type Output = Tensor<I::Output, B>;
+    /// Auto-generated documentation for Error.
     type Error = Error;
 
     #[inline]
+    /// Auto-generated documentation for forward.
     fn forward(&self, x: Tensor<I, B>) -> core::result::Result<Self::Output, Error> {
         let out = B::adaptive_avg_pool2d(x.inner(), (HOut::USIZE, WOut::USIZE))?;
 

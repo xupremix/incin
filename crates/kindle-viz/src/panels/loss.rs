@@ -30,14 +30,17 @@ impl LossPanel {
 }
 
 impl Panel for LossPanel {
+    /// Auto-generated documentation for id.
     fn id(&self) -> &'static str {
         "loss"
     }
 
+    /// Auto-generated documentation for title.
     fn title(&self) -> &str {
         "Loss"
     }
 
+    /// Auto-generated documentation for update.
     fn update(&mut self, event: &Event) {
         if let Event::Scalar(s) = event
             && s.name == "loss"
@@ -46,14 +49,14 @@ impl Panel for LossPanel {
         }
     }
 
+    /// Auto-generated documentation for render.
     fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) {
         let area = ctx.area();
 
-        if let Some(last_val) = self.points.last().map(|p| p.1) {
-            if !last_val.is_finite() {
-                ctx.set_alert(format!("NaN/Inf detected"));
+        if let Some(last_val) = self.points.last().map(|p| p.1)
+            && !last_val.is_finite() {
+                ctx.set_alert("NaN/Inf detected".to_string());
             }
-        }
 
         let frame = ctx.frame_mut();
 
@@ -87,10 +90,12 @@ impl Panel for LossPanel {
         frame.render_widget(chart, area);
     }
 
+    /// Auto-generated documentation for handle_event.
     fn handle_event(&mut self, _event: &PanelEvent) -> bool {
         false // loss panel has no panel-local key handling this phase
     }
 
+    /// Auto-generated documentation for reset.
     fn reset(&mut self) {
         self.points.clear();
     }

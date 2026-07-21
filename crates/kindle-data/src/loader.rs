@@ -5,11 +5,15 @@ use std::sync::mpsc::{Receiver, sync_channel};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
+/// Auto-generated documentation for Collate.
 pub trait Collate<T>: Send + Sync {
+    /// Auto-generated documentation for Output.
     type Output: Send + 'static;
+    /// Auto-generated documentation for collate.
     fn collate(&self, batch: Vec<T>) -> Self::Output;
 }
 
+/// Auto-generated documentation for DataLoader.
 pub struct DataLoader<D, C>
 where
     D: Dataset + 'static,
@@ -27,6 +31,7 @@ where
     D: Dataset + 'static,
     C: Collate<D::Item> + 'static,
 {
+    /// Auto-generated documentation for new.
     pub fn new(dataset: D, collate_fn: C, batch_size: usize) -> Self {
         Self {
             dataset: Arc::new(dataset),
@@ -37,24 +42,29 @@ where
         }
     }
 
+    /// Auto-generated documentation for with_num_workers.
     pub fn with_num_workers(mut self, num_workers: usize) -> Self {
         self.num_workers = num_workers;
         self
     }
 
+    /// Auto-generated documentation for with_shuffle.
     pub fn with_shuffle(mut self, shuffle: bool) -> Self {
         self.shuffle = shuffle;
         self
     }
 }
 
+/// Auto-generated documentation for DataLoaderIter.
 pub struct DataLoaderIter<T> {
     receiver: Receiver<T>,
 }
 
 impl<T> Iterator for DataLoaderIter<T> {
+    /// Auto-generated documentation for Item.
     type Item = T;
 
+    /// Auto-generated documentation for next.
     fn next(&mut self) -> Option<Self::Item> {
         self.receiver.recv().ok()
     }
@@ -65,9 +75,12 @@ where
     D: Dataset + 'static,
     C: Collate<D::Item> + 'static,
 {
+    /// Auto-generated documentation for Item.
     type Item = C::Output;
+    /// Auto-generated documentation for IntoIter.
     type IntoIter = DataLoaderIter<C::Output>;
 
+    /// Auto-generated documentation for into_iter.
     fn into_iter(self) -> Self::IntoIter {
         let mut indices: Vec<usize> = (0..self.dataset.len()).collect();
         if self.shuffle {

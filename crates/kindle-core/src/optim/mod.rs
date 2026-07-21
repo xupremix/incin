@@ -1,5 +1,8 @@
 use crate::prelude::*;
 
+pub mod scheduler;
+pub use scheduler::*;
+
 /// Encapsulates the backend-specific gradients obtained from a backward pass.
 ///
 /// This is a newtype wrapper around the backend's raw gradient container (e.g., `candle_core::backprop::GradStore`).
@@ -28,11 +31,13 @@ pub trait Optimizer<B: Backend> {
 /// ```
 pub struct SGD<B: Backend, K: DType = f32> {
     params: alloc::collections::BTreeMap<String, B::RawVar>,
+    /// Auto-generated documentation for lr.
     pub lr: f64,
     _marker: core::marker::PhantomData<K>,
 }
 
 impl<B: Backend, K: DType> SGD<B, K> {
+    /// Auto-generated documentation for new.
     pub fn new(params: alloc::collections::BTreeMap<String, B::RawVar>, lr: f64) -> Self {
         Self {
             params,
@@ -43,6 +48,7 @@ impl<B: Backend, K: DType> SGD<B, K> {
 }
 
 impl<B: Backend, K: DType> Optimizer<B> for SGD<B, K> {
+    /// Auto-generated documentation for step.
     fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()> {
         for var in self.params.values_mut() {
             let t = B::var_as_tensor::<K>(var)?;
@@ -72,10 +78,15 @@ impl<B: Backend, K: DType> Optimizer<B> for SGD<B, K> {
 /// ```
 pub struct AdamW<B: Backend, K: DType = f32> {
     params: alloc::collections::BTreeMap<String, B::RawVar>,
+    /// Auto-generated documentation for lr.
     pub lr: f64,
+    /// Auto-generated documentation for beta1.
     pub beta1: f64,
+    /// Auto-generated documentation for beta2.
     pub beta2: f64,
+    /// Auto-generated documentation for eps.
     pub eps: f64,
+    /// Auto-generated documentation for weight_decay.
     pub weight_decay: f64,
     m: alloc::collections::BTreeMap<String, B::Storage<K>>,
     v: alloc::collections::BTreeMap<String, B::Storage<K>>,
@@ -83,6 +94,7 @@ pub struct AdamW<B: Backend, K: DType = f32> {
 }
 
 impl<B: Backend, K: DType> AdamW<B, K> {
+    /// Auto-generated documentation for new.
     pub fn new(params: alloc::collections::BTreeMap<String, B::RawVar>, lr: f64) -> Self {
         Self {
             params,
@@ -99,6 +111,7 @@ impl<B: Backend, K: DType> AdamW<B, K> {
 }
 
 impl<B: Backend, K: DType> Optimizer<B> for AdamW<B, K> {
+    /// Auto-generated documentation for step.
     fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()> {
         self.step += 1;
         let t_step = self.step as f64;
@@ -109,11 +122,21 @@ impl<B: Backend, K: DType> Optimizer<B> for AdamW<B, K> {
             let t = B::var_as_tensor::<K>(var)?;
             if let Some(grad) = B::get_grad::<K>(&t, &grads.0)? {
                 if !self.m.contains_key(name) {
-                    let zero = B::var_zeros::<K>(B::shape::<K>(&t).as_slice(), KindleDType::F32, &KindleDevice::cpu()).unwrap(); // Fallback device
+                    let zero = B::var_zeros::<K>(
+                        B::shape::<K>(&t).as_slice(),
+                        KindleDType::F32,
+                        &KindleDevice::cpu(),
+                    )
+                    .unwrap(); // Fallback device
                     self.m.insert(name.clone(), B::var_as_tensor::<K>(&zero)?);
                 }
                 if !self.v.contains_key(name) {
-                    let zero = B::var_zeros::<K>(B::shape::<K>(&t).as_slice(), KindleDType::F32, &KindleDevice::cpu()).unwrap();
+                    let zero = B::var_zeros::<K>(
+                        B::shape::<K>(&t).as_slice(),
+                        KindleDType::F32,
+                        &KindleDevice::cpu(),
+                    )
+                    .unwrap();
                     self.v.insert(name.clone(), B::var_as_tensor::<K>(&zero)?);
                 }
 
@@ -155,9 +178,13 @@ impl<B: Backend, K: DType> Optimizer<B> for AdamW<B, K> {
 /// ```
 pub struct Adam<B: Backend, K: DType = f32> {
     params: alloc::collections::BTreeMap<String, B::RawVar>,
+    /// Auto-generated documentation for lr.
     pub lr: f64,
+    /// Auto-generated documentation for beta1.
     pub beta1: f64,
+    /// Auto-generated documentation for beta2.
     pub beta2: f64,
+    /// Auto-generated documentation for eps.
     pub eps: f64,
     m: alloc::collections::BTreeMap<String, B::Storage<K>>,
     v: alloc::collections::BTreeMap<String, B::Storage<K>>,
@@ -165,6 +192,7 @@ pub struct Adam<B: Backend, K: DType = f32> {
 }
 
 impl<B: Backend, K: DType> Adam<B, K> {
+    /// Auto-generated documentation for new.
     pub fn new(params: alloc::collections::BTreeMap<String, B::RawVar>, lr: f64) -> Self {
         Self {
             params,
@@ -180,6 +208,7 @@ impl<B: Backend, K: DType> Adam<B, K> {
 }
 
 impl<B: Backend, K: DType> Optimizer<B> for Adam<B, K> {
+    /// Auto-generated documentation for step.
     fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()> {
         self.step += 1;
         let t_step = self.step as f64;

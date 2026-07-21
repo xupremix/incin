@@ -321,7 +321,9 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
         let (impl_g, _, _) = impl_generics_with_newd.split_for_impl();
         quote! {
             impl #impl_g #k_crate::prelude::ToDevice<#b_ident, __NewD> for #name #ty_generics #where_clause {
+                /// Auto-generated documentation for Output.
                 type Output = #name #output_ty_generics;
+                /// Auto-generated documentation for to_device.
                 fn to_device(self, arg: &__NewD::Arg) -> #k_crate::prelude::Result<Self::Output> {
                     #to_device_instantiation
                 }
@@ -335,6 +337,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
         #input
 
         impl #impl_generics #k_crate::prelude::Parameters<#b_ident> for #name #ty_generics #where_clause {
+            /// Auto-generated documentation for named_parameters.
             fn named_parameters(&self, prefix: &str, map: &mut #k_crate::prelude::BTreeMap<#k_crate::prelude::String, <#b_ident as #k_crate::prelude::Backend>::RawVar>) {
                 let prefix = if prefix.is_empty() { #k_crate::prelude::String::new() } else { #k_crate::prelude::format!("{}.", prefix) };
                 #(#param_calls)*
@@ -342,6 +345,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
 
         impl #impl_generics #k_crate::prelude::StateDict<#b_ident> for #name #ty_generics #where_clause {
+            /// Auto-generated documentation for load_state_dict.
             fn load_state_dict(
                 &mut self,
                 prefix: &str,
@@ -351,12 +355,14 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                 Ok(())
             }
 
+            /// Auto-generated documentation for state_dict.
             fn state_dict(&self, prefix: &str, tensors: &mut #k_crate::prelude::BTreeMap<#k_crate::prelude::String, #k_crate::prelude::Tensor<#k_crate::prelude::Dyn, #b_ident>>) {
                 #(#state_dict_calls)*
             }
         }
 
         impl #orig_impl_generics #k_crate::prelude::NamedLayers for #name #orig_ty_generics #orig_where_clause {
+            /// Auto-generated documentation for layer_structure.
             fn layer_structure(&self, prefix: &str) -> #k_crate::prelude::Vec<#k_crate::prelude::LayerNode> {
                 let node_name = if prefix.is_empty() {
                     #k_crate::prelude::String::from(stringify!(#name))

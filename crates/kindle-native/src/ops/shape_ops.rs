@@ -20,6 +20,7 @@ use crate::storage::{NativeBuffer, NativeStorage};
 use crate::tape::{self, TapeEntry};
 
 impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for NativeBackend<T, D> {
+    /// Auto-generated documentation for reshape.
     fn reshape<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         shape: &[usize],
@@ -42,6 +43,7 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for NativeBacken
         Ok(out)
     }
 
+    /// Auto-generated documentation for transpose.
     fn transpose<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         dim1: usize,
@@ -66,6 +68,7 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for NativeBacken
         Ok(out)
     }
 
+    /// Auto-generated documentation for broadcast_as.
     fn broadcast_as<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         shape: &[usize],
@@ -87,6 +90,7 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for NativeBacken
         Ok(out)
     }
 
+    /// Auto-generated documentation for matmul.
     fn matmul<K: DType>(
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
@@ -98,6 +102,7 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for NativeBacken
         }
     }
 
+    /// Auto-generated documentation for narrow.
     fn narrow<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
@@ -124,6 +129,7 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for NativeBacken
         Ok(out)
     }
 
+    /// Auto-generated documentation for squeeze.
     fn squeeze<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
@@ -146,6 +152,7 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for NativeBacken
         Self::reshape::<K>(t, &target_shape)
     }
 
+    /// Auto-generated documentation for stack.
     fn stack<K: DType>(
         tensors: &[&<Self as Backend>::Storage<K>],
         dim: usize,
@@ -202,6 +209,7 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for NativeBacken
         Self::concat::<K>(&refs, dim)
     }
 
+    /// Auto-generated documentation for concat.
     fn concat<K: DType>(
         tensors: &[&<Self as Backend>::Storage<K>],
         dim: usize,
@@ -364,6 +372,7 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for NativeBacken
         Ok(out)
     }
 
+    /// Auto-generated documentation for slice.
     fn slice<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         ranges: &[(usize, usize)],
@@ -375,6 +384,7 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for NativeBacken
         Ok(out)
     }
 
+    /// Auto-generated documentation for flatten.
     fn flatten<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         start_dim: usize,
@@ -400,6 +410,7 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for NativeBacken
         Self::reshape::<K>(t, &target_shape)
     }
 
+    /// Auto-generated documentation for broadcast_left.
     fn broadcast_left<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         shape: &[usize],
@@ -409,18 +420,22 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for NativeBacken
         Self::broadcast_as::<K>(t, &target_shape)
     }
 
+    /// Auto-generated documentation for float_to_scalar.
     fn float_to_scalar<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<f64> {
         if t.shape.iter().product::<usize>() != 1 {
             return Err(Error::ShapeMismatch {
                 op: "float_to_scalar",
                 expected: vec![1],
                 got: t.shape.clone(),
-                msg: alloc::string::String::from("float_to_scalar requires a single-element tensor"),
+                msg: alloc::string::String::from(
+                    "float_to_scalar requires a single-element tensor",
+                ),
             });
         }
         Ok(t.get(&vec![0usize; t.shape.len()]))
     }
 
+    /// Auto-generated documentation for float_to_vec1.
     fn float_to_vec1<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<alloc::vec::Vec<f64>> {
         let total: usize = t.shape.iter().product();
         let mut out = alloc::vec::Vec::with_capacity(total);
@@ -434,6 +449,7 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for NativeBacken
         Ok(out)
     }
 
+    /// Auto-generated documentation for int_to_scalar.
     fn int_to_scalar<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<i64> {
         if t.shape.iter().product::<usize>() != 1 {
             return Err(Error::ShapeMismatch {
@@ -446,6 +462,7 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for NativeBacken
         Ok(t.get(&vec![0usize; t.shape.len()]) as i64)
     }
 
+    /// Auto-generated documentation for int_to_vec1.
     fn int_to_vec1<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<alloc::vec::Vec<i64>> {
         let total: usize = t.shape.iter().product();
         let mut out = alloc::vec::Vec::with_capacity(total);
@@ -459,13 +476,14 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for NativeBacken
         Ok(out)
     }
 
+    /// Auto-generated documentation for tensor_to_dtype.
     fn tensor_to_dtype<K: DType, K2: DType>(
         t: &<Self as Backend>::Storage<K>,
         dtype: KindleDType,
     ) -> Result<<Self as Backend>::Storage<K2>> {
         let total: usize = t.shape.iter().product();
         let mut multi_idx = vec![0usize; t.shape.len()];
-        
+
         macro_rules! convert_variant {
             ($variant:ident, $ty:ty) => {{
                 let mut out: alloc::vec::Vec<$ty> = alloc::vec::Vec::with_capacity(total);
@@ -505,14 +523,18 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for NativeBacken
                 }
                 NativeBuffer::BF16(out)
             }
-            KindleDType::Q8_0 => return Err(Error::UnsupportedBackendOperation {
-                op: "tensor_to_dtype(Q8_0)",
-                backend: "Native",
-            }),
-            _ => return Err(Error::UnsupportedBackendOperation {
-                op: "tensor_to_dtype(unknown)",
-                backend: "Native",
-            }),
+            KindleDType::Q8_0 => {
+                return Err(Error::UnsupportedBackendOperation {
+                    op: "tensor_to_dtype(Q8_0)",
+                    backend: "Native",
+                });
+            }
+            _ => {
+                return Err(Error::UnsupportedBackendOperation {
+                    op: "tensor_to_dtype(unknown)",
+                    backend: "Native",
+                });
+            }
         };
 
         Ok(NativeStorage::from_contiguous(new_buffer, t.shape.clone()))
@@ -520,15 +542,19 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for NativeBacken
 }
 
 #[cfg(test)]
+/// Auto-generated documentation for tests.
 mod tests {
     use super::*;
 
+    /// Auto-generated documentation for TestBackend.
     type TestBackend = NativeBackend<f32, kindle_core::prelude::Cpu>;
 
+    /// Auto-generated documentation for matrix.
     fn matrix(v: Vec<f32>, rows: usize, cols: usize) -> NativeStorage {
         NativeStorage::from_contiguous(NativeBuffer::F32(v), vec![rows, cols])
     }
 
+    /// Auto-generated documentation for f32_vec.
     fn f32_vec(s: &NativeStorage) -> Vec<f32> {
         match &*s.buffer {
             NativeBuffer::F32(v) => v.clone(),
@@ -537,6 +563,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for reshape_through_trait_matches_direct_storage_call.
     fn reshape_through_trait_matches_direct_storage_call() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let direct = t.reshape(&[3, 2]).unwrap();
@@ -546,6 +573,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for transpose_through_trait_matches_direct_storage_call.
     fn transpose_through_trait_matches_direct_storage_call() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let direct = t.transpose(0, 1).unwrap();
@@ -555,6 +583,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for broadcast_as_through_trait_matches_direct_storage_call.
     fn broadcast_as_through_trait_matches_direct_storage_call() {
         let t = NativeStorage::from_contiguous(NativeBuffer::F32(vec![1.0, 2.0, 3.0]), vec![1, 3]);
         let direct = t.broadcast_as(&[4, 3]).unwrap();
@@ -564,6 +593,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for float_to_scalar_reads_single_element.
     fn float_to_scalar_reads_single_element() {
         let t = NativeStorage::from_contiguous(NativeBuffer::F32(vec![42.0]), vec![]);
         let v = TestBackend::float_to_scalar::<f32>(&t).unwrap();
@@ -571,6 +601,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for float_to_vec1_reads_all_elements_row_major.
     fn float_to_vec1_reads_all_elements_row_major() {
         let t = NativeStorage::from_contiguous(NativeBuffer::F32(vec![1.0, 2.0, 3.0]), vec![3]);
         let v = TestBackend::float_to_vec1::<f32>(&t).unwrap();
@@ -578,6 +609,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for reshape_backward_reshapes_grad_back_to_original_shape.
     fn reshape_backward_reshapes_grad_back_to_original_shape() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let out = TestBackend::reshape::<f32>(&t, &[6]).unwrap();
@@ -588,6 +620,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for transpose_backward_reapplies_same_transpose.
     fn transpose_backward_reapplies_same_transpose() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let out = TestBackend::transpose::<f32>(&t, 0, 1).unwrap();
@@ -598,6 +631,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for broadcast_as_backward_unbroadcasts_to_original_shape.
     fn broadcast_as_backward_unbroadcasts_to_original_shape() {
         let t = NativeStorage::from_contiguous(NativeBuffer::F32(vec![1.0, 2.0, 3.0]), vec![1, 3]);
         let out = TestBackend::broadcast_as::<f32>(&t, &[4, 3]).unwrap();
@@ -609,6 +643,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for matmul_via_trensor_ops_delegates_to_matmul_impl.
     fn matmul_via_trensor_ops_delegates_to_matmul_impl() {
         let lhs = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let rhs = matrix(
@@ -627,6 +662,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for unsupported_methods_return_typed_error_not_silent_placeholder.
     fn unsupported_methods_return_typed_error_not_silent_placeholder() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         // All other TensorOps methods are now fully implemented. We prove that
@@ -756,6 +792,7 @@ mod tests {
         assert!(matches!(result, Err(Error::ShapeMismatch { .. })));
     }
 
+    /// Auto-generated documentation for tensor3.
     fn tensor3(v: Vec<f32>, d0: usize, d1: usize, d2: usize) -> NativeStorage {
         NativeStorage::from_contiguous(NativeBuffer::F32(v), vec![d0, d1, d2])
     }

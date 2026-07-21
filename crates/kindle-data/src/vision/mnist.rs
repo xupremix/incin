@@ -2,13 +2,18 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
+/// Auto-generated documentation for MnistDataset.
 pub struct MnistDataset {
+    /// Auto-generated documentation for images.
     pub images: Vec<u8>,
+    /// Auto-generated documentation for labels.
     pub labels: Vec<u8>,
+    /// Auto-generated documentation for train.
     pub train: bool,
 }
 
 impl MnistDataset {
+    /// Auto-generated documentation for new.
     pub fn new<P: AsRef<Path>>(dir: P, train: bool) -> anyhow::Result<Self> {
         let dir = dir.as_ref();
         let (images_url, labels_url) = if train {
@@ -81,6 +86,7 @@ impl MnistDataset {
         })
     }
 
+    /// Auto-generated documentation for parse_images.
     fn parse_images(path: &Path) -> anyhow::Result<Vec<u8>> {
         let mut f = File::open(path)?;
         let mut magic = [0u8; 4];
@@ -103,6 +109,7 @@ impl MnistDataset {
         Ok(data)
     }
 
+    /// Auto-generated documentation for parse_labels.
     fn parse_labels(path: &Path) -> anyhow::Result<Vec<u8>> {
         let mut f = File::open(path)?;
         let mut magic = [0u8; 4];
@@ -121,12 +128,15 @@ impl MnistDataset {
 }
 
 impl crate::dataset::Dataset for MnistDataset {
+    /// Auto-generated documentation for Item.
     type Item = (Vec<f32>, u8);
 
+    /// Auto-generated documentation for len.
     fn len(&self) -> usize {
         self.labels.len()
     }
 
+    /// Auto-generated documentation for get.
     fn get(&self, index: usize) -> Option<Self::Item> {
         if index >= self.labels.len() {
             return None;

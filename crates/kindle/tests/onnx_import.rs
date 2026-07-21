@@ -1,9 +1,11 @@
 use kindle::prelude::*;
 
 #[test]
+/// Auto-generated documentation for test_onnx_advanced_ops.
 fn test_onnx_advanced_ops() {
     import_model!("../../test_models/advanced.onnx", TestOps);
 
+    /// Auto-generated documentation for Backend.
     type Backend = kindle_core::prelude::dummy::DummyBackend<f32, kindle::Cpu>;
 
     let x = Tensor::<s![1, 3, 224, 224], Backend>::zeros(()).unwrap();
@@ -17,8 +19,10 @@ fn test_onnx_advanced_ops() {
 }
 
 #[test]
+/// Auto-generated documentation for test_onnx_control_flow_if.
 fn test_onnx_control_flow_if() {
     import_model!("../../test_models/if.onnx", TestIf);
+    /// Auto-generated documentation for Backend.
     type Backend = NdarrayBackend<f32, kindle::Cpu>;
 
     let cond = Tensor::<s![1], Backend>::zeros(()).unwrap();

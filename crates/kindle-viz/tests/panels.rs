@@ -11,6 +11,7 @@ use kindle_viz_plugin_api::event::{KeyCode, KeyModifiers, PanelEvent, PanelKeyEv
 use kindle_viz_plugin_api::panel::Panel;
 use kindle_viz_plugin_api::render_ctx::RenderCtx;
 
+/// Auto-generated documentation for loss_event.
 fn loss_event(step: usize, value: f64) -> Event {
     Event::Scalar(ScalarEvent {
         schema_version: CURRENT_SCHEMA_VERSION,
@@ -20,6 +21,7 @@ fn loss_event(step: usize, value: f64) -> Event {
     })
 }
 
+/// Auto-generated documentation for key.
 fn key(c: char) -> PanelEvent {
     PanelEvent::Key(PanelKeyEvent {
         code: KeyCode::Char(c),
@@ -54,6 +56,7 @@ fn render_to_text(panel: &mut dyn Panel) -> String {
 }
 
 #[test]
+/// Auto-generated documentation for loss_panel_renders_waiting_placeholder_when_empty.
 fn loss_panel_renders_waiting_placeholder_when_empty() {
     let mut panel = LossPanel::new();
     let text = render_to_text(&mut panel);
@@ -65,6 +68,7 @@ fn loss_panel_renders_waiting_placeholder_when_empty() {
 }
 
 #[test]
+/// Auto-generated documentation for loss_panel_accumulates_only_loss_scalars_and_renders_chart.
 fn loss_panel_accumulates_only_loss_scalars_and_renders_chart() {
     let mut panel = LossPanel::new();
     panel.update(&loss_event(0, 2.0));
@@ -94,6 +98,7 @@ fn loss_panel_accumulates_only_loss_scalars_and_renders_chart() {
 }
 
 #[test]
+/// Auto-generated documentation for loss_panel_reset_clears_accumulated_points.
 fn loss_panel_reset_clears_accumulated_points() {
     let mut panel = LossPanel::new();
     panel.update(&loss_event(0, 2.0));
@@ -106,12 +111,14 @@ fn loss_panel_reset_clears_accumulated_points() {
 }
 
 #[test]
+/// Auto-generated documentation for loss_panel_handle_event_consumes_nothing.
 fn loss_panel_handle_event_consumes_nothing() {
     let mut panel = LossPanel::new();
     assert!(!panel.handle_event(&key('p')));
 }
 
 #[test]
+/// Auto-generated documentation for panic_test_panel_panics_on_p_in_handle_event.
 fn panic_test_panel_panics_on_p_in_handle_event() {
     // Suppress the default panic hook's stderr print -- the panic is the
     // expected behavior under test, not a failure.
@@ -132,6 +139,7 @@ fn panic_test_panel_panics_on_p_in_handle_event() {
 }
 
 #[test]
+/// Auto-generated documentation for panic_test_panel_ignores_other_keys_and_renders_hint.
 fn panic_test_panel_ignores_other_keys_and_renders_hint() {
     let mut panel = PanicTestPanel;
     assert!(!panel.handle_event(&key('x')));

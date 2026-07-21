@@ -362,6 +362,7 @@ pub(crate) fn adaptive_avg_pool2d_impl<T: DType, D: kindle_core::prelude::Device
 // Shared output-size arithmetic (mirrors ops::conv's out_size)
 // ---------------------------------------------------------------------------
 
+/// Auto-generated documentation for out_size.
 fn out_size(
     len: usize,
     kernel_size: usize,
@@ -379,18 +380,22 @@ fn out_size(
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
+/// Auto-generated documentation for tests.
 mod tests {
     use super::*;
     use crate::NativeBackend;
     use crate::gradcheck::gradcheck;
     use kindle_core::prelude::{Cpu, ReductionOps};
 
+    /// Auto-generated documentation for TestBackend.
     type TestBackend = NativeBackend<f32, Cpu>;
 
+    /// Auto-generated documentation for tensor.
     fn tensor(v: Vec<f32>, shape: Vec<usize>) -> NativeStorage {
         NativeStorage::from_contiguous(NativeBuffer::F32(v), shape)
     }
 
+    /// Auto-generated documentation for f32_vec.
     fn f32_vec(s: &NativeStorage) -> Vec<f32> {
         match &*s.buffer {
             NativeBuffer::F32(v) => v.clone(),
@@ -401,6 +406,7 @@ mod tests {
     // --- max_pool2d forward ---
 
     #[test]
+    /// Auto-generated documentation for max_pool2d_forward_no_overlap_hand_computed.
     fn max_pool2d_forward_no_overlap_hand_computed() {
         // [1,1,4,4] input, kernel=2x2, stride=2x2 -> [1,1,2,2], non-overlapping.
         let input_data: Vec<f32> = vec![
@@ -420,6 +426,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for max_pool2d_forward_with_padding_zero_boundary.
     fn max_pool2d_forward_with_padding_zero_boundary() {
         // [1,1,2,2] input, kernel=2x2, stride=1x1, padding=1x1.
         let input = tensor(vec![1.0, -2.0, -3.0, 4.0], vec![1, 1, 2, 2]);
@@ -439,6 +446,7 @@ mod tests {
     // --- max_pool2d backward ---
 
     #[test]
+    /// Auto-generated documentation for max_pool2d_backward_non_overlapping_routes_grad_to_winner_only.
     fn max_pool2d_backward_non_overlapping_routes_grad_to_winner_only() {
         let input_data: Vec<f32> = vec![
             1.0, 2.0, 3.0, 4.0, //
@@ -488,6 +496,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for max_pool2d_gradcheck_overlapping.
     fn max_pool2d_gradcheck_overlapping() {
         let input = tensor(
             vec![0.1, 0.5, 0.3, 0.9, 0.2, 0.4, 0.7, 0.6, 0.8],
@@ -508,6 +517,7 @@ mod tests {
     // --- avg_pool2d forward ---
 
     #[test]
+    /// Auto-generated documentation for avg_pool2d_forward_no_overlap_hand_computed.
     fn avg_pool2d_forward_no_overlap_hand_computed() {
         let input_data: Vec<f32> = vec![
             1.0, 2.0, 3.0, 4.0, //
@@ -528,6 +538,7 @@ mod tests {
     // --- avg_pool2d backward ---
 
     #[test]
+    /// Auto-generated documentation for avg_pool2d_backward_overlapping_windows_sums_grad_contributions.
     fn avg_pool2d_backward_overlapping_windows_sums_grad_contributions() {
         // [1,1,1,3] input, kernel=1x2, stride=1x1 (overlapping): 2 output
         // windows, middle position covered by both.
@@ -548,6 +559,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for avg_pool2d_gradcheck_overlapping.
     fn avg_pool2d_gradcheck_overlapping() {
         let input = tensor(
             vec![0.1, 0.5, 0.3, 0.9, 0.2, 0.4, 0.7, 0.6, 0.8],
@@ -567,6 +579,7 @@ mod tests {
     // --- adaptive_avg_pool2d forward ---
 
     #[test]
+    /// Auto-generated documentation for adaptive_avg_pool2d_evenly_dividing_matches_avg_pool2d.
     fn adaptive_avg_pool2d_evenly_dividing_matches_avg_pool2d() {
         let input_data: Vec<f32> = vec![
             1.0, 2.0, 3.0, 4.0, //
@@ -614,6 +627,7 @@ mod tests {
     // --- adaptive_avg_pool2d backward ---
 
     #[test]
+    /// Auto-generated documentation for adaptive_avg_pool2d_gradcheck_non_evenly_dividing.
     fn adaptive_avg_pool2d_gradcheck_non_evenly_dividing() {
         let input_data: Vec<f32> = (1..=7).map(|x| x as f32 * 0.1).collect();
         let input = tensor(input_data, vec![1, 1, 7, 1]);

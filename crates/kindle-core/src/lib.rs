@@ -1,5 +1,10 @@
 //! # Kindle Core
 //!
+//! The fundamental building blocks, traits, and types for the Kindle neural network framework.
+//! Defines `Tensor`, the `Backend` contract, operations, and the shape-safe type system.
+#![allow(dead_code)]
+#![allow(unused_imports)]
+//!
 //! `kindle-core` provides the fundamental abstractions, traits, and types for the Kindle framework.
 //! It encapsulates the tensor representation, neural network layers, shape systems, optimization traits, and serialization support.
 //!
@@ -48,13 +53,15 @@ pub(crate) mod serialize;
 pub(crate) mod shapes;
 pub(crate) mod tensor;
 
+/// Auto-generated documentation for loss.
 pub mod loss {
     pub use crate::nn::loss::*;
 }
 
-
+/// Auto-generated documentation for prelude.
 pub mod prelude {
     pub use super::err::*;
+    pub use crate::graph::{Graph, OpType};
     pub use crate::nn::{
         activation::{GELU, ReLU, Sigmoid, Softmax, Swish, Tanh},
         avg_pool2d::AvgPool2d,
@@ -63,40 +70,45 @@ pub mod prelude {
         conv2d::Conv2d,
         embedding::Embedding,
         flatten::Flatten,
+        init::Init,
         layer_norm::LayerNorm,
+        rms_norm::RMSNorm,
+        dropout::Dropout,
         linear::{Linear, LinearShape},
-        loss::{Reduction, CrossEntropyLoss, Mean, NoneReduction, MSELoss, L1Loss, BCEWithLogitsLoss},
+        loss::{
+            BCEWithLogitsLoss, CrossEntropyLoss, L1Loss, MSELoss, Mean, NoneReduction, Reduction,
+        },
         max_pool2d::MaxPool2d,
         module::{
             AutorefNamedLayers, AutorefNamedLayersFallback, AutorefParameters,
             AutorefParametersFallback, AutorefShapeInfo, AutorefShapeInfoFallback,
-            AutorefStateDict, AutorefStateDictFallback, LayerNode, Module, NamedLayers,
-            Parameters, Sequential, StateDict, ToDevice,
+            AutorefStateDict, AutorefStateDictFallback, LayerNode, Module, NamedLayers, Parameters,
+            Sequential, StateDict, ToDevice,
         },
+        optional::{False, OptionalField, True},
         param::Param,
         rnn::{RNN, RNNCell},
-        optional::{False, OptionalField, True},
-        init::Init,
     };
-    pub use crate::graph::{Graph, OpType};
     pub use crate::seq;
-    pub use kindle_macros::{s, idx, module};
+    pub use kindle_macros::{idx, module, s};
 
     pub use super::shapes::prelude::*;
     pub use super::tensor::prelude::*;
-    pub use alloc::string::{String, ToString};
-    pub use alloc::vec::{self, Vec};
-    pub use alloc::format;
-    pub use alloc::boxed::Box;
-    pub use alloc::collections::BTreeMap;
     #[cfg(feature = "std")]
     pub use crate::onnx_exporter::{OnnxExporter, OnnxImporter};
-    pub use crate::optim::{Adam, AdamW, Gradients, Optimizer, SGD};
+    pub use crate::optim::{Adam, AdamW, Gradients, Optimizer, SGD, LRScheduler, ConstantLR, LinearLR};
+    #[cfg(feature = "std")]
+    pub use crate::optim::{CosineAnnealingLR, StepLR};
+    pub use crate::serialize::{Deserializer, Serializer};
     #[cfg(feature = "std")]
     pub use crate::serialize::{Format, ModelExt};
-    pub use crate::serialize::{Deserializer, Serializer};
     pub use crate::shapes::dim::Dim;
     pub use crate::shapes::shape::{ConstShape, DynShape, PartialDynShape, Shape};
     pub use crate::symbolic_dim;
+    pub use alloc::boxed::Box;
+    pub use alloc::collections::BTreeMap;
+    pub use alloc::format;
+    pub use alloc::string::{String, ToString};
+    pub use alloc::vec::{self, Vec};
     pub use typenum::{self, B0, B1, Bit, Diff, Prod, Quot, Sum, UInt, UTerm, Unsigned};
 }

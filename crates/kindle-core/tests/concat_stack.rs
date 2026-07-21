@@ -1,11 +1,12 @@
 extern crate kindle_core as kindle;
 
-use kindle_core::prelude::*;
-use kindle_core::prelude::dummy::DummyBackend;
 use kindle_core::prelude::Cpu;
+use kindle_core::prelude::dummy::DummyBackend;
+use kindle_core::prelude::*;
 use kindle_macros::s;
 
 #[test]
+/// Auto-generated documentation for test_concat_static_success.
 fn test_concat_static_success() {
     let t1: Tensor<s![2, 3], DummyBackend<f32, Cpu>> = Tensor::zeros(()).unwrap();
     let t2: Tensor<s![4, 3], DummyBackend<f32, Cpu>> = Tensor::zeros(()).unwrap();
@@ -15,6 +16,7 @@ fn test_concat_static_success() {
 }
 
 #[test]
+/// Auto-generated documentation for test_try_concat_dynamic.
 fn test_try_concat_dynamic() {
     let t1: Tensor<(usize, typenum::U3), DummyBackend<f32, Cpu>> = Tensor::zeros((2,)).unwrap();
     let t2: Tensor<(usize, typenum::U3), DummyBackend<f32, Cpu>> = Tensor::zeros((4,)).unwrap();
@@ -24,6 +26,7 @@ fn test_try_concat_dynamic() {
 }
 
 #[test]
+/// Auto-generated documentation for test_stack_static_success.
 fn test_stack_static_success() {
     let t1: Tensor<s![2, 3], DummyBackend<f32, Cpu>> = Tensor::zeros(()).unwrap();
     let t2: Tensor<s![2, 3], DummyBackend<f32, Cpu>> = Tensor::zeros(()).unwrap();
@@ -33,6 +36,7 @@ fn test_stack_static_success() {
 }
 
 #[test]
+/// Auto-generated documentation for test_try_stack_dynamic.
 fn test_try_stack_dynamic() {
     let t1: Tensor<Dyn, DummyBackend<f32, Cpu>> = Tensor::zeros([2, 3]).unwrap();
     let t2: Tensor<Dyn, DummyBackend<f32, Cpu>> = Tensor::zeros([2, 3]).unwrap();

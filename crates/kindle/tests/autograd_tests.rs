@@ -1,10 +1,12 @@
 use kindle::DefaultBackend;
-use kindle::{Optimizer, SGD};
 use kindle::prelude::*;
+use kindle::{Optimizer, SGD};
 
+/// Auto-generated documentation for CpuBackend.
 type CpuBackend = DefaultBackend;
 
 #[test]
+/// Auto-generated documentation for test_simple_linear_regression.
 fn test_simple_linear_regression() -> Result<()> {
     let model = Linear::<s![1, 1], CpuBackend>::new()?;
     let mut optim = SGD::<CpuBackend>::new(model.parameters(), 0.01);
@@ -30,6 +32,7 @@ fn test_simple_linear_regression() -> Result<()> {
 }
 
 #[test]
+/// Auto-generated documentation for test_backward_with_nan_check_success.
 fn test_backward_with_nan_check_success() -> Result<()> {
     let model = Linear::<s![1, 1], CpuBackend>::new()?;
     let mut optim = SGD::<CpuBackend>::new(model.parameters(), 0.01);

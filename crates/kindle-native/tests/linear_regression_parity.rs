@@ -14,7 +14,9 @@ use kindle_native::NativeBackend;
 
 // ── Type aliases ─────────────────────────────────────────────────────────────
 
+/// Auto-generated documentation for NB.
 type NB = NativeBackend<f32, Cpu>;
+/// Auto-generated documentation for CB.
 type CB = CandleBackend<f32, Cpu>;
 
 // ── Data fixtures ─────────────────────────────────────────────────────────────
@@ -106,6 +108,7 @@ fn train<B: Backend + kindle_core::prelude::LossOps<B>>(n_epochs: usize, lr: f64
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[test]
+/// Auto-generated documentation for linear_regression_loss_curve_matches_candle.
 fn linear_regression_loss_curve_matches_candle() {
     let n_epochs = 8;
     let lr = 0.01;
@@ -138,11 +141,11 @@ fn linear_regression_loss_curve_matches_candle() {
 }
 
 #[test]
+/// Auto-generated documentation for gradient_accumulation_sums_on_reuse_end_to_end.
 fn gradient_accumulation_sums_on_reuse_end_to_end() {
     // Build a graph where x is used TWICE: loss = mean(x + x) = mean(2x).
     // d(mean(2x))/d(x_i) = 2/n.
     // Proves accumulation is summed, not overwritten, through the public API.
-
 
     let n = 4usize;
     let vals = vec![1.0f32, 2.0, 3.0, 4.0];
@@ -153,7 +156,9 @@ fn gradient_accumulation_sums_on_reuse_end_to_end() {
     let loss = NB::mean_all::<f32>(&y).unwrap(); // scalar
 
     let grads = NB::backward::<f32>(&loss).unwrap();
-    let g = NB::get_grad::<f32>(&x_stor, &grads).unwrap().expect("x should have a gradient");
+    let g = NB::get_grad::<f32>(&x_stor, &grads)
+        .unwrap()
+        .expect("x should have a gradient");
 
     // Each element's expected gradient: d(mean(x+x))/d(x_i) = 2/n
     let expected = 2.0f32 / n as f32;

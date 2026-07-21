@@ -20,7 +20,9 @@ use kindle_viz_plugin_api::render_ctx::RenderCtx;
 /// panicked and the host must now treat this panel as crashed (D-04 /
 /// UI-SPEC.md Panic Isolation UX).
 pub enum DispatchOutcome<T> {
+    /// Auto-generated documentation for Ok.
     Ok(T),
+    /// Auto-generated documentation for Panicked.
     Panicked,
 }
 
@@ -81,34 +83,43 @@ pub fn dispatch_reset(panel: &mut dyn Panel) -> DispatchOutcome<()> {
 }
 
 #[cfg(test)]
+/// Auto-generated documentation for tests.
 mod tests {
     use super::*;
 
+    /// Auto-generated documentation for PanickingPanel.
     struct PanickingPanel;
 
     impl Panel for PanickingPanel {
+        /// Auto-generated documentation for id.
         fn id(&self) -> &'static str {
             "panicking-test-panel"
         }
 
+        /// Auto-generated documentation for title.
         fn title(&self) -> &str {
             "Panicking Test Panel"
         }
 
+        /// Auto-generated documentation for update.
         fn update(&mut self, _event: &Event) {}
 
+        /// Auto-generated documentation for render.
         fn render(&mut self, _ctx: &mut RenderCtx<'_, '_>) {
             panic!("deliberate test panic");
         }
 
+        /// Auto-generated documentation for handle_event.
         fn handle_event(&mut self, _event: &PanelEvent) -> bool {
             false
         }
 
+        /// Auto-generated documentation for reset.
         fn reset(&mut self) {}
     }
 
     #[test]
+    /// Auto-generated documentation for panicking_panel_render_is_caught.
     fn panicking_panel_render_is_caught() {
         // Suppress the default panic hook's stderr print for the duration
         // of this test only -- the panic is expected/handled, not a genuine

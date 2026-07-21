@@ -11,14 +11,16 @@
 #[macro_use]
 extern crate alloc;
 
-use kindle::prelude::{StateDict, Reduction, CrossEntropyLoss, Mean};
 use kindle::SGD;
 use kindle::prelude::*;
+use kindle::prelude::{CrossEntropyLoss, Mean, StateDict};
 use kindle_backends::candle::CandleBackend;
 use kindle_native::NativeBackend;
 use kindle_telemetry::reporter::Reporter;
 
+/// Auto-generated documentation for NB.
 type NB = NativeBackend<f32, Cpu>;
+/// Auto-generated documentation for CB.
 type CB = CandleBackend<f32, Cpu>;
 
 // ── Model ────────────────────────────────────────────────────────────────────
@@ -37,26 +39,23 @@ pub struct SimpleCnn<B: Backend> {
     // applies its own learned affine shift, so a conv bias is redundant
     // here regardless -- disabling it sidesteps the bug with no loss of
     // model expressiveness.
+    /// Auto-generated documentation for conv1.
     pub conv1: kindle_core::prelude::Conv2d<
-        (
-            usize,
-            usize,
-            typenum::U3,
-            typenum::U1,
-            typenum::U1,
-            typenum::U1,
-        ),
+        s![dyn, dyn, 3, 1, 1, 1],
         B,
         kindle_core::prelude::False,
     >,
-    pub bn1: kindle::BatchNorm2d<(usize,), B>,
+    /// Auto-generated documentation for bn1.
+    pub bn1: kindle::BatchNorm2d<s![dyn], B>,
     // MaxPool2d is a zero-sized, stateless module (no parameters, no
     // device-bound buffers) and does not implement `ToDevice` -- it is
     // excluded from the `#[module]`-derived Parameters/StateDict/ToDevice
     // impls, which is semantically correct since it has nothing to collect
     // or move across devices.
     #[module(ignore)]
+    /// Auto-generated documentation for pool.
     pub pool: kindle::MaxPool2d<typenum::U2, typenum::U2>,
+    /// Auto-generated documentation for fc.
     pub fc: kindle::Linear<Dyn, B>,
 }
 
@@ -65,6 +64,7 @@ where
     B::FloatElem: ConstDType,
     B::Device: ConstDevice,
 {
+    /// Auto-generated documentation for new.
     pub fn new(
         in_channels: usize,
         conv_out_channels: usize,
@@ -73,18 +73,11 @@ where
     ) -> Result<Self> {
         Ok(Self {
             conv1: kindle_core::prelude::Conv2d::<
-                (
-                    usize,
-                    usize,
-                    typenum::U3,
-                    typenum::U1,
-                    typenum::U1,
-                    typenum::U1,
-                ),
+                s![dyn, dyn, 3, 1, 1, 1],
                 B,
                 kindle_core::prelude::False,
             >::new_with((conv_out_channels, in_channels))?,
-            bn1: kindle::BatchNorm2d::<(usize,), B>::new_with((conv_out_channels,), 1e-5, 0.1)?,
+            bn1: kindle::BatchNorm2d::<s![dyn], B>::new_with((conv_out_channels,), 1e-5, 0.1)?,
             pool: kindle::MaxPool2d::<typenum::U2, typenum::U2>::new()?,
             fc: kindle::Linear::<Dyn, B>::new_with((flattened_dim, num_classes))?,
         })
@@ -92,6 +85,7 @@ where
 }
 
 impl<B: Backend + kindle::ModuleOps<B>> SimpleCnn<B> {
+    /// Auto-generated documentation for forward.
     pub fn forward(&self, x: Tensor<Dyn, B>) -> Result<Tensor<Dyn, B>> {
         let x = self.conv1.forward(x)?;
         let x = self.bn1.forward(x)?;
@@ -117,8 +111,11 @@ impl<B: Backend + kindle::ModuleOps<B>> SimpleCnn<B> {
 /// learnable rather than degenerate. Per T-05-06, this is built ONCE and the
 /// same bytes are fed to both backends -- never regenerated per-backend.
 fn make_dataset() -> (Vec<f32>, Vec<u32>, usize) {
+    /// Auto-generated documentation for N.
     const N: usize = 32;
+    /// Auto-generated documentation for HW.
     const HW: usize = 8;
+    /// Auto-generated documentation for PIXELS.
     const PIXELS: usize = HW * HW;
 
     let mut images = Vec::with_capacity(N * PIXELS);
@@ -148,6 +145,7 @@ fn make_dataset() -> (Vec<f32>, Vec<u32>, usize) {
     (images, labels, N)
 }
 
+/// Auto-generated documentation for as_f32_bytes.
 fn as_f32_bytes(v: &[f32]) -> Vec<u8> {
     v.iter().flat_map(|x| x.to_ne_bytes()).collect()
 }
@@ -165,10 +163,12 @@ fn as_f32_bytes(v: &[f32]) -> Vec<u8> {
 /// values across backends, matching T-05-06's intent, even though the two
 /// backends' construction mechanisms necessarily differ).
 trait MakeLabels: Backend<FloatElem = f32> {
+    /// Auto-generated documentation for make_labels.
     fn make_labels(values: &[u32]) -> Self::Storage<u32>;
 }
 
 impl MakeLabels for NB {
+    /// Auto-generated documentation for make_labels.
     fn make_labels(values: &[u32]) -> Self::Storage<u32> {
         kindle_native::storage::NativeStorage::from_contiguous(
             kindle_native::storage::NativeBuffer::U32(values.to_vec()),
@@ -178,6 +178,7 @@ impl MakeLabels for NB {
 }
 
 impl MakeLabels for CB {
+    /// Auto-generated documentation for make_labels.
     fn make_labels(values: &[u32]) -> Self::Storage<u32> {
         // CandleBackend::from_bytes always reads its input bytes as f32
         // first, then casts to the target dtype -- so label values must be
@@ -466,6 +467,7 @@ fn run_live(images_bytes: &[u8], labels: &[u32], n_samples: usize, lr: f64) -> a
     println!("live run-id: {run_id}");
     println!("kindle-viz --run-id {run_id}");
 
+    /// Auto-generated documentation for LIVE_EPOCHS.
     const LIVE_EPOCHS: usize = 200;
     let mut state: Option<BTreeMap<String, Tensor<Dyn, NB>>> = None;
 

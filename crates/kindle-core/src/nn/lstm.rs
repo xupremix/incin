@@ -7,17 +7,23 @@ use alloc::vec::Vec;
 ///
 /// Supply `(In, Out)` for fully static dimensions, or [`Dyn`] for fully runtime sizes.
 pub trait LstmShape: Shape + DynShape {
+    /// Auto-generated documentation for In.
     type In: Dim;
+    /// Auto-generated documentation for Out.
     type Out: Dim;
 }
 
 impl<In: Dim, Out: Dim> LstmShape for (In, Out) {
+    /// Auto-generated documentation for In.
     type In = In;
+    /// Auto-generated documentation for Out.
     type Out = Out;
 }
 
 impl LstmShape for Dyn {
+    /// Auto-generated documentation for In.
     type In = usize;
+    /// Auto-generated documentation for Out.
     type Out = usize;
 }
 
@@ -56,13 +62,21 @@ pub struct LSTMCell<
     BiasIh: crate::nn::optional::OptionalField = True,
     BiasHh: crate::nn::optional::OptionalField = True,
 > {
+    /// Auto-generated documentation for wi_i.
     pub wi_i: Linear<(S::In, S::Out), B, BiasIh>,
+    /// Auto-generated documentation for wi_f.
     pub wi_f: Linear<(S::In, S::Out), B, BiasIh>,
+    /// Auto-generated documentation for wi_g.
     pub wi_g: Linear<(S::In, S::Out), B, BiasIh>,
+    /// Auto-generated documentation for wi_o.
     pub wi_o: Linear<(S::In, S::Out), B, BiasIh>,
+    /// Auto-generated documentation for wh_i.
     pub wh_i: Linear<(S::Out, S::Out), B, BiasHh>,
+    /// Auto-generated documentation for wh_f.
     pub wh_f: Linear<(S::Out, S::Out), B, BiasHh>,
+    /// Auto-generated documentation for wh_g.
     pub wh_g: Linear<(S::Out, S::Out), B, BiasHh>,
+    /// Auto-generated documentation for wh_o.
     pub wh_o: Linear<(S::Out, S::Out), B, BiasHh>,
 }
 
@@ -75,6 +89,7 @@ where
     (In, Out): LstmShape<In = In, Out = Out>,
     (Out, Out): LstmShape<In = Out, Out = Out>,
 {
+    /// Auto-generated documentation for new_with.
     pub fn new_with(in_arg: In::Arg, out_arg: Out::Arg) -> Result<Self>
     where
         In::Arg: Clone,
@@ -100,6 +115,7 @@ where
     (In, Out): LstmShape<In = In, Out = Out>,
     (Out, Out): LstmShape<In = Out, Out = Out>,
 {
+    /// Auto-generated documentation for new.
     pub fn new() -> Result<Self> {
         Self::new_with((), ())
     }
@@ -114,6 +130,7 @@ where
     (In, Out): LstmShape<In = In, Out = Out>,
     (Out, Out): LstmShape<In = Out, Out = Out>,
 {
+    /// Auto-generated documentation for new_with.
     pub fn new_with(in_arg: In::Arg, out_arg: Out::Arg) -> Result<Self>
     where
         In::Arg: Clone,
@@ -139,6 +156,7 @@ where
     (In, Out): LstmShape<In = In, Out = Out>,
     (Out, Out): LstmShape<In = Out, Out = Out>,
 {
+    /// Auto-generated documentation for new.
     pub fn new() -> Result<Self> {
         Self::new_with((), ())
     }
@@ -153,6 +171,7 @@ where
     (In, Out): LstmShape<In = In, Out = Out>,
     (Out, Out): LstmShape<In = Out, Out = Out>,
 {
+    /// Auto-generated documentation for new_with.
     pub fn new_with(in_arg: In::Arg, out_arg: Out::Arg) -> Result<Self>
     where
         In::Arg: Clone,
@@ -178,6 +197,7 @@ where
     (In, Out): LstmShape<In = In, Out = Out>,
     (Out, Out): LstmShape<In = Out, Out = Out>,
 {
+    /// Auto-generated documentation for new.
     pub fn new() -> Result<Self> {
         Self::new_with((), ())
     }
@@ -192,6 +212,7 @@ where
     (In, Out): LstmShape<In = In, Out = Out>,
     (Out, Out): LstmShape<In = Out, Out = Out>,
 {
+    /// Auto-generated documentation for new_with.
     pub fn new_with(in_arg: In::Arg, out_arg: Out::Arg) -> Result<Self>
     where
         In::Arg: Clone,
@@ -217,6 +238,7 @@ where
     (In, Out): LstmShape<In = In, Out = Out>,
     (Out, Out): LstmShape<In = Out, Out = Out>,
 {
+    /// Auto-generated documentation for new.
     pub fn new() -> Result<Self> {
         Self::new_with((), ())
     }
@@ -229,6 +251,7 @@ where
     B::FloatElem: ConstDType,
     B::Device: ConstDevice,
 {
+    /// Auto-generated documentation for new_with.
     pub fn new_with(in_f: usize, out_f: usize) -> Result<Self> {
         Ok(Self {
             wi_i: Linear::<(usize, usize), B, True>::new_with((in_f, out_f))?,
@@ -250,6 +273,7 @@ where
     B::FloatElem: ConstDType,
     B::Device: ConstDevice,
 {
+    /// Auto-generated documentation for new_with.
     pub fn new_with(in_f: usize, out_f: usize) -> Result<Self> {
         Ok(Self {
             wi_i: Linear::<(usize, usize), B, False>::new_with((in_f, out_f))?,
@@ -271,6 +295,7 @@ where
     B::FloatElem: ConstDType,
     B::Device: ConstDevice,
 {
+    /// Auto-generated documentation for new_with.
     pub fn new_with(in_f: usize, out_f: usize) -> Result<Self> {
         Ok(Self {
             wi_i: Linear::<(usize, usize), B, True>::new_with((in_f, out_f))?,
@@ -300,6 +325,7 @@ where
     Linear<(In, Out), B, BiasIh>: Parameters<B>,
     Linear<(Out, Out), B, BiasHh>: Parameters<B>,
 {
+    /// Auto-generated documentation for named_parameters.
     fn named_parameters(
         &self,
         prefix: &str,
@@ -338,10 +364,13 @@ where
     Linear<(Out, Out), B, BiasHh>:
         Module<Tensor<(Batch, Out), B>, Output = Tensor<(Batch, Out), B>, Error = Error>,
 {
+    /// Auto-generated documentation for Output.
     type Output = (Tensor<(Batch, Out), B>, Tensor<(Batch, Out), B>);
+    /// Auto-generated documentation for Error.
     type Error = Error;
 
     #[inline]
+    /// Auto-generated documentation for forward.
     fn forward(
         &self,
         (x, (h_prev, c_prev)): (
@@ -380,12 +409,14 @@ where
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone)]
+/// Auto-generated documentation for LSTM.
 pub struct LSTM<
     S: LstmShape,
     B: Backend,
     BiasIh: crate::nn::optional::OptionalField = True,
     BiasHh: crate::nn::optional::OptionalField = True,
 > {
+    /// Auto-generated documentation for cell.
     pub cell: LSTMCell<S, B, BiasIh, BiasHh>,
 }
 
@@ -396,6 +427,7 @@ impl<
     BiasHh: crate::nn::optional::OptionalField,
 > LSTM<S, B, BiasIh, BiasHh>
 {
+    /// Auto-generated documentation for new.
     pub fn new(cell: LSTMCell<S, B, BiasIh, BiasHh>) -> Self {
         Self { cell }
     }
@@ -411,6 +443,7 @@ impl<
 where
     LSTMCell<(In, Out), B, BiasIh, BiasHh>: Parameters<B>,
 {
+    /// Auto-generated documentation for named_parameters.
     fn named_parameters(
         &self,
         prefix: &str,
@@ -445,13 +478,16 @@ where
             Error = Error,
         >,
 {
+    /// Auto-generated documentation for Output.
     type Output = (
         Tensor<(Batch, Seq, Out), B>,
         (Tensor<(Batch, Out), B>, Tensor<(Batch, Out), B>),
     );
+    /// Auto-generated documentation for Error.
     type Error = Error;
 
     #[inline]
+    /// Auto-generated documentation for forward.
     fn forward(
         &self,
         (x, (mut h, mut c)): (
@@ -488,6 +524,7 @@ where
     Linear<(S::In, S::Out), B, BiasIh>: crate::nn::module::NamedLayers,
     Linear<(S::Out, S::Out), B, BiasHh>: crate::nn::module::NamedLayers,
 {
+    /// Auto-generated documentation for layer_structure.
     fn layer_structure(&self, prefix: &str) -> Vec<crate::nn::module::LayerNode> {
         let mut children = Vec::new();
 
@@ -563,6 +600,7 @@ impl<
 where
     LSTMCell<S, B, BiasIh, BiasHh>: crate::nn::module::NamedLayers,
 {
+    /// Auto-generated documentation for layer_structure.
     fn layer_structure(&self, prefix: &str) -> Vec<crate::nn::module::LayerNode> {
         let mut children = Vec::new();
         let p_cell = if prefix.is_empty() {

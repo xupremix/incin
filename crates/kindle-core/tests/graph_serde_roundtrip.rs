@@ -1,9 +1,10 @@
 extern crate kindle_core as kindle;
 
-use kindle_core::prelude::{Graph, OpType};
 use kindle_core::prelude::*;
+use kindle_core::prelude::{Graph, OpType};
 
 #[test]
+/// Auto-generated documentation for graph_round_trips_through_serde_json.
 fn graph_round_trips_through_serde_json() {
     let mut g = Graph::new();
     let v0 = g.add_value(vec![2, 3], KindleDType::F32, Some("x".into()));

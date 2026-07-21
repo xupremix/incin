@@ -7,13 +7,20 @@
 #[macro_use]
 extern crate alloc;
 
+/// The `emitter` module.
 pub mod emitter;
+/// Auto-generated documentation for err.
 pub mod err;
+/// Auto-generated documentation for events.
 pub mod events;
+/// Auto-generated documentation for reporter.
 pub mod reporter;
+/// Auto-generated documentation for run_dir.
 pub mod run_dir;
+/// Auto-generated documentation for transport.
 pub mod transport;
 
+/// Auto-generated documentation for prelude.
 pub mod prelude {
     pub use crate::emitter::Emitter;
     pub use crate::events::*;

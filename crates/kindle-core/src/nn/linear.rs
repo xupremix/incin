@@ -13,28 +13,44 @@ use crate::prelude::*;
 /// type S = s![784, 256];
 /// ```
 pub trait LinearShape: Shape + DynShape {
+    /// Auto-generated documentation for InF.
     type InF;
+    /// Auto-generated documentation for OutF.
     type OutF;
+    /// Auto-generated documentation for WeightArg.
     type WeightArg: crate::tensor::arg_into::NotUnit;
+    /// Auto-generated documentation for BiasArg.
     type BiasArg: crate::tensor::arg_into::NotUnit;
+    /// Auto-generated documentation for WeightShape.
     type WeightShape: Shape<Arg = Self::WeightArg> + DynShape;
+    /// Auto-generated documentation for BiasShape.
     type BiasShape: Shape<Arg = Self::BiasArg> + DynShape;
 
+    /// Auto-generated documentation for Target.
     type Target;
+    /// Auto-generated documentation for build_args.
     fn build_args(target: Self::Target) -> (usize, usize, Self::WeightArg, Self::BiasArg);
 }
 
 impl<InF: Dim, OutF: Dim> LinearShape for (InF, OutF) {
+    /// Auto-generated documentation for InF.
     type InF = InF;
+    /// Auto-generated documentation for OutF.
     type OutF = OutF;
+    /// Auto-generated documentation for WeightArg.
     type WeightArg = (<OutF as Dim>::Arg, <InF as Dim>::Arg);
+    /// Auto-generated documentation for BiasArg.
     type BiasArg = (<OutF as Dim>::Arg,);
+    /// Auto-generated documentation for WeightShape.
     type WeightShape = (OutF, InF);
+    /// Auto-generated documentation for BiasShape.
     type BiasShape = (OutF,);
 
+    /// Auto-generated documentation for Target.
     type Target = (InF::Arg, OutF::Arg);
 
     #[inline]
+    /// Auto-generated documentation for build_args.
     fn build_args(target: Self::Target) -> (usize, usize, Self::WeightArg, Self::BiasArg) {
         let in_f = InF::from_arg(target.0.clone()).size();
         let out_f = OutF::from_arg(target.1.clone()).size();
@@ -43,16 +59,24 @@ impl<InF: Dim, OutF: Dim> LinearShape for (InF, OutF) {
 }
 
 impl LinearShape for Dyn {
+    /// Auto-generated documentation for InF.
     type InF = Dyn;
+    /// Auto-generated documentation for OutF.
     type OutF = Dyn;
+    /// Auto-generated documentation for WeightArg.
     type WeightArg = alloc::vec::Vec<usize>;
+    /// Auto-generated documentation for BiasArg.
     type BiasArg = alloc::vec::Vec<usize>;
+    /// Auto-generated documentation for WeightShape.
     type WeightShape = Dyn;
+    /// Auto-generated documentation for BiasShape.
     type BiasShape = Dyn;
 
+    /// Auto-generated documentation for Target.
     type Target = (usize, usize);
 
     #[inline]
+    /// Auto-generated documentation for build_args.
     fn build_args(target: Self::Target) -> (usize, usize, Self::WeightArg, Self::BiasArg) {
         let in_f = target.0;
         let out_f = target.1;
@@ -83,7 +107,9 @@ pub struct Linear<
     B: Backend,
     Bias: crate::nn::optional::OptionalField = crate::nn::optional::True,
 > {
+    /// Auto-generated documentation for weight.
     pub weight: Param<S::WeightShape, B>,
+    /// Auto-generated documentation for bias.
     pub bias: Option<Param<S::BiasShape, B>>,
     #[module(ignore)]
     _phantom: core::marker::PhantomData<(S, B, Bias)>,
@@ -97,6 +123,7 @@ where
     B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
+    /// Auto-generated documentation for new_with.
     pub fn new_with(args: S::Target) -> Result<Self> {
         let (in_f, _out_f, w_args, b_args) = S::build_args(args);
         let init = crate::nn::init::Init::KaimingUniform {
@@ -136,6 +163,7 @@ where
     B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
+    /// Auto-generated documentation for new.
     pub fn new() -> Result<Self> {
         Self::new_with(((), ()))
     }
@@ -147,6 +175,7 @@ where
     B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
+    /// Auto-generated documentation for new_with.
     pub fn new_with(args: S::Target) -> Result<Self> {
         let (in_f, _out_f, w_args, _b_args) = S::build_args(args);
         let init = crate::nn::init::Init::KaimingUniform {
@@ -177,6 +206,7 @@ where
     B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
+    /// Auto-generated documentation for new.
     pub fn new() -> Result<Self> {
         Self::new_with(((), ()))
     }
@@ -188,6 +218,7 @@ where
     B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
+    /// Auto-generated documentation for new_with.
     pub fn new_with(args: S::Target, has_bias: bool) -> Result<Self> {
         let (in_f, _out_f, w_args, b_args) = S::build_args(args);
         let init = crate::nn::init::Init::KaimingUniform {
@@ -231,6 +262,7 @@ where
     B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
+    /// Auto-generated documentation for new.
     pub fn new(has_bias: bool) -> Result<Self> {
         Self::new_with(((), ()), has_bias)
     }
@@ -241,9 +273,12 @@ where
 
 // Dynamic input
 impl<B: Backend> Module<Tensor<Dyn, B>> for Linear<Dyn, B, crate::nn::optional::True> {
+    /// Auto-generated documentation for Output.
     type Output = Tensor<Dyn, B>;
+    /// Auto-generated documentation for Error.
     type Error = Error;
 
+    /// Auto-generated documentation for forward.
     fn forward(&self, x: Tensor<Dyn, B>) -> core::result::Result<Tensor<Dyn, B>, Error> {
         let weight_t = self.weight.as_tensor()?.transpose::<0, 1>()?;
         let out = x.matmul(&weight_t)?;
@@ -252,9 +287,12 @@ impl<B: Backend> Module<Tensor<Dyn, B>> for Linear<Dyn, B, crate::nn::optional::
 }
 
 impl<B: Backend> Module<Tensor<Dyn, B>> for Linear<Dyn, B, crate::nn::optional::False> {
+    /// Auto-generated documentation for Output.
     type Output = Tensor<Dyn, B>;
+    /// Auto-generated documentation for Error.
     type Error = Error;
 
+    /// Auto-generated documentation for forward.
     fn forward(&self, x: Tensor<Dyn, B>) -> core::result::Result<Tensor<Dyn, B>, Error> {
         let weight_t = self.weight.as_tensor()?.transpose::<0, 1>()?;
         x.matmul(&weight_t)
@@ -262,9 +300,12 @@ impl<B: Backend> Module<Tensor<Dyn, B>> for Linear<Dyn, B, crate::nn::optional::
 }
 
 impl<B: Backend> Module<Tensor<Dyn, B>> for Linear<Dyn, B, Dyn> {
+    /// Auto-generated documentation for Output.
     type Output = Tensor<Dyn, B>;
+    /// Auto-generated documentation for Error.
     type Error = Error;
 
+    /// Auto-generated documentation for forward.
     fn forward(&self, x: Tensor<Dyn, B>) -> core::result::Result<Tensor<Dyn, B>, Error> {
         let weight_t = self.weight.as_tensor()?.transpose::<0, 1>()?;
         let out = x.matmul(&weight_t)?;
@@ -286,9 +327,12 @@ impl<
 where
     InShape::Output: DynShape,
 {
+    /// Auto-generated documentation for Output.
     type Output = Tensor<InShape::Output, B>;
+    /// Auto-generated documentation for Error.
     type Error = Error;
 
+    /// Auto-generated documentation for forward.
     fn forward(&self, x: Tensor<InShape, B>) -> core::result::Result<Self::Output, Error> {
         let dtype = x._dtype.clone();
         let device = x._device.clone();
@@ -333,9 +377,12 @@ impl<
 where
     InShape::Output: DynShape,
 {
+    /// Auto-generated documentation for Output.
     type Output = Tensor<InShape::Output, B>;
+    /// Auto-generated documentation for Error.
     type Error = Error;
 
+    /// Auto-generated documentation for forward.
     fn forward(&self, x: Tensor<InShape, B>) -> core::result::Result<Self::Output, Error> {
         let dtype = x._dtype.clone();
         let device = x._device.clone();
@@ -372,9 +419,12 @@ impl<
 where
     InShape::Output: DynShape,
 {
+    /// Auto-generated documentation for Output.
     type Output = Tensor<InShape::Output, B>;
+    /// Auto-generated documentation for Error.
     type Error = Error;
 
+    /// Auto-generated documentation for forward.
     fn forward(&self, x: Tensor<InShape, B>) -> core::result::Result<Self::Output, Error> {
         let dtype = x._dtype.clone();
         let device = x._device.clone();

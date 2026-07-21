@@ -5,14 +5,17 @@ use typenum::{Prod, U1, Unsigned};
 
 /// Computes the total number of elements in a static shape.
 pub trait ElementCount {
+    /// Auto-generated documentation for Count.
     type Count: typenum::Unsigned;
 }
 
 impl ElementCount for () {
+    /// Auto-generated documentation for Count.
     type Count = U1;
 }
 
 impl<A: Unsigned> ElementCount for (A,) {
+    /// Auto-generated documentation for Count.
     type Count = A;
 }
 
@@ -21,6 +24,7 @@ where
     A: Mul<B>,
     Prod<A, B>: Unsigned,
 {
+    /// Auto-generated documentation for Count.
     type Count = Prod<A, B>;
 }
 
@@ -30,6 +34,7 @@ where
     Prod<A, B>: Mul<C>,
     Prod<Prod<A, B>, C>: Unsigned,
 {
+    /// Auto-generated documentation for Count.
     type Count = Prod<Prod<A, B>, C>;
 }
 
@@ -40,6 +45,7 @@ where
     Prod<Prod<A, B>, C>: Mul<D>,
     Prod<Prod<Prod<A, B>, C>, D>: Unsigned,
 {
+    /// Auto-generated documentation for Count.
     type Count = Prod<Prod<Prod<A, B>, C>, D>;
 }
 
@@ -49,6 +55,7 @@ where
     label = "Element count mismatch for reshape",
     note = "Reshape requires the total number of elements to remain constant"
 )]
+/// Auto-generated documentation for ReshapeShape.
 pub trait ReshapeShape<Target: Shape>: Shape {}
 
 // Blanket implementation for any two static shapes that share the exact same ElementCount.
@@ -66,10 +73,12 @@ pub trait TryReshape<Target: Shape>: Shape {}
 impl<S1: DynShape, S2: DynShape> TryReshape<S2> for S1 {}
 
 #[cfg(test)]
+/// Auto-generated documentation for tests.
 mod tests {
     use super::*;
     use typenum::{U2, U4, U8};
 
+    /// Auto-generated documentation for assert_reshape_eq.
     fn assert_reshape_eq<S1: Shape, S2: Shape>()
     where
         S1: ReshapeShape<S2>,
@@ -77,15 +86,21 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for reshape_same_rank_same_numel.
     fn reshape_same_rank_same_numel() {
+        /// Auto-generated documentation for S1.
         type S1 = (U2, U8);
+        /// Auto-generated documentation for S2.
         type S2 = (U4, U4);
         assert_reshape_eq::<S1, S2>();
     }
 
     #[test]
+    /// Auto-generated documentation for reshape_different_rank_same_numel.
     fn reshape_different_rank_same_numel() {
+        /// Auto-generated documentation for S1.
         type S1 = (U2, U2, U4);
+        /// Auto-generated documentation for S2.
         type S2 = (U4, U4);
         assert_reshape_eq::<S1, S2>();
     }

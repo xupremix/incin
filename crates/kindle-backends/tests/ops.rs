@@ -2,9 +2,11 @@ use kindle_backends::Backend;
 use kindle_backends::candle::CandleBackend;
 use kindle_core::prelude::*;
 
+/// Auto-generated documentation for CBackend.
 type CBackend = CandleBackend<f32, kindle_core::prelude::Cpu>;
 
 #[test]
+/// Auto-generated documentation for test_slice.
 fn test_slice() {
     let t = CBackend::zeros::<f32>(&[4, 4], KindleDType::F32, &KindleDevice::cpu()).unwrap();
     let s = CBackend::slice::<f32>(&t, &[(0, 4), (1, 3)]).unwrap();
@@ -12,6 +14,7 @@ fn test_slice() {
 }
 
 #[test]
+/// Auto-generated documentation for test_reshape.
 fn test_reshape() {
     let t = CBackend::zeros::<f32>(&[2, 8], KindleDType::F32, &KindleDevice::cpu()).unwrap();
     let r = CBackend::reshape::<f32>(&t, &[4, 4]).unwrap();
@@ -19,6 +22,7 @@ fn test_reshape() {
 }
 
 #[test]
+/// Auto-generated documentation for test_max_pool2d.
 fn test_max_pool2d() {
     let t =
         CBackend::zeros::<f32>(&[1, 3, 16, 16], KindleDType::F32, &KindleDevice::cpu()).unwrap();
@@ -27,6 +31,7 @@ fn test_max_pool2d() {
 }
 
 #[test]
+/// Auto-generated documentation for test_avg_pool2d.
 fn test_avg_pool2d() {
     let t =
         CBackend::zeros::<f32>(&[1, 3, 16, 16], KindleDType::F32, &KindleDevice::cpu()).unwrap();
@@ -35,6 +40,7 @@ fn test_avg_pool2d() {
 }
 
 #[test]
+/// Auto-generated documentation for test_conv2d.
 fn test_conv2d() {
     let t =
         CBackend::zeros::<f32>(&[1, 3, 16, 16], KindleDType::F32, &KindleDevice::cpu()).unwrap();
@@ -44,6 +50,7 @@ fn test_conv2d() {
 }
 
 #[test]
+/// Auto-generated documentation for test_batch_norm.
 fn test_batch_norm() {
     let t =
         CBackend::zeros::<f32>(&[1, 3, 16, 16], KindleDType::F32, &KindleDevice::cpu()).unwrap();

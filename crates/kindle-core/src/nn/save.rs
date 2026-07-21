@@ -1,7 +1,7 @@
 use crate::nn::StateDict;
 use crate::prelude::*;
-use safetensors::SafeTensors;
 use alloc::collections::BTreeMap;
+use safetensors::SafeTensors;
 use std::path::Path;
 
 /// Loads weights into a module from a safetensors file.

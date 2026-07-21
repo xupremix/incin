@@ -59,12 +59,14 @@ pub fn list_runs(
 }
 
 #[cfg(test)]
+/// Auto-generated documentation for tests.
 mod tests {
     use super::*;
     use std::sync::Mutex;
 
     // `default_run_dir()` reads/writes a process-wide env var, so tests
     // that touch it must not run concurrently with each other.
+    /// Auto-generated documentation for ENV_LOCK.
     static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     /// Returns a fresh, unique temp directory path (not yet created) for
@@ -78,6 +80,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for default_run_dir_creates_and_returns_dir.
     fn default_run_dir_creates_and_returns_dir() {
         let _guard = ENV_LOCK.lock().unwrap();
         let dir = unique_test_dir("default-run-dir");
@@ -98,6 +101,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for generate_run_id_is_unique_and_valid_uuid.
     fn generate_run_id_is_unique_and_valid_uuid() {
         let id1 = generate_run_id();
         let id2 = generate_run_id();
@@ -114,6 +118,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for list_runs_on_empty_dir_returns_empty_vec.
     fn list_runs_on_empty_dir_returns_empty_vec() {
         let dir = unique_test_dir("list-runs-empty");
         std::fs::create_dir_all(&dir).unwrap();
@@ -124,6 +129,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for list_runs_returns_exactly_n_entries_for_n_jsonl_files.
     fn list_runs_returns_exactly_n_entries_for_n_jsonl_files() {
         let dir = unique_test_dir("list-runs-n-entries");
         std::fs::create_dir_all(&dir).unwrap();
@@ -153,6 +159,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for list_runs_ignores_non_jsonl_files.
     fn list_runs_ignores_non_jsonl_files() {
         let dir = unique_test_dir("list-runs-ignore-non-jsonl");
         std::fs::create_dir_all(&dir).unwrap();
@@ -168,6 +175,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for default_run_dir_errors_when_data_dir_unavailable.
     fn default_run_dir_errors_when_data_dir_unavailable() {
         // We cannot force `dirs::data_dir()` itself to return None (it's
         // an external crate function with no injection point), so this

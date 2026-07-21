@@ -15,12 +15,19 @@ extern crate alloc;
 
 use proc_macro::TokenStream;
 
+/// Auto-generated documentation for arg_into.
 mod arg_into;
+/// Auto-generated documentation for idx.
 mod idx;
+/// Auto-generated documentation for module.
 mod module;
+/// Auto-generated documentation for onnx.
 mod onnx;
+/// Auto-generated documentation for safetensors.
 mod safetensors;
+/// Auto-generated documentation for shape.
 mod shape;
+/// Auto-generated documentation for shape_ops.
 mod shape_ops;
 
 /// A macro to construct static Tensor shapes ergonomically in the type system.
@@ -54,6 +61,7 @@ pub fn s(input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro]
+/// Auto-generated documentation for impl_arg_into.
 pub fn impl_arg_into(input: TokenStream) -> TokenStream {
     arg_into::impl_arg_into(input)
 }
@@ -116,6 +124,7 @@ pub fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 #[proc_macro]
+/// Auto-generated documentation for generate_shape_ops.
 pub fn generate_shape_ops(input: TokenStream) -> TokenStream {
     shape_ops::generate_shape_ops(input)
 }

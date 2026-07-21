@@ -20,15 +20,19 @@ use kindle_native::NativeBackend;
 
 // ── Type aliases ─────────────────────────────────────────────────────────
 
+/// Auto-generated documentation for NB.
 type NB = NativeBackend<f32, Cpu>;
+/// Auto-generated documentation for CB.
 type CB = CandleBackend<f32, Cpu>;
 
 // ── Shared helpers (mirrors linear_regression_parity.rs) ───────────────────
 
+/// Auto-generated documentation for as_bytes.
 fn as_bytes(v: &[f32]) -> Vec<u8> {
     v.iter().flat_map(|x| x.to_ne_bytes()).collect()
 }
 
+/// Auto-generated documentation for make_storage.
 fn make_storage<B: Backend>(data: &[f32], shape: &[usize]) -> B::Storage<f32> {
     B::from_bytes::<f32>(
         &as_bytes(data),
@@ -158,6 +162,7 @@ fn assert_close(a: &[f64], b: &[f64], tol: f64, label: &str) {
 // ── CreationOps (forward-only: no differentiable input) ────────────────────
 
 #[test]
+/// Auto-generated documentation for zeros_parity.
 fn zeros_parity() {
     let n = NB::zeros::<f32>(&[2, 3], KindleDType::F32, &KindleDevice::cpu()).unwrap();
     let c = CB::zeros::<f32>(&[2, 3], KindleDType::F32, &KindleDevice::cpu()).unwrap();
@@ -166,6 +171,7 @@ fn zeros_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for ones_parity.
 fn ones_parity() {
     let n = NB::ones::<f32>(&[2, 3], KindleDType::F32, &KindleDevice::cpu()).unwrap();
     let c = CB::ones::<f32>(&[2, 3], KindleDType::F32, &KindleDevice::cpu()).unwrap();
@@ -174,6 +180,7 @@ fn ones_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for tensor_to_device_parity.
 fn tensor_to_device_parity() {
     let data = vec![1.0, 2.0, 3.0, 4.0];
     let n0 = make_storage::<NB>(&data, &[4]);
@@ -192,6 +199,7 @@ fn tensor_to_device_parity() {
 // ── NumericOps ───────────────────────────────────────────────────────────
 
 #[test]
+/// Auto-generated documentation for add_forward_and_backward_parity.
 fn add_forward_and_backward_parity() {
     let a = vec![1.0, -2.0, 3.0, 0.5];
     let b = vec![4.0, 1.0, -3.0, 2.0];
@@ -205,6 +213,7 @@ fn add_forward_and_backward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for sub_forward_and_backward_parity.
 fn sub_forward_and_backward_parity() {
     let a = vec![5.0, -1.0, 2.0, 3.0];
     let b = vec![1.0, 2.0, -2.0, 0.5];
@@ -218,6 +227,7 @@ fn sub_forward_and_backward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for mul_forward_and_backward_parity.
 fn mul_forward_and_backward_parity() {
     let a = vec![2.0, -1.0, 0.5, 3.0];
     let b = vec![3.0, 4.0, -2.0, 1.5];
@@ -231,6 +241,7 @@ fn mul_forward_and_backward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for div_forward_and_backward_parity.
 fn div_forward_and_backward_parity() {
     let a = vec![4.0, -6.0, 9.0, 2.0];
     let b = vec![2.0, 3.0, -3.0, 0.5];
@@ -246,6 +257,7 @@ fn div_forward_and_backward_parity() {
 // ── FloatOps (13 unary/scalar kernels) ──────────────────────────────────────
 
 #[test]
+/// Auto-generated documentation for relu_forward_and_backward_parity.
 fn relu_forward_and_backward_parity() {
     // Avoids x == 0.0 exactly: relu's subgradient at the kink is convention-
     // dependent (NativeBackend and Candle may legitimately pick different
@@ -258,6 +270,7 @@ fn relu_forward_and_backward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for gelu_forward_and_backward_parity.
 fn gelu_forward_and_backward_parity() {
     let data = vec![-2.0, -0.5, 0.3, 1.0, 2.5];
     let (fwd_n, grad_n) = run_and_grad::<NB>(|x| NB::gelu::<f32>(x).unwrap(), &data, &[5]);
@@ -267,6 +280,7 @@ fn gelu_forward_and_backward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for abs_forward_and_backward_parity.
 fn abs_forward_and_backward_parity() {
     let data = vec![-3.0, -1.0, 0.5, 2.0];
     let (fwd_n, grad_n) = run_and_grad::<NB>(|x| NB::abs::<f32>(x).unwrap(), &data, &[4]);
@@ -276,6 +290,7 @@ fn abs_forward_and_backward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for exp_forward_and_backward_parity.
 fn exp_forward_and_backward_parity() {
     let data = vec![-1.0, 0.0, 0.5, 1.5];
     let (fwd_n, grad_n) = run_and_grad::<NB>(|x| NB::exp::<f32>(x).unwrap(), &data, &[4]);
@@ -285,6 +300,7 @@ fn exp_forward_and_backward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for neg_forward_and_backward_parity.
 fn neg_forward_and_backward_parity() {
     let data = vec![-2.0, 3.0, 0.0, 1.5];
     let (fwd_n, grad_n) = run_and_grad::<NB>(|x| NB::neg::<f32>(x).unwrap(), &data, &[4]);
@@ -294,6 +310,7 @@ fn neg_forward_and_backward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for sqrt_forward_and_backward_parity.
 fn sqrt_forward_and_backward_parity() {
     let data = vec![1.0, 4.0, 9.0, 2.25];
     let (fwd_n, grad_n) = run_and_grad::<NB>(|x| NB::sqrt::<f32>(x).unwrap(), &data, &[4]);
@@ -303,6 +320,7 @@ fn sqrt_forward_and_backward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for log_forward_and_backward_parity.
 fn log_forward_and_backward_parity() {
     let data = vec![0.5, 1.0, 2.0, 4.0];
     let (fwd_n, grad_n) = run_and_grad::<NB>(|x| NB::log::<f32>(x).unwrap(), &data, &[4]);
@@ -312,6 +330,7 @@ fn log_forward_and_backward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for tanh_forward_and_backward_parity.
 fn tanh_forward_and_backward_parity() {
     let data = vec![-1.5, -0.3, 0.3, 1.5];
     let (fwd_n, grad_n) = run_and_grad::<NB>(|x| NB::tanh::<f32>(x).unwrap(), &data, &[4]);
@@ -321,6 +340,7 @@ fn tanh_forward_and_backward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for sigmoid_forward_and_backward_parity.
 fn sigmoid_forward_and_backward_parity() {
     let data = vec![-2.0, -0.5, 0.5, 2.0];
     let (fwd_n, grad_n) = run_and_grad::<NB>(|x| NB::sigmoid::<f32>(x).unwrap(), &data, &[4]);
@@ -330,6 +350,7 @@ fn sigmoid_forward_and_backward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for swish_forward_and_backward_parity.
 fn swish_forward_and_backward_parity() {
     let data = vec![-2.0, -0.5, 0.5, 2.0];
     let (fwd_n, grad_n) = run_and_grad::<NB>(|x| NB::swish::<f32>(x).unwrap(), &data, &[4]);
@@ -339,6 +360,7 @@ fn swish_forward_and_backward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for softmax_forward_and_backward_parity.
 fn softmax_forward_and_backward_parity() {
     let data = vec![1.0, 2.0, 3.0, 0.5, -1.0, 2.5];
     let (fwd_n, grad_n) = run_and_grad::<NB>(|x| NB::softmax::<f32>(x, 1).unwrap(), &data, &[2, 3]);
@@ -348,6 +370,7 @@ fn softmax_forward_and_backward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for add_scalar_float_forward_and_backward_parity.
 fn add_scalar_float_forward_and_backward_parity() {
     let data = vec![1.0, -2.0, 3.0, 0.5];
     let (fwd_n, grad_n) = run_and_grad::<NB>(
@@ -365,6 +388,7 @@ fn add_scalar_float_forward_and_backward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for mul_scalar_float_forward_and_backward_parity.
 fn mul_scalar_float_forward_and_backward_parity() {
     let data = vec![1.0, -2.0, 3.0, 0.5];
     let (fwd_n, grad_n) = run_and_grad::<NB>(
@@ -384,6 +408,7 @@ fn mul_scalar_float_forward_and_backward_parity() {
 // ── ReductionOps (12 float-output reductions; argmax/argmin in Task 2) ─────
 
 #[test]
+/// Auto-generated documentation for sum_all_forward_and_backward_parity.
 fn sum_all_forward_and_backward_parity() {
     let data = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
     let (fwd_n, grad_n) = run_and_grad::<NB>(|x| NB::sum_all::<f32>(x).unwrap(), &data, &[2, 3]);
@@ -393,6 +418,7 @@ fn sum_all_forward_and_backward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for mean_all_forward_and_backward_parity.
 fn mean_all_forward_and_backward_parity() {
     let data = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
     let (fwd_n, grad_n) = run_and_grad::<NB>(|x| NB::mean_all::<f32>(x).unwrap(), &data, &[2, 3]);
@@ -402,6 +428,7 @@ fn mean_all_forward_and_backward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for max_all_forward_and_backward_parity.
 fn max_all_forward_and_backward_parity() {
     let data = vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0];
     let (fwd_n, grad_n) = run_and_grad::<NB>(|x| NB::max_all::<f32>(x).unwrap(), &data, &[2, 3]);
@@ -411,6 +438,7 @@ fn max_all_forward_and_backward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for min_all_forward_and_backward_parity.
 fn min_all_forward_and_backward_parity() {
     let data = vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0];
     let (fwd_n, grad_n) = run_and_grad::<NB>(|x| NB::min_all::<f32>(x).unwrap(), &data, &[2, 3]);
@@ -420,6 +448,7 @@ fn min_all_forward_and_backward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for sum_dim_forward_and_backward_parity.
 fn sum_dim_forward_and_backward_parity() {
     let data = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
     let (fwd_n, grad_n) = run_and_grad::<NB>(|x| NB::sum_dim::<f32>(x, 1).unwrap(), &data, &[2, 3]);
@@ -429,6 +458,7 @@ fn sum_dim_forward_and_backward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for sum_keepdim_forward_and_backward_parity.
 fn sum_keepdim_forward_and_backward_parity() {
     let data = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
     let (fwd_n, grad_n) =
@@ -440,6 +470,7 @@ fn sum_keepdim_forward_and_backward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for mean_dim_forward_and_backward_parity.
 fn mean_dim_forward_and_backward_parity() {
     let data = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
     let (fwd_n, grad_n) =
@@ -451,6 +482,7 @@ fn mean_dim_forward_and_backward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for mean_keepdim_forward_and_backward_parity.
 fn mean_keepdim_forward_and_backward_parity() {
     let data = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
     let (fwd_n, grad_n) =
@@ -462,6 +494,7 @@ fn mean_keepdim_forward_and_backward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for max_dim_forward_and_backward_parity.
 fn max_dim_forward_and_backward_parity() {
     let data = vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0];
     let (fwd_n, grad_n) = run_and_grad::<NB>(|x| NB::max_dim::<f32>(x, 1).unwrap(), &data, &[2, 3]);
@@ -471,6 +504,7 @@ fn max_dim_forward_and_backward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for max_keepdim_forward_and_backward_parity.
 fn max_keepdim_forward_and_backward_parity() {
     let data = vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0];
     let (fwd_n, grad_n) =
@@ -482,6 +516,7 @@ fn max_keepdim_forward_and_backward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for min_dim_forward_and_backward_parity.
 fn min_dim_forward_and_backward_parity() {
     let data = vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0];
     let (fwd_n, grad_n) = run_and_grad::<NB>(|x| NB::min_dim::<f32>(x, 1).unwrap(), &data, &[2, 3]);
@@ -491,6 +526,7 @@ fn min_dim_forward_and_backward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for min_keepdim_forward_and_backward_parity.
 fn min_keepdim_forward_and_backward_parity() {
     let data = vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0];
     let (fwd_n, grad_n) =
@@ -504,6 +540,7 @@ fn min_keepdim_forward_and_backward_parity() {
 // ── TensorOps shape methods ─────────────────────────────────────────────
 
 #[test]
+/// Auto-generated documentation for reshape_forward_and_backward_parity.
 fn reshape_forward_and_backward_parity() {
     let data = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
     let (fwd_n, grad_n) =
@@ -515,6 +552,7 @@ fn reshape_forward_and_backward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for transpose_forward_and_backward_parity.
 fn transpose_forward_and_backward_parity() {
     let data = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
     let (fwd_n, grad_n) =
@@ -526,6 +564,7 @@ fn transpose_forward_and_backward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for matmul_forward_and_backward_parity.
 fn matmul_forward_and_backward_parity() {
     let a = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]; // [2,3]
     let b = vec![1.0, 0.0, 0.0, 1.0, 1.0, 1.0]; // [3,2]
@@ -549,6 +588,7 @@ fn matmul_forward_and_backward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for broadcast_as_forward_and_backward_parity.
 fn broadcast_as_forward_and_backward_parity() {
     let data = vec![1.0, 2.0, 3.0];
     let (fwd_n, grad_n) = run_and_grad::<NB>(
@@ -566,6 +606,7 @@ fn broadcast_as_forward_and_backward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for narrow_forward_and_backward_parity.
 fn narrow_forward_and_backward_parity() {
     let data = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
     let (fwd_n, grad_n) =
@@ -577,6 +618,7 @@ fn narrow_forward_and_backward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for squeeze_forward_and_backward_parity.
 fn squeeze_forward_and_backward_parity() {
     let data = vec![1.0, 2.0, 3.0];
     let (fwd_n, grad_n) = run_and_grad::<NB>(|x| NB::squeeze::<f32>(x, 0).unwrap(), &data, &[1, 3]);
@@ -586,6 +628,7 @@ fn squeeze_forward_and_backward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for stack_forward_and_backward_parity.
 fn stack_forward_and_backward_parity() {
     let a = vec![1.0, 2.0, 3.0];
     let b = vec![4.0, 5.0, 6.0];
@@ -609,6 +652,7 @@ fn stack_forward_and_backward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for concat_forward_and_backward_parity.
 fn concat_forward_and_backward_parity() {
     let a = vec![1.0, 2.0, 3.0];
     let b = vec![4.0, 5.0, 6.0];
@@ -632,6 +676,7 @@ fn concat_forward_and_backward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for slice_forward_and_backward_parity.
 fn slice_forward_and_backward_parity() {
     let data = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
     let (fwd_n, grad_n) = run_and_grad::<NB>(
@@ -649,6 +694,7 @@ fn slice_forward_and_backward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for flatten_forward_and_backward_parity.
 fn flatten_forward_and_backward_parity() {
     let data = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
     let (fwd_n, grad_n) =
@@ -660,6 +706,7 @@ fn flatten_forward_and_backward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for broadcast_left_forward_and_backward_parity.
 fn broadcast_left_forward_and_backward_parity() {
     let data = vec![1.0, 2.0, 3.0];
     let (fwd_n, grad_n) = run_and_grad::<NB>(
@@ -690,6 +737,7 @@ fn broadcast_left_forward_and_backward_parity() {
 //    `NativeBackend` per 05-AUDIT.md's Descope Decision). ─────────────────
 
 #[test]
+/// Auto-generated documentation for argmax_forward_parity.
 fn argmax_forward_parity() {
     let data = vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0];
     let n_stor = make_storage::<NB>(&data, &[2, 3]);
@@ -716,6 +764,7 @@ fn argmax_forward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for argmin_forward_parity.
 fn argmin_forward_parity() {
     let data = vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0];
     let n_stor = make_storage::<NB>(&data, &[2, 3]);
@@ -780,6 +829,7 @@ fn layer_norm_forward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for batch_norm_forward_and_backward_parity.
 fn batch_norm_forward_and_backward_parity() {
     // [1, 3, 2, 2] — inference-mode-only (Phase 4 carried decision): running
     // stats are consumed as fixed constants, never updated.
@@ -836,6 +886,7 @@ fn batch_norm_forward_and_backward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for embedding_forward_and_backward_parity.
 fn embedding_forward_and_backward_parity() {
     // Weight [4, 3] (vocab=4, embed_dim=3); indices [1, 3] -> rows 1 and 3.
     let weight = vec![
@@ -885,6 +936,7 @@ fn embedding_forward_and_backward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for conv1d_forward_and_backward_parity.
 fn conv1d_forward_and_backward_parity() {
     // input [1, 2, 6], weight [3, 2, 3] (Cout=3, Cin=2, K=3), stride=1, pad=1.
     let data: Vec<f32> = (1..=12).map(|v| v as f32 * 0.1).collect();
@@ -958,6 +1010,7 @@ fn conv2d_forward_and_backward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for conv_transpose2d_forward_and_backward_parity.
 fn conv_transpose2d_forward_and_backward_parity() {
     // input [1, 3, 4, 4], weight [3, 4, 3, 3] (Cin=3, Cout=4, K=3x3) per
     // conv_transpose2d's (Cin, Cout, Kh, Kw) weight-layout convention.
@@ -983,6 +1036,7 @@ fn conv_transpose2d_forward_and_backward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for max_pool2d_forward_and_backward_parity.
 fn max_pool2d_forward_and_backward_parity() {
     let data: Vec<f32> = (0..48).map(|v| v as f32 % 9.0).collect(); // [1,3,4,4]
     let (fwd_n, grad_n) = run_and_grad::<NB>(
@@ -1023,6 +1077,7 @@ fn max_pool2d_forward_and_backward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for avg_pool2d_forward_and_backward_parity.
 fn avg_pool2d_forward_and_backward_parity() {
     let data: Vec<f32> = (0..48).map(|v| v as f32 % 9.0).collect(); // [1,3,4,4]
     let (fwd_n, grad_n) = run_and_grad::<NB>(
@@ -1092,6 +1147,7 @@ fn adaptive_avg_pool2d_native_self_consistency() {
 // to a real numerical divergence. Reduction::Mean is fully exercised below.
 
 #[test]
+/// Auto-generated documentation for mse_loss_forward_and_backward_parity_mean.
 fn mse_loss_forward_and_backward_parity_mean() {
     let pred = vec![1.0, 2.0, 3.0, 4.0];
     let target = vec![1.5, 1.5, 2.5, 4.5];
@@ -1191,6 +1247,7 @@ fn bce_with_logits_loss_forward_and_backward_parity() {
 }
 
 #[test]
+/// Auto-generated documentation for cross_entropy_loss_forward_and_backward_parity.
 fn cross_entropy_loss_forward_and_backward_parity() {
     // pred [2, 3] logits, target [2] class indices.
     let pred = vec![1.0, 2.0, 0.5, 0.2, 1.5, 3.0];

@@ -2,9 +2,11 @@ use kindle_backends::candle::CandleBackend;
 use kindle_core::prelude::*;
 use typenum::{U2, U3};
 
+/// Auto-generated documentation for B.
 type B = CandleBackend<f32, Cpu>;
 
 #[test]
+/// Auto-generated documentation for test_broadcast_success.
 fn test_broadcast_success() {
     let t1: Tensor<(U2,), B> = Tensor::zeros(()).unwrap();
     let t2: Tensor<(U3, U2), B> = Tensor::zeros(()).unwrap();

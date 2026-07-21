@@ -8,16 +8,26 @@
 
 use kindle_core::prelude::Error;
 use kindle_core::prelude::{CreationOps, DType, KindleDType, KindleDevice, Result};
+#[allow(unused_imports)]
 use rand::Rng;
+#[allow(unused_imports)]
 use rand::SeedableRng;
+#[allow(unused_imports)]
 use rand_distr::{Distribution, StandardNormal};
+#[allow(unused_imports)]
 use rayon::prelude::*;
 
 use crate::NativeBackend;
 use crate::storage::{NativeBuffer, NativeStorage};
 use crate::var;
 
-fn fill_buffer(total: usize, value: f64, dtype: KindleDType, device: &KindleDevice) -> Result<NativeBuffer> {
+/// Auto-generated documentation for fill_buffer.
+fn fill_buffer(
+    total: usize,
+    value: f64,
+    dtype: KindleDType,
+    device: &KindleDevice,
+) -> Result<NativeBuffer> {
     let host_buf = match dtype {
         KindleDType::F32 => NativeBuffer::F32(vec![value as f32; total]),
         KindleDType::F64 => NativeBuffer::F64(vec![value; total]),
@@ -32,7 +42,12 @@ fn fill_buffer(total: usize, value: f64, dtype: KindleDType, device: &KindleDevi
                 backend: "Native Q8_0",
             });
         }
-        _ => return Err(Error::UnsupportedBackendOperation { op: "fill", backend: "Native unknown dtype" }),
+        _ => {
+            return Err(Error::UnsupportedBackendOperation {
+                op: "fill",
+                backend: "Native unknown dtype",
+            });
+        }
     };
 
     match device.variant() {
@@ -42,7 +57,9 @@ fn fill_buffer(total: usize, value: f64, dtype: KindleDType, device: &KindleDevi
             let ctx = crate::gpu::cuda_cache::get_cuda_device(id);
             let stream = ctx.default_stream();
             let bytes = host_buf.as_bytes();
-            let dev_slice = stream.clone_htod(bytes).map_err(|e| Error::Msg(format!("CUDA alloc/copy failed: {:?}", e)))?;
+            let dev_slice = stream
+                .clone_htod(bytes)
+                .map_err(|e| Error::Msg(format!("CUDA alloc/copy failed: {:?}", e)))?;
             Ok(NativeBuffer::Cuda(crate::storage::NativeCudaBuffer {
                 len: total,
                 data: alloc::sync::Arc::new(dev_slice),
@@ -50,11 +67,15 @@ fn fill_buffer(total: usize, value: f64, dtype: KindleDType, device: &KindleDevi
                 device_id: id,
             }))
         }
-        _ => Err(Error::UnsupportedBackendOperation { op: "fill", backend: "Native unknown device" }),
+        _ => Err(Error::UnsupportedBackendOperation {
+            op: "fill",
+            backend: "Native unknown device",
+        }),
     }
 }
 
 impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for NativeBackend<T, D> {
+    /// Auto-generated documentation for zeros.
     fn zeros<K: DType>(
         shape: &[usize],
         dtype: KindleDType,
@@ -65,6 +86,7 @@ impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for NativeBack
         Ok(NativeStorage::from_contiguous(buffer, shape.to_vec()))
     }
 
+    /// Auto-generated documentation for ones.
     fn ones<K: DType>(
         shape: &[usize],
         dtype: KindleDType,
@@ -75,6 +97,7 @@ impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for NativeBack
         Ok(NativeStorage::from_contiguous(buffer, shape.to_vec()))
     }
 
+    /// Auto-generated documentation for rand.
     fn rand<K: DType>(
         shape: &[usize],
         dtype: KindleDType,
@@ -101,7 +124,9 @@ impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for NativeBack
                 let ctx = crate::gpu::cuda_cache::get_cuda_device(id);
                 let stream = ctx.default_stream();
                 let bytes = buffer.as_bytes();
-                let dev_slice = stream.clone_htod(bytes).map_err(|e| Error::Msg(format!("CUDA alloc/copy failed: {:?}", e)))?;
+                let dev_slice = stream
+                    .clone_htod(bytes)
+                    .map_err(|e| Error::Msg(format!("CUDA alloc/copy failed: {:?}", e)))?;
                 NativeBuffer::Cuda(crate::storage::NativeCudaBuffer {
                     len: total,
                     data: alloc::sync::Arc::new(dev_slice),
@@ -112,12 +137,10 @@ impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for NativeBack
             _ => panic!("Unsupported device"),
         };
 
-        Ok(NativeStorage::from_contiguous(
-            final_buffer,
-            shape.to_vec(),
-        ))
+        Ok(NativeStorage::from_contiguous(final_buffer, shape.to_vec()))
     }
 
+    /// Auto-generated documentation for randn.
     fn randn<K: DType>(
         shape: &[usize],
         dtype: KindleDType,
@@ -144,7 +167,9 @@ impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for NativeBack
                 let ctx = crate::gpu::cuda_cache::get_cuda_device(id);
                 let stream = ctx.default_stream();
                 let bytes = buffer.as_bytes();
-                let dev_slice = stream.clone_htod(bytes).map_err(|e| Error::Msg(format!("CUDA alloc/copy failed: {:?}", e)))?;
+                let dev_slice = stream
+                    .clone_htod(bytes)
+                    .map_err(|e| Error::Msg(format!("CUDA alloc/copy failed: {:?}", e)))?;
                 NativeBuffer::Cuda(crate::storage::NativeCudaBuffer {
                     len: total,
                     data: alloc::sync::Arc::new(dev_slice),
@@ -155,12 +180,10 @@ impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for NativeBack
             _ => panic!("Unsupported device"),
         };
 
-        Ok(NativeStorage::from_contiguous(
-            final_buffer,
-            shape.to_vec(),
-        ))
+        Ok(NativeStorage::from_contiguous(final_buffer, shape.to_vec()))
     }
 
+    /// Auto-generated documentation for var_zeros.
     fn var_zeros<K: DType>(
         shape: &[usize],
         dtype: KindleDType,
@@ -170,6 +193,7 @@ impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for NativeBack
         var::var_from_tensor(&t)
     }
 
+    /// Auto-generated documentation for var_ones.
     fn var_ones<K: DType>(
         shape: &[usize],
         dtype: KindleDType,
@@ -179,6 +203,7 @@ impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for NativeBack
         var::var_from_tensor(&t)
     }
 
+    /// Auto-generated documentation for var_rand.
     fn var_rand<K: DType>(
         shape: &[usize],
         dtype: KindleDType,
@@ -188,6 +213,7 @@ impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for NativeBack
         var::var_from_tensor(&t)
     }
 
+    /// Auto-generated documentation for var_randn.
     fn var_randn<K: DType>(
         shape: &[usize],
         dtype: KindleDType,
@@ -197,11 +223,22 @@ impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for NativeBack
         var::var_from_tensor(&t)
     }
 
+    /// Auto-generated documentation for tensor_to_device.
     fn tensor_to_device<K: DType>(
         t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         device: &KindleDevice,
     ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
-        let is_cpu = matches!(t.buffer.as_ref(), NativeBuffer::F32(_) | NativeBuffer::F64(_) | NativeBuffer::U8(_) | NativeBuffer::U32(_) | NativeBuffer::I64(_) | NativeBuffer::F16(_) | NativeBuffer::BF16(_) | NativeBuffer::Q8_0(_));
+        let is_cpu = matches!(
+            t.buffer.as_ref(),
+            NativeBuffer::F32(_)
+                | NativeBuffer::F64(_)
+                | NativeBuffer::U8(_)
+                | NativeBuffer::U32(_)
+                | NativeBuffer::I64(_)
+                | NativeBuffer::F16(_)
+                | NativeBuffer::BF16(_)
+                | NativeBuffer::Q8_0(_)
+        );
 
         match (is_cpu, device.variant()) {
             (true, kindle_core::prelude::DeviceVariant::Cpu) => Ok(t.clone()),
@@ -210,15 +247,18 @@ impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for NativeBack
                 let ctx = crate::gpu::cuda_cache::get_cuda_device(id);
                 let stream = ctx.default_stream();
                 let bytes = t.buffer.as_bytes();
-                let dev_slice = stream.clone_htod(bytes).map_err(|e| Error::Msg(format!("CUDA alloc/copy failed: {:?}", e)))?;
-                
+                let dev_slice = stream
+                    .clone_htod(bytes)
+                    .map_err(|e| Error::Msg(format!("CUDA alloc/copy failed: {:?}", e)))?;
+
                 let mut cloned = t.clone();
-                cloned.buffer = alloc::sync::Arc::new(NativeBuffer::Cuda(crate::storage::NativeCudaBuffer {
-                    len: t.buffer.len(),
-                    data: alloc::sync::Arc::new(dev_slice),
-                    device: ctx.clone(),
-                    device_id: id,
-                }));
+                cloned.buffer =
+                    alloc::sync::Arc::new(NativeBuffer::Cuda(crate::storage::NativeCudaBuffer {
+                        len: t.buffer.len(),
+                        data: alloc::sync::Arc::new(dev_slice),
+                        device: ctx.clone(),
+                        device_id: id,
+                    }));
                 Ok(cloned)
             }
             (false, kindle_core::prelude::DeviceVariant::Cpu) => {
@@ -226,38 +266,53 @@ impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for NativeBack
                 {
                     if let NativeBuffer::Cuda(b) = t.buffer.as_ref() {
                         let stream = b.device.default_stream();
-                        // wait, device len is elements but the slice is u8
+                        // Account for u8 size when allocating the device slice
                         // we need the number of bytes.
                         let mut bytes = vec![0u8; b.data.len()];
-                        stream.memcpy_dtoh(b.data.as_ref(), &mut bytes).map_err(|e| Error::Msg(format!("CUDA dtoh failed: {:?}", e)))?;
+                        stream
+                            .memcpy_dtoh(b.data.as_ref(), &mut bytes)
+                            .map_err(|e| Error::Msg(format!("CUDA dtoh failed: {:?}", e)))?;
                         if core::any::TypeId::of::<K>() == core::any::TypeId::of::<f32>() {
                             let floats: Vec<f32> = bytemuck::cast_slice(&bytes).to_vec();
                             let mut cloned = t.clone();
                             cloned.buffer = alloc::sync::Arc::new(NativeBuffer::F32(floats));
                             return Ok(cloned);
                         } else {
-                            return Err(Error::UnsupportedBackendOperation { op: "dtoh only supports F32 for now", backend: "Native" });
+                            return Err(Error::UnsupportedBackendOperation {
+                                op: "dtoh only supports F32 for now",
+                                backend: "Native",
+                            });
                         }
                     }
                 }
-                Err(Error::UnsupportedBackendOperation { op: "tensor_to_device (unknown device source)", backend: "Native" })
+                Err(Error::UnsupportedBackendOperation {
+                    op: "tensor_to_device (unknown device source)",
+                    backend: "Native",
+                })
             }
-            _ => Err(Error::UnsupportedBackendOperation { op: "tensor_to_device", backend: "Native" })
+            _ => Err(Error::UnsupportedBackendOperation {
+                op: "tensor_to_device",
+                backend: "Native",
+            }),
         }
     }
 }
 
 #[cfg(test)]
+/// Auto-generated documentation for tests.
 mod tests {
     use super::*;
     use kindle_core::prelude::Backend;
 
+    /// Auto-generated documentation for TestBackend.
     type TestBackend = NativeBackend<f32, kindle_core::prelude::Cpu>;
 
+    /// Auto-generated documentation for dev.
     fn dev() -> KindleDevice {
         KindleDevice::cpu()
     }
 
+    /// Auto-generated documentation for f32_vec.
     fn f32_vec(s: &NativeStorage) -> Vec<f32> {
         match &*s.buffer {
             NativeBuffer::F32(v) => v.clone(),
@@ -266,6 +321,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for zeros_produces_correct_shape_and_all_zero_values.
     fn zeros_produces_correct_shape_and_all_zero_values() {
         let t = TestBackend::zeros::<f32>(&[2, 3], KindleDType::F32, &dev()).unwrap();
         assert_eq!(t.shape, vec![2, 3]);
@@ -273,6 +329,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for ones_produces_correct_shape_and_all_one_values.
     fn ones_produces_correct_shape_and_all_one_values() {
         let t = TestBackend::ones::<f32>(&[2, 3], KindleDType::F32, &dev()).unwrap();
         assert_eq!(t.shape, vec![2, 3]);
@@ -280,6 +337,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for rand_produces_values_in_zero_one_range.
     fn rand_produces_values_in_zero_one_range() {
         let t = TestBackend::rand::<f32>(&[100], KindleDType::F32, &dev()).unwrap();
         assert_eq!(t.shape, vec![100]);
@@ -289,6 +347,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for randn_produces_statistically_plausible_standard_normal_samples.
     fn randn_produces_statistically_plausible_standard_normal_samples() {
         let t = TestBackend::randn::<f32>(&[1000], KindleDType::F32, &dev()).unwrap();
         let data = f32_vec(&t);
@@ -305,6 +364,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for var_zeros_wraps_equivalent_zeros_result.
     fn var_zeros_wraps_equivalent_zeros_result() {
         let var = TestBackend::var_zeros::<f32>(&[2, 2], KindleDType::F32, &dev()).unwrap();
         let t = TestBackend::var_as_tensor::<f32>(&var).unwrap();
@@ -313,6 +373,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for var_ones_wraps_equivalent_ones_result.
     fn var_ones_wraps_equivalent_ones_result() {
         let var = TestBackend::var_ones::<f32>(&[2, 2], KindleDType::F32, &dev()).unwrap();
         let t = TestBackend::var_as_tensor::<f32>(&var).unwrap();
@@ -321,6 +382,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for var_rand_wraps_equivalent_rand_result.
     fn var_rand_wraps_equivalent_rand_result() {
         let var = TestBackend::var_rand::<f32>(&[10], KindleDType::F32, &dev()).unwrap();
         let t = TestBackend::var_as_tensor::<f32>(&var).unwrap();
@@ -329,6 +391,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for var_randn_wraps_equivalent_randn_result.
     fn var_randn_wraps_equivalent_randn_result() {
         let var = TestBackend::var_randn::<f32>(&[50], KindleDType::F32, &dev()).unwrap();
         let t = TestBackend::var_as_tensor::<f32>(&var).unwrap();
@@ -336,6 +399,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for tensor_to_device_is_a_noop_returning_equivalent_storage.
     fn tensor_to_device_is_a_noop_returning_equivalent_storage() {
         let t = TestBackend::zeros::<f32>(&[3], KindleDType::F32, &dev()).unwrap();
         let t2 = TestBackend::tensor_to_device::<f32>(&t, &dev()).unwrap();

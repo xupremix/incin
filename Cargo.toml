@@ -25,7 +25,8 @@ readme = "README.md"
 license = "MIT OR Apache-2.0"
 
 [workspace.lints.clippy]
-
+type_complexity = "allow"
+too_many_arguments = "allow"
 [workspace.dependencies]
 proc-macro2 = { version = "1.0.106", default-features = false }
 syn = { version = "2.0.118", features = ["full"] }

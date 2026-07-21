@@ -1,12 +1,12 @@
 //! Contains the `Panel` trait which defines the core interface for UI plugins.
-//! 
+//!
 //! A [`Panel`] acts as a single, self-contained view within the `kindle-viz` dashboard.
 //! It is responsible for tracking its own state, responding to incoming telemetry events,
 //! handling user input (like mouse clicks or key presses when focused), and rendering
 //! its contents into a designated region on the screen.
 //!
-//! Because `kindle-viz` may spawn background tasks, panels must be `Send` and are 
-//! updated using mutable references (`&mut self`), clearly defining ownership and 
+//! Because `kindle-viz` may spawn background tasks, panels must be `Send` and are
+//! updated using mutable references (`&mut self`), clearly defining ownership and
 //! allowing them to hold persistent state across frames without global mutability or locks.
 
 use crate::event::PanelEvent;

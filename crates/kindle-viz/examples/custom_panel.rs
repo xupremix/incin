@@ -1,11 +1,12 @@
-use kindle_viz_plugin_api::prelude::*;
 use kindle_telemetry::events::{Event, ScalarEvent};
 use kindle_viz::app::{App, DefaultKeymap};
-use ratatui::widgets::{Block, Borders, Paragraph};
-use ratatui::style::{Style, Color};
+use kindle_viz_plugin_api::prelude::*;
 use ratatui::layout::Alignment;
+use ratatui::style::{Color, Style};
+use ratatui::widgets::{Block, Borders, Paragraph};
 use std::io::stdout;
 
+/// Auto-generated documentation for CustomMetricPanel.
 struct CustomMetricPanel {
     current_value: f64,
     border_color: Color,
@@ -21,14 +22,17 @@ impl CustomMetricPanel {
 }
 
 impl Panel for CustomMetricPanel {
+    /// Auto-generated documentation for id.
     fn id(&self) -> &'static str {
         "custom_metric"
     }
 
+    /// Auto-generated documentation for title.
     fn title(&self) -> &str {
         "Custom Metric Tracker"
     }
 
+    /// Auto-generated documentation for update.
     fn update(&mut self, event: &Event) {
         if let Event::Scalar(ScalarEvent { name, value, .. }) = event {
             if name == "custom_metric" {
@@ -37,6 +41,7 @@ impl Panel for CustomMetricPanel {
         }
     }
 
+    /// Auto-generated documentation for render.
     fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) {
         // Register a hit region spanning the entire panel area
         ctx.register_hit_region(ctx.area(), HitId(1));
@@ -45,7 +50,10 @@ impl Panel for CustomMetricPanel {
             .borders(Borders::ALL)
             .border_style(Style::default().fg(self.border_color));
 
-        let text = format!("Current Value: {:.2}\n(Press 'c' to change border color)", self.current_value);
+        let text = format!(
+            "Current Value: {:.2}\n(Press 'c' to change border color)",
+            self.current_value
+        );
         let paragraph = Paragraph::new(text)
             .block(block)
             .alignment(Alignment::Center);
@@ -54,6 +62,7 @@ impl Panel for CustomMetricPanel {
         ctx.frame_mut().render_widget(paragraph, area);
     }
 
+    /// Auto-generated documentation for handle_event.
     fn handle_event(&mut self, event: &PanelEvent) -> bool {
         match event {
             PanelEvent::Key(k) => {
@@ -68,12 +77,11 @@ impl Panel for CustomMetricPanel {
                     false
                 }
             }
-            PanelEvent::Mouse(_) => {
-                false
-            }
+            PanelEvent::Mouse(_) => false,
         }
     }
 
+    /// Auto-generated documentation for hover_text.
     fn hover_text(&self, id: HitId) -> Option<String> {
         if id == HitId(1) {
             Some("Hovering over custom metric panel!".to_string())
@@ -82,6 +90,7 @@ impl Panel for CustomMetricPanel {
         }
     }
 
+    /// Auto-generated documentation for reset.
     fn reset(&mut self) {
         self.current_value = 0.0;
         self.border_color = Color::Blue;
@@ -89,11 +98,13 @@ impl Panel for CustomMetricPanel {
 }
 
 // Dummy transport to simulate events
+/// Auto-generated documentation for DummyTransport.
 struct DummyTransport {
     last_val: f64,
 }
 
 impl kindle_viz::transport_reader::TransportReader for DummyTransport {
+    /// Auto-generated documentation for poll_new_events.
     fn poll_new_events(&mut self) -> kindle_viz::err::Result<Vec<Event>> {
         self.last_val += 1.0;
         if self.last_val > 100.0 {
@@ -109,6 +120,7 @@ impl kindle_viz::transport_reader::TransportReader for DummyTransport {
     }
 }
 
+/// Auto-generated documentation for install_panic_hook.
 fn install_panic_hook() {
     let previous_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |panic_info| {
@@ -123,18 +135,18 @@ fn install_panic_hook() {
 async fn main() -> anyhow::Result<()> {
     let transport = Box::new(DummyTransport { last_val: 0.0 });
     let mut app = App::new(transport, "Custom Panel Example".to_string());
-    
+
     app.register_panel(Box::new(CustomMetricPanel::new()));
 
     install_panic_hook();
     let terminal = ratatui::init();
     let _ = crossterm::execute!(stdout(), crossterm::event::EnableMouseCapture);
-    
+
     let keymap = Box::new(DefaultKeymap);
     let result = kindle_viz::app::run(app, terminal, keymap).await;
-    
+
     let _ = crossterm::execute!(stdout(), crossterm::event::DisableMouseCapture);
     ratatui::restore();
-    
+
     result
 }

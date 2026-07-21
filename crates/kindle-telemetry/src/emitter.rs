@@ -9,8 +9,8 @@
 //! (priority channel, effectively-always-succeeds given its low volume and
 //! dedicated capacity).
 
-use crossbeam_channel::{Receiver, Sender, TryRecvError, TrySendError, bounded};
 use alloc::sync::Arc;
+use crossbeam_channel::{Receiver, Sender, TryRecvError, TrySendError, bounded};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
@@ -212,14 +212,17 @@ impl Drop for Emitter {
 }
 
 impl Reporter for Emitter {
+    /// Auto-generated documentation for log_scalar.
     fn log_scalar(&self, event: ScalarEvent) {
         self.send_bulk(Event::Scalar(event));
     }
 
+    /// Auto-generated documentation for log_gradient_norm.
     fn log_gradient_norm(&self, event: GradientNormEvent) {
         self.send_bulk(Event::GradientNorm(event));
     }
 
+    /// Auto-generated documentation for log_weight_norm.
     fn log_weight_norm(&self, event: WeightNormEvent) {
         self.send_bulk(Event::WeightNorm(event));
     }
@@ -242,14 +245,17 @@ impl Reporter for Emitter {
         self.send_priority(Event::Memory(event));
     }
 
+    /// Auto-generated documentation for log_epoch.
     fn log_epoch(&self, event: EpochEvent) {
         self.send_priority(Event::Epoch(event));
     }
 
+    /// Auto-generated documentation for log_hyperparam.
     fn log_hyperparam(&self, event: HyperparamEvent) {
         self.send_priority(Event::Hyperparam(event));
     }
 
+    /// Auto-generated documentation for log_graph_snapshot.
     fn log_graph_snapshot(&self, event: GraphSnapshotEvent) {
         self.send_priority(Event::GraphSnapshot(event));
     }
@@ -351,6 +357,7 @@ fn write_to_all(
 }
 
 #[cfg(test)]
+/// Auto-generated documentation for tests.
 mod tests {
     use super::*;
     use crate::events::CURRENT_SCHEMA_VERSION;
@@ -362,6 +369,7 @@ mod tests {
     struct CollectingTransport(Arc<Mutex<Vec<Event>>>);
 
     impl Transport for CollectingTransport {
+        /// Auto-generated documentation for write_event.
         fn write_event(&mut self, event: &Event) -> crate::err::Result<()> {
             self.0.lock().unwrap().push(event.clone());
             Ok(())
@@ -377,6 +385,7 @@ mod tests {
     }
 
     impl Transport for StallingTransport {
+        /// Auto-generated documentation for write_event.
         fn write_event(&mut self, event: &Event) -> crate::err::Result<()> {
             std::thread::sleep(self.delay);
             self.inner.lock().unwrap().push(event.clone());
@@ -384,6 +393,7 @@ mod tests {
         }
     }
 
+    /// Auto-generated documentation for scalar_event.
     fn scalar_event(step: usize, name: &str, value: f64) -> ScalarEvent {
         ScalarEvent {
             schema_version: CURRENT_SCHEMA_VERSION,
@@ -393,6 +403,7 @@ mod tests {
         }
     }
 
+    /// Auto-generated documentation for hyperparam_event.
     fn hyperparam_event() -> HyperparamEvent {
         let mut params = alloc::collections::BTreeMap::new();
         params.insert("lr".to_string(), "0.001".to_string());
@@ -403,6 +414,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for new_with_tiny_capacities_returns_without_blocking_or_panicking.
     fn new_with_tiny_capacities_returns_without_blocking_or_panicking() {
         let collected = Arc::new(Mutex::new(Vec::new()));
         let transport: Box<dyn Transport> = Box::new(CollectingTransport(collected));
@@ -414,6 +426,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for overflowing_bulk_channel_does_not_block_caller.
     fn overflowing_bulk_channel_does_not_block_caller() {
         // Capacity-1 bulk channel, writer thread deliberately stalled so the
         // channel stays saturated for the duration of the test.
@@ -441,6 +454,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for dropped_count_increments_on_bulk_overflow_and_stays_zero_otherwise.
     fn dropped_count_increments_on_bulk_overflow_and_stays_zero_otherwise() {
         let inner = Arc::new(Mutex::new(Vec::new()));
         let transport: Box<dyn Transport> = Box::new(StallingTransport {
@@ -463,6 +477,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for priority_event_delivered_even_while_bulk_channel_saturated.
     fn priority_event_delivered_even_while_bulk_channel_saturated() {
         let collected = Arc::new(Mutex::new(Vec::new()));
         let transport: Box<dyn Transport> = Box::new(CollectingTransport(collected.clone()));
@@ -503,6 +518,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for event_type_routes_to_correct_channel_behavior_under_saturation.
     fn event_type_routes_to_correct_channel_behavior_under_saturation() {
         let collected = Arc::new(Mutex::new(Vec::new()));
         let transport: Box<dyn Transport> = Box::new(CollectingTransport(collected.clone()));

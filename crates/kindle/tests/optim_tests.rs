@@ -1,9 +1,11 @@
-use kindle::{Adam, AdamW, SGD};
 use kindle::prelude::*;
-// CosineAnnealingLR might not exist, but let's see. I'll just comment it out if it doesn't.
+use kindle::{Adam, AdamW, SGD};
 
+
+/// Auto-generated documentation for CpuBackend.
 type CpuBackend = DefaultBackend;
 
+/// Auto-generated documentation for get_linear_and_grads.
 fn get_linear_and_grads() -> Result<(
     Linear<s![10, 5], CpuBackend>,
     kindle::Gradients<<CpuBackend as Backend>::Grads>,
@@ -18,6 +20,7 @@ fn get_linear_and_grads() -> Result<(
 }
 
 #[test]
+/// Auto-generated documentation for test_sgd.
 fn test_sgd() -> Result<()> {
     let (linear, grads) = get_linear_and_grads()?;
     let mut optim = SGD::<CpuBackend>::new(linear.parameters(), 0.01);
@@ -28,6 +31,7 @@ fn test_sgd() -> Result<()> {
 }
 
 #[test]
+/// Auto-generated documentation for test_adam.
 fn test_adam() -> Result<()> {
     let (linear, grads) = get_linear_and_grads()?;
     let mut optim = Adam::<CpuBackend>::new(linear.parameters(), 0.001);
@@ -38,6 +42,7 @@ fn test_adam() -> Result<()> {
 }
 
 #[test]
+/// Auto-generated documentation for test_adamw.
 fn test_adamw() -> Result<()> {
     let (linear, grads) = get_linear_and_grads()?;
     let mut optim = AdamW::<CpuBackend>::new(linear.parameters(), 0.001);

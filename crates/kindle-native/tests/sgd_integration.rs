@@ -22,6 +22,7 @@ use alloc::collections::BTreeMap;
 use kindle_core::prelude::*;
 use kindle_native::NativeBackend;
 
+/// Auto-generated documentation for B.
 type B = NativeBackend<f32, Cpu>;
 
 /// Build a flat F32 `Storage` from a literal vec, shape `[n]`.
@@ -75,7 +76,9 @@ fn sgd_step_updates_native_params_in_correct_direction() {
     let grads = B::backward::<f32>(&loss).unwrap();
 
     // grad_w = w / n (d(mean(w^2)*0.5)/dw_i = w_i/n)
-    let grad_w = B::get_grad::<f32>(&w_t, &grads).unwrap().expect("w should have gradient");
+    let grad_w = B::get_grad::<f32>(&w_t, &grads)
+        .unwrap()
+        .expect("w should have gradient");
     for (i, (&gv, &wv)) in f32_vec(&grad_w).iter().zip(w_init.iter()).enumerate() {
         let expected_grad = wv / n as f32;
         assert!(

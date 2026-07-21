@@ -2,34 +2,44 @@ use crate::graph::{Graph, OpType, ValueId};
 use crate::prelude::*;
 use crate::tensor::backend::*;
 // removed RefCell
-use spin::{Mutex, Lazy};
+use spin::{Lazy, Mutex};
 
+/// Auto-generated documentation for TRACING_GRAPH.
 pub static TRACING_GRAPH: Lazy<Mutex<Graph>> = Lazy::new(|| Mutex::new(Graph::new()));
 
+/// Auto-generated documentation for extract_graph.
 pub fn extract_graph() -> Graph {
     let mut b = TRACING_GRAPH.lock();
     core::mem::take(&mut *b)
 }
 
 #[derive(Clone)]
+/// Auto-generated documentation for TracingBackend.
 pub struct TracingBackend<B: Backend> {
     _marker: core::marker::PhantomData<B>,
 }
 
 #[derive(Clone)]
+/// Auto-generated documentation for TracingTensor.
 pub struct TracingTensor<T> {
+    /// Auto-generated documentation for inner.
     pub inner: T,
+    /// Auto-generated documentation for value_id.
     pub value_id: ValueId,
 }
 
 #[derive(Clone)]
+/// Auto-generated documentation for TracingVar.
 pub struct TracingVar<V> {
+    /// Auto-generated documentation for inner.
     pub inner: V,
+    /// Auto-generated documentation for value_id.
     pub value_id: ValueId,
 }
 
 impl<B: Backend> TracingBackend<B> {
     // A helper for binary ops
+    /// Auto-generated documentation for trace_binary.
     fn trace_binary<K1: super::dtype::DType, K2: super::dtype::DType, KOut: super::dtype::DType>(
         op: OpType,
         lhs: &TracingTensor<B::Storage<K1>>,
@@ -55,6 +65,7 @@ impl<B: Backend> TracingBackend<B> {
     }
 
     // A helper for unary ops
+    /// Auto-generated documentation for trace_unary.
     fn trace_unary<K: super::dtype::DType, KOut: super::dtype::DType>(
         op: OpType,
         t: &TracingTensor<B::Storage<K>>,
@@ -80,33 +91,45 @@ impl<B: Backend> TracingBackend<B> {
 }
 
 impl<B: Backend> Backend for TracingBackend<B> {
+    /// Auto-generated documentation for Storage.
     type Storage<K: super::dtype::DType> = TracingTensor<B::Storage<K>>;
+    /// Auto-generated documentation for Device.
     type Device = B::Device;
+    /// Auto-generated documentation for FloatElem.
     type FloatElem = B::FloatElem;
+    /// Auto-generated documentation for IntElem.
     type IntElem = B::IntElem;
 
+    /// Auto-generated documentation for BackendWithDevice.
     type BackendWithDevice<NewD: crate::tensor::device::Device> =
         TracingBackend<B::BackendWithDevice<NewD>>;
 
+    /// Auto-generated documentation for RawVar.
     type RawVar = TracingVar<B::RawVar>;
+    /// Auto-generated documentation for Grads.
     type Grads = B::Grads;
+    /// Auto-generated documentation for InnerBackend.
     type InnerBackend = B::InnerBackend;
 
+    /// Auto-generated documentation for shape.
     fn shape<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>) -> alloc::vec::Vec<usize> {
         B::shape(&t.inner)
     }
 
+    /// Auto-generated documentation for format_tensor_display.
     fn format_tensor_display<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> alloc::string::String {
         B::format_tensor_display(&t.inner)
     }
+    /// Auto-generated documentation for format_tensor_debug.
     fn format_tensor_debug<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> alloc::string::String {
         B::format_tensor_debug(&t.inner)
     }
 
+    /// Auto-generated documentation for var_as_tensor.
     fn var_as_tensor<K: super::dtype::DType>(
         var: &<Self as Backend>::RawVar,
     ) -> Result<<Self as Backend>::Storage<K>> {
@@ -117,6 +140,7 @@ impl<B: Backend> Backend for TracingBackend<B> {
         })
     }
 
+    /// Auto-generated documentation for var_from_tensor.
     fn var_from_tensor<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::RawVar> {
@@ -127,6 +151,7 @@ impl<B: Backend> Backend for TracingBackend<B> {
         })
     }
 
+    /// Auto-generated documentation for var_to_device.
     fn var_to_device(
         var: &<Self as Backend>::RawVar,
         device: &KindleDevice,
@@ -138,6 +163,7 @@ impl<B: Backend> Backend for TracingBackend<B> {
         })
     }
 
+    /// Auto-generated documentation for assign_var.
     fn assign_var<K: super::dtype::DType>(
         var: &mut <Self as Backend>::RawVar,
         tensor: &<Self as Backend>::Storage<K>,
@@ -145,18 +171,21 @@ impl<B: Backend> Backend for TracingBackend<B> {
         B::assign_var(&mut var.inner, &tensor.inner)
     }
 
+    /// Auto-generated documentation for backward.
     fn backward<K: super::dtype::DType>(
         loss: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Grads> {
         B::backward(&loss.inner)
     }
 
+    /// Auto-generated documentation for backward_with_nan_check.
     fn backward_with_nan_check<K: super::dtype::DType>(
         loss: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Grads> {
         B::backward_with_nan_check(&loss.inner)
     }
 
+    /// Auto-generated documentation for get_grad.
     fn get_grad<K: super::dtype::DType>(
         _var: &<Self as Backend>::Storage<K>,
         _grads: &<Self as Backend>::Grads,
@@ -164,6 +193,7 @@ impl<B: Backend> Backend for TracingBackend<B> {
         Ok(None)
     }
 
+    /// Auto-generated documentation for from_bytes.
     fn from_bytes<K: super::dtype::DType>(
         bytes: &[u8],
         shape: &[usize],
@@ -180,6 +210,7 @@ impl<B: Backend> Backend for TracingBackend<B> {
         Ok(TracingTensor { inner, value_id })
     }
 
+    /// Auto-generated documentation for to_bytes.
     fn to_bytes<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<alloc::vec::Vec<u8>> {
@@ -188,94 +219,95 @@ impl<B: Backend> Backend for TracingBackend<B> {
 }
 
 impl<B: Backend> CreationOps<Self> for TracingBackend<B> {
+    /// Auto-generated documentation for zeros.
     fn zeros<K: super::dtype::DType>(
         shape: &[usize],
         dtype: KindleDType,
         device: &KindleDevice,
     ) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::zeros(shape, dtype, device)?;
-        let value_id =
-            TRACING_GRAPH.lock().add_value(shape.to_vec(), dtype, None);
+        let value_id = TRACING_GRAPH.lock().add_value(shape.to_vec(), dtype, None);
         Ok(TracingTensor { inner, value_id })
     }
 
+    /// Auto-generated documentation for ones.
     fn ones<K: super::dtype::DType>(
         shape: &[usize],
         dtype: KindleDType,
         device: &KindleDevice,
     ) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::ones(shape, dtype, device)?;
-        let value_id =
-            TRACING_GRAPH.lock().add_value(shape.to_vec(), dtype, None);
+        let value_id = TRACING_GRAPH.lock().add_value(shape.to_vec(), dtype, None);
         Ok(TracingTensor { inner, value_id })
     }
 
+    /// Auto-generated documentation for rand.
     fn rand<K: super::dtype::DType>(
         shape: &[usize],
         dtype: KindleDType,
         device: &KindleDevice,
     ) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::rand(shape, dtype, device)?;
-        let value_id =
-            TRACING_GRAPH.lock().add_value(shape.to_vec(), dtype, None);
+        let value_id = TRACING_GRAPH.lock().add_value(shape.to_vec(), dtype, None);
         Ok(TracingTensor { inner, value_id })
     }
 
+    /// Auto-generated documentation for randn.
     fn randn<K: super::dtype::DType>(
         shape: &[usize],
         dtype: KindleDType,
         device: &KindleDevice,
     ) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::randn(shape, dtype, device)?;
-        let value_id =
-            TRACING_GRAPH.lock().add_value(shape.to_vec(), dtype, None);
+        let value_id = TRACING_GRAPH.lock().add_value(shape.to_vec(), dtype, None);
         Ok(TracingTensor { inner, value_id })
     }
 
+    /// Auto-generated documentation for var_zeros.
     fn var_zeros<K: super::dtype::DType>(
         shape: &[usize],
         dtype: KindleDType,
         device: &KindleDevice,
     ) -> Result<<Self as Backend>::RawVar> {
         let inner = B::var_zeros::<K>(shape, dtype, device)?;
-        let value_id =
-            TRACING_GRAPH.lock().add_value(shape.to_vec(), dtype, None);
+        let value_id = TRACING_GRAPH.lock().add_value(shape.to_vec(), dtype, None);
         Ok(TracingVar { inner, value_id })
     }
 
+    /// Auto-generated documentation for var_ones.
     fn var_ones<K: super::dtype::DType>(
         shape: &[usize],
         dtype: KindleDType,
         device: &KindleDevice,
     ) -> Result<<Self as Backend>::RawVar> {
         let inner = B::var_ones::<K>(shape, dtype, device)?;
-        let value_id =
-            TRACING_GRAPH.lock().add_value(shape.to_vec(), dtype, None);
+        let value_id = TRACING_GRAPH.lock().add_value(shape.to_vec(), dtype, None);
         Ok(TracingVar { inner, value_id })
     }
 
+    /// Auto-generated documentation for var_rand.
     fn var_rand<K: super::dtype::DType>(
         shape: &[usize],
         dtype: KindleDType,
         device: &KindleDevice,
     ) -> Result<<Self as Backend>::RawVar> {
         let inner = B::var_rand::<K>(shape, dtype, device)?;
-        let value_id =
-            TRACING_GRAPH.lock().add_value(shape.to_vec(), dtype, None);
+        let value_id = TRACING_GRAPH.lock().add_value(shape.to_vec(), dtype, None);
         Ok(TracingVar { inner, value_id })
     }
 
+    /// Auto-generated documentation for var_randn.
     fn var_randn<K: super::dtype::DType>(
         shape: &[usize],
         dtype: KindleDType,
         device: &KindleDevice,
     ) -> Result<<Self as Backend>::RawVar> {
         let inner = B::var_randn::<K>(shape, dtype, device)?;
-        let value_id =
-            TRACING_GRAPH.lock().add_value(shape.to_vec(), dtype, None);
+        let value_id = TRACING_GRAPH.lock().add_value(shape.to_vec(), dtype, None);
         Ok(TracingVar { inner, value_id })
     }
 
+    /// Auto-generated documentation for tensor_to_device.
     fn tensor_to_device<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         device: &KindleDevice,
@@ -289,6 +321,7 @@ impl<B: Backend> CreationOps<Self> for TracingBackend<B> {
 }
 
 impl<B: Backend> NumericOps<Self> for TracingBackend<B> {
+    /// Auto-generated documentation for add.
     fn add<K: super::dtype::DType>(
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
@@ -297,6 +330,7 @@ impl<B: Backend> NumericOps<Self> for TracingBackend<B> {
         Ok(Self::trace_binary(OpType::Add, lhs, rhs, &inner))
     }
 
+    /// Auto-generated documentation for sub.
     fn sub<K: super::dtype::DType>(
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
@@ -305,6 +339,7 @@ impl<B: Backend> NumericOps<Self> for TracingBackend<B> {
         Ok(Self::trace_binary(OpType::Sub, lhs, rhs, &inner))
     }
 
+    /// Auto-generated documentation for mul.
     fn mul<K: super::dtype::DType>(
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
@@ -313,6 +348,7 @@ impl<B: Backend> NumericOps<Self> for TracingBackend<B> {
         Ok(Self::trace_binary(OpType::Mul, lhs, rhs, &inner))
     }
 
+    /// Auto-generated documentation for div.
     fn div<K: super::dtype::DType>(
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
@@ -323,6 +359,7 @@ impl<B: Backend> NumericOps<Self> for TracingBackend<B> {
 }
 
 impl<B: Backend> FloatOps<Self> for TracingBackend<B> {
+    /// Auto-generated documentation for add_scalar_float.
     fn add_scalar_float<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         scalar: f64,
@@ -331,6 +368,7 @@ impl<B: Backend> FloatOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::AddScalar, t, &inner))
     }
 
+    /// Auto-generated documentation for mul_scalar_float.
     fn mul_scalar_float<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         scalar: f64,
@@ -339,6 +377,7 @@ impl<B: Backend> FloatOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::MulScalar, t, &inner))
     }
 
+    /// Auto-generated documentation for relu.
     fn relu<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
@@ -346,6 +385,22 @@ impl<B: Backend> FloatOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::Relu, t, &inner))
     }
 
+    fn step<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::step(&t.inner)?;
+        Ok(Self::trace_unary(OpType::Step, t, &inner))
+    }
+
+    fn mish<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::mish(&t.inner)?;
+        Ok(Self::trace_unary(OpType::Mish, t, &inner))
+    }
+
+    fn elu<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::elu(&t.inner)?;
+        Ok(Self::trace_unary(OpType::Elu, t, &inner))
+    }
+
+    /// Auto-generated documentation for gelu.
     fn gelu<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
@@ -353,6 +408,7 @@ impl<B: Backend> FloatOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::Gelu, t, &inner))
     }
 
+    /// Auto-generated documentation for abs.
     fn abs<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
@@ -360,6 +416,7 @@ impl<B: Backend> FloatOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::Relu, t, &inner))
     }
 
+    /// Auto-generated documentation for exp.
     fn exp<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
@@ -367,6 +424,7 @@ impl<B: Backend> FloatOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::Relu, t, &inner))
     }
 
+    /// Auto-generated documentation for neg.
     fn neg<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
@@ -374,6 +432,7 @@ impl<B: Backend> FloatOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::Relu, t, &inner))
     }
 
+    /// Auto-generated documentation for sqrt.
     fn sqrt<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
@@ -381,6 +440,7 @@ impl<B: Backend> FloatOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::Relu, t, &inner))
     }
 
+    /// Auto-generated documentation for log.
     fn log<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
@@ -388,6 +448,7 @@ impl<B: Backend> FloatOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::Relu, t, &inner))
     }
 
+    /// Auto-generated documentation for tanh.
     fn tanh<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
@@ -395,6 +456,7 @@ impl<B: Backend> FloatOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::Relu, t, &inner))
     }
 
+    /// Auto-generated documentation for sigmoid.
     fn sigmoid<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
@@ -402,6 +464,7 @@ impl<B: Backend> FloatOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::Relu, t, &inner))
     }
 
+    /// Auto-generated documentation for swish.
     fn swish<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
@@ -409,6 +472,7 @@ impl<B: Backend> FloatOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::Relu, t, &inner))
     }
 
+    /// Auto-generated documentation for softmax.
     fn softmax<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
@@ -431,6 +495,7 @@ impl<B: Backend> FloatOps<Self> for TracingBackend<B> {
 }
 
 impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
+    /// Auto-generated documentation for sum_all.
     fn sum_all<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
@@ -438,6 +503,7 @@ impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::SumAll, t, &inner))
     }
 
+    /// Auto-generated documentation for mean_all.
     fn mean_all<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
@@ -445,6 +511,7 @@ impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::MeanAll, t, &inner))
     }
 
+    /// Auto-generated documentation for max_all.
     fn max_all<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
@@ -452,6 +519,7 @@ impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::MaxAll, t, &inner))
     }
 
+    /// Auto-generated documentation for min_all.
     fn min_all<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
@@ -459,6 +527,7 @@ impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::MinAll, t, &inner))
     }
 
+    /// Auto-generated documentation for sum_dim.
     fn sum_dim<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
@@ -467,6 +536,7 @@ impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::SumDim, t, &inner))
     }
 
+    /// Auto-generated documentation for sum_keepdim.
     fn sum_keepdim<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
@@ -475,6 +545,7 @@ impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::SumDim, t, &inner))
     }
 
+    /// Auto-generated documentation for mean_dim.
     fn mean_dim<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
@@ -483,6 +554,7 @@ impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::MeanDim, t, &inner))
     }
 
+    /// Auto-generated documentation for mean_keepdim.
     fn mean_keepdim<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
@@ -491,6 +563,7 @@ impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::MeanDim, t, &inner))
     }
 
+    /// Auto-generated documentation for max_dim.
     fn max_dim<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
@@ -499,6 +572,7 @@ impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::MaxDim, t, &inner))
     }
 
+    /// Auto-generated documentation for max_keepdim.
     fn max_keepdim<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
@@ -507,6 +581,7 @@ impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::MaxDim, t, &inner))
     }
 
+    /// Auto-generated documentation for min_dim.
     fn min_dim<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
@@ -515,6 +590,7 @@ impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::MinDim, t, &inner))
     }
 
+    /// Auto-generated documentation for min_keepdim.
     fn min_keepdim<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
@@ -523,6 +599,7 @@ impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::MinDim, t, &inner))
     }
 
+    /// Auto-generated documentation for argmax.
     fn argmax<K: super::dtype::DType, KInt: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: Option<usize>,
@@ -531,6 +608,7 @@ impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::ArgMax, t, &inner))
     }
 
+    /// Auto-generated documentation for argmin.
     fn argmin<K: super::dtype::DType, KInt: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: Option<usize>,
@@ -538,9 +616,66 @@ impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
         let inner = B::argmin(&t.inner, dim)?;
         Ok(Self::trace_unary(OpType::ArgMin, t, &inner))
     }
+
+    /// Auto-generated documentation for topk.
+    fn topk<K: super::dtype::DType, KInt: super::dtype::DType>(
+        t: &<Self as Backend>::Storage<K>,
+        k: usize,
+        dim: usize,
+        largest: bool,
+    ) -> Result<(<Self as Backend>::Storage<K>, <Self as Backend>::Storage<KInt>)> {
+        let (v_inner, i_inner) = B::topk(&t.inner, k, dim, largest)?;
+        
+        let shape_v = B::shape(&v_inner);
+        let shape_i = B::shape(&i_inner);
+        
+        // FIXME: Currently we just trace this as a generic Unary Op to satisfy the compiler.
+        // If we want ONNX export to support topk properly, we need a TopK OpType.
+        // For now, this is enough to compile.
+        let v_id = {
+            let mut g = TRACING_GRAPH.lock();
+            let out_id = g.add_value(shape_v, KindleDType::F32, None);
+            g.add_node(
+                OpType::Reshape, // Placeholder
+                vec![t.value_id],
+                vec![out_id],
+                alloc::collections::BTreeMap::new(),
+            );
+            out_id
+        };
+
+        let i_id = {
+            let mut g = TRACING_GRAPH.lock();
+            let out_id = g.add_value(shape_i, KindleDType::U32, None);
+            g.add_node(
+                OpType::Reshape, // Placeholder
+                vec![t.value_id],
+                vec![out_id],
+                alloc::collections::BTreeMap::new(),
+            );
+            out_id
+        };
+
+        Ok((
+            TracingTensor { inner: v_inner, value_id: v_id },
+            TracingTensor { inner: i_inner, value_id: i_id },
+        ))
+    }
+
+    /// Auto-generated documentation for argsort.
+    fn argsort<K: super::dtype::DType, KInt: super::dtype::DType>(
+        t: &<Self as Backend>::Storage<K>,
+        dim: usize,
+        descending: bool,
+    ) -> Result<<Self as Backend>::Storage<KInt>> {
+        let inner = B::argsort(&t.inner, dim, descending)?;
+        // FIXME: Same as topk, use a placeholder op for now.
+        Ok(Self::trace_unary(OpType::Reshape, t, &inner))
+    }
 }
 
 impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
+    /// Auto-generated documentation for tensor_to_dtype.
     fn tensor_to_dtype<K1: super::dtype::DType, K2: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K1>,
         dtype: KindleDType,
@@ -561,6 +696,7 @@ impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
         Ok(TracingTensor { inner, value_id })
     }
 
+    /// Auto-generated documentation for broadcast_as.
     fn broadcast_as<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         shape: &[usize],
@@ -569,6 +705,7 @@ impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::Broadcast, t, &inner))
     }
 
+    /// Auto-generated documentation for reshape.
     fn reshape<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         shape: &[usize],
@@ -598,6 +735,7 @@ impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
         Ok(TracingTensor { inner, value_id })
     }
 
+    /// Auto-generated documentation for transpose.
     fn transpose<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         dim1: usize,
@@ -612,13 +750,17 @@ impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
             // simple perm vector building for ONNX
             let mut perm: Vec<i64> = (0..shape_out.len() as i64).collect();
             perm.swap(dim1, dim2);
-            attrs.insert(alloc::string::String::from("perm"), crate::graph::AttributeValue::Ints(perm));
+            attrs.insert(
+                alloc::string::String::from("perm"),
+                crate::graph::AttributeValue::Ints(perm),
+            );
             g.add_node(OpType::Transpose, vec![t.value_id], vec![out_id], attrs);
             out_id
         };
         Ok(TracingTensor { inner, value_id })
     }
 
+    /// Auto-generated documentation for narrow.
     fn narrow<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
@@ -629,6 +771,7 @@ impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::Narrow, t, &inner))
     }
 
+    /// Auto-generated documentation for concat.
     fn concat<K: super::dtype::DType>(
         tensors: &[&<Self as Backend>::Storage<K>],
         dim: usize,
@@ -651,6 +794,7 @@ impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
         Ok(TracingTensor { inner, value_id })
     }
 
+    /// Auto-generated documentation for stack.
     fn stack<K: super::dtype::DType>(
         tensors: &[&<Self as Backend>::Storage<K>],
         dim: usize,
@@ -673,6 +817,7 @@ impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
         Ok(TracingTensor { inner, value_id })
     }
 
+    /// Auto-generated documentation for slice.
     fn slice<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         ranges: &[(usize, usize)],
@@ -681,6 +826,7 @@ impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::Slice, t, &inner))
     }
 
+    /// Auto-generated documentation for flatten.
     fn flatten<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         start_dim: usize,
@@ -690,6 +836,7 @@ impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::Reshape, t, &inner))
     }
 
+    /// Auto-generated documentation for squeeze.
     fn squeeze<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
@@ -698,6 +845,7 @@ impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::Reshape, t, &inner))
     }
 
+    /// Auto-generated documentation for broadcast_left.
     fn broadcast_left<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         shape: &[usize],
@@ -706,6 +854,7 @@ impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::Broadcast, t, &inner))
     }
 
+    /// Auto-generated documentation for matmul.
     fn matmul<K: super::dtype::DType>(
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
@@ -713,17 +862,21 @@ impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
         let inner = B::matmul(&lhs.inner, &rhs.inner)?;
         Ok(Self::trace_binary(OpType::MatMul, lhs, rhs, &inner))
     }
+    /// Auto-generated documentation for float_to_scalar.
     fn float_to_scalar<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>) -> Result<f64> {
         B::float_to_scalar(&t.inner)
     }
+    /// Auto-generated documentation for float_to_vec1.
     fn float_to_vec1<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<alloc::vec::Vec<f64>> {
         B::float_to_vec1(&t.inner)
     }
+    /// Auto-generated documentation for int_to_scalar.
     fn int_to_scalar<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>) -> Result<i64> {
         B::int_to_scalar(&t.inner)
     }
+    /// Auto-generated documentation for int_to_vec1.
     fn int_to_vec1<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<alloc::vec::Vec<i64>> {
@@ -732,6 +885,7 @@ impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
 }
 
 impl<B: Backend + crate::tensor::backend::ModuleOps<B>> ModuleOps<Self> for TracingBackend<B> {
+    /// Auto-generated documentation for conv1d.
     fn conv1d<K: super::dtype::DType>(
         x: &<Self as Backend>::Storage<K>,
         weight: &<Self as Backend>::Storage<K>,
@@ -779,6 +933,7 @@ impl<B: Backend + crate::tensor::backend::ModuleOps<B>> ModuleOps<Self> for Trac
         Ok(TracingTensor { inner, value_id })
     }
 
+    /// Auto-generated documentation for conv2d.
     fn conv2d<K: super::dtype::DType>(
         x: &<Self as Backend>::Storage<K>,
         weight: &<Self as Backend>::Storage<K>,
@@ -831,6 +986,7 @@ impl<B: Backend + crate::tensor::backend::ModuleOps<B>> ModuleOps<Self> for Trac
         Ok(TracingTensor { inner, value_id })
     }
 
+    /// Auto-generated documentation for max_pool2d.
     fn max_pool2d<K: super::dtype::DType>(
         x: &<Self as Backend>::Storage<K>,
         kernel_size: (usize, usize),
@@ -842,6 +998,7 @@ impl<B: Backend + crate::tensor::backend::ModuleOps<B>> ModuleOps<Self> for Trac
         Ok(Self::trace_unary(OpType::MaxPool2d, x, &inner))
     }
 
+    /// Auto-generated documentation for avg_pool2d.
     fn avg_pool2d<K: super::dtype::DType>(
         x: &<Self as Backend>::Storage<K>,
         kernel_size: (usize, usize),
@@ -852,6 +1009,7 @@ impl<B: Backend + crate::tensor::backend::ModuleOps<B>> ModuleOps<Self> for Trac
         Ok(Self::trace_unary(OpType::AvgPool2d, x, &inner))
     }
 
+    /// Auto-generated documentation for adaptive_avg_pool2d.
     fn adaptive_avg_pool2d<K: super::dtype::DType>(
         x: &<Self as Backend>::Storage<K>,
         output_size: (usize, usize),
@@ -860,6 +1018,7 @@ impl<B: Backend + crate::tensor::backend::ModuleOps<B>> ModuleOps<Self> for Trac
         Ok(Self::trace_unary(OpType::AdaptiveAvgPool2d, x, &inner))
     }
 
+    /// Auto-generated documentation for embedding.
     fn embedding<K: super::dtype::DType, KInt: super::dtype::DType>(
         t: &<Self as Backend>::Storage<KInt>,
         w: &<Self as Backend>::Storage<K>,
@@ -880,6 +1039,7 @@ impl<B: Backend + crate::tensor::backend::ModuleOps<B>> ModuleOps<Self> for Trac
         Ok(TracingTensor { inner, value_id })
     }
 
+    /// Auto-generated documentation for layer_norm.
     fn layer_norm<K: super::dtype::DType>(
         x: &<Self as Backend>::Storage<K>,
         weight: &<Self as Backend>::Storage<K>,
@@ -890,6 +1050,7 @@ impl<B: Backend + crate::tensor::backend::ModuleOps<B>> ModuleOps<Self> for Trac
         Ok(Self::trace_unary(OpType::LayerNorm, x, &inner))
     }
 
+    /// Auto-generated documentation for batch_norm.
     fn batch_norm<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         w: Option<&<Self as Backend>::Storage<K>>,
@@ -911,6 +1072,7 @@ impl<B: Backend + crate::tensor::backend::ModuleOps<B>> ModuleOps<Self> for Trac
         Ok(Self::trace_unary(OpType::BatchNorm, t, &inner))
     }
 
+    /// Auto-generated documentation for conv_transpose2d.
     fn conv_transpose2d<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         w: &<Self as Backend>::Storage<K>,
@@ -937,6 +1099,7 @@ impl<B: Backend + crate::tensor::backend::ModuleOps<B>> ModuleOps<Self> for Trac
 }
 
 impl<B: Backend + crate::tensor::backend::LossOps<B>> LossOps<Self> for TracingBackend<B> {
+    /// Auto-generated documentation for cross_entropy_loss.
     fn cross_entropy_loss<K: super::dtype::DType, KInt: super::dtype::DType>(
         logits: &<Self as Backend>::Storage<K>,
         targets: &<Self as Backend>::Storage<KInt>,
@@ -951,6 +1114,7 @@ impl<B: Backend + crate::tensor::backend::LossOps<B>> LossOps<Self> for TracingB
         ))
     }
 
+    /// Auto-generated documentation for mse_loss.
     fn mse_loss<K: super::dtype::DType>(
         predictions: &<Self as Backend>::Storage<K>,
         targets: &<Self as Backend>::Storage<K>,
@@ -965,6 +1129,7 @@ impl<B: Backend + crate::tensor::backend::LossOps<B>> LossOps<Self> for TracingB
         ))
     }
 
+    /// Auto-generated documentation for l1_loss.
     fn l1_loss<K: super::dtype::DType>(
         predictions: &<Self as Backend>::Storage<K>,
         targets: &<Self as Backend>::Storage<K>,
@@ -979,6 +1144,7 @@ impl<B: Backend + crate::tensor::backend::LossOps<B>> LossOps<Self> for TracingB
         ))
     }
 
+    /// Auto-generated documentation for bce_with_logits_loss.
     fn bce_with_logits_loss<K: super::dtype::DType>(
         logits: &<Self as Backend>::Storage<K>,
         targets: &<Self as Backend>::Storage<K>,
@@ -995,6 +1161,7 @@ impl<B: Backend + crate::tensor::backend::LossOps<B>> LossOps<Self> for TracingB
 }
 
 impl<B: Backend> QuantizedOps<Self> for TracingBackend<B> {
+    /// Auto-generated documentation for quantize.
     fn quantize<K: super::dtype::FloatDType, Q: super::dtype::QuantDType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<Q>> {
@@ -1005,6 +1172,7 @@ impl<B: Backend> QuantizedOps<Self> for TracingBackend<B> {
         })
     }
 
+    /// Auto-generated documentation for dequantize.
     fn dequantize<Q: super::dtype::QuantDType, K: super::dtype::FloatDType>(
         t: &<Self as Backend>::Storage<Q>,
     ) -> Result<<Self as Backend>::Storage<K>> {
@@ -1015,6 +1183,7 @@ impl<B: Backend> QuantizedOps<Self> for TracingBackend<B> {
         })
     }
 
+    /// Auto-generated documentation for quantized_matmul.
     fn quantized_matmul<Q: super::dtype::QuantDType>(
         lhs: &<Self as Backend>::Storage<Q>,
         rhs: &<Self as Backend>::Storage<Q>,

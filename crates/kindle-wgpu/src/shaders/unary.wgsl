@@ -55,8 +55,26 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     } else if op == 8u {
         // Log
         out[idx] = log(x);
-    } else {
+    } else if op == 9u {
         // Swish = x * sigmoid(x)
         out[idx] = x / (1.0 + exp(-x));
+    } else if op == 10u {
+        // Step
+        if x > 0.0 {
+            out[idx] = 1.0;
+        } else {
+            out[idx] = 0.0;
+        }
+    } else if op == 11u {
+        // Mish = x * tanh(softplus(x))
+        let sp = select(log(1.0 + exp(x)), x, x > 20.0);
+        out[idx] = x * tanh(sp);
+    } else {
+        // ELU (alpha = 1.0)
+        if x > 0.0 {
+            out[idx] = x;
+        } else {
+            out[idx] = exp(x) - 1.0;
+        }
     }
 }

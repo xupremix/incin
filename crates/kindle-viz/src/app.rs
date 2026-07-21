@@ -32,14 +32,18 @@ const RENDER_TICK: Duration = Duration::from_millis(33);
 const TRANSPORT_POLL: Duration = Duration::from_millis(50);
 
 /// Exact UI-SPEC.md footer copy.
-const FOOTER_HINTS: &str = "q: quit  Tab: focus next  l: toggle layout  f: fullscreen  p: trigger panic";
+const FOOTER_HINTS: &str =
+    "q: quit  Tab: focus next  l: toggle layout  f: fullscreen  p: trigger panic";
 
 /// Exact UI-SPEC.md crashed-panel placeholder copy (Red/Bold, rendered
 const CRASHED_PLACEHOLDER: &str = "⚠ panel crashed — press r to retry";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Auto-generated documentation for LayoutMode.
 pub enum LayoutMode {
+    /// Auto-generated documentation for Grid.
     Grid,
+    /// Auto-generated documentation for Maximized.
     Maximized,
 }
 
@@ -69,7 +73,11 @@ pub struct App {
     /// Panel areas from the last render pass, mapping panel index to its rendered area.
     last_panel_areas: Vec<(usize, ratatui::layout::Rect)>,
     /// Hit regions from the last render pass, with the panel index attached.
-    last_hit_regions: Vec<(ratatui::layout::Rect, kindle_viz_plugin_api::render_ctx::HitId, usize)>,
+    last_hit_regions: Vec<(
+        ratatui::layout::Rect,
+        kindle_viz_plugin_api::render_ctx::HitId,
+        usize,
+    )>,
 }
 
 impl App {
@@ -260,12 +268,16 @@ impl App {
             if self.layout_mode == LayoutMode::Maximized && i != self.focused {
                 continue;
             }
-            let area_idx = if self.layout_mode == LayoutMode::Maximized { 0 } else { i };
+            let area_idx = if self.layout_mode == LayoutMode::Maximized {
+                0
+            } else {
+                i
+            };
 
             if area_idx >= panel_areas.len() {
                 break; // Beyond allocated grid or scroll area
             }
-            
+
             // Re-draw only the border/title chrome over the panel's own
             // block so the focus color rule holds without the Panel trait
             // needing a focus parameter (Block leaves inner content intact).
@@ -274,7 +286,7 @@ impl App {
             } else {
                 Color::DarkGray
             };
-            
+
             let panel_title = panel.title().to_string();
 
             if self.crashed[i] {
@@ -296,7 +308,7 @@ impl App {
                 frame.render_widget(placeholder, panel_areas[area_idx]);
                 continue;
             }
-            
+
             panel_hit_regions.clear();
             let mut ctx = RenderCtx::new(frame, panel_areas[area_idx], &mut panel_hit_regions);
             if let DispatchOutcome::Panicked = dispatch::dispatch_render(panel.as_mut(), &mut ctx) {
@@ -309,16 +321,18 @@ impl App {
             for (rect, id) in &panel_hit_regions {
                 self.last_hit_regions.push((*rect, *id, i));
             }
-            
-            let mut title_style = Style::default().fg(focus_color).add_modifier(Modifier::BOLD);
+
+            let mut title_style = Style::default()
+                .fg(focus_color)
+                .add_modifier(Modifier::BOLD);
             let mut border_style = Style::default().fg(focus_color);
-            
+
             if let Some(msg) = alert {
                 alerts.push(format!("{}: {}", panel_title, msg));
                 border_style = border_style.fg(Color::Red).add_modifier(Modifier::BOLD);
                 title_style = title_style.fg(Color::Red);
             }
-            
+
             let focus_block = Block::default()
                 .borders(Borders::ALL)
                 .border_style(border_style)
@@ -327,7 +341,7 @@ impl App {
             frame.render_widget(focus_block, panel_areas[area_idx]);
             self.last_panel_areas.push((i, panel_areas[area_idx]));
         }
-        
+
         let footer_text = if let Some(hover) = self.hover_text.take() {
             hover
         } else if !alerts.is_empty() {
@@ -337,13 +351,13 @@ impl App {
         } else {
             FOOTER_HINTS.to_string()
         };
-        
+
         let footer_style = if !alerts.is_empty() || !self.conflicts.is_empty() {
             Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
         } else {
             Style::default().add_modifier(Modifier::DIM)
         };
-        
+
         let footer = Paragraph::new(footer_text).style(footer_style);
         frame.render_widget(footer, rows[2]);
     }
@@ -355,6 +369,7 @@ impl App {
 pub struct DefaultKeymap;
 
 impl KeymapProvider for DefaultKeymap {
+    /// Auto-generated documentation for resolve.
     fn resolve(&self, key: PanelKeyEvent) -> Option<Action> {
         match key.code {
             KeyCode::Char('q') | KeyCode::Esc => Some(Action::Quit),
@@ -376,6 +391,7 @@ impl KeymapProvider for DefaultKeymap {
 pub struct VimKeymap;
 
 impl KeymapProvider for VimKeymap {
+    /// Auto-generated documentation for resolve.
     fn resolve(&self, key: PanelKeyEvent) -> Option<Action> {
         match key.code {
             KeyCode::Char('q') | KeyCode::Esc => Some(Action::Quit),
@@ -422,27 +438,59 @@ fn convert_key(key: KeyEvent) -> Option<PanelKeyEvent> {
 }
 
 /// Converts a crossterm mouse event into the plugin-api's `PanelMouseEvent`.
-fn convert_mouse(mouse: crossterm::event::MouseEvent) -> Option<kindle_viz_plugin_api::event::PanelMouseEvent> {
+fn convert_mouse(
+    mouse: crossterm::event::MouseEvent,
+) -> Option<kindle_viz_plugin_api::event::PanelMouseEvent> {
     use crossterm::event::MouseEventKind;
     use kindle_viz_plugin_api::event::{KeyModifiers, PanelMouseEvent};
     let modifiers = KeyModifiers {
-        ctrl: mouse.modifiers.contains(crossterm::event::KeyModifiers::CONTROL),
-        shift: mouse.modifiers.contains(crossterm::event::KeyModifiers::SHIFT),
-        alt: mouse.modifiers.contains(crossterm::event::KeyModifiers::ALT),
+        ctrl: mouse
+            .modifiers
+            .contains(crossterm::event::KeyModifiers::CONTROL),
+        shift: mouse
+            .modifiers
+            .contains(crossterm::event::KeyModifiers::SHIFT),
+        alt: mouse
+            .modifiers
+            .contains(crossterm::event::KeyModifiers::ALT),
     };
     match mouse.kind {
-        MouseEventKind::Down(_) => Some(PanelMouseEvent::Down { x: mouse.column, y: mouse.row, modifiers }),
-        MouseEventKind::Up(_) => Some(PanelMouseEvent::Up { x: mouse.column, y: mouse.row, modifiers }),
-        MouseEventKind::Drag(_) => Some(PanelMouseEvent::Drag { x: mouse.column, y: mouse.row, modifiers }),
-        MouseEventKind::ScrollDown => Some(PanelMouseEvent::ScrollDown { x: mouse.column, y: mouse.row, modifiers }),
-        MouseEventKind::ScrollUp => Some(PanelMouseEvent::ScrollUp { x: mouse.column, y: mouse.row, modifiers }),
+        MouseEventKind::Down(_) => Some(PanelMouseEvent::Down {
+            x: mouse.column,
+            y: mouse.row,
+            modifiers,
+        }),
+        MouseEventKind::Up(_) => Some(PanelMouseEvent::Up {
+            x: mouse.column,
+            y: mouse.row,
+            modifiers,
+        }),
+        MouseEventKind::Drag(_) => Some(PanelMouseEvent::Drag {
+            x: mouse.column,
+            y: mouse.row,
+            modifiers,
+        }),
+        MouseEventKind::ScrollDown => Some(PanelMouseEvent::ScrollDown {
+            x: mouse.column,
+            y: mouse.row,
+            modifiers,
+        }),
+        MouseEventKind::ScrollUp => Some(PanelMouseEvent::ScrollUp {
+            x: mouse.column,
+            y: mouse.row,
+            modifiers,
+        }),
         MouseEventKind::Moved | MouseEventKind::ScrollLeft | MouseEventKind::ScrollRight => None,
     }
 }
 
 /// Runs the event loop until quit: multiplexes terminal input, transport
 /// polling, and the fixed render tick -- no branch blocks the others.
-pub async fn run(mut app: App, mut terminal: ratatui::DefaultTerminal, keymap: Box<dyn KeymapProvider>) -> anyhow::Result<()> {
+pub async fn run(
+    mut app: App,
+    mut terminal: ratatui::DefaultTerminal,
+    keymap: Box<dyn KeymapProvider>,
+) -> anyhow::Result<()> {
     let mut term_events = EventStream::new();
     let mut render_interval = interval(RENDER_TICK);
     let mut transport_interval = interval(TRANSPORT_POLL);
@@ -515,10 +563,12 @@ pub async fn run(mut app: App, mut terminal: ratatui::DefaultTerminal, keymap: B
 }
 
 #[cfg(test)]
+/// Auto-generated documentation for tests.
 mod tests {
     use super::*;
 
     #[test]
+    /// Auto-generated documentation for default_keymap_resolves_quit_and_focus_keys.
     fn default_keymap_resolves_quit_and_focus_keys() {
         let keymap = DefaultKeymap;
         let no_mods = KeyModifiers {
@@ -586,14 +636,19 @@ mod tests {
     struct CrashOnP;
 
     impl Panel for CrashOnP {
+        /// Auto-generated documentation for id.
         fn id(&self) -> &'static str {
             "crash-on-p"
         }
+        /// Auto-generated documentation for title.
         fn title(&self) -> &str {
             "Crash On P"
         }
+        /// Auto-generated documentation for update.
         fn update(&mut self, _event: &kindle_telemetry::events::Event) {}
+        /// Auto-generated documentation for render.
         fn render(&mut self, _ctx: &mut RenderCtx<'_, '_>) {}
+        /// Auto-generated documentation for handle_event.
         fn handle_event(&mut self, event: &PanelEvent) -> bool {
             if let PanelEvent::Key(k) = event {
                 if k.code == KeyCode::Char('p') {
@@ -602,18 +657,22 @@ mod tests {
             }
             false
         }
+        /// Auto-generated documentation for reset.
         fn reset(&mut self) {}
     }
 
+    /// Auto-generated documentation for NoopTransport.
     struct NoopTransport;
 
     impl crate::transport_reader::TransportReader for NoopTransport {
+        /// Auto-generated documentation for poll_new_events.
         fn poll_new_events(&mut self) -> crate::err::Result<Vec<kindle_telemetry::events::Event>> {
             Ok(Vec::new())
         }
     }
 
     #[test]
+    /// Auto-generated documentation for panel_local_panic_marks_crashed_and_retry_recovers.
     fn panel_local_panic_marks_crashed_and_retry_recovers() {
         let previous_hook = std::panic::take_hook();
         std::panic::set_hook(Box::new(|_| {}));

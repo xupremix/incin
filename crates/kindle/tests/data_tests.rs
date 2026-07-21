@@ -1,7 +1,9 @@
+#![allow(unused_imports)]
 use kindle::prelude::*;
 use kindle_data::{DataLoader, Dataset}; // Assumed standard paths, although I might need to check if they exist
 
 #[test]
+/// Auto-generated documentation for test_dataset.
 fn test_dataset() {
     // If kindle_data has a dummy dataset or DataLoader we can test it here.
     // For now, I'll just compile test to see what exists.

@@ -7,8 +7,8 @@
 use crate::prelude::{Backend, Dyn, DynShape, RequiresGrad, Result, Shape, Tensor};
 use crate::tensor::ops::*;
 
-use alloc::vec::Vec;
 use alloc::string::ToString;
+use alloc::vec::Vec;
 
 impl<
     S: Shape + DynShape,
@@ -280,6 +280,7 @@ impl<
             _grad: self._grad,
         })
     }
+    /// Auto-generated documentation for try_reshape.
     pub fn try_reshape<S2>(&self, args: S2::Arg) -> Result<Tensor<S2, B, K, D, G>>
     where
         S2: Shape + DynShape,
@@ -331,6 +332,7 @@ impl<
         ))
     }
 
+    /// Auto-generated documentation for to_dtype.
     pub fn to_dtype<T2: crate::tensor::dtype::DType<Arg = ()>>(
         &self,
     ) -> Result<Tensor<S, B, T2, D, G>> {
@@ -355,7 +357,7 @@ impl<
         let bytes = B::to_bytes(&self.inner)?;
         if bytes.len() != core::mem::size_of::<E>() {
             // Attempt to dynamically cast f32 -> bool if requested, to keep old fallback working
-            if core::mem::size_of::<E>() == 1 && bytes.len() > 0 {
+            if core::mem::size_of::<E>() == 1 && !bytes.is_empty() {
                 let val = bytes[0] != 0;
                 return Ok(unsafe { core::ptr::read_unaligned(&val as *const bool as *const E) });
             }
@@ -465,7 +467,10 @@ impl<
 
     /// Dynamically concatenates a slice of tensors along `dim`.
     /// This is fallible at runtime if shapes mismatch or dim is out of bounds.
-    pub fn try_concat_slice(tensors: &[&Tensor<S, B, K, D, G>], dim: usize) -> Result<Tensor<Dyn, B, K, D, G>> {
+    pub fn try_concat_slice(
+        tensors: &[&Tensor<S, B, K, D, G>],
+        dim: usize,
+    ) -> Result<Tensor<Dyn, B, K, D, G>> {
         let raw_tensors: alloc::vec::Vec<&B::Storage<K>> =
             tensors.iter().map(|t| &t.inner).collect();
         if raw_tensors.is_empty() {
@@ -509,7 +514,11 @@ impl<
     }
 
     /// Dynamically concatenates `self` with `other` along `dim`.
-    pub fn try_concat<S2>(&self, other: &Tensor<S2, B, K, D, G>, dim: usize) -> Result<Tensor<Dyn, B, K, D, G>>
+    pub fn try_concat<S2>(
+        &self,
+        other: &Tensor<S2, B, K, D, G>,
+        dim: usize,
+    ) -> Result<Tensor<Dyn, B, K, D, G>>
     where
         S2: Shape,
     {
@@ -526,7 +535,10 @@ impl<
     }
 
     /// Dynamically stacks a slice of tensors along `dim`.
-    pub fn try_stack_slice(tensors: &[&Tensor<S, B, K, D, G>], dim: usize) -> Result<Tensor<Dyn, B, K, D, G>> {
+    pub fn try_stack_slice(
+        tensors: &[&Tensor<S, B, K, D, G>],
+        dim: usize,
+    ) -> Result<Tensor<Dyn, B, K, D, G>> {
         let raw_tensors: alloc::vec::Vec<&B::Storage<K>> =
             tensors.iter().map(|t| &t.inner).collect();
         if raw_tensors.is_empty() {
@@ -569,7 +581,11 @@ impl<
     }
 
     /// Dynamically stacks `self` with `other` along `dim`.
-    pub fn try_stack(&self, other: &Tensor<S, B, K, D, G>, dim: usize) -> Result<Tensor<Dyn, B, K, D, G>> {
+    pub fn try_stack(
+        &self,
+        other: &Tensor<S, B, K, D, G>,
+        dim: usize,
+    ) -> Result<Tensor<Dyn, B, K, D, G>> {
         let inner = B::stack(&[&self.inner, &other.inner], dim)?;
         let mut out_shape = B::shape(&self.inner);
         out_shape.insert(dim, 2);
@@ -583,7 +599,14 @@ impl<
     }
 }
 
-pub fn try_stack_tensors<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, D: crate::tensor::device::Device, G: crate::tensor::grad::RequiresGrad>(
+/// Auto-generated documentation for try_stack_tensors.
+pub fn try_stack_tensors<
+    S: Shape + DynShape,
+    B: Backend,
+    K: crate::tensor::dtype::DType,
+    D: crate::tensor::device::Device,
+    G: crate::tensor::grad::RequiresGrad,
+>(
     tensors: &[&Tensor<S, B, K, D, G>],
     dim: usize,
 ) -> Result<Tensor<Dyn, B, K, D, G>>
@@ -622,7 +645,9 @@ impl<
 where
     B: Backend<BackendWithDevice<NewD> = B>,
 {
+    /// Auto-generated documentation for Output.
     type Output = Tensor<S, B, K, NewD, G>;
+    /// Auto-generated documentation for to_device.
     fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output> {
         let field = NewD::init(arg.clone());
         let kindle_dev = NewD::to_kindle(&field)?;

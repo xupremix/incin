@@ -36,6 +36,7 @@ impl<
         self.cross_entropy_loss_with::<Mean, S2>(target)
     }
 
+    /// Auto-generated documentation for cross_entropy_loss_with.
     pub fn cross_entropy_loss_with<R: ReductionMode, S2: Shape>(
         &self,
         target: &Tensor<S2, B, K, D, G>,
@@ -77,6 +78,7 @@ impl<
         self.mse_loss_with::<Mean, S2>(target)
     }
 
+    /// Auto-generated documentation for mse_loss_with.
     pub fn mse_loss_with<R: ReductionMode, S2: Shape>(
         &self,
         target: &Tensor<S2, B, K, D, G>,
@@ -99,6 +101,7 @@ impl<
         ))
     }
 
+    /// Auto-generated documentation for l1_loss.
     pub fn l1_loss<S2: Shape>(
         &self,
         target: &Tensor<S2, B, K, D, G>,
@@ -106,6 +109,7 @@ impl<
         self.l1_loss_with::<Mean, S2>(target)
     }
 
+    /// Auto-generated documentation for l1_loss_with.
     pub fn l1_loss_with<R: ReductionMode, S2: Shape>(
         &self,
         target: &Tensor<S2, B, K, D, G>,
@@ -128,6 +132,7 @@ impl<
         ))
     }
 
+    /// Auto-generated documentation for bce_with_logits_loss.
     pub fn bce_with_logits_loss<S2: Shape>(
         &self,
         target: &Tensor<S2, B, K, D, G>,
@@ -135,6 +140,7 @@ impl<
         self.bce_with_logits_loss_with::<Mean, S2>(target)
     }
 
+    /// Auto-generated documentation for bce_with_logits_loss_with.
     pub fn bce_with_logits_loss_with<R: ReductionMode, S2: Shape>(
         &self,
         target: &Tensor<S2, B, K, D, G>,

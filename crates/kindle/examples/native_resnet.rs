@@ -1,12 +1,17 @@
 use kindle::prelude::*;
-use typenum::consts::*;
+
 
 #[module]
+/// Auto-generated documentation for BasicBlock.
 pub struct BasicBlock<B: Backend> {
-    pub conv1: kindle::Conv2d<(usize, usize, U3, U1, U1, U1), B>,
-    pub bn1: kindle::BatchNorm2d<(usize,), B>,
-    pub conv2: kindle::Conv2d<(usize, usize, U3, U1, U1, U1), B>,
-    pub bn2: kindle::BatchNorm2d<(usize,), B>,
+    /// Auto-generated documentation for conv1.
+    pub conv1: kindle::Conv2d<s![dyn, dyn, 3, 1, 1, 1], B>,
+    /// Auto-generated documentation for bn1.
+    pub bn1: kindle::BatchNorm2d<s![dyn], B>,
+    /// Auto-generated documentation for conv2.
+    pub conv2: kindle::Conv2d<s![dyn, dyn, 3, 1, 1, 1], B>,
+    /// Auto-generated documentation for bn2.
+    pub bn2: kindle::BatchNorm2d<s![dyn], B>,
 }
 
 impl<B: Backend> BasicBlock<B>
@@ -14,6 +19,7 @@ where
     B::FloatElem: ConstDType,
     B::Device: ConstDevice,
 {
+    /// Auto-generated documentation for new.
     pub fn new(
         in_channels: usize,
         out_channels: usize,
@@ -21,21 +27,22 @@ where
         _device: &KindleDevice,
     ) -> Result<Self> {
         Ok(Self {
-            conv1: kindle::Conv2d::<(usize, usize, U3, U1, U1, U1), B>::new_with((
+            conv1: kindle::Conv2d::<s![dyn, dyn, 3, 1, 1, 1], B>::new_with((
                 out_channels,
                 in_channels,
             ))?,
-            bn1: kindle::BatchNorm2d::<(usize,), B>::new_with((out_channels,), 1e-5, 0.1)?,
-            conv2: kindle::Conv2d::<(usize, usize, U3, U1, U1, U1), B>::new_with((
+            bn1: kindle::BatchNorm2d::<s![dyn], B>::new_with((out_channels,), 1e-5, 0.1)?,
+            conv2: kindle::Conv2d::<s![dyn, dyn, 3, 1, 1, 1], B>::new_with((
                 out_channels,
                 out_channels,
             ))?,
-            bn2: kindle::BatchNorm2d::<(usize,), B>::new_with((out_channels,), 1e-5, 0.1)?,
+            bn2: kindle::BatchNorm2d::<s![dyn], B>::new_with((out_channels,), 1e-5, 0.1)?,
         })
     }
 }
 
 impl<B: Backend> BasicBlock<B> {
+    /// Auto-generated documentation for forward.
     pub fn forward(&self, x: Tensor<Dyn, B>) -> Result<Tensor<Dyn, B>> {
         let out = self.conv1.forward(x.clone())?;
         let out = self.bn1.forward(out)?;
@@ -49,10 +56,15 @@ impl<B: Backend> BasicBlock<B> {
 }
 
 #[module]
+/// Auto-generated documentation for ResNet.
 pub struct ResNet<B: Backend> {
-    pub conv1: kindle::Conv2d<(usize, usize, U7, U2, U3, U1), B>,
-    pub bn1: kindle::BatchNorm2d<(usize,), B>,
+    /// Auto-generated documentation for conv1.
+    pub conv1: kindle::Conv2d<s![dyn, dyn, 7, 2, 3, 1], B>,
+    /// Auto-generated documentation for bn1.
+    pub bn1: kindle::BatchNorm2d<s![dyn], B>,
+    /// Auto-generated documentation for layer1.
     pub layer1: BasicBlock<B>,
+    /// Auto-generated documentation for fc.
     pub fc: kindle::Linear<Dyn, B>,
 }
 
@@ -61,10 +73,11 @@ where
     B::FloatElem: ConstDType,
     B::Device: ConstDevice,
 {
+    /// Auto-generated documentation for new.
     pub fn new(num_classes: usize, device: &KindleDevice) -> Result<Self> {
         Ok(Self {
-            conv1: kindle::Conv2d::<(usize, usize, U7, U2, U3, U1), B>::new_with((64, 3))?,
-            bn1: kindle::BatchNorm2d::<(usize,), B>::new_with((64,), 1e-5, 0.1)?,
+            conv1: kindle::Conv2d::<s![dyn, dyn, 7, 2, 3, 1], B>::new_with((64, 3))?,
+            bn1: kindle::BatchNorm2d::<s![dyn], B>::new_with((64,), 1e-5, 0.1)?,
             layer1: BasicBlock::<B>::new(64, 64, 1, device)?,
             fc: kindle::Linear::<Dyn, B>::new_with((64, num_classes))?,
         })
@@ -72,6 +85,7 @@ where
 }
 
 impl<B: Backend> ResNet<B> {
+    /// Auto-generated documentation for forward.
     pub fn forward(&self, x: Tensor<Dyn, B>) -> Result<Tensor<Dyn, B>> {
         let x = self.conv1.forward(x)?;
         let x = self.bn1.forward(x)?;

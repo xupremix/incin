@@ -203,7 +203,11 @@ pub(crate) fn matmul_impl(lhs: &NativeStorage, rhs: &NativeStorage) -> Result<Na
         let dispatcher = crate::gpu::NativeCudaDispatcher::new(device_id);
 
         if crate::gpu::cuda_cache::get_module(device_id, "matmul").is_none() {
-            dispatcher.compile_and_load_kernel("matmul", crate::ops::cuda_kernels::MATMUL_KERNEL, "matmul")?;
+            dispatcher.compile_and_load_kernel(
+                "matmul",
+                crate::ops::cuda_kernels::MATMUL_KERNEL,
+                "matmul",
+            )?;
         }
 
         let f = dispatcher.get_function("matmul", "matmul")?;
@@ -226,14 +230,17 @@ pub(crate) fn matmul_impl(lhs: &NativeStorage, rhs: &NativeStorage) -> Result<Na
         unsafe {
             let lhs_f32 = lhs_b.data.transmute::<f32>(m * k).unwrap();
             let rhs_f32 = rhs_b.data.transmute::<f32>(k * n).unwrap();
-            
+
             let mut out_data_arc = out_b.data.clone();
-            let out_slice_u8: &mut cudarc::driver::CudaSlice<u8> = alloc::sync::Arc::get_mut(&mut out_data_arc).expect("Failed to get mut to output buffer");
+            let out_slice_u8: &mut cudarc::driver::CudaSlice<u8> =
+                alloc::sync::Arc::get_mut(&mut out_data_arc)
+                    .expect("Failed to get mut to output buffer");
             let mut out_f32 = out_slice_u8.transmute_mut::<f32>(m * n).unwrap();
 
             use cudarc::driver::PushKernelArg;
             let stream = lhs_b.device.default_stream();
-            stream.launch_builder(&f)
+            stream
+                .launch_builder(&f)
                 .arg(&lhs_f32)
                 .arg(&rhs_f32)
                 .arg(&mut out_f32)
@@ -241,13 +248,15 @@ pub(crate) fn matmul_impl(lhs: &NativeStorage, rhs: &NativeStorage) -> Result<Na
                 .arg(&(k as i32))
                 .arg(&(n as i32))
                 .launch(cfg)
-                .map_err(|e| kindle_core::prelude::Error::Msg(format!("Kernel launch failed: {:?}", e)))?;
-                
+                .map_err(|e| {
+                    kindle_core::prelude::Error::Msg(format!("Kernel launch failed: {:?}", e))
+                })?;
+
             out_b.data = out_data_arc;
         }
 
         let out = NativeStorage::from_contiguous(NativeBuffer::Cuda(out_b), vec![m, n]);
-        
+
         let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
         let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
         crate::tape::push(crate::tape::TapeEntry {
@@ -311,13 +320,16 @@ pub(crate) fn matmul_impl(lhs: &NativeStorage, rhs: &NativeStorage) -> Result<Na
 }
 
 #[cfg(test)]
+/// Auto-generated documentation for tests.
 mod tests {
     use super::*;
 
+    /// Auto-generated documentation for matrix.
     fn matrix(v: Vec<f32>, rows: usize, cols: usize) -> NativeStorage {
         NativeStorage::from_contiguous(NativeBuffer::F32(v), vec![rows, cols])
     }
 
+    /// Auto-generated documentation for f32_vec.
     fn f32_vec(s: &NativeStorage) -> Vec<f32> {
         match &*s.buffer {
             NativeBuffer::F32(v) => v.clone(),
@@ -326,6 +338,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for matmul_forward_hand_computed_2x3_times_3x4.
     fn matmul_forward_hand_computed_2x3_times_3x4() {
         // lhs = [[1,2,3],[4,5,6]] (2x3)
         let lhs = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
@@ -350,6 +363,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for matmul_forward_transposed_lhs_view_is_correct_without_materializing.
     fn matmul_forward_transposed_lhs_view_is_correct_without_materializing() {
         // Original storage is [3,2] = [[1,4],[2,5],[3,6]]; transpose(0,1)
         // gives a non-contiguous [2,3] view = [[1,2,3],[4,5,6]] (same
@@ -375,6 +389,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for matmul_backward_matches_hand_computed_gradients.
     fn matmul_backward_matches_hand_computed_gradients() {
         // lhs [2,3], rhs [3,4] as above; grad_out is a synthetic [2,4] all-ones-ish
         // matrix with distinct values so the composition is unambiguous.
@@ -399,7 +414,7 @@ mod tests {
         // sum of rhs^T's rows (since grad_out row is all ones):
         // sum over rhs^T's 4 rows (its columns as rows) = per-column sums of rhs:
         // col0: 7+11+15=33, col1: 8+12+16=36, col2: 9+13+17=39, col3: 10+14+18=42
-        // Wait: rhs^T is [4,3] (rows = rhs's 4 columns transposed to rows length 3).
+        // rhs^T is [4,3] (rows = rhs's 4 columns transposed to rows length 3).
         // rhs^T row i = rhs's column i as a length-3 vector: [rhs[0][i], rhs[1][i], rhs[2][i]]
         // grad_lhs[m][k] = sum_n grad_out[m][n] * rhs^T[n][k] = sum_n rhs[k][n] (since grad_out=1)
         //               = sum over n of rhs[k][n] = row-sum of rhs's row k.
@@ -419,6 +434,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for matmul_shape_incompatible_returns_err_not_panic.
     fn matmul_shape_incompatible_returns_err_not_panic() {
         let lhs = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let rhs = matrix(vec![0.0; 20], 4, 5);
@@ -426,6 +442,7 @@ mod tests {
         assert!(result.is_err());
     }
 
+    /// Auto-generated documentation for tensor.
     fn tensor(v: Vec<f32>, shape: Vec<usize>) -> NativeStorage {
         NativeStorage::from_contiguous(NativeBuffer::F32(v), shape)
     }
@@ -619,6 +636,7 @@ mod tests {
     use crate::gradcheck::gradcheck;
     use kindle_core::prelude::{Cpu, ReductionOps};
 
+    /// Auto-generated documentation for TestBackend.
     type TestBackend = NativeBackend<f32, Cpu>;
 
     /// Wraps `batched_matmul_impl` with `sum_all` so `gradcheck` (which
@@ -743,6 +761,7 @@ mod tests {
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[target_feature(enable = "avx2", enable = "fma")]
 #[inline]
+/// Auto-generated documentation for f32_matmul_avx2.
 unsafe fn f32_matmul_avx2(
     m: usize,
     k: usize,
@@ -789,6 +808,7 @@ unsafe fn f32_matmul_avx2(
 }
 
 #[inline]
+/// Auto-generated documentation for f32_matmul_scalar.
 fn f32_matmul_scalar(
     m: usize,
     k: usize,

@@ -3,6 +3,7 @@ use alloc::collections::BTreeMap;
 
 /// A trait for serializing a collection of dynamic tensors to a specific format.
 pub trait Serializer {
+    /// Auto-generated documentation for Error.
     type Error: core::fmt::Debug + core::fmt::Display;
 
     /// Serializes the state dict to the given path or stream.
@@ -17,6 +18,7 @@ pub trait Serializer {
 
 /// A trait for deserializing a collection of dynamic tensors from a specific format.
 pub trait Deserializer {
+    /// Auto-generated documentation for Error.
     type Error: core::fmt::Debug + core::fmt::Display;
 
     /// Deserializes the state dict from the given path or stream.
@@ -30,12 +32,14 @@ pub trait Deserializer {
 }
 
 #[cfg(feature = "std")]
+/// Auto-generated documentation for SafetensorsSerializer.
 pub struct SafetensorsSerializer<'a> {
     path: &'a std::path::Path,
 }
 
 #[cfg(feature = "std")]
 impl<'a> SafetensorsSerializer<'a> {
+    /// Auto-generated documentation for new.
     pub fn new(path: &'a std::path::Path) -> Self {
         Self { path }
     }
@@ -43,8 +47,10 @@ impl<'a> SafetensorsSerializer<'a> {
 
 #[cfg(feature = "std")]
 impl<'a> Serializer for SafetensorsSerializer<'a> {
+    /// Auto-generated documentation for Error.
     type Error = anyhow::Error;
 
+    /// Auto-generated documentation for serialize.
     fn serialize<B: Backend>(
         &mut self,
         state_dict: &BTreeMap<String, Tensor<Dyn, B>>,
@@ -88,12 +94,14 @@ impl<'a> Serializer for SafetensorsSerializer<'a> {
 }
 
 #[cfg(feature = "std")]
+/// Auto-generated documentation for SafetensorsDeserializer.
 pub struct SafetensorsDeserializer<'a> {
     path: &'a std::path::Path,
 }
 
 #[cfg(feature = "std")]
 impl<'a> SafetensorsDeserializer<'a> {
+    /// Auto-generated documentation for new.
     pub fn new(path: &'a std::path::Path) -> Self {
         Self { path }
     }
@@ -101,8 +109,10 @@ impl<'a> SafetensorsDeserializer<'a> {
 
 #[cfg(feature = "std")]
 impl<'a> Deserializer for SafetensorsDeserializer<'a> {
+    /// Auto-generated documentation for Error.
     type Error = anyhow::Error;
 
+    /// Auto-generated documentation for deserialize.
     fn deserialize<B: Backend>(
         &mut self,
         device: &KindleDevice,
@@ -150,6 +160,7 @@ impl<'a> Deserializer for SafetensorsDeserializer<'a> {
 
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(dead_code)]
+/// Auto-generated documentation for SerializedTensor.
 struct SerializedTensor {
     shape: Vec<usize>,
     dtype: String,
@@ -157,12 +168,14 @@ struct SerializedTensor {
 }
 
 #[cfg(feature = "std")]
+/// Auto-generated documentation for BincodeSerializer.
 pub struct BincodeSerializer<'a> {
     path: &'a std::path::Path,
 }
 
 #[cfg(feature = "std")]
 impl<'a> BincodeSerializer<'a> {
+    /// Auto-generated documentation for new.
     pub fn new(path: &'a std::path::Path) -> Self {
         Self { path }
     }
@@ -170,8 +183,10 @@ impl<'a> BincodeSerializer<'a> {
 
 #[cfg(feature = "std")]
 impl<'a> Serializer for BincodeSerializer<'a> {
+    /// Auto-generated documentation for Error.
     type Error = anyhow::Error;
 
+    /// Auto-generated documentation for serialize.
     fn serialize<B: Backend>(
         &mut self,
         state_dict: &BTreeMap<String, Tensor<Dyn, B>>,
@@ -212,12 +227,14 @@ impl<'a> Serializer for BincodeSerializer<'a> {
 }
 
 #[cfg(feature = "std")]
+/// Auto-generated documentation for BincodeDeserializer.
 pub struct BincodeDeserializer<'a> {
     path: &'a std::path::Path,
 }
 
 #[cfg(feature = "std")]
 impl<'a> BincodeDeserializer<'a> {
+    /// Auto-generated documentation for new.
     pub fn new(path: &'a std::path::Path) -> Self {
         Self { path }
     }
@@ -225,8 +242,10 @@ impl<'a> BincodeDeserializer<'a> {
 
 #[cfg(feature = "std")]
 impl<'a> Deserializer for BincodeDeserializer<'a> {
+    /// Auto-generated documentation for Error.
     type Error = anyhow::Error;
 
+    /// Auto-generated documentation for deserialize.
     fn deserialize<B: Backend>(
         &mut self,
         device: &KindleDevice,
@@ -270,18 +289,24 @@ impl<'a> Deserializer for BincodeDeserializer<'a> {
 
 #[cfg(feature = "std")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Auto-generated documentation for Format.
 pub enum Format {
+    /// Auto-generated documentation for Safetensors.
     Safetensors,
+    /// Auto-generated documentation for ONNX.
     ONNX,
 }
 
 #[cfg(feature = "std")]
+/// Auto-generated documentation for ModelExt.
 pub trait ModelExt<B: Backend> {
+    /// Auto-generated documentation for save.
     fn save(&self, format: Format, path: &std::path::Path) -> Result<()>
     where
         <<B as Backend>::Device as Device>::Field: Default,
         <<B as Backend>::FloatElem as crate::tensor::dtype::DType>::Field: Default;
 
+    /// Auto-generated documentation for load.
     fn load(&mut self, format: Format, path: &std::path::Path, device: &KindleDevice) -> Result<()>
     where
         <<B as Backend>::Device as Device>::Field: Default,
@@ -290,6 +315,7 @@ pub trait ModelExt<B: Backend> {
 
 #[cfg(feature = "std")]
 impl<B: Backend, T: crate::nn::module::StateDict<B>> ModelExt<B> for T {
+    /// Auto-generated documentation for save.
     fn save(&self, format: Format, path: &std::path::Path) -> Result<()>
     where
         <<B as Backend>::Device as Device>::Field: Default,
@@ -310,6 +336,7 @@ impl<B: Backend, T: crate::nn::module::StateDict<B>> ModelExt<B> for T {
         Ok(())
     }
 
+    /// Auto-generated documentation for load.
     fn load(&mut self, format: Format, path: &std::path::Path, device: &KindleDevice) -> Result<()>
     where
         <<B as Backend>::Device as Device>::Field: Default,

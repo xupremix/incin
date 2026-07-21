@@ -1,3 +1,4 @@
+use alloc::collections::BTreeMap;
 use kindle_telemetry::events::{Event, GraphSnapshotEvent};
 use kindle_viz_plugin_api::event::{KeyCode, PanelEvent, PanelMouseEvent};
 use kindle_viz_plugin_api::panel::Panel;
@@ -7,19 +8,23 @@ use ratatui::{
     style::{Color, Modifier, Style},
     text::Span,
     widgets::{
-        canvas::{Canvas, Line, Points},
         Cell, Paragraph, Row, Table,
+        canvas::{Canvas, Line, Points},
     },
 };
-use alloc::collections::BTreeMap;
 
 #[derive(PartialEq, Eq)]
+/// Auto-generated documentation for ViewMode.
 pub enum ViewMode {
+    /// Auto-generated documentation for List.
     List,
+    /// Auto-generated documentation for Canvas3D.
     Canvas3D,
+    /// Auto-generated documentation for Canvas2D.
     Canvas2D,
 }
 
+/// Auto-generated documentation for GraphModuleListPanel.
 pub struct GraphModuleListPanel {
     snapshot: Option<GraphSnapshotEvent>,
     scroll_offset: usize,
@@ -31,11 +36,18 @@ pub struct GraphModuleListPanel {
     zoom: f64,
     pan_x: f64,
     pan_y: f64,
-    
+
     last_mouse: Option<(u16, u16)>,
 }
 
+impl Default for GraphModuleListPanel {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GraphModuleListPanel {
+    /// Auto-generated documentation for new.
     pub fn new() -> Self {
         Self {
             snapshot: None,
@@ -50,19 +62,30 @@ impl GraphModuleListPanel {
         }
     }
 
-    fn calculate_3d_layout(&self, snapshot: &GraphSnapshotEvent) -> BTreeMap<usize, (f64, f64, f64)> {
+    /// Auto-generated documentation for calculate_3d_layout.
+    fn calculate_3d_layout(
+        &self,
+        snapshot: &GraphSnapshotEvent,
+    ) -> BTreeMap<usize, (f64, f64, f64)> {
         let mut value_depths: BTreeMap<usize, usize> = BTreeMap::new();
         let mut node_depths: BTreeMap<usize, usize> = BTreeMap::new();
         let mut max_depth = 0;
-        
+
         // Compute depth
         for node in &snapshot.graph.nodes {
-            let d = node.inputs.iter().map(|i| value_depths.get(i).copied().unwrap_or(0) + 1).max().unwrap_or(0);
+            let d = node
+                .inputs
+                .iter()
+                .map(|i| value_depths.get(i).copied().unwrap_or(0) + 1)
+                .max()
+                .unwrap_or(0);
             node_depths.insert(node.id, d);
             for &out in &node.outputs {
                 value_depths.insert(out, d);
             }
-            if d > max_depth { max_depth = d; }
+            if d > max_depth {
+                max_depth = d;
+            }
         }
 
         // Group by depth
@@ -91,7 +114,7 @@ impl GraphModuleListPanel {
                     let radius = (n as f64).sqrt() * spacing_x / 2.0;
                     (angle.cos() * radius, angle.sin() * radius * 0.5)
                 };
-                
+
                 positions.insert(id, (x, y, z));
             }
         }
@@ -101,24 +124,30 @@ impl GraphModuleListPanel {
 }
 
 impl Panel for GraphModuleListPanel {
+    /// Auto-generated documentation for id.
     fn id(&self) -> &'static str {
         "graph_modules"
     }
 
+    /// Auto-generated documentation for title.
     fn title(&self) -> &str {
         match self.view_mode {
             ViewMode::List => "Model Structure (List | Press 'v' for 2D)",
             ViewMode::Canvas2D => "Model Structure (2D | Drag: Pan | Scroll: Zoom | 'v' for 3D)",
-            ViewMode::Canvas3D => "Model Structure (3D | Drag: Pan | Shift+Drag: Rotate | Scroll: Zoom | 'v' for List)",
+            ViewMode::Canvas3D => {
+                "Model Structure (3D | Drag: Pan | Shift+Drag: Rotate | Scroll: Zoom | 'v' for List)"
+            }
         }
     }
 
+    /// Auto-generated documentation for update.
     fn update(&mut self, event: &Event) {
         if let Event::GraphSnapshot(m) = event {
             self.snapshot = Some(m.clone());
         }
     }
 
+    /// Auto-generated documentation for render.
     fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) {
         let area = ctx.area();
         let frame = ctx.frame_mut();
@@ -140,13 +169,19 @@ impl Panel for GraphModuleListPanel {
                 Cell::from("Inputs").style(Style::default().add_modifier(Modifier::BOLD)),
             ]);
 
-            let rows: Vec<Row> = snapshot.graph.nodes.iter().skip(self.scroll_offset).map(|m| {
-                Row::new(vec![
-                    Cell::from(m.id.to_string()),
-                    Cell::from(m.op.as_str().to_string()),
-                    Cell::from(format!("{:?}", m.inputs)),
-                ])
-            }).collect();
+            let rows: Vec<Row> = snapshot
+                .graph
+                .nodes
+                .iter()
+                .skip(self.scroll_offset)
+                .map(|m| {
+                    Row::new(vec![
+                        Cell::from(m.id.to_string()),
+                        Cell::from(m.op.as_str().to_string()),
+                        Cell::from(format!("{:?}", m.inputs)),
+                    ])
+                })
+                .collect();
 
             let table = Table::new(
                 rows,
@@ -154,13 +189,14 @@ impl Panel for GraphModuleListPanel {
                     Constraint::Percentage(50),
                     Constraint::Percentage(30),
                     Constraint::Percentage(20),
-                ]
-            ).header(header);
+                ],
+            )
+            .header(header);
 
             frame.render_widget(table, area);
         } else {
             let positions = self.calculate_3d_layout(snapshot);
-            
+
             let pitch = self.pitch;
             let yaw = self.yaw;
             let zoom = self.zoom;
@@ -169,18 +205,17 @@ impl Panel for GraphModuleListPanel {
 
             let project = |x: f64, y: f64, z: f64| -> (f64, f64) {
                 if self.view_mode == ViewMode::Canvas2D {
-                    // In 2D mode, we ignore z and rotate, just orthographic mapping
-                    // y should go down as depth increases
-                    // wait, in calculate_3d_layout, z is depth.
-                    // Let's map z to y, and x to x.
+                    // In 2D mode, we ignore z and rotate, using an orthographic mapping.
+                    // y should go down as depth increases.
+                    // Since z represents depth, we map -z to y.
                     let px = x;
-                    let py = -z; 
+                    let py = -z;
                     ((px * zoom) + pan_x, (py * zoom) + pan_y)
                 } else {
                     // Rotate Yaw (around Y axis)
                     let x1 = x * yaw.cos() - z * yaw.sin();
                     let z1 = x * yaw.sin() + z * yaw.cos();
-                    
+
                     // Rotate Pitch (around X axis)
                     let y2 = y * pitch.cos() - z1 * pitch.sin();
                     let _z2 = y * pitch.sin() + z1 * pitch.cos();
@@ -200,8 +235,12 @@ impl Panel for GraphModuleListPanel {
             let mut max_abs_y = 10.0_f64;
             for &(x, y, z) in positions.values() {
                 let (px, py) = project(x, y, z);
-                if px.abs() > max_abs_x { max_abs_x = px.abs(); }
-                if py.abs() > max_abs_y { max_abs_y = py.abs(); }
+                if px.abs() > max_abs_x {
+                    max_abs_x = px.abs();
+                }
+                if py.abs() > max_abs_y {
+                    max_abs_y = py.abs();
+                }
             }
             // Add a 20% margin
             max_abs_x *= 1.2;
@@ -225,8 +264,8 @@ impl Panel for GraphModuleListPanel {
                         if let Some(&(x1, y1, z1)) = positions.get(&node.id) {
                             let (px1, py1) = project(x1, y1, z1);
                             for input in &node.inputs {
-                                if let Some(&source_node_id) = value_to_node.get(input) {
-                                    if let Some(&(x2, y2, z2)) = positions.get(&source_node_id) {
+                                if let Some(&source_node_id) = value_to_node.get(input)
+                                    && let Some(&(x2, y2, z2)) = positions.get(&source_node_id) {
                                         let (px2, py2) = project(x2, y2, z2);
                                         ctx.draw(&Line {
                                             x1: px1,
@@ -236,7 +275,6 @@ impl Panel for GraphModuleListPanel {
                                             color: Color::DarkGray,
                                         });
                                     }
-                                }
                             }
                         }
                     }
@@ -256,7 +294,7 @@ impl Panel for GraphModuleListPanel {
                                 coords: &[(px, py)],
                                 color,
                             });
-                            
+
                             // Add labels in 2D mode
                             if self.view_mode == ViewMode::Canvas2D {
                                 let mut in_shapes = Vec::new();
@@ -270,23 +308,46 @@ impl Panel for GraphModuleListPanel {
                                 } else {
                                     in_shapes.join(", ")
                                 };
-                                
+
                                 let out_shape_str = if let Some(&out_id) = node.outputs.first() {
-                                    snapshot.graph.values.get(&out_id).map(|v| format!("{:?}", v.shape)).unwrap_or_default()
+                                    snapshot
+                                        .graph
+                                        .values
+                                        .get(&out_id)
+                                        .map(|v| format!("{:?}", v.shape))
+                                        .unwrap_or_default()
                                 } else {
                                     String::new()
                                 };
-                                
+
                                 let op_label = format!("[ {} ]", node.op.as_str());
                                 let label_y_offset = max_abs_y * 0.06;
                                 let label_x_offset = -(max_abs_x * 0.01 * op_label.len() as f64);
-                                
+
                                 if !in_str.is_empty() {
-                                    ctx.print(px + label_x_offset, py + label_y_offset, Span::styled(in_str, Style::default().fg(Color::DarkGray)));
+                                    ctx.print(
+                                        px + label_x_offset,
+                                        py + label_y_offset,
+                                        Span::styled(in_str, Style::default().fg(Color::DarkGray)),
+                                    );
                                 }
-                                ctx.print(px + label_x_offset, py, Span::styled(op_label, Style::default().fg(color).add_modifier(Modifier::BOLD)));
+                                ctx.print(
+                                    px + label_x_offset,
+                                    py,
+                                    Span::styled(
+                                        op_label,
+                                        Style::default().fg(color).add_modifier(Modifier::BOLD),
+                                    ),
+                                );
                                 if !out_shape_str.is_empty() {
-                                    ctx.print(px + label_x_offset, py - label_y_offset, Span::styled(out_shape_str, Style::default().fg(Color::White)));
+                                    ctx.print(
+                                        px + label_x_offset,
+                                        py - label_y_offset,
+                                        Span::styled(
+                                            out_shape_str,
+                                            Style::default().fg(Color::White),
+                                        ),
+                                    );
                                 }
                             }
                         }
@@ -297,6 +358,7 @@ impl Panel for GraphModuleListPanel {
         }
     }
 
+    /// Auto-generated documentation for handle_event.
     fn handle_event(&mut self, event: &PanelEvent) -> bool {
         match event {
             PanelEvent::Key(k) => match k.code {
@@ -312,13 +374,17 @@ impl Panel for GraphModuleListPanel {
                     if self.view_mode == ViewMode::List {
                         self.scroll_offset = self.scroll_offset.saturating_sub(1);
                         true
-                    } else { false }
+                    } else {
+                        false
+                    }
                 }
                 KeyCode::Down => {
                     if self.view_mode == ViewMode::List {
                         self.scroll_offset = self.scroll_offset.saturating_add(1);
                         true
-                    } else { false }
+                    } else {
+                        false
+                    }
                 }
                 _ => false,
             },
@@ -353,7 +419,7 @@ impl Panel for GraphModuleListPanel {
                             if let Some((lx, ly)) = self.last_mouse {
                                 let dx = (x as f64) - (lx as f64);
                                 let dy = (y as f64) - (ly as f64);
-                                
+
                                 if modifiers.shift {
                                     // Rotate
                                     self.yaw += dx * 0.02;
@@ -377,6 +443,7 @@ impl Panel for GraphModuleListPanel {
         }
     }
 
+    /// Auto-generated documentation for reset.
     fn reset(&mut self) {
         self.snapshot = None;
         self.scroll_offset = 0;

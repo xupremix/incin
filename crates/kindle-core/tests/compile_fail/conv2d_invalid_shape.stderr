@@ -17,9 +17,9 @@ warning: unused import: `kindle_core as kindle`
   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
 
 error[E0277]: cannot subtract `B1` from `UInt<UTerm, B0>`
-  --> tests/compile_fail/conv2d_invalid_shape.rs:14:16
+  --> tests/compile_fail/conv2d_invalid_shape.rs:15:16
    |
-14 |     let _c = t.conv2d::<typenum::U1, typenum::U0, s![8, 3, 3, 3]>(&w, None).unwrap();
+15 |     let _c = t.conv2d::<typenum::U1, typenum::U0, s![8, 3, 3, 3]>(&w, None).unwrap();
    |                ^^^^^^ no implementation for `UInt<UTerm, B0> - B1`
    |
    = help: the trait `std::ops::Sub<B1>` is not implemented for `UInt<UTerm, B0>`

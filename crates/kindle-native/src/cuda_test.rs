@@ -4,6 +4,7 @@ use crate::storage::{NativeBuffer, NativeStorage, NativeCudaBuffer};
 use alloc::sync::Arc;
 use cudarc::driver::{CudaDevice, CudaSlice};
 
+/// Auto-generated documentation for test_cuda_add.
 pub fn test_cuda_add() -> Result<()> {
     let device = CudaDevice::new(0).unwrap();
     let data_a: Vec<f32> = vec![1.0, 2.0];

@@ -22,3 +22,4 @@ NATIVE_BACKEND_PLAN.md
 .planning/
 .claude/
 .gemini/
+.agents/

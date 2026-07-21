@@ -7,5 +7,6 @@ use crate::panel::Panel;
 /// Both first-party built-in panels and third-party plugins implement this
 /// identically: no privileged internal API.
 pub trait Plugin {
+    /// Auto-generated documentation for panels.
     fn panels(&self) -> Vec<Box<dyn Panel>>;
 }

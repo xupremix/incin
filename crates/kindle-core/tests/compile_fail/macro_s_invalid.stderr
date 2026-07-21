@@ -9,9 +9,9 @@ error[E0254]: the name `kindle` is defined multiple times
   = note: `kindle` must be defined only once in the type namespace of this module
 
 error: expected identifier
- --> tests/compile_fail/macro_s_invalid.rs:5:24
+ --> tests/compile_fail/macro_s_invalid.rs:6:24
   |
-5 | type BadShape = s![10, "foo"];
+6 | type BadShape = s![10, "foo"];
   |                        ^^^^^
 
 warning: unused import: `kindle_core as kindle`

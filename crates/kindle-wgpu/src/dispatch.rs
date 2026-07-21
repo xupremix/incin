@@ -2,9 +2,10 @@ use alloc::sync::Arc;
 use wgpu::ComputePipeline;
 
 use crate::device::get_device_state;
-use crate::storage::WgpuBuffer;
 use crate::pipeline::get_or_create_pipeline;
+use crate::storage::WgpuBuffer;
 
+/// Auto-generated documentation for WG_SIZE.
 const WG_SIZE: u32 = 256;
 
 /// Run a simple 1D dispatch with 3 storage bindings: lhs, rhs, out, plus a u32 params buffer.
@@ -24,10 +25,22 @@ pub(crate) fn dispatch_binary(
         label: Some("Binary BG"),
         layout: &bgl,
         entries: &[
-            wgpu::BindGroupEntry { binding: 0, resource: lhs.buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 1, resource: rhs.buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 2, resource: out.buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 3, resource: params_buf.buffer.as_entire_binding() },
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: lhs.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: rhs.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: out.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 3,
+                resource: params_buf.buffer.as_entire_binding(),
+            },
         ],
     });
     let n = params_data[1];
@@ -47,9 +60,18 @@ pub(crate) fn dispatch_unary(inp: &WgpuBuffer, out: &Arc<WgpuBuffer>, params_dat
         label: Some("Unary BG"),
         layout: &bgl,
         entries: &[
-            wgpu::BindGroupEntry { binding: 0, resource: inp.buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 1, resource: out.buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 2, resource: params_buf.buffer.as_entire_binding() },
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: inp.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: out.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: params_buf.buffer.as_entire_binding(),
+            },
         ],
     });
     let n = params_data[1];
@@ -69,9 +91,18 @@ pub(crate) fn dispatch_scalar(inp: &WgpuBuffer, out: &Arc<WgpuBuffer>, params_da
         label: Some("Scalar BG"),
         layout: &bgl,
         entries: &[
-            wgpu::BindGroupEntry { binding: 0, resource: inp.buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 1, resource: out.buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 2, resource: params_buf.buffer.as_entire_binding() },
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: inp.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: out.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: params_buf.buffer.as_entire_binding(),
+            },
         ],
     });
     let n = params_data[1];
@@ -97,9 +128,18 @@ pub(crate) fn dispatch_reduce_all(inp: &WgpuBuffer, n: u32, reduce_mode: u32) ->
         label: Some("Reduce BG"),
         layout: &bgl,
         entries: &[
-            wgpu::BindGroupEntry { binding: 0, resource: inp.buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 1, resource: partial_buf.buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 2, resource: params_buf.buffer.as_entire_binding() },
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: inp.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: partial_buf.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: params_buf.buffer.as_entire_binding(),
+            },
         ],
     });
     run_pipeline(&state, &pipeline, &bg, n_wg, 1, 1, "Reduce-pass1");
@@ -126,9 +166,18 @@ pub(crate) fn dispatch_softmax(inp: &WgpuBuffer, out: &Arc<WgpuBuffer>, batch: u
         label: Some("Softmax BG"),
         layout: &bgl,
         entries: &[
-            wgpu::BindGroupEntry { binding: 0, resource: inp.buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 1, resource: out.buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 2, resource: params_buf.buffer.as_entire_binding() },
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: inp.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: out.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: params_buf.buffer.as_entire_binding(),
+            },
         ],
     });
     // Each workgroup handles one row
@@ -148,9 +197,18 @@ pub(crate) fn dispatch_transpose(inp: &WgpuBuffer, out: &Arc<WgpuBuffer>, rows: 
         label: Some("Transpose BG"),
         layout: &bgl,
         entries: &[
-            wgpu::BindGroupEntry { binding: 0, resource: inp.buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 1, resource: out.buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 2, resource: params_buf.buffer.as_entire_binding() },
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: inp.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: out.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: params_buf.buffer.as_entire_binding(),
+            },
         ],
     });
     let wg_x = (cols + 15) / 16;
@@ -158,16 +216,19 @@ pub(crate) fn dispatch_transpose(inp: &WgpuBuffer, out: &Arc<WgpuBuffer>, rows: 
     run_pipeline(&state, &pipeline, &bg, wg_x, wg_y, 1, "Transpose");
 }
 
+/// Auto-generated documentation for run_pipeline.
 fn run_pipeline(
     state: &crate::device::WgpuDeviceState,
     pipeline: &ComputePipeline,
     bg: &wgpu::BindGroup,
-    x: u32, y: u32, z: u32,
+    x: u32,
+    y: u32,
+    z: u32,
     label: &str,
 ) {
-    let mut encoder = state.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        label: Some(label),
-    });
+    let mut encoder = state
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some(label) });
     {
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some(label),
@@ -196,19 +257,28 @@ pub(crate) fn dispatch_im2col(inp: &WgpuBuffer, col: &WgpuBuffer, params_data: &
         label: Some("Im2Col BG"),
         layout: &bgl,
         entries: &[
-            wgpu::BindGroupEntry { binding: 0, resource: inp.buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 1, resource: col.buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 2, resource: params_buf.buffer.as_entire_binding() },
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: inp.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: col.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: params_buf.buffer.as_entire_binding(),
+            },
         ],
     });
     // total threads = N * C*Kh*Kw * H_out*W_out
-    let n       = params_data[0] as u64;
-    let c_in    = params_data[1] as u64;
-    let h_out   = params_data[4] as u64;
-    let w_out   = params_data[5] as u64;
-    let kh      = params_data[6] as u64;
-    let kw      = params_data[7] as u64;
-    let total   = n * c_in * kh * kw * h_out * w_out;
+    let n = params_data[0] as u64;
+    let c_in = params_data[1] as u64;
+    let h_out = params_data[4] as u64;
+    let w_out = params_data[5] as u64;
+    let kh = params_data[6] as u64;
+    let kw = params_data[7] as u64;
+    let total = n * c_in * kh * kw * h_out * w_out;
     let wg = ((total + 255) / 256) as u32;
     run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "Im2Col");
 }
@@ -218,10 +288,10 @@ pub(crate) fn dispatch_im2col(inp: &WgpuBuffer, col: &WgpuBuffer, params_data: &
 /// meta: [N, lr_bits, beta1_bits, beta2_bits, eps_bits, wd_bits, bc1_bits, bc2_bits]
 pub(crate) fn dispatch_adamw(
     param: &WgpuBuffer,
-    grad:  &WgpuBuffer,
-    m:     &WgpuBuffer,
-    v:     &WgpuBuffer,
-    meta:  &[u32],
+    grad: &WgpuBuffer,
+    m: &WgpuBuffer,
+    v: &WgpuBuffer,
+    meta: &[u32],
 ) {
     let state = get_device_state();
     let shader = include_str!("shaders/adamw.wgsl");
@@ -233,11 +303,26 @@ pub(crate) fn dispatch_adamw(
         label: Some("AdamW BG"),
         layout: &bgl,
         entries: &[
-            wgpu::BindGroupEntry { binding: 0, resource: param.buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 1, resource: grad.buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 2, resource: m.buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 3, resource: v.buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 4, resource: meta_buf.buffer.as_entire_binding() },
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: param.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: grad.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: m.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 3,
+                resource: v.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 4,
+                resource: meta_buf.buffer.as_entire_binding(),
+            },
         ],
     });
     let n = meta[0];
@@ -245,3 +330,43 @@ pub(crate) fn dispatch_adamw(
     run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "AdamW");
 }
 
+/// Dispatch transposed 2D convolution
+pub(crate) fn dispatch_conv_transpose2d(
+    inp: &WgpuBuffer,
+    weight: &WgpuBuffer,
+    out: &WgpuBuffer,
+    params_data: &[u32],
+) {
+    let state = get_device_state();
+    let shader = include_str!("shaders/conv_transpose.wgsl");
+    let pipeline = get_or_create_pipeline("conv_transpose", shader, "main");
+
+    let params_buf = WgpuBuffer::from_slice(params_data);
+    let bgl = pipeline.get_bind_group_layout(0);
+    let bg = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("ConvTranspose BG"),
+        layout: &bgl,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: inp.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: weight.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: out.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 3,
+                resource: params_buf.buffer.as_entire_binding(),
+            },
+        ],
+    });
+
+    let total_out = params_data[0] * params_data[2] * params_data[5] * params_data[6];
+    let wg = (total_out + 63) / 64;
+    run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "ConvTranspose");
+}

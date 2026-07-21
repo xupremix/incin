@@ -15,9 +15,13 @@ pub const CURRENT_SCHEMA_VERSION: u32 = 1;
 /// (`step`/`loss`/`lr`/`throughput`) as a generic named-metric event.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ScalarEvent {
+    /// Auto-generated documentation for schema_version.
     pub schema_version: u32,
+    /// Auto-generated documentation for step.
     pub step: usize,
+    /// Auto-generated documentation for name.
     pub name: String,
+    /// Auto-generated documentation for value.
     pub value: f64,
 }
 
@@ -28,26 +32,37 @@ pub struct ScalarEvent {
 /// reference computation.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct GradientNormEvent {
+    /// Auto-generated documentation for schema_version.
     pub schema_version: u32,
+    /// Auto-generated documentation for step.
     pub step: usize,
+    /// Auto-generated documentation for param_name.
     pub param_name: String,
+    /// Auto-generated documentation for l2_norm.
     pub l2_norm: f32,
 }
 
 /// Per-parameter weight L2-norm sample, same shape as `GradientNormEvent`.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct WeightNormEvent {
+    /// Auto-generated documentation for schema_version.
     pub schema_version: u32,
+    /// Auto-generated documentation for step.
     pub step: usize,
+    /// Auto-generated documentation for param_name.
     pub param_name: String,
+    /// Auto-generated documentation for l2_norm.
     pub l2_norm: f32,
 }
 
 /// Process resident-set-size sample.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MemoryEvent {
+    /// Auto-generated documentation for schema_version.
     pub schema_version: u32,
+    /// Auto-generated documentation for step.
     pub step: usize,
+    /// Auto-generated documentation for rss_bytes.
     pub rss_bytes: u64,
 }
 
@@ -55,8 +70,11 @@ pub struct MemoryEvent {
 /// `epoch`/`metrics: BTreeMap<String, f32>` shape.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct EpochEvent {
+    /// Auto-generated documentation for schema_version.
     pub schema_version: u32,
+    /// Auto-generated documentation for epoch.
     pub epoch: usize,
+    /// Auto-generated documentation for metrics.
     pub metrics: alloc::collections::BTreeMap<String, f32>,
 }
 
@@ -65,7 +83,9 @@ pub struct EpochEvent {
 /// tagged-union payload.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct HyperparamEvent {
+    /// Auto-generated documentation for schema_version.
     pub schema_version: u32,
+    /// Auto-generated documentation for params.
     pub params: alloc::collections::BTreeMap<String, String>,
 }
 
@@ -73,7 +93,9 @@ pub struct HyperparamEvent {
 /// `Graph` IR from `kindle_core::graph`.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct GraphSnapshotEvent {
+    /// Auto-generated documentation for schema_version.
     pub schema_version: u32,
+    /// Auto-generated documentation for graph.
     pub graph: kindle_core::prelude::Graph,
 }
 
@@ -88,22 +110,32 @@ pub struct GraphSnapshotEvent {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "type")]
 pub enum Event {
+    /// Auto-generated documentation for Scalar.
     Scalar(ScalarEvent),
+    /// Auto-generated documentation for GradientNorm.
     GradientNorm(GradientNormEvent),
+    /// Auto-generated documentation for WeightNorm.
     WeightNorm(WeightNormEvent),
+    /// Auto-generated documentation for Memory.
     Memory(MemoryEvent),
+    /// Auto-generated documentation for Epoch.
     Epoch(EpochEvent),
+    /// Auto-generated documentation for Hyperparam.
     Hyperparam(HyperparamEvent),
+    /// Auto-generated documentation for GraphSnapshot.
     GraphSnapshot(GraphSnapshotEvent),
     #[serde(other)]
+    /// Auto-generated documentation for Unknown.
     Unknown,
 }
 
 #[cfg(test)]
+/// Auto-generated documentation for tests.
 mod tests {
     use super::*;
 
     #[test]
+    /// Auto-generated documentation for scalar_event_schema_version_round_trips_through_json.
     fn scalar_event_schema_version_round_trips_through_json() {
         let event = ScalarEvent {
             schema_version: CURRENT_SCHEMA_VERSION,
@@ -123,6 +155,7 @@ mod tests {
     }
 
     #[test]
+    /// Auto-generated documentation for unrecognized_event_type_deserializes_to_unknown.
     fn unrecognized_event_type_deserializes_to_unknown() {
         let future_event_json = r#"{"type":"SomeFutureEventType","schema_version":99,"foo":"bar"}"#;
 

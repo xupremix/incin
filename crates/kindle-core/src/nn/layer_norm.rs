@@ -2,18 +2,27 @@ use crate::nn::{Module, Param};
 use crate::prelude::*;
 use core::marker::PhantomData;
 
+/// Auto-generated documentation for LayerNormShape.
 pub trait LayerNormShape: Shape + DynShape {
+    /// Auto-generated documentation for Channels.
     type Channels: Dim;
+    /// Auto-generated documentation for BuildArg.
     type BuildArg: crate::tensor::arg_into::NotUnit + Clone;
+    /// Auto-generated documentation for Target.
     type Target;
+    /// Auto-generated documentation for build_args.
     fn build_args(target: Self::Target) -> Self::BuildArg;
 }
 
 impl<C: Dim> LayerNormShape for (C,) {
+    /// Auto-generated documentation for Channels.
     type Channels = C;
+    /// Auto-generated documentation for BuildArg.
     type BuildArg = (<C as Dim>::Arg,);
+    /// Auto-generated documentation for Target.
     type Target = (<C as Dim>::Arg,);
 
+    /// Auto-generated documentation for build_args.
     fn build_args(target: Self::Target) -> Self::BuildArg {
         target
     }
@@ -21,10 +30,14 @@ impl<C: Dim> LayerNormShape for (C,) {
 
 #[derive(Debug)]
 #[kindle_macros::module(internal)]
+/// Auto-generated documentation for LayerNorm.
 pub struct LayerNorm<S: LayerNormShape, B: Backend> {
+    /// Auto-generated documentation for weight.
     pub weight: Param<(S::Channels,), B>,
+    /// Auto-generated documentation for bias.
     pub bias: Param<(S::Channels,), B>,
     #[module(ignore)]
+    /// Auto-generated documentation for eps.
     pub eps: f32,
     #[module(ignore)]
     _phantom: PhantomData<(S, B)>,
@@ -36,6 +49,7 @@ where
     B::Device: crate::prelude::ConstDevice,
     (S::Channels,): Shape<Arg = S::BuildArg>,
 {
+    /// Auto-generated documentation for new_with.
     pub fn new_with(args: S::Target, eps: f32) -> Result<Self> {
         let b_args = S::build_args(args);
 
@@ -67,18 +81,25 @@ where
     B::Device: crate::prelude::ConstDevice,
     (S::Channels,): Shape<Arg = S::BuildArg>,
 {
+    /// Auto-generated documentation for new.
     pub fn new(eps: f32) -> Result<Self> {
         Self::new_with(((),), eps)
     }
 }
 
-impl<S: LayerNormShape, InS: Shape + DynShape + crate::shapes::EndsWith<S::Channels>, B: Backend + crate::tensor::backend::ModuleOps<B>>
-    Module<Tensor<InS, B>> for LayerNorm<S, B>
+impl<
+    S: LayerNormShape,
+    InS: Shape + DynShape + crate::shapes::EndsWith<S::Channels>,
+    B: Backend + crate::tensor::backend::ModuleOps<B>,
+> Module<Tensor<InS, B>> for LayerNorm<S, B>
 {
+    /// Auto-generated documentation for Output.
     type Output = Tensor<InS, B>;
+    /// Auto-generated documentation for Error.
     type Error = Error;
 
     #[inline]
+    /// Auto-generated documentation for forward.
     fn forward(&self, x: Tensor<InS, B>) -> core::result::Result<Self::Output, Error> {
         let weight = self.weight.as_tensor()?.into_dyn();
         let bias = self.bias.as_tensor()?.into_dyn();

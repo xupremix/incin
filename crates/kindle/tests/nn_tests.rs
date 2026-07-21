@@ -1,8 +1,10 @@
 use kindle::prelude::*;
 
+/// Auto-generated documentation for CpuBackend.
 type CpuBackend = DefaultBackend;
 
 #[test]
+/// Auto-generated documentation for test_param.
 fn test_param() -> Result<()> {
     // Test creating a Param from zeros
     let param = Param::<s![10, 10], CpuBackend>::zeros(())?;
@@ -16,6 +18,7 @@ fn test_param() -> Result<()> {
 }
 
 #[test]
+/// Auto-generated documentation for test_linear.
 fn test_linear() -> Result<()> {
     let linear = Linear::<s![10, 5], CpuBackend>::new()?;
     let input = Tensor::<s![2, 10], CpuBackend>::ones(())?;
@@ -28,9 +31,11 @@ fn test_linear() -> Result<()> {
 }
 
 #[test]
+/// Auto-generated documentation for test_conv2d.
 fn test_conv2d() -> Result<()> {
     // 3 InChannels, 16 OutChannels, 3x3 Kernel, Stride=1, Padding=1, Dilation=1
     // (OutC, InC, K, S, P, D)
+    /// Auto-generated documentation for ConvShape.
     type ConvShape = (
         kindle::prelude::typenum::U16,
         kindle::prelude::typenum::U3,
@@ -53,6 +58,7 @@ fn test_conv2d() -> Result<()> {
 }
 
 #[test]
+/// Auto-generated documentation for test_layer_norm.
 fn test_layer_norm() -> Result<()> {
     let ln = LayerNorm::<s![20], CpuBackend>::new(1e-5)?;
     let input = Tensor::<s![5, 10, 20], CpuBackend>::ones(())?;
@@ -65,6 +71,7 @@ fn test_layer_norm() -> Result<()> {
 }
 
 #[test]
+/// Auto-generated documentation for test_batch_norm2d.
 fn test_batch_norm2d() -> Result<()> {
     // 16 Channels
     let bn = BatchNorm2d::<s![16], CpuBackend>::new(1e-5, 0.1)?;
@@ -80,6 +87,7 @@ fn test_batch_norm2d() -> Result<()> {
 }
 
 #[test]
+/// Auto-generated documentation for test_sequential.
 fn test_sequential() -> Result<()> {
     let seq = seq!(
         Linear::<s![10, 5], CpuBackend>::new()?,
@@ -97,8 +105,10 @@ fn test_sequential() -> Result<()> {
 }
 
 #[test]
+/// Auto-generated documentation for test_embedding.
 fn test_embedding() -> Result<()> {
     // Vocab=100, EmbedDim=32
+    /// Auto-generated documentation for EmbedShape.
     type EmbedShape = (
         kindle::prelude::typenum::U100,
         kindle::prelude::typenum::U32,

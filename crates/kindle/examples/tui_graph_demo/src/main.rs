@@ -4,24 +4,31 @@ use kindle::prelude::*;
 use kindle::{Linear, Module};
 use kindle_core::prelude::{TRACING_GRAPH, TracingBackend, extract_graph};
 use kindle_native::NativeBackend;
-use kindle_telemetry::reporter::Reporter;
 use kindle_telemetry::events::GraphSnapshotEvent;
+use kindle_telemetry::reporter::Reporter;
 
+/// Auto-generated documentation for NB.
 type NB = NativeBackend<f32, Cpu>;
+/// Auto-generated documentation for TB.
 type TB = TracingBackend<NB>;
 
 #[module]
+/// Auto-generated documentation for SimpleMlp.
 pub struct SimpleMlp<B: Backend> {
+    /// Auto-generated documentation for fc1.
     pub fc1: Linear<Dyn, B>,
+    /// Auto-generated documentation for fc2.
     pub fc2: Linear<Dyn, B>,
+    /// Auto-generated documentation for fc3.
     pub fc3: Linear<Dyn, B>,
 }
 
-impl<B: Backend> SimpleMlp<B> 
-where 
+impl<B: Backend> SimpleMlp<B>
+where
     B::FloatElem: ConstDType,
     B::Device: ConstDevice,
 {
+    /// Auto-generated documentation for new.
     pub fn new() -> Result<Self> {
         Ok(Self {
             fc1: Linear::<Dyn, B>::new_with((10, 32))?,
@@ -30,6 +37,7 @@ where
         })
     }
 
+    /// Auto-generated documentation for forward.
     pub fn forward(&self, x: Tensor<Dyn, B>) -> Result<Tensor<Dyn, B>> {
         let x = self.fc1.forward(x)?.relu()?;
         let x = self.fc2.forward(x)?.relu()?;
@@ -73,7 +81,9 @@ fn main() -> anyhow::Result<()> {
     });
 
     println!("Done! Emitted the graph to telemetry.");
-    println!("Keeping process alive for 30 seconds for live attach (though kindle-viz reads past history too)...");
+    println!(
+        "Keeping process alive for 30 seconds for live attach (though kindle-viz reads past history too)..."
+    );
     for _ in 0..30 {
         std::thread::sleep(std::time::Duration::from_secs(1));
     }
