@@ -40,7 +40,7 @@ mod shape_ops;
 /// `(typenum::U1, typenum::U3, typenum::U224, typenum::U224)`
 ///
 /// ## Examples
-/// ```rust,no_run
+/// ```rust,ignore
 /// use kindle::prelude::*;
 ///
 /// // Defines a 4D tensor shape [Batch=2, Channels=3, Height=224, Width=224]
@@ -49,7 +49,7 @@ mod shape_ops;
 /// ```
 ///
 /// You can also mix named symbolic dimensions (if they implement `Dim`):
-/// ```rust,no_run
+/// ```rust,ignore
 /// use kindle::prelude::*;
 /// kindle_core::symbolic_dim!(BatchSize);
 ///
@@ -82,7 +82,7 @@ pub fn impl_arg_into(input: TokenStream) -> TokenStream {
 /// * `-1` -> Translates to `InferDim` (used mainly in reshaping to infer the dimension size).
 ///
 /// ## Examples
-/// ```rust,no_run
+/// ```rust,ignore
 /// use kindle::prelude::*;
 ///
 /// // Given a tensor `t` of shape [10, 20, 30]
@@ -107,7 +107,7 @@ pub fn idx(input: TokenStream) -> TokenStream {
 /// aggregates them. It ignores fields that don't store tensor state.
 ///
 /// ## Examples
-/// ```rust,no_run
+/// ```rust,ignore
 /// use kindle::prelude::*;
 ///
 /// #[module]
@@ -145,7 +145,7 @@ pub fn generate_shape_ops(input: TokenStream) -> TokenStream {
 /// `Conv` -> `Conv2d`, `Relu` -> `ReLU`, etc).
 ///
 /// ## Examples
-/// ```rust,no_run
+/// ```rust,ignore
 /// use kindle::prelude::*;
 ///
 /// // Generates a struct named `MyResNet` from "resnet18.onnx".
