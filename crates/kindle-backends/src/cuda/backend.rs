@@ -13,8 +13,51 @@ pub struct CudaVar {
     pub storage: CudaStorage,
 }
 
-impl<T: DType, D: Device> TensorOps<Self> for CudaBackend<T, D> {}
-impl<T: DType, D: Device> NumericOps<Self> for CudaBackend<T, D> {}
+
+impl<T: DType, D: Device> TensorOps<Self> for CudaBackend<T, D> {
+    fn concat<K: DType>(
+        tensors: &[&<Self as Backend>::Storage<K>],
+        dim: usize,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        crate::cuda::ops::shape::launch_concat(tensors, dim)
+    }
+}
+
+
+impl<T: DType, D: Device> NumericOps<Self> for CudaBackend<T, D> {
+    fn add<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let out_shape = crate::cpu::stride::broadcast_shape(&lhs.shape, &rhs.shape)?;
+        crate::cuda::ops::elementwise::launch_binary_op("add", "a + b", lhs, rhs, &out_shape)
+    }
+
+    fn sub<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let out_shape = crate::cpu::stride::broadcast_shape(&lhs.shape, &rhs.shape)?;
+        crate::cuda::ops::elementwise::launch_binary_op("sub", "a - b", lhs, rhs, &out_shape)
+    }
+
+    fn mul<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let out_shape = crate::cpu::stride::broadcast_shape(&lhs.shape, &rhs.shape)?;
+        crate::cuda::ops::elementwise::launch_binary_op("mul", "a * b", lhs, rhs, &out_shape)
+    }
+
+    fn div<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let out_shape = crate::cpu::stride::broadcast_shape(&lhs.shape, &rhs.shape)?;
+        crate::cuda::ops::elementwise::launch_binary_op("div", "a / b", lhs, rhs, &out_shape)
+    }
+}
+
 impl<T: DType, D: Device> FloatOps<Self> for CudaBackend<T, D> {}
 impl<T: DType, D: Device> CreationOps<Self> for CudaBackend<T, D> {}
 impl<T: DType, D: Device> ReductionOps<Self> for CudaBackend<T, D> {}

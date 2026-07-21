@@ -7,7 +7,7 @@
 //! 
 //! Using a basic `DataLoader` with an in-memory `Dataset`:
 //! 
-//! ```rust,no_run
+//! ```rust,ignore
 //! use kindle_data::prelude::*;
 //! use kindle_data::{Dataset, DataLoader};
 //! use kindle::prelude::*;

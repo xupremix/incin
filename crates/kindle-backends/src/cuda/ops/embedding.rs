@@ -1,4 +1,4 @@
-use crate::cpu::storage::{CpuBuffer, CpuCudaBuffer, CpuStorage};
+use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
 use kindle_core::prelude::Result;
 
@@ -7,8 +7,8 @@ const EMBEDDING_SRC: &str = include_str!("kernels/embedding.cu");
 
 #[cfg(feature = "cuda")]
 fn ensure_embedding_loaded(device_id: usize) -> Result<()> {
-    if crate::cpu::gpu::cuda_cache::get_module(device_id, "embedding").is_none() {
-        let dispatcher = crate::cpu::gpu::CpuCudaDispatcher::new(device_id);
+    if crate::cuda::gpu::cuda_cache::get_module(device_id, "embedding").is_none() {
+        let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
         dispatcher.compile_and_load_kernel("embedding", EMBEDDING_SRC, "embedding")?;
     }
     Ok(())
@@ -16,12 +16,10 @@ fn ensure_embedding_loaded(device_id: usize) -> Result<()> {
 
 #[cfg(feature = "cuda")]
 pub fn launch_embedding_forward(
-    weight: &CpuStorage,
-    indices: &CpuStorage,
-) -> Result<CpuStorage> {
-    if let (CpuBuffer::Cuda(w_b), CpuBuffer::Cuda(i_b)) =
-        (&*weight.buffer, &*indices.buffer)
-    {
+    weight: &CudaStorage,
+    indices: &CudaStorage,
+) -> Result<CudaStorage> {
+    if true { let (w_b, i_b) = (&*weight.buffer, &*indices.buffer);
         let device_id = w_b.device_id;
         if device_id != i_b.device_id {
             return Err(kindle_core::prelude::Error::Msg(
@@ -30,7 +28,7 @@ pub fn launch_embedding_forward(
         }
         ensure_embedding_loaded(device_id)?;
 
-        let dispatcher = crate::cpu::gpu::CpuCudaDispatcher::new(device_id);
+        let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
         let f = dispatcher.get_function("embedding", "embedding_forward")?;
         let stream = w_b.device.default_stream();
 
@@ -42,7 +40,7 @@ pub fn launch_embedding_forward(
         out_shape.push(hidden_size);
         let out_numel = num_indices * hidden_size;
 
-        let out_b = CpuCudaBuffer {
+        let out_b = CudaBuffer {
             len: out_numel,
             data: Arc::new(stream.alloc_zeros::<u8>(out_numel * 4).unwrap()),
             device: w_b.device.clone(),
@@ -79,12 +77,12 @@ pub fn launch_embedding_forward(
         }
 
         let out_strides = crate::cpu::stride::contiguous_strides(&out_shape);
-        Ok(CpuStorage {
-            buffer: Arc::new(CpuBuffer::Cuda(out_b)),
+        Ok(CudaStorage {
+            buffer: Arc::new(out_b),
             shape: out_shape,
             strides: out_strides,
             offset: 0,
-            id: crate::cpu::storage::TensorId::next(),
+            id: crate::cuda::storage::TensorId::next(),
         })
     } else {
         Err(kindle_core::prelude::Error::Msg(
@@ -95,25 +93,23 @@ pub fn launch_embedding_forward(
 
 #[cfg(feature = "cuda")]
 pub fn launch_embedding_backward(
-    grad_output: &CpuStorage,
-    indices: &CpuStorage,
+    grad_output: &CudaStorage,
+    indices: &CudaStorage,
     vocab_size: usize,
     hidden_size: usize,
-) -> Result<CpuStorage> {
-    if let (CpuBuffer::Cuda(go_b), CpuBuffer::Cuda(i_b)) =
-        (&*grad_output.buffer, &*indices.buffer)
-    {
+) -> Result<CudaStorage> {
+    if true { let (go_b, i_b) = (&*grad_output.buffer, &*indices.buffer);
         let device_id = go_b.device_id;
         ensure_embedding_loaded(device_id)?;
 
-        let dispatcher = crate::cpu::gpu::CpuCudaDispatcher::new(device_id);
+        let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
         let f = dispatcher.get_function("embedding", "embedding_backward")?;
         let stream = go_b.device.default_stream();
 
         let num_indices = indices.shape.iter().product::<usize>();
         let out_numel = vocab_size * hidden_size;
 
-        let grad_w_b = CpuCudaBuffer {
+        let grad_w_b = CudaBuffer {
             len: out_numel,
             data: Arc::new(stream.alloc_zeros::<u8>(out_numel * 4).unwrap()),
             device: go_b.device.clone(),
@@ -150,12 +146,12 @@ pub fn launch_embedding_backward(
 
         let out_shape = vec![vocab_size, hidden_size];
         let out_strides = crate::cpu::stride::contiguous_strides(&out_shape);
-        Ok(CpuStorage {
-            buffer: Arc::new(CpuBuffer::Cuda(grad_w_b)),
+        Ok(CudaStorage {
+            buffer: Arc::new(grad_w_b),
             shape: out_shape,
             strides: out_strides,
             offset: 0,
-            id: crate::cpu::storage::TensorId::next(),
+            id: crate::cuda::storage::TensorId::next(),
         })
     } else {
         Err(kindle_core::prelude::Error::Msg(

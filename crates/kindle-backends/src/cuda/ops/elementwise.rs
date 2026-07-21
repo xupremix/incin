@@ -1,4 +1,4 @@
-use crate::cpu::storage::{CpuBuffer, CpuCudaBuffer, CpuStorage};
+use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
 use kindle_core::prelude::Result;
 
@@ -84,13 +84,13 @@ extern "C" __global__ void binary_op_{OP_NAME}(
 
 #[cfg(feature = "cuda")]
 /// Auto-generated documentation for launch_unary_op.
-pub fn launch_unary_op(op_name: &str, op_expr: &str, t: &CpuStorage) -> Result<CpuStorage> {
-    if let CpuBuffer::Cuda(b) = &*t.buffer {
+pub fn launch_unary_op(op_name: &str, op_expr: &str, t: &CudaStorage) -> Result<CudaStorage> {
+    if true { let b = &*t.buffer;
         let device_id = b.device_id;
-        let dispatcher = crate::cpu::gpu::CpuCudaDispatcher::new(device_id);
+        let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
 
         let kernel_name = format!("unary_op_{}", op_name);
-        if crate::cpu::gpu::cuda_cache::get_module(device_id, &kernel_name).is_none() {
+        if crate::cuda::gpu::cuda_cache::get_module(device_id, &kernel_name).is_none() {
             let kernel_src = ELEMENTWISE_UNARY_TEMPLATE
                 .replace("{OP_NAME}", op_name)
                 .replace("{OP}", op_expr);
@@ -101,7 +101,7 @@ pub fn launch_unary_op(op_name: &str, op_expr: &str, t: &CpuStorage) -> Result<C
         let numel: usize = t.shape.iter().product();
         let stream = b.device.default_stream();
 
-        let mut out_b = CpuCudaBuffer {
+        let mut out_b = CudaBuffer {
             len: numel,
             data: Arc::new(stream.alloc_zeros::<u8>(numel * 4).unwrap()),
             device: b.device.clone(),
@@ -152,8 +152,7 @@ pub fn launch_unary_op(op_name: &str, op_expr: &str, t: &CpuStorage) -> Result<C
             out_b.data = out_data_arc;
         }
 
-        Ok(CpuStorage::from_contiguous(
-            CpuBuffer::Cuda(out_b),
+        Ok(CudaStorage::new(alloc::sync::Arc::new(out_b),
             t.shape.clone(),
         ))
     } else {
@@ -166,16 +165,16 @@ pub fn launch_unary_op(op_name: &str, op_expr: &str, t: &CpuStorage) -> Result<C
 pub fn launch_binary_op(
     op_name: &str,
     op_expr: &str,
-    lhs: &CpuStorage,
-    rhs: &CpuStorage,
+    lhs: &CudaStorage,
+    rhs: &CudaStorage,
     out_shape: &[usize],
-) -> Result<CpuStorage> {
-    if let (CpuBuffer::Cuda(lhs_b), CpuBuffer::Cuda(rhs_b)) = (&*lhs.buffer, &*rhs.buffer) {
+) -> Result<CudaStorage> {
+    if true { let (lhs_b, rhs_b) = (&*lhs.buffer, &*rhs.buffer);
         let device_id = lhs_b.device_id;
-        let dispatcher = crate::cpu::gpu::CpuCudaDispatcher::new(device_id);
+        let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
 
         let kernel_name = format!("binary_op_{}", op_name);
-        if crate::cpu::gpu::cuda_cache::get_module(device_id, &kernel_name).is_none() {
+        if crate::cuda::gpu::cuda_cache::get_module(device_id, &kernel_name).is_none() {
             let kernel_src = ELEMENTWISE_BINARY_TEMPLATE
                 .replace("{OP_NAME}", op_name)
                 .replace("{OP}", op_expr);
@@ -186,7 +185,7 @@ pub fn launch_binary_op(
         let numel: usize = out_shape.iter().product();
         let stream = lhs_b.device.default_stream();
 
-        let mut out_b = CpuCudaBuffer {
+        let mut out_b = CudaBuffer {
             len: numel,
             data: Arc::new(stream.alloc_zeros::<u8>(numel * 4).unwrap()),
             device: lhs_b.device.clone(),
@@ -256,8 +255,7 @@ pub fn launch_binary_op(
             out_b.data = out_data_arc;
         }
 
-        Ok(CpuStorage::from_contiguous(
-            CpuBuffer::Cuda(out_b),
+        Ok(CudaStorage::new(alloc::sync::Arc::new(out_b),
             out_shape.to_vec(),
         ))
     } else {

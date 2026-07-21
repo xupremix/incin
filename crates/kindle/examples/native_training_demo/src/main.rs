@@ -14,14 +14,11 @@ extern crate alloc;
 use kindle::SGD;
 use kindle::prelude::*;
 use kindle::prelude::{CrossEntropyLoss, Mean, StateDict};
-use kindle_backends::legacy::candle::CandleBackend;
 use kindle_backends::cpu::{CpuBackend, CpuBuffer, CpuStorage};
 use kindle_telemetry::reporter::Reporter;
 
 /// The CPU backend type alias.
 type NB = CpuBackend<f32, Cpu>;
-/// The Candle legacy backend type alias.
-type CB = CandleBackend<f32, Cpu>;
 
 // ── Model ────────────────────────────────────────────────────────────────────
 

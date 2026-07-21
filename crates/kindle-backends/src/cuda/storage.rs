@@ -43,6 +43,7 @@ pub struct CudaStorage {
     pub shape: Vec<usize>,
     pub strides: Vec<usize>,
     pub id: TensorId,
+    pub offset: usize,
 }
 
 impl CudaStorage {
@@ -57,6 +58,7 @@ impl CudaStorage {
             shape,
             strides,
             id: TensorId::next(),
+            offset: 0,
         }
     }
 }

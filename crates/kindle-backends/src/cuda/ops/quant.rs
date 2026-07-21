@@ -1,22 +1,23 @@
-use crate::cpu::storage::{BlockQ8_0, CpuBuffer, CpuCudaBuffer, CpuStorage};
+use crate::cuda::storage::{CudaBuffer, CudaStorage};
+use crate::cpu::storage::BlockQ8_0;
 use alloc::sync::Arc;
 use kindle_core::prelude::Result;
 
 #[cfg(feature = "cuda")]
-pub fn launch_quantize(inp: &CpuStorage) -> Result<CpuStorage> {
-    if let CpuBuffer::Cuda(b_inp) = &*inp.buffer {
+pub fn launch_quantize(inp: &CudaStorage) -> Result<CudaStorage> {
+    if true { let b_inp = &*inp.buffer;
         let device_id = b_inp.device_id;
 
-        if crate::cpu::gpu::cuda_cache::get_module(device_id, "quant").is_none() {
-            let dispatcher = crate::cpu::gpu::CpuCudaDispatcher::new(device_id);
+        if crate::cuda::gpu::cuda_cache::get_module(device_id, "quant").is_none() {
+            let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
             dispatcher.compile_and_load_kernel(
                 "quant",
-                crate::cpu::ops::cuda_kernels::QUANT_KERNEL,
+                crate::cuda::ops::kernels::QUANT_KERNEL,
                 "quantize_q8_0",
             )?;
         }
 
-        let dispatcher = crate::cpu::gpu::CpuCudaDispatcher::new(device_id);
+        let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
         let f = dispatcher.get_function("quant", "quantize_q8_0")?;
         let stream = b_inp.device.default_stream();
 
@@ -31,7 +32,7 @@ pub fn launch_quantize(inp: &CpuStorage) -> Result<CpuStorage> {
         let num_blocks = n / 32;
         let out_bytes = num_blocks * core::mem::size_of::<BlockQ8_0>();
 
-        let out_buf = CpuCudaBuffer {
+        let out_buf = CudaBuffer {
             len: num_blocks,
             data: Arc::new(stream.alloc_zeros::<u8>(out_bytes).unwrap()),
             device: b_inp.device.clone(),
@@ -65,8 +66,7 @@ pub fn launch_quantize(inp: &CpuStorage) -> Result<CpuStorage> {
                 })?;
         }
 
-        return Ok(CpuStorage::from_contiguous(
-            CpuBuffer::Cuda(out_buf),
+        return Ok(CudaStorage::new(alloc::sync::Arc::new(out_buf),
             inp.shape.clone(),
         ));
     }
@@ -76,20 +76,20 @@ pub fn launch_quantize(inp: &CpuStorage) -> Result<CpuStorage> {
 }
 
 #[cfg(feature = "cuda")]
-pub fn launch_dequantize(inp: &CpuStorage) -> Result<CpuStorage> {
-    if let CpuBuffer::Cuda(b_inp) = &*inp.buffer {
+pub fn launch_dequantize(inp: &CudaStorage) -> Result<CudaStorage> {
+    if true { let b_inp = &*inp.buffer;
         let device_id = b_inp.device_id;
 
-        if crate::cpu::gpu::cuda_cache::get_module(device_id, "quant").is_none() {
-            let dispatcher = crate::cpu::gpu::CpuCudaDispatcher::new(device_id);
+        if crate::cuda::gpu::cuda_cache::get_module(device_id, "quant").is_none() {
+            let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
             dispatcher.compile_and_load_kernel(
                 "quant",
-                crate::cpu::ops::cuda_kernels::QUANT_KERNEL,
+                crate::cuda::ops::kernels::QUANT_KERNEL,
                 "dequantize_q8_0",
             )?;
         }
 
-        let dispatcher = crate::cpu::gpu::CpuCudaDispatcher::new(device_id);
+        let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
         let f = dispatcher.get_function("quant", "dequantize_q8_0")?;
         let stream = b_inp.device.default_stream();
 
@@ -97,7 +97,7 @@ pub fn launch_dequantize(inp: &CpuStorage) -> Result<CpuStorage> {
         let num_blocks = b_inp.len;
         let out_numel = n;
 
-        let out_buf = CpuCudaBuffer {
+        let out_buf = CudaBuffer {
             len: out_numel,
             data: Arc::new(stream.alloc_zeros::<u8>(out_numel * 4).unwrap()),
             device: b_inp.device.clone(),
@@ -131,8 +131,7 @@ pub fn launch_dequantize(inp: &CpuStorage) -> Result<CpuStorage> {
                 })?;
         }
 
-        return Ok(CpuStorage::from_contiguous(
-            CpuBuffer::Cuda(out_buf),
+        return Ok(CudaStorage::new(alloc::sync::Arc::new(out_buf),
             inp.shape.clone(),
         ));
     }

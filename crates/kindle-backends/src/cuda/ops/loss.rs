@@ -1,30 +1,30 @@
-use crate::cpu::storage::{CpuBuffer, CpuCudaBuffer, CpuStorage};
+use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
 use kindle_core::prelude::Result;
 
 #[cfg(feature = "cuda")]
 pub fn launch_nll_loss(
-    log_sm: &CpuStorage,
-    targets: &CpuStorage,
+    log_sm: &CudaStorage,
+    targets: &CudaStorage,
     classes: usize,
-) -> Result<CpuStorage> {
-    if let (CpuBuffer::Cuda(b_log_sm), CpuBuffer::Cuda(b_targets)) = (&*log_sm.buffer, &*targets.buffer) {
+) -> Result<CudaStorage> {
+    if let (b_log_sm, b_targets) = (&*log_sm.buffer, &*targets.buffer) {
         let device_id = b_log_sm.device_id;
         let kernel_name = "nll_loss";
         
-        if crate::cpu::gpu::cuda_cache::get_module(device_id, kernel_name).is_none() {
-            let dispatcher = crate::cpu::gpu::CpuCudaDispatcher::new(device_id);
-            dispatcher.compile_and_load_kernel(kernel_name, crate::cpu::ops::cuda_kernels::LOSS_KERNEL, kernel_name)?;
+        if crate::cuda::gpu::cuda_cache::get_module(device_id, kernel_name).is_none() {
+            let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
+            dispatcher.compile_and_load_kernel(kernel_name, crate::cuda::ops::kernels::LOSS_KERNEL, kernel_name)?;
         }
 
-        let dispatcher = crate::cpu::gpu::CpuCudaDispatcher::new(device_id);
+        let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
         let f = dispatcher.get_function(kernel_name, "nll_loss")?;
         let stream = b_log_sm.device.default_stream();
 
         let batch = targets.shape.iter().product::<usize>();
         let out_numel = batch;
 
-        let out_b = CpuCudaBuffer {
+        let out_b = CudaBuffer {
             len: out_numel,
             data: Arc::new(stream.alloc_zeros::<u8>(out_numel * 4).unwrap()),
             device: b_log_sm.device.clone(),
@@ -61,8 +61,7 @@ pub fn launch_nll_loss(
                 })?;
         }
 
-        return Ok(CpuStorage::from_contiguous(
-            CpuBuffer::Cuda(out_b),
+        return Ok(CudaStorage::new(alloc::sync::Arc::new(out_b),
             vec![batch],
         ));
     }

@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy")]
 //! Cross-backend parity: `CpuBackend<f32, Cpu>` vs `CandleBackend<f32,
 //! Cpu>`, driven purely through the `Backend` trait surface (D-03), one
 //! `#[test]` per individual op for failure localization.

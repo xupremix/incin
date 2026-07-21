@@ -1,4 +1,4 @@
-use crate::cpu::storage::{CpuBuffer, CpuCudaBuffer, CpuStorage};
+use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
 use kindle_core::prelude::Result;
 
@@ -7,8 +7,8 @@ const REDUCE_SRC: &str = include_str!("kernels/reduce.cu");
 
 #[cfg(feature = "cuda")]
 fn ensure_reduce_loaded(device_id: usize) -> Result<()> {
-    if crate::cpu::gpu::cuda_cache::get_module(device_id, "reduce").is_none() {
-        let dispatcher = crate::cpu::gpu::CpuCudaDispatcher::new(device_id);
+    if crate::cuda::gpu::cuda_cache::get_module(device_id, "reduce").is_none() {
+        let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
         dispatcher.compile_and_load_kernel("reduce", REDUCE_SRC, "reduce")?;
     }
     Ok(())
@@ -19,15 +19,15 @@ pub fn launch_reduce_op(
     op_name: &str,
     _init_val: &str,
     _update_op: &str,
-    storage: &CpuStorage,
+    storage: &CudaStorage,
     axis: usize,
     keepdim: bool,
-) -> Result<CpuStorage> {
-    if let CpuBuffer::Cuda(b) = &*storage.buffer {
+) -> Result<CudaStorage> {
+    if true { let b = &*storage.buffer;
         let device_id = b.device_id;
         ensure_reduce_loaded(device_id)?;
 
-        let dispatcher = crate::cpu::gpu::CpuCudaDispatcher::new(device_id);
+        let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
         let f = dispatcher.get_function("reduce", op_name)?;
         let stream = b.device.default_stream();
 
@@ -55,7 +55,7 @@ pub fn launch_reduce_op(
         let out_strides_dev = stream.clone_htod(&out_strides_h).unwrap();
 
         let keepdim_numel: usize = keepdim_shape.iter().product();
-        let out_b = CpuCudaBuffer {
+        let out_b = CudaBuffer {
             len: keepdim_numel,
             data: Arc::new(stream.alloc_zeros::<u8>(keepdim_numel * 4).unwrap()),
             device: b.device.clone(),
@@ -97,18 +97,18 @@ pub fn launch_reduce_op(
         }
 
         let out_strides_final = crate::cpu::stride::contiguous_strides(&out_shape);
-        let keepdim_storage = CpuStorage {
-            buffer: Arc::new(CpuBuffer::Cuda(out_b)),
+        let keepdim_storage = CudaStorage {
+            buffer: Arc::new(out_b),
             shape: keepdim_shape.clone(),
             strides: crate::cpu::stride::contiguous_strides(&keepdim_shape),
             offset: 0,
-            id: crate::cpu::storage::TensorId::next(),
+            id: crate::cuda::storage::TensorId::next(),
         };
 
         if keepdim || out_shape == keepdim_shape {
             Ok(keepdim_storage)
         } else {
-            Ok(CpuStorage {
+            Ok(CudaStorage {
                 shape: out_shape.clone(),
                 strides: out_strides_final,
                 ..keepdim_storage
@@ -126,15 +126,15 @@ pub fn launch_reduce_with_indices_op(
     op_name: &str,
     _init_val: &str,
     _update_op: &str,
-    storage: &CpuStorage,
+    storage: &CudaStorage,
     axis: usize,
     _keepdim: bool,
-) -> Result<(CpuStorage, CpuStorage)> {
-    if let CpuBuffer::Cuda(b) = &*storage.buffer {
+) -> Result<(CudaStorage, CudaStorage)> {
+    if true { let b = &*storage.buffer;
         let device_id = b.device_id;
         ensure_reduce_loaded(device_id)?;
 
-        let dispatcher = crate::cpu::gpu::CpuCudaDispatcher::new(device_id);
+        let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
         let f = dispatcher.get_function("reduce", op_name)?;
         let stream = b.device.default_stream();
 
@@ -154,13 +154,13 @@ pub fn launch_reduce_with_indices_op(
         let out_shape_dev = stream.clone_htod(&out_shape_h).unwrap();
         let out_strides_dev = stream.clone_htod(&out_strides_h).unwrap();
 
-        let val_b = CpuCudaBuffer {
+        let val_b = CudaBuffer {
             len: out_numel,
             data: Arc::new(stream.alloc_zeros::<u8>(out_numel * 4).unwrap()),
             device: b.device.clone(),
             device_id,
         };
-        let idx_b = CpuCudaBuffer {
+        let idx_b = CudaBuffer {
             len: out_numel,
             data: Arc::new(stream.alloc_zeros::<u8>(out_numel * 4).unwrap()),
             device: b.device.clone(),
@@ -208,19 +208,19 @@ pub fn launch_reduce_with_indices_op(
         }
 
         let out_strides = crate::cpu::stride::contiguous_strides(&out_shape);
-        let val_storage = CpuStorage {
-            buffer: Arc::new(CpuBuffer::Cuda(val_b)),
+        let val_storage = CudaStorage {
+            buffer: Arc::new(val_b),
             shape: out_shape.clone(),
             strides: out_strides.clone(),
             offset: 0,
-            id: crate::cpu::storage::TensorId::next(),
+            id: crate::cuda::storage::TensorId::next(),
         };
-        let idx_storage = CpuStorage {
-            buffer: Arc::new(CpuBuffer::Cuda(idx_b)),
+        let idx_storage = CudaStorage {
+            buffer: Arc::new(idx_b),
             shape: out_shape,
             strides: out_strides,
             offset: 0,
-            id: crate::cpu::storage::TensorId::next(),
+            id: crate::cuda::storage::TensorId::next(),
         };
         Ok((val_storage, idx_storage))
     } else {
@@ -235,14 +235,14 @@ pub fn launch_reduce_with_indices_host(
     op_name: &str,
     init_val: &str,
     update_op: &str,
-    storage: &CpuStorage,
+    storage: &CudaStorage,
     axis: usize,
     keepdim: bool,
-) -> Result<(CpuStorage, Vec<usize>)> {
+) -> Result<(CudaStorage, Vec<usize>)> {
     let (val_storage, idx_storage) =
         launch_reduce_with_indices_op(op_name, init_val, update_op, storage, axis, keepdim)?;
 
-    let host_indices = if let CpuBuffer::Cuda(b) = &*idx_storage.buffer {
+    let host_indices = if true { let b = &*idx_storage.buffer;
         let stream = b.device.default_stream();
         let dev_u32 = unsafe { b.data.transmute::<u32>(b.len).unwrap() };
         stream.clone_dtoh(&dev_u32).unwrap()
