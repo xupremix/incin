@@ -11,10 +11,14 @@ pub fn launch_nll_loss(
     if let (b_log_sm, b_targets) = (&*log_sm.buffer, &*targets.buffer) {
         let device_id = b_log_sm.device_id;
         let kernel_name = "nll_loss";
-        
+
         if crate::cuda::gpu::cuda_cache::get_module(device_id, kernel_name).is_none() {
             let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
-            dispatcher.compile_and_load_kernel(kernel_name, crate::cuda::ops::kernels::LOSS_KERNEL, kernel_name)?;
+            dispatcher.compile_and_load_kernel(
+                kernel_name,
+                crate::cuda::ops::kernels::LOSS_KERNEL,
+                kernel_name,
+            )?;
         }
 
         let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
@@ -24,7 +28,7 @@ pub fn launch_nll_loss(
         let batch = targets.shape.iter().product::<usize>();
         let out_numel = batch;
 
-        let out_b = CudaBuffer {
+        let mut out_b = CudaBuffer {
             len: out_numel,
             data: Arc::new(stream.alloc_zeros::<u8>(out_numel * 4).unwrap()),
             device: b_log_sm.device.clone(),
@@ -41,10 +45,11 @@ pub fn launch_nll_loss(
             // Targets are cast to i64 (they come from float conversions or ints)
             let log_sm_ptr = b_log_sm.data.transmute::<f32>(b_log_sm.len).unwrap();
             let targets_ptr = b_targets.data.transmute::<i64>(b_targets.len).unwrap();
-            
-            let mut out_data_arc = out_b.data.clone();
-            let out_u8: &mut cudarc::driver::CudaSlice<u8> =
-                Arc::get_mut(&mut out_data_arc).unwrap();
+
+            // out_b.data was just allocated above (Arc::new), so it is uniquely owned
+            // here (refcount 1) and Arc::get_mut succeeds without cloning first.
+            let out_u8: &mut cudarc::driver::CudaSlice<u8> = Arc::get_mut(&mut out_b.data)
+                .expect("out_b.data is freshly allocated and uniquely owned here");
             let mut out_ptr = out_u8.transmute_mut::<f32>(out_numel).unwrap();
 
             use cudarc::driver::PushKernelArg;
@@ -57,13 +62,16 @@ pub fn launch_nll_loss(
                 .arg(&(classes as i32))
                 .launch(cfg)
                 .map_err(|e| {
-                    kindle_core::prelude::Error::Msg(alloc::format!("nll_loss launch failed: {:?}", e))
+                    kindle_core::prelude::Error::Msg(alloc::format!(
+                        "nll_loss launch failed: {:?}",
+                        e
+                    ))
                 })?;
         }
 
-        return Ok(CudaStorage::new(alloc::sync::Arc::new(out_b),
-            vec![batch],
-        ));
+        return Ok(CudaStorage::new(alloc::sync::Arc::new(out_b), vec![batch]));
     }
-    Err(kindle_core::prelude::Error::Msg("nll_loss requires cuda buffers".to_string()))
+    Err(kindle_core::prelude::Error::Msg(
+        "nll_loss requires cuda buffers".to_string(),
+    ))
 }

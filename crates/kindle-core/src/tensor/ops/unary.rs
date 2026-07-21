@@ -272,7 +272,8 @@ macro_rules! impl_std_scalar_ops {
             #[inline]
             /// Auto-generated documentation for mul.
             fn mul(self, rhs: $t) -> Self::Output {
-                self.mul_scalar(rhs).unwrap()
+                self.mul_scalar(rhs)
+                    .unwrap_or_else(|e| panic!("Tensor `*` (scalar) operator panicked: {e:?}"))
             }
         }
         impl<
@@ -289,7 +290,8 @@ macro_rules! impl_std_scalar_ops {
             #[inline]
             /// Auto-generated documentation for mul.
             fn mul(self, rhs: $t) -> Self::Output {
-                self.mul_scalar(rhs).unwrap()
+                self.mul_scalar(rhs)
+                    .unwrap_or_else(|e| panic!("Tensor `*` (scalar) operator panicked: {e:?}"))
             }
         }
         impl<
@@ -305,7 +307,8 @@ macro_rules! impl_std_scalar_ops {
             #[inline]
             /// Auto-generated documentation for add.
             fn add(self, rhs: $t) -> Self::Output {
-                self.add_scalar(rhs).unwrap()
+                self.add_scalar(rhs)
+                    .unwrap_or_else(|e| panic!("Tensor `+` (scalar) operator panicked: {e:?}"))
             }
         }
         impl<
@@ -322,7 +325,8 @@ macro_rules! impl_std_scalar_ops {
             #[inline]
             /// Auto-generated documentation for add.
             fn add(self, rhs: $t) -> Self::Output {
-                self.add_scalar(rhs).unwrap()
+                self.add_scalar(rhs)
+                    .unwrap_or_else(|e| panic!("Tensor `+` (scalar) operator panicked: {e:?}"))
             }
         }
     };

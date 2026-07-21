@@ -15,7 +15,19 @@ use kindle_core::prelude::Result;
 pub(crate) fn contiguous_strides(shape: &[usize]) -> Vec<usize> {
     let mut strides = vec![1usize; shape.len()];
     for i in (0..shape.len().saturating_sub(1)).rev() {
-        strides[i] = strides[i + 1] * shape[i + 1];
+        // checked_mul instead of a bare `*`: in release builds (overflow
+        // checks off by default) an unchecked multiply here can silently
+        // wrap to a small stride, which downstream code then uses to index
+        // into a buffer sized from the same (also-wrapped) element count —
+        // an out-of-bounds read/write path (C-5). Panic loudly instead.
+        strides[i] = strides[i + 1].checked_mul(shape[i + 1]).unwrap_or_else(|| {
+            panic!(
+                "shape overflow computing strides: stride {} * dim {} overflows usize (shape: {:?})",
+                strides[i + 1],
+                shape[i + 1],
+                shape
+            )
+        });
     }
     strides
 }
@@ -24,6 +36,24 @@ pub(crate) fn contiguous_strides(shape: &[usize]) -> Vec<usize> {
 /// `shape`.
 pub(crate) fn is_contiguous(shape: &[usize], strides: &[usize]) -> bool {
     strides == contiguous_strides(shape)
+}
+
+/// Total element count of `shape`, i.e. the product of all dims — but via
+/// `checked_mul` instead of a bare `.iter().product()`. A crafted or
+/// accidentally-huge user-supplied shape can otherwise overflow `usize` in
+/// release builds (overflow checks are off by default) and silently wrap to
+/// a small number, undersizing the `Vec` allocated for it while later
+/// stride-based indexing (computed from the same, differently-wrapped shape)
+/// reads/writes past the end of that undersized buffer (C-5).
+pub(crate) fn checked_numel(shape: &[usize]) -> Result<usize> {
+    shape.iter().try_fold(1usize, |acc, &dim| {
+        acc.checked_mul(dim).ok_or_else(|| {
+            Error::Msg(format!(
+                "shape overflow computing element count: shape {:?} overflows usize",
+                shape
+            ))
+        })
+    })
 }
 
 /// Resolve the broadcast-compatible output shape of two input shapes, using

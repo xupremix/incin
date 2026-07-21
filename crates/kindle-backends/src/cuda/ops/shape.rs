@@ -27,7 +27,7 @@ pub fn launch_concat(tensors: &[&CudaStorage], dim: usize) -> Result<CudaStorage
         _ => {
             return Err(kindle_core::prelude::Error::Msg(
                 "concat: inputs must be CUDA buffers".into(),
-            ))
+            ));
         }
     };
     let device_id = first_buf.device_id;
@@ -42,7 +42,7 @@ pub fn launch_concat(tensors: &[&CudaStorage], dim: usize) -> Result<CudaStorage
     out_shape[dim] = out_dim_total;
 
     let total = out_shape.iter().product::<usize>();
-    let out_b = CudaBuffer {
+    let mut out_b = CudaBuffer {
         len: total,
         data: Arc::new(stream.alloc_zeros::<u8>(total * 4).unwrap()),
         device: first_buf.device.clone(),
@@ -77,9 +77,11 @@ pub fn launch_concat(tensors: &[&CudaStorage], dim: usize) -> Result<CudaStorage
 
         unsafe {
             let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();
-            let mut out_data_arc = out_b.data.clone();
-            let out_u8: &mut cudarc::driver::CudaSlice<u8> =
-                Arc::get_mut(&mut out_data_arc).unwrap();
+            // out_b.data was allocated once before this loop and never cloned, so it
+            // stays uniquely owned (refcount 1) across every iteration and
+            // Arc::get_mut succeeds without cloning first.
+            let out_u8: &mut cudarc::driver::CudaSlice<u8> = Arc::get_mut(&mut out_b.data)
+                .expect("out_b.data is uniquely owned for the lifetime of this loop");
             let mut out_f32 = out_u8.transmute_mut::<f32>(total).unwrap();
 
             use cudarc::driver::PushKernelArg;

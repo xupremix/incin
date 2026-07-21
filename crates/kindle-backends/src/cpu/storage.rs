@@ -52,9 +52,6 @@ pub struct BlockQ8_0 {
     pub(crate) qs: [i8; 32],
 }
 
-
-
-
 #[derive(Debug, Clone, PartialEq)]
 /// Auto-generated documentation for CpuBuffer.
 pub enum CpuBuffer {
@@ -74,7 +71,7 @@ pub enum CpuBuffer {
     BF16(Vec<bf16>),
     /// Auto-generated documentation for Q8_0.
     Q8_0(Vec<BlockQ8_0>),
-        }
+}
 
 impl CpuBuffer {
     /// Total number of scalar elements held by this buffer, regardless of
@@ -124,6 +121,37 @@ impl CpuBuffer {
                     v.as_ptr() as *const u8,
                     v.len() * core::mem::size_of::<BlockQ8_0>(),
                 ),
+            }
+        }
+    }
+
+    /// Build a new buffer with the same dtype variant as `self`, populated
+    /// from `values` (one `f64` per element, converted to the variant's
+    /// native element type).
+    ///
+    /// Used by elementwise ops (`elementwise_binary`/`elementwise_unary`) to
+    /// preserve the operands' actual dtype instead of hardcoding `F32` for
+    /// every result regardless of input dtype (that hardcoding was a silent
+    /// precision-loss bug: an F64/F16/BF16 tensor would previously come back
+    /// out of `add`/`mul`/`relu`/etc. downcast through f32 with no error).
+    ///
+    /// Panics if `self` is `Q8_0` — quantized buffers are never produced by
+    /// elementwise float ops.
+    pub(crate) fn from_f64_values(&self, values: Vec<f64>) -> CpuBuffer {
+        match self {
+            CpuBuffer::F32(_) => CpuBuffer::F32(values.into_iter().map(|v| v as f32).collect()),
+            CpuBuffer::F64(_) => CpuBuffer::F64(values),
+            CpuBuffer::U8(_) => CpuBuffer::U8(values.into_iter().map(|v| v as u8).collect()),
+            CpuBuffer::U32(_) => CpuBuffer::U32(values.into_iter().map(|v| v as u32).collect()),
+            CpuBuffer::I64(_) => CpuBuffer::I64(values.into_iter().map(|v| v as i64).collect()),
+            CpuBuffer::F16(_) => {
+                CpuBuffer::F16(values.into_iter().map(half::f16::from_f64).collect())
+            }
+            CpuBuffer::BF16(_) => {
+                CpuBuffer::BF16(values.into_iter().map(half::bf16::from_f64).collect())
+            }
+            CpuBuffer::Q8_0(_) => {
+                panic!("from_f64_values not supported on Q8_0 quantized buffer")
             }
         }
     }
@@ -181,8 +209,6 @@ impl CpuStorage {
     pub fn ones_like(other: &CpuStorage) -> Self {
         let total: usize = other.shape.iter().product();
 
-
-
         let new_buffer = match &*other.buffer {
             CpuBuffer::F32(_) => CpuBuffer::F32(vec![1.0f32; total]),
             CpuBuffer::F64(_) => CpuBuffer::F64(vec![1.0f64; total]),
@@ -196,7 +222,6 @@ impl CpuStorage {
 
         CpuStorage::from_contiguous(new_buffer, other.shape.clone())
     }
-
 
     /// Resolve a logical multi-index through `self.strides`/`self.offset`
     /// into the underlying `CpuBuffer`, returning the value as `f64`.
@@ -651,8 +676,7 @@ mod tests {
     #[test]
     /// Auto-generated documentation for scatter_into_zeros_partial_overlap_writes_only_target_region.
     fn scatter_into_zeros_partial_overlap_writes_only_target_region() {
-        let values =
-            CpuStorage::from_contiguous(CpuBuffer::F32(vec![7.0, 8.0, 9.0]), vec![1, 3]);
+        let values = CpuStorage::from_contiguous(CpuBuffer::F32(vec![7.0, 8.0, 9.0]), vec![1, 3]);
         let result = scatter_into_zeros(&[4, 3], &[1, 0], &values);
         assert_eq!(result.shape, vec![4, 3]);
         for col in 0..3 {
@@ -682,8 +706,7 @@ mod tests {
     #[test]
     /// Auto-generated documentation for scatter_into_zeros_returns_fresh_buffer_not_sharing_values_rc.
     fn scatter_into_zeros_returns_fresh_buffer_not_sharing_values_rc() {
-        let values =
-            CpuStorage::from_contiguous(CpuBuffer::F32(vec![7.0, 8.0, 9.0]), vec![1, 3]);
+        let values = CpuStorage::from_contiguous(CpuBuffer::F32(vec![7.0, 8.0, 9.0]), vec![1, 3]);
         let result = scatter_into_zeros(&[4, 3], &[1, 0], &values);
         assert!(!Arc::ptr_eq(&values.buffer, &result.buffer));
     }

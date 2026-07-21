@@ -23,7 +23,8 @@ pub fn launch_reduce_op(
     axis: usize,
     keepdim: bool,
 ) -> Result<CudaStorage> {
-    if true { let b = &*storage.buffer;
+    if true {
+        let b = &*storage.buffer;
         let device_id = b.device_id;
         ensure_reduce_loaded(device_id)?;
 
@@ -45,8 +46,10 @@ pub fn launch_reduce_op(
 
         let mut keepdim_shape = storage.shape.clone();
         keepdim_shape[axis] = 1;
-        let out_strides_h: Vec<i32> =
-            crate::cpu::stride::contiguous_strides(&keepdim_shape).iter().map(|&x| x as i32).collect();
+        let out_strides_h: Vec<i32> = crate::cpu::stride::contiguous_strides(&keepdim_shape)
+            .iter()
+            .map(|&x| x as i32)
+            .collect();
         let keepdim_shape_h: Vec<i32> = keepdim_shape.iter().map(|&x| x as i32).collect();
 
         let in_shape_dev = stream.clone_htod(&in_shape_h).unwrap();
@@ -55,7 +58,7 @@ pub fn launch_reduce_op(
         let out_strides_dev = stream.clone_htod(&out_strides_h).unwrap();
 
         let keepdim_numel: usize = keepdim_shape.iter().product();
-        let out_b = CudaBuffer {
+        let mut out_b = CudaBuffer {
             len: keepdim_numel,
             data: Arc::new(stream.alloc_zeros::<u8>(keepdim_numel * 4).unwrap()),
             device: b.device.clone(),
@@ -70,9 +73,10 @@ pub fn launch_reduce_op(
 
         unsafe {
             let in_f32 = b.data.transmute::<f32>(b.len).unwrap();
-            let mut out_data_arc = out_b.data.clone();
-            let out_slice_u8: &mut cudarc::driver::CudaSlice<u8> =
-                Arc::get_mut(&mut out_data_arc).unwrap();
+            // out_b.data was just allocated above (Arc::new), so it is uniquely owned
+            // here (refcount 1) and Arc::get_mut succeeds without cloning first.
+            let out_slice_u8: &mut cudarc::driver::CudaSlice<u8> = Arc::get_mut(&mut out_b.data)
+                .expect("out_b.data is freshly allocated and uniquely owned here");
             let mut out_f32 = out_slice_u8.transmute_mut::<f32>(keepdim_numel).unwrap();
 
             use cudarc::driver::PushKernelArg;
@@ -130,7 +134,8 @@ pub fn launch_reduce_with_indices_op(
     axis: usize,
     _keepdim: bool,
 ) -> Result<(CudaStorage, CudaStorage)> {
-    if true { let b = &*storage.buffer;
+    if true {
+        let b = &*storage.buffer;
         let device_id = b.device_id;
         ensure_reduce_loaded(device_id)?;
 
@@ -145,8 +150,10 @@ pub fn launch_reduce_with_indices_op(
 
         let in_shape_h: Vec<i32> = storage.shape.iter().map(|&x| x as i32).collect();
         let in_strides_h: Vec<i32> = storage.strides.iter().map(|&x| x as i32).collect();
-        let out_strides_h: Vec<i32> =
-            crate::cpu::stride::contiguous_strides(&out_shape).iter().map(|&x| x as i32).collect();
+        let out_strides_h: Vec<i32> = crate::cpu::stride::contiguous_strides(&out_shape)
+            .iter()
+            .map(|&x| x as i32)
+            .collect();
         let out_shape_h: Vec<i32> = out_shape.iter().map(|&x| x as i32).collect();
 
         let in_shape_dev = stream.clone_htod(&in_shape_h).unwrap();
@@ -154,13 +161,13 @@ pub fn launch_reduce_with_indices_op(
         let out_shape_dev = stream.clone_htod(&out_shape_h).unwrap();
         let out_strides_dev = stream.clone_htod(&out_strides_h).unwrap();
 
-        let val_b = CudaBuffer {
+        let mut val_b = CudaBuffer {
             len: out_numel,
             data: Arc::new(stream.alloc_zeros::<u8>(out_numel * 4).unwrap()),
             device: b.device.clone(),
             device_id,
         };
-        let idx_b = CudaBuffer {
+        let mut idx_b = CudaBuffer {
             len: out_numel,
             data: Arc::new(stream.alloc_zeros::<u8>(out_numel * 4).unwrap()),
             device: b.device.clone(),
@@ -175,14 +182,15 @@ pub fn launch_reduce_with_indices_op(
 
         unsafe {
             let in_f32 = b.data.transmute::<f32>(b.len).unwrap();
-            let mut val_data_arc = val_b.data.clone();
-            let val_u8: &mut cudarc::driver::CudaSlice<u8> =
-                Arc::get_mut(&mut val_data_arc).unwrap();
+            // val_b.data / idx_b.data were just allocated above (Arc::new), so they
+            // are uniquely owned here (refcount 1) and Arc::get_mut succeeds without
+            // cloning first.
+            let val_u8: &mut cudarc::driver::CudaSlice<u8> = Arc::get_mut(&mut val_b.data)
+                .expect("val_b.data is freshly allocated and uniquely owned here");
             let mut val_f32 = val_u8.transmute_mut::<f32>(out_numel).unwrap();
 
-            let mut idx_data_arc = idx_b.data.clone();
-            let idx_u8: &mut cudarc::driver::CudaSlice<u8> =
-                Arc::get_mut(&mut idx_data_arc).unwrap();
+            let idx_u8: &mut cudarc::driver::CudaSlice<u8> = Arc::get_mut(&mut idx_b.data)
+                .expect("idx_b.data is freshly allocated and uniquely owned here");
             let mut idx_u32 = idx_u8.transmute_mut::<u32>(out_numel).unwrap();
 
             use cudarc::driver::PushKernelArg;
@@ -242,7 +250,8 @@ pub fn launch_reduce_with_indices_host(
     let (val_storage, idx_storage) =
         launch_reduce_with_indices_op(op_name, init_val, update_op, storage, axis, keepdim)?;
 
-    let host_indices = if true { let b = &*idx_storage.buffer;
+    let host_indices = if true {
+        let b = &*idx_storage.buffer;
         let stream = b.device.default_stream();
         let dev_u32 = unsafe { b.data.transmute::<u32>(b.len).unwrap() };
         stream.clone_dtoh(&dev_u32).unwrap()

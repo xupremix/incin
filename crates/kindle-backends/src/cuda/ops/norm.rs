@@ -1,8 +1,8 @@
+use crate::cuda::ops::kernels::NORM_KERNEL;
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
-use kindle_core::prelude::Result;
-use crate::cuda::ops::kernels::NORM_KERNEL;
 use cudarc::driver::PushKernelArg;
+use kindle_core::prelude::Result;
 
 #[cfg(feature = "cuda")]
 fn ensure_norm_loaded(device_id: usize) -> Result<()> {
@@ -21,7 +21,7 @@ pub fn launch_layer_norm(
     eps: f32,
 ) -> Result<CudaStorage> {
     let w_buf = &*weight.buffer;
-    
+
     let device_id = w_buf.device_id;
     ensure_norm_loaded(device_id)?;
 
@@ -36,14 +36,14 @@ pub fn launch_layer_norm(
     let rank = t.shape.len();
     let norm_size = t.shape[rank - 1];
     let batch_size = t.shape[..rank - 1].iter().product::<usize>();
-    
-    let out_b = CudaBuffer {
+
+    let mut out_b = CudaBuffer {
         len: t_buf.len,
         data: Arc::new(stream.alloc_zeros::<u8>(t_buf.len * 4).unwrap()),
         device: w_buf.device.clone(),
         device_id,
     };
-    
+
     let cfg = cudarc::driver::LaunchConfig {
         grid_dim: (batch_size as u32, 1, 1),
         block_dim: (256, 1, 1),
@@ -53,14 +53,16 @@ pub fn launch_layer_norm(
     unsafe {
         let t_ptr = t_buf.data.transmute::<f32>(t_buf.len).unwrap();
         let w_ptr = w_buf.data.transmute::<f32>(w_buf.len).unwrap();
-        
-        let mut out_data_arc = out_b.data.clone();
-        let out_u8: &mut cudarc::driver::CudaSlice<u8> =
-            Arc::get_mut(&mut out_data_arc).unwrap();
+
+        // out_b.data was just allocated above (Arc::new), so it is uniquely owned
+        // here (refcount 1) and Arc::get_mut succeeds without cloning first.
+        let out_u8: &mut cudarc::driver::CudaSlice<u8> = Arc::get_mut(&mut out_b.data)
+            .expect("out_b.data is freshly allocated and uniquely owned here");
         let mut out_ptr = out_u8.transmute_mut::<f32>(t_buf.len).unwrap();
 
         if let Some(b) = bias {
-            if true { let b_buf = &*b.buffer;
+            if true {
+                let b_buf = &*b.buffer;
                 let b_ptr = b_buf.data.transmute::<f32>(b_buf.len).unwrap();
                 stream
                     .launch_builder(&f)
@@ -73,7 +75,12 @@ pub fn launch_layer_norm(
                     .arg(&(has_bias as i32))
                     .arg(&(batch_size as i32))
                     .launch(cfg)
-                    .map_err(|e| kindle_core::prelude::Error::Msg(alloc::format!("layer_norm launch error: {:?}", e)))?;
+                    .map_err(|e| {
+                        kindle_core::prelude::Error::Msg(alloc::format!(
+                            "layer_norm launch error: {:?}",
+                            e
+                        ))
+                    })?;
             }
         } else {
             // Re-transmute w_ptr to use as a dummy pointer for b_ptr
@@ -89,11 +96,17 @@ pub fn launch_layer_norm(
                 .arg(&(has_bias as i32))
                 .arg(&(batch_size as i32))
                 .launch(cfg)
-                .map_err(|e| kindle_core::prelude::Error::Msg(alloc::format!("layer_norm launch error: {:?}", e)))?;
+                .map_err(|e| {
+                    kindle_core::prelude::Error::Msg(alloc::format!(
+                        "layer_norm launch error: {:?}",
+                        e
+                    ))
+                })?;
         }
     }
 
-    Ok(CudaStorage::new(alloc::sync::Arc::new(out_b),
+    Ok(CudaStorage::new(
+        alloc::sync::Arc::new(out_b),
         t.shape.clone(),
     ))
 }
@@ -127,7 +140,7 @@ pub fn launch_batch_norm(
     let rank = t.shape.len();
     let channel_dim = if rank > 1 { 1 } else { 0 };
     let num_channels = t.shape[channel_dim];
-    
+
     let spatial_size = if rank > 2 {
         t.shape[2..].iter().product::<usize>()
     } else {
@@ -135,14 +148,14 @@ pub fn launch_batch_norm(
     };
 
     let total_elements = t.shape.iter().product::<usize>();
-    
-    let out_b = CudaBuffer {
+
+    let mut out_b = CudaBuffer {
         len: t_buf.len,
         data: Arc::new(stream.alloc_zeros::<u8>(t_buf.len * 4).unwrap()),
         device: t_buf.device.clone(),
         device_id,
     };
-    
+
     let block_size = 256;
     let grid_size = (total_elements as u32 + block_size - 1) / block_size;
 
@@ -154,15 +167,53 @@ pub fn launch_batch_norm(
 
     unsafe {
         let t_ptr = t_buf.data.transmute::<f32>(t_buf.len).unwrap();
-        
-        let mut out_data_arc = out_b.data.clone();
-        let out_u8: &mut cudarc::driver::CudaSlice<u8> = Arc::get_mut(&mut out_data_arc).unwrap();
+
+        // out_b.data was just allocated above (Arc::new), so it is uniquely owned
+        // here (refcount 1) and Arc::get_mut succeeds without cloning first.
+        let out_u8: &mut cudarc::driver::CudaSlice<u8> = Arc::get_mut(&mut out_b.data)
+            .expect("out_b.data is freshly allocated and uniquely owned here");
         let mut out_ptr = out_u8.transmute_mut::<f32>(t_buf.len).unwrap();
 
-        let w_ptr = w.and_then(|s| if true { let buf = &*s.buffer; Some(buf.data.transmute::<f32>(buf.len).unwrap()) } else { None }).unwrap_or_else(|| t_buf.data.transmute::<f32>(t_buf.len).unwrap());
-        let b_ptr = b.and_then(|s| if true { let buf = &*s.buffer; Some(buf.data.transmute::<f32>(buf.len).unwrap()) } else { None }).unwrap_or_else(|| t_buf.data.transmute::<f32>(t_buf.len).unwrap());
-        let rm_ptr = rm.and_then(|s| if true { let buf = &*s.buffer; Some(buf.data.transmute::<f32>(buf.len).unwrap()) } else { None }).unwrap_or_else(|| t_buf.data.transmute::<f32>(t_buf.len).unwrap());
-        let rv_ptr = rv.and_then(|s| if true { let buf = &*s.buffer; Some(buf.data.transmute::<f32>(buf.len).unwrap()) } else { None }).unwrap_or_else(|| t_buf.data.transmute::<f32>(t_buf.len).unwrap());
+        let w_ptr = w
+            .and_then(|s| {
+                if true {
+                    let buf = &*s.buffer;
+                    Some(buf.data.transmute::<f32>(buf.len).unwrap())
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_else(|| t_buf.data.transmute::<f32>(t_buf.len).unwrap());
+        let b_ptr = b
+            .and_then(|s| {
+                if true {
+                    let buf = &*s.buffer;
+                    Some(buf.data.transmute::<f32>(buf.len).unwrap())
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_else(|| t_buf.data.transmute::<f32>(t_buf.len).unwrap());
+        let rm_ptr = rm
+            .and_then(|s| {
+                if true {
+                    let buf = &*s.buffer;
+                    Some(buf.data.transmute::<f32>(buf.len).unwrap())
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_else(|| t_buf.data.transmute::<f32>(t_buf.len).unwrap());
+        let rv_ptr = rv
+            .and_then(|s| {
+                if true {
+                    let buf = &*s.buffer;
+                    Some(buf.data.transmute::<f32>(buf.len).unwrap())
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_else(|| t_buf.data.transmute::<f32>(t_buf.len).unwrap());
 
         stream
             .launch_builder(&f)
@@ -181,10 +232,13 @@ pub fn launch_batch_norm(
             .arg(&(has_rm as i32))
             .arg(&(has_rv as i32))
             .launch(cfg)
-            .map_err(|e| kindle_core::prelude::Error::Msg(alloc::format!("batch_norm launch error: {:?}", e)))?;
+            .map_err(|e| {
+                kindle_core::prelude::Error::Msg(alloc::format!("batch_norm launch error: {:?}", e))
+            })?;
     }
 
-    Ok(CudaStorage::new(alloc::sync::Arc::new(out_b),
+    Ok(CudaStorage::new(
+        alloc::sync::Arc::new(out_b),
         t.shape.clone(),
     ))
 }

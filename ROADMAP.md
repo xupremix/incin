@@ -18,6 +18,14 @@
 > priority below. Treat the "Critical" section as the actual release blocker list;
 > the old B-1..B-6 numbering is kept only for traceability and mapped to its
 > current status in the "Legacy blocker status" section.
+>
+> **2026-07-21 same-day follow-up: Phase 0 fixed.** C-1, C-2, C-5, C-6, and C-7
+> below are now fixed, tested, and committed (see each section for what changed
+> and where the tests live). C-3 and C-4 (WGPU/CUDA autograd wiring — the bigger,
+> multi-file Phase 1 work) are still open. A new hygiene finding also surfaced
+> while fixing these: `cargo fmt --all -- --check` fails across most of the
+> repository (pre-existing, not introduced by this pass) — see Repository
+> Hygiene below.
 
 ---
 
@@ -25,10 +33,10 @@
 
 | Crate | Tests | Status |
 |-------|-------|--------|
-| `kindle-core` | Passing | ⚠ Type-safety promise has real gaps (see C-2, C-3) |
-| `kindle-backends` (cpu) | Passing on CI-testable path | ⚠ Silent f32 downcast bug (C-1) |
-| `kindle-backends` (cuda) | Untested on CI (needs GPU) | ❌ Every op panics on first call (C-1... wait, see C-0) |
-| `kindle-backends` (wgpu) | Passing | ❌ Autograd silently produces no gradients (C-4) |
+| `kindle-core` | Passing | ✅ C-6/C-7 fixed; C-3 (autograd design gaps) still open |
+| `kindle-backends` (cpu) | Passing, +2 new regression tests | ✅ C-2 (f32 downcast) and C-5 (overflow) fixed |
+| `kindle-backends` (cuda) | Compiles (no GPU in this env to run it) | ✅ C-1 (panic-on-first-call) fixed; ❌ C-4 (no autograd) still open |
+| `kindle-backends` (wgpu) | Passing | ❌ C-3: autograd silently produces no gradients — still open |
 | `kindle-backends` (legacy: candle/ndarray/burn) | Partial | ⚠ Ndarray ~61% stubbed, Burn permanently dead code |
 | `kindle-macros` | Passing | ✅ Solid — hygiene good, doc examples present |
 | `kindle-data` | **0 tests** | ❌ Untested despite concurrent DataLoader logic |
@@ -46,31 +54,41 @@ now. Anything below referencing those old crate names has been corrected.
 These are silent-wrong-answer or guaranteed-panic bugs in the numeric core, not
 style issues. None of them were on the previous roadmap.
 
-### C-1 — Every CUDA op panics on its first invocation
+### C-1 — Every CUDA op panics on its first invocation — ✅ FIXED (2026-07-21)
 `crates/kindle-backends/src/cuda/ops/{elementwise,norm,embedding,quant,reduce,shape,loss}.rs`
 (e.g. `elementwise.rs:132-134`). The pattern
-`let mut x = out_b.data.clone(); Arc::get_mut(&mut x).unwrap();` requires the
+`let mut x = out_b.data.clone(); Arc::get_mut(&mut x).unwrap();` required the
 `Arc` refcount to be exactly 1, but `out_b` (holding the other strong reference)
-is still alive at that point — refcount is always 2, so `Arc::get_mut` always
-returns `None` and the `.unwrap()` always panics. This is every add/sub/mul/div,
+was still alive at that point — refcount was always 2, so `Arc::get_mut` always
+returned `None` and the `.unwrap()` always panicked. This was every add/sub/mul/div,
 layer/batch norm, embedding forward+backward, quantize/dequantize, reduce/argmax,
 concat, and cross-entropy on the CUDA backend. Almost certainly never exercised
-in CI (no GPU runner), which is why it's shipped silently.
-**Fix:** stop cloning into a shared `Arc` before mutating; allocate a fresh
-buffer for the output or use `Arc::make_mut` correctly (which copies-on-write
-instead of panicking on refcount > 1).
+in CI (no GPU runner), which is why it shipped silently.
+**Fixed:** removed the unnecessary `.clone()` in all 13 call sites across 7
+files — `out_b.data` (etc.) is freshly allocated immediately before each of
+these blocks, so it's already uniquely owned (refcount 1); `Arc::get_mut`
+now operates on it directly instead of on a doomed clone. Verified with
+`cargo check -p kindle-backends --features cuda` (compiles clean) and the
+existing CPU/WGPU test suite (no regressions); actual GPU execution couldn't
+be runtime-tested in this environment (no CUDA hardware/toolkit available) —
+**still needs a real-GPU CI job or manual verification before shipping.**
 
-### C-2 — CPU elementwise ops silently downcast every dtype to f32
+### C-2 — CPU elementwise ops silently downcast every dtype to f32 — ✅ FIXED (2026-07-21)
 `crates/kindle-backends/src/cpu/ops/elementwise.rs:85-88,108-111`. Regardless of
-the operands' actual `KindleDType` (F64, F16, BF16, ...), the result is always
+the operands' actual `KindleDType` (F64, F16, BF16, ...), the result was always
 constructed as `CpuBuffer::F32(out)`. Every add/sub/mul/div/relu/exp/log/tanh/
-sigmoid/gelu/softmax on a non-f32 tensor silently loses precision with no error.
-This is the exact anti-pattern the old roadmap accused the legacy Candle/Ndarray
-backends of (see B-4 below, which *was* fixed there) — except it's real and
+sigmoid/gelu/softmax on a non-f32 tensor silently lost precision with no error.
+This was the exact anti-pattern the old roadmap accused the legacy Candle/Ndarray
+backends of (see B-4 below, which *was* fixed there) — except it was real and
 unflagged in the backend meant to replace that legacy code.
-**Fix:** dispatch on the actual `CpuBuffer` variant and construct the matching
-output variant; add a cross-backend dtype-preservation test as a regression
-guard (none currently exists).
+**Fixed:** added `CpuBuffer::from_f64_values` (`cpu/storage.rs`), which builds
+a buffer matching the *input's* actual dtype variant instead of hardcoding F32;
+`elementwise_binary`/`elementwise_unary` and three backward closures
+(`mul_scalar_float`, `step`, `swish`) now use it. Added two regression tests
+(`add_preserves_f64_dtype_and_precision`, `relu_preserves_f64_dtype` in
+`cpu/ops/elementwise.rs`) using values exactly representable in f64 but not in
+f32, so a silent f32 round-trip would fail them. Full workspace test suite
+passes (285 tests in `kindle-backends`, up from 281).
 
 ### C-3 — WGPU autograd silently produces no gradients
 `crates/kindle-backends/src/wgpu/tape.rs` + `wgpu/backend.rs:91,96`. `backward()`
@@ -98,45 +116,58 @@ times (cpu/cuda/wgpu) with only the CPU copy actually wired up — worth asking
 whether tape/autograd logic can be lifted into `kindle-core` and made backend-
 generic instead of re-implemented per backend.
 
-### C-5 — Unchecked shape-multiplication overflow feeds allocation and stride math
+### C-5 — Unchecked shape-multiplication overflow feeds allocation and stride math — ✅ FIXED (2026-07-21)
 `crates/kindle-backends/src/cpu/stride.rs:17-19` (`contiguous_strides`, plain
 `*`) and `cpu/creation.rs:70,81,98,127` (`shape.iter().product()` for `Vec`
 length). No overflow guard on user-supplied shapes. In release builds (integer
-overflow checks are off by default) a crafted or accidentally-huge shape can
+overflow checks are off by default) a crafted or accidentally-huge shape could
 wrap the element count to a small number, undersizing the backing `Vec`, while
-strides computed from the same unchecked shape are later used to index into it
+strides computed from the same unchecked shape were later used to index into it
 — a path to out-of-bounds read/write, not just a panic.
-**Fix:** use `checked_mul`/`try_fold` when computing `numel` and strides from a
-shape, and return `Err(Error::ShapeOverflow)` (or similar) instead of trusting
-the multiplication.
+**Fixed:** `contiguous_strides` now uses `checked_mul` and panics with a clear
+message on overflow (kept infallible rather than changing its signature — it's
+called from dozens of sites across the codebase, all currently assuming
+`Vec<usize>` back, not `Result`); added `cpu::stride::checked_numel` (via
+`try_fold`/`checked_mul`, returns `Result<usize>`) and switched `zeros`/`ones`/
+`rand`/`randn` in `cpu/creation.rs` to it, since those are already
+`Result`-returning and can propagate a real `Err` instead of panicking.
 
-### C-6 — kindle-core's dynamic-shape broadcast doesn't actually verify anything
+### C-6 — kindle-core's dynamic-shape broadcast doesn't actually verify anything — ✅ FIXED (2026-07-21), impact was smaller than first assessed
 `crates/kindle-core/src/shapes/broadcast.rs:329-420` (all `(usize,)` /
-`(usize, B)` / `(usize, B, C)` dynamic-dim impls). `output_shape` computes
+`(usize, B)` / `(usize, B, C)` dynamic-dim impls). `output_shape` computed
 `lhs.0.max(rhs.0)` with **no check** that the two dims are equal or that one is
-1. This is neither a compile-time check (they're runtime `usize`s by design,
-that's fine) nor a runtime check (nothing rejects incompatible dims) — it
-silently accepts a shape mismatch and fabricates a plausible-looking but wrong
-output shape. This directly undermines the crate's headline "compile-time shape
-verification" claim for any tensor with a `Dyn` dimension, which is most real
-models (batch size is almost always dynamic).
-**Fix:** add the standard NumPy/PyTorch broadcast-compatibility check
-(`lhs == rhs || lhs == 1 || rhs == 1`) to every dynamic-dim `output_shape` impl,
-returning `Err` on mismatch instead of `.max()`.
+1. **Correction after tracing every call site:** this is *not* reachable as a
+live "silently accepts and computes wrong data" bug via the public `Tensor`
+API. The only caller (`impl_broadcast_binary_op!`/`impl_std_ops!` in
+`tensor/ops/binary.rs`) always computes this value, then calls the backend's
+`add`/`sub`/`mul`/`div`, which independently calls the already-correctly-validated
+`kindle_backends::cpu::stride::broadcast_shape` (returns `Err` on real
+mismatch, with its own passing tests) and propagates its error via `?` *before*
+the fabricated shape is ever used to build a `Tensor`. So today, a genuine
+shape mismatch already errors out correctly through that separate path. It's
+still a real gap for defense-in-depth (a hypothetical future direct caller of
+`BroadcastShape::output_shape` would get silently wrong data) and for
+`Tensor::shape()` introspection semantics.
+**Fixed:** added `checked_broadcast_dim(lhs, rhs)` (asserts `lhs == rhs || lhs
+== 1 || rhs == 1`, same NumPy/PyTorch rule already enforced elsewhere) and
+used it at all 4 call sites (the `(usize,)`/`(usize,B)`/`(usize,B,C)`/
+`(usize,B,C,D)` impls). Kept as a panic rather than a `Result` — changing
+`BroadcastShape::output_shape`'s signature would ripple through ~50 other
+(fully static, always-compatible-by-construction) impls in the same file for
+no behavior change on the only real call site.
 
-### C-7 — Arithmetic operators panic instead of propagating errors
+### C-7 — Arithmetic operators panic instead of propagating errors — ✅ FIXED (2026-07-21)
 `crates/kindle-core/src/tensor/ops/binary.rs:196,220,243,266` and the scalar
-variants in `unary.rs`. `impl core::ops::Add/Sub/Mul/Div for Tensor` call
-`self.backend_method(&rhs).unwrap()`. Combined with C-6, a shape mismatch that
-slips past the type system on a `Dyn` dimension turns into an uncatchable panic
-the first time a user writes ordinary `a + b`, in a language whose entire pitch
-is "verified at compile time, not discovered at runtime."
-**Fix:** either don't implement `std::ops::Add` et al. for fallible tensor
-addition (require `.add()?` everywhere), or keep the operator sugar but make it
-panic with a clear, actionable message pointing at the shape mismatch rather
-than an opaque `unwrap()` on an internal `Result`. Fixing C-6 removes most real
-occurrences of this panic; this item is about not having *any* silent
-`.unwrap()` between user code and a backend `Result`.
+variants in `unary.rs`. `impl core::ops::Add/Sub/Mul/Div for Tensor` called
+`self.backend_method(&rhs).unwrap()` with a bare `.unwrap()` and no context.
+Since C-6's fix confirms shape mismatches already error out cleanly before
+reaching this `.unwrap()`, this item was purely about panic-message quality:
+whatever *does* fail here fails behind an opaque `unwrap()`.
+**Fixed:** replaced every such `.unwrap()` (4 in the `impl_std_ops!` macro
+body in `binary.rs`, 2 in the `impl_std_scalar_ops!` macro body in `unary.rs`)
+with `.unwrap_or_else(|e| panic!(...))` messages naming the operator and
+printing the underlying `Error`, so a real failure is immediately debuggable
+instead of a bare "called `Result::unwrap()` on an `Err` value" with no context.
 
 ---
 
@@ -421,6 +452,7 @@ type has a *compiled* usage example (not `rust,ignore`).
 - [ ] Add `[workspace.metadata.release]` or similar to control which crates get published
 - [x] CI feature flag fixed (`kindle-backends/native` → `kindle-backends/cpu,kindle/cpu`) in this pass
 - [ ] Add GPU-hardware-gated CI jobs for `cuda`/`wgpu` (or explicit software-fallback jobs) — currently zero CI coverage for the backends with C-1/C-3/C-4
+- [ ] **New finding (2026-07-21):** `cargo fmt --all -- --check` fails across most of the repository (e.g. `tensor/backend.rs`, `wgpu/backend.rs`, `wgpu/dispatch.rs` have hundreds of formatting diffs) — pre-existing, not introduced by this session's fixes. Since CI (`.github/workflows/ci.yml`) runs `cargo fmt --all -- --check` as its first step, **CI would fail immediately on `main` today**, before ever reaching the test suite. Files touched in this session's fixes were reformatted with `rustfmt` and are clean; the rest of the repo needs a dedicated `cargo fmt --all` pass (deliberately NOT done in this session — it would touch nearly every file and bury the semantic fixes in formatting noise). Do this as its own isolated commit before relying on CI.
 - [ ] Add `CHANGELOG.md` following Keep-a-Changelog format
 - [x] `CONTRIBUTING.md` exists
 
@@ -475,16 +507,17 @@ is stable.
 
 ## Summary Checklist (ordered by priority)
 
-1. **C-1** Fix CUDA `Arc::get_mut` panic (every CUDA op)
-2. **C-2** Fix CPU elementwise f32 downcast (dtype correctness)
-3. **C-6 / C-7** Fix dynamic broadcast validation, then the operator-overload panics it was masking
-4. **C-5** Checked shape multiplication (overflow → OOB path)
-5. **C-3 / C-4** Wire up WGPU and CUDA autograd tapes (currently silent no-ops)
+1. ~~**C-1** Fix CUDA `Arc::get_mut` panic (every CUDA op)~~ — ✅ fixed 2026-07-21, needs real-GPU verification
+2. ~~**C-2** Fix CPU elementwise f32 downcast (dtype correctness)~~ — ✅ fixed 2026-07-21, regression-tested
+3. ~~**C-6 / C-7** Fix dynamic broadcast validation, then the operator-overload panics it was masking~~ — ✅ fixed 2026-07-21
+4. ~~**C-5** Checked shape multiplication (overflow → OOB path)~~ — ✅ fixed 2026-07-21
+5. **C-3 / C-4** Wire up WGPU and CUDA autograd tapes (currently silent no-ops) — **still open, next priority**
 6. Add cross-backend gradient-parity tests
 7. Close B-3 for real: `cuda`/`cpu` `pub(crate)` audit + `kindle-core` `TRACING_GRAPH` leak
 8. Audit `kindle` facade wildcard re-exports; fix `DefaultBackend = ()` trap; remove dead `candle` cfg
 9. Write `kindle-data` `DataLoader` tests
 10. Decide `legacy::burn_backend`'s fate; stop paying its dependency cost
 11. Add GPU-gated CI jobs (cuda/wgpu) — the current gap is why C-1/C-3/C-4 shipped unnoticed
-12. Make doc comments real (not templates); make `s![]`/`idx![]` doctests compile for real
-13. Write `CHANGELOG.md`, finish remaining repo hygiene items above
+12. Run a dedicated `cargo fmt --all` pass (repo-wide, pre-existing debt — see Repository Hygiene) as its own commit, before or right after opening the first real PR against `main`
+13. Make doc comments real (not templates); make `s![]`/`idx![]` doctests compile for real
+14. Write `CHANGELOG.md`, finish remaining repo hygiene items above

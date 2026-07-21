@@ -85,7 +85,8 @@ extern "C" __global__ void binary_op_{OP_NAME}(
 #[cfg(feature = "cuda")]
 /// Auto-generated documentation for launch_unary_op.
 pub fn launch_unary_op(op_name: &str, op_expr: &str, t: &CudaStorage) -> Result<CudaStorage> {
-    if true { let b = &*t.buffer;
+    if true {
+        let b = &*t.buffer;
         let device_id = b.device_id;
         let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
 
@@ -110,8 +111,6 @@ pub fn launch_unary_op(op_name: &str, op_expr: &str, t: &CudaStorage) -> Result<
 
         let ndim = t.shape.len();
 
-
-
         // Populate shapes/strides
         // Normally you'd htod_copy, we do a simplistic sync transfer here
         let shape_i32: Vec<i32> = t.shape.iter().map(|&x| x as i32).collect();
@@ -129,9 +128,10 @@ pub fn launch_unary_op(op_name: &str, op_expr: &str, t: &CudaStorage) -> Result<
 
         unsafe {
             let input_f32 = b.data.transmute::<f32>(b.len).unwrap();
-            let mut out_data_arc = out_b.data.clone();
-            let out_slice_u8: &mut cudarc::driver::CudaSlice<u8> =
-                Arc::get_mut(&mut out_data_arc).unwrap();
+            // out_b.data was just allocated above (Arc::new), so it is uniquely owned
+            // here (refcount 1) and Arc::get_mut succeeds without cloning first.
+            let out_slice_u8: &mut cudarc::driver::CudaSlice<u8> = Arc::get_mut(&mut out_b.data)
+                .expect("out_b.data is freshly allocated and uniquely owned here");
             let mut out_f32 = out_slice_u8.transmute_mut::<f32>(numel).unwrap();
 
             use cudarc::driver::PushKernelArg;
@@ -148,11 +148,10 @@ pub fn launch_unary_op(op_name: &str, op_expr: &str, t: &CudaStorage) -> Result<
                 .map_err(|e| {
                     kindle_core::prelude::Error::Msg(format!("Kernel launch failed: {:?}", e))
                 })?;
-
-            out_b.data = out_data_arc;
         }
 
-        Ok(CudaStorage::new(alloc::sync::Arc::new(out_b),
+        Ok(CudaStorage::new(
+            alloc::sync::Arc::new(out_b),
             t.shape.clone(),
         ))
     } else {
@@ -169,7 +168,8 @@ pub fn launch_binary_op(
     rhs: &CudaStorage,
     out_shape: &[usize],
 ) -> Result<CudaStorage> {
-    if true { let (lhs_b, rhs_b) = (&*lhs.buffer, &*rhs.buffer);
+    if true {
+        let (lhs_b, rhs_b) = (&*lhs.buffer, &*rhs.buffer);
         let device_id = lhs_b.device_id;
         let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
 
@@ -212,11 +212,31 @@ pub fn launch_binary_op(
 
         let out_shape_i32: Vec<i32> = out_shape.iter().map(|&x| x as i32).collect();
 
-        let out_shape_dev = lhs_b.device.default_stream().clone_htod(&out_shape_i32).unwrap();
-        let lhs_shape_dev = lhs_b.device.default_stream().clone_htod(&lhs_padded_shape).unwrap();
-        let rhs_shape_dev = lhs_b.device.default_stream().clone_htod(&rhs_padded_shape).unwrap();
-        let lhs_strides_dev = lhs_b.device.default_stream().clone_htod(&lhs_padded_strides).unwrap();
-        let rhs_strides_dev = lhs_b.device.default_stream().clone_htod(&rhs_padded_strides).unwrap();
+        let out_shape_dev = lhs_b
+            .device
+            .default_stream()
+            .clone_htod(&out_shape_i32)
+            .unwrap();
+        let lhs_shape_dev = lhs_b
+            .device
+            .default_stream()
+            .clone_htod(&lhs_padded_shape)
+            .unwrap();
+        let rhs_shape_dev = lhs_b
+            .device
+            .default_stream()
+            .clone_htod(&rhs_padded_shape)
+            .unwrap();
+        let lhs_strides_dev = lhs_b
+            .device
+            .default_stream()
+            .clone_htod(&lhs_padded_strides)
+            .unwrap();
+        let rhs_strides_dev = lhs_b
+            .device
+            .default_stream()
+            .clone_htod(&rhs_padded_strides)
+            .unwrap();
 
         let cfg = cudarc::driver::LaunchConfig {
             grid_dim: ((numel as u32 + 255) / 256, 1, 1),
@@ -227,9 +247,10 @@ pub fn launch_binary_op(
         unsafe {
             let lhs_f32 = lhs_b.data.transmute::<f32>(lhs_b.len).unwrap();
             let rhs_f32 = rhs_b.data.transmute::<f32>(rhs_b.len).unwrap();
-            let mut out_data_arc = out_b.data.clone();
-            let out_slice_u8: &mut cudarc::driver::CudaSlice<u8> =
-                Arc::get_mut(&mut out_data_arc).unwrap();
+            // out_b.data was just allocated above (Arc::new), so it is uniquely owned
+            // here (refcount 1) and Arc::get_mut succeeds without cloning first.
+            let out_slice_u8: &mut cudarc::driver::CudaSlice<u8> = Arc::get_mut(&mut out_b.data)
+                .expect("out_b.data is freshly allocated and uniquely owned here");
             let mut out_f32 = out_slice_u8.transmute_mut::<f32>(numel).unwrap();
 
             use cudarc::driver::PushKernelArg;
@@ -251,11 +272,10 @@ pub fn launch_binary_op(
                 .map_err(|e| {
                     kindle_core::prelude::Error::Msg(format!("Kernel launch failed: {:?}", e))
                 })?;
-
-            out_b.data = out_data_arc;
         }
 
-        Ok(CudaStorage::new(alloc::sync::Arc::new(out_b),
+        Ok(CudaStorage::new(
+            alloc::sync::Arc::new(out_b),
             out_shape.to_vec(),
         ))
     } else {

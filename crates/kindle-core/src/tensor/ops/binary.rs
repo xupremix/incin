@@ -193,7 +193,16 @@ macro_rules! impl_std_ops {
                 Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, D, G>;
             #[inline]
             fn $method(self, rhs: Tensor<S2, B, K, D, G>) -> Self::Output {
-                self.$backend_method(&rhs).unwrap()
+                self.$backend_method(&rhs).unwrap_or_else(|e| {
+                    panic!(
+                        "Tensor `{}` operator panicked: {:?} (operands were not \
+                         broadcast-compatible at runtime; call `.{}()` directly \
+                         instead of the operator to handle this as a `Result`)",
+                        stringify!($method),
+                        e,
+                        stringify!($backend_method)
+                    )
+                })
             }
         }
 
@@ -217,7 +226,16 @@ macro_rules! impl_std_ops {
                 Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, D, G>;
             #[inline]
             fn $method(self, rhs: &'b Tensor<S2, B, K, D, G>) -> Self::Output {
-                self.$backend_method(rhs).unwrap()
+                self.$backend_method(rhs).unwrap_or_else(|e| {
+                    panic!(
+                        "Tensor `{}` operator panicked: {:?} (operands were not \
+                         broadcast-compatible at runtime; call `.{}()` directly \
+                         instead of the operator to handle this as a `Result`)",
+                        stringify!($method),
+                        e,
+                        stringify!($backend_method)
+                    )
+                })
             }
         }
 
@@ -240,7 +258,16 @@ macro_rules! impl_std_ops {
                 Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, D, G>;
             #[inline]
             fn $method(self, rhs: &'a Tensor<S2, B, K, D, G>) -> Self::Output {
-                self.$backend_method(rhs).unwrap()
+                self.$backend_method(rhs).unwrap_or_else(|e| {
+                    panic!(
+                        "Tensor `{}` operator panicked: {:?} (operands were not \
+                         broadcast-compatible at runtime; call `.{}()` directly \
+                         instead of the operator to handle this as a `Result`)",
+                        stringify!($method),
+                        e,
+                        stringify!($backend_method)
+                    )
+                })
             }
         }
 
@@ -263,7 +290,16 @@ macro_rules! impl_std_ops {
                 Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, D, G>;
             #[inline]
             fn $method(self, rhs: Tensor<S2, B, K, D, G>) -> Self::Output {
-                self.$backend_method(&rhs).unwrap()
+                self.$backend_method(&rhs).unwrap_or_else(|e| {
+                    panic!(
+                        "Tensor `{}` operator panicked: {:?} (operands were not \
+                         broadcast-compatible at runtime; call `.{}()` directly \
+                         instead of the operator to handle this as a `Result`)",
+                        stringify!($method),
+                        e,
+                        stringify!($backend_method)
+                    )
+                })
             }
         }
     };

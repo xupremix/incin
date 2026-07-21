@@ -67,7 +67,7 @@ impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for CpuBackend
         dtype: KindleDType,
         device: &KindleDevice,
     ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
-        let total: usize = shape.iter().product();
+        let total: usize = crate::cpu::stride::checked_numel(shape)?;
         let buffer = fill_buffer(total, 0.0, dtype, device)?;
         Ok(CpuStorage::from_contiguous(buffer, shape.to_vec()))
     }
@@ -78,7 +78,7 @@ impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for CpuBackend
         dtype: KindleDType,
         device: &KindleDevice,
     ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
-        let total: usize = shape.iter().product();
+        let total: usize = crate::cpu::stride::checked_numel(shape)?;
         let buffer = fill_buffer(total, 1.0, dtype, device)?;
         Ok(CpuStorage::from_contiguous(buffer, shape.to_vec()))
     }
@@ -95,7 +95,7 @@ impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for CpuBackend
                 backend: "Cpu",
             });
         }
-        let total: usize = shape.iter().product();
+        let total: usize = crate::cpu::stride::checked_numel(shape)?;
         #[cfg(feature = "std")]
         let mut rng = rand::thread_rng();
         #[cfg(not(feature = "std"))]
@@ -124,7 +124,7 @@ impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for CpuBackend
                 backend: "Cpu",
             });
         }
-        let total: usize = shape.iter().product();
+        let total: usize = crate::cpu::stride::checked_numel(shape)?;
         #[cfg(feature = "std")]
         let mut rng = rand::thread_rng();
         #[cfg(not(feature = "std"))]

@@ -19,7 +19,8 @@ pub fn launch_embedding_forward(
     weight: &CudaStorage,
     indices: &CudaStorage,
 ) -> Result<CudaStorage> {
-    if true { let (w_b, i_b) = (&*weight.buffer, &*indices.buffer);
+    if true {
+        let (w_b, i_b) = (&*weight.buffer, &*indices.buffer);
         let device_id = w_b.device_id;
         if device_id != i_b.device_id {
             return Err(kindle_core::prelude::Error::Msg(
@@ -40,7 +41,7 @@ pub fn launch_embedding_forward(
         out_shape.push(hidden_size);
         let out_numel = num_indices * hidden_size;
 
-        let out_b = CudaBuffer {
+        let mut out_b = CudaBuffer {
             len: out_numel,
             data: Arc::new(stream.alloc_zeros::<u8>(out_numel * 4).unwrap()),
             device: w_b.device.clone(),
@@ -56,9 +57,10 @@ pub fn launch_embedding_forward(
         unsafe {
             let i_ptr = i_b.data.transmute::<i64>(i_b.len).unwrap();
             let w_ptr = w_b.data.transmute::<f32>(w_b.len).unwrap();
-            let mut out_data_arc = out_b.data.clone();
-            let out_u8: &mut cudarc::driver::CudaSlice<u8> =
-                Arc::get_mut(&mut out_data_arc).unwrap();
+            // out_b.data was just allocated above (Arc::new), so it is uniquely owned
+            // here (refcount 1) and Arc::get_mut succeeds without cloning first.
+            let out_u8: &mut cudarc::driver::CudaSlice<u8> = Arc::get_mut(&mut out_b.data)
+                .expect("out_b.data is freshly allocated and uniquely owned here");
             let mut out_ptr = out_u8.transmute_mut::<f32>(out_numel).unwrap();
 
             use cudarc::driver::PushKernelArg;
@@ -72,7 +74,9 @@ pub fn launch_embedding_forward(
                 .arg(&(hidden_size as usize))
                 .launch(cfg)
                 .map_err(|e| {
-                    kindle_core::prelude::Error::Msg(format!("embedding_forward launch failed: {e:?}"))
+                    kindle_core::prelude::Error::Msg(format!(
+                        "embedding_forward launch failed: {e:?}"
+                    ))
                 })?;
         }
 
@@ -98,7 +102,8 @@ pub fn launch_embedding_backward(
     vocab_size: usize,
     hidden_size: usize,
 ) -> Result<CudaStorage> {
-    if true { let (go_b, i_b) = (&*grad_output.buffer, &*indices.buffer);
+    if true {
+        let (go_b, i_b) = (&*grad_output.buffer, &*indices.buffer);
         let device_id = go_b.device_id;
         ensure_embedding_loaded(device_id)?;
 
@@ -109,7 +114,7 @@ pub fn launch_embedding_backward(
         let num_indices = indices.shape.iter().product::<usize>();
         let out_numel = vocab_size * hidden_size;
 
-        let grad_w_b = CudaBuffer {
+        let mut grad_w_b = CudaBuffer {
             len: out_numel,
             data: Arc::new(stream.alloc_zeros::<u8>(out_numel * 4).unwrap()),
             device: go_b.device.clone(),
@@ -125,9 +130,10 @@ pub fn launch_embedding_backward(
         unsafe {
             let go_ptr = go_b.data.transmute::<f32>(go_b.len).unwrap();
             let i_ptr = i_b.data.transmute::<i64>(i_b.len).unwrap();
-            let mut gw_data_arc = grad_w_b.data.clone();
-            let gw_u8: &mut cudarc::driver::CudaSlice<u8> =
-                Arc::get_mut(&mut gw_data_arc).unwrap();
+            // grad_w_b.data was just allocated above (Arc::new), so it is uniquely
+            // owned here (refcount 1) and Arc::get_mut succeeds without cloning first.
+            let gw_u8: &mut cudarc::driver::CudaSlice<u8> = Arc::get_mut(&mut grad_w_b.data)
+                .expect("grad_w_b.data is freshly allocated and uniquely owned here");
             let mut gw_ptr = gw_u8.transmute_mut::<f32>(out_numel).unwrap();
 
             use cudarc::driver::PushKernelArg;
@@ -140,7 +146,9 @@ pub fn launch_embedding_backward(
                 .arg(&(hidden_size as usize))
                 .launch(cfg)
                 .map_err(|e| {
-                    kindle_core::prelude::Error::Msg(format!("embedding_backward launch failed: {e:?}"))
+                    kindle_core::prelude::Error::Msg(format!(
+                        "embedding_backward launch failed: {e:?}"
+                    ))
                 })?;
         }
 

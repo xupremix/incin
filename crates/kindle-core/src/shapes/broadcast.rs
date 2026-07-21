@@ -2,6 +2,27 @@
 use crate::prelude::*;
 use crate::tensor::matmul::StaticDim;
 
+/// Resolve one runtime (`Dyn`) broadcast dimension, panicking with a clear
+/// message on incompatible sizes instead of silently fabricating a wrong
+/// result via a bare `.max()`. NumPy/PyTorch broadcast rule: two dims are
+/// compatible iff they're equal or one of them is 1.
+///
+/// Every `BroadcastShape` call site reachable through the public `Tensor` API
+/// (`broadcast_add`/`sub`/`mul`/`div` and the `+`/`-`/`*`/`/` operator
+/// overloads in `tensor::ops::binary`) already calls into the backend's own
+/// validated `broadcast_shape` first and propagates its `Err` via `?` before
+/// this value is ever used — so today this assert is not reachable from that
+/// path. It exists as defense-in-depth for any future or direct caller of
+/// `BroadcastShape::output_shape` that doesn't already validate independently.
+#[inline]
+fn checked_broadcast_dim(lhs: usize, rhs: usize) -> usize {
+    assert!(
+        lhs == rhs || lhs == 1 || rhs == 1,
+        "cannot broadcast dynamic dimension: {lhs} vs {rhs} (dims must be equal, or one of them must be 1)"
+    );
+    lhs.max(rhs)
+}
+
 /// Trait that verifies two shapes are broadcastable and determines the output shape.
 #[diagnostic::on_unimplemented(
     message = "Cannot broadcast shape `{Self}` to `{Rhs}`",
@@ -334,7 +355,7 @@ impl BroadcastShape<(usize,)> for (usize,) {
         lhs: &<Self as Shape>::Field,
         rhs: &<Self as Shape>::Field,
     ) -> <Self::Output as Shape>::Field {
-        (lhs.0.max(rhs.0),)
+        (checked_broadcast_dim(lhs.0, rhs.0),)
     }
 }
 impl BroadcastShape<()> for (usize,) {
@@ -367,7 +388,7 @@ impl<B: StaticDim> BroadcastShape<(usize, B)> for (usize, B) {
         lhs: &<Self as Shape>::Field,
         rhs: &<Self as Shape>::Field,
     ) -> <Self::Output as Shape>::Field {
-        (lhs.0.max(rhs.0), Default::default())
+        (checked_broadcast_dim(lhs.0, rhs.0), Default::default())
     }
 }
 impl<B: StaticDim> BroadcastShape<()> for (usize, B) {
@@ -422,7 +443,11 @@ impl<B: StaticDim, C: StaticDim> BroadcastShape<(usize, B, C)> for (usize, B, C)
         lhs: &<Self as Shape>::Field,
         rhs: &<Self as Shape>::Field,
     ) -> <Self::Output as Shape>::Field {
-        (lhs.0.max(rhs.0), Default::default(), Default::default())
+        (
+            checked_broadcast_dim(lhs.0, rhs.0),
+            Default::default(),
+            Default::default(),
+        )
     }
 }
 impl<B: StaticDim, C: StaticDim> BroadcastShape<()> for (usize, B, C) {
@@ -502,7 +527,7 @@ impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(usize, B, C, D)>
         rhs: &<Self as Shape>::Field,
     ) -> <Self::Output as Shape>::Field {
         (
-            lhs.0.max(rhs.0),
+            checked_broadcast_dim(lhs.0, rhs.0),
             Default::default(),
             Default::default(),
             Default::default(),

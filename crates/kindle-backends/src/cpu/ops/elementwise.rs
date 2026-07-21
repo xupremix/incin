@@ -71,21 +71,20 @@ pub(crate) fn elementwise_binary(
     out_shape: &[usize],
     f: impl Fn(f64, f64) -> f64 + Send + Sync,
 ) -> Result<CpuStorage> {
-
     let total: usize = out_shape.iter().product();
-    let out: Vec<f32> = (0..total)
+    let out: Vec<f64> = (0..total)
         .into_par_iter()
         .map(|flat_idx| {
             let nd_idx = flat_to_nd(flat_idx, out_shape);
             let a = read_broadcast(lhs, &nd_idx, out_shape);
             let b = read_broadcast(rhs, &nd_idx, out_shape);
-            f(a, b) as f32
+            f(a, b)
         })
         .collect();
-    Ok(CpuStorage::from_contiguous(
-        CpuBuffer::F32(out),
-        out_shape.to_vec(),
-    ))
+    // Preserve lhs's actual dtype variant instead of hardcoding F32 (C-2:
+    // this used to silently downcast every non-f32 dtype through f32).
+    let out_buffer = lhs.buffer.from_f64_values(out);
+    Ok(CpuStorage::from_contiguous(out_buffer, out_shape.to_vec()))
 }
 
 /// Elementwise negate (used by `sub`'s backward rule: rhs receives the
@@ -96,19 +95,18 @@ pub(crate) fn elementwise_unary(
     t: &CpuStorage,
     f: impl Fn(f64) -> f64 + Send + Sync,
 ) -> Result<CpuStorage> {
-
     let total: usize = t.shape.iter().product();
-    let out: Vec<f32> = (0..total)
+    let out: Vec<f64> = (0..total)
         .into_par_iter()
         .map(|flat_idx| {
             let nd_idx = flat_to_nd(flat_idx, &t.shape);
-            f(t.get(&nd_idx)) as f32
+            f(t.get(&nd_idx))
         })
         .collect();
-    Ok(CpuStorage::from_contiguous(
-        CpuBuffer::F32(out),
-        t.shape.clone(),
-    ))
+    // Preserve t's actual dtype variant instead of hardcoding F32 (C-2: this
+    // used to silently downcast every non-f32 dtype through f32).
+    let out_buffer = t.buffer.from_f64_values(out);
+    Ok(CpuStorage::from_contiguous(out_buffer, t.shape.clone()))
 }
 
 /// Auto-generated documentation for negate.
@@ -120,10 +118,7 @@ fn negate(t: &CpuStorage) -> CpuStorage {
 /// broadcastable to the other's shape) storages — used by `mul`'s backward
 /// rule to compute `grad_out * other_operand`, aligned to `grad_out`'s shape.
 #[allow(dead_code)]
-fn mul_elementwise_broadcast(
-    grad_out: &CpuStorage,
-    other: &CpuStorage,
-) -> Result<CpuStorage> {
+fn mul_elementwise_broadcast(grad_out: &CpuStorage, other: &CpuStorage) -> Result<CpuStorage> {
     elementwise_binary("mul", "a * b", grad_out, other, &grad_out.shape, |a, b| {
         a * b
     })
@@ -342,13 +337,13 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for CpuBackend<T,
                 let mut scaled = Vec::with_capacity(total);
                 let mut idx = vec![0usize; grad_out.shape.len()];
                 for _ in 0..total {
-                    scaled.push((grad_out.get(&idx) * scalar) as f32);
+                    scaled.push(grad_out.get(&idx) * scalar);
                     if !grad_out.shape.is_empty() {
                         increment_index(&mut idx, &grad_out.shape);
                     }
                 }
                 vec![CpuStorage::from_contiguous(
-                    CpuBuffer::F32(scaled),
+                    grad_out.buffer.from_f64_values(scaled),
                     grad_out.shape.clone(),
                 )]
             }),
@@ -389,7 +384,9 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for CpuBackend<T,
 
     /// Auto-generated documentation for step.
     fn step<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        let out = elementwise_unary("step", "x > 0.0 ? 1.0 : 0.0", t, |x| if x > 0.0 { 1.0 } else { 0.0 })?;
+        let out = elementwise_unary("step", "x > 0.0 ? 1.0 : 0.0", t, |x| {
+            if x > 0.0 { 1.0 } else { 0.0 }
+        })?;
 
         // step'(x) = 0 almost everywhere.
         let (t_id, out_id) = (t.id, out.id);
@@ -398,8 +395,11 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for CpuBackend<T,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &CpuStorage| {
                 let total: usize = grad_out.shape.iter().product();
-                let zeros = vec![0.0f32; total];
-                vec![CpuStorage::from_contiguous(CpuBuffer::F32(zeros), grad_out.shape.clone())]
+                let zeros = vec![0.0f64; total];
+                vec![CpuStorage::from_contiguous(
+                    grad_out.buffer.from_f64_values(zeros),
+                    grad_out.shape.clone(),
+                )]
             }),
         });
         Ok(out)
@@ -438,7 +438,9 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for CpuBackend<T,
 
     /// Auto-generated documentation for elu.
     fn elu<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        let out = elementwise_unary("elu", "x > 0.0 ? x : expf(x) - 1.0", t, |x| if x > 0.0 { x } else { x.exp() - 1.0 })?;
+        let out = elementwise_unary("elu", "x > 0.0 ? x : expf(x) - 1.0", t, |x| {
+            if x > 0.0 { x } else { x.exp() - 1.0 }
+        })?;
 
         let out_capture = out.clone();
         let (t_id, out_id) = (t.id, out.id);
@@ -714,7 +716,7 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for CpuBackend<T,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &CpuStorage| {
                 let total: usize = grad_out.shape.iter().product();
-                let grad: Vec<f32> = (0..total)
+                let grad: Vec<f64> = (0..total)
                     .into_par_iter()
                     .map(|flat_idx| {
                         let nd_idx = flat_to_nd(flat_idx, &grad_out.shape);
@@ -723,11 +725,11 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for CpuBackend<T,
                         let g = grad_out.get(&nd_idx);
                         let sig = 1.0 / (1.0 + (-x).exp());
                         let deriv = o + sig * (1.0 - o);
-                        (g * deriv) as f32
+                        g * deriv
                     })
                     .collect();
                 vec![CpuStorage::from_contiguous(
-                    CpuBuffer::F32(grad),
+                    grad_out.buffer.from_f64_values(grad),
                     grad_out.shape.clone(),
                 )]
             }),
@@ -810,6 +812,48 @@ mod tests {
         match &*s.buffer {
             CpuBuffer::F32(v) => v.clone(),
             _ => panic!("expected F32 buffer"),
+        }
+    }
+
+    fn f64_storage(v: Vec<f64>, shape: Vec<usize>) -> CpuStorage {
+        CpuStorage::from_contiguous(CpuBuffer::F64(v), shape)
+    }
+
+    // Regression guard for C-2: elementwise ops used to hardcode `CpuBuffer::F32`
+    // for every result regardless of the operands' actual dtype, silently
+    // downcasting F64 (and F16/BF16) tensors through f32 with no error. These
+    // values are specifically chosen to be exactly representable in f64 but
+    // NOT exactly representable in f32, so an accidental f32 round-trip
+    // changes the result.
+    #[test]
+    fn add_preserves_f64_dtype_and_precision() {
+        let lhs = f64_storage(vec![1.000000123456789], vec![1]);
+        let rhs = f64_storage(vec![2.000000987654321], vec![1]);
+        let out = TestBackend::add::<f64>(&lhs, &rhs).unwrap();
+
+        match &*out.buffer {
+            CpuBuffer::F64(v) => {
+                let expected = 1.000000123456789 + 2.000000987654321;
+                assert_eq!(
+                    v[0], expected,
+                    "add on F64 operands must return an F64 buffer with full f64 precision, \
+                     not a value that has round-tripped through f32"
+                );
+            }
+            other => panic!("expected CpuBuffer::F64, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn relu_preserves_f64_dtype() {
+        let t = f64_storage(vec![-1.000000123456789, 3.000000987654321], vec![2]);
+        let out = TestBackend::relu::<f64>(&t).unwrap();
+
+        match &*out.buffer {
+            CpuBuffer::F64(v) => {
+                assert_eq!(v, &vec![0.0, 3.000000987654321]);
+            }
+            other => panic!("expected CpuBuffer::F64, got {other:?}"),
         }
     }
 
