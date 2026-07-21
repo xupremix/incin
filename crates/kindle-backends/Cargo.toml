@@ -19,7 +19,7 @@ cpu = []
 cuda = ["dep:cudarc", "kindle-core/cuda"]
 wgpu = ["dep:wgpu", "dep:pollster", "kindle-core/wgpu"]
 fused = []
-legacy = ["dep:candle-core", "dep:candle-nn", "dep:ndarray", "dep:burn"]
+legacy = ["dep:candle-core", "dep:candle-nn"]
 telemetry = ["dep:kindle-telemetry"]
 
 [dependencies]
@@ -46,8 +46,6 @@ cudarc = { version = "0.19.8", optional = true, features = ["cuda-12000", "nvrtc
 # Legacy Backends
 candle-core = { workspace = true, optional = true }
 candle-nn = { workspace = true, optional = true }
-ndarray = { version = "0.17.2", optional = true, default-features = false }
-burn = { version = "0.21.0", optional = true, features = ["autodiff"] }
 
 [lints]
 workspace = true

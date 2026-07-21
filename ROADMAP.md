@@ -54,7 +54,7 @@
 | `kindle-backends` (cpu) | Passing, +2 new regression tests | ✅ C-2 (f32 downcast) and C-5 (overflow) fixed |
 | `kindle-backends` (cuda) | Compiles (no GPU in this env to run it) | ✅ C-1 fixed; ⚠ C-4: add/sub/mul/div now gradient-wired (unverified on real hardware); everything else (`CreationOps`/`FloatOps`/norm/embedding/quant/reduce/loss) is still an empty trait impl falling to `Err` |
 | `kindle-backends` (wgpu) | Passing, +16 new gradient tests | ⚠ C-3: elementwise/activation autograd fixed; matmul/conv/norm/reductions/etc. still ungradiented |
-| `kindle-backends` (legacy: candle/ndarray/burn) | Partial | ⚠ Ndarray ~61% stubbed, Burn permanently dead code |
+| `kindle-backends` (legacy: candle only now) | Partial | ✅ `ndarray`/`burn` backends + deps deleted (2026-07-21, both were permanently dead code); only `CandleBackend` remains |
 | `kindle-macros` | Passing | ✅ Solid — hygiene good, doc examples present |
 | `kindle-data` | **0 tests** | ❌ Untested despite concurrent DataLoader logic |
 | `kindle` (facade) | Passing | ⚠ API surface leaks internals via wildcard re-exports |
@@ -270,21 +270,25 @@ instead of a bare "called `Result::unwrap()` on an `Err` value" with no context.
   `Collate` impl to prove the collate function actually runs. Every test goes
   through a 10s `recv_timeout` wrapper so a deadlock/hang fails loudly and
   fast instead of stalling the suite. Ran 5x in a row with no flakiness.
-- **`legacy::burn_backend` is permanently dead code**:
-  `crates/kindle-backends/src/legacy/mod.rs:2138` gates it with `#[cfg(any())]`,
-  which is always false — it can never compile in under any feature
-  combination. Even if unlocked, it implements a `Backend<(D,)>`/`RawTensor`
-  shape from an old API that doesn't match the current `Backend` trait in
-  `kindle-core` (no generic parameter, uses `Storage<K>` not `RawTensor`) — it
-  cannot compile against present-day `kindle-core` regardless. Meanwhile the
-  `burn` dependency is still pulled in transitively by the `legacy` feature for
-  code that can never run. **Decide:** delete it outright, or file it as a
-  genuine future rewrite and stop compiling `burn` as a dependency until then.
-- **`NdarrayBackend` is ~61% stubbed** (54 of 89 ops return
-  `UnsupportedBackendOperation`, `legacy/mod.rs:1181-2131`) — confirmed accurate
-  from the old roadmap, still true. Fine as a documented `0.1.0-alpha` limitation
-  if `legacy` ships with a clear "not all ops implemented" notice; not fine as
-  an undocumented surprise.
+- **`legacy::burn_backend` AND `legacy::ndarray_backend` were both permanently dead code — ✅ DELETED (2026-07-21).**
+  The original finding only caught `burn_backend` (`legacy/mod.rs:2138`,
+  `#[cfg(any())]` — always false, unreachable under any feature combination).
+  Re-checking while fixing it found `ndarray_backend` (`legacy/mod.rs:1180`,
+  containing the actual `NdarrayBackend` struct) was gated the **exact same
+  way** — meaning the "`NdarrayBackend` is ~61% stubbed" finding below was
+  analyzing dead code too; it was never reachable under any feature flag,
+  not just incomplete. `burn_backend` additionally implemented a
+  `Backend<(D,)>`/`RawTensor` shape from an old API that doesn't match the
+  current `kindle-core::Backend` trait at all, so it couldn't have compiled
+  even if unlocked. **Fix:** deleted both modules outright (~1,200 lines) —
+  dead code with no realistic path back to working, not worth a rewrite
+  ticket. Removed the now-unused `ndarray`/`burn` optional dependencies from
+  `Cargo.toml` and `legacy = [...]`'s feature list; confirmed via
+  `cargo tree -p kindle-backends --features legacy` that neither appears in
+  the dependency tree anymore (`Cargo.lock` shrank by ~4,400 lines). Only
+  `legacy::candle` (the real, live `CandleBackend`) remains. Verified
+  `cargo check`/`cargo test -p kindle-backends --features legacy` and the
+  full workspace suite all still pass.
 - **`pub` API leakage across backends — ✅ FIXED (2026-07-21).** `wgpu` was
   already correctly scoped. Brought `cuda` up to the same standard:
   `cuda/mod.rs`'s `ops`/`storage`/`gpu`/`tape` submodules are now `pub(crate)`
@@ -484,9 +488,11 @@ actually load-bearing for correctness, not just release paperwork.
 11. Add `#[non_exhaustive]` / doc-coverage items already tracked below.
 
 **Phase 3 — test debt**
-12. Write tests for `kindle-data`'s `DataLoader` (highest-risk untested code).
-13. Decide `legacy::burn_backend`'s fate (delete vs. real rewrite ticket) and
-    stop paying its dependency cost either way.
+12. ✅ DONE (2026-07-21): wrote tests for `kindle-data`'s `DataLoader`
+    (highest-risk untested code) — 9 tests incl. multi-worker concurrency.
+13. ✅ DONE (2026-07-21): deleted `legacy::burn_backend` AND
+    `legacy::ndarray_backend` (both permanently dead code, `#[cfg(any())]`)
+    and removed the now-unused `burn`/`ndarray` dependencies entirely.
 14. Make `s![]`/`idx![]` doctests real (`rust,ignore` → compiled).
 
 **Phase 4 — docs & release paperwork** (mostly unchanged from before, see below)
@@ -637,7 +643,7 @@ is stable.
 7. ~~Close B-3 for real: `cuda`/`cpu` `pub(crate)` audit + `kindle-core` `TRACING_GRAPH` leak~~ — ✅ fixed 2026-07-21
 8. ~~Audit `kindle` facade wildcard re-exports; fix `DefaultBackend = ()` trap; remove dead `candle` cfg~~ — ✅ fixed 2026-07-21 (macros wildcard narrowed, `kindle_backends::*` deliberately left, see High priority section for why)
 9. ~~Write `kindle-data` `DataLoader` tests~~ — ✅ fixed 2026-07-21 (9 tests, incl. multi-worker concurrency)
-10. Decide `legacy::burn_backend`'s fate; stop paying its dependency cost
+10. ~~Decide `legacy::burn_backend`'s fate; stop paying its dependency cost~~ — ✅ fixed 2026-07-21 (deleted, along with equally-dead `ndarray_backend`)
 11. Add GPU-gated CI jobs (cuda/wgpu) — the current gap is why C-1/C-3/C-4 shipped unnoticed
 12. Run a dedicated `cargo fmt --all` pass (repo-wide, pre-existing debt — see Repository Hygiene) as its own commit, before or right after opening the first real PR against `main`
 13. Make doc comments real (not templates); make `s![]`/`idx![]` doctests compile for real
