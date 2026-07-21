@@ -34,3 +34,6 @@ candle-nn = { version = "0.9.1", default-features = false }
 thiserror = { version = "2.0.18", default-features = false }
 half = { version = "2.7.1", default-features = false }
 # miette = "7.6.0"
+[workspace.metadata.release]
+shared-version = true
+tag-name = "v{{version}}"
