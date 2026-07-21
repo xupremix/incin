@@ -145,9 +145,7 @@ fn fill_like(like: &CpuStorage, shape: &[usize], scalar_value: f64) -> CpuStorag
         CpuBuffer::U32(_) => CpuBuffer::U32(vec![scalar_value as u32; total]),
         CpuBuffer::I64(_) => CpuBuffer::I64(vec![scalar_value as i64; total]),
         CpuBuffer::F16(_) => CpuBuffer::F16(vec![half::f16::from_f64(scalar_value); total]),
-        CpuBuffer::BF16(_) => {
-            CpuBuffer::BF16(vec![half::bf16::from_f64(scalar_value); total])
-        }
+        CpuBuffer::BF16(_) => CpuBuffer::BF16(vec![half::bf16::from_f64(scalar_value); total]),
 
         CpuBuffer::Q8_0(_) => panic!("fill_like not supported on Q8_0 buffer"),
     };
@@ -159,8 +157,6 @@ fn fill_like(like: &CpuStorage, shape: &[usize], scalar_value: f64) -> CpuStorag
 /// Ties: strict `>` (not `>=`) naturally picks first-encountered winner
 /// during forward iteration (Pitfall 3 mitigation, T-02-07).
 fn max_axis_with_indices(storage: &CpuStorage, axis: usize) -> (CpuStorage, Vec<usize>) {
-
-
     let mut out_shape = storage.shape.clone();
     out_shape[axis] = 1;
     let out_total: usize = out_shape.iter().product();
@@ -190,8 +186,6 @@ fn max_axis_with_indices(storage: &CpuStorage, axis: usize) -> (CpuStorage, Vec<
 /// Mirror of `max_axis_with_indices`, seeded with `f64::INFINITY` and a
 /// strict `<` comparison — same first-encountered-winner convention.
 fn min_axis_with_indices(storage: &CpuStorage, axis: usize) -> (CpuStorage, Vec<usize>) {
-
-
     let mut out_shape = storage.shape.clone();
     out_shape[axis] = 1;
     let out_total: usize = out_shape.iter().product();
@@ -251,8 +245,6 @@ impl<T: DType, D: kindle_core::prelude::Device> ReductionOps<Self> for CpuBacken
     fn sum_all<K: DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-
-
         let total: usize = t.shape.iter().product();
         let mut idx = vec![0usize; t.shape.len()];
         let mut sum = 0f64;
@@ -287,8 +279,6 @@ impl<T: DType, D: kindle_core::prelude::Device> ReductionOps<Self> for CpuBacken
     fn mean_all<K: DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-
-
         let total: usize = t.shape.iter().product();
         let mut idx = vec![0usize; t.shape.len()];
         let mut sum = 0f64;
@@ -808,8 +798,7 @@ impl<T: DType, D: kindle_core::prelude::Device> ReductionOps<Self> for CpuBacken
                         multi[d] as i64
                     })
                     .collect();
-                let keepdim_out =
-                    CpuStorage::from_contiguous(CpuBuffer::I64(idx_vals), out_shape);
+                let keepdim_out = CpuStorage::from_contiguous(CpuBuffer::I64(idx_vals), out_shape);
                 let mut squeeze_shape = keepdim_out.shape.clone();
                 squeeze_shape.remove(d);
                 Ok(keepdim_out
@@ -865,8 +854,7 @@ impl<T: DType, D: kindle_core::prelude::Device> ReductionOps<Self> for CpuBacken
                         multi[d] as i64
                     })
                     .collect();
-                let keepdim_out =
-                    CpuStorage::from_contiguous(CpuBuffer::I64(idx_vals), out_shape);
+                let keepdim_out = CpuStorage::from_contiguous(CpuBuffer::I64(idx_vals), out_shape);
                 let mut squeeze_shape = keepdim_out.shape.clone();
                 squeeze_shape.remove(d);
                 Ok(keepdim_out
@@ -902,7 +890,10 @@ impl<T: DType, D: kindle_core::prelude::Device> ReductionOps<Self> for CpuBacken
         k: usize,
         dim: usize,
         largest: bool,
-    ) -> Result<(<Self as Backend>::Storage<K>, <Self as Backend>::Storage<KInt>)> {
+    ) -> Result<(
+        <Self as Backend>::Storage<K>,
+        <Self as Backend>::Storage<KInt>,
+    )> {
         let shape = &t.shape;
         if dim >= shape.len() {
             return Err(Error::ShapeMismatch {
@@ -937,9 +928,11 @@ impl<T: DType, D: kindle_core::prelude::Device> ReductionOps<Self> for CpuBacken
                 slice_vals.push((t.get(&coords), j as u32));
             }
             if largest {
-                slice_vals.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(core::cmp::Ordering::Equal));
+                slice_vals
+                    .sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(core::cmp::Ordering::Equal));
             } else {
-                slice_vals.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(core::cmp::Ordering::Equal));
+                slice_vals
+                    .sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(core::cmp::Ordering::Equal));
             }
 
             let mut out_coords = coords.clone();
@@ -990,9 +983,11 @@ impl<T: DType, D: kindle_core::prelude::Device> ReductionOps<Self> for CpuBacken
                 slice_vals.push((t.get(&coords), k as u32));
             }
             if descending {
-                slice_vals.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(core::cmp::Ordering::Equal));
+                slice_vals
+                    .sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(core::cmp::Ordering::Equal));
             } else {
-                slice_vals.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(core::cmp::Ordering::Equal));
+                slice_vals
+                    .sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(core::cmp::Ordering::Equal));
             }
             for k in 0..shape[dim] {
                 coords[dim] = k;
@@ -1000,7 +995,10 @@ impl<T: DType, D: kindle_core::prelude::Device> ReductionOps<Self> for CpuBacken
                 out[flat] = slice_vals[k].1;
             }
         }
-        Ok(CpuStorage::from_contiguous(CpuBuffer::U32(out), shape.clone()))
+        Ok(CpuStorage::from_contiguous(
+            CpuBuffer::U32(out),
+            shape.clone(),
+        ))
     }
 }
 

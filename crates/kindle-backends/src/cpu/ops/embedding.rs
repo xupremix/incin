@@ -48,7 +48,6 @@ pub(crate) fn embedding_impl<T: DType, D: kindle_core::prelude::Device, K: DType
     let vocab_size = w.shape[0];
     let hidden_size = w.shape[1];
 
-
     let total_indices: usize = t.shape.iter().product();
     let mut idx = vec![0usize; t.shape.len()];
 

@@ -7,17 +7,17 @@ pub struct TensorId(u64);
 static NEXT_TENSOR_ID: AtomicU64 = AtomicU64::new(0);
 
 impl TensorId {
-    pub fn next() -> Self {
+    pub(crate) fn next() -> Self {
         TensorId(NEXT_TENSOR_ID.fetch_add(1, Ordering::Relaxed))
     }
 }
 
 #[derive(Debug)]
 pub struct CudaBuffer {
-    pub len: usize,
-    pub data: Arc<cudarc::driver::CudaSlice<u8>>,
-    pub device: Arc<cudarc::driver::CudaContext>,
-    pub device_id: usize,
+    pub(crate) len: usize,
+    pub(crate) data: Arc<cudarc::driver::CudaSlice<u8>>,
+    pub(crate) device: Arc<cudarc::driver::CudaContext>,
+    pub(crate) device_id: usize,
 }
 
 impl PartialEq for CudaBuffer {
@@ -39,11 +39,11 @@ impl Clone for CudaBuffer {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CudaStorage {
-    pub buffer: Arc<CudaBuffer>,
-    pub shape: Vec<usize>,
-    pub strides: Vec<usize>,
-    pub id: TensorId,
-    pub offset: usize,
+    pub(crate) buffer: Arc<CudaBuffer>,
+    pub(crate) shape: Vec<usize>,
+    pub(crate) strides: Vec<usize>,
+    pub(crate) id: TensorId,
+    pub(crate) offset: usize,
 }
 
 impl CudaStorage {

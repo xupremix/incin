@@ -277,22 +277,35 @@ instead of a bare "called `Result::unwrap()` on an `Err` value" with no context.
   from the old roadmap, still true. Fine as a documented `0.1.0-alpha` limitation
   if `legacy` ships with a clear "not all ops implemented" notice; not fine as
   an undocumented surprise.
-- **`pub` API leakage is inconsistently fixed across backends.** The old
-  roadmap's B-3 (below) was closed for `wgpu`, which now correctly scopes
-  `dispatch`/`pipeline`/`device`/`storage` as `pub(crate)`. It was **never
-  applied to `cuda`**: `cuda/mod.rs` still marks `ops`, `storage`, `gpu`, `tape`
-  as `pub`; `CudaBuffer` exposes raw `Arc<CudaSlice<u8>>`/`Arc<CudaContext>`
-  fields as `pub`; `TapeEntry`/`CudaGrads` and dispatch functions
-  (`launch_quantize`/`launch_dequantize`/`launch_concat`) are all `pub`. The
-  `cpu` backend has the same problem: `CpuBuffer` is a `pub enum`, `CpuGrads`
-  has a `pub grads` field. And a **new** leak has appeared in `kindle-core`
-  itself: `tensor::tracing::TRACING_GRAPH` is a `pub static Lazy<Mutex<Graph>>`
-  — a process-wide mutable singleton that downstream crates can `.lock()` and
-  mutate via the trait methods on `Graph` even though `Graph` itself is
-  `pub(crate)`. This also means every test in the same process shares one
-  tracing graph — a source of cross-test pollution independent of the API
-  leak. **B-3 should not be marked done anywhere until cuda + cpu + this new
-  kindle-core leak are all closed.**
+- **`pub` API leakage across backends — ✅ FIXED (2026-07-21).** `wgpu` was
+  already correctly scoped. Brought `cuda` up to the same standard:
+  `cuda/mod.rs`'s `ops`/`storage`/`gpu`/`tape` submodules are now `pub(crate)`
+  (only `CudaBackend`/`CudaGrads`/`CudaVar` are re-exported, mirroring wgpu's
+  pattern exactly, including a new `pub type CudaGrads = crate::cuda::tape::CudaGrads;`
+  alias in `backend.rs` so the type stays externally nameable through the
+  `pub(crate)`-module `tape`); `CudaBuffer`'s raw `Arc<CudaSlice<u8>>`/
+  `Arc<CudaContext>` fields, `CudaStorage`'s fields, `TapeEntry`'s fields, and
+  all `launch_*` dispatch functions are now `pub(crate)`. `CpuGrads`'s
+  `grads` field (previously `pub`) and `WgpuGrads`'s (same issue, not
+  previously flagged) are now `pub(crate)`, each with a `.get(id)` accessor
+  method instead (added one for `WgpuGrads`/`CudaGrads`; `CpuGrads` already
+  had one). `kindle-core`'s `tensor::tracing::TRACING_GRAPH` static is now
+  `pub(crate)` — it turned out to be a genuine (if leaky) cross-crate
+  integration point, not just an oversight: `kindle-backends`' `cpu/tape.rs`
+  and `wgpu/tape.rs` read it for telemetry snapshots, and the
+  `tui_graph_demo`/`onnx_export` examples wrote to it directly via
+  `.lock().mark_input(...)`. Added three narrow public functions instead —
+  `extract_graph()` (already existed), `tracing_graph_snapshot()` (new,
+  non-destructive clone for telemetry), `tracing_mark_input()`/
+  `tracing_mark_output()` (new) — and updated all four call sites to use
+  them instead of reaching into the raw `Mutex<Graph>`. `CpuBuffer` being
+  `pub` was **not** changed — re-reading `cpu/mod.rs`'s own module doc, this
+  one is explicitly documented as intentional ("`CpuBuffer` for
+  pattern-matching in `to_bytes`/`from_bytes`"), and its variants are plain
+  data containers with no invariant an external `CpuBuffer::F32(vec![...])`
+  construction could violate — unlike the raw GPU-context/slice handles this
+  fix targeted. Full workspace test suite + `cargo build --examples
+  --workspace` both pass with zero regressions.
 - **Facade (`kindle`) blanket-exports internals via wildcard globs**:
   `crates/kindle/src/lib.rs:83` (`pub use kindle_backends::*;`) and `:170`
   (`pub use kindle_macros::*;`) re-export everything, including internal
@@ -437,11 +450,13 @@ actually load-bearing for correctness, not just release paperwork.
    without one.
 
 **Phase 2 — API surface & encapsulation audit**
-8. Close B-3 for real: `cuda` and `cpu` modules brought to the same
-   `pub(crate)` discipline `wgpu` already has; remove the `kindle-core`
-   `TRACING_GRAPH` leak (make it `pub(crate)`, and consider whether a
-   process-wide singleton is the right design at all vs. a graph handle threaded
-   through the API).
+8. ✅ DONE (2026-07-21): closed B-3 for real — `cuda` and `cpu` modules brought
+   to the same `pub(crate)` discipline `wgpu` already has; removed the
+   `kindle-core` `TRACING_GRAPH` leak (now `pub(crate)`, with 3 narrow public
+   functions replacing direct `Mutex<Graph>` access). Still worth a follow-up
+   design question: is a process-wide singleton the right shape at all vs. a
+   graph handle threaded through the API? Not changed in this pass — only the
+   encapsulation, not the underlying design.
 9. Audit `kindle`'s wildcard re-exports (`pub use kindle_backends::*` /
    `kindle_macros::*`) down to an explicit allowlist.
 10. Fix or remove `DefaultBackend = ()` fallback; fix or delete the dead
@@ -483,9 +498,9 @@ actually load-bearing for correctness, not just release paperwork.
 | `CpuBackend<T>`, `CudaBackend<T>`, `WgpuBackend<T>` | `kindle-backends` | ✅ Yes (the structs only) |
 | `Error` enum variants | `kindle-core` | ✅ Yes (`#[non_exhaustive]` — already applied) |
 | `nn::Linear`, `Conv2d`, `LayerNorm`, etc. | `kindle-core` | ✅ Yes |
-| `dispatch_*` / `launch_*` functions | `kindle-backends` (cuda, wgpu) | ❌ No — must be `pub(crate)` everywhere (cuda still leaks these) |
-| `CpuBuffer`, `CudaBuffer`, `WgpuBuffer`/`WgpuStorage` fields | `kindle-backends` | ❌ No — fields/enums must be private or `pub(crate)` |
-| `TRACING_GRAPH` static | `kindle-core` | ❌ No — must be `pub(crate)`, see High priority section |
+| `dispatch_*` / `launch_*` functions | `kindle-backends` (cuda, wgpu) | ❌ No — `pub(crate)` everywhere ✅ (2026-07-21) |
+| `CudaBuffer`, `WgpuBuffer`/`WgpuStorage` fields | `kindle-backends` | ❌ No — `pub(crate)` ✅ (2026-07-21). `CpuBuffer` itself stays `pub` (intentional, see High priority section) |
+| `TRACING_GRAPH` static | `kindle-core` | ❌ No — `pub(crate)` ✅ (2026-07-21) |
 | Internal modules (`tape`, `stride`, `creation`, `ops`, `gpu`) | `kindle-backends` | ❌ No — `pub(crate)` |
 
 ### `#[non_exhaustive]` status
@@ -599,7 +614,7 @@ is stable.
 4. ~~**C-5** Checked shape multiplication (overflow → OOB path)~~ — ✅ fixed 2026-07-21
 5. **C-3** (partial ✅: elementwise + matmul + activations wired on WGPU, 18 tests, hardware-verified) / **C-4** (partial ✅: same 4 ops wired on CUDA, compile-verified only — no hardware in this env) — remaining: WGPU conv/norm/pooling/embedding/reductions/loss/quant; CUDA needs `CreationOps`/`FloatOps` built from scratch (currently empty) before any of that can even run — **next priority**
 6. Add cross-backend gradient-parity tests
-7. Close B-3 for real: `cuda`/`cpu` `pub(crate)` audit + `kindle-core` `TRACING_GRAPH` leak
+7. ~~Close B-3 for real: `cuda`/`cpu` `pub(crate)` audit + `kindle-core` `TRACING_GRAPH` leak~~ — ✅ fixed 2026-07-21
 8. Audit `kindle` facade wildcard re-exports; fix `DefaultBackend = ()` trap; remove dead `candle` cfg
 9. Write `kindle-data` `DataLoader` tests
 10. Decide `legacy::burn_backend`'s fate; stop paying its dependency cost

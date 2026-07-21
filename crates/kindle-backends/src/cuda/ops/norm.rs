@@ -14,7 +14,7 @@ fn ensure_norm_loaded(device_id: usize) -> Result<()> {
 }
 
 #[cfg(feature = "cuda")]
-pub fn launch_layer_norm(
+pub(crate) fn launch_layer_norm(
     t: &CudaStorage,
     weight: &CudaStorage,
     bias: Option<&CudaStorage>,
@@ -112,7 +112,7 @@ pub fn launch_layer_norm(
 }
 
 #[cfg(feature = "cuda")]
-pub fn launch_batch_norm(
+pub(crate) fn launch_batch_norm(
     t: &CudaStorage,
     w: Option<&CudaStorage>,
     b: Option<&CudaStorage>,

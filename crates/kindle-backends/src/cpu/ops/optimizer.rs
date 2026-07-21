@@ -23,13 +23,11 @@ impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device + Clone + '
         _weight_decay: f64,
         _step: usize,
     ) -> Result<()> {
-
-
         let var_storage = crate::cpu::var::var_as_tensor(_var)?;
 
         let mut v_buf_arc = var_storage.buffer.clone();
         let v_buf_mut = alloc::sync::Arc::make_mut(&mut v_buf_arc);
-        
+
         let m_buffer_mut = alloc::sync::Arc::make_mut(&mut _m.buffer);
         let v2_buffer_mut = alloc::sync::Arc::make_mut(&mut _v.buffer);
 
@@ -38,22 +36,18 @@ impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device + Clone + '
             CpuBuffer::F32(g_vec),
             CpuBuffer::F32(m_vec),
             CpuBuffer::F32(v2_vec),
-        ) = (
-            v_buf_mut,
-            &*_grad.buffer,
-            m_buffer_mut,
-            v2_buffer_mut,
-        ) {
+        ) = (v_buf_mut, &*_grad.buffer, m_buffer_mut, v2_buffer_mut)
+        {
             let lr_f32 = _lr as f32;
             let beta1_f32 = _beta1 as f32;
             let beta2_f32 = _beta2 as f32;
             let eps_f32 = _eps as f32;
             let wd_f32 = _weight_decay as f32;
-            
+
             let bias_correction1 = 1.0 - beta1_f32.powi(_step as i32);
             let bias_correction2 = 1.0 - beta2_f32.powi(_step as i32);
             let effective_lr = lr_f32 * (bias_correction2.sqrt() / bias_correction1);
-            
+
             // Assume T = f32 for CpuBackend
             let v_data: &mut [f32] = v_vec.as_mut_slice();
             let g_data: &[f32] = g_vec.as_slice();

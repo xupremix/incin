@@ -67,17 +67,14 @@ impl<T: DType, D: kindle_core::prelude::Device> LossOps<Self> for CpuBackend<T, 
         // Step 1: log_softmax over the class dimension (axis 1).
         let log_probs = crate::cpu::ops::elementwise::log_softmax::<T, D, K>(pred, 1)?;
 
-
         // CPU FALLBACK
         let mut one_hot_buf = vec![0.0f32; batch * classes];
         for b_idx in 0..batch {
             let class_idx = target.get(&[b_idx]) as i64 as usize;
             one_hot_buf[b_idx * classes + class_idx] = 1.0;
         }
-        let one_hot = CpuStorage::from_contiguous(
-            CpuBuffer::F32(one_hot_buf),
-            vec![batch, classes]
-        );
+        let one_hot =
+            CpuStorage::from_contiguous(CpuBuffer::F32(one_hot_buf), vec![batch, classes]);
 
         // Step 3: picked = log_probs * one_hot
         let picked = <Self as NumericOps<Self>>::mul::<K>(&log_probs, &one_hot)?;

@@ -50,8 +50,10 @@ pub(crate) struct TapeEntry {
 /// The backend's gradient container: `Backend::Grads` in a later plan's
 /// `lib.rs` impl. Wraps a plain `BTreeMap` keyed by `TensorId`.
 pub struct CpuGrads {
-    /// Auto-generated documentation for grads.
-    pub grads: BTreeMap<TensorId, CpuStorage>,
+    // Private per B-3 (.agents/API_DESIGN.md "pub(crate) is default"): use
+    // `.get(id)` — downstream crates shouldn't inspect/mutate the internal
+    // BTreeMap beyond the intended query API.
+    pub(crate) grads: BTreeMap<TensorId, CpuStorage>,
 }
 
 impl CpuGrads {
@@ -144,9 +146,8 @@ fn emit_backward_telemetry(step: usize, n_ops: usize) {
     // Snapshot the current tracing graph and ship it to kindle-viz.
     #[cfg(feature = "std")]
     {
-        use kindle_core::prelude::TRACING_GRAPH;
-        if let Some(g) = TRACING_GRAPH.try_lock() {
-            crate::telemetry::emit_graph_snapshot((*g).clone());
+        if let Some(g) = kindle_core::prelude::tracing_graph_snapshot() {
+            crate::telemetry::emit_graph_snapshot(g);
         }
     }
 }
@@ -312,8 +313,6 @@ fn sum_dim_keepdim(storage: &CpuStorage, axis: usize) -> CpuStorage {
             CpuBuffer::$variant(out)
         }};
     }
-
-
 
     let new_buffer = match &*storage.buffer {
         CpuBuffer::F32(_) => reduce_variant!(F32, |v: f64| v as f32),

@@ -2,8 +2,10 @@ extern crate alloc;
 use alloc::collections::BTreeMap;
 use kindle::prelude::*;
 use kindle::{Linear, Module};
-use kindle_core::prelude::{TRACING_GRAPH, TracingBackend, extract_graph};
 use kindle_backends::cpu::CpuBackend;
+use kindle_core::prelude::{
+    TracingBackend, extract_graph, tracing_mark_input, tracing_mark_output,
+};
 
 /// Auto-generated documentation for NB.
 type NB = CpuBackend<f32, Cpu>;
@@ -66,9 +68,9 @@ fn project(
 fn main() -> anyhow::Result<()> {
     let model = SimpleMlp::<TB>::new()?;
     let input = Tensor::<Dyn, TB>::zeros([1, 10])?;
-    TRACING_GRAPH.lock().mark_input(input.inner().value_id);
+    tracing_mark_input(input.inner().value_id);
     let output = model.forward(input)?;
-    TRACING_GRAPH.lock().mark_output(output.inner().value_id);
+    tracing_mark_output(output.inner().value_id);
     let graph = extract_graph();
 
     println!("Graph has {} nodes.", graph.nodes.len());

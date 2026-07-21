@@ -49,7 +49,7 @@ pub(crate) fn layer_norm_impl<T: DType, D: kindle_core::prelude::Device, K: DTyp
     let last_dim = rank - 1;
 
     // ── NATIVE CUDA FAST PATH ──
-    
+
     // 1. mean_keepdim over the trailing dim → shape matches t with last dim = 1
     let mean = <B<T, D> as ReductionOps<B<T, D>>>::mean_keepdim::<K>(t, last_dim)?;
     // 2. centered = t - mean  (broadcast sub)
@@ -71,10 +71,8 @@ pub(crate) fn layer_norm_impl<T: DType, D: kindle_core::prelude::Device, K: DTyp
         Some(b) => b,
         None => {
             let n = weight.shape.iter().product::<usize>();
-            bias_storage = CpuStorage::from_contiguous(
-                CpuBuffer::F32(vec![0.0f32; n]),
-                weight.shape.clone(),
-            );
+            bias_storage =
+                CpuStorage::from_contiguous(CpuBuffer::F32(vec![0.0f32; n]), weight.shape.clone());
             &bias_storage
         }
     };

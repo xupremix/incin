@@ -13,6 +13,8 @@ pub struct CudaVar {
     pub storage: CudaStorage,
 }
 
+pub type CudaGrads = crate::cuda::tape::CudaGrads;
+
 impl<T: DType, D: Device> TensorOps<Self> for CudaBackend<T, D> {
     fn concat<K: DType>(
         tensors: &[&<Self as Backend>::Storage<K>],
@@ -211,7 +213,7 @@ impl<T: DType, D: Device> Backend for CudaBackend<T, D> {
 
     type Storage<K: DType> = CudaStorage;
     type RawVar = CudaVar;
-    type Grads = crate::cuda::tape::CudaGrads;
+    type Grads = CudaGrads;
 
     type InnerBackend = Self;
 
@@ -236,7 +238,7 @@ impl<T: DType, D: Device> Backend for CudaBackend<T, D> {
         t: &Self::Storage<K>,
         grads: &Self::Grads,
     ) -> Result<Option<Self::Storage<K>>> {
-        Ok(grads.grads.get(&t.id).cloned())
+        Ok(grads.get(t.id).cloned())
     }
     fn to_bytes<K: DType>(_t: &Self::Storage<K>) -> Result<alloc::vec::Vec<u8>> {
         Err(Error::UnsupportedBackendOperation {

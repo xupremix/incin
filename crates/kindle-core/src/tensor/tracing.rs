@@ -4,13 +4,36 @@ use crate::tensor::backend::*;
 // removed RefCell
 use spin::{Lazy, Mutex};
 
-/// Auto-generated documentation for TRACING_GRAPH.
-pub static TRACING_GRAPH: Lazy<Mutex<Graph>> = Lazy::new(|| Mutex::new(Graph::new()));
+// Private per B-3 (.agents/API_DESIGN.md "pub(crate) is default"): this used
+// to be `pub`, letting any downstream crate `.lock()` the raw `Mutex<Graph>`
+// and call arbitrary `Graph` methods directly, even though `Graph` itself is
+// `pub(crate)`. The three functions below are the only operations downstream
+// crates actually need (draining/snapshotting the graph, marking an input/
+// output value) — everything else about `Graph`'s shape stays encapsulated.
+pub(crate) static TRACING_GRAPH: Lazy<Mutex<Graph>> = Lazy::new(|| Mutex::new(Graph::new()));
 
-/// Auto-generated documentation for extract_graph.
+/// Drain the process-wide tracing graph, returning everything recorded since
+/// the last call (or since startup).
 pub fn extract_graph() -> Graph {
     let mut b = TRACING_GRAPH.lock();
     core::mem::take(&mut *b)
+}
+
+/// Clone the process-wide tracing graph's current contents WITHOUT draining
+/// it (unlike `extract_graph`) — used by telemetry to snapshot mid-flight.
+/// Returns `None` if the graph is momentarily locked elsewhere.
+pub fn tracing_graph_snapshot() -> Option<Graph> {
+    TRACING_GRAPH.try_lock().map(|g| (*g).clone())
+}
+
+/// Mark `value_id` as a graph input (e.g. for ONNX export / visualization).
+pub fn tracing_mark_input(value_id: ValueId) {
+    TRACING_GRAPH.lock().mark_input(value_id);
+}
+
+/// Mark `value_id` as a graph output (e.g. for ONNX export / visualization).
+pub fn tracing_mark_output(value_id: ValueId) {
+    TRACING_GRAPH.lock().mark_output(value_id);
 }
 
 #[derive(Clone)]
@@ -385,17 +408,23 @@ impl<B: Backend> FloatOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::Relu, t, &inner))
     }
 
-    fn step<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+    fn step<K: super::dtype::DType>(
+        t: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::step(&t.inner)?;
         Ok(Self::trace_unary(OpType::Step, t, &inner))
     }
 
-    fn mish<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+    fn mish<K: super::dtype::DType>(
+        t: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::mish(&t.inner)?;
         Ok(Self::trace_unary(OpType::Mish, t, &inner))
     }
 
-    fn elu<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+    fn elu<K: super::dtype::DType>(
+        t: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::elu(&t.inner)?;
         Ok(Self::trace_unary(OpType::Elu, t, &inner))
     }
@@ -623,12 +652,15 @@ impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
         k: usize,
         dim: usize,
         largest: bool,
-    ) -> Result<(<Self as Backend>::Storage<K>, <Self as Backend>::Storage<KInt>)> {
+    ) -> Result<(
+        <Self as Backend>::Storage<K>,
+        <Self as Backend>::Storage<KInt>,
+    )> {
         let (v_inner, i_inner) = B::topk(&t.inner, k, dim, largest)?;
-        
+
         let shape_v = B::shape(&v_inner);
         let shape_i = B::shape(&i_inner);
-        
+
         // FIXME: Currently we just trace this as a generic Unary Op to satisfy the compiler.
         // If we want ONNX export to support topk properly, we need a TopK OpType.
         // For now, this is enough to compile.
@@ -657,8 +689,14 @@ impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
         };
 
         Ok((
-            TracingTensor { inner: v_inner, value_id: v_id },
-            TracingTensor { inner: i_inner, value_id: i_id },
+            TracingTensor {
+                inner: v_inner,
+                value_id: v_id,
+            },
+            TracingTensor {
+                inner: i_inner,
+                value_id: i_id,
+            },
         ))
     }
 

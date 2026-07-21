@@ -84,7 +84,11 @@ extern "C" __global__ void binary_op_{OP_NAME}(
 
 #[cfg(feature = "cuda")]
 /// Auto-generated documentation for launch_unary_op.
-pub fn launch_unary_op(op_name: &str, op_expr: &str, t: &CudaStorage) -> Result<CudaStorage> {
+pub(crate) fn launch_unary_op(
+    op_name: &str,
+    op_expr: &str,
+    t: &CudaStorage,
+) -> Result<CudaStorage> {
     if true {
         let b = &*t.buffer;
         let device_id = b.device_id;
@@ -161,7 +165,7 @@ pub fn launch_unary_op(op_name: &str, op_expr: &str, t: &CudaStorage) -> Result<
 
 #[cfg(feature = "cuda")]
 /// Auto-generated documentation for launch_binary_op.
-pub fn launch_binary_op(
+pub(crate) fn launch_binary_op(
     op_name: &str,
     op_expr: &str,
     lhs: &CudaStorage,

@@ -94,4 +94,3 @@ pub(crate) mod cuda {
 
 #[cfg(feature = "cuda")]
 pub(crate) use cuda::*;
-

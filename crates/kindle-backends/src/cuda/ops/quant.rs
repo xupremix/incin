@@ -4,7 +4,7 @@ use alloc::sync::Arc;
 use kindle_core::prelude::Result;
 
 #[cfg(feature = "cuda")]
-pub fn launch_quantize(inp: &CudaStorage) -> Result<CudaStorage> {
+pub(crate) fn launch_quantize(inp: &CudaStorage) -> Result<CudaStorage> {
     if true {
         let b_inp = &*inp.buffer;
         let device_id = b_inp.device_id;
@@ -79,7 +79,7 @@ pub fn launch_quantize(inp: &CudaStorage) -> Result<CudaStorage> {
 }
 
 #[cfg(feature = "cuda")]
-pub fn launch_dequantize(inp: &CudaStorage) -> Result<CudaStorage> {
+pub(crate) fn launch_dequantize(inp: &CudaStorage) -> Result<CudaStorage> {
     if true {
         let b_inp = &*inp.buffer;
         let device_id = b_inp.device_id;

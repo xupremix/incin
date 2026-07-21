@@ -51,10 +51,7 @@ pub(crate) fn transpose_last2(t: &CpuStorage) -> CpuStorage {
 /// adds this op's own hand-composed top-level `TapeEntry` (using
 /// `transpose_last2` + recursive `batched_matmul_impl` calls +
 /// `tape::unbroadcast`), layered on top of this forward result.
-pub(crate) fn batched_matmul_impl(
-    lhs: &CpuStorage,
-    rhs: &CpuStorage,
-) -> Result<CpuStorage> {
+pub(crate) fn batched_matmul_impl(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStorage> {
     let (l_rank, r_rank) = (lhs.shape.len(), rhs.shape.len());
     if l_rank < 2 || r_rank < 2 {
         return Err(Error::ShapeMismatch {
@@ -191,7 +188,6 @@ pub(crate) fn matmul_impl(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStora
             ),
         });
     }
-
 
     let m = lhs.shape[0];
     let k = lhs.shape[1];

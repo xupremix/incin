@@ -3,7 +3,7 @@ use alloc::sync::Arc;
 use kindle_core::prelude::Result;
 
 #[cfg(feature = "cuda")]
-pub fn launch_nll_loss(
+pub(crate) fn launch_nll_loss(
     log_sm: &CudaStorage,
     targets: &CudaStorage,
     classes: usize,

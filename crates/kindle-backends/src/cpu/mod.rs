@@ -97,7 +97,7 @@ impl<T: DType, D: Device> kindle_core::prelude::Backend for CpuBackend<T, D> {
         t: &Self::Storage<K>,
         grads: &Self::Grads,
     ) -> Result<Option<Self::Storage<K>>> {
-        Ok(grads.grads.get(&t.id).cloned())
+        Ok(grads.get(t.id).cloned())
     }
 
     /// Auto-generated documentation for to_bytes.

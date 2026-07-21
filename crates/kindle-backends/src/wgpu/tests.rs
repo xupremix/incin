@@ -723,8 +723,8 @@ mod tests {
         let b = storage(vec![10.0, 20.0, 30.0], vec![3]);
         let out = <B as NumericOps<B>>::add::<f32>(&a, &b).unwrap();
         let grads = <B as Backend>::backward::<f32>(&out).unwrap();
-        let ga = grads.grads.get(&a.id).expect("a should have a gradient");
-        let gb = grads.grads.get(&b.id).expect("b should have a gradient");
+        let ga = grads.get(a.id).expect("a should have a gradient");
+        let gb = grads.get(b.id).expect("b should have a gradient");
         assert!(vec_approx_eq(&readback(ga), &[1.0, 1.0, 1.0], 1e-5));
         assert!(vec_approx_eq(&readback(gb), &[1.0, 1.0, 1.0], 1e-5));
     }
@@ -735,8 +735,8 @@ mod tests {
         let b = storage(vec![1.0, 2.0, 3.0], vec![3]);
         let out = <B as NumericOps<B>>::sub::<f32>(&a, &b).unwrap();
         let grads = <B as Backend>::backward::<f32>(&out).unwrap();
-        let ga = grads.grads.get(&a.id).unwrap();
-        let gb = grads.grads.get(&b.id).unwrap();
+        let ga = grads.get(a.id).unwrap();
+        let gb = grads.get(b.id).unwrap();
         assert!(vec_approx_eq(&readback(ga), &[1.0, 1.0, 1.0], 1e-5));
         assert!(vec_approx_eq(&readback(gb), &[-1.0, -1.0, -1.0], 1e-5));
     }
@@ -748,8 +748,8 @@ mod tests {
         let b = storage(vec![5.0, 6.0, 7.0], vec![3]);
         let out = <B as NumericOps<B>>::mul::<f32>(&a, &b).unwrap();
         let grads = <B as Backend>::backward::<f32>(&out).unwrap();
-        let ga = grads.grads.get(&a.id).unwrap();
-        let gb = grads.grads.get(&b.id).unwrap();
+        let ga = grads.get(a.id).unwrap();
+        let gb = grads.get(b.id).unwrap();
         assert!(vec_approx_eq(&readback(ga), &[5.0, 6.0, 7.0], 1e-5));
         assert!(vec_approx_eq(&readback(gb), &[2.0, 3.0, 4.0], 1e-5));
     }
@@ -761,8 +761,8 @@ mod tests {
         let b = storage(vec![2.0, 4.0], vec![2]);
         let out = <B as NumericOps<B>>::div::<f32>(&a, &b).unwrap();
         let grads = <B as Backend>::backward::<f32>(&out).unwrap();
-        let ga = grads.grads.get(&a.id).unwrap();
-        let gb = grads.grads.get(&b.id).unwrap();
+        let ga = grads.get(a.id).unwrap();
+        let gb = grads.get(b.id).unwrap();
         assert!(vec_approx_eq(&readback(ga), &[0.5, 0.25], 1e-4));
         assert!(vec_approx_eq(&readback(gb), &[-1.5, -0.5], 1e-4));
     }
@@ -772,7 +772,7 @@ mod tests {
         let t = storage(vec![1.0, 2.0, 3.0], vec![3]);
         let out = <B as FloatOps<B>>::mul_scalar_float::<f32>(&t, 2.5).unwrap();
         let grads = <B as Backend>::backward::<f32>(&out).unwrap();
-        let gt = grads.grads.get(&t.id).unwrap();
+        let gt = grads.get(t.id).unwrap();
         assert!(vec_approx_eq(&readback(gt), &[2.5, 2.5, 2.5], 1e-5));
     }
 
@@ -781,7 +781,7 @@ mod tests {
         let t = storage(vec![-2.0, 0.0, 3.0], vec![3]);
         let out = <B as FloatOps<B>>::relu::<f32>(&t).unwrap();
         let grads = <B as Backend>::backward::<f32>(&out).unwrap();
-        let gt = grads.grads.get(&t.id).unwrap();
+        let gt = grads.get(t.id).unwrap();
         // Strict `>` boundary: zero gradient at x=0, matching the CPU backend.
         assert!(vec_approx_eq(&readback(gt), &[0.0, 0.0, 1.0], 1e-5));
     }
@@ -791,7 +791,7 @@ mod tests {
         let t = storage(vec![1.0, -2.0, 3.0], vec![3]);
         let out = <B as FloatOps<B>>::neg::<f32>(&t).unwrap();
         let grads = <B as Backend>::backward::<f32>(&out).unwrap();
-        let gt = grads.grads.get(&t.id).unwrap();
+        let gt = grads.get(t.id).unwrap();
         assert!(vec_approx_eq(&readback(gt), &[-1.0, -1.0, -1.0], 1e-5));
     }
 
@@ -800,7 +800,7 @@ mod tests {
         let t = storage(vec![-2.5, 0.0, 3.5], vec![3]);
         let out = <B as FloatOps<B>>::abs::<f32>(&t).unwrap();
         let grads = <B as Backend>::backward::<f32>(&out).unwrap();
-        let gt = grads.grads.get(&t.id).unwrap();
+        let gt = grads.get(t.id).unwrap();
         assert!(vec_approx_eq(&readback(gt), &[-1.0, 0.0, 1.0], 1e-5));
     }
 
@@ -809,7 +809,7 @@ mod tests {
         let t = storage(vec![4.0, 9.0], vec![2]);
         let out = <B as FloatOps<B>>::sqrt::<f32>(&t).unwrap();
         let grads = <B as Backend>::backward::<f32>(&out).unwrap();
-        let gt = grads.grads.get(&t.id).unwrap();
+        let gt = grads.get(t.id).unwrap();
         // 1/(2*sqrt(4))=0.25, 1/(2*sqrt(9))=1/6
         assert!(vec_approx_eq(&readback(gt), &[0.25, 1.0 / 6.0], 1e-3));
     }
@@ -820,7 +820,7 @@ mod tests {
         let out = <B as FloatOps<B>>::exp::<f32>(&t).unwrap();
         let out_vals = readback(&out);
         let grads = <B as Backend>::backward::<f32>(&out).unwrap();
-        let gt = grads.grads.get(&t.id).unwrap();
+        let gt = grads.get(t.id).unwrap();
         assert!(vec_approx_eq(&readback(gt), &out_vals, 1e-4));
     }
 
@@ -829,7 +829,7 @@ mod tests {
         let t = storage(vec![1.0, 2.0, 4.0], vec![3]);
         let out = <B as FloatOps<B>>::log::<f32>(&t).unwrap();
         let grads = <B as Backend>::backward::<f32>(&out).unwrap();
-        let gt = grads.grads.get(&t.id).unwrap();
+        let gt = grads.get(t.id).unwrap();
         assert!(vec_approx_eq(&readback(gt), &[1.0, 0.5, 0.25], 1e-4));
     }
 
@@ -838,7 +838,7 @@ mod tests {
         let t = storage(vec![0.0], vec![1]);
         let out = <B as FloatOps<B>>::sigmoid::<f32>(&t).unwrap();
         let grads = <B as Backend>::backward::<f32>(&out).unwrap();
-        let gt = grads.grads.get(&t.id).unwrap();
+        let gt = grads.get(t.id).unwrap();
         // sigmoid(0)=0.5, deriv = 0.5*0.5 = 0.25
         assert!(vec_approx_eq(&readback(gt), &[0.25], 1e-4));
     }
@@ -848,7 +848,7 @@ mod tests {
         let t = storage(vec![0.0], vec![1]);
         let out = <B as FloatOps<B>>::tanh::<f32>(&t).unwrap();
         let grads = <B as Backend>::backward::<f32>(&out).unwrap();
-        let gt = grads.grads.get(&t.id).unwrap();
+        let gt = grads.get(t.id).unwrap();
         // tanh(0)=0, deriv = 1 - 0^2 = 1
         assert!(vec_approx_eq(&readback(gt), &[1.0], 1e-4));
     }
@@ -858,7 +858,7 @@ mod tests {
         let t = storage(vec![0.0], vec![1]);
         let out = <B as FloatOps<B>>::swish::<f32>(&t).unwrap();
         let grads = <B as Backend>::backward::<f32>(&out).unwrap();
-        let gt = grads.grads.get(&t.id).unwrap();
+        let gt = grads.get(t.id).unwrap();
         // swish(0)=0, sigmoid(0)=0.5, deriv = out + sig*(1-out) = 0 + 0.5*1 = 0.5
         assert!(vec_approx_eq(&readback(gt), &[0.5], 1e-4));
     }
@@ -876,8 +876,8 @@ mod tests {
         );
         let out = <B as TensorOps<B>>::matmul::<f32>(&lhs, &rhs).unwrap();
         let grads = <B as Backend>::backward::<f32>(&out).unwrap();
-        let lhs_grad = grads.grads.get(&lhs.id).expect("lhs should have a gradient");
-        let rhs_grad = grads.grads.get(&rhs.id).expect("rhs should have a gradient");
+        let lhs_grad = grads.get(lhs.id).expect("lhs should have a gradient");
+        let rhs_grad = grads.get(rhs.id).expect("rhs should have a gradient");
 
         assert_eq!(lhs_grad.shape, vec![2, 3]);
         assert!(vec_approx_eq(
@@ -900,15 +900,12 @@ mod tests {
         // sums grad_lhs back down over the batch axis instead of returning
         // a [2,2,2]-shaped gradient for a [2,2]-shaped parameter.
         let lhs = storage(vec![1.0, 0.0, 0.0, 1.0], vec![2, 2]); // identity
-        let rhs = storage(
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0],
-            vec![2, 2, 2],
-        );
+        let rhs = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0], vec![2, 2, 2]);
         let out = <B as TensorOps<B>>::matmul::<f32>(&lhs, &rhs).unwrap();
         assert_eq!(out.shape, vec![2, 2, 2]);
 
         let grads = <B as Backend>::backward::<f32>(&out).unwrap();
-        let lhs_grad = grads.grads.get(&lhs.id).expect("lhs should have a gradient");
+        let lhs_grad = grads.get(lhs.id).expect("lhs should have a gradient");
         assert_eq!(
             lhs_grad.shape,
             vec![2, 2],
@@ -929,8 +926,8 @@ mod tests {
         let loss = <B as FloatOps<B>>::relu::<f32>(&out).unwrap();
 
         let grads = <B as Backend>::backward::<f32>(&loss).unwrap();
-        let ga = grads.grads.get(&a.id).expect("a should have a gradient");
-        let gb = grads.grads.get(&b.id).expect("b should have a gradient");
+        let ga = grads.get(a.id).expect("a should have a gradient");
+        let gb = grads.get(b.id).expect("b should have a gradient");
 
         // out = a*b + a = 2*3+2 = 8 > 0, so relu'(out) = 1: gradient passes
         // straight through relu unchanged.

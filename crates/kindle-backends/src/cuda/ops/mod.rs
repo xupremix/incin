@@ -1,8 +1,8 @@
-pub mod elementwise;
-pub mod embedding;
-pub mod kernels;
-pub mod loss;
-pub mod norm;
-pub mod quant;
-pub mod reduce;
-pub mod shape;
+pub(crate) mod elementwise;
+pub(crate) mod embedding;
+pub(crate) mod kernels;
+pub(crate) mod loss;
+pub(crate) mod norm;
+pub(crate) mod quant;
+pub(crate) mod reduce;
+pub(crate) mod shape;

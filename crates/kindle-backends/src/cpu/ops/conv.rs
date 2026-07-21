@@ -111,10 +111,6 @@ fn validate_groups(op: &'static str, cin: usize, cout: usize, groups: usize) -> 
 /// from a `[B, Cin, L]` input. For every gathered element whose computed
 /// source position falls outside `[0, L)`, substitutes `0.0` (Pitfall 2).
 
-
-
-
-
 fn im2col_1d(
     input: &CpuStorage,
     kernel_size: usize,

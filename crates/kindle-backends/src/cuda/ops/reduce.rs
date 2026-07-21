@@ -15,7 +15,7 @@ fn ensure_reduce_loaded(device_id: usize) -> Result<()> {
 }
 
 #[cfg(feature = "cuda")]
-pub fn launch_reduce_op(
+pub(crate) fn launch_reduce_op(
     op_name: &str,
     _init_val: &str,
     _update_op: &str,
@@ -126,7 +126,7 @@ pub fn launch_reduce_op(
 }
 
 #[cfg(feature = "cuda")]
-pub fn launch_reduce_with_indices_op(
+pub(crate) fn launch_reduce_with_indices_op(
     op_name: &str,
     _init_val: &str,
     _update_op: &str,
@@ -239,7 +239,7 @@ pub fn launch_reduce_with_indices_op(
 }
 
 #[cfg(feature = "cuda")]
-pub fn launch_reduce_with_indices_host(
+pub(crate) fn launch_reduce_with_indices_host(
     op_name: &str,
     init_val: &str,
     update_op: &str,

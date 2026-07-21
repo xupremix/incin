@@ -5,8 +5,8 @@ use core::cell::RefCell;
 
 use kindle_core::prelude::Result;
 
-use crate::wgpu::storage::{TensorId, WgpuStorage, WgpuBuffer};
 use crate::wgpu::dispatch;
+use crate::wgpu::storage::{TensorId, WgpuBuffer, WgpuStorage};
 
 pub struct TapeEntry {
     pub output_id: TensorId,
@@ -34,12 +34,22 @@ pub fn push(entry: TapeEntry) {
 }
 
 pub struct WgpuGrads {
-    pub grads: BTreeMap<TensorId, WgpuStorage>,
+    // Private per B-3 (.agents/API_DESIGN.md "pub(crate) is default"): use
+    // `.get(id)` — downstream crates shouldn't inspect/mutate the internal
+    // BTreeMap beyond the intended query API.
+    pub(crate) grads: BTreeMap<TensorId, WgpuStorage>,
+}
+
+impl WgpuGrads {
+    /// Look up the accumulated gradient for a given tensor id, if any.
+    pub fn get(&self, id: TensorId) -> Option<&WgpuStorage> {
+        self.grads.get(&id)
+    }
 }
 
 pub fn backward(loss: &WgpuStorage) -> Result<WgpuGrads> {
     let mut grads: BTreeMap<TensorId, WgpuStorage> = BTreeMap::new();
-    
+
     // Seed with ones
     let n = loss.shape.iter().product::<usize>();
     let data: Vec<f32> = vec![1.0; n];
@@ -80,9 +90,8 @@ fn emit_backward_telemetry(step: usize, n_ops: usize) {
     crate::telemetry::emit_scalar(step, "tape/ops", n_ops as f64);
     #[cfg(feature = "std")]
     {
-        use kindle_core::prelude::TRACING_GRAPH;
-        if let Some(g) = TRACING_GRAPH.try_lock() {
-            crate::telemetry::emit_graph_snapshot((*g).clone());
+        if let Some(g) = kindle_core::prelude::tracing_graph_snapshot() {
+            crate::telemetry::emit_graph_snapshot(g);
         }
     }
 }
@@ -96,7 +105,7 @@ fn check_nan(storage: &WgpuStorage, id: TensorId) {
 
 pub fn backward_with_nan_check(loss: &WgpuStorage) -> Result<WgpuGrads> {
     let mut grads: BTreeMap<TensorId, WgpuStorage> = BTreeMap::new();
-    
+
     // Seed with ones
     let n = loss.shape.iter().product::<usize>();
     let data: Vec<f32> = vec![1.0; n];
@@ -126,7 +135,10 @@ pub fn backward_with_nan_check(loss: &WgpuStorage) -> Result<WgpuGrads> {
 }
 
 fn add_wgpu_storage(a: &WgpuStorage, b: &WgpuStorage) -> WgpuStorage {
-    debug_assert_eq!(a.shape, b.shape, "tape accumulation requires matching shapes");
+    debug_assert_eq!(
+        a.shape, b.shape,
+        "tape accumulation requires matching shapes"
+    );
     let n = a.shape.iter().product::<usize>();
     let out_buf = WgpuBuffer::new_zeros(n * core::mem::size_of::<f32>());
     let params = [0, n as u32]; // op_mode 0=add
@@ -169,16 +181,16 @@ fn sum_dim_keepdim(storage: &WgpuStorage, axis: usize) -> WgpuStorage {
     out_shape[axis] = 1;
     let total: usize = out_shape.iter().product();
     let out_buf = WgpuBuffer::new_zeros(total * core::mem::size_of::<f32>());
-    
+
     let inner_stride: usize = storage.shape[axis + 1..].iter().product();
-    
+
     dispatch::dispatch_reduce_dim(
         &storage.buffer,
         &out_buf,
         0, // sum
         storage.shape[axis] as u32,
         inner_stride as u32,
-        total as u32
+        total as u32,
     );
     WgpuStorage::new(out_buf, out_shape)
 }

@@ -104,11 +104,7 @@ fn numerical_grad(
 /// Panics with a clear message if `op(inputs)`'s output shape is not scalar
 /// (`[]`) — `gradcheck` requires a scalar-output op so a single central
 /// difference directly approximates the whole gradient contribution.
-pub fn gradcheck(
-    op: impl Fn(&[CpuStorage]) -> CpuStorage,
-    inputs: &[CpuStorage],
-    eps: f64,
-) -> f64 {
+pub fn gradcheck(op: impl Fn(&[CpuStorage]) -> CpuStorage, inputs: &[CpuStorage], eps: f64) -> f64 {
     let out = op(inputs);
     assert_eq!(
         out.shape,

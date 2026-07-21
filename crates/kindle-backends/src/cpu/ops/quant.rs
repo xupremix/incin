@@ -23,8 +23,6 @@ impl<T: DType, D: Device> QuantizedOps<Self> for CpuBackend<T, D> {
             });
         }
 
-
-
         let f32_data = match &*_t.buffer {
             CpuBuffer::F32(v) => v,
             _ => {
@@ -85,8 +83,6 @@ impl<T: DType, D: Device> QuantizedOps<Self> for CpuBackend<T, D> {
                 backend: "Cpu (only Q8_0 to F32 supported)",
             });
         }
-
-
 
         let q8_data = match &*_t.buffer {
             CpuBuffer::Q8_0(v) => v,
@@ -272,8 +268,7 @@ mod tests {
         for i in 0..64 {
             lhs_data[i] = (i as f32 % 5.0) - 2.0;
         }
-        let lhs_f32 =
-            CpuStorage::from_contiguous(CpuBuffer::F32(lhs_data.clone()), vec![2, 32]);
+        let lhs_f32 = CpuStorage::from_contiguous(CpuBuffer::F32(lhs_data.clone()), vec![2, 32]);
         let lhs_q8 = TestBackend::quantize::<f32, Q8_0>(&lhs_f32).unwrap();
 
         // RHS: 3x32
@@ -281,8 +276,7 @@ mod tests {
         for i in 0..96 {
             rhs_data[i] = (i as f32 % 4.0) - 1.5;
         }
-        let rhs_f32 =
-            CpuStorage::from_contiguous(CpuBuffer::F32(rhs_data.clone()), vec![3, 32]);
+        let rhs_f32 = CpuStorage::from_contiguous(CpuBuffer::F32(rhs_data.clone()), vec![3, 32]);
         let rhs_q8 = TestBackend::quantize::<f32, Q8_0>(&rhs_f32).unwrap();
 
         let out_storage = TestBackend::quantized_matmul::<Q8_0>(&lhs_q8, &rhs_q8).unwrap();

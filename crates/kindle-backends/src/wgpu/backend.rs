@@ -100,7 +100,7 @@ impl<T: DType, D: Device> Backend for WgpuBackend<T, D> {
         t: &Self::Storage<K>,
         grads: &Self::Grads,
     ) -> Result<Option<Self::Storage<K>>> {
-        Ok(grads.grads.get(&t.id).cloned())
+        Ok(grads.get(t.id).cloned())
     }
 
     /// Auto-generated documentation for to_bytes.
@@ -763,14 +763,14 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackend<T, D> {
                 let rhs_rank = rhs_capture.shape.len();
                 let rhs_t = Self::transpose::<K>(&rhs_capture, rhs_rank - 2, rhs_rank - 1)
                     .expect("rhs^T (matmul backward)");
-                let grad_lhs_full =
-                    Self::matmul::<K>(grad_out, &rhs_t).expect("grad_out @ rhs^T (matmul backward)");
+                let grad_lhs_full = Self::matmul::<K>(grad_out, &rhs_t)
+                    .expect("grad_out @ rhs^T (matmul backward)");
 
                 let lhs_rank = lhs_capture.shape.len();
                 let lhs_t = Self::transpose::<K>(&lhs_capture, lhs_rank - 2, lhs_rank - 1)
                     .expect("lhs^T (matmul backward)");
-                let grad_rhs_full =
-                    Self::matmul::<K>(&lhs_t, grad_out).expect("lhs^T @ grad_out (matmul backward)");
+                let grad_rhs_full = Self::matmul::<K>(&lhs_t, grad_out)
+                    .expect("lhs^T @ grad_out (matmul backward)");
 
                 vec![
                     crate::wgpu::tape::unbroadcast(&grad_lhs_full, &lhs_shape)

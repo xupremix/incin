@@ -2,8 +2,10 @@
 extern crate alloc;
 use kindle::prelude::*;
 use kindle::{Linear, Module};
-use kindle_core::prelude::{TRACING_GRAPH, TracingBackend, extract_graph};
 use kindle_backends::cpu::CpuBackend;
+use kindle_core::prelude::{
+    TracingBackend, extract_graph, tracing_mark_input, tracing_mark_output,
+};
 use kindle_telemetry::events::GraphSnapshotEvent;
 use kindle_telemetry::reporter::Reporter;
 
@@ -64,13 +66,13 @@ fn main() -> anyhow::Result<()> {
     let input = Tensor::<Dyn, TB>::zeros([1, 10])?;
 
     // 2. Mark input
-    TRACING_GRAPH.lock().mark_input(input.inner().value_id);
+    tracing_mark_input(input.inner().value_id);
 
     // 3. Forward pass
     let output = model.forward(input)?;
 
     // 4. Mark output
-    TRACING_GRAPH.lock().mark_output(output.inner().value_id);
+    tracing_mark_output(output.inner().value_id);
 
     // 5. Extract graph and emit
     let graph = extract_graph();

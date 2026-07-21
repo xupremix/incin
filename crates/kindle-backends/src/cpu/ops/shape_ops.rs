@@ -302,8 +302,6 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for CpuBackend<T
             }};
         }
 
-
-
         let new_buffer = match &*tensors[0].buffer {
             CpuBuffer::F32(_) => concat_variant!(F32, f32),
             CpuBuffer::F64(_) => concat_variant!(F64, f64),

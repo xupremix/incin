@@ -138,7 +138,6 @@ pub(crate) fn max_pool2d_impl<T: DType, D: kindle_core::prelude::Device, K: DTyp
     padding: (usize, usize),
     dilation: (usize, usize),
 ) -> Result<CpuStorage> {
-
     let (out, winning_flat_src_idx) = max_window_2d(t, kernel_size, stride, padding, dilation);
 
     let input_shape = t.shape.clone();
@@ -176,7 +175,6 @@ pub(crate) fn avg_pool2d_impl<T: DType, D: kindle_core::prelude::Device, K: DTyp
     stride: (usize, usize),
     padding: (usize, usize),
 ) -> Result<CpuStorage> {
-
     let (b, c, h, w) = (t.shape[0], t.shape[1], t.shape[2], t.shape[3]);
     let (kh, kw) = kernel_size;
     let (sh, sw) = stride;
@@ -288,7 +286,6 @@ pub(crate) fn adaptive_avg_pool2d_impl<T: DType, D: kindle_core::prelude::Device
     t: &CpuStorage,
     output_size: (usize, usize),
 ) -> Result<CpuStorage> {
-
     let (b, c, h, w) = (t.shape[0], t.shape[1], t.shape[2], t.shape[3]);
     let (h_out, w_out) = output_size;
 

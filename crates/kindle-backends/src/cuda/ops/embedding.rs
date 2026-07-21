@@ -15,7 +15,7 @@ fn ensure_embedding_loaded(device_id: usize) -> Result<()> {
 }
 
 #[cfg(feature = "cuda")]
-pub fn launch_embedding_forward(
+pub(crate) fn launch_embedding_forward(
     weight: &CudaStorage,
     indices: &CudaStorage,
 ) -> Result<CudaStorage> {
@@ -96,7 +96,7 @@ pub fn launch_embedding_forward(
 }
 
 #[cfg(feature = "cuda")]
-pub fn launch_embedding_backward(
+pub(crate) fn launch_embedding_backward(
     grad_output: &CudaStorage,
     indices: &CudaStorage,
     vocab_size: usize,

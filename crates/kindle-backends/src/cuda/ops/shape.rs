@@ -15,7 +15,7 @@ fn ensure_concat_loaded(device_id: usize) -> Result<()> {
 }
 
 #[cfg(feature = "cuda")]
-pub fn launch_concat(tensors: &[&CudaStorage], dim: usize) -> Result<CudaStorage> {
+pub(crate) fn launch_concat(tensors: &[&CudaStorage], dim: usize) -> Result<CudaStorage> {
     if tensors.is_empty() {
         return Err(kindle_core::prelude::Error::Msg(
             "concat: empty tensor list".into(),

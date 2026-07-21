@@ -5,27 +5,37 @@ use core::cell::RefCell;
 
 use kindle_core::prelude::Result;
 
-use crate::cuda::storage::{TensorId, CudaStorage, CudaBuffer};
+use crate::cuda::storage::{CudaBuffer, CudaStorage, TensorId};
 
-pub struct TapeEntry {
-    pub output_id: TensorId,
-    pub input_ids: Vec<TensorId>,
-    pub backward: Box<dyn Fn(&CudaStorage) -> Vec<CudaStorage> + Send + Sync>,
+pub(crate) struct TapeEntry {
+    pub(crate) output_id: TensorId,
+    pub(crate) input_ids: Vec<TensorId>,
+    pub(crate) backward: Box<dyn Fn(&CudaStorage) -> Vec<CudaStorage> + Send + Sync>,
 }
 
 thread_local! {
     static TAPE: RefCell<Vec<TapeEntry>> = RefCell::new(Vec::new());
 }
 
-pub fn push(entry: TapeEntry) {
+pub(crate) fn push(entry: TapeEntry) {
     TAPE.with(|t| t.borrow_mut().push(entry));
 }
 
+/// The CUDA backend's gradient container (`Backend::Grads`). The `grads`
+/// map itself is private — use `.get(id)` — so downstream crates can't
+/// inspect/mutate the internal `BTreeMap` beyond the intended query API.
 pub struct CudaGrads {
-    pub grads: BTreeMap<TensorId, CudaStorage>,
+    pub(crate) grads: BTreeMap<TensorId, CudaStorage>,
 }
 
-pub fn backward(loss: &CudaStorage) -> Result<CudaGrads> {
+impl CudaGrads {
+    /// Look up the accumulated gradient for a given tensor id, if any.
+    pub fn get(&self, id: TensorId) -> Option<&CudaStorage> {
+        self.grads.get(&id)
+    }
+}
+
+pub(crate) fn backward(loss: &CudaStorage) -> Result<CudaGrads> {
     let mut grads: BTreeMap<TensorId, CudaStorage> = BTreeMap::new();
 
     let numel = loss.shape.iter().product::<usize>();
@@ -34,14 +44,17 @@ pub fn backward(loss: &CudaStorage) -> Result<CudaGrads> {
     let data_ones = vec![1.0f32; numel];
     let data_u8: &[u8] = bytemuck::cast_slice(&data_ones);
     let u8_slice = stream.clone_htod(data_u8).unwrap();
-    
+
     let buf = CudaBuffer {
         len: numel,
         data: alloc::sync::Arc::new(u8_slice),
         device: loss.buffer.device.clone(),
         device_id,
     };
-    grads.insert(loss.id, CudaStorage::new(alloc::sync::Arc::new(buf), loss.shape.clone()));
+    grads.insert(
+        loss.id,
+        CudaStorage::new(alloc::sync::Arc::new(buf), loss.shape.clone()),
+    );
 
     let entries = TAPE.with(|t| core::mem::take(&mut *t.borrow_mut()));
 
@@ -61,7 +74,7 @@ pub fn backward(loss: &CudaStorage) -> Result<CudaGrads> {
     Ok(CudaGrads { grads })
 }
 
-pub fn backward_with_nan_check(loss: &CudaStorage) -> Result<CudaGrads> {
+pub(crate) fn backward_with_nan_check(loss: &CudaStorage) -> Result<CudaGrads> {
     backward(loss) // NaN check omitted for simplicity
 }
 
@@ -69,7 +82,7 @@ fn add_cuda_storage(a: &CudaStorage, b: &CudaStorage) -> CudaStorage {
     crate::cuda::ops::elementwise::launch_binary_op("add", "a + b", a, b, &a.shape).unwrap()
 }
 
-pub fn unbroadcast(grad: &CudaStorage, target_shape: &[usize]) -> Result<CudaStorage> {
+pub(crate) fn unbroadcast(grad: &CudaStorage, target_shape: &[usize]) -> Result<CudaStorage> {
     if grad.shape == target_shape {
         return Ok(grad.clone());
     }
