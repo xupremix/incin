@@ -21,11 +21,18 @@
 >
 > **2026-07-21 same-day follow-up: Phase 0 fixed.** C-1, C-2, C-5, C-6, and C-7
 > below are now fixed, tested, and committed (see each section for what changed
-> and where the tests live). C-3 and C-4 (WGPU/CUDA autograd wiring — the bigger,
-> multi-file Phase 1 work) are still open. A new hygiene finding also surfaced
-> while fixing these: `cargo fmt --all -- --check` fails across most of the
-> repository (pre-existing, not introduced by this pass) — see Repository
-> Hygiene below.
+> and where the tests live). A new hygiene finding also surfaced while fixing
+> these: `cargo fmt --all -- --check` fails across most of the repository
+> (pre-existing, not introduced by this pass) — see Repository Hygiene below.
+>
+> **2026-07-21 second follow-up: C-3 partially fixed.** WGPU's autograd tape is
+> now wired for `NumericOps` (add/sub/mul/div), scalar ops, and 9 unary
+> activations (relu/step/neg/abs/sqrt/exp/log/tanh/sigmoid/swish), with 16 new
+> gradient tests run end-to-end against a real (software) WGPU adapter in this
+> environment. `matmul`, conv/pooling/norm layers, embedding, reductions,
+> cross-entropy, and quantization are **still unwired on WGPU** — see C-3's
+> section for the exact remaining list. C-4 (CUDA autograd) is untouched and
+> fully open.
 
 ---
 
@@ -36,7 +43,7 @@
 | `kindle-core` | Passing | ✅ C-6/C-7 fixed; C-3 (autograd design gaps) still open |
 | `kindle-backends` (cpu) | Passing, +2 new regression tests | ✅ C-2 (f32 downcast) and C-5 (overflow) fixed |
 | `kindle-backends` (cuda) | Compiles (no GPU in this env to run it) | ✅ C-1 (panic-on-first-call) fixed; ❌ C-4 (no autograd) still open |
-| `kindle-backends` (wgpu) | Passing | ❌ C-3: autograd silently produces no gradients — still open |
+| `kindle-backends` (wgpu) | Passing, +16 new gradient tests | ⚠ C-3: elementwise/activation autograd fixed; matmul/conv/norm/reductions/etc. still ungradiented |
 | `kindle-backends` (legacy: candle/ndarray/burn) | Partial | ⚠ Ndarray ~61% stubbed, Burn permanently dead code |
 | `kindle-macros` | Passing | ✅ Solid — hygiene good, doc examples present |
 | `kindle-data` | **0 tests** | ❌ Untested despite concurrent DataLoader logic |
@@ -90,19 +97,49 @@ a buffer matching the *input's* actual dtype variant instead of hardcoding F32;
 f32, so a silent f32 round-trip would fail them. Full workspace test suite
 passes (285 tests in `kindle-backends`, up from 281).
 
-### C-3 — WGPU autograd silently produces no gradients
+### C-3 — WGPU autograd silently produces no gradients — ⚠ PARTIALLY FIXED (2026-07-21)
 `crates/kindle-backends/src/wgpu/tape.rs` + `wgpu/backend.rs:91,96`. `backward()`
-is wired to `tape::backward`, but `tape::push` (`tape.rs:26`) has **zero call
-sites** anywhere under `wgpu/*.rs`. The tape is always empty, so `backward()`
-only ever returns a gradient for the loss node itself — no parameter tensor ever
-receives a gradient on the WGPU backend. `unbroadcast`/`sum_dim_squeeze`/
-`sum_dim_keepdim` (`tape.rs:137,160,167`) are correctly implemented and are
-*needed* — they're just never reached because no forward op records a
-`TapeEntry`. Training on this backend currently runs, converges toward nothing,
-and reports no error.
-**Fix:** wire every WGPU forward op to call `tape::push` with its backward
-closure, the same way the CPU backend does; add a parity test asserting WGPU
-gradients match CPU gradients (numerically, not just shape).
+was wired to `tape::backward`, but `tape::push` (`tape.rs:26`) had **zero call
+sites** anywhere under `wgpu/*.rs`. The tape was always empty, so `backward()`
+only ever returned a gradient for the loss node itself — no parameter tensor
+ever received a gradient on the WGPU backend. `unbroadcast`/`sum_dim_squeeze`/
+`sum_dim_keepdim` (`tape.rs:137,160,167`) were correctly implemented and
+*needed* — they were just never reached because no forward op recorded a
+`TapeEntry`. Training on this backend used to run, converge toward nothing,
+and report no error.
+
+**Fixed for:** `NumericOps` (`add`/`sub`/`mul`/`div`, matching CPU's math
+exactly, using `unbroadcast` at every input — currently a no-op since WGPU's
+`binary_op` requires equal shapes and has no broadcasting yet, but wired for
+when it does), `FloatOps` scalar ops (`add_scalar_float`, `mul_scalar_float`)
+and unary activations (`relu`, `step`, `neg`, `abs`, `sqrt`, `exp`, `log`,
+`tanh`, `sigmoid`, `swish`) — all composed from the existing
+`binary_op`/`unary_op`/`scalar_op` GPU dispatch helpers already in
+`wgpu/backend.rs`, no new WGSL kernels needed. 16 new tests in `wgpu/tests.rs`
+verify each op's gradient against hand-derived expected values (e.g.
+`div_backward_matches_quotient_rule`, `sigmoid_backward_matches_out_times_one_minus_out`),
+plus `chained_ops_accumulate_gradient_through_multiple_hops`, which composes
+`mul`+`add`+`relu` with a tensor reused by two ops and asserts the gradient
+contributions are *summed*, not overwritten — the CPUBACK-05 correctness class
+of bug this same tape design already guards against on the CPU backend. All
+298 `kindle-backends` `--features wgpu` tests pass (up from 283, actually run
+end-to-end against a software WGPU adapter in this environment, not just
+compile-checked).
+
+**Still NOT wired** (forward runs, but produces no gradient, same as before):
+`mish`, `elu`, `gelu` (derivatives need a composition or kernel this pass
+didn't build — `gelu` in particular needs `erf`, which has no GPU primitive
+here), `softmax` (a monolithic kernel, not decomposed like CPU's
+`exp(log_softmax(x))`, so needs its own dedicated backward), and everything in
+`TensorOps`/`ReductionOps`/`ModuleOps`/`LossOps`/`QuantizedOps` — `matmul`,
+`reshape`/`transpose`/`narrow`/`stack`/`concat`, all reductions
+(`sum`/`mean`/`max`/`min`/`argmax`/`topk`/...), `embedding`, `layer_norm`,
+`batch_norm`, pooling, `conv1d`/`conv2d`/`conv_transpose2d`,
+`cross_entropy_loss`, and quantization. **A real model's forward pass
+(matmul + conv + norm layers) still won't get gradients on WGPU** — this fix
+covers elementwise arithmetic and common activations only. The remaining ops
+need the same treatment; prioritize `matmul` and `layer_norm`/`batch_norm`
+next since those are on the critical path for any real network.
 
 ### C-4 — CUDA autograd is fully disconnected
 `crates/kindle-backends/src/cuda/backend.rs`: `type Grads = ()`, `backward()`
@@ -511,7 +548,7 @@ is stable.
 2. ~~**C-2** Fix CPU elementwise f32 downcast (dtype correctness)~~ — ✅ fixed 2026-07-21, regression-tested
 3. ~~**C-6 / C-7** Fix dynamic broadcast validation, then the operator-overload panics it was masking~~ — ✅ fixed 2026-07-21
 4. ~~**C-5** Checked shape multiplication (overflow → OOB path)~~ — ✅ fixed 2026-07-21
-5. **C-3 / C-4** Wire up WGPU and CUDA autograd tapes (currently silent no-ops) — **still open, next priority**
+5. **C-3** (partial ✅ 2026-07-21: elementwise + activations wired, 16 tests) / **C-4** (still fully open) — finish wiring WGPU's matmul/conv/norm/pooling/embedding/reductions/loss/quant ops, then do CUDA autograd from scratch — **next priority**
 6. Add cross-backend gradient-parity tests
 7. Close B-3 for real: `cuda`/`cpu` `pub(crate)` audit + `kindle-core` `TRACING_GRAPH` leak
 8. Audit `kindle` facade wildcard re-exports; fix `DefaultBackend = ()` trap; remove dead `candle` cfg

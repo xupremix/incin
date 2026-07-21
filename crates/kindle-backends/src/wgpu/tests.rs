@@ -696,13 +696,195 @@ mod tests {
             data[i] = (i as f32 - 32.0) * 0.1; // ranging -3.2 to +3.1
         }
         let s = storage(data.clone(), vec![2, 32]);
-        let q_storage = <B as QuantizedOps<B>>::quantize::<f32, kindle_core::prelude::Q8_0>(&s).unwrap();
-        let deq_storage = <B as QuantizedOps<B>>::dequantize::<kindle_core::prelude::Q8_0, f32>(&q_storage).unwrap();
+        let q_storage =
+            <B as QuantizedOps<B>>::quantize::<f32, kindle_core::prelude::Q8_0>(&s).unwrap();
+        let deq_storage =
+            <B as QuantizedOps<B>>::dequantize::<kindle_core::prelude::Q8_0, f32>(&q_storage)
+                .unwrap();
         let deq_data = readback(&deq_storage);
 
         for (orig, deq) in data.iter().zip(deq_data.iter()) {
             let diff = (orig - deq).abs();
             assert!(diff < 0.05, "Diff too large: {} vs {}", orig, deq);
         }
+    }
+
+    // ── Autograd (C-3 regression guard) ─────────────────────────────────────
+    //
+    // Before this fix, `tape::push` had zero call sites anywhere in this
+    // module — `backward()` ran without error but silently returned no
+    // gradient for any parameter. Every test below fails loudly (missing or
+    // wrong gradient) if that regresses, instead of the old failure mode
+    // (no error, no gradient, wrong training silently).
+
+    #[test]
+    fn add_backward_gives_grad_one_to_both_operands() {
+        let a = storage(vec![1.0, 2.0, 3.0], vec![3]);
+        let b = storage(vec![10.0, 20.0, 30.0], vec![3]);
+        let out = <B as NumericOps<B>>::add::<f32>(&a, &b).unwrap();
+        let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+        let ga = grads.grads.get(&a.id).expect("a should have a gradient");
+        let gb = grads.grads.get(&b.id).expect("b should have a gradient");
+        assert!(vec_approx_eq(&readback(ga), &[1.0, 1.0, 1.0], 1e-5));
+        assert!(vec_approx_eq(&readback(gb), &[1.0, 1.0, 1.0], 1e-5));
+    }
+
+    #[test]
+    fn sub_backward_negates_rhs_contribution() {
+        let a = storage(vec![10.0, 20.0, 30.0], vec![3]);
+        let b = storage(vec![1.0, 2.0, 3.0], vec![3]);
+        let out = <B as NumericOps<B>>::sub::<f32>(&a, &b).unwrap();
+        let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+        let ga = grads.grads.get(&a.id).unwrap();
+        let gb = grads.grads.get(&b.id).unwrap();
+        assert!(vec_approx_eq(&readback(ga), &[1.0, 1.0, 1.0], 1e-5));
+        assert!(vec_approx_eq(&readback(gb), &[-1.0, -1.0, -1.0], 1e-5));
+    }
+
+    #[test]
+    fn mul_backward_uses_other_operands_real_values() {
+        // d(a*b)/da = b, d(a*b)/db = a.
+        let a = storage(vec![2.0, 3.0, 4.0], vec![3]);
+        let b = storage(vec![5.0, 6.0, 7.0], vec![3]);
+        let out = <B as NumericOps<B>>::mul::<f32>(&a, &b).unwrap();
+        let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+        let ga = grads.grads.get(&a.id).unwrap();
+        let gb = grads.grads.get(&b.id).unwrap();
+        assert!(vec_approx_eq(&readback(ga), &[5.0, 6.0, 7.0], 1e-5));
+        assert!(vec_approx_eq(&readback(gb), &[2.0, 3.0, 4.0], 1e-5));
+    }
+
+    #[test]
+    fn div_backward_matches_quotient_rule() {
+        // d(a/b)/da = 1/b, d(a/b)/db = -a/b^2.
+        let a = storage(vec![6.0, 8.0], vec![2]);
+        let b = storage(vec![2.0, 4.0], vec![2]);
+        let out = <B as NumericOps<B>>::div::<f32>(&a, &b).unwrap();
+        let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+        let ga = grads.grads.get(&a.id).unwrap();
+        let gb = grads.grads.get(&b.id).unwrap();
+        assert!(vec_approx_eq(&readback(ga), &[0.5, 0.25], 1e-4));
+        assert!(vec_approx_eq(&readback(gb), &[-1.5, -0.5], 1e-4));
+    }
+
+    #[test]
+    fn mul_scalar_float_backward_scales_gradient() {
+        let t = storage(vec![1.0, 2.0, 3.0], vec![3]);
+        let out = <B as FloatOps<B>>::mul_scalar_float::<f32>(&t, 2.5).unwrap();
+        let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+        let gt = grads.grads.get(&t.id).unwrap();
+        assert!(vec_approx_eq(&readback(gt), &[2.5, 2.5, 2.5], 1e-5));
+    }
+
+    #[test]
+    fn relu_backward_zero_at_boundary() {
+        let t = storage(vec![-2.0, 0.0, 3.0], vec![3]);
+        let out = <B as FloatOps<B>>::relu::<f32>(&t).unwrap();
+        let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+        let gt = grads.grads.get(&t.id).unwrap();
+        // Strict `>` boundary: zero gradient at x=0, matching the CPU backend.
+        assert!(vec_approx_eq(&readback(gt), &[0.0, 0.0, 1.0], 1e-5));
+    }
+
+    #[test]
+    fn neg_backward_is_constant_negative_one() {
+        let t = storage(vec![1.0, -2.0, 3.0], vec![3]);
+        let out = <B as FloatOps<B>>::neg::<f32>(&t).unwrap();
+        let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+        let gt = grads.grads.get(&t.id).unwrap();
+        assert!(vec_approx_eq(&readback(gt), &[-1.0, -1.0, -1.0], 1e-5));
+    }
+
+    #[test]
+    fn abs_backward_matches_sign() {
+        let t = storage(vec![-2.5, 0.0, 3.5], vec![3]);
+        let out = <B as FloatOps<B>>::abs::<f32>(&t).unwrap();
+        let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+        let gt = grads.grads.get(&t.id).unwrap();
+        assert!(vec_approx_eq(&readback(gt), &[-1.0, 0.0, 1.0], 1e-5));
+    }
+
+    #[test]
+    fn sqrt_backward_matches_one_over_two_sqrt() {
+        let t = storage(vec![4.0, 9.0], vec![2]);
+        let out = <B as FloatOps<B>>::sqrt::<f32>(&t).unwrap();
+        let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+        let gt = grads.grads.get(&t.id).unwrap();
+        // 1/(2*sqrt(4))=0.25, 1/(2*sqrt(9))=1/6
+        assert!(vec_approx_eq(&readback(gt), &[0.25, 1.0 / 6.0], 1e-3));
+    }
+
+    #[test]
+    fn exp_backward_equals_output() {
+        let t = storage(vec![0.0, 1.0], vec![2]);
+        let out = <B as FloatOps<B>>::exp::<f32>(&t).unwrap();
+        let out_vals = readback(&out);
+        let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+        let gt = grads.grads.get(&t.id).unwrap();
+        assert!(vec_approx_eq(&readback(gt), &out_vals, 1e-4));
+    }
+
+    #[test]
+    fn log_backward_matches_reciprocal() {
+        let t = storage(vec![1.0, 2.0, 4.0], vec![3]);
+        let out = <B as FloatOps<B>>::log::<f32>(&t).unwrap();
+        let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+        let gt = grads.grads.get(&t.id).unwrap();
+        assert!(vec_approx_eq(&readback(gt), &[1.0, 0.5, 0.25], 1e-4));
+    }
+
+    #[test]
+    fn sigmoid_backward_matches_out_times_one_minus_out() {
+        let t = storage(vec![0.0], vec![1]);
+        let out = <B as FloatOps<B>>::sigmoid::<f32>(&t).unwrap();
+        let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+        let gt = grads.grads.get(&t.id).unwrap();
+        // sigmoid(0)=0.5, deriv = 0.5*0.5 = 0.25
+        assert!(vec_approx_eq(&readback(gt), &[0.25], 1e-4));
+    }
+
+    #[test]
+    fn tanh_backward_matches_one_minus_out_squared() {
+        let t = storage(vec![0.0], vec![1]);
+        let out = <B as FloatOps<B>>::tanh::<f32>(&t).unwrap();
+        let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+        let gt = grads.grads.get(&t.id).unwrap();
+        // tanh(0)=0, deriv = 1 - 0^2 = 1
+        assert!(vec_approx_eq(&readback(gt), &[1.0], 1e-4));
+    }
+
+    #[test]
+    fn swish_backward_matches_analytic_derivative_at_zero() {
+        let t = storage(vec![0.0], vec![1]);
+        let out = <B as FloatOps<B>>::swish::<f32>(&t).unwrap();
+        let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+        let gt = grads.grads.get(&t.id).unwrap();
+        // swish(0)=0, sigmoid(0)=0.5, deriv = out + sig*(1-out) = 0 + 0.5*1 = 0.5
+        assert!(vec_approx_eq(&readback(gt), &[0.5], 1e-4));
+    }
+
+    #[test]
+    fn chained_ops_accumulate_gradient_through_multiple_hops() {
+        // loss = relu(a*b + a) — proves multi-op composition (mul, add,
+        // relu) all correctly record and walk the tape together, and that
+        // `a` (used twice, by both `mul` and `add`) gets its gradient
+        // contributions SUMMED rather than overwritten.
+        let a = storage(vec![2.0], vec![1]);
+        let b = storage(vec![3.0], vec![1]);
+        let ab = <B as NumericOps<B>>::mul::<f32>(&a, &b).unwrap();
+        let out = <B as NumericOps<B>>::add::<f32>(&ab, &a).unwrap();
+        let loss = <B as FloatOps<B>>::relu::<f32>(&out).unwrap();
+
+        let grads = <B as Backend>::backward::<f32>(&loss).unwrap();
+        let ga = grads.grads.get(&a.id).expect("a should have a gradient");
+        let gb = grads.grads.get(&b.id).expect("b should have a gradient");
+
+        // out = a*b + a = 2*3+2 = 8 > 0, so relu'(out) = 1: gradient passes
+        // straight through relu unchanged.
+        // d(loss)/da = b + 1 = 3 + 1 = 4 (mul's contribution `b`, PLUS add's
+        // contribution `1`, summed — not overwritten).
+        // d(loss)/db = a = 2.
+        assert!(vec_approx_eq(&readback(ga), &[4.0], 1e-4));
+        assert!(vec_approx_eq(&readback(gb), &[2.0], 1e-4));
     }
 }

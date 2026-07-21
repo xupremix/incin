@@ -62,7 +62,6 @@ impl<T: DType, D: Device> Backend for WgpuBackend<T, D> {
         format!("WgpuTensor(shape={:?})", t.shape)
     }
 
-
     /// Auto-generated documentation for var_as_tensor.
     fn var_as_tensor<K: DType>(var: &Self::RawVar) -> Result<Self::Storage<K>> {
         Ok(var.storage.clone())
@@ -290,28 +289,107 @@ impl<T: DType, D: Device> NumericOps<Self> for WgpuBackend<T, D> {
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        binary_op::<T, D>(lhs, rhs, 0, "add")
+        let out = binary_op::<T, D>(lhs, rhs, 0, "add")?;
+        let (lhs_shape, rhs_shape) = (lhs.shape.clone(), rhs.shape.clone());
+        let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
+        crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![lhs_id, rhs_id],
+            backward: Box::new(move |grad_out: &WgpuStorage| {
+                vec![
+                    crate::wgpu::tape::unbroadcast(grad_out, &lhs_shape)
+                        .expect("unbroadcast lhs (add)"),
+                    crate::wgpu::tape::unbroadcast(grad_out, &rhs_shape)
+                        .expect("unbroadcast rhs (add)"),
+                ]
+            }),
+        });
+        Ok(out)
     }
     /// Auto-generated documentation for sub.
     fn sub<K: DType>(
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        binary_op::<T, D>(lhs, rhs, 1, "sub")
+        let out = binary_op::<T, D>(lhs, rhs, 1, "sub")?;
+        let (lhs_shape, rhs_shape) = (lhs.shape.clone(), rhs.shape.clone());
+        let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
+        crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![lhs_id, rhs_id],
+            backward: Box::new(move |grad_out: &WgpuStorage| {
+                let neg_grad = unary_op::<T, D>(grad_out, 5).expect("neg (sub backward)");
+                vec![
+                    crate::wgpu::tape::unbroadcast(grad_out, &lhs_shape)
+                        .expect("unbroadcast lhs (sub)"),
+                    crate::wgpu::tape::unbroadcast(&neg_grad, &rhs_shape)
+                        .expect("unbroadcast rhs (sub)"),
+                ]
+            }),
+        });
+        Ok(out)
     }
     /// Auto-generated documentation for mul.
     fn mul<K: DType>(
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        binary_op::<T, D>(lhs, rhs, 2, "mul")
+        let out = binary_op::<T, D>(lhs, rhs, 2, "mul")?;
+        let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
+        let (lhs_shape, rhs_shape) = (lhs.shape.clone(), rhs.shape.clone());
+        let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
+        crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![lhs_id, rhs_id],
+            backward: Box::new(move |grad_out: &WgpuStorage| {
+                let grad_lhs = binary_op::<T, D>(grad_out, &rhs_capture, 2, "mul_grad")
+                    .expect("mul backward (lhs)");
+                let grad_rhs = binary_op::<T, D>(grad_out, &lhs_capture, 2, "mul_grad")
+                    .expect("mul backward (rhs)");
+                vec![
+                    crate::wgpu::tape::unbroadcast(&grad_lhs, &lhs_shape)
+                        .expect("unbroadcast lhs (mul)"),
+                    crate::wgpu::tape::unbroadcast(&grad_rhs, &rhs_shape)
+                        .expect("unbroadcast rhs (mul)"),
+                ]
+            }),
+        });
+        Ok(out)
     }
     /// Auto-generated documentation for div.
     fn div<K: DType>(
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        binary_op::<T, D>(lhs, rhs, 3, "div")
+        let out = binary_op::<T, D>(lhs, rhs, 3, "div")?;
+        let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
+        let (lhs_shape, rhs_shape) = (lhs.shape.clone(), rhs.shape.clone());
+        let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
+        crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![lhs_id, rhs_id],
+            backward: Box::new(move |grad_out: &WgpuStorage| {
+                // d(lhs/rhs)/dlhs = 1/rhs -> grad_lhs = grad_out / rhs
+                let grad_lhs = binary_op::<T, D>(grad_out, &rhs_capture, 3, "div_grad_lhs")
+                    .expect("div backward (lhs)");
+                // d(lhs/rhs)/drhs = -lhs/rhs^2 -> grad_rhs = grad_out * (-lhs/rhs^2)
+                let rhs_sq = binary_op::<T, D>(&rhs_capture, &rhs_capture, 2, "div_grad_rhs_sq")
+                    .expect("rhs^2 (div backward)");
+                let lhs_over_rhs_sq =
+                    binary_op::<T, D>(&lhs_capture, &rhs_sq, 3, "div_grad_rhs_ratio")
+                        .expect("lhs/rhs^2 (div backward)");
+                let neg_ratio = unary_op::<T, D>(&lhs_over_rhs_sq, 5).expect("neg (div backward)");
+                let grad_rhs = binary_op::<T, D>(grad_out, &neg_ratio, 2, "div_grad_rhs")
+                    .expect("div backward (rhs)");
+                vec![
+                    crate::wgpu::tape::unbroadcast(&grad_lhs, &lhs_shape)
+                        .expect("unbroadcast lhs (div)"),
+                    crate::wgpu::tape::unbroadcast(&grad_rhs, &rhs_shape)
+                        .expect("unbroadcast rhs (div)"),
+                ]
+            }),
+        });
+        Ok(out)
     }
 }
 
@@ -341,74 +419,190 @@ fn scalar_op<T: DType, D: Device>(
     Ok(WgpuStorage::new(out_buf, t.shape.clone()))
 }
 
+/// Push a single-input `TapeEntry` whose backward closure is `grad_fn`.
+/// Shared by every unary `FloatOps` impl below to avoid repeating the
+/// `TapeEntry { output_id, input_ids: vec![t.id], backward: ... }`
+/// boilerplate at each of the ~10 call sites.
+fn push_unary_tape_entry(
+    t_id: crate::wgpu::storage::TensorId,
+    out_id: crate::wgpu::storage::TensorId,
+    grad_fn: impl Fn(&WgpuStorage) -> WgpuStorage + Send + Sync + 'static,
+) {
+    crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &WgpuStorage| vec![grad_fn(grad_out)]),
+    });
+}
+
 impl<T: DType, D: Device> FloatOps<Self> for WgpuBackend<T, D> {
     /// Auto-generated documentation for add_scalar_float.
     fn add_scalar_float<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         scalar: f64,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        scalar_op::<T, D>(t, scalar, 0)
+        let out = scalar_op::<T, D>(t, scalar, 0)?;
+        // Gradient passes through unchanged (same shape, no unbroadcast
+        // needed — scalar ops don't change shape).
+        push_unary_tape_entry(t.id, out.id, |grad_out| grad_out.clone());
+        Ok(out)
     }
     /// Auto-generated documentation for mul_scalar_float.
     fn mul_scalar_float<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         scalar: f64,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        scalar_op::<T, D>(t, scalar, 1)
+        let out = scalar_op::<T, D>(t, scalar, 1)?;
+        // Gradient scales by the same constant.
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            scalar_op::<T, D>(grad_out, scalar, 1).expect("mul_scalar_float backward")
+        });
+        Ok(out)
     }
     /// Auto-generated documentation for relu.
     fn relu<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        unary_op::<T, D>(t, 0)
+        let out = unary_op::<T, D>(t, 0)?;
+        // relu'(x) = step(x) (1 if x>0 else 0) — input-based.
+        let t_capture = t.clone();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            let deriv = unary_op::<T, D>(&t_capture, 10).expect("step (relu backward)");
+            binary_op::<T, D>(grad_out, &deriv, 2, "relu_grad").expect("relu backward")
+        });
+        Ok(out)
     }
     /// Auto-generated documentation for step.
     fn step<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        unary_op::<T, D>(t, 10)
+        let out = unary_op::<T, D>(t, 10)?;
+        // step'(x) = 0 almost everywhere.
+        push_unary_tape_entry(t.id, out.id, |grad_out| {
+            scalar_op::<T, D>(grad_out, 0.0, 1).expect("step backward (zero grad)")
+        });
+        Ok(out)
     }
     /// Auto-generated documentation for mish.
     fn mish<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+        // NOT tape-wired yet: mish'(x) needs a composition this backend's
+        // primitives don't cover in one pass (see ROADMAP.md C-3 follow-up).
         unary_op::<T, D>(t, 11)
     }
     /// Auto-generated documentation for elu.
     fn elu<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+        // NOT tape-wired yet — see ROADMAP.md C-3 follow-up.
         unary_op::<T, D>(t, 12)
     }
     /// Auto-generated documentation for gelu.
     fn gelu<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+        // NOT tape-wired yet: exact erf-based gelu' has no GPU primitive here
+        // — see ROADMAP.md C-3 follow-up.
         unary_op::<T, D>(t, 1)
     }
     /// Auto-generated documentation for tanh.
     fn tanh<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        unary_op::<T, D>(t, 2)
+        let out = unary_op::<T, D>(t, 2)?;
+        // tanh'(x) = 1 - out^2 (output-based).
+        let out_capture = out.clone();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            let out_sq = binary_op::<T, D>(&out_capture, &out_capture, 2, "tanh_grad_sq")
+                .expect("out^2 (tanh backward)");
+            let neg_out_sq = unary_op::<T, D>(&out_sq, 5).expect("neg (tanh backward)");
+            let deriv = scalar_op::<T, D>(&neg_out_sq, 1.0, 0).expect("1 - out^2 (tanh backward)");
+            binary_op::<T, D>(grad_out, &deriv, 2, "tanh_grad").expect("tanh backward")
+        });
+        Ok(out)
     }
     /// Auto-generated documentation for sigmoid.
     fn sigmoid<K: DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        unary_op::<T, D>(t, 3)
+        let out = unary_op::<T, D>(t, 3)?;
+        // sigmoid'(x) = out*(1-out) (output-based).
+        let out_capture = out.clone();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            let neg_out = unary_op::<T, D>(&out_capture, 5).expect("neg (sigmoid backward)");
+            let one_minus_out =
+                scalar_op::<T, D>(&neg_out, 1.0, 0).expect("1 - out (sigmoid backward)");
+            let deriv = binary_op::<T, D>(&out_capture, &one_minus_out, 2, "sigmoid_grad_deriv")
+                .expect("out*(1-out) (sigmoid backward)");
+            binary_op::<T, D>(grad_out, &deriv, 2, "sigmoid_grad").expect("sigmoid backward")
+        });
+        Ok(out)
     }
     /// Auto-generated documentation for abs.
     fn abs<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        unary_op::<T, D>(t, 4)
+        let out = unary_op::<T, D>(t, 4)?;
+        // abs'(x) = sign(x) (input-based), computed as step(x) - step(-x):
+        // 1 if x>0, -1 if x<0, 0 if x==0 — matches the CPU backend exactly.
+        let t_capture = t.clone();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            let neg_t = unary_op::<T, D>(&t_capture, 5).expect("neg (abs backward)");
+            let step_pos = unary_op::<T, D>(&t_capture, 10).expect("step(x) (abs backward)");
+            let step_neg = unary_op::<T, D>(&neg_t, 10).expect("step(-x) (abs backward)");
+            let neg_step_neg = unary_op::<T, D>(&step_neg, 5).expect("neg (abs backward)");
+            let sign = binary_op::<T, D>(&step_pos, &neg_step_neg, 0, "abs_grad_sign")
+                .expect("sign(x) (abs backward)");
+            binary_op::<T, D>(grad_out, &sign, 2, "abs_grad").expect("abs backward")
+        });
+        Ok(out)
     }
     /// Auto-generated documentation for neg.
     fn neg<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        unary_op::<T, D>(t, 5)
+        let out = unary_op::<T, D>(t, 5)?;
+        // neg'(x) = -1 (constant; no input capture needed).
+        push_unary_tape_entry(t.id, out.id, |grad_out| {
+            unary_op::<T, D>(grad_out, 5).expect("neg backward")
+        });
+        Ok(out)
     }
     /// Auto-generated documentation for sqrt.
     fn sqrt<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        unary_op::<T, D>(t, 6)
+        let out = unary_op::<T, D>(t, 6)?;
+        // sqrt'(x) = 1/(2*out) (output-based) -> grad = grad_out/out * 0.5.
+        let out_capture = out.clone();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            let ratio = binary_op::<T, D>(grad_out, &out_capture, 3, "sqrt_grad_ratio")
+                .expect("sqrt backward");
+            scalar_op::<T, D>(&ratio, 0.5, 1).expect("sqrt backward (halve)")
+        });
+        Ok(out)
     }
     /// Auto-generated documentation for exp.
     fn exp<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        unary_op::<T, D>(t, 7)
+        let out = unary_op::<T, D>(t, 7)?;
+        // exp'(x) = out (output-based).
+        let out_capture = out.clone();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            binary_op::<T, D>(grad_out, &out_capture, 2, "exp_grad").expect("exp backward")
+        });
+        Ok(out)
     }
     /// Auto-generated documentation for log.
     fn log<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        unary_op::<T, D>(t, 8)
+        let out = unary_op::<T, D>(t, 8)?;
+        // log'(x) = 1/x (input-based, NOT output-based).
+        let t_capture = t.clone();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            binary_op::<T, D>(grad_out, &t_capture, 3, "log_grad").expect("log backward")
+        });
+        Ok(out)
     }
     /// Auto-generated documentation for swish.
     fn swish<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        unary_op::<T, D>(t, 9)
+        let out = unary_op::<T, D>(t, 9)?;
+        // swish(x) = x*sigmoid(x); swish'(x) = out + sigmoid(x)*(1-out).
+        let t_capture = t.clone();
+        let out_capture = out.clone();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            let sig = unary_op::<T, D>(&t_capture, 3).expect("sigmoid(x) (swish backward)");
+            let neg_out = unary_op::<T, D>(&out_capture, 5).expect("neg (swish backward)");
+            let one_minus_out =
+                scalar_op::<T, D>(&neg_out, 1.0, 0).expect("1 - out (swish backward)");
+            let sig_term = binary_op::<T, D>(&sig, &one_minus_out, 2, "swish_grad_sig_term")
+                .expect("sigmoid(x)*(1-out) (swish backward)");
+            let deriv = binary_op::<T, D>(&out_capture, &sig_term, 0, "swish_grad_deriv")
+                .expect("swish backward deriv");
+            binary_op::<T, D>(grad_out, &deriv, 2, "swish_grad").expect("swish backward")
+        });
+        Ok(out)
     }
 
     /// Auto-generated documentation for softmax.
@@ -416,6 +610,10 @@ impl<T: DType, D: Device> FloatOps<Self> for WgpuBackend<T, D> {
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as Backend>::Storage<K>> {
+        // NOT tape-wired yet: this is a single monolithic GPU kernel (not
+        // composed from log_softmax like the CPU backend), so its backward
+        // needs its own dedicated implementation — see ROADMAP.md C-3
+        // follow-up.
         let shape = &t.shape;
         // Flatten to [batch, n] where n = shape[dim..] product
         let n: usize = shape[dim..].iter().product();
@@ -443,10 +641,10 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackend<T, D> {
                 msg: "matmul requires at least 2D inputs".to_string(),
             });
         }
-        
+
         let lhs_rank = lhs.shape.len();
         let rhs_rank = rhs.shape.len();
-        
+
         let m = lhs.shape[lhs_rank - 2] as u32;
         let k = lhs.shape[lhs_rank - 1] as u32;
         let n = rhs.shape[rhs_rank - 1] as u32;
@@ -462,10 +660,14 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackend<T, D> {
 
         // Compute batch dims
         let mut lhs_batch = 1;
-        for i in 0..lhs_rank - 2 { lhs_batch *= lhs.shape[i]; }
+        for i in 0..lhs_rank - 2 {
+            lhs_batch *= lhs.shape[i];
+        }
         let mut rhs_batch = 1;
-        for i in 0..rhs_rank - 2 { rhs_batch *= rhs.shape[i]; }
-        
+        for i in 0..rhs_rank - 2 {
+            rhs_batch *= rhs.shape[i];
+        }
+
         let batch = core::cmp::max(lhs_batch, rhs_batch);
         if lhs_batch != 1 && rhs_batch != 1 && lhs_batch != rhs_batch {
             return Err(Error::ShapeMismatch {
@@ -475,13 +677,19 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackend<T, D> {
                 msg: "matmul batch dims incompatible".to_string(),
             });
         }
-        
+
         let lhs_stride_b = if lhs_batch == 1 { 0 } else { m * k };
         let rhs_stride_b = if rhs_batch == 1 { 0 } else { k * n };
 
         // Output shape matches the larger batched input
-        let mut out_shape = if lhs_batch > 1 { lhs.shape[..lhs_rank - 2].to_vec() } else { rhs.shape[..rhs_rank - 2].to_vec() };
-        if out_shape.is_empty() && batch > 1 { out_shape.push(batch); }
+        let mut out_shape = if lhs_batch > 1 {
+            lhs.shape[..lhs_rank - 2].to_vec()
+        } else {
+            rhs.shape[..rhs_rank - 2].to_vec()
+        };
+        if out_shape.is_empty() && batch > 1 {
+            out_shape.push(batch);
+        }
         out_shape.push(m as usize);
         out_shape.push(n as usize);
 
@@ -489,33 +697,36 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackend<T, D> {
         let shader = include_str!("shaders/matmul.wgsl");
         let pipeline = crate::wgpu::pipeline::get_or_create_pipeline("matmul", shader, "main");
 
-        let out_buf = WgpuBuffer::new_zeros((batch as u32 * m * n) as usize * core::mem::size_of::<f32>());
+        let out_buf =
+            WgpuBuffer::new_zeros((batch as u32 * m * n) as usize * core::mem::size_of::<f32>());
         let shape_data = [m, k, n, batch as u32, lhs_stride_b, rhs_stride_b];
         let shape_buf = WgpuBuffer::from_slice(&shape_data);
 
         let bgl = pipeline.get_bind_group_layout(0);
-        let bg = state.device.create_bind_group(&::wgpu::BindGroupDescriptor {
-            label: Some("Matmul BG"),
-            layout: &bgl,
-            entries: &[
-                ::wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: lhs.buffer.buffer.as_entire_binding(),
-                },
-                ::wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: rhs.buffer.buffer.as_entire_binding(),
-                },
-                ::wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: out_buf.buffer.as_entire_binding(),
-                },
-                ::wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: shape_buf.buffer.as_entire_binding(),
-                },
-            ],
-        });
+        let bg = state
+            .device
+            .create_bind_group(&::wgpu::BindGroupDescriptor {
+                label: Some("Matmul BG"),
+                layout: &bgl,
+                entries: &[
+                    ::wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: lhs.buffer.buffer.as_entire_binding(),
+                    },
+                    ::wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: rhs.buffer.buffer.as_entire_binding(),
+                    },
+                    ::wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: out_buf.buffer.as_entire_binding(),
+                    },
+                    ::wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: shape_buf.buffer.as_entire_binding(),
+                    },
+                ],
+            });
 
         let mut encoder = state
             .device
@@ -561,19 +772,16 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackend<T, D> {
         let shape = &t.shape;
         let mut new_shape = shape.clone();
         new_shape.swap(dim1, dim2);
-        
+
         let out_n = num_elements(&new_shape) as u32;
         let out_buf = WgpuBuffer::new_zeros(t.buffer.size);
-        
+
         let mut aux = (0..shape.len()).collect::<Vec<_>>();
         aux.swap(dim1, dim2);
 
         let params = dispatch::prepare_shape_params(
             2, // op_mode = transpose
-            out_n,
-            &new_shape,
-            shape,
-            &aux,
+            out_n, &new_shape, shape, &aux,
         );
 
         dispatch::dispatch_shape(&t.buffer, &out_buf, &params);
@@ -616,19 +824,16 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackend<T, D> {
         let shape = &t.shape;
         let mut new_shape = shape.clone();
         new_shape[dim] = len;
-        
+
         let out_n = num_elements(&new_shape) as u32;
         let out_buf = WgpuBuffer::new_zeros(out_n as usize * 4);
-        
+
         let mut aux = vec![0usize; shape.len()];
         aux[dim] = start;
 
         let params = dispatch::prepare_shape_params(
             0, // op_mode = slice
-            out_n,
-            &new_shape,
-            shape,
-            &aux,
+            out_n, &new_shape, shape, &aux,
         );
 
         dispatch::dispatch_shape(&t.buffer, &out_buf, &params);
@@ -641,7 +846,7 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackend<T, D> {
     ) -> Result<<Self as Backend>::Storage<K>> {
         let out_n = num_elements(shape) as u32;
         let out_buf = WgpuBuffer::new_zeros(out_n as usize * 4);
-        
+
         let params = dispatch::prepare_shape_params(
             3, // op_mode = broadcast
             out_n,
@@ -680,10 +885,7 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackend<T, D> {
 
         let params = dispatch::prepare_shape_params(
             0, // op_mode = slice
-            out_n,
-            &new_shape,
-            shape,
-            &aux,
+            out_n, &new_shape, shape, &aux,
         );
 
         dispatch::dispatch_shape(&t.buffer, &out_buf, &params);
@@ -739,13 +941,10 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackend<T, D> {
 
             let params = dispatch::prepare_shape_params(
                 1, // op_mode = paste
-                in_n,
-                &out_shape,
-                &t.shape,
-                &aux,
+                in_n, &out_shape, &t.shape, &aux,
             );
             dispatch::dispatch_shape(&t.buffer, &out_buf, &params);
-            
+
             current_offset += t.shape[dim];
         }
         Ok(WgpuStorage::new(out_buf, out_shape))
@@ -812,7 +1011,7 @@ fn reduce_dim_to_storage(t: &WgpuStorage, dim: usize, mode: u32, keepdim: bool) 
     for d in (dim + 1..shape.len()).rev() {
         inner_stride *= shape[d];
     }
-    
+
     // mode mapping: CPU reduce_dim mode (0=sum, 1=max, 2=min) maps directly
     // to my shader ops (0=sum, 2=max, 3=min).
     let op_mode = match mode {
@@ -1029,7 +1228,10 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackend<T, D> {
         k: usize,
         dim: usize,
         largest: bool,
-    ) -> Result<(<Self as Backend>::Storage<K>, <Self as Backend>::Storage<KInt>)> {
+    ) -> Result<(
+        <Self as Backend>::Storage<K>,
+        <Self as Backend>::Storage<KInt>,
+    )> {
         let shape = &t.shape;
         if dim >= shape.len() {
             return Err(Error::ShapeMismatch {
@@ -1072,9 +1274,11 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackend<T, D> {
             }
 
             if largest {
-                slice_vals.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(core::cmp::Ordering::Equal));
+                slice_vals
+                    .sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(core::cmp::Ordering::Equal));
             } else {
-                slice_vals.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(core::cmp::Ordering::Equal));
+                slice_vals
+                    .sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(core::cmp::Ordering::Equal));
             }
 
             let mut out_coords = coords.clone();
@@ -1142,9 +1346,11 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackend<T, D> {
             }
 
             if descending {
-                slice_vals.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(core::cmp::Ordering::Equal));
+                slice_vals
+                    .sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(core::cmp::Ordering::Equal));
             } else {
-                slice_vals.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(core::cmp::Ordering::Equal));
+                slice_vals
+                    .sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(core::cmp::Ordering::Equal));
             }
 
             let mut out_coords = coords.clone();
@@ -1177,7 +1383,7 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
         let vocab_size = weight.shape[0];
         let seq_len = num_elements(&indices.shape);
         let out_buf = WgpuBuffer::new_zeros(seq_len * embed_dim * 4);
-        
+
         dispatch::dispatch_embedding(
             &indices.buffer,
             &weight.buffer,
@@ -1247,7 +1453,11 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
 
         let has_gamma = if weight.is_some() { 1.0 } else { 0.0 };
         let has_beta = if bias.is_some() { 1.0 } else { 0.0 };
-        let has_rm_rv = if running_mean.is_some() && running_var.is_some() { 1.0 } else { 0.0 };
+        let has_rm_rv = if running_mean.is_some() && running_var.is_some() {
+            1.0
+        } else {
+            0.0
+        };
 
         dispatch::dispatch_batch_norm(
             &t.buffer,
@@ -1279,11 +1489,9 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
         let out_buf = WgpuBuffer::new_zeros(n * c * oh * ow * 4);
 
         dispatch::dispatch_pool2d(
-            &t.buffer, &out_buf,
-            0, // mode 0 = adaptive_avg
-            n as u32, c as u32, h as u32, w as u32,
-            oh as u32, ow as u32,
-            0, 0, 0, 0, 0, 0, 0, 0 // unused kernel params
+            &t.buffer, &out_buf, 0, // mode 0 = adaptive_avg
+            n as u32, c as u32, h as u32, w as u32, oh as u32, ow as u32, 0, 0, 0, 0, 0, 0, 0,
+            0, // unused kernel params
         );
 
         Ok(WgpuStorage::new(out_buf, vec![n, c, oh, ow]))
@@ -1303,18 +1511,13 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
         let (ph, pw) = padding;
         let oh = (h + 2 * ph - kh) / sh + 1;
         let ow = (w + 2 * pw - kw) / sw + 1;
-        
+
         let out_buf = WgpuBuffer::new_zeros(n * c * oh * ow * 4);
 
         dispatch::dispatch_pool2d(
-            &t.buffer, &out_buf,
-            1, // mode 1 = avg
-            n as u32, c as u32, h as u32, w as u32,
-            oh as u32, ow as u32,
-            kh as u32, kw as u32,
-            sh as u32, sw as u32,
-            ph as u32, pw as u32,
-            1, 1 // dilation = 1
+            &t.buffer, &out_buf, 1, // mode 1 = avg
+            n as u32, c as u32, h as u32, w as u32, oh as u32, ow as u32, kh as u32, kw as u32,
+            sh as u32, sw as u32, ph as u32, pw as u32, 1, 1, // dilation = 1
         );
 
         Ok(WgpuStorage::new(out_buf, vec![n, c, oh, ow]))
@@ -1338,18 +1541,13 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
         let eff_kw = dw * (kw - 1) + 1;
         let oh = (h + 2 * ph - eff_kh) / sh + 1;
         let ow = (w + 2 * pw - eff_kw) / sw + 1;
-        
+
         let out_buf = WgpuBuffer::new_zeros(n * c * oh * ow * 4);
 
         dispatch::dispatch_pool2d(
-            &t.buffer, &out_buf,
-            2, // mode 2 = max
-            n as u32, c as u32, h as u32, w as u32,
-            oh as u32, ow as u32,
-            kh as u32, kw as u32,
-            sh as u32, sw as u32,
-            ph as u32, pw as u32,
-            dh as u32, dw as u32
+            &t.buffer, &out_buf, 2, // mode 2 = max
+            n as u32, c as u32, h as u32, w as u32, oh as u32, ow as u32, kh as u32, kw as u32,
+            sh as u32, sw as u32, ph as u32, pw as u32, dh as u32, dw as u32,
         );
 
         Ok(WgpuStorage::new(out_buf, vec![n, c, oh, ow]))
@@ -1462,10 +1660,19 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
 
             // Apply bias on GPU (if present)
             if let Some(b_storage) = bias {
-                dispatch::dispatch_bias_add(&out_storage.buffer, &b_storage.buffer, batch as u32, c_out as u32, col_spatial as u32);
+                dispatch::dispatch_bias_add(
+                    &out_storage.buffer,
+                    &b_storage.buffer,
+                    batch as u32,
+                    c_out as u32,
+                    col_spatial as u32,
+                );
             }
 
-            return Ok(WgpuStorage::new(out_storage.buffer, vec![batch, c_out, h_out, w_out]));
+            return Ok(WgpuStorage::new(
+                out_storage.buffer,
+                vec![batch, c_out, h_out, w_out],
+            ));
         }
 
         // ── Direct convolution per batch for groups > 1 ──
@@ -1488,12 +1695,18 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
             dilation as u32,
             groups as u32,
         ];
-        
+
         dispatch::dispatch_conv2d_direct(&t.buffer, &weight.buffer, &out_buf, &conv_params);
 
         if let Some(b_storage) = bias {
             let spatial = h_out * w_out;
-            dispatch::dispatch_bias_add(&out_buf, &b_storage.buffer, batch as u32, c_out as u32, spatial as u32);
+            dispatch::dispatch_bias_add(
+                &out_buf,
+                &b_storage.buffer,
+                batch as u32,
+                c_out as u32,
+                spatial as u32,
+            );
         }
 
         Ok(WgpuStorage::new(out_buf, vec![batch, c_out, h_out, w_out]))
@@ -1512,7 +1725,7 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
     ) -> Result<<Self as Backend>::Storage<K>> {
         let shape = &t.shape; // [N, C_in, H_in, W_in]
         let ws = &weight.shape; // [C_in, C_out/groups, kH, kW]
-        
+
         if shape.len() != 4 || ws.len() != 4 {
             return Err(Error::ShapeMismatch {
                 op: "conv_transpose2d",
@@ -1521,17 +1734,17 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
                 msg: "expected 4D input and weight".into(),
             });
         }
-        
+
         let batch = shape[0];
         let c_in = shape[1];
         let h_in = shape[2];
         let w_in = shape[3];
-        
+
         let w_c_in = ws[0];
         let c_out_per_group = ws[1];
         let kh = ws[2];
         let kw = ws[3];
-        
+
         let c_out = c_out_per_group * groups;
         assert_eq!(c_in, w_c_in, "Input channels must match weight in_channels");
 
@@ -1541,7 +1754,7 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
         let w_out = w_out.saturating_sub(2 * padding);
 
         let out_buf = WgpuBuffer::new_zeros(batch * c_out * h_out * w_out * 4);
-        
+
         let params: [u32; 16] = [
             batch as u32,
             c_in as u32,
@@ -1560,15 +1773,21 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
             dilation as u32,
             groups as u32,
         ];
-        
+
         dispatch::dispatch_conv_transpose2d(&t.buffer, &weight.buffer, &out_buf, &params);
         let out_storage = WgpuStorage::new(out_buf.clone(), vec![batch, c_out, h_out, w_out]);
-        
+
         if let Some(b_storage) = bias {
             let spatial = h_out * w_out;
-            dispatch::dispatch_bias_add(&out_buf, &b_storage.buffer, batch as u32, c_out as u32, spatial as u32);
+            dispatch::dispatch_bias_add(
+                &out_buf,
+                &b_storage.buffer,
+                batch as u32,
+                c_out as u32,
+                spatial as u32,
+            );
         }
-        
+
         Ok(out_storage)
     }
 }
@@ -1586,7 +1805,7 @@ impl<T: DType, D: Device> LossOps<Self> for WgpuBackend<T, D> {
         // Compute softmax then nll
         let softmax = <Self as FloatOps<Self>>::softmax::<K>(pred, pred.shape.len() - 1)?;
         let log_sm = <Self as FloatOps<Self>>::log::<K>(&softmax)?;
-        
+
         let batch = num_elements(&target.shape);
         let n_classes = pred.shape.last().copied().unwrap_or(1);
 
@@ -1600,24 +1819,28 @@ impl<T: DType, D: Device> LossOps<Self> for WgpuBackend<T, D> {
         );
 
         match reduction {
-            kindle_core::prelude::Reduction::None => {
-                Ok(WgpuStorage::new(nll_buf, vec![batch]))
-            }
+            kindle_core::prelude::Reduction::None => Ok(WgpuStorage::new(nll_buf, vec![batch])),
             kindle_core::prelude::Reduction::Mean => {
                 let out_buf = WgpuBuffer::new_zeros(4);
                 dispatch::dispatch_reduce_dim(
-                    &nll_buf, &out_buf,
+                    &nll_buf,
+                    &out_buf,
                     1, // mean
-                    batch as u32, 1, 1
+                    batch as u32,
+                    1,
+                    1,
                 );
                 Ok(WgpuStorage::new(out_buf, vec![1]))
             }
             kindle_core::prelude::Reduction::Sum => {
                 let out_buf = WgpuBuffer::new_zeros(4);
                 dispatch::dispatch_reduce_dim(
-                    &nll_buf, &out_buf,
+                    &nll_buf,
+                    &out_buf,
                     0, // sum
-                    batch as u32, 1, 1
+                    batch as u32,
+                    1,
+                    1,
                 );
                 Ok(WgpuStorage::new(out_buf, vec![1]))
             }
