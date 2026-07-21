@@ -26,13 +26,23 @@
 > (pre-existing, not introduced by this pass) — see Repository Hygiene below.
 >
 > **2026-07-21 second follow-up: C-3 partially fixed.** WGPU's autograd tape is
-> now wired for `NumericOps` (add/sub/mul/div), scalar ops, and 9 unary
-> activations (relu/step/neg/abs/sqrt/exp/log/tanh/sigmoid/swish), with 16 new
-> gradient tests run end-to-end against a real (software) WGPU adapter in this
-> environment. `matmul`, conv/pooling/norm layers, embedding, reductions,
-> cross-entropy, and quantization are **still unwired on WGPU** — see C-3's
-> section for the exact remaining list. C-4 (CUDA autograd) is untouched and
-> fully open.
+> now wired for `NumericOps` (add/sub/mul/div), `matmul`, scalar ops, and 9
+> unary activations (relu/step/neg/abs/sqrt/exp/log/tanh/sigmoid/swish), with
+> 18 new gradient tests run end-to-end against a real (software) WGPU adapter
+> in this environment. `layer_norm`/`batch_norm`/`softmax` are single
+> monolithic GPU kernels with no decomposed primitives to compose a backward
+> from (would need new WGSL kernels — deliberately not attempted blind); conv,
+> pooling, embedding, reductions, cross-entropy, and quantization are also
+> **still unwired on WGPU** — see C-3's section for the exact remaining list.
+>
+> **2026-07-21 third follow-up: C-4 partially fixed, and rescoped.** CUDA's
+> `add`/`sub`/`mul`/`div` are now gradient-wired the same way, but fixing this
+> surfaced that `CudaBackend` implements almost nothing else — `CreationOps`,
+> `FloatOps`, `ReductionOps`, `ModuleOps`, `LossOps`, `QuantizedOps`,
+> `OptimizerOps` are all empty impl blocks falling through to `Err`. This is a
+> bigger, more foundational gap than "autograd disconnected" — see C-4's
+> section. Unlike the WGPU fix, this environment has no CUDA hardware, so the
+> CUDA changes are compile-verified only, not runtime-verified.
 
 ---
 
@@ -42,7 +52,7 @@
 |-------|-------|--------|
 | `kindle-core` | Passing | ✅ C-6/C-7 fixed; C-3 (autograd design gaps) still open |
 | `kindle-backends` (cpu) | Passing, +2 new regression tests | ✅ C-2 (f32 downcast) and C-5 (overflow) fixed |
-| `kindle-backends` (cuda) | Compiles (no GPU in this env to run it) | ✅ C-1 (panic-on-first-call) fixed; ❌ C-4 (no autograd) still open |
+| `kindle-backends` (cuda) | Compiles (no GPU in this env to run it) | ✅ C-1 fixed; ⚠ C-4: add/sub/mul/div now gradient-wired (unverified on real hardware); everything else (`CreationOps`/`FloatOps`/norm/embedding/quant/reduce/loss) is still an empty trait impl falling to `Err` |
 | `kindle-backends` (wgpu) | Passing, +16 new gradient tests | ⚠ C-3: elementwise/activation autograd fixed; matmul/conv/norm/reductions/etc. still ungradiented |
 | `kindle-backends` (legacy: candle/ndarray/burn) | Partial | ⚠ Ndarray ~61% stubbed, Burn permanently dead code |
 | `kindle-macros` | Passing | ✅ Solid — hygiene good, doc examples present |
@@ -141,17 +151,56 @@ covers elementwise arithmetic and common activations only. The remaining ops
 need the same treatment; prioritize `matmul` and `layer_norm`/`batch_norm`
 next since those are on the critical path for any real network.
 
-### C-4 — CUDA autograd is fully disconnected
-`crates/kindle-backends/src/cuda/backend.rs`: `type Grads = ()`, `backward()`
-unconditionally returns `Ok(())`, `get_grad()` always returns `Ok(None)`.
-`cuda/tape.rs`'s `push`/`backward`/`unbroadcast`/`sum_dim_*` have zero callers
-anywhere in `cuda/`. Even more disconnected than the WGPU case (C-3) — there
-isn't even a partial wiring attempt.
-**Fix:** same shape as C-3's fix, applied to the CUDA backend. Should probably
-be done as one shared piece of work since the tape logic is duplicated three
-times (cpu/cuda/wgpu) with only the CPU copy actually wired up — worth asking
-whether tape/autograd logic can be lifted into `kindle-core` and made backend-
-generic instead of re-implemented per backend.
+### C-4 — CUDA autograd is fully disconnected — ⚠ PARTIALLY FIXED (2026-07-21), and the backend itself is far less complete than C-4 originally described
+`crates/kindle-backends/src/cuda/backend.rs`: `type Grads` was `()`, `backward()`
+unconditionally returned `Ok(())`, `get_grad()` always returned `Ok(None)`.
+`cuda/tape.rs`'s `push`/`backward`/`unbroadcast`/`sum_dim_*` had zero callers
+anywhere in `cuda/`.
+
+**Correction, found while fixing this:** the original C-4 write-up undersold
+the actual gap. `CudaBackend`'s trait impls in `cuda/backend.rs` were, before
+this fix, almost entirely **empty blocks relying on `Backend` trait defaults**
+(which mostly return `Err(UnsupportedBackendOperation)`):
+`impl FloatOps<Self> for CudaBackend<T, D> {}`,
+`impl CreationOps<Self> for CudaBackend<T, D> {}`,
+`impl ReductionOps<Self> for CudaBackend<T, D> {}`,
+`impl QuantizedOps<Self> for CudaBackend<T, D> {}`,
+`impl OptimizerOps<Self> for CudaBackend<T, D> {}`,
+`impl ModuleOps<Self> for CudaBackend<T, D> {}`,
+`impl LossOps<Self> for CudaBackend<T, D> {}` — every one of these is still an
+empty `{}` today. Only `TensorOps::concat` and `NumericOps` (`add`/`sub`/`mul`/`div`)
+were actually implemented. This means **you cannot even create a CUDA tensor**
+via the standard `zeros`/`ones`/`rand`/`randn` API (`CreationOps` has no
+overrides, so every call falls through to the default `Err`) — despite the
+extensive, mostly-working `cuda/ops/{norm,embedding,quant,reduce,loss}.rs`
+dispatch functions existing and (since C-1) being individually correct: they
+are **dead code**, never called from anywhere in `cuda/backend.rs`. The
+"autograd disconnected" framing undersold this — the more accurate framing is
+"the CUDA backend implements a small elementwise-arithmetic slice of the full
+`Backend` trait surface, and everything outside that slice doesn't exist yet,"
+not "everything exists but doesn't compute gradients."
+
+**Fixed:** wired `tape::push` into the 4 `NumericOps` methods that actually
+exist (`add`/`sub`/`mul`/`div`), mirroring C-3's WGPU fix exactly (same math,
+same `unbroadcast` helper, already present unused in `cuda/tape.rs`). Wired
+`Backend::backward`/`backward_with_nan_check`/`get_grad` to the real
+`cuda::tape` functions instead of the `()`/`Ok(None)` placeholders, and
+changed `type Grads` from `()` to `crate::cuda::tape::CudaGrads`. Verified via
+`cargo check`/`cargo test --no-run -p kindle-backends --features cuda`
+(compiles clean, test binaries build) — **not runtime-verified**, unlike C-3's
+WGPU fix: this environment has no CUDA hardware/toolkit, so unlike WGPU (which
+ran against a real software adapter), these 4 ops' gradients have not been
+executed even once. Treat this as "should be correct by construction, mirrors
+an already-verified pattern" rather than "verified" until someone runs it on
+real hardware.
+
+**Deliberately NOT attempted in this pass:** building out `CreationOps` (so
+tensors can even be created), `FloatOps` (activations), or wiring up the
+existing `norm`/`embedding`/`quant`/`reduce`/`loss` dispatch code into the
+trait at all. Doing that safely requires either CUDA hardware to verify
+against, or extreme care given this exact audit's whole finding is "silently
+wrong numbers are worse than an honest `Err`." Do this as a dedicated,
+hardware-verified follow-up, not blind.
 
 ### C-5 — Unchecked shape-multiplication overflow feeds allocation and stride math — ✅ FIXED (2026-07-21)
 `crates/kindle-backends/src/cpu/stride.rs:17-19` (`contiguous_strides`, plain
@@ -548,7 +597,7 @@ is stable.
 2. ~~**C-2** Fix CPU elementwise f32 downcast (dtype correctness)~~ — ✅ fixed 2026-07-21, regression-tested
 3. ~~**C-6 / C-7** Fix dynamic broadcast validation, then the operator-overload panics it was masking~~ — ✅ fixed 2026-07-21
 4. ~~**C-5** Checked shape multiplication (overflow → OOB path)~~ — ✅ fixed 2026-07-21
-5. **C-3** (partial ✅ 2026-07-21: elementwise + activations wired, 16 tests) / **C-4** (still fully open) — finish wiring WGPU's matmul/conv/norm/pooling/embedding/reductions/loss/quant ops, then do CUDA autograd from scratch — **next priority**
+5. **C-3** (partial ✅: elementwise + matmul + activations wired on WGPU, 18 tests, hardware-verified) / **C-4** (partial ✅: same 4 ops wired on CUDA, compile-verified only — no hardware in this env) — remaining: WGPU conv/norm/pooling/embedding/reductions/loss/quant; CUDA needs `CreationOps`/`FloatOps` built from scratch (currently empty) before any of that can even run — **next priority**
 6. Add cross-backend gradient-parity tests
 7. Close B-3 for real: `cuda`/`cpu` `pub(crate)` audit + `kindle-core` `TRACING_GRAPH` leak
 8. Audit `kindle` facade wildcard re-exports; fix `DefaultBackend = ()` trap; remove dead `candle` cfg

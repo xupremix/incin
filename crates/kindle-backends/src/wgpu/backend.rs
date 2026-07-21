@@ -743,7 +743,44 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackend<T, D> {
             cpass.dispatch_workgroups((n + 15) / 16, (m + 15) / 16, batch as u32);
         }
         state.queue.submit(core::iter::once(encoder.finish()));
-        Ok(WgpuStorage::new(out_buf, out_shape))
+        let out = WgpuStorage::new(out_buf, out_shape);
+
+        // Backward: grad_lhs = grad_out @ rhs^T, grad_rhs = lhs^T @ grad_out,
+        // composed from Self::matmul + Self::transpose recursion (mirrors the
+        // CPU backend's batched_matmul_impl exactly) rather than a bespoke
+        // kernel. Self::matmul already broadcasts a batch=1 operand against
+        // the other's batch shape internally (lhs_stride_b/rhs_stride_b=0
+        // above), so `grad_out @ rhs^T`/`lhs^T @ grad_out` naturally come out
+        // at the OUTPUT batch shape; `unbroadcast` then reduces back down to
+        // each operand's own original (possibly batch=1) shape.
+        let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
+        let (lhs_shape, rhs_shape) = (lhs.shape.clone(), rhs.shape.clone());
+        let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
+        crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![lhs_id, rhs_id],
+            backward: Box::new(move |grad_out: &WgpuStorage| {
+                let rhs_rank = rhs_capture.shape.len();
+                let rhs_t = Self::transpose::<K>(&rhs_capture, rhs_rank - 2, rhs_rank - 1)
+                    .expect("rhs^T (matmul backward)");
+                let grad_lhs_full =
+                    Self::matmul::<K>(grad_out, &rhs_t).expect("grad_out @ rhs^T (matmul backward)");
+
+                let lhs_rank = lhs_capture.shape.len();
+                let lhs_t = Self::transpose::<K>(&lhs_capture, lhs_rank - 2, lhs_rank - 1)
+                    .expect("lhs^T (matmul backward)");
+                let grad_rhs_full =
+                    Self::matmul::<K>(&lhs_t, grad_out).expect("lhs^T @ grad_out (matmul backward)");
+
+                vec![
+                    crate::wgpu::tape::unbroadcast(&grad_lhs_full, &lhs_shape)
+                        .expect("unbroadcast lhs (matmul backward)"),
+                    crate::wgpu::tape::unbroadcast(&grad_rhs_full, &rhs_shape)
+                        .expect("unbroadcast rhs (matmul backward)"),
+                ]
+            }),
+        });
+        Ok(out)
     }
 
     /// Auto-generated documentation for reshape.
@@ -1403,6 +1440,10 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
         bias: Option<&<Self as Backend>::Storage<K>>,
         eps: f32,
     ) -> Result<<Self as Backend>::Storage<K>> {
+        // NOT tape-wired yet: this is a single monolithic GPU kernel (mean,
+        // variance, normalize, scale, shift all fused in one dispatch), with
+        // no decomposed mean/var primitive to compose a backward from and no
+        // dedicated backward kernel — see ROADMAP.md C-3 follow-up.
         let shape = &t.shape;
         let norm_size = shape.last().copied().unwrap_or(1);
         let batch = num_elements(shape) / norm_size;
@@ -1438,6 +1479,8 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
         eps: f32,
         _momentum: f64,
     ) -> Result<<Self as Backend>::Storage<K>> {
+        // NOT tape-wired yet — same reason as layer_norm above; see
+        // ROADMAP.md C-3 follow-up.
         let shape = &t.shape; // [N, C, H, W] or [N, C]
         let n_total = num_elements(shape);
         let c = shape.get(1).copied().unwrap_or(1);

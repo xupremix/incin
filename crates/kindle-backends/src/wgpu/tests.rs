@@ -864,6 +864,59 @@ mod tests {
     }
 
     #[test]
+    fn matmul_backward_matches_hand_computed_gradients() {
+        // Same fixture and hand-derived expected values as the CPU backend's
+        // matmul_backward_matches_hand_computed_gradients test.
+        let lhs = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
+        let rhs = storage(
+            vec![
+                7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0,
+            ],
+            vec![3, 4],
+        );
+        let out = <B as TensorOps<B>>::matmul::<f32>(&lhs, &rhs).unwrap();
+        let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+        let lhs_grad = grads.grads.get(&lhs.id).expect("lhs should have a gradient");
+        let rhs_grad = grads.grads.get(&rhs.id).expect("rhs should have a gradient");
+
+        assert_eq!(lhs_grad.shape, vec![2, 3]);
+        assert!(vec_approx_eq(
+            &readback(lhs_grad),
+            &[34.0, 50.0, 66.0, 34.0, 50.0, 66.0],
+            1e-3
+        ));
+        assert_eq!(rhs_grad.shape, vec![3, 4]);
+        assert!(vec_approx_eq(
+            &readback(rhs_grad),
+            &[5.0, 5.0, 5.0, 5.0, 7.0, 7.0, 7.0, 7.0, 9.0, 9.0, 9.0, 9.0],
+            1e-3
+        ));
+    }
+
+    #[test]
+    fn matmul_backward_unbroadcasts_batch1_operand_to_its_own_shape() {
+        // lhs is a single (unbatched) [2,2] matrix broadcast against a
+        // batched rhs [2,2,2] — proves the batch-broadcast path correctly
+        // sums grad_lhs back down over the batch axis instead of returning
+        // a [2,2,2]-shaped gradient for a [2,2]-shaped parameter.
+        let lhs = storage(vec![1.0, 0.0, 0.0, 1.0], vec![2, 2]); // identity
+        let rhs = storage(
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0],
+            vec![2, 2, 2],
+        );
+        let out = <B as TensorOps<B>>::matmul::<f32>(&lhs, &rhs).unwrap();
+        assert_eq!(out.shape, vec![2, 2, 2]);
+
+        let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+        let lhs_grad = grads.grads.get(&lhs.id).expect("lhs should have a gradient");
+        assert_eq!(
+            lhs_grad.shape,
+            vec![2, 2],
+            "grad for the batch=1 (unbatched) operand must be unbroadcast back to its own shape"
+        );
+    }
+
+    #[test]
     fn chained_ops_accumulate_gradient_through_multiple_hops() {
         // loss = relu(a*b + a) — proves multi-op composition (mul, add,
         // relu) all correctly record and walk the tape together, and that
