@@ -134,7 +134,7 @@ mod tests {
     use super::*;
 
     #[test]
-    /// Core abstraction for `scalar_event_schema_version_round_trips_through_json` within the Kindle framework.
+    /// Scalar event schema version round trips through json.
     fn scalar_event_schema_version_round_trips_through_json() {
         let event = ScalarEvent {
             schema_version: CURRENT_SCHEMA_VERSION,
@@ -154,7 +154,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `unrecognized_event_type_deserializes_to_unknown` within the Kindle framework.
+    /// Unrecognized event type deserializes to unknown.
     fn unrecognized_event_type_deserializes_to_unknown() {
         let future_event_json = r#"{"type":"SomeFutureEventType","schema_version":99,"foo":"bar"}"#;
 

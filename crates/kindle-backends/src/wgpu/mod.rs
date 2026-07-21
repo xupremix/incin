@@ -21,5 +21,5 @@ pub(crate) mod tape;
 //   - `WgpuGrads` as `Backend::Grads`
 pub use backend::{WgpuBackend, WgpuGrads, WgpuVar};
 
-/// Core abstraction for `tests` within the Kindle framework..
+/// `tests`.
 mod tests;

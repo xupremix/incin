@@ -10,7 +10,7 @@ use kindle_viz::transport_reader::FileTransportReader;
 use serde::Deserialize;
 
 #[derive(Deserialize, Default)]
-/// Core abstraction for `Config` within the Kindle framework.
+/// Config.
 struct Config {
     keymap: Option<String>,
 }
@@ -20,7 +20,7 @@ struct Config {
     name = "kindle-viz",
     about = "Terminal UI for observing live Kindle training runs"
 )]
-/// Core abstraction for `Cli` within the Kindle framework.
+/// Cli.
 struct Cli {
     /// Run id to attach to, resolved against kindle-telemetry's default
     /// (XDG) run directory.

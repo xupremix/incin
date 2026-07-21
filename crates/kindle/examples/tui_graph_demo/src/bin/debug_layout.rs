@@ -7,19 +7,19 @@ use kindle_core::prelude::{
     TracingBackend, extract_graph, tracing_mark_input, tracing_mark_output,
 };
 
-/// Core abstraction for `NB` within the Kindle framework.
+/// Nb.
 type NB = CpuBackend<f32, Cpu>;
-/// Core abstraction for `TB` within the Kindle framework.
+/// Tb.
 type TB = TracingBackend<NB>;
 
 #[module]
-/// Core abstraction for `SimpleMlp` within the Kindle framework.
+/// Simple mlp.
 pub struct SimpleMlp<B: Backend> {
-    /// Core abstraction for `fc1` within the Kindle framework.
+    /// Fc1.
     pub fc1: Linear<Dyn, B>,
-    /// Core abstraction for `fc2` within the Kindle framework.
+    /// Fc2.
     pub fc2: Linear<Dyn, B>,
-    /// Core abstraction for `fc3` within the Kindle framework.
+    /// Fc3.
     pub fc3: Linear<Dyn, B>,
 }
 
@@ -28,7 +28,7 @@ where
     B::FloatElem: ConstDType,
     B::Device: ConstDevice,
 {
-    /// Core abstraction for `new` within the Kindle framework.
+    /// New.
     pub fn new() -> Result<Self> {
         Ok(Self {
             fc1: Linear::<Dyn, B>::new_with((10, 32))?,
@@ -37,7 +37,7 @@ where
         })
     }
 
-    /// Core abstraction for `forward` within the Kindle framework.
+    /// Forward.
     pub fn forward(&self, x: Tensor<Dyn, B>) -> Result<Tensor<Dyn, B>> {
         let x = self.fc1.forward(x)?.relu()?;
         let x = self.fc2.forward(x)?.relu()?;
@@ -45,7 +45,7 @@ where
     }
 }
 
-/// Core abstraction for `project` within the Kindle framework.
+/// Project.
 fn project(
     x: f64,
     y: f64,

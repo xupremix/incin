@@ -277,7 +277,7 @@ impl<
             _grad: self._grad,
         })
     }
-    /// Core abstraction for `try_reshape` within the Kindle framework..
+    /// `try_reshape`.
     pub fn try_reshape<S2>(&self, args: S2::Arg) -> Result<Tensor<S2, B, K, D, G>>
     where
         S2: Shape + DynShape,
@@ -329,7 +329,7 @@ impl<
         ))
     }
 
-    /// Core abstraction for `to_dtype` within the Kindle framework..
+    /// `to_dtype`.
     pub fn to_dtype<T2: crate::tensor::dtype::DType<Arg = ()>>(
         &self,
     ) -> Result<Tensor<S, B, T2, D, G>> {
@@ -349,16 +349,20 @@ impl<
     /// This will bring the tensor data to the CPU and read the bytes.
     pub fn to_scalar<E: Copy>(&self) -> Result<E> {
         let bytes = B::to_bytes(&self.inner)?;
-        if bytes.len() != core::mem::size_of::<E>() {
+        let elem_size = core::mem::size_of::<E>();
+        let dtype = K::to_kindle(&self._dtype);
+        let expected_size = dtype.element_size();
+        if bytes.len() != elem_size || elem_size != expected_size {
             // Attempt to dynamically cast f32 -> bool if requested, to keep old fallback working
-            if core::mem::size_of::<E>() == 1 && !bytes.is_empty() {
+            if elem_size == 1 && !bytes.is_empty() {
                 let val = bytes[0] != 0;
                 return Ok(unsafe { core::ptr::read_unaligned(&val as *const bool as *const E) });
             }
             return Err(crate::err::Error::Msg(alloc::format!(
-                "Size mismatch when converting to scalar. Tensor dtype bytes: {}, expected: {}",
+                "Size mismatch when converting to scalar. Tensor dtype {:?} ({} bytes) vs requested type ({} bytes)",
+                dtype,
                 bytes.len(),
-                core::mem::size_of::<E>()
+                elem_size
             )));
         }
         let val = unsafe { core::ptr::read_unaligned(bytes.as_ptr() as *const E) };
@@ -369,7 +373,18 @@ impl<
     pub fn to_vec1<E: Copy>(&self) -> Result<alloc::vec::Vec<E>> {
         let bytes = B::to_bytes(&self.inner)?;
         let num_elements = S::numel(&self._shape);
-        let expected_bytes = num_elements * core::mem::size_of::<E>();
+        let elem_size = core::mem::size_of::<E>();
+        let dtype = K::to_kindle(&self._dtype);
+        let expected_elem_size = dtype.element_size();
+        if elem_size != expected_elem_size {
+            return Err(crate::err::Error::Msg(alloc::format!(
+                "Element size mismatch converting to vec: Tensor dtype {:?} element size {} vs requested type size {}",
+                dtype,
+                expected_elem_size,
+                elem_size
+            )));
+        }
+        let expected_bytes = num_elements * elem_size;
         if bytes.len() != expected_bytes {
             return Err(crate::err::Error::Msg(alloc::format!(
                 "Size mismatch when converting to vec. Tensor dtype bytes: {}, expected: {}",
@@ -586,7 +601,7 @@ impl<
     }
 }
 
-/// Core abstraction for `try_stack_tensors` within the Kindle framework..
+/// `try_stack_tensors`.
 pub fn try_stack_tensors<
     S: Shape + DynShape,
     B: Backend,
@@ -632,9 +647,9 @@ impl<
 where
     B: Backend<BackendWithDevice<NewD> = B>,
 {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<S, B, K, NewD, G>;
-    /// Core abstraction for `to_device` within the Kindle framework..
+    /// `to_device`.
     fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output> {
         let field = NewD::init(arg.clone());
         let kindle_dev = NewD::to_kindle(&field)?;

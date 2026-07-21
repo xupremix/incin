@@ -5,11 +5,11 @@ use typenum::{Diff, Prod, Quot, Sum, U1, U2};
 
 // ConvOutDim already defined in arithmetic.rs and exposed via prelude
 
-/// Core abstraction for `KernelConv2dShape` within the Kindle framework..
+/// `KernelConv2dShape`.
 pub trait KernelConv2dShape<K: Shape, Stride: StaticDim, Padding: StaticDim>: Shape {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output: Shape;
-    /// Core abstraction for `output_shape` within the Kindle framework..
+    /// `output_shape`.
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         kernel: &<K as Shape>::Field,
@@ -39,7 +39,7 @@ where
     ConvOutDim<HIn, KH, Stride, Padding>: StaticDim,
     ConvOutDim<WIn, KW, Stride, Padding>: StaticDim,
 {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = (
         B,
         COut,
@@ -48,7 +48,7 @@ where
     );
 
     #[inline(always)]
-    /// Core abstraction for `output_shape` within the Kindle framework..
+    /// `output_shape`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<(COut, CIn, KH, KW) as Shape>::Field,
@@ -68,9 +68,9 @@ impl<
     Padding: crate::tensor::matmul::StaticDim + typenum::Unsigned,
 > KernelConv2dShape<Dyn, Stride, Padding> for Dyn
 {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = Dyn;
-    /// Core abstraction for `output_shape` within the Kindle framework..
+    /// `output_shape`.
     fn output_shape(
         lhs: &<Dyn as Shape>::Field,
         kernel: &<Dyn as Shape>::Field,
@@ -99,7 +99,7 @@ impl<
     G: RequiresGrad,
 > Tensor<S1, B, K, D, G>
 {
-    /// Core abstraction for `conv2d` within the Kindle framework..
+    /// `conv2d`.
     pub fn conv2d<Stride, Padding, KShape>(
         &self,
         weight: &Tensor<KShape, B, K, D, G>,

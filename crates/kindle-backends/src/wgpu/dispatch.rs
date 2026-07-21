@@ -5,7 +5,7 @@ use crate::wgpu::device::get_device_state;
 use crate::wgpu::pipeline::get_or_create_pipeline;
 use crate::wgpu::storage::WgpuBuffer;
 
-/// Core abstraction for `WG_SIZE` within the Kindle framework..
+/// `WG_SIZE`.
 const WG_SIZE: u32 = 256;
 
 /// Run a simple 1D dispatch with 3 storage bindings: lhs, rhs, out, plus a u32 params buffer.
@@ -185,7 +185,7 @@ pub(crate) fn dispatch_softmax(inp: &WgpuBuffer, out: &Arc<WgpuBuffer>, batch: u
     run_pipeline(&state, &pipeline, &bg, batch, 1, 1, "Softmax");
 }
 
-/// Core abstraction for `run_pipeline` within the Kindle framework..
+/// `run_pipeline`.
 fn run_pipeline(
     state: &crate::wgpu::device::WgpuDeviceState,
     pipeline: &ComputePipeline,

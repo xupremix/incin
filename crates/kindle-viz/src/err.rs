@@ -3,43 +3,43 @@
 
 use core::fmt::Debug;
 
-/// Core abstraction for `Result` within the Kindle framework.
+/// Result.
 pub type Result<T> = core::result::Result<T, Error>;
 
 #[derive(thiserror::Error)]
-/// Core abstraction for `Error` within the Kindle framework.
+/// Error.
 pub enum Error {
     #[error("I/O error: {0}")]
-    /// Core abstraction for `Io` within the Kindle framework.
+    /// Io.
     Io(#[from] std::io::Error),
 
     #[error("Serialization error: {0}")]
-    /// Core abstraction for `Serialize` within the Kindle framework.
+    /// Serialize.
     Serialize(#[from] serde_json::Error),
 
     #[error("Transport error: {0}")]
-    /// Core abstraction for `Transport` within the Kindle framework.
+    /// Transport.
     Transport(String),
 
     #[error("Generic Message: {0}")]
-    /// Core abstraction for `Msg` within the Kindle framework.
+    /// Msg.
     Msg(String),
 }
 
 impl Debug for Error {
-    /// Core abstraction for `fmt` within the Kindle framework.
+    /// Fmt.
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{self}")
     }
 }
 
 #[cfg(test)]
-/// Core abstraction for `tests` within the Kindle framework.
+/// Tests.
 mod tests {
     use super::*;
 
     #[test]
-    /// Core abstraction for `test_error_formatting` within the Kindle framework.
+    /// Test error formatting.
     fn test_error_formatting() {
         let err = Error::Transport(String::from("connection reset"));
         let formatted = format!("{err}");

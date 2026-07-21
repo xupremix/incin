@@ -5,13 +5,13 @@
 #[macro_use]
 extern crate alloc;
 
-/// Core abstraction for `app` within the Kindle framework.
+/// App.
 pub mod app;
-/// Core abstraction for `dispatch` within the Kindle framework.
+/// Dispatch.
 pub mod dispatch;
-/// Core abstraction for `err` within the Kindle framework.
+/// Err.
 pub mod err;
-/// Core abstraction for `panels` within the Kindle framework.
+/// Panels.
 pub mod panels;
-/// Core abstraction for `transport_reader` within the Kindle framework.
+/// Transport reader.
 pub mod transport_reader;

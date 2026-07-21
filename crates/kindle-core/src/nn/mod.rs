@@ -47,46 +47,46 @@
 //!
 //! * [`Param`] — A trainable parameter (gradients are computed and updated by an optimizer).
 //! * [`Buffer`] — A non-trainable state buffer (e.g., running statistics in BatchNorm).
-/// Core abstraction for `activation` within the Kindle framework..
+/// `activation`.
 pub mod activation;
-/// Core abstraction for `adaptive_avg_pool2d` within the Kindle framework..
+/// `adaptive_avg_pool2d`.
 pub mod adaptive_avg_pool2d;
-/// Core abstraction for `avg_pool2d` within the Kindle framework..
+/// `avg_pool2d`.
 pub mod avg_pool2d;
-/// Core abstraction for `batch_norm` within the Kindle framework..
+/// `batch_norm`.
 pub mod batch_norm;
-/// Core abstraction for `conv1d` within the Kindle framework..
+/// `conv1d`.
 pub mod conv1d;
-/// Core abstraction for `conv2d` within the Kindle framework..
+/// `conv2d`.
 pub mod conv2d;
 pub mod dropout;
-/// Core abstraction for `embedding` within the Kindle framework..
+/// `embedding`.
 pub mod embedding;
-/// Core abstraction for `flatten` within the Kindle framework..
+/// `flatten`.
 pub mod flatten;
-/// Core abstraction for `init` within the Kindle framework..
+/// `init`.
 pub mod init;
-/// Core abstraction for `layer_norm` within the Kindle framework..
+/// `layer_norm`.
 pub mod layer_norm;
-/// Core abstraction for `linear` within the Kindle framework..
+/// `linear`.
 pub mod linear;
-/// Core abstraction for `loss` within the Kindle framework..
+/// `loss`.
 pub mod loss;
-/// Core abstraction for `lstm` within the Kindle framework..
+/// `lstm`.
 pub mod lstm;
-/// Core abstraction for `max_pool2d` within the Kindle framework..
+/// `max_pool2d`.
 pub mod max_pool2d;
-/// Core abstraction for `module` within the Kindle framework..
+/// `module`.
 pub mod module;
-/// Core abstraction for `optional` within the Kindle framework..
+/// `optional`.
 pub mod optional;
-/// Core abstraction for `param` within the Kindle framework..
+/// `param`.
 pub mod param;
-/// Core abstraction for `rnn` within the Kindle framework..
+/// `rnn`.
 pub mod rms_norm;
 pub mod rnn;
 #[cfg(feature = "std")]
-/// Core abstraction for `save` within the Kindle framework..
+/// `save`.
 pub mod save;
 
 pub use activation::*;

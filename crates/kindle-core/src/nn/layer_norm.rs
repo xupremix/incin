@@ -2,27 +2,27 @@ use crate::nn::{Module, Param};
 use crate::prelude::*;
 use core::marker::PhantomData;
 
-/// Core abstraction for `LayerNormShape` within the Kindle framework..
+/// `LayerNormShape`.
 pub trait LayerNormShape: Shape + DynShape {
-    /// Core abstraction for `Channels` within the Kindle framework..
+    /// `Channels`.
     type Channels: Dim;
-    /// Core abstraction for `BuildArg` within the Kindle framework..
+    /// `BuildArg`.
     type BuildArg: crate::tensor::arg_into::NotUnit + Clone;
-    /// Core abstraction for `Target` within the Kindle framework..
+    /// The runtime arguments needed to instantiate this layer.
     type Target;
-    /// Core abstraction for `build_args` within the Kindle framework..
+    /// Converts the target arguments into concrete shape args for weight and bias tensors.
     fn build_args(target: Self::Target) -> Self::BuildArg;
 }
 
 impl<C: Dim> LayerNormShape for (C,) {
-    /// Core abstraction for `Channels` within the Kindle framework..
+    /// `Channels`.
     type Channels = C;
-    /// Core abstraction for `BuildArg` within the Kindle framework..
+    /// `BuildArg`.
     type BuildArg = (<C as Dim>::Arg,);
-    /// Core abstraction for `Target` within the Kindle framework..
+    /// The runtime arguments needed to instantiate this layer.
     type Target = (<C as Dim>::Arg,);
 
-    /// Core abstraction for `build_args` within the Kindle framework..
+    /// Converts the target arguments into concrete shape args for weight and bias tensors.
     fn build_args(target: Self::Target) -> Self::BuildArg {
         target
     }
@@ -30,14 +30,14 @@ impl<C: Dim> LayerNormShape for (C,) {
 
 #[derive(Debug)]
 #[kindle_macros::module(internal)]
-/// Core abstraction for `LayerNorm` within the Kindle framework..
+/// `LayerNorm`.
 pub struct LayerNorm<S: LayerNormShape, B: Backend> {
-    /// Core abstraction for `weight` within the Kindle framework..
+    /// The learnable weight matrix parameter.
     pub weight: Param<(S::Channels,), B>,
-    /// Core abstraction for `bias` within the Kindle framework..
+    /// The optional learnable bias vector parameter.
     pub bias: Param<(S::Channels,), B>,
     #[module(ignore)]
-    /// Core abstraction for `eps` within the Kindle framework..
+    /// Small epsilon added to the denominator for numerical stability.
     pub eps: f32,
     #[module(ignore)]
     _phantom: PhantomData<(S, B)>,
@@ -49,7 +49,7 @@ where
     B::Device: crate::prelude::ConstDevice,
     (S::Channels,): Shape<Arg = S::BuildArg>,
 {
-    /// Core abstraction for `new_with` within the Kindle framework..
+    /// Creates a new instance with explicitly provided shape arguments.
     pub fn new_with(args: S::Target, eps: f32) -> Result<Self> {
         let b_args = S::build_args(args);
 
@@ -81,7 +81,7 @@ where
     B::Device: crate::prelude::ConstDevice,
     (S::Channels,): Shape<Arg = S::BuildArg>,
 {
-    /// Core abstraction for `new` within the Kindle framework..
+    /// Creates a new instance with default (statically inferred) shape arguments.
     pub fn new(eps: f32) -> Result<Self> {
         Self::new_with(((),), eps)
     }
@@ -93,13 +93,13 @@ impl<
     B: Backend + crate::tensor::backend::ModuleOps<B>,
 > Module<Tensor<InS, B>> for LayerNorm<S, B>
 {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<InS, B>;
-    /// Core abstraction for `Error` within the Kindle framework..
+    /// The error type returned if the forward pass fails.
     type Error = Error;
 
     #[inline]
-    /// Core abstraction for `forward` within the Kindle framework..
+    /// Runs the forward pass of this module on the given input.
     fn forward(&self, x: Tensor<InS, B>) -> core::result::Result<Self::Output, Error> {
         let weight = self.weight.as_tensor()?.into_dyn();
         let bias = self.bias.as_tensor()?.into_dyn();

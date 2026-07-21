@@ -6,7 +6,7 @@ use ratatui::style::{Color, Style};
 use ratatui::widgets::{Block, Borders, Paragraph};
 use std::io::stdout;
 
-/// Core abstraction for `CustomMetricPanel` within the Kindle framework.
+/// Custom metric panel.
 struct CustomMetricPanel {
     current_value: f64,
     border_color: Color,
@@ -22,17 +22,17 @@ impl CustomMetricPanel {
 }
 
 impl Panel for CustomMetricPanel {
-    /// Core abstraction for `id` within the Kindle framework.
+    /// Id.
     fn id(&self) -> &'static str {
         "custom_metric"
     }
 
-    /// Core abstraction for `title` within the Kindle framework.
+    /// Title.
     fn title(&self) -> &str {
         "Custom Metric Tracker"
     }
 
-    /// Core abstraction for `update` within the Kindle framework.
+    /// Update.
     fn update(&mut self, event: &Event) {
         if let Event::Scalar(ScalarEvent { name, value, .. }) = event
             && name == "custom_metric"
@@ -41,7 +41,7 @@ impl Panel for CustomMetricPanel {
         }
     }
 
-    /// Core abstraction for `render` within the Kindle framework.
+    /// Render.
     fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) {
         // Register a hit region spanning the entire panel area
         ctx.register_hit_region(ctx.area(), HitId(1));
@@ -62,7 +62,7 @@ impl Panel for CustomMetricPanel {
         ctx.frame_mut().render_widget(paragraph, area);
     }
 
-    /// Core abstraction for `handle_event` within the Kindle framework.
+    /// Handle event.
     fn handle_event(&mut self, event: &PanelEvent) -> bool {
         match event {
             PanelEvent::Key(k) => {
@@ -81,7 +81,7 @@ impl Panel for CustomMetricPanel {
         }
     }
 
-    /// Core abstraction for `hover_text` within the Kindle framework.
+    /// Hover text.
     fn hover_text(&self, id: HitId) -> Option<String> {
         if id == HitId(1) {
             Some("Hovering over custom metric panel!".to_string())
@@ -90,7 +90,7 @@ impl Panel for CustomMetricPanel {
         }
     }
 
-    /// Core abstraction for `reset` within the Kindle framework.
+    /// Reset.
     fn reset(&mut self) {
         self.current_value = 0.0;
         self.border_color = Color::Blue;
@@ -98,13 +98,13 @@ impl Panel for CustomMetricPanel {
 }
 
 // Dummy transport to simulate events
-/// Core abstraction for `DummyTransport` within the Kindle framework.
+/// Dummy transport.
 struct DummyTransport {
     last_val: f64,
 }
 
 impl kindle_viz::transport_reader::TransportReader for DummyTransport {
-    /// Core abstraction for `poll_new_events` within the Kindle framework.
+    /// Poll new events.
     fn poll_new_events(&mut self) -> kindle_viz::err::Result<Vec<Event>> {
         self.last_val += 1.0;
         if self.last_val > 100.0 {
@@ -120,7 +120,7 @@ impl kindle_viz::transport_reader::TransportReader for DummyTransport {
     }
 }
 
-/// Core abstraction for `install_panic_hook` within the Kindle framework.
+/// Install panic hook.
 fn install_panic_hook() {
     let previous_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |panic_info| {

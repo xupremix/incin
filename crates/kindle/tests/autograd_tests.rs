@@ -1,12 +1,11 @@
-use kindle::DefaultBackend;
 use kindle::prelude::*;
 use kindle::{Optimizer, SGD};
 
 /// Implementation of `CpuBackend` for the respective backend.
-type CpuBackend = DefaultBackend;
+type CpuBackend = kindle_backends::cpu::CpuBackend<f32, Cpu>;
 
 #[test]
-/// Core abstraction for `test_simple_linear_regression` within the Kindle framework.
+/// Test simple linear regression.
 fn test_simple_linear_regression() -> Result<()> {
     let model = Linear::<s![1, 1], CpuBackend>::new()?;
     let mut optim = SGD::<CpuBackend>::new(model.parameters(), 0.01);
@@ -32,7 +31,7 @@ fn test_simple_linear_regression() -> Result<()> {
 }
 
 #[test]
-/// Core abstraction for `test_backward_with_nan_check_success` within the Kindle framework.
+/// Test backward with nan check success.
 fn test_backward_with_nan_check_success() -> Result<()> {
     let model = Linear::<s![1, 1], CpuBackend>::new()?;
     let mut optim = SGD::<CpuBackend>::new(model.parameters(), 0.01);

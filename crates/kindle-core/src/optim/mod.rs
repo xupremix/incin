@@ -31,13 +31,13 @@ pub trait Optimizer<B: Backend> {
 /// ```
 pub struct SGD<B: Backend, K: DType = f32> {
     params: alloc::collections::BTreeMap<String, B::RawVar>,
-    /// Core abstraction for `lr` within the Kindle framework..
+    /// `lr`.
     pub lr: f64,
     _marker: core::marker::PhantomData<K>,
 }
 
 impl<B: Backend, K: DType> SGD<B, K> {
-    /// Core abstraction for `new` within the Kindle framework..
+    /// Creates a new instance with default (statically inferred) shape arguments.
     pub fn new(params: alloc::collections::BTreeMap<String, B::RawVar>, lr: f64) -> Self {
         Self {
             params,
@@ -48,7 +48,7 @@ impl<B: Backend, K: DType> SGD<B, K> {
 }
 
 impl<B: Backend, K: DType> Optimizer<B> for SGD<B, K> {
-    /// Core abstraction for `step` within the Kindle framework..
+    /// `step`.
     fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()> {
         for var in self.params.values_mut() {
             let t = B::var_as_tensor::<K>(var)?;
@@ -78,15 +78,15 @@ impl<B: Backend, K: DType> Optimizer<B> for SGD<B, K> {
 /// ```
 pub struct AdamW<B: Backend, K: DType = f32> {
     params: alloc::collections::BTreeMap<String, B::RawVar>,
-    /// Core abstraction for `lr` within the Kindle framework..
+    /// `lr`.
     pub lr: f64,
-    /// Core abstraction for `beta1` within the Kindle framework..
+    /// `beta1`.
     pub beta1: f64,
-    /// Core abstraction for `beta2` within the Kindle framework..
+    /// `beta2`.
     pub beta2: f64,
-    /// Core abstraction for `eps` within the Kindle framework..
+    /// Small epsilon added to the denominator for numerical stability.
     pub eps: f64,
-    /// Core abstraction for `weight_decay` within the Kindle framework..
+    /// `weight_decay`.
     pub weight_decay: f64,
     m: alloc::collections::BTreeMap<String, B::Storage<K>>,
     v: alloc::collections::BTreeMap<String, B::Storage<K>>,
@@ -94,7 +94,7 @@ pub struct AdamW<B: Backend, K: DType = f32> {
 }
 
 impl<B: Backend, K: DType> AdamW<B, K> {
-    /// Core abstraction for `new` within the Kindle framework..
+    /// Creates a new instance with default (statically inferred) shape arguments.
     pub fn new(params: alloc::collections::BTreeMap<String, B::RawVar>, lr: f64) -> Self {
         Self {
             params,
@@ -111,7 +111,7 @@ impl<B: Backend, K: DType> AdamW<B, K> {
 }
 
 impl<B: Backend, K: DType> Optimizer<B> for AdamW<B, K> {
-    /// Core abstraction for `step` within the Kindle framework..
+    /// `step`.
     fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()> {
         self.step += 1;
         let t_step = self.step as f64;
@@ -178,13 +178,13 @@ impl<B: Backend, K: DType> Optimizer<B> for AdamW<B, K> {
 /// ```
 pub struct Adam<B: Backend, K: DType = f32> {
     params: alloc::collections::BTreeMap<String, B::RawVar>,
-    /// Core abstraction for `lr` within the Kindle framework..
+    /// `lr`.
     pub lr: f64,
-    /// Core abstraction for `beta1` within the Kindle framework..
+    /// `beta1`.
     pub beta1: f64,
-    /// Core abstraction for `beta2` within the Kindle framework..
+    /// `beta2`.
     pub beta2: f64,
-    /// Core abstraction for `eps` within the Kindle framework..
+    /// Small epsilon added to the denominator for numerical stability.
     pub eps: f64,
     m: alloc::collections::BTreeMap<String, B::Storage<K>>,
     v: alloc::collections::BTreeMap<String, B::Storage<K>>,
@@ -192,7 +192,7 @@ pub struct Adam<B: Backend, K: DType = f32> {
 }
 
 impl<B: Backend, K: DType> Adam<B, K> {
-    /// Core abstraction for `new` within the Kindle framework..
+    /// Creates a new instance with default (statically inferred) shape arguments.
     pub fn new(params: alloc::collections::BTreeMap<String, B::RawVar>, lr: f64) -> Self {
         Self {
             params,
@@ -208,7 +208,7 @@ impl<B: Backend, K: DType> Adam<B, K> {
 }
 
 impl<B: Backend, K: DType> Optimizer<B> for Adam<B, K> {
-    /// Core abstraction for `step` within the Kindle framework..
+    /// `step`.
     fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()> {
         self.step += 1;
         let t_step = self.step as f64;

@@ -3,18 +3,18 @@ use quote::{format_ident, quote};
 use syn::parse::{Parse, ParseStream};
 use syn::{LitInt, parse_macro_input};
 
-/// Core abstraction for `MaxRank` within the Kindle framework.
+/// Max rank.
 struct MaxRank(usize);
 
 impl Parse for MaxRank {
-    /// Core abstraction for `parse` within the Kindle framework.
+    /// Parse.
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let lit: LitInt = input.parse()?;
         Ok(MaxRank(lit.base10_parse()?))
     }
 }
 
-/// Core abstraction for `impl_arg_into` within the Kindle framework.
+/// Impl arg into.
 pub fn impl_arg_into(input: TokenStream) -> TokenStream {
     let MaxRank(max_rank) = parse_macro_input!(input as MaxRank);
     let mut output = quote!();
@@ -67,7 +67,7 @@ pub fn impl_arg_into(input: TokenStream) -> TokenStream {
             // e.g. impl<D0: Dim, const N1: usize> ArgInto<(usize, Const<N1>)> for (D0,)
             output.extend(quote! {
                 impl<#(#impl_generics),*> ArgInto<(#(#target_types,)*)> for (#(#source_types,)*) {
-                    /// Core abstraction for `into_arg` within the Kindle framework.
+                    /// Into arg.
                     fn into_arg(self) -> (#(#target_types,)*) {
                         (#(#tuple_body_items,)*)
                     }
@@ -81,7 +81,7 @@ pub fn impl_arg_into(input: TokenStream) -> TokenStream {
                 let single_source = &source_types[0];
                 output.extend(quote! {
                     impl<#(#impl_generics),*> ArgInto<(#(#target_types,)*)> for #single_source {
-                        /// Core abstraction for `into_arg` within the Kindle framework.
+                        /// Into arg.
                         fn into_arg(self) -> (#(#target_types,)*) {
                             (#(#scalar_body_items,)*)
                         }

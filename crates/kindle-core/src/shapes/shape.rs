@@ -15,11 +15,11 @@ use typenum::Unsigned;
 ///
 /// In practice, shapes are most often constructed via the `s![]` macro.
 pub trait Shape: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
-    /// Core abstraction for `Arg` within the Kindle framework..
+    /// `Arg`.
     type Arg;
-    /// Core abstraction for `Field` within the Kindle framework..
+    /// `Field`.
     type Field: Debug + Clone + Send + Sync;
-    /// Core abstraction for `Dims` within the Kindle framework..
+    /// `Dims`.
     type Dims: Debug
         + Clone
         + Default
@@ -32,9 +32,9 @@ pub trait Shape: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
         + Index<usize, Output = usize>
         + IndexMut<usize>
         + AsRef<[usize]>;
-    /// Core abstraction for `init` within the Kindle framework..
+    /// `init`.
     fn init(arg: Self::Arg) -> Self::Field;
-    /// Core abstraction for `from_dyn` within the Kindle framework..
+    /// `from_dyn`.
     fn from_dyn(dims: &[usize]) -> Option<Self::Field>;
 }
 
@@ -44,40 +44,40 @@ pub trait Shape: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
 /// This includes both `Dyn` and fully static shapes (tuples). Operations that need to introspect
 /// the shape at runtime (e.g., computing strides) require a `DynShape` bound.
 pub trait DynShape: Shape {
-    /// Core abstraction for `rank` within the Kindle framework..
+    /// `rank`.
     fn rank(shape: &Self::Field) -> usize;
-    /// Core abstraction for `numel` within the Kindle framework..
+    /// `numel`.
     fn numel(shape: &Self::Field) -> usize;
-    /// Core abstraction for `dims` within the Kindle framework..
+    /// `dims`.
     fn dims(shape: &Self::Field) -> Self::Dims;
 }
 
-/// Core abstraction for `AppendDim` within the Kindle framework..
+/// `AppendDim`.
 pub trait AppendDim<D: Dim> {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output: Shape;
 }
 
-/// Core abstraction for `ReplaceLastDim` within the Kindle framework..
+/// `ReplaceLastDim`.
 pub trait ReplaceLastDim<NewDim: Dim> {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output: Shape;
 }
 
-/// Core abstraction for `EndsWith` within the Kindle framework..
+/// `EndsWith`.
 pub trait EndsWith<D: Dim>: Shape {}
-/// Core abstraction for `HasChannels1D` within the Kindle framework..
+/// `HasChannels1D`.
 pub trait HasChannels1D<D: Dim>: Shape {}
-/// Core abstraction for `HasChannels2D` within the Kindle framework..
+/// `HasChannels2D`.
 pub trait HasChannels2D<D: Dim>: Shape {}
 
 impl<D: Dim> EndsWith<D> for Dyn {}
 impl<D: Dim> HasChannels1D<D> for Dyn {}
 impl<D: Dim> HasChannels2D<D> for Dyn {}
 
-/// Core abstraction for `PartialDynShape` within the Kindle framework..
+/// `PartialDynShape`.
 pub trait PartialDynShape: DynShape {
-    /// Core abstraction for `RANK` within the Kindle framework..
+    /// `RANK`.
     const RANK: usize;
 }
 
@@ -95,9 +95,9 @@ pub trait PartialDynShape: DynShape {
 /// ```
 pub trait ConstShape: Shape<Field: Default> {
     // const RANK: usize; // impl PartialDynShape for it and DynShape
-    /// Core abstraction for `NUMEL` within the Kindle framework..
+    /// `NUMEL`.
     const NUMEL: usize;
-    /// Core abstraction for `DIMS` within the Kindle framework..
+    /// `DIMS`.
     const DIMS: <Self as Shape>::Dims;
 }
 
@@ -105,17 +105,17 @@ pub trait ConstShape: Shape<Field: Default> {
 /// --- Dyn ---
 ///
 impl Shape for Dyn {
-    /// Core abstraction for `Arg` within the Kindle framework..
+    /// `Arg`.
     type Arg = Vec<usize>;
-    /// Core abstraction for `Field` within the Kindle framework..
+    /// `Field`.
     type Field = Vec<usize>;
-    /// Core abstraction for `Dims` within the Kindle framework..
+    /// `Dims`.
     type Dims = Vec<usize>;
-    /// Core abstraction for `init` within the Kindle framework..
+    /// `init`.
     fn init(arg: Self::Arg) -> Self::Field {
         arg
     }
-    /// Core abstraction for `from_dyn` within the Kindle framework..
+    /// `from_dyn`.
     fn from_dyn(dims: &[usize]) -> Option<Self::Field> {
         Some(dims.to_vec())
     }
@@ -123,43 +123,43 @@ impl Shape for Dyn {
 
 impl DynShape for Dyn {
     #[inline(always)]
-    /// Core abstraction for `rank` within the Kindle framework..
+    /// `rank`.
     fn rank(shape: &Self::Field) -> usize {
         shape.len()
     }
 
     #[inline(always)]
-    /// Core abstraction for `numel` within the Kindle framework..
+    /// `numel`.
     fn numel(shape: &Self::Field) -> usize {
         shape.iter().product()
     }
 
     #[inline(always)]
-    /// Core abstraction for `dims` within the Kindle framework..
+    /// `dims`.
     fn dims(shape: &Self::Field) -> Self::Dims {
         shape.clone()
     }
 }
 
 impl<D: Dim> AppendDim<D> for Dyn {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = Dyn;
 }
 
 macro_rules! impl_shape_for_tuple {
     ($n:expr $(, $name:ident $idx:tt)* $(,)?) => {
         impl< $($name: Dim,)* > Shape for ( $($name,)*) {
-            /// Core abstraction for `Arg` within the Kindle framework..
+            /// `Arg`.
             type Arg = ($(<$name as Dim>::Arg,)*);
-            /// Core abstraction for `Field` within the Kindle framework..
+            /// `Field`.
             type Field = Self;
-            /// Core abstraction for `Dims` within the Kindle framework..
+            /// `Dims`.
             type Dims = [usize; ($n)];
-            /// Core abstraction for `init` within the Kindle framework..
+            /// `init`.
             fn init(arg: Self::Arg) -> Self::Field {
                 ($(Dim::from_arg(arg.$idx),)*)
             }
-            /// Core abstraction for `from_dyn` within the Kindle framework..
+            /// `from_dyn`.
             fn from_dyn(dims: &[usize]) -> Option<Self::Field> {
                 if dims.len() != $n {
                     return None;
@@ -170,73 +170,73 @@ macro_rules! impl_shape_for_tuple {
             }
         }
         impl< $($name: Dim,)* > PartialDynShape for ( $($name,)*) {
-            /// Core abstraction for `RANK` within the Kindle framework..
+            /// `RANK`.
             const RANK: usize = $n;
         }
         impl< $($name: Dim,)* > DynShape for ( $($name,)*) {
             #[inline(always)]
-            /// Core abstraction for `dims` within the Kindle framework..
+            /// `dims`.
             fn dims(shape: &Self::Field) -> Self::Dims {
                 [$(shape.$idx.size()),*]
             }
 
             #[inline(always)]
-            /// Core abstraction for `rank` within the Kindle framework..
+            /// `rank`.
             fn rank(_: &Self::Field) -> usize {
                 ($n)
             }
 
             #[inline(always)]
-            /// Core abstraction for `numel` within the Kindle framework..
+            /// `numel`.
             fn numel(shape: &Self::Field) -> usize {
                 1 $( * shape.$idx.size())*
             }
         }
 
         impl<$($name: Unsigned + Dim, )*> ConstShape for ($($name, )*) {
-            /// Core abstraction for `NUMEL` within the Kindle framework..
+            /// `NUMEL`.
             const NUMEL: usize = $($name::USIZE * )* 1;
-            /// Core abstraction for `DIMS` within the Kindle framework..
+            /// `DIMS`.
             const DIMS: Self::Dims = [$($name::USIZE),*];
         }
 
         impl Shape for [usize; ($n)] {
-            /// Core abstraction for `Arg` within the Kindle framework..
+            /// `Arg`.
             type Arg = Self;
-            /// Core abstraction for `Field` within the Kindle framework..
+            /// `Field`.
             type Field = Self;
-            /// Core abstraction for `Dims` within the Kindle framework..
+            /// `Dims`.
             type Dims = Self;
-            /// Core abstraction for `init` within the Kindle framework..
+            /// `init`.
             fn init(arg: Self::Arg) -> Self::Field {
                 arg
             }
-            /// Core abstraction for `from_dyn` within the Kindle framework..
+            /// `from_dyn`.
             fn from_dyn(dims: &[usize]) -> Option<Self::Field> {
                 dims.try_into().ok()
             }
         }
         impl DynShape for [usize; ($n)] {
             #[inline(always)]
-            /// Core abstraction for `dims` within the Kindle framework..
+            /// `dims`.
             fn dims(shape: &Self::Field) -> Self::Dims {
                 *shape
             }
 
             #[inline(always)]
-            /// Core abstraction for `rank` within the Kindle framework..
+            /// `rank`.
             fn rank(_: &Self::Field) -> usize {
                 ($n)
             }
 
             #[inline(always)]
-            /// Core abstraction for `numel` within the Kindle framework..
+            /// `numel`.
             fn numel(shape: &Self::Field) -> usize {
                 1 $( * shape[$idx])*
             }
         }
         impl PartialDynShape for [usize; ($n)] {
-            /// Core abstraction for `RANK` within the Kindle framework..
+            /// `RANK`.
             const RANK: usize = ($n);
         }
         impl EndsWith<usize> for [usize; ($n)] {}
@@ -246,52 +246,52 @@ macro_rules! impl_shape_for_tuple {
 }
 
 impl Shape for () {
-    /// Core abstraction for `Arg` within the Kindle framework..
+    /// `Arg`.
     type Arg = ();
-    /// Core abstraction for `Field` within the Kindle framework..
+    /// `Field`.
     type Field = ();
-    /// Core abstraction for `Dims` within the Kindle framework..
+    /// `Dims`.
     type Dims = [usize; 0];
-    /// Core abstraction for `init` within the Kindle framework..
+    /// `init`.
     fn init(_: Self::Arg) {}
-    /// Core abstraction for `from_dyn` within the Kindle framework..
+    /// `from_dyn`.
     fn from_dyn(dims: &[usize]) -> Option<Self::Field> {
         if dims.is_empty() { Some(()) } else { None }
     }
 }
 
 impl PartialDynShape for () {
-    /// Core abstraction for `RANK` within the Kindle framework..
+    /// `RANK`.
     const RANK: usize = 0;
 }
 
 impl<D: Dim> AppendDim<D> for () {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = (D,);
 }
 
 impl ConstShape for () {
-    /// Core abstraction for `NUMEL` within the Kindle framework..
+    /// `NUMEL`.
     const NUMEL: usize = 1;
-    /// Core abstraction for `DIMS` within the Kindle framework..
+    /// `DIMS`.
     const DIMS: <Self as Shape>::Dims = [];
 }
 
 impl DynShape for () {
     #[inline(always)]
-    /// Core abstraction for `rank` within the Kindle framework..
+    /// `rank`.
     fn rank(_: &Self::Field) -> usize {
         0
     }
 
     #[inline(always)]
-    /// Core abstraction for `numel` within the Kindle framework..
+    /// `numel`.
     fn numel(_: &Self::Field) -> usize {
         1
     }
 
     #[inline(always)]
-    /// Core abstraction for `dims` within the Kindle framework..
+    /// `dims`.
     fn dims(_: &Self::Field) -> Self::Dims {
         []
     }
@@ -309,7 +309,7 @@ impl_shape_for_tuple!(8, D0 0, D1 1, D2 2, D3 3, D4 4, D5 5, D6 6, D7 7);
 macro_rules! impl_append_dim_for_tuple {
     ($($name:ident),*) => {
         impl< $($name: Dim,)* Append: Dim > AppendDim<Append> for ( $($name,)*) {
-            /// Core abstraction for `Output` within the Kindle framework..
+            /// The output tensor type produced by this module's forward pass.
             type Output = ( $($name,)* Append);
         }
     };
@@ -328,13 +328,13 @@ impl_append_dim_for_tuple!(D0, D1, D2, D3, D4, D5, D6);
 macro_rules! impl_replace_last_dim_for_tuple {
     ($last:ident) => {
         impl<$last: Dim, NewDim: Dim> ReplaceLastDim<NewDim> for ($last,) {
-            /// Core abstraction for `Output` within the Kindle framework..
+            /// The output tensor type produced by this module's forward pass.
             type Output = (NewDim,);
         }
     };
     ($n1:ident, $last:ident) => {
         impl<$n1: Dim, $last: Dim, NewDim: Dim> ReplaceLastDim<NewDim> for ($n1, $last) {
-            /// Core abstraction for `Output` within the Kindle framework..
+            /// The output tensor type produced by this module's forward pass.
             type Output = ($n1, NewDim);
         }
     };
@@ -342,7 +342,7 @@ macro_rules! impl_replace_last_dim_for_tuple {
         impl<$n1: Dim, $n2: Dim, $last: Dim, NewDim: Dim> ReplaceLastDim<NewDim>
             for ($n1, $n2, $last)
         {
-            /// Core abstraction for `Output` within the Kindle framework..
+            /// The output tensor type produced by this module's forward pass.
             type Output = ($n1, $n2, NewDim);
         }
     };
@@ -350,7 +350,7 @@ macro_rules! impl_replace_last_dim_for_tuple {
         impl<$n1: Dim, $n2: Dim, $n3: Dim, $last: Dim, NewDim: Dim> ReplaceLastDim<NewDim>
             for ($n1, $n2, $n3, $last)
         {
-            /// Core abstraction for `Output` within the Kindle framework..
+            /// The output tensor type produced by this module's forward pass.
             type Output = ($n1, $n2, $n3, NewDim);
         }
     };
@@ -358,7 +358,7 @@ macro_rules! impl_replace_last_dim_for_tuple {
         impl<$n1: Dim, $n2: Dim, $n3: Dim, $n4: Dim, $last: Dim, NewDim: Dim> ReplaceLastDim<NewDim>
             for ($n1, $n2, $n3, $n4, $last)
         {
-            /// Core abstraction for `Output` within the Kindle framework..
+            /// The output tensor type produced by this module's forward pass.
             type Output = ($n1, $n2, $n3, $n4, NewDim);
         }
     };
@@ -366,7 +366,7 @@ macro_rules! impl_replace_last_dim_for_tuple {
         impl<$n1: Dim, $n2: Dim, $n3: Dim, $n4: Dim, $n5: Dim, $last: Dim, NewDim: Dim>
             ReplaceLastDim<NewDim> for ($n1, $n2, $n3, $n4, $n5, $last)
         {
-            /// Core abstraction for `Output` within the Kindle framework..
+            /// The output tensor type produced by this module's forward pass.
             type Output = ($n1, $n2, $n3, $n4, $n5, NewDim);
         }
     };
@@ -374,7 +374,7 @@ macro_rules! impl_replace_last_dim_for_tuple {
         impl<$n1: Dim, $n2: Dim, $n3: Dim, $n4: Dim, $n5: Dim, $n6: Dim, $last: Dim, NewDim: Dim>
             ReplaceLastDim<NewDim> for ($n1, $n2, $n3, $n4, $n5, $n6, $last)
         {
-            /// Core abstraction for `Output` within the Kindle framework..
+            /// The output tensor type produced by this module's forward pass.
             type Output = ($n1, $n2, $n3, $n4, $n5, $n6, NewDim);
         }
     };
@@ -391,7 +391,7 @@ macro_rules! impl_replace_last_dim_for_tuple {
             NewDim: Dim,
         > ReplaceLastDim<NewDim> for ($n1, $n2, $n3, $n4, $n5, $n6, $n7, $last)
         {
-            /// Core abstraction for `Output` within the Kindle framework..
+            /// The output tensor type produced by this module's forward pass.
             type Output = ($n1, $n2, $n3, $n4, $n5, $n6, $n7, NewDim);
         }
     };
@@ -409,7 +409,7 @@ macro_rules! impl_replace_last_dim_for_tuple {
             NewDim: Dim,
         > ReplaceLastDim<NewDim> for ($n1, $n2, $n3, $n4, $n5, $n6, $n7, $n8, $last)
         {
-            /// Core abstraction for `Output` within the Kindle framework..
+            /// The output tensor type produced by this module's forward pass.
             type Output = ($n1, $n2, $n3, $n4, $n5, $n6, $n7, $n8, NewDim);
         }
     };
@@ -428,7 +428,7 @@ macro_rules! impl_replace_last_dim_for_tuple {
             NewDim: Dim,
         > ReplaceLastDim<NewDim> for ($n1, $n2, $n3, $n4, $n5, $n6, $n7, $n8, $n9, $last)
         {
-            /// Core abstraction for `Output` within the Kindle framework..
+            /// The output tensor type produced by this module's forward pass.
             type Output = ($n1, $n2, $n3, $n4, $n5, $n6, $n7, $n8, $n9, NewDim);
         }
     };
@@ -448,7 +448,7 @@ macro_rules! impl_replace_last_dim_for_tuple {
             NewDim: Dim,
         > ReplaceLastDim<NewDim> for ($n1, $n2, $n3, $n4, $n5, $n6, $n7, $n8, $n9, $n10, $last)
         {
-            /// Core abstraction for `Output` within the Kindle framework..
+            /// The output tensor type produced by this module's forward pass.
             type Output = ($n1, $n2, $n3, $n4, $n5, $n6, $n7, $n8, $n9, $n10, NewDim);
         }
     };
@@ -483,7 +483,7 @@ macro_rules! impl_replace_last_dim_for_tuple {
                 $last,
             )
         {
-            /// Core abstraction for `Output` within the Kindle framework..
+            /// The output tensor type produced by this module's forward pass.
             type Output = (
                 $n1,
                 $n2,
@@ -512,22 +512,22 @@ impl_replace_last_dim_for_tuple!(D0, D1, D2, D3, D4, D5, D6);
 impl_replace_last_dim_for_tuple!(D0, D1, D2, D3, D4, D5, D6, D7);
 
 impl<NewDim: Dim> ReplaceLastDim<NewDim> for Dyn {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = Dyn;
 }
 
 impl<D: Dim> Shape for Vec<D> {
-    /// Core abstraction for `Arg` within the Kindle framework..
+    /// `Arg`.
     type Arg = Self;
-    /// Core abstraction for `Field` within the Kindle framework..
+    /// `Field`.
     type Field = Self;
-    /// Core abstraction for `Dims` within the Kindle framework..
+    /// `Dims`.
     type Dims = Vec<usize>;
-    /// Core abstraction for `init` within the Kindle framework..
+    /// `init`.
     fn init(arg: Self::Arg) -> Self::Field {
         arg
     }
-    /// Core abstraction for `from_dyn` within the Kindle framework..
+    /// `from_dyn`.
     fn from_dyn(dims: &[usize]) -> Option<Self::Field> {
         dims.iter().map(|&d| D::from_size(d)).collect()
     }
@@ -535,34 +535,34 @@ impl<D: Dim> Shape for Vec<D> {
 
 impl<D: Dim> DynShape for Vec<D> {
     #[inline(always)]
-    /// Core abstraction for `rank` within the Kindle framework..
+    /// `rank`.
     fn rank(shape: &Self::Field) -> usize {
         shape.len()
     }
 
     #[inline(always)]
-    /// Core abstraction for `numel` within the Kindle framework..
+    /// `numel`.
     fn numel(shape: &Self::Field) -> usize {
         shape.iter().map(|d| d.size()).product()
     }
 
     #[inline(always)]
-    /// Core abstraction for `dims` within the Kindle framework..
+    /// `dims`.
     fn dims(shape: &Self::Field) -> Self::Dims {
         shape.iter().map(|d| d.size()).collect()
     }
 }
 
-/// Core abstraction for `Scalar` within the Kindle framework..
+/// `Scalar`.
 pub type Scalar = ();
 
 #[cfg(test)]
-/// Core abstraction for `tests` within the Kindle framework..
+/// `tests`.
 mod tests {
     use super::*;
 
     #[test]
-    /// Core abstraction for `test_scalar_shape` within the Kindle framework..
+    /// `test_scalar_shape`.
     fn test_scalar_shape() {
         assert_eq!(<() as DynShape>::rank(&()), 0);
         assert_eq!(<() as DynShape>::numel(&()), 1);
@@ -573,7 +573,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `test_dyn_shape` within the Kindle framework..
+    /// `test_dyn_shape`.
     fn test_dyn_shape() {
         let d = vec![2, 3, 4];
         assert_eq!(<Dyn as DynShape>::rank(&d), 3);
@@ -582,7 +582,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `test_array_shape` within the Kindle framework..
+    /// `test_array_shape`.
     fn test_array_shape() {
         let shape: [usize; 3] = [2, 3, 4];
         assert_eq!(<[usize; 3] as DynShape>::rank(&shape), 3);

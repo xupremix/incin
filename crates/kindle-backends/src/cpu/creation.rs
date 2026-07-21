@@ -21,7 +21,7 @@ use crate::cpu::CpuBackend;
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
 use crate::cpu::var;
 
-/// Core abstraction for `fill_buffer` within the Kindle framework..
+/// `fill_buffer`.
 fn fill_buffer(
     total: usize,
     value: f64,
@@ -61,7 +61,7 @@ fn fill_buffer(
 }
 
 impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for CpuBackend<T, D> {
-    /// Core abstraction for `zeros` within the Kindle framework..
+    /// `zeros`.
     fn zeros<K: DType>(
         shape: &[usize],
         dtype: KindleDType,
@@ -72,7 +72,7 @@ impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for CpuBackend
         Ok(CpuStorage::from_contiguous(buffer, shape.to_vec()))
     }
 
-    /// Core abstraction for `ones` within the Kindle framework..
+    /// `ones`.
     fn ones<K: DType>(
         shape: &[usize],
         dtype: KindleDType,
@@ -83,7 +83,7 @@ impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for CpuBackend
         Ok(CpuStorage::from_contiguous(buffer, shape.to_vec()))
     }
 
-    /// Core abstraction for `rand` within the Kindle framework..
+    /// `rand`.
     fn rand<K: DType>(
         shape: &[usize],
         dtype: KindleDType,
@@ -112,7 +112,7 @@ impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for CpuBackend
         Ok(CpuStorage::from_contiguous(final_buffer, shape.to_vec()))
     }
 
-    /// Core abstraction for `randn` within the Kindle framework..
+    /// `randn`.
     fn randn<K: DType>(
         shape: &[usize],
         dtype: KindleDType,
@@ -141,7 +141,7 @@ impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for CpuBackend
         Ok(CpuStorage::from_contiguous(final_buffer, shape.to_vec()))
     }
 
-    /// Core abstraction for `var_zeros` within the Kindle framework..
+    /// `var_zeros`.
     fn var_zeros<K: DType>(
         shape: &[usize],
         dtype: KindleDType,
@@ -151,7 +151,7 @@ impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for CpuBackend
         var::var_from_tensor(&t)
     }
 
-    /// Core abstraction for `var_ones` within the Kindle framework..
+    /// `var_ones`.
     fn var_ones<K: DType>(
         shape: &[usize],
         dtype: KindleDType,
@@ -161,7 +161,7 @@ impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for CpuBackend
         var::var_from_tensor(&t)
     }
 
-    /// Core abstraction for `var_rand` within the Kindle framework..
+    /// `var_rand`.
     fn var_rand<K: DType>(
         shape: &[usize],
         dtype: KindleDType,
@@ -171,7 +171,7 @@ impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for CpuBackend
         var::var_from_tensor(&t)
     }
 
-    /// Core abstraction for `var_randn` within the Kindle framework..
+    /// `var_randn`.
     fn var_randn<K: DType>(
         shape: &[usize],
         dtype: KindleDType,
@@ -181,7 +181,7 @@ impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for CpuBackend
         var::var_from_tensor(&t)
     }
 
-    /// Core abstraction for `tensor_to_device` within the Kindle framework..
+    /// `tensor_to_device`.
     fn tensor_to_device<K: DType>(
         t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         device: &KindleDevice,
@@ -215,20 +215,20 @@ impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for CpuBackend
 }
 
 #[cfg(test)]
-/// Core abstraction for `tests` within the Kindle framework..
+/// `tests`.
 mod tests {
     use super::*;
     use kindle_core::prelude::Backend;
 
-    /// Core abstraction for `TestBackend` within the Kindle framework..
+    /// `TestBackend`.
     type TestBackend = CpuBackend<f32, kindle_core::prelude::Cpu>;
 
-    /// Core abstraction for `dev` within the Kindle framework..
+    /// `dev`.
     fn dev() -> KindleDevice {
         KindleDevice::cpu()
     }
 
-    /// Core abstraction for `f32_vec` within the Kindle framework..
+    /// `f32_vec`.
     fn f32_vec(s: &CpuStorage) -> Vec<f32> {
         match &*s.buffer {
             CpuBuffer::F32(v) => v.clone(),
@@ -237,7 +237,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `zeros_produces_correct_shape_and_all_zero_values` within the Kindle framework..
+    /// `zeros_produces_correct_shape_and_all_zero_values`.
     fn zeros_produces_correct_shape_and_all_zero_values() {
         let t = TestBackend::zeros::<f32>(&[2, 3], KindleDType::F32, &dev()).unwrap();
         assert_eq!(t.shape, vec![2, 3]);
@@ -245,7 +245,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `ones_produces_correct_shape_and_all_one_values` within the Kindle framework..
+    /// `ones_produces_correct_shape_and_all_one_values`.
     fn ones_produces_correct_shape_and_all_one_values() {
         let t = TestBackend::ones::<f32>(&[2, 3], KindleDType::F32, &dev()).unwrap();
         assert_eq!(t.shape, vec![2, 3]);
@@ -253,7 +253,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `rand_produces_values_in_zero_one_range` within the Kindle framework..
+    /// `rand_produces_values_in_zero_one_range`.
     fn rand_produces_values_in_zero_one_range() {
         let t = TestBackend::rand::<f32>(&[100], KindleDType::F32, &dev()).unwrap();
         assert_eq!(t.shape, vec![100]);
@@ -263,7 +263,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `randn_produces_statistically_plausible_standard_normal_samples` within the Kindle framework..
+    /// `randn_produces_statistically_plausible_standard_normal_samples`.
     fn randn_produces_statistically_plausible_standard_normal_samples() {
         let t = TestBackend::randn::<f32>(&[1000], KindleDType::F32, &dev()).unwrap();
         let data = f32_vec(&t);
@@ -280,7 +280,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `var_zeros_wraps_equivalent_zeros_result` within the Kindle framework..
+    /// `var_zeros_wraps_equivalent_zeros_result`.
     fn var_zeros_wraps_equivalent_zeros_result() {
         let var = TestBackend::var_zeros::<f32>(&[2, 2], KindleDType::F32, &dev()).unwrap();
         let t = TestBackend::var_as_tensor::<f32>(&var).unwrap();
@@ -289,7 +289,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `var_ones_wraps_equivalent_ones_result` within the Kindle framework..
+    /// `var_ones_wraps_equivalent_ones_result`.
     fn var_ones_wraps_equivalent_ones_result() {
         let var = TestBackend::var_ones::<f32>(&[2, 2], KindleDType::F32, &dev()).unwrap();
         let t = TestBackend::var_as_tensor::<f32>(&var).unwrap();
@@ -298,7 +298,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `var_rand_wraps_equivalent_rand_result` within the Kindle framework..
+    /// `var_rand_wraps_equivalent_rand_result`.
     fn var_rand_wraps_equivalent_rand_result() {
         let var = TestBackend::var_rand::<f32>(&[10], KindleDType::F32, &dev()).unwrap();
         let t = TestBackend::var_as_tensor::<f32>(&var).unwrap();
@@ -307,7 +307,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `var_randn_wraps_equivalent_randn_result` within the Kindle framework..
+    /// `var_randn_wraps_equivalent_randn_result`.
     fn var_randn_wraps_equivalent_randn_result() {
         let var = TestBackend::var_randn::<f32>(&[50], KindleDType::F32, &dev()).unwrap();
         let t = TestBackend::var_as_tensor::<f32>(&var).unwrap();
@@ -315,7 +315,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `tensor_to_device_is_a_noop_returning_equivalent_storage` within the Kindle framework..
+    /// `tensor_to_device_is_a_noop_returning_equivalent_storage`.
     fn tensor_to_device_is_a_noop_returning_equivalent_storage() {
         let t = TestBackend::zeros::<f32>(&[3], KindleDType::F32, &dev()).unwrap();
         let t2 = TestBackend::tensor_to_device::<f32>(&t, &dev()).unwrap();

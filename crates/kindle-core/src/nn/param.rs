@@ -26,7 +26,7 @@ pub struct Param<S: Shape, B: Backend> {
 }
 
 impl<S: Shape, B: Backend> Clone for Param<S, B> {
-    /// Core abstraction for `clone` within the Kindle framework..
+    /// `clone`.
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
@@ -38,7 +38,7 @@ impl<S: Shape, B: Backend> Clone for Param<S, B> {
 }
 
 impl<S: Shape, B: Backend> core::fmt::Debug for Param<S, B> {
-    /// Core abstraction for `fmt` within the Kindle framework..
+    /// `fmt`.
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Param").field("inner", &"...").finish()
     }
@@ -68,9 +68,9 @@ impl<S: Shape + DynShape, B: Backend> Param<S, B> {
 impl<S: Shape, B: Backend, NewD: crate::prelude::Device> crate::nn::module::ToDevice<B, NewD>
     for Param<S, B>
 {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = Param<S, B::BackendWithDevice<NewD>>;
-    /// Core abstraction for `to_device` within the Kindle framework..
+    /// `to_device`.
     fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output> {
         let field = NewD::init(arg.clone());
         let kindle_dev = NewD::to_kindle(&field)?;
@@ -88,7 +88,7 @@ impl<S: Shape + DynShape, B: Backend> Param<S, B>
 where
     (S, B::FloatElem, B::Device, Grad): TensorArgs<S, B::FloatElem, B::Device, Grad>,
 {
-    /// Core abstraction for `new_init_raw` within the Kindle framework..
+    /// `new_init_raw`.
     pub fn new_init_raw(
         args: <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
             S,
@@ -158,7 +158,7 @@ where
         })
     }
 
-    /// Core abstraction for `new_init` within the Kindle framework..
+    /// `new_init`.
     pub fn new_init<A>(args: A, init: crate::nn::init::Init) -> Result<Self>
     where
         A:
@@ -174,7 +174,7 @@ where
         Self::new_init_raw(args.into_arg(), init)
     }
 
-    /// Core abstraction for `zeros_raw` within the Kindle framework..
+    /// `zeros_raw`.
     pub fn zeros_raw(
         args: <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
             S,
@@ -196,7 +196,7 @@ where
         })
     }
 
-    /// Core abstraction for `zeros` within the Kindle framework..
+    /// `zeros`.
     pub fn zeros<A>(args: A) -> Result<Self>
     where
         A:
@@ -212,7 +212,7 @@ where
         Self::zeros_raw(args.into_arg())
     }
 
-    /// Core abstraction for `randn` within the Kindle framework..
+    /// `randn`.
     pub fn randn<A>(args: A) -> Result<Self>
     where
         A:
@@ -239,7 +239,7 @@ where
         })
     }
 
-    /// Core abstraction for `ones_raw` within the Kindle framework..
+    /// `ones_raw`.
     pub fn ones_raw(
         args: <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
             S,
@@ -261,7 +261,7 @@ where
         })
     }
 
-    /// Core abstraction for `ones` within the Kindle framework..
+    /// `ones`.
     pub fn ones<A>(args: A) -> Result<Self>
     where
         A:
@@ -320,7 +320,7 @@ where
 }
 
 impl<S: Shape + DynShape, B: Backend> Parameters<B> for Param<S, B> {
-    /// Core abstraction for `named_parameters` within the Kindle framework..
+    /// Collects named trainable parameters into `map` under the given `prefix`.
     fn named_parameters(
         &self,
         prefix: &str,
@@ -331,7 +331,7 @@ impl<S: Shape + DynShape, B: Backend> Parameters<B> for Param<S, B> {
 }
 
 impl<S1: DynShape, B: Backend> Param<S1, B> {
-    /// Core abstraction for `into_shape` within the Kindle framework..
+    /// `into_shape`.
     pub fn into_shape<S2: Shape>(self) -> Result<Param<S2, B>>
     where
         B: Backend,
@@ -361,7 +361,7 @@ use crate::nn::module::StateDict;
 use alloc::collections::BTreeMap;
 
 impl<S: Shape + DynShape, B: Backend> StateDict<B> for Param<S, B> {
-    /// Core abstraction for `load_state_dict` within the Kindle framework..
+    /// Loads parameters from a flat name→tensor map, in-place.
     fn load_state_dict(
         &mut self,
         prefix: &str,
@@ -376,7 +376,7 @@ impl<S: Shape + DynShape, B: Backend> StateDict<B> for Param<S, B> {
         Ok(())
     }
 
-    /// Core abstraction for `state_dict` within the Kindle framework..
+    /// Returns a flat map from parameter name to its raw tensor value.
     fn state_dict(&self, prefix: &str, tensors: &mut BTreeMap<String, Tensor<Dyn, B>>) {
         if let Ok(t) = self.as_tensor()
             && let Ok(dyn_t) = t.into_shape::<Dyn>()
@@ -399,7 +399,7 @@ pub struct Buffer<S: Shape, B: Backend> {
 }
 
 impl<S: Shape, B: Backend> Clone for Buffer<S, B> {
-    /// Core abstraction for `clone` within the Kindle framework..
+    /// `clone`.
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
@@ -411,14 +411,14 @@ impl<S: Shape, B: Backend> Clone for Buffer<S, B> {
 }
 
 impl<S: Shape, B: Backend> core::fmt::Debug for Buffer<S, B> {
-    /// Core abstraction for `fmt` within the Kindle framework..
+    /// `fmt`.
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Buffer").field("inner", &"...").finish()
     }
 }
 
 impl<S: Shape, B: Backend> Buffer<S, B> {
-    /// Core abstraction for `as_tensor` within the Kindle framework..
+    /// `as_tensor`.
     pub fn as_tensor(&self) -> Result<Tensor<S, B, B::FloatElem>> {
         let inner_tensor = B::var_as_tensor(&self.inner)?;
         Ok(Tensor {
@@ -441,9 +441,9 @@ impl<S: Shape + DynShape, B: Backend> Buffer<S, B> {
 impl<S: Shape, B: Backend, NewD: crate::prelude::Device> crate::nn::module::ToDevice<B, NewD>
     for Buffer<S, B>
 {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = Buffer<S, B::BackendWithDevice<NewD>>;
-    /// Core abstraction for `to_device` within the Kindle framework..
+    /// `to_device`.
     fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output> {
         let field = NewD::init(arg.clone());
         let kindle_dev = NewD::to_kindle(&field)?;
@@ -461,7 +461,7 @@ impl<S: Shape + DynShape, B: Backend> Buffer<S, B>
 where
     (S, B::FloatElem, B::Device, Grad): TensorArgs<S, B::FloatElem, B::Device, Grad>,
 {
-    /// Core abstraction for `new_init_raw` within the Kindle framework..
+    /// `new_init_raw`.
     pub fn new_init_raw(
         args: <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
             S,
@@ -531,7 +531,7 @@ where
         })
     }
 
-    /// Core abstraction for `new_init` within the Kindle framework..
+    /// `new_init`.
     pub fn new_init<A>(args: A, init: crate::nn::init::Init) -> Result<Self>
     where
         A:
@@ -547,7 +547,7 @@ where
         Self::new_init_raw(args.into_arg(), init)
     }
 
-    /// Core abstraction for `zeros_raw` within the Kindle framework..
+    /// `zeros_raw`.
     pub fn zeros_raw(
         args: <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
             S,
@@ -569,7 +569,7 @@ where
         })
     }
 
-    /// Core abstraction for `zeros` within the Kindle framework..
+    /// `zeros`.
     pub fn zeros<A>(args: A) -> Result<Self>
     where
         A:
@@ -585,7 +585,7 @@ where
         Self::zeros_raw(args.into_arg())
     }
 
-    /// Core abstraction for `ones_raw` within the Kindle framework..
+    /// `ones_raw`.
     pub fn ones_raw(
         args: <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
             S,
@@ -607,7 +607,7 @@ where
         })
     }
 
-    /// Core abstraction for `ones` within the Kindle framework..
+    /// `ones`.
     pub fn ones<A>(args: A) -> Result<Self>
     where
         A:
@@ -625,7 +625,7 @@ where
 }
 
 impl<S: Shape + DynShape, B: Backend> Parameters<B> for Buffer<S, B> {
-    /// Core abstraction for `named_parameters` within the Kindle framework..
+    /// Collects named trainable parameters into `map` under the given `prefix`.
     fn named_parameters(
         &self,
         _prefix: &str,
@@ -635,7 +635,7 @@ impl<S: Shape + DynShape, B: Backend> Parameters<B> for Buffer<S, B> {
 }
 
 impl<S: Shape + DynShape, B: Backend> StateDict<B> for Buffer<S, B> {
-    /// Core abstraction for `load_state_dict` within the Kindle framework..
+    /// Loads parameters from a flat name→tensor map, in-place.
     fn load_state_dict(
         &mut self,
         prefix: &str,
@@ -647,7 +647,7 @@ impl<S: Shape + DynShape, B: Backend> StateDict<B> for Buffer<S, B> {
         Ok(())
     }
 
-    /// Core abstraction for `state_dict` within the Kindle framework..
+    /// Returns a flat map from parameter name to its raw tensor value.
     fn state_dict(&self, prefix: &str, tensors: &mut BTreeMap<String, Tensor<Dyn, B>>) {
         if let Ok(t) = self.as_tensor()
             && let Ok(dyn_t) = t.into_shape::<Dyn>()

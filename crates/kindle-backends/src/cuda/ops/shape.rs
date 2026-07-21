@@ -68,7 +68,7 @@ pub(crate) fn launch_concat(tensors: &[&CudaStorage], dim: usize) -> Result<Cuda
         }
 
         let block_size: u32 = 256;
-        let grid_size = (elements as u32 + block_size - 1) / block_size;
+        let grid_size = (elements as u32).div_ceil(block_size);
         let cfg = cudarc::driver::LaunchConfig {
             grid_dim: (grid_size, 1, 1),
             block_dim: (block_size, 1, 1),

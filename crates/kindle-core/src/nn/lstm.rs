@@ -7,23 +7,23 @@ use alloc::vec::Vec;
 ///
 /// Supply `(In, Out)` for fully static dimensions, or [`Dyn`] for fully runtime sizes.
 pub trait LstmShape: Shape + DynShape {
-    /// Core abstraction for `In` within the Kindle framework..
+    /// `In`.
     type In: Dim;
-    /// Core abstraction for `Out` within the Kindle framework..
+    /// `Out`.
     type Out: Dim;
 }
 
 impl<In: Dim, Out: Dim> LstmShape for (In, Out) {
-    /// Core abstraction for `In` within the Kindle framework..
+    /// `In`.
     type In = In;
-    /// Core abstraction for `Out` within the Kindle framework..
+    /// `Out`.
     type Out = Out;
 }
 
 impl LstmShape for Dyn {
-    /// Core abstraction for `In` within the Kindle framework..
+    /// `In`.
     type In = usize;
-    /// Core abstraction for `Out` within the Kindle framework..
+    /// `Out`.
     type Out = usize;
 }
 
@@ -62,21 +62,21 @@ pub struct LSTMCell<
     BiasIh: crate::nn::optional::OptionalField = True,
     BiasHh: crate::nn::optional::OptionalField = True,
 > {
-    /// Core abstraction for `wi_i` within the Kindle framework..
+    /// `wi_i`.
     pub wi_i: Linear<(S::In, S::Out), B, BiasIh>,
-    /// Core abstraction for `wi_f` within the Kindle framework..
+    /// `wi_f`.
     pub wi_f: Linear<(S::In, S::Out), B, BiasIh>,
-    /// Core abstraction for `wi_g` within the Kindle framework..
+    /// `wi_g`.
     pub wi_g: Linear<(S::In, S::Out), B, BiasIh>,
-    /// Core abstraction for `wi_o` within the Kindle framework..
+    /// `wi_o`.
     pub wi_o: Linear<(S::In, S::Out), B, BiasIh>,
-    /// Core abstraction for `wh_i` within the Kindle framework..
+    /// `wh_i`.
     pub wh_i: Linear<(S::Out, S::Out), B, BiasHh>,
-    /// Core abstraction for `wh_f` within the Kindle framework..
+    /// `wh_f`.
     pub wh_f: Linear<(S::Out, S::Out), B, BiasHh>,
-    /// Core abstraction for `wh_g` within the Kindle framework..
+    /// `wh_g`.
     pub wh_g: Linear<(S::Out, S::Out), B, BiasHh>,
-    /// Core abstraction for `wh_o` within the Kindle framework..
+    /// `wh_o`.
     pub wh_o: Linear<(S::Out, S::Out), B, BiasHh>,
 }
 
@@ -89,7 +89,7 @@ where
     (In, Out): LstmShape<In = In, Out = Out>,
     (Out, Out): LstmShape<In = Out, Out = Out>,
 {
-    /// Core abstraction for `new_with` within the Kindle framework..
+    /// Creates a new instance with explicitly provided shape arguments.
     pub fn new_with(in_arg: In::Arg, out_arg: Out::Arg) -> Result<Self>
     where
         In::Arg: Clone,
@@ -115,7 +115,7 @@ where
     (In, Out): LstmShape<In = In, Out = Out>,
     (Out, Out): LstmShape<In = Out, Out = Out>,
 {
-    /// Core abstraction for `new` within the Kindle framework..
+    /// Creates a new instance with default (statically inferred) shape arguments.
     pub fn new() -> Result<Self> {
         Self::new_with((), ())
     }
@@ -130,7 +130,7 @@ where
     (In, Out): LstmShape<In = In, Out = Out>,
     (Out, Out): LstmShape<In = Out, Out = Out>,
 {
-    /// Core abstraction for `new_with` within the Kindle framework..
+    /// Creates a new instance with explicitly provided shape arguments.
     pub fn new_with(in_arg: In::Arg, out_arg: Out::Arg) -> Result<Self>
     where
         In::Arg: Clone,
@@ -156,7 +156,7 @@ where
     (In, Out): LstmShape<In = In, Out = Out>,
     (Out, Out): LstmShape<In = Out, Out = Out>,
 {
-    /// Core abstraction for `new` within the Kindle framework..
+    /// Creates a new instance with default (statically inferred) shape arguments.
     pub fn new() -> Result<Self> {
         Self::new_with((), ())
     }
@@ -171,7 +171,7 @@ where
     (In, Out): LstmShape<In = In, Out = Out>,
     (Out, Out): LstmShape<In = Out, Out = Out>,
 {
-    /// Core abstraction for `new_with` within the Kindle framework..
+    /// Creates a new instance with explicitly provided shape arguments.
     pub fn new_with(in_arg: In::Arg, out_arg: Out::Arg) -> Result<Self>
     where
         In::Arg: Clone,
@@ -197,7 +197,7 @@ where
     (In, Out): LstmShape<In = In, Out = Out>,
     (Out, Out): LstmShape<In = Out, Out = Out>,
 {
-    /// Core abstraction for `new` within the Kindle framework..
+    /// Creates a new instance with default (statically inferred) shape arguments.
     pub fn new() -> Result<Self> {
         Self::new_with((), ())
     }
@@ -212,7 +212,7 @@ where
     (In, Out): LstmShape<In = In, Out = Out>,
     (Out, Out): LstmShape<In = Out, Out = Out>,
 {
-    /// Core abstraction for `new_with` within the Kindle framework..
+    /// Creates a new instance with explicitly provided shape arguments.
     pub fn new_with(in_arg: In::Arg, out_arg: Out::Arg) -> Result<Self>
     where
         In::Arg: Clone,
@@ -238,7 +238,7 @@ where
     (In, Out): LstmShape<In = In, Out = Out>,
     (Out, Out): LstmShape<In = Out, Out = Out>,
 {
-    /// Core abstraction for `new` within the Kindle framework..
+    /// Creates a new instance with default (statically inferred) shape arguments.
     pub fn new() -> Result<Self> {
         Self::new_with((), ())
     }
@@ -251,7 +251,7 @@ where
     B::FloatElem: ConstDType,
     B::Device: ConstDevice,
 {
-    /// Core abstraction for `new_with` within the Kindle framework..
+    /// Creates a new instance with explicitly provided shape arguments.
     pub fn new_with(in_f: usize, out_f: usize) -> Result<Self> {
         Ok(Self {
             wi_i: Linear::<(usize, usize), B, True>::new_with((in_f, out_f))?,
@@ -273,7 +273,7 @@ where
     B::FloatElem: ConstDType,
     B::Device: ConstDevice,
 {
-    /// Core abstraction for `new_with` within the Kindle framework..
+    /// Creates a new instance with explicitly provided shape arguments.
     pub fn new_with(in_f: usize, out_f: usize) -> Result<Self> {
         Ok(Self {
             wi_i: Linear::<(usize, usize), B, False>::new_with((in_f, out_f))?,
@@ -295,7 +295,7 @@ where
     B::FloatElem: ConstDType,
     B::Device: ConstDevice,
 {
-    /// Core abstraction for `new_with` within the Kindle framework..
+    /// Creates a new instance with explicitly provided shape arguments.
     pub fn new_with(in_f: usize, out_f: usize) -> Result<Self> {
         Ok(Self {
             wi_i: Linear::<(usize, usize), B, True>::new_with((in_f, out_f))?,
@@ -325,7 +325,7 @@ where
     Linear<(In, Out), B, BiasIh>: Parameters<B>,
     Linear<(Out, Out), B, BiasHh>: Parameters<B>,
 {
-    /// Core abstraction for `named_parameters` within the Kindle framework..
+    /// Collects named trainable parameters into `map` under the given `prefix`.
     fn named_parameters(
         &self,
         prefix: &str,
@@ -364,13 +364,13 @@ where
     Linear<(Out, Out), B, BiasHh>:
         Module<Tensor<(Batch, Out), B>, Output = Tensor<(Batch, Out), B>, Error = Error>,
 {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = (Tensor<(Batch, Out), B>, Tensor<(Batch, Out), B>);
-    /// Core abstraction for `Error` within the Kindle framework..
+    /// The error type returned if the forward pass fails.
     type Error = Error;
 
     #[inline]
-    /// Core abstraction for `forward` within the Kindle framework..
+    /// Runs the forward pass of this module on the given input.
     fn forward(
         &self,
         (x, (h_prev, c_prev)): (
@@ -409,7 +409,7 @@ where
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone)]
-/// Core abstraction for `LSTM` within the Kindle framework..
+/// `LSTM`.
 #[allow(clippy::upper_case_acronyms)]
 pub struct LSTM<
     S: LstmShape,
@@ -417,7 +417,7 @@ pub struct LSTM<
     BiasIh: crate::nn::optional::OptionalField = True,
     BiasHh: crate::nn::optional::OptionalField = True,
 > {
-    /// Core abstraction for `cell` within the Kindle framework..
+    /// `cell`.
     pub cell: LSTMCell<S, B, BiasIh, BiasHh>,
 }
 
@@ -428,7 +428,7 @@ impl<
     BiasHh: crate::nn::optional::OptionalField,
 > LSTM<S, B, BiasIh, BiasHh>
 {
-    /// Core abstraction for `new` within the Kindle framework..
+    /// Creates a new instance with default (statically inferred) shape arguments.
     pub fn new(cell: LSTMCell<S, B, BiasIh, BiasHh>) -> Self {
         Self { cell }
     }
@@ -444,7 +444,7 @@ impl<
 where
     LSTMCell<(In, Out), B, BiasIh, BiasHh>: Parameters<B>,
 {
-    /// Core abstraction for `named_parameters` within the Kindle framework..
+    /// Collects named trainable parameters into `map` under the given `prefix`.
     fn named_parameters(
         &self,
         prefix: &str,
@@ -479,16 +479,16 @@ where
             Error = Error,
         >,
 {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = (
         Tensor<(Batch, Seq, Out), B>,
         (Tensor<(Batch, Out), B>, Tensor<(Batch, Out), B>),
     );
-    /// Core abstraction for `Error` within the Kindle framework..
+    /// The error type returned if the forward pass fails.
     type Error = Error;
 
     #[inline]
-    /// Core abstraction for `forward` within the Kindle framework..
+    /// Runs the forward pass of this module on the given input.
     fn forward(
         &self,
         (x, (mut h, mut c)): (
@@ -525,7 +525,7 @@ where
     Linear<(S::In, S::Out), B, BiasIh>: crate::nn::module::NamedLayers,
     Linear<(S::Out, S::Out), B, BiasHh>: crate::nn::module::NamedLayers,
 {
-    /// Core abstraction for `layer_structure` within the Kindle framework..
+    /// Returns the layer hierarchy rooted at this module for visualization.
     fn layer_structure(&self, prefix: &str) -> Vec<crate::nn::module::LayerNode> {
         let mut children = Vec::new();
 
@@ -601,7 +601,7 @@ impl<
 where
     LSTMCell<S, B, BiasIh, BiasHh>: crate::nn::module::NamedLayers,
 {
-    /// Core abstraction for `layer_structure` within the Kindle framework..
+    /// Returns the layer hierarchy rooted at this module for visualization.
     fn layer_structure(&self, prefix: &str) -> Vec<crate::nn::module::LayerNode> {
         let mut children = Vec::new();
         let p_cell = if prefix.is_empty() {

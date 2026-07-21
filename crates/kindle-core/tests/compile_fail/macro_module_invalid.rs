@@ -4,9 +4,9 @@ use kindle_core::prelude::*;
 use kindle_macros::{s, module};
 
 #[module(foo = "bar")]
-/// Core abstraction for `MyNet` within the Kindle framework.
+/// My net.
 pub struct MyNet<B: Backend> {
-    /// Core abstraction for `linear` within the Kindle framework.
+    /// Linear.
     pub linear: Linear<s![10, 10], B>,
 }
 

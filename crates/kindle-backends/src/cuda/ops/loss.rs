@@ -36,7 +36,7 @@ pub(crate) fn launch_nll_loss(
         };
 
         let cfg = cudarc::driver::LaunchConfig {
-            grid_dim: ((batch as u32 + 255) / 256, 1, 1),
+            grid_dim: ((batch as u32).div_ceil(256), 1, 1),
             block_dim: (256, 1, 1),
             shared_mem_bytes: 0,
         };

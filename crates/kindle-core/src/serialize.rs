@@ -3,7 +3,7 @@ use alloc::collections::BTreeMap;
 
 /// A trait for serializing a collection of dynamic tensors to a specific format.
 pub trait Serializer {
-    /// Core abstraction for `Error` within the Kindle framework..
+    /// The error type returned if the forward pass fails.
     type Error: core::fmt::Debug + core::fmt::Display;
 
     /// Serializes the state dict to the given path or stream.
@@ -18,7 +18,7 @@ pub trait Serializer {
 
 /// A trait for deserializing a collection of dynamic tensors from a specific format.
 pub trait Deserializer {
-    /// Core abstraction for `Error` within the Kindle framework..
+    /// The error type returned if the forward pass fails.
     type Error: core::fmt::Debug + core::fmt::Display;
 
     /// Deserializes the state dict from the given path or stream.
@@ -32,14 +32,14 @@ pub trait Deserializer {
 }
 
 #[cfg(feature = "std")]
-/// Core abstraction for `SafetensorsSerializer` within the Kindle framework..
+/// `SafetensorsSerializer`.
 pub struct SafetensorsSerializer<'a> {
     path: &'a std::path::Path,
 }
 
 #[cfg(feature = "std")]
 impl<'a> SafetensorsSerializer<'a> {
-    /// Core abstraction for `new` within the Kindle framework..
+    /// Creates a new instance with default (statically inferred) shape arguments.
     pub fn new(path: &'a std::path::Path) -> Self {
         Self { path }
     }
@@ -47,10 +47,10 @@ impl<'a> SafetensorsSerializer<'a> {
 
 #[cfg(feature = "std")]
 impl<'a> Serializer for SafetensorsSerializer<'a> {
-    /// Core abstraction for `Error` within the Kindle framework..
+    /// The error type returned if the forward pass fails.
     type Error = anyhow::Error;
 
-    /// Core abstraction for `serialize` within the Kindle framework..
+    /// `serialize`.
     fn serialize<B: Backend>(
         &mut self,
         state_dict: &BTreeMap<String, Tensor<Dyn, B>>,
@@ -79,7 +79,11 @@ impl<'a> Serializer for SafetensorsSerializer<'a> {
                 KindleDType::U32 => Dtype::U32,
                 KindleDType::I64 => Dtype::I64,
                 KindleDType::U8 => Dtype::U8,
-                KindleDType::Q8_0 => panic!("Safetensors does not support Q8_0 dtype natively"),
+                KindleDType::Q8_0 => {
+                    return Err(anyhow::anyhow!(
+                        "Safetensors does not support Q8_0 dtype natively"
+                    ));
+                }
             };
             let view = TensorView::new(safe_dtype, shape.clone(), bytes.as_slice())
                 .map_err(|e| anyhow::anyhow!("Failed to create TensorView: {:?}", e))?;
@@ -94,14 +98,14 @@ impl<'a> Serializer for SafetensorsSerializer<'a> {
 }
 
 #[cfg(feature = "std")]
-/// Core abstraction for `SafetensorsDeserializer` within the Kindle framework..
+/// `SafetensorsDeserializer`.
 pub struct SafetensorsDeserializer<'a> {
     path: &'a std::path::Path,
 }
 
 #[cfg(feature = "std")]
 impl<'a> SafetensorsDeserializer<'a> {
-    /// Core abstraction for `new` within the Kindle framework..
+    /// Creates a new instance with default (statically inferred) shape arguments.
     pub fn new(path: &'a std::path::Path) -> Self {
         Self { path }
     }
@@ -109,10 +113,10 @@ impl<'a> SafetensorsDeserializer<'a> {
 
 #[cfg(feature = "std")]
 impl<'a> Deserializer for SafetensorsDeserializer<'a> {
-    /// Core abstraction for `Error` within the Kindle framework..
+    /// The error type returned if the forward pass fails.
     type Error = anyhow::Error;
 
-    /// Core abstraction for `deserialize` within the Kindle framework..
+    /// `deserialize`.
     fn deserialize<B: Backend>(
         &mut self,
         device: &KindleDevice,
@@ -160,7 +164,7 @@ impl<'a> Deserializer for SafetensorsDeserializer<'a> {
 
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(dead_code)]
-/// Core abstraction for `SerializedTensor` within the Kindle framework..
+/// `SerializedTensor`.
 struct SerializedTensor {
     shape: Vec<usize>,
     dtype: String,
@@ -168,14 +172,14 @@ struct SerializedTensor {
 }
 
 #[cfg(feature = "std")]
-/// Core abstraction for `BincodeSerializer` within the Kindle framework..
+/// `BincodeSerializer`.
 pub struct BincodeSerializer<'a> {
     path: &'a std::path::Path,
 }
 
 #[cfg(feature = "std")]
 impl<'a> BincodeSerializer<'a> {
-    /// Core abstraction for `new` within the Kindle framework..
+    /// Creates a new instance with default (statically inferred) shape arguments.
     pub fn new(path: &'a std::path::Path) -> Self {
         Self { path }
     }
@@ -183,10 +187,10 @@ impl<'a> BincodeSerializer<'a> {
 
 #[cfg(feature = "std")]
 impl<'a> Serializer for BincodeSerializer<'a> {
-    /// Core abstraction for `Error` within the Kindle framework..
+    /// The error type returned if the forward pass fails.
     type Error = anyhow::Error;
 
-    /// Core abstraction for `serialize` within the Kindle framework..
+    /// `serialize`.
     fn serialize<B: Backend>(
         &mut self,
         state_dict: &BTreeMap<String, Tensor<Dyn, B>>,
@@ -227,14 +231,14 @@ impl<'a> Serializer for BincodeSerializer<'a> {
 }
 
 #[cfg(feature = "std")]
-/// Core abstraction for `BincodeDeserializer` within the Kindle framework..
+/// `BincodeDeserializer`.
 pub struct BincodeDeserializer<'a> {
     path: &'a std::path::Path,
 }
 
 #[cfg(feature = "std")]
 impl<'a> BincodeDeserializer<'a> {
-    /// Core abstraction for `new` within the Kindle framework..
+    /// Creates a new instance with default (statically inferred) shape arguments.
     pub fn new(path: &'a std::path::Path) -> Self {
         Self { path }
     }
@@ -242,10 +246,10 @@ impl<'a> BincodeDeserializer<'a> {
 
 #[cfg(feature = "std")]
 impl<'a> Deserializer for BincodeDeserializer<'a> {
-    /// Core abstraction for `Error` within the Kindle framework..
+    /// The error type returned if the forward pass fails.
     type Error = anyhow::Error;
 
-    /// Core abstraction for `deserialize` within the Kindle framework..
+    /// `deserialize`.
     fn deserialize<B: Backend>(
         &mut self,
         device: &KindleDevice,
@@ -289,24 +293,24 @@ impl<'a> Deserializer for BincodeDeserializer<'a> {
 
 #[cfg(feature = "std")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-/// Core abstraction for `Format` within the Kindle framework..
+/// `Format`.
 pub enum Format {
-    /// Core abstraction for `Safetensors` within the Kindle framework..
+    /// `Safetensors`.
     Safetensors,
-    /// Core abstraction for `ONNX` within the Kindle framework..
+    /// `ONNX`.
     ONNX,
 }
 
 #[cfg(feature = "std")]
-/// Core abstraction for `ModelExt` within the Kindle framework..
+/// `ModelExt`.
 pub trait ModelExt<B: Backend> {
-    /// Core abstraction for `save` within the Kindle framework..
+    /// `save`.
     fn save(&self, format: Format, path: &std::path::Path) -> Result<()>
     where
         <<B as Backend>::Device as Device>::Field: Default,
         <<B as Backend>::FloatElem as crate::tensor::dtype::DType>::Field: Default;
 
-    /// Core abstraction for `load` within the Kindle framework..
+    /// `load`.
     fn load(&mut self, format: Format, path: &std::path::Path, device: &KindleDevice) -> Result<()>
     where
         <<B as Backend>::Device as Device>::Field: Default,
@@ -315,7 +319,7 @@ pub trait ModelExt<B: Backend> {
 
 #[cfg(feature = "std")]
 impl<B: Backend, T: crate::nn::module::StateDict<B>> ModelExt<B> for T {
-    /// Core abstraction for `save` within the Kindle framework..
+    /// `save`.
     fn save(&self, format: Format, path: &std::path::Path) -> Result<()>
     where
         <<B as Backend>::Device as Device>::Field: Default,
@@ -336,7 +340,7 @@ impl<B: Backend, T: crate::nn::module::StateDict<B>> ModelExt<B> for T {
         Ok(())
     }
 
-    /// Core abstraction for `load` within the Kindle framework..
+    /// `load`.
     fn load(&mut self, format: Format, path: &std::path::Path, device: &KindleDevice) -> Result<()>
     where
         <<B as Backend>::Device as Device>::Field: Default,

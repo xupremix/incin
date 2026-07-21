@@ -6,109 +6,109 @@
 //! or dynamically (using `try_stack` / `dyn_slice`) depending on the operation chosen.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-/// Core abstraction for `IndexSpec` within the Kindle framework..
+/// `IndexSpec`.
 pub enum IndexSpec {
-    /// Core abstraction for `All` within the Kindle framework..
+    /// `All`.
     All,
-    /// Core abstraction for `Range` within the Kindle framework..
+    /// `Range`.
     Range(isize, isize),
-    /// Core abstraction for `RangeFrom` within the Kindle framework..
+    /// `RangeFrom`.
     RangeFrom(isize),
-    /// Core abstraction for `RangeTo` within the Kindle framework..
+    /// `RangeTo`.
     RangeTo(isize),
-    /// Core abstraction for `Index` within the Kindle framework..
+    /// `Index`.
     Index(isize),
 }
 
 impl From<isize> for IndexSpec {
-    /// Core abstraction for `from` within the Kindle framework..
+    /// `from`.
     fn from(idx: isize) -> Self {
         IndexSpec::Index(idx)
     }
 }
 impl From<core::ops::Range<isize>> for IndexSpec {
-    /// Core abstraction for `from` within the Kindle framework..
+    /// `from`.
     fn from(r: core::ops::Range<isize>) -> Self {
         IndexSpec::Range(r.start, r.end)
     }
 }
 impl From<core::ops::RangeFrom<isize>> for IndexSpec {
-    /// Core abstraction for `from` within the Kindle framework..
+    /// `from`.
     fn from(r: core::ops::RangeFrom<isize>) -> Self {
         IndexSpec::RangeFrom(r.start)
     }
 }
 impl From<core::ops::RangeTo<isize>> for IndexSpec {
-    /// Core abstraction for `from` within the Kindle framework..
+    /// `from`.
     fn from(r: core::ops::RangeTo<isize>) -> Self {
         IndexSpec::RangeTo(r.end)
     }
 }
 
 impl From<usize> for IndexSpec {
-    /// Core abstraction for `from` within the Kindle framework..
+    /// `from`.
     fn from(idx: usize) -> Self {
         IndexSpec::Index(idx as isize)
     }
 }
 impl From<core::ops::Range<usize>> for IndexSpec {
-    /// Core abstraction for `from` within the Kindle framework..
+    /// `from`.
     fn from(r: core::ops::Range<usize>) -> Self {
         IndexSpec::Range(r.start as isize, r.end as isize)
     }
 }
 impl From<core::ops::RangeFrom<usize>> for IndexSpec {
-    /// Core abstraction for `from` within the Kindle framework..
+    /// `from`.
     fn from(r: core::ops::RangeFrom<usize>) -> Self {
         IndexSpec::RangeFrom(r.start as isize)
     }
 }
 impl From<core::ops::RangeTo<usize>> for IndexSpec {
-    /// Core abstraction for `from` within the Kindle framework..
+    /// `from`.
     fn from(r: core::ops::RangeTo<usize>) -> Self {
         IndexSpec::RangeTo(r.end as isize)
     }
 }
 impl From<i32> for IndexSpec {
-    /// Core abstraction for `from` within the Kindle framework..
+    /// `from`.
     fn from(idx: i32) -> Self {
         IndexSpec::Index(idx as isize)
     }
 }
 
 impl From<core::ops::Range<i32>> for IndexSpec {
-    /// Core abstraction for `from` within the Kindle framework..
+    /// `from`.
     fn from(r: core::ops::Range<i32>) -> Self {
         IndexSpec::Range(r.start as isize, r.end as isize)
     }
 }
 impl From<core::ops::RangeFrom<i32>> for IndexSpec {
-    /// Core abstraction for `from` within the Kindle framework..
+    /// `from`.
     fn from(r: core::ops::RangeFrom<i32>) -> Self {
         IndexSpec::RangeFrom(r.start as isize)
     }
 }
 impl From<core::ops::RangeTo<i32>> for IndexSpec {
-    /// Core abstraction for `from` within the Kindle framework..
+    /// `from`.
     fn from(r: core::ops::RangeTo<i32>) -> Self {
         IndexSpec::RangeTo(r.end as isize)
     }
 }
 impl From<core::ops::RangeFull> for IndexSpec {
-    /// Core abstraction for `from` within the Kindle framework..
+    /// `from`.
     fn from(_: core::ops::RangeFull) -> Self {
         IndexSpec::All
     }
 }
 
-/// Core abstraction for `IndexArgs` within the Kindle framework..
+/// `IndexArgs`.
 pub trait IndexArgs {
-    /// Core abstraction for `into_specs` within the Kindle framework..
+    /// `into_specs`.
     fn into_specs(self) -> alloc::vec::Vec<IndexSpec>;
 }
 
 impl<T: Into<IndexSpec>> IndexArgs for T {
-    /// Core abstraction for `into_specs` within the Kindle framework..
+    /// `into_specs`.
     fn into_specs(self) -> alloc::vec::Vec<IndexSpec> {
         alloc::vec![self.into()]
     }
@@ -117,7 +117,7 @@ impl<T: Into<IndexSpec>> IndexArgs for T {
 macro_rules! impl_index_args_tuple {
     ($($t:ident),+) => {
         impl<$($t: Into<IndexSpec>),+> IndexArgs for ($($t,)+) {
-            /// Core abstraction for `into_specs` within the Kindle framework..
+            /// `into_specs`.
             fn into_specs(self) -> alloc::vec::Vec<IndexSpec> {
                 let mut specs = alloc::vec::Vec::new();
                 #[allow(non_snake_case)]
@@ -139,36 +139,36 @@ impl_index_args_tuple!(A, B, C, D, E);
 impl_index_args_tuple!(A, B, C, D, E, F);
 impl_index_args_tuple!(A, B, C, D, E, F, G);
 
-/// Core abstraction for `ShapeEq` within the Kindle framework..
+/// `ShapeEq`.
 pub trait ShapeEq<Other> {
-    /// Core abstraction for `SHAPES_EQUAL` within the Kindle framework..
+    /// `SHAPES_EQUAL`.
     const SHAPES_EQUAL: bool;
-    /// Core abstraction for `ASSERT_SHAPES_MATCH` within the Kindle framework..
+    /// `ASSERT_SHAPES_MATCH`.
     const ASSERT_SHAPES_MATCH: ();
 }
 
 impl<S> ShapeEq<S> for S {
-    /// Core abstraction for `SHAPES_EQUAL` within the Kindle framework..
+    /// `SHAPES_EQUAL`.
     const SHAPES_EQUAL: bool = true;
-    /// Core abstraction for `ASSERT_SHAPES_MATCH` within the Kindle framework..
+    /// `ASSERT_SHAPES_MATCH`.
     const ASSERT_SHAPES_MATCH: () = assert!(
         Self::SHAPES_EQUAL,
         "Shape Mismatch: Attempted to operate on tensors of incompatible shapes."
     );
 }
 
-/// Core abstraction for `DTypeEq` within the Kindle framework..
+/// `DTypeEq`.
 pub trait DTypeEq<Other> {
-    /// Core abstraction for `DTYPES_EQUAL` within the Kindle framework..
+    /// `DTYPES_EQUAL`.
     const DTYPES_EQUAL: bool;
-    /// Core abstraction for `ASSERT_DTYPES_MATCH` within the Kindle framework..
+    /// `ASSERT_DTYPES_MATCH`.
     const ASSERT_DTYPES_MATCH: ();
 }
 
 impl<T> DTypeEq<T> for T {
-    /// Core abstraction for `DTYPES_EQUAL` within the Kindle framework..
+    /// `DTYPES_EQUAL`.
     const DTYPES_EQUAL: bool = true;
-    /// Core abstraction for `ASSERT_DTYPES_MATCH` within the Kindle framework..
+    /// `ASSERT_DTYPES_MATCH`.
     const ASSERT_DTYPES_MATCH: () = assert!(
         Self::DTYPES_EQUAL,
         "DType Mismatch: Attempted to operate on tensors of incompatible datatypes."

@@ -64,12 +64,12 @@ impl Debug for Error {
 }
 
 #[cfg(test)]
-/// Core abstraction for `tests` within the Kindle framework..
+/// `tests`.
 mod tests {
     use super::*;
 
     #[test]
-    /// Core abstraction for `test_error_formatting` within the Kindle framework..
+    /// `test_error_formatting`.
     fn test_error_formatting() {
         let err = Error::OutOfMemory {
             device: "CUDA:0".to_string(),

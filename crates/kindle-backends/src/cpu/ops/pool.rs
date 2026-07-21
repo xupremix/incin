@@ -365,7 +365,7 @@ pub(crate) fn adaptive_avg_pool2d_impl<T: DType, D: kindle_core::prelude::Device
 // Shared output-size arithmetic (mirrors ops::conv's out_size)
 // ---------------------------------------------------------------------------
 
-/// Core abstraction for `out_size` within the Kindle framework..
+/// `out_size`.
 fn out_size(
     len: usize,
     kernel_size: usize,
@@ -383,22 +383,22 @@ fn out_size(
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
-/// Core abstraction for `tests` within the Kindle framework..
+/// `tests`.
 mod tests {
     use super::*;
     use crate::cpu::CpuBackend;
     use crate::cpu::gradcheck::gradcheck;
     use kindle_core::prelude::{Cpu, ReductionOps};
 
-    /// Core abstraction for `TestBackend` within the Kindle framework..
+    /// `TestBackend`.
     type TestBackend = CpuBackend<f32, Cpu>;
 
-    /// Core abstraction for `tensor` within the Kindle framework..
+    /// `tensor`.
     fn tensor(v: Vec<f32>, shape: Vec<usize>) -> CpuStorage {
         CpuStorage::from_contiguous(CpuBuffer::F32(v), shape)
     }
 
-    /// Core abstraction for `f32_vec` within the Kindle framework..
+    /// `f32_vec`.
     fn f32_vec(s: &CpuStorage) -> Vec<f32> {
         match &*s.buffer {
             CpuBuffer::F32(v) => v.clone(),
@@ -409,7 +409,7 @@ mod tests {
     // --- max_pool2d forward ---
 
     #[test]
-    /// Core abstraction for `max_pool2d_forward_no_overlap_hand_computed` within the Kindle framework..
+    /// `max_pool2d_forward_no_overlap_hand_computed`.
     fn max_pool2d_forward_no_overlap_hand_computed() {
         // [1,1,4,4] input, kernel=2x2, stride=2x2 -> [1,1,2,2], non-overlapping.
         let input_data: Vec<f32> = vec![
@@ -429,7 +429,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `max_pool2d_forward_with_padding_zero_boundary` within the Kindle framework..
+    /// `max_pool2d_forward_with_padding_zero_boundary`.
     fn max_pool2d_forward_with_padding_zero_boundary() {
         // [1,1,2,2] input, kernel=2x2, stride=1x1, padding=1x1.
         let input = tensor(vec![1.0, -2.0, -3.0, 4.0], vec![1, 1, 2, 2]);
@@ -449,7 +449,7 @@ mod tests {
     // --- max_pool2d backward ---
 
     #[test]
-    /// Core abstraction for `max_pool2d_backward_non_overlapping_routes_grad_to_winner_only` within the Kindle framework..
+    /// `max_pool2d_backward_non_overlapping_routes_grad_to_winner_only`.
     fn max_pool2d_backward_non_overlapping_routes_grad_to_winner_only() {
         let input_data: Vec<f32> = vec![
             1.0, 2.0, 3.0, 4.0, //
@@ -499,7 +499,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `max_pool2d_gradcheck_overlapping` within the Kindle framework..
+    /// `max_pool2d_gradcheck_overlapping`.
     fn max_pool2d_gradcheck_overlapping() {
         let input = tensor(
             vec![0.1, 0.5, 0.3, 0.9, 0.2, 0.4, 0.7, 0.6, 0.8],
@@ -520,7 +520,7 @@ mod tests {
     // --- avg_pool2d forward ---
 
     #[test]
-    /// Core abstraction for `avg_pool2d_forward_no_overlap_hand_computed` within the Kindle framework..
+    /// `avg_pool2d_forward_no_overlap_hand_computed`.
     fn avg_pool2d_forward_no_overlap_hand_computed() {
         let input_data: Vec<f32> = vec![
             1.0, 2.0, 3.0, 4.0, //
@@ -541,7 +541,7 @@ mod tests {
     // --- avg_pool2d backward ---
 
     #[test]
-    /// Core abstraction for `avg_pool2d_backward_overlapping_windows_sums_grad_contributions` within the Kindle framework..
+    /// `avg_pool2d_backward_overlapping_windows_sums_grad_contributions`.
     fn avg_pool2d_backward_overlapping_windows_sums_grad_contributions() {
         // [1,1,1,3] input, kernel=1x2, stride=1x1 (overlapping): 2 output
         // windows, middle position covered by both.
@@ -562,7 +562,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `avg_pool2d_gradcheck_overlapping` within the Kindle framework..
+    /// `avg_pool2d_gradcheck_overlapping`.
     fn avg_pool2d_gradcheck_overlapping() {
         let input = tensor(
             vec![0.1, 0.5, 0.3, 0.9, 0.2, 0.4, 0.7, 0.6, 0.8],
@@ -582,7 +582,7 @@ mod tests {
     // --- adaptive_avg_pool2d forward ---
 
     #[test]
-    /// Core abstraction for `adaptive_avg_pool2d_evenly_dividing_matches_avg_pool2d` within the Kindle framework..
+    /// `adaptive_avg_pool2d_evenly_dividing_matches_avg_pool2d`.
     fn adaptive_avg_pool2d_evenly_dividing_matches_avg_pool2d() {
         let input_data: Vec<f32> = vec![
             1.0, 2.0, 3.0, 4.0, //
@@ -630,7 +630,7 @@ mod tests {
     // --- adaptive_avg_pool2d backward ---
 
     #[test]
-    /// Core abstraction for `adaptive_avg_pool2d_gradcheck_non_evenly_dividing` within the Kindle framework..
+    /// `adaptive_avg_pool2d_gradcheck_non_evenly_dividing`.
     fn adaptive_avg_pool2d_gradcheck_non_evenly_dividing() {
         let input_data: Vec<f32> = (1..=7).map(|x| x as f32 * 0.1).collect();
         let input = tensor(input_data, vec![1, 1, 7, 1]);

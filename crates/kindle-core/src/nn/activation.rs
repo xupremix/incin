@@ -8,7 +8,7 @@ use crate::prelude::*;
 pub struct ReLU;
 
 impl<B: Backend> Parameters<B> for ReLU {
-    /// Core abstraction for `named_parameters` within the Kindle framework..
+    /// Collects named trainable parameters into `map` under the given `prefix`.
     fn named_parameters(
         &self,
         _prefix: &str,
@@ -18,13 +18,13 @@ impl<B: Backend> Parameters<B> for ReLU {
 }
 
 impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for ReLU {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<S, B>;
-    /// Core abstraction for `Error` within the Kindle framework..
+    /// The error type returned if the forward pass fails.
     type Error = Error;
 
     #[inline]
-    /// Core abstraction for `forward` within the Kindle framework..
+    /// Runs the forward pass of this module on the given input.
     fn forward(&self, x: Tensor<S, B>) -> core::result::Result<Tensor<S, B>, Error> {
         x.relu()
     }
@@ -38,7 +38,7 @@ impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for ReLU {
 pub struct GELU;
 
 impl<B: Backend> Parameters<B> for GELU {
-    /// Core abstraction for `named_parameters` within the Kindle framework..
+    /// Collects named trainable parameters into `map` under the given `prefix`.
     fn named_parameters(
         &self,
         _prefix: &str,
@@ -48,13 +48,13 @@ impl<B: Backend> Parameters<B> for GELU {
 }
 
 impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for GELU {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<S, B>;
-    /// Core abstraction for `Error` within the Kindle framework..
+    /// The error type returned if the forward pass fails.
     type Error = Error;
 
     #[inline]
-    /// Core abstraction for `forward` within the Kindle framework..
+    /// Runs the forward pass of this module on the given input.
     fn forward(&self, x: Tensor<S, B>) -> core::result::Result<Tensor<S, B>, Error> {
         x.gelu()
     }
@@ -68,7 +68,7 @@ impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for GELU {
 pub struct Swish;
 
 impl<B: Backend> Parameters<B> for Swish {
-    /// Core abstraction for `named_parameters` within the Kindle framework..
+    /// Collects named trainable parameters into `map` under the given `prefix`.
     fn named_parameters(
         &self,
         _prefix: &str,
@@ -78,13 +78,13 @@ impl<B: Backend> Parameters<B> for Swish {
 }
 
 impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for Swish {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<S, B>;
-    /// Core abstraction for `Error` within the Kindle framework..
+    /// The error type returned if the forward pass fails.
     type Error = Error;
 
     #[inline]
-    /// Core abstraction for `forward` within the Kindle framework..
+    /// Runs the forward pass of this module on the given input.
     fn forward(&self, x: Tensor<S, B>) -> core::result::Result<Tensor<S, B>, Error> {
         x.swish()
     }
@@ -98,7 +98,7 @@ impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for Swish {
 pub struct Mish;
 
 impl<B: Backend> Parameters<B> for Mish {
-    /// Core abstraction for `named_parameters` within the Kindle framework..
+    /// Collects named trainable parameters into `map` under the given `prefix`.
     fn named_parameters(
         &self,
         _prefix: &str,
@@ -108,13 +108,13 @@ impl<B: Backend> Parameters<B> for Mish {
 }
 
 impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for Mish {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<S, B>;
-    /// Core abstraction for `Error` within the Kindle framework..
+    /// The error type returned if the forward pass fails.
     type Error = Error;
 
     #[inline]
-    /// Core abstraction for `forward` within the Kindle framework..
+    /// Runs the forward pass of this module on the given input.
     fn forward(&self, x: Tensor<S, B>) -> core::result::Result<Tensor<S, B>, Error> {
         x.mish()
     }
@@ -130,7 +130,7 @@ impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for Mish {
 pub struct ELU;
 
 impl<B: Backend> Parameters<B> for ELU {
-    /// Core abstraction for `named_parameters` within the Kindle framework..
+    /// Collects named trainable parameters into `map` under the given `prefix`.
     fn named_parameters(
         &self,
         _prefix: &str,
@@ -140,13 +140,13 @@ impl<B: Backend> Parameters<B> for ELU {
 }
 
 impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for ELU {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<S, B>;
-    /// Core abstraction for `Error` within the Kindle framework..
+    /// The error type returned if the forward pass fails.
     type Error = Error;
 
     #[inline]
-    /// Core abstraction for `forward` within the Kindle framework..
+    /// Runs the forward pass of this module on the given input.
     fn forward(&self, x: Tensor<S, B>) -> core::result::Result<Tensor<S, B>, Error> {
         x.elu()
     }
@@ -165,14 +165,14 @@ pub struct Softmax {
 }
 
 impl Softmax {
-    /// Core abstraction for `new` within the Kindle framework..
+    /// Creates a new instance with default (statically inferred) shape arguments.
     pub fn new(dim: usize) -> Self {
         Self { dim }
     }
 }
 
 impl<B: Backend> Parameters<B> for Softmax {
-    /// Core abstraction for `named_parameters` within the Kindle framework..
+    /// Collects named trainable parameters into `map` under the given `prefix`.
     fn named_parameters(
         &self,
         _prefix: &str,
@@ -182,13 +182,13 @@ impl<B: Backend> Parameters<B> for Softmax {
 }
 
 impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for Softmax {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<S, B>;
-    /// Core abstraction for `Error` within the Kindle framework..
+    /// The error type returned if the forward pass fails.
     type Error = Error;
 
     #[inline]
-    /// Core abstraction for `forward` within the Kindle framework..
+    /// Runs the forward pass of this module on the given input.
     fn forward(&self, x: Tensor<S, B>) -> core::result::Result<Tensor<S, B>, Error> {
         x.softmax(self.dim)
     }
@@ -201,7 +201,7 @@ impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for Softmax {
 pub struct Sigmoid;
 
 impl<B: Backend> Parameters<B> for Sigmoid {
-    /// Core abstraction for `named_parameters` within the Kindle framework..
+    /// Collects named trainable parameters into `map` under the given `prefix`.
     fn named_parameters(
         &self,
         _prefix: &str,
@@ -211,13 +211,13 @@ impl<B: Backend> Parameters<B> for Sigmoid {
 }
 
 impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for Sigmoid {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<S, B>;
-    /// Core abstraction for `Error` within the Kindle framework..
+    /// The error type returned if the forward pass fails.
     type Error = Error;
 
     #[inline]
-    /// Core abstraction for `forward` within the Kindle framework..
+    /// Runs the forward pass of this module on the given input.
     fn forward(&self, x: Tensor<S, B>) -> core::result::Result<Tensor<S, B>, Error> {
         x.sigmoid()
     }
@@ -230,7 +230,7 @@ impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for Sigmoid {
 pub struct Tanh;
 
 impl<B: Backend> Parameters<B> for Tanh {
-    /// Core abstraction for `named_parameters` within the Kindle framework..
+    /// Collects named trainable parameters into `map` under the given `prefix`.
     fn named_parameters(
         &self,
         _prefix: &str,
@@ -240,20 +240,20 @@ impl<B: Backend> Parameters<B> for Tanh {
 }
 
 impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for Tanh {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<S, B>;
-    /// Core abstraction for `Error` within the Kindle framework..
+    /// The error type returned if the forward pass fails.
     type Error = Error;
 
     #[inline]
-    /// Core abstraction for `forward` within the Kindle framework..
+    /// Runs the forward pass of this module on the given input.
     fn forward(&self, x: Tensor<S, B>) -> core::result::Result<Tensor<S, B>, Error> {
         x.tanh()
     }
 }
 
 impl<B: Backend> crate::nn::module::StateDict<B> for ReLU {
-    /// Core abstraction for `load_state_dict` within the Kindle framework..
+    /// Loads parameters from a flat name→tensor map, in-place.
     fn load_state_dict(
         &mut self,
         _: &str,
@@ -261,11 +261,11 @@ impl<B: Backend> crate::nn::module::StateDict<B> for ReLU {
     ) -> crate::prelude::Result<()> {
         Ok(())
     }
-    /// Core abstraction for `state_dict` within the Kindle framework..
+    /// Returns a flat map from parameter name to its raw tensor value.
     fn state_dict(&self, _: &str, _: &mut alloc::collections::BTreeMap<String, Tensor<Dyn, B>>) {}
 }
 impl<B: Backend> crate::nn::module::StateDict<B> for GELU {
-    /// Core abstraction for `load_state_dict` within the Kindle framework..
+    /// Loads parameters from a flat name→tensor map, in-place.
     fn load_state_dict(
         &mut self,
         _: &str,
@@ -273,11 +273,11 @@ impl<B: Backend> crate::nn::module::StateDict<B> for GELU {
     ) -> crate::prelude::Result<()> {
         Ok(())
     }
-    /// Core abstraction for `state_dict` within the Kindle framework..
+    /// Returns a flat map from parameter name to its raw tensor value.
     fn state_dict(&self, _: &str, _: &mut alloc::collections::BTreeMap<String, Tensor<Dyn, B>>) {}
 }
 impl<B: Backend> crate::nn::module::StateDict<B> for Swish {
-    /// Core abstraction for `load_state_dict` within the Kindle framework..
+    /// Loads parameters from a flat name→tensor map, in-place.
     fn load_state_dict(
         &mut self,
         _: &str,
@@ -285,11 +285,11 @@ impl<B: Backend> crate::nn::module::StateDict<B> for Swish {
     ) -> crate::prelude::Result<()> {
         Ok(())
     }
-    /// Core abstraction for `state_dict` within the Kindle framework..
+    /// Returns a flat map from parameter name to its raw tensor value.
     fn state_dict(&self, _: &str, _: &mut alloc::collections::BTreeMap<String, Tensor<Dyn, B>>) {}
 }
 impl<B: Backend> crate::nn::module::StateDict<B> for Softmax {
-    /// Core abstraction for `load_state_dict` within the Kindle framework..
+    /// Loads parameters from a flat name→tensor map, in-place.
     fn load_state_dict(
         &mut self,
         _: &str,
@@ -297,11 +297,11 @@ impl<B: Backend> crate::nn::module::StateDict<B> for Softmax {
     ) -> crate::prelude::Result<()> {
         Ok(())
     }
-    /// Core abstraction for `state_dict` within the Kindle framework..
+    /// Returns a flat map from parameter name to its raw tensor value.
     fn state_dict(&self, _: &str, _: &mut alloc::collections::BTreeMap<String, Tensor<Dyn, B>>) {}
 }
 impl<B: Backend> crate::nn::module::StateDict<B> for Sigmoid {
-    /// Core abstraction for `load_state_dict` within the Kindle framework..
+    /// Loads parameters from a flat name→tensor map, in-place.
     fn load_state_dict(
         &mut self,
         _: &str,
@@ -309,11 +309,11 @@ impl<B: Backend> crate::nn::module::StateDict<B> for Sigmoid {
     ) -> crate::prelude::Result<()> {
         Ok(())
     }
-    /// Core abstraction for `state_dict` within the Kindle framework..
+    /// Returns a flat map from parameter name to its raw tensor value.
     fn state_dict(&self, _: &str, _: &mut alloc::collections::BTreeMap<String, Tensor<Dyn, B>>) {}
 }
 impl<B: Backend> crate::nn::module::StateDict<B> for Tanh {
-    /// Core abstraction for `load_state_dict` within the Kindle framework..
+    /// Loads parameters from a flat name→tensor map, in-place.
     fn load_state_dict(
         &mut self,
         _: &str,
@@ -321,12 +321,12 @@ impl<B: Backend> crate::nn::module::StateDict<B> for Tanh {
     ) -> crate::prelude::Result<()> {
         Ok(())
     }
-    /// Core abstraction for `state_dict` within the Kindle framework..
+    /// Returns a flat map from parameter name to its raw tensor value.
     fn state_dict(&self, _: &str, _: &mut alloc::collections::BTreeMap<String, Tensor<Dyn, B>>) {}
 }
 
 impl crate::nn::module::NamedLayers for ReLU {
-    /// Core abstraction for `layer_structure` within the Kindle framework..
+    /// Returns the layer hierarchy rooted at this module for visualization.
     fn layer_structure(&self, prefix: &str) -> Vec<crate::nn::module::LayerNode> {
         vec![crate::nn::module::LayerNode {
             name: prefix.to_string(),
@@ -338,7 +338,7 @@ impl crate::nn::module::NamedLayers for ReLU {
 }
 
 impl crate::nn::module::NamedLayers for GELU {
-    /// Core abstraction for `layer_structure` within the Kindle framework..
+    /// Returns the layer hierarchy rooted at this module for visualization.
     fn layer_structure(&self, prefix: &str) -> Vec<crate::nn::module::LayerNode> {
         vec![crate::nn::module::LayerNode {
             name: prefix.to_string(),
@@ -350,7 +350,7 @@ impl crate::nn::module::NamedLayers for GELU {
 }
 
 impl crate::nn::module::NamedLayers for Swish {
-    /// Core abstraction for `layer_structure` within the Kindle framework..
+    /// Returns the layer hierarchy rooted at this module for visualization.
     fn layer_structure(&self, prefix: &str) -> Vec<crate::nn::module::LayerNode> {
         vec![crate::nn::module::LayerNode {
             name: prefix.to_string(),
@@ -362,7 +362,7 @@ impl crate::nn::module::NamedLayers for Swish {
 }
 
 impl crate::nn::module::NamedLayers for Sigmoid {
-    /// Core abstraction for `layer_structure` within the Kindle framework..
+    /// Returns the layer hierarchy rooted at this module for visualization.
     fn layer_structure(&self, prefix: &str) -> Vec<crate::nn::module::LayerNode> {
         vec![crate::nn::module::LayerNode {
             name: prefix.to_string(),
@@ -374,7 +374,7 @@ impl crate::nn::module::NamedLayers for Sigmoid {
 }
 
 impl crate::nn::module::NamedLayers for Tanh {
-    /// Core abstraction for `layer_structure` within the Kindle framework..
+    /// Returns the layer hierarchy rooted at this module for visualization.
     fn layer_structure(&self, prefix: &str) -> Vec<crate::nn::module::LayerNode> {
         vec![crate::nn::module::LayerNode {
             name: prefix.to_string(),
@@ -386,7 +386,7 @@ impl crate::nn::module::NamedLayers for Tanh {
 }
 
 impl crate::nn::module::NamedLayers for Softmax {
-    /// Core abstraction for `layer_structure` within the Kindle framework..
+    /// Returns the layer hierarchy rooted at this module for visualization.
     fn layer_structure(&self, prefix: &str) -> Vec<crate::nn::module::LayerNode> {
         vec![crate::nn::module::LayerNode {
             name: prefix.to_string(),
@@ -396,3 +396,18 @@ impl crate::nn::module::NamedLayers for Softmax {
         }]
     }
 }
+
+macro_rules! impl_unit_to_device {
+    ($($t:ty),+) => {
+        $(
+            impl<B: Backend, NewD: Device> crate::nn::module::ToDevice<B, NewD> for $t {
+                type Output = $t;
+                fn to_device(self, _arg: &NewD::Arg) -> Result<Self::Output> {
+                    Ok(self)
+                }
+            }
+        )+
+    };
+}
+
+impl_unit_to_device!(ReLU, GELU, Swish, Mish, ELU, Softmax, Sigmoid, Tanh);

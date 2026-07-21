@@ -7,16 +7,16 @@ use std::path::PathBuf;
 use syn::Ident;
 
 #[derive(Serialize, Deserialize, Clone)]
-/// Core abstraction for `OnnxDim` within the Kindle framework.
+/// Onnx dim.
 pub enum OnnxDim {
-    /// Core abstraction for `Const` within the Kindle framework.
+    /// Const.
     Const(usize),
-    /// Core abstraction for `Dyn` within the Kindle framework.
+    /// Dyn.
     Dyn,
 }
 
 #[derive(Serialize, Deserialize)]
-/// Core abstraction for `OnnxMeta` within the Kindle framework.
+/// Onnx meta.
 struct OnnxMeta {
     param_names: Vec<String>,
     param_shapes: Vec<Vec<usize>>,
@@ -26,7 +26,7 @@ struct OnnxMeta {
     last_output_shape: Vec<OnnxDim>,
 }
 
-/// Core abstraction for `get_ints_attr` within the Kindle framework.
+/// Get ints attr.
 fn get_ints_attr(node: &onnx_pb::NodeProto, name: &str) -> Option<Vec<i64>> {
     for attr in &node.attribute {
         if attr.name == name {
@@ -36,7 +36,7 @@ fn get_ints_attr(node: &onnx_pb::NodeProto, name: &str) -> Option<Vec<i64>> {
     None
 }
 
-/// Core abstraction for `parse_graph_nodes` within the Kindle framework.
+/// Parse graph nodes.
 fn parse_graph_nodes(
     nodes: &[onnx_pb::NodeProto],
     shape_map: &alloc::collections::BTreeMap<String, Vec<OnnxDim>>,
@@ -541,7 +541,7 @@ pub(crate) fn parse_onnx(
             B::FloatElem: kindle::prelude::ConstDType,
             B::Device: kindle::prelude::ConstDevice,
         {
-            /// Core abstraction for `new` within the Kindle framework.
+            /// New.
             pub fn new() -> Self {
                 Self {
                     #(#inits,)*
@@ -549,7 +549,7 @@ pub(crate) fn parse_onnx(
                 }
             }
 
-            /// Core abstraction for `load_default_weights` within the Kindle framework.
+            /// Load default weights.
             pub fn load_default_weights(&mut self) -> kindle::prelude::Result<()> {
                 Ok(())
             }
@@ -561,7 +561,7 @@ pub(crate) fn parse_onnx(
             B::FloatElem: kindle::prelude::ConstDType,
             B::Device: kindle::prelude::ConstDevice,
         {
-            /// Core abstraction for `forward` within the Kindle framework.
+            /// Forward.
             pub fn forward(&self, #(#user_inputs),*) -> kindle::prelude::Result<kindle::prelude::Tensor<#out_shape_type, B>> {
                 #(#forward_stmts)*
                 let final_out = #last_output;

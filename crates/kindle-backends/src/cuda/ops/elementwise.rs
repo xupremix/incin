@@ -2,15 +2,15 @@ use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
 use kindle_core::prelude::Result;
 
-/// Core abstraction for `ELEMENTWISE_UNARY_TEMPLATE` within the Kindle framework..
+/// `ELEMENTWISE_UNARY_TEMPLATE`.
 pub const ELEMENTWISE_UNARY_TEMPLATE: &str = r#"
 extern "C" __global__ void unary_op_{OP_NAME}(
-    /// Core abstraction for `float` within the Kindle framework..
+    /// `float`.
     const float* input,
     float* output,
-    /// Core abstraction for `int` within the Kindle framework..
+    /// `int`.
     const int* shape,
-    /// Core abstraction for `int` within the Kindle framework..
+    /// `int`.
     const int* strides,
     int offset,
     int numel,
@@ -32,23 +32,23 @@ extern "C" __global__ void unary_op_{OP_NAME}(
 }
 "#;
 
-/// Core abstraction for `ELEMENTWISE_BINARY_TEMPLATE` within the Kindle framework..
+/// `ELEMENTWISE_BINARY_TEMPLATE`.
 pub const ELEMENTWISE_BINARY_TEMPLATE: &str = r#"
 extern "C" __global__ void binary_op_{OP_NAME}(
-    /// Core abstraction for `float` within the Kindle framework..
+    /// `float`.
     const float* lhs,
-    /// Core abstraction for `float` within the Kindle framework..
+    /// `float`.
     const float* rhs,
     float* output,
-    /// Core abstraction for `int` within the Kindle framework..
+    /// `int`.
     const int* out_shape,
-    /// Core abstraction for `int` within the Kindle framework..
+    /// `int`.
     const int* lhs_shape,
-    /// Core abstraction for `int` within the Kindle framework..
+    /// `int`.
     const int* rhs_shape,
-    /// Core abstraction for `int` within the Kindle framework..
+    /// `int`.
     const int* lhs_strides,
-    /// Core abstraction for `int` within the Kindle framework..
+    /// `int`.
     const int* rhs_strides,
     int lhs_offset,
     int rhs_offset,
@@ -83,7 +83,7 @@ extern "C" __global__ void binary_op_{OP_NAME}(
 "#;
 
 #[cfg(feature = "cuda")]
-/// Core abstraction for `launch_unary_op` within the Kindle framework..
+/// `launch_unary_op`.
 pub(crate) fn launch_unary_op(
     op_name: &str,
     op_expr: &str,
@@ -110,7 +110,7 @@ pub(crate) fn launch_unary_op(
             len: numel,
             data: Arc::new(stream.alloc_zeros::<u8>(numel * 4).unwrap()),
             device: b.device.clone(),
-            device_id: device_id,
+            device_id,
         };
 
         let ndim = t.shape.len();
@@ -125,7 +125,7 @@ pub(crate) fn launch_unary_op(
         let strides_dev = b.device.default_stream().clone_htod(&strides_i32).unwrap();
 
         let cfg = cudarc::driver::LaunchConfig {
-            grid_dim: ((numel as u32 + 255) / 256, 1, 1),
+            grid_dim: ((numel as u32).div_ceil(256), 1, 1),
             block_dim: (256, 1, 1),
             shared_mem_bytes: 0,
         };
@@ -164,7 +164,7 @@ pub(crate) fn launch_unary_op(
 }
 
 #[cfg(feature = "cuda")]
-/// Core abstraction for `launch_binary_op` within the Kindle framework..
+/// `launch_binary_op`.
 pub(crate) fn launch_binary_op(
     op_name: &str,
     op_expr: &str,
@@ -193,7 +193,7 @@ pub(crate) fn launch_binary_op(
             len: numel,
             data: Arc::new(stream.alloc_zeros::<u8>(numel * 4).unwrap()),
             device: lhs_b.device.clone(),
-            device_id: device_id,
+            device_id,
         };
 
         let ndim = out_shape.len();
@@ -243,7 +243,7 @@ pub(crate) fn launch_binary_op(
             .unwrap();
 
         let cfg = cudarc::driver::LaunchConfig {
-            grid_dim: ((numel as u32 + 255) / 256, 1, 1),
+            grid_dim: ((numel as u32).div_ceil(256), 1, 1),
             block_dim: (256, 1, 1),
             shared_mem_bytes: 0,
         };

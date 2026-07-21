@@ -85,25 +85,25 @@ pub(crate) fn broadcast_shape(a: &[usize], b: &[usize]) -> Result<Vec<usize>> {
 }
 
 #[cfg(test)]
-/// Core abstraction for `tests` within the Kindle framework..
+/// `tests`.
 mod tests {
     use super::*;
 
     #[test]
-    /// Core abstraction for `contiguous_strides_row_major` within the Kindle framework..
+    /// `contiguous_strides_row_major`.
     fn contiguous_strides_row_major() {
         assert_eq!(contiguous_strides(&[2, 3, 4]), vec![12, 4, 1]);
     }
 
     #[test]
-    /// Core abstraction for `contiguous_strides_scalar` within the Kindle framework..
+    /// `contiguous_strides_scalar`.
     fn contiguous_strides_scalar() {
         let empty: &[usize] = &[];
         assert_eq!(contiguous_strides(empty), Vec::<usize>::new());
     }
 
     #[test]
-    /// Core abstraction for `is_contiguous_true_for_fresh_strides` within the Kindle framework..
+    /// `is_contiguous_true_for_fresh_strides`.
     fn is_contiguous_true_for_fresh_strides() {
         let shape = vec![2, 3, 4];
         let strides = contiguous_strides(&shape);
@@ -111,7 +111,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `is_contiguous_false_for_transposed_strides` within the Kindle framework..
+    /// `is_contiguous_false_for_transposed_strides`.
     fn is_contiguous_false_for_transposed_strides() {
         // [2,3] contiguous strides are [3,1]; a transposed view swaps shape
         // to [3,2] but keeps strides [1,3] (permuted, non-contiguous).
@@ -121,26 +121,26 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `broadcast_shape_both_expand` within the Kindle framework..
+    /// `broadcast_shape_both_expand`.
     fn broadcast_shape_both_expand() {
         assert_eq!(broadcast_shape(&[3, 1], &[1, 4]).unwrap(), vec![3, 4]);
     }
 
     #[test]
-    /// Core abstraction for `broadcast_shape_right_aligned_leading_dim_insert` within the Kindle framework..
+    /// `broadcast_shape_right_aligned_leading_dim_insert`.
     fn broadcast_shape_right_aligned_leading_dim_insert() {
         assert_eq!(broadcast_shape(&[5], &[3, 5]).unwrap(), vec![3, 5]);
     }
 
     #[test]
-    /// Core abstraction for `broadcast_shape_incompatible_errors` within the Kindle framework..
+    /// `broadcast_shape_incompatible_errors`.
     fn broadcast_shape_incompatible_errors() {
         let result = broadcast_shape(&[3, 4], &[3, 5]);
         assert!(result.is_err());
     }
 
     #[test]
-    /// Core abstraction for `broadcast_shape_scalar_broadcast` within the Kindle framework..
+    /// `broadcast_shape_scalar_broadcast`.
     fn broadcast_shape_scalar_broadcast() {
         let empty: &[usize] = &[];
         assert_eq!(broadcast_shape(empty, &[3, 4]).unwrap(), vec![3, 4]);

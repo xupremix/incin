@@ -6,11 +6,11 @@ use kindle_core::prelude::*;
 use kindle_core::prelude::*;
 use kindle_macros::s;
 
-/// Core abstraction for `B` within the Kindle framework.
+/// B.
 type B = DummyBackend<f32, kindle_core::prelude::Cpu>;
 
 #[test]
-/// Core abstraction for `test_linear_permutations` within the Kindle framework.
+/// Test linear permutations.
 fn test_linear_permutations() {
     // 1. Fully static, Bias = True (default)
     let _l1 = Linear::<s![10, 20], B>::new().unwrap();
@@ -44,7 +44,7 @@ fn test_linear_permutations() {
 }
 
 #[test]
-/// Core abstraction for `test_conv1d_permutations` within the Kindle framework.
+/// Test conv1d permutations.
 fn test_conv1d_permutations() {
     // Conv1dShape: (OutC, InC, K, S, P, D)
     // 1. Fully static, Bias = True (default)
@@ -71,7 +71,7 @@ fn test_conv1d_permutations() {
 }
 
 #[test]
-/// Core abstraction for `test_conv2d_permutations` within the Kindle framework.
+/// Test conv2d permutations.
 fn test_conv2d_permutations() {
     // Conv2dShape: (OutC, InC, K, S, P, D)
     // 1. Fully static, Bias = True (default)
@@ -98,7 +98,7 @@ fn test_conv2d_permutations() {
 }
 
 #[test]
-/// Core abstraction for `test_norm_permutations` within the Kindle framework.
+/// Test norm permutations.
 fn test_norm_permutations() {
     // LayerNorm — static
     let _ln1 = LayerNorm::<s![10], B>::new(1e-5).unwrap();
@@ -112,7 +112,7 @@ fn test_norm_permutations() {
 }
 
 #[test]
-/// Core abstraction for `test_rnn_permutations` within the Kindle framework.
+/// Test rnn permutations.
 fn test_rnn_permutations() {
     // RNNCell — static
     let _wi = Linear::<s![10, 20], B>::new().unwrap();

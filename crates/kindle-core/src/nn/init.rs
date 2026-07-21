@@ -1,46 +1,46 @@
 #[derive(Debug, Clone, Copy, Default)]
-/// Core abstraction for `Init` within the Kindle framework..
+/// `Init`.
 pub enum Init {
     #[default]
-    /// Core abstraction for `Zeros` within the Kindle framework..
+    /// `Zeros`.
     Zeros,
-    /// Core abstraction for `Ones` within the Kindle framework..
+    /// `Ones`.
     Ones,
-    /// Core abstraction for `Rand` within the Kindle framework..
+    /// `Rand`.
     Rand,
-    /// Core abstraction for `Randn` within the Kindle framework..
+    /// `Randn`.
     Randn,
-    /// Core abstraction for `KaimingUniform` within the Kindle framework..
+    /// `KaimingUniform`.
     KaimingUniform {
         /// fan_in
         fan_in: usize,
         /// a
         a: f64,
     },
-    /// Core abstraction for `KaimingNormal` within the Kindle framework..
+    /// `KaimingNormal`.
     KaimingNormal {
         /// fan_in
         fan_in: usize,
         /// a
         a: f64,
     },
-    /// Core abstraction for `XavierUniform` within the Kindle framework..
+    /// `XavierUniform`.
     XavierUniform {
         /// fan_in
         fan_in: usize,
         /// fan_out
         fan_out: usize,
     },
-    /// Core abstraction for `XavierNormal` within the Kindle framework..
+    /// `XavierNormal`.
     XavierNormal {
         /// fan_in
         fan_in: usize,
         /// fan_out
         fan_out: usize,
     },
-    /// Core abstraction for `Constant` within the Kindle framework..
+    /// `Constant`.
     Constant(f64),
-    /// Core abstraction for `Uniform` within the Kindle framework..
+    /// `Uniform`.
     Uniform {
         /// bound
         bound: f64,

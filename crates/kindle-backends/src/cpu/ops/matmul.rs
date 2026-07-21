@@ -235,7 +235,7 @@ pub(crate) fn matmul_impl(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStora
 }
 
 #[inline]
-/// Core abstraction for `f32_matmul_scalar` within the Kindle framework..
+/// `f32_matmul_scalar`.
 fn f32_matmul_scalar(
     m: usize,
     k: usize,
@@ -278,7 +278,7 @@ fn f32_matmul_scalar(
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[target_feature(enable = "avx2", enable = "fma")]
 #[inline]
-/// Core abstraction for `f32_matmul_avx2` within the Kindle framework..
+/// `f32_matmul_avx2`.
 unsafe fn f32_matmul_avx2(
     m: usize,
     k: usize,
@@ -325,16 +325,16 @@ unsafe fn f32_matmul_avx2(
 }
 
 #[cfg(test)]
-/// Core abstraction for `tests` within the Kindle framework..
+/// `tests`.
 mod tests {
     use super::*;
 
-    /// Core abstraction for `matrix` within the Kindle framework..
+    /// `matrix`.
     fn matrix(v: Vec<f32>, rows: usize, cols: usize) -> CpuStorage {
         CpuStorage::from_contiguous(CpuBuffer::F32(v), vec![rows, cols])
     }
 
-    /// Core abstraction for `f32_vec` within the Kindle framework..
+    /// `f32_vec`.
     fn f32_vec(s: &CpuStorage) -> Vec<f32> {
         match &*s.buffer {
             CpuBuffer::F32(v) => v.clone(),
@@ -343,7 +343,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `matmul_forward_hand_computed_2x3_times_3x4` within the Kindle framework..
+    /// `matmul_forward_hand_computed_2x3_times_3x4`.
     fn matmul_forward_hand_computed_2x3_times_3x4() {
         // lhs = [[1,2,3],[4,5,6]] (2x3)
         let lhs = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
@@ -368,7 +368,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `matmul_forward_transposed_lhs_view_is_correct_without_materializing` within the Kindle framework..
+    /// `matmul_forward_transposed_lhs_view_is_correct_without_materializing`.
     fn matmul_forward_transposed_lhs_view_is_correct_without_materializing() {
         // Original storage is [3,2] = [[1,4],[2,5],[3,6]]; transpose(0,1)
         // gives a non-contiguous [2,3] view = [[1,2,3],[4,5,6]] (same
@@ -394,7 +394,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `matmul_backward_matches_hand_computed_gradients` within the Kindle framework..
+    /// `matmul_backward_matches_hand_computed_gradients`.
     fn matmul_backward_matches_hand_computed_gradients() {
         // lhs [2,3], rhs [3,4] as above; grad_out is a synthetic [2,4] all-ones-ish
         // matrix with distinct values so the composition is unambiguous.
@@ -439,7 +439,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `matmul_shape_incompatible_returns_err_not_panic` within the Kindle framework..
+    /// `matmul_shape_incompatible_returns_err_not_panic`.
     fn matmul_shape_incompatible_returns_err_not_panic() {
         let lhs = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let rhs = matrix(vec![0.0; 20], 4, 5);
@@ -447,7 +447,7 @@ mod tests {
         assert!(result.is_err());
     }
 
-    /// Core abstraction for `tensor` within the Kindle framework..
+    /// `tensor`.
     fn tensor(v: Vec<f32>, shape: Vec<usize>) -> CpuStorage {
         CpuStorage::from_contiguous(CpuBuffer::F32(v), shape)
     }
@@ -641,7 +641,7 @@ mod tests {
     use crate::cpu::gradcheck::gradcheck;
     use kindle_core::prelude::{Cpu, ReductionOps};
 
-    /// Core abstraction for `TestBackend` within the Kindle framework..
+    /// `TestBackend`.
     type TestBackend = CpuBackend<f32, Cpu>;
 
     /// Wraps `batched_matmul_impl` with `sum_all` so `gradcheck` (which

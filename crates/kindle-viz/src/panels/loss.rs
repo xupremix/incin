@@ -30,17 +30,17 @@ impl LossPanel {
 }
 
 impl Panel for LossPanel {
-    /// Core abstraction for `id` within the Kindle framework.
+    /// Id.
     fn id(&self) -> &'static str {
         "loss"
     }
 
-    /// Core abstraction for `title` within the Kindle framework.
+    /// Title.
     fn title(&self) -> &str {
         "Loss"
     }
 
-    /// Core abstraction for `update` within the Kindle framework.
+    /// Update.
     fn update(&mut self, event: &Event) {
         if let Event::Scalar(s) = event
             && s.name == "loss"
@@ -49,7 +49,7 @@ impl Panel for LossPanel {
         }
     }
 
-    /// Core abstraction for `render` within the Kindle framework.
+    /// Render.
     fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) {
         let area = ctx.area();
 
@@ -91,12 +91,12 @@ impl Panel for LossPanel {
         frame.render_widget(chart, area);
     }
 
-    /// Core abstraction for `handle_event` within the Kindle framework.
+    /// Handle event.
     fn handle_event(&mut self, _event: &PanelEvent) -> bool {
         false // loss panel has no panel-local key handling this phase
     }
 
-    /// Core abstraction for `reset` within the Kindle framework.
+    /// Reset.
     fn reset(&mut self) {
         self.points.clear();
     }

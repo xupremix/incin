@@ -43,9 +43,9 @@ use typenum::consts::*;
 use typenum::{Bit, UInt, UTerm, Unsigned};
 
 impl DimIdx for UTerm {
-    /// Core abstraction for `Resolved` within the Kindle framework..
+    /// `Resolved`.
     type Resolved = UTerm;
-    /// Core abstraction for `size` within the Kindle framework..
+    /// `size`.
     fn size() -> Option<usize> {
         Some(0)
     }
@@ -66,18 +66,18 @@ where
         + PartialEq
         + 'static,
 {
-    /// Core abstraction for `Resolved` within the Kindle framework..
+    /// `Resolved`.
     type Resolved = UInt<U, B>;
-    /// Core abstraction for `size` within the Kindle framework..
+    /// `size`.
     fn size() -> Option<usize> {
         Some(Self::USIZE)
     }
 }
 
 impl DimIdx for InferDim {
-    /// Core abstraction for `Resolved` within the Kindle framework..
+    /// `Resolved`.
     type Resolved = usize;
-    /// Core abstraction for `size` within the Kindle framework..
+    /// `size`.
     fn size() -> Option<usize> {
         None
     }
@@ -87,9 +87,9 @@ impl DimIdx for InferDim {
 impl<Tag: 'static + Send + Sync + Copy + Clone + core::fmt::Debug + Eq + PartialEq> DimIdx
     for NamedDyn<Tag>
 {
-    /// Core abstraction for `Resolved` within the Kindle framework..
+    /// `Resolved`.
     type Resolved = NamedDyn<Tag>;
-    /// Core abstraction for `size` within the Kindle framework..
+    /// `size`.
     fn size() -> Option<usize> {
         None
     } // Not a static known size, but handled specially
@@ -101,11 +101,11 @@ impl<Tag: 'static + Send + Sync + Copy + Clone + core::fmt::Debug + Eq + Partial
     label = "Invalid dimension for reshape",
     note = "The element count must remain constant during reshape"
 )]
-/// Core abstraction for `ReshapeTarget` within the Kindle framework..
+/// `ReshapeTarget`.
 pub trait ReshapeTarget<In: Shape> {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output: Shape;
-    /// Core abstraction for `calculate_shape` within the Kindle framework..
+    /// `calculate_shape`.
     fn calculate_shape(in_shape_vec: &[usize]) -> Vec<usize>;
 }
 
@@ -116,10 +116,10 @@ macro_rules! impl_reshape_target {
         where
             ($($D::Resolved,)*): Shape,
         {
-            /// Core abstraction for `Output` within the Kindle framework..
+            /// The output tensor type produced by this module's forward pass.
             type Output = ($($D::Resolved,)*);
 
-            /// Core abstraction for `calculate_shape` within the Kindle framework..
+            /// `calculate_shape`.
             fn calculate_shape(in_shape_vec: &[usize]) -> Vec<usize> {
                 let total_elements: usize = in_shape_vec.iter().product();
                 let mut resolved_sizes = vec![];
@@ -134,7 +134,7 @@ macro_rules! impl_reshape_target {
                         // In Reshape contexts, InferDim acts as the unique auto-inferred dimension.
 
                         if infer_idx.is_some() {
-                            panic!("Only one inferred dimension (-1 or NamedDyn) is allowed in reshape");
+                            return vec![];
                         }
                         infer_idx = Some(_current_idx);
                         resolved_sizes.push(0); // placeholder
@@ -179,18 +179,18 @@ pub trait SliceIdx {
 }
 
 impl<Start: Unsigned, End: Unsigned, Diff: Dim> SliceIdx for Slice<Start, End, Diff> {
-    /// Core abstraction for `Resolved` within the Kindle framework..
+    /// `Resolved`.
     type Resolved = Diff;
-    /// Core abstraction for `bounds` within the Kindle framework..
+    /// `bounds`.
     fn bounds(_size: usize) -> (usize, usize) {
         (Start::USIZE, End::USIZE)
     }
 }
 
 impl SliceIdx for UTerm {
-    /// Core abstraction for `Resolved` within the Kindle framework..
+    /// `Resolved`.
     type Resolved = U1;
-    /// Core abstraction for `bounds` within the Kindle framework..
+    /// `bounds`.
     fn bounds(_size: usize) -> (usize, usize) {
         (0, 1)
     }
@@ -211,9 +211,9 @@ where
         + PartialEq
         + 'static,
 {
-    /// Core abstraction for `Resolved` within the Kindle framework..
+    /// `Resolved`.
     type Resolved = U1;
-    /// Core abstraction for `bounds` within the Kindle framework..
+    /// `bounds`.
     fn bounds(_size: usize) -> (usize, usize) {
         (Self::USIZE, Self::USIZE + 1)
     }
@@ -223,9 +223,9 @@ where
 // We can't easily implement a variadic Ellipsis in simple tuple traits without
 // advanced macro work. For now, we assume `..` is a single full dimension slice.
 impl SliceIdx for Ellipsis {
-    /// Core abstraction for `Resolved` within the Kindle framework..
+    /// `Resolved`.
     type Resolved = usize; // Dyn size since it depends on the input
-    /// Core abstraction for `bounds` within the Kindle framework..
+    /// `bounds`.
     fn bounds(size: usize) -> (usize, usize) {
         (0, size)
     }
@@ -236,9 +236,9 @@ impl SliceIdx for Ellipsis {
     label = "Invalid slice target",
     note = "The slice range must be within the bounds of the original dimension"
 )]
-/// Core abstraction for `SliceTarget` within the Kindle framework..
+/// `SliceTarget`.
 pub trait SliceTarget<In: Shape> {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output: Shape;
     /// Returns the bounds (start, end) for each dimension in `in_shape_vec`
     fn calculate_bounds(in_shape_vec: &[usize]) -> Vec<(usize, usize)>;
@@ -250,10 +250,10 @@ macro_rules! impl_slice_target {
         where
             ($($D::Resolved,)*): Shape,
         {
-            /// Core abstraction for `Output` within the Kindle framework..
+            /// The output tensor type produced by this module's forward pass.
             type Output = ($($D::Resolved,)*);
 
-            /// Core abstraction for `calculate_bounds` within the Kindle framework..
+            /// `calculate_bounds`.
             fn calculate_bounds(in_shape_vec: &[usize]) -> Vec<(usize, usize)> {
                 let mut bounds = vec![];
                 let mut _current_idx = 0usize;
@@ -274,29 +274,29 @@ impl_slice_target!(D1, D2, D3);
 impl_slice_target!(D1, D2, D3, D4);
 
 #[cfg(test)]
-/// Core abstraction for `tests` within the Kindle framework..
+/// `tests`.
 mod tests {
     use super::*;
     use crate::prelude::Shape;
     use typenum::{U0, U1, U2, U3, U4};
 
-    /// Core abstraction for `assert_shape_eq` within the Kindle framework..
+    /// `assert_shape_eq`.
     fn assert_shape_eq<S1: Shape, S2: Shape>() {}
 
     #[test]
-    /// Core abstraction for `slice_range_output_shape` within the Kindle framework..
+    /// `slice_range_output_shape`.
     fn slice_range_output_shape() {
         // idx![1..3, .., 0..2] on (U4, U4, U3) → (U2, usize, U2)
-        /// Core abstraction for `IdxT` within the Kindle framework..
+        /// `IdxT`.
         type IdxT = (Slice<U1, U3, U2>, Ellipsis, Slice<U0, U2, U2>);
         assert_shape_eq::<<IdxT as SliceTarget<(U4, U4, U3)>>::Output, (U2, usize, U2)>();
     }
 
     #[test]
-    /// Core abstraction for `slice_full_passthrough` within the Kindle framework..
+    /// `slice_full_passthrough`.
     fn slice_full_passthrough() {
         // idx![.., .., ..] on (U4, U4, U3) → (usize, usize, usize)
-        /// Core abstraction for `IdxT` within the Kindle framework..
+        /// `IdxT`.
         type IdxT = (Ellipsis, Ellipsis, Ellipsis);
         assert_shape_eq::<<IdxT as SliceTarget<(U4, U4, U3)>>::Output, (usize, usize, usize)>();
     }

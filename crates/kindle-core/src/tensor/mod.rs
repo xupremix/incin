@@ -1,27 +1,27 @@
-/// Core abstraction for `arg` within the Kindle framework..
+/// `arg`.
 pub mod arg;
-/// Core abstraction for `arg_into` within the Kindle framework..
+/// `arg_into`.
 pub mod arg_into;
-/// Core abstraction for `backend` within the Kindle framework..
+/// `backend`.
 pub mod backend;
-/// Core abstraction for `base` within the Kindle framework..
+/// `base`.
 pub mod base;
-/// Core abstraction for `conv2d` within the Kindle framework..
+/// `conv2d`.
 pub mod conv2d;
-/// Core abstraction for `device` within the Kindle framework..
+/// `device`.
 pub mod device;
-/// Core abstraction for `dtype` within the Kindle framework..
+/// `dtype`.
 pub mod dtype;
-/// Core abstraction for `grad` within the Kindle framework..
+/// `grad`.
 pub mod grad;
-/// Core abstraction for `matmul` within the Kindle framework..
+/// `matmul`.
 pub mod matmul;
-/// Core abstraction for `ops` within the Kindle framework..
+/// `ops`.
 pub mod ops;
-/// Core abstraction for `tracing` within the Kindle framework..
+/// `tracing`.
 pub mod tracing;
 
-/// Core abstraction for `prelude` within the Kindle framework..
+/// `prelude`.
 pub mod prelude {
     pub use super::arg::*;
     pub use super::arg_into::*;

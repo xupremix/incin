@@ -66,7 +66,7 @@ pub(crate) fn launch_reduce_op(
         };
 
         let cfg = cudarc::driver::LaunchConfig {
-            grid_dim: ((keepdim_numel as u32 + 255) / 256, 1, 1),
+            grid_dim: ((keepdim_numel as u32).div_ceil(256), 1, 1),
             block_dim: (256, 1, 1),
             shared_mem_bytes: 0,
         };
@@ -175,7 +175,7 @@ pub(crate) fn launch_reduce_with_indices_op(
         };
 
         let cfg = cudarc::driver::LaunchConfig {
-            grid_dim: ((out_numel as u32 + 255) / 256, 1, 1),
+            grid_dim: ((out_numel as u32).div_ceil(256), 1, 1),
             block_dim: (256, 1, 1),
             shared_mem_bytes: 0,
         };

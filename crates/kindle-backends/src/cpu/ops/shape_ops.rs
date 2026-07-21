@@ -20,7 +20,7 @@ use crate::cpu::storage::{CpuBuffer, CpuStorage};
 use crate::cpu::tape::{self, TapeEntry};
 
 impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for CpuBackend<T, D> {
-    /// Core abstraction for `reshape` within the Kindle framework..
+    /// `reshape`.
     fn reshape<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         shape: &[usize],
@@ -43,7 +43,7 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for CpuBackend<T
         Ok(out)
     }
 
-    /// Core abstraction for `transpose` within the Kindle framework..
+    /// `transpose`.
     fn transpose<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         dim1: usize,
@@ -68,7 +68,7 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for CpuBackend<T
         Ok(out)
     }
 
-    /// Core abstraction for `broadcast_as` within the Kindle framework..
+    /// `broadcast_as`.
     fn broadcast_as<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         shape: &[usize],
@@ -90,7 +90,7 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for CpuBackend<T
         Ok(out)
     }
 
-    /// Core abstraction for `matmul` within the Kindle framework..
+    /// `matmul`.
     fn matmul<K: DType>(
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
@@ -102,7 +102,7 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for CpuBackend<T
         }
     }
 
-    /// Core abstraction for `narrow` within the Kindle framework..
+    /// `narrow`.
     fn narrow<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
@@ -129,7 +129,7 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for CpuBackend<T
         Ok(out)
     }
 
-    /// Core abstraction for `squeeze` within the Kindle framework..
+    /// `squeeze`.
     fn squeeze<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
@@ -152,7 +152,7 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for CpuBackend<T
         Self::reshape::<K>(t, &target_shape)
     }
 
-    /// Core abstraction for `stack` within the Kindle framework..
+    /// `stack`.
     fn stack<K: DType>(
         tensors: &[&<Self as Backend>::Storage<K>],
         dim: usize,
@@ -209,7 +209,7 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for CpuBackend<T
         Self::concat::<K>(&refs, dim)
     }
 
-    /// Core abstraction for `concat` within the Kindle framework..
+    /// `concat`.
     fn concat<K: DType>(
         tensors: &[&<Self as Backend>::Storage<K>],
         dim: usize,
@@ -370,7 +370,7 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for CpuBackend<T
         Ok(out)
     }
 
-    /// Core abstraction for `slice` within the Kindle framework..
+    /// `slice`.
     fn slice<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         ranges: &[(usize, usize)],
@@ -382,7 +382,7 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for CpuBackend<T
         Ok(out)
     }
 
-    /// Core abstraction for `flatten` within the Kindle framework..
+    /// `flatten`.
     fn flatten<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         start_dim: usize,
@@ -408,7 +408,7 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for CpuBackend<T
         Self::reshape::<K>(t, &target_shape)
     }
 
-    /// Core abstraction for `broadcast_left` within the Kindle framework..
+    /// `broadcast_left`.
     fn broadcast_left<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         shape: &[usize],
@@ -418,7 +418,7 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for CpuBackend<T
         Self::broadcast_as::<K>(t, &target_shape)
     }
 
-    /// Core abstraction for `float_to_scalar` within the Kindle framework..
+    /// `float_to_scalar`.
     fn float_to_scalar<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<f64> {
         if t.shape.iter().product::<usize>() != 1 {
             return Err(Error::ShapeMismatch {
@@ -433,7 +433,7 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for CpuBackend<T
         Ok(t.get(&vec![0usize; t.shape.len()]))
     }
 
-    /// Core abstraction for `float_to_vec1` within the Kindle framework..
+    /// `float_to_vec1`.
     fn float_to_vec1<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<alloc::vec::Vec<f64>> {
         let total: usize = t.shape.iter().product();
         let mut out = alloc::vec::Vec::with_capacity(total);
@@ -447,7 +447,7 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for CpuBackend<T
         Ok(out)
     }
 
-    /// Core abstraction for `int_to_scalar` within the Kindle framework..
+    /// `int_to_scalar`.
     fn int_to_scalar<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<i64> {
         if t.shape.iter().product::<usize>() != 1 {
             return Err(Error::ShapeMismatch {
@@ -460,7 +460,7 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for CpuBackend<T
         Ok(t.get(&vec![0usize; t.shape.len()]) as i64)
     }
 
-    /// Core abstraction for `int_to_vec1` within the Kindle framework..
+    /// `int_to_vec1`.
     fn int_to_vec1<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<alloc::vec::Vec<i64>> {
         let total: usize = t.shape.iter().product();
         let mut out = alloc::vec::Vec::with_capacity(total);
@@ -474,7 +474,7 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for CpuBackend<T
         Ok(out)
     }
 
-    /// Core abstraction for `tensor_to_dtype` within the Kindle framework..
+    /// `tensor_to_dtype`.
     fn tensor_to_dtype<K: DType, K2: DType>(
         t: &<Self as Backend>::Storage<K>,
         dtype: KindleDType,
@@ -540,19 +540,19 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for CpuBackend<T
 }
 
 #[cfg(test)]
-/// Core abstraction for `tests` within the Kindle framework..
+/// `tests`.
 mod tests {
     use super::*;
 
-    /// Core abstraction for `TestBackend` within the Kindle framework..
+    /// `TestBackend`.
     type TestBackend = CpuBackend<f32, kindle_core::prelude::Cpu>;
 
-    /// Core abstraction for `matrix` within the Kindle framework..
+    /// `matrix`.
     fn matrix(v: Vec<f32>, rows: usize, cols: usize) -> CpuStorage {
         CpuStorage::from_contiguous(CpuBuffer::F32(v), vec![rows, cols])
     }
 
-    /// Core abstraction for `f32_vec` within the Kindle framework..
+    /// `f32_vec`.
     fn f32_vec(s: &CpuStorage) -> Vec<f32> {
         match &*s.buffer {
             CpuBuffer::F32(v) => v.clone(),
@@ -561,7 +561,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `reshape_through_trait_matches_direct_storage_call` within the Kindle framework..
+    /// `reshape_through_trait_matches_direct_storage_call`.
     fn reshape_through_trait_matches_direct_storage_call() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let direct = t.reshape(&[3, 2]).unwrap();
@@ -571,7 +571,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `transpose_through_trait_matches_direct_storage_call` within the Kindle framework..
+    /// `transpose_through_trait_matches_direct_storage_call`.
     fn transpose_through_trait_matches_direct_storage_call() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let direct = t.transpose(0, 1).unwrap();
@@ -581,7 +581,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `broadcast_as_through_trait_matches_direct_storage_call` within the Kindle framework..
+    /// `broadcast_as_through_trait_matches_direct_storage_call`.
     fn broadcast_as_through_trait_matches_direct_storage_call() {
         let t = CpuStorage::from_contiguous(CpuBuffer::F32(vec![1.0, 2.0, 3.0]), vec![1, 3]);
         let direct = t.broadcast_as(&[4, 3]).unwrap();
@@ -591,7 +591,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `float_to_scalar_reads_single_element` within the Kindle framework..
+    /// `float_to_scalar_reads_single_element`.
     fn float_to_scalar_reads_single_element() {
         let t = CpuStorage::from_contiguous(CpuBuffer::F32(vec![42.0]), vec![]);
         let v = TestBackend::float_to_scalar::<f32>(&t).unwrap();
@@ -599,7 +599,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `float_to_vec1_reads_all_elements_row_major` within the Kindle framework..
+    /// `float_to_vec1_reads_all_elements_row_major`.
     fn float_to_vec1_reads_all_elements_row_major() {
         let t = CpuStorage::from_contiguous(CpuBuffer::F32(vec![1.0, 2.0, 3.0]), vec![3]);
         let v = TestBackend::float_to_vec1::<f32>(&t).unwrap();
@@ -607,7 +607,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `reshape_backward_reshapes_grad_back_to_original_shape` within the Kindle framework..
+    /// `reshape_backward_reshapes_grad_back_to_original_shape`.
     fn reshape_backward_reshapes_grad_back_to_original_shape() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let out = TestBackend::reshape::<f32>(&t, &[6]).unwrap();
@@ -618,7 +618,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `transpose_backward_reapplies_same_transpose` within the Kindle framework..
+    /// `transpose_backward_reapplies_same_transpose`.
     fn transpose_backward_reapplies_same_transpose() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let out = TestBackend::transpose::<f32>(&t, 0, 1).unwrap();
@@ -629,7 +629,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `broadcast_as_backward_unbroadcasts_to_original_shape` within the Kindle framework..
+    /// `broadcast_as_backward_unbroadcasts_to_original_shape`.
     fn broadcast_as_backward_unbroadcasts_to_original_shape() {
         let t = CpuStorage::from_contiguous(CpuBuffer::F32(vec![1.0, 2.0, 3.0]), vec![1, 3]);
         let out = TestBackend::broadcast_as::<f32>(&t, &[4, 3]).unwrap();
@@ -641,7 +641,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `matmul_via_trensor_ops_delegates_to_matmul_impl` within the Kindle framework..
+    /// `matmul_via_trensor_ops_delegates_to_matmul_impl`.
     fn matmul_via_trensor_ops_delegates_to_matmul_impl() {
         let lhs = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let rhs = matrix(
@@ -660,7 +660,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `unsupported_methods_return_typed_error_not_silent_placeholder` within the Kindle framework..
+    /// `unsupported_methods_return_typed_error_not_silent_placeholder`.
     fn unsupported_methods_return_typed_error_not_silent_placeholder() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         // All other TensorOps methods are now fully implemented. We prove that
@@ -790,7 +790,7 @@ mod tests {
         assert!(matches!(result, Err(Error::ShapeMismatch { .. })));
     }
 
-    /// Core abstraction for `tensor3` within the Kindle framework..
+    /// `tensor3`.
     fn tensor3(v: Vec<f32>, d0: usize, d1: usize, d2: usize) -> CpuStorage {
         CpuStorage::from_contiguous(CpuBuffer::F32(v), vec![d0, d1, d2])
     }

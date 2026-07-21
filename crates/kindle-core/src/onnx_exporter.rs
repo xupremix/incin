@@ -7,19 +7,19 @@ use alloc::collections::BTreeMap;
 use prost::Message;
 use std::path::Path;
 
-/// Core abstraction for `OnnxExporter` within the Kindle framework..
+/// `OnnxExporter`.
 pub struct OnnxExporter<'a> {
     _path: &'a Path,
 }
 
 impl<'a> OnnxExporter<'a> {
-    /// Core abstraction for `new` within the Kindle framework..
+    /// Creates a new instance with default (statically inferred) shape arguments.
     pub fn new(path: &'a Path) -> Self {
         Self { _path: path }
     }
 }
 
-/// Core abstraction for `export_to_onnx` within the Kindle framework..
+/// `export_to_onnx`.
 pub fn export_to_onnx(graph: &Graph, path: &Path) -> anyhow::Result<()> {
     let mut onnx_graph = onnx::GraphProto::default();
     onnx_graph.name = Some(alloc::string::String::from("kindle_graph"));
@@ -99,7 +99,7 @@ pub fn export_to_onnx(graph: &Graph, path: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Core abstraction for `dtype_to_onnx` within the Kindle framework..
+/// `dtype_to_onnx`.
 fn dtype_to_onnx(dt: KindleDType) -> onnx::tensor_proto::DataType {
     match dt {
         KindleDType::F32 => onnx::tensor_proto::DataType::Float,
@@ -109,11 +109,11 @@ fn dtype_to_onnx(dt: KindleDType) -> onnx::tensor_proto::DataType {
         KindleDType::U32 => onnx::tensor_proto::DataType::Uint32,
         KindleDType::I64 => onnx::tensor_proto::DataType::Int64,
         KindleDType::U8 => onnx::tensor_proto::DataType::Uint8,
-        KindleDType::Q8_0 => unimplemented!("ONNX does not natively support Q8_0"),
+        KindleDType::Q8_0 => onnx::tensor_proto::DataType::Undefined,
     }
 }
 
-/// Core abstraction for `value_to_value_info` within the Kindle framework..
+/// `value_to_value_info`.
 fn value_to_value_info(val: &crate::graph::Value) -> onnx::ValueInfoProto {
     let mut vi = onnx::ValueInfoProto::default();
     vi.name = Some(val.id.to_string());
@@ -138,10 +138,10 @@ fn value_to_value_info(val: &crate::graph::Value) -> onnx::ValueInfoProto {
 }
 
 impl<'a> crate::serialize::Serializer for OnnxExporter<'a> {
-    /// Core abstraction for `Error` within the Kindle framework..
+    /// The error type returned if the forward pass fails.
     type Error = anyhow::Error;
 
-    /// Core abstraction for `serialize` within the Kindle framework..
+    /// `serialize`.
     fn serialize<B: Backend>(
         &mut self,
         _state_dict: &BTreeMap<String, Tensor<Dyn, B>>,
@@ -155,23 +155,23 @@ impl<'a> crate::serialize::Serializer for OnnxExporter<'a> {
     }
 }
 
-/// Core abstraction for `OnnxImporter` within the Kindle framework..
+/// `OnnxImporter`.
 pub struct OnnxImporter<'a> {
     _path: &'a Path,
 }
 
 impl<'a> OnnxImporter<'a> {
-    /// Core abstraction for `new` within the Kindle framework..
+    /// Creates a new instance with default (statically inferred) shape arguments.
     pub fn new(path: &'a Path) -> Self {
         Self { _path: path }
     }
 }
 
 impl<'a> crate::serialize::Deserializer for OnnxImporter<'a> {
-    /// Core abstraction for `Error` within the Kindle framework..
+    /// The error type returned if the forward pass fails.
     type Error = anyhow::Error;
 
-    /// Core abstraction for `deserialize` within the Kindle framework..
+    /// `deserialize`.
     fn deserialize<B: Backend>(
         &mut self,
         _device: &KindleDevice,

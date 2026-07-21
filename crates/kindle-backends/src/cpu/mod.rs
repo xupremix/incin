@@ -44,35 +44,35 @@ pub use var::CpuVar;
 pub struct CpuBackend<T, D>(core::marker::PhantomData<(T, D)>);
 
 impl<T: DType, D: Device> kindle_core::prelude::Backend for CpuBackend<T, D> {
-    /// Core abstraction for `Device` within the Kindle framework..
+    /// `Device`.
     type Device = D;
     // CPUBACK-01: genuinely dispatched from T, NOT hardcoded f32.
-    /// Core abstraction for `FloatElem` within the Kindle framework..
+    /// `FloatElem`.
     type FloatElem = T;
-    /// Core abstraction for `IntElem` within the Kindle framework..
+    /// `IntElem`.
     type IntElem = i64;
-    /// Core abstraction for `Storage` within the Kindle framework..
+    /// `Storage`.
     type Storage<K: DType> = storage::CpuStorage;
-    /// Core abstraction for `RawVar` within the Kindle framework..
+    /// `RawVar`.
     type RawVar = var::CpuVar;
-    /// Core abstraction for `Grads` within the Kindle framework..
+    /// `Grads`.
     type Grads = tape::CpuGrads;
-    /// Core abstraction for `InnerBackend` within the Kindle framework..
+    /// `InnerBackend`.
     type InnerBackend = Self;
-    /// Core abstraction for `BackendWithDevice` within the Kindle framework..
+    /// `BackendWithDevice`.
     type BackendWithDevice<NewD: Device> = CpuBackend<T, NewD>;
 
-    /// Core abstraction for `shape` within the Kindle framework..
+    /// `shape`.
     fn shape<K: DType>(t: &Self::Storage<K>) -> alloc::vec::Vec<usize> {
         t.shape.clone()
     }
 
-    /// Core abstraction for `format_tensor_display` within the Kindle framework..
+    /// `format_tensor_display`.
     fn format_tensor_display<K: DType>(t: &Self::Storage<K>) -> alloc::string::String {
         alloc::format!("CpuStorage(shape={:?})", t.shape)
     }
 
-    /// Core abstraction for `format_tensor_debug` within the Kindle framework..
+    /// `format_tensor_debug`.
     fn format_tensor_debug<K: DType>(t: &Self::Storage<K>) -> alloc::string::String {
         alloc::format!(
             "CpuStorage(shape={:?}, strides={:?}, offset={})",
@@ -82,17 +82,17 @@ impl<T: DType, D: Device> kindle_core::prelude::Backend for CpuBackend<T, D> {
         )
     }
 
-    /// Core abstraction for `backward` within the Kindle framework..
+    /// `backward`.
     fn backward<K: DType>(t: &Self::Storage<K>) -> Result<Self::Grads> {
         tape::backward(t)
     }
 
-    /// Core abstraction for `backward_with_nan_check` within the Kindle framework..
+    /// `backward_with_nan_check`.
     fn backward_with_nan_check<K: DType>(t: &Self::Storage<K>) -> Result<Self::Grads> {
         tape::backward_with_nan_check(t)
     }
 
-    /// Core abstraction for `get_grad` within the Kindle framework..
+    /// `get_grad`.
     fn get_grad<K: DType>(
         t: &Self::Storage<K>,
         grads: &Self::Grads,
@@ -100,7 +100,7 @@ impl<T: DType, D: Device> kindle_core::prelude::Backend for CpuBackend<T, D> {
         Ok(grads.get(t.id).cloned())
     }
 
-    /// Core abstraction for `to_bytes` within the Kindle framework..
+    /// `to_bytes`.
     fn to_bytes<K: DType>(t: &Self::Storage<K>) -> Result<alloc::vec::Vec<u8>> {
         let t_contig = t.contiguous();
         let num_elements = t_contig.shape.iter().product::<usize>();
@@ -117,7 +117,7 @@ impl<T: DType, D: Device> kindle_core::prelude::Backend for CpuBackend<T, D> {
         }
     }
 
-    /// Core abstraction for `from_bytes` within the Kindle framework..
+    /// `from_bytes`.
     fn from_bytes<K: DType>(
         bytes: &[u8],
         shape: &[usize],
@@ -139,17 +139,17 @@ impl<T: DType, D: Device> kindle_core::prelude::Backend for CpuBackend<T, D> {
         }
     }
 
-    /// Core abstraction for `var_as_tensor` within the Kindle framework..
+    /// `var_as_tensor`.
     fn var_as_tensor<K: DType>(var: &Self::RawVar) -> Result<Self::Storage<K>> {
         var::var_as_tensor(var)
     }
 
-    /// Core abstraction for `var_from_tensor` within the Kindle framework..
+    /// `var_from_tensor`.
     fn var_from_tensor<K: DType>(t: &Self::Storage<K>) -> Result<Self::RawVar> {
         var::var_from_tensor(t)
     }
 
-    /// Core abstraction for `var_to_device` within the Kindle framework..
+    /// `var_to_device`.
     fn var_to_device(var: &Self::RawVar, _device: &KindleDevice) -> Result<Self::RawVar> {
         // CPU-only no-op this phase (single-device target) — matches
         // CandleBackend's real to_device call structurally, but as a plain
@@ -157,7 +157,7 @@ impl<T: DType, D: Device> kindle_core::prelude::Backend for CpuBackend<T, D> {
         Ok(var.clone())
     }
 
-    /// Core abstraction for `assign_var` within the Kindle framework..
+    /// `assign_var`.
     fn assign_var<K: DType>(var: &mut Self::RawVar, tensor: &Self::Storage<K>) -> Result<()> {
         var::assign_var(var, tensor)
     }

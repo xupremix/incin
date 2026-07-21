@@ -4,10 +4,10 @@ extern crate alloc;
 use alloc::collections::BTreeMap;
 
 /// Implementation of `CpuBackend` for the respective backend.
-type CpuBackend = DefaultBackend;
+type CpuBackend = kindle_backends::cpu::CpuBackend<f32, Cpu>;
 
 #[test]
-/// Core abstraction for `test_state_dict_extraction` within the Kindle framework.
+/// Test state dict extraction.
 fn test_state_dict_extraction() -> Result<()> {
     let layer = Linear::<s![10, 5], CpuBackend>::new()?;
     let mut map = BTreeMap::new();

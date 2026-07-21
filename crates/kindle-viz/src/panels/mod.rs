@@ -4,15 +4,15 @@
 //! kindle-viz-internal-only API (PLUGIN-01/PLUGIN-02's "no privileged API"
 //! property).
 
-/// Core abstraction for `graph` within the Kindle framework.
+/// Graph.
 pub mod graph;
-/// Core abstraction for `loss` within the Kindle framework.
+/// Loss.
 pub mod loss;
-/// Core abstraction for `norms` within the Kindle framework.
+/// Norms.
 pub mod norms;
-/// Core abstraction for `panic_test` within the Kindle framework.
+/// Panic test.
 pub mod panic_test;
-/// Core abstraction for `scalar` within the Kindle framework.
+/// Scalar.
 pub mod scalar;
-/// Core abstraction for `system` within the Kindle framework.
+/// System.
 pub mod system;

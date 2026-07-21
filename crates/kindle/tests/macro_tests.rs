@@ -2,25 +2,25 @@ use kindle::prelude::*;
 use kindle::{ConstShape, DynShape, Shape};
 
 /// Implementation of `CpuBackend` for the respective backend.
-type CpuBackend = DefaultBackend;
+type CpuBackend = kindle_backends::cpu::CpuBackend<f32, Cpu>;
 
 #[test]
-/// Core abstraction for `test_s_macro` within the Kindle framework.
+/// Test s macro.
 fn test_s_macro() {
     // Static dimensions
-    /// Core abstraction for `StaticShape` within the Kindle framework.
+    /// Static shape.
     type StaticShape = s![10, 20];
     assert_eq!(<StaticShape as ConstShape>::DIMS, [10, 20]);
 
     // Dynamic dimensions
-    /// Core abstraction for `DynShapeType` within the Kindle framework.
+    /// Dyn shape type.
     type DynShapeType = s![dyn, dyn];
     let arg = (10, 20); // Arg depends on the dynamic fields
     let field = <DynShapeType as Shape>::init(arg);
     assert_eq!(<DynShapeType as DynShape>::dims(&field), [10, 20]);
 
     // Mixed dimensions
-    /// Core abstraction for `MixedShape` within the Kindle framework.
+    /// Mixed shape.
     type MixedShape = s![2, dyn, 5, dyn];
     let mixed_arg = ((), 3, (), 7);
     let mixed_field = <MixedShape as Shape>::init(mixed_arg);
@@ -28,26 +28,26 @@ fn test_s_macro() {
 }
 
 #[test]
-/// Core abstraction for `test_idx_macro` within the Kindle framework.
+/// Test idx macro.
 fn test_idx_macro() {
     // Basic indexing
     #[allow(dead_code)]
-    /// Core abstraction for `Ranges` within the Kindle framework.
+    /// Ranges.
     type Ranges = idx![0..5, 2..10, 0, ..];
     // Compiling is enough to verify type parsing
 }
 
 #[module]
-/// Core abstraction for `MyCustomLayer` within the Kindle framework.
+/// My custom layer.
 pub struct MyCustomLayer<B: Backend> {
-    /// Core abstraction for `linear` within the Kindle framework.
+    /// Linear.
     pub linear: Linear<s![10, 5], B>,
-    /// Core abstraction for `ln` within the Kindle framework.
+    /// Ln.
     pub ln: LayerNorm<s![5], B>,
 }
 
 #[test]
-/// Core abstraction for `test_module_macro` within the Kindle framework.
+/// Test module macro.
 fn test_module_macro() -> Result<()> {
     // Verify that #[module] derived Parameters and StateDict automatically
     let layer = MyCustomLayer::<CpuBackend> {

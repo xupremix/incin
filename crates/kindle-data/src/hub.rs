@@ -33,7 +33,7 @@ impl HubApi {
     }
 }
 
-/// Core abstraction for `HubRepo` within the Kindle framework.
+/// Hub repo.
 pub struct HubRepo {
     inner: hf_hub::api::sync::ApiRepo,
 }

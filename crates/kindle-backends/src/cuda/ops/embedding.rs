@@ -69,9 +69,9 @@ pub(crate) fn launch_embedding_forward(
                 .arg(&i_ptr)
                 .arg(&w_ptr)
                 .arg(&mut out_ptr)
-                .arg(&(num_indices as usize))
-                .arg(&(vocab_size as usize))
-                .arg(&(hidden_size as usize))
+                .arg(&{ num_indices })
+                .arg(&{ vocab_size })
+                .arg(&{ hidden_size })
                 .launch(cfg)
                 .map_err(|e| {
                     kindle_core::prelude::Error::Msg(format!(
@@ -142,8 +142,8 @@ pub(crate) fn launch_embedding_backward(
                 .arg(&go_ptr)
                 .arg(&i_ptr)
                 .arg(&mut gw_ptr)
-                .arg(&(num_indices as usize))
-                .arg(&(hidden_size as usize))
+                .arg(&{ num_indices })
+                .arg(&{ hidden_size })
                 .launch(cfg)
                 .map_err(|e| {
                     kindle_core::prelude::Error::Msg(format!(

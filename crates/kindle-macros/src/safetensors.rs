@@ -10,7 +10,7 @@ use syn::{
     parse_macro_input,
 };
 
-/// Core abstraction for `ImportModelInput` within the Kindle framework.
+/// Import model input.
 struct ImportModelInput {
     path: LitStr,
     _comma: Token![,],
@@ -19,7 +19,7 @@ struct ImportModelInput {
 }
 
 impl Parse for ImportModelInput {
-    /// Core abstraction for `parse` within the Kindle framework.
+    /// Parse.
     fn parse(input: ParseStream) -> Result<Self> {
         let path: LitStr = input.parse()?;
         let _comma: Token![,] = input.parse()?;
@@ -49,16 +49,16 @@ impl Parse for ImportModelInput {
     }
 }
 
-/// Core abstraction for `Node` within the Kindle framework.
+/// Node.
 enum Node {
-    /// Core abstraction for `Leaf` within the Kindle framework.
+    /// Leaf.
     Leaf { shape: Vec<usize>, is_buffer: bool },
-    /// Core abstraction for `Dir` within the Kindle framework.
+    /// Dir.
     Dir(BTreeMap<String, Node>),
 }
 
 impl Node {
-    /// Core abstraction for `insert` within the Kindle framework.
+    /// Insert.
     fn insert(&mut self, path: &[&str], shape: Vec<usize>) {
         if path.len() == 1 {
             let is_buffer = path[0] == "running_mean"
@@ -76,7 +76,7 @@ impl Node {
     }
 }
 
-/// Core abstraction for `generate_structs` within the Kindle framework.
+/// Generate structs.
 fn generate_structs(
     name: &Ident,
     node: &Node,
@@ -232,7 +232,7 @@ pub(crate) fn import_model(_attr: TokenStream, item: TokenStream) -> TokenStream
         where
             #(#bounds,)*
         {
-            /// Core abstraction for `load_default_weights` within the Kindle framework.
+            /// Load default weights.
             pub fn load_default_weights(&mut self) -> kindle::prelude::Result<()> {
                 kindle::prelude::load_safetensors(self, #path_str)
             }

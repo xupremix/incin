@@ -5,9 +5,9 @@ use crate::prelude::Shape;
     label = "Invalid transpose",
     note = "Transpose requires both dimensions to be < the rank of the tensor"
 )]
-/// Core abstraction for `Transpose` within the Kindle framework..
+/// `Transpose`.
 pub trait Transpose<const D1: usize, const D2: usize>: Shape {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output: Shape;
 }
 
@@ -16,9 +16,9 @@ pub trait Transpose<const D1: usize, const D2: usize>: Shape {
     label = "Invalid reduction dimension",
     note = "Reduction requires the dimension to be < the rank of the tensor"
 )]
-/// Core abstraction for `ReduceDim` within the Kindle framework..
+/// `ReduceDim`.
 pub trait ReduceDim<const D: usize>: Shape {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output: Shape;
 }
 
@@ -27,9 +27,9 @@ pub trait ReduceDim<const D: usize>: Shape {
     label = "Invalid reduction dimension",
     note = "Reduction requires the dimension to be < the rank of the tensor"
 )]
-/// Core abstraction for `ReduceKeepDim` within the Kindle framework..
+/// `ReduceKeepDim`.
 pub trait ReduceKeepDim<const D: usize>: Shape {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output: Shape;
 }
 
@@ -38,29 +38,29 @@ pub trait ReduceKeepDim<const D: usize>: Shape {
     label = "Invalid flatten range",
     note = "Flatten requires START <= END and END < the rank of the tensor"
 )]
-/// Core abstraction for `Flatten` within the Kindle framework..
+/// `Flatten`.
 pub trait Flatten<const START: usize, const END: usize>: Shape {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output: Shape;
 }
 
 impl<const START: usize, const END: usize> Flatten<START, END> for crate::prelude::Dyn {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = crate::prelude::Dyn;
 }
 
 impl<const D1: usize, const D2: usize> Transpose<D1, D2> for crate::prelude::Dyn {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = crate::prelude::Dyn;
 }
 
 impl<const D: usize> ReduceDim<D> for crate::prelude::Dyn {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = crate::prelude::Dyn;
 }
 
 impl<const D: usize> ReduceKeepDim<D> for crate::prelude::Dyn {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = crate::prelude::Dyn;
 }
 

@@ -1,48 +1,48 @@
 use crate::nn::{Module, Param};
 use crate::prelude::*;
 
-/// Core abstraction for `EmbeddingShape` within the Kindle framework..
+/// `EmbeddingShape`.
 pub trait EmbeddingShape: Shape + DynShape {
-    /// Core abstraction for `Vocab` within the Kindle framework..
+    /// `Vocab`.
     type Vocab: Dim;
-    /// Core abstraction for `Embed` within the Kindle framework..
+    /// `Embed`.
     type Embed: Dim;
-    /// Core abstraction for `BuildArg` within the Kindle framework..
+    /// `BuildArg`.
     type BuildArg: crate::tensor::arg_into::NotUnit;
-    /// Core abstraction for `Target` within the Kindle framework..
+    /// The runtime arguments needed to instantiate this layer.
     type Target;
 
-    /// Core abstraction for `build_args` within the Kindle framework..
+    /// Converts the target arguments into concrete shape args for weight and bias tensors.
     fn build_args(target: Self::Target) -> Self::BuildArg;
 }
 
 impl<V: Dim, E: Dim> EmbeddingShape for (V, E) {
-    /// Core abstraction for `Vocab` within the Kindle framework..
+    /// `Vocab`.
     type Vocab = V;
-    /// Core abstraction for `Embed` within the Kindle framework..
+    /// `Embed`.
     type Embed = E;
-    /// Core abstraction for `BuildArg` within the Kindle framework..
+    /// `BuildArg`.
     type BuildArg = (<V as Dim>::Arg, <E as Dim>::Arg);
-    /// Core abstraction for `Target` within the Kindle framework..
+    /// The runtime arguments needed to instantiate this layer.
     type Target = (<V as Dim>::Arg, <E as Dim>::Arg);
 
-    /// Core abstraction for `build_args` within the Kindle framework..
+    /// Converts the target arguments into concrete shape args for weight and bias tensors.
     fn build_args(target: Self::Target) -> Self::BuildArg {
         target
     }
 }
 
 impl EmbeddingShape for Dyn {
-    /// Core abstraction for `Vocab` within the Kindle framework..
+    /// `Vocab`.
     type Vocab = usize;
-    /// Core abstraction for `Embed` within the Kindle framework..
+    /// `Embed`.
     type Embed = usize;
-    /// Core abstraction for `BuildArg` within the Kindle framework..
+    /// `BuildArg`.
     type BuildArg = alloc::vec::Vec<usize>;
-    /// Core abstraction for `Target` within the Kindle framework..
+    /// The runtime arguments needed to instantiate this layer.
     type Target = (usize, usize);
 
-    /// Core abstraction for `build_args` within the Kindle framework..
+    /// Converts the target arguments into concrete shape args for weight and bias tensors.
     fn build_args(target: Self::Target) -> Self::BuildArg {
         alloc::vec![target.0, target.1]
     }
@@ -50,9 +50,9 @@ impl EmbeddingShape for Dyn {
 
 #[derive(Debug, Clone)]
 #[kindle_macros::module(internal)]
-/// Core abstraction for `Embedding` within the Kindle framework..
+/// `Embedding`.
 pub struct Embedding<S: EmbeddingShape, B: Backend> {
-    /// Core abstraction for `weight` within the Kindle framework..
+    /// The learnable weight matrix parameter.
     pub weight: Param<(S::Vocab, S::Embed), B>,
 }
 
@@ -62,7 +62,7 @@ where
     B::Device: crate::prelude::ConstDevice,
     (S::Vocab, S::Embed): Shape<Arg = S::BuildArg>,
 {
-    /// Core abstraction for `new_with` within the Kindle framework..
+    /// Creates a new instance with explicitly provided shape arguments.
     pub fn new_with(args: S::Target) -> Result<Self> {
         let w_args = S::build_args(args);
         let w_args_data = crate::tensor::arg_into::TensorArgsData {
@@ -89,7 +89,7 @@ where
     B::Device: crate::prelude::ConstDevice,
     (S::Vocab, S::Embed): Shape<Arg = S::BuildArg>,
 {
-    /// Core abstraction for `new` within the Kindle framework..
+    /// Creates a new instance with default (statically inferred) shape arguments.
     pub fn new() -> Result<Self> {
         Self::new_with(())
     }
@@ -101,13 +101,13 @@ where
     S::Embed: typenum::Unsigned,
     B: Backend + crate::tensor::backend::ModuleOps<B>,
 {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<<InS as AppendDim<S::Embed>>::Output, B>;
-    /// Core abstraction for `Error` within the Kindle framework..
+    /// The error type returned if the forward pass fails.
     type Error = Error;
 
     #[inline]
-    /// Core abstraction for `forward` within the Kindle framework..
+    /// Runs the forward pass of this module on the given input.
     fn forward(&self, x: Tensor<InS, B>) -> core::result::Result<Self::Output, Error> {
         let weight = self.weight.as_tensor()?;
         let out = B::embedding(x.inner(), weight.inner())?;

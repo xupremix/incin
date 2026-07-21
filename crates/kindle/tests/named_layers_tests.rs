@@ -1,23 +1,23 @@
 use kindle::prelude::*;
-/// Core abstraction for `B` within the Kindle framework.
+/// B.
 type B = kindle::DefaultBackend;
 
 #[module]
-/// Core abstraction for `SubModule` within the Kindle framework.
+/// Sub module.
 struct SubModule {
     fc: Linear<s![100, 50], B>,
     act: ReLU,
 }
 
 #[module]
-/// Core abstraction for `TestMLP` within the Kindle framework.
+/// Test mlp.
 struct TestMLP {
     sub: SubModule,
     fc_out: Linear<s![50, 10], B>,
 }
 
 #[test]
-/// Core abstraction for `test_named_layers_derivation` within the Kindle framework.
+/// Test named layers derivation.
 fn test_named_layers_derivation() {
     let sub = SubModule {
         fc: Linear::new().unwrap(),
@@ -61,7 +61,7 @@ fn test_named_layers_derivation() {
 }
 
 #[test]
-/// Core abstraction for `test_sequential_named_layers` within the Kindle framework.
+/// Test sequential named layers.
 fn test_sequential_named_layers() {
     let net = seq!(
         Linear::<s![768, 256], B>::new().unwrap(),

@@ -1,18 +1,18 @@
 extern crate alloc;
 use kindle::prelude::*;
 
-/// Core abstraction for `Features` within the Kindle framework.
+/// Features.
 type Features = Sequential<Conv2d<s![dyn, dyn, 3, 1, 0, 1]>, ReLU>;
 
 #[module]
-/// Core abstraction for `SimpleCNN` within the Kindle framework.
+/// Simple cnn.
 pub struct SimpleCNN {
     features: Features,
     classifier: Linear<Dyn>,
 }
 
 impl SimpleCNN {
-    /// Core abstraction for `new` within the Kindle framework.
+    /// New.
     pub fn new() -> Result<Self> {
         // Init 16 out_channels, 1 in_channel
         let conv = Conv2d::<s![dyn, dyn, 3, 1, 0, 1]>::new_with((16, 1))?;
@@ -27,7 +27,7 @@ impl SimpleCNN {
         })
     }
 
-    /// Core abstraction for `forward` within the Kindle framework.
+    /// Forward.
     pub fn forward(&self, x: Tensor<Dyn>) -> Result<Tensor<Dyn>> {
         // 1. Feature extraction (Conv2d -> ReLU)
         let f = self.features.forward(x)?;

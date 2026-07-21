@@ -6,7 +6,7 @@ use kindle_core::prelude::*;
 use kindle_macros::s;
 
 #[test]
-/// Core abstraction for `test_concat_static_success` within the Kindle framework.
+/// Test concat static success.
 fn test_concat_static_success() {
     let t1: Tensor<s![2, 3], DummyBackend<f32, Cpu>> = Tensor::zeros(()).unwrap();
     let t2: Tensor<s![4, 3], DummyBackend<f32, Cpu>> = Tensor::zeros(()).unwrap();
@@ -16,7 +16,7 @@ fn test_concat_static_success() {
 }
 
 #[test]
-/// Core abstraction for `test_try_concat_dynamic` within the Kindle framework.
+/// Test try concat dynamic.
 fn test_try_concat_dynamic() {
     let t1: Tensor<(usize, typenum::U3), DummyBackend<f32, Cpu>> = Tensor::zeros((2,)).unwrap();
     let t2: Tensor<(usize, typenum::U3), DummyBackend<f32, Cpu>> = Tensor::zeros((4,)).unwrap();
@@ -26,7 +26,7 @@ fn test_try_concat_dynamic() {
 }
 
 #[test]
-/// Core abstraction for `test_stack_static_success` within the Kindle framework.
+/// Test stack static success.
 fn test_stack_static_success() {
     let t1: Tensor<s![2, 3], DummyBackend<f32, Cpu>> = Tensor::zeros(()).unwrap();
     let t2: Tensor<s![2, 3], DummyBackend<f32, Cpu>> = Tensor::zeros(()).unwrap();
@@ -36,7 +36,7 @@ fn test_stack_static_success() {
 }
 
 #[test]
-/// Core abstraction for `test_try_stack_dynamic` within the Kindle framework.
+/// Test try stack dynamic.
 fn test_try_stack_dynamic() {
     let t1: Tensor<Dyn, DummyBackend<f32, Cpu>> = Tensor::zeros([2, 3]).unwrap();
     let t2: Tensor<Dyn, DummyBackend<f32, Cpu>> = Tensor::zeros([2, 3]).unwrap();

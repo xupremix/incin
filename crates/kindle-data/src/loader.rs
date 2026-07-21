@@ -5,15 +5,15 @@ use std::sync::mpsc::{Receiver, sync_channel};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-/// Core abstraction for `Collate` within the Kindle framework.
+/// Collate.
 pub trait Collate<T>: Send + Sync {
-    /// Core abstraction for `Output` within the Kindle framework.
+    /// Output.
     type Output: Send + 'static;
-    /// Core abstraction for `collate` within the Kindle framework.
+    /// Collate.
     fn collate(&self, batch: Vec<T>) -> Self::Output;
 }
 
-/// Core abstraction for `DataLoader` within the Kindle framework.
+/// Data loader.
 pub struct DataLoader<D, C>
 where
     D: Dataset + 'static,
@@ -31,7 +31,7 @@ where
     D: Dataset + 'static,
     C: Collate<D::Item> + 'static,
 {
-    /// Core abstraction for `new` within the Kindle framework.
+    /// New.
     pub fn new(dataset: D, collate_fn: C, batch_size: usize) -> Self {
         Self {
             dataset: Arc::new(dataset),
@@ -42,29 +42,29 @@ where
         }
     }
 
-    /// Core abstraction for `with_num_workers` within the Kindle framework.
+    /// With num workers.
     pub fn with_num_workers(mut self, num_workers: usize) -> Self {
         self.num_workers = num_workers;
         self
     }
 
-    /// Core abstraction for `with_shuffle` within the Kindle framework.
+    /// With shuffle.
     pub fn with_shuffle(mut self, shuffle: bool) -> Self {
         self.shuffle = shuffle;
         self
     }
 }
 
-/// Core abstraction for `DataLoaderIter` within the Kindle framework.
+/// Data loader iter.
 pub struct DataLoaderIter<T> {
     receiver: Receiver<T>,
 }
 
 impl<T> Iterator for DataLoaderIter<T> {
-    /// Core abstraction for `Item` within the Kindle framework.
+    /// Item.
     type Item = T;
 
-    /// Core abstraction for `next` within the Kindle framework.
+    /// Next.
     fn next(&mut self) -> Option<Self::Item> {
         self.receiver.recv().ok()
     }
@@ -75,12 +75,12 @@ where
     D: Dataset + 'static,
     C: Collate<D::Item> + 'static,
 {
-    /// Core abstraction for `Item` within the Kindle framework.
+    /// Item.
     type Item = C::Output;
-    /// Core abstraction for `IntoIter` within the Kindle framework.
+    /// Into iter.
     type IntoIter = DataLoaderIter<C::Output>;
 
-    /// Core abstraction for `into_iter` within the Kindle framework.
+    /// Into iter.
     fn into_iter(self) -> Self::IntoIter {
         let mut indices: Vec<usize> = (0..self.dataset.len()).collect();
         if self.shuffle {

@@ -6,7 +6,7 @@ use kindle_core::prelude::*;
 use kindle_macros::s;
 
 #[test]
-/// Core abstraction for `test_reshape_static_success` within the Kindle framework.
+/// Test reshape static success.
 fn test_reshape_static_success() {
     let t = Tensor::<s![2, 3], DummyBackend<f32, Cpu>>::zeros(()).unwrap();
 
@@ -16,7 +16,7 @@ fn test_reshape_static_success() {
 }
 
 #[test]
-/// Core abstraction for `test_try_reshape_dynamic` within the Kindle framework.
+/// Test try reshape dynamic.
 fn test_try_reshape_dynamic() {
     let t = Tensor::<Dyn, DummyBackend<f32, Cpu>>::zeros(vec![2, 3]).unwrap();
 

@@ -310,7 +310,7 @@ pub(crate) fn conv1d_impl<T: DType, D: kindle_core::prelude::Device, K: DType>(
     dilation: usize,
     groups: usize,
 ) -> Result<CpuStorage> {
-    /// Core abstraction for `B` within the Kindle framework..
+    /// `B`.
     type B<T, D> = CpuBackend<T, D>;
 
     let (b, cin, len) = (input.shape[0], input.shape[1], input.shape[2]);
@@ -440,7 +440,7 @@ pub(crate) fn conv2d_impl<T: DType, D: kindle_core::prelude::Device, K: DType>(
     dilation: usize,
     groups: usize,
 ) -> Result<CpuStorage> {
-    /// Core abstraction for `B` within the Kindle framework..
+    /// `B`.
     type B<T, D> = CpuBackend<T, D>;
 
     let (b, cin, h, w) = (
@@ -610,7 +610,7 @@ pub(crate) fn conv_transpose2d_impl<T: DType, D: kindle_core::prelude::Device, K
     dilation: usize,
     groups: usize,
 ) -> Result<CpuStorage> {
-    /// Core abstraction for `B` within the Kindle framework..
+    /// `B`.
     type B<T, D> = CpuBackend<T, D>;
 
     if groups != 1 {
@@ -795,7 +795,7 @@ fn concat_along_dim0(parts: &[CpuStorage]) -> CpuStorage {
     concat_along_dim(parts, 0)
 }
 
-/// Core abstraction for `concat_along_dim` within the Kindle framework..
+/// `concat_along_dim`.
 fn concat_along_dim(parts: &[CpuStorage], dim: usize) -> CpuStorage {
     let rank = parts[0].shape.len();
     let mut out_shape = parts[0].shape.clone();
@@ -828,21 +828,21 @@ fn concat_along_dim(parts: &[CpuStorage], dim: usize) -> CpuStorage {
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
-/// Core abstraction for `tests` within the Kindle framework..
+/// `tests`.
 mod tests {
     use super::*;
     use crate::cpu::gradcheck::gradcheck;
     use kindle_core::prelude::{Cpu, ReductionOps};
 
-    /// Core abstraction for `TestBackend` within the Kindle framework..
+    /// `TestBackend`.
     type TestBackend = CpuBackend<f32, Cpu>;
 
-    /// Core abstraction for `tensor` within the Kindle framework..
+    /// `tensor`.
     fn tensor(v: Vec<f32>, shape: Vec<usize>) -> CpuStorage {
         CpuStorage::from_contiguous(CpuBuffer::F32(v), shape)
     }
 
-    /// Core abstraction for `f32_vec` within the Kindle framework..
+    /// `f32_vec`.
     fn f32_vec(s: &CpuStorage) -> Vec<f32> {
         match &*s.buffer {
             CpuBuffer::F32(v) => v.clone(),
@@ -925,7 +925,7 @@ mod tests {
 
     // --- conv1d backward ---
 
-    /// Core abstraction for `conv1d_sum_op` within the Kindle framework..
+    /// `conv1d_sum_op`.
     fn conv1d_sum_op(inputs: &[CpuStorage]) -> CpuStorage {
         let out = conv1d_impl::<f32, Cpu, f32>(&inputs[0], &inputs[1], None, 1, 0, 1, 1).unwrap();
         TestBackend::sum_all::<f32>(&out).unwrap()
@@ -1044,7 +1044,7 @@ mod tests {
 
     // --- conv2d backward ---
 
-    /// Core abstraction for `conv2d_sum_op` within the Kindle framework..
+    /// `conv2d_sum_op`.
     fn conv2d_sum_op(inputs: &[CpuStorage]) -> CpuStorage {
         let out = conv2d_impl::<f32, Cpu, f32>(&inputs[0], &inputs[1], None, 1, 0, 1, 1).unwrap();
         TestBackend::sum_all::<f32>(&out).unwrap()
@@ -1159,7 +1159,7 @@ mod tests {
 
     // --- conv_transpose2d backward ---
 
-    /// Core abstraction for `conv_transpose2d_sum_op` within the Kindle framework..
+    /// `conv_transpose2d_sum_op`.
     fn conv_transpose2d_sum_op(inputs: &[CpuStorage]) -> CpuStorage {
         let out =
             conv_transpose2d_impl::<f32, Cpu, f32>(&inputs[0], &inputs[1], None, 1, 0, 0, 1, 1)

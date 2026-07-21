@@ -35,27 +35,27 @@
 //!   `conv_transpose2d`/`max_pool2d`/`avg_pool2d`/`adaptive_avg_pool2d`) —
 //!   zero `Error::UnsupportedBackendOperation` stubs remain.
 
-/// Core abstraction for `conv` within the Kindle framework..
+/// `conv`.
 pub mod conv;
-/// Core abstraction for `elementwise` within the Kindle framework..
+/// `elementwise`.
 pub mod elementwise;
-/// Core abstraction for `embedding` within the Kindle framework..
+/// `embedding`.
 pub mod embedding;
-/// Core abstraction for `loss` within the Kindle framework..
+/// `loss`.
 pub mod loss;
-/// Core abstraction for `matmul` within the Kindle framework..
+/// `matmul`.
 pub mod matmul;
-/// Core abstraction for `module` within the Kindle framework..
+/// `module`.
 pub mod module;
-/// Core abstraction for `norm` within the Kindle framework..
+/// `norm`.
 pub mod norm;
-/// Core abstraction for `optimizer` within the Kindle framework..
+/// `optimizer`.
 pub mod optimizer;
-/// Core abstraction for `pool` within the Kindle framework..
+/// `pool`.
 pub mod pool;
-/// Core abstraction for `quant` within the Kindle framework..
+/// `quant`.
 pub mod quant;
-/// Core abstraction for `reduce` within the Kindle framework..
+/// `reduce`.
 pub mod reduce;
-/// Core abstraction for `shape_ops` within the Kindle framework..
+/// `shape_ops`.
 pub mod shape_ops;

@@ -53,18 +53,18 @@ pub(crate) fn var_from_tensor(t: &CpuStorage) -> Result<CpuVar> {
 }
 
 #[cfg(test)]
-/// Core abstraction for `tests` within the Kindle framework..
+/// `tests`.
 mod tests {
     use super::*;
     use crate::cpu::storage::CpuBuffer;
 
-    /// Core abstraction for `storage` within the Kindle framework..
+    /// `storage`.
     fn storage(v: Vec<f32>) -> CpuStorage {
         let len = v.len();
         CpuStorage::from_contiguous(CpuBuffer::F32(v), vec![len])
     }
 
-    /// Core abstraction for `f32_vec` within the Kindle framework..
+    /// `f32_vec`.
     fn f32_vec(s: &CpuStorage) -> Vec<f32> {
         match &*s.buffer {
             CpuBuffer::F32(v) => v.clone(),
@@ -73,7 +73,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `var_as_tensor_returns_clone_of_current_value` within the Kindle framework..
+    /// `var_as_tensor_returns_clone_of_current_value`.
     fn var_as_tensor_returns_clone_of_current_value() {
         let t = storage(vec![1.0, 2.0, 3.0]);
         let var = var_from_tensor(&t).unwrap();
@@ -82,7 +82,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `assign_var_replaces_value_and_subsequent_read_reflects_it` within the Kindle framework..
+    /// `assign_var_replaces_value_and_subsequent_read_reflects_it`.
     fn assign_var_replaces_value_and_subsequent_read_reflects_it() {
         let t = storage(vec![1.0, 2.0, 3.0]);
         let mut var = var_from_tensor(&t).unwrap();
@@ -95,7 +95,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `var_as_tensor_does_not_hold_live_borrow_across_assign_var` within the Kindle framework..
+    /// `var_as_tensor_does_not_hold_live_borrow_across_assign_var`.
     fn var_as_tensor_does_not_hold_live_borrow_across_assign_var() {
         // Calling var_as_tensor immediately followed by assign_var on the
         // same CpuVar within the same scope must not panic — proves
@@ -113,7 +113,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `two_sequential_assign_var_calls_each_succeed_and_final_read_reflects_second` within the Kindle framework..
+    /// `two_sequential_assign_var_calls_each_succeed_and_final_read_reflects_second`.
     fn two_sequential_assign_var_calls_each_succeed_and_final_read_reflects_second() {
         let t = storage(vec![0.0]);
         let mut var = var_from_tensor(&t).unwrap();

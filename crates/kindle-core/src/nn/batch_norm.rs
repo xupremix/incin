@@ -22,25 +22,25 @@ use core::marker::PhantomData;
 /// let bn = BatchNorm2d::<(typenum::U64,), MyBackend>::new(typenum::U64::new(), 1e-5, 0.1)?;
 /// ```
 pub trait BatchNormShape: Shape + DynShape {
-    /// Core abstraction for `Channels` within the Kindle framework..
+    /// `Channels`.
     type Channels: Dim;
-    /// Core abstraction for `BuildArg` within the Kindle framework..
+    /// `BuildArg`.
     type BuildArg: crate::tensor::arg_into::NotUnit + Clone;
-    /// Core abstraction for `Target` within the Kindle framework..
+    /// The runtime arguments needed to instantiate this layer.
     type Target;
-    /// Core abstraction for `build_args` within the Kindle framework..
+    /// Converts the target arguments into concrete shape args for weight and bias tensors.
     fn build_args(target: Self::Target) -> Self::BuildArg;
 }
 
 impl<C: Dim> BatchNormShape for (C,) {
-    /// Core abstraction for `Channels` within the Kindle framework..
+    /// `Channels`.
     type Channels = C;
-    /// Core abstraction for `BuildArg` within the Kindle framework..
+    /// `BuildArg`.
     type BuildArg = (<C as Dim>::Arg,);
-    /// Core abstraction for `Target` within the Kindle framework..
+    /// The runtime arguments needed to instantiate this layer.
     type Target = (<C as Dim>::Arg,);
 
-    /// Core abstraction for `build_args` within the Kindle framework..
+    /// Converts the target arguments into concrete shape args for weight and bias tensors.
     fn build_args(target: Self::Target) -> Self::BuildArg {
         target
     }
@@ -48,21 +48,21 @@ impl<C: Dim> BatchNormShape for (C,) {
 
 #[derive(Debug, Clone)]
 #[kindle_macros::module(internal)]
-/// Core abstraction for `BatchNorm2d` within the Kindle framework..
+/// `BatchNorm2d`.
 pub struct BatchNorm2d<S: BatchNormShape, B: Backend> {
-    /// Core abstraction for `weight` within the Kindle framework..
+    /// The learnable weight matrix parameter.
     pub weight: Param<(S::Channels,), B>,
-    /// Core abstraction for `bias` within the Kindle framework..
+    /// The optional learnable bias vector parameter.
     pub bias: Param<(S::Channels,), B>,
-    /// Core abstraction for `running_mean` within the Kindle framework..
+    /// Running mean buffer used during batch normalization inference.
     pub running_mean: Buffer<(S::Channels,), B>,
-    /// Core abstraction for `running_var` within the Kindle framework..
+    /// Running variance buffer used during batch normalization inference.
     pub running_var: Buffer<(S::Channels,), B>,
     #[module(ignore)]
-    /// Core abstraction for `eps` within the Kindle framework..
+    /// Small epsilon added to the denominator for numerical stability.
     pub eps: f32,
     #[module(ignore)]
-    /// Core abstraction for `momentum` within the Kindle framework..
+    /// Momentum factor for updating running statistics.
     pub momentum: f32,
     #[module(ignore)]
     _phantom: PhantomData<B>,
@@ -74,7 +74,7 @@ where
     B::Device: crate::prelude::ConstDevice,
     (S::Channels,): Shape<Arg = S::BuildArg>,
 {
-    /// Core abstraction for `new_with` within the Kindle framework..
+    /// Creates a new instance with explicitly provided shape arguments.
     pub fn new_with(args: S::Target, eps: f32, momentum: f32) -> Result<Self> {
         let b_args = S::build_args(args);
 
@@ -110,7 +110,7 @@ where
     B::Device: crate::prelude::ConstDevice,
     (S::Channels,): Shape<Arg = S::BuildArg>,
 {
-    /// Core abstraction for `new` within the Kindle framework..
+    /// Creates a new instance with default (statically inferred) shape arguments.
     pub fn new(eps: f32, momentum: f32) -> Result<Self> {
         Self::new_with(((),), eps, momentum)
     }
@@ -122,13 +122,13 @@ impl<
     B: Backend + crate::tensor::backend::ModuleOps<B>,
 > Module<Tensor<InS, B>> for BatchNorm2d<S, B>
 {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<InS, B>;
-    /// Core abstraction for `Error` within the Kindle framework..
+    /// The error type returned if the forward pass fails.
     type Error = Error;
 
     #[inline]
-    /// Core abstraction for `forward` within the Kindle framework..
+    /// Runs the forward pass of this module on the given input.
     fn forward(&self, x: Tensor<InS, B>) -> core::result::Result<Self::Output, Self::Error> {
         let weight = self.weight.as_tensor()?.into_dyn();
         let bias = self.bias.as_tensor()?.into_dyn();

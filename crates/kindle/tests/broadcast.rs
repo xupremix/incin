@@ -1,11 +1,11 @@
 use kindle_core::prelude::*;
 use typenum::{U2, U3};
 
-/// Core abstraction for `B` within the Kindle framework.
+/// B.
 type B = kindle_backends::cpu::CpuBackend<f32, kindle_core::prelude::Cpu>;
 
 #[test]
-/// Core abstraction for `test_broadcast_success` within the Kindle framework.
+/// Test broadcast success.
 fn test_broadcast_success() {
     let t1: Tensor<(U2,), B> = Tensor::zeros(()).unwrap();
     let t2: Tensor<(U3, U2), B> = Tensor::zeros(()).unwrap();

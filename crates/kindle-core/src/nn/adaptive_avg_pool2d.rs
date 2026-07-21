@@ -4,7 +4,7 @@ use crate::prelude::*;
 use typenum::Unsigned;
 
 #[derive(Debug, Clone)]
-/// Core abstraction for `AdaptiveAvgPool2d` within the Kindle framework..
+/// `AdaptiveAvgPool2d`.
 pub struct AdaptiveAvgPool2d<HOut: Unsigned, WOut: Unsigned> {
     _phantom: core::marker::PhantomData<(HOut, WOut)>,
 }
@@ -16,7 +16,7 @@ impl<HOut: Unsigned, WOut: Unsigned> Default for AdaptiveAvgPool2d<HOut, WOut> {
 }
 
 impl<HOut: Unsigned, WOut: Unsigned> AdaptiveAvgPool2d<HOut, WOut> {
-    /// Core abstraction for `new` within the Kindle framework..
+    /// Creates a new instance with default (statically inferred) shape arguments.
     pub fn new() -> Self {
         Self {
             _phantom: core::marker::PhantomData,
@@ -25,7 +25,7 @@ impl<HOut: Unsigned, WOut: Unsigned> AdaptiveAvgPool2d<HOut, WOut> {
 }
 
 impl<HOut: Unsigned, WOut: Unsigned, B: Backend> Parameters<B> for AdaptiveAvgPool2d<HOut, WOut> {
-    /// Core abstraction for `named_parameters` within the Kindle framework..
+    /// Collects named trainable parameters into `map` under the given `prefix`.
     fn named_parameters(
         &self,
         _prefix: &str,
@@ -41,13 +41,13 @@ impl<
     B: Backend + crate::tensor::backend::ModuleOps<B>,
 > Module<Tensor<I, B>> for AdaptiveAvgPool2d<HOut, WOut>
 {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<I::Output, B>;
-    /// Core abstraction for `Error` within the Kindle framework..
+    /// The error type returned if the forward pass fails.
     type Error = Error;
 
     #[inline]
-    /// Core abstraction for `forward` within the Kindle framework..
+    /// Runs the forward pass of this module on the given input.
     fn forward(&self, x: Tensor<I, B>) -> core::result::Result<Self::Output, Error> {
         let out = B::adaptive_avg_pool2d(x.inner(), (HOut::USIZE, WOut::USIZE))?;
 

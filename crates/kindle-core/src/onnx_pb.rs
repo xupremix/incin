@@ -1,4 +1,4 @@
-/// Core abstraction for `onnx` within the Kindle framework..
+/// `onnx`.
 #[allow(clippy::doc_overindented_list_items, clippy::enum_variant_names)]
 pub mod onnx {
     include!(concat!(env!("OUT_DIR"), "/onnx.rs"));

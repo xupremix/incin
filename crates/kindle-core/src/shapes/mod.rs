@@ -10,28 +10,28 @@
 //! * [`spatial`] — Shape traits for convolution (`Conv2dShape`, `Conv1dShape`) and pooling.
 //! * `concat` — Shape traits for verified concatenation along an axis.
 //! * `stack` — Shape traits for verified tensor stacking.
-/// Core abstraction for `arithmetic` within the Kindle framework..
+/// `arithmetic`.
 pub mod arithmetic;
-/// Core abstraction for `broadcast` within the Kindle framework..
+/// `broadcast`.
 pub mod broadcast;
 
-/// Core abstraction for `concat` within the Kindle framework..
+/// `concat`.
 pub mod concat;
-/// Core abstraction for `dim` within the Kindle framework..
+/// The dimension along which this operation is applied.
 pub mod dim;
-/// Core abstraction for `idx` within the Kindle framework..
+/// `idx`.
 pub mod idx;
-/// Core abstraction for `named` within the Kindle framework..
+/// `named`.
 pub mod named;
-/// Core abstraction for `reshape` within the Kindle framework..
+/// `reshape`.
 pub mod reshape;
-/// Core abstraction for `shape` within the Kindle framework..
+/// `shape`.
 pub mod shape;
-/// Core abstraction for `shape_ops` within the Kindle framework..
+/// `shape_ops`.
 pub mod shape_ops;
-/// Core abstraction for `spatial` within the Kindle framework..
+/// `spatial`.
 pub mod spatial;
-/// Core abstraction for `stack` within the Kindle framework..
+/// `stack`.
 pub mod stack;
 
 pub use arithmetic::*;
@@ -43,7 +43,7 @@ pub use shape::*;
 pub use shape_ops::*;
 pub use spatial::*;
 
-/// Core abstraction for `prelude` within the Kindle framework..
+/// `prelude`.
 pub mod prelude {
     pub use super::arithmetic::*;
     pub use super::broadcast::*;

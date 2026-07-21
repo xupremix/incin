@@ -11,7 +11,7 @@ pub struct WgpuBackend<T, D>(core::marker::PhantomData<(T, D)>);
 #[derive(Clone)]
 /// Implementation of `WgpuVar` for the respective backend..
 pub struct WgpuVar {
-    /// Core abstraction for `storage` within the Kindle framework..
+    /// `storage`.
     pub storage: WgpuStorage,
 }
 
@@ -20,7 +20,7 @@ pub type WgpuGrads = crate::wgpu::tape::WgpuGrads;
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper: compute flat element count from shape
 // ─────────────────────────────────────────────────────────────────────────────
-/// Core abstraction for `num_elements` within the Kindle framework..
+/// `num_elements`.
 pub(crate) fn num_elements(shape: &[usize]) -> usize {
     shape.iter().product()
 }
@@ -29,73 +29,73 @@ pub(crate) fn num_elements(shape: &[usize]) -> usize {
 // Backend core trait
 // ─────────────────────────────────────────────────────────────────────────────
 impl<T: DType, D: Device> Backend for WgpuBackend<T, D> {
-    /// Core abstraction for `Device` within the Kindle framework..
+    /// `Device`.
     type Device = D;
-    /// Core abstraction for `FloatElem` within the Kindle framework..
+    /// `FloatElem`.
     type FloatElem = T;
-    /// Core abstraction for `IntElem` within the Kindle framework..
+    /// `IntElem`.
     type IntElem = i64;
-    /// Core abstraction for `BackendWithDevice` within the Kindle framework..
+    /// `BackendWithDevice`.
     type BackendWithDevice<NewD: Device> = WgpuBackend<T, NewD>;
 
-    /// Core abstraction for `Storage` within the Kindle framework..
+    /// `Storage`.
     type Storage<K: DType> = WgpuStorage;
-    /// Core abstraction for `RawVar` within the Kindle framework..
+    /// `RawVar`.
     type RawVar = WgpuVar;
-    /// Core abstraction for `Grads` within the Kindle framework..
+    /// `Grads`.
     type Grads = WgpuGrads;
-    /// Core abstraction for `InnerBackend` within the Kindle framework..
+    /// `InnerBackend`.
     type InnerBackend = Self;
 
-    /// Core abstraction for `shape` within the Kindle framework..
+    /// `shape`.
     fn shape<K: DType>(t: &Self::Storage<K>) -> Vec<usize> {
         t.shape.clone()
     }
 
-    /// Core abstraction for `format_tensor_display` within the Kindle framework..
+    /// `format_tensor_display`.
     fn format_tensor_display<K: DType>(_t: &Self::Storage<K>) -> String {
         "WgpuTensor(...)".to_string()
     }
 
-    /// Core abstraction for `format_tensor_debug` within the Kindle framework..
+    /// `format_tensor_debug`.
     fn format_tensor_debug<K: DType>(t: &Self::Storage<K>) -> String {
         format!("WgpuTensor(shape={:?})", t.shape)
     }
 
-    /// Core abstraction for `var_as_tensor` within the Kindle framework..
+    /// `var_as_tensor`.
     fn var_as_tensor<K: DType>(var: &Self::RawVar) -> Result<Self::Storage<K>> {
         Ok(var.storage.clone())
     }
 
-    /// Core abstraction for `var_from_tensor` within the Kindle framework..
+    /// `var_from_tensor`.
     fn var_from_tensor<K: DType>(t: &Self::Storage<K>) -> Result<Self::RawVar> {
         Ok(WgpuVar { storage: t.clone() })
     }
 
-    /// Core abstraction for `var_to_device` within the Kindle framework..
+    /// `var_to_device`.
     fn var_to_device(var: &Self::RawVar, _device: &KindleDevice) -> Result<Self::RawVar> {
         Ok(WgpuVar {
             storage: var.storage.clone(),
         })
     }
 
-    /// Core abstraction for `assign_var` within the Kindle framework..
+    /// `assign_var`.
     fn assign_var<K: DType>(var: &mut Self::RawVar, tensor: &Self::Storage<K>) -> Result<()> {
         var.storage = tensor.clone();
         Ok(())
     }
 
-    /// Core abstraction for `backward` within the Kindle framework..
+    /// `backward`.
     fn backward<K: DType>(loss: &Self::Storage<K>) -> Result<Self::Grads> {
         crate::wgpu::tape::backward(loss)
     }
 
-    /// Core abstraction for `backward_with_nan_check` within the Kindle framework..
+    /// `backward_with_nan_check`.
     fn backward_with_nan_check<K: DType>(loss: &Self::Storage<K>) -> Result<Self::Grads> {
         crate::wgpu::tape::backward_with_nan_check(loss)
     }
 
-    /// Core abstraction for `get_grad` within the Kindle framework..
+    /// `get_grad`.
     fn get_grad<K: DType>(
         t: &Self::Storage<K>,
         grads: &Self::Grads,
@@ -103,12 +103,12 @@ impl<T: DType, D: Device> Backend for WgpuBackend<T, D> {
         Ok(grads.get(t.id).cloned())
     }
 
-    /// Core abstraction for `to_bytes` within the Kindle framework..
+    /// `to_bytes`.
     fn to_bytes<K: DType>(t: &Self::Storage<K>) -> Result<Vec<u8>> {
         Ok(t.buffer.to_vec::<u8>())
     }
 
-    /// Core abstraction for `from_bytes` within the Kindle framework..
+    /// `from_bytes`.
     fn from_bytes<K: DType>(
         bytes: &[u8],
         shape: &[usize],
@@ -124,7 +124,7 @@ impl<T: DType, D: Device> Backend for WgpuBackend<T, D> {
 // CreationOps
 // ─────────────────────────────────────────────────────────────────────────────
 impl<T: DType, D: Device> CreationOps<Self> for WgpuBackend<T, D> {
-    /// Core abstraction for `zeros` within the Kindle framework..
+    /// `zeros`.
     fn zeros<K: DType>(
         shape: &[usize],
         _dtype: KindleDType,
@@ -136,7 +136,7 @@ impl<T: DType, D: Device> CreationOps<Self> for WgpuBackend<T, D> {
         Ok(WgpuStorage::new(buf, shape.to_vec()))
     }
 
-    /// Core abstraction for `ones` within the Kindle framework..
+    /// `ones`.
     fn ones<K: DType>(
         shape: &[usize],
         _dtype: KindleDType,
@@ -148,7 +148,7 @@ impl<T: DType, D: Device> CreationOps<Self> for WgpuBackend<T, D> {
         Ok(WgpuStorage::new(buf, shape.to_vec()))
     }
 
-    /// Core abstraction for `rand` within the Kindle framework..
+    /// `rand`.
     fn rand<K: DType>(
         shape: &[usize],
         _dtype: KindleDType,
@@ -174,7 +174,7 @@ impl<T: DType, D: Device> CreationOps<Self> for WgpuBackend<T, D> {
         Ok(WgpuStorage::new(buf, shape.to_vec()))
     }
 
-    /// Core abstraction for `randn` within the Kindle framework..
+    /// `randn`.
     fn randn<K: DType>(
         shape: &[usize],
         _dtype: KindleDType,
@@ -208,7 +208,7 @@ impl<T: DType, D: Device> CreationOps<Self> for WgpuBackend<T, D> {
         Ok(WgpuStorage::new(buf, shape.to_vec()))
     }
 
-    /// Core abstraction for `var_zeros` within the Kindle framework..
+    /// `var_zeros`.
     fn var_zeros<K: DType>(
         shape: &[usize],
         dtype: KindleDType,
@@ -218,7 +218,7 @@ impl<T: DType, D: Device> CreationOps<Self> for WgpuBackend<T, D> {
         Ok(WgpuVar { storage: s })
     }
 
-    /// Core abstraction for `var_ones` within the Kindle framework..
+    /// `var_ones`.
     fn var_ones<K: DType>(
         shape: &[usize],
         dtype: KindleDType,
@@ -228,7 +228,7 @@ impl<T: DType, D: Device> CreationOps<Self> for WgpuBackend<T, D> {
         Ok(WgpuVar { storage: s })
     }
 
-    /// Core abstraction for `var_rand` within the Kindle framework..
+    /// `var_rand`.
     fn var_rand<K: DType>(
         shape: &[usize],
         dtype: KindleDType,
@@ -238,7 +238,7 @@ impl<T: DType, D: Device> CreationOps<Self> for WgpuBackend<T, D> {
         Ok(WgpuVar { storage: s })
     }
 
-    /// Core abstraction for `var_randn` within the Kindle framework..
+    /// `var_randn`.
     fn var_randn<K: DType>(
         shape: &[usize],
         dtype: KindleDType,
@@ -248,7 +248,7 @@ impl<T: DType, D: Device> CreationOps<Self> for WgpuBackend<T, D> {
         Ok(WgpuVar { storage: s })
     }
 
-    /// Core abstraction for `tensor_to_device` within the Kindle framework..
+    /// `tensor_to_device`.
     fn tensor_to_device<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         _device: &KindleDevice,
@@ -261,7 +261,7 @@ impl<T: DType, D: Device> CreationOps<Self> for WgpuBackend<T, D> {
 // ─────────────────────────────────────────────────────────────────────────────
 // NumericOps  (add, sub, mul, div)
 // ─────────────────────────────────────────────────────────────────────────────
-/// Core abstraction for `binary_op` within the Kindle framework..
+/// `binary_op`.
 #[allow(clippy::extra_unused_type_parameters)]
 fn binary_op<T: DType, D: Device>(
     lhs: &WgpuStorage,
@@ -285,7 +285,7 @@ fn binary_op<T: DType, D: Device>(
 }
 
 impl<T: DType, D: Device> NumericOps<Self> for WgpuBackend<T, D> {
-    /// Core abstraction for `add` within the Kindle framework..
+    /// `add`.
     fn add<K: DType>(
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
@@ -307,7 +307,7 @@ impl<T: DType, D: Device> NumericOps<Self> for WgpuBackend<T, D> {
         });
         Ok(out)
     }
-    /// Core abstraction for `sub` within the Kindle framework..
+    /// `sub`.
     fn sub<K: DType>(
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
@@ -330,7 +330,7 @@ impl<T: DType, D: Device> NumericOps<Self> for WgpuBackend<T, D> {
         });
         Ok(out)
     }
-    /// Core abstraction for `mul` within the Kindle framework..
+    /// `mul`.
     fn mul<K: DType>(
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
@@ -357,7 +357,7 @@ impl<T: DType, D: Device> NumericOps<Self> for WgpuBackend<T, D> {
         });
         Ok(out)
     }
-    /// Core abstraction for `div` within the Kindle framework..
+    /// `div`.
     fn div<K: DType>(
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
@@ -397,7 +397,7 @@ impl<T: DType, D: Device> NumericOps<Self> for WgpuBackend<T, D> {
 // ─────────────────────────────────────────────────────────────────────────────
 // FloatOps  (scalar + unary activations)
 // ─────────────────────────────────────────────────────────────────────────────
-/// Core abstraction for `unary_op` within the Kindle framework..
+/// `unary_op`.
 #[allow(clippy::extra_unused_type_parameters)]
 fn unary_op<T: DType, D: Device>(t: &WgpuStorage, op_mode: u32) -> Result<WgpuStorage> {
     let n = num_elements(&t.shape) as u32;
@@ -407,7 +407,7 @@ fn unary_op<T: DType, D: Device>(t: &WgpuStorage, op_mode: u32) -> Result<WgpuSt
     Ok(WgpuStorage::new(out_buf, t.shape.clone()))
 }
 
-/// Core abstraction for `scalar_op` within the Kindle framework..
+/// `scalar_op`.
 #[allow(clippy::extra_unused_type_parameters)]
 fn scalar_op<T: DType, D: Device>(
     t: &WgpuStorage,
@@ -439,7 +439,7 @@ fn push_unary_tape_entry(
 }
 
 impl<T: DType, D: Device> FloatOps<Self> for WgpuBackend<T, D> {
-    /// Core abstraction for `add_scalar_float` within the Kindle framework..
+    /// `add_scalar_float`.
     fn add_scalar_float<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         scalar: f64,
@@ -450,7 +450,7 @@ impl<T: DType, D: Device> FloatOps<Self> for WgpuBackend<T, D> {
         push_unary_tape_entry(t.id, out.id, |grad_out| grad_out.clone());
         Ok(out)
     }
-    /// Core abstraction for `mul_scalar_float` within the Kindle framework..
+    /// `mul_scalar_float`.
     fn mul_scalar_float<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         scalar: f64,
@@ -462,7 +462,7 @@ impl<T: DType, D: Device> FloatOps<Self> for WgpuBackend<T, D> {
         });
         Ok(out)
     }
-    /// Core abstraction for `relu` within the Kindle framework..
+    /// `relu`.
     fn relu<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         let out = unary_op::<T, D>(t, 0)?;
         // relu'(x) = step(x) (1 if x>0 else 0) — input-based.
@@ -473,7 +473,7 @@ impl<T: DType, D: Device> FloatOps<Self> for WgpuBackend<T, D> {
         });
         Ok(out)
     }
-    /// Core abstraction for `step` within the Kindle framework..
+    /// `step`.
     fn step<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         let out = unary_op::<T, D>(t, 10)?;
         // step'(x) = 0 almost everywhere.
@@ -482,24 +482,32 @@ impl<T: DType, D: Device> FloatOps<Self> for WgpuBackend<T, D> {
         });
         Ok(out)
     }
-    /// Core abstraction for `mish` within the Kindle framework..
-    fn mish<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        // NOT tape-wired yet: mish'(x) needs a composition this backend's
-        // primitives don't cover in one pass (see ROADMAP.md C-3 follow-up).
-        unary_op::<T, D>(t, 11)
-    }
-    /// Core abstraction for `elu` within the Kindle framework..
+    /// `elu`.
     fn elu<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        // NOT tape-wired yet — see ROADMAP.md C-3 follow-up.
-        unary_op::<T, D>(t, 12)
+        let out = unary_op::<T, D>(t, 12)?;
+        let t_capture = t.clone();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            binary_op::<T, D>(grad_out, &t_capture, 5, "elu_grad").expect("elu backward")
+        });
+        Ok(out)
     }
-    /// Core abstraction for `gelu` within the Kindle framework..
     fn gelu<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        // NOT tape-wired yet: exact erf-based gelu' has no GPU primitive here
-        // — see ROADMAP.md C-3 follow-up.
-        unary_op::<T, D>(t, 1)
+        let out = unary_op::<T, D>(t, 1)?;
+        let t_capture = t.clone();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            binary_op::<T, D>(grad_out, &t_capture, 4, "gelu_grad").expect("gelu backward")
+        });
+        Ok(out)
     }
-    /// Core abstraction for `tanh` within the Kindle framework..
+    fn mish<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+        let out = unary_op::<T, D>(t, 11)?;
+        let t_capture = t.clone();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            binary_op::<T, D>(grad_out, &t_capture, 6, "mish_grad").expect("mish backward")
+        });
+        Ok(out)
+    }
+    /// `tanh`.
     fn tanh<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         let out = unary_op::<T, D>(t, 2)?;
         // tanh'(x) = 1 - out^2 (output-based).
@@ -513,7 +521,7 @@ impl<T: DType, D: Device> FloatOps<Self> for WgpuBackend<T, D> {
         });
         Ok(out)
     }
-    /// Core abstraction for `sigmoid` within the Kindle framework..
+    /// `sigmoid`.
     fn sigmoid<K: DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
@@ -530,7 +538,7 @@ impl<T: DType, D: Device> FloatOps<Self> for WgpuBackend<T, D> {
         });
         Ok(out)
     }
-    /// Core abstraction for `abs` within the Kindle framework..
+    /// `abs`.
     fn abs<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         let out = unary_op::<T, D>(t, 4)?;
         // abs'(x) = sign(x) (input-based), computed as step(x) - step(-x):
@@ -547,7 +555,7 @@ impl<T: DType, D: Device> FloatOps<Self> for WgpuBackend<T, D> {
         });
         Ok(out)
     }
-    /// Core abstraction for `neg` within the Kindle framework..
+    /// `neg`.
     fn neg<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         let out = unary_op::<T, D>(t, 5)?;
         // neg'(x) = -1 (constant; no input capture needed).
@@ -556,7 +564,7 @@ impl<T: DType, D: Device> FloatOps<Self> for WgpuBackend<T, D> {
         });
         Ok(out)
     }
-    /// Core abstraction for `sqrt` within the Kindle framework..
+    /// `sqrt`.
     fn sqrt<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         let out = unary_op::<T, D>(t, 6)?;
         // sqrt'(x) = 1/(2*out) (output-based) -> grad = grad_out/out * 0.5.
@@ -568,7 +576,7 @@ impl<T: DType, D: Device> FloatOps<Self> for WgpuBackend<T, D> {
         });
         Ok(out)
     }
-    /// Core abstraction for `exp` within the Kindle framework..
+    /// `exp`.
     fn exp<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         let out = unary_op::<T, D>(t, 7)?;
         // exp'(x) = out (output-based).
@@ -578,7 +586,7 @@ impl<T: DType, D: Device> FloatOps<Self> for WgpuBackend<T, D> {
         });
         Ok(out)
     }
-    /// Core abstraction for `log` within the Kindle framework..
+    /// `log`.
     fn log<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         let out = unary_op::<T, D>(t, 8)?;
         // log'(x) = 1/x (input-based, NOT output-based).
@@ -588,7 +596,7 @@ impl<T: DType, D: Device> FloatOps<Self> for WgpuBackend<T, D> {
         });
         Ok(out)
     }
-    /// Core abstraction for `swish` within the Kindle framework..
+    /// `swish`.
     fn swish<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         let out = unary_op::<T, D>(t, 9)?;
         // swish(x) = x*sigmoid(x); swish'(x) = out + sigmoid(x)*(1-out).
@@ -608,7 +616,7 @@ impl<T: DType, D: Device> FloatOps<Self> for WgpuBackend<T, D> {
         Ok(out)
     }
 
-    /// Core abstraction for `softmax` within the Kindle framework..
+    /// `softmax`.
     fn softmax<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
@@ -637,7 +645,7 @@ pub(crate) fn log_softmax<T: DType, D: Device, K: DType>(
 // TensorOps  (reshape, transpose, matmul, narrow, flatten, squeeze, stack, concat, etc.)
 // ─────────────────────────────────────────────────────────────────────────────
 impl<T: DType, D: Device> TensorOps<Self> for WgpuBackend<T, D> {
-    /// Core abstraction for `matmul` within the Kindle framework..
+    /// `matmul`.
     fn matmul<K: DType>(
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
@@ -792,7 +800,7 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackend<T, D> {
         Ok(out)
     }
 
-    /// Core abstraction for `reshape` within the Kindle framework..
+    /// `reshape`.
     fn reshape<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         shape: &[usize],
@@ -818,7 +826,7 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackend<T, D> {
         Ok(out)
     }
 
-    /// Core abstraction for `transpose` within the Kindle framework..
+    /// `transpose`.
     fn transpose<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         dim1: usize,
@@ -853,7 +861,7 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackend<T, D> {
         Ok(out)
     }
 
-    /// Core abstraction for `flatten` within the Kindle framework..
+    /// `flatten`.
     fn flatten<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         start_dim: usize,
@@ -867,7 +875,7 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackend<T, D> {
         Self::reshape::<K>(t, &new_shape)
     }
 
-    /// Core abstraction for `squeeze` within the Kindle framework..
+    /// `squeeze`.
     fn squeeze<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
@@ -955,7 +963,7 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackend<T, D> {
         Ok(out)
     }
 
-    /// Core abstraction for `broadcast_left` within the Kindle framework..
+    /// `broadcast_left`.
     fn broadcast_left<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         shape: &[usize],
@@ -965,7 +973,7 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackend<T, D> {
         Self::broadcast_as::<K>(t, &target_shape)
     }
 
-    /// Core abstraction for `slice` within the Kindle framework..
+    /// `slice`.
     fn slice<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         ranges: &[(usize, usize)],
@@ -977,7 +985,7 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackend<T, D> {
         Ok(out)
     }
 
-    /// Core abstraction for `stack` within the Kindle framework..
+    /// `stack`.
     fn stack<K: DType>(
         tensors: &[&<Self as Backend>::Storage<K>],
         dim: usize,
@@ -996,7 +1004,7 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackend<T, D> {
         Self::concat::<K>(&refs, dim)
     }
 
-    /// Core abstraction for `concat` within the Kindle framework..
+    /// `concat`.
     fn concat<K: DType>(
         tensors: &[&<Self as Backend>::Storage<K>],
         dim: usize,
@@ -1056,31 +1064,31 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackend<T, D> {
         Ok(out)
     }
 
-    /// Core abstraction for `float_to_scalar` within the Kindle framework..
+    /// `float_to_scalar`.
     fn float_to_scalar<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<f64> {
         let data: Vec<f32> = t.buffer.to_vec::<f32>();
         Ok(data.first().copied().unwrap_or(0.0) as f64)
     }
 
-    /// Core abstraction for `float_to_vec1` within the Kindle framework..
+    /// `float_to_vec1`.
     fn float_to_vec1<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<Vec<f64>> {
         let data: Vec<f32> = t.buffer.to_vec::<f32>();
         Ok(data.iter().map(|&x| x as f64).collect())
     }
 
-    /// Core abstraction for `int_to_scalar` within the Kindle framework..
+    /// `int_to_scalar`.
     fn int_to_scalar<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<i64> {
         let data: Vec<f32> = t.buffer.to_vec::<f32>();
         Ok(data.first().copied().unwrap_or(0.0) as i64)
     }
 
-    /// Core abstraction for `int_to_vec1` within the Kindle framework..
+    /// `int_to_vec1`.
     fn int_to_vec1<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<Vec<i64>> {
         let data: Vec<f32> = t.buffer.to_vec::<f32>();
         Ok(data.iter().map(|&x| x as i64).collect())
     }
 
-    /// Core abstraction for `tensor_to_dtype` within the Kindle framework..
+    /// `tensor_to_dtype`.
     fn tensor_to_dtype<K: DType, K2: DType>(
         t: &<Self as Backend>::Storage<K>,
         _dtype: KindleDType,
@@ -1098,14 +1106,14 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackend<T, D> {
 // ─────────────────────────────────────────────────────────────────────────────
 // ReductionOps
 // ─────────────────────────────────────────────────────────────────────────────
-/// Core abstraction for `reduce_all_to_storage` within the Kindle framework..
+/// `reduce_all_to_storage`.
 fn reduce_all_to_storage(t: &WgpuStorage, mode: u32) -> WgpuStorage {
     let n = num_elements(&t.shape) as u32;
     let out = dispatch::dispatch_reduce_all(&t.buffer, n, mode);
     WgpuStorage::new(out, vec![1])
 }
 
-/// Core abstraction for `reduce_dim_to_storage` within the Kindle framework..
+/// `reduce_dim_to_storage`.
 fn reduce_dim_to_storage(t: &WgpuStorage, dim: usize, mode: u32, keepdim: bool) -> WgpuStorage {
     let shape = &t.shape;
     let mut out_shape = shape.clone();
@@ -1148,7 +1156,7 @@ fn reduce_dim_to_storage(t: &WgpuStorage, dim: usize, mode: u32, keepdim: bool) 
 }
 
 impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackend<T, D> {
-    /// Core abstraction for `sum_all` within the Kindle framework..
+    /// `sum_all`.
     fn sum_all<K: DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
@@ -1167,7 +1175,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackend<T, D> {
         });
         Ok(out)
     }
-    /// Core abstraction for `mean_all` within the Kindle framework..
+    /// `mean_all`.
     fn mean_all<K: DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
@@ -1189,20 +1197,20 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackend<T, D> {
         });
         Ok(out)
     }
-    /// Core abstraction for `max_all` within the Kindle framework..
+    /// `max_all`.
     fn max_all<K: DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
         Ok(reduce_all_to_storage(t, 1))
     }
-    /// Core abstraction for `min_all` within the Kindle framework..
+    /// `min_all`.
     fn min_all<K: DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
         Ok(reduce_all_to_storage(t, 2))
     }
 
-    /// Core abstraction for `sum_dim` within the Kindle framework..
+    /// `sum_dim`.
     fn sum_dim<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
@@ -1225,7 +1233,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackend<T, D> {
         });
         Ok(out)
     }
-    /// Core abstraction for `sum_keepdim` within the Kindle framework..
+    /// `sum_keepdim`.
     fn sum_keepdim<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
@@ -1245,7 +1253,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackend<T, D> {
         });
         Ok(out)
     }
-    /// Core abstraction for `mean_dim` within the Kindle framework..
+    /// `mean_dim`.
     fn mean_dim<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
@@ -1268,7 +1276,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackend<T, D> {
         });
         Ok(out)
     }
-    /// Core abstraction for `mean_keepdim` within the Kindle framework..
+    /// `mean_keepdim`.
     fn mean_keepdim<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
@@ -1288,28 +1296,28 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackend<T, D> {
         });
         Ok(out)
     }
-    /// Core abstraction for `max_dim` within the Kindle framework..
+    /// `max_dim`.
     fn max_dim<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as Backend>::Storage<K>> {
         Ok(reduce_dim_to_storage(t, dim, 1, false))
     }
-    /// Core abstraction for `max_keepdim` within the Kindle framework..
+    /// `max_keepdim`.
     fn max_keepdim<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as Backend>::Storage<K>> {
         Ok(reduce_dim_to_storage(t, dim, 1, true))
     }
-    /// Core abstraction for `min_dim` within the Kindle framework..
+    /// `min_dim`.
     fn min_dim<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as Backend>::Storage<K>> {
         Ok(reduce_dim_to_storage(t, dim, 2, false))
     }
-    /// Core abstraction for `min_keepdim` within the Kindle framework..
+    /// `min_keepdim`.
     fn min_keepdim<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
@@ -1317,7 +1325,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackend<T, D> {
         Ok(reduce_dim_to_storage(t, dim, 2, true))
     }
 
-    /// Core abstraction for `argmax` within the Kindle framework..
+    /// `argmax`.
     fn argmax<K: DType, KInt: DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: Option<usize>,
@@ -1363,7 +1371,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackend<T, D> {
         }
     }
 
-    /// Core abstraction for `argmin` within the Kindle framework..
+    /// `argmin`.
     fn argmin<K: DType, KInt: DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: Option<usize>,
@@ -1409,7 +1417,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackend<T, D> {
         }
     }
 
-    /// Core abstraction for `topk` within the Kindle framework..
+    /// `topk`.
     fn topk<K: DType, KInt: DType>(
         t: &<Self as Backend>::Storage<K>,
         k: usize,
@@ -1489,7 +1497,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackend<T, D> {
         ))
     }
 
-    /// Core abstraction for `argsort` within the Kindle framework..
+    /// `argsort`.
     fn argsort<K: DType, KInt: DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
@@ -1561,7 +1569,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackend<T, D> {
 // ModuleOps
 // ─────────────────────────────────────────────────────────────────────────────
 impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
-    /// Core abstraction for `embedding` within the Kindle framework..
+    /// `embedding`.
     fn embedding<K: DType, KInt: DType>(
         indices: &<Self as Backend>::Storage<KInt>,
         weight: &<Self as Backend>::Storage<K>,
@@ -1580,10 +1588,38 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
             vocab_size as u32,
         );
 
-        Ok(WgpuStorage::new(out_buf, vec![seq_len, embed_dim]))
+        let out = WgpuStorage::new(out_buf, vec![seq_len, embed_dim]);
+
+        let (indices_capture, weight_shape) = (indices.clone(), weight.shape.clone());
+        let (weight_id, out_id) = (weight.id, out.id);
+        crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![weight_id],
+            backward: Box::new(move |grad_out: &WgpuStorage| {
+                let indices_data = indices_capture.buffer.to_vec::<u32>();
+                let grad_data = grad_out.buffer.to_vec::<f32>();
+                let mut weight_grad = vec![0.0f32; vocab_size * embed_dim];
+
+                for (i, &idx) in indices_data.iter().enumerate() {
+                    let idx = idx as usize;
+                    if idx < vocab_size {
+                        for d in 0..embed_dim {
+                            weight_grad[idx * embed_dim + d] += grad_data[i * embed_dim + d];
+                        }
+                    }
+                }
+
+                vec![WgpuStorage::new(
+                    WgpuBuffer::from_slice(&weight_grad),
+                    weight_shape.clone(),
+                )]
+            }),
+        });
+
+        Ok(out)
     }
 
-    /// Core abstraction for `layer_norm` within the Kindle framework..
+    /// `layer_norm`.
     fn layer_norm<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         weight: &<Self as Backend>::Storage<K>,
@@ -1623,7 +1659,7 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
         }
     }
 
-    /// Core abstraction for `batch_norm` within the Kindle framework..
+    /// `batch_norm`.
     fn batch_norm<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         weight: Option<&<Self as Backend>::Storage<K>>,
@@ -1682,7 +1718,7 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
         Self::add::<K>(&scaled, &b_b)
     }
 
-    /// Core abstraction for `adaptive_avg_pool2d` within the Kindle framework..
+    /// `adaptive_avg_pool2d`.
     fn adaptive_avg_pool2d<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         output_size: (usize, usize),
@@ -1701,7 +1737,7 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
         Ok(WgpuStorage::new(out_buf, vec![n, c, oh, ow]))
     }
 
-    /// Core abstraction for `avg_pool2d` within the Kindle framework..
+    /// `avg_pool2d`.
     fn avg_pool2d<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         kernel_size: (usize, usize),
@@ -1727,7 +1763,7 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
         Ok(WgpuStorage::new(out_buf, vec![n, c, oh, ow]))
     }
 
-    /// Core abstraction for `max_pool2d` within the Kindle framework..
+    /// `max_pool2d`.
     fn max_pool2d<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         kernel_size: (usize, usize),
@@ -1757,7 +1793,7 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
         Ok(WgpuStorage::new(out_buf, vec![n, c, oh, ow]))
     }
 
-    /// Core abstraction for `conv1d` within the Kindle framework..
+    /// `conv1d`.
     fn conv1d<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         weight: &<Self as Backend>::Storage<K>,
@@ -1795,7 +1831,7 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
         Ok(WgpuStorage::new(out.buffer, vec![n, c_out, l_out]))
     }
 
-    /// Core abstraction for `conv2d` within the Kindle framework..
+    /// `conv2d`.
     fn conv2d<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         weight: &<Self as Backend>::Storage<K>,
@@ -1916,7 +1952,7 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
         Ok(WgpuStorage::new(out_buf, vec![batch, c_out, h_out, w_out]))
     }
 
-    /// Core abstraction for `conv_transpose2d` within the Kindle framework..
+    /// `conv_transpose2d`.
     fn conv_transpose2d<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         weight: &<Self as Backend>::Storage<K>,
@@ -2000,7 +2036,7 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
 // LossOps (cross_entropy delegated to base trait which composes from float/reduce ops)
 // ─────────────────────────────────────────────────────────────────────────────
 impl<T: DType, D: Device> LossOps<Self> for WgpuBackend<T, D> {
-    /// Core abstraction for `cross_entropy_loss` within the Kindle framework..
+    /// `cross_entropy_loss`.
     fn cross_entropy_loss<K: DType, KInt: DType>(
         pred: &<Self as Backend>::Storage<K>,
         target: &<Self as Backend>::Storage<KInt>,
@@ -2166,7 +2202,7 @@ impl<T: DType, D: Device> QuantizedOps<Self> for WgpuBackend<T, D> {
 // OptimizerOps (AdamW)
 // ─────────────────────────────────────────────────────────────────────────────
 impl<T: DType, D: Device> OptimizerOps<Self> for WgpuBackend<T, D> {
-    /// Core abstraction for `adamw_step` within the Kindle framework..
+    /// `adamw_step`.
     fn adamw_step<K: DType>(
         var: &mut <Self as Backend>::RawVar,
         grad: &<Self as Backend>::Storage<K>,

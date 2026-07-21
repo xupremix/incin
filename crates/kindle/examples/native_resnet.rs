@@ -1,15 +1,15 @@
 use kindle::prelude::*;
 
 #[module]
-/// Core abstraction for `BasicBlock` within the Kindle framework.
+/// Basic block.
 pub struct BasicBlock<B: Backend> {
-    /// Core abstraction for `conv1` within the Kindle framework.
+    /// Conv1.
     pub conv1: kindle::Conv2d<s![dyn, dyn, 3, 1, 1, 1], B>,
-    /// Core abstraction for `bn1` within the Kindle framework.
+    /// Bn1.
     pub bn1: kindle::BatchNorm2d<s![dyn], B>,
-    /// Core abstraction for `conv2` within the Kindle framework.
+    /// Conv2.
     pub conv2: kindle::Conv2d<s![dyn, dyn, 3, 1, 1, 1], B>,
-    /// Core abstraction for `bn2` within the Kindle framework.
+    /// Bn2.
     pub bn2: kindle::BatchNorm2d<s![dyn], B>,
 }
 
@@ -18,7 +18,7 @@ where
     B::FloatElem: ConstDType,
     B::Device: ConstDevice,
 {
-    /// Core abstraction for `new` within the Kindle framework.
+    /// New.
     pub fn new(
         in_channels: usize,
         out_channels: usize,
@@ -41,7 +41,7 @@ where
 }
 
 impl<B: Backend> BasicBlock<B> {
-    /// Core abstraction for `forward` within the Kindle framework.
+    /// Forward.
     pub fn forward(&self, x: Tensor<Dyn, B>) -> Result<Tensor<Dyn, B>> {
         let out = self.conv1.forward(x.clone())?;
         let out = self.bn1.forward(out)?;
@@ -55,15 +55,15 @@ impl<B: Backend> BasicBlock<B> {
 }
 
 #[module]
-/// Core abstraction for `ResNet` within the Kindle framework.
+/// Res net.
 pub struct ResNet<B: Backend> {
-    /// Core abstraction for `conv1` within the Kindle framework.
+    /// Conv1.
     pub conv1: kindle::Conv2d<s![dyn, dyn, 7, 2, 3, 1], B>,
-    /// Core abstraction for `bn1` within the Kindle framework.
+    /// Bn1.
     pub bn1: kindle::BatchNorm2d<s![dyn], B>,
-    /// Core abstraction for `layer1` within the Kindle framework.
+    /// Layer1.
     pub layer1: BasicBlock<B>,
-    /// Core abstraction for `fc` within the Kindle framework.
+    /// Fc.
     pub fc: kindle::Linear<Dyn, B>,
 }
 
@@ -72,7 +72,7 @@ where
     B::FloatElem: ConstDType,
     B::Device: ConstDevice,
 {
-    /// Core abstraction for `new` within the Kindle framework.
+    /// New.
     pub fn new(num_classes: usize, device: &KindleDevice) -> Result<Self> {
         Ok(Self {
             conv1: kindle::Conv2d::<s![dyn, dyn, 7, 2, 3, 1], B>::new_with((64, 3))?,
@@ -84,7 +84,7 @@ where
 }
 
 impl<B: Backend> ResNet<B> {
-    /// Core abstraction for `forward` within the Kindle framework.
+    /// Forward.
     pub fn forward(&self, x: Tensor<Dyn, B>) -> Result<Tensor<Dyn, B>> {
         let x = self.conv1.forward(x)?;
         let x = self.bn1.forward(x)?;

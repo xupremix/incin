@@ -5,13 +5,13 @@ use syn::{
     punctuated::Punctuated,
 };
 
-/// Core abstraction for `IdxList` within the Kindle framework.
+/// Idx list.
 struct IdxList {
     items: Punctuated<Expr, Token![,]>,
 }
 
 impl Parse for IdxList {
-    /// Core abstraction for `parse` within the Kindle framework.
+    /// Parse.
     fn parse(input: ParseStream) -> syn::Result<Self> {
         Ok(IdxList {
             items: Punctuated::parse_terminated(input)?,

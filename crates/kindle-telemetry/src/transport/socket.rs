@@ -158,12 +158,12 @@ mod tests {
     use std::io::Read;
     use std::time::Duration;
 
-    /// Core abstraction for `unique_run_id` within the Kindle framework.
+    /// Unique run id.
     fn unique_run_id(label: &str) -> String {
         format!("test-{label}-{}", uuid::Uuid::now_v7())
     }
 
-    /// Core abstraction for `scalar_event` within the Kindle framework.
+    /// Scalar event.
     fn scalar_event(step: usize, name: &str, value: f64) -> Event {
         Event::Scalar(ScalarEvent {
             schema_version: crate::events::CURRENT_SCHEMA_VERSION,
@@ -189,7 +189,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `bind_with_fresh_run_id_succeeds_without_blocking` within the Kindle framework.
+    /// Bind with fresh run id succeeds without blocking.
     fn bind_with_fresh_run_id_succeeds_without_blocking() {
         let run_id = unique_run_id("bind");
         let start = std::time::Instant::now();
@@ -205,7 +205,7 @@ mod tests {
     // explicit `match` instead of `expect_err`/`unwrap_err`, both of which require
     // `T: Debug` on the `Ok` side even when only the `Err` value is used.
     #[test]
-    /// Core abstraction for `bind_rejects_empty_run_id` within the Kindle framework.
+    /// Bind rejects empty run id.
     fn bind_rejects_empty_run_id() {
         let err = match SocketTransport::bind("") {
             Err(e) => e,
@@ -215,7 +215,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `bind_rejects_overly_long_run_id` within the Kindle framework.
+    /// Bind rejects overly long run id.
     fn bind_rejects_overly_long_run_id() {
         let run_id = "a".repeat(MAX_RUN_ID_LEN + 1);
         let err = match SocketTransport::bind(&run_id) {
@@ -226,7 +226,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `bind_rejects_path_like_run_id` within the Kindle framework.
+    /// Bind rejects path like run id.
     fn bind_rejects_path_like_run_id() {
         let err = match SocketTransport::bind("../../etc/passwd") {
             Err(e) => e,
@@ -236,7 +236,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `write_event_with_zero_clients_connected_succeeds` within the Kindle framework.
+    /// Write event with zero clients connected succeeds.
     fn write_event_with_zero_clients_connected_succeeds() {
         let run_id = unique_run_id("no-clients");
         let mut transport = SocketTransport::bind(&run_id).expect("bind should succeed");
@@ -247,7 +247,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `connected_client_receives_byte_identical_jsonl_line_to_file_transport` within the Kindle framework.
+    /// Connected client receives byte identical jsonl line to file transport.
     fn connected_client_receives_byte_identical_jsonl_line_to_file_transport() {
         let run_id = unique_run_id("byte-identical");
         let mut socket_transport = SocketTransport::bind(&run_id).expect("bind should succeed");
@@ -305,7 +305,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `disconnected_client_is_pruned_without_write_event_returning_err` within the Kindle framework.
+    /// Disconnected client is pruned without write event returning err.
     fn disconnected_client_is_pruned_without_write_event_returning_err() {
         let run_id = unique_run_id("disconnect");
         let mut transport = SocketTransport::bind(&run_id).expect("bind should succeed");

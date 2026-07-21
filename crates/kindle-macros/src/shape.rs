@@ -7,20 +7,20 @@ use syn::{
     punctuated::Punctuated,
 };
 
-/// Core abstraction for `Dim` within the Kindle framework.
+/// Dim.
 enum Dim {
-    /// Core abstraction for `Dyn` within the Kindle framework.
+    /// Dyn.
     Dyn,
-    /// Core abstraction for `Lit` within the Kindle framework.
+    /// Lit.
     Lit(syn::LitInt),
-    /// Core abstraction for `Path` within the Kindle framework.
+    /// Path.
     Path(syn::Path),
-    /// Core abstraction for `Sym` within the Kindle framework.
+    /// Sym.
     Sym(syn::Ident),
 }
 
 impl Parse for Dim {
-    /// Core abstraction for `parse` within the Kindle framework.
+    /// Parse.
     fn parse(input: ParseStream) -> syn::Result<Self> {
         if input.peek(Token![dyn]) {
             input.parse::<Token![dyn]>()?;
@@ -43,14 +43,14 @@ impl Parse for Dim {
     }
 }
 
-/// Core abstraction for `NumberList` within the Kindle framework.
+/// Number list.
 struct NumberList {
     internal: bool,
     items: Punctuated<Dim, Token![,]>,
 }
 
 impl Parse for NumberList {
-    /// Core abstraction for `parse` within the Kindle framework.
+    /// Parse.
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let mut internal = false;
         if input.peek(Token![@]) {

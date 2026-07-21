@@ -7,14 +7,14 @@ use std::path::PathBuf;
 
 type Backend = kindle_backends::cpu::CpuBackend<f32, kindle_core::prelude::Cpu>;
 
-/// Core abstraction for `MnistCollate` within the Kindle framework.
+/// Mnist collate.
 struct MnistCollate;
 
 impl Collate<(Vec<f32>, u8)> for MnistCollate {
-    /// Core abstraction for `Output` within the Kindle framework.
+    /// Output.
     type Output = (Tensor<Dyn, Backend>, Tensor<Dyn, Backend>);
 
-    /// Core abstraction for `collate` within the Kindle framework.
+    /// Collate.
     fn collate(&self, batch: Vec<(Vec<f32>, u8)>) -> Self::Output {
         let batch_size = batch.len();
         let mut images = Vec::with_capacity(batch_size * 784);

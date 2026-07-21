@@ -1,16 +1,16 @@
-/// Core abstraction for `binary` within the Kindle framework..
+/// `binary`.
 pub mod binary;
-/// Core abstraction for `index` within the Kindle framework..
+/// `index`.
 pub mod index;
-/// Core abstraction for `loss` within the Kindle framework..
+/// `loss`.
 pub mod loss;
-/// Core abstraction for `manipulation` within the Kindle framework..
+/// `manipulation`.
 pub mod manipulation;
-/// Core abstraction for `module` within the Kindle framework..
+/// `module`.
 pub mod module;
-/// Core abstraction for `reduce` within the Kindle framework..
+/// `reduce`.
 pub mod reduce;
-/// Core abstraction for `unary` within the Kindle framework..
+/// `unary`.
 pub mod unary;
 
 pub use index::*;

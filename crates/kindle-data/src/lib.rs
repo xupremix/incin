@@ -51,22 +51,22 @@
 
 #[macro_use]
 extern crate alloc;
-/// Core abstraction for `dataset` within the Kindle framework.
+/// Dataset.
 pub mod dataset;
-/// Core abstraction for `downloader` within the Kindle framework.
+/// Downloader.
 pub mod downloader;
-/// Core abstraction for `hub` within the Kindle framework.
+/// Hub.
 pub mod hub;
-/// Core abstraction for `loader` within the Kindle framework.
+/// Loader.
 pub mod loader;
-/// Core abstraction for `vision` within the Kindle framework.
+/// Vision.
 pub mod vision;
 
 pub use dataset::Dataset;
 pub use downloader::Downloader;
 pub use loader::{Collate, DataLoader};
 
-/// Core abstraction for `prelude` within the Kindle framework.
+/// Prelude.
 pub mod prelude {
     pub use super::hub::*;
     pub use super::loader::*;

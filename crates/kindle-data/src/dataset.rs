@@ -1,33 +1,33 @@
 use alloc::sync::Arc;
 
-/// Core abstraction for `Dataset` within the Kindle framework.
+/// Dataset.
 pub trait Dataset: Send + Sync {
-    /// Core abstraction for `Item` within the Kindle framework.
+    /// Item.
     type Item: Send + 'static;
 
-    /// Core abstraction for `len` within the Kindle framework.
+    /// Len.
     fn len(&self) -> usize;
 
-    /// Core abstraction for `is_empty` within the Kindle framework.
+    /// Is empty.
     fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
-    /// Core abstraction for `get` within the Kindle framework.
+    /// Get.
     fn get(&self, index: usize) -> Option<Self::Item>;
 }
 
 // Implement for Arc<T>
 impl<T: Dataset + ?Sized> Dataset for Arc<T> {
-    /// Core abstraction for `Item` within the Kindle framework.
+    /// Item.
     type Item = T::Item;
 
-    /// Core abstraction for `len` within the Kindle framework.
+    /// Len.
     fn len(&self) -> usize {
         (**self).len()
     }
 
-    /// Core abstraction for `get` within the Kindle framework.
+    /// Get.
     fn get(&self, index: usize) -> Option<Self::Item> {
         (**self).get(index)
     }

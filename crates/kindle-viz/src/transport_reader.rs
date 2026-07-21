@@ -41,7 +41,7 @@ impl FileTransportReader {
 }
 
 impl TransportReader for FileTransportReader {
-    /// Core abstraction for `poll_new_events` within the Kindle framework.
+    /// Poll new events.
     fn poll_new_events(&mut self) -> crate::err::Result<Vec<Event>> {
         use std::io::BufRead;
 
@@ -78,12 +78,12 @@ impl TransportReader for FileTransportReader {
 }
 
 #[cfg(test)]
-/// Core abstraction for `tests` within the Kindle framework.
+/// Tests.
 mod tests {
     use super::*;
     use std::io::Write;
 
-    /// Core abstraction for `unique_test_path` within the Kindle framework.
+    /// Unique test path.
     fn unique_test_path(label: &str) -> std::path::PathBuf {
         std::env::temp_dir().join(format!(
             "kindle-viz-transport-reader-test-{label}-{}.jsonl",
@@ -91,7 +91,7 @@ mod tests {
         ))
     }
 
-    /// Core abstraction for `scalar_event_json` within the Kindle framework.
+    /// Scalar event json.
     fn scalar_event_json(step: usize, name: &str, value: f64) -> String {
         let event = Event::Scalar(kindle_telemetry::events::ScalarEvent {
             schema_version: kindle_telemetry::events::CURRENT_SCHEMA_VERSION,
@@ -103,7 +103,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `partial_line_completes_on_next_poll` within the Kindle framework.
+    /// Partial line completes on next poll.
     fn partial_line_completes_on_next_poll() {
         let path = unique_test_path("partial-line");
 
@@ -150,7 +150,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `no_duplicate_events_across_polls` within the Kindle framework.
+    /// No duplicate events across polls.
     fn no_duplicate_events_across_polls() {
         let path = unique_test_path("no-duplicate");
 

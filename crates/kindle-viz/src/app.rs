@@ -39,11 +39,11 @@ const FOOTER_HINTS: &str =
 const CRASHED_PLACEHOLDER: &str = "⚠ panel crashed — press r to retry";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-/// Core abstraction for `LayoutMode` within the Kindle framework.
+/// Layout mode.
 pub enum LayoutMode {
-    /// Core abstraction for `Grid` within the Kindle framework.
+    /// Grid.
     Grid,
-    /// Core abstraction for `Maximized` within the Kindle framework.
+    /// Maximized.
     Maximized,
 }
 
@@ -369,7 +369,7 @@ impl App {
 pub struct DefaultKeymap;
 
 impl KeymapProvider for DefaultKeymap {
-    /// Core abstraction for `resolve` within the Kindle framework.
+    /// Resolve.
     fn resolve(&self, key: PanelKeyEvent) -> Option<Action> {
         match key.code {
             KeyCode::Char('q') | KeyCode::Esc => Some(Action::Quit),
@@ -391,7 +391,7 @@ impl KeymapProvider for DefaultKeymap {
 pub struct VimKeymap;
 
 impl KeymapProvider for VimKeymap {
-    /// Core abstraction for `resolve` within the Kindle framework.
+    /// Resolve.
     fn resolve(&self, key: PanelKeyEvent) -> Option<Action> {
         match key.code {
             KeyCode::Char('q') | KeyCode::Esc => Some(Action::Quit),
@@ -563,12 +563,12 @@ pub async fn run(
 }
 
 #[cfg(test)]
-/// Core abstraction for `tests` within the Kindle framework.
+/// Tests.
 mod tests {
     use super::*;
 
     #[test]
-    /// Core abstraction for `default_keymap_resolves_quit_and_focus_keys` within the Kindle framework.
+    /// Default keymap resolves quit and focus keys.
     fn default_keymap_resolves_quit_and_focus_keys() {
         let keymap = DefaultKeymap;
         let no_mods = KeyModifiers {
@@ -636,19 +636,19 @@ mod tests {
     struct CrashOnP;
 
     impl Panel for CrashOnP {
-        /// Core abstraction for `id` within the Kindle framework.
+        /// Id.
         fn id(&self) -> &'static str {
             "crash-on-p"
         }
-        /// Core abstraction for `title` within the Kindle framework.
+        /// Title.
         fn title(&self) -> &str {
             "Crash On P"
         }
-        /// Core abstraction for `update` within the Kindle framework.
+        /// Update.
         fn update(&mut self, _event: &kindle_telemetry::events::Event) {}
-        /// Core abstraction for `render` within the Kindle framework.
+        /// Render.
         fn render(&mut self, _ctx: &mut RenderCtx<'_, '_>) {}
-        /// Core abstraction for `handle_event` within the Kindle framework.
+        /// Handle event.
         fn handle_event(&mut self, event: &PanelEvent) -> bool {
             if let PanelEvent::Key(k) = event
                 && k.code == KeyCode::Char('p')
@@ -657,22 +657,22 @@ mod tests {
             }
             false
         }
-        /// Core abstraction for `reset` within the Kindle framework.
+        /// Reset.
         fn reset(&mut self) {}
     }
 
-    /// Core abstraction for `NoopTransport` within the Kindle framework.
+    /// Noop transport.
     struct NoopTransport;
 
     impl crate::transport_reader::TransportReader for NoopTransport {
-        /// Core abstraction for `poll_new_events` within the Kindle framework.
+        /// Poll new events.
         fn poll_new_events(&mut self) -> crate::err::Result<Vec<kindle_telemetry::events::Event>> {
             Ok(Vec::new())
         }
     }
 
     #[test]
-    /// Core abstraction for `panel_local_panic_marks_crashed_and_retry_recovers` within the Kindle framework.
+    /// Panel local panic marks crashed and retry recovers.
     fn panel_local_panic_marks_crashed_and_retry_recovers() {
         let previous_hook = std::panic::take_hook();
         std::panic::set_hook(Box::new(|_| {}));

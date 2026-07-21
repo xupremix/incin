@@ -72,7 +72,7 @@ pub(crate) fn launch_layer_norm(
                     .arg(&mut out_ptr)
                     .arg(&eps)
                     .arg(&(norm_size as i32))
-                    .arg(&(has_bias as i32))
+                    .arg(&{ has_bias })
                     .arg(&(batch_size as i32))
                     .launch(cfg)
                     .map_err(|e| {
@@ -93,7 +93,7 @@ pub(crate) fn launch_layer_norm(
                 .arg(&mut out_ptr)
                 .arg(&eps)
                 .arg(&(norm_size as i32))
-                .arg(&(has_bias as i32))
+                .arg(&{ has_bias })
                 .arg(&(batch_size as i32))
                 .launch(cfg)
                 .map_err(|e| {
@@ -157,7 +157,7 @@ pub(crate) fn launch_batch_norm(
     };
 
     let block_size = 256;
-    let grid_size = (total_elements as u32 + block_size - 1) / block_size;
+    let grid_size = (total_elements as u32).div_ceil(block_size);
 
     let cfg = cudarc::driver::LaunchConfig {
         grid_dim: (grid_size, 1, 1),
@@ -227,10 +227,10 @@ pub(crate) fn launch_batch_norm(
             .arg(&(num_channels as i32))
             .arg(&(spatial_size as i32))
             .arg(&(total_elements as i32))
-            .arg(&(has_w as i32))
-            .arg(&(has_b as i32))
-            .arg(&(has_rm as i32))
-            .arg(&(has_rv as i32))
+            .arg(&{ has_w })
+            .arg(&{ has_b })
+            .arg(&{ has_rm })
+            .arg(&{ has_rv })
             .launch(cfg)
             .map_err(|e| {
                 kindle_core::prelude::Error::Msg(alloc::format!("batch_norm launch error: {:?}", e))

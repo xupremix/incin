@@ -37,32 +37,32 @@ pub fn tracing_mark_output(value_id: ValueId) {
 }
 
 #[derive(Clone)]
-/// Core abstraction for `TracingBackend` within the Kindle framework..
+/// `TracingBackend`.
 pub struct TracingBackend<B: Backend> {
     _marker: core::marker::PhantomData<B>,
 }
 
 #[derive(Clone)]
-/// Core abstraction for `TracingTensor` within the Kindle framework..
+/// `TracingTensor`.
 pub struct TracingTensor<T> {
-    /// Core abstraction for `inner` within the Kindle framework..
+    /// `inner`.
     pub inner: T,
-    /// Core abstraction for `value_id` within the Kindle framework..
+    /// `value_id`.
     pub value_id: ValueId,
 }
 
 #[derive(Clone)]
-/// Core abstraction for `TracingVar` within the Kindle framework..
+/// `TracingVar`.
 pub struct TracingVar<V> {
-    /// Core abstraction for `inner` within the Kindle framework..
+    /// `inner`.
     pub inner: V,
-    /// Core abstraction for `value_id` within the Kindle framework..
+    /// `value_id`.
     pub value_id: ValueId,
 }
 
 impl<B: Backend> TracingBackend<B> {
     // A helper for binary ops
-    /// Core abstraction for `trace_binary` within the Kindle framework..
+    /// `trace_binary`.
     fn trace_binary<K1: super::dtype::DType, K2: super::dtype::DType, KOut: super::dtype::DType>(
         op: OpType,
         lhs: &TracingTensor<B::Storage<K1>>,
@@ -88,7 +88,7 @@ impl<B: Backend> TracingBackend<B> {
     }
 
     // A helper for unary ops
-    /// Core abstraction for `trace_unary` within the Kindle framework..
+    /// `trace_unary`.
     fn trace_unary<K: super::dtype::DType, KOut: super::dtype::DType>(
         op: OpType,
         t: &TracingTensor<B::Storage<K>>,
@@ -114,45 +114,45 @@ impl<B: Backend> TracingBackend<B> {
 }
 
 impl<B: Backend> Backend for TracingBackend<B> {
-    /// Core abstraction for `Storage` within the Kindle framework..
+    /// `Storage`.
     type Storage<K: super::dtype::DType> = TracingTensor<B::Storage<K>>;
-    /// Core abstraction for `Device` within the Kindle framework..
+    /// `Device`.
     type Device = B::Device;
-    /// Core abstraction for `FloatElem` within the Kindle framework..
+    /// `FloatElem`.
     type FloatElem = B::FloatElem;
-    /// Core abstraction for `IntElem` within the Kindle framework..
+    /// `IntElem`.
     type IntElem = B::IntElem;
 
-    /// Core abstraction for `BackendWithDevice` within the Kindle framework..
+    /// `BackendWithDevice`.
     type BackendWithDevice<NewD: crate::tensor::device::Device> =
         TracingBackend<B::BackendWithDevice<NewD>>;
 
-    /// Core abstraction for `RawVar` within the Kindle framework..
+    /// `RawVar`.
     type RawVar = TracingVar<B::RawVar>;
-    /// Core abstraction for `Grads` within the Kindle framework..
+    /// `Grads`.
     type Grads = B::Grads;
-    /// Core abstraction for `InnerBackend` within the Kindle framework..
+    /// `InnerBackend`.
     type InnerBackend = B::InnerBackend;
 
-    /// Core abstraction for `shape` within the Kindle framework..
+    /// `shape`.
     fn shape<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>) -> alloc::vec::Vec<usize> {
         B::shape(&t.inner)
     }
 
-    /// Core abstraction for `format_tensor_display` within the Kindle framework..
+    /// `format_tensor_display`.
     fn format_tensor_display<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> alloc::string::String {
         B::format_tensor_display(&t.inner)
     }
-    /// Core abstraction for `format_tensor_debug` within the Kindle framework..
+    /// `format_tensor_debug`.
     fn format_tensor_debug<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> alloc::string::String {
         B::format_tensor_debug(&t.inner)
     }
 
-    /// Core abstraction for `var_as_tensor` within the Kindle framework..
+    /// `var_as_tensor`.
     fn var_as_tensor<K: super::dtype::DType>(
         var: &<Self as Backend>::RawVar,
     ) -> Result<<Self as Backend>::Storage<K>> {
@@ -163,7 +163,7 @@ impl<B: Backend> Backend for TracingBackend<B> {
         })
     }
 
-    /// Core abstraction for `var_from_tensor` within the Kindle framework..
+    /// `var_from_tensor`.
     fn var_from_tensor<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::RawVar> {
@@ -174,7 +174,7 @@ impl<B: Backend> Backend for TracingBackend<B> {
         })
     }
 
-    /// Core abstraction for `var_to_device` within the Kindle framework..
+    /// `var_to_device`.
     fn var_to_device(
         var: &<Self as Backend>::RawVar,
         device: &KindleDevice,
@@ -186,7 +186,7 @@ impl<B: Backend> Backend for TracingBackend<B> {
         })
     }
 
-    /// Core abstraction for `assign_var` within the Kindle framework..
+    /// `assign_var`.
     fn assign_var<K: super::dtype::DType>(
         var: &mut <Self as Backend>::RawVar,
         tensor: &<Self as Backend>::Storage<K>,
@@ -194,21 +194,21 @@ impl<B: Backend> Backend for TracingBackend<B> {
         B::assign_var(&mut var.inner, &tensor.inner)
     }
 
-    /// Core abstraction for `backward` within the Kindle framework..
+    /// `backward`.
     fn backward<K: super::dtype::DType>(
         loss: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Grads> {
         B::backward(&loss.inner)
     }
 
-    /// Core abstraction for `backward_with_nan_check` within the Kindle framework..
+    /// `backward_with_nan_check`.
     fn backward_with_nan_check<K: super::dtype::DType>(
         loss: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Grads> {
         B::backward_with_nan_check(&loss.inner)
     }
 
-    /// Core abstraction for `get_grad` within the Kindle framework..
+    /// `get_grad`.
     fn get_grad<K: super::dtype::DType>(
         _var: &<Self as Backend>::Storage<K>,
         _grads: &<Self as Backend>::Grads,
@@ -216,7 +216,7 @@ impl<B: Backend> Backend for TracingBackend<B> {
         Ok(None)
     }
 
-    /// Core abstraction for `from_bytes` within the Kindle framework..
+    /// `from_bytes`.
     fn from_bytes<K: super::dtype::DType>(
         bytes: &[u8],
         shape: &[usize],
@@ -233,7 +233,7 @@ impl<B: Backend> Backend for TracingBackend<B> {
         Ok(TracingTensor { inner, value_id })
     }
 
-    /// Core abstraction for `to_bytes` within the Kindle framework..
+    /// `to_bytes`.
     fn to_bytes<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<alloc::vec::Vec<u8>> {
@@ -242,7 +242,7 @@ impl<B: Backend> Backend for TracingBackend<B> {
 }
 
 impl<B: Backend> CreationOps<Self> for TracingBackend<B> {
-    /// Core abstraction for `zeros` within the Kindle framework..
+    /// `zeros`.
     fn zeros<K: super::dtype::DType>(
         shape: &[usize],
         dtype: KindleDType,
@@ -253,7 +253,7 @@ impl<B: Backend> CreationOps<Self> for TracingBackend<B> {
         Ok(TracingTensor { inner, value_id })
     }
 
-    /// Core abstraction for `ones` within the Kindle framework..
+    /// `ones`.
     fn ones<K: super::dtype::DType>(
         shape: &[usize],
         dtype: KindleDType,
@@ -264,7 +264,7 @@ impl<B: Backend> CreationOps<Self> for TracingBackend<B> {
         Ok(TracingTensor { inner, value_id })
     }
 
-    /// Core abstraction for `rand` within the Kindle framework..
+    /// `rand`.
     fn rand<K: super::dtype::DType>(
         shape: &[usize],
         dtype: KindleDType,
@@ -275,7 +275,7 @@ impl<B: Backend> CreationOps<Self> for TracingBackend<B> {
         Ok(TracingTensor { inner, value_id })
     }
 
-    /// Core abstraction for `randn` within the Kindle framework..
+    /// `randn`.
     fn randn<K: super::dtype::DType>(
         shape: &[usize],
         dtype: KindleDType,
@@ -286,7 +286,7 @@ impl<B: Backend> CreationOps<Self> for TracingBackend<B> {
         Ok(TracingTensor { inner, value_id })
     }
 
-    /// Core abstraction for `var_zeros` within the Kindle framework..
+    /// `var_zeros`.
     fn var_zeros<K: super::dtype::DType>(
         shape: &[usize],
         dtype: KindleDType,
@@ -297,7 +297,7 @@ impl<B: Backend> CreationOps<Self> for TracingBackend<B> {
         Ok(TracingVar { inner, value_id })
     }
 
-    /// Core abstraction for `var_ones` within the Kindle framework..
+    /// `var_ones`.
     fn var_ones<K: super::dtype::DType>(
         shape: &[usize],
         dtype: KindleDType,
@@ -308,7 +308,7 @@ impl<B: Backend> CreationOps<Self> for TracingBackend<B> {
         Ok(TracingVar { inner, value_id })
     }
 
-    /// Core abstraction for `var_rand` within the Kindle framework..
+    /// `var_rand`.
     fn var_rand<K: super::dtype::DType>(
         shape: &[usize],
         dtype: KindleDType,
@@ -319,7 +319,7 @@ impl<B: Backend> CreationOps<Self> for TracingBackend<B> {
         Ok(TracingVar { inner, value_id })
     }
 
-    /// Core abstraction for `var_randn` within the Kindle framework..
+    /// `var_randn`.
     fn var_randn<K: super::dtype::DType>(
         shape: &[usize],
         dtype: KindleDType,
@@ -330,7 +330,7 @@ impl<B: Backend> CreationOps<Self> for TracingBackend<B> {
         Ok(TracingVar { inner, value_id })
     }
 
-    /// Core abstraction for `tensor_to_device` within the Kindle framework..
+    /// `tensor_to_device`.
     fn tensor_to_device<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         device: &KindleDevice,
@@ -344,7 +344,7 @@ impl<B: Backend> CreationOps<Self> for TracingBackend<B> {
 }
 
 impl<B: Backend> NumericOps<Self> for TracingBackend<B> {
-    /// Core abstraction for `add` within the Kindle framework..
+    /// `add`.
     fn add<K: super::dtype::DType>(
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
@@ -353,7 +353,7 @@ impl<B: Backend> NumericOps<Self> for TracingBackend<B> {
         Ok(Self::trace_binary(OpType::Add, lhs, rhs, &inner))
     }
 
-    /// Core abstraction for `sub` within the Kindle framework..
+    /// `sub`.
     fn sub<K: super::dtype::DType>(
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
@@ -362,7 +362,7 @@ impl<B: Backend> NumericOps<Self> for TracingBackend<B> {
         Ok(Self::trace_binary(OpType::Sub, lhs, rhs, &inner))
     }
 
-    /// Core abstraction for `mul` within the Kindle framework..
+    /// `mul`.
     fn mul<K: super::dtype::DType>(
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
@@ -371,7 +371,7 @@ impl<B: Backend> NumericOps<Self> for TracingBackend<B> {
         Ok(Self::trace_binary(OpType::Mul, lhs, rhs, &inner))
     }
 
-    /// Core abstraction for `div` within the Kindle framework..
+    /// `div`.
     fn div<K: super::dtype::DType>(
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
@@ -382,7 +382,7 @@ impl<B: Backend> NumericOps<Self> for TracingBackend<B> {
 }
 
 impl<B: Backend> FloatOps<Self> for TracingBackend<B> {
-    /// Core abstraction for `add_scalar_float` within the Kindle framework..
+    /// `add_scalar_float`.
     fn add_scalar_float<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         scalar: f64,
@@ -391,7 +391,7 @@ impl<B: Backend> FloatOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::AddScalar, t, &inner))
     }
 
-    /// Core abstraction for `mul_scalar_float` within the Kindle framework..
+    /// `mul_scalar_float`.
     fn mul_scalar_float<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         scalar: f64,
@@ -400,7 +400,7 @@ impl<B: Backend> FloatOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::MulScalar, t, &inner))
     }
 
-    /// Core abstraction for `relu` within the Kindle framework..
+    /// `relu`.
     fn relu<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
@@ -429,7 +429,7 @@ impl<B: Backend> FloatOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::Elu, t, &inner))
     }
 
-    /// Core abstraction for `gelu` within the Kindle framework..
+    /// `gelu`.
     fn gelu<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
@@ -437,7 +437,7 @@ impl<B: Backend> FloatOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::Gelu, t, &inner))
     }
 
-    /// Core abstraction for `abs` within the Kindle framework..
+    /// `abs`.
     fn abs<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
@@ -445,7 +445,7 @@ impl<B: Backend> FloatOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::Relu, t, &inner))
     }
 
-    /// Core abstraction for `exp` within the Kindle framework..
+    /// `exp`.
     fn exp<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
@@ -453,7 +453,7 @@ impl<B: Backend> FloatOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::Relu, t, &inner))
     }
 
-    /// Core abstraction for `neg` within the Kindle framework..
+    /// `neg`.
     fn neg<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
@@ -461,7 +461,7 @@ impl<B: Backend> FloatOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::Relu, t, &inner))
     }
 
-    /// Core abstraction for `sqrt` within the Kindle framework..
+    /// `sqrt`.
     fn sqrt<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
@@ -469,7 +469,7 @@ impl<B: Backend> FloatOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::Relu, t, &inner))
     }
 
-    /// Core abstraction for `log` within the Kindle framework..
+    /// `log`.
     fn log<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
@@ -477,7 +477,7 @@ impl<B: Backend> FloatOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::Relu, t, &inner))
     }
 
-    /// Core abstraction for `tanh` within the Kindle framework..
+    /// `tanh`.
     fn tanh<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
@@ -485,7 +485,7 @@ impl<B: Backend> FloatOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::Relu, t, &inner))
     }
 
-    /// Core abstraction for `sigmoid` within the Kindle framework..
+    /// `sigmoid`.
     fn sigmoid<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
@@ -493,7 +493,7 @@ impl<B: Backend> FloatOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::Relu, t, &inner))
     }
 
-    /// Core abstraction for `swish` within the Kindle framework..
+    /// `swish`.
     fn swish<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
@@ -501,7 +501,7 @@ impl<B: Backend> FloatOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::Relu, t, &inner))
     }
 
-    /// Core abstraction for `softmax` within the Kindle framework..
+    /// `softmax`.
     fn softmax<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
@@ -524,7 +524,7 @@ impl<B: Backend> FloatOps<Self> for TracingBackend<B> {
 }
 
 impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
-    /// Core abstraction for `sum_all` within the Kindle framework..
+    /// `sum_all`.
     fn sum_all<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
@@ -532,7 +532,7 @@ impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::SumAll, t, &inner))
     }
 
-    /// Core abstraction for `mean_all` within the Kindle framework..
+    /// `mean_all`.
     fn mean_all<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
@@ -540,7 +540,7 @@ impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::MeanAll, t, &inner))
     }
 
-    /// Core abstraction for `max_all` within the Kindle framework..
+    /// `max_all`.
     fn max_all<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
@@ -548,7 +548,7 @@ impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::MaxAll, t, &inner))
     }
 
-    /// Core abstraction for `min_all` within the Kindle framework..
+    /// `min_all`.
     fn min_all<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
@@ -556,7 +556,7 @@ impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::MinAll, t, &inner))
     }
 
-    /// Core abstraction for `sum_dim` within the Kindle framework..
+    /// `sum_dim`.
     fn sum_dim<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
@@ -565,7 +565,7 @@ impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::SumDim, t, &inner))
     }
 
-    /// Core abstraction for `sum_keepdim` within the Kindle framework..
+    /// `sum_keepdim`.
     fn sum_keepdim<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
@@ -574,7 +574,7 @@ impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::SumDim, t, &inner))
     }
 
-    /// Core abstraction for `mean_dim` within the Kindle framework..
+    /// `mean_dim`.
     fn mean_dim<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
@@ -583,7 +583,7 @@ impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::MeanDim, t, &inner))
     }
 
-    /// Core abstraction for `mean_keepdim` within the Kindle framework..
+    /// `mean_keepdim`.
     fn mean_keepdim<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
@@ -592,7 +592,7 @@ impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::MeanDim, t, &inner))
     }
 
-    /// Core abstraction for `max_dim` within the Kindle framework..
+    /// `max_dim`.
     fn max_dim<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
@@ -601,7 +601,7 @@ impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::MaxDim, t, &inner))
     }
 
-    /// Core abstraction for `max_keepdim` within the Kindle framework..
+    /// `max_keepdim`.
     fn max_keepdim<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
@@ -610,7 +610,7 @@ impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::MaxDim, t, &inner))
     }
 
-    /// Core abstraction for `min_dim` within the Kindle framework..
+    /// `min_dim`.
     fn min_dim<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
@@ -619,7 +619,7 @@ impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::MinDim, t, &inner))
     }
 
-    /// Core abstraction for `min_keepdim` within the Kindle framework..
+    /// `min_keepdim`.
     fn min_keepdim<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
@@ -628,7 +628,7 @@ impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::MinDim, t, &inner))
     }
 
-    /// Core abstraction for `argmax` within the Kindle framework..
+    /// `argmax`.
     fn argmax<K: super::dtype::DType, KInt: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: Option<usize>,
@@ -637,7 +637,7 @@ impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::ArgMax, t, &inner))
     }
 
-    /// Core abstraction for `argmin` within the Kindle framework..
+    /// `argmin`.
     fn argmin<K: super::dtype::DType, KInt: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: Option<usize>,
@@ -646,7 +646,7 @@ impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::ArgMin, t, &inner))
     }
 
-    /// Core abstraction for `topk` within the Kindle framework..
+    /// `topk`.
     fn topk<K: super::dtype::DType, KInt: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         k: usize,
@@ -700,7 +700,7 @@ impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
         ))
     }
 
-    /// Core abstraction for `argsort` within the Kindle framework..
+    /// `argsort`.
     fn argsort<K: super::dtype::DType, KInt: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
@@ -713,7 +713,7 @@ impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
 }
 
 impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
-    /// Core abstraction for `tensor_to_dtype` within the Kindle framework..
+    /// `tensor_to_dtype`.
     fn tensor_to_dtype<K1: super::dtype::DType, K2: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K1>,
         dtype: KindleDType,
@@ -734,7 +734,7 @@ impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
         Ok(TracingTensor { inner, value_id })
     }
 
-    /// Core abstraction for `broadcast_as` within the Kindle framework..
+    /// `broadcast_as`.
     fn broadcast_as<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         shape: &[usize],
@@ -743,7 +743,7 @@ impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::Broadcast, t, &inner))
     }
 
-    /// Core abstraction for `reshape` within the Kindle framework..
+    /// `reshape`.
     fn reshape<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         shape: &[usize],
@@ -773,7 +773,7 @@ impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
         Ok(TracingTensor { inner, value_id })
     }
 
-    /// Core abstraction for `transpose` within the Kindle framework..
+    /// `transpose`.
     fn transpose<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         dim1: usize,
@@ -798,7 +798,7 @@ impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
         Ok(TracingTensor { inner, value_id })
     }
 
-    /// Core abstraction for `narrow` within the Kindle framework..
+    /// `narrow`.
     fn narrow<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
@@ -809,7 +809,7 @@ impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::Narrow, t, &inner))
     }
 
-    /// Core abstraction for `concat` within the Kindle framework..
+    /// `concat`.
     fn concat<K: super::dtype::DType>(
         tensors: &[&<Self as Backend>::Storage<K>],
         dim: usize,
@@ -832,7 +832,7 @@ impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
         Ok(TracingTensor { inner, value_id })
     }
 
-    /// Core abstraction for `stack` within the Kindle framework..
+    /// `stack`.
     fn stack<K: super::dtype::DType>(
         tensors: &[&<Self as Backend>::Storage<K>],
         dim: usize,
@@ -855,7 +855,7 @@ impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
         Ok(TracingTensor { inner, value_id })
     }
 
-    /// Core abstraction for `slice` within the Kindle framework..
+    /// `slice`.
     fn slice<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         ranges: &[(usize, usize)],
@@ -864,7 +864,7 @@ impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::Slice, t, &inner))
     }
 
-    /// Core abstraction for `flatten` within the Kindle framework..
+    /// `flatten`.
     fn flatten<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         start_dim: usize,
@@ -874,7 +874,7 @@ impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::Reshape, t, &inner))
     }
 
-    /// Core abstraction for `squeeze` within the Kindle framework..
+    /// `squeeze`.
     fn squeeze<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
@@ -883,7 +883,7 @@ impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::Reshape, t, &inner))
     }
 
-    /// Core abstraction for `broadcast_left` within the Kindle framework..
+    /// `broadcast_left`.
     fn broadcast_left<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         shape: &[usize],
@@ -892,7 +892,7 @@ impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::Broadcast, t, &inner))
     }
 
-    /// Core abstraction for `matmul` within the Kindle framework..
+    /// `matmul`.
     fn matmul<K: super::dtype::DType>(
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
@@ -900,21 +900,21 @@ impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
         let inner = B::matmul(&lhs.inner, &rhs.inner)?;
         Ok(Self::trace_binary(OpType::MatMul, lhs, rhs, &inner))
     }
-    /// Core abstraction for `float_to_scalar` within the Kindle framework..
+    /// `float_to_scalar`.
     fn float_to_scalar<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>) -> Result<f64> {
         B::float_to_scalar(&t.inner)
     }
-    /// Core abstraction for `float_to_vec1` within the Kindle framework..
+    /// `float_to_vec1`.
     fn float_to_vec1<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<alloc::vec::Vec<f64>> {
         B::float_to_vec1(&t.inner)
     }
-    /// Core abstraction for `int_to_scalar` within the Kindle framework..
+    /// `int_to_scalar`.
     fn int_to_scalar<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>) -> Result<i64> {
         B::int_to_scalar(&t.inner)
     }
-    /// Core abstraction for `int_to_vec1` within the Kindle framework..
+    /// `int_to_vec1`.
     fn int_to_vec1<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<alloc::vec::Vec<i64>> {
@@ -923,7 +923,7 @@ impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
 }
 
 impl<B: Backend + crate::tensor::backend::ModuleOps<B>> ModuleOps<Self> for TracingBackend<B> {
-    /// Core abstraction for `conv1d` within the Kindle framework..
+    /// `conv1d`.
     fn conv1d<K: super::dtype::DType>(
         x: &<Self as Backend>::Storage<K>,
         weight: &<Self as Backend>::Storage<K>,
@@ -971,7 +971,7 @@ impl<B: Backend + crate::tensor::backend::ModuleOps<B>> ModuleOps<Self> for Trac
         Ok(TracingTensor { inner, value_id })
     }
 
-    /// Core abstraction for `conv2d` within the Kindle framework..
+    /// `conv2d`.
     fn conv2d<K: super::dtype::DType>(
         x: &<Self as Backend>::Storage<K>,
         weight: &<Self as Backend>::Storage<K>,
@@ -1024,7 +1024,7 @@ impl<B: Backend + crate::tensor::backend::ModuleOps<B>> ModuleOps<Self> for Trac
         Ok(TracingTensor { inner, value_id })
     }
 
-    /// Core abstraction for `max_pool2d` within the Kindle framework..
+    /// `max_pool2d`.
     fn max_pool2d<K: super::dtype::DType>(
         x: &<Self as Backend>::Storage<K>,
         kernel_size: (usize, usize),
@@ -1036,7 +1036,7 @@ impl<B: Backend + crate::tensor::backend::ModuleOps<B>> ModuleOps<Self> for Trac
         Ok(Self::trace_unary(OpType::MaxPool2d, x, &inner))
     }
 
-    /// Core abstraction for `avg_pool2d` within the Kindle framework..
+    /// `avg_pool2d`.
     fn avg_pool2d<K: super::dtype::DType>(
         x: &<Self as Backend>::Storage<K>,
         kernel_size: (usize, usize),
@@ -1047,7 +1047,7 @@ impl<B: Backend + crate::tensor::backend::ModuleOps<B>> ModuleOps<Self> for Trac
         Ok(Self::trace_unary(OpType::AvgPool2d, x, &inner))
     }
 
-    /// Core abstraction for `adaptive_avg_pool2d` within the Kindle framework..
+    /// `adaptive_avg_pool2d`.
     fn adaptive_avg_pool2d<K: super::dtype::DType>(
         x: &<Self as Backend>::Storage<K>,
         output_size: (usize, usize),
@@ -1056,7 +1056,7 @@ impl<B: Backend + crate::tensor::backend::ModuleOps<B>> ModuleOps<Self> for Trac
         Ok(Self::trace_unary(OpType::AdaptiveAvgPool2d, x, &inner))
     }
 
-    /// Core abstraction for `embedding` within the Kindle framework..
+    /// `embedding`.
     fn embedding<K: super::dtype::DType, KInt: super::dtype::DType>(
         t: &<Self as Backend>::Storage<KInt>,
         w: &<Self as Backend>::Storage<K>,
@@ -1077,7 +1077,7 @@ impl<B: Backend + crate::tensor::backend::ModuleOps<B>> ModuleOps<Self> for Trac
         Ok(TracingTensor { inner, value_id })
     }
 
-    /// Core abstraction for `layer_norm` within the Kindle framework..
+    /// `layer_norm`.
     fn layer_norm<K: super::dtype::DType>(
         x: &<Self as Backend>::Storage<K>,
         weight: &<Self as Backend>::Storage<K>,
@@ -1088,7 +1088,7 @@ impl<B: Backend + crate::tensor::backend::ModuleOps<B>> ModuleOps<Self> for Trac
         Ok(Self::trace_unary(OpType::LayerNorm, x, &inner))
     }
 
-    /// Core abstraction for `batch_norm` within the Kindle framework..
+    /// `batch_norm`.
     fn batch_norm<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         w: Option<&<Self as Backend>::Storage<K>>,
@@ -1110,7 +1110,7 @@ impl<B: Backend + crate::tensor::backend::ModuleOps<B>> ModuleOps<Self> for Trac
         Ok(Self::trace_unary(OpType::BatchNorm, t, &inner))
     }
 
-    /// Core abstraction for `conv_transpose2d` within the Kindle framework..
+    /// `conv_transpose2d`.
     fn conv_transpose2d<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         w: &<Self as Backend>::Storage<K>,
@@ -1137,7 +1137,7 @@ impl<B: Backend + crate::tensor::backend::ModuleOps<B>> ModuleOps<Self> for Trac
 }
 
 impl<B: Backend + crate::tensor::backend::LossOps<B>> LossOps<Self> for TracingBackend<B> {
-    /// Core abstraction for `cross_entropy_loss` within the Kindle framework..
+    /// `cross_entropy_loss`.
     fn cross_entropy_loss<K: super::dtype::DType, KInt: super::dtype::DType>(
         logits: &<Self as Backend>::Storage<K>,
         targets: &<Self as Backend>::Storage<KInt>,
@@ -1152,7 +1152,7 @@ impl<B: Backend + crate::tensor::backend::LossOps<B>> LossOps<Self> for TracingB
         ))
     }
 
-    /// Core abstraction for `mse_loss` within the Kindle framework..
+    /// `mse_loss`.
     fn mse_loss<K: super::dtype::DType>(
         predictions: &<Self as Backend>::Storage<K>,
         targets: &<Self as Backend>::Storage<K>,
@@ -1167,7 +1167,7 @@ impl<B: Backend + crate::tensor::backend::LossOps<B>> LossOps<Self> for TracingB
         ))
     }
 
-    /// Core abstraction for `l1_loss` within the Kindle framework..
+    /// `l1_loss`.
     fn l1_loss<K: super::dtype::DType>(
         predictions: &<Self as Backend>::Storage<K>,
         targets: &<Self as Backend>::Storage<K>,
@@ -1182,7 +1182,7 @@ impl<B: Backend + crate::tensor::backend::LossOps<B>> LossOps<Self> for TracingB
         ))
     }
 
-    /// Core abstraction for `bce_with_logits_loss` within the Kindle framework..
+    /// `bce_with_logits_loss`.
     fn bce_with_logits_loss<K: super::dtype::DType>(
         logits: &<Self as Backend>::Storage<K>,
         targets: &<Self as Backend>::Storage<K>,
@@ -1199,7 +1199,7 @@ impl<B: Backend + crate::tensor::backend::LossOps<B>> LossOps<Self> for TracingB
 }
 
 impl<B: Backend> QuantizedOps<Self> for TracingBackend<B> {
-    /// Core abstraction for `quantize` within the Kindle framework..
+    /// `quantize`.
     fn quantize<K: super::dtype::FloatDType, Q: super::dtype::QuantDType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<Q>> {
@@ -1210,7 +1210,7 @@ impl<B: Backend> QuantizedOps<Self> for TracingBackend<B> {
         })
     }
 
-    /// Core abstraction for `dequantize` within the Kindle framework..
+    /// `dequantize`.
     fn dequantize<Q: super::dtype::QuantDType, K: super::dtype::FloatDType>(
         t: &<Self as Backend>::Storage<Q>,
     ) -> Result<<Self as Backend>::Storage<K>> {
@@ -1221,7 +1221,7 @@ impl<B: Backend> QuantizedOps<Self> for TracingBackend<B> {
         })
     }
 
-    /// Core abstraction for `quantized_matmul` within the Kindle framework..
+    /// `quantized_matmul`.
     fn quantized_matmul<Q: super::dtype::QuantDType>(
         lhs: &<Self as Backend>::Storage<Q>,
         rhs: &<Self as Backend>::Storage<Q>,

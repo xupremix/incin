@@ -4,7 +4,7 @@ use kindle_core::prelude::*;
 use kindle_core::prelude::{Graph, OpType};
 
 #[test]
-/// Core abstraction for `graph_round_trips_through_serde_json` within the Kindle framework.
+/// Graph round trips through serde json.
 fn graph_round_trips_through_serde_json() {
     let mut g = Graph::new();
     let v0 = g.add_value(vec![2, 3], KindleDType::F32, Some("x".into()));

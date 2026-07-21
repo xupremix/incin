@@ -10,7 +10,7 @@ macro_rules! impl_module_for_optional_field {
         }
     ) => {
         impl<S: $shape_trait, B: crate::prelude::Backend, Bias: crate::nn::optional::OptionalField> crate::nn::module::Parameters<B> for $name<S, B, Bias> {
-            /// Core abstraction for `named_parameters` within the Kindle framework..
+            /// Collects named trainable parameters into `map` under the given `prefix`.
             fn named_parameters(&self, prefix: &str, map: &mut alloc::collections::BTreeMap<String, <B as crate::prelude::Backend>::RawVar>) {
                 use crate::nn::module::{AutorefParameters, AutorefParametersFallback};
                 let prefix = if prefix.is_empty() { "".to_string() } else { format!("{}.", prefix) };
@@ -21,7 +21,7 @@ macro_rules! impl_module_for_optional_field {
         }
 
         impl<S: $shape_trait, B: crate::prelude::Backend, Bias: crate::nn::optional::OptionalField> crate::nn::StateDict<B> for $name<S, B, Bias> {
-            /// Core abstraction for `load_state_dict` within the Kindle framework..
+            /// Loads parameters from a flat name→tensor map, in-place.
             fn load_state_dict(&mut self, prefix: &str, tensors: &alloc::collections::BTreeMap<String, crate::prelude::Tensor<crate::prelude::Dyn, B>>) -> crate::prelude::Result<()> {
                 use crate::nn::module::{AutorefStateDict, AutorefStateDictFallback};
                 let prefix = if prefix.is_empty() { "".to_string() } else { format!("{}.", prefix) };
@@ -30,7 +30,7 @@ macro_rules! impl_module_for_optional_field {
                 )*
                 Ok(())
             }
-            /// Core abstraction for `state_dict` within the Kindle framework..
+            /// Returns a flat map from parameter name to its raw tensor value.
             fn state_dict(&self, prefix: &str, tensors: &mut alloc::collections::BTreeMap<String, crate::prelude::Tensor<crate::prelude::Dyn, B>>) {
                 use crate::nn::module::{AutorefStateDict, AutorefStateDictFallback};
                 let prefix = if prefix.is_empty() { "".to_string() } else { format!("{}.", prefix) };

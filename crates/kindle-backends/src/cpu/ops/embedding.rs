@@ -124,27 +124,27 @@ pub(crate) fn embedding_impl<T: DType, D: kindle_core::prelude::Device, K: DType
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
-/// Core abstraction for `tests` within the Kindle framework..
+/// `tests`.
 mod tests {
     use super::*;
     use crate::cpu::CpuBackend;
     use crate::cpu::tape;
     use kindle_core::prelude::{Cpu, ReductionOps};
 
-    /// Core abstraction for `B` within the Kindle framework..
+    /// `B`.
     type B = CpuBackend<f32, Cpu>;
 
-    /// Core abstraction for `weight` within the Kindle framework..
+    /// The learnable weight matrix parameter.
     fn weight(v: Vec<f32>, vocab: usize, hidden: usize) -> CpuStorage {
         CpuStorage::from_contiguous(CpuBuffer::F32(v), vec![vocab, hidden])
     }
 
-    /// Core abstraction for `indices_i64` within the Kindle framework..
+    /// `indices_i64`.
     fn indices_i64(v: Vec<i64>, shape: Vec<usize>) -> CpuStorage {
         CpuStorage::from_contiguous(CpuBuffer::I64(v), shape)
     }
 
-    /// Core abstraction for `f32_vec` within the Kindle framework..
+    /// `f32_vec`.
     fn f32_vec(s: &CpuStorage) -> Vec<f32> {
         match &*s.buffer {
             CpuBuffer::F32(v) => v.clone(),
@@ -153,7 +153,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `forward_1d_indices_gathers_correct_rows_with_repeats` within the Kindle framework..
+    /// `forward_1d_indices_gathers_correct_rows_with_repeats`.
     fn forward_1d_indices_gathers_correct_rows_with_repeats() {
         // weight [3,2]: row0=[1,2], row1=[3,4], row2=[5,6]
         let w = weight(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 3, 2);
@@ -166,7 +166,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `forward_2d_indices_gathers_correct_rows` within the Kindle framework..
+    /// `forward_2d_indices_gathers_correct_rows`.
     fn forward_2d_indices_gathers_correct_rows() {
         // weight [4,3]
         let w = weight(
@@ -195,7 +195,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `backward_repeated_index_accumulates_not_overwrites` within the Kindle framework..
+    /// `backward_repeated_index_accumulates_not_overwrites`.
     fn backward_repeated_index_accumulates_not_overwrites() {
         // weight [2,2]: row0, row1
         let w = weight(vec![1.0, 2.0, 3.0, 4.0], 2, 2);
@@ -215,7 +215,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `backward_unaddressed_rows_get_exactly_zero_gradient` within the Kindle framework..
+    /// `backward_unaddressed_rows_get_exactly_zero_gradient`.
     fn backward_unaddressed_rows_get_exactly_zero_gradient() {
         // weight [3,2]; only row 1 is addressed.
         let w = weight(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 3, 2);
@@ -231,7 +231,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `out_of_range_index_returns_shape_mismatch_error` within the Kindle framework..
+    /// `out_of_range_index_returns_shape_mismatch_error`.
     fn out_of_range_index_returns_shape_mismatch_error() {
         let w = weight(vec![1.0, 2.0, 3.0, 4.0], 2, 2);
         let idx = indices_i64(vec![5], vec![1]);
@@ -240,7 +240,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `negative_index_returns_shape_mismatch_error_not_panic` within the Kindle framework..
+    /// `negative_index_returns_shape_mismatch_error_not_panic`.
     fn negative_index_returns_shape_mismatch_error_not_panic() {
         let w = weight(vec![1.0, 2.0, 3.0, 4.0], 2, 2);
         let idx = indices_i64(vec![-1], vec![1]);

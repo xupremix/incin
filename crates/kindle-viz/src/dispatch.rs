@@ -20,9 +20,9 @@ use kindle_viz_plugin_api::render_ctx::RenderCtx;
 /// panicked and the host must now treat this panel as crashed (D-04 /
 /// UI-SPEC.md Panic Isolation UX).
 pub enum DispatchOutcome<T> {
-    /// Core abstraction for `Ok` within the Kindle framework.
+    /// Ok.
     Ok(T),
-    /// Core abstraction for `Panicked` within the Kindle framework.
+    /// Panicked.
     Panicked,
 }
 
@@ -83,43 +83,43 @@ pub fn dispatch_reset(panel: &mut dyn Panel) -> DispatchOutcome<()> {
 }
 
 #[cfg(test)]
-/// Core abstraction for `tests` within the Kindle framework.
+/// Tests.
 mod tests {
     use super::*;
 
-    /// Core abstraction for `PanickingPanel` within the Kindle framework.
+    /// Panicking panel.
     struct PanickingPanel;
 
     impl Panel for PanickingPanel {
-        /// Core abstraction for `id` within the Kindle framework.
+        /// Id.
         fn id(&self) -> &'static str {
             "panicking-test-panel"
         }
 
-        /// Core abstraction for `title` within the Kindle framework.
+        /// Title.
         fn title(&self) -> &str {
             "Panicking Test Panel"
         }
 
-        /// Core abstraction for `update` within the Kindle framework.
+        /// Update.
         fn update(&mut self, _event: &Event) {}
 
-        /// Core abstraction for `render` within the Kindle framework.
+        /// Render.
         fn render(&mut self, _ctx: &mut RenderCtx<'_, '_>) {
             panic!("deliberate test panic");
         }
 
-        /// Core abstraction for `handle_event` within the Kindle framework.
+        /// Handle event.
         fn handle_event(&mut self, _event: &PanelEvent) -> bool {
             false
         }
 
-        /// Core abstraction for `reset` within the Kindle framework.
+        /// Reset.
         fn reset(&mut self) {}
     }
 
     #[test]
-    /// Core abstraction for `panicking_panel_render_is_caught` within the Kindle framework.
+    /// Panicking panel render is caught.
     fn panicking_panel_render_is_caught() {
         // Suppress the default panic hook's stderr print for the duration
         // of this test only -- the panic is expected/handled, not a genuine

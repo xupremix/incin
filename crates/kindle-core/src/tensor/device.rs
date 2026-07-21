@@ -3,24 +3,24 @@ use core::marker::PhantomData;
 
 use crate::prelude::{Dyn, Result};
 
-/// Core abstraction for `Device` within the Kindle framework..
+/// `Device`.
 pub trait Device: 'static + Send + Sync + Clone + Eq + PartialEq + Debug + Sized {
-    /// Core abstraction for `Arg` within the Kindle framework..
+    /// `Arg`.
     type Arg: Clone;
-    /// Core abstraction for `Field` within the Kindle framework..
+    /// `Field`.
     type Field: Debug + Clone;
-    /// Core abstraction for `init` within the Kindle framework..
+    /// `init`.
     fn init(arg: Self::Arg) -> Self::Field;
-    /// Core abstraction for `to_kindle` within the Kindle framework..
+    /// `to_kindle`.
     fn to_kindle(dev: &Self::Field) -> Result<KindleDevice>;
 }
-/// Core abstraction for `DynDevice` within the Kindle framework..
+/// `DynDevice`.
 pub trait DynDevice: Device {}
-/// Core abstraction for `ConstDevice` within the Kindle framework..
+/// `ConstDevice`.
 pub trait ConstDevice: Default + Device<Arg = ()> {}
 
 #[cfg(feature = "cuda")]
-/// Core abstraction for `cuda` within the Kindle framework..
+/// `cuda`.
 pub mod cuda {
 
     use super::{ConstDevice, Device, DynDevice, KindleDevice, PhantomData, Result};
@@ -32,17 +32,17 @@ pub mod cuda {
     impl<const N: usize> ConstDevice for Cuda<N> {}
 
     impl<const N: usize> Device for Cuda<N> {
-        /// Core abstraction for `Arg` within the Kindle framework..
+        /// `Arg`.
         type Arg = ();
-        /// Core abstraction for `Field` within the Kindle framework..
+        /// `Field`.
         type Field = PhantomData<Self>;
 
-        /// Core abstraction for `to_kindle` within the Kindle framework..
+        /// `to_kindle`.
         fn to_kindle(_: &Self::Field) -> Result<KindleDevice> {
             Ok(KindleDevice::cuda(N))
         }
 
-        /// Core abstraction for `init` within the Kindle framework..
+        /// `init`.
         fn init(_: Self::Arg) -> Self::Field {
             PhantomData
         }
@@ -55,7 +55,7 @@ pub mod cuda {
 pub use cuda::*;
 
 #[cfg(feature = "wgpu")]
-/// Core abstraction for `wgpu` within the Kindle framework..
+/// `wgpu`.
 pub mod wgpu {
     use super::{ConstDevice, Device, DynDevice, KindleDevice, PhantomData, Result};
 
@@ -66,17 +66,17 @@ pub mod wgpu {
     impl<const N: usize> ConstDevice for Wgpu<N> {}
 
     impl<const N: usize> Device for Wgpu<N> {
-        /// Core abstraction for `Arg` within the Kindle framework..
+        /// `Arg`.
         type Arg = ();
-        /// Core abstraction for `Field` within the Kindle framework..
+        /// `Field`.
         type Field = PhantomData<Self>;
 
-        /// Core abstraction for `to_kindle` within the Kindle framework..
+        /// `to_kindle`.
         fn to_kindle(_: &Self::Field) -> Result<KindleDevice> {
             Ok(KindleDevice::wgpu(N))
         }
 
-        /// Core abstraction for `init` within the Kindle framework..
+        /// `init`.
         fn init(_: Self::Arg) -> Self::Field {
             PhantomData
         }
@@ -95,17 +95,17 @@ pub struct Cpu;
 impl ConstDevice for Cpu {}
 
 impl Device for Cpu {
-    /// Core abstraction for `Arg` within the Kindle framework..
+    /// `Arg`.
     type Arg = ();
-    /// Core abstraction for `Field` within the Kindle framework..
+    /// `Field`.
     type Field = PhantomData<Self>;
 
-    /// Core abstraction for `to_kindle` within the Kindle framework..
+    /// `to_kindle`.
     fn to_kindle(_: &Self::Field) -> Result<KindleDevice> {
         Ok(KindleDevice::cpu())
     }
 
-    /// Core abstraction for `init` within the Kindle framework..
+    /// `init`.
     fn init(_: Self::Arg) -> Self::Field {
         PhantomData
     }
@@ -113,17 +113,17 @@ impl Device for Cpu {
 impl DynDevice for Cpu {}
 
 impl Device for Dyn {
-    /// Core abstraction for `Arg` within the Kindle framework..
+    /// `Arg`.
     type Arg = KindleDevice;
-    /// Core abstraction for `Field` within the Kindle framework..
+    /// `Field`.
     type Field = KindleDevice;
 
-    /// Core abstraction for `to_kindle` within the Kindle framework..
+    /// `to_kindle`.
     fn to_kindle(dev: &Self::Field) -> Result<KindleDevice> {
         Ok(*dev)
     }
 
-    /// Core abstraction for `init` within the Kindle framework..
+    /// `init`.
     fn init(arg: Self::Arg) -> Self::Field {
         arg
     }
@@ -132,7 +132,7 @@ impl DynDevice for Dyn {}
 
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-/// Core abstraction for `DeviceVariant` within the Kindle framework..
+/// `DeviceVariant`.
 pub enum DeviceVariant {
     /// Implementation of `Cpu` for the respective backend..
     Cpu,
@@ -145,38 +145,38 @@ pub enum DeviceVariant {
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-/// Core abstraction for `KindleDevice` within the Kindle framework..
+/// `KindleDevice`.
 pub struct KindleDevice(DeviceVariant);
 
 impl KindleDevice {
-    /// Core abstraction for `variant` within the Kindle framework..
+    /// `variant`.
     pub fn variant(&self) -> DeviceVariant {
         self.0
     }
 
-    /// Core abstraction for `cpu` within the Kindle framework..
+    /// `cpu`.
     pub fn cpu() -> Self {
         Self(DeviceVariant::Cpu)
     }
 
     #[cfg(feature = "cuda")]
-    /// Core abstraction for `cuda` within the Kindle framework..
+    /// `cuda`.
     pub fn cuda(ord: usize) -> Self {
         Self(DeviceVariant::Cuda(ord))
     }
 
     #[cfg(feature = "wgpu")]
-    /// Core abstraction for `wgpu` within the Kindle framework..
+    /// `wgpu`.
     pub fn wgpu(ord: usize) -> Self {
         Self(DeviceVariant::Wgpu(ord))
     }
 }
 
-/// Core abstraction for `fn` within the Kindle framework..
+/// `fn`.
 pub const fn cuda_is_available() -> bool {
     cfg!(feature = "cuda")
 }
-/// Core abstraction for `fn` within the Kindle framework..
+/// `fn`.
 pub const fn wgpu_is_available() -> bool {
     cfg!(feature = "wgpu")
 }
@@ -184,12 +184,12 @@ pub const fn wgpu_is_available() -> bool {
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 /// Implementation of `CudaDevice` for the respective backend..
 pub struct CudaDevice {
-    /// Core abstraction for `id` within the Kindle framework..
+    /// `id`.
     pub id: usize,
 }
 
 impl CudaDevice {
-    /// Core abstraction for `new` within the Kindle framework..
+    /// Creates a new instance with default (statically inferred) shape arguments.
     pub fn new(id: usize) -> Self {
         Self { id }
     }
@@ -198,24 +198,24 @@ impl CudaDevice {
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 /// Implementation of `WgpuDevice` for the respective backend..
 pub struct WgpuDevice {
-    /// Core abstraction for `id` within the Kindle framework..
+    /// `id`.
     pub id: usize,
 }
 
 impl WgpuDevice {
-    /// Core abstraction for `new` within the Kindle framework..
+    /// Creates a new instance with default (statically inferred) shape arguments.
     pub fn new(id: usize) -> Self {
         Self { id }
     }
 }
 
 #[cfg(test)]
-/// Core abstraction for `tests` within the Kindle framework..
+/// `tests`.
 mod tests {
     use super::*;
 
     #[test]
-    /// Core abstraction for `test_device_variants` within the Kindle framework..
+    /// `test_device_variants`.
     fn test_device_variants() {
         let cpu = KindleDevice::cpu();
         assert_eq!(cpu.variant(), DeviceVariant::Cpu);

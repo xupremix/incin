@@ -4,121 +4,121 @@ use crate::prelude::*;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Reduction {
     #[default]
-    /// Core abstraction for `Mean` within the Kindle framework..
+    /// `Mean`.
     Mean,
-    /// Core abstraction for `Sum` within the Kindle framework..
+    /// `Sum`.
     Sum,
-    /// Core abstraction for `None` within the Kindle framework..
+    /// `None`.
     None,
 }
 
-/// Core abstraction for `ReductionMode` within the Kindle framework..
+/// `ReductionMode`.
 pub trait ReductionMode: Clone + Default + 'static {
-    /// Core abstraction for `as_enum` within the Kindle framework..
+    /// `as_enum`.
     fn as_enum() -> Reduction;
 }
 
 #[derive(Debug, Clone, Copy, Default)]
-/// Core abstraction for `Mean` within the Kindle framework..
+/// `Mean`.
 pub struct Mean;
 impl ReductionMode for Mean {
-    /// Core abstraction for `as_enum` within the Kindle framework..
+    /// `as_enum`.
     fn as_enum() -> Reduction {
         Reduction::Mean
     }
 }
 
 #[derive(Debug, Clone, Copy, Default)]
-/// Core abstraction for `Sum` within the Kindle framework..
+/// `Sum`.
 pub struct Sum;
 impl ReductionMode for Sum {
-    /// Core abstraction for `as_enum` within the Kindle framework..
+    /// `as_enum`.
     fn as_enum() -> Reduction {
         Reduction::Sum
     }
 }
 
 #[derive(Debug, Clone, Copy, Default)]
-/// Core abstraction for `NoneReduction` within the Kindle framework..
+/// `NoneReduction`.
 pub struct NoneReduction;
 impl ReductionMode for NoneReduction {
-    /// Core abstraction for `as_enum` within the Kindle framework..
+    /// `as_enum`.
     fn as_enum() -> Reduction {
         Reduction::None
     }
 }
 
-/// Core abstraction for `MseReductionShape` within the Kindle framework..
+/// `MseReductionShape`.
 pub trait MseReductionShape<S: Shape> {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output: Shape;
 }
 impl<S: Shape> MseReductionShape<S> for Mean {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = ();
 }
 impl<S: Shape> MseReductionShape<S> for Sum {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = ();
 }
 impl<S: Shape> MseReductionShape<S> for NoneReduction {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = S;
 }
 
-/// Core abstraction for `CrossEntropyReductionShape` within the Kindle framework..
+/// `CrossEntropyReductionShape`.
 pub trait CrossEntropyReductionShape<S: Shape> {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output: Shape;
 }
 impl<S: Shape> CrossEntropyReductionShape<S> for Mean {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = ();
 }
 impl<S: Shape> CrossEntropyReductionShape<S> for Sum {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = ();
 }
 impl<S: Shape + crate::shapes::shape_ops::ReduceDim<1>> CrossEntropyReductionShape<S>
     for NoneReduction
 {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = S::Output;
 }
 
-/// Core abstraction for `BceReductionShape` within the Kindle framework..
+/// `BceReductionShape`.
 pub trait BceReductionShape<S: Shape> {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output: Shape;
 }
 impl<S: Shape> BceReductionShape<S> for Mean {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = ();
 }
 impl<S: Shape> BceReductionShape<S> for Sum {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = ();
 }
 impl<S: Shape> BceReductionShape<S> for NoneReduction {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = S;
 }
 
-/// Core abstraction for `L1ReductionShape` within the Kindle framework..
+/// `L1ReductionShape`.
 pub trait L1ReductionShape<S: Shape> {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output: Shape;
 }
 impl<S: Shape> L1ReductionShape<S> for Mean {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = ();
 }
 impl<S: Shape> L1ReductionShape<S> for Sum {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = ();
 }
 impl<S: Shape> L1ReductionShape<S> for NoneReduction {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = S;
 }
 
@@ -131,7 +131,7 @@ impl<S: Shape> MSEShape<S> for S {}
 pub struct MSELoss<R: ReductionMode = Mean>(core::marker::PhantomData<R>);
 
 impl<R: ReductionMode> MSELoss<R> {
-    /// Core abstraction for `new` within the Kindle framework..
+    /// Creates a new instance with default (statically inferred) shape arguments.
     pub fn new() -> Self {
         Self(core::marker::PhantomData)
     }
@@ -184,7 +184,7 @@ impl<Batch: Dim> CrossEntropyShape<(Batch,)> for Dyn {}
 pub struct CrossEntropyLoss<R: ReductionMode = Mean>(core::marker::PhantomData<R>);
 
 impl<R: ReductionMode> CrossEntropyLoss<R> {
-    /// Core abstraction for `new` within the Kindle framework..
+    /// Creates a new instance with default (statically inferred) shape arguments.
     pub fn new() -> Self {
         Self(core::marker::PhantomData)
     }
@@ -236,7 +236,7 @@ impl<S: crate::prelude::Shape> L1Shape<S> for S {}
 pub struct L1Loss<R: ReductionMode = Mean>(core::marker::PhantomData<R>);
 
 impl<R: ReductionMode> L1Loss<R> {
-    /// Core abstraction for `new` within the Kindle framework..
+    /// Creates a new instance with default (statically inferred) shape arguments.
     pub fn new() -> Self {
         Self(core::marker::PhantomData)
     }
@@ -281,7 +281,7 @@ impl<S: crate::prelude::Shape> BCEWithLogitsShape<S> for S {}
 pub struct BCEWithLogitsLoss<R: ReductionMode = Mean>(core::marker::PhantomData<R>);
 
 impl<R: ReductionMode> BCEWithLogitsLoss<R> {
-    /// Core abstraction for `new` within the Kindle framework..
+    /// Creates a new instance with default (statically inferred) shape arguments.
     pub fn new() -> Self {
         Self(core::marker::PhantomData)
     }

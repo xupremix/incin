@@ -28,11 +28,18 @@ pub struct FileTransport {
     file: File,
 }
 
+#[cfg(unix)]
+use std::os::unix::fs::OpenOptionsExt;
+
 impl FileTransport {
     /// Opens (creating if absent) the file at `path` for append-only
     /// writes.
     pub fn open(path: &Path) -> std::io::Result<Self> {
-        let file = OpenOptions::new().create(true).append(true).open(path)?;
+        let mut opts = OpenOptions::new();
+        opts.create(true).append(true);
+        #[cfg(unix)]
+        opts.mode(0o600);
+        let file = opts.open(path)?;
         Ok(Self { file })
     }
 }
@@ -56,7 +63,7 @@ mod tests {
     use crate::events::ScalarEvent;
     use std::io::{BufRead, BufReader};
 
-    /// Core abstraction for `unique_test_path` within the Kindle framework.
+    /// Unique test path.
     fn unique_test_path(label: &str) -> std::path::PathBuf {
         std::env::temp_dir().join(format!(
             "kindle-telemetry-file-transport-test-{label}-{}.jsonl",
@@ -64,7 +71,7 @@ mod tests {
         ))
     }
 
-    /// Core abstraction for `scalar_event` within the Kindle framework.
+    /// Scalar event.
     fn scalar_event(step: usize, name: &str, value: f64) -> Event {
         Event::Scalar(ScalarEvent {
             schema_version: crate::events::CURRENT_SCHEMA_VERSION,
@@ -75,7 +82,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `open_on_nonexistent_path_creates_file_and_succeeds` within the Kindle framework.
+    /// Open on nonexistent path creates file and succeeds.
     fn open_on_nonexistent_path_creates_file_and_succeeds() {
         let path = unique_test_path("open-creates");
         assert!(!path.exists());
@@ -88,7 +95,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `write_event_three_times_round_trips_through_readback` within the Kindle framework.
+    /// Write event three times round trips through readback.
     fn write_event_three_times_round_trips_through_readback() {
         let path = unique_test_path("round-trip");
         let mut transport = FileTransport::open(&path).expect("open should succeed");
@@ -128,7 +135,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `each_line_ends_with_exactly_one_newline_and_no_embedded_newline` within the Kindle framework.
+    /// Each line ends with exactly one newline and no embedded newline.
     fn each_line_ends_with_exactly_one_newline_and_no_embedded_newline() {
         let path = unique_test_path("single-newline");
         let mut transport = FileTransport::open(&path).expect("open should succeed");
@@ -148,7 +155,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `second_transport_at_same_path_appends_rather_than_truncates` within the Kindle framework.
+    /// Second transport at same path appends rather than truncates.
     fn second_transport_at_same_path_appends_rather_than_truncates() {
         let path = unique_test_path("append-not-truncate");
 
@@ -172,7 +179,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `truncated_trailing_line_yields_prior_complete_records_only` within the Kindle framework.
+    /// Truncated trailing line yields prior complete records only.
     fn truncated_trailing_line_yields_prior_complete_records_only() {
         let path = unique_test_path("crash-truncation");
 
@@ -211,7 +218,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `detach_reattach_sees_all_events_in_order` within the Kindle framework.
+    /// Detach reattach sees all events in order.
     fn detach_reattach_sees_all_events_in_order() {
         let path = unique_test_path("detach-reattach");
         let mut transport = FileTransport::open(&path).expect("open should succeed");

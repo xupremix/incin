@@ -29,40 +29,40 @@ pub struct Conv2d<
     B: Backend,
     Bias: crate::nn::optional::OptionalField = crate::nn::optional::True,
 > {
-    /// Core abstraction for `weight` within the Kindle framework..
+    /// The learnable weight matrix parameter.
     pub weight: Param<S::WeightShape, B>,
-    /// Core abstraction for `bias` within the Kindle framework..
+    /// The optional learnable bias vector parameter.
     pub bias: Option<Param<S::BiasShape, B>>,
     #[module(ignore)]
     _phantom: core::marker::PhantomData<(S, B, Bias)>,
 }
 
-/// Core abstraction for `Conv2dShape` within the Kindle framework..
+/// `Conv2dShape`.
 pub trait Conv2dShape: Shape + DynShape {
-    /// Core abstraction for `OutC` within the Kindle framework..
+    /// `OutC`.
     type OutC: Dim;
-    /// Core abstraction for `InC` within the Kindle framework..
+    /// `InC`.
     type InC: Dim;
-    /// Core abstraction for `K` within the Kindle framework..
+    /// `K`.
     type K: Unsigned + Dim<Arg = ()>;
-    /// Core abstraction for `S` within the Kindle framework..
+    /// `S`.
     type S: Unsigned + Dim<Arg = ()>;
-    /// Core abstraction for `P` within the Kindle framework..
+    /// `P`.
     type P: Unsigned + Dim<Arg = ()>;
-    /// Core abstraction for `D` within the Kindle framework..
+    /// `D`.
     type D: Unsigned + Dim<Arg = ()>;
-    /// Core abstraction for `WeightArg` within the Kindle framework..
+    /// The shape argument type used to construct the weight tensor.
     type WeightArg: crate::tensor::arg_into::NotUnit;
-    /// Core abstraction for `BiasArg` within the Kindle framework..
+    /// The shape argument type used to construct the bias tensor.
     type BiasArg: crate::tensor::arg_into::NotUnit;
-    /// Core abstraction for `WeightShape` within the Kindle framework..
+    /// The static shape type of the weight parameter tensor.
     type WeightShape: Shape<Arg = Self::WeightArg> + DynShape;
-    /// Core abstraction for `BiasShape` within the Kindle framework..
+    /// The static shape type of the bias parameter tensor.
     type BiasShape: Shape<Arg = Self::BiasArg> + DynShape;
-    /// Core abstraction for `Target` within the Kindle framework..
+    /// The runtime arguments needed to instantiate this layer.
     type Target;
 
-    /// Core abstraction for `build_args` within the Kindle framework..
+    /// Converts the target arguments into concrete shape args for weight and bias tensors.
     fn build_args(target: Self::Target) -> (usize, usize, Self::WeightArg, Self::BiasArg);
 }
 
@@ -75,36 +75,36 @@ impl<
     D: Unsigned + Dim<Arg = ()>,
 > Conv2dShape for (OutC, InC, K, S, P, D)
 {
-    /// Core abstraction for `OutC` within the Kindle framework..
+    /// `OutC`.
     type OutC = OutC;
-    /// Core abstraction for `InC` within the Kindle framework..
+    /// `InC`.
     type InC = InC;
-    /// Core abstraction for `K` within the Kindle framework..
+    /// `K`.
     type K = K;
-    /// Core abstraction for `S` within the Kindle framework..
+    /// `S`.
     type S = S;
-    /// Core abstraction for `P` within the Kindle framework..
+    /// `P`.
     type P = P;
-    /// Core abstraction for `D` within the Kindle framework..
+    /// `D`.
     type D = D;
-    /// Core abstraction for `WeightArg` within the Kindle framework..
+    /// The shape argument type used to construct the weight tensor.
     type WeightArg = (
         <OutC as Dim>::Arg,
         <InC as Dim>::Arg,
         <K as Dim>::Arg,
         <K as Dim>::Arg,
     );
-    /// Core abstraction for `BiasArg` within the Kindle framework..
+    /// The shape argument type used to construct the bias tensor.
     type BiasArg = (<OutC as Dim>::Arg,);
-    /// Core abstraction for `WeightShape` within the Kindle framework..
+    /// The static shape type of the weight parameter tensor.
     type WeightShape = (OutC, InC, K, K);
-    /// Core abstraction for `BiasShape` within the Kindle framework..
+    /// The static shape type of the bias parameter tensor.
     type BiasShape = (OutC,);
-    /// Core abstraction for `Target` within the Kindle framework..
+    /// The runtime arguments needed to instantiate this layer.
     type Target = (OutC::Arg, InC::Arg);
 
     #[inline]
-    /// Core abstraction for `build_args` within the Kindle framework..
+    /// Converts the target arguments into concrete shape args for weight and bias tensors.
     fn build_args(target: Self::Target) -> (usize, usize, Self::WeightArg, Self::BiasArg) {
         let out_channels = OutC::from_arg(target.0.clone()).size();
         let in_channels = InC::from_arg(target.1.clone()).size();
@@ -125,7 +125,7 @@ where
     B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
-    /// Core abstraction for `new_with` within the Kindle framework..
+    /// Creates a new instance with explicitly provided shape arguments.
     pub fn new_with(args: S::Target) -> Result<Self> {
         let (_cout, _cin, w_args, b_args) = S::build_args(args);
         let fan_in = _cin * S::K::USIZE * S::K::USIZE;
@@ -165,7 +165,7 @@ where
     B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
-    /// Core abstraction for `new` within the Kindle framework..
+    /// Creates a new instance with default (statically inferred) shape arguments.
     pub fn new() -> Result<Self> {
         Self::new_with(((), ()))
     }
@@ -178,7 +178,7 @@ where
     B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
-    /// Core abstraction for `new_with` within the Kindle framework..
+    /// Creates a new instance with explicitly provided shape arguments.
     pub fn new_with(args: S::Target) -> Result<Self> {
         let (_cout, _cin, w_args, _b_args) = S::build_args(args);
         let fan_in = _cin * S::K::USIZE * S::K::USIZE;
@@ -209,7 +209,7 @@ where
     B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
-    /// Core abstraction for `new` within the Kindle framework..
+    /// Creates a new instance with default (statically inferred) shape arguments.
     pub fn new() -> Result<Self> {
         Self::new_with(((), ()))
     }
@@ -221,7 +221,7 @@ where
     B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
-    /// Core abstraction for `new_with` within the Kindle framework..
+    /// Creates a new instance with explicitly provided shape arguments.
     pub fn new_with(args: S::Target, has_bias: bool) -> Result<Self> {
         let (_cout, _cin, w_args, b_args) = S::build_args(args);
         let fan_in = _cin * S::K::USIZE * S::K::USIZE;
@@ -265,7 +265,7 @@ where
     B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
-    /// Core abstraction for `new` within the Kindle framework..
+    /// Creates a new instance with default (statically inferred) shape arguments.
     pub fn new(has_bias: bool) -> Result<Self> {
         Self::new_with(((), ()), has_bias)
     }
@@ -280,13 +280,13 @@ where
         + crate::shapes::HasChannels2D<CIn>,
     B: Backend + crate::tensor::backend::ModuleOps<B>,
 {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<I::Output, B>;
-    /// Core abstraction for `Error` within the Kindle framework..
+    /// The error type returned if the forward pass fails.
     type Error = Error;
 
     #[inline]
-    /// Core abstraction for `forward` within the Kindle framework..
+    /// Runs the forward pass of this module on the given input.
     fn forward(&self, x: Tensor<I, B>) -> core::result::Result<Self::Output, Error> {
         let weight = self.weight.as_tensor()?;
 
@@ -346,13 +346,13 @@ where
         + crate::shapes::HasChannels2D<CIn>,
     B: Backend + crate::tensor::backend::ModuleOps<B>,
 {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<I::Output, B>;
-    /// Core abstraction for `Error` within the Kindle framework..
+    /// The error type returned if the forward pass fails.
     type Error = Error;
 
     #[inline]
-    /// Core abstraction for `forward` within the Kindle framework..
+    /// Runs the forward pass of this module on the given input.
     fn forward(&self, x: Tensor<I, B>) -> core::result::Result<Self::Output, Error> {
         let weight = self.weight.as_tensor()?;
 
@@ -412,13 +412,13 @@ where
         + crate::shapes::HasChannels2D<CIn>,
     B: Backend + crate::tensor::backend::ModuleOps<B>,
 {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<I::Output, B>;
-    /// Core abstraction for `Error` within the Kindle framework..
+    /// The error type returned if the forward pass fails.
     type Error = Error;
 
     #[inline]
-    /// Core abstraction for `forward` within the Kindle framework..
+    /// Runs the forward pass of this module on the given input.
     fn forward(&self, x: Tensor<I, B>) -> core::result::Result<Self::Output, Error> {
         let weight = self.weight.as_tensor()?;
         let bias = match &self.bias {

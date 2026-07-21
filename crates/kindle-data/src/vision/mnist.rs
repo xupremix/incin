@@ -2,18 +2,18 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
-/// Core abstraction for `MnistDataset` within the Kindle framework.
+/// Mnist dataset.
 pub struct MnistDataset {
-    /// Core abstraction for `images` within the Kindle framework.
+    /// Images.
     pub images: Vec<u8>,
-    /// Core abstraction for `labels` within the Kindle framework.
+    /// Labels.
     pub labels: Vec<u8>,
-    /// Core abstraction for `train` within the Kindle framework.
+    /// Train.
     pub train: bool,
 }
 
 impl MnistDataset {
-    /// Core abstraction for `new` within the Kindle framework.
+    /// New.
     pub fn new<P: AsRef<Path>>(dir: P, train: bool) -> anyhow::Result<Self> {
         let dir = dir.as_ref();
         let (images_url, labels_url) = if train {
@@ -86,7 +86,7 @@ impl MnistDataset {
         })
     }
 
-    /// Core abstraction for `parse_images` within the Kindle framework.
+    /// Parse images.
     fn parse_images(path: &Path) -> anyhow::Result<Vec<u8>> {
         let mut f = File::open(path)?;
         let mut magic = [0u8; 4];
@@ -109,7 +109,7 @@ impl MnistDataset {
         Ok(data)
     }
 
-    /// Core abstraction for `parse_labels` within the Kindle framework.
+    /// Parse labels.
     fn parse_labels(path: &Path) -> anyhow::Result<Vec<u8>> {
         let mut f = File::open(path)?;
         let mut magic = [0u8; 4];
@@ -128,15 +128,15 @@ impl MnistDataset {
 }
 
 impl crate::dataset::Dataset for MnistDataset {
-    /// Core abstraction for `Item` within the Kindle framework.
+    /// Item.
     type Item = (Vec<f32>, u8);
 
-    /// Core abstraction for `len` within the Kindle framework.
+    /// Len.
     fn len(&self) -> usize {
         self.labels.len()
     }
 
-    /// Core abstraction for `get` within the Kindle framework.
+    /// Get.
     fn get(&self, index: usize) -> Option<Self::Item> {
         if index >= self.labels.len() {
             return None;

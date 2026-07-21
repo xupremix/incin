@@ -39,11 +39,11 @@ pub(crate) type BackwardFn = Box<dyn Fn(&CpuStorage) -> Vec<CpuStorage> + Send +
 /// visibility into whether the surrounding `Tensor<..., G>`'s `G` is `Grad`
 /// or `NoGrad`.
 pub(crate) struct TapeEntry {
-    /// Core abstraction for `output_id` within the Kindle framework..
+    /// `output_id`.
     pub(crate) output_id: TensorId,
-    /// Core abstraction for `input_ids` within the Kindle framework..
+    /// `input_ids`.
     pub(crate) input_ids: Vec<TensorId>,
-    /// Core abstraction for `backward` within the Kindle framework..
+    /// `backward`.
     pub(crate) backward: BackwardFn,
 }
 
@@ -64,7 +64,7 @@ impl CpuGrads {
 }
 
 thread_local! {
-    /// Core abstraction for `TAPE` within the Kindle framework..
+    /// `TAPE`.
     static TAPE: RefCell<Vec<TapeEntry>> = const { RefCell::new(Vec::new()) };
 }
 
@@ -348,23 +348,23 @@ fn increment_index(idx: &mut [usize], shape: &[usize]) {
 }
 
 #[cfg(test)]
-/// Core abstraction for `tests` within the Kindle framework..
+/// `tests`.
 mod tests {
     use super::*;
     use crate::cpu::storage::CpuBuffer;
 
-    /// Core abstraction for `scalar` within the Kindle framework..
+    /// `scalar`.
     fn scalar(v: f32) -> CpuStorage {
         CpuStorage::from_contiguous(CpuBuffer::F32(vec![v]), vec![])
     }
 
-    /// Core abstraction for `vector` within the Kindle framework..
+    /// `vector`.
     fn vector(v: Vec<f32>) -> CpuStorage {
         let len = v.len();
         CpuStorage::from_contiguous(CpuBuffer::F32(v), vec![len])
     }
 
-    /// Core abstraction for `matrix` within the Kindle framework..
+    /// `matrix`.
     fn matrix(v: Vec<f32>, rows: usize, cols: usize) -> CpuStorage {
         CpuStorage::from_contiguous(CpuBuffer::F32(v), vec![rows, cols])
     }
@@ -372,7 +372,7 @@ mod tests {
     // --- unbroadcast standalone tests (CPUBACK-06) ---
 
     #[test]
-    /// Core abstraction for `unbroadcast_bias_vector_b_n_to_n` within the Kindle framework..
+    /// `unbroadcast_bias_vector_b_n_to_n`.
     fn unbroadcast_bias_vector_b_n_to_n() {
         // grad shape [4,3] (B=4, N=3), summed back to [3] (bias vector case).
         let grad = matrix(
@@ -391,7 +391,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `unbroadcast_scalar_target_sums_all_axes` within the Kindle framework..
+    /// `unbroadcast_scalar_target_sums_all_axes`.
     fn unbroadcast_scalar_target_sums_all_axes() {
         // grad shape [4,3], forward-broadcast from a scalar `[]`, summed
         // back to `[]` (scalar case).
@@ -402,7 +402,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `unbroadcast_same_shape_is_noop` within the Kindle framework..
+    /// `unbroadcast_same_shape_is_noop`.
     fn unbroadcast_same_shape_is_noop() {
         let grad = vector(vec![1.0, 2.0, 3.0]);
         let result = unbroadcast(&grad, &[3]).unwrap();
@@ -415,7 +415,7 @@ mod tests {
     // --- tape accumulation tests (CPUBACK-05) ---
 
     #[test]
-    /// Core abstraction for `backward_seeds_loss_gradient_with_ones` within the Kindle framework..
+    /// `backward_seeds_loss_gradient_with_ones`.
     fn backward_seeds_loss_gradient_with_ones() {
         let loss = scalar(5.0);
         let grads = backward(&loss).unwrap();
@@ -424,7 +424,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `backward_accumulates_not_overwrites_on_tensor_reuse` within the Kindle framework..
+    /// `backward_accumulates_not_overwrites_on_tensor_reuse`.
     fn backward_accumulates_not_overwrites_on_tensor_reuse() {
         // Hand-built two-op graph: a single input tensor `x` is consumed
         // twice (mirrors `x.add(&x)`-shaped reuse). Two independent
@@ -504,7 +504,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `backward_drains_tape_and_second_call_is_not_contaminated` within the Kindle framework..
+    /// `backward_drains_tape_and_second_call_is_not_contaminated`.
     fn backward_drains_tape_and_second_call_is_not_contaminated() {
         // First independent small graph.
         let x1 = scalar(1.0);
@@ -542,7 +542,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `tape_len_is_zero_immediately_after_any_backward_call` within the Kindle framework..
+    /// `tape_len_is_zero_immediately_after_any_backward_call`.
     fn tape_len_is_zero_immediately_after_any_backward_call() {
         let x = scalar(1.0);
         let out = scalar(2.0);
@@ -557,7 +557,7 @@ mod tests {
 
     #[test]
     #[should_panic(expected = "NaN or Infinity detected in gradient")]
-    /// Core abstraction for `backward_with_nan_check_panics_on_nan` within the Kindle framework..
+    /// `backward_with_nan_check_panics_on_nan`.
     fn backward_with_nan_check_panics_on_nan() {
         let x = scalar(1.0);
         let out = scalar(2.0);

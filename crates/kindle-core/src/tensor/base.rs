@@ -6,7 +6,7 @@ use crate::prelude::{
 use alloc::string::ToString;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-/// Core abstraction for `Dyn` within the Kindle framework..
+/// `Dyn`.
 pub struct Dyn(pub ());
 
 /// The core `Tensor` type representing an n-dimensional array.
@@ -397,7 +397,7 @@ impl<S: Shape, B: Backend, K: DType, D: Device> Tensor<S, B, K, D, Grad> {
 impl<S: crate::prelude::Shape, B: crate::prelude::Backend, K: DType, D: Device, G: RequiresGrad>
     core::fmt::Display for Tensor<S, B, K, D, G>
 {
-    /// Core abstraction for `fmt` within the Kindle framework..
+    /// `fmt`.
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", B::format_tensor_display(&self.inner))
     }
@@ -406,7 +406,7 @@ impl<S: crate::prelude::Shape, B: crate::prelude::Backend, K: DType, D: Device, 
 impl<S: crate::prelude::Shape, B: crate::prelude::Backend, K: DType, D: Device, G: RequiresGrad>
     core::fmt::Debug for Tensor<S, B, K, D, G>
 {
-    /// Core abstraction for `fmt` within the Kindle framework..
+    /// `fmt`.
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(
             f,
@@ -419,14 +419,14 @@ impl<S: crate::prelude::Shape, B: crate::prelude::Backend, K: DType, D: Device, 
 }
 
 #[cfg(test)]
-/// Core abstraction for `tests` within the Kindle framework..
+/// `tests`.
 mod tests {
     use super::*;
 
     use alloc::vec;
 
     #[test]
-    /// Core abstraction for `test_tensor_creation` within the Kindle framework..
+    /// `test_tensor_creation`.
     fn test_tensor_creation() {
         let t: Tensor<Dyn, crate::tensor::backend::dummy::DummyBackend<f32, crate::prelude::Cpu>> =
             Tensor::zeros(vec![2, 3]).unwrap();
@@ -436,7 +436,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `test_tensor_ones` within the Kindle framework..
+    /// `test_tensor_ones`.
     fn test_tensor_ones() {
         let t: Tensor<Dyn, crate::tensor::backend::dummy::DummyBackend<f32, crate::prelude::Cpu>> =
             Tensor::ones(vec![4]).unwrap();

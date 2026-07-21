@@ -1,7 +1,7 @@
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 
-/// Core abstraction for `generate_shape_ops` within the Kindle framework.
+/// Generate shape ops.
 pub fn generate_shape_ops(_input: TokenStream) -> TokenStream {
     let mut tokens = proc_macro2::TokenStream::new();
     let max_rank = 8;
@@ -16,7 +16,7 @@ pub fn generate_shape_ops(_input: TokenStream) -> TokenStream {
 
                 tokens.extend(quote! {
                     impl<#(#in_types: crate::prelude::Dim,)*> crate::shapes::shape_ops::Transpose<#d1, #d2> for (#(#in_types,)*) {
-                        /// Core abstraction for `Output` within the Kindle framework.
+                        /// Output.
                         type Output = (#(#out_dims,)*);
                     }
                 });
@@ -34,14 +34,14 @@ pub fn generate_shape_ops(_input: TokenStream) -> TokenStream {
             if out_types.is_empty() {
                 tokens.extend(quote! {
                     impl<#(#in_types: crate::prelude::Dim,)*> crate::shapes::shape_ops::ReduceDim<#d> for (#(#in_types,)*) {
-                        /// Core abstraction for `Output` within the Kindle framework.
+                        /// Output.
                         type Output = (); // Scalar
                     }
                 });
             } else {
                 tokens.extend(quote! {
                     impl<#(#in_types: crate::prelude::Dim,)*> crate::shapes::shape_ops::ReduceDim<#d> for (#(#in_types,)*) {
-                        /// Core abstraction for `Output` within the Kindle framework.
+                        /// Output.
                         type Output = (#(#out_types,)*);
                     }
                 });
@@ -64,7 +64,7 @@ pub fn generate_shape_ops(_input: TokenStream) -> TokenStream {
 
             tokens.extend(quote! {
                 impl<#(#in_types: crate::prelude::Dim,)*> crate::shapes::shape_ops::ReduceKeepDim<#d> for (#(#in_types,)*) {
-                    /// Core abstraction for `Output` within the Kindle framework.
+                    /// Output.
                     type Output = (#(#out_types,)*);
                 }
             });
@@ -103,7 +103,7 @@ pub fn generate_shape_ops(_input: TokenStream) -> TokenStream {
 
                 tokens.extend(quote! {
                     impl<#(#in_types: crate::prelude::Dim,)*> crate::shapes::shape_ops::Flatten<#start, #end> for (#(#in_types,)*) {
-                        /// Core abstraction for `Output` within the Kindle framework.
+                        /// Output.
                         type Output = #out_type;
                     }
                 });

@@ -1,114 +1,114 @@
 use crate::prelude::*;
 use alloc::collections::BTreeMap;
 
-/// Core abstraction for `ValueId` within the Kindle framework..
+/// `ValueId`.
 pub type ValueId = usize;
-/// Core abstraction for `NodeId` within the Kindle framework..
+/// `NodeId`.
 pub type NodeId = usize;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-/// Core abstraction for `OpType` within the Kindle framework..
+/// `OpType`.
 pub enum OpType {
-    /// Core abstraction for `ArgMax` within the Kindle framework..
+    /// `ArgMax`.
     ArgMax,
-    /// Core abstraction for `ArgMin` within the Kindle framework..
+    /// `ArgMin`.
     ArgMin,
-    /// Core abstraction for `Add` within the Kindle framework..
+    /// `Add`.
     Add,
-    /// Core abstraction for `Sub` within the Kindle framework..
+    /// `Sub`.
     Sub,
-    /// Core abstraction for `Mul` within the Kindle framework..
+    /// `Mul`.
     Mul,
-    /// Core abstraction for `Div` within the Kindle framework..
+    /// `Div`.
     Div,
-    /// Core abstraction for `MatMul` within the Kindle framework..
+    /// `MatMul`.
     MatMul,
-    /// Core abstraction for `Relu` within the Kindle framework..
+    /// `Relu`.
     Relu,
-    /// Core abstraction for `Step` within the Kindle framework..
+    /// `Step`.
     Step,
-    /// Core abstraction for `Mish` within the Kindle framework..
+    /// `Mish`.
     Mish,
-    /// Core abstraction for `Elu` within the Kindle framework..
+    /// `Elu`.
     Elu,
-    /// Core abstraction for `Gelu` within the Kindle framework..
+    /// `Gelu`.
     Gelu,
-    /// Core abstraction for `Conv1d` within the Kindle framework..
+    /// `Conv1d`.
     Conv1d,
-    /// Core abstraction for `Conv2d` within the Kindle framework..
+    /// `Conv2d`.
     Conv2d,
-    /// Core abstraction for `Linear` within the Kindle framework..
+    /// `Linear`.
     Linear,
-    /// Core abstraction for `Reshape` within the Kindle framework..
+    /// `Reshape`.
     Reshape,
-    /// Core abstraction for `Transpose` within the Kindle framework..
+    /// `Transpose`.
     Transpose,
-    /// Core abstraction for `Softmax` within the Kindle framework..
+    /// `Softmax`.
     Softmax,
-    /// Core abstraction for `Concat` within the Kindle framework..
+    /// `Concat`.
     Concat,
-    /// Core abstraction for `Stack` within the Kindle framework..
+    /// `Stack`.
     Stack,
-    /// Core abstraction for `AddScalar` within the Kindle framework..
+    /// `AddScalar`.
     AddScalar,
-    /// Core abstraction for `MulScalar` within the Kindle framework..
+    /// `MulScalar`.
     MulScalar,
-    /// Core abstraction for `SumAll` within the Kindle framework..
+    /// `SumAll`.
     SumAll,
-    /// Core abstraction for `MeanAll` within the Kindle framework..
+    /// `MeanAll`.
     MeanAll,
-    /// Core abstraction for `MaxAll` within the Kindle framework..
+    /// `MaxAll`.
     MaxAll,
-    /// Core abstraction for `MinAll` within the Kindle framework..
+    /// `MinAll`.
     MinAll,
-    /// Core abstraction for `SumDim` within the Kindle framework..
+    /// `SumDim`.
     SumDim,
-    /// Core abstraction for `MeanDim` within the Kindle framework..
+    /// `MeanDim`.
     MeanDim,
-    /// Core abstraction for `MaxDim` within the Kindle framework..
+    /// `MaxDim`.
     MaxDim,
-    /// Core abstraction for `MinDim` within the Kindle framework..
+    /// `MinDim`.
     MinDim,
-    /// Core abstraction for `Broadcast` within the Kindle framework..
+    /// `Broadcast`.
     Broadcast,
-    /// Core abstraction for `Narrow` within the Kindle framework..
+    /// `Narrow`.
     Narrow,
-    /// Core abstraction for `MaxPool2d` within the Kindle framework..
+    /// `MaxPool2d`.
     MaxPool2d,
-    /// Core abstraction for `AvgPool2d` within the Kindle framework..
+    /// `AvgPool2d`.
     AvgPool2d,
-    /// Core abstraction for `AdaptiveAvgPool2d` within the Kindle framework..
+    /// `AdaptiveAvgPool2d`.
     AdaptiveAvgPool2d,
-    /// Core abstraction for `Slice` within the Kindle framework..
+    /// `Slice`.
     Slice,
-    /// Core abstraction for `ToDtype` within the Kindle framework..
+    /// `ToDtype`.
     ToDtype,
-    /// Core abstraction for `CrossEntropyLoss` within the Kindle framework..
+    /// `CrossEntropyLoss`.
     CrossEntropyLoss,
-    /// Core abstraction for `MseLoss` within the Kindle framework..
+    /// `MseLoss`.
     MseLoss,
-    /// Core abstraction for `L1Loss` within the Kindle framework..
+    /// `L1Loss`.
     L1Loss,
-    /// Core abstraction for `BceWithLogitsLoss` within the Kindle framework..
+    /// `BceWithLogitsLoss`.
     BceWithLogitsLoss,
-    /// Core abstraction for `Embedding` within the Kindle framework..
+    /// `Embedding`.
     Embedding,
-    /// Core abstraction for `LayerNorm` within the Kindle framework..
+    /// `LayerNorm`.
     LayerNorm,
-    /// Core abstraction for `BatchNorm` within the Kindle framework..
+    /// `BatchNorm`.
     BatchNorm,
-    /// Core abstraction for `Squeeze` within the Kindle framework..
+    /// `Squeeze`.
     Squeeze,
-    /// Core abstraction for `ConvTranspose2d` within the Kindle framework..
+    /// `ConvTranspose2d`.
     ConvTranspose2d,
-    /// Core abstraction for `Input` within the Kindle framework..
+    /// `Input`.
     Input,
-    /// Core abstraction for `Constant` within the Kindle framework..
+    /// `Constant`.
     Constant,
 }
 
 impl OpType {
-    /// Core abstraction for `as_str` within the Kindle framework..
+    /// `as_str`.
     pub fn as_str(&self) -> &'static str {
         match self {
             OpType::ArgMax => "ArgMax",
@@ -164,74 +164,74 @@ impl OpType {
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-/// Core abstraction for `Value` within the Kindle framework..
+/// `Value`.
 pub struct Value {
-    /// Core abstraction for `id` within the Kindle framework..
+    /// `id`.
     pub id: ValueId,
-    /// Core abstraction for `shape` within the Kindle framework..
+    /// `shape`.
     pub shape: Vec<usize>,
-    /// Core abstraction for `dtype` within the Kindle framework..
+    /// `dtype`.
     pub dtype: KindleDType,
-    /// Core abstraction for `name` within the Kindle framework..
+    /// The display name of this layer node.
     pub name: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-/// Core abstraction for `Node` within the Kindle framework..
+/// `Node`.
 pub struct Node {
-    /// Core abstraction for `id` within the Kindle framework..
+    /// `id`.
     pub id: NodeId,
-    /// Core abstraction for `op` within the Kindle framework..
+    /// `op`.
     pub op: OpType,
-    /// Core abstraction for `inputs` within the Kindle framework..
+    /// `inputs`.
     pub inputs: Vec<ValueId>,
-    /// Core abstraction for `outputs` within the Kindle framework..
+    /// `outputs`.
     pub outputs: Vec<ValueId>,
-    /// Core abstraction for `attributes` within the Kindle framework..
+    /// `attributes`.
     pub attributes: BTreeMap<String, AttributeValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-/// Core abstraction for `AttributeValue` within the Kindle framework..
+/// `AttributeValue`.
 pub enum AttributeValue {
-    /// Core abstraction for `Int` within the Kindle framework..
+    /// `Int`.
     Int(i64),
-    /// Core abstraction for `Float` within the Kindle framework..
+    /// `Float`.
     Float(f32),
-    /// Core abstraction for `String` within the Kindle framework..
+    /// `String`.
     String(String),
-    /// Core abstraction for `Ints` within the Kindle framework..
+    /// `Ints`.
     Ints(Vec<i64>),
-    /// Core abstraction for `Floats` within the Kindle framework..
+    /// `Floats`.
     Floats(Vec<f32>),
 }
 
 #[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-/// Core abstraction for `Graph` within the Kindle framework..
+/// `Graph`.
 pub struct Graph {
     #[serde(with = "string_key_map")]
-    /// Core abstraction for `values` within the Kindle framework..
+    /// `values`.
     pub values: BTreeMap<ValueId, Value>,
-    /// Core abstraction for `nodes` within the Kindle framework..
+    /// `nodes`.
     pub nodes: Vec<Node>,
-    /// Core abstraction for `inputs` within the Kindle framework..
+    /// `inputs`.
     pub inputs: Vec<ValueId>,
-    /// Core abstraction for `outputs` within the Kindle framework..
+    /// `outputs`.
     pub outputs: Vec<ValueId>,
     #[serde(with = "string_key_map")]
-    /// Core abstraction for `initializers` within the Kindle framework..
+    /// `initializers`.
     pub initializers: BTreeMap<ValueId, Vec<u8>>, // raw bytes for constants/weights
     next_value_id: usize,
     next_node_id: usize,
 }
 
-/// Core abstraction for `string_key_map` within the Kindle framework..
+/// `string_key_map`.
 mod string_key_map {
     use alloc::collections::BTreeMap;
     use alloc::string::{String, ToString};
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-    /// Core abstraction for `serialize` within the Kindle framework..
+    /// `serialize`.
     pub fn serialize<K, V, S>(map: &BTreeMap<K, V>, serializer: S) -> Result<S::Ok, S::Error>
     where
         K: ToString,
@@ -243,7 +243,7 @@ mod string_key_map {
         string_map.serialize(serializer)
     }
 
-    /// Core abstraction for `deserialize` within the Kindle framework..
+    /// `deserialize`.
     pub fn deserialize<'de, K, V, D>(deserializer: D) -> Result<BTreeMap<K, V>, D::Error>
     where
         K: core::str::FromStr + core::hash::Hash + Eq + core::cmp::Ord,
@@ -265,12 +265,12 @@ mod string_key_map {
 }
 
 impl Graph {
-    /// Core abstraction for `new` within the Kindle framework..
+    /// Creates a new instance with default (statically inferred) shape arguments.
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Core abstraction for `add_value` within the Kindle framework..
+    /// `add_value`.
     pub fn add_value(
         &mut self,
         shape: Vec<usize>,
@@ -291,7 +291,7 @@ impl Graph {
         id
     }
 
-    /// Core abstraction for `add_node` within the Kindle framework..
+    /// `add_node`.
     pub fn add_node(
         &mut self,
         op: OpType,
@@ -311,14 +311,14 @@ impl Graph {
         id
     }
 
-    /// Core abstraction for `mark_input` within the Kindle framework..
+    /// `mark_input`.
     pub fn mark_input(&mut self, value_id: ValueId) {
         if !self.inputs.contains(&value_id) {
             self.inputs.push(value_id);
         }
     }
 
-    /// Core abstraction for `mark_output` within the Kindle framework..
+    /// `mark_output`.
     pub fn mark_output(&mut self, value_id: ValueId) {
         if !self.outputs.contains(&value_id) {
             self.outputs.push(value_id);

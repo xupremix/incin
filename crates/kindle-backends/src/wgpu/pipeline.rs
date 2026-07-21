@@ -6,7 +6,7 @@ use wgpu::{ComputePipeline, ShaderModuleDescriptor};
 
 use crate::wgpu::device::get_device_state;
 
-/// Core abstraction for `PIPELINE_CACHE` within the Kindle framework..
+/// `PIPELINE_CACHE`.
 static PIPELINE_CACHE: std::sync::OnceLock<Mutex<BTreeMap<String, Arc<ComputePipeline>>>> =
     std::sync::OnceLock::new();
 

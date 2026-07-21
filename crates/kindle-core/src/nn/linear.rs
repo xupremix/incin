@@ -13,44 +13,44 @@ use crate::prelude::*;
 /// type S = s![784, 256];
 /// ```
 pub trait LinearShape: Shape + DynShape {
-    /// Core abstraction for `InF` within the Kindle framework..
+    /// The number of input features (last dimension of the input tensor).
     type InF;
-    /// Core abstraction for `OutF` within the Kindle framework..
+    /// The number of output features (last dimension of the output tensor).
     type OutF;
-    /// Core abstraction for `WeightArg` within the Kindle framework..
+    /// The shape argument type used to construct the weight tensor.
     type WeightArg: crate::tensor::arg_into::NotUnit;
-    /// Core abstraction for `BiasArg` within the Kindle framework..
+    /// The shape argument type used to construct the bias tensor.
     type BiasArg: crate::tensor::arg_into::NotUnit;
-    /// Core abstraction for `WeightShape` within the Kindle framework..
+    /// The static shape type of the weight parameter tensor.
     type WeightShape: Shape<Arg = Self::WeightArg> + DynShape;
-    /// Core abstraction for `BiasShape` within the Kindle framework..
+    /// The static shape type of the bias parameter tensor.
     type BiasShape: Shape<Arg = Self::BiasArg> + DynShape;
 
-    /// Core abstraction for `Target` within the Kindle framework..
+    /// The runtime arguments needed to instantiate this layer.
     type Target;
-    /// Core abstraction for `build_args` within the Kindle framework..
+    /// Converts the target arguments into concrete shape args for weight and bias tensors.
     fn build_args(target: Self::Target) -> (usize, usize, Self::WeightArg, Self::BiasArg);
 }
 
 impl<InF: Dim, OutF: Dim> LinearShape for (InF, OutF) {
-    /// Core abstraction for `InF` within the Kindle framework..
+    /// The number of input features (last dimension of the input tensor).
     type InF = InF;
-    /// Core abstraction for `OutF` within the Kindle framework..
+    /// The number of output features (last dimension of the output tensor).
     type OutF = OutF;
-    /// Core abstraction for `WeightArg` within the Kindle framework..
+    /// The shape argument type used to construct the weight tensor.
     type WeightArg = (<OutF as Dim>::Arg, <InF as Dim>::Arg);
-    /// Core abstraction for `BiasArg` within the Kindle framework..
+    /// The shape argument type used to construct the bias tensor.
     type BiasArg = (<OutF as Dim>::Arg,);
-    /// Core abstraction for `WeightShape` within the Kindle framework..
+    /// The static shape type of the weight parameter tensor.
     type WeightShape = (OutF, InF);
-    /// Core abstraction for `BiasShape` within the Kindle framework..
+    /// The static shape type of the bias parameter tensor.
     type BiasShape = (OutF,);
 
-    /// Core abstraction for `Target` within the Kindle framework..
+    /// The runtime arguments needed to instantiate this layer.
     type Target = (InF::Arg, OutF::Arg);
 
     #[inline]
-    /// Core abstraction for `build_args` within the Kindle framework..
+    /// Converts the target arguments into concrete shape args for weight and bias tensors.
     fn build_args(target: Self::Target) -> (usize, usize, Self::WeightArg, Self::BiasArg) {
         let in_f = InF::from_arg(target.0.clone()).size();
         let out_f = OutF::from_arg(target.1.clone()).size();
@@ -59,24 +59,24 @@ impl<InF: Dim, OutF: Dim> LinearShape for (InF, OutF) {
 }
 
 impl LinearShape for Dyn {
-    /// Core abstraction for `InF` within the Kindle framework..
+    /// The number of input features (last dimension of the input tensor).
     type InF = Dyn;
-    /// Core abstraction for `OutF` within the Kindle framework..
+    /// The number of output features (last dimension of the output tensor).
     type OutF = Dyn;
-    /// Core abstraction for `WeightArg` within the Kindle framework..
+    /// The shape argument type used to construct the weight tensor.
     type WeightArg = alloc::vec::Vec<usize>;
-    /// Core abstraction for `BiasArg` within the Kindle framework..
+    /// The shape argument type used to construct the bias tensor.
     type BiasArg = alloc::vec::Vec<usize>;
-    /// Core abstraction for `WeightShape` within the Kindle framework..
+    /// The static shape type of the weight parameter tensor.
     type WeightShape = Dyn;
-    /// Core abstraction for `BiasShape` within the Kindle framework..
+    /// The static shape type of the bias parameter tensor.
     type BiasShape = Dyn;
 
-    /// Core abstraction for `Target` within the Kindle framework..
+    /// The runtime arguments needed to instantiate this layer.
     type Target = (usize, usize);
 
     #[inline]
-    /// Core abstraction for `build_args` within the Kindle framework..
+    /// Converts the target arguments into concrete shape args for weight and bias tensors.
     fn build_args(target: Self::Target) -> (usize, usize, Self::WeightArg, Self::BiasArg) {
         let in_f = target.0;
         let out_f = target.1;
@@ -107,9 +107,9 @@ pub struct Linear<
     B: Backend,
     Bias: crate::nn::optional::OptionalField = crate::nn::optional::True,
 > {
-    /// Core abstraction for `weight` within the Kindle framework..
+    /// The learnable weight matrix parameter.
     pub weight: Param<S::WeightShape, B>,
-    /// Core abstraction for `bias` within the Kindle framework..
+    /// The optional learnable bias vector parameter.
     pub bias: Option<Param<S::BiasShape, B>>,
     #[module(ignore)]
     _phantom: core::marker::PhantomData<(S, B, Bias)>,
@@ -123,7 +123,7 @@ where
     B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
-    /// Core abstraction for `new_with` within the Kindle framework..
+    /// Creates a new instance with explicitly provided shape arguments.
     pub fn new_with(args: S::Target) -> Result<Self> {
         let (in_f, _out_f, w_args, b_args) = S::build_args(args);
         let init = crate::nn::init::Init::KaimingUniform {
@@ -163,7 +163,7 @@ where
     B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
-    /// Core abstraction for `new` within the Kindle framework..
+    /// Creates a new instance with default (statically inferred) shape arguments.
     pub fn new() -> Result<Self> {
         Self::new_with(((), ()))
     }
@@ -175,7 +175,7 @@ where
     B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
-    /// Core abstraction for `new_with` within the Kindle framework..
+    /// Creates a new instance with explicitly provided shape arguments.
     pub fn new_with(args: S::Target) -> Result<Self> {
         let (in_f, _out_f, w_args, _b_args) = S::build_args(args);
         let init = crate::nn::init::Init::KaimingUniform {
@@ -206,7 +206,7 @@ where
     B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
-    /// Core abstraction for `new` within the Kindle framework..
+    /// Creates a new instance with default (statically inferred) shape arguments.
     pub fn new() -> Result<Self> {
         Self::new_with(((), ()))
     }
@@ -218,7 +218,7 @@ where
     B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
-    /// Core abstraction for `new_with` within the Kindle framework..
+    /// Creates a new instance with explicitly provided shape arguments.
     pub fn new_with(args: S::Target, has_bias: bool) -> Result<Self> {
         let (in_f, _out_f, w_args, b_args) = S::build_args(args);
         let init = crate::nn::init::Init::KaimingUniform {
@@ -262,7 +262,7 @@ where
     B::FloatElem: crate::prelude::ConstDType,
     B::Device: crate::prelude::ConstDevice,
 {
-    /// Core abstraction for `new` within the Kindle framework..
+    /// Creates a new instance with default (statically inferred) shape arguments.
     pub fn new(has_bias: bool) -> Result<Self> {
         Self::new_with(((), ()), has_bias)
     }
@@ -273,12 +273,12 @@ where
 
 // Dynamic input
 impl<B: Backend> Module<Tensor<Dyn, B>> for Linear<Dyn, B, crate::nn::optional::True> {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<Dyn, B>;
-    /// Core abstraction for `Error` within the Kindle framework..
+    /// The error type returned if the forward pass fails.
     type Error = Error;
 
-    /// Core abstraction for `forward` within the Kindle framework..
+    /// Runs the forward pass of this module on the given input.
     fn forward(&self, x: Tensor<Dyn, B>) -> core::result::Result<Tensor<Dyn, B>, Error> {
         let weight_t = self.weight.as_tensor()?.transpose::<0, 1>()?;
         let out = x.matmul(&weight_t)?;
@@ -287,12 +287,12 @@ impl<B: Backend> Module<Tensor<Dyn, B>> for Linear<Dyn, B, crate::nn::optional::
 }
 
 impl<B: Backend> Module<Tensor<Dyn, B>> for Linear<Dyn, B, crate::nn::optional::False> {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<Dyn, B>;
-    /// Core abstraction for `Error` within the Kindle framework..
+    /// The error type returned if the forward pass fails.
     type Error = Error;
 
-    /// Core abstraction for `forward` within the Kindle framework..
+    /// Runs the forward pass of this module on the given input.
     fn forward(&self, x: Tensor<Dyn, B>) -> core::result::Result<Tensor<Dyn, B>, Error> {
         let weight_t = self.weight.as_tensor()?.transpose::<0, 1>()?;
         x.matmul(&weight_t)
@@ -300,12 +300,12 @@ impl<B: Backend> Module<Tensor<Dyn, B>> for Linear<Dyn, B, crate::nn::optional::
 }
 
 impl<B: Backend> Module<Tensor<Dyn, B>> for Linear<Dyn, B, Dyn> {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<Dyn, B>;
-    /// Core abstraction for `Error` within the Kindle framework..
+    /// The error type returned if the forward pass fails.
     type Error = Error;
 
-    /// Core abstraction for `forward` within the Kindle framework..
+    /// Runs the forward pass of this module on the given input.
     fn forward(&self, x: Tensor<Dyn, B>) -> core::result::Result<Tensor<Dyn, B>, Error> {
         let weight_t = self.weight.as_tensor()?.transpose::<0, 1>()?;
         let out = x.matmul(&weight_t)?;
@@ -327,12 +327,12 @@ impl<
 where
     InShape::Output: DynShape,
 {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<InShape::Output, B>;
-    /// Core abstraction for `Error` within the Kindle framework..
+    /// The error type returned if the forward pass fails.
     type Error = Error;
 
-    /// Core abstraction for `forward` within the Kindle framework..
+    /// Runs the forward pass of this module on the given input.
     fn forward(&self, x: Tensor<InShape, B>) -> core::result::Result<Self::Output, Error> {
         let dtype = x._dtype.clone();
         let device = x._device.clone();
@@ -377,12 +377,12 @@ impl<
 where
     InShape::Output: DynShape,
 {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<InShape::Output, B>;
-    /// Core abstraction for `Error` within the Kindle framework..
+    /// The error type returned if the forward pass fails.
     type Error = Error;
 
-    /// Core abstraction for `forward` within the Kindle framework..
+    /// Runs the forward pass of this module on the given input.
     fn forward(&self, x: Tensor<InShape, B>) -> core::result::Result<Self::Output, Error> {
         let dtype = x._dtype.clone();
         let device = x._device.clone();
@@ -419,12 +419,12 @@ impl<
 where
     InShape::Output: DynShape,
 {
-    /// Core abstraction for `Output` within the Kindle framework..
+    /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<InShape::Output, B>;
-    /// Core abstraction for `Error` within the Kindle framework..
+    /// The error type returned if the forward pass fails.
     type Error = Error;
 
-    /// Core abstraction for `forward` within the Kindle framework..
+    /// Runs the forward pass of this module on the given input.
     fn forward(&self, x: Tensor<InShape, B>) -> core::result::Result<Self::Output, Error> {
         let dtype = x._dtype.clone();
         let device = x._device.clone();

@@ -5,17 +5,17 @@ use typenum::{Prod, U1, Unsigned};
 
 /// Computes the total number of elements in a static shape.
 pub trait ElementCount {
-    /// Core abstraction for `Count` within the Kindle framework..
+    /// `Count`.
     type Count: typenum::Unsigned;
 }
 
 impl ElementCount for () {
-    /// Core abstraction for `Count` within the Kindle framework..
+    /// `Count`.
     type Count = U1;
 }
 
 impl<A: Unsigned> ElementCount for (A,) {
-    /// Core abstraction for `Count` within the Kindle framework..
+    /// `Count`.
     type Count = A;
 }
 
@@ -24,7 +24,7 @@ where
     A: Mul<B>,
     Prod<A, B>: Unsigned,
 {
-    /// Core abstraction for `Count` within the Kindle framework..
+    /// `Count`.
     type Count = Prod<A, B>;
 }
 
@@ -34,7 +34,7 @@ where
     Prod<A, B>: Mul<C>,
     Prod<Prod<A, B>, C>: Unsigned,
 {
-    /// Core abstraction for `Count` within the Kindle framework..
+    /// `Count`.
     type Count = Prod<Prod<A, B>, C>;
 }
 
@@ -45,7 +45,7 @@ where
     Prod<Prod<A, B>, C>: Mul<D>,
     Prod<Prod<Prod<A, B>, C>, D>: Unsigned,
 {
-    /// Core abstraction for `Count` within the Kindle framework..
+    /// `Count`.
     type Count = Prod<Prod<Prod<A, B>, C>, D>;
 }
 
@@ -55,7 +55,7 @@ where
     label = "Element count mismatch for reshape",
     note = "Reshape requires the total number of elements to remain constant"
 )]
-/// Core abstraction for `ReshapeShape` within the Kindle framework..
+/// `ReshapeShape`.
 pub trait ReshapeShape<Target: Shape>: Shape {}
 
 // Blanket implementation for any two static shapes that share the exact same ElementCount.
@@ -73,12 +73,12 @@ pub trait TryReshape<Target: Shape>: Shape {}
 impl<S1: DynShape, S2: DynShape> TryReshape<S2> for S1 {}
 
 #[cfg(test)]
-/// Core abstraction for `tests` within the Kindle framework..
+/// `tests`.
 mod tests {
     use super::*;
     use typenum::{U2, U4, U8};
 
-    /// Core abstraction for `assert_reshape_eq` within the Kindle framework..
+    /// `assert_reshape_eq`.
     fn assert_reshape_eq<S1, S2: Shape>()
     where
         S1: Shape + ReshapeShape<S2>,
@@ -86,21 +86,21 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `reshape_same_rank_same_numel` within the Kindle framework..
+    /// `reshape_same_rank_same_numel`.
     fn reshape_same_rank_same_numel() {
-        /// Core abstraction for `S1` within the Kindle framework..
+        /// `S1`.
         type S1 = (U2, U8);
-        /// Core abstraction for `S2` within the Kindle framework..
+        /// `S2`.
         type S2 = (U4, U4);
         assert_reshape_eq::<S1, S2>();
     }
 
     #[test]
-    /// Core abstraction for `reshape_different_rank_same_numel` within the Kindle framework..
+    /// `reshape_different_rank_same_numel`.
     fn reshape_different_rank_same_numel() {
-        /// Core abstraction for `S1` within the Kindle framework..
+        /// `S1`.
         type S1 = (U2, U2, U4);
-        /// Core abstraction for `S2` within the Kindle framework..
+        /// `S2`.
         type S2 = (U4, U4);
         assert_reshape_eq::<S1, S2>();
     }

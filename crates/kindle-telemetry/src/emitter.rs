@@ -212,17 +212,17 @@ impl Drop for Emitter {
 }
 
 impl Reporter for Emitter {
-    /// Core abstraction for `log_scalar` within the Kindle framework.
+    /// Log scalar.
     fn log_scalar(&self, event: ScalarEvent) {
         self.send_bulk(Event::Scalar(event));
     }
 
-    /// Core abstraction for `log_gradient_norm` within the Kindle framework.
+    /// Log gradient norm.
     fn log_gradient_norm(&self, event: GradientNormEvent) {
         self.send_bulk(Event::GradientNorm(event));
     }
 
-    /// Core abstraction for `log_weight_norm` within the Kindle framework.
+    /// Log weight norm.
     fn log_weight_norm(&self, event: WeightNormEvent) {
         self.send_bulk(Event::WeightNorm(event));
     }
@@ -245,17 +245,17 @@ impl Reporter for Emitter {
         self.send_priority(Event::Memory(event));
     }
 
-    /// Core abstraction for `log_epoch` within the Kindle framework.
+    /// Log epoch.
     fn log_epoch(&self, event: EpochEvent) {
         self.send_priority(Event::Epoch(event));
     }
 
-    /// Core abstraction for `log_hyperparam` within the Kindle framework.
+    /// Log hyperparam.
     fn log_hyperparam(&self, event: HyperparamEvent) {
         self.send_priority(Event::Hyperparam(event));
     }
 
-    /// Core abstraction for `log_graph_snapshot` within the Kindle framework.
+    /// Log graph snapshot.
     fn log_graph_snapshot(&self, event: GraphSnapshotEvent) {
         self.send_priority(Event::GraphSnapshot(event));
     }
@@ -357,7 +357,7 @@ fn write_to_all(
 }
 
 #[cfg(test)]
-/// Core abstraction for `tests` within the Kindle framework.
+/// Tests.
 mod tests {
     use super::*;
     use crate::events::CURRENT_SCHEMA_VERSION;
@@ -369,7 +369,7 @@ mod tests {
     struct CollectingTransport(Arc<Mutex<Vec<Event>>>);
 
     impl Transport for CollectingTransport {
-        /// Core abstraction for `write_event` within the Kindle framework.
+        /// Write event.
         fn write_event(&mut self, event: &Event) -> crate::err::Result<()> {
             self.0.lock().unwrap().push(event.clone());
             Ok(())
@@ -385,7 +385,7 @@ mod tests {
     }
 
     impl Transport for StallingTransport {
-        /// Core abstraction for `write_event` within the Kindle framework.
+        /// Write event.
         fn write_event(&mut self, event: &Event) -> crate::err::Result<()> {
             std::thread::sleep(self.delay);
             self.inner.lock().unwrap().push(event.clone());
@@ -393,7 +393,7 @@ mod tests {
         }
     }
 
-    /// Core abstraction for `scalar_event` within the Kindle framework.
+    /// Scalar event.
     fn scalar_event(step: usize, name: &str, value: f64) -> ScalarEvent {
         ScalarEvent {
             schema_version: CURRENT_SCHEMA_VERSION,
@@ -403,7 +403,7 @@ mod tests {
         }
     }
 
-    /// Core abstraction for `hyperparam_event` within the Kindle framework.
+    /// Hyperparam event.
     fn hyperparam_event() -> HyperparamEvent {
         let mut params = alloc::collections::BTreeMap::new();
         params.insert("lr".to_string(), "0.001".to_string());
@@ -414,7 +414,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `new_with_tiny_capacities_returns_without_blocking_or_panicking` within the Kindle framework.
+    /// New with tiny capacities returns without blocking or panicking.
     fn new_with_tiny_capacities_returns_without_blocking_or_panicking() {
         let collected = Arc::new(Mutex::new(Vec::new()));
         let transport: Box<dyn Transport> = Box::new(CollectingTransport(collected));
@@ -426,7 +426,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `overflowing_bulk_channel_does_not_block_caller` within the Kindle framework.
+    /// Overflowing bulk channel does not block caller.
     fn overflowing_bulk_channel_does_not_block_caller() {
         // Capacity-1 bulk channel, writer thread deliberately stalled so the
         // channel stays saturated for the duration of the test.
@@ -454,7 +454,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `dropped_count_increments_on_bulk_overflow_and_stays_zero_otherwise` within the Kindle framework.
+    /// Dropped count increments on bulk overflow and stays zero otherwise.
     fn dropped_count_increments_on_bulk_overflow_and_stays_zero_otherwise() {
         let inner = Arc::new(Mutex::new(Vec::new()));
         let transport: Box<dyn Transport> = Box::new(StallingTransport {
@@ -477,7 +477,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `priority_event_delivered_even_while_bulk_channel_saturated` within the Kindle framework.
+    /// Priority event delivered even while bulk channel saturated.
     fn priority_event_delivered_even_while_bulk_channel_saturated() {
         let collected = Arc::new(Mutex::new(Vec::new()));
         let transport: Box<dyn Transport> = Box::new(CollectingTransport(collected.clone()));
@@ -518,7 +518,7 @@ mod tests {
     }
 
     #[test]
-    /// Core abstraction for `event_type_routes_to_correct_channel_behavior_under_saturation` within the Kindle framework.
+    /// Event type routes to correct channel behavior under saturation.
     fn event_type_routes_to_correct_channel_behavior_under_saturation() {
         let collected = Arc::new(Mutex::new(Vec::new()));
         let transport: Box<dyn Transport> = Box::new(CollectingTransport(collected.clone()));
