@@ -1,27 +1,27 @@
-/// Auto-generated documentation for arg.
+/// Core abstraction for `arg` within the Kindle framework..
 pub mod arg;
-/// Auto-generated documentation for arg_into.
+/// Core abstraction for `arg_into` within the Kindle framework..
 pub mod arg_into;
-/// Auto-generated documentation for backend.
+/// Core abstraction for `backend` within the Kindle framework..
 pub mod backend;
-/// Auto-generated documentation for base.
+/// Core abstraction for `base` within the Kindle framework..
 pub mod base;
-/// Auto-generated documentation for conv2d.
+/// Core abstraction for `conv2d` within the Kindle framework..
 pub mod conv2d;
-/// Auto-generated documentation for device.
+/// Core abstraction for `device` within the Kindle framework..
 pub mod device;
-/// Auto-generated documentation for dtype.
+/// Core abstraction for `dtype` within the Kindle framework..
 pub mod dtype;
-/// Auto-generated documentation for grad.
+/// Core abstraction for `grad` within the Kindle framework..
 pub mod grad;
-/// Auto-generated documentation for matmul.
+/// Core abstraction for `matmul` within the Kindle framework..
 pub mod matmul;
-/// Auto-generated documentation for ops.
+/// Core abstraction for `ops` within the Kindle framework..
 pub mod ops;
-/// Auto-generated documentation for tracing.
+/// Core abstraction for `tracing` within the Kindle framework..
 pub mod tracing;
 
-/// Auto-generated documentation for prelude.
+/// Core abstraction for `prelude` within the Kindle framework..
 pub mod prelude {
     pub use super::arg::*;
     pub use super::arg_into::*;

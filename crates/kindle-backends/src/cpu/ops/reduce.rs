@@ -884,7 +884,7 @@ impl<T: DType, D: kindle_core::prelude::Device> ReductionOps<Self> for CpuBacken
         }
     }
 
-    /// Auto-generated documentation for topk.
+    /// Core abstraction for `topk` within the Kindle framework..
     fn topk<K: DType, KInt: DType>(
         t: &<Self as Backend>::Storage<K>,
         k: usize,
@@ -949,7 +949,7 @@ impl<T: DType, D: kindle_core::prelude::Device> ReductionOps<Self> for CpuBacken
         ))
     }
 
-    /// Auto-generated documentation for argsort.
+    /// Core abstraction for `argsort` within the Kindle framework..
     fn argsort<K: DType, KInt: DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
@@ -1007,27 +1007,27 @@ impl<T: DType, D: kindle_core::prelude::Device> ReductionOps<Self> for CpuBacken
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
-/// Auto-generated documentation for tests.
+/// Core abstraction for `tests` within the Kindle framework..
 mod tests {
     use super::*;
     use crate::cpu::gradcheck::gradcheck;
     use crate::cpu::tape;
 
-    /// Auto-generated documentation for B.
+    /// Core abstraction for `B` within the Kindle framework..
     type B = CpuBackend<f32, kindle_core::prelude::Cpu>;
 
-    /// Auto-generated documentation for matrix.
+    /// Core abstraction for `matrix` within the Kindle framework..
     fn matrix(v: Vec<f32>, rows: usize, cols: usize) -> CpuStorage {
         CpuStorage::from_contiguous(CpuBuffer::F32(v), vec![rows, cols])
     }
 
-    /// Auto-generated documentation for vector.
+    /// Core abstraction for `vector` within the Kindle framework..
     fn vector(v: Vec<f32>) -> CpuStorage {
         let len = v.len();
         CpuStorage::from_contiguous(CpuBuffer::F32(v), vec![len])
     }
 
-    /// Auto-generated documentation for f32_vec.
+    /// Core abstraction for `f32_vec` within the Kindle framework..
     fn f32_vec(s: &CpuStorage) -> Vec<f32> {
         match &*s.buffer {
             CpuBuffer::F32(v) => v.clone(),
@@ -1038,7 +1038,7 @@ mod tests {
     // --- sum_all ---
 
     #[test]
-    /// Auto-generated documentation for sum_all_on_2x3_returns_correct_scalar.
+    /// Core abstraction for `sum_all_on_2x3_returns_correct_scalar` within the Kindle framework..
     fn sum_all_on_2x3_returns_correct_scalar() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let out = B::sum_all::<f32>(&t).unwrap();
@@ -1047,7 +1047,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for sum_all_backward_distributes_grad_uniformly.
+    /// Core abstraction for `sum_all_backward_distributes_grad_uniformly` within the Kindle framework..
     fn sum_all_backward_distributes_grad_uniformly() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let out = B::sum_all::<f32>(&t).unwrap();
@@ -1061,7 +1061,7 @@ mod tests {
     // --- mean_all ---
 
     #[test]
-    /// Auto-generated documentation for mean_all_on_2x3_returns_correct_scalar.
+    /// Core abstraction for `mean_all_on_2x3_returns_correct_scalar` within the Kindle framework..
     fn mean_all_on_2x3_returns_correct_scalar() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let out = B::mean_all::<f32>(&t).unwrap();
@@ -1072,7 +1072,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for mean_all_backward_distributes_grad_scaled_by_1_over_n.
+    /// Core abstraction for `mean_all_backward_distributes_grad_scaled_by_1_over_n` within the Kindle framework..
     fn mean_all_backward_distributes_grad_scaled_by_1_over_n() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let out = B::mean_all::<f32>(&t).unwrap();
@@ -1091,7 +1091,7 @@ mod tests {
     // --- sum_dim ---
 
     #[test]
-    /// Auto-generated documentation for sum_dim_removes_axis_0_on_2x3.
+    /// Core abstraction for `sum_dim_removes_axis_0_on_2x3` within the Kindle framework..
     fn sum_dim_removes_axis_0_on_2x3() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let out = B::sum_dim::<f32>(&t, 0).unwrap();
@@ -1101,7 +1101,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for sum_dim_removes_axis_1_on_2x3.
+    /// Core abstraction for `sum_dim_removes_axis_1_on_2x3` within the Kindle framework..
     fn sum_dim_removes_axis_1_on_2x3() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let out = B::sum_dim::<f32>(&t, 1).unwrap();
@@ -1111,7 +1111,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for sum_dim_backward_broadcasts_grad_back_to_original_shape.
+    /// Core abstraction for `sum_dim_backward_broadcasts_grad_back_to_original_shape` within the Kindle framework..
     fn sum_dim_backward_broadcasts_grad_back_to_original_shape() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let out = B::sum_dim::<f32>(&t, 0).unwrap(); // shape [3]
@@ -1125,7 +1125,7 @@ mod tests {
     // --- sum_keepdim ---
 
     #[test]
-    /// Auto-generated documentation for sum_keepdim_retains_axis_0_on_2x3.
+    /// Core abstraction for `sum_keepdim_retains_axis_0_on_2x3` within the Kindle framework..
     fn sum_keepdim_retains_axis_0_on_2x3() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let out = B::sum_keepdim::<f32>(&t, 0).unwrap();
@@ -1134,7 +1134,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for sum_keepdim_backward_broadcasts_grad_to_original_shape.
+    /// Core abstraction for `sum_keepdim_backward_broadcasts_grad_to_original_shape` within the Kindle framework..
     fn sum_keepdim_backward_broadcasts_grad_to_original_shape() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let out = B::sum_keepdim::<f32>(&t, 0).unwrap(); // shape [1, 3]
@@ -1148,7 +1148,7 @@ mod tests {
     // --- sum_all backward with non-trivial incoming gradient (tape chain) ---
 
     #[test]
-    /// Auto-generated documentation for sum_all_backward_scales_by_incoming_gradient.
+    /// Core abstraction for `sum_all_backward_scales_by_incoming_gradient` within the Kindle framework..
     fn sum_all_backward_scales_by_incoming_gradient() {
         // Build a small graph: out = sum_all(t), then seed with grad = 2.0
         // instead of 1.0 by composing with a scalar mul.
@@ -1179,7 +1179,7 @@ mod tests {
     // --- mean_dim / mean_keepdim ---
 
     #[test]
-    /// Auto-generated documentation for mean_dim_column_means_on_2x3.
+    /// Core abstraction for `mean_dim_column_means_on_2x3` within the Kindle framework..
     fn mean_dim_column_means_on_2x3() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let out = B::mean_dim::<f32>(&t, 0).unwrap();
@@ -1191,7 +1191,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for mean_keepdim_column_means_on_2x3.
+    /// Core abstraction for `mean_keepdim_column_means_on_2x3` within the Kindle framework..
     fn mean_keepdim_column_means_on_2x3() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let out = B::mean_keepdim::<f32>(&t, 0).unwrap();
@@ -1203,7 +1203,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for mean_dim_gradcheck_dim0.
+    /// Core abstraction for `mean_dim_gradcheck_dim0` within the Kindle framework..
     fn mean_dim_gradcheck_dim0() {
         let x = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
@@ -1218,7 +1218,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for mean_keepdim_gradcheck_dim1.
+    /// Core abstraction for `mean_keepdim_gradcheck_dim1` within the Kindle framework..
     fn mean_keepdim_gradcheck_dim1() {
         let x = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
@@ -1235,7 +1235,7 @@ mod tests {
     // --- max_dim / min_dim / max_keepdim / min_keepdim / max_all / min_all ---
 
     #[test]
-    /// Auto-generated documentation for max_dim_column_maxima_on_2x3.
+    /// Core abstraction for `max_dim_column_maxima_on_2x3` within the Kindle framework..
     fn max_dim_column_maxima_on_2x3() {
         let t = matrix(vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0], 2, 3);
         let out = B::max_dim::<f32>(&t, 0).unwrap();
@@ -1244,7 +1244,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for max_keepdim_column_maxima_on_2x3.
+    /// Core abstraction for `max_keepdim_column_maxima_on_2x3` within the Kindle framework..
     fn max_keepdim_column_maxima_on_2x3() {
         let t = matrix(vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0], 2, 3);
         let out = B::max_keepdim::<f32>(&t, 0).unwrap();
@@ -1253,7 +1253,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for min_dim_column_minima_on_2x3.
+    /// Core abstraction for `min_dim_column_minima_on_2x3` within the Kindle framework..
     fn min_dim_column_minima_on_2x3() {
         let t = matrix(vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0], 2, 3);
         let out = B::min_dim::<f32>(&t, 0).unwrap();
@@ -1262,7 +1262,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for min_keepdim_column_minima_on_2x3.
+    /// Core abstraction for `min_keepdim_column_minima_on_2x3` within the Kindle framework..
     fn min_keepdim_column_minima_on_2x3() {
         let t = matrix(vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0], 2, 3);
         let out = B::min_keepdim::<f32>(&t, 0).unwrap();
@@ -1271,7 +1271,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for max_all_and_min_all_on_flat_vector.
+    /// Core abstraction for `max_all_and_min_all_on_flat_vector` within the Kindle framework..
     fn max_all_and_min_all_on_flat_vector() {
         let t = vector(vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0]);
         let max_out = B::max_all::<f32>(&t).unwrap();
@@ -1284,7 +1284,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for max_dim_gradcheck_all_distinct_values.
+    /// Core abstraction for `max_dim_gradcheck_all_distinct_values` within the Kindle framework..
     fn max_dim_gradcheck_all_distinct_values() {
         let x = matrix(vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0], 2, 3);
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
@@ -1333,7 +1333,7 @@ mod tests {
 
     // --- argmax / argmin ---
 
-    /// Auto-generated documentation for i64_vec.
+    /// Core abstraction for `i64_vec` within the Kindle framework..
     fn i64_vec(s: &CpuStorage) -> Vec<i64> {
         match &*s.buffer {
             CpuBuffer::I64(v) => v.clone(),
@@ -1342,7 +1342,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for argmax_dim0_returns_row_index_of_column_max.
+    /// Core abstraction for `argmax_dim0_returns_row_index_of_column_max` within the Kindle framework..
     fn argmax_dim0_returns_row_index_of_column_max() {
         let t = matrix(vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0], 2, 3);
         let out = B::argmax::<f32, i64>(&t, Some(0)).unwrap();
@@ -1353,7 +1353,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for argmax_dim_none_returns_scalar_flat_index_of_global_max.
+    /// Core abstraction for `argmax_dim_none_returns_scalar_flat_index_of_global_max` within the Kindle framework..
     fn argmax_dim_none_returns_scalar_flat_index_of_global_max() {
         let t = matrix(vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0], 2, 3);
         let out = B::argmax::<f32, i64>(&t, None).unwrap();
@@ -1363,7 +1363,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for argmin_dim0_and_dim_none_mirror_argmax.
+    /// Core abstraction for `argmin_dim0_and_dim_none_mirror_argmax` within the Kindle framework..
     fn argmin_dim0_and_dim_none_mirror_argmax() {
         let t = matrix(vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0], 2, 3);
         let out_dim0 = B::argmin::<f32, i64>(&t, Some(0)).unwrap();

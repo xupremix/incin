@@ -9,18 +9,18 @@ extern crate alloc;
 
 /// The `emitter` module.
 pub mod emitter;
-/// Auto-generated documentation for err.
+/// Error types and result alias for telemetry operations.
 pub mod err;
-/// Auto-generated documentation for events.
+/// Schema-versioned telemetry events (scalars, norms, memory, graph).
 pub mod events;
-/// Auto-generated documentation for reporter.
+/// Trait contract for telemetry reporters.
 pub mod reporter;
-/// Auto-generated documentation for run_dir.
+/// Utilities for creating structured run directories.
 pub mod run_dir;
-/// Auto-generated documentation for transport.
+/// File and IPC transport sinks for telemetry events.
 pub mod transport;
 
-/// Auto-generated documentation for prelude.
+/// Convenient re-exports for telemetry usage.
 pub mod prelude {
     pub use crate::emitter::Emitter;
     pub use crate::events::*;

@@ -277,7 +277,7 @@ impl<
             _grad: self._grad,
         })
     }
-    /// Auto-generated documentation for try_reshape.
+    /// Core abstraction for `try_reshape` within the Kindle framework..
     pub fn try_reshape<S2>(&self, args: S2::Arg) -> Result<Tensor<S2, B, K, D, G>>
     where
         S2: Shape + DynShape,
@@ -329,7 +329,7 @@ impl<
         ))
     }
 
-    /// Auto-generated documentation for to_dtype.
+    /// Core abstraction for `to_dtype` within the Kindle framework..
     pub fn to_dtype<T2: crate::tensor::dtype::DType<Arg = ()>>(
         &self,
     ) -> Result<Tensor<S, B, T2, D, G>> {
@@ -586,7 +586,7 @@ impl<
     }
 }
 
-/// Auto-generated documentation for try_stack_tensors.
+/// Core abstraction for `try_stack_tensors` within the Kindle framework..
 pub fn try_stack_tensors<
     S: Shape + DynShape,
     B: Backend,
@@ -632,9 +632,9 @@ impl<
 where
     B: Backend<BackendWithDevice<NewD> = B>,
 {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = Tensor<S, B, K, NewD, G>;
-    /// Auto-generated documentation for to_device.
+    /// Core abstraction for `to_device` within the Kindle framework..
     fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output> {
         let field = NewD::init(arg.clone());
         let kindle_dev = NewD::to_kindle(&field)?;

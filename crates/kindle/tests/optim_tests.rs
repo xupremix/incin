@@ -1,10 +1,10 @@
 use kindle::prelude::*;
 use kindle::{Adam, AdamW, SGD};
 
-/// Auto-generated documentation for CpuBackend.
+/// Implementation of `CpuBackend` for the respective backend.
 type CpuBackend = DefaultBackend;
 
-/// Auto-generated documentation for get_linear_and_grads.
+/// Core abstraction for `get_linear_and_grads` within the Kindle framework.
 fn get_linear_and_grads() -> Result<(
     Linear<s![10, 5], CpuBackend>,
     kindle::Gradients<<CpuBackend as Backend>::Grads>,
@@ -19,7 +19,7 @@ fn get_linear_and_grads() -> Result<(
 }
 
 #[test]
-/// Auto-generated documentation for test_sgd.
+/// Core abstraction for `test_sgd` within the Kindle framework.
 fn test_sgd() -> Result<()> {
     let (linear, grads) = get_linear_and_grads()?;
     let mut optim = SGD::<CpuBackend>::new(linear.parameters(), 0.01);
@@ -30,7 +30,7 @@ fn test_sgd() -> Result<()> {
 }
 
 #[test]
-/// Auto-generated documentation for test_adam.
+/// Core abstraction for `test_adam` within the Kindle framework.
 fn test_adam() -> Result<()> {
     let (linear, grads) = get_linear_and_grads()?;
     let mut optim = Adam::<CpuBackend>::new(linear.parameters(), 0.001);
@@ -41,7 +41,7 @@ fn test_adam() -> Result<()> {
 }
 
 #[test]
-/// Auto-generated documentation for test_adamw.
+/// Core abstraction for `test_adamw` within the Kindle framework.
 fn test_adamw() -> Result<()> {
     let (linear, grads) = get_linear_and_grads()?;
     let mut optim = AdamW::<CpuBackend>::new(linear.parameters(), 0.001);

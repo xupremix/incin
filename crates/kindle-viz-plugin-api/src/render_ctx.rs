@@ -38,12 +38,12 @@ impl<'a, 'b> RenderCtx<'a, 'b> {
         }
     }
 
-    /// Auto-generated documentation for frame_mut.
+    /// Returns a mutable reference to the ratatui frame for rendering widgets.
     pub fn frame_mut(&mut self) -> &mut Frame<'b> {
         self.frame
     }
 
-    /// Auto-generated documentation for area.
+    /// Returns the bounding layout area assigned to this panel.
     pub fn area(&self) -> Rect {
         self.area
     }

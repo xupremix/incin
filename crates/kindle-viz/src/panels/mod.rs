@@ -4,15 +4,15 @@
 //! kindle-viz-internal-only API (PLUGIN-01/PLUGIN-02's "no privileged API"
 //! property).
 
-/// Auto-generated documentation for graph.
+/// Core abstraction for `graph` within the Kindle framework.
 pub mod graph;
-/// Auto-generated documentation for loss.
+/// Core abstraction for `loss` within the Kindle framework.
 pub mod loss;
-/// Auto-generated documentation for norms.
+/// Core abstraction for `norms` within the Kindle framework.
 pub mod norms;
-/// Auto-generated documentation for panic_test.
+/// Core abstraction for `panic_test` within the Kindle framework.
 pub mod panic_test;
-/// Auto-generated documentation for scalar.
+/// Core abstraction for `scalar` within the Kindle framework.
 pub mod scalar;
-/// Auto-generated documentation for system.
+/// Core abstraction for `system` within the Kindle framework.
 pub mod system;

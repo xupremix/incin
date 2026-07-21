@@ -30,17 +30,17 @@ impl LossPanel {
 }
 
 impl Panel for LossPanel {
-    /// Auto-generated documentation for id.
+    /// Core abstraction for `id` within the Kindle framework.
     fn id(&self) -> &'static str {
         "loss"
     }
 
-    /// Auto-generated documentation for title.
+    /// Core abstraction for `title` within the Kindle framework.
     fn title(&self) -> &str {
         "Loss"
     }
 
-    /// Auto-generated documentation for update.
+    /// Core abstraction for `update` within the Kindle framework.
     fn update(&mut self, event: &Event) {
         if let Event::Scalar(s) = event
             && s.name == "loss"
@@ -49,7 +49,7 @@ impl Panel for LossPanel {
         }
     }
 
-    /// Auto-generated documentation for render.
+    /// Core abstraction for `render` within the Kindle framework.
     fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) {
         let area = ctx.area();
 
@@ -91,12 +91,12 @@ impl Panel for LossPanel {
         frame.render_widget(chart, area);
     }
 
-    /// Auto-generated documentation for handle_event.
+    /// Core abstraction for `handle_event` within the Kindle framework.
     fn handle_event(&mut self, _event: &PanelEvent) -> bool {
         false // loss panel has no panel-local key handling this phase
     }
 
-    /// Auto-generated documentation for reset.
+    /// Core abstraction for `reset` within the Kindle framework.
     fn reset(&mut self) {
         self.points.clear();
     }

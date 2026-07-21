@@ -29,11 +29,11 @@ fn checked_broadcast_dim(lhs: usize, rhs: usize) -> usize {
     label = "Shape mismatch during broadcast",
     note = "Broadcast requires dimensions to be equal, or one of them to be 1"
 )]
-/// Auto-generated documentation for BroadcastShape.
+/// Core abstraction for `BroadcastShape` within the Kindle framework..
 pub trait BroadcastShape<Rhs: Shape>: Shape {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output: Shape;
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         rhs: &<Rhs as Shape>::Field,
@@ -41,17 +41,17 @@ pub trait BroadcastShape<Rhs: Shape>: Shape {
 }
 
 impl BroadcastShape<()> for () {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = ();
     #[inline(always)]
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(_: &(), _: &()) {}
 }
 impl<A: StaticDim> BroadcastShape<(A,)> for (A,) {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (A,);
     #[inline(always)]
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<Self as Shape>::Field,
@@ -60,10 +60,10 @@ impl<A: StaticDim> BroadcastShape<(A,)> for (A,) {
     }
 }
 impl<A: StaticDim, B: StaticDim> BroadcastShape<(A, B)> for (A, B) {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (A, B);
     #[inline(always)]
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<Self as Shape>::Field,
@@ -72,10 +72,10 @@ impl<A: StaticDim, B: StaticDim> BroadcastShape<(A, B)> for (A, B) {
     }
 }
 impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<(A, B, C)> for (A, B, C) {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (A, B, C);
     #[inline(always)]
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<Self as Shape>::Field,
@@ -86,10 +86,10 @@ impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<(A, B, C)> for (A,
 impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(A, B, C, D)>
     for (A, B, C, D)
 {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (A, B, C, D);
     #[inline(always)]
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<Self as Shape>::Field,
@@ -99,10 +99,10 @@ impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(A, 
 }
 
 impl<A: StaticDim> BroadcastShape<(A,)> for () {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (A,);
     #[inline(always)]
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<(A,) as Shape>::Field,
@@ -111,10 +111,10 @@ impl<A: StaticDim> BroadcastShape<(A,)> for () {
     }
 }
 impl<A: StaticDim, B: StaticDim> BroadcastShape<(A, B)> for () {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (A, B);
     #[inline(always)]
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<(A, B) as Shape>::Field,
@@ -123,10 +123,10 @@ impl<A: StaticDim, B: StaticDim> BroadcastShape<(A, B)> for () {
     }
 }
 impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<(A, B, C)> for () {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (A, B, C);
     #[inline(always)]
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<(A, B, C) as Shape>::Field,
@@ -135,10 +135,10 @@ impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<(A, B, C)> for () 
     }
 }
 impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(A, B, C, D)> for () {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (A, B, C, D);
     #[inline(always)]
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<(A, B, C, D) as Shape>::Field,
@@ -147,10 +147,10 @@ impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(A, 
     }
 }
 impl<A: StaticDim> BroadcastShape<()> for (A,) {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (A,);
     #[inline(always)]
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<() as Shape>::Field,
@@ -159,10 +159,10 @@ impl<A: StaticDim> BroadcastShape<()> for (A,) {
     }
 }
 impl<A: StaticDim, B: StaticDim> BroadcastShape<(A, B)> for (B,) {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (A, B);
     #[inline(always)]
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<(A, B) as Shape>::Field,
@@ -171,10 +171,10 @@ impl<A: StaticDim, B: StaticDim> BroadcastShape<(A, B)> for (B,) {
     }
 }
 impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<(A, B, C)> for (C,) {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (A, B, C);
     #[inline(always)]
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<(A, B, C) as Shape>::Field,
@@ -183,10 +183,10 @@ impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<(A, B, C)> for (C,
     }
 }
 impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(A, B, C, D)> for (D,) {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (A, B, C, D);
     #[inline(always)]
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<(A, B, C, D) as Shape>::Field,
@@ -195,10 +195,10 @@ impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(A, 
     }
 }
 impl<A: StaticDim, B: StaticDim> BroadcastShape<()> for (A, B) {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (A, B);
     #[inline(always)]
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<() as Shape>::Field,
@@ -207,10 +207,10 @@ impl<A: StaticDim, B: StaticDim> BroadcastShape<()> for (A, B) {
     }
 }
 impl<A: StaticDim, B: StaticDim> BroadcastShape<(B,)> for (A, B) {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (A, B);
     #[inline(always)]
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<(B,) as Shape>::Field,
@@ -219,10 +219,10 @@ impl<A: StaticDim, B: StaticDim> BroadcastShape<(B,)> for (A, B) {
     }
 }
 impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<(A, B, C)> for (B, C) {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (A, B, C);
     #[inline(always)]
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<(A, B, C) as Shape>::Field,
@@ -233,10 +233,10 @@ impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<(A, B, C)> for (B,
 impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(A, B, C, D)>
     for (C, D)
 {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (A, B, C, D);
     #[inline(always)]
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<(A, B, C, D) as Shape>::Field,
@@ -245,10 +245,10 @@ impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(A, 
     }
 }
 impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<()> for (A, B, C) {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (A, B, C);
     #[inline(always)]
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<() as Shape>::Field,
@@ -257,10 +257,10 @@ impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<()> for (A, B, C) 
     }
 }
 impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<(C,)> for (A, B, C) {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (A, B, C);
     #[inline(always)]
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<(C,) as Shape>::Field,
@@ -269,10 +269,10 @@ impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<(C,)> for (A, B, C
     }
 }
 impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<(B, C)> for (A, B, C) {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (A, B, C);
     #[inline(always)]
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<(B, C) as Shape>::Field,
@@ -283,10 +283,10 @@ impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<(B, C)> for (A, B,
 impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(A, B, C, D)>
     for (B, C, D)
 {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (A, B, C, D);
     #[inline(always)]
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<(A, B, C, D) as Shape>::Field,
@@ -295,10 +295,10 @@ impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(A, 
     }
 }
 impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<()> for (A, B, C, D) {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (A, B, C, D);
     #[inline(always)]
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<() as Shape>::Field,
@@ -307,10 +307,10 @@ impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<()> 
     }
 }
 impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(D,)> for (A, B, C, D) {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (A, B, C, D);
     #[inline(always)]
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<(D,) as Shape>::Field,
@@ -321,10 +321,10 @@ impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(D,)
 impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(C, D)>
     for (A, B, C, D)
 {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (A, B, C, D);
     #[inline(always)]
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<(C, D) as Shape>::Field,
@@ -335,10 +335,10 @@ impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(C, 
 impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(B, C, D)>
     for (A, B, C, D)
 {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (A, B, C, D);
     #[inline(always)]
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<(B, C, D) as Shape>::Field,
@@ -348,9 +348,9 @@ impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(B, 
 }
 
 impl BroadcastShape<(usize,)> for (usize,) {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (usize,);
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         rhs: &<Self as Shape>::Field,
@@ -359,9 +359,9 @@ impl BroadcastShape<(usize,)> for (usize,) {
     }
 }
 impl BroadcastShape<()> for (usize,) {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (usize,);
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         _: &<() as Shape>::Field,
@@ -370,9 +370,9 @@ impl BroadcastShape<()> for (usize,) {
     }
 }
 impl BroadcastShape<(usize,)> for () {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (usize,);
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<(usize,) as Shape>::Field,
@@ -381,9 +381,9 @@ impl BroadcastShape<(usize,)> for () {
     }
 }
 impl<B: StaticDim> BroadcastShape<(usize, B)> for (usize, B) {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (usize, B);
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         rhs: &<Self as Shape>::Field,
@@ -392,9 +392,9 @@ impl<B: StaticDim> BroadcastShape<(usize, B)> for (usize, B) {
     }
 }
 impl<B: StaticDim> BroadcastShape<()> for (usize, B) {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (usize, B);
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         _: &<() as Shape>::Field,
@@ -403,9 +403,9 @@ impl<B: StaticDim> BroadcastShape<()> for (usize, B) {
     }
 }
 impl<B: StaticDim> BroadcastShape<(usize, B)> for () {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (usize, B);
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<(usize, B) as Shape>::Field,
@@ -414,9 +414,9 @@ impl<B: StaticDim> BroadcastShape<(usize, B)> for () {
     }
 }
 impl<B: StaticDim> BroadcastShape<(B,)> for (usize, B) {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (usize, B);
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         _: &<(B,) as Shape>::Field,
@@ -425,9 +425,9 @@ impl<B: StaticDim> BroadcastShape<(B,)> for (usize, B) {
     }
 }
 impl<B: StaticDim> BroadcastShape<(usize, B)> for (B,) {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (usize, B);
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<(usize, B) as Shape>::Field,
@@ -436,9 +436,9 @@ impl<B: StaticDim> BroadcastShape<(usize, B)> for (B,) {
     }
 }
 impl<B: StaticDim, C: StaticDim> BroadcastShape<(usize, B, C)> for (usize, B, C) {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (usize, B, C);
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         rhs: &<Self as Shape>::Field,
@@ -451,9 +451,9 @@ impl<B: StaticDim, C: StaticDim> BroadcastShape<(usize, B, C)> for (usize, B, C)
     }
 }
 impl<B: StaticDim, C: StaticDim> BroadcastShape<()> for (usize, B, C) {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (usize, B, C);
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         _: &<() as Shape>::Field,
@@ -462,9 +462,9 @@ impl<B: StaticDim, C: StaticDim> BroadcastShape<()> for (usize, B, C) {
     }
 }
 impl<B: StaticDim, C: StaticDim> BroadcastShape<(usize, B, C)> for () {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (usize, B, C);
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<(usize, B, C) as Shape>::Field,
@@ -473,9 +473,9 @@ impl<B: StaticDim, C: StaticDim> BroadcastShape<(usize, B, C)> for () {
     }
 }
 impl<B: StaticDim, C: StaticDim> BroadcastShape<(C,)> for (usize, B, C) {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (usize, B, C);
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         _: &<(C,) as Shape>::Field,
@@ -484,9 +484,9 @@ impl<B: StaticDim, C: StaticDim> BroadcastShape<(C,)> for (usize, B, C) {
     }
 }
 impl<B: StaticDim, C: StaticDim> BroadcastShape<(usize, B, C)> for (C,) {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (usize, B, C);
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<(usize, B, C) as Shape>::Field,
@@ -495,9 +495,9 @@ impl<B: StaticDim, C: StaticDim> BroadcastShape<(usize, B, C)> for (C,) {
     }
 }
 impl<B: StaticDim, C: StaticDim> BroadcastShape<(B, C)> for (usize, B, C) {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (usize, B, C);
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         _: &<(B, C) as Shape>::Field,
@@ -506,9 +506,9 @@ impl<B: StaticDim, C: StaticDim> BroadcastShape<(B, C)> for (usize, B, C) {
     }
 }
 impl<B: StaticDim, C: StaticDim> BroadcastShape<(usize, B, C)> for (B, C) {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (usize, B, C);
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<(usize, B, C) as Shape>::Field,
@@ -519,9 +519,9 @@ impl<B: StaticDim, C: StaticDim> BroadcastShape<(usize, B, C)> for (B, C) {
 impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(usize, B, C, D)>
     for (usize, B, C, D)
 {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (usize, B, C, D);
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         rhs: &<Self as Shape>::Field,
@@ -535,9 +535,9 @@ impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(usize, B, C, D)>
     }
 }
 impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<()> for (usize, B, C, D) {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (usize, B, C, D);
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         _: &<() as Shape>::Field,
@@ -551,9 +551,9 @@ impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<()> for (usize, B,
     }
 }
 impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(usize, B, C, D)> for () {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (usize, B, C, D);
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<(usize, B, C, D) as Shape>::Field,
@@ -567,9 +567,9 @@ impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(usize, B, C, D)> 
     }
 }
 impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(D,)> for (usize, B, C, D) {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (usize, B, C, D);
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         _: &<(D,) as Shape>::Field,
@@ -583,9 +583,9 @@ impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(D,)> for (usize, 
     }
 }
 impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(usize, B, C, D)> for (D,) {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (usize, B, C, D);
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<(usize, B, C, D) as Shape>::Field,
@@ -599,9 +599,9 @@ impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(usize, B, C, D)> 
     }
 }
 impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(C, D)> for (usize, B, C, D) {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (usize, B, C, D);
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         _: &<(C, D) as Shape>::Field,
@@ -615,9 +615,9 @@ impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(C, D)> for (usize
     }
 }
 impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(usize, B, C, D)> for (C, D) {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (usize, B, C, D);
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<(usize, B, C, D) as Shape>::Field,
@@ -631,9 +631,9 @@ impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(usize, B, C, D)> 
     }
 }
 impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(B, C, D)> for (usize, B, C, D) {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (usize, B, C, D);
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         _: &<(B, C, D) as Shape>::Field,
@@ -647,9 +647,9 @@ impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(B, C, D)> for (us
     }
 }
 impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(usize, B, C, D)> for (B, C, D) {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (usize, B, C, D);
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<(usize, B, C, D) as Shape>::Field,
@@ -664,9 +664,9 @@ impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(usize, B, C, D)> 
 }
 
 impl BroadcastShape<Dyn> for Dyn {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = Dyn;
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         lhs: &<Dyn as Shape>::Field,
         rhs: &<Dyn as Shape>::Field,
@@ -691,9 +691,9 @@ impl BroadcastShape<Dyn> for Dyn {
     }
 }
 impl BroadcastShape<()> for Dyn {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = Dyn;
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         lhs: &<Dyn as Shape>::Field,
         _: &<() as Shape>::Field,
@@ -702,9 +702,9 @@ impl BroadcastShape<()> for Dyn {
     }
 }
 impl BroadcastShape<Dyn> for () {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = Dyn;
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<Dyn as Shape>::Field,
@@ -713,9 +713,9 @@ impl BroadcastShape<Dyn> for () {
     }
 }
 impl<A: StaticDim> BroadcastShape<(A,)> for Dyn {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = Dyn;
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         lhs: &<Dyn as Shape>::Field,
         _: &<(A,) as Shape>::Field,
@@ -724,9 +724,9 @@ impl<A: StaticDim> BroadcastShape<(A,)> for Dyn {
     }
 }
 impl<A: StaticDim> BroadcastShape<Dyn> for (A,) {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = Dyn;
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<Dyn as Shape>::Field,
@@ -735,9 +735,9 @@ impl<A: StaticDim> BroadcastShape<Dyn> for (A,) {
     }
 }
 impl<A: StaticDim, B: StaticDim> BroadcastShape<(A, B)> for Dyn {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = Dyn;
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         lhs: &<Dyn as Shape>::Field,
         _: &<(A, B) as Shape>::Field,
@@ -746,9 +746,9 @@ impl<A: StaticDim, B: StaticDim> BroadcastShape<(A, B)> for Dyn {
     }
 }
 impl<A: StaticDim, B: StaticDim> BroadcastShape<Dyn> for (A, B) {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = Dyn;
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<Dyn as Shape>::Field,
@@ -757,9 +757,9 @@ impl<A: StaticDim, B: StaticDim> BroadcastShape<Dyn> for (A, B) {
     }
 }
 impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<(A, B, C)> for Dyn {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = Dyn;
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         lhs: &<Dyn as Shape>::Field,
         _: &<(A, B, C) as Shape>::Field,
@@ -768,9 +768,9 @@ impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<(A, B, C)> for Dyn
     }
 }
 impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<Dyn> for (A, B, C) {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = Dyn;
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<Dyn as Shape>::Field,
@@ -779,9 +779,9 @@ impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<Dyn> for (A, B, C)
     }
 }
 impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(A, B, C, D)> for Dyn {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = Dyn;
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         lhs: &<Dyn as Shape>::Field,
         _: &<(A, B, C, D) as Shape>::Field,
@@ -790,9 +790,9 @@ impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(A, 
     }
 }
 impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<Dyn> for (A, B, C, D) {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = Dyn;
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<Dyn as Shape>::Field,
@@ -801,9 +801,9 @@ impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<Dyn>
     }
 }
 impl BroadcastShape<(usize,)> for Dyn {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = Dyn;
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         lhs: &<Dyn as Shape>::Field,
         _: &<(usize,) as Shape>::Field,
@@ -812,9 +812,9 @@ impl BroadcastShape<(usize,)> for Dyn {
     }
 }
 impl BroadcastShape<Dyn> for (usize,) {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = Dyn;
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<Dyn as Shape>::Field,
@@ -823,9 +823,9 @@ impl BroadcastShape<Dyn> for (usize,) {
     }
 }
 impl<B: StaticDim> BroadcastShape<(usize, B)> for Dyn {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = Dyn;
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         lhs: &<Dyn as Shape>::Field,
         _: &<(usize, B) as Shape>::Field,
@@ -834,9 +834,9 @@ impl<B: StaticDim> BroadcastShape<(usize, B)> for Dyn {
     }
 }
 impl<B: StaticDim> BroadcastShape<Dyn> for (usize, B) {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = Dyn;
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<Dyn as Shape>::Field,
@@ -845,9 +845,9 @@ impl<B: StaticDim> BroadcastShape<Dyn> for (usize, B) {
     }
 }
 impl<B: StaticDim, C: StaticDim> BroadcastShape<(usize, B, C)> for Dyn {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = Dyn;
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         lhs: &<Dyn as Shape>::Field,
         _: &<(usize, B, C) as Shape>::Field,
@@ -856,9 +856,9 @@ impl<B: StaticDim, C: StaticDim> BroadcastShape<(usize, B, C)> for Dyn {
     }
 }
 impl<B: StaticDim, C: StaticDim> BroadcastShape<Dyn> for (usize, B, C) {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = Dyn;
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<Dyn as Shape>::Field,
@@ -867,9 +867,9 @@ impl<B: StaticDim, C: StaticDim> BroadcastShape<Dyn> for (usize, B, C) {
     }
 }
 impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(usize, B, C, D)> for Dyn {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = Dyn;
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         lhs: &<Dyn as Shape>::Field,
         _: &<(usize, B, C, D) as Shape>::Field,
@@ -878,9 +878,9 @@ impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(usize, B, C, D)> 
     }
 }
 impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<Dyn> for (usize, B, C, D) {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = Dyn;
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<Dyn as Shape>::Field,

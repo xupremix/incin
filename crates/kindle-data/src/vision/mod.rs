@@ -1,2 +1,2 @@
-/// Auto-generated documentation for mnist.
+/// Core abstraction for `mnist` within the Kindle framework.
 pub mod mnist;

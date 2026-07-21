@@ -7,37 +7,37 @@ use kindle_viz_plugin_api::event::PanelEvent;
 use kindle_viz_plugin_api::panel::Panel;
 use kindle_viz_plugin_api::render_ctx::RenderCtx;
 
-/// Auto-generated documentation for NoopPanel.
+/// Core abstraction for `NoopPanel` within the Kindle framework.
 struct NoopPanel;
 
 impl Panel for NoopPanel {
-    /// Auto-generated documentation for id.
+    /// Core abstraction for `id` within the Kindle framework.
     fn id(&self) -> &'static str {
         "noop"
     }
 
-    /// Auto-generated documentation for title.
+    /// Core abstraction for `title` within the Kindle framework.
     fn title(&self) -> &str {
         "Noop"
     }
 
-    /// Auto-generated documentation for update.
+    /// Core abstraction for `update` within the Kindle framework.
     fn update(&mut self, _event: &Event) {}
 
-    /// Auto-generated documentation for render.
+    /// Core abstraction for `render` within the Kindle framework.
     fn render(&mut self, _ctx: &mut RenderCtx<'_, '_>) {}
 
-    /// Auto-generated documentation for handle_event.
+    /// Core abstraction for `handle_event` within the Kindle framework.
     fn handle_event(&mut self, _event: &PanelEvent) -> bool {
         false
     }
 
-    /// Auto-generated documentation for reset.
+    /// Core abstraction for `reset` within the Kindle framework.
     fn reset(&mut self) {}
 }
 
 #[test]
-/// Auto-generated documentation for trait_object_safety.
+/// Core abstraction for `trait_object_safety` within the Kindle framework.
 fn trait_object_safety() {
     let _panels: Vec<Box<dyn Panel>> = vec![Box::new(NoopPanel)];
     assert_eq!(_panels.len(), 1);

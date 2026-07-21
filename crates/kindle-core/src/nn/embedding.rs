@@ -1,48 +1,48 @@
 use crate::nn::{Module, Param};
 use crate::prelude::*;
 
-/// Auto-generated documentation for EmbeddingShape.
+/// Core abstraction for `EmbeddingShape` within the Kindle framework..
 pub trait EmbeddingShape: Shape + DynShape {
-    /// Auto-generated documentation for Vocab.
+    /// Core abstraction for `Vocab` within the Kindle framework..
     type Vocab: Dim;
-    /// Auto-generated documentation for Embed.
+    /// Core abstraction for `Embed` within the Kindle framework..
     type Embed: Dim;
-    /// Auto-generated documentation for BuildArg.
+    /// Core abstraction for `BuildArg` within the Kindle framework..
     type BuildArg: crate::tensor::arg_into::NotUnit;
-    /// Auto-generated documentation for Target.
+    /// Core abstraction for `Target` within the Kindle framework..
     type Target;
 
-    /// Auto-generated documentation for build_args.
+    /// Core abstraction for `build_args` within the Kindle framework..
     fn build_args(target: Self::Target) -> Self::BuildArg;
 }
 
 impl<V: Dim, E: Dim> EmbeddingShape for (V, E) {
-    /// Auto-generated documentation for Vocab.
+    /// Core abstraction for `Vocab` within the Kindle framework..
     type Vocab = V;
-    /// Auto-generated documentation for Embed.
+    /// Core abstraction for `Embed` within the Kindle framework..
     type Embed = E;
-    /// Auto-generated documentation for BuildArg.
+    /// Core abstraction for `BuildArg` within the Kindle framework..
     type BuildArg = (<V as Dim>::Arg, <E as Dim>::Arg);
-    /// Auto-generated documentation for Target.
+    /// Core abstraction for `Target` within the Kindle framework..
     type Target = (<V as Dim>::Arg, <E as Dim>::Arg);
 
-    /// Auto-generated documentation for build_args.
+    /// Core abstraction for `build_args` within the Kindle framework..
     fn build_args(target: Self::Target) -> Self::BuildArg {
         target
     }
 }
 
 impl EmbeddingShape for Dyn {
-    /// Auto-generated documentation for Vocab.
+    /// Core abstraction for `Vocab` within the Kindle framework..
     type Vocab = usize;
-    /// Auto-generated documentation for Embed.
+    /// Core abstraction for `Embed` within the Kindle framework..
     type Embed = usize;
-    /// Auto-generated documentation for BuildArg.
+    /// Core abstraction for `BuildArg` within the Kindle framework..
     type BuildArg = alloc::vec::Vec<usize>;
-    /// Auto-generated documentation for Target.
+    /// Core abstraction for `Target` within the Kindle framework..
     type Target = (usize, usize);
 
-    /// Auto-generated documentation for build_args.
+    /// Core abstraction for `build_args` within the Kindle framework..
     fn build_args(target: Self::Target) -> Self::BuildArg {
         alloc::vec![target.0, target.1]
     }
@@ -50,9 +50,9 @@ impl EmbeddingShape for Dyn {
 
 #[derive(Debug, Clone)]
 #[kindle_macros::module(internal)]
-/// Auto-generated documentation for Embedding.
+/// Core abstraction for `Embedding` within the Kindle framework..
 pub struct Embedding<S: EmbeddingShape, B: Backend> {
-    /// Auto-generated documentation for weight.
+    /// Core abstraction for `weight` within the Kindle framework..
     pub weight: Param<(S::Vocab, S::Embed), B>,
 }
 
@@ -62,7 +62,7 @@ where
     B::Device: crate::prelude::ConstDevice,
     (S::Vocab, S::Embed): Shape<Arg = S::BuildArg>,
 {
-    /// Auto-generated documentation for new_with.
+    /// Core abstraction for `new_with` within the Kindle framework..
     pub fn new_with(args: S::Target) -> Result<Self> {
         let w_args = S::build_args(args);
         let w_args_data = crate::tensor::arg_into::TensorArgsData {
@@ -89,7 +89,7 @@ where
     B::Device: crate::prelude::ConstDevice,
     (S::Vocab, S::Embed): Shape<Arg = S::BuildArg>,
 {
-    /// Auto-generated documentation for new.
+    /// Core abstraction for `new` within the Kindle framework..
     pub fn new() -> Result<Self> {
         Self::new_with(())
     }
@@ -101,13 +101,13 @@ where
     S::Embed: typenum::Unsigned,
     B: Backend + crate::tensor::backend::ModuleOps<B>,
 {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = Tensor<<InS as AppendDim<S::Embed>>::Output, B>;
-    /// Auto-generated documentation for Error.
+    /// Core abstraction for `Error` within the Kindle framework..
     type Error = Error;
 
     #[inline]
-    /// Auto-generated documentation for forward.
+    /// Core abstraction for `forward` within the Kindle framework..
     fn forward(&self, x: Tensor<InS, B>) -> core::result::Result<Self::Output, Error> {
         let weight = self.weight.as_tensor()?;
         let out = B::embedding(x.inner(), weight.inner())?;

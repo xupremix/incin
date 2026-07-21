@@ -22,25 +22,25 @@ use core::marker::PhantomData;
 /// let bn = BatchNorm2d::<(typenum::U64,), MyBackend>::new(typenum::U64::new(), 1e-5, 0.1)?;
 /// ```
 pub trait BatchNormShape: Shape + DynShape {
-    /// Auto-generated documentation for Channels.
+    /// Core abstraction for `Channels` within the Kindle framework..
     type Channels: Dim;
-    /// Auto-generated documentation for BuildArg.
+    /// Core abstraction for `BuildArg` within the Kindle framework..
     type BuildArg: crate::tensor::arg_into::NotUnit + Clone;
-    /// Auto-generated documentation for Target.
+    /// Core abstraction for `Target` within the Kindle framework..
     type Target;
-    /// Auto-generated documentation for build_args.
+    /// Core abstraction for `build_args` within the Kindle framework..
     fn build_args(target: Self::Target) -> Self::BuildArg;
 }
 
 impl<C: Dim> BatchNormShape for (C,) {
-    /// Auto-generated documentation for Channels.
+    /// Core abstraction for `Channels` within the Kindle framework..
     type Channels = C;
-    /// Auto-generated documentation for BuildArg.
+    /// Core abstraction for `BuildArg` within the Kindle framework..
     type BuildArg = (<C as Dim>::Arg,);
-    /// Auto-generated documentation for Target.
+    /// Core abstraction for `Target` within the Kindle framework..
     type Target = (<C as Dim>::Arg,);
 
-    /// Auto-generated documentation for build_args.
+    /// Core abstraction for `build_args` within the Kindle framework..
     fn build_args(target: Self::Target) -> Self::BuildArg {
         target
     }
@@ -48,21 +48,21 @@ impl<C: Dim> BatchNormShape for (C,) {
 
 #[derive(Debug, Clone)]
 #[kindle_macros::module(internal)]
-/// Auto-generated documentation for BatchNorm2d.
+/// Core abstraction for `BatchNorm2d` within the Kindle framework..
 pub struct BatchNorm2d<S: BatchNormShape, B: Backend> {
-    /// Auto-generated documentation for weight.
+    /// Core abstraction for `weight` within the Kindle framework..
     pub weight: Param<(S::Channels,), B>,
-    /// Auto-generated documentation for bias.
+    /// Core abstraction for `bias` within the Kindle framework..
     pub bias: Param<(S::Channels,), B>,
-    /// Auto-generated documentation for running_mean.
+    /// Core abstraction for `running_mean` within the Kindle framework..
     pub running_mean: Buffer<(S::Channels,), B>,
-    /// Auto-generated documentation for running_var.
+    /// Core abstraction for `running_var` within the Kindle framework..
     pub running_var: Buffer<(S::Channels,), B>,
     #[module(ignore)]
-    /// Auto-generated documentation for eps.
+    /// Core abstraction for `eps` within the Kindle framework..
     pub eps: f32,
     #[module(ignore)]
-    /// Auto-generated documentation for momentum.
+    /// Core abstraction for `momentum` within the Kindle framework..
     pub momentum: f32,
     #[module(ignore)]
     _phantom: PhantomData<B>,
@@ -74,7 +74,7 @@ where
     B::Device: crate::prelude::ConstDevice,
     (S::Channels,): Shape<Arg = S::BuildArg>,
 {
-    /// Auto-generated documentation for new_with.
+    /// Core abstraction for `new_with` within the Kindle framework..
     pub fn new_with(args: S::Target, eps: f32, momentum: f32) -> Result<Self> {
         let b_args = S::build_args(args);
 
@@ -110,7 +110,7 @@ where
     B::Device: crate::prelude::ConstDevice,
     (S::Channels,): Shape<Arg = S::BuildArg>,
 {
-    /// Auto-generated documentation for new.
+    /// Core abstraction for `new` within the Kindle framework..
     pub fn new(eps: f32, momentum: f32) -> Result<Self> {
         Self::new_with(((),), eps, momentum)
     }
@@ -122,13 +122,13 @@ impl<
     B: Backend + crate::tensor::backend::ModuleOps<B>,
 > Module<Tensor<InS, B>> for BatchNorm2d<S, B>
 {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = Tensor<InS, B>;
-    /// Auto-generated documentation for Error.
+    /// Core abstraction for `Error` within the Kindle framework..
     type Error = Error;
 
     #[inline]
-    /// Auto-generated documentation for forward.
+    /// Core abstraction for `forward` within the Kindle framework..
     fn forward(&self, x: Tensor<InS, B>) -> core::result::Result<Self::Output, Self::Error> {
         let weight = self.weight.as_tensor()?.into_dyn();
         let bias = self.bias.as_tensor()?.into_dyn();

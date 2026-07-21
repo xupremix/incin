@@ -1,6 +1,6 @@
 use kindle::prelude::*;
 
-fn main() -> anyhow::Result<()> {
+fn main() -> kindle::Result<()> {
     println!("Starting RNN Sequence Prediction Example");
 
     // Define an RNN sequence model with static dimension shapes

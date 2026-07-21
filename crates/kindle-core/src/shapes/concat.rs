@@ -7,20 +7,20 @@ use typenum::{U0, U1, U2, U3, U4, U5};
     label = "Shape mismatch during concatenation",
     note = "Concatenation requires all dimensions except the given axis to match exactly"
 )]
-/// Auto-generated documentation for ConcatShape.
+/// Core abstraction for `ConcatShape` within the Kindle framework..
 pub trait ConcatShape<S2, Axis> {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output: Shape;
 }
 
-/// Auto-generated documentation for TryConcatShape.
+/// Core abstraction for `TryConcatShape` within the Kindle framework..
 pub trait TryConcatShape<S2> {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output: Shape;
 }
 
 impl<S1: Shape, S2: Shape> TryConcatShape<S2> for S1 {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = Dyn;
 }
 
@@ -31,7 +31,7 @@ where
     D0: Add<D0_>,
     <D0 as Add<D0_>>::Output: Dim,
 {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (<D0 as Add<D0_>>::Output,);
 }
 
@@ -43,7 +43,7 @@ where
     D0: Add<D0_>,
     <D0 as Add<D0_>>::Output: Dim,
 {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (<D0 as Add<D0_>>::Output, D1);
 }
 
@@ -55,7 +55,7 @@ where
     D1: Add<D1_>,
     <D1 as Add<D1_>>::Output: Dim,
 {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (D0, <D1 as Add<D1_>>::Output);
 }
 
@@ -68,7 +68,7 @@ where
     D0: Add<D0_>,
     <D0 as Add<D0_>>::Output: Dim,
 {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (<D0 as Add<D0_>>::Output, D1, D2);
 }
 
@@ -81,7 +81,7 @@ where
     D1: Add<D1_>,
     <D1 as Add<D1_>>::Output: Dim,
 {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (D0, <D1 as Add<D1_>>::Output, D2);
 }
 
@@ -94,7 +94,7 @@ where
     D2: Add<D2_>,
     <D2 as Add<D2_>>::Output: Dim,
 {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (D0, D1, <D2 as Add<D2_>>::Output);
 }
 
@@ -108,7 +108,7 @@ where
     D0: Add<D0_>,
     <D0 as Add<D0_>>::Output: Dim,
 {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (<D0 as Add<D0_>>::Output, D1, D2, D3);
 }
 
@@ -122,7 +122,7 @@ where
     D1: Add<D1_>,
     <D1 as Add<D1_>>::Output: Dim,
 {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (D0, <D1 as Add<D1_>>::Output, D2, D3);
 }
 
@@ -136,7 +136,7 @@ where
     D2: Add<D2_>,
     <D2 as Add<D2_>>::Output: Dim,
 {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (D0, D1, <D2 as Add<D2_>>::Output, D3);
 }
 
@@ -150,7 +150,7 @@ where
     D3: Add<D3_>,
     <D3 as Add<D3_>>::Output: Dim,
 {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (D0, D1, D2, <D3 as Add<D3_>>::Output);
 }
 
@@ -165,7 +165,7 @@ where
     D0: Add<D0_>,
     <D0 as Add<D0_>>::Output: Dim,
 {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (<D0 as Add<D0_>>::Output, D1, D2, D3, D4);
 }
 
@@ -180,7 +180,7 @@ where
     D1: Add<D1_>,
     <D1 as Add<D1_>>::Output: Dim,
 {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (D0, <D1 as Add<D1_>>::Output, D2, D3, D4);
 }
 
@@ -195,7 +195,7 @@ where
     D2: Add<D2_>,
     <D2 as Add<D2_>>::Output: Dim,
 {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (D0, D1, <D2 as Add<D2_>>::Output, D3, D4);
 }
 
@@ -210,7 +210,7 @@ where
     D3: Add<D3_>,
     <D3 as Add<D3_>>::Output: Dim,
 {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (D0, D1, D2, <D3 as Add<D3_>>::Output, D4);
 }
 
@@ -225,7 +225,7 @@ where
     D4: Add<D4_>,
     <D4 as Add<D4_>>::Output: Dim,
 {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (D0, D1, D2, D3, <D4 as Add<D4_>>::Output);
 }
 
@@ -242,7 +242,7 @@ where
     D0: Add<D0_>,
     <D0 as Add<D0_>>::Output: Dim,
 {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (<D0 as Add<D0_>>::Output, D1, D2, D3, D4, D5);
 }
 
@@ -259,7 +259,7 @@ where
     D1: Add<D1_>,
     <D1 as Add<D1_>>::Output: Dim,
 {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (D0, <D1 as Add<D1_>>::Output, D2, D3, D4, D5);
 }
 
@@ -276,7 +276,7 @@ where
     D2: Add<D2_>,
     <D2 as Add<D2_>>::Output: Dim,
 {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (D0, D1, <D2 as Add<D2_>>::Output, D3, D4, D5);
 }
 
@@ -293,7 +293,7 @@ where
     D3: Add<D3_>,
     <D3 as Add<D3_>>::Output: Dim,
 {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (D0, D1, D2, <D3 as Add<D3_>>::Output, D4, D5);
 }
 
@@ -310,7 +310,7 @@ where
     D4: Add<D4_>,
     <D4 as Add<D4_>>::Output: Dim,
 {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (D0, D1, D2, D3, <D4 as Add<D4_>>::Output, D5);
 }
 
@@ -327,6 +327,6 @@ where
     D5: Add<D5_>,
     <D5 as Add<D5_>>::Output: Dim,
 {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (D0, D1, D2, D3, D4, <D5 as Add<D5_>>::Output);
 }

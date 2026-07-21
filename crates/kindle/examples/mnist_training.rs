@@ -7,14 +7,14 @@ use std::path::PathBuf;
 
 type Backend = kindle_backends::cpu::CpuBackend<f32, kindle_core::prelude::Cpu>;
 
-/// Auto-generated documentation for MnistCollate.
+/// Core abstraction for `MnistCollate` within the Kindle framework.
 struct MnistCollate;
 
 impl Collate<(Vec<f32>, u8)> for MnistCollate {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework.
     type Output = (Tensor<Dyn, Backend>, Tensor<Dyn, Backend>);
 
-    /// Auto-generated documentation for collate.
+    /// Core abstraction for `collate` within the Kindle framework.
     fn collate(&self, batch: Vec<(Vec<f32>, u8)>) -> Self::Output {
         let batch_size = batch.len();
         let mut images = Vec::with_capacity(batch_size * 784);
@@ -58,7 +58,7 @@ impl Collate<(Vec<f32>, u8)> for MnistCollate {
     }
 }
 
-fn main() -> anyhow::Result<()> {
+fn main() -> kindle::Result<()> {
     println!("Starting MNIST Training Example");
 
     // 1. Dataset loading

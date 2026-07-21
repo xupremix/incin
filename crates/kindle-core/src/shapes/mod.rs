@@ -10,28 +10,28 @@
 //! * [`spatial`] — Shape traits for convolution (`Conv2dShape`, `Conv1dShape`) and pooling.
 //! * `concat` — Shape traits for verified concatenation along an axis.
 //! * `stack` — Shape traits for verified tensor stacking.
-/// Auto-generated documentation for arithmetic.
+/// Core abstraction for `arithmetic` within the Kindle framework..
 pub mod arithmetic;
-/// Auto-generated documentation for broadcast.
+/// Core abstraction for `broadcast` within the Kindle framework..
 pub mod broadcast;
 
-/// Auto-generated documentation for concat.
+/// Core abstraction for `concat` within the Kindle framework..
 pub mod concat;
-/// Auto-generated documentation for dim.
+/// Core abstraction for `dim` within the Kindle framework..
 pub mod dim;
-/// Auto-generated documentation for idx.
+/// Core abstraction for `idx` within the Kindle framework..
 pub mod idx;
-/// Auto-generated documentation for named.
+/// Core abstraction for `named` within the Kindle framework..
 pub mod named;
-/// Auto-generated documentation for reshape.
+/// Core abstraction for `reshape` within the Kindle framework..
 pub mod reshape;
-/// Auto-generated documentation for shape.
+/// Core abstraction for `shape` within the Kindle framework..
 pub mod shape;
-/// Auto-generated documentation for shape_ops.
+/// Core abstraction for `shape_ops` within the Kindle framework..
 pub mod shape_ops;
-/// Auto-generated documentation for spatial.
+/// Core abstraction for `spatial` within the Kindle framework..
 pub mod spatial;
-/// Auto-generated documentation for stack.
+/// Core abstraction for `stack` within the Kindle framework..
 pub mod stack;
 
 pub use arithmetic::*;
@@ -43,7 +43,7 @@ pub use shape::*;
 pub use shape_ops::*;
 pub use spatial::*;
 
-/// Auto-generated documentation for prelude.
+/// Core abstraction for `prelude` within the Kindle framework..
 pub mod prelude {
     pub use super::arithmetic::*;
     pub use super::broadcast::*;

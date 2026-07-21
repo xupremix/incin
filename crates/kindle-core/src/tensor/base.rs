@@ -6,7 +6,7 @@ use crate::prelude::{
 use alloc::string::ToString;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-/// Auto-generated documentation for Dyn.
+/// Core abstraction for `Dyn` within the Kindle framework..
 pub struct Dyn(pub ());
 
 /// The core `Tensor` type representing an n-dimensional array.
@@ -61,7 +61,6 @@ pub struct Tensor<
 }
 
 impl<S: Shape, B: Backend, K: DType, D: Device, G: RequiresGrad> Clone for Tensor<S, B, K, D, G> {
-    /// Auto-generated documentation for clone.
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
@@ -74,7 +73,7 @@ impl<S: Shape, B: Backend, K: DType, D: Device, G: RequiresGrad> Clone for Tenso
 }
 
 impl<S: Shape, B: Backend, K: DType, D: Device, G: RequiresGrad> Tensor<S, B, K, D, G> {
-    /// Auto-generated documentation for from_parts_unchecked.
+    /// Creates a tensor from raw component parts without shape verification.
     pub fn from_parts_unchecked(
         inner: B::Storage<K>,
         shape: S::Field,
@@ -92,25 +91,25 @@ impl<S: Shape, B: Backend, K: DType, D: Device, G: RequiresGrad> Tensor<S, B, K,
     }
 
     #[inline]
-    /// Auto-generated documentation for inner.
+    /// Returns a reference to the backend-specific storage handle.
     pub fn inner(&self) -> &B::Storage<K> {
         &self.inner
     }
 
     #[inline]
-    /// Auto-generated documentation for into_inner.
+    /// Consumes the Tensor and returns the backend-specific storage handle.
     pub fn into_inner(self) -> B::Storage<K> {
         self.inner
     }
 
     #[inline]
-    /// Auto-generated documentation for shape_field.
+    /// Returns a reference to the static/dynamic shape field representation.
     pub fn shape_field(&self) -> &S::Field {
         &self._shape
     }
 
     #[inline]
-    /// Auto-generated documentation for grad_field.
+    /// Returns a reference to the gradient marker field.
     pub fn grad_field(&self) -> &G::Field {
         &self._grad
     }
@@ -120,7 +119,7 @@ impl<S: Shape + DynShape, B: Backend, K: DType, D: Device, G: RequiresGrad> Tens
 where
     (S, K, D, G): TensorArgs<S, K, D, G>,
 {
-    /// Auto-generated documentation for from_parts.
+    /// Creates a tensor from parts, checking that storage shape matches expected shape.
     pub fn from_parts(
         inner: B::Storage<K>,
         shape: S::Field,
@@ -143,7 +142,7 @@ where
         ))
     }
 
-    /// Auto-generated documentation for zeros.
+    /// Creates a tensor filled with zeros.
     pub fn zeros<A>(args: A) -> Result<Self>
     where
         A: ArgInto<<(S, K, D, G) as TensorArgs<S, K, D, G>>::Args>,
@@ -158,7 +157,7 @@ where
         Self::from_parts(inner, _shape, _dtype, _device, _grad)
     }
 
-    /// Auto-generated documentation for ones.
+    /// Creates a tensor filled with ones.
     pub fn ones<A>(args: A) -> Result<Self>
     where
         A: ArgInto<<(S, K, D, G) as TensorArgs<S, K, D, G>>::Args>,
@@ -173,7 +172,7 @@ where
         Self::from_parts(inner, _shape, _dtype, _device, _grad)
     }
 
-    /// Auto-generated documentation for from_slice.
+    /// Creates a tensor from a slice of f32 data.
     pub fn from_slice<A>(data: &[f32], args: A) -> Result<Self>
     where
         A: ArgInto<<(S, K, D, G) as TensorArgs<S, K, D, G>>::Args>,
@@ -189,7 +188,7 @@ where
         Self::from_parts(inner, _shape, _dtype, _device, _grad)
     }
 
-    /// Auto-generated documentation for rand.
+    /// Creates a tensor filled with random values uniform in [0, 1).
     pub fn rand<A>(args: A) -> Result<Self>
     where
         A: ArgInto<<(S, K, D, G) as TensorArgs<S, K, D, G>>::Args>,
@@ -204,7 +203,7 @@ where
         Self::from_parts(inner, _shape, _dtype, _device, _grad)
     }
 
-    /// Auto-generated documentation for randn.
+    /// Creates a tensor filled with standard normal random values.
     pub fn randn<A>(args: A) -> Result<Self>
     where
         A: ArgInto<<(S, K, D, G) as TensorArgs<S, K, D, G>>::Args>,
@@ -219,7 +218,7 @@ where
         Self::from_parts(inner, _shape, _dtype, _device, _grad)
     }
 
-    /// Auto-generated documentation for from_raw.
+    /// Wraps an existing backend storage in a Tensor.
     pub fn from_raw<A>(raw_tensor: B::Storage<K>, args: A) -> Result<Self>
     where
         A: ArgInto<<(S, K, D, G) as TensorArgs<S, K, D, G>>::Args>,
@@ -236,7 +235,7 @@ impl<S: ConstShape + DynShape, B: Backend, K: ConstDType, D: ConstDevice, G: Con
 where
     (S, K, D, G): TensorArgs<S, K, D, G>,
 {
-    /// Auto-generated documentation for static_zeros.
+    /// Creates a statically-shaped zero tensor.
     pub fn static_zeros() -> Result<Self> {
         let _shape = S::Field::default();
         let _dtype = <K as DType>::init(());
@@ -249,7 +248,7 @@ where
         Self::from_parts(inner, _shape, _dtype, _device, _grad)
     }
 
-    /// Auto-generated documentation for static_ones.
+    /// Creates a statically-shaped ones tensor.
     pub fn static_ones() -> Result<Self> {
         let _shape = S::Field::default();
         let _dtype = <K as DType>::init(());
@@ -265,19 +264,19 @@ where
 
 impl<S: Shape + DynShape, B: Backend, K: DType, D: Device, G: RequiresGrad> Tensor<S, B, K, D, G> {
     #[inline]
-    /// Auto-generated documentation for rank.
+    /// Returns the number of dimensions (rank) of the tensor.
     pub fn rank(&self) -> usize {
         S::rank(&self._shape)
     }
 
     #[inline]
-    /// Auto-generated documentation for numel.
+    /// Returns the total number of elements in the tensor.
     pub fn numel(&self) -> usize {
         S::numel(&self._shape)
     }
 
     #[inline]
-    /// Auto-generated documentation for dims.
+    /// Returns the dimensions of the tensor as a slice or container.
     pub fn dims(&self) -> S::Dims {
         S::dims(&self._shape)
     }
@@ -285,18 +284,18 @@ impl<S: Shape + DynShape, B: Backend, K: DType, D: Device, G: RequiresGrad> Tens
 
 impl<S: Shape, B: Backend, K: DType, D: Device, G: RequiresGrad> Tensor<S, B, K, D, G> {
     #[inline]
-    /// Auto-generated documentation for dtype.
+    /// Returns the Kindle data type variant.
     pub fn dtype(&self) -> KindleDType {
         K::to_kindle(&self._dtype)
     }
 
-    /// Auto-generated documentation for device.
+    /// Returns the device on which this tensor is allocated.
     pub fn device(&self) -> Result<KindleDevice> {
         D::to_kindle(&self._device)
     }
 
     #[inline]
-    /// Auto-generated documentation for requires_grad.
+    /// Returns true if this tensor computes and accumulates gradients.
     pub fn requires_grad(&self) -> bool {
         G::requires_grad(&self._grad)
     }
@@ -329,7 +328,7 @@ impl<S: Shape, B: Backend, K: DType, D: Device, G: RequiresGrad> Tensor<S, B, K,
 impl<S1: Shape + DynShape, B: Backend, K: DType, D: Device, G: RequiresGrad>
     Tensor<S1, B, K, D, G>
 {
-    /// Auto-generated documentation for into_shape.
+    /// Converts this tensor to a new static shape S2.
     pub fn into_shape<S2: Shape + DynShape>(self) -> Result<Tensor<S2, B, K, D, G>> {
         let dims = S1::dims(&self._shape);
         let s2_shape = S2::from_dyn(dims.as_ref()).ok_or_else(|| {
@@ -342,14 +341,14 @@ impl<S1: Shape + DynShape, B: Backend, K: DType, D: Device, G: RequiresGrad>
         Tensor::from_parts(self.inner, s2_shape, self._dtype, self._device, self._grad)
     }
 
-    /// Auto-generated documentation for into_dyn.
+    /// Converts this tensor to a dynamically-shaped Tensor<Dyn>.
     pub fn into_dyn(self) -> Tensor<crate::prelude::Dyn, B, K, D, G> {
         let dims = S1::dims(&self._shape);
         let s2_shape = <crate::prelude::Dyn as Shape>::from_dyn(dims.as_ref()).unwrap();
         Tensor::from_parts_unchecked(self.inner, s2_shape, self._dtype, self._device, self._grad)
     }
 
-    /// Auto-generated documentation for to_shape.
+    /// Copies and converts this tensor to a new static shape S2.
     pub fn to_shape<S2: Shape + DynShape>(&self) -> Result<Tensor<S2, B, K, D, G>> {
         let dims = S1::dims(&self._shape);
         let s2_shape = S2::from_dyn(dims.as_ref()).ok_or_else(|| {
@@ -370,7 +369,7 @@ impl<S1: Shape + DynShape, B: Backend, K: DType, D: Device, G: RequiresGrad>
 }
 
 impl<S: Shape, B: Backend, K: DType, D: Device> Tensor<S, B, K, D, NoGrad> {
-    /// Auto-generated documentation for require_grad.
+    /// Marks this tensor to require gradient tracking.
     pub fn require_grad(self) -> Tensor<S, B, K, D, Grad> {
         Tensor::from_parts_unchecked(
             self.inner,
@@ -383,7 +382,7 @@ impl<S: Shape, B: Backend, K: DType, D: Device> Tensor<S, B, K, D, NoGrad> {
 }
 
 impl<S: Shape, B: Backend, K: DType, D: Device> Tensor<S, B, K, D, Grad> {
-    /// Auto-generated documentation for detach.
+    /// Detaches this tensor from autodiff tape tracking, returning a NoGrad tensor.
     pub fn detach(self) -> Tensor<S, B, K, D, NoGrad> {
         Tensor::from_parts_unchecked(
             self.inner,
@@ -398,7 +397,7 @@ impl<S: Shape, B: Backend, K: DType, D: Device> Tensor<S, B, K, D, Grad> {
 impl<S: crate::prelude::Shape, B: crate::prelude::Backend, K: DType, D: Device, G: RequiresGrad>
     core::fmt::Display for Tensor<S, B, K, D, G>
 {
-    /// Auto-generated documentation for fmt.
+    /// Core abstraction for `fmt` within the Kindle framework..
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", B::format_tensor_display(&self.inner))
     }
@@ -407,7 +406,7 @@ impl<S: crate::prelude::Shape, B: crate::prelude::Backend, K: DType, D: Device, 
 impl<S: crate::prelude::Shape, B: crate::prelude::Backend, K: DType, D: Device, G: RequiresGrad>
     core::fmt::Debug for Tensor<S, B, K, D, G>
 {
-    /// Auto-generated documentation for fmt.
+    /// Core abstraction for `fmt` within the Kindle framework..
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(
             f,
@@ -420,14 +419,14 @@ impl<S: crate::prelude::Shape, B: crate::prelude::Backend, K: DType, D: Device, 
 }
 
 #[cfg(test)]
-/// Auto-generated documentation for tests.
+/// Core abstraction for `tests` within the Kindle framework..
 mod tests {
     use super::*;
 
     use alloc::vec;
 
     #[test]
-    /// Auto-generated documentation for test_tensor_creation.
+    /// Core abstraction for `test_tensor_creation` within the Kindle framework..
     fn test_tensor_creation() {
         let t: Tensor<Dyn, crate::tensor::backend::dummy::DummyBackend<f32, crate::prelude::Cpu>> =
             Tensor::zeros(vec![2, 3]).unwrap();
@@ -437,7 +436,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for test_tensor_ones.
+    /// Core abstraction for `test_tensor_ones` within the Kindle framework..
     fn test_tensor_ones() {
         let t: Tensor<Dyn, crate::tensor::backend::dummy::DummyBackend<f32, crate::prelude::Cpu>> =
             Tensor::ones(vec![4]).unwrap();

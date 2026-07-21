@@ -1,26 +1,26 @@
 use kindle::prelude::*;
 use kindle::{ConstShape, DynShape, Shape};
 
-/// Auto-generated documentation for CpuBackend.
+/// Implementation of `CpuBackend` for the respective backend.
 type CpuBackend = DefaultBackend;
 
 #[test]
-/// Auto-generated documentation for test_s_macro.
+/// Core abstraction for `test_s_macro` within the Kindle framework.
 fn test_s_macro() {
     // Static dimensions
-    /// Auto-generated documentation for StaticShape.
+    /// Core abstraction for `StaticShape` within the Kindle framework.
     type StaticShape = s![10, 20];
     assert_eq!(<StaticShape as ConstShape>::DIMS, [10, 20]);
 
     // Dynamic dimensions
-    /// Auto-generated documentation for DynShapeType.
+    /// Core abstraction for `DynShapeType` within the Kindle framework.
     type DynShapeType = s![dyn, dyn];
     let arg = (10, 20); // Arg depends on the dynamic fields
     let field = <DynShapeType as Shape>::init(arg);
     assert_eq!(<DynShapeType as DynShape>::dims(&field), [10, 20]);
 
     // Mixed dimensions
-    /// Auto-generated documentation for MixedShape.
+    /// Core abstraction for `MixedShape` within the Kindle framework.
     type MixedShape = s![2, dyn, 5, dyn];
     let mixed_arg = ((), 3, (), 7);
     let mixed_field = <MixedShape as Shape>::init(mixed_arg);
@@ -28,26 +28,26 @@ fn test_s_macro() {
 }
 
 #[test]
-/// Auto-generated documentation for test_idx_macro.
+/// Core abstraction for `test_idx_macro` within the Kindle framework.
 fn test_idx_macro() {
     // Basic indexing
     #[allow(dead_code)]
-    /// Auto-generated documentation for Ranges.
+    /// Core abstraction for `Ranges` within the Kindle framework.
     type Ranges = idx![0..5, 2..10, 0, ..];
     // Compiling is enough to verify type parsing
 }
 
 #[module]
-/// Auto-generated documentation for MyCustomLayer.
+/// Core abstraction for `MyCustomLayer` within the Kindle framework.
 pub struct MyCustomLayer<B: Backend> {
-    /// Auto-generated documentation for linear.
+    /// Core abstraction for `linear` within the Kindle framework.
     pub linear: Linear<s![10, 5], B>,
-    /// Auto-generated documentation for ln.
+    /// Core abstraction for `ln` within the Kindle framework.
     pub ln: LayerNorm<s![5], B>,
 }
 
 #[test]
-/// Auto-generated documentation for test_module_macro.
+/// Core abstraction for `test_module_macro` within the Kindle framework.
 fn test_module_macro() -> Result<()> {
     // Verify that #[module] derived Parameters and StateDict automatically
     let layer = MyCustomLayer::<CpuBackend> {

@@ -10,7 +10,7 @@ extern crate alloc;
 use alloc::vec::Vec;
 
 impl<T: DType, D: Device> QuantizedOps<Self> for CpuBackend<T, D> {
-    /// Auto-generated documentation for quantize.
+    /// Core abstraction for `quantize` within the Kindle framework..
     fn quantize<K: FloatDType, Q: QuantDType>(
         _t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<Q>> {
@@ -71,7 +71,7 @@ impl<T: DType, D: Device> QuantizedOps<Self> for CpuBackend<T, D> {
         ))
     }
 
-    /// Auto-generated documentation for dequantize.
+    /// Core abstraction for `dequantize` within the Kindle framework..
     fn dequantize<Q: QuantDType, K: FloatDType>(
         _t: &<Self as Backend>::Storage<Q>,
     ) -> Result<<Self as Backend>::Storage<K>> {
@@ -109,7 +109,7 @@ impl<T: DType, D: Device> QuantizedOps<Self> for CpuBackend<T, D> {
         ))
     }
 
-    /// Auto-generated documentation for quantized_matmul.
+    /// Core abstraction for `quantized_matmul` within the Kindle framework..
     fn quantized_matmul<Q: QuantDType>(
         _lhs: &<Self as Backend>::Storage<Q>,
         _rhs: &<Self as Backend>::Storage<Q>,
@@ -231,7 +231,7 @@ impl<T: DType, D: Device> QuantizedOps<Self> for CpuBackend<T, D> {
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[target_feature(enable = "avx2")]
 #[inline]
-/// Auto-generated documentation for vec_dot_q8_0_avx2.
+/// Core abstraction for `vec_dot_q8_0_avx2` within the Kindle framework..
 unsafe fn vec_dot_q8_0_avx2(
     n: usize,
     lhs: &[crate::cpu::storage::BlockQ8_0],
@@ -285,7 +285,7 @@ unsafe fn vec_dot_q8_0_avx2(
 }
 
 #[inline]
-/// Auto-generated documentation for vec_dot_q8_0_scalar.
+/// Core abstraction for `vec_dot_q8_0_scalar` within the Kindle framework..
 fn vec_dot_q8_0_scalar(
     n: usize,
     lhs: &[crate::cpu::storage::BlockQ8_0],
@@ -309,15 +309,15 @@ fn vec_dot_q8_0_scalar(
 }
 
 #[cfg(test)]
-/// Auto-generated documentation for tests.
+/// Core abstraction for `tests` within the Kindle framework..
 mod tests {
     use super::*;
 
-    /// Auto-generated documentation for TestBackend.
+    /// Core abstraction for `TestBackend` within the Kindle framework..
     type TestBackend = CpuBackend<f32, kindle_core::prelude::Cpu>;
 
     #[test]
-    /// Auto-generated documentation for test_quantize_dequantize_fidelity.
+    /// Core abstraction for `test_quantize_dequantize_fidelity` within the Kindle framework..
     fn test_quantize_dequantize_fidelity() {
         let mut data = vec![0.0f32; 64];
         for (i, d) in data.iter_mut().enumerate() {
@@ -341,7 +341,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for test_quantized_matmul.
+    /// Core abstraction for `test_quantized_matmul` within the Kindle framework..
     fn test_quantized_matmul() {
         // LHS: 2x32
         let mut lhs_data = vec![0.0f32; 64];

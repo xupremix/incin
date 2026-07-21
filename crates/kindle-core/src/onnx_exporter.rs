@@ -7,19 +7,19 @@ use alloc::collections::BTreeMap;
 use prost::Message;
 use std::path::Path;
 
-/// Auto-generated documentation for OnnxExporter.
+/// Core abstraction for `OnnxExporter` within the Kindle framework..
 pub struct OnnxExporter<'a> {
     _path: &'a Path,
 }
 
 impl<'a> OnnxExporter<'a> {
-    /// Auto-generated documentation for new.
+    /// Core abstraction for `new` within the Kindle framework..
     pub fn new(path: &'a Path) -> Self {
         Self { _path: path }
     }
 }
 
-/// Auto-generated documentation for export_to_onnx.
+/// Core abstraction for `export_to_onnx` within the Kindle framework..
 pub fn export_to_onnx(graph: &Graph, path: &Path) -> anyhow::Result<()> {
     let mut onnx_graph = onnx::GraphProto::default();
     onnx_graph.name = Some(alloc::string::String::from("kindle_graph"));
@@ -99,7 +99,7 @@ pub fn export_to_onnx(graph: &Graph, path: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Auto-generated documentation for dtype_to_onnx.
+/// Core abstraction for `dtype_to_onnx` within the Kindle framework..
 fn dtype_to_onnx(dt: KindleDType) -> onnx::tensor_proto::DataType {
     match dt {
         KindleDType::F32 => onnx::tensor_proto::DataType::Float,
@@ -113,7 +113,7 @@ fn dtype_to_onnx(dt: KindleDType) -> onnx::tensor_proto::DataType {
     }
 }
 
-/// Auto-generated documentation for value_to_value_info.
+/// Core abstraction for `value_to_value_info` within the Kindle framework..
 fn value_to_value_info(val: &crate::graph::Value) -> onnx::ValueInfoProto {
     let mut vi = onnx::ValueInfoProto::default();
     vi.name = Some(val.id.to_string());
@@ -138,10 +138,10 @@ fn value_to_value_info(val: &crate::graph::Value) -> onnx::ValueInfoProto {
 }
 
 impl<'a> crate::serialize::Serializer for OnnxExporter<'a> {
-    /// Auto-generated documentation for Error.
+    /// Core abstraction for `Error` within the Kindle framework..
     type Error = anyhow::Error;
 
-    /// Auto-generated documentation for serialize.
+    /// Core abstraction for `serialize` within the Kindle framework..
     fn serialize<B: Backend>(
         &mut self,
         _state_dict: &BTreeMap<String, Tensor<Dyn, B>>,
@@ -155,23 +155,23 @@ impl<'a> crate::serialize::Serializer for OnnxExporter<'a> {
     }
 }
 
-/// Auto-generated documentation for OnnxImporter.
+/// Core abstraction for `OnnxImporter` within the Kindle framework..
 pub struct OnnxImporter<'a> {
     _path: &'a Path,
 }
 
 impl<'a> OnnxImporter<'a> {
-    /// Auto-generated documentation for new.
+    /// Core abstraction for `new` within the Kindle framework..
     pub fn new(path: &'a Path) -> Self {
         Self { _path: path }
     }
 }
 
 impl<'a> crate::serialize::Deserializer for OnnxImporter<'a> {
-    /// Auto-generated documentation for Error.
+    /// Core abstraction for `Error` within the Kindle framework..
     type Error = anyhow::Error;
 
-    /// Auto-generated documentation for deserialize.
+    /// Core abstraction for `deserialize` within the Kindle framework..
     fn deserialize<B: Backend>(
         &mut self,
         _device: &KindleDevice,

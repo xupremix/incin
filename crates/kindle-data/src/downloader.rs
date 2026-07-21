@@ -3,11 +3,11 @@ use std::fs::File;
 use std::io;
 use std::path::{Path, PathBuf};
 
-/// Auto-generated documentation for Downloader.
+/// Core abstraction for `Downloader` within the Kindle framework.
 pub struct Downloader;
 
 impl Downloader {
-    /// Auto-generated documentation for download.
+    /// Core abstraction for `download` within the Kindle framework.
     pub fn download(url: &str, cache_dir: &Path, filename: &str) -> Result<PathBuf> {
         let dest_path = cache_dir.join(filename);
 
@@ -28,7 +28,7 @@ impl Downloader {
         Ok(dest_path)
     }
 
-    /// Auto-generated documentation for download_and_extract_gz.
+    /// Core abstraction for `download_and_extract_gz` within the Kindle framework.
     pub fn download_and_extract_gz(url: &str, cache_dir: &Path, filename: &str) -> Result<PathBuf> {
         let gz_path = Self::download(url, cache_dir, &format!("{}.gz", filename))?;
         let dest_path = cache_dir.join(filename);

@@ -2,16 +2,16 @@ use crate::prelude::Dim;
 use core::marker::PhantomData;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-/// Auto-generated documentation for NamedDyn.
+/// Core abstraction for `NamedDyn` within the Kindle framework..
 pub struct NamedDyn<Tag: 'static + Send + Sync + Copy + Clone + core::fmt::Debug + Eq + PartialEq> {
-    /// Auto-generated documentation for size.
+    /// Core abstraction for `size` within the Kindle framework..
     pub size: usize,
     _marker: PhantomData<Tag>,
 }
 
 impl<Tag: 'static + Send + Sync + Copy + Clone + core::fmt::Debug + Eq + PartialEq> NamedDyn<Tag> {
     #[inline(always)]
-    /// Auto-generated documentation for new.
+    /// Core abstraction for `new` within the Kindle framework..
     pub fn new(size: usize) -> Self {
         Self {
             size,
@@ -23,29 +23,29 @@ impl<Tag: 'static + Send + Sync + Copy + Clone + core::fmt::Debug + Eq + Partial
 impl<Tag: 'static + Send + Sync + Copy + Clone + core::fmt::Debug + Eq + PartialEq> Dim
     for NamedDyn<Tag>
 {
-    /// Auto-generated documentation for Arg.
+    /// Core abstraction for `Arg` within the Kindle framework..
     type Arg = usize;
 
     #[inline(always)]
-    /// Auto-generated documentation for size.
+    /// Core abstraction for `size` within the Kindle framework..
     fn size(&self) -> usize {
         self.size
     }
 
     #[inline(always)]
-    /// Auto-generated documentation for from_size.
+    /// Core abstraction for `from_size` within the Kindle framework..
     fn from_size(size: usize) -> Option<Self> {
         Some(Self::new(size))
     }
 
     #[inline(always)]
-    /// Auto-generated documentation for from_arg.
+    /// Core abstraction for `from_arg` within the Kindle framework..
     fn from_arg(arg: Self::Arg) -> Self {
         Self::new(arg)
     }
 
     #[inline(always)]
-    /// Auto-generated documentation for arg.
+    /// Core abstraction for `arg` within the Kindle framework..
     fn arg(&self) -> Self::Arg {
         self.size
     }

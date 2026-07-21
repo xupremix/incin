@@ -6,9 +6,9 @@ use crate::prelude::{DType, Device, RequiresGrad, Shape};
 /// - `()` for fully-static parameters (e.g., `Const<N>`, f32, Cpu, Grad)
 /// - The actual value for dynamic parameters (e.g., `Vec<usize>`, KindleDType, KindleDevice, bool)
 pub trait TensorArgs<S: Shape, K: DType, D: Device, G: RequiresGrad> {
-    /// Auto-generated documentation for Args.
+    /// Core abstraction for `Args` within the Kindle framework..
     type Args;
-    /// Auto-generated documentation for construct.
+    /// Core abstraction for `construct` within the Kindle framework..
     fn construct(args: Self::Args) -> (S::Field, K::Field, D::Field, G::Field);
 }
 
@@ -19,11 +19,11 @@ where
     D: Device,
     G: RequiresGrad,
 {
-    /// Auto-generated documentation for Args.
+    /// Core abstraction for `Args` within the Kindle framework..
     type Args = crate::prelude::TensorArgsData<S::Arg, K::Arg, D::Arg, G::Arg>;
 
     #[inline]
-    /// Auto-generated documentation for construct.
+    /// Core abstraction for `construct` within the Kindle framework..
     fn construct(args: Self::Args) -> (S::Field, K::Field, D::Field, G::Field) {
         (
             S::init(args.shape),

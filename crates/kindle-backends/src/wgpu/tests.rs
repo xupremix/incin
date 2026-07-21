@@ -5,33 +5,33 @@ use crate::wgpu::{WgpuBackend, WgpuVar};
 use kindle_core::prelude::*;
 
 // Helper: create a WgpuStorage from a flat vec and shape
-/// Auto-generated documentation for storage.
+/// Core abstraction for `storage` within the Kindle framework..
 fn storage(data: Vec<f32>, shape: Vec<usize>) -> WgpuStorage {
     WgpuStorage::new(WgpuBuffer::from_slice(&data), shape)
 }
 
-/// Auto-generated documentation for readback.
+/// Core abstraction for `readback` within the Kindle framework..
 fn readback(s: &WgpuStorage) -> Vec<f32> {
     s.buffer.to_vec::<f32>()
 }
 
-/// Auto-generated documentation for approx_eq.
+/// Core abstraction for `approx_eq` within the Kindle framework..
 fn approx_eq(a: f32, b: f32, tol: f32) -> bool {
     (a - b).abs() < tol
 }
 
-/// Auto-generated documentation for vec_approx_eq.
+/// Core abstraction for `vec_approx_eq` within the Kindle framework..
 fn vec_approx_eq(a: &[f32], b: &[f32], tol: f32) -> bool {
     a.len() == b.len() && a.iter().zip(b.iter()).all(|(x, y)| approx_eq(*x, *y, tol))
 }
 
-/// Auto-generated documentation for B.
+/// Core abstraction for `B` within the Kindle framework..
 type B = WgpuBackend<f32, Cpu>;
 
 // ── Creation ──────────────────────────────────────────────────────────────
 
 #[test]
-/// Auto-generated documentation for test_zeros.
+/// Core abstraction for `test_zeros` within the Kindle framework..
 fn test_zeros() {
     let s = <B as CreationOps<B>>::zeros::<f32>(&[2, 3], KindleDType::F32, &KindleDevice::cpu())
         .unwrap();
@@ -40,7 +40,7 @@ fn test_zeros() {
 }
 
 #[test]
-/// Auto-generated documentation for test_ones.
+/// Core abstraction for `test_ones` within the Kindle framework..
 fn test_ones() {
     let s = <B as CreationOps<B>>::ones::<f32>(&[3, 2], KindleDType::F32, &KindleDevice::cpu())
         .unwrap();
@@ -48,7 +48,7 @@ fn test_ones() {
 }
 
 #[test]
-/// Auto-generated documentation for test_rand_shape.
+/// Core abstraction for `test_rand_shape` within the Kindle framework..
 fn test_rand_shape() {
     let s = <B as CreationOps<B>>::rand::<f32>(&[4, 4], KindleDType::F32, &KindleDevice::cpu())
         .unwrap();
@@ -59,7 +59,7 @@ fn test_rand_shape() {
 }
 
 #[test]
-/// Auto-generated documentation for test_randn_shape.
+/// Core abstraction for `test_randn_shape` within the Kindle framework..
 fn test_randn_shape() {
     let s = <B as CreationOps<B>>::randn::<f32>(&[100], KindleDType::F32, &KindleDevice::cpu())
         .unwrap();
@@ -69,7 +69,7 @@ fn test_randn_shape() {
 // ── Binary ops ────────────────────────────────────────────────────────────
 
 #[test]
-/// Auto-generated documentation for test_add.
+/// Core abstraction for `test_add` within the Kindle framework..
 fn test_add() {
     let a = storage(vec![1.0, 2.0, 3.0, 4.0], vec![4]);
     let b = storage(vec![10.0, 20.0, 30.0, 40.0], vec![4]);
@@ -78,7 +78,7 @@ fn test_add() {
 }
 
 #[test]
-/// Auto-generated documentation for test_sub.
+/// Core abstraction for `test_sub` within the Kindle framework..
 fn test_sub() {
     let a = storage(vec![10.0, 20.0, 30.0], vec![3]);
     let b = storage(vec![1.0, 2.0, 3.0], vec![3]);
@@ -87,7 +87,7 @@ fn test_sub() {
 }
 
 #[test]
-/// Auto-generated documentation for test_mul.
+/// Core abstraction for `test_mul` within the Kindle framework..
 fn test_mul() {
     let a = storage(vec![2.0, 3.0, 4.0], vec![3]);
     let b = storage(vec![5.0, 6.0, 7.0], vec![3]);
@@ -96,7 +96,7 @@ fn test_mul() {
 }
 
 #[test]
-/// Auto-generated documentation for test_div.
+/// Core abstraction for `test_div` within the Kindle framework..
 fn test_div() {
     let a = storage(vec![10.0, 20.0, 30.0], vec![3]);
     let b = storage(vec![2.0, 4.0, 5.0], vec![3]);
@@ -107,7 +107,7 @@ fn test_div() {
 // ── Matmul ────────────────────────────────────────────────────────────────
 
 #[test]
-/// Auto-generated documentation for test_matmul_2x3_3x2.
+/// Core abstraction for `test_matmul_2x3_3x2` within the Kindle framework..
 fn test_matmul_2x3_3x2() {
     let a = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
     let b = storage(vec![7.0, 8.0, 9.0, 10.0, 11.0, 12.0], vec![3, 2]);
@@ -121,7 +121,7 @@ fn test_matmul_2x3_3x2() {
 }
 
 #[test]
-/// Auto-generated documentation for test_matmul_square.
+/// Core abstraction for `test_matmul_square` within the Kindle framework..
 fn test_matmul_square() {
     let a = storage(vec![1.0, 0.0, 0.0, 1.0], vec![2, 2]); // identity
     let b = storage(vec![3.0, 4.0, 5.0, 6.0], vec![2, 2]);
@@ -132,7 +132,7 @@ fn test_matmul_square() {
 // ── Float / Unary ops ─────────────────────────────────────────────────────
 
 #[test]
-/// Auto-generated documentation for test_relu.
+/// Core abstraction for `test_relu` within the Kindle framework..
 fn test_relu() {
     let a = storage(vec![-2.0, -1.0, 0.0, 1.0, 2.0], vec![5]);
     let out = <B as FloatOps<B>>::relu::<f32>(&a).unwrap();
@@ -140,7 +140,7 @@ fn test_relu() {
 }
 
 #[test]
-/// Auto-generated documentation for test_neg.
+/// Core abstraction for `test_neg` within the Kindle framework..
 fn test_neg() {
     let a = storage(vec![1.0, -2.0, 3.0], vec![3]);
     let out = <B as FloatOps<B>>::neg::<f32>(&a).unwrap();
@@ -148,7 +148,7 @@ fn test_neg() {
 }
 
 #[test]
-/// Auto-generated documentation for test_abs.
+/// Core abstraction for `test_abs` within the Kindle framework..
 fn test_abs() {
     let a = storage(vec![-3.0, 0.0, 4.0], vec![3]);
     let out = <B as FloatOps<B>>::abs::<f32>(&a).unwrap();
@@ -156,7 +156,7 @@ fn test_abs() {
 }
 
 #[test]
-/// Auto-generated documentation for test_sqrt.
+/// Core abstraction for `test_sqrt` within the Kindle framework..
 fn test_sqrt() {
     let a = storage(vec![4.0, 9.0, 16.0], vec![3]);
     let out = <B as FloatOps<B>>::sqrt::<f32>(&a).unwrap();
@@ -164,7 +164,7 @@ fn test_sqrt() {
 }
 
 #[test]
-/// Auto-generated documentation for test_exp_log.
+/// Core abstraction for `test_exp_log` within the Kindle framework..
 fn test_exp_log() {
     let a = storage(vec![0.0, 1.0, 2.0], vec![3]);
     let exp_out = <B as FloatOps<B>>::exp::<f32>(&a).unwrap();
@@ -176,7 +176,7 @@ fn test_exp_log() {
 }
 
 #[test]
-/// Auto-generated documentation for test_sigmoid.
+/// Core abstraction for `test_sigmoid` within the Kindle framework..
 fn test_sigmoid() {
     let a = storage(vec![0.0], vec![1]);
     let out = <B as FloatOps<B>>::sigmoid::<f32>(&a).unwrap();
@@ -184,7 +184,7 @@ fn test_sigmoid() {
 }
 
 #[test]
-/// Auto-generated documentation for test_tanh.
+/// Core abstraction for `test_tanh` within the Kindle framework..
 fn test_tanh() {
     let a = storage(vec![0.0], vec![1]);
     let out = <B as FloatOps<B>>::tanh::<f32>(&a).unwrap();
@@ -192,7 +192,7 @@ fn test_tanh() {
 }
 
 #[test]
-/// Auto-generated documentation for test_swish.
+/// Core abstraction for `test_swish` within the Kindle framework..
 fn test_swish() {
     // swish(x) = x * sigmoid(x); swish(0) = 0
     let a = storage(vec![0.0, 1.0], vec![2]);
@@ -204,7 +204,7 @@ fn test_swish() {
 }
 
 #[test]
-/// Auto-generated documentation for test_gelu.
+/// Core abstraction for `test_gelu` within the Kindle framework..
 fn test_gelu() {
     let a = storage(vec![0.0], vec![1]);
     let out = <B as FloatOps<B>>::gelu::<f32>(&a).unwrap();
@@ -212,7 +212,7 @@ fn test_gelu() {
 }
 
 #[test]
-/// Auto-generated documentation for test_add_scalar.
+/// Core abstraction for `test_add_scalar` within the Kindle framework..
 fn test_add_scalar() {
     let a = storage(vec![1.0, 2.0, 3.0], vec![3]);
     let out = <B as FloatOps<B>>::add_scalar_float::<f32>(&a, 10.0).unwrap();
@@ -220,7 +220,7 @@ fn test_add_scalar() {
 }
 
 #[test]
-/// Auto-generated documentation for test_mul_scalar.
+/// Core abstraction for `test_mul_scalar` within the Kindle framework..
 fn test_mul_scalar() {
     let a = storage(vec![1.0, 2.0, 3.0], vec![3]);
     let out = <B as FloatOps<B>>::mul_scalar_float::<f32>(&a, 3.0).unwrap();
@@ -228,7 +228,7 @@ fn test_mul_scalar() {
 }
 
 #[test]
-/// Auto-generated documentation for test_softmax.
+/// Core abstraction for `test_softmax` within the Kindle framework..
 fn test_softmax() {
     let a = storage(vec![1.0, 2.0, 3.0], vec![1, 3]);
     let out = <B as FloatOps<B>>::softmax::<f32>(&a, 1).unwrap();
@@ -249,7 +249,7 @@ fn test_softmax() {
 // ── Reduction ops ─────────────────────────────────────────────────────────
 
 #[test]
-/// Auto-generated documentation for test_sum_all.
+/// Core abstraction for `test_sum_all` within the Kindle framework..
 fn test_sum_all() {
     let a = storage(vec![1.0, 2.0, 3.0, 4.0], vec![2, 2]);
     let out = <B as ReductionOps<B>>::sum_all::<f32>(&a).unwrap();
@@ -257,7 +257,7 @@ fn test_sum_all() {
 }
 
 #[test]
-/// Auto-generated documentation for test_mean_all.
+/// Core abstraction for `test_mean_all` within the Kindle framework..
 fn test_mean_all() {
     let a = storage(vec![1.0, 2.0, 3.0, 4.0], vec![4]);
     let out = <B as ReductionOps<B>>::mean_all::<f32>(&a).unwrap();
@@ -265,7 +265,7 @@ fn test_mean_all() {
 }
 
 #[test]
-/// Auto-generated documentation for test_max_all.
+/// Core abstraction for `test_max_all` within the Kindle framework..
 fn test_max_all() {
     let a = storage(vec![3.0, 1.0, 4.0, 1.0, 5.0, 9.0], vec![6]);
     let out = <B as ReductionOps<B>>::max_all::<f32>(&a).unwrap();
@@ -273,7 +273,7 @@ fn test_max_all() {
 }
 
 #[test]
-/// Auto-generated documentation for test_min_all.
+/// Core abstraction for `test_min_all` within the Kindle framework..
 fn test_min_all() {
     let a = storage(vec![3.0, 1.0, 4.0, -2.0, 5.0], vec![5]);
     let out = <B as ReductionOps<B>>::min_all::<f32>(&a).unwrap();
@@ -281,7 +281,7 @@ fn test_min_all() {
 }
 
 #[test]
-/// Auto-generated documentation for test_sum_dim.
+/// Core abstraction for `test_sum_dim` within the Kindle framework..
 fn test_sum_dim() {
     // [[1,2,3],[4,5,6]] sum along dim 0 -> [5,7,9]
     let a = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
@@ -291,7 +291,7 @@ fn test_sum_dim() {
 }
 
 #[test]
-/// Auto-generated documentation for test_sum_keepdim.
+/// Core abstraction for `test_sum_keepdim` within the Kindle framework..
 fn test_sum_keepdim() {
     let a = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
     let out = <B as ReductionOps<B>>::sum_keepdim::<f32>(&a, 0).unwrap();
@@ -299,7 +299,7 @@ fn test_sum_keepdim() {
 }
 
 #[test]
-/// Auto-generated documentation for test_mean_dim.
+/// Core abstraction for `test_mean_dim` within the Kindle framework..
 fn test_mean_dim() {
     let a = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
     let out = <B as ReductionOps<B>>::mean_dim::<f32>(&a, 0).unwrap();
@@ -307,14 +307,14 @@ fn test_mean_dim() {
 }
 
 #[test]
-/// Auto-generated documentation for test_max_dim.
+/// Core abstraction for `test_max_dim` within the Kindle framework..
 fn test_max_dim() {
     let a = storage(vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0], vec![2, 3]);
     let out = <B as ReductionOps<B>>::max_dim::<f32>(&a, 0).unwrap();
     assert!(vec_approx_eq(&readback(&out), &[4.0, 5.0, 6.0], 1e-4));
 }
 #[test]
-/// Auto-generated documentation for test_argmax_flat.
+/// Core abstraction for `test_argmax_flat` within the Kindle framework..
 fn test_argmax_flat() {
     let a = storage(vec![1.0, 5.0, 3.0, 9.0, 2.0], vec![5]);
     let out = <B as ReductionOps<B>>::argmax::<f32, u32>(&a, None).unwrap();
@@ -322,7 +322,7 @@ fn test_argmax_flat() {
 }
 
 #[test]
-/// Auto-generated documentation for test_argmin_flat.
+/// Core abstraction for `test_argmin_flat` within the Kindle framework..
 fn test_argmin_flat() {
     let a = storage(vec![3.0, -1.0, 5.0], vec![3]);
     let out = <B as ReductionOps<B>>::argmin::<f32, u32>(&a, None).unwrap();
@@ -332,7 +332,7 @@ fn test_argmin_flat() {
 // ── Tensor ops ────────────────────────────────────────────────────────────
 
 #[test]
-/// Auto-generated documentation for test_reshape.
+/// Core abstraction for `test_reshape` within the Kindle framework..
 fn test_reshape() {
     let a = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
     let out = <B as TensorOps<B>>::reshape::<f32>(&a, &[3, 2]).unwrap();
@@ -341,7 +341,7 @@ fn test_reshape() {
 }
 
 #[test]
-/// Auto-generated documentation for test_transpose_2d.
+/// Core abstraction for `test_transpose_2d` within the Kindle framework..
 fn test_transpose_2d() {
     // [[1,2,3],[4,5,6]] -> [[1,4],[2,5],[3,6]]
     let a = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
@@ -355,7 +355,7 @@ fn test_transpose_2d() {
 }
 
 #[test]
-/// Auto-generated documentation for test_flatten.
+/// Core abstraction for `test_flatten` within the Kindle framework..
 fn test_flatten() {
     let a = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
     let out = <B as TensorOps<B>>::flatten::<f32>(&a, 0, 1).unwrap();
@@ -363,7 +363,7 @@ fn test_flatten() {
 }
 
 #[test]
-/// Auto-generated documentation for test_squeeze.
+/// Core abstraction for `test_squeeze` within the Kindle framework..
 fn test_squeeze() {
     let a = storage(vec![1.0, 2.0, 3.0], vec![1, 3]);
     let out = <B as TensorOps<B>>::squeeze::<f32>(&a, 0).unwrap();
@@ -371,7 +371,7 @@ fn test_squeeze() {
 }
 
 #[test]
-/// Auto-generated documentation for test_narrow.
+/// Core abstraction for `test_narrow` within the Kindle framework..
 fn test_narrow() {
     // [[1,2,3],[4,5,6]] narrow dim=0, start=1, len=1 -> [[4,5,6]]
     let a = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
@@ -381,7 +381,7 @@ fn test_narrow() {
 }
 
 #[test]
-/// Auto-generated documentation for test_concat_dim0.
+/// Core abstraction for `test_concat_dim0` within the Kindle framework..
 fn test_concat_dim0() {
     let a = storage(vec![1.0, 2.0, 3.0], vec![1, 3]);
     let b = storage(vec![4.0, 5.0, 6.0], vec![1, 3]);
@@ -391,7 +391,7 @@ fn test_concat_dim0() {
 }
 
 #[test]
-/// Auto-generated documentation for test_stack.
+/// Core abstraction for `test_stack` within the Kindle framework..
 fn test_stack() {
     let a = storage(vec![1.0, 2.0, 3.0], vec![3]);
     let b = storage(vec![4.0, 5.0, 6.0], vec![3]);
@@ -401,7 +401,7 @@ fn test_stack() {
 }
 
 #[test]
-/// Auto-generated documentation for test_float_to_scalar.
+/// Core abstraction for `test_float_to_scalar` within the Kindle framework..
 fn test_float_to_scalar() {
     let a = storage(vec![42.0], vec![1]);
     let val = <B as TensorOps<B>>::float_to_scalar::<f32>(&a).unwrap();
@@ -411,7 +411,7 @@ fn test_float_to_scalar() {
 // ── Module ops ────────────────────────────────────────────────────────────
 
 #[test]
-/// Auto-generated documentation for test_embedding.
+/// Core abstraction for `test_embedding` within the Kindle framework..
 fn test_embedding() {
     // vocab=3, dim=4; pick indices [0, 2]
     let weight = storage(
@@ -433,7 +433,7 @@ fn test_embedding() {
 }
 
 #[test]
-/// Auto-generated documentation for test_layer_norm.
+/// Core abstraction for `test_layer_norm` within the Kindle framework..
 fn test_layer_norm() {
     let x = storage(vec![1.0, 2.0, 3.0, 4.0], vec![1, 4]);
     let gamma = storage(vec![1.0, 1.0, 1.0, 1.0], vec![4]);
@@ -448,7 +448,7 @@ fn test_layer_norm() {
 }
 
 #[test]
-/// Auto-generated documentation for test_adaptive_avg_pool2d.
+/// Core abstraction for `test_adaptive_avg_pool2d` within the Kindle framework..
 fn test_adaptive_avg_pool2d() {
     // 1x1x4x4 -> 1x1x2x2
     let data: Vec<f32> = (1..=16).map(|x| x as f32).collect();
@@ -461,7 +461,7 @@ fn test_adaptive_avg_pool2d() {
 }
 
 #[test]
-/// Auto-generated documentation for test_max_pool2d.
+/// Core abstraction for `test_max_pool2d` within the Kindle framework..
 fn test_max_pool2d() {
     // 1x1x4x4, kernel 2x2, stride 2
     let data: Vec<f32> = vec![
@@ -480,7 +480,7 @@ fn test_max_pool2d() {
 // ── Loss ops ──────────────────────────────────────────────────────────────
 
 #[test]
-/// Auto-generated documentation for test_cross_entropy_mean.
+/// Core abstraction for `test_cross_entropy_mean` within the Kindle framework..
 fn test_cross_entropy_mean() {
     // 2 classes, batch=2; pred logits
     let pred = storage(vec![2.0, 1.0, 0.5, 3.0], vec![2, 2]);
@@ -499,7 +499,7 @@ fn test_cross_entropy_mean() {
 // ── Optimizer ─────────────────────────────────────────────────────────────
 
 #[test]
-/// Auto-generated documentation for test_adamw_step.
+/// Core abstraction for `test_adamw_step` within the Kindle framework..
 fn test_adamw_step() {
     let param = storage(vec![1.0, 2.0, 3.0], vec![3]);
     let grad = storage(vec![0.1, 0.2, 0.3], vec![3]);
@@ -529,7 +529,7 @@ fn test_adamw_step() {
 // ── GPU AdamW parity ─────────────────────────────────────────────────────
 
 #[test]
-/// Auto-generated documentation for test_adamw_gpu_matches_reference.
+/// Core abstraction for `test_adamw_gpu_matches_reference` within the Kindle framework..
 fn test_adamw_gpu_matches_reference() {
     // Reference CPU calculation for a single AdamW step
     let lr = 0.001f32;
@@ -591,7 +591,7 @@ fn test_adamw_gpu_matches_reference() {
 // ── Conv ops ──────────────────────────────────────────────────────────────
 
 #[test]
-/// Auto-generated documentation for test_conv2d_identity_kernel.
+/// Core abstraction for `test_conv2d_identity_kernel` within the Kindle framework..
 fn test_conv2d_identity_kernel() {
     // 3x3 identity filter: output should equal the center pixel (no padding, stride=1)
     // Input: 1x1x3x3, Weight: 1x1x1x1 = [[1.0]] -> output = input
@@ -610,7 +610,7 @@ fn test_conv2d_identity_kernel() {
 }
 
 #[test]
-/// Auto-generated documentation for test_conv2d_known_output.
+/// Core abstraction for `test_conv2d_known_output` within the Kindle framework..
 fn test_conv2d_known_output() {
     // Input 1x1x4x4, weight 1x1x2x2, stride=1, padding=0
     // Using weight [[1,0],[0,1]] (sum of diagonal)
@@ -627,7 +627,7 @@ fn test_conv2d_known_output() {
 }
 
 #[test]
-/// Auto-generated documentation for test_conv2d_with_bias.
+/// Core abstraction for `test_conv2d_with_bias` within the Kindle framework..
 fn test_conv2d_with_bias() {
     let inp = storage(vec![1.0, 2.0, 2.0, 1.0], vec![1, 1, 2, 2]);
     let weight = storage(vec![1.0, 1.0, 1.0, 1.0], vec![1, 1, 2, 2]);
@@ -639,7 +639,7 @@ fn test_conv2d_with_bias() {
 }
 
 #[test]
-/// Auto-generated documentation for test_conv2d_padding.
+/// Core abstraction for `test_conv2d_padding` within the Kindle framework..
 fn test_conv2d_padding() {
     // 1x1x1x1 input with 1-padding, 1x1x3x3 kernel -> 1x1x1x1 output
     let inp = storage(vec![1.0], vec![1, 1, 1, 1]);
@@ -654,7 +654,7 @@ fn test_conv2d_padding() {
 }
 
 #[test]
-/// Auto-generated documentation for test_conv2d_two_output_channels.
+/// Core abstraction for `test_conv2d_two_output_channels` within the Kindle framework..
 fn test_conv2d_two_output_channels() {
     // 1 input, 2 output channels: each filter reads the same input
     let inp = storage(vec![1.0, 2.0, 3.0, 4.0], vec![1, 1, 2, 2]);
@@ -674,7 +674,7 @@ fn test_conv2d_two_output_channels() {
 }
 
 #[test]
-/// Auto-generated documentation for test_conv1d_basic.
+/// Core abstraction for `test_conv1d_basic` within the Kindle framework..
 fn test_conv1d_basic() {
     // Input: 1 batch, 1 channel, 4 elements; Weight: 1 out, 1 in, 2 kernel
     let inp = storage(vec![1.0, 2.0, 3.0, 4.0], vec![1, 1, 4]);

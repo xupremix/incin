@@ -188,7 +188,7 @@ macro_rules! impl_std_ops {
             S1: crate::shapes::broadcast::BroadcastShape<S2>,
             <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape,
         {
-            /// Auto-generated documentation for Output.
+            /// Core abstraction for `Output` within the Kindle framework..
             type Output =
                 Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, D, G>;
             #[inline]
@@ -221,7 +221,7 @@ macro_rules! impl_std_ops {
             S1: crate::shapes::broadcast::BroadcastShape<S2>,
             <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape,
         {
-            /// Auto-generated documentation for Output.
+            /// Core abstraction for `Output` within the Kindle framework..
             type Output =
                 Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, D, G>;
             #[inline]
@@ -253,7 +253,7 @@ macro_rules! impl_std_ops {
             S1: crate::shapes::broadcast::BroadcastShape<S2>,
             <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape,
         {
-            /// Auto-generated documentation for Output.
+            /// Core abstraction for `Output` within the Kindle framework..
             type Output =
                 Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, D, G>;
             #[inline]
@@ -285,7 +285,7 @@ macro_rules! impl_std_ops {
             S1: crate::shapes::broadcast::BroadcastShape<S2>,
             <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape,
         {
-            /// Auto-generated documentation for Output.
+            /// Core abstraction for `Output` within the Kindle framework..
             type Output =
                 Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, D, G>;
             #[inline]

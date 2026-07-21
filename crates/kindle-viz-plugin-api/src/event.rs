@@ -6,74 +6,74 @@
 /// this phase's keybinding set; extend as needed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeyCode {
-    /// Auto-generated documentation for Char.
+    /// Printable character key.
     Char(char),
-    /// Auto-generated documentation for Tab.
+    /// Tab key.
     Tab,
-    /// Auto-generated documentation for BackTab.
+    /// Shift+Tab (BackTab) key.
     BackTab,
-    /// Auto-generated documentation for Esc.
+    /// Escape key.
     Esc,
-    /// Auto-generated documentation for Enter.
+    /// Enter/Return key.
     Enter,
-    /// Auto-generated documentation for Up.
+    /// Up arrow key.
     Up,
-    /// Auto-generated documentation for Down.
+    /// Down arrow key.
     Down,
-    /// Auto-generated documentation for Left.
+    /// Left arrow key.
     Left,
-    /// Auto-generated documentation for Right.
+    /// Right arrow key.
     Right,
 }
 
 /// Modifier keys held alongside a [`KeyCode`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct KeyModifiers {
-    /// Auto-generated documentation for ctrl.
+    /// Control key indicator.
     pub ctrl: bool,
-    /// Auto-generated documentation for shift.
+    /// Shift key indicator.
     pub shift: bool,
-    /// Auto-generated documentation for alt.
+    /// Alt/Option key indicator.
     pub alt: bool,
 }
 
 /// A single key-press event routed to a panel or the host keymap resolver.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PanelKeyEvent {
-    /// Auto-generated documentation for code.
+    /// Target key code.
     pub code: KeyCode,
-    /// Auto-generated documentation for modifiers.
+    /// Active key modifiers.
     pub modifiers: KeyModifiers,
 }
 
 /// Subset of mouse events panels need.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PanelMouseEvent {
-    /// Auto-generated documentation for Down.
+    /// Mouse button press at (x, y).
     Down {
         x: u16,
         y: u16,
         modifiers: KeyModifiers,
     },
-    /// Auto-generated documentation for Up.
+    /// Mouse button release at (x, y).
     Up {
         x: u16,
         y: u16,
         modifiers: KeyModifiers,
     },
-    /// Auto-generated documentation for Drag.
+    /// Mouse drag movement at (x, y).
     Drag {
         x: u16,
         y: u16,
         modifiers: KeyModifiers,
     },
-    /// Auto-generated documentation for ScrollDown.
+    /// Mouse scroll down event.
     ScrollDown {
         x: u16,
         y: u16,
         modifiers: KeyModifiers,
     },
-    /// Auto-generated documentation for ScrollUp.
+    /// Mouse scroll up event.
     ScrollUp {
         x: u16,
         y: u16,
@@ -88,8 +88,8 @@ pub enum PanelMouseEvent {
 /// considered proven.
 #[derive(Debug, Clone)]
 pub enum PanelEvent {
-    /// Auto-generated documentation for Key.
+    /// Keyboard interaction event.
     Key(PanelKeyEvent),
-    /// Auto-generated documentation for Mouse.
+    /// Mouse interaction event.
     Mouse(PanelMouseEvent),
 }

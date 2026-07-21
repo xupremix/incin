@@ -51,22 +51,22 @@
 
 #[macro_use]
 extern crate alloc;
-/// Auto-generated documentation for dataset.
+/// Core abstraction for `dataset` within the Kindle framework.
 pub mod dataset;
-/// Auto-generated documentation for downloader.
+/// Core abstraction for `downloader` within the Kindle framework.
 pub mod downloader;
-/// Auto-generated documentation for hub.
+/// Core abstraction for `hub` within the Kindle framework.
 pub mod hub;
-/// Auto-generated documentation for loader.
+/// Core abstraction for `loader` within the Kindle framework.
 pub mod loader;
-/// Auto-generated documentation for vision.
+/// Core abstraction for `vision` within the Kindle framework.
 pub mod vision;
 
 pub use dataset::Dataset;
 pub use downloader::Downloader;
 pub use loader::{Collate, DataLoader};
 
-/// Auto-generated documentation for prelude.
+/// Core abstraction for `prelude` within the Kindle framework.
 pub mod prelude {
     pub use super::hub::*;
     pub use super::loader::*;

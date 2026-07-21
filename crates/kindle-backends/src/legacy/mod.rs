@@ -8,7 +8,7 @@ pub use kindle_core::prelude::*;
 // CandleBackend
 // ----------------------------------------------------------------------------
 
-/// Auto-generated documentation for candle.
+/// Core abstraction for `candle` within the Kindle framework..
 pub mod candle {
     use super::*;
     use candle_core as candle;
@@ -20,7 +20,7 @@ pub mod candle {
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct CandleBackend<T, D>(core::marker::PhantomData<(T, D)>);
 
-    /// Auto-generated documentation for to_candle_device.
+    /// Core abstraction for `to_candle_device` within the Kindle framework..
     pub fn to_candle_device(dev: &KindleDevice) -> Result<candle::Device> {
         use kindle_core::prelude::DeviceVariant;
         match dev.variant() {
@@ -38,7 +38,7 @@ pub mod candle {
         }
     }
 
-    /// Auto-generated documentation for to_candle_dtype.
+    /// Core abstraction for `to_candle_dtype` within the Kindle framework..
     pub fn to_candle_dtype(dtype: KindleDType) -> candle::DType {
         match dtype {
             KindleDType::U8 => candle::DType::U8,
@@ -56,58 +56,58 @@ pub mod candle {
     impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device>
         kindle_core::prelude::Backend for CandleBackend<T, D>
     {
-        /// Auto-generated documentation for Device.
+        /// Core abstraction for `Device` within the Kindle framework..
         type Device = D;
-        /// Auto-generated documentation for FloatElem.
+        /// Core abstraction for `FloatElem` within the Kindle framework..
         type FloatElem = T;
-        /// Auto-generated documentation for IntElem.
+        /// Core abstraction for `IntElem` within the Kindle framework..
         type IntElem = i64;
-        /// Auto-generated documentation for BackendWithDevice.
+        /// Core abstraction for `BackendWithDevice` within the Kindle framework..
         type BackendWithDevice<NewD: kindle_core::prelude::Device> = CandleBackend<T, NewD>;
 
-        /// Auto-generated documentation for Storage.
+        /// Core abstraction for `Storage` within the Kindle framework..
         type Storage<K: kindle_core::prelude::DType> = candle_core::Tensor;
-        /// Auto-generated documentation for RawVar.
+        /// Core abstraction for `RawVar` within the Kindle framework..
         type RawVar = candle_core::Var;
-        /// Auto-generated documentation for Grads.
+        /// Core abstraction for `Grads` within the Kindle framework..
         type Grads = candle_core::backprop::GradStore;
-        /// Auto-generated documentation for InnerBackend.
+        /// Core abstraction for `InnerBackend` within the Kindle framework..
         type InnerBackend = Self;
 
-        /// Auto-generated documentation for shape.
+        /// Core abstraction for `shape` within the Kindle framework..
         fn shape<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Vec<usize> {
             t.dims().to_vec()
         }
 
-        /// Auto-generated documentation for format_tensor_display.
+        /// Core abstraction for `format_tensor_display` within the Kindle framework..
         fn format_tensor_display<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> alloc::string::String {
             std::format!("{}", t)
         }
-        /// Auto-generated documentation for format_tensor_debug.
+        /// Core abstraction for `format_tensor_debug` within the Kindle framework..
         fn format_tensor_debug<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> alloc::string::String {
             std::format!("Raw Tensor: {:?}, Strides: {:?}", t, t.stride())
         }
 
-        /// Auto-generated documentation for var_as_tensor.
+        /// Core abstraction for `var_as_tensor` within the Kindle framework..
         fn var_as_tensor<K: kindle_core::prelude::DType>(
             var: &<Self as kindle_core::prelude::Backend>::RawVar,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(var.as_tensor().clone())
         }
-        /// Auto-generated documentation for var_from_tensor.
+        /// Core abstraction for `var_from_tensor` within the Kindle framework..
         fn var_from_tensor<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<<Self as kindle_core::prelude::Backend>::RawVar> {
             Ok(candle::Var::from_tensor(t).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
-        /// Auto-generated documentation for var_to_device.
+        /// Core abstraction for `var_to_device` within the Kindle framework..
         fn var_to_device(
             var: &<Self as kindle_core::prelude::Backend>::RawVar,
             device: &kindle_core::prelude::KindleDevice,
@@ -119,7 +119,7 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e).into())
         }
 
-        /// Auto-generated documentation for assign_var.
+        /// Core abstraction for `assign_var` within the Kindle framework..
         fn assign_var<K: kindle_core::prelude::DType>(
             var: &mut <Self as kindle_core::prelude::Backend>::RawVar,
             tensor: &<Self as kindle_core::prelude::Backend>::Storage<K>,
@@ -128,7 +128,7 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e).into())
         }
 
-        /// Auto-generated documentation for backward.
+        /// Core abstraction for `backward` within the Kindle framework..
         fn backward<K: kindle_core::prelude::DType>(
             loss: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Grads> {
@@ -136,14 +136,14 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e).into())
         }
 
-        /// Auto-generated documentation for backward_with_nan_check.
+        /// Core abstraction for `backward_with_nan_check` within the Kindle framework..
         fn backward_with_nan_check<K: kindle_core::prelude::DType>(
             loss: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Grads> {
             Self::backward::<K>(loss)
         }
 
-        /// Auto-generated documentation for get_grad.
+        /// Core abstraction for `get_grad` within the Kindle framework..
         fn get_grad<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             grads: &<Self as kindle_core::prelude::Backend>::Grads,
@@ -151,7 +151,7 @@ pub mod candle {
             Ok(grads.get(t).cloned())
         }
 
-        /// Auto-generated documentation for to_bytes.
+        /// Core abstraction for `to_bytes` within the Kindle framework..
         fn to_bytes<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<alloc::vec::Vec<u8>> {
@@ -169,7 +169,7 @@ pub mod candle {
             Ok(bytes.to_vec())
         }
 
-        /// Auto-generated documentation for from_bytes.
+        /// Core abstraction for `from_bytes` within the Kindle framework..
         fn from_bytes<K: kindle_core::prelude::DType>(
             bytes: &[u8],
             shape: &[usize],
@@ -196,7 +196,7 @@ pub mod candle {
     impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device>
         kindle_core::prelude::QuantizedOps<Self> for CandleBackend<T, D>
     {
-        /// Auto-generated documentation for quantize.
+        /// Core abstraction for `quantize` within the Kindle framework..
         fn quantize<K: kindle_core::prelude::FloatDType, Q: kindle_core::prelude::QuantDType>(
             _t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<Q>> {
@@ -205,7 +205,7 @@ pub mod candle {
                 backend: "Candle",
             })
         }
-        /// Auto-generated documentation for dequantize.
+        /// Core abstraction for `dequantize` within the Kindle framework..
         fn dequantize<Q: kindle_core::prelude::QuantDType, K: kindle_core::prelude::FloatDType>(
             _t: &<Self as kindle_core::prelude::Backend>::Storage<Q>,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
@@ -214,7 +214,7 @@ pub mod candle {
                 backend: "Candle",
             })
         }
-        /// Auto-generated documentation for quantized_matmul.
+        /// Core abstraction for `quantized_matmul` within the Kindle framework..
         fn quantized_matmul<Q: kindle_core::prelude::QuantDType>(
             _lhs: &<Self as kindle_core::prelude::Backend>::Storage<Q>,
             _rhs: &<Self as kindle_core::prelude::Backend>::Storage<Q>,
@@ -229,7 +229,7 @@ pub mod candle {
     impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device>
         kindle_core::prelude::CreationOps<Self> for CandleBackend<T, D>
     {
-        /// Auto-generated documentation for zeros.
+        /// Core abstraction for `zeros` within the Kindle framework..
         fn zeros<K: kindle_core::prelude::DType>(
             shape: &[usize],
             dtype: KindleDType,
@@ -241,7 +241,7 @@ pub mod candle {
             )
         }
 
-        /// Auto-generated documentation for ones.
+        /// Core abstraction for `ones` within the Kindle framework..
         fn ones<K: kindle_core::prelude::DType>(
             shape: &[usize],
             dtype: KindleDType,
@@ -253,7 +253,7 @@ pub mod candle {
             )
         }
 
-        /// Auto-generated documentation for rand.
+        /// Core abstraction for `rand` within the Kindle framework..
         fn rand<K: kindle_core::prelude::DType>(
             shape: &[usize],
             dtype: KindleDType,
@@ -267,7 +267,7 @@ pub mod candle {
             )
         }
 
-        /// Auto-generated documentation for randn.
+        /// Core abstraction for `randn` within the Kindle framework..
         fn randn<K: kindle_core::prelude::DType>(
             shape: &[usize],
             dtype: KindleDType,
@@ -281,7 +281,7 @@ pub mod candle {
             )
         }
 
-        /// Auto-generated documentation for var_zeros.
+        /// Core abstraction for `var_zeros` within the Kindle framework..
         fn var_zeros<K: kindle_core::prelude::DType>(
             shape: &[usize],
             dtype: KindleDType,
@@ -293,7 +293,7 @@ pub mod candle {
             )
         }
 
-        /// Auto-generated documentation for var_ones.
+        /// Core abstraction for `var_ones` within the Kindle framework..
         fn var_ones<K: kindle_core::prelude::DType>(
             shape: &[usize],
             dtype: KindleDType,
@@ -305,7 +305,7 @@ pub mod candle {
             )
         }
 
-        /// Auto-generated documentation for var_rand.
+        /// Core abstraction for `var_rand` within the Kindle framework..
         fn var_rand<K: kindle_core::prelude::DType>(
             shape: &[usize],
             _dtype: KindleDType,
@@ -317,7 +317,7 @@ pub mod candle {
             )
         }
 
-        /// Auto-generated documentation for var_randn.
+        /// Core abstraction for `var_randn` within the Kindle framework..
         fn var_randn<K: kindle_core::prelude::DType>(
             shape: &[usize],
             _dtype: KindleDType,
@@ -328,7 +328,7 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
-        /// Auto-generated documentation for tensor_to_device.
+        /// Core abstraction for `tensor_to_device` within the Kindle framework..
         fn tensor_to_device<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             device: &KindleDevice,
@@ -342,7 +342,7 @@ pub mod candle {
     impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device>
         kindle_core::prelude::NumericOps<Self> for CandleBackend<T, D>
     {
-        /// Auto-generated documentation for add.
+        /// Core abstraction for `add` within the Kindle framework..
         fn add<K: kindle_core::prelude::DType>(
             lhs: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             rhs: &<Self as kindle_core::prelude::Backend>::Storage<K>,
@@ -351,7 +351,7 @@ pub mod candle {
                 .broadcast_add(rhs)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// Auto-generated documentation for sub.
+        /// Core abstraction for `sub` within the Kindle framework..
         fn sub<K: kindle_core::prelude::DType>(
             lhs: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             rhs: &<Self as kindle_core::prelude::Backend>::Storage<K>,
@@ -360,7 +360,7 @@ pub mod candle {
                 .broadcast_sub(rhs)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// Auto-generated documentation for mul.
+        /// Core abstraction for `mul` within the Kindle framework..
         fn mul<K: kindle_core::prelude::DType>(
             lhs: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             rhs: &<Self as kindle_core::prelude::Backend>::Storage<K>,
@@ -369,7 +369,7 @@ pub mod candle {
                 .broadcast_mul(rhs)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// Auto-generated documentation for div.
+        /// Core abstraction for `div` within the Kindle framework..
         fn div<K: kindle_core::prelude::DType>(
             lhs: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             rhs: &<Self as kindle_core::prelude::Backend>::Storage<K>,
@@ -383,7 +383,7 @@ pub mod candle {
     impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device>
         kindle_core::prelude::TensorOps<Self> for CandleBackend<T, D>
     {
-        /// Auto-generated documentation for matmul.
+        /// Core abstraction for `matmul` within the Kindle framework..
         fn matmul<K: kindle_core::prelude::DType>(
             lhs: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             rhs: &<Self as kindle_core::prelude::Backend>::Storage<K>,
@@ -462,7 +462,7 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
-        /// Auto-generated documentation for stack.
+        /// Core abstraction for `stack` within the Kindle framework..
         fn stack<K: kindle_core::prelude::DType>(
             tensors: &[&<Self as kindle_core::prelude::Backend>::Storage<K>],
             dim: usize,
@@ -471,7 +471,7 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
-        /// Auto-generated documentation for concat.
+        /// Core abstraction for `concat` within the Kindle framework..
         fn concat<K: kindle_core::prelude::DType>(
             tensors: &[&<Self as kindle_core::prelude::Backend>::Storage<K>],
             dim: usize,
@@ -480,7 +480,7 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
-        /// Auto-generated documentation for broadcast_as.
+        /// Core abstraction for `broadcast_as` within the Kindle framework..
         fn broadcast_as<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             shape: &[usize],
@@ -488,7 +488,7 @@ pub mod candle {
             Ok(t.broadcast_as(shape)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// Auto-generated documentation for broadcast_left.
+        /// Core abstraction for `broadcast_left` within the Kindle framework..
         fn broadcast_left<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             shape: &[usize],
@@ -497,7 +497,7 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
-        /// Auto-generated documentation for reshape.
+        /// Core abstraction for `reshape` within the Kindle framework..
         fn reshape<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             shape: &[usize],
@@ -505,7 +505,7 @@ pub mod candle {
             Ok(t.reshape(shape)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// Auto-generated documentation for transpose.
+        /// Core abstraction for `transpose` within the Kindle framework..
         fn transpose<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             dim1: usize,
@@ -514,7 +514,7 @@ pub mod candle {
             Ok(t.transpose(dim1, dim2)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// Auto-generated documentation for slice.
+        /// Core abstraction for `slice` within the Kindle framework..
         fn slice<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             ranges: &[(usize, usize)],
@@ -528,7 +528,7 @@ pub mod candle {
             Ok(out)
         }
 
-        /// Auto-generated documentation for flatten.
+        /// Core abstraction for `flatten` within the Kindle framework..
         fn flatten<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             start_dim: usize,
@@ -538,7 +538,7 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
-        /// Auto-generated documentation for narrow.
+        /// Core abstraction for `narrow` within the Kindle framework..
         fn narrow<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             dim: usize,
@@ -549,7 +549,7 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
-        /// Auto-generated documentation for squeeze.
+        /// Core abstraction for `squeeze` within the Kindle framework..
         fn squeeze<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             dim: usize,
@@ -558,7 +558,7 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
-        /// Auto-generated documentation for float_to_scalar.
+        /// Core abstraction for `float_to_scalar` within the Kindle framework..
         fn float_to_scalar<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<f64> {
@@ -570,7 +570,7 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
             Ok(s as f64)
         }
-        /// Auto-generated documentation for float_to_vec1.
+        /// Core abstraction for `float_to_vec1` within the Kindle framework..
         fn float_to_vec1<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<Vec<f64>> {
@@ -582,7 +582,7 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
             Ok(vec.into_iter().map(|x| x as f64).collect())
         }
-        /// Auto-generated documentation for int_to_scalar.
+        /// Core abstraction for `int_to_scalar` within the Kindle framework..
         fn int_to_scalar<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<i64> {
@@ -594,7 +594,7 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
             Ok(s)
         }
-        /// Auto-generated documentation for int_to_vec1.
+        /// Core abstraction for `int_to_vec1` within the Kindle framework..
         fn int_to_vec1<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<Vec<i64>> {
@@ -606,7 +606,7 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
             Ok(vec)
         }
-        /// Auto-generated documentation for tensor_to_dtype.
+        /// Core abstraction for `tensor_to_dtype` within the Kindle framework..
         fn tensor_to_dtype<K: kindle_core::prelude::DType, K2: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             dtype: KindleDType,
@@ -619,28 +619,28 @@ pub mod candle {
     impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device>
         kindle_core::prelude::FloatOps<Self> for CandleBackend<T, D>
     {
-        /// Auto-generated documentation for add_scalar_float.
+        /// Core abstraction for `add_scalar_float` within the Kindle framework..
         fn add_scalar_float<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             scalar: f64,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok((t + scalar).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// Auto-generated documentation for mul_scalar_float.
+        /// Core abstraction for `mul_scalar_float` within the Kindle framework..
         fn mul_scalar_float<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             scalar: f64,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok((t * scalar).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// Auto-generated documentation for relu.
+        /// Core abstraction for `relu` within the Kindle framework..
         fn relu<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(t.relu()
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// Auto-generated documentation for gelu.
+        /// Core abstraction for `gelu` within the Kindle framework..
         fn gelu<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
@@ -666,7 +666,7 @@ pub mod candle {
             unimplemented!("elu not implemented for CandleBackend")
         }
 
-        /// Auto-generated documentation for softmax.
+        /// Core abstraction for `softmax` within the Kindle framework..
         fn softmax<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             dim: usize,
@@ -675,56 +675,56 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
-        /// Auto-generated documentation for swish.
+        /// Core abstraction for `swish` within the Kindle framework..
         fn swish<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             // swish is x * sigmoid(x)
             Ok(candle_nn::ops::silu(t).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// Auto-generated documentation for abs.
+        /// Core abstraction for `abs` within the Kindle framework..
         fn abs<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(t.abs()
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// Auto-generated documentation for neg.
+        /// Core abstraction for `neg` within the Kindle framework..
         fn neg<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(t.neg()
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// Auto-generated documentation for sqrt.
+        /// Core abstraction for `sqrt` within the Kindle framework..
         fn sqrt<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(t.sqrt()
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// Auto-generated documentation for exp.
+        /// Core abstraction for `exp` within the Kindle framework..
         fn exp<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(t.exp()
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// Auto-generated documentation for log.
+        /// Core abstraction for `log` within the Kindle framework..
         fn log<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(t.log()
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// Auto-generated documentation for tanh.
+        /// Core abstraction for `tanh` within the Kindle framework..
         fn tanh<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(t.tanh()
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// Auto-generated documentation for sigmoid.
+        /// Core abstraction for `sigmoid` within the Kindle framework..
         fn sigmoid<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
@@ -735,28 +735,28 @@ pub mod candle {
     impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device>
         kindle_core::prelude::ReductionOps<Self> for CandleBackend<T, D>
     {
-        /// Auto-generated documentation for sum_all.
+        /// Core abstraction for `sum_all` within the Kindle framework..
         fn sum_all<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(t.sum_all()
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// Auto-generated documentation for mean_all.
+        /// Core abstraction for `mean_all` within the Kindle framework..
         fn mean_all<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(t.mean_all()
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// Auto-generated documentation for max_all.
+        /// Core abstraction for `max_all` within the Kindle framework..
         fn max_all<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(t.max_all()
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// Auto-generated documentation for min_all.
+        /// Core abstraction for `min_all` within the Kindle framework..
         fn min_all<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
@@ -764,7 +764,7 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
-        /// Auto-generated documentation for sum_dim.
+        /// Core abstraction for `sum_dim` within the Kindle framework..
         fn sum_dim<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             dim: usize,
@@ -772,7 +772,7 @@ pub mod candle {
             Ok(t.sum(dim)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// Auto-generated documentation for sum_keepdim.
+        /// Core abstraction for `sum_keepdim` within the Kindle framework..
         fn sum_keepdim<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             dim: usize,
@@ -781,7 +781,7 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
-        /// Auto-generated documentation for mean_dim.
+        /// Core abstraction for `mean_dim` within the Kindle framework..
         fn mean_dim<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             dim: usize,
@@ -789,7 +789,7 @@ pub mod candle {
             Ok(t.mean(dim)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// Auto-generated documentation for mean_keepdim.
+        /// Core abstraction for `mean_keepdim` within the Kindle framework..
         fn mean_keepdim<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             dim: usize,
@@ -797,7 +797,7 @@ pub mod candle {
             Ok(t.mean_keepdim(dim)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// Auto-generated documentation for max_dim.
+        /// Core abstraction for `max_dim` within the Kindle framework..
         fn max_dim<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             dim: usize,
@@ -805,7 +805,7 @@ pub mod candle {
             Ok(t.max(dim)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// Auto-generated documentation for max_keepdim.
+        /// Core abstraction for `max_keepdim` within the Kindle framework..
         fn max_keepdim<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             dim: usize,
@@ -813,7 +813,7 @@ pub mod candle {
             Ok(t.max_keepdim(dim)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// Auto-generated documentation for min_dim.
+        /// Core abstraction for `min_dim` within the Kindle framework..
         fn min_dim<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             dim: usize,
@@ -821,7 +821,7 @@ pub mod candle {
             Ok(t.min(dim)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// Auto-generated documentation for min_keepdim.
+        /// Core abstraction for `min_keepdim` within the Kindle framework..
         fn min_keepdim<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             dim: usize,
@@ -830,7 +830,7 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
-        /// Auto-generated documentation for argmax.
+        /// Core abstraction for `argmax` within the Kindle framework..
         fn argmax<K: kindle_core::prelude::DType, KInt: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             dim: Option<usize>,
@@ -847,7 +847,7 @@ pub mod candle {
             }
         }
 
-        /// Auto-generated documentation for argmin.
+        /// Core abstraction for `argmin` within the Kindle framework..
         fn argmin<K: kindle_core::prelude::DType, KInt: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             dim: Option<usize>,
@@ -888,7 +888,7 @@ pub mod candle {
     impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device>
         kindle_core::prelude::ModuleOps<Self> for CandleBackend<T, D>
     {
-        /// Auto-generated documentation for adaptive_avg_pool2d.
+        /// Core abstraction for `adaptive_avg_pool2d` within the Kindle framework..
         fn adaptive_avg_pool2d<K: kindle_core::prelude::DType>(
             _t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             _output_size: (usize, usize),
@@ -896,7 +896,7 @@ pub mod candle {
             unimplemented!("adaptive_avg_pool2d not implemented for CandleBackend")
         }
 
-        /// Auto-generated documentation for layer_norm.
+        /// Core abstraction for `layer_norm` within the Kindle framework..
         fn layer_norm<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             weight: &<Self as kindle_core::prelude::Backend>::Storage<K>,
@@ -917,7 +917,7 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
-        /// Auto-generated documentation for batch_norm.
+        /// Core abstraction for `batch_norm` within the Kindle framework..
         fn batch_norm<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             weight: Option<&<Self as kindle_core::prelude::Backend>::Storage<K>>,
@@ -1003,7 +1003,7 @@ pub mod candle {
             Ok(out)
         }
 
-        /// Auto-generated documentation for embedding.
+        /// Core abstraction for `embedding` within the Kindle framework..
         fn embedding<K: kindle_core::prelude::DType, KInt: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<KInt>,
             w: &<Self as kindle_core::prelude::Backend>::Storage<K>,
@@ -1028,7 +1028,7 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
-        /// Auto-generated documentation for conv1d.
+        /// Core abstraction for `conv1d` within the Kindle framework..
         fn conv1d<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             w: &<Self as kindle_core::prelude::Backend>::Storage<K>,
@@ -1042,7 +1042,7 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
-        /// Auto-generated documentation for conv2d.
+        /// Core abstraction for `conv2d` within the Kindle framework..
         fn conv2d<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             weight: &<Self as kindle_core::prelude::Backend>::Storage<K>,
@@ -1056,7 +1056,7 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
-        /// Auto-generated documentation for conv_transpose2d.
+        /// Core abstraction for `conv_transpose2d` within the Kindle framework..
         fn conv_transpose2d<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             weight: &<Self as kindle_core::prelude::Backend>::Storage<K>,
@@ -1073,7 +1073,7 @@ pub mod candle {
             )
         }
 
-        /// Auto-generated documentation for max_pool2d.
+        /// Core abstraction for `max_pool2d` within the Kindle framework..
         fn max_pool2d<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             kernel_size: (usize, usize),
@@ -1087,7 +1087,7 @@ pub mod candle {
             )
         }
 
-        /// Auto-generated documentation for avg_pool2d.
+        /// Core abstraction for `avg_pool2d` within the Kindle framework..
         fn avg_pool2d<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             kernel_size: (usize, usize),
@@ -1104,7 +1104,7 @@ pub mod candle {
     impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device>
         kindle_core::prelude::LossOps<Self> for CandleBackend<T, D>
     {
-        /// Auto-generated documentation for l1_loss.
+        /// Core abstraction for `l1_loss` within the Kindle framework..
         fn l1_loss<K: kindle_core::prelude::DType>(
             _pred: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             _target: &<Self as kindle_core::prelude::Backend>::Storage<K>,
@@ -1113,7 +1113,7 @@ pub mod candle {
             unimplemented!("l1_loss not implemented for CandleBackend")
         }
 
-        /// Auto-generated documentation for bce_with_logits_loss.
+        /// Core abstraction for `bce_with_logits_loss` within the Kindle framework..
         fn bce_with_logits_loss<K: kindle_core::prelude::DType>(
             _pred: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             _target: &<Self as kindle_core::prelude::Backend>::Storage<K>,
@@ -1122,7 +1122,7 @@ pub mod candle {
             unimplemented!("bce_with_logits_loss not implemented for CandleBackend")
         }
 
-        /// Auto-generated documentation for mse_loss.
+        /// Core abstraction for `mse_loss` within the Kindle framework..
         fn mse_loss<K: kindle_core::prelude::DType>(
             pred: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             target: &<Self as kindle_core::prelude::Backend>::Storage<K>,
@@ -1133,7 +1133,7 @@ pub mod candle {
             Ok(loss)
         }
 
-        /// Auto-generated documentation for cross_entropy_loss.
+        /// Core abstraction for `cross_entropy_loss` within the Kindle framework..
         fn cross_entropy_loss<K: kindle_core::prelude::DType, KInt: kindle_core::prelude::DType>(
             pred: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             target: &<Self as kindle_core::prelude::Backend>::Storage<KInt>,
@@ -1153,19 +1153,19 @@ pub mod candle {
     }
 
     #[cfg(test)]
-    /// Auto-generated documentation for tests.
+    /// Core abstraction for `tests` within the Kindle framework..
     mod tests {
         use super::*;
 
         #[test]
-        /// Auto-generated documentation for test_to_candle_dtype.
+        /// Core abstraction for `test_to_candle_dtype` within the Kindle framework..
         fn test_to_candle_dtype() {
             assert_eq!(to_candle_dtype(KindleDType::F32), candle::DType::F32);
             assert_eq!(to_candle_dtype(KindleDType::I64), candle::DType::I64);
         }
 
         #[test]
-        /// Auto-generated documentation for test_to_candle_device.
+        /// Core abstraction for `test_to_candle_device` within the Kindle framework..
         fn test_to_candle_device() {
             let cpu = KindleDevice::cpu();
             let c_dev = to_candle_device(&cpu).unwrap();

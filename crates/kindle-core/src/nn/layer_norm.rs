@@ -2,27 +2,27 @@ use crate::nn::{Module, Param};
 use crate::prelude::*;
 use core::marker::PhantomData;
 
-/// Auto-generated documentation for LayerNormShape.
+/// Core abstraction for `LayerNormShape` within the Kindle framework..
 pub trait LayerNormShape: Shape + DynShape {
-    /// Auto-generated documentation for Channels.
+    /// Core abstraction for `Channels` within the Kindle framework..
     type Channels: Dim;
-    /// Auto-generated documentation for BuildArg.
+    /// Core abstraction for `BuildArg` within the Kindle framework..
     type BuildArg: crate::tensor::arg_into::NotUnit + Clone;
-    /// Auto-generated documentation for Target.
+    /// Core abstraction for `Target` within the Kindle framework..
     type Target;
-    /// Auto-generated documentation for build_args.
+    /// Core abstraction for `build_args` within the Kindle framework..
     fn build_args(target: Self::Target) -> Self::BuildArg;
 }
 
 impl<C: Dim> LayerNormShape for (C,) {
-    /// Auto-generated documentation for Channels.
+    /// Core abstraction for `Channels` within the Kindle framework..
     type Channels = C;
-    /// Auto-generated documentation for BuildArg.
+    /// Core abstraction for `BuildArg` within the Kindle framework..
     type BuildArg = (<C as Dim>::Arg,);
-    /// Auto-generated documentation for Target.
+    /// Core abstraction for `Target` within the Kindle framework..
     type Target = (<C as Dim>::Arg,);
 
-    /// Auto-generated documentation for build_args.
+    /// Core abstraction for `build_args` within the Kindle framework..
     fn build_args(target: Self::Target) -> Self::BuildArg {
         target
     }
@@ -30,14 +30,14 @@ impl<C: Dim> LayerNormShape for (C,) {
 
 #[derive(Debug)]
 #[kindle_macros::module(internal)]
-/// Auto-generated documentation for LayerNorm.
+/// Core abstraction for `LayerNorm` within the Kindle framework..
 pub struct LayerNorm<S: LayerNormShape, B: Backend> {
-    /// Auto-generated documentation for weight.
+    /// Core abstraction for `weight` within the Kindle framework..
     pub weight: Param<(S::Channels,), B>,
-    /// Auto-generated documentation for bias.
+    /// Core abstraction for `bias` within the Kindle framework..
     pub bias: Param<(S::Channels,), B>,
     #[module(ignore)]
-    /// Auto-generated documentation for eps.
+    /// Core abstraction for `eps` within the Kindle framework..
     pub eps: f32,
     #[module(ignore)]
     _phantom: PhantomData<(S, B)>,
@@ -49,7 +49,7 @@ where
     B::Device: crate::prelude::ConstDevice,
     (S::Channels,): Shape<Arg = S::BuildArg>,
 {
-    /// Auto-generated documentation for new_with.
+    /// Core abstraction for `new_with` within the Kindle framework..
     pub fn new_with(args: S::Target, eps: f32) -> Result<Self> {
         let b_args = S::build_args(args);
 
@@ -81,7 +81,7 @@ where
     B::Device: crate::prelude::ConstDevice,
     (S::Channels,): Shape<Arg = S::BuildArg>,
 {
-    /// Auto-generated documentation for new.
+    /// Core abstraction for `new` within the Kindle framework..
     pub fn new(eps: f32) -> Result<Self> {
         Self::new_with(((),), eps)
     }
@@ -93,13 +93,13 @@ impl<
     B: Backend + crate::tensor::backend::ModuleOps<B>,
 > Module<Tensor<InS, B>> for LayerNorm<S, B>
 {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = Tensor<InS, B>;
-    /// Auto-generated documentation for Error.
+    /// Core abstraction for `Error` within the Kindle framework..
     type Error = Error;
 
     #[inline]
-    /// Auto-generated documentation for forward.
+    /// Core abstraction for `forward` within the Kindle framework..
     fn forward(&self, x: Tensor<InS, B>) -> core::result::Result<Self::Output, Error> {
         let weight = self.weight.as_tensor()?.into_dyn();
         let bias = self.bias.as_tensor()?.into_dyn();

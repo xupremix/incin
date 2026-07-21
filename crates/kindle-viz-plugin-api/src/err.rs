@@ -4,23 +4,23 @@
 
 use core::fmt::Debug;
 
-/// Auto-generated documentation for Result.
+/// Convenience type alias for `Result<T, Error>`.
 pub type Result<T> = core::result::Result<T, Error>;
 
 #[derive(thiserror::Error)]
-/// Auto-generated documentation for Error.
+/// Plugin API error types.
 pub enum Error {
     #[error("I/O error: {0}")]
-    /// Auto-generated documentation for Io.
+    /// Underlying I/O error.
     Io(#[from] std::io::Error),
 
     #[error("Generic Message: {0}")]
-    /// Auto-generated documentation for Msg.
+    /// Generic message string error.
     Msg(String),
 }
 
 impl Debug for Error {
-    /// Auto-generated documentation for fmt.
+    /// Format error using Display representation.
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{self}")
     }

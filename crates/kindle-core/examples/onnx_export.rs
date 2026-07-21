@@ -5,7 +5,7 @@ extern crate alloc;
 use alloc::collections::BTreeMap;
 use std::path::Path;
 
-/// Auto-generated documentation for B.
+/// Core abstraction for `B` within the Kindle framework.
 type B = TracingBackend<DummyBackend<f32, Cpu>>;
 
 fn main() -> anyhow::Result<()> {

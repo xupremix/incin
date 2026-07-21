@@ -3,11 +3,11 @@ use kindle::prelude::*;
 extern crate alloc;
 use alloc::collections::BTreeMap;
 
-/// Auto-generated documentation for CpuBackend.
+/// Implementation of `CpuBackend` for the respective backend.
 type CpuBackend = DefaultBackend;
 
 #[test]
-/// Auto-generated documentation for test_state_dict_extraction.
+/// Core abstraction for `test_state_dict_extraction` within the Kindle framework.
 fn test_state_dict_extraction() -> Result<()> {
     let layer = Linear::<s![10, 5], CpuBackend>::new()?;
     let mut map = BTreeMap::new();

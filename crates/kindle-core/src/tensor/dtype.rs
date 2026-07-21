@@ -3,62 +3,62 @@ use crate::prelude::Dyn;
 use core::{fmt::Debug, marker::PhantomData};
 pub use half::{bf16, f16};
 
-/// Auto-generated documentation for DType.
+/// Core abstraction for `DType` within the Kindle framework..
 pub trait DType: 'static + Clone + Debug + Send + Sync + PartialEq {
-    /// Auto-generated documentation for Arg.
+    /// Core abstraction for `Arg` within the Kindle framework..
     type Arg;
-    /// Auto-generated documentation for Field.
+    /// Core abstraction for `Field` within the Kindle framework..
     type Field: Debug + Clone;
-    /// Auto-generated documentation for init.
+    /// Core abstraction for `init` within the Kindle framework..
     fn init(arg: Self::Arg) -> Self::Field;
-    /// Auto-generated documentation for to_kindle.
+    /// Core abstraction for `to_kindle` within the Kindle framework..
     fn to_kindle(dtype: &Self::Field) -> KindleDType;
 }
 
-/// Auto-generated documentation for DynDType.
+/// Core abstraction for `DynDType` within the Kindle framework..
 pub trait DynDType: DType {}
 
-/// Auto-generated documentation for FloatDType.
+/// Core abstraction for `FloatDType` within the Kindle framework..
 pub trait FloatDType: DType {}
-/// Auto-generated documentation for IntDType.
+/// Core abstraction for `IntDType` within the Kindle framework..
 pub trait IntDType: DType {}
-/// Auto-generated documentation for BoolDType.
+/// Core abstraction for `BoolDType` within the Kindle framework..
 pub trait BoolDType: DType {}
 
-/// Auto-generated documentation for ConstDType.
+/// Core abstraction for `ConstDType` within the Kindle framework..
 pub trait ConstDType: DType<Arg = ()> {
     /// The Rust element type corresponding to this dtype.
     type Elem: 'static + Copy + Debug + Send + Sync;
-    /// Auto-generated documentation for DTYPE.
+    /// Core abstraction for `DTYPE` within the Kindle framework..
     const DTYPE: KindleDType;
 }
 
-/// Auto-generated documentation for QuantDType.
+/// Core abstraction for `QuantDType` within the Kindle framework..
 pub trait QuantDType: DType {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-/// Auto-generated documentation for Q8_0.
+/// Core abstraction for `Q8_0` within the Kindle framework..
 pub struct Q8_0;
 
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-/// Auto-generated documentation for KindleDType.
+/// Core abstraction for `KindleDType` within the Kindle framework..
 pub enum KindleDType {
-    /// Auto-generated documentation for U8.
+    /// Core abstraction for `U8` within the Kindle framework..
     U8,
-    /// Auto-generated documentation for U32.
+    /// Core abstraction for `U32` within the Kindle framework..
     U32,
-    /// Auto-generated documentation for I64.
+    /// Core abstraction for `I64` within the Kindle framework..
     I64,
-    /// Auto-generated documentation for BF16.
+    /// Core abstraction for `BF16` within the Kindle framework..
     BF16,
-    /// Auto-generated documentation for F16.
+    /// Core abstraction for `F16` within the Kindle framework..
     F16,
-    /// Auto-generated documentation for F32.
+    /// Core abstraction for `F32` within the Kindle framework..
     F32,
-    /// Auto-generated documentation for F64.
+    /// Core abstraction for `F64` within the Kindle framework..
     F64,
-    /// Auto-generated documentation for Q8_0.
+    /// Core abstraction for `Q8_0` within the Kindle framework..
     Q8_0,
 }
 
@@ -66,24 +66,24 @@ macro_rules! impl_dtype {
     ($($repr:ident $t:ty),* $(,)?) => {
         $(
             impl DType for $t {
-                /// Auto-generated documentation for Arg.
+                /// Core abstraction for `Arg` within the Kindle framework..
                 type Arg = ();
-                /// Auto-generated documentation for Field.
+                /// Core abstraction for `Field` within the Kindle framework..
                 type Field = PhantomData<$t>;
-                /// Auto-generated documentation for to_kindle.
+                /// Core abstraction for `to_kindle` within the Kindle framework..
                 fn to_kindle(_: &Self::Field) -> KindleDType {
                     KindleDType::$repr
                 }
-                /// Auto-generated documentation for init.
+                /// Core abstraction for `init` within the Kindle framework..
                 fn init(_: Self::Arg) -> Self::Field {
                     PhantomData
                 }
             }
             impl DynDType for $t { }
             impl ConstDType for $t {
-                /// Auto-generated documentation for Elem.
+                /// Core abstraction for `Elem` within the Kindle framework..
                 type Elem = $t;
-                /// Auto-generated documentation for DTYPE.
+                /// Core abstraction for `DTYPE` within the Kindle framework..
                 const DTYPE: KindleDType = KindleDType::$repr;
             }
         )*
@@ -113,17 +113,17 @@ impl IntDType for i64 {}
 impl QuantDType for Q8_0 {}
 
 impl DType for Dyn {
-    /// Auto-generated documentation for Arg.
+    /// Core abstraction for `Arg` within the Kindle framework..
     type Arg = KindleDType;
-    /// Auto-generated documentation for Field.
+    /// Core abstraction for `Field` within the Kindle framework..
     type Field = KindleDType;
 
-    /// Auto-generated documentation for init.
+    /// Core abstraction for `init` within the Kindle framework..
     fn init(arg: Self::Arg) -> Self::Field {
         arg
     }
 
-    /// Auto-generated documentation for to_kindle.
+    /// Core abstraction for `to_kindle` within the Kindle framework..
     fn to_kindle(dtype: &Self::Field) -> KindleDType {
         *dtype
     }

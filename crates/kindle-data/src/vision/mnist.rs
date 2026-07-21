@@ -2,18 +2,18 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
-/// Auto-generated documentation for MnistDataset.
+/// Core abstraction for `MnistDataset` within the Kindle framework.
 pub struct MnistDataset {
-    /// Auto-generated documentation for images.
+    /// Core abstraction for `images` within the Kindle framework.
     pub images: Vec<u8>,
-    /// Auto-generated documentation for labels.
+    /// Core abstraction for `labels` within the Kindle framework.
     pub labels: Vec<u8>,
-    /// Auto-generated documentation for train.
+    /// Core abstraction for `train` within the Kindle framework.
     pub train: bool,
 }
 
 impl MnistDataset {
-    /// Auto-generated documentation for new.
+    /// Core abstraction for `new` within the Kindle framework.
     pub fn new<P: AsRef<Path>>(dir: P, train: bool) -> anyhow::Result<Self> {
         let dir = dir.as_ref();
         let (images_url, labels_url) = if train {
@@ -86,7 +86,7 @@ impl MnistDataset {
         })
     }
 
-    /// Auto-generated documentation for parse_images.
+    /// Core abstraction for `parse_images` within the Kindle framework.
     fn parse_images(path: &Path) -> anyhow::Result<Vec<u8>> {
         let mut f = File::open(path)?;
         let mut magic = [0u8; 4];
@@ -109,7 +109,7 @@ impl MnistDataset {
         Ok(data)
     }
 
-    /// Auto-generated documentation for parse_labels.
+    /// Core abstraction for `parse_labels` within the Kindle framework.
     fn parse_labels(path: &Path) -> anyhow::Result<Vec<u8>> {
         let mut f = File::open(path)?;
         let mut magic = [0u8; 4];
@@ -128,15 +128,15 @@ impl MnistDataset {
 }
 
 impl crate::dataset::Dataset for MnistDataset {
-    /// Auto-generated documentation for Item.
+    /// Core abstraction for `Item` within the Kindle framework.
     type Item = (Vec<f32>, u8);
 
-    /// Auto-generated documentation for len.
+    /// Core abstraction for `len` within the Kindle framework.
     fn len(&self) -> usize {
         self.labels.len()
     }
 
-    /// Auto-generated documentation for get.
+    /// Core abstraction for `get` within the Kindle framework.
     fn get(&self, index: usize) -> Option<Self::Item> {
         if index >= self.labels.len() {
             return None;

@@ -1,11 +1,11 @@
 extern crate alloc;
 use kindle::prelude::*;
 
-/// Auto-generated documentation for B.
+/// Core abstraction for `B` within the Kindle framework.
 type B = DefaultBackend;
 
 #[module]
-/// Auto-generated documentation for MyModel.
+/// Core abstraction for `MyModel` within the Kindle framework.
 struct MyModel {
     l1: Linear<s![10, 20], B>,
     l2: Linear<s![20, 20], B>,
@@ -15,7 +15,7 @@ struct MyModel {
 
 impl MyModel {
     #[allow(dead_code)]
-    /// Auto-generated documentation for forward.
+    /// Core abstraction for `forward` within the Kindle framework.
     pub fn forward(
         &self,
         x: Tensor<s![2, 2, 2, dyn, 10]>,

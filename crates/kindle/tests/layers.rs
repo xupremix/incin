@@ -1,10 +1,10 @@
 use kindle::prelude::*;
 use kindle::{Conv2d, Linear};
-/// Auto-generated documentation for B.
+/// Core abstraction for `B` within the Kindle framework.
 type B = kindle_backends::cpu::CpuBackend<f32, kindle_core::prelude::Cpu>;
 
 #[test]
-/// Auto-generated documentation for test_linear_mixed_shapes.
+/// Core abstraction for `test_linear_mixed_shapes` within the Kindle framework.
 fn test_linear_mixed_shapes() {
     // 1. Fully static
     let _ = Linear::<s![3, 4], B>::new().unwrap();
@@ -20,7 +20,7 @@ fn test_linear_mixed_shapes() {
 }
 
 #[test]
-/// Auto-generated documentation for test_conv2d_mixed_shapes.
+/// Core abstraction for `test_conv2d_mixed_shapes` within the Kindle framework.
 fn test_conv2d_mixed_shapes() {
     // Conv2d<S: Conv2dShape, B: Backend>
     // S = (OutC, InC, K, S, P, D)
@@ -39,7 +39,7 @@ fn test_conv2d_mixed_shapes() {
 }
 
 #[test]
-/// Auto-generated documentation for test_tensor_mixed_shapes.
+/// Core abstraction for `test_tensor_mixed_shapes` within the Kindle framework.
 fn test_tensor_mixed_shapes() {
     let _ = Tensor::<s![3, 4], B>::zeros(()).unwrap();
     let _ = Tensor::<s![dyn, dyn], B>::zeros((3, 4)).unwrap();

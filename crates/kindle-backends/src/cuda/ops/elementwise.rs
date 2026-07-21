@@ -2,15 +2,15 @@ use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
 use kindle_core::prelude::Result;
 
-/// Auto-generated documentation for ELEMENTWISE_UNARY_TEMPLATE.
+/// Core abstraction for `ELEMENTWISE_UNARY_TEMPLATE` within the Kindle framework..
 pub const ELEMENTWISE_UNARY_TEMPLATE: &str = r#"
 extern "C" __global__ void unary_op_{OP_NAME}(
-    /// Auto-generated documentation for float.
+    /// Core abstraction for `float` within the Kindle framework..
     const float* input,
     float* output,
-    /// Auto-generated documentation for int.
+    /// Core abstraction for `int` within the Kindle framework..
     const int* shape,
-    /// Auto-generated documentation for int.
+    /// Core abstraction for `int` within the Kindle framework..
     const int* strides,
     int offset,
     int numel,
@@ -32,23 +32,23 @@ extern "C" __global__ void unary_op_{OP_NAME}(
 }
 "#;
 
-/// Auto-generated documentation for ELEMENTWISE_BINARY_TEMPLATE.
+/// Core abstraction for `ELEMENTWISE_BINARY_TEMPLATE` within the Kindle framework..
 pub const ELEMENTWISE_BINARY_TEMPLATE: &str = r#"
 extern "C" __global__ void binary_op_{OP_NAME}(
-    /// Auto-generated documentation for float.
+    /// Core abstraction for `float` within the Kindle framework..
     const float* lhs,
-    /// Auto-generated documentation for float.
+    /// Core abstraction for `float` within the Kindle framework..
     const float* rhs,
     float* output,
-    /// Auto-generated documentation for int.
+    /// Core abstraction for `int` within the Kindle framework..
     const int* out_shape,
-    /// Auto-generated documentation for int.
+    /// Core abstraction for `int` within the Kindle framework..
     const int* lhs_shape,
-    /// Auto-generated documentation for int.
+    /// Core abstraction for `int` within the Kindle framework..
     const int* rhs_shape,
-    /// Auto-generated documentation for int.
+    /// Core abstraction for `int` within the Kindle framework..
     const int* lhs_strides,
-    /// Auto-generated documentation for int.
+    /// Core abstraction for `int` within the Kindle framework..
     const int* rhs_strides,
     int lhs_offset,
     int rhs_offset,
@@ -83,7 +83,7 @@ extern "C" __global__ void binary_op_{OP_NAME}(
 "#;
 
 #[cfg(feature = "cuda")]
-/// Auto-generated documentation for launch_unary_op.
+/// Core abstraction for `launch_unary_op` within the Kindle framework..
 pub(crate) fn launch_unary_op(
     op_name: &str,
     op_expr: &str,
@@ -164,7 +164,7 @@ pub(crate) fn launch_unary_op(
 }
 
 #[cfg(feature = "cuda")]
-/// Auto-generated documentation for launch_binary_op.
+/// Core abstraction for `launch_binary_op` within the Kindle framework..
 pub(crate) fn launch_binary_op(
     op_name: &str,
     op_expr: &str,

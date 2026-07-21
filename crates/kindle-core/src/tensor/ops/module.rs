@@ -10,7 +10,7 @@ impl<
 > Tensor<S, B, K, D, G>
 {
     #[inline]
-    /// Auto-generated documentation for layer_norm.
+    /// Core abstraction for `layer_norm` within the Kindle framework..
     pub fn layer_norm(
         &self,
         weight: &Tensor<Dyn, B, K, D, G>,
@@ -29,7 +29,7 @@ impl<
     }
 
     #[inline]
-    /// Auto-generated documentation for batch_norm.
+    /// Core abstraction for `batch_norm` within the Kindle framework..
     pub fn batch_norm(
         &self,
         weight: &Tensor<Dyn, B, K, D, G>,

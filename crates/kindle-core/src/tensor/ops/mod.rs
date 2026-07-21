@@ -1,16 +1,16 @@
-/// Auto-generated documentation for binary.
+/// Core abstraction for `binary` within the Kindle framework..
 pub mod binary;
-/// Auto-generated documentation for index.
+/// Core abstraction for `index` within the Kindle framework..
 pub mod index;
-/// Auto-generated documentation for loss.
+/// Core abstraction for `loss` within the Kindle framework..
 pub mod loss;
-/// Auto-generated documentation for manipulation.
+/// Core abstraction for `manipulation` within the Kindle framework..
 pub mod manipulation;
-/// Auto-generated documentation for module.
+/// Core abstraction for `module` within the Kindle framework..
 pub mod module;
-/// Auto-generated documentation for reduce.
+/// Core abstraction for `reduce` within the Kindle framework..
 pub mod reduce;
-/// Auto-generated documentation for unary.
+/// Core abstraction for `unary` within the Kindle framework..
 pub mod unary;
 
 pub use index::*;

@@ -14,17 +14,17 @@ use ratatui::{
 };
 
 #[derive(PartialEq, Eq)]
-/// Auto-generated documentation for ViewMode.
+/// Core abstraction for `ViewMode` within the Kindle framework.
 pub enum ViewMode {
-    /// Auto-generated documentation for List.
+    /// Core abstraction for `List` within the Kindle framework.
     List,
-    /// Auto-generated documentation for Canvas3D.
+    /// Core abstraction for `Canvas3D` within the Kindle framework.
     Canvas3D,
-    /// Auto-generated documentation for Canvas2D.
+    /// Core abstraction for `Canvas2D` within the Kindle framework.
     Canvas2D,
 }
 
-/// Auto-generated documentation for GraphModuleListPanel.
+/// Core abstraction for `GraphModuleListPanel` within the Kindle framework.
 pub struct GraphModuleListPanel {
     snapshot: Option<GraphSnapshotEvent>,
     scroll_offset: usize,
@@ -47,7 +47,7 @@ impl Default for GraphModuleListPanel {
 }
 
 impl GraphModuleListPanel {
-    /// Auto-generated documentation for new.
+    /// Core abstraction for `new` within the Kindle framework.
     pub fn new() -> Self {
         Self {
             snapshot: None,
@@ -62,7 +62,7 @@ impl GraphModuleListPanel {
         }
     }
 
-    /// Auto-generated documentation for calculate_3d_layout.
+    /// Core abstraction for `calculate_3d_layout` within the Kindle framework.
     fn calculate_3d_layout(
         &self,
         snapshot: &GraphSnapshotEvent,
@@ -124,12 +124,12 @@ impl GraphModuleListPanel {
 }
 
 impl Panel for GraphModuleListPanel {
-    /// Auto-generated documentation for id.
+    /// Core abstraction for `id` within the Kindle framework.
     fn id(&self) -> &'static str {
         "graph_modules"
     }
 
-    /// Auto-generated documentation for title.
+    /// Core abstraction for `title` within the Kindle framework.
     fn title(&self) -> &str {
         match self.view_mode {
             ViewMode::List => "Model Structure (List | Press 'v' for 2D)",
@@ -140,14 +140,14 @@ impl Panel for GraphModuleListPanel {
         }
     }
 
-    /// Auto-generated documentation for update.
+    /// Core abstraction for `update` within the Kindle framework.
     fn update(&mut self, event: &Event) {
         if let Event::GraphSnapshot(m) = event {
             self.snapshot = Some(m.clone());
         }
     }
 
-    /// Auto-generated documentation for render.
+    /// Core abstraction for `render` within the Kindle framework.
     fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) {
         let area = ctx.area();
         let frame = ctx.frame_mut();
@@ -359,7 +359,7 @@ impl Panel for GraphModuleListPanel {
         }
     }
 
-    /// Auto-generated documentation for handle_event.
+    /// Core abstraction for `handle_event` within the Kindle framework.
     fn handle_event(&mut self, event: &PanelEvent) -> bool {
         match event {
             PanelEvent::Key(k) => match k.code {
@@ -444,7 +444,7 @@ impl Panel for GraphModuleListPanel {
         }
     }
 
-    /// Auto-generated documentation for reset.
+    /// Core abstraction for `reset` within the Kindle framework.
     fn reset(&mut self) {
         self.snapshot = None;
         self.scroll_offset = 0;

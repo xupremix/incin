@@ -4,121 +4,121 @@ use crate::prelude::*;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Reduction {
     #[default]
-    /// Auto-generated documentation for Mean.
+    /// Core abstraction for `Mean` within the Kindle framework..
     Mean,
-    /// Auto-generated documentation for Sum.
+    /// Core abstraction for `Sum` within the Kindle framework..
     Sum,
-    /// Auto-generated documentation for None.
+    /// Core abstraction for `None` within the Kindle framework..
     None,
 }
 
-/// Auto-generated documentation for ReductionMode.
+/// Core abstraction for `ReductionMode` within the Kindle framework..
 pub trait ReductionMode: Clone + Default + 'static {
-    /// Auto-generated documentation for as_enum.
+    /// Core abstraction for `as_enum` within the Kindle framework..
     fn as_enum() -> Reduction;
 }
 
 #[derive(Debug, Clone, Copy, Default)]
-/// Auto-generated documentation for Mean.
+/// Core abstraction for `Mean` within the Kindle framework..
 pub struct Mean;
 impl ReductionMode for Mean {
-    /// Auto-generated documentation for as_enum.
+    /// Core abstraction for `as_enum` within the Kindle framework..
     fn as_enum() -> Reduction {
         Reduction::Mean
     }
 }
 
 #[derive(Debug, Clone, Copy, Default)]
-/// Auto-generated documentation for Sum.
+/// Core abstraction for `Sum` within the Kindle framework..
 pub struct Sum;
 impl ReductionMode for Sum {
-    /// Auto-generated documentation for as_enum.
+    /// Core abstraction for `as_enum` within the Kindle framework..
     fn as_enum() -> Reduction {
         Reduction::Sum
     }
 }
 
 #[derive(Debug, Clone, Copy, Default)]
-/// Auto-generated documentation for NoneReduction.
+/// Core abstraction for `NoneReduction` within the Kindle framework..
 pub struct NoneReduction;
 impl ReductionMode for NoneReduction {
-    /// Auto-generated documentation for as_enum.
+    /// Core abstraction for `as_enum` within the Kindle framework..
     fn as_enum() -> Reduction {
         Reduction::None
     }
 }
 
-/// Auto-generated documentation for MseReductionShape.
+/// Core abstraction for `MseReductionShape` within the Kindle framework..
 pub trait MseReductionShape<S: Shape> {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output: Shape;
 }
 impl<S: Shape> MseReductionShape<S> for Mean {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = ();
 }
 impl<S: Shape> MseReductionShape<S> for Sum {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = ();
 }
 impl<S: Shape> MseReductionShape<S> for NoneReduction {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = S;
 }
 
-/// Auto-generated documentation for CrossEntropyReductionShape.
+/// Core abstraction for `CrossEntropyReductionShape` within the Kindle framework..
 pub trait CrossEntropyReductionShape<S: Shape> {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output: Shape;
 }
 impl<S: Shape> CrossEntropyReductionShape<S> for Mean {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = ();
 }
 impl<S: Shape> CrossEntropyReductionShape<S> for Sum {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = ();
 }
 impl<S: Shape + crate::shapes::shape_ops::ReduceDim<1>> CrossEntropyReductionShape<S>
     for NoneReduction
 {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = S::Output;
 }
 
-/// Auto-generated documentation for BceReductionShape.
+/// Core abstraction for `BceReductionShape` within the Kindle framework..
 pub trait BceReductionShape<S: Shape> {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output: Shape;
 }
 impl<S: Shape> BceReductionShape<S> for Mean {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = ();
 }
 impl<S: Shape> BceReductionShape<S> for Sum {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = ();
 }
 impl<S: Shape> BceReductionShape<S> for NoneReduction {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = S;
 }
 
-/// Auto-generated documentation for L1ReductionShape.
+/// Core abstraction for `L1ReductionShape` within the Kindle framework..
 pub trait L1ReductionShape<S: Shape> {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output: Shape;
 }
 impl<S: Shape> L1ReductionShape<S> for Mean {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = ();
 }
 impl<S: Shape> L1ReductionShape<S> for Sum {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = ();
 }
 impl<S: Shape> L1ReductionShape<S> for NoneReduction {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = S;
 }
 
@@ -131,7 +131,7 @@ impl<S: Shape> MSEShape<S> for S {}
 pub struct MSELoss<R: ReductionMode = Mean>(core::marker::PhantomData<R>);
 
 impl<R: ReductionMode> MSELoss<R> {
-    /// Auto-generated documentation for new.
+    /// Core abstraction for `new` within the Kindle framework..
     pub fn new() -> Self {
         Self(core::marker::PhantomData)
     }
@@ -184,7 +184,7 @@ impl<Batch: Dim> CrossEntropyShape<(Batch,)> for Dyn {}
 pub struct CrossEntropyLoss<R: ReductionMode = Mean>(core::marker::PhantomData<R>);
 
 impl<R: ReductionMode> CrossEntropyLoss<R> {
-    /// Auto-generated documentation for new.
+    /// Core abstraction for `new` within the Kindle framework..
     pub fn new() -> Self {
         Self(core::marker::PhantomData)
     }
@@ -236,7 +236,7 @@ impl<S: crate::prelude::Shape> L1Shape<S> for S {}
 pub struct L1Loss<R: ReductionMode = Mean>(core::marker::PhantomData<R>);
 
 impl<R: ReductionMode> L1Loss<R> {
-    /// Auto-generated documentation for new.
+    /// Core abstraction for `new` within the Kindle framework..
     pub fn new() -> Self {
         Self(core::marker::PhantomData)
     }
@@ -281,7 +281,7 @@ impl<S: crate::prelude::Shape> BCEWithLogitsShape<S> for S {}
 pub struct BCEWithLogitsLoss<R: ReductionMode = Mean>(core::marker::PhantomData<R>);
 
 impl<R: ReductionMode> BCEWithLogitsLoss<R> {
-    /// Auto-generated documentation for new.
+    /// Core abstraction for `new` within the Kindle framework..
     pub fn new() -> Self {
         Self(core::marker::PhantomData)
     }

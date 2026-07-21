@@ -5,13 +5,13 @@
 #[macro_use]
 extern crate alloc;
 
-/// Auto-generated documentation for app.
+/// Core abstraction for `app` within the Kindle framework.
 pub mod app;
-/// Auto-generated documentation for dispatch.
+/// Core abstraction for `dispatch` within the Kindle framework.
 pub mod dispatch;
-/// Auto-generated documentation for err.
+/// Core abstraction for `err` within the Kindle framework.
 pub mod err;
-/// Auto-generated documentation for panels.
+/// Core abstraction for `panels` within the Kindle framework.
 pub mod panels;
-/// Auto-generated documentation for transport_reader.
+/// Core abstraction for `transport_reader` within the Kindle framework.
 pub mod transport_reader;

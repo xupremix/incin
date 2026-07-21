@@ -6,109 +6,109 @@
 //! or dynamically (using `try_stack` / `dyn_slice`) depending on the operation chosen.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-/// Auto-generated documentation for IndexSpec.
+/// Core abstraction for `IndexSpec` within the Kindle framework..
 pub enum IndexSpec {
-    /// Auto-generated documentation for All.
+    /// Core abstraction for `All` within the Kindle framework..
     All,
-    /// Auto-generated documentation for Range.
+    /// Core abstraction for `Range` within the Kindle framework..
     Range(isize, isize),
-    /// Auto-generated documentation for RangeFrom.
+    /// Core abstraction for `RangeFrom` within the Kindle framework..
     RangeFrom(isize),
-    /// Auto-generated documentation for RangeTo.
+    /// Core abstraction for `RangeTo` within the Kindle framework..
     RangeTo(isize),
-    /// Auto-generated documentation for Index.
+    /// Core abstraction for `Index` within the Kindle framework..
     Index(isize),
 }
 
 impl From<isize> for IndexSpec {
-    /// Auto-generated documentation for from.
+    /// Core abstraction for `from` within the Kindle framework..
     fn from(idx: isize) -> Self {
         IndexSpec::Index(idx)
     }
 }
 impl From<core::ops::Range<isize>> for IndexSpec {
-    /// Auto-generated documentation for from.
+    /// Core abstraction for `from` within the Kindle framework..
     fn from(r: core::ops::Range<isize>) -> Self {
         IndexSpec::Range(r.start, r.end)
     }
 }
 impl From<core::ops::RangeFrom<isize>> for IndexSpec {
-    /// Auto-generated documentation for from.
+    /// Core abstraction for `from` within the Kindle framework..
     fn from(r: core::ops::RangeFrom<isize>) -> Self {
         IndexSpec::RangeFrom(r.start)
     }
 }
 impl From<core::ops::RangeTo<isize>> for IndexSpec {
-    /// Auto-generated documentation for from.
+    /// Core abstraction for `from` within the Kindle framework..
     fn from(r: core::ops::RangeTo<isize>) -> Self {
         IndexSpec::RangeTo(r.end)
     }
 }
 
 impl From<usize> for IndexSpec {
-    /// Auto-generated documentation for from.
+    /// Core abstraction for `from` within the Kindle framework..
     fn from(idx: usize) -> Self {
         IndexSpec::Index(idx as isize)
     }
 }
 impl From<core::ops::Range<usize>> for IndexSpec {
-    /// Auto-generated documentation for from.
+    /// Core abstraction for `from` within the Kindle framework..
     fn from(r: core::ops::Range<usize>) -> Self {
         IndexSpec::Range(r.start as isize, r.end as isize)
     }
 }
 impl From<core::ops::RangeFrom<usize>> for IndexSpec {
-    /// Auto-generated documentation for from.
+    /// Core abstraction for `from` within the Kindle framework..
     fn from(r: core::ops::RangeFrom<usize>) -> Self {
         IndexSpec::RangeFrom(r.start as isize)
     }
 }
 impl From<core::ops::RangeTo<usize>> for IndexSpec {
-    /// Auto-generated documentation for from.
+    /// Core abstraction for `from` within the Kindle framework..
     fn from(r: core::ops::RangeTo<usize>) -> Self {
         IndexSpec::RangeTo(r.end as isize)
     }
 }
 impl From<i32> for IndexSpec {
-    /// Auto-generated documentation for from.
+    /// Core abstraction for `from` within the Kindle framework..
     fn from(idx: i32) -> Self {
         IndexSpec::Index(idx as isize)
     }
 }
 
 impl From<core::ops::Range<i32>> for IndexSpec {
-    /// Auto-generated documentation for from.
+    /// Core abstraction for `from` within the Kindle framework..
     fn from(r: core::ops::Range<i32>) -> Self {
         IndexSpec::Range(r.start as isize, r.end as isize)
     }
 }
 impl From<core::ops::RangeFrom<i32>> for IndexSpec {
-    /// Auto-generated documentation for from.
+    /// Core abstraction for `from` within the Kindle framework..
     fn from(r: core::ops::RangeFrom<i32>) -> Self {
         IndexSpec::RangeFrom(r.start as isize)
     }
 }
 impl From<core::ops::RangeTo<i32>> for IndexSpec {
-    /// Auto-generated documentation for from.
+    /// Core abstraction for `from` within the Kindle framework..
     fn from(r: core::ops::RangeTo<i32>) -> Self {
         IndexSpec::RangeTo(r.end as isize)
     }
 }
 impl From<core::ops::RangeFull> for IndexSpec {
-    /// Auto-generated documentation for from.
+    /// Core abstraction for `from` within the Kindle framework..
     fn from(_: core::ops::RangeFull) -> Self {
         IndexSpec::All
     }
 }
 
-/// Auto-generated documentation for IndexArgs.
+/// Core abstraction for `IndexArgs` within the Kindle framework..
 pub trait IndexArgs {
-    /// Auto-generated documentation for into_specs.
+    /// Core abstraction for `into_specs` within the Kindle framework..
     fn into_specs(self) -> alloc::vec::Vec<IndexSpec>;
 }
 
 impl<T: Into<IndexSpec>> IndexArgs for T {
-    /// Auto-generated documentation for into_specs.
+    /// Core abstraction for `into_specs` within the Kindle framework..
     fn into_specs(self) -> alloc::vec::Vec<IndexSpec> {
         alloc::vec![self.into()]
     }
@@ -117,7 +117,7 @@ impl<T: Into<IndexSpec>> IndexArgs for T {
 macro_rules! impl_index_args_tuple {
     ($($t:ident),+) => {
         impl<$($t: Into<IndexSpec>),+> IndexArgs for ($($t,)+) {
-            /// Auto-generated documentation for into_specs.
+            /// Core abstraction for `into_specs` within the Kindle framework..
             fn into_specs(self) -> alloc::vec::Vec<IndexSpec> {
                 let mut specs = alloc::vec::Vec::new();
                 #[allow(non_snake_case)]
@@ -139,36 +139,36 @@ impl_index_args_tuple!(A, B, C, D, E);
 impl_index_args_tuple!(A, B, C, D, E, F);
 impl_index_args_tuple!(A, B, C, D, E, F, G);
 
-/// Auto-generated documentation for ShapeEq.
+/// Core abstraction for `ShapeEq` within the Kindle framework..
 pub trait ShapeEq<Other> {
-    /// Auto-generated documentation for SHAPES_EQUAL.
+    /// Core abstraction for `SHAPES_EQUAL` within the Kindle framework..
     const SHAPES_EQUAL: bool;
-    /// Auto-generated documentation for ASSERT_SHAPES_MATCH.
+    /// Core abstraction for `ASSERT_SHAPES_MATCH` within the Kindle framework..
     const ASSERT_SHAPES_MATCH: ();
 }
 
 impl<S> ShapeEq<S> for S {
-    /// Auto-generated documentation for SHAPES_EQUAL.
+    /// Core abstraction for `SHAPES_EQUAL` within the Kindle framework..
     const SHAPES_EQUAL: bool = true;
-    /// Auto-generated documentation for ASSERT_SHAPES_MATCH.
+    /// Core abstraction for `ASSERT_SHAPES_MATCH` within the Kindle framework..
     const ASSERT_SHAPES_MATCH: () = assert!(
         Self::SHAPES_EQUAL,
         "Shape Mismatch: Attempted to operate on tensors of incompatible shapes."
     );
 }
 
-/// Auto-generated documentation for DTypeEq.
+/// Core abstraction for `DTypeEq` within the Kindle framework..
 pub trait DTypeEq<Other> {
-    /// Auto-generated documentation for DTYPES_EQUAL.
+    /// Core abstraction for `DTYPES_EQUAL` within the Kindle framework..
     const DTYPES_EQUAL: bool;
-    /// Auto-generated documentation for ASSERT_DTYPES_MATCH.
+    /// Core abstraction for `ASSERT_DTYPES_MATCH` within the Kindle framework..
     const ASSERT_DTYPES_MATCH: ();
 }
 
 impl<T> DTypeEq<T> for T {
-    /// Auto-generated documentation for DTYPES_EQUAL.
+    /// Core abstraction for `DTYPES_EQUAL` within the Kindle framework..
     const DTYPES_EQUAL: bool = true;
-    /// Auto-generated documentation for ASSERT_DTYPES_MATCH.
+    /// Core abstraction for `ASSERT_DTYPES_MATCH` within the Kindle framework..
     const ASSERT_DTYPES_MATCH: () = assert!(
         Self::DTYPES_EQUAL,
         "DType Mismatch: Attempted to operate on tensors of incompatible datatypes."

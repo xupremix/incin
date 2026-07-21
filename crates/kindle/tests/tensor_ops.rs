@@ -1,6 +1,6 @@
 use kindle::prelude::*;
 
-/// Auto-generated documentation for CpuBackend.
+/// Implementation of `CpuBackend` for the respective backend.
 type CpuBackend = DefaultBackend;
 
 fn to_vec(t: &Tensor<Dyn, CpuBackend>) -> Vec<f32> {
@@ -11,7 +11,7 @@ fn to_vec(t: &Tensor<Dyn, CpuBackend>) -> Vec<f32> {
 // 1.1 Unary Operations
 // -----------------------------------------------------------------------------
 #[test]
-/// Auto-generated documentation for test_unary_abs.
+/// Core abstraction for `test_unary_abs` within the Kindle framework.
 fn test_unary_abs() -> Result<()> {
     // permutations: positive, negative, zero, very small numbers, very large numbers, NaN, Inf
     let t = Tensor::<s![7], CpuBackend>::from_slice(
@@ -30,7 +30,7 @@ fn test_unary_abs() -> Result<()> {
 }
 
 #[test]
-/// Auto-generated documentation for test_unary_relu.
+/// Core abstraction for `test_unary_relu` within the Kindle framework.
 fn test_unary_relu() -> Result<()> {
     // positive (unchanged), negative (zeroed), zero
     let t = Tensor::<s![3], CpuBackend>::from_slice(&[5.0, -5.0, 0.0], ())?;
@@ -40,7 +40,7 @@ fn test_unary_relu() -> Result<()> {
 }
 
 #[test]
-/// Auto-generated documentation for test_unary_gelu.
+/// Core abstraction for `test_unary_gelu` within the Kindle framework.
 fn test_unary_gelu() -> Result<()> {
     // standard normal values, extreme negatives/positives
     let t = Tensor::<s![3], CpuBackend>::from_slice(&[0.0, -10.0, 10.0], ())?;
@@ -52,7 +52,7 @@ fn test_unary_gelu() -> Result<()> {
 }
 
 #[test]
-/// Auto-generated documentation for test_unary_swish.
+/// Core abstraction for `test_unary_swish` within the Kindle framework.
 fn test_unary_swish() -> Result<()> {
     // beta=1 definitions
     let t = Tensor::<s![2], CpuBackend>::from_slice(&[0.0, 1.0], ())?;
@@ -63,7 +63,7 @@ fn test_unary_swish() -> Result<()> {
 }
 
 #[test]
-/// Auto-generated documentation for test_unary_softmax.
+/// Core abstraction for `test_unary_softmax` within the Kindle framework.
 fn test_unary_softmax() -> Result<()> {
     // dim 0, dim 1, very large/small values
     // Softmax along dim 1
@@ -87,7 +87,7 @@ fn test_unary_softmax() -> Result<()> {
 }
 
 #[test]
-/// Auto-generated documentation for test_unary_misc.
+/// Core abstraction for `test_unary_misc` within the Kindle framework.
 fn test_unary_misc() -> Result<()> {
     // neg
     let t_neg = Tensor::<s![3], CpuBackend>::from_slice(&[0.0, 1.0, -1.0], ())?;
@@ -135,7 +135,7 @@ fn test_unary_misc() -> Result<()> {
 // 1.2 Binary Operations
 // -----------------------------------------------------------------------------
 #[test]
-/// Auto-generated documentation for test_binary_add.
+/// Core abstraction for `test_binary_add` within the Kindle framework.
 fn test_binary_add() -> Result<()> {
     // positive + positive, negative + negative, zeroes, very large (overflow potential but f32 handles it)
     let a = Tensor::<s![4], CpuBackend>::from_slice(&[1.0, -1.0, 0.0, 3e38], ())?;
@@ -149,7 +149,7 @@ fn test_binary_add() -> Result<()> {
 }
 
 #[test]
-/// Auto-generated documentation for test_binary_sub.
+/// Core abstraction for `test_binary_sub` within the Kindle framework.
 fn test_binary_sub() -> Result<()> {
     // lhs > rhs, lhs < rhs, identical tensors
     let a = Tensor::<s![3], CpuBackend>::from_slice(&[5.0, 1.0, 3.0], ())?;
@@ -160,7 +160,7 @@ fn test_binary_sub() -> Result<()> {
 }
 
 #[test]
-/// Auto-generated documentation for test_binary_mul.
+/// Core abstraction for `test_binary_mul` within the Kindle framework.
 fn test_binary_mul() -> Result<()> {
     // zeroes, element-wise identity, negative terms
     let a = Tensor::<s![3], CpuBackend>::from_slice(&[0.0, 1.0, -2.0], ())?;
@@ -171,7 +171,7 @@ fn test_binary_mul() -> Result<()> {
 }
 
 #[test]
-/// Auto-generated documentation for test_binary_div.
+/// Core abstraction for `test_binary_div` within the Kindle framework.
 fn test_binary_div() -> Result<()> {
     // standard division, division by zero, precision limits
     let a = Tensor::<s![3], CpuBackend>::from_slice(&[6.0, 1.0, 1.0], ())?;
@@ -187,7 +187,7 @@ fn test_binary_div() -> Result<()> {
 // 1.3 Broadcasting Operations
 // -----------------------------------------------------------------------------
 #[test]
-/// Auto-generated documentation for test_broadcast_scalar.
+/// Core abstraction for `test_broadcast_scalar` within the Kindle framework.
 fn test_broadcast_scalar() -> Result<()> {
     let t = Tensor::<s![2, 2], CpuBackend>::from_slice(&[1.0, 2.0, 3.0, 4.0], ())?.into_dyn();
     let s = Tensor::<s![1], CpuBackend>::from_slice(&[10.0], ())?.into_dyn();
@@ -198,7 +198,7 @@ fn test_broadcast_scalar() -> Result<()> {
 }
 
 #[test]
-/// Auto-generated documentation for test_broadcast_1d_to_2d.
+/// Core abstraction for `test_broadcast_1d_to_2d` within the Kindle framework.
 fn test_broadcast_1d_to_2d() -> Result<()> {
     let t_2d =
         Tensor::<s![2, 3], CpuBackend>::from_slice(&[1.0, 1.0, 1.0, 2.0, 2.0, 2.0], ())?.into_dyn();
@@ -209,7 +209,7 @@ fn test_broadcast_1d_to_2d() -> Result<()> {
 }
 
 #[test]
-/// Auto-generated documentation for test_broadcast_trailing_dims.
+/// Core abstraction for `test_broadcast_trailing_dims` within the Kindle framework.
 fn test_broadcast_trailing_dims() -> Result<()> {
     let t_3d = Tensor::<s![2, 2, 2], CpuBackend>::ones(())?.into_dyn();
     let t_2d = Tensor::<s![2, 2], CpuBackend>::ones(())?.into_dyn();
@@ -222,7 +222,7 @@ fn test_broadcast_trailing_dims() -> Result<()> {
 // 1.4 Reduction Operations
 // -----------------------------------------------------------------------------
 #[test]
-/// Auto-generated documentation for test_reduction_sum.
+/// Core abstraction for `test_reduction_sum` within the Kindle framework.
 fn test_reduction_sum() -> Result<()> {
     let t = Tensor::<s![2, 3], CpuBackend>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
     // sum_all
@@ -241,7 +241,7 @@ fn test_reduction_sum() -> Result<()> {
 }
 
 #[test]
-/// Auto-generated documentation for test_reduction_mean.
+/// Core abstraction for `test_reduction_mean` within the Kindle framework.
 fn test_reduction_mean() -> Result<()> {
     let t = Tensor::<s![2, 2], CpuBackend>::from_slice(&[1.0, 2.0, 3.0, 4.0], ())?;
     assert_eq!(to_vec(&t.clone().mean_all()?.into_dyn())[0], 2.5);
@@ -251,7 +251,7 @@ fn test_reduction_mean() -> Result<()> {
 }
 
 #[test]
-/// Auto-generated documentation for test_reduction_max_min.
+/// Core abstraction for `test_reduction_max_min` within the Kindle framework.
 fn test_reduction_max_min() -> Result<()> {
     let t = Tensor::<s![2, 2], CpuBackend>::from_slice(&[-1.0, 5.0, 0.0, 3.0], ())?;
     // max
@@ -277,7 +277,7 @@ fn test_reduction_max_min() -> Result<()> {
 // 1.5 Manipulation Operations
 // -----------------------------------------------------------------------------
 #[test]
-/// Auto-generated documentation for test_manipulation_reshape_flatten.
+/// Core abstraction for `test_manipulation_reshape_flatten` within the Kindle framework.
 fn test_manipulation_reshape_flatten() -> Result<()> {
     let t = Tensor::<s![2, 3], CpuBackend>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
 
@@ -301,7 +301,7 @@ fn test_manipulation_reshape_flatten() -> Result<()> {
 }
 
 #[test]
-/// Auto-generated documentation for test_manipulation_transpose_squeeze.
+/// Core abstraction for `test_manipulation_transpose_squeeze` within the Kindle framework.
 fn test_manipulation_transpose_squeeze() -> Result<()> {
     let t = Tensor::<s![2, 3], CpuBackend>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
 
@@ -324,7 +324,7 @@ fn test_manipulation_transpose_squeeze() -> Result<()> {
 // 1.6 Indexing & Slicing
 // -----------------------------------------------------------------------------
 #[test]
-/// Auto-generated documentation for test_indexing_concat.
+/// Core abstraction for `test_indexing_concat` within the Kindle framework.
 fn test_indexing_concat() -> Result<()> {
     let t1 = Tensor::<s![2, 2], CpuBackend>::from_slice(&[1.0, 2.0, 3.0, 4.0], ())?;
     let t2 = Tensor::<s![2, 2], CpuBackend>::from_slice(&[5.0, 6.0, 7.0, 8.0], ())?;
@@ -347,7 +347,7 @@ fn test_indexing_concat() -> Result<()> {
 }
 
 #[test]
-/// Auto-generated documentation for test_indexing_stack.
+/// Core abstraction for `test_indexing_stack` within the Kindle framework.
 fn test_indexing_stack() -> Result<()> {
     let t1 = Tensor::<s![2], CpuBackend>::from_slice(&[1.0, 2.0], ())?;
     let t2 = Tensor::<s![2], CpuBackend>::from_slice(&[3.0, 4.0], ())?;
@@ -373,7 +373,7 @@ fn test_indexing_stack() -> Result<()> {
 }
 
 #[test]
-/// Auto-generated documentation for test_indexing_narrow.
+/// Core abstraction for `test_indexing_narrow` within the Kindle framework.
 fn test_indexing_narrow() -> Result<()> {
     let t = Tensor::<s![3, 3], CpuBackend>::from_slice(
         &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
@@ -399,7 +399,7 @@ fn test_indexing_narrow() -> Result<()> {
 // 1.7 Loss Functions
 // -----------------------------------------------------------------------------
 #[test]
-/// Auto-generated documentation for test_loss_mse.
+/// Core abstraction for `test_loss_mse` within the Kindle framework.
 fn test_loss_mse() -> Result<()> {
     let pred = Tensor::<s![2], CpuBackend>::from_slice(&[1.0, 2.0], ())?;
     let target1 = Tensor::<s![2], CpuBackend>::from_slice(&[1.0, 2.0], ())?; // identical
@@ -416,7 +416,7 @@ fn test_loss_mse() -> Result<()> {
 }
 
 #[test]
-/// Auto-generated documentation for test_loss_cross_entropy.
+/// Core abstraction for `test_loss_cross_entropy` within the Kindle framework.
 fn test_loss_cross_entropy() -> Result<()> {
     // 2 samples, 3 classes
     let logits = Tensor::<s![2, 3], CpuBackend>::from_slice(

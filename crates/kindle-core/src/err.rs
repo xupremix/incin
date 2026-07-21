@@ -2,74 +2,74 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use core::fmt::Debug;
 
-/// Auto-generated documentation for Result.
+/// Convenience type alias for `Result<T, Error>`.
 pub type Result<T> = core::result::Result<T, Error>;
 
 #[non_exhaustive]
 #[derive(thiserror::Error)]
-/// Auto-generated documentation for Error.
+/// Central error enum for the Kindle framework.
 pub enum Error {
     #[error("Shape mismatch during '{op}': expected {expected:?}, got {got:?}. {msg}")]
-    /// Auto-generated documentation for ShapeMismatch.
+    /// Incompatible shape during tensor operation execution.
     ShapeMismatch {
-        /// op
+        /// Name of the operation that failed.
         op: &'static str,
-        /// expected
+        /// Expected dimension array.
         expected: Vec<usize>,
-        /// got
+        /// Actual dimension array.
         got: Vec<usize>,
-        /// msg
+        /// Context message.
         msg: String,
     },
 
     #[error("Out of Memory error on device: {device}")]
-    /// Auto-generated documentation for OutOfMemory.
+    /// Device out-of-memory allocation failure.
     OutOfMemory {
-        /// device
+        /// Target device string identifier.
         device: String,
     },
 
     #[error("Operation '{op}' is not supported by backend '{backend}'")]
-    /// Auto-generated documentation for UnsupportedBackendOperation.
+    /// Operation unimplemented or unsupported by the target backend.
     UnsupportedBackendOperation {
-        /// op
+        /// Name of the operation requested.
         op: &'static str,
-        /// backend
+        /// Name of the backend.
         backend: &'static str,
     },
 
     #[error("Invalid device provided: expected {expected}, got {got}")]
-    /// Auto-generated documentation for DeviceInitializationError.
+    /// Device initialization or mismatch error.
     DeviceInitializationError {
-        /// expected
+        /// Expected device string.
         expected: String,
-        /// got
+        /// Actual device string.
         got: String,
     },
 
     #[error("Internal Backend Failure: {0}")]
-    /// Auto-generated documentation for BackendFailure.
+    /// Internal backend execution failure.
     BackendFailure(#[from] anyhow::Error),
 
     #[error("Generic Message: {0}")]
-    /// Auto-generated documentation for Msg.
+    /// Generic error string.
     Msg(String),
 }
 
 impl Debug for Error {
-    /// Auto-generated documentation for fmt.
+    /// Format error using Display representation.
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{self}")
     }
 }
 
 #[cfg(test)]
-/// Auto-generated documentation for tests.
+/// Core abstraction for `tests` within the Kindle framework..
 mod tests {
     use super::*;
 
     #[test]
-    /// Auto-generated documentation for test_error_formatting.
+    /// Core abstraction for `test_error_formatting` within the Kindle framework..
     fn test_error_formatting() {
         let err = Error::OutOfMemory {
             device: "CUDA:0".to_string(),

@@ -10,7 +10,7 @@ pub(crate) struct WgpuDeviceState {
     pub(crate) queue: Queue,
 }
 
-/// Auto-generated documentation for WGPU_STATE.
+/// Core abstraction for `WGPU_STATE` within the Kindle framework..
 static WGPU_STATE: std::sync::OnceLock<Arc<WgpuDeviceState>> = std::sync::OnceLock::new();
 
 pub(crate) fn get_device_state() -> Arc<WgpuDeviceState> {

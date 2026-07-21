@@ -36,7 +36,7 @@ impl<
         self.cross_entropy_loss_with::<Mean, S2>(target)
     }
 
-    /// Auto-generated documentation for cross_entropy_loss_with.
+    /// Core abstraction for `cross_entropy_loss_with` within the Kindle framework..
     pub fn cross_entropy_loss_with<R, S2: Shape>(
         &self,
         target: &Tensor<S2, B, K, D, G>,
@@ -78,7 +78,7 @@ impl<
         self.mse_loss_with::<Mean, S2>(target)
     }
 
-    /// Auto-generated documentation for mse_loss_with.
+    /// Core abstraction for `mse_loss_with` within the Kindle framework..
     pub fn mse_loss_with<R, S2: Shape>(
         &self,
         target: &Tensor<S2, B, K, D, G>,
@@ -101,7 +101,7 @@ impl<
         ))
     }
 
-    /// Auto-generated documentation for l1_loss.
+    /// Core abstraction for `l1_loss` within the Kindle framework..
     pub fn l1_loss<S2: Shape>(
         &self,
         target: &Tensor<S2, B, K, D, G>,
@@ -109,7 +109,7 @@ impl<
         self.l1_loss_with::<Mean, S2>(target)
     }
 
-    /// Auto-generated documentation for l1_loss_with.
+    /// Core abstraction for `l1_loss_with` within the Kindle framework..
     pub fn l1_loss_with<R, S2: Shape>(
         &self,
         target: &Tensor<S2, B, K, D, G>,
@@ -132,7 +132,7 @@ impl<
         ))
     }
 
-    /// Auto-generated documentation for bce_with_logits_loss.
+    /// Core abstraction for `bce_with_logits_loss` within the Kindle framework..
     pub fn bce_with_logits_loss<S2: Shape>(
         &self,
         target: &Tensor<S2, B, K, D, G>,
@@ -140,7 +140,7 @@ impl<
         self.bce_with_logits_loss_with::<Mean, S2>(target)
     }
 
-    /// Auto-generated documentation for bce_with_logits_loss_with.
+    /// Core abstraction for `bce_with_logits_loss_with` within the Kindle framework..
     pub fn bce_with_logits_loss_with<R, S2: Shape>(
         &self,
         target: &Tensor<S2, B, K, D, G>,

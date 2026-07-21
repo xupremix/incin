@@ -24,20 +24,20 @@ use alloc::vec::Vec;
 /// Trait for converting user-provided arguments into the internal
 /// representation expected by tensor parameters.
 pub trait ArgInto<Target> {
-    /// Auto-generated documentation for into_arg.
+    /// Core abstraction for `into_arg` within the Kindle framework..
     fn into_arg(self) -> Target;
 }
 
 #[derive(Debug, Clone)]
-/// Auto-generated documentation for TensorArgsData.
+/// Core abstraction for `TensorArgsData` within the Kindle framework..
 pub struct TensorArgsData<S, T, D, G> {
-    /// Auto-generated documentation for shape.
+    /// Core abstraction for `shape` within the Kindle framework..
     pub shape: S,
-    /// Auto-generated documentation for dtype.
+    /// Core abstraction for `dtype` within the Kindle framework..
     pub dtype: T,
-    /// Auto-generated documentation for device.
+    /// Core abstraction for `device` within the Kindle framework..
     pub device: D,
-    /// Auto-generated documentation for grad.
+    /// Core abstraction for `grad` within the Kindle framework..
     pub grad: G,
 }
 
@@ -55,7 +55,7 @@ macro_rules! impl_self_arginto {
         $(
             impl ArgInto<$t> for $t {
                 #[inline(always)]
-                /// Auto-generated documentation for into_arg.
+                /// Core abstraction for `into_arg` within the Kindle framework..
                 fn into_arg(self) -> $t {
                     self
                 }
@@ -77,7 +77,7 @@ impl_self_arginto! {
 
 impl ArgInto<UTerm> for UTerm {
     #[inline(always)]
-    /// Auto-generated documentation for into_arg.
+    /// Core abstraction for `into_arg` within the Kindle framework..
     fn into_arg(self) -> UTerm {
         self
     }
@@ -99,7 +99,7 @@ where
         + 'static,
 {
     #[inline(always)]
-    /// Auto-generated documentation for into_arg.
+    /// Core abstraction for `into_arg` within the Kindle framework..
     fn into_arg(self) -> UInt<U, B> {
         self
     }
@@ -108,7 +108,7 @@ where
 #[cfg(feature = "cuda")]
 impl<const N: usize> ArgInto<Cuda<N>> for Cuda<N> {
     #[inline(always)]
-    /// Auto-generated documentation for into_arg.
+    /// Core abstraction for `into_arg` within the Kindle framework..
     fn into_arg(self) -> Cuda<N> {
         self
     }
@@ -117,7 +117,7 @@ impl<const N: usize> ArgInto<Cuda<N>> for Cuda<N> {
 #[cfg(feature = "wgpu")]
 impl<const N: usize> ArgInto<Wgpu<N>> for Wgpu<N> {
     #[inline(always)]
-    /// Auto-generated documentation for into_arg.
+    /// Core abstraction for `into_arg` within the Kindle framework..
     fn into_arg(self) -> Wgpu<N> {
         self
     }
@@ -129,7 +129,7 @@ impl<const N: usize> ArgInto<Wgpu<N>> for Wgpu<N> {
 
 impl<D: Dim> ArgInto<Vec<D>> for Vec<D> {
     #[inline(always)]
-    /// Auto-generated documentation for into_arg.
+    /// Core abstraction for `into_arg` within the Kindle framework..
     fn into_arg(self) -> Vec<D> {
         self
     }
@@ -137,7 +137,7 @@ impl<D: Dim> ArgInto<Vec<D>> for Vec<D> {
 
 impl<const N: usize> ArgInto<Vec<usize>> for [usize; N] {
     #[inline(always)]
-    /// Auto-generated documentation for into_arg.
+    /// Core abstraction for `into_arg` within the Kindle framework..
     fn into_arg(self) -> Vec<usize> {
         self.to_vec()
     }
@@ -145,7 +145,7 @@ impl<const N: usize> ArgInto<Vec<usize>> for [usize; N] {
 
 impl ArgInto<Vec<usize>> for &[usize] {
     #[inline(always)]
-    /// Auto-generated documentation for into_arg.
+    /// Core abstraction for `into_arg` within the Kindle framework..
     fn into_arg(self) -> Vec<usize> {
         self.to_vec()
     }
@@ -153,7 +153,7 @@ impl ArgInto<Vec<usize>> for &[usize] {
 
 impl<const N: usize> ArgInto<[usize; N]> for [usize; N] {
     #[inline(always)]
-    /// Auto-generated documentation for into_arg.
+    /// Core abstraction for `into_arg` within the Kindle framework..
     fn into_arg(self) -> [usize; N] {
         self
     }
@@ -230,7 +230,7 @@ macro_rules! impl_dim_tuple_arg_into {
         // Self -> Self identity
         impl<$($name,)*> ArgInto<($($name,)*)> for ($($name,)*) {
             #[inline(always)]
-            /// Auto-generated documentation for into_arg.
+            /// Core abstraction for `into_arg` within the Kindle framework..
             fn into_arg(self) -> ($($name,)*) {
                 self
             }
@@ -286,7 +286,7 @@ kindle_macros::impl_arg_into!(7);
 // 0 values: fully static tensor, no args needed
 impl ArgInto<TensorArgsData<(), (), (), ()>> for () {
     #[inline(always)]
-    /// Auto-generated documentation for into_arg.
+    /// Core abstraction for `into_arg` within the Kindle framework..
     fn into_arg(self) -> TensorArgsData<(), (), (), ()> {
         TensorArgsData {
             shape: (),
@@ -300,7 +300,7 @@ impl ArgInto<TensorArgsData<(), (), (), ()>> for () {
 // 1 value: placed in whichever position has a non-() arg type
 impl<A: ArgInto<B>, B: NotUnit> ArgInto<TensorArgsData<B, (), (), ()>> for A {
     #[inline(always)]
-    /// Auto-generated documentation for into_arg.
+    /// Core abstraction for `into_arg` within the Kindle framework..
     fn into_arg(self) -> TensorArgsData<B, (), (), ()> {
         TensorArgsData {
             shape: self.into_arg(),
@@ -312,7 +312,7 @@ impl<A: ArgInto<B>, B: NotUnit> ArgInto<TensorArgsData<B, (), (), ()>> for A {
 }
 impl<A: ArgInto<B>, B: NotUnit> ArgInto<TensorArgsData<(), B, (), ()>> for A {
     #[inline(always)]
-    /// Auto-generated documentation for into_arg.
+    /// Core abstraction for `into_arg` within the Kindle framework..
     fn into_arg(self) -> TensorArgsData<(), B, (), ()> {
         TensorArgsData {
             shape: (),
@@ -324,7 +324,7 @@ impl<A: ArgInto<B>, B: NotUnit> ArgInto<TensorArgsData<(), B, (), ()>> for A {
 }
 impl<A: ArgInto<B>, B: NotUnit> ArgInto<TensorArgsData<(), (), B, ()>> for A {
     #[inline(always)]
-    /// Auto-generated documentation for into_arg.
+    /// Core abstraction for `into_arg` within the Kindle framework..
     fn into_arg(self) -> TensorArgsData<(), (), B, ()> {
         TensorArgsData {
             shape: (),
@@ -336,7 +336,7 @@ impl<A: ArgInto<B>, B: NotUnit> ArgInto<TensorArgsData<(), (), B, ()>> for A {
 }
 impl<A: ArgInto<B>, B: NotUnit> ArgInto<TensorArgsData<(), (), (), B>> for A {
     #[inline(always)]
-    /// Auto-generated documentation for into_arg.
+    /// Core abstraction for `into_arg` within the Kindle framework..
     fn into_arg(self) -> TensorArgsData<(), (), (), B> {
         TensorArgsData {
             shape: (),
@@ -355,7 +355,7 @@ where
     TA: NotUnit,
     TB: NotUnit,
 {
-    /// Auto-generated documentation for into_arg.
+    /// Core abstraction for `into_arg` within the Kindle framework..
     fn into_arg(self) -> TensorArgsData<TA, TB, (), ()> {
         TensorArgsData {
             shape: self.0.into_arg(),
@@ -373,7 +373,7 @@ where
     TA: NotUnit,
     TB: NotUnit,
 {
-    /// Auto-generated documentation for into_arg.
+    /// Core abstraction for `into_arg` within the Kindle framework..
     fn into_arg(self) -> TensorArgsData<TA, (), TB, ()> {
         TensorArgsData {
             shape: self.0.into_arg(),
@@ -391,7 +391,7 @@ where
     TA: NotUnit,
     TB: NotUnit,
 {
-    /// Auto-generated documentation for into_arg.
+    /// Core abstraction for `into_arg` within the Kindle framework..
     fn into_arg(self) -> TensorArgsData<TA, (), (), TB> {
         TensorArgsData {
             shape: self.0.into_arg(),
@@ -409,7 +409,7 @@ where
     TA: NotUnit,
     TB: NotUnit,
 {
-    /// Auto-generated documentation for into_arg.
+    /// Core abstraction for `into_arg` within the Kindle framework..
     fn into_arg(self) -> TensorArgsData<(), TA, TB, ()> {
         TensorArgsData {
             shape: (),
@@ -427,7 +427,7 @@ where
     TA: NotUnit,
     TB: NotUnit,
 {
-    /// Auto-generated documentation for into_arg.
+    /// Core abstraction for `into_arg` within the Kindle framework..
     fn into_arg(self) -> TensorArgsData<(), TA, (), TB> {
         TensorArgsData {
             shape: (),
@@ -445,7 +445,7 @@ where
     TA: NotUnit,
     TB: NotUnit,
 {
-    /// Auto-generated documentation for into_arg.
+    /// Core abstraction for `into_arg` within the Kindle framework..
     fn into_arg(self) -> TensorArgsData<(), (), TA, TB> {
         TensorArgsData {
             shape: (),
@@ -466,7 +466,7 @@ where
     TB: NotUnit,
     TC: NotUnit,
 {
-    /// Auto-generated documentation for into_arg.
+    /// Core abstraction for `into_arg` within the Kindle framework..
     fn into_arg(self) -> TensorArgsData<(), TA, TB, TC> {
         TensorArgsData {
             shape: (),
@@ -485,7 +485,7 @@ where
     TB: NotUnit,
     TC: NotUnit,
 {
-    /// Auto-generated documentation for into_arg.
+    /// Core abstraction for `into_arg` within the Kindle framework..
     fn into_arg(self) -> TensorArgsData<TA, (), TB, TC> {
         TensorArgsData {
             shape: self.0.into_arg(),
@@ -504,7 +504,7 @@ where
     TB: NotUnit,
     TC: NotUnit,
 {
-    /// Auto-generated documentation for into_arg.
+    /// Core abstraction for `into_arg` within the Kindle framework..
     fn into_arg(self) -> TensorArgsData<TA, TB, (), TC> {
         TensorArgsData {
             shape: self.0.into_arg(),
@@ -523,7 +523,7 @@ where
     TB: NotUnit,
     TC: NotUnit,
 {
-    /// Auto-generated documentation for into_arg.
+    /// Core abstraction for `into_arg` within the Kindle framework..
     fn into_arg(self) -> TensorArgsData<TA, TB, TC, ()> {
         TensorArgsData {
             shape: self.0.into_arg(),
@@ -546,7 +546,7 @@ where
     TC: NotUnit,
     TD: NotUnit,
 {
-    /// Auto-generated documentation for into_arg.
+    /// Core abstraction for `into_arg` within the Kindle framework..
     fn into_arg(self) -> TensorArgsData<TA, TB, TC, TD> {
         TensorArgsData {
             shape: self.0.into_arg(),
@@ -563,7 +563,7 @@ where
 
 impl<T> ArgInto<PhantomData<T>> for PhantomData<T> {
     #[inline(always)]
-    /// Auto-generated documentation for into_arg.
+    /// Core abstraction for `into_arg` within the Kindle framework..
     fn into_arg(self) -> PhantomData<T> {
         self
     }

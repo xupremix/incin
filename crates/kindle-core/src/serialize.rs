@@ -3,7 +3,7 @@ use alloc::collections::BTreeMap;
 
 /// A trait for serializing a collection of dynamic tensors to a specific format.
 pub trait Serializer {
-    /// Auto-generated documentation for Error.
+    /// Core abstraction for `Error` within the Kindle framework..
     type Error: core::fmt::Debug + core::fmt::Display;
 
     /// Serializes the state dict to the given path or stream.
@@ -18,7 +18,7 @@ pub trait Serializer {
 
 /// A trait for deserializing a collection of dynamic tensors from a specific format.
 pub trait Deserializer {
-    /// Auto-generated documentation for Error.
+    /// Core abstraction for `Error` within the Kindle framework..
     type Error: core::fmt::Debug + core::fmt::Display;
 
     /// Deserializes the state dict from the given path or stream.
@@ -32,14 +32,14 @@ pub trait Deserializer {
 }
 
 #[cfg(feature = "std")]
-/// Auto-generated documentation for SafetensorsSerializer.
+/// Core abstraction for `SafetensorsSerializer` within the Kindle framework..
 pub struct SafetensorsSerializer<'a> {
     path: &'a std::path::Path,
 }
 
 #[cfg(feature = "std")]
 impl<'a> SafetensorsSerializer<'a> {
-    /// Auto-generated documentation for new.
+    /// Core abstraction for `new` within the Kindle framework..
     pub fn new(path: &'a std::path::Path) -> Self {
         Self { path }
     }
@@ -47,10 +47,10 @@ impl<'a> SafetensorsSerializer<'a> {
 
 #[cfg(feature = "std")]
 impl<'a> Serializer for SafetensorsSerializer<'a> {
-    /// Auto-generated documentation for Error.
+    /// Core abstraction for `Error` within the Kindle framework..
     type Error = anyhow::Error;
 
-    /// Auto-generated documentation for serialize.
+    /// Core abstraction for `serialize` within the Kindle framework..
     fn serialize<B: Backend>(
         &mut self,
         state_dict: &BTreeMap<String, Tensor<Dyn, B>>,
@@ -94,14 +94,14 @@ impl<'a> Serializer for SafetensorsSerializer<'a> {
 }
 
 #[cfg(feature = "std")]
-/// Auto-generated documentation for SafetensorsDeserializer.
+/// Core abstraction for `SafetensorsDeserializer` within the Kindle framework..
 pub struct SafetensorsDeserializer<'a> {
     path: &'a std::path::Path,
 }
 
 #[cfg(feature = "std")]
 impl<'a> SafetensorsDeserializer<'a> {
-    /// Auto-generated documentation for new.
+    /// Core abstraction for `new` within the Kindle framework..
     pub fn new(path: &'a std::path::Path) -> Self {
         Self { path }
     }
@@ -109,10 +109,10 @@ impl<'a> SafetensorsDeserializer<'a> {
 
 #[cfg(feature = "std")]
 impl<'a> Deserializer for SafetensorsDeserializer<'a> {
-    /// Auto-generated documentation for Error.
+    /// Core abstraction for `Error` within the Kindle framework..
     type Error = anyhow::Error;
 
-    /// Auto-generated documentation for deserialize.
+    /// Core abstraction for `deserialize` within the Kindle framework..
     fn deserialize<B: Backend>(
         &mut self,
         device: &KindleDevice,
@@ -160,7 +160,7 @@ impl<'a> Deserializer for SafetensorsDeserializer<'a> {
 
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(dead_code)]
-/// Auto-generated documentation for SerializedTensor.
+/// Core abstraction for `SerializedTensor` within the Kindle framework..
 struct SerializedTensor {
     shape: Vec<usize>,
     dtype: String,
@@ -168,14 +168,14 @@ struct SerializedTensor {
 }
 
 #[cfg(feature = "std")]
-/// Auto-generated documentation for BincodeSerializer.
+/// Core abstraction for `BincodeSerializer` within the Kindle framework..
 pub struct BincodeSerializer<'a> {
     path: &'a std::path::Path,
 }
 
 #[cfg(feature = "std")]
 impl<'a> BincodeSerializer<'a> {
-    /// Auto-generated documentation for new.
+    /// Core abstraction for `new` within the Kindle framework..
     pub fn new(path: &'a std::path::Path) -> Self {
         Self { path }
     }
@@ -183,10 +183,10 @@ impl<'a> BincodeSerializer<'a> {
 
 #[cfg(feature = "std")]
 impl<'a> Serializer for BincodeSerializer<'a> {
-    /// Auto-generated documentation for Error.
+    /// Core abstraction for `Error` within the Kindle framework..
     type Error = anyhow::Error;
 
-    /// Auto-generated documentation for serialize.
+    /// Core abstraction for `serialize` within the Kindle framework..
     fn serialize<B: Backend>(
         &mut self,
         state_dict: &BTreeMap<String, Tensor<Dyn, B>>,
@@ -227,14 +227,14 @@ impl<'a> Serializer for BincodeSerializer<'a> {
 }
 
 #[cfg(feature = "std")]
-/// Auto-generated documentation for BincodeDeserializer.
+/// Core abstraction for `BincodeDeserializer` within the Kindle framework..
 pub struct BincodeDeserializer<'a> {
     path: &'a std::path::Path,
 }
 
 #[cfg(feature = "std")]
 impl<'a> BincodeDeserializer<'a> {
-    /// Auto-generated documentation for new.
+    /// Core abstraction for `new` within the Kindle framework..
     pub fn new(path: &'a std::path::Path) -> Self {
         Self { path }
     }
@@ -242,10 +242,10 @@ impl<'a> BincodeDeserializer<'a> {
 
 #[cfg(feature = "std")]
 impl<'a> Deserializer for BincodeDeserializer<'a> {
-    /// Auto-generated documentation for Error.
+    /// Core abstraction for `Error` within the Kindle framework..
     type Error = anyhow::Error;
 
-    /// Auto-generated documentation for deserialize.
+    /// Core abstraction for `deserialize` within the Kindle framework..
     fn deserialize<B: Backend>(
         &mut self,
         device: &KindleDevice,
@@ -289,24 +289,24 @@ impl<'a> Deserializer for BincodeDeserializer<'a> {
 
 #[cfg(feature = "std")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-/// Auto-generated documentation for Format.
+/// Core abstraction for `Format` within the Kindle framework..
 pub enum Format {
-    /// Auto-generated documentation for Safetensors.
+    /// Core abstraction for `Safetensors` within the Kindle framework..
     Safetensors,
-    /// Auto-generated documentation for ONNX.
+    /// Core abstraction for `ONNX` within the Kindle framework..
     ONNX,
 }
 
 #[cfg(feature = "std")]
-/// Auto-generated documentation for ModelExt.
+/// Core abstraction for `ModelExt` within the Kindle framework..
 pub trait ModelExt<B: Backend> {
-    /// Auto-generated documentation for save.
+    /// Core abstraction for `save` within the Kindle framework..
     fn save(&self, format: Format, path: &std::path::Path) -> Result<()>
     where
         <<B as Backend>::Device as Device>::Field: Default,
         <<B as Backend>::FloatElem as crate::tensor::dtype::DType>::Field: Default;
 
-    /// Auto-generated documentation for load.
+    /// Core abstraction for `load` within the Kindle framework..
     fn load(&mut self, format: Format, path: &std::path::Path, device: &KindleDevice) -> Result<()>
     where
         <<B as Backend>::Device as Device>::Field: Default,
@@ -315,7 +315,7 @@ pub trait ModelExt<B: Backend> {
 
 #[cfg(feature = "std")]
 impl<B: Backend, T: crate::nn::module::StateDict<B>> ModelExt<B> for T {
-    /// Auto-generated documentation for save.
+    /// Core abstraction for `save` within the Kindle framework..
     fn save(&self, format: Format, path: &std::path::Path) -> Result<()>
     where
         <<B as Backend>::Device as Device>::Field: Default,
@@ -336,7 +336,7 @@ impl<B: Backend, T: crate::nn::module::StateDict<B>> ModelExt<B> for T {
         Ok(())
     }
 
-    /// Auto-generated documentation for load.
+    /// Core abstraction for `load` within the Kindle framework..
     fn load(&mut self, format: Format, path: &std::path::Path, device: &KindleDevice) -> Result<()>
     where
         <<B as Backend>::Device as Device>::Field: Default,

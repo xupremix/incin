@@ -82,7 +82,7 @@ impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device + Clone + '
 
 #[cfg(test)]
 #[allow(unused_imports)]
-/// Auto-generated documentation for tests.
+/// Core abstraction for `tests` within the Kindle framework..
 mod tests {
     use super::*;
     use crate::cpu::CpuBackend;
@@ -91,7 +91,7 @@ mod tests {
     #[test]
     #[ignore = "Requires CUDA GPU"]
     #[cfg(all(feature = "cuda", feature = "fused"))]
-    /// Auto-generated documentation for test_fused_adamw_step.
+    /// Core abstraction for `test_fused_adamw_step` within the Kindle framework..
     fn test_fused_adamw_step() {
         // Here we would test the backend directly, checking the result
         // against a CPU-based implementation to ensure 100% mathematical parity.

@@ -70,35 +70,35 @@ pub trait Parameters<B: Backend> {
 
 /// A trait to transfer ownership of a module to a new device.
 pub trait ToDevice<B: Backend, NewD: Device> {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output;
-    /// Auto-generated documentation for to_device.
+    /// Core abstraction for `to_device` within the Kindle framework..
     fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output>;
 }
 
 impl<T: ToDevice<B, NewD>, B: Backend, NewD: Device> ToDevice<B, NewD> for Option<T> {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = Option<T::Output>;
-    /// Auto-generated documentation for to_device.
+    /// Core abstraction for `to_device` within the Kindle framework..
     fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output> {
         self.map(|t| t.to_device(arg)).transpose()
     }
 }
 
 impl<B: Backend, NewD: Device> ToDevice<B, NewD> for () {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = ();
 
-    /// Auto-generated documentation for to_device.
+    /// Core abstraction for `to_device` within the Kindle framework..
     fn to_device(self, _arg: &NewD::Arg) -> Result<Self::Output> {
         Ok(())
     }
 }
 
 #[doc(hidden)]
-/// Auto-generated documentation for AutorefParametersFallback.
+/// Core abstraction for `AutorefParametersFallback` within the Kindle framework..
 pub trait AutorefParametersFallback<B: Backend> {
-    /// Auto-generated documentation for maybe_parameters.
+    /// Core abstraction for `maybe_parameters` within the Kindle framework..
     fn maybe_parameters(
         &self,
         _phantom: core::marker::PhantomData<B>,
@@ -110,9 +110,9 @@ pub trait AutorefParametersFallback<B: Backend> {
 impl<T, B: Backend> AutorefParametersFallback<B> for &&T {}
 
 #[doc(hidden)]
-/// Auto-generated documentation for AutorefParameters.
+/// Core abstraction for `AutorefParameters` within the Kindle framework..
 pub trait AutorefParameters<B: Backend> {
-    /// Auto-generated documentation for maybe_parameters.
+    /// Core abstraction for `maybe_parameters` within the Kindle framework..
     fn maybe_parameters(
         &self,
         _phantom: core::marker::PhantomData<B>,
@@ -122,7 +122,7 @@ pub trait AutorefParameters<B: Backend> {
 }
 impl<T: Parameters<B>, B: Backend> AutorefParameters<B> for &T {
     #[inline]
-    /// Auto-generated documentation for maybe_parameters.
+    /// Core abstraction for `maybe_parameters` within the Kindle framework..
     fn maybe_parameters(
         &self,
         _marker: core::marker::PhantomData<B>,
@@ -134,9 +134,9 @@ impl<T: Parameters<B>, B: Backend> AutorefParameters<B> for &T {
 }
 
 #[doc(hidden)]
-/// Auto-generated documentation for AutorefStateDictFallback.
+/// Core abstraction for `AutorefStateDictFallback` within the Kindle framework..
 pub trait AutorefStateDictFallback<B: Backend> {
-    /// Auto-generated documentation for maybe_load_state_dict.
+    /// Core abstraction for `maybe_load_state_dict` within the Kindle framework..
     fn maybe_load_state_dict(
         &mut self,
         _phantom: core::marker::PhantomData<B>,
@@ -145,7 +145,7 @@ pub trait AutorefStateDictFallback<B: Backend> {
     ) -> Result<()> {
         Ok(())
     }
-    /// Auto-generated documentation for maybe_state_dict.
+    /// Core abstraction for `maybe_state_dict` within the Kindle framework..
     fn maybe_state_dict(
         &self,
         _phantom: core::marker::PhantomData<B>,
@@ -158,16 +158,16 @@ impl<T, B: Backend> AutorefStateDictFallback<B> for &mut &mut T {}
 impl<T, B: Backend> AutorefStateDictFallback<B> for &&T {}
 
 #[doc(hidden)]
-/// Auto-generated documentation for AutorefStateDict.
+/// Core abstraction for `AutorefStateDict` within the Kindle framework..
 pub trait AutorefStateDict<B: Backend> {
-    /// Auto-generated documentation for maybe_load_state_dict.
+    /// Core abstraction for `maybe_load_state_dict` within the Kindle framework..
     fn maybe_load_state_dict(
         &mut self,
         _phantom: core::marker::PhantomData<B>,
         prefix: &str,
         tensors: &BTreeMap<String, Tensor<Dyn, B>>,
     ) -> Result<()>;
-    /// Auto-generated documentation for maybe_state_dict.
+    /// Core abstraction for `maybe_state_dict` within the Kindle framework..
     fn maybe_state_dict(
         &self,
         _phantom: core::marker::PhantomData<B>,
@@ -179,7 +179,7 @@ pub trait AutorefStateDict<B: Backend> {
 // For mutable operations
 impl<T: StateDict<B>, B: Backend> AutorefStateDict<B> for &mut T {
     #[inline]
-    /// Auto-generated documentation for maybe_load_state_dict.
+    /// Core abstraction for `maybe_load_state_dict` within the Kindle framework..
     fn maybe_load_state_dict(
         &mut self,
         _phantom: core::marker::PhantomData<B>,
@@ -189,7 +189,7 @@ impl<T: StateDict<B>, B: Backend> AutorefStateDict<B> for &mut T {
         (*self).load_state_dict(prefix, tensors)
     }
     #[inline]
-    /// Auto-generated documentation for maybe_state_dict.
+    /// Core abstraction for `maybe_state_dict` within the Kindle framework..
     fn maybe_state_dict(
         &self,
         _phantom: core::marker::PhantomData<B>,
@@ -203,7 +203,7 @@ impl<T: StateDict<B>, B: Backend> AutorefStateDict<B> for &mut T {
 // For immutable operations (state_dict uses &self)
 impl<T: StateDict<B>, B: Backend> AutorefStateDict<B> for &T {
     #[inline]
-    /// Auto-generated documentation for maybe_load_state_dict.
+    /// Core abstraction for `maybe_load_state_dict` within the Kindle framework..
     fn maybe_load_state_dict(
         &mut self,
         _phantom: core::marker::PhantomData<B>,
@@ -213,7 +213,7 @@ impl<T: StateDict<B>, B: Backend> AutorefStateDict<B> for &T {
         Ok(()) // Should not be called
     }
     #[inline]
-    /// Auto-generated documentation for maybe_state_dict.
+    /// Core abstraction for `maybe_state_dict` within the Kindle framework..
     fn maybe_state_dict(
         &self,
         _phantom: core::marker::PhantomData<B>,
@@ -255,12 +255,12 @@ impl<T: StateDict<B>, B: Backend> AutorefStateDict<B> for &T {
 /// }
 /// ```
 pub trait Module<Input> {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output;
-    /// Auto-generated documentation for Error.
+    /// Core abstraction for `Error` within the Kindle framework..
     type Error;
 
-    /// Auto-generated documentation for forward.
+    /// Core abstraction for `forward` within the Kindle framework..
     fn forward(&self, input: Input) -> core::result::Result<Self::Output, Self::Error>;
 }
 
@@ -274,13 +274,13 @@ where
     L1: Module<I>,
     L2: Module<L1::Output, Error = L1::Error>,
 {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = L2::Output;
-    /// Auto-generated documentation for Error.
+    /// Core abstraction for `Error` within the Kindle framework..
     type Error = L1::Error;
 
     #[inline]
-    /// Auto-generated documentation for forward.
+    /// Core abstraction for `forward` within the Kindle framework..
     fn forward(&self, input: I) -> core::result::Result<Self::Output, Self::Error> {
         let out1 = self.0.forward(input)?;
         self.1.forward(out1)
@@ -292,9 +292,9 @@ where
     L1: ToDevice<B, NewD>,
     L2: ToDevice<B, NewD>,
 {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = Sequential<L1::Output, L2::Output>;
-    /// Auto-generated documentation for to_device.
+    /// Core abstraction for `to_device` within the Kindle framework..
     fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output> {
         Ok(Sequential(self.0.to_device(arg)?, self.1.to_device(arg)?))
     }
@@ -305,7 +305,7 @@ where
     L1: Parameters<B>,
     L2: Parameters<B>,
 {
-    /// Auto-generated documentation for named_parameters.
+    /// Core abstraction for `named_parameters` within the Kindle framework..
     fn named_parameters(
         &self,
         prefix: &str,
@@ -321,7 +321,7 @@ where
     L1: StateDict<B>,
     L2: StateDict<B>,
 {
-    /// Auto-generated documentation for load_state_dict.
+    /// Core abstraction for `load_state_dict` within the Kindle framework..
     fn load_state_dict(
         &mut self,
         prefix: &str,
@@ -332,7 +332,7 @@ where
         Ok(())
     }
 
-    /// Auto-generated documentation for state_dict.
+    /// Core abstraction for `state_dict` within the Kindle framework..
     fn state_dict(&self, prefix: &str, tensors: &mut BTreeMap<String, Tensor<Dyn, B>>) {
         self.0.state_dict(&format!("{}0.", prefix), tensors);
         self.1.state_dict(&format!("{}1.", prefix), tensors);
@@ -344,17 +344,17 @@ macro_rules! impl_dummy_state {
     ($($t:ty),+) => {
         $(
             impl<B: Backend> Parameters<B> for $t {
-                /// Auto-generated documentation for named_parameters.
+                /// Core abstraction for `named_parameters` within the Kindle framework..
                 fn named_parameters(&self, _prefix: &str, _map: &mut alloc::collections::BTreeMap<String, B::RawVar>) {}
             }
 
             impl<B: Backend> StateDict<B> for $t {
-                /// Auto-generated documentation for load_state_dict.
+                /// Core abstraction for `load_state_dict` within the Kindle framework..
                 fn load_state_dict(&mut self, _prefix: &str, _tensors: &BTreeMap<String, Tensor<Dyn, B>>) -> Result<()> {
                     Ok(())
                 }
 
-                /// Auto-generated documentation for state_dict.
+                /// Core abstraction for `state_dict` within the Kindle framework..
                 fn state_dict(&self, _prefix: &str, _tensors: &mut BTreeMap<String, Tensor<Dyn, B>>) {
                 }
             }
@@ -368,7 +368,7 @@ impl<T, B: Backend> Parameters<B> for core::marker::PhantomData<T>
 where
     T: crate::prelude::DType,
 {
-    /// Auto-generated documentation for named_parameters.
+    /// Core abstraction for `named_parameters` within the Kindle framework..
     fn named_parameters(
         &self,
         _prefix: &str,
@@ -380,7 +380,7 @@ impl<T, B: Backend> StateDict<B> for core::marker::PhantomData<T>
 where
     T: crate::prelude::DType,
 {
-    /// Auto-generated documentation for load_state_dict.
+    /// Core abstraction for `load_state_dict` within the Kindle framework..
     fn load_state_dict(
         &mut self,
         _prefix: &str,
@@ -388,12 +388,12 @@ where
     ) -> Result<()> {
         Ok(())
     }
-    /// Auto-generated documentation for state_dict.
+    /// Core abstraction for `state_dict` within the Kindle framework..
     fn state_dict(&self, _prefix: &str, _tensors: &mut BTreeMap<String, Tensor<Dyn, B>>) {}
 }
 
 impl<T: Parameters<B>, B: Backend> Parameters<B> for Option<T> {
-    /// Auto-generated documentation for named_parameters.
+    /// Core abstraction for `named_parameters` within the Kindle framework..
     fn named_parameters(
         &self,
         prefix: &str,
@@ -406,7 +406,7 @@ impl<T: Parameters<B>, B: Backend> Parameters<B> for Option<T> {
 }
 
 impl<L: StateDict<B>, B: Backend> StateDict<B> for Option<L> {
-    /// Auto-generated documentation for load_state_dict.
+    /// Core abstraction for `load_state_dict` within the Kindle framework..
     fn load_state_dict(
         &mut self,
         prefix: &str,
@@ -418,7 +418,7 @@ impl<L: StateDict<B>, B: Backend> StateDict<B> for Option<L> {
         Ok(())
     }
 
-    /// Auto-generated documentation for state_dict.
+    /// Core abstraction for `state_dict` within the Kindle framework..
     fn state_dict(&self, prefix: &str, tensors: &mut BTreeMap<String, Tensor<Dyn, B>>) {
         if let Some(v) = self {
             v.state_dict(prefix, tensors);
@@ -429,19 +429,19 @@ impl<L: StateDict<B>, B: Backend> StateDict<B> for Option<L> {
 /// Represents a node in the neural network layer structure metadata tree.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct LayerNode {
-    /// Auto-generated documentation for name.
+    /// Core abstraction for `name` within the Kindle framework..
     pub name: String,
-    /// Auto-generated documentation for type_name.
+    /// Core abstraction for `type_name` within the Kindle framework..
     pub type_name: String,
-    /// Auto-generated documentation for shape_info.
+    /// Core abstraction for `shape_info` within the Kindle framework..
     pub shape_info: String,
-    /// Auto-generated documentation for children.
+    /// Core abstraction for `children` within the Kindle framework..
     pub children: Vec<LayerNode>,
 }
 
 /// A trait implemented by all Neural Network modules to report their structural architecture.
 pub trait NamedLayers {
-    /// Auto-generated documentation for layer_structure.
+    /// Core abstraction for `layer_structure` within the Kindle framework..
     fn layer_structure(&self, prefix: &str) -> Vec<LayerNode>;
 }
 
@@ -509,7 +509,7 @@ pub fn assign_sequential_names(nodes: &mut [LayerNode], prefix: &str) {
 }
 
 impl<L1: NamedLayers, L2: NamedLayers> NamedLayers for Sequential<L1, L2> {
-    /// Auto-generated documentation for layer_structure.
+    /// Core abstraction for `layer_structure` within the Kindle framework..
     fn layer_structure(&self, prefix: &str) -> Vec<LayerNode> {
         let mut nodes = Vec::new();
         nodes.extend(self.0.layer_structure(""));
@@ -521,7 +521,7 @@ impl<L1: NamedLayers, L2: NamedLayers> NamedLayers for Sequential<L1, L2> {
 }
 
 impl<T: NamedLayers> NamedLayers for Option<T> {
-    /// Auto-generated documentation for layer_structure.
+    /// Core abstraction for `layer_structure` within the Kindle framework..
     fn layer_structure(&self, prefix: &str) -> Vec<LayerNode> {
         if let Some(layer) = self {
             layer.layer_structure(prefix)
@@ -532,9 +532,9 @@ impl<T: NamedLayers> NamedLayers for Option<T> {
 }
 
 #[doc(hidden)]
-/// Auto-generated documentation for AutorefNamedLayersFallback.
+/// Core abstraction for `AutorefNamedLayersFallback` within the Kindle framework..
 pub trait AutorefNamedLayersFallback {
-    /// Auto-generated documentation for maybe_layer_structure.
+    /// Core abstraction for `maybe_layer_structure` within the Kindle framework..
     fn maybe_layer_structure(&self, _prefix: &str) -> Option<Vec<LayerNode>> {
         None
     }
@@ -542,23 +542,23 @@ pub trait AutorefNamedLayersFallback {
 impl<T> AutorefNamedLayersFallback for &&T {}
 
 #[doc(hidden)]
-/// Auto-generated documentation for AutorefNamedLayers.
+/// Core abstraction for `AutorefNamedLayers` within the Kindle framework..
 pub trait AutorefNamedLayers {
-    /// Auto-generated documentation for maybe_layer_structure.
+    /// Core abstraction for `maybe_layer_structure` within the Kindle framework..
     fn maybe_layer_structure(&self, prefix: &str) -> Option<Vec<LayerNode>>;
 }
 impl<T: NamedLayers> AutorefNamedLayers for &T {
     #[inline]
-    /// Auto-generated documentation for maybe_layer_structure.
+    /// Core abstraction for `maybe_layer_structure` within the Kindle framework..
     fn maybe_layer_structure(&self, prefix: &str) -> Option<Vec<LayerNode>> {
         Some(self.layer_structure(prefix))
     }
 }
 
 #[doc(hidden)]
-/// Auto-generated documentation for AutorefShapeInfoFallback.
+/// Core abstraction for `AutorefShapeInfoFallback` within the Kindle framework..
 pub trait AutorefShapeInfoFallback {
-    /// Auto-generated documentation for maybe_shape_info.
+    /// Core abstraction for `maybe_shape_info` within the Kindle framework..
     fn maybe_shape_info(&self) -> Option<String> {
         None
     }
@@ -566,21 +566,21 @@ pub trait AutorefShapeInfoFallback {
 impl<T> AutorefShapeInfoFallback for &&T {}
 
 #[doc(hidden)]
-/// Auto-generated documentation for AutorefShapeInfo.
+/// Core abstraction for `AutorefShapeInfo` within the Kindle framework..
 pub trait AutorefShapeInfo {
-    /// Auto-generated documentation for maybe_shape_info.
+    /// Core abstraction for `maybe_shape_info` within the Kindle framework..
     fn maybe_shape_info(&self) -> Option<String>;
 }
 impl<S: Shape + DynShape, B: Backend> AutorefShapeInfo for &crate::nn::param::Param<S, B> {
     #[inline]
-    /// Auto-generated documentation for maybe_shape_info.
+    /// Core abstraction for `maybe_shape_info` within the Kindle framework..
     fn maybe_shape_info(&self) -> Option<String> {
         Some(format!("{:?}", self.shape_dims()))
     }
 }
 impl<S: Shape + DynShape, B: Backend> AutorefShapeInfo for &crate::nn::param::Buffer<S, B> {
     #[inline]
-    /// Auto-generated documentation for maybe_shape_info.
+    /// Core abstraction for `maybe_shape_info` within the Kindle framework..
     fn maybe_shape_info(&self) -> Option<String> {
         Some(format!("{:?}", self.shape_dims()))
     }
@@ -590,7 +590,7 @@ where
     for<'a> &'a T: AutorefShapeInfo,
 {
     #[inline]
-    /// Auto-generated documentation for maybe_shape_info.
+    /// Core abstraction for `maybe_shape_info` within the Kindle framework..
     fn maybe_shape_info(&self) -> Option<String> {
         if let Some(val) = self {
             (&val).maybe_shape_info()

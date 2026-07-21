@@ -5,15 +5,15 @@ use std::sync::mpsc::{Receiver, sync_channel};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-/// Auto-generated documentation for Collate.
+/// Core abstraction for `Collate` within the Kindle framework.
 pub trait Collate<T>: Send + Sync {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework.
     type Output: Send + 'static;
-    /// Auto-generated documentation for collate.
+    /// Core abstraction for `collate` within the Kindle framework.
     fn collate(&self, batch: Vec<T>) -> Self::Output;
 }
 
-/// Auto-generated documentation for DataLoader.
+/// Core abstraction for `DataLoader` within the Kindle framework.
 pub struct DataLoader<D, C>
 where
     D: Dataset + 'static,
@@ -31,7 +31,7 @@ where
     D: Dataset + 'static,
     C: Collate<D::Item> + 'static,
 {
-    /// Auto-generated documentation for new.
+    /// Core abstraction for `new` within the Kindle framework.
     pub fn new(dataset: D, collate_fn: C, batch_size: usize) -> Self {
         Self {
             dataset: Arc::new(dataset),
@@ -42,29 +42,29 @@ where
         }
     }
 
-    /// Auto-generated documentation for with_num_workers.
+    /// Core abstraction for `with_num_workers` within the Kindle framework.
     pub fn with_num_workers(mut self, num_workers: usize) -> Self {
         self.num_workers = num_workers;
         self
     }
 
-    /// Auto-generated documentation for with_shuffle.
+    /// Core abstraction for `with_shuffle` within the Kindle framework.
     pub fn with_shuffle(mut self, shuffle: bool) -> Self {
         self.shuffle = shuffle;
         self
     }
 }
 
-/// Auto-generated documentation for DataLoaderIter.
+/// Core abstraction for `DataLoaderIter` within the Kindle framework.
 pub struct DataLoaderIter<T> {
     receiver: Receiver<T>,
 }
 
 impl<T> Iterator for DataLoaderIter<T> {
-    /// Auto-generated documentation for Item.
+    /// Core abstraction for `Item` within the Kindle framework.
     type Item = T;
 
-    /// Auto-generated documentation for next.
+    /// Core abstraction for `next` within the Kindle framework.
     fn next(&mut self) -> Option<Self::Item> {
         self.receiver.recv().ok()
     }
@@ -75,12 +75,12 @@ where
     D: Dataset + 'static,
     C: Collate<D::Item> + 'static,
 {
-    /// Auto-generated documentation for Item.
+    /// Core abstraction for `Item` within the Kindle framework.
     type Item = C::Output;
-    /// Auto-generated documentation for IntoIter.
+    /// Core abstraction for `IntoIter` within the Kindle framework.
     type IntoIter = DataLoaderIter<C::Output>;
 
-    /// Auto-generated documentation for into_iter.
+    /// Core abstraction for `into_iter` within the Kindle framework.
     fn into_iter(self) -> Self::IntoIter {
         let mut indices: Vec<usize> = (0..self.dataset.len()).collect();
         if self.shuffle {

@@ -2,17 +2,17 @@ use kindle_core::prelude::*;
 use kindle_core::prelude::dummy::DummyBackend;
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
-/// Auto-generated documentation for MockGpu.
+/// Core abstraction for `MockGpu` within the Kindle framework.
 pub struct MockGpu;
 impl ConstDevice for MockGpu {}
 impl Device for MockGpu {
-    /// Auto-generated documentation for Arg.
+    /// Core abstraction for `Arg` within the Kindle framework.
     type Arg = ();
-    /// Auto-generated documentation for Field.
+    /// Core abstraction for `Field` within the Kindle framework.
     type Field = core::marker::PhantomData<Self>;
-    /// Auto-generated documentation for to_kindle.
+    /// Core abstraction for `to_kindle` within the Kindle framework.
     fn to_kindle(_: &Self::Field) -> Result<KindleDevice> { Ok(KindleDevice::cpu()) }
-    /// Auto-generated documentation for init.
+    /// Core abstraction for `init` within the Kindle framework.
     fn init(_: Self::Arg) -> Self::Field { core::marker::PhantomData }
 }
 impl DynDevice for MockGpu {}

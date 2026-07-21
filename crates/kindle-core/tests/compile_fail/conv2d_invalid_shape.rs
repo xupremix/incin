@@ -4,7 +4,7 @@ use kindle_core::prelude::*;
 use kindle_macros::s;
 use kindle_core::prelude::dummy::DummyBackend;
 
-/// Auto-generated documentation for Backend.
+/// Core abstraction for `Backend` within the Kindle framework.
 type Backend = DummyBackend<f32, kindle_core::prelude::Cpu>;
 
 fn main() {

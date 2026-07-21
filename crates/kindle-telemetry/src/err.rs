@@ -4,43 +4,41 @@
 
 use core::fmt::Debug;
 
-/// Auto-generated documentation for Result.
+/// Convenience type alias for `Result<T, Error>`.
 pub type Result<T> = core::result::Result<T, Error>;
 
 #[derive(thiserror::Error)]
-/// Auto-generated documentation for Error.
+/// Telemetry system errors.
 pub enum Error {
     #[error("I/O error: {0}")]
-    /// Auto-generated documentation for Io.
+    /// Underlying file or network I/O error.
     Io(#[from] std::io::Error),
 
     #[error("Serialization error: {0}")]
-    /// Auto-generated documentation for Serialize.
+    /// Event JSON serialization error.
     Serialize(#[from] serde_json::Error),
 
     #[error("Socket bind/connect error: {0}")]
-    /// Auto-generated documentation for Socket.
+    /// IPC socket connection or bind failure.
     Socket(String),
 
     #[error("Generic Message: {0}")]
-    /// Auto-generated documentation for Msg.
+    /// Generic error message string.
     Msg(String),
 }
 
 impl Debug for Error {
-    /// Auto-generated documentation for fmt.
+    /// Format error using Display representation.
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{self}")
     }
 }
 
 #[cfg(test)]
-/// Auto-generated documentation for tests.
 mod tests {
     use super::*;
 
     #[test]
-    /// Auto-generated documentation for test_error_formatting.
     fn test_error_formatting() {
         let err = Error::Socket("bind failed".to_string());
         let formatted = format!("{err}");

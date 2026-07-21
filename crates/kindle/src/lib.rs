@@ -84,24 +84,24 @@ pub use kindle_backends::*;
 
 pub use kindle_macros::{import_model, module};
 
-/// Auto-generated documentation for hub.
+/// Core abstraction for `hub` within the Kindle framework.
 pub mod hub {
     pub use kindle_data::hub::*;
 }
 
 // We define a type alias to restore the default Backend behavior without cyclical dependencies
 #[cfg(feature = "cuda")]
-/// Auto-generated documentation for DefaultDevice.
+/// Core abstraction for `DefaultDevice` within the Kindle framework.
 pub type DefaultDevice = crate::prelude::Cuda;
 #[cfg(all(not(feature = "cuda"), feature = "wgpu"))]
-/// Auto-generated documentation for DefaultDevice.
+/// Core abstraction for `DefaultDevice` within the Kindle framework.
 pub type DefaultDevice = crate::prelude::Wgpu;
 #[cfg(all(not(feature = "cuda"), not(feature = "wgpu")))]
-/// Auto-generated documentation for DefaultDevice.
+/// Core abstraction for `DefaultDevice` within the Kindle framework.
 pub type DefaultDevice = kindle_core::prelude::Cpu;
 
 #[cfg(feature = "cpu")]
-/// Auto-generated documentation for DefaultBackend.
+/// Core abstraction for `DefaultBackend` within the Kindle framework.
 pub type DefaultBackend = kindle_backends::cpu::CpuBackend<f32, DefaultDevice>;
 
 // No `DefaultBackend` fallback when `cpu` is disabled: a `()` placeholder
@@ -114,7 +114,7 @@ pub type DefaultBackend = kindle_backends::cpu::CpuBackend<f32, DefaultDevice>;
 // immediate "expected 2 generic arguments" error at the actual call site.
 
 #[cfg(feature = "cpu")]
-/// Auto-generated documentation for Tensor.
+/// Core abstraction for `Tensor` within the Kindle framework.
 pub type Tensor<
     S,
     B = DefaultBackend,
@@ -124,7 +124,7 @@ pub type Tensor<
 > = kindle_core::prelude::Tensor<S, B, K, D, G>;
 
 #[cfg(not(feature = "cpu"))]
-/// Auto-generated documentation for Tensor.
+/// Core abstraction for `Tensor` within the Kindle framework.
 pub type Tensor<
     S,
     B, // User must specify backend if Cpu is disabled
@@ -140,78 +140,78 @@ pub type Tensor<
 // (the common case), and with NO default when it's off — same reasoning as
 // `Tensor` above and `DefaultBackend` itself.
 #[cfg(feature = "cpu")]
-/// Auto-generated documentation for Linear.
+/// Core abstraction for `Linear` within the Kindle framework.
 pub type Linear<S, B = DefaultBackend> = kindle_core::prelude::Linear<S, B>;
 #[cfg(not(feature = "cpu"))]
-/// Auto-generated documentation for Linear.
+/// Core abstraction for `Linear` within the Kindle framework.
 pub type Linear<S, B> = kindle_core::prelude::Linear<S, B>;
 
 #[cfg(feature = "cpu")]
-/// Auto-generated documentation for Conv1d.
+/// Core abstraction for `Conv1d` within the Kindle framework.
 pub type Conv1d<S, B = DefaultBackend> = kindle_core::prelude::Conv1d<S, B>;
 #[cfg(not(feature = "cpu"))]
-/// Auto-generated documentation for Conv1d.
+/// Core abstraction for `Conv1d` within the Kindle framework.
 pub type Conv1d<S, B> = kindle_core::prelude::Conv1d<S, B>;
 
 #[cfg(feature = "cpu")]
-/// Auto-generated documentation for Conv2d.
+/// Core abstraction for `Conv2d` within the Kindle framework.
 pub type Conv2d<S, B = DefaultBackend> = kindle_core::prelude::Conv2d<S, B>;
 #[cfg(not(feature = "cpu"))]
-/// Auto-generated documentation for Conv2d.
+/// Core abstraction for `Conv2d` within the Kindle framework.
 pub type Conv2d<S, B> = kindle_core::prelude::Conv2d<S, B>;
 
 #[cfg(feature = "cpu")]
-/// Auto-generated documentation for BatchNorm2d.
+/// Core abstraction for `BatchNorm2d` within the Kindle framework.
 pub type BatchNorm2d<C, B = DefaultBackend> = kindle_core::prelude::BatchNorm2d<C, B>;
 #[cfg(not(feature = "cpu"))]
-/// Auto-generated documentation for BatchNorm2d.
+/// Core abstraction for `BatchNorm2d` within the Kindle framework.
 pub type BatchNorm2d<C, B> = kindle_core::prelude::BatchNorm2d<C, B>;
 
 #[cfg(feature = "cpu")]
-/// Auto-generated documentation for LayerNorm.
+/// Core abstraction for `LayerNorm` within the Kindle framework.
 pub type LayerNorm<C, B = DefaultBackend> = kindle_core::prelude::LayerNorm<C, B>;
 #[cfg(not(feature = "cpu"))]
-/// Auto-generated documentation for LayerNorm.
+/// Core abstraction for `LayerNorm` within the Kindle framework.
 pub type LayerNorm<C, B> = kindle_core::prelude::LayerNorm<C, B>;
 
-/// Auto-generated documentation for AvgPool2d.
+/// Core abstraction for `AvgPool2d` within the Kindle framework.
 pub type AvgPool2d<K, S, P = typenum::U0, D = typenum::U1> =
     kindle_core::prelude::AvgPool2d<K, S, P, D>;
-/// Auto-generated documentation for MaxPool2d.
+/// Core abstraction for `MaxPool2d` within the Kindle framework.
 pub type MaxPool2d<K, S, P = typenum::U0, D = typenum::U1> =
     kindle_core::prelude::MaxPool2d<K, S, P, D>;
-/// Auto-generated documentation for Sequential.
+/// Core abstraction for `Sequential` within the Kindle framework.
 pub type Sequential<L1, L2> = kindle_core::prelude::Sequential<L1, L2>;
 
 #[cfg(feature = "cpu")]
-/// Auto-generated documentation for Param.
+/// Core abstraction for `Param` within the Kindle framework.
 pub type Param<T, B = DefaultBackend> = kindle_core::prelude::Param<T, B>;
 #[cfg(not(feature = "cpu"))]
-/// Auto-generated documentation for Param.
+/// Core abstraction for `Param` within the Kindle framework.
 pub type Param<T, B> = kindle_core::prelude::Param<T, B>;
 
 #[cfg(feature = "cpu")]
-/// Auto-generated documentation for RNNCell.
+/// Core abstraction for `RNNCell` within the Kindle framework.
 pub type RNNCell<S, B = DefaultBackend> = kindle_core::prelude::RNNCell<S, B>;
 #[cfg(not(feature = "cpu"))]
-/// Auto-generated documentation for RNNCell.
+/// Core abstraction for `RNNCell` within the Kindle framework.
 pub type RNNCell<S, B> = kindle_core::prelude::RNNCell<S, B>;
 
 #[cfg(feature = "cpu")]
-/// Auto-generated documentation for RNN.
+/// Core abstraction for `RNN` within the Kindle framework.
 pub type RNN<S, B = DefaultBackend> = kindle_core::prelude::RNN<S, B>;
 #[cfg(not(feature = "cpu"))]
-/// Auto-generated documentation for RNN.
+/// Core abstraction for `RNN` within the Kindle framework.
 pub type RNN<S, B> = kindle_core::prelude::RNN<S, B>;
 
 #[cfg(feature = "cpu")]
-/// Auto-generated documentation for Embedding.
+/// Core abstraction for `Embedding` within the Kindle framework.
 pub type Embedding<S, B = DefaultBackend> = kindle_core::prelude::Embedding<S, B>;
 #[cfg(not(feature = "cpu"))]
-/// Auto-generated documentation for Embedding.
+/// Core abstraction for `Embedding` within the Kindle framework.
 pub type Embedding<S, B> = kindle_core::prelude::Embedding<S, B>;
 
-/// Auto-generated documentation for macros.
+/// Core abstraction for `macros` within the Kindle framework.
 pub mod macros {
     // `impl_arg_into` deliberately excluded: it's an internal codegen helper
     // invoked once, internally, by `kindle-core` itself
@@ -221,7 +221,7 @@ pub mod macros {
 }
 
 #[allow(unused_imports)]
-/// Auto-generated documentation for prelude.
+/// Core abstraction for `prelude` within the Kindle framework.
 pub mod prelude {
     pub use kindle_backends::prelude::*;
     pub use kindle_core::prelude::*;
@@ -243,13 +243,13 @@ pub mod prelude {
 }
 
 #[cfg(test)]
-/// Auto-generated documentation for tests.
+/// Core abstraction for `tests` within the Kindle framework.
 mod tests {
     use super::*;
 
     #[test]
     #[cfg(feature = "cpu")]
-    /// Auto-generated documentation for test_tensor_export.
+    /// Core abstraction for `test_tensor_export` within the Kindle framework.
     fn test_tensor_export() {
         // Verify the `Tensor` alias and its `DefaultBackend` are properly
         // exported and usable end-to-end. This used to gate on

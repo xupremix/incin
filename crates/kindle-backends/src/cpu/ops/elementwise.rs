@@ -109,7 +109,7 @@ pub(crate) fn elementwise_unary(
     Ok(CpuStorage::from_contiguous(out_buffer, t.shape.clone()))
 }
 
-/// Auto-generated documentation for negate.
+/// Core abstraction for `negate` within the Kindle framework..
 fn negate(t: &CpuStorage) -> CpuStorage {
     elementwise_unary("neg", "-x", t, |x| -x).unwrap()
 }
@@ -142,7 +142,7 @@ fn erf_approx(x: f64) -> f64 {
 }
 
 impl<T: DType, D: kindle_core::prelude::Device> NumericOps<Self> for CpuBackend<T, D> {
-    /// Auto-generated documentation for add.
+    /// Core abstraction for `add` within the Kindle framework..
     fn add<K: DType>(
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
@@ -165,7 +165,7 @@ impl<T: DType, D: kindle_core::prelude::Device> NumericOps<Self> for CpuBackend<
         Ok(out)
     }
 
-    /// Auto-generated documentation for sub.
+    /// Core abstraction for `sub` within the Kindle framework..
     fn sub<K: DType>(
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
@@ -189,7 +189,7 @@ impl<T: DType, D: kindle_core::prelude::Device> NumericOps<Self> for CpuBackend<
         Ok(out)
     }
 
-    /// Auto-generated documentation for mul.
+    /// Core abstraction for `mul` within the Kindle framework..
     fn mul<K: DType>(
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
@@ -233,7 +233,7 @@ impl<T: DType, D: kindle_core::prelude::Device> NumericOps<Self> for CpuBackend<
         Ok(out)
     }
 
-    /// Auto-generated documentation for div.
+    /// Core abstraction for `div` within the Kindle framework..
     fn div<K: DType>(
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
@@ -291,7 +291,7 @@ impl<T: DType, D: kindle_core::prelude::Device> NumericOps<Self> for CpuBackend<
 }
 
 impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for CpuBackend<T, D> {
-    /// Auto-generated documentation for add_scalar_float.
+    /// Core abstraction for `add_scalar_float` within the Kindle framework..
     fn add_scalar_float<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         scalar: f64,
@@ -314,7 +314,7 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for CpuBackend<T,
         Ok(out)
     }
 
-    /// Auto-generated documentation for mul_scalar_float.
+    /// Core abstraction for `mul_scalar_float` within the Kindle framework..
     fn mul_scalar_float<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         scalar: f64,
@@ -351,7 +351,7 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for CpuBackend<T,
         Ok(out)
     }
 
-    /// Auto-generated documentation for relu.
+    /// Core abstraction for `relu` within the Kindle framework..
     fn relu<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         let out = elementwise_unary("relu", "x > 0.0 ? x : 0.0", t, |x| x.max(0.0))?;
 
@@ -381,7 +381,7 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for CpuBackend<T,
         Ok(out)
     }
 
-    /// Auto-generated documentation for step.
+    /// Core abstraction for `step` within the Kindle framework..
     fn step<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         let out = elementwise_unary("step", "x > 0.0 ? 1.0 : 0.0", t, |x| {
             if x > 0.0 { 1.0 } else { 0.0 }
@@ -404,7 +404,7 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for CpuBackend<T,
         Ok(out)
     }
 
-    /// Auto-generated documentation for mish.
+    /// Core abstraction for `mish` within the Kindle framework..
     fn mish<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         let out = elementwise_unary(
             "mish",
@@ -435,7 +435,7 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for CpuBackend<T,
         Ok(out)
     }
 
-    /// Auto-generated documentation for elu.
+    /// Core abstraction for `elu` within the Kindle framework..
     fn elu<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         let out = elementwise_unary("elu", "x > 0.0 ? x : expf(x) - 1.0", t, |x| {
             if x > 0.0 { x } else { x.exp() - 1.0 }
@@ -465,7 +465,7 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for CpuBackend<T,
         Ok(out)
     }
 
-    /// Auto-generated documentation for gelu.
+    /// Core abstraction for `gelu` within the Kindle framework..
     fn gelu<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         let out = elementwise_unary(
             "gelu",
@@ -495,7 +495,7 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for CpuBackend<T,
         Ok(out)
     }
 
-    /// Auto-generated documentation for abs.
+    /// Core abstraction for `abs` within the Kindle framework..
     fn abs<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         let out = elementwise_unary("abs", "fabsf(x)", t, |x| x.abs())?;
 
@@ -530,7 +530,7 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for CpuBackend<T,
         Ok(out)
     }
 
-    /// Auto-generated documentation for exp.
+    /// Core abstraction for `exp` within the Kindle framework..
     fn exp<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         let out = elementwise_unary("exp", "expf(x)", t, |x| x.exp())?;
 
@@ -559,7 +559,7 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for CpuBackend<T,
         Ok(out)
     }
 
-    /// Auto-generated documentation for neg.
+    /// Core abstraction for `neg` within the Kindle framework..
     fn neg<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         let out = negate(t);
 
@@ -573,7 +573,7 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for CpuBackend<T,
         Ok(out)
     }
 
-    /// Auto-generated documentation for sqrt.
+    /// Core abstraction for `sqrt` within the Kindle framework..
     fn sqrt<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         let out = elementwise_unary("sqrt", "sqrtf(x)", t, |x| x.sqrt())?;
 
@@ -602,7 +602,7 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for CpuBackend<T,
         Ok(out)
     }
 
-    /// Auto-generated documentation for log.
+    /// Core abstraction for `log` within the Kindle framework..
     fn log<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         let out = elementwise_unary("log", "logf(x)", t, |x| x.ln())?;
 
@@ -631,7 +631,7 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for CpuBackend<T,
         Ok(out)
     }
 
-    /// Auto-generated documentation for tanh.
+    /// Core abstraction for `tanh` within the Kindle framework..
     fn tanh<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         let out = elementwise_unary("tanh", "tanhf(x)", t, |x| x.tanh())?;
 
@@ -660,7 +660,7 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for CpuBackend<T,
         Ok(out)
     }
 
-    /// Auto-generated documentation for sigmoid.
+    /// Core abstraction for `sigmoid` within the Kindle framework..
     fn sigmoid<K: DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
@@ -693,7 +693,7 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for CpuBackend<T,
         Ok(out)
     }
 
-    /// Auto-generated documentation for swish.
+    /// Core abstraction for `swish` within the Kindle framework..
     fn swish<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         let out = elementwise_unary("swish", "x / (1.0f + expf(-x))", t, |x| {
             let sig = 1.0 / (1.0 + (-x).exp());
@@ -733,7 +733,7 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for CpuBackend<T,
         });
         Ok(out)
     }
-    /// Auto-generated documentation for softmax.
+    /// Core abstraction for `softmax` within the Kindle framework..
     fn softmax<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
@@ -774,7 +774,7 @@ pub(crate) fn log_softmax<T: DType, D: kindle_core::prelude::Device, K: DType>(
 ) -> Result<CpuStorage> {
     use kindle_core::prelude::{FloatOps, NumericOps, ReductionOps};
 
-    /// Auto-generated documentation for B.
+    /// Core abstraction for `B` within the Kindle framework..
     type B<T, D> = CpuBackend<T, D>;
 
     let max = <B<T, D> as ReductionOps<B<T, D>>>::max_keepdim::<K>(t, dim)?;
@@ -786,7 +786,7 @@ pub(crate) fn log_softmax<T: DType, D: kindle_core::prelude::Device, K: DType>(
 }
 
 #[cfg(test)]
-/// Auto-generated documentation for tests.
+/// Core abstraction for `tests` within the Kindle framework..
 mod tests {
     use super::*;
     use crate::cpu::gradcheck::gradcheck;
@@ -794,18 +794,18 @@ mod tests {
     use crate::cpu::tape;
     use kindle_core::prelude::ReductionOps;
 
-    /// Auto-generated documentation for matrix.
+    /// Core abstraction for `matrix` within the Kindle framework..
     fn matrix(v: Vec<f32>, rows: usize, cols: usize) -> CpuStorage {
         CpuStorage::from_contiguous(CpuBuffer::F32(v), vec![rows, cols])
     }
 
-    /// Auto-generated documentation for vector.
+    /// Core abstraction for `vector` within the Kindle framework..
     fn vector(v: Vec<f32>) -> CpuStorage {
         let len = v.len();
         CpuStorage::from_contiguous(CpuBuffer::F32(v), vec![len])
     }
 
-    /// Auto-generated documentation for f32_vec.
+    /// Core abstraction for `f32_vec` within the Kindle framework..
     fn f32_vec(s: &CpuStorage) -> Vec<f32> {
         match &*s.buffer {
             CpuBuffer::F32(v) => v.clone(),
@@ -855,11 +855,11 @@ mod tests {
         }
     }
 
-    /// Auto-generated documentation for TestBackend.
+    /// Core abstraction for `TestBackend` within the Kindle framework..
     type TestBackend = CpuBackend<f32, kindle_core::prelude::Cpu>;
 
     #[test]
-    /// Auto-generated documentation for add_broadcasts_forward_correctly.
+    /// Core abstraction for `add_broadcasts_forward_correctly` within the Kindle framework..
     fn add_broadcasts_forward_correctly() {
         let lhs = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let rhs = vector(vec![10.0, 20.0, 30.0]);
@@ -869,7 +869,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for add_backward_unbroadcasts_correctly_for_bias_vector_case.
+    /// Core abstraction for `add_backward_unbroadcasts_correctly_for_bias_vector_case` within the Kindle framework..
     fn add_backward_unbroadcasts_correctly_for_bias_vector_case() {
         let lhs = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let rhs = vector(vec![10.0, 20.0, 30.0]);
@@ -889,7 +889,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for sub_forward_computes_elementwise_difference_with_broadcast.
+    /// Core abstraction for `sub_forward_computes_elementwise_difference_with_broadcast` within the Kindle framework..
     fn sub_forward_computes_elementwise_difference_with_broadcast() {
         let lhs = matrix(vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0], 2, 3);
         let rhs = vector(vec![1.0, 2.0, 3.0]);
@@ -899,7 +899,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for sub_backward_negates_rhs_contribution.
+    /// Core abstraction for `sub_backward_negates_rhs_contribution` within the Kindle framework..
     fn sub_backward_negates_rhs_contribution() {
         let lhs = vector(vec![10.0, 20.0, 30.0]);
         let rhs = vector(vec![1.0, 2.0, 3.0]);
@@ -914,7 +914,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for mul_forward_computes_elementwise_product_with_broadcast.
+    /// Core abstraction for `mul_forward_computes_elementwise_product_with_broadcast` within the Kindle framework..
     fn mul_forward_computes_elementwise_product_with_broadcast() {
         let lhs = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let rhs = vector(vec![2.0, 3.0, 4.0]);
@@ -924,7 +924,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for mul_backward_uses_other_operands_real_values.
+    /// Core abstraction for `mul_backward_uses_other_operands_real_values` within the Kindle framework..
     fn mul_backward_uses_other_operands_real_values() {
         // d(a*b)/da = b, d(a*b)/db = a — verify the retrieved gradient
         // equals a manually-computed expected value (not merely "some
@@ -945,7 +945,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for mul_backward_with_broadcast_bias_vector_case.
+    /// Core abstraction for `mul_backward_with_broadcast_bias_vector_case` within the Kindle framework..
     fn mul_backward_with_broadcast_bias_vector_case() {
         let lhs = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let rhs = vector(vec![2.0, 3.0, 4.0]);
@@ -968,7 +968,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for add_scalar_float_forward_and_backward.
+    /// Core abstraction for `add_scalar_float_forward_and_backward` within the Kindle framework..
     fn add_scalar_float_forward_and_backward() {
         let t = vector(vec![1.0, 2.0, 3.0]);
         let out = TestBackend::add_scalar_float::<f32>(&t, 1.0).unwrap();
@@ -981,7 +981,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for mul_scalar_float_forward_and_backward.
+    /// Core abstraction for `mul_scalar_float_forward_and_backward` within the Kindle framework..
     fn mul_scalar_float_forward_and_backward() {
         let t = vector(vec![1.0, 2.0, 3.0]);
         let out = TestBackend::mul_scalar_float::<f32>(&t, 2.5).unwrap();
@@ -996,7 +996,7 @@ mod tests {
     // --- Task 1: relu / abs / neg ---
 
     #[test]
-    /// Auto-generated documentation for relu_forward_and_backward_zero_at_boundary.
+    /// Core abstraction for `relu_forward_and_backward_zero_at_boundary` within the Kindle framework..
     fn relu_forward_and_backward_zero_at_boundary() {
         let t = vector(vec![-2.0, 0.0, 3.0]);
         let out = TestBackend::relu::<f32>(&t).unwrap();
@@ -1009,7 +1009,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for relu_gradcheck_on_nonzero_input.
+    /// Core abstraction for `relu_gradcheck_on_nonzero_input` within the Kindle framework..
     fn relu_gradcheck_on_nonzero_input() {
         let x = vector(vec![2.0, -1.5, 0.7]);
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
@@ -1024,7 +1024,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for abs_forward_and_gradcheck.
+    /// Core abstraction for `abs_forward_and_gradcheck` within the Kindle framework..
     fn abs_forward_and_gradcheck() {
         let t = vector(vec![-2.5, 0.0, 3.5]);
         let out = TestBackend::abs::<f32>(&t).unwrap();
@@ -1043,7 +1043,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for neg_forward_and_gradcheck.
+    /// Core abstraction for `neg_forward_and_gradcheck` within the Kindle framework..
     fn neg_forward_and_gradcheck() {
         let t = vector(vec![1.0, -2.0, 3.0]);
         let out = TestBackend::neg::<f32>(&t).unwrap();
@@ -1064,7 +1064,7 @@ mod tests {
     // --- Task 2: exp / sqrt / log / tanh / sigmoid / swish ---
 
     #[test]
-    /// Auto-generated documentation for exp_forward_and_gradcheck.
+    /// Core abstraction for `exp_forward_and_gradcheck` within the Kindle framework..
     fn exp_forward_and_gradcheck() {
         let t = vector(vec![0.0, 1.0]);
         let out = TestBackend::exp::<f32>(&t).unwrap();
@@ -1086,7 +1086,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for sqrt_forward_gradcheck_and_nan_propagation.
+    /// Core abstraction for `sqrt_forward_gradcheck_and_nan_propagation` within the Kindle framework..
     fn sqrt_forward_gradcheck_and_nan_propagation() {
         let t = vector(vec![4.0, 9.0]);
         let out = TestBackend::sqrt::<f32>(&t).unwrap();
@@ -1111,7 +1111,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for log_forward_gradcheck_and_domain_propagation.
+    /// Core abstraction for `log_forward_gradcheck_and_domain_propagation` within the Kindle framework..
     fn log_forward_gradcheck_and_domain_propagation() {
         let t = vector(vec![1.0, core::f64::consts::E as f32]);
         let out = TestBackend::log::<f32>(&t).unwrap();
@@ -1146,7 +1146,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for tanh_gradcheck.
+    /// Core abstraction for `tanh_gradcheck` within the Kindle framework..
     fn tanh_gradcheck() {
         let x = vector(vec![0.5, -1.0, 2.0]);
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
@@ -1161,7 +1161,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for sigmoid_forward_and_gradcheck.
+    /// Core abstraction for `sigmoid_forward_and_gradcheck` within the Kindle framework..
     fn sigmoid_forward_and_gradcheck() {
         let t = vector(vec![0.0]);
         let out = TestBackend::sigmoid::<f32>(&t).unwrap();
@@ -1180,7 +1180,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for swish_forward_and_gradcheck.
+    /// Core abstraction for `swish_forward_and_gradcheck` within the Kindle framework..
     fn swish_forward_and_gradcheck() {
         let t = vector(vec![0.0]);
         let out = TestBackend::swish::<f32>(&t).unwrap();
@@ -1201,7 +1201,7 @@ mod tests {
     // --- Task 3: gelu (exact erf-based form) ---
 
     #[test]
-    /// Auto-generated documentation for gelu_forward_zero_and_one.
+    /// Core abstraction for `gelu_forward_zero_and_one` within the Kindle framework..
     fn gelu_forward_zero_and_one() {
         let zero = vector(vec![0.0]);
         let out_zero = TestBackend::gelu::<f32>(&zero).unwrap();
@@ -1221,7 +1221,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for gelu_gradcheck.
+    /// Core abstraction for `gelu_gradcheck` within the Kindle framework..
     fn gelu_gradcheck() {
         let x = vector(vec![0.5, -1.0, 2.0]);
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
@@ -1238,7 +1238,7 @@ mod tests {
     // --- Task 1 (plan 02-04): softmax by composition ---
 
     #[test]
-    /// Auto-generated documentation for softmax_forward_sums_to_one_on_vector.
+    /// Core abstraction for `softmax_forward_sums_to_one_on_vector` within the Kindle framework..
     fn softmax_forward_sums_to_one_on_vector() {
         let t = vector(vec![1.0, 2.0, 3.0]);
         let out = TestBackend::softmax::<f32>(&t, 0).unwrap();
@@ -1253,7 +1253,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for softmax_forward_sums_to_one_per_row_on_matrix.
+    /// Core abstraction for `softmax_forward_sums_to_one_per_row_on_matrix` within the Kindle framework..
     fn softmax_forward_sums_to_one_per_row_on_matrix() {
         let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
         let out = TestBackend::softmax::<f32>(&t, 1).unwrap();
@@ -1272,7 +1272,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for softmax_forward_stable_on_large_magnitude_equal_logits.
+    /// Core abstraction for `softmax_forward_stable_on_large_magnitude_equal_logits` within the Kindle framework..
     fn softmax_forward_stable_on_large_magnitude_equal_logits() {
         // Without max-subtraction, exp(1000.0) overflows to inf, producing
         // NaN (inf/inf) instead of a finite uniform distribution.
@@ -1290,7 +1290,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for softmax_forward_uniform_on_all_zero_logits.
+    /// Core abstraction for `softmax_forward_uniform_on_all_zero_logits` within the Kindle framework..
     fn softmax_forward_uniform_on_all_zero_logits() {
         let t = vector(vec![0.0, 0.0, 0.0]);
         let out = TestBackend::softmax::<f32>(&t, 0).unwrap();
@@ -1306,7 +1306,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for softmax_gradcheck.
+    /// Core abstraction for `softmax_gradcheck` within the Kindle framework..
     fn softmax_gradcheck() {
         let x = vector(vec![0.5, -1.0, 2.0]);
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
@@ -1321,7 +1321,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for softmax_backward_finite_on_large_magnitude_equal_logits.
+    /// Core abstraction for `softmax_backward_finite_on_large_magnitude_equal_logits` within the Kindle framework..
     fn softmax_backward_finite_on_large_magnitude_equal_logits() {
         // Proves both forward AND backward are numerically stable under the
         // composition, not just forward (Test 3's finite-forward twin).
@@ -1341,7 +1341,7 @@ mod tests {
     // --- log_softmax kernel tests (Plan 04-01 Task 1) ---
 
     #[test]
-    /// Auto-generated documentation for log_softmax_exp_sums_to_one_on_vector.
+    /// Core abstraction for `log_softmax_exp_sums_to_one_on_vector` within the Kindle framework..
     fn log_softmax_exp_sums_to_one_on_vector() {
         // exp(log_softmax(x)).sum() == 1.0 (the softmax identity).
         use crate::cpu::ops::elementwise::log_softmax;
@@ -1357,7 +1357,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for log_softmax_is_finite_and_correct_on_large_magnitude_equal_logits.
+    /// Core abstraction for `log_softmax_is_finite_and_correct_on_large_magnitude_equal_logits` within the Kindle framework..
     fn log_softmax_is_finite_and_correct_on_large_magnitude_equal_logits() {
         // log_softmax([1000, 1000, 1000]) should be -ln(3) for each element.
         // Without max-subtraction, exp(1000) overflows to inf and log(inf) = inf.
@@ -1376,7 +1376,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for softmax_after_refactor_still_passes_all_prior_behavior.
+    /// Core abstraction for `softmax_after_refactor_still_passes_all_prior_behavior` within the Kindle framework..
     fn softmax_after_refactor_still_passes_all_prior_behavior() {
         // Regression guard: the refactored softmax (exp(log_softmax(x, dim)))
         // must produce the same output as the old max_keepdim/sub/exp/sum_keepdim/div
@@ -1397,7 +1397,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for log_softmax_gradcheck.
+    /// Core abstraction for `log_softmax_gradcheck` within the Kindle framework..
     fn log_softmax_gradcheck() {
         // Finite-difference gradcheck for log_softmax itself.
         use crate::cpu::ops::elementwise::log_softmax;

@@ -154,16 +154,16 @@ pub fn gradcheck(op: impl Fn(&[CpuStorage]) -> CpuStorage, inputs: &[CpuStorage]
 }
 
 #[cfg(test)]
-/// Auto-generated documentation for tests.
+/// Core abstraction for `tests` within the Kindle framework..
 mod tests {
     use super::*;
     use crate::cpu::CpuBackend;
     use kindle_core::prelude::{Cpu, NumericOps, ReductionOps};
 
-    /// Auto-generated documentation for TestBackend.
+    /// Core abstraction for `TestBackend` within the Kindle framework..
     type TestBackend = CpuBackend<f32, Cpu>;
 
-    /// Auto-generated documentation for vector.
+    /// Core abstraction for `vector` within the Kindle framework..
     fn vector(v: Vec<f32>) -> CpuStorage {
         let len = v.len();
         CpuStorage::from_contiguous(CpuBuffer::F32(v), vec![len])

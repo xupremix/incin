@@ -1,114 +1,114 @@
 use crate::prelude::*;
 use alloc::collections::BTreeMap;
 
-/// Auto-generated documentation for ValueId.
+/// Core abstraction for `ValueId` within the Kindle framework..
 pub type ValueId = usize;
-/// Auto-generated documentation for NodeId.
+/// Core abstraction for `NodeId` within the Kindle framework..
 pub type NodeId = usize;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-/// Auto-generated documentation for OpType.
+/// Core abstraction for `OpType` within the Kindle framework..
 pub enum OpType {
-    /// Auto-generated documentation for ArgMax.
+    /// Core abstraction for `ArgMax` within the Kindle framework..
     ArgMax,
-    /// Auto-generated documentation for ArgMin.
+    /// Core abstraction for `ArgMin` within the Kindle framework..
     ArgMin,
-    /// Auto-generated documentation for Add.
+    /// Core abstraction for `Add` within the Kindle framework..
     Add,
-    /// Auto-generated documentation for Sub.
+    /// Core abstraction for `Sub` within the Kindle framework..
     Sub,
-    /// Auto-generated documentation for Mul.
+    /// Core abstraction for `Mul` within the Kindle framework..
     Mul,
-    /// Auto-generated documentation for Div.
+    /// Core abstraction for `Div` within the Kindle framework..
     Div,
-    /// Auto-generated documentation for MatMul.
+    /// Core abstraction for `MatMul` within the Kindle framework..
     MatMul,
-    /// Auto-generated documentation for Relu.
+    /// Core abstraction for `Relu` within the Kindle framework..
     Relu,
-    /// Auto-generated documentation for Step.
+    /// Core abstraction for `Step` within the Kindle framework..
     Step,
-    /// Auto-generated documentation for Mish.
+    /// Core abstraction for `Mish` within the Kindle framework..
     Mish,
-    /// Auto-generated documentation for Elu.
+    /// Core abstraction for `Elu` within the Kindle framework..
     Elu,
-    /// Auto-generated documentation for Gelu.
+    /// Core abstraction for `Gelu` within the Kindle framework..
     Gelu,
-    /// Auto-generated documentation for Conv1d.
+    /// Core abstraction for `Conv1d` within the Kindle framework..
     Conv1d,
-    /// Auto-generated documentation for Conv2d.
+    /// Core abstraction for `Conv2d` within the Kindle framework..
     Conv2d,
-    /// Auto-generated documentation for Linear.
+    /// Core abstraction for `Linear` within the Kindle framework..
     Linear,
-    /// Auto-generated documentation for Reshape.
+    /// Core abstraction for `Reshape` within the Kindle framework..
     Reshape,
-    /// Auto-generated documentation for Transpose.
+    /// Core abstraction for `Transpose` within the Kindle framework..
     Transpose,
-    /// Auto-generated documentation for Softmax.
+    /// Core abstraction for `Softmax` within the Kindle framework..
     Softmax,
-    /// Auto-generated documentation for Concat.
+    /// Core abstraction for `Concat` within the Kindle framework..
     Concat,
-    /// Auto-generated documentation for Stack.
+    /// Core abstraction for `Stack` within the Kindle framework..
     Stack,
-    /// Auto-generated documentation for AddScalar.
+    /// Core abstraction for `AddScalar` within the Kindle framework..
     AddScalar,
-    /// Auto-generated documentation for MulScalar.
+    /// Core abstraction for `MulScalar` within the Kindle framework..
     MulScalar,
-    /// Auto-generated documentation for SumAll.
+    /// Core abstraction for `SumAll` within the Kindle framework..
     SumAll,
-    /// Auto-generated documentation for MeanAll.
+    /// Core abstraction for `MeanAll` within the Kindle framework..
     MeanAll,
-    /// Auto-generated documentation for MaxAll.
+    /// Core abstraction for `MaxAll` within the Kindle framework..
     MaxAll,
-    /// Auto-generated documentation for MinAll.
+    /// Core abstraction for `MinAll` within the Kindle framework..
     MinAll,
-    /// Auto-generated documentation for SumDim.
+    /// Core abstraction for `SumDim` within the Kindle framework..
     SumDim,
-    /// Auto-generated documentation for MeanDim.
+    /// Core abstraction for `MeanDim` within the Kindle framework..
     MeanDim,
-    /// Auto-generated documentation for MaxDim.
+    /// Core abstraction for `MaxDim` within the Kindle framework..
     MaxDim,
-    /// Auto-generated documentation for MinDim.
+    /// Core abstraction for `MinDim` within the Kindle framework..
     MinDim,
-    /// Auto-generated documentation for Broadcast.
+    /// Core abstraction for `Broadcast` within the Kindle framework..
     Broadcast,
-    /// Auto-generated documentation for Narrow.
+    /// Core abstraction for `Narrow` within the Kindle framework..
     Narrow,
-    /// Auto-generated documentation for MaxPool2d.
+    /// Core abstraction for `MaxPool2d` within the Kindle framework..
     MaxPool2d,
-    /// Auto-generated documentation for AvgPool2d.
+    /// Core abstraction for `AvgPool2d` within the Kindle framework..
     AvgPool2d,
-    /// Auto-generated documentation for AdaptiveAvgPool2d.
+    /// Core abstraction for `AdaptiveAvgPool2d` within the Kindle framework..
     AdaptiveAvgPool2d,
-    /// Auto-generated documentation for Slice.
+    /// Core abstraction for `Slice` within the Kindle framework..
     Slice,
-    /// Auto-generated documentation for ToDtype.
+    /// Core abstraction for `ToDtype` within the Kindle framework..
     ToDtype,
-    /// Auto-generated documentation for CrossEntropyLoss.
+    /// Core abstraction for `CrossEntropyLoss` within the Kindle framework..
     CrossEntropyLoss,
-    /// Auto-generated documentation for MseLoss.
+    /// Core abstraction for `MseLoss` within the Kindle framework..
     MseLoss,
-    /// Auto-generated documentation for L1Loss.
+    /// Core abstraction for `L1Loss` within the Kindle framework..
     L1Loss,
-    /// Auto-generated documentation for BceWithLogitsLoss.
+    /// Core abstraction for `BceWithLogitsLoss` within the Kindle framework..
     BceWithLogitsLoss,
-    /// Auto-generated documentation for Embedding.
+    /// Core abstraction for `Embedding` within the Kindle framework..
     Embedding,
-    /// Auto-generated documentation for LayerNorm.
+    /// Core abstraction for `LayerNorm` within the Kindle framework..
     LayerNorm,
-    /// Auto-generated documentation for BatchNorm.
+    /// Core abstraction for `BatchNorm` within the Kindle framework..
     BatchNorm,
-    /// Auto-generated documentation for Squeeze.
+    /// Core abstraction for `Squeeze` within the Kindle framework..
     Squeeze,
-    /// Auto-generated documentation for ConvTranspose2d.
+    /// Core abstraction for `ConvTranspose2d` within the Kindle framework..
     ConvTranspose2d,
-    /// Auto-generated documentation for Input.
+    /// Core abstraction for `Input` within the Kindle framework..
     Input,
-    /// Auto-generated documentation for Constant.
+    /// Core abstraction for `Constant` within the Kindle framework..
     Constant,
 }
 
 impl OpType {
-    /// Auto-generated documentation for as_str.
+    /// Core abstraction for `as_str` within the Kindle framework..
     pub fn as_str(&self) -> &'static str {
         match self {
             OpType::ArgMax => "ArgMax",
@@ -164,74 +164,74 @@ impl OpType {
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-/// Auto-generated documentation for Value.
+/// Core abstraction for `Value` within the Kindle framework..
 pub struct Value {
-    /// Auto-generated documentation for id.
+    /// Core abstraction for `id` within the Kindle framework..
     pub id: ValueId,
-    /// Auto-generated documentation for shape.
+    /// Core abstraction for `shape` within the Kindle framework..
     pub shape: Vec<usize>,
-    /// Auto-generated documentation for dtype.
+    /// Core abstraction for `dtype` within the Kindle framework..
     pub dtype: KindleDType,
-    /// Auto-generated documentation for name.
+    /// Core abstraction for `name` within the Kindle framework..
     pub name: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-/// Auto-generated documentation for Node.
+/// Core abstraction for `Node` within the Kindle framework..
 pub struct Node {
-    /// Auto-generated documentation for id.
+    /// Core abstraction for `id` within the Kindle framework..
     pub id: NodeId,
-    /// Auto-generated documentation for op.
+    /// Core abstraction for `op` within the Kindle framework..
     pub op: OpType,
-    /// Auto-generated documentation for inputs.
+    /// Core abstraction for `inputs` within the Kindle framework..
     pub inputs: Vec<ValueId>,
-    /// Auto-generated documentation for outputs.
+    /// Core abstraction for `outputs` within the Kindle framework..
     pub outputs: Vec<ValueId>,
-    /// Auto-generated documentation for attributes.
+    /// Core abstraction for `attributes` within the Kindle framework..
     pub attributes: BTreeMap<String, AttributeValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-/// Auto-generated documentation for AttributeValue.
+/// Core abstraction for `AttributeValue` within the Kindle framework..
 pub enum AttributeValue {
-    /// Auto-generated documentation for Int.
+    /// Core abstraction for `Int` within the Kindle framework..
     Int(i64),
-    /// Auto-generated documentation for Float.
+    /// Core abstraction for `Float` within the Kindle framework..
     Float(f32),
-    /// Auto-generated documentation for String.
+    /// Core abstraction for `String` within the Kindle framework..
     String(String),
-    /// Auto-generated documentation for Ints.
+    /// Core abstraction for `Ints` within the Kindle framework..
     Ints(Vec<i64>),
-    /// Auto-generated documentation for Floats.
+    /// Core abstraction for `Floats` within the Kindle framework..
     Floats(Vec<f32>),
 }
 
 #[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-/// Auto-generated documentation for Graph.
+/// Core abstraction for `Graph` within the Kindle framework..
 pub struct Graph {
     #[serde(with = "string_key_map")]
-    /// Auto-generated documentation for values.
+    /// Core abstraction for `values` within the Kindle framework..
     pub values: BTreeMap<ValueId, Value>,
-    /// Auto-generated documentation for nodes.
+    /// Core abstraction for `nodes` within the Kindle framework..
     pub nodes: Vec<Node>,
-    /// Auto-generated documentation for inputs.
+    /// Core abstraction for `inputs` within the Kindle framework..
     pub inputs: Vec<ValueId>,
-    /// Auto-generated documentation for outputs.
+    /// Core abstraction for `outputs` within the Kindle framework..
     pub outputs: Vec<ValueId>,
     #[serde(with = "string_key_map")]
-    /// Auto-generated documentation for initializers.
+    /// Core abstraction for `initializers` within the Kindle framework..
     pub initializers: BTreeMap<ValueId, Vec<u8>>, // raw bytes for constants/weights
     next_value_id: usize,
     next_node_id: usize,
 }
 
-/// Auto-generated documentation for string_key_map.
+/// Core abstraction for `string_key_map` within the Kindle framework..
 mod string_key_map {
     use alloc::collections::BTreeMap;
     use alloc::string::{String, ToString};
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-    /// Auto-generated documentation for serialize.
+    /// Core abstraction for `serialize` within the Kindle framework..
     pub fn serialize<K, V, S>(map: &BTreeMap<K, V>, serializer: S) -> Result<S::Ok, S::Error>
     where
         K: ToString,
@@ -243,7 +243,7 @@ mod string_key_map {
         string_map.serialize(serializer)
     }
 
-    /// Auto-generated documentation for deserialize.
+    /// Core abstraction for `deserialize` within the Kindle framework..
     pub fn deserialize<'de, K, V, D>(deserializer: D) -> Result<BTreeMap<K, V>, D::Error>
     where
         K: core::str::FromStr + core::hash::Hash + Eq + core::cmp::Ord,
@@ -265,12 +265,12 @@ mod string_key_map {
 }
 
 impl Graph {
-    /// Auto-generated documentation for new.
+    /// Core abstraction for `new` within the Kindle framework..
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Auto-generated documentation for add_value.
+    /// Core abstraction for `add_value` within the Kindle framework..
     pub fn add_value(
         &mut self,
         shape: Vec<usize>,
@@ -291,7 +291,7 @@ impl Graph {
         id
     }
 
-    /// Auto-generated documentation for add_node.
+    /// Core abstraction for `add_node` within the Kindle framework..
     pub fn add_node(
         &mut self,
         op: OpType,
@@ -311,14 +311,14 @@ impl Graph {
         id
     }
 
-    /// Auto-generated documentation for mark_input.
+    /// Core abstraction for `mark_input` within the Kindle framework..
     pub fn mark_input(&mut self, value_id: ValueId) {
         if !self.inputs.contains(&value_id) {
             self.inputs.push(value_id);
         }
     }
 
-    /// Auto-generated documentation for mark_output.
+    /// Core abstraction for `mark_output` within the Kindle framework..
     pub fn mark_output(&mut self, value_id: ValueId) {
         if !self.outputs.contains(&value_id) {
             self.outputs.push(value_id);

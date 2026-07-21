@@ -115,3 +115,24 @@ impl WgpuStorage {
         }
     }
 }
+
+pub(crate) fn scatter_into_zeros(
+    out_shape: &[usize],
+    start: &[usize],
+    grad_out: &WgpuStorage,
+) -> WgpuStorage {
+    use crate::wgpu::dispatch;
+    let out_n = crate::wgpu::backend::num_elements(out_shape);
+    let out_buf = WgpuBuffer::new_zeros(out_n * 4);
+    let in_n = crate::wgpu::backend::num_elements(&grad_out.shape) as u32;
+
+    let params = dispatch::prepare_shape_params(
+        1, // paste
+        in_n,
+        out_shape,
+        &grad_out.shape,
+        start,
+    );
+    dispatch::dispatch_shape(&grad_out.buffer, &out_buf, &params);
+    WgpuStorage::new(out_buf, out_shape.to_vec())
+}

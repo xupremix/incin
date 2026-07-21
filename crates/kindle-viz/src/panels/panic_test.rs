@@ -15,20 +15,20 @@ use ratatui::widgets::{Block, Borders, Paragraph};
 pub struct PanicTestPanel;
 
 impl Panel for PanicTestPanel {
-    /// Auto-generated documentation for id.
+    /// Core abstraction for `id` within the Kindle framework.
     fn id(&self) -> &'static str {
         "panic-test"
     }
 
-    /// Auto-generated documentation for title.
+    /// Core abstraction for `title` within the Kindle framework.
     fn title(&self) -> &str {
         "Panic Test"
     }
 
-    /// Auto-generated documentation for update.
+    /// Core abstraction for `update` within the Kindle framework.
     fn update(&mut self, _event: &Event) {}
 
-    /// Auto-generated documentation for render.
+    /// Core abstraction for `render` within the Kindle framework.
     fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) {
         let area = ctx.area();
         let block = Block::default().title("Panic Test").borders(Borders::ALL);
@@ -36,7 +36,7 @@ impl Panel for PanicTestPanel {
         ctx.frame_mut().render_widget(text, area);
     }
 
-    /// Auto-generated documentation for handle_event.
+    /// Core abstraction for `handle_event` within the Kindle framework.
     fn handle_event(&mut self, event: &PanelEvent) -> bool {
         if let PanelEvent::Key(k) = event
             && k.code == KeyCode::Char('p')
@@ -46,7 +46,7 @@ impl Panel for PanicTestPanel {
         false
     }
 
-    /// Auto-generated documentation for reset.
+    /// Core abstraction for `reset` within the Kindle framework.
     fn reset(&mut self) {
         // stateless -- nothing to reset
     }

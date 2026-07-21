@@ -51,20 +51,20 @@
 //!
 //! Once implemented, you can register it with `kindle-viz`'s `App` at startup.
 extern crate alloc;
-/// Auto-generated documentation for err.
+/// Error types and result alias for plugin operations.
 pub mod err;
-/// Auto-generated documentation for event.
+/// Input events (keyboard, mouse, focus) for interactive panels.
 pub mod event;
-/// Auto-generated documentation for keymap.
+/// Keymap actions and resolution.
 pub mod keymap;
-/// Auto-generated documentation for panel.
+/// State and lifecycle interface for visualizer panels.
 pub mod panel;
-/// Auto-generated documentation for plugin.
+/// Plugin bundling interface.
 pub mod plugin;
-/// Auto-generated documentation for render_ctx.
+/// Rendering context wrapper for ratatui buffer access.
 pub mod render_ctx;
 
-/// Auto-generated documentation for prelude.
+/// Convenient re-exports for building visualizer plugins.
 pub mod prelude {
     pub use crate::err::{Error, Result};
     pub use crate::event::*;

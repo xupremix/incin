@@ -11,7 +11,7 @@ pub(crate) mod cuda {
     }
 
     impl CpuCudaDispatcher {
-        /// Auto-generated documentation for new.
+        /// Core abstraction for `new` within the Kindle framework..
         pub fn new(device_id: usize) -> Self {
             let ctx = cuda_cache::get_cuda_device(device_id);
             Self { device_id, ctx }
@@ -58,13 +58,13 @@ pub(crate) mod cuda {
         use cudarc::driver::{CudaContext, CudaModule};
         use std::sync::{Arc, Mutex, OnceLock};
 
-        /// Auto-generated documentation for CUDA_DEVICES.
+        /// Core abstraction for `CUDA_DEVICES` within the Kindle framework..
         static CUDA_DEVICES: OnceLock<Mutex<BTreeMap<usize, Arc<CudaContext>>>> = OnceLock::new();
-        /// Auto-generated documentation for CUDA_MODULES.
+        /// Core abstraction for `CUDA_MODULES` within the Kindle framework..
         static CUDA_MODULES: OnceLock<Mutex<BTreeMap<(usize, String), Arc<CudaModule>>>> =
             OnceLock::new();
 
-        /// Auto-generated documentation for get_cuda_device.
+        /// Core abstraction for `get_cuda_device` within the Kindle framework..
         pub fn get_cuda_device(id: usize) -> Arc<CudaContext> {
             let map_mutex = CUDA_DEVICES.get_or_init(|| Mutex::new(BTreeMap::new()));
             let mut map = map_mutex.lock().unwrap();
@@ -76,14 +76,14 @@ pub(crate) mod cuda {
             dev
         }
 
-        /// Auto-generated documentation for cache_module.
+        /// Core abstraction for `cache_module` within the Kindle framework..
         pub fn cache_module(device_id: usize, module_name: String, module: Arc<CudaModule>) {
             let map_mutex = CUDA_MODULES.get_or_init(|| Mutex::new(BTreeMap::new()));
             let mut map = map_mutex.lock().unwrap();
             map.insert((device_id, module_name), module);
         }
 
-        /// Auto-generated documentation for get_module.
+        /// Core abstraction for `get_module` within the Kindle framework..
         pub fn get_module(device_id: usize, module_name: &str) -> Option<Arc<CudaModule>> {
             let map_mutex = CUDA_MODULES.get_or_init(|| Mutex::new(BTreeMap::new()));
             let map = map_mutex.lock().unwrap();

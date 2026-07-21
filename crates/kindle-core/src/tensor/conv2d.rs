@@ -5,11 +5,11 @@ use typenum::{Diff, Prod, Quot, Sum, U1, U2};
 
 // ConvOutDim already defined in arithmetic.rs and exposed via prelude
 
-/// Auto-generated documentation for KernelConv2dShape.
+/// Core abstraction for `KernelConv2dShape` within the Kindle framework..
 pub trait KernelConv2dShape<K: Shape, Stride: StaticDim, Padding: StaticDim>: Shape {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output: Shape;
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         kernel: &<K as Shape>::Field,
@@ -39,7 +39,7 @@ where
     ConvOutDim<HIn, KH, Stride, Padding>: StaticDim,
     ConvOutDim<WIn, KW, Stride, Padding>: StaticDim,
 {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = (
         B,
         COut,
@@ -48,7 +48,7 @@ where
     );
 
     #[inline(always)]
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<(COut, CIn, KH, KW) as Shape>::Field,
@@ -68,9 +68,9 @@ impl<
     Padding: crate::tensor::matmul::StaticDim + typenum::Unsigned,
 > KernelConv2dShape<Dyn, Stride, Padding> for Dyn
 {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = Dyn;
-    /// Auto-generated documentation for output_shape.
+    /// Core abstraction for `output_shape` within the Kindle framework..
     fn output_shape(
         lhs: &<Dyn as Shape>::Field,
         kernel: &<Dyn as Shape>::Field,
@@ -99,7 +99,7 @@ impl<
     G: RequiresGrad,
 > Tensor<S1, B, K, D, G>
 {
-    /// Auto-generated documentation for conv2d.
+    /// Core abstraction for `conv2d` within the Kindle framework..
     pub fn conv2d<Stride, Padding, KShape>(
         &self,
         weight: &Tensor<KShape, B, K, D, G>,

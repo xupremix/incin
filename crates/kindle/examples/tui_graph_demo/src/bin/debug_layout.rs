@@ -7,19 +7,19 @@ use kindle_core::prelude::{
     TracingBackend, extract_graph, tracing_mark_input, tracing_mark_output,
 };
 
-/// Auto-generated documentation for NB.
+/// Core abstraction for `NB` within the Kindle framework.
 type NB = CpuBackend<f32, Cpu>;
-/// Auto-generated documentation for TB.
+/// Core abstraction for `TB` within the Kindle framework.
 type TB = TracingBackend<NB>;
 
 #[module]
-/// Auto-generated documentation for SimpleMlp.
+/// Core abstraction for `SimpleMlp` within the Kindle framework.
 pub struct SimpleMlp<B: Backend> {
-    /// Auto-generated documentation for fc1.
+    /// Core abstraction for `fc1` within the Kindle framework.
     pub fc1: Linear<Dyn, B>,
-    /// Auto-generated documentation for fc2.
+    /// Core abstraction for `fc2` within the Kindle framework.
     pub fc2: Linear<Dyn, B>,
-    /// Auto-generated documentation for fc3.
+    /// Core abstraction for `fc3` within the Kindle framework.
     pub fc3: Linear<Dyn, B>,
 }
 
@@ -28,7 +28,7 @@ where
     B::FloatElem: ConstDType,
     B::Device: ConstDevice,
 {
-    /// Auto-generated documentation for new.
+    /// Core abstraction for `new` within the Kindle framework.
     pub fn new() -> Result<Self> {
         Ok(Self {
             fc1: Linear::<Dyn, B>::new_with((10, 32))?,
@@ -37,7 +37,7 @@ where
         })
     }
 
-    /// Auto-generated documentation for forward.
+    /// Core abstraction for `forward` within the Kindle framework.
     pub fn forward(&self, x: Tensor<Dyn, B>) -> Result<Tensor<Dyn, B>> {
         let x = self.fc1.forward(x)?.relu()?;
         let x = self.fc2.forward(x)?.relu()?;
@@ -45,7 +45,7 @@ where
     }
 }
 
-/// Auto-generated documentation for project.
+/// Core abstraction for `project` within the Kindle framework.
 fn project(
     x: f64,
     y: f64,

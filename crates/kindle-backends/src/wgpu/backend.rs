@@ -1596,7 +1596,7 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
         let std = Self::sqrt::<K>(&var_plus_eps)?;
         let std_b = Self::broadcast_as::<K>(&std, &t.shape)?;
         let normalized = Self::div::<K>(&centered, &std_b)?;
-        
+
         let mut w_shape = vec![1; rank];
         w_shape[last_dim] = weight.shape[0];
         let w_reshaped = Self::reshape::<K>(weight, &w_shape)?;
@@ -1608,7 +1608,7 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
                 let b_reshaped = Self::reshape::<K>(b, &w_shape)?;
                 let bias_b = Self::broadcast_as::<K>(&b_reshaped, &t.shape)?;
                 Self::add::<K>(&scaled, &bias_b)
-            },
+            }
             None => {
                 let n = num_elements(&t.shape);
                 let zeros = WgpuStorage::new(WgpuBuffer::new_zeros(n * 4), t.shape.clone());
@@ -1664,7 +1664,7 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
 
         let rv_plus_eps = Self::add_scalar_float::<K>(&rv, eps as f64)?;
         let std = Self::sqrt::<K>(&rv_plus_eps)?;
-        
+
         let rm_b = Self::broadcast_as::<K>(&rm, &t.shape)?;
         let std_b = Self::broadcast_as::<K>(&std, &t.shape)?;
         let w_b = Self::broadcast_as::<K>(&w, &t.shape)?;

@@ -20,9 +20,9 @@ use kindle_viz_plugin_api::render_ctx::RenderCtx;
 /// panicked and the host must now treat this panel as crashed (D-04 /
 /// UI-SPEC.md Panic Isolation UX).
 pub enum DispatchOutcome<T> {
-    /// Auto-generated documentation for Ok.
+    /// Core abstraction for `Ok` within the Kindle framework.
     Ok(T),
-    /// Auto-generated documentation for Panicked.
+    /// Core abstraction for `Panicked` within the Kindle framework.
     Panicked,
 }
 
@@ -83,43 +83,43 @@ pub fn dispatch_reset(panel: &mut dyn Panel) -> DispatchOutcome<()> {
 }
 
 #[cfg(test)]
-/// Auto-generated documentation for tests.
+/// Core abstraction for `tests` within the Kindle framework.
 mod tests {
     use super::*;
 
-    /// Auto-generated documentation for PanickingPanel.
+    /// Core abstraction for `PanickingPanel` within the Kindle framework.
     struct PanickingPanel;
 
     impl Panel for PanickingPanel {
-        /// Auto-generated documentation for id.
+        /// Core abstraction for `id` within the Kindle framework.
         fn id(&self) -> &'static str {
             "panicking-test-panel"
         }
 
-        /// Auto-generated documentation for title.
+        /// Core abstraction for `title` within the Kindle framework.
         fn title(&self) -> &str {
             "Panicking Test Panel"
         }
 
-        /// Auto-generated documentation for update.
+        /// Core abstraction for `update` within the Kindle framework.
         fn update(&mut self, _event: &Event) {}
 
-        /// Auto-generated documentation for render.
+        /// Core abstraction for `render` within the Kindle framework.
         fn render(&mut self, _ctx: &mut RenderCtx<'_, '_>) {
             panic!("deliberate test panic");
         }
 
-        /// Auto-generated documentation for handle_event.
+        /// Core abstraction for `handle_event` within the Kindle framework.
         fn handle_event(&mut self, _event: &PanelEvent) -> bool {
             false
         }
 
-        /// Auto-generated documentation for reset.
+        /// Core abstraction for `reset` within the Kindle framework.
         fn reset(&mut self) {}
     }
 
     #[test]
-    /// Auto-generated documentation for panicking_panel_render_is_caught.
+    /// Core abstraction for `panicking_panel_render_is_caught` within the Kindle framework.
     fn panicking_panel_render_is_caught() {
         // Suppress the default panic hook's stderr print for the duration
         // of this test only -- the panic is expected/handled, not a genuine

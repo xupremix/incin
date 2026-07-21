@@ -47,46 +47,46 @@
 //!
 //! * [`Param`] — A trainable parameter (gradients are computed and updated by an optimizer).
 //! * [`Buffer`] — A non-trainable state buffer (e.g., running statistics in BatchNorm).
-/// Auto-generated documentation for activation.
+/// Core abstraction for `activation` within the Kindle framework..
 pub mod activation;
-/// Auto-generated documentation for adaptive_avg_pool2d.
+/// Core abstraction for `adaptive_avg_pool2d` within the Kindle framework..
 pub mod adaptive_avg_pool2d;
-/// Auto-generated documentation for avg_pool2d.
+/// Core abstraction for `avg_pool2d` within the Kindle framework..
 pub mod avg_pool2d;
-/// Auto-generated documentation for batch_norm.
+/// Core abstraction for `batch_norm` within the Kindle framework..
 pub mod batch_norm;
-/// Auto-generated documentation for conv1d.
+/// Core abstraction for `conv1d` within the Kindle framework..
 pub mod conv1d;
-/// Auto-generated documentation for conv2d.
+/// Core abstraction for `conv2d` within the Kindle framework..
 pub mod conv2d;
 pub mod dropout;
-/// Auto-generated documentation for embedding.
+/// Core abstraction for `embedding` within the Kindle framework..
 pub mod embedding;
-/// Auto-generated documentation for flatten.
+/// Core abstraction for `flatten` within the Kindle framework..
 pub mod flatten;
-/// Auto-generated documentation for init.
+/// Core abstraction for `init` within the Kindle framework..
 pub mod init;
-/// Auto-generated documentation for layer_norm.
+/// Core abstraction for `layer_norm` within the Kindle framework..
 pub mod layer_norm;
-/// Auto-generated documentation for linear.
+/// Core abstraction for `linear` within the Kindle framework..
 pub mod linear;
-/// Auto-generated documentation for loss.
+/// Core abstraction for `loss` within the Kindle framework..
 pub mod loss;
-/// Auto-generated documentation for lstm.
+/// Core abstraction for `lstm` within the Kindle framework..
 pub mod lstm;
-/// Auto-generated documentation for max_pool2d.
+/// Core abstraction for `max_pool2d` within the Kindle framework..
 pub mod max_pool2d;
-/// Auto-generated documentation for module.
+/// Core abstraction for `module` within the Kindle framework..
 pub mod module;
-/// Auto-generated documentation for optional.
+/// Core abstraction for `optional` within the Kindle framework..
 pub mod optional;
-/// Auto-generated documentation for param.
+/// Core abstraction for `param` within the Kindle framework..
 pub mod param;
-/// Auto-generated documentation for rnn.
+/// Core abstraction for `rnn` within the Kindle framework..
 pub mod rms_norm;
 pub mod rnn;
 #[cfg(feature = "std")]
-/// Auto-generated documentation for save.
+/// Core abstraction for `save` within the Kindle framework..
 pub mod save;
 
 pub use activation::*;

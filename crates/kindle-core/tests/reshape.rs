@@ -6,7 +6,7 @@ use kindle_core::prelude::*;
 use kindle_macros::s;
 
 #[test]
-/// Auto-generated documentation for test_reshape_static_success.
+/// Core abstraction for `test_reshape_static_success` within the Kindle framework.
 fn test_reshape_static_success() {
     let t = Tensor::<s![2, 3], DummyBackend<f32, Cpu>>::zeros(()).unwrap();
 
@@ -16,7 +16,7 @@ fn test_reshape_static_success() {
 }
 
 #[test]
-/// Auto-generated documentation for test_try_reshape_dynamic.
+/// Core abstraction for `test_try_reshape_dynamic` within the Kindle framework.
 fn test_try_reshape_dynamic() {
     let t = Tensor::<Dyn, DummyBackend<f32, Cpu>>::zeros(vec![2, 3]).unwrap();
 

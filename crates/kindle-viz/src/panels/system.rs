@@ -8,7 +8,7 @@ use ratatui::symbols;
 use ratatui::text::Span;
 use ratatui::widgets::{Axis, Chart, Dataset, Paragraph};
 
-/// Auto-generated documentation for MemoryPanel.
+/// Core abstraction for `MemoryPanel` within the Kindle framework.
 pub struct MemoryPanel {
     title: String,
     id: &'static str,
@@ -17,7 +17,7 @@ pub struct MemoryPanel {
 }
 
 impl MemoryPanel {
-    /// Auto-generated documentation for new.
+    /// Core abstraction for `new` within the Kindle framework.
     pub fn new(title: &str, id: &'static str, alert_threshold: Option<f64>) -> Self {
         Self {
             title: title.to_string(),
@@ -29,17 +29,17 @@ impl MemoryPanel {
 }
 
 impl Panel for MemoryPanel {
-    /// Auto-generated documentation for id.
+    /// Core abstraction for `id` within the Kindle framework.
     fn id(&self) -> &'static str {
         self.id
     }
 
-    /// Auto-generated documentation for title.
+    /// Core abstraction for `title` within the Kindle framework.
     fn title(&self) -> &str {
         &self.title
     }
 
-    /// Auto-generated documentation for update.
+    /// Core abstraction for `update` within the Kindle framework.
     fn update(&mut self, event: &Event) {
         if let Event::Memory(MemoryEvent {
             step, rss_bytes, ..
@@ -50,7 +50,7 @@ impl Panel for MemoryPanel {
         }
     }
 
-    /// Auto-generated documentation for render.
+    /// Core abstraction for `render` within the Kindle framework.
     fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) {
         let area = ctx.area();
 
@@ -97,12 +97,12 @@ impl Panel for MemoryPanel {
         frame.render_widget(chart, area);
     }
 
-    /// Auto-generated documentation for handle_event.
+    /// Core abstraction for `handle_event` within the Kindle framework.
     fn handle_event(&mut self, _event: &PanelEvent) -> bool {
         false
     }
 
-    /// Auto-generated documentation for reset.
+    /// Core abstraction for `reset` within the Kindle framework.
     fn reset(&mut self) {
         self.points.clear();
     }

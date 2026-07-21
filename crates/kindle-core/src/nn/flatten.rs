@@ -3,7 +3,7 @@ use crate::prelude::*;
 
 #[derive(Debug, Clone)]
 #[kindle_macros::module(internal)]
-/// Auto-generated documentation for Flatten.
+/// Core abstraction for `Flatten` within the Kindle framework..
 pub struct Flatten<const START: usize, const END: usize> {}
 
 impl<const START: usize, const END: usize> Default for Flatten<START, END> {
@@ -13,7 +13,7 @@ impl<const START: usize, const END: usize> Default for Flatten<START, END> {
 }
 
 impl<const START: usize, const END: usize> Flatten<START, END> {
-    /// Auto-generated documentation for new.
+    /// Core abstraction for `new` within the Kindle framework..
     pub fn new() -> Self {
         Self {}
     }
@@ -28,12 +28,12 @@ where
     D: crate::tensor::device::Device,
     G: RequiresGrad,
 {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = Tensor<S::Output, B, K, D, G>;
-    /// Auto-generated documentation for Error.
+    /// Core abstraction for `Error` within the Kindle framework..
     type Error = crate::prelude::Error;
 
-    /// Auto-generated documentation for forward.
+    /// Core abstraction for `forward` within the Kindle framework..
     fn forward(&self, x: Tensor<S, B, K, D, G>) -> Result<Self::Output> {
         x.flatten::<START, END>()
     }

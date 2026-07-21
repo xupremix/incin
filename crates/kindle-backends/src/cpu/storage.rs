@@ -27,7 +27,7 @@ use crate::cpu::stride;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct TensorId(u64);
 
-/// Auto-generated documentation for NEXT_TENSOR_ID.
+/// Core abstraction for `NEXT_TENSOR_ID` within the Kindle framework..
 static NEXT_TENSOR_ID: AtomicU64 = AtomicU64::new(0);
 
 impl TensorId {
@@ -53,23 +53,23 @@ pub struct BlockQ8_0 {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-/// Auto-generated documentation for CpuBuffer.
+/// Implementation of `CpuBuffer` for the respective backend..
 pub enum CpuBuffer {
-    /// Auto-generated documentation for F32.
+    /// Core abstraction for `F32` within the Kindle framework..
     F32(Vec<f32>),
-    /// Auto-generated documentation for F64.
+    /// Core abstraction for `F64` within the Kindle framework..
     F64(Vec<f64>),
-    /// Auto-generated documentation for U8.
+    /// Core abstraction for `U8` within the Kindle framework..
     U8(Vec<u8>),
-    /// Auto-generated documentation for U32.
+    /// Core abstraction for `U32` within the Kindle framework..
     U32(Vec<u32>),
-    /// Auto-generated documentation for I64.
+    /// Core abstraction for `I64` within the Kindle framework..
     I64(Vec<i64>),
-    /// Auto-generated documentation for F16.
+    /// Core abstraction for `F16` within the Kindle framework..
     F16(Vec<f16>),
-    /// Auto-generated documentation for BF16.
+    /// Core abstraction for `BF16` within the Kindle framework..
     BF16(Vec<bf16>),
-    /// Auto-generated documentation for Q8_0.
+    /// Core abstraction for `Q8_0` within the Kindle framework..
     Q8_0(Vec<BlockQ8_0>),
 }
 
@@ -497,11 +497,11 @@ pub(crate) fn scatter_into_zeros(
 }
 
 #[cfg(test)]
-/// Auto-generated documentation for tests.
+/// Core abstraction for `tests` within the Kindle framework..
 mod tests {
     use super::*;
 
-    /// Auto-generated documentation for storage_2x3.
+    /// Core abstraction for `storage_2x3` within the Kindle framework..
     fn storage_2x3() -> CpuStorage {
         CpuStorage::from_contiguous(
             CpuBuffer::F32(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]),
@@ -510,7 +510,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for from_contiguous_has_expected_shape_and_strides.
+    /// Core abstraction for `from_contiguous_has_expected_shape_and_strides` within the Kindle framework..
     fn from_contiguous_has_expected_shape_and_strides() {
         let s = storage_2x3();
         assert_eq!(s.shape, vec![2, 3]);
@@ -518,7 +518,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for reshape_contiguous_shares_buffer_and_gets_new_id.
+    /// Core abstraction for `reshape_contiguous_shares_buffer_and_gets_new_id` within the Kindle framework..
     fn reshape_contiguous_shares_buffer_and_gets_new_id() {
         let s = storage_2x3();
         let strong_count_before = Arc::strong_count(&s.buffer);
@@ -530,7 +530,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for reshape_non_contiguous_materializes_then_reshapes.
+    /// Core abstraction for `reshape_non_contiguous_materializes_then_reshapes` within the Kindle framework..
     fn reshape_non_contiguous_materializes_then_reshapes() {
         let s = storage_2x3();
         let t = s.transpose(0, 1).unwrap(); // [3,2], non-contiguous
@@ -550,7 +550,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for transpose_shares_buffer_and_swaps_shape_strides.
+    /// Core abstraction for `transpose_shares_buffer_and_swaps_shape_strides` within the Kindle framework..
     fn transpose_shares_buffer_and_swaps_shape_strides() {
         let s = storage_2x3();
         let strong_count_before = Arc::strong_count(&s.buffer);
@@ -563,7 +563,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for transposed_view_reads_correct_values_without_contiguous_call.
+    /// Core abstraction for `transposed_view_reads_correct_values_without_contiguous_call` within the Kindle framework..
     fn transposed_view_reads_correct_values_without_contiguous_call() {
         let s = storage_2x3(); // [[1,2,3],[4,5,6]]
         let t = s.transpose(0, 1).unwrap(); // [[1,4],[2,5],[3,6]]
@@ -576,7 +576,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for broadcast_as_expands_and_shares_buffer.
+    /// Core abstraction for `broadcast_as_expands_and_shares_buffer` within the Kindle framework..
     fn broadcast_as_expands_and_shares_buffer() {
         let s = CpuStorage::from_contiguous(CpuBuffer::F32(vec![1.0, 2.0, 3.0]), vec![1, 3]);
         let strong_count_before = Arc::strong_count(&s.buffer);
@@ -598,7 +598,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for narrow_contiguous_shares_buffer_and_slices_correct_values.
+    /// Core abstraction for `narrow_contiguous_shares_buffer_and_slices_correct_values` within the Kindle framework..
     fn narrow_contiguous_shares_buffer_and_slices_correct_values() {
         // [3,2] storage: [[1,4],[2,5],[3,6]]
         let s = CpuStorage::from_contiguous(
@@ -616,7 +616,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for narrow_on_transposed_view_reads_correct_values_without_materializing.
+    /// Core abstraction for `narrow_on_transposed_view_reads_correct_values_without_materializing` within the Kindle framework..
     fn narrow_on_transposed_view_reads_correct_values_without_materializing() {
         let s = storage_2x3(); // [[1,2,3],[4,5,6]]
         let t = s.transpose(0, 1).unwrap(); // [[1,4],[2,5],[3,6]], non-contiguous
@@ -630,7 +630,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for narrow_out_of_bounds_length_errors.
+    /// Core abstraction for `narrow_out_of_bounds_length_errors` within the Kindle framework..
     fn narrow_out_of_bounds_length_errors() {
         let s = storage_2x3();
         let result = s.narrow(0, 1, 2); // start=1, len=2 -> needs shape[0] >= 3, but it's 2
@@ -638,7 +638,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for narrow_dim_out_of_range_errors.
+    /// Core abstraction for `narrow_dim_out_of_range_errors` within the Kindle framework..
     fn narrow_dim_out_of_range_errors() {
         let s = storage_2x3();
         let result = s.narrow(5, 0, 1);
@@ -646,7 +646,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for narrow_boundary_values_succeed.
+    /// Core abstraction for `narrow_boundary_values_succeed` within the Kindle framework..
     fn narrow_boundary_values_succeed() {
         let s = storage_2x3(); // shape [2,3]
         // Full-length narrow (a no-op in effect).
@@ -665,7 +665,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for tensor_id_never_repeats_across_many_calls.
+    /// Core abstraction for `tensor_id_never_repeats_across_many_calls` within the Kindle framework..
     fn tensor_id_never_repeats_across_many_calls() {
         let mut ids = hashbrown::HashSet::new();
         for _ in 0..1000 {
@@ -675,7 +675,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for scatter_into_zeros_partial_overlap_writes_only_target_region.
+    /// Core abstraction for `scatter_into_zeros_partial_overlap_writes_only_target_region` within the Kindle framework..
     fn scatter_into_zeros_partial_overlap_writes_only_target_region() {
         let values = CpuStorage::from_contiguous(CpuBuffer::F32(vec![7.0, 8.0, 9.0]), vec![1, 3]);
         let result = scatter_into_zeros(&[4, 3], &[1, 0], &values);
@@ -691,7 +691,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for scatter_into_zeros_full_overlap_matches_values_exactly.
+    /// Core abstraction for `scatter_into_zeros_full_overlap_matches_values_exactly` within the Kindle framework..
     fn scatter_into_zeros_full_overlap_matches_values_exactly() {
         let values =
             CpuStorage::from_contiguous(CpuBuffer::F32(vec![1.0, 2.0, 3.0, 4.0]), vec![2, 2]);
@@ -705,7 +705,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for scatter_into_zeros_returns_fresh_buffer_not_sharing_values_rc.
+    /// Core abstraction for `scatter_into_zeros_returns_fresh_buffer_not_sharing_values_rc` within the Kindle framework..
     fn scatter_into_zeros_returns_fresh_buffer_not_sharing_values_rc() {
         let values = CpuStorage::from_contiguous(CpuBuffer::F32(vec![7.0, 8.0, 9.0]), vec![1, 3]);
         let result = scatter_into_zeros(&[4, 3], &[1, 0], &values);
@@ -713,7 +713,7 @@ mod tests {
     }
 
     #[test]
-    /// Auto-generated documentation for scatter_into_zeros_1d_case.
+    /// Core abstraction for `scatter_into_zeros_1d_case` within the Kindle framework..
     fn scatter_into_zeros_1d_case() {
         let values = CpuStorage::from_contiguous(CpuBuffer::F32(vec![9.0, 10.0]), vec![2]);
         let result = scatter_into_zeros(&[5], &[2], &values);

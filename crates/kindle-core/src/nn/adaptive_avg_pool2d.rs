@@ -4,7 +4,7 @@ use crate::prelude::*;
 use typenum::Unsigned;
 
 #[derive(Debug, Clone)]
-/// Auto-generated documentation for AdaptiveAvgPool2d.
+/// Core abstraction for `AdaptiveAvgPool2d` within the Kindle framework..
 pub struct AdaptiveAvgPool2d<HOut: Unsigned, WOut: Unsigned> {
     _phantom: core::marker::PhantomData<(HOut, WOut)>,
 }
@@ -16,7 +16,7 @@ impl<HOut: Unsigned, WOut: Unsigned> Default for AdaptiveAvgPool2d<HOut, WOut> {
 }
 
 impl<HOut: Unsigned, WOut: Unsigned> AdaptiveAvgPool2d<HOut, WOut> {
-    /// Auto-generated documentation for new.
+    /// Core abstraction for `new` within the Kindle framework..
     pub fn new() -> Self {
         Self {
             _phantom: core::marker::PhantomData,
@@ -25,7 +25,7 @@ impl<HOut: Unsigned, WOut: Unsigned> AdaptiveAvgPool2d<HOut, WOut> {
 }
 
 impl<HOut: Unsigned, WOut: Unsigned, B: Backend> Parameters<B> for AdaptiveAvgPool2d<HOut, WOut> {
-    /// Auto-generated documentation for named_parameters.
+    /// Core abstraction for `named_parameters` within the Kindle framework..
     fn named_parameters(
         &self,
         _prefix: &str,
@@ -41,13 +41,13 @@ impl<
     B: Backend + crate::tensor::backend::ModuleOps<B>,
 > Module<Tensor<I, B>> for AdaptiveAvgPool2d<HOut, WOut>
 {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = Tensor<I::Output, B>;
-    /// Auto-generated documentation for Error.
+    /// Core abstraction for `Error` within the Kindle framework..
     type Error = Error;
 
     #[inline]
-    /// Auto-generated documentation for forward.
+    /// Core abstraction for `forward` within the Kindle framework..
     fn forward(&self, x: Tensor<I, B>) -> core::result::Result<Self::Output, Error> {
         let out = B::adaptive_avg_pool2d(x.inner(), (HOut::USIZE, WOut::USIZE))?;
 

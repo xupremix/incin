@@ -39,11 +39,11 @@ const FOOTER_HINTS: &str =
 const CRASHED_PLACEHOLDER: &str = "⚠ panel crashed — press r to retry";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-/// Auto-generated documentation for LayoutMode.
+/// Core abstraction for `LayoutMode` within the Kindle framework.
 pub enum LayoutMode {
-    /// Auto-generated documentation for Grid.
+    /// Core abstraction for `Grid` within the Kindle framework.
     Grid,
-    /// Auto-generated documentation for Maximized.
+    /// Core abstraction for `Maximized` within the Kindle framework.
     Maximized,
 }
 
@@ -369,7 +369,7 @@ impl App {
 pub struct DefaultKeymap;
 
 impl KeymapProvider for DefaultKeymap {
-    /// Auto-generated documentation for resolve.
+    /// Core abstraction for `resolve` within the Kindle framework.
     fn resolve(&self, key: PanelKeyEvent) -> Option<Action> {
         match key.code {
             KeyCode::Char('q') | KeyCode::Esc => Some(Action::Quit),
@@ -391,7 +391,7 @@ impl KeymapProvider for DefaultKeymap {
 pub struct VimKeymap;
 
 impl KeymapProvider for VimKeymap {
-    /// Auto-generated documentation for resolve.
+    /// Core abstraction for `resolve` within the Kindle framework.
     fn resolve(&self, key: PanelKeyEvent) -> Option<Action> {
         match key.code {
             KeyCode::Char('q') | KeyCode::Esc => Some(Action::Quit),
@@ -563,12 +563,12 @@ pub async fn run(
 }
 
 #[cfg(test)]
-/// Auto-generated documentation for tests.
+/// Core abstraction for `tests` within the Kindle framework.
 mod tests {
     use super::*;
 
     #[test]
-    /// Auto-generated documentation for default_keymap_resolves_quit_and_focus_keys.
+    /// Core abstraction for `default_keymap_resolves_quit_and_focus_keys` within the Kindle framework.
     fn default_keymap_resolves_quit_and_focus_keys() {
         let keymap = DefaultKeymap;
         let no_mods = KeyModifiers {
@@ -636,19 +636,19 @@ mod tests {
     struct CrashOnP;
 
     impl Panel for CrashOnP {
-        /// Auto-generated documentation for id.
+        /// Core abstraction for `id` within the Kindle framework.
         fn id(&self) -> &'static str {
             "crash-on-p"
         }
-        /// Auto-generated documentation for title.
+        /// Core abstraction for `title` within the Kindle framework.
         fn title(&self) -> &str {
             "Crash On P"
         }
-        /// Auto-generated documentation for update.
+        /// Core abstraction for `update` within the Kindle framework.
         fn update(&mut self, _event: &kindle_telemetry::events::Event) {}
-        /// Auto-generated documentation for render.
+        /// Core abstraction for `render` within the Kindle framework.
         fn render(&mut self, _ctx: &mut RenderCtx<'_, '_>) {}
-        /// Auto-generated documentation for handle_event.
+        /// Core abstraction for `handle_event` within the Kindle framework.
         fn handle_event(&mut self, event: &PanelEvent) -> bool {
             if let PanelEvent::Key(k) = event
                 && k.code == KeyCode::Char('p')
@@ -657,22 +657,22 @@ mod tests {
             }
             false
         }
-        /// Auto-generated documentation for reset.
+        /// Core abstraction for `reset` within the Kindle framework.
         fn reset(&mut self) {}
     }
 
-    /// Auto-generated documentation for NoopTransport.
+    /// Core abstraction for `NoopTransport` within the Kindle framework.
     struct NoopTransport;
 
     impl crate::transport_reader::TransportReader for NoopTransport {
-        /// Auto-generated documentation for poll_new_events.
+        /// Core abstraction for `poll_new_events` within the Kindle framework.
         fn poll_new_events(&mut self) -> crate::err::Result<Vec<kindle_telemetry::events::Event>> {
             Ok(Vec::new())
         }
     }
 
     #[test]
-    /// Auto-generated documentation for panel_local_panic_marks_crashed_and_retry_recovers.
+    /// Core abstraction for `panel_local_panic_marks_crashed_and_retry_recovers` within the Kindle framework.
     fn panel_local_panic_marks_crashed_and_retry_recovers() {
         let previous_hook = std::panic::take_hook();
         std::panic::set_hook(Box::new(|_| {}));

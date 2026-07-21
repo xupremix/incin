@@ -24,12 +24,12 @@ pub(crate) mod serialize;
 pub(crate) mod shapes;
 pub(crate) mod tensor;
 
-/// Auto-generated documentation for loss.
+/// Loss functions and reduction definitions.
 pub mod loss {
     pub use crate::nn::loss::*;
 }
 
-/// Auto-generated documentation for prelude.
+/// Core prelude re-exporting common types, neural network modules, shapes, and backend traits.
 pub mod prelude {
     pub use super::err::*;
     pub use crate::graph::{Graph, OpType};

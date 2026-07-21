@@ -7,16 +7,16 @@ use std::path::PathBuf;
 use syn::Ident;
 
 #[derive(Serialize, Deserialize, Clone)]
-/// Auto-generated documentation for OnnxDim.
+/// Core abstraction for `OnnxDim` within the Kindle framework.
 pub enum OnnxDim {
-    /// Auto-generated documentation for Const.
+    /// Core abstraction for `Const` within the Kindle framework.
     Const(usize),
-    /// Auto-generated documentation for Dyn.
+    /// Core abstraction for `Dyn` within the Kindle framework.
     Dyn,
 }
 
 #[derive(Serialize, Deserialize)]
-/// Auto-generated documentation for OnnxMeta.
+/// Core abstraction for `OnnxMeta` within the Kindle framework.
 struct OnnxMeta {
     param_names: Vec<String>,
     param_shapes: Vec<Vec<usize>>,
@@ -26,7 +26,7 @@ struct OnnxMeta {
     last_output_shape: Vec<OnnxDim>,
 }
 
-/// Auto-generated documentation for get_ints_attr.
+/// Core abstraction for `get_ints_attr` within the Kindle framework.
 fn get_ints_attr(node: &onnx_pb::NodeProto, name: &str) -> Option<Vec<i64>> {
     for attr in &node.attribute {
         if attr.name == name {
@@ -36,7 +36,7 @@ fn get_ints_attr(node: &onnx_pb::NodeProto, name: &str) -> Option<Vec<i64>> {
     None
 }
 
-/// Auto-generated documentation for parse_graph_nodes.
+/// Core abstraction for `parse_graph_nodes` within the Kindle framework.
 fn parse_graph_nodes(
     nodes: &[onnx_pb::NodeProto],
     shape_map: &alloc::collections::BTreeMap<String, Vec<OnnxDim>>,
@@ -541,7 +541,7 @@ pub(crate) fn parse_onnx(
             B::FloatElem: kindle::prelude::ConstDType,
             B::Device: kindle::prelude::ConstDevice,
         {
-            /// Auto-generated documentation for new.
+            /// Core abstraction for `new` within the Kindle framework.
             pub fn new() -> Self {
                 Self {
                     #(#inits,)*
@@ -549,7 +549,7 @@ pub(crate) fn parse_onnx(
                 }
             }
 
-            /// Auto-generated documentation for load_default_weights.
+            /// Core abstraction for `load_default_weights` within the Kindle framework.
             pub fn load_default_weights(&mut self) -> kindle::prelude::Result<()> {
                 Ok(())
             }
@@ -561,7 +561,7 @@ pub(crate) fn parse_onnx(
             B::FloatElem: kindle::prelude::ConstDType,
             B::Device: kindle::prelude::ConstDevice,
         {
-            /// Auto-generated documentation for forward.
+            /// Core abstraction for `forward` within the Kindle framework.
             pub fn forward(&self, #(#user_inputs),*) -> kindle::prelude::Result<kindle::prelude::Tensor<#out_shape_type, B>> {
                 #(#forward_stmts)*
                 let final_out = #last_output;

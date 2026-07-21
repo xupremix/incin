@@ -3,43 +3,43 @@
 
 use core::fmt::Debug;
 
-/// Auto-generated documentation for Result.
+/// Core abstraction for `Result` within the Kindle framework.
 pub type Result<T> = core::result::Result<T, Error>;
 
 #[derive(thiserror::Error)]
-/// Auto-generated documentation for Error.
+/// Core abstraction for `Error` within the Kindle framework.
 pub enum Error {
     #[error("I/O error: {0}")]
-    /// Auto-generated documentation for Io.
+    /// Core abstraction for `Io` within the Kindle framework.
     Io(#[from] std::io::Error),
 
     #[error("Serialization error: {0}")]
-    /// Auto-generated documentation for Serialize.
+    /// Core abstraction for `Serialize` within the Kindle framework.
     Serialize(#[from] serde_json::Error),
 
     #[error("Transport error: {0}")]
-    /// Auto-generated documentation for Transport.
+    /// Core abstraction for `Transport` within the Kindle framework.
     Transport(String),
 
     #[error("Generic Message: {0}")]
-    /// Auto-generated documentation for Msg.
+    /// Core abstraction for `Msg` within the Kindle framework.
     Msg(String),
 }
 
 impl Debug for Error {
-    /// Auto-generated documentation for fmt.
+    /// Core abstraction for `fmt` within the Kindle framework.
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{self}")
     }
 }
 
 #[cfg(test)]
-/// Auto-generated documentation for tests.
+/// Core abstraction for `tests` within the Kindle framework.
 mod tests {
     use super::*;
 
     #[test]
-    /// Auto-generated documentation for test_error_formatting.
+    /// Core abstraction for `test_error_formatting` within the Kindle framework.
     fn test_error_formatting() {
         let err = Error::Transport(String::from("connection reset"));
         let formatted = format!("{err}");

@@ -21,7 +21,7 @@ use kindle_core::prelude::{Backend, DType, ModuleOps, Result};
 use crate::cpu::CpuBackend;
 
 impl<T: DType, D: kindle_core::prelude::Device> ModuleOps<Self> for CpuBackend<T, D> {
-    /// Auto-generated documentation for layer_norm.
+    /// Core abstraction for `layer_norm` within the Kindle framework..
     fn layer_norm<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         weight: &<Self as Backend>::Storage<K>,
@@ -31,7 +31,7 @@ impl<T: DType, D: kindle_core::prelude::Device> ModuleOps<Self> for CpuBackend<T
         crate::cpu::ops::norm::layer_norm_impl::<T, D, K>(t, weight, bias, eps)
     }
 
-    /// Auto-generated documentation for batch_norm.
+    /// Core abstraction for `batch_norm` within the Kindle framework..
     fn batch_norm<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         w: Option<&<Self as Backend>::Storage<K>>,
@@ -44,7 +44,7 @@ impl<T: DType, D: kindle_core::prelude::Device> ModuleOps<Self> for CpuBackend<T
         crate::cpu::ops::norm::batch_norm_impl::<T, D, K>(t, w, b, rm, rv, e, momentum)
     }
 
-    /// Auto-generated documentation for embedding.
+    /// Core abstraction for `embedding` within the Kindle framework..
     fn embedding<K: DType, KInt: DType>(
         t: &<Self as Backend>::Storage<KInt>,
         w: &<Self as Backend>::Storage<K>,
@@ -52,7 +52,7 @@ impl<T: DType, D: kindle_core::prelude::Device> ModuleOps<Self> for CpuBackend<T
         crate::cpu::ops::embedding::embedding_impl::<T, D, K, KInt>(t, w)
     }
 
-    /// Auto-generated documentation for conv1d.
+    /// Core abstraction for `conv1d` within the Kindle framework..
     fn conv1d<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         w: &<Self as Backend>::Storage<K>,
@@ -65,7 +65,7 @@ impl<T: DType, D: kindle_core::prelude::Device> ModuleOps<Self> for CpuBackend<T
         crate::cpu::ops::conv::conv1d_impl::<T, D, K>(t, w, b, stride, padding, dilation, groups)
     }
 
-    /// Auto-generated documentation for conv2d.
+    /// Core abstraction for `conv2d` within the Kindle framework..
     fn conv2d<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         w: &<Self as Backend>::Storage<K>,
@@ -78,7 +78,7 @@ impl<T: DType, D: kindle_core::prelude::Device> ModuleOps<Self> for CpuBackend<T
         crate::cpu::ops::conv::conv2d_impl::<T, D, K>(t, w, b, stride, padding, dilation, groups)
     }
 
-    /// Auto-generated documentation for conv_transpose2d.
+    /// Core abstraction for `conv_transpose2d` within the Kindle framework..
     fn conv_transpose2d<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         w: &<Self as Backend>::Storage<K>,
@@ -101,7 +101,7 @@ impl<T: DType, D: kindle_core::prelude::Device> ModuleOps<Self> for CpuBackend<T
         )
     }
 
-    /// Auto-generated documentation for max_pool2d.
+    /// Core abstraction for `max_pool2d` within the Kindle framework..
     fn max_pool2d<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         kernel_size: (usize, usize),
@@ -112,7 +112,7 @@ impl<T: DType, D: kindle_core::prelude::Device> ModuleOps<Self> for CpuBackend<T
         crate::cpu::ops::pool::max_pool2d_impl::<T, D, K>(t, kernel_size, stride, padding, dilation)
     }
 
-    /// Auto-generated documentation for avg_pool2d.
+    /// Core abstraction for `avg_pool2d` within the Kindle framework..
     fn avg_pool2d<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         kernel_size: (usize, usize),
@@ -122,7 +122,7 @@ impl<T: DType, D: kindle_core::prelude::Device> ModuleOps<Self> for CpuBackend<T
         crate::cpu::ops::pool::avg_pool2d_impl::<T, D, K>(t, kernel_size, stride, padding)
     }
 
-    /// Auto-generated documentation for adaptive_avg_pool2d.
+    /// Core abstraction for `adaptive_avg_pool2d` within the Kindle framework..
     fn adaptive_avg_pool2d<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         output_size: (usize, usize),

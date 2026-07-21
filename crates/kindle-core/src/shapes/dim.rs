@@ -7,41 +7,41 @@
 /// In practice, you rarely need to implement or use `Dim` directly. The `s![]` macro generates
 /// the correct implementations automatically. Custom symbolic dimensions can be created via `symbolic_dim!`.
 pub trait Dim: 'static + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + PartialEq {
-    /// Auto-generated documentation for Arg.
+    /// Core abstraction for `Arg` within the Kindle framework..
     type Arg: Clone + Default + core::fmt::Debug;
-    /// Auto-generated documentation for size.
+    /// Core abstraction for `size` within the Kindle framework..
     fn size(&self) -> usize;
-    /// Auto-generated documentation for from_size.
+    /// Core abstraction for `from_size` within the Kindle framework..
     fn from_size(size: usize) -> Option<Self>;
-    /// Auto-generated documentation for from_arg.
+    /// Core abstraction for `from_arg` within the Kindle framework..
     fn from_arg(arg: Self::Arg) -> Self;
-    /// Auto-generated documentation for arg.
+    /// Core abstraction for `arg` within the Kindle framework..
     fn arg(&self) -> Self::Arg;
 }
 
 impl Dim for usize {
-    /// Auto-generated documentation for Arg.
+    /// Core abstraction for `Arg` within the Kindle framework..
     type Arg = Self;
 
     #[inline(always)]
-    /// Auto-generated documentation for size.
+    /// Core abstraction for `size` within the Kindle framework..
     fn size(&self) -> usize {
         *self
     }
     #[inline(always)]
-    /// Auto-generated documentation for from_size.
+    /// Core abstraction for `from_size` within the Kindle framework..
     fn from_size(size: usize) -> Option<Self> {
         Some(size)
     }
 
     #[inline(always)]
-    /// Auto-generated documentation for from_arg.
+    /// Core abstraction for `from_arg` within the Kindle framework..
     fn from_arg(arg: Self::Arg) -> Self {
         arg
     }
 
     #[inline(always)]
-    /// Auto-generated documentation for arg.
+    /// Core abstraction for `arg` within the Kindle framework..
     fn arg(&self) -> Self::Arg {
         *self
     }
@@ -62,29 +62,29 @@ macro_rules! symbolic_dim {
             pub struct $name(pub usize);
 
             impl $crate::prelude::Dim for $name {
-                /// Auto-generated documentation for Arg.
+                /// Core abstraction for `Arg` within the Kindle framework..
                 type Arg = usize;
 
                 #[inline(always)]
-                /// Auto-generated documentation for size.
+                /// Core abstraction for `size` within the Kindle framework..
                 fn size(&self) -> usize {
                     self.0
                 }
 
                 #[inline(always)]
-                /// Auto-generated documentation for from_size.
+                /// Core abstraction for `from_size` within the Kindle framework..
                 fn from_size(size: usize) -> Option<Self> {
                     Some(Self(size))
                 }
 
                 #[inline(always)]
-                /// Auto-generated documentation for from_arg.
+                /// Core abstraction for `from_arg` within the Kindle framework..
                 fn from_arg(arg: Self::Arg) -> Self {
                     Self(arg)
                 }
 
                 #[inline(always)]
-                /// Auto-generated documentation for arg.
+                /// Core abstraction for `arg` within the Kindle framework..
                 fn arg(&self) -> Self::Arg {
                     self.0
                 }
@@ -102,23 +102,23 @@ macro_rules! symbolic_dim {
 pub struct ProdDim<A, B>(pub usize, core::marker::PhantomData<(A, B)>);
 
 impl<A: Dim, B: Dim> Dim for ProdDim<A, B> {
-    /// Auto-generated documentation for Arg.
+    /// Core abstraction for `Arg` within the Kindle framework..
     type Arg = (A::Arg, B::Arg);
 
     #[inline(always)]
-    /// Auto-generated documentation for size.
+    /// Core abstraction for `size` within the Kindle framework..
     fn size(&self) -> usize {
         self.0
     }
 
     #[inline(always)]
-    /// Auto-generated documentation for from_size.
+    /// Core abstraction for `from_size` within the Kindle framework..
     fn from_size(size: usize) -> Option<Self> {
         Some(Self(size, core::marker::PhantomData))
     }
 
     #[inline(always)]
-    /// Auto-generated documentation for from_arg.
+    /// Core abstraction for `from_arg` within the Kindle framework..
     fn from_arg(arg: Self::Arg) -> Self {
         let a = A::from_arg(arg.0);
         let b = B::from_arg(arg.1);
@@ -126,7 +126,7 @@ impl<A: Dim, B: Dim> Dim for ProdDim<A, B> {
     }
 
     #[inline(always)]
-    /// Auto-generated documentation for arg.
+    /// Core abstraction for `arg` within the Kindle framework..
     fn arg(&self) -> Self::Arg {
         (
             <A::Arg as core::default::Default>::default(),
@@ -147,29 +147,29 @@ impl<A: Dim + Default, B: Dim + Default> Default for ProdDim<A, B> {
 use typenum::{Bit, UInt, UTerm, Unsigned};
 
 impl Dim for UTerm {
-    /// Auto-generated documentation for Arg.
+    /// Core abstraction for `Arg` within the Kindle framework..
     type Arg = ();
 
     #[inline(always)]
-    /// Auto-generated documentation for size.
+    /// Core abstraction for `size` within the Kindle framework..
     fn size(&self) -> usize {
         0
     }
 
     #[inline(always)]
-    /// Auto-generated documentation for from_size.
+    /// Core abstraction for `from_size` within the Kindle framework..
     fn from_size(size: usize) -> Option<Self> {
         if size == 0 { Some(UTerm) } else { None }
     }
 
     #[inline(always)]
-    /// Auto-generated documentation for from_arg.
+    /// Core abstraction for `from_arg` within the Kindle framework..
     fn from_arg(_: Self::Arg) -> Self {
         UTerm
     }
 
     #[inline(always)]
-    /// Auto-generated documentation for arg.
+    /// Core abstraction for `arg` within the Kindle framework..
     fn arg(&self) -> Self::Arg {}
 }
 
@@ -188,17 +188,17 @@ where
         + PartialEq
         + 'static,
 {
-    /// Auto-generated documentation for Arg.
+    /// Core abstraction for `Arg` within the Kindle framework..
     type Arg = ();
 
     #[inline(always)]
-    /// Auto-generated documentation for size.
+    /// Core abstraction for `size` within the Kindle framework..
     fn size(&self) -> usize {
         Self::USIZE
     }
 
     #[inline(always)]
-    /// Auto-generated documentation for from_size.
+    /// Core abstraction for `from_size` within the Kindle framework..
     fn from_size(size: usize) -> Option<Self> {
         if size == Self::USIZE {
             Some(Default::default())
@@ -208,12 +208,12 @@ where
     }
 
     #[inline(always)]
-    /// Auto-generated documentation for from_arg.
+    /// Core abstraction for `from_arg` within the Kindle framework..
     fn from_arg(_: Self::Arg) -> Self {
         Default::default()
     }
 
     #[inline(always)]
-    /// Auto-generated documentation for arg.
+    /// Core abstraction for `arg` within the Kindle framework..
     fn arg(&self) -> Self::Arg {}
 }

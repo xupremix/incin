@@ -267,10 +267,10 @@ macro_rules! impl_std_scalar_ops {
             G: RequiresGrad,
         > core::ops::Mul<$t> for Tensor<S, B, K, D, G>
         {
-            /// Auto-generated documentation for Output.
+            /// Core abstraction for `Output` within the Kindle framework..
             type Output = Tensor<S, B, K, D, G>;
             #[inline]
-            /// Auto-generated documentation for mul.
+            /// Core abstraction for `mul` within the Kindle framework..
             fn mul(self, rhs: $t) -> Self::Output {
                 self.mul_scalar(rhs)
                     .unwrap_or_else(|e| panic!("Tensor `*` (scalar) operator panicked: {e:?}"))
@@ -285,10 +285,10 @@ macro_rules! impl_std_scalar_ops {
             G: RequiresGrad,
         > core::ops::Mul<$t> for &'a Tensor<S, B, K, D, G>
         {
-            /// Auto-generated documentation for Output.
+            /// Core abstraction for `Output` within the Kindle framework..
             type Output = Tensor<S, B, K, D, G>;
             #[inline]
-            /// Auto-generated documentation for mul.
+            /// Core abstraction for `mul` within the Kindle framework..
             fn mul(self, rhs: $t) -> Self::Output {
                 self.mul_scalar(rhs)
                     .unwrap_or_else(|e| panic!("Tensor `*` (scalar) operator panicked: {e:?}"))
@@ -302,10 +302,10 @@ macro_rules! impl_std_scalar_ops {
             G: RequiresGrad,
         > core::ops::Add<$t> for Tensor<S, B, K, D, G>
         {
-            /// Auto-generated documentation for Output.
+            /// Core abstraction for `Output` within the Kindle framework..
             type Output = Tensor<S, B, K, D, G>;
             #[inline]
-            /// Auto-generated documentation for add.
+            /// Core abstraction for `add` within the Kindle framework..
             fn add(self, rhs: $t) -> Self::Output {
                 self.add_scalar(rhs)
                     .unwrap_or_else(|e| panic!("Tensor `+` (scalar) operator panicked: {e:?}"))
@@ -320,10 +320,10 @@ macro_rules! impl_std_scalar_ops {
             G: RequiresGrad,
         > core::ops::Add<$t> for &'a Tensor<S, B, K, D, G>
         {
-            /// Auto-generated documentation for Output.
+            /// Core abstraction for `Output` within the Kindle framework..
             type Output = Tensor<S, B, K, D, G>;
             #[inline]
-            /// Auto-generated documentation for add.
+            /// Core abstraction for `add` within the Kindle framework..
             fn add(self, rhs: $t) -> Self::Output {
                 self.add_scalar(rhs)
                     .unwrap_or_else(|e| panic!("Tensor `+` (scalar) operator panicked: {e:?}"))

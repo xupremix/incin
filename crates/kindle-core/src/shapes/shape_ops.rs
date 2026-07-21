@@ -5,9 +5,9 @@ use crate::prelude::Shape;
     label = "Invalid transpose",
     note = "Transpose requires both dimensions to be < the rank of the tensor"
 )]
-/// Auto-generated documentation for Transpose.
+/// Core abstraction for `Transpose` within the Kindle framework..
 pub trait Transpose<const D1: usize, const D2: usize>: Shape {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output: Shape;
 }
 
@@ -16,9 +16,9 @@ pub trait Transpose<const D1: usize, const D2: usize>: Shape {
     label = "Invalid reduction dimension",
     note = "Reduction requires the dimension to be < the rank of the tensor"
 )]
-/// Auto-generated documentation for ReduceDim.
+/// Core abstraction for `ReduceDim` within the Kindle framework..
 pub trait ReduceDim<const D: usize>: Shape {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output: Shape;
 }
 
@@ -27,9 +27,9 @@ pub trait ReduceDim<const D: usize>: Shape {
     label = "Invalid reduction dimension",
     note = "Reduction requires the dimension to be < the rank of the tensor"
 )]
-/// Auto-generated documentation for ReduceKeepDim.
+/// Core abstraction for `ReduceKeepDim` within the Kindle framework..
 pub trait ReduceKeepDim<const D: usize>: Shape {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output: Shape;
 }
 
@@ -38,29 +38,29 @@ pub trait ReduceKeepDim<const D: usize>: Shape {
     label = "Invalid flatten range",
     note = "Flatten requires START <= END and END < the rank of the tensor"
 )]
-/// Auto-generated documentation for Flatten.
+/// Core abstraction for `Flatten` within the Kindle framework..
 pub trait Flatten<const START: usize, const END: usize>: Shape {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output: Shape;
 }
 
 impl<const START: usize, const END: usize> Flatten<START, END> for crate::prelude::Dyn {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = crate::prelude::Dyn;
 }
 
 impl<const D1: usize, const D2: usize> Transpose<D1, D2> for crate::prelude::Dyn {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = crate::prelude::Dyn;
 }
 
 impl<const D: usize> ReduceDim<D> for crate::prelude::Dyn {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = crate::prelude::Dyn;
 }
 
 impl<const D: usize> ReduceKeepDim<D> for crate::prelude::Dyn {
-    /// Auto-generated documentation for Output.
+    /// Core abstraction for `Output` within the Kindle framework..
     type Output = crate::prelude::Dyn;
 }
 

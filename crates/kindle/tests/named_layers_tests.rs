@@ -1,23 +1,23 @@
 use kindle::prelude::*;
-/// Auto-generated documentation for B.
-type B = kindle_backends::cpu::CpuBackend<f32, kindle_core::prelude::Cpu>;
+/// Core abstraction for `B` within the Kindle framework.
+type B = kindle::DefaultBackend;
 
 #[module]
-/// Auto-generated documentation for SubModule.
+/// Core abstraction for `SubModule` within the Kindle framework.
 struct SubModule {
     fc: Linear<s![100, 50], B>,
     act: ReLU,
 }
 
 #[module]
-/// Auto-generated documentation for TestMLP.
+/// Core abstraction for `TestMLP` within the Kindle framework.
 struct TestMLP {
     sub: SubModule,
     fc_out: Linear<s![50, 10], B>,
 }
 
 #[test]
-/// Auto-generated documentation for test_named_layers_derivation.
+/// Core abstraction for `test_named_layers_derivation` within the Kindle framework.
 fn test_named_layers_derivation() {
     let sub = SubModule {
         fc: Linear::new().unwrap(),
@@ -61,7 +61,7 @@ fn test_named_layers_derivation() {
 }
 
 #[test]
-/// Auto-generated documentation for test_sequential_named_layers.
+/// Core abstraction for `test_sequential_named_layers` within the Kindle framework.
 fn test_sequential_named_layers() {
     let net = seq!(
         Linear::<s![768, 256], B>::new().unwrap(),

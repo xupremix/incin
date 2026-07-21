@@ -35,27 +35,27 @@
 //!   `conv_transpose2d`/`max_pool2d`/`avg_pool2d`/`adaptive_avg_pool2d`) —
 //!   zero `Error::UnsupportedBackendOperation` stubs remain.
 
-/// Auto-generated documentation for conv.
+/// Core abstraction for `conv` within the Kindle framework..
 pub mod conv;
-/// Auto-generated documentation for elementwise.
+/// Core abstraction for `elementwise` within the Kindle framework..
 pub mod elementwise;
-/// Auto-generated documentation for embedding.
+/// Core abstraction for `embedding` within the Kindle framework..
 pub mod embedding;
-/// Auto-generated documentation for loss.
+/// Core abstraction for `loss` within the Kindle framework..
 pub mod loss;
-/// Auto-generated documentation for matmul.
+/// Core abstraction for `matmul` within the Kindle framework..
 pub mod matmul;
-/// Auto-generated documentation for module.
+/// Core abstraction for `module` within the Kindle framework..
 pub mod module;
-/// Auto-generated documentation for norm.
+/// Core abstraction for `norm` within the Kindle framework..
 pub mod norm;
-/// Auto-generated documentation for optimizer.
+/// Core abstraction for `optimizer` within the Kindle framework..
 pub mod optimizer;
-/// Auto-generated documentation for pool.
+/// Core abstraction for `pool` within the Kindle framework..
 pub mod pool;
-/// Auto-generated documentation for quant.
+/// Core abstraction for `quant` within the Kindle framework..
 pub mod quant;
-/// Auto-generated documentation for reduce.
+/// Core abstraction for `reduce` within the Kindle framework..
 pub mod reduce;
-/// Auto-generated documentation for shape_ops.
+/// Core abstraction for `shape_ops` within the Kindle framework..
 pub mod shape_ops;

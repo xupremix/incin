@@ -7,23 +7,23 @@ use crate::event::PanelKeyEvent;
 /// `KeymapProvider` to a configurable/vim-swappable system.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Action {
-    /// Auto-generated documentation for Quit.
+    /// Quit application.
     Quit,
-    /// Auto-generated documentation for FocusNext.
+    /// Move focus to next panel.
     FocusNext,
-    /// Auto-generated documentation for FocusPrev.
+    /// Move focus to previous panel.
     FocusPrev,
-    /// Auto-generated documentation for FocusUp.
+    /// Move focus upward.
     FocusUp,
-    /// Auto-generated documentation for FocusDown.
+    /// Move focus downward.
     FocusDown,
-    /// Auto-generated documentation for FocusLeft.
+    /// Move focus to the left.
     FocusLeft,
-    /// Auto-generated documentation for FocusRight.
+    /// Move focus to the right.
     FocusRight,
-    /// Auto-generated documentation for RetryPanel.
+    /// Retry/refresh current panel.
     RetryPanel,
-    /// Auto-generated documentation for ToggleLayout.
+    /// Toggle panel layout mode.
     ToggleLayout,
     /// Delegates to the focused panel's own `handle_event`.
     PanelLocal,
@@ -34,6 +34,6 @@ pub enum Action {
 /// (Plan 08-04); the trait exists now so Phase 10's vim-keymap plugin has
 /// a stable contract.
 pub trait KeymapProvider {
-    /// Auto-generated documentation for resolve.
+    /// Resolves a key event to an Action if mapped.
     fn resolve(&self, key: PanelKeyEvent) -> Option<Action>;
 }

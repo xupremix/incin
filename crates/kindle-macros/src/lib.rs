@@ -15,19 +15,19 @@ extern crate alloc;
 
 use proc_macro::TokenStream;
 
-/// Auto-generated documentation for arg_into.
+/// Internal helper module for generating ArgInto implementations.
 mod arg_into;
-/// Auto-generated documentation for idx.
+/// Internal helper module for tensor index and slicing macro.
 mod idx;
-/// Auto-generated documentation for module.
+/// Helper module for deriving neural network module traits.
 mod module;
-/// Auto-generated documentation for onnx.
+/// Helper module for parsing ONNX model graphs into Rust structs.
 mod onnx;
-/// Auto-generated documentation for safetensors.
+/// Helper module for importing model weights from safetensors.
 mod safetensors;
-/// Auto-generated documentation for shape.
+/// Helper module for static shape macro expansion.
 mod shape;
-/// Auto-generated documentation for shape_ops.
+/// Internal helper module for shape operation macros.
 mod shape_ops;
 
 /// A macro to construct static Tensor shapes ergonomically in the type system.
@@ -40,18 +40,19 @@ mod shape_ops;
 /// `(typenum::U1, typenum::U3, typenum::U224, typenum::U224)`
 ///
 /// ## Examples
-/// ```rust,ignore
+/// ```rust
 /// use kindle::prelude::*;
 ///
 /// // Defines a 4D tensor shape [Batch=2, Channels=3, Height=224, Width=224]
 /// type ImageBatch = s![2, 3, 224, 224];
-/// let t = Tensor::<ImageBatch, CpuBackend>::zeros(()).unwrap();
+/// let t = Tensor::<ImageBatch>::zeros(()).unwrap();
+/// assert_eq!(t.dims().as_ref(), &[2, 3, 224, 224]);
 /// ```
 ///
 /// You can also mix named symbolic dimensions (if they implement `Dim`):
-/// ```rust,ignore
+/// ```rust
 /// use kindle::prelude::*;
-/// kindle_core::symbolic_dim!(BatchSize);
+/// kindle::symbolic_dim!(BatchSize);
 ///
 /// type BatchedFeatures = s![BatchSize, 128];
 /// ```
@@ -61,7 +62,7 @@ pub fn s(input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro]
-/// Auto-generated documentation for impl_arg_into.
+/// Internal helper macro for generating tuple `ArgInto` trait implementations.
 pub fn impl_arg_into(input: TokenStream) -> TokenStream {
     arg_into::impl_arg_into(input)
 }
@@ -82,13 +83,14 @@ pub fn impl_arg_into(input: TokenStream) -> TokenStream {
 /// * `-1` -> Translates to `InferDim` (used mainly in reshaping to infer the dimension size).
 ///
 /// ## Examples
-/// ```rust,ignore
+/// ```rust
 /// use kindle::prelude::*;
 ///
 /// // Given a tensor `t` of shape [10, 20, 30]
 /// // Slice the first dimension 0..5, take all of the second, and 15..30 of the third.
-/// let view = t.slice::<idx![0..5, .., 15..30]>().unwrap();
-/// // view shape is now [5, 20, 15]
+/// let t = Tensor::<s![10, 20, 30]>::zeros(()).unwrap();
+/// let view = t.slice_idx::<idx![0..5, .., 15..30]>().unwrap();
+/// assert_eq!(view.dims().as_ref(), &[5, 20, 15]);
 /// ```
 #[proc_macro]
 pub fn idx(input: TokenStream) -> TokenStream {
@@ -107,7 +109,7 @@ pub fn idx(input: TokenStream) -> TokenStream {
 /// aggregates them. It ignores fields that don't store tensor state.
 ///
 /// ## Examples
-/// ```rust,ignore
+/// ```rust
 /// use kindle::prelude::*;
 ///
 /// #[module]
@@ -124,7 +126,7 @@ pub fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 #[proc_macro]
-/// Auto-generated documentation for generate_shape_ops.
+/// Internal helper macro for generating backend shape operation glue.
 pub fn generate_shape_ops(input: TokenStream) -> TokenStream {
     shape_ops::generate_shape_ops(input)
 }
