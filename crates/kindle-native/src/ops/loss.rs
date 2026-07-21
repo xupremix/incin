@@ -74,7 +74,7 @@ impl<T: DType, D: kindle_core::prelude::Device> LossOps<Self> for NativeBackend<
         #[cfg(feature = "cuda")]
         let one_hot = if let NativeBuffer::Cuda(pred_b) = &*log_probs.buffer {
             if let NativeBuffer::Cuda(_) = &*target.buffer {
-                crate::ops::cuda_loss::launch_one_hot(target, batch, classes, pred_b).unwrap()
+                crate::ops::cuda_loss::launch_one_hot(target, classes).unwrap()
             } else {
                 // target on CPU, pred on GPU — download target and use CPU path, then upload
                 let mut one_hot_buf = vec![0.0f32; batch * classes];
