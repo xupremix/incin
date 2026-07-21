@@ -24,10 +24,18 @@ kindle/
 
 ---
 
-## 2. Core Backend Architecture: `KindleBackend<T, D>`
+## 2. Core Backend Architecture: `KindleBackend<T, D>` (design target — not yet built)
 
-### Unified Type System
-Instead of separate backend structs, `kindle` uses a single unified `KindleBackend<T, D>` parameterized by element type `T` (`f32`, `f16`, `i32`) and hardware device `D` (`Cpu`, `Cuda`, `Wgpu`):
+> **Status check (2026-07-21 audit):** the code today still has separate
+> `CpuBackend<T>` / `CudaBackend<T>` / `WgpuBackend<T>` structs (plus legacy
+> `CandleBackend<T,D>` / `NdarrayBackend<T,D>`) — these are the graph's top
+> god-nodes by edge count. The unified `KindleBackend<T, D>` below is the
+> **planned** refactor (see ROADMAP.md Phase 2), described here in present
+> tense as a design spec, not as current architecture. Don't assume it exists
+> when reading or writing code against this crate.
+
+### Unified Type System (planned)
+Instead of separate backend structs, `kindle` is planned to use a single unified `KindleBackend<T, D>` parameterized by element type `T` (`f32`, `f16`, `i32`) and hardware device `D` (`Cpu`, `Cuda`, `Wgpu`):
 
 ```rust
 #[derive(Debug, Clone, Copy)]
@@ -129,6 +137,18 @@ fn main() -> Result<()> {
 
 ## 7. Recent Project Changelog
 
+- **2026-07-21 full-codebase audit**: reviewed every crate for correctness,
+  security, and API-design issues. Found and documented in `ROADMAP.md`:
+  CUDA ops panic on first call (`Arc::get_mut` refcount bug), CPU elementwise
+  ops silently downcast all dtypes to f32, WGPU and CUDA autograd tapes are
+  fully disconnected (no gradients ever produced), unchecked shape-multiplication
+  overflow, dynamic-shape broadcast performs no compatibility check, and
+  `pub` API leakage in `cuda`/`cpu` backends + a new `kindle-core` `TRACING_GRAPH`
+  leak. Renamed `dev/refactor` → `main`; fixed a broken CI feature flag
+  (`kindle-backends/native` didn't exist); linked `origin` to
+  `github.com/xupremix/kindle` (pushed as a new branch, existing unrelated
+  `master` history left untouched). See `ROADMAP.md` for the full findings and
+  phased implementation plan.
 - **`d3601a4`**: `docs: add tensor shape ranges, index syntax, and changelog to PROJECT_MEMORY.md`.
 - **`c48c530`**: `docs: add PROJECT_MEMORY.md, autotuning spec, and fix training demo & doctests`.
 - **`1c8cb35`**: `chore: clean up obsolete Claude info and legacy planning files`.

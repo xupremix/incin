@@ -4,12 +4,12 @@
 
 **Kindle** is an experimental deep learning framework in Rust focusing on ergonomic syntax, uncompromised speed, and explicit statically verified mathematical correctness.
 
-It wraps robust tensor engines (like `candle` and `burn`) and enforces strict mathematical type checking at compile time.
+It ships native CPU, CUDA, and WGPU execution backends and enforces strict mathematical type checking at compile time. `candle`/`ndarray`/`burn` wrappers exist behind the `legacy` feature for interop, but are no longer the primary execution path.
 
 ## 🚀 The Philosophy
 - **Compile-Time Shape Verification**: Your matrix multiplications and broadcasts are verified when compiling, reducing out-of-bounds runtime panic overhead.
 - **Python-like Ergonomics**: We use Rust `macro_rules!` (`s!`, `idx!`) to recreate the seamless slicing and shape specification syntax of PyTorch/NumPy.
-- **Backend Agnostic API Design**: While natively using HuggingFace's `candle`, the abstract `Backend` trait enables plugging in Burn or wgpu engines effortlessly.
+- **Backend Agnostic API Design**: The abstract `Backend` trait decouples tensor math from hardware execution, with native CPU, CUDA, and WGPU implementations shipped in `kindle-backends`.
 - **Zero-Cost Abstractions**: The static types `S`, `T`, `D`, `G` map entirely to `PhantomData` markers, imposing ZERO overhead on runtime buffers.
 
 ## 🛠️ Setup & Requirements

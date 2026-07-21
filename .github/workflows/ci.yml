@@ -35,7 +35,7 @@ jobs:
       run: cargo clippy --workspace --all-targets -- -D warnings
       
     - name: Run Unit & Integration Tests
-      run: cargo test --workspace --all-targets --features kindle-backends/native
+      run: cargo test --workspace --all-targets --no-default-features --features kindle-backends/cpu,kindle/cpu
       
     - name: Build Examples
       run: cargo build --examples --workspace
