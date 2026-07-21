@@ -48,6 +48,40 @@ pub(crate) fn embedding_impl<T: DType, D: kindle_core::prelude::Device, K: DType
     let vocab_size = w.shape[0];
     let hidden_size = w.shape[1];
 
+    #[cfg(feature = "cuda")]
+    if matches!(&*w.buffer, NativeBuffer::Cuda(_)) && matches!(&*t.buffer, NativeBuffer::Cuda(_)) {
+        let out = crate::ops::cuda_embedding::launch_embedding_fwd(t, w)?;
+        let total_indices: usize = t.shape.iter().product();
+
+        let w_id = w.id;
+        let out_id = out.id;
+        let w_shape = w.shape.clone();
+
+        if let NativeBuffer::Cuda(idx_b) = &*t.buffer {
+            let indices_dev_clone = idx_b.data.clone();
+            let device_clone = idx_b.device.clone();
+            let device_id = idx_b.device_id;
+
+            tape::push(TapeEntry {
+                output_id: out_id,
+                input_ids: vec![w_id],
+                backward: Box::new(move |grad_out: &NativeStorage| {
+                    let gw = crate::ops::cuda_embedding::launch_embedding_bwd(
+                        grad_out,
+                        &indices_dev_clone,
+                        &device_clone,
+                        device_id,
+                        vocab_size,
+                        hidden_size,
+                        total_indices,
+                    ).unwrap();
+                    vec![gw]
+                }),
+            });
+        }
+        return Ok(out);
+    }
+
     let total_indices: usize = t.shape.iter().product();
     let mut idx = vec![0usize; t.shape.len()];
 

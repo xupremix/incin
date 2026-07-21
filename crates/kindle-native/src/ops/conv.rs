@@ -46,6 +46,7 @@ use kindle_core::prelude::{DType, NumericOps, Result, TensorOps};
 use crate::NativeBackend;
 use crate::ops::matmul::{batched_matmul_impl, transpose_last2};
 use crate::storage::{NativeBuffer, NativeStorage, increment_index, scatter_into_zeros};
+
 use crate::tape::{self, TapeEntry};
 
 // ---------------------------------------------------------------------------
@@ -109,6 +110,327 @@ fn validate_groups(op: &'static str, cin: usize, cout: usize, groups: usize) -> 
 /// Materializing gather loop producing a `[B, L_out, Cin*K]` column matrix
 /// from a `[B, Cin, L]` input. For every gathered element whose computed
 /// source position falls outside `[0, L)`, substitutes `0.0` (Pitfall 2).
+
+#[cfg(feature = "cuda")]
+fn cuda_im2col_1d(
+    input: &NativeStorage,
+    kernel_size: usize,
+    stride: usize,
+    padding: usize,
+    dilation: usize,
+) -> NativeStorage {
+    let (b, cin, len) = (input.shape[0], input.shape[1], input.shape[2]);
+    let l_out = out_size(len, kernel_size, stride, padding, dilation);
+    let out_len = b * l_out * cin * kernel_size;
+
+    if let NativeBuffer::Cuda(buf) = &*input.buffer {
+        let device_id = buf.device_id;
+        let stream = buf.device.default_stream();
+        let dispatcher = crate::gpu::NativeCudaDispatcher::new(device_id);
+        
+        let kernel_name = "im2col_1d";
+        if crate::gpu::cuda_cache::get_module(device_id, "conv").is_none() {
+            dispatcher.compile_and_load_kernel("conv", include_str!("kernels/conv.cu"), "conv").unwrap();
+        }
+        let f = dispatcher.get_function("conv", kernel_name).unwrap();
+
+        let mut out_b = crate::storage::NativeCudaBuffer {
+            len: out_len,
+            data: alloc::sync::Arc::new(stream.alloc_zeros::<u8>(out_len * 4).unwrap()),
+            device: buf.device.clone(),
+            device_id,
+        };
+
+        use cudarc::driver::PushKernelArg;
+
+        let cfg = cudarc::driver::LaunchConfig {
+            grid_dim: (((b * cin * l_out) as u32 + 255) / 256, 1, 1),
+            block_dim: (256, 1, 1),
+            shared_mem_bytes: 0,
+        };
+
+        let in_data_arc = buf.data.clone();
+        let in_slice_u8: &cudarc::driver::CudaSlice<u8> = &in_data_arc;
+        let mut out_data_arc = out_b.data.clone();
+        unsafe {
+            let out_slice_u8: &mut cudarc::driver::CudaSlice<u8> = alloc::sync::Arc::get_mut(&mut out_data_arc).unwrap();
+            let mut out_f32 = out_slice_u8.transmute_mut::<f32>(out_len).unwrap();
+            let in_f32 = in_slice_u8.transmute::<f32>(buf.len).unwrap();
+            
+            stream
+                .launch_builder(&f)
+                .arg(&in_f32)
+                .arg(&mut out_f32)
+                .arg(&(b as usize))
+                .arg(&(cin as usize))
+                .arg(&(len as usize))
+                .arg(&(l_out as usize))
+                .arg(&(kernel_size as usize))
+                .arg(&(stride as usize))
+                .arg(&(padding as usize))
+                .arg(&(dilation as usize))
+                .launch(cfg)
+                .unwrap();
+        }
+        
+        out_b.data = out_data_arc;
+
+        NativeStorage::from_contiguous(
+            NativeBuffer::Cuda(out_b),
+            vec![b, l_out, cin * kernel_size],
+        )
+    } else {
+        unreachable!()
+    }
+}
+
+#[cfg(feature = "cuda")]
+fn cuda_col2im_1d(
+    cols_grad: &NativeStorage,
+    input_shape: &[usize],
+    kernel_size: usize,
+    stride: usize,
+    padding: usize,
+    dilation: usize,
+) -> NativeStorage {
+    let (b, cin, len) = (input_shape[0], input_shape[1], input_shape[2]);
+    let l_out = cols_grad.shape[1];
+    let out_len = b * cin * len;
+
+    if let NativeBuffer::Cuda(buf) = &*cols_grad.buffer {
+        let device_id = buf.device_id;
+        let stream = buf.device.default_stream();
+        let dispatcher = crate::gpu::NativeCudaDispatcher::new(device_id);
+        
+        let kernel_name = "col2im_1d";
+        if crate::gpu::cuda_cache::get_module(device_id, "conv").is_none() {
+            dispatcher.compile_and_load_kernel("conv", include_str!("kernels/conv.cu"), "conv").unwrap();
+        }
+        let f = dispatcher.get_function("conv", kernel_name).unwrap();
+
+        let mut out_b = crate::storage::NativeCudaBuffer {
+            len: out_len,
+            data: alloc::sync::Arc::new(stream.alloc_zeros::<u8>(out_len * 4).unwrap()),
+            device: buf.device.clone(),
+            device_id,
+        };
+
+        use cudarc::driver::PushKernelArg;
+
+        let cfg = cudarc::driver::LaunchConfig {
+            grid_dim: (((b * cin * l_out) as u32 + 255) / 256, 1, 1),
+            block_dim: (256, 1, 1),
+            shared_mem_bytes: 0,
+        };
+
+        let in_data_arc = buf.data.clone();
+        let in_slice_u8: &cudarc::driver::CudaSlice<u8> = &in_data_arc;
+        let mut out_data_arc = out_b.data.clone();
+        unsafe {
+            let out_slice_u8: &mut cudarc::driver::CudaSlice<u8> = alloc::sync::Arc::get_mut(&mut out_data_arc).unwrap();
+            let mut out_f32 = out_slice_u8.transmute_mut::<f32>(out_len).unwrap();
+            let in_f32 = in_slice_u8.transmute::<f32>(buf.len).unwrap();
+            
+            stream
+                .launch_builder(&f)
+                .arg(&in_f32)
+                .arg(&mut out_f32)
+                .arg(&(b as usize))
+                .arg(&(cin as usize))
+                .arg(&(len as usize))
+                .arg(&(l_out as usize))
+                .arg(&(kernel_size as usize))
+                .arg(&(stride as usize))
+                .arg(&(padding as usize))
+                .arg(&(dilation as usize))
+                .launch(cfg)
+                .unwrap();
+        }
+        
+        out_b.data = out_data_arc;
+
+        NativeStorage::from_contiguous(
+            NativeBuffer::Cuda(out_b),
+            input_shape.to_vec(),
+        )
+    } else {
+        unreachable!()
+    }
+}
+
+#[cfg(feature = "cuda")]
+fn cuda_im2col_2d(
+    input: &NativeStorage,
+    kernel_h: usize,
+    kernel_w: usize,
+    stride: usize,
+    padding: usize,
+    dilation: usize,
+) -> NativeStorage {
+    let (b, cin, h, w) = (
+        input.shape[0],
+        input.shape[1],
+        input.shape[2],
+        input.shape[3],
+    );
+    let h_out = out_size(h, kernel_h, stride, padding, dilation);
+    let w_out = out_size(w, kernel_w, stride, padding, dilation);
+    let out_len = b * h_out * w_out * cin * kernel_h * kernel_w;
+
+    if let NativeBuffer::Cuda(buf) = &*input.buffer {
+        let device_id = buf.device_id;
+        let stream = buf.device.default_stream();
+        let dispatcher = crate::gpu::NativeCudaDispatcher::new(device_id);
+        
+        let kernel_name = "im2col_2d";
+        if crate::gpu::cuda_cache::get_module(device_id, "conv").is_none() {
+            dispatcher.compile_and_load_kernel("conv", include_str!("kernels/conv.cu"), "conv").unwrap();
+        }
+        let f = dispatcher.get_function("conv", kernel_name).unwrap();
+
+        let mut out_b = crate::storage::NativeCudaBuffer {
+            len: out_len,
+            data: alloc::sync::Arc::new(stream.alloc_zeros::<u8>(out_len * 4).unwrap()),
+            device: buf.device.clone(),
+            device_id,
+        };
+
+        use cudarc::driver::PushKernelArg;
+
+        let cfg = cudarc::driver::LaunchConfig {
+            grid_dim: (((b * cin * h_out * w_out) as u32 + 255) / 256, 1, 1),
+            block_dim: (256, 1, 1),
+            shared_mem_bytes: 0,
+        };
+
+        let in_data_arc = buf.data.clone();
+        let in_slice_u8: &cudarc::driver::CudaSlice<u8> = &in_data_arc;
+        let mut out_data_arc = out_b.data.clone();
+        unsafe {
+            let out_slice_u8: &mut cudarc::driver::CudaSlice<u8> = alloc::sync::Arc::get_mut(&mut out_data_arc).unwrap();
+            let mut out_f32 = out_slice_u8.transmute_mut::<f32>(out_len).unwrap();
+            let in_f32 = in_slice_u8.transmute::<f32>(buf.len).unwrap();
+            
+            stream
+                .launch_builder(&f)
+                .arg(&in_f32)
+                .arg(&mut out_f32)
+                .arg(&(b as usize))
+                .arg(&(cin as usize))
+                .arg(&(h as usize))
+                .arg(&(w as usize))
+                .arg(&(h_out as usize))
+                .arg(&(w_out as usize))
+                .arg(&(kernel_h as usize))
+                .arg(&(kernel_w as usize))
+                .arg(&(stride as usize))
+                .arg(&(stride as usize))
+                .arg(&(padding as usize))
+                .arg(&(padding as usize))
+                .arg(&(dilation as usize))
+                .arg(&(dilation as usize))
+                .launch(cfg)
+                .unwrap();
+        }
+        
+        out_b.data = out_data_arc;
+
+        NativeStorage::from_contiguous(
+            NativeBuffer::Cuda(out_b),
+            vec![b, h_out * w_out, cin * kernel_h * kernel_w],
+        )
+    } else {
+        unreachable!()
+    }
+}
+
+#[cfg(feature = "cuda")]
+fn cuda_col2im_2d(
+    cols_grad: &NativeStorage,
+    input_shape: &[usize],
+    kernel_h: usize,
+    kernel_w: usize,
+    stride: usize,
+    padding: usize,
+    dilation: usize,
+) -> NativeStorage {
+    let (b, cin, h, w) = (
+        input_shape[0],
+        input_shape[1],
+        input_shape[2],
+        input_shape[3],
+    );
+    let h_out = out_size(h, kernel_h, stride, padding, dilation);
+    let w_out = out_size(w, kernel_w, stride, padding, dilation);
+    let out_len = b * cin * h * w;
+
+    if let NativeBuffer::Cuda(buf) = &*cols_grad.buffer {
+        let device_id = buf.device_id;
+        let stream = buf.device.default_stream();
+        let dispatcher = crate::gpu::NativeCudaDispatcher::new(device_id);
+        
+        let kernel_name = "col2im_2d";
+        if crate::gpu::cuda_cache::get_module(device_id, "conv").is_none() {
+            dispatcher.compile_and_load_kernel("conv", include_str!("kernels/conv.cu"), "conv").unwrap();
+        }
+        let f = dispatcher.get_function("conv", kernel_name).unwrap();
+
+        let mut out_b = crate::storage::NativeCudaBuffer {
+            len: out_len,
+            data: alloc::sync::Arc::new(stream.alloc_zeros::<u8>(out_len * 4).unwrap()),
+            device: buf.device.clone(),
+            device_id,
+        };
+
+        use cudarc::driver::PushKernelArg;
+
+        let cfg = cudarc::driver::LaunchConfig {
+            grid_dim: (((b * cin * h_out * w_out) as u32 + 255) / 256, 1, 1),
+            block_dim: (256, 1, 1),
+            shared_mem_bytes: 0,
+        };
+
+        let in_data_arc = buf.data.clone();
+        let in_slice_u8: &cudarc::driver::CudaSlice<u8> = &in_data_arc;
+        let mut out_data_arc = out_b.data.clone();
+        unsafe {
+            let out_slice_u8: &mut cudarc::driver::CudaSlice<u8> = alloc::sync::Arc::get_mut(&mut out_data_arc).unwrap();
+            let mut out_f32 = out_slice_u8.transmute_mut::<f32>(out_len).unwrap();
+            let in_f32 = in_slice_u8.transmute::<f32>(buf.len).unwrap();
+            
+            stream
+                .launch_builder(&f)
+                .arg(&in_f32)
+                .arg(&mut out_f32)
+                .arg(&(b as usize))
+                .arg(&(cin as usize))
+                .arg(&(h as usize))
+                .arg(&(w as usize))
+                .arg(&(h_out as usize))
+                .arg(&(w_out as usize))
+                .arg(&(kernel_h as usize))
+                .arg(&(kernel_w as usize))
+                .arg(&(stride as usize))
+                .arg(&(stride as usize))
+                .arg(&(padding as usize))
+                .arg(&(padding as usize))
+                .arg(&(dilation as usize))
+                .arg(&(dilation as usize))
+                .launch(cfg)
+                .unwrap();
+        }
+        
+        out_b.data = out_data_arc;
+
+        NativeStorage::from_contiguous(
+            NativeBuffer::Cuda(out_b),
+            input_shape.to_vec(),
+        )
+    } else {
+        unreachable!()
+    }
+}
+
 fn im2col_1d(
     input: &NativeStorage,
     kernel_size: usize,
@@ -116,6 +438,10 @@ fn im2col_1d(
     padding: usize,
     dilation: usize,
 ) -> NativeStorage {
+    #[cfg(feature = "cuda")]
+    if let NativeBuffer::Cuda(_) = &*input.buffer {
+        return cuda_im2col_1d(input, kernel_size, stride, padding, dilation);
+    }
     let (b, cin, len) = (input.shape[0], input.shape[1], input.shape[2]);
     let l_out = out_size(len, kernel_size, stride, padding, dilation);
 
@@ -151,6 +477,10 @@ fn col2im_1d(
     padding: usize,
     dilation: usize,
 ) -> NativeStorage {
+    #[cfg(feature = "cuda")]
+    if let NativeBuffer::Cuda(_) = &*cols_grad.buffer {
+        return cuda_col2im_1d(cols_grad, input_shape, kernel_size, stride, padding, dilation);
+    }
     let (b, cin, len) = (input_shape[0], input_shape[1], input_shape[2]);
     let l_out = cols_grad.shape[1];
 
@@ -191,6 +521,10 @@ fn im2col_2d(
     padding: usize,
     dilation: usize,
 ) -> NativeStorage {
+    #[cfg(feature = "cuda")]
+    if let NativeBuffer::Cuda(_) = &*input.buffer {
+        return cuda_im2col_2d(input, kernel_h, kernel_w, stride, padding, dilation);
+    }
     let (b, cin, h, w) = (
         input.shape[0],
         input.shape[1],
@@ -245,6 +579,10 @@ fn col2im_2d(
     padding: usize,
     dilation: usize,
 ) -> NativeStorage {
+    #[cfg(feature = "cuda")]
+    if let NativeBuffer::Cuda(_) = &*cols_grad.buffer {
+        return cuda_col2im_2d(cols_grad, input_shape, kernel_h, kernel_w, stride, padding, dilation);
+    }
     let (b, cin, h, w) = (
         input_shape[0],
         input_shape[1],

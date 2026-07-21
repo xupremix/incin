@@ -185,36 +185,6 @@ pub(crate) fn dispatch_softmax(inp: &WgpuBuffer, out: &Arc<WgpuBuffer>, batch: u
 }
 
 /// Dispatch tiled 2D transpose
-pub(crate) fn dispatch_transpose(inp: &WgpuBuffer, out: &Arc<WgpuBuffer>, rows: u32, cols: u32) {
-    let state = get_device_state();
-    let shader = include_str!("shaders/transpose.wgsl");
-    let pipeline = get_or_create_pipeline("transpose", shader, "main");
-
-    let params = [rows, cols];
-    let params_buf = WgpuBuffer::from_slice(&params);
-    let bgl = pipeline.get_bind_group_layout(0);
-    let bg = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("Transpose BG"),
-        layout: &bgl,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: inp.buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: out.buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 2,
-                resource: params_buf.buffer.as_entire_binding(),
-            },
-        ],
-    });
-    let wg_x = (cols + 15) / 16;
-    let wg_y = (rows + 15) / 16;
-    run_pipeline(&state, &pipeline, &bg, wg_x, wg_y, 1, "Transpose");
-}
 
 /// Auto-generated documentation for run_pipeline.
 fn run_pipeline(
@@ -369,4 +339,341 @@ pub(crate) fn dispatch_conv_transpose2d(
     let total_out = params_data[0] * params_data[2] * params_data[5] * params_data[6];
     let wg = (total_out + 63) / 64;
     run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "ConvTranspose");
+}
+
+pub(crate) fn dispatch_shape(
+    inp: &WgpuBuffer,
+    out: &Arc<WgpuBuffer>,
+    params_data: &[u32; 21],
+) {
+    let state = get_device_state();
+    let shader = include_str!("shaders/shape.wgsl");
+    let pipeline = get_or_create_pipeline("shape", shader, "main");
+
+    let params_buf = WgpuBuffer::from_slice(params_data);
+    let bgl = pipeline.get_bind_group_layout(0);
+    let bg = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("Shape BG"),
+        layout: &bgl,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: inp.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: out.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: params_buf.buffer.as_entire_binding(),
+            },
+        ],
+    });
+    let n = params_data[2];
+    let wg = (n + WG_SIZE - 1) / WG_SIZE;
+    run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "Shape");
+}
+
+pub(crate) fn prepare_shape_params(
+    op_mode: u32,
+    n_elements: u32,
+    out_shape: &[usize],
+    inp_shape: &[usize],
+    aux: &[usize],
+) -> [u32; 21] {
+    let rank = core::cmp::max(out_shape.len(), inp_shape.len()) as u32;
+    let mut params = [0u32; 21];
+    params[0] = op_mode;
+    params[1] = rank;
+    params[2] = n_elements;
+    
+    let pad_out = 6 - out_shape.len();
+    for (i, &s) in out_shape.iter().enumerate() {
+        params[3 + pad_out + i] = s as u32;
+    }
+    for i in 0..pad_out {
+        params[3 + i] = 1;
+    }
+
+    let pad_inp = 6 - inp_shape.len();
+    for (i, &s) in inp_shape.iter().enumerate() {
+        params[9 + pad_inp + i] = s as u32;
+    }
+    for i in 0..pad_inp {
+        params[9 + i] = 1;
+    }
+
+    let pad_aux = 6 - aux.len();
+    for (i, &s) in aux.iter().enumerate() {
+        let mut val = s as u32;
+        if op_mode == 2 {
+            val += pad_out as u32;
+        }
+        params[15 + pad_aux + i] = val;
+    }
+    for i in 0..pad_aux {
+        params[15 + i] = 0;
+    }
+
+    params
+}
+
+pub(crate) fn dispatch_reduce_dim(
+    inp: &WgpuBuffer,
+    out: &Arc<WgpuBuffer>,
+    op_mode: u32,
+    dim_size: u32,
+    inner_stride: u32,
+    out_n: u32,
+) {
+    let state = get_device_state();
+    let shader = include_str!("shaders/reduce_dim.wgsl");
+    let pipeline = get_or_create_pipeline("reduce_dim", shader, "main");
+
+    let params_buf = WgpuBuffer::from_slice(&[op_mode, dim_size, inner_stride, out_n]);
+    let bgl = pipeline.get_bind_group_layout(0);
+    let bg = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("ReduceDim BG"),
+        layout: &bgl,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: inp.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: out.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: params_buf.buffer.as_entire_binding(),
+            },
+        ],
+    });
+    let wg = (out_n + WG_SIZE - 1) / WG_SIZE;
+    run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "ReduceDim");
+}
+
+pub(crate) fn dispatch_embedding(
+    indices: &WgpuBuffer,
+    weight: &WgpuBuffer,
+    out: &Arc<WgpuBuffer>,
+    seq_len: u32,
+    embed_dim: u32,
+    vocab_size: u32,
+) {
+    let state = get_device_state();
+    let shader = include_str!("shaders/embedding.wgsl");
+    let pipeline = get_or_create_pipeline("embedding", shader, "main");
+    let params_buf = WgpuBuffer::from_slice(&[seq_len, embed_dim, vocab_size]);
+    let bgl = pipeline.get_bind_group_layout(0);
+    let bg = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("Embedding BG"),
+        layout: &bgl,
+        entries: &[
+            wgpu::BindGroupEntry { binding: 0, resource: indices.buffer.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 1, resource: weight.buffer.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 2, resource: out.buffer.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 3, resource: params_buf.buffer.as_entire_binding() },
+        ],
+    });
+    let total = seq_len * embed_dim;
+    let wg = (total + WG_SIZE - 1) / WG_SIZE;
+    run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "Embedding");
+}
+
+pub(crate) fn dispatch_layer_norm(
+    inp: &WgpuBuffer,
+    gamma: &WgpuBuffer,
+    beta: &WgpuBuffer,
+    out: &Arc<WgpuBuffer>,
+    eps: f32,
+    norm_size: u32,
+    has_bias: f32,
+    batch_size: u32,
+) {
+    let state = get_device_state();
+    let shader = include_str!("shaders/layer_norm.wgsl");
+    let pipeline = get_or_create_pipeline("layer_norm", shader, "main");
+    let params_buf = WgpuBuffer::from_slice(&[eps, norm_size as f32, has_bias, batch_size as f32]);
+    let bgl = pipeline.get_bind_group_layout(0);
+    let bg = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("LayerNorm BG"),
+        layout: &bgl,
+        entries: &[
+            wgpu::BindGroupEntry { binding: 0, resource: inp.buffer.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 1, resource: gamma.buffer.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 2, resource: beta.buffer.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 3, resource: out.buffer.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 4, resource: params_buf.buffer.as_entire_binding() },
+        ],
+    });
+    let wg = (batch_size + 64 - 1) / 64; // workgroup size is 64
+    run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "LayerNorm");
+}
+
+pub(crate) fn dispatch_batch_norm(
+    inp: &WgpuBuffer,
+    gamma: &WgpuBuffer,
+    beta: &WgpuBuffer,
+    rm: &WgpuBuffer,
+    rv: &WgpuBuffer,
+    out: &Arc<WgpuBuffer>,
+    eps: f32,
+    channels: u32,
+    spatial: u32,
+    batch: u32,
+    has_gamma: f32,
+    has_beta: f32,
+    has_rm_rv: f32,
+) {
+    let state = get_device_state();
+    let shader = include_str!("shaders/batch_norm.wgsl");
+    let pipeline = get_or_create_pipeline("batch_norm", shader, "main");
+    let params = [
+        eps,
+        channels as f32,
+        spatial as f32,
+        batch as f32,
+        has_gamma,
+        has_beta,
+        has_rm_rv,
+    ];
+    let params_buf = WgpuBuffer::from_slice(&params);
+    let bgl = pipeline.get_bind_group_layout(0);
+    let bg = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("BatchNorm BG"),
+        layout: &bgl,
+        entries: &[
+            wgpu::BindGroupEntry { binding: 0, resource: inp.buffer.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 1, resource: gamma.buffer.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 2, resource: beta.buffer.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 3, resource: rm.buffer.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 4, resource: rv.buffer.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 5, resource: out.buffer.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 6, resource: params_buf.buffer.as_entire_binding() },
+        ],
+    });
+    let wg = (channels + 64 - 1) / 64; // workgroup size is 64
+    run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "BatchNorm");
+}
+
+pub(crate) fn dispatch_pool2d(
+    inp: &WgpuBuffer,
+    out: &Arc<WgpuBuffer>,
+    mode: u32,
+    n: u32,
+    c: u32,
+    h: u32,
+    w: u32,
+    oh: u32,
+    ow: u32,
+    kh: u32,
+    kw: u32,
+    sh: u32,
+    sw: u32,
+    ph: u32,
+    pw: u32,
+    dh: u32,
+    dw: u32,
+) {
+    let state = get_device_state();
+    let shader = include_str!("shaders/pool2d.wgsl");
+    let pipeline = get_or_create_pipeline("pool2d", shader, "main");
+    let params = [
+        mode, n, c, h, w, oh, ow, kh, kw, sh, sw, ph, pw, dh, dw,
+    ];
+    let params_buf = WgpuBuffer::from_slice(&params);
+    let bgl = pipeline.get_bind_group_layout(0);
+    let bg = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("Pool2D BG"),
+        layout: &bgl,
+        entries: &[
+            wgpu::BindGroupEntry { binding: 0, resource: inp.buffer.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 1, resource: out.buffer.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 2, resource: params_buf.buffer.as_entire_binding() },
+        ],
+    });
+    let total = n * c * oh * ow;
+    let wg = (total + WG_SIZE - 1) / WG_SIZE;
+    run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "Pool2D");
+}
+
+pub(crate) fn dispatch_bias_add(
+    t: &Arc<WgpuBuffer>,
+    bias: &WgpuBuffer,
+    batch: u32,
+    channels: u32,
+    spatial: u32,
+) {
+    let state = get_device_state();
+    let shader = include_str!("shaders/bias_add.wgsl");
+    let pipeline = get_or_create_pipeline("bias_add", shader, "main");
+    let total = batch * channels * spatial;
+    let params_buf = WgpuBuffer::from_slice(&[channels, spatial, total]);
+    let bgl = pipeline.get_bind_group_layout(0);
+    let bg = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("BiasAdd BG"),
+        layout: &bgl,
+        entries: &[
+            wgpu::BindGroupEntry { binding: 0, resource: t.buffer.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 1, resource: bias.buffer.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 2, resource: params_buf.buffer.as_entire_binding() },
+        ],
+    });
+    let wg = (total + WG_SIZE - 1) / WG_SIZE;
+    run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "BiasAdd");
+}
+
+pub(crate) fn dispatch_conv2d_direct(
+    inp: &WgpuBuffer,
+    weight: &WgpuBuffer,
+    out: &Arc<WgpuBuffer>,
+    params: &[u32; 16],
+) {
+    let state = get_device_state();
+    let shader = include_str!("shaders/conv2d_direct.wgsl");
+    let pipeline = get_or_create_pipeline("conv2d_direct", shader, "main");
+    let params_buf = WgpuBuffer::from_slice(params);
+    let bgl = pipeline.get_bind_group_layout(0);
+    let bg = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("Conv2DDirect BG"),
+        layout: &bgl,
+        entries: &[
+            wgpu::BindGroupEntry { binding: 0, resource: inp.buffer.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 1, resource: weight.buffer.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 2, resource: out.buffer.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 3, resource: params_buf.buffer.as_entire_binding() },
+        ],
+    });
+    let total = params[0] * params[4] * params[5] * params[6];
+    let wg = (total + WG_SIZE - 1) / WG_SIZE;
+    run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "Conv2DDirect");
+}
+
+pub(crate) fn dispatch_nll_loss(
+    log_sm: &WgpuBuffer,
+    target: &WgpuBuffer,
+    out: &Arc<WgpuBuffer>,
+    batch: u32,
+    n_classes: u32,
+) {
+    let state = get_device_state();
+    let shader = include_str!("shaders/nll_loss.wgsl");
+    let pipeline = get_or_create_pipeline("nll_loss", shader, "main");
+    let params_buf = WgpuBuffer::from_slice(&[batch, n_classes]);
+    let bgl = pipeline.get_bind_group_layout(0);
+    let bg = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("NLLLoss BG"),
+        layout: &bgl,
+        entries: &[
+            wgpu::BindGroupEntry { binding: 0, resource: log_sm.buffer.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 1, resource: target.buffer.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 2, resource: out.buffer.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 3, resource: params_buf.buffer.as_entire_binding() },
+        ],
+    });
+    let wg = (batch + WG_SIZE - 1) / WG_SIZE;
+    run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "NLLLoss");
 }

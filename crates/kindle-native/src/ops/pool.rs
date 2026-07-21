@@ -138,6 +138,157 @@ pub(crate) fn max_pool2d_impl<T: DType, D: kindle_core::prelude::Device, K: DTyp
     padding: (usize, usize),
     dilation: (usize, usize),
 ) -> Result<NativeStorage> {
+    #[cfg(feature = "cuda")]
+    if let NativeBuffer::Cuda(t_b) = &*t.buffer {
+        let (b, c, h, w) = (t.shape[0], t.shape[1], t.shape[2], t.shape[3]);
+        let (kh, kw) = kernel_size;
+        let (sh, sw) = stride;
+        let (ph, pw) = padding;
+        let (dh, dw) = dilation;
+        
+        let h_out = out_size(h, kh, sh, ph, dh);
+        let w_out = out_size(w, kw, sw, pw, dw);
+        let out_total = b * c * h_out * w_out;
+
+        let device_id = t_b.device_id;
+        let stream = t_b.device.default_stream();
+        let dispatcher = crate::gpu::NativeCudaDispatcher::new(device_id);
+        
+        let kernel_name = "max_pool2d_forward";
+        if crate::gpu::cuda_cache::get_module(device_id, "pool").is_none() {
+            let kernel_src = include_str!("kernels/pool.cu");
+            dispatcher.compile_and_load_kernel("pool", kernel_src, "pool")?;
+        }
+        let f = dispatcher.get_function("pool", kernel_name)?;
+        
+        use cudarc::driver::PushKernelArg;
+
+        let mut out_b = crate::storage::NativeCudaBuffer {
+            len: out_total,
+            data: alloc::sync::Arc::new(stream.alloc_zeros::<u8>(out_total * 4).unwrap()),
+            device: t_b.device.clone(),
+            device_id,
+        };
+        
+        let mut max_indices_b = crate::storage::NativeCudaBuffer {
+            len: out_total,
+            data: alloc::sync::Arc::new(stream.alloc_zeros::<u8>(out_total * 4).unwrap()),
+            device: t_b.device.clone(),
+            device_id,
+        };
+        
+        let b_size = 256;
+        let grid = ((out_total as u32 + b_size - 1) / b_size, 1, 1);
+        let cfg = cudarc::driver::LaunchConfig {
+            grid_dim: grid,
+            block_dim: (b_size, 1, 1),
+            shared_mem_bytes: 0,
+        };
+        
+        unsafe {
+            let input_f32 = t_b.data.transmute::<f32>(t_b.len).unwrap();
+            
+            let mut out_data_arc = out_b.data.clone();
+            let out_slice_u8: &mut cudarc::driver::CudaSlice<u8> = alloc::sync::Arc::get_mut(&mut out_data_arc).unwrap();
+            let mut out_f32 = out_slice_u8.transmute_mut::<f32>(out_total).unwrap();
+            
+            let mut mi_data_arc = max_indices_b.data.clone();
+            let mi_slice_u8: &mut cudarc::driver::CudaSlice<u8> = alloc::sync::Arc::get_mut(&mut mi_data_arc).unwrap();
+            let mut mi_u32 = mi_slice_u8.transmute_mut::<u32>(out_total).unwrap();
+
+            stream
+                .launch_builder(&f)
+                .arg(&input_f32)
+                .arg(&mut out_f32)
+                .arg(&mut mi_u32)
+                .arg(&(b as i32))
+                .arg(&(c as i32))
+                .arg(&(h as i32))
+                .arg(&(w as i32))
+                .arg(&(h_out as i32))
+                .arg(&(w_out as i32))
+                .arg(&(kh as i32))
+                .arg(&(kw as i32))
+                .arg(&(sh as i32))
+                .arg(&(sw as i32))
+                .arg(&(ph as i32))
+                .arg(&(pw as i32))
+                .arg(&(dh as i32))
+                .arg(&(dw as i32))
+                .launch(cfg)
+                .map_err(|e| kindle_core::prelude::Error::Msg(format!("Launch failed: {:?}", e)))?;
+                
+            out_b.data = out_data_arc;
+            max_indices_b.data = mi_data_arc;
+        }
+        
+        let out_storage = NativeStorage::from_contiguous(
+            NativeBuffer::Cuda(out_b),
+            vec![b, c, h_out, w_out]
+        );
+        
+        let input_shape = t.shape.clone();
+        let (t_id, out_id) = (t.id, out_storage.id);
+        
+        tape::push(TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id],
+            backward: Box::new(move |grad_out: &NativeStorage| {
+                if let NativeBuffer::Cuda(go_b) = &*grad_out.buffer {
+                    let dispatcher = crate::gpu::NativeCudaDispatcher::new(device_id);
+                    let f = dispatcher.get_function("pool", "scatter_pool_grad_2d").unwrap();
+                    let input_total = input_shape.iter().product::<usize>();
+                    
+                    let stream = go_b.device.default_stream();
+                    use cudarc::driver::PushKernelArg;
+                    
+                    let mut grad_in_b = crate::storage::NativeCudaBuffer {
+                        len: input_total,
+                        data: alloc::sync::Arc::new(stream.alloc_zeros::<u8>(input_total * 4).unwrap()),
+                        device: go_b.device.clone(),
+                        device_id,
+                    };
+                    
+                    let b_size = 256;
+                    let grid = ((out_total as u32 + b_size - 1) / b_size, 1, 1);
+                    let cfg = cudarc::driver::LaunchConfig {
+                        grid_dim: grid,
+                        block_dim: (b_size, 1, 1),
+                        shared_mem_bytes: 0,
+                    };
+                    
+                    unsafe {
+                        let go_f32 = go_b.data.transmute::<f32>(go_b.len).unwrap();
+                        let mi_u32 = max_indices_b.data.transmute::<u32>(out_total).unwrap();
+                        
+                        let mut gi_data_arc = grad_in_b.data.clone();
+                        let gi_slice_u8: &mut cudarc::driver::CudaSlice<u8> = alloc::sync::Arc::get_mut(&mut gi_data_arc).unwrap();
+                        let mut gi_f32 = gi_slice_u8.transmute_mut::<f32>(input_total).unwrap();
+
+                        stream
+                            .launch_builder(&f)
+                            .arg(&go_f32)
+                            .arg(&mi_u32)
+                            .arg(&mut gi_f32)
+                            .arg(&(out_total as i32))
+                            .launch(cfg)
+                            .unwrap();
+                            
+                        grad_in_b.data = gi_data_arc;
+                    }
+                    vec![NativeStorage::from_contiguous(
+                        NativeBuffer::Cuda(grad_in_b),
+                        input_shape.clone()
+                    )]
+                } else {
+                    panic!("grad_out must be Cuda");
+                }
+            }),
+        });
+        
+        return Ok(out_storage);
+    }
+
     let (out, winning_flat_src_idx) = max_window_2d(t, kernel_size, stride, padding, dilation);
 
     let input_shape = t.shape.clone();
@@ -175,6 +326,150 @@ pub(crate) fn avg_pool2d_impl<T: DType, D: kindle_core::prelude::Device, K: DTyp
     stride: (usize, usize),
     padding: (usize, usize),
 ) -> Result<NativeStorage> {
+    #[cfg(feature = "cuda")]
+    if let NativeBuffer::Cuda(t_b) = &*t.buffer {
+        let (b, c, h, w) = (t.shape[0], t.shape[1], t.shape[2], t.shape[3]);
+        let (kh, kw) = kernel_size;
+        let (sh, sw) = stride;
+        let (ph, pw) = padding;
+        
+        let h_out = out_size(h, kh, sh, ph, 1);
+        let w_out = out_size(w, kw, sw, pw, 1);
+        let out_total = b * c * h_out * w_out;
+
+        let device_id = t_b.device_id;
+        let stream = t_b.device.default_stream();
+        let dispatcher = crate::gpu::NativeCudaDispatcher::new(device_id);
+        
+        let kernel_name = "avg_pool2d_forward";
+        if crate::gpu::cuda_cache::get_module(device_id, "pool").is_none() {
+            let kernel_src = include_str!("kernels/pool.cu");
+            dispatcher.compile_and_load_kernel("pool", kernel_src, "pool")?;
+        }
+        let f = dispatcher.get_function("pool", kernel_name)?;
+        
+        use cudarc::driver::PushKernelArg;
+
+        let mut out_b = crate::storage::NativeCudaBuffer {
+            len: out_total,
+            data: alloc::sync::Arc::new(stream.alloc_zeros::<u8>(out_total * 4).unwrap()),
+            device: t_b.device.clone(),
+            device_id,
+        };
+        
+        let b_size = 256;
+        let grid = ((out_total as u32 + b_size - 1) / b_size, 1, 1);
+        let cfg = cudarc::driver::LaunchConfig {
+            grid_dim: grid,
+            block_dim: (b_size, 1, 1),
+            shared_mem_bytes: 0,
+        };
+        
+        unsafe {
+            let input_f32 = t_b.data.transmute::<f32>(t_b.len).unwrap();
+            
+            let mut out_data_arc = out_b.data.clone();
+            let out_slice_u8: &mut cudarc::driver::CudaSlice<u8> = alloc::sync::Arc::get_mut(&mut out_data_arc).unwrap();
+            let mut out_f32 = out_slice_u8.transmute_mut::<f32>(out_total).unwrap();
+
+            stream
+                .launch_builder(&f)
+                .arg(&input_f32)
+                .arg(&mut out_f32)
+                .arg(&(b as i32))
+                .arg(&(c as i32))
+                .arg(&(h as i32))
+                .arg(&(w as i32))
+                .arg(&(h_out as i32))
+                .arg(&(w_out as i32))
+                .arg(&(kh as i32))
+                .arg(&(kw as i32))
+                .arg(&(sh as i32))
+                .arg(&(sw as i32))
+                .arg(&(ph as i32))
+                .arg(&(pw as i32))
+                .launch(cfg)
+                .map_err(|e| kindle_core::prelude::Error::Msg(format!("Launch failed: {:?}", e)))?;
+                
+            out_b.data = out_data_arc;
+        }
+        
+        let out_storage = NativeStorage::from_contiguous(
+            NativeBuffer::Cuda(out_b),
+            vec![b, c, h_out, w_out]
+        );
+        
+        let input_shape = t.shape.clone();
+        let (t_id, out_id) = (t.id, out_storage.id);
+        
+        tape::push(TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id],
+            backward: Box::new(move |grad_out: &NativeStorage| {
+                if let NativeBuffer::Cuda(go_b) = &*grad_out.buffer {
+                    let dispatcher = crate::gpu::NativeCudaDispatcher::new(device_id);
+                    let f = dispatcher.get_function("pool", "avg_pool2d_backward").unwrap();
+                    let input_total = input_shape.iter().product::<usize>();
+                    
+                    let stream = go_b.device.default_stream();
+                    use cudarc::driver::PushKernelArg;
+                    
+                    let mut grad_in_b = crate::storage::NativeCudaBuffer {
+                        len: input_total,
+                        data: alloc::sync::Arc::new(stream.alloc_zeros::<u8>(input_total * 4).unwrap()),
+                        device: go_b.device.clone(),
+                        device_id,
+                    };
+                    
+                    let b_size = 256;
+                    let grid = ((out_total as u32 + b_size - 1) / b_size, 1, 1);
+                    let cfg = cudarc::driver::LaunchConfig {
+                        grid_dim: grid,
+                        block_dim: (b_size, 1, 1),
+                        shared_mem_bytes: 0,
+                    };
+                    
+                    unsafe {
+                        let go_f32 = go_b.data.transmute::<f32>(go_b.len).unwrap();
+                        
+                        let mut gi_data_arc = grad_in_b.data.clone();
+                        let gi_slice_u8: &mut cudarc::driver::CudaSlice<u8> = alloc::sync::Arc::get_mut(&mut gi_data_arc).unwrap();
+                        let mut gi_f32 = gi_slice_u8.transmute_mut::<f32>(input_total).unwrap();
+
+                        stream
+                            .launch_builder(&f)
+                            .arg(&go_f32)
+                            .arg(&mut gi_f32)
+                            .arg(&(b as i32))
+                            .arg(&(c as i32))
+                            .arg(&(h as i32))
+                            .arg(&(w as i32))
+                            .arg(&(h_out as i32))
+                            .arg(&(w_out as i32))
+                            .arg(&(kh as i32))
+                            .arg(&(kw as i32))
+                            .arg(&(sh as i32))
+                            .arg(&(sw as i32))
+                            .arg(&(ph as i32))
+                            .arg(&(pw as i32))
+                            .launch(cfg)
+                            .unwrap();
+                            
+                        grad_in_b.data = gi_data_arc;
+                    }
+                    vec![NativeStorage::from_contiguous(
+                        NativeBuffer::Cuda(grad_in_b),
+                        input_shape.clone()
+                    )]
+                } else {
+                    panic!("grad_out must be Cuda");
+                }
+            }),
+        });
+        
+        return Ok(out_storage);
+    }
+
     let (b, c, h, w) = (t.shape[0], t.shape[1], t.shape[2], t.shape[3]);
     let (kh, kw) = kernel_size;
     let (sh, sw) = stride;
@@ -286,6 +581,133 @@ pub(crate) fn adaptive_avg_pool2d_impl<T: DType, D: kindle_core::prelude::Device
     t: &NativeStorage,
     output_size: (usize, usize),
 ) -> Result<NativeStorage> {
+    #[cfg(feature = "cuda")]
+    if let NativeBuffer::Cuda(t_b) = &*t.buffer {
+        let (b, c, h, w) = (t.shape[0], t.shape[1], t.shape[2], t.shape[3]);
+        let (h_out, w_out) = output_size;
+        let out_total = b * c * h_out * w_out;
+
+        let device_id = t_b.device_id;
+        let stream = t_b.device.default_stream();
+        let dispatcher = crate::gpu::NativeCudaDispatcher::new(device_id);
+        
+        let kernel_name = "adaptive_avg_pool2d_forward";
+        if crate::gpu::cuda_cache::get_module(device_id, "pool").is_none() {
+            let kernel_src = include_str!("kernels/pool.cu");
+            dispatcher.compile_and_load_kernel("pool", kernel_src, "pool")?;
+        }
+        let f = dispatcher.get_function("pool", kernel_name)?;
+        
+        use cudarc::driver::PushKernelArg;
+
+        let mut out_b = crate::storage::NativeCudaBuffer {
+            len: out_total,
+            data: alloc::sync::Arc::new(stream.alloc_zeros::<u8>(out_total * 4).unwrap()),
+            device: t_b.device.clone(),
+            device_id,
+        };
+        
+        let b_size = 256;
+        let grid = ((out_total as u32 + b_size - 1) / b_size, 1, 1);
+        let cfg = cudarc::driver::LaunchConfig {
+            grid_dim: grid,
+            block_dim: (b_size, 1, 1),
+            shared_mem_bytes: 0,
+        };
+        
+        unsafe {
+            let input_f32 = t_b.data.transmute::<f32>(t_b.len).unwrap();
+            
+            let mut out_data_arc = out_b.data.clone();
+            let out_slice_u8: &mut cudarc::driver::CudaSlice<u8> = alloc::sync::Arc::get_mut(&mut out_data_arc).unwrap();
+            let mut out_f32 = out_slice_u8.transmute_mut::<f32>(out_total).unwrap();
+
+            stream
+                .launch_builder(&f)
+                .arg(&input_f32)
+                .arg(&mut out_f32)
+                .arg(&(b as i32))
+                .arg(&(c as i32))
+                .arg(&(h as i32))
+                .arg(&(w as i32))
+                .arg(&(h_out as i32))
+                .arg(&(w_out as i32))
+                .launch(cfg)
+                .map_err(|e| kindle_core::prelude::Error::Msg(format!("Launch failed: {:?}", e)))?;
+                
+            out_b.data = out_data_arc;
+        }
+        
+        let out_storage = NativeStorage::from_contiguous(
+            NativeBuffer::Cuda(out_b),
+            vec![b, c, h_out, w_out]
+        );
+        
+        let input_shape = t.shape.clone();
+        let (t_id, out_id) = (t.id, out_storage.id);
+        
+        tape::push(TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id],
+            backward: Box::new(move |grad_out: &NativeStorage| {
+                if let NativeBuffer::Cuda(go_b) = &*grad_out.buffer {
+                    let dispatcher = crate::gpu::NativeCudaDispatcher::new(device_id);
+                    let f = dispatcher.get_function("pool", "adaptive_avg_pool2d_backward").unwrap();
+                    let input_total = input_shape.iter().product::<usize>();
+                    
+                    let stream = go_b.device.default_stream();
+                    use cudarc::driver::PushKernelArg;
+                    
+                    let mut grad_in_b = crate::storage::NativeCudaBuffer {
+                        len: input_total,
+                        data: alloc::sync::Arc::new(stream.alloc_zeros::<u8>(input_total * 4).unwrap()),
+                        device: go_b.device.clone(),
+                        device_id,
+                    };
+                    
+                    let b_size = 256;
+                    let grid = ((out_total as u32 + b_size - 1) / b_size, 1, 1);
+                    let cfg = cudarc::driver::LaunchConfig {
+                        grid_dim: grid,
+                        block_dim: (b_size, 1, 1),
+                        shared_mem_bytes: 0,
+                    };
+                    
+                    unsafe {
+                        let go_f32 = go_b.data.transmute::<f32>(go_b.len).unwrap();
+                        
+                        let mut gi_data_arc = grad_in_b.data.clone();
+                        let gi_slice_u8: &mut cudarc::driver::CudaSlice<u8> = alloc::sync::Arc::get_mut(&mut gi_data_arc).unwrap();
+                        let mut gi_f32 = gi_slice_u8.transmute_mut::<f32>(input_total).unwrap();
+
+                        stream
+                            .launch_builder(&f)
+                            .arg(&go_f32)
+                            .arg(&mut gi_f32)
+                            .arg(&(b as i32))
+                            .arg(&(c as i32))
+                            .arg(&(h as i32))
+                            .arg(&(w as i32))
+                            .arg(&(h_out as i32))
+                            .arg(&(w_out as i32))
+                            .launch(cfg)
+                            .unwrap();
+                            
+                        grad_in_b.data = gi_data_arc;
+                    }
+                    vec![NativeStorage::from_contiguous(
+                        NativeBuffer::Cuda(grad_in_b),
+                        input_shape.clone()
+                    )]
+                } else {
+                    panic!("grad_out must be Cuda");
+                }
+            }),
+        });
+        
+        return Ok(out_storage);
+    }
+
     let (b, c, h, w) = (t.shape[0], t.shape[1], t.shape[2], t.shape[3]);
     let (h_out, w_out) = output_size;
 

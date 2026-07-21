@@ -112,7 +112,12 @@ pub(crate) fn sum_axis_keepdim(storage: &NativeStorage, axis: usize) -> NativeSt
         NativeBuffer::I64(_) => reduce_variant!(I64, |v: f64| v as i64),
         NativeBuffer::F16(_) => reduce_variant!(F16, |v: f64| half::f16::from_f64(v)),
         NativeBuffer::BF16(_) => reduce_variant!(BF16, |v: f64| half::bf16::from_f64(v)),
-        NativeBuffer::Cuda(_) => panic!("sum_axis_keepdim not supported on CUDA buffer"),
+        NativeBuffer::Cuda(_) => {
+            #[cfg(feature = "cuda")]
+            return crate::ops::cuda_reduce::launch_reduce_op("sum_axis_keepdim", "0.0", "acc = acc + val", storage, axis, true).unwrap();
+            #[cfg(not(feature = "cuda"))]
+            panic!("CUDA not enabled");
+        },
         NativeBuffer::Metal(_) => panic!("sum_axis_keepdim not supported on Metal buffer"),
         NativeBuffer::Q8_0(_) => panic!("sum_axis_keepdim not supported on Q8_0 buffer"),
     };
@@ -149,7 +154,26 @@ fn fill_like(like: &NativeStorage, shape: &[usize], scalar_value: f64) -> Native
         NativeBuffer::BF16(_) => {
             NativeBuffer::BF16(vec![half::bf16::from_f64(scalar_value); total])
         }
-        NativeBuffer::Cuda(_) => panic!("fill_like not supported on CUDA buffer"),
+        NativeBuffer::Cuda(b) => {
+            #[cfg(feature = "cuda")]
+            {
+                let device_id = b.device_id;
+                let stream = b.device.default_stream();
+                let h_data = vec![scalar_value as f32; total];
+                let h_bytes: &[u8] = bytemuck::cast_slice(&h_data);
+                let mut dev_data = stream.alloc_zeros::<u8>(total * 4).unwrap();
+                stream.memcpy_htod(h_bytes, &mut dev_data).unwrap();
+                let cuda_buf = NativeBuffer::Cuda(crate::storage::NativeCudaBuffer {
+                    len: total,
+                    data: alloc::sync::Arc::new(dev_data),
+                    device: b.device.clone(),
+                    device_id,
+                });
+                return NativeStorage::from_contiguous(cuda_buf, shape.to_vec());
+            }
+            #[cfg(not(feature = "cuda"))]
+            panic!("CUDA not enabled");
+        }
         NativeBuffer::Metal(_) => panic!("fill_like not supported on Metal buffer"),
         NativeBuffer::Q8_0(_) => panic!("fill_like not supported on Q8_0 buffer"),
     };
@@ -161,6 +185,15 @@ fn fill_like(like: &NativeStorage, shape: &[usize], scalar_value: f64) -> Native
 /// Ties: strict `>` (not `>=`) naturally picks first-encountered winner
 /// during forward iteration (Pitfall 3 mitigation, T-02-07).
 fn max_axis_with_indices(storage: &NativeStorage, axis: usize) -> (NativeStorage, Vec<usize>) {
+    #[cfg(feature = "cuda")]
+    if matches!(&*storage.buffer, NativeBuffer::Cuda(_)) {
+        return crate::ops::cuda_reduce::launch_reduce_with_indices_host(
+            "max_axis_with_indices", "-INFINITY",
+            "if (val > best_val) { best_val = val; best_idx = i; }",
+            storage, axis, true
+        ).unwrap();
+    }
+
     let mut out_shape = storage.shape.clone();
     out_shape[axis] = 1;
     let out_total: usize = out_shape.iter().product();
@@ -190,6 +223,15 @@ fn max_axis_with_indices(storage: &NativeStorage, axis: usize) -> (NativeStorage
 /// Mirror of `max_axis_with_indices`, seeded with `f64::INFINITY` and a
 /// strict `<` comparison — same first-encountered-winner convention.
 fn min_axis_with_indices(storage: &NativeStorage, axis: usize) -> (NativeStorage, Vec<usize>) {
+    #[cfg(feature = "cuda")]
+    if matches!(&*storage.buffer, NativeBuffer::Cuda(_)) {
+        return crate::ops::cuda_reduce::launch_reduce_with_indices_host(
+            "min_axis_with_indices", "INFINITY",
+            "if (val < best_val) { best_val = val; best_idx = i; }",
+            storage, axis, true
+        ).unwrap();
+    }
+
     let mut out_shape = storage.shape.clone();
     out_shape[axis] = 1;
     let out_total: usize = out_shape.iter().product();
@@ -249,6 +291,32 @@ impl<T: DType, D: kindle_core::prelude::Device> ReductionOps<Self> for NativeBac
     fn sum_all<K: DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
+        #[cfg(feature = "cuda")]
+        if matches!(&*t.buffer, NativeBuffer::Cuda(_)) {
+            let mut acc = t.clone();
+            for axis in (0..t.shape.len()).rev() {
+                acc = crate::ops::cuda_reduce::launch_reduce_op(
+                    "sum_all", "0.0", "acc = acc + val", &acc, 0, false
+                ).unwrap();
+            }
+            let t_clone = t.clone();
+            let (t_id, out_id) = (t.id, acc.id);
+            tape::push(TapeEntry {
+                output_id: out_id,
+                input_ids: vec![t_id],
+                backward: Box::new(move |grad_out: &NativeStorage| {
+                    let scalar_grad = if let NativeBuffer::Cuda(b) = &*grad_out.buffer {
+                        let stream = b.device.default_stream();
+                        let mut h = vec![0f32; 1];
+                        unsafe { let dev_f32 = b.data.transmute::<f32>(1).unwrap(); let v = stream.clone_dtoh(&dev_f32).unwrap(); h[0] = v[0]; }
+                        h[0] as f64
+                    } else { grad_out.get(&vec![0usize; grad_out.shape.len()]) };
+                    vec![fill_like(&t_clone, &t_clone.shape, scalar_grad)]
+                }),
+            });
+            return Ok(acc);
+        }
+
         let total: usize = t.shape.iter().product();
         let mut idx = vec![0usize; t.shape.len()];
         let mut sum = 0f64;
@@ -283,6 +351,38 @@ impl<T: DType, D: kindle_core::prelude::Device> ReductionOps<Self> for NativeBac
     fn mean_all<K: DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
+        #[cfg(feature = "cuda")]
+        if matches!(&*t.buffer, NativeBuffer::Cuda(_)) {
+            let total = t.shape.iter().product::<usize>();
+            let n = total as f64;
+            let mut acc = t.clone();
+            for _ in 0..t.shape.len() {
+                acc = crate::ops::cuda_reduce::launch_reduce_op(
+                    "mean_all_sum", "0.0", "acc = acc + val", &acc, 0, false
+                ).unwrap();
+            }
+            // divide by n using elementwise scalar op on GPU
+            let inv_n = 1.0 / n.max(1.0);
+            let h_n = vec![inv_n as f32];
+            let t_clone = t.clone();
+            let (t_id, out_id) = (t.id, acc.id);
+            tape::push(TapeEntry {
+                output_id: out_id,
+                input_ids: vec![t_id],
+                backward: Box::new(move |grad_out: &NativeStorage| {
+                    let scalar_grad = if let NativeBuffer::Cuda(b) = &*grad_out.buffer {
+                        let stream = b.device.default_stream();
+                        let mut h = vec![0f32; 1];
+                        unsafe { let dev_f32 = b.data.transmute::<f32>(1).unwrap(); let v = stream.clone_dtoh(&dev_f32).unwrap(); h[0] = v[0]; }
+                        h[0] as f64
+                    } else { grad_out.get(&vec![0usize; grad_out.shape.len()]) };
+                    let scaled = if n > 0.0 { scalar_grad / n } else { 0.0 };
+                    vec![fill_like(&t_clone, &t_clone.shape, scaled)]
+                }),
+            });
+            return Ok(acc);
+        }
+
         let total: usize = t.shape.iter().product();
         let mut idx = vec![0usize; t.shape.len()];
         let mut sum = 0f64;

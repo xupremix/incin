@@ -64,8 +64,8 @@ fn read_broadcast(storage: &NativeStorage, out_idx: &[usize], out_shape: &[usize
 use rayon::prelude::*;
 
 pub(crate) fn elementwise_binary(
-    _op_name: &str,
-    _op_expr: &str,
+    op_name: &str,
+    op_expr: &str,
     lhs: &NativeStorage,
     rhs: &NativeStorage,
     out_shape: &[usize],
@@ -97,8 +97,8 @@ pub(crate) fn elementwise_binary(
 /// Elementwise negate (used by `sub`'s backward rule: rhs receives the
 /// negated incoming gradient before unbroadcasting).
 pub(crate) fn elementwise_unary(
-    _op_name: &str,
-    _op_expr: &str,
+    op_name: &str,
+    op_expr: &str,
     t: &NativeStorage,
     f: impl Fn(f64) -> f64 + Send + Sync,
 ) -> Result<NativeStorage> {

@@ -110,8 +110,7 @@ pub fn launch_unary_op(op_name: &str, op_expr: &str, t: &NativeStorage) -> Resul
 
         let ndim = t.shape.len();
 
-        let shape_dev = stream.alloc_zeros::<i32>(ndim).unwrap();
-        let strides_dev = stream.alloc_zeros::<i32>(ndim).unwrap();
+
 
         // Populate shapes/strides
         // Normally you'd htod_copy, we do a simplistic sync transfer here
@@ -119,8 +118,8 @@ pub fn launch_unary_op(op_name: &str, op_expr: &str, t: &NativeStorage) -> Resul
         let strides_i32: Vec<i32> = t.strides.iter().map(|&x| x as i32).collect();
 
         // This is a naive implementation, ideally you want a quick memcpy
-        let shape_dev = b.device.htod_sync_copy(&shape_i32).unwrap();
-        let strides_dev = b.device.htod_sync_copy(&strides_i32).unwrap();
+        let shape_dev = b.device.default_stream().clone_htod(&shape_i32).unwrap();
+        let strides_dev = b.device.default_stream().clone_htod(&strides_i32).unwrap();
 
         let cfg = cudarc::driver::LaunchConfig {
             grid_dim: ((numel as u32 + 255) / 256, 1, 1),
@@ -214,11 +213,11 @@ pub fn launch_binary_op(
 
         let out_shape_i32: Vec<i32> = out_shape.iter().map(|&x| x as i32).collect();
 
-        let out_shape_dev = lhs_b.device.htod_sync_copy(&out_shape_i32).unwrap();
-        let lhs_shape_dev = lhs_b.device.htod_sync_copy(&lhs_padded_shape).unwrap();
-        let rhs_shape_dev = lhs_b.device.htod_sync_copy(&rhs_padded_shape).unwrap();
-        let lhs_strides_dev = lhs_b.device.htod_sync_copy(&lhs_padded_strides).unwrap();
-        let rhs_strides_dev = lhs_b.device.htod_sync_copy(&rhs_padded_strides).unwrap();
+        let out_shape_dev = lhs_b.device.default_stream().clone_htod(&out_shape_i32).unwrap();
+        let lhs_shape_dev = lhs_b.device.default_stream().clone_htod(&lhs_padded_shape).unwrap();
+        let rhs_shape_dev = lhs_b.device.default_stream().clone_htod(&rhs_padded_shape).unwrap();
+        let lhs_strides_dev = lhs_b.device.default_stream().clone_htod(&lhs_padded_strides).unwrap();
+        let rhs_strides_dev = lhs_b.device.default_stream().clone_htod(&rhs_padded_strides).unwrap();
 
         let cfg = cudarc::driver::LaunchConfig {
             grid_dim: ((numel as u32 + 255) / 256, 1, 1),

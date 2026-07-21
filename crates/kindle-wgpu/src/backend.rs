@@ -563,24 +563,26 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackend<T, D> {
         dim2: usize,
     ) -> Result<<Self as Backend>::Storage<K>> {
         let shape = &t.shape;
-        if shape.len() != 2 {
-            // Only 2D transpose via shader; for N-D just swap dims in metadata (no copy, contiguous assumed)
-            let mut new_shape = shape.clone();
-            new_shape.swap(dim1, dim2);
-            return Ok(WgpuStorage {
-                buffer: t.buffer.clone(),
-                shape: new_shape,
-                strides: vec![],
-            });
-        }
-        let rows = shape[0] as u32;
-        let cols = shape[1] as u32;
+        let mut new_shape = shape.clone();
+        new_shape.swap(dim1, dim2);
+        
+        let out_n = num_elements(&new_shape) as u32;
         let out_buf = WgpuBuffer::new_zeros(t.buffer.size);
-        dispatch::dispatch_transpose(&t.buffer, &out_buf, rows, cols);
-        Ok(WgpuStorage::new(
-            out_buf,
-            vec![cols as usize, rows as usize],
-        ))
+        
+        let mut aux = (0..shape.len()).collect::<Vec<_>>();
+        aux.swap(dim1, dim2);
+
+        let params = dispatch::prepare_shape_params(
+            2, // op_mode = transpose
+            out_n,
+            &new_shape,
+            shape,
+            &aux,
+        );
+
+        dispatch::dispatch_shape(&t.buffer, &out_buf, &params);
+
+        Ok(WgpuStorage::new(out_buf, new_shape))
     }
 
     /// Auto-generated documentation for flatten.
@@ -617,137 +619,51 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackend<T, D> {
         })
     }
 
-    /// Auto-generated documentation for narrow.
     fn narrow<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
         start: usize,
         len: usize,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        // Copy the slice for dim. For now: CPU-round-trip for generality.
-        let data: Vec<f32> = t.buffer.to_vec::<f32>();
         let shape = &t.shape;
-
-        // Compute strides
-        let mut strides = vec![1usize; shape.len()];
-        for i in (0..shape.len() - 1).rev() {
-            strides[i] = strides[i + 1] * shape[i + 1];
-        }
-
         let mut new_shape = shape.clone();
         new_shape[dim] = len;
-        let out_n = num_elements(&new_shape);
-        let mut out_data = vec![0.0f32; out_n];
+        
+        let out_n = num_elements(&new_shape) as u32;
+        let out_buf = WgpuBuffer::new_zeros(out_n as usize * 4);
+        
+        let mut aux = vec![0usize; shape.len()];
+        aux[dim] = start;
 
-        // Iterate over output indices
-        /// Auto-generated documentation for fill.
-        fn fill(
-            data: &[f32],
-            out: &mut [f32],
-            shape: &[usize],
-            new_shape: &[usize],
-            strides: &[usize],
-            dim: usize,
-            start: usize,
-            idx: &mut Vec<usize>,
-            out_idx: &mut Vec<usize>,
-            depth: usize,
-        ) {
-            if depth == shape.len() {
-                let in_flat: usize = idx.iter().zip(strides.iter()).map(|(i, s)| i * s).sum();
-                let out_flat: usize = out_idx
-                    .iter()
-                    .zip(
-                        {
-                            let mut s = vec![1usize; out_idx.len()];
-                            for i in (0..out_idx.len() - 1).rev() {
-                                s[i] = s[i + 1] * new_shape[i + 1];
-                            }
-                            s
-                        }
-                        .iter(),
-                    )
-                    .map(|(i, s)| i * s)
-                    .sum();
-                out[out_flat] = data[in_flat];
-                return;
-            }
-            let range = if depth == dim {
-                start..(start + new_shape[dim])
-            } else {
-                0..shape[depth]
-            };
-            for i in range {
-                idx.push(i);
-                let out_i = if depth == dim { i - start } else { i };
-                out_idx.push(out_i);
-                fill(
-                    data,
-                    out,
-                    shape,
-                    new_shape,
-                    strides,
-                    dim,
-                    start,
-                    idx,
-                    out_idx,
-                    depth + 1,
-                );
-                idx.pop();
-                out_idx.pop();
-            }
-        }
-
-        fill(
-            &data,
-            &mut out_data,
-            shape,
+        let params = dispatch::prepare_shape_params(
+            0, // op_mode = slice
+            out_n,
             &new_shape,
-            &strides,
-            dim,
-            start,
-            &mut vec![],
-            &mut vec![],
-            0,
+            shape,
+            &aux,
         );
 
-        let buf = WgpuBuffer::from_slice(&out_data);
-        Ok(WgpuStorage::new(buf, new_shape))
+        dispatch::dispatch_shape(&t.buffer, &out_buf, &params);
+        Ok(WgpuStorage::new(out_buf, new_shape))
     }
 
-    /// Auto-generated documentation for broadcast_as.
     fn broadcast_as<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         shape: &[usize],
     ) -> Result<<Self as Backend>::Storage<K>> {
-        // CPU-side for now
-        let src: Vec<f32> = t.buffer.to_vec::<f32>();
-        let src_shape = &t.shape;
-        let out_n = num_elements(shape);
-        let mut out = vec![0.0f32; out_n];
-        let ndim = shape.len();
-        let pad = ndim - src_shape.len();
+        let out_n = num_elements(shape) as u32;
+        let out_buf = WgpuBuffer::new_zeros(out_n as usize * 4);
+        
+        let params = dispatch::prepare_shape_params(
+            3, // op_mode = broadcast
+            out_n,
+            shape,
+            &t.shape,
+            &[],
+        );
 
-        for i in 0..out_n {
-            let mut rem = i;
-            let mut src_i = 0usize;
-            let mut src_stride = 1usize;
-            for d in (0..ndim).rev() {
-                let dim_size = shape[d];
-                let coord = rem % dim_size;
-                rem /= dim_size;
-                if d >= pad {
-                    let sd = d - pad;
-                    let src_dim = src_shape[sd];
-                    let src_coord = if src_dim == 1 { 0 } else { coord };
-                    src_i += src_coord * src_stride;
-                    src_stride *= src_shape[sd];
-                }
-            }
-            out[i] = src[src_i];
-        }
-        let buf = WgpuBuffer::from_slice(&out);
-        Ok(WgpuStorage::new(buf, shape.to_vec()))
+        dispatch::dispatch_shape(&t.buffer, &out_buf, &params);
+        Ok(WgpuStorage::new(out_buf, shape.to_vec()))
     }
 
     /// Auto-generated documentation for broadcast_left.
@@ -763,12 +679,27 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackend<T, D> {
         t: &<Self as Backend>::Storage<K>,
         ranges: &[(usize, usize)],
     ) -> Result<<Self as Backend>::Storage<K>> {
-        // Start with narrow on each dim
-        let mut cur = t.clone();
-        for (d, &(start, end)) in ranges.iter().enumerate() {
-            cur = Self::narrow::<K>(&cur, d, start, end - start)?;
+        let shape = &t.shape;
+        let mut new_shape = shape.clone();
+        let mut aux = vec![0usize; shape.len()];
+        for (i, &(start, end)) in ranges.iter().enumerate() {
+            new_shape[i] = end - start;
+            aux[i] = start;
         }
-        Ok(cur)
+
+        let out_n = num_elements(&new_shape) as u32;
+        let out_buf = WgpuBuffer::new_zeros(out_n as usize * 4);
+
+        let params = dispatch::prepare_shape_params(
+            0, // op_mode = slice
+            out_n,
+            &new_shape,
+            shape,
+            &aux,
+        );
+
+        dispatch::dispatch_shape(&t.buffer, &out_buf, &params);
+        Ok(WgpuStorage::new(out_buf, new_shape))
     }
 
     /// Auto-generated documentation for stack.
@@ -804,64 +735,31 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackend<T, D> {
         if tensors.is_empty() {
             return Err(Error::Msg("concat: empty tensor list".to_string()));
         }
-        // CPU-side concat for generality
-        let first_shape = &tensors[0].shape;
-        let ndim = first_shape.len();
-        let total_dim_size: usize = tensors.iter().map(|t| t.shape[dim]).sum();
-        let mut out_shape = first_shape.clone();
-        out_shape[dim] = total_dim_size;
-
-        // Simple approach: serialize each tensor and reconstruct
-        // For contiguous tensors along dim, we can just concatenate with stride awareness
-        let all_data: Vec<Vec<f32>> = tensors.iter().map(|t| t.buffer.to_vec::<f32>()).collect();
+        let rank = tensors[0].shape.len();
+        let mut out_shape = tensors[0].shape.clone();
+        out_shape[dim] = tensors.iter().map(|t| t.shape[dim]).sum();
 
         let out_n = num_elements(&out_shape);
-        let mut out = vec![0.0f32; out_n];
+        let out_buf = WgpuBuffer::new_zeros(out_n * 4);
 
-        // Compute out_strides
-        let mut out_strides = vec![1usize; ndim];
-        for i in (0..ndim - 1).rev() {
-            out_strides[i] = out_strides[i + 1] * out_shape[i + 1];
+        let mut current_offset = 0usize;
+        for t in tensors {
+            let in_n = num_elements(&t.shape) as u32;
+            let mut aux = vec![0usize; rank];
+            aux[dim] = current_offset;
+
+            let params = dispatch::prepare_shape_params(
+                1, // op_mode = paste
+                in_n,
+                &out_shape,
+                &t.shape,
+                &aux,
+            );
+            dispatch::dispatch_shape(&t.buffer, &out_buf, &params);
+            
+            current_offset += t.shape[dim];
         }
-
-        for i in 0..out_n {
-            // Decompose flat index to coords in out_shape
-            let mut coords = vec![0usize; ndim];
-            let mut rem = i;
-            for d in (0..ndim).rev() {
-                coords[d] = rem % out_shape[d];
-                rem /= out_shape[d];
-            }
-            // Find which tensor owns this index along dim
-            let dim_offset = coords[dim];
-            let (tensor_idx, local_dim) = {
-                let mut t_idx = 0;
-                let mut local = dim_offset;
-                for (ti, t) in tensors.iter().enumerate() {
-                    if local < t.shape[dim] {
-                        t_idx = ti;
-                        break;
-                    }
-                    local -= t.shape[dim];
-                }
-                (t_idx, local)
-            };
-            let mut src_coords = coords.clone();
-            src_coords[dim] = local_dim;
-            let mut src_strides = vec![1usize; ndim];
-            for d in (0..ndim - 1).rev() {
-                src_strides[d] = src_strides[d + 1] * tensors[tensor_idx].shape[d + 1];
-            }
-            let src_flat: usize = src_coords
-                .iter()
-                .zip(src_strides.iter())
-                .map(|(c, s)| c * s)
-                .sum();
-            out[i] = all_data[tensor_idx][src_flat];
-        }
-
-        let buf = WgpuBuffer::from_slice(&out);
-        Ok(WgpuStorage::new(buf, out_shape))
+        Ok(WgpuStorage::new(out_buf, out_shape))
     }
 
     /// Auto-generated documentation for float_to_scalar.
@@ -914,51 +812,35 @@ fn reduce_all_to_storage(t: &WgpuStorage, mode: u32) -> WgpuStorage {
 
 /// Auto-generated documentation for reduce_dim_to_storage.
 fn reduce_dim_to_storage(t: &WgpuStorage, dim: usize, mode: u32, keepdim: bool) -> WgpuStorage {
-    // Approach: fold over the specified dim via CPU for correctness.
-    // GPU version would use strided reduce; this is correct for all cases.
-    let data: Vec<f32> = t.buffer.to_vec::<f32>();
     let shape = &t.shape;
-    let ndim = shape.len();
-
-    let mut strides = vec![1usize; ndim];
-    for i in (0..ndim - 1).rev() {
-        strides[i] = strides[i + 1] * shape[i + 1];
-    }
-
     let mut out_shape = shape.clone();
     out_shape[dim] = 1;
     let out_n = num_elements(&out_shape);
-    let init = if mode == 0 {
-        0.0f32
-    } else if mode == 1 {
-        f32::NEG_INFINITY
-    } else {
-        f32::INFINITY
+
+    let dim_size = shape[dim] as u32;
+    let mut inner_stride = 1usize;
+    for d in (dim + 1..shape.len()).rev() {
+        inner_stride *= shape[d];
+    }
+    
+    // mode mapping: CPU reduce_dim mode (0=sum, 1=max, 2=min) maps directly
+    // to my shader ops (0=sum, 2=max, 3=min).
+    let op_mode = match mode {
+        0 => 0u32, // sum
+        1 => 2u32, // max
+        2 => 3u32, // min
+        _ => panic!("Unknown reduce dim mode"),
     };
-    let mut out = vec![init; out_n];
 
-    let mut out_strides = vec![1usize; ndim];
-    for i in (0..ndim - 1).rev() {
-        out_strides[i] = out_strides[i + 1] * out_shape[i + 1];
-    }
-
-    for in_i in 0..data.len() {
-        let mut rem = in_i;
-        let mut out_i = 0usize;
-        for d in (0..ndim).rev() {
-            let coord = rem % shape[d];
-            rem /= shape[d];
-            let out_coord = if d == dim { 0 } else { coord };
-            out_i += out_coord * out_strides[d];
-        }
-        if mode == 0 {
-            out[out_i] += data[in_i];
-        } else if mode == 1 {
-            out[out_i] = out[out_i].max(data[in_i]);
-        } else {
-            out[out_i] = out[out_i].min(data[in_i]);
-        }
-    }
+    let out_buf = WgpuBuffer::new_zeros(out_n * 4);
+    dispatch::dispatch_reduce_dim(
+        &t.buffer,
+        &out_buf,
+        op_mode,
+        dim_size,
+        inner_stride as u32,
+        out_n as u32,
+    );
 
     let final_shape = if keepdim {
         out_shape
@@ -967,8 +849,7 @@ fn reduce_dim_to_storage(t: &WgpuStorage, dim: usize, mode: u32, keepdim: bool) 
         s.remove(dim);
         s
     };
-    let buf = WgpuBuffer::from_slice(&out);
-    WgpuStorage::new(buf, final_shape)
+    WgpuStorage::new(out_buf, final_shape)
 }
 
 impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackend<T, D> {
@@ -1081,42 +962,27 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackend<T, D> {
                 let shape = &t.shape;
                 let mut out_shape = shape.clone();
                 out_shape[d] = 1;
-                // Simple cpu argmax per slice
-                let n_out = num_elements(&out_shape);
-                let mut out = vec![0u32; n_out];
-                let mut strides = vec![1usize; shape.len()];
-                for i in (0..shape.len() - 1).rev() {
-                    strides[i] = strides[i + 1] * shape[i + 1];
-                }
-                let mut out_strides = vec![1usize; shape.len()];
-                for i in (0..shape.len() - 1).rev() {
-                    out_strides[i] = out_strides[i + 1] * out_shape[i + 1];
+                let out_n = num_elements(&out_shape);
+
+                let dim_size = shape[d] as u32;
+                let mut inner_stride = 1usize;
+                for dd in (d + 1..shape.len()).rev() {
+                    inner_stride *= shape[dd];
                 }
 
-                for i in 0..n_out {
-                    let mut rem = i;
-                    let mut coords = vec![0usize; shape.len()];
-                    for dd in (0..shape.len()).rev() {
-                        coords[dd] = rem % out_shape[dd];
-                        rem /= out_shape[dd];
-                    }
-                    let mut best_val = f32::NEG_INFINITY;
-                    let mut best_idx = 0;
-                    for k in 0..shape[d] {
-                        coords[d] = k;
-                        let flat: usize =
-                            coords.iter().zip(strides.iter()).map(|(c, s)| c * s).sum();
-                        if data[flat] > best_val {
-                            best_val = data[flat];
-                            best_idx = k;
-                        }
-                    }
-                    out[i] = best_idx as u32;
-                }
+                let out_buf = WgpuBuffer::new_zeros(out_n * 4);
+                dispatch::dispatch_reduce_dim(
+                    &t.buffer,
+                    &out_buf,
+                    4, // argmax
+                    dim_size,
+                    inner_stride as u32,
+                    out_n as u32,
+                );
+
                 let mut final_shape = shape.clone();
                 final_shape.remove(d);
-                let buf = WgpuBuffer::from_slice(&out);
-                Ok(WgpuStorage::new(buf, final_shape))
+                Ok(WgpuStorage::new(out_buf, final_shape))
             }
         }
     }
@@ -1142,36 +1008,27 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackend<T, D> {
                 let shape = &t.shape;
                 let mut out_shape = shape.clone();
                 out_shape[d] = 1;
-                let n_out = num_elements(&out_shape);
-                let mut out = vec![0u32; n_out];
-                let mut strides = vec![1usize; shape.len()];
-                for i in (0..shape.len() - 1).rev() {
-                    strides[i] = strides[i + 1] * shape[i + 1];
+                let out_n = num_elements(&out_shape);
+
+                let dim_size = shape[d] as u32;
+                let mut inner_stride = 1usize;
+                for dd in (d + 1..shape.len()).rev() {
+                    inner_stride *= shape[dd];
                 }
-                for i in 0..n_out {
-                    let mut rem = i;
-                    let mut coords = vec![0usize; shape.len()];
-                    for dd in (0..shape.len()).rev() {
-                        coords[dd] = rem % out_shape[dd];
-                        rem /= out_shape[dd];
-                    }
-                    let mut best_val = f32::INFINITY;
-                    let mut best_idx = 0;
-                    for k in 0..shape[d] {
-                        coords[d] = k;
-                        let flat: usize =
-                            coords.iter().zip(strides.iter()).map(|(c, s)| c * s).sum();
-                        if data[flat] < best_val {
-                            best_val = data[flat];
-                            best_idx = k;
-                        }
-                    }
-                    out[i] = best_idx as u32;
-                }
+
+                let out_buf = WgpuBuffer::new_zeros(out_n * 4);
+                dispatch::dispatch_reduce_dim(
+                    &t.buffer,
+                    &out_buf,
+                    5, // argmin
+                    dim_size,
+                    inner_stride as u32,
+                    out_n as u32,
+                );
+
                 let mut final_shape = shape.clone();
                 final_shape.remove(d);
-                let buf = WgpuBuffer::from_slice(&out);
-                Ok(WgpuStorage::new(buf, final_shape))
+                Ok(WgpuStorage::new(out_buf, final_shape))
             }
         }
     }
@@ -1326,19 +1183,21 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
         indices: &<Self as Backend>::Storage<KInt>,
         weight: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let idx_data: Vec<f32> = indices.buffer.to_vec::<f32>();
-        let weight_data: Vec<f32> = weight.buffer.to_vec::<f32>();
         let embed_dim = weight.shape[1];
+        let vocab_size = weight.shape[0];
         let seq_len = num_elements(&indices.shape);
-        let mut out = vec![0.0f32; seq_len * embed_dim];
-        for (i, &idx_f) in idx_data.iter().enumerate() {
-            let idx = idx_f as usize;
-            let src = &weight_data[idx * embed_dim..(idx + 1) * embed_dim];
-            let dst = &mut out[i * embed_dim..(i + 1) * embed_dim];
-            dst.copy_from_slice(src);
-        }
-        let buf = WgpuBuffer::from_slice(&out);
-        Ok(WgpuStorage::new(buf, vec![seq_len, embed_dim]))
+        let out_buf = WgpuBuffer::new_zeros(seq_len * embed_dim * 4);
+        
+        dispatch::dispatch_embedding(
+            &indices.buffer,
+            &weight.buffer,
+            &out_buf,
+            seq_len as u32,
+            embed_dim as u32,
+            vocab_size as u32,
+        );
+
+        Ok(WgpuStorage::new(out_buf, vec![seq_len, embed_dim]))
     }
 
     /// Auto-generated documentation for layer_norm.
@@ -1348,26 +1207,29 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
         bias: Option<&<Self as Backend>::Storage<K>>,
         eps: f32,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let data: Vec<f32> = t.buffer.to_vec::<f32>();
-        let gamma: Vec<f32> = weight.buffer.to_vec::<f32>();
-        let beta_data: Option<Vec<f32>> = bias.map(|b| b.buffer.to_vec::<f32>());
         let shape = &t.shape;
         let norm_size = shape.last().copied().unwrap_or(1);
         let batch = num_elements(shape) / norm_size;
-        let mut out = data.clone();
-        for b in 0..batch {
-            let slice = &data[b * norm_size..(b + 1) * norm_size];
-            let mean = slice.iter().sum::<f32>() / norm_size as f32;
-            let var = slice.iter().map(|x| (x - mean).powi(2)).sum::<f32>() / norm_size as f32;
-            let std = (var + eps).sqrt();
-            for i in 0..norm_size {
-                let norm = (data[b * norm_size + i] - mean) / std;
-                out[b * norm_size + i] =
-                    norm * gamma[i] + beta_data.as_ref().map_or(0.0, |bv| bv[i]);
-            }
-        }
-        let buf = WgpuBuffer::from_slice(&out);
-        Ok(WgpuStorage::new(buf, shape.clone()))
+        let out_buf = WgpuBuffer::new_zeros(num_elements(shape) * 4);
+
+        let beta_buf = bias.map_or_else(
+            || weight.buffer.clone(), // dummy
+            |b| b.buffer.clone(),
+        );
+        let has_bias = if bias.is_some() { 1.0 } else { 0.0 };
+
+        dispatch::dispatch_layer_norm(
+            &t.buffer,
+            &weight.buffer,
+            &beta_buf,
+            &out_buf,
+            eps,
+            norm_size as u32,
+            has_bias,
+            batch as u32,
+        );
+
+        Ok(WgpuStorage::new(out_buf, shape.clone()))
     }
 
     /// Auto-generated documentation for batch_norm.
@@ -1380,54 +1242,40 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
         eps: f32,
         _momentum: f64,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let data: Vec<f32> = t.buffer.to_vec::<f32>();
         let shape = &t.shape; // [N, C, H, W] or [N, C]
         let n_total = num_elements(shape);
         let c = shape.get(1).copied().unwrap_or(1);
-        let spatial = n_total / (shape[0] * c);
-        let gamma: Option<Vec<f32>> = weight.map(|w| w.buffer.to_vec::<f32>());
-        let beta: Option<Vec<f32>> = bias.map(|b| b.buffer.to_vec::<f32>());
-        let rm: Option<Vec<f32>> = running_mean.map(|m| m.buffer.to_vec::<f32>());
-        let rv: Option<Vec<f32>> = running_var.map(|v| v.buffer.to_vec::<f32>());
-        let mut out = data.clone();
-        for ch in 0..c {
-            let mean = rm.as_ref().map_or_else(
-                || {
-                    let mut sum = 0.0f32;
-                    for n in 0..shape[0] {
-                        for s in 0..spatial {
-                            sum += data[n * c * spatial + ch * spatial + s];
-                        }
-                    }
-                    sum / (shape[0] * spatial) as f32
-                },
-                |m| m[ch],
-            );
-            let var = rv.as_ref().map_or_else(
-                || {
-                    let mut sum = 0.0f32;
-                    for n in 0..shape[0] {
-                        for s in 0..spatial {
-                            let x = data[n * c * spatial + ch * spatial + s] - mean;
-                            sum += x * x;
-                        }
-                    }
-                    sum / (shape[0] * spatial) as f32
-                },
-                |v| v[ch],
-            );
-            let std = (var + eps).sqrt();
-            let g = gamma.as_ref().map_or(1.0, |gv| gv[ch]);
-            let b = beta.as_ref().map_or(0.0, |bv| bv[ch]);
-            for n in 0..shape[0] {
-                for s in 0..spatial {
-                    let idx = n * c * spatial + ch * spatial + s;
-                    out[idx] = (data[idx] - mean) / std * g + b;
-                }
-            }
-        }
-        let buf = WgpuBuffer::from_slice(&out);
-        Ok(WgpuStorage::new(buf, shape.clone()))
+        let spatial = n_total / (shape.get(0).copied().unwrap_or(1) * c);
+        let batch = shape.get(0).copied().unwrap_or(1);
+
+        let out_buf = WgpuBuffer::new_zeros(n_total * 4);
+
+        let gamma_buf = weight.map_or_else(|| t.buffer.clone(), |w| w.buffer.clone());
+        let beta_buf = bias.map_or_else(|| t.buffer.clone(), |b| b.buffer.clone());
+        let rm_buf = running_mean.map_or_else(|| t.buffer.clone(), |m| m.buffer.clone());
+        let rv_buf = running_var.map_or_else(|| t.buffer.clone(), |v| v.buffer.clone());
+
+        let has_gamma = if weight.is_some() { 1.0 } else { 0.0 };
+        let has_beta = if bias.is_some() { 1.0 } else { 0.0 };
+        let has_rm_rv = if running_mean.is_some() && running_var.is_some() { 1.0 } else { 0.0 };
+
+        dispatch::dispatch_batch_norm(
+            &t.buffer,
+            &gamma_buf,
+            &beta_buf,
+            &rm_buf,
+            &rv_buf,
+            &out_buf,
+            eps,
+            c as u32,
+            spatial as u32,
+            batch as u32,
+            has_gamma,
+            has_beta,
+            has_rm_rv,
+        );
+
+        Ok(WgpuStorage::new(out_buf, shape.clone()))
     }
 
     /// Auto-generated documentation for adaptive_avg_pool2d.
@@ -1438,31 +1286,17 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
         let shape = &t.shape; // [N, C, H, W]
         let (n, c, h, w) = (shape[0], shape[1], shape[2], shape[3]);
         let (oh, ow) = output_size;
-        let data: Vec<f32> = t.buffer.to_vec::<f32>();
-        let mut out = vec![0.0f32; n * c * oh * ow];
-        for bi in 0..n {
-            for ci in 0..c {
-                for oi in 0..oh {
-                    for oj in 0..ow {
-                        let h_start = oi * h / oh;
-                        let h_end = ((oi + 1) * h + oh - 1) / oh;
-                        let w_start = oj * w / ow;
-                        let w_end = ((oj + 1) * w + ow - 1) / ow;
-                        let mut sum = 0.0f32;
-                        let mut cnt = 0;
-                        for hi in h_start..h_end {
-                            for wi in w_start..w_end {
-                                sum += data[bi * c * h * w + ci * h * w + hi * w + wi];
-                                cnt += 1;
-                            }
-                        }
-                        out[bi * c * oh * ow + ci * oh * ow + oi * ow + oj] = sum / cnt as f32;
-                    }
-                }
-            }
-        }
-        let buf = WgpuBuffer::from_slice(&out);
-        Ok(WgpuStorage::new(buf, vec![n, c, oh, ow]))
+        let out_buf = WgpuBuffer::new_zeros(n * c * oh * ow * 4);
+
+        dispatch::dispatch_pool2d(
+            &t.buffer, &out_buf,
+            0, // mode 0 = adaptive_avg
+            n as u32, c as u32, h as u32, w as u32,
+            oh as u32, ow as u32,
+            0, 0, 0, 0, 0, 0, 0, 0 // unused kernel params
+        );
+
+        Ok(WgpuStorage::new(out_buf, vec![n, c, oh, ow]))
     }
 
     /// Auto-generated documentation for avg_pool2d.
@@ -1479,33 +1313,21 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
         let (ph, pw) = padding;
         let oh = (h + 2 * ph - kh) / sh + 1;
         let ow = (w + 2 * pw - kw) / sw + 1;
-        let data: Vec<f32> = t.buffer.to_vec::<f32>();
-        let mut out = vec![0.0f32; n * c * oh * ow];
-        for bi in 0..n {
-            for ci in 0..c {
-                for oi in 0..oh {
-                    for oj in 0..ow {
-                        let mut sum = 0.0f32;
-                        for ki in 0..kh {
-                            for kj in 0..kw {
-                                let hi = (oi * sh + ki) as isize - ph as isize;
-                                let wi = (oj * sw + kj) as isize - pw as isize;
-                                if hi >= 0 && hi < h as isize && wi >= 0 && wi < w as isize {
-                                    sum += data[bi * c * h * w
-                                        + ci * h * w
-                                        + hi as usize * w
-                                        + wi as usize];
-                                }
-                            }
-                        }
-                        out[bi * c * oh * ow + ci * oh * ow + oi * ow + oj] =
-                            sum / (kh * kw) as f32;
-                    }
-                }
-            }
-        }
-        let buf = WgpuBuffer::from_slice(&out);
-        Ok(WgpuStorage::new(buf, vec![n, c, oh, ow]))
+        
+        let out_buf = WgpuBuffer::new_zeros(n * c * oh * ow * 4);
+
+        dispatch::dispatch_pool2d(
+            &t.buffer, &out_buf,
+            1, // mode 1 = avg
+            n as u32, c as u32, h as u32, w as u32,
+            oh as u32, ow as u32,
+            kh as u32, kw as u32,
+            sh as u32, sw as u32,
+            ph as u32, pw as u32,
+            1, 1 // dilation = 1
+        );
+
+        Ok(WgpuStorage::new(out_buf, vec![n, c, oh, ow]))
     }
 
     /// Auto-generated documentation for max_pool2d.
@@ -1526,35 +1348,21 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
         let eff_kw = dw * (kw - 1) + 1;
         let oh = (h + 2 * ph - eff_kh) / sh + 1;
         let ow = (w + 2 * pw - eff_kw) / sw + 1;
-        let data: Vec<f32> = t.buffer.to_vec::<f32>();
-        let mut out = vec![f32::NEG_INFINITY; n * c * oh * ow];
-        for bi in 0..n {
-            for ci in 0..c {
-                for oi in 0..oh {
-                    for oj in 0..ow {
-                        for ki in 0..kh {
-                            for kj in 0..kw {
-                                let hi = (oi * sh + ki * dh) as isize - ph as isize;
-                                let wi = (oj * sw + kj * dw) as isize - pw as isize;
-                                if hi >= 0 && hi < h as isize && wi >= 0 && wi < w as isize {
-                                    let v = data[bi * c * h * w
-                                        + ci * h * w
-                                        + hi as usize * w
-                                        + wi as usize];
-                                    let o =
-                                        &mut out[bi * c * oh * ow + ci * oh * ow + oi * ow + oj];
-                                    if v > *o {
-                                        *o = v;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        let buf = WgpuBuffer::from_slice(&out);
-        Ok(WgpuStorage::new(buf, vec![n, c, oh, ow]))
+        
+        let out_buf = WgpuBuffer::new_zeros(n * c * oh * ow * 4);
+
+        dispatch::dispatch_pool2d(
+            &t.buffer, &out_buf,
+            2, // mode 2 = max
+            n as u32, c as u32, h as u32, w as u32,
+            oh as u32, ow as u32,
+            kh as u32, kw as u32,
+            sh as u32, sw as u32,
+            ph as u32, pw as u32,
+            dh as u32, dw as u32
+        );
+
+        Ok(WgpuStorage::new(out_buf, vec![n, c, oh, ow]))
     }
 
     /// Auto-generated documentation for conv1d.
@@ -1656,7 +1464,6 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
         // For g>1 we slice and loop.
         let _w_data: Vec<f32> = weight.buffer.to_vec::<f32>();
         let _col_data: Vec<f32> = col_buf.to_vec::<f32>();
-        let c_out_g = c_out / g;
         let k_size = c_in_g * kh * kw;
 
         if g == 1 {
@@ -1674,67 +1481,42 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
             let out_storage = Self::matmul::<K>(&w_storage, &col_storage)?;
 
             // Apply bias on GPU (if present)
-            let out_buf = if let Some(b_storage) = bias {
-                // Bias addition can be done by a broadcast add shader, or here on CPU if lazy.
-                // For now, doing it on CPU as a bridge, but ideally dispatch_binary should be used.
-                let mut out_data = out_storage.buffer.to_vec::<f32>();
-                let b_data = b_storage.buffer.to_vec::<f32>();
-                for b in 0..batch {
-                    for oc in 0..c_out {
-                        let off = b * c_out * col_spatial + oc * col_spatial;
-                        let bias_val = b_data[oc];
-                        for s in 0..col_spatial {
-                            out_data[off + s] += bias_val;
-                        }
-                    }
-                }
-                WgpuBuffer::from_slice(&out_data)
-            } else {
-                out_storage.buffer
-            };
-
-            return Ok(WgpuStorage::new(out_buf, vec![batch, c_out, h_out, w_out]));
-        }
-
-        // ── matmul per batch for groups > 1 ──
-        let w_data: Vec<f32> = weight.buffer.to_vec::<f32>();
-        let col_data: Vec<f32> = col_buf.to_vec::<f32>();
-
-        let mut out_data = vec![0.0f32; batch * c_out * h_out * w_out];
-
-        for b in 0..batch {
-            for gi in 0..g {
-                let w_off = gi * c_out_g * k_size;
-                let col_off = b * col_channels * col_spatial + gi * k_size * col_spatial;
-                let out_off = b * c_out * col_spatial + gi * c_out_g * col_spatial;
-
-                for oc in 0..c_out_g {
-                    for sp in 0..col_spatial {
-                        let mut acc = 0.0f32;
-                        for k in 0..k_size {
-                            acc += w_data[w_off + oc * k_size + k]
-                                * col_data[col_off + k * col_spatial + sp];
-                        }
-                        out_data[out_off + oc * col_spatial + sp] = acc;
-                    }
-                }
+            if let Some(b_storage) = bias {
+                dispatch::dispatch_bias_add(&out_storage.buffer, &b_storage.buffer, batch as u32, c_out as u32, col_spatial as u32);
             }
+
+            return Ok(WgpuStorage::new(out_storage.buffer, vec![batch, c_out, h_out, w_out]));
         }
+
+        // ── Direct convolution per batch for groups > 1 ──
+        let out_buf = WgpuBuffer::new_zeros(batch * c_out * h_out * w_out * 4);
+        let conv_params: [u32; 16] = [
+            batch as u32,
+            c_in as u32,
+            h_in as u32,
+            w_in as u32,
+            c_out as u32,
+            h_out as u32,
+            w_out as u32,
+            kh as u32,
+            kw as u32,
+            stride as u32,
+            stride as u32,
+            padding as u32,
+            padding as u32,
+            dilation as u32,
+            dilation as u32,
+            groups as u32,
+        ];
+        
+        dispatch::dispatch_conv2d_direct(&t.buffer, &weight.buffer, &out_buf, &conv_params);
 
         if let Some(b_storage) = bias {
-            let b_data: Vec<f32> = b_storage.buffer.to_vec::<f32>();
-            for b in 0..batch {
-                for oc in 0..c_out {
-                    let off = b * c_out * h_out * w_out + oc * h_out * w_out;
-                    for s in 0..h_out * w_out {
-                        out_data[off + s] += b_data[oc];
-                    }
-                }
-            }
+            let spatial = h_out * w_out;
+            dispatch::dispatch_bias_add(&out_buf, &b_storage.buffer, batch as u32, c_out as u32, spatial as u32);
         }
 
-        let buf = WgpuBuffer::from_slice(&out_data);
-        Ok(WgpuStorage::new(buf, vec![batch, c_out, h_out, w_out]))
+        Ok(WgpuStorage::new(out_buf, vec![batch, c_out, h_out, w_out]))
     }
 
     /// Auto-generated documentation for conv_transpose2d.
@@ -1800,23 +1582,11 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
         ];
         
         dispatch::dispatch_conv_transpose2d(&t.buffer, &weight.buffer, &out_buf, &params);
-        
-        let out_storage = WgpuStorage::new(out_buf, vec![batch, c_out, h_out, w_out]);
+        let out_storage = WgpuStorage::new(out_buf.clone(), vec![batch, c_out, h_out, w_out]);
         
         if let Some(b_storage) = bias {
-            let mut out_data = out_storage.buffer.to_vec::<f32>();
-            let b_data = b_storage.buffer.to_vec::<f32>();
-            for b in 0..batch {
-                for oc in 0..c_out {
-                    let off = b * c_out * h_out * w_out + oc * h_out * w_out;
-                    let bias_val = b_data[oc];
-                    for s in 0..h_out * w_out {
-                        out_data[off + s] += bias_val;
-                    }
-                }
-            }
-            let buf = WgpuBuffer::from_slice(&out_data);
-            return Ok(WgpuStorage::new(buf, vec![batch, c_out, h_out, w_out]));
+            let spatial = h_out * w_out;
+            dispatch::dispatch_bias_add(&out_buf, &b_storage.buffer, batch as u32, c_out as u32, spatial as u32);
         }
         
         Ok(out_storage)
@@ -1836,26 +1606,42 @@ impl<T: DType, D: Device> LossOps<Self> for WgpuBackend<T, D> {
         // Compute softmax then nll
         let softmax = <Self as FloatOps<Self>>::softmax::<K>(pred, pred.shape.len() - 1)?;
         let log_sm = <Self as FloatOps<Self>>::log::<K>(&softmax)?;
-        let log_data: Vec<f32> = log_sm.buffer.to_vec::<f32>();
-        let idx_data: Vec<f32> = target.buffer.to_vec::<f32>();
-        let batch = idx_data.len();
+        
+        let batch = num_elements(&target.shape);
         let n_classes = pred.shape.last().copied().unwrap_or(1);
-        let nlls: Vec<f32> = idx_data
-            .iter()
-            .enumerate()
-            .map(|(i, &idx)| -log_data[i * n_classes + idx as usize])
-            .collect();
-        let out = match reduction {
-            kindle_core::prelude::Reduction::None => nlls,
-            kindle_core::prelude::Reduction::Mean => vec![nlls.iter().sum::<f32>() / batch as f32],
-            kindle_core::prelude::Reduction::Sum => vec![nlls.iter().sum::<f32>()],
-        };
-        let shape = match reduction {
-            kindle_core::prelude::Reduction::None => vec![batch],
-            _ => vec![1],
-        };
-        let buf = WgpuBuffer::from_slice(&out);
-        Ok(WgpuStorage::new(buf, shape))
+
+        let nll_buf = WgpuBuffer::new_zeros(batch * 4);
+        dispatch::dispatch_nll_loss(
+            &log_sm.buffer,
+            &target.buffer,
+            &nll_buf,
+            batch as u32,
+            n_classes as u32,
+        );
+
+        match reduction {
+            kindle_core::prelude::Reduction::None => {
+                Ok(WgpuStorage::new(nll_buf, vec![batch]))
+            }
+            kindle_core::prelude::Reduction::Mean => {
+                let out_buf = WgpuBuffer::new_zeros(4);
+                dispatch::dispatch_reduce_dim(
+                    &nll_buf, &out_buf,
+                    1, // mean
+                    batch as u32, 1, 1
+                );
+                Ok(WgpuStorage::new(out_buf, vec![1]))
+            }
+            kindle_core::prelude::Reduction::Sum => {
+                let out_buf = WgpuBuffer::new_zeros(4);
+                dispatch::dispatch_reduce_dim(
+                    &nll_buf, &out_buf,
+                    0, // sum
+                    batch as u32, 1, 1
+                );
+                Ok(WgpuStorage::new(out_buf, vec![1]))
+            }
+        }
     }
 }
 

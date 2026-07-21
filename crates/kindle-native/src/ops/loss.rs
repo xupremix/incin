@@ -29,6 +29,8 @@ use kindle_core::prelude::{Backend, DType, FloatOps, LossOps, NumericOps, Reduct
 
 use crate::NativeBackend;
 use crate::storage::{NativeBuffer, NativeStorage};
+#[cfg(feature = "cuda")]
+use alloc::sync::Arc;
 
 impl<T: DType, D: kindle_core::prelude::Device> LossOps<Self> for NativeBackend<T, D> {
     /// Numerically-stable cross-entropy loss via the shared `log_softmax`
@@ -69,22 +71,57 @@ impl<T: DType, D: kindle_core::prelude::Device> LossOps<Self> for NativeBackend<
 
         // Step 2: Build one-hot constant. Read target indices as i64→usize
         // (Pitfall 8 convention). No tape entry — it's a constant.
-        let mut one_hot_buf = vec![0.0f32; batch * classes];
-        for b in 0..batch {
-            let class_idx = target.get(&[b]) as i64 as usize;
-            debug_assert!(
-                class_idx < classes,
-                "cross_entropy_loss: target[{b}]={class_idx} out of range [0,{classes})"
-            );
-            one_hot_buf[b * classes + class_idx] = 1.0;
-        }
-        // Transmit one_hot as the same dtype K by reading through f32 bytes.
-        // Since K is the float dtype of pred (typically f32), and NativeBuffer::F32
-        // is what get() always reads as f64, we build it as F32 and let the
-        // type system treat it as K-typed (NativeStorage is untyped at the
-        // buffer level — `get()` always returns f64 regardless of K).
-        let one_hot =
-            NativeStorage::from_contiguous(NativeBuffer::F32(one_hot_buf), vec![batch, classes]);
+        #[cfg(feature = "cuda")]
+        let one_hot = if let NativeBuffer::Cuda(pred_b) = &*log_probs.buffer {
+            if let NativeBuffer::Cuda(_) = &*target.buffer {
+                crate::ops::cuda_loss::launch_one_hot(target, batch, classes, pred_b).unwrap()
+            } else {
+                // target on CPU, pred on GPU — download target and use CPU path, then upload
+                let mut one_hot_buf = vec![0.0f32; batch * classes];
+                for b_idx in 0..batch {
+                    let class_idx = target.get(&[b_idx]) as i64 as usize;
+                    one_hot_buf[b_idx * classes + class_idx] = 1.0;
+                }
+                let stream = pred_b.device.default_stream();
+                let h_bytes: &[u8] = bytemuck::cast_slice(&one_hot_buf);
+                let mut dev_data = stream.alloc_zeros::<u8>(batch * classes * 4).unwrap();
+                stream.memcpy_htod(h_bytes, &mut dev_data).unwrap();
+                let cuda_b = crate::storage::NativeCudaBuffer {
+                    len: batch * classes,
+                    data: alloc::sync::Arc::new(dev_data),
+                    device: pred_b.device.clone(),
+                    device_id: pred_b.device_id,
+                };
+                NativeStorage {
+                    buffer: alloc::sync::Arc::new(NativeBuffer::Cuda(cuda_b)),
+                    shape: vec![batch, classes],
+                    strides: crate::stride::contiguous_strides(&[batch, classes]),
+                    offset: 0,
+                    id: crate::storage::TensorId::next(),
+                }
+            }
+        } else {
+            let mut one_hot_buf = vec![0.0f32; batch * classes];
+            for b_idx in 0..batch {
+                let class_idx = target.get(&[b_idx]) as i64 as usize;
+                one_hot_buf[b_idx * classes + class_idx] = 1.0;
+            }
+            NativeStorage::from_contiguous(NativeBuffer::F32(one_hot_buf), vec![batch, classes])
+        };
+
+        #[cfg(not(feature = "cuda"))]
+        let one_hot = {
+            let mut one_hot_buf = vec![0.0f32; batch * classes];
+            for b in 0..batch {
+                let class_idx = target.get(&[b]) as i64 as usize;
+                debug_assert!(
+                    class_idx < classes,
+                    "cross_entropy_loss: target[{b}]={class_idx} out of range [0,{classes})"
+                );
+                one_hot_buf[b * classes + class_idx] = 1.0;
+            }
+            NativeStorage::from_contiguous(NativeBuffer::F32(one_hot_buf), vec![batch, classes])
+        };
 
         // Step 3: tape-tracked mul — gradient flows through log_probs here.
         let picked = <Self as NumericOps<Self>>::mul::<K>(&log_probs, &one_hot)?;
