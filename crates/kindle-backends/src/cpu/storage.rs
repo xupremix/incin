@@ -52,50 +52,6 @@ pub struct BlockQ8_0 {
     pub(crate) qs: [i8; 32],
 }
 
-#[cfg(feature = "cuda")]
-#[derive(Debug)]
-/// Cpu CUDA device buffer.
-pub struct CpuCudaBuffer {
-    pub(crate) len: usize,
-    pub(crate) data: alloc::sync::Arc<cudarc::driver::CudaSlice<u8>>,
-    pub(crate) device: alloc::sync::Arc<cudarc::driver::CudaContext>,
-    pub(crate) device_id: usize,
-}
-
-#[cfg(feature = "cuda")]
-impl PartialEq for CpuCudaBuffer {
-    /// Auto-generated documentation for eq.
-    fn eq(&self, other: &Self) -> bool {
-        self.len == other.len && alloc::sync::Arc::ptr_eq(&self.data, &other.data)
-    }
-}
-
-#[cfg(feature = "cuda")]
-impl Clone for CpuCudaBuffer {
-    /// Auto-generated documentation for clone.
-    fn clone(&self) -> Self {
-        CpuCudaBuffer {
-            len: self.len,
-            data: self.data.clone(),
-            device: self.device.clone(),
-            device_id: self.device_id,
-        }
-    }
-}
-
-#[cfg(not(feature = "cuda"))]
-#[derive(Debug, Clone, PartialEq)]
-/// Stub CUDA buffer for non-CUDA builds.
-pub struct CpuCudaBuffer {
-    pub(crate) len: usize,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-/// Metal device buffer.
-pub struct CpuMetalBuffer {
-    pub(crate) len: usize,
-}
-
 #[derive(Debug, Clone, PartialEq)]
 /// Auto-generated documentation for CpuBuffer.
 pub enum CpuBuffer {
@@ -115,10 +71,7 @@ pub enum CpuBuffer {
     BF16(Vec<bf16>),
     /// Auto-generated documentation for Q8_0.
     Q8_0(Vec<BlockQ8_0>),
-    /// Auto-generated documentation for Cuda.
-    Cuda(CpuCudaBuffer),
-    /// Auto-generated documentation for Metal.
-    Metal(CpuMetalBuffer),
+
 }
 
 impl CpuBuffer {
@@ -134,8 +87,7 @@ impl CpuBuffer {
             CpuBuffer::F16(v) => v.len(),
             CpuBuffer::BF16(v) => v.len(),
             CpuBuffer::Q8_0(v) => v.len() * 32,
-            CpuBuffer::Cuda(b) => b.len,
-            CpuBuffer::Metal(b) => b.len,
+
         }
     }
 
@@ -171,8 +123,7 @@ impl CpuBuffer {
                     v.as_ptr() as *const u8,
                     v.len() * core::mem::size_of::<BlockQ8_0>(),
                 ),
-                CpuBuffer::Cuda(_) => panic!("as_bytes not supported on CUDA buffer"),
-                CpuBuffer::Metal(_) => panic!("as_bytes not supported on Metal buffer"),
+
             }
         }
     }
@@ -192,8 +143,7 @@ impl CpuBuffer {
             CpuBuffer::Q8_0(_) => {
                 panic!("get_f64 not supported directly on Q8_0 quantized buffer")
             }
-            CpuBuffer::Cuda(_) => panic!("get_f64 not supported directly on CUDA buffer"),
-            CpuBuffer::Metal(_) => panic!("get_f64 not supported directly on Metal buffer"),
+
         }
     }
 }
@@ -232,22 +182,6 @@ impl CpuStorage {
     pub fn ones_like(other: &CpuStorage) -> Self {
         let total: usize = other.shape.iter().product();
 
-        #[cfg(feature = "cuda")]
-        if let CpuBuffer::Cuda(b) = &*other.buffer {
-            let stream = b.device.default_stream();
-            let h_data = vec![1.0f32; total];
-            let h_bytes: &[u8] = bytemuck::cast_slice(&h_data);
-            let mut dev_data = stream.alloc_zeros::<u8>(total * 4).unwrap();
-            stream.memcpy_htod(h_bytes, &mut dev_data).unwrap();
-            let cuda_buf = CpuBuffer::Cuda(CpuCudaBuffer {
-                len: total,
-                data: Arc::new(dev_data),
-                device: b.device.clone(),
-                device_id: b.device_id,
-            });
-            return CpuStorage::from_contiguous(cuda_buf, other.shape.clone());
-        }
-
         let new_buffer = match &*other.buffer {
             CpuBuffer::F32(_) => CpuBuffer::F32(vec![1.0f32; total]),
             CpuBuffer::F64(_) => CpuBuffer::F64(vec![1.0f64; total]),
@@ -257,8 +191,6 @@ impl CpuStorage {
             CpuBuffer::F16(_) => CpuBuffer::F16(vec![half::f16::from_f64(1.0); total]),
             CpuBuffer::BF16(_) => CpuBuffer::BF16(vec![half::bf16::from_f64(1.0); total]),
             CpuBuffer::Q8_0(_) => panic!("ones_like not supported on Q8_0 buffer"),
-            CpuBuffer::Cuda(_) => panic!("ones_like CUDA unreachable"),
-            CpuBuffer::Metal(_) => panic!("ones_like not supported on Metal buffer"),
         };
 
         CpuStorage::from_contiguous(new_buffer, other.shape.clone())
@@ -446,8 +378,7 @@ impl CpuStorage {
                 CpuBuffer::BF16(out)
             }
             CpuBuffer::Q8_0(_) => panic!("materialize not supported on Q8_0 buffer"),
-            CpuBuffer::Cuda(_) => panic!("materialize not supported on CUDA buffer"),
-            CpuBuffer::Metal(_) => panic!("materialize not supported on Metal buffer"),
+
         };
 
         CpuStorage::from_contiguous(new_buffer, self.shape.clone())
@@ -533,8 +464,7 @@ pub(crate) fn scatter_into_zeros(
             }
             CpuBuffer::BF16(out)
         }
-        CpuBuffer::Cuda(_) => panic!("scatter_into_zeros not supported on CUDA buffer"),
-        CpuBuffer::Metal(_) => panic!("scatter_into_zeros not supported on Metal buffer"),
+
         CpuBuffer::Q8_0(_) => panic!("scatter_into_zeros not supported on Q8_0 buffer"),
     };
 

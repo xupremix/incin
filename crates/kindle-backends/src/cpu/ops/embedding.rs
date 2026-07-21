@@ -48,30 +48,6 @@ pub(crate) fn embedding_impl<T: DType, D: kindle_core::prelude::Device, K: DType
     let vocab_size = w.shape[0];
     let hidden_size = w.shape[1];
 
-    #[cfg(feature = "cuda")]
-    if matches!(&*w.buffer, CpuBuffer::Cuda(_)) && matches!(&*t.buffer, CpuBuffer::Cuda(_)) {
-        let out = crate::cpu::ops::cuda_embedding::launch_embedding_forward(w, t)?;
-
-        let w_id = w.id;
-        let out_id = out.id;
-        
-        let t_clone = t.clone();
-        tape::push(TapeEntry {
-            output_id: out_id,
-            input_ids: vec![w_id],
-            backward: Box::new(move |grad_out: &CpuStorage| {
-                let gw = crate::cpu::ops::cuda_embedding::launch_embedding_backward(
-                    grad_out,
-                    &t_clone,
-                    vocab_size,
-                    hidden_size,
-                ).unwrap();
-                vec![gw]
-            }),
-        });
-        
-        return Ok(out);
-    }
 
     let total_indices: usize = t.shape.iter().product();
     let mut idx = vec![0usize; t.shape.len()];

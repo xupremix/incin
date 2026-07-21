@@ -218,18 +218,6 @@ fn add_cpu_storage(a: &CpuStorage, b: &CpuStorage) -> CpuStorage {
         }};
     }
 
-    #[cfg(feature = "cuda")]
-    if matches!((&*a.buffer, &*b.buffer), (CpuBuffer::Cuda(_), CpuBuffer::Cuda(_))) {
-        return crate::cpu::ops::cuda_elementwise::launch_binary_op(
-            "add",
-            "a + b",
-            a,
-            b,
-            &a.shape,
-        )
-        .unwrap();
-    }
-
     let new_buffer = match (&*a.buffer, &*b.buffer) {
         (CpuBuffer::F32(_), CpuBuffer::F32(_)) => {
             add_variant!(
@@ -325,18 +313,7 @@ fn sum_dim_keepdim(storage: &CpuStorage, axis: usize) -> CpuStorage {
         }};
     }
 
-    #[cfg(feature = "cuda")]
-    if matches!(&*storage.buffer, CpuBuffer::Cuda(_)) {
-        return crate::cpu::ops::cuda_reduce::launch_reduce_op(
-            "sum_axis_keepdim",
-            "0.0",
-            "acc = acc + val",
-            storage,
-            axis,
-            true,
-        )
-        .unwrap();
-    }
+
 
     let new_buffer = match &*storage.buffer {
         CpuBuffer::F32(_) => reduce_variant!(F32, |v: f64| v as f32),
@@ -346,8 +323,7 @@ fn sum_dim_keepdim(storage: &CpuStorage, axis: usize) -> CpuStorage {
         CpuBuffer::I64(_) => reduce_variant!(I64, |v: f64| v as i64),
         CpuBuffer::F16(_) => reduce_variant!(F16, |v: f64| half::f16::from_f64(v)),
         CpuBuffer::BF16(_) => reduce_variant!(BF16, |v: f64| half::bf16::from_f64(v)),
-        CpuBuffer::Cuda(_) => panic!("sum_dim_keepdim CUDA unreachable"),
-        CpuBuffer::Metal(_) => panic!("sum_dim_keepdim not supported on Metal buffer"),
+
         CpuBuffer::Q8_0(_) => panic!("sum_dim_keepdim not supported on Q8_0 buffer"),
     };
 

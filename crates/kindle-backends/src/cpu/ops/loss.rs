@@ -67,18 +67,6 @@ impl<T: DType, D: kindle_core::prelude::Device> LossOps<Self> for CpuBackend<T, 
         // Step 1: log_softmax over the class dimension (axis 1).
         let log_probs = crate::cpu::ops::elementwise::log_softmax::<T, D, K>(pred, 1)?;
 
-        // NATIVE CUDA FAST PATH
-        #[cfg(feature = "cuda")]
-        if let CpuBuffer::Cuda(_) = &*log_probs.buffer {
-            let per_nll = crate::cpu::ops::cuda_loss::launch_nll_loss(&log_probs, target, classes)?;
-            
-            // Step 5: Dispatch on `reduction`: mean / sum / none.
-            return match reduction {
-                Reduction::None => Ok(per_nll),
-                Reduction::Mean => <CpuBackend<T, D> as ReductionOps<CpuBackend<T, D>>>::mean_all::<K>(&per_nll),
-                Reduction::Sum => <CpuBackend<T, D> as ReductionOps<CpuBackend<T, D>>>::sum_all::<K>(&per_nll),
-            };
-        }
 
         // CPU FALLBACK
         let mut one_hot_buf = vec![0.0f32; batch * classes];

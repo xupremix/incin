@@ -23,10 +23,7 @@ impl<T: DType, D: Device> QuantizedOps<Self> for CpuBackend<T, D> {
             });
         }
 
-        #[cfg(feature = "cuda")]
-        if let CpuBuffer::Cuda(_) = &*_t.buffer {
-            return crate::cpu::ops::cuda_quant::launch_quantize(_t);
-        }
+
 
         let f32_data = match &*_t.buffer {
             CpuBuffer::F32(v) => v,
@@ -89,10 +86,7 @@ impl<T: DType, D: Device> QuantizedOps<Self> for CpuBackend<T, D> {
             });
         }
 
-        #[cfg(feature = "cuda")]
-        if let CpuBuffer::Cuda(_) = &*_t.buffer {
-            return crate::cpu::ops::cuda_quant::launch_dequantize(_t);
-        }
+
 
         let q8_data = match &*_t.buffer {
             CpuBuffer::Q8_0(v) => v,

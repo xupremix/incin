@@ -302,31 +302,7 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for CpuBackend<T
             }};
         }
 
-        // CUDA: delegate entirely to the GPU kernel and early-return.
-        #[cfg(feature = "cuda")]
-        if matches!(&*tensors[0].buffer, CpuBuffer::Cuda(_)) {
-            let out = crate::cpu::ops::cuda_shape::launch_concat(&tensors, dim)?;
-            let out_id = out.id;
-            let input_ids: Vec<_> = tensors.iter().map(|t| t.id).collect();
-            let input_dim_sizes: Vec<usize> = tensors.iter().map(|t| t.shape[dim]).collect();
-            let offsets = cumulative_offsets.clone();
-            tape::push(TapeEntry {
-                output_id: out_id,
-                input_ids,
-                backward: Box::new(move |grad_out: &CpuStorage| {
-                    offsets
-                        .iter()
-                        .zip(input_dim_sizes.iter())
-                        .map(|(&offset, &len)| {
-                            grad_out
-                                .narrow(dim, offset, len)
-                                .expect("concat backward: narrow cannot fail")
-                        })
-                        .collect()
-                }),
-            });
-            return Ok(out);
-        }
+
 
         let new_buffer = match &*tensors[0].buffer {
             CpuBuffer::F32(_) => concat_variant!(F32, f32),
@@ -368,8 +344,6 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for CpuBackend<T
                 }
                 CpuBuffer::BF16(out)
             }
-            CpuBuffer::Cuda(_) => panic!("CUDA not enabled"),
-            CpuBuffer::Metal(_) => panic!("concat not supported on Metal buffer"),
             CpuBuffer::Q8_0(_) => panic!("concat not supported on Q8_0 buffer"),
         };
 

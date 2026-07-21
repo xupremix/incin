@@ -39,20 +39,12 @@
 pub mod conv;
 #[cfg(feature = "cuda")]
 /// Auto-generated documentation for #[cfg(feature = "cuda")]
-pub mod cuda_elementwise;
 #[cfg(feature = "cuda")]
-pub mod cuda_shape;
 #[cfg(feature = "cuda")]
-pub mod cuda_embedding;
 #[cfg(feature = "cuda")]
-pub mod cuda_reduce;
 #[cfg(feature = "cuda")]
-pub mod cuda_norm;
 #[cfg(feature = "cuda")]
-pub mod cuda_quant;
 #[cfg(feature = "cuda")]
-/// Auto-generated documentation for cuda_kernels.
-pub mod cuda_kernels;
 /// Auto-generated documentation for elementwise.
 pub mod elementwise;
 /// Auto-generated documentation for embedding.
@@ -76,5 +68,3 @@ pub mod reduce;
 /// Auto-generated documentation for shape_ops.
 pub mod shape_ops;
 
-#[cfg(feature = "cuda")]
-pub mod cuda_loss;

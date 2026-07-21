@@ -71,12 +71,6 @@ pub(crate) fn elementwise_binary(
     out_shape: &[usize],
     f: impl Fn(f64, f64) -> f64 + Send + Sync,
 ) -> Result<CpuStorage> {
-    #[cfg(feature = "cuda")]
-    if let (CpuBuffer::Cuda(_), CpuBuffer::Cuda(_)) = (&*lhs.buffer, &*rhs.buffer) {
-        return crate::cpu::ops::cuda_elementwise::launch_binary_op(
-            op_name, op_expr, lhs, rhs, out_shape,
-        );
-    }
 
     let total: usize = out_shape.iter().product();
     let out: Vec<f32> = (0..total)
@@ -102,10 +96,6 @@ pub(crate) fn elementwise_unary(
     t: &CpuStorage,
     f: impl Fn(f64) -> f64 + Send + Sync,
 ) -> Result<CpuStorage> {
-    #[cfg(feature = "cuda")]
-    if let CpuBuffer::Cuda(_) = &*t.buffer {
-        return crate::cpu::ops::cuda_elementwise::launch_unary_op(op_name, op_expr, t);
-    }
 
     let total: usize = t.shape.iter().product();
     let out: Vec<f32> = (0..total)

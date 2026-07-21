@@ -52,21 +52,7 @@ fn fill_buffer(
 
     match device.variant() {
         kindle_core::prelude::DeviceVariant::Cpu => Ok(host_buf),
-        #[cfg(feature = "cuda")]
-        kindle_core::prelude::DeviceVariant::Cuda(id) => {
-            let ctx = crate::cpu::gpu::cuda_cache::get_cuda_device(id);
-            let stream = ctx.default_stream();
-            let bytes = host_buf.as_bytes();
-            let dev_slice = stream
-                .clone_htod(bytes)
-                .map_err(|e| Error::Msg(format!("CUDA alloc/copy failed: {:?}", e)))?;
-            Ok(CpuBuffer::Cuda(crate::cpu::storage::CpuCudaBuffer {
-                len: total,
-                data: alloc::sync::Arc::new(dev_slice),
-                device: ctx.clone(),
-                device_id: id,
-            }))
-        }
+
         _ => Err(Error::UnsupportedBackendOperation {
             op: "fill",
             backend: "Cpu unknown device",
@@ -119,21 +105,7 @@ impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for CpuBackend
 
         let final_buffer = match device.variant() {
             kindle_core::prelude::DeviceVariant::Cpu => buffer,
-            #[cfg(feature = "cuda")]
-            kindle_core::prelude::DeviceVariant::Cuda(id) => {
-                let ctx = crate::cpu::gpu::cuda_cache::get_cuda_device(id);
-                let stream = ctx.default_stream();
-                let bytes = buffer.as_bytes();
-                let dev_slice = stream
-                    .clone_htod(bytes)
-                    .map_err(|e| Error::Msg(format!("CUDA alloc/copy failed: {:?}", e)))?;
-                CpuBuffer::Cuda(crate::cpu::storage::CpuCudaBuffer {
-                    len: total,
-                    data: alloc::sync::Arc::new(dev_slice),
-                    device: ctx.clone(),
-                    device_id: id,
-                })
-            }
+
             _ => panic!("Unsupported device"),
         };
 
@@ -162,21 +134,7 @@ impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for CpuBackend
 
         let final_buffer = match device.variant() {
             kindle_core::prelude::DeviceVariant::Cpu => buffer,
-            #[cfg(feature = "cuda")]
-            kindle_core::prelude::DeviceVariant::Cuda(id) => {
-                let ctx = crate::cpu::gpu::cuda_cache::get_cuda_device(id);
-                let stream = ctx.default_stream();
-                let bytes = buffer.as_bytes();
-                let dev_slice = stream
-                    .clone_htod(bytes)
-                    .map_err(|e| Error::Msg(format!("CUDA alloc/copy failed: {:?}", e)))?;
-                CpuBuffer::Cuda(crate::cpu::storage::CpuCudaBuffer {
-                    len: total,
-                    data: alloc::sync::Arc::new(dev_slice),
-                    device: ctx.clone(),
-                    device_id: id,
-                })
-            }
+
             _ => panic!("Unsupported device"),
         };
 
@@ -242,49 +200,7 @@ impl<T: DType, D: kindle_core::prelude::Device> CreationOps<Self> for CpuBackend
 
         match (is_cpu, device.variant()) {
             (true, kindle_core::prelude::DeviceVariant::Cpu) => Ok(t.clone()),
-            #[cfg(feature = "cuda")]
-            (true, kindle_core::prelude::DeviceVariant::Cuda(id)) => {
-                let ctx = crate::cpu::gpu::cuda_cache::get_cuda_device(id);
-                let stream = ctx.default_stream();
-                let bytes = t.buffer.as_bytes();
-                let dev_slice = stream
-                    .clone_htod(bytes)
-                    .map_err(|e| Error::Msg(format!("CUDA alloc/copy failed: {:?}", e)))?;
-
-                let mut cloned = t.clone();
-                cloned.buffer =
-                    alloc::sync::Arc::new(CpuBuffer::Cuda(crate::cpu::storage::CpuCudaBuffer {
-                        len: t.buffer.len(),
-                        data: alloc::sync::Arc::new(dev_slice),
-                        device: ctx.clone(),
-                        device_id: id,
-                    }));
-                Ok(cloned)
-            }
             (false, kindle_core::prelude::DeviceVariant::Cpu) => {
-                #[cfg(feature = "cuda")]
-                {
-                    if let CpuBuffer::Cuda(b) = t.buffer.as_ref() {
-                        let stream = b.device.default_stream();
-                        // Account for u8 size when allocating the device slice
-                        // we need the number of bytes.
-                        let mut bytes = vec![0u8; b.data.len()];
-                        stream
-                            .memcpy_dtoh(b.data.as_ref(), &mut bytes)
-                            .map_err(|e| Error::Msg(format!("CUDA dtoh failed: {:?}", e)))?;
-                        if core::any::TypeId::of::<K>() == core::any::TypeId::of::<f32>() {
-                            let floats: Vec<f32> = bytemuck::cast_slice(&bytes).to_vec();
-                            let mut cloned = t.clone();
-                            cloned.buffer = alloc::sync::Arc::new(CpuBuffer::F32(floats));
-                            return Ok(cloned);
-                        } else {
-                            return Err(Error::UnsupportedBackendOperation {
-                                op: "dtoh only supports F32 for now",
-                                backend: "Cpu",
-                            });
-                        }
-                    }
-                }
                 Err(Error::UnsupportedBackendOperation {
                     op: "tensor_to_device (unknown device source)",
                     backend: "Cpu",

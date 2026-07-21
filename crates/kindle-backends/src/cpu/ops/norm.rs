@@ -49,10 +49,6 @@ pub(crate) fn layer_norm_impl<T: DType, D: kindle_core::prelude::Device, K: DTyp
     let last_dim = rank - 1;
 
     // ── NATIVE CUDA FAST PATH ──
-    #[cfg(feature = "cuda")]
-    if let CpuBuffer::Cuda(_) = &*t.buffer {
-        return crate::cpu::ops::cuda_norm::launch_layer_norm(t, weight, bias, eps);
-    }
     
     // 1. mean_keepdim over the trailing dim → shape matches t with last dim = 1
     let mean = <B<T, D> as ReductionOps<B<T, D>>>::mean_keepdim::<K>(t, last_dim)?;
@@ -118,10 +114,6 @@ pub(crate) fn batch_norm_impl<T: DType, D: kindle_core::prelude::Device, K: DTyp
     let num_channels = t.shape[channel_dim];
 
     // ── NATIVE CUDA FAST PATH ──
-    #[cfg(feature = "cuda")]
-    if let CpuBuffer::Cuda(_) = &*t.buffer {
-        return crate::cpu::ops::cuda_norm::launch_batch_norm(t, w, b, rm, rv, eps);
-    }
 
     // Build the broadcast shape [1, C, 1, 1, ...] for each optional arg.
     let mut bcast_shape = vec![1usize; rank];
@@ -130,23 +122,6 @@ pub(crate) fn batch_norm_impl<T: DType, D: kindle_core::prelude::Device, K: DTyp
     // Helper: zeros or ones constant buffer in bcast_shape.
     let make_buf = |fill: f32| -> CpuStorage {
         let n = num_channels;
-        #[cfg(feature = "cuda")]
-        if let CpuBuffer::Cuda(b) = &*t.buffer {
-            let stream = b.device.default_stream();
-            let mut dev_data = stream.alloc_zeros::<u8>(n * 4).unwrap();
-            if fill != 0.0 {
-                let h_data = vec![fill; n];
-                let h_bytes: &[u8] = bytemuck::cast_slice(&h_data);
-                stream.memcpy_htod(h_bytes, &mut dev_data).unwrap();
-            }
-            let cuda_b = crate::cpu::storage::CpuCudaBuffer {
-                len: n,
-                data: alloc::sync::Arc::new(dev_data),
-                device: b.device.clone(),
-                device_id: b.device_id,
-            };
-            return CpuStorage::from_contiguous(CpuBuffer::Cuda(cuda_b), bcast_shape.clone());
-        }
         CpuStorage::from_contiguous(CpuBuffer::F32(vec![fill; n]), bcast_shape.clone())
     };
 

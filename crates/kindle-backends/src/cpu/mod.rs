@@ -17,7 +17,6 @@ pub use kindle_core::prelude::*;
 
 pub(crate) mod creation;
 /// GPU dispatcher modules (CUDA/Metal) — internal only.
-pub(crate) mod gpu;
 pub(crate) mod gradcheck;
 pub(crate) mod ops;
 /// Internal storage types.
