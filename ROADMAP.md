@@ -306,26 +306,38 @@ instead of a bare "called `Result::unwrap()` on an `Err` value" with no context.
   construction could violate — unlike the raw GPU-context/slice handles this
   fix targeted. Full workspace test suite + `cargo build --examples
   --workspace` both pass with zero regressions.
-- **Facade (`kindle`) blanket-exports internals via wildcard globs**:
-  `crates/kindle/src/lib.rs:83` (`pub use kindle_backends::*;`) and `:170`
-  (`pub use kindle_macros::*;`) re-export everything, including internal
-  proc-macro helpers like `generate_shape_ops` and `impl_arg_into` that have no
-  business in the public prelude. The old roadmap already asked for this audit
-  (line "Audit re-exports") — this confirms it's still open, with the exact
-  offending lines.
-- **`DefaultBackend` silently degrades to `()` when `cpu` is disabled**:
-  `crates/kindle/src/lib.rs:107-109`. Since `Tensor<S, B = DefaultBackend, ...>`
-  requires `B: Backend`, a user who disables the `cpu` feature without
-  explicitly naming a backend gets a default that can't satisfy its own trait
-  bound — a confusing error far from the actual misconfiguration, not a clear
-  "you forgot to pick a backend" message.
-- **Dead `#[cfg(feature = "candle")]` block in the facade**:
-  `crates/kindle/src/lib.rs:189` references a feature that doesn't exist in
-  `crates/kindle/Cargo.toml` (`std`, `cpu`, `cuda`, `wgpu`, `legacy`, `nightly`
-  only) — confirmed via a `cargo` "unexpected cfg" warning. This code path can
-  never activate. The crate's own top-doc comment still advertises Candle
-  support, which is now misleading in two ways (README's version of this claim
-  was already fixed in this pass, this one wasn't).
+- **Facade (`kindle`) blanket-exports internals via wildcard globs — ✅ FIXED (2026-07-21) for `kindle_macros::*`.**
+  `crates/kindle/src/lib.rs`'s `pub mod macros` and `prelude` module both used
+  `kindle_macros::{idx, impl_arg_into, s}` / `kindle_macros::*`, which pulled in
+  `generate_shape_ops` and `impl_arg_into` — internal codegen helpers invoked
+  only by `kindle-core` itself (`kindle_macros::generate_shape_ops!()` in
+  `shapes/shape_ops.rs`, `kindle_macros::impl_arg_into!(7)` in
+  `tensor/arg_into.rs`; confirmed via grep that no end-user code calls either).
+  Both are now explicit lists (`{idx, s}` and `{idx, import_model, module, s}`)
+  with neither leaked symbol included. **`pub use kindle_backends::*;`
+  (crate root) deliberately left as-is** — narrowing it risks breaking
+  external consumers I can't fully enumerate in this pass, and unlike the
+  macros case, everything it pulls in (`cpu`/`cuda`/`wgpu` modules) is already
+  intentionally `pub` within `kindle-backends` itself; this is redundant
+  multi-path exposure of already-public items, not the same class of leak as
+  a genuinely-internal symbol escaping. Worth a dedicated follow-up.
+- **`DefaultBackend` silently degrades to `()` when `cpu` is disabled — ✅ FIXED (2026-07-21).**
+  Removed the `()` fallback entirely. `Tensor` already had the correct fix
+  (no `B` default at all when `cpu` is off, forcing an explicit, immediate
+  error at the actual call site) — applied the same split-by-`cfg` pattern to
+  the 9 other `B`-taking aliases (`Linear`, `Conv1d`, `Conv2d`, `BatchNorm2d`,
+  `LayerNorm`, `Param`, `RNNCell`, `RNN`, `Embedding`), which previously all
+  still defaulted to the broken `()`. Verified both
+  `cargo check -p kindle --features cpu` and `--no-default-features` (cpu off)
+  compile clean, and the full workspace test suite still passes.
+- **Dead `#[cfg(feature = "candle")]` block in the facade — ✅ FIXED (2026-07-21).**
+  The crate's top-doc comment (`lib.rs:8`) claiming to wrap Candle "out of the
+  box" was corrected (matches the README fix from earlier in this audit); the
+  dead `#[cfg(feature = "candle")]` test block in `test_tensor_export` (which
+  never ran, since `candle` isn't a real feature) was replaced with a real,
+  `#[cfg(feature = "cpu")]`-gated assertion that actually exercises
+  `Tensor`/`DefaultBackend` end-to-end — confirmed it now runs and passes
+  (`cargo test -p kindle --features cpu`).
 - **The 3-tier CUDA autotuning engine described in `PROJECT_MEMORY.md` and
   `docs/AUTOTUNING_AND_ARCHITECTURE.md` does not exist.** No `autotune`,
   occupancy-query, `LRUCache`, or cached-`LaunchConfig` code exists anywhere
@@ -615,7 +627,7 @@ is stable.
 5. **C-3** (partial ✅: elementwise + matmul + activations wired on WGPU, 18 tests, hardware-verified) / **C-4** (partial ✅: same 4 ops wired on CUDA, compile-verified only — no hardware in this env) — remaining: WGPU conv/norm/pooling/embedding/reductions/loss/quant; CUDA needs `CreationOps`/`FloatOps` built from scratch (currently empty) before any of that can even run — **next priority**
 6. Add cross-backend gradient-parity tests
 7. ~~Close B-3 for real: `cuda`/`cpu` `pub(crate)` audit + `kindle-core` `TRACING_GRAPH` leak~~ — ✅ fixed 2026-07-21
-8. Audit `kindle` facade wildcard re-exports; fix `DefaultBackend = ()` trap; remove dead `candle` cfg
+8. ~~Audit `kindle` facade wildcard re-exports; fix `DefaultBackend = ()` trap; remove dead `candle` cfg~~ — ✅ fixed 2026-07-21 (macros wildcard narrowed, `kindle_backends::*` deliberately left, see High priority section for why)
 9. Write `kindle-data` `DataLoader` tests
 10. Decide `legacy::burn_backend`'s fate; stop paying its dependency cost
 11. Add GPU-gated CI jobs (cuda/wgpu) — the current gap is why C-1/C-3/C-4 shipped unnoticed

@@ -5,7 +5,7 @@
 //! ## Key Features
 //!
 //! * **Compile-time Shape Verification**: Write tensor operations with `Tensor<s![Batch, Channels, Height, Width], Backend>` and let the compiler guarantee that shapes align for operations like `matmul`, `conv2d`, `concat`, etc.
-//! * **Backend Agnostic**: Kindle is built on a trait-based backend system. Out of the box, it supports wrapping frameworks like [Candle](https://github.com/huggingface/candle) and `ndarray`, while making it trivial to plug in your own custom backend.
+//! * **Backend Agnostic**: Kindle is built on a trait-based backend system, with native CPU, CUDA, and WGPU execution backends shipped out of the box. `candle`/`ndarray`/`burn` wrappers exist behind the `legacy` feature for interop.
 //! * **Macro-driven Ergonomics**: Powerful macros like `s![]` for shape definitions, `idx![]` for expressive slicing and reshaping, and `import_model![]` for generating fully typed Rust structs directly from ONNX files.
 //! * **Zero-Cost Abstractions**: The static shape information (`typenum`) exists entirely in the type system and evaporates at runtime, introducing zero overhead to the underlying backend operations.
 //!
@@ -104,9 +104,14 @@ pub type DefaultDevice = kindle_core::prelude::Cpu;
 /// Auto-generated documentation for DefaultBackend.
 pub type DefaultBackend = kindle_backends::cpu::CpuBackend<f32, DefaultDevice>;
 
-#[cfg(not(feature = "cpu"))]
-/// Auto-generated documentation for DefaultBackend.
-pub type DefaultBackend = (); // Fallback
+// No `DefaultBackend` fallback when `cpu` is disabled: a `()` placeholder
+// (the previous approach) doesn't implement `Backend`, so every type alias
+// below that defaults its `B` param to it would compile-error deep inside
+// trait-bound resolution the moment anyone actually used it, far from the
+// real problem ("you disabled `cpu` and didn't pick another backend").
+// Instead, every alias below drops the `B = DefaultBackend` default entirely
+// in this configuration, same as `Tensor` already did — forcing an explicit,
+// immediate "expected 2 generic arguments" error at the actual call site.
 
 #[cfg(feature = "cpu")]
 /// Auto-generated documentation for Tensor.
@@ -129,16 +134,46 @@ pub type Tensor<
 > = kindle_core::prelude::Tensor<S, B, K, D, G>;
 
 // Neural Network Layer Aliases
+//
+// Each of these that takes a `B` (backend) param is declared twice, gated on
+// the `cpu` feature: with a `= DefaultBackend` default when `cpu` is on
+// (the common case), and with NO default when it's off — same reasoning as
+// `Tensor` above and `DefaultBackend` itself.
+#[cfg(feature = "cpu")]
 /// Auto-generated documentation for Linear.
 pub type Linear<S, B = DefaultBackend> = kindle_core::prelude::Linear<S, B>;
+#[cfg(not(feature = "cpu"))]
+/// Auto-generated documentation for Linear.
+pub type Linear<S, B> = kindle_core::prelude::Linear<S, B>;
+
+#[cfg(feature = "cpu")]
 /// Auto-generated documentation for Conv1d.
 pub type Conv1d<S, B = DefaultBackend> = kindle_core::prelude::Conv1d<S, B>;
+#[cfg(not(feature = "cpu"))]
+/// Auto-generated documentation for Conv1d.
+pub type Conv1d<S, B> = kindle_core::prelude::Conv1d<S, B>;
+
+#[cfg(feature = "cpu")]
 /// Auto-generated documentation for Conv2d.
 pub type Conv2d<S, B = DefaultBackend> = kindle_core::prelude::Conv2d<S, B>;
+#[cfg(not(feature = "cpu"))]
+/// Auto-generated documentation for Conv2d.
+pub type Conv2d<S, B> = kindle_core::prelude::Conv2d<S, B>;
+
+#[cfg(feature = "cpu")]
 /// Auto-generated documentation for BatchNorm2d.
 pub type BatchNorm2d<C, B = DefaultBackend> = kindle_core::prelude::BatchNorm2d<C, B>;
+#[cfg(not(feature = "cpu"))]
+/// Auto-generated documentation for BatchNorm2d.
+pub type BatchNorm2d<C, B> = kindle_core::prelude::BatchNorm2d<C, B>;
+
+#[cfg(feature = "cpu")]
 /// Auto-generated documentation for LayerNorm.
 pub type LayerNorm<C, B = DefaultBackend> = kindle_core::prelude::LayerNorm<C, B>;
+#[cfg(not(feature = "cpu"))]
+/// Auto-generated documentation for LayerNorm.
+pub type LayerNorm<C, B> = kindle_core::prelude::LayerNorm<C, B>;
+
 /// Auto-generated documentation for AvgPool2d.
 pub type AvgPool2d<K, S, P = typenum::U0, D = typenum::U1> =
     kindle_core::prelude::AvgPool2d<K, S, P, D>;
@@ -147,18 +182,42 @@ pub type MaxPool2d<K, S, P = typenum::U0, D = typenum::U1> =
     kindle_core::prelude::MaxPool2d<K, S, P, D>;
 /// Auto-generated documentation for Sequential.
 pub type Sequential<L1, L2> = kindle_core::prelude::Sequential<L1, L2>;
+
+#[cfg(feature = "cpu")]
 /// Auto-generated documentation for Param.
 pub type Param<T, B = DefaultBackend> = kindle_core::prelude::Param<T, B>;
+#[cfg(not(feature = "cpu"))]
+/// Auto-generated documentation for Param.
+pub type Param<T, B> = kindle_core::prelude::Param<T, B>;
+
+#[cfg(feature = "cpu")]
 /// Auto-generated documentation for RNNCell.
 pub type RNNCell<S, B = DefaultBackend> = kindle_core::prelude::RNNCell<S, B>;
+#[cfg(not(feature = "cpu"))]
+/// Auto-generated documentation for RNNCell.
+pub type RNNCell<S, B> = kindle_core::prelude::RNNCell<S, B>;
+
+#[cfg(feature = "cpu")]
 /// Auto-generated documentation for RNN.
 pub type RNN<S, B = DefaultBackend> = kindle_core::prelude::RNN<S, B>;
+#[cfg(not(feature = "cpu"))]
+/// Auto-generated documentation for RNN.
+pub type RNN<S, B> = kindle_core::prelude::RNN<S, B>;
+
+#[cfg(feature = "cpu")]
 /// Auto-generated documentation for Embedding.
 pub type Embedding<S, B = DefaultBackend> = kindle_core::prelude::Embedding<S, B>;
+#[cfg(not(feature = "cpu"))]
+/// Auto-generated documentation for Embedding.
+pub type Embedding<S, B> = kindle_core::prelude::Embedding<S, B>;
 
 /// Auto-generated documentation for macros.
 pub mod macros {
-    pub use kindle_macros::{idx, impl_arg_into, s};
+    // `impl_arg_into` deliberately excluded: it's an internal codegen helper
+    // invoked once, internally, by `kindle-core` itself
+    // (`kindle_macros::impl_arg_into!(7)` in `tensor/arg_into.rs`) — no
+    // end-user code calls it, and it has no documented public contract.
+    pub use kindle_macros::{idx, s};
 }
 
 #[allow(unused_imports)]
@@ -167,13 +226,19 @@ pub mod prelude {
     pub use kindle_backends::prelude::*;
     pub use kindle_core::prelude::*;
 
-    pub use kindle_macros::*;
+    // Explicit list instead of `kindle_macros::*`: the wildcard also pulled
+    // in `generate_shape_ops` and `impl_arg_into`, internal codegen helpers
+    // invoked only by kindle-core's own macro expansions
+    // (`kindle_macros::generate_shape_ops!()` in `shapes/shape_ops.rs`,
+    // `kindle_macros::impl_arg_into!(7)` in `tensor/arg_into.rs`) — neither
+    // has a documented public contract or any end-user call site.
+    pub use kindle_macros::{idx, import_model, module, s};
 
     // We intentionally overshadow kindle_core::Tensor and NN modules with our aliased versions
+    #[cfg(feature = "cpu")]
+    pub use super::DefaultBackend;
     pub use super::Tensor;
-    pub use super::{
-        AvgPool2d, BatchNorm2d, Conv1d, Conv2d, DefaultBackend, LayerNorm, Linear, MaxPool2d, Param,
-    };
+    pub use super::{AvgPool2d, BatchNorm2d, Conv1d, Conv2d, LayerNorm, Linear, MaxPool2d, Param};
     pub use super::{Embedding, RNN, RNNCell};
 }
 
@@ -183,13 +248,14 @@ mod tests {
     use super::*;
 
     #[test]
+    #[cfg(feature = "cpu")]
     /// Auto-generated documentation for test_tensor_export.
     fn test_tensor_export() {
-        // Just verify types are properly exported and accessible
-        #[cfg(feature = "candle")]
-        {
-            // Verify our alias correctly injects CandleBackend
-            let _t: Tensor<Dyn> = Tensor::zeros(std::vec![2, 2]).unwrap();
-        }
+        // Verify the `Tensor` alias and its `DefaultBackend` are properly
+        // exported and usable end-to-end. This used to gate on
+        // `#[cfg(feature = "candle")]`, a feature that doesn't exist in this
+        // crate's Cargo.toml (confirmed via a "unexpected cfg" warning) — the
+        // real assertion below never ran.
+        let _t: Tensor<Dyn> = Tensor::zeros(std::vec![2, 2]).unwrap();
     }
 }
