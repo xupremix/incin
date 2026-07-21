@@ -1,11 +1,11 @@
-//! Definition-of-done example (NATBACK-11): trains a small CNN classifier
+//! Definition-of-done example: trains a small CNN classifier
 //! (conv2d -> batch_norm -> relu -> max_pool2d -> flatten -> linear) end-to-end
 //! (forward -> cross_entropy_loss -> backward -> optimizer step) for multiple
-//! epochs on `NativeBackend<f32, Cpu>`, then re-runs the identical model/data
+//! epochs on `CpuBackend<f32, Cpu>`, then re-runs the identical model/data
 //! on `CandleBackend<f32, Cpu>`, printing both backends' per-epoch loss curves
 //! and wall-clock timing side-by-side.
 //!
-//! This is the one artifact in Phase 5 that exercises the full typed
+//! This exercises the full typed
 //! `Tensor<S,B,K,D,G>` / `Module` / `Optimizer` API end-to-end, not raw
 //! `Backend::Storage` calls.
 #[macro_use]
@@ -14,13 +14,13 @@ extern crate alloc;
 use kindle::SGD;
 use kindle::prelude::*;
 use kindle::prelude::{CrossEntropyLoss, Mean, StateDict};
-use kindle_backends::candle::CandleBackend;
-use kindle_native::NativeBackend;
+use kindle_backends::legacy::candle::CandleBackend;
+use kindle_backends::cpu::{CpuBackend, CpuBuffer, CpuStorage};
 use kindle_telemetry::reporter::Reporter;
 
-/// Auto-generated documentation for NB.
-type NB = NativeBackend<f32, Cpu>;
-/// Auto-generated documentation for CB.
+/// The CPU backend type alias.
+type NB = CpuBackend<f32, Cpu>;
+/// The Candle legacy backend type alias.
 type CB = CandleBackend<f32, Cpu>;
 
 // ── Model ────────────────────────────────────────────────────────────────────
@@ -150,7 +150,7 @@ fn as_f32_bytes(v: &[f32]) -> Vec<u8> {
     v.iter().flat_map(|x| x.to_ne_bytes()).collect()
 }
 
-/// `NativeBackend::from_bytes` only supports the F32 dtype (confirmed by
+/// `CpuBackend::from_bytes` only supports the F32 dtype (confirmed by
 /// 05-RESEARCH.md's trait-closure audit -- this is an existing, documented
 /// gap, not something this plan's scope covers fixing), and
 /// `CandleBackend::from_bytes` always interprets its input bytes as `f32`
@@ -170,8 +170,8 @@ trait MakeLabels: Backend<FloatElem = f32> {
 impl MakeLabels for NB {
     /// Auto-generated documentation for make_labels.
     fn make_labels(values: &[u32]) -> Self::Storage<u32> {
-        kindle_native::NativeStorage::from_contiguous(
-            kindle_native::NativeBuffer::U32(values.to_vec()),
+        CpuStorage::from_contiguous(
+            CpuBuffer::U32(values.to_vec()),
             vec![values.len()],
         )
     }
@@ -551,13 +551,13 @@ fn main() -> anyhow::Result<()> {
         let cl = candle_losses[i];
         println!("epoch {i}: native_loss={nl:.6}  candle_loss={cl:.6}");
     }
-    println!("NativeBackend: {native_elapsed:?} total | CandleBackend: {candle_elapsed:?} total");
+    println!("CpuBackend: {native_elapsed:?} total | CandleBackend: {candle_elapsed:?} total");
 
     let native_ok = native_losses.last().unwrap() < native_losses.first().unwrap();
     let candle_ok = candle_losses.last().unwrap() < candle_losses.first().unwrap();
     println!();
     println!(
-        "NativeBackend loss decreased first->last: {}",
+        "CpuBackend loss decreased first->last: {}",
         if native_ok { "PASS" } else { "FAIL" }
     );
     println!(

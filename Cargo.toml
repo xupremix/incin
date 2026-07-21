@@ -8,8 +8,6 @@ members = [
     "crates/kindle-data",
     "crates/kindle-macros",
     "crates/kindle-telemetry",
-    "crates/kindle-native",
-    "crates/kindle-wgpu",
     "crates/kindle-viz-plugin-api",
     "crates/kindle-viz",
     "crates/kindle/examples/*",

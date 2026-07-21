@@ -100,15 +100,15 @@ pub type DefaultDevice = crate::prelude::Metal;
 /// Auto-generated documentation for DefaultDevice.
 pub type DefaultDevice = kindle_core::prelude::Cpu;
 
-#[cfg(feature = "candle")]
+#[cfg(feature = "cpu")]
 /// Auto-generated documentation for DefaultBackend.
-pub type DefaultBackend = kindle_backends::candle::CandleBackend<f32, DefaultDevice>;
+pub type DefaultBackend = kindle_backends::cpu::CpuBackend<f32, DefaultDevice>;
 
-#[cfg(not(feature = "candle"))]
+#[cfg(not(feature = "cpu"))]
 /// Auto-generated documentation for DefaultBackend.
 pub type DefaultBackend = (); // Fallback
 
-#[cfg(feature = "candle")]
+#[cfg(feature = "cpu")]
 /// Auto-generated documentation for Tensor.
 pub type Tensor<
     S,
@@ -118,11 +118,11 @@ pub type Tensor<
     G = kindle_core::prelude::Grad,
 > = kindle_core::prelude::Tensor<S, B, K, D, G>;
 
-#[cfg(not(feature = "candle"))]
+#[cfg(not(feature = "cpu"))]
 /// Auto-generated documentation for Tensor.
 pub type Tensor<
     S,
-    B, // User must specify backend if Candle is disabled
+    B, // User must specify backend if Cpu is disabled
     K = <B as kindle_core::prelude::Backend>::FloatElem,
     D = <B as kindle_core::prelude::Backend>::Device,
     G = kindle_core::prelude::Grad,

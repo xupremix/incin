@@ -6,27 +6,47 @@ readme.workspace = true
 license.workspace = true
 
 [features]
-default = ["std", "candle", "ndarray"]
-std = ["kindle-core/std", "kindle-native?/std", "anyhow/std", "ndarray?/std"]
-candle = ["dep:candle-core", "dep:candle-nn"]
-ndarray = ["dep:ndarray"]
-burn = ["dep:burn"]
-native = ["dep:kindle-native"]
-cuda = ["candle-core?/cuda", "candle-nn?/cuda", "burn?/wgpu"]
-metal = ["candle-core?/metal", "candle-nn?/metal"]
+default = ["std", "cpu", "wgpu", "cuda"]
+std = [
+    "kindle-core/std",
+    "anyhow/std",
+    "rand/std",
+    "rand/std_rng",
+    "rand_distr/std",
+    "half/std"
+]
+cpu = []
+cuda = ["dep:cudarc", "kindle-core/cuda"]
+metal = ["kindle-core/metal"]
+wgpu = ["dep:wgpu", "dep:pollster"]
+fused = []
+legacy = ["dep:candle-core", "dep:candle-nn", "dep:ndarray", "dep:burn"]
 
 [dependencies]
 kindle-core = { path = "../kindle-core", default-features = false }
 anyhow = { version = "1.0.103", default-features = false }
-spin = { version = "0.9.8", default-features = false, features = ["rwlock"] }
+spin = { version = "0.9.8", default-features = false, features = ["rwlock", "mutex", "spin_mutex"] }
+rand = { version = "0.8", default-features = false, features = ["alloc", "small_rng"] }
+rand_distr = { version = "0.4", default-features = false, features = ["alloc"] }
+half = { workspace = true, default-features = false }
+bytemuck = { version = "1.25", default-features = false, features = ["derive"] }
+ggml-quants = "0.1.0"
+hashbrown = { version = "0.14", default-features = false, features = ["alloc", "inline-more", "ahash"] }
+rayon = "1.10.0"
+log = "0.4.22"
 
-# Optional Backends
+# WGPU Backend
+wgpu = { version = "22.0.0", optional = true }
+pollster = { version = "0.3.0", optional = true }
+
+# CUDA Backend
+cudarc = { version = "0.19.8", optional = true, features = ["cuda-12000", "nvrtc", "cublas", "cudnn", "f16"] }
+
+# Legacy Backends
 candle-core = { workspace = true, optional = true }
 candle-nn = { workspace = true, optional = true }
 ndarray = { version = "0.17.2", optional = true, default-features = false }
 burn = { version = "0.21.0", optional = true, features = ["autodiff"] }
-burn-ndarray = "0.21.0"
-kindle-native = { path = "../kindle-native", optional = true, default-features = false }
 
 [lints]
 workspace = true

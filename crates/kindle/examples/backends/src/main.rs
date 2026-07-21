@@ -9,7 +9,7 @@ fn main() -> Result<()> {
     println!("Candle Backend Shape: {:?}", res.dims());
 
     // 2. Using the Ndarray Backend
-    let ndarray_tensor: Tensor<s![3, 3], NdarrayBackend<f32, DefaultDevice>> = Tensor::zeros(())?;
+    let ndarray_tensor: Tensor<s![3, 3], WgpuBackend<f32, DefaultDevice>> = Tensor::zeros(())?;
     let res2 = ndarray_tensor.relu()?;
     println!("Ndarray Backend Shape: {:?}", res2.dims());
 

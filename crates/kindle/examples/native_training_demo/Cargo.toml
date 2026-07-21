@@ -6,9 +6,8 @@ readme.workspace = true
 license.workspace = true
 
 [dependencies]
-kindle = { path = "../.." }
-kindle-backends = { path = "../../../kindle-backends", features = ["candle", "native"] }
-kindle-native = { path = "../../../kindle-native" }
+kindle = { path = "../..", features = ["cpu"] }
+kindle-backends = { path = "../../../kindle-backends", features = ["cpu", "wgpu", "legacy"] }
 kindle-telemetry = { path = "../../../kindle-telemetry" }
 kindle-core = { path = "../../../kindle-core" }
 anyhow = "1.0.103"

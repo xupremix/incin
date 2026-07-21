@@ -10,14 +10,13 @@ license.workspace = true
 workspace = true
 
 [features]
-default = ["std", "candle"]
-std = ["kindle-core/std", "kindle-macros/std"]
+default = ["std", "cpu"]
+std = ["kindle-core/std", "kindle-macros/std", "kindle-backends/std"]
 nightly = ["kindle-core/nightly", "kindle-macros/nightly"]
+cpu = ["kindle-backends/cpu"]
 cuda = ["kindle-core/cuda", "kindle-backends/cuda"]
-metal = ["kindle-core/metal", "kindle-backends/metal"]
-candle = ["kindle-backends/candle"]
-ndarray = ["kindle-backends/ndarray"]
-burn = ["kindle-backends/burn"]
+wgpu = ["kindle-backends/wgpu"]
+legacy = ["kindle-backends/legacy"]
 
 [dependencies]
 kindle-core = { path = "../kindle-core", version = "0.1.0", default-features = false }
@@ -26,8 +25,6 @@ kindle-backends = { path = "../kindle-backends", default-features = false }
 kindle-data = { version = "0.1.0", path = "../kindle-data" }
 
 [dev-dependencies]
-kindle-native = { path = "../kindle-native", default-features = false }
-kindle-wgpu = { path = "../kindle-wgpu" }
 candle-core = { workspace = true }
 hashbrown = "0.14.5"
 anyhow = "1.0"

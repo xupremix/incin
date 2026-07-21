@@ -3,12 +3,12 @@ extern crate alloc;
 use kindle::prelude::*;
 use kindle::{Linear, Module};
 use kindle_core::prelude::{TRACING_GRAPH, TracingBackend, extract_graph};
-use kindle_native::NativeBackend;
+use kindle_backends::cpu::CpuBackend;
 use kindle_telemetry::events::GraphSnapshotEvent;
 use kindle_telemetry::reporter::Reporter;
 
 /// Auto-generated documentation for NB.
-type NB = NativeBackend<f32, Cpu>;
+type NB = CpuBackend<f32, Cpu>;
 /// Auto-generated documentation for TB.
 type TB = TracingBackend<NB>;
 

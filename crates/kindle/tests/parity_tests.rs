@@ -1,14 +1,14 @@
 //! Cross-backend numerical parity tests.
 //!
-//! Validates that `NativeBackend` and `WgpuBackend` produce outputs within
+//! Validates that `CpuBackend` and `WgpuBackend` produce outputs within
 //! 1e-4 for all common ops. Guards against silent divergence between the
 //! CPU reference implementation and the WGSL shaders.
 
 use kindle::prelude::*;
-use kindle_native::NativeBackend;
-use kindle_wgpu::WgpuBackend;
+use kindle_backends::cpu::CpuBackend;
+use kindle_backends::wgpu::WgpuBackend;
 
-type Native = NativeBackend<f32, Cpu>;
+type Native = CpuBackend<f32, Cpu>;
 type Wgpu = WgpuBackend<f32, Cpu>;
 
 // ─────────────────────────────────────────────────────────────────────────────
