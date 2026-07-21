@@ -32,7 +32,7 @@ pub struct NativeVar(pub(crate) Rc<RefCell<NativeStorage>>);
 /// so would keep the `RefCell` borrowed past the call, and a subsequent
 /// `assign_var` on the same `NativeVar` would panic on reentrant mutable
 /// borrow (Pitfall 5).
-pub fn var_as_tensor(var: &NativeVar) -> Result<NativeStorage> {
+pub(crate) fn var_as_tensor(var: &NativeVar) -> Result<NativeStorage> {
     Ok(var.0.borrow().clone())
 }
 
@@ -42,13 +42,13 @@ pub fn var_as_tensor(var: &NativeVar) -> Result<NativeStorage> {
 /// to call `borrow_mut()` on a `NativeVar`'s inner `RefCell` (NATBACK-09,
 /// structurally enforced — grep the crate for `borrow_mut()` to confirm
 /// this is the sole call site).
-pub fn assign_var(var: &mut NativeVar, tensor: &NativeStorage) -> Result<()> {
+pub(crate) fn assign_var(var: &mut NativeVar, tensor: &NativeStorage) -> Result<()> {
     *var.0.borrow_mut() = tensor.clone();
     Ok(())
 }
 
 /// Construct a fresh `NativeVar` wrapping a clone of `t`.
-pub fn var_from_tensor(t: &NativeStorage) -> Result<NativeVar> {
+pub(crate) fn var_from_tensor(t: &NativeStorage) -> Result<NativeVar> {
     Ok(NativeVar(Rc::new(RefCell::new(t.clone()))))
 }
 

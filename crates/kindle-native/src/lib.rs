@@ -18,15 +18,26 @@ extern crate alloc;
 pub use kindle_core::prelude::*;
 
 pub(crate) mod creation;
-/// Auto-generated documentation for gpu.
-pub mod gpu;
+/// GPU dispatcher modules (CUDA/Metal) — internal only.
+pub(crate) mod gpu;
 pub(crate) mod gradcheck;
 pub(crate) mod ops;
-/// Auto-generated documentation for storage.
-pub mod storage;
+/// Internal storage types.
+pub(crate) mod storage;
 pub(crate) mod stride;
 pub(crate) mod tape;
 pub(crate) mod var;
+
+// ── Public re-exports ─────────────────────────────────────────────────────────
+// Only the three types a downstream crate legitimately needs to name:
+//   - NativeBackend<T, D>  to parameterise Tensor
+//   - NativeStorage        as Backend::Storage<K>
+//   - NativeVar            as Backend::RawVar
+//   - NativeGrads          as Backend::Grads
+//   - NativeBuffer         for pattern-matching in to_bytes / from_bytes
+pub use storage::{NativeBuffer, NativeStorage};
+pub use tape::NativeGrads;
+pub use var::NativeVar;
 
 /// The native, pure-Rust `Backend` implementor. `T` genuinely drives
 /// `Backend::FloatElem` (NATBACK-01, D-03) — unlike `CandleBackend`/

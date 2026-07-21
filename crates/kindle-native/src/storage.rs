@@ -25,14 +25,14 @@ use crate::stride;
 /// independently constructed `TensorId`s are never equal, even after many
 /// calls to `next()`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct TensorId(u64);
+pub(crate) struct TensorId(u64);
 
 /// Auto-generated documentation for NEXT_TENSOR_ID.
 static NEXT_TENSOR_ID: AtomicU64 = AtomicU64::new(0);
 
 impl TensorId {
     /// Allocate a fresh, never-before-seen `TensorId`.
-    pub fn next() -> Self {
+    pub(crate) fn next() -> Self {
         // Ordering::Relaxed is sufficient: this counter is an identity
         // source, not a synchronization primitive guarding shared data.
         TensorId(NEXT_TENSOR_ID.fetch_add(1, Ordering::Relaxed))
@@ -48,24 +48,18 @@ impl TensorId {
 /// only shape/stride bookkeeping.
 #[derive(Debug, Clone, PartialEq)]
 pub struct BlockQ8_0 {
-    /// Auto-generated documentation for d.
-    pub d: half::f16,
-    /// Auto-generated documentation for qs.
-    pub qs: [i8; 32],
+    pub(crate) d: half::f16,
+    pub(crate) qs: [i8; 32],
 }
 
 #[cfg(feature = "cuda")]
 #[derive(Debug)]
-/// Auto-generated documentation for NativeCudaBuffer.
+/// Native CUDA device buffer.
 pub struct NativeCudaBuffer {
-    /// Auto-generated documentation for len.
-    pub len: usize,
-    /// Auto-generated documentation for data.
-    pub data: alloc::sync::Arc<cudarc::driver::CudaSlice<u8>>,
-    /// Auto-generated documentation for device.
-    pub device: alloc::sync::Arc<cudarc::driver::CudaContext>,
-    /// Auto-generated documentation for device_id.
-    pub device_id: usize,
+    pub(crate) len: usize,
+    pub(crate) data: alloc::sync::Arc<cudarc::driver::CudaSlice<u8>>,
+    pub(crate) device: alloc::sync::Arc<cudarc::driver::CudaContext>,
+    pub(crate) device_id: usize,
 }
 
 #[cfg(feature = "cuda")]
@@ -91,17 +85,15 @@ impl Clone for NativeCudaBuffer {
 
 #[cfg(not(feature = "cuda"))]
 #[derive(Debug, Clone, PartialEq)]
-/// Auto-generated documentation for NativeCudaBuffer.
+/// Stub CUDA buffer for non-CUDA builds.
 pub struct NativeCudaBuffer {
-    /// Auto-generated documentation for len.
-    pub len: usize,
+    pub(crate) len: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-/// Auto-generated documentation for NativeMetalBuffer.
+/// Metal device buffer.
 pub struct NativeMetalBuffer {
-    /// Auto-generated documentation for len.
-    pub len: usize,
+    pub(crate) len: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -238,10 +230,23 @@ impl NativeStorage {
     /// shape and dtype variant as `other`. Used by `tape::backward()` to
     /// seed the loss tensor's gradient before walking the tape.
     pub fn ones_like(other: &NativeStorage) -> Self {
-        // `Iterator::product()` over an empty shape (scalar / 0-d) already
-        // yields `1`, so this correctly handles both the scalar and
-        // N-dimensional cases with no special-casing needed.
         let total: usize = other.shape.iter().product();
+
+        #[cfg(feature = "cuda")]
+        if let NativeBuffer::Cuda(b) = &*other.buffer {
+            let stream = b.device.default_stream();
+            let h_data = vec![1.0f32; total];
+            let h_bytes: &[u8] = bytemuck::cast_slice(&h_data);
+            let mut dev_data = stream.alloc_zeros::<u8>(total * 4).unwrap();
+            stream.memcpy_htod(h_bytes, &mut dev_data).unwrap();
+            let cuda_buf = NativeBuffer::Cuda(NativeCudaBuffer {
+                len: total,
+                data: Arc::new(dev_data),
+                device: b.device.clone(),
+                device_id: b.device_id,
+            });
+            return NativeStorage::from_contiguous(cuda_buf, other.shape.clone());
+        }
 
         let new_buffer = match &*other.buffer {
             NativeBuffer::F32(_) => NativeBuffer::F32(vec![1.0f32; total]),
@@ -252,12 +257,13 @@ impl NativeStorage {
             NativeBuffer::F16(_) => NativeBuffer::F16(vec![half::f16::from_f64(1.0); total]),
             NativeBuffer::BF16(_) => NativeBuffer::BF16(vec![half::bf16::from_f64(1.0); total]),
             NativeBuffer::Q8_0(_) => panic!("ones_like not supported on Q8_0 buffer"),
-            NativeBuffer::Cuda(_) => panic!("ones_like not supported on CUDA buffer"),
+            NativeBuffer::Cuda(_) => panic!("ones_like CUDA unreachable"),
             NativeBuffer::Metal(_) => panic!("ones_like not supported on Metal buffer"),
         };
 
         NativeStorage::from_contiguous(new_buffer, other.shape.clone())
     }
+
 
     /// Resolve a logical multi-index through `self.strides`/`self.offset`
     /// into the underlying `NativeBuffer`, returning the value as `f64`.

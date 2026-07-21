@@ -1,10 +1,10 @@
 [package]
+publish = false
 name = "kindle-viz"
 edition.workspace = true
 version.workspace = true
 readme.workspace = true
 license.workspace = true
-publish = false
 
 [[bin]]
 name = "kindle-viz"

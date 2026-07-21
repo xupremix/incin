@@ -6,10 +6,8 @@ pub(crate) mod cuda {
 
     /// Native CUDA kernel compiler and execution dispatcher.
     pub(crate) struct NativeCudaDispatcher {
-        /// Auto-generated documentation for device_id.
-        pub device_id: usize,
-        /// Auto-generated documentation for ctx.
-        pub ctx: Arc<CudaContext>,
+        pub(crate) device_id: usize,
+        pub(crate) ctx: Arc<CudaContext>,
     }
 
     impl NativeCudaDispatcher {
@@ -104,8 +102,7 @@ pub(crate) mod metal {
 
     /// Native Apple Metal shading compiler and execution dispatcher.
     pub(crate) struct NativeMetalDispatcher {
-        /// Auto-generated documentation for device_id.
-        pub device_id: usize,
+        pub(crate) device_id: usize,
     }
 
     impl NativeMetalDispatcher {

@@ -23,7 +23,7 @@ use crate::storage::{NativeBuffer, NativeStorage, TensorId};
 /// A boxed backward closure: receives the accumulated gradient for a
 /// `TapeEntry`'s `output_id` and returns one gradient per `input_id`, in
 /// the same order.
-pub type BackwardFn = Box<dyn Fn(&NativeStorage) -> Vec<NativeStorage> + Send + Sync>;
+pub(crate) type BackwardFn = Box<dyn Fn(&NativeStorage) -> Vec<NativeStorage> + Send + Sync>;
 
 /// One recorded operation: the output it produced, the inputs it consumed,
 /// and a boxed backward closure mapping an accumulated output-gradient to
@@ -32,13 +32,13 @@ pub type BackwardFn = Box<dyn Fn(&NativeStorage) -> Vec<NativeStorage> + Send + 
 /// Per D-05, `push()` records every op unconditionally — the backend has no
 /// visibility into whether the surrounding `Tensor<..., G>`'s `G` is `Grad`
 /// or `NoGrad`.
-pub struct TapeEntry {
+pub(crate) struct TapeEntry {
     /// Auto-generated documentation for output_id.
-    pub output_id: TensorId,
+    pub(crate) output_id: TensorId,
     /// Auto-generated documentation for input_ids.
-    pub input_ids: Vec<TensorId>,
+    pub(crate) input_ids: Vec<TensorId>,
     /// Auto-generated documentation for backward.
-    pub backward: BackwardFn,
+    pub(crate) backward: BackwardFn,
 }
 
 /// The backend's gradient container: `Backend::Grads` in a later plan's
@@ -61,7 +61,7 @@ thread_local! {
 }
 
 /// Push a `TapeEntry` onto the thread-local tape, unconditionally (D-05).
-pub fn push(entry: TapeEntry) {
+pub(crate) fn push(entry: TapeEntry) {
     TAPE.with(|t| t.borrow_mut().push(entry));
 }
 
@@ -179,6 +179,18 @@ fn add_native_storage(a: &NativeStorage, b: &NativeStorage) -> NativeStorage {
         }};
     }
 
+    #[cfg(feature = "cuda")]
+    if matches!((&*a.buffer, &*b.buffer), (NativeBuffer::Cuda(_), NativeBuffer::Cuda(_))) {
+        return crate::ops::cuda_elementwise::launch_binary_op(
+            "add",
+            "a + b",
+            a,
+            b,
+            &a.shape,
+        )
+        .unwrap();
+    }
+
     let new_buffer = match (&*a.buffer, &*b.buffer) {
         (NativeBuffer::F32(_), NativeBuffer::F32(_)) => {
             add_variant!(
@@ -195,9 +207,6 @@ fn add_native_storage(a: &NativeStorage, b: &NativeStorage) -> NativeStorage {
             )
         }
         _ => {
-            // Only float dtypes are exercised by this phase's gradients;
-            // fall back to an f32 sum for any other matching-variant pair
-            // (I64/U8/U32 gradients are not a Phase 1 concern).
             add_variant!(
                 F32,
                 |s: &NativeStorage, i: &[usize]| s.get(i) as f32,
@@ -215,7 +224,7 @@ fn add_native_storage(a: &NativeStorage, b: &NativeStorage) -> NativeStorage {
 /// `target_shape` has size 1 but `grad`'s corresponding axis is `>1`.
 ///
 /// A no-op (returns a clone) when `grad.shape == target_shape`.
-pub fn unbroadcast(grad: &NativeStorage, target_shape: &[usize]) -> Result<NativeStorage> {
+pub(crate) fn unbroadcast(grad: &NativeStorage, target_shape: &[usize]) -> Result<NativeStorage> {
     if grad.shape == target_shape {
         return Ok(grad.clone());
     }
@@ -277,6 +286,19 @@ fn sum_dim_keepdim(storage: &NativeStorage, axis: usize) -> NativeStorage {
         }};
     }
 
+    #[cfg(feature = "cuda")]
+    if matches!(&*storage.buffer, NativeBuffer::Cuda(_)) {
+        return crate::ops::cuda_reduce::launch_reduce_op(
+            "sum_axis_keepdim",
+            "0.0",
+            "acc = acc + val",
+            storage,
+            axis,
+            true,
+        )
+        .unwrap();
+    }
+
     let new_buffer = match &*storage.buffer {
         NativeBuffer::F32(_) => reduce_variant!(F32, |v: f64| v as f32),
         NativeBuffer::F64(_) => reduce_variant!(F64, |v: f64| v),
@@ -285,7 +307,7 @@ fn sum_dim_keepdim(storage: &NativeStorage, axis: usize) -> NativeStorage {
         NativeBuffer::I64(_) => reduce_variant!(I64, |v: f64| v as i64),
         NativeBuffer::F16(_) => reduce_variant!(F16, |v: f64| half::f16::from_f64(v)),
         NativeBuffer::BF16(_) => reduce_variant!(BF16, |v: f64| half::bf16::from_f64(v)),
-        NativeBuffer::Cuda(_) => panic!("sum_dim_keepdim not supported on CUDA buffer"),
+        NativeBuffer::Cuda(_) => panic!("sum_dim_keepdim CUDA unreachable"),
         NativeBuffer::Metal(_) => panic!("sum_dim_keepdim not supported on Metal buffer"),
         NativeBuffer::Q8_0(_) => panic!("sum_dim_keepdim not supported on Q8_0 buffer"),
     };

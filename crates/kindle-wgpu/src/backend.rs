@@ -15,8 +15,7 @@ pub struct WgpuVar {
     pub storage: WgpuStorage,
 }
 
-/// Auto-generated documentation for WgpuGrads.
-pub struct WgpuGrads {}
+pub type WgpuGrads = crate::tape::WgpuGrads;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper: compute flat element count from shape
@@ -63,6 +62,7 @@ impl<T: DType, D: Device> Backend for WgpuBackend<T, D> {
         format!("WgpuTensor(shape={:?})", t.shape)
     }
 
+
     /// Auto-generated documentation for var_as_tensor.
     fn var_as_tensor<K: DType>(var: &Self::RawVar) -> Result<Self::Storage<K>> {
         Ok(var.storage.clone())
@@ -87,21 +87,21 @@ impl<T: DType, D: Device> Backend for WgpuBackend<T, D> {
     }
 
     /// Auto-generated documentation for backward.
-    fn backward<K: DType>(_loss: &Self::Storage<K>) -> Result<Self::Grads> {
-        unimplemented!("Backward pass not yet implemented for WgpuBackend")
+    fn backward<K: DType>(loss: &Self::Storage<K>) -> Result<Self::Grads> {
+        crate::tape::backward(loss)
     }
 
     /// Auto-generated documentation for backward_with_nan_check.
-    fn backward_with_nan_check<K: DType>(_loss: &Self::Storage<K>) -> Result<Self::Grads> {
-        unimplemented!("Backward pass not yet implemented for WgpuBackend")
+    fn backward_with_nan_check<K: DType>(loss: &Self::Storage<K>) -> Result<Self::Grads> {
+        crate::tape::backward_with_nan_check(loss)
     }
 
     /// Auto-generated documentation for get_grad.
     fn get_grad<K: DType>(
-        _t: &Self::Storage<K>,
-        _grads: &Self::Grads,
+        t: &Self::Storage<K>,
+        grads: &Self::Grads,
     ) -> Result<Option<Self::Storage<K>>> {
-        unimplemented!("Grads not yet implemented for WgpuBackend")
+        Ok(grads.grads.get(&t.id).cloned())
     }
 
     /// Auto-generated documentation for to_bytes.
@@ -549,11 +549,7 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackend<T, D> {
             });
         }
         // Reshape is metadata-only (contiguous buffer reuse)
-        Ok(WgpuStorage {
-            buffer: t.buffer.clone(),
-            shape: shape.to_vec(),
-            strides: vec![],
-        })
+        Ok(WgpuStorage::new(t.buffer.clone(), shape.to_vec()))
     }
 
     /// Auto-generated documentation for transpose.
@@ -596,11 +592,7 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackend<T, D> {
         let mut new_shape: Vec<usize> = shape[..start_dim].to_vec();
         new_shape.push(flat_size);
         new_shape.extend_from_slice(&shape[end_dim + 1..]);
-        Ok(WgpuStorage {
-            buffer: t.buffer.clone(),
-            shape: new_shape,
-            strides: vec![],
-        })
+        Ok(WgpuStorage::new(t.buffer.clone(), new_shape))
     }
 
     /// Auto-generated documentation for squeeze.
@@ -612,11 +604,7 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackend<T, D> {
         if new_shape[dim] == 1 {
             new_shape.remove(dim);
         }
-        Ok(WgpuStorage {
-            buffer: t.buffer.clone(),
-            shape: new_shape,
-            strides: vec![],
-        })
+        Ok(WgpuStorage::new(t.buffer.clone(), new_shape))
     }
 
     fn narrow<K: DType>(
@@ -720,6 +708,7 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackend<T, D> {
                     buffer: t.buffer.clone(),
                     shape: new_shape,
                     strides: vec![],
+                    id: crate::storage::TensorId::next(),
                 }
             })
             .collect();
@@ -796,6 +785,7 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackend<T, D> {
             buffer: t.buffer.clone(),
             shape: t.shape.clone(),
             strides: t.strides.clone(),
+            id: crate::storage::TensorId::next(),
         })
     }
 }
@@ -1387,22 +1377,20 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
             buffer: t.buffer.clone(),
             shape: vec![n, c_in, 1, l_in],
             strides: vec![],
+            id: crate::storage::TensorId::next(),
         };
         let w4d = WgpuStorage {
             buffer: weight.buffer.clone(),
             shape: vec![c_out, w_shape[1], 1, kl],
             strides: vec![],
+            id: crate::storage::TensorId::next(),
         };
         let bias4d = bias;
 
         let out = Self::conv2d::<K>(&inp4d, &w4d, bias4d, stride, padding, dilation, groups)?;
         // out: [N, C_out, 1, L_out]  -> [N, C_out, L_out]
         let l_out = out.shape[3];
-        Ok(WgpuStorage {
-            buffer: out.buffer,
-            shape: vec![n, c_out, l_out],
-            strides: vec![],
-        })
+        Ok(WgpuStorage::new(out.buffer, vec![n, c_out, l_out]))
     }
 
     /// Auto-generated documentation for conv2d.
@@ -1468,16 +1456,8 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
 
         if g == 1 {
             // GPU batched matmul fast path
-            let w_storage = WgpuStorage {
-                buffer: weight.buffer.clone(),
-                shape: vec![c_out, k_size],
-                strides: vec![],
-            };
-            let col_storage = WgpuStorage {
-                buffer: col_buf,
-                shape: vec![batch, k_size, col_spatial],
-                strides: vec![],
-            };
+            let w_storage = WgpuStorage::new(weight.buffer.clone(), vec![c_out, k_size]);
+            let col_storage = WgpuStorage::new(col_buf, vec![batch, k_size, col_spatial]);
             let out_storage = Self::matmul::<K>(&w_storage, &col_storage)?;
 
             // Apply bias on GPU (if present)
@@ -1646,27 +1626,124 @@ impl<T: DType, D: Device> LossOps<Self> for WgpuBackend<T, D> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// QuantizedOps (stub)
+// QuantizedOps  (Q8_0: CPU-side encode/decode, GPU matmul via dequant)
 // ─────────────────────────────────────────────────────────────────────────────
+//
+// WgpuStorage stores raw bytes in a WgpuBuffer. For Q8_0 quantized tensors,
+// the buffer holds packed BlockQ8_0 structs (34 bytes each):
+//   [0..1]  = f16 scale `d` (little-endian)
+//   [2..33] = 32 × i8 quantized weights
+//
+// This mirrors the NativeBackend's `BlockQ8_0` layout, allowing byte-level
+// interoperability.  The encode/decode runs on the CPU (WgpuBuffer::to_vec /
+// from_slice); a GPU-native WGSL kernel is deferred post-0.1.0.
 impl<T: DType, D: Device> QuantizedOps<Self> for WgpuBackend<T, D> {
-    /// Auto-generated documentation for quantize.
+    /// Quantize a contiguous f32 tensor to Q8_0 format.
+    ///
+    /// Only `K = f32` and `Q = Q8_0` are supported; any other combination
+    /// returns `UnsupportedBackendOperation`.
     fn quantize<K: FloatDType, Q: QuantDType>(
-        _t: &<Self as Backend>::Storage<K>,
+        t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<Q>> {
-        unimplemented!()
+        if core::any::TypeId::of::<Q>() != core::any::TypeId::of::<Q8_0>()
+            || core::any::TypeId::of::<K>() != core::any::TypeId::of::<f32>()
+        {
+            return Err(Error::UnsupportedBackendOperation {
+                op: "quantize",
+                backend: "WGPU (only F32 to Q8_0 supported)",
+            });
+        }
+
+        let f32_data: Vec<f32> = t.buffer.to_vec::<f32>();
+        let n = f32_data.len();
+        if n % 32 != 0 {
+            return Err(Error::Msg(alloc::format!(
+                "WGPU quantize Q8_0: length must be a multiple of 32, got {}",
+                n
+            )));
+        }
+
+        // Encode as packed BlockQ8_0 bytes: [f16_le(d), i8×32] per block.
+        let blocks = n / 32;
+        let block_bytes = 2 + 32; // sizeof(f16) + 32 × sizeof(i8)
+        let mut out_bytes: Vec<u8> = Vec::with_capacity(blocks * block_bytes);
+
+        for chunk in f32_data.chunks_exact(32) {
+            let max_abs = chunk.iter().map(|v| v.abs()).fold(0.0f32, f32::max);
+            let d = max_abs / 127.0;
+            let inv_d = if d == 0.0 { 0.0 } else { 1.0 / d };
+
+            // Write scale as f16 little-endian.
+            let d_f16 = kindle_core::prelude::f16::from_f32(d);
+            let d_bits = d_f16.to_bits();
+            out_bytes.push((d_bits & 0xFF) as u8);
+            out_bytes.push((d_bits >> 8) as u8);
+
+            // Write 32 quantized i8 values.
+            for &v in chunk {
+                let q = (v * inv_d).round().max(-128.0).min(127.0) as i8;
+                out_bytes.push(q as u8);
+            }
+        }
+
+        let buf = WgpuBuffer::from_slice::<u8>(&out_bytes);
+        Ok(WgpuStorage::new(buf, t.shape.clone()))
     }
-    /// Auto-generated documentation for dequantize.
+
+    /// Dequantize a Q8_0 tensor back to f32.
     fn dequantize<Q: QuantDType, K: FloatDType>(
-        _t: &<Self as Backend>::Storage<Q>,
+        t: &<Self as Backend>::Storage<Q>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        unimplemented!()
+        if core::any::TypeId::of::<Q>() != core::any::TypeId::of::<Q8_0>()
+            || core::any::TypeId::of::<K>() != core::any::TypeId::of::<f32>()
+        {
+            return Err(Error::UnsupportedBackendOperation {
+                op: "dequantize",
+                backend: "WGPU (only Q8_0 to F32 supported)",
+            });
+        }
+
+        let raw: Vec<u8> = t.buffer.to_vec::<u8>();
+        let block_bytes = 34usize; // 2-byte f16 + 32 × i8
+        if raw.len() % block_bytes != 0 {
+            return Err(Error::Msg(alloc::format!(
+                "WGPU dequantize: raw buffer length {} is not a multiple of 34",
+                raw.len()
+            )));
+        }
+
+        let blocks = raw.len() / block_bytes;
+        let mut f32_data: Vec<f32> = Vec::with_capacity(blocks * 32);
+
+        for block in raw.chunks_exact(block_bytes) {
+            let d_bits = (block[0] as u16) | ((block[1] as u16) << 8);
+            let d = kindle_core::prelude::f16::from_bits(d_bits).to_f32();
+            for i in 0..32 {
+                let q = block[2 + i] as i8;
+                f32_data.push(q as f32 * d);
+            }
+        }
+
+        let buf = WgpuBuffer::from_slice::<f32>(&f32_data);
+        Ok(WgpuStorage::new(buf, t.shape.clone()))
     }
-    /// Auto-generated documentation for quantized_matmul.
+
+    /// Quantized matmul: dequantize both operands to f32 then dispatch to
+    /// the GPU matmul shader.  A native WGSL Q8_0 matmul kernel is deferred.
     fn quantized_matmul<Q: QuantDType>(
-        _lhs: &<Self as Backend>::Storage<Q>,
-        _rhs: &<Self as Backend>::Storage<Q>,
+        lhs: &<Self as Backend>::Storage<Q>,
+        rhs: &<Self as Backend>::Storage<Q>,
     ) -> Result<<Self as Backend>::Storage<f32>> {
-        unimplemented!()
+        if core::any::TypeId::of::<Q>() != core::any::TypeId::of::<Q8_0>() {
+            return Err(Error::UnsupportedBackendOperation {
+                op: "quantized_matmul",
+                backend: "WGPU (only Q8_0 supported)",
+            });
+        }
+        // Dequantize both operands, then run the existing GPU matmul.
+        let lhs_f32 = Self::dequantize::<Q, f32>(lhs)?;
+        let rhs_f32 = Self::dequantize::<Q, f32>(rhs)?;
+        Self::matmul::<f32>(&lhs_f32, &rhs_f32)
     }
 }
 

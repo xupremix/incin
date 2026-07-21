@@ -75,6 +75,19 @@ impl WgpuBuffer {
     }
 }
 
+use core::sync::atomic::{AtomicU64, Ordering};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct TensorId(u64);
+
+static NEXT_TENSOR_ID: AtomicU64 = AtomicU64::new(0);
+
+impl TensorId {
+    pub fn next() -> Self {
+        TensorId(NEXT_TENSOR_ID.fetch_add(1, Ordering::Relaxed))
+    }
+}
+
 /// Storage type used by `WgpuBackend` as `Backend::Storage<K>`.
 /// The internal buffer and shape are private to prevent construction of
 /// invalid states from outside this crate.
@@ -83,6 +96,7 @@ pub struct WgpuStorage {
     pub(crate) buffer: Arc<WgpuBuffer>,
     pub(crate) shape: Vec<usize>,
     pub(crate) strides: Vec<usize>,
+    pub(crate) id: TensorId,
 }
 
 impl WgpuStorage {
@@ -97,6 +111,7 @@ impl WgpuStorage {
             buffer,
             shape,
             strides,
+            id: TensorId::next(),
         }
     }
 }

@@ -37,7 +37,7 @@ pub fn launch_reduce_op(
         } else {
             out_shape.remove(axis);
         }
-        let out_numel: usize = out_shape.iter().product();
+        let _out_numel: usize = out_shape.iter().product();
         let ndim = storage.shape.len() as i32;
 
         let in_shape_h: Vec<i32> = storage.shape.iter().map(|&x| x as i32).collect();
@@ -128,7 +128,7 @@ pub fn launch_reduce_with_indices_op(
     _update_op: &str,
     storage: &NativeStorage,
     axis: usize,
-    keepdim: bool,
+    _keepdim: bool,
 ) -> Result<(NativeStorage, NativeStorage)> {
     if let NativeBuffer::Cuda(b) = &*storage.buffer {
         let device_id = b.device_id;

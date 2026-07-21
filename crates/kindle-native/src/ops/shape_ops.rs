@@ -302,6 +302,32 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for NativeBacken
             }};
         }
 
+        // CUDA: delegate entirely to the GPU kernel and early-return.
+        #[cfg(feature = "cuda")]
+        if matches!(&*tensors[0].buffer, NativeBuffer::Cuda(_)) {
+            let out = crate::ops::cuda_shape::launch_concat(&tensors, dim)?;
+            let out_id = out.id;
+            let input_ids: Vec<_> = tensors.iter().map(|t| t.id).collect();
+            let input_dim_sizes: Vec<usize> = tensors.iter().map(|t| t.shape[dim]).collect();
+            let offsets = cumulative_offsets.clone();
+            tape::push(TapeEntry {
+                output_id: out_id,
+                input_ids,
+                backward: Box::new(move |grad_out: &NativeStorage| {
+                    offsets
+                        .iter()
+                        .zip(input_dim_sizes.iter())
+                        .map(|(&offset, &len)| {
+                            grad_out
+                                .narrow(dim, offset, len)
+                                .expect("concat backward: narrow cannot fail")
+                        })
+                        .collect()
+                }),
+            });
+            return Ok(out);
+        }
+
         let new_buffer = match &*tensors[0].buffer {
             NativeBuffer::F32(_) => concat_variant!(F32, f32),
             NativeBuffer::F64(_) => concat_variant!(F64, f64),
@@ -342,7 +368,7 @@ impl<T: DType, D: kindle_core::prelude::Device> TensorOps<Self> for NativeBacken
                 }
                 NativeBuffer::BF16(out)
             }
-            NativeBuffer::Cuda(_) => panic!("concat not supported on CUDA buffer"),
+            NativeBuffer::Cuda(_) => panic!("CUDA not enabled"),
             NativeBuffer::Metal(_) => panic!("concat not supported on Metal buffer"),
             NativeBuffer::Q8_0(_) => panic!("concat not supported on Q8_0 buffer"),
         };

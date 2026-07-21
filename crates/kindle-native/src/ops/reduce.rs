@@ -294,7 +294,7 @@ impl<T: DType, D: kindle_core::prelude::Device> ReductionOps<Self> for NativeBac
         #[cfg(feature = "cuda")]
         if matches!(&*t.buffer, NativeBuffer::Cuda(_)) {
             let mut acc = t.clone();
-            for axis in (0..t.shape.len()).rev() {
+            for _axis in (0..t.shape.len()).rev() {
                 acc = crate::ops::cuda_reduce::launch_reduce_op(
                     "sum_all", "0.0", "acc = acc + val", &acc, 0, false
                 ).unwrap();
@@ -363,7 +363,7 @@ impl<T: DType, D: kindle_core::prelude::Device> ReductionOps<Self> for NativeBac
             }
             // divide by n using elementwise scalar op on GPU
             let inv_n = 1.0 / n.max(1.0);
-            let h_n = vec![inv_n as f32];
+            let _h_n = vec![inv_n as f32];
             let t_clone = t.clone();
             let (t_id, out_id) = (t.id, acc.id);
             tape::push(TapeEntry {

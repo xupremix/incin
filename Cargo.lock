@@ -4446,12 +4446,15 @@ name = "kindle"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bytemuck",
  "candle-core 0.9.1",
  "hashbrown 0.14.5",
  "kindle-backends",
  "kindle-core",
  "kindle-data",
  "kindle-macros",
+ "kindle-native",
+ "kindle-wgpu",
 ]
 
 [[package]]

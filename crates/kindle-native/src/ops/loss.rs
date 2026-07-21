@@ -29,8 +29,6 @@ use kindle_core::prelude::{Backend, DType, FloatOps, LossOps, NumericOps, Reduct
 
 use crate::NativeBackend;
 use crate::storage::{NativeBuffer, NativeStorage};
-#[cfg(feature = "cuda")]
-use alloc::sync::Arc;
 
 impl<T: DType, D: kindle_core::prelude::Device> LossOps<Self> for NativeBackend<T, D> {
     /// Numerically-stable cross-entropy loss via the shared `log_softmax`
@@ -69,68 +67,38 @@ impl<T: DType, D: kindle_core::prelude::Device> LossOps<Self> for NativeBackend<
         // Step 1: log_softmax over the class dimension (axis 1).
         let log_probs = crate::ops::elementwise::log_softmax::<T, D, K>(pred, 1)?;
 
-        // Step 2: Build one-hot constant. Read target indices as i64→usize
-        // (Pitfall 8 convention). No tape entry — it's a constant.
+        // NATIVE CUDA FAST PATH
         #[cfg(feature = "cuda")]
-        let one_hot = if let NativeBuffer::Cuda(pred_b) = &*log_probs.buffer {
-            if let NativeBuffer::Cuda(_) = &*target.buffer {
-                crate::ops::cuda_loss::launch_one_hot(target, classes).unwrap()
-            } else {
-                // target on CPU, pred on GPU — download target and use CPU path, then upload
-                let mut one_hot_buf = vec![0.0f32; batch * classes];
-                for b_idx in 0..batch {
-                    let class_idx = target.get(&[b_idx]) as i64 as usize;
-                    one_hot_buf[b_idx * classes + class_idx] = 1.0;
-                }
-                let stream = pred_b.device.default_stream();
-                let h_bytes: &[u8] = bytemuck::cast_slice(&one_hot_buf);
-                let mut dev_data = stream.alloc_zeros::<u8>(batch * classes * 4).unwrap();
-                stream.memcpy_htod(h_bytes, &mut dev_data).unwrap();
-                let cuda_b = crate::storage::NativeCudaBuffer {
-                    len: batch * classes,
-                    data: alloc::sync::Arc::new(dev_data),
-                    device: pred_b.device.clone(),
-                    device_id: pred_b.device_id,
-                };
-                NativeStorage {
-                    buffer: alloc::sync::Arc::new(NativeBuffer::Cuda(cuda_b)),
-                    shape: vec![batch, classes],
-                    strides: crate::stride::contiguous_strides(&[batch, classes]),
-                    offset: 0,
-                    id: crate::storage::TensorId::next(),
-                }
-            }
-        } else {
-            let mut one_hot_buf = vec![0.0f32; batch * classes];
-            for b_idx in 0..batch {
-                let class_idx = target.get(&[b_idx]) as i64 as usize;
-                one_hot_buf[b_idx * classes + class_idx] = 1.0;
-            }
-            NativeStorage::from_contiguous(NativeBuffer::F32(one_hot_buf), vec![batch, classes])
-        };
+        if let NativeBuffer::Cuda(_) = &*log_probs.buffer {
+            let per_nll = crate::ops::cuda_loss::launch_nll_loss(&log_probs, target, classes)?;
+            
+            // Step 5: Dispatch on `reduction`: mean / sum / none.
+            return match reduction {
+                Reduction::None => Ok(per_nll),
+                Reduction::Mean => <NativeBackend<T, D> as ReductionOps<NativeBackend<T, D>>>::mean_all::<K>(&per_nll),
+                Reduction::Sum => <NativeBackend<T, D> as ReductionOps<NativeBackend<T, D>>>::sum_all::<K>(&per_nll),
+            };
+        }
 
-        #[cfg(not(feature = "cuda"))]
-        let one_hot = {
-            let mut one_hot_buf = vec![0.0f32; batch * classes];
-            for b in 0..batch {
-                let class_idx = target.get(&[b]) as i64 as usize;
-                debug_assert!(
-                    class_idx < classes,
-                    "cross_entropy_loss: target[{b}]={class_idx} out of range [0,{classes})"
-                );
-                one_hot_buf[b * classes + class_idx] = 1.0;
-            }
-            NativeStorage::from_contiguous(NativeBuffer::F32(one_hot_buf), vec![batch, classes])
-        };
+        // CPU FALLBACK
+        let mut one_hot_buf = vec![0.0f32; batch * classes];
+        for b_idx in 0..batch {
+            let class_idx = target.get(&[b_idx]) as i64 as usize;
+            one_hot_buf[b_idx * classes + class_idx] = 1.0;
+        }
+        let one_hot = NativeStorage::from_contiguous(
+            NativeBuffer::F32(one_hot_buf),
+            vec![batch, classes]
+        );
 
-        // Step 3: tape-tracked mul — gradient flows through log_probs here.
+        // Step 3: picked = log_probs * one_hot
         let picked = <Self as NumericOps<Self>>::mul::<K>(&log_probs, &one_hot)?;
 
-        // Step 4: sum over class axis → shape [Batch], then negate.
+        // Step 4: per_nll = -sum_dim(picked, 1)
         let sum_picked = <Self as ReductionOps<Self>>::sum_dim::<K>(&picked, 1)?;
         let per_nll = <Self as FloatOps<Self>>::neg::<K>(&sum_picked)?;
 
-        // Step 5: reduce per Reduction.
+        // Step 5: Dispatch on `reduction`: mean / sum / none.
         match reduction {
             Reduction::Mean => <Self as ReductionOps<Self>>::mean_all::<K>(&per_nll),
             Reduction::Sum => <Self as ReductionOps<Self>>::sum_all::<K>(&per_nll),

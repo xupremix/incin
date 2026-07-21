@@ -140,21 +140,21 @@ Every public item must have a `///` doc comment. Current state:
 
 ### `kindle-native`
 - [ ] Fix `FloatElem` not driven by `T` (B-4, already fixed in native — confirm)
-- [ ] Change all implementation modules to `pub(crate)` (B-3)
-- [ ] Make `NativeStorage` / `NativeVar` fields private with constructors (B-3)
+- [x] Change all implementation modules to `pub(crate)` (B-3)
+- [x] Make `NativeStorage` / `NativeVar` fields private with constructors (B-3)
 - [ ] Add `///` doc to `NativeBackend` struct
-- [ ] Run `cargo clippy -p kindle-native -- -D warnings`
+- [x] Run `cargo clippy -p kindle-native -- -D warnings`
 - [ ] Fix 58 `#[ignore]`d tests — either implement them or delete them
 
 ### `kindle-wgpu`
-- [ ] Fix `test_adamw_step` (B-1) — add `device.poll` in `run_pipeline`
-- [ ] Change all `dispatch.rs` functions to `pub(crate)` (B-3)
-- [ ] Change `get_or_create_pipeline` / `get_device_state` to `pub(crate)` (B-3)
-- [ ] Make `WgpuBuffer`, `WgpuStorage`, `WgpuDeviceState` fields private (B-3)
-- [ ] Change `pub mod dispatch`, `pub mod pipeline`, `pub mod device`, `pub mod storage` to `pub(crate)` in `lib.rs`
+- [x] Fix `test_adamw_step` (B-1) — add `device.poll` in `run_pipeline`
+- [x] Change all `dispatch.rs` functions to `pub(crate)` (B-3)
+- [x] Change `get_or_create_pipeline` / `get_device_state` to `pub(crate)` (B-3)
+- [x] Make `WgpuBuffer`, `WgpuStorage`, `WgpuDeviceState` fields private (B-3)
+- [x] Change `pub mod dispatch`, `pub mod pipeline`, `pub mod device`, `pub mod storage` to `pub(crate)` in `lib.rs`
 - [ ] Implement `conv_transpose1d`, `conv_transpose2d` (3 `unimplemented!()` remaining)
 - [ ] Add GPU matmul path to `conv2d` (remove CPU fallback)
-- [ ] Add numerical parity tests against `NativeBackend`
+- [x] Add numerical parity tests against `NativeBackend`
 - [ ] Add `///` doc to `WgpuBackend`
 
 ### `kindle-backends` (legacy candle/ndarray wrappers)
@@ -173,7 +173,7 @@ Every public item must have a `///` doc comment. Current state:
 - [ ] Document public API
 
 ### `kindle` (facade)
-- [ ] Fix linker crash in test suite (B-2)
+- [x] Fix linker crash in test suite (B-2)
 - [ ] Audit re-exports: only re-export what belongs in the public prelude
 - [ ] Remove direct `anyhow` dependency (leaked through `dev-dependencies`)
 

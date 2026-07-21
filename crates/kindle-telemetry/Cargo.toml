@@ -1,10 +1,10 @@
 [package]
+publish = false
 name = "kindle-telemetry"
 edition.workspace = true
 version.workspace = true
 readme.workspace = true
 license.workspace = true
-publish = false
 
 [dependencies]
 crossbeam-channel = "0.5.16"

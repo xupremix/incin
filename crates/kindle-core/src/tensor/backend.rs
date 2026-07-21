@@ -3,16 +3,16 @@ use crate::tensor::device::Device;
 use crate::tensor::dtype::{DType, FloatDType, QuantDType};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-/// Auto-generated documentation for ScalarValue.
+    /// Provides the ScalarValue operation or structure.
 pub enum ScalarValue {
-    /// Auto-generated documentation for Float.
+    /// Provides the Float operation or structure.
     Float(f64),
-    /// Auto-generated documentation for Int.
+    /// Provides the Int operation or structure.
     Int(i64),
 }
 
 impl ScalarValue {
-    /// Auto-generated documentation for to_f64.
+    /// Provides the to_f64 operation or structure.
     pub fn to_f64(&self) -> f64 {
         match self {
             ScalarValue::Float(f) => *f,
@@ -20,7 +20,7 @@ impl ScalarValue {
         }
     }
 
-    /// Auto-generated documentation for to_i64.
+    /// Provides the to_i64 operation or structure.
     pub fn to_i64(&self) -> i64 {
         match self {
             ScalarValue::Float(f) => *f as i64,
@@ -30,34 +30,34 @@ impl ScalarValue {
 }
 
 impl From<f32> for ScalarValue {
-    /// Auto-generated documentation for from.
+    /// Provides the from operation or structure.
     fn from(v: f32) -> Self {
         ScalarValue::Float(v as f64)
     }
 }
 impl From<f64> for ScalarValue {
-    /// Auto-generated documentation for from.
+    /// Provides the from operation or structure.
     fn from(v: f64) -> Self {
         ScalarValue::Float(v)
     }
 }
 impl From<i32> for ScalarValue {
-    /// Auto-generated documentation for from.
+    /// Provides the from operation or structure.
     fn from(v: i32) -> Self {
         ScalarValue::Int(v as i64)
     }
 }
 impl From<i64> for ScalarValue {
-    /// Auto-generated documentation for from.
+    /// Provides the from operation or structure.
     fn from(v: i64) -> Self {
         ScalarValue::Int(v)
     }
 }
 
-/// Auto-generated documentation for SupportsDType.
+    /// Provides the SupportsDType operation or structure.
 pub trait SupportsDType<K: DType> {}
 
-/// Auto-generated documentation for Backend.
+    /// Provides the Backend operation or structure.
 pub trait Backend:
     Sized
     + Clone
@@ -74,24 +74,24 @@ pub trait Backend:
     + crate::tensor::backend::ModuleOps<Self>
     + crate::tensor::backend::LossOps<Self>
 {
-    /// Auto-generated documentation for Device.
+    /// Provides the Device operation or structure.
     type Device: Device;
-    /// Auto-generated documentation for FloatElem.
+    /// Provides the FloatElem operation or structure.
     type FloatElem: DType;
-    /// Auto-generated documentation for IntElem.
+    /// Provides the IntElem operation or structure.
     type IntElem: DType;
 
-    /// Auto-generated documentation for Storage.
+    /// Provides the Storage operation or structure.
     type Storage<K: DType>: Clone;
-    /// Auto-generated documentation for RawVar.
+    /// Provides the RawVar operation or structure.
     type RawVar: Clone;
-    /// Auto-generated documentation for Grads.
+    /// Provides the Grads operation or structure.
     type Grads;
 
-    /// Auto-generated documentation for InnerBackend.
+    /// Provides the InnerBackend operation or structure.
     type InnerBackend: Backend;
 
-    /// Auto-generated documentation for BackendWithDevice.
+    /// Provides the BackendWithDevice operation or structure.
     type BackendWithDevice<NewD: Device>: Backend<
             Device = NewD,
             RawVar = Self::RawVar,
@@ -99,26 +99,26 @@ pub trait Backend:
             IntElem = Self::IntElem,
         >;
 
-    /// Auto-generated documentation for shape.
+    /// Provides the shape operation or structure.
     fn shape<K: DType>(t: &Self::Storage<K>) -> alloc::vec::Vec<usize>;
-    /// Auto-generated documentation for format_tensor_display.
+    /// Provides the format_tensor_display operation or structure.
     fn format_tensor_display<K: DType>(t: &Self::Storage<K>) -> alloc::string::String;
-    /// Auto-generated documentation for format_tensor_debug.
+    /// Provides the format_tensor_debug operation or structure.
     fn format_tensor_debug<K: DType>(t: &Self::Storage<K>) -> alloc::string::String;
 
-    /// Auto-generated documentation for backward.
+    /// Provides the backward operation or structure.
     fn backward<K: DType>(t: &Self::Storage<K>) -> Result<Self::Grads>;
-    /// Auto-generated documentation for backward_with_nan_check.
+    /// Provides the backward_with_nan_check operation or structure.
     fn backward_with_nan_check<K: DType>(t: &Self::Storage<K>) -> Result<Self::Grads>;
-    /// Auto-generated documentation for get_grad.
+    /// Provides the get_grad operation or structure.
     fn get_grad<K: DType>(
         t: &Self::Storage<K>,
         grads: &Self::Grads,
     ) -> Result<Option<Self::Storage<K>>>;
 
-    /// Auto-generated documentation for to_bytes.
+    /// Provides the to_bytes operation or structure.
     fn to_bytes<K: DType>(t: &Self::Storage<K>) -> Result<alloc::vec::Vec<u8>>;
-    /// Auto-generated documentation for from_bytes.
+    /// Provides the from_bytes operation or structure.
     fn from_bytes<K: DType>(
         bytes: &[u8],
         shape: &[usize],
@@ -126,307 +126,447 @@ pub trait Backend:
         device: &KindleDevice,
     ) -> Result<Self::Storage<K>>;
 
-    /// Auto-generated documentation for var_as_tensor.
+    /// Provides the var_as_tensor operation or structure.
     fn var_as_tensor<K: DType>(var: &Self::RawVar) -> Result<Self::Storage<K>>;
-    /// Auto-generated documentation for var_from_tensor.
+    /// Provides the var_from_tensor operation or structure.
     fn var_from_tensor<K: DType>(t: &Self::Storage<K>) -> Result<Self::RawVar>;
-    /// Auto-generated documentation for var_to_device.
+    /// Provides the var_to_device operation or structure.
     fn var_to_device(var: &Self::RawVar, device: &KindleDevice) -> Result<Self::RawVar>;
-    /// Auto-generated documentation for assign_var.
+    /// Provides the assign_var operation or structure.
     fn assign_var<K: DType>(var: &mut Self::RawVar, tensor: &Self::Storage<K>) -> Result<()>;
 }
 
 // FloatOps only requires Backend, operates on FloatTensorPrimitive
-/// Auto-generated documentation for FloatOps.
+    /// Provides the FloatOps operation or structure.
 pub trait FloatOps<B: Backend> {
-    /// Auto-generated documentation for relu.
-    fn relu<K: DType>(t: &B::Storage<K>) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for step.
-    fn step<K: DType>(t: &B::Storage<K>) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for mish.
-    fn mish<K: DType>(t: &B::Storage<K>) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for elu.
-    fn elu<K: DType>(t: &B::Storage<K>) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for gelu.
-    fn gelu<K: DType>(t: &B::Storage<K>) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for abs.
-    fn abs<K: DType>(t: &B::Storage<K>) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for exp.
-    fn exp<K: DType>(t: &B::Storage<K>) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for neg.
-    fn neg<K: DType>(t: &B::Storage<K>) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for sqrt.
-    fn sqrt<K: DType>(t: &B::Storage<K>) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for log.
-    fn log<K: DType>(t: &B::Storage<K>) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for tanh.
-    fn tanh<K: DType>(t: &B::Storage<K>) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for sigmoid.
-    fn sigmoid<K: DType>(t: &B::Storage<K>) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for swish.
-    fn swish<K: DType>(t: &B::Storage<K>) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for softmax.
-    fn softmax<K: DType>(t: &B::Storage<K>, dim: usize) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for add_scalar_float.
-    fn add_scalar_float<K: DType>(t: &B::Storage<K>, scalar: f64) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for mul_scalar_float.
-    fn mul_scalar_float<K: DType>(t: &B::Storage<K>, scalar: f64) -> Result<B::Storage<K>>;
+    /// Provides the relu operation or structure.
+    fn relu<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "relu", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the step operation or structure.
+    fn step<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "step", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the mish operation or structure.
+    fn mish<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "mish", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the elu operation or structure.
+    fn elu<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "elu", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the gelu operation or structure.
+    fn gelu<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "gelu", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the abs operation or structure.
+    fn abs<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "abs", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the exp operation or structure.
+    fn exp<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "exp", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the neg operation or structure.
+    fn neg<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "neg", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the sqrt operation or structure.
+    fn sqrt<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "sqrt", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the log operation or structure.
+    fn log<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "log", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the tanh operation or structure.
+    fn tanh<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "tanh", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the sigmoid operation or structure.
+    fn sigmoid<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "sigmoid", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the swish operation or structure.
+    fn swish<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "swish", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the softmax operation or structure.
+    fn softmax<K: DType>(_t: &B::Storage<K>, _dim: usize) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "softmax", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the add_scalar_float operation or structure.
+    fn add_scalar_float<K: DType>(_t: &B::Storage<K>, _scalar: f64) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "add_scalar_float", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the mul_scalar_float operation or structure.
+    fn mul_scalar_float<K: DType>(_t: &B::Storage<K>, _scalar: f64) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "mul_scalar_float", backend: core::any::type_name::<Self>() })
+    }
 }
 
 // NumericOps operates generically over any TensorKind!
-/// Auto-generated documentation for NumericOps.
+    /// Provides the NumericOps operation or structure.
 pub trait NumericOps<B: Backend> {
-    /// Auto-generated documentation for add.
-    fn add<K: DType>(lhs: &B::Storage<K>, rhs: &B::Storage<K>) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for sub.
-    fn sub<K: DType>(lhs: &B::Storage<K>, rhs: &B::Storage<K>) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for mul.
-    fn mul<K: DType>(lhs: &B::Storage<K>, rhs: &B::Storage<K>) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for div.
-    fn div<K: DType>(lhs: &B::Storage<K>, rhs: &B::Storage<K>) -> Result<B::Storage<K>>;
+    /// Provides the add operation or structure.
+    fn add<K: DType>(_lhs: &B::Storage<K>, _rhs: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "add", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the sub operation or structure.
+    fn sub<K: DType>(_lhs: &B::Storage<K>, _rhs: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "sub", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the mul operation or structure.
+    fn mul<K: DType>(_lhs: &B::Storage<K>, _rhs: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "mul", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the div operation or structure.
+    fn div<K: DType>(_lhs: &B::Storage<K>, _rhs: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "div", backend: core::any::type_name::<Self>() })
+    }
 }
 
-/// Auto-generated documentation for TensorOps.
+    /// Provides the TensorOps operation or structure.
 pub trait TensorOps<B: Backend> {
-    /// Auto-generated documentation for reshape.
-    fn reshape<K: DType>(t: &B::Storage<K>, shape: &[usize]) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for transpose.
-    fn transpose<K: DType>(t: &B::Storage<K>, dim1: usize, dim2: usize) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for matmul.
-    fn matmul<K: DType>(lhs: &B::Storage<K>, rhs: &B::Storage<K>) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for broadcast_as.
-    fn broadcast_as<K: DType>(t: &B::Storage<K>, shape: &[usize]) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for narrow.
+    /// Provides the reshape operation or structure.
+    fn reshape<K: DType>(_t: &B::Storage<K>, _shape: &[usize]) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "reshape", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the transpose operation or structure.
+    fn transpose<K: DType>(_t: &B::Storage<K>, _dim1: usize, _dim2: usize) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "transpose", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the matmul operation or structure.
+    fn matmul<K: DType>(_lhs: &B::Storage<K>, _rhs: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "matmul", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the broadcast_as operation or structure.
+    fn broadcast_as<K: DType>(_t: &B::Storage<K>, _shape: &[usize]) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "broadcast_as", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the narrow operation or structure.
     fn narrow<K: DType>(
-        t: &B::Storage<K>,
-        dim: usize,
-        start: usize,
-        len: usize,
-    ) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for squeeze.
-    fn squeeze<K: DType>(t: &B::Storage<K>, dim: usize) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for stack.
-    fn stack<K: DType>(t: &[&B::Storage<K>], dim: usize) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for concat.
-    fn concat<K: DType>(t: &[&B::Storage<K>], dim: usize) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for slice.
-    fn slice<K: DType>(t: &B::Storage<K>, ranges: &[(usize, usize)]) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for flatten.
+        _t: &B::Storage<K>,
+        _dim: usize,
+        _start: usize,
+        _len: usize,
+    ) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "narrow", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the squeeze operation or structure.
+    fn squeeze<K: DType>(_t: &B::Storage<K>, _dim: usize) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "squeeze", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the stack operation or structure.
+    fn stack<K: DType>(_t: &[&B::Storage<K>], _dim: usize) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "stack", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the concat operation or structure.
+    fn concat<K: DType>(_t: &[&B::Storage<K>], _dim: usize) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "concat", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the slice operation or structure.
+    fn slice<K: DType>(_t: &B::Storage<K>, _ranges: &[(usize, usize)]) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "slice", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the flatten operation or structure.
     fn flatten<K: DType>(
-        t: &B::Storage<K>,
-        start_dim: usize,
-        end_dim: usize,
-    ) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for broadcast_left.
-    fn broadcast_left<K: DType>(t: &B::Storage<K>, shape: &[usize]) -> Result<B::Storage<K>>;
+        _t: &B::Storage<K>,
+        _start_dim: usize,
+        _end_dim: usize,
+    ) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "flatten", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the broadcast_left operation or structure.
+    fn broadcast_left<K: DType>(_t: &B::Storage<K>, _shape: &[usize]) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "broadcast_left", backend: core::any::type_name::<Self>() })
+    }
 
-    /// Auto-generated documentation for float_to_scalar.
-    fn float_to_scalar<K: DType>(t: &B::Storage<K>) -> Result<f64>;
-    /// Auto-generated documentation for float_to_vec1.
-    fn float_to_vec1<K: DType>(t: &B::Storage<K>) -> Result<alloc::vec::Vec<f64>>;
+    /// Provides the float_to_scalar operation or structure.
+    fn float_to_scalar<K: DType>(_t: &B::Storage<K>) -> Result<f64> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "float_to_scalar", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the float_to_vec1 operation or structure.
+    fn float_to_vec1<K: DType>(_t: &B::Storage<K>) -> Result<alloc::vec::Vec<f64>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "float_to_vec1", backend: core::any::type_name::<Self>() })
+    }
 
-    /// Auto-generated documentation for int_to_scalar.
-    fn int_to_scalar<K: DType>(t: &B::Storage<K>) -> Result<i64>;
-    /// Auto-generated documentation for int_to_vec1.
-    fn int_to_vec1<K: DType>(t: &B::Storage<K>) -> Result<alloc::vec::Vec<i64>>;
+    /// Provides the int_to_scalar operation or structure.
+    fn int_to_scalar<K: DType>(_t: &B::Storage<K>) -> Result<i64> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "int_to_scalar", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the int_to_vec1 operation or structure.
+    fn int_to_vec1<K: DType>(_t: &B::Storage<K>) -> Result<alloc::vec::Vec<i64>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "int_to_vec1", backend: core::any::type_name::<Self>() })
+    }
 
-    /// Auto-generated documentation for tensor_to_dtype.
+    /// Provides the tensor_to_dtype operation or structure.
     fn tensor_to_dtype<K: DType, K2: DType>(
-        t: &B::Storage<K>,
-        dtype: KindleDType,
-    ) -> Result<B::Storage<K2>>;
+        _t: &B::Storage<K>,
+        _dtype: KindleDType,
+    ) -> Result<B::Storage<K2>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "tensor_to_dtype", backend: core::any::type_name::<Self>() })
+    }
 }
 
-/// Auto-generated documentation for CreationOps.
+    /// Provides the CreationOps operation or structure.
 pub trait CreationOps<B: Backend> {
-    /// Auto-generated documentation for zeros.
+    /// Provides the zeros operation or structure.
     fn zeros<K: DType>(
-        shape: &[usize],
-        dtype: KindleDType,
-        device: &KindleDevice,
-    ) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for ones.
+        _shape: &[usize],
+        _dtype: KindleDType,
+        _device: &KindleDevice,
+    ) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "zeros", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the ones operation or structure.
     fn ones<K: DType>(
-        shape: &[usize],
-        dtype: KindleDType,
-        device: &KindleDevice,
-    ) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for rand.
+        _shape: &[usize],
+        _dtype: KindleDType,
+        _device: &KindleDevice,
+    ) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "ones", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the rand operation or structure.
     fn rand<K: DType>(
-        shape: &[usize],
-        dtype: KindleDType,
-        device: &KindleDevice,
-    ) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for randn.
+        _shape: &[usize],
+        _dtype: KindleDType,
+        _device: &KindleDevice,
+    ) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "rand", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the randn operation or structure.
     fn randn<K: DType>(
-        shape: &[usize],
-        dtype: KindleDType,
-        device: &KindleDevice,
-    ) -> Result<B::Storage<K>>;
+        _shape: &[usize],
+        _dtype: KindleDType,
+        _device: &KindleDevice,
+    ) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "randn", backend: core::any::type_name::<Self>() })
+    }
 
-    /// Auto-generated documentation for var_zeros.
+    /// Provides the var_zeros operation or structure.
     fn var_zeros<K: DType>(
-        shape: &[usize],
-        dtype: KindleDType,
-        device: &KindleDevice,
-    ) -> Result<B::RawVar>;
-    /// Auto-generated documentation for var_ones.
+        _shape: &[usize],
+        _dtype: KindleDType,
+        _device: &KindleDevice,
+    ) -> Result<B::RawVar> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "var_zeros", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the var_ones operation or structure.
     fn var_ones<K: DType>(
-        shape: &[usize],
-        dtype: KindleDType,
-        device: &KindleDevice,
-    ) -> Result<B::RawVar>;
-    /// Auto-generated documentation for var_rand.
+        _shape: &[usize],
+        _dtype: KindleDType,
+        _device: &KindleDevice,
+    ) -> Result<B::RawVar> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "var_ones", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the var_rand operation or structure.
     fn var_rand<K: DType>(
-        shape: &[usize],
-        dtype: KindleDType,
-        device: &KindleDevice,
-    ) -> Result<B::RawVar>;
-    /// Auto-generated documentation for var_randn.
+        _shape: &[usize],
+        _dtype: KindleDType,
+        _device: &KindleDevice,
+    ) -> Result<B::RawVar> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "var_rand", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the var_randn operation or structure.
     fn var_randn<K: DType>(
-        shape: &[usize],
-        dtype: KindleDType,
-        device: &KindleDevice,
-    ) -> Result<B::RawVar>;
+        _shape: &[usize],
+        _dtype: KindleDType,
+        _device: &KindleDevice,
+    ) -> Result<B::RawVar> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "var_randn", backend: core::any::type_name::<Self>() })
+    }
 
-    /// Auto-generated documentation for tensor_to_device.
+    /// Provides the tensor_to_device operation or structure.
     fn tensor_to_device<K: DType>(
-        t: &B::Storage<K>,
-        device: &KindleDevice,
-    ) -> Result<B::Storage<K>>;
+        _t: &B::Storage<K>,
+        _device: &KindleDevice,
+    ) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "tensor_to_device", backend: core::any::type_name::<Self>() })
+    }
 }
 
-/// Auto-generated documentation for ReductionOps.
+    /// Provides the ReductionOps operation or structure.
 pub trait ReductionOps<B: Backend> {
-    /// Auto-generated documentation for sum_all.
-    fn sum_all<K: DType>(t: &B::Storage<K>) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for mean_all.
-    fn mean_all<K: DType>(t: &B::Storage<K>) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for max_all.
-    fn max_all<K: DType>(t: &B::Storage<K>) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for min_all.
-    fn min_all<K: DType>(t: &B::Storage<K>) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for sum_dim.
-    fn sum_dim<K: DType>(t: &B::Storage<K>, dim: usize) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for sum_keepdim.
-    fn sum_keepdim<K: DType>(t: &B::Storage<K>, dim: usize) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for mean_dim.
-    fn mean_dim<K: DType>(t: &B::Storage<K>, dim: usize) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for mean_keepdim.
-    fn mean_keepdim<K: DType>(t: &B::Storage<K>, dim: usize) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for max_dim.
-    fn max_dim<K: DType>(t: &B::Storage<K>, dim: usize) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for max_keepdim.
-    fn max_keepdim<K: DType>(t: &B::Storage<K>, dim: usize) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for min_dim.
-    fn min_dim<K: DType>(t: &B::Storage<K>, dim: usize) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for min_keepdim.
-    fn min_keepdim<K: DType>(t: &B::Storage<K>, dim: usize) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for argmax.
+    /// Provides the sum_all operation or structure.
+    fn sum_all<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "sum_all", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the mean_all operation or structure.
+    fn mean_all<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "mean_all", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the max_all operation or structure.
+    fn max_all<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "max_all", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the min_all operation or structure.
+    fn min_all<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "min_all", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the sum_dim operation or structure.
+    fn sum_dim<K: DType>(_t: &B::Storage<K>, _dim: usize) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "sum_dim", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the sum_keepdim operation or structure.
+    fn sum_keepdim<K: DType>(_t: &B::Storage<K>, _dim: usize) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "sum_keepdim", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the mean_dim operation or structure.
+    fn mean_dim<K: DType>(_t: &B::Storage<K>, _dim: usize) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "mean_dim", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the mean_keepdim operation or structure.
+    fn mean_keepdim<K: DType>(_t: &B::Storage<K>, _dim: usize) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "mean_keepdim", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the max_dim operation or structure.
+    fn max_dim<K: DType>(_t: &B::Storage<K>, _dim: usize) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "max_dim", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the max_keepdim operation or structure.
+    fn max_keepdim<K: DType>(_t: &B::Storage<K>, _dim: usize) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "max_keepdim", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the min_dim operation or structure.
+    fn min_dim<K: DType>(_t: &B::Storage<K>, _dim: usize) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "min_dim", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the min_keepdim operation or structure.
+    fn min_keepdim<K: DType>(_t: &B::Storage<K>, _dim: usize) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "min_keepdim", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the argmax operation or structure.
     fn argmax<K: DType, KInt: DType>(
-        t: &B::Storage<K>,
-        dim: Option<usize>,
-    ) -> Result<B::Storage<KInt>>;
-    /// Auto-generated documentation for argmin.
+        _t: &B::Storage<K>,
+        _dim: Option<usize>,
+    ) -> Result<B::Storage<KInt>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "argmax", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the argmin operation or structure.
     fn argmin<K: DType, KInt: DType>(
-        t: &B::Storage<K>,
-        dim: Option<usize>,
-    ) -> Result<B::Storage<KInt>>;
-    /// Auto-generated documentation for topk.
+        _t: &B::Storage<K>,
+        _dim: Option<usize>,
+    ) -> Result<B::Storage<KInt>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "argmin", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the topk operation or structure.
     fn topk<K: DType, KInt: DType>(
-        t: &B::Storage<K>,
-        k: usize,
-        dim: usize,
-        largest: bool,
-    ) -> Result<(B::Storage<K>, B::Storage<KInt>)>;
-    /// Auto-generated documentation for argsort.
+        _t: &B::Storage<K>,
+        _k: usize,
+        _dim: usize,
+        _largest: bool,
+    ) -> Result<(B::Storage<K>, B::Storage<KInt>)> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "topk", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the argsort operation or structure.
     fn argsort<K: DType, KInt: DType>(
-        t: &B::Storage<K>,
-        dim: usize,
-        descending: bool,
-    ) -> Result<B::Storage<KInt>>;
+        _t: &B::Storage<K>,
+        _dim: usize,
+        _descending: bool,
+    ) -> Result<B::Storage<KInt>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "argsort", backend: core::any::type_name::<Self>() })
+    }
 }
 
-/// Auto-generated documentation for ModuleOps.
+    /// Provides the ModuleOps operation or structure.
 pub trait ModuleOps<B: Backend> {
-    /// Auto-generated documentation for layer_norm.
+    /// Provides the layer_norm operation or structure.
     fn layer_norm<K: DType>(
-        t: &B::Storage<K>,
-        weight: &B::Storage<K>,
-        bias: Option<&B::Storage<K>>,
-        eps: f32,
-    ) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for batch_norm.
+        _t: &B::Storage<K>,
+        _weight: &B::Storage<K>,
+        _bias: Option<&B::Storage<K>>,
+        _eps: f32,
+    ) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "layer_norm", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the batch_norm operation or structure.
     fn batch_norm<K: DType>(
-        t: &B::Storage<K>,
-        w: Option<&B::Storage<K>>,
-        b: Option<&B::Storage<K>>,
-        rm: Option<&B::Storage<K>>,
-        rv: Option<&B::Storage<K>>,
-        e: f32,
-        momentum: f64,
-    ) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for embedding.
+        _t: &B::Storage<K>,
+        _w: Option<&B::Storage<K>>,
+        _b: Option<&B::Storage<K>>,
+        _rm: Option<&B::Storage<K>>,
+        _rv: Option<&B::Storage<K>>,
+        _e: f32,
+        _momentum: f64,
+    ) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "batch_norm", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the embedding operation or structure.
     fn embedding<K: DType, KInt: DType>(
-        t: &B::Storage<KInt>,
-        w: &B::Storage<K>,
-    ) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for conv1d.
+        _t: &B::Storage<KInt>,
+        _w: &B::Storage<K>,
+    ) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "embedding", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the conv1d operation or structure.
     fn conv1d<K: DType>(
-        t: &B::Storage<K>,
-        w: &B::Storage<K>,
-        b: Option<&B::Storage<K>>,
-        stride: usize,
-        padding: usize,
-        dilation: usize,
-        groups: usize,
-    ) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for conv2d.
+        _t: &B::Storage<K>,
+        _w: &B::Storage<K>,
+        _b: Option<&B::Storage<K>>,
+        _stride: usize,
+        _padding: usize,
+        _dilation: usize,
+        _groups: usize,
+    ) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "conv1d", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the conv2d operation or structure.
     fn conv2d<K: DType>(
-        t: &B::Storage<K>,
-        w: &B::Storage<K>,
-        b: Option<&B::Storage<K>>,
-        stride: usize,
-        padding: usize,
-        dilation: usize,
-        groups: usize,
-    ) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for conv_transpose2d.
+        _t: &B::Storage<K>,
+        _w: &B::Storage<K>,
+        _b: Option<&B::Storage<K>>,
+        _stride: usize,
+        _padding: usize,
+        _dilation: usize,
+        _groups: usize,
+    ) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "conv2d", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the conv_transpose2d operation or structure.
     fn conv_transpose2d<K: DType>(
-        t: &B::Storage<K>,
-        w: &B::Storage<K>,
-        b: Option<&B::Storage<K>>,
-        stride: usize,
-        padding: usize,
-        output_padding: usize,
-        dilation: usize,
-        groups: usize,
-    ) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for max_pool2d.
+        _t: &B::Storage<K>,
+        _w: &B::Storage<K>,
+        _b: Option<&B::Storage<K>>,
+        _stride: usize,
+        _padding: usize,
+        _output_padding: usize,
+        _dilation: usize,
+        _groups: usize,
+    ) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "conv_transpose2d", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the max_pool2d operation or structure.
     fn max_pool2d<K: DType>(
-        t: &B::Storage<K>,
-        kernel_size: (usize, usize),
-        stride: (usize, usize),
-        padding: (usize, usize),
-        dilation: (usize, usize),
-    ) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for avg_pool2d.
+        _t: &B::Storage<K>,
+        _kernel_size: (usize, usize),
+        _stride: (usize, usize),
+        _padding: (usize, usize),
+        _dilation: (usize, usize),
+    ) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "max_pool2d", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the avg_pool2d operation or structure.
     fn avg_pool2d<K: DType>(
-        t: &B::Storage<K>,
-        kernel_size: (usize, usize),
-        stride: (usize, usize),
-        padding: (usize, usize),
-    ) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for adaptive_avg_pool2d.
+        _t: &B::Storage<K>,
+        _kernel_size: (usize, usize),
+        _stride: (usize, usize),
+        _padding: (usize, usize),
+    ) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "avg_pool2d", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the adaptive_avg_pool2d operation or structure.
     fn adaptive_avg_pool2d<K: DType>(
-        t: &B::Storage<K>,
-        output_size: (usize, usize),
-    ) -> Result<B::Storage<K>>;
+        _t: &B::Storage<K>,
+        _output_size: (usize, usize),
+    ) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "adaptive_avg_pool2d", backend: core::any::type_name::<Self>() })
+    }
 }
 
-/// Auto-generated documentation for LossOps.
+    /// Provides the LossOps operation or structure.
 pub trait LossOps<B: Backend>: NumericOps<B> + FloatOps<B> + ReductionOps<B> {
-    /// Auto-generated documentation for mse_loss.
+    /// Provides the mse_loss operation or structure.
     fn mse_loss<K: DType>(
         pred: &B::Storage<K>,
         target: &B::Storage<K>,
@@ -441,7 +581,7 @@ pub trait LossOps<B: Backend>: NumericOps<B> + FloatOps<B> + ReductionOps<B> {
         }
     }
 
-    /// Auto-generated documentation for l1_loss.
+    /// Provides the l1_loss operation or structure.
     fn l1_loss<K: DType>(
         pred: &B::Storage<K>,
         target: &B::Storage<K>,
@@ -456,7 +596,7 @@ pub trait LossOps<B: Backend>: NumericOps<B> + FloatOps<B> + ReductionOps<B> {
         }
     }
 
-    /// Auto-generated documentation for bce_with_logits_loss.
+    /// Provides the bce_with_logits_loss operation or structure.
     fn bce_with_logits_loss<K: DType>(
         pred: &B::Storage<K>,
         target: &B::Storage<K>,
@@ -481,30 +621,38 @@ pub trait LossOps<B: Backend>: NumericOps<B> + FloatOps<B> + ReductionOps<B> {
         }
     }
 
-    /// Auto-generated documentation for cross_entropy_loss.
+    /// Provides the cross_entropy_loss operation or structure.
     fn cross_entropy_loss<K: DType, KInt: DType>(
-        pred: &B::Storage<K>,
-        target: &B::Storage<KInt>,
-        reduction: crate::nn::loss::Reduction,
-    ) -> Result<B::Storage<K>>;
+        _pred: &B::Storage<K>,
+        _target: &B::Storage<KInt>,
+        _reduction: crate::nn::loss::Reduction,
+    ) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "cross_entropy_loss", backend: core::any::type_name::<Self>() })
+    }
 }
 
-/// Auto-generated documentation for QuantizedOps.
+    /// Provides the QuantizedOps operation or structure.
 pub trait QuantizedOps<B: Backend> {
-    /// Auto-generated documentation for quantize.
-    fn quantize<K: FloatDType, Q: QuantDType>(t: &B::Storage<K>) -> Result<B::Storage<Q>>;
-    /// Auto-generated documentation for dequantize.
-    fn dequantize<Q: QuantDType, K: FloatDType>(t: &B::Storage<Q>) -> Result<B::Storage<K>>;
-    /// Auto-generated documentation for quantized_matmul.
+    /// Provides the quantize operation or structure.
+    fn quantize<K: FloatDType, Q: QuantDType>(_t: &B::Storage<K>) -> Result<B::Storage<Q>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "quantize", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the dequantize operation or structure.
+    fn dequantize<Q: QuantDType, K: FloatDType>(_t: &B::Storage<Q>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "dequantize", backend: core::any::type_name::<Self>() })
+    }
+    /// Provides the quantized_matmul operation or structure.
     fn quantized_matmul<Q: QuantDType>(
-        lhs: &B::Storage<Q>,
-        rhs: &B::Storage<Q>,
-    ) -> Result<B::Storage<f32>>;
+        _lhs: &B::Storage<Q>,
+        _rhs: &B::Storage<Q>,
+    ) -> Result<B::Storage<f32>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "quantized_matmul", backend: core::any::type_name::<Self>() })
+    }
 }
 
-/// Auto-generated documentation for OptimizerOps.
+    /// Provides the OptimizerOps operation or structure.
 pub trait OptimizerOps<B: Backend> {
-    /// Auto-generated documentation for adamw_step.
+    /// Provides the adamw_step operation or structure.
     fn adamw_step<K: DType>(
         var: &mut B::RawVar,
         grad: &B::Storage<K>,
@@ -550,7 +698,7 @@ pub trait OptimizerOps<B: Backend> {
         Ok(())
     }
 }
-/// Auto-generated documentation for dummy.
+    /// Provides the dummy operation or structure.
 pub mod dummy {
     use super::*;
     use crate::nn::Reduction;
@@ -559,13 +707,13 @@ pub mod dummy {
     use crate::tensor::device::KindleDevice;
     use crate::tensor::dtype::DType;
 
-    /// Auto-generated documentation for DummyBackend.
+    /// Provides the DummyBackend operation or structure.
     pub struct DummyBackend<T, D> {
         _marker: core::marker::PhantomData<(T, D)>,
     }
 
     impl<T: DType, D: Device + Clone + 'static> Clone for DummyBackend<T, D> {
-        /// Auto-generated documentation for clone.
+    /// Provides the clone operation or structure.
         fn clone(&self) -> Self {
             DummyBackend {
                 _marker: core::marker::PhantomData,
@@ -574,55 +722,55 @@ pub mod dummy {
     }
 
     impl<T: DType, D: Device + Clone + 'static> Backend for DummyBackend<T, D> {
-        /// Auto-generated documentation for Device.
+    /// Provides the Device operation or structure.
         type Device = D;
-        /// Auto-generated documentation for FloatElem.
+    /// Provides the FloatElem operation or structure.
         type FloatElem = T;
-        /// Auto-generated documentation for IntElem.
+    /// Provides the IntElem operation or structure.
         type IntElem = i64;
-        /// Auto-generated documentation for RawVar.
+    /// Provides the RawVar operation or structure.
         type RawVar = alloc::vec::Vec<usize>;
-        /// Auto-generated documentation for Grads.
+    /// Provides the Grads operation or structure.
         type Grads = ();
-        /// Auto-generated documentation for Storage.
+    /// Provides the Storage operation or structure.
         type Storage<K: DType> = alloc::vec::Vec<usize>;
-        /// Auto-generated documentation for InnerBackend.
+    /// Provides the InnerBackend operation or structure.
         type InnerBackend = Self;
-        /// Auto-generated documentation for BackendWithDevice.
+    /// Provides the BackendWithDevice operation or structure.
         type BackendWithDevice<NewD: Device> = DummyBackend<T, NewD>;
 
-        /// Auto-generated documentation for shape.
+    /// Provides the shape operation or structure.
         fn shape<K: DType>(t: &Self::Storage<K>) -> alloc::vec::Vec<usize> {
             t.clone()
         }
-        /// Auto-generated documentation for format_tensor_display.
+    /// Provides the format_tensor_display operation or structure.
         fn format_tensor_display<K: DType>(_t: &Self::Storage<K>) -> alloc::string::String {
             alloc::string::String::from("dummy")
         }
-        /// Auto-generated documentation for format_tensor_debug.
+    /// Provides the format_tensor_debug operation or structure.
         fn format_tensor_debug<K: DType>(_t: &Self::Storage<K>) -> alloc::string::String {
             alloc::string::String::from("dummy")
         }
-        /// Auto-generated documentation for backward.
+    /// Provides the backward operation or structure.
         fn backward<K: DType>(_t: &Self::Storage<K>) -> Result<Self::Grads> {
             Ok(())
         }
-        /// Auto-generated documentation for backward_with_nan_check.
+    /// Provides the backward_with_nan_check operation or structure.
         fn backward_with_nan_check<K: DType>(_t: &Self::Storage<K>) -> Result<Self::Grads> {
             Ok(())
         }
-        /// Auto-generated documentation for get_grad.
+    /// Provides the get_grad operation or structure.
         fn get_grad<K: DType>(
             _t: &Self::Storage<K>,
             _grads: &Self::Grads,
         ) -> Result<Option<Self::Storage<K>>> {
             Ok(None)
         }
-        /// Auto-generated documentation for to_bytes.
+    /// Provides the to_bytes operation or structure.
         fn to_bytes<K: DType>(_t: &Self::Storage<K>) -> Result<alloc::vec::Vec<u8>> {
             Ok(alloc::vec::Vec::new())
         }
-        /// Auto-generated documentation for from_bytes.
+    /// Provides the from_bytes operation or structure.
         fn from_bytes<K: DType>(
             _bytes: &[u8],
             shape: &[usize],
@@ -631,19 +779,19 @@ pub mod dummy {
         ) -> Result<Self::Storage<K>> {
             Ok(shape.to_vec())
         }
-        /// Auto-generated documentation for var_as_tensor.
+    /// Provides the var_as_tensor operation or structure.
         fn var_as_tensor<K: DType>(var: &Self::RawVar) -> Result<Self::Storage<K>> {
             Ok(var.clone())
         }
-        /// Auto-generated documentation for var_from_tensor.
+    /// Provides the var_from_tensor operation or structure.
         fn var_from_tensor<K: DType>(t: &Self::Storage<K>) -> Result<Self::RawVar> {
             Ok(t.clone())
         }
-        /// Auto-generated documentation for var_to_device.
+    /// Provides the var_to_device operation or structure.
         fn var_to_device(var: &Self::RawVar, _device: &KindleDevice) -> Result<Self::RawVar> {
             Ok(var.clone())
         }
-        /// Auto-generated documentation for assign_var.
+    /// Provides the assign_var operation or structure.
         fn assign_var<K: DType>(var: &mut Self::RawVar, tensor: &Self::Storage<K>) -> Result<()> {
             *var = tensor.clone();
             Ok(())
@@ -651,7 +799,7 @@ pub mod dummy {
     }
 
     impl<T: DType, D: Device + Clone + 'static> CreationOps<Self> for DummyBackend<T, D> {
-        /// Auto-generated documentation for zeros.
+    /// Provides the zeros operation or structure.
         fn zeros<K: DType>(
             shape: &[usize],
             _dtype: KindleDType,
@@ -659,7 +807,7 @@ pub mod dummy {
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(shape.to_vec())
         }
-        /// Auto-generated documentation for ones.
+    /// Provides the ones operation or structure.
         fn ones<K: DType>(
             shape: &[usize],
             _dtype: KindleDType,
@@ -667,7 +815,7 @@ pub mod dummy {
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(shape.to_vec())
         }
-        /// Auto-generated documentation for rand.
+    /// Provides the rand operation or structure.
         fn rand<K: DType>(
             shape: &[usize],
             _dtype: KindleDType,
@@ -675,7 +823,7 @@ pub mod dummy {
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(shape.to_vec())
         }
-        /// Auto-generated documentation for randn.
+    /// Provides the randn operation or structure.
         fn randn<K: DType>(
             shape: &[usize],
             _dtype: KindleDType,
@@ -683,7 +831,7 @@ pub mod dummy {
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(shape.to_vec())
         }
-        /// Auto-generated documentation for var_zeros.
+    /// Provides the var_zeros operation or structure.
         fn var_zeros<K: DType>(
             shape: &[usize],
             _dtype: KindleDType,
@@ -691,7 +839,7 @@ pub mod dummy {
         ) -> Result<<Self as Backend>::RawVar> {
             Ok(shape.to_vec())
         }
-        /// Auto-generated documentation for var_ones.
+    /// Provides the var_ones operation or structure.
         fn var_ones<K: DType>(
             shape: &[usize],
             _dtype: KindleDType,
@@ -699,7 +847,7 @@ pub mod dummy {
         ) -> Result<<Self as Backend>::RawVar> {
             Ok(shape.to_vec())
         }
-        /// Auto-generated documentation for var_rand.
+    /// Provides the var_rand operation or structure.
         fn var_rand<K: DType>(
             shape: &[usize],
             _dtype: KindleDType,
@@ -707,7 +855,7 @@ pub mod dummy {
         ) -> Result<<Self as Backend>::RawVar> {
             Ok(shape.to_vec())
         }
-        /// Auto-generated documentation for var_randn.
+    /// Provides the var_randn operation or structure.
         fn var_randn<K: DType>(
             shape: &[usize],
             _dtype: KindleDType,
@@ -715,7 +863,7 @@ pub mod dummy {
         ) -> Result<<Self as Backend>::RawVar> {
             Ok(shape.to_vec())
         }
-        /// Auto-generated documentation for tensor_to_device.
+    /// Provides the tensor_to_device operation or structure.
         fn tensor_to_device<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             _device: &KindleDevice,
@@ -725,28 +873,28 @@ pub mod dummy {
     }
 
     impl<T: DType, D: Device + Clone + 'static> NumericOps<Self> for DummyBackend<T, D> {
-        /// Auto-generated documentation for add.
+    /// Provides the add operation or structure.
         fn add<K: DType>(
             lhs: &<Self as Backend>::Storage<K>,
             _rhs: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(lhs.clone())
         }
-        /// Auto-generated documentation for sub.
+    /// Provides the sub operation or structure.
         fn sub<K: DType>(
             lhs: &<Self as Backend>::Storage<K>,
             _rhs: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(lhs.clone())
         }
-        /// Auto-generated documentation for mul.
+    /// Provides the mul operation or structure.
         fn mul<K: DType>(
             lhs: &<Self as Backend>::Storage<K>,
             _rhs: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(lhs.clone())
         }
-        /// Auto-generated documentation for div.
+    /// Provides the div operation or structure.
         fn div<K: DType>(
             lhs: &<Self as Backend>::Storage<K>,
             _rhs: &<Self as Backend>::Storage<K>,
@@ -756,99 +904,99 @@ pub mod dummy {
     }
 
     impl<T: DType, D: Device + Clone + 'static> FloatOps<Self> for DummyBackend<T, D> {
-        /// Auto-generated documentation for add_scalar_float.
+    /// Provides the add_scalar_float operation or structure.
         fn add_scalar_float<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             _scalar: f64,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(t.clone())
         }
-        /// Auto-generated documentation for mul_scalar_float.
+    /// Provides the mul_scalar_float operation or structure.
         fn mul_scalar_float<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             _scalar: f64,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(t.clone())
         }
-        /// Auto-generated documentation for relu.
+    /// Provides the relu operation or structure.
         fn relu<K: DType>(
             t: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(t.clone())
         }
-        /// Auto-generated documentation for step.
+    /// Provides the step operation or structure.
         fn step<K: DType>(
             t: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(t.clone())
         }
-        /// Auto-generated documentation for mish.
+    /// Provides the mish operation or structure.
         fn mish<K: DType>(
             t: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(t.clone())
         }
-        /// Auto-generated documentation for elu.
+    /// Provides the elu operation or structure.
         fn elu<K: DType>(
             t: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(t.clone())
         }
-        /// Auto-generated documentation for gelu.
+    /// Provides the gelu operation or structure.
         fn gelu<K: DType>(
             t: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(t.clone())
         }
-        /// Auto-generated documentation for abs.
+    /// Provides the abs operation or structure.
         fn abs<K: DType>(
             t: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(t.clone())
         }
-        /// Auto-generated documentation for exp.
+    /// Provides the exp operation or structure.
         fn exp<K: DType>(
             t: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(t.clone())
         }
-        /// Auto-generated documentation for neg.
+    /// Provides the neg operation or structure.
         fn neg<K: DType>(
             t: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(t.clone())
         }
-        /// Auto-generated documentation for sqrt.
+    /// Provides the sqrt operation or structure.
         fn sqrt<K: DType>(
             t: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(t.clone())
         }
-        /// Auto-generated documentation for log.
+    /// Provides the log operation or structure.
         fn log<K: DType>(
             t: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(t.clone())
         }
-        /// Auto-generated documentation for tanh.
+    /// Provides the tanh operation or structure.
         fn tanh<K: DType>(
             t: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(t.clone())
         }
-        /// Auto-generated documentation for sigmoid.
+    /// Provides the sigmoid operation or structure.
         fn sigmoid<K: DType>(
             t: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(t.clone())
         }
-        /// Auto-generated documentation for swish.
+    /// Provides the swish operation or structure.
         fn swish<K: DType>(
             t: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(t.clone())
         }
-        /// Auto-generated documentation for softmax.
+    /// Provides the softmax operation or structure.
         fn softmax<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             _dim: usize,
@@ -858,31 +1006,31 @@ pub mod dummy {
     }
 
     impl<T: DType, D: Device + Clone + 'static> ReductionOps<Self> for DummyBackend<T, D> {
-        /// Auto-generated documentation for sum_all.
+    /// Provides the sum_all operation or structure.
         fn sum_all<K: DType>(
             _t: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(alloc::vec![])
         }
-        /// Auto-generated documentation for mean_all.
+    /// Provides the mean_all operation or structure.
         fn mean_all<K: DType>(
             _t: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(alloc::vec![])
         }
-        /// Auto-generated documentation for max_all.
+    /// Provides the max_all operation or structure.
         fn max_all<K: DType>(
             _t: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(alloc::vec![])
         }
-        /// Auto-generated documentation for min_all.
+    /// Provides the min_all operation or structure.
         fn min_all<K: DType>(
             _t: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(alloc::vec![])
         }
-        /// Auto-generated documentation for sum_dim.
+    /// Provides the sum_dim operation or structure.
         fn sum_dim<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             dim: usize,
@@ -893,7 +1041,7 @@ pub mod dummy {
             }
             Ok(s)
         }
-        /// Auto-generated documentation for sum_keepdim.
+    /// Provides the sum_keepdim operation or structure.
         fn sum_keepdim<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             dim: usize,
@@ -904,7 +1052,7 @@ pub mod dummy {
             }
             Ok(s)
         }
-        /// Auto-generated documentation for mean_dim.
+    /// Provides the mean_dim operation or structure.
         fn mean_dim<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             dim: usize,
@@ -915,7 +1063,7 @@ pub mod dummy {
             }
             Ok(s)
         }
-        /// Auto-generated documentation for mean_keepdim.
+    /// Provides the mean_keepdim operation or structure.
         fn mean_keepdim<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             dim: usize,
@@ -926,7 +1074,7 @@ pub mod dummy {
             }
             Ok(s)
         }
-        /// Auto-generated documentation for max_dim.
+    /// Provides the max_dim operation or structure.
         fn max_dim<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             dim: usize,
@@ -937,7 +1085,7 @@ pub mod dummy {
             }
             Ok(s)
         }
-        /// Auto-generated documentation for max_keepdim.
+    /// Provides the max_keepdim operation or structure.
         fn max_keepdim<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             dim: usize,
@@ -948,7 +1096,7 @@ pub mod dummy {
             }
             Ok(s)
         }
-        /// Auto-generated documentation for min_dim.
+    /// Provides the min_dim operation or structure.
         fn min_dim<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             dim: usize,
@@ -959,7 +1107,7 @@ pub mod dummy {
             }
             Ok(s)
         }
-        /// Auto-generated documentation for min_keepdim.
+    /// Provides the min_keepdim operation or structure.
         fn min_keepdim<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             dim: usize,
@@ -970,21 +1118,21 @@ pub mod dummy {
             }
             Ok(s)
         }
-        /// Auto-generated documentation for argmax.
+    /// Provides the argmax operation or structure.
         fn argmax<K: DType, KInt: DType>(
             _t: &<Self as Backend>::Storage<K>,
             _dim: Option<usize>,
         ) -> Result<<Self as Backend>::Storage<KInt>> {
             Ok(alloc::vec![])
         }
-        /// Auto-generated documentation for argmin.
+    /// Provides the argmin operation or structure.
         fn argmin<K: DType, KInt: DType>(
             _t: &<Self as Backend>::Storage<K>,
             _dim: Option<usize>,
         ) -> Result<<Self as Backend>::Storage<KInt>> {
             Ok(alloc::vec![])
         }
-        /// Auto-generated documentation for topk.
+    /// Provides the topk operation or structure.
         fn topk<K: DType, KInt: DType>(
             _t: &<Self as Backend>::Storage<K>,
             _k: usize,
@@ -993,7 +1141,7 @@ pub mod dummy {
         ) -> Result<(<Self as Backend>::Storage<K>, <Self as Backend>::Storage<KInt>)> {
             Ok((alloc::vec![], alloc::vec![]))
         }
-        /// Auto-generated documentation for argsort.
+    /// Provides the argsort operation or structure.
         fn argsort<K: DType, KInt: DType>(
             _t: &<Self as Backend>::Storage<K>,
             _dim: usize,
@@ -1004,7 +1152,7 @@ pub mod dummy {
     }
 
     impl<T: DType, D: Device + Clone + 'static> TensorOps<Self> for DummyBackend<T, D> {
-        /// Auto-generated documentation for matmul.
+    /// Provides the matmul operation or structure.
         fn matmul<K: DType>(
             lhs: &<Self as Backend>::Storage<K>,
             rhs: &<Self as Backend>::Storage<K>,
@@ -1016,35 +1164,35 @@ pub mod dummy {
             }
             Ok(out)
         }
-        /// Auto-generated documentation for float_to_scalar.
+    /// Provides the float_to_scalar operation or structure.
         fn float_to_scalar<K: DType>(_t: &<Self as Backend>::Storage<K>) -> Result<f64> {
             Ok(0.0)
         }
-        /// Auto-generated documentation for float_to_vec1.
+    /// Provides the float_to_vec1 operation or structure.
         fn float_to_vec1<K: DType>(
             _t: &<Self as Backend>::Storage<K>,
         ) -> Result<alloc::vec::Vec<f64>> {
             Ok(alloc::vec![0.0])
         }
-        /// Auto-generated documentation for int_to_scalar.
+    /// Provides the int_to_scalar operation or structure.
         fn int_to_scalar<K: DType>(_t: &<Self as Backend>::Storage<K>) -> Result<i64> {
             Ok(0)
         }
-        /// Auto-generated documentation for int_to_vec1.
+    /// Provides the int_to_vec1 operation or structure.
         fn int_to_vec1<K: DType>(
             _t: &<Self as Backend>::Storage<K>,
         ) -> Result<alloc::vec::Vec<i64>> {
             Ok(alloc::vec![0])
         }
 
-        /// Auto-generated documentation for broadcast_as.
+    /// Provides the broadcast_as operation or structure.
         fn broadcast_as<K: DType>(
             _t: &<Self as Backend>::Storage<K>,
             s: &[usize],
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(s.to_vec())
         }
-        /// Auto-generated documentation for broadcast_left.
+    /// Provides the broadcast_left operation or structure.
         fn broadcast_left<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             s: &[usize],
@@ -1053,14 +1201,14 @@ pub mod dummy {
             out.extend_from_slice(t);
             Ok(out)
         }
-        /// Auto-generated documentation for reshape.
+    /// Provides the reshape operation or structure.
         fn reshape<K: DType>(
             _t: &<Self as Backend>::Storage<K>,
             s: &[usize],
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(s.to_vec())
         }
-        /// Auto-generated documentation for transpose.
+    /// Provides the transpose operation or structure.
         fn transpose<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             d1: usize,
@@ -1072,7 +1220,7 @@ pub mod dummy {
             }
             Ok(out)
         }
-        /// Auto-generated documentation for flatten.
+    /// Provides the flatten operation or structure.
         fn flatten<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             s: usize,
@@ -1086,7 +1234,7 @@ pub mod dummy {
             out.extend_from_slice(&t[e + 1..]);
             Ok(out)
         }
-        /// Auto-generated documentation for slice.
+    /// Provides the slice operation or structure.
         fn slice<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             ranges: &[(usize, usize)],
@@ -1099,7 +1247,7 @@ pub mod dummy {
             }
             Ok(out)
         }
-        /// Auto-generated documentation for narrow.
+    /// Provides the narrow operation or structure.
         fn narrow<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             d: usize,
@@ -1112,7 +1260,7 @@ pub mod dummy {
             }
             Ok(out)
         }
-        /// Auto-generated documentation for squeeze.
+    /// Provides the squeeze operation or structure.
         fn squeeze<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             d: usize,
@@ -1123,7 +1271,7 @@ pub mod dummy {
             }
             Ok(out)
         }
-        /// Auto-generated documentation for stack.
+    /// Provides the stack operation or structure.
         fn stack<K: DType>(
             t: &[&<Self as Backend>::Storage<K>],
             d: usize,
@@ -1137,7 +1285,7 @@ pub mod dummy {
             }
             Ok(out)
         }
-        /// Auto-generated documentation for concat.
+    /// Provides the concat operation or structure.
         fn concat<K: DType>(
             t: &[&<Self as Backend>::Storage<K>],
             d: usize,
@@ -1151,7 +1299,7 @@ pub mod dummy {
             }
             Ok(out)
         }
-        /// Auto-generated documentation for tensor_to_dtype.
+    /// Provides the tensor_to_dtype operation or structure.
         fn tensor_to_dtype<K: DType, K2: DType>(
             t: &<Self as Backend>::Storage<K>,
             _dtype: KindleDType,
@@ -1161,7 +1309,7 @@ pub mod dummy {
     }
 
     impl<T: DType, D: Device + Clone + 'static> ModuleOps<Self> for DummyBackend<T, D> {
-        /// Auto-generated documentation for layer_norm.
+    /// Provides the layer_norm operation or structure.
         fn layer_norm<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             _w: &<Self as Backend>::Storage<K>,
@@ -1170,7 +1318,7 @@ pub mod dummy {
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(t.clone())
         }
-        /// Auto-generated documentation for batch_norm.
+    /// Provides the batch_norm operation or structure.
         fn batch_norm<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             _w: Option<&<Self as Backend>::Storage<K>>,
@@ -1182,14 +1330,14 @@ pub mod dummy {
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(t.clone())
         }
-        /// Auto-generated documentation for embedding.
+    /// Provides the embedding operation or structure.
         fn embedding<K: DType, KInt: DType>(
             _t: &<Self as Backend>::Storage<KInt>,
             _w: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(alloc::vec![])
         }
-        /// Auto-generated documentation for conv1d.
+    /// Provides the conv1d operation or structure.
         fn conv1d<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             w: &<Self as Backend>::Storage<K>,
@@ -1210,7 +1358,7 @@ pub mod dummy {
             }
             Ok(out)
         }
-        /// Auto-generated documentation for conv2d.
+    /// Provides the conv2d operation or structure.
         fn conv2d<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             w: &<Self as Backend>::Storage<K>,
@@ -1234,7 +1382,7 @@ pub mod dummy {
             }
             Ok(out)
         }
-        /// Auto-generated documentation for conv_transpose2d.
+    /// Provides the conv_transpose2d operation or structure.
         fn conv_transpose2d<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             w: &<Self as Backend>::Storage<K>,
@@ -1259,7 +1407,7 @@ pub mod dummy {
             }
             Ok(out)
         }
-        /// Auto-generated documentation for max_pool2d.
+    /// Provides the max_pool2d operation or structure.
         fn max_pool2d<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             k: (usize, usize),
@@ -1277,7 +1425,7 @@ pub mod dummy {
             }
             Ok(out)
         }
-        /// Auto-generated documentation for avg_pool2d.
+    /// Provides the avg_pool2d operation or structure.
         fn avg_pool2d<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             k: (usize, usize),
@@ -1294,7 +1442,7 @@ pub mod dummy {
             }
             Ok(out)
         }
-        /// Auto-generated documentation for adaptive_avg_pool2d.
+    /// Provides the adaptive_avg_pool2d operation or structure.
         fn adaptive_avg_pool2d<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             out: (usize, usize),
@@ -1310,7 +1458,7 @@ pub mod dummy {
     }
 
     impl<T: DType, D: Device + Clone + 'static> LossOps<Self> for DummyBackend<T, D> {
-        /// Auto-generated documentation for mse_loss.
+    /// Provides the mse_loss operation or structure.
         fn mse_loss<K: DType>(
             _pred: &<Self as Backend>::Storage<K>,
             _target: &<Self as Backend>::Storage<K>,
@@ -1318,7 +1466,7 @@ pub mod dummy {
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(alloc::vec![])
         }
-        /// Auto-generated documentation for l1_loss.
+    /// Provides the l1_loss operation or structure.
         fn l1_loss<K: DType>(
             _pred: &<Self as Backend>::Storage<K>,
             _target: &<Self as Backend>::Storage<K>,
@@ -1326,7 +1474,7 @@ pub mod dummy {
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(alloc::vec![])
         }
-        /// Auto-generated documentation for bce_with_logits_loss.
+    /// Provides the bce_with_logits_loss operation or structure.
         fn bce_with_logits_loss<K: DType>(
             _pred: &<Self as Backend>::Storage<K>,
             _target: &<Self as Backend>::Storage<K>,
@@ -1334,7 +1482,7 @@ pub mod dummy {
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(alloc::vec![])
         }
-        /// Auto-generated documentation for cross_entropy_loss.
+    /// Provides the cross_entropy_loss operation or structure.
         fn cross_entropy_loss<K: DType, KInt: DType>(
             _pred: &<Self as Backend>::Storage<K>,
             _target: &<Self as Backend>::Storage<KInt>,
@@ -1345,19 +1493,19 @@ pub mod dummy {
     }
 
     impl<T: DType, D: Device + Clone + 'static> QuantizedOps<Self> for DummyBackend<T, D> {
-        /// Auto-generated documentation for quantize.
+    /// Provides the quantize operation or structure.
         fn quantize<K: FloatDType, Q: QuantDType>(
             _t: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<Q>> {
             Ok(alloc::vec![])
         }
-        /// Auto-generated documentation for dequantize.
+    /// Provides the dequantize operation or structure.
         fn dequantize<Q: QuantDType, K: FloatDType>(
             _t: &<Self as Backend>::Storage<Q>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(alloc::vec![])
         }
-        /// Auto-generated documentation for quantized_matmul.
+    /// Provides the quantized_matmul operation or structure.
         fn quantized_matmul<Q: QuantDType>(
             _lhs: &<Self as Backend>::Storage<Q>,
             _rhs: &<Self as Backend>::Storage<Q>,

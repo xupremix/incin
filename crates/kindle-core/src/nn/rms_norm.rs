@@ -105,7 +105,7 @@ impl<
             Dyn::from_dyn(&mean_shape).unwrap(),
             x._dtype.clone(),
             x._device.clone(),
-            x._grad.clone(), // We propagate grad context
+            x._grad, // We propagate grad context
         );
         
         // mean(x^2) + eps

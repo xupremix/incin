@@ -23,6 +23,11 @@ impl<T: DType, D: Device> QuantizedOps<Self> for NativeBackend<T, D> {
             });
         }
 
+        #[cfg(feature = "cuda")]
+        if let NativeBuffer::Cuda(_) = &*_t.buffer {
+            return crate::ops::cuda_quant::launch_quantize(_t);
+        }
+
         let f32_data = match &*_t.buffer {
             NativeBuffer::F32(v) => v,
             _ => {
@@ -82,6 +87,11 @@ impl<T: DType, D: Device> QuantizedOps<Self> for NativeBackend<T, D> {
                 op: "dequantize",
                 backend: "Native (only Q8_0 to F32 supported)",
             });
+        }
+
+        #[cfg(feature = "cuda")]
+        if let NativeBuffer::Cuda(_) = &*_t.buffer {
+            return crate::ops::cuda_quant::launch_dequantize(_t);
         }
 
         let q8_data = match &*_t.buffer {

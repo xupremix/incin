@@ -14,6 +14,7 @@ pub(crate) mod device;
 pub(crate) mod dispatch;
 pub(crate) mod pipeline;
 pub(crate) mod storage;
+pub(crate) mod tape;
 
 // The three types a downstream crate legitimately needs:
 //   - `WgpuBackend<T, D>` to parameterise `Tensor`

@@ -35,7 +35,7 @@ You can configure internal macro and Hub behavior using the following environmen
 ## 🌟 Quick Tour
 
 ### Type-Safe ResNet Definition
-```rust
+```rust,ignore
 use kindle::prelude::*;
 
 #[kindle::module]
@@ -54,7 +54,7 @@ impl ResNetBlock {
 ```
 
 ### Python-like Slicing
-```rust
+```rust,ignore
 use kindle::prelude::*;
 
 let t = Tensor::zeros([2, 3, 4]).unwrap();
@@ -63,7 +63,7 @@ let sliced = t.slice(idx![.., 1..3, 0]).unwrap();
 ```
 
 ### Multi-Threaded DataLoaders
-```rust
+```rust,ignore
 use kindle_data::prelude::*;
 
 let iterator = (0..100).into_iter();

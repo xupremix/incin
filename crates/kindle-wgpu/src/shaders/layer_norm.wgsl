@@ -34,10 +34,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         var_sum = var_sum + diff * diff;
     }
     let variance = var_sum / f32(norm_size);
-    let std = sqrt(variance + eps);
+    let std_dev = sqrt(variance + eps);
 
     for (var i = 0u; i < norm_size; i = i + 1u) {
-        let norm = (inp[base + i] - mean) / std;
+        let norm = (inp[base + i] - mean) / std_dev;
         var b = 0.0;
         if has_bias > 0u {
             b = beta[i];

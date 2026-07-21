@@ -688,4 +688,21 @@ mod tests {
         // out[0] = 1+2=3, out[1] = 2+3=5, out[2] = 3+4=7
         assert!(vec_approx_eq(&readback(&out), &[3.0, 5.0, 7.0], 1e-4));
     }
+
+    #[test]
+    fn test_quantize_dequantize() {
+        let mut data = vec![0.0f32; 64];
+        for i in 0..64 {
+            data[i] = (i as f32 - 32.0) * 0.1; // ranging -3.2 to +3.1
+        }
+        let s = storage(data.clone(), vec![2, 32]);
+        let q_storage = <B as QuantizedOps<B>>::quantize::<f32, kindle_core::prelude::Q8_0>(&s).unwrap();
+        let deq_storage = <B as QuantizedOps<B>>::dequantize::<kindle_core::prelude::Q8_0, f32>(&q_storage).unwrap();
+        let deq_data = readback(&deq_storage);
+
+        for (orig, deq) in data.iter().zip(deq_data.iter()) {
+            let diff = (orig - deq).abs();
+            assert!(diff < 0.05, "Diff too large: {} vs {}", orig, deq);
+        }
+    }
 }

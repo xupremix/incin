@@ -170,8 +170,8 @@ trait MakeLabels: Backend<FloatElem = f32> {
 impl MakeLabels for NB {
     /// Auto-generated documentation for make_labels.
     fn make_labels(values: &[u32]) -> Self::Storage<u32> {
-        kindle_native::storage::NativeStorage::from_contiguous(
-            kindle_native::storage::NativeBuffer::U32(values.to_vec()),
+        kindle_native::NativeStorage::from_contiguous(
+            kindle_native::NativeBuffer::U32(values.to_vec()),
             vec![values.len()],
         )
     }

@@ -54,7 +54,7 @@ where
         }
 
         if self.p >= 1.0 {
-            return Ok(x.mul_scalar(0.0)?);
+            return x.mul_scalar(0.0);
         }
 
         let scale = 1.0 / (1.0 - self.p);
