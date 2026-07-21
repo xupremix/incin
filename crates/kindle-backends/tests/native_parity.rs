@@ -904,8 +904,8 @@ fn embedding_forward_and_backward_parity() {
     // so the integer index storage is built directly via NativeStorage's own
     // I64 buffer constructor instead — still purely-Backend-trait on the
     // WEIGHT side, which is the side under gradient test.
-    let n_idx = kindle_backends::cpu::NativeStorage::from_contiguous(
-        kindle_backends::cpu::NativeBuffer::I64(vec![1, 3]),
+    let n_idx = kindle_backends::cpu::CpuStorage::from_contiguous(
+        kindle_backends::cpu::CpuBuffer::I64(vec![1, 3]),
         vec![2],
     );
 
@@ -1251,8 +1251,8 @@ fn bce_with_logits_loss_forward_and_backward_parity() {
 fn cross_entropy_loss_forward_and_backward_parity() {
     // pred [2, 3] logits, target [2] class indices.
     let pred = vec![1.0, 2.0, 0.5, 0.2, 1.5, 3.0];
-    let n_target = kindle_backends::cpu::NativeStorage::from_contiguous(
-        kindle_backends::cpu::NativeBuffer::I64(vec![1, 2]),
+    let n_target = kindle_backends::cpu::CpuStorage::from_contiguous(
+        kindle_backends::cpu::CpuBuffer::I64(vec![1, 2]),
         vec![2],
     );
     let (fwd_n, grad_n) = run_and_grad::<NB>(

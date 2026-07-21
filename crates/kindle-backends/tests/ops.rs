@@ -1,9 +1,8 @@
 use kindle_backends::Backend;
-use kindle_backends::candle::CandleBackend;
 use kindle_core::prelude::*;
 
 /// Auto-generated documentation for CBackend.
-type CBackend = CandleBackend<f32, kindle_core::prelude::Cpu>;
+type CBackend = kindle_backends::cpu::CpuBackend<f32, kindle_core::prelude::Cpu>;
 
 #[test]
 /// Auto-generated documentation for test_slice.

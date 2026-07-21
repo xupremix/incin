@@ -1,9 +1,8 @@
-use kindle_backends::candle::CandleBackend;
 use kindle_core::prelude::*;
 use typenum::{U2, U3};
 
 /// Auto-generated documentation for B.
-type B = CandleBackend<f32, Cpu>;
+type B = kindle_backends::cpu::CpuBackend<f32, kindle_core::prelude::Cpu>;
 
 #[test]
 /// Auto-generated documentation for test_broadcast_success.

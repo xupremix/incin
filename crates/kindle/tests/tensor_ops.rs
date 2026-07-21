@@ -3,9 +3,8 @@ use kindle::prelude::*;
 /// Auto-generated documentation for CpuBackend.
 type CpuBackend = DefaultBackend;
 
-/// Auto-generated documentation for to_vec.
 fn to_vec(t: &Tensor<Dyn, CpuBackend>) -> Vec<f32> {
-    t.inner().flatten_all().unwrap().to_vec1::<f32>().unwrap()
+    t.to_vec1::<f32>().unwrap()
 }
 
 // -----------------------------------------------------------------------------

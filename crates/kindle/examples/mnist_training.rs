@@ -5,12 +5,7 @@ use kindle_data::vision::mnist::MnistDataset;
 use kindle_data::{Collate, DataLoader, Dataset};
 use std::path::PathBuf;
 
-#[cfg(feature = "candle")]
-/// Auto-generated documentation for Backend.
-type Backend = kindle_backends::candle::CandleBackend<f32, Cpu>;
-#[cfg(not(feature = "candle"))]
-/// Auto-generated documentation for Backend.
-type Backend = kindle_core::tensor::backend::DummyBackend<f32, Cpu>;
+type Backend = kindle_backends::cpu::CpuBackend<f32, kindle_core::prelude::Cpu>;
 
 /// Auto-generated documentation for MnistCollate.
 struct MnistCollate;

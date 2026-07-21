@@ -1,8 +1,6 @@
 use kindle::prelude::*;
-use kindle_backends::candle::CandleBackend;
-
 /// Auto-generated documentation for B.
-type B = CandleBackend<f32, kindle::prelude::Cpu>;
+type B = kindle_backends::cpu::CpuBackend<f32, kindle_core::prelude::Cpu>;
 
 #[module]
 /// Auto-generated documentation for SubModule.

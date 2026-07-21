@@ -103,8 +103,14 @@ impl<T: DType, D: Device> kindle_core::prelude::Backend for CpuBackend<T, D> {
 
     /// Auto-generated documentation for to_bytes.
     fn to_bytes<K: DType>(t: &Self::Storage<K>) -> Result<alloc::vec::Vec<u8>> {
-        match &*t.buffer {
-            storage::CpuBuffer::F32(v) => Ok(bytemuck::cast_slice(&v).to_vec()),
+        let t_contig = t.contiguous();
+        let num_elements = t_contig.shape.iter().product::<usize>();
+        let offset = t_contig.offset;
+        match &*t_contig.buffer {
+            storage::CpuBuffer::F32(v) => {
+                let slice = &v[offset..offset + num_elements];
+                Ok(bytemuck::cast_slice(slice).to_vec())
+            }
             _ => Err(Error::UnsupportedBackendOperation {
                 op: "to_bytes",
                 backend: "Cpu",

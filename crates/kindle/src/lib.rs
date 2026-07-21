@@ -16,8 +16,8 @@
 //! ```rust
 //! use kindle::prelude::*;
 //!
-//! // Create a backend alias for convenience (requires `candle` feature)
-//! type Backend = kindle_backends::candle::CandleBackend<f32, Cpu>;
+//! // Create a backend alias for convenience
+//! type Backend = kindle_backends::cpu::CpuBackend<f32, Cpu>;
 //!
 //! // Create a statically shaped tensor: (Batch=2, Channels=3, Height=224, Width=224)
 //! let x = Tensor::<s![2, 3, 224, 224], Backend>::zeros(()).unwrap();
@@ -33,7 +33,7 @@
 //! ```rust,no_run
 //! use kindle::prelude::*;
 //!
-//! type Backend = kindle_backends::candle::CandleBackend<f32, Cpu>;
+//! type Backend = kindle_backends::cpu::CpuBackend<f32, Cpu>;
 //!
 //! #[module]
 //! pub struct MLP {

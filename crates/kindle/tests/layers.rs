@@ -1,9 +1,7 @@
 use kindle::prelude::*;
 use kindle::{Conv2d, Linear};
-use kindle_backends::candle::CandleBackend;
-
 /// Auto-generated documentation for B.
-type B = CandleBackend<f32, kindle::prelude::Cpu>;
+type B = kindle_backends::cpu::CpuBackend<f32, kindle_core::prelude::Cpu>;
 
 #[test]
 /// Auto-generated documentation for test_linear_mixed_shapes.

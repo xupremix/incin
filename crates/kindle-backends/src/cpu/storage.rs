@@ -404,7 +404,7 @@ impl CpuStorage {
     /// current shape/strides/offset and copying element-by-element in
     /// row-major order. Used only on the non-contiguous fallback path of
     /// `reshape`.
-    fn contiguous(&self) -> Self {
+    pub(crate) fn contiguous(&self) -> Self {
         if stride::is_contiguous(&self.shape, &self.strides) {
             return self.clone();
         }
