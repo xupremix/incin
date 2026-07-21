@@ -494,23 +494,23 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackend<T, D> {
         let shape_buf = WgpuBuffer::from_slice(&shape_data);
 
         let bgl = pipeline.get_bind_group_layout(0);
-        let bg = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        let bg = state.device.create_bind_group(&::wgpu::BindGroupDescriptor {
             label: Some("Matmul BG"),
             layout: &bgl,
             entries: &[
-                wgpu::BindGroupEntry {
+                ::wgpu::BindGroupEntry {
                     binding: 0,
                     resource: lhs.buffer.buffer.as_entire_binding(),
                 },
-                wgpu::BindGroupEntry {
+                ::wgpu::BindGroupEntry {
                     binding: 1,
                     resource: rhs.buffer.buffer.as_entire_binding(),
                 },
-                wgpu::BindGroupEntry {
+                ::wgpu::BindGroupEntry {
                     binding: 2,
                     resource: out_buf.buffer.as_entire_binding(),
                 },
-                wgpu::BindGroupEntry {
+                ::wgpu::BindGroupEntry {
                     binding: 3,
                     resource: shape_buf.buffer.as_entire_binding(),
                 },
@@ -519,11 +519,11 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackend<T, D> {
 
         let mut encoder = state
             .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            .create_command_encoder(&::wgpu::CommandEncoderDescriptor {
                 label: Some("Matmul"),
             });
         {
-            let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            let mut cpass = encoder.begin_compute_pass(&::wgpu::ComputePassDescriptor {
                 label: Some("Matmul"),
                 timestamp_writes: None,
             });

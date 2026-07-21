@@ -93,10 +93,10 @@ pub mod hub {
 #[cfg(feature = "cuda")]
 /// Auto-generated documentation for DefaultDevice.
 pub type DefaultDevice = crate::prelude::Cuda;
-#[cfg(all(not(feature = "cuda"), feature = "metal"))]
+#[cfg(all(not(feature = "cuda"), feature = "wgpu"))]
 /// Auto-generated documentation for DefaultDevice.
-pub type DefaultDevice = crate::prelude::Metal;
-#[cfg(all(not(feature = "cuda"), not(feature = "metal")))]
+pub type DefaultDevice = crate::prelude::Wgpu;
+#[cfg(all(not(feature = "cuda"), not(feature = "wgpu")))]
 /// Auto-generated documentation for DefaultDevice.
 pub type DefaultDevice = kindle_core::prelude::Cpu;
 

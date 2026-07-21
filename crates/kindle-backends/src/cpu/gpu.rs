@@ -95,8 +95,8 @@ pub(crate) mod cuda {
 #[cfg(feature = "cuda")]
 pub(crate) use cuda::*;
 
-#[cfg(feature = "metal")]
-pub(crate) mod metal {
+#[cfg(feature = "wgpu")]
+pub(crate) mod wgpu {
     use crate::cpu::storage::CpuMetalBuffer;
     use kindle_core::prelude::Result;
 
@@ -132,5 +132,5 @@ pub(crate) mod metal {
     }
 }
 
-#[cfg(feature = "metal")]
-pub(crate) use metal::*;
+#[cfg(feature = "wgpu")]
+pub(crate) use wgpu::*;

@@ -23,7 +23,7 @@ std = [
 ]
 nightly = []
 cuda = []
-metal = []
+wgpu = []
 
 # candle = ["dep:candle-core", "dep:candle-nn"]
 # cuda = ["dep:candle-core?/cuda", "dep:candle-nn?/cuda"]

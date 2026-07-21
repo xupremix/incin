@@ -13,8 +13,8 @@ use core::marker::PhantomData;
 #[cfg(feature = "cuda")]
 use crate::prelude::Cuda;
 
-#[cfg(feature = "metal")]
-use crate::prelude::Metal;
+#[cfg(feature = "wgpu")]
+use crate::prelude::Wgpu;
 
 use crate::prelude::{Cpu, Dim, Grad, KindleDType, KindleDevice, NoGrad};
 use typenum::{Bit, UInt, UTerm, Unsigned};
@@ -114,11 +114,11 @@ impl<const N: usize> ArgInto<Cuda<N>> for Cuda<N> {
     }
 }
 
-#[cfg(feature = "metal")]
-impl<const N: usize> ArgInto<Metal<N>> for Metal<N> {
+#[cfg(feature = "wgpu")]
+impl<const N: usize> ArgInto<Wgpu<N>> for Wgpu<N> {
     #[inline(always)]
     /// Auto-generated documentation for into_arg.
-    fn into_arg(self) -> Metal<N> {
+    fn into_arg(self) -> Wgpu<N> {
         self
     }
 }
@@ -215,8 +215,8 @@ where
 #[cfg(feature = "cuda")]
 impl<const N: usize> NotUnit for Cuda<N> {}
 
-#[cfg(feature = "metal")]
-impl<const N: usize> NotUnit for Metal<N> {}
+#[cfg(feature = "wgpu")]
+impl<const N: usize> NotUnit for Wgpu<N> {}
 
 impl<D: Dim> NotUnit for Vec<D> {}
 // Handled in shape.rs

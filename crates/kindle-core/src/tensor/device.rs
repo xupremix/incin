@@ -54,18 +54,18 @@ pub mod cuda {
 #[cfg(feature = "cuda")]
 pub use cuda::*;
 
-#[cfg(feature = "metal")]
-/// Auto-generated documentation for metal.
-pub mod metal {
+#[cfg(feature = "wgpu")]
+/// Auto-generated documentation for wgpu.
+pub mod wgpu {
     use super::{ConstDevice, Device, DynDevice, KindleDevice, PhantomData, Result};
 
     #[derive(Debug, Default, Clone, PartialEq, Eq)]
-    /// Auto-generated documentation for Metal.
-    pub struct Metal<const N: usize = 0>;
+    /// Auto-generated documentation for Wgpu.
+    pub struct Wgpu<const N: usize = 0>;
 
-    impl<const N: usize> ConstDevice for Metal<N> {}
+    impl<const N: usize> ConstDevice for Wgpu<N> {}
 
-    impl<const N: usize> Device for Metal<N> {
+    impl<const N: usize> Device for Wgpu<N> {
         /// Auto-generated documentation for Arg.
         type Arg = ();
         /// Auto-generated documentation for Field.
@@ -73,7 +73,7 @@ pub mod metal {
 
         /// Auto-generated documentation for to_kindle.
         fn to_kindle(_: &Self::Field) -> Result<KindleDevice> {
-            Ok(KindleDevice::metal(N))
+            Ok(KindleDevice::wgpu(N))
         }
 
         /// Auto-generated documentation for init.
@@ -82,11 +82,11 @@ pub mod metal {
         }
     }
 
-    impl<const N: usize> DynDevice for Metal<N> {}
+    impl<const N: usize> DynDevice for Wgpu<N> {}
 }
 
-#[cfg(feature = "metal")]
-pub use metal::*;
+#[cfg(feature = "wgpu")]
+pub use wgpu::*;
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 /// Auto-generated documentation for Cpu.
@@ -139,9 +139,9 @@ pub enum DeviceVariant {
     #[cfg(feature = "cuda")]
     /// Auto-generated documentation for Cuda.
     Cuda(usize),
-    #[cfg(feature = "metal")]
-    /// Auto-generated documentation for Metal.
-    Metal(usize),
+    #[cfg(feature = "wgpu")]
+    /// Auto-generated documentation for Wgpu.
+    Wgpu(usize),
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -165,10 +165,10 @@ impl KindleDevice {
         Self(DeviceVariant::Cuda(ord))
     }
 
-    #[cfg(feature = "metal")]
-    /// Auto-generated documentation for metal.
-    pub fn metal(ord: usize) -> Self {
-        Self(DeviceVariant::Metal(ord))
+    #[cfg(feature = "wgpu")]
+    /// Auto-generated documentation for wgpu.
+    pub fn wgpu(ord: usize) -> Self {
+        Self(DeviceVariant::Wgpu(ord))
     }
 }
 
@@ -177,8 +177,8 @@ pub const fn cuda_is_available() -> bool {
     cfg!(feature = "cuda")
 }
 /// Auto-generated documentation for fn.
-pub const fn metal_is_available() -> bool {
-    cfg!(feature = "metal")
+pub const fn wgpu_is_available() -> bool {
+    cfg!(feature = "wgpu")
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -196,13 +196,13 @@ impl CudaDevice {
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-/// Auto-generated documentation for MetalDevice.
-pub struct MetalDevice {
+/// Auto-generated documentation for WgpuDevice.
+pub struct WgpuDevice {
     /// Auto-generated documentation for id.
     pub id: usize,
 }
 
-impl MetalDevice {
+impl WgpuDevice {
     /// Auto-generated documentation for new.
     pub fn new(id: usize) -> Self {
         Self { id }
@@ -226,10 +226,10 @@ mod tests {
             assert_eq!(cuda.variant(), DeviceVariant::Cuda(0));
         }
 
-        #[cfg(feature = "metal")]
+        #[cfg(feature = "wgpu")]
         {
-            let metal = KindleDevice::metal(0);
-            assert_eq!(metal.variant(), DeviceVariant::Metal(0));
+            let wgpu = KindleDevice::wgpu(0);
+            assert_eq!(wgpu.variant(), DeviceVariant::Wgpu(0));
         }
     }
 }

@@ -29,8 +29,8 @@ pub mod candle {
             #[cfg(feature = "cuda")]
             DeviceVariant::Cuda(ord) => Ok(candle::Device::new_cuda(ord)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?),
-            #[cfg(feature = "metal")]
-            DeviceVariant::Metal(ord) => Ok(candle::Device::new_metal(ord)
+            #[cfg(feature = "wgpu")]
+            DeviceVariant::Wgpu(ord) => Ok(candle::Device::new_metal(ord)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?),
             _ => Err(Error::UnsupportedBackendOperation {
                 op: "to_candle_device",
