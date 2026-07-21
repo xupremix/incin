@@ -52,6 +52,9 @@ pub struct BlockQ8_0 {
     pub(crate) qs: [i8; 32],
 }
 
+
+
+
 #[derive(Debug, Clone, PartialEq)]
 /// Auto-generated documentation for CpuBuffer.
 pub enum CpuBuffer {
@@ -71,8 +74,7 @@ pub enum CpuBuffer {
     BF16(Vec<bf16>),
     /// Auto-generated documentation for Q8_0.
     Q8_0(Vec<BlockQ8_0>),
-
-}
+        }
 
 impl CpuBuffer {
     /// Total number of scalar elements held by this buffer, regardless of
@@ -87,7 +89,6 @@ impl CpuBuffer {
             CpuBuffer::F16(v) => v.len(),
             CpuBuffer::BF16(v) => v.len(),
             CpuBuffer::Q8_0(v) => v.len() * 32,
-
         }
     }
 
@@ -123,7 +124,6 @@ impl CpuBuffer {
                     v.as_ptr() as *const u8,
                     v.len() * core::mem::size_of::<BlockQ8_0>(),
                 ),
-
             }
         }
     }
@@ -143,7 +143,6 @@ impl CpuBuffer {
             CpuBuffer::Q8_0(_) => {
                 panic!("get_f64 not supported directly on Q8_0 quantized buffer")
             }
-
         }
     }
 }
@@ -181,6 +180,8 @@ impl CpuStorage {
     /// seed the loss tensor's gradient before walking the tape.
     pub fn ones_like(other: &CpuStorage) -> Self {
         let total: usize = other.shape.iter().product();
+
+
 
         let new_buffer = match &*other.buffer {
             CpuBuffer::F32(_) => CpuBuffer::F32(vec![1.0f32; total]),
@@ -378,7 +379,6 @@ impl CpuStorage {
                 CpuBuffer::BF16(out)
             }
             CpuBuffer::Q8_0(_) => panic!("materialize not supported on Q8_0 buffer"),
-
         };
 
         CpuStorage::from_contiguous(new_buffer, self.shape.clone())
@@ -464,7 +464,6 @@ pub(crate) fn scatter_into_zeros(
             }
             CpuBuffer::BF16(out)
         }
-
         CpuBuffer::Q8_0(_) => panic!("scatter_into_zeros not supported on Q8_0 buffer"),
     };
 

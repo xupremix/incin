@@ -13,10 +13,10 @@
 //!
 //! Requires `--features native,candle`.
 
+use kindle_backends::cpu::CpuBackend;
 use kindle_backends::legacy::candle::CandleBackend;
 use kindle_core::prelude::Reduction;
 use kindle_core::prelude::*;
-use kindle_backends::cpu::CpuBackend;
 
 // ── Type aliases ─────────────────────────────────────────────────────────
 
