@@ -652,6 +652,7 @@ pub(crate) fn dispatch_pool2d(
     run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "Pool2D");
 }
 
+#[allow(dead_code)] // wired up once WGPU conv bias path is complete
 pub(crate) fn dispatch_bias_add(
     t: &Arc<WgpuBuffer>,
     bias: &WgpuBuffer,

@@ -1566,6 +1566,253 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackend<T, D> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Conv backward helpers (CPU-side, used inside backward closures that
+// read data back from WgpuBuffer and compute gradients in host memory).
+// The same im2col / col2im logic as `crates/kindle-backends/src/cpu/ops/conv.rs`
+// but operating on plain `Vec<f32>` instead of `CpuStorage`.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Gather a `[B, Cin, H, W]` buffer (row-major) into a
+/// `[B, H_out*W_out, Cin*Kh*Kw]` column matrix. Out-of-bounds positions
+/// (i.e. positions in the padded region) contribute 0.0.
+fn im2col_2d_cpu(
+    input: &[f32],
+    b: usize,
+    cin: usize,
+    h: usize,
+    w: usize,
+    kh: usize,
+    kw: usize,
+    stride: usize,
+    padding: usize,
+    dilation: usize,
+) -> (Vec<f32>, usize, usize) {
+    let h_out =
+        (h + 2 * padding).saturating_sub(dilation * (kh.saturating_sub(1)) + 1) / stride + 1;
+    let w_out =
+        (w + 2 * padding).saturating_sub(dilation * (kw.saturating_sub(1)) + 1) / stride + 1;
+    let col_len = cin * kh * kw;
+    let spatial = h_out * w_out;
+    let mut out = vec![0.0f32; b * spatial * col_len];
+    for bi in 0..b {
+        for oh in 0..h_out {
+            for ow in 0..w_out {
+                let o_flat = oh * w_out + ow;
+                for ci in 0..cin {
+                    for ki_h in 0..kh {
+                        for ki_w in 0..kw {
+                            let src_h = oh * stride + ki_h * dilation;
+                            let src_w = ow * stride + ki_w * dilation;
+                            let val = if src_h >= padding
+                                && src_h - padding < h
+                                && src_w >= padding
+                                && src_w - padding < w
+                            {
+                                let ih = src_h - padding;
+                                let iw = src_w - padding;
+                                input[bi * (cin * h * w) + ci * (h * w) + ih * w + iw]
+                            } else {
+                                0.0
+                            };
+                            let col_idx = ci * kh * kw + ki_h * kw + ki_w;
+                            out[bi * (spatial * col_len) + o_flat * col_len + col_idx] = val;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    (out, h_out, w_out)
+}
+
+/// Scatter-ADD a `[B, H_out*W_out, Cin*Kh*Kw]` gradient back into a
+/// zero-initialized `[B, Cin, H, W]` buffer.
+fn col2im_2d_cpu(
+    cols_grad: &[f32],
+    b: usize,
+    cin: usize,
+    h: usize,
+    w: usize,
+    h_out: usize,
+    w_out: usize,
+    kh: usize,
+    kw: usize,
+    stride: usize,
+    padding: usize,
+    dilation: usize,
+) -> Vec<f32> {
+    let col_len = cin * kh * kw;
+    let spatial = h_out * w_out;
+    let mut out = vec![0.0f32; b * cin * h * w];
+    for bi in 0..b {
+        for oh in 0..h_out {
+            for ow in 0..w_out {
+                let o_flat = oh * w_out + ow;
+                for ci in 0..cin {
+                    for ki_h in 0..kh {
+                        for ki_w in 0..kw {
+                            let src_h = oh * stride + ki_h * dilation;
+                            let src_w = ow * stride + ki_w * dilation;
+                            if src_h >= padding
+                                && src_h - padding < h
+                                && src_w >= padding
+                                && src_w - padding < w
+                            {
+                                let ih = src_h - padding;
+                                let iw = src_w - padding;
+                                let col_idx = ci * kh * kw + ki_h * kw + ki_w;
+                                out[bi * (cin * h * w) + ci * (h * w) + ih * w + iw] += cols_grad
+                                    [bi * (spatial * col_len) + o_flat * col_len + col_idx];
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Batched matrix multiply on CPU: lhs `[B, M, K]` × rhs `[B, K, N]` → `[B, M, N]`.
+/// Used inside conv backward closures.
+fn cpu_bmm(lhs: &[f32], rhs: &[f32], b: usize, m: usize, k: usize, n: usize) -> Vec<f32> {
+    let mut out = vec![0.0f32; b * m * n];
+    for bi in 0..b {
+        for mi in 0..m {
+            for ni in 0..n {
+                let mut acc = 0.0f32;
+                for ki in 0..k {
+                    acc += lhs[bi * (m * k) + mi * k + ki] * rhs[bi * (k * n) + ki * n + ni];
+                }
+                out[bi * (m * n) + mi * n + ni] = acc;
+            }
+        }
+    }
+    out
+}
+
+/// Transpose the last two dimensions of a `[B, M, N]` tensor → `[B, N, M]`.
+fn cpu_transpose_last2(src: &[f32], b: usize, m: usize, n: usize) -> Vec<f32> {
+    let mut out = vec![0.0f32; b * m * n];
+    for bi in 0..b {
+        for mi in 0..m {
+            for ni in 0..n {
+                out[bi * (n * m) + ni * m + mi] = src[bi * (m * n) + mi * n + ni];
+            }
+        }
+    }
+    out
+}
+
+/// Sum a `[B, M, N]` buffer over its leading batch axis → `[M, N]`.
+fn cpu_sum_batch(src: &[f32], b: usize, m: usize, n: usize) -> Vec<f32> {
+    let mut out = vec![0.0f32; m * n];
+    for bi in 0..b {
+        for mi in 0..m {
+            for ni in 0..n {
+                out[mi * n + ni] += src[bi * (m * n) + mi * n + ni];
+            }
+        }
+    }
+    out
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WgpuBackend inherent helpers
+// ─────────────────────────────────────────────────────────────────────────────
+impl<T: DType, D: Device> WgpuBackend<T, D> {
+    /// Forward-only conv2d (no tape entry). Used by both `conv1d` and `conv2d`
+    /// so they can push exactly ONE clean tape entry each for their respective
+    /// grad shapes, rather than having nested entries from the internal matmul.
+    fn conv2d_no_tape<K: DType>(
+        t: &WgpuStorage,
+        weight: &WgpuStorage,
+        stride: usize,
+        padding: usize,
+        dilation: usize,
+        groups: usize,
+    ) -> Result<WgpuStorage> {
+        let shape = &t.shape; // [N, C_in, H, W]
+        let ws = &weight.shape; // [C_out, C_in/groups, Kh, Kw]
+        if shape.len() != 4 || ws.len() != 4 {
+            return Err(Error::ShapeMismatch {
+                op: "conv2d",
+                expected: vec![4],
+                got: vec![shape.len()],
+                msg: "expected 4D input and weight".into(),
+            });
+        }
+        let (batch, c_in, h_in, w_in) = (shape[0], shape[1], shape[2], shape[3]);
+        let (c_out, c_in_per_g, kh, kw) = (ws[0], ws[1], ws[2], ws[3]);
+        let g = groups.max(1);
+        let c_in_g = c_in / g;
+        assert_eq!(c_in_g, c_in_per_g, "groups mismatch");
+
+        let h_out =
+            (h_in + 2 * padding).saturating_sub(dilation * (kh.saturating_sub(1)) + 1) / stride + 1;
+        let w_out =
+            (w_in + 2 * padding).saturating_sub(dilation * (kw.saturating_sub(1)) + 1) / stride + 1;
+
+        let col_channels = c_in * kh * kw;
+        let col_spatial = h_out * w_out;
+        let col_buf = WgpuBuffer::new_zeros(batch * col_channels * col_spatial * 4);
+
+        let params: [u32; 14] = [
+            batch as u32,
+            c_in as u32,
+            h_in as u32,
+            w_in as u32,
+            h_out as u32,
+            w_out as u32,
+            kh as u32,
+            kw as u32,
+            stride as u32,
+            stride as u32,
+            padding as u32,
+            padding as u32,
+            dilation as u32,
+            dilation as u32,
+        ];
+        dispatch::dispatch_im2col(&t.buffer, &col_buf, &params);
+
+        let k_size = c_in_g * kh * kw;
+
+        if g == 1 {
+            let w_storage = WgpuStorage::new(weight.buffer.clone(), vec![c_out, k_size]);
+            let col_storage = WgpuStorage::new(col_buf, vec![batch, k_size, col_spatial]);
+            let out_storage = Self::matmul::<K>(&w_storage, &col_storage)?;
+            return Ok(WgpuStorage::new(
+                out_storage.buffer,
+                vec![batch, c_out, h_out, w_out],
+            ));
+        }
+
+        // groups > 1: direct kernel
+        let out_buf = WgpuBuffer::new_zeros(batch * c_out * h_out * w_out * 4);
+        let conv_params: [u32; 16] = [
+            batch as u32,
+            c_in as u32,
+            h_in as u32,
+            w_in as u32,
+            c_out as u32,
+            h_out as u32,
+            w_out as u32,
+            kh as u32,
+            kw as u32,
+            stride as u32,
+            stride as u32,
+            padding as u32,
+            padding as u32,
+            dilation as u32,
+            dilation as u32,
+            groups as u32,
+        ];
+        dispatch::dispatch_conv2d_direct(&t.buffer, &weight.buffer, &out_buf, &conv_params);
+        Ok(WgpuStorage::new(out_buf, vec![batch, c_out, h_out, w_out]))
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // ModuleOps
 // ─────────────────────────────────────────────────────────────────────────────
 impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
@@ -1803,14 +2050,17 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
         dilation: usize,
         groups: usize,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        // Implement as conv2d over a fake spatial H=1 dimension
-        // Input:  [N, C_in, L]       -> [N, C_in, 1, L]
-        // Weight: [C_out, C_in, Kl]  -> [C_out, C_in, 1, Kl]
+        // Delegate to conv2d over a fake H=1 spatial dimension, then reshape
+        // back to 3D. We capture IDs before delegating so we can wire our OWN
+        // tape entry that maps grad_out [N, C_out, L_out] → grads for the
+        // original 3D tensors, hiding the internal 4D reshape from callers.
         let inp_shape = &t.shape; // [N, C_in, L]
         let w_shape = &weight.shape; // [C_out, C_in/groups, Kl]
         let (n, c_in, l_in) = (inp_shape[0], inp_shape[1], inp_shape[2]);
-        let (c_out, _, kl) = (w_shape[0], w_shape[1], w_shape[2]);
+        let (c_out, c_in_g, kl) = (w_shape[0], w_shape[1], w_shape[2]);
+        let c_out_g = c_out / groups.max(1);
 
+        // Forward: CPU im2col + batched matmul via GPU conv2d path.
         let inp4d = WgpuStorage {
             buffer: t.buffer.clone(),
             shape: vec![n, c_in, 1, l_in],
@@ -1819,16 +2069,153 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
         };
         let w4d = WgpuStorage {
             buffer: weight.buffer.clone(),
-            shape: vec![c_out, w_shape[1], 1, kl],
+            shape: vec![c_out, c_in_g, 1, kl],
             strides: vec![],
             id: crate::wgpu::storage::TensorId::next(),
         };
-        let bias4d = bias;
+        // conv2d push its own internal tape entries; we want ONE clean entry
+        // that owns the conv1d backward, so we deliberately skip bias inside
+        // conv2d and add it via the already-tape-tracked add below.
+        let out4d = Self::conv2d_no_tape::<K>(&inp4d, &w4d, stride, padding, dilation, groups)?;
+        let l_out = out4d.shape[3];
+        let out = WgpuStorage::new(out4d.buffer, vec![n, c_out, l_out]);
 
-        let out = Self::conv2d::<K>(&inp4d, &w4d, bias4d, stride, padding, dilation, groups)?;
-        // out: [N, C_out, 1, L_out]  -> [N, C_out, L_out]
-        let l_out = out.shape[3];
-        Ok(WgpuStorage::new(out.buffer, vec![n, c_out, l_out]))
+        // Push tape entry for conv1d.
+        let (inp_capture, w_capture) = (t.clone(), weight.clone());
+        let (inp_id, w_id, out_id) = (t.id, weight.id, out.id);
+        crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![inp_id, w_id],
+            backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
+                // grad_out: [N, C_out, L_out]
+                let input_data = inp_capture.buffer.to_vec::<f32>();
+                let weight_data = w_capture.buffer.to_vec::<f32>();
+                let grad_data = grad_out.buffer.to_vec::<f32>();
+
+                // Treat as [N, C_in, 1, L] / [N, C_out, 1, L_out] for the 2D helpers.
+                let (h, h_out) = (1usize, 1usize);
+
+                let mut grad_input_groups: Vec<Vec<f32>> = Vec::with_capacity(groups);
+                let mut grad_weight_groups: Vec<Vec<f32>> = Vec::with_capacity(groups);
+
+                for g in 0..groups {
+                    // Slice per-group input/weight/grad_out
+                    let gin_size = n * c_in_g * l_in;
+                    let mut input_g = vec![0.0f32; gin_size];
+                    for bi in 0..n {
+                        for ci in 0..c_in_g {
+                            for li in 0..l_in {
+                                input_g[bi * c_in_g * l_in + ci * l_in + li] =
+                                    input_data[bi * c_in * l_in + (g * c_in_g + ci) * l_in + li];
+                            }
+                        }
+                    }
+
+                    let gwt_size = c_out_g * c_in_g * kl;
+                    let mut weight_g = vec![0.0f32; gwt_size];
+                    for co in 0..c_out_g {
+                        for ci in 0..c_in_g {
+                            for ki in 0..kl {
+                                weight_g[co * c_in_g * kl + ci * kl + ki] =
+                                    weight_data[(g * c_out_g + co) * c_in_g * kl + ci * kl + ki];
+                            }
+                        }
+                    }
+
+                    let ggo_size = n * c_out_g * l_out;
+                    let mut grad_out_g = vec![0.0f32; ggo_size];
+                    for bi in 0..n {
+                        for co in 0..c_out_g {
+                            for li in 0..l_out {
+                                grad_out_g[bi * c_out_g * l_out + co * l_out + li] =
+                                    grad_data[bi * c_out * l_out + (g * c_out_g + co) * l_out + li];
+                            }
+                        }
+                    }
+
+                    // im2col on input_g treated as [N, C_in_g, 1, L]
+                    let (cols, ..) = im2col_2d_cpu(
+                        &input_g, n, c_in_g, h, l_in, h, kl, stride, padding, dilation,
+                    );
+                    // cols: [N, L_out, C_in_g*kl]
+                    // weight_mat_t: [C_in_g*kl, C_out_g] (transposed for grad_input)
+                    let weight_mat_t = cpu_transpose_last2(&weight_g, 1, c_out_g, c_in_g * kl);
+                    // grad_out_g: [N, C_out_g, L_out] -> [N, L_out, C_out_g]
+                    let mut go_t = vec![0.0f32; n * l_out * c_out_g];
+                    for bi in 0..n {
+                        for li in 0..l_out {
+                            for co in 0..c_out_g {
+                                go_t[bi * l_out * c_out_g + li * c_out_g + co] =
+                                    grad_out_g[bi * c_out_g * l_out + co * l_out + li];
+                            }
+                        }
+                    }
+                    // grad_cols = go_t @ weight_mat_t: [N, L_out, C_out_g] @ [C_out_g, C_in_g*kl]
+                    let grad_cols = cpu_bmm(&go_t, &weight_mat_t, n, l_out, c_out_g, c_in_g * kl);
+                    // col2im: [N, L_out, C_in_g*kl] -> [N, C_in_g, 1, L]
+                    let grad_input_g = col2im_2d_cpu(
+                        &grad_cols, n, c_in_g, h, l_in, h_out, l_out, h, kl, stride, padding,
+                        dilation,
+                    );
+                    grad_input_groups.push(grad_input_g);
+
+                    // grad_weight: go_t^T @ cols: [N, C_out_g, L_out] @ [N, L_out, C_in_g*kl]
+                    let go_t2 = cpu_transpose_last2(&go_t, n, l_out, c_out_g);
+                    let gw_mat = cpu_bmm(&go_t2, &cols, n, c_out_g, l_out, c_in_g * kl);
+                    // sum over batch: [N, C_out_g, C_in_g*kl] -> [C_out_g, C_in_g*kl]
+                    let gw_summed = cpu_sum_batch(&gw_mat, n, c_out_g, c_in_g * kl);
+                    // reshape to [C_out_g, C_in_g, Kl]
+                    grad_weight_groups.push(gw_summed);
+                }
+
+                // Reassemble gradient tensors
+                let mut grad_input_data = vec![0.0f32; n * c_in * l_in];
+                for g in 0..groups {
+                    let g_data = &grad_input_groups[g];
+                    for bi in 0..n {
+                        for ci in 0..c_in_g {
+                            for li in 0..l_in {
+                                grad_input_data
+                                    [bi * c_in * l_in + (g * c_in_g + ci) * l_in + li] +=
+                                    g_data[bi * c_in_g * l_in + ci * l_in + li];
+                            }
+                        }
+                    }
+                }
+
+                let mut grad_weight_data = vec![0.0f32; c_out * c_in_g * kl];
+                for g in 0..groups {
+                    let g_data = &grad_weight_groups[g];
+                    for co in 0..c_out_g {
+                        for rest in 0..c_in_g * kl {
+                            grad_weight_data[(g * c_out_g + co) * c_in_g * kl + rest] +=
+                                g_data[co * c_in_g * kl + rest];
+                        }
+                    }
+                }
+
+                vec![
+                    WgpuStorage::new(
+                        WgpuBuffer::from_slice(&grad_input_data),
+                        inp_capture.shape.clone(),
+                    ),
+                    WgpuStorage::new(
+                        WgpuBuffer::from_slice(&grad_weight_data),
+                        w_capture.shape.clone(),
+                    ),
+                ]
+            }),
+        });
+
+        // Bias is broadcast-added via the already-tape-tracked add (grad_bias
+        // flows through that entry for free).
+        match bias {
+            Some(b) => {
+                let b_shaped = Self::reshape::<K>(b, &[1, c_out, 1])?;
+                Self::add::<K>(&out, &b_shaped)
+            }
+            None => Ok(out),
+        }
     }
 
     /// `conv2d`.
@@ -1841,115 +2228,153 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
         dilation: usize,
         groups: usize,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        // im2col + batched matmul (groups=1 fast path; groups>1 loop)
+        let conv_out = Self::conv2d_no_tape::<K>(t, weight, stride, padding, dilation, groups)?;
         let shape = &t.shape; // [N, C_in, H, W]
         let ws = &weight.shape; // [C_out, C_in/groups, Kh, Kw]
-        if shape.len() != 4 || ws.len() != 4 {
-            return Err(Error::ShapeMismatch {
-                op: "conv2d",
-                expected: vec![4],
-                got: vec![shape.len()],
-                msg: "expected 4D input and weight".into(),
-            });
-        }
         let (batch, c_in, h_in, w_in) = (shape[0], shape[1], shape[2], shape[3]);
-        let (c_out, c_in_per_g, kh, kw) = (ws[0], ws[1], ws[2], ws[3]);
-        let g = groups;
-        let c_in_g = c_in / g;
-        assert_eq!(c_in_g, c_in_per_g, "groups mismatch");
+        let (c_out, c_in_g, kh, kw) = (ws[0], ws[1], ws[2], ws[3]);
+        let c_out_g = c_out / groups.max(1);
+        let h_out = conv_out.shape[2];
+        let w_out = conv_out.shape[3];
 
-        let h_out = (h_in + 2 * padding - dilation * (kh - 1) - 1) / stride + 1;
-        let w_out = (w_in + 2 * padding - dilation * (kw - 1) - 1) / stride + 1;
+        // Wire autograd tape entry.
+        let (inp_capture, w_capture) = (t.clone(), weight.clone());
+        let (inp_id, w_id, out_id) = (t.id, weight.id, conv_out.id);
+        crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![inp_id, w_id],
+            backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
+                let input_data = inp_capture.buffer.to_vec::<f32>();
+                let weight_data = w_capture.buffer.to_vec::<f32>();
+                // grad_out: [N, C_out, H_out, W_out] → flatten to row-major vec
+                let grad_data = grad_out.buffer.to_vec::<f32>();
 
-        // ── im2col ────────────────────────────────────────────────────────────
-        // col: [N, C_in * Kh * Kw, H_out * W_out]
-        let col_channels = c_in * kh * kw;
-        let col_spatial = h_out * w_out;
-        let col_buf = WgpuBuffer::new_zeros(batch * col_channels * col_spatial * 4);
+                let mut grad_input_data = vec![0.0f32; batch * c_in * h_in * w_in];
+                let mut grad_weight_data = vec![0.0f32; c_out * c_in_g * kh * kw];
 
-        let params: [u32; 14] = [
-            batch as u32,
-            c_in as u32,
-            h_in as u32,
-            w_in as u32,
-            h_out as u32,
-            w_out as u32,
-            kh as u32,
-            kw as u32,
-            stride as u32,
-            stride as u32,
-            padding as u32,
-            padding as u32,
-            dilation as u32,
-            dilation as u32,
-        ];
-        dispatch::dispatch_im2col(&t.buffer, &col_buf, &params);
+                for g in 0..groups {
+                    // Slice input group [N, C_in_g, H, W]
+                    let mut input_g = vec![0.0f32; batch * c_in_g * h_in * w_in];
+                    for bi in 0..batch {
+                        for ci in 0..c_in_g {
+                            for hi in 0..h_in {
+                                for wi in 0..w_in {
+                                    input_g[bi * (c_in_g * h_in * w_in)
+                                        + ci * (h_in * w_in)
+                                        + hi * w_in
+                                        + wi] = input_data[bi * (c_in * h_in * w_in)
+                                        + (g * c_in_g + ci) * (h_in * w_in)
+                                        + hi * w_in
+                                        + wi];
+                                }
+                            }
+                        }
+                    }
 
-        // ── matmul per batch: weight [C_out/g, C_in/g * Kh * Kw] x col_slice -> out_slice ──
-        // For g=1 this is a single batched matmul.
-        // For g>1 we slice and loop.
-        let _w_data: Vec<f32> = weight.buffer.to_vec::<f32>();
-        let _col_data: Vec<f32> = col_buf.to_vec::<f32>();
-        let k_size = c_in_g * kh * kw;
+                    // Slice weight group [C_out_g, C_in_g, Kh, Kw]
+                    let mut weight_g = vec![0.0f32; c_out_g * c_in_g * kh * kw];
+                    for co in 0..c_out_g {
+                        let src_co = g * c_out_g + co;
+                        for rest in 0..c_in_g * kh * kw {
+                            weight_g[co * c_in_g * kh * kw + rest] =
+                                weight_data[src_co * c_in_g * kh * kw + rest];
+                        }
+                    }
 
-        if g == 1 {
-            // GPU batched matmul fast path
-            let w_storage = WgpuStorage::new(weight.buffer.clone(), vec![c_out, k_size]);
-            let col_storage = WgpuStorage::new(col_buf, vec![batch, k_size, col_spatial]);
-            let out_storage = Self::matmul::<K>(&w_storage, &col_storage)?;
+                    // Slice grad_out group [N, C_out_g, H_out, W_out]
+                    let mut go_g = vec![0.0f32; batch * c_out_g * h_out * w_out];
+                    for bi in 0..batch {
+                        for co in 0..c_out_g {
+                            for hi in 0..h_out {
+                                for wi in 0..w_out {
+                                    go_g[bi * (c_out_g * h_out * w_out)
+                                        + co * (h_out * w_out)
+                                        + hi * w_out
+                                        + wi] = grad_data[bi * (c_out * h_out * w_out)
+                                        + (g * c_out_g + co) * (h_out * w_out)
+                                        + hi * w_out
+                                        + wi];
+                                }
+                            }
+                        }
+                    }
 
-            // Apply bias on GPU (if present)
-            if let Some(b_storage) = bias {
-                dispatch::dispatch_bias_add(
-                    &out_storage.buffer,
-                    &b_storage.buffer,
-                    batch as u32,
-                    c_out as u32,
-                    col_spatial as u32,
-                );
+                    let (cols, ..) = im2col_2d_cpu(
+                        &input_g, batch, c_in_g, h_in, w_in, kh, kw, stride, padding, dilation,
+                    );
+                    // cols: [N, H_out*W_out, C_in_g*Kh*Kw]
+                    // go_g: [N, C_out_g, H_out*W_out] → [N, H_out*W_out, C_out_g]
+                    let spatial = h_out * w_out;
+                    let mut go_t = vec![0.0f32; batch * spatial * c_out_g];
+                    for bi in 0..batch {
+                        for co in 0..c_out_g {
+                            for s in 0..spatial {
+                                go_t[bi * spatial * c_out_g + s * c_out_g + co] =
+                                    go_g[bi * c_out_g * spatial + co * spatial + s];
+                            }
+                        }
+                    }
+
+                    // grad_cols = go_t @ weight_g: [N, spatial, C_out_g] @ [C_out_g, C_in_g*Kh*Kw]
+                    let grad_cols =
+                        cpu_bmm(&go_t, &weight_g, batch, spatial, c_out_g, c_in_g * kh * kw);
+                    // col2im → grad for input_g [N, C_in_g, H, W]
+                    let grad_input_g = col2im_2d_cpu(
+                        &grad_cols, batch, c_in_g, h_in, w_in, h_out, w_out, kh, kw, stride,
+                        padding, dilation,
+                    );
+
+                    // Accumulate into grad_input_data
+                    for bi in 0..batch {
+                        for ci in 0..c_in_g {
+                            for hi in 0..h_in {
+                                for wi in 0..w_in {
+                                    grad_input_data[bi * (c_in * h_in * w_in)
+                                        + (g * c_in_g + ci) * (h_in * w_in)
+                                        + hi * w_in
+                                        + wi] += grad_input_g[bi * (c_in_g * h_in * w_in)
+                                        + ci * (h_in * w_in)
+                                        + hi * w_in
+                                        + wi];
+                                }
+                            }
+                        }
+                    }
+
+                    // grad_weight_g: go_t^T @ cols → [N, C_out_g, C_in_g*Kh*Kw] → sum over batch
+                    let go_t2 = cpu_transpose_last2(&go_t, batch, spatial, c_out_g);
+                    let gw_mat = cpu_bmm(&go_t2, &cols, batch, c_out_g, spatial, c_in_g * kh * kw);
+                    let gw_summed = cpu_sum_batch(&gw_mat, batch, c_out_g, c_in_g * kh * kw);
+
+                    for co in 0..c_out_g {
+                        for rest in 0..c_in_g * kh * kw {
+                            grad_weight_data[(g * c_out_g + co) * c_in_g * kh * kw + rest] +=
+                                gw_summed[co * c_in_g * kh * kw + rest];
+                        }
+                    }
+                }
+
+                vec![
+                    WgpuStorage::new(
+                        WgpuBuffer::from_slice(&grad_input_data),
+                        inp_capture.shape.clone(),
+                    ),
+                    WgpuStorage::new(
+                        WgpuBuffer::from_slice(&grad_weight_data),
+                        w_capture.shape.clone(),
+                    ),
+                ]
+            }),
+        });
+
+        // Bias is broadcast-added via the already-tape-tracked add.
+        match bias {
+            Some(b) => {
+                let b_shaped = Self::reshape::<K>(b, &[1, c_out, 1, 1])?;
+                Self::add::<K>(&conv_out, &b_shaped)
             }
-
-            return Ok(WgpuStorage::new(
-                out_storage.buffer,
-                vec![batch, c_out, h_out, w_out],
-            ));
+            None => Ok(conv_out),
         }
-
-        // ── Direct convolution per batch for groups > 1 ──
-        let out_buf = WgpuBuffer::new_zeros(batch * c_out * h_out * w_out * 4);
-        let conv_params: [u32; 16] = [
-            batch as u32,
-            c_in as u32,
-            h_in as u32,
-            w_in as u32,
-            c_out as u32,
-            h_out as u32,
-            w_out as u32,
-            kh as u32,
-            kw as u32,
-            stride as u32,
-            stride as u32,
-            padding as u32,
-            padding as u32,
-            dilation as u32,
-            dilation as u32,
-            groups as u32,
-        ];
-
-        dispatch::dispatch_conv2d_direct(&t.buffer, &weight.buffer, &out_buf, &conv_params);
-
-        if let Some(b_storage) = bias {
-            let spatial = h_out * w_out;
-            dispatch::dispatch_bias_add(
-                &out_buf,
-                &b_storage.buffer,
-                batch as u32,
-                c_out as u32,
-                spatial as u32,
-            );
-        }
-
-        Ok(WgpuStorage::new(out_buf, vec![batch, c_out, h_out, w_out]))
     }
 
     /// `conv_transpose2d`.
@@ -1988,10 +2413,18 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
         let c_out = c_out_per_group * groups;
         assert_eq!(c_in, w_c_in, "Input channels must match weight in_channels");
 
-        let h_out = (h_in - 1) * stride + dilation * (kh - 1) + output_padding + 1;
-        let h_out = h_out.saturating_sub(2 * padding);
-        let w_out = (w_in - 1) * stride + dilation * (kw - 1) + output_padding + 1;
-        let w_out = w_out.saturating_sub(2 * padding);
+        let h_nat = {
+            let unstrided = h_in.saturating_sub(1) * stride;
+            let eff_k = dilation * kh.saturating_sub(1);
+            (unstrided + eff_k + 1).saturating_sub(2 * padding)
+        };
+        let w_nat = {
+            let unstrided = w_in.saturating_sub(1) * stride;
+            let eff_k = dilation * kw.saturating_sub(1);
+            (unstrided + eff_k + 1).saturating_sub(2 * padding)
+        };
+        let h_out = h_nat + output_padding;
+        let w_out = w_nat + output_padding;
 
         let out_buf = WgpuBuffer::new_zeros(batch * c_out * h_out * w_out * 4);
 
@@ -2015,20 +2448,119 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
         ];
 
         dispatch::dispatch_conv_transpose2d(&t.buffer, &weight.buffer, &out_buf, &params);
-        let out_storage = WgpuStorage::new(out_buf.clone(), vec![batch, c_out, h_out, w_out]);
+        let out_storage = WgpuStorage::new(out_buf, vec![batch, c_out, h_out, w_out]);
 
-        if let Some(b_storage) = bias {
-            let spatial = h_out * w_out;
-            dispatch::dispatch_bias_add(
-                &out_buf,
-                &b_storage.buffer,
-                batch as u32,
-                c_out as u32,
-                spatial as u32,
-            );
+        // Wire autograd tape (groups==1 only; matches CPU backend's documented scope).
+        let (inp_capture, w_capture) = (t.clone(), weight.clone());
+        let (inp_id, w_id, out_id) = (t.id, weight.id, out_storage.id);
+        crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![inp_id, w_id],
+            backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
+                let input_data = inp_capture.buffer.to_vec::<f32>();
+                let weight_data = w_capture.buffer.to_vec::<f32>();
+                let grad_data = grad_out.buffer.to_vec::<f32>();
+
+                // Narrow away output_padding rows/cols from grad_out.
+                let go_nat: Vec<f32> = if output_padding == 0 {
+                    grad_data.clone()
+                } else {
+                    let mut nat = vec![0.0f32; batch * c_out * h_nat * w_nat];
+                    for bi in 0..batch {
+                        for co in 0..c_out {
+                            for hi in 0..h_nat {
+                                for wi in 0..w_nat {
+                                    nat[bi * (c_out * h_nat * w_nat)
+                                        + co * (h_nat * w_nat)
+                                        + hi * w_nat
+                                        + wi] = grad_data[bi * (c_out * h_out * w_out)
+                                        + co * (h_out * w_out)
+                                        + hi * w_out
+                                        + wi];
+                                }
+                            }
+                        }
+                    }
+                    nat
+                };
+
+                // grad_input: apply conv2d forward formula to go_nat with weight.
+                // im2col on go_nat [N, C_out, H_nat, W_nat] using same kernel geometry.
+                let (go_cols, ..) = im2col_2d_cpu(
+                    &go_nat, batch, c_out, h_nat, w_nat, kh, kw, stride, padding, dilation,
+                );
+                // go_cols: [N, H_in*W_in, C_out*Kh*Kw]
+                // weight_mat_t: [C_out*Kh*Kw, C_in] (transposed for grad_input: grad = go_cols @ W^T)
+                let weight_mat_t = cpu_transpose_last2(&weight_data, 1, c_in, c_out * kh * kw);
+                // grad_input_flat = go_cols @ weight_mat_t: [N, H_in*W_in, C_out*Kh*Kw] @ [C_out*Kh*Kw, C_in]
+                let spatial_in = h_in * w_in;
+                let grad_input_flat = cpu_bmm(
+                    &go_cols,
+                    &weight_mat_t,
+                    batch,
+                    spatial_in,
+                    c_out * kh * kw,
+                    c_in,
+                );
+                // [N, H_in*W_in, C_in] -> [N, C_in, H_in, W_in]
+                let mut grad_input_data = vec![0.0f32; batch * c_in * h_in * w_in];
+                for bi in 0..batch {
+                    for ci in 0..c_in {
+                        for s in 0..spatial_in {
+                            let hi = s / w_in;
+                            let wi = s % w_in;
+                            grad_input_data
+                                [bi * (c_in * h_in * w_in) + ci * (h_in * w_in) + hi * w_in + wi] =
+                                grad_input_flat[bi * (spatial_in * c_in) + s * c_in + ci];
+                        }
+                    }
+                }
+
+                // grad_weight: same swap as CPU conv_transpose2d backward:
+                // input_t^T @ go_cols -> [N, C_in, C_out*Kh*Kw] -> sum_batch -> [C_in, C_out, Kh, Kw]
+                let mut input_flat_t = vec![0.0f32; batch * spatial_in * c_in];
+                for bi in 0..batch {
+                    for ci in 0..c_in {
+                        for s in 0..spatial_in {
+                            let hi = s / w_in;
+                            let wi_idx = s % w_in;
+                            input_flat_t[bi * (spatial_in * c_in) + s * c_in + ci] = input_data[bi
+                                * (c_in * h_in * w_in)
+                                + ci * (h_in * w_in)
+                                + hi * w_in
+                                + wi_idx];
+                        }
+                    }
+                }
+                let input_t2 = cpu_transpose_last2(&input_flat_t, batch, spatial_in, c_in);
+                let gw_mat = cpu_bmm(
+                    &input_t2,
+                    &go_cols,
+                    batch,
+                    c_in,
+                    spatial_in,
+                    c_out * kh * kw,
+                );
+                let gw_summed = cpu_sum_batch(&gw_mat, batch, c_in, c_out * kh * kw);
+
+                vec![
+                    WgpuStorage::new(
+                        WgpuBuffer::from_slice(&grad_input_data),
+                        inp_capture.shape.clone(),
+                    ),
+                    WgpuStorage::new(WgpuBuffer::from_slice(&gw_summed), w_capture.shape.clone()),
+                ]
+            }),
+        });
+
+        // Bias via already-tape-tracked add.
+        match bias {
+            Some(b) => {
+                let b_shaped = Self::reshape::<K>(b, &[1, c_out, 1, 1])?;
+                Self::add::<K>(&out_storage, &b_shaped)
+            }
+            None => Ok(out_storage),
         }
-
-        Ok(out_storage)
     }
 }
 
