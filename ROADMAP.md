@@ -259,9 +259,17 @@ instead of a bare "called `Result::unwrap()` on an `Err` value" with no context.
 
 ## High priority — real gaps, not yet release-blocking on their own
 
-- **`kindle-data` has zero tests** despite `loader.rs` implementing nontrivial
-  concurrent logic (bounded channel, worker pool, shared `Mutex<Iterator>`).
-  Highest-risk untested code in the workspace by a wide margin.
+- **`kindle-data` has zero tests — ✅ FIXED (2026-07-21).** Added 9 tests in
+  `loader.rs` covering single-threaded ordering, exact/short final batches,
+  empty dataset, batch size larger than the dataset, shuffle (verifies the
+  full item *set* is preserved, just reordered), and — the actual
+  concurrency-risk cases — multi-worker runs (with and without shuffle) that
+  assert every item is yielded **exactly once, no duplicates, no drops**
+  across 8 worker threads pulling from the shared `Mutex<Iterator>`, plus a
+  more-workers-than-batches edge case and a real (sum, not passthrough)
+  `Collate` impl to prove the collate function actually runs. Every test goes
+  through a 10s `recv_timeout` wrapper so a deadlock/hang fails loudly and
+  fast instead of stalling the suite. Ran 5x in a row with no flakiness.
 - **`legacy::burn_backend` is permanently dead code**:
   `crates/kindle-backends/src/legacy/mod.rs:2138` gates it with `#[cfg(any())]`,
   which is always false — it can never compile in under any feature
@@ -551,7 +559,7 @@ type has a *compiled* usage example (not `rust,ignore`).
 | Cross-backend numeric parity | None | CPU vs WGPU vs CUDA parity to 1e-4, **including gradients** (would have caught C-1/C-3/C-4) |
 | Compile-fail shape tests | Fixed (B-6) | Extend to cover the C-6 dynamic-broadcast gap once fixed |
 | Doc tests | Present but `rust,ignore` | At least `s![]`/`idx![]` compiled as real doctests |
-| Concurrency tests | None for `kindle-data` | `DataLoader` worker pool / channel / mutex coverage |
+| Concurrency tests | ✅ `kindle-data` covered (2026-07-21) | Extend the same pattern to any future concurrent code |
 
 ---
 
@@ -628,7 +636,7 @@ is stable.
 6. Add cross-backend gradient-parity tests
 7. ~~Close B-3 for real: `cuda`/`cpu` `pub(crate)` audit + `kindle-core` `TRACING_GRAPH` leak~~ — ✅ fixed 2026-07-21
 8. ~~Audit `kindle` facade wildcard re-exports; fix `DefaultBackend = ()` trap; remove dead `candle` cfg~~ — ✅ fixed 2026-07-21 (macros wildcard narrowed, `kindle_backends::*` deliberately left, see High priority section for why)
-9. Write `kindle-data` `DataLoader` tests
+9. ~~Write `kindle-data` `DataLoader` tests~~ — ✅ fixed 2026-07-21 (9 tests, incl. multi-worker concurrency)
 10. Decide `legacy::burn_backend`'s fate; stop paying its dependency cost
 11. Add GPU-gated CI jobs (cuda/wgpu) — the current gap is why C-1/C-3/C-4 shipped unnoticed
 12. Run a dedicated `cargo fmt --all` pass (repo-wide, pre-existing debt — see Repository Hygiene) as its own commit, before or right after opening the first real PR against `main`
