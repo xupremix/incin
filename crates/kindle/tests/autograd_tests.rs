@@ -2,7 +2,7 @@ use kindle::prelude::*;
 use kindle::{Optimizer, SGD};
 
 /// Implementation of `CpuBackend` for the respective backend.
-type CpuBackend = kindle_backends::cpu::CpuBackend<f32, Cpu>;
+type CpuBackend = kindle_backends::cpu::CpuBackend;
 
 #[test]
 /// Test simple linear regression.

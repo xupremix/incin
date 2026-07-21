@@ -8,7 +8,7 @@ use kindle_core::prelude::{
 };
 
 /// Nb.
-type NB = CpuBackend<f32, Cpu>;
+type NB = CpuBackend;
 /// Tb.
 type TB = TracingBackend<NB>;
 

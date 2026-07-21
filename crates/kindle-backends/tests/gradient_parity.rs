@@ -4,7 +4,7 @@ use kindle_backends::cpu::CpuBackend;
 use kindle_backends::wgpu::WgpuBackend;
 use kindle_core::prelude::*;
 
-type CpuB = CpuBackend<f32, Cpu>;
+type CpuB = CpuBackend;
 type WgpuB = WgpuBackend<f32, Cpu>;
 
 fn read_f32<B: Backend>(s: &B::Storage<f32>) -> Vec<f32> {

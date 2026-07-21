@@ -254,7 +254,6 @@ mod tests {
     #[cfg(feature = "cpu")]
     /// Test tensor export.
     fn test_tensor_export() {
-        let _t = Tensor::<Dyn, kindle_backends::cpu::CpuBackend<f32, Cpu>>::zeros(std::vec![2, 2])
-            .unwrap();
+        let _t = Tensor::<Dyn, DefaultBackend>::zeros(std::vec![2, 2]).unwrap();
     }
 }

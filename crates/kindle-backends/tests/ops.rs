@@ -2,7 +2,7 @@ use kindle_backends::Backend;
 use kindle_core::prelude::*;
 
 /// Cbackend.
-type CBackend = kindle_backends::cpu::CpuBackend<f32, kindle_core::prelude::Cpu>;
+type CBackend = kindle_backends::cpu::CpuBackend;
 
 #[test]
 /// Test slice.

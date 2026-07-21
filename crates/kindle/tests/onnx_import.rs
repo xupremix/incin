@@ -6,7 +6,7 @@ fn test_onnx_advanced_ops() {
     import_model!("../../test_models/advanced.onnx", TestOps);
 
     /// Backend.
-    type Backend = kindle_backends::cpu::CpuBackend<f32, kindle_core::prelude::Cpu>;
+    type Backend = kindle_backends::cpu::CpuBackend;
 
     let x = Tensor::<s![1, 3, 224, 224], Backend>::zeros(()).unwrap();
     let _shape = Tensor::<s![2], Backend>::zeros(()).unwrap();
@@ -23,7 +23,7 @@ fn test_onnx_advanced_ops() {
 fn test_onnx_control_flow_if() {
     import_model!("../../test_models/if.onnx", TestIf);
     /// Backend.
-    type Backend = kindle_backends::cpu::CpuBackend<f32, kindle_core::prelude::Cpu>;
+    type Backend = kindle_backends::cpu::CpuBackend;
 
     let cond = Tensor::<s![1], Backend>::zeros(()).unwrap();
     let x = Tensor::<s![1], Backend>::zeros(()).unwrap();

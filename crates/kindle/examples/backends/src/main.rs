@@ -8,10 +8,10 @@ fn main() -> Result<()> {
     let res = candle_tensor.relu()?;
     println!("Candle Backend Shape: {:?}", res.dims());
 
-    // 2. Using the Ndarray Backend
-    let ndarray_tensor: Tensor<s![3, 3], WgpuBackend<f32, DefaultDevice>> = Tensor::zeros(())?;
-    let res2 = ndarray_tensor.relu()?;
-    println!("Ndarray Backend Shape: {:?}", res2.dims());
+    // 2. Using the Wgpu Backend
+    let wgpu_tensor: Tensor<s![3, 3], WgpuBackend> = Tensor::zeros(())?;
+    let res2 = wgpu_tensor.relu()?;
+    println!("Wgpu Backend Shape: {:?}", res2.dims());
 
     Ok(())
 }

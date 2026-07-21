@@ -1,7 +1,7 @@
 use kindle::prelude::*;
 
 /// Implementation of `CpuBackend` for the respective backend.
-type CpuBackend = kindle_backends::cpu::CpuBackend<f32, Cpu>;
+type CpuBackend = kindle_backends::cpu::CpuBackend;
 
 fn to_vec(t: &Tensor<Dyn, CpuBackend>) -> Vec<f32> {
     t.to_vec1::<f32>().unwrap()

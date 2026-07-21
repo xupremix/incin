@@ -1,7 +1,7 @@
 use kindle::prelude::*;
 use kindle::{Conv2d, Linear};
 /// B.
-type B = kindle_backends::cpu::CpuBackend<f32, kindle_core::prelude::Cpu>;
+type B = kindle_backends::cpu::CpuBackend;
 
 #[test]
 /// Test linear mixed shapes.

@@ -12,7 +12,7 @@ use kindle::prelude::{CrossEntropyLoss, Mean};
 use kindle_backends::cpu::CpuBackend;
 
 /// The CPU backend type alias.
-type NB = CpuBackend<f32, Cpu>;
+type NB = CpuBackend;
 
 // ── Model ────────────────────────────────────────────────────────────────────
 

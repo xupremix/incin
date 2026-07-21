@@ -10,7 +10,7 @@ use kindle_telemetry::events::GraphSnapshotEvent;
 use kindle_telemetry::reporter::Reporter;
 
 /// Nb.
-type NB = CpuBackend<f32, Cpu>;
+type NB = CpuBackend;
 /// Tb.
 type TB = TracingBackend<NB>;
 

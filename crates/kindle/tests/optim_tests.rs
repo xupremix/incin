@@ -2,7 +2,7 @@ use kindle::prelude::*;
 use kindle::{Adam, AdamW, SGD};
 
 /// Implementation of `CpuBackend` for the respective backend.
-type CpuBackend = kindle_backends::cpu::CpuBackend<f32, Cpu>;
+type CpuBackend = kindle_backends::cpu::CpuBackend;
 
 /// Get linear and grads.
 fn get_linear_and_grads() -> Result<(

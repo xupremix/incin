@@ -5,7 +5,7 @@ use kindle_data::vision::mnist::MnistDataset;
 use kindle_data::{Collate, DataLoader, Dataset};
 use std::path::PathBuf;
 
-type Backend = kindle_backends::cpu::CpuBackend<f32, kindle_core::prelude::Cpu>;
+type Backend = kindle_backends::cpu::CpuBackend;
 
 /// Mnist collate.
 struct MnistCollate;

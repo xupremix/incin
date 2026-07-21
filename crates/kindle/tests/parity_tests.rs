@@ -8,7 +8,7 @@ use kindle::prelude::*;
 use kindle_backends::cpu::CpuBackend;
 use kindle_backends::wgpu::WgpuBackend;
 
-type Native = CpuBackend<f32, Cpu>;
+type Native = CpuBackend;
 type Wgpu = WgpuBackend<f32, Cpu>;
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 #![cfg(feature = "legacy")]
-//! Cross-backend parity: `CpuBackend<f32, Cpu>` vs `CandleBackend<f32,
+//! Cross-backend parity: `CpuBackend` vs `CandleBackend<f32,
 //! Cpu>`, driven purely through the `Backend` trait surface (D-03), one
 //! `#[test]` per individual op for failure localization.
 //!
@@ -22,7 +22,7 @@ use kindle_core::prelude::*;
 // ── Type aliases ─────────────────────────────────────────────────────────
 
 /// Nb.
-type NB = CpuBackend<f32, Cpu>;
+type NB = CpuBackend;
 /// Cb.
 type CB = CandleBackend<f32, Cpu>;
 
