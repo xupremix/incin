@@ -192,7 +192,7 @@ impl<R: ReductionMode> CrossEntropyLoss<R> {
     /// Forward pass computing the Cross Entropy Loss between predictions and targets.
     /// The target tensor MUST have `u32` elements at compile time.
     pub fn forward<
-        S1: Shape + crate::prelude::DynShape,
+        S1,
         S2: Shape,
         B: Backend + crate::tensor::backend::LossOps<B>,
         K: crate::tensor::dtype::DType,
@@ -204,7 +204,7 @@ impl<R: ReductionMode> CrossEntropyLoss<R> {
         target: &Tensor<S2, B, u32, D, NoGrad>,
     ) -> Result<Tensor<R::Output, B, K, D, G>>
     where
-        S1: CrossEntropyShape<S2>,
+        S1: Shape + crate::prelude::DynShape + CrossEntropyShape<S2>,
         R: CrossEntropyReductionShape<S1>,
     {
         // binds `BackendWithDType<u32>::RawTensor` to be identical to `Self::RawTensor`.

@@ -194,7 +194,7 @@ impl<T: DType, D: Device> CreationOps<Self> for WgpuBackend<T, D> {
             ((*s >> 33) as f32) / (u32::MAX as f32)
         };
         // Box-Muller transform
-        let data: Vec<f32> = (0..((n + 1) / 2))
+        let data: Vec<f32> = (0..n.div_ceil(2))
             .flat_map(|_| {
                 let u1 = lcg(&mut state).max(1e-7);
                 let u2 = lcg(&mut state);
@@ -262,6 +262,7 @@ impl<T: DType, D: Device> CreationOps<Self> for WgpuBackend<T, D> {
 // NumericOps  (add, sub, mul, div)
 // ─────────────────────────────────────────────────────────────────────────────
 /// Auto-generated documentation for binary_op.
+#[allow(clippy::extra_unused_type_parameters)]
 fn binary_op<T: DType, D: Device>(
     lhs: &WgpuStorage,
     rhs: &WgpuStorage,
@@ -397,6 +398,7 @@ impl<T: DType, D: Device> NumericOps<Self> for WgpuBackend<T, D> {
 // FloatOps  (scalar + unary activations)
 // ─────────────────────────────────────────────────────────────────────────────
 /// Auto-generated documentation for unary_op.
+#[allow(clippy::extra_unused_type_parameters)]
 fn unary_op<T: DType, D: Device>(t: &WgpuStorage, op_mode: u32) -> Result<WgpuStorage> {
     let n = num_elements(&t.shape) as u32;
     let out_buf = WgpuBuffer::new_zeros(t.buffer.size);
@@ -406,6 +408,7 @@ fn unary_op<T: DType, D: Device>(t: &WgpuStorage, op_mode: u32) -> Result<WgpuSt
 }
 
 /// Auto-generated documentation for scalar_op.
+#[allow(clippy::extra_unused_type_parameters)]
 fn scalar_op<T: DType, D: Device>(
     t: &WgpuStorage,
     scalar: f64,
@@ -740,7 +743,7 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackend<T, D> {
             });
             cpass.set_pipeline(&pipeline);
             cpass.set_bind_group(0, &bg, &[]);
-            cpass.dispatch_workgroups((n + 15) / 16, (m + 15) / 16, batch as u32);
+            cpass.dispatch_workgroups(n.div_ceil(16), m.div_ceil(16), batch as u32);
         }
         state.queue.submit(core::iter::once(encoder.finish()));
         let out = WgpuStorage::new(out_buf, out_shape);
@@ -1319,7 +1322,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackend<T, D> {
             }
 
             let mut out_coords = coords.clone();
-            for j in 0..k {
+            for (j, &(val, idx)) in slice_vals.iter().enumerate().take(k) {
                 out_coords[dim] = j;
                 let mut flat = 0usize;
                 let mut stride = 1usize;
@@ -1327,8 +1330,8 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackend<T, D> {
                     flat += out_coords[dd] * stride;
                     stride *= out_shape[dd];
                 }
-                out_vals[flat] = slice_vals[j].0;
-                out_indices[flat] = slice_vals[j].1;
+                out_vals[flat] = val;
+                out_indices[flat] = idx;
             }
         }
         let buf_vals = WgpuBuffer::from_slice(&out_vals);
@@ -1391,7 +1394,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackend<T, D> {
             }
 
             let mut out_coords = coords.clone();
-            for j in 0..shape[dim] {
+            for (j, &(_, idx)) in slice_vals.iter().enumerate() {
                 out_coords[dim] = j;
                 let mut flat = 0usize;
                 let mut stride = 1usize;
@@ -1399,7 +1402,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackend<T, D> {
                     flat += out_coords[dd] * stride;
                     stride *= shape[dd];
                 }
-                out[flat] = slice_vals[j].1;
+                out[flat] = idx;
             }
         }
         let buf = WgpuBuffer::from_slice(&out);
@@ -1484,8 +1487,8 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
         let shape = &t.shape; // [N, C, H, W] or [N, C]
         let n_total = num_elements(shape);
         let c = shape.get(1).copied().unwrap_or(1);
-        let spatial = n_total / (shape.get(0).copied().unwrap_or(1) * c);
-        let batch = shape.get(0).copied().unwrap_or(1);
+        let spatial = n_total / (shape.first().copied().unwrap_or(1) * c);
+        let batch = shape.first().copied().unwrap_or(1);
 
         let out_buf = WgpuBuffer::new_zeros(n_total * 4);
 
@@ -1922,7 +1925,7 @@ impl<T: DType, D: Device> QuantizedOps<Self> for WgpuBackend<T, D> {
 
         let f32_data: Vec<f32> = t.buffer.to_vec::<f32>();
         let n = f32_data.len();
-        if n % 32 != 0 {
+        if !n.is_multiple_of(32) {
             return Err(Error::Msg(alloc::format!(
                 "WGPU quantize Q8_0: length must be a multiple of 32, got {}",
                 n
@@ -1947,7 +1950,7 @@ impl<T: DType, D: Device> QuantizedOps<Self> for WgpuBackend<T, D> {
 
             // Write 32 quantized i8 values.
             for &v in chunk {
-                let q = (v * inv_d).round().max(-128.0).min(127.0) as i8;
+                let q = (v * inv_d).round().clamp(-128.0, 127.0) as i8;
                 out_bytes.push(q as u8);
             }
         }
@@ -1971,7 +1974,7 @@ impl<T: DType, D: Device> QuantizedOps<Self> for WgpuBackend<T, D> {
 
         let raw: Vec<u8> = t.buffer.to_vec::<u8>();
         let block_bytes = 34usize; // 2-byte f16 + 32 × i8
-        if raw.len() % block_bytes != 0 {
+        if !raw.len().is_multiple_of(block_bytes) {
             return Err(Error::Msg(alloc::format!(
                 "WGPU dequantize: raw buffer length {} is not a multiple of 34",
                 raw.len()

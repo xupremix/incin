@@ -27,7 +27,7 @@ fn main() -> anyhow::Result<()> {
 
     // Export to ONNX
     let path = Path::new("model.onnx");
-    let mut exporter = OnnxExporter::new(&path);
+    let mut exporter = OnnxExporter::new(path);
 
     // State dict is irrelevant here since the tracing graph already captured everything
     exporter.serialize::<B>(&BTreeMap::new())?;

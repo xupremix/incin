@@ -435,14 +435,14 @@ mod tests {
             bn_expected(1.0, 3.0, 1.0, 1.0, 0.0, eps),
         ];
         // Spot-check one element per channel (output is contiguous [B,C,H,W]).
-        for ch in 0..3usize {
+        for (ch, expected) in expected_ch.iter().enumerate() {
             // First spatial position of first batch for this channel
             let idx = ch * 4; // batch=0, ch, h=0, w=0
             assert!(
-                (vals[idx] - expected_ch[ch]).abs() < 1e-4,
+                (vals[idx] - expected).abs() < 1e-4,
                 "bn ch{ch}: got {:.6}, expected {:.6}",
                 vals[idx],
-                expected_ch[ch]
+                expected
             );
         }
     }

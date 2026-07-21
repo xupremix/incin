@@ -161,7 +161,7 @@ mod tests {
         let out = B::mse_loss::<f32>(&pred(), &target(), Reduction::None).unwrap();
         assert_eq!(out.shape, vec![2, 3]);
         let got = f32_vec(&out);
-        let expected = vec![0.0f32, 1.0, 4.0, 4.0, 9.0, 16.0];
+        let expected = [0.0f32, 1.0, 4.0, 4.0, 9.0, 16.0];
         for (g, e) in got.iter().zip(expected.iter()) {
             assert!((g - e).abs() < 1e-5, "mse none: got {g}, expected {e}");
         }
@@ -219,7 +219,7 @@ mod tests {
         let out = B::l1_loss::<f32>(&pred(), &target(), Reduction::None).unwrap();
         assert_eq!(out.shape, vec![2, 3]);
         let got = f32_vec(&out);
-        let expected = vec![0.0f32, 1.0, 2.0, 2.0, 3.0, 4.0];
+        let expected = [0.0f32, 1.0, 2.0, 2.0, 3.0, 4.0];
         for (i, (g, e)) in got.iter().zip(expected.iter()).enumerate() {
             assert!((g - e).abs() < 1e-5, "l1 none[{i}]: got {g}, expected {e}");
         }

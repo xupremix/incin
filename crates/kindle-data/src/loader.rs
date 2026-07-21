@@ -198,11 +198,9 @@ mod tests {
     // worker-thread loop (e.g. a channel deadlock, an off-by-one in
     // `batch_indices` that spins forever) must fail loudly and quickly
     // instead of hanging the test suite indefinitely.
-    fn collect_with_timeout<T: Send + 'static>(
-        iter: impl Iterator<Item = T> + Send + 'static,
-    ) -> Vec<T>
+    fn collect_with_timeout<T>(iter: impl Iterator<Item = T> + Send + 'static) -> Vec<T>
     where
-        T: 'static,
+        T: Send + 'static,
     {
         let (tx, rx) = std::sync::mpsc::channel();
         std::thread::spawn(move || {

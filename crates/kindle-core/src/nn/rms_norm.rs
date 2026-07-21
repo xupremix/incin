@@ -86,13 +86,13 @@ impl<
     fn forward(&self, x: Tensor<InS, B>) -> core::result::Result<Self::Output, Error> {
         // RMSNorm: x * weight / sqrt(mean(x^2) + eps)
         let weight = self.weight.as_tensor()?.into_dyn();
-        
+
         let x_dims = InS::dims(&x._shape);
         let dim = x_dims.as_ref().len().saturating_sub(1);
-        
+
         // x^2
         let x_sq = x.mul(&x)?;
-        
+
         // mean(x^2)
         // We use backend dynamic reduce to keep shapes dynamic
         let mean_sq_inner = B::mean_keepdim(x_sq.inner(), dim)?;
@@ -107,20 +107,20 @@ impl<
             x._device.clone(),
             x._grad, // We propagate grad context
         );
-        
+
         // mean(x^2) + eps
         let var = mean_sq.add_scalar(self.eps)?;
-        
+
         // sqrt(mean(x^2) + eps)
         let std = var.sqrt()?;
-        
+
         // x / std
         let dyn_x = x.into_dyn();
         let normed = dyn_x.broadcast_div(&std)?;
-        
+
         // normed * weight
         let out = normed.broadcast_mul(&weight)?;
-        
+
         out.into_shape::<InS>()
     }
 }

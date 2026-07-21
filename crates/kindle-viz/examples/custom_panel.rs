@@ -34,10 +34,10 @@ impl Panel for CustomMetricPanel {
 
     /// Auto-generated documentation for update.
     fn update(&mut self, event: &Event) {
-        if let Event::Scalar(ScalarEvent { name, value, .. }) = event {
-            if name == "custom_metric" {
-                self.current_value = *value;
-            }
+        if let Event::Scalar(ScalarEvent { name, value, .. }) = event
+            && name == "custom_metric"
+        {
+            self.current_value = *value;
         }
     }
 

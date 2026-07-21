@@ -565,7 +565,7 @@ pub(crate) fn parse_onnx(
             pub fn forward(&self, #(#user_inputs),*) -> kindle::prelude::Result<kindle::prelude::Tensor<#out_shape_type, B>> {
                 #(#forward_stmts)*
                 let final_out = #last_output;
-                Ok(final_out.into_shape::<#out_shape_type>()?)
+                final_out.into_shape::<#out_shape_type>()
             }
         }
     };

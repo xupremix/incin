@@ -65,7 +65,7 @@ impl CpuGrads {
 
 thread_local! {
     /// Auto-generated documentation for TAPE.
-    static TAPE: RefCell<Vec<TapeEntry>> = RefCell::new(Vec::new());
+    static TAPE: RefCell<Vec<TapeEntry>> = const { RefCell::new(Vec::new()) };
 }
 
 /// Push a `TapeEntry` onto the thread-local tape, unconditionally (D-05).

@@ -19,11 +19,8 @@ type NB = CpuBackend<f32, Cpu>;
 /// A small CNN classifier: conv2d -> batch_norm -> relu -> max_pool2d -> flatten -> linear.
 #[module]
 pub struct SimpleCnn<B: Backend> {
-    pub conv1: kindle_core::prelude::Conv2d<
-        s![dyn, dyn, 3, 1, 1, 1],
-        B,
-        kindle_core::prelude::False,
-    >,
+    pub conv1:
+        kindle_core::prelude::Conv2d<s![dyn, dyn, 3, 1, 1, 1], B, kindle_core::prelude::False>,
     pub bn1: kindle::BatchNorm2d<s![dyn], B>,
     #[module(ignore)]
     pub pool: kindle::MaxPool2d<typenum::U2, typenum::U2>,
@@ -119,7 +116,7 @@ where
     let pool_w = w / 2;
     let flattened_dim = conv_out_channels * pool_h * pool_w;
 
-    let mut model =
+    let model =
         SimpleCnn::<B>::new(in_channels, conv_out_channels, num_classes, flattened_dim).unwrap();
     let mut sgd = SGD::<B>::new(model.parameters(), lr);
 
@@ -132,7 +129,9 @@ where
 
     for _epoch in 0..n_epochs {
         let x = Tensor::<Dyn, B>::from_slice(images, target_shape.clone()).unwrap();
-        let targets = Tensor::<Dyn, B, u32>::from_slice(&labels_f32, vec![n_samples]).unwrap().detach();
+        let targets = Tensor::<Dyn, B, u32>::from_slice(&labels_f32, vec![n_samples])
+            .unwrap()
+            .detach();
 
         let logits = model.forward(x).unwrap();
 
@@ -159,17 +158,10 @@ fn main() -> anyhow::Result<()> {
          on {n_samples} synthetic 8x8 samples for {n_epochs} epochs (lr={lr})"
     );
 
-    let (native_losses, native_elapsed) = train::<NB>(
-        &images,
-        &labels,
-        n_samples,
-        n_epochs,
-        lr,
-    );
+    let (native_losses, native_elapsed) = train::<NB>(&images, &labels, n_samples, n_epochs, lr);
 
     println!();
-    for i in 0..n_epochs {
-        let nl = native_losses[i];
+    for (i, nl) in native_losses.iter().enumerate().take(n_epochs) {
         println!("epoch {i}: loss={nl:.6}");
     }
     println!("CpuBackend: {native_elapsed:?} total");

@@ -91,7 +91,7 @@ impl LRScheduler for CosineAnnealingLR {
     fn get_lr(&self) -> f64 {
         let progress = (self.current_step as f64) / (self.t_max as f64);
         let progress = progress.min(1.0);
-        
+
         self.min_lr + 0.5 * (self.initial_lr - self.min_lr) * (1.0 + f64::cos(progress * PI))
     }
 

@@ -126,6 +126,7 @@ impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for Mish {
 /// This implementation hardcodes alpha to 1.0.
 /// This is a stateless module with no learnable parameters.
 #[derive(Debug, Clone, Default)]
+#[allow(clippy::upper_case_acronyms)]
 pub struct ELU;
 
 impl<B: Backend> Parameters<B> for ELU {

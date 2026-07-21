@@ -56,12 +56,13 @@ impl Panel for MemoryPanel {
 
         if let Some(threshold) = self.alert_threshold
             && let Some(last_val) = self.points.last().map(|p| p.1)
-                && last_val > threshold {
-                    ctx.set_alert(format!(
-                        "High memory ({:.1} MB > {} MB)",
-                        last_val, threshold
-                    ));
-                }
+            && last_val > threshold
+        {
+            ctx.set_alert(format!(
+                "High memory ({:.1} MB > {} MB)",
+                last_val, threshold
+            ));
+        }
 
         let frame = ctx.frame_mut();
 

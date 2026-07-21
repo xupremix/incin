@@ -42,9 +42,10 @@ impl Panel for ScalarPanel {
     /// Auto-generated documentation for update.
     fn update(&mut self, event: &Event) {
         if let Event::Scalar(s) = event
-            && s.name == self.metric_name {
-                self.points.push((s.step as f64, s.value));
-            }
+            && s.name == self.metric_name
+        {
+            self.points.push((s.step as f64, s.value));
+        }
     }
 
     /// Auto-generated documentation for render.

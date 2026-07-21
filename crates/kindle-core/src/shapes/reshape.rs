@@ -79,9 +79,9 @@ mod tests {
     use typenum::{U2, U4, U8};
 
     /// Auto-generated documentation for assert_reshape_eq.
-    fn assert_reshape_eq<S1: Shape, S2: Shape>()
+    fn assert_reshape_eq<S1, S2: Shape>()
     where
-        S1: ReshapeShape<S2>,
+        S1: Shape + ReshapeShape<S2>,
     {
     }
 

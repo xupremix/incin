@@ -35,7 +35,7 @@ pub(crate) fn get_or_create_pipeline(
             label: Some(&key),
             layout: None, // Auto-derive bind group layouts from the shader
             module: &shader,
-            entry_point: entry_point,
+            entry_point,
             compilation_options: Default::default(),
             cache: None,
         });

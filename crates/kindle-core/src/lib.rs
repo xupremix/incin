@@ -39,12 +39,11 @@ pub mod prelude {
         batch_norm::BatchNorm2d,
         conv1d::Conv1d,
         conv2d::Conv2d,
+        dropout::Dropout,
         embedding::Embedding,
         flatten::Flatten,
         init::Init,
         layer_norm::LayerNorm,
-        rms_norm::RMSNorm,
-        dropout::Dropout,
         linear::{Linear, LinearShape},
         loss::{
             BCEWithLogitsLoss, CrossEntropyLoss, L1Loss, MSELoss, Mean, NoneReduction, Reduction,
@@ -58,6 +57,7 @@ pub mod prelude {
         },
         optional::{False, OptionalField, True},
         param::Param,
+        rms_norm::RMSNorm,
         rnn::{RNN, RNNCell},
     };
     pub use crate::seq;
@@ -67,7 +67,9 @@ pub mod prelude {
     pub use super::tensor::prelude::*;
     #[cfg(feature = "std")]
     pub use crate::onnx_exporter::{OnnxExporter, OnnxImporter};
-    pub use crate::optim::{Adam, AdamW, Gradients, Optimizer, SGD, LRScheduler, ConstantLR, LinearLR};
+    pub use crate::optim::{
+        Adam, AdamW, ConstantLR, Gradients, LRScheduler, LinearLR, Optimizer, SGD,
+    };
     #[cfg(feature = "std")]
     pub use crate::optim::{CosineAnnealingLR, StepLR};
     pub use crate::serialize::{Deserializer, Serializer};

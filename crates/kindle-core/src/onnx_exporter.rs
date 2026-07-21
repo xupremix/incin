@@ -1,3 +1,5 @@
+#![allow(clippy::field_reassign_with_default)]
+
 use crate::graph::{AttributeValue, Graph};
 use crate::onnx_pb::onnx;
 use crate::prelude::*;

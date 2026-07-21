@@ -4,7 +4,6 @@
 
 pub use kindle_core::prelude::*;
 
-
 // ----------------------------------------------------------------------------
 // CandleBackend
 // ----------------------------------------------------------------------------
@@ -870,7 +869,10 @@ pub mod candle {
             _k: usize,
             _dim: usize,
             _largest: bool,
-        ) -> Result<(<Self as kindle_core::prelude::Backend>::Storage<K>, <Self as kindle_core::prelude::Backend>::Storage<KInt>)> {
+        ) -> Result<(
+            <Self as kindle_core::prelude::Backend>::Storage<K>,
+            <Self as kindle_core::prelude::Backend>::Storage<KInt>,
+        )> {
             unimplemented!("topk not implemented for CandleBackend")
         }
 
@@ -1145,6 +1147,11 @@ pub mod candle {
         }
     }
 
+    impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device>
+        kindle_core::prelude::OptimizerOps<Self> for CandleBackend<T, D>
+    {
+    }
+
     #[cfg(test)]
     /// Auto-generated documentation for tests.
     mod tests {
@@ -1164,10 +1171,5 @@ pub mod candle {
             let c_dev = to_candle_device(&cpu).unwrap();
             assert!(matches!(c_dev, candle::Device::Cpu));
         }
-    }
-
-    impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device>
-        kindle_core::prelude::OptimizerOps<Self> for CandleBackend<T, D>
-    {
     }
 }

@@ -6,3 +6,6 @@ publish = false
 
 [dependencies]
 kindle = { path = "../.." }
+
+[lints]
+workspace = true

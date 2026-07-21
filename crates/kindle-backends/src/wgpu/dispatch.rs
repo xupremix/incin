@@ -44,7 +44,7 @@ pub(crate) fn dispatch_binary(
         ],
     });
     let n = params_data[1];
-    let wg = (n + WG_SIZE - 1) / WG_SIZE;
+    let wg = n.div_ceil(WG_SIZE);
     run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "Binary");
 }
 
@@ -75,7 +75,7 @@ pub(crate) fn dispatch_unary(inp: &WgpuBuffer, out: &Arc<WgpuBuffer>, params_dat
         ],
     });
     let n = params_data[1];
-    let wg = (n + WG_SIZE - 1) / WG_SIZE;
+    let wg = n.div_ceil(WG_SIZE);
     run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "Unary");
 }
 
@@ -106,7 +106,7 @@ pub(crate) fn dispatch_scalar(inp: &WgpuBuffer, out: &Arc<WgpuBuffer>, params_da
         ],
     });
     let n = params_data[1];
-    let wg = (n + WG_SIZE - 1) / WG_SIZE;
+    let wg = n.div_ceil(WG_SIZE);
     run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "Scalar");
 }
 
@@ -118,7 +118,7 @@ pub(crate) fn dispatch_reduce_all(inp: &WgpuBuffer, n: u32, reduce_mode: u32) ->
     let pipeline = get_or_create_pipeline("reduce", shader, "main");
 
     // First pass: reduce into n_wg partial results
-    let n_wg = (n + WG_SIZE - 1) / WG_SIZE;
+    let n_wg = n.div_ceil(WG_SIZE);
     let partial_buf = WgpuBuffer::new_zeros(n_wg as usize * 4);
     let params = [n, reduce_mode];
     let params_buf = WgpuBuffer::from_slice(&params);
@@ -184,8 +184,6 @@ pub(crate) fn dispatch_softmax(inp: &WgpuBuffer, out: &Arc<WgpuBuffer>, batch: u
     run_pipeline(&state, &pipeline, &bg, batch, 1, 1, "Softmax");
 }
 
-/// Dispatch tiled 2D transpose
-
 /// Auto-generated documentation for run_pipeline.
 fn run_pipeline(
     state: &crate::wgpu::device::WgpuDeviceState,
@@ -249,7 +247,7 @@ pub(crate) fn dispatch_im2col(inp: &WgpuBuffer, col: &WgpuBuffer, params_data: &
     let kh = params_data[6] as u64;
     let kw = params_data[7] as u64;
     let total = n * c_in * kh * kw * h_out * w_out;
-    let wg = ((total + 255) / 256) as u32;
+    let wg = total.div_ceil(256) as u32;
     run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "Im2Col");
 }
 
@@ -296,7 +294,7 @@ pub(crate) fn dispatch_adamw(
         ],
     });
     let n = meta[0];
-    let wg = (n + 255) / 256;
+    let wg = n.div_ceil(256);
     run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "AdamW");
 }
 
@@ -337,15 +335,11 @@ pub(crate) fn dispatch_conv_transpose2d(
     });
 
     let total_out = params_data[0] * params_data[2] * params_data[5] * params_data[6];
-    let wg = (total_out + 63) / 64;
+    let wg = total_out.div_ceil(64);
     run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "ConvTranspose");
 }
 
-pub(crate) fn dispatch_shape(
-    inp: &WgpuBuffer,
-    out: &Arc<WgpuBuffer>,
-    params_data: &[u32; 21],
-) {
+pub(crate) fn dispatch_shape(inp: &WgpuBuffer, out: &Arc<WgpuBuffer>, params_data: &[u32; 21]) {
     let state = get_device_state();
     let shader = include_str!("shaders/shape.wgsl");
     let pipeline = get_or_create_pipeline("shape", shader, "main");
@@ -371,7 +365,7 @@ pub(crate) fn dispatch_shape(
         ],
     });
     let n = params_data[2];
-    let wg = (n + WG_SIZE - 1) / WG_SIZE;
+    let wg = n.div_ceil(WG_SIZE);
     run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "Shape");
 }
 
@@ -387,7 +381,7 @@ pub(crate) fn prepare_shape_params(
     params[0] = op_mode;
     params[1] = rank;
     params[2] = n_elements;
-    
+
     let pad_out = 6 - out_shape.len();
     for (i, &s) in out_shape.iter().enumerate() {
         params[3 + pad_out + i] = s as u32;
@@ -451,7 +445,7 @@ pub(crate) fn dispatch_reduce_dim(
             },
         ],
     });
-    let wg = (out_n + WG_SIZE - 1) / WG_SIZE;
+    let wg = out_n.div_ceil(WG_SIZE);
     run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "ReduceDim");
 }
 
@@ -472,14 +466,26 @@ pub(crate) fn dispatch_embedding(
         label: Some("Embedding BG"),
         layout: &bgl,
         entries: &[
-            wgpu::BindGroupEntry { binding: 0, resource: indices.buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 1, resource: weight.buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 2, resource: out.buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 3, resource: params_buf.buffer.as_entire_binding() },
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: indices.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: weight.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: out.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 3,
+                resource: params_buf.buffer.as_entire_binding(),
+            },
         ],
     });
     let total = seq_len * embed_dim;
-    let wg = (total + WG_SIZE - 1) / WG_SIZE;
+    let wg = total.div_ceil(WG_SIZE);
     run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "Embedding");
 }
 
@@ -502,14 +508,29 @@ pub(crate) fn dispatch_layer_norm(
         label: Some("LayerNorm BG"),
         layout: &bgl,
         entries: &[
-            wgpu::BindGroupEntry { binding: 0, resource: inp.buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 1, resource: gamma.buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 2, resource: beta.buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 3, resource: out.buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 4, resource: params_buf.buffer.as_entire_binding() },
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: inp.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: gamma.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: beta.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 3,
+                resource: out.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 4,
+                resource: params_buf.buffer.as_entire_binding(),
+            },
         ],
     });
-    let wg = (batch_size + 64 - 1) / 64; // workgroup size is 64
+    let wg = batch_size.div_ceil(64); // workgroup size is 64
     run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "LayerNorm");
 }
 
@@ -546,16 +567,37 @@ pub(crate) fn dispatch_batch_norm(
         label: Some("BatchNorm BG"),
         layout: &bgl,
         entries: &[
-            wgpu::BindGroupEntry { binding: 0, resource: inp.buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 1, resource: gamma.buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 2, resource: beta.buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 3, resource: rm.buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 4, resource: rv.buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 5, resource: out.buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 6, resource: params_buf.buffer.as_entire_binding() },
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: inp.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: gamma.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: beta.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 3,
+                resource: rm.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 4,
+                resource: rv.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 5,
+                resource: out.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 6,
+                resource: params_buf.buffer.as_entire_binding(),
+            },
         ],
     });
-    let wg = (channels + 64 - 1) / 64; // workgroup size is 64
+    let wg = channels.div_ceil(64); // workgroup size is 64
     run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "BatchNorm");
 }
 
@@ -581,22 +623,29 @@ pub(crate) fn dispatch_pool2d(
     let state = get_device_state();
     let shader = include_str!("shaders/pool2d.wgsl");
     let pipeline = get_or_create_pipeline("pool2d", shader, "main");
-    let params = [
-        mode, n, c, h, w, oh, ow, kh, kw, sh, sw, ph, pw, dh, dw,
-    ];
+    let params = [mode, n, c, h, w, oh, ow, kh, kw, sh, sw, ph, pw, dh, dw];
     let params_buf = WgpuBuffer::from_slice(&params);
     let bgl = pipeline.get_bind_group_layout(0);
     let bg = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("Pool2D BG"),
         layout: &bgl,
         entries: &[
-            wgpu::BindGroupEntry { binding: 0, resource: inp.buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 1, resource: out.buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 2, resource: params_buf.buffer.as_entire_binding() },
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: inp.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: out.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: params_buf.buffer.as_entire_binding(),
+            },
         ],
     });
     let total = n * c * oh * ow;
-    let wg = (total + WG_SIZE - 1) / WG_SIZE;
+    let wg = total.div_ceil(WG_SIZE);
     run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "Pool2D");
 }
 
@@ -617,12 +666,21 @@ pub(crate) fn dispatch_bias_add(
         label: Some("BiasAdd BG"),
         layout: &bgl,
         entries: &[
-            wgpu::BindGroupEntry { binding: 0, resource: t.buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 1, resource: bias.buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 2, resource: params_buf.buffer.as_entire_binding() },
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: t.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: bias.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: params_buf.buffer.as_entire_binding(),
+            },
         ],
     });
-    let wg = (total + WG_SIZE - 1) / WG_SIZE;
+    let wg = total.div_ceil(WG_SIZE);
     run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "BiasAdd");
 }
 
@@ -641,14 +699,26 @@ pub(crate) fn dispatch_conv2d_direct(
         label: Some("Conv2DDirect BG"),
         layout: &bgl,
         entries: &[
-            wgpu::BindGroupEntry { binding: 0, resource: inp.buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 1, resource: weight.buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 2, resource: out.buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 3, resource: params_buf.buffer.as_entire_binding() },
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: inp.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: weight.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: out.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 3,
+                resource: params_buf.buffer.as_entire_binding(),
+            },
         ],
     });
     let total = params[0] * params[4] * params[5] * params[6];
-    let wg = (total + WG_SIZE - 1) / WG_SIZE;
+    let wg = total.div_ceil(WG_SIZE);
     run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "Conv2DDirect");
 }
 
@@ -668,12 +738,24 @@ pub(crate) fn dispatch_nll_loss(
         label: Some("NLLLoss BG"),
         layout: &bgl,
         entries: &[
-            wgpu::BindGroupEntry { binding: 0, resource: log_sm.buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 1, resource: target.buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 2, resource: out.buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 3, resource: params_buf.buffer.as_entire_binding() },
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: log_sm.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: target.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: out.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 3,
+                resource: params_buf.buffer.as_entire_binding(),
+            },
         ],
     });
-    let wg = (batch + WG_SIZE - 1) / WG_SIZE;
+    let wg = batch.div_ceil(WG_SIZE);
     run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "NLLLoss");
 }

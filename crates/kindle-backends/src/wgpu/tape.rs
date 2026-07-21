@@ -15,7 +15,7 @@ pub struct TapeEntry {
 }
 
 thread_local! {
-    static TAPE: RefCell<Vec<TapeEntry>> = RefCell::new(Vec::new());
+    static TAPE: RefCell<Vec<TapeEntry>> = const { RefCell::new(Vec::new()) };
 }
 
 #[cfg(feature = "telemetry")]

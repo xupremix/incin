@@ -137,6 +137,7 @@ impl CpuBuffer {
     ///
     /// Panics if `self` is `Q8_0` — quantized buffers are never produced by
     /// elementwise float ops.
+    #[allow(clippy::wrong_self_convention)]
     pub(crate) fn from_f64_values(&self, values: Vec<f64>) -> CpuBuffer {
         match self {
             CpuBuffer::F32(_) => CpuBuffer::F32(values.into_iter().map(|v| v as f32).collect()),

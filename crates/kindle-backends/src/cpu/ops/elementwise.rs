@@ -13,7 +13,7 @@
 use kindle_core::prelude::{Backend, DType, FloatOps, NumericOps, Result};
 
 use crate::cpu::CpuBackend;
-use crate::cpu::storage::{CpuBuffer, CpuStorage};
+use crate::cpu::storage::CpuStorage;
 use crate::cpu::tape::{self, TapeEntry};
 
 /// Resolve the per-operand logical index for a given output logical index,
@@ -64,8 +64,8 @@ fn read_broadcast(storage: &CpuStorage, out_idx: &[usize], out_shape: &[usize]) 
 use rayon::prelude::*;
 
 pub(crate) fn elementwise_binary(
-    op_name: &str,
-    op_expr: &str,
+    _op_name: &str,
+    _op_expr: &str,
     lhs: &CpuStorage,
     rhs: &CpuStorage,
     out_shape: &[usize],
@@ -90,8 +90,8 @@ pub(crate) fn elementwise_binary(
 /// Elementwise negate (used by `sub`'s backward rule: rhs receives the
 /// negated incoming gradient before unbroadcasting).
 pub(crate) fn elementwise_unary(
-    op_name: &str,
-    op_expr: &str,
+    _op_name: &str,
+    _op_expr: &str,
     t: &CpuStorage,
     f: impl Fn(f64) -> f64 + Send + Sync,
 ) -> Result<CpuStorage> {
@@ -370,7 +370,6 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for CpuBackend<T,
                     &t_capture,
                     &grad_out.shape,
                     |g, x| {
-                        let x = x;
                         let deriv = if x > 0.0 { 1.0 } else { 0.0 };
                         g * deriv
                     },
@@ -485,7 +484,6 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for CpuBackend<T,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &CpuStorage| {
                 let grad = elementwise_binary("gelu_grad", "a * (0.5 * (1.0 + erff(b / 1.41421356)) + b * (0.39894228 * expf(-0.5 * b * b)))", grad_out, &t_capture, &grad_out.shape, |g, x| {
-                    let x = x;
                     let cdf = 0.5 * (1.0 + erf_approx(x / core::f64::consts::SQRT_2));
                     let pdf = (1.0 / (2.0 * core::f64::consts::PI).sqrt()) * (-x * x / 2.0).exp();
                     let deriv = cdf + x * pdf;
@@ -515,7 +513,6 @@ impl<T: DType, D: kindle_core::prelude::Device> FloatOps<Self> for CpuBackend<T,
                     &t_capture,
                     &grad_out.shape,
                     |g, x| {
-                        let x = x;
                         let deriv = if x > 0.0 {
                             1.0
                         } else if x < 0.0 {
@@ -793,6 +790,7 @@ pub(crate) fn log_softmax<T: DType, D: kindle_core::prelude::Device, K: DType>(
 mod tests {
     use super::*;
     use crate::cpu::gradcheck::gradcheck;
+    use crate::cpu::storage::CpuBuffer;
     use crate::cpu::tape;
     use kindle_core::prelude::ReductionOps;
 

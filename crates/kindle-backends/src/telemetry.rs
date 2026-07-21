@@ -14,7 +14,7 @@
 //!   `#[cfg(feature = "telemetry")]` guards.
 
 #[cfg(feature = "telemetry")]
-pub use kindle_telemetry::prelude::{Emitter, ScalarEvent, MemoryEvent, CURRENT_SCHEMA_VERSION};
+pub use kindle_telemetry::prelude::{CURRENT_SCHEMA_VERSION, Emitter, MemoryEvent, ScalarEvent};
 #[cfg(feature = "telemetry")]
 use kindle_telemetry::reporter::Reporter;
 

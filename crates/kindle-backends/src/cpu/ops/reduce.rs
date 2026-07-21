@@ -936,11 +936,11 @@ impl<T: DType, D: kindle_core::prelude::Device> ReductionOps<Self> for CpuBacken
             }
 
             let mut out_coords = coords.clone();
-            for j in 0..k {
+            for (j, &(val, idx)) in slice_vals.iter().enumerate().take(k) {
                 out_coords[dim] = j;
                 let flat = flatten_index(&out_coords, &out_shape);
-                out_vals[flat] = slice_vals[j].0 as f32;
-                out_indices[flat] = slice_vals[j].1;
+                out_vals[flat] = val as f32;
+                out_indices[flat] = idx;
             }
         }
         Ok((
@@ -989,10 +989,10 @@ impl<T: DType, D: kindle_core::prelude::Device> ReductionOps<Self> for CpuBacken
                 slice_vals
                     .sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(core::cmp::Ordering::Equal));
             }
-            for k in 0..shape[dim] {
+            for (k, &(_, idx)) in slice_vals.iter().enumerate() {
                 coords[dim] = k;
                 let flat = flatten_index(&coords, shape);
-                out[flat] = slice_vals[k].1;
+                out[flat] = idx;
             }
         }
         Ok(CpuStorage::from_contiguous(

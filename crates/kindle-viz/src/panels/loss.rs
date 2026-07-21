@@ -54,9 +54,10 @@ impl Panel for LossPanel {
         let area = ctx.area();
 
         if let Some(last_val) = self.points.last().map(|p| p.1)
-            && !last_val.is_finite() {
-                ctx.set_alert("NaN/Inf detected".to_string());
-            }
+            && !last_val.is_finite()
+        {
+            ctx.set_alert("NaN/Inf detected".to_string());
+        }
 
         let frame = ctx.frame_mut();
 

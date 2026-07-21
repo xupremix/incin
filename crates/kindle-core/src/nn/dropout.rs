@@ -58,7 +58,7 @@ where
         }
 
         let scale = 1.0 / (1.0 - self.p);
-        
+
         // Generate uniform mask in [0, 1)
         let dtype = <B::FloatElem as ConstDType>::DTYPE;
         let mask_inner = B::rand(x.dims().as_ref(), dtype, &x.device()?)?;
@@ -69,10 +69,10 @@ where
             x._device.clone(),
             core::marker::PhantomData,
         );
-        
+
         // mask - p is positive for (1 - p) proportion of elements
         let mask = mask.add_scalar(-self.p)?;
-        
+
         // apply step function: 1.0 if (mask - p) > 0.0 else 0.0
         let binary_mask = mask.step()?;
 

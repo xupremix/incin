@@ -51,12 +51,12 @@
 | Crate | Tests | Status |
 |-------|-------|--------|
 | `kindle-core` | Passing | ✅ C-6/C-7 fixed; C-3 (autograd design gaps) still open |
-| `kindle-backends` (cpu) | Passing, +2 new regression tests | ✅ C-2 (f32 downcast) and C-5 (overflow) fixed |
+| `kindle-backends` (cpu) | Passing, +2 new regression tests | ✅ C-2 (f32 downcast), C-5 (overflow), C-8 (mis-gated `elementwise` module — CPU couldn't build standalone) fixed |
 | `kindle-backends` (cuda) | Compiles (no GPU in this env to run it) | ✅ C-1 fixed; ⚠ C-4: add/sub/mul/div now gradient-wired (unverified on real hardware); everything else (`CreationOps`/`FloatOps`/norm/embedding/quant/reduce/loss) is still an empty trait impl falling to `Err` |
 | `kindle-backends` (wgpu) | Passing, +16 new gradient tests | ⚠ C-3: elementwise/activation autograd fixed; matmul/conv/norm/reductions/etc. still ungradiented |
 | `kindle-backends` (legacy: candle only now) | Partial | ✅ `ndarray`/`burn` backends + deps deleted (2026-07-21, both were permanently dead code); only `CandleBackend` remains |
 | `kindle-macros` | Passing | ✅ Solid — hygiene good, doc examples present |
-| `kindle-data` | **0 tests** | ❌ Untested despite concurrent DataLoader logic |
+| `kindle-data` | 9 tests | ✅ `DataLoader` tested (incl. multi-worker concurrency); `default-features = false` fixed on its `kindle-backends` dep (was leaking `cuda`/`wgpu`, see C-8) |
 | `kindle` (facade) | Passing | ⚠ API surface leaks internals via wildcard re-exports |
 | `kindle-viz` / `kindle-telemetry` / `kindle-viz-plugin-api` | Passing | 🔲 Prototype, correctly marked `publish = false` |
 
@@ -254,6 +254,37 @@ body in `binary.rs`, 2 in the `impl_std_scalar_ops!` macro body in `unary.rs`)
 with `.unwrap_or_else(|e| panic!(...))` messages naming the operator and
 printing the underlying `Error`, so a real failure is immediately debuggable
 instead of a bare "called `Result::unwrap()` on an `Err` value" with no context.
+
+---
+
+### C-8 — `cpu::ops::elementwise` was `#[cfg(feature = "cuda")]`-gated; CI's "cpu-only" test run silently never tested cpu-only — ✅ FIXED (2026-07-21)
+Two compounding bugs, both found while wiring up CI (item 12):
+1. `crates/kindle-backends/src/cpu/ops/mod.rs` had `pub mod elementwise;` — the
+   module implementing `NumericOps`/`FloatOps` for `CpuBackend`, i.e. the
+   entire reason the CPU backend can add/mul/relu/etc. — preceded by *seven*
+   duplicate `#[cfg(feature = "cuda")]` attributes. With `cuda` off,
+   `cpu::ops::elementwise` didn't exist at all and `CpuBackend` failed to
+   implement `NumericOps`/`FloatOps`, i.e. **the CPU backend could not compile
+   standalone**.
+2. This was invisible because it never *was* standalone: `kindle-data/Cargo.toml`
+   depended on `kindle-backends` without `default-features = false`, so every
+   `cargo test --workspace ...` — including CI's own
+   `--no-default-features --features kindle-backends/cpu,kindle/cpu` — silently
+   re-enabled `kindle-backends`' full default feature set (`std, cpu, wgpu,
+   cuda`) through that one crate, masking bug (1) for the whole session and,
+   presumably, since whenever these two files were introduced. Two example
+   crates (`tui_graph_demo`, `native_training_demo`) had the same leak pattern
+   (needed `wgpu` legitimately, pulled unwanted `cuda` too).
+**Fixed:** removed the 7 stray `#[cfg(feature = "cuda")]` attributes; added
+`default-features = false` to all three leaking `Cargo.toml`s, keeping only
+the features each crate actually needs. Re-verified: `cargo check -p
+kindle-backends --no-default-features --features cpu,std` now compiles clean,
+and the full workspace test suite (48 suites, 0 failed) still passes under
+the *real* cpu-only feature set — this is the first time in the audit this
+was actually verified rather than assumed. This is the same class of bug as
+C-1/C-3/C-4 (a real defect with zero automated coverage), found by the same
+root cause the roadmap already flagged: no CI job ever verified a feature
+combination actually meant what its name said.
 
 ---
 
@@ -493,7 +524,14 @@ actually load-bearing for correctness, not just release paperwork.
 13. ✅ DONE (2026-07-21): deleted `legacy::burn_backend` AND
     `legacy::ndarray_backend` (both permanently dead code, `#[cfg(any())]`)
     and removed the now-unused `burn`/`ndarray` dependencies entirely.
-14. Make `s![]`/`idx![]` doctests real (`rust,ignore` → compiled).
+14. ✅ DONE (2026-07-21): repo-wide `cargo fmt --all` pass (237 files) as its
+    own change; found and fixed C-8 (see above) while getting CI's cpu-only
+    test command to actually mean what it said; brought `cargo clippy
+    --workspace --all-targets --features kindle-backends/cpu,kindle/cpu -- -D
+    warnings` from ~120 real errors (after subtracting C-8's false-positive
+    noise) to a clean pass — `cargo fmt --all -- --check` and this clippy
+    invocation are now both genuinely green, not just untested.
+15. Make `s![]`/`idx![]` doctests real (`rust,ignore` → compiled).
 
 **Phase 4 — docs & release paperwork** (mostly unchanged from before, see below)
 
@@ -644,7 +682,8 @@ is stable.
 8. ~~Audit `kindle` facade wildcard re-exports; fix `DefaultBackend = ()` trap; remove dead `candle` cfg~~ — ✅ fixed 2026-07-21 (macros wildcard narrowed, `kindle_backends::*` deliberately left, see High priority section for why)
 9. ~~Write `kindle-data` `DataLoader` tests~~ — ✅ fixed 2026-07-21 (9 tests, incl. multi-worker concurrency)
 10. ~~Decide `legacy::burn_backend`'s fate; stop paying its dependency cost~~ — ✅ fixed 2026-07-21 (deleted, along with equally-dead `ndarray_backend`)
-11. Add GPU-gated CI jobs (cuda/wgpu) — the current gap is why C-1/C-3/C-4 shipped unnoticed
-12. Run a dedicated `cargo fmt --all` pass (repo-wide, pre-existing debt — see Repository Hygiene) as its own commit, before or right after opening the first real PR against `main`
-13. Make doc comments real (not templates); make `s![]`/`idx![]` doctests compile for real
-14. Write `CHANGELOG.md`, finish remaining repo hygiene items above
+11. ~~**C-8** `cpu::ops::elementwise` mis-gated behind `#[cfg(feature = "cuda")]`; `kindle-data`/example crates leaked `kindle-backends`' default features, masking it~~ — ✅ fixed 2026-07-21 (see C-8 above) — found *while* doing item 12
+12. ~~Run a dedicated `cargo fmt --all` pass (repo-wide) as its own commit, and get `cargo clippy --workspace --all-targets -- -D warnings` genuinely green~~ — ✅ fixed 2026-07-21 (237 files reformatted; ~120 real clippy errors fixed; both gates are real now, not silently red)
+13. Add GPU-gated CI jobs (cuda/wgpu), and update `.github/workflows/ci.yml`'s fmt/clippy steps to match what's now actually green — the CI gap (no GPU jobs, an unverified cpu-only feature set) is why C-1/C-3/C-4/C-8 all shipped unnoticed
+14. Make doc comments real (not templates); make `s![]`/`idx![]` doctests compile for real
+15. Write `CHANGELOG.md`, finish remaining repo hygiene items above

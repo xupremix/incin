@@ -37,12 +37,12 @@ impl<
     }
 
     /// Auto-generated documentation for cross_entropy_loss_with.
-    pub fn cross_entropy_loss_with<R: ReductionMode, S2: Shape>(
+    pub fn cross_entropy_loss_with<R, S2: Shape>(
         &self,
         target: &Tensor<S2, B, K, D, G>,
     ) -> Result<Tensor<R::Output, B, K, D, G>>
     where
-        R: CrossEntropyReductionShape<S>,
+        R: ReductionMode + CrossEntropyReductionShape<S>,
     {
         let inner = B::cross_entropy_loss(&self.inner, &target.inner, R::as_enum())?;
         let mut out_shape_dims: Vec<usize> = vec![];
@@ -79,12 +79,12 @@ impl<
     }
 
     /// Auto-generated documentation for mse_loss_with.
-    pub fn mse_loss_with<R: ReductionMode, S2: Shape>(
+    pub fn mse_loss_with<R, S2: Shape>(
         &self,
         target: &Tensor<S2, B, K, D, G>,
     ) -> Result<Tensor<R::Output, B, K, D, G>>
     where
-        R: MseReductionShape<S>,
+        R: ReductionMode + MseReductionShape<S>,
     {
         let inner = B::mse_loss(&self.inner, &target.inner, R::as_enum())?;
         let mut out_shape_dims: Vec<usize> = vec![];
@@ -110,12 +110,12 @@ impl<
     }
 
     /// Auto-generated documentation for l1_loss_with.
-    pub fn l1_loss_with<R: ReductionMode, S2: Shape>(
+    pub fn l1_loss_with<R, S2: Shape>(
         &self,
         target: &Tensor<S2, B, K, D, G>,
     ) -> Result<Tensor<R::Output, B, K, D, G>>
     where
-        R: L1ReductionShape<S>,
+        R: ReductionMode + L1ReductionShape<S>,
     {
         let inner = B::l1_loss(&self.inner, &target.inner, R::as_enum())?;
         let mut out_shape_dims: Vec<usize> = vec![];
@@ -141,12 +141,12 @@ impl<
     }
 
     /// Auto-generated documentation for bce_with_logits_loss_with.
-    pub fn bce_with_logits_loss_with<R: ReductionMode, S2: Shape>(
+    pub fn bce_with_logits_loss_with<R, S2: Shape>(
         &self,
         target: &Tensor<S2, B, K, D, G>,
     ) -> Result<Tensor<R::Output, B, K, D, G>>
     where
-        R: BceReductionShape<S>,
+        R: ReductionMode + BceReductionShape<S>,
     {
         let inner = B::bce_with_logits_loss(&self.inner, &target.inner, R::as_enum())?;
         let mut out_shape_dims: Vec<usize> = vec![];

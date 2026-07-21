@@ -46,7 +46,6 @@ pub struct Dyn(pub ());
 ///
 /// assert_eq!(dyn_t.dims(), vec![32, 64]);
 /// ```
-
 pub struct Tensor<
     S: Shape,
     B: Backend,
@@ -396,6 +395,30 @@ impl<S: Shape, B: Backend, K: DType, D: Device> Tensor<S, B, K, D, Grad> {
     }
 }
 
+impl<S: crate::prelude::Shape, B: crate::prelude::Backend, K: DType, D: Device, G: RequiresGrad>
+    core::fmt::Display for Tensor<S, B, K, D, G>
+{
+    /// Auto-generated documentation for fmt.
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}", B::format_tensor_display(&self.inner))
+    }
+}
+
+impl<S: crate::prelude::Shape, B: crate::prelude::Backend, K: DType, D: Device, G: RequiresGrad>
+    core::fmt::Debug for Tensor<S, B, K, D, G>
+{
+    /// Auto-generated documentation for fmt.
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(
+            f,
+            "Tensor({}, shape={:?})\n{}",
+            core::any::type_name::<B>(),
+            B::shape(&self.inner),
+            B::format_tensor_debug(&self.inner)
+        )
+    }
+}
+
 #[cfg(test)]
 /// Auto-generated documentation for tests.
 mod tests {
@@ -420,29 +443,5 @@ mod tests {
             Tensor::ones(vec![4]).unwrap();
         assert_eq!(t.rank(), 1);
         assert_eq!(t.numel(), 4);
-    }
-}
-
-impl<S: crate::prelude::Shape, B: crate::prelude::Backend, K: DType, D: Device, G: RequiresGrad>
-    core::fmt::Display for Tensor<S, B, K, D, G>
-{
-    /// Auto-generated documentation for fmt.
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{}", B::format_tensor_display(&self.inner))
-    }
-}
-
-impl<S: crate::prelude::Shape, B: crate::prelude::Backend, K: DType, D: Device, G: RequiresGrad>
-    core::fmt::Debug for Tensor<S, B, K, D, G>
-{
-    /// Auto-generated documentation for fmt.
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(
-            f,
-            "Tensor({}, shape={:?})\n{}",
-            core::any::type_name::<B>(),
-            B::shape(&self.inner),
-            B::format_tensor_debug(&self.inner)
-        )
     }
 }

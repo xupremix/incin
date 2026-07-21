@@ -1,7 +1,6 @@
 use kindle::prelude::*;
 use kindle::{Adam, AdamW, SGD};
 
-
 /// Auto-generated documentation for CpuBackend.
 type CpuBackend = DefaultBackend;
 

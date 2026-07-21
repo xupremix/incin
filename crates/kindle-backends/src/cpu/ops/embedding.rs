@@ -30,6 +30,7 @@ use crate::cpu::tape::{self, TapeEntry};
 /// gathered position's incoming gradient slice into the corresponding row
 /// of a zero-filled buffer sized to `w`, summing contributions when the same
 /// row index appears more than once in `t`.
+#[allow(clippy::extra_unused_type_parameters)]
 pub(crate) fn embedding_impl<T: DType, D: kindle_core::prelude::Device, K: DType, KInt: DType>(
     t: &CpuStorage,
     w: &CpuStorage,

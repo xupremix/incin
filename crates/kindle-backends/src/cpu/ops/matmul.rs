@@ -234,6 +234,96 @@ pub(crate) fn matmul_impl(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStora
     Ok(out)
 }
 
+#[inline]
+/// Auto-generated documentation for f32_matmul_scalar.
+fn f32_matmul_scalar(
+    m: usize,
+    k: usize,
+    n: usize,
+    lhs: &CpuStorage,
+    rhs: &CpuStorage,
+    out: &mut [f32],
+) {
+    if rhs.strides[1] == 1 {
+        let rhs_data = match &*rhs.buffer {
+            CpuBuffer::F32(v) => v,
+            _ => return,
+        };
+        let rhs_stride_k = rhs.strides[0];
+
+        for mi in 0..m {
+            for ki in 0..k {
+                let a_val = lhs.get(&[mi, ki]) as f32;
+                let rhs_row_start = rhs.offset + ki * rhs_stride_k;
+                let out_row_start = mi * n;
+
+                for ni in 0..n {
+                    out[out_row_start + ni] += a_val * rhs_data[rhs_row_start + ni];
+                }
+            }
+        }
+    } else {
+        for mi in 0..m {
+            for ni in 0..n {
+                let mut acc = 0f64;
+                for ki in 0..k {
+                    acc += lhs.get(&[mi, ki]) * rhs.get(&[ki, ni]);
+                }
+                out[mi * n + ni] = acc as f32;
+            }
+        }
+    }
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[target_feature(enable = "avx2", enable = "fma")]
+#[inline]
+/// Auto-generated documentation for f32_matmul_avx2.
+unsafe fn f32_matmul_avx2(
+    m: usize,
+    k: usize,
+    n: usize,
+    lhs: &CpuStorage,
+    rhs: &CpuStorage,
+    out: &mut [f32],
+) {
+    #[cfg(target_arch = "x86")]
+    use core::arch::x86::*;
+    #[cfg(target_arch = "x86_64")]
+    use core::arch::x86_64::*;
+
+    let rhs_stride_k = rhs.strides[0];
+    let rhs_data = match &*rhs.buffer {
+        CpuBuffer::F32(v) => v,
+        _ => return,
+    };
+
+    let n_vec = n - (n % 8);
+
+    for mi in 0..m {
+        for ki in 0..k {
+            let a_val = lhs.get(&[mi, ki]) as f32;
+            let a_vec = _mm256_set1_ps(a_val);
+
+            let rhs_row_start = rhs.offset + ki * rhs_stride_k;
+            let out_row_start = mi * n;
+
+            for ni in (0..n_vec).step_by(8) {
+                unsafe {
+                    let b = _mm256_loadu_ps(rhs_data.as_ptr().add(rhs_row_start + ni));
+                    let mut c = _mm256_loadu_ps(out.as_ptr().add(out_row_start + ni));
+                    c = _mm256_fmadd_ps(a_vec, b, c);
+                    _mm256_storeu_ps(out.as_mut_ptr().add(out_row_start + ni), c);
+                }
+            }
+
+            for ni in n_vec..n {
+                out[out_row_start + ni] += a_val * rhs_data[rhs_row_start + ni];
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 /// Auto-generated documentation for tests.
 mod tests {
@@ -670,95 +760,5 @@ mod tests {
             max_rel_err < 1e-2,
             "gradcheck max relative error too high: {max_rel_err}"
         );
-    }
-}
-
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-#[target_feature(enable = "avx2", enable = "fma")]
-#[inline]
-/// Auto-generated documentation for f32_matmul_avx2.
-unsafe fn f32_matmul_avx2(
-    m: usize,
-    k: usize,
-    n: usize,
-    lhs: &CpuStorage,
-    rhs: &CpuStorage,
-    out: &mut [f32],
-) {
-    #[cfg(target_arch = "x86")]
-    use core::arch::x86::*;
-    #[cfg(target_arch = "x86_64")]
-    use core::arch::x86_64::*;
-
-    let rhs_stride_k = rhs.strides[0];
-    let rhs_data = match &*rhs.buffer {
-        CpuBuffer::F32(v) => v,
-        _ => return,
-    };
-
-    let n_vec = n - (n % 8);
-
-    for mi in 0..m {
-        for ki in 0..k {
-            let a_val = lhs.get(&[mi, ki]) as f32;
-            let a_vec = _mm256_set1_ps(a_val);
-
-            let rhs_row_start = rhs.offset + ki * rhs_stride_k;
-            let out_row_start = mi * n;
-
-            for ni in (0..n_vec).step_by(8) {
-                unsafe {
-                    let b = _mm256_loadu_ps(rhs_data.as_ptr().add(rhs_row_start + ni));
-                    let mut c = _mm256_loadu_ps(out.as_ptr().add(out_row_start + ni));
-                    c = _mm256_fmadd_ps(a_vec, b, c);
-                    _mm256_storeu_ps(out.as_mut_ptr().add(out_row_start + ni), c);
-                }
-            }
-
-            for ni in n_vec..n {
-                out[out_row_start + ni] += a_val * rhs_data[rhs_row_start + ni];
-            }
-        }
-    }
-}
-
-#[inline]
-/// Auto-generated documentation for f32_matmul_scalar.
-fn f32_matmul_scalar(
-    m: usize,
-    k: usize,
-    n: usize,
-    lhs: &CpuStorage,
-    rhs: &CpuStorage,
-    out: &mut [f32],
-) {
-    if rhs.strides[1] == 1 {
-        let rhs_data = match &*rhs.buffer {
-            CpuBuffer::F32(v) => v,
-            _ => return,
-        };
-        let rhs_stride_k = rhs.strides[0];
-
-        for mi in 0..m {
-            for ki in 0..k {
-                let a_val = lhs.get(&[mi, ki]) as f32;
-                let rhs_row_start = rhs.offset + ki * rhs_stride_k;
-                let out_row_start = mi * n;
-
-                for ni in 0..n {
-                    out[out_row_start + ni] += a_val * rhs_data[rhs_row_start + ni];
-                }
-            }
-        }
-    } else {
-        for mi in 0..m {
-            for ni in 0..n {
-                let mut acc = 0f64;
-                for ki in 0..k {
-                    acc += lhs.get(&[mi, ki]) * rhs.get(&[ki, ni]);
-                }
-                out[mi * n + ni] = acc as f32;
-            }
-        }
     }
 }

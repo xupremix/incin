@@ -1,7 +1,6 @@
 extern crate alloc;
 use kindle::prelude::*;
 
-
 /// Auto-generated documentation for Features.
 type Features = Sequential<Conv2d<s![dyn, dyn, 3, 1, 0, 1]>, ReLU>;
 

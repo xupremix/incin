@@ -92,7 +92,7 @@ fn natural_transpose_out_size(
 /// `Error::ShapeMismatch` (never panicking on an integer-division remainder)
 /// otherwise (T-04-11).
 fn validate_groups(op: &'static str, cin: usize, cout: usize, groups: usize) -> Result<()> {
-    if groups == 0 || cin % groups != 0 || cout % groups != 0 {
+    if groups == 0 || !cin.is_multiple_of(groups) || !cout.is_multiple_of(groups) {
         return Err(Error::ShapeMismatch {
             op,
             expected: vec![groups],
@@ -110,7 +110,6 @@ fn validate_groups(op: &'static str, cin: usize, cout: usize, groups: usize) -> 
 /// Materializing gather loop producing a `[B, L_out, Cin*K]` column matrix
 /// from a `[B, Cin, L]` input. For every gathered element whose computed
 /// source position falls outside `[0, L)`, substitutes `0.0` (Pitfall 2).
-
 fn im2col_1d(
     input: &CpuStorage,
     kernel_size: usize,

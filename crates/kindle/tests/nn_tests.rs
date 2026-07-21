@@ -11,7 +11,7 @@ fn test_param() -> Result<()> {
 
     // Test getting a tensor out
     let t = param.as_tensor()?;
-    let t_dims: [usize; 2] = t.dims().into();
+    let t_dims: [usize; 2] = t.dims();
     assert_eq!(t_dims, [10, 10]);
 
     Ok(())
@@ -24,7 +24,7 @@ fn test_linear() -> Result<()> {
     let input = Tensor::<s![2, 10], CpuBackend>::ones(())?;
 
     let out = linear.forward(input)?;
-    let out_dims: [usize; 2] = out.dims().into();
+    let out_dims: [usize; 2] = out.dims();
     assert_eq!(out_dims, [2, 5]);
 
     Ok(())
@@ -50,7 +50,7 @@ fn test_conv2d() -> Result<()> {
     let input = Tensor::<s![2, 3, 32, 32], CpuBackend>::ones(())?;
 
     let out = conv.forward(input)?;
-    let out_dims: [usize; 4] = out.dims().into();
+    let out_dims: [usize; 4] = out.dims();
     // Out: Batch=2, Channels=16, H=32, W=32 (because kernel=3, padding=1, stride=1)
     assert_eq!(out_dims, [2, 16, 32, 32]);
 
@@ -64,7 +64,7 @@ fn test_layer_norm() -> Result<()> {
     let input = Tensor::<s![5, 10, 20], CpuBackend>::ones(())?;
 
     let out = ln.forward(input)?;
-    let out_dims: [usize; 3] = out.dims().into();
+    let out_dims: [usize; 3] = out.dims();
     assert_eq!(out_dims, [5, 10, 20]);
 
     Ok(())
@@ -80,7 +80,7 @@ fn test_batch_norm2d() -> Result<()> {
     let input = Tensor::<s![2, 16, 32, 32], CpuBackend>::ones(())?;
 
     let out = bn.forward(input)?;
-    let out_dims: [usize; 4] = out.dims().into();
+    let out_dims: [usize; 4] = out.dims();
     assert_eq!(out_dims, [2, 16, 32, 32]);
 
     Ok(())
@@ -98,7 +98,7 @@ fn test_sequential() -> Result<()> {
     let input = Tensor::<s![4, 10], CpuBackend>::ones(())?;
 
     let out = seq.forward(input)?;
-    let out_dims: [usize; 2] = out.dims().into();
+    let out_dims: [usize; 2] = out.dims();
     assert_eq!(out_dims, [4, 2]);
 
     Ok(())
@@ -119,7 +119,7 @@ fn test_embedding() -> Result<()> {
     let input = Tensor::<s![2, 10], CpuBackend>::ones(())?;
 
     let out = emb.forward(input)?;
-    let out_dims: [usize; 3] = out.dims().into();
+    let out_dims: [usize; 3] = out.dims();
     assert_eq!(out_dims, [2, 10, 32]);
 
     Ok(())

@@ -231,9 +231,6 @@ impl<
         ))
     }
 
-    /// Try to reshape this tensor into the provided shape `S2`.
-    /// This falls back to a runtime verification for dynamic shapes.
-
     /// Narrows the tensor dynamically, returning a tensor with `Dyn` shape.
     ///
     /// # Examples
@@ -348,9 +345,6 @@ impl<
         ))
     }
 
-    /// Permute the tensor's dimensions by swapping `D1` and `D2`.
-    /// Strongly typed output shape via `Transpose<D1, D2>`.
-
     /// Extracts a single scalar value from a 0D or 1D tensor.
     /// This will bring the tensor data to the CPU and read the bytes.
     pub fn to_scalar<E: Copy>(&self) -> Result<E> {
@@ -439,22 +433,15 @@ impl<
         S: crate::shapes::Flatten<START, END>,
     {
         let inner = B::flatten(&self.inner, START, END)?;
-        let in_dims = S::dims(&self._shape).into();
+        let in_dims: Vec<usize> = S::dims(&self._shape).into();
         let mut out_dims = Vec::new();
 
-        for i in 0..START {
-            out_dims.push(in_dims[i]);
-        }
+        out_dims.extend_from_slice(&in_dims[0..START]);
 
-        let mut prod = 1;
-        for i in START..=END {
-            prod *= in_dims[i];
-        }
+        let prod: usize = in_dims[START..=END].iter().product();
         out_dims.push(prod);
 
-        for i in (END + 1)..in_dims.len() {
-            out_dims.push(in_dims[i]);
-        }
+        out_dims.extend_from_slice(&in_dims[(END + 1)..]);
 
         Ok(Tensor::from_parts_unchecked(
             inner,

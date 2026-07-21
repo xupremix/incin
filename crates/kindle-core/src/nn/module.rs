@@ -364,7 +364,7 @@ macro_rules! impl_dummy_state {
 
 impl_dummy_state!(usize, f32);
 
-impl<T: ?Sized, B: Backend> Parameters<B> for core::marker::PhantomData<T>
+impl<T, B: Backend> Parameters<B> for core::marker::PhantomData<T>
 where
     T: crate::prelude::DType,
 {
@@ -376,7 +376,7 @@ where
     ) {
     }
 }
-impl<T: ?Sized, B: Backend> StateDict<B> for core::marker::PhantomData<T>
+impl<T, B: Backend> StateDict<B> for core::marker::PhantomData<T>
 where
     T: crate::prelude::DType,
 {

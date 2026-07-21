@@ -1,6 +1,5 @@
 use kindle::prelude::*;
 
-
 #[module]
 /// Auto-generated documentation for BasicBlock.
 pub struct BasicBlock<B: Backend> {
@@ -51,7 +50,7 @@ impl<B: Backend> BasicBlock<B> {
         let out = self.bn2.forward(out)?;
 
         let out = out.add(&x)?;
-        Ok(out.relu()?)
+        out.relu()
     }
 }
 

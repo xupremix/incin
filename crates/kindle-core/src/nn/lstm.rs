@@ -410,6 +410,7 @@ where
 
 #[derive(Debug, Clone)]
 /// Auto-generated documentation for LSTM.
+#[allow(clippy::upper_case_acronyms)]
 pub struct LSTM<
     S: LstmShape,
     B: Backend,

@@ -344,11 +344,14 @@ impl<
 
 impl<
     S: crate::prelude::Shape + crate::shapes::DynShape,
-    B: crate::prelude::Backend + crate::tensor::backend::ReductionOps<B> + crate::tensor::backend::FloatOps<B>,
+    B: crate::prelude::Backend
+        + crate::tensor::backend::ReductionOps<B>
+        + crate::tensor::backend::FloatOps<B>,
     K: crate::prelude::DType,
     D: crate::prelude::Device,
     G: crate::prelude::RequiresGrad,
-> Tensor<S, B, K, D, G> {
+> Tensor<S, B, K, D, G>
+{
     /// Computes the variance over all elements.
     pub fn var_all(&self, unbiased: bool) -> Result<Tensor<(), B, K, D, G>> {
         let mean = self.clone().mean_all()?;
@@ -357,7 +360,7 @@ impl<
         let diff = dyn_self.broadcast_sub(&dyn_mean)?;
         let sq_diff = diff.mul(&diff)?;
         let sum_sq = sq_diff.sum_all()?;
-        
+
         let n = S::numel(&self._shape) as f32;
         let denom = if unbiased {
             if n <= 1.0 { 0.0 } else { n - 1.0 }
@@ -374,9 +377,14 @@ impl<
     }
 
     /// Computes the variance along a specific dimension, removing that dimension.
-    pub fn var_dim<const DIM: usize>(&self, unbiased: bool) -> Result<Tensor<<S as crate::shapes::ReduceDim<DIM>>::Output, B, K, D, G>> 
+    pub fn var_dim<const DIM: usize>(
+        &self,
+        unbiased: bool,
+    ) -> Result<Tensor<<S as crate::shapes::ReduceDim<DIM>>::Output, B, K, D, G>>
     where
-        S: crate::shapes::DynShape + crate::shapes::ReduceDim<DIM> + crate::shapes::ReduceKeepDim<DIM>,
+        S: crate::shapes::DynShape
+            + crate::shapes::ReduceDim<DIM>
+            + crate::shapes::ReduceKeepDim<DIM>,
         <S as crate::shapes::ReduceDim<DIM>>::Output: crate::shapes::DynShape,
         <S as crate::shapes::ReduceKeepDim<DIM>>::Output: crate::shapes::DynShape,
     {
@@ -386,7 +394,7 @@ impl<
         let diff = dyn_self.broadcast_sub(&dyn_mean)?;
         let sq_diff = diff.mul(&diff)?;
         let sum_sq = sq_diff.sum_dim::<DIM>()?;
-        
+
         let dims = S::dims(&self._shape);
         let n = dims.as_ref()[DIM] as f32;
         let denom = if unbiased {
@@ -400,9 +408,14 @@ impl<
     }
 
     /// Computes the standard deviation along a specific dimension, removing that dimension.
-    pub fn std_dim<const DIM: usize>(&self, unbiased: bool) -> Result<Tensor<<S as crate::shapes::ReduceDim<DIM>>::Output, B, K, D, G>> 
+    pub fn std_dim<const DIM: usize>(
+        &self,
+        unbiased: bool,
+    ) -> Result<Tensor<<S as crate::shapes::ReduceDim<DIM>>::Output, B, K, D, G>>
     where
-        S: crate::shapes::DynShape + crate::shapes::ReduceDim<DIM> + crate::shapes::ReduceKeepDim<DIM>,
+        S: crate::shapes::DynShape
+            + crate::shapes::ReduceDim<DIM>
+            + crate::shapes::ReduceKeepDim<DIM>,
         <S as crate::shapes::ReduceDim<DIM>>::Output: crate::shapes::DynShape,
         <S as crate::shapes::ReduceKeepDim<DIM>>::Output: crate::shapes::DynShape,
     {
@@ -410,7 +423,10 @@ impl<
     }
 
     /// Computes the variance along a specific dimension, keeping it with size 1.
-    pub fn var_keepdim<const DIM: usize>(&self, unbiased: bool) -> Result<Tensor<<S as crate::shapes::ReduceKeepDim<DIM>>::Output, B, K, D, G>> 
+    pub fn var_keepdim<const DIM: usize>(
+        &self,
+        unbiased: bool,
+    ) -> Result<Tensor<<S as crate::shapes::ReduceKeepDim<DIM>>::Output, B, K, D, G>>
     where
         S: crate::shapes::DynShape + crate::shapes::ReduceKeepDim<DIM>,
         <S as crate::shapes::ReduceKeepDim<DIM>>::Output: crate::shapes::DynShape,
@@ -421,7 +437,7 @@ impl<
         let diff = dyn_self.broadcast_sub(&dyn_mean)?;
         let sq_diff = diff.mul(&diff)?;
         let sum_sq = sq_diff.sum_keepdim::<DIM>()?;
-        
+
         let dims = S::dims(&self._shape);
         let n = dims.as_ref()[DIM] as f32;
         let denom = if unbiased {
@@ -435,7 +451,10 @@ impl<
     }
 
     /// Computes the standard deviation along a specific dimension, keeping it with size 1.
-    pub fn std_keepdim<const DIM: usize>(&self, unbiased: bool) -> Result<Tensor<<S as crate::shapes::ReduceKeepDim<DIM>>::Output, B, K, D, G>> 
+    pub fn std_keepdim<const DIM: usize>(
+        &self,
+        unbiased: bool,
+    ) -> Result<Tensor<<S as crate::shapes::ReduceKeepDim<DIM>>::Output, B, K, D, G>>
     where
         S: crate::shapes::DynShape + crate::shapes::ReduceKeepDim<DIM>,
         <S as crate::shapes::ReduceKeepDim<DIM>>::Output: crate::shapes::DynShape,

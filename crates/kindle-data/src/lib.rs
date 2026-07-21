@@ -4,19 +4,19 @@
 //! Handles batching, shuffling, and data transformation pipelines.
 //!
 //! ## Examples
-//! 
+//!
 //! Using a basic `DataLoader` with an in-memory `Dataset`:
-//! 
+//!
 //! ```rust,ignore
 //! use kindle_data::prelude::*;
 //! use kindle_data::{Dataset, DataLoader};
 //! use kindle::prelude::*;
-//! 
+//!
 //! struct MyDataset {
 //!     images: Tensor<s![100, 3, 224, 224], CpuBackend>,
 //!     labels: Tensor<s![100], CpuBackend>,
 //! }
-//! 
+//!
 //! impl Dataset for MyDataset {
 //!     type Item = (Tensor<s![3, 224, 224], CpuBackend>, Tensor<s![], CpuBackend>);
 //!     
@@ -32,7 +32,7 @@
 //!         todo!()
 //!     }
 //! }
-//! 
+//!
 //! fn main() {
 //!     let dataset = MyDataset {
 //!         images: Tensor::zeros(()).unwrap(),

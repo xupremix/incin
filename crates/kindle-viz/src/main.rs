@@ -65,11 +65,12 @@ async fn main() -> anyhow::Result<()> {
                 let path = entry.path();
                 if path.extension().and_then(|s| s.to_str()) == Some("jsonl")
                     && let Ok(meta) = entry.metadata()
-                        && let Ok(modified) = meta.modified()
-                            && modified > latest_time {
-                                latest_time = modified;
-                                latest_run = Some(path);
-                            }
+                    && let Ok(modified) = meta.modified()
+                    && modified > latest_time
+                {
+                    latest_time = modified;
+                    latest_run = Some(path);
+                }
             }
         }
         latest_run
@@ -129,9 +130,10 @@ async fn main() -> anyhow::Result<()> {
     // Load config if exists
     let mut config = Config::default();
     if let Ok(content) = std::fs::read_to_string("kindle-viz.toml")
-        && let Ok(parsed) = toml::from_str::<Config>(&content) {
-            config = parsed;
-        }
+        && let Ok(parsed) = toml::from_str::<Config>(&content)
+    {
+        config = parsed;
+    }
 
     let keymap: Box<dyn kindle_viz_plugin_api::keymap::KeymapProvider> =
         if config.keymap.as_deref() == Some("vim") {

@@ -39,9 +39,10 @@ impl Panel for PanicTestPanel {
     /// Auto-generated documentation for handle_event.
     fn handle_event(&mut self, event: &PanelEvent) -> bool {
         if let PanelEvent::Key(k) = event
-            && k.code == KeyCode::Char('p') {
-                panic!("Manual panic triggered from PanicTestPanel");
-            }
+            && k.code == KeyCode::Char('p')
+        {
+            panic!("Manual panic triggered from PanicTestPanel");
+        }
         false
     }
 

@@ -8,7 +8,7 @@ pub use kindle_core::prelude::*;
 pub mod prelude {
     #[cfg(feature = "cpu")]
     pub use super::cpu::CpuBackend;
-    
+
     #[cfg(feature = "cuda")]
     #[allow(unused_imports)]
     pub use super::cuda::*;

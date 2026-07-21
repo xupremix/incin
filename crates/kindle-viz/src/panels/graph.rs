@@ -265,16 +265,17 @@ impl Panel for GraphModuleListPanel {
                             let (px1, py1) = project(x1, y1, z1);
                             for input in &node.inputs {
                                 if let Some(&source_node_id) = value_to_node.get(input)
-                                    && let Some(&(x2, y2, z2)) = positions.get(&source_node_id) {
-                                        let (px2, py2) = project(x2, y2, z2);
-                                        ctx.draw(&Line {
-                                            x1: px1,
-                                            y1: py1,
-                                            x2: px2,
-                                            y2: py2,
-                                            color: Color::DarkGray,
-                                        });
-                                    }
+                                    && let Some(&(x2, y2, z2)) = positions.get(&source_node_id)
+                                {
+                                    let (px2, py2) = project(x2, y2, z2);
+                                    ctx.draw(&Line {
+                                        x1: px1,
+                                        y1: py1,
+                                        x2: px2,
+                                        y2: py2,
+                                        color: Color::DarkGray,
+                                    });
+                                }
                             }
                         }
                     }

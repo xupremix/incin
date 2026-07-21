@@ -131,6 +131,7 @@ fn scatter_pool_grad_2d(
 }
 
 /// `ModuleOps::max_pool2d`'s `CpuBackend` implementation.
+#[allow(clippy::extra_unused_type_parameters)]
 pub(crate) fn max_pool2d_impl<T: DType, D: kindle_core::prelude::Device, K: DType>(
     t: &CpuStorage,
     kernel_size: (usize, usize),
@@ -169,6 +170,7 @@ pub(crate) fn max_pool2d_impl<T: DType, D: kindle_core::prelude::Device, K: DTyp
 /// value UNIFORMLY (divided by the window's element count) into every input
 /// position the window covered, `+=`-accumulating across overlapping
 /// windows.
+#[allow(clippy::extra_unused_type_parameters)]
 pub(crate) fn avg_pool2d_impl<T: DType, D: kindle_core::prelude::Device, K: DType>(
     t: &CpuStorage,
     kernel_size: (usize, usize),
@@ -282,6 +284,7 @@ fn adaptive_window_bounds(input_size: usize, output_size: usize, i: usize) -> (u
 }
 
 /// `ModuleOps::adaptive_avg_pool2d`'s `CpuBackend` implementation.
+#[allow(clippy::extra_unused_type_parameters)]
 pub(crate) fn adaptive_avg_pool2d_impl<T: DType, D: kindle_core::prelude::Device, K: DType>(
     t: &CpuStorage,
     output_size: (usize, usize),

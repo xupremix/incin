@@ -234,7 +234,7 @@ fn test_reduction_sum() -> Result<()> {
     // sum_keepdim (1)
     let s1 = t.sum_keepdim::<1>()?;
     assert_eq!(s1.rank(), 2);
-    let s1_dims: [usize; 2] = s1.dims().into();
+    let s1_dims: [usize; 2] = s1.dims();
     assert_eq!(s1_dims, [2, 1]);
     assert_eq!(to_vec(&s1.into_dyn()), vec![6.0, 15.0]);
     Ok(())
@@ -283,18 +283,18 @@ fn test_manipulation_reshape_flatten() -> Result<()> {
 
     // reshape
     let r = t.clone().reshape_idx::<idx![3, 2]>()?;
-    let r_dims: [usize; 2] = r.dims().into();
+    let r_dims: [usize; 2] = r.dims();
     assert_eq!(r_dims, [3, 2]);
 
     // flatten all (using 0 and 1 since it's 2D)
     let f_all = t.clone().flatten::<0, 1>()?;
-    let f_all_dims: [usize; 1] = f_all.dims().into();
+    let f_all_dims: [usize; 1] = f_all.dims();
     assert_eq!(f_all_dims, [6]);
 
     // flatten partial
     let t3 = Tensor::<s![2, 2, 2], CpuBackend>::ones(())?;
     let f_part = t3.flatten::<1, 2>()?;
-    let f_part_dims: [usize; 2] = f_part.dims().into();
+    let f_part_dims: [usize; 2] = f_part.dims();
     assert_eq!(f_part_dims, [2, 4]);
 
     Ok(())
@@ -307,14 +307,14 @@ fn test_manipulation_transpose_squeeze() -> Result<()> {
 
     // transpose
     let tr = t.clone().transpose::<0, 1>()?;
-    let tr_dims: [usize; 2] = tr.dims().into();
+    let tr_dims: [usize; 2] = tr.dims();
     assert_eq!(tr_dims, [3, 2]);
     assert_eq!(to_vec(&tr.into_dyn()), vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0]);
 
     // squeeze (must be size 1)
     let t_sq = Tensor::<s![1, 3], CpuBackend>::from_slice(&[1.0, 2.0, 3.0], ())?;
     let sq = t_sq.try_squeeze(0)?;
-    let sq_dims: Vec<usize> = sq.dims().into();
+    let sq_dims: Vec<usize> = sq.dims();
     assert_eq!(sq_dims, vec![3]);
 
     Ok(())
@@ -333,13 +333,13 @@ fn test_indexing_concat() -> Result<()> {
     let c0 = t1
         .clone()
         .concat::<s![2, 2], kindle::prelude::typenum::U0>(&t2)?;
-    let c0_dims: [usize; 2] = c0.dims().into();
+    let c0_dims: [usize; 2] = c0.dims();
     assert_eq!(c0_dims, [4, 2]);
     assert_eq!(to_vec(&c0.into_dyn()), vec![1., 2., 3., 4., 5., 6., 7., 8.]);
 
     // concat dim 1
     let c1 = t1.concat::<s![2, 2], kindle::prelude::typenum::U1>(&t2)?;
-    let c1_dims: [usize; 2] = c1.dims().into();
+    let c1_dims: [usize; 2] = c1.dims();
     assert_eq!(c1_dims, [2, 4]);
     assert_eq!(to_vec(&c1.into_dyn()), vec![1., 2., 5., 6., 3., 4., 7., 8.]);
 
@@ -354,13 +354,13 @@ fn test_indexing_stack() -> Result<()> {
 
     // stack dim 0
     let s0 = t1.clone().stack::<kindle::prelude::typenum::U0>(&t2)?;
-    let s0_dims: [usize; 2] = s0.dims().into();
+    let s0_dims: [usize; 2] = s0.dims();
     assert_eq!(s0_dims, [2, 2]);
     assert_eq!(to_vec(&s0.into_dyn()), vec![1., 2., 3., 4.]);
 
     // stack dim 1
     let s1 = t1.clone().stack::<kindle::prelude::typenum::U1>(&t2)?;
-    let s1_dims: [usize; 2] = s1.dims().into();
+    let s1_dims: [usize; 2] = s1.dims();
     assert_eq!(s1_dims, [2, 2]);
     assert_eq!(to_vec(&s1.into_dyn()), vec![1., 3., 2., 4.]);
 

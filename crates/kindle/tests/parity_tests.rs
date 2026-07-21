@@ -59,8 +59,14 @@ fn test_parity_add() -> Result<()> {
     let a = vec![1.0f32, 2.0, 3.0, 4.0];
     let b = vec![0.5f32, 1.5, 2.5, 3.5];
 
-    let n = native_vec(&Native::add::<f32>(&native_storage(&a, &[2, 2]), &native_storage(&b, &[2, 2]))?);
-    let w = wgpu_vec(&Wgpu::add::<f32>(&wgpu_storage(&a, &[2, 2]), &wgpu_storage(&b, &[2, 2]))?);
+    let n = native_vec(&Native::add::<f32>(
+        &native_storage(&a, &[2, 2]),
+        &native_storage(&b, &[2, 2]),
+    )?);
+    let w = wgpu_vec(&Wgpu::add::<f32>(
+        &wgpu_storage(&a, &[2, 2]),
+        &wgpu_storage(&b, &[2, 2]),
+    )?);
     assert_close(&n, &w, 1e-5, "add");
     Ok(())
 }
@@ -107,8 +113,14 @@ fn test_parity_matmul_2d() -> Result<()> {
     // [2×3] @ [3×2] = [2×2]
     let a = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
     let b = vec![7.0f32, 8.0, 9.0, 10.0, 11.0, 12.0];
-    let n = native_vec(&Native::matmul::<f32>(&native_storage(&a, &[2, 3]), &native_storage(&b, &[3, 2]))?);
-    let w = wgpu_vec(&Wgpu::matmul::<f32>(&wgpu_storage(&a, &[2, 3]), &wgpu_storage(&b, &[3, 2]))?);
+    let n = native_vec(&Native::matmul::<f32>(
+        &native_storage(&a, &[2, 3]),
+        &native_storage(&b, &[3, 2]),
+    )?);
+    let w = wgpu_vec(&Wgpu::matmul::<f32>(
+        &wgpu_storage(&a, &[2, 3]),
+        &wgpu_storage(&b, &[3, 2]),
+    )?);
     assert_close(&n, &w, 1e-3, "matmul 2d");
     Ok(())
 }

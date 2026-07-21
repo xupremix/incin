@@ -1,16 +1,15 @@
 extern crate kindle_core as kindle;
 
-use kindle_core::prelude::dummy::DummyBackend;
 use kindle_core::prelude::Cpu;
+use kindle_core::prelude::dummy::DummyBackend;
 use kindle_core::prelude::*;
 use kindle_macros::s;
-
 
 #[test]
 fn test_rms_norm_static() {
     let _t1: Tensor<s![2, 3, 4], DummyBackend<f32, Cpu>> = Tensor::zeros(()).unwrap();
     let norm: RMSNorm<s![4], DummyBackend<f32, Cpu>> = RMSNorm::new(0.001).unwrap();
-    
+
     let _ = norm;
 }
 
@@ -18,9 +17,9 @@ fn test_rms_norm_static() {
 fn test_dropout() {
     let mut dropout: Dropout = Dropout::new(0.5);
     // test properties
-    assert_eq!(dropout.is_training, true);
+    assert!(dropout.is_training);
     dropout.is_training = false;
-    assert_eq!(dropout.is_training, false);
+    assert!(!dropout.is_training);
 }
 
 #[test]

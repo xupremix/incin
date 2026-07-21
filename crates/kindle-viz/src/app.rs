@@ -650,10 +650,10 @@ mod tests {
         fn render(&mut self, _ctx: &mut RenderCtx<'_, '_>) {}
         /// Auto-generated documentation for handle_event.
         fn handle_event(&mut self, event: &PanelEvent) -> bool {
-            if let PanelEvent::Key(k) = event {
-                if k.code == KeyCode::Char('p') {
-                    panic!("deliberate test panic");
-                }
+            if let PanelEvent::Key(k) = event
+                && k.code == KeyCode::Char('p')
+            {
+                panic!("deliberate test panic");
             }
             false
         }

@@ -165,7 +165,7 @@ impl<T: DType, D: Device> QuantizedOps<Self> for CpuBackend<T, D> {
             )));
         }
 
-        if k % 32 != 0 {
+        if !k.is_multiple_of(32) {
             return Err(Error::Msg(alloc::format!(
                 "quantized_matmul K must be multiple of 32, got {}",
                 k
@@ -196,9 +196,9 @@ impl<T: DType, D: Device> QuantizedOps<Self> for CpuBackend<T, D> {
                         unsafe {
                             vec_dot_q8_0_avx2(
                                 blocks_per_row,
-                                &lhs_data,
+                                lhs_data,
                                 lhs_row_start,
-                                &rhs_data,
+                                rhs_data,
                                 rhs_row_start,
                             )
                         }
@@ -210,9 +210,9 @@ impl<T: DType, D: Device> QuantizedOps<Self> for CpuBackend<T, D> {
                 } else {
                     vec_dot_q8_0_scalar(
                         blocks_per_row,
-                        &lhs_data,
+                        lhs_data,
                         lhs_row_start,
-                        &rhs_data,
+                        rhs_data,
                         rhs_row_start,
                     )
                 };
@@ -225,75 +225,6 @@ impl<T: DType, D: Device> QuantizedOps<Self> for CpuBackend<T, D> {
             CpuBuffer::F32(out_data),
             out_shape,
         ))
-    }
-}
-
-#[cfg(test)]
-/// Auto-generated documentation for tests.
-mod tests {
-    use super::*;
-
-    /// Auto-generated documentation for TestBackend.
-    type TestBackend = CpuBackend<f32, kindle_core::prelude::Cpu>;
-
-    #[test]
-    /// Auto-generated documentation for test_quantize_dequantize_fidelity.
-    fn test_quantize_dequantize_fidelity() {
-        let mut data = vec![0.0f32; 64];
-        for i in 0..64 {
-            data[i] = (i as f32 - 32.0) * 0.1; // ranging -3.2 to +3.1
-        }
-
-        let storage = CpuStorage::from_contiguous(CpuBuffer::F32(data.clone()), vec![2, 32]);
-
-        let q_storage = TestBackend::quantize::<f32, Q8_0>(&storage).unwrap();
-        let deq_storage = TestBackend::dequantize::<Q8_0, f32>(&q_storage).unwrap();
-
-        let deq_data = match &*deq_storage.buffer {
-            CpuBuffer::F32(v) => v,
-            _ => panic!("Expected F32"),
-        };
-
-        for (orig, deq) in data.iter().zip(deq_data.iter()) {
-            let diff = (orig - deq).abs();
-            assert!(diff < 0.05, "Diff too large: {} vs {}", orig, deq);
-        }
-    }
-
-    #[test]
-    /// Auto-generated documentation for test_quantized_matmul.
-    fn test_quantized_matmul() {
-        // LHS: 2x32
-        let mut lhs_data = vec![0.0f32; 64];
-        for i in 0..64 {
-            lhs_data[i] = (i as f32 % 5.0) - 2.0;
-        }
-        let lhs_f32 = CpuStorage::from_contiguous(CpuBuffer::F32(lhs_data.clone()), vec![2, 32]);
-        let lhs_q8 = TestBackend::quantize::<f32, Q8_0>(&lhs_f32).unwrap();
-
-        // RHS: 3x32
-        let mut rhs_data = vec![0.0f32; 96];
-        for i in 0..96 {
-            rhs_data[i] = (i as f32 % 4.0) - 1.5;
-        }
-        let rhs_f32 = CpuStorage::from_contiguous(CpuBuffer::F32(rhs_data.clone()), vec![3, 32]);
-        let rhs_q8 = TestBackend::quantize::<f32, Q8_0>(&rhs_f32).unwrap();
-
-        let out_storage = TestBackend::quantized_matmul::<Q8_0>(&lhs_q8, &rhs_q8).unwrap();
-
-        assert_eq!(out_storage.shape, vec![2, 3]);
-
-        // Just check that it computes something non-zero and doesn't crash.
-        // A more rigorous test would compare it precisely with f32 matmul.
-        let out_data = match &*out_storage.buffer {
-            CpuBuffer::F32(v) => v,
-            _ => panic!("Expected F32"),
-        };
-
-        assert_eq!(out_data.len(), 6);
-        for &val in out_data {
-            assert!(val.abs() > 0.0);
-        }
     }
 }
 
@@ -375,4 +306,73 @@ fn vec_dot_q8_0_scalar(
         sum += (block_sum as f32) * lhs_block.d.to_f32() * rhs_block.d.to_f32();
     }
     sum
+}
+
+#[cfg(test)]
+/// Auto-generated documentation for tests.
+mod tests {
+    use super::*;
+
+    /// Auto-generated documentation for TestBackend.
+    type TestBackend = CpuBackend<f32, kindle_core::prelude::Cpu>;
+
+    #[test]
+    /// Auto-generated documentation for test_quantize_dequantize_fidelity.
+    fn test_quantize_dequantize_fidelity() {
+        let mut data = vec![0.0f32; 64];
+        for (i, d) in data.iter_mut().enumerate() {
+            *d = (i as f32 - 32.0) * 0.1; // ranging -3.2 to +3.1
+        }
+
+        let storage = CpuStorage::from_contiguous(CpuBuffer::F32(data.clone()), vec![2, 32]);
+
+        let q_storage = TestBackend::quantize::<f32, Q8_0>(&storage).unwrap();
+        let deq_storage = TestBackend::dequantize::<Q8_0, f32>(&q_storage).unwrap();
+
+        let deq_data = match &*deq_storage.buffer {
+            CpuBuffer::F32(v) => v,
+            _ => panic!("Expected F32"),
+        };
+
+        for (orig, deq) in data.iter().zip(deq_data.iter()) {
+            let diff = (orig - deq).abs();
+            assert!(diff < 0.05, "Diff too large: {} vs {}", orig, deq);
+        }
+    }
+
+    #[test]
+    /// Auto-generated documentation for test_quantized_matmul.
+    fn test_quantized_matmul() {
+        // LHS: 2x32
+        let mut lhs_data = vec![0.0f32; 64];
+        for (i, d) in lhs_data.iter_mut().enumerate() {
+            *d = (i as f32 % 5.0) - 2.0;
+        }
+        let lhs_f32 = CpuStorage::from_contiguous(CpuBuffer::F32(lhs_data.clone()), vec![2, 32]);
+        let lhs_q8 = TestBackend::quantize::<f32, Q8_0>(&lhs_f32).unwrap();
+
+        // RHS: 3x32
+        let mut rhs_data = vec![0.0f32; 96];
+        for (i, d) in rhs_data.iter_mut().enumerate() {
+            *d = (i as f32 % 4.0) - 1.5;
+        }
+        let rhs_f32 = CpuStorage::from_contiguous(CpuBuffer::F32(rhs_data.clone()), vec![3, 32]);
+        let rhs_q8 = TestBackend::quantize::<f32, Q8_0>(&rhs_f32).unwrap();
+
+        let out_storage = TestBackend::quantized_matmul::<Q8_0>(&lhs_q8, &rhs_q8).unwrap();
+
+        assert_eq!(out_storage.shape, vec![2, 3]);
+
+        // Just check that it computes something non-zero and doesn't crash.
+        // A more rigorous test would compare it precisely with f32 matmul.
+        let out_data = match &*out_storage.buffer {
+            CpuBuffer::F32(v) => v,
+            _ => panic!("Expected F32"),
+        };
+
+        assert_eq!(out_data.len(), 6);
+        for &val in out_data {
+            assert!(val.abs() > 0.0);
+        }
+    }
 }
