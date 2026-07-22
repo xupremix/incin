@@ -698,10 +698,11 @@ types already (`f32`, `f64`, `i64`, `bool`, `u8`). New tests:
 
 ## Low priority / cleanup
 
-- Vestigial unused `op_name`/`op_expr` params in `cpu/ops/elementwise.rs:67-68,94-95`
-  — dead scaffolding for a debug/introspection feature that was never wired up
-  (`TapeEntry` has no field to receive them). Delete or actually wire them into
-  error messages.
+- ✅ **FIXED, since this was written:** Vestigial unused `op_name`/`op_expr`
+  params in `cpu/ops/elementwise.rs` (dead scaffolding for a debug/
+  introspection feature that was never wired up — `TapeEntry` has no field
+  to receive them). Fixed 2026-07-22 by deleting both params and updating
+  all call sites; no behavior change, full test suite + clippy green.
 - ✅ **FIXED, since this was written:** `DummyBackend` conv/pool shape math
   (`kindle-core/tensor/backend.rs`, conv1d/conv2d/conv_transpose2d/max_pool2d/
   avg_pool2d) risked unsigned underflow/panic for small input + large
@@ -734,10 +735,11 @@ types already (`f32`, `f64`, `i64`, `bool`, `u8`). New tests:
   nothing) — the example-crate restructuring since this note was written
   gave each example (including the two that use `anyhow`) its own
   `Cargo.toml`, which already achieves what this item asked for.
-- `kindle-telemetry`'s `HyperparamEvent` is a free-form value bag with no
-  automatic capture of env vars or paths — but if a caller logs a secret-bearing
-  string as a "hyperparameter," it persists verbatim in shareable JSONL output.
-  Worth a doc caveat.
+- ✅ **FIXED, since this was written:** `kindle-telemetry`'s `HyperparamEvent`
+  is a free-form value bag with no automatic capture of env vars or paths —
+  if a caller logs a secret-bearing string as a "hyperparameter," it persists
+  verbatim in shareable JSONL output. Fixed 2026-07-22: added a doc caveat
+  directly on the struct in `events.rs`.
 - graphify's own knowledge graph (`graphify-out/`) contains stale nodes
   referencing a `kindle-core/src/dashboard/` module that no longer exists in the
   tree — re-run `graphify update .` (per `.agents/rules/graphify.md`) after
