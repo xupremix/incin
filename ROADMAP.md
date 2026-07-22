@@ -109,6 +109,30 @@ policy remain.
 > `min_dim`/`min_keepdim`/`argmax`/`argmin`/`topk`/`argsort`) — this is the
 > real remaining list, not the one below. `layer_norm`/`batch_norm` remain the
 > next priority per the original note.
+>
+> **2026-07-22 fifth follow-up: `layer_norm`/`batch_norm` were already
+> correct too, just untested.** Same story as `softmax` above: both forward
+> implementations are fully composed from already-wired primitives
+> (`mean_keepdim`/`broadcast_as`/`sub`/`mul`/`sqrt`/`div`/`add_scalar_float`/
+> `reshape`/`add`), mirroring the CPU backend's own `layer_norm_impl` (also
+> composed rather than directly wired, verified there by
+> `cpu::gradcheck::gradcheck`'s `layer_norm_gradcheck`). Added the WGPU
+> equivalent — a small central-difference gradcheck helper local to
+> `wgpu/tests.rs` (`gradcheck_wgpu`/`numerical_grad_wgpu`), used by two new
+> tests, `layer_norm_backward_matches_finite_difference` and
+> `batch_norm_backward_matches_finite_difference` — run against the real
+> software WGPU adapter in this environment, not compile-checked: max
+> absolute difference against the analytic gradient was ~1.1e-4
+> (layer_norm) and ~3.2e-4 (batch_norm) at finite-difference eps=1e-3, well
+> inside f32 noise. Finite-difference checking was used instead of
+> hand-derived closed-form values (the pattern used elsewhere in this file)
+> specifically because hand-deriving the layer/batch-norm backward formula
+> to compare against would duplicate the same derivation the composed graph
+> already performs. Updated remaining list: `adaptive_avg_pool2d`/
+> `avg_pool2d`/`max_pool2d`, `cross_entropy_loss`,
+> `quantize`/`dequantize`/`quantized_matmul`, and the max/min-family
+> reductions are what's actually left on WGPU now — pooling is the next
+> priority (also real-hardware-verifiable here, same pattern).
 
 ---
 
@@ -119,7 +143,7 @@ policy remain.
 | `kindle-core` | Passing | ✅ C-6/C-7 fixed; C-3 (autograd design gaps) still open |
 | `kindle-backends` (cpu) | Passing, +2 new regression tests | ✅ C-2 (f32 downcast), C-5 (overflow), C-8 (mis-gated `elementwise` module — CPU couldn't build standalone) fixed |
 | `kindle-backends` (cuda) | Compiles (no GPU in this env to run it) | ✅ C-1 fixed; ⚠ C-4: add/sub/mul/div now gradient-wired (unverified on real hardware); everything else (`CreationOps`/`FloatOps`/norm/embedding/quant/reduce/loss) is still an empty trait impl falling to `Err` |
-| `kindle-backends` (wgpu) | Passing | ⚠ C-3: elementwise/activation/`matmul`/`TensorOps`/`embedding`/`conv*`/sum-reductions autograd all wired (see 2026-07-22 follow-up); `layer_norm`/`batch_norm`/pooling/`cross_entropy_loss`/quantization/max-min-reductions still ungradiented |
+| `kindle-backends` (wgpu) | Passing, +2 gradcheck tests | ⚠ C-3: elementwise/activation/`matmul`/`TensorOps`/`embedding`/`conv*`/sum-reductions/`layer_norm`/`batch_norm` autograd all wired and tested against a real adapter (see 2026-07-22 follow-ups); pooling/`cross_entropy_loss`/quantization/max-min-reductions still ungradiented |
 | `kindle-backends` (legacy: candle only now) | Partial | ✅ `ndarray`/`burn` backends + deps deleted (2026-07-21, both were permanently dead code); only `CandleBackend` remains |
 | `kindle-macros` | Passing | ✅ Solid — hygiene good, doc examples present |
 | `kindle-data` | 9 tests | ✅ `DataLoader` tested (incl. multi-worker concurrency); `default-features = false` fixed on its `kindle-backends` dep (was leaking `cuda`/`wgpu`, see C-8) |
