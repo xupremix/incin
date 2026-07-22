@@ -834,8 +834,8 @@ type has a *compiled* usage example (not `rust,ignore`).
 - [ ] Add `[workspace.metadata.release]` or similar to control which crates get published
 - [x] CI feature flag fixed (`kindle-backends/native` → `kindle-backends/cpu,kindle/cpu`) in this pass
 - [ ] Add GPU-hardware-gated CI jobs for `cuda`/`wgpu` (or explicit software-fallback jobs) — currently zero CI coverage for the backends with C-1/C-3/C-4
-- [ ] **New finding (2026-07-21):** `cargo fmt --all -- --check` fails across most of the repository (e.g. `tensor/backend.rs`, `wgpu/backend.rs`, `wgpu/dispatch.rs` have hundreds of formatting diffs) — pre-existing, not introduced by this session's fixes. Since CI (`.github/workflows/ci.yml`) runs `cargo fmt --all -- --check` as its first step, **CI would fail immediately on `main` today**, before ever reaching the test suite. Files touched in this session's fixes were reformatted with `rustfmt` and are clean; the rest of the repo needs a dedicated `cargo fmt --all` pass (deliberately NOT done in this session — it would touch nearly every file and bury the semantic fixes in formatting noise). Do this as its own isolated commit before relying on CI.
-- [ ] Add `CHANGELOG.md` following Keep-a-Changelog format
+- [x] **New finding (2026-07-21), since fixed:** `cargo fmt --all -- --check` used to fail across most of the repository. A later session did the dedicated repo-wide `cargo fmt --all` pass this note asked for (see `git log` — `f126d6b`/`b9544a7` era); re-verified clean (`cargo fmt --all -- --check` exits 0, 0 diff lines) as of 2026-07-22 in this session, after touching another ~10 files across this session's own commits.
+- [x] Add `CHANGELOG.md` following Keep-a-Changelog format — exists (`CHANGELOG.md`, Keep-a-Changelog style); `[Unreleased]` populated with this session's changes 2026-07-22
 - [x] `CONTRIBUTING.md` exists
 
 ---

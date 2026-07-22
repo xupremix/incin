@@ -5,6 +5,60 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- **Dtype/kernel specialization architecture:** new `dtype_policy.rs` (single
+  storage/compute/accumulator/output dtype resolver for CPU/CUDA/WGPU),
+  `iteration.rs` (backend-neutral broadcast/layout iteration plan), and
+  `kernel.rs` (typed CUDA source generation shared across pointwise,
+  reduction, and normalization operation families). See
+  `docs/DTYPE_KERNEL_ARCHITECTURE.md` for the full design and phased status.
+- **CUDA autotuning foundation** (new `autotune` feature, `tuning.rs`): typed
+  canonical launch-candidate keys, CUDA-event warmup/sample measurement,
+  compute-capability-scoped caching, a Condvar-coordinated in-flight
+  suppression claim so concurrent callers tuning the same problem/device/
+  workload key block on the in-progress measurement instead of redundantly
+  benchmarking it, and Tier-2 occupancy pruning for pointwise candidates
+  (`cuOccupancyMaxActiveBlocksPerMultiprocessor`, conservative — only drops a
+  candidate the driver confirms has zero active blocks). CUDA reductions and
+  layer/batch norm are now generated from the dtype policy (replacing the
+  checked-in F32-only `norm.cu`/`reduce.cu`) with warp/block cooperation and
+  Welford accumulation; CUDA pointwise dispatch adds scalar-ILP and aligned
+  packed (`half2`/`bfloat162`/`float4`/`double2`) access candidates. All CUDA
+  work is compile/clippy-verified only — no CUDA hardware available in CI or
+  local development at time of writing.
+- **WGPU autograd, essentially complete:** `layer_norm`, `batch_norm`,
+  `adaptive_avg_pool2d`/`avg_pool2d`/`max_pool2d`, `max_dim`/`min_dim`/
+  `max_all`/`min_all`/`max_keepdim`/`min_keepdim`, and `cross_entropy_loss`
+  are now gradient-correct on the WGPU backend, verified against a real
+  software WGPU adapter (not just compile-checked) via finite-difference
+  gradcheck tests. Pooling and the max/min-family reductions needed genuine
+  new backward code (host-readback + recomputed-argmax/window scatter,
+  mirroring the CPU backend's proven `cpu/ops/pool.rs`/`cpu/ops/reduce.rs`
+  algorithms); `layer_norm`/`batch_norm`/`softmax`/`cross_entropy_loss` turned
+  out to already be gradient-correct by composition from already-wired
+  primitives and only needed verification. WGPU autograd coverage now
+  matches CPU's, except `quantize`/`dequantize`/`quantized_matmul` (not wired
+  on CPU either — not a WGPU-specific gap).
+- **Cross-backend gradient parity:** extended `tests/gradient_parity.rs` with
+  `max_pool2d` and `cross_entropy_loss` (non-zero target class) CPU-vs-WGPU
+  checks, the permanent regression class this file exists to catch.
+
+### Fixed
+- **C-9:** WGPU `embedding`'s backward and `cross_entropy_loss`'s one-hot
+  construction bit-reinterpreted F32-stored index/target bytes as `u32`
+  (`buffer.to_vec::<u32>()`) instead of converting the value, silently
+  corrupting every gradient/loss contribution for any non-zero class or
+  vocab index (only index `0.0` happened to survive, since its IEEE bit
+  pattern is `0x00000000`). Existing tests never caught this — both only
+  exercised index/class `0`. Fixed to read `to_vec::<f32>()` and convert,
+  matching the WGSL forward kernel's own `u32(indices[i])` value conversion.
+- Pre-existing (not introduced this cycle) `cargo clippy --features cuda,std`
+  and `--features wgpu,std` failures on `main`, found while auditing the
+  above: mismatched feature gates in `backend_kind.rs`'s test module,
+  `cpu/creation.rs`'s `TransferTo<Cpu>` test, and `tests/ops.rs`/
+  `tests/gradient_parity.rs` assuming `cpu` was always enabled alongside
+  `cuda`/`wgpu`.
+
 ## [0.2.0] - 2026-07-22
 
 ### Changed
