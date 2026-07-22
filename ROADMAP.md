@@ -183,6 +183,36 @@ policy remain.
 > C-9's regression coverage) all pass against the real software WGPU
 > adapter; full `--features wgpu,std` suite is 94/94 (up from 80 before this
 > C-3 audit began).
+>
+> **2026-07-22 eighth follow-up: the "`max_keepdim` must stay a stop-gradient"
+> claim two paragraphs up was wrong — corrected and wired.** Checking the CPU
+> backend for comparison (which this session should have done before writing
+> that reasoning, not after) shows CPU's `max_keepdim` is fully autograd-wired,
+> and its `log_softmax` — the identical formula, composed the identical way —
+> passes `softmax_gradcheck`/`log_softmax_gradcheck` with real numeric
+> verification. The actual reason it's safe: `log_softmax(x) = (x - M) -
+> log(sum(exp(x - M)))` is not merely numerically close but ALGEBRAICALLY
+> IDENTICAL to `x - log(sum(exp(x)))` for any `M` (the `M` terms cancel
+> exactly), so the two expressions are the same function of `x` everywhere,
+> not just equal at one point — their gradients must be identical regardless
+> of whether `M` is treated as differentiable. `max_keepdim`/`min_keepdim`
+> are now wired the same way as `max_dim`/`min_dim` (same
+> `push_extremum_dim_tape_entry` helper). Verified rather than re-reasoned
+> about: `cross_entropy_loss_matches_hand_computed_value_for_nonzero_target`
+> (hand-computed `0.196076`) and `cross_entropy_loss_backward_matches_finite_difference`
+> both still pass exactly through `log_softmax`'s real production call path
+> after wiring `max_keepdim`. Also added a genuinely-non-trivial-loss softmax
+> gradcheck — the pre-existing `softmax_backward_is_tape_tracked` only checks
+> that `sum(softmax(x))`'s gradient sums to `0` across the vector, which is
+> true even for an all-zeros (broken) gradient, since `sum(softmax(x))` is
+> identically `1` for any `x` and therefore has a true gradient of exactly
+> zero everywhere — a weak check that couldn't have caught a real bug here.
+> **WGPU autograd coverage is now everything except
+> `quantize`/`dequantize`/`quantized_matmul`** (which aren't wired on the CPU
+> backend either — quantization isn't currently differentiable on any
+> backend in this codebase, not a WGPU-specific gap). Full
+> `--features wgpu,std` suite: 97/97 (up from 94); `cpu,wgpu,std`
+> `gradient_parity`: 7/7.
 
 ---
 
@@ -193,7 +223,7 @@ policy remain.
 | `kindle-core` | Passing | ✅ C-6/C-7 fixed; C-3 (autograd design gaps) still open |
 | `kindle-backends` (cpu) | Passing, +2 new regression tests | ✅ C-2 (f32 downcast), C-5 (overflow), C-8 (mis-gated `elementwise` module — CPU couldn't build standalone) fixed |
 | `kindle-backends` (cuda) | Compiles (no GPU in this env to run it) | ✅ C-1 fixed; ⚠ C-4: add/sub/mul/div now gradient-wired (unverified on real hardware); everything else (`CreationOps`/`FloatOps`/norm/embedding/quant/reduce/loss) is still an empty trait impl falling to `Err` |
-| `kindle-backends` (wgpu) | Passing, 94/94, +18 tests this audit | ✅ C-9 (embedding/cross_entropy index bit-reinterpret) fixed; ⚠ C-3: elementwise/activation/`matmul`/`TensorOps`/`embedding`/`conv*`/reductions (incl. max/min-family)/`layer_norm`/`batch_norm`/pooling/`cross_entropy_loss` autograd all wired and tested against a real adapter (see 2026-07-22 follow-ups); only `quantize`/`dequantize`/`quantized_matmul` and the deliberately-unwired `max_keepdim`/`min_keepdim` remain |
+| `kindle-backends` (wgpu) | Passing, 97/97, +21 tests this audit | ✅ C-9 (embedding/cross_entropy index bit-reinterpret) fixed; ⚠ C-3: elementwise/activation/`matmul`/`TensorOps`/`embedding`/`conv*`/all reductions (incl. `_keepdim` variants)/`layer_norm`/`batch_norm`/pooling/`cross_entropy_loss` autograd all wired and tested against a real adapter (see 2026-07-22 follow-ups); only `quantize`/`dequantize`/`quantized_matmul` remain — not a WGPU-specific gap, unwired on CPU too |
 | `kindle-backends` (legacy: candle only now) | Partial | ✅ `ndarray`/`burn` backends + deps deleted (2026-07-21, both were permanently dead code); only `CandleBackend` remains |
 | `kindle-macros` | Passing | ✅ Solid — hygiene good, doc examples present |
 | `kindle-data` | 9 tests | ✅ `DataLoader` tested (incl. multi-worker concurrency); `default-features = false` fixed on its `kindle-backends` dep (was leaking `cuda`/`wgpu`, see C-8) |
