@@ -7,41 +7,43 @@
 /// In practice, you rarely need to implement or use `Dim` directly. The `s![]` macro generates
 /// the correct implementations automatically. Custom symbolic dimensions can be created via `symbolic_dim!`.
 pub trait Dim: 'static + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + PartialEq {
-    /// `Arg`.
+    /// The user-facing constructor argument (e.g. `()` for compile-time-
+    /// fixed dimensions, `usize` for runtime-sized ones).
     type Arg: Clone + Default + core::fmt::Debug;
-    /// `size`.
+    /// Returns this dimension's size.
     fn size(&self) -> usize;
-    /// `from_size`.
+    /// Attempts to construct this dimension from a runtime `size`,
+    /// returning `None` if `size` doesn't match a compile-time-fixed value.
     fn from_size(size: usize) -> Option<Self>;
-    /// `from_arg`.
+    /// Constructs this dimension from its constructor argument.
     fn from_arg(arg: Self::Arg) -> Self;
-    /// `arg`.
+    /// Returns the constructor argument that would reproduce this dimension.
     fn arg(&self) -> Self::Arg;
 }
 
 impl Dim for usize {
-    /// `Arg`.
+    /// A runtime dimension's argument is just its size.
     type Arg = Self;
 
     #[inline(always)]
-    /// `size`.
+    /// Itself.
     fn size(&self) -> usize {
         *self
     }
     #[inline(always)]
-    /// `from_size`.
+    /// Always succeeds — any `usize` is a valid runtime dimension.
     fn from_size(size: usize) -> Option<Self> {
         Some(size)
     }
 
     #[inline(always)]
-    /// `from_arg`.
+    /// Identity.
     fn from_arg(arg: Self::Arg) -> Self {
         arg
     }
 
     #[inline(always)]
-    /// `arg`.
+    /// Identity.
     fn arg(&self) -> Self::Arg {
         *self
     }
@@ -62,29 +64,29 @@ macro_rules! symbolic_dim {
             pub struct $name(pub usize);
 
             impl $crate::prelude::Dim for $name {
-                /// `Arg`.
+                /// The wrapped runtime size.
                 type Arg = usize;
 
                 #[inline(always)]
-                /// `size`.
+                /// The wrapped size.
                 fn size(&self) -> usize {
                     self.0
                 }
 
                 #[inline(always)]
-                /// `from_size`.
+                /// Always succeeds — wraps any `usize`.
                 fn from_size(size: usize) -> Option<Self> {
                     Some(Self(size))
                 }
 
                 #[inline(always)]
-                /// `from_arg`.
+                /// Wraps `arg`.
                 fn from_arg(arg: Self::Arg) -> Self {
                     Self(arg)
                 }
 
                 #[inline(always)]
-                /// `arg`.
+                /// Unwraps the size.
                 fn arg(&self) -> Self::Arg {
                     self.0
                 }
@@ -102,23 +104,24 @@ macro_rules! symbolic_dim {
 pub struct ProdDim<A, B>(pub usize, core::marker::PhantomData<(A, B)>);
 
 impl<A: Dim, B: Dim> Dim for ProdDim<A, B> {
-    /// `Arg`.
+    /// The pair of constituent dimensions' own arguments.
     type Arg = (A::Arg, B::Arg);
 
     #[inline(always)]
-    /// `size`.
+    /// The precomputed product `A::size() * B::size()`.
     fn size(&self) -> usize {
         self.0
     }
 
     #[inline(always)]
-    /// `from_size`.
+    /// Always succeeds — any `usize` product is accepted as-is (the
+    /// individual `A`/`B` factors are not recoverable from the product alone).
     fn from_size(size: usize) -> Option<Self> {
         Some(Self(size, core::marker::PhantomData))
     }
 
     #[inline(always)]
-    /// `from_arg`.
+    /// Constructs `A`/`B` from their arguments and stores their product.
     fn from_arg(arg: Self::Arg) -> Self {
         let a = A::from_arg(arg.0);
         let b = B::from_arg(arg.1);
@@ -126,7 +129,8 @@ impl<A: Dim, B: Dim> Dim for ProdDim<A, B> {
     }
 
     #[inline(always)]
-    /// `arg`.
+    /// Returns `A`/`B`'s default arguments (the actual product size is
+    /// tracked separately in `self.0`, not reconstructible from `Arg` alone).
     fn arg(&self) -> Self::Arg {
         (
             <A::Arg as core::default::Default>::default(),
@@ -147,29 +151,29 @@ impl<A: Dim + Default, B: Dim + Default> Default for ProdDim<A, B> {
 use typenum::{Bit, UInt, UTerm, Unsigned};
 
 impl Dim for UTerm {
-    /// `Arg`.
+    /// No argument needed — `UTerm` (typenum's zero) is always size 0.
     type Arg = ();
 
     #[inline(always)]
-    /// `size`.
+    /// Always 0.
     fn size(&self) -> usize {
         0
     }
 
     #[inline(always)]
-    /// `from_size`.
+    /// Succeeds only for `size == 0`.
     fn from_size(size: usize) -> Option<Self> {
         if size == 0 { Some(UTerm) } else { None }
     }
 
     #[inline(always)]
-    /// `from_arg`.
+    /// No-op: `UTerm` has only one value.
     fn from_arg(_: Self::Arg) -> Self {
         UTerm
     }
 
     #[inline(always)]
-    /// `arg`.
+    /// No-op.
     fn arg(&self) -> Self::Arg {}
 }
 
@@ -188,17 +192,17 @@ where
         + PartialEq
         + 'static,
 {
-    /// `Arg`.
+    /// No argument needed — the size is fixed by the `typenum` type itself.
     type Arg = ();
 
     #[inline(always)]
-    /// `size`.
+    /// The compile-time-known `typenum` value.
     fn size(&self) -> usize {
         Self::USIZE
     }
 
     #[inline(always)]
-    /// `from_size`.
+    /// Succeeds only when `size` matches this exact compile-time value.
     fn from_size(size: usize) -> Option<Self> {
         if size == Self::USIZE {
             Some(Default::default())
@@ -208,12 +212,12 @@ where
     }
 
     #[inline(always)]
-    /// `from_arg`.
+    /// No-op: the value is fixed by the type, not the argument.
     fn from_arg(_: Self::Arg) -> Self {
         Default::default()
     }
 
     #[inline(always)]
-    /// `arg`.
+    /// No-op.
     fn arg(&self) -> Self::Arg {}
 }
