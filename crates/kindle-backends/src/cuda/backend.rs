@@ -1112,6 +1112,57 @@ impl<T: DType, D: Device> ReductionOps<Self> for CudaBackendImpl<T, D> {
     fn min_keepdim<K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
         crate::cuda::ops::reduce::launch_reduce_op("min", t, dim, true)
     }
+
+    /// `dim: None` flattens first, then reduces axis 0 — for a 1D tensor,
+    /// "coordinate along axis 0 of the winner" and "global flat index of
+    /// the winner" are the same number, so this needs no special-casing
+    /// versus the `Some(d)` path, matching CPU's `argmax`/`argmin` semantics
+    /// (flat index for `None`, per-axis coordinate for `Some(d)`) exactly.
+    fn argmax<K: DType, KInt: DType>(t: &CudaStorage, dim: Option<usize>) -> Result<CudaStorage> {
+        let (target, axis) = match dim {
+            Some(d) => {
+                if d >= t.shape.len() {
+                    return Err(Error::ShapeMismatch {
+                        op: "argmax",
+                        expected: t.shape.clone(),
+                        got: vec![d],
+                        msg: format!("argmax: axis {d} out of range for shape {:?}", t.shape),
+                    });
+                }
+                (t.clone(), d)
+            }
+            None => {
+                let numel: usize = t.shape.iter().product();
+                (<Self as TensorOps<Self>>::reshape::<K>(t, &[numel])?, 0)
+            }
+        };
+        let (_, idx_u32) =
+            crate::cuda::ops::reduce::launch_reduce_with_indices_op("max", &target, axis, false)?;
+        crate::cuda::ops::reduce::indices_u32_to_i64(&idx_u32)
+    }
+
+    fn argmin<K: DType, KInt: DType>(t: &CudaStorage, dim: Option<usize>) -> Result<CudaStorage> {
+        let (target, axis) = match dim {
+            Some(d) => {
+                if d >= t.shape.len() {
+                    return Err(Error::ShapeMismatch {
+                        op: "argmin",
+                        expected: t.shape.clone(),
+                        got: vec![d],
+                        msg: format!("argmin: axis {d} out of range for shape {:?}", t.shape),
+                    });
+                }
+                (t.clone(), d)
+            }
+            None => {
+                let numel: usize = t.shape.iter().product();
+                (<Self as TensorOps<Self>>::reshape::<K>(t, &[numel])?, 0)
+            }
+        };
+        let (_, idx_u32) =
+            crate::cuda::ops::reduce::launch_reduce_with_indices_op("min", &target, axis, false)?;
+        crate::cuda::ops::reduce::indices_u32_to_i64(&idx_u32)
+    }
 }
 impl<T: DType, D: Device> QuantizedOps<Self> for CudaBackendImpl<T, D> {
     fn quantize<K: FloatDType, Q: QuantDType>(t: &CudaStorage) -> Result<CudaStorage> {
@@ -1853,5 +1904,36 @@ mod tests {
         let grads = crate::cuda::tape::backward(&out).unwrap();
         let g = grads.get(t_id).expect("gelu input should have a gradient");
         assert_eq!(g.shape, vec![3]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn argmax_dim0_returns_row_index_of_column_max() {
+        let t = cuda_f32(&[2, 3], vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0]);
+        let out = <B as ReductionOps<B>>::argmax::<f32, i64>(&t, Some(0)).unwrap();
+        assert_eq!(out.shape, vec![3]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn argmax_dim_none_returns_scalar_flat_index() {
+        let t = cuda_f32(&[2, 3], vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0]);
+        let out = <B as ReductionOps<B>>::argmax::<f32, i64>(&t, None).unwrap();
+        assert_eq!(out.shape, Vec::<usize>::new());
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn argmin_dim0_returns_row_index_of_column_min() {
+        let t = cuda_f32(&[2, 3], vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0]);
+        let out = <B as ReductionOps<B>>::argmin::<f32, i64>(&t, Some(0)).unwrap();
+        assert_eq!(out.shape, vec![3]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn argmax_rejects_out_of_range_axis() {
+        let t = cuda_f32(&[2, 3], vec![0.0; 6]);
+        assert!(<B as ReductionOps<B>>::argmax::<f32, i64>(&t, Some(5)).is_err());
     }
 }

@@ -490,6 +490,47 @@ pub(crate) fn launch_reduce_with_indices_host(
     ))
 }
 
+/// Converts a `U32`-dtype index `CudaStorage` (what `launch_reduce_with_indices_op`
+/// produces) into an `I64`-dtype one, matching CPU/WGPU's `argmax`/`argmin`
+/// convention (`CpuBuffer::I64`) so downstream consumers that assume
+/// integer index tensors are `I64` (e.g. `embedding`, `cross_entropy_loss`)
+/// keep working uniformly across backends. Small buffer (one index per
+/// reduced output position, not per input element), so a host round-trip
+/// here is cheap regardless of the input tensor's size.
+#[cfg(feature = "cuda")]
+pub(crate) fn indices_u32_to_i64(idx: &CudaStorage) -> Result<CudaStorage> {
+    let buf = &*idx.buffer;
+    if buf.dtype != DTypeId::U32 {
+        return Err(Error::DTypeStorageMismatch {
+            expected: DTypeId::U32,
+            got: buf.dtype,
+        });
+    }
+    let stream = buf.device.default_stream();
+    let host_u32: alloc::vec::Vec<u32> = unsafe {
+        let view = buf
+            .data
+            .transmute::<u32>(buf.len)
+            .ok_or_else(|| Error::Msg("indices_u32_to_i64: invalid byte length".into()))?;
+        stream
+            .clone_dtoh(&view)
+            .map_err(|e| Error::Msg(format!("indices_u32_to_i64: download failed: {e:?}")))?
+    };
+    let host_i64: alloc::vec::Vec<i64> = host_u32.iter().map(|&v| v as i64).collect();
+    let bytes: &[u8] = bytemuck::cast_slice(&host_i64);
+    let device_data = stream
+        .clone_htod(bytes)
+        .map_err(|e| Error::Msg(format!("indices_u32_to_i64: upload failed: {e:?}")))?;
+    let new_buf = CudaBuffer {
+        len: buf.len,
+        dtype: DTypeId::I64,
+        data: Arc::new(device_data),
+        device: buf.device.clone(),
+        device_id: buf.device_id,
+    };
+    Ok(CudaStorage::new(Arc::new(new_buf), idx.shape.clone()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
