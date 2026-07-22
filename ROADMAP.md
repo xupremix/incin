@@ -133,6 +133,23 @@ policy remain.
 > `quantize`/`dequantize`/`quantized_matmul`, and the max/min-family
 > reductions are what's actually left on WGPU now — pooling is the next
 > priority (also real-hardware-verifiable here, same pattern).
+>
+> **2026-07-22 sixth follow-up: pooling wired.** Unlike softmax/layer_norm/
+> batch_norm, `pool2d`'s forward (`shaders/pool2d.wgsl`) is a genuine
+> monolithic kernel with nothing to compose a backward from, so this needed
+> real new code, not just wiring. Followed the pattern `conv2d`'s backward
+> already established on this backend (readback to a flat host `Vec`,
+> compute with plain Rust loops, upload the result) and ported the exact
+> algorithms the CPU backend already proves correct
+> (`max_window_2d`/`scatter_pool_grad_2d`/`avg_pool2d_impl`/
+> `adaptive_avg_pool2d_impl` in `cpu/ops/pool.rs`) after confirming the WGSL
+> forward's algorithm matches CPU's exactly. 4 new gradcheck tests (disjoint
+> and overlapping-window `avg_pool2d`, `max_pool2d`, uneven-window
+> `adaptive_avg_pool2d`) pass against the real software WGPU adapter.
+> Remaining: `cross_entropy_loss`, `quantize`/`dequantize`/`quantized_matmul`,
+> and the max/min-family reductions. `cross_entropy_loss` is next — it's
+> almost certainly composable from already-wired primitives (softmax's
+> `log_softmax` helper is already `pub(crate)` and reusable), unlike pooling.
 
 ---
 
@@ -143,7 +160,7 @@ policy remain.
 | `kindle-core` | Passing | ✅ C-6/C-7 fixed; C-3 (autograd design gaps) still open |
 | `kindle-backends` (cpu) | Passing, +2 new regression tests | ✅ C-2 (f32 downcast), C-5 (overflow), C-8 (mis-gated `elementwise` module — CPU couldn't build standalone) fixed |
 | `kindle-backends` (cuda) | Compiles (no GPU in this env to run it) | ✅ C-1 fixed; ⚠ C-4: add/sub/mul/div now gradient-wired (unverified on real hardware); everything else (`CreationOps`/`FloatOps`/norm/embedding/quant/reduce/loss) is still an empty trait impl falling to `Err` |
-| `kindle-backends` (wgpu) | Passing, +2 gradcheck tests | ⚠ C-3: elementwise/activation/`matmul`/`TensorOps`/`embedding`/`conv*`/sum-reductions/`layer_norm`/`batch_norm` autograd all wired and tested against a real adapter (see 2026-07-22 follow-ups); pooling/`cross_entropy_loss`/quantization/max-min-reductions still ungradiented |
+| `kindle-backends` (wgpu) | Passing, +6 gradcheck tests | ⚠ C-3: elementwise/activation/`matmul`/`TensorOps`/`embedding`/`conv*`/sum-reductions/`layer_norm`/`batch_norm`/pooling autograd all wired and tested against a real adapter (see 2026-07-22 follow-ups); `cross_entropy_loss`/quantization/max-min-reductions still ungradiented |
 | `kindle-backends` (legacy: candle only now) | Partial | ✅ `ndarray`/`burn` backends + deps deleted (2026-07-21, both were permanently dead code); only `CandleBackend` remains |
 | `kindle-macros` | Passing | ✅ Solid — hygiene good, doc examples present |
 | `kindle-data` | 9 tests | ✅ `DataLoader` tested (incl. multi-worker concurrency); `default-features = false` fixed on its `kindle-backends` dep (was leaking `cuda`/`wgpu`, see C-8) |
