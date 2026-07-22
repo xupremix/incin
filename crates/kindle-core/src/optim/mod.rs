@@ -108,6 +108,61 @@ impl<B: Backend, K: DType> AdamW<B, K> {
             step: 0,
         }
     }
+
+    /// Gets the current step counter.
+    pub fn step_count(&self) -> usize {
+        self.step
+    }
+
+    /// Sets the current step counter value.
+    pub fn set_step_count(&mut self, step: usize) {
+        self.step = step;
+    }
+
+    /// Exports optimizer state tensors (`m` and `v` momentum buffers).
+    pub fn state_dict(&self, prefix: &str, dict: &mut alloc::collections::BTreeMap<String, B::Storage<K>>) {
+        let p = if prefix.is_empty() {
+            alloc::string::String::new()
+        } else {
+            alloc::format!("{}.", prefix)
+        };
+        for (name, m_val) in &self.m {
+            dict.insert(alloc::format!("{}m.{}", p, name), m_val.clone());
+        }
+        for (name, v_val) in &self.v {
+            dict.insert(alloc::format!("{}v.{}", p, name), v_val.clone());
+        }
+    }
+
+    /// Loads optimizer state tensors from a dictionary.
+    pub fn load_state_dict(&mut self, prefix: &str, dict: &alloc::collections::BTreeMap<String, B::Storage<K>>) -> Result<()> {
+        let p = if prefix.is_empty() {
+            alloc::string::String::new()
+        } else {
+            alloc::format!("{}.", prefix)
+        };
+        let m_prefix = alloc::format!("{}m.", p);
+        let v_prefix = alloc::format!("{}v.", p);
+
+        for (key, storage) in dict {
+            if let Some(name) = key.strip_prefix(&m_prefix) {
+                self.m.insert(name.to_string(), storage.clone());
+            } else if let Some(name) = key.strip_prefix(&v_prefix) {
+                self.v.insert(name.to_string(), storage.clone());
+            }
+        }
+        Ok(())
+    }
+}
+
+impl<B: Backend<FloatElem = f32>> crate::nn::module::StateDict<B> for AdamW<B, f32> {
+    fn load_state_dict(&mut self, prefix: &str, dict: &alloc::collections::BTreeMap<String, B::Storage<f32>>) -> Result<()> {
+        AdamW::load_state_dict(self, prefix, dict)
+    }
+
+    fn state_dict(&self, prefix: &str, dict: &mut alloc::collections::BTreeMap<String, B::Storage<f32>>) {
+        AdamW::state_dict(self, prefix, dict);
+    }
 }
 
 impl<B: Backend, K: DType> Optimizer<B> for AdamW<B, K> {
@@ -121,15 +176,6 @@ impl<B: Backend, K: DType> Optimizer<B> for AdamW<B, K> {
         for (name, var) in self.params.iter_mut() {
             let t = B::var_as_tensor::<K>(var)?;
             if let Some(grad) = B::get_grad::<K>(&t, &grads.0)? {
-                // The parameter's own device, not a hardcoded CPU fallback -
-                // every concrete backend (Cpu/Wgpu/Cuda) overrides
-                // `storage_device` to return its real device, so this only
-                // falls back to CPU for a hypothetical backend that
-                // genuinely can't report one. Allocating `m`/`v` on the
-                // wrong device previously made `AdamW` fail on its very
-                // first step on any non-CPU backend (`validate_cuda_device`
-                // rejects a CPU `DeviceId` outright) - see
-                // `IMPLEMENTATION_PLAN.md` §1.7.
                 let device = B::storage_device::<K>(&t).unwrap_or_else(DeviceId::cpu);
                 if !self.m.contains_key(name) {
                     let zero =
@@ -191,61 +237,6 @@ pub struct Adam<B: Backend, K: DType = f32> {
     m: alloc::collections::BTreeMap<String, B::Storage<K>>,
     v: alloc::collections::BTreeMap<String, B::Storage<K>>,
     step: usize,
-}
-
-    pub fn step_count(&self) -> usize {
-        self.step
-    }
-
-    /// Sets the current step counter value.
-    pub fn set_step_count(&mut self, step: usize) {
-        self.step = step;
-    }
-
-    /// Exports optimizer state tensors (`m` and `v` momentum buffers).
-    pub fn state_dict(&self, prefix: &str, dict: &mut alloc::collections::BTreeMap<String, B::Storage<K>>) {
-        let p = if prefix.is_empty() {
-            alloc::string::String::new()
-        } else {
-            alloc::format!("{}.", prefix)
-        };
-        for (name, m_val) in &self.m {
-            dict.insert(alloc::format!("{}m.{}", p, name), m_val.clone());
-        }
-        for (name, v_val) in &self.v {
-            dict.insert(alloc::format!("{}v.{}", p, name), v_val.clone());
-        }
-    }
-
-    /// Loads optimizer state tensors from a dictionary.
-    pub fn load_state_dict(&mut self, prefix: &str, dict: &alloc::collections::BTreeMap<String, B::Storage<K>>) -> Result<()> {
-        let p = if prefix.is_empty() {
-            alloc::string::String::new()
-        } else {
-            alloc::format!("{}.", prefix)
-        };
-        let m_prefix = alloc::format!("{}m.", p);
-        let v_prefix = alloc::format!("{}v.", p);
-
-        for (key, storage) in dict {
-            if let Some(name) = key.strip_prefix(&m_prefix) {
-                self.m.insert(name.to_string(), storage.clone());
-            } else if let Some(name) = key.strip_prefix(&v_prefix) {
-                self.v.insert(name.to_string(), storage.clone());
-            }
-        }
-        Ok(())
-    }
-}
-
-impl<B: Backend<FloatElem = f32>> crate::nn::module::StateDict<B> for AdamW<B, f32> {
-    fn load_state_dict(&mut self, prefix: &str, dict: &alloc::collections::BTreeMap<String, B::Storage<f32>>) -> Result<()> {
-        AdamW::load_state_dict(self, prefix, dict)
-    }
-
-    fn state_dict(&self, prefix: &str, dict: &mut alloc::collections::BTreeMap<String, B::Storage<f32>>) {
-        AdamW::state_dict(self, prefix, dict);
-    }
 }
 
 impl<B: Backend, K: DType> Adam<B, K> {
