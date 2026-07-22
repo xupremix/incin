@@ -14,7 +14,7 @@ pub(crate) extern crate alloc;
 pub(crate) mod err;
 
 pub(crate) mod graph;
-pub(crate) mod nn;
+pub mod nn;
 #[cfg(feature = "std")]
 pub(crate) mod onnx_exporter;
 #[cfg(feature = "std")]
@@ -65,6 +65,8 @@ pub mod prelude {
 
     pub use super::shapes::prelude::*;
     pub use super::tensor::prelude::*;
+    #[cfg(feature = "std")]
+    pub use crate::nn::save::{load_safetensors, save_safetensors};
     #[cfg(feature = "std")]
     pub use crate::onnx_exporter::{OnnxExporter, OnnxImporter};
     pub use crate::optim::{

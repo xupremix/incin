@@ -22,17 +22,19 @@ error[E0774]: `derive` may only be applied to `struct`s, `enum`s and `union`s
 14 | | }
    | |_- not a `struct`, `enum` or `union`
 
-error[E0603]: module `nn` is private
- --> tests/compile_fail/forward_conv1d_static_mismatch.rs:5:18
+warning: unused import: `kindle_core as kindle`
+ --> tests/compile_fail/forward_conv1d_static_mismatch.rs:2:5
+  |
+2 | use kindle_core as kindle;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `kindle_core::nn::*`
+ --> tests/compile_fail/forward_conv1d_static_mismatch.rs:5:5
   |
 5 | use kindle_core::nn::*;
-  |                  ^^ private module
-  |
-note: the module `nn` is defined here
- --> src/lib.rs
-  |
-  | pub(crate) mod nn;
-  | ^^^^^^^^^^^^^^^^^
+  |     ^^^^^^^^^^^^^^^^^^
 
 error[E0107]: struct takes at most 3 generic arguments but 6 generic arguments were supplied
   --> tests/compile_fail/forward_conv1d_static_mismatch.rs:10:17
