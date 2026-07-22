@@ -521,6 +521,30 @@ fn cross_entropy_loss_matches_hand_computed_value_for_nonzero_target() {
     );
 }
 
+#[test]
+fn cross_entropy_loss_backward_matches_finite_difference() {
+    // cross_entropy_loss is fully composed from already-wired primitives
+    // (log_softmax's sub/exp/sum_keepdim/log/broadcast_as chain, mul,
+    // sum_dim, neg, mean_all), so — like softmax/layer_norm/batch_norm
+    // before it — this should already be gradient-correct with no new
+    // wiring; this test verifies that rather than assuming it.
+    let pred = storage(vec![2.0, 1.0, -0.5, 0.5, 3.0, 0.2], vec![2, 3]);
+    let target = storage(vec![0.0, 2.0], vec![2]); // class 0, class 2
+    let op = |inputs: &[WgpuStorage]| -> WgpuStorage {
+        <B as LossOps<B>>::cross_entropy_loss::<f32, f32>(
+            &inputs[0],
+            &target,
+            kindle_core::prelude::Reduction::Mean,
+        )
+        .unwrap()
+    };
+    let max_abs_diff = gradcheck_wgpu(op, &[pred], 1e-3);
+    assert!(
+        max_abs_diff < 2e-3,
+        "cross_entropy_loss gradcheck max abs diff too high: {max_abs_diff:.6}"
+    );
+}
+
 // ── Optimizer ─────────────────────────────────────────────────────────────
 
 #[test]
