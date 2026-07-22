@@ -3,16 +3,19 @@ use crate::tensor::device::Device;
 use crate::tensor::dtype::{DType, FloatDType, QuantDType};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-/// Provides the ScalarValue operation or structure.
+/// A backend-agnostic scalar, tagged by whether it originated as a float or
+/// an integer literal so callers can round-trip the value without losing
+/// that distinction (e.g. when building a `ScalarValue` from a Rust literal
+/// via `From` and later reading it back as whichever type the op needs).
 pub enum ScalarValue {
-    /// Provides the Float operation or structure.
+    /// A floating-point scalar, stored at full `f64` precision.
     Float(f64),
-    /// Provides the Int operation or structure.
+    /// An integer scalar, stored as `i64`.
     Int(i64),
 }
 
 impl ScalarValue {
-    /// Provides the to_f64 operation or structure.
+    /// Reads the value as `f64`, casting from `Int` if needed.
     pub fn to_f64(&self) -> f64 {
         match self {
             ScalarValue::Float(f) => *f,
@@ -20,7 +23,7 @@ impl ScalarValue {
         }
     }
 
-    /// Provides the to_i64 operation or structure.
+    /// Reads the value as `i64`, truncating from `Float` if needed.
     pub fn to_i64(&self) -> i64 {
         match self {
             ScalarValue::Float(f) => *f as i64,
@@ -30,25 +33,25 @@ impl ScalarValue {
 }
 
 impl From<f32> for ScalarValue {
-    /// Provides the from operation or structure.
+    /// Widens an `f32` literal into a `Float` scalar.
     fn from(v: f32) -> Self {
         ScalarValue::Float(v as f64)
     }
 }
 impl From<f64> for ScalarValue {
-    /// Provides the from operation or structure.
+    /// Wraps an `f64` literal as a `Float` scalar.
     fn from(v: f64) -> Self {
         ScalarValue::Float(v)
     }
 }
 impl From<i32> for ScalarValue {
-    /// Provides the from operation or structure.
+    /// Widens an `i32` literal into an `Int` scalar.
     fn from(v: i32) -> Self {
         ScalarValue::Int(v as i64)
     }
 }
 impl From<i64> for ScalarValue {
-    /// Provides the from operation or structure.
+    /// Wraps an `i64` literal as an `Int` scalar.
     fn from(v: i64) -> Self {
         ScalarValue::Int(v)
     }
@@ -62,7 +65,17 @@ pub trait SupportsDType<K: DType> {
     }
 }
 
-/// Provides the Backend operation or structure.
+/// The framework's single extension point: implement this (plus its
+/// operation sub-traits) to add a new compute backend.
+///
+/// `Tensor<S, B, K, G>` is generic over `B: Backend` and stores exactly one
+/// `B::Storage<K>` handle — every tensor operation ultimately dispatches to
+/// a method on this trait or one of the op sub-traits it requires
+/// (`NumericOps`, `FloatOps`, `CreationOps`, `ReductionOps`, `ModuleOps`,
+/// `LossOps`, `QuantizedOps`, `OptimizerOps`, `TensorOps`). A method with no
+/// override on a sub-trait returns `Err(UnsupportedBackendOperation)` by
+/// default, so a backend only needs to implement the operations it actually
+/// supports.
 pub trait Backend:
     Sized
     + Clone
@@ -79,24 +92,31 @@ pub trait Backend:
     + crate::tensor::backend::ModuleOps<Self>
     + crate::tensor::backend::LossOps<Self>
 {
-    /// Provides the Device operation or structure.
+    /// The type-level device this backend runs on (`Cpu`, `Wgpu<N>`, `Cuda<N>`, `Dyn`, ...).
     type Device: Device;
-    /// Provides the FloatElem operation or structure.
+    /// The floating-point element type this backend instance computes in.
     type FloatElem: DType;
-    /// Provides the IntElem operation or structure.
+    /// The integer element type this backend instance uses for indices
+    /// (embedding lookups, `argmax`/`argmin`, etc.).
     type IntElem: DType;
 
-    /// Provides the Storage operation or structure.
+    /// The concrete, backend-native handle a `Tensor<_, Self, K>` wraps.
+    /// Every op takes and returns this type directly — there is no shared
+    /// storage representation across backends.
     type Storage<K: DType>: Clone;
-    /// Provides the RawVar operation or structure.
+    /// Backend-native handle for a trainable variable (as opposed to a
+    /// plain, non-owning tensor view).
     type RawVar: Clone;
-    /// Provides the Grads operation or structure.
+    /// The gradient collection returned by `backward`, indexed however the
+    /// backend's own tape implementation chooses (usually by tensor id).
     type Grads;
 
-    /// Provides the InnerBackend operation or structure.
+    /// The backend actually doing the compute once any runtime-dispatch
+    /// wrapper (see `Dyn`'s `DispatchBackend`) has been resolved. Equal to
+    /// `Self` for every concrete (non-dispatching) backend.
     type InnerBackend: Backend;
 
-    /// Provides the shape operation or structure.
+    /// Returns the logical shape (dimension sizes) of a storage handle.
     fn shape<K: DType>(t: &Self::Storage<K>) -> alloc::vec::Vec<usize>;
     /// Returns the physical storage dtype when the backend can inspect it.
     fn storage_dtype<K: DType>(_t: &Self::Storage<K>) -> Option<DTypeId> {
@@ -106,24 +126,32 @@ pub trait Backend:
     fn storage_device<K: DType>(_t: &Self::Storage<K>) -> Option<DeviceId> {
         None
     }
-    /// Provides the format_tensor_display operation or structure.
+    /// Renders a tensor's values for `Display` (concise, human-facing).
     fn format_tensor_display<K: DType>(t: &Self::Storage<K>) -> alloc::string::String;
-    /// Provides the format_tensor_debug operation or structure.
+    /// Renders a tensor's values and metadata for `Debug` (verbose,
+    /// diagnostic-facing — shape/dtype/device alongside the data).
     fn format_tensor_debug<K: DType>(t: &Self::Storage<K>) -> alloc::string::String;
 
-    /// Provides the backward operation or structure.
+    /// Runs backpropagation from `t` through the backend's recorded tape,
+    /// returning the resulting per-tensor gradients.
     fn backward<K: DType>(t: &Self::Storage<K>) -> Result<Self::Grads>;
-    /// Provides the backward_with_nan_check operation or structure.
+    /// Same as `backward`, but additionally checks intermediate gradients
+    /// for `NaN`/`Inf` and reports them as an error instead of silently
+    /// propagating corrupted values.
     fn backward_with_nan_check<K: DType>(t: &Self::Storage<K>) -> Result<Self::Grads>;
-    /// Provides the get_grad operation or structure.
+    /// Looks up the gradient computed for `t` in a `Grads` collection
+    /// returned by `backward`. `None` if `t` received no gradient (e.g. it
+    /// wasn't reachable from the tensor `backward` was called on).
     fn get_grad<K: DType>(
         t: &Self::Storage<K>,
         grads: &Self::Grads,
     ) -> Result<Option<Self::Storage<K>>>;
 
-    /// Provides the to_bytes operation or structure.
+    /// Serializes storage to a flat, dtype-native byte buffer (row-major,
+    /// no header) — the inverse of `from_bytes`.
     fn to_bytes<K: DType>(t: &Self::Storage<K>) -> Result<alloc::vec::Vec<u8>>;
-    /// Provides the from_bytes operation or structure.
+    /// Reconstructs storage from raw bytes produced by `to_bytes`,
+    /// validating that `bytes.len()` matches `shape`/`dtype`'s expected size.
     fn from_bytes<K: DType>(
         bytes: &[u8],
         shape: &[usize],
@@ -131,11 +159,12 @@ pub trait Backend:
         device: &DeviceId,
     ) -> Result<Self::Storage<K>>;
 
-    /// Provides the var_as_tensor operation or structure.
+    /// Views a trainable variable as a plain tensor storage handle.
     fn var_as_tensor<K: DType>(var: &Self::RawVar) -> Result<Self::Storage<K>>;
-    /// Provides the var_from_tensor operation or structure.
+    /// Promotes a plain tensor storage handle into a trainable variable.
     fn var_from_tensor<K: DType>(t: &Self::Storage<K>) -> Result<Self::RawVar>;
-    /// Provides the assign_var operation or structure.
+    /// Overwrites a variable's value in place (e.g. an optimizer step),
+    /// without changing its identity for gradient-tracking purposes.
     fn assign_var<K: DType>(var: &mut Self::RawVar, tensor: &Self::Storage<K>) -> Result<()>;
 }
 
@@ -167,114 +196,119 @@ pub trait TransferTo<NewD: Device>: Backend {
 }
 
 // FloatOps only requires Backend, operates on FloatTensorPrimitive
-/// Provides the FloatOps operation or structure.
+/// Elementwise floating-point operations: activation functions and
+/// scalar-broadcast arithmetic. Every method defaults to
+/// `Err(UnsupportedBackendOperation)`, so a backend only overrides what it
+/// actually implements.
 pub trait FloatOps<B: Backend> {
-    /// Provides the relu operation or structure.
+    /// Rectified linear unit: `max(0, x)`.
     fn relu<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "relu",
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the step operation or structure.
+    /// Heaviside step function: `1` where `x > 0`, else `0`.
     fn step<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "step",
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the mish operation or structure.
+    /// Mish activation: `x * tanh(softplus(x))`.
     fn mish<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "mish",
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the elu operation or structure.
+    /// Exponential Linear Unit: `x` where `x > 0`, else `exp(x) - 1`.
     fn elu<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "elu",
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the gelu operation or structure.
+    /// Gaussian Error Linear Unit (exact, erf-based):
+    /// `x * 0.5 * (1 + erf(x / sqrt(2)))`.
     fn gelu<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "gelu",
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the abs operation or structure.
+    /// Elementwise absolute value.
     fn abs<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "abs",
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the exp operation or structure.
+    /// Elementwise natural exponential.
     fn exp<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "exp",
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the neg operation or structure.
+    /// Elementwise negation: `-x`.
     fn neg<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "neg",
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the sqrt operation or structure.
+    /// Elementwise square root.
     fn sqrt<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "sqrt",
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the log operation or structure.
+    /// Elementwise natural logarithm.
     fn log<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "log",
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the tanh operation or structure.
+    /// Elementwise hyperbolic tangent.
     fn tanh<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "tanh",
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the sigmoid operation or structure.
+    /// Elementwise logistic sigmoid: `1 / (1 + exp(-x))`.
     fn sigmoid<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "sigmoid",
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the swish operation or structure.
+    /// Swish/SiLU activation: `x * sigmoid(x)`.
     fn swish<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "swish",
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the softmax operation or structure.
+    /// Softmax along `dim`, numerically stabilized by subtracting the
+    /// per-slice max before exponentiating.
     fn softmax<K: DType>(_t: &B::Storage<K>, _dim: usize) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "softmax",
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the add_scalar_float operation or structure.
+    /// Adds scalar `scalar` to every element.
     fn add_scalar_float<K: DType>(_t: &B::Storage<K>, _scalar: f64) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "add_scalar_float",
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the mul_scalar_float operation or structure.
+    /// Multiplies every element by scalar `scalar`.
     fn mul_scalar_float<K: DType>(_t: &B::Storage<K>, _scalar: f64) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "mul_scalar_float",
@@ -284,30 +318,31 @@ pub trait FloatOps<B: Backend> {
 }
 
 // NumericOps operates generically over any TensorKind!
-/// Provides the NumericOps operation or structure.
+/// Elementwise binary arithmetic with NumPy-style broadcasting (any
+/// mismatched dimension must be size 1 on one side).
 pub trait NumericOps<B: Backend> {
-    /// Provides the add operation or structure.
+    /// Elementwise addition: `lhs + rhs`.
     fn add<K: DType>(_lhs: &B::Storage<K>, _rhs: &B::Storage<K>) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "add",
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the sub operation or structure.
+    /// Elementwise subtraction: `lhs - rhs`.
     fn sub<K: DType>(_lhs: &B::Storage<K>, _rhs: &B::Storage<K>) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "sub",
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the mul operation or structure.
+    /// Elementwise multiplication: `lhs * rhs`.
     fn mul<K: DType>(_lhs: &B::Storage<K>, _rhs: &B::Storage<K>) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "mul",
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the div operation or structure.
+    /// Elementwise division: `lhs / rhs`.
     fn div<K: DType>(_lhs: &B::Storage<K>, _rhs: &B::Storage<K>) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "div",
@@ -316,16 +351,21 @@ pub trait NumericOps<B: Backend> {
     }
 }
 
-/// Provides the TensorOps operation or structure.
+/// Shape, layout, and dtype manipulation that doesn't change element
+/// values (aside from `tensor_to_dtype`'s cast) — reshapes, views,
+/// concatenation, and host-readback conversions.
 pub trait TensorOps<B: Backend> {
-    /// Provides the reshape operation or structure.
+    /// Reinterprets storage under a new `shape` with the same element count
+    /// and row-major ordering (no data movement on backends with
+    /// contiguous storage).
     fn reshape<K: DType>(_t: &B::Storage<K>, _shape: &[usize]) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "reshape",
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the transpose operation or structure.
+    /// Swaps dimensions `dim1` and `dim2` in the logical shape (a view, not
+    /// a copy, on backends with strided storage).
     fn transpose<K: DType>(
         _t: &B::Storage<K>,
         _dim1: usize,
@@ -336,21 +376,24 @@ pub trait TensorOps<B: Backend> {
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the matmul operation or structure.
+    /// Batched matrix multiplication over the trailing two dimensions of
+    /// `lhs`/`rhs`, broadcasting any leading batch dimensions.
     fn matmul<K: DType>(_lhs: &B::Storage<K>, _rhs: &B::Storage<K>) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "matmul",
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the broadcast_as operation or structure.
+    /// Broadcasts `t` to `shape` per NumPy rules (each dimension where the
+    /// source size differs from the target must be exactly 1).
     fn broadcast_as<K: DType>(_t: &B::Storage<K>, _shape: &[usize]) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "broadcast_as",
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the narrow operation or structure.
+    /// Takes the `len`-element window `[start, start + len)` along `dim`,
+    /// keeping every other dimension unchanged.
     fn narrow<K: DType>(
         _t: &B::Storage<K>,
         _dim: usize,
@@ -362,35 +405,39 @@ pub trait TensorOps<B: Backend> {
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the squeeze operation or structure.
+    /// Removes dimension `dim`, which must have size 1.
     fn squeeze<K: DType>(_t: &B::Storage<K>, _dim: usize) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "squeeze",
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the stack operation or structure.
+    /// Stacks same-shaped tensors along a brand-new dimension inserted at
+    /// `dim` (output has one more dimension than each input).
     fn stack<K: DType>(_t: &[&B::Storage<K>], _dim: usize) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "stack",
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the concat operation or structure.
+    /// Concatenates tensors along an existing dimension `dim` (every other
+    /// dimension must already match across inputs).
     fn concat<K: DType>(_t: &[&B::Storage<K>], _dim: usize) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "concat",
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the slice operation or structure.
+    /// Takes a `[start, end)` window per dimension, one `(start, end)` pair
+    /// in `ranges` for each dimension of `t`, in order.
     fn slice<K: DType>(_t: &B::Storage<K>, _ranges: &[(usize, usize)]) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "slice",
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the flatten operation or structure.
+    /// Collapses dimensions `[start_dim, end_dim]` (inclusive) into a
+    /// single dimension, preserving element order.
     fn flatten<K: DType>(
         _t: &B::Storage<K>,
         _start_dim: usize,
@@ -401,7 +448,9 @@ pub trait TensorOps<B: Backend> {
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the broadcast_left operation or structure.
+    /// Prepends size-1 dimensions on the left until `t` has as many
+    /// dimensions as `shape`, then broadcasts to `shape` (the NumPy
+    /// "align on the right" convention for broadcasting mismatched ranks).
     fn broadcast_left<K: DType>(_t: &B::Storage<K>, _shape: &[usize]) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "broadcast_left",
@@ -409,14 +458,15 @@ pub trait TensorOps<B: Backend> {
         })
     }
 
-    /// Provides the float_to_scalar operation or structure.
+    /// Reads a single-element floating-point tensor's value as `f64`.
+    /// Errors if `t` has more than one element.
     fn float_to_scalar<K: DType>(_t: &B::Storage<K>) -> Result<f64> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "float_to_scalar",
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the float_to_vec1 operation or structure.
+    /// Reads a 1-D floating-point tensor's values into a host `Vec<f64>`.
     fn float_to_vec1<K: DType>(_t: &B::Storage<K>) -> Result<alloc::vec::Vec<f64>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "float_to_vec1",
@@ -424,14 +474,15 @@ pub trait TensorOps<B: Backend> {
         })
     }
 
-    /// Provides the int_to_scalar operation or structure.
+    /// Reads a single-element integer tensor's value as `i64`. Errors if
+    /// `t` has more than one element.
     fn int_to_scalar<K: DType>(_t: &B::Storage<K>) -> Result<i64> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "int_to_scalar",
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the int_to_vec1 operation or structure.
+    /// Reads a 1-D integer tensor's values into a host `Vec<i64>`.
     fn int_to_vec1<K: DType>(_t: &B::Storage<K>) -> Result<alloc::vec::Vec<i64>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "int_to_vec1",
@@ -439,7 +490,9 @@ pub trait TensorOps<B: Backend> {
         })
     }
 
-    /// Provides the tensor_to_dtype operation or structure.
+    /// Casts storage from dtype `K` to dtype `K2`, converting element
+    /// values (not a bit-reinterpret — see `dtype` for the target's
+    /// `DTypeId`).
     fn tensor_to_dtype<K: DType, K2: DType>(
         _t: &B::Storage<K>,
         _dtype: DTypeId,
@@ -451,9 +504,11 @@ pub trait TensorOps<B: Backend> {
     }
 }
 
-/// Provides the CreationOps operation or structure.
+/// Allocates fresh storage and trainable variables — the only place new
+/// tensor data can originate from (every other op transforms existing
+/// storage).
 pub trait CreationOps<B: Backend> {
-    /// Provides the zeros operation or structure.
+    /// Allocates a `shape`-sized tensor of `dtype`, filled with zero.
     fn zeros<K: DType>(
         _shape: &[usize],
         _dtype: DTypeId,
@@ -464,7 +519,7 @@ pub trait CreationOps<B: Backend> {
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the ones operation or structure.
+    /// Allocates a `shape`-sized tensor of `dtype`, filled with one.
     fn ones<K: DType>(
         _shape: &[usize],
         _dtype: DTypeId,
@@ -475,7 +530,8 @@ pub trait CreationOps<B: Backend> {
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the rand operation or structure.
+    /// Allocates a `shape`-sized tensor of `dtype`, filled with samples
+    /// from `Uniform(0, 1)`.
     fn rand<K: DType>(
         _shape: &[usize],
         _dtype: DTypeId,
@@ -486,7 +542,8 @@ pub trait CreationOps<B: Backend> {
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the randn operation or structure.
+    /// Allocates a `shape`-sized tensor of `dtype`, filled with samples
+    /// from the standard normal distribution `N(0, 1)`.
     fn randn<K: DType>(
         _shape: &[usize],
         _dtype: DTypeId,
@@ -498,7 +555,7 @@ pub trait CreationOps<B: Backend> {
         })
     }
 
-    /// Provides the var_zeros operation or structure.
+    /// Same as `zeros`, but returns a trainable `RawVar` directly.
     fn var_zeros<K: DType>(
         _shape: &[usize],
         _dtype: DTypeId,
@@ -509,7 +566,7 @@ pub trait CreationOps<B: Backend> {
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the var_ones operation or structure.
+    /// Same as `ones`, but returns a trainable `RawVar` directly.
     fn var_ones<K: DType>(
         _shape: &[usize],
         _dtype: DTypeId,
@@ -520,7 +577,7 @@ pub trait CreationOps<B: Backend> {
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the var_rand operation or structure.
+    /// Same as `rand`, but returns a trainable `RawVar` directly.
     fn var_rand<K: DType>(
         _shape: &[usize],
         _dtype: DTypeId,
@@ -531,7 +588,7 @@ pub trait CreationOps<B: Backend> {
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the var_randn operation or structure.
+    /// Same as `randn`, but returns a trainable `RawVar` directly.
     fn var_randn<K: DType>(
         _shape: &[usize],
         _dtype: DTypeId,
@@ -544,93 +601,98 @@ pub trait CreationOps<B: Backend> {
     }
 }
 
-/// Provides the ReductionOps operation or structure.
+/// Reductions that collapse a tensor along one or all dimensions —
+/// aggregate statistics (`sum`/`mean`/`max`/`min`) and index-producing
+/// selections (`argmax`/`argmin`/`topk`/`argsort`).
 pub trait ReductionOps<B: Backend> {
-    /// Provides the sum_all operation or structure.
+    /// Sums every element into a single-element tensor.
     fn sum_all<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "sum_all",
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the mean_all operation or structure.
+    /// Averages every element into a single-element tensor.
     fn mean_all<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "mean_all",
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the max_all operation or structure.
+    /// Reduces to the single largest element.
     fn max_all<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "max_all",
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the min_all operation or structure.
+    /// Reduces to the single smallest element.
     fn min_all<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "min_all",
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the sum_dim operation or structure.
+    /// Sums along `dim`, removing that dimension from the output shape.
     fn sum_dim<K: DType>(_t: &B::Storage<K>, _dim: usize) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "sum_dim",
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the sum_keepdim operation or structure.
+    /// Sums along `dim`, keeping it in the output shape as size 1.
     fn sum_keepdim<K: DType>(_t: &B::Storage<K>, _dim: usize) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "sum_keepdim",
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the mean_dim operation or structure.
+    /// Averages along `dim`, removing that dimension from the output shape.
     fn mean_dim<K: DType>(_t: &B::Storage<K>, _dim: usize) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "mean_dim",
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the mean_keepdim operation or structure.
+    /// Averages along `dim`, keeping it in the output shape as size 1.
     fn mean_keepdim<K: DType>(_t: &B::Storage<K>, _dim: usize) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "mean_keepdim",
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the max_dim operation or structure.
+    /// Reduces along `dim` to its max, removing that dimension.
     fn max_dim<K: DType>(_t: &B::Storage<K>, _dim: usize) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "max_dim",
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the max_keepdim operation or structure.
+    /// Reduces along `dim` to its max, keeping it in the output shape as
+    /// size 1.
     fn max_keepdim<K: DType>(_t: &B::Storage<K>, _dim: usize) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "max_keepdim",
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the min_dim operation or structure.
+    /// Reduces along `dim` to its min, removing that dimension.
     fn min_dim<K: DType>(_t: &B::Storage<K>, _dim: usize) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "min_dim",
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the min_keepdim operation or structure.
+    /// Reduces along `dim` to its min, keeping it in the output shape as
+    /// size 1.
     fn min_keepdim<K: DType>(_t: &B::Storage<K>, _dim: usize) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "min_keepdim",
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the argmax operation or structure.
+    /// Index of the maximum element, either flattened (`dim: None`) or
+    /// along a single `dim`.
     fn argmax<K: DType, KInt: DType>(
         _t: &B::Storage<K>,
         _dim: Option<usize>,
@@ -640,7 +702,8 @@ pub trait ReductionOps<B: Backend> {
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the argmin operation or structure.
+    /// Index of the minimum element, either flattened (`dim: None`) or
+    /// along a single `dim`.
     fn argmin<K: DType, KInt: DType>(
         _t: &B::Storage<K>,
         _dim: Option<usize>,
@@ -650,7 +713,8 @@ pub trait ReductionOps<B: Backend> {
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the topk operation or structure.
+    /// The `k` largest (`largest: true`) or smallest (`largest: false`)
+    /// elements along `dim`, returned as `(values, indices)`.
     fn topk<K: DType, KInt: DType>(
         _t: &B::Storage<K>,
         _k: usize,
@@ -662,7 +726,7 @@ pub trait ReductionOps<B: Backend> {
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the argsort operation or structure.
+    /// Indices that would sort `t` along `dim`, ascending or `descending`.
     fn argsort<K: DType, KInt: DType>(
         _t: &B::Storage<K>,
         _dim: usize,
@@ -675,9 +739,13 @@ pub trait ReductionOps<B: Backend> {
     }
 }
 
-/// Provides the ModuleOps operation or structure.
+/// Neural-network layer primitives: normalization, embedding lookup,
+/// convolution, and pooling. Each takes plain storage (not `Param`/`Module`
+/// wrappers) — the `nn` layer types call through to these.
 pub trait ModuleOps<B: Backend> {
-    /// Provides the layer_norm operation or structure.
+    /// Layer normalization over the last dimension: normalizes `t` to zero
+    /// mean/unit variance (with `eps` added for numerical stability), then
+    /// applies an affine `weight` scale and optional `bias` shift.
     fn layer_norm<K: DType>(
         _t: &B::Storage<K>,
         _weight: &B::Storage<K>,
@@ -689,7 +757,10 @@ pub trait ModuleOps<B: Backend> {
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the batch_norm operation or structure.
+    /// Batch normalization over the channel dimension: normalizes using
+    /// batch statistics (training) or `rm`/`rv` running mean/variance
+    /// (inference), with `momentum` controlling running-stat updates and
+    /// optional affine `w`/`b`.
     fn batch_norm<K: DType>(
         _t: &B::Storage<K>,
         _w: Option<&B::Storage<K>>,
@@ -704,7 +775,8 @@ pub trait ModuleOps<B: Backend> {
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the embedding operation or structure.
+    /// Embedding table lookup: gathers rows of the weight matrix `w` at
+    /// the integer indices in `t`.
     fn embedding<K: DType, KInt: DType>(
         _t: &B::Storage<KInt>,
         _w: &B::Storage<K>,
@@ -714,7 +786,8 @@ pub trait ModuleOps<B: Backend> {
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the conv1d operation or structure.
+    /// 1-D convolution of `t` with kernel `w` (and optional bias `b`),
+    /// with the given `stride`/`padding`/`dilation`/`groups`.
     fn conv1d<K: DType>(
         _t: &B::Storage<K>,
         _w: &B::Storage<K>,
@@ -729,7 +802,8 @@ pub trait ModuleOps<B: Backend> {
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the conv2d operation or structure.
+    /// 2-D convolution of `t` with kernel `w` (and optional bias `b`),
+    /// with the given `stride`/`padding`/`dilation`/`groups`.
     fn conv2d<K: DType>(
         _t: &B::Storage<K>,
         _w: &B::Storage<K>,
@@ -744,7 +818,9 @@ pub trait ModuleOps<B: Backend> {
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the conv_transpose2d operation or structure.
+    /// Transposed ("deconvolution") 2-D convolution — the gradient
+    /// operation of `conv2d` used as a forward op for upsampling, with an
+    /// extra `output_padding` to resolve the otherwise-ambiguous output size.
     fn conv_transpose2d<K: DType>(
         _t: &B::Storage<K>,
         _w: &B::Storage<K>,
@@ -760,7 +836,8 @@ pub trait ModuleOps<B: Backend> {
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the max_pool2d operation or structure.
+    /// 2-D max pooling: for each output position, the max over its
+    /// `kernel_size` window (given `stride`/`padding`/`dilation`).
     fn max_pool2d<K: DType>(
         _t: &B::Storage<K>,
         _kernel_size: (usize, usize),
@@ -773,7 +850,8 @@ pub trait ModuleOps<B: Backend> {
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the avg_pool2d operation or structure.
+    /// 2-D average pooling: for each output position, the mean over its
+    /// `kernel_size` window (given `stride`/`padding`).
     fn avg_pool2d<K: DType>(
         _t: &B::Storage<K>,
         _kernel_size: (usize, usize),
@@ -785,7 +863,9 @@ pub trait ModuleOps<B: Backend> {
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the adaptive_avg_pool2d operation or structure.
+    /// Average pooling that derives its own window size per output
+    /// position so the output spatial size is exactly `output_size`,
+    /// regardless of the input size (PyTorch's `AdaptiveAvgPool2d`).
     fn adaptive_avg_pool2d<K: DType>(
         _t: &B::Storage<K>,
         _output_size: (usize, usize),
@@ -797,9 +877,12 @@ pub trait ModuleOps<B: Backend> {
     }
 }
 
-/// Provides the LossOps operation or structure.
+/// Loss functions, given a default implementation in terms of
+/// `NumericOps`/`FloatOps`/`ReductionOps` so a backend implementing those
+/// gets working losses for free (override individually only for a
+/// backend-specific fused kernel).
 pub trait LossOps<B: Backend>: NumericOps<B> + FloatOps<B> + ReductionOps<B> {
-    /// Provides the mse_loss operation or structure.
+    /// Mean/sum/none-reduced squared error: `(pred - target)^2`.
     fn mse_loss<K: DType>(
         pred: &B::Storage<K>,
         target: &B::Storage<K>,
@@ -814,7 +897,7 @@ pub trait LossOps<B: Backend>: NumericOps<B> + FloatOps<B> + ReductionOps<B> {
         }
     }
 
-    /// Provides the l1_loss operation or structure.
+    /// Mean/sum/none-reduced absolute error: `|pred - target|`.
     fn l1_loss<K: DType>(
         pred: &B::Storage<K>,
         target: &B::Storage<K>,
@@ -829,7 +912,10 @@ pub trait LossOps<B: Backend>: NumericOps<B> + FloatOps<B> + ReductionOps<B> {
         }
     }
 
-    /// Provides the bce_with_logits_loss operation or structure.
+    /// Binary cross-entropy computed from raw logits (`pred`, pre-sigmoid),
+    /// using the numerically stable formulation
+    /// `max(x,0) - x*z + log(1 + exp(-|x|))` so it never evaluates
+    /// `sigmoid`/`log` on the raw logit directly.
     fn bce_with_logits_loss<K: DType>(
         pred: &B::Storage<K>,
         target: &B::Storage<K>,
@@ -854,7 +940,10 @@ pub trait LossOps<B: Backend>: NumericOps<B> + FloatOps<B> + ReductionOps<B> {
         }
     }
 
-    /// Provides the cross_entropy_loss operation or structure.
+    /// Cross-entropy loss between raw `pred` logits (softmax applied
+    /// internally) and integer class-index `target`s — no default
+    /// implementation, since it needs a numerically-stable fused
+    /// log-softmax rather than composing `softmax` + `log` naively.
     fn cross_entropy_loss<K: DType, KInt: DType>(
         _pred: &B::Storage<K>,
         _target: &B::Storage<KInt>,
@@ -867,23 +956,26 @@ pub trait LossOps<B: Backend>: NumericOps<B> + FloatOps<B> + ReductionOps<B> {
     }
 }
 
-/// Provides the QuantizedOps operation or structure.
+/// Block quantization: compresses `FloatDType` storage into a `QuantDType`
+/// representation for reduced memory footprint, and the reverse.
 pub trait QuantizedOps<B: Backend> {
-    /// Provides the quantize operation or structure.
+    /// Compresses `t` from a float dtype into quantized storage `Q`.
     fn quantize<K: FloatDType, Q: QuantDType>(_t: &B::Storage<K>) -> Result<B::Storage<Q>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "quantize",
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the dequantize operation or structure.
+    /// Expands quantized storage `Q` back into a float dtype `K`
+    /// (lossy — the inverse of `quantize` only up to quantization error).
     fn dequantize<Q: QuantDType, K: FloatDType>(_t: &B::Storage<Q>) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "dequantize",
             backend: core::any::type_name::<Self>(),
         })
     }
-    /// Provides the quantized_matmul operation or structure.
+    /// Matrix multiplication of two quantized-storage operands, producing
+    /// `f32` output without needing to fully dequantize both operands first.
     fn quantized_matmul<Q: QuantDType>(
         _lhs: &B::Storage<Q>,
         _rhs: &B::Storage<Q>,
@@ -895,9 +987,16 @@ pub trait QuantizedOps<B: Backend> {
     }
 }
 
-/// Provides the OptimizerOps operation or structure.
+/// In-place optimizer update rules, applied directly to a backend's
+/// `RawVar` (so the update can be fused/backend-native instead of composed
+/// from generic tensor ops where that matters for performance).
 pub trait OptimizerOps<B: Backend> {
-    /// Provides the adamw_step operation or structure.
+    /// One AdamW step (Adam with decoupled weight decay): updates `var`
+    /// in place from `grad`, with `m`/`v` as the first/second moment
+    /// running averages (bias-corrected internally using `step`, the
+    /// 1-indexed step count). Has a default implementation composed from
+    /// `NumericOps`/`FloatOps`, so any backend implementing those gets a
+    /// working (if not backend-fused) AdamW for free.
     fn adamw_step<K: DType>(
         var: &mut B::RawVar,
         grad: &B::Storage<K>,
@@ -943,7 +1042,9 @@ pub trait OptimizerOps<B: Backend> {
         Ok(())
     }
 }
-/// Provides the dummy operation or structure.
+/// A minimal, allocation-free `Backend` implementation used only by unit
+/// tests elsewhere in this crate that need a concrete `Backend` type
+/// without depending on `kindle-backends`. See `DummyBackend`.
 pub mod dummy {
     use super::*;
     use crate::nn::Reduction;
@@ -952,13 +1053,18 @@ pub mod dummy {
     use crate::tensor::device::DeviceId;
     use crate::tensor::dtype::DType;
 
-    /// Provides the DummyBackend operation or structure.
+    /// Test-only stand-in `Backend` used by `tensor/base.rs`'s unit tests to
+    /// exercise `Tensor`'s generic-over-`Backend` machinery without pulling
+    /// in a real compute backend. Its `Storage<K>` is literally the shape
+    /// (`Vec<usize>`) — every op below tracks how an operation would
+    /// transform the *shape*, using the same arithmetic real backends use,
+    /// but performs no actual data computation and holds no element values.
     pub struct DummyBackend<T, D> {
         _marker: core::marker::PhantomData<(T, D)>,
     }
 
     impl<T: DType, D: Device + Clone + 'static> Clone for DummyBackend<T, D> {
-        /// Provides the clone operation or structure.
+        /// Cheap: the type carries no state beyond its `PhantomData` markers.
         fn clone(&self) -> Self {
             DummyBackend {
                 _marker: core::marker::PhantomData,
@@ -967,53 +1073,55 @@ pub mod dummy {
     }
 
     impl<T: DType, D: Device + Clone + 'static> Backend for DummyBackend<T, D> {
-        /// Provides the Device operation or structure.
+        /// The device type this stand-in is parameterized over.
         type Device = D;
-        /// Provides the FloatElem operation or structure.
+        /// The float element type this stand-in is parameterized over.
         type FloatElem = T;
-        /// Provides the IntElem operation or structure.
+        /// Fixed to `i64`, matching every real backend's `IntElem`.
         type IntElem = i64;
-        /// Provides the RawVar operation or structure.
+        /// A trainable variable is just its shape, like `Storage`.
         type RawVar = alloc::vec::Vec<usize>;
-        /// Provides the Grads operation or structure.
+        /// No real gradients are tracked, so this carries no data.
         type Grads = ();
-        /// Provides the Storage operation or structure.
+        /// Shape-only storage: `Storage<K>` is the tensor's shape, not its
+        /// values, regardless of `K`.
         type Storage<K: DType> = alloc::vec::Vec<usize>;
-        /// Provides the InnerBackend operation or structure.
+        /// No dispatch wrapper — this stand-in is always its own inner backend.
         type InnerBackend = Self;
 
-        /// Provides the shape operation or structure.
+        /// Returns the shape, which is exactly what `Storage<K>` already is.
         fn shape<K: DType>(t: &Self::Storage<K>) -> alloc::vec::Vec<usize> {
             t.clone()
         }
-        /// Provides the format_tensor_display operation or structure.
+        /// Always `"dummy"` — there are no real values to render.
         fn format_tensor_display<K: DType>(_t: &Self::Storage<K>) -> alloc::string::String {
             alloc::string::String::from("dummy")
         }
-        /// Provides the format_tensor_debug operation or structure.
+        /// Always `"dummy"` — there are no real values to render.
         fn format_tensor_debug<K: DType>(_t: &Self::Storage<K>) -> alloc::string::String {
             alloc::string::String::from("dummy")
         }
-        /// Provides the backward operation or structure.
+        /// No-op: there is no tape to run backward through.
         fn backward<K: DType>(_t: &Self::Storage<K>) -> Result<Self::Grads> {
             Ok(())
         }
-        /// Provides the backward_with_nan_check operation or structure.
+        /// No-op: there is no tape to run backward through.
         fn backward_with_nan_check<K: DType>(_t: &Self::Storage<K>) -> Result<Self::Grads> {
             Ok(())
         }
-        /// Provides the get_grad operation or structure.
+        /// Always `None`: `Grads` carries no data to look a gradient up in.
         fn get_grad<K: DType>(
             _t: &Self::Storage<K>,
             _grads: &Self::Grads,
         ) -> Result<Option<Self::Storage<K>>> {
             Ok(None)
         }
-        /// Provides the to_bytes operation or structure.
+        /// Always empty: there are no element values to serialize.
         fn to_bytes<K: DType>(_t: &Self::Storage<K>) -> Result<alloc::vec::Vec<u8>> {
             Ok(alloc::vec::Vec::new())
         }
-        /// Provides the from_bytes operation or structure.
+        /// Ignores `bytes` entirely and reconstructs storage from `shape`
+        /// alone, since `Storage<K>` only ever tracks shape.
         fn from_bytes<K: DType>(
             _bytes: &[u8],
             shape: &[usize],
@@ -1022,15 +1130,17 @@ pub mod dummy {
         ) -> Result<Self::Storage<K>> {
             Ok(shape.to_vec())
         }
-        /// Provides the var_as_tensor operation or structure.
+        /// `RawVar` and `Storage<K>` are the same representation, so this
+        /// is a plain clone.
         fn var_as_tensor<K: DType>(var: &Self::RawVar) -> Result<Self::Storage<K>> {
             Ok(var.clone())
         }
-        /// Provides the var_from_tensor operation or structure.
+        /// `RawVar` and `Storage<K>` are the same representation, so this
+        /// is a plain clone.
         fn var_from_tensor<K: DType>(t: &Self::Storage<K>) -> Result<Self::RawVar> {
             Ok(t.clone())
         }
-        /// Provides the assign_var operation or structure.
+        /// Overwrites `var`'s shape with `tensor`'s.
         fn assign_var<K: DType>(var: &mut Self::RawVar, tensor: &Self::Storage<K>) -> Result<()> {
             *var = tensor.clone();
             Ok(())
@@ -1111,8 +1221,10 @@ pub mod dummy {
         }
     }
 
+    /// Shape is preserved by every allocation, since it's the only thing
+    /// `Storage`/`RawVar` track — no real fill value is ever written.
     impl<T: DType, D: Device + Clone + 'static> CreationOps<Self> for DummyBackend<T, D> {
-        /// Provides the zeros operation or structure.
+        /// Returns `shape` verbatim as the storage handle.
         fn zeros<K: DType>(
             shape: &[usize],
             _dtype: DTypeId,
@@ -1120,7 +1232,7 @@ pub mod dummy {
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(shape.to_vec())
         }
-        /// Provides the ones operation or structure.
+        /// Returns `shape` verbatim as the storage handle.
         fn ones<K: DType>(
             shape: &[usize],
             _dtype: DTypeId,
@@ -1128,7 +1240,7 @@ pub mod dummy {
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(shape.to_vec())
         }
-        /// Provides the rand operation or structure.
+        /// Returns `shape` verbatim as the storage handle.
         fn rand<K: DType>(
             shape: &[usize],
             _dtype: DTypeId,
@@ -1136,7 +1248,7 @@ pub mod dummy {
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(shape.to_vec())
         }
-        /// Provides the randn operation or structure.
+        /// Returns `shape` verbatim as the storage handle.
         fn randn<K: DType>(
             shape: &[usize],
             _dtype: DTypeId,
@@ -1144,7 +1256,7 @@ pub mod dummy {
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(shape.to_vec())
         }
-        /// Provides the var_zeros operation or structure.
+        /// Returns `shape` verbatim as the variable handle.
         fn var_zeros<K: DType>(
             shape: &[usize],
             _dtype: DTypeId,
@@ -1152,7 +1264,7 @@ pub mod dummy {
         ) -> Result<<Self as Backend>::RawVar> {
             Ok(shape.to_vec())
         }
-        /// Provides the var_ones operation or structure.
+        /// Returns `shape` verbatim as the variable handle.
         fn var_ones<K: DType>(
             shape: &[usize],
             _dtype: DTypeId,
@@ -1160,7 +1272,7 @@ pub mod dummy {
         ) -> Result<<Self as Backend>::RawVar> {
             Ok(shape.to_vec())
         }
-        /// Provides the var_rand operation or structure.
+        /// Returns `shape` verbatim as the variable handle.
         fn var_rand<K: DType>(
             shape: &[usize],
             _dtype: DTypeId,
@@ -1168,7 +1280,7 @@ pub mod dummy {
         ) -> Result<<Self as Backend>::RawVar> {
             Ok(shape.to_vec())
         }
-        /// Provides the var_randn operation or structure.
+        /// Returns `shape` verbatim as the variable handle.
         fn var_randn<K: DType>(
             shape: &[usize],
             _dtype: DTypeId,
@@ -1178,29 +1290,31 @@ pub mod dummy {
         }
     }
 
+    /// Every binary op is a shape no-op: it returns `lhs`'s shape unchanged
+    /// (broadcasting between differing shapes is not modeled).
     impl<T: DType, D: Device + Clone + 'static> NumericOps<Self> for DummyBackend<T, D> {
-        /// Provides the add operation or structure.
+        /// Returns `lhs`'s shape unchanged.
         fn add<K: DType>(
             lhs: &<Self as Backend>::Storage<K>,
             _rhs: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(lhs.clone())
         }
-        /// Provides the sub operation or structure.
+        /// Returns `lhs`'s shape unchanged.
         fn sub<K: DType>(
             lhs: &<Self as Backend>::Storage<K>,
             _rhs: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(lhs.clone())
         }
-        /// Provides the mul operation or structure.
+        /// Returns `lhs`'s shape unchanged.
         fn mul<K: DType>(
             lhs: &<Self as Backend>::Storage<K>,
             _rhs: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(lhs.clone())
         }
-        /// Provides the div operation or structure.
+        /// Returns `lhs`'s shape unchanged.
         fn div<K: DType>(
             lhs: &<Self as Backend>::Storage<K>,
             _rhs: &<Self as Backend>::Storage<K>,
@@ -1209,100 +1323,102 @@ pub mod dummy {
         }
     }
 
+    /// Every activation and scalar op is shape-preserving, so each is a
+    /// plain clone of the input shape.
     impl<T: DType, D: Device + Clone + 'static> FloatOps<Self> for DummyBackend<T, D> {
-        /// Provides the add_scalar_float operation or structure.
+        /// Returns `t`'s shape unchanged.
         fn add_scalar_float<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             _scalar: f64,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(t.clone())
         }
-        /// Provides the mul_scalar_float operation or structure.
+        /// Returns `t`'s shape unchanged.
         fn mul_scalar_float<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             _scalar: f64,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(t.clone())
         }
-        /// Provides the relu operation or structure.
+        /// Returns `t`'s shape unchanged.
         fn relu<K: DType>(
             t: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(t.clone())
         }
-        /// Provides the step operation or structure.
+        /// Returns `t`'s shape unchanged.
         fn step<K: DType>(
             t: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(t.clone())
         }
-        /// Provides the mish operation or structure.
+        /// Returns `t`'s shape unchanged.
         fn mish<K: DType>(
             t: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(t.clone())
         }
-        /// Provides the elu operation or structure.
+        /// Returns `t`'s shape unchanged.
         fn elu<K: DType>(
             t: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(t.clone())
         }
-        /// Provides the gelu operation or structure.
+        /// Returns `t`'s shape unchanged.
         fn gelu<K: DType>(
             t: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(t.clone())
         }
-        /// Provides the abs operation or structure.
+        /// Returns `t`'s shape unchanged.
         fn abs<K: DType>(
             t: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(t.clone())
         }
-        /// Provides the exp operation or structure.
+        /// Returns `t`'s shape unchanged.
         fn exp<K: DType>(
             t: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(t.clone())
         }
-        /// Provides the neg operation or structure.
+        /// Returns `t`'s shape unchanged.
         fn neg<K: DType>(
             t: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(t.clone())
         }
-        /// Provides the sqrt operation or structure.
+        /// Returns `t`'s shape unchanged.
         fn sqrt<K: DType>(
             t: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(t.clone())
         }
-        /// Provides the log operation or structure.
+        /// Returns `t`'s shape unchanged.
         fn log<K: DType>(
             t: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(t.clone())
         }
-        /// Provides the tanh operation or structure.
+        /// Returns `t`'s shape unchanged.
         fn tanh<K: DType>(
             t: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(t.clone())
         }
-        /// Provides the sigmoid operation or structure.
+        /// Returns `t`'s shape unchanged.
         fn sigmoid<K: DType>(
             t: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(t.clone())
         }
-        /// Provides the swish operation or structure.
+        /// Returns `t`'s shape unchanged.
         fn swish<K: DType>(
             t: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(t.clone())
         }
-        /// Provides the softmax operation or structure.
+        /// Returns `t`'s shape unchanged (`dim` is not validated).
         fn softmax<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             _dim: usize,
@@ -1311,32 +1427,36 @@ pub mod dummy {
         }
     }
 
+    /// `_all` reductions collapse to an (empty) scalar shape; `_dim`
+    /// reductions either remove `dim` or clamp it to size 1 (`_keepdim`),
+    /// exactly like a real reduction's shape effect — again with no real
+    /// values behind either result.
     impl<T: DType, D: Device + Clone + 'static> ReductionOps<Self> for DummyBackend<T, D> {
-        /// Provides the sum_all operation or structure.
+        /// Collapses to an empty (scalar) shape.
         fn sum_all<K: DType>(
             _t: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(alloc::vec![])
         }
-        /// Provides the mean_all operation or structure.
+        /// Collapses to an empty (scalar) shape.
         fn mean_all<K: DType>(
             _t: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(alloc::vec![])
         }
-        /// Provides the max_all operation or structure.
+        /// Collapses to an empty (scalar) shape.
         fn max_all<K: DType>(
             _t: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(alloc::vec![])
         }
-        /// Provides the min_all operation or structure.
+        /// Collapses to an empty (scalar) shape.
         fn min_all<K: DType>(
             _t: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(alloc::vec![])
         }
-        /// Provides the sum_dim operation or structure.
+        /// Removes `dim` from the shape.
         fn sum_dim<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             dim: usize,
@@ -1347,7 +1467,7 @@ pub mod dummy {
             }
             Ok(s)
         }
-        /// Provides the sum_keepdim operation or structure.
+        /// Sets `dim`'s size to 1, keeping the dimension in the shape.
         fn sum_keepdim<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             dim: usize,
@@ -1358,7 +1478,7 @@ pub mod dummy {
             }
             Ok(s)
         }
-        /// Provides the mean_dim operation or structure.
+        /// Removes `dim` from the shape.
         fn mean_dim<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             dim: usize,
@@ -1369,7 +1489,7 @@ pub mod dummy {
             }
             Ok(s)
         }
-        /// Provides the mean_keepdim operation or structure.
+        /// Sets `dim`'s size to 1, keeping the dimension in the shape.
         fn mean_keepdim<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             dim: usize,
@@ -1380,7 +1500,7 @@ pub mod dummy {
             }
             Ok(s)
         }
-        /// Provides the max_dim operation or structure.
+        /// Removes `dim` from the shape.
         fn max_dim<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             dim: usize,
@@ -1391,7 +1511,7 @@ pub mod dummy {
             }
             Ok(s)
         }
-        /// Provides the max_keepdim operation or structure.
+        /// Sets `dim`'s size to 1, keeping the dimension in the shape.
         fn max_keepdim<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             dim: usize,
@@ -1402,7 +1522,7 @@ pub mod dummy {
             }
             Ok(s)
         }
-        /// Provides the min_dim operation or structure.
+        /// Removes `dim` from the shape.
         fn min_dim<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             dim: usize,
@@ -1413,7 +1533,7 @@ pub mod dummy {
             }
             Ok(s)
         }
-        /// Provides the min_keepdim operation or structure.
+        /// Sets `dim`'s size to 1, keeping the dimension in the shape.
         fn min_keepdim<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             dim: usize,
@@ -1424,21 +1544,21 @@ pub mod dummy {
             }
             Ok(s)
         }
-        /// Provides the argmax operation or structure.
+        /// Always an empty shape — no indices are actually computed.
         fn argmax<K: DType, KInt: DType>(
             _t: &<Self as Backend>::Storage<K>,
             _dim: Option<usize>,
         ) -> Result<<Self as Backend>::Storage<KInt>> {
             Ok(alloc::vec![])
         }
-        /// Provides the argmin operation or structure.
+        /// Always an empty shape — no indices are actually computed.
         fn argmin<K: DType, KInt: DType>(
             _t: &<Self as Backend>::Storage<K>,
             _dim: Option<usize>,
         ) -> Result<<Self as Backend>::Storage<KInt>> {
             Ok(alloc::vec![])
         }
-        /// Provides the topk operation or structure.
+        /// Always an empty `(values, indices)` pair.
         fn topk<K: DType, KInt: DType>(
             _t: &<Self as Backend>::Storage<K>,
             _k: usize,
@@ -1450,7 +1570,7 @@ pub mod dummy {
         )> {
             Ok((alloc::vec![], alloc::vec![]))
         }
-        /// Provides the argsort operation or structure.
+        /// Always an empty shape — no indices are actually computed.
         fn argsort<K: DType, KInt: DType>(
             _t: &<Self as Backend>::Storage<K>,
             _dim: usize,
@@ -1460,8 +1580,13 @@ pub mod dummy {
         }
     }
 
+    /// Each op tracks its real shape-transformation logic (matmul's last
+    /// dim, transpose's swap, flatten's dimension collapse, etc.) since
+    /// shape *is* everything this stand-in's storage represents — but
+    /// still no element values exist behind any of it.
     impl<T: DType, D: Device + Clone + 'static> TensorOps<Self> for DummyBackend<T, D> {
-        /// Provides the matmul operation or structure.
+        /// Replaces the trailing dimension with `rhs`'s trailing dimension,
+        /// mirroring real matmul's output shape.
         fn matmul<K: DType>(
             lhs: &<Self as Backend>::Storage<K>,
             rhs: &<Self as Backend>::Storage<K>,
@@ -1473,35 +1598,36 @@ pub mod dummy {
             }
             Ok(out)
         }
-        /// Provides the float_to_scalar operation or structure.
+        /// Always `0.0` — there is no real element value to read.
         fn float_to_scalar<K: DType>(_t: &<Self as Backend>::Storage<K>) -> Result<f64> {
             Ok(0.0)
         }
-        /// Provides the float_to_vec1 operation or structure.
+        /// Always a single `0.0` — there are no real element values to read.
         fn float_to_vec1<K: DType>(
             _t: &<Self as Backend>::Storage<K>,
         ) -> Result<alloc::vec::Vec<f64>> {
             Ok(alloc::vec![0.0])
         }
-        /// Provides the int_to_scalar operation or structure.
+        /// Always `0` — there is no real element value to read.
         fn int_to_scalar<K: DType>(_t: &<Self as Backend>::Storage<K>) -> Result<i64> {
             Ok(0)
         }
-        /// Provides the int_to_vec1 operation or structure.
+        /// Always a single `0` — there are no real element values to read.
         fn int_to_vec1<K: DType>(
             _t: &<Self as Backend>::Storage<K>,
         ) -> Result<alloc::vec::Vec<i64>> {
             Ok(alloc::vec![0])
         }
 
-        /// Provides the broadcast_as operation or structure.
+        /// Returns the target `shape` verbatim (broadcast compatibility is
+        /// not validated).
         fn broadcast_as<K: DType>(
             _t: &<Self as Backend>::Storage<K>,
             s: &[usize],
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(s.to_vec())
         }
-        /// Provides the broadcast_left operation or structure.
+        /// Prepends the target `shape`'s dimensions ahead of `t`'s own.
         fn broadcast_left<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             s: &[usize],
@@ -1510,14 +1636,15 @@ pub mod dummy {
             out.extend_from_slice(t);
             Ok(out)
         }
-        /// Provides the reshape operation or structure.
+        /// Returns the target `shape` verbatim (numel compatibility is not
+        /// validated).
         fn reshape<K: DType>(
             _t: &<Self as Backend>::Storage<K>,
             s: &[usize],
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(s.to_vec())
         }
-        /// Provides the transpose operation or structure.
+        /// Swaps dimensions `d1`/`d2` in the shape.
         fn transpose<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             d1: usize,
@@ -1529,7 +1656,7 @@ pub mod dummy {
             }
             Ok(out)
         }
-        /// Provides the flatten operation or structure.
+        /// Collapses dimensions `[s, e]` into their product.
         fn flatten<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             s: usize,
@@ -1543,7 +1670,7 @@ pub mod dummy {
             out.extend_from_slice(&t[e + 1..]);
             Ok(out)
         }
-        /// Provides the slice operation or structure.
+        /// Sets each dimension's size to its `(start, end)` window length.
         fn slice<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             ranges: &[(usize, usize)],
@@ -1556,7 +1683,7 @@ pub mod dummy {
             }
             Ok(out)
         }
-        /// Provides the narrow operation or structure.
+        /// Sets dimension `d`'s size to the requested window length `l`.
         fn narrow<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             d: usize,
@@ -1569,7 +1696,7 @@ pub mod dummy {
             }
             Ok(out)
         }
-        /// Provides the squeeze operation or structure.
+        /// Removes dimension `d` from the shape.
         fn squeeze<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             d: usize,
@@ -1580,7 +1707,8 @@ pub mod dummy {
             }
             Ok(out)
         }
-        /// Provides the stack operation or structure.
+        /// Inserts a new dimension at `d`, sized to the number of stacked
+        /// tensors.
         fn stack<K: DType>(
             t: &[&<Self as Backend>::Storage<K>],
             d: usize,
@@ -1594,7 +1722,8 @@ pub mod dummy {
             }
             Ok(out)
         }
-        /// Provides the concat operation or structure.
+        /// Sets dimension `d`'s size to the sum of every input's size
+        /// along `d`.
         fn concat<K: DType>(
             t: &[&<Self as Backend>::Storage<K>],
             d: usize,
@@ -1608,7 +1737,7 @@ pub mod dummy {
             }
             Ok(out)
         }
-        /// Provides the tensor_to_dtype operation or structure.
+        /// Returns `t`'s shape unchanged — no element values exist to cast.
         fn tensor_to_dtype<K: DType, K2: DType>(
             t: &<Self as Backend>::Storage<K>,
             _dtype: DTypeId,
@@ -1617,8 +1746,12 @@ pub mod dummy {
         }
     }
 
+    /// Normalization ops are shape-preserving no-ops; conv/pool ops
+    /// compute their real output spatial size via `conv_out_size`/
+    /// `conv_transpose_out_size` (the saturating helpers above) so tests
+    /// can assert on shape correctness even though no data is computed.
     impl<T: DType, D: Device + Clone + 'static> ModuleOps<Self> for DummyBackend<T, D> {
-        /// Provides the layer_norm operation or structure.
+        /// Returns `t`'s shape unchanged.
         fn layer_norm<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             _w: &<Self as Backend>::Storage<K>,
@@ -1627,7 +1760,7 @@ pub mod dummy {
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(t.clone())
         }
-        /// Provides the batch_norm operation or structure.
+        /// Returns `t`'s shape unchanged.
         fn batch_norm<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             _w: Option<&<Self as Backend>::Storage<K>>,
@@ -1639,14 +1772,15 @@ pub mod dummy {
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(t.clone())
         }
-        /// Provides the embedding operation or structure.
+        /// Always an empty shape — no real gather is performed.
         fn embedding<K: DType, KInt: DType>(
             _t: &<Self as Backend>::Storage<KInt>,
             _w: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(alloc::vec![])
         }
-        /// Provides the conv1d operation or structure.
+        /// Computes the real output shape: channel dim from `w[0]`, spatial
+        /// dim via `conv_out_size`.
         fn conv1d<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             w: &<Self as Backend>::Storage<K>,
@@ -1667,7 +1801,8 @@ pub mod dummy {
             }
             Ok(out)
         }
-        /// Provides the conv2d operation or structure.
+        /// Computes the real output shape: channel dim from `w[0]`, spatial
+        /// dims via `conv_out_size`.
         fn conv2d<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             w: &<Self as Backend>::Storage<K>,
@@ -1691,7 +1826,9 @@ pub mod dummy {
             }
             Ok(out)
         }
-        /// Provides the conv_transpose2d operation or structure.
+        /// Computes the real output shape: channel dim from `w[1]`
+        /// (transposed conv's weight layout), spatial dims via
+        /// `conv_transpose_out_size`.
         fn conv_transpose2d<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             w: &<Self as Backend>::Storage<K>,
@@ -1716,7 +1853,7 @@ pub mod dummy {
             }
             Ok(out)
         }
-        /// Provides the max_pool2d operation or structure.
+        /// Computes the real output spatial shape via `conv_out_size`.
         fn max_pool2d<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             k: (usize, usize),
@@ -1734,7 +1871,9 @@ pub mod dummy {
             }
             Ok(out)
         }
-        /// Provides the avg_pool2d operation or structure.
+        /// Computes the real output spatial shape via `conv_out_size`
+        /// (dilation fixed to 1, matching `avg_pool2d` having no dilation
+        /// parameter).
         fn avg_pool2d<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             k: (usize, usize),
@@ -1751,7 +1890,9 @@ pub mod dummy {
             }
             Ok(out)
         }
-        /// Provides the adaptive_avg_pool2d operation or structure.
+        /// Sets the trailing two dimensions directly to `out` (adaptive
+        /// pooling's whole point is that the output size is exact,
+        /// regardless of input size).
         fn adaptive_avg_pool2d<K: DType>(
             t: &<Self as Backend>::Storage<K>,
             out: (usize, usize),
@@ -1766,8 +1907,11 @@ pub mod dummy {
         }
     }
 
+    /// All four losses reduce to an empty (scalar) shape, ignoring
+    /// `reduction`'s actual `None`/`Sum`/`Mean` distinction since there are
+    /// no real values to reduce.
     impl<T: DType, D: Device + Clone + 'static> LossOps<Self> for DummyBackend<T, D> {
-        /// Provides the mse_loss operation or structure.
+        /// Always an empty (scalar) shape.
         fn mse_loss<K: DType>(
             _pred: &<Self as Backend>::Storage<K>,
             _target: &<Self as Backend>::Storage<K>,
@@ -1775,7 +1919,7 @@ pub mod dummy {
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(alloc::vec![])
         }
-        /// Provides the l1_loss operation or structure.
+        /// Always an empty (scalar) shape.
         fn l1_loss<K: DType>(
             _pred: &<Self as Backend>::Storage<K>,
             _target: &<Self as Backend>::Storage<K>,
@@ -1783,7 +1927,7 @@ pub mod dummy {
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(alloc::vec![])
         }
-        /// Provides the bce_with_logits_loss operation or structure.
+        /// Always an empty (scalar) shape.
         fn bce_with_logits_loss<K: DType>(
             _pred: &<Self as Backend>::Storage<K>,
             _target: &<Self as Backend>::Storage<K>,
@@ -1791,7 +1935,7 @@ pub mod dummy {
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(alloc::vec![])
         }
-        /// Provides the cross_entropy_loss operation or structure.
+        /// Always an empty (scalar) shape.
         fn cross_entropy_loss<K: DType, KInt: DType>(
             _pred: &<Self as Backend>::Storage<K>,
             _target: &<Self as Backend>::Storage<KInt>,
@@ -1801,20 +1945,22 @@ pub mod dummy {
         }
     }
 
+    /// All quantization ops are no-ops returning an empty shape — there is
+    /// no real data to (de)quantize.
     impl<T: DType, D: Device + Clone + 'static> QuantizedOps<Self> for DummyBackend<T, D> {
-        /// Provides the quantize operation or structure.
+        /// Always an empty shape.
         fn quantize<K: FloatDType, Q: QuantDType>(
             _t: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<Q>> {
             Ok(alloc::vec![])
         }
-        /// Provides the dequantize operation or structure.
+        /// Always an empty shape.
         fn dequantize<Q: QuantDType, K: FloatDType>(
             _t: &<Self as Backend>::Storage<Q>,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(alloc::vec![])
         }
-        /// Provides the quantized_matmul operation or structure.
+        /// Always an empty shape.
         fn quantized_matmul<Q: QuantDType>(
             _lhs: &<Self as Backend>::Storage<Q>,
             _rhs: &<Self as Backend>::Storage<Q>,
