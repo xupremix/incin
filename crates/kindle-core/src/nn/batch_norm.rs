@@ -3,37 +3,23 @@ use crate::prelude::*;
 
 use core::marker::PhantomData;
 
-/// A 2D Batch Normalization layer, as described in [Batch Normalization: Accelerating Deep Network Training by Reducing Internal Covariate Shift](https://arxiv.org/abs/1502.03167).
-///
-/// Normalizes the input tensor across the batch and spatial dimensions for each channel independently,
-/// applying learnable affine scaling (`weight`) and shift (`bias`) parameters.
-///
-/// The type parameter `S` is the shape marker.
-///
-/// ## Running Statistics
-/// `running_mean` and `running_var` are non-trainable buffers updated during training (training mode
-/// must be handled at the backend level). During inference, these stored statistics are used.
-///
-/// ## Examples
-/// ```rust,ignore
-/// use kindle::prelude::*;
-///
-/// // BatchNorm for 64-channel feature maps
-/// let bn = BatchNorm2d::<(typenum::U64,), MyBackend>::build((1e-5, 0.1))?;
-/// ```
+/// A shape marker trait specifying a [`BatchNorm2d`] layer's channel
+/// count. The typical usage is `(Channels,)` for a static layer, or `Dyn`
+/// for a runtime-determined size.
 pub trait BatchNormShape: Shape + DynShape {
-    /// `Channels`.
+    /// The number of channels being normalized.
     type Channels: Dim;
-    /// `BuildArg`.
+    /// The shape argument type used to construct the weight/bias/
+    /// running-stat tensors.
     type BuildArg: crate::tensor::arg_into::NotUnit + Clone;
     /// Converts the target arguments into concrete shape args for weight and bias tensors.
     fn build_args(target: <Self::Channels as Dim>::Arg) -> Self::BuildArg;
 }
 
 impl<C: Dim> BatchNormShape for (C,) {
-    /// `Channels`.
+    /// The channel count.
     type Channels = C;
-    /// `BuildArg`.
+    /// A single-element `(channels_arg,)` tuple.
     type BuildArg = (<C as Dim>::Arg,);
 
     /// Converts the target arguments into concrete shape args for weight and bias tensors.
@@ -52,7 +38,24 @@ impl BatchNormShape for Dyn {
 
 #[derive(Debug, Clone)]
 #[kindle_macros::module(internal)]
-/// `BatchNorm2d`.
+/// A 2D Batch Normalization layer, as described in [Batch Normalization: Accelerating Deep Network Training by Reducing Internal Covariate Shift](https://arxiv.org/abs/1502.03167).
+///
+/// Normalizes the input tensor across the batch and spatial dimensions for each channel independently,
+/// applying learnable affine scaling (`weight`) and shift (`bias`) parameters.
+///
+/// The type parameter `S` is the shape marker.
+///
+/// ## Running Statistics
+/// `running_mean` and `running_var` are non-trainable buffers updated during training (training mode
+/// must be handled at the backend level). During inference, these stored statistics are used.
+///
+/// ## Examples
+/// ```rust,ignore
+/// use kindle::prelude::*;
+///
+/// // BatchNorm for 64-channel feature maps
+/// let bn = BatchNorm2d::<(typenum::U64,), MyBackend>::build((1e-5, 0.1))?;
+/// ```
 pub struct BatchNorm2d<S: BatchNormShape, B: Backend> {
     /// The learnable weight matrix parameter.
     pub weight: Param<(S::Channels,), B>,

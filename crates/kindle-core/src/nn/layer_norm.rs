@@ -2,20 +2,22 @@ use crate::nn::{Module, Param};
 use crate::prelude::*;
 use core::marker::PhantomData;
 
-/// `LayerNormShape`.
+/// A shape marker trait specifying a [`LayerNorm`] layer's normalized
+/// dimension size. The typical usage is `(Channels,)` for a static layer,
+/// or `Dyn` for a runtime-determined size.
 pub trait LayerNormShape: Shape + DynShape {
-    /// `Channels`.
+    /// The size of the dimension being normalized (the weight/bias length).
     type Channels: Dim;
-    /// `BuildArg`.
+    /// The shape argument type used to construct the weight/bias tensors.
     type BuildArg: crate::tensor::arg_into::NotUnit + Clone;
     /// Converts the target arguments into concrete shape args for weight and bias tensors.
     fn build_args(target: <Self::Channels as Dim>::Arg) -> Self::BuildArg;
 }
 
 impl<C: Dim> LayerNormShape for (C,) {
-    /// `Channels`.
+    /// The normalized dimension size.
     type Channels = C;
-    /// `BuildArg`.
+    /// A single-element `(channels_arg,)` tuple.
     type BuildArg = (<C as Dim>::Arg,);
 
     /// Converts the target arguments into concrete shape args for weight and bias tensors.
@@ -34,7 +36,8 @@ impl LayerNormShape for Dyn {
 
 #[derive(Debug)]
 #[kindle_macros::module(internal)]
-/// `LayerNorm`.
+/// Layer normalization: normalizes the last dimension to zero mean and
+/// unit variance, then applies a learnable affine `weight`/`bias`.
 pub struct LayerNorm<S: LayerNormShape, B: Backend> {
     /// The learnable weight matrix parameter.
     pub weight: Param<(S::Channels,), B>,
