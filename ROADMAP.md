@@ -702,9 +702,15 @@ types already (`f32`, `f64`, `i64`, `bool`, `u8`). New tests:
   — dead scaffolding for a debug/introspection feature that was never wired up
   (`TapeEntry` has no field to receive them). Delete or actually wire them into
   error messages.
-- `DummyBackend` conv/pool shape math (`kindle-core/tensor/backend.rs:1357,1380-1381,1405-1406,1423-1424`)
-  risks unsigned underflow/panic for small input + large kernel/dilation/padding.
-  B-5 (below) is functionally fixed but undefended against pathological inputs.
+- ✅ **FIXED, since this was written:** `DummyBackend` conv/pool shape math
+  (`kindle-core/tensor/backend.rs`, conv1d/conv2d/conv_transpose2d/max_pool2d/
+  avg_pool2d) risked unsigned underflow/panic for small input + large
+  kernel/dilation/padding. Fixed 2026-07-22 by adding `conv_out_size`/
+  `conv_transpose_out_size` helpers using saturating arithmetic throughout,
+  matching the CPU backend's own `out_size` (`cpu/ops/pool.rs`) precedent for
+  this exact case. Verified by reproducing the panic against the old raw
+  formula (1x1x2x2 input vs. a dilation-3 5x5 kernel: "attempt to subtract
+  with overflow") and confirming a regression test passes cleanly with the fix.
 - `kindle-viz/src/panels/graph.rs:163` has a fragile `unwrap()` that's only
   safe because of an early-return three lines above — refactor to `if let`/`else`.
 - Doc comments across most of `kindle-core`/`kindle-native`/`kindle-wgpu`-successor
@@ -805,7 +811,7 @@ actually load-bearing for correctness, not just release paperwork.
 | B-2 | `kindle` facade linker bus-error | ✅ Fixed — `cargo test -p kindle` passes clean, full suite + doctests |
 | B-3 | Accidental `pub` leakage across crates | ⚠ **Partially fixed** — `wgpu` done correctly; `cuda`, `cpu`, and a new `kindle-core` leak (`TRACING_GRAPH`) are open. Do not mark this done — see High priority section above. |
 | B-4 | Legacy backends ignore `FloatElem` generic | ✅ Fixed — both Candle and Ndarray legacy wrappers do `type FloatElem = T` correctly now |
-| B-5 | `DummyBackend` conv/pool shape math wrong | ✅ Fixed, but see Low-priority underflow-hardening note above |
+| B-5 | `DummyBackend` conv/pool shape math wrong | ✅ Fixed; underflow-hardening also done 2026-07-22, see Low-priority section above |
 | B-6 | Compile-fail tests exercising wrong failure | ✅ Fixed — macro imports present, `.stderr` snapshots updated |
 
 ---
