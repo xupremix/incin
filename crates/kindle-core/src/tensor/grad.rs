@@ -2,72 +2,77 @@ use crate::prelude::Dyn;
 use core::fmt::Debug;
 use core::marker::PhantomData;
 
-/// `RequiresGrad`.
+/// A type-level marker for whether a `Tensor` tracks gradients — `Grad`
+/// (always tracks), `NoGrad` (never tracks), or `Dyn` (decided at runtime).
 pub trait RequiresGrad: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
-    /// `Arg`.
+    /// The user-facing constructor argument (`()` for the compile-time-
+    /// fixed markers, `bool` for `Dyn`).
     type Arg;
-    /// `Field`.
+    /// The runtime-stored representation (a `PhantomData` for the
+    /// compile-time-fixed markers, `bool` for `Dyn`).
     type Field: Clone + Debug + Send + Sync + PartialEq;
-    /// `requires_grad`.
+    /// Returns whether gradient tracking is enabled.
     fn requires_grad(grad: &Self::Field) -> bool;
-    /// `init`.
+    /// Converts a user-facing `Arg` into the stored `Field` representation.
     fn init(arg: Self::Arg) -> Self::Field;
 }
 
-/// `DynRequiresGrad`.
+/// Marker for `RequiresGrad` implementors whose value is resolved at
+/// runtime rather than fixed by the type alone (currently only `Dyn`).
 pub trait DynRequiresGrad: RequiresGrad {}
 
-/// `ConstRequiresGrad`.
+/// A `RequiresGrad` whose value is fully known at compile time (`Grad` or
+/// `NoGrad`, as opposed to `Dyn`) — takes no constructor argument.
 pub trait ConstRequiresGrad: RequiresGrad<Arg = ()> {
-    /// `REQUIRES_GRAD`.
+    /// The compile-time-known gradient-tracking value.
     const REQUIRES_GRAD: bool;
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Default)]
-/// `Grad`.
+/// Marker: this tensor always tracks gradients.
 pub struct Grad;
 #[derive(Clone, Debug, Eq, PartialEq, Default)]
-/// `NoGrad`.
+/// Marker: this tensor never tracks gradients.
 pub struct NoGrad;
 
 impl RequiresGrad for Dyn {
-    /// `Arg`.
+    /// The runtime-chosen gradient-tracking flag.
     type Arg = bool;
-    /// `Field`.
+    /// Stored directly as the flag itself.
     type Field = bool;
-    /// `requires_grad`.
+    /// Returns the stored flag.
     fn requires_grad(grad: &Self::Field) -> bool {
         *grad
     }
-    /// `init`.
+    /// Stores the flag verbatim.
     fn init(arg: Self::Arg) -> Self::Field {
         arg
     }
 }
 impl RequiresGrad for Grad {
-    /// `Arg`.
+    /// No argument needed — always tracks gradients.
     type Arg = ();
-    /// `Field`.
+    /// Zero-sized: the value is fixed by the type.
     type Field = PhantomData<Self>;
-    /// `requires_grad`.
+    /// Always `true`.
     fn requires_grad(_: &Self::Field) -> bool {
         true
     }
-    /// `init`.
+    /// No-op: nothing to convert.
     fn init(_: Self::Arg) -> Self::Field {
         PhantomData
     }
 }
 impl RequiresGrad for NoGrad {
-    /// `Arg`.
+    /// No argument needed — never tracks gradients.
     type Arg = ();
-    /// `Field`.
+    /// Zero-sized: the value is fixed by the type.
     type Field = PhantomData<Self>;
-    /// `requires_grad`.
+    /// Always `false`.
     fn requires_grad(_: &Self::Field) -> bool {
         false
     }
-    /// `init`.
+    /// No-op: nothing to convert.
     fn init(_: Self::Arg) -> Self::Field {
         PhantomData
     }
@@ -78,10 +83,10 @@ impl DynRequiresGrad for Grad {}
 impl DynRequiresGrad for NoGrad {}
 
 impl ConstRequiresGrad for Grad {
-    /// `REQUIRES_GRAD`.
+    /// Always `true`.
     const REQUIRES_GRAD: bool = true;
 }
 impl ConstRequiresGrad for NoGrad {
-    /// `REQUIRES_GRAD`.
+    /// Always `false`.
     const REQUIRES_GRAD: bool = false;
 }
