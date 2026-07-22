@@ -70,35 +70,42 @@ pub trait Parameters<B: Backend> {
 
 /// A trait to transfer ownership of a module to a new device.
 pub trait ToDevice<B: Backend, NewD: Device> {
-    /// The output tensor type produced by this module's forward pass.
+    /// The same module type, but rebuilt on backend `NewD` — e.g.
+    /// `Linear<S, KindleBackend<T, Cpu>>` transferred to `Wgpu` becomes
+    /// `Linear<S, KindleBackend<T, Wgpu>>`.
     type Output;
-    /// `to_device`.
+    /// Moves every parameter/buffer this module owns onto device `arg`,
+    /// returning the module rebuilt on the new backend.
     fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output>;
 }
 
 impl<T: ToDevice<B, NewD>, B: Backend, NewD: Device> ToDevice<B, NewD> for Option<T> {
-    /// The output tensor type produced by this module's forward pass.
+    /// `None` stays `None`; `Some(t)` becomes `Some(t.to_device(..))`.
     type Output = Option<T::Output>;
-    /// `to_device`.
+    /// Transfers the wrapped value if present; a no-op for `None`.
     fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output> {
         self.map(|t| t.to_device(arg)).transpose()
     }
 }
 
 impl<B: Backend, NewD: Device> ToDevice<B, NewD> for () {
-    /// The output tensor type produced by this module's forward pass.
+    /// `()` has no per-device state, so transferring it is a no-op.
     type Output = ();
 
-    /// `to_device`.
+    /// No-op: `()` carries nothing to transfer.
     fn to_device(self, _arg: &NewD::Arg) -> Result<Self::Output> {
         Ok(())
     }
 }
 
 #[doc(hidden)]
-/// `AutorefParametersFallback`.
+/// Autoref-specialization fallback: the `&&T` blanket impl every type gets
+/// "for free," used so `#[module]`-derived fields that don't implement
+/// `Parameters` (plain scalars, markers) contribute nothing instead of
+/// failing to compile. Method resolution prefers `AutorefParameters`'s `&T`
+/// impl when it applies, falling back to this `&&T` impl otherwise.
 pub trait AutorefParametersFallback<B: Backend> {
-    /// `maybe_parameters`.
+    /// No-op: contributes no parameters.
     fn maybe_parameters(
         &self,
         _phantom: core::marker::PhantomData<B>,
@@ -110,9 +117,11 @@ pub trait AutorefParametersFallback<B: Backend> {
 impl<T, B: Backend> AutorefParametersFallback<B> for &&T {}
 
 #[doc(hidden)]
-/// `AutorefParameters`.
+/// The preferred (non-fallback) half of the autoref-specialization pair:
+/// picked over `AutorefParametersFallback` for any type that actually
+/// implements `Parameters`.
 pub trait AutorefParameters<B: Backend> {
-    /// `maybe_parameters`.
+    /// Delegates to `Parameters::named_parameters`.
     fn maybe_parameters(
         &self,
         _phantom: core::marker::PhantomData<B>,
@@ -122,7 +131,7 @@ pub trait AutorefParameters<B: Backend> {
 }
 impl<T: Parameters<B>, B: Backend> AutorefParameters<B> for &T {
     #[inline]
-    /// `maybe_parameters`.
+    /// Delegates to `Parameters::named_parameters`.
     fn maybe_parameters(
         &self,
         _marker: core::marker::PhantomData<B>,
@@ -134,9 +143,11 @@ impl<T: Parameters<B>, B: Backend> AutorefParameters<B> for &T {
 }
 
 #[doc(hidden)]
-/// `AutorefStateDictFallback`.
+/// Autoref-specialization fallback for `StateDict`: fields that don't
+/// implement it (plain scalars, markers) silently contribute nothing to
+/// save/load instead of failing to compile.
 pub trait AutorefStateDictFallback<B: Backend> {
-    /// `maybe_load_state_dict`.
+    /// No-op: nothing to load.
     fn maybe_load_state_dict(
         &mut self,
         _phantom: core::marker::PhantomData<B>,
@@ -145,7 +156,7 @@ pub trait AutorefStateDictFallback<B: Backend> {
     ) -> Result<()> {
         Ok(())
     }
-    /// `maybe_state_dict`.
+    /// No-op: nothing to save.
     fn maybe_state_dict(
         &self,
         _phantom: core::marker::PhantomData<B>,
@@ -158,16 +169,18 @@ impl<T, B: Backend> AutorefStateDictFallback<B> for &mut &mut T {}
 impl<T, B: Backend> AutorefStateDictFallback<B> for &&T {}
 
 #[doc(hidden)]
-/// `AutorefStateDict`.
+/// The preferred (non-fallback) half of the autoref-specialization pair:
+/// picked over `AutorefStateDictFallback` for any type that actually
+/// implements `StateDict`.
 pub trait AutorefStateDict<B: Backend> {
-    /// `maybe_load_state_dict`.
+    /// Delegates to `StateDict::load_state_dict`.
     fn maybe_load_state_dict(
         &mut self,
         _phantom: core::marker::PhantomData<B>,
         prefix: &str,
         tensors: &BTreeMap<String, Tensor<Dyn, B>>,
     ) -> Result<()>;
-    /// `maybe_state_dict`.
+    /// Delegates to `StateDict::state_dict`.
     fn maybe_state_dict(
         &self,
         _phantom: core::marker::PhantomData<B>,
@@ -179,7 +192,7 @@ pub trait AutorefStateDict<B: Backend> {
 // For mutable operations
 impl<T: StateDict<B>, B: Backend> AutorefStateDict<B> for &mut T {
     #[inline]
-    /// `maybe_load_state_dict`.
+    /// Delegates to `StateDict::load_state_dict`.
     fn maybe_load_state_dict(
         &mut self,
         _phantom: core::marker::PhantomData<B>,
@@ -189,7 +202,7 @@ impl<T: StateDict<B>, B: Backend> AutorefStateDict<B> for &mut T {
         (*self).load_state_dict(prefix, tensors)
     }
     #[inline]
-    /// `maybe_state_dict`.
+    /// Delegates to `StateDict::state_dict`.
     fn maybe_state_dict(
         &self,
         _phantom: core::marker::PhantomData<B>,
@@ -203,7 +216,9 @@ impl<T: StateDict<B>, B: Backend> AutorefStateDict<B> for &mut T {
 // For immutable operations (state_dict uses &self)
 impl<T: StateDict<B>, B: Backend> AutorefStateDict<B> for &T {
     #[inline]
-    /// `maybe_load_state_dict`.
+    /// Unreachable in practice: loading requires `&mut`, so this
+    /// shared-reference impl only exists to satisfy the autoref-resolution
+    /// pair's shape; it never actually gets called for loading.
     fn maybe_load_state_dict(
         &mut self,
         _phantom: core::marker::PhantomData<B>,
@@ -213,7 +228,7 @@ impl<T: StateDict<B>, B: Backend> AutorefStateDict<B> for &T {
         Ok(()) // Should not be called
     }
     #[inline]
-    /// `maybe_state_dict`.
+    /// Delegates to `StateDict::state_dict`.
     fn maybe_state_dict(
         &self,
         _phantom: core::marker::PhantomData<B>,
@@ -292,9 +307,9 @@ where
     L1: ToDevice<B, NewD>,
     L2: ToDevice<B, NewD>,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// The same `Sequential` with each inner module transferred to `NewD`.
     type Output = Sequential<L1::Output, L2::Output>;
-    /// `to_device`.
+    /// Transfers both inner modules to the new device.
     fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output> {
         Ok(Sequential(self.0.to_device(arg)?, self.1.to_device(arg)?))
     }
@@ -532,9 +547,10 @@ impl<T: NamedLayers> NamedLayers for Option<T> {
 }
 
 #[doc(hidden)]
-/// `AutorefNamedLayersFallback`.
+/// Autoref-specialization fallback for `NamedLayers`: fields that don't
+/// implement it report no structure (`None`) instead of failing to compile.
 pub trait AutorefNamedLayersFallback {
-    /// `maybe_layer_structure`.
+    /// `None`: this field contributes no layer-structure node.
     fn maybe_layer_structure(&self, _prefix: &str) -> Option<Vec<LayerNode>> {
         None
     }
@@ -542,23 +558,27 @@ pub trait AutorefNamedLayersFallback {
 impl<T> AutorefNamedLayersFallback for &&T {}
 
 #[doc(hidden)]
-/// `AutorefNamedLayers`.
+/// The preferred (non-fallback) half of the autoref-specialization pair:
+/// picked over `AutorefNamedLayersFallback` for any type that actually
+/// implements `NamedLayers`.
 pub trait AutorefNamedLayers {
-    /// `maybe_layer_structure`.
+    /// Delegates to `NamedLayers::layer_structure`, wrapped in `Some`.
     fn maybe_layer_structure(&self, prefix: &str) -> Option<Vec<LayerNode>>;
 }
 impl<T: NamedLayers> AutorefNamedLayers for &T {
     #[inline]
-    /// `maybe_layer_structure`.
+    /// Delegates to `NamedLayers::layer_structure`, wrapped in `Some`.
     fn maybe_layer_structure(&self, prefix: &str) -> Option<Vec<LayerNode>> {
         Some(self.layer_structure(prefix))
     }
 }
 
 #[doc(hidden)]
-/// `AutorefShapeInfoFallback`.
+/// Autoref-specialization fallback for shape-info reporting: fields with
+/// no known shape (not a `Param`/`Buffer`) report `None` instead of
+/// failing to compile.
 pub trait AutorefShapeInfoFallback {
-    /// `maybe_shape_info`.
+    /// `None`: this field has no shape to report.
     fn maybe_shape_info(&self) -> Option<String> {
         None
     }
@@ -566,21 +586,23 @@ pub trait AutorefShapeInfoFallback {
 impl<T> AutorefShapeInfoFallback for &&T {}
 
 #[doc(hidden)]
-/// `AutorefShapeInfo`.
+/// The preferred (non-fallback) half of the autoref-specialization pair:
+/// picked over `AutorefShapeInfoFallback` for `Param`/`Buffer` fields (and
+/// anything else with a known shape).
 pub trait AutorefShapeInfo {
-    /// `maybe_shape_info`.
+    /// Renders this field's shape as a debug string, if it has one.
     fn maybe_shape_info(&self) -> Option<String>;
 }
 impl<S: Shape + DynShape, B: Backend> AutorefShapeInfo for &crate::nn::param::Param<S, B> {
     #[inline]
-    /// `maybe_shape_info`.
+    /// Renders the parameter's dimensions, e.g. `[128, 256]`.
     fn maybe_shape_info(&self) -> Option<String> {
         Some(format!("{:?}", self.shape_dims()))
     }
 }
 impl<S: Shape + DynShape, B: Backend> AutorefShapeInfo for &crate::nn::param::Buffer<S, B> {
     #[inline]
-    /// `maybe_shape_info`.
+    /// Renders the buffer's dimensions, e.g. `[128, 256]`.
     fn maybe_shape_info(&self) -> Option<String> {
         Some(format!("{:?}", self.shape_dims()))
     }
@@ -590,7 +612,7 @@ where
     for<'a> &'a T: AutorefShapeInfo,
 {
     #[inline]
-    /// `maybe_shape_info`.
+    /// Delegates to the wrapped value's shape info; `None` for `None`.
     fn maybe_shape_info(&self) -> Option<String> {
         if let Some(val) = self {
             (&val).maybe_shape_info()
