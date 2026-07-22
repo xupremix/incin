@@ -2027,4 +2027,29 @@ mod tests {
                 .is_err()
         );
     }
+
+    // `OptimizerOps::adamw_step` has no override in this file's
+    // `impl OptimizerOps<Self> for CudaBackendImpl {}` (empty) - it resolves
+    // to `OptimizerOps`'s own default body (`kindle-core/src/tensor/backend.rs:1000-1041`),
+    // composed entirely from `NumericOps`/`FloatOps`/`assign_var` (already
+    // wired on CUDA). This test exists to prove that resolution actually
+    // compiles, not to add new functionality. The dedicated
+    // `kernels/fused_adamw.cu` kernel remains genuinely unused - wiring it
+    // would be a performance optimization over this composed default, not a
+    // correctness fix, and is deliberately deferred (see
+    // `IMPLEMENTATION_PLAN.md` §1.7).
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn adamw_step_default_impl_resolves_and_runs_on_cuda() {
+        let param = cuda_f32(&[2], vec![1.0, 2.0]);
+        let mut var = CudaVar { storage: param };
+        let grad = cuda_f32(&[2], vec![0.1, 0.2]);
+        let mut m = cuda_f32(&[2], vec![0.0, 0.0]);
+        let mut v = cuda_f32(&[2], vec![0.0, 0.0]);
+        <B as OptimizerOps<B>>::adamw_step::<f32>(
+            &mut var, &grad, &mut m, &mut v, 1e-3, 0.9, 0.999, 1e-8, 0.01, 1,
+        )
+        .unwrap();
+        assert_eq!(var.storage.shape, vec![2]);
+    }
 }
