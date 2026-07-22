@@ -1,13 +1,16 @@
 use crate::nn::{Module, Param};
 use crate::prelude::*;
 
-/// `EmbeddingShape`.
+/// A shape marker trait specifying an [`Embedding`] layer's vocabulary size
+/// and embedding dimension, analogous to [`LinearShape`](crate::nn::linear::LinearShape).
+/// The typical usage is `(Vocab, Embed)` for a static layer, or `Dyn` for
+/// runtime-determined sizes.
 pub trait EmbeddingShape: Shape + DynShape {
-    /// `Vocab`.
+    /// The vocabulary size (number of distinct token ids).
     type Vocab: Dim;
-    /// `Embed`.
+    /// The embedding dimension (length of each row vector).
     type Embed: Dim;
-    /// `BuildArg`.
+    /// The shape argument type used to construct the weight tensor.
     type BuildArg: crate::tensor::arg_into::NotUnit;
 
     /// Converts the target arguments into concrete shape args for weight and bias tensors.
@@ -16,11 +19,11 @@ pub trait EmbeddingShape: Shape + DynShape {
 }
 
 impl<V: Dim, E: Dim> EmbeddingShape for (V, E) {
-    /// `Vocab`.
+    /// The vocabulary size.
     type Vocab = V;
-    /// `Embed`.
+    /// The embedding dimension.
     type Embed = E;
-    /// `BuildArg`.
+    /// A `(vocab_arg, embed_arg)` pair.
     type BuildArg = (<V as Dim>::Arg, <E as Dim>::Arg);
 
     /// Converts the target arguments into concrete shape args for weight and bias tensors.
@@ -32,11 +35,11 @@ impl<V: Dim, E: Dim> EmbeddingShape for (V, E) {
 }
 
 impl EmbeddingShape for Dyn {
-    /// `Vocab`.
+    /// The vocabulary size, resolved at runtime.
     type Vocab = usize;
-    /// `Embed`.
+    /// The embedding dimension, resolved at runtime.
     type Embed = usize;
-    /// `BuildArg`.
+    /// The weight tensor's shape as a `Vec<usize>`.
     type BuildArg = alloc::vec::Vec<usize>;
 
     /// Converts the target arguments into concrete shape args for weight and bias tensors.
@@ -49,7 +52,8 @@ impl EmbeddingShape for Dyn {
 
 #[derive(Debug, Clone)]
 #[kindle_macros::module(internal)]
-/// `Embedding`.
+/// An embedding table: maps integer token ids to dense vectors via row
+/// lookup in a learnable `[vocab_size, embed_dim]` weight matrix.
 pub struct Embedding<S: EmbeddingShape, B: Backend> {
     /// The learnable weight matrix parameter.
     pub weight: Param<(S::Vocab, S::Embed), B>,
