@@ -295,7 +295,10 @@ fn coordinator() -> &'static TuningCoordinator {
     })
 }
 
-#[cfg(any(feature = "autotune", test))]
+// Direct cache accessors, kept test-only: production dispatch always goes
+// through `claim_tuning`/`TuningPermit::record` so concurrent callers for the
+// same key are coordinated instead of redundantly measuring in parallel.
+#[cfg(test)]
 pub(crate) fn cached_launch(key: &TuningKey) -> Option<TunedLaunch> {
     coordinator()
         .state
@@ -304,7 +307,7 @@ pub(crate) fn cached_launch(key: &TuningKey) -> Option<TunedLaunch> {
         .get(key)
 }
 
-#[cfg(any(feature = "autotune", test))]
+#[cfg(test)]
 pub(crate) fn cache_measured_launch(key: TuningKey, launch: TunedLaunch) {
     coordinator()
         .state
@@ -326,6 +329,11 @@ pub(crate) struct TuningPermit {
 
 #[cfg(any(feature = "autotune", test))]
 impl TuningPermit {
+    #[cfg(all(feature = "cuda", feature = "autotune"))]
+    pub(crate) fn key(&self) -> Option<&TuningKey> {
+        self.key.as_ref()
+    }
+
     pub(crate) fn record(mut self, measurements: &[CandidateMeasurement]) -> Result<TunedLaunch> {
         let winner = select_fastest(measurements)?;
         let key = self
@@ -392,7 +400,7 @@ pub(crate) fn claim_tuning(
     }
 }
 
-#[cfg(any(feature = "autotune", test))]
+#[cfg(test)]
 pub(crate) fn record_measurements(
     key: TuningKey,
     measurements: &[CandidateMeasurement],

@@ -76,7 +76,7 @@ impl PointwiseStrategy {
 struct PointwiseLaunchSelection {
     strategy: PointwiseStrategy,
     #[cfg(feature = "autotune")]
-    tuning_key: Option<crate::tuning::TuningKey>,
+    tuning_permit: Option<crate::tuning::TuningPermit>,
     candidates: Vec<crate::tuning::LaunchCandidate>,
 }
 
@@ -132,20 +132,18 @@ fn pointwise_launch_selection(
             &kernel.key,
             crate::tuning::WorkloadBucket::pointwise(numel, packed_aligned),
         );
-        if let Some(tuned) = crate::tuning::cached_launch(&key)
-            && candidates.contains(&tuned.candidate)
-        {
-            return Ok(PointwiseLaunchSelection {
+        match crate::tuning::claim_tuning(key, &candidates)? {
+            crate::tuning::TuningDecision::Cached(tuned) => Ok(PointwiseLaunchSelection {
                 strategy: strategy_from_candidate(tuned.candidate)?,
-                tuning_key: None,
+                tuning_permit: None,
                 candidates,
-            });
+            }),
+            crate::tuning::TuningDecision::Measure(permit) => Ok(PointwiseLaunchSelection {
+                strategy: fallback,
+                tuning_permit: Some(permit),
+                candidates,
+            }),
         }
-        Ok(PointwiseLaunchSelection {
-            strategy: fallback,
-            tuning_key: Some(key),
-            candidates,
-        })
     }
     #[cfg(not(feature = "autotune"))]
     {
@@ -168,7 +166,7 @@ where
     F: FnMut(PointwiseStrategy) -> Result<crate::kernel::RenderedKernel>,
 {
     #[cfg(feature = "autotune")]
-    let tune_all = selection.tuning_key.is_some();
+    let tune_all = selection.tuning_permit.is_some();
     #[cfg(not(feature = "autotune"))]
     let tune_all = false;
     let candidates = if tune_all {
@@ -184,7 +182,10 @@ where
         validate_kernel_abi(&kernel, dtype)?;
         #[cfg(feature = "autotune")]
         {
-            if let Some(key) = &selection.tuning_key
+            if let Some(key) = selection
+                .tuning_permit
+                .as_ref()
+                .and_then(|permit| permit.key())
                 && kernel.key.tuning_problem_id() != key.problem
             {
                 return Err(Error::Msg(
@@ -222,7 +223,7 @@ where
     #[cfg(not(feature = "autotune"))]
     let _ = stream;
     #[cfg(feature = "autotune")]
-    if let Some(key) = selection.tuning_key {
+    if let Some(permit) = selection.tuning_permit {
         let mut measurements = Vec::with_capacity(prepared.len());
         for candidate in prepared {
             measurements.push(crate::tuning::measure_cuda_candidate(
@@ -231,7 +232,7 @@ where
                 || launch(candidate),
             )?);
         }
-        let winner = crate::tuning::record_measurements(key, &measurements)?;
+        let winner = permit.record(&measurements)?;
         let selected = prepared
             .iter()
             .find(|candidate| candidate.candidate == winner.candidate)

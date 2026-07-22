@@ -84,7 +84,7 @@ fn is_contiguous_last_axis(storage: &CudaStorage, axis: usize) -> bool {
 struct ReductionLaunchSelection {
     candidate: crate::tuning::LaunchCandidate,
     #[cfg(feature = "autotune")]
-    tuning_key: Option<crate::tuning::TuningKey>,
+    tuning_permit: Option<crate::tuning::TuningPermit>,
 }
 
 fn reduction_launch_selection(
@@ -103,18 +103,16 @@ fn reduction_launch_selection(
             &kernel.key,
             crate::tuning::WorkloadBucket::reduction(rows, reduction_size),
         );
-        if let Some(tuned) = crate::tuning::cached_launch(&key)
-            && candidates.contains(&tuned.candidate)
-        {
-            return Ok(ReductionLaunchSelection {
+        match crate::tuning::claim_tuning(key, &candidates)? {
+            crate::tuning::TuningDecision::Cached(tuned) => Ok(ReductionLaunchSelection {
                 candidate: tuned.candidate,
-                tuning_key: None,
-            });
+                tuning_permit: None,
+            }),
+            crate::tuning::TuningDecision::Measure(permit) => Ok(ReductionLaunchSelection {
+                candidate: fallback,
+                tuning_permit: Some(permit),
+            }),
         }
-        Ok(ReductionLaunchSelection {
-            candidate: fallback,
-            tuning_key: Some(key),
-        })
     }
     #[cfg(not(feature = "autotune"))]
     {
@@ -136,7 +134,7 @@ where
     F: FnMut(crate::tuning::LaunchCandidate) -> Result<()>,
 {
     #[cfg(feature = "autotune")]
-    if let Some(key) = selection.tuning_key {
+    if let Some(permit) = selection.tuning_permit {
         let candidates = crate::tuning::reduction_candidates(contiguous_last_axis);
         let mut measurements = Vec::with_capacity(candidates.len());
         for candidate in candidates {
@@ -146,7 +144,7 @@ where
                 || launch(candidate),
             )?);
         }
-        return Ok(crate::tuning::record_measurements(key, &measurements)?.candidate);
+        return Ok(permit.record(&measurements)?.candidate);
     }
     #[cfg(not(feature = "autotune"))]
     let _ = (stream, contiguous_last_axis, &mut launch);
