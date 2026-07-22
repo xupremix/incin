@@ -78,7 +78,8 @@ pub struct Param<S: Shape, B: Backend> {
 }
 
 impl<S: Shape, B: Backend> Clone for Param<S, B> {
-    /// `clone`.
+    /// Clones the underlying backend variable and metadata (cheap: most
+    /// backends' `RawVar` is a reference-counted handle).
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
@@ -90,7 +91,8 @@ impl<S: Shape, B: Backend> Clone for Param<S, B> {
 }
 
 impl<S: Shape, B: Backend> core::fmt::Debug for Param<S, B> {
-    /// `fmt`.
+    /// Redacted `Debug` output: the backend variable's contents aren't
+    /// cheaply inspectable, so only a placeholder is shown for `inner`.
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Param").field("inner", &"...").finish()
     }
@@ -123,9 +125,9 @@ where
     B: TransferTo<NewD>,
     <B as TransferTo<NewD>>::Output: SupportsDType<B::FloatElem>,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// The same parameter, rebuilt on backend `NewD`.
     type Output = Param<S, <B as TransferTo<NewD>>::Output>;
-    /// `to_device`.
+    /// Transfers the underlying variable to device `arg`.
     fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output> {
         let field = NewD::init(arg.clone());
         let inner = B::transfer_var(&self.inner, &self._dtype, &field)?;
@@ -142,7 +144,8 @@ impl<S: Shape + DynShape, B: Backend> Param<S, B>
 where
     (S, B::FloatElem, B::Device, Grad): TensorArgs<S, B::FloatElem, B::Device, Grad>,
 {
-    /// `new_init_raw`.
+    /// Allocates storage of the given shape/dtype/device and fills it
+    /// according to `init` (e.g. Kaiming/Xavier/zeros/ones/uniform/normal).
     pub fn new_init_raw(
         args: <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
             S,
@@ -167,7 +170,8 @@ where
         })
     }
 
-    /// `new_init`.
+    /// Same as `new_init_raw`, but accepts any argument type convertible
+    /// via `ArgInto` instead of the exact tuple form.
     pub fn new_init<A>(args: A, init: crate::nn::init::Init) -> Result<Self>
     where
         B: SupportsDType<B::FloatElem>,
@@ -184,7 +188,7 @@ where
         Self::new_init_raw(args.into_arg(), init)
     }
 
-    /// `zeros_raw`.
+    /// Allocates storage of the given shape/dtype/device, filled with zero.
     pub fn zeros_raw(
         args: <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
             S,
@@ -206,7 +210,8 @@ where
         })
     }
 
-    /// `zeros`.
+    /// Same as `zeros_raw`, but accepts any argument type convertible via
+    /// `ArgInto` instead of the exact tuple form.
     pub fn zeros<A>(args: A) -> Result<Self>
     where
         A:
@@ -222,7 +227,8 @@ where
         Self::zeros_raw(args.into_arg())
     }
 
-    /// `randn`.
+    /// Allocates storage of the given shape/dtype/device, filled with
+    /// samples from the standard normal distribution `N(0, 1)`.
     pub fn randn<A>(args: A) -> Result<Self>
     where
         A:
@@ -249,7 +255,7 @@ where
         })
     }
 
-    /// `ones_raw`.
+    /// Allocates storage of the given shape/dtype/device, filled with one.
     pub fn ones_raw(
         args: <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
             S,
@@ -271,7 +277,8 @@ where
         })
     }
 
-    /// `ones`.
+    /// Same as `ones_raw`, but accepts any argument type convertible via
+    /// `ArgInto` instead of the exact tuple form.
     pub fn ones<A>(args: A) -> Result<Self>
     where
         A:
@@ -341,7 +348,8 @@ impl<S: Shape + DynShape, B: Backend> Parameters<B> for Param<S, B> {
 }
 
 impl<S1: DynShape, B: Backend> Param<S1, B> {
-    /// `into_shape`.
+    /// Reinterprets a dynamically-shaped parameter as a statically-shaped
+    /// `S2`, checking at runtime that the actual dimensions match `S2`.
     pub fn into_shape<S2: Shape>(self) -> Result<Param<S2, B>>
     where
         B: Backend,
@@ -409,7 +417,8 @@ pub struct Buffer<S: Shape, B: Backend> {
 }
 
 impl<S: Shape, B: Backend> Clone for Buffer<S, B> {
-    /// `clone`.
+    /// Clones the underlying backend variable and metadata (cheap: most
+    /// backends' `RawVar` is a reference-counted handle).
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
@@ -421,14 +430,15 @@ impl<S: Shape, B: Backend> Clone for Buffer<S, B> {
 }
 
 impl<S: Shape, B: Backend> core::fmt::Debug for Buffer<S, B> {
-    /// `fmt`.
+    /// Redacted `Debug` output: the backend variable's contents aren't
+    /// cheaply inspectable, so only a placeholder is shown for `inner`.
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Buffer").field("inner", &"...").finish()
     }
 }
 
 impl<S: Shape, B: Backend> Buffer<S, B> {
-    /// `as_tensor`.
+    /// Extract a functional Tensor from this buffer for forward passes.
     pub fn as_tensor(&self) -> Result<Tensor<S, B, B::FloatElem>> {
         let inner_tensor = B::var_as_tensor(&self.inner)?;
         Ok(Tensor {
@@ -454,9 +464,9 @@ where
     B: TransferTo<NewD>,
     <B as TransferTo<NewD>>::Output: SupportsDType<B::FloatElem>,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// The same buffer, rebuilt on backend `NewD`.
     type Output = Buffer<S, <B as TransferTo<NewD>>::Output>;
-    /// `to_device`.
+    /// Transfers the underlying variable to device `arg`.
     fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output> {
         let field = NewD::init(arg.clone());
         let inner = B::transfer_var(&self.inner, &self._dtype, &field)?;
@@ -473,7 +483,8 @@ impl<S: Shape + DynShape, B: Backend> Buffer<S, B>
 where
     (S, B::FloatElem, B::Device, Grad): TensorArgs<S, B::FloatElem, B::Device, Grad>,
 {
-    /// `new_init_raw`.
+    /// Allocates storage of the given shape/dtype/device and fills it
+    /// according to `init` (e.g. Kaiming/Xavier/zeros/ones/uniform/normal).
     pub fn new_init_raw(
         args: <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
             S,
@@ -498,7 +509,8 @@ where
         })
     }
 
-    /// `new_init`.
+    /// Same as `new_init_raw`, but accepts any argument type convertible
+    /// via `ArgInto` instead of the exact tuple form.
     pub fn new_init<A>(args: A, init: crate::nn::init::Init) -> Result<Self>
     where
         B: SupportsDType<B::FloatElem>,
@@ -515,7 +527,7 @@ where
         Self::new_init_raw(args.into_arg(), init)
     }
 
-    /// `zeros_raw`.
+    /// Allocates storage of the given shape/dtype/device, filled with zero.
     pub fn zeros_raw(
         args: <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
             S,
@@ -537,7 +549,8 @@ where
         })
     }
 
-    /// `zeros`.
+    /// Same as `zeros_raw`, but accepts any argument type convertible via
+    /// `ArgInto` instead of the exact tuple form.
     pub fn zeros<A>(args: A) -> Result<Self>
     where
         A:
@@ -553,7 +566,7 @@ where
         Self::zeros_raw(args.into_arg())
     }
 
-    /// `ones_raw`.
+    /// Allocates storage of the given shape/dtype/device, filled with one.
     pub fn ones_raw(
         args: <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
             S,
@@ -575,7 +588,8 @@ where
         })
     }
 
-    /// `ones`.
+    /// Same as `ones_raw`, but accepts any argument type convertible via
+    /// `ArgInto` instead of the exact tuple form.
     pub fn ones<A>(args: A) -> Result<Self>
     where
         A:
