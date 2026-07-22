@@ -1,13 +1,13 @@
 use kindle::prelude::*;
 
-/// Implementation of `CpuBackend` for the respective backend.
-type CpuBackend = kindle_backends::cpu::CpuBackend;
+/// Implementation of `CpuBackendImpl` for the respective backend.
+type CpuBackendImpl = kindle_backends::cpu::CpuBackendImpl;
 
 #[test]
 /// Test param.
 fn test_param() -> Result<()> {
     // Test creating a Param from zeros
-    let param = Param::<s![10, 10], CpuBackend>::zeros(())?;
+    let param = Param::<s![10, 10], CpuBackendImpl>::zeros(())?;
 
     // Test getting a tensor out
     let t = param.as_tensor()?;
@@ -20,8 +20,8 @@ fn test_param() -> Result<()> {
 #[test]
 /// Test linear.
 fn test_linear() -> Result<()> {
-    let linear = Linear::<s![10, 5], CpuBackend>::new()?;
-    let input = Tensor::<s![2, 10], CpuBackend>::ones(())?;
+    let linear = Linear::<s![10, 5], CpuBackendImpl>::build(())?;
+    let input = Tensor::<s![2, 10], CpuBackendImpl>::ones(())?;
 
     let out = linear.forward(input)?;
     let out_dims: [usize; 2] = out.dims();
@@ -44,10 +44,10 @@ fn test_conv2d() -> Result<()> {
         kindle::prelude::typenum::U1,
         kindle::prelude::typenum::U1,
     );
-    let conv = Conv2d::<ConvShape, CpuBackend>::new()?;
+    let conv = Conv2d::<ConvShape, CpuBackendImpl>::build(())?;
 
     // Input: Batch=2, Channels=3, H=32, W=32
-    let input = Tensor::<s![2, 3, 32, 32], CpuBackend>::ones(())?;
+    let input = Tensor::<s![2, 3, 32, 32], CpuBackendImpl>::ones(())?;
 
     let out = conv.forward(input)?;
     let out_dims: [usize; 4] = out.dims();
@@ -60,8 +60,8 @@ fn test_conv2d() -> Result<()> {
 #[test]
 /// Test layer norm.
 fn test_layer_norm() -> Result<()> {
-    let ln = LayerNorm::<s![20], CpuBackend>::new(1e-5)?;
-    let input = Tensor::<s![5, 10, 20], CpuBackend>::ones(())?;
+    let ln = LayerNorm::<s![20], CpuBackendImpl>::build(1e-5)?;
+    let input = Tensor::<s![5, 10, 20], CpuBackendImpl>::ones(())?;
 
     let out = ln.forward(input)?;
     let out_dims: [usize; 3] = out.dims();
@@ -74,10 +74,10 @@ fn test_layer_norm() -> Result<()> {
 /// Test batch norm2d.
 fn test_batch_norm2d() -> Result<()> {
     // 16 Channels
-    let bn = BatchNorm2d::<s![16], CpuBackend>::new(1e-5, 0.1)?;
+    let bn = BatchNorm2d::<s![16], CpuBackendImpl>::build((1e-5, 0.1))?;
 
     // Input: Batch=2, Channels=16, H=32, W=32
-    let input = Tensor::<s![2, 16, 32, 32], CpuBackend>::ones(())?;
+    let input = Tensor::<s![2, 16, 32, 32], CpuBackendImpl>::ones(())?;
 
     let out = bn.forward(input)?;
     let out_dims: [usize; 4] = out.dims();
@@ -90,12 +90,12 @@ fn test_batch_norm2d() -> Result<()> {
 /// Test sequential.
 fn test_sequential() -> Result<()> {
     let seq = seq!(
-        Linear::<s![10, 5], CpuBackend>::new()?,
+        Linear::<s![10, 5], CpuBackendImpl>::build(())?,
         ReLU,
-        Linear::<s![5, 2], CpuBackend>::new()?
+        Linear::<s![5, 2], CpuBackendImpl>::build(())?
     );
 
-    let input = Tensor::<s![4, 10], CpuBackend>::ones(())?;
+    let input = Tensor::<s![4, 10], CpuBackendImpl>::ones(())?;
 
     let out = seq.forward(input)?;
     let out_dims: [usize; 2] = out.dims();
@@ -113,10 +113,10 @@ fn test_embedding() -> Result<()> {
         kindle::prelude::typenum::U100,
         kindle::prelude::typenum::U32,
     );
-    let weight = Param::<EmbedShape, CpuBackend>::randn(())?;
-    let emb = Embedding::<EmbedShape, CpuBackend> { weight };
+    let weight = Param::<EmbedShape, CpuBackendImpl>::randn(())?;
+    let emb = Embedding::<EmbedShape, CpuBackendImpl> { weight };
     // Input: Batch=2, SeqLen=10
-    let input = Tensor::<s![2, 10], CpuBackend>::ones(())?;
+    let input = Tensor::<s![2, 10], CpuBackendImpl>::ones(())?;
 
     let out = emb.forward(input)?;
     let out_dims: [usize; 3] = out.dims();

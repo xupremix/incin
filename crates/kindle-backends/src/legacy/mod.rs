@@ -15,21 +15,21 @@ pub mod candle {
 
     /// # Backend Float Element Limitation (B-4)
     /// **Known Limitation:** `CandleBackend` ignores its compile-time `T` generic
-    /// for inner allocation precision and relies on the dynamic `KindleDType`
+    /// for inner allocation precision and relies on the dynamic `DTypeId`
     /// supplied to creation methods.
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct CandleBackend<T, D>(core::marker::PhantomData<(T, D)>);
 
     /// `to_candle_device`.
-    pub fn to_candle_device(dev: &KindleDevice) -> Result<candle::Device> {
-        use kindle_core::prelude::DeviceVariant;
-        match dev.variant() {
-            DeviceVariant::Cpu => Ok(candle::Device::Cpu),
+    pub fn to_candle_device(dev: &DeviceId) -> Result<candle::Device> {
+        use kindle_core::prelude::DeviceKind;
+        match dev.kind() {
+            DeviceKind::Cpu => Ok(candle::Device::Cpu),
             #[cfg(feature = "cuda")]
-            DeviceVariant::Cuda(ord) => Ok(candle::Device::new_cuda(ord)
+            DeviceKind::Cuda => Ok(candle::Device::new_cuda(dev.ordinal())
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?),
             #[cfg(feature = "wgpu")]
-            DeviceVariant::Wgpu(ord) => Ok(candle::Device::new_metal(ord)
+            DeviceKind::Wgpu => Ok(candle::Device::new_metal(dev.ordinal())
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?),
             _ => Err(Error::UnsupportedBackendOperation {
                 op: "to_candle_device",
@@ -39,16 +39,16 @@ pub mod candle {
     }
 
     /// `to_candle_dtype`.
-    pub fn to_candle_dtype(dtype: KindleDType) -> candle::DType {
+    pub fn to_candle_dtype(dtype: DTypeId) -> candle::DType {
         match dtype {
-            KindleDType::U8 => candle::DType::U8,
-            KindleDType::U32 => candle::DType::U32,
-            KindleDType::I64 => candle::DType::I64,
-            KindleDType::BF16 => candle::DType::BF16,
-            KindleDType::F16 => candle::DType::F16,
-            KindleDType::F32 => candle::DType::F32,
-            KindleDType::F64 => candle::DType::F64,
-            KindleDType::Q8_0 => unimplemented!("Q8_0 is not natively supported in candle yet"),
+            DTypeId::U8 => candle::DType::U8,
+            DTypeId::U32 => candle::DType::U32,
+            DTypeId::I64 => candle::DType::I64,
+            DTypeId::BF16 => candle::DType::BF16,
+            DTypeId::F16 => candle::DType::F16,
+            DTypeId::F32 => candle::DType::F32,
+            DTypeId::F64 => candle::DType::F64,
+            DTypeId::Q8_0 => unimplemented!("Q8_0 is not natively supported in candle yet"),
             _ => unimplemented!("Unsupported dtype in candle"),
         }
     }
@@ -62,9 +62,6 @@ pub mod candle {
         type FloatElem = T;
         /// `IntElem`.
         type IntElem = i64;
-        /// `BackendWithDevice`.
-        type BackendWithDevice<NewD: kindle_core::prelude::Device> = CandleBackend<T, NewD>;
-
         /// `Storage`.
         type Storage<K: kindle_core::prelude::DType> = candle_core::Tensor;
         /// `RawVar`.
@@ -105,18 +102,6 @@ pub mod candle {
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<<Self as kindle_core::prelude::Backend>::RawVar> {
             Ok(candle::Var::from_tensor(t).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
-        }
-
-        /// `var_to_device`.
-        fn var_to_device(
-            var: &<Self as kindle_core::prelude::Backend>::RawVar,
-            device: &kindle_core::prelude::KindleDevice,
-        ) -> Result<<Self as kindle_core::prelude::Backend>::RawVar> {
-            let dev = to_candle_device(device)?;
-            var.as_tensor()
-                .to_device(&dev)
-                .and_then(|t| candle::Var::from_tensor(&t))
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e).into())
         }
 
         /// `assign_var`.
@@ -173,8 +158,8 @@ pub mod candle {
         fn from_bytes<K: kindle_core::prelude::DType>(
             bytes: &[u8],
             shape: &[usize],
-            dtype: KindleDType,
-            device: &KindleDevice,
+            dtype: DTypeId,
+            device: &DeviceId,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             let floats = unsafe {
                 core::slice::from_raw_parts(
@@ -190,6 +175,52 @@ pub mod candle {
                 .to_dtype(c_dtype)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
             Ok(t)
+        }
+    }
+
+    impl<
+        T: kindle_core::prelude::DType,
+        D: kindle_core::prelude::Device,
+        K: kindle_core::prelude::DType,
+    > kindle_core::prelude::SupportsDType<K> for CandleBackend<T, D>
+    {
+    }
+
+    impl<T, D, NewD> kindle_core::prelude::TransferTo<NewD> for CandleBackend<T, D>
+    where
+        T: kindle_core::prelude::DType,
+        D: kindle_core::prelude::Device,
+        NewD: kindle_core::prelude::Device,
+    {
+        type Output = CandleBackend<T, NewD>;
+
+        fn transfer_storage<K: kindle_core::prelude::DType>(
+            storage: &Self::Storage<K>,
+            dtype: &K::Field,
+            device: &NewD::Field,
+        ) -> Result<<Self::Output as Backend>::Storage<K>>
+        where
+            Self::Output: SupportsDType<K>,
+        {
+            let destination = NewD::to_kindle(device)?;
+            <Self::Output as SupportsDType<K>>::resolve_dtype(dtype, &destination)?;
+            let target = to_candle_device(&destination)?;
+            storage
+                .to_device(&target)
+                .map_err(|error| anyhow::anyhow!(error).into())
+        }
+
+        fn transfer_var(
+            variable: &Self::RawVar,
+            dtype: &<T as kindle_core::prelude::DType>::Field,
+            device: &NewD::Field,
+        ) -> Result<<Self::Output as Backend>::RawVar>
+        where
+            Self::Output: SupportsDType<T>,
+        {
+            let storage = <Self as Backend>::var_as_tensor::<T>(variable)?;
+            let transferred = Self::transfer_storage(&storage, dtype, device)?;
+            <Self::Output as Backend>::var_from_tensor::<T>(&transferred)
         }
     }
 
@@ -232,8 +263,8 @@ pub mod candle {
         /// `zeros`.
         fn zeros<K: kindle_core::prelude::DType>(
             shape: &[usize],
-            dtype: KindleDType,
-            device: &KindleDevice,
+            dtype: DTypeId,
+            device: &DeviceId,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(
                 candle::Tensor::zeros(shape, to_candle_dtype(dtype), &to_candle_device(device)?)
@@ -244,8 +275,8 @@ pub mod candle {
         /// `ones`.
         fn ones<K: kindle_core::prelude::DType>(
             shape: &[usize],
-            dtype: KindleDType,
-            device: &KindleDevice,
+            dtype: DTypeId,
+            device: &DeviceId,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(
                 candle::Tensor::ones(shape, to_candle_dtype(dtype), &to_candle_device(device)?)
@@ -256,8 +287,8 @@ pub mod candle {
         /// `rand`.
         fn rand<K: kindle_core::prelude::DType>(
             shape: &[usize],
-            dtype: KindleDType,
-            device: &KindleDevice,
+            dtype: DTypeId,
+            device: &DeviceId,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(
                 candle::Tensor::rand(0f32, 1f32, shape, &to_candle_device(device)?)
@@ -270,8 +301,8 @@ pub mod candle {
         /// `randn`.
         fn randn<K: kindle_core::prelude::DType>(
             shape: &[usize],
-            dtype: KindleDType,
-            device: &KindleDevice,
+            dtype: DTypeId,
+            device: &DeviceId,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(
                 candle::Tensor::randn(0f32, 1f32, shape, &to_candle_device(device)?)
@@ -284,8 +315,8 @@ pub mod candle {
         /// `var_zeros`.
         fn var_zeros<K: kindle_core::prelude::DType>(
             shape: &[usize],
-            dtype: KindleDType,
-            device: &KindleDevice,
+            dtype: DTypeId,
+            device: &DeviceId,
         ) -> Result<<Self as kindle_core::prelude::Backend>::RawVar> {
             Ok(
                 candle::Var::zeros(shape, to_candle_dtype(dtype), &to_candle_device(device)?)
@@ -296,8 +327,8 @@ pub mod candle {
         /// `var_ones`.
         fn var_ones<K: kindle_core::prelude::DType>(
             shape: &[usize],
-            dtype: KindleDType,
-            device: &KindleDevice,
+            dtype: DTypeId,
+            device: &DeviceId,
         ) -> Result<<Self as kindle_core::prelude::Backend>::RawVar> {
             Ok(
                 candle::Var::ones(shape, to_candle_dtype(dtype), &to_candle_device(device)?)
@@ -308,8 +339,8 @@ pub mod candle {
         /// `var_rand`.
         fn var_rand<K: kindle_core::prelude::DType>(
             shape: &[usize],
-            _dtype: KindleDType,
-            device: &KindleDevice,
+            _dtype: DTypeId,
+            device: &DeviceId,
         ) -> Result<<Self as kindle_core::prelude::Backend>::RawVar> {
             Ok(
                 candle::Var::rand(0f32, 1f32, shape, &to_candle_device(device)?)
@@ -320,22 +351,12 @@ pub mod candle {
         /// `var_randn`.
         fn var_randn<K: kindle_core::prelude::DType>(
             shape: &[usize],
-            _dtype: KindleDType,
-            device: &KindleDevice,
+            _dtype: DTypeId,
+            device: &DeviceId,
         ) -> Result<<Self as kindle_core::prelude::Backend>::RawVar> {
             let dev = to_candle_device(device)?;
             Ok(candle::Var::randn(0f32, 1f32, shape, &dev)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
-        }
-
-        /// `tensor_to_device`.
-        fn tensor_to_device<K: kindle_core::prelude::DType>(
-            t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
-            device: &KindleDevice,
-        ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
-            let dev = to_candle_device(device)?;
-            t.to_device(&dev)
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e).into())
         }
     }
 
@@ -609,7 +630,7 @@ pub mod candle {
         /// `tensor_to_dtype`.
         fn tensor_to_dtype<K: kindle_core::prelude::DType, K2: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
-            dtype: KindleDType,
+            dtype: DTypeId,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K2>> {
             Ok(t.to_dtype(to_candle_dtype(dtype))
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
@@ -1160,14 +1181,14 @@ pub mod candle {
         #[test]
         /// `test_to_candle_dtype`.
         fn test_to_candle_dtype() {
-            assert_eq!(to_candle_dtype(KindleDType::F32), candle::DType::F32);
-            assert_eq!(to_candle_dtype(KindleDType::I64), candle::DType::I64);
+            assert_eq!(to_candle_dtype(DTypeId::F32), candle::DType::F32);
+            assert_eq!(to_candle_dtype(DTypeId::I64), candle::DType::I64);
         }
 
         #[test]
         /// `test_to_candle_device`.
         fn test_to_candle_device() {
-            let cpu = KindleDevice::cpu();
+            let cpu = DeviceId::cpu();
             let c_dev = to_candle_device(&cpu).unwrap();
             assert!(matches!(c_dev, candle::Device::Cpu));
         }

@@ -5,7 +5,7 @@ use kindle_data::vision::mnist::MnistDataset;
 use kindle_data::{Collate, DataLoader, Dataset};
 use std::path::PathBuf;
 
-type Backend = kindle_backends::cpu::CpuBackend;
+type Backend = kindle_backends::cpu::CpuBackendImpl;
 
 /// Mnist collate.
 struct MnistCollate;
@@ -39,17 +39,16 @@ impl Collate<(Vec<f32>, u8)> for MnistCollate {
             )
         };
 
-        let device = KindleDevice::cpu();
+        let device = DeviceId::cpu();
         let images_raw = Backend::from_bytes::<f32>(
             images_bytes,
             &[batch_size, 1, 28, 28],
-            KindleDType::F32,
+            DTypeId::F32,
             &device,
         )
         .unwrap();
         let labels_raw =
-            Backend::from_bytes::<u32>(labels_bytes, &[batch_size], KindleDType::U32, &device)
-                .unwrap();
+            Backend::from_bytes::<u32>(labels_bytes, &[batch_size], DTypeId::U32, &device).unwrap();
 
         (
             Tensor::<Dyn, Backend>::from_raw(images_raw, vec![batch_size, 1, 28, 28]).unwrap(),
@@ -75,9 +74,9 @@ fn main() -> kindle::Result<()> {
     // 2. Model definition (MLP using the seq! macro and Flatten)
     let model = seq![
         Flatten::<1, 3>::new(), // Flattens (B, 1, 28, 28) -> (B, 784)
-        Linear::<Dyn, Backend>::new_with((784, 128))?,
+        Linear::<Dyn, Backend>::build((784, 128))?,
         ReLU,
-        Linear::<Dyn, Backend>::new_with((128, 10))?
+        Linear::<Dyn, Backend>::build((128, 10))?
     ];
 
     // 3. Optimizer setup

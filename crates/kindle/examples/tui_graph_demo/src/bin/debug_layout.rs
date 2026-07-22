@@ -2,13 +2,13 @@ extern crate alloc;
 use alloc::collections::BTreeMap;
 use kindle::prelude::*;
 use kindle::{Linear, Module};
-use kindle_backends::cpu::CpuBackend;
+use kindle_backends::cpu::CpuBackendImpl;
 use kindle_core::prelude::{
     TracingBackend, extract_graph, tracing_mark_input, tracing_mark_output,
 };
 
 /// Nb.
-type NB = CpuBackend;
+type NB = CpuBackendImpl;
 /// Tb.
 type TB = TracingBackend<NB>;
 
@@ -25,15 +25,16 @@ pub struct SimpleMlp<B: Backend> {
 
 impl<B: Backend> SimpleMlp<B>
 where
+    B: SupportsDType<B::FloatElem>,
     B::FloatElem: ConstDType,
     B::Device: ConstDevice,
 {
     /// New.
     pub fn new() -> Result<Self> {
         Ok(Self {
-            fc1: Linear::<Dyn, B>::new_with((10, 32))?,
-            fc2: Linear::<Dyn, B>::new_with((32, 16))?,
-            fc3: Linear::<Dyn, B>::new_with((16, 2))?,
+            fc1: Linear::<Dyn, B>::build((10, 32))?,
+            fc2: Linear::<Dyn, B>::build((32, 16))?,
+            fc3: Linear::<Dyn, B>::build((16, 2))?,
         })
     }
 

@@ -10,7 +10,9 @@ It ships native CPU, CUDA, and WGPU execution backends and enforces strict mathe
 - **Compile-Time Shape Verification**: Your matrix multiplications and broadcasts are verified when compiling, reducing out-of-bounds runtime panic overhead.
 - **Python-like Ergonomics**: We use Rust `macro_rules!` (`s!`, `idx!`) to recreate the seamless slicing and shape specification syntax of PyTorch/NumPy.
 - **Backend Agnostic API Design**: The abstract `Backend` trait decouples tensor math from hardware execution, with native CPU, CUDA, and WGPU implementations shipped in `kindle-backends`.
-- **Zero-Cost Abstractions**: The static types `S`, `T`, `D`, `G` map entirely to `PhantomData` markers, imposing ZERO overhead on runtime buffers.
+- **Zero-Cost Static Metadata**: `Tensor<S, B, K, G>` tracks shape, backend,
+  dtype, and gradient requirements. The device is derived exclusively from
+  `B`; `Dyn` opts a position into runtime metadata when needed.
 
 ## 🛠️ Setup & Requirements
 
@@ -33,6 +35,23 @@ You can configure internal macro and Hub behavior using the following environmen
 - `KINDLE_NO_META`: Set to `1` or `true` to force `import_model!` to bypass the lightning-fast `.kindle_meta` JSON cache and do a full `.safetensors`/`.onnx` graph re-parse during `cargo build`. You can also configure this directly in the macro using `import_model!("model.onnx", { no_meta: true })`.
 
 ## 🌟 Quick Tour
+
+### Unified creation and runtime dispatch
+
+```rust,ignore
+use kindle::prelude::*;
+use kindle_backends::KindleBackend;
+
+type CpuF32 = KindleBackend<f32, Cpu>;
+let static_tensor = Tensor::<s![2, 3], CpuF32>::zeros(())?;
+
+type Runtime = KindleBackend<Dyn, Dyn>;
+let runtime_tensor = Tensor::<Dyn, Runtime, Dyn>::zeros((
+    [2, 3],
+    DTypeId::F32,
+    DeviceId::cpu(),
+))?;
+```
 
 ### Type-Safe ResNet Definition
 ```rust,ignore

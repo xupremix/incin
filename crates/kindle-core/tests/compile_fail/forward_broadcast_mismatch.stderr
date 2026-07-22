@@ -27,7 +27,7 @@ error[E0277]: Cannot broadcast shape `(UInt<UTerm, B1>, UInt<UInt<UTerm, B1>, B0
              `()` implements `BroadcastShape<(usize, B, C)>`
              `()` implements `BroadcastShape<(usize, B, C, D)>`
            and $N others
-note: required by a bound in `kindle_core::tensor::ops::binary::<impl kindle_core::prelude::Tensor<S1, B, K, D, G>>::broadcast_add`
+note: required by a bound in `kindle_core::tensor::ops::binary::<impl kindle_core::prelude::Tensor<S1, B, K, G>>::broadcast_add`
   --> src/tensor/ops/binary.rs
    |
    | / impl_broadcast_binary_op!(
@@ -38,5 +38,5 @@ note: required by a bound in `kindle_core::tensor::ops::binary::<impl kindle_cor
    | |     BroadcastAdd, broadcast_add, add
    | |                   ------------- required by a bound in this associated function
    | | );
-   | |_^ required by this bound in `kindle_core::tensor::ops::binary::<impl Tensor<S1, B, K, D, G>>::broadcast_add`
+   | |_^ required by this bound in `kindle_core::tensor::ops::binary::<impl Tensor<S1, B, K, G>>::broadcast_add`
    = note: this error originates in the macro `impl_broadcast_binary_op` (in Nightly builds, run with -Z macro-backtrace for more info)

@@ -4,7 +4,23 @@ use kindle_core::prelude::*;
 
 /// WebGPU compute backend for Kindle. Type alias for `KindleBackend<T, D>`.
 #[derive(Clone)]
-pub struct WgpuBackend<T = f32, D = Wgpu>(core::marker::PhantomData<(T, D)>);
+pub struct WgpuBackendImpl<T = f32, D = Wgpu>(core::marker::PhantomData<(T, D)>);
+
+impl<T: DType, D: Device> SupportsDType<f32> for WgpuBackendImpl<T, D> {}
+
+impl<T: DType, D: Device> SupportsDType<Dyn> for WgpuBackendImpl<T, D> {
+    fn resolve_dtype(field: &DTypeId, _device: &DeviceId) -> Result<DTypeId> {
+        if *field == DTypeId::F32 {
+            Ok(*field)
+        } else {
+            Err(Error::UnsupportedDType {
+                dtype: *field,
+                backend: "Wgpu",
+                op: "create",
+            })
+        }
+    }
+}
 
 #[derive(Clone)]
 /// Implementation of `WgpuVar` for the respective backend..
@@ -23,19 +39,39 @@ pub(crate) fn num_elements(shape: &[usize]) -> usize {
     shape.iter().product()
 }
 
+fn validate_wgpu(dtype: DTypeId, device: &DeviceId, op: &'static str) -> Result<()> {
+    if device.kind() != DeviceKind::Wgpu {
+        return Err(Error::DeviceInitializationError {
+            expected: "wgpu".to_string(),
+            got: format!("{:?}", device.kind()),
+        });
+    }
+    if device.ordinal() != 0 {
+        return Err(Error::InvalidDeviceOrdinal {
+            backend: "Wgpu",
+            ordinal: device.ordinal(),
+        });
+    }
+    if dtype != DTypeId::F32 {
+        return Err(Error::UnsupportedDType {
+            dtype,
+            backend: "Wgpu",
+            op,
+        });
+    }
+    Ok(())
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Backend core trait
 // ─────────────────────────────────────────────────────────────────────────────
-impl<T: DType, D: Device> Backend for WgpuBackend<T, D> {
+impl<T: DType, D: Device> Backend for WgpuBackendImpl<T, D> {
     /// `Device`.
     type Device = D;
     /// `FloatElem`.
     type FloatElem = T;
     /// `IntElem`.
     type IntElem = i64;
-    /// `BackendWithDevice`.
-    type BackendWithDevice<NewD: Device> = WgpuBackend<T, NewD>;
-
     /// `Storage`.
     type Storage<K: DType> = WgpuStorage;
     /// `RawVar`.
@@ -48,6 +84,14 @@ impl<T: DType, D: Device> Backend for WgpuBackend<T, D> {
     /// `shape`.
     fn shape<K: DType>(t: &Self::Storage<K>) -> Vec<usize> {
         t.shape.clone()
+    }
+
+    fn storage_dtype<K: DType>(_t: &Self::Storage<K>) -> Option<DTypeId> {
+        Some(DTypeId::F32)
+    }
+
+    fn storage_device<K: DType>(_t: &Self::Storage<K>) -> Option<DeviceId> {
+        Some(DeviceId::wgpu(0))
     }
 
     /// `format_tensor_display`.
@@ -68,13 +112,6 @@ impl<T: DType, D: Device> Backend for WgpuBackend<T, D> {
     /// `var_from_tensor`.
     fn var_from_tensor<K: DType>(t: &Self::Storage<K>) -> Result<Self::RawVar> {
         Ok(WgpuVar { storage: t.clone() })
-    }
-
-    /// `var_to_device`.
-    fn var_to_device(var: &Self::RawVar, _device: &KindleDevice) -> Result<Self::RawVar> {
-        Ok(WgpuVar {
-            storage: var.storage.clone(),
-        })
     }
 
     /// `assign_var`.
@@ -110,9 +147,17 @@ impl<T: DType, D: Device> Backend for WgpuBackend<T, D> {
     fn from_bytes<K: DType>(
         bytes: &[u8],
         shape: &[usize],
-        _dtype: KindleDType,
-        _device: &KindleDevice,
+        dtype: DTypeId,
+        device: &DeviceId,
     ) -> Result<Self::Storage<K>> {
+        validate_wgpu(dtype, device, "from_bytes")?;
+        let expected = num_elements(shape) * core::mem::size_of::<f32>();
+        if bytes.len() != expected {
+            return Err(Error::InvalidByteLength {
+                expected,
+                got: bytes.len(),
+            });
+        }
         let buffer = WgpuBuffer::from_slice(bytes);
         Ok(WgpuStorage::new(buffer, shape.to_vec()))
     }
@@ -121,13 +166,14 @@ impl<T: DType, D: Device> Backend for WgpuBackend<T, D> {
 // ─────────────────────────────────────────────────────────────────────────────
 // CreationOps
 // ─────────────────────────────────────────────────────────────────────────────
-impl<T: DType, D: Device> CreationOps<Self> for WgpuBackend<T, D> {
+impl<T: DType, D: Device> CreationOps<Self> for WgpuBackendImpl<T, D> {
     /// `zeros`.
     fn zeros<K: DType>(
         shape: &[usize],
-        _dtype: KindleDType,
-        _device: &KindleDevice,
+        dtype: DTypeId,
+        device: &DeviceId,
     ) -> Result<<Self as Backend>::Storage<K>> {
+        validate_wgpu(dtype, device, "zeros")?;
         let n = num_elements(shape);
         let data: Vec<f32> = vec![0.0; n];
         let buf = WgpuBuffer::from_slice(&data);
@@ -137,9 +183,10 @@ impl<T: DType, D: Device> CreationOps<Self> for WgpuBackend<T, D> {
     /// `ones`.
     fn ones<K: DType>(
         shape: &[usize],
-        _dtype: KindleDType,
-        _device: &KindleDevice,
+        dtype: DTypeId,
+        device: &DeviceId,
     ) -> Result<<Self as Backend>::Storage<K>> {
+        validate_wgpu(dtype, device, "ones")?;
         let n = num_elements(shape);
         let data: Vec<f32> = vec![1.0; n];
         let buf = WgpuBuffer::from_slice(&data);
@@ -149,9 +196,10 @@ impl<T: DType, D: Device> CreationOps<Self> for WgpuBackend<T, D> {
     /// `rand`.
     fn rand<K: DType>(
         shape: &[usize],
-        _dtype: KindleDType,
-        _device: &KindleDevice,
+        dtype: DTypeId,
+        device: &DeviceId,
     ) -> Result<<Self as Backend>::Storage<K>> {
+        validate_wgpu(dtype, device, "rand")?;
         use std::time::{SystemTime, UNIX_EPOCH};
         let n = num_elements(shape);
         // Simple LCG for now – GPU-side random generation would need more infrastructure
@@ -175,9 +223,10 @@ impl<T: DType, D: Device> CreationOps<Self> for WgpuBackend<T, D> {
     /// `randn`.
     fn randn<K: DType>(
         shape: &[usize],
-        _dtype: KindleDType,
-        _device: &KindleDevice,
+        dtype: DTypeId,
+        device: &DeviceId,
     ) -> Result<<Self as Backend>::Storage<K>> {
+        validate_wgpu(dtype, device, "randn")?;
         use std::time::{SystemTime, UNIX_EPOCH};
         let n = num_elements(shape);
         let seed = SystemTime::now()
@@ -209,8 +258,8 @@ impl<T: DType, D: Device> CreationOps<Self> for WgpuBackend<T, D> {
     /// `var_zeros`.
     fn var_zeros<K: DType>(
         shape: &[usize],
-        dtype: KindleDType,
-        device: &KindleDevice,
+        dtype: DTypeId,
+        device: &DeviceId,
     ) -> Result<<Self as Backend>::RawVar> {
         let s = Self::zeros::<K>(shape, dtype, device)?;
         Ok(WgpuVar { storage: s })
@@ -219,8 +268,8 @@ impl<T: DType, D: Device> CreationOps<Self> for WgpuBackend<T, D> {
     /// `var_ones`.
     fn var_ones<K: DType>(
         shape: &[usize],
-        dtype: KindleDType,
-        device: &KindleDevice,
+        dtype: DTypeId,
+        device: &DeviceId,
     ) -> Result<<Self as Backend>::RawVar> {
         let s = Self::ones::<K>(shape, dtype, device)?;
         Ok(WgpuVar { storage: s })
@@ -229,8 +278,8 @@ impl<T: DType, D: Device> CreationOps<Self> for WgpuBackend<T, D> {
     /// `var_rand`.
     fn var_rand<K: DType>(
         shape: &[usize],
-        dtype: KindleDType,
-        device: &KindleDevice,
+        dtype: DTypeId,
+        device: &DeviceId,
     ) -> Result<<Self as Backend>::RawVar> {
         let s = Self::rand::<K>(shape, dtype, device)?;
         Ok(WgpuVar { storage: s })
@@ -239,20 +288,11 @@ impl<T: DType, D: Device> CreationOps<Self> for WgpuBackend<T, D> {
     /// `var_randn`.
     fn var_randn<K: DType>(
         shape: &[usize],
-        dtype: KindleDType,
-        device: &KindleDevice,
+        dtype: DTypeId,
+        device: &DeviceId,
     ) -> Result<<Self as Backend>::RawVar> {
         let s = Self::randn::<K>(shape, dtype, device)?;
         Ok(WgpuVar { storage: s })
-    }
-
-    /// `tensor_to_device`.
-    fn tensor_to_device<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
-        _device: &KindleDevice,
-    ) -> Result<<Self as Backend>::Storage<K>> {
-        // WGPU buffers are already on the GPU
-        Ok(t.clone())
     }
 }
 
@@ -282,7 +322,7 @@ fn binary_op<T: DType>(
     Ok(WgpuStorage::new(out_buf, lhs.shape.clone()))
 }
 
-impl<T: DType, D: Device> NumericOps<Self> for WgpuBackend<T, D> {
+impl<T: DType, D: Device> NumericOps<Self> for WgpuBackendImpl<T, D> {
     /// `add`.
     fn add<K: DType>(
         lhs: &<Self as Backend>::Storage<K>,
@@ -432,7 +472,7 @@ fn push_unary_tape_entry(
     });
 }
 
-impl<T: DType, D: Device> FloatOps<Self> for WgpuBackend<T, D> {
+impl<T: DType, D: Device> FloatOps<Self> for WgpuBackendImpl<T, D> {
     /// `add_scalar_float`.
     fn add_scalar_float<K: DType>(
         t: &<Self as Backend>::Storage<K>,
@@ -621,20 +661,20 @@ impl<T: DType, D: Device> FloatOps<Self> for WgpuBackend<T, D> {
 
 /// Helper function to compute log_softmax composed from primitives.
 pub(crate) fn log_softmax<T: DType, K: DType>(t: &WgpuStorage, dim: usize) -> Result<WgpuStorage> {
-    let max = WgpuBackend::<T>::max_keepdim::<K>(t, dim)?;
-    let max_b = WgpuBackend::<T>::broadcast_as::<K>(&max, &t.shape)?;
-    let diff = WgpuBackend::<T>::sub::<K>(t, &max_b)?;
-    let exp_diff = WgpuBackend::<T>::exp::<K>(&diff)?;
-    let sum_exp = WgpuBackend::<T>::sum_keepdim::<K>(&exp_diff, dim)?;
-    let sum_exp_b = WgpuBackend::<T>::broadcast_as::<K>(&sum_exp, &t.shape)?;
-    let log_sum = WgpuBackend::<T>::log::<K>(&sum_exp_b)?;
-    WgpuBackend::<T>::sub::<K>(&diff, &log_sum)
+    let max = WgpuBackendImpl::<T>::max_keepdim::<K>(t, dim)?;
+    let max_b = WgpuBackendImpl::<T>::broadcast_as::<K>(&max, &t.shape)?;
+    let diff = WgpuBackendImpl::<T>::sub::<K>(t, &max_b)?;
+    let exp_diff = WgpuBackendImpl::<T>::exp::<K>(&diff)?;
+    let sum_exp = WgpuBackendImpl::<T>::sum_keepdim::<K>(&exp_diff, dim)?;
+    let sum_exp_b = WgpuBackendImpl::<T>::broadcast_as::<K>(&sum_exp, &t.shape)?;
+    let log_sum = WgpuBackendImpl::<T>::log::<K>(&sum_exp_b)?;
+    WgpuBackendImpl::<T>::sub::<K>(&diff, &log_sum)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TensorOps  (reshape, transpose, matmul, narrow, flatten, squeeze, stack, concat, etc.)
 // ─────────────────────────────────────────────────────────────────────────────
-impl<T: DType, D: Device> TensorOps<Self> for WgpuBackend<T, D> {
+impl<T: DType, D: Device> TensorOps<Self> for WgpuBackendImpl<T, D> {
     /// `matmul`.
     fn matmul<K: DType>(
         lhs: &<Self as Backend>::Storage<K>,
@@ -1081,7 +1121,7 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackend<T, D> {
     /// `tensor_to_dtype`.
     fn tensor_to_dtype<K: DType, K2: DType>(
         t: &<Self as Backend>::Storage<K>,
-        _dtype: KindleDType,
+        _dtype: DTypeId,
     ) -> Result<<Self as Backend>::Storage<K2>> {
         // Simple passthrough (all stored as f32 internally)
         Ok(WgpuStorage {
@@ -1145,7 +1185,7 @@ fn reduce_dim_to_storage(t: &WgpuStorage, dim: usize, mode: u32, keepdim: bool) 
     WgpuStorage::new(out_buf, final_shape)
 }
 
-impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackend<T, D> {
+impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackendImpl<T, D> {
     /// `sum_all`.
     fn sum_all<K: DType>(
         t: &<Self as Backend>::Storage<K>,
@@ -1708,9 +1748,9 @@ fn cpu_sum_batch(src: &[f32], b: usize, m: usize, n: usize) -> Vec<f32> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// WgpuBackend inherent helpers
+// WgpuBackendImpl inherent helpers
 // ─────────────────────────────────────────────────────────────────────────────
-impl<T: DType, D: Device> WgpuBackend<T, D> {
+impl<T: DType, D: Device> WgpuBackendImpl<T, D> {
     /// Forward-only conv2d (no tape entry). Used by both `conv1d` and `conv2d`
     /// so they can push exactly ONE clean tape entry each for their respective
     /// grad shapes, rather than having nested entries from the internal matmul.
@@ -1805,7 +1845,7 @@ impl<T: DType, D: Device> WgpuBackend<T, D> {
 // ─────────────────────────────────────────────────────────────────────────────
 // ModuleOps
 // ─────────────────────────────────────────────────────────────────────────────
-impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
+impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
     /// `embedding`.
     fn embedding<K: DType, KInt: DType>(
         indices: &<Self as Backend>::Storage<KInt>,
@@ -2557,7 +2597,7 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackend<T, D> {
 // ─────────────────────────────────────────────────────────────────────────────
 // LossOps (cross_entropy delegated to base trait which composes from float/reduce ops)
 // ─────────────────────────────────────────────────────────────────────────────
-impl<T: DType, D: Device> LossOps<Self> for WgpuBackend<T, D> {
+impl<T: DType, D: Device> LossOps<Self> for WgpuBackendImpl<T, D> {
     /// `cross_entropy_loss`.
     fn cross_entropy_loss<K: DType, KInt: DType>(
         pred: &<Self as Backend>::Storage<K>,
@@ -2610,7 +2650,7 @@ impl<T: DType, D: Device> LossOps<Self> for WgpuBackend<T, D> {
 // This mirrors the NativeBackend's `BlockQ8_0` layout, allowing byte-level
 // interoperability.  The encode/decode runs on the CPU (WgpuBuffer::to_vec /
 // from_slice); a GPU-native WGSL kernel is deferred post-0.1.0.
-impl<T: DType, D: Device> QuantizedOps<Self> for WgpuBackend<T, D> {
+impl<T: DType, D: Device> QuantizedOps<Self> for WgpuBackendImpl<T, D> {
     /// Quantize a contiguous f32 tensor to Q8_0 format.
     ///
     /// Only `K = f32` and `Q = Q8_0` are supported; any other combination
@@ -2723,7 +2763,7 @@ impl<T: DType, D: Device> QuantizedOps<Self> for WgpuBackend<T, D> {
 // ─────────────────────────────────────────────────────────────────────────────
 // OptimizerOps (AdamW)
 // ─────────────────────────────────────────────────────────────────────────────
-impl<T: DType, D: Device> OptimizerOps<Self> for WgpuBackend<T, D> {
+impl<T: DType, D: Device> OptimizerOps<Self> for WgpuBackendImpl<T, D> {
     /// `adamw_step`.
     fn adamw_step<K: DType>(
         var: &mut <Self as Backend>::RawVar,

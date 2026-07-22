@@ -1,11 +1,27 @@
 use crate::cuda::storage::CudaStorage;
+use alloc::sync::Arc;
 use kindle_core::prelude::*;
-use std::fmt::Debug;
 
 /// Type alias for `KindleBackend<T, D>` with a CUDA device. Kept for backwards
 /// compatibility — prefer `KindleBackend<T, Cuda>` in new code.
 #[derive(Clone)]
-pub struct CudaBackend<T = f32, D = Cuda>(core::marker::PhantomData<(T, D)>);
+pub struct CudaBackendImpl<T = f32, D = Cuda>(core::marker::PhantomData<(T, D)>);
+
+impl<T: DType, D: Device> SupportsDType<f32> for CudaBackendImpl<T, D> {}
+
+impl<T: DType, D: Device> SupportsDType<Dyn> for CudaBackendImpl<T, D> {
+    fn resolve_dtype(field: &DTypeId, _device: &DeviceId) -> Result<DTypeId> {
+        if *field == DTypeId::F32 {
+            Ok(*field)
+        } else {
+            Err(Error::UnsupportedDType {
+                dtype: *field,
+                backend: "Cuda",
+                op: "create",
+            })
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct CudaVar {
@@ -14,7 +30,7 @@ pub struct CudaVar {
 
 pub type CudaGrads = crate::cuda::tape::CudaGrads;
 
-impl<T: DType, D: Device> TensorOps<Self> for CudaBackend<T, D> {
+impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
     fn concat<K: DType>(
         tensors: &[&<Self as Backend>::Storage<K>],
         dim: usize,
@@ -23,7 +39,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackend<T, D> {
     }
 }
 
-impl<T: DType, D: Device> NumericOps<Self> for CudaBackend<T, D> {
+impl<T: DType, D: Device> NumericOps<Self> for CudaBackendImpl<T, D> {
     fn add<K: DType>(
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
@@ -197,18 +213,70 @@ impl<T: DType, D: Device> NumericOps<Self> for CudaBackend<T, D> {
     }
 }
 
-impl<T: DType, D: Device> FloatOps<Self> for CudaBackend<T, D> {}
-impl<T: DType, D: Device> CreationOps<Self> for CudaBackend<T, D> {}
-impl<T: DType, D: Device> ReductionOps<Self> for CudaBackend<T, D> {}
-impl<T: DType, D: Device> QuantizedOps<Self> for CudaBackend<T, D> {}
-impl<T: DType, D: Device> OptimizerOps<Self> for CudaBackend<T, D> {}
-impl<T: DType, D: Device> ModuleOps<Self> for CudaBackend<T, D> {}
-impl<T: DType, D: Device> LossOps<Self> for CudaBackend<T, D> {}
+impl<T: DType, D: Device> FloatOps<Self> for CudaBackendImpl<T, D> {}
+impl<T: DType, D: Device> CreationOps<Self> for CudaBackendImpl<T, D> {
+    fn zeros<K: DType>(shape: &[usize], dtype: DTypeId, device: &DeviceId) -> Result<CudaStorage> {
+        cuda_from_f32(
+            shape,
+            dtype,
+            device,
+            vec![0.0; shape.iter().product()],
+            "zeros",
+        )
+    }
 
-impl<T: DType, D: Device> Backend for CudaBackend<T, D> {
+    fn ones<K: DType>(shape: &[usize], dtype: DTypeId, device: &DeviceId) -> Result<CudaStorage> {
+        cuda_from_f32(
+            shape,
+            dtype,
+            device,
+            vec![1.0; shape.iter().product()],
+            "ones",
+        )
+    }
+
+    fn rand<K: DType>(shape: &[usize], dtype: DTypeId, device: &DeviceId) -> Result<CudaStorage> {
+        use rand::Rng;
+        let mut rng = rand::thread_rng();
+        let values = (0..shape.iter().product()).map(|_| rng.r#gen()).collect();
+        cuda_from_f32(shape, dtype, device, values, "rand")
+    }
+
+    fn randn<K: DType>(shape: &[usize], dtype: DTypeId, device: &DeviceId) -> Result<CudaStorage> {
+        use rand_distr::{Distribution, StandardNormal};
+        let mut rng = rand::thread_rng();
+        let values = (0..shape.iter().product())
+            .map(|_| StandardNormal.sample(&mut rng))
+            .collect();
+        cuda_from_f32(shape, dtype, device, values, "randn")
+    }
+
+    fn var_zeros<K: DType>(shape: &[usize], dtype: DTypeId, device: &DeviceId) -> Result<CudaVar> {
+        Self::zeros::<K>(shape, dtype, device).map(|storage| CudaVar { storage })
+    }
+
+    fn var_ones<K: DType>(shape: &[usize], dtype: DTypeId, device: &DeviceId) -> Result<CudaVar> {
+        Self::ones::<K>(shape, dtype, device).map(|storage| CudaVar { storage })
+    }
+
+    fn var_rand<K: DType>(shape: &[usize], dtype: DTypeId, device: &DeviceId) -> Result<CudaVar> {
+        Self::rand::<K>(shape, dtype, device).map(|storage| CudaVar { storage })
+    }
+
+    fn var_randn<K: DType>(shape: &[usize], dtype: DTypeId, device: &DeviceId) -> Result<CudaVar> {
+        Self::randn::<K>(shape, dtype, device).map(|storage| CudaVar { storage })
+    }
+}
+impl<T: DType, D: Device> ReductionOps<Self> for CudaBackendImpl<T, D> {}
+impl<T: DType, D: Device> QuantizedOps<Self> for CudaBackendImpl<T, D> {}
+impl<T: DType, D: Device> OptimizerOps<Self> for CudaBackendImpl<T, D> {}
+impl<T: DType, D: Device> ModuleOps<Self> for CudaBackendImpl<T, D> {}
+impl<T: DType, D: Device> LossOps<Self> for CudaBackendImpl<T, D> {}
+
+impl<T: DType, D: Device> Backend for CudaBackendImpl<T, D> {
     type Device = D;
     type FloatElem = T;
-    type IntElem = f32; // Placeholder
+    type IntElem = i64;
 
     type Storage<K: DType> = CudaStorage;
     type RawVar = CudaVar;
@@ -216,10 +284,14 @@ impl<T: DType, D: Device> Backend for CudaBackend<T, D> {
 
     type InnerBackend = Self;
 
-    type BackendWithDevice<NewD: Device> = CudaBackend<T, NewD>;
-
     fn shape<K: DType>(t: &Self::Storage<K>) -> alloc::vec::Vec<usize> {
         t.shape.clone()
+    }
+    fn storage_dtype<K: DType>(_t: &Self::Storage<K>) -> Option<DTypeId> {
+        Some(DTypeId::F32)
+    }
+    fn storage_device<K: DType>(t: &Self::Storage<K>) -> Option<DeviceId> {
+        Some(DeviceId::cuda(t.buffer.device_id))
     }
     fn format_tensor_display<K: DType>(_t: &Self::Storage<K>) -> alloc::string::String {
         "CudaTensor(...)".to_string()
@@ -239,22 +311,28 @@ impl<T: DType, D: Device> Backend for CudaBackend<T, D> {
     ) -> Result<Option<Self::Storage<K>>> {
         Ok(grads.get(t.id).cloned())
     }
-    fn to_bytes<K: DType>(_t: &Self::Storage<K>) -> Result<alloc::vec::Vec<u8>> {
-        Err(Error::UnsupportedBackendOperation {
-            op: "to_bytes",
-            backend: "CudaBackend",
-        })
+    fn to_bytes<K: DType>(t: &Self::Storage<K>) -> Result<alloc::vec::Vec<u8>> {
+        t.buffer
+            .device
+            .default_stream()
+            .clone_dtoh(&*t.buffer.data)
+            .map_err(|error| Error::Msg(format!("CUDA download failed: {error:?}")))
     }
     fn from_bytes<K: DType>(
-        _bytes: &[u8],
-        _shape: &[usize],
-        _dtype: KindleDType,
-        _device: &KindleDevice,
+        bytes: &[u8],
+        shape: &[usize],
+        dtype: DTypeId,
+        device: &DeviceId,
     ) -> Result<Self::Storage<K>> {
-        Err(Error::UnsupportedBackendOperation {
-            op: "from_bytes",
-            backend: "CudaBackend",
-        })
+        validate_cuda(dtype, device, "from_bytes")?;
+        let expected = shape.iter().product::<usize>() * 4;
+        if bytes.len() != expected {
+            return Err(Error::InvalidByteLength {
+                expected,
+                got: bytes.len(),
+            });
+        }
+        cuda_from_bytes(shape, device.ordinal(), bytes)
     }
     fn var_as_tensor<K: DType>(var: &Self::RawVar) -> Result<Self::Storage<K>> {
         Ok(var.storage.clone())
@@ -262,11 +340,55 @@ impl<T: DType, D: Device> Backend for CudaBackend<T, D> {
     fn var_from_tensor<K: DType>(t: &Self::Storage<K>) -> Result<Self::RawVar> {
         Ok(CudaVar { storage: t.clone() })
     }
-    fn var_to_device(var: &Self::RawVar, _device: &KindleDevice) -> Result<Self::RawVar> {
-        Ok(var.clone())
-    }
     fn assign_var<K: DType>(var: &mut Self::RawVar, tensor: &Self::Storage<K>) -> Result<()> {
         var.storage = tensor.clone();
         Ok(())
     }
+}
+
+fn validate_cuda(dtype: DTypeId, device: &DeviceId, op: &'static str) -> Result<()> {
+    if device.kind() != DeviceKind::Cuda {
+        return Err(Error::DeviceInitializationError {
+            expected: "cuda".into(),
+            got: format!("{:?}", device.kind()),
+        });
+    }
+    if dtype != DTypeId::F32 {
+        return Err(Error::UnsupportedDType {
+            dtype,
+            backend: "Cuda",
+            op,
+        });
+    }
+    Ok(())
+}
+
+fn cuda_from_f32(
+    shape: &[usize],
+    dtype: DTypeId,
+    device: &DeviceId,
+    values: Vec<f32>,
+    op: &'static str,
+) -> Result<CudaStorage> {
+    validate_cuda(dtype, device, op)?;
+    cuda_from_bytes(shape, device.ordinal(), bytemuck::cast_slice(&values))
+}
+
+fn cuda_from_bytes(shape: &[usize], ordinal: usize, bytes: &[u8]) -> Result<CudaStorage> {
+    let context =
+        cudarc::driver::CudaContext::new(ordinal).map_err(|_| Error::InvalidDeviceOrdinal {
+            backend: "Cuda",
+            ordinal,
+        })?;
+    let data = context
+        .default_stream()
+        .clone_htod(bytes)
+        .map_err(|error| Error::Msg(format!("CUDA upload failed: {error:?}")))?;
+    let buffer = crate::cuda::storage::CudaBuffer {
+        len: shape.iter().product(),
+        data: Arc::new(data),
+        device: context,
+        device_id: ordinal,
+    };
+    Ok(CudaStorage::new(Arc::new(buffer), shape.to_vec()))
 }

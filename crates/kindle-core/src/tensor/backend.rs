@@ -1,4 +1,4 @@
-use crate::prelude::{KindleDType, KindleDevice, Result};
+use crate::prelude::{DTypeId, DeviceId, Result};
 use crate::tensor::device::Device;
 use crate::tensor::dtype::{DType, FloatDType, QuantDType};
 
@@ -54,8 +54,13 @@ impl From<i64> for ScalarValue {
     }
 }
 
-/// Provides the SupportsDType operation or structure.
-pub trait SupportsDType<K: DType> {}
+/// Resolves the dtype represented by `K` for a concrete runtime device.
+pub trait SupportsDType<K: DType> {
+    /// Resolve and validate dtype metadata before storage is created.
+    fn resolve_dtype(field: &K::Field, _device: &DeviceId) -> Result<DTypeId> {
+        Ok(K::to_kindle(field))
+    }
+}
 
 /// Provides the Backend operation or structure.
 pub trait Backend:
@@ -91,16 +96,16 @@ pub trait Backend:
     /// Provides the InnerBackend operation or structure.
     type InnerBackend: Backend;
 
-    /// Provides the BackendWithDevice operation or structure.
-    type BackendWithDevice<NewD: Device>: Backend<
-            Device = NewD,
-            RawVar = Self::RawVar,
-            FloatElem = Self::FloatElem,
-            IntElem = Self::IntElem,
-        >;
-
     /// Provides the shape operation or structure.
     fn shape<K: DType>(t: &Self::Storage<K>) -> alloc::vec::Vec<usize>;
+    /// Returns the physical storage dtype when the backend can inspect it.
+    fn storage_dtype<K: DType>(_t: &Self::Storage<K>) -> Option<DTypeId> {
+        None
+    }
+    /// Returns the physical storage device when the backend can inspect it.
+    fn storage_device<K: DType>(_t: &Self::Storage<K>) -> Option<DeviceId> {
+        None
+    }
     /// Provides the format_tensor_display operation or structure.
     fn format_tensor_display<K: DType>(t: &Self::Storage<K>) -> alloc::string::String;
     /// Provides the format_tensor_debug operation or structure.
@@ -122,18 +127,43 @@ pub trait Backend:
     fn from_bytes<K: DType>(
         bytes: &[u8],
         shape: &[usize],
-        dtype: KindleDType,
-        device: &KindleDevice,
+        dtype: DTypeId,
+        device: &DeviceId,
     ) -> Result<Self::Storage<K>>;
 
     /// Provides the var_as_tensor operation or structure.
     fn var_as_tensor<K: DType>(var: &Self::RawVar) -> Result<Self::Storage<K>>;
     /// Provides the var_from_tensor operation or structure.
     fn var_from_tensor<K: DType>(t: &Self::Storage<K>) -> Result<Self::RawVar>;
-    /// Provides the var_to_device operation or structure.
-    fn var_to_device(var: &Self::RawVar, device: &KindleDevice) -> Result<Self::RawVar>;
     /// Provides the assign_var operation or structure.
     fn assign_var<K: DType>(var: &mut Self::RawVar, tensor: &Self::Storage<K>) -> Result<()>;
+}
+
+/// Transfers storage and variables from one backend to a backend on `NewD`.
+///
+/// Implementations must not assume that storage handles or raw variable types
+/// are compatible across backend families.
+pub trait TransferTo<NewD: Device>: Backend {
+    /// Backend selected for the destination device.
+    type Output: Backend<Device = NewD, FloatElem = Self::FloatElem, IntElem = Self::IntElem>;
+
+    /// Transfers tensor storage while preserving shape and dtype.
+    fn transfer_storage<K: DType>(
+        storage: &Self::Storage<K>,
+        dtype: &K::Field,
+        device: &NewD::Field,
+    ) -> Result<<Self::Output as Backend>::Storage<K>>
+    where
+        Self::Output: SupportsDType<K>;
+
+    /// Transfers a variable into destination-native variable storage.
+    fn transfer_var(
+        variable: &Self::RawVar,
+        dtype: &<Self::FloatElem as DType>::Field,
+        device: &NewD::Field,
+    ) -> Result<<Self::Output as Backend>::RawVar>
+    where
+        Self::Output: SupportsDType<Self::FloatElem>;
 }
 
 // FloatOps only requires Backend, operates on FloatTensorPrimitive
@@ -412,7 +442,7 @@ pub trait TensorOps<B: Backend> {
     /// Provides the tensor_to_dtype operation or structure.
     fn tensor_to_dtype<K: DType, K2: DType>(
         _t: &B::Storage<K>,
-        _dtype: KindleDType,
+        _dtype: DTypeId,
     ) -> Result<B::Storage<K2>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "tensor_to_dtype",
@@ -426,8 +456,8 @@ pub trait CreationOps<B: Backend> {
     /// Provides the zeros operation or structure.
     fn zeros<K: DType>(
         _shape: &[usize],
-        _dtype: KindleDType,
-        _device: &KindleDevice,
+        _dtype: DTypeId,
+        _device: &DeviceId,
     ) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "zeros",
@@ -437,8 +467,8 @@ pub trait CreationOps<B: Backend> {
     /// Provides the ones operation or structure.
     fn ones<K: DType>(
         _shape: &[usize],
-        _dtype: KindleDType,
-        _device: &KindleDevice,
+        _dtype: DTypeId,
+        _device: &DeviceId,
     ) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "ones",
@@ -448,8 +478,8 @@ pub trait CreationOps<B: Backend> {
     /// Provides the rand operation or structure.
     fn rand<K: DType>(
         _shape: &[usize],
-        _dtype: KindleDType,
-        _device: &KindleDevice,
+        _dtype: DTypeId,
+        _device: &DeviceId,
     ) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "rand",
@@ -459,8 +489,8 @@ pub trait CreationOps<B: Backend> {
     /// Provides the randn operation or structure.
     fn randn<K: DType>(
         _shape: &[usize],
-        _dtype: KindleDType,
-        _device: &KindleDevice,
+        _dtype: DTypeId,
+        _device: &DeviceId,
     ) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "randn",
@@ -471,8 +501,8 @@ pub trait CreationOps<B: Backend> {
     /// Provides the var_zeros operation or structure.
     fn var_zeros<K: DType>(
         _shape: &[usize],
-        _dtype: KindleDType,
-        _device: &KindleDevice,
+        _dtype: DTypeId,
+        _device: &DeviceId,
     ) -> Result<B::RawVar> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "var_zeros",
@@ -482,8 +512,8 @@ pub trait CreationOps<B: Backend> {
     /// Provides the var_ones operation or structure.
     fn var_ones<K: DType>(
         _shape: &[usize],
-        _dtype: KindleDType,
-        _device: &KindleDevice,
+        _dtype: DTypeId,
+        _device: &DeviceId,
     ) -> Result<B::RawVar> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "var_ones",
@@ -493,8 +523,8 @@ pub trait CreationOps<B: Backend> {
     /// Provides the var_rand operation or structure.
     fn var_rand<K: DType>(
         _shape: &[usize],
-        _dtype: KindleDType,
-        _device: &KindleDevice,
+        _dtype: DTypeId,
+        _device: &DeviceId,
     ) -> Result<B::RawVar> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "var_rand",
@@ -504,22 +534,11 @@ pub trait CreationOps<B: Backend> {
     /// Provides the var_randn operation or structure.
     fn var_randn<K: DType>(
         _shape: &[usize],
-        _dtype: KindleDType,
-        _device: &KindleDevice,
+        _dtype: DTypeId,
+        _device: &DeviceId,
     ) -> Result<B::RawVar> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "var_randn",
-            backend: core::any::type_name::<Self>(),
-        })
-    }
-
-    /// Provides the tensor_to_device operation or structure.
-    fn tensor_to_device<K: DType>(
-        _t: &B::Storage<K>,
-        _device: &KindleDevice,
-    ) -> Result<B::Storage<K>> {
-        Err(crate::prelude::Error::UnsupportedBackendOperation {
-            op: "tensor_to_device",
             backend: core::any::type_name::<Self>(),
         })
     }
@@ -930,7 +949,7 @@ pub mod dummy {
     use crate::nn::Reduction;
     use crate::prelude::Result;
     use crate::tensor::device::Device;
-    use crate::tensor::device::KindleDevice;
+    use crate::tensor::device::DeviceId;
     use crate::tensor::dtype::DType;
 
     /// Provides the DummyBackend operation or structure.
@@ -962,8 +981,6 @@ pub mod dummy {
         type Storage<K: DType> = alloc::vec::Vec<usize>;
         /// Provides the InnerBackend operation or structure.
         type InnerBackend = Self;
-        /// Provides the BackendWithDevice operation or structure.
-        type BackendWithDevice<NewD: Device> = DummyBackend<T, NewD>;
 
         /// Provides the shape operation or structure.
         fn shape<K: DType>(t: &Self::Storage<K>) -> alloc::vec::Vec<usize> {
@@ -1000,8 +1017,8 @@ pub mod dummy {
         fn from_bytes<K: DType>(
             _bytes: &[u8],
             shape: &[usize],
-            _dtype: KindleDType,
-            _device: &KindleDevice,
+            _dtype: DTypeId,
+            _device: &DeviceId,
         ) -> Result<Self::Storage<K>> {
             Ok(shape.to_vec())
         }
@@ -1013,10 +1030,6 @@ pub mod dummy {
         fn var_from_tensor<K: DType>(t: &Self::Storage<K>) -> Result<Self::RawVar> {
             Ok(t.clone())
         }
-        /// Provides the var_to_device operation or structure.
-        fn var_to_device(var: &Self::RawVar, _device: &KindleDevice) -> Result<Self::RawVar> {
-            Ok(var.clone())
-        }
         /// Provides the assign_var operation or structure.
         fn assign_var<K: DType>(var: &mut Self::RawVar, tensor: &Self::Storage<K>) -> Result<()> {
             *var = tensor.clone();
@@ -1024,77 +1037,100 @@ pub mod dummy {
         }
     }
 
+    impl<T: DType, D: Device + Clone + 'static, K: DType> SupportsDType<K> for DummyBackend<T, D> {}
+
+    impl<T: DType, D: Device + Clone + 'static, NewD: Device + Clone + 'static> TransferTo<NewD>
+        for DummyBackend<T, D>
+    {
+        type Output = DummyBackend<T, NewD>;
+
+        fn transfer_storage<K: DType>(
+            storage: &Self::Storage<K>,
+            _dtype: &K::Field,
+            _device: &NewD::Field,
+        ) -> Result<<Self::Output as Backend>::Storage<K>>
+        where
+            Self::Output: SupportsDType<K>,
+        {
+            Ok(storage.clone())
+        }
+
+        fn transfer_var(
+            variable: &Self::RawVar,
+            _dtype: &<Self::FloatElem as DType>::Field,
+            _device: &NewD::Field,
+        ) -> Result<<Self::Output as Backend>::RawVar>
+        where
+            Self::Output: SupportsDType<Self::FloatElem>,
+        {
+            Ok(variable.clone())
+        }
+    }
+
     impl<T: DType, D: Device + Clone + 'static> CreationOps<Self> for DummyBackend<T, D> {
         /// Provides the zeros operation or structure.
         fn zeros<K: DType>(
             shape: &[usize],
-            _dtype: KindleDType,
-            _device: &KindleDevice,
+            _dtype: DTypeId,
+            _device: &DeviceId,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(shape.to_vec())
         }
         /// Provides the ones operation or structure.
         fn ones<K: DType>(
             shape: &[usize],
-            _dtype: KindleDType,
-            _device: &KindleDevice,
+            _dtype: DTypeId,
+            _device: &DeviceId,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(shape.to_vec())
         }
         /// Provides the rand operation or structure.
         fn rand<K: DType>(
             shape: &[usize],
-            _dtype: KindleDType,
-            _device: &KindleDevice,
+            _dtype: DTypeId,
+            _device: &DeviceId,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(shape.to_vec())
         }
         /// Provides the randn operation or structure.
         fn randn<K: DType>(
             shape: &[usize],
-            _dtype: KindleDType,
-            _device: &KindleDevice,
+            _dtype: DTypeId,
+            _device: &DeviceId,
         ) -> Result<<Self as Backend>::Storage<K>> {
             Ok(shape.to_vec())
         }
         /// Provides the var_zeros operation or structure.
         fn var_zeros<K: DType>(
             shape: &[usize],
-            _dtype: KindleDType,
-            _device: &KindleDevice,
+            _dtype: DTypeId,
+            _device: &DeviceId,
         ) -> Result<<Self as Backend>::RawVar> {
             Ok(shape.to_vec())
         }
         /// Provides the var_ones operation or structure.
         fn var_ones<K: DType>(
             shape: &[usize],
-            _dtype: KindleDType,
-            _device: &KindleDevice,
+            _dtype: DTypeId,
+            _device: &DeviceId,
         ) -> Result<<Self as Backend>::RawVar> {
             Ok(shape.to_vec())
         }
         /// Provides the var_rand operation or structure.
         fn var_rand<K: DType>(
             shape: &[usize],
-            _dtype: KindleDType,
-            _device: &KindleDevice,
+            _dtype: DTypeId,
+            _device: &DeviceId,
         ) -> Result<<Self as Backend>::RawVar> {
             Ok(shape.to_vec())
         }
         /// Provides the var_randn operation or structure.
         fn var_randn<K: DType>(
             shape: &[usize],
-            _dtype: KindleDType,
-            _device: &KindleDevice,
+            _dtype: DTypeId,
+            _device: &DeviceId,
         ) -> Result<<Self as Backend>::RawVar> {
             Ok(shape.to_vec())
-        }
-        /// Provides the tensor_to_device operation or structure.
-        fn tensor_to_device<K: DType>(
-            t: &<Self as Backend>::Storage<K>,
-            _device: &KindleDevice,
-        ) -> Result<<Self as Backend>::Storage<K>> {
-            Ok(t.clone())
         }
     }
 
@@ -1531,7 +1567,7 @@ pub mod dummy {
         /// Provides the tensor_to_dtype operation or structure.
         fn tensor_to_dtype<K: DType, K2: DType>(
             t: &<Self as Backend>::Storage<K>,
-            _dtype: KindleDType,
+            _dtype: DTypeId,
         ) -> Result<<Self as Backend>::Storage<K2>> {
             Ok(t.clone())
         }

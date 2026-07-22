@@ -95,16 +95,15 @@ impl<
     S1: Shape + DynShape,
     B: Backend + crate::tensor::backend::ModuleOps<B>,
     K: crate::tensor::dtype::DType,
-    D: crate::tensor::device::Device,
     G: RequiresGrad,
-> Tensor<S1, B, K, D, G>
+> Tensor<S1, B, K, G>
 {
     /// `conv2d`.
     pub fn conv2d<Stride, Padding, KShape>(
         &self,
-        weight: &Tensor<KShape, B, K, D, G>,
-        bias: Option<&Tensor<Dyn, B, K, D, G>>, // Simplified bias for now
-    ) -> Result<Tensor<S1::Output, B, K, D, G>>
+        weight: &Tensor<KShape, B, K, G>,
+        bias: Option<&Tensor<Dyn, B, K, G>>, // Simplified bias for now
+    ) -> Result<Tensor<S1::Output, B, K, G>>
     where
         Stride: StaticDim + typenum::Unsigned,
         Padding: StaticDim + typenum::Unsigned,

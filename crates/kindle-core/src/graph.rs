@@ -171,7 +171,7 @@ pub struct Value {
     /// `shape`.
     pub shape: Vec<usize>,
     /// `dtype`.
-    pub dtype: KindleDType,
+    pub dtype: DTypeId,
     /// The display name of this layer node.
     pub name: Option<String>,
 }
@@ -274,7 +274,7 @@ impl Graph {
     pub fn add_value(
         &mut self,
         shape: Vec<usize>,
-        dtype: KindleDType,
+        dtype: DTypeId,
         name: Option<String>,
     ) -> ValueId {
         let id = self.next_value_id;

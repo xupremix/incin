@@ -3,13 +3,13 @@ use kindle::prelude::*;
 extern crate alloc;
 use alloc::collections::BTreeMap;
 
-/// Implementation of `CpuBackend` for the respective backend.
-type CpuBackend = kindle_backends::cpu::CpuBackend;
+/// Implementation of `CpuBackendImpl` for the respective backend.
+type CpuBackendImpl = kindle_backends::cpu::CpuBackendImpl;
 
 #[test]
 /// Test state dict extraction.
 fn test_state_dict_extraction() -> Result<()> {
-    let layer = Linear::<s![10, 5], CpuBackend>::new()?;
+    let layer = Linear::<s![10, 5], CpuBackendImpl>::build(())?;
     let mut map = BTreeMap::new();
 
     // Extract state
@@ -23,7 +23,7 @@ fn test_state_dict_extraction() -> Result<()> {
     assert!(map.contains_key("linear.bias."));
 
     // Load state
-    let mut new_layer = Linear::<s![10, 5], CpuBackend>::new()?;
+    let mut new_layer = Linear::<s![10, 5], CpuBackendImpl>::build(())?;
     new_layer.load_state_dict("linear.", &map)?;
 
     // Test parameters

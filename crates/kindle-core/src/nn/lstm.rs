@@ -44,16 +44,16 @@ impl LstmShape for Dyn {
 /// use kindle::nn::optional::{True, False};
 ///
 /// // Fully static, both biases present (default)
-/// let cell = LSTMCell::<s![10, 20], B>::new()?;
+/// let cell = LSTMCell::<s![10, 20], B>::build(())?;
 ///
 /// // Fully static, input bias present, hidden bias absent
-/// let cell = LSTMCell::<s![10, 20], B, True, False>::new()?;
+/// let cell = LSTMCell::<s![10, 20], B, True, False>::build(())?;
 ///
 /// // Fully dynamic shape, both biases always present
-/// let cell = LSTMCell::<Dyn, B>::new_with(10, 20)?;
+/// let cell = LSTMCell::<Dyn, B>::build((10, 20))?;
 ///
 /// // Fully dynamic shape, no biases
-/// let cell = LSTMCell::<Dyn, B, False, False>::new_with(10, 20)?;
+/// let cell = LSTMCell::<Dyn, B, False, False>::build((10, 20))?;
 /// ```
 #[derive(Debug, Clone)]
 pub struct LSTMCell<
@@ -80,232 +80,83 @@ pub struct LSTMCell<
     pub wh_o: Linear<(S::Out, S::Out), B, BiasHh>,
 }
 
-// ── LSTMCell<S, B, True, True> (default) ────────────────────────────────────
-
-impl<In: Dim, Out: Dim, B: Backend> LSTMCell<(In, Out), B, True, True>
+impl<S, B, BiasIh, BiasHh> LSTMCell<S, B, BiasIh, BiasHh>
 where
-    B::FloatElem: ConstDType,
-    B::Device: ConstDevice,
-    (In, Out): LstmShape<In = In, Out = Out>,
-    (Out, Out): LstmShape<In = Out, Out = Out>,
+    S: LstmShape,
+    B: Backend + SupportsDType<B::FloatElem>,
+    BiasIh: crate::nn::optional::OptionalField,
+    BiasHh: crate::nn::optional::OptionalField,
+    <S::In as Dim>::Arg: Clone,
+    <S::Out as Dim>::Arg: Clone,
+    <B::FloatElem as DType>::Arg: Clone,
+    <B::Device as Device>::Arg: Clone,
+    <BiasIh as crate::nn::optional::OptionalField>::Arg: Clone,
+    <BiasHh as crate::nn::optional::OptionalField>::Arg: Clone,
 {
-    /// Creates a new instance with explicitly provided shape arguments.
-    pub fn new_with(in_arg: In::Arg, out_arg: Out::Arg) -> Result<Self>
+    pub fn build<A>(args: A) -> Result<Self>
     where
-        In::Arg: Clone,
-        Out::Arg: Clone,
+        A: crate::tensor::arg_into::LayerArgInto<(
+                <S::In as Dim>::Arg,
+                <S::Out as Dim>::Arg,
+                <B::FloatElem as DType>::Arg,
+                <B::Device as Device>::Arg,
+                <BiasIh as crate::nn::optional::OptionalField>::Arg,
+                <BiasHh as crate::nn::optional::OptionalField>::Arg,
+            )>,
     {
+        use crate::tensor::arg_into::LayerArgInto;
+        let (input, output, dtype, device, bias_ih, bias_hh) = args.into_layer_arg();
         Ok(Self {
-            wi_i: Linear::<(In, Out), B, True>::new_with((in_arg.clone(), out_arg.clone()))?,
-            wi_f: Linear::<(In, Out), B, True>::new_with((in_arg.clone(), out_arg.clone()))?,
-            wi_g: Linear::<(In, Out), B, True>::new_with((in_arg.clone(), out_arg.clone()))?,
-            wi_o: Linear::<(In, Out), B, True>::new_with((in_arg, out_arg.clone()))?,
-            wh_i: Linear::<(Out, Out), B, True>::new_with((out_arg.clone(), out_arg.clone()))?,
-            wh_f: Linear::<(Out, Out), B, True>::new_with((out_arg.clone(), out_arg.clone()))?,
-            wh_g: Linear::<(Out, Out), B, True>::new_with((out_arg.clone(), out_arg.clone()))?,
-            wh_o: Linear::<(Out, Out), B, True>::new_with((out_arg.clone(), out_arg))?,
-        })
-    }
-}
-
-impl<In: Dim<Arg = ()>, Out: Dim<Arg = ()>, B: Backend> LSTMCell<(In, Out), B, True, True>
-where
-    B::FloatElem: ConstDType,
-    B::Device: ConstDevice,
-    (In, Out): LstmShape<In = In, Out = Out>,
-    (Out, Out): LstmShape<In = Out, Out = Out>,
-{
-    /// Creates a new instance with default (statically inferred) shape arguments.
-    pub fn new() -> Result<Self> {
-        Self::new_with((), ())
-    }
-}
-
-// ── LSTMCell<S, B, True, False> ─────────────────────────────────────────────
-
-impl<In: Dim, Out: Dim, B: Backend> LSTMCell<(In, Out), B, True, False>
-where
-    B::FloatElem: ConstDType,
-    B::Device: ConstDevice,
-    (In, Out): LstmShape<In = In, Out = Out>,
-    (Out, Out): LstmShape<In = Out, Out = Out>,
-{
-    /// Creates a new instance with explicitly provided shape arguments.
-    pub fn new_with(in_arg: In::Arg, out_arg: Out::Arg) -> Result<Self>
-    where
-        In::Arg: Clone,
-        Out::Arg: Clone,
-    {
-        Ok(Self {
-            wi_i: Linear::<(In, Out), B, True>::new_with((in_arg.clone(), out_arg.clone()))?,
-            wi_f: Linear::<(In, Out), B, True>::new_with((in_arg.clone(), out_arg.clone()))?,
-            wi_g: Linear::<(In, Out), B, True>::new_with((in_arg.clone(), out_arg.clone()))?,
-            wi_o: Linear::<(In, Out), B, True>::new_with((in_arg, out_arg.clone()))?,
-            wh_i: Linear::<(Out, Out), B, False>::new_with((out_arg.clone(), out_arg.clone()))?,
-            wh_f: Linear::<(Out, Out), B, False>::new_with((out_arg.clone(), out_arg.clone()))?,
-            wh_g: Linear::<(Out, Out), B, False>::new_with((out_arg.clone(), out_arg.clone()))?,
-            wh_o: Linear::<(Out, Out), B, False>::new_with((out_arg.clone(), out_arg))?,
-        })
-    }
-}
-
-impl<In: Dim<Arg = ()>, Out: Dim<Arg = ()>, B: Backend> LSTMCell<(In, Out), B, True, False>
-where
-    B::FloatElem: ConstDType,
-    B::Device: ConstDevice,
-    (In, Out): LstmShape<In = In, Out = Out>,
-    (Out, Out): LstmShape<In = Out, Out = Out>,
-{
-    /// Creates a new instance with default (statically inferred) shape arguments.
-    pub fn new() -> Result<Self> {
-        Self::new_with((), ())
-    }
-}
-
-// ── LSTMCell<S, B, False, True> ─────────────────────────────────────────────
-
-impl<In: Dim, Out: Dim, B: Backend> LSTMCell<(In, Out), B, False, True>
-where
-    B::FloatElem: ConstDType,
-    B::Device: ConstDevice,
-    (In, Out): LstmShape<In = In, Out = Out>,
-    (Out, Out): LstmShape<In = Out, Out = Out>,
-{
-    /// Creates a new instance with explicitly provided shape arguments.
-    pub fn new_with(in_arg: In::Arg, out_arg: Out::Arg) -> Result<Self>
-    where
-        In::Arg: Clone,
-        Out::Arg: Clone,
-    {
-        Ok(Self {
-            wi_i: Linear::<(In, Out), B, False>::new_with((in_arg.clone(), out_arg.clone()))?,
-            wi_f: Linear::<(In, Out), B, False>::new_with((in_arg.clone(), out_arg.clone()))?,
-            wi_g: Linear::<(In, Out), B, False>::new_with((in_arg.clone(), out_arg.clone()))?,
-            wi_o: Linear::<(In, Out), B, False>::new_with((in_arg, out_arg.clone()))?,
-            wh_i: Linear::<(Out, Out), B, True>::new_with((out_arg.clone(), out_arg.clone()))?,
-            wh_f: Linear::<(Out, Out), B, True>::new_with((out_arg.clone(), out_arg.clone()))?,
-            wh_g: Linear::<(Out, Out), B, True>::new_with((out_arg.clone(), out_arg.clone()))?,
-            wh_o: Linear::<(Out, Out), B, True>::new_with((out_arg.clone(), out_arg))?,
-        })
-    }
-}
-
-impl<In: Dim<Arg = ()>, Out: Dim<Arg = ()>, B: Backend> LSTMCell<(In, Out), B, False, True>
-where
-    B::FloatElem: ConstDType,
-    B::Device: ConstDevice,
-    (In, Out): LstmShape<In = In, Out = Out>,
-    (Out, Out): LstmShape<In = Out, Out = Out>,
-{
-    /// Creates a new instance with default (statically inferred) shape arguments.
-    pub fn new() -> Result<Self> {
-        Self::new_with((), ())
-    }
-}
-
-// ── LSTMCell<S, B, False, False> ────────────────────────────────────────────
-
-impl<In: Dim, Out: Dim, B: Backend> LSTMCell<(In, Out), B, False, False>
-where
-    B::FloatElem: ConstDType,
-    B::Device: ConstDevice,
-    (In, Out): LstmShape<In = In, Out = Out>,
-    (Out, Out): LstmShape<In = Out, Out = Out>,
-{
-    /// Creates a new instance with explicitly provided shape arguments.
-    pub fn new_with(in_arg: In::Arg, out_arg: Out::Arg) -> Result<Self>
-    where
-        In::Arg: Clone,
-        Out::Arg: Clone,
-    {
-        Ok(Self {
-            wi_i: Linear::<(In, Out), B, False>::new_with((in_arg.clone(), out_arg.clone()))?,
-            wi_f: Linear::<(In, Out), B, False>::new_with((in_arg.clone(), out_arg.clone()))?,
-            wi_g: Linear::<(In, Out), B, False>::new_with((in_arg.clone(), out_arg.clone()))?,
-            wi_o: Linear::<(In, Out), B, False>::new_with((in_arg, out_arg.clone()))?,
-            wh_i: Linear::<(Out, Out), B, False>::new_with((out_arg.clone(), out_arg.clone()))?,
-            wh_f: Linear::<(Out, Out), B, False>::new_with((out_arg.clone(), out_arg.clone()))?,
-            wh_g: Linear::<(Out, Out), B, False>::new_with((out_arg.clone(), out_arg.clone()))?,
-            wh_o: Linear::<(Out, Out), B, False>::new_with((out_arg.clone(), out_arg))?,
-        })
-    }
-}
-
-impl<In: Dim<Arg = ()>, Out: Dim<Arg = ()>, B: Backend> LSTMCell<(In, Out), B, False, False>
-where
-    B::FloatElem: ConstDType,
-    B::Device: ConstDevice,
-    (In, Out): LstmShape<In = In, Out = Out>,
-    (Out, Out): LstmShape<In = Out, Out = Out>,
-{
-    /// Creates a new instance with default (statically inferred) shape arguments.
-    pub fn new() -> Result<Self> {
-        Self::new_with((), ())
-    }
-}
-
-// ── LSTMCell<Dyn, B, True, True> ────────────────────────────────────────────
-
-impl<B: Backend> LSTMCell<Dyn, B, True, True>
-where
-    B::FloatElem: ConstDType,
-    B::Device: ConstDevice,
-{
-    /// Creates a new instance with explicitly provided shape arguments.
-    pub fn new_with(in_f: usize, out_f: usize) -> Result<Self> {
-        Ok(Self {
-            wi_i: Linear::<(usize, usize), B, True>::new_with((in_f, out_f))?,
-            wi_f: Linear::<(usize, usize), B, True>::new_with((in_f, out_f))?,
-            wi_g: Linear::<(usize, usize), B, True>::new_with((in_f, out_f))?,
-            wi_o: Linear::<(usize, usize), B, True>::new_with((in_f, out_f))?,
-            wh_i: Linear::<(usize, usize), B, True>::new_with((out_f, out_f))?,
-            wh_f: Linear::<(usize, usize), B, True>::new_with((out_f, out_f))?,
-            wh_g: Linear::<(usize, usize), B, True>::new_with((out_f, out_f))?,
-            wh_o: Linear::<(usize, usize), B, True>::new_with((out_f, out_f))?,
-        })
-    }
-}
-
-// ── LSTMCell<Dyn, B, False, False> ──────────────────────────────────────────
-
-impl<B: Backend> LSTMCell<Dyn, B, False, False>
-where
-    B::FloatElem: ConstDType,
-    B::Device: ConstDevice,
-{
-    /// Creates a new instance with explicitly provided shape arguments.
-    pub fn new_with(in_f: usize, out_f: usize) -> Result<Self> {
-        Ok(Self {
-            wi_i: Linear::<(usize, usize), B, False>::new_with((in_f, out_f))?,
-            wi_f: Linear::<(usize, usize), B, False>::new_with((in_f, out_f))?,
-            wi_g: Linear::<(usize, usize), B, False>::new_with((in_f, out_f))?,
-            wi_o: Linear::<(usize, usize), B, False>::new_with((in_f, out_f))?,
-            wh_i: Linear::<(usize, usize), B, False>::new_with((out_f, out_f))?,
-            wh_f: Linear::<(usize, usize), B, False>::new_with((out_f, out_f))?,
-            wh_g: Linear::<(usize, usize), B, False>::new_with((out_f, out_f))?,
-            wh_o: Linear::<(usize, usize), B, False>::new_with((out_f, out_f))?,
-        })
-    }
-}
-
-// ── LSTMCell<Dyn, B, True, False> ───────────────────────────────────────────
-
-impl<B: Backend> LSTMCell<Dyn, B, True, False>
-where
-    B::FloatElem: ConstDType,
-    B::Device: ConstDevice,
-{
-    /// Creates a new instance with explicitly provided shape arguments.
-    pub fn new_with(in_f: usize, out_f: usize) -> Result<Self> {
-        Ok(Self {
-            wi_i: Linear::<(usize, usize), B, True>::new_with((in_f, out_f))?,
-            wi_f: Linear::<(usize, usize), B, True>::new_with((in_f, out_f))?,
-            wi_g: Linear::<(usize, usize), B, True>::new_with((in_f, out_f))?,
-            wi_o: Linear::<(usize, usize), B, True>::new_with((in_f, out_f))?,
-            wh_i: Linear::<(usize, usize), B, False>::new_with((out_f, out_f))?,
-            wh_f: Linear::<(usize, usize), B, False>::new_with((out_f, out_f))?,
-            wh_g: Linear::<(usize, usize), B, False>::new_with((out_f, out_f))?,
-            wh_o: Linear::<(usize, usize), B, False>::new_with((out_f, out_f))?,
+            wi_i: Linear::build_full(
+                input.clone(),
+                output.clone(),
+                dtype.clone(),
+                device.clone(),
+                bias_ih.clone(),
+            )?,
+            wi_f: Linear::build_full(
+                input.clone(),
+                output.clone(),
+                dtype.clone(),
+                device.clone(),
+                bias_ih.clone(),
+            )?,
+            wi_g: Linear::build_full(
+                input.clone(),
+                output.clone(),
+                dtype.clone(),
+                device.clone(),
+                bias_ih.clone(),
+            )?,
+            wi_o: Linear::build_full(
+                input,
+                output.clone(),
+                dtype.clone(),
+                device.clone(),
+                bias_ih,
+            )?,
+            wh_i: Linear::build_full(
+                output.clone(),
+                output.clone(),
+                dtype.clone(),
+                device.clone(),
+                bias_hh.clone(),
+            )?,
+            wh_f: Linear::build_full(
+                output.clone(),
+                output.clone(),
+                dtype.clone(),
+                device.clone(),
+                bias_hh.clone(),
+            )?,
+            wh_g: Linear::build_full(
+                output.clone(),
+                output.clone(),
+                dtype.clone(),
+                device.clone(),
+                bias_hh.clone(),
+            )?,
+            wh_o: Linear::build_full(output.clone(), output, dtype, device, bias_hh)?,
         })
     }
 }
@@ -468,8 +319,6 @@ impl<
         (Tensor<(Batch, Out), B>, Tensor<(Batch, Out), B>),
     )> for LSTM<(In, Out), B, BiasIh, BiasHh>
 where
-    B::FloatElem: ConstDType,
-    B::Device: ConstDevice,
     LSTMCell<(In, Out), B, BiasIh, BiasHh>: Module<
             (
                 Tensor<(Batch, In), B>,

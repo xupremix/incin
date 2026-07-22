@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use crate::wgpu::storage::{WgpuBuffer, WgpuStorage};
-use crate::wgpu::{WgpuBackend, WgpuVar};
+use crate::wgpu::{WgpuBackendImpl, WgpuVar};
 use kindle_core::prelude::*;
 
 // Helper: create a WgpuStorage from a flat vec and shape
@@ -26,15 +26,14 @@ fn vec_approx_eq(a: &[f32], b: &[f32], tol: f32) -> bool {
 }
 
 /// `B`.
-type B = WgpuBackend<f32, Cpu>;
+type B = WgpuBackendImpl<f32, Wgpu<0>>;
 
 // ── Creation ──────────────────────────────────────────────────────────────
 
 #[test]
 /// `test_zeros`.
 fn test_zeros() {
-    let s = <B as CreationOps<B>>::zeros::<f32>(&[2, 3], KindleDType::F32, &KindleDevice::cpu())
-        .unwrap();
+    let s = <B as CreationOps<B>>::zeros::<f32>(&[2, 3], DTypeId::F32, &DeviceId::wgpu(0)).unwrap();
     assert_eq!(s.shape, vec![2, 3]);
     assert!(readback(&s).iter().all(|&x| x == 0.0));
 }
@@ -42,16 +41,14 @@ fn test_zeros() {
 #[test]
 /// `test_ones`.
 fn test_ones() {
-    let s = <B as CreationOps<B>>::ones::<f32>(&[3, 2], KindleDType::F32, &KindleDevice::cpu())
-        .unwrap();
+    let s = <B as CreationOps<B>>::ones::<f32>(&[3, 2], DTypeId::F32, &DeviceId::wgpu(0)).unwrap();
     assert!(readback(&s).iter().all(|&x| x == 1.0));
 }
 
 #[test]
 /// `test_rand_shape`.
 fn test_rand_shape() {
-    let s = <B as CreationOps<B>>::rand::<f32>(&[4, 4], KindleDType::F32, &KindleDevice::cpu())
-        .unwrap();
+    let s = <B as CreationOps<B>>::rand::<f32>(&[4, 4], DTypeId::F32, &DeviceId::wgpu(0)).unwrap();
     assert_eq!(s.shape, vec![4, 4]);
     let data = readback(&s);
     // All values should be in [0, 1)
@@ -61,8 +58,7 @@ fn test_rand_shape() {
 #[test]
 /// `test_randn_shape`.
 fn test_randn_shape() {
-    let s = <B as CreationOps<B>>::randn::<f32>(&[100], KindleDType::F32, &KindleDevice::cpu())
-        .unwrap();
+    let s = <B as CreationOps<B>>::randn::<f32>(&[100], DTypeId::F32, &DeviceId::wgpu(0)).unwrap();
     assert_eq!(s.shape, vec![100]);
 }
 

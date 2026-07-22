@@ -8,7 +8,7 @@ use kindle_macros::s;
 #[test]
 fn test_rms_norm_static() {
     let _t1: Tensor<s![2, 3, 4], DummyBackend<f32, Cpu>> = Tensor::zeros(()).unwrap();
-    let norm: RMSNorm<s![4], DummyBackend<f32, Cpu>> = RMSNorm::new(0.001).unwrap();
+    let norm: RMSNorm<s![4], DummyBackend<f32, Cpu>> = RMSNorm::build(0.001).unwrap();
 
     let _ = norm;
 }

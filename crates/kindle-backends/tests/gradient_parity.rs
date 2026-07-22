@@ -1,11 +1,11 @@
 #![cfg(feature = "wgpu")]
 
-use kindle_backends::cpu::CpuBackend;
-use kindle_backends::wgpu::WgpuBackend;
+use kindle_backends::cpu::CpuBackendImpl;
+use kindle_backends::wgpu::WgpuBackendImpl;
 use kindle_core::prelude::*;
 
-type CpuB = CpuBackend;
-type WgpuB = WgpuBackend<f32, Cpu>;
+type CpuB = CpuBackendImpl;
+type WgpuB = WgpuBackendImpl<f32, kindle_core::prelude::Wgpu<0>>;
 
 fn read_f32<B: Backend>(s: &B::Storage<f32>) -> Vec<f32> {
     let bytes = B::to_bytes::<f32>(s).unwrap();
@@ -34,15 +34,15 @@ fn parity_elementwise_add() {
     let cpu_a = CpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_a),
         &shape,
-        KindleDType::F32,
-        &KindleDevice::cpu(),
+        DTypeId::F32,
+        &DeviceId::cpu(),
     )
     .unwrap();
     let cpu_b = CpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_b),
         &shape,
-        KindleDType::F32,
-        &KindleDevice::cpu(),
+        DTypeId::F32,
+        &DeviceId::cpu(),
     )
     .unwrap();
     let cpu_out = CpuB::add::<f32>(&cpu_a, &cpu_b).unwrap();
@@ -52,15 +52,15 @@ fn parity_elementwise_add() {
     let wgpu_a = WgpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_a),
         &shape,
-        KindleDType::F32,
-        &KindleDevice::cpu(),
+        DTypeId::F32,
+        &DeviceId::wgpu(0),
     )
     .unwrap();
     let wgpu_b = WgpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_b),
         &shape,
-        KindleDType::F32,
-        &KindleDevice::cpu(),
+        DTypeId::F32,
+        &DeviceId::wgpu(0),
     )
     .unwrap();
     let wgpu_out = WgpuB::add::<f32>(&wgpu_a, &wgpu_b).unwrap();
@@ -100,8 +100,8 @@ fn parity_activations_softmax() {
     let cpu_in = CpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data),
         &shape,
-        KindleDType::F32,
-        &KindleDevice::cpu(),
+        DTypeId::F32,
+        &DeviceId::cpu(),
     )
     .unwrap();
     let cpu_out = CpuB::softmax::<f32>(&cpu_in, 1).unwrap();
@@ -111,8 +111,8 @@ fn parity_activations_softmax() {
     let wgpu_in = WgpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data),
         &shape,
-        KindleDType::F32,
-        &KindleDevice::cpu(),
+        DTypeId::F32,
+        &DeviceId::wgpu(0),
     )
     .unwrap();
     let wgpu_out = WgpuB::softmax::<f32>(&wgpu_in, 1).unwrap();
@@ -148,15 +148,15 @@ fn parity_matmul() {
     let cpu_a = CpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_a),
         &shape_a,
-        KindleDType::F32,
-        &KindleDevice::cpu(),
+        DTypeId::F32,
+        &DeviceId::cpu(),
     )
     .unwrap();
     let cpu_b = CpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_b),
         &shape_b,
-        KindleDType::F32,
-        &KindleDevice::cpu(),
+        DTypeId::F32,
+        &DeviceId::cpu(),
     )
     .unwrap();
     let cpu_out = CpuB::matmul::<f32>(&cpu_a, &cpu_b).unwrap();
@@ -166,15 +166,15 @@ fn parity_matmul() {
     let wgpu_a = WgpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_a),
         &shape_a,
-        KindleDType::F32,
-        &KindleDevice::cpu(),
+        DTypeId::F32,
+        &DeviceId::wgpu(0),
     )
     .unwrap();
     let wgpu_b = WgpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_b),
         &shape_b,
-        KindleDType::F32,
-        &KindleDevice::cpu(),
+        DTypeId::F32,
+        &DeviceId::wgpu(0),
     )
     .unwrap();
     let wgpu_out = WgpuB::matmul::<f32>(&wgpu_a, &wgpu_b).unwrap();
@@ -213,22 +213,22 @@ fn parity_layer_norm() {
     let cpu_x = CpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_x),
         &shape_x,
-        KindleDType::F32,
-        &KindleDevice::cpu(),
+        DTypeId::F32,
+        &DeviceId::cpu(),
     )
     .unwrap();
     let cpu_w = CpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_w),
         &shape_w,
-        KindleDType::F32,
-        &KindleDevice::cpu(),
+        DTypeId::F32,
+        &DeviceId::cpu(),
     )
     .unwrap();
     let cpu_b = CpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_b),
         &shape_w,
-        KindleDType::F32,
-        &KindleDevice::cpu(),
+        DTypeId::F32,
+        &DeviceId::cpu(),
     )
     .unwrap();
     let cpu_out = CpuB::layer_norm::<f32>(&cpu_x, &cpu_w, Some(&cpu_b), 1e-5).unwrap();
@@ -237,22 +237,22 @@ fn parity_layer_norm() {
     let wgpu_x = WgpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_x),
         &shape_x,
-        KindleDType::F32,
-        &KindleDevice::cpu(),
+        DTypeId::F32,
+        &DeviceId::wgpu(0),
     )
     .unwrap();
     let wgpu_w = WgpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_w),
         &shape_w,
-        KindleDType::F32,
-        &KindleDevice::cpu(),
+        DTypeId::F32,
+        &DeviceId::wgpu(0),
     )
     .unwrap();
     let wgpu_b = WgpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_b),
         &shape_w,
-        KindleDType::F32,
-        &KindleDevice::cpu(),
+        DTypeId::F32,
+        &DeviceId::wgpu(0),
     )
     .unwrap();
     let wgpu_out = WgpuB::layer_norm::<f32>(&wgpu_x, &wgpu_w, Some(&wgpu_b), 1e-5).unwrap();
@@ -268,7 +268,7 @@ fn parity_layer_norm() {
 }
 
 #[test]
-fn parity_cross_entropy_loss() {
+fn wgpu_cross_entropy_rejects_unsupported_u32_targets() {
     let shape_pred = vec![2, 3];
     let shape_tgt = vec![2];
     let data_pred = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
@@ -279,63 +279,43 @@ fn parity_cross_entropy_loss() {
     let cpu_pred = CpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_pred),
         &shape_pred,
-        KindleDType::F32,
-        &KindleDevice::cpu(),
+        DTypeId::F32,
+        &DeviceId::cpu(),
     )
     .unwrap();
     let cpu_tgt = CpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_tgt_f32),
         &shape_tgt,
-        KindleDType::F32,
-        &KindleDevice::cpu(),
+        DTypeId::F32,
+        &DeviceId::cpu(),
     )
     .unwrap();
     let cpu_out =
         CpuB::cross_entropy_loss::<f32, f32>(&cpu_pred, &cpu_tgt, Reduction::Mean).unwrap();
-    let cpu_grads = CpuB::backward::<f32>(&cpu_out).unwrap();
+    assert_eq!(CpuB::shape::<f32>(&cpu_out), Vec::<usize>::new());
 
     // WGPU
-    let wgpu_pred = WgpuB::from_bytes::<f32>(
+    let _wgpu_pred = WgpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&data_pred),
         &shape_pred,
-        KindleDType::F32,
-        &KindleDevice::cpu(),
+        DTypeId::F32,
+        &DeviceId::wgpu(0),
     )
     .unwrap();
-    let wgpu_tgt = WgpuB::from_bytes::<u32>(
+    let error = WgpuB::from_bytes::<u32>(
         bytemuck::cast_slice(&data_tgt),
         &shape_tgt,
-        KindleDType::U32,
-        &KindleDevice::cpu(),
+        DTypeId::U32,
+        &DeviceId::wgpu(0),
     )
-    .unwrap();
-    let wgpu_out =
-        WgpuB::cross_entropy_loss::<f32, u32>(&wgpu_pred, &wgpu_tgt, Reduction::Mean).unwrap();
-    let wgpu_grads = WgpuB::backward::<f32>(&wgpu_out).unwrap();
-
-    let cpu_res = read_f32::<CpuB>(&cpu_out);
-    let wgpu_res = read_f32::<WgpuB>(&wgpu_out);
-    assert!(
-        approx_eq_slice(&cpu_res, &wgpu_res, 1e-3),
-        "CrossEntropy Loss Forward mismatch: CPU {:?} vs WGPU {:?}",
-        cpu_res,
-        wgpu_res
-    );
-
-    let cpu_gp = read_f32::<CpuB>(
-        &CpuB::get_grad::<f32>(&cpu_pred, &cpu_grads)
-            .unwrap()
-            .unwrap(),
-    );
-    let wgpu_gp = read_f32::<WgpuB>(
-        &WgpuB::get_grad::<f32>(&wgpu_pred, &wgpu_grads)
-            .unwrap()
-            .unwrap(),
-    );
-    assert!(
-        approx_eq_slice(&cpu_gp, &wgpu_gp, 1e-3),
-        "CrossEntropy Loss Grad mismatch: CPU {:?} vs WGPU {:?}",
-        cpu_gp,
-        wgpu_gp
-    );
+    .err()
+    .expect("WGPU must reject U32 storage");
+    assert!(matches!(
+        error,
+        Error::UnsupportedDType {
+            dtype: DTypeId::U32,
+            backend: "Wgpu",
+            op: "from_bytes",
+        }
+    ));
 }

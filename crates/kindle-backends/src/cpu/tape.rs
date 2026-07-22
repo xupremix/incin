@@ -23,7 +23,7 @@ use crate::cpu::storage::{CpuBuffer, CpuStorage, TensorId};
 // A thread-local backward-call counter for telemetry step tracking.
 #[cfg(feature = "telemetry")]
 thread_local! {
-    static BACKWARD_STEP: RefCell<usize> = RefCell::new(0);
+    static BACKWARD_STEP: RefCell<usize> = const { RefCell::new(0) };
 }
 
 /// A boxed backward closure: receives the accumulated gradient for a

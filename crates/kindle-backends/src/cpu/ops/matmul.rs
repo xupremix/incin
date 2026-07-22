@@ -1,4 +1,4 @@
-//! Naive, stride-aware, unbatched-2D-only `matmul` for `CpuBackend`.
+//! Naive, stride-aware, unbatched-2D-only `matmul` for `CpuBackendImpl`.
 //!
 //! Per CONTEXT.md's explicit Phase 1 scope decision, batch-broadcast matmul
 //! (>2D operands) is out of scope here (deferred to Phase 3 / CPUBACK-07).
@@ -9,7 +9,7 @@
 //!
 //! This file only contributes a plain function, `matmul_impl`, rather than
 //! its own `impl TensorOps` block: Rust does not allow two separate `impl
-//! TensorOps<..> for CpuBackend<..>` blocks for the same trait+type
+//! TensorOps<..> for CpuBackendImpl<..>` blocks for the same trait+type
 //! across two files, so `ops/shape_ops.rs`'s single `TensorOps` impl block
 //! calls into `matmul_impl` for its `matmul` method.
 
@@ -637,12 +637,12 @@ mod tests {
 
     // --- Task 2: batched matmul backward (gradcheck) ---
 
-    use crate::cpu::CpuBackend;
+    use crate::cpu::CpuBackendImpl;
     use crate::cpu::gradcheck::gradcheck;
     use kindle_core::prelude::{Cpu, ReductionOps};
 
     /// `TestBackend`.
-    type TestBackend = CpuBackend<f32, Cpu>;
+    type TestBackend = CpuBackendImpl<f32, Cpu>;
 
     /// Wraps `batched_matmul_impl` with `sum_all` so `gradcheck` (which
     /// requires a scalar-output op) can drive it.

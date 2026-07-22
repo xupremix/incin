@@ -1,4 +1,4 @@
-//! Operator implementations for `CpuBackend<T, D>`.
+//! Operator implementations for `CpuBackendImpl<T, D>`.
 //!
 //! * `elementwise` — `NumericOps::{add,sub,mul,div}` and
 //!   `FloatOps::{add_scalar_float,mul_scalar_float,relu,gelu,…}` (all

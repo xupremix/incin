@@ -72,7 +72,7 @@ impl<B: Backend> TracingBackend<B> {
         let shape = B::shape(inner_res);
         let value_id = {
             let mut g = TRACING_GRAPH.lock();
-            let out_id = g.add_value(shape, KindleDType::F32, None); // default F32 for now
+            let out_id = g.add_value(shape, DTypeId::F32, None); // default F32 for now
             g.add_node(
                 op,
                 vec![lhs.value_id, rhs.value_id],
@@ -97,7 +97,7 @@ impl<B: Backend> TracingBackend<B> {
         let shape = B::shape(inner_res);
         let value_id = {
             let mut g = TRACING_GRAPH.lock();
-            let out_id = g.add_value(shape, KindleDType::F32, None);
+            let out_id = g.add_value(shape, DTypeId::F32, None);
             g.add_node(
                 op,
                 vec![t.value_id],
@@ -123,10 +123,6 @@ impl<B: Backend> Backend for TracingBackend<B> {
     /// `IntElem`.
     type IntElem = B::IntElem;
 
-    /// `BackendWithDevice`.
-    type BackendWithDevice<NewD: crate::tensor::device::Device> =
-        TracingBackend<B::BackendWithDevice<NewD>>;
-
     /// `RawVar`.
     type RawVar = TracingVar<B::RawVar>;
     /// `Grads`.
@@ -137,6 +133,16 @@ impl<B: Backend> Backend for TracingBackend<B> {
     /// `shape`.
     fn shape<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>) -> alloc::vec::Vec<usize> {
         B::shape(&t.inner)
+    }
+
+    fn storage_dtype<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>) -> Option<DTypeId> {
+        B::storage_dtype(&t.inner)
+    }
+
+    fn storage_device<K: super::dtype::DType>(
+        t: &<Self as Backend>::Storage<K>,
+    ) -> Option<DeviceId> {
+        B::storage_device(&t.inner)
     }
 
     /// `format_tensor_display`.
@@ -174,18 +180,6 @@ impl<B: Backend> Backend for TracingBackend<B> {
         })
     }
 
-    /// `var_to_device`.
-    fn var_to_device(
-        var: &<Self as Backend>::RawVar,
-        device: &KindleDevice,
-    ) -> Result<<Self as Backend>::RawVar> {
-        let inner = B::var_to_device(&var.inner, device)?;
-        Ok(TracingVar {
-            inner,
-            value_id: var.value_id,
-        })
-    }
-
     /// `assign_var`.
     fn assign_var<K: super::dtype::DType>(
         var: &mut <Self as Backend>::RawVar,
@@ -220,13 +214,13 @@ impl<B: Backend> Backend for TracingBackend<B> {
     fn from_bytes<K: super::dtype::DType>(
         bytes: &[u8],
         shape: &[usize],
-        dtype: KindleDType,
-        device: &KindleDevice,
+        dtype: DTypeId,
+        device: &DeviceId,
     ) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::from_bytes(bytes, shape, dtype, device)?;
         let value_id = {
             let mut g = TRACING_GRAPH.lock();
-            let id = g.add_value(shape.to_vec(), KindleDType::F32, None);
+            let id = g.add_value(shape.to_vec(), DTypeId::F32, None);
             g.initializers.insert(id, bytes.to_vec());
             id
         };
@@ -241,12 +235,18 @@ impl<B: Backend> Backend for TracingBackend<B> {
     }
 }
 
+impl<B: Backend + SupportsDType<K>, K: DType> SupportsDType<K> for TracingBackend<B> {
+    fn resolve_dtype(field: &K::Field, device: &DeviceId) -> Result<DTypeId> {
+        B::resolve_dtype(field, device)
+    }
+}
+
 impl<B: Backend> CreationOps<Self> for TracingBackend<B> {
     /// `zeros`.
     fn zeros<K: super::dtype::DType>(
         shape: &[usize],
-        dtype: KindleDType,
-        device: &KindleDevice,
+        dtype: DTypeId,
+        device: &DeviceId,
     ) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::zeros(shape, dtype, device)?;
         let value_id = TRACING_GRAPH.lock().add_value(shape.to_vec(), dtype, None);
@@ -256,8 +256,8 @@ impl<B: Backend> CreationOps<Self> for TracingBackend<B> {
     /// `ones`.
     fn ones<K: super::dtype::DType>(
         shape: &[usize],
-        dtype: KindleDType,
-        device: &KindleDevice,
+        dtype: DTypeId,
+        device: &DeviceId,
     ) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::ones(shape, dtype, device)?;
         let value_id = TRACING_GRAPH.lock().add_value(shape.to_vec(), dtype, None);
@@ -267,8 +267,8 @@ impl<B: Backend> CreationOps<Self> for TracingBackend<B> {
     /// `rand`.
     fn rand<K: super::dtype::DType>(
         shape: &[usize],
-        dtype: KindleDType,
-        device: &KindleDevice,
+        dtype: DTypeId,
+        device: &DeviceId,
     ) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::rand(shape, dtype, device)?;
         let value_id = TRACING_GRAPH.lock().add_value(shape.to_vec(), dtype, None);
@@ -278,8 +278,8 @@ impl<B: Backend> CreationOps<Self> for TracingBackend<B> {
     /// `randn`.
     fn randn<K: super::dtype::DType>(
         shape: &[usize],
-        dtype: KindleDType,
-        device: &KindleDevice,
+        dtype: DTypeId,
+        device: &DeviceId,
     ) -> Result<<Self as Backend>::Storage<K>> {
         let inner = B::randn(shape, dtype, device)?;
         let value_id = TRACING_GRAPH.lock().add_value(shape.to_vec(), dtype, None);
@@ -289,8 +289,8 @@ impl<B: Backend> CreationOps<Self> for TracingBackend<B> {
     /// `var_zeros`.
     fn var_zeros<K: super::dtype::DType>(
         shape: &[usize],
-        dtype: KindleDType,
-        device: &KindleDevice,
+        dtype: DTypeId,
+        device: &DeviceId,
     ) -> Result<<Self as Backend>::RawVar> {
         let inner = B::var_zeros::<K>(shape, dtype, device)?;
         let value_id = TRACING_GRAPH.lock().add_value(shape.to_vec(), dtype, None);
@@ -300,8 +300,8 @@ impl<B: Backend> CreationOps<Self> for TracingBackend<B> {
     /// `var_ones`.
     fn var_ones<K: super::dtype::DType>(
         shape: &[usize],
-        dtype: KindleDType,
-        device: &KindleDevice,
+        dtype: DTypeId,
+        device: &DeviceId,
     ) -> Result<<Self as Backend>::RawVar> {
         let inner = B::var_ones::<K>(shape, dtype, device)?;
         let value_id = TRACING_GRAPH.lock().add_value(shape.to_vec(), dtype, None);
@@ -311,8 +311,8 @@ impl<B: Backend> CreationOps<Self> for TracingBackend<B> {
     /// `var_rand`.
     fn var_rand<K: super::dtype::DType>(
         shape: &[usize],
-        dtype: KindleDType,
-        device: &KindleDevice,
+        dtype: DTypeId,
+        device: &DeviceId,
     ) -> Result<<Self as Backend>::RawVar> {
         let inner = B::var_rand::<K>(shape, dtype, device)?;
         let value_id = TRACING_GRAPH.lock().add_value(shape.to_vec(), dtype, None);
@@ -322,23 +322,64 @@ impl<B: Backend> CreationOps<Self> for TracingBackend<B> {
     /// `var_randn`.
     fn var_randn<K: super::dtype::DType>(
         shape: &[usize],
-        dtype: KindleDType,
-        device: &KindleDevice,
+        dtype: DTypeId,
+        device: &DeviceId,
     ) -> Result<<Self as Backend>::RawVar> {
         let inner = B::var_randn::<K>(shape, dtype, device)?;
         let value_id = TRACING_GRAPH.lock().add_value(shape.to_vec(), dtype, None);
         Ok(TracingVar { inner, value_id })
     }
+}
 
-    /// `tensor_to_device`.
-    fn tensor_to_device<K: super::dtype::DType>(
-        t: &<Self as Backend>::Storage<K>,
-        device: &KindleDevice,
-    ) -> Result<<Self as Backend>::Storage<K>> {
-        let inner = B::tensor_to_device(&t.inner, device)?;
+impl<B, NewD> TransferTo<NewD> for TracingBackend<B>
+where
+    B: Backend + TransferTo<NewD>,
+    NewD: crate::tensor::device::Device,
+{
+    type Output = TracingBackend<<B as TransferTo<NewD>>::Output>;
+
+    fn transfer_storage<K: super::dtype::DType>(
+        storage: &Self::Storage<K>,
+        dtype: &K::Field,
+        device: &NewD::Field,
+    ) -> Result<<Self::Output as Backend>::Storage<K>>
+    where
+        Self::Output: SupportsDType<K>,
+    {
+        let shape = B::shape(&storage.inner);
+        let bytes = B::to_bytes(&storage.inner)?;
+        let device_id = NewD::to_kindle(device)?;
+        let dtype_id = <Self::Output as SupportsDType<K>>::resolve_dtype(dtype, &device_id)?;
+        let inner = <<B as TransferTo<NewD>>::Output as Backend>::from_bytes::<K>(
+            &bytes, &shape, dtype_id, &device_id,
+        )?;
         Ok(TracingTensor {
             inner,
-            value_id: t.value_id,
+            value_id: storage.value_id,
+        })
+    }
+
+    fn transfer_var(
+        variable: &Self::RawVar,
+        dtype: &<Self::FloatElem as super::dtype::DType>::Field,
+        device: &NewD::Field,
+    ) -> Result<<Self::Output as Backend>::RawVar>
+    where
+        Self::Output: SupportsDType<Self::FloatElem>,
+    {
+        let source = B::var_as_tensor::<B::FloatElem>(&variable.inner)?;
+        let shape = B::shape(&source);
+        let bytes = B::to_bytes(&source)?;
+        let device_id = NewD::to_kindle(device)?;
+        let dtype_id =
+            <Self::Output as SupportsDType<B::FloatElem>>::resolve_dtype(dtype, &device_id)?;
+        let storage = <<B as TransferTo<NewD>>::Output as Backend>::from_bytes::<B::FloatElem>(
+            &bytes, &shape, dtype_id, &device_id,
+        )?;
+        let inner = <<B as TransferTo<NewD>>::Output as Backend>::var_from_tensor(&storage)?;
+        Ok(TracingVar {
+            inner,
+            value_id: variable.value_id,
         })
     }
 }
@@ -510,7 +551,7 @@ impl<B: Backend> FloatOps<Self> for TracingBackend<B> {
         let shape = B::shape(&inner);
         let value_id = {
             let mut g = TRACING_GRAPH.lock();
-            let out_id = g.add_value(shape, KindleDType::F32, None);
+            let out_id = g.add_value(shape, DTypeId::F32, None);
             let mut attrs = alloc::collections::BTreeMap::new();
             attrs.insert(
                 alloc::string::String::from("axis"),
@@ -666,7 +707,7 @@ impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
         // For now, this is enough to compile.
         let v_id = {
             let mut g = TRACING_GRAPH.lock();
-            let out_id = g.add_value(shape_v, KindleDType::F32, None);
+            let out_id = g.add_value(shape_v, DTypeId::F32, None);
             g.add_node(
                 OpType::Reshape, // Placeholder
                 vec![t.value_id],
@@ -678,7 +719,7 @@ impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
 
         let i_id = {
             let mut g = TRACING_GRAPH.lock();
-            let out_id = g.add_value(shape_i, KindleDType::U32, None);
+            let out_id = g.add_value(shape_i, DTypeId::U32, None);
             g.add_node(
                 OpType::Reshape, // Placeholder
                 vec![t.value_id],
@@ -716,7 +757,7 @@ impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
     /// `tensor_to_dtype`.
     fn tensor_to_dtype<K1: super::dtype::DType, K2: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K1>,
-        dtype: KindleDType,
+        dtype: DTypeId,
     ) -> Result<<Self as Backend>::Storage<K2>> {
         let inner = B::tensor_to_dtype::<K1, K2>(&t.inner, dtype)?;
         let shape = B::shape(&inner);
@@ -752,10 +793,10 @@ impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
         let shape_out = B::shape(&inner);
         let value_id = {
             let mut g = TRACING_GRAPH.lock();
-            let out_id = g.add_value(shape_out.clone(), KindleDType::F32, None);
+            let out_id = g.add_value(shape_out.clone(), DTypeId::F32, None);
 
             // Add reshape parameters as a constant value
-            let shape_val_id = g.add_value(vec![shape.len()], KindleDType::I64, None);
+            let shape_val_id = g.add_value(vec![shape.len()], DTypeId::I64, None);
             let mut bytes = Vec::new();
             for &s in shape {
                 bytes.extend_from_slice(&(s as i64).to_le_bytes());
@@ -783,7 +824,7 @@ impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
         let shape_out = B::shape(&inner);
         let value_id = {
             let mut g = TRACING_GRAPH.lock();
-            let out_id = g.add_value(shape_out.clone(), KindleDType::F32, None);
+            let out_id = g.add_value(shape_out.clone(), DTypeId::F32, None);
             let mut attrs = alloc::collections::BTreeMap::new();
             // simple perm vector building for ONNX
             let mut perm: Vec<i64> = (0..shape_out.len() as i64).collect();
@@ -819,7 +860,7 @@ impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
         let shape_out = B::shape(&inner);
         let value_id = {
             let mut g = TRACING_GRAPH.lock();
-            let out_id = g.add_value(shape_out, KindleDType::F32, None);
+            let out_id = g.add_value(shape_out, DTypeId::F32, None);
             let inputs = tensors.iter().map(|t| t.value_id).collect();
             let mut attrs = alloc::collections::BTreeMap::new();
             attrs.insert(
@@ -842,7 +883,7 @@ impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
         let shape_out = B::shape(&inner);
         let value_id = {
             let mut g = TRACING_GRAPH.lock();
-            let out_id = g.add_value(shape_out, KindleDType::F32, None);
+            let out_id = g.add_value(shape_out, DTypeId::F32, None);
             let inputs = tensors.iter().map(|t| t.value_id).collect();
             let mut attrs = alloc::collections::BTreeMap::new();
             attrs.insert(
@@ -946,7 +987,7 @@ impl<B: Backend + crate::tensor::backend::ModuleOps<B>> ModuleOps<Self> for Trac
         let shape_out = B::shape(&inner);
         let value_id = {
             let mut g = TRACING_GRAPH.lock();
-            let out_id = g.add_value(shape_out, KindleDType::F32, None);
+            let out_id = g.add_value(shape_out, DTypeId::F32, None);
             let mut inputs = vec![x.value_id, weight.value_id];
             if let Some(b) = bias {
                 inputs.push(b.value_id);
@@ -994,7 +1035,7 @@ impl<B: Backend + crate::tensor::backend::ModuleOps<B>> ModuleOps<Self> for Trac
         let shape_out = B::shape(&inner);
         let value_id = {
             let mut g = TRACING_GRAPH.lock();
-            let out_id = g.add_value(shape_out, KindleDType::F32, None);
+            let out_id = g.add_value(shape_out, DTypeId::F32, None);
             let mut inputs = vec![x.value_id, weight.value_id];
             if let Some(b) = bias {
                 inputs.push(b.value_id);
@@ -1065,7 +1106,7 @@ impl<B: Backend + crate::tensor::backend::ModuleOps<B>> ModuleOps<Self> for Trac
         let shape = B::shape(&inner);
         let value_id = {
             let mut g = TRACING_GRAPH.lock();
-            let out_id = g.add_value(shape, KindleDType::F32, None);
+            let out_id = g.add_value(shape, DTypeId::F32, None);
             g.add_node(
                 OpType::Embedding,
                 vec![t.value_id, w.value_id],

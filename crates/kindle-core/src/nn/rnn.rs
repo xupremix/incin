@@ -150,8 +150,8 @@ where
 /// use kindle::prelude::*;
 ///
 /// let cell = RNNCell::new(
-///     Linear::<s![10, 20], Backend>::new()?,
-///     Linear::<s![20, 20], Backend>::new()?,
+///     Linear::<s![10, 20], Backend>::build(())?,
+///     Linear::<s![20, 20], Backend>::build(())?,
 /// );
 /// let rnn = RNN::<s![10, 20], Backend>::new(cell);
 /// let input = Tensor::<s![2, 5, 10], Backend>::zeros(()).unwrap();

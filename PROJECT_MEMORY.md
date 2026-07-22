@@ -24,40 +24,37 @@ kindle/
 
 ---
 
-## 2. Core Backend Architecture: `KindleBackend<T, D>` (design target — not yet built)
+## 2. Core Backend Architecture: `KindleBackend<T, D>`
 
-> **Status check (2026-07-21 audit):** the code today still has separate
-> `CpuBackend<T>` / `CudaBackend<T>` / `WgpuBackend<T>` structs (plus legacy
-> `CandleBackend<T,D>` / `NdarrayBackend<T,D>`) — these are the graph's top
-> god-nodes by edge count. The unified `KindleBackend<T, D>` below is the
-> **planned** refactor (see ROADMAP.md Phase 2), described here in present
-> tense as a design spec, not as current architecture. Don't assume it exists
-> when reading or writing code against this crate.
-
-### Unified Type System (planned)
-Instead of separate backend structs, `kindle` is planned to use a single unified `KindleBackend<T, D>` parameterized by element type `T` (`f32`, `f16`, `i32`) and hardware device `D` (`Cpu`, `Cuda`, `Wgpu`):
+As of 0.2.0, `KindleBackend<T, D>` maps static device markers to their concrete
+backends and maps `Dyn` to an enum-backed runtime dispatcher. Tensor device
+metadata comes only from the backend:
 
 ```rust
-#[derive(Debug, Clone, Copy)]
-pub struct KindleBackend<T: DType = f32, D: Device = Cpu> {
-    _marker: core::marker::PhantomData<(T, D)>,
-}
-
-pub type CpuBackend<T = f32> = KindleBackend<T, Cpu>;
-pub type CudaBackend<T = f32> = KindleBackend<T, Cuda>;
-pub type WgpuBackend<T = f32> = KindleBackend<T, Wgpu>;
+pub type KindleBackend<T, D> = <D as BackendFor<T>>::Backend;
+pub struct Tensor<S, B, K = B::FloatElem, G = Grad> { /* private fields */ }
 ```
 
-### Static Monomorphization (`BackendDevice<T>`)
-The `BackendDevice<T>` trait maps `D` to its hardware-specific storage struct (`CpuStorage`, `CudaStorage`, `WgpuStorage`) at compile time. This guarantees **zero runtime dispatch overhead**.
+### Static monomorphization and runtime dispatch
+
+`Cpu`, `Wgpu<N>`, and `Cuda<N>` retain concrete, zero-overhead backend types.
+`KindleBackend<T, Dyn>` uses `DispatchBackend<T, Dyn>` and chooses CPU, WGPU,
+or CUDA from a validated `DeviceId`. CPU supports all storage dtypes; WGPU and
+CUDA advertise F32 only.
 
 ```rust
-pub trait BackendDevice<T: DType>: Device {
-    type Storage: Clone;
-    type Var: Clone;
-    type Grads: Clone;
+pub trait BackendFor<T: DType>: Device {
+    type Backend: Backend<Device = Self, FloatElem = T, IntElem = i64>;
 }
 ```
+
+`BackendFor<T>` is sealed. Cross-device and cross-family movement is expressed by
+`TransferTo<NewD>`; its `Output` backend is selected by `BackendFor`, and tensor or
+variable payloads are validated and rebuilt in destination-native storage.
+
+Allocating layers expose only `build(args)`. The tuple lists dynamic dimensions,
+backend dtype, backend device, dynamic optional flags, and runtime parameters in
+that order; compile-time-static positions are omitted.
 
 ---
 
@@ -121,10 +118,8 @@ use kindle_backends::KindleBackend;
 type B = KindleBackend<f32, Cuda>;
 
 fn main() -> Result<()> {
-    let device = CudaDevice::new(0)?;
-    
-    let a = Tensor::<s![32, 512], B>::ones(&device)?;
-    let b = Tensor::<s![32, 512], B>::ones(&device)?;
+    let a = Tensor::<s![32, 512], B>::ones(())?;
+    let b = Tensor::<s![32, 512], B>::ones(())?;
 
     let c = a.add(&b)?;
     let z = c.relu()?;
@@ -152,7 +147,7 @@ fn main() -> Result<()> {
 - **`d3601a4`**: `docs: add tensor shape ranges, index syntax, and changelog to PROJECT_MEMORY.md`.
 - **`c48c530`**: `docs: add PROJECT_MEMORY.md, autotuning spec, and fix training demo & doctests`.
 - **`1c8cb35`**: `chore: clean up obsolete Claude info and legacy planning files`.
-- **`a93ca32`**: `feat: complete CudaBackend integration and test/example fixes`.
+- **`a93ca32`**: `feat: complete CudaBackendImpl integration and test/example fixes`.
 - **`74f197b`**: `feat: complete Phase 4 and Phase 5`.
 - **`243e6a5`**: `Fix compilation: remove orphaned CpuBuffer::Cuda references in cpu backend`.
 - **`f854c18`**: `Phase 4: Replaced metal config with wgpu in core, backends, and app lib`.

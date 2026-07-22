@@ -124,8 +124,8 @@ impl<B: Backend, K: DType> Optimizer<B> for AdamW<B, K> {
                 if !self.m.contains_key(name) {
                     let zero = B::var_zeros::<K>(
                         B::shape::<K>(&t).as_slice(),
-                        KindleDType::F32,
-                        &KindleDevice::cpu(),
+                        DTypeId::F32,
+                        &DeviceId::cpu(),
                     )
                     .unwrap(); // Fallback device
                     self.m.insert(name.clone(), B::var_as_tensor::<K>(&zero)?);
@@ -133,8 +133,8 @@ impl<B: Backend, K: DType> Optimizer<B> for AdamW<B, K> {
                 if !self.v.contains_key(name) {
                     let zero = B::var_zeros::<K>(
                         B::shape::<K>(&t).as_slice(),
-                        KindleDType::F32,
-                        &KindleDevice::cpu(),
+                        DTypeId::F32,
+                        &DeviceId::cpu(),
                     )
                     .unwrap();
                     self.v.insert(name.clone(), B::var_as_tensor::<K>(&zero)?);

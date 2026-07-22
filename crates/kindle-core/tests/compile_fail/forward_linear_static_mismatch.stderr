@@ -15,7 +15,7 @@ error[E0774]: `derive` may only be applied to `struct`s, `enum`s and `union`s
    |   ^^^^^^^^^^^^^^^^^^^^^^^^^ not applicable here
  8 |
  9 | / fn main() {
-10 | |     let layer = Linear::<s![3, 4], DummyBackend<f32, Cpu>>::new().unwrap();
+10 | |     let layer = Linear::<s![3, 4], DummyBackend<f32, Cpu>>::build(()).unwrap();
 11 | |     // 5 != 3
 12 | |     let input = Tensor::<s![2, 5], DummyBackend<f32, Cpu>>::zeros(()).unwrap();
 13 | |     layer.forward(input).unwrap();
@@ -49,4 +49,4 @@ error[E0277]: the trait bound `(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UInt<UTerm,
              `(D0, D1, D2, D3, D4)` implements `EndsWith<D4>`
              `(D0, D1, D2, D3, D4, D5)` implements `EndsWith<D5>`
              `(D0,)` implements `EndsWith<D0>`
-   = note: required for `kindle::prelude::Linear<(UInt<UInt<UTerm, B1>, B1>, UInt<UInt<UInt<UTerm, B1>, B0>, B0>), DummyBackend<f32, kindle::prelude::Cpu>>` to implement `kindle::prelude::Module<kindle::prelude::Tensor<(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UInt<UTerm, B1>, B0>, B1>), DummyBackend<f32, kindle::prelude::Cpu>, f32, kindle::prelude::Cpu>>`
+   = note: required for `kindle::prelude::Linear<(UInt<UInt<UTerm, B1>, B1>, UInt<UInt<UInt<UTerm, B1>, B0>, B0>), DummyBackend<f32, kindle::prelude::Cpu>>` to implement `kindle::prelude::Module<kindle::prelude::Tensor<(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UInt<UTerm, B1>, B0>, B1>), DummyBackend<f32, kindle::prelude::Cpu>, f32>>`

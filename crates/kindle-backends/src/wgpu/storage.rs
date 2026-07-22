@@ -88,7 +88,7 @@ impl TensorId {
     }
 }
 
-/// Storage type used by `WgpuBackend` as `Backend::Storage<K>`.
+/// Storage type used by `WgpuBackendImpl` as `Backend::Storage<K>`.
 /// The internal buffer and shape are private to prevent construction of
 /// invalid states from outside this crate.
 #[derive(Clone)]

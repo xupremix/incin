@@ -15,12 +15,12 @@ macro_rules! impl_binary_op {
         $trait_name:ident, $method:ident, $backend_method:ident
     ) => {
         // Tensor op Tensor → Result<Tensor> (owned)
-        impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, D: crate::tensor::device::Device, G: RequiresGrad> Tensor<S, B, K, D, G>
+        impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tensor<S, B, K, G>
 {
             $(#[$meta])*
             pub fn $method<S2: Shape, G2: RequiresGrad>(
                 &self,
-                rhs: &Tensor<S2, B, K, D, G2>,
+                rhs: &Tensor<S2, B, K, G2>,
             ) -> Result<Self>
             where
                 S: ShapeEq<S2>,
@@ -96,11 +96,11 @@ macro_rules! impl_broadcast_binary_op {
         $(#[$meta:meta])*
         $trait_name:ident, $method:ident, $backend_method:ident
     ) => {
-        impl<S1: Shape + crate::shapes::DynShape, B: Backend, K: crate::tensor::dtype::DType, D: crate::tensor::device::Device, G: RequiresGrad> Tensor<S1, B, K, D, G>
+        impl<S1: Shape + crate::shapes::DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tensor<S1, B, K, G>
         {
             $(#[$meta])*
             #[inline]
-            pub fn $method<S2>(&self, rhs: &Tensor<S2, B, K, D, G>) -> Result<Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, D, G>>
+            pub fn $method<S2>(&self, rhs: &Tensor<S2, B, K, G>) -> Result<Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, G>>
             where
                 S2: Shape + crate::shapes::DynShape,
                 S1: crate::shapes::broadcast::BroadcastShape<S2>,
@@ -181,18 +181,17 @@ macro_rules! impl_std_ops {
             S2: Shape + crate::shapes::DynShape,
             B: Backend,
             K: crate::tensor::dtype::DType,
-            D: crate::tensor::device::Device,
             G: RequiresGrad,
-        > core::ops::$trait<Tensor<S2, B, K, D, G>> for Tensor<S1, B, K, D, G>
+        > core::ops::$trait<Tensor<S2, B, K, G>> for Tensor<S1, B, K, G>
         where
             S1: crate::shapes::broadcast::BroadcastShape<S2>,
             <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape,
         {
             /// The output tensor type produced by this module's forward pass.
             type Output =
-                Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, D, G>;
+                Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, G>;
             #[inline]
-            fn $method(self, rhs: Tensor<S2, B, K, D, G>) -> Self::Output {
+            fn $method(self, rhs: Tensor<S2, B, K, G>) -> Self::Output {
                 self.$backend_method(&rhs).unwrap_or_else(|e| {
                     panic!(
                         "Tensor `{}` operator panicked: {:?} (operands were not \
@@ -214,18 +213,17 @@ macro_rules! impl_std_ops {
             S2: Shape + crate::shapes::DynShape,
             B: Backend,
             K: crate::tensor::dtype::DType,
-            D: crate::tensor::device::Device,
             G: RequiresGrad,
-        > core::ops::$trait<&'b Tensor<S2, B, K, D, G>> for &'a Tensor<S1, B, K, D, G>
+        > core::ops::$trait<&'b Tensor<S2, B, K, G>> for &'a Tensor<S1, B, K, G>
         where
             S1: crate::shapes::broadcast::BroadcastShape<S2>,
             <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape,
         {
             /// The output tensor type produced by this module's forward pass.
             type Output =
-                Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, D, G>;
+                Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, G>;
             #[inline]
-            fn $method(self, rhs: &'b Tensor<S2, B, K, D, G>) -> Self::Output {
+            fn $method(self, rhs: &'b Tensor<S2, B, K, G>) -> Self::Output {
                 self.$backend_method(rhs).unwrap_or_else(|e| {
                     panic!(
                         "Tensor `{}` operator panicked: {:?} (operands were not \
@@ -246,18 +244,17 @@ macro_rules! impl_std_ops {
             S2: Shape + crate::shapes::DynShape,
             B: Backend,
             K: crate::tensor::dtype::DType,
-            D: crate::tensor::device::Device,
             G: RequiresGrad,
-        > core::ops::$trait<&'a Tensor<S2, B, K, D, G>> for Tensor<S1, B, K, D, G>
+        > core::ops::$trait<&'a Tensor<S2, B, K, G>> for Tensor<S1, B, K, G>
         where
             S1: crate::shapes::broadcast::BroadcastShape<S2>,
             <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape,
         {
             /// The output tensor type produced by this module's forward pass.
             type Output =
-                Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, D, G>;
+                Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, G>;
             #[inline]
-            fn $method(self, rhs: &'a Tensor<S2, B, K, D, G>) -> Self::Output {
+            fn $method(self, rhs: &'a Tensor<S2, B, K, G>) -> Self::Output {
                 self.$backend_method(rhs).unwrap_or_else(|e| {
                     panic!(
                         "Tensor `{}` operator panicked: {:?} (operands were not \
@@ -278,18 +275,17 @@ macro_rules! impl_std_ops {
             S2: Shape + crate::shapes::DynShape,
             B: Backend,
             K: crate::tensor::dtype::DType,
-            D: crate::tensor::device::Device,
             G: RequiresGrad,
-        > core::ops::$trait<Tensor<S2, B, K, D, G>> for &'a Tensor<S1, B, K, D, G>
+        > core::ops::$trait<Tensor<S2, B, K, G>> for &'a Tensor<S1, B, K, G>
         where
             S1: crate::shapes::broadcast::BroadcastShape<S2>,
             <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape,
         {
             /// The output tensor type produced by this module's forward pass.
             type Output =
-                Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, D, G>;
+                Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, G>;
             #[inline]
-            fn $method(self, rhs: Tensor<S2, B, K, D, G>) -> Self::Output {
+            fn $method(self, rhs: Tensor<S2, B, K, G>) -> Self::Output {
                 self.$backend_method(&rhs).unwrap_or_else(|e| {
                     panic!(
                         "Tensor `{}` operator panicked: {:?} (operands were not \

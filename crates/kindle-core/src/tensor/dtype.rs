@@ -12,11 +12,8 @@ pub trait DType: 'static + Clone + Debug + Send + Sync + PartialEq {
     /// `init`.
     fn init(arg: Self::Arg) -> Self::Field;
     /// `to_kindle`.
-    fn to_kindle(dtype: &Self::Field) -> KindleDType;
+    fn to_kindle(dtype: &Self::Field) -> DTypeId;
 }
-
-/// `DynDType`.
-pub trait DynDType: DType {}
 
 /// `FloatDType`.
 pub trait FloatDType: DType {}
@@ -30,7 +27,7 @@ pub trait ConstDType: DType<Arg = ()> {
     /// The Rust element type corresponding to this dtype.
     type Elem: 'static + Copy + Debug + Send + Sync;
     /// `DTYPE`.
-    const DTYPE: KindleDType;
+    const DTYPE: DTypeId;
 }
 
 /// `QuantDType`.
@@ -42,8 +39,8 @@ pub struct Q8_0;
 
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-/// `KindleDType`.
-pub enum KindleDType {
+/// `DTypeId`.
+pub enum DTypeId {
     /// `U8`.
     U8,
     /// `U32`.
@@ -62,14 +59,14 @@ pub enum KindleDType {
     Q8_0,
 }
 
-impl KindleDType {
+impl DTypeId {
     /// Returns the size in bytes of a single element of this dtype.
     pub fn element_size(&self) -> usize {
         match self {
-            KindleDType::U8 | KindleDType::Q8_0 => 1,
-            KindleDType::F16 | KindleDType::BF16 => 2,
-            KindleDType::F32 | KindleDType::U32 => 4,
-            KindleDType::F64 | KindleDType::I64 => 8,
+            DTypeId::U8 | DTypeId::Q8_0 => 1,
+            DTypeId::F16 | DTypeId::BF16 => 2,
+            DTypeId::F32 | DTypeId::U32 => 4,
+            DTypeId::F64 | DTypeId::I64 => 8,
         }
     }
 }
@@ -83,20 +80,19 @@ macro_rules! impl_dtype {
                 /// `Field`.
                 type Field = PhantomData<$t>;
                 /// `to_kindle`.
-                fn to_kindle(_: &Self::Field) -> KindleDType {
-                    KindleDType::$repr
+                fn to_kindle(_: &Self::Field) -> DTypeId {
+                    DTypeId::$repr
                 }
                 /// `init`.
                 fn init(_: Self::Arg) -> Self::Field {
                     PhantomData
                 }
             }
-            impl DynDType for $t { }
             impl ConstDType for $t {
                 /// `Elem`.
                 type Elem = $t;
                 /// `DTYPE`.
-                const DTYPE: KindleDType = KindleDType::$repr;
+                const DTYPE: DTypeId = DTypeId::$repr;
             }
         )*
     };
@@ -126,9 +122,9 @@ impl QuantDType for Q8_0 {}
 
 impl DType for Dyn {
     /// `Arg`.
-    type Arg = KindleDType;
+    type Arg = DTypeId;
     /// `Field`.
-    type Field = KindleDType;
+    type Field = DTypeId;
 
     /// `init`.
     fn init(arg: Self::Arg) -> Self::Field {
@@ -136,8 +132,7 @@ impl DType for Dyn {
     }
 
     /// `to_kindle`.
-    fn to_kindle(dtype: &Self::Field) -> KindleDType {
+    fn to_kindle(dtype: &Self::Field) -> DTypeId {
         *dtype
     }
 }
-impl DynDType for Dyn {}

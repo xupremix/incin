@@ -1,15 +1,17 @@
+#![cfg(feature = "wgpu")]
+
 //! Cross-backend numerical parity tests.
 //!
-//! Validates that `CpuBackend` and `WgpuBackend` produce outputs within
+//! Validates that `CpuBackendImpl` and `WgpuBackendImpl` produce outputs within
 //! 1e-4 for all common ops. Guards against silent divergence between the
 //! CPU reference implementation and the WGSL shaders.
 
 use kindle::prelude::*;
-use kindle_backends::cpu::CpuBackend;
-use kindle_backends::wgpu::WgpuBackend;
+use kindle_backends::cpu::CpuBackendImpl;
+use kindle_backends::wgpu::WgpuBackendImpl;
 
-type Native = CpuBackend;
-type Wgpu = WgpuBackend<f32, Cpu>;
+type Native = CpuBackendImpl;
+type Wgpu = WgpuBackendImpl<f32, kindle::Wgpu<0>>;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -17,12 +19,12 @@ type Wgpu = WgpuBackend<f32, Cpu>;
 
 fn native_storage(data: &[f32], shape: &[usize]) -> <Native as Backend>::Storage<f32> {
     let bytes = bytemuck::cast_slice(data);
-    Native::from_bytes::<f32>(bytes, shape, KindleDType::F32, &KindleDevice::cpu()).unwrap()
+    Native::from_bytes::<f32>(bytes, shape, DTypeId::F32, &DeviceId::cpu()).unwrap()
 }
 
 fn wgpu_storage(data: &[f32], shape: &[usize]) -> <Wgpu as Backend>::Storage<f32> {
     let bytes = bytemuck::cast_slice(data);
-    Wgpu::from_bytes::<f32>(bytes, shape, KindleDType::F32, &KindleDevice::cpu()).unwrap()
+    Wgpu::from_bytes::<f32>(bytes, shape, DTypeId::F32, &DeviceId::wgpu(0)).unwrap()
 }
 
 fn native_vec(s: &<Native as Backend>::Storage<f32>) -> Vec<f64> {

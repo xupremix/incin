@@ -24,14 +24,7 @@ macro_rules! impl_unary_op {
     };
 }
 
-impl<
-    S: Shape,
-    B: Backend,
-    K: crate::tensor::dtype::DType,
-    D: crate::tensor::device::Device,
-    G: RequiresGrad,
-> Tensor<S, B, K, D, G>
-{
+impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tensor<S, B, K, G> {
     impl_unary_op!(
         /// Computes the absolute value of each element in the tensor.
         ///
@@ -128,7 +121,7 @@ impl<
     /// let sm = t.softmax(1).unwrap();
     /// ```
     #[inline]
-    pub fn softmax(&self, dim: usize) -> Result<Tensor<S, B, K, D, G>> {
+    pub fn softmax(&self, dim: usize) -> Result<Tensor<S, B, K, G>> {
         let inner = B::softmax::<K>(&self.inner, dim)?;
         Ok(Tensor::from_parts_unchecked(
             inner,
@@ -259,16 +252,11 @@ impl<
 
 macro_rules! impl_std_scalar_ops {
     ($t:ty) => {
-        impl<
-            S: Shape,
-            B: Backend,
-            K: crate::tensor::dtype::DType,
-            D: crate::tensor::device::Device,
-            G: RequiresGrad,
-        > core::ops::Mul<$t> for Tensor<S, B, K, D, G>
+        impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
+            core::ops::Mul<$t> for Tensor<S, B, K, G>
         {
             /// The output tensor type produced by this module's forward pass.
-            type Output = Tensor<S, B, K, D, G>;
+            type Output = Tensor<S, B, K, G>;
             #[inline]
             /// `mul`.
             fn mul(self, rhs: $t) -> Self::Output {
@@ -276,17 +264,11 @@ macro_rules! impl_std_scalar_ops {
                     .unwrap_or_else(|e| panic!("Tensor `*` (scalar) operator panicked: {e:?}"))
             }
         }
-        impl<
-            'a,
-            S: Shape,
-            B: Backend,
-            K: crate::tensor::dtype::DType,
-            D: crate::tensor::device::Device,
-            G: RequiresGrad,
-        > core::ops::Mul<$t> for &'a Tensor<S, B, K, D, G>
+        impl<'a, S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
+            core::ops::Mul<$t> for &'a Tensor<S, B, K, G>
         {
             /// The output tensor type produced by this module's forward pass.
-            type Output = Tensor<S, B, K, D, G>;
+            type Output = Tensor<S, B, K, G>;
             #[inline]
             /// `mul`.
             fn mul(self, rhs: $t) -> Self::Output {
@@ -294,16 +276,11 @@ macro_rules! impl_std_scalar_ops {
                     .unwrap_or_else(|e| panic!("Tensor `*` (scalar) operator panicked: {e:?}"))
             }
         }
-        impl<
-            S: Shape,
-            B: Backend,
-            K: crate::tensor::dtype::DType,
-            D: crate::tensor::device::Device,
-            G: RequiresGrad,
-        > core::ops::Add<$t> for Tensor<S, B, K, D, G>
+        impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
+            core::ops::Add<$t> for Tensor<S, B, K, G>
         {
             /// The output tensor type produced by this module's forward pass.
-            type Output = Tensor<S, B, K, D, G>;
+            type Output = Tensor<S, B, K, G>;
             #[inline]
             /// `add`.
             fn add(self, rhs: $t) -> Self::Output {
@@ -311,17 +288,11 @@ macro_rules! impl_std_scalar_ops {
                     .unwrap_or_else(|e| panic!("Tensor `+` (scalar) operator panicked: {e:?}"))
             }
         }
-        impl<
-            'a,
-            S: Shape,
-            B: Backend,
-            K: crate::tensor::dtype::DType,
-            D: crate::tensor::device::Device,
-            G: RequiresGrad,
-        > core::ops::Add<$t> for &'a Tensor<S, B, K, D, G>
+        impl<'a, S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
+            core::ops::Add<$t> for &'a Tensor<S, B, K, G>
         {
             /// The output tensor type produced by this module's forward pass.
-            type Output = Tensor<S, B, K, D, G>;
+            type Output = Tensor<S, B, K, G>;
             #[inline]
             /// `add`.
             fn add(self, rhs: $t) -> Self::Output {

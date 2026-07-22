@@ -1,4 +1,4 @@
-//! Free-function `embedding` helper for `CpuBackend<T, D>`.
+//! Free-function `embedding` helper for `CpuBackendImpl<T, D>`.
 //!
 //! `embedding_impl` is called by `ops/module.rs`'s `ModuleOps::embedding`
 //! trait method, mirroring `ops/norm.rs`'s free-function-called-from-
@@ -127,12 +127,12 @@ pub(crate) fn embedding_impl<T: DType, D: kindle_core::prelude::Device, K: DType
 /// `tests`.
 mod tests {
     use super::*;
-    use crate::cpu::CpuBackend;
+    use crate::cpu::CpuBackendImpl;
     use crate::cpu::tape;
     use kindle_core::prelude::{Cpu, ReductionOps};
 
     /// `B`.
-    type B = CpuBackend<f32, Cpu>;
+    type B = CpuBackendImpl<f32, Cpu>;
 
     /// The learnable weight matrix parameter.
     fn weight(v: Vec<f32>, vocab: usize, hidden: usize) -> CpuStorage {

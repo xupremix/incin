@@ -4,19 +4,16 @@
 //! without necessarily changing the underlying data. It includes reshaping, transposition,
 //! squeezing, flattening, and broadcasting. These operations heavily leverage the
 //! compile-time type system to ensure the resulting shapes are strictly valid.
-use crate::prelude::{Backend, Dyn, DynShape, RequiresGrad, Result, Shape, Tensor};
+use crate::prelude::{
+    Backend, Dyn, DynShape, RequiresGrad, Result, Shape, SupportsDType, Tensor, TransferTo,
+};
 use crate::tensor::ops::*;
 
 use alloc::string::ToString;
 use alloc::vec::Vec;
 
-impl<
-    S: Shape + DynShape,
-    B: Backend,
-    K: crate::tensor::dtype::DType,
-    D: crate::tensor::device::Device,
-    G: RequiresGrad,
-> Tensor<S, B, K, D, G>
+impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
+    Tensor<S, B, K, G>
 {
     /// Slices a tensor dynamically based on a slice of `IndexSpec` configurations.
     /// Returns a dynamically shaped tensor (`Dyn`).
@@ -27,7 +24,7 @@ impl<
     /// let t = Tensor::<s![3, 3], DefaultBackend>::ones(()).unwrap();
     /// let s = t.slice(&[IndexSpec::All, IndexSpec::Index(0)]).unwrap();
     /// ```
-    pub fn slice(&self, specs: &[IndexSpec]) -> Result<Tensor<Dyn, B, K, D, G>> {
+    pub fn slice(&self, specs: &[IndexSpec]) -> Result<Tensor<Dyn, B, K, G>> {
         self.dyn_slice(specs)
     }
 
@@ -40,12 +37,12 @@ impl<
     pub fn get<I: crate::tensor::ops::index::IndexArgs>(
         &self,
         index: I,
-    ) -> Result<Tensor<Dyn, B, K, D, G>> {
+    ) -> Result<Tensor<Dyn, B, K, G>> {
         self.dyn_slice(&index.into_specs())
     }
 
     /// Internal alias for `slice`.
-    pub fn dyn_slice(&self, specs: &[IndexSpec]) -> Result<Tensor<Dyn, B, K, D, G>> {
+    pub fn dyn_slice(&self, specs: &[IndexSpec]) -> Result<Tensor<Dyn, B, K, G>> {
         let current_dims = S::dims(&self._shape);
         if specs.len() > current_dims.as_ref().len() {
             return Err(crate::err::Error::Msg(alloc::format!(
@@ -107,15 +104,14 @@ impl<
     S: Shape + DynShape,
     B: Backend + crate::tensor::backend::ModuleOps<B>,
     K: crate::tensor::dtype::DType,
-    D: crate::tensor::device::Device,
     G: RequiresGrad,
-> Tensor<S, B, K, D, G>
+> Tensor<S, B, K, G>
 {
     /// Functional `max_pool2d` operation.
     pub fn max_pool2d<KShape, SShape, P, Dilation>(
         &self,
     ) -> Result<
-        Tensor<<S as crate::shapes::Pool2dShape<KShape, SShape, P, Dilation>>::Output, B, K, D, G>,
+        Tensor<<S as crate::shapes::Pool2dShape<KShape, SShape, P, Dilation>>::Output, B, K, G>,
     >
     where
         KShape: typenum::Unsigned,
@@ -151,13 +147,8 @@ impl<
 // Structural Ops (Reshape, Broadcast, Transpose, Flatten)
 // -------------------------------------------------------------
 
-impl<
-    S: Shape + DynShape,
-    B: Backend,
-    K: crate::tensor::dtype::DType,
-    D: crate::tensor::device::Device,
-    G: RequiresGrad,
-> Tensor<S, B, K, D, G>
+impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
+    Tensor<S, B, K, G>
 {
     /// Reshape this tensor into explicitly provided shape `S2`.
     /// This is guaranteed at compile-time to have matching elements.
@@ -168,7 +159,7 @@ impl<
     /// let t = Tensor::<s![2, 3], DefaultBackend>::ones(()).unwrap();
     /// let r = t.reshape::<s![6]>(()).unwrap();
     /// ```
-    pub fn reshape<S2>(&self, args: S2::Arg) -> Result<Tensor<S2, B, K, D, G>>
+    pub fn reshape<S2>(&self, args: S2::Arg) -> Result<Tensor<S2, B, K, G>>
     where
         S2: Shape + DynShape,
         S: crate::shapes::reshape::ReshapeShape<S2>,
@@ -196,7 +187,7 @@ impl<
     /// ```
     pub fn reshape_idx<T: crate::shapes::idx::ReshapeTarget<S>>(
         &self,
-    ) -> Result<Tensor<T::Output, B, K, D, G>> {
+    ) -> Result<Tensor<T::Output, B, K, G>> {
         let in_shape_vec = S::dims(&self._shape);
         let out_shape_vec = T::calculate_shape(in_shape_vec.as_ref());
         let inner = B::reshape(&self.inner, &out_shape_vec)?;
@@ -212,7 +203,7 @@ impl<
     /// Slices a tensor based on python-like slicing syntax via the `idx!` macro.
     pub fn slice_idx<T: crate::shapes::idx::SliceTarget<S>>(
         &self,
-    ) -> Result<Tensor<T::Output, B, K, D, G>> {
+    ) -> Result<Tensor<T::Output, B, K, G>> {
         let in_shape_vec = S::dims(&self._shape);
         let ranges = T::calculate_bounds(in_shape_vec.as_ref());
         let inner = B::slice(&self.inner, &ranges)?;
@@ -239,12 +230,7 @@ impl<
     /// let t = Tensor::<s![10], DefaultBackend>::ones(()).unwrap();
     /// let n = t.try_narrow(0, 2, 5).unwrap(); // shape [5]
     /// ```
-    pub fn try_narrow(
-        self,
-        dim: usize,
-        start: usize,
-        len: usize,
-    ) -> Result<Tensor<Dyn, B, K, D, G>> {
+    pub fn try_narrow(self, dim: usize, start: usize, len: usize) -> Result<Tensor<Dyn, B, K, G>> {
         let inner = B::narrow(&self.inner, dim, start, len)?;
         let mut shape = S::dims(&self._shape).as_ref().to_vec();
         shape[dim] = len;
@@ -265,7 +251,7 @@ impl<
     /// let t = Tensor::<s![1, 5], DefaultBackend>::ones(()).unwrap();
     /// let sq = t.try_squeeze(0).unwrap(); // shape [5]
     /// ```
-    pub fn try_squeeze(self, dim: usize) -> Result<Tensor<Dyn, B, K, D, G>> {
+    pub fn try_squeeze(self, dim: usize) -> Result<Tensor<Dyn, B, K, G>> {
         let inner = B::squeeze(&self.inner, dim)?;
         let mut shape = S::dims(&self._shape).as_ref().to_vec();
         shape.remove(dim);
@@ -278,7 +264,7 @@ impl<
         })
     }
     /// `try_reshape`.
-    pub fn try_reshape<S2>(&self, args: S2::Arg) -> Result<Tensor<S2, B, K, D, G>>
+    pub fn try_reshape<S2>(&self, args: S2::Arg) -> Result<Tensor<S2, B, K, G>>
     where
         S2: Shape + DynShape,
         S: crate::shapes::reshape::TryReshape<S2>,
@@ -313,10 +299,7 @@ impl<
     }
 
     /// Broadcast the tensor to the specific shape `S2`.
-    pub fn broadcast_to<S2: Shape + DynShape>(
-        &self,
-        args: S2::Arg,
-    ) -> Result<Tensor<S2, B, K, D, G>> {
+    pub fn broadcast_to<S2: Shape + DynShape>(&self, args: S2::Arg) -> Result<Tensor<S2, B, K, G>> {
         let new_shape_field = S2::init(args);
         let new_dims = S2::dims(&new_shape_field);
         let inner = B::broadcast_as(&self.inner, new_dims.as_ref())?;
@@ -332,7 +315,7 @@ impl<
     /// `to_dtype`.
     pub fn to_dtype<T2: crate::tensor::dtype::DType<Arg = ()>>(
         &self,
-    ) -> Result<Tensor<S, B, T2, D, G>> {
+    ) -> Result<Tensor<S, B, T2, G>> {
         let field = T2::init(());
         let kindle_dtype = T2::to_kindle(&field);
         let inner = B::tensor_to_dtype::<K, T2>(&self.inner, kindle_dtype)?;
@@ -413,9 +396,7 @@ impl<
     /// let t = Tensor::<s![2, 3], DefaultBackend>::ones(()).unwrap();
     /// let tr = t.transpose::<0, 1>().unwrap(); // shape [3, 2]
     /// ```
-    pub fn transpose<const D1: usize, const D2: usize>(
-        &self,
-    ) -> Result<Tensor<S::Output, B, K, D, G>>
+    pub fn transpose<const D1: usize, const D2: usize>(&self) -> Result<Tensor<S::Output, B, K, G>>
     where
         S: crate::shapes::Transpose<D1, D2>,
     {
@@ -443,7 +424,7 @@ impl<
     /// ```
     pub fn flatten<const START: usize, const END: usize>(
         &self,
-    ) -> Result<Tensor<S::Output, B, K, D, G>>
+    ) -> Result<Tensor<S::Output, B, K, G>>
     where
         S: crate::shapes::Flatten<START, END>,
     {
@@ -470,9 +451,9 @@ impl<
     /// Dynamically concatenates a slice of tensors along `dim`.
     /// This is fallible at runtime if shapes mismatch or dim is out of bounds.
     pub fn try_concat_slice(
-        tensors: &[&Tensor<S, B, K, D, G>],
+        tensors: &[&Tensor<S, B, K, G>],
         dim: usize,
-    ) -> Result<Tensor<Dyn, B, K, D, G>> {
+    ) -> Result<Tensor<Dyn, B, K, G>> {
         let raw_tensors: alloc::vec::Vec<&B::Storage<K>> =
             tensors.iter().map(|t| &t.inner).collect();
         if raw_tensors.is_empty() {
@@ -495,8 +476,8 @@ impl<
     /// Statically concatenates `self` with `other` along `Axis`.
     pub fn concat<S2, Axis>(
         &self,
-        other: &Tensor<S2, B, K, D, G>,
-    ) -> Result<Tensor<<S as crate::shapes::concat::ConcatShape<S2, Axis>>::Output, B, K, D, G>>
+        other: &Tensor<S2, B, K, G>,
+    ) -> Result<Tensor<<S as crate::shapes::concat::ConcatShape<S2, Axis>>::Output, B, K, G>>
     where
         S2: Shape,
         Axis: typenum::Unsigned,
@@ -518,9 +499,9 @@ impl<
     /// Dynamically concatenates `self` with `other` along `dim`.
     pub fn try_concat<S2>(
         &self,
-        other: &Tensor<S2, B, K, D, G>,
+        other: &Tensor<S2, B, K, G>,
         dim: usize,
-    ) -> Result<Tensor<Dyn, B, K, D, G>>
+    ) -> Result<Tensor<Dyn, B, K, G>>
     where
         S2: Shape,
     {
@@ -538,9 +519,9 @@ impl<
 
     /// Dynamically stacks a slice of tensors along `dim`.
     pub fn try_stack_slice(
-        tensors: &[&Tensor<S, B, K, D, G>],
+        tensors: &[&Tensor<S, B, K, G>],
         dim: usize,
-    ) -> Result<Tensor<Dyn, B, K, D, G>> {
+    ) -> Result<Tensor<Dyn, B, K, G>> {
         let raw_tensors: alloc::vec::Vec<&B::Storage<K>> =
             tensors.iter().map(|t| &t.inner).collect();
         if raw_tensors.is_empty() {
@@ -563,8 +544,8 @@ impl<
     /// Statically stacks `self` with `other` along `Axis`.
     pub fn stack<Axis>(
         &self,
-        other: &Tensor<S, B, K, D, G>,
-    ) -> Result<Tensor<<S as crate::shapes::stack::StackShape<Axis>>::Output, B, K, D, G>>
+        other: &Tensor<S, B, K, G>,
+    ) -> Result<Tensor<<S as crate::shapes::stack::StackShape<Axis>>::Output, B, K, G>>
     where
         Axis: typenum::Unsigned,
         S: crate::shapes::stack::StackShape<Axis>,
@@ -585,9 +566,9 @@ impl<
     /// Dynamically stacks `self` with `other` along `dim`.
     pub fn try_stack(
         &self,
-        other: &Tensor<S, B, K, D, G>,
+        other: &Tensor<S, B, K, G>,
         dim: usize,
-    ) -> Result<Tensor<Dyn, B, K, D, G>> {
+    ) -> Result<Tensor<Dyn, B, K, G>> {
         let inner = B::stack(&[&self.inner, &other.inner], dim)?;
         let mut out_shape = B::shape(&self.inner);
         out_shape.insert(dim, 2);
@@ -606,12 +587,11 @@ pub fn try_stack_tensors<
     S: Shape + DynShape,
     B: Backend,
     K: crate::tensor::dtype::DType,
-    D: crate::tensor::device::Device,
     G: crate::tensor::grad::RequiresGrad,
 >(
-    tensors: &[&Tensor<S, B, K, D, G>],
+    tensors: &[&Tensor<S, B, K, G>],
     dim: usize,
-) -> Result<Tensor<Dyn, B, K, D, G>>
+) -> Result<Tensor<Dyn, B, K, G>>
 where
     G::Field: Clone,
 {
@@ -640,20 +620,19 @@ impl<
     S: Shape,
     B: Backend,
     K: crate::tensor::dtype::DType,
-    D: crate::tensor::device::Device,
     G: RequiresGrad,
     NewD: crate::prelude::Device,
-> crate::nn::module::ToDevice<B, NewD> for Tensor<S, B, K, D, G>
+> crate::nn::module::ToDevice<B, NewD> for Tensor<S, B, K, G>
 where
-    B: Backend<BackendWithDevice<NewD> = B>,
+    B: Backend + TransferTo<NewD>,
+    <B as TransferTo<NewD>>::Output: SupportsDType<K>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<S, B, K, NewD, G>;
+    type Output = Tensor<S, <B as TransferTo<NewD>>::Output, K, G>;
     /// `to_device`.
     fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output> {
         let field = NewD::init(arg.clone());
-        let kindle_dev = NewD::to_kindle(&field)?;
-        let inner = B::tensor_to_device::<K>(&self.inner, &kindle_dev)?;
+        let inner = B::transfer_storage(&self.inner, &self._dtype, &field)?;
         Ok(Tensor::from_parts_unchecked(
             inner,
             self._shape,

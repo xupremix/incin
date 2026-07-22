@@ -1,4 +1,4 @@
-//! `max_pool2d`/`avg_pool2d`/`adaptive_avg_pool2d` for `CpuBackend<T, D>` —
+//! `max_pool2d`/`avg_pool2d`/`adaptive_avg_pool2d` for `CpuBackendImpl<T, D>` —
 //! generalizes `ops/reduce.rs`'s `max_axis_with_indices`/`scatter_axis_grad`
 //! 1D-axis-reduction pattern to a 2D sliding window (D-01/D-02).
 //!
@@ -130,7 +130,7 @@ fn scatter_pool_grad_2d(
     CpuStorage::from_contiguous(CpuBuffer::F32(vals), input_shape.to_vec())
 }
 
-/// `ModuleOps::max_pool2d`'s `CpuBackend` implementation.
+/// `ModuleOps::max_pool2d`'s `CpuBackendImpl` implementation.
 #[allow(clippy::extra_unused_type_parameters)]
 pub(crate) fn max_pool2d_impl<T: DType, D: kindle_core::prelude::Device, K: DType>(
     t: &CpuStorage,
@@ -162,7 +162,7 @@ pub(crate) fn max_pool2d_impl<T: DType, D: kindle_core::prelude::Device, K: DTyp
 // avg_pool2d
 // ---------------------------------------------------------------------------
 
-/// `ModuleOps::avg_pool2d`'s `CpuBackend` implementation: for each output
+/// `ModuleOps::avg_pool2d`'s `CpuBackendImpl` implementation: for each output
 /// position, sums the window's values (padded-region positions contribute
 /// `0.0` to both the sum and the fixed `kernel_size.0 * kernel_size.1`
 /// divisor — PyTorch's `count_include_pad=True` default) divided by the
@@ -283,7 +283,7 @@ fn adaptive_window_bounds(input_size: usize, output_size: usize, i: usize) -> (u
     (start, end)
 }
 
-/// `ModuleOps::adaptive_avg_pool2d`'s `CpuBackend` implementation.
+/// `ModuleOps::adaptive_avg_pool2d`'s `CpuBackendImpl` implementation.
 #[allow(clippy::extra_unused_type_parameters)]
 pub(crate) fn adaptive_avg_pool2d_impl<T: DType, D: kindle_core::prelude::Device, K: DType>(
     t: &CpuStorage,
@@ -386,12 +386,12 @@ fn out_size(
 /// `tests`.
 mod tests {
     use super::*;
-    use crate::cpu::CpuBackend;
+    use crate::cpu::CpuBackendImpl;
     use crate::cpu::gradcheck::gradcheck;
     use kindle_core::prelude::{Cpu, ReductionOps};
 
     /// `TestBackend`.
-    type TestBackend = CpuBackend<f32, Cpu>;
+    type TestBackend = CpuBackendImpl<f32, Cpu>;
 
     /// `tensor`.
     fn tensor(v: Vec<f32>, shape: Vec<usize>) -> CpuStorage {

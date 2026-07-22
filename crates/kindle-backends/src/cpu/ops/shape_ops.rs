@@ -1,8 +1,8 @@
-//! `TensorOps` for `CpuBackend<T, D>`: real `reshape`/`transpose`/
+//! `TensorOps` for `CpuBackendImpl<T, D>`: real `reshape`/`transpose`/
 //! `broadcast_as`/`matmul`/`float_to_scalar`/`float_to_vec1`; every other
 //! method is a typed stub returning `Error::UnsupportedBackendOperation`.
 //!
-//! This is the single `impl TensorOps<..> for CpuBackend<..>` block for
+//! This is the single `impl TensorOps<..> for CpuBackendImpl<..>` block for
 //! the whole crate — `matmul`'s method body delegates to
 //! `ops::matmul::matmul_impl` (see that file's module doc for why the naive
 //! loop lives in its own file as a plain function rather than its own impl
@@ -11,16 +11,16 @@
 //! duplicate that logic, only add tape tracking (D-05: every op is a graph
 //! node, unconditionally recorded).
 
-use crate::cpu::CpuBackend;
+use crate::cpu::CpuBackendImpl;
 use kindle_core::prelude::Error;
 use kindle_core::prelude::*;
-use kindle_core::prelude::{Backend, DType, KindleDType, Result, TensorOps};
+use kindle_core::prelude::{Backend, DType, DTypeId, Result, TensorOps};
 
 use crate::cpu::ops::matmul::{batched_matmul_impl, matmul_impl};
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
 use crate::cpu::tape::{self, TapeEntry};
 
-impl<T: DType, D: Device> TensorOps<Self> for CpuBackend<T, D> {
+impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
     /// `reshape`.
     fn reshape<K: DType>(
         t: &<Self as Backend>::Storage<K>,
@@ -478,7 +478,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackend<T, D> {
     /// `tensor_to_dtype`.
     fn tensor_to_dtype<K: DType, K2: DType>(
         t: &<Self as Backend>::Storage<K>,
-        dtype: KindleDType,
+        dtype: DTypeId,
     ) -> Result<<Self as Backend>::Storage<K2>> {
         let total: usize = t.shape.iter().product();
         let mut multi_idx = vec![0usize; t.shape.len()];
@@ -497,12 +497,12 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackend<T, D> {
         }
 
         let new_buffer = match dtype {
-            KindleDType::F32 => convert_variant!(F32, f32),
-            KindleDType::F64 => convert_variant!(F64, f64),
-            KindleDType::U8 => convert_variant!(U8, u8),
-            KindleDType::U32 => convert_variant!(U32, u32),
-            KindleDType::I64 => convert_variant!(I64, i64),
-            KindleDType::F16 => {
+            DTypeId::F32 => convert_variant!(F32, f32),
+            DTypeId::F64 => convert_variant!(F64, f64),
+            DTypeId::U8 => convert_variant!(U8, u8),
+            DTypeId::U32 => convert_variant!(U32, u32),
+            DTypeId::I64 => convert_variant!(I64, i64),
+            DTypeId::F16 => {
                 let mut out: alloc::vec::Vec<half::f16> = alloc::vec::Vec::with_capacity(total);
                 for _ in 0..total {
                     out.push(half::f16::from_f64(t.get(&multi_idx)));
@@ -512,7 +512,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackend<T, D> {
                 }
                 CpuBuffer::F16(out)
             }
-            KindleDType::BF16 => {
+            DTypeId::BF16 => {
                 let mut out: alloc::vec::Vec<half::bf16> = alloc::vec::Vec::with_capacity(total);
                 for _ in 0..total {
                     out.push(half::bf16::from_f64(t.get(&multi_idx)));
@@ -522,7 +522,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackend<T, D> {
                 }
                 CpuBuffer::BF16(out)
             }
-            KindleDType::Q8_0 => {
+            DTypeId::Q8_0 => {
                 return Err(Error::UnsupportedBackendOperation {
                     op: "tensor_to_dtype(Q8_0)",
                     backend: "Cpu",
@@ -546,7 +546,7 @@ mod tests {
     use super::*;
 
     /// `TestBackend`.
-    type TestBackend = CpuBackend<f32, kindle_core::prelude::Cpu>;
+    type TestBackend = CpuBackendImpl<f32, kindle_core::prelude::Cpu>;
 
     /// `matrix`.
     fn matrix(v: Vec<f32>, rows: usize, cols: usize) -> CpuStorage {
@@ -667,7 +667,7 @@ mod tests {
         // All other TensorOps methods are now fully implemented. We prove that
         // unsupported operations return typed errors by attempting to convert
         // to Q8_0, which is intentionally left unsupported in the Cpu backend.
-        let result = TestBackend::tensor_to_dtype::<f32, f32>(&t, KindleDType::Q8_0);
+        let result = TestBackend::tensor_to_dtype::<f32, f32>(&t, DTypeId::Q8_0);
         assert!(matches!(
             result,
             Err(Error::UnsupportedBackendOperation {

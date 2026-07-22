@@ -20,7 +20,7 @@ thread_local! {
 
 #[cfg(feature = "telemetry")]
 thread_local! {
-    static BACKWARD_STEP: RefCell<usize> = RefCell::new(0);
+    static BACKWARD_STEP: RefCell<usize> = const { RefCell::new(0) };
 }
 
 pub fn push(entry: TapeEntry) {

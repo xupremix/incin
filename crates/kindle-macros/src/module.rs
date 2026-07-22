@@ -269,7 +269,9 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                 syn::GenericParam::Type(t) => {
                     let ident = &t.ident;
                     if backend_generic.as_ref() == Some(ident) {
-                        args.push(quote! { <#ident as #k_crate::prelude::Backend>::BackendWithDevice<__NewD> });
+                        args.push(
+                            quote! { <#ident as #k_crate::prelude::TransferTo<__NewD>>::Output },
+                        );
                     } else if t.bounds.iter().any(|b| {
                         if let syn::TypeParamBound::Trait(tb) = b {
                             tb.path
@@ -318,9 +320,16 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
         impl_generics_with_newd
             .params
             .push(syn::parse_quote!(__NewD: #k_crate::prelude::Device));
-        let (impl_g, _, _) = impl_generics_with_newd.split_for_impl();
+        impl_generics_with_newd
+            .make_where_clause()
+            .predicates
+            .push(syn::parse_quote!(#b_ident: #k_crate::prelude::TransferTo<__NewD>));
+        impl_generics_with_newd.make_where_clause().predicates.push(
+            syn::parse_quote!(<#b_ident as #k_crate::prelude::TransferTo<__NewD>>::Output: #k_crate::prelude::SupportsDType<<#b_ident as #k_crate::prelude::Backend>::FloatElem>),
+        );
+        let (impl_g, _, to_device_where_clause) = impl_generics_with_newd.split_for_impl();
         quote! {
-            impl #impl_g #k_crate::prelude::ToDevice<#b_ident, __NewD> for #name #ty_generics #where_clause {
+            impl #impl_g #k_crate::prelude::ToDevice<#b_ident, __NewD> for #name #ty_generics #to_device_where_clause {
                 /// Output.
                 type Output = #name #output_ty_generics;
                 /// To device.

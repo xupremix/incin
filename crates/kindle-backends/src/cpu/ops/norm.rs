@@ -1,4 +1,4 @@
-//! Free-function normalization helpers for `CpuBackend<T, D>`.
+//! Free-function normalization helpers for `CpuBackendImpl<T, D>`.
 //!
 //! `layer_norm_impl` and `batch_norm_impl` are called by the trait dispatch
 //! methods in `ops/module.rs`. They are `pub(crate)` rather than `pub` so
@@ -11,7 +11,7 @@
 
 use kindle_core::prelude::{DType, FloatOps, NumericOps, ReductionOps, Result};
 
-use crate::cpu::CpuBackend;
+use crate::cpu::CpuBackendImpl;
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
 
 // ---------------------------------------------------------------------------
@@ -43,7 +43,7 @@ pub(crate) fn layer_norm_impl<T: DType, D: kindle_core::prelude::Device, K: DTyp
     eps: f32,
 ) -> Result<CpuStorage> {
     /// `B`.
-    type B<T, D> = CpuBackend<T, D>;
+    type B<T, D> = CpuBackendImpl<T, D>;
 
     let rank = t.shape.len();
     let last_dim = rank - 1;
@@ -105,7 +105,7 @@ pub(crate) fn batch_norm_impl<T: DType, D: kindle_core::prelude::Device, K: DTyp
     _momentum: f64, // deliberately unused — inference-mode-only (CONTEXT.md carried-forward decision)
 ) -> Result<CpuStorage> {
     /// `B`.
-    type B<T, D> = CpuBackend<T, D>;
+    type B<T, D> = CpuBackendImpl<T, D>;
 
     let rank = t.shape.len();
     let channel_dim = if rank > 1 { 1 } else { 0 };
@@ -185,7 +185,7 @@ mod tests {
     use crate::cpu::storage::{CpuBuffer, CpuStorage};
 
     /// `TestB`.
-    type TestB = CpuBackend<f32, kindle_core::prelude::Cpu>;
+    type TestB = CpuBackendImpl<f32, kindle_core::prelude::Cpu>;
 
     /// `matrix`.
     fn matrix(v: Vec<f32>, rows: usize, cols: usize) -> CpuStorage {

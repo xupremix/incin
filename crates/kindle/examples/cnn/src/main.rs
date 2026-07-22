@@ -15,11 +15,11 @@ impl SimpleCNN {
     /// New.
     pub fn new() -> Result<Self> {
         // Init 16 out_channels, 1 in_channel
-        let conv = Conv2d::<s![dyn, dyn, 3, 1, 0, 1]>::new_with((16, 1))?;
+        let conv = Conv2d::<s![dyn, dyn, 3, 1, 0, 1]>::build((16, 1))?;
         let relu = ReLU;
         let features = Sequential(conv, relu);
 
-        let classifier = Linear::<Dyn>::new_with((16 * 26 * 26, 10))?;
+        let classifier = Linear::<Dyn>::build((16 * 26 * 26, 10))?;
 
         Ok(Self {
             features,

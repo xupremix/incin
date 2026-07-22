@@ -12,7 +12,7 @@ macro_rules! impl_reduction_op {
         $method:ident, $backend_method:ident
     ) => {
         $(#[$meta])*
-        pub fn $method(self) -> Result<Tensor<(), B, K, D, G>> {
+        pub fn $method(self) -> Result<Tensor<(), B, K, G>> {
             let inner = B::$backend_method(&self.inner)?;
             Ok(Tensor::from_parts_unchecked(
                 inner,
@@ -31,7 +31,7 @@ macro_rules! impl_reduction_dim_op {
         $method:ident, $backend_method:ident, $trait_bound:ident, $keep_dim:expr
     ) => {
         $(#[$meta])*
-        pub fn $method<const DIM: usize>(&self) -> Result<Tensor<S::Output, B, K, D, G>>
+        pub fn $method<const DIM: usize>(&self) -> Result<Tensor<S::Output, B, K, G>>
         where
             S: DynShape + crate::shapes::$trait_bound<DIM>,
         {
@@ -57,14 +57,7 @@ macro_rules! impl_reduction_dim_op {
     };
 }
 
-impl<
-    S: Shape,
-    B: Backend,
-    K: crate::tensor::dtype::DType,
-    D: crate::tensor::device::Device,
-    G: RequiresGrad,
-> Tensor<S, B, K, D, G>
-{
+impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tensor<S, B, K, G> {
     impl_reduction_op!(
         /// Computes the sum of all elements in the tensor, reducing it to a scalar tensor.
         ///
@@ -214,9 +207,8 @@ impl<
     S: crate::prelude::Shape + crate::prelude::DynShape,
     B: crate::prelude::Backend,
     K: crate::prelude::DType,
-    D: crate::prelude::Device,
     G: crate::prelude::RequiresGrad,
-> Tensor<S, B, K, D, G>
+> Tensor<S, B, K, G>
 {
     /// Computes the argmax of the tensor.
     /// If `dim` is `None`, the tensor is flattened and the argmax over the entire tensor is returned as a 0D scalar.
@@ -224,7 +216,7 @@ impl<
     pub fn argmax(
         &self,
         dim: Option<usize>,
-    ) -> Result<Tensor<crate::prelude::Dyn, B, u32, D, crate::prelude::NoGrad>> {
+    ) -> Result<Tensor<crate::prelude::Dyn, B, u32, crate::prelude::NoGrad>> {
         let inner = match dim {
             Some(d) => B::argmax::<K, u32>(&self.inner, Some(d))?,
             None => {
@@ -259,7 +251,7 @@ impl<
     pub fn argmin(
         &self,
         dim: Option<usize>,
-    ) -> Result<Tensor<crate::prelude::Dyn, B, u32, D, crate::prelude::NoGrad>> {
+    ) -> Result<Tensor<crate::prelude::Dyn, B, u32, crate::prelude::NoGrad>> {
         let inner = match dim {
             Some(d) => B::argmin::<K, u32>(&self.inner, Some(d))?,
             None => {
@@ -296,8 +288,8 @@ impl<
         dim: usize,
         largest: bool,
     ) -> Result<(
-        Tensor<crate::prelude::Dyn, B, K, D, crate::prelude::NoGrad>,
-        Tensor<crate::prelude::Dyn, B, u32, D, crate::prelude::NoGrad>,
+        Tensor<crate::prelude::Dyn, B, K, crate::prelude::NoGrad>,
+        Tensor<crate::prelude::Dyn, B, u32, crate::prelude::NoGrad>,
     )> {
         let (values_inner, indices_inner) = B::topk::<K, u32>(&self.inner, k, dim, largest)?;
         let mut out_dims = S::dims(&self._shape).into();
@@ -326,7 +318,7 @@ impl<
         &self,
         dim: usize,
         descending: bool,
-    ) -> Result<Tensor<S, B, u32, D, crate::prelude::NoGrad>> {
+    ) -> Result<Tensor<S, B, u32, crate::prelude::NoGrad>> {
         let indices_inner = B::argsort::<K, u32>(&self.inner, dim, descending)?;
         Ok(Tensor::from_parts_unchecked(
             indices_inner,
@@ -348,12 +340,11 @@ impl<
         + crate::tensor::backend::ReductionOps<B>
         + crate::tensor::backend::FloatOps<B>,
     K: crate::prelude::DType,
-    D: crate::prelude::Device,
     G: crate::prelude::RequiresGrad,
-> Tensor<S, B, K, D, G>
+> Tensor<S, B, K, G>
 {
     /// Computes the variance over all elements.
-    pub fn var_all(&self, unbiased: bool) -> Result<Tensor<(), B, K, D, G>> {
+    pub fn var_all(&self, unbiased: bool) -> Result<Tensor<(), B, K, G>> {
         let mean = self.clone().mean_all()?;
         let dyn_self = self.clone().into_dyn();
         let dyn_mean = mean.into_dyn();
@@ -372,7 +363,7 @@ impl<
     }
 
     /// Computes the standard deviation over all elements.
-    pub fn std_all(&self, unbiased: bool) -> Result<Tensor<(), B, K, D, G>> {
+    pub fn std_all(&self, unbiased: bool) -> Result<Tensor<(), B, K, G>> {
         self.var_all(unbiased)?.sqrt()
     }
 
@@ -380,7 +371,7 @@ impl<
     pub fn var_dim<const DIM: usize>(
         &self,
         unbiased: bool,
-    ) -> Result<Tensor<<S as crate::shapes::ReduceDim<DIM>>::Output, B, K, D, G>>
+    ) -> Result<Tensor<<S as crate::shapes::ReduceDim<DIM>>::Output, B, K, G>>
     where
         S: crate::shapes::DynShape
             + crate::shapes::ReduceDim<DIM>
@@ -411,7 +402,7 @@ impl<
     pub fn std_dim<const DIM: usize>(
         &self,
         unbiased: bool,
-    ) -> Result<Tensor<<S as crate::shapes::ReduceDim<DIM>>::Output, B, K, D, G>>
+    ) -> Result<Tensor<<S as crate::shapes::ReduceDim<DIM>>::Output, B, K, G>>
     where
         S: crate::shapes::DynShape
             + crate::shapes::ReduceDim<DIM>
@@ -426,7 +417,7 @@ impl<
     pub fn var_keepdim<const DIM: usize>(
         &self,
         unbiased: bool,
-    ) -> Result<Tensor<<S as crate::shapes::ReduceKeepDim<DIM>>::Output, B, K, D, G>>
+    ) -> Result<Tensor<<S as crate::shapes::ReduceKeepDim<DIM>>::Output, B, K, G>>
     where
         S: crate::shapes::DynShape + crate::shapes::ReduceKeepDim<DIM>,
         <S as crate::shapes::ReduceKeepDim<DIM>>::Output: crate::shapes::DynShape,
@@ -454,7 +445,7 @@ impl<
     pub fn std_keepdim<const DIM: usize>(
         &self,
         unbiased: bool,
-    ) -> Result<Tensor<<S as crate::shapes::ReduceKeepDim<DIM>>::Output, B, K, D, G>>
+    ) -> Result<Tensor<<S as crate::shapes::ReduceKeepDim<DIM>>::Output, B, K, G>>
     where
         S: crate::shapes::DynShape + crate::shapes::ReduceKeepDim<DIM>,
         <S as crate::shapes::ReduceKeepDim<DIM>>::Output: crate::shapes::DynShape,

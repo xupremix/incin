@@ -22,14 +22,7 @@ pub(crate) fn launch_concat(tensors: &[&CudaStorage], dim: usize) -> Result<Cuda
         ));
     }
 
-    let first_buf = match &*tensors[0].buffer {
-        b => b,
-        _ => {
-            return Err(kindle_core::prelude::Error::Msg(
-                "concat: inputs must be CUDA buffers".into(),
-            ));
-        }
-    };
+    let first_buf = &*tensors[0].buffer;
     let device_id = first_buf.device_id;
     ensure_concat_loaded(device_id)?;
 

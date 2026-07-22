@@ -1,5 +1,5 @@
 #![cfg(feature = "legacy")]
-//! Cross-backend parity: `CpuBackend` vs `CandleBackend<f32,
+//! Cross-backend parity: `CpuBackendImpl` vs `CandleBackend<f32,
 //! Cpu>`, driven purely through the `Backend` trait surface (D-03), one
 //! `#[test]` per individual op for failure localization.
 //!
@@ -14,7 +14,7 @@
 //!
 //! Requires `--features native,candle`.
 
-use kindle_backends::cpu::CpuBackend;
+use kindle_backends::cpu::CpuBackendImpl;
 use kindle_backends::legacy::candle::CandleBackend;
 use kindle_core::prelude::Reduction;
 use kindle_core::prelude::*;
@@ -22,7 +22,7 @@ use kindle_core::prelude::*;
 // ── Type aliases ─────────────────────────────────────────────────────────
 
 /// Nb.
-type NB = CpuBackend;
+type NB = CpuBackendImpl;
 /// Cb.
 type CB = CandleBackend<f32, Cpu>;
 
@@ -35,17 +35,12 @@ fn as_bytes(v: &[f32]) -> Vec<u8> {
 
 /// Make storage.
 fn make_storage<B: Backend>(data: &[f32], shape: &[usize]) -> B::Storage<f32> {
-    B::from_bytes::<f32>(
-        &as_bytes(data),
-        shape,
-        KindleDType::F32,
-        &KindleDevice::cpu(),
-    )
-    .expect("from_bytes")
+    B::from_bytes::<f32>(&as_bytes(data), shape, DTypeId::F32, &DeviceId::cpu())
+        .expect("from_bytes")
 }
 
 /// Reshape `t` to 1D before reading it out via `float_to_vec1` (Pitfall 5) —
-/// `CpuBackend::float_to_vec1` errors on any rank != 1 input, so every
+/// `CpuBackendImpl::float_to_vec1` errors on any rank != 1 input, so every
 /// non-scalar, non-1D output/gradient must be flattened first. Scalar (rank
 /// 0) outputs are read via `float_to_scalar` instead.
 fn read_flat<B: Backend>(t: &B::Storage<f32>) -> Vec<f64> {
@@ -165,8 +160,8 @@ fn assert_close(a: &[f64], b: &[f64], tol: f64, label: &str) {
 #[test]
 /// Parity test between CPU and WGPU backends for `zeros_parity`.
 fn zeros_parity() {
-    let n = NB::zeros::<f32>(&[2, 3], KindleDType::F32, &KindleDevice::cpu()).unwrap();
-    let c = CB::zeros::<f32>(&[2, 3], KindleDType::F32, &KindleDevice::cpu()).unwrap();
+    let n = NB::zeros::<f32>(&[2, 3], DTypeId::F32, &DeviceId::cpu()).unwrap();
+    let c = CB::zeros::<f32>(&[2, 3], DTypeId::F32, &DeviceId::cpu()).unwrap();
     assert_eq!(NB::shape::<f32>(&n), CB::shape::<f32>(&c));
     assert_close(&read_flat::<NB>(&n), &read_flat::<CB>(&c), 1e-2, "zeros");
 }
@@ -174,26 +169,36 @@ fn zeros_parity() {
 #[test]
 /// Parity test between CPU and WGPU backends for `ones_parity`.
 fn ones_parity() {
-    let n = NB::ones::<f32>(&[2, 3], KindleDType::F32, &KindleDevice::cpu()).unwrap();
-    let c = CB::ones::<f32>(&[2, 3], KindleDType::F32, &KindleDevice::cpu()).unwrap();
+    let n = NB::ones::<f32>(&[2, 3], DTypeId::F32, &DeviceId::cpu()).unwrap();
+    let c = CB::ones::<f32>(&[2, 3], DTypeId::F32, &DeviceId::cpu()).unwrap();
     assert_eq!(NB::shape::<f32>(&n), CB::shape::<f32>(&c));
     assert_close(&read_flat::<NB>(&n), &read_flat::<CB>(&c), 1e-2, "ones");
 }
 
 #[test]
-/// Parity test between CPU and WGPU backends for `tensor_to_device_parity`.
-fn tensor_to_device_parity() {
+/// Parity test for same-device transfers.
+fn transfer_to_device_parity() {
     let data = vec![1.0, 2.0, 3.0, 4.0];
     let n0 = make_storage::<NB>(&data, &[4]);
     let c0 = make_storage::<CB>(&data, &[4]);
-    let n = NB::tensor_to_device::<f32>(&n0, &KindleDevice::cpu()).unwrap();
-    let c = CB::tensor_to_device::<f32>(&c0, &KindleDevice::cpu()).unwrap();
+    let n = <NB as TransferTo<Cpu>>::transfer_storage::<f32>(
+        &n0,
+        &Default::default(),
+        &Default::default(),
+    )
+    .unwrap();
+    let c = <CB as TransferTo<Cpu>>::transfer_storage::<f32>(
+        &c0,
+        &Default::default(),
+        &Default::default(),
+    )
+    .unwrap();
     assert_eq!(NB::shape::<f32>(&n), CB::shape::<f32>(&c));
     assert_close(
         &read_flat::<NB>(&n),
         &read_flat::<CB>(&c),
         1e-2,
-        "tensor_to_device",
+        "transfer_to_device",
     );
 }
 
@@ -261,7 +266,7 @@ fn div_forward_and_backward_parity() {
 /// Verifies numerical parity of forward and backward pass between backends for `relu_forward_and_backward_parity`.
 fn relu_forward_and_backward_parity() {
     // Avoids x == 0.0 exactly: relu's subgradient at the kink is convention-
-    // dependent (CpuBackend and Candle may legitimately pick different
+    // dependent (CpuBackendImpl and Candle may legitimately pick different
     // sides of {0, 1}), which is not a real numerical divergence to test for.
     let data = vec![-2.0, -0.5, 0.1, 0.5, 2.0];
     let (fwd_n, grad_n) = run_and_grad::<NB>(|x| NB::relu::<f32>(x).unwrap(), &data, &[5]);
@@ -728,14 +733,14 @@ fn broadcast_left_forward_and_backward_parity() {
 //    differentiable integer-index output, confirmed by 05-AUDIT.md's
 //    backward-rule audit). `float_to_scalar`/`float_to_vec1` are used to
 //    read the index values back out purely through the `Backend` trait: on
-//    `CpuBackend` the `K` type parameter is a compile-time-only marker
+//    `CpuBackendImpl` the `K` type parameter is a compile-time-only marker
 //    (the real read goes through `NativeStorage::get`'s `get_f64`, which is
 //    buffer-dtype-agnostic), and on `CandleBackend` `float_to_vec1`
 //    internally converts to F32 via `to_dtype` regardless of the tensor's
 //    actual dtype — so calling the `f32` read accessors on an `i64`-backed
 //    argmax/argmin output is well-defined on both backends without needing
 //    `int_to_scalar`/`int_to_vec1` (which are formally descoped/stubbed on
-//    `CpuBackend` per 05-AUDIT.md's Descope Decision). ─────────────────
+//    `CpuBackendImpl` per 05-AUDIT.md's Descope Decision). ─────────────────
 
 #[test]
 /// Verifies numerical parity of the forward pass between backends for `argmax_forward_parity`.
@@ -801,7 +806,7 @@ fn argmin_forward_parity() {
 /// for the input (confirmed empirically: `get_grad` returns `None`,
 /// independent of test data). This is a genuine, permanent Candle-side
 /// limitation (not test-input-dependent, not floating-point noise, not a
-/// `CpuBackend` gap) — `CpuBackend::layer_norm` DOES have a real,
+/// `CpuBackendImpl` gap) — `CpuBackendImpl::layer_norm` DOES have a real,
 /// composed backward (05-AUDIT.md's Section 2, `layer_norm` = Composed).
 /// Backward parity for this op is therefore untestable against Candle by
 /// construction; forward-only comparison is the correct, honest test here.
@@ -901,7 +906,7 @@ fn embedding_forward_and_backward_parity() {
     // Embedding's index input has no gradient (KInt, non-differentiable);
     // only the weight table is differentiable, so run_and_grad is applied to
     // the WEIGHT, with indices captured by closure as a fixed constant.
-    // CpuBackend::from_bytes only supports F32 (Pattern 1's audit table),
+    // CpuBackendImpl::from_bytes only supports F32 (Pattern 1's audit table),
     // so the integer index storage is built directly via NativeStorage's own
     // I64 buffer constructor instead — still purely-Backend-trait on the
     // WEIGHT side, which is the side under gradient test.
@@ -919,13 +924,8 @@ fn embedding_forward_and_backward_parity() {
     // CandleBackend::from_bytes always reads the input bytes as f32 first
     // (regardless of `dtype`), then converts via `to_dtype` — so the index
     // bytes must be f32-encoded (`as_bytes`), not raw i64 bytes.
-    let c_idx = CB::from_bytes::<i64>(
-        &as_bytes(&indices_f),
-        &[2],
-        KindleDType::I64,
-        &KindleDevice::cpu(),
-    )
-    .unwrap();
+    let c_idx =
+        CB::from_bytes::<i64>(&as_bytes(&indices_f), &[2], DTypeId::I64, &DeviceId::cpu()).unwrap();
     let (fwd_c, grad_c) = run_and_grad::<CB>(
         |w| CB::embedding::<f32, i64>(&c_idx, w).unwrap(),
         &weight,
@@ -961,7 +961,7 @@ fn conv1d_forward_and_backward_parity() {
     assert_close(&grad_n, &grad_c, 1e-2, "conv1d backward");
 }
 
-/// conv2d/conv_transpose2d tolerance investigation (Pitfall 4): CpuBackend's
+/// conv2d/conv_transpose2d tolerance investigation (Pitfall 4): CpuBackendImpl's
 /// im2col+matmul accumulation order differs from Candle's native conv kernel,
 /// so a wider-than-default tolerance MAY be needed. Both are first attempted
 /// at the shared 1e-2 default; empirically confirmed to pass at 1e-2 (no
@@ -1058,12 +1058,12 @@ fn max_pool2d_forward_and_backward_parity() {
     // avg_pool2d-over-the-winner-mask step BEFORE upsampling back to the
     // full window, even when a window has exactly one unique maximum (i.e.
     // the winner receives `grad_out * 1/kernel_area`, not the full
-    // `grad_out`). `CpuBackend::max_pool2d` gives the winner the FULL
+    // `grad_out`). `CpuBackendImpl::max_pool2d` gives the winner the FULL
     // upstream gradient (the standard/PyTorch-matching convention — see
     // `pool.rs`'s own `scatter_pool_grad_2d`). This is a confirmed, semantic
     // backward-definition difference between the two backends' `max_pool2d`
     // (not floating-point rounding noise, so it is not a Pitfall-4-style
-    // tolerance-widening case) — CpuBackend's gradient at each winning
+    // tolerance-widening case) — CpuBackendImpl's gradient at each winning
     // position is exactly `kernel_area` times Candle's. Normalize Candle's
     // gradient by that fixed, known factor before comparing at the shared
     // 1e-2 tolerance, rather than silently loosening the comparison.
@@ -1101,9 +1101,9 @@ fn avg_pool2d_forward_and_backward_parity() {
 /// documented as an INTENTIONAL, permanent gap by REQUIREMENTS.md's own
 /// NATBACK-03 wording: "`l1_loss`/`bce_with_logits_loss`/
 /// `adaptive_avg_pool2d`... unlike `CandleBackend`, which currently stubs
-/// these three" — `CpuBackend` is REQUIRED to exceed `CandleBackend`'s
+/// these three" — `CpuBackendImpl` is REQUIRED to exceed `CandleBackend`'s
 /// coverage here, not match it). Since no reference implementation exists on
-/// the other backend, this test verifies `CpuBackend::adaptive_avg_pool2d`
+/// the other backend, this test verifies `CpuBackendImpl::adaptive_avg_pool2d`
 /// forward+backward self-consistency instead of cross-backend parity: (a)
 /// forward output shape matches the requested `output_size`, and (b) the
 /// backward gradient of `sum_all(out)` w.r.t. the input sums to exactly
@@ -1171,12 +1171,12 @@ fn mse_loss_forward_and_backward_parity_mean() {
 /// `l1_loss` has no `CandleBackend` implementation (`unimplemented!()`
 /// unconditionally — same documented, intentional gap as
 /// `adaptive_avg_pool2d`, per REQUIREMENTS.md's NATBACK-03 wording).
-/// `CpuBackend::l1_loss` is composed entirely from already-real,
+/// `CpuBackendImpl::l1_loss` is composed entirely from already-real,
 /// already-parity-tested primitives (`sub` -> `abs` -> `mean_all`, per
 /// `ops/loss.rs`'s own doc comment), so this test builds the mathematically
 /// equivalent composition on `CandleBackend` FROM THOSE SAME real, already-
 /// covered `Backend` trait methods (not a hand-rolled candle-core call) as
-/// the comparison reference — this still exercises `CpuBackend::l1_loss`
+/// the comparison reference — this still exercises `CpuBackendImpl::l1_loss`
 /// itself (the actual audit target) against a Candle-side value produced
 /// purely through the shared `Backend` trait surface.
 #[test]
@@ -1205,13 +1205,13 @@ fn l1_loss_forward_and_backward_parity() {
 
 /// `bce_with_logits_loss` has no `CandleBackend` implementation
 /// (`unimplemented!()` unconditionally — same documented, intentional gap).
-/// `CpuBackend::bce_with_logits_loss` implements the numerically-stable
+/// `CpuBackendImpl::bce_with_logits_loss` implements the numerically-stable
 /// formula `max(x,0) - x*z + log(1+exp(-|x|))`, composed entirely from
 /// already-real, already-parity-tested primitives (per `ops/loss.rs`'s own
 /// doc comment: `relu`/`mul`/`sub`/`abs`/`neg`/`exp`/`add_scalar_float`/
 /// `log`/`add`). This test builds the identical composition on
 /// `CandleBackend` from those same real trait methods as the comparison
-/// reference, exercising `CpuBackend::bce_with_logits_loss` itself
+/// reference, exercising `CpuBackendImpl::bce_with_logits_loss` itself
 /// against a Candle-side value produced purely through the shared `Backend`
 /// trait surface.
 #[test]
@@ -1228,7 +1228,7 @@ fn bce_with_logits_loss_forward_and_backward_parity() {
     let (fwd_c, grad_c) = run_and_grad::<CB>(
         |p| {
             // max(x,0) - x*z + log(1+exp(-|x|)), the same stable formula
-            // CpuBackend::bce_with_logits_loss composes.
+            // CpuBackendImpl::bce_with_logits_loss composes.
             let relu_p = CB::relu::<f32>(p).unwrap();
             let p_mul_z = CB::mul::<f32>(p, &c_t).unwrap();
             let term1 = CB::sub::<f32>(&relu_p, &p_mul_z).unwrap();
@@ -1265,13 +1265,9 @@ fn cross_entropy_loss_forward_and_backward_parity() {
     // See embedding_forward_and_backward_parity's comment: CandleBackend::
     // from_bytes always reads as f32 first, so target values must be f32-
     // encoded bytes, not raw i64 bytes.
-    let c_target = CB::from_bytes::<i64>(
-        &as_bytes(&[1.0, 2.0]),
-        &[2],
-        KindleDType::I64,
-        &KindleDevice::cpu(),
-    )
-    .unwrap();
+    let c_target =
+        CB::from_bytes::<i64>(&as_bytes(&[1.0, 2.0]), &[2], DTypeId::I64, &DeviceId::cpu())
+            .unwrap();
     let (fwd_c, grad_c) = run_and_grad::<CB>(
         |p| CB::cross_entropy_loss::<f32, i64>(p, &c_target, Reduction::Mean).unwrap(),
         &pred,

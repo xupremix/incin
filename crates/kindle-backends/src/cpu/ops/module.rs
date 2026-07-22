@@ -1,8 +1,8 @@
-//! `ModuleOps` for `CpuBackend<T, D>` — the crate's single `impl ModuleOps`
+//! `ModuleOps` for `CpuBackendImpl<T, D>` — the crate's single `impl ModuleOps`
 //! block (Rust disallows splitting one trait impl across multiple files).
 //!
 //! As of Plan 04-07, ALL NINE `ModuleOps` methods are real — no unsupported-
-//! operation stubs remain on `CpuBackend`:
+//! operation stubs remain on `CpuBackendImpl`:
 //!   - `layer_norm` — delegates to `ops::norm::layer_norm_impl`
 //!   - `batch_norm`  — delegates to `ops::norm::batch_norm_impl`
 //!   - `embedding`  — delegates to `ops::embedding::embedding_impl`
@@ -16,11 +16,11 @@
 //! This closes out `ModuleOps`'s full trait surface for Phase 4
 //! (CPUBACK-08).
 
-use crate::cpu::CpuBackend;
+use crate::cpu::CpuBackendImpl;
 use kindle_core::prelude::*;
 use kindle_core::prelude::{Backend, DType, ModuleOps, Result};
 
-impl<T: DType, D: Device> ModuleOps<Self> for CpuBackend<T, D> {
+impl<T: DType, D: Device> ModuleOps<Self> for CpuBackendImpl<T, D> {
     /// `layer_norm`.
     fn layer_norm<K: DType>(
         t: &<Self as Backend>::Storage<K>,

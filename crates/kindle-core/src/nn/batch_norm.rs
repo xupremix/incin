@@ -19,17 +19,15 @@ use core::marker::PhantomData;
 /// use kindle::prelude::*;
 ///
 /// // BatchNorm for 64-channel feature maps
-/// let bn = BatchNorm2d::<(typenum::U64,), MyBackend>::new(typenum::U64::new(), 1e-5, 0.1)?;
+/// let bn = BatchNorm2d::<(typenum::U64,), MyBackend>::build((1e-5, 0.1))?;
 /// ```
 pub trait BatchNormShape: Shape + DynShape {
     /// `Channels`.
     type Channels: Dim;
     /// `BuildArg`.
     type BuildArg: crate::tensor::arg_into::NotUnit + Clone;
-    /// The runtime arguments needed to instantiate this layer.
-    type Target;
     /// Converts the target arguments into concrete shape args for weight and bias tensors.
-    fn build_args(target: Self::Target) -> Self::BuildArg;
+    fn build_args(target: <Self::Channels as Dim>::Arg) -> Self::BuildArg;
 }
 
 impl<C: Dim> BatchNormShape for (C,) {
@@ -37,12 +35,18 @@ impl<C: Dim> BatchNormShape for (C,) {
     type Channels = C;
     /// `BuildArg`.
     type BuildArg = (<C as Dim>::Arg,);
-    /// The runtime arguments needed to instantiate this layer.
-    type Target = (<C as Dim>::Arg,);
 
     /// Converts the target arguments into concrete shape args for weight and bias tensors.
-    fn build_args(target: Self::Target) -> Self::BuildArg {
-        target
+    fn build_args(target: <Self::Channels as Dim>::Arg) -> Self::BuildArg {
+        (target,)
+    }
+}
+
+impl BatchNormShape for Dyn {
+    type Channels = usize;
+    type BuildArg = (usize,);
+    fn build_args(target: usize) -> Self::BuildArg {
+        (target,)
     }
 }
 
@@ -70,26 +74,52 @@ pub struct BatchNorm2d<S: BatchNormShape, B: Backend> {
 
 impl<S: BatchNormShape, B: Backend> BatchNorm2d<S, B>
 where
-    B::FloatElem: crate::prelude::ConstDType,
-    B::Device: crate::prelude::ConstDevice,
+    B: SupportsDType<B::FloatElem>,
     (S::Channels,): Shape<Arg = S::BuildArg>,
+    <B::FloatElem as DType>::Arg: Clone,
+    <B::Device as Device>::Arg: Clone,
 {
-    /// Creates a new instance with explicitly provided shape arguments.
-    pub fn new_with(args: S::Target, eps: f32, momentum: f32) -> Result<Self> {
-        let b_args = S::build_args(args);
-
-        let args_data = crate::tensor::arg_into::TensorArgsData {
-            shape: b_args,
-            dtype: (),
-            device: (),
-            grad: (),
-        };
-
-        let weight = Param::<(S::Channels,), B>::ones_raw(args_data.clone())?;
-        let bias = Param::<(S::Channels,), B>::zeros_raw(args_data.clone())?;
-        let running_mean = Buffer::<(S::Channels,), B>::zeros_raw(args_data.clone())?;
-        let running_var = Buffer::<(S::Channels,), B>::ones_raw(args_data.clone())?;
-
+    pub fn build<A>(args: A) -> Result<Self>
+    where
+        A: crate::tensor::arg_into::LayerArgInto<(
+                <S::Channels as Dim>::Arg,
+                <B::FloatElem as DType>::Arg,
+                <B::Device as Device>::Arg,
+                f32,
+                f32,
+            )>,
+    {
+        use crate::tensor::arg_into::LayerArgInto;
+        let (channels, dtype, device, eps, momentum) = args.into_layer_arg();
+        let shape = S::build_args(channels);
+        let weight =
+            Param::<(S::Channels,), B>::ones_raw(crate::tensor::arg_into::TensorArgsData {
+                shape: shape.clone(),
+                dtype: dtype.clone(),
+                device: device.clone(),
+                grad: (),
+            })?;
+        let bias =
+            Param::<(S::Channels,), B>::zeros_raw(crate::tensor::arg_into::TensorArgsData {
+                shape: shape.clone(),
+                dtype: dtype.clone(),
+                device: device.clone(),
+                grad: (),
+            })?;
+        let running_mean =
+            Buffer::<(S::Channels,), B>::zeros_raw(crate::tensor::arg_into::TensorArgsData {
+                shape: shape.clone(),
+                dtype: dtype.clone(),
+                device: device.clone(),
+                grad: (),
+            })?;
+        let running_var =
+            Buffer::<(S::Channels,), B>::ones_raw(crate::tensor::arg_into::TensorArgsData {
+                shape,
+                dtype,
+                device,
+                grad: (),
+            })?;
         Ok(Self {
             weight,
             bias,
@@ -99,20 +129,6 @@ where
             momentum,
             _phantom: PhantomData,
         })
-    }
-}
-
-impl<S, B> BatchNorm2d<S, B>
-where
-    S: BatchNormShape<Target = ((),)>,
-    B: Backend,
-    B::FloatElem: crate::prelude::ConstDType,
-    B::Device: crate::prelude::ConstDevice,
-    (S::Channels,): Shape<Arg = S::BuildArg>,
-{
-    /// Creates a new instance with default (statically inferred) shape arguments.
-    pub fn new(eps: f32, momentum: f32) -> Result<Self> {
-        Self::new_with(((),), eps, momentum)
     }
 }
 

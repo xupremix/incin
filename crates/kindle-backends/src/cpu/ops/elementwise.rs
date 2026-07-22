@@ -1,5 +1,5 @@
 //! `NumericOps` (`add`/`sub`/`mul`/`div`) and `FloatOps::{add_scalar_float,
-//! mul_scalar_float}` for `CpuBackend<T, D>`.
+//! mul_scalar_float}` for `CpuBackendImpl<T, D>`.
 //!
 //! Every op here resolves the broadcast output shape via
 //! `stride::broadcast_shape`, then iterates the OUTPUT shape's logical index
@@ -10,7 +10,7 @@
 //! whose backward closure calls `tape::unbroadcast` on the ORIGINAL
 //! (pre-broadcast) operand shapes.
 
-use crate::cpu::CpuBackend;
+use crate::cpu::CpuBackendImpl;
 use kindle_core::prelude::*;
 use kindle_core::prelude::{Backend, DType, FloatOps, NumericOps, Result};
 
@@ -142,7 +142,7 @@ fn erf_approx(x: f64) -> f64 {
     sign * y
 }
 
-impl<T: DType, D: Device> NumericOps<Self> for CpuBackend<T, D> {
+impl<T: DType, D: Device> NumericOps<Self> for CpuBackendImpl<T, D> {
     /// `add`.
     fn add<K: DType>(
         lhs: &<Self as Backend>::Storage<K>,
@@ -291,7 +291,7 @@ impl<T: DType, D: Device> NumericOps<Self> for CpuBackend<T, D> {
     }
 }
 
-impl<T: DType, D: Device> FloatOps<Self> for CpuBackend<T, D> {
+impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
     /// `add_scalar_float`.
     fn add_scalar_float<K: DType>(
         t: &<Self as Backend>::Storage<K>,
@@ -776,7 +776,7 @@ pub(crate) fn log_softmax<T: DType, D: kindle_core::prelude::Device, K: DType>(
     use kindle_core::prelude::{FloatOps, NumericOps, ReductionOps};
 
     /// `B`.
-    type B<T, D> = CpuBackend<T, D>;
+    type B<T, D> = CpuBackendImpl<T, D>;
 
     let max = <B<T, D> as ReductionOps<B<T, D>>>::max_keepdim::<K>(t, dim)?;
     let diff = <B<T, D> as NumericOps<B<T, D>>>::sub::<K>(t, &max)?;
@@ -857,7 +857,7 @@ mod tests {
     }
 
     /// `TestBackend`.
-    type TestBackend = CpuBackend<f32, kindle_core::prelude::Cpu>;
+    type TestBackend = CpuBackendImpl<f32, kindle_core::prelude::Cpu>;
 
     #[test]
     /// `add_broadcasts_forward_correctly`.

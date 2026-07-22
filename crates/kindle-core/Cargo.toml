@@ -30,7 +30,7 @@ wgpu = []
 
 [dependencies]
 spin = { version = "0.9.8", default-features = false, features = ["mutex", "spin_mutex", "lazy"] }
-kindle-macros = { path = "../kindle-macros", version = "0.1.0", default-features = false }
+kindle-macros = { path = "../kindle-macros", version = "0.2.0", default-features = false }
 thiserror = { workspace = true, default-features = false }
 half = { workspace = true, default-features = false }
 anyhow = { version = "1.0.103", default-features = false }

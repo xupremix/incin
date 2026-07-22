@@ -2,7 +2,7 @@ use kindle_core::prelude::*;
 use typenum::{U2, U3};
 
 /// B.
-type B = kindle_backends::cpu::CpuBackend;
+type B = kindle_backends::cpu::CpuBackendImpl;
 
 #[test]
 /// Test broadcast success.

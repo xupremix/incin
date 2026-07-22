@@ -1,15 +1,10 @@
-use kindle_core::prelude::*;
+extern crate kindle_core as kindle;
 use kindle_core::prelude::dummy::DummyBackend;
-use kindle_core::nn::{BatchNorm2d, Module};
-use typenum::{typenum::U16, typenum::U32};
+use kindle_core::prelude::*;
 
 fn main() {
-    let device = Cpu;
-    // Layer expects 32 channels
-    let layer: BatchNorm2d<typenum::U32, DummyBackend<f32, Cpu>> = BatchNorm2d::new((), &device).unwrap();
-    
-    // Tensor has 16 channels, this should fail!
-    let tensor: Tensor<(usize, typenum::U16, usize, usize), DummyBackend<f32, Cpu>> = Tensor::zeros((1, 1, 1)).unwrap();
-    
-    let _out = layer.forward(tensor).unwrap();
+    let layer = BatchNorm2d::<s![32], DummyBackend<f32, Cpu>>::build((1e-5, 0.1)).unwrap();
+    // The input has 16 channels, but the layer expects 32.
+    let input = Tensor::<s![2, 16, 8, 8], DummyBackend<f32, Cpu>>::zeros(()).unwrap();
+    layer.forward(input).unwrap();
 }

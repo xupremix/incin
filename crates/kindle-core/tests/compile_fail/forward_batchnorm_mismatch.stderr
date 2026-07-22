@@ -1,116 +1,12 @@
-error[E0432]: unresolved imports `typenum::typenum`, `typenum::typenum`
- --> tests/compile_fail/forward_batchnorm_mismatch.rs:4:15
+error[E0277]: the trait bound `(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>): HasChannels2D<UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>>` is not satisfied
+ --> tests/compile_fail/forward_batchnorm_mismatch.rs:9:19
   |
-4 | use typenum::{typenum::U16, typenum::U32};
-  |               ^^^^^^^       ^^^^^^^ could not find `typenum` in `typenum`
-  |               |
-  |               could not find `typenum` in `typenum`
-
-error[E0603]: module `nn` is private
- --> tests/compile_fail/forward_batchnorm_mismatch.rs:3:18
+9 |     layer.forward(input).unwrap();
+  |           ------- ^^^^^ unsatisfied trait bound
+  |           |
+  |           required by a bound introduced by this call
   |
-3 | use kindle_core::nn::{BatchNorm2d, Module};
-  |                  ^^ private module
-  |
-note: the module `nn` is defined here
- --> src/lib.rs
-  |
-  | pub(crate) mod nn;
-  | ^^^^^^^^^^^^^^^^^
-
-error[E0603]: module `nn` is private
- --> tests/compile_fail/forward_batchnorm_mismatch.rs:3:18
-  |
-3 | use kindle_core::nn::{BatchNorm2d, Module};
-  |                  ^^ private module
-  |
-help: consider importing this trait instead:
-      kindle_core::prelude::Module
- --> tests/compile_fail/forward_batchnorm_mismatch.rs:3:36
-  |
-3 | use kindle_core::nn::{BatchNorm2d, Module};
-  |                                    ^^^^^^
-note: the module `nn` is defined here
- --> src/lib.rs
-  |
-  | pub(crate) mod nn;
-  | ^^^^^^^^^^^^^^^^^
-
-error[E0277]: the trait bound `UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>: kindle_core::nn::batch_norm::BatchNormShape` is not satisfied
- --> tests/compile_fail/forward_batchnorm_mismatch.rs:9:16
-  |
-9 |     let layer: BatchNorm2d<typenum::U32, DummyBackend<f32, Cpu>> = BatchNorm2d::new((), &device).unwrap();
-  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied trait bound
-  |
-  = help: the trait `kindle_core::nn::batch_norm::BatchNormShape` is not implemented for `UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>`
-  = help: the trait `kindle_core::nn::batch_norm::BatchNormShape` is implemented for `(C,)`
-note: required by a bound in `kindle_core::prelude::BatchNorm2d`
- --> src/nn/batch_norm.rs
-  |
-  | pub struct BatchNorm2d<S: BatchNormShape, B: Backend> {
-  |                           ^^^^^^^^^^^^^^ required by this bound in `BatchNorm2d`
-
-error[E0308]: arguments to this function are incorrect
- --> tests/compile_fail/forward_batchnorm_mismatch.rs:9:68
-  |
-9 |     let layer: BatchNorm2d<typenum::U32, DummyBackend<f32, Cpu>> = BatchNorm2d::new((), &device).unwrap();
-  |                                                                    ^^^^^^^^^^^^^^^^ --  ------- expected `f32`, found `&Cpu`
-  |                                                                                     |
-  |                                                                                     expected `f32`, found `()`
-  |
-note: associated function defined here
- --> src/nn/batch_norm.rs
-  |
-  |     pub fn new(eps: f32, momentum: f32) -> Result<Self> {
-  |            ^^^
-
-error[E0277]: the trait bound `UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>: kindle_core::nn::batch_norm::BatchNormShape` is not satisfied
- --> tests/compile_fail/forward_batchnorm_mismatch.rs:9:68
-  |
-9 |     let layer: BatchNorm2d<typenum::U32, DummyBackend<f32, Cpu>> = BatchNorm2d::new((), &device).unwrap();
-  |                                                                    ^^^^^^^^^^^ unsatisfied trait bound
-  |
-  = help: the trait `kindle_core::nn::batch_norm::BatchNormShape` is not implemented for `UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>`
-  = help: the trait `kindle_core::nn::batch_norm::BatchNormShape` is implemented for `(C,)`
-note: required by a bound in `kindle_core::prelude::BatchNorm2d`
- --> src/nn/batch_norm.rs
-  |
-  | pub struct BatchNorm2d<S: BatchNormShape, B: Backend> {
-  |                           ^^^^^^^^^^^^^^ required by this bound in `BatchNorm2d`
-
-error[E0277]: the trait bound `UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>: kindle_core::nn::batch_norm::BatchNormShape` is not satisfied
- --> tests/compile_fail/forward_batchnorm_mismatch.rs:9:68
-  |
-9 |     let layer: BatchNorm2d<typenum::U32, DummyBackend<f32, Cpu>> = BatchNorm2d::new((), &device).unwrap();
-  |                                                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied trait bound
-  |
-  = help: the trait `kindle_core::nn::batch_norm::BatchNormShape` is not implemented for `UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>`
-  = help: the trait `kindle_core::nn::batch_norm::BatchNormShape` is implemented for `(C,)`
-note: required by a bound in `kindle_core::prelude::BatchNorm2d::<S, B>::new`
- --> src/nn/batch_norm.rs
-  |
-  |     S: BatchNormShape<Target = ((),)>,
-  |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `BatchNorm2d::<S, B>::new`
-...
-  |     pub fn new(eps: f32, momentum: f32) -> Result<Self> {
-  |            --- required by a bound in this associated function
-
-error[E0599]: the method `forward` exists for struct `kindle_core::prelude::BatchNorm2d<UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>, DummyBackend<f32, kindle_core::prelude::Cpu>>`, but its trait bounds were not satisfied
-  --> tests/compile_fail/forward_batchnorm_mismatch.rs:14:22
-   |
-14 |     let _out = layer.forward(tensor).unwrap();
-   |                      ^^^^^^^ method cannot be called due to unsatisfied trait bounds
-   |
-  ::: $CARGO/typenum-$VERSION/src/uint.rs
-   |
-   | pub struct UInt<U, B> {
-   | --------------------- doesn't satisfy `_: BatchNormShape`
-   |
-  ::: src/nn/batch_norm.rs
-   |
-   | pub struct BatchNorm2d<S: BatchNormShape, B: Backend> {
-   | ----------------------------------------------------- doesn't satisfy `_: Module<Tensor<_, DummyBackend<f32, Cpu>, _, _>>`
-   |
-   = note: the following trait bounds were not satisfied:
-           `UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>: kindle_core::nn::batch_norm::BatchNormShape`
-           which is required by `kindle_core::prelude::BatchNorm2d<UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>, DummyBackend<f32, kindle_core::prelude::Cpu>>: kindle_core::prelude::Module<kindle_core::prelude::Tensor<_, DummyBackend<f32, kindle_core::prelude::Cpu>, _, _>>`
+  = help: the trait `HasChannels2D<UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>>` is not implemented for `(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>)`
+          but trait `HasChannels2D<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>>` is implemented for it
+  = help: for that trait implementation, expected `UTerm`, found `UInt<UTerm, B1>`
+  = note: required for `kindle::prelude::BatchNorm2d<(UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>,), DummyBackend<f32, kindle::prelude::Cpu>>` to implement `kindle::prelude::Module<kindle::prelude::Tensor<(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>), DummyBackend<f32, kindle::prelude::Cpu>, f32>>`

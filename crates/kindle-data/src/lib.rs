@@ -13,12 +13,12 @@
 //! use kindle::prelude::*;
 //!
 //! struct MyDataset {
-//!     images: Tensor<s![100, 3, 224, 224], CpuBackend>,
-//!     labels: Tensor<s![100], CpuBackend>,
+//!     images: Tensor<s![100, 3, 224, 224], CpuBackendImpl>,
+//!     labels: Tensor<s![100], CpuBackendImpl>,
 //! }
 //!
 //! impl Dataset for MyDataset {
-//!     type Item = (Tensor<s![3, 224, 224], CpuBackend>, Tensor<s![], CpuBackend>);
+//!     type Item = (Tensor<s![3, 224, 224], CpuBackendImpl>, Tensor<s![], CpuBackendImpl>);
 //!     
 //!     fn len(&self) -> usize {
 //!         100

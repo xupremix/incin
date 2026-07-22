@@ -67,6 +67,12 @@ pub fn impl_arg_into(input: TokenStream) -> TokenStream {
     arg_into::impl_arg_into(input)
 }
 
+#[proc_macro]
+#[doc(hidden)]
+pub fn impl_layer_args(input: TokenStream) -> TokenStream {
+    arg_into::impl_layer_args(input)
+}
+
 /// A macro to construct index and slicing arguments for tensor reshaping and subsetting.
 ///
 /// This macro generates the highly complex underlying type trees needed for operations like

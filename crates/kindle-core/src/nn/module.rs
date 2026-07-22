@@ -32,7 +32,7 @@ pub trait StateDict<B: Backend> {
     fn load_from<D: crate::serialize::Deserializer>(
         &mut self,
         deserializer: &mut D,
-        device: &KindleDevice,
+        device: &DeviceId,
     ) -> Result<()>
     where
         <<B as Backend>::Device as Device>::Field: Default,

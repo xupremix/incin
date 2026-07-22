@@ -7,7 +7,7 @@ use kindle_core::nn::*;
 #[derive(Clone, Default)]
 
 fn main() {
-    let layer = Linear::<s![3, 4], DummyBackend<f32, Cpu>>::new().unwrap();
+    let layer = Linear::<s![3, 4], DummyBackend<f32, Cpu>>::build(()).unwrap();
     // Partially dynamic, but the end dimension is still known and wrong!
     let input = Tensor::<s![dyn, 5], DummyBackend<f32, Cpu>>::zeros([2, 5]).unwrap();
     layer.forward(input).unwrap();

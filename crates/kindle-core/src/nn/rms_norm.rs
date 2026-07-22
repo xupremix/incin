@@ -6,17 +6,23 @@ use core::marker::PhantomData;
 pub trait RMSNormShape: Shape + DynShape {
     type Channels: Dim;
     type BuildArg: crate::tensor::arg_into::NotUnit + Clone;
-    type Target;
-    fn build_args(target: Self::Target) -> Self::BuildArg;
+    fn build_args(target: <Self::Channels as Dim>::Arg) -> Self::BuildArg;
 }
 
 impl<C: Dim> RMSNormShape for (C,) {
     type Channels = C;
     type BuildArg = (<C as Dim>::Arg,);
-    type Target = (<C as Dim>::Arg,);
 
-    fn build_args(target: Self::Target) -> Self::BuildArg {
-        target
+    fn build_args(target: <Self::Channels as Dim>::Arg) -> Self::BuildArg {
+        (target,)
+    }
+}
+
+impl RMSNormShape for Dyn {
+    type Channels = usize;
+    type BuildArg = (usize,);
+    fn build_args(target: usize) -> Self::BuildArg {
+        (target,)
     }
 }
 
@@ -36,40 +42,33 @@ pub struct RMSNorm<S: RMSNormShape, B: Backend> {
 
 impl<S: RMSNormShape, B: Backend> RMSNorm<S, B>
 where
-    B::FloatElem: crate::prelude::ConstDType,
-    B::Device: crate::prelude::ConstDevice,
+    B: SupportsDType<B::FloatElem>,
     (S::Channels,): Shape<Arg = S::BuildArg>,
 {
-    pub fn new_with(args: S::Target, eps: f32) -> Result<Self> {
-        let b_args = S::build_args(args);
-
-        let args_data = crate::tensor::arg_into::TensorArgsData {
-            shape: b_args,
-            dtype: (),
-            device: (),
-            grad: (),
-        };
-
-        let weight = Param::<(S::Channels,), B>::ones_raw(args_data.clone())?;
-
+    pub fn build<A>(args: A) -> Result<Self>
+    where
+        A: crate::tensor::arg_into::LayerArgInto<(
+                <S::Channels as Dim>::Arg,
+                <B::FloatElem as DType>::Arg,
+                <B::Device as Device>::Arg,
+                f32,
+            )>,
+    {
+        use crate::tensor::arg_into::LayerArgInto;
+        let (channels, dtype, device, eps) = args.into_layer_arg();
+        let shape = S::build_args(channels);
+        let weight =
+            Param::<(S::Channels,), B>::ones_raw(crate::tensor::arg_into::TensorArgsData {
+                shape,
+                dtype,
+                device,
+                grad: (),
+            })?;
         Ok(Self {
             weight,
             eps,
             _phantom: PhantomData,
         })
-    }
-}
-
-impl<S, B> RMSNorm<S, B>
-where
-    S: RMSNormShape<Target = ((),)>,
-    B: Backend,
-    B::FloatElem: crate::prelude::ConstDType,
-    B::Device: crate::prelude::ConstDevice,
-    (S::Channels,): Shape<Arg = S::BuildArg>,
-{
-    pub fn new(eps: f32) -> Result<Self> {
-        Self::new_with(((),), eps)
     }
 }
 
@@ -100,7 +99,7 @@ impl<
         if !mean_shape.is_empty() {
             mean_shape[dim] = 1;
         }
-        let mean_sq = Tensor::<Dyn, B, B::FloatElem, B::Device, Grad>::from_parts_unchecked(
+        let mean_sq = Tensor::<Dyn, B, B::FloatElem, Grad>::from_parts_unchecked(
             mean_sq_inner,
             Dyn::from_dyn(&mean_shape).unwrap(),
             x._dtype.clone(),

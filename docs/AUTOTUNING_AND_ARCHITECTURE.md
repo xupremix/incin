@@ -12,7 +12,7 @@
 ```
                   +-----------------------------------+
                   |           kindle (API)            |
-                  |  Tensor<S, B, K, D, G>, Module    |
+                  |   Tensor<S, B, K, G>, Module      |
                   +-----------------------------------+
                                     |
                                     v
@@ -45,9 +45,8 @@ Users never write low-level GPU parameters, block dimensions, or raw memory poin
 ### User View
 ```rust
 use kindle::prelude::*;
-use kindle_backends::cuda::CudaBackend;
 
-type B = CudaBackend<f32, Cuda>;
+type B = KindleBackend<f32, Cuda>;
 
 fn main() -> Result<()> {
     let device = CudaDevice::new(0)?;
@@ -61,8 +60,8 @@ fn main() -> Result<()> {
 ```
 
 ### Execution Flow Under the Hood
-1. `a.add(&b)` invokes `NumericOps::add` on `CudaBackend`.
-2. `CudaBackend` queries `CudaAutoTuner::get_1d_config(numel, op_code)` for the optimal launch parameters.
+1. `a.add(&b)` invokes `NumericOps::add` on the backend selected by `KindleBackend`.
+2. The CUDA implementation queries `CudaAutoTuner::get_1d_config(numel, op_code)` for the optimal launch parameters.
 3. The kernel is dispatched via `cudarc` default stream with Grid-Stride Loop execution.
 
 ---

@@ -1,4 +1,4 @@
-//! `LossOps` for `CpuBackend<T, D>`.
+//! `LossOps` for `CpuBackendImpl<T, D>`.
 //!
 //! `mse_loss` is composed strictly from already-tape-tracked primitives
 //! (`NumericOps::sub`, `NumericOps::mul`, `ReductionOps::mean_all` /
@@ -24,14 +24,14 @@
 //! correct backward by composition with zero new tape entries of their own,
 //! exactly like `mse_loss`/`cross_entropy_loss` above.
 
-use crate::cpu::CpuBackend;
+use crate::cpu::CpuBackendImpl;
 use kindle_core::prelude::Reduction;
 use kindle_core::prelude::*;
 use kindle_core::prelude::{Backend, DType, FloatOps, LossOps, NumericOps, ReductionOps, Result};
 
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
 
-impl<T: DType, D: Device> LossOps<Self> for CpuBackend<T, D> {
+impl<T: DType, D: Device> LossOps<Self> for CpuBackendImpl<T, D> {
     /// Numerically-stable cross-entropy loss via the shared `log_softmax`
     /// kernel (D-02, Plan 04-01).
     ///
@@ -106,7 +106,7 @@ mod tests {
     use crate::cpu::tape;
 
     /// `B`.
-    type B = CpuBackend<f32, kindle_core::prelude::Cpu>;
+    type B = CpuBackendImpl<f32, kindle_core::prelude::Cpu>;
 
     /// `matrix`.
     fn matrix(v: Vec<f32>, rows: usize, cols: usize) -> CpuStorage {

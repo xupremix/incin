@@ -37,7 +37,7 @@
 >
 > **2026-07-21 third follow-up: C-4 partially fixed, and rescoped.** CUDA's
 > `add`/`sub`/`mul`/`div` are now gradient-wired the same way, but fixing this
-> surfaced that `CudaBackend` implements almost nothing else — `CreationOps`,
+> surfaced that `CudaBackendImpl` implements almost nothing else — `CreationOps`,
 > `FloatOps`, `ReductionOps`, `ModuleOps`, `LossOps`, `QuantizedOps`,
 > `OptimizerOps` are all empty impl blocks falling through to `Err`. This is a
 > bigger, more foundational gap than "autograd disconnected" — see C-4's
@@ -92,7 +92,7 @@ be runtime-tested in this environment (no CUDA hardware/toolkit available) —
 
 ### C-2 — CPU elementwise ops silently downcast every dtype to f32 — ✅ FIXED (2026-07-21)
 `crates/kindle-backends/src/cpu/ops/elementwise.rs:85-88,108-111`. Regardless of
-the operands' actual `KindleDType` (F64, F16, BF16, ...), the result was always
+the operands' actual `DTypeId` (F64, F16, BF16, ...), the result was always
 constructed as `CpuBuffer::F32(out)`. Every add/sub/mul/div/relu/exp/log/tanh/
 sigmoid/gelu/softmax on a non-f32 tensor silently lost precision with no error.
 This was the exact anti-pattern the old roadmap accused the legacy Candle/Ndarray
@@ -158,16 +158,16 @@ unconditionally returned `Ok(())`, `get_grad()` always returned `Ok(None)`.
 anywhere in `cuda/`.
 
 **Correction, found while fixing this:** the original C-4 write-up undersold
-the actual gap. `CudaBackend`'s trait impls in `cuda/backend.rs` were, before
+the actual gap. `CudaBackendImpl`'s trait impls in `cuda/backend.rs` were, before
 this fix, almost entirely **empty blocks relying on `Backend` trait defaults**
 (which mostly return `Err(UnsupportedBackendOperation)`):
-`impl FloatOps<Self> for CudaBackend<T, D> {}`,
-`impl CreationOps<Self> for CudaBackend<T, D> {}`,
-`impl ReductionOps<Self> for CudaBackend<T, D> {}`,
-`impl QuantizedOps<Self> for CudaBackend<T, D> {}`,
-`impl OptimizerOps<Self> for CudaBackend<T, D> {}`,
-`impl ModuleOps<Self> for CudaBackend<T, D> {}`,
-`impl LossOps<Self> for CudaBackend<T, D> {}` — every one of these is still an
+`impl FloatOps<Self> for CudaBackendImpl<T, D> {}`,
+`impl CreationOps<Self> for CudaBackendImpl<T, D> {}`,
+`impl ReductionOps<Self> for CudaBackendImpl<T, D> {}`,
+`impl QuantizedOps<Self> for CudaBackendImpl<T, D> {}`,
+`impl OptimizerOps<Self> for CudaBackendImpl<T, D> {}`,
+`impl ModuleOps<Self> for CudaBackendImpl<T, D> {}`,
+`impl LossOps<Self> for CudaBackendImpl<T, D> {}` — every one of these is still an
 empty `{}` today. Only `TensorOps::concat` and `NumericOps` (`add`/`sub`/`mul`/`div`)
 were actually implemented. This means **you cannot even create a CUDA tensor**
 via the standard `zeros`/`ones`/`rand`/`randn` API (`CreationOps` has no
@@ -260,10 +260,10 @@ instead of a bare "called `Result::unwrap()` on an `Err` value" with no context.
 ### C-8 — `cpu::ops::elementwise` was `#[cfg(feature = "cuda")]`-gated; CI's "cpu-only" test run silently never tested cpu-only — ✅ FIXED (2026-07-21)
 Two compounding bugs, both found while wiring up CI (item 12):
 1. `crates/kindle-backends/src/cpu/ops/mod.rs` had `pub mod elementwise;` — the
-   module implementing `NumericOps`/`FloatOps` for `CpuBackend`, i.e. the
+   module implementing `NumericOps`/`FloatOps` for `CpuBackendImpl`, i.e. the
    entire reason the CPU backend can add/mul/relu/etc. — preceded by *seven*
    duplicate `#[cfg(feature = "cuda")]` attributes. With `cuda` off,
-   `cpu::ops::elementwise` didn't exist at all and `CpuBackend` failed to
+   `cpu::ops::elementwise` didn't exist at all and `CpuBackendImpl` failed to
    implement `NumericOps`/`FloatOps`, i.e. **the CPU backend could not compile
    standalone**.
 2. This was invisible because it never *was* standalone: `kindle-data/Cargo.toml`
@@ -323,7 +323,7 @@ combination actually meant what its name said.
 - **`pub` API leakage across backends — ✅ FIXED (2026-07-21).** `wgpu` was
   already correctly scoped. Brought `cuda` up to the same standard:
   `cuda/mod.rs`'s `ops`/`storage`/`gpu`/`tape` submodules are now `pub(crate)`
-  (only `CudaBackend`/`CudaGrads`/`CudaVar` are re-exported, mirroring wgpu's
+  (only `CudaBackendImpl`/`CudaGrads`/`CudaVar` are re-exported, mirroring wgpu's
   pattern exactly, including a new `pub type CudaGrads = crate::cuda::tape::CudaGrads;`
   alias in `backend.rs` so the type stays externally nameable through the
   `pub(crate)`-module `tape`); `CudaBuffer`'s raw `Arc<CudaSlice<u8>>`/
@@ -397,7 +397,7 @@ combination actually meant what its name said.
 - **Unsound raw-byte reinterpretation**: `to_scalar<E: Copy>`/`to_vec1<E: Copy>`
   in `kindle-core/src/tensor/ops/manipulation.rs:362,370,387-393` only check
   byte-length equality against `size_of::<E>()`, never cross-check the tensor's
-  actual `KindleDType` against `E` before `read_unaligned`/`copy_nonoverlapping`.
+  actual `DTypeId` against `E` before `read_unaligned`/`copy_nonoverlapping`.
   Undefined behavior if `E = bool` (or similar) and the underlying byte isn't
   0/1. Add a dtype/`E` compatibility check before the unsafe reinterpret.
 - **`panic!`/`unimplemented!` inside `Result`-returning library functions**:
@@ -427,7 +427,7 @@ combination actually meant what its name said.
   backend struct** ("Instead of separate backend structs, kindle uses a single
   unified `KindleBackend<T, D>`..."), but its own status checklist lists this as
   unchecked, and the audit confirms the actual code still has separate
-  `CpuBackend`/`CudaBackend`/`WgpuBackend`/`CandleBackend`/`NdarrayBackend`
+  `CpuBackendImpl`/`CudaBackendImpl`/`WgpuBackendImpl`/`CandleBackend`/`NdarrayBackend`
   types (these are the graph's top god-nodes by edge count). Reframe that
   section as a design target, not current architecture, until the refactor lands.
 - **`kindle-telemetry`'s file transport has no explicit permission hardening**
@@ -557,9 +557,9 @@ actually load-bearing for correctness, not just release paperwork.
 | Symbol | Crate | Stable? |
 |--------|-------|---------|
 | `Backend` trait + all sub-traits (`FloatOps`, `NumericOps`, ...) | `kindle-core` | ✅ Yes — this is the extension point |
-| `Tensor<S, B, K, D, G>` type and its inherent methods | `kindle-core` | ✅ Yes |
+| `Tensor<S, B, K, G>` type and its inherent methods | `kindle-core` | ✅ Yes |
 | `s![]`, `idx![]` macros | `kindle-macros` | ✅ Yes |
-| `CpuBackend<T>`, `CudaBackend<T>`, `WgpuBackend<T>` | `kindle-backends` | ✅ Yes (the structs only) |
+| `CpuBackendImpl<T>`, `CudaBackendImpl<T>`, `WgpuBackendImpl<T>` | `kindle-backends` | ✅ Yes (the structs only) |
 | `Error` enum variants | `kindle-core` | ✅ Yes (`#[non_exhaustive]` — already applied) |
 | `nn::Linear`, `Conv2d`, `LayerNorm`, etc. | `kindle-core` | ✅ Yes |
 | `dispatch_*` / `launch_*` functions | `kindle-backends` (cuda, wgpu) | ❌ No — `pub(crate)` everywhere ✅ (2026-07-21) |
@@ -569,8 +569,8 @@ actually load-bearing for correctness, not just release paperwork.
 
 ### `#[non_exhaustive]` status
 - `Error` enum — ✅ already applied (`kindle-core/src/err.rs:8`)
-- `KindleDType` enum — ✅ already applied (`kindle-core/src/tensor/dtype.rs:43`)
-- `KindleDevice` struct — check and apply if missing
+- `DTypeId` enum — ✅ already applied (`kindle-core/src/tensor/dtype.rs:43`)
+- `DeviceId` struct — check and apply if missing
 
 ### Semver implications
 Adding a new associated type or method to the `Backend` trait is a **breaking

@@ -19,10 +19,10 @@ wgpu = ["kindle-backends/wgpu"]
 legacy = ["kindle-backends/legacy"]
 
 [dependencies]
-kindle-core = { path = "../kindle-core", version = "0.1.0", default-features = false }
-kindle-macros = { path = "../kindle-macros/", version = "0.1.0", default-features = false }
+kindle-core = { path = "../kindle-core", version = "0.2.0", default-features = false }
+kindle-macros = { path = "../kindle-macros/", version = "0.2.0", default-features = false }
 kindle-backends = { path = "../kindle-backends", default-features = false }
-kindle-data = { version = "0.1.0", path = "../kindle-data" }
+kindle-data = { version = "0.2.0", path = "../kindle-data" }
 
 [dev-dependencies]
 candle-core = { workspace = true }

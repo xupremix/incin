@@ -62,7 +62,7 @@ where
         // Generate uniform mask in [0, 1)
         let dtype = <B::FloatElem as ConstDType>::DTYPE;
         let mask_inner = B::rand(x.dims().as_ref(), dtype, &x.device()?)?;
-        let mask = Tensor::<S, B, B::FloatElem, B::Device, NoGrad>::from_parts_unchecked(
+        let mask = Tensor::<S, B, B::FloatElem, NoGrad>::from_parts_unchecked(
             mask_inner,
             x._shape.clone(),
             x._dtype.clone(),

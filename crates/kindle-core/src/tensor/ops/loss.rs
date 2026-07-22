@@ -15,9 +15,8 @@ impl<
     S: Shape + crate::prelude::DynShape,
     B: Backend + crate::tensor::backend::LossOps<B>,
     K: crate::tensor::dtype::DType,
-    D: crate::tensor::device::Device,
     G: RequiresGrad,
-> Tensor<S, B, K, D, G>
+> Tensor<S, B, K, G>
 {
     /// Computes the Cross Entropy loss between predictions and target labels.
     /// Uses the default `Mean` reduction.
@@ -31,16 +30,16 @@ impl<
     /// ```
     pub fn cross_entropy_loss<S2: Shape>(
         &self,
-        target: &Tensor<S2, B, K, D, G>,
-    ) -> Result<Tensor<(), B, K, D, G>> {
+        target: &Tensor<S2, B, K, G>,
+    ) -> Result<Tensor<(), B, K, G>> {
         self.cross_entropy_loss_with::<Mean, S2>(target)
     }
 
     /// `cross_entropy_loss_with`.
     pub fn cross_entropy_loss_with<R, S2: Shape>(
         &self,
-        target: &Tensor<S2, B, K, D, G>,
-    ) -> Result<Tensor<R::Output, B, K, D, G>>
+        target: &Tensor<S2, B, K, G>,
+    ) -> Result<Tensor<R::Output, B, K, G>>
     where
         R: ReductionMode + CrossEntropyReductionShape<S>,
     {
@@ -71,18 +70,15 @@ impl<
     /// let target = Tensor::<s![2], DefaultBackend>::zeros(()).unwrap();
     /// let loss = pred.mse_loss(&target).unwrap();
     /// ```
-    pub fn mse_loss<S2: Shape>(
-        &self,
-        target: &Tensor<S2, B, K, D, G>,
-    ) -> Result<Tensor<(), B, K, D, G>> {
+    pub fn mse_loss<S2: Shape>(&self, target: &Tensor<S2, B, K, G>) -> Result<Tensor<(), B, K, G>> {
         self.mse_loss_with::<Mean, S2>(target)
     }
 
     /// `mse_loss_with`.
     pub fn mse_loss_with<R, S2: Shape>(
         &self,
-        target: &Tensor<S2, B, K, D, G>,
-    ) -> Result<Tensor<R::Output, B, K, D, G>>
+        target: &Tensor<S2, B, K, G>,
+    ) -> Result<Tensor<R::Output, B, K, G>>
     where
         R: ReductionMode + MseReductionShape<S>,
     {
@@ -102,18 +98,15 @@ impl<
     }
 
     /// `l1_loss`.
-    pub fn l1_loss<S2: Shape>(
-        &self,
-        target: &Tensor<S2, B, K, D, G>,
-    ) -> Result<Tensor<(), B, K, D, G>> {
+    pub fn l1_loss<S2: Shape>(&self, target: &Tensor<S2, B, K, G>) -> Result<Tensor<(), B, K, G>> {
         self.l1_loss_with::<Mean, S2>(target)
     }
 
     /// `l1_loss_with`.
     pub fn l1_loss_with<R, S2: Shape>(
         &self,
-        target: &Tensor<S2, B, K, D, G>,
-    ) -> Result<Tensor<R::Output, B, K, D, G>>
+        target: &Tensor<S2, B, K, G>,
+    ) -> Result<Tensor<R::Output, B, K, G>>
     where
         R: ReductionMode + L1ReductionShape<S>,
     {
@@ -135,16 +128,16 @@ impl<
     /// `bce_with_logits_loss`.
     pub fn bce_with_logits_loss<S2: Shape>(
         &self,
-        target: &Tensor<S2, B, K, D, G>,
-    ) -> Result<Tensor<(), B, K, D, G>> {
+        target: &Tensor<S2, B, K, G>,
+    ) -> Result<Tensor<(), B, K, G>> {
         self.bce_with_logits_loss_with::<Mean, S2>(target)
     }
 
     /// `bce_with_logits_loss_with`.
     pub fn bce_with_logits_loss_with<R, S2: Shape>(
         &self,
-        target: &Tensor<S2, B, K, D, G>,
-    ) -> Result<Tensor<R::Output, B, K, D, G>>
+        target: &Tensor<S2, B, K, G>,
+    ) -> Result<Tensor<R::Output, B, K, G>>
     where
         R: ReductionMode + BceReductionShape<S>,
     {

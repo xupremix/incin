@@ -1,7 +1,7 @@
 //! Backend training demo: trains a small CNN classifier
 //! (conv2d -> batch_norm -> relu -> max_pool2d -> flatten -> linear) end-to-end
 //! (forward -> cross_entropy_loss -> backward -> optimizer step) for multiple
-//! epochs on `CpuBackend<f32, Cpu>`.
+//! epochs on `CpuBackendImpl<f32, Cpu>`.
 
 #[macro_use]
 extern crate alloc;
@@ -9,10 +9,10 @@ extern crate alloc;
 use kindle::SGD;
 use kindle::prelude::*;
 use kindle::prelude::{CrossEntropyLoss, Mean};
-use kindle_backends::cpu::CpuBackend;
+use kindle_backends::cpu::CpuBackendImpl;
 
 /// The CPU backend type alias.
-type NB = CpuBackend;
+type NB = CpuBackendImpl;
 
 // ── Model ────────────────────────────────────────────────────────────────────
 
@@ -29,7 +29,8 @@ pub struct SimpleCnn<B: Backend> {
 
 impl<B: Backend + kindle::ModuleOps<B>> SimpleCnn<B>
 where
-    B::FloatElem: ConstDType,
+    B: SupportsDType<B::FloatElem> + SupportsDType<u32>,
+    B::FloatElem: ConstDType<Elem = f32>,
     B::Device: ConstDevice,
 {
     pub fn new(
@@ -43,10 +44,10 @@ where
                 s![dyn, dyn, 3, 1, 1, 1],
                 B,
                 kindle_core::prelude::False,
-            >::new_with((conv_out_channels, in_channels))?,
-            bn1: kindle::BatchNorm2d::<s![dyn], B>::new_with((conv_out_channels,), 1e-5, 0.1)?,
+            >::build((conv_out_channels, in_channels))?,
+            bn1: kindle::BatchNorm2d::<s![dyn], B>::build((conv_out_channels, 1e-5, 0.1))?,
             pool: kindle::MaxPool2d::<typenum::U2, typenum::U2>::new()?,
-            fc: kindle::Linear::<Dyn, B>::new_with((flattened_dim, num_classes))?,
+            fc: kindle::Linear::<Dyn, B>::build((flattened_dim, num_classes))?,
         })
     }
 }
@@ -97,7 +98,7 @@ fn make_dataset() -> (Vec<f32>, Vec<u32>, usize) {
 
 // ── Training loop ────────────────────────────────────────────────────────────
 
-fn train<B: Backend + kindle::ModuleOps<B>>(
+fn train<B>(
     images: &[f32],
     labels: &[u32],
     n_samples: usize,
@@ -105,7 +106,8 @@ fn train<B: Backend + kindle::ModuleOps<B>>(
     lr: f64,
 ) -> (Vec<f32>, std::time::Duration)
 where
-    B::FloatElem: ConstDType,
+    B: Backend + kindle::ModuleOps<B> + SupportsDType<B::FloatElem> + SupportsDType<u32>,
+    B::FloatElem: ConstDType<Elem = f32>,
     B::Device: ConstDevice,
 {
     let in_channels = 1;
@@ -125,11 +127,11 @@ where
 
     let target_shape = vec![n_samples, in_channels, h, w];
 
-    let labels_f32: Vec<f32> = labels.iter().map(|&x| x as f32).collect();
+    let labels_u32 = labels.to_vec();
 
     for _epoch in 0..n_epochs {
         let x = Tensor::<Dyn, B>::from_slice(images, target_shape.clone()).unwrap();
-        let targets = Tensor::<Dyn, B, u32>::from_slice(&labels_f32, vec![n_samples])
+        let targets = Tensor::<Dyn, B, u32>::from_slice(&labels_u32, vec![n_samples])
             .unwrap()
             .detach();
 
@@ -164,12 +166,12 @@ fn main() -> anyhow::Result<()> {
     for (i, nl) in native_losses.iter().enumerate().take(n_epochs) {
         println!("epoch {i}: loss={nl:.6}");
     }
-    println!("CpuBackend: {native_elapsed:?} total");
+    println!("CpuBackendImpl: {native_elapsed:?} total");
 
     let native_ok = native_losses.last().unwrap() < native_losses.first().unwrap();
     println!();
     println!(
-        "CpuBackend loss decreased first->last: {}",
+        "CpuBackendImpl loss decreased first->last: {}",
         if native_ok { "PASS" } else { "FAIL" }
     );
 

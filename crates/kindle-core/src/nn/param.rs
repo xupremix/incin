@@ -1,5 +1,57 @@
 use crate::prelude::*;
 
+fn execute_initializer<B>(
+    dims: &[usize],
+    dtype_field: &<B::FloatElem as DType>::Field,
+    device_field: &<B::Device as Device>::Field,
+    init: crate::nn::init::Init,
+) -> Result<B::RawVar>
+where
+    B: Backend + SupportsDType<B::FloatElem>,
+{
+    use crate::nn::init::Init;
+    let device = B::Device::to_kindle(device_field)?;
+    let dtype = B::resolve_dtype(dtype_field, &device)?;
+    match init {
+        Init::Zeros => B::var_zeros::<B::FloatElem>(dims, dtype, &device),
+        Init::Ones => B::var_ones::<B::FloatElem>(dims, dtype, &device),
+        Init::Rand => B::var_rand::<B::FloatElem>(dims, dtype, &device),
+        Init::Randn => B::var_randn::<B::FloatElem>(dims, dtype, &device),
+        Init::Uniform { bound } => {
+            let value = B::rand::<B::FloatElem>(dims, dtype, &device)?;
+            let value = B::mul_scalar_float(&value, 2.0 * bound)?;
+            B::var_from_tensor(&B::add_scalar_float(&value, -bound)?)
+        }
+        Init::Constant(value) => {
+            let ones = B::ones::<B::FloatElem>(dims, dtype, &device)?;
+            B::var_from_tensor(&B::mul_scalar_float(&ones, value)?)
+        }
+        Init::KaimingUniform { fan_in, a } => {
+            let std = f64::sqrt(2.0 / ((1.0 + a * a) * fan_in as f64));
+            let bound = f64::sqrt(3.0) * std;
+            let value = B::rand::<B::FloatElem>(dims, dtype, &device)?;
+            let value = B::mul_scalar_float(&value, 2.0 * bound)?;
+            B::var_from_tensor(&B::add_scalar_float(&value, -bound)?)
+        }
+        Init::KaimingNormal { fan_in, a } => {
+            let std = f64::sqrt(2.0 / ((1.0 + a * a) * fan_in as f64));
+            let value = B::randn::<B::FloatElem>(dims, dtype, &device)?;
+            B::var_from_tensor(&B::mul_scalar_float(&value, std)?)
+        }
+        Init::XavierUniform { fan_in, fan_out } => {
+            let bound = f64::sqrt(6.0 / (fan_in as f64 + fan_out as f64));
+            let value = B::rand::<B::FloatElem>(dims, dtype, &device)?;
+            let value = B::mul_scalar_float(&value, 2.0 * bound)?;
+            B::var_from_tensor(&B::add_scalar_float(&value, -bound)?)
+        }
+        Init::XavierNormal { fan_in, fan_out } => {
+            let std = f64::sqrt(2.0 / (fan_in as f64 + fan_out as f64));
+            let value = B::randn::<B::FloatElem>(dims, dtype, &device)?;
+            B::var_from_tensor(&B::mul_scalar_float(&value, std)?)
+        }
+    }
+}
+
 /// A trainable parameter storing an underlying backend variable that supports gradient computation.
 ///
 /// `Param` is the typed wrapper around a backend's gradient-tracking variable (e.g. `candle_core::Var`).
@@ -67,14 +119,16 @@ impl<S: Shape + DynShape, B: Backend> Param<S, B> {
 
 impl<S: Shape, B: Backend, NewD: crate::prelude::Device> crate::nn::module::ToDevice<B, NewD>
     for Param<S, B>
+where
+    B: TransferTo<NewD>,
+    <B as TransferTo<NewD>>::Output: SupportsDType<B::FloatElem>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Param<S, B::BackendWithDevice<NewD>>;
+    type Output = Param<S, <B as TransferTo<NewD>>::Output>;
     /// `to_device`.
     fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output> {
         let field = NewD::init(arg.clone());
-        let kindle_dev = NewD::to_kindle(&field)?;
-        let inner = B::var_to_device(&self.inner, &kindle_dev)?;
+        let inner = B::transfer_var(&self.inner, &self._dtype, &field)?;
         Ok(Param {
             inner,
             _shape: self._shape,
@@ -97,58 +151,13 @@ where
             Grad,
         >>::Args,
         init: crate::nn::init::Init,
-    ) -> Result<Self> {
-        use crate::nn::init::Init;
+    ) -> Result<Self>
+    where
+        B: SupportsDType<B::FloatElem>,
+    {
         let (_shape, _dtype, _device, _) = <(S, B::FloatElem, B::Device, Grad)>::construct(args);
         let dims: S::Dims = S::dims(&_shape);
-        let device = <B::Device as Device>::to_kindle(&_device)?;
-        let dtype = <B::FloatElem as DType>::to_kindle(&_dtype);
-
-        let inner = match init {
-            Init::Zeros => B::var_zeros::<B::FloatElem>(dims.as_ref(), dtype, &device)?,
-            Init::Ones => B::var_ones::<B::FloatElem>(dims.as_ref(), dtype, &device)?,
-            Init::Rand => B::var_rand::<B::FloatElem>(dims.as_ref(), dtype, &device)?,
-            Init::Randn => B::var_randn::<B::FloatElem>(dims.as_ref(), dtype, &device)?,
-
-            Init::Uniform { bound } => {
-                let t_rand = B::rand::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
-                let t_scaled = B::mul_scalar_float(&t_rand, 2.0 * bound)?;
-                let t_final = B::add_scalar_float(&t_scaled, -bound)?;
-                B::var_from_tensor(&t_final)?
-            }
-            Init::Constant(c) => {
-                let ones = B::ones::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
-                let c_tensor = B::mul_scalar_float(&ones, c)?;
-                B::var_from_tensor(&c_tensor)?
-            }
-            Init::KaimingUniform { fan_in, a } => {
-                let std = f64::sqrt(2.0 / ((1.0 + a * a) * fan_in as f64));
-                let bound = f64::sqrt(3.0) * std;
-                let t_rand = B::rand::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
-                let t_scaled = B::mul_scalar_float(&t_rand, 2.0 * bound)?;
-                let t_final = B::add_scalar_float(&t_scaled, -bound)?;
-                B::var_from_tensor(&t_final)?
-            }
-            Init::KaimingNormal { fan_in, a } => {
-                let std = f64::sqrt(2.0 / ((1.0 + a * a) * fan_in as f64));
-                let t_randn = B::randn::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
-                let t_final = B::mul_scalar_float(&t_randn, std)?;
-                B::var_from_tensor(&t_final)?
-            }
-            Init::XavierUniform { fan_in, fan_out } => {
-                let bound = f64::sqrt(6.0 / (fan_in as f64 + fan_out as f64));
-                let t_rand = B::rand::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
-                let t_scaled = B::mul_scalar_float(&t_rand, 2.0 * bound)?;
-                let t_final = B::add_scalar_float(&t_scaled, -bound)?;
-                B::var_from_tensor(&t_final)?
-            }
-            Init::XavierNormal { fan_in, fan_out } => {
-                let std = f64::sqrt(2.0 / (fan_in as f64 + fan_out as f64));
-                let t_randn = B::randn::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
-                let t_final = B::mul_scalar_float(&t_randn, std)?;
-                B::var_from_tensor(&t_final)?
-            }
-        };
+        let inner = execute_initializer::<B>(dims.as_ref(), &_dtype, &_device, init)?;
 
         Ok(Self {
             inner,
@@ -161,6 +170,7 @@ where
     /// `new_init`.
     pub fn new_init<A>(args: A, init: crate::nn::init::Init) -> Result<Self>
     where
+        B: SupportsDType<B::FloatElem>,
         A:
             ArgInto<
                 <(S, B::FloatElem, B::Device, Grad) as TensorArgs<
@@ -304,12 +314,12 @@ where
     pub fn to_device<D2: Device>(
         self,
         _device: &D2::Field,
-    ) -> Result<Param<S, B::BackendWithDevice<D2>>>
+    ) -> Result<Param<S, <B as TransferTo<D2>>::Output>>
     where
-        B::BackendWithDevice<D2>: Backend<RawVar = B::RawVar>,
+        B: TransferTo<D2>,
+        <B as TransferTo<D2>>::Output: SupportsDType<B::FloatElem>,
     {
-        let kindle_device = D2::to_kindle(_device)?;
-        let new_inner = B::var_to_device(&self.inner, &kindle_device)?;
+        let new_inner = B::transfer_var(&self.inner, &self._dtype, _device)?;
         Ok(Param {
             inner: new_inner,
             _shape: self._shape,
@@ -440,14 +450,16 @@ impl<S: Shape + DynShape, B: Backend> Buffer<S, B> {
 
 impl<S: Shape, B: Backend, NewD: crate::prelude::Device> crate::nn::module::ToDevice<B, NewD>
     for Buffer<S, B>
+where
+    B: TransferTo<NewD>,
+    <B as TransferTo<NewD>>::Output: SupportsDType<B::FloatElem>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Buffer<S, B::BackendWithDevice<NewD>>;
+    type Output = Buffer<S, <B as TransferTo<NewD>>::Output>;
     /// `to_device`.
     fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output> {
         let field = NewD::init(arg.clone());
-        let kindle_dev = NewD::to_kindle(&field)?;
-        let inner = B::var_to_device(&self.inner, &kindle_dev)?;
+        let inner = B::transfer_var(&self.inner, &self._dtype, &field)?;
         Ok(Buffer {
             inner,
             _shape: self._shape,
@@ -470,58 +482,13 @@ where
             Grad,
         >>::Args,
         init: crate::nn::init::Init,
-    ) -> Result<Self> {
-        use crate::nn::init::Init;
+    ) -> Result<Self>
+    where
+        B: SupportsDType<B::FloatElem>,
+    {
         let (_shape, _dtype, _device, _) = <(S, B::FloatElem, B::Device, Grad)>::construct(args);
         let dims: S::Dims = S::dims(&_shape);
-        let device = <B::Device as Device>::to_kindle(&_device)?;
-        let dtype = <B::FloatElem as DType>::to_kindle(&_dtype);
-
-        let inner = match init {
-            Init::Zeros => B::var_zeros::<B::FloatElem>(dims.as_ref(), dtype, &device)?,
-            Init::Ones => B::var_ones::<B::FloatElem>(dims.as_ref(), dtype, &device)?,
-            Init::Rand => B::var_rand::<B::FloatElem>(dims.as_ref(), dtype, &device)?,
-            Init::Randn => B::var_randn::<B::FloatElem>(dims.as_ref(), dtype, &device)?,
-
-            Init::Uniform { bound } => {
-                let t_rand = B::rand::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
-                let t_scaled = B::mul_scalar_float(&t_rand, 2.0 * bound)?;
-                let t_final = B::add_scalar_float(&t_scaled, -bound)?;
-                B::var_from_tensor(&t_final)?
-            }
-            Init::Constant(c) => {
-                let ones = B::ones::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
-                let c_tensor = B::mul_scalar_float(&ones, c)?;
-                B::var_from_tensor(&c_tensor)?
-            }
-            Init::KaimingUniform { fan_in, a } => {
-                let std = f64::sqrt(2.0 / ((1.0 + a * a) * fan_in as f64));
-                let bound = f64::sqrt(3.0) * std;
-                let t_rand = B::rand::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
-                let t_scaled = B::mul_scalar_float(&t_rand, 2.0 * bound)?;
-                let t_final = B::add_scalar_float(&t_scaled, -bound)?;
-                B::var_from_tensor(&t_final)?
-            }
-            Init::KaimingNormal { fan_in, a } => {
-                let std = f64::sqrt(2.0 / ((1.0 + a * a) * fan_in as f64));
-                let t_randn = B::randn::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
-                let t_final = B::mul_scalar_float(&t_randn, std)?;
-                B::var_from_tensor(&t_final)?
-            }
-            Init::XavierUniform { fan_in, fan_out } => {
-                let bound = f64::sqrt(6.0 / (fan_in as f64 + fan_out as f64));
-                let t_rand = B::rand::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
-                let t_scaled = B::mul_scalar_float(&t_rand, 2.0 * bound)?;
-                let t_final = B::add_scalar_float(&t_scaled, -bound)?;
-                B::var_from_tensor(&t_final)?
-            }
-            Init::XavierNormal { fan_in, fan_out } => {
-                let std = f64::sqrt(2.0 / (fan_in as f64 + fan_out as f64));
-                let t_randn = B::randn::<B::FloatElem>(dims.as_ref(), dtype, &device)?;
-                let t_final = B::mul_scalar_float(&t_randn, std)?;
-                B::var_from_tensor(&t_final)?
-            }
-        };
+        let inner = execute_initializer::<B>(dims.as_ref(), &_dtype, &_device, init)?;
 
         Ok(Self {
             inner,
@@ -534,6 +501,7 @@ where
     /// `new_init`.
     pub fn new_init<A>(args: A, init: crate::nn::init::Init) -> Result<Self>
     where
+        B: SupportsDType<B::FloatElem>,
         A:
             ArgInto<
                 <(S, B::FloatElem, B::Device, Grad) as TensorArgs<

@@ -41,7 +41,7 @@ impl TensorId {
 
 /// Dtype-tagged raw data buffer.
 ///
-/// All 7 `KindleDType` variants are reserved as enum shape per the
+/// All 7 `DTypeId` variants are reserved as enum shape per the
 /// project's "Resolving the Deferred Gray Areas" decision. Only `F32` needs
 /// real arithmetic elsewhere in this phase; the other variants exist as
 /// data-holding shapes since `storage.rs` itself doesn't perform arithmetic,

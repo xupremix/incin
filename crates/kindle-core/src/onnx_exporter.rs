@@ -100,16 +100,16 @@ pub fn export_to_onnx(graph: &Graph, path: &Path) -> anyhow::Result<()> {
 }
 
 /// `dtype_to_onnx`.
-fn dtype_to_onnx(dt: KindleDType) -> onnx::tensor_proto::DataType {
+fn dtype_to_onnx(dt: DTypeId) -> onnx::tensor_proto::DataType {
     match dt {
-        KindleDType::F32 => onnx::tensor_proto::DataType::Float,
-        KindleDType::F64 => onnx::tensor_proto::DataType::Double,
-        KindleDType::F16 => onnx::tensor_proto::DataType::Float16,
-        KindleDType::BF16 => onnx::tensor_proto::DataType::Bfloat16,
-        KindleDType::U32 => onnx::tensor_proto::DataType::Uint32,
-        KindleDType::I64 => onnx::tensor_proto::DataType::Int64,
-        KindleDType::U8 => onnx::tensor_proto::DataType::Uint8,
-        KindleDType::Q8_0 => onnx::tensor_proto::DataType::Undefined,
+        DTypeId::F32 => onnx::tensor_proto::DataType::Float,
+        DTypeId::F64 => onnx::tensor_proto::DataType::Double,
+        DTypeId::F16 => onnx::tensor_proto::DataType::Float16,
+        DTypeId::BF16 => onnx::tensor_proto::DataType::Bfloat16,
+        DTypeId::U32 => onnx::tensor_proto::DataType::Uint32,
+        DTypeId::I64 => onnx::tensor_proto::DataType::Int64,
+        DTypeId::U8 => onnx::tensor_proto::DataType::Uint8,
+        DTypeId::Q8_0 => onnx::tensor_proto::DataType::Undefined,
     }
 }
 
@@ -174,7 +174,7 @@ impl<'a> crate::serialize::Deserializer for OnnxImporter<'a> {
     /// `deserialize`.
     fn deserialize<B: Backend>(
         &mut self,
-        _device: &KindleDevice,
+        _device: &DeviceId,
     ) -> core::result::Result<BTreeMap<String, Tensor<Dyn, B>>, Self::Error>
     where
         <<B as Backend>::Device as Device>::Field: Default,

@@ -1,18 +1,18 @@
 use kindle::prelude::*;
 use kindle::{Optimizer, SGD};
 
-/// Implementation of `CpuBackend` for the respective backend.
-type CpuBackend = kindle_backends::cpu::CpuBackend;
+/// Implementation of `CpuBackendImpl` for the respective backend.
+type CpuBackendImpl = kindle_backends::cpu::CpuBackendImpl;
 
 #[test]
 /// Test simple linear regression.
 fn test_simple_linear_regression() -> Result<()> {
-    let model = Linear::<s![1, 1], CpuBackend>::new()?;
-    let mut optim = SGD::<CpuBackend>::new(model.parameters(), 0.01);
+    let model = Linear::<s![1, 1], CpuBackendImpl>::build(())?;
+    let mut optim = SGD::<CpuBackendImpl>::new(model.parameters(), 0.01);
 
     // We just create zeros to test the autograd and optimizer pipeline
-    let x = Tensor::<s![4, 1], CpuBackend>::zeros(())?;
-    let y = Tensor::<s![4, 1], CpuBackend>::zeros(())?;
+    let x = Tensor::<s![4, 1], CpuBackendImpl>::zeros(())?;
+    let y = Tensor::<s![4, 1], CpuBackendImpl>::zeros(())?;
 
     for _ in 0..2 {
         let pred = model.forward(x.clone())?;
@@ -33,15 +33,15 @@ fn test_simple_linear_regression() -> Result<()> {
 #[test]
 /// Test backward with nan check success.
 fn test_backward_with_nan_check_success() -> Result<()> {
-    let model = Linear::<s![1, 1], CpuBackend>::new()?;
-    let mut optim = SGD::<CpuBackend>::new(model.parameters(), 0.01);
+    let model = Linear::<s![1, 1], CpuBackendImpl>::build(())?;
+    let mut optim = SGD::<CpuBackendImpl>::new(model.parameters(), 0.01);
 
-    let x = Tensor::<s![4, 1], CpuBackend>::zeros(())?;
-    let y = Tensor::<s![4, 1], CpuBackend>::zeros(())?;
+    let x = Tensor::<s![4, 1], CpuBackendImpl>::zeros(())?;
+    let y = Tensor::<s![4, 1], CpuBackendImpl>::zeros(())?;
 
     let pred = model.forward(x.clone())?;
     let loss = pred.mse_loss(&y)?;
-    let raw_grads = CpuBackend::backward_with_nan_check::<f32>(loss.inner())?; // Should succeed
+    let raw_grads = CpuBackendImpl::backward_with_nan_check::<f32>(loss.inner())?; // Should succeed
     let grads = kindle::Gradients(raw_grads);
     optim.step(&grads)?;
 

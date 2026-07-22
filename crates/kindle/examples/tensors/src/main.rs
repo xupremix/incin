@@ -31,10 +31,10 @@ impl MyModel {
 
 fn main() -> kindle::Result<()> {
     let model = MyModel {
-        l1: Linear::new()?,
-        l2: Linear::new()?,
-        l3: Linear::new()?,
-        l4: Linear::new()?,
+        l1: Linear::build(())?,
+        l2: Linear::build(())?,
+        l3: Linear::build(())?,
+        l4: Linear::build(())?,
     };
 
     let t: Tensor<s![2, 2, 2, dyn, 10], B> = Tensor::randn(10_usize)? * 2.;

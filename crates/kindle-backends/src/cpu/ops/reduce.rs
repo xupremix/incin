@@ -1,4 +1,4 @@
-//! `ReductionOps` for `CpuBackend<T, D>`: every method now has a real
+//! `ReductionOps` for `CpuBackendImpl<T, D>`: every method now has a real
 //! implementation — `sum_all`/`mean_all`/`sum_dim`/`sum_keepdim` (Phase 1),
 //! `mean_dim`/`mean_keepdim`/`max_dim`/`max_keepdim`/`min_dim`/`min_keepdim`/
 //! `max_all`/`min_all` (Phase 2, gradcheck-verified backward), and
@@ -43,7 +43,7 @@
 //!   keep returning the typed unsupported-backend-operation error — never a
 //!   silent `Ok(t.clone())` placeholder (T-01-15 mitigation).
 
-use crate::cpu::CpuBackend;
+use crate::cpu::CpuBackendImpl;
 use kindle_core::prelude::Error;
 use kindle_core::prelude::*;
 use kindle_core::prelude::{Backend, DType, ReductionOps, Result};
@@ -239,7 +239,7 @@ fn scatter_axis_grad(
 // ReductionOps impl
 // ---------------------------------------------------------------------------
 
-impl<T: DType, D: Device> ReductionOps<Self> for CpuBackend<T, D> {
+impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
     /// Sum every element of `t` into a single-element scalar storage (shape
     /// `[]`). Pushes a `TapeEntry` whose backward broadcasts the incoming
     /// scalar gradient uniformly back across `t`'s original shape.
@@ -1015,7 +1015,7 @@ mod tests {
     use crate::cpu::tape;
 
     /// `B`.
-    type B = CpuBackend<f32, kindle_core::prelude::Cpu>;
+    type B = CpuBackendImpl<f32, kindle_core::prelude::Cpu>;
 
     /// `matrix`.
     fn matrix(v: Vec<f32>, rows: usize, cols: usize) -> CpuStorage {

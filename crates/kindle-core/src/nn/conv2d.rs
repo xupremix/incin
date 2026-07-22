@@ -20,7 +20,7 @@ use typenum::Unsigned;
 ///
 /// // A statically typed 3×3, stride-1, padding-0, dilation-1 conv: 3 in → 64 out
 /// type S = s![64, 3, 3, 3]; // (COut, CIn, K, K)
-/// let conv = Conv2d::<typenum::U3, typenum::U1, typenum::U0, typenum::U1, S, MyBackend>::new()?;
+/// let conv = Conv2d::<S, MyBackend>::build(())?;
 /// ```
 #[derive(Debug, Clone)]
 #[kindle_macros::module(internal)]
@@ -59,11 +59,11 @@ pub trait Conv2dShape: Shape + DynShape {
     type WeightShape: Shape<Arg = Self::WeightArg> + DynShape;
     /// The static shape type of the bias parameter tensor.
     type BiasShape: Shape<Arg = Self::BiasArg> + DynShape;
-    /// The runtime arguments needed to instantiate this layer.
-    type Target;
 
     /// Converts the target arguments into concrete shape args for weight and bias tensors.
-    fn build_args(target: Self::Target) -> (usize, usize, Self::WeightArg, Self::BiasArg);
+    fn build_args(
+        target: (<Self::OutC as Dim>::Arg, <Self::InC as Dim>::Arg),
+    ) -> (usize, usize, Self::WeightArg, Self::BiasArg);
 }
 
 impl<
@@ -100,12 +100,12 @@ impl<
     type WeightShape = (OutC, InC, K, K);
     /// The static shape type of the bias parameter tensor.
     type BiasShape = (OutC,);
-    /// The runtime arguments needed to instantiate this layer.
-    type Target = (OutC::Arg, InC::Arg);
 
     #[inline]
     /// Converts the target arguments into concrete shape args for weight and bias tensors.
-    fn build_args(target: Self::Target) -> (usize, usize, Self::WeightArg, Self::BiasArg) {
+    fn build_args(
+        target: (<Self::OutC as Dim>::Arg, <Self::InC as Dim>::Arg),
+    ) -> (usize, usize, Self::WeightArg, Self::BiasArg) {
         let out_channels = OutC::from_arg(target.0.clone()).size();
         let in_channels = InC::from_arg(target.1.clone()).size();
         K::from_arg(()).arg();
@@ -118,132 +118,46 @@ impl<
     }
 }
 
-// ── Bias = True ────────────────────────────────────────────────────────────────
-impl<S: Conv2dShape, B: Backend + crate::tensor::backend::ModuleOps<B>>
-    Conv2d<S, B, crate::nn::optional::True>
+impl<S, B, Bias> Conv2d<S, B, Bias>
 where
-    B::FloatElem: crate::prelude::ConstDType,
-    B::Device: crate::prelude::ConstDevice,
+    S: Conv2dShape,
+    B: Backend + SupportsDType<B::FloatElem>,
+    Bias: crate::nn::optional::OptionalField,
+    <B::FloatElem as DType>::Arg: Clone,
+    <B::Device as Device>::Arg: Clone,
 {
-    /// Creates a new instance with explicitly provided shape arguments.
-    pub fn new_with(args: S::Target) -> Result<Self> {
-        let (_cout, _cin, w_args, b_args) = S::build_args(args);
-        let fan_in = _cin * S::K::USIZE * S::K::USIZE;
+    pub fn build<A>(args: A) -> Result<Self>
+    where
+        A: crate::tensor::arg_into::LayerArgInto<(
+                <S::OutC as Dim>::Arg,
+                <S::InC as Dim>::Arg,
+                <B::FloatElem as DType>::Arg,
+                <B::Device as Device>::Arg,
+                <Bias as crate::nn::optional::OptionalField>::Arg,
+            )>,
+    {
+        use crate::tensor::arg_into::LayerArgInto;
+        let (out_c, in_c, dtype, device, bias_arg) = args.into_layer_arg();
+        let (_cout, cin, weight_shape, bias_shape) = S::build_args((out_c, in_c));
         let init = crate::nn::init::Init::KaimingUniform {
-            fan_in,
+            fan_in: cin * S::K::USIZE * S::K::USIZE,
             a: f64::sqrt(5.0),
         };
         let weight = Param::<S::WeightShape, B>::new_init_raw(
             crate::tensor::arg_into::TensorArgsData {
-                shape: w_args,
-                dtype: (),
-                device: (),
+                shape: weight_shape,
+                dtype: dtype.clone(),
+                device: device.clone(),
                 grad: (),
             },
             init,
         )?;
-        let bias = Some(Param::<S::BiasShape, B>::new_init_raw(
-            crate::tensor::arg_into::TensorArgsData {
-                shape: b_args,
-                dtype: (),
-                device: (),
-                grad: (),
-            },
-            init,
-        )?);
-        Ok(Self {
-            weight,
-            bias,
-            _phantom: core::marker::PhantomData,
-        })
-    }
-}
-impl<S, B> Conv2d<S, B, crate::nn::optional::True>
-where
-    S: Conv2dShape<Target = ((), ())>,
-    B: Backend + crate::tensor::backend::ModuleOps<B>,
-    B::FloatElem: crate::prelude::ConstDType,
-    B::Device: crate::prelude::ConstDevice,
-{
-    /// Creates a new instance with default (statically inferred) shape arguments.
-    pub fn new() -> Result<Self> {
-        Self::new_with(((), ()))
-    }
-}
-
-// ── Bias = False ───────────────────────────────────────────────────────────────
-impl<S: Conv2dShape, B: Backend + crate::tensor::backend::ModuleOps<B>>
-    Conv2d<S, B, crate::nn::optional::False>
-where
-    B::FloatElem: crate::prelude::ConstDType,
-    B::Device: crate::prelude::ConstDevice,
-{
-    /// Creates a new instance with explicitly provided shape arguments.
-    pub fn new_with(args: S::Target) -> Result<Self> {
-        let (_cout, _cin, w_args, _b_args) = S::build_args(args);
-        let fan_in = _cin * S::K::USIZE * S::K::USIZE;
-        let init = crate::nn::init::Init::KaimingUniform {
-            fan_in,
-            a: f64::sqrt(5.0),
-        };
-        let weight = Param::<S::WeightShape, B>::new_init_raw(
-            crate::tensor::arg_into::TensorArgsData {
-                shape: w_args,
-                dtype: (),
-                device: (),
-                grad: (),
-            },
-            init,
-        )?;
-        Ok(Self {
-            weight,
-            bias: None,
-            _phantom: core::marker::PhantomData,
-        })
-    }
-}
-impl<S, B> Conv2d<S, B, crate::nn::optional::False>
-where
-    S: Conv2dShape<Target = ((), ())>,
-    B: Backend + crate::tensor::backend::ModuleOps<B>,
-    B::FloatElem: crate::prelude::ConstDType,
-    B::Device: crate::prelude::ConstDevice,
-{
-    /// Creates a new instance with default (statically inferred) shape arguments.
-    pub fn new() -> Result<Self> {
-        Self::new_with(((), ()))
-    }
-}
-
-// ── Bias = Dyn ─────────────────────────────────────────────────────────────────
-impl<S: Conv2dShape, B: Backend + crate::tensor::backend::ModuleOps<B>> Conv2d<S, B, Dyn>
-where
-    B::FloatElem: crate::prelude::ConstDType,
-    B::Device: crate::prelude::ConstDevice,
-{
-    /// Creates a new instance with explicitly provided shape arguments.
-    pub fn new_with(args: S::Target, has_bias: bool) -> Result<Self> {
-        let (_cout, _cin, w_args, b_args) = S::build_args(args);
-        let fan_in = _cin * S::K::USIZE * S::K::USIZE;
-        let init = crate::nn::init::Init::KaimingUniform {
-            fan_in,
-            a: f64::sqrt(5.0),
-        };
-        let weight = Param::<S::WeightShape, B>::new_init_raw(
-            crate::tensor::arg_into::TensorArgsData {
-                shape: w_args,
-                dtype: (),
-                device: (),
-                grad: (),
-            },
-            init,
-        )?;
-        let bias = if has_bias {
+        let bias = if Bias::init(bias_arg) {
             Some(Param::<S::BiasShape, B>::new_init_raw(
                 crate::tensor::arg_into::TensorArgsData {
-                    shape: b_args,
-                    dtype: (),
-                    device: (),
+                    shape: bias_shape,
+                    dtype,
+                    device,
                     grad: (),
                 },
                 init,
@@ -256,18 +170,6 @@ where
             bias,
             _phantom: core::marker::PhantomData,
         })
-    }
-}
-impl<S, B> Conv2d<S, B, Dyn>
-where
-    S: Conv2dShape<Target = ((), ())>,
-    B: Backend + crate::tensor::backend::ModuleOps<B>,
-    B::FloatElem: crate::prelude::ConstDType,
-    B::Device: crate::prelude::ConstDevice,
-{
-    /// Creates a new instance with default (statically inferred) shape arguments.
-    pub fn new(has_bias: bool) -> Result<Self> {
-        Self::new_with(((), ()), has_bias)
     }
 }
 

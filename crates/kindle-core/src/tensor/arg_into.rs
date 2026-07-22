@@ -16,7 +16,7 @@ use crate::prelude::Cuda;
 #[cfg(feature = "wgpu")]
 use crate::prelude::Wgpu;
 
-use crate::prelude::{Cpu, Dim, Grad, KindleDType, KindleDevice, NoGrad};
+use crate::prelude::{Cpu, DTypeId, DeviceId, Dim, Grad, NoGrad};
 use typenum::{Bit, UInt, UTerm, Unsigned};
 
 use alloc::vec::Vec;
@@ -28,17 +28,25 @@ pub trait ArgInto<Target> {
     fn into_arg(self) -> Target;
 }
 
+/// Converts an exact compressed allocating-layer argument list.
+pub trait LayerArgInto<Target> {
+    /// Restores omitted static positions in declaration order.
+    fn into_layer_arg(self) -> Target;
+}
+
+kindle_macros::impl_layer_args!(9);
+
 #[derive(Debug, Clone)]
 /// `TensorArgsData`.
 pub struct TensorArgsData<S, T, D, G> {
     /// `shape`.
-    pub shape: S,
+    pub(crate) shape: S,
     /// `dtype`.
-    pub dtype: T,
+    pub(crate) dtype: T,
     /// `device`.
-    pub device: D,
+    pub(crate) device: D,
     /// `grad`.
-    pub grad: G,
+    pub(crate) grad: G,
 }
 
 /// Marker trait for types that represent non-trivial (non-unit) arguments.
@@ -66,10 +74,12 @@ macro_rules! impl_self_arginto {
 
 impl_self_arginto! {
     ()
+    f32
+    f64
     usize
     bool
-    KindleDType
-    KindleDevice
+    DTypeId
+    DeviceId
     Cpu
     Grad
     NoGrad
@@ -172,14 +182,16 @@ macro_rules! impl_not_unit {
 }
 
 impl_not_unit! {
+    f32
+    f64
     usize
     bool
     &usize
     Cpu
     Grad
     NoGrad
-    KindleDType
-    KindleDevice
+    DTypeId
+    DeviceId
 }
 
 // () combinations used for static shapes should also be treated as Non-Unit

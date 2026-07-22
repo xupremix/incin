@@ -2,12 +2,12 @@ error[E0308]: mismatched types
   --> tests/compile_fail/loss_cross_entropy_mismatch.rs:13:40
    |
 13 |     let _loss = loss_fn.forward(&pred, &target);
-   |                         -------        ^^^^^^^ expected `&Tensor<_, ..., u32, ..., ...>`, found `&Tensor<(..., ...), ..., u32, ...>`
+   |                         -------        ^^^^^^^ expected `&Tensor<_, ..., u32, ...>`, found `&Tensor<(UInt<..., ...>, ...), ..., u32>`
    |                         |
    |                         arguments to this method are incorrect
    |
-   = note: expected reference `&kindle::prelude::Tensor<_, DummyBackend<f32, kindle::prelude::Cpu>, u32, kindle::prelude::Cpu, NoGrad>`
-              found reference `&kindle::prelude::Tensor<(UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, UInt<UInt<UInt<UTerm, B1>, B0>, B1>), DummyBackend<u32, kindle::prelude::Cpu>, u32, kindle::prelude::Cpu>`
+   = note: expected reference `&kindle::prelude::Tensor<_, DummyBackend<f32, kindle::prelude::Cpu>, u32, NoGrad>`
+              found reference `&kindle::prelude::Tensor<(UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, UInt<UInt<UInt<UTerm, B1>, B0>, B1>), DummyBackend<u32, kindle::prelude::Cpu>, u32, Grad>`
 note: method defined here
   --> src/nn/loss.rs
    |

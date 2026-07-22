@@ -12,10 +12,8 @@ pub trait Device: 'static + Send + Sync + Clone + Eq + PartialEq + Debug + Sized
     /// `init`.
     fn init(arg: Self::Arg) -> Self::Field;
     /// `to_kindle`.
-    fn to_kindle(dev: &Self::Field) -> Result<KindleDevice>;
+    fn to_kindle(dev: &Self::Field) -> Result<DeviceId>;
 }
-/// `DynDevice`.
-pub trait DynDevice: Device {}
 /// `ConstDevice`.
 pub trait ConstDevice: Default + Device<Arg = ()> {}
 
@@ -23,7 +21,7 @@ pub trait ConstDevice: Default + Device<Arg = ()> {}
 /// `cuda`.
 pub mod cuda {
 
-    use super::{ConstDevice, Device, DynDevice, KindleDevice, PhantomData, Result};
+    use super::{ConstDevice, Device, DeviceId, PhantomData, Result};
 
     #[derive(Debug, Default, Clone, PartialEq, Eq)]
     /// Implementation of `Cuda` for the respective backend..
@@ -38,8 +36,8 @@ pub mod cuda {
         type Field = PhantomData<Self>;
 
         /// `to_kindle`.
-        fn to_kindle(_: &Self::Field) -> Result<KindleDevice> {
-            Ok(KindleDevice::cuda(N))
+        fn to_kindle(_: &Self::Field) -> Result<DeviceId> {
+            Ok(DeviceId::cuda(N))
         }
 
         /// `init`.
@@ -47,8 +45,6 @@ pub mod cuda {
             PhantomData
         }
     }
-
-    impl<const N: usize> DynDevice for Cuda<N> {}
 }
 
 #[cfg(feature = "cuda")]
@@ -57,7 +53,7 @@ pub use cuda::*;
 #[cfg(feature = "wgpu")]
 /// `wgpu`.
 pub mod wgpu {
-    use super::{ConstDevice, Device, DynDevice, KindleDevice, PhantomData, Result};
+    use super::{ConstDevice, Device, DeviceId, PhantomData, Result};
 
     #[derive(Debug, Default, Clone, PartialEq, Eq)]
     /// Implementation of `Wgpu` for the respective backend..
@@ -72,8 +68,8 @@ pub mod wgpu {
         type Field = PhantomData<Self>;
 
         /// `to_kindle`.
-        fn to_kindle(_: &Self::Field) -> Result<KindleDevice> {
-            Ok(KindleDevice::wgpu(N))
+        fn to_kindle(_: &Self::Field) -> Result<DeviceId> {
+            Ok(DeviceId::wgpu(N))
         }
 
         /// `init`.
@@ -81,8 +77,6 @@ pub mod wgpu {
             PhantomData
         }
     }
-
-    impl<const N: usize> DynDevice for Wgpu<N> {}
 }
 
 #[cfg(feature = "wgpu")]
@@ -101,8 +95,8 @@ impl Device for Cpu {
     type Field = PhantomData<Self>;
 
     /// `to_kindle`.
-    fn to_kindle(_: &Self::Field) -> Result<KindleDevice> {
-        Ok(KindleDevice::cpu())
+    fn to_kindle(_: &Self::Field) -> Result<DeviceId> {
+        Ok(DeviceId::cpu())
     }
 
     /// `init`.
@@ -110,16 +104,15 @@ impl Device for Cpu {
         PhantomData
     }
 }
-impl DynDevice for Cpu {}
 
 impl Device for Dyn {
     /// `Arg`.
-    type Arg = KindleDevice;
+    type Arg = DeviceId;
     /// `Field`.
-    type Field = KindleDevice;
+    type Field = DeviceId;
 
     /// `to_kindle`.
-    fn to_kindle(dev: &Self::Field) -> Result<KindleDevice> {
+    fn to_kindle(dev: &Self::Field) -> Result<DeviceId> {
         Ok(*dev)
     }
 
@@ -128,47 +121,59 @@ impl Device for Dyn {
         arg
     }
 }
-impl DynDevice for Dyn {}
 
 #[non_exhaustive]
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-/// `DeviceVariant`.
-pub enum DeviceVariant {
+#[derive(Debug, Clone, Copy, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+/// `DeviceKind`.
+pub enum DeviceKind {
     /// Implementation of `Cpu` for the respective backend..
     Cpu,
-    #[cfg(feature = "cuda")]
     /// Implementation of `Cuda` for the respective backend..
-    Cuda(usize),
-    #[cfg(feature = "wgpu")]
+    Cuda,
     /// Implementation of `Wgpu` for the respective backend..
-    Wgpu(usize),
+    Wgpu,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-/// `KindleDevice`.
-pub struct KindleDevice(DeviceVariant);
+#[derive(Debug, Clone, Copy, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+/// `DeviceId`.
+pub struct DeviceId {
+    kind: DeviceKind,
+    ordinal: usize,
+}
 
-impl KindleDevice {
-    /// `variant`.
-    pub fn variant(&self) -> DeviceVariant {
-        self.0
+impl DeviceId {
+    /// Returns the backend family.
+    pub const fn kind(self) -> DeviceKind {
+        self.kind
+    }
+
+    /// Returns the ordinal within the backend family.
+    pub const fn ordinal(self) -> usize {
+        self.ordinal
     }
 
     /// `cpu`.
     pub fn cpu() -> Self {
-        Self(DeviceVariant::Cpu)
+        Self {
+            kind: DeviceKind::Cpu,
+            ordinal: 0,
+        }
     }
 
-    #[cfg(feature = "cuda")]
     /// `cuda`.
     pub fn cuda(ord: usize) -> Self {
-        Self(DeviceVariant::Cuda(ord))
+        Self {
+            kind: DeviceKind::Cuda,
+            ordinal: ord,
+        }
     }
 
-    #[cfg(feature = "wgpu")]
     /// `wgpu`.
     pub fn wgpu(ord: usize) -> Self {
-        Self(DeviceVariant::Wgpu(ord))
+        Self {
+            kind: DeviceKind::Wgpu,
+            ordinal: ord,
+        }
     }
 }
 
@@ -217,19 +222,21 @@ mod tests {
     #[test]
     /// `test_device_variants`.
     fn test_device_variants() {
-        let cpu = KindleDevice::cpu();
-        assert_eq!(cpu.variant(), DeviceVariant::Cpu);
+        let cpu = DeviceId::cpu();
+        assert_eq!(cpu.kind(), DeviceKind::Cpu);
 
         #[cfg(feature = "cuda")]
         {
-            let cuda = KindleDevice::cuda(0);
-            assert_eq!(cuda.variant(), DeviceVariant::Cuda(0));
+            let cuda = DeviceId::cuda(0);
+            assert_eq!(cuda.kind(), DeviceKind::Cuda);
+            assert_eq!(cuda.ordinal(), 0);
         }
 
         #[cfg(feature = "wgpu")]
         {
-            let wgpu = KindleDevice::wgpu(0);
-            assert_eq!(wgpu.variant(), DeviceVariant::Wgpu(0));
+            let wgpu = DeviceId::wgpu(0);
+            assert_eq!(wgpu.kind(), DeviceKind::Wgpu);
+            assert_eq!(wgpu.ordinal(), 0);
         }
     }
 }

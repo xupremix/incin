@@ -1,4 +1,4 @@
-use crate::cpu::CpuBackend;
+use crate::cpu::CpuBackendImpl;
 use crate::cpu::storage::{BlockQ8_0, CpuBuffer, CpuStorage};
 use kindle_core::prelude::*;
 use kindle_core::prelude::{Backend, QuantizedOps};
@@ -7,7 +7,7 @@ use kindle_core::prelude::{FloatDType, QuantDType};
 extern crate alloc;
 use alloc::vec::Vec;
 
-impl<T: DType, D: Device> QuantizedOps<Self> for CpuBackend<T, D> {
+impl<T: DType, D: Device> QuantizedOps<Self> for CpuBackendImpl<T, D> {
     /// `quantize`.
     fn quantize<K: FloatDType, Q: QuantDType>(
         _t: &<Self as Backend>::Storage<K>,
@@ -312,7 +312,7 @@ mod tests {
     use super::*;
 
     /// `TestBackend`.
-    type TestBackend = CpuBackend<f32, kindle_core::prelude::Cpu>;
+    type TestBackend = CpuBackendImpl<f32, kindle_core::prelude::Cpu>;
 
     #[test]
     /// `test_quantize_dequantize_fidelity`.

@@ -9,6 +9,50 @@ pub type Result<T> = core::result::Result<T, Error>;
 #[derive(thiserror::Error)]
 /// Central error enum for the Kindle framework.
 pub enum Error {
+    #[error("Backend '{backend}' is unavailable in this build")]
+    /// A runtime-selected backend was not enabled.
+    BackendUnavailable { backend: &'static str },
+
+    #[error("Dtype {dtype:?} is unsupported by backend '{backend}' for '{op}'")]
+    /// The backend or operation cannot represent the requested dtype.
+    UnsupportedDType {
+        dtype: crate::prelude::DTypeId,
+        backend: &'static str,
+        op: &'static str,
+    },
+
+    #[error("Tensor dtype metadata {expected:?} does not match storage {got:?}")]
+    /// Logical dtype differs from physical storage.
+    DTypeStorageMismatch {
+        expected: crate::prelude::DTypeId,
+        got: crate::prelude::DTypeId,
+    },
+
+    #[error("Tensor device metadata {expected:?} does not match storage {got:?}")]
+    /// Logical device differs from physical storage.
+    DeviceStorageMismatch {
+        expected: crate::prelude::DeviceId,
+        got: crate::prelude::DeviceId,
+    },
+
+    #[error("Device mismatch: left {left:?}, right {right:?}")]
+    /// Inputs reside on different devices.
+    DeviceMismatch {
+        left: crate::prelude::DeviceId,
+        right: crate::prelude::DeviceId,
+    },
+
+    #[error("Invalid byte length: expected {expected}, got {got}")]
+    /// Byte payload length does not match shape and dtype.
+    InvalidByteLength { expected: usize, got: usize },
+
+    #[error("Invalid {backend} device ordinal {ordinal}")]
+    /// Device ordinal could not be selected.
+    InvalidDeviceOrdinal {
+        backend: &'static str,
+        ordinal: usize,
+    },
+
     #[error("Shape mismatch during '{op}': expected {expected:?}, got {got:?}. {msg}")]
     /// Incompatible shape during tensor operation execution.
     ShapeMismatch {

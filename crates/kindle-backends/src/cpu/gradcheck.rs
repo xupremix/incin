@@ -157,11 +157,11 @@ pub fn gradcheck(op: impl Fn(&[CpuStorage]) -> CpuStorage, inputs: &[CpuStorage]
 /// `tests`.
 mod tests {
     use super::*;
-    use crate::cpu::CpuBackend;
+    use crate::cpu::CpuBackendImpl;
     use kindle_core::prelude::{Cpu, NumericOps, ReductionOps};
 
     /// `TestBackend`.
-    type TestBackend = CpuBackend<f32, Cpu>;
+    type TestBackend = CpuBackendImpl<f32, Cpu>;
 
     /// `vector`.
     fn vector(v: Vec<f32>) -> CpuStorage {

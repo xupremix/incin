@@ -1,4 +1,4 @@
-//! `conv1d`/`conv2d` for `CpuBackend<T, D>` via im2col (window-unfold into
+//! `conv1d`/`conv2d` for `CpuBackendImpl<T, D>` via im2col (window-unfold into
 //! a column matrix) + `ops::matmul::batched_matmul_impl` for the actual
 //! multiply-accumulate (D-01).
 //!
@@ -43,7 +43,7 @@
 use kindle_core::prelude::Error;
 use kindle_core::prelude::{DType, NumericOps, Result, TensorOps};
 
-use crate::cpu::CpuBackend;
+use crate::cpu::CpuBackendImpl;
 use crate::cpu::ops::matmul::{batched_matmul_impl, transpose_last2};
 use crate::cpu::storage::{CpuBuffer, CpuStorage, increment_index, scatter_into_zeros};
 
@@ -296,7 +296,7 @@ fn col2im_2d(
 // conv1d_impl
 // ---------------------------------------------------------------------------
 
-/// `ModuleOps::conv1d`'s CpuBackend implementation: im2col + per-group
+/// `ModuleOps::conv1d`'s CpuBackendImpl implementation: im2col + per-group
 /// `batched_matmul_impl` + concat forward, hand-composed backward for
 /// grad_input (col2im fold) and grad_weight (per-group matmul), with bias
 /// broadcast-added via the already-tape-tracked `NumericOps::add` (so
@@ -311,7 +311,7 @@ pub(crate) fn conv1d_impl<T: DType, D: kindle_core::prelude::Device, K: DType>(
     groups: usize,
 ) -> Result<CpuStorage> {
     /// `B`.
-    type B<T, D> = CpuBackend<T, D>;
+    type B<T, D> = CpuBackendImpl<T, D>;
 
     let (b, cin, len) = (input.shape[0], input.shape[1], input.shape[2]);
     let (cout, cin_g, kernel_size) = (weight.shape[0], weight.shape[1], weight.shape[2]);
@@ -429,7 +429,7 @@ pub(crate) fn conv1d_impl<T: DType, D: kindle_core::prelude::Device, K: DType>(
 // conv2d_impl
 // ---------------------------------------------------------------------------
 
-/// `ModuleOps::conv2d`'s CpuBackend implementation, mirroring
+/// `ModuleOps::conv2d`'s CpuBackendImpl implementation, mirroring
 /// `conv1d_impl`'s exact structure generalized to two spatial axes.
 pub(crate) fn conv2d_impl<T: DType, D: kindle_core::prelude::Device, K: DType>(
     input: &CpuStorage,
@@ -441,7 +441,7 @@ pub(crate) fn conv2d_impl<T: DType, D: kindle_core::prelude::Device, K: DType>(
     groups: usize,
 ) -> Result<CpuStorage> {
     /// `B`.
-    type B<T, D> = CpuBackend<T, D>;
+    type B<T, D> = CpuBackendImpl<T, D>;
 
     let (b, cin, h, w) = (
         input.shape[0],
@@ -573,7 +573,7 @@ pub(crate) fn conv2d_impl<T: DType, D: kindle_core::prelude::Device, K: DType>(
 // conv_transpose2d_impl
 // ---------------------------------------------------------------------------
 
-/// `ModuleOps::conv_transpose2d`'s `CpuBackend` implementation (RESEARCH.md
+/// `ModuleOps::conv_transpose2d`'s `CpuBackendImpl` implementation (RESEARCH.md
 /// Pattern 4): transposed convolution's forward pass is exactly `conv2d`'s
 /// own backward-data (grad-w.r.t.-input) formula applied directly to
 /// `input` (renamed "output" in transposed-conv terminology) instead of to a
@@ -611,7 +611,7 @@ pub(crate) fn conv_transpose2d_impl<T: DType, D: kindle_core::prelude::Device, K
     groups: usize,
 ) -> Result<CpuStorage> {
     /// `B`.
-    type B<T, D> = CpuBackend<T, D>;
+    type B<T, D> = CpuBackendImpl<T, D>;
 
     if groups != 1 {
         return Err(Error::ShapeMismatch {
@@ -619,7 +619,7 @@ pub(crate) fn conv_transpose2d_impl<T: DType, D: kindle_core::prelude::Device, K
             expected: vec![1],
             got: vec![groups],
             msg: format!(
-                "conv_transpose2d: only groups == 1 is supported on CpuBackend, got groups={groups}"
+                "conv_transpose2d: only groups == 1 is supported on CpuBackendImpl, got groups={groups}"
             ),
         });
     }
@@ -835,7 +835,7 @@ mod tests {
     use kindle_core::prelude::{Cpu, ReductionOps};
 
     /// `TestBackend`.
-    type TestBackend = CpuBackend<f32, Cpu>;
+    type TestBackend = CpuBackendImpl<f32, Cpu>;
 
     /// `tensor`.
     fn tensor(v: Vec<f32>, shape: Vec<usize>) -> CpuStorage {

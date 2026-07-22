@@ -5,8 +5,8 @@ fn main() -> Result<()> {
 
     // Define an RNN sequence model with static dimension shapes
     // Input features: 10, Output features: 20
-    let wi = Linear::<s![10, 20]>::new()?;
-    let wh = Linear::<s![20, 20]>::new()?;
+    let wi = Linear::<s![10, 20]>::build(())?;
+    let wh = Linear::<s![20, 20]>::build(())?;
     let cell = RNNCell::<s![10, 20]>::new(wi, wh);
     let model = RNN::<s![10, 20]>::new(cell);
 

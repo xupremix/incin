@@ -15,6 +15,7 @@ pub struct BasicBlock<B: Backend> {
 
 impl<B: Backend> BasicBlock<B>
 where
+    B: SupportsDType<B::FloatElem>,
     B::FloatElem: ConstDType,
     B::Device: ConstDevice,
 {
@@ -23,19 +24,19 @@ where
         in_channels: usize,
         out_channels: usize,
         _stride: usize,
-        _device: &KindleDevice,
+        _device: &DeviceId,
     ) -> Result<Self> {
         Ok(Self {
-            conv1: kindle::Conv2d::<s![dyn, dyn, 3, 1, 1, 1], B>::new_with((
+            conv1: kindle::Conv2d::<s![dyn, dyn, 3, 1, 1, 1], B>::build((
                 out_channels,
                 in_channels,
             ))?,
-            bn1: kindle::BatchNorm2d::<s![dyn], B>::new_with((out_channels,), 1e-5, 0.1)?,
-            conv2: kindle::Conv2d::<s![dyn, dyn, 3, 1, 1, 1], B>::new_with((
+            bn1: kindle::BatchNorm2d::<s![dyn], B>::build((out_channels, 1e-5, 0.1))?,
+            conv2: kindle::Conv2d::<s![dyn, dyn, 3, 1, 1, 1], B>::build((
                 out_channels,
                 out_channels,
             ))?,
-            bn2: kindle::BatchNorm2d::<s![dyn], B>::new_with((out_channels,), 1e-5, 0.1)?,
+            bn2: kindle::BatchNorm2d::<s![dyn], B>::build((out_channels, 1e-5, 0.1))?,
         })
     }
 }
@@ -69,16 +70,17 @@ pub struct ResNet<B: Backend> {
 
 impl<B: Backend> ResNet<B>
 where
+    B: SupportsDType<B::FloatElem>,
     B::FloatElem: ConstDType,
     B::Device: ConstDevice,
 {
     /// New.
-    pub fn new(num_classes: usize, device: &KindleDevice) -> Result<Self> {
+    pub fn new(num_classes: usize, device: &DeviceId) -> Result<Self> {
         Ok(Self {
-            conv1: kindle::Conv2d::<s![dyn, dyn, 7, 2, 3, 1], B>::new_with((64, 3))?,
-            bn1: kindle::BatchNorm2d::<s![dyn], B>::new_with((64,), 1e-5, 0.1)?,
+            conv1: kindle::Conv2d::<s![dyn, dyn, 7, 2, 3, 1], B>::build((64, 3))?,
+            bn1: kindle::BatchNorm2d::<s![dyn], B>::build((64, 1e-5, 0.1))?,
             layer1: BasicBlock::<B>::new(64, 64, 1, device)?,
-            fc: kindle::Linear::<Dyn, B>::new_with((64, num_classes))?,
+            fc: kindle::Linear::<Dyn, B>::build((64, num_classes))?,
         })
     }
 }

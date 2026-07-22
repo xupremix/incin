@@ -24,7 +24,7 @@ pub trait Deserializer {
     /// Deserializes the state dict from the given path or stream.
     fn deserialize<B: Backend>(
         &mut self,
-        device: &KindleDevice,
+        device: &DeviceId,
     ) -> core::result::Result<BTreeMap<String, Tensor<Dyn, B>>, Self::Error>
     where
         <<B as Backend>::Device as Device>::Field: Default,
@@ -60,7 +60,7 @@ impl<'a> Serializer for SafetensorsSerializer<'a> {
         <<B as Backend>::FloatElem as crate::tensor::dtype::DType>::Field: Default,
     {
         use safetensors::tensor::{Dtype, TensorView};
-        let mut bytes_store: Vec<(String, Vec<u8>, Vec<usize>, KindleDType)> = Vec::new();
+        let mut bytes_store: Vec<(String, Vec<u8>, Vec<usize>, DTypeId)> = Vec::new();
         let mut data_map: BTreeMap<String, TensorView<'_>> = BTreeMap::new();
 
         // First extract all bytes because TensorView needs references to the bytes.
@@ -72,14 +72,14 @@ impl<'a> Serializer for SafetensorsSerializer<'a> {
 
         for (k, bytes, shape, dtype) in &bytes_store {
             let safe_dtype = match dtype {
-                KindleDType::F32 => Dtype::F32,
-                KindleDType::F64 => Dtype::F64,
-                KindleDType::F16 => Dtype::F16,
-                KindleDType::BF16 => Dtype::BF16,
-                KindleDType::U32 => Dtype::U32,
-                KindleDType::I64 => Dtype::I64,
-                KindleDType::U8 => Dtype::U8,
-                KindleDType::Q8_0 => {
+                DTypeId::F32 => Dtype::F32,
+                DTypeId::F64 => Dtype::F64,
+                DTypeId::F16 => Dtype::F16,
+                DTypeId::BF16 => Dtype::BF16,
+                DTypeId::U32 => Dtype::U32,
+                DTypeId::I64 => Dtype::I64,
+                DTypeId::U8 => Dtype::U8,
+                DTypeId::Q8_0 => {
                     return Err(anyhow::anyhow!(
                         "Safetensors does not support Q8_0 dtype natively"
                     ));
@@ -119,7 +119,7 @@ impl<'a> Deserializer for SafetensorsDeserializer<'a> {
     /// `deserialize`.
     fn deserialize<B: Backend>(
         &mut self,
-        device: &KindleDevice,
+        device: &DeviceId,
     ) -> core::result::Result<BTreeMap<String, Tensor<Dyn, B>>, Self::Error>
     where
         <<B as Backend>::Device as Device>::Field: Default,
@@ -134,13 +134,13 @@ impl<'a> Deserializer for SafetensorsDeserializer<'a> {
 
         for (name, tensor_view) in st.tensors() {
             let dtype = match tensor_view.dtype() {
-                safetensors::tensor::Dtype::F32 => KindleDType::F32,
-                safetensors::tensor::Dtype::F64 => KindleDType::F64,
-                safetensors::tensor::Dtype::F16 => KindleDType::F16,
-                safetensors::tensor::Dtype::BF16 => KindleDType::BF16,
-                safetensors::tensor::Dtype::U32 => KindleDType::U32,
-                safetensors::tensor::Dtype::I64 => KindleDType::I64,
-                safetensors::tensor::Dtype::U8 => KindleDType::U8,
+                safetensors::tensor::Dtype::F32 => DTypeId::F32,
+                safetensors::tensor::Dtype::F64 => DTypeId::F64,
+                safetensors::tensor::Dtype::F16 => DTypeId::F16,
+                safetensors::tensor::Dtype::BF16 => DTypeId::BF16,
+                safetensors::tensor::Dtype::U32 => DTypeId::U32,
+                safetensors::tensor::Dtype::I64 => DTypeId::I64,
+                safetensors::tensor::Dtype::U8 => DTypeId::U8,
                 _ => return Err(anyhow::anyhow!("Unsupported dtype in safetensors")),
             };
 
@@ -204,14 +204,14 @@ impl<'a> Serializer for BincodeSerializer<'a> {
             let bytes = <B as Backend>::to_bytes(&v.inner)
                 .map_err(|e| anyhow::anyhow!("Backend to_bytes failed: {}", e))?;
             let dtype_str = match v.dtype() {
-                KindleDType::F32 => "F32",
-                KindleDType::F64 => "F64",
-                KindleDType::F16 => "F16",
-                KindleDType::BF16 => "BF16",
-                KindleDType::U32 => "U32",
-                KindleDType::I64 => "I64",
-                KindleDType::U8 => "U8",
-                KindleDType::Q8_0 => "Q8_0",
+                DTypeId::F32 => "F32",
+                DTypeId::F64 => "F64",
+                DTypeId::F16 => "F16",
+                DTypeId::BF16 => "BF16",
+                DTypeId::U32 => "U32",
+                DTypeId::I64 => "I64",
+                DTypeId::U8 => "U8",
+                DTypeId::Q8_0 => "Q8_0",
             }
             .to_string();
             map.insert(
@@ -252,7 +252,7 @@ impl<'a> Deserializer for BincodeDeserializer<'a> {
     /// `deserialize`.
     fn deserialize<B: Backend>(
         &mut self,
-        device: &KindleDevice,
+        device: &DeviceId,
     ) -> core::result::Result<BTreeMap<String, Tensor<Dyn, B>>, Self::Error>
     where
         <<B as Backend>::Device as Device>::Field: Default,
@@ -264,14 +264,14 @@ impl<'a> Deserializer for BincodeDeserializer<'a> {
         let mut state_dict = BTreeMap::new();
         for (k, st) in map {
             let dtype = match st.dtype.as_str() {
-                "F32" => KindleDType::F32,
-                "F64" => KindleDType::F64,
-                "F16" => KindleDType::F16,
-                "BF16" => KindleDType::BF16,
-                "U32" => KindleDType::U32,
-                "I64" => KindleDType::I64,
-                "U8" => KindleDType::U8,
-                "Q8_0" => KindleDType::Q8_0,
+                "F32" => DTypeId::F32,
+                "F64" => DTypeId::F64,
+                "F16" => DTypeId::F16,
+                "BF16" => DTypeId::BF16,
+                "U32" => DTypeId::U32,
+                "I64" => DTypeId::I64,
+                "U8" => DTypeId::U8,
+                "Q8_0" => DTypeId::Q8_0,
                 _ => return Err(anyhow::anyhow!("Unsupported dtype in bincode")),
             };
             let raw_tensor = <B as Backend>::from_bytes(&st.data, &st.shape, dtype, device)
@@ -311,7 +311,7 @@ pub trait ModelExt<B: Backend> {
         <<B as Backend>::FloatElem as crate::tensor::dtype::DType>::Field: Default;
 
     /// `load`.
-    fn load(&mut self, format: Format, path: &std::path::Path, device: &KindleDevice) -> Result<()>
+    fn load(&mut self, format: Format, path: &std::path::Path, device: &DeviceId) -> Result<()>
     where
         <<B as Backend>::Device as Device>::Field: Default,
         <<B as Backend>::FloatElem as crate::tensor::dtype::DType>::Field: Default;
@@ -341,7 +341,7 @@ impl<B: Backend, T: crate::nn::module::StateDict<B>> ModelExt<B> for T {
     }
 
     /// `load`.
-    fn load(&mut self, format: Format, path: &std::path::Path, device: &KindleDevice) -> Result<()>
+    fn load(&mut self, format: Format, path: &std::path::Path, device: &DeviceId) -> Result<()>
     where
         <<B as Backend>::Device as Device>::Field: Default,
         <<B as Backend>::FloatElem as crate::tensor::dtype::DType>::Field: Default,

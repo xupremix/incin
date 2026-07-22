@@ -1,17 +1,17 @@
 extern crate alloc;
+use kindle::Tensor;
 use kindle::prelude::*;
-use kindle::{DefaultDevice, Tensor};
 
 fn main() -> Result<()> {
-    // 1. Using the default Candle Backend
-    let candle_tensor: Tensor<s![3, 3], CandleBackend<f32, DefaultDevice>> = Tensor::zeros(())?;
-    let res = candle_tensor.relu()?;
-    println!("Candle Backend Shape: {:?}", res.dims());
+    type CpuB = KindleBackend<f32, Cpu>;
+    let cpu_tensor: Tensor<s![3, 3], CpuB> = Tensor::zeros(())?;
+    let res = cpu_tensor.relu()?;
+    println!("CPU backend shape: {:?}", res.dims());
 
-    // 2. Using the Wgpu Backend
-    let wgpu_tensor: Tensor<s![3, 3], WgpuBackend> = Tensor::zeros(())?;
+    type WgpuB = KindleBackend<f32, Wgpu>;
+    let wgpu_tensor: Tensor<s![3, 3], WgpuB> = Tensor::zeros(())?;
     let res2 = wgpu_tensor.relu()?;
-    println!("Wgpu Backend Shape: {:?}", res2.dims());
+    println!("WGPU backend shape: {:?}", res2.dims());
 
     Ok(())
 }

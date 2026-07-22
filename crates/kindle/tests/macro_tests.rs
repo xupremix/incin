@@ -1,8 +1,8 @@
 use kindle::prelude::*;
 use kindle::{ConstShape, DynShape, Shape};
 
-/// Implementation of `CpuBackend` for the respective backend.
-type CpuBackend = kindle_backends::cpu::CpuBackend;
+/// Implementation of `CpuBackendImpl` for the respective backend.
+type CpuBackendImpl = kindle_backends::cpu::CpuBackendImpl;
 
 #[test]
 /// Test s macro.
@@ -50,9 +50,9 @@ pub struct MyCustomLayer<B: Backend> {
 /// Test module macro.
 fn test_module_macro() -> Result<()> {
     // Verify that #[module] derived Parameters and StateDict automatically
-    let layer = MyCustomLayer::<CpuBackend> {
-        linear: Linear::new()?,
-        ln: LayerNorm::new(1e-5)?,
+    let layer = MyCustomLayer::<CpuBackendImpl> {
+        linear: Linear::build(())?,
+        ln: LayerNorm::build(1e-5)?,
     };
 
     // Since #[module] implements Parameters, this should compile:

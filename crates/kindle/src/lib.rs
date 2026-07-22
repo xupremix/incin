@@ -17,7 +17,7 @@
 //! use kindle::prelude::*;
 //!
 //! // Create a backend alias for convenience
-//! type Backend = kindle_backends::cpu::CpuBackend<f32, Cpu>;
+//! type Backend = KindleBackend<f32, Cpu>;
 //!
 //! // Create a statically shaped tensor: (Batch=2, Channels=3, Height=224, Width=224)
 //! let x = Tensor::<s![2, 3, 224, 224], Backend>::zeros(()).unwrap();
@@ -33,7 +33,7 @@
 //! ```rust,no_run
 //! use kindle::prelude::*;
 //!
-//! type Backend = kindle_backends::cpu::CpuBackend<f32, Cpu>;
+//! type Backend = KindleBackend<f32, Cpu>;
 //!
 //! #[module]
 //! pub struct MLP {
@@ -47,9 +47,9 @@
 //!     pub fn new() -> Result<Self> {
 //!         Ok(Self {
 //!             net: seq!(
-//!                 Linear::<s![768, 256], Backend>::new()?,
+//!                 Linear::<s![768, 256], Backend>::build(())?,
 //!                 ReLU,
-//!                 Linear::<s![256, 10], Backend>::new()?
+//!                 Linear::<s![256, 10], Backend>::build(())?
 //!             )
 //!         })
 //!     }
@@ -122,9 +122,8 @@ pub type Tensor<
     S,
     B = DefaultBackend,
     K = <B as kindle_core::prelude::Backend>::FloatElem,
-    D = <B as kindle_core::prelude::Backend>::Device,
     G = kindle_core::prelude::Grad,
-> = kindle_core::prelude::Tensor<S, B, K, D, G>;
+> = kindle_core::prelude::Tensor<S, B, K, G>;
 
 #[cfg(not(feature = "cpu"))]
 /// Tensor.
@@ -132,9 +131,8 @@ pub type Tensor<
     S,
     B, // User must specify backend if Cpu is disabled
     K = <B as kindle_core::prelude::Backend>::FloatElem,
-    D = <B as kindle_core::prelude::Backend>::Device,
     G = kindle_core::prelude::Grad,
-> = kindle_core::prelude::Tensor<S, B, K, D, G>;
+> = kindle_core::prelude::Tensor<S, B, K, G>;
 
 // Neural Network Layer Aliases
 //
@@ -249,6 +247,14 @@ pub mod prelude {
 /// Tests.
 mod tests {
     use super::*;
+
+    #[test]
+    #[cfg(feature = "cpu")]
+    /// Runtime dtype creation keeps the dtype tag in a `Dyn` tensor.
+    fn test_runtime_dtype_tensor_creation() {
+        let t = Tensor::<Dyn, DefaultBackend, Dyn>::ones((std::vec![2, 2], DTypeId::F64)).unwrap();
+        assert_eq!(t.dtype(), DTypeId::F64);
+    }
 
     #[test]
     #[cfg(feature = "cpu")]

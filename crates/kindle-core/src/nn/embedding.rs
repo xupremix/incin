@@ -9,11 +9,10 @@ pub trait EmbeddingShape: Shape + DynShape {
     type Embed: Dim;
     /// `BuildArg`.
     type BuildArg: crate::tensor::arg_into::NotUnit;
-    /// The runtime arguments needed to instantiate this layer.
-    type Target;
 
     /// Converts the target arguments into concrete shape args for weight and bias tensors.
-    fn build_args(target: Self::Target) -> Self::BuildArg;
+    fn build_args(target: (<Self::Vocab as Dim>::Arg, <Self::Embed as Dim>::Arg))
+    -> Self::BuildArg;
 }
 
 impl<V: Dim, E: Dim> EmbeddingShape for (V, E) {
@@ -23,11 +22,11 @@ impl<V: Dim, E: Dim> EmbeddingShape for (V, E) {
     type Embed = E;
     /// `BuildArg`.
     type BuildArg = (<V as Dim>::Arg, <E as Dim>::Arg);
-    /// The runtime arguments needed to instantiate this layer.
-    type Target = (<V as Dim>::Arg, <E as Dim>::Arg);
 
     /// Converts the target arguments into concrete shape args for weight and bias tensors.
-    fn build_args(target: Self::Target) -> Self::BuildArg {
+    fn build_args(
+        target: (<Self::Vocab as Dim>::Arg, <Self::Embed as Dim>::Arg),
+    ) -> Self::BuildArg {
         target
     }
 }
@@ -39,11 +38,11 @@ impl EmbeddingShape for Dyn {
     type Embed = usize;
     /// `BuildArg`.
     type BuildArg = alloc::vec::Vec<usize>;
-    /// The runtime arguments needed to instantiate this layer.
-    type Target = (usize, usize);
 
     /// Converts the target arguments into concrete shape args for weight and bias tensors.
-    fn build_args(target: Self::Target) -> Self::BuildArg {
+    fn build_args(
+        target: (<Self::Vocab as Dim>::Arg, <Self::Embed as Dim>::Arg),
+    ) -> Self::BuildArg {
         alloc::vec![target.0, target.1]
     }
 }
@@ -58,40 +57,31 @@ pub struct Embedding<S: EmbeddingShape, B: Backend> {
 
 impl<S: EmbeddingShape, B: Backend> Embedding<S, B>
 where
-    B::FloatElem: crate::prelude::ConstDType,
-    B::Device: crate::prelude::ConstDevice,
+    B: SupportsDType<B::FloatElem>,
     (S::Vocab, S::Embed): Shape<Arg = S::BuildArg>,
 {
-    /// Creates a new instance with explicitly provided shape arguments.
-    pub fn new_with(args: S::Target) -> Result<Self> {
-        let w_args = S::build_args(args);
-        let w_args_data = crate::tensor::arg_into::TensorArgsData {
-            shape: w_args,
-            dtype: (),
-            device: (),
-            grad: (),
-        };
-
-        // Kaiming uniform init or standard normal? Usually standard normal.
+    pub fn build<A>(args: A) -> Result<Self>
+    where
+        A: crate::tensor::arg_into::LayerArgInto<(
+                <S::Vocab as Dim>::Arg,
+                <S::Embed as Dim>::Arg,
+                <B::FloatElem as DType>::Arg,
+                <B::Device as Device>::Arg,
+            )>,
+    {
+        use crate::tensor::arg_into::LayerArgInto;
+        let (vocab, embed, dtype, device) = args.into_layer_arg();
+        let shape = S::build_args((vocab, embed));
         let weight = Param::<(S::Vocab, S::Embed), B>::new_init_raw(
-            w_args_data,
+            crate::tensor::arg_into::TensorArgsData {
+                shape,
+                dtype,
+                device,
+                grad: (),
+            },
             crate::nn::init::Init::Randn,
         )?;
         Ok(Self { weight })
-    }
-}
-
-impl<S, B> Embedding<S, B>
-where
-    S: EmbeddingShape<Target = ()>,
-    B: Backend + crate::tensor::backend::ModuleOps<B>,
-    B::FloatElem: crate::prelude::ConstDType,
-    B::Device: crate::prelude::ConstDevice,
-    (S::Vocab, S::Embed): Shape<Arg = S::BuildArg>,
-{
-    /// Creates a new instance with default (statically inferred) shape arguments.
-    pub fn new() -> Result<Self> {
-        Self::new_with(())
     }
 }
 

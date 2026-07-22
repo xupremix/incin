@@ -14,9 +14,9 @@ use crate::prelude::*;
 /// ```
 pub trait LinearShape: Shape + DynShape {
     /// The number of input features (last dimension of the input tensor).
-    type InF;
+    type InF: Dim;
     /// The number of output features (last dimension of the output tensor).
-    type OutF;
+    type OutF: Dim;
     /// The shape argument type used to construct the weight tensor.
     type WeightArg: crate::tensor::arg_into::NotUnit;
     /// The shape argument type used to construct the bias tensor.
@@ -26,10 +26,10 @@ pub trait LinearShape: Shape + DynShape {
     /// The static shape type of the bias parameter tensor.
     type BiasShape: Shape<Arg = Self::BiasArg> + DynShape;
 
-    /// The runtime arguments needed to instantiate this layer.
-    type Target;
     /// Converts the target arguments into concrete shape args for weight and bias tensors.
-    fn build_args(target: Self::Target) -> (usize, usize, Self::WeightArg, Self::BiasArg);
+    fn build_args(
+        target: (<Self::InF as Dim>::Arg, <Self::OutF as Dim>::Arg),
+    ) -> (usize, usize, Self::WeightArg, Self::BiasArg);
 }
 
 impl<InF: Dim, OutF: Dim> LinearShape for (InF, OutF) {
@@ -46,12 +46,11 @@ impl<InF: Dim, OutF: Dim> LinearShape for (InF, OutF) {
     /// The static shape type of the bias parameter tensor.
     type BiasShape = (OutF,);
 
-    /// The runtime arguments needed to instantiate this layer.
-    type Target = (InF::Arg, OutF::Arg);
-
     #[inline]
     /// Converts the target arguments into concrete shape args for weight and bias tensors.
-    fn build_args(target: Self::Target) -> (usize, usize, Self::WeightArg, Self::BiasArg) {
+    fn build_args(
+        target: (<Self::InF as Dim>::Arg, <Self::OutF as Dim>::Arg),
+    ) -> (usize, usize, Self::WeightArg, Self::BiasArg) {
         let in_f = InF::from_arg(target.0.clone()).size();
         let out_f = OutF::from_arg(target.1.clone()).size();
         (in_f, out_f, (target.1.clone(), target.0), (target.1,))
@@ -60,9 +59,9 @@ impl<InF: Dim, OutF: Dim> LinearShape for (InF, OutF) {
 
 impl LinearShape for Dyn {
     /// The number of input features (last dimension of the input tensor).
-    type InF = Dyn;
+    type InF = usize;
     /// The number of output features (last dimension of the output tensor).
-    type OutF = Dyn;
+    type OutF = usize;
     /// The shape argument type used to construct the weight tensor.
     type WeightArg = alloc::vec::Vec<usize>;
     /// The shape argument type used to construct the bias tensor.
@@ -72,12 +71,11 @@ impl LinearShape for Dyn {
     /// The static shape type of the bias parameter tensor.
     type BiasShape = Dyn;
 
-    /// The runtime arguments needed to instantiate this layer.
-    type Target = (usize, usize);
-
     #[inline]
     /// Converts the target arguments into concrete shape args for weight and bias tensors.
-    fn build_args(target: Self::Target) -> (usize, usize, Self::WeightArg, Self::BiasArg) {
+    fn build_args(
+        target: (<Self::InF as Dim>::Arg, <Self::OutF as Dim>::Arg),
+    ) -> (usize, usize, Self::WeightArg, Self::BiasArg) {
         let in_f = target.0;
         let out_f = target.1;
         (in_f, out_f, alloc::vec![out_f, in_f], alloc::vec![out_f])
@@ -95,10 +93,10 @@ impl LinearShape for Dyn {
 /// use kindle::prelude::*;
 ///
 /// // A fully static linear layer: 512 inputs → 256 outputs
-/// let layer = Linear::<s![512, 256], MyBackend>::new()?;
+/// let layer = Linear::<s![512, 256], MyBackend>::build(())?;
 ///
 /// // A dynamic linear layer — shape known only at runtime
-/// let layer = Linear::<Dyn, MyBackend>::new(512, 256)?;
+/// let layer = Linear::<Dyn, MyBackend>::build((512, 256))?;
 /// ```
 #[derive(Debug, Clone)]
 #[kindle_macros::module(internal)]
@@ -117,15 +115,38 @@ pub struct Linear<
 
 // Implement `Module` for `Linear` when input shape is `(Batch, In)`.
 
-// ── Bias = True: always creates bias ────────────────────────────────────────
-impl<S: LinearShape, B: Backend> Linear<S, B, crate::nn::optional::True>
+impl<S, B, Bias> Linear<S, B, Bias>
 where
-    B::FloatElem: crate::prelude::ConstDType,
-    B::Device: crate::prelude::ConstDevice,
+    S: LinearShape,
+    B: Backend + SupportsDType<B::FloatElem>,
+    Bias: crate::nn::optional::OptionalField,
+    <B::FloatElem as DType>::Arg: Clone,
+    <B::Device as Device>::Arg: Clone,
 {
-    /// Creates a new instance with explicitly provided shape arguments.
-    pub fn new_with(args: S::Target) -> Result<Self> {
-        let (in_f, _out_f, w_args, b_args) = S::build_args(args);
+    /// Builds the layer from its exact compressed argument tuple.
+    pub fn build<A>(args: A) -> Result<Self>
+    where
+        A: crate::tensor::arg_into::LayerArgInto<(
+                <S::InF as Dim>::Arg,
+                <S::OutF as Dim>::Arg,
+                <B::FloatElem as DType>::Arg,
+                <B::Device as Device>::Arg,
+                <Bias as crate::nn::optional::OptionalField>::Arg,
+            )>,
+    {
+        use crate::tensor::arg_into::LayerArgInto;
+        let (in_arg, out_arg, dtype, device, bias) = args.into_layer_arg();
+        Self::build_full(in_arg, out_arg, dtype, device, bias)
+    }
+
+    pub(crate) fn build_full(
+        in_arg: <S::InF as Dim>::Arg,
+        out_arg: <S::OutF as Dim>::Arg,
+        dtype: <B::FloatElem as DType>::Arg,
+        device: <B::Device as Device>::Arg,
+        bias_arg: <Bias as crate::nn::optional::OptionalField>::Arg,
+    ) -> Result<Self> {
+        let (in_f, _out_f, w_args, b_args) = S::build_args((in_arg, out_arg));
         let init = crate::nn::init::Init::KaimingUniform {
             fan_in: in_f,
             a: f64::sqrt(5.0),
@@ -133,113 +154,18 @@ where
         let weight = Param::<S::WeightShape, B>::new_init_raw(
             crate::tensor::arg_into::TensorArgsData {
                 shape: w_args,
-                dtype: (),
-                device: (),
+                dtype: dtype.clone(),
+                device: device.clone(),
                 grad: (),
             },
             init,
         )?;
-        let bias = Some(Param::<S::BiasShape, B>::new_init_raw(
-            crate::tensor::arg_into::TensorArgsData {
-                shape: b_args,
-                dtype: (),
-                device: (),
-                grad: (),
-            },
-            init,
-        )?);
-        Ok(Self {
-            weight,
-            bias,
-            _phantom: core::marker::PhantomData,
-        })
-    }
-}
-
-impl<S, B> Linear<S, B, crate::nn::optional::True>
-where
-    S: LinearShape<Target = ((), ())>,
-    B: Backend,
-    B::FloatElem: crate::prelude::ConstDType,
-    B::Device: crate::prelude::ConstDevice,
-{
-    /// Creates a new instance with default (statically inferred) shape arguments.
-    pub fn new() -> Result<Self> {
-        Self::new_with(((), ()))
-    }
-}
-
-// ── Bias = False: never creates bias ─────────────────────────────────────────
-impl<S: LinearShape, B: Backend> Linear<S, B, crate::nn::optional::False>
-where
-    B::FloatElem: crate::prelude::ConstDType,
-    B::Device: crate::prelude::ConstDevice,
-{
-    /// Creates a new instance with explicitly provided shape arguments.
-    pub fn new_with(args: S::Target) -> Result<Self> {
-        let (in_f, _out_f, w_args, _b_args) = S::build_args(args);
-        let init = crate::nn::init::Init::KaimingUniform {
-            fan_in: in_f,
-            a: f64::sqrt(5.0),
-        };
-        let weight = Param::<S::WeightShape, B>::new_init_raw(
-            crate::tensor::arg_into::TensorArgsData {
-                shape: w_args,
-                dtype: (),
-                device: (),
-                grad: (),
-            },
-            init,
-        )?;
-        Ok(Self {
-            weight,
-            bias: None,
-            _phantom: core::marker::PhantomData,
-        })
-    }
-}
-
-impl<S, B> Linear<S, B, crate::nn::optional::False>
-where
-    S: LinearShape<Target = ((), ())>,
-    B: Backend,
-    B::FloatElem: crate::prelude::ConstDType,
-    B::Device: crate::prelude::ConstDevice,
-{
-    /// Creates a new instance with default (statically inferred) shape arguments.
-    pub fn new() -> Result<Self> {
-        Self::new_with(((), ()))
-    }
-}
-
-// ── Bias = Dyn: decides at runtime via `has_bias: bool` ──────────────────────
-impl<S: LinearShape, B: Backend> Linear<S, B, Dyn>
-where
-    B::FloatElem: crate::prelude::ConstDType,
-    B::Device: crate::prelude::ConstDevice,
-{
-    /// Creates a new instance with explicitly provided shape arguments.
-    pub fn new_with(args: S::Target, has_bias: bool) -> Result<Self> {
-        let (in_f, _out_f, w_args, b_args) = S::build_args(args);
-        let init = crate::nn::init::Init::KaimingUniform {
-            fan_in: in_f,
-            a: f64::sqrt(5.0),
-        };
-        let weight = Param::<S::WeightShape, B>::new_init_raw(
-            crate::tensor::arg_into::TensorArgsData {
-                shape: w_args,
-                dtype: (),
-                device: (),
-                grad: (),
-            },
-            init,
-        )?;
-        let bias = if has_bias {
+        let bias = if Bias::init(bias_arg) {
             Some(Param::<S::BiasShape, B>::new_init_raw(
                 crate::tensor::arg_into::TensorArgsData {
                     shape: b_args,
-                    dtype: (),
-                    device: (),
+                    dtype,
+                    device,
                     grad: (),
                 },
                 init,
@@ -252,19 +178,6 @@ where
             bias,
             _phantom: core::marker::PhantomData,
         })
-    }
-}
-
-impl<S, B> Linear<S, B, Dyn>
-where
-    S: LinearShape<Target = ((), ())>,
-    B: Backend,
-    B::FloatElem: crate::prelude::ConstDType,
-    B::Device: crate::prelude::ConstDevice,
-{
-    /// Creates a new instance with default (statically inferred) shape arguments.
-    pub fn new(has_bias: bool) -> Result<Self> {
-        Self::new_with(((), ()), has_bias)
     }
 }
 

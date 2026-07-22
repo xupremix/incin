@@ -20,12 +20,12 @@ struct TestMLP {
 /// Test named layers derivation.
 fn test_named_layers_derivation() {
     let sub = SubModule {
-        fc: Linear::new().unwrap(),
+        fc: Linear::build(()).unwrap(),
         act: ReLU,
     };
     let mlp = TestMLP {
         sub,
-        fc_out: Linear::new().unwrap(),
+        fc_out: Linear::build(()).unwrap(),
     };
 
     let structure = mlp.layer_structure("model");
@@ -64,9 +64,9 @@ fn test_named_layers_derivation() {
 /// Test sequential named layers.
 fn test_sequential_named_layers() {
     let net = seq!(
-        Linear::<s![768, 256], B>::new().unwrap(),
+        Linear::<s![768, 256], B>::build(()).unwrap(),
         ReLU,
-        Linear::<s![256, 10], B>::new().unwrap()
+        Linear::<s![256, 10], B>::build(()).unwrap()
     );
 
     let structure = net.layer_structure("net");

@@ -141,13 +141,12 @@ impl<R: ReductionMode> MSELoss<R> {
         S: Shape + crate::prelude::DynShape,
         B: Backend + crate::tensor::backend::LossOps<B>,
         K: crate::tensor::dtype::DType,
-        D: crate::tensor::device::Device,
         G: RequiresGrad,
     >(
         &self,
-        pred: &Tensor<S, B, K, D, G>,
-        target: &Tensor<S, B, K, D, NoGrad>,
-    ) -> Result<Tensor<R::Output, B, K, D, G>>
+        pred: &Tensor<S, B, K, G>,
+        target: &Tensor<S, B, K, NoGrad>,
+    ) -> Result<Tensor<R::Output, B, K, G>>
     where
         R: MseReductionShape<S>,
     {
@@ -196,13 +195,12 @@ impl<R: ReductionMode> CrossEntropyLoss<R> {
         S2: Shape,
         B: Backend + crate::tensor::backend::LossOps<B>,
         K: crate::tensor::dtype::DType,
-        D: crate::tensor::device::Device,
         G: RequiresGrad,
     >(
         &self,
-        pred: &Tensor<S1, B, K, D, G>,
-        target: &Tensor<S2, B, u32, D, NoGrad>,
-    ) -> Result<Tensor<R::Output, B, K, D, G>>
+        pred: &Tensor<S1, B, K, G>,
+        target: &Tensor<S2, B, u32, NoGrad>,
+    ) -> Result<Tensor<R::Output, B, K, G>>
     where
         S1: Shape + crate::prelude::DynShape + CrossEntropyShape<S2>,
         R: CrossEntropyReductionShape<S1>,
@@ -246,13 +244,12 @@ impl<R: ReductionMode> L1Loss<R> {
         S: Shape + crate::prelude::DynShape,
         B: Backend + crate::tensor::backend::LossOps<B>,
         K: crate::tensor::dtype::DType,
-        D: crate::tensor::device::Device,
         G: RequiresGrad,
     >(
         &self,
-        pred: &Tensor<S, B, K, D, G>,
-        target: &Tensor<S, B, K, D, NoGrad>,
-    ) -> Result<Tensor<R::Output, B, K, D, G>>
+        pred: &Tensor<S, B, K, G>,
+        target: &Tensor<S, B, K, NoGrad>,
+    ) -> Result<Tensor<R::Output, B, K, G>>
     where
         R: L1ReductionShape<S>,
     {
@@ -291,13 +288,12 @@ impl<R: ReductionMode> BCEWithLogitsLoss<R> {
         S: Shape + crate::prelude::DynShape,
         B: Backend + crate::tensor::backend::LossOps<B>,
         K: crate::tensor::dtype::DType,
-        D: crate::tensor::device::Device,
         G: RequiresGrad,
     >(
         &self,
-        pred: &Tensor<S, B, K, D, G>,
-        target: &Tensor<S, B, K, D, NoGrad>,
-    ) -> Result<Tensor<R::Output, B, K, D, G>>
+        pred: &Tensor<S, B, K, G>,
+        target: &Tensor<S, B, K, NoGrad>,
+    ) -> Result<Tensor<R::Output, B, K, G>>
     where
         R: BceReductionShape<S>,
     {

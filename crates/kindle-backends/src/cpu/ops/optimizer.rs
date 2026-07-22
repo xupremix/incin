@@ -1,7 +1,7 @@
-use crate::cpu::{CpuBackend, CpuBuffer};
+use crate::cpu::{CpuBackendImpl, CpuBuffer};
 use kindle_core::prelude::{Backend, DType, Device, OptimizerOps, Result};
 
-impl<T: DType, D: Device> OptimizerOps<Self> for CpuBackend<T, D> {
+impl<T: DType, D: Device> OptimizerOps<Self> for CpuBackendImpl<T, D> {
     /// Applies a fused AdamW optimization step on the backend.
     ///
     /// This directly modifies the buffers (`var`, `m`, `v`) in place. If `fused`
@@ -44,7 +44,7 @@ impl<T: DType, D: Device> OptimizerOps<Self> for CpuBackend<T, D> {
             let bias_correction2 = 1.0 - beta2_f32.powi(_step as i32);
             let effective_lr = lr_f32 * (bias_correction2.sqrt() / bias_correction1);
 
-            // Assume T = f32 for CpuBackend
+            // Assume T = f32 for CpuBackendImpl
             let v_data: &mut [f32] = v_vec.as_mut_slice();
             let g_data: &[f32] = g_vec.as_slice();
             let m_data: &mut [f32] = m_vec.as_mut_slice();
@@ -71,7 +71,7 @@ impl<T: DType, D: Device> OptimizerOps<Self> for CpuBackend<T, D> {
 
         Err(kindle_core::prelude::Error::UnsupportedBackendOperation {
             op: "adamw_step",
-            backend: "CpuBackend",
+            backend: "CpuBackendImpl",
         })
     }
 }
@@ -81,7 +81,7 @@ impl<T: DType, D: Device> OptimizerOps<Self> for CpuBackend<T, D> {
 /// `tests`.
 mod tests {
     use super::*;
-    use crate::cpu::CpuBackend;
+    use crate::cpu::CpuBackendImpl;
     use kindle_core::prelude::*;
 
     #[test]
@@ -91,9 +91,8 @@ mod tests {
     fn test_fused_adamw_step() {
         // Here we would test the backend directly, checking the result
         // against a CPU-based implementation to ensure 100% mathematical parity.
-        let device = CpuBackend::<f32, _>::new_cuda(0).unwrap();
+        let _device = DeviceId::cuda(0);
         // create variables, run adamw_step, assert elements.
         // Left unimplemented dynamically due to local hardware constraint.
-        assert!(true);
     }
 }
