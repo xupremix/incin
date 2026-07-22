@@ -992,3 +992,124 @@ fn mish_backward_matches_derivative() {
     let expected = [(2.0f32.ln()).tanh()];
     assert!(vec_approx_eq(&readback(gt), &expected, 1e-4));
 }
+
+// ── Finite-difference gradcheck (layer_norm / batch_norm) ──────────────────
+//
+// layer_norm/batch_norm push no TapeEntry of their own: both are composed
+// entirely from already-wired primitives (mean_keepdim/broadcast_as/sub/mul/
+// sqrt/div/add_scalar_float/reshape/add), mirroring the CPU backend's own
+// `layer_norm_impl` (also un-wired directly, also composed, verified there by
+// `cpu::gradcheck::gradcheck` — see `cpu/ops/norm.rs`'s `layer_norm_gradcheck`).
+// A hand-derived closed-form check would need to re-derive the standard
+// layer/batch-norm backward formula independently just to compare against,
+// which is exactly the kind of derivation this composition is meant to avoid
+// duplicating — central-difference numerical gradient checking verifies the
+// composed graph directly against the forward computation instead.
+
+/// Central-difference approximation of `d(output_scalar)/d(inputs[input_idx][flat_idx])`.
+fn numerical_grad_wgpu(
+    f: &impl Fn(&[WgpuStorage]) -> WgpuStorage,
+    inputs: &[WgpuStorage],
+    input_idx: usize,
+    flat_idx: usize,
+    eps: f32,
+) -> f32 {
+    let mut plus = inputs.to_vec();
+    let mut minus = inputs.to_vec();
+    let mut plus_data = readback(&inputs[input_idx]);
+    plus_data[flat_idx] += eps;
+    plus[input_idx] = storage(plus_data, inputs[input_idx].shape.clone());
+    let mut minus_data = readback(&inputs[input_idx]);
+    minus_data[flat_idx] -= eps;
+    minus[input_idx] = storage(minus_data, inputs[input_idx].shape.clone());
+
+    let f_plus = readback(&f(&plus))[0];
+    let f_minus = readback(&f(&minus))[0];
+    (f_plus - f_minus) / (2.0 * eps)
+}
+
+/// Runs `op` (which must reduce to a scalar output), extracts the analytic
+/// gradient for every input's every element via `backward`, and returns the
+/// maximum absolute difference against `numerical_grad_wgpu` at the same
+/// position. Inputs with no recorded gradient (e.g. constants the graph
+/// never differentiates through) are skipped rather than treated as a
+/// zero-gradient mismatch.
+fn gradcheck_wgpu(
+    op: impl Fn(&[WgpuStorage]) -> WgpuStorage,
+    inputs: &[WgpuStorage],
+    eps: f32,
+) -> f32 {
+    let out = op(inputs);
+    assert_eq!(
+        out.shape.iter().product::<usize>(),
+        1,
+        "gradcheck requires a scalar-output op (got shape {:?})",
+        out.shape
+    );
+    let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+
+    let mut max_abs_diff = 0.0f32;
+    for (i, input) in inputs.iter().enumerate() {
+        let Some(analytic) = grads.get(input.id) else {
+            continue;
+        };
+        let analytic_vals = readback(analytic);
+        for (flat_idx, &analytic_val) in analytic_vals.iter().enumerate() {
+            let numeric = numerical_grad_wgpu(&op, inputs, i, flat_idx, eps);
+            let abs_diff = (analytic_val - numeric).abs();
+            max_abs_diff = max_abs_diff.max(abs_diff);
+        }
+    }
+    max_abs_diff
+}
+
+#[test]
+fn layer_norm_backward_matches_finite_difference() {
+    // Non-identity weight: with weight=1, sum(layer_norm(x)) is always 0 (a
+    // normalized vector always sums to 0 by definition), which would make
+    // this check trivially pass on a broken gradient too — see the identical
+    // note on the CPU backend's `layer_norm_gradcheck`.
+    let t = storage(vec![0.5, -1.0, 2.0, 1.0, 0.0, -0.5], vec![2, 3]);
+    let weight = storage(vec![2.0, 1.0, 0.5], vec![3]);
+    let bias = storage(vec![0.1, -0.1, 0.2], vec![3]);
+    let eps = 1e-5f32;
+    let op = |inputs: &[WgpuStorage]| -> WgpuStorage {
+        let out =
+            <B as ModuleOps<B>>::layer_norm::<f32>(&inputs[0], &inputs[1], Some(&inputs[2]), eps)
+                .unwrap();
+        <B as ReductionOps<B>>::sum_all::<f32>(&out).unwrap()
+    };
+    let max_abs_diff = gradcheck_wgpu(op, &[t, weight, bias], 1e-3);
+    assert!(
+        max_abs_diff < 2e-3,
+        "layer_norm gradcheck max abs diff too high: {max_abs_diff:.6}"
+    );
+}
+
+#[test]
+fn batch_norm_backward_matches_finite_difference() {
+    let t = storage(vec![1.0, 2.0, -1.0, 0.5, 3.0, -2.0], vec![2, 3, 1]);
+    let weight = storage(vec![1.5, 0.5, 2.0], vec![3]);
+    let bias = storage(vec![0.1, 0.2, -0.1], vec![3]);
+    let running_mean = storage(vec![0.0, 0.5, -0.5], vec![3]);
+    let running_var = storage(vec![1.0, 2.0, 0.5], vec![3]);
+    let eps = 1e-5f32;
+    let op = |inputs: &[WgpuStorage]| -> WgpuStorage {
+        let out = <B as ModuleOps<B>>::batch_norm::<f32>(
+            &inputs[0],
+            Some(&inputs[1]),
+            Some(&inputs[2]),
+            Some(&inputs[3]),
+            Some(&inputs[4]),
+            eps,
+            0.1,
+        )
+        .unwrap();
+        <B as ReductionOps<B>>::sum_all::<f32>(&out).unwrap()
+    };
+    let max_abs_diff = gradcheck_wgpu(op, &[t, weight, bias, running_mean, running_var], 1e-3);
+    assert!(
+        max_abs_diff < 2e-3,
+        "batch_norm gradcheck max abs diff too high: {max_abs_diff:.6}"
+    );
+}
