@@ -207,7 +207,38 @@ impl<T: DType, D: Device> NumericOps<Self> for CudaBackendImpl<T, D> {
     }
 }
 
-impl<T: DType, D: Device> FloatOps<Self> for CudaBackendImpl<T, D> {}
+impl<T: DType, D: Device> FloatOps<Self> for CudaBackendImpl<T, D> {
+    fn relu<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
+        crate::cuda::ops::elementwise::launch_unary_op("relu", "x > 0.0f ? x : 0.0f", t)
+    }
+    fn sigmoid<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
+        crate::cuda::ops::elementwise::launch_unary_op("sigmoid", "1.0f / (1.0f + expf(-x))", t)
+    }
+    fn tanh<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
+        crate::cuda::ops::elementwise::launch_unary_op("tanh", "tanhf(x)", t)
+    }
+    fn swish<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
+        crate::cuda::ops::elementwise::launch_unary_op("swish", "x / (1.0f + expf(-x))", t)
+    }
+    fn exp<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
+        crate::cuda::ops::elementwise::launch_unary_op("exp", "expf(x)", t)
+    }
+    fn log<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
+        crate::cuda::ops::elementwise::launch_unary_op("log", "logf(x)", t)
+    }
+    fn sqrt<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
+        crate::cuda::ops::elementwise::launch_unary_op("sqrt", "sqrtf(x)", t)
+    }
+    fn neg<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
+        crate::cuda::ops::elementwise::launch_unary_op("neg", "-x", t)
+    }
+    fn abs<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
+        crate::cuda::ops::elementwise::launch_unary_op("abs", "fabsf(x)", t)
+    }
+    fn step<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
+        crate::cuda::ops::elementwise::launch_unary_op("step", "x > 0.0f ? 1.0f : 0.0f", t)
+    }
+}
 impl<T: DType, D: Device> CreationOps<Self> for CudaBackendImpl<T, D> {
     fn zeros<K: DType>(shape: &[usize], dtype: DTypeId, device: &DeviceId) -> Result<CudaStorage> {
         cuda_from_f32(
@@ -261,11 +292,157 @@ impl<T: DType, D: Device> CreationOps<Self> for CudaBackendImpl<T, D> {
         Self::randn::<K>(shape, dtype, device).map(|storage| CudaVar { storage })
     }
 }
-impl<T: DType, D: Device> ReductionOps<Self> for CudaBackendImpl<T, D> {}
-impl<T: DType, D: Device> QuantizedOps<Self> for CudaBackendImpl<T, D> {}
+impl<T: DType, D: Device> ReductionOps<Self> for CudaBackendImpl<T, D> {
+    fn sum_all<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
+        let rank = t.shape.len();
+        if rank == 0 {
+            return Ok(t.clone());
+        }
+        let mut curr = t.clone();
+        for dim in (0..rank).rev() {
+            curr = crate::cuda::ops::reduce::launch_reduce_op("sum", &curr, dim, false)?;
+        }
+        Ok(curr)
+    }
+
+    fn mean_all<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
+        let total = checked_numel(&t.shape)? as f64;
+        let sum = Self::sum_all::<K>(t)?;
+        if total > 0.0 {
+            Self::mul_scalar_float::<K>(&sum, 1.0 / total)
+        } else {
+            Ok(sum)
+        }
+    }
+
+    fn max_all<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
+        let rank = t.shape.len();
+        if rank == 0 {
+            return Ok(t.clone());
+        }
+        let mut curr = t.clone();
+        for dim in (0..rank).rev() {
+            curr = crate::cuda::ops::reduce::launch_reduce_op("max", &curr, dim, false)?;
+        }
+        Ok(curr)
+    }
+
+    fn min_all<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
+        let rank = t.shape.len();
+        if rank == 0 {
+            return Ok(t.clone());
+        }
+        let mut curr = t.clone();
+        for dim in (0..rank).rev() {
+            curr = crate::cuda::ops::reduce::launch_reduce_op("min", &curr, dim, false)?;
+        }
+        Ok(curr)
+    }
+
+    fn sum_dim<K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
+        crate::cuda::ops::reduce::launch_reduce_op("sum", t, dim, false)
+    }
+
+    fn sum_keepdim<K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
+        crate::cuda::ops::reduce::launch_reduce_op("sum", t, dim, true)
+    }
+
+    fn mean_dim<K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
+        let axis_len = t.shape.get(dim).cloned().unwrap_or(1) as f64;
+        let sum = crate::cuda::ops::reduce::launch_reduce_op("sum", t, dim, false)?;
+        if axis_len > 0.0 {
+            Self::mul_scalar_float::<K>(&sum, 1.0 / axis_len)
+        } else {
+            Ok(sum)
+        }
+    }
+
+    fn mean_keepdim<K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
+        let axis_len = t.shape.get(dim).cloned().unwrap_or(1) as f64;
+        let sum = crate::cuda::ops::reduce::launch_reduce_op("sum", t, dim, true)?;
+        if axis_len > 0.0 {
+            Self::mul_scalar_float::<K>(&sum, 1.0 / axis_len)
+        } else {
+            Ok(sum)
+        }
+    }
+
+    fn max_dim<K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
+        crate::cuda::ops::reduce::launch_reduce_op("max", t, dim, false)
+    }
+
+    fn max_keepdim<K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
+        crate::cuda::ops::reduce::launch_reduce_op("max", t, dim, true)
+    }
+
+    fn min_dim<K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
+        crate::cuda::ops::reduce::launch_reduce_op("min", t, dim, false)
+    }
+
+    fn min_keepdim<K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
+        crate::cuda::ops::reduce::launch_reduce_op("min", t, dim, true)
+    }
+}
+impl<T: DType, D: Device> QuantizedOps<Self> for CudaBackendImpl<T, D> {
+    fn quantize<K: FloatDType, Q: QuantDType>(t: &CudaStorage) -> Result<CudaStorage> {
+        crate::cuda::ops::quant::launch_quantize(t)
+    }
+
+    fn dequantize<Q: QuantDType, K: FloatDType>(t: &CudaStorage) -> Result<CudaStorage> {
+        crate::cuda::ops::quant::launch_dequantize(t)
+    }
+}
 impl<T: DType, D: Device> OptimizerOps<Self> for CudaBackendImpl<T, D> {}
-impl<T: DType, D: Device> ModuleOps<Self> for CudaBackendImpl<T, D> {}
-impl<T: DType, D: Device> LossOps<Self> for CudaBackendImpl<T, D> {}
+impl<T: DType, D: Device> ModuleOps<Self> for CudaBackendImpl<T, D> {
+    fn layer_norm<K: DType>(
+        input: &CudaStorage,
+        weight: &CudaStorage,
+        bias: Option<&CudaStorage>,
+        eps: f32,
+    ) -> Result<CudaStorage> {
+        crate::cuda::ops::norm::launch_layer_norm(input, weight, bias, eps)
+    }
+
+    fn batch_norm<K: DType>(
+        input: &CudaStorage,
+        weight: Option<&CudaStorage>,
+        bias: Option<&CudaStorage>,
+        running_mean: Option<&CudaStorage>,
+        running_variance: Option<&CudaStorage>,
+        eps: f32,
+        _momentum: f64,
+    ) -> Result<CudaStorage> {
+        crate::cuda::ops::norm::launch_batch_norm(
+            input,
+            weight,
+            bias,
+            running_mean,
+            running_variance,
+            eps,
+        )
+    }
+}
+impl<T: DType, D: Device> LossOps<Self> for CudaBackendImpl<T, D> {
+    fn cross_entropy_loss<K: DType, KInt: DType>(
+        pred: &CudaStorage,
+        target: &CudaStorage,
+        reduction: kindle_core::prelude::Reduction,
+    ) -> Result<CudaStorage> {
+        let classes = if pred.shape.len() > 1 {
+            pred.shape[1]
+        } else {
+            pred.shape[0]
+        };
+        let sm = Self::softmax::<K>(pred, 1)?;
+        let log_sm = Self::log::<K>(&sm)?;
+        let nll = crate::cuda::ops::loss::launch_nll_loss(&log_sm, target, classes)?;
+        match reduction {
+            kindle_core::prelude::Reduction::Mean => Self::mean_all::<K>(&nll),
+            kindle_core::prelude::Reduction::Sum => Self::sum_all::<K>(&nll),
+            kindle_core::prelude::Reduction::None => Ok(nll),
+        }
+    }
+}
 
 impl<T: DType, D: Device> Backend for CudaBackendImpl<T, D> {
     type Device = D;

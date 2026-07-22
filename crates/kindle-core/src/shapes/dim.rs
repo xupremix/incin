@@ -58,8 +58,9 @@ impl Dim for usize {
 /// ```
 #[macro_export]
 macro_rules! symbolic_dim {
-    ($($name:ident),+ $(,)?) => {
+    ($( $(#[$meta:meta])* $name:ident ),+ $(,)?) => {
         $(
+            $(#[$meta])*
             #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
             pub struct $name(pub usize);
 

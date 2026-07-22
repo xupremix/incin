@@ -33,6 +33,8 @@ pub mod shape_ops;
 pub mod spatial;
 /// `stack`.
 pub mod stack;
+/// `tail_shape`.
+pub mod tail_shape;
 
 pub use arithmetic::*;
 pub use broadcast::BroadcastShape;
@@ -42,6 +44,7 @@ pub use reshape::*;
 pub use shape::*;
 pub use shape_ops::*;
 pub use spatial::*;
+pub use tail_shape::*;
 
 /// `prelude`.
 pub mod prelude {
@@ -52,4 +55,5 @@ pub mod prelude {
     pub use super::idx::*;
     pub use super::named::*;
     pub use super::shape::*;
+    pub use super::tail_shape::*;
 }

@@ -715,10 +715,9 @@ impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
         Ok(Self::trace_unary(OpType::ArgMin, t, &inner))
     }
 
-    /// Delegates to `B::topk`, recording each output (values and
-    /// indices) as a placeholder `OpType::Reshape` node — there is no
-    /// dedicated `TopK` `OpType` yet, so ONNX export/visualization of
-    /// `topk` is currently a known approximation, not a faithful trace.
+    /// Delegates to `B::topk`, recording both outputs (values and indices)
+    /// in the tracing graph under `OpType::TopK` with `k`, `dim`, and
+    /// `largest` stored as node attributes.
     fn topk<K: super::dtype::DType, KInt: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         k: usize,
@@ -733,17 +732,27 @@ impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
         let shape_v = B::shape(&v_inner);
         let shape_i = B::shape(&i_inner);
 
-        // FIXME: Currently we just trace this as a generic Unary Op to satisfy the compiler.
-        // If we want ONNX export to support topk properly, we need a TopK OpType.
-        // For now, this is enough to compile.
         let v_id = {
             let mut g = TRACING_GRAPH.lock();
             let out_id = g.add_value(shape_v, DTypeId::F32, None);
+            let mut attrs = alloc::collections::BTreeMap::new();
+            attrs.insert(
+                alloc::string::String::from("k"),
+                crate::graph::AttributeValue::Int(k as i64),
+            );
+            attrs.insert(
+                alloc::string::String::from("axis"),
+                crate::graph::AttributeValue::Int(dim as i64),
+            );
+            attrs.insert(
+                alloc::string::String::from("largest"),
+                crate::graph::AttributeValue::Int(if largest { 1 } else { 0 }),
+            );
             g.add_node(
-                OpType::Reshape, // Placeholder
+                OpType::TopK,
                 vec![t.value_id],
                 vec![out_id],
-                alloc::collections::BTreeMap::new(),
+                attrs,
             );
             out_id
         };
@@ -751,11 +760,24 @@ impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
         let i_id = {
             let mut g = TRACING_GRAPH.lock();
             let out_id = g.add_value(shape_i, DTypeId::U32, None);
+            let mut attrs = alloc::collections::BTreeMap::new();
+            attrs.insert(
+                alloc::string::String::from("k"),
+                crate::graph::AttributeValue::Int(k as i64),
+            );
+            attrs.insert(
+                alloc::string::String::from("axis"),
+                crate::graph::AttributeValue::Int(dim as i64),
+            );
+            attrs.insert(
+                alloc::string::String::from("largest"),
+                crate::graph::AttributeValue::Int(if largest { 1 } else { 0 }),
+            );
             g.add_node(
-                OpType::Reshape, // Placeholder
+                OpType::TopK,
                 vec![t.value_id],
                 vec![out_id],
-                alloc::collections::BTreeMap::new(),
+                attrs,
             );
             out_id
         };
@@ -772,18 +794,31 @@ impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
         ))
     }
 
-    /// Delegates to `B::argsort`, recording a placeholder
-    /// `OpType::Reshape` node — there is no dedicated `OpType` for
-    /// argsort yet, so ONNX export/visualization is currently a known
-    /// approximation, not a faithful trace.
+    /// Delegates to `B::argsort`, recording an `OpType::Argsort` node
+    /// with `dim` and `descending` as node attributes.
     fn argsort<K: super::dtype::DType, KInt: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
         descending: bool,
     ) -> Result<<Self as Backend>::Storage<KInt>> {
         let inner = B::argsort(&t.inner, dim, descending)?;
-        // FIXME: Same as topk, use a placeholder op for now.
-        Ok(Self::trace_unary(OpType::Reshape, t, &inner))
+        let shape_out = B::shape(&inner);
+        let value_id = {
+            let mut g = TRACING_GRAPH.lock();
+            let out_id = g.add_value(shape_out, DTypeId::I64, None);
+            let mut attrs = alloc::collections::BTreeMap::new();
+            attrs.insert(
+                alloc::string::String::from("axis"),
+                crate::graph::AttributeValue::Int(dim as i64),
+            );
+            attrs.insert(
+                alloc::string::String::from("descending"),
+                crate::graph::AttributeValue::Int(if descending { 1 } else { 0 }),
+            );
+            g.add_node(OpType::Argsort, vec![t.value_id], vec![out_id], attrs);
+            out_id
+        };
+        Ok(TracingTensor { inner, value_id })
     }
 }
 

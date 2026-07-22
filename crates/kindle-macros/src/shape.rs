@@ -4,7 +4,6 @@ use syn::{
     Token,
     parse::{Parse, ParseStream},
     parse_macro_input,
-    punctuated::Punctuated,
 };
 
 /// Dim.
@@ -15,8 +14,6 @@ enum Dim {
     Lit(syn::LitInt),
     /// Path.
     Path(syn::Path),
-    /// Sym.
-    Sym(syn::Ident),
 }
 
 impl Parse for Dim {
@@ -26,27 +23,30 @@ impl Parse for Dim {
             input.parse::<Token![dyn]>()?;
             return Ok(Dim::Dyn);
         }
+        if input.peek(Token![_]) {
+            input.parse::<Token![_]>()?;
+            return Ok(Dim::Dyn);
+        }
         if input.peek(syn::LitInt) {
             return Ok(Dim::Lit(input.parse::<syn::LitInt>()?));
-        }
-
-        let fork = input.fork();
-        if fork.peek(syn::Ident) && fork.peek2(syn::Ident) {
-            let first = fork.parse::<syn::Ident>()?;
-            if first == "sym" {
-                input.parse::<syn::Ident>()?; // consume 'sym'
-                return Ok(Dim::Sym(input.parse::<syn::Ident>()?));
-            }
         }
 
         Ok(Dim::Path(input.parse::<syn::Path>()?))
     }
 }
 
+enum ShapeInput {
+    List(Vec<Dim>),
+    Repeat { dim: Dim, count: usize },
+    Tail(Vec<Dim>),
+    Head(Vec<Dim>),
+    Span { head: Vec<Dim>, tail: Vec<Dim> },
+}
+
 /// Number list.
 struct NumberList {
     internal: bool,
-    items: Punctuated<Dim, Token![,]>,
+    input: ShapeInput,
 }
 
 impl Parse for NumberList {
@@ -57,10 +57,84 @@ impl Parse for NumberList {
             input.parse::<Token![@]>()?;
             internal = true;
         }
-        Ok(NumberList {
-            internal,
-            items: Punctuated::parse_terminated(input)?,
-        })
+
+        if !input.peek(Token![..]) {
+            let fork = input.fork();
+            if fork.parse::<Dim>().is_ok() && fork.peek(Token![;]) {
+                let dim: Dim = input.parse()?;
+                input.parse::<Token![;]>()?;
+                let count_lit: syn::LitInt = input.parse()?;
+                let count: usize = count_lit.base10_parse()?;
+                return Ok(NumberList {
+                    internal,
+                    input: ShapeInput::Repeat { dim, count },
+                });
+            }
+        }
+
+        let mut before_dotdot: Vec<Dim> = Vec::new();
+        let mut after_dotdot: Vec<Dim> = Vec::new();
+        let mut has_dotdot = false;
+
+        while !input.is_empty() {
+            if input.peek(Token![..]) {
+                if has_dotdot {
+                    return Err(syn::Error::new(
+                        input.span(),
+                        "Only a single '..' ellipsis is permitted in a shape",
+                    ));
+                }
+                input.parse::<Token![..]>()?;
+                has_dotdot = true;
+                if input.peek(Token![,]) {
+                    input.parse::<Token![,]>()?;
+                }
+                continue;
+            }
+
+            let dim: Dim = input.parse()?;
+            if has_dotdot {
+                after_dotdot.push(dim);
+            } else {
+                before_dotdot.push(dim);
+            }
+
+            if input.peek(Token![,]) {
+                input.parse::<Token![,]>()?;
+            }
+        }
+
+        if has_dotdot {
+            if before_dotdot.is_empty() && !after_dotdot.is_empty() {
+                Ok(NumberList {
+                    internal,
+                    input: ShapeInput::Tail(after_dotdot),
+                })
+            } else if !before_dotdot.is_empty() && after_dotdot.is_empty() {
+                Ok(NumberList {
+                    internal,
+                    input: ShapeInput::Head(before_dotdot),
+                })
+            } else if !before_dotdot.is_empty() && !after_dotdot.is_empty() {
+                Ok(NumberList {
+                    internal,
+                    input: ShapeInput::Span {
+                        head: before_dotdot,
+                        tail: after_dotdot,
+                    },
+                })
+            } else {
+                Ok(NumberList {
+                    internal,
+                    input: ShapeInput::Tail(Vec::new()),
+                })
+            }
+        } else {
+            Ok(NumberList {
+                internal,
+                input: ShapeInput::List(before_dotdot),
+            })
+        }
     }
 }
 
@@ -81,36 +155,58 @@ pub(crate) fn lit_to_typenum(
 }
 
 pub(crate) fn shape(input: TokenStream) -> TokenStream {
-    let items = parse_macro_input!(input as NumberList);
-    let list = items.items;
-    let internal = items.internal;
-    let mut output = Vec::new();
+    let parsed = parse_macro_input!(input as NumberList);
+    let internal = parsed.internal;
     let path = if internal {
         quote! { crate::prelude:: }
     } else {
         quote! { kindle::prelude:: }
     };
-    for elem in &list {
-        match elem {
-            Dim::Dyn => output.push(quote! { usize }),
-            Dim::Lit(lit_int) => {
-                let val: usize = match lit_int.base10_parse() {
-                    Ok(v) => v,
-                    Err(e) => {
-                        return syn::Error::new_spanned(lit_int, format!("Invalid integer: {}", e))
-                            .to_compile_error()
-                            .into();
-                    }
-                };
-                output.push(lit_to_typenum(val, &path));
-            }
-            Dim::Path(p) => output.push(quote! { #p }),
-            Dim::Sym(ident) => output.push(quote! { #ident }),
-        }
-    }
 
-    quote! {
-        ( #(#output,)* )
+    let render_dim = |elem: &Dim| -> proc_macro2::TokenStream {
+        match elem {
+            Dim::Dyn => quote! { usize },
+            Dim::Lit(lit_int) => {
+                let val: usize = lit_int.base10_parse().unwrap_or(0);
+                lit_to_typenum(val, &path)
+            }
+            Dim::Path(p) => quote! { #p },
+        }
+    };
+
+    match parsed.input {
+        ShapeInput::List(list) => {
+            let output: Vec<_> = list.iter().map(render_dim).collect();
+            quote! {
+                ( #(#output,)* )
+            }
+        }
+        ShapeInput::Repeat { dim, count } => {
+            let rendered = render_dim(&dim);
+            let output: Vec<_> = (0..count).map(|_| rendered.clone()).collect();
+            quote! {
+                ( #(#output,)* )
+            }
+        }
+        ShapeInput::Tail(list) => {
+            let output: Vec<_> = list.iter().map(render_dim).collect();
+            quote! {
+                #path TailShape<( #(#output,)* )>
+            }
+        }
+        ShapeInput::Head(list) => {
+            let output: Vec<_> = list.iter().map(render_dim).collect();
+            quote! {
+                #path HeadShape<( #(#output,)* )>
+            }
+        }
+        ShapeInput::Span { head, tail } => {
+            let head_output: Vec<_> = head.iter().map(render_dim).collect();
+            let tail_output: Vec<_> = tail.iter().map(render_dim).collect();
+            quote! {
+                #path SpanShape<( #(#head_output,)* ), ( #(#tail_output,)* )>
+            }
+        }
     }
     .into()
 }

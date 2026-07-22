@@ -286,6 +286,43 @@ fn gelu_forward_and_backward_parity() {
 }
 
 #[test]
+/// Verifies forward parity of `step` (Heaviside) between backends.
+/// Backward is all-zeros (step is constant everywhere except at the kink),
+/// so only forward values are compared.
+fn step_forward_parity() {
+    // Avoids x == 0.0 exactly (kink-point convention may differ).
+    let data = vec![-2.0, -0.5, 0.1, 0.5, 2.0];
+    let n_stor = make_storage::<NB>(&data, &[5]);
+    let c_stor = make_storage::<CB>(&data, &[5]);
+    let fwd_n = NB::step::<f32>(&n_stor).unwrap();
+    let fwd_c = CB::step::<f32>(&c_stor).unwrap();
+    let n_vals: Vec<f64> = NB::float_to_vec1::<f32>(&fwd_n).unwrap();
+    let c_vals: Vec<f64> = CB::float_to_vec1::<f32>(&fwd_c).unwrap();
+    assert_close(&n_vals, &c_vals, 1e-2, "step forward");
+}
+
+#[test]
+/// Verifies numerical parity of forward and backward pass between backends for `mish_forward_and_backward_parity`.
+fn mish_forward_and_backward_parity() {
+    let data = vec![-2.0, -0.5, 0.3, 1.0, 2.5];
+    let (fwd_n, grad_n) = run_and_grad::<NB>(|x| NB::mish::<f32>(x).unwrap(), &data, &[5]);
+    let (fwd_c, grad_c) = run_and_grad::<CB>(|x| CB::mish::<f32>(x).unwrap(), &data, &[5]);
+    assert_close(&fwd_n, &fwd_c, 1e-2, "mish forward");
+    assert_close(&grad_n, &grad_c, 1e-2, "mish backward");
+}
+
+#[test]
+/// Verifies numerical parity of forward and backward pass between backends for `elu_forward_and_backward_parity`.
+fn elu_forward_and_backward_parity() {
+    let data = vec![-2.0, -0.5, 0.1, 0.5, 2.0];
+    let (fwd_n, grad_n) = run_and_grad::<NB>(|x| NB::elu::<f32>(x).unwrap(), &data, &[5]);
+    let (fwd_c, grad_c) = run_and_grad::<CB>(|x| CB::elu::<f32>(x).unwrap(), &data, &[5]);
+    assert_close(&fwd_n, &fwd_c, 1e-2, "elu forward");
+    assert_close(&grad_n, &grad_c, 1e-2, "elu backward");
+}
+
+
+#[test]
 /// Verifies numerical parity of forward and backward pass between backends for `abs_forward_and_backward_parity`.
 fn abs_forward_and_backward_parity() {
     let data = vec![-3.0, -1.0, 0.5, 2.0];
@@ -796,6 +833,37 @@ fn argmin_forward_parity() {
     );
 }
 
+#[test]
+/// Verifies numerical parity of `argsort` (ascending and descending) between
+/// backends. Both backends now have real implementations: `CpuBackendImpl`
+/// sorts via an indexed comparison, `CandleBackend` delegates to
+/// `arg_sort_last_dim` (with optional transpose for non-last dims).
+fn argsort_forward_parity() {
+    let data = vec![3.0, 1.0, 4.0, 1.5, 2.0, 6.0];
+    let n_stor = make_storage::<NB>(&data, &[2, 3]);
+    let c_stor = make_storage::<CB>(&data, &[2, 3]);
+
+    // ascending along dim 1 (last dim)
+    let n_asc = NB::argsort::<f32, i64>(&n_stor, 1, false).unwrap();
+    let c_asc = CB::argsort::<f32, i64>(&c_stor, 1, false).unwrap();
+    assert_close(
+        &read_flat::<NB>(&n_asc),
+        &read_flat::<CB>(&c_asc),
+        1e-2,
+        "argsort ascending dim=1",
+    );
+
+    // descending along dim 1
+    let n_desc = NB::argsort::<f32, i64>(&n_stor, 1, true).unwrap();
+    let c_desc = CB::argsort::<f32, i64>(&c_stor, 1, true).unwrap();
+    assert_close(
+        &read_flat::<NB>(&n_desc),
+        &read_flat::<CB>(&c_desc),
+        1e-2,
+        "argsort descending dim=1",
+    );
+}
+
 // ── ModuleOps (9 methods, forward+backward) ────────────────────────────────
 
 /// `layer_norm` forward-only parity — backward is NOT compared. Confirmed by
@@ -1095,17 +1163,10 @@ fn avg_pool2d_forward_and_backward_parity() {
     assert_close(&grad_n, &grad_c, 1e-2, "avg_pool2d backward");
 }
 
-/// `adaptive_avg_pool2d` has no `CandleBackend` implementation to compare
-/// against at all: `CandleBackend::adaptive_avg_pool2d` is `unimplemented!()`
-/// unconditionally (confirmed at `crates/kindle-backends/src/lib.rs`, and
-/// documented as an INTENTIONAL, permanent gap by REQUIREMENTS.md's own
-/// NATBACK-03 wording: "`l1_loss`/`bce_with_logits_loss`/
-/// `adaptive_avg_pool2d`... unlike `CandleBackend`, which currently stubs
-/// these three" — `CpuBackendImpl` is REQUIRED to exceed `CandleBackend`'s
-/// coverage here, not match it). Since no reference implementation exists on
-/// the other backend, this test verifies `CpuBackendImpl::adaptive_avg_pool2d`
-/// forward+backward self-consistency instead of cross-backend parity: (a)
-/// forward output shape matches the requested `output_size`, and (b) the
+/// `adaptive_avg_pool2d` is not supported by `CandleBackend` — it returns
+/// `Err(UnsupportedBackendOperation)` (not a panic). This test verifies
+/// `CpuBackendImpl::adaptive_avg_pool2d` forward+backward self-consistency:
+/// (a) forward output shape matches the requested `output_size`, and (b) the
 /// backward gradient of `sum_all(out)` w.r.t. the input sums to exactly
 /// `out_h * out_w * channels` (each output position's gradient of 1.0,
 /// distributed uniformly across its own variable-size window per Phase 4's
@@ -1115,6 +1176,13 @@ fn avg_pool2d_forward_and_backward_parity() {
 /// without a second backend).
 #[test]
 fn adaptive_avg_pool2d_native_self_consistency() {
+    // Verify CandleBackend returns graceful Err, not panic.
+    let c_stor = make_storage::<CB>(&[1.0f32; 75], &[1, 3, 5, 5]);
+    assert!(
+        CB::adaptive_avg_pool2d::<f32>(&c_stor, (3, 3)).is_err(),
+        "CandleBackend::adaptive_avg_pool2d should return Err, not panic"
+    );
+
     // input=5 -> output=3 (Phase 4's own non-uniform-window precedent).
     let data: Vec<f32> = (0..75).map(|v| v as f32 % 9.0).collect(); // [1,3,5,5]
     let (_, grad_n) = run_and_grad::<NB>(
@@ -1168,17 +1236,10 @@ fn mse_loss_forward_and_backward_parity_mean() {
     assert_close(&grad_n, &grad_c, 1e-2, "mse_loss(mean) backward");
 }
 
-/// `l1_loss` has no `CandleBackend` implementation (`unimplemented!()`
-/// unconditionally — same documented, intentional gap as
-/// `adaptive_avg_pool2d`, per REQUIREMENTS.md's NATBACK-03 wording).
-/// `CpuBackendImpl::l1_loss` is composed entirely from already-real,
-/// already-parity-tested primitives (`sub` -> `abs` -> `mean_all`, per
-/// `ops/loss.rs`'s own doc comment), so this test builds the mathematically
-/// equivalent composition on `CandleBackend` FROM THOSE SAME real, already-
-/// covered `Backend` trait methods (not a hand-rolled candle-core call) as
-/// the comparison reference — this still exercises `CpuBackendImpl::l1_loss`
-/// itself (the actual audit target) against a Candle-side value produced
-/// purely through the shared `Backend` trait surface.
+/// `l1_loss`: now fully implemented in `CandleBackend` via elementwise
+/// `|pred - target|` + reduction. This test verifies forward+backward parity
+/// between `CpuBackendImpl` and `CandleBackend` using their respective direct
+/// implementations.
 #[test]
 fn l1_loss_forward_and_backward_parity() {
     let pred = vec![1.0, -2.0, 3.5, 0.5];
@@ -1191,11 +1252,7 @@ fn l1_loss_forward_and_backward_parity() {
     );
     let c_t = make_storage::<CB>(&target, &[4]);
     let (fwd_c, grad_c) = run_and_grad::<CB>(
-        |p| {
-            let diff = CB::sub::<f32>(p, &c_t).unwrap();
-            let abs_diff = CB::abs::<f32>(&diff).unwrap();
-            CB::mean_all::<f32>(&abs_diff).unwrap()
-        },
+        |p| CB::l1_loss::<f32>(p, &c_t, Reduction::Mean).unwrap(),
         &pred,
         &[4],
     );
@@ -1203,17 +1260,10 @@ fn l1_loss_forward_and_backward_parity() {
     assert_close(&grad_n, &grad_c, 1e-2, "l1_loss backward");
 }
 
-/// `bce_with_logits_loss` has no `CandleBackend` implementation
-/// (`unimplemented!()` unconditionally — same documented, intentional gap).
-/// `CpuBackendImpl::bce_with_logits_loss` implements the numerically-stable
-/// formula `max(x,0) - x*z + log(1+exp(-|x|))`, composed entirely from
-/// already-real, already-parity-tested primitives (per `ops/loss.rs`'s own
-/// doc comment: `relu`/`mul`/`sub`/`abs`/`neg`/`exp`/`add_scalar_float`/
-/// `log`/`add`). This test builds the identical composition on
-/// `CandleBackend` from those same real trait methods as the comparison
-/// reference, exercising `CpuBackendImpl::bce_with_logits_loss` itself
-/// against a Candle-side value produced purely through the shared `Backend`
-/// trait surface.
+/// `bce_with_logits_loss`: now fully implemented in `CandleBackend` via
+/// the numerically stable formula `max(x,0) - x*y + log(1+exp(-|x|))`.
+/// This test verifies forward+backward parity between `CpuBackendImpl` and
+/// `CandleBackend` using their respective direct implementations.
 #[test]
 fn bce_with_logits_loss_forward_and_backward_parity() {
     let pred = vec![0.5, -1.0, 2.0, -0.5];
@@ -1226,20 +1276,7 @@ fn bce_with_logits_loss_forward_and_backward_parity() {
     );
     let c_t = make_storage::<CB>(&target, &[4]);
     let (fwd_c, grad_c) = run_and_grad::<CB>(
-        |p| {
-            // max(x,0) - x*z + log(1+exp(-|x|)), the same stable formula
-            // CpuBackendImpl::bce_with_logits_loss composes.
-            let relu_p = CB::relu::<f32>(p).unwrap();
-            let p_mul_z = CB::mul::<f32>(p, &c_t).unwrap();
-            let term1 = CB::sub::<f32>(&relu_p, &p_mul_z).unwrap();
-            let abs_p = CB::abs::<f32>(p).unwrap();
-            let neg_abs_p = CB::neg::<f32>(&abs_p).unwrap();
-            let exp_term = CB::exp::<f32>(&neg_abs_p).unwrap();
-            let one_plus_exp = CB::add_scalar_float::<f32>(&exp_term, 1.0).unwrap();
-            let log_term = CB::log::<f32>(&one_plus_exp).unwrap();
-            let elementwise = CB::add::<f32>(&term1, &log_term).unwrap();
-            CB::mean_all::<f32>(&elementwise).unwrap()
-        },
+        |p| CB::bce_with_logits_loss::<f32>(p, &c_t, Reduction::Mean).unwrap(),
         &pred,
         &[4],
     );

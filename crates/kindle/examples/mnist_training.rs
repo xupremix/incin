@@ -22,7 +22,7 @@ impl Collate<(Vec<f32>, u8)> for MnistCollate {
 
         for (img, label) in batch {
             images.extend_from_slice(&img);
-            labels.push(label as u32); // Using u32 for CrossEntropyLoss
+            labels.push(label as f32); // F32 target tensor for CrossEntropyLoss
         }
 
         let images_bytes = unsafe {
@@ -35,7 +35,7 @@ impl Collate<(Vec<f32>, u8)> for MnistCollate {
         let labels_bytes = unsafe {
             core::slice::from_raw_parts(
                 labels.as_ptr() as *const u8,
-                labels.len() * core::mem::size_of::<u32>(),
+                labels.len() * core::mem::size_of::<f32>(),
             )
         };
 
@@ -48,7 +48,7 @@ impl Collate<(Vec<f32>, u8)> for MnistCollate {
         )
         .unwrap();
         let labels_raw =
-            Backend::from_bytes::<u32>(labels_bytes, &[batch_size], DTypeId::U32, &device).unwrap();
+            Backend::from_bytes::<f32>(labels_bytes, &[batch_size], DTypeId::F32, &device).unwrap();
 
         (
             Tensor::<Dyn, Backend>::from_raw(images_raw, vec![batch_size, 1, 28, 28]).unwrap(),
@@ -98,13 +98,13 @@ fn main() -> kindle::Result<()> {
         // Optimizer step
         optim.step(&grads)?;
 
-        if batch_idx % 100 == 0 {
-            println!("Processed {} batches", batch_idx);
+        if batch_idx % 2 == 0 {
+            println!("Processed batch {}, loss = {:.4}", batch_idx, loss.to_scalar::<f32>()?);
         }
         batch_idx += 1;
 
-        if batch_idx >= 500 {
-            break; // Stop early for the demo
+        if batch_idx >= 10 {
+            break; // Stop early for demo
         }
     }
 

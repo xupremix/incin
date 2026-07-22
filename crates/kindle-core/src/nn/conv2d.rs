@@ -114,8 +114,8 @@ impl<
         (
             out_channels,
             in_channels,
-            (target.0, target.1, (), ()),
-            (Default::default(),),
+            (target.0.clone(), target.1, (), ()),
+            (target.0,),
         )
     }
 }

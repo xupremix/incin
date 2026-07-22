@@ -87,7 +87,7 @@ fn main() -> anyhow::Result<()> {
     println!(
         "Keeping process alive for 30 seconds for live attach (though kindle-viz reads past history too)..."
     );
-    for _ in 0..30 {
+    for _ in 0..1 {
         std::thread::sleep(std::time::Duration::from_secs(1));
     }
 

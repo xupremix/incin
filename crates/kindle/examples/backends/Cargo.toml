@@ -6,7 +6,8 @@ readme.workspace = true
 license.workspace = true
 
 [dependencies]
-kindle = { path = "../.." }
+kindle = { path = "../..", features = ["wgpu"] }
 
 [lints]
 workspace = true
+

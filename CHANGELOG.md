@@ -44,6 +44,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   checks, the permanent regression class this file exists to catch.
 
 ### Fixed
+- **C-10:** `Tensor::to_scalar<E>`/`to_vec1<E>` could construct an invalid `bool`
+  (Miri-confirmed undefined behavior) when reading non-0/1 byte values from
+  storage. Fixed by special-casing `bool` `TypeId` checks and enforcing a
+  safe non-zero element truthiness check without unsound transmutes.
 - **C-9:** WGPU `embedding`'s backward and `cross_entropy_loss`'s one-hot
   construction bit-reinterpreted F32-stored index/target bytes as `u32`
   (`buffer.to_vec::<u32>()`) instead of converting the value, silently

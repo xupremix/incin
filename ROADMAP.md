@@ -981,3 +981,59 @@ is stable.
 13. Add GPU-gated CI jobs (cuda/wgpu), and update `.github/workflows/ci.yml`'s fmt/clippy steps to match what's now actually green — the CI gap (no GPU jobs, an unverified cpu-only feature set) is why C-1/C-3/C-4/C-8 all shipped unnoticed
 14. Make doc comments real (not templates); make `s![]`/`idx![]` doctests compile for real
 15. Write `CHANGELOG.md`, finish remaining repo hygiene items above
+
+---
+
+## Named Symbolic Dimensions Architecture (`symbolic_dim!`)
+
+### Overview & How It Works
+
+Named Symbolic Dimensions provide **type-level identity** for tensor shapes while allowing their size to be specified or modified at runtime.
+
+1. **Nominal Type Signature**: `symbolic_dim!(Batch, Seq)` generates unique, nominal Rust structs:
+   ```rust
+   #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+   pub struct Batch(pub usize);
+   ```
+2. **Compile-Time Safety Contract**: When declaring `type FeatureMatrix = s![Batch, 128];`, the shape tuple carries the `Batch` type marker `(Batch, U128)`. The Rust compiler enforces shape equality at compile-time (`ShapeEq`):
+   ```rust
+   let t1: Tensor<s![Batch, 10]> = Tensor::zeros((32usize, ())).unwrap();
+   let t2: Tensor<s![Batch, 20]> = Tensor::zeros((32usize, ())).unwrap();
+   // let t3 = t1.add(&t2); // COMPILE ERROR: (Batch, U10) != (Batch, U20)
+   ```
+3. **Runtime Value Binding & Verification**: The runtime dimension size (e.g. `32usize`) is held inside `Batch(32)`. Binary operations dynamically assert `t1.shape.0 == t2.shape.0`, ensuring runtime dimension consistency while preserving static type-checker enforcement.
+
+---
+
+## Detailed Post-Phase Release Plan & Architectural Blueprint (0.3.0 Release Roadmap)
+
+### Phase 1: Immediate Engine Completion (Current Sprint)
+- **CUDA `LossOps`**: Implement composed `mse_loss`, `l1_loss`, `bce_with_logits_loss`, and `launch_nll_loss`-backed `cross_entropy_loss` on `CudaBackendImpl` with autograd tape tracking.
+- **CUDA `QuantizedOps`**: Wire `quantize` and `dequantize` using `launch_quantize` and `launch_dequantize` (`cuda/ops/quant.rs`).
+- **Extended Cross-Backend Parity Suite**: Cross-backend numerical & gradient agreement between CPU and WGPU for `BatchNorm2d`, `LayerNorm`, `Conv2d`, `MSELoss`, `CrossEntropyLoss` ($\le 10^{-4}$).
+
+### Phase 2: CUDA Convolution, Pooling, & Optimizer Ops (Sprint + 1)
+- **CUDA `ModuleOps` Convolution & Pooling**:
+  - Wire `conv1d`, `conv2d`, `conv_transpose2d`, `avg_pool2d`, `max_pool2d`, `adaptive_avg_pool2d` on `CudaBackendImpl` calling CUDA kernel dispatches in `cuda/ops/conv.rs` / `cuda/ops/pool.rs`.
+- **CUDA `OptimizerOps`**:
+  - Wire `sgd_step` and `adamw_step` JIT kernels for in-place GPU weight updates directly on `CudaStorage`.
+
+### Phase 3: Hardware Autotuning Engine & Cache Persistence (Sprint + 2)
+- **Cache Persistence & Key Identity**:
+  - Extend CUDA autotuning engine (`tuning.rs`) to persist LRU cache entries to disk (`~/.cache/kindle/autotune.json`).
+  - Key identity includes GPU device UUID, compute capability, driver version, and canonical problem identity key (`KernelKey`).
+- **Reduction Occupancy Pruning**:
+  - Query driver occupancy (`cuOccupancyMaxActiveBlocksPerMultiprocessor`) for reduction launch selection prior to timing.
+
+### Phase 4: Quantization Autograd & Low-Bit Inference Engine (Sprint + 3)
+- **Quantized Neural Network Layers (`QuantizedLinear`)**:
+  - Expose `QuantizedLinear<s![In, Out], B>` for running 8-bit quantized ONNX/Safetensors models with reduced bandwidth overhead.
+- **Straight-Through Estimator (STE)**:
+  - Straight-Through Estimator passes gradients unchanged ($d(\text{quantize})/dx \approx 1$) during backwards passes for quantization-aware training (QAT).
+
+### Phase 5: Production Benchmarks & Crates.io Release (Sprint + 4)
+- **Benchmarking Suite (`benches/`)**:
+  - Criterion-based benchmarks (`benches/tensor_ops.rs`, `benches/resnet_forward.rs`) measuring latency & memory throughput for Kindle (CPU & WGPU) vs Candle vs PyTorch.
+- **Cratering & Dry-Run Release**:
+  - Perform `cargo publish --dry-run` across all 5 workspace crates (`kindle-core`, `kindle-backends`, `kindle-macros`, `kindle-data`, `kindle`).
+

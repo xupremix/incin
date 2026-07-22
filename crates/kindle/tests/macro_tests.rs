@@ -25,6 +25,63 @@ fn test_s_macro() {
     let mixed_arg = ((), 3, (), 7);
     let mixed_field = <MixedShape as Shape>::init(mixed_arg);
     assert_eq!(<MixedShape as DynShape>::dims(&mixed_field), [2, 3, 5, 7]);
+
+    // Wildcard '_' dimensions
+    type WildcardShape = s![_, _];
+    let wildcard_field = <WildcardShape as Shape>::init((15, 30));
+    assert_eq!(<WildcardShape as DynShape>::dims(&wildcard_field), [15, 30]);
+
+    // Array repetition ';' syntax
+    type RepetitionShape = s![64; 3];
+    assert_eq!(<RepetitionShape as ConstShape>::DIMS, [64, 64, 64]);
+
+    // Symbolic dim with doc comments
+    symbolic_dim! {
+        /// Batch size dimension
+        DocBatch,
+        /// Sequence length dimension
+        DocSeq,
+    }
+    type SymDocShape = s![DocBatch, DocSeq];
+    let sym_field = <SymDocShape as Shape>::init((32, 128));
+    assert_eq!(<SymDocShape as DynShape>::dims(&sym_field), [32, 128]);
+
+    // Tail Ellipsis '..' syntax (s![.., 128])
+    type TailFeatureShape = s![.., 128];
+    let tail_field = <TailFeatureShape as Shape>::init(vec![32, 16, 128]);
+    assert_eq!(
+        <TailFeatureShape as DynShape>::dims(&tail_field),
+        [32, 16, 128]
+    );
+    assert_eq!(<TailFeatureShape as DynShape>::rank(&tail_field), 3);
+
+    // Head Ellipsis '..' syntax (s![128, ..])
+    type HeadFeatureShape = s![128, ..];
+    let head_field = <HeadFeatureShape as Shape>::init(vec![128, 64, 32]);
+    assert_eq!(
+        <HeadFeatureShape as DynShape>::dims(&head_field),
+        [128, 64, 32]
+    );
+    assert_eq!(<HeadFeatureShape as DynShape>::rank(&head_field), 3);
+
+    // Span Ellipsis '..' syntax (s![32, .., 128])
+    type SpanFeatureShape = s![32, .., 128];
+    let span_field = <SpanFeatureShape as Shape>::init(vec![32, 16, 8, 128]);
+    assert_eq!(
+        <SpanFeatureShape as DynShape>::dims(&span_field),
+        [32, 16, 8, 128]
+    );
+    assert_eq!(<SpanFeatureShape as DynShape>::rank(&span_field), 4);
+
+    // Direct Tensor creation with Ellipsis shapes
+    let t_tail = Tensor::<TailFeatureShape, CpuBackendImpl>::zeros([32, 16, 128]).unwrap();
+    assert_eq!(t_tail.dims(), vec![32, 16, 128]);
+
+    let t_head = Tensor::<HeadFeatureShape, CpuBackendImpl>::zeros([128, 64, 32]).unwrap();
+    assert_eq!(t_head.dims(), vec![128, 64, 32]);
+
+    let t_span = Tensor::<SpanFeatureShape, CpuBackendImpl>::zeros([32, 16, 8, 128]).unwrap();
+    assert_eq!(t_span.dims(), vec![32, 16, 8, 128]);
 }
 
 #[test]

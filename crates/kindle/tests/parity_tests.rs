@@ -135,3 +135,105 @@ fn test_parity_sum_dim() -> Result<()> {
     assert_close(&n, &w, 1e-4, "sum_dim");
     Ok(())
 }
+
+#[test]
+fn test_parity_gradient_add() -> Result<()> {
+    let a_data = vec![1.0f32, 2.0, 3.0, 4.0];
+    let b_data = vec![0.5f32, 1.5, 2.5, 3.5];
+
+    let a_native = native_storage(&a_data, &[2, 2]);
+    let b_native = native_storage(&b_data, &[2, 2]);
+    let out_native = Native::add::<f32>(&a_native, &b_native)?;
+    let grads_native = Native::backward::<f32>(&out_native)?;
+    let grad_a_native = native_vec(&Native::get_grad::<f32>(&a_native, &grads_native)?.unwrap());
+
+    let a_wgpu = wgpu_storage(&a_data, &[2, 2]);
+    let b_wgpu = wgpu_storage(&b_data, &[2, 2]);
+    let out_wgpu = Wgpu::add::<f32>(&a_wgpu, &b_wgpu)?;
+    let grads_wgpu = Wgpu::backward::<f32>(&out_wgpu)?;
+    let grad_a_wgpu = wgpu_vec(&Wgpu::get_grad::<f32>(&a_wgpu, &grads_wgpu)?.unwrap());
+
+    assert_close(&grad_a_native, &grad_a_wgpu, 1e-4, "add gradient");
+    Ok(())
+}
+
+#[test]
+fn test_parity_gradient_mul() -> Result<()> {
+    let a_data = vec![1.0f32, 2.0, 3.0, 4.0];
+    let b_data = vec![2.0f32, 3.0, 4.0, 5.0];
+
+    let a_native = native_storage(&a_data, &[2, 2]);
+    let b_native = native_storage(&b_data, &[2, 2]);
+    let out_native = Native::mul::<f32>(&a_native, &b_native)?;
+    let grads_native = Native::backward::<f32>(&out_native)?;
+    let grad_a_native = native_vec(&Native::get_grad::<f32>(&a_native, &grads_native)?.unwrap());
+
+    let a_wgpu = wgpu_storage(&a_data, &[2, 2]);
+    let b_wgpu = wgpu_storage(&b_data, &[2, 2]);
+    let out_wgpu = Wgpu::mul::<f32>(&a_wgpu, &b_wgpu)?;
+    let grads_wgpu = Wgpu::backward::<f32>(&out_wgpu)?;
+    let grad_a_wgpu = wgpu_vec(&Wgpu::get_grad::<f32>(&a_wgpu, &grads_wgpu)?.unwrap());
+
+    assert_close(&grad_a_native, &grad_a_wgpu, 1e-4, "mul gradient");
+    Ok(())
+}
+
+#[test]
+fn test_parity_layer_norm() -> Result<()> {
+    let input_data = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let weight_data = vec![1.0f32, 1.0, 1.0];
+    let bias_data = vec![0.0f32, 0.0, 0.0];
+
+    let n = native_vec(&Native::layer_norm::<f32>(
+        &native_storage(&input_data, &[2, 3]),
+        &native_storage(&weight_data, &[3]),
+        Some(&native_storage(&bias_data, &[3])),
+        1e-5,
+    )?);
+    let w = wgpu_vec(&Wgpu::layer_norm::<f32>(
+        &wgpu_storage(&input_data, &[2, 3]),
+        &wgpu_storage(&weight_data, &[3]),
+        Some(&wgpu_storage(&bias_data, &[3])),
+        1e-5,
+    )?);
+    assert_close(&n, &w, 1e-4, "layer_norm");
+    Ok(())
+}
+
+#[test]
+fn test_parity_mse_loss() -> Result<()> {
+    let pred_data = vec![1.0f32, 2.0, 3.0, 4.0];
+    let target_data = vec![0.0f32, 1.0, 2.0, 3.0];
+
+    let n = native_vec(&Native::mse_loss::<f32>(
+        &native_storage(&pred_data, &[4]),
+        &native_storage(&target_data, &[4]),
+        Reduction::Mean,
+    )?);
+    let w = wgpu_vec(&Wgpu::mse_loss::<f32>(
+        &wgpu_storage(&pred_data, &[4]),
+        &wgpu_storage(&target_data, &[4]),
+        Reduction::Mean,
+    )?);
+    assert_close(&n, &w, 1e-4, "mse_loss");
+    Ok(())
+}
+
+#[test]
+fn test_parity_cross_entropy_loss() -> Result<()> {
+    let pred_data = vec![2.0f32, 1.0, 0.1, 0.5, 2.5, 0.3];
+    let target_data = vec![0.0f32, 1.0];
+
+    let n = native_vec(&Native::cross_entropy_loss::<f32, f32>(
+        &native_storage(&pred_data, &[2, 3]),
+        &native_storage(&target_data, &[2]),
+        Reduction::Mean,
+    )?);
+    let w = wgpu_vec(&Wgpu::cross_entropy_loss::<f32, f32>(
+        &wgpu_storage(&pred_data, &[2, 3]),
+        &wgpu_storage(&target_data, &[2]),
+        Reduction::Mean,
+    )?);
+    assert_close(&n, &w, 1e-4, "cross_entropy_loss");
+    Ok(())
+}

@@ -125,6 +125,10 @@ pub enum OpType {
     Input,
     /// A constant value baked into the graph.
     Constant,
+    /// Top-k values and indices along a dimension.
+    TopK,
+    /// Argsort indices along a dimension.
+    Argsort,
 }
 
 impl OpType {
@@ -189,6 +193,8 @@ impl OpType {
             OpType::ConvTranspose2d => "ConvTranspose2d",
             OpType::Input => "Input",
             OpType::Constant => "Constant",
+            OpType::TopK => "TopK",
+            OpType::Argsort => "Argsort",
         }
     }
 }

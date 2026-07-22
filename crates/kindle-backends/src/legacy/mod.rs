@@ -694,22 +694,50 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         } // using gelu_erf as fallback for general
 
+        /// Implements Heaviside step function: H(x) = 0 if x < 0, else 1.
+        /// Computed as: mask = (x >= 0), cast mask to float.
         fn step<K: kindle_core::prelude::DType>(
-            _t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
+            t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
-            unimplemented!("step not implemented for CandleBackend")
+            // (t >= 0.0) gives a bool mask; cast to float dtype
+            let zero = t
+                .zeros_like()
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+            let mask = t
+                .ge(&zero)
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+            Ok(mask
+                .to_dtype(t.dtype())
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
+        /// Implements Mish activation: `x * tanh(softplus(x))`
+        /// where `softplus(x) = ln(1 + exp(x))`.
         fn mish<K: kindle_core::prelude::DType>(
-            _t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
+            t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
-            unimplemented!("mish not implemented for CandleBackend")
+            // softplus(x) = ln(1 + exp(x))
+            let exp_x = t
+                .exp()
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+            let softplus = (exp_x + 1.0f64)
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?
+                .log()
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+            // mish(x) = x * tanh(softplus(x))
+            let tanh_sp = softplus
+                .tanh()
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+            Ok(t.broadcast_mul(&tanh_sp)
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
+        /// Implements Exponential Linear Unit: ELU(x) = x if x >= 0, else 1*(e^x - 1).
         fn elu<K: kindle_core::prelude::DType>(
-            _t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
+            t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
-            unimplemented!("elu not implemented for CandleBackend")
+            Ok(t.elu(1.0f64)
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
         /// Applies softmax along `dim`.
@@ -915,6 +943,8 @@ pub mod candle {
             }
         }
 
+        /// `topk` is not natively available in candle; returns an error
+        /// instead of panicking so callers can handle the unsupported case.
         fn topk<K: kindle_core::prelude::DType, KInt: kindle_core::prelude::DType>(
             _t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             _k: usize,
@@ -924,27 +954,58 @@ pub mod candle {
             <Self as kindle_core::prelude::Backend>::Storage<K>,
             <Self as kindle_core::prelude::Backend>::Storage<KInt>,
         )> {
-            unimplemented!("topk not implemented for CandleBackend")
+            Err(Error::UnsupportedBackendOperation {
+                op: "topk",
+                backend: "CandleBackend",
+            })
         }
 
+        /// Sorts indices along the last dimension using candle's native
+        /// `argsort_last_dim`. For non-last dimensions, transposes to last
+        /// and back.
         fn argsort<K: kindle_core::prelude::DType, KInt: kindle_core::prelude::DType>(
-            _t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
-            _dim: usize,
-            _descending: bool,
+            t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
+            dim: usize,
+            descending: bool,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<KInt>> {
-            unimplemented!("argsort not implemented for CandleBackend")
+            let rank = t.rank();
+            let last = rank.saturating_sub(1);
+            // Candle's arg_sort_last_dim takes `asc: bool`; our API takes `descending: bool`.
+            let asc = !descending;
+            if dim == last {
+                Ok(t.arg_sort_last_dim(asc)
+                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+            } else {
+                // Transpose target dim to last, sort, transpose back.
+                // arg_sort_last_dim requires a contiguous tensor, so make it so.
+                let t_swap = t
+                    .transpose(dim, last)
+                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?
+                    .contiguous()
+                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+                let sorted = t_swap
+                    .arg_sort_last_dim(asc)
+                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+                Ok(sorted
+                    .transpose(dim, last)
+                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
+            }
         }
     }
 
     impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device>
         kindle_core::prelude::ModuleOps<Self> for CandleBackend<T, D>
     {
-        /// Not implemented for `CandleBackend`; always panics.
+        /// Candle has no native adaptive pooling; returns an error
+        /// instead of panicking so callers can handle the unsupported case.
         fn adaptive_avg_pool2d<K: kindle_core::prelude::DType>(
             _t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             _output_size: (usize, usize),
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
-            unimplemented!("adaptive_avg_pool2d not implemented for CandleBackend")
+            Err(Error::UnsupportedBackendOperation {
+                op: "adaptive_avg_pool2d",
+                backend: "CandleBackend",
+            })
         }
 
         /// Applies layer normalization over the last dimension, substituting a
@@ -1166,22 +1227,76 @@ pub mod candle {
     impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device>
         kindle_core::prelude::LossOps<Self> for CandleBackend<T, D>
     {
-        /// Not implemented for `CandleBackend`; always panics.
+        /// Computes L1 (Mean Absolute Error) loss: `|pred - target|` with
+        /// the given `reduction` (Mean, Sum, or None).
         fn l1_loss<K: kindle_core::prelude::DType>(
-            _pred: &<Self as kindle_core::prelude::Backend>::Storage<K>,
-            _target: &<Self as kindle_core::prelude::Backend>::Storage<K>,
-            _reduction: kindle_core::prelude::Reduction,
+            pred: &<Self as kindle_core::prelude::Backend>::Storage<K>,
+            target: &<Self as kindle_core::prelude::Backend>::Storage<K>,
+            reduction: kindle_core::prelude::Reduction,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
-            unimplemented!("l1_loss not implemented for CandleBackend")
+            let diff = pred
+                .broadcast_sub(target)
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+            let abs_diff = diff
+                .abs()
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+            match reduction {
+                kindle_core::prelude::Reduction::Mean => Ok(abs_diff
+                    .mean_all()
+                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?),
+                kindle_core::prelude::Reduction::Sum => Ok(abs_diff
+                    .sum_all()
+                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?),
+                kindle_core::prelude::Reduction::None => Ok(abs_diff),
+            }
         }
 
-        /// Not implemented for `CandleBackend`; always panics.
+        /// Computes Binary Cross-Entropy from logits:
+        /// `max(x, 0) - x*y + log(1 + exp(-|x|))`
+        /// with the given `reduction` (Mean, Sum, or None).
         fn bce_with_logits_loss<K: kindle_core::prelude::DType>(
-            _pred: &<Self as kindle_core::prelude::Backend>::Storage<K>,
-            _target: &<Self as kindle_core::prelude::Backend>::Storage<K>,
-            _reduction: kindle_core::prelude::Reduction,
+            pred: &<Self as kindle_core::prelude::Backend>::Storage<K>,
+            target: &<Self as kindle_core::prelude::Backend>::Storage<K>,
+            reduction: kindle_core::prelude::Reduction,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
-            unimplemented!("bce_with_logits_loss not implemented for CandleBackend")
+            // Numerically stable: max(x, 0) - x*y + log(1 + exp(-|x|))
+            let zero = pred
+                .zeros_like()
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+            let relu_x = pred
+                .maximum(&zero)
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+            let x_y = pred
+                .broadcast_mul(target)
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+            let abs_x = pred
+                .abs()
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+            let neg_abs_x = abs_x
+                .neg()
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+            let exp_neg_abs = neg_abs_x
+                .exp()
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+            let one = (exp_neg_abs + 1.0f64)
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+            let log_term = one
+                .log()
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+            let elementwise = relu_x
+                .broadcast_sub(&x_y)
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?
+                .broadcast_add(&log_term)
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+            match reduction {
+                kindle_core::prelude::Reduction::Mean => Ok(elementwise
+                    .mean_all()
+                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?),
+                kindle_core::prelude::Reduction::Sum => Ok(elementwise
+                    .sum_all()
+                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?),
+                kindle_core::prelude::Reduction::None => Ok(elementwise),
+            }
         }
 
         /// Computes mean squared error between `pred` and `target`; the
