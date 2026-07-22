@@ -150,6 +150,39 @@ policy remain.
 > and the max/min-family reductions. `cross_entropy_loss` is next — it's
 > almost certainly composable from already-wired primitives (softmax's
 > `log_softmax` helper is already `pub(crate)` and reusable), unlike pooling.
+>
+> **2026-07-22 seventh follow-up: max/min-family reductions wired (except
+> the `_keepdim` variants), `cross_entropy_loss` confirmed, C-9 found and
+> fixed.** `max_dim`/`min_dim`/`max_all`/`min_all` needed real new code (like
+> pooling, not composition): recomputes each output position's winning
+> source element from the captured input and scatters `grad_out` there with
+> `=` (never `+=` — a plain axis reduction never shares a winning source
+> across output positions, unlike overlapping pooling windows), mirroring
+> the CPU backend's `max_axis_with_indices`/`scatter_axis_grad`
+> (`cpu/ops/reduce.rs`) exactly. **`max_keepdim`/`min_keepdim` are
+> deliberately left unwired** — `log_softmax` calls `max_keepdim` purely to
+> subtract a per-row max for numerical stability, and softmax's value is
+> invariant to that constant, so it must stay a stop-gradient; it currently
+> does only because `max_keepdim` pushes no `TapeEntry`. Wiring it
+> generically would silently corrupt every caller through `log_softmax`
+> (`softmax`, `cross_entropy_loss`) unless that call site were first changed
+> to a genuinely detached max. Doc comments on both `_keepdim` methods now
+> spell this out so a future pass doesn't "complete the set" and reintroduce
+> a silent-wrong-gradient bug. `cross_entropy_loss`'s gradient (as opposed to
+> its forward value, fixed separately as C-9 below) was confirmed correct by
+> composition, same as softmax/layer_norm/batch_norm — no new wiring needed,
+> just a gradcheck test. **Also found and fixed while auditing
+> `cross_entropy_loss`'s forward: C-9**, a real silent-wrong-answer bug in
+> `embedding`'s backward and `cross_entropy_loss`'s one-hot construction
+> (both bit-reinterpreted F32-stored index bytes as `u32` instead of
+> converting the value — see C-9's full writeup in the Critical section).
+> **Remaining WGPU autograd gap, confirmed accurate as of this follow-up:**
+> only `quantize`/`dequantize`/`quantized_matmul` and `max_keepdim`/
+> `min_keepdim` (deliberately, see above). 10 new tests this round (6 for
+> max/min-family reductions, 1 for `cross_entropy_loss`'s gradient, 2 for
+> C-9's regression coverage) all pass against the real software WGPU
+> adapter; full `--features wgpu,std` suite is 94/94 (up from 80 before this
+> C-3 audit began).
 
 ---
 
@@ -160,7 +193,7 @@ policy remain.
 | `kindle-core` | Passing | ✅ C-6/C-7 fixed; C-3 (autograd design gaps) still open |
 | `kindle-backends` (cpu) | Passing, +2 new regression tests | ✅ C-2 (f32 downcast), C-5 (overflow), C-8 (mis-gated `elementwise` module — CPU couldn't build standalone) fixed |
 | `kindle-backends` (cuda) | Compiles (no GPU in this env to run it) | ✅ C-1 fixed; ⚠ C-4: add/sub/mul/div now gradient-wired (unverified on real hardware); everything else (`CreationOps`/`FloatOps`/norm/embedding/quant/reduce/loss) is still an empty trait impl falling to `Err` |
-| `kindle-backends` (wgpu) | Passing, +8 tests | ✅ C-9 (embedding/cross_entropy index bit-reinterpret) fixed; ⚠ C-3: elementwise/activation/`matmul`/`TensorOps`/`embedding`/`conv*`/sum-reductions/`layer_norm`/`batch_norm`/pooling autograd all wired and tested against a real adapter (see 2026-07-22 follow-ups); `cross_entropy_loss`/quantization/max-min-reductions still ungradiented |
+| `kindle-backends` (wgpu) | Passing, 94/94, +18 tests this audit | ✅ C-9 (embedding/cross_entropy index bit-reinterpret) fixed; ⚠ C-3: elementwise/activation/`matmul`/`TensorOps`/`embedding`/`conv*`/reductions (incl. max/min-family)/`layer_norm`/`batch_norm`/pooling/`cross_entropy_loss` autograd all wired and tested against a real adapter (see 2026-07-22 follow-ups); only `quantize`/`dequantize`/`quantized_matmul` and the deliberately-unwired `max_keepdim`/`min_keepdim` remain |
 | `kindle-backends` (legacy: candle only now) | Partial | ✅ `ndarray`/`burn` backends + deps deleted (2026-07-21, both were permanently dead code); only `CandleBackend` remains |
 | `kindle-macros` | Passing | ✅ Solid — hygiene good, doc examples present |
 | `kindle-data` | 9 tests | ✅ `DataLoader` tested (incl. multi-worker concurrency); `default-features = false` fixed on its `kindle-backends` dep (was leaking `cuda`/`wgpu`, see C-8) |
