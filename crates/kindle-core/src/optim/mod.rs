@@ -121,22 +121,24 @@ impl<B: Backend, K: DType> Optimizer<B> for AdamW<B, K> {
         for (name, var) in self.params.iter_mut() {
             let t = B::var_as_tensor::<K>(var)?;
             if let Some(grad) = B::get_grad::<K>(&t, &grads.0)? {
+                // The parameter's own device, not a hardcoded CPU fallback -
+                // every concrete backend (Cpu/Wgpu/Cuda) overrides
+                // `storage_device` to return its real device, so this only
+                // falls back to CPU for a hypothetical backend that
+                // genuinely can't report one. Allocating `m`/`v` on the
+                // wrong device previously made `AdamW` fail on its very
+                // first step on any non-CPU backend (`validate_cuda_device`
+                // rejects a CPU `DeviceId` outright) - see
+                // `IMPLEMENTATION_PLAN.md` §1.7.
+                let device = B::storage_device::<K>(&t).unwrap_or_else(DeviceId::cpu);
                 if !self.m.contains_key(name) {
-                    let zero = B::var_zeros::<K>(
-                        B::shape::<K>(&t).as_slice(),
-                        DTypeId::F32,
-                        &DeviceId::cpu(),
-                    )
-                    .unwrap(); // Fallback device
+                    let zero =
+                        B::var_zeros::<K>(B::shape::<K>(&t).as_slice(), DTypeId::F32, &device)?;
                     self.m.insert(name.clone(), B::var_as_tensor::<K>(&zero)?);
                 }
                 if !self.v.contains_key(name) {
-                    let zero = B::var_zeros::<K>(
-                        B::shape::<K>(&t).as_slice(),
-                        DTypeId::F32,
-                        &DeviceId::cpu(),
-                    )
-                    .unwrap();
+                    let zero =
+                        B::var_zeros::<K>(B::shape::<K>(&t).as_slice(), DTypeId::F32, &device)?;
                     self.v.insert(name.clone(), B::var_as_tensor::<K>(&zero)?);
                 }
 
