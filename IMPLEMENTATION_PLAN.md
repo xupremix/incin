@@ -1006,27 +1006,28 @@ CPU/WGPU and give a skewed picture.
 
 ---
 
-## 10. Definition of done — mapping back to `ROADMAP.md`'s Version Strategy
+## 11. End-to-End User Workflow Additions — ✅ DONE (2026-07-23)
 
-| Milestone | Gate | Current blocker |
-|---|---|---|
-| `0.1.0-alpha.1` | C-1..C-7 fixed, API cleanup | ✅ already met |
-| `0.1.0-beta.1` | All tests pass, gradient parity green, full docs, **CI green including GPU-gated jobs** | Blocked on Phase 1 (CUDA completeness) + Phase 3 (GPU CI, itself blocked on hardware access) |
-| `0.1.0` | crates.io publish, README updated | Blocked transitively on beta.1 |
+To address the complete lifecycle (Implementation -> Training -> Testing/Validation -> Datasets -> Persistence):
 
-Given CUDA hardware is unavailable in every environment this project has
-touched so far (confirmed in three separate sessions per `ROADMAP.md` and
-`.planning/STATE.md`), **the realistic near-term path is not "finish CUDA,
-then ship"** — it's one of:
-- **(a)** Scope `0.1.0` as CPU + WGPU only, ship CUDA behind an explicitly
-  `#[doc = "experimental, not hardware-verified"]`-labeled feature flag with
-  a published gap list (this document's §1 tables, condensed), and revisit
-  CUDA's stability bar for `0.2.0` once real hardware is available.
-- **(b)** Get real GPU hardware into the loop (cloud instance, self-hosted
-  runner) before writing more CUDA code, so Phase 1's work can actually be
-  verified as it lands instead of accumulating more "compiles, never run"
-  debt on top of what already exists.
+1. **Data Augmentation & Processing (`kindle-data::transforms`)**:
+   - Added `Transform` trait (`fn transform(&self, input: Self::Input) -> Result<Self::Output>`).
+   - Implemented `Normalize` (per-channel image normalization with `imagenet()` preset), `Scale`, `RandomHorizontalFlip`, `CenterCrop`, and `Compose` (pipeline chaining).
+   - Re-exported in `kindle-data` and `kindle` preludes.
 
-**This is a decision for the user, not something to resolve silently by
-picking whichever is less work.** Raise it explicitly before starting Phase
-1 in earnest.
+2. **Optimizer Checkpointing (`StateDict` for `AdamW`/`Adam`/`SGD`)**:
+   - Implemented `state_dict`, `load_state_dict`, `step_count`, `set_step_count`, and `StateDict<B>` for `AdamW`, `Adam`, and `SGD` in `kindle-core/src/optim/mod.rs`.
+   - Preserves $m$ and $v$ momentum tensors and step counters across checkpoints. Unit-tested in `optim_tests.rs`.
+
+3. **Evaluation Metrics Library (`kindle-core::metrics`)**:
+   - Added `Metric` trait (`value()`, `reset()`).
+   - Implemented classification and regression metrics: `Accuracy`, `Precision`, `Recall`, `F1Score`, `MSE`, and `ConfusionMatrix`.
+   - Re-exported in `kindle-core` prelude.
+
+4. **Model Architecture Visualization (`model.summary()`)**:
+   - Added `summary(&self) -> String` to `NamedLayers` and `format_layer_summary` in `kindle-core/src/nn/module.rs`.
+   - Generates human-readable printable tree tables showing layer hierarchy, names, types, and shape/parameter specifications. Unit-tested in `named_layers_tests.rs`.
+
+5. **HuggingFace Hub Shortcut (`from_pretrained`)**:
+   - Added `kindle::hub::from_pretrained(repo_id, filename, device)` and `HubRepo::load_safetensors` to download model weights directly from HuggingFace Hub into a state map.
+

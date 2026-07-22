@@ -50,3 +50,54 @@ fn test_adamw() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_adam_optimizer_state_dict_checkpointing() -> Result<()> {
+    let (linear, grads) = get_linear_and_grads()?;
+    let mut optim1 = Adam::<CpuBackendImpl>::new(linear.parameters(), 0.01);
+
+    // Step 1
+    optim1.step(&grads)?;
+    assert_eq!(optim1.step_count(), 1);
+
+    // Save optimizer state
+    let mut state = BTreeMap::new();
+    optim1.state_dict("", &mut state);
+    assert!(!state.is_empty());
+
+    // Create a new optimizer instance and load state
+    let mut optim2 = Adam::<CpuBackendImpl>::new(linear.parameters(), 0.01);
+    optim2.load_state_dict("", &state)?;
+    optim2.set_step_count(optim1.step_count());
+
+    assert_eq!(optim2.step_count(), 1);
+    // Step again with restored momentum state
+    optim2.step(&grads)?;
+    assert_eq!(optim2.step_count(), 2);
+
+    Ok(())
+}
+
+#[test]
+fn test_adamw_optimizer_state_dict_checkpointing() -> Result<()> {
+    let (linear, grads) = get_linear_and_grads()?;
+    let mut optim1 = AdamW::<CpuBackendImpl>::new(linear.parameters(), 0.01);
+
+    optim1.step(&grads)?;
+    assert_eq!(optim1.step_count(), 1);
+
+    let mut state = BTreeMap::new();
+    optim1.state_dict("", &mut state);
+    assert!(!state.is_empty());
+
+    let mut optim2 = AdamW::<CpuBackendImpl>::new(linear.parameters(), 0.01);
+    optim2.load_state_dict("", &state)?;
+    optim2.set_step_count(optim1.step_count());
+
+    assert_eq!(optim2.step_count(), 1);
+    optim2.step(&grads)?;
+    assert_eq!(optim2.step_count(), 2);
+
+    Ok(())
+}
+

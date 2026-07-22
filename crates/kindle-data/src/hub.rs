@@ -45,9 +45,31 @@ impl HubRepo {
         let path = self.inner.get(filename).map_err(anyhow::Error::from)?;
         Ok(path)
     }
+
+    /// Downloads `model.safetensors` (or specified filename) from HuggingFace Hub
+    /// and loads the state tensors directly.
+    pub fn load_safetensors<B: Backend<FloatElem = f32>>(
+        &self,
+        filename: Option<&str>,
+        device: &DeviceId,
+    ) -> Result<alloc::collections::BTreeMap<String, B::Storage<f32>>> {
+        let file = filename.unwrap_or("model.safetensors");
+        let path = self.get(file)?;
+        kindle_core::prelude::load_safetensors::<B>(&path, device)
+    }
 }
 
 /// Helper shortcut function to quickly download a file from a repository.
 pub fn download(repo_id: &str, filename: &str) -> Result<PathBuf> {
     HubApi::new()?.model(repo_id).get(filename)
 }
+
+/// Downloads a `safetensors` model file from HuggingFace `repo_id` and loads it directly into a state map.
+pub fn from_pretrained<B: Backend<FloatElem = f32>>(
+    repo_id: &str,
+    filename: Option<&str>,
+    device: &DeviceId,
+) -> Result<alloc::collections::BTreeMap<String, B::Storage<f32>>> {
+    HubApi::new()?.model(repo_id).load_safetensors::<B>(filename, device)
+}
+

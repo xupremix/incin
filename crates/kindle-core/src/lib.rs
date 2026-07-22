@@ -14,6 +14,7 @@ pub(crate) extern crate alloc;
 pub(crate) mod err;
 
 pub(crate) mod graph;
+pub mod metrics;
 pub mod nn;
 #[cfg(feature = "std")]
 pub(crate) mod onnx_exporter;
@@ -33,6 +34,7 @@ pub mod loss {
 pub mod prelude {
     pub use super::err::*;
     pub use crate::graph::{Graph, OpType};
+    pub use crate::metrics::{Accuracy, ConfusionMatrix, F1Score, MSE, Metric, Precision, Recall};
     pub use crate::nn::{
         activation::{GELU, ReLU, Sigmoid, Softmax, Swish, Tanh},
         avg_pool2d::AvgPool2d,

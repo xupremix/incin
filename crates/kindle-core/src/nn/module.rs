@@ -743,6 +743,40 @@ pub struct LayerNode {
 pub trait NamedLayers {
     /// Returns the layer hierarchy rooted at this module for visualization.
     fn layer_structure(&self, prefix: &str) -> Vec<LayerNode>;
+
+    /// Returns a formatted human-readable architecture summary table.
+    fn summary(&self) -> String {
+        format_layer_summary(&self.layer_structure(""))
+    }
+}
+
+/// Formats a slice of `LayerNode` items into a human-readable printable tree table.
+pub fn format_layer_summary(nodes: &[LayerNode]) -> String {
+    let mut out = String::new();
+    out.push_str("================================================================================\n");
+    out.push_str(&format!("{:<32} {:<28} {:<16}\n", "Layer (Name: Type)", "Shape / Spec", "Details"));
+    out.push_str("================================================================================\n");
+
+    fn print_node(node: &LayerNode, indent: usize, out: &mut String) {
+        let indent_str = "  ".repeat(indent);
+        let clean_type = clean_type_name(&node.type_name);
+        let name_type = if node.name.is_empty() {
+            format!("{}{}", indent_str, clean_type)
+        } else {
+            format!("{}{}: {}", indent_str, node.name, clean_type)
+        };
+        let shape = if node.shape_info.is_empty() { "-" } else { &node.shape_info };
+        out.push_str(&format!("{:<32} {:<28} {:<16}\n", name_type, shape, "-"));
+        for child in &node.children {
+            print_node(child, indent + 1, out);
+        }
+    }
+
+    for node in nodes {
+        print_node(node, 0, &mut out);
+    }
+    out.push_str("================================================================================\n");
+    out
 }
 
 /// Cleans a fully qualified Rust type path into a simple name (e.g. `kindle::nn::linear::Linear<...>` -> `Linear`).

@@ -8,14 +8,7 @@ need scoping (like `IMPLEMENTATION_PLAN.md` §8/§9) before any get built.
 
 ## Gaps — friction a PyTorch developer would hit immediately
 
-- **No `print(model)` equivalent.** PyTorch developers reflexively run
-  `print(model)` to sanity-check an architecture. Kindle already has the
-  underlying data for this — `NamedLayers`/`LayerNode`
-  (`kindle-core/src/nn/module.rs`) walk the exact same tree `#[module]`
-  builds — but nothing turns it into a printable tree. A `Display` impl (or
-  a `model.summary()` helper) built on the existing `layer_structure()` call
-  would be a small, self-contained win that directly answers a reflex
-  PyTorch users have on day one.
+- **`print(model)` / `model.summary()` equivalent.** — ✅ IMPLEMENTED (2026-07-23). `NamedLayers::summary(&self)` and `format_layer_summary` in `kindle-core/src/nn/module.rs` output formatted architecture tables.
 - **Compile errors from shape mismatches are real Rust generic-trait-bound
   errors**, which for `typenum`-heavy code can be walls of `Prod<UInt<...>>`
   noise — intimidating for someone whose only error-message experience is
@@ -26,29 +19,9 @@ need scoping (like `IMPLEMENTATION_PLAN.md` §8/§9) before any get built.
   trait-resolution failure. Worth auditing which traits are the ones
   actually failing in practice (grep existing `.stderr` compile-fail test
   snapshots for the ugliest ones) and prioritizing those.
-- **`Sequential`'s state_dict keys don't look like PyTorch's.** PyTorch's
-  `nn.Sequential` state dict is flat: `0.weight`, `1.weight`, `2.weight`. A
-  `seq!`-built `Sequential<A, Sequential<B, C>>`'s state dict
-  (`kindle-core/src/nn/module.rs`'s `Parameters`/`StateDict` impls) is
-  nested by construction: `0.weight`, `1.0.weight`, `1.1.weight`. A PyTorch
-  user inspecting a saved `.safetensors` file's key names would find this
-  surprising, and it complicates loading weights exported from a real
-  PyTorch `nn.Sequential`. This is a real behavior change if fixed (see
-  `IMPLEMENTATION_PLAN.md` §8.4-adjacent note — not written up as a full
-  proposal yet), not just a docs fix.
-- **No `from_pretrained("org/model")` one-liner** — see the strength below,
-  the pieces exist but aren't glued together.
-- **No optimizer checkpoint/resume.** `AdamW`/`Adam` (`kindle-core/src/optim/mod.rs`)
-  hold real per-parameter state (`m`/`v` momentum/variance `BTreeMap`s, a
-  `step` counter) but neither implements `StateDict` — confirmed by grep,
-  zero `impl StateDict for AdamW/Adam/SGD` anywhere. PyTorch's
-  `torch.save({'model': ..., 'optimizer': optimizer.state_dict()})` +
-  resume-training workflow has no equivalent here today: interrupting and
-  resuming a real training run silently restarts Adam's moment estimates
-  from zero instead of continuing them, which measurably changes early-resume
-  training dynamics. This is a real training-workflow gap, not just an API
-  nicety, and probably the single most PyTorch-switcher-relevant one on this
-  list once someone runs anything longer than a toy example.
+- **`Sequential`'s state_dict keys don't look like PyTorch's.** — ✅ IMPLEMENTED (`f33f3d3`). `Sequential` flattens state dict keys (`0.weight`, `1.weight`).
+- **`from_pretrained("org/model")` one-liner** — ✅ IMPLEMENTED (2026-07-23). Added `kindle::hub::from_pretrained(repo_id, filename, device)`.
+- **Optimizer checkpoint/resume.** — ✅ IMPLEMENTED (2026-07-23). `AdamW`/`Adam`/`SGD` implement `state_dict`, `load_state_dict`, `step_count`, and `StateDict<B>`, persisting momentum $m$/$v$ tensors and step counters across checkpoints.
 - **No mixed-precision / autocast context.** Confirmed by grep: no
   `autocast`-equivalent anywhere. The dtype-policy machinery
   (`dtype_policy.rs`, referenced throughout `ROADMAP.md`'s CUDA kernel work)

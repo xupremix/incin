@@ -61,13 +61,17 @@ pub mod hub;
 pub mod loader;
 /// Vision.
 pub mod vision;
+/// Transforms and data processing pipelines.
+pub mod transforms;
 
 pub use dataset::Dataset;
 pub use downloader::Downloader;
 pub use loader::{Collate, DataLoader};
+pub use transforms::{CenterCrop, Compose, Normalize, RandomHorizontalFlip, Scale, Transform};
 
 /// Prelude.
 pub mod prelude {
     pub use super::hub::*;
     pub use super::loader::*;
+    pub use super::transforms::*;
 }

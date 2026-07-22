@@ -83,4 +83,10 @@ fn test_sequential_named_layers() {
     assert_eq!(structure[2].name, "net.Linear2");
     assert_eq!(structure[2].type_name, "Linear");
     assert!(structure[2].shape_info.contains("weight: [10, 256]"));
+
+    let summary_text = net.summary();
+    assert!(summary_text.contains("Linear"));
+    assert!(summary_text.contains("ReLU"));
+    assert!(summary_text.contains("weight: [256, 768]"));
 }
+

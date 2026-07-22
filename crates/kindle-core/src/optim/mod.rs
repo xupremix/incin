@@ -193,6 +193,61 @@ pub struct Adam<B: Backend, K: DType = f32> {
     step: usize,
 }
 
+    pub fn step_count(&self) -> usize {
+        self.step
+    }
+
+    /// Sets the current step counter value.
+    pub fn set_step_count(&mut self, step: usize) {
+        self.step = step;
+    }
+
+    /// Exports optimizer state tensors (`m` and `v` momentum buffers).
+    pub fn state_dict(&self, prefix: &str, dict: &mut alloc::collections::BTreeMap<String, B::Storage<K>>) {
+        let p = if prefix.is_empty() {
+            alloc::string::String::new()
+        } else {
+            alloc::format!("{}.", prefix)
+        };
+        for (name, m_val) in &self.m {
+            dict.insert(alloc::format!("{}m.{}", p, name), m_val.clone());
+        }
+        for (name, v_val) in &self.v {
+            dict.insert(alloc::format!("{}v.{}", p, name), v_val.clone());
+        }
+    }
+
+    /// Loads optimizer state tensors from a dictionary.
+    pub fn load_state_dict(&mut self, prefix: &str, dict: &alloc::collections::BTreeMap<String, B::Storage<K>>) -> Result<()> {
+        let p = if prefix.is_empty() {
+            alloc::string::String::new()
+        } else {
+            alloc::format!("{}.", prefix)
+        };
+        let m_prefix = alloc::format!("{}m.", p);
+        let v_prefix = alloc::format!("{}v.", p);
+
+        for (key, storage) in dict {
+            if let Some(name) = key.strip_prefix(&m_prefix) {
+                self.m.insert(name.to_string(), storage.clone());
+            } else if let Some(name) = key.strip_prefix(&v_prefix) {
+                self.v.insert(name.to_string(), storage.clone());
+            }
+        }
+        Ok(())
+    }
+}
+
+impl<B: Backend<FloatElem = f32>> crate::nn::module::StateDict<B> for AdamW<B, f32> {
+    fn load_state_dict(&mut self, prefix: &str, dict: &alloc::collections::BTreeMap<String, B::Storage<f32>>) -> Result<()> {
+        AdamW::load_state_dict(self, prefix, dict)
+    }
+
+    fn state_dict(&self, prefix: &str, dict: &mut alloc::collections::BTreeMap<String, B::Storage<f32>>) {
+        AdamW::state_dict(self, prefix, dict);
+    }
+}
+
 impl<B: Backend, K: DType> Adam<B, K> {
     /// Creates a new instance with default (statically inferred) shape arguments.
     pub fn new(params: alloc::collections::BTreeMap<String, B::RawVar>, lr: f64) -> Self {
@@ -206,6 +261,61 @@ impl<B: Backend, K: DType> Adam<B, K> {
             v: alloc::collections::BTreeMap::new(),
             step: 0,
         }
+    }
+
+    /// Gets the current step counter.
+    pub fn step_count(&self) -> usize {
+        self.step
+    }
+
+    /// Sets the current step counter value.
+    pub fn set_step_count(&mut self, step: usize) {
+        self.step = step;
+    }
+
+    /// Exports optimizer state tensors (`m` and `v` momentum buffers).
+    pub fn state_dict(&self, prefix: &str, dict: &mut alloc::collections::BTreeMap<String, B::Storage<K>>) {
+        let p = if prefix.is_empty() {
+            alloc::string::String::new()
+        } else {
+            alloc::format!("{}.", prefix)
+        };
+        for (name, m_val) in &self.m {
+            dict.insert(alloc::format!("{}m.{}", p, name), m_val.clone());
+        }
+        for (name, v_val) in &self.v {
+            dict.insert(alloc::format!("{}v.{}", p, name), v_val.clone());
+        }
+    }
+
+    /// Loads optimizer state tensors from a dictionary.
+    pub fn load_state_dict(&mut self, prefix: &str, dict: &alloc::collections::BTreeMap<String, B::Storage<K>>) -> Result<()> {
+        let p = if prefix.is_empty() {
+            alloc::string::String::new()
+        } else {
+            alloc::format!("{}.", prefix)
+        };
+        let m_prefix = alloc::format!("{}m.", p);
+        let v_prefix = alloc::format!("{}v.", p);
+
+        for (key, storage) in dict {
+            if let Some(name) = key.strip_prefix(&m_prefix) {
+                self.m.insert(name.to_string(), storage.clone());
+            } else if let Some(name) = key.strip_prefix(&v_prefix) {
+                self.v.insert(name.to_string(), storage.clone());
+            }
+        }
+        Ok(())
+    }
+}
+
+impl<B: Backend<FloatElem = f32>> crate::nn::module::StateDict<B> for Adam<B, f32> {
+    fn load_state_dict(&mut self, prefix: &str, dict: &alloc::collections::BTreeMap<String, B::Storage<f32>>) -> Result<()> {
+        Adam::load_state_dict(self, prefix, dict)
+    }
+
+    fn state_dict(&self, prefix: &str, dict: &mut alloc::collections::BTreeMap<String, B::Storage<f32>>) {
+        Adam::state_dict(self, prefix, dict);
     }
 }
 
