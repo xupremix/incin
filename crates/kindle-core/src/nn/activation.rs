@@ -1,4 +1,4 @@
-use crate::nn::module::{Module, Parameters};
+use crate::nn::module::{Module, Parameters, TrainMode};
 use crate::prelude::*;
 
 /// The Rectified Linear Unit (ReLU) activation function: `f(x) = max(0, x)`.
@@ -16,6 +16,11 @@ impl<B: Backend> Parameters<B> for ReLU {
     ) {
     }
 }
+
+/// Stateless — no training-dependent behavior, opts in with the trait's
+/// default no-op so it can appear inside a `Sequential` alongside layers
+/// that do have one (e.g. `Dropout`).
+impl TrainMode for ReLU {}
 
 impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for ReLU {
     /// The output tensor type produced by this module's forward pass.
@@ -47,6 +52,11 @@ impl<B: Backend> Parameters<B> for GELU {
     }
 }
 
+/// Stateless — no training-dependent behavior, opts in with the trait's
+/// default no-op so it can appear inside a `Sequential` alongside layers
+/// that do have one (e.g. `Dropout`).
+impl TrainMode for GELU {}
+
 impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for GELU {
     /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<S, B>;
@@ -77,6 +87,11 @@ impl<B: Backend> Parameters<B> for Swish {
     }
 }
 
+/// Stateless — no training-dependent behavior, opts in with the trait's
+/// default no-op so it can appear inside a `Sequential` alongside layers
+/// that do have one (e.g. `Dropout`).
+impl TrainMode for Swish {}
+
 impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for Swish {
     /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<S, B>;
@@ -106,6 +121,11 @@ impl<B: Backend> Parameters<B> for Mish {
     ) {
     }
 }
+
+/// Stateless — no training-dependent behavior, opts in with the trait's
+/// default no-op so it can appear inside a `Sequential` alongside layers
+/// that do have one (e.g. `Dropout`).
+impl TrainMode for Mish {}
 
 impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for Mish {
     /// The output tensor type produced by this module's forward pass.
@@ -138,6 +158,11 @@ impl<B: Backend> Parameters<B> for ELU {
     ) {
     }
 }
+
+/// Stateless — no training-dependent behavior, opts in with the trait's
+/// default no-op so it can appear inside a `Sequential` alongside layers
+/// that do have one (e.g. `Dropout`).
+impl TrainMode for ELU {}
 
 impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for ELU {
     /// The output tensor type produced by this module's forward pass.
@@ -181,6 +206,11 @@ impl<B: Backend> Parameters<B> for Softmax {
     }
 }
 
+/// Stateless — no training-dependent behavior, opts in with the trait's
+/// default no-op so it can appear inside a `Sequential` alongside layers
+/// that do have one (e.g. `Dropout`).
+impl TrainMode for Softmax {}
+
 impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for Softmax {
     /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<S, B>;
@@ -210,6 +240,11 @@ impl<B: Backend> Parameters<B> for Sigmoid {
     }
 }
 
+/// Stateless — no training-dependent behavior, opts in with the trait's
+/// default no-op so it can appear inside a `Sequential` alongside layers
+/// that do have one (e.g. `Dropout`).
+impl TrainMode for Sigmoid {}
+
 impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for Sigmoid {
     /// The output tensor type produced by this module's forward pass.
     type Output = Tensor<S, B>;
@@ -238,6 +273,11 @@ impl<B: Backend> Parameters<B> for Tanh {
     ) {
     }
 }
+
+/// Stateless — no training-dependent behavior, opts in with the trait's
+/// default no-op so it can appear inside a `Sequential` alongside layers
+/// that do have one (e.g. `Dropout`).
+impl TrainMode for Tanh {}
 
 impl<S: Shape + DynShape, B: Backend> Module<Tensor<S, B>> for Tanh {
     /// The output tensor type produced by this module's forward pass.

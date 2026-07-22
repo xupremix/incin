@@ -60,6 +60,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut to_device_fields = Vec::new();
     let mut named_layer_calls = Vec::new();
     let mut shape_info_calls = Vec::new();
+    let mut train_mode_calls = Vec::new();
 
     if let syn::Data::Struct(ref mut data) = input.data {
         match &mut data.fields {
@@ -155,6 +156,12 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                             }
                         }
                     });
+                    train_mode_calls.push(quote! {
+                        {
+                            use #k_crate::prelude::{AutorefTrainMode, AutorefTrainModeFallback};
+                            (&mut &mut self.#fname).maybe_set_training(training);
+                        }
+                    });
                     to_device_fields.push(quote! {
                         #fname: #k_crate::prelude::ToDevice::to_device(self.#fname, arg)?
                     });
@@ -247,6 +254,12 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                             if let Some(sh) = (&&self.#idx).maybe_shape_info() {
                                 shape_parts.push(#format_mac("{}: {}", #idx_str, sh));
                             }
+                        }
+                    });
+                    train_mode_calls.push(quote! {
+                        {
+                            use #k_crate::prelude::{AutorefTrainMode, AutorefTrainModeFallback};
+                            (&mut &mut self.#idx).maybe_set_training(training);
                         }
                     });
                     to_device_fields.push(quote! {
@@ -392,6 +405,13 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                     shape_info,
                     children,
                 }])
+            }
+        }
+
+        impl #orig_impl_generics #k_crate::prelude::TrainMode for #name #orig_ty_generics #orig_where_clause {
+            /// Set training.
+            fn set_training(&mut self, training: bool) {
+                #(#train_mode_calls)*
             }
         }
 

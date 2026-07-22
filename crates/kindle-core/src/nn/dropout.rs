@@ -1,4 +1,4 @@
-use crate::nn::{Module, Parameters};
+use crate::nn::{Module, Parameters, TrainMode};
 use crate::prelude::*;
 
 /// A Dropout layer.
@@ -36,6 +36,14 @@ impl<B: Backend> Parameters<B> for Dropout {
         _map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
     ) {
         // No learnable parameters.
+    }
+}
+
+impl TrainMode for Dropout {
+    /// Directly sets `is_training` — `Dropout`'s own forward already reads
+    /// this flag to decide identity-vs-random-zeroing behavior.
+    fn set_training(&mut self, training: bool) {
+        self.is_training = training;
     }
 }
 

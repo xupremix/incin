@@ -1,4 +1,4 @@
-use crate::nn::{Module, Parameters};
+use crate::nn::{Module, Parameters, TrainMode};
 use crate::prelude::*;
 
 use typenum::Unsigned;
@@ -30,6 +30,11 @@ impl<K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned, B: Backend> Parameters<
     ) {
     }
 }
+
+/// Stateless — no training-dependent behavior, opts in with the trait's
+/// default no-op so it can appear inside a `Sequential` alongside layers
+/// that do have one (e.g. `Dropout`).
+impl<K: Unsigned, S: Unsigned, P: Unsigned, D: Unsigned> TrainMode for MaxPool2d<K, S, P, D> {}
 
 impl<
     I: Shape + DynShape + crate::shapes::Pool2dShape<K, S, P, D>,

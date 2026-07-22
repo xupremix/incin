@@ -239,6 +239,106 @@ impl<T: StateDict<B>, B: Backend> AutorefStateDict<B> for &T {
     }
 }
 
+#[doc(hidden)]
+/// Autoref-specialization fallback for `TrainMode`: fields that don't
+/// implement it (plain scalars, markers, and — currently — `BatchNorm2d`,
+/// see `TrainMode`'s own doc) silently do nothing instead of failing to
+/// compile.
+pub trait AutorefTrainModeFallback {
+    /// No-op: nothing to switch.
+    fn maybe_set_training(&mut self, _training: bool) {}
+}
+impl<T> AutorefTrainModeFallback for &mut &mut T {
+    fn maybe_set_training(&mut self, _training: bool) {}
+}
+
+#[doc(hidden)]
+/// The preferred (non-fallback) half of the autoref-specialization pair:
+/// picked over `AutorefTrainModeFallback` for any type that actually
+/// implements `TrainMode`.
+pub trait AutorefTrainMode {
+    /// Delegates to `TrainMode::set_training`.
+    fn maybe_set_training(&mut self, training: bool);
+}
+impl<T: TrainMode> AutorefTrainMode for &mut T {
+    #[inline]
+    /// Delegates to `TrainMode::set_training`.
+    fn maybe_set_training(&mut self, training: bool) {
+        (*self).set_training(training);
+    }
+}
+
+/// Recursively switches a module (and every submodule reachable through
+/// `#[module]`-derived fields) between training and evaluation behavior —
+/// `#[module]` auto-implements this exactly like it does `Parameters`/
+/// `StateDict`, walking every field and delegating to whichever ones
+/// implement `TrainMode` themselves (via the same autoref-specialization
+/// pattern those two use), so calling `.eval()` on a top-level model
+/// propagates all the way down to every nested [`crate::nn::dropout::Dropout`]
+/// without the caller needing to reach into the tree by hand.
+///
+/// `set_training` defaults to a no-op, so any leaf layer with no
+/// training-dependent behavior (`Linear`, `ReLU`, `Conv2d`, ...) can opt in
+/// with a bare `impl TrainMode for X {}` — this is what makes it possible
+/// for [`Sequential`] to require `L1: TrainMode, L2: TrainMode` (see its own
+/// impl below) without forcing every existing layer type to implement real
+/// logic. That bound is a deliberate, *required* departure from the
+/// `AutorefTrainMode`/`AutorefTrainModeFallback` pair above:
+/// autoref-specialization only resolves to the "real" impl when the
+/// compiler can *prove* the bound holds at the point the generic code is
+/// checked, which is impossible for `Sequential<L1, L2>`'s bare, unbounded
+/// `L1`/`L2` type parameters — so `Sequential` mirrors `Parameters`/
+/// `StateDict`'s own existing pattern instead (explicit bounds, direct
+/// calls), not the autoref trick, which is only safe to use where a field's
+/// type is concretely known at the `impl` site (exactly what `#[module]`'s
+/// generated code and `Param`/`Buffer` fields always are).
+///
+/// ## What this currently affects
+///
+/// Only [`crate::nn::dropout::Dropout`] has training-dependent behavior
+/// today (`is_training` gates whether it randomly zeroes elements or acts as
+/// an identity function — see its own doc). **`BatchNorm2d` does not
+/// currently respond to this call** — its own `forward` always normalizes
+/// using the supplied running statistics regardless of mode (a deliberate,
+/// already-documented "inference-mode-only" scope carried forward from an
+/// earlier design decision — see the `_momentum` parameter's doc comment in
+/// `cpu/ops/norm.rs::batch_norm_impl`), so it opts into `TrainMode` as a
+/// harmless no-op via the macro's default rather than silently claiming a
+/// behavior change that isn't actually implemented. Reversing that
+/// BatchNorm scope decision is a separate, larger, cross-backend proposal,
+/// not part of this one.
+///
+/// ## Examples
+/// ```rust,ignore
+/// use kindle::prelude::*;
+///
+/// let mut model = MyModel::build(...)?;
+/// model.eval();   // nested Dropout layers become identity functions
+/// let out = model.forward(x)?;
+/// model.train();  // back to normal (randomized) training behavior
+/// ```
+pub trait TrainMode {
+    /// Sets training mode on this module and recursively on every
+    /// submodule. `train()`/`eval()` are the ergonomic entry points — most
+    /// callers should use those instead of calling this directly. Defaults
+    /// to a no-op so leaf layers with no training-dependent behavior can
+    /// opt in with a bare `impl TrainMode for X {}`.
+    #[inline]
+    fn set_training(&mut self, _training: bool) {}
+
+    /// Switches to training mode (the default after construction).
+    #[inline]
+    fn train(&mut self) {
+        self.set_training(true);
+    }
+
+    /// Switches to evaluation/inference mode.
+    #[inline]
+    fn eval(&mut self) {
+        self.set_training(false);
+    }
+}
+
 /// A generic Neural Network Layer or Module.
 /// Capable of taking an input and returning an output or error.
 ///
@@ -328,6 +428,28 @@ where
     ) {
         self.0.named_parameters(&format!("{}0.", prefix), map);
         self.1.named_parameters(&format!("{}1.", prefix), map);
+    }
+}
+
+// Explicit bounds + direct calls, matching `Parameters`/`StateDict`'s own
+// impls for `Sequential` immediately below/above — NOT the autoref-
+// specialization trick `#[module]`'s generated code uses for its fields.
+// That trick only resolves to the "real" impl when the compiler can PROVE
+// the bound holds while checking the generic code, which is impossible for
+// `L1`/`L2` here: they're bare, unconstrained type parameters with no
+// `TrainMode` bound, so autoref would *always* silently pick the no-op
+// fallback regardless of what `L1`/`L2` are eventually monomorphized to —
+// verified empirically while building this (a `Sequential<Linear<..>,
+// Dropout>`'s `.eval()` call still ran `Dropout` in training mode with the
+// autoref version). Every leaf layer with no training-dependent behavior
+// (`Linear`, `ReLU`, `Conv2d`, pooling layers, ...) implements `TrainMode`
+// via its default no-op body specifically so this bound is satisfiable for
+// real `seq!`-built chains, not just chains containing `Dropout`.
+impl<L1: TrainMode, L2: TrainMode> TrainMode for Sequential<L1, L2> {
+    /// Recursively sets training mode on both inner modules.
+    fn set_training(&mut self, training: bool) {
+        self.0.set_training(training);
+        self.1.set_training(training);
     }
 }
 

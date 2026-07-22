@@ -135,6 +135,42 @@ fn test_seq_type_matches_seq_value_type() -> Result<()> {
 }
 
 #[test]
+/// `.eval()` on a `Sequential` propagates through to a nested `Dropout`
+/// without the caller reaching into the tree by hand. `Linear` opts into
+/// `TrainMode` via its default no-op body (like every other stateless
+/// leaf layer), which is what makes `Sequential<Linear<..>, Dropout>: TrainMode`
+/// satisfiable at all — see `TrainMode`'s own doc for why this needs
+/// explicit bounds rather than the autoref trick `#[module]`'s generated
+/// code uses for its own fields.
+fn test_train_mode_propagates_through_sequential_dropout() -> Result<()> {
+    let mut seq = seq!(
+        Linear::<s![4, 4], CpuBackendImpl>::build(())?,
+        Dropout::new(0.9)
+    );
+
+    let input = Tensor::<s![2, 4], CpuBackendImpl>::ones(())?;
+
+    // Fresh Dropout defaults to is_training = true, and Sequential itself
+    // has no set_training call yet, so this is still train mode.
+    let linear_only = seq.0.forward(input.clone())?.to_vec1::<f32>()?;
+
+    seq.eval();
+    assert!(
+        !seq.1.is_training,
+        "eval() should have flipped is_training to false"
+    );
+    let out_eval = seq.forward(input.clone())?.to_vec1::<f32>()?;
+    // Eval-mode Dropout is an identity function, so this must exactly match
+    // Linear's own output with no randomness/scaling applied.
+    assert_eq!(out_eval, linear_only);
+
+    seq.train();
+    assert!(seq.1.is_training);
+
+    Ok(())
+}
+
+#[test]
 /// Test embedding.
 fn test_embedding() -> Result<()> {
     // Vocab=100, EmbedDim=32

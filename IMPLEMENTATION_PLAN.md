@@ -901,6 +901,72 @@ observed in this codebase, unlike 8.1-8.3) — flag it to the user as a
 question ("would `#[track_caller]` on the hot-path tensor ops be worth the
 minor perf/binary-size cost?") rather than assuming it's wanted.
 
+### 8.5 `Module::train()`/`eval()` mode propagation — ✅ IMPLEMENTED (2026-07-23)
+
+**Gap found while surveying UX proposals:** `Module` had no train/eval
+concept at all. `Dropout` (`kindle-core/src/nn/dropout.rs`) already had its
+own local `is_training: bool` gating identity-vs-random-zeroing behavior,
+but nothing let a caller flip it network-wide — a user would have had to
+reach into a `#[module]`-built model tree by hand to find every nested
+`Dropout` and set its flag individually. Checked `BatchNorm2d` too, since
+PyTorch's `.eval()` also freezes BatchNorm's running-stat updates: its
+`forward` (`cpu/ops/norm.rs::batch_norm_impl`) always normalizes using the
+supplied running statistics regardless of mode — a **pre-existing,
+deliberately-documented "inference-mode-only" decision** (`_momentum: f64,
+// deliberately unused — inference-mode-only (CONTEXT.md carried-forward
+decision)`), not a bug. Reversing that is a separate, larger, cross-backend
+proposal (real batch statistics + running-stat updates on 3 backends) —
+explicitly out of scope here; `TrainMode` propagates through `BatchNorm2d`
+as an honest no-op rather than silently overclaiming a behavior change.
+
+**Design, and the non-obvious pitfall hit while building it:** added
+`TrainMode` (`train()`/`eval()`/`set_training(bool)`) to
+`kindle-core/src/nn/module.rs`, plus an `AutorefTrainMode`/
+`AutorefTrainModeFallback` pair mirroring `Parameters`/`StateDict`'s own
+autoref-specialization pattern exactly, and `kindle-macros/src/module.rs`
+auto-generates `impl TrainMode` for every `#[module]`-derived struct (one
+more `train_mode_calls` collection, same shape as `param_calls`/
+`load_state_calls`). `set_training` defaults to a no-op so any stateless
+leaf layer can opt in with a bare `impl TrainMode for X {}`.
+
+**The pitfall:** `Sequential<L1, L2>`'s hand-written impl was *first*
+written unconditionally (no `L1: TrainMode`/`L2: TrainMode` bound), reusing
+the same autoref delegation the macro uses for its fields, reasoning that
+this would let `.eval()` "reach through" to whichever side happens to be a
+`Dropout` without requiring every leaf type to implement the trait. **This
+does not work, and was caught by an actual failing test, not by review**:
+autoref-specialization only resolves to the "real" impl when the compiler
+can *prove* the bound holds while type-checking the *generic* code — for
+`Sequential<L1, L2>`'s bare, unconstrained `L1`/`L2`, that proof is
+impossible regardless of what the caller eventually instantiates them as,
+so it *always* silently picked the no-op fallback. Confirmed empirically
+(temporary `eprintln!` instrumentation) that the exact same code shape
+resolves correctly for `#[module]`'s own per-field calls (`Param<S,B>`,
+`Buffer<S,B>` are concrete type constructors with unconditional trait impls
+at the `impl` site) but not for `Sequential`'s bare type parameters — this
+is a real, general limitation of the autoref trick, not specific to
+`TrainMode`. Fixed by matching `Parameters`/`StateDict`'s own existing
+`Sequential` impl pattern instead: explicit `L1: TrainMode, L2: TrainMode`
+bounds, direct (non-autoref) method calls. This is *why* every existing
+stateless leaf layer (`Linear`, all 8 activations in `activation.rs`,
+`AdaptiveAvgPool2d`, `AvgPool2d`, `MaxPool2d`, plus everything `#[module]`-
+derived) needed the one-line `impl TrainMode for X {}` opt-in — without it,
+the `Sequential` bound would be unsatisfiable for any real `seq!`-built
+chain that isn't 100% `Dropout`. `RNN`/`RNNCell`/`LSTM`/`LSTMCell` were
+deliberately skipped: their `forward` signature returns a tuple
+(`(output, hidden_state)`), which doesn't compose through `Sequential`'s
+`Module<Input>` chaining in the first place, so there's no realistic case
+needing them to implement `TrainMode` today.
+
+1 new test (`kindle/tests/nn_tests.rs::test_train_mode_propagates_through_sequential_dropout`)
+— not just a shape check: builds `seq!(Linear, Dropout::new(0.9))`, calls
+`.eval()`, and asserts the output *exactly* equals calling the `Linear`
+layer alone (eval-mode `Dropout` is a true identity function, so this is a
+real, deterministic, non-probabilistic correctness check, not a "probably
+different" random-seed comparison). Full verification loop (fmt/clippy
+workspace CPU+WGPU/tests, plus `cargo check --features cuda,std` since
+`kindle-core` is shared) all green, 0 regressions.
+
 ---
 
 ## 9. New feature proposals — require explicit user sign-off before implementing

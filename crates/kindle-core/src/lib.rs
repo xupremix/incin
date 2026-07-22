@@ -52,8 +52,8 @@ pub mod prelude {
         module::{
             AutorefNamedLayers, AutorefNamedLayersFallback, AutorefParameters,
             AutorefParametersFallback, AutorefShapeInfo, AutorefShapeInfoFallback,
-            AutorefStateDict, AutorefStateDictFallback, LayerNode, Module, NamedLayers, Parameters,
-            Sequential, StateDict, ToDevice,
+            AutorefStateDict, AutorefStateDictFallback, AutorefTrainMode, AutorefTrainModeFallback,
+            LayerNode, Module, NamedLayers, Parameters, Sequential, StateDict, ToDevice, TrainMode,
         },
         optional::{False, OptionalField, True},
         param::Param,
