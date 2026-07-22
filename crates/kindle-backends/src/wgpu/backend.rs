@@ -1834,6 +1834,32 @@ impl<T: DType, D: Device> WgpuBackendImpl<T, D> {
     }
 }
 
+/// Row-major contiguous strides for a rank-4 `[N, C, H, W]` shape. WGPU
+/// storage has no non-contiguous view support (`WgpuStorage::new` always
+/// derives strides from shape), so pooling backward closures — which read
+/// buffers back to a flat host `Vec` — can compute this directly instead of
+/// pulling in `cpu::stride`.
+fn contiguous_strides_4d(shape: &[usize]) -> [usize; 4] {
+    [
+        shape[1] * shape[2] * shape[3],
+        shape[2] * shape[3],
+        shape[3],
+        1,
+    ]
+}
+
+/// Per-axis adaptive-pooling window bounds: `start = floor(i*input_size/output_size)`,
+/// `end = ceil((i+1)*input_size/output_size)`. Matches both the CPU backend's
+/// `adaptive_window_bounds` (`cpu/ops/pool.rs`) and the WGSL forward kernel's
+/// own `h_start`/`h_end` computation (`shaders/pool2d.wgsl`, mode 0) exactly —
+/// never derives an equivalent fixed kernel_size/stride, which is wrong
+/// whenever `input_size` doesn't evenly divide `output_size`.
+fn adaptive_window_bounds(input_size: usize, output_size: usize, i: usize) -> (usize, usize) {
+    let start = (i * input_size) / output_size;
+    let end = ((i + 1) * input_size).div_ceil(output_size);
+    (start, end)
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // ModuleOps
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2003,7 +2029,67 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
             0, // unused kernel params
         );
 
-        Ok(WgpuStorage::new(out_buf, vec![n, c, oh, ow]))
+        let out = WgpuStorage::new(out_buf, vec![n, c, oh, ow]);
+
+        // Backward: distributes grad_out's per-position value uniformly
+        // (divided by that position's actual window element count — windows
+        // vary in size when input_size doesn't evenly divide output_size)
+        // into every input position the window covered, `+=`-accumulating
+        // across overlapping windows. Mirrors the CPU backend's
+        // `adaptive_avg_pool2d_impl` (`cpu/ops/pool.rs`) exactly, including
+        // its `adaptive_window_bounds` formula
+        // (`start = floor(i*input_size/output_size)`,
+        // `end = ceil((i+1)*input_size/output_size)`), which the WGSL
+        // forward kernel (`shaders/pool2d.wgsl`, mode 0) also already uses.
+        let input_shape = t.shape.clone();
+        let t_capture = t.clone();
+        let (t_id, out_id) = (t.id, out.id);
+        crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id],
+            backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
+                let _ = &t_capture; // input values aren't needed, only its shape
+                let (b, c, h, w) = (
+                    input_shape[0],
+                    input_shape[1],
+                    input_shape[2],
+                    input_shape[3],
+                );
+                let grad_data = grad_out.buffer.to_vec::<f32>();
+                let mut grad_input = vec![0.0f32; b * c * h * w];
+                let in_strides = contiguous_strides_4d(&input_shape);
+                let h_out = grad_out.shape[2];
+                let w_out = grad_out.shape[3];
+                for bi in 0..b {
+                    for ci in 0..c {
+                        for oh in 0..h_out {
+                            let (h_start, h_end) = adaptive_window_bounds(h, h_out, oh);
+                            for ow in 0..w_out {
+                                let (w_start, w_end) = adaptive_window_bounds(w, w_out, ow);
+                                let count = ((h_end - h_start) * (w_end - w_start)) as f32;
+                                let flat_out = ((bi * c + ci) * h_out + oh) * w_out + ow;
+                                let g = grad_data[flat_out] / count;
+                                for ih in h_start..h_end {
+                                    for iw in w_start..w_end {
+                                        let flat = bi * in_strides[0]
+                                            + ci * in_strides[1]
+                                            + ih * in_strides[2]
+                                            + iw * in_strides[3];
+                                        grad_input[flat] += g;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                vec![WgpuStorage::new(
+                    WgpuBuffer::from_slice(&grad_input),
+                    input_shape.clone(),
+                )]
+            }),
+        });
+
+        Ok(out)
     }
 
     /// `avg_pool2d`.
@@ -2029,7 +2115,70 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
             sh as u32, sw as u32, ph as u32, pw as u32, 1, 1, // dilation = 1
         );
 
-        Ok(WgpuStorage::new(out_buf, vec![n, c, oh, ow]))
+        let out = WgpuStorage::new(out_buf, vec![n, c, oh, ow]);
+
+        // Backward: distributes grad_out's per-position value uniformly
+        // (divided by the FIXED kh*kw divisor — count_include_pad=True,
+        // PyTorch's default, matching this op's forward, which sums the
+        // padded region as 0.0 but still divides by kh*kw) into every input
+        // position the window covered (padded positions are skipped, never
+        // written), `+=`-accumulating across overlapping windows. Mirrors
+        // the CPU backend's `avg_pool2d_impl` exactly.
+        let input_shape = t.shape.clone();
+        let (t_id, out_id) = (t.id, out.id);
+        let window_count = (kh * kw) as f32;
+        crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id],
+            backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
+                let (b, c, h, w) = (
+                    input_shape[0],
+                    input_shape[1],
+                    input_shape[2],
+                    input_shape[3],
+                );
+                let grad_data = grad_out.buffer.to_vec::<f32>();
+                let mut grad_input = vec![0.0f32; b * c * h * w];
+                let in_strides = contiguous_strides_4d(&input_shape);
+                let h_out = grad_out.shape[2];
+                let w_out = grad_out.shape[3];
+                for bi in 0..b {
+                    for ci in 0..c {
+                        for oh in 0..h_out {
+                            for ow in 0..w_out {
+                                let flat_out = ((bi * c + ci) * h_out + oh) * w_out + ow;
+                                let g = grad_data[flat_out] / window_count;
+                                for khi in 0..kh {
+                                    for kwi in 0..kw {
+                                        let src_h = oh * sh + khi;
+                                        let src_w = ow * sw + kwi;
+                                        if src_h >= ph
+                                            && src_h - ph < h
+                                            && src_w >= pw
+                                            && src_w - pw < w
+                                        {
+                                            let ih = src_h - ph;
+                                            let iw = src_w - pw;
+                                            let flat = bi * in_strides[0]
+                                                + ci * in_strides[1]
+                                                + ih * in_strides[2]
+                                                + iw * in_strides[3];
+                                            grad_input[flat] += g;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                vec![WgpuStorage::new(
+                    WgpuBuffer::from_slice(&grad_input),
+                    input_shape.clone(),
+                )]
+            }),
+        });
+
+        Ok(out)
     }
 
     /// `max_pool2d`.
@@ -2059,7 +2208,79 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
             sh as u32, sw as u32, ph as u32, pw as u32, dh as u32, dw as u32,
         );
 
-        Ok(WgpuStorage::new(out_buf, vec![n, c, oh, ow]))
+        let out = WgpuStorage::new(out_buf, vec![n, c, oh, ow]);
+
+        // Backward: recomputes each output position's winning (first-argmax,
+        // strict `>`) source position from the captured input (padded
+        // positions are never candidates, never substituted with 0.0 —
+        // matches the WGSL forward's `-FLT_MAX` init and its bounds-checked
+        // skip), then `+=`-accumulates grad_out's value there — never `=`,
+        // since overlapping windows (stride < kernel_size) can share a
+        // winning input position. Mirrors the CPU backend's
+        // `max_window_2d`/`scatter_pool_grad_2d` exactly.
+        let input_shape = t.shape.clone();
+        let t_capture = t.clone();
+        let (t_id, out_id) = (t.id, out.id);
+        crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id],
+            backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
+                let (b, c, h, w) = (
+                    input_shape[0],
+                    input_shape[1],
+                    input_shape[2],
+                    input_shape[3],
+                );
+                let input_data = t_capture.buffer.to_vec::<f32>();
+                let grad_data = grad_out.buffer.to_vec::<f32>();
+                let mut grad_input = vec![0.0f32; b * c * h * w];
+                let in_strides = contiguous_strides_4d(&input_shape);
+                let h_out = grad_out.shape[2];
+                let w_out = grad_out.shape[3];
+                for bi in 0..b {
+                    for ci in 0..c {
+                        for oh in 0..h_out {
+                            for ow in 0..w_out {
+                                let mut best_val = f32::NEG_INFINITY;
+                                let mut best_flat = 0usize;
+                                for khi in 0..kh {
+                                    for kwi in 0..kw {
+                                        let src_h = oh * sh + khi * dh;
+                                        let src_w = ow * sw + kwi * dw;
+                                        if src_h < ph
+                                            || src_h - ph >= h
+                                            || src_w < pw
+                                            || src_w - pw >= w
+                                        {
+                                            continue;
+                                        }
+                                        let ih = src_h - ph;
+                                        let iw = src_w - pw;
+                                        let flat = bi * in_strides[0]
+                                            + ci * in_strides[1]
+                                            + ih * in_strides[2]
+                                            + iw * in_strides[3];
+                                        let v = input_data[flat];
+                                        if v > best_val {
+                                            best_val = v;
+                                            best_flat = flat;
+                                        }
+                                    }
+                                }
+                                let flat_out = ((bi * c + ci) * h_out + oh) * w_out + ow;
+                                grad_input[best_flat] += grad_data[flat_out];
+                            }
+                        }
+                    }
+                }
+                vec![WgpuStorage::new(
+                    WgpuBuffer::from_slice(&grad_input),
+                    input_shape.clone(),
+                )]
+            }),
+        });
+
+        Ok(out)
     }
 
     /// `conv1d`.

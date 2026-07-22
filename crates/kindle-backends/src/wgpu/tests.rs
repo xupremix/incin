@@ -1113,3 +1113,88 @@ fn batch_norm_backward_matches_finite_difference() {
         "batch_norm gradcheck max abs diff too high: {max_abs_diff:.6}"
     );
 }
+
+// ── Pooling backward (previously unwired, see wgpu/backend.rs) ─────────────
+
+#[test]
+fn avg_pool2d_backward_matches_finite_difference() {
+    // 1x1x4x4, kernel 2x2, stride 2, no padding: every window is disjoint,
+    // so this also exercises the "no accumulation across windows" path.
+    let data: Vec<f32> = (1..=16).map(|x| x as f32).collect();
+    let t = storage(data, vec![1, 1, 4, 4]);
+    let op = |inputs: &[WgpuStorage]| -> WgpuStorage {
+        let out =
+            <B as ModuleOps<B>>::avg_pool2d::<f32>(&inputs[0], (2, 2), (2, 2), (0, 0)).unwrap();
+        <B as ReductionOps<B>>::sum_all::<f32>(&out).unwrap()
+    };
+    let max_abs_diff = gradcheck_wgpu(op, &[t], 1e-3);
+    assert!(
+        max_abs_diff < 2e-3,
+        "avg_pool2d gradcheck max abs diff too high: {max_abs_diff:.6}"
+    );
+}
+
+#[test]
+fn avg_pool2d_backward_accumulates_over_overlapping_windows() {
+    // 1x1x3x3, kernel 2x2, stride 1: overlapping windows, so the corner
+    // input positions (weight 1/4) and edge/center positions (shared by
+    // 2/4 windows) get different accumulated gradients — a stride==kernel
+    // (disjoint-window) test alone wouldn't catch a missing `+=`.
+    let data: Vec<f32> = (1..=9).map(|x| x as f32).collect();
+    let t = storage(data, vec![1, 1, 3, 3]);
+    let op = |inputs: &[WgpuStorage]| -> WgpuStorage {
+        let out =
+            <B as ModuleOps<B>>::avg_pool2d::<f32>(&inputs[0], (2, 2), (1, 1), (0, 0)).unwrap();
+        <B as ReductionOps<B>>::sum_all::<f32>(&out).unwrap()
+    };
+    let max_abs_diff = gradcheck_wgpu(op, &[t], 1e-3);
+    assert!(
+        max_abs_diff < 2e-3,
+        "avg_pool2d (overlapping) gradcheck max abs diff too high: {max_abs_diff:.6}"
+    );
+}
+
+#[test]
+fn max_pool2d_backward_matches_finite_difference() {
+    // Distinct, well-separated values so no window has a near-tie that a
+    // finite-difference perturbation (eps=1e-3) could flip the argmax on.
+    let data: Vec<f32> = vec![
+        1.0, 8.0, 2.0, 9.0, 3.0, 7.0, 4.0, 6.0, 10.0, 0.5, 11.0, 1.5, 12.0, 2.5, 13.0, 3.5,
+    ];
+    let t = storage(data, vec![1, 1, 4, 4]);
+    let op = |inputs: &[WgpuStorage]| -> WgpuStorage {
+        let out =
+            <B as ModuleOps<B>>::max_pool2d::<f32>(&inputs[0], (2, 2), (2, 2), (0, 0), (1, 1))
+                .unwrap();
+        <B as ReductionOps<B>>::sum_all::<f32>(&out).unwrap()
+    };
+    let max_abs_diff = gradcheck_wgpu(op, &[t], 1e-3);
+    assert!(
+        max_abs_diff < 2e-3,
+        "max_pool2d gradcheck max abs diff too high: {max_abs_diff:.6}"
+    );
+}
+
+#[test]
+fn adaptive_avg_pool2d_backward_matches_finite_difference_with_uneven_windows() {
+    // 5x5 -> 3x3 does not divide evenly, so window sizes vary per output
+    // position (matches the doc comment on `adaptive_window_bounds`) —
+    // exercises the per-position variable divisor, not just a fixed one.
+    let data: Vec<f32> = (1..=25).map(|x| x as f32 * 0.3).collect();
+    let t = storage(data, vec![1, 1, 5, 5]);
+    let op = |inputs: &[WgpuStorage]| -> WgpuStorage {
+        let out = <B as ModuleOps<B>>::adaptive_avg_pool2d::<f32>(&inputs[0], (3, 3)).unwrap();
+        <B as ReductionOps<B>>::sum_all::<f32>(&out).unwrap()
+    };
+    // Larger fd-eps than the other pooling tests: with 25 summed elements
+    // and uneven per-position window counts, eps=1e-3's finite-difference
+    // rounding noise alone exceeded 2e-3 even with a perfectly correct
+    // analytic gradient (confirmed by sweeping eps — the residual shrinks as
+    // eps grows, the signature of fd rounding noise, not a formula error,
+    // which would instead stay roughly constant as eps changes).
+    let max_abs_diff = gradcheck_wgpu(op, &[t], 1e-2);
+    assert!(
+        max_abs_diff < 2e-3,
+        "adaptive_avg_pool2d gradcheck max abs diff too high: {max_abs_diff:.6}"
+    );
+}
