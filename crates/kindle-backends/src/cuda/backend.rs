@@ -1050,6 +1050,97 @@ impl<T: DType, D: Device> ModuleOps<Self> for CudaBackendImpl<T, D> {
         });
         Ok(out)
     }
+
+    /// Backward replays `max_indices` (captured from the forward pass)
+    /// through `scatter_pool_grad_2d` — no forward recomputation needed,
+    /// mirrors CPU's `max_window_2d`/`scatter_pool_grad_2d` pairing exactly.
+    fn max_pool2d<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        kernel_size: (usize, usize),
+        stride: (usize, usize),
+        padding: (usize, usize),
+        dilation: (usize, usize),
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let (out, max_indices) = crate::cuda::ops::pool::launch_max_pool2d_forward(
+            t,
+            kernel_size,
+            stride,
+            padding,
+            dilation,
+        )?;
+        let input_shape = t.shape.clone();
+        let (t_id, out_id) = (t.id, out.id);
+        crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id],
+            backward: Box::new(move |grad_out: &CudaStorage| {
+                vec![
+                    crate::cuda::ops::pool::launch_scatter_pool_grad_2d(
+                        grad_out,
+                        &max_indices,
+                        &input_shape,
+                    )
+                    .expect("max_pool2d backward"),
+                ]
+            }),
+        });
+        Ok(out)
+    }
+
+    /// Backward is a real CUDA kernel (`avg_pool2d_backward`), unlike
+    /// WGPU's host-readback-and-Rust-loop approach — see this file's
+    /// module doc.
+    fn avg_pool2d<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        kernel_size: (usize, usize),
+        stride: (usize, usize),
+        padding: (usize, usize),
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let out =
+            crate::cuda::ops::pool::launch_avg_pool2d_forward(t, kernel_size, stride, padding)?;
+        let input_shape = t.shape.clone();
+        let (t_id, out_id) = (t.id, out.id);
+        crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id],
+            backward: Box::new(move |grad_out: &CudaStorage| {
+                vec![
+                    crate::cuda::ops::pool::launch_avg_pool2d_backward(
+                        grad_out,
+                        &input_shape,
+                        kernel_size,
+                        stride,
+                        padding,
+                    )
+                    .expect("avg_pool2d backward"),
+                ]
+            }),
+        });
+        Ok(out)
+    }
+
+    fn adaptive_avg_pool2d<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        output_size: (usize, usize),
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let out = crate::cuda::ops::pool::launch_adaptive_avg_pool2d_forward(t, output_size)?;
+        let input_shape = t.shape.clone();
+        let (t_id, out_id) = (t.id, out.id);
+        crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id],
+            backward: Box::new(move |grad_out: &CudaStorage| {
+                vec![
+                    crate::cuda::ops::pool::launch_adaptive_avg_pool2d_backward(
+                        grad_out,
+                        &input_shape,
+                    )
+                    .expect("adaptive_avg_pool2d backward"),
+                ]
+            }),
+        });
+        Ok(out)
+    }
 }
 impl<T: DType, D: Device> LossOps<Self> for CudaBackendImpl<T, D> {
     fn cross_entropy_loss<K: DType, KInt: DType>(
@@ -1459,5 +1550,58 @@ mod tests {
             .get(w_id)
             .expect("embedding weight should have a gradient");
         assert_eq!(g.shape, vec![3, 2]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn max_pool2d_computes_correct_output_shape() {
+        // N=1,C=1,H=4,W=4, kernel=2, stride=2 -> 2x2 output
+        let t = cuda_f32(&[1, 1, 4, 4], vec![0.0; 16]);
+        let out =
+            <B as ModuleOps<B>>::max_pool2d::<f32>(&t, (2, 2), (2, 2), (0, 0), (1, 1)).unwrap();
+        assert_eq!(out.shape, vec![1, 1, 2, 2]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn max_pool2d_backward_zero_pads_to_input_shape() {
+        let t = cuda_f32(&[1, 1, 4, 4], vec![0.0; 16]);
+        let t_id = t.id;
+        let out =
+            <B as ModuleOps<B>>::max_pool2d::<f32>(&t, (2, 2), (2, 2), (0, 0), (1, 1)).unwrap();
+        let grads = crate::cuda::tape::backward(&out).unwrap();
+        let g = grads
+            .get(t_id)
+            .expect("max_pool2d input should have a gradient");
+        assert_eq!(g.shape, vec![1, 1, 4, 4]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn avg_pool2d_computes_correct_output_shape() {
+        let t = cuda_f32(&[1, 1, 4, 4], vec![0.0; 16]);
+        let out = <B as ModuleOps<B>>::avg_pool2d::<f32>(&t, (2, 2), (2, 2), (0, 0)).unwrap();
+        assert_eq!(out.shape, vec![1, 1, 2, 2]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn adaptive_avg_pool2d_matches_requested_output_size() {
+        let t = cuda_f32(&[1, 1, 5, 5], vec![0.0; 25]);
+        let out = <B as ModuleOps<B>>::adaptive_avg_pool2d::<f32>(&t, (3, 3)).unwrap();
+        assert_eq!(out.shape, vec![1, 1, 3, 3]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn adaptive_avg_pool2d_backward_matches_input_shape() {
+        let t = cuda_f32(&[1, 1, 5, 5], vec![0.0; 25]);
+        let t_id = t.id;
+        let out = <B as ModuleOps<B>>::adaptive_avg_pool2d::<f32>(&t, (3, 3)).unwrap();
+        let grads = crate::cuda::tape::backward(&out).unwrap();
+        let g = grads
+            .get(t_id)
+            .expect("adaptive_avg_pool2d input should have a gradient");
+        assert_eq!(g.shape, vec![1, 1, 5, 5]);
     }
 }
