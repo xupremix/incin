@@ -1,37 +1,40 @@
 use crate::prelude::*;
 use alloc::collections::BTreeMap;
 
-/// `ValueId`.
+/// Identifies a single tensor value (an input, output, or intermediate
+/// result) within a `Graph`.
 pub type ValueId = usize;
-/// `NodeId`.
+/// Identifies a single operation node within a `Graph`.
 pub type NodeId = usize;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-/// `OpType`.
+/// The kind of operation a `Node` represents — a backend-agnostic tag
+/// recorded by `TracingBackend` and consumed by ONNX export (`as_str`
+/// supplies the exported node's `op_type` string) and graph visualization.
 pub enum OpType {
-    /// `ArgMax`.
+    /// Index of the maximum element.
     ArgMax,
-    /// `ArgMin`.
+    /// Index of the minimum element.
     ArgMin,
-    /// `Add`.
+    /// Elementwise addition.
     Add,
-    /// `Sub`.
+    /// Elementwise subtraction.
     Sub,
-    /// `Mul`.
+    /// Elementwise multiplication.
     Mul,
-    /// `Div`.
+    /// Elementwise division.
     Div,
-    /// `MatMul`.
+    /// Matrix multiplication.
     MatMul,
-    /// `Relu`.
+    /// Rectified linear unit.
     Relu,
-    /// `Step`.
+    /// Heaviside step function.
     Step,
-    /// `Mish`.
+    /// Mish activation.
     Mish,
-    /// `Elu`.
+    /// Exponential Linear Unit.
     Elu,
-    /// `Gelu`.
+    /// Gaussian Error Linear Unit.
     Gelu,
     /// Elementwise absolute value.
     Abs,
@@ -49,82 +52,85 @@ pub enum OpType {
     Sigmoid,
     /// Swish/SiLU activation.
     Swish,
-    /// `Conv1d`.
+    /// 1-D convolution.
     Conv1d,
-    /// `Conv2d`.
+    /// 2-D convolution.
     Conv2d,
-    /// `Linear`.
+    /// Fully-connected (dense) layer.
     Linear,
-    /// `Reshape`.
+    /// Shape reinterpretation (also used as a placeholder for
+    /// `flatten`/`squeeze`, which have no dedicated variant).
     Reshape,
-    /// `Transpose`.
+    /// Dimension permutation.
     Transpose,
-    /// `Softmax`.
+    /// Softmax along a dimension.
     Softmax,
-    /// `Concat`.
+    /// Concatenation along an existing dimension.
     Concat,
-    /// `Stack`.
+    /// Stacking along a new dimension.
     Stack,
-    /// `AddScalar`.
+    /// Scalar addition.
     AddScalar,
-    /// `MulScalar`.
+    /// Scalar multiplication.
     MulScalar,
-    /// `SumAll`.
+    /// Sum-reduce to a scalar.
     SumAll,
-    /// `MeanAll`.
+    /// Mean-reduce to a scalar.
     MeanAll,
-    /// `MaxAll`.
+    /// Max-reduce to a scalar.
     MaxAll,
-    /// `MinAll`.
+    /// Min-reduce to a scalar.
     MinAll,
-    /// `SumDim`.
+    /// Sum-reduce along one dimension.
     SumDim,
-    /// `MeanDim`.
+    /// Mean-reduce along one dimension.
     MeanDim,
-    /// `MaxDim`.
+    /// Max-reduce along one dimension.
     MaxDim,
-    /// `MinDim`.
+    /// Min-reduce along one dimension.
     MinDim,
-    /// `Broadcast`.
+    /// NumPy-style broadcast.
     Broadcast,
-    /// `Narrow`.
+    /// A contiguous window along one dimension.
     Narrow,
-    /// `MaxPool2d`.
+    /// 2-D max pooling.
     MaxPool2d,
-    /// `AvgPool2d`.
+    /// 2-D average pooling.
     AvgPool2d,
-    /// `AdaptiveAvgPool2d`.
+    /// 2-D adaptive average pooling.
     AdaptiveAvgPool2d,
-    /// `Slice`.
+    /// A strided window per dimension.
     Slice,
-    /// `ToDtype`.
+    /// Dtype cast.
     ToDtype,
-    /// `CrossEntropyLoss`.
+    /// Cross-entropy loss.
     CrossEntropyLoss,
-    /// `MseLoss`.
+    /// Mean squared error loss.
     MseLoss,
-    /// `L1Loss`.
+    /// Mean absolute error loss.
     L1Loss,
-    /// `BceWithLogitsLoss`.
+    /// Binary cross-entropy from logits.
     BceWithLogitsLoss,
-    /// `Embedding`.
+    /// Embedding table lookup.
     Embedding,
-    /// `LayerNorm`.
+    /// Layer normalization.
     LayerNorm,
-    /// `BatchNorm`.
+    /// Batch normalization.
     BatchNorm,
-    /// `Squeeze`.
+    /// Removes a size-1 dimension.
     Squeeze,
-    /// `ConvTranspose2d`.
+    /// Transposed ("deconvolution") 2-D convolution.
     ConvTranspose2d,
-    /// `Input`.
+    /// A graph input placeholder (no computation).
     Input,
-    /// `Constant`.
+    /// A constant value baked into the graph.
     Constant,
 }
 
 impl OpType {
-    /// `as_str`.
+    /// Renders this op as the string ONNX export uses for the node's
+    /// `op_type` (some ops map to the closest matching ONNX standard op
+    /// name, e.g. `Linear` -> `"Gemm"`, `Conv1d`/`Conv2d` -> `"Conv"`).
     pub fn as_str(&self) -> &'static str {
         match self {
             OpType::ArgMax => "ArgMax",
@@ -188,74 +194,84 @@ impl OpType {
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-/// `Value`.
+/// Metadata for a single tensor value in the graph — shape and dtype, but
+/// not the tensor's actual data (see `Graph::initializers` for constants).
 pub struct Value {
-    /// `id`.
+    /// This value's id.
     pub id: ValueId,
-    /// `shape`.
+    /// The tensor's shape.
     pub shape: Vec<usize>,
-    /// `dtype`.
+    /// The tensor's element dtype.
     pub dtype: DTypeId,
-    /// The display name of this layer node.
+    /// An optional human-readable name (e.g. for named graph inputs).
     pub name: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-/// `Node`.
+/// A single operation in the graph: an `OpType` consuming `inputs` and
+/// producing `outputs`, with op-specific parameters in `attributes`
+/// (e.g. `conv2d`'s stride/padding, `concat`'s axis).
 pub struct Node {
-    /// `id`.
+    /// This node's id.
     pub id: NodeId,
-    /// `op`.
+    /// The operation this node represents.
     pub op: OpType,
-    /// `inputs`.
+    /// The value ids this node consumes.
     pub inputs: Vec<ValueId>,
-    /// `outputs`.
+    /// The value ids this node produces.
     pub outputs: Vec<ValueId>,
-    /// `attributes`.
+    /// Op-specific named parameters (e.g. `"axis"`, `"strides"`).
     pub attributes: BTreeMap<String, AttributeValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-/// `AttributeValue`.
+/// A single named parameter value attached to a `Node` (ONNX-style
+/// attribute typing: scalar or list, integer/float/string).
 pub enum AttributeValue {
-    /// `Int`.
+    /// A single integer (e.g. `"axis"`).
     Int(i64),
-    /// `Float`.
+    /// A single float (e.g. `"epsilon"`).
     Float(f32),
-    /// `String`.
+    /// A single string.
     String(String),
-    /// `Ints`.
+    /// A list of integers (e.g. `"strides"`, `"pads"`, `"perm"`).
     Ints(Vec<i64>),
-    /// `Floats`.
+    /// A list of floats.
     Floats(Vec<f32>),
 }
 
 #[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-/// `Graph`.
+/// A serializable, backend-agnostic computation graph IR: the value/node
+/// list recorded by `TracingBackend`, consumed by ONNX export and graph
+/// visualization. `ValueId`/`NodeId` keys are freshly allocated per graph
+/// (via `add_value`/`add_node`), not tied to any particular backend's
+/// tensor identity.
 pub struct Graph {
     #[serde(with = "string_key_map")]
-    /// `values`.
+    /// Every tensor value's metadata, keyed by id.
     pub values: BTreeMap<ValueId, Value>,
-    /// `nodes`.
+    /// Every operation, in insertion order.
     pub nodes: Vec<Node>,
-    /// `inputs`.
+    /// Value ids marked as graph inputs (via `mark_input`).
     pub inputs: Vec<ValueId>,
-    /// `outputs`.
+    /// Value ids marked as graph outputs (via `mark_output`).
     pub outputs: Vec<ValueId>,
     #[serde(with = "string_key_map")]
-    /// `initializers`.
+    /// Raw bytes for constant/weight values, keyed by value id.
     pub initializers: BTreeMap<ValueId, Vec<u8>>, // raw bytes for constants/weights
     next_value_id: usize,
     next_node_id: usize,
 }
 
-/// `string_key_map`.
+/// Serde helper: `BTreeMap` only serializes to JSON objects when keys are
+/// strings, but `ValueId` is `usize` — this module stringifies keys on
+/// serialize and parses them back on deserialize.
 mod string_key_map {
     use alloc::collections::BTreeMap;
     use alloc::string::{String, ToString};
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-    /// `serialize`.
+    /// Serializes `map` with each key converted to its `ToString` form.
     pub fn serialize<K, V, S>(map: &BTreeMap<K, V>, serializer: S) -> Result<S::Ok, S::Error>
     where
         K: ToString,
@@ -267,7 +283,7 @@ mod string_key_map {
         string_map.serialize(serializer)
     }
 
-    /// `deserialize`.
+    /// Deserializes a string-keyed map and parses each key back via `FromStr`.
     pub fn deserialize<'de, K, V, D>(deserializer: D) -> Result<BTreeMap<K, V>, D::Error>
     where
         K: core::str::FromStr + core::hash::Hash + Eq + core::cmp::Ord,
@@ -294,7 +310,8 @@ impl Graph {
         Self::default()
     }
 
-    /// `add_value`.
+    /// Registers a new tensor value's metadata, returning its freshly
+    /// allocated `ValueId`.
     pub fn add_value(
         &mut self,
         shape: Vec<usize>,
@@ -315,7 +332,7 @@ impl Graph {
         id
     }
 
-    /// `add_node`.
+    /// Appends a new operation node, returning its freshly allocated `NodeId`.
     pub fn add_node(
         &mut self,
         op: OpType,
@@ -335,14 +352,14 @@ impl Graph {
         id
     }
 
-    /// `mark_input`.
+    /// Marks `value_id` as a graph input, if not already marked.
     pub fn mark_input(&mut self, value_id: ValueId) {
         if !self.inputs.contains(&value_id) {
             self.inputs.push(value_id);
         }
     }
 
-    /// `mark_output`.
+    /// Marks `value_id` as a graph output, if not already marked.
     pub fn mark_output(&mut self, value_id: ValueId) {
         if !self.outputs.contains(&value_id) {
             self.outputs.push(value_id);
