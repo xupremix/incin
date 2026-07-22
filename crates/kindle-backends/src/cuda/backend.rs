@@ -1010,6 +1010,46 @@ impl<T: DType, D: Device> ModuleOps<Self> for CudaBackendImpl<T, D> {
             eps,
         )
     }
+
+    /// Embedding table lookup. Only `w` (the weight table) is differentiable
+    /// — `t` (integer indices) is not part of the tape's `input_ids`,
+    /// matching CPU's `embedding_impl` (`cpu/ops/embedding.rs`) exactly.
+    fn embedding<K: DType, KInt: DType>(
+        t: &<Self as Backend>::Storage<KInt>,
+        w: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        if w.shape.len() != 2 {
+            return Err(Error::ShapeMismatch {
+                op: "embedding",
+                expected: vec![0, 0],
+                got: w.shape.clone(),
+                msg: format!(
+                    "embedding: weight table must be rank-2 [vocab_size, hidden_size], got shape {:?}",
+                    w.shape
+                ),
+            });
+        }
+        let (vocab_size, hidden_size) = (w.shape[0], w.shape[1]);
+        let out = crate::cuda::ops::embedding::launch_embedding_forward(w, t)?;
+        let indices_capture = t.clone();
+        let (w_id, out_id) = (w.id, out.id);
+        crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![w_id],
+            backward: Box::new(move |grad_out: &CudaStorage| {
+                vec![
+                    crate::cuda::ops::embedding::launch_embedding_backward(
+                        grad_out,
+                        &indices_capture,
+                        vocab_size,
+                        hidden_size,
+                    )
+                    .expect("embedding backward"),
+                ]
+            }),
+        });
+        Ok(out)
+    }
 }
 impl<T: DType, D: Device> LossOps<Self> for CudaBackendImpl<T, D> {
     fn cross_entropy_loss<K: DType, KInt: DType>(
@@ -1382,5 +1422,42 @@ mod tests {
             .get(t_id)
             .expect("narrow input should have a gradient");
         assert_eq!(g.shape, vec![4, 3]);
+    }
+
+    fn cuda_i64(shape: &[usize], values: Vec<i64>) -> CudaStorage {
+        let bytes: Vec<u8> = values.iter().flat_map(|v| v.to_le_bytes()).collect();
+        cuda_from_bytes(shape, DTypeId::I64, DeviceId::cuda(0).ordinal(), &bytes).unwrap()
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn embedding_gathers_rows_by_index() {
+        // vocab_size=3, hidden_size=2
+        let w = cuda_f32(&[3, 2], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        let idx = cuda_i64(&[2], vec![2, 0]);
+        let out = <B as ModuleOps<B>>::embedding::<f32, i64>(&idx, &w).unwrap();
+        assert_eq!(out.shape, vec![2, 2]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn embedding_rejects_non_rank2_weight() {
+        let w = cuda_f32(&[3, 2, 1], vec![0.0; 6]);
+        let idx = cuda_i64(&[1], vec![0]);
+        assert!(<B as ModuleOps<B>>::embedding::<f32, i64>(&idx, &w).is_err());
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn embedding_backward_produces_weight_gradient_only() {
+        let w = cuda_f32(&[3, 2], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        let idx = cuda_i64(&[2], vec![2, 0]);
+        let w_id = w.id;
+        let out = <B as ModuleOps<B>>::embedding::<f32, i64>(&idx, &w).unwrap();
+        let grads = crate::cuda::tape::backward(&out).unwrap();
+        let g = grads
+            .get(w_id)
+            .expect("embedding weight should have a gradient");
+        assert_eq!(g.shape, vec![3, 2]);
     }
 }
