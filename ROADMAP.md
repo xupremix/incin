@@ -675,14 +675,16 @@ actually run against the real software WGPU adapter in this environment.
   worth auditing incrementally, starting with anything reachable from public
   API entry points (see C-7, the manipulation.rs and serialize.rs items above
   for the ones already confirmed reachable from user code).
-- `s![]`/`idx![]` doc examples exist (`kindle-macros/src/lib.rs:42-57,84-92`)
-  contrary to the old roadmap's claim they were missing — but they're marked
-  `rust,ignore`, so `cargo test --doc` never actually compiles/verifies them.
-  Worth making at least one of each a real, compiled doctest.
-- `crates/kindle/Cargo.toml`'s `anyhow` dev-dependency is used by exactly two
-  examples (`mnist_training.rs`, `rnn_sequence_prediction.rs`), not by tests.
-  Switching those examples to `kindle_core::Result` would let the dependency
-  be dropped entirely.
+- ✅ **FIXED, since this was written:** `s![]`/`idx![]`/`#[module]` doc examples
+  in `kindle-macros/src/lib.rs` are now real, compiled doctests (verified
+  2026-07-22: `cargo test --doc -p kindle-macros` → 4 passed, 0 failed). Only
+  `import_model`'s example stays `rust,ignore` (reasonably — it needs an
+  actual ONNX file on disk to compile against).
+- ✅ **FIXED, since this was written:** `crates/kindle/Cargo.toml` no longer
+  has an `anyhow` dependency at all (verified 2026-07-22, grep returns
+  nothing) — the example-crate restructuring since this note was written
+  gave each example (including the two that use `anyhow`) its own
+  `Cargo.toml`, which already achieves what this item asked for.
 - `kindle-telemetry`'s `HyperparamEvent` is a free-form value bag with no
   automatic capture of env vars or paths — but if a caller logs a secret-bearing
   string as a "hyperparameter," it persists verbatim in shareable JSONL output.
@@ -748,7 +750,7 @@ actually load-bearing for correctness, not just release paperwork.
     warnings` from ~120 real errors (after subtracting C-8's false-positive
     noise) to a clean pass — `cargo fmt --all -- --check` and this clippy
     invocation are now both genuinely green, not just untested.
-15. Make `s![]`/`idx![]` doctests real (`rust,ignore` → compiled).
+15. ✅ DONE (verified 2026-07-22, already fixed by an earlier session): `s![]`/`idx![]`/`#[module]` doctests are real and compiled — see Medium priority section.
 
 **Phase 4 — docs & release paperwork** (mostly unchanged from before, see below)
 
@@ -829,8 +831,8 @@ type has a *compiled* usage example (not `rust,ignore`).
 - [x] Scratch files at root (`diagnostic_test.rs`, `scratch*.py`, etc.) — already gone
 - [x] `publish = false` on `kindle-viz` / `kindle-telemetry` / `kindle-viz-plugin-api` — already set
 - [x] README no longer claims to "wrap candle and burn" as the primary story — fixed in this pass
-- [ ] Move planning docs (`FUTURE_ROADMAP.md`, `GPU_ROADMAP.md`, etc.) to `docs/` if any still exist at root
-- [ ] `anyhow` dev-dependency in `kindle` facade — narrow to the 2 examples that use it, or remove
+- [x] Move planning docs (`FUTURE_ROADMAP.md`, `GPU_ROADMAP.md`, etc.) to `docs/` — none exist at root (verified 2026-07-22, only CHANGELOG/CONTRIBUTING/PROJECT_MEMORY/README/ROADMAP.md)
+- [x] `anyhow` dev-dependency in `kindle` facade — already gone entirely (verified 2026-07-22, see Medium priority section)
 - [ ] Add `[workspace.metadata.release]` or similar to control which crates get published
 - [x] CI feature flag fixed (`kindle-backends/native` → `kindle-backends/cpu,kindle/cpu`) in this pass
 - [ ] Add GPU-hardware-gated CI jobs for `cuda`/`wgpu` (or explicit software-fallback jobs) — currently zero CI coverage for the backends with C-1/C-3/C-4
