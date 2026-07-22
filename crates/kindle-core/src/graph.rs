@@ -33,6 +33,22 @@ pub enum OpType {
     Elu,
     /// `Gelu`.
     Gelu,
+    /// Elementwise absolute value.
+    Abs,
+    /// Elementwise natural exponential.
+    Exp,
+    /// Elementwise negation.
+    Neg,
+    /// Elementwise square root.
+    Sqrt,
+    /// Elementwise natural logarithm.
+    Log,
+    /// Elementwise hyperbolic tangent.
+    Tanh,
+    /// Elementwise logistic sigmoid.
+    Sigmoid,
+    /// Swish/SiLU activation.
+    Swish,
     /// `Conv1d`.
     Conv1d,
     /// `Conv2d`.
@@ -123,6 +139,14 @@ impl OpType {
             OpType::Mish => "Mish",
             OpType::Elu => "Elu",
             OpType::Gelu => "Gelu",
+            OpType::Abs => "Abs",
+            OpType::Exp => "Exp",
+            OpType::Neg => "Neg",
+            OpType::Sqrt => "Sqrt",
+            OpType::Log => "Log",
+            OpType::Tanh => "Tanh",
+            OpType::Sigmoid => "Sigmoid",
+            OpType::Swish => "Swish",
             OpType::Conv1d => "Conv",
             OpType::Conv2d => "Conv",
             OpType::Linear => "Gemm",
