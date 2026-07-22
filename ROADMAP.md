@@ -648,12 +648,16 @@ types already (`f32`, `f64`, `i64`, `bool`, `u8`). New tests:
 - ✅ **FIXED (2026-07-22), promoted to C-10** — see the Critical section above;
   this was real, Miri-confirmed undefined behavior, not just a theoretical
   soundness gap.
-- **`panic!`/`unimplemented!` inside `Result`-returning library functions**:
-  `kindle-core/src/serialize.rs:82` (Q8_0), `onnx_exporter.rs:110`
-  (`dtype_to_onnx`, reachable from `export_to_onnx`), `shapes/idx.rs:137`
-  (multi-inferred-dim reshape, reachable from user-facing `reshape`). All should
-  return `Err` instead of panicking — they're reachable from ordinary public API
-  calls, not internal invariants.
+- ✅ **FIXED, since this was written (verified 2026-07-22):** `panic!`/
+  `unimplemented!` inside `Result`-returning library functions —
+  `serialize.rs`, `onnx_exporter.rs`, and `shapes/idx.rs` no longer contain
+  any `panic!`/`unimplemented!` calls (grep confirms zero matches in all
+  three files). `dtype_to_onnx` (`onnx_exporter.rs:103`) now maps `Q8_0` to
+  `DataType::Undefined` instead of panicking. Matches CHANGELOG.md's
+  `[0.2.0]` entry ("Replaced `panic!`/`unimplemented!` calls in
+  `serialize.rs`... `onnx_exporter.rs`... `shapes/idx.rs`... with clean
+  `Result::Err` returns"), which this roadmap section hadn't been updated to
+  reflect.
 - **ONNX model loading is a non-functional stub wired up as if real**:
   `OnnxImporter::deserialize` (`onnx_exporter.rs:168-184`) always returns
   `Err("ONNX loading is currently unsupported...")`, but `nn/save.rs:340-356`
@@ -661,10 +665,11 @@ types already (`f32`, `f64`, `i64`, `bool`, `u8`). New tests:
   `import_model!` protobuf parsing that runs at compile time lives in
   `kindle-macros`, is separate from this, and works — so there's no untrusted-
   file attack surface here, just a misleading dead-end runtime API.)
-- **Dead `if true {...} else {...}` branches across CUDA ops** (`elementwise.rs`,
-  `embedding.rs`, `quant.rs`, `reduce.rs`, `norm.rs`): unreachable
-  `Err("Not a CUDA buffer")` arms are leftover refactor cruft that hides the
-  fact no real type-check happens at those call sites.
+- ✅ **FIXED (2026-07-22).** Dead `if true {...} else {...}` branches across
+  CUDA ops (`elementwise.rs`/`reduce.rs`/`norm.rs` had already lost theirs,
+  presumably during this session's `kernel.rs` dtype-policy refactor;
+  `embedding.rs`/`quant.rs` still had 4 — removed). Verified zero remain via
+  `grep -rn "if true {" crates/kindle-backends/src/cuda/ops/*.rs`.
 - **CUDA kernel templates accept trusted internal scalar expressions.** The
   templates and dtype policy now live in `kernel.rs`, validate operation
   identifiers, specialize float storage/compute conversions, and use distinct
@@ -672,18 +677,22 @@ types already (`f32`, `f64`, `i64`, `bool`, `u8`). New tests:
   supporting user-defined expressions, replace free-form source fragments with
   a closed scalar IR and renderer so source injection is structurally
   impossible.
-- **`PROJECT_MEMORY.md` describes `KindleBackend<T, D>` as an already-unified
-  backend struct** ("Instead of separate backend structs, kindle uses a single
-  unified `KindleBackend<T, D>`..."), but its own status checklist lists this as
-  unchecked, and the audit confirms the actual code still has separate
-  `CpuBackendImpl`/`CudaBackendImpl`/`WgpuBackendImpl`/`CandleBackend`/`NdarrayBackend`
-  types (these are the graph's top god-nodes by edge count). Reframe that
-  section as a design target, not current architecture, until the refactor lands.
-- **`kindle-telemetry`'s file transport has no explicit permission hardening**
-  (`transport/file.rs:35`, relies on default umask). Not currently exploitable
-  (resolves under `~/.local/share`), but no defense-in-depth if that assumption
-  ever breaks (shared multi-user data dir, misconfigured `XDG_DATA_HOME`).
-  Consider explicit `0600` via `PermissionsExt`.
+- ✅ **RESOLVED (verified 2026-07-22).** `PROJECT_MEMORY.md` describing
+  `KindleBackend<T, D>` as the unified backend spelling is now accurate, not
+  aspirational: `pub type KindleBackend<T = f32, D = Cpu> = <D as
+  BackendFor<T>>::Backend;` exists (`kindle-backends/src/lib.rs:26`) and is
+  the documented public API surface (see `6a401ab feat!: complete unified
+  backend transfer and builder API`, landed before this session). The
+  concrete `CpuBackendImpl`/`CudaBackendImpl`/`WgpuBackendImpl` structs still
+  exist underneath it — that's the expected shape of a type-alias
+  unification (`BackendFor` resolves to them), not a discrepancy with what
+  `PROJECT_MEMORY.md` claims.
+- ✅ **FIXED, since this was written (verified 2026-07-22):**
+  `kindle-telemetry`'s file transport now sets `0o600` explicitly
+  (`transport/file.rs:41`, `opts.mode(0o600)`) rather than relying on the
+  default umask. Matches CHANGELOG.md's `[0.2.0]` entry ("`FileTransport::open`
+  now sets Unix file permissions to `0o600`"), which this roadmap section
+  hadn't been updated to reflect.
 
 ---
 
