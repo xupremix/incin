@@ -46,8 +46,6 @@ pub(crate) fn flat_to_nd(mut flat_idx: usize, shape: &[usize]) -> Vec<usize> {
 use rayon::prelude::*;
 
 pub(crate) fn elementwise_binary(
-    _op_name: &str,
-    _op_expr: &str,
     lhs: &CpuStorage,
     rhs: &CpuStorage,
     out_shape: &[usize],
@@ -95,16 +93,12 @@ fn elementwise_binary_numeric(
     if let Some(output) = elementwise_kernel::execute_binary(op, lhs, rhs, out_shape)? {
         return Ok(output);
     }
-    elementwise_binary("", "", lhs, rhs, out_shape, move |lhs, rhs| {
-        op.eval_f64(lhs, rhs)
-    })
+    elementwise_binary(lhs, rhs, out_shape, move |lhs, rhs| op.eval_f64(lhs, rhs))
 }
 
 /// Elementwise negate (used by `sub`'s backward rule: rhs receives the
 /// negated incoming gradient before unbroadcasting).
 pub(crate) fn elementwise_unary(
-    _op_name: &str,
-    _op_expr: &str,
     t: &CpuStorage,
     f: impl Fn(f64) -> f64 + Send + Sync,
 ) -> Result<CpuStorage> {
@@ -126,7 +120,7 @@ fn elementwise_unary_typed(op: UnaryOp, input: &CpuStorage) -> Result<CpuStorage
     if let Some(output) = elementwise_kernel::execute_unary(op, input)? {
         return Ok(output);
     }
-    elementwise_unary("", "", input, move |value| op.eval_f64(value))
+    elementwise_unary(input, move |value| op.eval_f64(value))
 }
 
 /// `negate`.
@@ -278,14 +272,9 @@ impl<T: DType, D: Device> NumericOps<Self> for CpuBackendImpl<T, D> {
                 let grad_rhs = elementwise_binary_numeric(
                     BinaryOp::Mul,
                     grad_out,
-                    &elementwise_binary(
-                        "div_grad_rhs_inner",
-                        "-a / (b * b)",
-                        &lhs_capture,
-                        &rhs_capture,
-                        &grad_out.shape,
-                        |l, r| -l / (r * r),
-                    )
+                    &elementwise_binary(&lhs_capture, &rhs_capture, &grad_out.shape, |l, r| {
+                        -l / (r * r)
+                    })
                     .unwrap(),
                     &grad_out.shape,
                 )
@@ -363,17 +352,10 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &CpuStorage| {
-                let grad = elementwise_binary(
-                    "relu_grad",
-                    "b > 0.0 ? a : 0.0",
-                    grad_out,
-                    &t_capture,
-                    &grad_out.shape,
-                    |g, x| {
-                        let deriv = if x > 0.0 { 1.0 } else { 0.0 };
-                        g * deriv
-                    },
-                )
+                let grad = elementwise_binary(grad_out, &t_capture, &grad_out.shape, |g, x| {
+                    let deriv = if x > 0.0 { 1.0 } else { 0.0 };
+                    g * deriv
+                })
                 .unwrap();
                 vec![grad]
             }),
@@ -412,13 +394,14 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &CpuStorage| {
-                let grad = elementwise_binary("mish_grad", "a * (tanhf(b > 20.0 ? b : logf(1.0 + expf(b))) + b * (1.0 / (1.0 + expf(-b))) * (1.0 - powf(tanhf(b > 20.0 ? b : logf(1.0 + expf(b))), 2.0)))", grad_out, &t_capture, &grad_out.shape, |g, x| {
+                let grad = elementwise_binary(grad_out, &t_capture, &grad_out.shape, |g, x| {
                     let sp = if x > 20.0 { x } else { (1.0 + x.exp()).ln() };
                     let th = sp.tanh();
                     let sig = 1.0 / (1.0 + (-x).exp());
                     let deriv = th + x * sig * (1.0 - th * th);
                     g * deriv
-                }).unwrap();
+                })
+                .unwrap();
                 vec![grad]
             }),
         });
@@ -435,17 +418,10 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &CpuStorage| {
-                let grad = elementwise_binary(
-                    "elu_grad",
-                    "a * (b > 0.0 ? 1.0 : b + 1.0)",
-                    grad_out,
-                    &out_capture,
-                    &grad_out.shape,
-                    |g, o| {
-                        let deriv = if o > 0.0 { 1.0 } else { o + 1.0 };
-                        g * deriv
-                    },
-                )
+                let grad = elementwise_binary(grad_out, &out_capture, &grad_out.shape, |g, o| {
+                    let deriv = if o > 0.0 { 1.0 } else { o + 1.0 };
+                    g * deriv
+                })
                 .unwrap();
                 vec![grad]
             }),
@@ -466,12 +442,13 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &CpuStorage| {
-                let grad = elementwise_binary("gelu_grad", "a * (0.5 * (1.0 + erff(b / 1.41421356)) + b * (0.39894228 * expf(-0.5 * b * b)))", grad_out, &t_capture, &grad_out.shape, |g, x| {
+                let grad = elementwise_binary(grad_out, &t_capture, &grad_out.shape, |g, x| {
                     let cdf = 0.5 * (1.0 + erf_approx(x / core::f64::consts::SQRT_2));
                     let pdf = (1.0 / (2.0 * core::f64::consts::PI).sqrt()) * (-x * x / 2.0).exp();
                     let deriv = cdf + x * pdf;
                     g * deriv
-                }).unwrap();
+                })
+                .unwrap();
                 vec![grad]
             }),
         });
@@ -489,23 +466,16 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &CpuStorage| {
-                let grad = elementwise_binary(
-                    "abs_grad",
-                    "b > 0.0 ? a : (b < 0.0 ? -a : 0.0)",
-                    grad_out,
-                    &t_capture,
-                    &grad_out.shape,
-                    |g, x| {
-                        let deriv = if x > 0.0 {
-                            1.0
-                        } else if x < 0.0 {
-                            -1.0
-                        } else {
-                            0.0
-                        };
-                        g * deriv
-                    },
-                )
+                let grad = elementwise_binary(grad_out, &t_capture, &grad_out.shape, |g, x| {
+                    let deriv = if x > 0.0 {
+                        1.0
+                    } else if x < 0.0 {
+                        -1.0
+                    } else {
+                        0.0
+                    };
+                    g * deriv
+                })
                 .unwrap();
                 vec![grad]
             }),
@@ -524,17 +494,10 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &CpuStorage| {
-                let grad = elementwise_binary(
-                    "exp_grad",
-                    "a * b",
-                    grad_out,
-                    &out_capture,
-                    &grad_out.shape,
-                    |g, o| {
-                        let deriv = o;
-                        g * deriv
-                    },
-                )
+                let grad = elementwise_binary(grad_out, &out_capture, &grad_out.shape, |g, o| {
+                    let deriv = o;
+                    g * deriv
+                })
                 .unwrap();
                 vec![grad]
             }),
@@ -567,17 +530,10 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &CpuStorage| {
-                let grad = elementwise_binary(
-                    "sqrt_grad",
-                    "a / (2.0 * b)",
-                    grad_out,
-                    &out_capture,
-                    &grad_out.shape,
-                    |g, o| {
-                        let deriv = 1.0 / (2.0 * o);
-                        g * deriv
-                    },
-                )
+                let grad = elementwise_binary(grad_out, &out_capture, &grad_out.shape, |g, o| {
+                    let deriv = 1.0 / (2.0 * o);
+                    g * deriv
+                })
                 .unwrap();
                 vec![grad]
             }),
@@ -596,17 +552,10 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &CpuStorage| {
-                let grad = elementwise_binary(
-                    "log_grad",
-                    "a / b",
-                    grad_out,
-                    &t_capture,
-                    &grad_out.shape,
-                    |g, x| {
-                        let deriv = 1.0 / x;
-                        g * deriv
-                    },
-                )
+                let grad = elementwise_binary(grad_out, &t_capture, &grad_out.shape, |g, x| {
+                    let deriv = 1.0 / x;
+                    g * deriv
+                })
                 .unwrap();
                 vec![grad]
             }),
@@ -625,17 +574,10 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &CpuStorage| {
-                let grad = elementwise_binary(
-                    "tanh_grad",
-                    "a * (1.0 - b * b)",
-                    grad_out,
-                    &out_capture,
-                    &grad_out.shape,
-                    |g, o| {
-                        let deriv = 1.0 - o * o;
-                        g * deriv
-                    },
-                )
+                let grad = elementwise_binary(grad_out, &out_capture, &grad_out.shape, |g, o| {
+                    let deriv = 1.0 - o * o;
+                    g * deriv
+                })
                 .unwrap();
                 vec![grad]
             }),
@@ -656,17 +598,10 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &CpuStorage| {
-                let grad = elementwise_binary(
-                    "sigmoid_grad",
-                    "a * b * (1.0 - b)",
-                    grad_out,
-                    &out_capture,
-                    &grad_out.shape,
-                    |g, o| {
-                        let deriv = o * (1.0 - o);
-                        g * deriv
-                    },
-                )
+                let grad = elementwise_binary(grad_out, &out_capture, &grad_out.shape, |g, o| {
+                    let deriv = o * (1.0 - o);
+                    g * deriv
+                })
                 .unwrap();
                 vec![grad]
             }),
