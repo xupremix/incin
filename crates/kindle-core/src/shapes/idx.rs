@@ -43,9 +43,9 @@ use typenum::consts::*;
 use typenum::{Bit, UInt, UTerm, Unsigned};
 
 impl DimIdx for UTerm {
-    /// `Resolved`.
+    /// `UTerm` (0) resolves to itself.
     type Resolved = UTerm;
-    /// `size`.
+    /// Always `Some(0)`.
     fn size() -> Option<usize> {
         Some(0)
     }
@@ -66,18 +66,18 @@ where
         + PartialEq
         + 'static,
 {
-    /// `Resolved`.
+    /// A known `typenum` size resolves to itself.
     type Resolved = UInt<U, B>;
-    /// `size`.
+    /// The compile-time-known size.
     fn size() -> Option<usize> {
         Some(Self::USIZE)
     }
 }
 
 impl DimIdx for InferDim {
-    /// `Resolved`.
+    /// Resolves to a runtime-computed `usize`.
     type Resolved = usize;
-    /// `size`.
+    /// Always `None` — the size is inferred from the other dimensions.
     fn size() -> Option<usize> {
         None
     }
@@ -87,12 +87,12 @@ impl DimIdx for InferDim {
 impl<Tag: 'static + Send + Sync + Copy + Clone + core::fmt::Debug + Eq + PartialEq> DimIdx
     for NamedDyn<Tag>
 {
-    /// `Resolved`.
+    /// A named-dynamic dimension resolves to itself.
     type Resolved = NamedDyn<Tag>;
-    /// `size`.
+    /// Always `None` — not a static known size, but handled specially.
     fn size() -> Option<usize> {
         None
-    } // Not a static known size, but handled specially
+    }
 }
 
 /// Computes the new shape resulting from a reshape.
@@ -101,11 +101,11 @@ impl<Tag: 'static + Send + Sync + Copy + Clone + core::fmt::Debug + Eq + Partial
     label = "Invalid dimension for reshape",
     note = "The element count must remain constant during reshape"
 )]
-/// `ReshapeTarget`.
 pub trait ReshapeTarget<In: Shape> {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resolved output shape (each `DimIdx` entry resolved, with at
+    /// most one `InferDim` inferred from the remaining element count).
     type Output: Shape;
-    /// `calculate_shape`.
+    /// Computes the concrete output dimensions from the input's runtime shape.
     fn calculate_shape(in_shape_vec: &[usize]) -> Vec<usize>;
 }
 
@@ -116,10 +116,11 @@ macro_rules! impl_reshape_target {
         where
             ($($D::Resolved,)*): Shape,
         {
-            /// The output tensor type produced by this module's forward pass.
+            /// The resolved output shape.
             type Output = ($($D::Resolved,)*);
 
-            /// `calculate_shape`.
+            /// Computes the concrete output dimensions from the input's runtime shape.
+
             fn calculate_shape(in_shape_vec: &[usize]) -> Vec<usize> {
                 let total_elements: usize = in_shape_vec.iter().product();
                 let mut resolved_sizes = vec![];
@@ -179,18 +180,19 @@ pub trait SliceIdx {
 }
 
 impl<Start: Unsigned, End: Unsigned, Diff: Dim> SliceIdx for Slice<Start, End, Diff> {
-    /// `Resolved`.
+    /// The slice's known width.
     type Resolved = Diff;
-    /// `bounds`.
+    /// The compile-time-known `(Start, End)` bounds, ignoring the actual
+    /// dimension size.
     fn bounds(_size: usize) -> (usize, usize) {
         (Start::USIZE, End::USIZE)
     }
 }
 
 impl SliceIdx for UTerm {
-    /// `Resolved`.
+    /// A bare index selects a single element, reducing this axis to size 1.
     type Resolved = U1;
-    /// `bounds`.
+    /// Selects index `0`.
     fn bounds(_size: usize) -> (usize, usize) {
         (0, 1)
     }
@@ -211,9 +213,9 @@ where
         + PartialEq
         + 'static,
 {
-    /// `Resolved`.
+    /// A bare index selects a single element, reducing this axis to size 1.
     type Resolved = U1;
-    /// `bounds`.
+    /// Selects the index encoded by this `typenum` value.
     fn bounds(_size: usize) -> (usize, usize) {
         (Self::USIZE, Self::USIZE + 1)
     }
@@ -223,9 +225,9 @@ where
 // We can't easily implement a variadic Ellipsis in simple tuple traits without
 // advanced macro work. For now, we assume `..` is a single full dimension slice.
 impl SliceIdx for Ellipsis {
-    /// `Resolved`.
-    type Resolved = usize; // Dyn size since it depends on the input
-    /// `bounds`.
+    /// Dynamic size, since it depends on the input.
+    type Resolved = usize;
+    /// Selects the entire axis, `[0, size)`.
     fn bounds(size: usize) -> (usize, usize) {
         (0, size)
     }
@@ -236,9 +238,9 @@ impl SliceIdx for Ellipsis {
     label = "Invalid slice target",
     note = "The slice range must be within the bounds of the original dimension"
 )]
-/// `SliceTarget`.
+/// Computes the output shape resulting from an `idx![]` slice expression.
 pub trait SliceTarget<In: Shape> {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resolved output shape after applying each dimension's `SliceIdx`.
     type Output: Shape;
     /// Returns the bounds (start, end) for each dimension in `in_shape_vec`
     fn calculate_bounds(in_shape_vec: &[usize]) -> Vec<(usize, usize)>;
@@ -250,10 +252,11 @@ macro_rules! impl_slice_target {
         where
             ($($D::Resolved,)*): Shape,
         {
-            /// The output tensor type produced by this module's forward pass.
+            /// The resolved output shape.
             type Output = ($($D::Resolved,)*);
 
-            /// `calculate_bounds`.
+            /// Computes each dimension's `(start, end)` bounds from the input's runtime shape.
+
             fn calculate_bounds(in_shape_vec: &[usize]) -> Vec<(usize, usize)> {
                 let mut bounds = vec![];
                 let mut _current_idx = 0usize;
@@ -274,29 +277,23 @@ impl_slice_target!(D1, D2, D3);
 impl_slice_target!(D1, D2, D3, D4);
 
 #[cfg(test)]
-/// `tests`.
 mod tests {
     use super::*;
     use crate::prelude::Shape;
     use typenum::{U0, U1, U2, U3, U4};
 
-    /// `assert_shape_eq`.
     fn assert_shape_eq<S1: Shape, S2: Shape>() {}
 
     #[test]
-    /// `slice_range_output_shape`.
     fn slice_range_output_shape() {
         // idx![1..3, .., 0..2] on (U4, U4, U3) → (U2, usize, U2)
-        /// `IdxT`.
         type IdxT = (Slice<U1, U3, U2>, Ellipsis, Slice<U0, U2, U2>);
         assert_shape_eq::<<IdxT as SliceTarget<(U4, U4, U3)>>::Output, (U2, usize, U2)>();
     }
 
     #[test]
-    /// `slice_full_passthrough`.
     fn slice_full_passthrough() {
         // idx![.., .., ..] on (U4, U4, U3) → (usize, usize, usize)
-        /// `IdxT`.
         type IdxT = (Ellipsis, Ellipsis, Ellipsis);
         assert_shape_eq::<<IdxT as SliceTarget<(U4, U4, U3)>>::Output, (usize, usize, usize)>();
     }

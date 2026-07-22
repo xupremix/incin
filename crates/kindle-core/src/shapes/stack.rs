@@ -6,9 +6,11 @@ use typenum::{U0, U1, U2, U3, U4, U5, U6};
     label = "Invalid axis for stacking",
     note = "Stacking requires the axis to be <= the rank of the tensor"
 )]
-/// `StackShape`.
+/// Compile-time-checked stacking shape rule: stacking 2 tensors of
+/// shape `Self` along a new dimension inserted at `Axis` produces
+/// `Output` (one rank higher, with a size-2 dimension at `Axis`).
 pub trait StackShape<Axis> {
-    /// The output tensor type produced by this module's forward pass.
+    /// `Self` with a new size-2 dimension inserted at `Axis`.
     type Output: Shape;
 }
 
@@ -16,7 +18,7 @@ impl<D0> StackShape<U0> for (D0,)
 where
     D0: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// `Self` with a new size-2 dimension inserted at `Axis`.
     type Output = (U2, D0);
 }
 
@@ -24,7 +26,7 @@ impl<D0> StackShape<U1> for (D0,)
 where
     D0: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// `Self` with a new size-2 dimension inserted at `Axis`.
     type Output = (D0, U2);
 }
 
@@ -33,7 +35,7 @@ where
     D0: Dim,
     D1: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// `Self` with a new size-2 dimension inserted at `Axis`.
     type Output = (U2, D0, D1);
 }
 
@@ -42,7 +44,7 @@ where
     D0: Dim,
     D1: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// `Self` with a new size-2 dimension inserted at `Axis`.
     type Output = (D0, U2, D1);
 }
 
@@ -51,7 +53,7 @@ where
     D0: Dim,
     D1: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// `Self` with a new size-2 dimension inserted at `Axis`.
     type Output = (D0, D1, U2);
 }
 
@@ -61,7 +63,7 @@ where
     D1: Dim,
     D2: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// `Self` with a new size-2 dimension inserted at `Axis`.
     type Output = (U2, D0, D1, D2);
 }
 
@@ -71,7 +73,7 @@ where
     D1: Dim,
     D2: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// `Self` with a new size-2 dimension inserted at `Axis`.
     type Output = (D0, U2, D1, D2);
 }
 
@@ -81,7 +83,7 @@ where
     D1: Dim,
     D2: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// `Self` with a new size-2 dimension inserted at `Axis`.
     type Output = (D0, D1, U2, D2);
 }
 
@@ -91,7 +93,7 @@ where
     D1: Dim,
     D2: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// `Self` with a new size-2 dimension inserted at `Axis`.
     type Output = (D0, D1, D2, U2);
 }
 
@@ -102,7 +104,7 @@ where
     D2: Dim,
     D3: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// `Self` with a new size-2 dimension inserted at `Axis`.
     type Output = (U2, D0, D1, D2, D3);
 }
 
@@ -113,7 +115,7 @@ where
     D2: Dim,
     D3: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// `Self` with a new size-2 dimension inserted at `Axis`.
     type Output = (D0, U2, D1, D2, D3);
 }
 
@@ -124,7 +126,7 @@ where
     D2: Dim,
     D3: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// `Self` with a new size-2 dimension inserted at `Axis`.
     type Output = (D0, D1, U2, D2, D3);
 }
 
@@ -135,7 +137,7 @@ where
     D2: Dim,
     D3: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// `Self` with a new size-2 dimension inserted at `Axis`.
     type Output = (D0, D1, D2, U2, D3);
 }
 
@@ -146,7 +148,7 @@ where
     D2: Dim,
     D3: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// `Self` with a new size-2 dimension inserted at `Axis`.
     type Output = (D0, D1, D2, D3, U2);
 }
 
@@ -158,7 +160,7 @@ where
     D3: Dim,
     D4: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// `Self` with a new size-2 dimension inserted at `Axis`.
     type Output = (U2, D0, D1, D2, D3, D4);
 }
 
@@ -170,7 +172,7 @@ where
     D3: Dim,
     D4: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// `Self` with a new size-2 dimension inserted at `Axis`.
     type Output = (D0, U2, D1, D2, D3, D4);
 }
 
@@ -182,7 +184,7 @@ where
     D3: Dim,
     D4: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// `Self` with a new size-2 dimension inserted at `Axis`.
     type Output = (D0, D1, U2, D2, D3, D4);
 }
 
@@ -194,7 +196,7 @@ where
     D3: Dim,
     D4: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// `Self` with a new size-2 dimension inserted at `Axis`.
     type Output = (D0, D1, D2, U2, D3, D4);
 }
 
@@ -206,7 +208,7 @@ where
     D3: Dim,
     D4: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// `Self` with a new size-2 dimension inserted at `Axis`.
     type Output = (D0, D1, D2, D3, U2, D4);
 }
 
@@ -218,7 +220,7 @@ where
     D3: Dim,
     D4: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// `Self` with a new size-2 dimension inserted at `Axis`.
     type Output = (D0, D1, D2, D3, D4, U2);
 }
 
@@ -231,7 +233,7 @@ where
     D4: Dim,
     D5: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// `Self` with a new size-2 dimension inserted at `Axis`.
     type Output = (U2, D0, D1, D2, D3, D4, D5);
 }
 
@@ -244,7 +246,7 @@ where
     D4: Dim,
     D5: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// `Self` with a new size-2 dimension inserted at `Axis`.
     type Output = (D0, U2, D1, D2, D3, D4, D5);
 }
 
@@ -257,7 +259,7 @@ where
     D4: Dim,
     D5: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// `Self` with a new size-2 dimension inserted at `Axis`.
     type Output = (D0, D1, U2, D2, D3, D4, D5);
 }
 
@@ -270,7 +272,7 @@ where
     D4: Dim,
     D5: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// `Self` with a new size-2 dimension inserted at `Axis`.
     type Output = (D0, D1, D2, U2, D3, D4, D5);
 }
 
@@ -283,7 +285,7 @@ where
     D4: Dim,
     D5: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// `Self` with a new size-2 dimension inserted at `Axis`.
     type Output = (D0, D1, D2, D3, U2, D4, D5);
 }
 
@@ -296,7 +298,7 @@ where
     D4: Dim,
     D5: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// `Self` with a new size-2 dimension inserted at `Axis`.
     type Output = (D0, D1, D2, D3, D4, U2, D5);
 }
 
@@ -309,11 +311,11 @@ where
     D4: Dim,
     D5: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// `Self` with a new size-2 dimension inserted at `Axis`.
     type Output = (D0, D1, D2, D3, D4, D5, U2);
 }
 
 impl StackShape<U0> for () {
-    /// The output tensor type produced by this module's forward pass.
+    /// `Self` with a new size-2 dimension inserted at `Axis`.
     type Output = (U2,);
 }
