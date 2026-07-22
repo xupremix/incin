@@ -209,7 +209,7 @@ didn't exist.
 |---|---|---|---|
 | `sum_all`/`mean_all`/`max_all`/`min_all`/`sum_dim`/`sum_keepdim`/`mean_dim`/`mean_keepdim`/`max_dim`/`max_keepdim`/`min_dim`/`min_keepdim` | ✅ | ✅ | ✅ `cuda/backend.rs:558-685` (wired `dc46447`) |
 | `argmax`/`argmin` | ✅ | ✅ | ✅ (2026-07-22, `c33cbcc` — `launch_reduce_with_indices_op` covered exactly this) |
-| `topk`/`argsort` | ✅ | ✅ | ❌ not implemented — confirmed `reduce.rs` has no existing kernel/dispatch for multi-element sort along an axis (`launch_reduce_with_indices_op` only finds a single max/min per slice). Needs a genuine host-readback-and-sort implementation ported from `cpu/ops/reduce.rs::topk`/`argsort`, deliberately deferred rather than rushed — see `c33cbcc`'s commit message. |
+| `topk`/`argsort` | ✅ | ✅ | ✅ (2026-07-23 — `cuda_topk_host`/`cuda_argsort_host` in `cuda/backend.rs`, host-readback-and-sort ported verbatim from WGPU's own implementation, see §1.6 below) |
 
 ### 1.6 `QuantizedOps` (`kindle-core/src/tensor/backend.rs:961-992`)
 
@@ -392,9 +392,19 @@ option A):**
 
 ---
 
-## 3. Phase 1 — CUDA backend completion
+## 3. Phase 1 — CUDA backend completion — ✅ ALL SUBSECTIONS COMPLETE (2026-07-23)
 
-This is the largest, highest-value, and most hallucination-risky phase: it's
+Every subsection below (1.1 `TensorOps`/matmul, 1.2 `embedding`, 1.3
+pooling, 1.4 convolution, 1.5 `mish`/`elu`/`gelu`, 1.6 `argmax`/`argmin`/
+`topk`/`argsort`, 1.7 `adamw_step`, plus `quantized_matmul` §1.8) is now
+implemented and compile-verified (`cargo check`/`clippy -D warnings`/
+`test --no-run` for `--features cuda,std`; full workspace CPU/WGPU suite
+green throughout, zero regressions). **None of it has run on real CUDA
+hardware** — every test added during this phase is `#[ignore = "requires
+CUDA hardware"]`; see §4 (Phase 2) for wiring these into the cross-backend
+parity suite next, and §5 (Phase 3) for eventually running them for real.
+
+This was the largest, highest-value, and most hallucination-risky phase: it's
 easy for an agent to "helpfully" write a brand-new naive CUDA kernel for
 something that already has one sitting unused two directories away (this
 happened conceptually with C-1 through C-4 in `ROADMAP.md` — dispatch code
@@ -659,14 +669,35 @@ follow-up in the same file already flagged that assumption may be stale for
 WGPU ("check the actual formula used before assuming `erf` exists" — verify
 the same thing here for whatever CUDA ends up needing).
 
-### 1.6 `ReductionOps` remainder — `argmax`/`argmin`/`topk`/`argsort`
+### 1.6 `ReductionOps` remainder — `argmax`/`argmin`/`topk`/`argsort` — ✅ ALL IMPLEMENTED (`argmax`/`argmin` 2026-07-22 `c33cbcc`; `topk`/`argsort` 2026-07-23)
 
-`cuda/ops/reduce.rs` (515 lines) has `launch_reduce_with_indices_op` and
-`launch_reduce_with_indices_host` already defined — **read this file in full
-before starting**, don't assume what these functions do from their names
-alone. If they already cover `argmax`/`argmin`, this task is pure wiring
-(§3 step 4). `topk`/`argsort` are more likely to need genuinely new logic —
-confirm against the file's actual contents, not this document's guess.
+`argmax`/`argmin` were pure wiring onto `launch_reduce_with_indices_op`, as
+predicted. `topk`/`argsort` needed genuinely new logic, also as predicted —
+but the "genuinely new" part turned out to be smaller than expected once
+WGPU's own implementation was checked first: **WGPU has no GPU kernel for
+`topk`/`argsort` either** — `wgpu/backend.rs::topk`/`argsort` download to a
+host `Vec<f32>`, run a plain per-slice Rust sort, and re-upload, identically
+to CPU's own implementation. So CUDA's `topk`/`argsort`
+(`cuda_topk_host`/`cuda_argsort_host` in `cuda/backend.rs`) port that exact
+algorithm verbatim (same coordinate-decode/sort/flat-index-re-encode loop
+structure) rather than writing a CUDA sorting kernel — this is not a
+CUDA-specific shortcut, it's what every existing backend already does for
+these two ops. New `download_f32_host`/`upload_f32_from_host`/
+`upload_u32_from_host` helpers (reusing the input `CudaStorage`'s existing
+device/stream rather than opening a fresh `CudaContext` like
+`cuda_from_bytes` does) support the round trip.
+
+One pre-existing cross-backend inconsistency surfaced and preserved (not
+introduced): `argmax`/`argmin` convert their index output to `I64` on every
+backend, but `topk`/`argsort` leave it as `U32` on every backend (checked
+CPU's own `topk`/`argsort` — confirmed, not assumed). CUDA's new
+implementation matches this exactly rather than "fixing" it, since changing
+established output dtype on two already-shipped-elsewhere ops is out of
+scope for a CUDA-parity task.
+
+6 new `#[ignore]`d tests: `topk` value+index check (hand-computed, 2×3
+input), `topk` k-clamping, `topk` axis-rejection, `argsort` value check
+(hand-computed), `argsort` axis-rejection.
 
 ### 1.7 `OptimizerOps` — `adamw_step`
 

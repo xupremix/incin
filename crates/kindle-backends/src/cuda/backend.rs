@@ -1163,6 +1163,23 @@ impl<T: DType, D: Device> ReductionOps<Self> for CudaBackendImpl<T, D> {
             crate::cuda::ops::reduce::launch_reduce_with_indices_op("min", &target, axis, false)?;
         crate::cuda::ops::reduce::indices_u32_to_i64(&idx_u32)
     }
+
+    fn topk<K: DType, KInt: DType>(
+        t: &CudaStorage,
+        k: usize,
+        dim: usize,
+        largest: bool,
+    ) -> Result<(CudaStorage, CudaStorage)> {
+        cuda_topk_host(t, k, dim, largest)
+    }
+
+    fn argsort<K: DType, KInt: DType>(
+        t: &CudaStorage,
+        dim: usize,
+        descending: bool,
+    ) -> Result<CudaStorage> {
+        cuda_argsort_host(t, dim, descending)
+    }
 }
 impl<T: DType, D: Device> QuantizedOps<Self> for CudaBackendImpl<T, D> {
     fn quantize<K: FloatDType, Q: QuantDType>(t: &CudaStorage) -> Result<CudaStorage> {
@@ -2000,6 +2017,202 @@ fn cuda_from_bytes(
     Ok(CudaStorage::new(Arc::new(buffer), shape.to_vec()))
 }
 
+/// Downloads an F32 `CudaStorage`'s raw contents to a host `Vec<f32>`.
+fn download_f32_host(t: &CudaStorage) -> Vec<f32> {
+    let bytes = t
+        .buffer
+        .device
+        .default_stream()
+        .clone_dtoh(&*t.buffer.data)
+        .expect("cuda download");
+    bytemuck::cast_slice::<u8, f32>(&bytes).to_vec()
+}
+
+/// Uploads a host `Vec<f32>` as a fresh `CudaStorage` on the same device as
+/// `t_buf`, reusing its existing device/stream (no new `CudaContext`,
+/// unlike `cuda_from_bytes`).
+fn upload_f32_from_host(
+    t_buf: &crate::cuda::storage::CudaBuffer,
+    shape: Vec<usize>,
+    values: Vec<f32>,
+) -> CudaStorage {
+    let stream = t_buf.device.default_stream();
+    let data = stream
+        .clone_htod(bytemuck::cast_slice(&values))
+        .expect("cuda upload");
+    let buffer = crate::cuda::storage::CudaBuffer {
+        len: values.len(),
+        dtype: DTypeId::F32,
+        data: Arc::new(data),
+        device: t_buf.device.clone(),
+        device_id: t_buf.device_id,
+    };
+    CudaStorage::new(Arc::new(buffer), shape)
+}
+
+/// `U32` counterpart of `upload_f32_from_host` — used for `topk`/`argsort`'s
+/// index outputs.
+fn upload_u32_from_host(
+    t_buf: &crate::cuda::storage::CudaBuffer,
+    shape: Vec<usize>,
+    values: Vec<u32>,
+) -> CudaStorage {
+    let stream = t_buf.device.default_stream();
+    let data = stream
+        .clone_htod(bytemuck::cast_slice(&values))
+        .expect("cuda upload");
+    let buffer = crate::cuda::storage::CudaBuffer {
+        len: values.len(),
+        dtype: DTypeId::U32,
+        data: Arc::new(data),
+        device: t_buf.device.clone(),
+        device_id: t_buf.device_id,
+    };
+    CudaStorage::new(Arc::new(buffer), shape)
+}
+
+/// `topk`/`argsort` have no CUDA kernel on ANY backend — WGPU's own
+/// implementation (`wgpu/backend.rs::topk`) is equally a host download, a
+/// plain per-slice Rust sort, and a re-upload; this ports that exact
+/// algorithm (coordinate decode, sort, flat-index re-encode) verbatim, so
+/// it's not a CUDA-specific shortcut, it's what the "true" GPU backend
+/// already does for these two ops. Output indices stay `U32` (never
+/// converted to `I64`), matching CPU/WGPU's own `topk`/`argsort` exactly —
+/// unlike `argmax`/`argmin`, which both DO convert to `I64` on every
+/// backend (a pre-existing inconsistency in the trait's own reference
+/// backends, not something introduced here).
+fn cuda_topk_host(
+    t: &CudaStorage,
+    k: usize,
+    dim: usize,
+    largest: bool,
+) -> Result<(CudaStorage, CudaStorage)> {
+    let shape = t.shape.clone();
+    if dim >= shape.len() {
+        return Err(Error::ShapeMismatch {
+            op: "topk",
+            expected: shape.clone(),
+            got: vec![dim],
+            msg: format!("topk: axis {dim} out of range for shape {shape:?}"),
+        });
+    }
+    let k = k.min(shape[dim]);
+    let data = download_f32_host(t);
+
+    let mut out_shape = shape.clone();
+    out_shape[dim] = k;
+    let mut base_shape = shape.clone();
+    base_shape[dim] = 1;
+
+    let n_slices: usize = base_shape.iter().product();
+    let out_numel: usize = out_shape.iter().product();
+    let mut out_vals = vec![0.0f32; out_numel];
+    let mut out_indices = vec![0u32; out_numel];
+
+    for i in 0..n_slices {
+        let mut rem = i;
+        let mut coords = vec![0usize; shape.len()];
+        for dd in (0..shape.len()).rev() {
+            coords[dd] = rem % base_shape[dd];
+            rem /= base_shape[dd];
+        }
+
+        let mut slice_vals: Vec<(f32, u32)> = Vec::with_capacity(shape[dim]);
+        for j in 0..shape[dim] {
+            coords[dim] = j;
+            let mut flat = 0usize;
+            let mut stride = 1usize;
+            for dd in (0..shape.len()).rev() {
+                flat += coords[dd] * stride;
+                stride *= shape[dd];
+            }
+            slice_vals.push((data[flat], j as u32));
+        }
+        if largest {
+            slice_vals.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(core::cmp::Ordering::Equal));
+        } else {
+            slice_vals.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(core::cmp::Ordering::Equal));
+        }
+
+        let mut out_coords = coords.clone();
+        for (j, &(val, idx)) in slice_vals.iter().enumerate().take(k) {
+            out_coords[dim] = j;
+            let mut flat = 0usize;
+            let mut stride = 1usize;
+            for dd in (0..out_shape.len()).rev() {
+                flat += out_coords[dd] * stride;
+                stride *= out_shape[dd];
+            }
+            out_vals[flat] = val;
+            out_indices[flat] = idx;
+        }
+    }
+
+    let t_buf = &*t.buffer;
+    let vals_out = upload_f32_from_host(t_buf, out_shape.clone(), out_vals);
+    let indices_out = upload_u32_from_host(t_buf, out_shape, out_indices);
+    Ok((vals_out, indices_out))
+}
+
+/// See `cuda_topk_host`'s doc — same "no CUDA kernel on any backend, ported
+/// verbatim from WGPU's host loop" note applies here.
+fn cuda_argsort_host(t: &CudaStorage, dim: usize, descending: bool) -> Result<CudaStorage> {
+    let shape = t.shape.clone();
+    if dim >= shape.len() {
+        return Err(Error::ShapeMismatch {
+            op: "argsort",
+            expected: shape.clone(),
+            got: vec![dim],
+            msg: format!("argsort: axis {dim} out of range for shape {shape:?}"),
+        });
+    }
+    let data = download_f32_host(t);
+
+    let mut base_shape = shape.clone();
+    base_shape[dim] = 1;
+    let n_slices: usize = base_shape.iter().product();
+    let mut out = vec![0u32; shape.iter().product()];
+
+    for i in 0..n_slices {
+        let mut rem = i;
+        let mut coords = vec![0usize; shape.len()];
+        for dd in (0..shape.len()).rev() {
+            coords[dd] = rem % base_shape[dd];
+            rem /= base_shape[dd];
+        }
+
+        let mut slice_vals: Vec<(f32, u32)> = Vec::with_capacity(shape[dim]);
+        for j in 0..shape[dim] {
+            coords[dim] = j;
+            let mut flat = 0usize;
+            let mut stride = 1usize;
+            for dd in (0..shape.len()).rev() {
+                flat += coords[dd] * stride;
+                stride *= shape[dd];
+            }
+            slice_vals.push((data[flat], j as u32));
+        }
+        if descending {
+            slice_vals.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(core::cmp::Ordering::Equal));
+        } else {
+            slice_vals.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(core::cmp::Ordering::Equal));
+        }
+        for (j, &(_, idx)) in slice_vals.iter().enumerate() {
+            coords[dim] = j;
+            let mut flat = 0usize;
+            let mut stride = 1usize;
+            for dd in (0..shape.len()).rev() {
+                flat += coords[dd] * stride;
+                stride *= shape[dd];
+            }
+            out[flat] = idx;
+        }
+    }
+
+    let t_buf = &*t.buffer;
+    Ok(upload_u32_from_host(t_buf, shape, out))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2045,20 +2258,6 @@ mod tests {
 
     fn cuda_f32(shape: &[usize], values: Vec<f32>) -> CudaStorage {
         cuda_from_f32(shape, DTypeId::F32, &DeviceId::cuda(0), values, "test").unwrap()
-    }
-
-    /// Downloads an F32 `CudaStorage`'s raw contents to a host `Vec<f32>`
-    /// for value-level assertions (the shape-only tests elsewhere in this
-    /// module predate this helper; conv's tests use it to cross-check
-    /// against CPU's own hand-computed conv fixtures, not just shapes).
-    fn download_f32(t: &CudaStorage) -> Vec<f32> {
-        let bytes = t
-            .buffer
-            .device
-            .default_stream()
-            .clone_dtoh(&*t.buffer.data)
-            .expect("cuda download");
-        bytemuck::cast_slice::<u8, f32>(&bytes).to_vec()
     }
 
     #[test]
@@ -2290,7 +2489,7 @@ mod tests {
         let w = cuda_f32(&[1, 1, 2], vec![1.0, 1.0]);
         let out = <B as ModuleOps<B>>::conv1d::<f32>(&t, &w, None, 1, 0, 1, 1).unwrap();
         assert_eq!(out.shape, vec![1, 1, 3]);
-        let vals = download_f32(&out);
+        let vals = download_f32_host(&out);
         assert_eq!(vals, vec![3.0, 5.0, 7.0]);
     }
 
@@ -2326,7 +2525,7 @@ mod tests {
         let w = cuda_f32(&[1, 1, 2, 2], vec![1.0, 1.0, 1.0, 1.0]);
         let out = <B as ModuleOps<B>>::conv2d::<f32>(&t, &w, None, 1, 0, 1, 1).unwrap();
         assert_eq!(out.shape, vec![1, 1, 2, 2]);
-        let vals = download_f32(&out);
+        let vals = download_f32_host(&out);
         assert_eq!(vals, vec![12.0, 16.0, 24.0, 28.0]);
     }
 
@@ -2337,7 +2536,7 @@ mod tests {
         let w = cuda_f32(&[1, 1, 1, 1], vec![1.0]);
         let bias = cuda_f32(&[1], vec![10.0]);
         let out = <B as ModuleOps<B>>::conv2d::<f32>(&t, &w, Some(&bias), 1, 0, 1, 1).unwrap();
-        let vals = download_f32(&out);
+        let vals = download_f32_host(&out);
         assert_eq!(vals, vec![11.0, 12.0, 13.0, 14.0]);
     }
 
@@ -2365,7 +2564,7 @@ mod tests {
         let w = cuda_f32(&[2, 1, 1, 1], vec![2.0, 3.0]);
         let out = <B as ModuleOps<B>>::conv2d::<f32>(&t, &w, None, 1, 0, 1, 2).unwrap();
         assert_eq!(out.shape, vec![1, 2, 2, 2]);
-        let vals = download_f32(&out);
+        let vals = download_f32_host(&out);
         assert_eq!(vals, vec![2.0, 4.0, 6.0, 8.0, 15.0, 18.0, 21.0, 24.0]);
     }
 
@@ -2551,6 +2750,66 @@ mod tests {
     fn argmax_rejects_out_of_range_axis() {
         let t = cuda_f32(&[2, 3], vec![0.0; 6]);
         assert!(<B as ReductionOps<B>>::argmax::<f32, i64>(&t, Some(5)).is_err());
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn topk_returns_largest_k_values_and_their_indices() {
+        // row0=[1,5,3], row1=[4,2,6]; dim=1, k=2, largest=true.
+        let t = cuda_f32(&[2, 3], vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0]);
+        let (vals, indices) = <B as ReductionOps<B>>::topk::<f32, u32>(&t, 2, 1, true).unwrap();
+        assert_eq!(vals.shape, vec![2, 2]);
+        assert_eq!(indices.shape, vec![2, 2]);
+        assert_eq!(download_f32_host(&vals), vec![5.0, 3.0, 6.0, 4.0]);
+        let idx_bytes = indices
+            .buffer
+            .device
+            .default_stream()
+            .clone_dtoh(&*indices.buffer.data)
+            .unwrap();
+        let idx_vals: Vec<u32> = bytemuck::cast_slice::<u8, u32>(&idx_bytes).to_vec();
+        assert_eq!(idx_vals, vec![1, 2, 2, 0]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn topk_clamps_k_to_axis_length() {
+        let t = cuda_f32(&[1, 3], vec![1.0, 2.0, 3.0]);
+        let (vals, indices) = <B as ReductionOps<B>>::topk::<f32, u32>(&t, 10, 1, true).unwrap();
+        assert_eq!(vals.shape, vec![1, 3]);
+        assert_eq!(indices.shape, vec![1, 3]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn topk_rejects_out_of_range_axis() {
+        let t = cuda_f32(&[2, 3], vec![0.0; 6]);
+        assert!(<B as ReductionOps<B>>::topk::<f32, u32>(&t, 1, 5, true).is_err());
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn argsort_returns_ascending_indices_per_row() {
+        // row0=[1,5,3] -> ascending order is indices [0,2,1]; row1=[4,2,6]
+        // -> ascending order is indices [1,0,2].
+        let t = cuda_f32(&[2, 3], vec![1.0, 5.0, 3.0, 4.0, 2.0, 6.0]);
+        let out = <B as ReductionOps<B>>::argsort::<f32, u32>(&t, 1, false).unwrap();
+        assert_eq!(out.shape, vec![2, 3]);
+        let bytes = out
+            .buffer
+            .device
+            .default_stream()
+            .clone_dtoh(&*out.buffer.data)
+            .unwrap();
+        let idx_vals: Vec<u32> = bytemuck::cast_slice::<u8, u32>(&bytes).to_vec();
+        assert_eq!(idx_vals, vec![0, 2, 1, 1, 0, 2]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn argsort_rejects_out_of_range_axis() {
+        let t = cuda_f32(&[2, 3], vec![0.0; 6]);
+        assert!(<B as ReductionOps<B>>::argsort::<f32, u32>(&t, 5, false).is_err());
     }
 
     #[test]
