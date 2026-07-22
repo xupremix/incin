@@ -3,59 +3,67 @@ use crate::prelude::Dyn;
 use core::{fmt::Debug, marker::PhantomData};
 pub use half::{bf16, f16};
 
-/// `DType`.
+/// A type-level tensor element type (`f32`, `f16`, `bf16`, `u8`, `i64`,
+/// `Q8_0`, or `Dyn` for a runtime-chosen dtype). Paired with a `Device`
+/// via `BackendFor<T>` to select a concrete backend.
 pub trait DType: 'static + Clone + Debug + Send + Sync + PartialEq {
-    /// `Arg`.
+    /// The user-facing constructor argument (`()` for compile-time-fixed
+    /// dtypes, `DTypeId` for `Dyn`).
     type Arg;
-    /// `Field`.
+    /// The runtime-stored representation (a `PhantomData` for compile-
+    /// time-fixed dtypes, `DTypeId` for `Dyn`).
     type Field: Debug + Clone;
-    /// `init`.
+    /// Converts a user-facing `Arg` into the stored `Field` representation.
     fn init(arg: Self::Arg) -> Self::Field;
-    /// `to_kindle`.
+    /// Resolves this dtype's runtime `DTypeId`.
     fn to_kindle(dtype: &Self::Field) -> DTypeId;
 }
 
-/// `FloatDType`.
+/// Marker for floating-point dtypes (`f32`/`f64`/`f16`/`bf16`).
 pub trait FloatDType: DType {}
-/// `IntDType`.
+/// Marker for integer dtypes (`u8`/`u32`/`i64`).
 pub trait IntDType: DType {}
-/// `BoolDType`.
+/// Marker for the boolean dtype.
 pub trait BoolDType: DType {}
 
-/// `ConstDType`.
+/// A `DType` whose identity is fully known at compile time (as opposed to
+/// `Dyn`, which is resolved at runtime) — takes no constructor argument.
 pub trait ConstDType: DType<Arg = ()> {
     /// The Rust element type corresponding to this dtype.
     type Elem: 'static + Copy + Debug + Send + Sync;
-    /// `DTYPE`.
+    /// The compile-time-known `DTypeId`.
     const DTYPE: DTypeId;
 }
 
-/// `QuantDType`.
+/// Marker for block-quantized dtypes (e.g. `Q8_0`) — storage formats with
+/// their own internal scale/block structure, not plain scalar elements.
 pub trait QuantDType: DType {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-/// `Q8_0`.
+/// Q8_0 block quantization: groups of 32 elements share one `f32` scale,
+/// each element stored as a scaled `i8`.
 pub struct Q8_0;
 
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-/// `DTypeId`.
+/// The runtime-identifiable element type a storage handle holds — every
+/// `DType::to_kindle` resolves to one of these.
 pub enum DTypeId {
-    /// `U8`.
+    /// 8-bit unsigned integer.
     U8,
-    /// `U32`.
+    /// 32-bit unsigned integer.
     U32,
-    /// `I64`.
+    /// 64-bit signed integer.
     I64,
-    /// `BF16`.
+    /// 16-bit brain floating point.
     BF16,
-    /// `F16`.
+    /// 16-bit (IEEE 754 half-precision) floating point.
     F16,
-    /// `F32`.
+    /// 32-bit floating point.
     F32,
-    /// `F64`.
+    /// 64-bit floating point.
     F64,
-    /// `Q8_0`.
+    /// Q8_0 block-quantized 8-bit integer.
     Q8_0,
 }
 
@@ -75,23 +83,23 @@ macro_rules! impl_dtype {
     ($($repr:ident $t:ty),* $(,)?) => {
         $(
             impl DType for $t {
-                /// `Arg`.
+                /// No argument needed — the dtype is fixed by the Rust type itself.
                 type Arg = ();
-                /// `Field`.
+                /// Zero-sized: the value is fixed by the type.
                 type Field = PhantomData<$t>;
-                /// `to_kindle`.
+                /// The compile-time-known `DTypeId` for this Rust type.
                 fn to_kindle(_: &Self::Field) -> DTypeId {
                     DTypeId::$repr
                 }
-                /// `init`.
+                /// No-op: nothing to convert.
                 fn init(_: Self::Arg) -> Self::Field {
                     PhantomData
                 }
             }
             impl ConstDType for $t {
-                /// `Elem`.
+                /// This Rust type itself.
                 type Elem = $t;
-                /// `DTYPE`.
+                /// The compile-time-known `DTypeId`.
                 const DTYPE: DTypeId = DTypeId::$repr;
             }
         )*
@@ -121,17 +129,18 @@ impl IntDType for i64 {}
 impl QuantDType for Q8_0 {}
 
 impl DType for Dyn {
-    /// `Arg`.
+    /// The runtime-chosen dtype.
     type Arg = DTypeId;
-    /// `Field`.
+    /// Stored directly — `Dyn`'s whole point is deferring dtype choice
+    /// to runtime, so `Field` is just the `DTypeId` itself.
     type Field = DTypeId;
 
-    /// `init`.
+    /// Stores the `DTypeId` verbatim.
     fn init(arg: Self::Arg) -> Self::Field {
         arg
     }
 
-    /// `to_kindle`.
+    /// Already a `DTypeId` — returned as-is.
     fn to_kindle(dtype: &Self::Field) -> DTypeId {
         *dtype
     }
