@@ -655,6 +655,147 @@ impl<T: DType, D: Device> FloatOps<Self> for CudaBackendImpl<T, D> {
         Ok(out)
     }
 
+    /// `mish(x) = x * tanh(softplus(x))`. Forward/backward formulas ported
+    /// verbatim from `cpu/ops/elementwise_kernel.rs`'s `UnaryOp::Mish` /
+    /// `cpu/ops/elementwise.rs::mish`'s backward closure — not re-derived —
+    /// including the `x > 20` softplus overflow guard.
+    fn mish<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
+        let softplus_expr = "x > 20.0f ? x : logf(1.0f + expf(x))";
+        let sp = crate::cuda::ops::elementwise::launch_unary_op("softplus", softplus_expr, t)?;
+        let th = crate::cuda::ops::elementwise::launch_unary_op("tanhf", "tanhf(x)", &sp)?;
+        let out =
+            crate::cuda::ops::elementwise::launch_binary_op("mul", "a * b", t, &th, &t.shape)?;
+        let t_capture = t.clone();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            let sp = crate::cuda::ops::elementwise::launch_unary_op(
+                "softplus",
+                softplus_expr,
+                &t_capture,
+            )
+            .expect("softplus (mish backward)");
+            let th = crate::cuda::ops::elementwise::launch_unary_op("tanhf", "tanhf(x)", &sp)
+                .expect("tanh(softplus) (mish backward)");
+            let sig = crate::cuda::ops::elementwise::launch_unary_op(
+                "sigmoid",
+                "1.0f / (1.0f + expf(-x))",
+                &t_capture,
+            )
+            .expect("sigmoid (mish backward)");
+            // deriv = th + x * sig * (1 - th^2)
+            let th_sq = crate::cuda::ops::elementwise::launch_binary_op(
+                "mul", "a * b", &th, &th, &th.shape,
+            )
+            .expect("th^2 (mish backward)");
+            let one_minus_th_sq =
+                crate::cuda::ops::elementwise::launch_unary_op("one_minus", "1.0f - x", &th_sq)
+                    .expect("1 - th^2 (mish backward)");
+            let x_sig = crate::cuda::ops::elementwise::launch_binary_op(
+                "mul",
+                "a * b",
+                &t_capture,
+                &sig,
+                &t_capture.shape,
+            )
+            .expect("x * sig (mish backward)");
+            let term2 = crate::cuda::ops::elementwise::launch_binary_op(
+                "mul",
+                "a * b",
+                &x_sig,
+                &one_minus_th_sq,
+                &x_sig.shape,
+            )
+            .expect("x*sig*(1-th^2) (mish backward)");
+            let deriv = crate::cuda::ops::elementwise::launch_binary_op(
+                "add", "a + b", &th, &term2, &th.shape,
+            )
+            .expect("mish deriv");
+            crate::cuda::ops::elementwise::launch_binary_op(
+                "mul",
+                "a * b",
+                grad_out,
+                &deriv,
+                &grad_out.shape,
+            )
+            .expect("mish backward")
+        });
+        Ok(out)
+    }
+
+    /// `elu(x) = x > 0 ? x : exp(x) - 1`. Backward is output-based
+    /// (`o > 0 ? 1 : o + 1`), ported verbatim from
+    /// `cpu/ops/elementwise.rs::elu`'s backward closure.
+    fn elu<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
+        let out = crate::cuda::ops::elementwise::launch_unary_op(
+            "elu",
+            "x > 0.0f ? x : expf(x) - 1.0f",
+            t,
+        )?;
+        let out_capture = out.clone();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            let deriv = crate::cuda::ops::elementwise::launch_unary_op(
+                "elu_grad",
+                "x > 0.0f ? 1.0f : x + 1.0f",
+                &out_capture,
+            )
+            .expect("elu deriv");
+            crate::cuda::ops::elementwise::launch_binary_op(
+                "mul",
+                "a * b",
+                grad_out,
+                &deriv,
+                &grad_out.shape,
+            )
+            .expect("elu backward")
+        });
+        Ok(out)
+    }
+
+    /// `gelu(x) = x * 0.5 * (1 + erf(x/sqrt(2)))`, using CUDA's native
+    /// `erff` device intrinsic (unlike WGPU, which has no `erf` primitive
+    /// and needed a polynomial approximation — see `ROADMAP.md`'s C-3
+    /// notes). Backward ported verbatim from
+    /// `cpu/ops/elementwise.rs::gelu`'s backward closure (input-based:
+    /// `cdf(x) + x * pdf(x)`).
+    fn gelu<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
+        let cdf_expr = "0.5f * (1.0f + erff(x * 0.7071067811865476f))";
+        let cdf = crate::cuda::ops::elementwise::launch_unary_op("gelu_cdf", cdf_expr, t)?;
+        let out =
+            crate::cuda::ops::elementwise::launch_binary_op("mul", "a * b", t, &cdf, &t.shape)?;
+        let t_capture = t.clone();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            let cdf =
+                crate::cuda::ops::elementwise::launch_unary_op("gelu_cdf", cdf_expr, &t_capture)
+                    .expect("cdf (gelu backward)");
+            let pdf = crate::cuda::ops::elementwise::launch_unary_op(
+                "gelu_pdf",
+                "0.3989422804014327f * expf(-x * x * 0.5f)",
+                &t_capture,
+            )
+            .expect("pdf (gelu backward)");
+            let x_pdf = crate::cuda::ops::elementwise::launch_binary_op(
+                "mul",
+                "a * b",
+                &t_capture,
+                &pdf,
+                &t_capture.shape,
+            )
+            .expect("x*pdf (gelu backward)");
+            let deriv = crate::cuda::ops::elementwise::launch_binary_op(
+                "add", "a + b", &cdf, &x_pdf, &cdf.shape,
+            )
+            .expect("gelu deriv");
+            crate::cuda::ops::elementwise::launch_binary_op(
+                "mul",
+                "a * b",
+                grad_out,
+                &deriv,
+                &grad_out.shape,
+            )
+            .expect("gelu backward")
+        });
+        Ok(out)
+    }
+
     fn exp<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
         let out = crate::cuda::ops::elementwise::launch_unary_op("exp", "expf(x)", t)?;
         let out_capture = out.clone();
@@ -1652,5 +1793,65 @@ mod tests {
             .get(pred_id)
             .expect("mse_loss pred should have a gradient");
         assert_eq!(g.shape, vec![2, 3]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn mish_forward_matches_hand_computed_value() {
+        // mish(0) = 0 * tanh(ln(2)) = 0
+        let t = cuda_f32(&[1], vec![0.0]);
+        let out = <B as FloatOps<B>>::mish::<f32>(&t).unwrap();
+        assert_eq!(out.shape, vec![1]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn mish_backward_produces_gradient() {
+        let t = cuda_f32(&[3], vec![-1.0, 0.0, 1.0]);
+        let t_id = t.id;
+        let out = <B as FloatOps<B>>::mish::<f32>(&t).unwrap();
+        let grads = crate::cuda::tape::backward(&out).unwrap();
+        let g = grads.get(t_id).expect("mish input should have a gradient");
+        assert_eq!(g.shape, vec![3]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn elu_forward_matches_hand_computed_value() {
+        // elu(1) = 1 ; elu(-1) = exp(-1) - 1
+        let t = cuda_f32(&[2], vec![1.0, -1.0]);
+        let out = <B as FloatOps<B>>::elu::<f32>(&t).unwrap();
+        assert_eq!(out.shape, vec![2]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn elu_backward_produces_gradient() {
+        let t = cuda_f32(&[2], vec![1.0, -1.0]);
+        let t_id = t.id;
+        let out = <B as FloatOps<B>>::elu::<f32>(&t).unwrap();
+        let grads = crate::cuda::tape::backward(&out).unwrap();
+        let g = grads.get(t_id).expect("elu input should have a gradient");
+        assert_eq!(g.shape, vec![2]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn gelu_forward_matches_hand_computed_value() {
+        // gelu(0) = 0 * 0.5 * (1 + erf(0)) = 0
+        let t = cuda_f32(&[1], vec![0.0]);
+        let out = <B as FloatOps<B>>::gelu::<f32>(&t).unwrap();
+        assert_eq!(out.shape, vec![1]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn gelu_backward_produces_gradient() {
+        let t = cuda_f32(&[3], vec![-1.0, 0.0, 1.0]);
+        let t_id = t.id;
+        let out = <B as FloatOps<B>>::gelu::<f32>(&t).unwrap();
+        let grads = crate::cuda::tape::backward(&out).unwrap();
+        let g = grads.get(t_id).expect("gelu input should have a gradient");
+        assert_eq!(g.shape, vec![3]);
     }
 }
