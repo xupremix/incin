@@ -1039,6 +1039,50 @@ pub mod dummy {
 
     impl<T: DType, D: Device + Clone + 'static, K: DType> SupportsDType<K> for DummyBackend<T, D> {}
 
+    /// Output spatial size for conv/pool shape math:
+    /// `(in + 2*pad - dilation*(kernel-1) - 1) / stride + 1`. Uses saturating
+    /// arithmetic throughout (never panics/wraps on pathological inputs —
+    /// small `in` with a large `kernel`/`dilation`/`padding` would otherwise
+    /// underflow the `usize` subtraction), matching the CPU backend's own
+    /// `out_size` (`cpu/ops/pool.rs`), which already uses the same
+    /// saturate-rather-than-error convention for this exact case. This is
+    /// shape-only bookkeeping for `DummyBackend` (a test-only stand-in with
+    /// no real storage), so a saturated/degenerate size is the appropriate
+    /// "can't compute a real answer" response, not an error.
+    fn conv_out_size(
+        len: usize,
+        kernel_size: usize,
+        stride: usize,
+        padding: usize,
+        dilation: usize,
+    ) -> usize {
+        let padded = len.saturating_add(2 * padding);
+        let effective_kernel = dilation
+            .saturating_mul(kernel_size.saturating_sub(1))
+            .saturating_add(1);
+        padded.saturating_sub(effective_kernel) / stride.max(1) + 1
+    }
+
+    /// Output spatial size for `conv_transpose2d` shape math:
+    /// `(in - 1) * stride - 2*pad + dilation*(kernel-1) + output_padding + 1`.
+    /// Same saturating-arithmetic rationale as `conv_out_size`.
+    fn conv_transpose_out_size(
+        len: usize,
+        kernel_size: usize,
+        stride: usize,
+        padding: usize,
+        output_padding: usize,
+        dilation: usize,
+    ) -> usize {
+        let strided = len.saturating_sub(1).saturating_mul(stride);
+        let effective_kernel = dilation.saturating_mul(kernel_size.saturating_sub(1));
+        strided
+            .saturating_sub(2 * padding)
+            .saturating_add(effective_kernel)
+            .saturating_add(output_padding)
+            .saturating_add(1)
+    }
+
     impl<T: DType, D: Device + Clone + 'static, NewD: Device + Clone + 'static> TransferTo<NewD>
         for DummyBackend<T, D>
     {
@@ -1619,7 +1663,7 @@ pub mod dummy {
                 let k = w[w.len() - 1];
                 let c_out = w[0]; // Assuming [C_out, C_in / groups, K]
                 out[len - 2] = c_out;
-                out[len - 1] = (l_in + 2 * p - d * (k - 1) - 1) / s + 1;
+                out[len - 1] = conv_out_size(l_in, k, s, p, d);
             }
             Ok(out)
         }
@@ -1642,8 +1686,8 @@ pub mod dummy {
                 let k_w = w[w.len() - 1];
                 let c_out = w[0]; // [C_out, C_in / groups, K_H, K_W]
                 out[len - 3] = c_out;
-                out[len - 2] = (h_in + 2 * p - d * (k_h - 1) - 1) / s + 1;
-                out[len - 1] = (w_in + 2 * p - d * (k_w - 1) - 1) / s + 1;
+                out[len - 2] = conv_out_size(h_in, k_h, s, p, d);
+                out[len - 1] = conv_out_size(w_in, k_w, s, p, d);
             }
             Ok(out)
         }
@@ -1667,8 +1711,8 @@ pub mod dummy {
                 let k_w = w[w.len() - 1];
                 let c_out = w[1]; // [C_in, C_out / groups, K_H, K_W]
                 out[len - 3] = c_out;
-                out[len - 2] = (h_in - 1) * s - 2 * p + d * (k_h - 1) + op + 1;
-                out[len - 1] = (w_in - 1) * s - 2 * p + d * (k_w - 1) + op + 1;
+                out[len - 2] = conv_transpose_out_size(h_in, k_h, s, p, op, d);
+                out[len - 1] = conv_transpose_out_size(w_in, k_w, s, p, op, d);
             }
             Ok(out)
         }
@@ -1685,8 +1729,8 @@ pub mod dummy {
             if len >= 2 {
                 let h_in = out[len - 2];
                 let w_in = out[len - 1];
-                out[len - 2] = (h_in + 2 * p.0 - d.0 * (k.0 - 1) - 1) / s.0 + 1;
-                out[len - 1] = (w_in + 2 * p.1 - d.1 * (k.1 - 1) - 1) / s.1 + 1;
+                out[len - 2] = conv_out_size(h_in, k.0, s.0, p.0, d.0);
+                out[len - 1] = conv_out_size(w_in, k.1, s.1, p.1, d.1);
             }
             Ok(out)
         }
@@ -1702,8 +1746,8 @@ pub mod dummy {
             if len >= 2 {
                 let h_in = out[len - 2];
                 let w_in = out[len - 1];
-                out[len - 2] = (h_in + 2 * p.0 - (k.0 - 1) - 1) / s.0 + 1;
-                out[len - 1] = (w_in + 2 * p.1 - (k.1 - 1) - 1) / s.1 + 1;
+                out[len - 2] = conv_out_size(h_in, k.0, s.0, p.0, 1);
+                out[len - 1] = conv_out_size(w_in, k.1, s.1, p.1, 1);
             }
             Ok(out)
         }
