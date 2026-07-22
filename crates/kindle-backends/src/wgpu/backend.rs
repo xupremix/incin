@@ -1177,6 +1177,101 @@ fn reduce_dim_to_storage(t: &WgpuStorage, dim: usize, mode: u32, keepdim: bool) 
     WgpuStorage::new(out_buf, final_shape)
 }
 
+/// Splits a contiguous shape into `(outer, axis, inner)` element counts
+/// around `dim`, i.e. `shape[..dim]`, `shape[dim]`, `shape[dim+1..]`
+/// products. For a contiguous row-major tensor this is enough to address
+/// any element directly (`outer_idx*(axis*inner) + axis_idx*inner + inner_idx`)
+/// without a general N-dimensional odometer — WGPU storage has no
+/// non-contiguous view support, so this always applies.
+fn axis_reduce_dims(shape: &[usize], dim: usize) -> (usize, usize, usize) {
+    let outer: usize = shape[..dim].iter().product();
+    let axis = shape[dim];
+    let inner: usize = shape[dim + 1..].iter().product();
+    (outer, axis, inner)
+}
+
+/// Backward for `max_dim`/`min_dim`: recomputes each output position's
+/// winning (first-encountered, strict `>`/`<`) source position from the
+/// captured input, then scatters `grad_out`'s value there with a bare `=`
+/// (never `+=` — unlike pooling, a plain axis reduction never has two output
+/// positions sharing the same winning source element). Mirrors the CPU
+/// backend's `max_axis_with_indices`/`min_axis_with_indices` +
+/// `scatter_axis_grad` (`cpu/ops/reduce.rs`) exactly. Not used for
+/// `max_keepdim`/`min_keepdim` — see their doc comments.
+fn push_extremum_dim_tape_entry(t: &WgpuStorage, out: &WgpuStorage, dim: usize, is_max: bool) {
+    let input_shape = t.shape.clone();
+    let t_capture = t.clone();
+    let (t_id, out_id) = (t.id, out.id);
+    crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
+            let (outer, axis, inner) = axis_reduce_dims(&input_shape, dim);
+            let input_data = t_capture.buffer.to_vec::<f32>();
+            let grad_data = grad_out.buffer.to_vec::<f32>();
+            let mut grad_input = vec![0.0f32; outer * axis * inner];
+            for o in 0..outer {
+                for i in 0..inner {
+                    let mut best_val = if is_max {
+                        f32::NEG_INFINITY
+                    } else {
+                        f32::INFINITY
+                    };
+                    let mut best_flat = o * (axis * inner) + i;
+                    for a in 0..axis {
+                        let flat = o * (axis * inner) + a * inner + i;
+                        let v = input_data[flat];
+                        if (is_max && v > best_val) || (!is_max && v < best_val) {
+                            best_val = v;
+                            best_flat = flat;
+                        }
+                    }
+                    let flat_out = o * inner + i;
+                    grad_input[best_flat] = grad_data[flat_out];
+                }
+            }
+            vec![WgpuStorage::new(
+                WgpuBuffer::from_slice(&grad_input),
+                input_shape.clone(),
+            )]
+        }),
+    });
+}
+
+/// Backward for `max_all`/`min_all`: the whole-tensor special case of
+/// `push_extremum_dim_tape_entry` (`outer = inner = 1`, `axis = numel`).
+fn push_extremum_all_tape_entry(t: &WgpuStorage, out: &WgpuStorage, is_max: bool) {
+    let input_shape = t.shape.clone();
+    let t_capture = t.clone();
+    let (t_id, out_id) = (t.id, out.id);
+    crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
+            let input_data = t_capture.buffer.to_vec::<f32>();
+            let grad_val = grad_out.buffer.to_vec::<f32>()[0];
+            let mut best_val = if is_max {
+                f32::NEG_INFINITY
+            } else {
+                f32::INFINITY
+            };
+            let mut best_flat = 0usize;
+            for (flat, &v) in input_data.iter().enumerate() {
+                if (is_max && v > best_val) || (!is_max && v < best_val) {
+                    best_val = v;
+                    best_flat = flat;
+                }
+            }
+            let mut grad_input = vec![0.0f32; input_data.len()];
+            grad_input[best_flat] = grad_val;
+            vec![WgpuStorage::new(
+                WgpuBuffer::from_slice(&grad_input),
+                input_shape.clone(),
+            )]
+        }),
+    });
+}
+
 impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackendImpl<T, D> {
     /// `sum_all`.
     fn sum_all<K: DType>(
@@ -1223,13 +1318,17 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackendImpl<T, D> {
     fn max_all<K: DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        Ok(reduce_all_to_storage(t, 1))
+        let out = reduce_all_to_storage(t, 1);
+        push_extremum_all_tape_entry(t, &out, true);
+        Ok(out)
     }
     /// `min_all`.
     fn min_all<K: DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        Ok(reduce_all_to_storage(t, 2))
+        let out = reduce_all_to_storage(t, 2);
+        push_extremum_all_tape_entry(t, &out, false);
+        Ok(out)
     }
 
     /// `sum_dim`.
@@ -1323,9 +1422,21 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackendImpl<T, D> {
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        Ok(reduce_dim_to_storage(t, dim, 1, false))
+        let out = reduce_dim_to_storage(t, dim, 1, false);
+        push_extremum_dim_tape_entry(t, &out, dim, true);
+        Ok(out)
     }
     /// `max_keepdim`.
+    ///
+    /// Deliberately NOT autograd-wired, unlike `max_dim` above. `log_softmax`
+    /// (used by `softmax`/`cross_entropy_loss`) calls this to subtract a
+    /// per-row max purely for numerical stability; softmax's value is
+    /// invariant to that per-row constant, so that subtraction must act as a
+    /// stop-gradient. It currently does, only because this function pushes no
+    /// `TapeEntry`. Wiring a real gradient here would silently corrupt every
+    /// caller that goes through `log_softmax` unless that call site is first
+    /// changed to a genuinely detached max — do not "complete the set" with
+    /// `max_dim`/`min_dim` above without also fixing that.
     fn max_keepdim<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
@@ -1337,9 +1448,18 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackendImpl<T, D> {
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        Ok(reduce_dim_to_storage(t, dim, 2, false))
+        let out = reduce_dim_to_storage(t, dim, 2, false);
+        push_extremum_dim_tape_entry(t, &out, dim, false);
+        Ok(out)
     }
     /// `min_keepdim`.
+    ///
+    /// Deliberately NOT autograd-wired — see `max_keepdim`'s doc comment
+    /// above; the same `log_softmax` stop-gradient reasoning applies (even
+    /// though `log_softmax` only actually calls `max_keepdim`, not this one,
+    /// keeping both un-wired keeps the pair symmetric and avoids a future
+    /// caller relying on `min_keepdim` being differentiable when its sibling
+    /// deliberately isn't).
     fn min_keepdim<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,

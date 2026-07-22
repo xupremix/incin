@@ -1258,3 +1258,76 @@ fn adaptive_avg_pool2d_backward_matches_finite_difference_with_uneven_windows() 
         "adaptive_avg_pool2d gradcheck max abs diff too high: {max_abs_diff:.6}"
     );
 }
+
+// ── max/min reduction backward (previously unwired) ─────────────────────────
+//
+// max_keepdim/min_keepdim are deliberately NOT covered here — see their doc
+// comments in wgpu/backend.rs: log_softmax relies on max_keepdim staying a
+// stop-gradient for its numerical-stability subtraction.
+
+#[test]
+fn max_all_backward_routes_gradient_to_winning_element() {
+    let t = storage(vec![1.0, 5.0, 3.0, 4.0], vec![2, 2]);
+    let out = <B as ReductionOps<B>>::max_all::<f32>(&t).unwrap();
+    let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+    let gt = grads.get(t.id).expect("t should have gradient");
+    assert!(vec_approx_eq(&readback(gt), &[0.0, 1.0, 0.0, 0.0], 1e-5));
+}
+
+#[test]
+fn min_all_backward_routes_gradient_to_winning_element() {
+    let t = storage(vec![1.0, 5.0, -3.0, 4.0], vec![2, 2]);
+    let out = <B as ReductionOps<B>>::min_all::<f32>(&t).unwrap();
+    let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+    let gt = grads.get(t.id).expect("t should have gradient");
+    assert!(vec_approx_eq(&readback(gt), &[0.0, 0.0, 1.0, 0.0], 1e-5));
+}
+
+#[test]
+fn max_dim_backward_matches_finite_difference() {
+    // Distinct, well-separated values per axis-0 pair so no window has a
+    // near-tie a finite-difference perturbation could flip the argmax on.
+    let t = storage(vec![1.0, 8.0, 9.0, 2.0, 3.0, 7.0], vec![2, 3]);
+    let op = |inputs: &[WgpuStorage]| -> WgpuStorage {
+        let out = <B as ReductionOps<B>>::max_dim::<f32>(&inputs[0], 0).unwrap();
+        <B as ReductionOps<B>>::sum_all::<f32>(&out).unwrap()
+    };
+    let max_abs_diff = gradcheck_wgpu(op, &[t], 1e-3);
+    assert!(
+        max_abs_diff < 2e-3,
+        "max_dim gradcheck max abs diff too high: {max_abs_diff:.6}"
+    );
+}
+
+#[test]
+fn min_dim_backward_matches_finite_difference() {
+    let t = storage(vec![1.0, 8.0, 9.0, 2.0, 3.0, 7.0], vec![2, 3]);
+    let op = |inputs: &[WgpuStorage]| -> WgpuStorage {
+        let out = <B as ReductionOps<B>>::min_dim::<f32>(&inputs[0], 1).unwrap();
+        <B as ReductionOps<B>>::sum_all::<f32>(&out).unwrap()
+    };
+    let max_abs_diff = gradcheck_wgpu(op, &[t], 1e-3);
+    assert!(
+        max_abs_diff < 2e-3,
+        "min_dim gradcheck max abs diff too high: {max_abs_diff:.6}"
+    );
+}
+
+#[test]
+fn max_dim_backward_never_double_counts_when_multiple_output_positions_share_no_source() {
+    // 3x3, reduce dim 1: three independent rows, each with a distinct
+    // winner — verifies scatter uses `=` per output position without any
+    // cross-row interference (each row's winning column differs).
+    let t = storage(
+        vec![9.0, 1.0, 2.0, 3.0, 9.0, 4.0, 5.0, 6.0, 9.0],
+        vec![3, 3],
+    );
+    let out = <B as ReductionOps<B>>::max_dim::<f32>(&t, 1).unwrap();
+    let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+    let gt = grads.get(t.id).expect("t should have gradient");
+    assert!(vec_approx_eq(
+        &readback(gt),
+        &[1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+        1e-5
+    ));
+}
