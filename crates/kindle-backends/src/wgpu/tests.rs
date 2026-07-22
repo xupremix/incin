@@ -492,6 +492,35 @@ fn test_cross_entropy_mean() {
     assert!(loss < 5.0, "Loss should be reasonable");
 }
 
+#[test]
+fn cross_entropy_loss_matches_hand_computed_value_for_nonzero_target() {
+    // Regression test: target/index storage is physically F32 bytes (the
+    // embedding WGSL kernel's `u32(indices[i])` confirms this backend does
+    // real value conversion, not raw-byte reinterpretation), so building the
+    // one-hot target must read it back the same way. The existing
+    // `test_cross_entropy_mean` above only asserts loose bounds and would
+    // not have caught a bit-reinterpret bug that zeroes out every non-0.0
+    // target row's contribution — this test pins down an exact expected
+    // value with target class 1 (row 0) and class 1 (row 1, this backend's
+    // bit-pattern-vs-value bug would previously silently drop this row's
+    // real contribution, understating the loss).
+    let pred = storage(vec![2.0, 1.0, 0.5, 3.0], vec![2, 2]);
+    let target = storage(vec![0.0, 1.0], vec![2]); // class 0, class 1
+    let out = <B as LossOps<B>>::cross_entropy_loss::<f32, f32>(
+        &pred,
+        &target,
+        kindle_core::prelude::Reduction::Mean,
+    )
+    .unwrap();
+    let loss = readback(&out)[0];
+    // Hand-computed: -log_softmax([2,1])[0] = 0.313262,
+    // -log_softmax([0.5,3])[1] = 0.078890, mean = 0.196076.
+    assert!(
+        approx_eq(loss, 0.196076, 1e-4),
+        "expected ~0.196076, got {loss}"
+    );
+}
+
 // ── Optimizer ─────────────────────────────────────────────────────────────
 
 #[test]
@@ -957,6 +986,37 @@ fn embedding_backward_accumulates_gradients() {
     assert!(vec_approx_eq(
         &readback(g_weight),
         &[2.0, 2.0, 0.0, 0.0],
+        1e-5
+    ));
+}
+
+#[test]
+fn embedding_backward_handles_nonzero_indices() {
+    // Regression test: index storage is physically F32 bytes (the WGSL
+    // forward kernel does `u32(indices[i])`, a value conversion), so the
+    // backward must read it back the same way. A raw `to_vec::<u32>()`
+    // bit-reinterpret would only happen to work for index 0.0 (bit pattern
+    // 0x00000000 == integer 0) and scatter every other index's gradient
+    // into the wrong (or out-of-bounds, silently dropped) row — which
+    // `embedding_backward_accumulates_gradients` above, using only index
+    // 0.0, could not have caught.
+    let weight = storage(
+        vec![
+            0.1, 0.2, // row 0
+            0.3, 0.4, // row 1
+            0.5, 0.6, // row 2
+        ],
+        vec![3, 2],
+    );
+    let indices = storage(vec![2.0, 1.0, 2.0], vec![3]);
+    let out = <B as ModuleOps<B>>::embedding::<f32, f32>(&indices, &weight).unwrap();
+    let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+    let g_weight = grads.get(weight.id).expect("weight should have gradient");
+    // Row 0: never chosen -> 0.0. Row 1: chosen once -> 1.0. Row 2: chosen
+    // twice -> 2.0 (accumulated, not overwritten).
+    assert!(vec_approx_eq(
+        &readback(g_weight),
+        &[0.0, 0.0, 1.0, 1.0, 2.0, 2.0],
         1e-5
     ));
 }

@@ -1891,7 +1891,13 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![weight_id],
             backward: Box::new(move |grad_out: &WgpuStorage| {
-                let indices_data = indices_capture.buffer.to_vec::<u32>();
+                // Index storage is physically F32 bytes (the WGSL forward
+                // kernel declares `indices: array<f32>` and does a real
+                // `u32(indices[i])` value conversion) — `to_vec::<u32>()`
+                // would bit-reinterpret those bytes instead of converting
+                // the value, corrupting every index except 0.0 (whose bit
+                // pattern happens to equal integer 0).
+                let indices_data = indices_capture.buffer.to_vec::<f32>();
                 let grad_data = grad_out.buffer.to_vec::<f32>();
                 let mut weight_grad = vec![0.0f32; vocab_size * embed_dim];
 
@@ -2823,8 +2829,12 @@ impl<T: DType, D: Device> LossOps<Self> for WgpuBackendImpl<T, D> {
         // 1. log_probs = log_softmax(pred, 1)
         let log_probs = log_softmax::<T, K>(pred, 1)?;
 
-        // 2. Build one_hot constant WgpuStorage
-        let target_data = target.buffer.to_vec::<u32>();
+        // 2. Build one_hot constant WgpuStorage. Target storage is
+        // physically F32 bytes (this backend has no genuine integer
+        // storage), so read it as F32 and convert the value — a raw
+        // `to_vec::<u32>()` bit-reinterpret would corrupt every class index
+        // except 0.0 (whose bit pattern happens to equal integer 0).
+        let target_data = target.buffer.to_vec::<f32>();
         let mut one_hot_data = vec![0.0f32; batch * classes];
         for b_idx in 0..batch {
             let class_idx = target_data[b_idx] as usize;
