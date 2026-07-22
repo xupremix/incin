@@ -207,7 +207,55 @@ where
             function,
         });
     }
+    #[cfg(feature = "autotune")]
+    if tune_all {
+        prune_zero_occupancy_candidates(&mut prepared);
+    }
     Ok(prepared)
+}
+
+/// Queries the driver for how many blocks of `block_size` can actually be
+/// resident on a multiprocessor at once for `function`. `None` means the
+/// query itself failed (unrelated driver error) rather than the candidate
+/// being infeasible, so callers must not treat `None` as zero occupancy.
+#[cfg(all(feature = "cuda", feature = "autotune"))]
+fn occupancy_active_blocks(
+    function: &cudarc::driver::CudaFunction,
+    block_size: u16,
+) -> Option<u32> {
+    function
+        .occupancy_max_active_blocks_per_multiprocessor(u32::from(block_size), 0, None)
+        .ok()
+}
+
+/// Drops candidates the driver reports as unable to place even one block on
+/// a multiprocessor, before the expensive JIT-then-measure loop times them.
+/// Only prunes when at least one other candidate is confirmed viable, and
+/// never removes a candidate whose occupancy query itself failed (unknown,
+/// not proven infeasible) — an optimization that must never narrow the
+/// legal candidate set to zero or reject a candidate on a driver hiccup.
+#[cfg(all(feature = "cuda", feature = "autotune"))]
+fn prune_zero_occupancy_candidates(prepared: &mut Vec<PreparedPointwiseKernel>) {
+    let occupancies: Vec<Option<u32>> = prepared
+        .iter()
+        .map(|prepared_kernel| {
+            occupancy_active_blocks(
+                &prepared_kernel.function,
+                prepared_kernel.candidate.block_size,
+            )
+        })
+        .collect();
+    let any_confirmed_viable = occupancies.iter().any(|occupancy| *occupancy != Some(0));
+    if !any_confirmed_viable {
+        return;
+    }
+    let mut kept = Vec::with_capacity(prepared.len());
+    for (candidate, occupancy) in prepared.drain(..).zip(occupancies) {
+        if occupancy != Some(0) {
+            kept.push(candidate);
+        }
+    }
+    *prepared = kept;
 }
 
 #[cfg(feature = "cuda")]
