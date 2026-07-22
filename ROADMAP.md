@@ -1,5 +1,12 @@
 # Kindle — Release Roadmap
 
+> **2026-07-22: see `IMPLEMENTATION_PLAN.md` (repo root) for the ground-truth,
+> task-by-task execution plan** — it cites exact file/line locations for what
+> is and isn't implemented per backend, includes an explicit anti-hallucination
+> "Hard DO-NOT list," and separates approved work from proposals requiring
+> sign-off. This file remains the historical narrative/audit log; treat
+> `IMPLEMENTATION_PLAN.md` as the operational document to work from.
+
 The physical plan for scalable dtype support, reusable kernel templates,
 layout specialization, fusion, autotuning, and performance gates is
 documented in [DType and Kernel Specialization Architecture](docs/DTYPE_KERNEL_ARCHITECTURE.md).
