@@ -81,6 +81,12 @@ pub struct EpochEvent {
 /// Static hyperparameter/config snapshot, emitted once per run. Values are
 /// string-typed to accommodate heterogeneous hyperparameter types without a
 /// tagged-union payload.
+///
+/// `params` is a free-form bag with no automatic redaction: whatever a
+/// caller inserts is persisted verbatim in shareable JSONL telemetry output.
+/// Do not log secrets, credentials, or filesystem paths that shouldn't leave
+/// the machine — this event was designed for hyperparameters (learning
+/// rate, batch size, model config), not arbitrary sensitive strings.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct HyperparamEvent {
     /// Schema version for binary compatibility.
