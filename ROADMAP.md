@@ -946,8 +946,21 @@ is stable.
 2. ~~**C-2** Fix CPU elementwise f32 downcast (dtype correctness)~~ — ✅ fixed 2026-07-21, regression-tested
 3. ~~**C-6 / C-7** Fix dynamic broadcast validation, then the operator-overload panics it was masking~~ — ✅ fixed 2026-07-21
 4. ~~**C-5** Checked shape multiplication (overflow → OOB path)~~ — ✅ fixed 2026-07-21
-5. **C-3** (partial ✅: elementwise + matmul + activations wired on WGPU, 18 tests, hardware-verified) / **C-4** (partial ✅: same 4 ops wired on CUDA, compile-verified only — no hardware in this env) — remaining: WGPU conv/norm/pooling/embedding/reductions/loss/quant; CUDA needs `CreationOps`/`FloatOps` built from scratch (currently empty) before any of that can even run — **next priority**
-6. Add cross-backend gradient-parity tests
+5. **C-3** (✅ 2026-07-22: elementwise/activations/matmul/`TensorOps`/`embedding`/
+   `conv*`/all reductions incl. `_keepdim`/`layer_norm`/`batch_norm`/pooling/
+   `cross_entropy_loss` all wired and hardware-verified against a software
+   WGPU adapter, 97/97 tests — only `quantize`/`dequantize`/`quantized_matmul`
+   remain, and those are unwired on CPU too, not WGPU-specific) / **C-4**
+   (still partial: same 4 `NumericOps` methods wired on CUDA, compile-verified
+   only — no hardware in this env; `CreationOps`/`FloatOps`/`ReductionOps`/
+   `ModuleOps`/`LossOps`/`QuantizedOps`/`OptimizerOps` are still empty `{}`
+   blocks and need building from scratch before any of that can even run) —
+   **CUDA is now the real remaining gap, blocked on this environment lacking
+   CUDA hardware for verification**
+6. ~~Add cross-backend gradient-parity tests~~ — ✅ done: `gradient_parity.rs`
+   has 6 CPU-vs-WGPU tests (elementwise, softmax, matmul, layer_norm,
+   max_pool2d, cross_entropy_loss w/ nonzero target). CUDA parity still
+   blocked on real hardware.
 7. ~~Close B-3 for real: `cuda`/`cpu` `pub(crate)` audit + `kindle-core` `TRACING_GRAPH` leak~~ — ✅ fixed 2026-07-21
 8. ~~Audit `kindle` facade wildcard re-exports; fix `DefaultBackend = ()` trap; remove dead `candle` cfg~~ — ✅ fixed 2026-07-21 (macros wildcard narrowed, `kindle_backends::*` deliberately left, see High priority section for why)
 9. ~~Write `kindle-data` `DataLoader` tests~~ — ✅ fixed 2026-07-21 (9 tests, incl. multi-worker concurrency)
