@@ -4,7 +4,8 @@ use typenum::Unsigned;
 
 #[derive(Debug, Clone)]
 #[kindle_macros::module(internal)]
-/// `Conv1d`.
+/// A 1-D convolution layer: `y = x * W + b`, sliding a `[out_c, in_c, k]`
+/// kernel over the input's trailing (length) dimension.
 pub struct Conv1d<
     S: Conv1dShape,
     B: Backend,
@@ -30,19 +31,21 @@ pub struct Conv1d<
     _phantom: core::marker::PhantomData<(S, B, Bias)>,
 }
 
-/// `Conv1dShape`.
+/// A shape marker trait specifying a [`Conv1d`] layer's channel counts and
+/// compile-time-fixed kernel/stride/padding/dilation. The typical usage is
+/// `(OutC, InC, K, S, P, D)` for a fully static layer.
 pub trait Conv1dShape: Shape + DynShape {
-    /// `OutC`.
+    /// Number of output channels.
     type OutC: Dim;
-    /// `InC`.
+    /// Number of input channels.
     type InC: Dim;
-    /// `K`.
+    /// Kernel (window) size.
     type K: Unsigned + Dim<Arg = ()>;
-    /// `S`.
+    /// Stride.
     type S: Unsigned + Dim<Arg = ()>;
-    /// `P`.
+    /// Padding.
     type P: Unsigned + Dim<Arg = ()>;
-    /// `D`.
+    /// Dilation.
     type D: Unsigned + Dim<Arg = ()>;
     /// The shape argument type used to construct the weight tensor.
     type WeightArg: crate::tensor::arg_into::NotUnit;
@@ -68,17 +71,17 @@ impl<
     D: Unsigned + Dim<Arg = ()>,
 > Conv1dShape for (OutC, InC, K, S, P, D)
 {
-    /// `OutC`.
+    /// Number of output channels.
     type OutC = OutC;
-    /// `InC`.
+    /// Number of input channels.
     type InC = InC;
-    /// `K`.
+    /// Kernel (window) size.
     type K = K;
-    /// `S`.
+    /// Stride.
     type S = S;
-    /// `P`.
+    /// Padding.
     type P = P;
-    /// `D`.
+    /// Dilation.
     type D = D;
     /// The shape argument type used to construct the weight tensor.
     type WeightArg = (<OutC as Dim>::Arg, <InC as Dim>::Arg, <K as Dim>::Arg);

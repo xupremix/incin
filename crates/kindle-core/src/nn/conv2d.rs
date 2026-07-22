@@ -37,19 +37,21 @@ pub struct Conv2d<
     _phantom: core::marker::PhantomData<(S, B, Bias)>,
 }
 
-/// `Conv2dShape`.
+/// A shape marker trait specifying a [`Conv2d`] layer's channel counts and
+/// compile-time-fixed kernel/stride/padding/dilation. The typical usage is
+/// `(OutC, InC, K, S, P, D)` for a fully static, square-kernel layer.
 pub trait Conv2dShape: Shape + DynShape {
-    /// `OutC`.
+    /// Number of output channels.
     type OutC: Dim;
-    /// `InC`.
+    /// Number of input channels.
     type InC: Dim;
-    /// `K`.
+    /// Kernel (window) size — square, applied to both spatial dimensions.
     type K: Unsigned + Dim<Arg = ()>;
-    /// `S`.
+    /// Stride.
     type S: Unsigned + Dim<Arg = ()>;
-    /// `P`.
+    /// Padding.
     type P: Unsigned + Dim<Arg = ()>;
-    /// `D`.
+    /// Dilation.
     type D: Unsigned + Dim<Arg = ()>;
     /// The shape argument type used to construct the weight tensor.
     type WeightArg: crate::tensor::arg_into::NotUnit;
@@ -75,17 +77,17 @@ impl<
     D: Unsigned + Dim<Arg = ()>,
 > Conv2dShape for (OutC, InC, K, S, P, D)
 {
-    /// `OutC`.
+    /// Number of output channels.
     type OutC = OutC;
-    /// `InC`.
+    /// Number of input channels.
     type InC = InC;
-    /// `K`.
+    /// Kernel (window) size.
     type K = K;
-    /// `S`.
+    /// Stride.
     type S = S;
-    /// `P`.
+    /// Padding.
     type P = P;
-    /// `D`.
+    /// Dilation.
     type D = D;
     /// The shape argument type used to construct the weight tensor.
     type WeightArg = (
