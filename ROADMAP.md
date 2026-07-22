@@ -338,17 +338,17 @@ this fix, almost entirely **empty blocks relying on `Backend` trait defaults**
 `impl OptimizerOps<Self> for CudaBackendImpl<T, D> {}`,
 `impl ModuleOps<Self> for CudaBackendImpl<T, D> {}`,
 `impl LossOps<Self> for CudaBackendImpl<T, D> {}` — every one of these is still an
-empty `{}` today. Only `TensorOps::concat` and `NumericOps` (`add`/`sub`/`mul`/`div`)
-were actually implemented. This means **you cannot even create a CUDA tensor**
-via the standard `zeros`/`ones`/`rand`/`randn` API (`CreationOps` has no
-overrides, so every call falls through to the default `Err`) — despite the
-extensive, mostly-working `cuda/ops/{norm,embedding,quant,reduce,loss}.rs`
-dispatch functions existing and (since C-1) being individually correct: they
-are **dead code**, never called from anywhere in `cuda/backend.rs`. The
-"autograd disconnected" framing undersold this — the more accurate framing is
-"the CUDA backend implements a small elementwise-arithmetic slice of the full
-`Backend` trait surface, and everything outside that slice doesn't exist yet,"
-not "everything exists but doesn't compute gradients."
+empty `{}` today [**correction below: `CreationOps` was NOT actually empty —
+see the 2026-07-22 follow-up**]. Only `TensorOps::concat` and `NumericOps`
+(`add`/`sub`/`mul`/`div`) were actually implemented [**also corrected below**]
+— despite the extensive, mostly-working
+`cuda/ops/{norm,embedding,quant,reduce,loss}.rs` dispatch functions existing
+and (since C-1) being individually correct: they are **dead code**, never
+called from anywhere in `cuda/backend.rs`. The "autograd disconnected"
+framing undersold this — the more accurate framing is "the CUDA backend
+implements a small elementwise-arithmetic slice of the full `Backend` trait
+surface, and everything outside that slice doesn't exist yet," not
+"everything exists but doesn't compute gradients."
 
 **Fixed:** wired `tape::push` into the 4 `NumericOps` methods that actually
 exist (`add`/`sub`/`mul`/`div`), mirroring C-3's WGPU fix exactly (same math,
@@ -371,6 +371,17 @@ trait at all. Doing that safely requires either CUDA hardware to verify
 against, or extreme care given this exact audit's whole finding is "silently
 wrong numbers are worse than an honest `Err`." Do this as a dedicated,
 hardware-verified follow-up, not blind.
+
+> **2026-07-22 follow-up: the "`CreationOps` is empty" claim above was wrong,
+> and predates this note.** `impl CreationOps<Self> for CudaBackendImpl<T, D>`
+> (`cuda/backend.rs:211-263`) has real `zeros`/`ones`/`rand`/`randn`/
+> `var_zeros`/`var_ones`/`var_rand`/`var_randn` bodies — `git log -S` traces
+> this to `a93ca32` ("complete CudaBackend integration..."), which predates
+> even the C-4 NumericOps fix commit this note belongs to. So "you cannot
+> even create a CUDA tensor" was never true at any point this session touched
+> the file; whoever wrote the paragraph above didn't check first. Still
+> genuinely empty `{}`: `FloatOps`, `ReductionOps`, `QuantizedOps`,
+> `OptimizerOps`, `ModuleOps`, `LossOps`. `TensorOps` still has only `concat`.
 
 ### C-5 — Unchecked shape-multiplication overflow feeds allocation and stride math — ✅ FIXED (2026-07-21)
 `crates/kindle-backends/src/cpu/stride.rs:17-19` (`contiguous_strides`, plain
