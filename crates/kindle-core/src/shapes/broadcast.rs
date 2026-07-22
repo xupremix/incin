@@ -29,11 +29,13 @@ fn checked_broadcast_dim(lhs: usize, rhs: usize) -> usize {
     label = "Shape mismatch during broadcast",
     note = "Broadcast requires dimensions to be equal, or one of them to be 1"
 )]
-/// `BroadcastShape`.
+/// Compile-time-checked NumPy-style broadcast shape rule: `Self`
+/// broadcast against `Rhs` produces `Output`.
 pub trait BroadcastShape<Rhs: Shape>: Shape {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against `Rhs`.
     type Output: Shape;
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`,
+    /// resolving any `usize` (runtime) dimensions via `checked_broadcast_dim`.
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         rhs: &<Rhs as Shape>::Field,
@@ -41,17 +43,17 @@ pub trait BroadcastShape<Rhs: Shape>: Shape {
 }
 
 impl BroadcastShape<()> for () {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = ();
     #[inline(always)]
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(_: &(), _: &()) {}
 }
 impl<A: StaticDim> BroadcastShape<(A,)> for (A,) {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (A,);
     #[inline(always)]
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<Self as Shape>::Field,
@@ -60,10 +62,10 @@ impl<A: StaticDim> BroadcastShape<(A,)> for (A,) {
     }
 }
 impl<A: StaticDim, B: StaticDim> BroadcastShape<(A, B)> for (A, B) {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (A, B);
     #[inline(always)]
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<Self as Shape>::Field,
@@ -72,10 +74,10 @@ impl<A: StaticDim, B: StaticDim> BroadcastShape<(A, B)> for (A, B) {
     }
 }
 impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<(A, B, C)> for (A, B, C) {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (A, B, C);
     #[inline(always)]
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<Self as Shape>::Field,
@@ -86,10 +88,10 @@ impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<(A, B, C)> for (A,
 impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(A, B, C, D)>
     for (A, B, C, D)
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (A, B, C, D);
     #[inline(always)]
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<Self as Shape>::Field,
@@ -99,10 +101,10 @@ impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(A, 
 }
 
 impl<A: StaticDim> BroadcastShape<(A,)> for () {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (A,);
     #[inline(always)]
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<(A,) as Shape>::Field,
@@ -111,10 +113,10 @@ impl<A: StaticDim> BroadcastShape<(A,)> for () {
     }
 }
 impl<A: StaticDim, B: StaticDim> BroadcastShape<(A, B)> for () {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (A, B);
     #[inline(always)]
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<(A, B) as Shape>::Field,
@@ -123,10 +125,10 @@ impl<A: StaticDim, B: StaticDim> BroadcastShape<(A, B)> for () {
     }
 }
 impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<(A, B, C)> for () {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (A, B, C);
     #[inline(always)]
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<(A, B, C) as Shape>::Field,
@@ -135,10 +137,10 @@ impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<(A, B, C)> for () 
     }
 }
 impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(A, B, C, D)> for () {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (A, B, C, D);
     #[inline(always)]
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<(A, B, C, D) as Shape>::Field,
@@ -147,10 +149,10 @@ impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(A, 
     }
 }
 impl<A: StaticDim> BroadcastShape<()> for (A,) {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (A,);
     #[inline(always)]
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<() as Shape>::Field,
@@ -159,10 +161,10 @@ impl<A: StaticDim> BroadcastShape<()> for (A,) {
     }
 }
 impl<A: StaticDim, B: StaticDim> BroadcastShape<(A, B)> for (B,) {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (A, B);
     #[inline(always)]
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<(A, B) as Shape>::Field,
@@ -171,10 +173,10 @@ impl<A: StaticDim, B: StaticDim> BroadcastShape<(A, B)> for (B,) {
     }
 }
 impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<(A, B, C)> for (C,) {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (A, B, C);
     #[inline(always)]
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<(A, B, C) as Shape>::Field,
@@ -183,10 +185,10 @@ impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<(A, B, C)> for (C,
     }
 }
 impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(A, B, C, D)> for (D,) {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (A, B, C, D);
     #[inline(always)]
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<(A, B, C, D) as Shape>::Field,
@@ -195,10 +197,10 @@ impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(A, 
     }
 }
 impl<A: StaticDim, B: StaticDim> BroadcastShape<()> for (A, B) {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (A, B);
     #[inline(always)]
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<() as Shape>::Field,
@@ -207,10 +209,10 @@ impl<A: StaticDim, B: StaticDim> BroadcastShape<()> for (A, B) {
     }
 }
 impl<A: StaticDim, B: StaticDim> BroadcastShape<(B,)> for (A, B) {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (A, B);
     #[inline(always)]
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<(B,) as Shape>::Field,
@@ -219,10 +221,10 @@ impl<A: StaticDim, B: StaticDim> BroadcastShape<(B,)> for (A, B) {
     }
 }
 impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<(A, B, C)> for (B, C) {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (A, B, C);
     #[inline(always)]
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<(A, B, C) as Shape>::Field,
@@ -233,10 +235,10 @@ impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<(A, B, C)> for (B,
 impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(A, B, C, D)>
     for (C, D)
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (A, B, C, D);
     #[inline(always)]
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<(A, B, C, D) as Shape>::Field,
@@ -245,10 +247,10 @@ impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(A, 
     }
 }
 impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<()> for (A, B, C) {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (A, B, C);
     #[inline(always)]
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<() as Shape>::Field,
@@ -257,10 +259,10 @@ impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<()> for (A, B, C) 
     }
 }
 impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<(C,)> for (A, B, C) {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (A, B, C);
     #[inline(always)]
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<(C,) as Shape>::Field,
@@ -269,10 +271,10 @@ impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<(C,)> for (A, B, C
     }
 }
 impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<(B, C)> for (A, B, C) {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (A, B, C);
     #[inline(always)]
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<(B, C) as Shape>::Field,
@@ -283,10 +285,10 @@ impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<(B, C)> for (A, B,
 impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(A, B, C, D)>
     for (B, C, D)
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (A, B, C, D);
     #[inline(always)]
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<(A, B, C, D) as Shape>::Field,
@@ -295,10 +297,10 @@ impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(A, 
     }
 }
 impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<()> for (A, B, C, D) {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (A, B, C, D);
     #[inline(always)]
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<() as Shape>::Field,
@@ -307,10 +309,10 @@ impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<()> 
     }
 }
 impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(D,)> for (A, B, C, D) {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (A, B, C, D);
     #[inline(always)]
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<(D,) as Shape>::Field,
@@ -321,10 +323,10 @@ impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(D,)
 impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(C, D)>
     for (A, B, C, D)
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (A, B, C, D);
     #[inline(always)]
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<(C, D) as Shape>::Field,
@@ -335,10 +337,10 @@ impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(C, 
 impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(B, C, D)>
     for (A, B, C, D)
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (A, B, C, D);
     #[inline(always)]
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<(B, C, D) as Shape>::Field,
@@ -348,9 +350,9 @@ impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(B, 
 }
 
 impl BroadcastShape<(usize,)> for (usize,) {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (usize,);
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         rhs: &<Self as Shape>::Field,
@@ -359,9 +361,9 @@ impl BroadcastShape<(usize,)> for (usize,) {
     }
 }
 impl BroadcastShape<()> for (usize,) {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (usize,);
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         _: &<() as Shape>::Field,
@@ -370,9 +372,9 @@ impl BroadcastShape<()> for (usize,) {
     }
 }
 impl BroadcastShape<(usize,)> for () {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (usize,);
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<(usize,) as Shape>::Field,
@@ -381,9 +383,9 @@ impl BroadcastShape<(usize,)> for () {
     }
 }
 impl<B: StaticDim> BroadcastShape<(usize, B)> for (usize, B) {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (usize, B);
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         rhs: &<Self as Shape>::Field,
@@ -392,9 +394,9 @@ impl<B: StaticDim> BroadcastShape<(usize, B)> for (usize, B) {
     }
 }
 impl<B: StaticDim> BroadcastShape<()> for (usize, B) {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (usize, B);
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         _: &<() as Shape>::Field,
@@ -403,9 +405,9 @@ impl<B: StaticDim> BroadcastShape<()> for (usize, B) {
     }
 }
 impl<B: StaticDim> BroadcastShape<(usize, B)> for () {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (usize, B);
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<(usize, B) as Shape>::Field,
@@ -414,9 +416,9 @@ impl<B: StaticDim> BroadcastShape<(usize, B)> for () {
     }
 }
 impl<B: StaticDim> BroadcastShape<(B,)> for (usize, B) {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (usize, B);
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         _: &<(B,) as Shape>::Field,
@@ -425,9 +427,9 @@ impl<B: StaticDim> BroadcastShape<(B,)> for (usize, B) {
     }
 }
 impl<B: StaticDim> BroadcastShape<(usize, B)> for (B,) {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (usize, B);
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<(usize, B) as Shape>::Field,
@@ -436,9 +438,9 @@ impl<B: StaticDim> BroadcastShape<(usize, B)> for (B,) {
     }
 }
 impl<B: StaticDim, C: StaticDim> BroadcastShape<(usize, B, C)> for (usize, B, C) {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (usize, B, C);
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         rhs: &<Self as Shape>::Field,
@@ -451,9 +453,9 @@ impl<B: StaticDim, C: StaticDim> BroadcastShape<(usize, B, C)> for (usize, B, C)
     }
 }
 impl<B: StaticDim, C: StaticDim> BroadcastShape<()> for (usize, B, C) {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (usize, B, C);
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         _: &<() as Shape>::Field,
@@ -462,9 +464,9 @@ impl<B: StaticDim, C: StaticDim> BroadcastShape<()> for (usize, B, C) {
     }
 }
 impl<B: StaticDim, C: StaticDim> BroadcastShape<(usize, B, C)> for () {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (usize, B, C);
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<(usize, B, C) as Shape>::Field,
@@ -473,9 +475,9 @@ impl<B: StaticDim, C: StaticDim> BroadcastShape<(usize, B, C)> for () {
     }
 }
 impl<B: StaticDim, C: StaticDim> BroadcastShape<(C,)> for (usize, B, C) {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (usize, B, C);
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         _: &<(C,) as Shape>::Field,
@@ -484,9 +486,9 @@ impl<B: StaticDim, C: StaticDim> BroadcastShape<(C,)> for (usize, B, C) {
     }
 }
 impl<B: StaticDim, C: StaticDim> BroadcastShape<(usize, B, C)> for (C,) {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (usize, B, C);
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<(usize, B, C) as Shape>::Field,
@@ -495,9 +497,9 @@ impl<B: StaticDim, C: StaticDim> BroadcastShape<(usize, B, C)> for (C,) {
     }
 }
 impl<B: StaticDim, C: StaticDim> BroadcastShape<(B, C)> for (usize, B, C) {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (usize, B, C);
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         _: &<(B, C) as Shape>::Field,
@@ -506,9 +508,9 @@ impl<B: StaticDim, C: StaticDim> BroadcastShape<(B, C)> for (usize, B, C) {
     }
 }
 impl<B: StaticDim, C: StaticDim> BroadcastShape<(usize, B, C)> for (B, C) {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (usize, B, C);
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<(usize, B, C) as Shape>::Field,
@@ -519,9 +521,9 @@ impl<B: StaticDim, C: StaticDim> BroadcastShape<(usize, B, C)> for (B, C) {
 impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(usize, B, C, D)>
     for (usize, B, C, D)
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (usize, B, C, D);
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         rhs: &<Self as Shape>::Field,
@@ -535,9 +537,9 @@ impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(usize, B, C, D)>
     }
 }
 impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<()> for (usize, B, C, D) {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (usize, B, C, D);
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         _: &<() as Shape>::Field,
@@ -551,9 +553,9 @@ impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<()> for (usize, B,
     }
 }
 impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(usize, B, C, D)> for () {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (usize, B, C, D);
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<(usize, B, C, D) as Shape>::Field,
@@ -567,9 +569,9 @@ impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(usize, B, C, D)> 
     }
 }
 impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(D,)> for (usize, B, C, D) {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (usize, B, C, D);
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         _: &<(D,) as Shape>::Field,
@@ -583,9 +585,9 @@ impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(D,)> for (usize, 
     }
 }
 impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(usize, B, C, D)> for (D,) {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (usize, B, C, D);
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<(usize, B, C, D) as Shape>::Field,
@@ -599,9 +601,9 @@ impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(usize, B, C, D)> 
     }
 }
 impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(C, D)> for (usize, B, C, D) {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (usize, B, C, D);
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         _: &<(C, D) as Shape>::Field,
@@ -615,9 +617,9 @@ impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(C, D)> for (usize
     }
 }
 impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(usize, B, C, D)> for (C, D) {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (usize, B, C, D);
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<(usize, B, C, D) as Shape>::Field,
@@ -631,9 +633,9 @@ impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(usize, B, C, D)> 
     }
 }
 impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(B, C, D)> for (usize, B, C, D) {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (usize, B, C, D);
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         _: &<(B, C, D) as Shape>::Field,
@@ -647,9 +649,9 @@ impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(B, C, D)> for (us
     }
 }
 impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(usize, B, C, D)> for (B, C, D) {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = (usize, B, C, D);
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<(usize, B, C, D) as Shape>::Field,
@@ -664,9 +666,9 @@ impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(usize, B, C, D)> 
 }
 
 impl BroadcastShape<Dyn> for Dyn {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = Dyn;
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         lhs: &<Dyn as Shape>::Field,
         rhs: &<Dyn as Shape>::Field,
@@ -691,9 +693,9 @@ impl BroadcastShape<Dyn> for Dyn {
     }
 }
 impl BroadcastShape<()> for Dyn {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = Dyn;
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         lhs: &<Dyn as Shape>::Field,
         _: &<() as Shape>::Field,
@@ -702,9 +704,9 @@ impl BroadcastShape<()> for Dyn {
     }
 }
 impl BroadcastShape<Dyn> for () {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = Dyn;
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<Dyn as Shape>::Field,
@@ -713,9 +715,9 @@ impl BroadcastShape<Dyn> for () {
     }
 }
 impl<A: StaticDim> BroadcastShape<(A,)> for Dyn {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = Dyn;
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         lhs: &<Dyn as Shape>::Field,
         _: &<(A,) as Shape>::Field,
@@ -724,9 +726,9 @@ impl<A: StaticDim> BroadcastShape<(A,)> for Dyn {
     }
 }
 impl<A: StaticDim> BroadcastShape<Dyn> for (A,) {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = Dyn;
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<Dyn as Shape>::Field,
@@ -735,9 +737,9 @@ impl<A: StaticDim> BroadcastShape<Dyn> for (A,) {
     }
 }
 impl<A: StaticDim, B: StaticDim> BroadcastShape<(A, B)> for Dyn {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = Dyn;
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         lhs: &<Dyn as Shape>::Field,
         _: &<(A, B) as Shape>::Field,
@@ -746,9 +748,9 @@ impl<A: StaticDim, B: StaticDim> BroadcastShape<(A, B)> for Dyn {
     }
 }
 impl<A: StaticDim, B: StaticDim> BroadcastShape<Dyn> for (A, B) {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = Dyn;
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<Dyn as Shape>::Field,
@@ -757,9 +759,9 @@ impl<A: StaticDim, B: StaticDim> BroadcastShape<Dyn> for (A, B) {
     }
 }
 impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<(A, B, C)> for Dyn {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = Dyn;
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         lhs: &<Dyn as Shape>::Field,
         _: &<(A, B, C) as Shape>::Field,
@@ -768,9 +770,9 @@ impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<(A, B, C)> for Dyn
     }
 }
 impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<Dyn> for (A, B, C) {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = Dyn;
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<Dyn as Shape>::Field,
@@ -779,9 +781,9 @@ impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<Dyn> for (A, B, C)
     }
 }
 impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(A, B, C, D)> for Dyn {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = Dyn;
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         lhs: &<Dyn as Shape>::Field,
         _: &<(A, B, C, D) as Shape>::Field,
@@ -790,9 +792,9 @@ impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(A, 
     }
 }
 impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<Dyn> for (A, B, C, D) {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = Dyn;
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<Dyn as Shape>::Field,
@@ -801,9 +803,9 @@ impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<Dyn>
     }
 }
 impl BroadcastShape<(usize,)> for Dyn {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = Dyn;
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         lhs: &<Dyn as Shape>::Field,
         _: &<(usize,) as Shape>::Field,
@@ -812,9 +814,9 @@ impl BroadcastShape<(usize,)> for Dyn {
     }
 }
 impl BroadcastShape<Dyn> for (usize,) {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = Dyn;
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<Dyn as Shape>::Field,
@@ -823,9 +825,9 @@ impl BroadcastShape<Dyn> for (usize,) {
     }
 }
 impl<B: StaticDim> BroadcastShape<(usize, B)> for Dyn {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = Dyn;
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         lhs: &<Dyn as Shape>::Field,
         _: &<(usize, B) as Shape>::Field,
@@ -834,9 +836,9 @@ impl<B: StaticDim> BroadcastShape<(usize, B)> for Dyn {
     }
 }
 impl<B: StaticDim> BroadcastShape<Dyn> for (usize, B) {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = Dyn;
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<Dyn as Shape>::Field,
@@ -845,9 +847,9 @@ impl<B: StaticDim> BroadcastShape<Dyn> for (usize, B) {
     }
 }
 impl<B: StaticDim, C: StaticDim> BroadcastShape<(usize, B, C)> for Dyn {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = Dyn;
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         lhs: &<Dyn as Shape>::Field,
         _: &<(usize, B, C) as Shape>::Field,
@@ -856,9 +858,9 @@ impl<B: StaticDim, C: StaticDim> BroadcastShape<(usize, B, C)> for Dyn {
     }
 }
 impl<B: StaticDim, C: StaticDim> BroadcastShape<Dyn> for (usize, B, C) {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = Dyn;
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<Dyn as Shape>::Field,
@@ -867,9 +869,9 @@ impl<B: StaticDim, C: StaticDim> BroadcastShape<Dyn> for (usize, B, C) {
     }
 }
 impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(usize, B, C, D)> for Dyn {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = Dyn;
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         lhs: &<Dyn as Shape>::Field,
         _: &<(usize, B, C, D) as Shape>::Field,
@@ -878,9 +880,9 @@ impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(usize, B, C, D)> 
     }
 }
 impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<Dyn> for (usize, B, C, D) {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = Dyn;
-    /// `output_shape`.
+    /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<Dyn as Shape>::Field,

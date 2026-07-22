@@ -7,20 +7,24 @@ use typenum::{U0, U1, U2, U3, U4, U5};
     label = "Shape mismatch during concatenation",
     note = "Concatenation requires all dimensions except the given axis to match exactly"
 )]
-/// `ConcatShape`.
+/// Compile-time-checked concatenation shape rule: concatenating `Self`
+/// with `S2` along dimension `Axis` produces `Output` (every other
+/// dimension must already match, per the diagnostic below).
 pub trait ConcatShape<S2, Axis> {
-    /// The output tensor type produced by this module's forward pass.
+    /// The resulting shape after concatenating `Self` with `S2` along `Axis`.
     type Output: Shape;
 }
 
-/// `TryConcatShape`.
+/// Fallback concatenation rule for shape pairs with no compile-time-known
+/// axis-sum relationship: always resolves to `Dyn`, deferring the actual
+/// dimension check to runtime.
 pub trait TryConcatShape<S2> {
-    /// The output tensor type produced by this module's forward pass.
+    /// Always `Dyn` — the concrete size is only known at runtime.
     type Output: Shape;
 }
 
 impl<S1: Shape, S2: Shape> TryConcatShape<S2> for S1 {
-    /// The output tensor type produced by this module's forward pass.
+    /// Always `Dyn` — the concrete size is only known at runtime.
     type Output = Dyn;
 }
 
@@ -31,7 +35,8 @@ where
     D0: Add<D0_>,
     <D0 as Add<D0_>>::Output: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// The concatenated shape: the target axis becomes the sum of both
+    /// operands' sizes along it, every other dimension unchanged.
     type Output = (<D0 as Add<D0_>>::Output,);
 }
 
@@ -43,7 +48,8 @@ where
     D0: Add<D0_>,
     <D0 as Add<D0_>>::Output: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// The concatenated shape: the target axis becomes the sum of both
+    /// operands' sizes along it, every other dimension unchanged.
     type Output = (<D0 as Add<D0_>>::Output, D1);
 }
 
@@ -55,7 +61,8 @@ where
     D1: Add<D1_>,
     <D1 as Add<D1_>>::Output: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// The concatenated shape: the target axis becomes the sum of both
+    /// operands' sizes along it, every other dimension unchanged.
     type Output = (D0, <D1 as Add<D1_>>::Output);
 }
 
@@ -68,7 +75,8 @@ where
     D0: Add<D0_>,
     <D0 as Add<D0_>>::Output: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// The concatenated shape: the target axis becomes the sum of both
+    /// operands' sizes along it, every other dimension unchanged.
     type Output = (<D0 as Add<D0_>>::Output, D1, D2);
 }
 
@@ -81,7 +89,8 @@ where
     D1: Add<D1_>,
     <D1 as Add<D1_>>::Output: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// The concatenated shape: the target axis becomes the sum of both
+    /// operands' sizes along it, every other dimension unchanged.
     type Output = (D0, <D1 as Add<D1_>>::Output, D2);
 }
 
@@ -94,7 +103,8 @@ where
     D2: Add<D2_>,
     <D2 as Add<D2_>>::Output: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// The concatenated shape: the target axis becomes the sum of both
+    /// operands' sizes along it, every other dimension unchanged.
     type Output = (D0, D1, <D2 as Add<D2_>>::Output);
 }
 
@@ -108,7 +118,8 @@ where
     D0: Add<D0_>,
     <D0 as Add<D0_>>::Output: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// The concatenated shape: the target axis becomes the sum of both
+    /// operands' sizes along it, every other dimension unchanged.
     type Output = (<D0 as Add<D0_>>::Output, D1, D2, D3);
 }
 
@@ -122,7 +133,8 @@ where
     D1: Add<D1_>,
     <D1 as Add<D1_>>::Output: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// The concatenated shape: the target axis becomes the sum of both
+    /// operands' sizes along it, every other dimension unchanged.
     type Output = (D0, <D1 as Add<D1_>>::Output, D2, D3);
 }
 
@@ -136,7 +148,8 @@ where
     D2: Add<D2_>,
     <D2 as Add<D2_>>::Output: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// The concatenated shape: the target axis becomes the sum of both
+    /// operands' sizes along it, every other dimension unchanged.
     type Output = (D0, D1, <D2 as Add<D2_>>::Output, D3);
 }
 
@@ -150,7 +163,8 @@ where
     D3: Add<D3_>,
     <D3 as Add<D3_>>::Output: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// The concatenated shape: the target axis becomes the sum of both
+    /// operands' sizes along it, every other dimension unchanged.
     type Output = (D0, D1, D2, <D3 as Add<D3_>>::Output);
 }
 
@@ -165,7 +179,8 @@ where
     D0: Add<D0_>,
     <D0 as Add<D0_>>::Output: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// The concatenated shape: the target axis becomes the sum of both
+    /// operands' sizes along it, every other dimension unchanged.
     type Output = (<D0 as Add<D0_>>::Output, D1, D2, D3, D4);
 }
 
@@ -180,7 +195,8 @@ where
     D1: Add<D1_>,
     <D1 as Add<D1_>>::Output: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// The concatenated shape: the target axis becomes the sum of both
+    /// operands' sizes along it, every other dimension unchanged.
     type Output = (D0, <D1 as Add<D1_>>::Output, D2, D3, D4);
 }
 
@@ -195,7 +211,8 @@ where
     D2: Add<D2_>,
     <D2 as Add<D2_>>::Output: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// The concatenated shape: the target axis becomes the sum of both
+    /// operands' sizes along it, every other dimension unchanged.
     type Output = (D0, D1, <D2 as Add<D2_>>::Output, D3, D4);
 }
 
@@ -210,7 +227,8 @@ where
     D3: Add<D3_>,
     <D3 as Add<D3_>>::Output: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// The concatenated shape: the target axis becomes the sum of both
+    /// operands' sizes along it, every other dimension unchanged.
     type Output = (D0, D1, D2, <D3 as Add<D3_>>::Output, D4);
 }
 
@@ -225,7 +243,8 @@ where
     D4: Add<D4_>,
     <D4 as Add<D4_>>::Output: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// The concatenated shape: the target axis becomes the sum of both
+    /// operands' sizes along it, every other dimension unchanged.
     type Output = (D0, D1, D2, D3, <D4 as Add<D4_>>::Output);
 }
 
@@ -242,7 +261,8 @@ where
     D0: Add<D0_>,
     <D0 as Add<D0_>>::Output: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// The concatenated shape: the target axis becomes the sum of both
+    /// operands' sizes along it, every other dimension unchanged.
     type Output = (<D0 as Add<D0_>>::Output, D1, D2, D3, D4, D5);
 }
 
@@ -259,7 +279,8 @@ where
     D1: Add<D1_>,
     <D1 as Add<D1_>>::Output: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// The concatenated shape: the target axis becomes the sum of both
+    /// operands' sizes along it, every other dimension unchanged.
     type Output = (D0, <D1 as Add<D1_>>::Output, D2, D3, D4, D5);
 }
 
@@ -276,7 +297,8 @@ where
     D2: Add<D2_>,
     <D2 as Add<D2_>>::Output: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// The concatenated shape: the target axis becomes the sum of both
+    /// operands' sizes along it, every other dimension unchanged.
     type Output = (D0, D1, <D2 as Add<D2_>>::Output, D3, D4, D5);
 }
 
@@ -293,7 +315,8 @@ where
     D3: Add<D3_>,
     <D3 as Add<D3_>>::Output: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// The concatenated shape: the target axis becomes the sum of both
+    /// operands' sizes along it, every other dimension unchanged.
     type Output = (D0, D1, D2, <D3 as Add<D3_>>::Output, D4, D5);
 }
 
@@ -310,7 +333,8 @@ where
     D4: Add<D4_>,
     <D4 as Add<D4_>>::Output: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// The concatenated shape: the target axis becomes the sum of both
+    /// operands' sizes along it, every other dimension unchanged.
     type Output = (D0, D1, D2, D3, <D4 as Add<D4_>>::Output, D5);
 }
 
@@ -327,6 +351,7 @@ where
     D5: Add<D5_>,
     <D5 as Add<D5_>>::Output: Dim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// The concatenated shape: the target axis becomes the sum of both
+    /// operands' sizes along it, every other dimension unchanged.
     type Output = (D0, D1, D2, D3, D4, <D5 as Add<D5_>>::Output);
 }
