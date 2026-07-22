@@ -748,12 +748,7 @@ impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
                 alloc::string::String::from("largest"),
                 crate::graph::AttributeValue::Int(if largest { 1 } else { 0 }),
             );
-            g.add_node(
-                OpType::TopK,
-                vec![t.value_id],
-                vec![out_id],
-                attrs,
-            );
+            g.add_node(OpType::TopK, vec![t.value_id], vec![out_id], attrs);
             out_id
         };
 
@@ -773,12 +768,7 @@ impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
                 alloc::string::String::from("largest"),
                 crate::graph::AttributeValue::Int(if largest { 1 } else { 0 }),
             );
-            g.add_node(
-                OpType::TopK,
-                vec![t.value_id],
-                vec![out_id],
-                attrs,
-            );
+            g.add_node(OpType::TopK, vec![t.value_id], vec![out_id], attrs);
             out_id
         };
 

@@ -440,3 +440,232 @@ fn wgpu_cross_entropy_rejects_unsupported_u32_targets() {
         }
     ));
 }
+
+#[test]
+fn parity_activations_relu() {
+    let shape = vec![2, 3];
+    let data = vec![-2.0f32, -0.5, 0.0, 1.0, 2.5, 4.0];
+
+    let cpu_in = CpuB::from_bytes::<f32>(
+        bytemuck::cast_slice(&data),
+        &shape,
+        DTypeId::F32,
+        &DeviceId::cpu(),
+    )
+    .unwrap();
+    let cpu_out = CpuB::relu::<f32>(&cpu_in).unwrap();
+    let cpu_grads = CpuB::backward::<f32>(&cpu_out).unwrap();
+
+    let wgpu_in = WgpuB::from_bytes::<f32>(
+        bytemuck::cast_slice(&data),
+        &shape,
+        DTypeId::F32,
+        &DeviceId::wgpu(0),
+    )
+    .unwrap();
+    let wgpu_out = WgpuB::relu::<f32>(&wgpu_in).unwrap();
+    let wgpu_grads = WgpuB::backward::<f32>(&wgpu_out).unwrap();
+
+    let cpu_res = read_f32::<CpuB>(&cpu_out);
+    let wgpu_res = read_f32::<WgpuB>(&wgpu_out);
+    assert!(
+        approx_eq_slice(&cpu_res, &wgpu_res, 1e-4),
+        "ReLU forward mismatch: CPU {cpu_res:?} vs WGPU {wgpu_res:?}"
+    );
+
+    let cpu_g = read_f32::<CpuB>(&CpuB::get_grad::<f32>(&cpu_in, &cpu_grads).unwrap().unwrap());
+    let wgpu_g = read_f32::<WgpuB>(
+        &WgpuB::get_grad::<f32>(&wgpu_in, &wgpu_grads)
+            .unwrap()
+            .unwrap(),
+    );
+    assert!(
+        approx_eq_slice(&cpu_g, &wgpu_g, 1e-4),
+        "ReLU grad mismatch: CPU {cpu_g:?} vs WGPU {wgpu_g:?}"
+    );
+}
+
+#[test]
+fn parity_activations_gelu() {
+    let shape = vec![2, 3];
+    let data = vec![-2.0f32, -0.5, 0.0, 1.0, 2.5, 4.0];
+
+    let cpu_in = CpuB::from_bytes::<f32>(
+        bytemuck::cast_slice(&data),
+        &shape,
+        DTypeId::F32,
+        &DeviceId::cpu(),
+    )
+    .unwrap();
+    let cpu_out = CpuB::gelu::<f32>(&cpu_in).unwrap();
+    let cpu_grads = CpuB::backward::<f32>(&cpu_out).unwrap();
+
+    let wgpu_in = WgpuB::from_bytes::<f32>(
+        bytemuck::cast_slice(&data),
+        &shape,
+        DTypeId::F32,
+        &DeviceId::wgpu(0),
+    )
+    .unwrap();
+    let wgpu_out = WgpuB::gelu::<f32>(&wgpu_in).unwrap();
+    let wgpu_grads = WgpuB::backward::<f32>(&wgpu_out).unwrap();
+
+    let cpu_res = read_f32::<CpuB>(&cpu_out);
+    let wgpu_res = read_f32::<WgpuB>(&wgpu_out);
+    assert!(
+        approx_eq_slice(&cpu_res, &wgpu_res, 1e-3),
+        "GELU forward mismatch: CPU {cpu_res:?} vs WGPU {wgpu_res:?}"
+    );
+
+    let cpu_g = read_f32::<CpuB>(&CpuB::get_grad::<f32>(&cpu_in, &cpu_grads).unwrap().unwrap());
+    let wgpu_g = read_f32::<WgpuB>(
+        &WgpuB::get_grad::<f32>(&wgpu_in, &wgpu_grads)
+            .unwrap()
+            .unwrap(),
+    );
+    assert!(
+        approx_eq_slice(&cpu_g, &wgpu_g, 1e-3),
+        "GELU grad mismatch: CPU {cpu_g:?} vs WGPU {wgpu_g:?}"
+    );
+}
+
+#[test]
+fn parity_batch_norm() {
+    let shape_x = vec![2, 2, 2, 2];
+    let shape_c = vec![2];
+    let data_x = vec![
+        1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0,
+    ];
+    let data_w = vec![1.0f32, 1.0];
+    let data_b = vec![0.0f32, 0.0];
+
+    let cpu_x = CpuB::from_bytes::<f32>(
+        bytemuck::cast_slice(&data_x),
+        &shape_x,
+        DTypeId::F32,
+        &DeviceId::cpu(),
+    )
+    .unwrap();
+    let cpu_w = CpuB::from_bytes::<f32>(
+        bytemuck::cast_slice(&data_w),
+        &shape_c,
+        DTypeId::F32,
+        &DeviceId::cpu(),
+    )
+    .unwrap();
+    let cpu_b = CpuB::from_bytes::<f32>(
+        bytemuck::cast_slice(&data_b),
+        &shape_c,
+        DTypeId::F32,
+        &DeviceId::cpu(),
+    )
+    .unwrap();
+    let cpu_out =
+        CpuB::batch_norm::<f32>(&cpu_x, Some(&cpu_w), Some(&cpu_b), None, None, 1e-5, 0.1).unwrap();
+
+    let wgpu_x = WgpuB::from_bytes::<f32>(
+        bytemuck::cast_slice(&data_x),
+        &shape_x,
+        DTypeId::F32,
+        &DeviceId::wgpu(0),
+    )
+    .unwrap();
+    let wgpu_w = WgpuB::from_bytes::<f32>(
+        bytemuck::cast_slice(&data_w),
+        &shape_c,
+        DTypeId::F32,
+        &DeviceId::wgpu(0),
+    )
+    .unwrap();
+    let wgpu_b = WgpuB::from_bytes::<f32>(
+        bytemuck::cast_slice(&data_b),
+        &shape_c,
+        DTypeId::F32,
+        &DeviceId::wgpu(0),
+    )
+    .unwrap();
+    let wgpu_out =
+        WgpuB::batch_norm::<f32>(&wgpu_x, Some(&wgpu_w), Some(&wgpu_b), None, None, 1e-5, 0.1)
+            .unwrap();
+
+    let cpu_res = read_f32::<CpuB>(&cpu_out);
+    let wgpu_res = read_f32::<WgpuB>(&wgpu_out);
+    assert!(
+        approx_eq_slice(&cpu_res, &wgpu_res, 1e-3),
+        "BatchNorm Forward mismatch: CPU {cpu_res:?} vs WGPU {wgpu_res:?}"
+    );
+}
+
+#[test]
+fn parity_reductions_sum_and_mean() {
+    let shape = vec![2, 3];
+    let data = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+
+    // Sum dim 1
+    let cpu_in = CpuB::from_bytes::<f32>(
+        bytemuck::cast_slice(&data),
+        &shape,
+        DTypeId::F32,
+        &DeviceId::cpu(),
+    )
+    .unwrap();
+    let cpu_sum = CpuB::sum_dim::<f32>(&cpu_in, 1).unwrap();
+    let cpu_grads = CpuB::backward::<f32>(&cpu_sum).unwrap();
+
+    let wgpu_in = WgpuB::from_bytes::<f32>(
+        bytemuck::cast_slice(&data),
+        &shape,
+        DTypeId::F32,
+        &DeviceId::wgpu(0),
+    )
+    .unwrap();
+    let wgpu_sum = WgpuB::sum_dim::<f32>(&wgpu_in, 1).unwrap();
+    let wgpu_grads = WgpuB::backward::<f32>(&wgpu_sum).unwrap();
+
+    let cpu_res = read_f32::<CpuB>(&cpu_sum);
+    let wgpu_res = read_f32::<WgpuB>(&wgpu_sum);
+    assert!(
+        approx_eq_slice(&cpu_res, &wgpu_res, 1e-4),
+        "sum_dim forward mismatch: CPU {cpu_res:?} vs WGPU {wgpu_res:?}"
+    );
+
+    let cpu_g = read_f32::<CpuB>(&CpuB::get_grad::<f32>(&cpu_in, &cpu_grads).unwrap().unwrap());
+    let wgpu_g = read_f32::<WgpuB>(
+        &WgpuB::get_grad::<f32>(&wgpu_in, &wgpu_grads)
+            .unwrap()
+            .unwrap(),
+    );
+    assert!(
+        approx_eq_slice(&cpu_g, &wgpu_g, 1e-4),
+        "sum_dim grad mismatch: CPU {cpu_g:?} vs WGPU {wgpu_g:?}"
+    );
+
+    // Mean dim 0
+    let cpu_mean = CpuB::mean_dim::<f32>(&cpu_in, 0).unwrap();
+    let cpu_mean_grads = CpuB::backward::<f32>(&cpu_mean).unwrap();
+
+    let wgpu_mean = WgpuB::mean_dim::<f32>(&wgpu_in, 0).unwrap();
+    let wgpu_mean_grads = WgpuB::backward::<f32>(&wgpu_mean).unwrap();
+
+    let cpu_mean_res = read_f32::<CpuB>(&cpu_mean);
+    let wgpu_mean_res = read_f32::<WgpuB>(&wgpu_mean);
+    assert!(
+        approx_eq_slice(&cpu_mean_res, &wgpu_mean_res, 1e-4),
+        "mean_dim forward mismatch: CPU {cpu_mean_res:?} vs WGPU {wgpu_mean_res:?}"
+    );
+
+    let cpu_mg = read_f32::<CpuB>(
+        &CpuB::get_grad::<f32>(&cpu_in, &cpu_mean_grads)
+            .unwrap()
+            .unwrap(),
+    );
+    let wgpu_mg = read_f32::<WgpuB>(
+        &WgpuB::get_grad::<f32>(&wgpu_in, &wgpu_mean_grads)
+            .unwrap()
+            .unwrap(),
+    );
+    assert!(
+        approx_eq_slice(&cpu_mg, &wgpu_mg, 1e-4),
+        "mean_dim grad mismatch: CPU {cpu_mg:?} vs WGPU {wgpu_mg:?}"
+    );
+}

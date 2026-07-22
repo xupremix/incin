@@ -99,7 +99,11 @@ fn main() -> kindle::Result<()> {
         optim.step(&grads)?;
 
         if batch_idx % 2 == 0 {
-            println!("Processed batch {}, loss = {:.4}", batch_idx, loss.to_scalar::<f32>()?);
+            println!(
+                "Processed batch {}, loss = {:.4}",
+                batch_idx,
+                loss.to_scalar::<f32>()?
+            );
         }
         batch_idx += 1;
 

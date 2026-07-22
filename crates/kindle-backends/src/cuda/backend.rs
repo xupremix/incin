@@ -207,38 +207,301 @@ impl<T: DType, D: Device> NumericOps<Self> for CudaBackendImpl<T, D> {
     }
 }
 
+fn push_unary_tape_entry(
+    t_id: crate::cuda::storage::TensorId,
+    out_id: crate::cuda::storage::TensorId,
+    grad_fn: impl Fn(&CudaStorage) -> CudaStorage + Send + Sync + 'static,
+) {
+    crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &CudaStorage| vec![grad_fn(grad_out)]),
+    });
+}
+
 impl<T: DType, D: Device> FloatOps<Self> for CudaBackendImpl<T, D> {
     fn relu<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        crate::cuda::ops::elementwise::launch_unary_op("relu", "x > 0.0f ? x : 0.0f", t)
+        let out = crate::cuda::ops::elementwise::launch_unary_op("relu", "x > 0.0f ? x : 0.0f", t)?;
+        let t_capture = t.clone();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            let deriv = crate::cuda::ops::elementwise::launch_unary_op(
+                "step",
+                "x > 0.0f ? 1.0f : 0.0f",
+                &t_capture,
+            )
+            .expect("step (relu backward)");
+            let out_shape = crate::cpu::stride::broadcast_shape(&grad_out.shape, &deriv.shape)
+                .expect("relu backward shape");
+            crate::cuda::ops::elementwise::launch_binary_op(
+                "mul", "a * b", grad_out, &deriv, &out_shape,
+            )
+            .expect("relu backward")
+        });
+        Ok(out)
     }
+
     fn sigmoid<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        crate::cuda::ops::elementwise::launch_unary_op("sigmoid", "1.0f / (1.0f + expf(-x))", t)
+        let out = crate::cuda::ops::elementwise::launch_unary_op(
+            "sigmoid",
+            "1.0f / (1.0f + expf(-x))",
+            t,
+        )?;
+        let out_capture = out.clone();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            let neg_out = crate::cuda::ops::elementwise::launch_unary_op("neg", "-x", &out_capture)
+                .expect("neg (sigmoid backward)");
+            let one_minus_out =
+                crate::cuda::ops::elementwise::launch_unary_op("add_one", "1.0f + x", &neg_out)
+                    .expect("1 - out (sigmoid backward)");
+            let deriv_shape =
+                crate::cpu::stride::broadcast_shape(&out_capture.shape, &one_minus_out.shape)
+                    .expect("sigmoid deriv shape");
+            let deriv = crate::cuda::ops::elementwise::launch_binary_op(
+                "mul",
+                "a * b",
+                &out_capture,
+                &one_minus_out,
+                &deriv_shape,
+            )
+            .expect("out*(1-out) (sigmoid backward)");
+            let grad_shape = crate::cpu::stride::broadcast_shape(&grad_out.shape, &deriv.shape)
+                .expect("sigmoid grad shape");
+            crate::cuda::ops::elementwise::launch_binary_op(
+                "mul",
+                "a * b",
+                grad_out,
+                &deriv,
+                &grad_shape,
+            )
+            .expect("sigmoid backward")
+        });
+        Ok(out)
     }
+
     fn tanh<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        crate::cuda::ops::elementwise::launch_unary_op("tanh", "tanhf(x)", t)
+        let out = crate::cuda::ops::elementwise::launch_unary_op("tanh", "tanhf(x)", t)?;
+        let out_capture = out.clone();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            let out_sq_shape =
+                crate::cpu::stride::broadcast_shape(&out_capture.shape, &out_capture.shape)
+                    .expect("tanh out^2 shape");
+            let out_sq = crate::cuda::ops::elementwise::launch_binary_op(
+                "mul",
+                "a * b",
+                &out_capture,
+                &out_capture,
+                &out_sq_shape,
+            )
+            .expect("out^2 (tanh backward)");
+            let neg_out_sq = crate::cuda::ops::elementwise::launch_unary_op("neg", "-x", &out_sq)
+                .expect("neg (tanh backward)");
+            let deriv =
+                crate::cuda::ops::elementwise::launch_unary_op("add_one", "1.0f + x", &neg_out_sq)
+                    .expect("1 - out^2 (tanh backward)");
+            let grad_shape = crate::cpu::stride::broadcast_shape(&grad_out.shape, &deriv.shape)
+                .expect("tanh grad shape");
+            crate::cuda::ops::elementwise::launch_binary_op(
+                "mul",
+                "a * b",
+                grad_out,
+                &deriv,
+                &grad_shape,
+            )
+            .expect("tanh backward")
+        });
+        Ok(out)
     }
+
     fn swish<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        crate::cuda::ops::elementwise::launch_unary_op("swish", "x / (1.0f + expf(-x))", t)
+        let out =
+            crate::cuda::ops::elementwise::launch_unary_op("swish", "x / (1.0f + expf(-x))", t)?;
+        let t_capture = t.clone();
+        let out_capture = out.clone();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            let sig = crate::cuda::ops::elementwise::launch_unary_op(
+                "sigmoid",
+                "1.0f / (1.0f + expf(-x))",
+                &t_capture,
+            )
+            .expect("sigmoid(x) (swish backward)");
+            let neg_out = crate::cuda::ops::elementwise::launch_unary_op("neg", "-x", &out_capture)
+                .expect("neg (swish backward)");
+            let one_minus_out =
+                crate::cuda::ops::elementwise::launch_unary_op("add_one", "1.0f + x", &neg_out)
+                    .expect("1 - out (swish backward)");
+            let sig_term_shape =
+                crate::cpu::stride::broadcast_shape(&sig.shape, &one_minus_out.shape)
+                    .expect("swish sig_term shape");
+            let sig_term = crate::cuda::ops::elementwise::launch_binary_op(
+                "mul",
+                "a * b",
+                &sig,
+                &one_minus_out,
+                &sig_term_shape,
+            )
+            .expect("sigmoid(x)*(1-out) (swish backward)");
+            let deriv_shape =
+                crate::cpu::stride::broadcast_shape(&out_capture.shape, &sig_term.shape)
+                    .expect("swish deriv shape");
+            let deriv = crate::cuda::ops::elementwise::launch_binary_op(
+                "add",
+                "a + b",
+                &out_capture,
+                &sig_term,
+                &deriv_shape,
+            )
+            .expect("swish backward deriv");
+            let grad_shape = crate::cpu::stride::broadcast_shape(&grad_out.shape, &deriv.shape)
+                .expect("swish grad shape");
+            crate::cuda::ops::elementwise::launch_binary_op(
+                "mul",
+                "a * b",
+                grad_out,
+                &deriv,
+                &grad_shape,
+            )
+            .expect("swish backward")
+        });
+        Ok(out)
     }
+
     fn exp<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        crate::cuda::ops::elementwise::launch_unary_op("exp", "expf(x)", t)
+        let out = crate::cuda::ops::elementwise::launch_unary_op("exp", "expf(x)", t)?;
+        let out_capture = out.clone();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            let grad_shape =
+                crate::cpu::stride::broadcast_shape(&grad_out.shape, &out_capture.shape)
+                    .expect("exp grad shape");
+            crate::cuda::ops::elementwise::launch_binary_op(
+                "mul",
+                "a * b",
+                grad_out,
+                &out_capture,
+                &grad_shape,
+            )
+            .expect("exp backward")
+        });
+        Ok(out)
     }
+
     fn log<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        crate::cuda::ops::elementwise::launch_unary_op("log", "logf(x)", t)
+        let out = crate::cuda::ops::elementwise::launch_unary_op("log", "logf(x)", t)?;
+        let t_capture = t.clone();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            let grad_shape = crate::cpu::stride::broadcast_shape(&grad_out.shape, &t_capture.shape)
+                .expect("log grad shape");
+            crate::cuda::ops::elementwise::launch_binary_op(
+                "div",
+                "a / b",
+                grad_out,
+                &t_capture,
+                &grad_shape,
+            )
+            .expect("log backward")
+        });
+        Ok(out)
     }
+
     fn sqrt<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        crate::cuda::ops::elementwise::launch_unary_op("sqrt", "sqrtf(x)", t)
+        let out = crate::cuda::ops::elementwise::launch_unary_op("sqrt", "sqrtf(x)", t)?;
+        let out_capture = out.clone();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            let ratio_shape =
+                crate::cpu::stride::broadcast_shape(&grad_out.shape, &out_capture.shape)
+                    .expect("sqrt ratio shape");
+            let ratio = crate::cuda::ops::elementwise::launch_binary_op(
+                "div",
+                "a / b",
+                grad_out,
+                &out_capture,
+                &ratio_shape,
+            )
+            .expect("sqrt backward ratio");
+            crate::cuda::ops::elementwise::launch_unary_op("half", "x * 0.5f", &ratio)
+                .expect("sqrt backward (halve)")
+        });
+        Ok(out)
     }
+
     fn neg<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        crate::cuda::ops::elementwise::launch_unary_op("neg", "-x", t)
+        let out = crate::cuda::ops::elementwise::launch_unary_op("neg", "-x", t)?;
+        push_unary_tape_entry(t.id, out.id, |grad_out| {
+            crate::cuda::ops::elementwise::launch_unary_op("neg", "-x", grad_out)
+                .expect("neg backward")
+        });
+        Ok(out)
     }
+
     fn abs<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        crate::cuda::ops::elementwise::launch_unary_op("abs", "fabsf(x)", t)
+        let out = crate::cuda::ops::elementwise::launch_unary_op("abs", "fabsf(x)", t)?;
+        let t_capture = t.clone();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            let sign = crate::cuda::ops::elementwise::launch_unary_op(
+                "sign",
+                "x > 0.0f ? 1.0f : (x < 0.0f ? -1.0f : 0.0f)",
+                &t_capture,
+            )
+            .expect("sign (abs backward)");
+            let grad_shape = crate::cpu::stride::broadcast_shape(&grad_out.shape, &sign.shape)
+                .expect("abs grad shape");
+            crate::cuda::ops::elementwise::launch_binary_op(
+                "mul",
+                "a * b",
+                grad_out,
+                &sign,
+                &grad_shape,
+            )
+            .expect("abs backward")
+        });
+        Ok(out)
     }
+
     fn step<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        crate::cuda::ops::elementwise::launch_unary_op("step", "x > 0.0f ? 1.0f : 0.0f", t)
+        let out =
+            crate::cuda::ops::elementwise::launch_unary_op("step", "x > 0.0f ? 1.0f : 0.0f", t)?;
+        push_unary_tape_entry(t.id, out.id, |grad_out| {
+            crate::cuda::ops::elementwise::launch_unary_op("zero", "0.0f", grad_out)
+                .expect("step backward (zero grad)")
+        });
+        Ok(out)
+    }
+
+    fn add_scalar_float<K: DType>(t: &CudaStorage, scalar: f64) -> Result<CudaStorage> {
+        let expr = format!("x + ({:.8}f)", scalar as f32);
+        let out = crate::cuda::ops::elementwise::launch_unary_op("add_scalar", &expr, t)?;
+        push_unary_tape_entry(t.id, out.id, |grad_out| grad_out.clone());
+        Ok(out)
+    }
+
+    fn mul_scalar_float<K: DType>(t: &CudaStorage, scalar: f64) -> Result<CudaStorage> {
+        let expr = format!("x * ({:.8}f)", scalar as f32);
+        let out = crate::cuda::ops::elementwise::launch_unary_op("mul_scalar", &expr, t)?;
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            let expr = format!("x * ({:.8}f)", scalar as f32);
+            crate::cuda::ops::elementwise::launch_unary_op("mul_scalar", &expr, grad_out)
+                .expect("mul_scalar_float backward")
+        });
+        Ok(out)
+    }
+
+    fn softmax<K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
+        let ls = log_softmax::<T, K>(t, dim)?;
+        Self::exp::<K>(&ls)
     }
 }
+
+/// Helper function to compute log_softmax composed from primitives on CUDA backend.
+pub(crate) fn log_softmax<T: DType, K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
+    let max = CudaBackendImpl::<T>::max_keepdim::<K>(t, dim)?;
+    let max_b = CudaBackendImpl::<T>::broadcast_as::<K>(&max, &t.shape)?;
+    let diff = CudaBackendImpl::<T>::sub::<K>(t, &max_b)?;
+    let exp_diff = CudaBackendImpl::<T>::exp::<K>(&diff)?;
+    let sum_exp = CudaBackendImpl::<T>::sum_keepdim::<K>(&exp_diff, dim)?;
+    let sum_exp_b = CudaBackendImpl::<T>::broadcast_as::<K>(&sum_exp, &t.shape)?;
+    let log_sum = CudaBackendImpl::<T>::log::<K>(&sum_exp_b)?;
+    CudaBackendImpl::<T>::sub::<K>(&diff, &log_sum)
+}
+
 impl<T: DType, D: Device> CreationOps<Self> for CudaBackendImpl<T, D> {
     fn zeros<K: DType>(shape: &[usize], dtype: DTypeId, device: &DeviceId) -> Result<CudaStorage> {
         cuda_from_f32(
@@ -300,7 +563,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CudaBackendImpl<T, D> {
         }
         let mut curr = t.clone();
         for dim in (0..rank).rev() {
-            curr = crate::cuda::ops::reduce::launch_reduce_op("sum", &curr, dim, false)?;
+            curr = Self::sum_dim::<K>(&curr, dim)?;
         }
         Ok(curr)
     }
@@ -322,7 +585,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CudaBackendImpl<T, D> {
         }
         let mut curr = t.clone();
         for dim in (0..rank).rev() {
-            curr = crate::cuda::ops::reduce::launch_reduce_op("max", &curr, dim, false)?;
+            curr = Self::max_dim::<K>(&curr, dim)?;
         }
         Ok(curr)
     }
@@ -334,37 +597,73 @@ impl<T: DType, D: Device> ReductionOps<Self> for CudaBackendImpl<T, D> {
         }
         let mut curr = t.clone();
         for dim in (0..rank).rev() {
-            curr = crate::cuda::ops::reduce::launch_reduce_op("min", &curr, dim, false)?;
+            curr = Self::min_dim::<K>(&curr, dim)?;
         }
         Ok(curr)
     }
 
     fn sum_dim<K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
-        crate::cuda::ops::reduce::launch_reduce_op("sum", t, dim, false)
+        let out = crate::cuda::ops::reduce::launch_reduce_op("sum", t, dim, false)?;
+        let t_shape = t.shape.clone();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            crate::cuda::tape::unbroadcast(grad_out, &t_shape).expect("unbroadcast sum_dim")
+        });
+        Ok(out)
     }
 
     fn sum_keepdim<K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
-        crate::cuda::ops::reduce::launch_reduce_op("sum", t, dim, true)
+        let out = crate::cuda::ops::reduce::launch_reduce_op("sum", t, dim, true)?;
+        let t_shape = t.shape.clone();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            crate::cuda::tape::unbroadcast(grad_out, &t_shape).expect("unbroadcast sum_keepdim")
+        });
+        Ok(out)
     }
 
     fn mean_dim<K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
         let axis_len = t.shape.get(dim).cloned().unwrap_or(1) as f64;
         let sum = crate::cuda::ops::reduce::launch_reduce_op("sum", t, dim, false)?;
-        if axis_len > 0.0 {
-            Self::mul_scalar_float::<K>(&sum, 1.0 / axis_len)
+        let out = if axis_len > 0.0 {
+            Self::mul_scalar_float::<K>(&sum, 1.0 / axis_len)?
         } else {
-            Ok(sum)
-        }
+            sum
+        };
+        let t_shape = t.shape.clone();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            let unb =
+                crate::cuda::tape::unbroadcast(grad_out, &t_shape).expect("unbroadcast mean_dim");
+            if axis_len > 0.0 {
+                let expr = format!("x * ({:.8}f)", (1.0 / axis_len) as f32);
+                crate::cuda::ops::elementwise::launch_unary_op("mul_scalar", &expr, &unb)
+                    .expect("scale mean_dim grad")
+            } else {
+                unb
+            }
+        });
+        Ok(out)
     }
 
     fn mean_keepdim<K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
         let axis_len = t.shape.get(dim).cloned().unwrap_or(1) as f64;
         let sum = crate::cuda::ops::reduce::launch_reduce_op("sum", t, dim, true)?;
-        if axis_len > 0.0 {
-            Self::mul_scalar_float::<K>(&sum, 1.0 / axis_len)
+        let out = if axis_len > 0.0 {
+            Self::mul_scalar_float::<K>(&sum, 1.0 / axis_len)?
         } else {
-            Ok(sum)
-        }
+            sum
+        };
+        let t_shape = t.shape.clone();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            let unb = crate::cuda::tape::unbroadcast(grad_out, &t_shape)
+                .expect("unbroadcast mean_keepdim");
+            if axis_len > 0.0 {
+                let expr = format!("x * ({:.8}f)", (1.0 / axis_len) as f32);
+                crate::cuda::ops::elementwise::launch_unary_op("mul_scalar", &expr, &unb)
+                    .expect("scale mean_keepdim grad")
+            } else {
+                unb
+            }
+        });
+        Ok(out)
     }
 
     fn max_dim<K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {

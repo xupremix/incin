@@ -1278,8 +1278,7 @@ pub mod candle {
             let exp_neg_abs = neg_abs_x
                 .exp()
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
-            let one = (exp_neg_abs + 1.0f64)
-                .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+            let one = (exp_neg_abs + 1.0f64).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
             let log_term = one
                 .log()
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;

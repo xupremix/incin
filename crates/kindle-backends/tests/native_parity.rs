@@ -321,7 +321,6 @@ fn elu_forward_and_backward_parity() {
     assert_close(&grad_n, &grad_c, 1e-2, "elu backward");
 }
 
-
 #[test]
 /// Verifies numerical parity of forward and backward pass between backends for `abs_forward_and_backward_parity`.
 fn abs_forward_and_backward_parity() {
