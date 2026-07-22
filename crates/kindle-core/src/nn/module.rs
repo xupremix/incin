@@ -624,6 +624,11 @@ where
 
 /// A macro to easily build Sequential models with many layers.
 /// `seq!(L1, L2, L3)` expands to `Sequential(L1, Sequential(L2, L3))`.
+///
+/// Naming the *type* of that value (e.g. for a `#[module]` struct field)
+/// still requires hand-nesting `Sequential<L1, Sequential<L2, L3>>` — see
+/// [`seq_type!`], which generates that same nesting from the same
+/// flat layer list so it never has to be written out by hand.
 #[macro_export]
 macro_rules! seq {
     ($l1:expr) => {
@@ -631,5 +636,49 @@ macro_rules! seq {
     };
     ($l1:expr, $($tail:expr),+ $(,)?) => {
         $crate::prelude::Sequential($l1, $crate::seq!($($tail),+))
+    };
+}
+
+/// Names the nested [`Sequential`] *type* that [`seq!`] would build a
+/// *value* of, from the same flat list of layer types.
+///
+/// `Sequential<L1, L2>` only composes two layers at a time, so a
+/// three-or-more-layer model's field type has to be hand-nested
+/// (`Sequential<A, Sequential<B, C>>`) even though `seq!(a, b, c)` already
+/// builds the matching value without that nesting spelled out. This macro
+/// mirrors `seq!`'s exact right-nesting rule at the type level:
+/// `seq_type!(L1, L2, L3)` expands to `Sequential<L1, Sequential<L2, L3>>`,
+/// so a layer list only needs to be written once per meaning (the type via
+/// this macro, the value via `seq!`) instead of the type being re-derived by
+/// hand every time the layer list changes.
+///
+/// ## Examples
+/// ```rust,ignore
+/// use kindle::prelude::*;
+///
+/// type Backend = KindleBackend<f32, Cpu>;
+///
+/// // Instead of writing:
+/// //   Sequential<Linear<s![768, 256], Backend>, Sequential<ReLU, Linear<s![256, 10], Backend>>>
+/// type Net = seq_type!(
+///     Linear<s![768, 256], Backend>,
+///     ReLU,
+///     Linear<s![256, 10], Backend>
+/// );
+///
+/// let net: Net = seq!(
+///     Linear::<s![768, 256], Backend>::build(())?,
+///     ReLU,
+///     Linear::<s![256, 10], Backend>::build(())?
+/// );
+/// # Ok::<(), Error>(())
+/// ```
+#[macro_export]
+macro_rules! seq_type {
+    ($l1:ty) => {
+        $l1
+    };
+    ($l1:ty, $($tail:ty),+ $(,)?) => {
+        $crate::prelude::Sequential<$l1, $crate::seq_type!($($tail),+)>
     };
 }

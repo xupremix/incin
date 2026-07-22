@@ -105,6 +105,36 @@ fn test_sequential() -> Result<()> {
 }
 
 #[test]
+/// `seq_type!` must name the exact type `seq!` builds a value of —
+/// this only compiles at all if the two macros' nesting rules stay in sync,
+/// so it's a compile-time proof, not just a runtime assertion.
+fn test_seq_type_matches_seq_value_type() -> Result<()> {
+    type Net = seq_type!(
+        Linear<s![10, 5], CpuBackendImpl>,
+        ReLU,
+        Linear<s![5, 2], CpuBackendImpl>
+    );
+
+    let net: Net = seq!(
+        Linear::<s![10, 5], CpuBackendImpl>::build(())?,
+        ReLU,
+        Linear::<s![5, 2], CpuBackendImpl>::build(())?
+    );
+
+    let input = Tensor::<s![4, 10], CpuBackendImpl>::ones(())?;
+    let out = net.forward(input)?;
+    let out_dims: [usize; 2] = out.dims();
+    assert_eq!(out_dims, [4, 2]);
+
+    // Parameters still flow through the aliased type exactly like a
+    // directly-typed `Sequential`, e.g. for an optimizer.
+    let params = net.parameters();
+    assert_eq!(params.len(), 4); // 2 Linear layers x (weight, bias)
+
+    Ok(())
+}
+
+#[test]
 /// Test embedding.
 fn test_embedding() -> Result<()> {
     // Vocab=100, EmbedDim=32

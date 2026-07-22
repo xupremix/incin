@@ -28,7 +28,10 @@
 //!
 //! ## Neural Network Modules
 //!
-//! Building and running a model is straightforward using the `#[module]` attribute and the `seq!` macro:
+//! Building and running a model is straightforward using the `#[module]` attribute and the
+//! `seq!`/`seq_type!` macros — `seq_type!` names the same nested `Sequential<...>`
+//! type that `seq!` builds a value of, so a layer list only needs to be written once per meaning
+//! instead of the field type being hand-nested separately:
 //!
 //! ```rust,no_run
 //! use kindle::prelude::*;
@@ -37,10 +40,11 @@
 //!
 //! #[module]
 //! pub struct MLP {
-//!     net: Sequential<
+//!     net: seq_type!(
 //!         Linear<s![768, 256], Backend>,
-//!         Sequential<ReLU, Linear<s![256, 10], Backend>>
-//!     >,
+//!         ReLU,
+//!         Linear<s![256, 10], Backend>
+//!     ),
 //! }
 //!
 //! impl MLP {

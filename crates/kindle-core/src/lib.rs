@@ -61,6 +61,7 @@ pub mod prelude {
         rnn::{RNN, RNNCell},
     };
     pub use crate::seq;
+    pub use crate::seq_type;
     pub use kindle_macros::{idx, module, s};
 
     pub use super::shapes::prelude::*;
