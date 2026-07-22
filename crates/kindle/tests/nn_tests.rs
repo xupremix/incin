@@ -105,6 +105,33 @@ fn test_sequential() -> Result<()> {
 }
 
 #[test]
+/// `seq!(Linear, ReLU, Linear)` builds the right-nested value
+/// `Sequential(Linear, Sequential(ReLU, Linear))`. Before flat numbering,
+/// this produced keys `0.weight/0.bias, 1.1.weight/1.1.bias` (encoding the
+/// tree's nesting depth). PyTorch's `nn.Sequential` numbers by flat
+/// position instead — index `1` (`ReLU`, no parameters) is simply absent
+/// from the state dict rather than renumbering what follows, so the second
+/// `Linear` keeps index `2`, not `1`.
+fn test_sequential_state_dict_keys_are_flat_like_pytorch() -> Result<()> {
+    let seq = seq!(
+        Linear::<s![10, 5], CpuBackendImpl>::build(())?,
+        ReLU,
+        Linear::<s![5, 2], CpuBackendImpl>::build(())?
+    );
+
+    let params = seq.parameters();
+    let mut keys: Vec<&String> = params.keys().collect();
+    keys.sort();
+    assert_eq!(
+        keys,
+        vec!["0.bias", "0.weight", "2.bias", "2.weight"],
+        "expected flat PyTorch-style numbering, got nested keys instead"
+    );
+
+    Ok(())
+}
+
+#[test]
 /// `seq_type!` must name the exact type `seq!` builds a value of —
 /// this only compiles at all if the two macros' nesting rules stay in sync,
 /// so it's a compile-time proof, not just a runtime assertion.

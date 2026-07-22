@@ -14,6 +14,56 @@ pub trait StateDict<B: Backend> {
     /// Collects the module's state into a dictionary of dynamic tensors.
     fn state_dict(&self, prefix: &str, tensors: &mut BTreeMap<String, Tensor<Dyn, B>>);
 
+    /// Number of flat positional slots this module occupies when nested
+    /// inside a [`Sequential`] chain — `1` for any ordinary layer (this
+    /// default). [`Sequential`]'s own impl overrides this to sum its two
+    /// children's widths, which is what lets `state_dict`/`load_state_dict`
+    /// number a many-layer chain flatly (`0.weight, 1.weight, 2.weight, ...`,
+    /// matching PyTorch's `nn.Sequential`) instead of literally encoding
+    /// `Sequential<L1, Sequential<L2, L3>>`'s right-nested tree structure
+    /// into the keys (`0.weight, 1.0.weight, 1.1.weight`). See
+    /// `Parameters::flat_width`'s doc for the full design note — this is
+    /// the `StateDict` half of the same mechanism, duplicated rather than
+    /// inherited via a supertrait bound so existing hand-written
+    /// `StateDict`-only implementors don't need an unrelated `Parameters`
+    /// impl just to keep compiling.
+    fn flat_width() -> usize
+    where
+        Self: Sized,
+    {
+        1
+    }
+
+    /// Collects state using FLAT positional numbering relative to
+    /// `base_index` (PyTorch `nn.Sequential` semantics), unlike
+    /// `state_dict`'s own literal prefix-string recursion. Default:
+    /// treat `self` as one flat slot at `base_index`, delegating to
+    /// `state_dict`. [`Sequential`] overrides this to recurse with the
+    /// correct running offset instead — see `flat_width`'s doc.
+    fn state_dict_flat(
+        &self,
+        outer_prefix: &str,
+        base_index: usize,
+        tensors: &mut BTreeMap<String, Tensor<Dyn, B>>,
+    ) where
+        Self: Sized,
+    {
+        self.state_dict(&format!("{outer_prefix}{base_index}."), tensors);
+    }
+
+    /// `load_state_dict`'s counterpart to `state_dict_flat` — see its doc.
+    fn load_state_dict_flat(
+        &mut self,
+        outer_prefix: &str,
+        base_index: usize,
+        tensors: &BTreeMap<String, Tensor<Dyn, B>>,
+    ) -> Result<()>
+    where
+        Self: Sized,
+    {
+        self.load_state_dict(&format!("{outer_prefix}{base_index}."), tensors)
+    }
+
     /// Helper: Serializes this module's state to a given serializer.
     fn save_to<S: crate::serialize::Serializer>(
         &self,
@@ -65,6 +115,67 @@ pub trait Parameters<B: Backend> {
         let mut map = alloc::collections::BTreeMap::new();
         self.named_parameters("", &mut map);
         map
+    }
+
+    /// Number of flat positional slots this module occupies when nested
+    /// inside a [`Sequential`] chain — `1` for any ordinary layer (this
+    /// default, and every existing layer type inherits it automatically
+    /// since `Parameters` is already implemented everywhere — no per-type
+    /// opt-in needed, unlike `TrainMode`'s default-no-op design). Overridden
+    /// only by [`Sequential`]'s own impl, which sums its two children's
+    /// widths.
+    ///
+    /// `seq!(a, b, c)` builds the right-nested value
+    /// `Sequential(a, Sequential(b, c))`, so a naive recursive
+    /// `named_parameters` (literally prepending `"0."`/`"1."` at each level)
+    /// produces keys that encode that nesting structure —
+    /// `0.weight, 1.0.weight, 1.1.weight` — rather than PyTorch
+    /// `nn.Sequential`'s flat `0.weight, 1.weight, 2.weight`. `flat_width`
+    /// plus [`named_parameters_flat`](Self::named_parameters_flat) is the
+    /// mechanism that fixes this: each level needs to know how many flat
+    /// positional slots its *left* child consumed before it can correctly
+    /// number its *right* child's first slot, and that width has to be
+    /// known independent of how many parameters (if any) each layer
+    /// actually has — a parameter-less layer like `ReLU` still occupies
+    /// exactly one position, exactly like PyTorch reserves index `1` for a
+    /// parameter-less middle layer in `nn.Sequential(Linear(3,3), ReLU(),
+    /// Linear(3,3))`'s state dict (keys `0.weight/0.bias`, nothing at index
+    /// `1`, then `2.weight/2.bias`).
+    fn flat_width() -> usize
+    where
+        Self: Sized,
+    {
+        1
+    }
+
+    /// Collects named parameters using FLAT positional numbering relative
+    /// to `base_index` (PyTorch `nn.Sequential` semantics), unlike
+    /// `named_parameters`'s own literal prefix-string recursion. Default:
+    /// treat `self` as one flat slot at `base_index`, delegating to
+    /// `named_parameters`. [`Sequential`] overrides this to recurse with the
+    /// correct running offset instead — see `flat_width`'s doc for why this
+    /// exists.
+    fn named_parameters_flat(
+        &self,
+        outer_prefix: &str,
+        base_index: usize,
+        map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
+    ) where
+        Self: Sized,
+    {
+        // `named_parameters`'s own `#[module]`-generated body ALREADY
+        // appends a trailing `.` to a non-empty incoming prefix before
+        // using it (`let prefix = if prefix.is_empty() { .. } else {
+        // format!("{}.", prefix) }`) — passing an already-dotted prefix
+        // here would double it up (`"0..weight"` instead of `"0.weight"`),
+        // a real bug caught by `test_sequential_state_dict_keys_are_flat_like_pytorch`
+        // actually asserting on key *strings* rather than just a count.
+        let joined = if outer_prefix.is_empty() {
+            format!("{base_index}")
+        } else {
+            format!("{outer_prefix}.{base_index}")
+        };
+        self.named_parameters(&joined, map);
     }
 }
 
@@ -420,14 +531,35 @@ where
     L1: Parameters<B>,
     L2: Parameters<B>,
 {
-    /// Collects named trainable parameters into `map` under the given `prefix`.
+    /// Entry point: flat-numbers from index `0`, matching PyTorch
+    /// `nn.Sequential`'s state-dict key scheme — see `flat_width`'s doc.
     fn named_parameters(
         &self,
         prefix: &str,
         map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
     ) {
-        self.0.named_parameters(&format!("{}0.", prefix), map);
-        self.1.named_parameters(&format!("{}1.", prefix), map);
+        self.named_parameters_flat(prefix, 0, map);
+    }
+
+    /// Sums both children's widths — see `flat_width`'s doc.
+    fn flat_width() -> usize {
+        L1::flat_width() + L2::flat_width()
+    }
+
+    /// Recurses with a running index offset: the left child starts at
+    /// `base_index`, the right child starts `L1::flat_width()` positions
+    /// later. Each child's OWN `named_parameters_flat` (its default if it's
+    /// an ordinary layer, or this same override if it's itself a
+    /// `Sequential`) handles turning that starting index into real keys.
+    fn named_parameters_flat(
+        &self,
+        outer_prefix: &str,
+        base_index: usize,
+        map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
+    ) {
+        self.0.named_parameters_flat(outer_prefix, base_index, map);
+        self.1
+            .named_parameters_flat(outer_prefix, base_index + L1::flat_width(), map);
     }
 }
 
@@ -458,21 +590,52 @@ where
     L1: StateDict<B>,
     L2: StateDict<B>,
 {
-    /// Loads parameters from a flat name→tensor map, in-place.
+    /// Entry point: flat-numbers from index `0` — see
+    /// `Parameters::flat_width`'s doc (same mechanism, `StateDict` half).
     fn load_state_dict(
         &mut self,
         prefix: &str,
         tensors: &BTreeMap<String, Tensor<Dyn, B>>,
     ) -> Result<()> {
-        self.0.load_state_dict(&format!("{}0.", prefix), tensors)?;
-        self.1.load_state_dict(&format!("{}1.", prefix), tensors)?;
-        Ok(())
+        self.load_state_dict_flat(prefix, 0, tensors)
     }
 
-    /// Returns a flat map from parameter name to its raw tensor value.
+    /// Entry point: flat-numbers from index `0` — see
+    /// `Parameters::flat_width`'s doc.
     fn state_dict(&self, prefix: &str, tensors: &mut BTreeMap<String, Tensor<Dyn, B>>) {
-        self.0.state_dict(&format!("{}0.", prefix), tensors);
-        self.1.state_dict(&format!("{}1.", prefix), tensors);
+        self.state_dict_flat(prefix, 0, tensors);
+    }
+
+    /// Sums both children's widths.
+    fn flat_width() -> usize {
+        L1::flat_width() + L2::flat_width()
+    }
+
+    /// Recurses with a running index offset — see `Parameters`'s identical
+    /// `named_parameters_flat` for the full explanation.
+    fn state_dict_flat(
+        &self,
+        outer_prefix: &str,
+        base_index: usize,
+        tensors: &mut BTreeMap<String, Tensor<Dyn, B>>,
+    ) {
+        self.0.state_dict_flat(outer_prefix, base_index, tensors);
+        self.1
+            .state_dict_flat(outer_prefix, base_index + L1::flat_width(), tensors);
+    }
+
+    /// `load_state_dict`'s counterpart to `state_dict_flat`.
+    fn load_state_dict_flat(
+        &mut self,
+        outer_prefix: &str,
+        base_index: usize,
+        tensors: &BTreeMap<String, Tensor<Dyn, B>>,
+    ) -> Result<()> {
+        self.0
+            .load_state_dict_flat(outer_prefix, base_index, tensors)?;
+        self.1
+            .load_state_dict_flat(outer_prefix, base_index + L1::flat_width(), tensors)?;
+        Ok(())
     }
 }
 

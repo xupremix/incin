@@ -32,3 +32,38 @@ fn test_state_dict_extraction() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+/// `state_dict`'s prefix convention differs from `named_parameters`'s (the
+/// caller must already include a trailing `.`, unlike `named_parameters`
+/// where the `#[module]`-generated body appends it), so `Sequential`'s flat
+/// numbering needs its own, separately-verified test even though it shares
+/// the same `flat_width` mechanism.
+fn test_sequential_state_dict_flat_keys_and_round_trip() -> Result<()> {
+    let seq = seq!(
+        Linear::<s![10, 5], CpuBackendImpl>::build(())?,
+        ReLU,
+        Linear::<s![5, 2], CpuBackendImpl>::build(())?
+    );
+    let mut map = BTreeMap::new();
+    seq.state_dict("", &mut map);
+
+    let mut keys: Vec<&String> = map.keys().collect();
+    keys.sort();
+    assert_eq!(
+        keys,
+        vec!["0.bias.", "0.weight.", "2.bias.", "2.weight."],
+        "expected flat PyTorch-style numbering, got nested keys instead"
+    );
+
+    // Round trip: a fresh Sequential of the same shape loads the saved
+    // state without error.
+    let mut new_seq = seq!(
+        Linear::<s![10, 5], CpuBackendImpl>::build(())?,
+        ReLU,
+        Linear::<s![5, 2], CpuBackendImpl>::build(())?
+    );
+    new_seq.load_state_dict("", &map)?;
+
+    Ok(())
+}
