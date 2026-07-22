@@ -1,27 +1,27 @@
-/// `arg`.
+/// Connects `Tensor`'s type parameters to the runtime arguments needed to construct one.
 pub mod arg;
-/// `arg_into`.
+/// Converts user-facing constructor arguments into each `TensorArgs` field.
 pub mod arg_into;
-/// `backend`.
+/// The `Backend` trait family and the test-only `DummyBackend` stand-in.
 pub mod backend;
-/// `base`.
+/// The `Tensor` type itself and its core inherent methods.
 pub mod base;
-/// `conv2d`.
+/// 2D convolution output-shape and parameter validation shared across backends.
 pub mod conv2d;
-/// `device`.
+/// The `Device` trait family (`Cpu`, `Cuda<N>`, `Wgpu<N>`, `Dyn`) and `DeviceId`.
 pub mod device;
-/// `dtype`.
+/// The `DType` trait family (`f32`/`f16`/`bf16`/.../`Dyn`) and `DTypeId`.
 pub mod dtype;
-/// `grad`.
+/// The `RequiresGrad` marker trait (`Grad`/`NoGrad`) controlling autodiff tracking.
 pub mod grad;
-/// `matmul`.
+/// Matrix multiplication shape validation shared across backends.
 pub mod matmul;
-/// `ops`.
+/// Operator-trait implementations (`Add`, `Index`, etc.) for `Tensor`.
 pub mod ops;
-/// `tracing`.
+/// The ONNX-tracing backend wrapper used to record ops into a `Graph`.
 pub mod tracing;
 
-/// `prelude`.
+/// Re-exports the public tensor-layer API: `Tensor`, `Backend`, `Device`, `DType`, and their supporting traits.
 pub mod prelude {
     pub use super::arg::*;
     pub use super::arg_into::*;

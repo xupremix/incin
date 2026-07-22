@@ -5,7 +5,10 @@ use crate::prelude::{
 use alloc::string::ToString;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-/// `Dyn`.
+/// A marker used as `Shape`, `DType`, `Device`, or their runtime-chosen
+/// variant across `Tensor`'s type parameters, deferring that choice from
+/// compile time to runtime (e.g. `Tensor<Dyn, B>` has a shape resolved at
+/// construction rather than baked into the type).
 pub struct Dyn(pub ());
 
 /// The core `Tensor` type representing an n-dimensional array.
@@ -27,7 +30,7 @@ pub struct Dyn(pub ());
 /// Creating and inspecting statically shaped tensors:
 /// ```rust,ignore
 /// use kindle::prelude::*;
-/// type Backend = kindle_backends::candle::CandleBackend<f32, Cpu>;
+/// type Backend = KindleBackend<f32, Cpu>;
 ///
 /// // Compile-time 3D tensor of shape [2, 5, 10]
 /// let t = Tensor::<s![2, 5, 10], Backend>::zeros(()).unwrap();
@@ -38,7 +41,7 @@ pub struct Dyn(pub ());
 /// Using dynamically shaped tensors:
 /// ```rust,ignore
 /// use kindle::prelude::*;
-/// type Backend = kindle_backends::candle::CandleBackend<f32, Cpu>;
+/// type Backend = KindleBackend<f32, Cpu>;
 ///
 /// // Shape determined at runtime
 /// let dyn_t = Tensor::<Dyn, Backend>::ones(vec![32, 64]).unwrap();
@@ -399,7 +402,7 @@ impl<S: Shape, B: Backend, K: DType> Tensor<S, B, K, Grad> {
 impl<S: crate::prelude::Shape, B: crate::prelude::Backend, K: DType, G: RequiresGrad>
     core::fmt::Display for Tensor<S, B, K, G>
 {
-    /// `fmt`.
+    /// Delegates to the backend's own display formatting of its storage.
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", B::format_tensor_display(&self.inner))
     }
@@ -408,7 +411,8 @@ impl<S: crate::prelude::Shape, B: crate::prelude::Backend, K: DType, G: Requires
 impl<S: crate::prelude::Shape, B: crate::prelude::Backend, K: DType, G: RequiresGrad>
     core::fmt::Debug for Tensor<S, B, K, G>
 {
-    /// `fmt`.
+    /// Prints the backend type name, runtime shape, and the backend's own
+    /// debug rendering of its storage.
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(
             f,
@@ -421,14 +425,12 @@ impl<S: crate::prelude::Shape, B: crate::prelude::Backend, K: DType, G: Requires
 }
 
 #[cfg(test)]
-/// `tests`.
 mod tests {
     use super::*;
 
     use alloc::vec;
 
     #[test]
-    /// `test_tensor_creation`.
     fn test_tensor_creation() {
         let t: Tensor<Dyn, crate::tensor::backend::dummy::DummyBackend<f32, crate::prelude::Cpu>> =
             Tensor::zeros(vec![2, 3]).unwrap();
@@ -438,7 +440,6 @@ mod tests {
     }
 
     #[test]
-    /// `test_tensor_ones`.
     fn test_tensor_ones() {
         let t: Tensor<Dyn, crate::tensor::backend::dummy::DummyBackend<f32, crate::prelude::Cpu>> =
             Tensor::ones(vec![4]).unwrap();
@@ -447,7 +448,7 @@ mod tests {
     }
 
     #[test]
-    /// `DummyBackend`'s conv/pool shape math must never panic on a
+    // `DummyBackend`'s conv/pool shape math must never panic on a
     /// pathological input, e.g. an input smaller than an (over-dilated)
     /// kernel plus padding — `2*padding + input` underflowing `dilation *
     /// (kernel - 1) + 1` used to panic via unchecked `usize` subtraction in

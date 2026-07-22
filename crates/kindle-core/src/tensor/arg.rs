@@ -6,9 +6,9 @@ use crate::prelude::{DType, Device, RequiresGrad, Shape};
 /// - `()` for fully-static parameters (e.g., `Const<N>`, f32, Cpu, Grad)
 /// - The actual value for dynamic parameters (e.g., `Vec<usize>`, DTypeId, DeviceId, bool)
 pub trait TensorArgs<S: Shape, K: DType, D: Device, G: RequiresGrad> {
-    /// `Args`.
+    /// The bundled constructor argument type combining all four parameters' `Arg`s.
     type Args;
-    /// `construct`.
+    /// Splits the bundled `Args` into each parameter's stored `Field` representation.
     fn construct(args: Self::Args) -> (S::Field, K::Field, D::Field, G::Field);
 }
 
@@ -19,11 +19,11 @@ where
     D: Device,
     G: RequiresGrad,
 {
-    /// `Args`.
+    /// A struct bundling each parameter's `Arg` (shape dims, dtype id, device id, grad flag).
     type Args = crate::prelude::TensorArgsData<S::Arg, K::Arg, D::Arg, G::Arg>;
 
     #[inline]
-    /// `construct`.
+    /// Initializes each parameter's `Field` independently from its slot in `args`.
     fn construct(args: Self::Args) -> (S::Field, K::Field, D::Field, G::Field) {
         (
             S::init(args.shape),
