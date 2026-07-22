@@ -8,7 +8,8 @@ pub use kindle_core::prelude::*;
 // CandleBackend
 // ----------------------------------------------------------------------------
 
-/// `candle`.
+/// Wraps the `candle_core` crate, providing `CandleBackend` as a `Backend`
+/// implementation backed by Candle's own tensor type.
 pub mod candle {
     use super::*;
     use candle_core as candle;
@@ -20,7 +21,8 @@ pub mod candle {
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct CandleBackend<T, D>(core::marker::PhantomData<(T, D)>);
 
-    /// `to_candle_device`.
+    /// Converts a kindle `DeviceId` into a candle `Device`, mapping CPU/CUDA/wgpu
+    /// device kinds and erroring on any device kind Candle doesn't support.
     pub fn to_candle_device(dev: &DeviceId) -> Result<candle::Device> {
         use kindle_core::prelude::DeviceKind;
         match dev.kind() {
@@ -38,7 +40,8 @@ pub mod candle {
         }
     }
 
-    /// `to_candle_dtype`.
+    /// Maps a kindle `DTypeId` to the corresponding candle `DType`, panicking on
+    /// dtypes Candle has no native representation for (e.g. `Q8_0`).
     pub fn to_candle_dtype(dtype: DTypeId) -> candle::DType {
         match dtype {
             DTypeId::U8 => candle::DType::U8,
@@ -56,55 +59,59 @@ pub mod candle {
     impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device>
         kindle_core::prelude::Backend for CandleBackend<T, D>
     {
-        /// `Device`.
+        /// The device type, forwarded unchanged from the `D` generic parameter.
         type Device = D;
-        /// `FloatElem`.
+        /// The floating-point element type, forwarded unchanged from the `T`
+        /// generic parameter.
         type FloatElem = T;
-        /// `IntElem`.
+        /// Integer elements are always represented as `i64`, regardless of `T`.
         type IntElem = i64;
-        /// `Storage`.
+        /// Tensor storage is a raw `candle_core::Tensor`; the `K` dtype marker
+        /// is not reflected in the storage type itself.
         type Storage<K: kindle_core::prelude::DType> = candle_core::Tensor;
-        /// `RawVar`.
+        /// A trainable variable is backed by candle's `Var`.
         type RawVar = candle_core::Var;
-        /// `Grads`.
+        /// Gradients are accumulated in candle's `GradStore`, keyed by tensor.
         type Grads = candle_core::backprop::GradStore;
-        /// `InnerBackend`.
+        /// `CandleBackend` has no further inner-backend indirection; it is its
+        /// own inner backend.
         type InnerBackend = Self;
 
-        /// `shape`.
+        /// Returns the tensor's dimensions as a `Vec<usize>`.
         fn shape<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Vec<usize> {
             t.dims().to_vec()
         }
 
-        /// `format_tensor_display`.
+        /// Formats the tensor using candle's own `Display` implementation.
         fn format_tensor_display<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> alloc::string::String {
             std::format!("{}", t)
         }
-        /// `format_tensor_debug`.
+        /// Formats the tensor's raw contents together with its strides, for
+        /// debugging.
         fn format_tensor_debug<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> alloc::string::String {
             std::format!("Raw Tensor: {:?}, Strides: {:?}", t, t.stride())
         }
 
-        /// `var_as_tensor`.
+        /// Clones the variable's underlying tensor out as plain storage.
         fn var_as_tensor<K: kindle_core::prelude::DType>(
             var: &<Self as kindle_core::prelude::Backend>::RawVar,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(var.as_tensor().clone())
         }
-        /// `var_from_tensor`.
+        /// Wraps a tensor in a new candle `Var`, cloning its data.
         fn var_from_tensor<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<<Self as kindle_core::prelude::Backend>::RawVar> {
             Ok(candle::Var::from_tensor(t).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
-        /// `assign_var`.
+        /// Overwrites the variable's contents in place with `tensor`.
         fn assign_var<K: kindle_core::prelude::DType>(
             var: &mut <Self as kindle_core::prelude::Backend>::RawVar,
             tensor: &<Self as kindle_core::prelude::Backend>::Storage<K>,
@@ -113,7 +120,8 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e).into())
         }
 
-        /// `backward`.
+        /// Runs backpropagation from `loss`, returning the resulting gradient
+        /// store.
         fn backward<K: kindle_core::prelude::DType>(
             loss: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Grads> {
@@ -121,14 +129,16 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e).into())
         }
 
-        /// `backward_with_nan_check`.
+        /// Identical to `backward`; candle has no separate NaN-checking
+        /// backward pass, so this simply delegates.
         fn backward_with_nan_check<K: kindle_core::prelude::DType>(
             loss: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Grads> {
             Self::backward::<K>(loss)
         }
 
-        /// `get_grad`.
+        /// Looks up the accumulated gradient for `t` in `grads`, if one was
+        /// recorded during backward.
         fn get_grad<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             grads: &<Self as kindle_core::prelude::Backend>::Grads,
@@ -136,7 +146,8 @@ pub mod candle {
             Ok(grads.get(t).cloned())
         }
 
-        /// `to_bytes`.
+        /// Flattens the tensor, casts it to `f32`, and returns its raw byte
+        /// representation.
         fn to_bytes<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<alloc::vec::Vec<u8>> {
@@ -154,7 +165,8 @@ pub mod candle {
             Ok(bytes.to_vec())
         }
 
-        /// `from_bytes`.
+        /// Reinterprets `bytes` as `f32` values, builds a tensor with `shape`
+        /// on `device`, and casts the result to `dtype`.
         fn from_bytes<K: kindle_core::prelude::DType>(
             bytes: &[u8],
             shape: &[usize],
@@ -227,7 +239,7 @@ pub mod candle {
     impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device>
         kindle_core::prelude::QuantizedOps<Self> for CandleBackend<T, D>
     {
-        /// `quantize`.
+        /// Not supported by candle; always returns `UnsupportedBackendOperation`.
         fn quantize<K: kindle_core::prelude::FloatDType, Q: kindle_core::prelude::QuantDType>(
             _t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<Q>> {
@@ -236,7 +248,7 @@ pub mod candle {
                 backend: "Candle",
             })
         }
-        /// `dequantize`.
+        /// Not supported by candle; always returns `UnsupportedBackendOperation`.
         fn dequantize<Q: kindle_core::prelude::QuantDType, K: kindle_core::prelude::FloatDType>(
             _t: &<Self as kindle_core::prelude::Backend>::Storage<Q>,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
@@ -245,7 +257,7 @@ pub mod candle {
                 backend: "Candle",
             })
         }
-        /// `quantized_matmul`.
+        /// Not supported by candle; always returns `UnsupportedBackendOperation`.
         fn quantized_matmul<Q: kindle_core::prelude::QuantDType>(
             _lhs: &<Self as kindle_core::prelude::Backend>::Storage<Q>,
             _rhs: &<Self as kindle_core::prelude::Backend>::Storage<Q>,
@@ -260,7 +272,8 @@ pub mod candle {
     impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device>
         kindle_core::prelude::CreationOps<Self> for CandleBackend<T, D>
     {
-        /// `zeros`.
+        /// Allocates a tensor of `shape` filled with zeros on `device` with the
+        /// given dtype.
         fn zeros<K: kindle_core::prelude::DType>(
             shape: &[usize],
             dtype: DTypeId,
@@ -272,7 +285,8 @@ pub mod candle {
             )
         }
 
-        /// `ones`.
+        /// Allocates a tensor of `shape` filled with ones on `device` with the
+        /// given dtype.
         fn ones<K: kindle_core::prelude::DType>(
             shape: &[usize],
             dtype: DTypeId,
@@ -284,7 +298,8 @@ pub mod candle {
             )
         }
 
-        /// `rand`.
+        /// Samples a uniform `[0, 1)` tensor of `shape` on `device`, then casts
+        /// it to `dtype`.
         fn rand<K: kindle_core::prelude::DType>(
             shape: &[usize],
             dtype: DTypeId,
@@ -298,7 +313,8 @@ pub mod candle {
             )
         }
 
-        /// `randn`.
+        /// Samples a standard-normal tensor of `shape` on `device`, then casts
+        /// it to `dtype`.
         fn randn<K: kindle_core::prelude::DType>(
             shape: &[usize],
             dtype: DTypeId,
@@ -312,7 +328,7 @@ pub mod candle {
             )
         }
 
-        /// `var_zeros`.
+        /// Allocates a zero-initialized trainable `Var` of `shape` on `device`.
         fn var_zeros<K: kindle_core::prelude::DType>(
             shape: &[usize],
             dtype: DTypeId,
@@ -324,7 +340,7 @@ pub mod candle {
             )
         }
 
-        /// `var_ones`.
+        /// Allocates a one-initialized trainable `Var` of `shape` on `device`.
         fn var_ones<K: kindle_core::prelude::DType>(
             shape: &[usize],
             dtype: DTypeId,
@@ -336,7 +352,8 @@ pub mod candle {
             )
         }
 
-        /// `var_rand`.
+        /// Allocates a trainable `Var` of `shape` on `device`, sampled from a
+        /// uniform `[0, 1)` distribution.
         fn var_rand<K: kindle_core::prelude::DType>(
             shape: &[usize],
             _dtype: DTypeId,
@@ -348,7 +365,8 @@ pub mod candle {
             )
         }
 
-        /// `var_randn`.
+        /// Allocates a trainable `Var` of `shape` on `device`, sampled from a
+        /// standard-normal distribution.
         fn var_randn<K: kindle_core::prelude::DType>(
             shape: &[usize],
             _dtype: DTypeId,
@@ -363,7 +381,7 @@ pub mod candle {
     impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device>
         kindle_core::prelude::NumericOps<Self> for CandleBackend<T, D>
     {
-        /// `add`.
+        /// Element-wise addition with broadcasting.
         fn add<K: kindle_core::prelude::DType>(
             lhs: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             rhs: &<Self as kindle_core::prelude::Backend>::Storage<K>,
@@ -372,7 +390,7 @@ pub mod candle {
                 .broadcast_add(rhs)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// `sub`.
+        /// Element-wise subtraction with broadcasting.
         fn sub<K: kindle_core::prelude::DType>(
             lhs: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             rhs: &<Self as kindle_core::prelude::Backend>::Storage<K>,
@@ -381,7 +399,7 @@ pub mod candle {
                 .broadcast_sub(rhs)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// `mul`.
+        /// Element-wise multiplication with broadcasting.
         fn mul<K: kindle_core::prelude::DType>(
             lhs: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             rhs: &<Self as kindle_core::prelude::Backend>::Storage<K>,
@@ -390,7 +408,7 @@ pub mod candle {
                 .broadcast_mul(rhs)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// `div`.
+        /// Element-wise division with broadcasting.
         fn div<K: kindle_core::prelude::DType>(
             lhs: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             rhs: &<Self as kindle_core::prelude::Backend>::Storage<K>,
@@ -404,7 +422,10 @@ pub mod candle {
     impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device>
         kindle_core::prelude::TensorOps<Self> for CandleBackend<T, D>
     {
-        /// `matmul`.
+        /// Matrix-multiplies `lhs` and `rhs`. For operands with more than 3
+        /// dimensions (which candle's `broadcast_matmul` can't handle directly),
+        /// manually broadcasts the leading batch dimensions, flattens them into
+        /// a single batch axis, multiplies, and reshapes back.
         fn matmul<K: kindle_core::prelude::DType>(
             lhs: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             rhs: &<Self as kindle_core::prelude::Backend>::Storage<K>,
@@ -483,7 +504,7 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
-        /// `stack`.
+        /// Stacks `tensors` along a new dimension `dim`.
         fn stack<K: kindle_core::prelude::DType>(
             tensors: &[&<Self as kindle_core::prelude::Backend>::Storage<K>],
             dim: usize,
@@ -492,7 +513,7 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
-        /// `concat`.
+        /// Concatenates `tensors` along an existing dimension `dim`.
         fn concat<K: kindle_core::prelude::DType>(
             tensors: &[&<Self as kindle_core::prelude::Backend>::Storage<K>],
             dim: usize,
@@ -501,7 +522,7 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
-        /// `broadcast_as`.
+        /// Broadcasts `t` to `shape`.
         fn broadcast_as<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             shape: &[usize],
@@ -509,7 +530,7 @@ pub mod candle {
             Ok(t.broadcast_as(shape)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// `broadcast_left`.
+        /// Broadcasts `t` by prepending dimensions from `shape` on the left.
         fn broadcast_left<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             shape: &[usize],
@@ -518,7 +539,7 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
-        /// `reshape`.
+        /// Reshapes `t` to `shape` without changing its underlying data.
         fn reshape<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             shape: &[usize],
@@ -526,7 +547,7 @@ pub mod candle {
             Ok(t.reshape(shape)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// `transpose`.
+        /// Swaps dimensions `dim1` and `dim2`.
         fn transpose<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             dim1: usize,
@@ -535,7 +556,8 @@ pub mod candle {
             Ok(t.transpose(dim1, dim2)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// `slice`.
+        /// Applies a per-dimension `[start, end)` narrow for each entry in
+        /// `ranges`, sequentially, one dimension at a time.
         fn slice<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             ranges: &[(usize, usize)],
@@ -549,7 +571,7 @@ pub mod candle {
             Ok(out)
         }
 
-        /// `flatten`.
+        /// Flattens dimensions `start_dim..=end_dim` into a single dimension.
         fn flatten<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             start_dim: usize,
@@ -559,7 +581,8 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
-        /// `narrow`.
+        /// Takes a contiguous sub-range of length `len` starting at `start`
+        /// along `dim`.
         fn narrow<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             dim: usize,
@@ -570,7 +593,7 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
-        /// `squeeze`.
+        /// Removes dimension `dim` if it has size 1.
         fn squeeze<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             dim: usize,
@@ -579,7 +602,8 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
-        /// `float_to_scalar`.
+        /// Casts `t` to `f32` and extracts its single element as an `f64`
+        /// scalar.
         fn float_to_scalar<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<f64> {
@@ -591,7 +615,7 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
             Ok(s as f64)
         }
-        /// `float_to_vec1`.
+        /// Casts `t` to `f32` and collects it into a flat `Vec<f64>`.
         fn float_to_vec1<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<Vec<f64>> {
@@ -603,7 +627,7 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
             Ok(vec.into_iter().map(|x| x as f64).collect())
         }
-        /// `int_to_scalar`.
+        /// Casts `t` to `i64` and extracts its single element.
         fn int_to_scalar<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<i64> {
@@ -615,7 +639,7 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
             Ok(s)
         }
-        /// `int_to_vec1`.
+        /// Casts `t` to `i64` and collects it into a flat `Vec<i64>`.
         fn int_to_vec1<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<Vec<i64>> {
@@ -627,7 +651,7 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
             Ok(vec)
         }
-        /// `tensor_to_dtype`.
+        /// Casts `t` to the candle dtype corresponding to `dtype`.
         fn tensor_to_dtype<K: kindle_core::prelude::DType, K2: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             dtype: DTypeId,
@@ -640,28 +664,29 @@ pub mod candle {
     impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device>
         kindle_core::prelude::FloatOps<Self> for CandleBackend<T, D>
     {
-        /// `add_scalar_float`.
+        /// Adds a scalar to every element of `t`.
         fn add_scalar_float<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             scalar: f64,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok((t + scalar).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// `mul_scalar_float`.
+        /// Multiplies every element of `t` by a scalar.
         fn mul_scalar_float<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             scalar: f64,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok((t * scalar).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// `relu`.
+        /// Applies the ReLU activation element-wise.
         fn relu<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(t.relu()
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// `gelu`.
+        /// Applies GELU using candle's exact erf-based formulation
+        /// (`gelu_erf`), used here as the general-purpose GELU.
         fn gelu<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
@@ -687,7 +712,7 @@ pub mod candle {
             unimplemented!("elu not implemented for CandleBackend")
         }
 
-        /// `softmax`.
+        /// Applies softmax along `dim`.
         fn softmax<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             dim: usize,
@@ -696,56 +721,57 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
-        /// `swish`.
+        /// Applies the swish/SiLU activation (`x * sigmoid(x)`) via candle's
+        /// `silu` op.
         fn swish<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             // swish is x * sigmoid(x)
             Ok(candle_nn::ops::silu(t).map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// `abs`.
+        /// Applies absolute value element-wise.
         fn abs<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(t.abs()
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// `neg`.
+        /// Negates every element of `t`.
         fn neg<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(t.neg()
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// `sqrt`.
+        /// Applies element-wise square root.
         fn sqrt<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(t.sqrt()
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// `exp`.
+        /// Applies element-wise exponential.
         fn exp<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(t.exp()
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// `log`.
+        /// Applies element-wise natural logarithm.
         fn log<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(t.log()
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// `tanh`.
+        /// Applies element-wise hyperbolic tangent.
         fn tanh<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(t.tanh()
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// `sigmoid`.
+        /// Applies the sigmoid activation element-wise.
         fn sigmoid<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
@@ -756,28 +782,28 @@ pub mod candle {
     impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device>
         kindle_core::prelude::ReductionOps<Self> for CandleBackend<T, D>
     {
-        /// `sum_all`.
+        /// Sums all elements into a scalar tensor.
         fn sum_all<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(t.sum_all()
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// `mean_all`.
+        /// Averages all elements into a scalar tensor.
         fn mean_all<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(t.mean_all()
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// `max_all`.
+        /// Reduces to the maximum element as a scalar tensor.
         fn max_all<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
             Ok(t.max_all()
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// `min_all`.
+        /// Reduces to the minimum element as a scalar tensor.
         fn min_all<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
         ) -> Result<<Self as kindle_core::prelude::Backend>::Storage<K>> {
@@ -785,7 +811,7 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
-        /// `sum_dim`.
+        /// Sums along `dim`, removing it from the shape.
         fn sum_dim<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             dim: usize,
@@ -793,7 +819,7 @@ pub mod candle {
             Ok(t.sum(dim)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// `sum_keepdim`.
+        /// Sums along `dim`, keeping it as a size-1 dimension.
         fn sum_keepdim<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             dim: usize,
@@ -802,7 +828,7 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
-        /// `mean_dim`.
+        /// Averages along `dim`, removing it from the shape.
         fn mean_dim<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             dim: usize,
@@ -810,7 +836,7 @@ pub mod candle {
             Ok(t.mean(dim)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// `mean_keepdim`.
+        /// Averages along `dim`, keeping it as a size-1 dimension.
         fn mean_keepdim<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             dim: usize,
@@ -818,7 +844,7 @@ pub mod candle {
             Ok(t.mean_keepdim(dim)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// `max_dim`.
+        /// Reduces to the maximum along `dim`, removing it from the shape.
         fn max_dim<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             dim: usize,
@@ -826,7 +852,8 @@ pub mod candle {
             Ok(t.max(dim)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// `max_keepdim`.
+        /// Reduces to the maximum along `dim`, keeping it as a size-1
+        /// dimension.
         fn max_keepdim<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             dim: usize,
@@ -834,7 +861,7 @@ pub mod candle {
             Ok(t.max_keepdim(dim)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// `min_dim`.
+        /// Reduces to the minimum along `dim`, removing it from the shape.
         fn min_dim<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             dim: usize,
@@ -842,7 +869,8 @@ pub mod candle {
             Ok(t.min(dim)
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
-        /// `min_keepdim`.
+        /// Reduces to the minimum along `dim`, keeping it as a size-1
+        /// dimension.
         fn min_keepdim<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             dim: usize,
@@ -851,7 +879,8 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
-        /// `argmax`.
+        /// Returns the index of the maximum element, along `dim` if given,
+        /// otherwise over the flattened tensor.
         fn argmax<K: kindle_core::prelude::DType, KInt: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             dim: Option<usize>,
@@ -868,7 +897,8 @@ pub mod candle {
             }
         }
 
-        /// `argmin`.
+        /// Returns the index of the minimum element, along `dim` if given,
+        /// otherwise over the flattened tensor.
         fn argmin<K: kindle_core::prelude::DType, KInt: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             dim: Option<usize>,
@@ -909,7 +939,7 @@ pub mod candle {
     impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device>
         kindle_core::prelude::ModuleOps<Self> for CandleBackend<T, D>
     {
-        /// `adaptive_avg_pool2d`.
+        /// Not implemented for `CandleBackend`; always panics.
         fn adaptive_avg_pool2d<K: kindle_core::prelude::DType>(
             _t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             _output_size: (usize, usize),
@@ -917,7 +947,8 @@ pub mod candle {
             unimplemented!("adaptive_avg_pool2d not implemented for CandleBackend")
         }
 
-        /// `layer_norm`.
+        /// Applies layer normalization over the last dimension, substituting a
+        /// zero bias when none is provided.
         fn layer_norm<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             weight: &<Self as kindle_core::prelude::Backend>::Storage<K>,
@@ -938,7 +969,10 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
-        /// `batch_norm`.
+        /// Applies batch normalization using the running mean/variance (or
+        /// defaults of 0/1 when not provided) and an optional affine
+        /// weight/bias, reshaping all of them to broadcast over the channel
+        /// dimension.
         fn batch_norm<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             weight: Option<&<Self as kindle_core::prelude::Backend>::Storage<K>>,
@@ -1024,7 +1058,9 @@ pub mod candle {
             Ok(out)
         }
 
-        /// `embedding`.
+        /// Looks up rows of embedding table `w` for each index in `t`, first
+        /// casting indices to `U32` if they aren't already `U32`/`I64` (candle
+        /// requires one of those two dtypes for embedding lookups).
         fn embedding<K: kindle_core::prelude::DType, KInt: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<KInt>,
             w: &<Self as kindle_core::prelude::Backend>::Storage<K>,
@@ -1049,7 +1085,8 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
-        /// `conv1d`.
+        /// 1-D convolution of `t` with kernel `w`; the bias argument is
+        /// ignored.
         fn conv1d<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             w: &<Self as kindle_core::prelude::Backend>::Storage<K>,
@@ -1063,7 +1100,8 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
-        /// `conv2d`.
+        /// 2-D convolution of `t` with kernel `weight`; the bias argument is
+        /// ignored.
         fn conv2d<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             weight: &<Self as kindle_core::prelude::Backend>::Storage<K>,
@@ -1077,7 +1115,8 @@ pub mod candle {
                 .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?)
         }
 
-        /// `conv_transpose2d`.
+        /// 2-D transposed convolution of `t` with kernel `weight`; the bias
+        /// and groups arguments are ignored.
         fn conv_transpose2d<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             weight: &<Self as kindle_core::prelude::Backend>::Storage<K>,
@@ -1094,7 +1133,8 @@ pub mod candle {
             )
         }
 
-        /// `max_pool2d`.
+        /// 2-D max pooling with the given kernel size and stride; padding and
+        /// dilation are ignored (not supported by candle's pooling op).
         fn max_pool2d<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             kernel_size: (usize, usize),
@@ -1108,7 +1148,8 @@ pub mod candle {
             )
         }
 
-        /// `avg_pool2d`.
+        /// 2-D average pooling with the given kernel size and stride; padding
+        /// is ignored (not supported by candle's pooling op).
         fn avg_pool2d<K: kindle_core::prelude::DType>(
             t: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             kernel_size: (usize, usize),
@@ -1125,7 +1166,7 @@ pub mod candle {
     impl<T: kindle_core::prelude::DType, D: kindle_core::prelude::Device>
         kindle_core::prelude::LossOps<Self> for CandleBackend<T, D>
     {
-        /// `l1_loss`.
+        /// Not implemented for `CandleBackend`; always panics.
         fn l1_loss<K: kindle_core::prelude::DType>(
             _pred: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             _target: &<Self as kindle_core::prelude::Backend>::Storage<K>,
@@ -1134,7 +1175,7 @@ pub mod candle {
             unimplemented!("l1_loss not implemented for CandleBackend")
         }
 
-        /// `bce_with_logits_loss`.
+        /// Not implemented for `CandleBackend`; always panics.
         fn bce_with_logits_loss<K: kindle_core::prelude::DType>(
             _pred: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             _target: &<Self as kindle_core::prelude::Backend>::Storage<K>,
@@ -1143,7 +1184,8 @@ pub mod candle {
             unimplemented!("bce_with_logits_loss not implemented for CandleBackend")
         }
 
-        /// `mse_loss`.
+        /// Computes mean squared error between `pred` and `target`; the
+        /// reduction argument is ignored since candle's `mse` always averages.
         fn mse_loss<K: kindle_core::prelude::DType>(
             pred: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             target: &<Self as kindle_core::prelude::Backend>::Storage<K>,
@@ -1154,7 +1196,9 @@ pub mod candle {
             Ok(loss)
         }
 
-        /// `cross_entropy_loss`.
+        /// Computes cross-entropy loss between `pred` logits and `target`
+        /// class indices, casting `target` to `U32` as candle requires; the
+        /// reduction argument is ignored.
         fn cross_entropy_loss<K: kindle_core::prelude::DType, KInt: kindle_core::prelude::DType>(
             pred: &<Self as kindle_core::prelude::Backend>::Storage<K>,
             target: &<Self as kindle_core::prelude::Backend>::Storage<KInt>,
@@ -1174,19 +1218,21 @@ pub mod candle {
     }
 
     #[cfg(test)]
-    /// `tests`.
+    /// Unit tests for the candle dtype and device conversion helpers.
     mod tests {
         use super::*;
 
         #[test]
-        /// `test_to_candle_dtype`.
+        /// Checks that `to_candle_dtype` maps `F32` and `I64` to the
+        /// corresponding candle dtypes.
         fn test_to_candle_dtype() {
             assert_eq!(to_candle_dtype(DTypeId::F32), candle::DType::F32);
             assert_eq!(to_candle_dtype(DTypeId::I64), candle::DType::I64);
         }
 
         #[test]
-        /// `test_to_candle_device`.
+        /// Checks that `to_candle_device` maps the CPU device kind to
+        /// `candle::Device::Cpu`.
         fn test_to_candle_device() {
             let cpu = DeviceId::cpu();
             let c_dev = to_candle_device(&cpu).unwrap();
