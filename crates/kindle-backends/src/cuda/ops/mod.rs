@@ -5,6 +5,7 @@ pub(crate) mod embedding;
 pub(crate) mod kernels;
 #[allow(dead_code)]
 pub(crate) mod loss;
+pub(crate) mod matmul;
 #[allow(dead_code)]
 pub(crate) mod norm;
 #[allow(dead_code)]

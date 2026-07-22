@@ -31,6 +31,296 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
     ) -> Result<<Self as Backend>::Storage<K>> {
         crate::cuda::ops::shape::launch_concat(tensors, dim)
     }
+
+    /// Metadata-only: every `CudaStorage` this backend produces is always
+    /// fully contiguous (`narrow`/`transpose`/`broadcast_as` below
+    /// materialize a fresh contiguous buffer rather than building a
+    /// strided view — CUDA's elementwise/matmul/reduce kernels assume flat
+    /// contiguous memory), so reshaping never needs to touch the data or
+    /// check contiguity first, unlike CPU's `reshape`.
+    fn reshape<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        shape: &[usize],
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let (old_numel, new_numel): (usize, usize) =
+            (t.shape.iter().product(), shape.iter().product());
+        if old_numel != new_numel {
+            return Err(Error::ShapeMismatch {
+                op: "reshape",
+                expected: t.shape.clone(),
+                got: shape.to_vec(),
+                msg: format!(
+                    "reshape requires the same element count; {:?} has {old_numel}, target {:?} has {new_numel}",
+                    t.shape, shape
+                ),
+            });
+        }
+        let out = CudaStorage::new(t.buffer.clone(), shape.to_vec());
+        let original_shape = t.shape.clone();
+        let (t_id, out_id) = (t.id, out.id);
+        crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id],
+            backward: Box::new(move |grad_out: &CudaStorage| {
+                vec![Self::reshape::<K>(grad_out, &original_shape).expect("reshape backward")]
+            }),
+        });
+        Ok(out)
+    }
+
+    /// Materializes (see `reshape`'s doc for why CUDA can't use CPU's
+    /// metadata-only strided-view approach here).
+    fn transpose<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        dim1: usize,
+        dim2: usize,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        if dim1 >= t.shape.len() || dim2 >= t.shape.len() {
+            return Err(Error::ShapeMismatch {
+                op: "transpose",
+                expected: t.shape.clone(),
+                got: vec![dim1, dim2],
+                msg: format!(
+                    "transpose dims ({dim1}, {dim2}) out of range for shape {:?}",
+                    t.shape
+                ),
+            });
+        }
+        let out = crate::cuda::ops::shape::launch_transpose(t, dim1, dim2)?;
+        let (t_id, out_id) = (t.id, out.id);
+        crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id],
+            // Re-applying the same transpose is its own inverse.
+            backward: Box::new(move |grad_out: &CudaStorage| {
+                vec![
+                    crate::cuda::ops::shape::launch_transpose(grad_out, dim1, dim2)
+                        .expect("transpose backward"),
+                ]
+            }),
+        });
+        Ok(out)
+    }
+
+    /// Matmul is only wired for unbatched 2D operands so far (see
+    /// `IMPLEMENTATION_PLAN.md` §3.1) — falls through to the `Backend`
+    /// trait's default `Err(UnsupportedBackendOperation)` for anything else.
+    fn matmul<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        if lhs.shape.len() != 2 || rhs.shape.len() != 2 || lhs.shape[1] != rhs.shape[0] {
+            return Err(Error::ShapeMismatch {
+                op: "matmul",
+                expected: vec![lhs.shape[0], rhs.shape.first().copied().unwrap_or(0)],
+                got: rhs.shape.clone(),
+                msg: format!(
+                    "matmul requires unbatched 2D operands with lhs.shape[1] == rhs.shape[0]; got lhs={:?}, rhs={:?}",
+                    lhs.shape, rhs.shape
+                ),
+            });
+        }
+        let out = crate::cuda::ops::matmul::launch_matmul(lhs, rhs)?;
+        let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
+        let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
+        crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![lhs_id, rhs_id],
+            backward: Box::new(move |grad_out: &CudaStorage| {
+                // grad_lhs = grad_out @ rhs.T ; grad_rhs = lhs.T @ grad_out
+                let rhs_t = crate::cuda::ops::shape::launch_transpose(&rhs_capture, 0, 1)
+                    .expect("matmul backward: transpose rhs");
+                let grad_lhs = crate::cuda::ops::matmul::launch_matmul(grad_out, &rhs_t)
+                    .expect("matmul backward: grad_lhs");
+                let lhs_t = crate::cuda::ops::shape::launch_transpose(&lhs_capture, 0, 1)
+                    .expect("matmul backward: transpose lhs");
+                let grad_rhs = crate::cuda::ops::matmul::launch_matmul(&lhs_t, grad_out)
+                    .expect("matmul backward: grad_rhs");
+                vec![grad_lhs, grad_rhs]
+            }),
+        });
+        Ok(out)
+    }
+
+    /// Materializes (see `reshape`'s doc for why).
+    fn broadcast_as<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        shape: &[usize],
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        // Validates compatibility before dispatch — an invalid broadcast
+        // must error, not silently read garbage/OOB indices in the kernel.
+        crate::cpu::stride::broadcast_shape(&t.shape, shape)?;
+
+        let out = crate::cuda::ops::shape::launch_broadcast(t, shape)?;
+        let original_shape = t.shape.clone();
+        let (t_id, out_id) = (t.id, out.id);
+        crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id],
+            backward: Box::new(move |grad_out: &CudaStorage| {
+                vec![
+                    crate::cuda::tape::unbroadcast(grad_out, &original_shape)
+                        .expect("broadcast_as backward"),
+                ]
+            }),
+        });
+        Ok(out)
+    }
+
+    /// Materializes (see `reshape`'s doc for why).
+    fn narrow<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        dim: usize,
+        start: usize,
+        len: usize,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        if dim >= t.shape.len() || start + len > t.shape[dim] {
+            return Err(Error::ShapeMismatch {
+                op: "narrow",
+                expected: t.shape.clone(),
+                got: vec![dim, start, len],
+                msg: format!(
+                    "narrow(dim={dim}, start={start}, len={len}) out of bounds for shape {:?}",
+                    t.shape
+                ),
+            });
+        }
+        let out = crate::cuda::ops::shape::launch_narrow(t, dim, start, len)?;
+        let original_shape = t.shape.clone();
+        let mut region_start = vec![0usize; original_shape.len()];
+        region_start[dim] = start;
+        let (t_id, out_id) = (t.id, out.id);
+        crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id],
+            backward: Box::new(move |grad_out: &CudaStorage| {
+                vec![crate::cuda::ops::shape::scatter_into_zeros(
+                    &original_shape,
+                    &region_start,
+                    grad_out,
+                )]
+            }),
+        });
+        Ok(out)
+    }
+
+    /// Composed from `reshape` (zero new tape entries — matches CPU/WGPU).
+    fn squeeze<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        dim: usize,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        if dim >= t.shape.len() || t.shape[dim] != 1 {
+            return Err(Error::ShapeMismatch {
+                op: "squeeze",
+                expected: vec![1],
+                got: t.shape.clone(),
+                msg: format!(
+                    "squeeze requires axis {dim} to have size 1, got size {} in shape {:?}",
+                    t.shape.get(dim).copied().unwrap_or(0),
+                    t.shape
+                ),
+            });
+        }
+        let mut target_shape = t.shape.clone();
+        target_shape.remove(dim);
+        Self::reshape::<K>(t, &target_shape)
+    }
+
+    /// Composed from `reshape` + `concat` (zero new tape entries — matches
+    /// CPU/WGPU: `TensorOps` has no dedicated `unsqueeze`, so each input is
+    /// reshaped to insert a size-1 axis at `dim`, then concatenated there).
+    fn stack<K: DType>(
+        tensors: &[&<Self as Backend>::Storage<K>],
+        dim: usize,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        if tensors.is_empty() {
+            return Err(Error::ShapeMismatch {
+                op: "stack",
+                expected: vec![],
+                got: vec![],
+                msg: "stack requires at least one input tensor".to_string(),
+            });
+        }
+        let rank = tensors[0].shape.len();
+        if dim > rank {
+            return Err(Error::ShapeMismatch {
+                op: "stack",
+                expected: tensors[0].shape.clone(),
+                got: vec![dim],
+                msg: format!(
+                    "stack dim {dim} out of range for rank-{rank} shape {:?} (dim may equal rank to append at the end)",
+                    tensors[0].shape
+                ),
+            });
+        }
+        for t in tensors.iter().skip(1) {
+            if t.shape != tensors[0].shape {
+                return Err(Error::ShapeMismatch {
+                    op: "stack",
+                    expected: tensors[0].shape.clone(),
+                    got: t.shape.clone(),
+                    msg: format!(
+                        "stack requires every input to have an IDENTICAL shape; expected {:?}, got {:?}",
+                        tensors[0].shape, t.shape
+                    ),
+                });
+            }
+        }
+        let mut unsqueezed = Vec::with_capacity(tensors.len());
+        for t in tensors.iter() {
+            let mut target_shape = t.shape.clone();
+            target_shape.insert(dim, 1);
+            unsqueezed.push(Self::reshape::<K>(t, &target_shape)?);
+        }
+        let refs: Vec<&<Self as Backend>::Storage<K>> = unsqueezed.iter().collect();
+        Self::concat::<K>(&refs, dim)
+    }
+
+    /// Composed from `narrow` (zero new tape entries — matches CPU/WGPU).
+    fn slice<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        ranges: &[(usize, usize)],
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let mut out = t.clone();
+        for (dim, &(start, end)) in ranges.iter().enumerate() {
+            out = Self::narrow::<K>(&out, dim, start, end - start)?;
+        }
+        Ok(out)
+    }
+
+    /// Composed from `reshape` (zero new tape entries — matches CPU/WGPU).
+    fn flatten<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        start_dim: usize,
+        end_dim: usize,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        if start_dim > end_dim || end_dim >= t.shape.len() {
+            return Err(Error::ShapeMismatch {
+                op: "flatten",
+                expected: t.shape.clone(),
+                got: vec![start_dim, end_dim],
+                msg: format!(
+                    "flatten(start_dim={start_dim}, end_dim={end_dim}) out of bounds for shape {:?}",
+                    t.shape
+                ),
+            });
+        }
+        let merged: usize = t.shape[start_dim..=end_dim].iter().product();
+        let mut target_shape = t.shape[..start_dim].to_vec();
+        target_shape.push(merged);
+        target_shape.extend_from_slice(&t.shape[end_dim + 1..]);
+        Self::reshape::<K>(t, &target_shape)
+    }
+
+    /// Composed from `broadcast_as` (zero new tape entries — matches CPU/WGPU).
+    fn broadcast_left<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        shape: &[usize],
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let mut target_shape = shape.to_vec();
+        target_shape.extend_from_slice(&t.shape);
+        Self::broadcast_as::<K>(t, &target_shape)
+    }
 }
 
 impl<T: DType, D: Device> NumericOps<Self> for CudaBackendImpl<T, D> {
@@ -948,5 +1238,149 @@ mod tests {
         assert_eq!(checked_numel(&[2, 3, 4]).unwrap(), 24);
         assert_eq!(checked_numel(&[usize::MAX, 0]).unwrap(), 0);
         assert!(checked_numel(&[usize::MAX, 2]).is_err());
+    }
+
+    // The tests below exercise real GPU dispatch (`TensorOps::{reshape,
+    // transpose, narrow, broadcast_as, squeeze, stack, slice, flatten,
+    // broadcast_left, matmul}`) and therefore need a real CUDA device to
+    // run — none is available in this environment (see
+    // `IMPLEMENTATION_PLAN.md` §3's verification-loop note: compile-verified
+    // only). `#[ignore]`d so `cargo test` stays green everywhere; run with
+    // `cargo test --features cuda,std -- --ignored` on real hardware.
+
+    type B = CudaBackendImpl<f32, Cuda>;
+
+    fn cuda_f32(shape: &[usize], values: Vec<f32>) -> CudaStorage {
+        cuda_from_f32(shape, DTypeId::F32, &DeviceId::cuda(0), values, "test").unwrap()
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn reshape_preserves_element_order() {
+        let t = cuda_f32(&[2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        let out = <B as TensorOps<B>>::reshape::<f32>(&t, &[3, 2]).unwrap();
+        assert_eq!(out.shape, vec![3, 2]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn reshape_rejects_mismatched_element_count() {
+        let t = cuda_f32(&[2, 3], vec![0.0; 6]);
+        assert!(<B as TensorOps<B>>::reshape::<f32>(&t, &[4, 2]).is_err());
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn transpose_2d_swaps_shape() {
+        let t = cuda_f32(&[2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        let out = <B as TensorOps<B>>::transpose::<f32>(&t, 0, 1).unwrap();
+        assert_eq!(out.shape, vec![3, 2]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn narrow_reduces_target_dim() {
+        let t = cuda_f32(&[4, 3], vec![0.0; 12]);
+        let out = <B as TensorOps<B>>::narrow::<f32>(&t, 0, 1, 2).unwrap();
+        assert_eq!(out.shape, vec![2, 3]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn broadcast_as_expands_size_one_dim() {
+        let t = cuda_f32(&[1, 3], vec![1.0, 2.0, 3.0]);
+        let out = <B as TensorOps<B>>::broadcast_as::<f32>(&t, &[4, 3]).unwrap();
+        assert_eq!(out.shape, vec![4, 3]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn broadcast_as_rejects_incompatible_shape() {
+        let t = cuda_f32(&[2, 3], vec![0.0; 6]);
+        assert!(<B as TensorOps<B>>::broadcast_as::<f32>(&t, &[2, 5]).is_err());
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn squeeze_removes_size_one_axis() {
+        let t = cuda_f32(&[1, 3], vec![1.0, 2.0, 3.0]);
+        let out = <B as TensorOps<B>>::squeeze::<f32>(&t, 0).unwrap();
+        assert_eq!(out.shape, vec![3]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn stack_inserts_new_axis() {
+        let a = cuda_f32(&[3], vec![1.0, 2.0, 3.0]);
+        let b = cuda_f32(&[3], vec![4.0, 5.0, 6.0]);
+        let out = <B as TensorOps<B>>::stack::<f32>(&[&a, &b], 0).unwrap();
+        assert_eq!(out.shape, vec![2, 3]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn slice_narrows_every_listed_dim() {
+        let t = cuda_f32(&[4, 4], vec![0.0; 16]);
+        let out = <B as TensorOps<B>>::slice::<f32>(&t, &[(1, 3), (0, 2)]).unwrap();
+        assert_eq!(out.shape, vec![2, 2]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn flatten_merges_middle_dims() {
+        let t = cuda_f32(&[2, 3, 4], vec![0.0; 24]);
+        let out = <B as TensorOps<B>>::flatten::<f32>(&t, 1, 2).unwrap();
+        assert_eq!(out.shape, vec![2, 12]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn broadcast_left_prepends_leading_dims() {
+        let t = cuda_f32(&[3], vec![1.0, 2.0, 3.0]);
+        let out = <B as TensorOps<B>>::broadcast_left::<f32>(&t, &[2, 4]).unwrap();
+        assert_eq!(out.shape, vec![2, 4, 3]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn matmul_computes_correct_shape_and_values() {
+        // [[1,2,3],[4,5,6]] @ [[7,8],[9,10],[11,12]] = [[58,64],[139,154]]
+        let lhs = cuda_f32(&[2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        let rhs = cuda_f32(&[3, 2], vec![7.0, 8.0, 9.0, 10.0, 11.0, 12.0]);
+        let out = <B as TensorOps<B>>::matmul::<f32>(&lhs, &rhs).unwrap();
+        assert_eq!(out.shape, vec![2, 2]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn matmul_rejects_incompatible_inner_dims() {
+        let lhs = cuda_f32(&[2, 3], vec![0.0; 6]);
+        let rhs = cuda_f32(&[4, 2], vec![0.0; 8]);
+        assert!(<B as TensorOps<B>>::matmul::<f32>(&lhs, &rhs).is_err());
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn matmul_backward_produces_gradients_for_both_operands() {
+        let lhs = cuda_f32(&[2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        let rhs = cuda_f32(&[3, 2], vec![7.0, 8.0, 9.0, 10.0, 11.0, 12.0]);
+        let (lhs_id, rhs_id) = (lhs.id, rhs.id);
+        let out = <B as TensorOps<B>>::matmul::<f32>(&lhs, &rhs).unwrap();
+        let grads = crate::cuda::tape::backward(&out).unwrap();
+        assert!(grads.get(lhs_id).is_some());
+        assert!(grads.get(rhs_id).is_some());
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn narrow_backward_zero_pads_grad_to_original_shape() {
+        let t = cuda_f32(&[4, 3], vec![0.0; 12]);
+        let t_id = t.id;
+        let out = <B as TensorOps<B>>::narrow::<f32>(&t, 0, 1, 2).unwrap();
+        let grads = crate::cuda::tape::backward(&out).unwrap();
+        let g = grads
+            .get(t_id)
+            .expect("narrow input should have a gradient");
+        assert_eq!(g.shape, vec![4, 3]);
     }
 }
