@@ -1031,3 +1031,38 @@ To address the complete lifecycle (Implementation -> Training -> Testing/Validat
 5. **HuggingFace Hub Shortcut (`from_pretrained`)**:
    - Added `kindle::hub::from_pretrained(repo_id, filename, device)` and `HubRepo::load_safetensors` to download model weights directly from HuggingFace Hub into a state map.
 
+---
+
+## 12. Public API Re-exports, Bare-Metal (`no_std`) Audit & Release Roadmap — ✅ DONE (2026-07-23)
+
+### 12.1 Public API & Namespace Cleanups
+- **Single Entry Point (`kindle`)**: Re-exported all core subsystems directly under `kindle` (`kindle::nn`, `kindle::optim`, `kindle::metrics`, `kindle::data`, `kindle::transforms`, `kindle::hub`, `kindle::typenum`). Users can import everything cleanly from the `kindle` root crate without reaching into internal `kindle-core` dependencies.
+- **Prelude Pollution Removal**: Removed internal codegen macros (`alloc::format`, `alloc::vec`, `B0`, `B1`, `Bit`, `Diff`, `Prod`, `Quot`, `Sum`, `UInt`, `UTerm`, `Unsigned`) from `kindle-core` and `kindle` preludes. `kindle::typenum` remains available for explicit type-level integer access.
+
+### 12.2 PyTorch Sequential Parity Verification
+- **Sequential Flat State-Dict Keys**: Confirmed `Sequential<L1, L2>` state-dict extraction generates flat PyTorch-indexed keys (`0.weight`, `0.bias`, `1.weight`, `1.bias`) rather than nested structures, ensuring seamless compatibility with PyTorch `.safetensors` checkpoints.
+
+### 12.3 Bare-Metal (`no_std`) Compatibility
+- `kindle-core` and `kindle-data` use `#![cfg_attr(not(feature = "std"), no_std)]` with explicit `alloc` references (`Vec`, `BTreeMap`, `Box`, `String`), maintaining full compatibility for embedded/bare-metal targets without leaking `std` dependencies.
+
+### 12.4 Roadmap Steps Towards 0.2.0 / 1.0 Release
+
+```
+[Phase 0: Triage] ──► [Phase 1: CUDA Backend] ──► [Phase 2: Parity Suite] ──► [Phase 3: CI Setup]
+       │                        │                        │                        │
+       ▼                        ▼                        ▼                        ▼
+     ✅ DONE                  ✅ DONE                  ✅ DONE            (WGPU CI ready;
+                                                                           CUDA compile-check)
+                                                                                  │
+                                                                                  ▼
+                                                                        [Release 0.2.0-beta.1]
+```
+
+1. **Step 1: Release `0.2.0-beta.1`**:
+   - Tag release candidate incorporating backend completion, PyTorch `Sequential` key parity, optimizer state checkpointing, metrics, data transforms, and `model.summary()`.
+2. **Step 2: WGPU GitHub Actions CI**:
+   - Enable software-rendered Vulkan/WGPU testing (`llvmpipe`) in GitHub Actions workflow.
+3. **Step 3: Optional CUDA Kernel Extensions (§9.1)**:
+   - Expose orphaned CUDA kernels (`fused_matmul_swiglu`, `flash_attention_lite`, `one_hot`) behind explicit feature flags once GPU testing hardware becomes available.
+
+

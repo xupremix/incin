@@ -88,10 +88,38 @@ pub use kindle_backends::*;
 
 pub use kindle_macros::{import_model, module};
 
-/// Hub.
+/// Neural network modules, activation functions, layers, and building blocks.
+pub mod nn {
+    pub use kindle_core::nn::*;
+}
+
+/// Optimization algorithms, loss functions, and learning rate schedulers.
+pub mod optim {
+    pub use kindle_core::optim::*;
+}
+
+/// Evaluation metrics (Accuracy, Precision, Recall, F1Score, MSE, ConfusionMatrix).
+pub mod metrics {
+    pub use kindle_core::metrics::*;
+}
+
+/// Dataset abstractions and data loading utilities.
+pub mod data {
+    pub use kindle_data::*;
+}
+
+/// Data transformations and augmentation pipeline.
+pub mod transforms {
+    pub use kindle_data::transforms::*;
+}
+
+/// HuggingFace Hub downloading & pretrained model loading utilities.
 pub mod hub {
     pub use kindle_data::hub::*;
 }
+
+/// Typenum compile-time type-level integers.
+pub use kindle_core::typenum;
 
 // We define a type alias to restore the default Backend behavior without cyclical dependencies
 #[cfg(feature = "cuda")]

@@ -85,8 +85,7 @@ pub mod prelude {
     pub use crate::symbolic_dim;
     pub use alloc::boxed::Box;
     pub use alloc::collections::BTreeMap;
-    pub use alloc::format;
     pub use alloc::string::{String, ToString};
-    pub use alloc::vec::{self, Vec};
-    pub use typenum::{self, B0, B1, Bit, Diff, Prod, Quot, Sum, UInt, UTerm, Unsigned};
+    pub use alloc::vec::Vec;
+    pub use typenum;
 }
