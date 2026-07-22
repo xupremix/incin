@@ -330,17 +330,35 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
 
     /// Extracts a single scalar value from a 0D or 1D tensor.
     /// This will bring the tensor data to the CPU and read the bytes.
-    pub fn to_scalar<E: Copy>(&self) -> Result<E> {
+    ///
+    /// `bool` is handled as a truthy (any-nonzero-byte) conversion rather
+    /// than a raw reinterpret, regardless of whether the tensor's actual
+    /// dtype element size happens to match `size_of::<bool>()`: `bool` has
+    /// only two valid bit patterns (`0x00`/`0x01`), and there is no
+    /// `DTypeId::Bool` (ONNX-style boolean tensors are stored as another
+    /// dtype, typically `U8`, and read out via this truthy conversion), so
+    /// reinterpreting an arbitrary stored byte as `bool` via
+    /// `read_unaligned` would be undefined behavior whenever that byte
+    /// isn't `0` or `1`.
+    pub fn to_scalar<E: Copy + 'static>(&self) -> Result<E> {
         let bytes = B::to_bytes(&self.inner)?;
-        let elem_size = core::mem::size_of::<E>();
         let dtype = K::to_kindle(&self._dtype);
+
+        if core::any::TypeId::of::<E>() == core::any::TypeId::of::<bool>() {
+            if bytes.is_empty() {
+                return Err(crate::err::Error::Msg(
+                    "cannot convert an empty tensor to a bool scalar".into(),
+                ));
+            }
+            let val = bytes.iter().any(|&byte| byte != 0);
+            // SAFETY: `E` is verified to be exactly `bool` above, so this
+            // reinterprets a genuine, valid `bool` as itself.
+            return Ok(unsafe { core::ptr::read_unaligned(&val as *const bool as *const E) });
+        }
+
+        let elem_size = core::mem::size_of::<E>();
         let expected_size = dtype.element_size();
         if bytes.len() != elem_size || elem_size != expected_size {
-            // Attempt to dynamically cast f32 -> bool if requested, to keep old fallback working
-            if elem_size == 1 && !bytes.is_empty() {
-                let val = bytes[0] != 0;
-                return Ok(unsafe { core::ptr::read_unaligned(&val as *const bool as *const E) });
-            }
             return Err(crate::err::Error::Msg(alloc::format!(
                 "Size mismatch when converting to scalar. Tensor dtype {:?} ({} bytes) vs requested type ({} bytes)",
                 dtype,
@@ -353,11 +371,34 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Extracts a 1D vector of scalars from this tensor.
-    pub fn to_vec1<E: Copy>(&self) -> Result<alloc::vec::Vec<E>> {
+    ///
+    /// See `to_scalar`'s doc comment for why `bool` is handled as a
+    /// per-element truthy conversion rather than a raw reinterpret.
+    pub fn to_vec1<E: Copy + 'static>(&self) -> Result<alloc::vec::Vec<E>> {
         let bytes = B::to_bytes(&self.inner)?;
         let num_elements = S::numel(&self._shape);
-        let elem_size = core::mem::size_of::<E>();
         let dtype = K::to_kindle(&self._dtype);
+
+        if core::any::TypeId::of::<E>() == core::any::TypeId::of::<bool>() {
+            let elem_size = dtype.element_size();
+            let expected_bytes = num_elements * elem_size;
+            if bytes.len() != expected_bytes {
+                return Err(crate::err::Error::Msg(alloc::format!(
+                    "Size mismatch when converting to vec. Tensor dtype bytes: {}, expected: {}",
+                    bytes.len(),
+                    expected_bytes
+                )));
+            }
+            let mut out = alloc::vec::Vec::with_capacity(num_elements);
+            for chunk in bytes.chunks_exact(elem_size) {
+                let val = chunk.iter().any(|&byte| byte != 0);
+                // SAFETY: `E` is verified to be exactly `bool` above.
+                out.push(unsafe { core::ptr::read_unaligned(&val as *const bool as *const E) });
+            }
+            return Ok(out);
+        }
+
+        let elem_size = core::mem::size_of::<E>();
         let expected_elem_size = dtype.element_size();
         if elem_size != expected_elem_size {
             return Err(crate::err::Error::Msg(alloc::format!(

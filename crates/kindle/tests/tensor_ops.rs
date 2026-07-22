@@ -447,3 +447,34 @@ fn test_loss_cross_entropy() -> Result<()> {
 
     Ok(())
 }
+
+// -----------------------------------------------------------------------------
+// to_scalar::<bool>() / to_vec1::<bool>() soundness (no DTypeId::Bool exists;
+// these read out a truthy conversion of another dtype's bytes, typically U8)
+// -----------------------------------------------------------------------------
+
+#[test]
+/// `to_scalar::<bool>()` must not reinterpret a raw stored byte as `bool`
+/// via a bit-cast: `bool` only has two valid bit patterns (`0x00`/`0x01`),
+/// so a stored byte of `5` (a valid `U8` value, not a valid `bool` one) must
+/// go through an explicit nonzero check instead of `read_unaligned`, which
+/// would otherwise construct an invalid (undefined-behavior) `bool` value.
+fn to_scalar_bool_handles_nonzero_non_unit_byte_without_ub() -> Result<()> {
+    let t = Tensor::<s![1], CpuBackendImpl, u8>::from_bytes(&[5u8], ())?;
+    let b: bool = t.to_scalar::<bool>()?;
+    assert!(b, "byte value 5 should be truthy");
+
+    let z = Tensor::<s![1], CpuBackendImpl, u8>::from_bytes(&[0u8], ())?;
+    let bz: bool = z.to_scalar::<bool>()?;
+    assert!(!bz, "byte value 0 should be falsy");
+    Ok(())
+}
+
+#[test]
+/// Same soundness property as above, for the vector conversion path.
+fn to_vec1_bool_handles_nonzero_non_unit_bytes_without_ub() -> Result<()> {
+    let t = Tensor::<s![4], CpuBackendImpl, u8>::from_bytes(&[0u8, 1u8, 5u8, 255u8], ())?;
+    let v: Vec<bool> = t.to_vec1::<bool>()?;
+    assert_eq!(v, vec![false, true, true, true]);
+    Ok(())
+}
