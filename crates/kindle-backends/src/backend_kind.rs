@@ -137,6 +137,7 @@ impl_transfer!(crate::dispatch::DispatchBackend<T, D>);
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "cpu")]
     use kindle_core::prelude::{
         DTypeId, DeviceId, Error, Grad, LayerNorm, Linear, RequiresGrad, Tensor, ToDevice, typenum,
     };

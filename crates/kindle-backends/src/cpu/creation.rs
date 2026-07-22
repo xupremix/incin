@@ -302,6 +302,7 @@ mod tests {
         assert_eq!(t.shape, vec![50]);
     }
 
+    #[cfg(feature = "cpu")]
     #[test]
     /// Same-device transfer returns equivalent destination-native storage.
     fn transfer_to_cpu_returns_equivalent_storage() {

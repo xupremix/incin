@@ -1,4 +1,4 @@
-#![cfg(feature = "wgpu")]
+#![cfg(all(feature = "cpu", feature = "wgpu"))]
 
 use kindle_backends::cpu::CpuBackendImpl;
 use kindle_backends::wgpu::WgpuBackendImpl;

@@ -1,3 +1,5 @@
+#![cfg(feature = "cpu")]
+
 use kindle_backends::Backend;
 use kindle_core::prelude::*;
 

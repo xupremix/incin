@@ -32,7 +32,7 @@ pub(crate) struct CudaDeviceKey {
     pub(crate) compute_capability: Option<(u16, u16)>,
 }
 
-#[cfg(all(feature = "cuda", any(feature = "autotune", test)))]
+#[cfg(all(feature = "cuda", feature = "autotune"))]
 impl CudaDeviceKey {
     pub(crate) fn from_context(context: &cudarc::driver::CudaContext) -> Result<Self> {
         let ordinal = u32::try_from(context.ordinal())
