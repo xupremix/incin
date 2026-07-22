@@ -15,11 +15,14 @@ use typenum::Unsigned;
 ///
 /// In practice, shapes are most often constructed via the `s![]` macro.
 pub trait Shape: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
-    /// `Arg`.
+    /// The user-facing constructor argument type (e.g. a tuple of
+    /// `usize`/`typenum` values, or `Vec<usize>` for `Dyn`).
     type Arg;
-    /// `Field`.
+    /// The runtime-stored representation of this shape inside a
+    /// `Tensor` (produced from `Arg` via `init`).
     type Field: Debug + Clone + Send + Sync;
-    /// `Dims`.
+    /// A fixed-size or `Vec`-backed collection of this shape's
+    /// per-dimension sizes, as returned by `DynShape::dims`.
     type Dims: Debug
         + Clone
         + Default
@@ -32,9 +35,11 @@ pub trait Shape: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
         + Index<usize, Output = usize>
         + IndexMut<usize>
         + AsRef<[usize]>;
-    /// `init`.
+    /// Converts a user-facing `Arg` into the stored `Field` representation.
     fn init(arg: Self::Arg) -> Self::Field;
-    /// `from_dyn`.
+    /// Attempts to construct this shape's `Field` from raw runtime
+    /// dimensions, returning `None` if `dims` doesn't match `Self`
+    /// (e.g. wrong rank, or a statically-fixed dimension that disagrees).
     fn from_dyn(dims: &[usize]) -> Option<Self::Field>;
 }
 
@@ -44,40 +49,45 @@ pub trait Shape: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
 /// This includes both `Dyn` and fully static shapes (tuples). Operations that need to introspect
 /// the shape at runtime (e.g., computing strides) require a `DynShape` bound.
 pub trait DynShape: Shape {
-    /// `rank`.
+    /// Returns the number of dimensions.
     fn rank(shape: &Self::Field) -> usize;
-    /// `numel`.
+    /// Returns the total element count (product of all dimension sizes).
     fn numel(shape: &Self::Field) -> usize;
-    /// `dims`.
+    /// Returns each dimension's size.
     fn dims(shape: &Self::Field) -> Self::Dims;
 }
 
-/// `AppendDim`.
+/// Appends dimension `D` to the end of `Self`'s shape.
 pub trait AppendDim<D: Dim> {
-    /// The output tensor type produced by this module's forward pass.
+    /// `Self`'s dimensions with `D` appended at the end.
     type Output: Shape;
 }
 
-/// `ReplaceLastDim`.
+/// Replaces `Self`'s last dimension with `NewDim`.
 pub trait ReplaceLastDim<NewDim: Dim> {
-    /// The output tensor type produced by this module's forward pass.
+    /// `Self`'s dimensions with the last one replaced by `NewDim`.
     type Output: Shape;
 }
 
-/// `EndsWith`.
+/// Marker: `Self`'s last dimension is `D` — used to bound layer
+/// `forward` impls (e.g. `Linear`) to inputs whose trailing feature
+/// dimension matches the layer's expected input size.
 pub trait EndsWith<D: Dim>: Shape {}
-/// `HasChannels1D`.
+/// Marker: `Self` has `D` channels at the `Conv1d`-expected channel
+/// position (second-to-last dimension, `[.., C, L]`).
 pub trait HasChannels1D<D: Dim>: Shape {}
-/// `HasChannels2D`.
+/// Marker: `Self` has `D` channels at the `Conv2d`/`BatchNorm2d`-expected
+/// channel position (third-to-last dimension, `[.., C, H, W]`).
 pub trait HasChannels2D<D: Dim>: Shape {}
 
 impl<D: Dim> EndsWith<D> for Dyn {}
 impl<D: Dim> HasChannels1D<D> for Dyn {}
 impl<D: Dim> HasChannels2D<D> for Dyn {}
 
-/// `PartialDynShape`.
+/// A `DynShape` whose rank is additionally known at compile time (as
+/// opposed to `Dyn`, whose rank is runtime-only).
 pub trait PartialDynShape: DynShape {
-    /// `RANK`.
+    /// The compile-time-known number of dimensions.
     const RANK: usize;
 }
 
@@ -95,9 +105,9 @@ pub trait PartialDynShape: DynShape {
 /// ```
 pub trait ConstShape: Shape<Field: Default> {
     // const RANK: usize; // impl PartialDynShape for it and DynShape
-    /// `NUMEL`.
+    /// The compile-time-known total element count.
     const NUMEL: usize;
-    /// `DIMS`.
+    /// The compile-time-known per-dimension sizes.
     const DIMS: <Self as Shape>::Dims;
 }
 
@@ -105,17 +115,17 @@ pub trait ConstShape: Shape<Field: Default> {
 /// --- Dyn ---
 ///
 impl Shape for Dyn {
-    /// `Arg`.
+    /// The user-facing constructor argument type for this concrete shape.
     type Arg = Vec<usize>;
-    /// `Field`.
+    /// The runtime-stored representation for this concrete shape.
     type Field = Vec<usize>;
-    /// `Dims`.
+    /// The per-dimension-sizes collection type for this concrete shape.
     type Dims = Vec<usize>;
-    /// `init`.
+    /// Converts a user-facing `Arg` into the stored `Field` representation.
     fn init(arg: Self::Arg) -> Self::Field {
         arg
     }
-    /// `from_dyn`.
+    /// Attempts to construct this shape's `Field` from raw runtime dimensions.
     fn from_dyn(dims: &[usize]) -> Option<Self::Field> {
         Some(dims.to_vec())
     }
@@ -123,43 +133,43 @@ impl Shape for Dyn {
 
 impl DynShape for Dyn {
     #[inline(always)]
-    /// `rank`.
+    /// Returns the number of dimensions.
     fn rank(shape: &Self::Field) -> usize {
         shape.len()
     }
 
     #[inline(always)]
-    /// `numel`.
+    /// Returns the total element count.
     fn numel(shape: &Self::Field) -> usize {
         shape.iter().product()
     }
 
     #[inline(always)]
-    /// `dims`.
+    /// Returns each dimension's size.
     fn dims(shape: &Self::Field) -> Self::Dims {
         shape.clone()
     }
 }
 
 impl<D: Dim> AppendDim<D> for Dyn {
-    /// The output tensor type produced by this module's forward pass.
+    /// `Self`'s dimensions with `D` appended at the end.
     type Output = Dyn;
 }
 
 macro_rules! impl_shape_for_tuple {
     ($n:expr $(, $name:ident $idx:tt)* $(,)?) => {
         impl< $($name: Dim,)* > Shape for ( $($name,)*) {
-            /// `Arg`.
+            /// The user-facing constructor argument type for this concrete shape.
             type Arg = ($(<$name as Dim>::Arg,)*);
-            /// `Field`.
+            /// The runtime-stored representation for this concrete shape.
             type Field = Self;
-            /// `Dims`.
+            /// The per-dimension-sizes collection type for this concrete shape.
             type Dims = [usize; ($n)];
-            /// `init`.
+            /// Converts a user-facing `Arg` into the stored `Field` representation.
             fn init(arg: Self::Arg) -> Self::Field {
                 ($(Dim::from_arg(arg.$idx),)*)
             }
-            /// `from_dyn`.
+            /// Attempts to construct this shape's `Field` from raw runtime dimensions.
             fn from_dyn(dims: &[usize]) -> Option<Self::Field> {
                 if dims.len() != $n {
                     return None;
@@ -170,73 +180,73 @@ macro_rules! impl_shape_for_tuple {
             }
         }
         impl< $($name: Dim,)* > PartialDynShape for ( $($name,)*) {
-            /// `RANK`.
+            /// The compile-time-known number of dimensions.
             const RANK: usize = $n;
         }
         impl< $($name: Dim,)* > DynShape for ( $($name,)*) {
             #[inline(always)]
-            /// `dims`.
+            /// Returns each dimension's size.
             fn dims(shape: &Self::Field) -> Self::Dims {
                 [$(shape.$idx.size()),*]
             }
 
             #[inline(always)]
-            /// `rank`.
+            /// Returns the number of dimensions.
             fn rank(_: &Self::Field) -> usize {
                 ($n)
             }
 
             #[inline(always)]
-            /// `numel`.
+            /// Returns the total element count.
             fn numel(shape: &Self::Field) -> usize {
                 1 $( * shape.$idx.size())*
             }
         }
 
         impl<$($name: Unsigned + Dim, )*> ConstShape for ($($name, )*) {
-            /// `NUMEL`.
+            /// The compile-time total element count.
             const NUMEL: usize = $($name::USIZE * )* 1;
-            /// `DIMS`.
+            /// The compile-time per-dimension sizes.
             const DIMS: Self::Dims = [$($name::USIZE),*];
         }
 
         impl Shape for [usize; ($n)] {
-            /// `Arg`.
+            /// The user-facing constructor argument type for this concrete shape.
             type Arg = Self;
-            /// `Field`.
+            /// The runtime-stored representation for this concrete shape.
             type Field = Self;
-            /// `Dims`.
+            /// The per-dimension-sizes collection type for this concrete shape.
             type Dims = Self;
-            /// `init`.
+            /// Converts a user-facing `Arg` into the stored `Field` representation.
             fn init(arg: Self::Arg) -> Self::Field {
                 arg
             }
-            /// `from_dyn`.
+            /// Attempts to construct this shape's `Field` from raw runtime dimensions.
             fn from_dyn(dims: &[usize]) -> Option<Self::Field> {
                 dims.try_into().ok()
             }
         }
         impl DynShape for [usize; ($n)] {
             #[inline(always)]
-            /// `dims`.
+            /// Returns each dimension's size.
             fn dims(shape: &Self::Field) -> Self::Dims {
                 *shape
             }
 
             #[inline(always)]
-            /// `rank`.
+            /// Returns the number of dimensions.
             fn rank(_: &Self::Field) -> usize {
                 ($n)
             }
 
             #[inline(always)]
-            /// `numel`.
+            /// Returns the total element count.
             fn numel(shape: &Self::Field) -> usize {
                 1 $( * shape[$idx])*
             }
         }
         impl PartialDynShape for [usize; ($n)] {
-            /// `RANK`.
+            /// The compile-time-known number of dimensions.
             const RANK: usize = ($n);
         }
         impl EndsWith<usize> for [usize; ($n)] {}
@@ -246,52 +256,52 @@ macro_rules! impl_shape_for_tuple {
 }
 
 impl Shape for () {
-    /// `Arg`.
+    /// The user-facing constructor argument type for this concrete shape.
     type Arg = ();
-    /// `Field`.
+    /// The runtime-stored representation for this concrete shape.
     type Field = ();
-    /// `Dims`.
+    /// The per-dimension-sizes collection type for this concrete shape.
     type Dims = [usize; 0];
-    /// `init`.
+    /// Converts a user-facing `Arg` into the stored `Field` representation.
     fn init(_: Self::Arg) {}
-    /// `from_dyn`.
+    /// Attempts to construct this shape's `Field` from raw runtime dimensions.
     fn from_dyn(dims: &[usize]) -> Option<Self::Field> {
         if dims.is_empty() { Some(()) } else { None }
     }
 }
 
 impl PartialDynShape for () {
-    /// `RANK`.
+    /// The compile-time-known number of dimensions.
     const RANK: usize = 0;
 }
 
 impl<D: Dim> AppendDim<D> for () {
-    /// The output tensor type produced by this module's forward pass.
+    /// `Self`'s dimensions with `D` appended at the end.
     type Output = (D,);
 }
 
 impl ConstShape for () {
-    /// `NUMEL`.
+    /// The compile-time total element count.
     const NUMEL: usize = 1;
-    /// `DIMS`.
+    /// The compile-time per-dimension sizes.
     const DIMS: <Self as Shape>::Dims = [];
 }
 
 impl DynShape for () {
     #[inline(always)]
-    /// `rank`.
+    /// Returns the number of dimensions.
     fn rank(_: &Self::Field) -> usize {
         0
     }
 
     #[inline(always)]
-    /// `numel`.
+    /// Returns the total element count.
     fn numel(_: &Self::Field) -> usize {
         1
     }
 
     #[inline(always)]
-    /// `dims`.
+    /// Returns each dimension's size.
     fn dims(_: &Self::Field) -> Self::Dims {
         []
     }
@@ -309,7 +319,7 @@ impl_shape_for_tuple!(8, D0 0, D1 1, D2 2, D3 3, D4 4, D5 5, D6 6, D7 7);
 macro_rules! impl_append_dim_for_tuple {
     ($($name:ident),*) => {
         impl< $($name: Dim,)* Append: Dim > AppendDim<Append> for ( $($name,)*) {
-            /// The output tensor type produced by this module's forward pass.
+            /// `Self`'s dimensions with `Append` appended at the end.
             type Output = ( $($name,)* Append);
         }
     };
@@ -328,13 +338,13 @@ impl_append_dim_for_tuple!(D0, D1, D2, D3, D4, D5, D6);
 macro_rules! impl_replace_last_dim_for_tuple {
     ($last:ident) => {
         impl<$last: Dim, NewDim: Dim> ReplaceLastDim<NewDim> for ($last,) {
-            /// The output tensor type produced by this module's forward pass.
+            /// `Self`'s dimensions with the last one replaced by `NewDim`.
             type Output = (NewDim,);
         }
     };
     ($n1:ident, $last:ident) => {
         impl<$n1: Dim, $last: Dim, NewDim: Dim> ReplaceLastDim<NewDim> for ($n1, $last) {
-            /// The output tensor type produced by this module's forward pass.
+            /// `Self`'s dimensions with the last one replaced by `NewDim`.
             type Output = ($n1, NewDim);
         }
     };
@@ -342,7 +352,7 @@ macro_rules! impl_replace_last_dim_for_tuple {
         impl<$n1: Dim, $n2: Dim, $last: Dim, NewDim: Dim> ReplaceLastDim<NewDim>
             for ($n1, $n2, $last)
         {
-            /// The output tensor type produced by this module's forward pass.
+            /// `Self`'s dimensions with the last one replaced by `NewDim`.
             type Output = ($n1, $n2, NewDim);
         }
     };
@@ -350,7 +360,7 @@ macro_rules! impl_replace_last_dim_for_tuple {
         impl<$n1: Dim, $n2: Dim, $n3: Dim, $last: Dim, NewDim: Dim> ReplaceLastDim<NewDim>
             for ($n1, $n2, $n3, $last)
         {
-            /// The output tensor type produced by this module's forward pass.
+            /// `Self`'s dimensions with the last one replaced by `NewDim`.
             type Output = ($n1, $n2, $n3, NewDim);
         }
     };
@@ -358,7 +368,7 @@ macro_rules! impl_replace_last_dim_for_tuple {
         impl<$n1: Dim, $n2: Dim, $n3: Dim, $n4: Dim, $last: Dim, NewDim: Dim> ReplaceLastDim<NewDim>
             for ($n1, $n2, $n3, $n4, $last)
         {
-            /// The output tensor type produced by this module's forward pass.
+            /// `Self`'s dimensions with the last one replaced by `NewDim`.
             type Output = ($n1, $n2, $n3, $n4, NewDim);
         }
     };
@@ -366,7 +376,7 @@ macro_rules! impl_replace_last_dim_for_tuple {
         impl<$n1: Dim, $n2: Dim, $n3: Dim, $n4: Dim, $n5: Dim, $last: Dim, NewDim: Dim>
             ReplaceLastDim<NewDim> for ($n1, $n2, $n3, $n4, $n5, $last)
         {
-            /// The output tensor type produced by this module's forward pass.
+            /// `Self`'s dimensions with the last one replaced by `NewDim`.
             type Output = ($n1, $n2, $n3, $n4, $n5, NewDim);
         }
     };
@@ -374,7 +384,7 @@ macro_rules! impl_replace_last_dim_for_tuple {
         impl<$n1: Dim, $n2: Dim, $n3: Dim, $n4: Dim, $n5: Dim, $n6: Dim, $last: Dim, NewDim: Dim>
             ReplaceLastDim<NewDim> for ($n1, $n2, $n3, $n4, $n5, $n6, $last)
         {
-            /// The output tensor type produced by this module's forward pass.
+            /// `Self`'s dimensions with the last one replaced by `NewDim`.
             type Output = ($n1, $n2, $n3, $n4, $n5, $n6, NewDim);
         }
     };
@@ -391,7 +401,7 @@ macro_rules! impl_replace_last_dim_for_tuple {
             NewDim: Dim,
         > ReplaceLastDim<NewDim> for ($n1, $n2, $n3, $n4, $n5, $n6, $n7, $last)
         {
-            /// The output tensor type produced by this module's forward pass.
+            /// `Self`'s dimensions with the last one replaced by `NewDim`.
             type Output = ($n1, $n2, $n3, $n4, $n5, $n6, $n7, NewDim);
         }
     };
@@ -409,7 +419,7 @@ macro_rules! impl_replace_last_dim_for_tuple {
             NewDim: Dim,
         > ReplaceLastDim<NewDim> for ($n1, $n2, $n3, $n4, $n5, $n6, $n7, $n8, $last)
         {
-            /// The output tensor type produced by this module's forward pass.
+            /// `Self`'s dimensions with the last one replaced by `NewDim`.
             type Output = ($n1, $n2, $n3, $n4, $n5, $n6, $n7, $n8, NewDim);
         }
     };
@@ -428,7 +438,7 @@ macro_rules! impl_replace_last_dim_for_tuple {
             NewDim: Dim,
         > ReplaceLastDim<NewDim> for ($n1, $n2, $n3, $n4, $n5, $n6, $n7, $n8, $n9, $last)
         {
-            /// The output tensor type produced by this module's forward pass.
+            /// `Self`'s dimensions with the last one replaced by `NewDim`.
             type Output = ($n1, $n2, $n3, $n4, $n5, $n6, $n7, $n8, $n9, NewDim);
         }
     };
@@ -448,7 +458,7 @@ macro_rules! impl_replace_last_dim_for_tuple {
             NewDim: Dim,
         > ReplaceLastDim<NewDim> for ($n1, $n2, $n3, $n4, $n5, $n6, $n7, $n8, $n9, $n10, $last)
         {
-            /// The output tensor type produced by this module's forward pass.
+            /// `Self`'s dimensions with the last one replaced by `NewDim`.
             type Output = ($n1, $n2, $n3, $n4, $n5, $n6, $n7, $n8, $n9, $n10, NewDim);
         }
     };
@@ -483,7 +493,7 @@ macro_rules! impl_replace_last_dim_for_tuple {
                 $last,
             )
         {
-            /// The output tensor type produced by this module's forward pass.
+            /// `Self`'s dimensions with the last one replaced by `NewDim`.
             type Output = (
                 $n1,
                 $n2,
@@ -512,22 +522,22 @@ impl_replace_last_dim_for_tuple!(D0, D1, D2, D3, D4, D5, D6);
 impl_replace_last_dim_for_tuple!(D0, D1, D2, D3, D4, D5, D6, D7);
 
 impl<NewDim: Dim> ReplaceLastDim<NewDim> for Dyn {
-    /// The output tensor type produced by this module's forward pass.
+    /// `Self`'s dimensions with the last one replaced by `NewDim`.
     type Output = Dyn;
 }
 
 impl<D: Dim> Shape for Vec<D> {
-    /// `Arg`.
+    /// The user-facing constructor argument type for this concrete shape.
     type Arg = Self;
-    /// `Field`.
+    /// The runtime-stored representation for this concrete shape.
     type Field = Self;
-    /// `Dims`.
+    /// The per-dimension-sizes collection type for this concrete shape.
     type Dims = Vec<usize>;
-    /// `init`.
+    /// Converts a user-facing `Arg` into the stored `Field` representation.
     fn init(arg: Self::Arg) -> Self::Field {
         arg
     }
-    /// `from_dyn`.
+    /// Attempts to construct this shape's `Field` from raw runtime dimensions.
     fn from_dyn(dims: &[usize]) -> Option<Self::Field> {
         dims.iter().map(|&d| D::from_size(d)).collect()
     }
@@ -535,34 +545,32 @@ impl<D: Dim> Shape for Vec<D> {
 
 impl<D: Dim> DynShape for Vec<D> {
     #[inline(always)]
-    /// `rank`.
+    /// Returns the number of dimensions.
     fn rank(shape: &Self::Field) -> usize {
         shape.len()
     }
 
     #[inline(always)]
-    /// `numel`.
+    /// Returns the total element count.
     fn numel(shape: &Self::Field) -> usize {
         shape.iter().map(|d| d.size()).product()
     }
 
     #[inline(always)]
-    /// `dims`.
+    /// Returns each dimension's size.
     fn dims(shape: &Self::Field) -> Self::Dims {
         shape.iter().map(|d| d.size()).collect()
     }
 }
 
-/// `Scalar`.
+/// The 0-dimensional (scalar) shape — an alias for `()`.
 pub type Scalar = ();
 
 #[cfg(test)]
-/// `tests`.
 mod tests {
     use super::*;
 
     #[test]
-    /// `test_scalar_shape`.
     fn test_scalar_shape() {
         assert_eq!(<() as DynShape>::rank(&()), 0);
         assert_eq!(<() as DynShape>::numel(&()), 1);
@@ -573,7 +581,6 @@ mod tests {
     }
 
     #[test]
-    /// `test_dyn_shape`.
     fn test_dyn_shape() {
         let d = vec![2, 3, 4];
         assert_eq!(<Dyn as DynShape>::rank(&d), 3);
@@ -582,7 +589,6 @@ mod tests {
     }
 
     #[test]
-    /// `test_array_shape`.
     fn test_array_shape() {
         let shape: [usize; 3] = [2, 3, 4];
         assert_eq!(<[usize; 3] as DynShape>::rank(&shape), 3);
