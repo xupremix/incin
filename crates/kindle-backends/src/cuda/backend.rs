@@ -1172,6 +1172,66 @@ impl<T: DType, D: Device> QuantizedOps<Self> for CudaBackendImpl<T, D> {
     fn dequantize<Q: QuantDType, K: FloatDType>(t: &CudaStorage) -> Result<CudaStorage> {
         crate::cuda::ops::quant::launch_dequantize(t)
     }
+
+    /// **Correctness-first, not bandwidth-optimal**: dequantizes both
+    /// operands to `f32` then calls the already-wired `matmul`, unlike
+    /// CPU's `quantized_matmul` (`cpu/ops/quant.rs`), which fuses the Q8_0
+    /// block-dequant directly into an AVX2 dot product without ever
+    /// materializing full-precision copies — the `QuantizedOps` trait doc
+    /// explicitly frames avoiding that materialization as the point of this
+    /// method. Porting CPU's fused block-dot-product math to a new CUDA
+    /// kernel blind (no hardware here to verify Q8_0 block-scale handling
+    /// against) is exactly the kind of change this codebase's audit history
+    /// treats as too risky to do without real-hardware verification — this
+    /// composition is mathematically equivalent (same result, more memory
+    /// bandwidth), and is the safer choice until real hardware is
+    /// available to validate a fused kernel against. Only `Q8_0` is
+    /// supported, matching CPU's own restriction exactly.
+    fn quantized_matmul<Q: QuantDType>(
+        lhs: &CudaStorage,
+        rhs: &CudaStorage,
+    ) -> Result<CudaStorage> {
+        if core::any::TypeId::of::<Q>() != core::any::TypeId::of::<kindle_core::prelude::Q8_0>() {
+            return Err(Error::UnsupportedBackendOperation {
+                op: "quantized_matmul",
+                backend: "Cuda (only Q8_0 supported)",
+            });
+        }
+        if rhs.shape.len() != 2 {
+            return Err(Error::Msg("quantized_matmul rhs must be 2D [N, K]".into()));
+        }
+        if lhs.shape.len() < 2 {
+            return Err(Error::Msg(
+                "quantized_matmul lhs requires at least 2D shapes".into(),
+            ));
+        }
+        let k = lhs.shape[lhs.shape.len() - 1];
+        let m: usize = lhs.shape[..lhs.shape.len() - 1].iter().product();
+        let n = rhs.shape[0];
+        if k != rhs.shape[1] {
+            return Err(Error::Msg(format!(
+                "quantized_matmul K mismatch: {k} != {}",
+                rhs.shape[1]
+            )));
+        }
+        if !k.is_multiple_of(32) {
+            return Err(Error::Msg(format!(
+                "quantized_matmul K must be multiple of 32, got {k}"
+            )));
+        }
+
+        let lhs_f32 = Self::dequantize::<Q, f32>(lhs)?;
+        let rhs_f32 = Self::dequantize::<Q, f32>(rhs)?;
+        let lhs_2d = <Self as TensorOps<Self>>::reshape::<f32>(&lhs_f32, &[m, k])?;
+        // rhs is stored [N, K]; matmul needs [K, N].
+        let rhs_t = crate::cuda::ops::shape::launch_transpose(&rhs_f32, 0, 1)?;
+        let out_2d = crate::cuda::ops::matmul::launch_matmul(&lhs_2d, &rhs_t)?;
+
+        let mut out_shape = lhs.shape.clone();
+        let last = out_shape.len() - 1;
+        out_shape[last] = n;
+        <Self as TensorOps<Self>>::reshape::<f32>(&out_2d, &out_shape)
+    }
 }
 impl<T: DType, D: Device> OptimizerOps<Self> for CudaBackendImpl<T, D> {}
 impl<T: DType, D: Device> ModuleOps<Self> for CudaBackendImpl<T, D> {
@@ -1935,5 +1995,36 @@ mod tests {
     fn argmax_rejects_out_of_range_axis() {
         let t = cuda_f32(&[2, 3], vec![0.0; 6]);
         assert!(<B as ReductionOps<B>>::argmax::<f32, i64>(&t, Some(5)).is_err());
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn quantized_matmul_computes_correct_shape() {
+        // lhs [2, 32] @ rhs [4, 32]^T -> [2, 4], K=32 is one Q8_0 block.
+        let lhs_f32 = cuda_f32(&[2, 32], (0..64).map(|i| i as f32 * 0.01).collect());
+        let rhs_f32 = cuda_f32(&[4, 32], (0..128).map(|i| i as f32 * 0.01).collect());
+        let lhs_q =
+            <B as QuantizedOps<B>>::quantize::<f32, kindle_core::prelude::Q8_0>(&lhs_f32).unwrap();
+        let rhs_q =
+            <B as QuantizedOps<B>>::quantize::<f32, kindle_core::prelude::Q8_0>(&rhs_f32).unwrap();
+        let out =
+            <B as QuantizedOps<B>>::quantized_matmul::<kindle_core::prelude::Q8_0>(&lhs_q, &rhs_q)
+                .unwrap();
+        assert_eq!(out.shape, vec![2, 4]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn quantized_matmul_rejects_non_multiple_of_32_k() {
+        let lhs_f32 = cuda_f32(&[2, 16], vec![0.0; 32]);
+        let rhs_f32 = cuda_f32(&[4, 16], vec![0.0; 64]);
+        let lhs_q =
+            <B as QuantizedOps<B>>::quantize::<f32, kindle_core::prelude::Q8_0>(&lhs_f32).unwrap();
+        let rhs_q =
+            <B as QuantizedOps<B>>::quantize::<f32, kindle_core::prelude::Q8_0>(&rhs_f32).unwrap();
+        assert!(
+            <B as QuantizedOps<B>>::quantized_matmul::<kindle_core::prelude::Q8_0>(&lhs_q, &rhs_q)
+                .is_err()
+        );
     }
 }
