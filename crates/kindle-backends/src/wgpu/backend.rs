@@ -1,3 +1,4 @@
+use crate::dtype_policy::{BackendFamily, OperationFamily, resolve_dtype_policy};
 use crate::wgpu::dispatch;
 use crate::wgpu::storage::{WgpuBuffer, WgpuStorage};
 use kindle_core::prelude::*;
@@ -10,15 +11,8 @@ impl<T: DType, D: Device> SupportsDType<f32> for WgpuBackendImpl<T, D> {}
 
 impl<T: DType, D: Device> SupportsDType<Dyn> for WgpuBackendImpl<T, D> {
     fn resolve_dtype(field: &DTypeId, _device: &DeviceId) -> Result<DTypeId> {
-        if *field == DTypeId::F32 {
-            Ok(*field)
-        } else {
-            Err(Error::UnsupportedDType {
-                dtype: *field,
-                backend: "Wgpu",
-                op: "create",
-            })
-        }
+        resolve_dtype_policy(BackendFamily::Wgpu, OperationFamily::Fill, *field, "create")
+            .map(|_| *field)
     }
 }
 
@@ -39,7 +33,12 @@ pub(crate) fn num_elements(shape: &[usize]) -> usize {
     shape.iter().product()
 }
 
-fn validate_wgpu(dtype: DTypeId, device: &DeviceId, op: &'static str) -> Result<()> {
+fn validate_wgpu(
+    dtype: DTypeId,
+    device: &DeviceId,
+    family: OperationFamily,
+    op: &'static str,
+) -> Result<()> {
     if device.kind() != DeviceKind::Wgpu {
         return Err(Error::DeviceInitializationError {
             expected: "wgpu".to_string(),
@@ -52,14 +51,7 @@ fn validate_wgpu(dtype: DTypeId, device: &DeviceId, op: &'static str) -> Result<
             ordinal: device.ordinal(),
         });
     }
-    if dtype != DTypeId::F32 {
-        return Err(Error::UnsupportedDType {
-            dtype,
-            backend: "Wgpu",
-            op,
-        });
-    }
-    Ok(())
+    resolve_dtype_policy(BackendFamily::Wgpu, family, dtype, op).map(|_| ())
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -150,7 +142,7 @@ impl<T: DType, D: Device> Backend for WgpuBackendImpl<T, D> {
         dtype: DTypeId,
         device: &DeviceId,
     ) -> Result<Self::Storage<K>> {
-        validate_wgpu(dtype, device, "from_bytes")?;
+        validate_wgpu(dtype, device, OperationFamily::Storage, "from_bytes")?;
         let expected = num_elements(shape) * core::mem::size_of::<f32>();
         if bytes.len() != expected {
             return Err(Error::InvalidByteLength {
@@ -173,7 +165,7 @@ impl<T: DType, D: Device> CreationOps<Self> for WgpuBackendImpl<T, D> {
         dtype: DTypeId,
         device: &DeviceId,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        validate_wgpu(dtype, device, "zeros")?;
+        validate_wgpu(dtype, device, OperationFamily::Fill, "zeros")?;
         let n = num_elements(shape);
         let data: Vec<f32> = vec![0.0; n];
         let buf = WgpuBuffer::from_slice(&data);
@@ -186,7 +178,7 @@ impl<T: DType, D: Device> CreationOps<Self> for WgpuBackendImpl<T, D> {
         dtype: DTypeId,
         device: &DeviceId,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        validate_wgpu(dtype, device, "ones")?;
+        validate_wgpu(dtype, device, OperationFamily::Fill, "ones")?;
         let n = num_elements(shape);
         let data: Vec<f32> = vec![1.0; n];
         let buf = WgpuBuffer::from_slice(&data);
@@ -199,7 +191,7 @@ impl<T: DType, D: Device> CreationOps<Self> for WgpuBackendImpl<T, D> {
         dtype: DTypeId,
         device: &DeviceId,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        validate_wgpu(dtype, device, "rand")?;
+        validate_wgpu(dtype, device, OperationFamily::Random, "rand")?;
         use std::time::{SystemTime, UNIX_EPOCH};
         let n = num_elements(shape);
         // Simple LCG for now – GPU-side random generation would need more infrastructure
@@ -226,7 +218,7 @@ impl<T: DType, D: Device> CreationOps<Self> for WgpuBackendImpl<T, D> {
         dtype: DTypeId,
         device: &DeviceId,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        validate_wgpu(dtype, device, "randn")?;
+        validate_wgpu(dtype, device, OperationFamily::Random, "randn")?;
         use std::time::{SystemTime, UNIX_EPOCH};
         let n = num_elements(shape);
         let seed = SystemTime::now()

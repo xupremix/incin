@@ -37,6 +37,7 @@ pub(crate) fn launch_concat(tensors: &[&CudaStorage], dim: usize) -> Result<Cuda
     let total = out_shape.iter().product::<usize>();
     let mut out_b = CudaBuffer {
         len: total,
+        dtype: first_buf.dtype,
         data: Arc::new(stream.alloc_zeros::<u8>(total * 4).unwrap()),
         device: first_buf.device.clone(),
         device_id,

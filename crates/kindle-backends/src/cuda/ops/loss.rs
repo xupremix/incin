@@ -30,6 +30,7 @@ pub(crate) fn launch_nll_loss(
 
     let mut out_b = CudaBuffer {
         len: out_numel,
+        dtype: b_log_sm.dtype,
         data: Arc::new(stream.alloc_zeros::<u8>(out_numel * 4).unwrap()),
         device: b_log_sm.device.clone(),
         device_id,

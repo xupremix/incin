@@ -12,8 +12,8 @@ use alloc::sync::Arc;
 use core::sync::atomic::{AtomicU64, Ordering};
 
 use half::{bf16, f16};
-use kindle_core::prelude::Error;
 use kindle_core::prelude::Result;
+use kindle_core::prelude::{DTypeId, Error};
 
 use crate::cpu::stride;
 
@@ -74,6 +74,19 @@ pub enum CpuBuffer {
 }
 
 impl CpuBuffer {
+    pub(crate) fn dtype_id(&self) -> DTypeId {
+        match self {
+            Self::F32(_) => DTypeId::F32,
+            Self::F64(_) => DTypeId::F64,
+            Self::U8(_) => DTypeId::U8,
+            Self::U32(_) => DTypeId::U32,
+            Self::I64(_) => DTypeId::I64,
+            Self::F16(_) => DTypeId::F16,
+            Self::BF16(_) => DTypeId::BF16,
+            Self::Q8_0(_) => DTypeId::Q8_0,
+        }
+    }
+
     /// Total number of scalar elements held by this buffer, regardless of
     /// dtype variant.
     pub fn len(&self) -> usize {
@@ -160,7 +173,7 @@ impl CpuBuffer {
     /// Read the scalar at flat buffer index `i` as an `f64`, regardless of
     /// dtype variant. Used by strided-index resolution in
     /// `CpuStorage::get`.
-    fn get_f64(&self, i: usize) -> f64 {
+    pub(crate) fn get_f64(&self, i: usize) -> f64 {
         match self {
             CpuBuffer::F32(v) => v[i] as f64,
             CpuBuffer::F64(v) => v[i],

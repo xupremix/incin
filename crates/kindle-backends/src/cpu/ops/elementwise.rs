@@ -14,22 +14,10 @@ use crate::cpu::CpuBackendImpl;
 use kindle_core::prelude::*;
 use kindle_core::prelude::{Backend, DType, FloatOps, NumericOps, Result};
 
+use crate::cpu::ops::elementwise_kernel::{self, BinaryOp, UnaryOp};
 use crate::cpu::storage::CpuStorage;
 use crate::cpu::tape::{self, TapeEntry};
-
-/// Resolve the per-operand logical index for a given output logical index,
-/// right-aligning `operand_shape` against `out_shape` (numpy/Candle-style
-/// broadcast): any leading dim the operand doesn't have is dropped, and any
-/// dim of size 1 in the operand wraps to index 0 regardless of the output's
-/// index at that axis.
-fn broadcast_index(out_idx: &[usize], out_shape: &[usize], operand_shape: &[usize]) -> Vec<usize> {
-    let offset = out_shape.len() - operand_shape.len();
-    operand_shape
-        .iter()
-        .enumerate()
-        .map(|(i, &dim)| if dim == 1 { 0 } else { out_idx[i + offset] })
-        .collect()
-}
+use crate::iteration::{IterationPlan, OperandLayout};
 
 /// Increment a row-major multi-index in place (odometer-style), matching
 /// `storage.rs`/`tape.rs`'s own iteration order.
@@ -52,13 +40,6 @@ pub(crate) fn flat_to_nd(mut flat_idx: usize, shape: &[usize]) -> Vec<usize> {
     nd
 }
 
-/// Read `storage` as `f64` at `storage`'s own (already-resolved) logical
-/// index, given the output-space index and shape.
-fn read_broadcast(storage: &CpuStorage, out_idx: &[usize], out_shape: &[usize]) -> f64 {
-    let idx = broadcast_index(out_idx, out_shape, &storage.shape);
-    storage.get(&idx)
-}
-
 /// Build a contiguous `CpuStorage` by applying `f(lhs_val, rhs_val)` over
 /// every logical index in `out_shape`, reading each operand through its own
 /// broadcast-resolved index (no pre-materialized broadcast copy).
@@ -72,13 +53,30 @@ pub(crate) fn elementwise_binary(
     out_shape: &[usize],
     f: impl Fn(f64, f64) -> f64 + Send + Sync,
 ) -> Result<CpuStorage> {
-    let total: usize = out_shape.iter().product();
-    let out: Vec<f64> = (0..total)
+    let plan = IterationPlan::binary(
+        OperandLayout {
+            shape: &lhs.shape,
+            strides: &lhs.strides,
+            offset: lhs.offset,
+        },
+        OperandLayout {
+            shape: &rhs.shape,
+            strides: &rhs.strides,
+            offset: rhs.offset,
+        },
+        out_shape,
+    )?;
+    let lhs_plan = &plan.operands[0];
+    let rhs_plan = &plan.operands[1];
+    let out: Vec<f64> = (0..plan.numel)
         .into_par_iter()
         .map(|flat_idx| {
-            let nd_idx = flat_to_nd(flat_idx, out_shape);
-            let a = read_broadcast(lhs, &nd_idx, out_shape);
-            let b = read_broadcast(rhs, &nd_idx, out_shape);
+            let a = lhs
+                .buffer
+                .get_f64(lhs_plan.physical_index(flat_idx, &plan.output_shape));
+            let b = rhs
+                .buffer
+                .get_f64(rhs_plan.physical_index(flat_idx, &plan.output_shape));
             f(a, b)
         })
         .collect();
@@ -86,6 +84,20 @@ pub(crate) fn elementwise_binary(
     // this used to silently downcast every non-f32 dtype through f32).
     let out_buffer = lhs.buffer.from_f64_values(out);
     Ok(CpuStorage::from_contiguous(out_buffer, out_shape.to_vec()))
+}
+
+fn elementwise_binary_numeric(
+    op: BinaryOp,
+    lhs: &CpuStorage,
+    rhs: &CpuStorage,
+    out_shape: &[usize],
+) -> Result<CpuStorage> {
+    if let Some(output) = elementwise_kernel::execute_binary(op, lhs, rhs, out_shape)? {
+        return Ok(output);
+    }
+    elementwise_binary("", "", lhs, rhs, out_shape, move |lhs, rhs| {
+        op.eval_f64(lhs, rhs)
+    })
 }
 
 /// Elementwise negate (used by `sub`'s backward rule: rhs receives the
@@ -110,9 +122,16 @@ pub(crate) fn elementwise_unary(
     Ok(CpuStorage::from_contiguous(out_buffer, t.shape.clone()))
 }
 
+fn elementwise_unary_typed(op: UnaryOp, input: &CpuStorage) -> Result<CpuStorage> {
+    if let Some(output) = elementwise_kernel::execute_unary(op, input)? {
+        return Ok(output);
+    }
+    elementwise_unary("", "", input, move |value| op.eval_f64(value))
+}
+
 /// `negate`.
 fn negate(t: &CpuStorage) -> CpuStorage {
-    elementwise_unary("neg", "-x", t, |x| -x).unwrap()
+    elementwise_unary_typed(UnaryOp::Neg, t).unwrap()
 }
 
 /// Elementwise multiply of two ALREADY-shape-matching (or one of them
@@ -120,9 +139,7 @@ fn negate(t: &CpuStorage) -> CpuStorage {
 /// rule to compute `grad_out * other_operand`, aligned to `grad_out`'s shape.
 #[allow(dead_code)]
 fn mul_elementwise_broadcast(grad_out: &CpuStorage, other: &CpuStorage) -> Result<CpuStorage> {
-    elementwise_binary("mul", "a * b", grad_out, other, &grad_out.shape, |a, b| {
-        a * b
-    })
+    elementwise_binary_numeric(BinaryOp::Mul, grad_out, other, &grad_out.shape)
 }
 
 /// Abramowitz & Stegun 7.1.26 rational polynomial approximation of the
@@ -149,7 +166,7 @@ impl<T: DType, D: Device> NumericOps<Self> for CpuBackendImpl<T, D> {
         rhs: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
         let out_shape = crate::cpu::stride::broadcast_shape(&lhs.shape, &rhs.shape)?;
-        let out = elementwise_binary("add", "a + b", lhs, rhs, &out_shape, |a, b| a + b)?;
+        let out = elementwise_binary_numeric(BinaryOp::Add, lhs, rhs, &out_shape)?;
 
         let (lhs_shape, rhs_shape) = (lhs.shape.clone(), rhs.shape.clone());
         let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
@@ -172,7 +189,7 @@ impl<T: DType, D: Device> NumericOps<Self> for CpuBackendImpl<T, D> {
         rhs: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
         let out_shape = crate::cpu::stride::broadcast_shape(&lhs.shape, &rhs.shape)?;
-        let out = elementwise_binary("sub", "a - b", lhs, rhs, &out_shape, |a, b| a - b)?;
+        let out = elementwise_binary_numeric(BinaryOp::Sub, lhs, rhs, &out_shape)?;
 
         let (lhs_shape, rhs_shape) = (lhs.shape.clone(), rhs.shape.clone());
         let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
@@ -196,7 +213,7 @@ impl<T: DType, D: Device> NumericOps<Self> for CpuBackendImpl<T, D> {
         rhs: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
         let out_shape = crate::cpu::stride::broadcast_shape(&lhs.shape, &rhs.shape)?;
-        let out = elementwise_binary("mul", "a * b", lhs, rhs, &out_shape, |a, b| a * b)?;
+        let out = elementwise_binary_numeric(BinaryOp::Mul, lhs, rhs, &out_shape)?;
 
         // Capture cloned copies of lhs/rhs's CpuStorage (cheap, Rc-backed)
         // since the backward closure needs their VALUES, not just shapes.
@@ -207,22 +224,18 @@ impl<T: DType, D: Device> NumericOps<Self> for CpuBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![lhs_id, rhs_id],
             backward: Box::new(move |grad_out: &CpuStorage| {
-                let grad_lhs = elementwise_binary(
-                    "mul",
-                    "a * b",
+                let grad_lhs = elementwise_binary_numeric(
+                    BinaryOp::Mul,
                     grad_out,
                     &rhs_capture,
                     &grad_out.shape,
-                    |a, b| a * b,
                 )
                 .unwrap();
-                let grad_rhs = elementwise_binary(
-                    "mul",
-                    "a * b",
+                let grad_rhs = elementwise_binary_numeric(
+                    BinaryOp::Mul,
                     grad_out,
                     &lhs_capture,
                     &grad_out.shape,
-                    |a, b| a * b,
                 )
                 .unwrap();
                 vec![
@@ -240,7 +253,7 @@ impl<T: DType, D: Device> NumericOps<Self> for CpuBackendImpl<T, D> {
         rhs: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
         let out_shape = crate::cpu::stride::broadcast_shape(&lhs.shape, &rhs.shape)?;
-        let out = elementwise_binary("div", "a / b", lhs, rhs, &out_shape, |a, b| a / b)?;
+        let out = elementwise_binary_numeric(BinaryOp::Div, lhs, rhs, &out_shape)?;
 
         // Per Assumption A2 (RESEARCH.md): implemented for trait-completeness
         // via the standard quotient rule (1/rhs, -lhs/rhs^2), each
@@ -254,19 +267,16 @@ impl<T: DType, D: Device> NumericOps<Self> for CpuBackendImpl<T, D> {
             input_ids: vec![lhs_id, rhs_id],
             backward: Box::new(move |grad_out: &CpuStorage| {
                 // d(lhs/rhs)/dlhs = 1/rhs -> grad_lhs = grad_out / rhs
-                let grad_lhs = elementwise_binary(
-                    "div_g_r",
-                    "a / b",
+                let grad_lhs = elementwise_binary_numeric(
+                    BinaryOp::Div,
                     grad_out,
                     &rhs_capture,
                     &grad_out.shape,
-                    |g, r| g / r,
                 )
                 .unwrap();
                 // d(lhs/rhs)/drhs = -lhs/rhs^2 -> grad_rhs = grad_out * (-lhs/rhs^2)
-                let grad_rhs = elementwise_binary(
-                    "mul_g_dr",
-                    "a * b",
+                let grad_rhs = elementwise_binary_numeric(
+                    BinaryOp::Mul,
                     grad_out,
                     &elementwise_binary(
                         "div_grad_rhs_inner",
@@ -278,7 +288,6 @@ impl<T: DType, D: Device> NumericOps<Self> for CpuBackendImpl<T, D> {
                     )
                     .unwrap(),
                     &grad_out.shape,
-                    |g, dr| g * dr,
                 )
                 .unwrap();
                 vec![
@@ -297,12 +306,7 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
         t: &<Self as Backend>::Storage<K>,
         scalar: f64,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let out = elementwise_unary(
-            &format!("add_scalar_{}", scalar),
-            &format!("x + {}", scalar),
-            t,
-            |x| x + scalar,
-        )?;
+        let out = elementwise_unary_typed(UnaryOp::AddScalar(scalar), t)?;
 
         let (t_id, out_id) = (t.id, out.id);
         tape::push(TapeEntry {
@@ -320,12 +324,7 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
         t: &<Self as Backend>::Storage<K>,
         scalar: f64,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let out = elementwise_unary(
-            &format!("mul_scalar_{}", scalar),
-            &format!("x * {}", scalar),
-            t,
-            |x| x * scalar,
-        )?;
+        let out = elementwise_unary_typed(UnaryOp::MulScalar(scalar), t)?;
 
         let (t_id, out_id) = (t.id, out.id);
         tape::push(TapeEntry {
@@ -354,7 +353,7 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
 
     /// `relu`.
     fn relu<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        let out = elementwise_unary("relu", "x > 0.0 ? x : 0.0", t, |x| x.max(0.0))?;
+        let out = elementwise_unary_typed(UnaryOp::Relu, t)?;
 
         // relu'(x) = 1 if x > 0 else 0 (input-based; strict `>`, zero
         // gradient at the x=0 boundary).
@@ -384,9 +383,7 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
 
     /// `step`.
     fn step<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        let out = elementwise_unary("step", "x > 0.0 ? 1.0 : 0.0", t, |x| {
-            if x > 0.0 { 1.0 } else { 0.0 }
-        })?;
+        let out = elementwise_unary_typed(UnaryOp::Step, t)?;
 
         // step'(x) = 0 almost everywhere.
         let (t_id, out_id) = (t.id, out.id);
@@ -407,15 +404,7 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
 
     /// `mish`.
     fn mish<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        let out = elementwise_unary(
-            "mish",
-            "x * tanhf(x > 20.0 ? x : logf(1.0 + expf(x)))",
-            t,
-            |x| {
-                let sp = if x > 20.0 { x } else { (1.0 + x.exp()).ln() };
-                x * sp.tanh()
-            },
-        )?;
+        let out = elementwise_unary_typed(UnaryOp::Mish, t)?;
 
         let t_capture = t.clone();
         let (t_id, out_id) = (t.id, out.id);
@@ -438,9 +427,7 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
 
     /// `elu`.
     fn elu<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        let out = elementwise_unary("elu", "x > 0.0 ? x : expf(x) - 1.0", t, |x| {
-            if x > 0.0 { x } else { x.exp() - 1.0 }
-        })?;
+        let out = elementwise_unary_typed(UnaryOp::Elu, t)?;
 
         let out_capture = out.clone();
         let (t_id, out_id) = (t.id, out.id);
@@ -468,12 +455,7 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
 
     /// `gelu`.
     fn gelu<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        let out = elementwise_unary(
-            "gelu",
-            "x * 0.5f * (1.0f + erff(x / 1.41421356f))",
-            t,
-            |x| x * 0.5 * (1.0 + erf_approx(x / core::f64::consts::SQRT_2)),
-        )?;
+        let out = elementwise_unary_typed(UnaryOp::Gelu, t)?;
 
         // gelu(x) = x * 0.5 * (1 + erf(x/sqrt(2)))
         // gelu'(x) = 0.5*(1+erf(x/sqrt(2))) + x * (1/sqrt(2*pi)) * exp(-x^2/2)
@@ -498,7 +480,7 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
 
     /// `abs`.
     fn abs<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        let out = elementwise_unary("abs", "fabsf(x)", t, |x| x.abs())?;
+        let out = elementwise_unary_typed(UnaryOp::Abs, t)?;
 
         // abs'(x) = sign(x) (input-based).
         let t_capture = t.clone();
@@ -533,7 +515,7 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
 
     /// `exp`.
     fn exp<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        let out = elementwise_unary("exp", "expf(x)", t, |x| x.exp())?;
+        let out = elementwise_unary_typed(UnaryOp::Exp, t)?;
 
         // exp'(x) = out (output-based).
         let out_capture = out.clone();
@@ -576,7 +558,7 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
 
     /// `sqrt`.
     fn sqrt<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        let out = elementwise_unary("sqrt", "sqrtf(x)", t, |x| x.sqrt())?;
+        let out = elementwise_unary_typed(UnaryOp::Sqrt, t)?;
 
         // sqrt'(x) = 1/(2*out) (output-based).
         let out_capture = out.clone();
@@ -605,7 +587,7 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
 
     /// `log`.
     fn log<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        let out = elementwise_unary("log", "logf(x)", t, |x| x.ln())?;
+        let out = elementwise_unary_typed(UnaryOp::Log, t)?;
 
         // log'(x) = 1/x (input-based, NOT output-based).
         let t_capture = t.clone();
@@ -634,7 +616,7 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
 
     /// `tanh`.
     fn tanh<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        let out = elementwise_unary("tanh", "tanhf(x)", t, |x| x.tanh())?;
+        let out = elementwise_unary_typed(UnaryOp::Tanh, t)?;
 
         // tanh'(x) = 1 - out^2 (output-based).
         let out_capture = out.clone();
@@ -665,9 +647,7 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
     fn sigmoid<K: DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let out = elementwise_unary("sigmoid", "1.0f / (1.0f + expf(-x))", t, |x| {
-            1.0 / (1.0 + (-x).exp())
-        })?;
+        let out = elementwise_unary_typed(UnaryOp::Sigmoid, t)?;
 
         // sigmoid'(x) = out*(1-out) (output-based).
         let out_capture = out.clone();
@@ -696,10 +676,7 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
 
     /// `swish`.
     fn swish<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
-        let out = elementwise_unary("swish", "x / (1.0f + expf(-x))", t, |x| {
-            let sig = 1.0 / (1.0 + (-x).exp());
-            x * sig
-        })?;
+        let out = elementwise_unary_typed(UnaryOp::Swish, t)?;
 
         // swish(x) = x * sigmoid(x)
         // swish'(x) = out + sigmoid(x)*(1-out) — needs BOTH the output and
@@ -841,6 +818,51 @@ mod tests {
             }
             other => panic!("expected CpuBuffer::F64, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn numeric_ops_preserve_half_storage_and_compute_in_f32() {
+        let f16_lhs = CpuStorage::from_contiguous(
+            CpuBuffer::F16(vec![half::f16::from_f32(1.5), half::f16::from_f32(2.0)]),
+            vec![2],
+        );
+        let f16_rhs = CpuStorage::from_contiguous(
+            CpuBuffer::F16(vec![half::f16::from_f32(2.0), half::f16::from_f32(4.0)]),
+            vec![2],
+        );
+        let f16_out = TestBackend::mul::<half::f16>(&f16_lhs, &f16_rhs).unwrap();
+        assert_eq!(
+            &*f16_out.buffer,
+            &CpuBuffer::F16(vec![half::f16::from_f32(3.0), half::f16::from_f32(8.0)])
+        );
+
+        let bf16_lhs = CpuStorage::from_contiguous(
+            CpuBuffer::BF16(vec![half::bf16::from_f32(1.5), half::bf16::from_f32(2.0)]),
+            vec![2],
+        );
+        let bf16_rhs = CpuStorage::from_contiguous(
+            CpuBuffer::BF16(vec![half::bf16::from_f32(2.0), half::bf16::from_f32(4.0)]),
+            vec![2],
+        );
+        let bf16_out = TestBackend::mul::<half::bf16>(&bf16_lhs, &bf16_rhs).unwrap();
+        assert_eq!(
+            &*bf16_out.buffer,
+            &CpuBuffer::BF16(vec![half::bf16::from_f32(3.0), half::bf16::from_f32(8.0)])
+        );
+    }
+
+    #[test]
+    fn numeric_ops_preserve_non_contiguous_view_semantics() {
+        let lhs = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3)
+            .transpose(0, 1)
+            .unwrap();
+        let rhs = matrix(vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0], 2, 3)
+            .transpose(0, 1)
+            .unwrap();
+        let output = TestBackend::add::<f32>(&lhs, &rhs).unwrap();
+
+        assert_eq!(output.shape, vec![3, 2]);
+        assert_eq!(f32_vec(&output), vec![11.0, 44.0, 22.0, 55.0, 33.0, 66.0]);
     }
 
     #[test]

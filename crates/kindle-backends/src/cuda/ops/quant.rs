@@ -35,6 +35,7 @@ pub(crate) fn launch_quantize(inp: &CudaStorage) -> Result<CudaStorage> {
 
         let mut out_buf = CudaBuffer {
             len: num_blocks,
+            dtype: kindle_core::prelude::DTypeId::Q8_0,
             data: Arc::new(stream.alloc_zeros::<u8>(out_bytes).unwrap()),
             device: b_inp.device.clone(),
             device_id,
@@ -103,6 +104,7 @@ pub(crate) fn launch_dequantize(inp: &CudaStorage) -> Result<CudaStorage> {
 
         let mut out_buf = CudaBuffer {
             len: out_numel,
+            dtype: kindle_core::prelude::DTypeId::F32,
             data: Arc::new(stream.alloc_zeros::<u8>(out_numel * 4).unwrap()),
             device: b_inp.device.clone(),
             device_id,

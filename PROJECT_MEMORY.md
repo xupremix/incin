@@ -88,11 +88,71 @@ let view = t.slice::<idx![0..5, .., 15..30]>()?;
 
 ## 4. CUDA GPU Autotuning Engine
 
-GPU kernel execution is automatically optimized using a **3-tier autotuning engine** without requiring any macros or launch boilerplate from the end-user:
+The forward architecture for dtype-polymorphic kernels is tracked in
+`docs/DTYPE_KERNEL_ARCHITECTURE.md`. Kernel bodies are defined by operation
+family and specialized lazily from explicit storage, compute, accumulator,
+layout, vector-width, hardware-feature, and math-mode policy. Structured
+GEMM/conv/attention should prefer tuned libraries; generated templates are
+primarily for pointwise, reduction, indexing, and fusion glue.
+
+CPU elementwise arithmetic and unary operations now use one operation-family
+dispatcher with typed F16/BF16/F32/F64 kernels for every layout. The shared
+unary/binary iteration plans supply allocation-free zero-stride indexing for
+general broadcast/views, remove unit axes, coalesce compatible dimensions, and
+use a shared serial odometer with a tight inner loop. F32/F64 contiguous and
+scalar-broadcast arithmetic uses runtime-selected AVX2 on x86-64 with scalar
+tails. At 2 Mi elements, Rayon partitions dense work into measured 128
+Ki-element chunks that reuse the same allocation-free AVX2 writers. A single
+dtype-family projection macro also maps those writers onto normalized
+dense-broadcast plans with contiguous/scalar inner strides; generic arbitrary-
+stride loops use Rayon from 256 Ki.
+
+The target GPU design uses a **3-tier autotuning engine** without requiring
+launch boilerplate from the end-user. Candidate enumeration, typed problem
+keys, synchronized CUDA-event median selection, compute-capability identity,
+and a bounded device/workload cache are implemented and consumed by
+pointwise/reduction dispatch. Tier 3 is therefore implemented for these two
+families; static-shape and occupancy-driven pruning remain architectural
+targets:
 
 1. **Tier 1: Proc-Macro (`cuda_launch_config!`)**: Pre-computes block/grid constants for static shapes at compile time ($0\text{ ns}$ runtime cost).
 2. **Tier 2: Hardware Occupancy (`cudaOccupancyMaxPotentialBlockSize`)**: Computes optimal block sizes ($32 \dots 1024$) and grid sizes ($N_{\text{SM}} \times 8$) based on CUDA device attributes.
 3. **Tier 3: Empirical Profiling (`features = ["autotune"]`)**: Benchmarks matrix/kernel shape candidates on iteration 1 and caches the fastest configuration in `LRUCache<KernelKey, LaunchConfig>`.
+
+The implemented CUDA foundation is narrower: buffers and host staging retain
+F16/BF16/F32/F64 byte widths, one unary/binary source-template family renders
+typed storage and compute conversions with dtype-specific keys, and the raw
+launch ABI checks rendered dtype/width plus all 32-bit metadata before GPU
+work. Dense pointwise dispatch distinguishes scalar ILP (`u1`/`u2`/`u4`) from
+aligned packed access (`half2`/`bfloat162`/`float4`/`double2`), with masked
+scalar tails for incomplete packets. `SupportsDType` remains F32-only because
+normalization, shape, embedding, loss, quantization, and gradient paths are not
+all dtype-safe yet. See `docs/DTYPE_KERNEL_ARCHITECTURE.md` for the physical
+milestone order and performance gates.
+
+CUDA reduction source is generated lazily by dtype, operation, layout, and
+indexed/non-indexed ABI. F16/BF16 accumulate in F32; F32/F64 remain native.
+Contiguous last-axis reductions use warp shuffles and one shared value per warp,
+while arbitrary views use the checked strided template. Do not restore the
+removed checked-in F32-only `reduce.cu` module.
+
+CUDA normalization source is also generated lazily. Layer norm uses per-thread
+Welford state, warp shuffles, one shared record per warp, and a fused affine
+write; batch-norm inference shares the storage/compute conversion vocabulary.
+The obsolete F32-only `norm.cu` module was removed. Keep non-contiguous views
+on an explicit fallback/error path until a layout-aware implementation exists;
+never reinterpret them as dense rows.
+
+`kindle-backends/src/dtype_policy.rs` is the authoritative capability seam.
+It distinguishes the ability to store bytes from initialization and operation-
+family support and resolves storage, compute, accumulator, and output dtypes.
+Do not add backend-local dtype allowlists; extend this table and its exhaustive
+matrix tests instead.
+
+The shared iteration planner classifies contiguous, scalar-left, scalar-right,
+and strided pointwise layouts. CUDA uses distinct template/cache families for
+these ABIs: dense/scalar launches pass only pointers, offsets, and element
+count, while the correctness fallback alone uploads shape and stride arrays.
 
 ---
 
@@ -175,5 +235,10 @@ fn main() -> Result<()> {
 - [x] Create CUDA Grid-Stride kernels and autotuning engine specification.
 - [x] Clean up legacy backend references (`metal`, `candle`) from active targets.
 - [ ] Refactor `kindle-backends` to export `KindleBackend<T, D>` with `BackendDevice<T>` trait.
-- [ ] Implement `autotune` LRU cache in `cuda/gpu.rs`.
+- [x] Implement a bounded `autotune` launch-result cache with canonical typed
+      problem keys and pointwise/reduction dispatch integration.
+- [x] Measure pointwise/reduction candidates with synchronized CUDA events and
+      scope results by compute capability.
+- [ ] Add occupancy pruning, device UUID/driver/compiler identity, concurrent
+      first-use suppression, and persistent/telemetrized winning launch plans.
 - [ ] Build PyTorch & NumPy comparison benchmark suite in `benches/`.

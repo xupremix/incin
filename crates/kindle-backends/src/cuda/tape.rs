@@ -47,6 +47,7 @@ pub(crate) fn backward(loss: &CudaStorage) -> Result<CudaGrads> {
 
     let buf = CudaBuffer {
         len: numel,
+        dtype: loss.buffer.dtype,
         data: alloc::sync::Arc::new(u8_slice),
         device: loss.buffer.device.clone(),
         device_id,
@@ -113,5 +114,5 @@ fn sum_dim_squeeze(storage: &CudaStorage, axis: usize) -> CudaStorage {
 }
 
 fn sum_dim_keepdim(storage: &CudaStorage, axis: usize) -> CudaStorage {
-    crate::cuda::ops::reduce::launch_reduce_op("sum", "a + b", "", storage, axis, true).unwrap()
+    crate::cuda::ops::reduce::launch_reduce_op("sum", storage, axis, true).unwrap()
 }

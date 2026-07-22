@@ -39,6 +39,7 @@
 pub mod conv;
 /// `elementwise`.
 pub mod elementwise;
+pub(crate) mod elementwise_kernel;
 /// `embedding`.
 pub mod embedding;
 /// `loss`.

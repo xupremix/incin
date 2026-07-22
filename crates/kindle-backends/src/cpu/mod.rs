@@ -67,16 +67,7 @@ impl<T: DType, D: Device> kindle_core::prelude::Backend for CpuBackendImpl<T, D>
     }
 
     fn storage_dtype<K: DType>(t: &Self::Storage<K>) -> Option<DTypeId> {
-        Some(match &*t.buffer {
-            CpuBuffer::F32(_) => DTypeId::F32,
-            CpuBuffer::F64(_) => DTypeId::F64,
-            CpuBuffer::U8(_) => DTypeId::U8,
-            CpuBuffer::U32(_) => DTypeId::U32,
-            CpuBuffer::I64(_) => DTypeId::I64,
-            CpuBuffer::F16(_) => DTypeId::F16,
-            CpuBuffer::BF16(_) => DTypeId::BF16,
-            CpuBuffer::Q8_0(_) => DTypeId::Q8_0,
-        })
+        Some(t.buffer.dtype_id())
     }
 
     fn storage_device<K: DType>(_t: &Self::Storage<K>) -> Option<DeviceId> {

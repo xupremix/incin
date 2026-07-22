@@ -1,5 +1,6 @@
 use alloc::sync::Arc;
 use core::sync::atomic::{AtomicU64, Ordering};
+use kindle_core::prelude::DTypeId;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct TensorId(u64);
@@ -15,6 +16,7 @@ impl TensorId {
 #[derive(Debug)]
 pub struct CudaBuffer {
     pub(crate) len: usize,
+    pub(crate) dtype: DTypeId,
     pub(crate) data: Arc<cudarc::driver::CudaSlice<u8>>,
     pub(crate) device: Arc<cudarc::driver::CudaContext>,
     pub(crate) device_id: usize,
@@ -22,7 +24,10 @@ pub struct CudaBuffer {
 
 impl PartialEq for CudaBuffer {
     fn eq(&self, other: &Self) -> bool {
-        self.len == other.len && Arc::ptr_eq(&self.data, &other.data)
+        self.len == other.len
+            && self.dtype == other.dtype
+            && self.device_id == other.device_id
+            && Arc::ptr_eq(&self.data, &other.data)
     }
 }
 
@@ -30,6 +35,7 @@ impl Clone for CudaBuffer {
     fn clone(&self) -> Self {
         CudaBuffer {
             len: self.len,
+            dtype: self.dtype,
             data: self.data.clone(),
             device: self.device.clone(),
             device_id: self.device_id,

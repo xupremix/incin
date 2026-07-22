@@ -1,4 +1,5 @@
 use crate::cuda::storage::CudaStorage;
+use crate::dtype_policy::{BackendFamily, OperationFamily, resolve_dtype_policy};
 use alloc::sync::Arc;
 use kindle_core::prelude::*;
 
@@ -11,15 +12,8 @@ impl<T: DType, D: Device> SupportsDType<f32> for CudaBackendImpl<T, D> {}
 
 impl<T: DType, D: Device> SupportsDType<Dyn> for CudaBackendImpl<T, D> {
     fn resolve_dtype(field: &DTypeId, _device: &DeviceId) -> Result<DTypeId> {
-        if *field == DTypeId::F32 {
-            Ok(*field)
-        } else {
-            Err(Error::UnsupportedDType {
-                dtype: *field,
-                backend: "Cuda",
-                op: "create",
-            })
-        }
+        resolve_dtype_policy(BackendFamily::Cuda, OperationFamily::Fill, *field, "create")
+            .map(|_| *field)
     }
 }
 
@@ -220,7 +214,7 @@ impl<T: DType, D: Device> CreationOps<Self> for CudaBackendImpl<T, D> {
             shape,
             dtype,
             device,
-            vec![0.0; shape.iter().product()],
+            vec![0.0; checked_numel(shape)?],
             "zeros",
         )
     }
@@ -230,7 +224,7 @@ impl<T: DType, D: Device> CreationOps<Self> for CudaBackendImpl<T, D> {
             shape,
             dtype,
             device,
-            vec![1.0; shape.iter().product()],
+            vec![1.0; checked_numel(shape)?],
             "ones",
         )
     }
@@ -238,14 +232,14 @@ impl<T: DType, D: Device> CreationOps<Self> for CudaBackendImpl<T, D> {
     fn rand<K: DType>(shape: &[usize], dtype: DTypeId, device: &DeviceId) -> Result<CudaStorage> {
         use rand::Rng;
         let mut rng = rand::thread_rng();
-        let values = (0..shape.iter().product()).map(|_| rng.r#gen()).collect();
+        let values = (0..checked_numel(shape)?).map(|_| rng.r#gen()).collect();
         cuda_from_f32(shape, dtype, device, values, "rand")
     }
 
     fn randn<K: DType>(shape: &[usize], dtype: DTypeId, device: &DeviceId) -> Result<CudaStorage> {
         use rand_distr::{Distribution, StandardNormal};
         let mut rng = rand::thread_rng();
-        let values = (0..shape.iter().product())
+        let values = (0..checked_numel(shape)?)
             .map(|_| StandardNormal.sample(&mut rng))
             .collect();
         cuda_from_f32(shape, dtype, device, values, "randn")
@@ -287,8 +281,8 @@ impl<T: DType, D: Device> Backend for CudaBackendImpl<T, D> {
     fn shape<K: DType>(t: &Self::Storage<K>) -> alloc::vec::Vec<usize> {
         t.shape.clone()
     }
-    fn storage_dtype<K: DType>(_t: &Self::Storage<K>) -> Option<DTypeId> {
-        Some(DTypeId::F32)
+    fn storage_dtype<K: DType>(t: &Self::Storage<K>) -> Option<DTypeId> {
+        Some(t.buffer.dtype)
     }
     fn storage_device<K: DType>(t: &Self::Storage<K>) -> Option<DeviceId> {
         Some(DeviceId::cuda(t.buffer.device_id))
@@ -312,11 +306,20 @@ impl<T: DType, D: Device> Backend for CudaBackendImpl<T, D> {
         Ok(grads.get(t.id).cloned())
     }
     fn to_bytes<K: DType>(t: &Self::Storage<K>) -> Result<alloc::vec::Vec<u8>> {
-        t.buffer
+        let bytes = t
+            .buffer
             .device
             .default_stream()
             .clone_dtoh(&*t.buffer.data)
-            .map_err(|error| Error::Msg(format!("CUDA download failed: {error:?}")))
+            .map_err(|error| Error::Msg(format!("CUDA download failed: {error:?}")))?;
+        let expected = checked_storage_byte_len(t.buffer.len, t.buffer.dtype)?;
+        if bytes.len() != expected {
+            return Err(Error::InvalidByteLength {
+                expected,
+                got: bytes.len(),
+            });
+        }
+        Ok(bytes)
     }
     fn from_bytes<K: DType>(
         bytes: &[u8],
@@ -324,15 +327,16 @@ impl<T: DType, D: Device> Backend for CudaBackendImpl<T, D> {
         dtype: DTypeId,
         device: &DeviceId,
     ) -> Result<Self::Storage<K>> {
-        validate_cuda(dtype, device, "from_bytes")?;
-        let expected = shape.iter().product::<usize>() * 4;
+        validate_cuda_storage(dtype, device, "from_bytes")?;
+        let numel = checked_numel(shape)?;
+        let expected = checked_storage_byte_len(numel, dtype)?;
         if bytes.len() != expected {
             return Err(Error::InvalidByteLength {
                 expected,
                 got: bytes.len(),
             });
         }
-        cuda_from_bytes(shape, device.ordinal(), bytes)
+        cuda_from_bytes(shape, dtype, device.ordinal(), bytes)
     }
     fn var_as_tensor<K: DType>(var: &Self::RawVar) -> Result<Self::Storage<K>> {
         Ok(var.storage.clone())
@@ -347,20 +351,44 @@ impl<T: DType, D: Device> Backend for CudaBackendImpl<T, D> {
 }
 
 fn validate_cuda(dtype: DTypeId, device: &DeviceId, op: &'static str) -> Result<()> {
+    validate_cuda_device(device)?;
+    resolve_dtype_policy(BackendFamily::Cuda, OperationFamily::Fill, dtype, op).map(|_| ())
+}
+
+fn validate_cuda_storage(dtype: DTypeId, device: &DeviceId, op: &'static str) -> Result<()> {
+    validate_cuda_device(device)?;
+    validate_cuda_storage_dtype(dtype, op)
+}
+
+fn validate_cuda_storage_dtype(dtype: DTypeId, op: &'static str) -> Result<()> {
+    resolve_dtype_policy(BackendFamily::Cuda, OperationFamily::Storage, dtype, op).map(|_| ())
+}
+
+fn validate_cuda_device(device: &DeviceId) -> Result<()> {
     if device.kind() != DeviceKind::Cuda {
         return Err(Error::DeviceInitializationError {
             expected: "cuda".into(),
             got: format!("{:?}", device.kind()),
         });
     }
-    if dtype != DTypeId::F32 {
-        return Err(Error::UnsupportedDType {
-            dtype,
-            backend: "Cuda",
-            op,
-        });
-    }
     Ok(())
+}
+
+fn checked_numel(shape: &[usize]) -> Result<usize> {
+    shape.iter().try_fold(1usize, |numel, &dimension| {
+        numel
+            .checked_mul(dimension)
+            .ok_or_else(|| Error::Msg(format!("CUDA tensor shape overflows usize: {shape:?}")))
+    })
+}
+
+fn checked_storage_byte_len(numel: usize, dtype: DTypeId) -> Result<usize> {
+    numel.checked_mul(dtype.element_size()).ok_or_else(|| {
+        Error::Msg(format!(
+            "CUDA storage byte length overflow: {numel} {:?} elements",
+            dtype
+        ))
+    })
 }
 
 fn cuda_from_f32(
@@ -371,10 +399,29 @@ fn cuda_from_f32(
     op: &'static str,
 ) -> Result<CudaStorage> {
     validate_cuda(dtype, device, op)?;
-    cuda_from_bytes(shape, device.ordinal(), bytemuck::cast_slice(&values))
+    cuda_from_bytes(
+        shape,
+        dtype,
+        device.ordinal(),
+        bytemuck::cast_slice(&values),
+    )
 }
 
-fn cuda_from_bytes(shape: &[usize], ordinal: usize, bytes: &[u8]) -> Result<CudaStorage> {
+fn cuda_from_bytes(
+    shape: &[usize],
+    dtype: DTypeId,
+    ordinal: usize,
+    bytes: &[u8],
+) -> Result<CudaStorage> {
+    validate_cuda_storage_dtype(dtype, "from_bytes")?;
+    let numel = checked_numel(shape)?;
+    let expected = checked_storage_byte_len(numel, dtype)?;
+    if bytes.len() != expected {
+        return Err(Error::InvalidByteLength {
+            expected,
+            got: bytes.len(),
+        });
+    }
     let context =
         cudarc::driver::CudaContext::new(ordinal).map_err(|_| Error::InvalidDeviceOrdinal {
             backend: "Cuda",
@@ -385,10 +432,45 @@ fn cuda_from_bytes(shape: &[usize], ordinal: usize, bytes: &[u8]) -> Result<Cuda
         .clone_htod(bytes)
         .map_err(|error| Error::Msg(format!("CUDA upload failed: {error:?}")))?;
     let buffer = crate::cuda::storage::CudaBuffer {
-        len: shape.iter().product(),
+        len: numel,
+        dtype,
         data: Arc::new(data),
         device: context,
         device_id: ordinal,
     };
     Ok(CudaStorage::new(Arc::new(buffer), shape.to_vec()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn byte_length_uses_authoritative_storage_dtype() {
+        assert_eq!(checked_storage_byte_len(7, DTypeId::F16).unwrap(), 14);
+        assert_eq!(checked_storage_byte_len(7, DTypeId::BF16).unwrap(), 14);
+        assert_eq!(checked_storage_byte_len(7, DTypeId::F32).unwrap(), 28);
+        assert_eq!(checked_storage_byte_len(7, DTypeId::F64).unwrap(), 56);
+        assert!(checked_storage_byte_len(usize::MAX, DTypeId::F64).is_err());
+    }
+
+    #[test]
+    fn storage_validation_accepts_renderable_float_family_only() {
+        let device = DeviceId::cuda(0);
+        for dtype in [DTypeId::F16, DTypeId::BF16, DTypeId::F32, DTypeId::F64] {
+            validate_cuda_storage(dtype, &device, "test").unwrap();
+        }
+        assert!(matches!(
+            validate_cuda_storage(DTypeId::I64, &device, "test"),
+            Err(Error::UnsupportedDType { .. })
+        ));
+        assert!(validate_cuda_storage(DTypeId::F32, &DeviceId::cpu(), "test").is_err());
+    }
+
+    #[test]
+    fn shape_cardinality_is_checked_before_allocation() {
+        assert_eq!(checked_numel(&[2, 3, 4]).unwrap(), 24);
+        assert_eq!(checked_numel(&[usize::MAX, 0]).unwrap(), 0);
+        assert!(checked_numel(&[usize::MAX, 2]).is_err());
+    }
 }

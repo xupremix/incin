@@ -1,264 +1,517 @@
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
+use crate::dtype_policy::{BackendFamily, OperationFamily, resolve_dtype_policy};
+use crate::iteration::OperandIteration;
 use alloc::sync::Arc;
-use kindle_core::prelude::Result;
+use kindle_core::prelude::{DTypeId, Error, Result};
+
+fn checked_i32(value: usize, field: &'static str) -> Result<i32> {
+    i32::try_from(value)
+        .map_err(|_| Error::Msg(format!("CUDA reduction {field} {value} exceeds i32 ABI")))
+}
+
+fn checked_i32_vec(values: &[usize], field: &'static str) -> Result<Vec<i32>> {
+    values
+        .iter()
+        .map(|&value| checked_i32(value, field))
+        .collect()
+}
+
+fn checked_byte_len(numel: usize, element_size: usize) -> Result<usize> {
+    numel.checked_mul(element_size).ok_or_else(|| {
+        Error::Msg(format!(
+            "CUDA reduction allocation overflow: {numel} elements of {element_size} bytes"
+        ))
+    })
+}
+
+fn validate_reduction<'a>(
+    storage: &'a CudaStorage,
+    axis: usize,
+    op_name: &'static str,
+) -> Result<(&'a CudaBuffer, usize)> {
+    let buffer = &*storage.buffer;
+    resolve_dtype_policy(
+        BackendFamily::Cuda,
+        OperationFamily::Reduction,
+        buffer.dtype,
+        op_name,
+    )?;
+    if axis >= storage.shape.len() {
+        return Err(Error::Msg(format!(
+            "CUDA reduction axis {axis} is out of bounds for rank {}",
+            storage.shape.len()
+        )));
+    }
+    let reduce_dim_size = storage.shape[axis];
+    if reduce_dim_size == 0 && op_name != "sum" {
+        return Err(Error::Msg(format!(
+            "CUDA {op_name} reduction is undefined for an empty axis"
+        )));
+    }
+    let operand = OperandIteration {
+        strides: storage.strides.clone(),
+        offset: storage.offset,
+    };
+    if let Some(max_index) = operand.max_physical_index(&storage.shape)?
+        && max_index >= buffer.len
+    {
+        return Err(Error::Msg(format!(
+            "CUDA reduction accesses storage index {max_index}, but buffer length is {}",
+            buffer.len
+        )));
+    }
+    Ok((buffer, reduce_dim_size))
+}
+
+fn reduction_shapes(shape: &[usize], axis: usize, keepdim: bool) -> (Vec<usize>, Vec<usize>) {
+    let mut keepdim_shape = shape.to_vec();
+    keepdim_shape[axis] = 1;
+    let final_shape = if keepdim {
+        keepdim_shape.clone()
+    } else {
+        let mut squeezed = keepdim_shape.clone();
+        squeezed.remove(axis);
+        squeezed
+    };
+    (keepdim_shape, final_shape)
+}
+
+fn is_contiguous_last_axis(storage: &CudaStorage, axis: usize) -> bool {
+    axis + 1 == storage.shape.len()
+        && storage.strides == crate::cpu::stride::contiguous_strides(&storage.shape)
+}
+
+struct ReductionLaunchSelection {
+    candidate: crate::tuning::LaunchCandidate,
+    #[cfg(feature = "autotune")]
+    tuning_key: Option<crate::tuning::TuningKey>,
+}
+
+fn reduction_launch_selection(
+    context: &cudarc::driver::CudaContext,
+    kernel: &crate::kernel::RenderedKernel,
+    rows: usize,
+    reduction_size: usize,
+    contiguous_last_axis: bool,
+) -> Result<ReductionLaunchSelection> {
+    let candidates = crate::tuning::reduction_candidates(contiguous_last_axis);
+    let fallback = crate::tuning::default_reduction_candidate(&candidates)?;
+    #[cfg(feature = "autotune")]
+    {
+        let key = crate::tuning::TuningKey::new(
+            crate::tuning::CudaDeviceKey::from_context(context)?,
+            &kernel.key,
+            crate::tuning::WorkloadBucket::reduction(rows, reduction_size),
+        );
+        if let Some(tuned) = crate::tuning::cached_launch(&key)
+            && candidates.contains(&tuned.candidate)
+        {
+            return Ok(ReductionLaunchSelection {
+                candidate: tuned.candidate,
+                tuning_key: None,
+            });
+        }
+        Ok(ReductionLaunchSelection {
+            candidate: fallback,
+            tuning_key: Some(key),
+        })
+    }
+    #[cfg(not(feature = "autotune"))]
+    {
+        let _ = (context, kernel, rows, reduction_size);
+        Ok(ReductionLaunchSelection {
+            candidate: fallback,
+        })
+    }
+}
 
 #[cfg(feature = "cuda")]
-const REDUCE_SRC: &str = include_str!("kernels/reduce.cu");
+fn empirically_select_reduction_candidate<F>(
+    stream: &cudarc::driver::CudaStream,
+    selection: ReductionLaunchSelection,
+    contiguous_last_axis: bool,
+    mut launch: F,
+) -> Result<crate::tuning::LaunchCandidate>
+where
+    F: FnMut(crate::tuning::LaunchCandidate) -> Result<()>,
+{
+    #[cfg(feature = "autotune")]
+    if let Some(key) = selection.tuning_key {
+        let candidates = crate::tuning::reduction_candidates(contiguous_last_axis);
+        let mut measurements = Vec::with_capacity(candidates.len());
+        for candidate in candidates {
+            measurements.push(crate::tuning::measure_cuda_candidate(
+                stream,
+                candidate,
+                || launch(candidate),
+            )?);
+        }
+        return Ok(crate::tuning::record_measurements(key, &measurements)?.candidate);
+    }
+    #[cfg(not(feature = "autotune"))]
+    let _ = (stream, contiguous_last_axis, &mut launch);
+    Ok(selection.candidate)
+}
 
 #[cfg(feature = "cuda")]
-fn ensure_reduce_loaded(device_id: usize) -> Result<()> {
-    if crate::cuda::gpu::cuda_cache::get_module(device_id, "reduce").is_none() {
+fn ensure_reduction_loaded(device_id: usize, kernel: &crate::kernel::RenderedKernel) -> Result<()> {
+    if crate::cuda::gpu::cuda_cache::get_module(device_id, &kernel.cache_key).is_none() {
         let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
-        dispatcher.compile_and_load_kernel("reduce", REDUCE_SRC, "reduce")?;
+        dispatcher.compile_and_load_kernel(
+            &kernel.entry_point,
+            &kernel.source,
+            &kernel.cache_key,
+        )?;
     }
     Ok(())
 }
 
 #[cfg(feature = "cuda")]
 pub(crate) fn launch_reduce_op(
-    op_name: &str,
-    _init_val: &str,
-    _update_op: &str,
+    op_name: &'static str,
     storage: &CudaStorage,
     axis: usize,
     keepdim: bool,
 ) -> Result<CudaStorage> {
-    if true {
-        let b = &*storage.buffer;
-        let device_id = b.device_id;
-        ensure_reduce_loaded(device_id)?;
-
-        let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
-        let f = dispatcher.get_function("reduce", op_name)?;
-        let stream = b.device.default_stream();
-
-        let mut out_shape = storage.shape.clone();
-        if keepdim {
-            out_shape[axis] = 1;
-        } else {
-            out_shape.remove(axis);
-        }
-        let _out_numel: usize = out_shape.iter().product();
-        let ndim = storage.shape.len() as i32;
-
-        let in_shape_h: Vec<i32> = storage.shape.iter().map(|&x| x as i32).collect();
-        let in_strides_h: Vec<i32> = storage.strides.iter().map(|&x| x as i32).collect();
-
-        let mut keepdim_shape = storage.shape.clone();
-        keepdim_shape[axis] = 1;
-        let out_strides_h: Vec<i32> = crate::cpu::stride::contiguous_strides(&keepdim_shape)
-            .iter()
-            .map(|&x| x as i32)
-            .collect();
-        let keepdim_shape_h: Vec<i32> = keepdim_shape.iter().map(|&x| x as i32).collect();
-
-        let in_shape_dev = stream.clone_htod(&in_shape_h).unwrap();
-        let in_strides_dev = stream.clone_htod(&in_strides_h).unwrap();
-        let out_shape_dev = stream.clone_htod(&keepdim_shape_h).unwrap();
-        let out_strides_dev = stream.clone_htod(&out_strides_h).unwrap();
-
-        let keepdim_numel: usize = keepdim_shape.iter().product();
-        let mut out_b = CudaBuffer {
-            len: keepdim_numel,
-            data: Arc::new(stream.alloc_zeros::<u8>(keepdim_numel * 4).unwrap()),
-            device: b.device.clone(),
-            device_id,
-        };
-
-        let cfg = cudarc::driver::LaunchConfig {
-            grid_dim: ((keepdim_numel as u32).div_ceil(256), 1, 1),
-            block_dim: (256, 1, 1),
-            shared_mem_bytes: 0,
-        };
-
-        unsafe {
-            let in_f32 = b.data.transmute::<f32>(b.len).unwrap();
-            // out_b.data was just allocated above (Arc::new), so it is uniquely owned
-            // here (refcount 1) and Arc::get_mut succeeds without cloning first.
-            let out_slice_u8: &mut cudarc::driver::CudaSlice<u8> = Arc::get_mut(&mut out_b.data)
-                .expect("out_b.data is freshly allocated and uniquely owned here");
-            let mut out_f32 = out_slice_u8.transmute_mut::<f32>(keepdim_numel).unwrap();
-
-            use cudarc::driver::PushKernelArg;
-            stream
-                .launch_builder(&f)
-                .arg(&in_f32)
-                .arg(&mut out_f32)
-                .arg(&in_shape_dev)
-                .arg(&in_strides_dev)
-                .arg(&out_shape_dev)
-                .arg(&out_strides_dev)
-                .arg(&(storage.offset as i32))
-                .arg(&0i32)
-                .arg(&(axis as i32))
-                .arg(&(storage.shape[axis] as i32))
-                .arg(&ndim)
-                .arg(&(keepdim_numel as i32))
-                .launch(cfg)
-                .map_err(|e| {
-                    kindle_core::prelude::Error::Msg(format!("{op_name} launch failed: {e:?}"))
-                })?;
-        }
-
-        let out_strides_final = crate::cpu::stride::contiguous_strides(&out_shape);
-        let keepdim_storage = CudaStorage {
-            buffer: Arc::new(out_b),
-            shape: keepdim_shape.clone(),
-            strides: crate::cpu::stride::contiguous_strides(&keepdim_shape),
-            offset: 0,
-            id: crate::cuda::storage::TensorId::next(),
-        };
-
-        if keepdim || out_shape == keepdim_shape {
-            Ok(keepdim_storage)
-        } else {
-            Ok(CudaStorage {
-                shape: out_shape.clone(),
-                strides: out_strides_final,
-                ..keepdim_storage
-            })
-        }
-    } else {
-        Err(kindle_core::prelude::Error::Msg(
-            "launch_reduce_op: input must be on CUDA".into(),
-        ))
+    let (buffer, reduce_dim_size) = validate_reduction(storage, axis, op_name)?;
+    let (keepdim_shape, final_shape) = reduction_shapes(&storage.shape, axis, keepdim);
+    let out_numel = keepdim_shape.iter().try_fold(1usize, |product, &dim| {
+        product
+            .checked_mul(dim)
+            .ok_or_else(|| Error::Msg("CUDA reduction output element count overflow".into()))
+    })?;
+    let fast = is_contiguous_last_axis(storage, axis);
+    let kernel = crate::kernel::render_cuda_reduction(op_name, buffer.dtype, false, fast)?;
+    if kernel.dtype != buffer.dtype || kernel.element_size != buffer.dtype.element_size() {
+        return Err(Error::Msg(
+            "CUDA reduction kernel/storage ABI mismatch".into(),
+        ));
     }
+    let launch_selection =
+        reduction_launch_selection(&buffer.device, &kernel, out_numel, reduce_dim_size, fast)?;
+
+    let stream = buffer.device.default_stream();
+    let byte_len = checked_byte_len(out_numel, kernel.element_size)?;
+    let mut out_buffer = CudaBuffer {
+        len: out_numel,
+        dtype: buffer.dtype,
+        data: Arc::new(stream.alloc_zeros::<u8>(byte_len).map_err(|error| {
+            Error::Msg(format!(
+                "CUDA reduction output allocation failed: {error:?}"
+            ))
+        })?),
+        device: buffer.device.clone(),
+        device_id: buffer.device_id,
+    };
+    if out_numel == 0 {
+        return Ok(CudaStorage::new(Arc::new(out_buffer), final_shape));
+    }
+
+    ensure_reduction_loaded(buffer.device_id, &kernel)?;
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(buffer.device_id);
+    let function = dispatcher.get_function(&kernel.cache_key, &kernel.entry_point)?;
+    let in_offset = checked_i32(storage.offset, "input offset")?;
+    let reduce_dim = checked_i32(reduce_dim_size, "axis length")?;
+    let out_numel_i32 = checked_i32(out_numel, "output element count")?;
+
+    unsafe {
+        let out_u8 = Arc::get_mut(&mut out_buffer.data).ok_or_else(|| {
+            Error::Msg("fresh CUDA reduction output buffer was unexpectedly shared".into())
+        })?;
+        use cudarc::driver::PushKernelArg;
+        if fast {
+            let policy = resolve_dtype_policy(
+                BackendFamily::Cuda,
+                OperationFamily::Reduction,
+                buffer.dtype,
+                op_name,
+            )?;
+            let grid = u32::try_from(out_numel).map_err(|_| {
+                Error::Msg(format!(
+                    "CUDA reduction block count {out_numel} exceeds u32 grid ABI"
+                ))
+            })?;
+            let mut launch = |candidate: crate::tuning::LaunchCandidate| -> Result<()> {
+                let block_size = u32::from(candidate.block_size);
+                let shared_mem_bytes = (usize::from(candidate.block_size) / 32)
+                    .checked_mul(policy.accumulator.element_size())
+                    .and_then(|bytes| u32::try_from(bytes).ok())
+                    .ok_or_else(|| {
+                        Error::Msg("CUDA reduction shared-memory size overflow".into())
+                    })?;
+                let config = cudarc::driver::LaunchConfig {
+                    grid_dim: (grid, 1, 1),
+                    block_dim: (block_size, 1, 1),
+                    shared_mem_bytes,
+                };
+                stream
+                    .launch_builder(&function)
+                    .arg(&*buffer.data)
+                    .arg(&mut *out_u8)
+                    .arg(&in_offset)
+                    .arg(&reduce_dim)
+                    .arg(&out_numel_i32)
+                    .launch(config)
+                    .map(|_| ())
+                    .map_err(|error| {
+                        Error::Msg(format!("CUDA {op_name} reduction launch failed: {error:?}"))
+                    })
+            };
+            let launch_candidate = empirically_select_reduction_candidate(
+                &stream,
+                launch_selection,
+                true,
+                &mut launch,
+            )?;
+            launch(launch_candidate)
+        } else {
+            let in_strides = checked_i32_vec(&storage.strides, "input stride")?;
+            let out_shape = checked_i32_vec(&keepdim_shape, "output shape")?;
+            let out_strides_host = crate::cpu::stride::contiguous_strides(&keepdim_shape);
+            let out_strides = checked_i32_vec(&out_strides_host, "output stride")?;
+            let in_strides_dev = stream.clone_htod(&in_strides).map_err(|error| {
+                Error::Msg(format!("CUDA reduction stride upload failed: {error:?}"))
+            })?;
+            let out_shape_dev = stream.clone_htod(&out_shape).map_err(|error| {
+                Error::Msg(format!("CUDA reduction shape upload failed: {error:?}"))
+            })?;
+            let out_strides_dev = stream.clone_htod(&out_strides).map_err(|error| {
+                Error::Msg(format!(
+                    "CUDA reduction output-stride upload failed: {error:?}"
+                ))
+            })?;
+            let ndim = checked_i32(storage.shape.len(), "rank")?;
+            let work_items = u32::try_from(out_numel).map_err(|_| {
+                Error::Msg(format!(
+                    "CUDA reduction work-item count {out_numel} exceeds u32 grid ABI"
+                ))
+            })?;
+            let axis_i32 = checked_i32(axis, "axis")?;
+            let mut launch = |candidate: crate::tuning::LaunchCandidate| -> Result<()> {
+                let block_size = u32::from(candidate.block_size);
+                let config = cudarc::driver::LaunchConfig {
+                    grid_dim: (work_items.div_ceil(block_size), 1, 1),
+                    block_dim: (block_size, 1, 1),
+                    shared_mem_bytes: 0,
+                };
+                stream
+                    .launch_builder(&function)
+                    .arg(&*buffer.data)
+                    .arg(&mut *out_u8)
+                    .arg(&in_strides_dev)
+                    .arg(&out_shape_dev)
+                    .arg(&out_strides_dev)
+                    .arg(&in_offset)
+                    .arg(&0i32)
+                    .arg(&axis_i32)
+                    .arg(&reduce_dim)
+                    .arg(&ndim)
+                    .arg(&out_numel_i32)
+                    .launch(config)
+                    .map(|_| ())
+                    .map_err(|error| {
+                        Error::Msg(format!("CUDA {op_name} reduction launch failed: {error:?}"))
+                    })
+            };
+            let launch_candidate = empirically_select_reduction_candidate(
+                &stream,
+                launch_selection,
+                false,
+                &mut launch,
+            )?;
+            launch(launch_candidate)
+        }?;
+    }
+
+    Ok(CudaStorage::new(Arc::new(out_buffer), final_shape))
 }
 
 #[cfg(feature = "cuda")]
 pub(crate) fn launch_reduce_with_indices_op(
-    op_name: &str,
-    _init_val: &str,
-    _update_op: &str,
+    op_name: &'static str,
     storage: &CudaStorage,
     axis: usize,
-    _keepdim: bool,
+    keepdim: bool,
 ) -> Result<(CudaStorage, CudaStorage)> {
-    if true {
-        let b = &*storage.buffer;
-        let device_id = b.device_id;
-        ensure_reduce_loaded(device_id)?;
-
-        let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
-        let f = dispatcher.get_function("reduce", op_name)?;
-        let stream = b.device.default_stream();
-
-        let mut out_shape = storage.shape.clone();
-        out_shape[axis] = 1;
-        let out_numel: usize = out_shape.iter().product();
-        let ndim = storage.shape.len() as i32;
-
-        let in_shape_h: Vec<i32> = storage.shape.iter().map(|&x| x as i32).collect();
-        let in_strides_h: Vec<i32> = storage.strides.iter().map(|&x| x as i32).collect();
-        let out_strides_h: Vec<i32> = crate::cpu::stride::contiguous_strides(&out_shape)
-            .iter()
-            .map(|&x| x as i32)
-            .collect();
-        let out_shape_h: Vec<i32> = out_shape.iter().map(|&x| x as i32).collect();
-
-        let in_shape_dev = stream.clone_htod(&in_shape_h).unwrap();
-        let in_strides_dev = stream.clone_htod(&in_strides_h).unwrap();
-        let out_shape_dev = stream.clone_htod(&out_shape_h).unwrap();
-        let out_strides_dev = stream.clone_htod(&out_strides_h).unwrap();
-
-        let mut val_b = CudaBuffer {
-            len: out_numel,
-            data: Arc::new(stream.alloc_zeros::<u8>(out_numel * 4).unwrap()),
-            device: b.device.clone(),
-            device_id,
-        };
-        let mut idx_b = CudaBuffer {
-            len: out_numel,
-            data: Arc::new(stream.alloc_zeros::<u8>(out_numel * 4).unwrap()),
-            device: b.device.clone(),
-            device_id,
-        };
-
-        let cfg = cudarc::driver::LaunchConfig {
-            grid_dim: ((out_numel as u32).div_ceil(256), 1, 1),
-            block_dim: (256, 1, 1),
-            shared_mem_bytes: 0,
-        };
-
-        unsafe {
-            let in_f32 = b.data.transmute::<f32>(b.len).unwrap();
-            // val_b.data / idx_b.data were just allocated above (Arc::new), so they
-            // are uniquely owned here (refcount 1) and Arc::get_mut succeeds without
-            // cloning first.
-            let val_u8: &mut cudarc::driver::CudaSlice<u8> = Arc::get_mut(&mut val_b.data)
-                .expect("val_b.data is freshly allocated and uniquely owned here");
-            let mut val_f32 = val_u8.transmute_mut::<f32>(out_numel).unwrap();
-
-            let idx_u8: &mut cudarc::driver::CudaSlice<u8> = Arc::get_mut(&mut idx_b.data)
-                .expect("idx_b.data is freshly allocated and uniquely owned here");
-            let mut idx_u32 = idx_u8.transmute_mut::<u32>(out_numel).unwrap();
-
-            use cudarc::driver::PushKernelArg;
+    let (buffer, reduce_dim_size) = validate_reduction(storage, axis, op_name)?;
+    let (keepdim_shape, final_shape) = reduction_shapes(&storage.shape, axis, keepdim);
+    let out_numel = keepdim_shape.iter().try_fold(1usize, |product, &dim| {
+        product
+            .checked_mul(dim)
+            .ok_or_else(|| Error::Msg("CUDA indexed reduction output size overflow".into()))
+    })?;
+    let kernel = crate::kernel::render_cuda_reduction(op_name, buffer.dtype, true, false)?;
+    let launch_selection =
+        reduction_launch_selection(&buffer.device, &kernel, out_numel, reduce_dim_size, false)?;
+    let stream = buffer.device.default_stream();
+    let mut value_buffer = CudaBuffer {
+        len: out_numel,
+        dtype: buffer.dtype,
+        data: Arc::new(
             stream
-                .launch_builder(&f)
-                .arg(&in_f32)
-                .arg(&mut val_f32)
-                .arg(&mut idx_u32)
-                .arg(&in_shape_dev)
+                .alloc_zeros::<u8>(checked_byte_len(out_numel, kernel.element_size)?)
+                .map_err(|error| {
+                    Error::Msg(format!("CUDA reduction value allocation failed: {error:?}"))
+                })?,
+        ),
+        device: buffer.device.clone(),
+        device_id: buffer.device_id,
+    };
+    let mut index_buffer = CudaBuffer {
+        len: out_numel,
+        dtype: DTypeId::U32,
+        data: Arc::new(
+            stream
+                .alloc_zeros::<u8>(checked_byte_len(out_numel, DTypeId::U32.element_size())?)
+                .map_err(|error| {
+                    Error::Msg(format!("CUDA reduction index allocation failed: {error:?}"))
+                })?,
+        ),
+        device: buffer.device.clone(),
+        device_id: buffer.device_id,
+    };
+    if out_numel == 0 {
+        return Ok((
+            CudaStorage::new(Arc::new(value_buffer), final_shape.clone()),
+            CudaStorage::new(Arc::new(index_buffer), final_shape),
+        ));
+    }
+
+    ensure_reduction_loaded(buffer.device_id, &kernel)?;
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(buffer.device_id);
+    let function = dispatcher.get_function(&kernel.cache_key, &kernel.entry_point)?;
+    let in_strides = checked_i32_vec(&storage.strides, "input stride")?;
+    let out_shape = checked_i32_vec(&keepdim_shape, "output shape")?;
+    let out_strides_host = crate::cpu::stride::contiguous_strides(&keepdim_shape);
+    let out_strides = checked_i32_vec(&out_strides_host, "output stride")?;
+    let in_strides_dev = stream.clone_htod(&in_strides).map_err(|error| {
+        Error::Msg(format!(
+            "CUDA indexed reduction stride upload failed: {error:?}"
+        ))
+    })?;
+    let out_shape_dev = stream.clone_htod(&out_shape).map_err(|error| {
+        Error::Msg(format!(
+            "CUDA indexed reduction shape upload failed: {error:?}"
+        ))
+    })?;
+    let out_strides_dev = stream.clone_htod(&out_strides).map_err(|error| {
+        Error::Msg(format!(
+            "CUDA indexed reduction output-stride upload failed: {error:?}"
+        ))
+    })?;
+    let out_numel_i32 = checked_i32(out_numel, "output element count")?;
+    let work_items = u32::try_from(out_numel).map_err(|_| {
+        Error::Msg(format!(
+            "CUDA indexed reduction work-item count {out_numel} exceeds u32 grid ABI"
+        ))
+    })?;
+
+    unsafe {
+        let value_u8 = Arc::get_mut(&mut value_buffer.data).ok_or_else(|| {
+            Error::Msg("fresh CUDA reduction value buffer was unexpectedly shared".into())
+        })?;
+        let index_u8 = Arc::get_mut(&mut index_buffer.data).ok_or_else(|| {
+            Error::Msg("fresh CUDA reduction index buffer was unexpectedly shared".into())
+        })?;
+        use cudarc::driver::PushKernelArg;
+        let in_offset = checked_i32(storage.offset, "input offset")?;
+        let axis_i32 = checked_i32(axis, "axis")?;
+        let reduce_dim = checked_i32(reduce_dim_size, "axis length")?;
+        let ndim = checked_i32(storage.shape.len(), "rank")?;
+        let mut launch = |candidate: crate::tuning::LaunchCandidate| -> Result<()> {
+            let block_size = u32::from(candidate.block_size);
+            let config = cudarc::driver::LaunchConfig {
+                grid_dim: (work_items.div_ceil(block_size), 1, 1),
+                block_dim: (block_size, 1, 1),
+                shared_mem_bytes: 0,
+            };
+            stream
+                .launch_builder(&function)
+                .arg(&*buffer.data)
+                .arg(&mut *value_u8)
+                .arg(&mut *index_u8)
                 .arg(&in_strides_dev)
                 .arg(&out_shape_dev)
                 .arg(&out_strides_dev)
-                .arg(&(storage.offset as i32))
+                .arg(&in_offset)
                 .arg(&0i32)
-                .arg(&(axis as i32))
-                .arg(&(storage.shape[axis] as i32))
+                .arg(&axis_i32)
+                .arg(&reduce_dim)
                 .arg(&ndim)
-                .arg(&(out_numel as i32))
-                .launch(cfg)
-                .map_err(|e| {
-                    kindle_core::prelude::Error::Msg(format!("{op_name} launch failed: {e:?}"))
-                })?;
-        }
-
-        let out_strides = crate::cpu::stride::contiguous_strides(&out_shape);
-        let val_storage = CudaStorage {
-            buffer: Arc::new(val_b),
-            shape: out_shape.clone(),
-            strides: out_strides.clone(),
-            offset: 0,
-            id: crate::cuda::storage::TensorId::next(),
+                .arg(&out_numel_i32)
+                .launch(config)
+                .map(|_| ())
+                .map_err(|error| {
+                    Error::Msg(format!(
+                        "CUDA indexed {op_name} reduction launch failed: {error:?}"
+                    ))
+                })
         };
-        let idx_storage = CudaStorage {
-            buffer: Arc::new(idx_b),
-            shape: out_shape,
-            strides: out_strides,
-            offset: 0,
-            id: crate::cuda::storage::TensorId::next(),
-        };
-        Ok((val_storage, idx_storage))
-    } else {
-        Err(kindle_core::prelude::Error::Msg(
-            "launch_reduce_with_indices_op: input must be on CUDA".into(),
-        ))
+        let launch_candidate =
+            empirically_select_reduction_candidate(&stream, launch_selection, false, &mut launch)?;
+        launch(launch_candidate)?;
     }
+
+    Ok((
+        CudaStorage::new(Arc::new(value_buffer), final_shape.clone()),
+        CudaStorage::new(Arc::new(index_buffer), final_shape),
+    ))
 }
 
 #[cfg(feature = "cuda")]
 pub(crate) fn launch_reduce_with_indices_host(
-    op_name: &str,
-    init_val: &str,
-    update_op: &str,
+    op_name: &'static str,
     storage: &CudaStorage,
     axis: usize,
     keepdim: bool,
 ) -> Result<(CudaStorage, Vec<usize>)> {
-    let (val_storage, idx_storage) =
-        launch_reduce_with_indices_op(op_name, init_val, update_op, storage, axis, keepdim)?;
-
-    let host_indices = if true {
-        let b = &*idx_storage.buffer;
-        let stream = b.device.default_stream();
-        let dev_u32 = unsafe { b.data.transmute::<u32>(b.len).unwrap() };
-        stream.clone_dtoh(&dev_u32).unwrap()
-    } else {
-        vec![]
+    let (value_storage, index_storage) =
+        launch_reduce_with_indices_op(op_name, storage, axis, keepdim)?;
+    let buffer = &*index_storage.buffer;
+    if buffer.dtype != DTypeId::U32 {
+        return Err(Error::DTypeStorageMismatch {
+            expected: DTypeId::U32,
+            got: buffer.dtype,
+        });
+    }
+    let indices = unsafe {
+        let device_values = buffer.data.transmute::<u32>(buffer.len).ok_or_else(|| {
+            Error::Msg("CUDA reduction index view has invalid byte length".into())
+        })?;
+        buffer
+            .device
+            .default_stream()
+            .clone_dtoh(&device_values)
+            .map_err(|error| {
+                Error::Msg(format!("CUDA reduction index download failed: {error:?}"))
+            })?
     };
+    Ok((
+        value_storage,
+        indices.into_iter().map(|index| index as usize).collect(),
+    ))
+}
 
-    let usize_indices = host_indices.into_iter().map(|x| x as usize).collect();
-    Ok((val_storage, usize_indices))
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn checked_reduction_metadata_rejects_narrowing_and_overflow() {
+        assert_eq!(checked_i32(i32::MAX as usize, "test").unwrap(), i32::MAX);
+        assert!(checked_i32(i32::MAX as usize + 1, "test").is_err());
+        assert!(checked_byte_len(usize::MAX, 2).is_err());
+    }
+
+    #[test]
+    fn reduction_shapes_preserve_or_remove_exactly_one_axis() {
+        assert_eq!(
+            reduction_shapes(&[2, 3, 4], 1, true),
+            (vec![2, 1, 4], vec![2, 1, 4])
+        );
+        assert_eq!(
+            reduction_shapes(&[2, 3, 4], 1, false),
+            (vec![2, 1, 4], vec![2, 4])
+        );
+    }
 }

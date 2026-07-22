@@ -1,5 +1,40 @@
 # Kindle — Release Roadmap
 
+The physical plan for scalable dtype support, reusable kernel templates,
+layout specialization, fusion, autotuning, and performance gates is
+documented in [DType and Kernel Specialization Architecture](docs/DTYPE_KERNEL_ARCHITECTURE.md).
+The first CPU slice now has typed kernels for every float layout, normalized
+and coalesced unary/binary iteration, AVX2 dense arithmetic on x86-64, measured
+serial/Rayon cutoffs, parallel AVX2 chunks, and a median-sampled
+dense-broadcast/reference benchmark. The same writer family is projected over
+vectorizable dense broadcasts rather than generating per-operation kernels.
+CUDA storage/rendering/raw launch ABI are now float-family aware internally and
+all launch metadata is checked before GPU work; public CUDA support stays F32
+until the remaining operation families and real-hardware tests are dtype-safe.
+One centralized policy now separates storage, fill, random, pointwise,
+reduction, and normalization capabilities and resolves storage, compute,
+accumulator, and output dtype for CPU, CUDA, and WGPU.
+CUDA pointwise dispatch now selects metadata-free contiguous and whole-scalar-
+broadcast templates from the normalized plan. Aligned dense views select true
+packed `half2`/`bfloat162`/`float4`/`double2` loads and stores with masked scalar
+tails; unaligned dense views retain separate scalar ILP candidates, and strided
+views retain the generic fallback and distinct cache identity.
+CUDA reductions are also generated from the dtype policy: half formats
+accumulate in F32, F64 stays F64, contiguous last-axis work uses block/warp
+parallel reduction, and arbitrary views retain a checked strided fallback.
+CUDA layer normalization now uses typed Welford accumulation with warp-shuffle
+combination and a fused affine write; batch-normalization inference shares the
+same dtype renderer and checked launch boundary.
+Generated CUDA families now carry typed, schema-versioned specialization keys.
+Pointwise and reduction dispatch enumerate small legal launch candidate sets
+and, with `autotune`, compile legal candidates before timing, run two warmups
+and seven stream-ordered CUDA-event samples per candidate, and cache the median
+winner by device compute capability, canonical problem identity, and workload
+bucket. Without `autotune`, cold selection remains deterministic.
+Non-x86 CPU vector paths, packed CPU half lanes, arbitrary-stride SIMD,
+real-GPU validation, normalization backward kernels, and measured/autotuned GPU
+policy remain.
+
 > **Goal:** Ship stable `0.1.0` crates to crates.io with a public API surface
 > that can evolve without breaking changes in any `0.x` patch release, and
 > with a clearly documented semver contract for the `1.0` boundary.
@@ -381,14 +416,14 @@ combination actually meant what its name said.
   `#[cfg(feature = "cpu")]`-gated assertion that actually exercises
   `Tensor`/`DefaultBackend` end-to-end — confirmed it now runs and passes
   (`cargo test -p kindle --features cpu`).
-- **The 3-tier CUDA autotuning engine described in `PROJECT_MEMORY.md` and
-  `docs/AUTOTUNING_AND_ARCHITECTURE.md` does not exist.** No `autotune`,
-  occupancy-query, `LRUCache`, or cached-`LaunchConfig` code exists anywhere
-  under `cuda/*.rs` — only hardcoded per-call `LaunchConfig` literals (fixed
-  block size 256). This was already an open checkbox in `PROJECT_MEMORY.md`'s
-  status section, but the docs describe it in the present tense as if partially
-  built; it is fully aspirational today. Either scope it as real upcoming work
-  or reframe the docs as a design doc for unbuilt work, not architecture-in-place.
+- **CUDA autotuning — 🟡 FOUNDATION IMPLEMENTED (2026-07-22).** The `autotune`
+  feature now provides typed canonical problem keys, pointwise/reduction launch
+  candidates, synchronized-median winner selection, and a bounded device/shape
+  cache consumed by dispatch. Cold-cache selection is deliberately
+  deterministic and is never stored as benchmark evidence. Pointwise and
+  reduction cold buckets now perform CUDA-event measurement after JIT and use
+  compute-capability identity. Occupancy pruning, concurrent first-use
+  suppression, persistence, and telemetry remain upcoming work.
 
 ---
 
@@ -417,12 +452,13 @@ combination actually meant what its name said.
   `embedding.rs`, `quant.rs`, `reduce.rs`, `norm.rs`): unreachable
   `Err("Not a CUDA buffer")` arms are leftover refactor cruft that hides the
   fact no real type-check happens at those call sites.
-- **Dynamic CUDA kernel source is built by string templating**
-  (`cuda/ops/elementwise.rs`, `ELEMENTWISE_*_TEMPLATE.replace("{OP}", op_expr)`)
-  and compiled at runtime via `nvrtc::compile_ptx`. Currently only fed trusted
-  string literals, so not exploitable today, but this is a compile-injection-
-  shaped pattern — if it's ever extended to accept user-defined ops, it needs
-  sanitization first.
+- **CUDA kernel templates accept trusted internal scalar expressions.** The
+  templates and dtype policy now live in `kernel.rs`, validate operation
+  identifiers, specialize float storage/compute conversions, and use distinct
+  dtype cache keys. Expressions still come only from internal literals. Before
+  supporting user-defined expressions, replace free-form source fragments with
+  a closed scalar IR and renderer so source injection is structurally
+  impossible.
 - **`PROJECT_MEMORY.md` describes `KindleBackend<T, D>` as an already-unified
   backend struct** ("Instead of separate backend structs, kindle uses a single
   unified `KindleBackend<T, D>`..."), but its own status checklist lists this as

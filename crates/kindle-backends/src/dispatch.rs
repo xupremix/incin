@@ -2,6 +2,8 @@
 
 use kindle_core::prelude::*;
 
+use crate::dtype_policy::{BackendFamily, OperationFamily, resolve_dtype_policy};
+
 /// Backend whose concrete implementation is selected from a [`DeviceId`].
 #[derive(Clone)]
 pub struct DispatchBackend<T = f32, D = Dyn>(core::marker::PhantomData<(T, D)>);
@@ -9,21 +11,13 @@ pub struct DispatchBackend<T = f32, D = Dyn>(core::marker::PhantomData<(T, D)>);
 impl<T: DType, D: Device, K: DType> SupportsDType<K> for DispatchBackend<T, D> {
     fn resolve_dtype(field: &K::Field, device: &DeviceId) -> Result<DTypeId> {
         let dtype = K::to_kindle(field);
-        match device.kind() {
-            DeviceKind::Cpu => Ok(dtype),
-            DeviceKind::Wgpu | DeviceKind::Cuda if dtype == DTypeId::F32 => Ok(dtype),
-            DeviceKind::Wgpu => Err(Error::UnsupportedDType {
-                dtype,
-                backend: "Wgpu",
-                op: "create",
-            }),
-            DeviceKind::Cuda => Err(Error::UnsupportedDType {
-                dtype,
-                backend: "Cuda",
-                op: "create",
-            }),
-            _ => Err(Error::BackendUnavailable { backend: "Unknown" }),
-        }
+        let backend = match device.kind() {
+            DeviceKind::Cpu => BackendFamily::Cpu,
+            DeviceKind::Wgpu => BackendFamily::Wgpu,
+            DeviceKind::Cuda => BackendFamily::Cuda,
+            _ => return Err(Error::BackendUnavailable { backend: "Unknown" }),
+        };
+        resolve_dtype_policy(backend, OperationFamily::Fill, dtype, "create").map(|_| dtype)
     }
 }
 

@@ -19,6 +19,7 @@ cpu = []
 cuda = ["dep:cudarc", "kindle-core/cuda"]
 wgpu = ["dep:wgpu", "dep:pollster", "kindle-core/wgpu"]
 fused = []
+autotune = ["cuda"]
 legacy = ["dep:candle-core", "dep:candle-nn"]
 telemetry = ["dep:kindle-telemetry"]
 

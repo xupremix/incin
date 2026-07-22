@@ -43,6 +43,7 @@ pub(crate) fn launch_embedding_forward(
 
         let mut out_b = CudaBuffer {
             len: out_numel,
+            dtype: w_b.dtype,
             data: Arc::new(stream.alloc_zeros::<u8>(out_numel * 4).unwrap()),
             device: w_b.device.clone(),
             device_id,
@@ -116,6 +117,7 @@ pub(crate) fn launch_embedding_backward(
 
         let mut grad_w_b = CudaBuffer {
             len: out_numel,
+            dtype: go_b.dtype,
             data: Arc::new(stream.alloc_zeros::<u8>(out_numel * 4).unwrap()),
             device: go_b.device.clone(),
             device_id,

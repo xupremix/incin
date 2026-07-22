@@ -10,6 +10,15 @@ pub use backend_kind::BackendFor;
 pub mod dispatch;
 pub use dispatch::DispatchBackend;
 
+pub(crate) mod dtype_policy;
+
+#[cfg(any(feature = "cpu", feature = "cuda"))]
+pub(crate) mod iteration;
+#[cfg(feature = "cuda")]
+pub(crate) mod kernel;
+#[cfg(feature = "cuda")]
+pub(crate) mod tuning;
+
 /// Unified backend selected by its float element type and device.
 ///
 /// Static devices resolve to concrete implementations. `KindleBackend<T, Dyn>`
