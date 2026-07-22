@@ -211,6 +211,22 @@ pub(crate) fn matmul_impl(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStora
             // SAFETY: CPU feature checked, arrays are F32.
             unsafe { f32_matmul_avx2(m, k, n, lhs, rhs, &mut out_data) }
         }
+    } else if can_use_avx2 {
+        #[cfg(target_arch = "aarch64")]
+        {
+            unsafe { f32_matmul_neon(m, k, n, lhs, rhs, &mut out_data) }
+        }
+        #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+        {
+            unsafe { f32_matmul_wasm(m, k, n, lhs, rhs, &mut out_data) }
+        }
+        #[cfg(not(any(
+            target_arch = "aarch64",
+            all(target_arch = "wasm32", target_feature = "simd128")
+        )))]
+        {
+            f32_matmul_scalar(m, k, n, lhs, rhs, &mut out_data);
+        }
     } else {
         f32_matmul_scalar(m, k, n, lhs, rhs, &mut out_data);
     }
@@ -314,6 +330,94 @@ unsafe fn f32_matmul_avx2(
                     let mut c = _mm256_loadu_ps(out.as_ptr().add(out_row_start + ni));
                     c = _mm256_fmadd_ps(a_vec, b, c);
                     _mm256_storeu_ps(out.as_mut_ptr().add(out_row_start + ni), c);
+                }
+            }
+
+            for ni in n_vec..n {
+                out[out_row_start + ni] += a_val * rhs_data[rhs_row_start + ni];
+            }
+        }
+    }
+}
+
+#[cfg(target_arch = "aarch64")]
+#[inline]
+unsafe fn f32_matmul_neon(
+    m: usize,
+    k: usize,
+    n: usize,
+    lhs: &CpuStorage,
+    rhs: &CpuStorage,
+    out: &mut [f32],
+) {
+    use core::arch::aarch64::{vdupq_n_f32, vfmaq_f32, vld1q_f32, vst1q_f32};
+
+    let rhs_stride_k = rhs.strides[0];
+    let rhs_data = match &*rhs.buffer {
+        CpuBuffer::F32(v) => v,
+        _ => return,
+    };
+
+    let n_vec = n - (n % 4);
+
+    for mi in 0..m {
+        for ki in 0..k {
+            let a_val = lhs.get(&[mi, ki]) as f32;
+            let a_vec = unsafe { vdupq_n_f32(a_val) };
+
+            let rhs_row_start = rhs.offset + ki * rhs_stride_k;
+            let out_row_start = mi * n;
+
+            for ni in (0..n_vec).step_by(4) {
+                unsafe {
+                    let b = vld1q_f32(rhs_data.as_ptr().add(rhs_row_start + ni));
+                    let c = vld1q_f32(out.as_ptr().add(out_row_start + ni));
+                    let result = vfmaq_f32(c, a_vec, b);
+                    vst1q_f32(out.as_mut_ptr().add(out_row_start + ni), result);
+                }
+            }
+
+            for ni in n_vec..n {
+                out[out_row_start + ni] += a_val * rhs_data[rhs_row_start + ni];
+            }
+        }
+    }
+}
+
+#[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+#[inline]
+unsafe fn f32_matmul_wasm(
+    m: usize,
+    k: usize,
+    n: usize,
+    lhs: &CpuStorage,
+    rhs: &CpuStorage,
+    out: &mut [f32],
+) {
+    use core::arch::wasm32::{f32x4_add, f32x4_mul, f32x4_splat, v128_load, v128_store};
+
+    let rhs_stride_k = rhs.strides[0];
+    let rhs_data = match &*rhs.buffer {
+        CpuBuffer::F32(v) => v,
+        _ => return,
+    };
+
+    let n_vec = n - (n % 4);
+
+    for mi in 0..m {
+        for ki in 0..k {
+            let a_val = lhs.get(&[mi, ki]) as f32;
+            let a_vec = f32x4_splat(a_val);
+
+            let rhs_row_start = rhs.offset + ki * rhs_stride_k;
+            let out_row_start = mi * n;
+
+            for ni in (0..n_vec).step_by(4) {
+                unsafe {
+                    let b = v128_load(rhs_data.as_ptr().add(rhs_row_start + ni).cast());
+                    let c = v128_load(out.as_ptr().add(out_row_start + ni).cast());
+                    let result = f32x4_add(c, f32x4_mul(a_vec, b));
+                    v128_store(out.as_mut_ptr().add(out_row_start + ni).cast(), result);
                 }
             }
 
