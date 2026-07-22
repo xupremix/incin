@@ -3,44 +3,50 @@ use core::marker::PhantomData;
 
 use crate::prelude::{Dyn, Result};
 
-/// `Device`.
+/// A type-level compute device (`Cpu`, `Cuda<N>`, `Wgpu<N>`, or `Dyn` for
+/// runtime-selected devices). Paired with a float element type via
+/// `BackendFor<T>` to select a concrete backend.
 pub trait Device: 'static + Send + Sync + Clone + Eq + PartialEq + Debug + Sized {
-    /// `Arg`.
+    /// The user-facing constructor argument type (`()` for fixed devices,
+    /// `DeviceId` for `Dyn`).
     type Arg: Clone;
-    /// `Field`.
+    /// The runtime-stored representation (a `PhantomData` for fixed
+    /// devices, `DeviceId` for `Dyn`).
     type Field: Debug + Clone;
-    /// `init`.
+    /// Converts a user-facing `Arg` into the stored `Field` representation.
     fn init(arg: Self::Arg) -> Self::Field;
-    /// `to_kindle`.
+    /// Resolves this device's runtime `DeviceId`.
     fn to_kindle(dev: &Self::Field) -> Result<DeviceId>;
 }
-/// `ConstDevice`.
+/// A `Device` whose identity is fully known at compile time (as opposed
+/// to `Dyn`, which is resolved at runtime) — takes no constructor argument.
 pub trait ConstDevice: Default + Device<Arg = ()> {}
 
 #[cfg(feature = "cuda")]
-/// `cuda`.
+/// The CUDA device type and its `Device` impl.
 pub mod cuda {
 
     use super::{ConstDevice, Device, DeviceId, PhantomData, Result};
 
     #[derive(Debug, Default, Clone, PartialEq, Eq)]
-    /// Implementation of `Cuda` for the respective backend..
+    /// The CUDA device, indexed by `N` for multi-GPU setups (defaults to
+    /// device 0). A zero-sized type — the index lives entirely at the type level.
     pub struct Cuda<const N: usize = 0>;
 
     impl<const N: usize> ConstDevice for Cuda<N> {}
 
     impl<const N: usize> Device for Cuda<N> {
-        /// `Arg`.
+        /// No constructor argument — the device index `N` is compile-time-fixed.
         type Arg = ();
-        /// `Field`.
+        /// Zero-sized: `N` alone identifies the device.
         type Field = PhantomData<Self>;
 
-        /// `to_kindle`.
+        /// Resolves to CUDA device ordinal `N`.
         fn to_kindle(_: &Self::Field) -> Result<DeviceId> {
             Ok(DeviceId::cuda(N))
         }
 
-        /// `init`.
+        /// No-op: nothing to convert.
         fn init(_: Self::Arg) -> Self::Field {
             PhantomData
         }
@@ -51,28 +57,29 @@ pub mod cuda {
 pub use cuda::*;
 
 #[cfg(feature = "wgpu")]
-/// `wgpu`.
+/// The WGPU device type and its `Device` impl.
 pub mod wgpu {
     use super::{ConstDevice, Device, DeviceId, PhantomData, Result};
 
     #[derive(Debug, Default, Clone, PartialEq, Eq)]
-    /// Implementation of `Wgpu` for the respective backend..
+    /// The WGPU device, indexed by `N` for multi-adapter setups (defaults
+    /// to adapter 0). A zero-sized type — the index lives entirely at the type level.
     pub struct Wgpu<const N: usize = 0>;
 
     impl<const N: usize> ConstDevice for Wgpu<N> {}
 
     impl<const N: usize> Device for Wgpu<N> {
-        /// `Arg`.
+        /// No constructor argument — the device index `N` is compile-time-fixed.
         type Arg = ();
-        /// `Field`.
+        /// Zero-sized: `N` alone identifies the device.
         type Field = PhantomData<Self>;
 
-        /// `to_kindle`.
+        /// Resolves to WGPU device ordinal `N`.
         fn to_kindle(_: &Self::Field) -> Result<DeviceId> {
             Ok(DeviceId::wgpu(N))
         }
 
-        /// `init`.
+        /// No-op: nothing to convert.
         fn init(_: Self::Arg) -> Self::Field {
             PhantomData
         }
@@ -83,40 +90,41 @@ pub mod wgpu {
 pub use wgpu::*;
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
-/// Implementation of `Cpu` for the respective backend..
+/// The CPU device. A zero-sized type — there is only one CPU.
 pub struct Cpu;
 
 impl ConstDevice for Cpu {}
 
 impl Device for Cpu {
-    /// `Arg`.
+    /// No constructor argument needed — there is only one CPU device.
     type Arg = ();
-    /// `Field`.
+    /// Zero-sized: there is nothing to store.
     type Field = PhantomData<Self>;
 
-    /// `to_kindle`.
+    /// Always resolves to `DeviceId::cpu()`.
     fn to_kindle(_: &Self::Field) -> Result<DeviceId> {
         Ok(DeviceId::cpu())
     }
 
-    /// `init`.
+    /// No-op: nothing to convert.
     fn init(_: Self::Arg) -> Self::Field {
         PhantomData
     }
 }
 
 impl Device for Dyn {
-    /// `Arg`.
+    /// The runtime-chosen device.
     type Arg = DeviceId;
-    /// `Field`.
+    /// Stored directly — `Dyn`'s whole point is deferring device choice
+    /// to runtime, so `Field` is just the `DeviceId` itself.
     type Field = DeviceId;
 
-    /// `to_kindle`.
+    /// Already a `DeviceId` — returned as-is.
     fn to_kindle(dev: &Self::Field) -> Result<DeviceId> {
         Ok(*dev)
     }
 
-    /// `init`.
+    /// Stores the `DeviceId` verbatim.
     fn init(arg: Self::Arg) -> Self::Field {
         arg
     }
@@ -124,18 +132,21 @@ impl Device for Dyn {
 
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
-/// `DeviceKind`.
+/// The runtime-identifiable backend family a `DeviceId` belongs to.
 pub enum DeviceKind {
-    /// Implementation of `Cpu` for the respective backend..
+    /// The CPU backend family.
     Cpu,
-    /// Implementation of `Cuda` for the respective backend..
+    /// The CUDA backend family.
     Cuda,
-    /// Implementation of `Wgpu` for the respective backend..
+    /// The WGPU backend family.
     Wgpu,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
-/// `DeviceId`.
+/// A runtime device identifier: a backend family (`DeviceKind`) plus an
+/// ordinal distinguishing multiple devices of the same family (e.g. GPU 0
+/// vs. GPU 1). This is the `Device` trait's runtime counterpart — every
+/// `Device::to_kindle` resolves to one of these.
 pub struct DeviceId {
     kind: DeviceKind,
     ordinal: usize,
@@ -152,7 +163,7 @@ impl DeviceId {
         self.ordinal
     }
 
-    /// `cpu`.
+    /// The single CPU device (ordinal always 0).
     pub fn cpu() -> Self {
         Self {
             kind: DeviceKind::Cpu,
@@ -160,7 +171,7 @@ impl DeviceId {
         }
     }
 
-    /// `cuda`.
+    /// A CUDA device at ordinal `ord`.
     pub fn cuda(ord: usize) -> Self {
         Self {
             kind: DeviceKind::Cuda,
@@ -168,7 +179,7 @@ impl DeviceId {
         }
     }
 
-    /// `wgpu`.
+    /// A WGPU device at ordinal `ord`.
     pub fn wgpu(ord: usize) -> Self {
         Self {
             kind: DeviceKind::Wgpu,
@@ -177,19 +188,22 @@ impl DeviceId {
     }
 }
 
-/// `fn`.
+/// Whether this build was compiled with the `cuda` feature enabled
+/// (does not check for actual CUDA hardware/drivers at runtime).
 pub const fn cuda_is_available() -> bool {
     cfg!(feature = "cuda")
 }
-/// `fn`.
+/// Whether this build was compiled with the `wgpu` feature enabled
+/// (does not check for an actual GPU adapter at runtime).
 pub const fn wgpu_is_available() -> bool {
     cfg!(feature = "wgpu")
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-/// Implementation of `CudaDevice` for the respective backend..
+/// A CUDA device index, used as a hashable/orderable key (e.g. for
+/// per-device kernel caches) distinct from the type-level `Cuda<N>` marker.
 pub struct CudaDevice {
-    /// `id`.
+    /// The CUDA device ordinal.
     pub id: usize,
 }
 
@@ -201,9 +215,10 @@ impl CudaDevice {
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-/// Implementation of `WgpuDevice` for the respective backend..
+/// A WGPU device index, used as a hashable/orderable key distinct from
+/// the type-level `Wgpu<N>` marker.
 pub struct WgpuDevice {
-    /// `id`.
+    /// The WGPU device ordinal.
     pub id: usize,
 }
 
@@ -215,12 +230,10 @@ impl WgpuDevice {
 }
 
 #[cfg(test)]
-/// `tests`.
 mod tests {
     use super::*;
 
     #[test]
-    /// `test_device_variants`.
     fn test_device_variants() {
         let cpu = DeviceId::cpu();
         assert_eq!(cpu.kind(), DeviceKind::Cpu);
