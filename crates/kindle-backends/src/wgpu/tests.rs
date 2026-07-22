@@ -994,6 +994,31 @@ fn softmax_backward_is_tape_tracked() {
 }
 
 #[test]
+fn softmax_gradient_via_nontrivial_loss_matches_finite_difference() {
+    // The test above only checks that the gradient of sum(softmax(x))
+    // sums to 0 across the vector — true, but weak (it can't distinguish a
+    // correct gradient from an all-zeros one, and sum(softmax(x)) is
+    // IDENTICALLY 1 for any x, so its true gradient is exactly zero
+    // everywhere regardless of whether max_keepdim's own gradient is
+    // wired correctly). Wrapping softmax in a non-symmetric weighted sum
+    // instead gives a genuinely non-trivial gradient, which is what
+    // actually exercises log_softmax's max_keepdim term (see max_keepdim's
+    // doc comment in wgpu/backend.rs for why wiring it is safe).
+    let t = storage(vec![1.0, 2.0, 5.0], vec![1, 3]);
+    let weight = storage(vec![1.0, 2.0, 3.0], vec![1, 3]);
+    let op = |inputs: &[WgpuStorage]| -> WgpuStorage {
+        let sm = <B as FloatOps<B>>::softmax::<f32>(&inputs[0], 1).unwrap();
+        let weighted = <B as NumericOps<B>>::mul::<f32>(&sm, &inputs[1]).unwrap();
+        <B as ReductionOps<B>>::sum_all::<f32>(&weighted).unwrap()
+    };
+    let max_abs_diff = gradcheck_wgpu(op, &[t, weight], 1e-3);
+    assert!(
+        max_abs_diff < 2e-3,
+        "softmax (weighted-sum loss) gradcheck max abs diff too high: {max_abs_diff:.6}"
+    );
+}
+
+#[test]
 fn embedding_backward_accumulates_gradients() {
     let weight = storage(
         vec![
@@ -1354,4 +1379,37 @@ fn max_dim_backward_never_double_counts_when_multiple_output_positions_share_no_
         &[1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
         1e-5
     ));
+}
+
+#[test]
+fn max_keepdim_backward_matches_finite_difference() {
+    // max_keepdim IS autograd-wired (unlike an earlier, incorrect version of
+    // this code/comment) — see its doc comment in wgpu/backend.rs for the
+    // algebraic argument, and softmax_gradient_via_nontrivial_loss_matches_finite_difference
+    // / cross_entropy_loss_backward_matches_finite_difference above for
+    // end-to-end proof through log_softmax specifically.
+    let t = storage(vec![1.0, 8.0, 9.0, 2.0, 3.0, 7.0], vec![2, 3]);
+    let op = |inputs: &[WgpuStorage]| -> WgpuStorage {
+        let out = <B as ReductionOps<B>>::max_keepdim::<f32>(&inputs[0], 0).unwrap();
+        <B as ReductionOps<B>>::sum_all::<f32>(&out).unwrap()
+    };
+    let max_abs_diff = gradcheck_wgpu(op, &[t], 1e-3);
+    assert!(
+        max_abs_diff < 2e-3,
+        "max_keepdim gradcheck max abs diff too high: {max_abs_diff:.6}"
+    );
+}
+
+#[test]
+fn min_keepdim_backward_matches_finite_difference() {
+    let t = storage(vec![1.0, 8.0, 9.0, 2.0, 3.0, 7.0], vec![2, 3]);
+    let op = |inputs: &[WgpuStorage]| -> WgpuStorage {
+        let out = <B as ReductionOps<B>>::min_keepdim::<f32>(&inputs[0], 1).unwrap();
+        <B as ReductionOps<B>>::sum_all::<f32>(&out).unwrap()
+    };
+    let max_abs_diff = gradcheck_wgpu(op, &[t], 1e-3);
+    assert!(
+        max_abs_diff < 2e-3,
+        "min_keepdim gradcheck max abs diff too high: {max_abs_diff:.6}"
+    );
 }

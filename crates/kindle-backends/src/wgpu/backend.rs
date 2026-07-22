@@ -1428,20 +1428,26 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackendImpl<T, D> {
     }
     /// `max_keepdim`.
     ///
-    /// Deliberately NOT autograd-wired, unlike `max_dim` above. `log_softmax`
-    /// (used by `softmax`/`cross_entropy_loss`) calls this to subtract a
-    /// per-row max purely for numerical stability; softmax's value is
-    /// invariant to that per-row constant, so that subtraction must act as a
-    /// stop-gradient. It currently does, only because this function pushes no
-    /// `TapeEntry`. Wiring a real gradient here would silently corrupt every
-    /// caller that goes through `log_softmax` unless that call site is first
-    /// changed to a genuinely detached max — do not "complete the set" with
-    /// `max_dim`/`min_dim` above without also fixing that.
+    /// Autograd-wired the same way as `max_dim`. `log_softmax` calls this to
+    /// subtract a per-row max `M` for numerical stability:
+    /// `log_softmax(x) = (x - M) - log(sum(exp(x - M)))`. This is not merely
+    /// numerically close but ALGEBRAICALLY IDENTICAL to `x - log(sum(exp(x)))`
+    /// for any `M` (the `M` terms cancel exactly:
+    /// `-M - log(exp(-M)*sum(exp(x))) = -M - (-M + log(sum(exp(x)))) =
+    /// -log(sum(exp(x)))`), so the two expressions are literally the same
+    /// function of `x` on their whole domain, not just equal at one point —
+    /// their gradients must therefore be identical too, whether or not `M`
+    /// is treated as differentiable. Wiring a real gradient here does NOT
+    /// need `log_softmax` to detach `M`. Matches the CPU backend, whose
+    /// `max_keepdim` is fully wired and whose composed `log_softmax` (same
+    /// formula) passes `softmax_gradcheck`/`log_softmax_gradcheck`.
     fn max_keepdim<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        Ok(reduce_dim_to_storage(t, dim, 1, true))
+        let out = reduce_dim_to_storage(t, dim, 1, true);
+        push_extremum_dim_tape_entry(t, &out, dim, true);
+        Ok(out)
     }
     /// `min_dim`.
     fn min_dim<K: DType>(
@@ -1454,17 +1460,15 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackendImpl<T, D> {
     }
     /// `min_keepdim`.
     ///
-    /// Deliberately NOT autograd-wired — see `max_keepdim`'s doc comment
-    /// above; the same `log_softmax` stop-gradient reasoning applies (even
-    /// though `log_softmax` only actually calls `max_keepdim`, not this one,
-    /// keeping both un-wired keeps the pair symmetric and avoids a future
-    /// caller relying on `min_keepdim` being differentiable when its sibling
-    /// deliberately isn't).
+    /// Autograd-wired the same way as `min_dim` — see `max_keepdim`'s doc
+    /// comment above.
     fn min_keepdim<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        Ok(reduce_dim_to_storage(t, dim, 2, true))
+        let out = reduce_dim_to_storage(t, dim, 2, true);
+        push_extremum_dim_tape_entry(t, &out, dim, false);
+        Ok(out)
     }
 
     /// `argmax`.
