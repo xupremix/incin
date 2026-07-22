@@ -24,7 +24,7 @@ use alloc::vec::Vec;
 /// Trait for converting user-provided arguments into the internal
 /// representation expected by tensor parameters.
 pub trait ArgInto<Target> {
-    /// `into_arg`.
+    /// Converts `self` into `Target`.
     fn into_arg(self) -> Target;
 }
 
@@ -37,15 +37,19 @@ pub trait LayerArgInto<Target> {
 kindle_macros::impl_layer_args!(9);
 
 #[derive(Debug, Clone)]
-/// `TensorArgsData`.
+/// The four tensor-construction parameters (shape, dtype, device, grad
+/// tracking) after `ArgInto`/`LayerArgInto` has resolved user-friendly
+/// arguments into their internal `Field` representations. `S`/`T`/`D`/`G`
+/// are each either `()` (not specified, static/default) or the concrete
+/// resolved type.
 pub struct TensorArgsData<S, T, D, G> {
-    /// `shape`.
+    /// The resolved shape argument.
     pub(crate) shape: S,
-    /// `dtype`.
+    /// The resolved dtype argument.
     pub(crate) dtype: T,
-    /// `device`.
+    /// The resolved device argument.
     pub(crate) device: D,
-    /// `grad`.
+    /// The resolved grad-tracking argument.
     pub(crate) grad: G,
 }
 
@@ -63,7 +67,7 @@ macro_rules! impl_self_arginto {
         $(
             impl ArgInto<$t> for $t {
                 #[inline(always)]
-                /// `into_arg`.
+                /// Converts `self` into the target representation.
                 fn into_arg(self) -> $t {
                     self
                 }
@@ -87,7 +91,7 @@ impl_self_arginto! {
 
 impl ArgInto<UTerm> for UTerm {
     #[inline(always)]
-    /// `into_arg`.
+    /// Converts `self` into the target representation.
     fn into_arg(self) -> UTerm {
         self
     }
@@ -109,7 +113,7 @@ where
         + 'static,
 {
     #[inline(always)]
-    /// `into_arg`.
+    /// Converts `self` into the target representation.
     fn into_arg(self) -> UInt<U, B> {
         self
     }
@@ -118,7 +122,7 @@ where
 #[cfg(feature = "cuda")]
 impl<const N: usize> ArgInto<Cuda<N>> for Cuda<N> {
     #[inline(always)]
-    /// `into_arg`.
+    /// Converts `self` into the target representation.
     fn into_arg(self) -> Cuda<N> {
         self
     }
@@ -127,7 +131,7 @@ impl<const N: usize> ArgInto<Cuda<N>> for Cuda<N> {
 #[cfg(feature = "wgpu")]
 impl<const N: usize> ArgInto<Wgpu<N>> for Wgpu<N> {
     #[inline(always)]
-    /// `into_arg`.
+    /// Converts `self` into the target representation.
     fn into_arg(self) -> Wgpu<N> {
         self
     }
@@ -139,7 +143,7 @@ impl<const N: usize> ArgInto<Wgpu<N>> for Wgpu<N> {
 
 impl<D: Dim> ArgInto<Vec<D>> for Vec<D> {
     #[inline(always)]
-    /// `into_arg`.
+    /// Converts `self` into the target representation.
     fn into_arg(self) -> Vec<D> {
         self
     }
@@ -147,7 +151,7 @@ impl<D: Dim> ArgInto<Vec<D>> for Vec<D> {
 
 impl<const N: usize> ArgInto<Vec<usize>> for [usize; N] {
     #[inline(always)]
-    /// `into_arg`.
+    /// Converts `self` into the target representation.
     fn into_arg(self) -> Vec<usize> {
         self.to_vec()
     }
@@ -155,7 +159,7 @@ impl<const N: usize> ArgInto<Vec<usize>> for [usize; N] {
 
 impl ArgInto<Vec<usize>> for &[usize] {
     #[inline(always)]
-    /// `into_arg`.
+    /// Converts `self` into the target representation.
     fn into_arg(self) -> Vec<usize> {
         self.to_vec()
     }
@@ -163,7 +167,7 @@ impl ArgInto<Vec<usize>> for &[usize] {
 
 impl<const N: usize> ArgInto<[usize; N]> for [usize; N] {
     #[inline(always)]
-    /// `into_arg`.
+    /// Converts `self` into the target representation.
     fn into_arg(self) -> [usize; N] {
         self
     }
@@ -242,7 +246,7 @@ macro_rules! impl_dim_tuple_arg_into {
         // Self -> Self identity
         impl<$($name,)*> ArgInto<($($name,)*)> for ($($name,)*) {
             #[inline(always)]
-            /// `into_arg`.
+            /// Converts `self` into the target representation.
             fn into_arg(self) -> ($($name,)*) {
                 self
             }
@@ -298,7 +302,7 @@ kindle_macros::impl_arg_into!(7);
 // 0 values: fully static tensor, no args needed
 impl ArgInto<TensorArgsData<(), (), (), ()>> for () {
     #[inline(always)]
-    /// `into_arg`.
+    /// Converts `self` into the target representation.
     fn into_arg(self) -> TensorArgsData<(), (), (), ()> {
         TensorArgsData {
             shape: (),
@@ -312,7 +316,7 @@ impl ArgInto<TensorArgsData<(), (), (), ()>> for () {
 // 1 value: placed in whichever position has a non-() arg type
 impl<A: ArgInto<B>, B: NotUnit> ArgInto<TensorArgsData<B, (), (), ()>> for A {
     #[inline(always)]
-    /// `into_arg`.
+    /// Converts `self` into the target representation.
     fn into_arg(self) -> TensorArgsData<B, (), (), ()> {
         TensorArgsData {
             shape: self.into_arg(),
@@ -324,7 +328,7 @@ impl<A: ArgInto<B>, B: NotUnit> ArgInto<TensorArgsData<B, (), (), ()>> for A {
 }
 impl<A: ArgInto<B>, B: NotUnit> ArgInto<TensorArgsData<(), B, (), ()>> for A {
     #[inline(always)]
-    /// `into_arg`.
+    /// Converts `self` into the target representation.
     fn into_arg(self) -> TensorArgsData<(), B, (), ()> {
         TensorArgsData {
             shape: (),
@@ -336,7 +340,7 @@ impl<A: ArgInto<B>, B: NotUnit> ArgInto<TensorArgsData<(), B, (), ()>> for A {
 }
 impl<A: ArgInto<B>, B: NotUnit> ArgInto<TensorArgsData<(), (), B, ()>> for A {
     #[inline(always)]
-    /// `into_arg`.
+    /// Converts `self` into the target representation.
     fn into_arg(self) -> TensorArgsData<(), (), B, ()> {
         TensorArgsData {
             shape: (),
@@ -348,7 +352,7 @@ impl<A: ArgInto<B>, B: NotUnit> ArgInto<TensorArgsData<(), (), B, ()>> for A {
 }
 impl<A: ArgInto<B>, B: NotUnit> ArgInto<TensorArgsData<(), (), (), B>> for A {
     #[inline(always)]
-    /// `into_arg`.
+    /// Converts `self` into the target representation.
     fn into_arg(self) -> TensorArgsData<(), (), (), B> {
         TensorArgsData {
             shape: (),
@@ -367,7 +371,7 @@ where
     TA: NotUnit,
     TB: NotUnit,
 {
-    /// `into_arg`.
+    /// Converts `self` into the target representation.
     fn into_arg(self) -> TensorArgsData<TA, TB, (), ()> {
         TensorArgsData {
             shape: self.0.into_arg(),
@@ -385,7 +389,7 @@ where
     TA: NotUnit,
     TB: NotUnit,
 {
-    /// `into_arg`.
+    /// Converts `self` into the target representation.
     fn into_arg(self) -> TensorArgsData<TA, (), TB, ()> {
         TensorArgsData {
             shape: self.0.into_arg(),
@@ -403,7 +407,7 @@ where
     TA: NotUnit,
     TB: NotUnit,
 {
-    /// `into_arg`.
+    /// Converts `self` into the target representation.
     fn into_arg(self) -> TensorArgsData<TA, (), (), TB> {
         TensorArgsData {
             shape: self.0.into_arg(),
@@ -421,7 +425,7 @@ where
     TA: NotUnit,
     TB: NotUnit,
 {
-    /// `into_arg`.
+    /// Converts `self` into the target representation.
     fn into_arg(self) -> TensorArgsData<(), TA, TB, ()> {
         TensorArgsData {
             shape: (),
@@ -439,7 +443,7 @@ where
     TA: NotUnit,
     TB: NotUnit,
 {
-    /// `into_arg`.
+    /// Converts `self` into the target representation.
     fn into_arg(self) -> TensorArgsData<(), TA, (), TB> {
         TensorArgsData {
             shape: (),
@@ -457,7 +461,7 @@ where
     TA: NotUnit,
     TB: NotUnit,
 {
-    /// `into_arg`.
+    /// Converts `self` into the target representation.
     fn into_arg(self) -> TensorArgsData<(), (), TA, TB> {
         TensorArgsData {
             shape: (),
@@ -478,7 +482,7 @@ where
     TB: NotUnit,
     TC: NotUnit,
 {
-    /// `into_arg`.
+    /// Converts `self` into the target representation.
     fn into_arg(self) -> TensorArgsData<(), TA, TB, TC> {
         TensorArgsData {
             shape: (),
@@ -497,7 +501,7 @@ where
     TB: NotUnit,
     TC: NotUnit,
 {
-    /// `into_arg`.
+    /// Converts `self` into the target representation.
     fn into_arg(self) -> TensorArgsData<TA, (), TB, TC> {
         TensorArgsData {
             shape: self.0.into_arg(),
@@ -516,7 +520,7 @@ where
     TB: NotUnit,
     TC: NotUnit,
 {
-    /// `into_arg`.
+    /// Converts `self` into the target representation.
     fn into_arg(self) -> TensorArgsData<TA, TB, (), TC> {
         TensorArgsData {
             shape: self.0.into_arg(),
@@ -535,7 +539,7 @@ where
     TB: NotUnit,
     TC: NotUnit,
 {
-    /// `into_arg`.
+    /// Converts `self` into the target representation.
     fn into_arg(self) -> TensorArgsData<TA, TB, TC, ()> {
         TensorArgsData {
             shape: self.0.into_arg(),
@@ -558,7 +562,7 @@ where
     TC: NotUnit,
     TD: NotUnit,
 {
-    /// `into_arg`.
+    /// Converts `self` into the target representation.
     fn into_arg(self) -> TensorArgsData<TA, TB, TC, TD> {
         TensorArgsData {
             shape: self.0.into_arg(),
@@ -575,7 +579,7 @@ where
 
 impl<T> ArgInto<PhantomData<T>> for PhantomData<T> {
     #[inline(always)]
-    /// `into_arg`.
+    /// Converts `self` into the target representation.
     fn into_arg(self) -> PhantomData<T> {
         self
     }
