@@ -1234,6 +1234,165 @@ impl<T: DType, D: Device> QuantizedOps<Self> for CudaBackendImpl<T, D> {
     }
 }
 impl<T: DType, D: Device> OptimizerOps<Self> for CudaBackendImpl<T, D> {}
+
+/// Tape-tracked wrapper pairing `launch_im2col_2d`/`launch_col2im_2d` as each
+/// other's forward/backward (they are exact inverses of one another). Once
+/// this is a proper tape op, `conv1d`/`conv2d`'s own forward can be composed
+/// entirely from already-tape-tracked primitives (`narrow`/`reshape`/
+/// `matmul`/`concat` plus this) with NO hand-written backward closure of
+/// their own — mirroring the `LossOps`/`OptimizerOps` "free via composition"
+/// discovery documented in `IMPLEMENTATION_PLAN.md`.
+fn im2col_2d_tape(
+    t: &CudaStorage,
+    kh: usize,
+    kw: usize,
+    stride: usize,
+    padding: usize,
+    dilation: usize,
+) -> Result<CudaStorage> {
+    let out = crate::cuda::ops::conv::launch_im2col_2d(t, kh, kw, stride, padding, dilation)?;
+    let original_shape = t.shape.clone();
+    let (t_id, out_id) = (t.id, out.id);
+    crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &CudaStorage| {
+            let h_out =
+                crate::cuda::ops::conv::out_size(original_shape[2], kh, stride, padding, dilation);
+            let w_out =
+                crate::cuda::ops::conv::out_size(original_shape[3], kw, stride, padding, dilation);
+            vec![
+                crate::cuda::ops::conv::launch_col2im_2d(
+                    grad_out,
+                    &original_shape,
+                    h_out,
+                    w_out,
+                    kh,
+                    kw,
+                    stride,
+                    padding,
+                    dilation,
+                )
+                .expect("im2col_2d backward"),
+            ]
+        }),
+    });
+    Ok(out)
+}
+
+/// Symmetric counterpart of `im2col_2d_tape` — `conv_transpose2d`'s forward
+/// calls this directly (its forward IS `conv2d`'s backward-data formula),
+/// so this needs its own tape entry whose backward is `launch_im2col_2d`.
+fn col2im_2d_tape(
+    cols: &CudaStorage,
+    target_shape: &[usize],
+    h_out: usize,
+    w_out: usize,
+    kh: usize,
+    kw: usize,
+    stride: usize,
+    padding: usize,
+    dilation: usize,
+) -> Result<CudaStorage> {
+    let out = crate::cuda::ops::conv::launch_col2im_2d(
+        cols,
+        target_shape,
+        h_out,
+        w_out,
+        kh,
+        kw,
+        stride,
+        padding,
+        dilation,
+    )?;
+    let cols_shape = cols.shape.clone();
+    let (cols_id, out_id) = (cols.id, out.id);
+    crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+        output_id: out_id,
+        input_ids: vec![cols_id],
+        backward: Box::new(move |grad_out: &CudaStorage| {
+            let cols_grad = crate::cuda::ops::conv::launch_im2col_2d(
+                grad_out, kh, kw, stride, padding, dilation,
+            )
+            .expect("col2im_2d backward");
+            debug_assert_eq!(cols_grad.shape, cols_shape);
+            vec![cols_grad]
+        }),
+    });
+    Ok(out)
+}
+
+/// 1D analogue of `im2col_2d_tape`.
+fn im2col_1d_tape(
+    t: &CudaStorage,
+    k: usize,
+    stride: usize,
+    padding: usize,
+    dilation: usize,
+) -> Result<CudaStorage> {
+    let out = crate::cuda::ops::conv::launch_im2col_1d(t, k, stride, padding, dilation)?;
+    let original_shape = t.shape.clone();
+    let (t_id, out_id) = (t.id, out.id);
+    crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &CudaStorage| {
+            let l_out =
+                crate::cuda::ops::conv::out_size(original_shape[2], k, stride, padding, dilation);
+            vec![
+                crate::cuda::ops::conv::launch_col2im_1d(
+                    grad_out,
+                    &original_shape,
+                    l_out,
+                    k,
+                    stride,
+                    padding,
+                    dilation,
+                )
+                .expect("im2col_1d backward"),
+            ]
+        }),
+    });
+    Ok(out)
+}
+
+/// Pads `t: [B, C, H, W]` with `pad_h`/`pad_w` trailing zero rows/columns —
+/// `conv_transpose2d`'s `output_padding` handling. This is exactly `narrow`'s
+/// backward (`scatter_into_zeros` at `region_start = [0,0,0,0]`) reused as a
+/// forward op, so its own backward is the matching two-axis narrow back down
+/// to the original `H`/`W`.
+fn pad_trailing_zeros_2d_tape(t: &CudaStorage, pad_h: usize, pad_w: usize) -> Result<CudaStorage> {
+    let (b, c, h, w) = (t.shape[0], t.shape[1], t.shape[2], t.shape[3]);
+    let target_shape = vec![b, c, h + pad_h, w + pad_w];
+    let out = crate::cuda::ops::shape::scatter_into_zeros(&target_shape, &[0, 0, 0, 0], t);
+    let (t_id, out_id) = (t.id, out.id);
+    crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &CudaStorage| {
+            let narrowed_h = crate::cuda::ops::shape::launch_narrow(grad_out, 2, 0, h)
+                .expect("pad_trailing_zeros_2d backward: narrow H");
+            let narrowed = crate::cuda::ops::shape::launch_narrow(&narrowed_h, 3, 0, w)
+                .expect("pad_trailing_zeros_2d backward: narrow W");
+            vec![narrowed]
+        }),
+    });
+    Ok(out)
+}
+
+/// Matches `cpu/ops/conv.rs::validate_groups` exactly.
+fn validate_conv_groups(op: &'static str, cin: usize, cout: usize, groups: usize) -> Result<()> {
+    if groups == 0 || !cin.is_multiple_of(groups) || !cout.is_multiple_of(groups) {
+        return Err(Error::ShapeMismatch {
+            op,
+            expected: vec![groups],
+            got: vec![cin, cout],
+            msg: format!("{op}: groups={groups} must evenly divide both Cin={cin} and Cout={cout}"),
+        });
+    }
+    Ok(())
+}
+
 impl<T: DType, D: Device> ModuleOps<Self> for CudaBackendImpl<T, D> {
     fn layer_norm<K: DType>(
         input: &CudaStorage,
@@ -1392,6 +1551,257 @@ impl<T: DType, D: Device> ModuleOps<Self> for CudaBackendImpl<T, D> {
             }),
         });
         Ok(out)
+    }
+
+    /// Composed entirely from already-tape-tracked primitives (`narrow`,
+    /// `im2col_1d_tape`, `reshape`, `matmul`, `concat`) — no hand-written
+    /// backward closure of its own, unlike CPU/WGPU's `conv1d`. Per-group,
+    /// per-batch `matmul` (CUDA's own `matmul` is unbatched 2D only, see
+    /// `IMPLEMENTATION_PLAN.md` §3.1) trades kernel-launch count for zero
+    /// new hand-derived backward math in a compile-verified-only environment
+    /// (no CUDA hardware here to gradcheck against).
+    fn conv1d<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        w: &<Self as Backend>::Storage<K>,
+        bias: Option<&<Self as Backend>::Storage<K>>,
+        stride: usize,
+        padding: usize,
+        dilation: usize,
+        groups: usize,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let (batch, cin, len) = (t.shape[0], t.shape[1], t.shape[2]);
+        let (cout, cin_g, k) = (w.shape[0], w.shape[1], w.shape[2]);
+        validate_conv_groups("conv1d", cin, cout, groups)?;
+        if cin / groups != cin_g {
+            return Err(Error::ShapeMismatch {
+                op: "conv1d",
+                expected: vec![cin / groups],
+                got: vec![cin_g],
+                msg: format!(
+                    "conv1d: weight's Cin/groups ({cin_g}) does not match input Cin/groups ({})",
+                    cin / groups
+                ),
+            });
+        }
+        let cout_g = cout / groups;
+        let l_out = crate::cuda::ops::conv::out_size(len, k, stride, padding, dilation);
+
+        let mut group_outputs: Vec<CudaStorage> = Vec::with_capacity(groups);
+        for g in 0..groups {
+            let input_g = <Self as TensorOps<Self>>::narrow::<K>(t, 1, g * cin_g, cin_g)?;
+            let weight_g = <Self as TensorOps<Self>>::narrow::<K>(w, 0, g * cout_g, cout_g)?;
+            let cols = im2col_1d_tape(&input_g, k, stride, padding, dilation)?;
+            let weight_mat =
+                <Self as TensorOps<Self>>::reshape::<K>(&weight_g, &[cout_g, cin_g * k])?;
+
+            let mut batch_outs: Vec<CudaStorage> = Vec::with_capacity(batch);
+            for bi in 0..batch {
+                let cols_b = <Self as TensorOps<Self>>::narrow::<K>(&cols, 0, bi, 1)?;
+                let cols_b = <Self as TensorOps<Self>>::squeeze::<K>(&cols_b, 0)?;
+                let out_b = <Self as TensorOps<Self>>::matmul::<K>(&weight_mat, &cols_b)?;
+                let out_b = <Self as TensorOps<Self>>::reshape::<K>(&out_b, &[1, cout_g, l_out])?;
+                batch_outs.push(out_b);
+            }
+            let group_out = if batch == 1 {
+                batch_outs.into_iter().next().unwrap()
+            } else {
+                let refs: Vec<&CudaStorage> = batch_outs.iter().collect();
+                <Self as TensorOps<Self>>::concat::<K>(&refs, 0)?
+            };
+            group_outputs.push(group_out);
+        }
+        let conv_out = if groups == 1 {
+            group_outputs.into_iter().next().unwrap()
+        } else {
+            let refs: Vec<&CudaStorage> = group_outputs.iter().collect();
+            <Self as TensorOps<Self>>::concat::<K>(&refs, 1)?
+        };
+
+        match bias {
+            Some(bv) => {
+                let bias_shaped = <Self as TensorOps<Self>>::reshape::<K>(bv, &[1, cout, 1])?;
+                <Self as NumericOps<Self>>::add::<K>(&conv_out, &bias_shaped)
+            }
+            None => Ok(conv_out),
+        }
+    }
+
+    /// Mirrors `conv1d`'s exact structure generalized to two spatial axes.
+    /// CUDA's `im2col_2d` kernel lays cols out channel-major
+    /// (`[B, Cin_g*Kh*Kw, H_out*W_out]` — see `cuda/ops/conv.rs`'s module
+    /// doc), so this computes `weight_mat @ cols_b` directly per batch, no
+    /// transpose of either operand needed (unlike CPU/WGPU's
+    /// spatial-major `cols @ weight_mat^T`).
+    fn conv2d<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        w: &<Self as Backend>::Storage<K>,
+        bias: Option<&<Self as Backend>::Storage<K>>,
+        stride: usize,
+        padding: usize,
+        dilation: usize,
+        groups: usize,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let (batch, cin, h, wid) = (t.shape[0], t.shape[1], t.shape[2], t.shape[3]);
+        let (cout, cin_g, kh, kw) = (w.shape[0], w.shape[1], w.shape[2], w.shape[3]);
+        validate_conv_groups("conv2d", cin, cout, groups)?;
+        if cin / groups != cin_g {
+            return Err(Error::ShapeMismatch {
+                op: "conv2d",
+                expected: vec![cin / groups],
+                got: vec![cin_g],
+                msg: format!(
+                    "conv2d: weight's Cin/groups ({cin_g}) does not match input Cin/groups ({})",
+                    cin / groups
+                ),
+            });
+        }
+        let cout_g = cout / groups;
+        let h_out = crate::cuda::ops::conv::out_size(h, kh, stride, padding, dilation);
+        let w_out = crate::cuda::ops::conv::out_size(wid, kw, stride, padding, dilation);
+
+        let mut group_outputs: Vec<CudaStorage> = Vec::with_capacity(groups);
+        for g in 0..groups {
+            let input_g = <Self as TensorOps<Self>>::narrow::<K>(t, 1, g * cin_g, cin_g)?;
+            let weight_g = <Self as TensorOps<Self>>::narrow::<K>(w, 0, g * cout_g, cout_g)?;
+            let cols = im2col_2d_tape(&input_g, kh, kw, stride, padding, dilation)?;
+            let weight_mat =
+                <Self as TensorOps<Self>>::reshape::<K>(&weight_g, &[cout_g, cin_g * kh * kw])?;
+
+            let mut batch_outs: Vec<CudaStorage> = Vec::with_capacity(batch);
+            for bi in 0..batch {
+                let cols_b = <Self as TensorOps<Self>>::narrow::<K>(&cols, 0, bi, 1)?;
+                let cols_b = <Self as TensorOps<Self>>::squeeze::<K>(&cols_b, 0)?;
+                let out_b = <Self as TensorOps<Self>>::matmul::<K>(&weight_mat, &cols_b)?;
+                let out_b =
+                    <Self as TensorOps<Self>>::reshape::<K>(&out_b, &[1, cout_g, h_out * w_out])?;
+                batch_outs.push(out_b);
+            }
+            let group_out = if batch == 1 {
+                batch_outs.into_iter().next().unwrap()
+            } else {
+                let refs: Vec<&CudaStorage> = batch_outs.iter().collect();
+                <Self as TensorOps<Self>>::concat::<K>(&refs, 0)?
+            };
+            group_outputs.push(group_out);
+        }
+        let conv_out = if groups == 1 {
+            group_outputs.into_iter().next().unwrap()
+        } else {
+            let refs: Vec<&CudaStorage> = group_outputs.iter().collect();
+            <Self as TensorOps<Self>>::concat::<K>(&refs, 1)?
+        };
+        let conv_out =
+            <Self as TensorOps<Self>>::reshape::<K>(&conv_out, &[batch, cout, h_out, w_out])?;
+
+        match bias {
+            Some(bv) => {
+                let bias_shaped = <Self as TensorOps<Self>>::reshape::<K>(bv, &[1, cout, 1, 1])?;
+                <Self as NumericOps<Self>>::add::<K>(&conv_out, &bias_shaped)
+            }
+            None => Ok(conv_out),
+        }
+    }
+
+    /// Transposed convolution's forward is exactly `conv2d`'s own
+    /// backward-data formula applied directly to `t` (RESEARCH.md Pattern
+    /// 4, same as CPU/WGPU): `weight_mat_t @ input_b` per batch, folded via
+    /// `col2im_2d_tape` (reusing the exact inverse of `im2col_2d_tape`).
+    /// `output_padding` is its own final step via `pad_trailing_zeros_2d_tape`,
+    /// never folded into `padding`'s symmetric arithmetic. Only `groups ==
+    /// 1` is supported, matching CPU/WGPU's own documented scope.
+    fn conv_transpose2d<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        w: &<Self as Backend>::Storage<K>,
+        bias: Option<&<Self as Backend>::Storage<K>>,
+        stride: usize,
+        padding: usize,
+        output_padding: usize,
+        dilation: usize,
+        groups: usize,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        if groups != 1 {
+            return Err(Error::ShapeMismatch {
+                op: "conv_transpose2d",
+                expected: vec![1],
+                got: vec![groups],
+                msg: format!(
+                    "conv_transpose2d: only groups == 1 is supported on CudaBackendImpl, got groups={groups}"
+                ),
+            });
+        }
+        if t.shape.len() != 4 || w.shape.len() != 4 {
+            return Err(Error::ShapeMismatch {
+                op: "conv_transpose2d",
+                expected: vec![4],
+                got: vec![t.shape.len()],
+                msg: "conv_transpose2d expected 4D input and weight".into(),
+            });
+        }
+        let (batch, cin, h, wid) = (t.shape[0], t.shape[1], t.shape[2], t.shape[3]);
+        let (w_cin, cout, kh, kw) = (w.shape[0], w.shape[1], w.shape[2], w.shape[3]);
+        if w_cin != cin {
+            return Err(Error::ShapeMismatch {
+                op: "conv_transpose2d",
+                expected: vec![cin],
+                got: vec![w_cin],
+                msg: format!(
+                    "conv_transpose2d: weight's Cin ({w_cin}) does not match input Cin ({cin})"
+                ),
+            });
+        }
+
+        let h_nat =
+            crate::cuda::ops::conv::natural_transpose_out_size(h, kh, stride, padding, dilation);
+        let w_nat =
+            crate::cuda::ops::conv::natural_transpose_out_size(wid, kw, stride, padding, dilation);
+
+        // weight: [Cin, Cout, Kh, Kw] (Candle's conv_transpose2d convention,
+        // matching CPU/WGPU).
+        let weight_mat = <Self as TensorOps<Self>>::reshape::<K>(w, &[cin, cout * kh * kw])?;
+        let weight_mat_t = <Self as TensorOps<Self>>::transpose::<K>(&weight_mat, 0, 1)?;
+        let input_flat = <Self as TensorOps<Self>>::reshape::<K>(t, &[batch, cin, h * wid])?;
+
+        let mut batch_cols: Vec<CudaStorage> = Vec::with_capacity(batch);
+        for bi in 0..batch {
+            let input_b = <Self as TensorOps<Self>>::narrow::<K>(&input_flat, 0, bi, 1)?;
+            let input_b = <Self as TensorOps<Self>>::squeeze::<K>(&input_b, 0)?;
+            let cols_b = <Self as TensorOps<Self>>::matmul::<K>(&weight_mat_t, &input_b)?;
+            let cols_b =
+                <Self as TensorOps<Self>>::reshape::<K>(&cols_b, &[1, cout * kh * kw, h * wid])?;
+            batch_cols.push(cols_b);
+        }
+        let cols = if batch == 1 {
+            batch_cols.into_iter().next().unwrap()
+        } else {
+            let refs: Vec<&CudaStorage> = batch_cols.iter().collect();
+            <Self as TensorOps<Self>>::concat::<K>(&refs, 0)?
+        };
+
+        let natural_out = col2im_2d_tape(
+            &cols,
+            &[batch, cout, h_nat, w_nat],
+            h,
+            wid,
+            kh,
+            kw,
+            stride,
+            padding,
+            dilation,
+        )?;
+
+        let conv_out = if output_padding == 0 {
+            natural_out
+        } else {
+            pad_trailing_zeros_2d_tape(&natural_out, output_padding, output_padding)?
+        };
+
+        match bias {
+            Some(bv) => {
+                let bias_shaped = <Self as TensorOps<Self>>::reshape::<K>(bv, &[1, cout, 1, 1])?;
+                <Self as NumericOps<Self>>::add::<K>(&conv_out, &bias_shaped)
+            }
+            None => Ok(conv_out),
+        }
     }
 }
 impl<T: DType, D: Device> LossOps<Self> for CudaBackendImpl<T, D> {
@@ -1637,6 +2047,20 @@ mod tests {
         cuda_from_f32(shape, DTypeId::F32, &DeviceId::cuda(0), values, "test").unwrap()
     }
 
+    /// Downloads an F32 `CudaStorage`'s raw contents to a host `Vec<f32>`
+    /// for value-level assertions (the shape-only tests elsewhere in this
+    /// module predate this helper; conv's tests use it to cross-check
+    /// against CPU's own hand-computed conv fixtures, not just shapes).
+    fn download_f32(t: &CudaStorage) -> Vec<f32> {
+        let bytes = t
+            .buffer
+            .device
+            .default_stream()
+            .clone_dtoh(&*t.buffer.data)
+            .expect("cuda download");
+        bytemuck::cast_slice::<u8, f32>(&bytes).to_vec()
+    }
+
     #[test]
     #[ignore = "requires CUDA hardware"]
     fn reshape_preserves_element_order() {
@@ -1855,6 +2279,138 @@ mod tests {
             .get(t_id)
             .expect("adaptive_avg_pool2d input should have a gradient");
         assert_eq!(g.shape, vec![1, 1, 5, 5]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn conv1d_computes_correct_output_shape_and_values() {
+        // [1,1,4] input, [1,1,2] kernel, stride=1, no padding -> [1,1,3] out,
+        // matching CPU's hand-computed test fixture (conv.rs) exactly.
+        let t = cuda_f32(&[1, 1, 4], vec![1.0, 2.0, 3.0, 4.0]);
+        let w = cuda_f32(&[1, 1, 2], vec![1.0, 1.0]);
+        let out = <B as ModuleOps<B>>::conv1d::<f32>(&t, &w, None, 1, 0, 1, 1).unwrap();
+        assert_eq!(out.shape, vec![1, 1, 3]);
+        let vals = download_f32(&out);
+        assert_eq!(vals, vec![3.0, 5.0, 7.0]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn conv1d_backward_produces_gradients_for_input_and_weight() {
+        let t = cuda_f32(&[1, 1, 4], vec![1.0, 2.0, 3.0, 4.0]);
+        let w = cuda_f32(&[1, 1, 2], vec![1.0, 1.0]);
+        let (t_id, w_id) = (t.id, w.id);
+        let out = <B as ModuleOps<B>>::conv1d::<f32>(&t, &w, None, 1, 0, 1, 1).unwrap();
+        let grads = crate::cuda::tape::backward(&out).unwrap();
+        assert_eq!(grads.get(t_id).unwrap().shape, vec![1, 1, 4]);
+        assert_eq!(grads.get(w_id).unwrap().shape, vec![1, 1, 2]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn conv1d_rejects_groups_not_dividing_channels() {
+        let t = cuda_f32(&[1, 3, 4], vec![0.0; 12]);
+        let w = cuda_f32(&[3, 3, 2], vec![0.0; 18]);
+        assert!(<B as ModuleOps<B>>::conv1d::<f32>(&t, &w, None, 1, 0, 1, 2).is_err());
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn conv2d_computes_correct_output_shape_and_values() {
+        // [1,1,3,3] input, [1,1,2,2] kernel, stride=1, no padding -> [1,1,2,2],
+        // matching CPU's hand-computed test fixture (conv.rs) exactly.
+        let t = cuda_f32(
+            &[1, 1, 3, 3],
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
+        );
+        let w = cuda_f32(&[1, 1, 2, 2], vec![1.0, 1.0, 1.0, 1.0]);
+        let out = <B as ModuleOps<B>>::conv2d::<f32>(&t, &w, None, 1, 0, 1, 1).unwrap();
+        assert_eq!(out.shape, vec![1, 1, 2, 2]);
+        let vals = download_f32(&out);
+        assert_eq!(vals, vec![12.0, 16.0, 24.0, 28.0]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn conv2d_with_bias_adds_per_channel_constant() {
+        let t = cuda_f32(&[1, 1, 2, 2], vec![1.0, 2.0, 3.0, 4.0]);
+        let w = cuda_f32(&[1, 1, 1, 1], vec![1.0]);
+        let bias = cuda_f32(&[1], vec![10.0]);
+        let out = <B as ModuleOps<B>>::conv2d::<f32>(&t, &w, Some(&bias), 1, 0, 1, 1).unwrap();
+        let vals = download_f32(&out);
+        assert_eq!(vals, vec![11.0, 12.0, 13.0, 14.0]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn conv2d_backward_produces_gradients_for_input_and_weight() {
+        let t = cuda_f32(
+            &[1, 1, 3, 3],
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
+        );
+        let w = cuda_f32(&[1, 1, 2, 2], vec![1.0, 1.0, 1.0, 1.0]);
+        let (t_id, w_id) = (t.id, w.id);
+        let out = <B as ModuleOps<B>>::conv2d::<f32>(&t, &w, None, 1, 0, 1, 1).unwrap();
+        let grads = crate::cuda::tape::backward(&out).unwrap();
+        assert_eq!(grads.get(t_id).unwrap().shape, vec![1, 1, 3, 3]);
+        assert_eq!(grads.get(w_id).unwrap().shape, vec![1, 1, 2, 2]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn conv2d_groups_matches_two_independent_convs() {
+        // groups=2 depthwise-ish split: Cin=2,Cout=2 each channel convolved
+        // independently, mirrors CPU's `conv2d_forward_groups_matches_two_independent_convs`.
+        let t = cuda_f32(&[1, 2, 2, 2], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]);
+        let w = cuda_f32(&[2, 1, 1, 1], vec![2.0, 3.0]);
+        let out = <B as ModuleOps<B>>::conv2d::<f32>(&t, &w, None, 1, 0, 1, 2).unwrap();
+        assert_eq!(out.shape, vec![1, 2, 2, 2]);
+        let vals = download_f32(&out);
+        assert_eq!(vals, vec![2.0, 4.0, 6.0, 8.0, 15.0, 18.0, 21.0, 24.0]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn conv_transpose2d_computes_correct_output_shape() {
+        // [1,1,2,2] input, weight [Cin=1,Cout=1,2,2], stride=1 -> natural
+        // [1,1,3,3] output (upsampling formula), matching CPU's
+        // `conv_transpose2d_forward_hand_computed_basic` fixture shape.
+        let t = cuda_f32(&[1, 1, 2, 2], vec![1.0, 2.0, 3.0, 4.0]);
+        let w = cuda_f32(&[1, 1, 2, 2], vec![1.0, 1.0, 1.0, 1.0]);
+        let out =
+            <B as ModuleOps<B>>::conv_transpose2d::<f32>(&t, &w, None, 1, 0, 0, 1, 1).unwrap();
+        assert_eq!(out.shape, vec![1, 1, 3, 3]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn conv_transpose2d_output_padding_appends_trailing_rows_and_cols() {
+        let t = cuda_f32(&[1, 1, 2, 2], vec![1.0, 2.0, 3.0, 4.0]);
+        let w = cuda_f32(&[1, 1, 2, 2], vec![1.0, 1.0, 1.0, 1.0]);
+        let out =
+            <B as ModuleOps<B>>::conv_transpose2d::<f32>(&t, &w, None, 1, 0, 1, 1, 1).unwrap();
+        assert_eq!(out.shape, vec![1, 1, 4, 4]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn conv_transpose2d_backward_produces_gradients_for_input_and_weight() {
+        let t = cuda_f32(&[1, 1, 2, 2], vec![1.0, 2.0, 3.0, 4.0]);
+        let w = cuda_f32(&[1, 1, 2, 2], vec![1.0, 1.0, 1.0, 1.0]);
+        let (t_id, w_id) = (t.id, w.id);
+        let out =
+            <B as ModuleOps<B>>::conv_transpose2d::<f32>(&t, &w, None, 1, 0, 0, 1, 1).unwrap();
+        let grads = crate::cuda::tape::backward(&out).unwrap();
+        assert_eq!(grads.get(t_id).unwrap().shape, vec![1, 1, 2, 2]);
+        assert_eq!(grads.get(w_id).unwrap().shape, vec![1, 1, 2, 2]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn conv_transpose2d_rejects_groups_other_than_one() {
+        let t = cuda_f32(&[1, 1, 2, 2], vec![0.0; 4]);
+        let w = cuda_f32(&[1, 1, 2, 2], vec![0.0; 4]);
+        assert!(<B as ModuleOps<B>>::conv_transpose2d::<f32>(&t, &w, None, 1, 0, 0, 1, 2).is_err());
     }
 
     // mse_loss/l1_loss/bce_with_logits_loss have no override in this file's

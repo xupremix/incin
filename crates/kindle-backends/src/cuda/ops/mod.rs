@@ -1,3 +1,4 @@
+pub(crate) mod conv;
 pub(crate) mod elementwise;
 #[allow(dead_code)]
 pub(crate) mod embedding;
