@@ -5,9 +5,9 @@ use crate::prelude::Shape;
     label = "Invalid transpose",
     note = "Transpose requires both dimensions to be < the rank of the tensor"
 )]
-/// `Transpose`.
+/// Compile-time-checked shape rule for swapping dimensions `D1`/`D2`.
 pub trait Transpose<const D1: usize, const D2: usize>: Shape {
-    /// The output tensor type produced by this module's forward pass.
+    /// `Self` with dimensions `D1` and `D2` swapped.
     type Output: Shape;
 }
 
@@ -16,9 +16,9 @@ pub trait Transpose<const D1: usize, const D2: usize>: Shape {
     label = "Invalid reduction dimension",
     note = "Reduction requires the dimension to be < the rank of the tensor"
 )]
-/// `ReduceDim`.
+/// Compile-time-checked shape rule for reducing (removing) dimension `D`.
 pub trait ReduceDim<const D: usize>: Shape {
-    /// The output tensor type produced by this module's forward pass.
+    /// `Self` with dimension `D` removed.
     type Output: Shape;
 }
 
@@ -27,9 +27,10 @@ pub trait ReduceDim<const D: usize>: Shape {
     label = "Invalid reduction dimension",
     note = "Reduction requires the dimension to be < the rank of the tensor"
 )]
-/// `ReduceKeepDim`.
+/// Compile-time-checked shape rule for reducing dimension `D` while
+/// keeping it in the shape at size 1.
 pub trait ReduceKeepDim<const D: usize>: Shape {
-    /// The output tensor type produced by this module's forward pass.
+    /// `Self` with dimension `D`'s size set to 1.
     type Output: Shape;
 }
 
@@ -38,29 +39,30 @@ pub trait ReduceKeepDim<const D: usize>: Shape {
     label = "Invalid flatten range",
     note = "Flatten requires START <= END and END < the rank of the tensor"
 )]
-/// `Flatten`.
+/// Compile-time-checked shape rule for collapsing dimensions
+/// `[START, END]` into a single dimension.
 pub trait Flatten<const START: usize, const END: usize>: Shape {
-    /// The output tensor type produced by this module's forward pass.
+    /// `Self` with dimensions `[START, END]` collapsed into one.
     type Output: Shape;
 }
 
 impl<const START: usize, const END: usize> Flatten<START, END> for crate::prelude::Dyn {
-    /// The output tensor type produced by this module's forward pass.
+    /// Always `Dyn` — the concrete size is only known at runtime.
     type Output = crate::prelude::Dyn;
 }
 
 impl<const D1: usize, const D2: usize> Transpose<D1, D2> for crate::prelude::Dyn {
-    /// The output tensor type produced by this module's forward pass.
+    /// Always `Dyn` — the concrete size is only known at runtime.
     type Output = crate::prelude::Dyn;
 }
 
 impl<const D: usize> ReduceDim<D> for crate::prelude::Dyn {
-    /// The output tensor type produced by this module's forward pass.
+    /// Always `Dyn` — the concrete size is only known at runtime.
     type Output = crate::prelude::Dyn;
 }
 
 impl<const D: usize> ReduceKeepDim<D> for crate::prelude::Dyn {
-    /// The output tensor type produced by this module's forward pass.
+    /// Always `Dyn` — the concrete size is only known at runtime.
     type Output = crate::prelude::Dyn;
 }
 
