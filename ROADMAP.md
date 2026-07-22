@@ -220,7 +220,7 @@ policy remain.
 
 | Crate | Tests | Status |
 |-------|-------|--------|
-| `kindle-core` | Passing | ✅ C-6/C-7 fixed; C-3 (autograd design gaps) still open |
+| `kindle-core` | Passing, +2 Miri-verified tests | ✅ C-6/C-7/C-10 (real UB in `to_scalar`/`to_vec1`, Miri-confirmed) fixed; C-3 (autograd design gaps) still open |
 | `kindle-backends` (cpu) | Passing, +2 new regression tests | ✅ C-2 (f32 downcast), C-5 (overflow), C-8 (mis-gated `elementwise` module — CPU couldn't build standalone) fixed |
 | `kindle-backends` (cuda) | Compiles (no GPU in this env to run it) | ✅ C-1 fixed; ⚠ C-4: add/sub/mul/div now gradient-wired (unverified on real hardware); everything else (`CreationOps`/`FloatOps`/norm/embedding/quant/reduce/loss) is still an empty trait impl falling to `Err` |
 | `kindle-backends` (wgpu) | Passing, 97/97, +21 tests this audit | ✅ C-9 (embedding/cross_entropy index bit-reinterpret) fixed; ⚠ C-3: elementwise/activation/`matmul`/`TensorOps`/`embedding`/`conv*`/all reductions (incl. `_keepdim` variants)/`layer_norm`/`batch_norm`/pooling/`cross_entropy_loss` autograd all wired and tested against a real adapter (see 2026-07-22 follow-ups); only `quantize`/`dequantize`/`quantized_matmul` remain — not a WGPU-specific gap, unwired on CPU too |
@@ -487,6 +487,41 @@ instead of the hand-computed 0.196) — before restoring the fix and
 confirming both pass. Full `--features wgpu,std` suite: 88/88 passing,
 actually run against the real software WGPU adapter in this environment.
 
+### C-10 — `Tensor::to_scalar<E>`/`to_vec1<E>` could construct an invalid `bool`: real, Miri-confirmed undefined behavior — ✅ FIXED (2026-07-22)
+`crates/kindle-core/src/tensor/ops/manipulation.rs`. Both generic accessors
+only checked byte-length equality against `size_of::<E>()`, never that the
+tensor's actual `DTypeId` is compatible with `E`, before an unsafe
+`read_unaligned`/`copy_nonoverlapping` reinterpret. This is the "Unsound
+raw-byte reinterpretation" item already flagged under Medium priority below
+(now resolved, moved here since it turned out to be actual UB, not just a
+theoretical soundness concern). `bool` has exactly two valid bit patterns
+(`0x00`/`0x01`); there is no `DTypeId::Bool` — ONNX-style boolean tensors are
+stored as another dtype (typically `U8`) and read out via
+`to_scalar::<bool>()`'s truthy-conversion fallback (see
+`kindle-macros/src/onnx.rs`'s `If`/`Loop` codegen) — so reading a stored byte
+that's neither `0` nor `1` (a perfectly valid `U8` value, e.g. `5`) as `bool`
+via `read_unaligned` constructs an invalid `bool`: undefined behavior, not a
+logic bug.
+**Confirmed with Miri, not just reasoned about:** ran the new regression test
+under `cargo +nightly miri test` against the pre-fix code first — Miri
+reported `Undefined Behavior: constructing invalid value: encountered 0x05,
+but expected a boolean` at the exact `read_unaligned` call site. Restored the
+fix and reran; both new tests pass clean under Miri.
+**Fixed:** both functions now special-case `bool` — check
+`TypeId::of::<E>() == TypeId::of::<bool>()` and construct a genuine, valid
+`bool` via a per-element nonzero check first, then reinterpret that (a
+same-type, always-sound cast), instead of ever reinterpret-casting arbitrary
+stored bytes as `bool`. Also fixes a secondary issue in `to_scalar`'s old
+fallback: it silently returned a truthy `0`/`1` value for ANY 1-byte-sized
+`E` on a size mismatch, not just `bool` — e.g. `to_scalar::<i8>()` on an
+`F32` tensor used to silently succeed instead of reporting the real dtype
+mismatch; now only `bool` gets the truthy conversion. Adds
+`E: Copy + 'static` bounds (needed for `TypeId`) to both public methods —
+checked every call site in the workspace uses concrete `'static` scalar
+types already (`f32`, `f64`, `i64`, `bool`, `u8`). New tests:
+`to_scalar_bool_handles_nonzero_non_unit_byte_without_ub`,
+`to_vec1_bool_handles_nonzero_non_unit_bytes_without_ub` (`kindle/tests/tensor_ops.rs`).
+
 ---
 
 ## High priority — real gaps, not yet release-blocking on their own
@@ -610,12 +645,9 @@ actually run against the real software WGPU adapter in this environment.
 
 ## Medium priority
 
-- **Unsound raw-byte reinterpretation**: `to_scalar<E: Copy>`/`to_vec1<E: Copy>`
-  in `kindle-core/src/tensor/ops/manipulation.rs:362,370,387-393` only check
-  byte-length equality against `size_of::<E>()`, never cross-check the tensor's
-  actual `DTypeId` against `E` before `read_unaligned`/`copy_nonoverlapping`.
-  Undefined behavior if `E = bool` (or similar) and the underlying byte isn't
-  0/1. Add a dtype/`E` compatibility check before the unsafe reinterpret.
+- ✅ **FIXED (2026-07-22), promoted to C-10** — see the Critical section above;
+  this was real, Miri-confirmed undefined behavior, not just a theoretical
+  soundness gap.
 - **`panic!`/`unimplemented!` inside `Result`-returning library functions**:
   `kindle-core/src/serialize.rs:82` (Q8_0), `onnx_exporter.rs:110`
   (`dtype_to_onnx`, reachable from `export_to_onnx`), `shapes/idx.rs:137`
