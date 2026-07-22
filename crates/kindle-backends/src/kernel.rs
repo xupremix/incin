@@ -1587,7 +1587,7 @@ mod tests {
         for dtype in [DTypeId::F16, DTypeId::BF16, DTypeId::F32, DTypeId::F64] {
             let unary =
                 render_cuda_unary_packed("neg", "-x", dtype, UnaryLayoutClass::Contiguous).unwrap();
-            cudarc::nvrtc::compile_ptx(&unary.source)
+            crate::cuda::gpu::compile_ptx_with_cuda_includes(&unary.source)
                 .unwrap_or_else(|error| panic!("NVRTC rejected packed unary {dtype:?}: {error:?}"));
 
             for layout in [
@@ -1596,9 +1596,9 @@ mod tests {
                 BinaryLayoutClass::ScalarRight,
             ] {
                 let binary = render_cuda_binary_packed("add", "a + b", dtype, layout).unwrap();
-                cudarc::nvrtc::compile_ptx(&binary.source).unwrap_or_else(|error| {
-                    panic!("NVRTC rejected packed binary {dtype:?}/{layout:?}: {error:?}")
-                });
+                crate::cuda::gpu::compile_ptx_with_cuda_includes(&binary.source).unwrap_or_else(
+                    |error| panic!("NVRTC rejected packed binary {dtype:?}/{layout:?}: {error:?}"),
+                );
             }
         }
     }
@@ -1653,16 +1653,17 @@ mod tests {
             for op in ["sum", "mean", "max", "min"] {
                 for fast in [false, true] {
                     let kernel = render_cuda_reduction(op, dtype, false, fast).unwrap();
-                    cudarc::nvrtc::compile_ptx(&kernel.source).unwrap_or_else(|error| {
-                        panic!("NVRTC rejected reduction {dtype:?}/{op}/fast={fast}: {error:?}")
-                    });
+                    crate::cuda::gpu::compile_ptx_with_cuda_includes(&kernel.source)
+                        .unwrap_or_else(|error| {
+                            panic!("NVRTC rejected reduction {dtype:?}/{op}/fast={fast}: {error:?}")
+                        });
                 }
             }
             for op in ["max", "min"] {
                 let kernel = render_cuda_reduction(op, dtype, true, false).unwrap();
-                cudarc::nvrtc::compile_ptx(&kernel.source).unwrap_or_else(|error| {
-                    panic!("NVRTC rejected indexed reduction {dtype:?}/{op}: {error:?}")
-                });
+                crate::cuda::gpu::compile_ptx_with_cuda_includes(&kernel.source).unwrap_or_else(
+                    |error| panic!("NVRTC rejected indexed reduction {dtype:?}/{op}: {error:?}"),
+                );
             }
         }
     }
@@ -1704,9 +1705,9 @@ mod tests {
         for dtype in [DTypeId::F16, DTypeId::BF16, DTypeId::F32, DTypeId::F64] {
             for op in ["layer_norm", "batch_norm"] {
                 let kernel = render_cuda_normalization(op, dtype).unwrap();
-                cudarc::nvrtc::compile_ptx(&kernel.source).unwrap_or_else(|error| {
-                    panic!("NVRTC rejected normalization {dtype:?}/{op}: {error:?}")
-                });
+                crate::cuda::gpu::compile_ptx_with_cuda_includes(&kernel.source).unwrap_or_else(
+                    |error| panic!("NVRTC rejected normalization {dtype:?}/{op}: {error:?}"),
+                );
             }
         }
     }

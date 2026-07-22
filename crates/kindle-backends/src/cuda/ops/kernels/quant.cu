@@ -1,5 +1,9 @@
 #include <cuda_fp16.h>
-#include <stdint.h>
+
+// NVRTC has no default header search path for host libc headers (only for
+// the CUDA toolkit's own headers, via --include-path), so <stdint.h> isn't
+// resolvable; define the one typedef we need instead.
+typedef signed char int8_t;
 
 struct __align__(2) BlockQ8_0 {
     half d;

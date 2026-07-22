@@ -2227,13 +2227,19 @@ mod tests {
     }
 
     #[test]
-    fn storage_validation_accepts_renderable_float_family_only() {
+    fn storage_validation_accepts_renderable_float_family_and_i64_indices() {
         let device = DeviceId::cuda(0);
-        for dtype in [DTypeId::F16, DTypeId::BF16, DTypeId::F32, DTypeId::F64] {
+        for dtype in [
+            DTypeId::F16,
+            DTypeId::BF16,
+            DTypeId::F32,
+            DTypeId::F64,
+            DTypeId::I64,
+        ] {
             validate_cuda_storage(dtype, &device, "test").unwrap();
         }
         assert!(matches!(
-            validate_cuda_storage(DTypeId::I64, &device, "test"),
+            validate_cuda_storage(DTypeId::U32, &device, "test"),
             Err(Error::UnsupportedDType { .. })
         ));
         assert!(validate_cuda_storage(DTypeId::F32, &DeviceId::cpu(), "test").is_err());

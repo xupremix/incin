@@ -24,7 +24,7 @@ pub(crate) mod cuda {
             src: &str,
             module_name: &str,
         ) -> Result<()> {
-            let ptx = cudarc::nvrtc::compile_ptx(src).map_err(|e| {
+            let ptx = compile_ptx_with_cuda_includes(src).map_err(|e| {
                 kindle_core::prelude::Error::Msg(format!("PTX compile failed: {:?}", e))
             })?;
             let module = self.ctx.load_module(ptx).map_err(|e| {
@@ -51,6 +51,49 @@ pub(crate) mod cuda {
             })?;
             Ok(f)
         }
+    }
+
+    /// Locates the CUDA toolkit's `include` directory so NVRTC can resolve
+    /// `#include <cuda_fp16.h>` / `<cuda_bf16.h>` — NVRTC has no default
+    /// header search path, unlike a host C++ compiler, so this must be
+    /// passed explicitly via `--include-path`.
+    pub(crate) fn cuda_include_paths() -> alloc::vec::Vec<String> {
+        for var in ["CUDA_INCLUDE_PATH", "CUDA_PATH", "CUDA_HOME", "CUDA_ROOT"] {
+            if let Ok(value) = std::env::var(var) {
+                let candidate = if var == "CUDA_INCLUDE_PATH" {
+                    value
+                } else {
+                    alloc::format!("{value}/include")
+                };
+                if std::path::Path::new(&candidate).is_dir() {
+                    return alloc::vec![candidate];
+                }
+            }
+        }
+        for candidate in [
+            "/usr/local/cuda/include",
+            "/usr/local/cuda/targets/x86_64-linux/include",
+        ] {
+            if std::path::Path::new(candidate).is_dir() {
+                return alloc::vec![candidate.to_string()];
+            }
+        }
+        alloc::vec::Vec::new()
+    }
+
+    /// Compiles a CUDA C/C++ source string to PTX, wiring up `--include-path`
+    /// so kernels that need `cuda_fp16.h`/`cuda_bf16.h` for half/bfloat16
+    /// support can find them.
+    pub(crate) fn compile_ptx_with_cuda_includes(
+        src: &str,
+    ) -> core::result::Result<cudarc::nvrtc::Ptx, cudarc::nvrtc::CompileError> {
+        cudarc::nvrtc::compile_ptx_with_opts(
+            src,
+            cudarc::nvrtc::CompileOptions {
+                include_paths: cuda_include_paths(),
+                ..Default::default()
+            },
+        )
     }
 
     pub(crate) mod cuda_cache {

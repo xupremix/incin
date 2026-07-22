@@ -1,4 +1,6 @@
-#include <stdint.h>
+// NVRTC has no default header search path, so <stdint.h> isn't resolvable
+// without an explicit --include-path; define the one typedef we need instead.
+typedef unsigned int uint32_t;
 
 extern "C" __global__ void concat_f32(
     const float* __restrict__ input,

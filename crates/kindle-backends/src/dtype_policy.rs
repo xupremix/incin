@@ -62,8 +62,11 @@ fn supports(backend: BackendFamily, family: OperationFamily, dtype: DTypeId) -> 
             | OperationFamily::Normalization => is_float(dtype),
         },
         BackendFamily::Cuda => match family {
-            OperationFamily::Storage
-            | OperationFamily::Pointwise
+            // I64 storage is index-only (embedding lookup indices) — it never
+            // reaches Pointwise/Reduction/Normalization compute, which stay
+            // float-only below.
+            OperationFamily::Storage => is_float(dtype) || dtype == DTypeId::I64,
+            OperationFamily::Pointwise
             | OperationFamily::Reduction
             | OperationFamily::Normalization => is_float(dtype),
             OperationFamily::Fill | OperationFamily::Random => dtype == DTypeId::F32,
@@ -133,7 +136,13 @@ mod tests {
     fn capability_matrix_separates_storage_creation_and_operations() {
         assert_eq!(
             accepted(BackendFamily::Cuda, OperationFamily::Storage),
-            vec![DTypeId::BF16, DTypeId::F16, DTypeId::F32, DTypeId::F64]
+            vec![
+                DTypeId::I64,
+                DTypeId::BF16,
+                DTypeId::F16,
+                DTypeId::F32,
+                DTypeId::F64
+            ]
         );
         assert_eq!(
             accepted(BackendFamily::Cuda, OperationFamily::Pointwise),

@@ -1,3 +1,7 @@
+// NVRTC has no default header search path, so `int64_t` isn't available
+// without an explicit typedef (unlike `size_t`, which is compiler builtin).
+typedef long long int64_t;
+
 extern "C" __global__ void im2col_2d(
     const float* __restrict__ input,
     float* __restrict__ output,

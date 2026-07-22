@@ -1,11 +1,17 @@
-#![cfg(all(feature = "cpu", feature = "wgpu"))]
+#![cfg(feature = "cpu")]
 
 use kindle_backends::cpu::CpuBackendImpl;
+#[cfg(feature = "wgpu")]
 use kindle_backends::wgpu::WgpuBackendImpl;
+#[cfg(feature = "cuda")]
+use kindle_backends::cuda::CudaBackendImpl;
 use kindle_core::prelude::*;
 
 type CpuB = CpuBackendImpl;
+#[cfg(feature = "wgpu")]
 type WgpuB = WgpuBackendImpl<f32, kindle_core::prelude::Wgpu<0>>;
+#[cfg(feature = "cuda")]
+type CudaB = CudaBackendImpl<f32, kindle_core::prelude::Cuda<0>>;
 
 fn read_f32<B: Backend>(s: &B::Storage<f32>) -> Vec<f32> {
     let bytes = B::to_bytes::<f32>(s).unwrap();
@@ -668,4 +674,301 @@ fn parity_reductions_sum_and_mean() {
         approx_eq_slice(&cpu_mg, &wgpu_mg, 1e-4),
         "mean_dim grad mismatch: CPU {cpu_mg:?} vs WGPU {wgpu_mg:?}"
     );
+}
+
+#[cfg(feature = "wgpu")]
+#[test]
+fn parity_conv2d() {
+    let shape_x = vec![1, 1, 4, 4];
+    let shape_w = vec![1, 1, 3, 3];
+    let data_x: Vec<f32> = (1..=16).map(|x| x as f32).collect();
+    let data_w = vec![1.0f32; 9];
+
+    let cpu_x = CpuB::from_bytes::<f32>(
+        bytemuck::cast_slice(&data_x),
+        &shape_x,
+        DTypeId::F32,
+        &DeviceId::cpu(),
+    )
+    .unwrap();
+    let cpu_w = CpuB::from_bytes::<f32>(
+        bytemuck::cast_slice(&data_w),
+        &shape_w,
+        DTypeId::F32,
+        &DeviceId::cpu(),
+    )
+    .unwrap();
+    let cpu_out = CpuB::conv2d::<f32>(&cpu_x, &cpu_w, None, 1, 0, 1, 1).unwrap();
+    let cpu_grads = CpuB::backward::<f32>(&cpu_out).unwrap();
+
+    let wgpu_x = WgpuB::from_bytes::<f32>(
+        bytemuck::cast_slice(&data_x),
+        &shape_x,
+        DTypeId::F32,
+        &DeviceId::wgpu(0),
+    )
+    .unwrap();
+    let wgpu_w = WgpuB::from_bytes::<f32>(
+        bytemuck::cast_slice(&data_w),
+        &shape_w,
+        DTypeId::F32,
+        &DeviceId::wgpu(0),
+    )
+    .unwrap();
+    let wgpu_out = WgpuB::conv2d::<f32>(&wgpu_x, &wgpu_w, None, 1, 0, 1, 1).unwrap();
+    let wgpu_grads = WgpuB::backward::<f32>(&wgpu_out).unwrap();
+
+    let cpu_res = read_f32::<CpuB>(&cpu_out);
+    let wgpu_res = read_f32::<WgpuB>(&wgpu_out);
+    assert!(
+        approx_eq_slice(&cpu_res, &wgpu_res, 1e-4),
+        "Conv2d forward mismatch: CPU {cpu_res:?} vs WGPU {wgpu_res:?}"
+    );
+
+    let cpu_gx = read_f32::<CpuB>(&CpuB::get_grad::<f32>(&cpu_x, &cpu_grads).unwrap().unwrap());
+    let wgpu_gx = read_f32::<WgpuB>(
+        &WgpuB::get_grad::<f32>(&wgpu_x, &wgpu_grads)
+            .unwrap()
+            .unwrap(),
+    );
+    assert!(
+        approx_eq_slice(&cpu_gx, &wgpu_gx, 1e-4),
+        "Conv2d grad X mismatch: CPU {cpu_gx:?} vs WGPU {wgpu_gx:?}"
+    );
+
+    let cpu_gw = read_f32::<CpuB>(&CpuB::get_grad::<f32>(&cpu_w, &cpu_grads).unwrap().unwrap());
+    let wgpu_gw = read_f32::<WgpuB>(
+        &WgpuB::get_grad::<f32>(&wgpu_w, &wgpu_grads)
+            .unwrap()
+            .unwrap(),
+    );
+    assert!(
+        approx_eq_slice(&cpu_gw, &wgpu_gw, 1e-4),
+        "Conv2d grad W mismatch: CPU {cpu_gw:?} vs WGPU {wgpu_gw:?}"
+    );
+}
+
+// =========================================================================
+// CUDA Parity Tests (gated on feature = "cuda", #[ignore]d without hardware)
+// =========================================================================
+
+#[cfg(feature = "cuda")]
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn cuda_parity_elementwise_add() {
+    let shape = vec![2, 3];
+    let data_a = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let data_b = vec![10.0f32, 20.0, 30.0, 40.0, 5.0, 60.0];
+
+    let cpu_a = CpuB::from_bytes::<f32>(
+        bytemuck::cast_slice(&data_a),
+        &shape,
+        DTypeId::F32,
+        &DeviceId::cpu(),
+    )
+    .unwrap();
+    let cpu_b = CpuB::from_bytes::<f32>(
+        bytemuck::cast_slice(&data_b),
+        &shape,
+        DTypeId::F32,
+        &DeviceId::cpu(),
+    )
+    .unwrap();
+    let cpu_out = CpuB::add::<f32>(&cpu_a, &cpu_b).unwrap();
+    let cpu_grads = CpuB::backward::<f32>(&cpu_out).unwrap();
+
+    let cuda_a = CudaB::from_bytes::<f32>(
+        bytemuck::cast_slice(&data_a),
+        &shape,
+        DTypeId::F32,
+        &DeviceId::cuda(0),
+    )
+    .unwrap();
+    let cuda_b = CudaB::from_bytes::<f32>(
+        bytemuck::cast_slice(&data_b),
+        &shape,
+        DTypeId::F32,
+        &DeviceId::cuda(0),
+    )
+    .unwrap();
+    let cuda_out = CudaB::add::<f32>(&cuda_a, &cuda_b).unwrap();
+    let cuda_grads = CudaB::backward::<f32>(&cuda_out).unwrap();
+
+    let cpu_res = read_f32::<CpuB>(&cpu_out);
+    let cuda_res = read_f32::<CudaB>(&cuda_out);
+    assert!(approx_eq_slice(&cpu_res, &cuda_res, 1e-4));
+
+    let cpu_ga = read_f32::<CpuB>(&CpuB::get_grad::<f32>(&cpu_a, &cpu_grads).unwrap().unwrap());
+    let cuda_ga = read_f32::<CudaB>(&CudaB::get_grad::<f32>(&cuda_a, &cuda_grads).unwrap().unwrap());
+    assert!(approx_eq_slice(&cpu_ga, &cuda_ga, 1e-4));
+}
+
+#[cfg(feature = "cuda")]
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn cuda_parity_matmul() {
+    let shape_a = vec![2, 3];
+    let shape_b = vec![3, 2];
+    let data_a = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let data_b = vec![7.0f32, 8.0, 9.0, 10.0, 11.0, 12.0];
+
+    let cpu_a = CpuB::from_bytes::<f32>(
+        bytemuck::cast_slice(&data_a),
+        &shape_a,
+        DTypeId::F32,
+        &DeviceId::cpu(),
+    )
+    .unwrap();
+    let cpu_b = CpuB::from_bytes::<f32>(
+        bytemuck::cast_slice(&data_b),
+        &shape_b,
+        DTypeId::F32,
+        &DeviceId::cpu(),
+    )
+    .unwrap();
+    let cpu_out = CpuB::matmul::<f32>(&cpu_a, &cpu_b).unwrap();
+    let cpu_grads = CpuB::backward::<f32>(&cpu_out).unwrap();
+
+    let cuda_a = CudaB::from_bytes::<f32>(
+        bytemuck::cast_slice(&data_a),
+        &shape_a,
+        DTypeId::F32,
+        &DeviceId::cuda(0),
+    )
+    .unwrap();
+    let cuda_b = CudaB::from_bytes::<f32>(
+        bytemuck::cast_slice(&data_b),
+        &shape_b,
+        DTypeId::F32,
+        &DeviceId::cuda(0),
+    )
+    .unwrap();
+    let cuda_out = CudaB::matmul::<f32>(&cuda_a, &cuda_b).unwrap();
+    let cuda_grads = CudaB::backward::<f32>(&cuda_out).unwrap();
+
+    let cpu_res = read_f32::<CpuB>(&cpu_out);
+    let cuda_res = read_f32::<CudaB>(&cuda_out);
+    assert!(approx_eq_slice(&cpu_res, &cuda_res, 1e-3));
+
+    let cpu_ga = read_f32::<CpuB>(&CpuB::get_grad::<f32>(&cpu_a, &cpu_grads).unwrap().unwrap());
+    let cuda_ga = read_f32::<CudaB>(&CudaB::get_grad::<f32>(&cuda_a, &cuda_grads).unwrap().unwrap());
+    assert!(approx_eq_slice(&cpu_ga, &cuda_ga, 1e-3));
+}
+
+#[cfg(feature = "cuda")]
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn cuda_parity_conv2d() {
+    let shape_x = vec![1, 1, 4, 4];
+    let shape_w = vec![1, 1, 3, 3];
+    let data_x: Vec<f32> = (1..=16).map(|x| x as f32).collect();
+    let data_w = vec![1.0f32; 9];
+
+    let cpu_x = CpuB::from_bytes::<f32>(
+        bytemuck::cast_slice(&data_x),
+        &shape_x,
+        DTypeId::F32,
+        &DeviceId::cpu(),
+    )
+    .unwrap();
+    let cpu_w = CpuB::from_bytes::<f32>(
+        bytemuck::cast_slice(&data_w),
+        &shape_w,
+        DTypeId::F32,
+        &DeviceId::cpu(),
+    )
+    .unwrap();
+    let cpu_out = CpuB::conv2d::<f32>(&cpu_x, &cpu_w, None, 1, 0, 1, 1).unwrap();
+    let cpu_grads = CpuB::backward::<f32>(&cpu_out).unwrap();
+
+    let cuda_x = CudaB::from_bytes::<f32>(
+        bytemuck::cast_slice(&data_x),
+        &shape_x,
+        DTypeId::F32,
+        &DeviceId::cuda(0),
+    )
+    .unwrap();
+    let cuda_w = CudaB::from_bytes::<f32>(
+        bytemuck::cast_slice(&data_w),
+        &shape_w,
+        DTypeId::F32,
+        &DeviceId::cuda(0),
+    )
+    .unwrap();
+    let cuda_out = CudaB::conv2d::<f32>(&cuda_x, &cuda_w, None, 1, 0, 1, 1).unwrap();
+    let cuda_grads = CudaB::backward::<f32>(&cuda_out).unwrap();
+
+    let cpu_res = read_f32::<CpuB>(&cpu_out);
+    let cuda_res = read_f32::<CudaB>(&cuda_out);
+    assert!(approx_eq_slice(&cpu_res, &cuda_res, 1e-4));
+
+    let cpu_gx = read_f32::<CpuB>(&CpuB::get_grad::<f32>(&cpu_x, &cpu_grads).unwrap().unwrap());
+    let cuda_gx = read_f32::<CudaB>(&CudaB::get_grad::<f32>(&cuda_x, &cuda_grads).unwrap().unwrap());
+    assert!(approx_eq_slice(&cpu_gx, &cuda_gx, 1e-4));
+}
+
+#[cfg(feature = "cuda")]
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn cuda_parity_batch_norm() {
+    let shape_x = vec![2, 2, 2, 2];
+    let shape_c = vec![2];
+    let data_x = vec![
+        1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0,
+    ];
+    let data_w = vec![1.0f32, 1.0];
+    let data_b = vec![0.0f32, 0.0];
+
+    let cpu_x = CpuB::from_bytes::<f32>(
+        bytemuck::cast_slice(&data_x),
+        &shape_x,
+        DTypeId::F32,
+        &DeviceId::cpu(),
+    )
+    .unwrap();
+    let cpu_w = CpuB::from_bytes::<f32>(
+        bytemuck::cast_slice(&data_w),
+        &shape_c,
+        DTypeId::F32,
+        &DeviceId::cpu(),
+    )
+    .unwrap();
+    let cpu_b = CpuB::from_bytes::<f32>(
+        bytemuck::cast_slice(&data_b),
+        &shape_c,
+        DTypeId::F32,
+        &DeviceId::cpu(),
+    )
+    .unwrap();
+    let cpu_out =
+        CpuB::batch_norm::<f32>(&cpu_x, Some(&cpu_w), Some(&cpu_b), None, None, 1e-5, 0.1).unwrap();
+
+    let cuda_x = CudaB::from_bytes::<f32>(
+        bytemuck::cast_slice(&data_x),
+        &shape_x,
+        DTypeId::F32,
+        &DeviceId::cuda(0),
+    )
+    .unwrap();
+    let cuda_w = CudaB::from_bytes::<f32>(
+        bytemuck::cast_slice(&data_w),
+        &shape_c,
+        DTypeId::F32,
+        &DeviceId::cuda(0),
+    )
+    .unwrap();
+    let cuda_b = CudaB::from_bytes::<f32>(
+        bytemuck::cast_slice(&data_b),
+        &shape_c,
+        DTypeId::F32,
+        &DeviceId::cuda(0),
+    )
+    .unwrap();
+    let cuda_out =
+        CudaB::batch_norm::<f32>(&cuda_x, Some(&cuda_w), Some(&cuda_b), None, None, 1e-5, 0.1)
+            .unwrap();
+
+    let cpu_res = read_f32::<CpuB>(&cpu_out);
+    let cuda_res = read_f32::<CudaB>(&cuda_out);
+    assert!(approx_eq_slice(&cpu_res, &cuda_res, 1e-3));
 }

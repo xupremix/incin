@@ -14,6 +14,11 @@
 //   params[9..15]  = inp_shape, padded to 6 dims with leading 1s
 //   params[15..21] = aux: narrow/paste start offsets, or transpose's
 //                    output-dim -> input-dim map, padded with 0s
+//
+// NVRTC has no default header search path, so `uint32_t` isn't available
+// without an explicit typedef (unlike `size_t`, which is compiler builtin).
+typedef unsigned int uint32_t;
+
 extern "C" __global__ void shape_op(
     const float* __restrict__ inp,
     float* __restrict__ out,

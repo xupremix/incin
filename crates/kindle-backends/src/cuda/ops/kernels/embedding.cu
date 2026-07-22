@@ -1,3 +1,7 @@
+// NVRTC has no default header search path, so `int64_t` isn't available
+// without an explicit typedef (unlike `size_t`, which is compiler builtin).
+typedef long long int64_t;
+
 extern "C" __global__ void embedding_forward(
     const int64_t* __restrict__ indices,
     const float* __restrict__ weight,

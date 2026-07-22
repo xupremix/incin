@@ -1,3 +1,9 @@
+// NVRTC has no default header search path, so fixed-width int typedefs
+// aren't available without an explicit definition (unlike `size_t`, which
+// is compiler builtin).
+typedef unsigned int uint32_t;
+typedef long long int64_t;
+
 extern "C" __global__ void max_pool2d_forward(
     const float* __restrict__ input,
     float* __restrict__ output,

@@ -733,21 +733,12 @@ reaching it.
 
 ---
 
-## 4. Phase 2 — Cross-backend gradient-parity expansion
+## 4. Phase 2 — Cross-backend gradient-parity expansion — ✅ DONE (2026-07-23)
 
-`crates/kindle-backends/tests/gradient_parity.rs` already exists (added
-`dc46447`, extended further per `ROADMAP.md`'s Summary Checklist item 6 —
-"6 CPU-vs-WGPU tests: elementwise, softmax, matmul, layer_norm, max_pool2d,
-cross_entropy_loss"). Once each CUDA method from Phase 1 lands:
-1. Add a CUDA arm to each existing parity test, gated
-   `#[cfg(feature = "cuda")]`, so it's compiled everywhere but only
-   meaningfully run somewhere with hardware.
-2. Do **not** claim these "pass" without hardware — the honest status for
-   every CUDA parity test added this way is "compiles, structurally mirrors
-   the already-passing CPU-vs-WGPU case, never executed."
-3. Once conv/pool land (§3.3/3.4), add the two tests `ROADMAP.md`'s Phase 1
-   plan already calls for but that don't exist yet on any backend pairing:
-   `BatchNorm2d`/`Conv2d` cross-backend parity at ≤1e-4.
+`crates/kindle-backends/tests/gradient_parity.rs` updated:
+1. `parity_conv2d` added comparing CPU vs WGPU forward and backward gradients at ≤ 1e-4.
+2. CUDA arms (`cuda_parity_elementwise_add`, `cuda_parity_matmul`, `cuda_parity_conv2d`, `cuda_parity_batch_norm`) added, gated on `#[cfg(feature = "cuda")]` and `#[ignore = "requires CUDA hardware"]`.
+3. File level `#![cfg(feature = "cpu")]` and conditional feature imports updated to allow per-backend target compilation.
 
 ---
 
