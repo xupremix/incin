@@ -160,7 +160,7 @@ policy remain.
 | `kindle-core` | Passing | ✅ C-6/C-7 fixed; C-3 (autograd design gaps) still open |
 | `kindle-backends` (cpu) | Passing, +2 new regression tests | ✅ C-2 (f32 downcast), C-5 (overflow), C-8 (mis-gated `elementwise` module — CPU couldn't build standalone) fixed |
 | `kindle-backends` (cuda) | Compiles (no GPU in this env to run it) | ✅ C-1 fixed; ⚠ C-4: add/sub/mul/div now gradient-wired (unverified on real hardware); everything else (`CreationOps`/`FloatOps`/norm/embedding/quant/reduce/loss) is still an empty trait impl falling to `Err` |
-| `kindle-backends` (wgpu) | Passing, +6 gradcheck tests | ⚠ C-3: elementwise/activation/`matmul`/`TensorOps`/`embedding`/`conv*`/sum-reductions/`layer_norm`/`batch_norm`/pooling autograd all wired and tested against a real adapter (see 2026-07-22 follow-ups); `cross_entropy_loss`/quantization/max-min-reductions still ungradiented |
+| `kindle-backends` (wgpu) | Passing, +8 tests | ✅ C-9 (embedding/cross_entropy index bit-reinterpret) fixed; ⚠ C-3: elementwise/activation/`matmul`/`TensorOps`/`embedding`/`conv*`/sum-reductions/`layer_norm`/`batch_norm`/pooling autograd all wired and tested against a real adapter (see 2026-07-22 follow-ups); `cross_entropy_loss`/quantization/max-min-reductions still ungradiented |
 | `kindle-backends` (legacy: candle only now) | Partial | ✅ `ndarray`/`burn` backends + deps deleted (2026-07-21, both were permanently dead code); only `CandleBackend` remains |
 | `kindle-macros` | Passing | ✅ Solid — hygiene good, doc examples present |
 | `kindle-data` | 9 tests | ✅ `DataLoader` tested (incl. multi-worker concurrency); `default-features = false` fixed on its `kindle-backends` dep (was leaking `cuda`/`wgpu`, see C-8) |
@@ -392,6 +392,37 @@ was actually verified rather than assumed. This is the same class of bug as
 C-1/C-3/C-4 (a real defect with zero automated coverage), found by the same
 root cause the roadmap already flagged: no CI job ever verified a feature
 combination actually meant what its name said.
+
+### C-9 — WGPU `embedding` backward and `cross_entropy_loss` bit-reinterpreted index storage instead of converting it — ✅ FIXED (2026-07-22)
+`crates/kindle-backends/src/wgpu/backend.rs`: `embedding`'s backward closure
+did `indices_capture.buffer.to_vec::<u32>()`, and `cross_entropy_loss`'s
+one-hot construction did `target.buffer.to_vec::<u32>()`. WGPU has no genuine
+integer storage — index/target tensors are physically F32 bytes, and the
+embedding WGSL kernel (`shaders/embedding.wgsl`) proves the correct read:
+it declares `indices: array<f32>` and does `u32(indices[i])`, a real value
+conversion. `to_vec::<u32>()` instead bit-reinterprets those same bytes via
+`bytemuck` — which only happens to produce the right answer for index/class
+`0.0` (IEEE bit pattern `0x00000000`, coincidentally also integer `0`). Any
+other value (`1.0f32` = bit pattern `1065353216`) reads back as a huge
+garbage integer, fails every `idx < vocab_size`/`class_idx < classes` bounds
+check, and silently drops that row's entire gradient/loss contribution
+instead of erroring — the exact "silently wrong answer" class of bug this
+roadmap treats as a release blocker, not a missing feature. Found while
+auditing `cross_entropy_loss` for autograd wiring (see C-3's 2026-07-22
+follow-ups above), not by suspicion of this specific bug.
+**Existing tests never caught this:** `embedding_backward_accumulates_gradients`
+only used index `0.0` for both positions; `test_cross_entropy_mean` only
+asserted loose bounds (`loss > 0.0 && loss < 5.0`) despite already using
+target class `1` in one row.
+**Fixed:** both sites now read `to_vec::<f32>()` and convert the value
+(`idx as usize`), matching the WGSL forward exactly. Verified the bug was
+real, not theoretical, by temporarily reverting the fix and confirming two
+new regression tests fail without it — `embedding_backward_handles_nonzero_indices`
+(wrong gradient rows) and
+`cross_entropy_loss_matches_hand_computed_value_for_nonzero_target` (0.157
+instead of the hand-computed 0.196) — before restoring the fix and
+confirming both pass. Full `--features wgpu,std` suite: 88/88 passing,
+actually run against the real software WGPU adapter in this environment.
 
 ---
 
