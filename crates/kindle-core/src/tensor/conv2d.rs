@@ -5,11 +5,12 @@ use typenum::{Diff, Prod, Quot, Sum, U1, U2};
 
 // ConvOutDim already defined in arithmetic.rs and exposed via prelude
 
-/// `KernelConv2dShape`.
+/// Compile-time-checked `Tensor::conv2d` output shape rule, given
+/// kernel shape `K` and compile-time-fixed `Stride`/`Padding`.
 pub trait KernelConv2dShape<K: Shape, Stride: StaticDim, Padding: StaticDim>: Shape {
-    /// The output tensor type produced by this module's forward pass.
+    /// The convolved output shape.
     type Output: Shape;
-    /// `output_shape`.
+    /// Computes the runtime `Field` of `Output` from the input and kernel fields.
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         kernel: &<K as Shape>::Field,
@@ -39,7 +40,8 @@ where
     ConvOutDim<HIn, KH, Stride, Padding>: StaticDim,
     ConvOutDim<WIn, KW, Stride, Padding>: StaticDim,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// The convolved output shape: batch unchanged, channel dim
+    /// replaced by `COut`, spatial dims via `ConvOutDim`.
     type Output = (
         B,
         COut,
@@ -48,7 +50,8 @@ where
     );
 
     #[inline(always)]
-    /// `output_shape`.
+    /// Purely type-level: all dimensions come from `Default`, since this
+    /// impl only applies when the whole shape is statically known.
     fn output_shape(
         _: &<Self as Shape>::Field,
         _: &<(COut, CIn, KH, KW) as Shape>::Field,
@@ -68,9 +71,10 @@ impl<
     Padding: crate::tensor::matmul::StaticDim + typenum::Unsigned,
 > KernelConv2dShape<Dyn, Stride, Padding> for Dyn
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// Always `Dyn` — the concrete size is only known at runtime.
     type Output = Dyn;
-    /// `output_shape`.
+    /// Computes the convolved output shape from the runtime input/kernel
+    /// dims using the standard conv output-size formula.
     fn output_shape(
         lhs: &<Dyn as Shape>::Field,
         kernel: &<Dyn as Shape>::Field,
@@ -98,7 +102,8 @@ impl<
     G: RequiresGrad,
 > Tensor<S1, B, K, G>
 {
-    /// `conv2d`.
+    /// 2D convolution with compile-time-checked output shape (see
+    /// `KernelConv2dShape`). Dilation and groups are fixed to 1.
     pub fn conv2d<Stride, Padding, KShape>(
         &self,
         weight: &Tensor<KShape, B, K, G>,

@@ -668,9 +668,9 @@ where
     B: Backend + TransferTo<NewD>,
     <B as TransferTo<NewD>>::Output: SupportsDType<K>,
 {
-    /// The output tensor type produced by this module's forward pass.
+    /// The same tensor, rebuilt on backend `NewD`.
     type Output = Tensor<S, <B as TransferTo<NewD>>::Output, K, G>;
-    /// `to_device`.
+    /// Transfers storage to device `arg`, keeping shape/dtype/grad-tracking.
     fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output> {
         let field = NewD::init(arg.clone());
         let inner = B::transfer_storage(&self.inner, &self._dtype, &field)?;

@@ -3,7 +3,7 @@ use crate::prelude::*;
 
 #[derive(Debug, Clone)]
 #[kindle_macros::module(internal)]
-/// `Flatten`.
+/// Collapses dimensions `[START, END]` (inclusive) into a single dimension.
 pub struct Flatten<const START: usize, const END: usize> {}
 
 impl<const START: usize, const END: usize> Default for Flatten<START, END> {

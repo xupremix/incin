@@ -187,7 +187,8 @@ macro_rules! impl_std_ops {
             S1: crate::shapes::broadcast::BroadcastShape<S2>,
             <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape,
         {
-            /// The output tensor type produced by this module's forward pass.
+            /// The broadcast-resolved output shape (via `BroadcastShape`),
+            /// with the same dtype/device/grad-tracking as the operands.
             type Output =
                 Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, G>;
             #[inline]
@@ -219,7 +220,8 @@ macro_rules! impl_std_ops {
             S1: crate::shapes::broadcast::BroadcastShape<S2>,
             <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape,
         {
-            /// The output tensor type produced by this module's forward pass.
+            /// The broadcast-resolved output shape (via `BroadcastShape`),
+            /// with the same dtype/device/grad-tracking as the operands.
             type Output =
                 Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, G>;
             #[inline]
@@ -250,7 +252,8 @@ macro_rules! impl_std_ops {
             S1: crate::shapes::broadcast::BroadcastShape<S2>,
             <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape,
         {
-            /// The output tensor type produced by this module's forward pass.
+            /// The broadcast-resolved output shape (via `BroadcastShape`),
+            /// with the same dtype/device/grad-tracking as the operands.
             type Output =
                 Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, G>;
             #[inline]
@@ -281,7 +284,8 @@ macro_rules! impl_std_ops {
             S1: crate::shapes::broadcast::BroadcastShape<S2>,
             <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape,
         {
-            /// The output tensor type produced by this module's forward pass.
+            /// The broadcast-resolved output shape (via `BroadcastShape`),
+            /// with the same dtype/device/grad-tracking as the operands.
             type Output =
                 Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, G>;
             #[inline]

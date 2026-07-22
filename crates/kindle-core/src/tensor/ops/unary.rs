@@ -255,10 +255,11 @@ macro_rules! impl_std_scalar_ops {
         impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
             core::ops::Mul<$t> for Tensor<S, B, K, G>
         {
-            /// The output tensor type produced by this module's forward pass.
+            /// Scalar multiplication preserves shape/dtype/device.
             type Output = Tensor<S, B, K, G>;
             #[inline]
-            /// `mul`.
+            /// `tensor * scalar`. Panics on error (`*` cannot return
+            /// `Result`) — use `mul_scalar` directly to handle failure.
             fn mul(self, rhs: $t) -> Self::Output {
                 self.mul_scalar(rhs)
                     .unwrap_or_else(|e| panic!("Tensor `*` (scalar) operator panicked: {e:?}"))
@@ -267,10 +268,11 @@ macro_rules! impl_std_scalar_ops {
         impl<'a, S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
             core::ops::Mul<$t> for &'a Tensor<S, B, K, G>
         {
-            /// The output tensor type produced by this module's forward pass.
+            /// Scalar multiplication preserves shape/dtype/device.
             type Output = Tensor<S, B, K, G>;
             #[inline]
-            /// `mul`.
+            /// `tensor * scalar`. Panics on error (`*` cannot return
+            /// `Result`) — use `mul_scalar` directly to handle failure.
             fn mul(self, rhs: $t) -> Self::Output {
                 self.mul_scalar(rhs)
                     .unwrap_or_else(|e| panic!("Tensor `*` (scalar) operator panicked: {e:?}"))
@@ -279,10 +281,11 @@ macro_rules! impl_std_scalar_ops {
         impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
             core::ops::Add<$t> for Tensor<S, B, K, G>
         {
-            /// The output tensor type produced by this module's forward pass.
+            /// Scalar addition preserves shape/dtype/device.
             type Output = Tensor<S, B, K, G>;
             #[inline]
-            /// `add`.
+            /// `tensor + scalar`. Panics on error (`+` cannot return
+            /// `Result`) — use `add_scalar` directly to handle failure.
             fn add(self, rhs: $t) -> Self::Output {
                 self.add_scalar(rhs)
                     .unwrap_or_else(|e| panic!("Tensor `+` (scalar) operator panicked: {e:?}"))
@@ -291,10 +294,11 @@ macro_rules! impl_std_scalar_ops {
         impl<'a, S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
             core::ops::Add<$t> for &'a Tensor<S, B, K, G>
         {
-            /// The output tensor type produced by this module's forward pass.
+            /// Scalar addition preserves shape/dtype/device.
             type Output = Tensor<S, B, K, G>;
             #[inline]
-            /// `add`.
+            /// `tensor + scalar`. Panics on error (`+` cannot return
+            /// `Result`) — use `add_scalar` directly to handle failure.
             fn add(self, rhs: $t) -> Self::Output {
                 self.add_scalar(rhs)
                     .unwrap_or_else(|e| panic!("Tensor `+` (scalar) operator panicked: {e:?}"))
