@@ -78,6 +78,37 @@ policy remain.
 > bigger, more foundational gap than "autograd disconnected" — see C-4's
 > section. Unlike the WGPU fix, this environment has no CUDA hardware, so the
 > CUDA changes are compile-verified only, not runtime-verified.
+>
+> **2026-07-22 fourth follow-up: C-3's "still NOT wired" list was stale.**
+> Auditing `wgpu/backend.rs` directly (grep for `tape::push`/
+> `push_unary_tape_entry`, then tracing every function that instead delegates
+> to an already-wired op) found that most of the list below this note is
+> **already gradient-correct on `main`**, apparently from WGPU/conv-pool
+> autograd work done in a later session that never updated this file (see
+> `git log -- crates/kindle-backends/src/wgpu/backend.rs`, e.g. "fix: resolve
+> clippy errors in WGPU conv/pool autograd backward"). Confirmed wired, either
+> directly or by composition: `mish`/`elu`/`gelu` (direct), `softmax` (composed
+> from `log_softmax`'s already-wired `sub`/`exp`/`sum_keepdim`/`log`/`broadcast_as`
+> chain — `max_keepdim` deliberately stays untracked in that chain, which is
+> mathematically correct: softmax is invariant to the per-row constant it
+> subtracts for numerical stability, so that path *should* be a stop-gradient,
+> not an oversight — but it means `max_keepdim` must not be wired generically
+> without special-casing this call site, or this becomes silently wrong), all
+> of `TensorOps` (`matmul`, `reshape`, `transpose`, `narrow`, `broadcast_as`,
+> `concat` directly; `flatten`/`squeeze` via `reshape`; `broadcast_left` via
+> `broadcast_as`; `slice` via `narrow`; `stack` via `reshape`+`concat`),
+> `embedding`, `sum_all`/`mean_all`/`sum_dim`/`sum_keepdim`/`mean_dim`/
+> `mean_keepdim`, and `conv1d`/`conv2d`/`conv_transpose2d`. Verified with
+> existing tests in `wgpu/tests.rs` (e.g. `softmax_backward_is_tape_tracked`,
+> `gelu_backward_matches_derivative`) already passing against the real
+> software WGPU adapter in this environment — not just re-reading the code.
+> **Still genuinely unwired**, confirmed by the same audit: `layer_norm`,
+> `batch_norm`, `adaptive_avg_pool2d`/`avg_pool2d`/`max_pool2d`,
+> `cross_entropy_loss`, `quantize`/`dequantize`/`quantized_matmul`, and the
+> max/min-family reductions (`max_all`/`min_all`/`max_dim`/`max_keepdim`/
+> `min_dim`/`min_keepdim`/`argmax`/`argmin`/`topk`/`argsort`) — this is the
+> real remaining list, not the one below. `layer_norm`/`batch_norm` remain the
+> next priority per the original note.
 
 ---
 
@@ -88,7 +119,7 @@ policy remain.
 | `kindle-core` | Passing | ✅ C-6/C-7 fixed; C-3 (autograd design gaps) still open |
 | `kindle-backends` (cpu) | Passing, +2 new regression tests | ✅ C-2 (f32 downcast), C-5 (overflow), C-8 (mis-gated `elementwise` module — CPU couldn't build standalone) fixed |
 | `kindle-backends` (cuda) | Compiles (no GPU in this env to run it) | ✅ C-1 fixed; ⚠ C-4: add/sub/mul/div now gradient-wired (unverified on real hardware); everything else (`CreationOps`/`FloatOps`/norm/embedding/quant/reduce/loss) is still an empty trait impl falling to `Err` |
-| `kindle-backends` (wgpu) | Passing, +16 new gradient tests | ⚠ C-3: elementwise/activation autograd fixed; matmul/conv/norm/reductions/etc. still ungradiented |
+| `kindle-backends` (wgpu) | Passing | ⚠ C-3: elementwise/activation/`matmul`/`TensorOps`/`embedding`/`conv*`/sum-reductions autograd all wired (see 2026-07-22 follow-up); `layer_norm`/`batch_norm`/pooling/`cross_entropy_loss`/quantization/max-min-reductions still ungradiented |
 | `kindle-backends` (legacy: candle only now) | Partial | ✅ `ndarray`/`burn` backends + deps deleted (2026-07-21, both were permanently dead code); only `CandleBackend` remains |
 | `kindle-macros` | Passing | ✅ Solid — hygiene good, doc examples present |
 | `kindle-data` | 9 tests | ✅ `DataLoader` tested (incl. multi-worker concurrency); `default-features = false` fixed on its `kindle-backends` dep (was leaking `cuda`/`wgpu`, see C-8) |
