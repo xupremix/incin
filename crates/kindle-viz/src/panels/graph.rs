@@ -152,15 +152,13 @@ impl Panel for GraphModuleListPanel {
         let area = ctx.area();
         let frame = ctx.frame_mut();
 
-        if self.snapshot.is_none() {
+        let Some(snapshot) = self.snapshot.as_ref() else {
             let placeholder = Paragraph::new("waiting for graph snapshot event…")
                 .style(Style::default().add_modifier(Modifier::DIM))
                 .alignment(Alignment::Center);
             frame.render_widget(placeholder, area);
             return;
-        }
-
-        let snapshot = self.snapshot.as_ref().unwrap();
+        };
 
         if self.view_mode == ViewMode::List {
             let header = Row::new(vec![
