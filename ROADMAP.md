@@ -711,8 +711,10 @@ types already (`f32`, `f64`, `i64`, `bool`, `u8`). New tests:
   this exact case. Verified by reproducing the panic against the old raw
   formula (1x1x2x2 input vs. a dilation-3 5x5 kernel: "attempt to subtract
   with overflow") and confirming a regression test passes cleanly with the fix.
-- `kindle-viz/src/panels/graph.rs:163` has a fragile `unwrap()` that's only
-  safe because of an early-return three lines above — refactor to `if let`/`else`.
+- ✅ **FIXED, since this was written:** `kindle-viz/src/panels/graph.rs:163` had
+  a fragile `unwrap()` that was only safe because of an early-return three
+  lines above. Fixed 2026-07-22 by collapsing the check and extraction into
+  a single `let Some(snapshot) = self.snapshot.as_ref() else { return };`.
 - Doc comments across most of `kindle-core`/`kindle-native`/`kindle-wgpu`-successor
   code are content-free templates ("Auto-generated documentation for X") —
   they satisfy a doc-coverage lint while conveying nothing. The real
