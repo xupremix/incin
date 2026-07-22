@@ -73,7 +73,7 @@ bandwidth-bound graphs, and cache the result.
 | Area | Current state | Consequence |
 | --- | --- | --- |
 | CPU elementwise | Arithmetic and unary families dispatch by storage dtype for every layout; a generated AVX2 projection covers F32/F64 contiguous, scalar-broadcast, and vectorizable dense-broadcast inner layouts in serial or Rayon workers | Non-x86 SIMD, packed half types, and arbitrary-stride vectorization remain |
-| CUDA elementwise | Float-family source/ABI; normalized strided fallback; metadata-free contiguous/scalar-broadcast paths; scalar ILP and aligned `half2`/`bfloat162`/`float4`/`double2` candidates with masked tails; optional cold-bucket CUDA-event tuning compares access and 128/256/512-thread variants | Real-GPU validation, occupancy pruning, dense-broadcast specialization, and whole-API dtype coverage remain |
+| CUDA elementwise | Float-family source/ABI; normalized strided fallback; metadata-free contiguous/scalar-broadcast paths; scalar ILP and aligned `half2`/`bfloat162`/`float4`/`double2` candidates with masked tails; optional cold-bucket CUDA-event tuning compares access and 128/256/512-thread variants, coordinated by an in-flight-suppression claim and pruned by pointwise occupancy queries before measurement | Real-GPU validation, reduction occupancy pruning, dense-broadcast specialization, and whole-API dtype coverage remain |
 | WGPU elementwise | One op-mode shader per family, hardcoded `f32` | Good source reuse, but no native F16 specialization and no dtype/adapter key |
 | Reductions/norms | Generated F16/BF16/F32/F64 templates use explicit accumulator policy; last-axis reductions use warp/block cooperation, layer norm uses Welford, and launch-width candidates consume validated cached decisions | Two-pass large reductions, backward normalization, deterministic variants, and real-GPU tuning remain |
 | Matmul/conv | Backend-specific handwritten paths | Cannot systematically select tensor cores, libraries, or tuned fallback kernels |
@@ -177,12 +177,16 @@ With `autotune`, pointwise dispatch consults a bounded cache scoped by device
 ordinal, canonical problem identity, and logarithmic workload bucket; it
 accepts a cached launch only when it remains a member of the candidates legal
 for the current layout and alignment. On a cold bucket, all required source
-variants are compiled before timing, each legal candidate receives two warmups
-and seven stream-ordered CUDA-event samples, and the median winner is recorded
-under the device compute capability and workload bucket. Without `autotune`,
-selection remains deterministic. Occupancy pruning, duplicate-tuning
-suppression, persistent results, and 32/64-bit index selection remain
-subsequent planner stages.
+variants are compiled, candidates the driver's occupancy query confirms
+cannot place a single block on a multiprocessor are pruned before timing,
+each surviving legal candidate receives two warmups and seven stream-ordered
+CUDA-event samples, and the median winner is recorded under the device
+compute capability and workload bucket. Concurrent callers racing to tune the
+same problem/device/workload key block on the in-progress measurement instead
+of redundantly benchmarking it, via a Condvar-coordinated in-flight claim.
+Without `autotune`, selection remains deterministic. Reduction occupancy
+pruning, persistent results, and 32/64-bit index selection remain subsequent
+planner stages.
 
 ### 3. Kernel specialization key
 
@@ -422,7 +426,7 @@ an optimization is never the only implementation until it passes its gate.
 | B. CUDA elementwise tiers | **In progress:** normalized strided fallback, metadata-free contiguous/scalar-broadcast templates, scalar ILP, packed float-family access, masked tails, and 128/256/512-thread candidates are implemented; optional cold-bucket CUDA-event measurement selects and caches the median winner after JIT | Real-GPU correctness under compute-sanitizer; odd/tail/view tests; material bandwidth win in each declared region |
 | C. Reductions and norms | **In progress:** generated float-family reductions use explicit accumulation, contiguous last-axis warp/block cooperation, checked strided fallback, typed Welford layer norm, and 64/128/256/512-thread candidates; value and indexed reductions empirically tune launch width when enabled | Two-pass candidates, normalization backward, adversarial numerical tests, deterministic repeatability, and size/axis benchmarks against CUDA libraries or PyTorch |
 | D. Structured operations | Route GEMM/conv/attention to cuBLASLt/cuDNN/CUTLASS plans with explicit epilogue and math policy; retain generated code only as coverage fallback | Shape-bucket benchmark suite, workspace limits, numerical parity, and selected-plan telemetry |
-| E. Cache and tuning | **In progress:** typed schema-versioned binary/problem keys, candidate enumeration, pre-timing JIT, CUDA-event warmups/samples, synchronized-median selection, compute-capability identity, deterministic non-autotune fallbacks, and a bounded 1024-entry device/workload cache are implemented; next add occupancy pruning, in-flight suppression, richer device/compiler identity, persistence, and telemetry | No key aliasing; only measured winners are recorded; deterministic invalidation; bounded disk/RAM use; warm launch avoids compilation and retuning |
+| E. Cache and tuning | **In progress:** typed schema-versioned binary/problem keys, candidate enumeration, pre-timing JIT, CUDA-event warmups/samples, synchronized-median selection, compute-capability identity, deterministic non-autotune fallbacks, a bounded 1024-entry device/workload cache, a Condvar-coordinated in-flight-suppression claim so concurrent callers for the same key block on the in-progress measurement instead of redundantly benchmarking it, and pointwise occupancy pruning (`cuOccupancyMaxActiveBlocksPerMultiprocessor`, conservative: only drops a candidate the driver confirms has zero active blocks, never narrows the legal set to zero) are implemented; next add reduction occupancy pruning (needs the compiled `CudaFunction` available at candidate-selection time, which requires restructuring `reduce.rs`'s launch-selection flow), richer device/compiler identity, persistence, and telemetry | No key aliasing; only measured winners are recorded; deterministic invalidation; bounded disk/RAM use; warm launch avoids compilation and retuning |
 | F. Fusion | Lower bounded pointwise graphs and structured epilogues to a small scalar IR; estimate register/source pressure before generating candidates | End-to-end launch/HBM reduction and latency win; compile time and cache cardinality stay within budgets |
 
 For elementwise code, the maintained source count should stay approximately

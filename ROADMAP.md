@@ -416,14 +416,29 @@ combination actually meant what its name said.
   `#[cfg(feature = "cpu")]`-gated assertion that actually exercises
   `Tensor`/`DefaultBackend` end-to-end — confirmed it now runs and passes
   (`cargo test -p kindle --features cpu`).
-- **CUDA autotuning — 🟡 FOUNDATION IMPLEMENTED (2026-07-22).** The `autotune`
-  feature now provides typed canonical problem keys, pointwise/reduction launch
-  candidates, synchronized-median winner selection, and a bounded device/shape
-  cache consumed by dispatch. Cold-cache selection is deliberately
-  deterministic and is never stored as benchmark evidence. Pointwise and
-  reduction cold buckets now perform CUDA-event measurement after JIT and use
-  compute-capability identity. Occupancy pruning, concurrent first-use
-  suppression, persistence, and telemetry remain upcoming work.
+- **CUDA autotuning — 🟡 FOUNDATION IMPLEMENTED, coordinator wired (2026-07-22).**
+  The `autotune` feature now provides typed canonical problem keys,
+  pointwise/reduction launch candidates, synchronized-median winner selection,
+  and a bounded device/shape cache consumed by dispatch. Cold-cache selection
+  is deliberately deterministic and is never stored as benchmark evidence.
+  Pointwise and reduction cold buckets now perform CUDA-event measurement
+  after JIT and use compute-capability identity. Concurrent first-use
+  (in-flight) suppression is now wired into both CUDA pointwise and reduction
+  dispatch (`tuning::claim_tuning`/`TuningPermit`) — a coordinator that
+  existed, fully unit-tested, but was never called from any dispatch path
+  before this session; racing callers for the same key now block on the
+  in-progress measurement instead of redundantly benchmarking it. Pointwise
+  candidates also get Tier-2 occupancy pruning
+  (`cuOccupancyMaxActiveBlocksPerMultiprocessor`), conservatively dropping
+  only candidates the driver confirms have zero active blocks and never
+  narrowing the legal set to zero. Reduction occupancy pruning, richer
+  device/compiler identity, persistence, and telemetry remain upcoming work;
+  reduction pruning specifically needs `reduce.rs`'s launch-selection flow
+  restructured so the compiled `CudaFunction` is available at candidate-
+  selection time (block size there is a launch parameter, not a
+  compiled-kernel axis, unlike pointwise). All of this is compile/clippy-
+  verified only — still no CUDA hardware in this environment to runtime-verify
+  against.
 
 ---
 

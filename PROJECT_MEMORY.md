@@ -192,6 +192,21 @@ fn main() -> Result<()> {
 
 ## 7. Recent Project Changelog
 
+- **2026-07-22 tuning coordinator wiring + occupancy pruning**: committed the
+  in-flight dtype/kernel specialization + CUDA autotuning WIP (dtype policy,
+  iteration planner, typed CUDA kernel generation, tuning cache), after fixing
+  a cpu-only test-build break it had introduced (`iteration.rs` test module
+  using cuda-gated APIs without a matching `cfg`). Fixed pre-existing
+  cuda-only/wgpu-only `clippy -D warnings` failures on `main` (mismatched
+  feature gates in `backend_kind.rs`, `cpu/creation.rs`, `tests/ops.rs`,
+  `tests/gradient_parity.rs`). Wired `tuning.rs`'s previously-dead in-flight
+  suppression coordinator (`claim_tuning`/`TuningPermit`) into CUDA pointwise
+  and reduction dispatch, so concurrent callers tuning the same key block on
+  the in-progress measurement instead of redundantly benchmarking it; added
+  Tier-2 occupancy pruning for pointwise autotune candidates via `cudarc`'s
+  `cuOccupancyMaxActiveBlocksPerMultiprocessor`. All CUDA-side work in this
+  entry is compile/clippy-verified only — no CUDA hardware in this
+  environment.
 - **2026-07-21 full-codebase audit**: reviewed every crate for correctness,
   security, and API-design issues. Found and documented in `ROADMAP.md`:
   CUDA ops panic on first call (`Arc::get_mut` refcount bug), CPU elementwise
@@ -239,6 +254,16 @@ fn main() -> Result<()> {
       problem keys and pointwise/reduction dispatch integration.
 - [x] Measure pointwise/reduction candidates with synchronized CUDA events and
       scope results by compute capability.
-- [ ] Add occupancy pruning, device UUID/driver/compiler identity, concurrent
-      first-use suppression, and persistent/telemetrized winning launch plans.
+- [x] Wire the concurrent first-use (in-flight) suppression coordinator into
+      CUDA pointwise/reduction dispatch, so racing callers for the same
+      tuning key block on the in-progress measurement instead of redundantly
+      benchmarking it themselves.
+- [x] Add occupancy pruning for CUDA pointwise autotune candidates
+      (`cuOccupancyMaxActiveBlocksPerMultiprocessor` via `cudarc`), skipping
+      block sizes the driver reports as non-viable before timing them.
+      Reduction candidates are not pruned yet (block size there is a launch
+      parameter, not a compiled-kernel axis, so the function handle isn't
+      available at selection time without restructuring).
+- [ ] Add device UUID/driver/compiler identity to the tuning cache key, and
+      persistent/telemetrized winning launch plans.
 - [ ] Build PyTorch & NumPy comparison benchmark suite in `benches/`.
