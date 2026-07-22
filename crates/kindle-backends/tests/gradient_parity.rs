@@ -268,6 +268,127 @@ fn parity_layer_norm() {
 }
 
 #[test]
+fn parity_max_pool2d() {
+    // Exercises the newest, most complex WGPU backward in this file (host
+    // readback + recomputed argmax scatter, wgpu/backend.rs) against CPU's
+    // independently-implemented max_window_2d/scatter_pool_grad_2d
+    // (cpu/ops/pool.rs) — this is exactly the kind of cross-backend check
+    // that would have caught a subtle indexing mistake in either one.
+    let shape = vec![1, 1, 4, 4];
+    let data = vec![
+        1.0f32, 8.0, 2.0, 9.0, 3.0, 7.0, 4.0, 6.0, 10.0, 0.5, 11.0, 1.5, 12.0, 2.5, 13.0, 3.5,
+    ];
+
+    let cpu_in = CpuB::from_bytes::<f32>(
+        bytemuck::cast_slice(&data),
+        &shape,
+        DTypeId::F32,
+        &DeviceId::cpu(),
+    )
+    .unwrap();
+    let cpu_out = CpuB::max_pool2d::<f32>(&cpu_in, (2, 2), (2, 2), (0, 0), (1, 1)).unwrap();
+    let cpu_grads = CpuB::backward::<f32>(&cpu_out).unwrap();
+
+    let wgpu_in = WgpuB::from_bytes::<f32>(
+        bytemuck::cast_slice(&data),
+        &shape,
+        DTypeId::F32,
+        &DeviceId::wgpu(0),
+    )
+    .unwrap();
+    let wgpu_out = WgpuB::max_pool2d::<f32>(&wgpu_in, (2, 2), (2, 2), (0, 0), (1, 1)).unwrap();
+    let wgpu_grads = WgpuB::backward::<f32>(&wgpu_out).unwrap();
+
+    let cpu_res = read_f32::<CpuB>(&cpu_out);
+    let wgpu_res = read_f32::<WgpuB>(&wgpu_out);
+    assert!(
+        approx_eq_slice(&cpu_res, &wgpu_res, 1e-4),
+        "max_pool2d forward mismatch: CPU {cpu_res:?} vs WGPU {wgpu_res:?}"
+    );
+
+    let cpu_g = read_f32::<CpuB>(&CpuB::get_grad::<f32>(&cpu_in, &cpu_grads).unwrap().unwrap());
+    let wgpu_g = read_f32::<WgpuB>(
+        &WgpuB::get_grad::<f32>(&wgpu_in, &wgpu_grads)
+            .unwrap()
+            .unwrap(),
+    );
+    assert!(
+        approx_eq_slice(&cpu_g, &wgpu_g, 1e-4),
+        "max_pool2d grad mismatch: CPU {cpu_g:?} vs WGPU {wgpu_g:?}"
+    );
+}
+
+#[test]
+fn parity_cross_entropy_loss_nonzero_target() {
+    // Regression coverage for C-9 (embedding/cross_entropy_loss bit-
+    // reinterpreted F32-stored index bytes as u32) at the cross-backend
+    // level: uses a non-zero target class specifically, which is exactly
+    // what that bug corrupted.
+    let shape_pred = vec![2, 3];
+    let shape_tgt = vec![2];
+    let data_pred = vec![2.0f32, 1.0, -0.5, 0.5, 3.0, 0.2];
+    let data_tgt = vec![0.0f32, 2.0]; // class 0, class 2 (non-zero)
+
+    let cpu_pred = CpuB::from_bytes::<f32>(
+        bytemuck::cast_slice(&data_pred),
+        &shape_pred,
+        DTypeId::F32,
+        &DeviceId::cpu(),
+    )
+    .unwrap();
+    let cpu_tgt = CpuB::from_bytes::<f32>(
+        bytemuck::cast_slice(&data_tgt),
+        &shape_tgt,
+        DTypeId::F32,
+        &DeviceId::cpu(),
+    )
+    .unwrap();
+    let cpu_out =
+        CpuB::cross_entropy_loss::<f32, f32>(&cpu_pred, &cpu_tgt, Reduction::Mean).unwrap();
+    let cpu_grads = CpuB::backward::<f32>(&cpu_out).unwrap();
+
+    let wgpu_pred = WgpuB::from_bytes::<f32>(
+        bytemuck::cast_slice(&data_pred),
+        &shape_pred,
+        DTypeId::F32,
+        &DeviceId::wgpu(0),
+    )
+    .unwrap();
+    let wgpu_tgt = WgpuB::from_bytes::<f32>(
+        bytemuck::cast_slice(&data_tgt),
+        &shape_tgt,
+        DTypeId::F32,
+        &DeviceId::wgpu(0),
+    )
+    .unwrap();
+    let wgpu_out =
+        WgpuB::cross_entropy_loss::<f32, f32>(&wgpu_pred, &wgpu_tgt, Reduction::Mean).unwrap();
+    let wgpu_grads = WgpuB::backward::<f32>(&wgpu_out).unwrap();
+
+    let cpu_res = read_f32::<CpuB>(&cpu_out);
+    let wgpu_res = read_f32::<WgpuB>(&wgpu_out);
+    assert!(
+        approx_eq_slice(&cpu_res, &wgpu_res, 1e-4),
+        "cross_entropy_loss forward mismatch: CPU {cpu_res:?} vs WGPU {wgpu_res:?}"
+    );
+
+    let cpu_g = read_f32::<CpuB>(
+        &CpuB::get_grad::<f32>(&cpu_pred, &cpu_grads)
+            .unwrap()
+            .unwrap(),
+    );
+    let wgpu_g = read_f32::<WgpuB>(
+        &WgpuB::get_grad::<f32>(&wgpu_pred, &wgpu_grads)
+            .unwrap()
+            .unwrap(),
+    );
+    assert!(
+        approx_eq_slice(&cpu_g, &wgpu_g, 1e-4),
+        "cross_entropy_loss grad mismatch: CPU {cpu_g:?} vs WGPU {wgpu_g:?}"
+    );
+}
+
+#[test]
 fn wgpu_cross_entropy_rejects_unsupported_u32_targets() {
     let shape_pred = vec![2, 3];
     let shape_tgt = vec![2];
