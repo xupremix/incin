@@ -1126,7 +1126,7 @@ mod tests {
         // appends ONE extra trailing row and column -> [1,1,5,5].
         assert_eq!(out.shape, vec![1, 1, 5, 5]);
         let vals = f32_vec(&out);
-        let natural = vec![
+        let natural = [
             1.0, 1.0, 2.0, 2.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0, 3.0, 3.0, 4.0, 4.0,
         ];
         // Leading [0..4, 0..4] sub-region matches the natural (no

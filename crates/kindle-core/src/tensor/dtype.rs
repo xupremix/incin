@@ -45,7 +45,7 @@ pub trait QuantDType: DType {}
 pub struct Q8_0;
 
 #[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 /// The runtime-identifiable element type a storage handle holds — every
 /// `DType::to_kindle` resolves to one of these.
 pub enum DTypeId {
@@ -60,17 +60,12 @@ pub enum DTypeId {
     /// 16-bit (IEEE 754 half-precision) floating point.
     F16,
     /// 32-bit floating point.
+    #[default]
     F32,
     /// 64-bit floating point.
     F64,
     /// Q8_0 block-quantized 8-bit integer.
     Q8_0,
-}
-
-impl Default for DTypeId {
-    fn default() -> Self {
-        Self::F32
-    }
 }
 
 impl DTypeId {
