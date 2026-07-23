@@ -2,9 +2,9 @@ name: Kindle CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "master", "develop" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "master", "develop" ]
 
 env:
   CARGO_TERM_COLOR: always
