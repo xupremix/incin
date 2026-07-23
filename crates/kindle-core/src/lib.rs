@@ -20,10 +20,11 @@ pub mod nn;
 pub(crate) mod onnx_exporter;
 #[cfg(feature = "std")]
 pub(crate) mod onnx_pb;
-pub(crate) mod optim;
+pub mod optim;
 pub(crate) mod serialize;
 pub(crate) mod shapes;
 pub(crate) mod tensor;
+pub use typenum;
 
 /// Loss functions and reduction definitions.
 pub mod loss {
@@ -69,7 +70,7 @@ pub mod prelude {
     pub use super::shapes::prelude::*;
     pub use super::tensor::prelude::*;
     #[cfg(feature = "std")]
-    pub use crate::nn::save::{load_safetensors, save_safetensors};
+    pub use crate::nn::save::{load_safetensors, load_safetensors_map, save_safetensors};
     #[cfg(feature = "std")]
     pub use crate::onnx_exporter::{OnnxExporter, OnnxImporter};
     pub use crate::optim::{
@@ -85,6 +86,7 @@ pub mod prelude {
     pub use crate::symbolic_dim;
     pub use alloc::boxed::Box;
     pub use alloc::collections::BTreeMap;
+    pub use alloc::format;
     pub use alloc::string::{String, ToString};
     pub use alloc::vec::Vec;
     pub use typenum;

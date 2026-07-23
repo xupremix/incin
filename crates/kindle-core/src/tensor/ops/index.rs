@@ -161,6 +161,7 @@ impl<S> ShapeEq<S> for S {
     const SHAPES_EQUAL: bool = true;
     /// Always passes, since `S: ShapeEq<S>` only reaches this impl when
     /// the two types genuinely match.
+    #[allow(clippy::assertions_on_constants)]
     const ASSERT_SHAPES_MATCH: () = assert!(
         Self::SHAPES_EQUAL,
         "Shape Mismatch: Attempted to operate on tensors of incompatible shapes."
@@ -182,6 +183,7 @@ impl<T> DTypeEq<T> for T {
     const DTYPES_EQUAL: bool = true;
     /// Always passes, since `T: DTypeEq<T>` only reaches this impl when
     /// the two types genuinely match.
+    #[allow(clippy::assertions_on_constants)]
     const ASSERT_DTYPES_MATCH: () = assert!(
         Self::DTYPES_EQUAL,
         "DType Mismatch: Attempted to operate on tensors of incompatible datatypes."

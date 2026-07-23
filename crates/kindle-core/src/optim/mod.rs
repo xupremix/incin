@@ -120,22 +120,38 @@ impl<B: Backend, K: DType> AdamW<B, K> {
     }
 
     /// Exports optimizer state tensors (`m` and `v` momentum buffers).
-    pub fn state_dict(&self, prefix: &str, dict: &mut alloc::collections::BTreeMap<String, B::Storage<K>>) {
+    pub fn state_dict(&self, prefix: &str, dict: &mut alloc::collections::BTreeMap<String, Tensor<Dyn, B, K>>) {
         let p = if prefix.is_empty() {
             alloc::string::String::new()
         } else {
             alloc::format!("{}.", prefix)
         };
         for (name, m_val) in &self.m {
-            dict.insert(alloc::format!("{}m.{}", p, name), m_val.clone());
+            let shape = B::shape(m_val);
+            let tensor = Tensor::<Dyn, B, K>::from_parts_unchecked(
+                m_val.clone(),
+                shape,
+                Default::default(),
+                Default::default(),
+                core::marker::PhantomData,
+            );
+            dict.insert(alloc::format!("{}m.{}", p, name), tensor);
         }
         for (name, v_val) in &self.v {
-            dict.insert(alloc::format!("{}v.{}", p, name), v_val.clone());
+            let shape = B::shape(v_val);
+            let tensor = Tensor::<Dyn, B, K>::from_parts_unchecked(
+                v_val.clone(),
+                shape,
+                Default::default(),
+                Default::default(),
+                core::marker::PhantomData,
+            );
+            dict.insert(alloc::format!("{}v.{}", p, name), tensor);
         }
     }
 
     /// Loads optimizer state tensors from a dictionary.
-    pub fn load_state_dict(&mut self, prefix: &str, dict: &alloc::collections::BTreeMap<String, B::Storage<K>>) -> Result<()> {
+    pub fn load_state_dict(&mut self, prefix: &str, dict: &alloc::collections::BTreeMap<String, Tensor<Dyn, B, K>>) -> Result<()> {
         let p = if prefix.is_empty() {
             alloc::string::String::new()
         } else {
@@ -144,11 +160,11 @@ impl<B: Backend, K: DType> AdamW<B, K> {
         let m_prefix = alloc::format!("{}m.", p);
         let v_prefix = alloc::format!("{}v.", p);
 
-        for (key, storage) in dict {
+        for (key, tensor) in dict {
             if let Some(name) = key.strip_prefix(&m_prefix) {
-                self.m.insert(name.to_string(), storage.clone());
+                self.m.insert(name.to_string(), tensor.inner().clone());
             } else if let Some(name) = key.strip_prefix(&v_prefix) {
-                self.v.insert(name.to_string(), storage.clone());
+                self.v.insert(name.to_string(), tensor.inner().clone());
             }
         }
         Ok(())
@@ -156,11 +172,11 @@ impl<B: Backend, K: DType> AdamW<B, K> {
 }
 
 impl<B: Backend<FloatElem = f32>> crate::nn::module::StateDict<B> for AdamW<B, f32> {
-    fn load_state_dict(&mut self, prefix: &str, dict: &alloc::collections::BTreeMap<String, B::Storage<f32>>) -> Result<()> {
+    fn load_state_dict(&mut self, prefix: &str, dict: &alloc::collections::BTreeMap<String, Tensor<Dyn, B>>) -> Result<()> {
         AdamW::load_state_dict(self, prefix, dict)
     }
 
-    fn state_dict(&self, prefix: &str, dict: &mut alloc::collections::BTreeMap<String, B::Storage<f32>>) {
+    fn state_dict(&self, prefix: &str, dict: &mut alloc::collections::BTreeMap<String, Tensor<Dyn, B>>) {
         AdamW::state_dict(self, prefix, dict);
     }
 }
@@ -265,22 +281,38 @@ impl<B: Backend, K: DType> Adam<B, K> {
     }
 
     /// Exports optimizer state tensors (`m` and `v` momentum buffers).
-    pub fn state_dict(&self, prefix: &str, dict: &mut alloc::collections::BTreeMap<String, B::Storage<K>>) {
+    pub fn state_dict(&self, prefix: &str, dict: &mut alloc::collections::BTreeMap<String, Tensor<Dyn, B, K>>) {
         let p = if prefix.is_empty() {
             alloc::string::String::new()
         } else {
             alloc::format!("{}.", prefix)
         };
         for (name, m_val) in &self.m {
-            dict.insert(alloc::format!("{}m.{}", p, name), m_val.clone());
+            let shape = B::shape(m_val);
+            let tensor = Tensor::<Dyn, B, K>::from_parts_unchecked(
+                m_val.clone(),
+                shape,
+                Default::default(),
+                Default::default(),
+                core::marker::PhantomData,
+            );
+            dict.insert(alloc::format!("{}m.{}", p, name), tensor);
         }
         for (name, v_val) in &self.v {
-            dict.insert(alloc::format!("{}v.{}", p, name), v_val.clone());
+            let shape = B::shape(v_val);
+            let tensor = Tensor::<Dyn, B, K>::from_parts_unchecked(
+                v_val.clone(),
+                shape,
+                Default::default(),
+                Default::default(),
+                core::marker::PhantomData,
+            );
+            dict.insert(alloc::format!("{}v.{}", p, name), tensor);
         }
     }
 
     /// Loads optimizer state tensors from a dictionary.
-    pub fn load_state_dict(&mut self, prefix: &str, dict: &alloc::collections::BTreeMap<String, B::Storage<K>>) -> Result<()> {
+    pub fn load_state_dict(&mut self, prefix: &str, dict: &alloc::collections::BTreeMap<String, Tensor<Dyn, B, K>>) -> Result<()> {
         let p = if prefix.is_empty() {
             alloc::string::String::new()
         } else {
@@ -289,11 +321,11 @@ impl<B: Backend, K: DType> Adam<B, K> {
         let m_prefix = alloc::format!("{}m.", p);
         let v_prefix = alloc::format!("{}v.", p);
 
-        for (key, storage) in dict {
+        for (key, tensor) in dict {
             if let Some(name) = key.strip_prefix(&m_prefix) {
-                self.m.insert(name.to_string(), storage.clone());
+                self.m.insert(name.to_string(), tensor.inner().clone());
             } else if let Some(name) = key.strip_prefix(&v_prefix) {
-                self.v.insert(name.to_string(), storage.clone());
+                self.v.insert(name.to_string(), tensor.inner().clone());
             }
         }
         Ok(())
@@ -301,11 +333,11 @@ impl<B: Backend, K: DType> Adam<B, K> {
 }
 
 impl<B: Backend<FloatElem = f32>> crate::nn::module::StateDict<B> for Adam<B, f32> {
-    fn load_state_dict(&mut self, prefix: &str, dict: &alloc::collections::BTreeMap<String, B::Storage<f32>>) -> Result<()> {
+    fn load_state_dict(&mut self, prefix: &str, dict: &alloc::collections::BTreeMap<String, Tensor<Dyn, B>>) -> Result<()> {
         Adam::load_state_dict(self, prefix, dict)
     }
 
-    fn state_dict(&self, prefix: &str, dict: &mut alloc::collections::BTreeMap<String, B::Storage<f32>>) {
+    fn state_dict(&self, prefix: &str, dict: &mut alloc::collections::BTreeMap<String, Tensor<Dyn, B>>) {
         Adam::state_dict(self, prefix, dict);
     }
 }

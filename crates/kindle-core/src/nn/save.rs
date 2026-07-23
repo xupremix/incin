@@ -4,15 +4,15 @@ use alloc::collections::BTreeMap;
 use safetensors::SafeTensors;
 use std::path::Path;
 
-/// Loads weights into a module from a safetensors file.
-pub fn load_safetensors<B, M, P>(module: &mut M, path: P) -> Result<()>
+/// Loads raw storage tensors from a safetensors file into a dictionary.
+pub fn load_safetensors_map<B, P>(
+    path: P,
+    device: &DeviceId,
+) -> Result<BTreeMap<String, B::Storage<B::FloatElem>>>
 where
     B: Backend,
-    M: StateDict<B>,
     P: AsRef<Path>,
     B: SupportsDType<B::FloatElem>,
-    <<B as Backend>::Device as Device>::Field: Default,
-    <<B as Backend>::FloatElem as DType>::Field: Default,
 {
     let buffer = std::fs::read(path)
         .map_err(|e| Error::Msg(format!("Failed to read safetensors file: {}", e)))?;
@@ -41,15 +41,36 @@ where
             }
         };
 
-        let inner = B::from_bytes::<B::FloatElem>(bytes, &shape, dtype, &DeviceId::cpu())?;
+        let inner = B::from_bytes::<B::FloatElem>(bytes, &shape, dtype, device)?;
+        mapped_tensors.insert(name.to_string(), inner);
+    }
+
+    Ok(mapped_tensors)
+}
+
+/// Loads weights into a module from a safetensors file.
+pub fn load_safetensors<B, M, P>(module: &mut M, path: P) -> Result<()>
+where
+    B: Backend,
+    M: StateDict<B>,
+    P: AsRef<Path>,
+    B: SupportsDType<B::FloatElem>,
+    <<B as Backend>::Device as Device>::Field: Default,
+    <<B as Backend>::FloatElem as DType>::Field: Default,
+{
+    let map = load_safetensors_map::<B, _>(path, &DeviceId::cpu())?;
+    let mut mapped_tensors = BTreeMap::new();
+
+    for (name, storage) in map {
+        let shape = B::shape(&storage);
         let tensor = Tensor::<Dyn, B>::from_parts_unchecked(
-            inner,
+            storage,
             shape,
             Default::default(),
             Default::default(),
             core::marker::PhantomData,
         );
-        mapped_tensors.insert(name.to_string(), tensor);
+        mapped_tensors.insert(name, tensor);
     }
 
     module.load_state_dict("", &mapped_tensors)?;

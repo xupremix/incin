@@ -12,7 +12,7 @@ pub trait Device: 'static + Send + Sync + Clone + Eq + PartialEq + Debug + Sized
     type Arg: Clone;
     /// The runtime-stored representation (a `PhantomData` for fixed
     /// devices, `DeviceId` for `Dyn`).
-    type Field: Debug + Clone;
+    type Field: Debug + Clone + Default;
     /// Converts a user-facing `Arg` into the stored `Field` representation.
     fn init(arg: Self::Arg) -> Self::Field;
     /// Resolves this device's runtime `DeviceId`.
@@ -150,6 +150,12 @@ pub enum DeviceKind {
 pub struct DeviceId {
     kind: DeviceKind,
     ordinal: usize,
+}
+
+impl Default for DeviceId {
+    fn default() -> Self {
+        Self::cpu()
+    }
 }
 
 impl DeviceId {

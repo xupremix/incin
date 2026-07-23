@@ -12,7 +12,7 @@ pub trait DType: 'static + Clone + Debug + Send + Sync + PartialEq {
     type Arg;
     /// The runtime-stored representation (a `PhantomData` for compile-
     /// time-fixed dtypes, `DTypeId` for `Dyn`).
-    type Field: Debug + Clone;
+    type Field: Debug + Clone + Default;
     /// Converts a user-facing `Arg` into the stored `Field` representation.
     fn init(arg: Self::Arg) -> Self::Field;
     /// Resolves this dtype's runtime `DTypeId`.
@@ -65,6 +65,12 @@ pub enum DTypeId {
     F64,
     /// Q8_0 block-quantized 8-bit integer.
     Q8_0,
+}
+
+impl Default for DTypeId {
+    fn default() -> Self {
+        Self::F32
+    }
 }
 
 impl DTypeId {
