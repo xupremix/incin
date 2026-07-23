@@ -1,0 +1,8 @@
+.gitignore
+.vscodeignore
+tsconfig.json
+src/**
+out/test/**
+.vscode-test/**
+**/*.map
+**/.gitkeep

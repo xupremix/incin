@@ -1,75 +1,21 @@
-error[E0254]: the name `kindle` is defined multiple times
- --> tests/compile_fail/forward_linear_partial_mismatch.rs:2:5
+warning: unused import: `kindle_core::nn::*`
+ --> tests/compile_fail/forward_linear_partial_mismatch.rs:4:5
   |
-1 | extern crate kindle_core as kindle;
-  | ----------------------------------- previous import of the extern crate `kindle` here
-2 | use kindle_core as kindle;
-  |     ^^^^^^^^^^^^^^^^^^^^^ `kindle` reimported here
-  |
-  = note: `kindle` must be defined only once in the type namespace of this module
-
-error[E0774]: `derive` may only be applied to `struct`s, `enum`s and `union`s
-  --> tests/compile_fail/forward_linear_partial_mismatch.rs:7:1
-   |
- 7 |   #[derive(Clone, Default)]
-   |   ^^^^^^^^^^^^^^^^^^^^^^^^^ not applicable here
- 8 |
- 9 | / fn main() {
-10 | |     let layer = Linear::<s![3, 4], DummyBackend<f32, Cpu>>::build(()).unwrap();
-11 | |     // Partially dynamic, but the end dimension is still known and wrong!
-12 | |     let input = Tensor::<s![dyn, 5], DummyBackend<f32, Cpu>>::zeros([2, 5]).unwrap();
-13 | |     layer.forward(input).unwrap();
-14 | | }
-   | |_- not a `struct`, `enum` or `union`
-
-warning: unused import: `kindle_core as kindle`
- --> tests/compile_fail/forward_linear_partial_mismatch.rs:2:5
-  |
-2 | use kindle_core as kindle;
-  |     ^^^^^^^^^^^^^^^^^^^^^
+4 | use kindle_core::nn::*;
+  |     ^^^^^^^^^^^^^^^^^^
   |
   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
 
-warning: unused import: `kindle_core::nn::*`
- --> tests/compile_fail/forward_linear_partial_mismatch.rs:5:5
-  |
-5 | use kindle_core::nn::*;
-  |     ^^^^^^^^^^^^^^^^^^
-
-error[E0277]: the trait bound `[{integer}; 2]: ArgInto<TensorArgsData<(usize, ()), (), (), ()>>` is not satisfied
-  --> tests/compile_fail/forward_linear_partial_mismatch.rs:12:69
+error[E0277]: Cannot use shape `(usize, UInt<UInt<UInt<UTerm, B1>, B0>, B1>)` here: its last dimension must be `UInt<UInt<UTerm, B1>, B1>`
+  --> tests/compile_fail/forward_linear_partial_mismatch.rs:10:19
    |
-12 |     let input = Tensor::<s![dyn, 5], DummyBackend<f32, Cpu>>::zeros([2, 5]).unwrap();
-   |                 --------------------------------------------------- ^^^^^^ the trait `Dim` is not implemented for `[{integer}; 2]`
-   |                 |
-   |                 required by a bound introduced by this call
-   |
-   = help: the following other types implement trait `Dim`:
-             NamedDyn<Tag>
-             ProdDim<A, B>
-             UInt<U, B>
-             UTerm
-             usize
-   = note: required for `[{integer}; 2]` to implement `ArgInto<(usize, ())>`
-   = note: 1 redundant requirement hidden
-   = note: required for `[{integer}; 2]` to implement `ArgInto<TensorArgsData<(usize, ()), (), (), ()>>`
-note: required by a bound in `kindle::prelude::Tensor::<S, B, K, G>::zeros`
-  --> src/tensor/base.rs
-   |
-   |     pub fn zeros<A>(args: A) -> Result<Self>
-   |            ----- required by a bound in this associated function
-   |     where
-   |         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
-   |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `Tensor::<S, B, K, G>::zeros`
-
-error[E0277]: the trait bound `(usize, UInt<UInt<UInt<UTerm, B1>, B0>, B1>): EndsWith<UInt<UInt<UTerm, B1>, B1>>` is not satisfied
-  --> tests/compile_fail/forward_linear_partial_mismatch.rs:13:19
-   |
-13 |     layer.forward(input).unwrap();
-   |           ------- ^^^^^ the trait `EndsWith<UInt<UInt<UTerm, B1>, B1>>` is not implemented for `(usize, UInt<UInt<UInt<UTerm, B1>, B0>, B1>)`
+10 |     layer.forward(input).unwrap();
+   |           ------- ^^^^^ wrong trailing dimension
    |           |
    |           required by a bound introduced by this call
    |
+   = help: the trait `EndsWith<UInt<UInt<UTerm, B1>, B1>>` is not implemented for `(usize, UInt<UInt<UInt<UTerm, B1>, B0>, B1>)`
+   = note: the input's last dimension must match this layer's expected input size
    = help: the following other types implement trait `EndsWith<D>`:
              `(D0, D1)` implements `EndsWith<D1>`
              `(D0, D1, D2)` implements `EndsWith<D2>`

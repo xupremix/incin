@@ -100,6 +100,13 @@ pub enum Error {
     Msg(String),
 }
 
+#[cfg(feature = "std")]
+impl From<std::io::Error> for Error {
+    fn from(err: std::io::Error) -> Self {
+        Error::Msg(err.to_string())
+    }
+}
+
 impl Debug for Error {
     /// Format error using Display representation.
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {

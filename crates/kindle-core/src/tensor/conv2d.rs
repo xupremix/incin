@@ -7,6 +7,11 @@ use typenum::{Diff, Prod, Quot, Sum, U1, U2};
 
 /// Compile-time-checked `Tensor::conv2d` output shape rule, given
 /// kernel shape `K` and compile-time-fixed `Stride`/`Padding`.
+#[diagnostic::on_unimplemented(
+    message = "Cannot apply a `{K}`-shaped kernel to input shape `{Self}`",
+    label = "kernel/input shape mismatch",
+    note = "the input's channel dimension must equal the kernel's input-channel dimension, and the input must be rank 4: (B, C, H, W)"
+)]
 pub trait KernelConv2dShape<K: Shape, Stride: StaticDim, Padding: StaticDim>: Shape {
     /// The convolved output shape.
     type Output: Shape;
@@ -50,14 +55,17 @@ where
     );
 
     #[inline(always)]
-    /// Purely type-level: all dimensions come from `Default`, since this
-    /// impl only applies when the whole shape is statically known.
+    /// `COut`/`HOut`/`WOut` come from `Default` — they're all `StaticDim`
+    /// (typenum) here, so the default *is* the only possible value. `B`
+    /// (the batch dim) is bounded only by `Dim + Default`, so a `usize` or
+    /// `symbolic_dim!` batch needs its real value copied from `lhs`
+    /// instead — `Default::default()` would silently produce 0.
     fn output_shape(
-        _: &<Self as Shape>::Field,
+        lhs: &<Self as Shape>::Field,
         _: &<(COut, CIn, KH, KW) as Shape>::Field,
     ) -> <Self::Output as Shape>::Field {
         (
-            Default::default(),
+            lhs.0,
             Default::default(),
             Default::default(),
             Default::default(),

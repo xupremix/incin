@@ -6,6 +6,14 @@ grounded in an actual gap or actual existing-but-hidden strength found while
 reading the code — not a generic wishlist. None of these are started; they
 need scoping (like `IMPLEMENTATION_PLAN.md` §8/§9) before any get built.
 
+> **2026-07-23: several of these ideas are now scoped into an executable,
+> task-by-task growth plan — see [`docs/growth/`](docs/growth/README.md).** That
+> directory turns the "make developers switch / make it go viral" goal into
+> followable workstreams (readable shape diagnostics, a multi-editor IDE
+> extension + LSP, named dimensions, compile-time model stats, the in-terminal
+> training dashboard + scaffolder, deployment/GGUF/WASM, a rustnomicon-style
+> book, and handcrafted agent skills). Start at its `README.md` §0/§3.
+
 ## Gaps — friction a PyTorch developer would hit immediately
 
 - **`print(model)` / `model.summary()` equivalent.** — ✅ IMPLEMENTED (2026-07-23). `NamedLayers::summary(&self)` and `format_layer_summary` in `kindle-core/src/nn/module.rs` output formatted architecture tables.
@@ -107,6 +115,34 @@ need scoping (like `IMPLEMENTATION_PLAN.md` §8/§9) before any get built.
   This matters for the PyTorch-switcher story too: if WASM/browser inference
   is ever part of the pitch (PyTorch's browser story is famously weak —
   ONNX Runtime Web / TF.js fill that gap today), this is the blocker.
+
+## Model Export & Ecosystem Interoperability (GGUF, MLX, UX Proposals)
+
+- **Native `.gguf` Model Export (`kindle::io::export_gguf`)**.
+  - *Goal*: Allow developers to train or fine-tune models in Rust using `kindle` and export them directly to `.gguf` v3 format for zero-Python deployment to `ollama`, `llama.cpp`, `LM Studio`, and edge runtimes.
+  - *Auto-Derivation*: Automatically derive GGUF metadata (`general.file_type`, `block_count`, `embedding_length`, tensor table, 32-byte alignment padding) by combining static shape metadata (`s![...]`) and runtime `state_dict` reflection.
+  - *Comprehensive Quantization Schemes*:
+    - **W4A16 (4-bit Weight, 16-bit Activation)**: Support AWQ / GPTQ / GGUF $Q4\_0$, $Q4\_K\_S$, and $Q4\_K\_M$ (4-bit packed weights with block scales, dequantized on-the-fly to $F16$/$BF16$ during matrix multiplication).
+    - **W8A16 (8-bit Weight, 16-bit Activation)**: GGUF $Q8\_0$ symmetric 8-bit weight quantization via `ggml-quants`.
+    - **W8A8 (8-bit Weight, 8-bit Activation)**: SmoothQuant-style INT8 weight and activation quantization for high-throughput CPU/CUDA GEMM execution.
+    - **Sub-Byte / Extreme Low-Bit (W2A16 / BitNet 1.58-bit)**: Support $Q2\_K$ and ternary weight formats for ultra-low memory edge deployment.
+  - *API*: Fluent builder interface (`GgufExporter::from_module(&model).with_quantization(QuantScheme::W4A16_Q4_K_M).save("model_q4_k_m.gguf")`).
+
+- **Apple MLX Ecosystem Interoperability (`kindle::io::export_mlx`)**.
+  - *Goal*: Enable seamless model sharing with Apple Silicon MLX / MLX-LM ecosystems.
+  - *Format*: MLX models store weights as `.safetensors` paired with a HuggingFace-compatible `config.json`. Provide `export_mlx_dir(module, path, config)` to output MLX-ready directory bundles supporting W4A16 and W8A16 weight packing.
+
+- **Developer UX Proposals & Utilities**:
+  - **`cargo kindle` Transparent Cargo Command Interceptor**:
+    - ✅ IMPLEMENTED (2026-07-23). `cargo-kindle` CLI binary (`crates/kindle/src/bin/cargo-kindle.rs`) seamlessly intercepts `cargo check`, `cargo build`, `cargo test`, `cargo run`, and `cargo clippy`.
+    - Features real-time JSON diagnostic translation of `typenum` generic binary encodings into decimal shape dimensions with inline translation hints.
+    - Supported flags:
+      - `--explain`: Appends contextual Kindle rule explanations (`MatMul`, `Concat`, `Conv2d`).
+      - `--raw`: Passes raw compiler diagnostics without translation.
+      - `cargo kindle inspect <file>`: Inspects `.safetensors`, `.gguf`, or `.onnx` model files from the command line.
+  - **Model File Inspector (`kindle inspect <file>`)**: Diagnostic helper / CLI tool (`kindle::io::inspect(path)`) that prints a formatted tree view of tensor names, shapes, data types, quantization formats (e.g. `W4A16 (Q4_K_M)`), and memory footprint for `.safetensors`, `.gguf`, and `.onnx` files without loading full weights into GPU/RAM.
+  - **`kindle diff_weights(model_a, model_b)`**: Diagnostic utility for measuring weight drift, parameter divergence, or quantization error metrics ($MSE$, cosine similarity) between unquantized float models and exported/quantized checkpoints.
+  - **Pre-packaged Model Configuration & Export Presets**: Architectural metadata mapping templates for standard models (`Llama`, `Mistral`, `ResNet`) so exporting to GGUF or ONNX automatically populates framework-specific tensor naming conventions (`0.weight` vs `layers.0.attention...`).
 
 ## Parked / not yet scoped
 

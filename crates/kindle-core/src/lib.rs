@@ -14,6 +14,8 @@ pub(crate) extern crate alloc;
 pub(crate) mod err;
 
 pub(crate) mod graph;
+#[cfg(feature = "std")]
+pub mod io;
 pub mod metrics;
 pub mod nn;
 #[cfg(feature = "std")]
@@ -69,6 +71,8 @@ pub mod prelude {
 
     pub use super::shapes::prelude::*;
     pub use super::tensor::prelude::*;
+    #[cfg(feature = "std")]
+    pub use crate::io::{GgufExporter, GgufMetadata, MlxExporter, QuantScheme, inspect_file};
     #[cfg(feature = "std")]
     pub use crate::nn::save::{load_safetensors, load_safetensors_map, save_safetensors};
     #[cfg(feature = "std")]

@@ -72,12 +72,27 @@ pub trait ReplaceLastDim<NewDim: Dim> {
 /// Marker: `Self`'s last dimension is `D` — used to bound layer
 /// `forward` impls (e.g. `Linear`) to inputs whose trailing feature
 /// dimension matches the layer's expected input size.
+#[diagnostic::on_unimplemented(
+    message = "Cannot use shape `{Self}` here: its last dimension must be `{D}`",
+    label = "wrong trailing dimension",
+    note = "the input's last dimension must match this layer's expected input size"
+)]
 pub trait EndsWith<D: Dim>: Shape {}
 /// Marker: `Self` has `D` channels at the `Conv1d`-expected channel
 /// position (second-to-last dimension, `[.., C, L]`).
+#[diagnostic::on_unimplemented(
+    message = "Cannot use shape `{Self}` here: it must have `{D}` channels",
+    label = "wrong channel count",
+    note = "Conv1d/BatchNorm1d expect channels at the second-to-last dimension: [.., C, L]"
+)]
 pub trait HasChannels1D<D: Dim>: Shape {}
 /// Marker: `Self` has `D` channels at the `Conv2d`/`BatchNorm2d`-expected
 /// channel position (third-to-last dimension, `[.., C, H, W]`).
+#[diagnostic::on_unimplemented(
+    message = "Cannot use shape `{Self}` here: it must have `{D}` channels",
+    label = "wrong channel count",
+    note = "Conv2d/BatchNorm2d expect channels at the third-to-last dimension: [.., C, H, W]"
+)]
 pub trait HasChannels2D<D: Dim>: Shape {}
 
 impl<D: Dim> EndsWith<D> for Dyn {}

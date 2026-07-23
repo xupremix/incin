@@ -1,0 +1,18 @@
+error[E0277]: Cannot concatenate shape `(Batch, UInt<UInt<UInt<UTerm, B1>, B0>, B0>)` with `(OtherBatch, UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>)` along axis `UInt<UTerm, B1>`
+  --> tests/compile_fail/named_dim_concat_mismatch.rs:14:15
+   |
+14 |     let _ = a.concat::<s![OtherBatch, 8], typenum::U1>(&b);
+   |               ^^^^^^ Shape mismatch during concatenation
+   |
+   = help: the trait `kindle::shapes::concat::ConcatShape<(OtherBatch, UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>), UInt<UTerm, B1>>` is not implemented for `(Batch, UInt<UInt<UInt<UTerm, B1>, B0>, B0>)`
+   = note: Concatenation requires all dimensions except the given axis to match exactly
+   = help: the following other types implement trait `kindle::shapes::concat::ConcatShape<S2, Axis>`:
+             `(D0, D1)` implements `kindle::shapes::concat::ConcatShape<(D0, D1_), UInt<UTerm, B1>>`
+             `(D0, D1)` implements `kindle::shapes::concat::ConcatShape<(D0_, D1), UTerm>`
+             `(D0, D1, D2)` implements `kindle::shapes::concat::ConcatShape<(D0, D1, D2_), UInt<UInt<UTerm, B1>, B0>>`
+             `(D0, D1, D2)` implements `kindle::shapes::concat::ConcatShape<(D0, D1_, D2), UInt<UTerm, B1>>`
+             `(D0, D1, D2)` implements `kindle::shapes::concat::ConcatShape<(D0_, D1, D2), UTerm>`
+             `(D0, D1, D2, D3)` implements `kindle::shapes::concat::ConcatShape<(D0, D1, D2, D3_), UInt<UInt<UTerm, B1>, B1>>`
+             `(D0, D1, D2, D3)` implements `kindle::shapes::concat::ConcatShape<(D0, D1, D2_, D3), UInt<UInt<UTerm, B1>, B0>>`
+             `(D0, D1, D2, D3)` implements `kindle::shapes::concat::ConcatShape<(D0, D1_, D2, D3), UInt<UTerm, B1>>`
+           and $N others

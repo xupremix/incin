@@ -2058,7 +2058,10 @@ dependencies = [
  "kindle-backends",
  "kindle-core",
  "kindle-data",
+ "kindle-diagnostics",
  "kindle-macros",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -2094,6 +2097,7 @@ dependencies = [
  "ggml-quants",
  "half",
  "hashbrown 0.14.5",
+ "kindle-backends",
  "kindle-macros",
  "prost 0.14.4",
  "prost-build 0.14.4",
@@ -2101,6 +2105,7 @@ dependencies = [
  "serde",
  "serde_json",
  "spin",
+ "tempfile",
  "thiserror 2.0.18",
  "trybuild",
  "typenum",
@@ -2119,6 +2124,18 @@ dependencies = [
  "rand 0.8.6",
  "rayon",
  "ureq",
+]
+
+[[package]]
+name = "kindle-diagnostics"
+version = "0.2.0"
+
+[[package]]
+name = "kindle-lsp"
+version = "0.2.0"
+dependencies = [
+ "kindle-diagnostics",
+ "serde_json",
 ]
 
 [[package]]
@@ -2420,6 +2437,13 @@ dependencies = [
  "termcolor",
  "thiserror 1.0.69",
  "unicode-xid",
+]
+
+[[package]]
+name = "named_dims_safety"
+version = "0.2.0"
+dependencies = [
+ "kindle",
 ]
 
 [[package]]

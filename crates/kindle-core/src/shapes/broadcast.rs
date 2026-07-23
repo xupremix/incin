@@ -1,6 +1,6 @@
 //! Compile-time broadcasting shape verification.
 use crate::prelude::*;
-use crate::tensor::matmul::StaticDim;
+use crate::tensor::matmul::StaticOrNamedDim;
 
 /// Resolve one runtime (`Dyn`) broadcast dimension, panicking with a clear
 /// message on incompatible sizes instead of silently fabricating a wrong
@@ -13,7 +13,11 @@ use crate::tensor::matmul::StaticDim;
 /// validated `broadcast_shape` first and propagates its `Err` via `?` before
 /// this value is ever used — so today this assert is not reachable from that
 /// path. It exists as defense-in-depth for any future or direct caller of
-/// `BroadcastShape::output_shape` that doesn't already validate independently.
+/// `BroadcastShape::output_shape` that doesn't already validate independently,
+/// and — since a `symbolic_dim!` name (unlike `typenum`) can legitimately
+/// hold a *different* runtime value on each operand even when both share the
+/// exact same type — as the actual guard against two same-typed named dims
+/// whose real sizes happen to disagree.
 #[inline]
 fn checked_broadcast_dim(lhs: usize, rhs: usize) -> usize {
     assert!(
@@ -21,6 +25,42 @@ fn checked_broadcast_dim(lhs: usize, rhs: usize) -> usize {
         "cannot broadcast dynamic dimension: {lhs} vs {rhs} (dims must be equal, or one of them must be 1)"
     );
     lhs.max(rhs)
+}
+
+/// Generic NumPy-style right-aligned broadcast: computes the output's
+/// runtime per-axis sizes from `lhs`/`rhs`'s own dims, prepending implicit
+/// size-1 axes on whichever operand has fewer dimensions. This one function
+/// backs every `BroadcastShape` impl below instead of each hand-rolling its
+/// own per-arity dimension arithmetic — which is what let a real bug slip in
+/// previously (see the module-level history in `docs/growth/03-named-
+/// dimensions.md`): building the output shape from `Default::default()`
+/// happened to be invisible for `typenum` dims (zero-sized `PhantomData`,
+/// so "the default" and "the real value" coincide) but would have silently
+/// zeroed any runtime-carrying dimension (a `usize` axis, or a
+/// `symbolic_dim!` name).
+fn broadcast_dims<L: DynShape, R: DynShape>(lhs: &L::Field, rhs: &R::Field) -> Vec<usize> {
+    let lhs_dims: Vec<usize> = L::dims(lhs).into();
+    let rhs_dims: Vec<usize> = R::dims(rhs).into();
+    let out_rank = lhs_dims.len().max(rhs_dims.len());
+    let mut out = Vec::with_capacity(out_rank);
+    for i in 0..out_rank {
+        let from_end = out_rank - i;
+        let l = lhs_dims
+            .len()
+            .checked_sub(from_end)
+            .map(|idx| lhs_dims[idx]);
+        let r = rhs_dims
+            .len()
+            .checked_sub(from_end)
+            .map(|idx| rhs_dims[idx]);
+        out.push(match (l, r) {
+            (Some(a), Some(b)) => checked_broadcast_dim(a, b),
+            (Some(a), None) => a,
+            (None, Some(b)) => b,
+            (None, None) => unreachable!("out_rank is the max of both operands' ranks"),
+        });
+    }
+    out
 }
 
 /// Trait that verifies two shapes are broadcastable and determines the output shape.
@@ -49,305 +89,108 @@ impl BroadcastShape<()> for () {
     /// Computes the runtime `Field` (dimension values) of `Output`.
     fn output_shape(_: &(), _: &()) {}
 }
-impl<A: StaticDim> BroadcastShape<(A,)> for (A,) {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (A,);
-    #[inline(always)]
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        _: &<Self as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        Default::default()
-    }
-}
-impl<A: StaticDim, B: StaticDim> BroadcastShape<(A, B)> for (A, B) {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (A, B);
-    #[inline(always)]
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        _: &<Self as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        Default::default()
-    }
-}
-impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<(A, B, C)> for (A, B, C) {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (A, B, C);
-    #[inline(always)]
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        _: &<Self as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        Default::default()
-    }
-}
-impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(A, B, C, D)>
-    for (A, B, C, D)
-{
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (A, B, C, D);
-    #[inline(always)]
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        _: &<Self as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        Default::default()
-    }
-}
 
-impl<A: StaticDim> BroadcastShape<(A,)> for () {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (A,);
-    #[inline(always)]
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        _: &<(A,) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        Default::default()
-    }
+// ============================================================================
+// Static family: every axis is `StaticOrNamedDim` (typenum or `symbolic_dim!`).
+// ============================================================================
+
+/// Same rank on both operands, every axis the identical type.
+macro_rules! impl_broadcast_same_rank {
+    ($($dim:ident),+) => {
+        impl<$($dim: StaticOrNamedDim),+> BroadcastShape<($($dim,)+)> for ($($dim,)+) {
+            /// The resulting shape after broadcasting `Self` against the other operand.
+            type Output = ($($dim,)+);
+            /// Computes the runtime `Field` (dimension values) of `Output`.
+            fn output_shape(
+                lhs: &<Self as Shape>::Field,
+                rhs: &<($($dim,)+) as Shape>::Field,
+            ) -> <Self::Output as Shape>::Field {
+                <Self::Output as Shape>::from_dyn(&broadcast_dims::<Self, ($($dim,)+)>(lhs, rhs)).unwrap()
+            }
+        }
+    };
 }
-impl<A: StaticDim, B: StaticDim> BroadcastShape<(A, B)> for () {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (A, B);
-    #[inline(always)]
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        _: &<(A, B) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        Default::default()
-    }
+impl_broadcast_same_rank!(A);
+impl_broadcast_same_rank!(A, B);
+impl_broadcast_same_rank!(A, B, C);
+impl_broadcast_same_rank!(A, B, C, D);
+
+/// Rank-0 (`()`) on one side, a full static shape on the other, in both directions.
+macro_rules! impl_broadcast_empty_to_full {
+    ($($dim:ident),+) => {
+        impl<$($dim: StaticOrNamedDim),+> BroadcastShape<($($dim,)+)> for () {
+            /// The resulting shape after broadcasting `Self` against the other operand.
+            type Output = ($($dim,)+);
+            /// Computes the runtime `Field` (dimension values) of `Output`.
+            fn output_shape(
+                lhs: &<Self as Shape>::Field,
+                rhs: &<($($dim,)+) as Shape>::Field,
+            ) -> <Self::Output as Shape>::Field {
+                <Self::Output as Shape>::from_dyn(&broadcast_dims::<Self, ($($dim,)+)>(lhs, rhs)).unwrap()
+            }
+        }
+        impl<$($dim: StaticOrNamedDim),+> BroadcastShape<()> for ($($dim,)+) {
+            /// The resulting shape after broadcasting `Self` against the other operand.
+            type Output = ($($dim,)+);
+            /// Computes the runtime `Field` (dimension values) of `Output`.
+            fn output_shape(
+                lhs: &<Self as Shape>::Field,
+                rhs: &<() as Shape>::Field,
+            ) -> <Self::Output as Shape>::Field {
+                <Self::Output as Shape>::from_dyn(&broadcast_dims::<Self, ()>(lhs, rhs)).unwrap()
+            }
+        }
+    };
 }
-impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<(A, B, C)> for () {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (A, B, C);
-    #[inline(always)]
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        _: &<(A, B, C) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        Default::default()
-    }
+impl_broadcast_empty_to_full!(A);
+impl_broadcast_empty_to_full!(A, B);
+impl_broadcast_empty_to_full!(A, B, C);
+impl_broadcast_empty_to_full!(A, B, C, D);
+
+/// Different ranks, the shorter shape's dims a literal *suffix* of the
+/// longer one's (implicit leading 1s fill the rest) — both directions.
+macro_rules! impl_broadcast_prepend {
+    ( ($($prefix:ident),+) ; ($($suffix:ident),+) ) => {
+        impl<$($prefix: StaticOrNamedDim,)+ $($suffix: StaticOrNamedDim),+> BroadcastShape<($($prefix,)+ $($suffix,)+)> for ($($suffix,)+)
+        where
+            ($($suffix,)+): DynShape,
+        {
+            /// The resulting shape after broadcasting `Self` against the other operand.
+            type Output = ($($prefix,)+ $($suffix,)+);
+            /// Computes the runtime `Field` (dimension values) of `Output`.
+            fn output_shape(
+                lhs: &<Self as Shape>::Field,
+                rhs: &<($($prefix,)+ $($suffix,)+) as Shape>::Field,
+            ) -> <Self::Output as Shape>::Field {
+                <Self::Output as Shape>::from_dyn(&broadcast_dims::<Self, ($($prefix,)+ $($suffix,)+)>(lhs, rhs)).unwrap()
+            }
+        }
+        impl<$($prefix: StaticOrNamedDim,)+ $($suffix: StaticOrNamedDim),+> BroadcastShape<($($suffix,)+)> for ($($prefix,)+ $($suffix,)+)
+        where
+            ($($suffix,)+): DynShape,
+        {
+            /// The resulting shape after broadcasting `Self` against the other operand.
+            type Output = ($($prefix,)+ $($suffix,)+);
+            /// Computes the runtime `Field` (dimension values) of `Output`.
+            fn output_shape(
+                lhs: &<Self as Shape>::Field,
+                rhs: &<($($suffix,)+) as Shape>::Field,
+            ) -> <Self::Output as Shape>::Field {
+                <Self::Output as Shape>::from_dyn(&broadcast_dims::<Self, ($($suffix,)+)>(lhs, rhs)).unwrap()
+            }
+        }
+    };
 }
-impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(A, B, C, D)> for () {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (A, B, C, D);
-    #[inline(always)]
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        _: &<(A, B, C, D) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        Default::default()
-    }
-}
-impl<A: StaticDim> BroadcastShape<()> for (A,) {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (A,);
-    #[inline(always)]
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        _: &<() as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        Default::default()
-    }
-}
-impl<A: StaticDim, B: StaticDim> BroadcastShape<(A, B)> for (B,) {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (A, B);
-    #[inline(always)]
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        _: &<(A, B) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        Default::default()
-    }
-}
-impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<(A, B, C)> for (C,) {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (A, B, C);
-    #[inline(always)]
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        _: &<(A, B, C) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        Default::default()
-    }
-}
-impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(A, B, C, D)> for (D,) {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (A, B, C, D);
-    #[inline(always)]
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        _: &<(A, B, C, D) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        Default::default()
-    }
-}
-impl<A: StaticDim, B: StaticDim> BroadcastShape<()> for (A, B) {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (A, B);
-    #[inline(always)]
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        _: &<() as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        Default::default()
-    }
-}
-impl<A: StaticDim, B: StaticDim> BroadcastShape<(B,)> for (A, B) {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (A, B);
-    #[inline(always)]
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        _: &<(B,) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        Default::default()
-    }
-}
-impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<(A, B, C)> for (B, C) {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (A, B, C);
-    #[inline(always)]
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        _: &<(A, B, C) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        Default::default()
-    }
-}
-impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(A, B, C, D)>
-    for (C, D)
-{
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (A, B, C, D);
-    #[inline(always)]
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        _: &<(A, B, C, D) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        Default::default()
-    }
-}
-impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<()> for (A, B, C) {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (A, B, C);
-    #[inline(always)]
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        _: &<() as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        Default::default()
-    }
-}
-impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<(C,)> for (A, B, C) {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (A, B, C);
-    #[inline(always)]
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        _: &<(C,) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        Default::default()
-    }
-}
-impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<(B, C)> for (A, B, C) {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (A, B, C);
-    #[inline(always)]
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        _: &<(B, C) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        Default::default()
-    }
-}
-impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(A, B, C, D)>
-    for (B, C, D)
-{
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (A, B, C, D);
-    #[inline(always)]
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        _: &<(A, B, C, D) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        Default::default()
-    }
-}
-impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<()> for (A, B, C, D) {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (A, B, C, D);
-    #[inline(always)]
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        _: &<() as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        Default::default()
-    }
-}
-impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(D,)> for (A, B, C, D) {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (A, B, C, D);
-    #[inline(always)]
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        _: &<(D,) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        Default::default()
-    }
-}
-impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(C, D)>
-    for (A, B, C, D)
-{
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (A, B, C, D);
-    #[inline(always)]
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        _: &<(C, D) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        Default::default()
-    }
-}
-impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(B, C, D)>
-    for (A, B, C, D)
-{
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (A, B, C, D);
-    #[inline(always)]
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        _: &<(B, C, D) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        Default::default()
-    }
-}
+impl_broadcast_prepend!((A); (B));
+impl_broadcast_prepend!((A); (B, C));
+impl_broadcast_prepend!((A, B); (C));
+impl_broadcast_prepend!((A); (B, C, D));
+impl_broadcast_prepend!((A, B); (C, D));
+impl_broadcast_prepend!((A, B, C); (D));
+
+// ============================================================================
+// Partially dynamic: a leading `usize` batch dim, `StaticOrNamedDim` tail.
+// ============================================================================
 
 impl BroadcastShape<(usize,)> for (usize,) {
     /// The resulting shape after broadcasting `Self` against the other operand.
@@ -382,288 +225,111 @@ impl BroadcastShape<(usize,)> for () {
         (rhs.0,)
     }
 }
-impl<B: StaticDim> BroadcastShape<(usize, B)> for (usize, B) {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (usize, B);
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        lhs: &<Self as Shape>::Field,
-        rhs: &<Self as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        (checked_broadcast_dim(lhs.0, rhs.0), Default::default())
-    }
+
+/// Same rank, leading `usize` batch dim shared, `StaticOrNamedDim` tail identical.
+macro_rules! impl_broadcast_usize_same_rank {
+    ($($dim:ident),+) => {
+        impl<$($dim: StaticOrNamedDim),+> BroadcastShape<(usize, $($dim,)+)> for (usize, $($dim,)+) {
+            /// The resulting shape after broadcasting `Self` against the other operand.
+            type Output = (usize, $($dim,)+);
+            /// Computes the runtime `Field` (dimension values) of `Output`.
+            fn output_shape(
+                lhs: &<Self as Shape>::Field,
+                rhs: &<(usize, $($dim,)+) as Shape>::Field,
+            ) -> <Self::Output as Shape>::Field {
+                <Self::Output as Shape>::from_dyn(&broadcast_dims::<Self, (usize, $($dim,)+)>(lhs, rhs)).unwrap()
+            }
+        }
+    };
 }
-impl<B: StaticDim> BroadcastShape<()> for (usize, B) {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (usize, B);
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        lhs: &<Self as Shape>::Field,
-        _: &<() as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        (lhs.0, Default::default())
-    }
+impl_broadcast_usize_same_rank!(B);
+impl_broadcast_usize_same_rank!(B, C);
+impl_broadcast_usize_same_rank!(B, C, D);
+
+/// Rank-0 (`()`) on one side, a `(usize, ...)` shape on the other.
+macro_rules! impl_broadcast_usize_empty_to_full {
+    ($($dim:ident),+) => {
+        impl<$($dim: StaticOrNamedDim),+> BroadcastShape<(usize, $($dim,)+)> for () {
+            /// The resulting shape after broadcasting `Self` against the other operand.
+            type Output = (usize, $($dim,)+);
+            /// Computes the runtime `Field` (dimension values) of `Output`.
+            fn output_shape(
+                lhs: &<Self as Shape>::Field,
+                rhs: &<(usize, $($dim,)+) as Shape>::Field,
+            ) -> <Self::Output as Shape>::Field {
+                <Self::Output as Shape>::from_dyn(&broadcast_dims::<Self, (usize, $($dim,)+)>(lhs, rhs)).unwrap()
+            }
+        }
+        impl<$($dim: StaticOrNamedDim),+> BroadcastShape<()> for (usize, $($dim,)+) {
+            /// The resulting shape after broadcasting `Self` against the other operand.
+            type Output = (usize, $($dim,)+);
+            /// Computes the runtime `Field` (dimension values) of `Output`.
+            fn output_shape(
+                lhs: &<Self as Shape>::Field,
+                rhs: &<() as Shape>::Field,
+            ) -> <Self::Output as Shape>::Field {
+                <Self::Output as Shape>::from_dyn(&broadcast_dims::<Self, ()>(lhs, rhs)).unwrap()
+            }
+        }
+    };
 }
-impl<B: StaticDim> BroadcastShape<(usize, B)> for () {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (usize, B);
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        rhs: &<(usize, B) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        (rhs.0, Default::default())
-    }
+impl_broadcast_usize_empty_to_full!(B);
+impl_broadcast_usize_empty_to_full!(B, C);
+impl_broadcast_usize_empty_to_full!(B, C, D);
+
+/// Different ranks, one of them `(usize, prefix..., suffix...)`, the other
+/// just `(suffix...)` (a literal suffix of the first) — both directions.
+/// `prefix` may be empty (the `usize` alone is the whole prefix).
+macro_rules! impl_broadcast_usize_prepend {
+    ( ($($prefix:ident),*) ; ($($suffix:ident),+) ) => {
+        impl<$($prefix: StaticOrNamedDim,)* $($suffix: StaticOrNamedDim),+> BroadcastShape<(usize, $($prefix,)* $($suffix,)+)> for ($($suffix,)+)
+        where
+            ($($suffix,)+): DynShape,
+        {
+            /// The resulting shape after broadcasting `Self` against the other operand.
+            type Output = (usize, $($prefix,)* $($suffix,)+);
+            /// Computes the runtime `Field` (dimension values) of `Output`.
+            fn output_shape(
+                lhs: &<Self as Shape>::Field,
+                rhs: &<(usize, $($prefix,)* $($suffix,)+) as Shape>::Field,
+            ) -> <Self::Output as Shape>::Field {
+                <Self::Output as Shape>::from_dyn(&broadcast_dims::<Self, (usize, $($prefix,)* $($suffix,)+)>(lhs, rhs)).unwrap()
+            }
+        }
+        impl<$($prefix: StaticOrNamedDim,)* $($suffix: StaticOrNamedDim),+> BroadcastShape<($($suffix,)+)> for (usize, $($prefix,)* $($suffix,)+)
+        where
+            ($($suffix,)+): DynShape,
+        {
+            /// The resulting shape after broadcasting `Self` against the other operand.
+            type Output = (usize, $($prefix,)* $($suffix,)+);
+            /// Computes the runtime `Field` (dimension values) of `Output`.
+            fn output_shape(
+                lhs: &<Self as Shape>::Field,
+                rhs: &<($($suffix,)+) as Shape>::Field,
+            ) -> <Self::Output as Shape>::Field {
+                <Self::Output as Shape>::from_dyn(&broadcast_dims::<Self, ($($suffix,)+)>(lhs, rhs)).unwrap()
+            }
+        }
+    };
 }
-impl<B: StaticDim> BroadcastShape<(B,)> for (usize, B) {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (usize, B);
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        lhs: &<Self as Shape>::Field,
-        _: &<(B,) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        (lhs.0, Default::default())
-    }
-}
-impl<B: StaticDim> BroadcastShape<(usize, B)> for (B,) {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (usize, B);
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        rhs: &<(usize, B) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        (rhs.0, Default::default())
-    }
-}
-impl<B: StaticDim, C: StaticDim> BroadcastShape<(usize, B, C)> for (usize, B, C) {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (usize, B, C);
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        lhs: &<Self as Shape>::Field,
-        rhs: &<Self as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        (
-            checked_broadcast_dim(lhs.0, rhs.0),
-            Default::default(),
-            Default::default(),
-        )
-    }
-}
-impl<B: StaticDim, C: StaticDim> BroadcastShape<()> for (usize, B, C) {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (usize, B, C);
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        lhs: &<Self as Shape>::Field,
-        _: &<() as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        (lhs.0, Default::default(), Default::default())
-    }
-}
-impl<B: StaticDim, C: StaticDim> BroadcastShape<(usize, B, C)> for () {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (usize, B, C);
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        rhs: &<(usize, B, C) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        (rhs.0, Default::default(), Default::default())
-    }
-}
-impl<B: StaticDim, C: StaticDim> BroadcastShape<(C,)> for (usize, B, C) {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (usize, B, C);
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        lhs: &<Self as Shape>::Field,
-        _: &<(C,) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        (lhs.0, Default::default(), Default::default())
-    }
-}
-impl<B: StaticDim, C: StaticDim> BroadcastShape<(usize, B, C)> for (C,) {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (usize, B, C);
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        rhs: &<(usize, B, C) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        (rhs.0, Default::default(), Default::default())
-    }
-}
-impl<B: StaticDim, C: StaticDim> BroadcastShape<(B, C)> for (usize, B, C) {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (usize, B, C);
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        lhs: &<Self as Shape>::Field,
-        _: &<(B, C) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        (lhs.0, Default::default(), Default::default())
-    }
-}
-impl<B: StaticDim, C: StaticDim> BroadcastShape<(usize, B, C)> for (B, C) {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (usize, B, C);
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        rhs: &<(usize, B, C) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        (rhs.0, Default::default(), Default::default())
-    }
-}
-impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(usize, B, C, D)>
-    for (usize, B, C, D)
-{
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (usize, B, C, D);
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        lhs: &<Self as Shape>::Field,
-        rhs: &<Self as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        (
-            checked_broadcast_dim(lhs.0, rhs.0),
-            Default::default(),
-            Default::default(),
-            Default::default(),
-        )
-    }
-}
-impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<()> for (usize, B, C, D) {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (usize, B, C, D);
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        lhs: &<Self as Shape>::Field,
-        _: &<() as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        (
-            lhs.0,
-            Default::default(),
-            Default::default(),
-            Default::default(),
-        )
-    }
-}
-impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(usize, B, C, D)> for () {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (usize, B, C, D);
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        rhs: &<(usize, B, C, D) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        (
-            rhs.0,
-            Default::default(),
-            Default::default(),
-            Default::default(),
-        )
-    }
-}
-impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(D,)> for (usize, B, C, D) {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (usize, B, C, D);
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        lhs: &<Self as Shape>::Field,
-        _: &<(D,) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        (
-            lhs.0,
-            Default::default(),
-            Default::default(),
-            Default::default(),
-        )
-    }
-}
-impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(usize, B, C, D)> for (D,) {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (usize, B, C, D);
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        rhs: &<(usize, B, C, D) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        (
-            rhs.0,
-            Default::default(),
-            Default::default(),
-            Default::default(),
-        )
-    }
-}
-impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(C, D)> for (usize, B, C, D) {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (usize, B, C, D);
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        lhs: &<Self as Shape>::Field,
-        _: &<(C, D) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        (
-            lhs.0,
-            Default::default(),
-            Default::default(),
-            Default::default(),
-        )
-    }
-}
-impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(usize, B, C, D)> for (C, D) {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (usize, B, C, D);
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        rhs: &<(usize, B, C, D) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        (
-            rhs.0,
-            Default::default(),
-            Default::default(),
-            Default::default(),
-        )
-    }
-}
-impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(B, C, D)> for (usize, B, C, D) {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (usize, B, C, D);
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        lhs: &<Self as Shape>::Field,
-        _: &<(B, C, D) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        (
-            lhs.0,
-            Default::default(),
-            Default::default(),
-            Default::default(),
-        )
-    }
-}
-impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(usize, B, C, D)> for (B, C, D) {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = (usize, B, C, D);
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        rhs: &<(usize, B, C, D) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        (
-            rhs.0,
-            Default::default(),
-            Default::default(),
-            Default::default(),
-        )
-    }
-}
+impl_broadcast_usize_prepend!((); (B));
+impl_broadcast_usize_prepend!((); (B, C));
+impl_broadcast_usize_prepend!((B); (C));
+impl_broadcast_usize_prepend!((); (B, C, D));
+impl_broadcast_usize_prepend!((B); (C, D));
+impl_broadcast_usize_prepend!((B, C); (D));
+
+// ============================================================================
+// Fully dynamic: `Dyn` on at least one side. The backend itself independently
+// validates and computes the real result shape before any `Tensor` carrying
+// this `Output` field is used (see `checked_broadcast_dim`'s doc comment) —
+// so unlike the families above, cloning whichever side is `Dyn` (or, when
+// neither is, doing the same right-aligned computation) is the existing,
+// intentionally-lightweight contract here, not a shortcut this change needs
+// to correct. Only the bound (`StaticOrNamedDim` instead of `StaticDim`)
+// needed relaxing to admit named dims — the bodies never used
+// `Default::default()` and don't change.
+// ============================================================================
 
 impl BroadcastShape<Dyn> for Dyn {
     /// The resulting shape after broadcasting `Self` against the other operand.
@@ -673,23 +339,7 @@ impl BroadcastShape<Dyn> for Dyn {
         lhs: &<Dyn as Shape>::Field,
         rhs: &<Dyn as Shape>::Field,
     ) -> <Dyn as Shape>::Field {
-        // Simplistic dynamic shape broadcasting computation
-        let mut out = alloc::vec![];
-        let max_len = lhs.len().max(rhs.len());
-        for i in 0..max_len {
-            let l = if i < max_len - lhs.len() {
-                1
-            } else {
-                lhs[i - (max_len - lhs.len())]
-            };
-            let r = if i < max_len - rhs.len() {
-                1
-            } else {
-                rhs[i - (max_len - rhs.len())]
-            };
-            out.push(l.max(r));
-        }
-        out
+        broadcast_dims::<Dyn, Dyn>(lhs, rhs)
     }
 }
 impl BroadcastShape<()> for Dyn {
@@ -714,94 +364,42 @@ impl BroadcastShape<Dyn> for () {
         rhs.clone() // At runtime candle will compute output shape properly
     }
 }
-impl<A: StaticDim> BroadcastShape<(A,)> for Dyn {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = Dyn;
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        lhs: &<Dyn as Shape>::Field,
-        _: &<(A,) as Shape>::Field,
-    ) -> <Dyn as Shape>::Field {
-        lhs.clone() // At runtime candle will compute output shape properly
-    }
+
+/// `Dyn` against a full static shape, in both directions — `Dyn`'s own
+/// field is authoritative (see the module note above), so the static
+/// operand's dims are unused; only its arity (rank) matters for which
+/// impl applies.
+macro_rules! impl_broadcast_dyn_static {
+    ($($dim:ident),+) => {
+        impl<$($dim: StaticOrNamedDim),+> BroadcastShape<($($dim,)+)> for Dyn {
+            /// The resulting shape after broadcasting `Self` against the other operand.
+            type Output = Dyn;
+            /// Computes the runtime `Field` (dimension values) of `Output`.
+            fn output_shape(
+                lhs: &<Dyn as Shape>::Field,
+                _: &<($($dim,)+) as Shape>::Field,
+            ) -> <Dyn as Shape>::Field {
+                lhs.clone() // At runtime candle will compute output shape properly
+            }
+        }
+        impl<$($dim: StaticOrNamedDim),+> BroadcastShape<Dyn> for ($($dim,)+) {
+            /// The resulting shape after broadcasting `Self` against the other operand.
+            type Output = Dyn;
+            /// Computes the runtime `Field` (dimension values) of `Output`.
+            fn output_shape(
+                _: &<Self as Shape>::Field,
+                rhs: &<Dyn as Shape>::Field,
+            ) -> <Dyn as Shape>::Field {
+                rhs.clone() // At runtime candle will compute output shape properly
+            }
+        }
+    };
 }
-impl<A: StaticDim> BroadcastShape<Dyn> for (A,) {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = Dyn;
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        rhs: &<Dyn as Shape>::Field,
-    ) -> <Dyn as Shape>::Field {
-        rhs.clone() // At runtime candle will compute output shape properly
-    }
-}
-impl<A: StaticDim, B: StaticDim> BroadcastShape<(A, B)> for Dyn {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = Dyn;
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        lhs: &<Dyn as Shape>::Field,
-        _: &<(A, B) as Shape>::Field,
-    ) -> <Dyn as Shape>::Field {
-        lhs.clone() // At runtime candle will compute output shape properly
-    }
-}
-impl<A: StaticDim, B: StaticDim> BroadcastShape<Dyn> for (A, B) {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = Dyn;
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        rhs: &<Dyn as Shape>::Field,
-    ) -> <Dyn as Shape>::Field {
-        rhs.clone() // At runtime candle will compute output shape properly
-    }
-}
-impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<(A, B, C)> for Dyn {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = Dyn;
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        lhs: &<Dyn as Shape>::Field,
-        _: &<(A, B, C) as Shape>::Field,
-    ) -> <Dyn as Shape>::Field {
-        lhs.clone() // At runtime candle will compute output shape properly
-    }
-}
-impl<A: StaticDim, B: StaticDim, C: StaticDim> BroadcastShape<Dyn> for (A, B, C) {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = Dyn;
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        rhs: &<Dyn as Shape>::Field,
-    ) -> <Dyn as Shape>::Field {
-        rhs.clone() // At runtime candle will compute output shape properly
-    }
-}
-impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(A, B, C, D)> for Dyn {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = Dyn;
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        lhs: &<Dyn as Shape>::Field,
-        _: &<(A, B, C, D) as Shape>::Field,
-    ) -> <Dyn as Shape>::Field {
-        lhs.clone() // At runtime candle will compute output shape properly
-    }
-}
-impl<A: StaticDim, B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<Dyn> for (A, B, C, D) {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = Dyn;
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        rhs: &<Dyn as Shape>::Field,
-    ) -> <Dyn as Shape>::Field {
-        rhs.clone() // At runtime candle will compute output shape properly
-    }
-}
+impl_broadcast_dyn_static!(A);
+impl_broadcast_dyn_static!(A, B);
+impl_broadcast_dyn_static!(A, B, C);
+impl_broadcast_dyn_static!(A, B, C, D);
+
 impl BroadcastShape<(usize,)> for Dyn {
     /// The resulting shape after broadcasting `Self` against the other operand.
     type Output = Dyn;
@@ -824,69 +422,34 @@ impl BroadcastShape<Dyn> for (usize,) {
         rhs.clone() // At runtime candle will compute output shape properly
     }
 }
-impl<B: StaticDim> BroadcastShape<(usize, B)> for Dyn {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = Dyn;
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        lhs: &<Dyn as Shape>::Field,
-        _: &<(usize, B) as Shape>::Field,
-    ) -> <Dyn as Shape>::Field {
-        lhs.clone() // At runtime candle will compute output shape properly
-    }
+
+/// `Dyn` against a `(usize, ...)` shape, in both directions.
+macro_rules! impl_broadcast_dyn_usize {
+    ($($dim:ident),+) => {
+        impl<$($dim: StaticOrNamedDim),+> BroadcastShape<(usize, $($dim,)+)> for Dyn {
+            /// The resulting shape after broadcasting `Self` against the other operand.
+            type Output = Dyn;
+            /// Computes the runtime `Field` (dimension values) of `Output`.
+            fn output_shape(
+                lhs: &<Dyn as Shape>::Field,
+                _: &<(usize, $($dim,)+) as Shape>::Field,
+            ) -> <Dyn as Shape>::Field {
+                lhs.clone() // At runtime candle will compute output shape properly
+            }
+        }
+        impl<$($dim: StaticOrNamedDim),+> BroadcastShape<Dyn> for (usize, $($dim,)+) {
+            /// The resulting shape after broadcasting `Self` against the other operand.
+            type Output = Dyn;
+            /// Computes the runtime `Field` (dimension values) of `Output`.
+            fn output_shape(
+                _: &<Self as Shape>::Field,
+                rhs: &<Dyn as Shape>::Field,
+            ) -> <Dyn as Shape>::Field {
+                rhs.clone() // At runtime candle will compute output shape properly
+            }
+        }
+    };
 }
-impl<B: StaticDim> BroadcastShape<Dyn> for (usize, B) {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = Dyn;
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        rhs: &<Dyn as Shape>::Field,
-    ) -> <Dyn as Shape>::Field {
-        rhs.clone() // At runtime candle will compute output shape properly
-    }
-}
-impl<B: StaticDim, C: StaticDim> BroadcastShape<(usize, B, C)> for Dyn {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = Dyn;
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        lhs: &<Dyn as Shape>::Field,
-        _: &<(usize, B, C) as Shape>::Field,
-    ) -> <Dyn as Shape>::Field {
-        lhs.clone() // At runtime candle will compute output shape properly
-    }
-}
-impl<B: StaticDim, C: StaticDim> BroadcastShape<Dyn> for (usize, B, C) {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = Dyn;
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        rhs: &<Dyn as Shape>::Field,
-    ) -> <Dyn as Shape>::Field {
-        rhs.clone() // At runtime candle will compute output shape properly
-    }
-}
-impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<(usize, B, C, D)> for Dyn {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = Dyn;
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        lhs: &<Dyn as Shape>::Field,
-        _: &<(usize, B, C, D) as Shape>::Field,
-    ) -> <Dyn as Shape>::Field {
-        lhs.clone() // At runtime candle will compute output shape properly
-    }
-}
-impl<B: StaticDim, C: StaticDim, D: StaticDim> BroadcastShape<Dyn> for (usize, B, C, D) {
-    /// The resulting shape after broadcasting `Self` against the other operand.
-    type Output = Dyn;
-    /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
-        rhs: &<Dyn as Shape>::Field,
-    ) -> <Dyn as Shape>::Field {
-        rhs.clone() // At runtime candle will compute output shape properly
-    }
-}
+impl_broadcast_dyn_usize!(B);
+impl_broadcast_dyn_usize!(B, C);
+impl_broadcast_dyn_usize!(B, C, D);

@@ -145,8 +145,13 @@ macro_rules! impl_conv1d_shape {
             /// The resulting shape per this trait\'s rule.
             type Output = ($($B,)* COut, <LIn as SpatialOut<K, S, P, D>>::Output);
             /// Computes the runtime `Field` of `Output` from the input\'s own field.
-            fn compute_output_shape(input: &Self::Field, _out_channels: usize) -> <Self::Output as crate::prelude::Shape>::Field {
-                ($(input.$idx.clone(),)* Default::default(), Default::default())
+            fn compute_output_shape(input: &Self::Field, out_channels: usize) -> <Self::Output as crate::prelude::Shape>::Field {
+                // `COut` is bounded by `Dim`, not `Unsigned` — for a `usize`
+                // or `symbolic_dim!` channel count, `Default::default()`
+                // would silently produce 0 instead of the real
+                // `out_channels` this function is already handed (and
+                // ignored, for exactly that reason, before this fix).
+                ($(input.$idx.clone(),)* COut::from_size(out_channels).unwrap(), Default::default())
             }
         }
     };
@@ -208,8 +213,12 @@ macro_rules! impl_conv2d_shape {
             /// The resulting shape per this trait\'s rule.
             type Output = ($($B,)* COut, <HIn as SpatialOut<K, S, P, D>>::Output, <WIn as SpatialOut<K, S, P, D>>::Output);
             /// Computes the runtime `Field` of `Output` from the input\'s own field.
-            fn compute_output_shape(input: &Self::Field, _out_channels: usize) -> <Self::Output as crate::prelude::Shape>::Field {
-                ($(input.$idx.clone(),)* Default::default(), Default::default(), Default::default())
+            fn compute_output_shape(input: &Self::Field, out_channels: usize) -> <Self::Output as crate::prelude::Shape>::Field {
+                // See `impl_conv1d_shape!`'s identical fix: `COut` is
+                // bounded by `Dim`, not `Unsigned`, so it needs the real
+                // `out_channels` this function is already handed, not
+                // `Default::default()`.
+                ($(input.$idx.clone(),)* COut::from_size(out_channels).unwrap(), Default::default(), Default::default())
             }
         }
     };

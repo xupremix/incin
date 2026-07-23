@@ -92,6 +92,15 @@ macro_rules! symbolic_dim {
                     self.0
                 }
             }
+
+            // Deliberately `StaticOrNamedDim`, not `StaticDim`: a named dim isn't
+            // a `typenum` compile-time constant (it can't do type-level
+            // arithmetic), but it *can* appear in a matmul's `M`/`N`/batch
+            // positions, which only need identity/carry-through, not
+            // arithmetic. `StaticDim` itself is left untouched here since
+            // `BroadcastShape`/`conv2d` also key off it and haven't been
+            // audited for real (non-zero-sized) runtime dimension state.
+            impl $crate::prelude::StaticOrNamedDim for $name {}
         )+
     };
 }

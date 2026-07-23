@@ -5,6 +5,8 @@ members = [
     "crates/kindle",
     "crates/kindle-backends",
     "crates/kindle-core",
+    "crates/kindle-diagnostics",
+    "crates/kindle-lsp",
     "crates/kindle-data",
     "crates/kindle-macros",
     "crates/kindle-telemetry",

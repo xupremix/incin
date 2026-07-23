@@ -68,10 +68,26 @@ impl StaticDim for typenum::UTerm {}
 
 impl<A: StaticDim, B: StaticDim> StaticDim for ProdDim<A, B> {}
 
+/// Marker for a dimension usable in a static matmul shape position: any
+/// `Dim` that isn't `usize` — `typenum` dims, `ProdDim` (post-flatten
+/// composites), and `symbolic_dim!`-named dims all qualify.
+///
+/// Deliberately **not** just `Dim` directly: `usize: Dim` already holds, and
+/// `MatMulShape`'s "partially/fully dynamic" impls below are hardcoded for
+/// `usize` specifically (e.g. `MatMulShape<(K, N)> for (usize, K)`). If the
+/// fully-static impl's `M`/`K`/`N` were bounded by plain `Dim`, `M = usize`
+/// would also satisfy it, directly overlapping/conflicting with that
+/// `usize`-specific impl — a coherence error (E0119). Routing through this
+/// dedicated marker (rather than widening `StaticDim` itself, which
+/// `BroadcastShape`/`conv2d` also key off of and haven't been audited for
+/// this change) keeps the fix scoped to matmul.
+pub trait StaticOrNamedDim: Dim {}
+impl<T: StaticDim> StaticOrNamedDim for T {}
+
 // ============================================================================
 // Fully static: (M, K) × (K, N) → (M, N)
 // ============================================================================
-impl<M: StaticDim, K: StaticDim, N: StaticDim> MatMulShape<(K, N)> for (M, K) {
+impl<M: StaticOrNamedDim, K: StaticOrNamedDim, N: StaticOrNamedDim> MatMulShape<(K, N)> for (M, K) {
     /// The resulting shape after multiplying `Self` by `Rhs`.
     type Output = (M, N);
 
@@ -79,10 +95,10 @@ impl<M: StaticDim, K: StaticDim, N: StaticDim> MatMulShape<(K, N)> for (M, K) {
     /// Computes the runtime `Field` (dimension values) of `Output` from
     /// the operands' own runtime fields.
     fn output_shape(
-        _: &<Self as Shape>::Field,
-        _: &<(K, N) as Shape>::Field,
+        lhs: &<Self as Shape>::Field,
+        rhs: &<(K, N) as Shape>::Field,
     ) -> <Self::Output as Shape>::Field {
-        (Default::default(), Default::default())
+        (lhs.0, rhs.1)
     }
 }
 
@@ -91,7 +107,7 @@ impl<M: StaticDim, K: StaticDim, N: StaticDim> MatMulShape<(K, N)> for (M, K) {
 // ============================================================================
 
 // (usize, K) × (K, N) → (usize, N)
-impl<K: StaticDim, N: StaticDim> MatMulShape<(K, N)> for (usize, K) {
+impl<K: StaticOrNamedDim, N: StaticOrNamedDim> MatMulShape<(K, N)> for (usize, K) {
     /// The resulting shape after multiplying `Self` by `Rhs`.
     type Output = (usize, N);
 
@@ -99,29 +115,29 @@ impl<K: StaticDim, N: StaticDim> MatMulShape<(K, N)> for (usize, K) {
     /// the operands' own runtime fields.
     fn output_shape(
         lhs: &<Self as Shape>::Field,
-        _: &<(K, N) as Shape>::Field,
+        rhs: &<(K, N) as Shape>::Field,
     ) -> <Self::Output as Shape>::Field {
-        (lhs.0, Default::default())
+        (lhs.0, rhs.1)
     }
 }
 
 // (M, K) × (K, usize) → (M, usize)
-impl<M: StaticDim, K: StaticDim> MatMulShape<(K, usize)> for (M, K) {
+impl<M: StaticOrNamedDim, K: StaticOrNamedDim> MatMulShape<(K, usize)> for (M, K) {
     /// The resulting shape after multiplying `Self` by `Rhs`.
     type Output = (M, usize);
 
     /// Computes the runtime `Field` (dimension values) of `Output` from
     /// the operands' own runtime fields.
     fn output_shape(
-        _: &<Self as Shape>::Field,
+        lhs: &<Self as Shape>::Field,
         rhs: &<(K, usize) as Shape>::Field,
     ) -> <Self::Output as Shape>::Field {
-        (Default::default(), rhs.1)
+        (lhs.0, rhs.1)
     }
 }
 
 // (usize, K) × (K, usize) → (usize, usize)
-impl<K: StaticDim> MatMulShape<(K, usize)> for (usize, K) {
+impl<K: StaticOrNamedDim> MatMulShape<(K, usize)> for (usize, K) {
     /// The resulting shape after multiplying `Self` by `Rhs`.
     type Output = (usize, usize);
 
@@ -192,45 +208,68 @@ impl MatMulShape<Dyn> for Dyn {
 macro_rules! impl_batched_matmul {
     // Both have same batch
     ( $( $batch:ident ),+ ) => {
-        impl< $($batch: StaticDim,)* M: StaticDim, K: StaticDim, N: StaticDim> MatMulShape<( $($batch,)* K, N)> for ( $($batch,)* M, K) {
+        impl< $($batch: StaticOrNamedDim,)* M: StaticOrNamedDim, K: StaticOrNamedDim, N: StaticOrNamedDim> MatMulShape<( $($batch,)* K, N)> for ( $($batch,)* M, K)
+        where
+            ( $($batch,)* M, K): DynShape,
+            ( $($batch,)* K, N): DynShape,
+        {
             /// The resulting shape after multiplying `Self` by `Rhs`.
             type Output = ( $($batch,)* M, N);
-            #[inline(always)]
             /// Computes the runtime `Field` (dimension values) of `Output` from
-            /// the operands' own runtime fields.
+            /// the operands' own runtime fields: the batch dims and `M` are
+            /// carried through from `lhs` unchanged, `K` (`lhs`'s last dim)
+            /// is replaced by `rhs`'s last dim (`N`) — arity-agnostic, so
+            /// this one body covers every `$batch` count this macro is
+            /// invoked with.
             fn output_shape(
-                _: &<Self as Shape>::Field,
-                _: &<( $($batch,)* K, N) as Shape>::Field,
+                lhs: &<Self as Shape>::Field,
+                rhs: &<( $($batch,)* K, N) as Shape>::Field,
             ) -> <Self::Output as Shape>::Field {
-                Default::default()
+                let mut dims: Vec<usize> = <Self as DynShape>::dims(lhs).into();
+                let rhs_dims: Vec<usize> = <( $($batch,)* K, N) as DynShape>::dims(rhs).into();
+                let last = dims.len() - 1;
+                dims[last] = rhs_dims[rhs_dims.len() - 1];
+                <Self::Output as Shape>::from_dyn(&dims).unwrap()
             }
         }
         // Lhs has batch
-        impl< $($batch: StaticDim,)* M: StaticDim, K: StaticDim, N: StaticDim> MatMulShape<(K, N)> for ( $($batch,)* M, K) {
+        impl< $($batch: StaticOrNamedDim,)* M: StaticOrNamedDim, K: StaticOrNamedDim, N: StaticOrNamedDim> MatMulShape<(K, N)> for ( $($batch,)* M, K)
+        where
+            ( $($batch,)* M, K): DynShape,
+        {
             /// The resulting shape after multiplying `Self` by `Rhs`.
             type Output = ( $($batch,)* M, N);
-            #[inline(always)]
-            /// Computes the runtime `Field` (dimension values) of `Output` from
-            /// the operands' own runtime fields.
+            /// Batch dims and `M` carried through from `lhs`; `K` (`lhs`'s
+            /// last dim) replaced by `rhs`'s own `N` (`rhs` is always a
+            /// plain `(K, N)` here, so direct field access is simplest).
             fn output_shape(
-                _: &<Self as Shape>::Field,
-                _: &<(K, N) as Shape>::Field,
+                lhs: &<Self as Shape>::Field,
+                rhs: &<(K, N) as Shape>::Field,
             ) -> <Self::Output as Shape>::Field {
-                Default::default()
+                let mut dims: Vec<usize> = <Self as DynShape>::dims(lhs).into();
+                let last = dims.len() - 1;
+                dims[last] = rhs.1.size();
+                <Self::Output as Shape>::from_dyn(&dims).unwrap()
             }
         }
         // Rhs has batch
-        impl< $($batch: StaticDim,)* M: StaticDim, K: StaticDim, N: StaticDim> MatMulShape<( $($batch,)* K, N)> for (M, K) {
+        impl< $($batch: StaticOrNamedDim,)* M: StaticOrNamedDim, K: StaticOrNamedDim, N: StaticOrNamedDim> MatMulShape<( $($batch,)* K, N)> for (M, K)
+        where
+            ( $($batch,)* K, N): DynShape,
+        {
             /// The resulting shape after multiplying `Self` by `Rhs`.
             type Output = ( $($batch,)* M, N);
-            #[inline(always)]
-            /// Computes the runtime `Field` (dimension values) of `Output` from
-            /// the operands' own runtime fields.
+            /// Batch dims and `N` carried through from `rhs`; `K`
+            /// (`rhs`'s second-to-last dim) replaced by `lhs`'s own `M`
+            /// (`lhs` is always a plain `(M, K)` here).
             fn output_shape(
-                _: &<Self as Shape>::Field,
-                _: &<( $($batch,)* K, N) as Shape>::Field,
+                lhs: &<Self as Shape>::Field,
+                rhs: &<( $($batch,)* K, N) as Shape>::Field,
             ) -> <Self::Output as Shape>::Field {
-                Default::default()
+                let mut dims: Vec<usize> = <( $($batch,)* K, N) as DynShape>::dims(rhs).into();
+                let second_last = dims.len() - 2;
+                dims[second_last] = lhs.0.size();
+                <Self::Output as Shape>::from_dyn(&dims).unwrap()
             }
         }
     };
@@ -241,64 +280,74 @@ impl_batched_matmul!(B1, B2);
 impl_batched_matmul!(B1, B2, B3);
 
 // Dynamic batch implementation
-impl<M: StaticDim, K: StaticDim, N: StaticDim> MatMulShape<(usize, K, N)> for (usize, M, K) {
+impl<M: StaticOrNamedDim, K: StaticOrNamedDim, N: StaticOrNamedDim> MatMulShape<(usize, K, N)>
+    for (usize, M, K)
+{
     /// The resulting shape after multiplying `Self` by `Rhs`.
     type Output = (usize, M, N);
     /// Computes the runtime `Field` (dimension values) of `Output` from
     /// the operands' own runtime fields.
     fn output_shape(
         lhs: &<Self as Shape>::Field,
-        _: &<(usize, K, N) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        (lhs.0, Default::default(), Default::default())
-    }
-}
-impl<M: StaticDim, K: StaticDim, N: StaticDim> MatMulShape<(K, N)> for (usize, M, K) {
-    /// The resulting shape after multiplying `Self` by `Rhs`.
-    type Output = (usize, M, N);
-    /// Computes the runtime `Field` (dimension values) of `Output` from
-    /// the operands' own runtime fields.
-    fn output_shape(
-        lhs: &<Self as Shape>::Field,
-        _: &<(K, N) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        (lhs.0, Default::default(), Default::default())
-    }
-}
-impl<M: StaticDim, K: StaticDim, N: StaticDim> MatMulShape<(K, N)> for (usize, usize, M, K) {
-    /// The resulting shape after multiplying `Self` by `Rhs`.
-    type Output = (usize, usize, M, N);
-    /// Computes the runtime `Field` (dimension values) of `Output` from
-    /// the operands' own runtime fields.
-    fn output_shape(
-        lhs: &<Self as Shape>::Field,
-        _: &<(K, N) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        (lhs.0, lhs.1, Default::default(), Default::default())
-    }
-}
-impl<M: StaticDim, K: StaticDim, N: StaticDim> MatMulShape<(usize, K, N)> for (M, K) {
-    /// The resulting shape after multiplying `Self` by `Rhs`.
-    type Output = (usize, M, N);
-    /// Computes the runtime `Field` (dimension values) of `Output` from
-    /// the operands' own runtime fields.
-    fn output_shape(
-        _: &<Self as Shape>::Field,
         rhs: &<(usize, K, N) as Shape>::Field,
     ) -> <Self::Output as Shape>::Field {
-        (rhs.0, Default::default(), Default::default())
+        (lhs.0, lhs.1, rhs.2)
     }
 }
-impl<M: StaticDim, K: StaticDim, N: StaticDim> MatMulShape<(usize, usize, K, N)> for (M, K) {
+impl<M: StaticOrNamedDim, K: StaticOrNamedDim, N: StaticOrNamedDim> MatMulShape<(K, N)>
+    for (usize, M, K)
+{
+    /// The resulting shape after multiplying `Self` by `Rhs`.
+    type Output = (usize, M, N);
+    /// Computes the runtime `Field` (dimension values) of `Output` from
+    /// the operands' own runtime fields.
+    fn output_shape(
+        lhs: &<Self as Shape>::Field,
+        rhs: &<(K, N) as Shape>::Field,
+    ) -> <Self::Output as Shape>::Field {
+        (lhs.0, lhs.1, rhs.1)
+    }
+}
+impl<M: StaticOrNamedDim, K: StaticOrNamedDim, N: StaticOrNamedDim> MatMulShape<(K, N)>
+    for (usize, usize, M, K)
+{
     /// The resulting shape after multiplying `Self` by `Rhs`.
     type Output = (usize, usize, M, N);
     /// Computes the runtime `Field` (dimension values) of `Output` from
     /// the operands' own runtime fields.
     fn output_shape(
-        _: &<Self as Shape>::Field,
+        lhs: &<Self as Shape>::Field,
+        rhs: &<(K, N) as Shape>::Field,
+    ) -> <Self::Output as Shape>::Field {
+        (lhs.0, lhs.1, lhs.2, rhs.1)
+    }
+}
+impl<M: StaticOrNamedDim, K: StaticOrNamedDim, N: StaticOrNamedDim> MatMulShape<(usize, K, N)>
+    for (M, K)
+{
+    /// The resulting shape after multiplying `Self` by `Rhs`.
+    type Output = (usize, M, N);
+    /// Computes the runtime `Field` (dimension values) of `Output` from
+    /// the operands' own runtime fields.
+    fn output_shape(
+        lhs: &<Self as Shape>::Field,
+        rhs: &<(usize, K, N) as Shape>::Field,
+    ) -> <Self::Output as Shape>::Field {
+        (rhs.0, lhs.0, rhs.2)
+    }
+}
+impl<M: StaticOrNamedDim, K: StaticOrNamedDim, N: StaticOrNamedDim>
+    MatMulShape<(usize, usize, K, N)> for (M, K)
+{
+    /// The resulting shape after multiplying `Self` by `Rhs`.
+    type Output = (usize, usize, M, N);
+    /// Computes the runtime `Field` (dimension values) of `Output` from
+    /// the operands' own runtime fields.
+    fn output_shape(
+        lhs: &<Self as Shape>::Field,
         rhs: &<(usize, usize, K, N) as Shape>::Field,
     ) -> <Self::Output as Shape>::Field {
-        (rhs.0, rhs.1, Default::default(), Default::default())
+        (rhs.0, rhs.1, lhs.0, rhs.3)
     }
 }
 

@@ -1,0 +1,28 @@
+error[E0277]: Cannot matrix-multiply shape `(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UTerm, B1>, B1>)` with `(UInt<UInt<UInt<UTerm, B1>, B0>, B0>, UInt<UInt<UInt<UTerm, B1>, B0>, B1>)`
+  --> tests/compile_fail/matmul_static_mismatch.rs:11:23
+   |
+11 |     let _ = t1.matmul(&t2);
+   |                ------ ^^^ Shape mismatch for matrix multiplication
+   |                |
+   |                required by a bound introduced by this call
+   |
+   = help: the trait `MatMulShape<(UInt<UInt<UInt<UTerm, B1>, B0>, B0>, UInt<UInt<UInt<UTerm, B1>, B0>, B1>)>` is not implemented for `(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UTerm, B1>, B1>)`
+   = note: Matrix multiplication requires the inner dimensions (last dim of lhs, second-to-last of rhs) to match
+   = help: the following other types implement trait `MatMulShape<Rhs>`:
+             `(B1, B2, B3, M, K)` implements `MatMulShape<(B1, B2, B3, K, N)>`
+             `(B1, B2, B3, M, K)` implements `MatMulShape<(K, N)>`
+             `(B1, B2, M, K)` implements `MatMulShape<(B1, B2, K, N)>`
+             `(B1, B2, M, K)` implements `MatMulShape<(K, N)>`
+             `(B1, M, K)` implements `MatMulShape<(B1, K, N)>`
+             `(B1, M, K)` implements `MatMulShape<(K, N)>`
+             `(M, K)` implements `MatMulShape<(B1, B2, B3, K, N)>`
+             `(M, K)` implements `MatMulShape<(B1, B2, K, N)>`
+           and $N others
+note: required by a bound in `kindle::tensor::matmul::<impl kindle::prelude::Tensor<S1, B, K, G>>::matmul`
+  --> src/tensor/matmul.rs
+   |
+   |     pub fn matmul<S2>(&self, rhs: &Tensor<S2, B, K, G>) -> Result<Tensor<S1::Output, B, K, G>>
+   |            ------ required by a bound in this associated function
+...
+   |         S1: MatMulShape<S2>,
+   |             ^^^^^^^^^^^^^^^ required by this bound in `kindle::tensor::matmul::<impl Tensor<S1, B, K, G>>::matmul`

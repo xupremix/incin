@@ -22,15 +22,16 @@ warning: unused import: `kindle_core::nn::*`
 5 | use kindle_core::nn::*;
   |     ^^^^^^^^^^^^^^^^^^
 
-error[E0277]: the trait bound `(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B1>, B0>, B0>): EndsWith<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B1>, B1>, B1>, B0>>` is not satisfied
+error[E0277]: Cannot use shape `(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B1>, B0>, B0>)` here: its last dimension must be `UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B1>, B1>, B1>, B0>`
   --> tests/compile_fail/forward_model_building_mismatch.rs:18:25
    |
 18 |     let _y = l2.forward(x).unwrap();
-   |                 ------- ^ unsatisfied trait bound
+   |                 ------- ^ wrong trailing dimension
    |                 |
    |                 required by a bound introduced by this call
    |
    = help: the trait `EndsWith<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B1>, B1>, B1>, B0>>` is not implemented for `(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B1>, B0>, B0>)`
+   = note: the input's last dimension must match this layer's expected input size
    = help: the following other types implement trait `EndsWith<D>`:
              `(D0, D1)` implements `EndsWith<D1>`
              `(D0, D1, D2)` implements `EndsWith<D2>`

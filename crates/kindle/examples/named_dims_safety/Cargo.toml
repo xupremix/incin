@@ -1,0 +1,10 @@
+[package]
+name = "named_dims_safety"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+kindle = { path = "../.." }
+
+[lints]
+workspace = true

@@ -1,57 +1,29 @@
-error[E0254]: the name `kindle` is defined multiple times
- --> tests/compile_fail/forward_conv1d_static_mismatch.rs:2:5
+warning: unused import: `kindle_core::nn::*`
+ --> tests/compile_fail/forward_conv1d_static_mismatch.rs:4:5
   |
-1 | extern crate kindle_core as kindle;
-  | ----------------------------------- previous import of the extern crate `kindle` here
-2 | use kindle_core as kindle;
-  |     ^^^^^^^^^^^^^^^^^^^^^ `kindle` reimported here
-  |
-  = note: `kindle` must be defined only once in the type namespace of this module
-
-error[E0774]: `derive` may only be applied to `struct`s, `enum`s and `union`s
-  --> tests/compile_fail/forward_conv1d_static_mismatch.rs:7:1
-   |
- 7 |   #[derive(Clone, Default)]
-   |   ^^^^^^^^^^^^^^^^^^^^^^^^^ not applicable here
- 8 |
- 9 | / fn main() {
-10 | |     let layer = Conv1d::<3, 1, 0, 1, s![16, 3, 3], DummyBackend<f32, Cpu>>::new().unwrap();
-11 | |     // 3 != 1 (in_channels)
-12 | |     let input = Tensor::<s![2, 1, 32], DummyBackend<f32, Cpu>>::zeros(()).unwrap();
-13 | |     layer.forward(input).unwrap();
-14 | | }
-   | |_- not a `struct`, `enum` or `union`
-
-warning: unused import: `kindle_core as kindle`
- --> tests/compile_fail/forward_conv1d_static_mismatch.rs:2:5
-  |
-2 | use kindle_core as kindle;
-  |     ^^^^^^^^^^^^^^^^^^^^^
+4 | use kindle_core::nn::*;
+  |     ^^^^^^^^^^^^^^^^^^
   |
   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
 
-warning: unused import: `kindle_core::nn::*`
- --> tests/compile_fail/forward_conv1d_static_mismatch.rs:5:5
-  |
-5 | use kindle_core::nn::*;
-  |     ^^^^^^^^^^^^^^^^^^
-
-error[E0107]: struct takes at most 3 generic arguments but 6 generic arguments were supplied
-  --> tests/compile_fail/forward_conv1d_static_mismatch.rs:10:17
+error[E0277]: Cannot use shape `(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UInt<UTerm, B1>, B0>, B0>, UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>)` here: it must have `UInt<UInt<UTerm, B1>, B1>` channels
+  --> tests/compile_fail/forward_conv1d_static_mismatch.rs:12:19
    |
-10 |     let layer = Conv1d::<3, 1, 0, 1, s![16, 3, 3], DummyBackend<f32, Cpu>>::new().unwrap();
-   |                 ^^^^^^          ----------------------------------------- help: remove the unnecessary generic arguments
-   |                 |
-   |                 expected at most 3 generic arguments
+12 |     layer.forward(input).unwrap();
+   |           ------- ^^^^^ wrong channel count
+   |           |
+   |           required by a bound introduced by this call
    |
-note: struct defined here, with at most 3 generic parameters: `S`, `B`, `Bias`
-  --> src/nn/conv1d.rs
+   = note: Conv1d/BatchNorm1d expect channels at the second-to-last dimension: [.., C, L]
+help: the trait `HasChannels1D<UInt<UInt<UTerm, B1>, B1>>` is not implemented for `(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UInt<UTerm, B1>, B0>, B0>, UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>)`
+      but trait `HasChannels1D<UInt<UInt<UInt<UTerm, B1>, B0>, B0>>` is implemented for it
+  --> src/shapes/shape.rs
    |
-   | pub struct Conv1d<
-   |            ^^^^^^
-   |     S: Conv1dShape,
-   |     -
-   |     B: Backend,
-   |     -
-   |     Bias: crate::nn::optional::OptionalField = crate::nn::optional::True,
-   |     --------------------------------------------------------------------
+   |         impl<$n1: Dim, $c: Dim, $n3: Dim> HasChannels1D<$c> for ($n1, $c, $n3) {}
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+   | impl_has_channels_1d_for_tuple!(D0, D1, D2);
+   | ------------------------------------------- in this macro invocation
+   = help: for that trait implementation, expected `UInt<UTerm, B1>`, found `UTerm`
+   = note: required for `kindle::nn::Conv1d<(UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, UInt<UInt<UTerm, B1>, B1>, UInt<UInt<UTerm, B1>, B1>, UInt<UTerm, B1>, UInt<UTerm, B1>, UInt<UTerm, B1>), DummyBackend<f32, kindle::prelude::Cpu>>` to implement `kindle::nn::Module<kindle::prelude::Tensor<(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UInt<UTerm, B1>, B0>, B0>, UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>, B0>, B0>), DummyBackend<f32, kindle::prelude::Cpu>, f32>>`
+   = note: this error originates in the macro `impl_has_channels_1d_for_tuple` (in Nightly builds, run with -Z macro-backtrace for more info)

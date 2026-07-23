@@ -1,0 +1,15 @@
+extern crate kindle_core as kindle;
+use kindle_core::prelude::*;
+use kindle_core::prelude::dummy::DummyBackend;
+use kindle_macros::s;
+
+kindle_core::symbolic_dim!(Batch, OtherBatch);
+
+fn main() {
+    // Concatenating along axis 1 (Feature) requires axis 0 to be the exact
+    // same type on both operands — Batch and OtherBatch are different types
+    // even though nothing here says they're a different runtime size.
+    let a: Tensor<s![Batch, 4], DummyBackend<f32, Cpu>> = Tensor::zeros((32usize, ())).unwrap();
+    let b: Tensor<s![OtherBatch, 8], DummyBackend<f32, Cpu>> = Tensor::zeros((32usize, ())).unwrap();
+    let _ = a.concat::<s![OtherBatch, 8], typenum::U1>(&b);
+}

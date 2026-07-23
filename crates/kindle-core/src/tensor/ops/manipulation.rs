@@ -520,17 +520,30 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         other: &Tensor<S2, B, K, G>,
     ) -> Result<Tensor<<S as crate::shapes::concat::ConcatShape<S2, Axis>>::Output, B, K, G>>
     where
-        S2: Shape,
+        S2: Shape + DynShape,
         Axis: typenum::Unsigned,
         S: crate::shapes::concat::ConcatShape<S2, Axis>,
-        <<S as crate::shapes::concat::ConcatShape<S2, Axis>>::Output as Shape>::Field:
-            core::default::Default,
     {
         let dim = Axis::USIZE;
         let inner = B::concat(&[&self.inner, &other.inner], dim)?;
+
+        // Built from the operands' real dims (not `Default::default()`):
+        // for purely-typenum shapes the output `Field` is a zero-sized
+        // `PhantomData` either way, but any runtime-carrying dimension
+        // (a plain `usize` axis, or a `symbolic_dim!` name) needs its
+        // actual value copied through, or the result's declared shape
+        // would silently report `0`/the wrapped type's default instead of
+        // the tensor's real size.
+        let mut out_dims: Vec<usize> = S::dims(&self._shape).into();
+        let other_dims: Vec<usize> = S2::dims(&other._shape).into();
+        out_dims[dim] += other_dims[dim];
+
         Ok(Tensor::from_parts_unchecked(
             inner,
-            core::default::Default::default(),
+            <<S as crate::shapes::concat::ConcatShape<S2, Axis>>::Output as Shape>::from_dyn(
+                &out_dims,
+            )
+            .unwrap(),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
@@ -590,14 +603,21 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     where
         Axis: typenum::Unsigned,
         S: crate::shapes::stack::StackShape<Axis>,
-        <<S as crate::shapes::stack::StackShape<Axis>>::Output as Shape>::Field:
-            core::default::Default,
     {
         let dim = Axis::USIZE;
         let inner = B::stack(&[&self.inner, &other.inner], dim)?;
+
+        // Built from `self`'s real dims (not `Default::default()`) — see
+        // the identical fix and rationale on `concat` above: any
+        // runtime-carrying dimension (a plain `usize` axis, or a
+        // `symbolic_dim!` name) needs its actual value copied through.
+        let mut out_dims: Vec<usize> = S::dims(&self._shape).into();
+        out_dims.insert(dim, 2);
+
         Ok(Tensor::from_parts_unchecked(
             inner,
-            core::default::Default::default(),
+            <<S as crate::shapes::stack::StackShape<Axis>>::Output as Shape>::from_dyn(&out_dims)
+                .unwrap(),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),

@@ -19,7 +19,7 @@ use typenum::Unsigned;
 /// use kindle::prelude::*;
 ///
 /// // A statically typed 3×3, stride-1, padding-0, dilation-1 conv: 3 in → 64 out
-/// type S = s![64, 3, 3, 3]; // (COut, CIn, K, K)
+/// type S = s![64, 3, 3, 1, 0, 1]; // (OutC, InC, K, Stride, Padding, Dilation)
 /// let conv = Conv2d::<S, MyBackend>::build(())?;
 /// ```
 #[derive(Debug, Clone)]
