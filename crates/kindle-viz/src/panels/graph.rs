@@ -377,13 +377,9 @@ impl Panel for GraphModuleListPanel {
                         false
                     }
                 }
-                KeyCode::Down => {
-                    if self.view_mode == ViewMode::List {
-                        self.scroll_offset = self.scroll_offset.saturating_add(1);
-                        true
-                    } else {
-                        false
-                    }
+                KeyCode::Down if self.view_mode == ViewMode::List => {
+                    self.scroll_offset = self.scroll_offset.saturating_add(1);
+                    true
                 }
                 _ => false,
             },

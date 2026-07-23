@@ -1,6 +1,6 @@
 use kindle_core::prelude::*;
 use kindle_core::prelude::dummy::DummyBackend;
-use typenum::{typenum::U1, typenum::U2, typenum::U3};
+use typenum::{U1, U2, U3};
 
 fn main() {
     let t1: Tensor<(typenum::U1, typenum::U2), DummyBackend<f32, Cpu>> = Tensor::zeros(()).unwrap();

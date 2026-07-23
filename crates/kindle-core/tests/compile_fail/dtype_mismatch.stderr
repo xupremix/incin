@@ -1,15 +1,3 @@
-error[E0433]: failed to resolve: use of unresolved module or unlinked crate `alloc`
- --> tests/compile_fail/dtype_mismatch.rs:5:70
-  |
-5 |     let t1: Tensor<Dyn, DummyBackend<f32, Cpu>, f32> = Tensor::zeros(alloc::vec![2]).unwrap();
-  |                                                                      ^^^^^ use of unresolved module or unlinked crate `alloc`
-
-error[E0433]: failed to resolve: use of unresolved module or unlinked crate `alloc`
- --> tests/compile_fail/dtype_mismatch.rs:6:70
-  |
-6 |     let t2: Tensor<Dyn, DummyBackend<f32, Cpu>, f64> = Tensor::zeros(alloc::vec![2]).unwrap();
-  |                                                                      ^^^^^ use of unresolved module or unlinked crate `alloc`
-
 error[E0308]: mismatched types
  --> tests/compile_fail/dtype_mismatch.rs:9:12
   |

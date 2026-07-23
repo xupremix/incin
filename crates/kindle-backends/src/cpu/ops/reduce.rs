@@ -72,11 +72,11 @@ fn unflatten_index(flat: usize, shape: &[usize]) -> Vec<usize> {
     let mut remaining = flat;
     let mut idx = vec![0usize; shape.len()];
     for i in 0..shape.len() {
-        if strides[i] == 0 {
-            idx[i] = 0;
-        } else {
-            idx[i] = remaining / strides[i];
+        if let Some(q) = remaining.checked_div(strides[i]) {
+            idx[i] = q;
             remaining %= strides[i];
+        } else {
+            idx[i] = 0;
         }
     }
     idx
