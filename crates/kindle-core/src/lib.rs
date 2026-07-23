@@ -64,6 +64,9 @@ pub mod prelude {
         param::Param,
         rms_norm::RMSNorm,
         rnn::{RNN, RNNCell},
+        stats::{
+            AutorefComputeStats, AutorefComputeStatsFallback, ComputeStats, LayerStats, ModelStats,
+        },
     };
     pub use crate::seq;
     pub use crate::seq_type;

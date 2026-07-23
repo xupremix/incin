@@ -99,7 +99,7 @@ impl LinearShape for Dyn {
 /// let layer = Linear::<Dyn, MyBackend>::build((512, 256))?;
 /// ```
 #[derive(Debug, Clone)]
-#[kindle_macros::module(internal)]
+#[kindle_macros::module(internal, no_stats)]
 pub struct Linear<
     S: LinearShape,
     B: Backend,
@@ -111,6 +111,29 @@ pub struct Linear<
     pub bias: Option<Param<S::BiasShape, B>>,
     #[module(ignore)]
     _phantom: core::marker::PhantomData<(S, B, Bias)>,
+}
+
+impl<S: LinearShape, B: Backend, Bias: crate::nn::optional::OptionalField> ComputeStats
+    for Linear<S, B, Bias>
+{
+    /// `params` = weight elements + bias elements (if present). `macs` =
+    /// `in_features * out_features * batch` — `y = xWᵀ + b` needs one MAC
+    /// per (batch, in, out) triple. Unlike `Conv1d`/`Conv2d`, this needs no
+    /// external input-shape info: a `Linear` layer's weight shape *is* its
+    /// in/out feature count, so this is exact, not an approximation.
+    fn compute_stats(&self, batch: u64) -> LayerStats {
+        let dims = self.weight.shape_dims();
+        let (out_f, in_f) = (dims[0] as u64, dims[1] as u64);
+        let bias_params = self
+            .bias
+            .as_ref()
+            .map(|b| b.shape_dims().iter().product::<usize>() as u64)
+            .unwrap_or(0);
+        LayerStats {
+            params: out_f * in_f + bias_params,
+            macs: in_f * out_f * batch,
+        }
+    }
 }
 
 // Implement `Module` for `Linear` when input shape is `(Batch, In)`.

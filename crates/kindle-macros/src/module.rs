@@ -7,6 +7,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
     let name = &input.ident;
 
     let is_internal = attr.to_string().contains("internal");
+    let no_stats = attr.to_string().contains("no_stats");
     let k_crate = if is_internal {
         quote! { crate }
     } else {
@@ -61,6 +62,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut named_layer_calls = Vec::new();
     let mut shape_info_calls = Vec::new();
     let mut train_mode_calls = Vec::new();
+    let mut stats_calls = Vec::new();
 
     if let syn::Data::Struct(ref mut data) = input.data {
         match &mut data.fields {
@@ -153,6 +155,14 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                             use #k_crate::prelude::{AutorefShapeInfo, AutorefShapeInfoFallback};
                             if let Some(sh) = (&&self.#fname).maybe_shape_info() {
                                 shape_parts.push(#format_mac("{}: {}", #fname_str, sh));
+                            }
+                        }
+                    });
+                    stats_calls.push(quote! {
+                        {
+                            use #k_crate::prelude::{AutorefComputeStats, AutorefComputeStatsFallback};
+                            if let Some(s) = (&&self.#fname).maybe_compute_stats(batch) {
+                                total += s;
                             }
                         }
                     });
@@ -256,6 +266,14 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                             }
                         }
                     });
+                    stats_calls.push(quote! {
+                        {
+                            use #k_crate::prelude::{AutorefComputeStats, AutorefComputeStatsFallback};
+                            if let Some(s) = (&&self.#idx).maybe_compute_stats(batch) {
+                                total += s;
+                            }
+                        }
+                    });
                     train_mode_calls.push(quote! {
                         {
                             use #k_crate::prelude::{AutorefTrainMode, AutorefTrainModeFallback};
@@ -326,6 +344,24 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
             syn::Fields::Unit => quote! { Ok(Self::Output) },
         },
         _ => unreachable!(),
+    };
+
+    let stats_impl = if no_stats {
+        quote! {}
+    } else {
+        quote! {
+            impl #orig_impl_generics #k_crate::prelude::ComputeStats for #name #orig_ty_generics #orig_where_clause {
+                /// Sums every field's parameter/MAC contribution for one
+                /// forward pass at `batch`. See `#[module(no_stats)]` for
+                /// how a leaf layer with its own known formula opts out of
+                /// this default instead.
+                fn compute_stats(&self, batch: u64) -> #k_crate::prelude::LayerStats {
+                    let mut total = #k_crate::prelude::LayerStats::default();
+                    #(#stats_calls)*
+                    total
+                }
+            }
+        }
     };
 
     let to_device_impl = if backend_generic.is_some() || is_internal {
@@ -414,6 +450,8 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                 #(#train_mode_calls)*
             }
         }
+
+        #stats_impl
 
         #to_device_impl
     };

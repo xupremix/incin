@@ -88,6 +88,8 @@ pub mod rnn;
 #[cfg(feature = "std")]
 /// `save`.
 pub mod save;
+/// `stats`.
+pub mod stats;
 
 pub use activation::*;
 pub use adaptive_avg_pool2d::*;
@@ -111,3 +113,4 @@ pub use rms_norm::*;
 pub use rnn::*;
 #[cfg(feature = "std")]
 pub use save::*;
+pub use stats::*;

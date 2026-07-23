@@ -50,8 +50,15 @@ fn print_help() {
     println!("    build      Run cargo build with real-time typenum error translation");
     println!("    test       Run cargo test with real-time typenum error translation");
     println!("    run        Run cargo run with real-time typenum error translation");
+    println!("    bench, doc, fix, clippy");
+    println!("               Same real-time typenum error translation as above");
     println!("    inspect    Inspect a .safetensors, .gguf, or .onnx model file metadata");
     println!("    translate  Translate raw text containing typenum expressions from stdin or arg");
+    println!("    <anything else>");
+    println!("               Delegated straight to `cargo <subcommand>` untouched — this");
+    println!("               covers every other built-in (fmt, tree, add, update, ...) and");
+    println!("               any third-party cargo plugin you have installed, with no need");
+    println!("               for cargo-kindle to know about it ahead of time.");
     println!();
     println!("FLAGS:");
     println!("    --raw      Disable typenum translation (output raw compiler diagnostics)");
@@ -142,11 +149,32 @@ fn main() -> io::Result<()> {
         return Ok(());
     }
 
-    // Command Interception & Forwarding to Cargo
-    let mut cmd_args = vec![subcommand];
-    if !raw_mode {
-        cmd_args.push("--message-format=json".to_string());
+    // Only cargo's own compilation-triggering subcommands understand
+    // `--message-format=json` (and thus benefit from diagnostic
+    // translation) — everything else, whether a built-in like `fmt`/
+    // `tree`/`add`/`update`/`publish` or a third-party plugin the user
+    // installed (`cargo-watch`, `cargo-audit`, `cargo-expand`, ...), gets
+    // delegated straight through with fully inherited stdio and no
+    // interception at all. This is deliberately a small, closed allowlist
+    // of cargo's own commands rather than a blocklist of known-bad ones:
+    // it means supporting a new third-party subcommand needs zero code
+    // here, ever — that's the whole point.
+    const JSON_CAPABLE_SUBCOMMANDS: &[&str] = &[
+        "build", "b", "check", "c", "test", "t", "bench", "run", "r", "clippy", "doc", "fix",
+    ];
+
+    if raw_mode || !JSON_CAPABLE_SUBCOMMANDS.contains(&subcommand.as_str()) {
+        let mut cmd_args = vec![subcommand];
+        cmd_args.extend(cargo_args);
+        let status = Command::new("cargo").args(&cmd_args).status()?;
+        if !status.success() {
+            std::process::exit(status.code().unwrap_or(1));
+        }
+        return Ok(());
     }
+
+    // Command Interception & Forwarding to Cargo
+    let mut cmd_args = vec![subcommand, "--message-format=json".to_string()];
     cmd_args.extend(cargo_args);
 
     let mut child = Command::new("cargo")
@@ -160,16 +188,42 @@ fn main() -> io::Result<()> {
 
     for line in reader.lines() {
         let line = line?;
-        if !raw_mode
-            && let Ok(json) = serde_json::from_str::<Value>(&line)
-            && json.get("reason").and_then(|r| r.as_str()) == Some("compiler-message")
-            && let Some(msg_obj) = json.get("message")
-            && let Some(rendered) = msg_obj.get("rendered").and_then(|r| r.as_str())
-        {
-            render_translated_diagnostic(rendered, raw_mode, explain_mode);
+        // `--raw` is handled above by delegating before `--message-format=json`
+        // is ever added, so by construction `raw_mode` is always `false` here.
+        // `--message-format=json` makes cargo emit *only* JSON on stdout,
+        // but its own pretty "Compiling foo v0.1.0 (...)" progress lines
+        // always go to *stderr* regardless of `--message-format` — and
+        // that stream is inherited untouched (`Stdio::inherit()` above), so
+        // that progress already reaches the terminal correctly on its own.
+        // Every JSON `reason` on stdout still needs to be handled here or
+        // its raw line leaks straight to the terminal; a plain non-JSON
+        // line (e.g. a program's own stdout under `cargo kindle run`)
+        // still just prints.
+        let Ok(json) = serde_json::from_str::<Value>(&line) else {
+            println!("{}", line);
             continue;
+        };
+        match json.get("reason").and_then(|r| r.as_str()) {
+            Some("compiler-message") => {
+                if let Some(rendered) = json
+                    .get("message")
+                    .and_then(|m| m.get("rendered"))
+                    .and_then(|r| r.as_str())
+                {
+                    render_translated_diagnostic(rendered, raw_mode, explain_mode);
+                }
+            }
+            // `compiler-artifact` (build progress, already shown via
+            // stderr above), `build-script-executed`, and `build-finished`
+            // are cargo-internal bookkeeping a plain `cargo build` never
+            // prints either — suppressed, not dumped raw. Deliberately an
+            // explicit list, not a wildcard: `cargo kindle run`'s program
+            // output could itself be JSON containing an unrelated "reason"
+            // key, and a wildcard would silently eat that instead of
+            // printing it.
+            Some("compiler-artifact") | Some("build-script-executed") | Some("build-finished") => {}
+            Some(_) | None => println!("{}", line),
         }
-        println!("{}", line);
     }
 
     let status = child.wait()?;

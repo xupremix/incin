@@ -748,6 +748,18 @@ pub trait NamedLayers {
     fn summary(&self) -> String {
         format_layer_summary(&self.layer_structure(""))
     }
+
+    /// [`Self::summary`] plus a params/MACs/FLOPs totals footer at the given
+    /// batch size — see [`format_layer_summary_with_stats`]. Only callable
+    /// when `Self` also implements
+    /// [`ComputeStats`](crate::nn::stats::ComputeStats) (every `#[module]`
+    /// struct does, automatically).
+    fn summary_with_stats(&self, batch: u64) -> String
+    where
+        Self: crate::nn::stats::ComputeStats,
+    {
+        format_layer_summary_with_stats(&self.layer_structure(""), self.stats(batch))
+    }
 }
 
 /// Formats a slice of `LayerNode` items into a human-readable printable tree table.
@@ -786,6 +798,30 @@ pub fn format_layer_summary(nodes: &[LayerNode]) -> String {
     for node in nodes {
         print_node(node, 0, &mut out);
     }
+    out.push_str(
+        "================================================================================\n",
+    );
+    out
+}
+
+/// [`format_layer_summary`] plus a totals footer (params / MACs / FLOPs at
+/// the given `stats`' batch size) — the "optional stats column" from
+/// `docs/growth/04-compile-time-stats.md`'s v1 acceptance criteria. This is
+/// a **totals row**, not a per-layer breakdown: threading per-node stats
+/// through `LayerNode` itself would mean adding a batch parameter to
+/// `NamedLayers::layer_structure`, a breaking signature change to a widely
+/// implemented trait that a "ships this week" v1 shouldn't take on. Extends
+/// [`format_layer_summary`] by composition rather than duplicating its tree
+/// printer.
+pub fn format_layer_summary_with_stats(
+    nodes: &[LayerNode],
+    stats: crate::nn::stats::ModelStats,
+) -> String {
+    let mut out = format_layer_summary(nodes);
+    out.push_str(&format!(
+        "Total params: {}    MACs: {}    FLOPs: {}\n",
+        stats.params, stats.macs, stats.flops
+    ));
     out.push_str(
         "================================================================================\n",
     );
