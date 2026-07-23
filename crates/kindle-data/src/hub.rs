@@ -70,6 +70,7 @@ pub fn from_pretrained<B: Backend<FloatElem = f32> + SupportsDType<f32>>(
     filename: Option<&str>,
     device: &DeviceId,
 ) -> Result<alloc::collections::BTreeMap<String, B::Storage<f32>>> {
-    HubApi::new()?.model(repo_id).load_safetensors::<B>(filename, device)
+    HubApi::new()?
+        .model(repo_id)
+        .load_safetensors::<B>(filename, device)
 }
-

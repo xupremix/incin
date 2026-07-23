@@ -6,7 +6,7 @@
 use alloc::boxed::Box;
 use alloc::vec;
 use alloc::vec::Vec;
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use rand::Rng;
 
 /// Core trait for a data transformation step.

@@ -753,9 +753,16 @@ pub trait NamedLayers {
 /// Formats a slice of `LayerNode` items into a human-readable printable tree table.
 pub fn format_layer_summary(nodes: &[LayerNode]) -> String {
     let mut out = String::new();
-    out.push_str("================================================================================\n");
-    out.push_str(&format!("{:<32} {:<28} {:<16}\n", "Layer (Name: Type)", "Shape / Spec", "Details"));
-    out.push_str("================================================================================\n");
+    out.push_str(
+        "================================================================================\n",
+    );
+    out.push_str(&format!(
+        "{:<32} {:<28} {:<16}\n",
+        "Layer (Name: Type)", "Shape / Spec", "Details"
+    ));
+    out.push_str(
+        "================================================================================\n",
+    );
 
     fn print_node(node: &LayerNode, indent: usize, out: &mut String) {
         let indent_str = "  ".repeat(indent);
@@ -765,7 +772,11 @@ pub fn format_layer_summary(nodes: &[LayerNode]) -> String {
         } else {
             format!("{}{}: {}", indent_str, node.name, clean_type)
         };
-        let shape = if node.shape_info.is_empty() { "-" } else { &node.shape_info };
+        let shape = if node.shape_info.is_empty() {
+            "-"
+        } else {
+            &node.shape_info
+        };
         out.push_str(&format!("{:<32} {:<28} {:<16}\n", name_type, shape, "-"));
         for child in &node.children {
             print_node(child, indent + 1, out);
@@ -775,7 +786,9 @@ pub fn format_layer_summary(nodes: &[LayerNode]) -> String {
     for node in nodes {
         print_node(node, 0, &mut out);
     }
-    out.push_str("================================================================================\n");
+    out.push_str(
+        "================================================================================\n",
+    );
     out
 }
 

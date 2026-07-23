@@ -89,4 +89,3 @@ fn test_sequential_named_layers() {
     assert!(summary_text.contains("ReLU"));
     assert!(summary_text.contains("weight: [256, 768]"));
 }
-

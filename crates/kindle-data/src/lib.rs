@@ -59,10 +59,10 @@ pub mod downloader;
 pub mod hub;
 /// Loader.
 pub mod loader;
-/// Vision.
-pub mod vision;
 /// Transforms and data processing pipelines.
 pub mod transforms;
+/// Vision.
+pub mod vision;
 
 pub use dataset::Dataset;
 pub use downloader::Downloader;

@@ -1,10 +1,10 @@
 #![cfg(feature = "cpu")]
 
 use kindle_backends::cpu::CpuBackendImpl;
-#[cfg(feature = "wgpu")]
-use kindle_backends::wgpu::WgpuBackendImpl;
 #[cfg(feature = "cuda")]
 use kindle_backends::cuda::CudaBackendImpl;
+#[cfg(feature = "wgpu")]
+use kindle_backends::wgpu::WgpuBackendImpl;
 use kindle_core::prelude::*;
 
 type CpuB = CpuBackendImpl;
@@ -799,7 +799,11 @@ fn cuda_parity_elementwise_add() {
     assert!(approx_eq_slice(&cpu_res, &cuda_res, 1e-4));
 
     let cpu_ga = read_f32::<CpuB>(&CpuB::get_grad::<f32>(&cpu_a, &cpu_grads).unwrap().unwrap());
-    let cuda_ga = read_f32::<CudaB>(&CudaB::get_grad::<f32>(&cuda_a, &cuda_grads).unwrap().unwrap());
+    let cuda_ga = read_f32::<CudaB>(
+        &CudaB::get_grad::<f32>(&cuda_a, &cuda_grads)
+            .unwrap()
+            .unwrap(),
+    );
     assert!(approx_eq_slice(&cpu_ga, &cuda_ga, 1e-4));
 }
 
@@ -851,7 +855,11 @@ fn cuda_parity_matmul() {
     assert!(approx_eq_slice(&cpu_res, &cuda_res, 1e-3));
 
     let cpu_ga = read_f32::<CpuB>(&CpuB::get_grad::<f32>(&cpu_a, &cpu_grads).unwrap().unwrap());
-    let cuda_ga = read_f32::<CudaB>(&CudaB::get_grad::<f32>(&cuda_a, &cuda_grads).unwrap().unwrap());
+    let cuda_ga = read_f32::<CudaB>(
+        &CudaB::get_grad::<f32>(&cuda_a, &cuda_grads)
+            .unwrap()
+            .unwrap(),
+    );
     assert!(approx_eq_slice(&cpu_ga, &cuda_ga, 1e-3));
 }
 
@@ -903,7 +911,11 @@ fn cuda_parity_conv2d() {
     assert!(approx_eq_slice(&cpu_res, &cuda_res, 1e-4));
 
     let cpu_gx = read_f32::<CpuB>(&CpuB::get_grad::<f32>(&cpu_x, &cpu_grads).unwrap().unwrap());
-    let cuda_gx = read_f32::<CudaB>(&CudaB::get_grad::<f32>(&cuda_x, &cuda_grads).unwrap().unwrap());
+    let cuda_gx = read_f32::<CudaB>(
+        &CudaB::get_grad::<f32>(&cuda_x, &cuda_grads)
+            .unwrap()
+            .unwrap(),
+    );
     assert!(approx_eq_slice(&cpu_gx, &cuda_gx, 1e-4));
 }
 

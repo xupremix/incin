@@ -24,7 +24,10 @@ pub struct Accuracy {
 impl Accuracy {
     /// Creates a new empty `Accuracy` metric.
     pub fn new() -> Self {
-        Self { correct: 0, total: 0 }
+        Self {
+            correct: 0,
+            total: 0,
+        }
     }
 
     /// Updates the metric with prediction and target class index slices.

@@ -100,4 +100,3 @@ fn test_adamw_optimizer_state_dict_checkpointing() -> Result<()> {
 
     Ok(())
 }
-

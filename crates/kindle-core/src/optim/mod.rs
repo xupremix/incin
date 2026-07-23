@@ -120,7 +120,11 @@ impl<B: Backend, K: DType> AdamW<B, K> {
     }
 
     /// Exports optimizer state tensors (`m` and `v` momentum buffers).
-    pub fn state_dict(&self, prefix: &str, dict: &mut alloc::collections::BTreeMap<String, Tensor<Dyn, B, K>>) {
+    pub fn state_dict(
+        &self,
+        prefix: &str,
+        dict: &mut alloc::collections::BTreeMap<String, Tensor<Dyn, B, K>>,
+    ) {
         let p = if prefix.is_empty() {
             alloc::string::String::new()
         } else {
@@ -151,7 +155,11 @@ impl<B: Backend, K: DType> AdamW<B, K> {
     }
 
     /// Loads optimizer state tensors from a dictionary.
-    pub fn load_state_dict(&mut self, prefix: &str, dict: &alloc::collections::BTreeMap<String, Tensor<Dyn, B, K>>) -> Result<()> {
+    pub fn load_state_dict(
+        &mut self,
+        prefix: &str,
+        dict: &alloc::collections::BTreeMap<String, Tensor<Dyn, B, K>>,
+    ) -> Result<()> {
         let p = if prefix.is_empty() {
             alloc::string::String::new()
         } else {
@@ -172,11 +180,19 @@ impl<B: Backend, K: DType> AdamW<B, K> {
 }
 
 impl<B: Backend<FloatElem = f32>> crate::nn::module::StateDict<B> for AdamW<B, f32> {
-    fn load_state_dict(&mut self, prefix: &str, dict: &alloc::collections::BTreeMap<String, Tensor<Dyn, B>>) -> Result<()> {
+    fn load_state_dict(
+        &mut self,
+        prefix: &str,
+        dict: &alloc::collections::BTreeMap<String, Tensor<Dyn, B>>,
+    ) -> Result<()> {
         AdamW::load_state_dict(self, prefix, dict)
     }
 
-    fn state_dict(&self, prefix: &str, dict: &mut alloc::collections::BTreeMap<String, Tensor<Dyn, B>>) {
+    fn state_dict(
+        &self,
+        prefix: &str,
+        dict: &mut alloc::collections::BTreeMap<String, Tensor<Dyn, B>>,
+    ) {
         AdamW::state_dict(self, prefix, dict);
     }
 }
@@ -281,7 +297,11 @@ impl<B: Backend, K: DType> Adam<B, K> {
     }
 
     /// Exports optimizer state tensors (`m` and `v` momentum buffers).
-    pub fn state_dict(&self, prefix: &str, dict: &mut alloc::collections::BTreeMap<String, Tensor<Dyn, B, K>>) {
+    pub fn state_dict(
+        &self,
+        prefix: &str,
+        dict: &mut alloc::collections::BTreeMap<String, Tensor<Dyn, B, K>>,
+    ) {
         let p = if prefix.is_empty() {
             alloc::string::String::new()
         } else {
@@ -312,7 +332,11 @@ impl<B: Backend, K: DType> Adam<B, K> {
     }
 
     /// Loads optimizer state tensors from a dictionary.
-    pub fn load_state_dict(&mut self, prefix: &str, dict: &alloc::collections::BTreeMap<String, Tensor<Dyn, B, K>>) -> Result<()> {
+    pub fn load_state_dict(
+        &mut self,
+        prefix: &str,
+        dict: &alloc::collections::BTreeMap<String, Tensor<Dyn, B, K>>,
+    ) -> Result<()> {
         let p = if prefix.is_empty() {
             alloc::string::String::new()
         } else {
@@ -333,11 +357,19 @@ impl<B: Backend, K: DType> Adam<B, K> {
 }
 
 impl<B: Backend<FloatElem = f32>> crate::nn::module::StateDict<B> for Adam<B, f32> {
-    fn load_state_dict(&mut self, prefix: &str, dict: &alloc::collections::BTreeMap<String, Tensor<Dyn, B>>) -> Result<()> {
+    fn load_state_dict(
+        &mut self,
+        prefix: &str,
+        dict: &alloc::collections::BTreeMap<String, Tensor<Dyn, B>>,
+    ) -> Result<()> {
         Adam::load_state_dict(self, prefix, dict)
     }
 
-    fn state_dict(&self, prefix: &str, dict: &mut alloc::collections::BTreeMap<String, Tensor<Dyn, B>>) {
+    fn state_dict(
+        &self,
+        prefix: &str,
+        dict: &mut alloc::collections::BTreeMap<String, Tensor<Dyn, B>>,
+    ) {
         Adam::state_dict(self, prefix, dict);
     }
 }
