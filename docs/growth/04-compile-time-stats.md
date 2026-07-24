@@ -6,7 +6,7 @@
 
 ## Goal
 
-Because every static shape is known at compile time, Kindle can report a model's
+Because every static shape is known at compile time, Incin can report a model's
 **parameter count, FLOPs/MACs, and peak activation memory** with zero runtime
 cost — and even *fail the build* if a budget is exceeded:
 
@@ -16,16 +16,16 @@ const _: () = assert!(MLP::<CpuBackendImpl>::PARAMS < 1_000_000);
 ```
 
 PyTorch needs `thop`/`fvcore` **and a forward pass**, and frequently miscounts
-(hooks miss functional ops). Kindle can make it a `const`.
+(hooks miss functional ops). Incin can make it a `const`.
 
 ## Grounding (what exists today)
 
 - `NamedLayers::layer_structure(&self) -> Vec<LayerNode>` and `summary()`
-  (`crates/kindle-core/src/nn/module.rs:743-800`) already walk the module tree.
+  (`crates/incin-core/src/nn/module.rs:743-800`) already walk the module tree.
   `LayerNode { name, type_name, shape_info: String, children }` — note
   `shape_info` is a **runtime String** and the tree is built at runtime.
 - The `#[module]` macro already generates a per-field traversal
-  (`param_calls`, `shape_info_calls` in `crates/kindle-macros/src/module.rs:57,
+  (`param_calls`, `shape_info_calls` in `crates/incin-macros/src/module.rs:57,
   120-155, 220-254`) using the `AutorefShapeInfo`/`maybe_shape_info` autoref
   specialization pattern.
 - `Parameters::parameters()` yields the actual parameter tensors at runtime.
@@ -106,7 +106,7 @@ support and which fall back to v1 runtime.
 
 ## Verification
 Standard loop **plus** the const-assert `compile_fail`/`compile-pass` snapshots
-in `crates/kindle-core/tests/compile_fail/` for the budget attributes.
+in `crates/incin-core/tests/compile_fail/` for the budget attributes.
 
 ## Risks / DO-NOT
 - **DO-NOT** claim "compile-time FLOPs" in marketing until v2/04.3 actually
@@ -115,7 +115,7 @@ in `crates/kindle-core/tests/compile_fail/` for the budget attributes.
 - **DO-NOT** try to make *total* FLOPs a const when batch is `dyn` — keep the
   per-sample/total split. Overreaching here produces `generic_const_exprs`
   nightly dependence, which the repo gates behind the `nightly` feature
-  (`crates/kindle-core/src/lib.rs:5-9`) — do not make core stats require nightly.
+  (`crates/incin-core/src/lib.rs:5-9`) — do not make core stats require nightly.
 - **DO-NOT** duplicate `format_layer_summary`; extend it.
 
 ## Demo script
@@ -124,7 +124,7 @@ past the budget, `cargo build` goes red *before running anything*. Caption:
 *"My model doesn't fit in budget — and my compiler told me, not my OOM killer."*
 
 > **2026-07-23 status update — v1 (Tasks 04.1–04.2) done, verified against
-> this doc's own worked example.** `crates/kindle-core/src/nn/stats.rs`
+> this doc's own worked example.** `crates/incin-core/src/nn/stats.rs`
 > (new file): `LayerStats{params, macs}` + `ModelStats{params, macs,
 > flops}`, and a `ComputeStats` trait mirroring `NamedLayers`/
 > `AutorefShapeInfo`'s existing autoref-specialization pattern exactly —
@@ -192,9 +192,9 @@ past the budget, `cargo build` goes red *before running anything*. Caption:
 > Unsigned::U64` making type-level dims readable as `const`s) was not
 > independently re-verified; treat it as still-open, not confirmed.
 >
-> Verification: `cargo test -p kindle-core --lib nn::stats` (8/8 passing);
+> Verification: `cargo test -p incin-core --lib nn::stats` (8/8 passing);
 > full workspace loop (fmt / clippy `-D warnings` / `cargo test --workspace
-> --all-targets`, 383 kindle-core lib tests passing / examples build / WGPU
+> --all-targets`, 383 incin-core lib tests passing / examples build / WGPU
 > lib tests 97 passing / CUDA compile-check) all clean.
 
 > **2026-07-23 status update — Tasks 04.1 and 04.2 done (v1 ships), scoped
@@ -205,7 +205,7 @@ past the budget, `cargo build` goes red *before running anything*. Caption:
 > trait mirroring the existing `NamedLayers`/`AutorefShapeInfo`
 > autoref-specialization pattern exactly (`AutorefComputeStats`/
 > `AutorefComputeStatsFallback` — a field with no known stats contributes
-> nothing instead of failing to compile). `#[module]` (`kindle-macros/src/
+> nothing instead of failing to compile). `#[module]` (`incin-macros/src/
 > module.rs`) now auto-generates `impl ComputeStats for #name` for **every**
 > `#[module]` struct, summing each field's contribution — this is genuinely
 > automatic; a user's own struct (like this doc's own `MLP` example) needs
@@ -230,7 +230,7 @@ past the budget, `cargo build` goes red *before running anything*. Caption:
 > which impl computes it — so the generic default's 0 is the honest answer
 > for both, not a workaround.
 >
-> **Verified, not assumed:** `crates/kindle-core/tests/model_stats.rs` (6
+> **Verified, not assumed:** `crates/incin-core/tests/model_stats.rs` (6
 > tests) checks `Linear`'s formula directly, an `MLP{fc1,fc2}` struct
 > matching *this doc's own* pretty-print mockup numbers exactly (101,770
 > params / 101,632 MACs at batch 1 — the test asserts those literal
@@ -239,8 +239,8 @@ past the budget, `cargo build` goes red *before running anything*. Caption:
 > `Sequential<Linear, ReLU>` (proves the container path and that an
 > activation contributes nothing), `Conv2d` (params exact, MACs the
 > documented 0), and `summary_with_stats`'s rendered output. Full workspace
-> loop green: fmt, clippy `-D warnings` (scoped to `kindle-core`/
-> `kindle-macros`/`kindle` — see note below), full test suite, WGPU lib
+> loop green: fmt, clippy `-D warnings` (scoped to `incin-core`/
+> `incin-macros`/`incin` — see note below), full test suite, WGPU lib
 > tests, CUDA compile-check.
 >
 > **Scope deliberately cut vs. this doc's original v1 sketch, to keep the
@@ -267,11 +267,11 @@ past the budget, `cargo build` goes red *before running anything*. Caption:
 >   after v1.
 >
 > **Unrelated note for whoever picks this up next:** while verifying, `cargo
-> clippy --workspace --all-targets` failed on `crates/kindle/examples/
+> clippy --workspace --all-targets` failed on `crates/incin/examples/
 > matmul/src/main.rs` — an uncommitted, in-progress-looking edit unrelated
 > to this work (`t1`'s shape changed to `s![3, 5]` while its comment and
 > `.into_shape()` call still say `3x4`, so `t1.matmul(&t2)` now genuinely
 > doesn't type-check). Left untouched rather than "fixed" out from under
 > whoever is mid-edit on it; verification above was scoped to the packages
-> this pass actually touched (`-p kindle-core -p kindle-macros -p kindle`)
+> this pass actually touched (`-p incin-core -p incin-macros -p incin`)
 > to get a clean signal independent of that file.

@@ -7,9 +7,9 @@ scratch/
 .vscode/
 Cargo.lock
 *.onnx
-!crates/kindle/resnet18.onnx
+!crates/incin/resnet18.onnx
 *.safetensors
-*.kindle_meta
+*.incin_meta
 expanded.rs
 data/
 wip/

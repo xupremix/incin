@@ -1,0 +1,15 @@
+error[E0308]: mismatched types
+ --> tests/compile_fail/dtype_mismatch.rs:9:12
+  |
+9 |     t1.add(&t2).unwrap();
+  |        --- ^^^ expected `&Tensor<Dyn, ..., f32, _>`, found `&Tensor<Dyn, ..., f64>`
+  |        |
+  |        arguments to this method are incorrect
+  |
+  = note: expected reference `&incin_core::prelude::Tensor<incin_core::prelude::Dyn, DummyBackend<f32, incin_core::prelude::Cpu>, f32, _>`
+             found reference `&incin_core::prelude::Tensor<incin_core::prelude::Dyn, DummyBackend<f32, incin_core::prelude::Cpu>, f64, Grad>`
+note: method defined here
+ --> src/tensor/ops/binary.rs
+  |
+  |     Add, add, add
+  |          ^^^

@@ -1,0 +1,141 @@
+use alloc::string::String;
+use alloc::vec::Vec;
+use core::fmt::Debug;
+
+/// Convenience type alias for `Result<T, Error>`.
+pub type Result<T> = core::result::Result<T, Error>;
+
+#[non_exhaustive]
+#[derive(thiserror::Error)]
+/// Central error enum for the Incin framework.
+pub enum Error {
+    #[error("Backend '{backend}' is unavailable in this build")]
+    /// A runtime-selected backend was not enabled.
+    BackendUnavailable { backend: &'static str },
+
+    #[error("Dtype {dtype:?} is unsupported by backend '{backend}' for '{op}'")]
+    /// The backend or operation cannot represent the requested dtype.
+    UnsupportedDType {
+        dtype: crate::prelude::DTypeId,
+        backend: &'static str,
+        op: &'static str,
+    },
+
+    #[error("Tensor dtype metadata {expected:?} does not match storage {got:?}")]
+    /// Logical dtype differs from physical storage.
+    DTypeStorageMismatch {
+        expected: crate::prelude::DTypeId,
+        got: crate::prelude::DTypeId,
+    },
+
+    #[error("Tensor device metadata {expected:?} does not match storage {got:?}")]
+    /// Logical device differs from physical storage.
+    DeviceStorageMismatch {
+        expected: crate::prelude::DeviceId,
+        got: crate::prelude::DeviceId,
+    },
+
+    #[error("Device mismatch: left {left:?}, right {right:?}")]
+    /// Inputs reside on different devices.
+    DeviceMismatch {
+        left: crate::prelude::DeviceId,
+        right: crate::prelude::DeviceId,
+    },
+
+    #[error("Invalid byte length: expected {expected}, got {got}")]
+    /// Byte payload length does not match shape and dtype.
+    InvalidByteLength { expected: usize, got: usize },
+
+    #[error("Invalid {backend} device ordinal {ordinal}")]
+    /// Device ordinal could not be selected.
+    InvalidDeviceOrdinal {
+        backend: &'static str,
+        ordinal: usize,
+    },
+
+    #[error("Shape mismatch during '{op}': expected {expected:?}, got {got:?}. {msg}")]
+    /// Incompatible shape during tensor operation execution.
+    ShapeMismatch {
+        /// Name of the operation that failed.
+        op: &'static str,
+        /// Expected dimension array.
+        expected: Vec<usize>,
+        /// Actual dimension array.
+        got: Vec<usize>,
+        /// Context message.
+        msg: String,
+    },
+
+    #[error("Out of Memory error on device: {device}")]
+    /// Device out-of-memory allocation failure.
+    OutOfMemory {
+        /// Target device string identifier.
+        device: String,
+    },
+
+    #[error("Operation '{op}' is not supported by backend '{backend}'")]
+    /// Operation unimplemented or unsupported by the target backend.
+    UnsupportedBackendOperation {
+        /// Name of the operation requested.
+        op: &'static str,
+        /// Name of the backend.
+        backend: &'static str,
+    },
+
+    #[error("Invalid device provided: expected {expected}, got {got}")]
+    /// Device initialization or mismatch error.
+    DeviceInitializationError {
+        /// Expected device string.
+        expected: String,
+        /// Actual device string.
+        got: String,
+    },
+
+    #[error("Internal Backend Failure: {0}")]
+    /// Internal backend execution failure.
+    BackendFailure(#[from] anyhow::Error),
+
+    #[error("Generic Message: {0}")]
+    /// Generic error string.
+    Msg(String),
+}
+
+#[cfg(feature = "std")]
+impl From<std::io::Error> for Error {
+    fn from(err: std::io::Error) -> Self {
+        Error::Msg(err.to_string())
+    }
+}
+
+impl Debug for Error {
+    /// Format error using Display representation.
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{self}")
+    }
+}
+
+#[cfg(test)]
+/// `tests`.
+mod tests {
+    use super::*;
+
+    #[test]
+    /// `test_error_formatting`.
+    fn test_error_formatting() {
+        let err = Error::OutOfMemory {
+            device: "CUDA:0".to_string(),
+        };
+        let formatted = alloc::format!("{}", err);
+        assert_eq!(formatted, "Out of Memory error on device: CUDA:0");
+
+        let err_unsupported = Error::UnsupportedBackendOperation {
+            op: "matmul",
+            backend: "Ndarray",
+        };
+        let formatted = alloc::format!("{}", err_unsupported);
+        assert_eq!(
+            formatted,
+            "Operation 'matmul' is not supported by backend 'Ndarray'"
+        );
+    }
+}

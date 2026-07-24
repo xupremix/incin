@@ -1,11 +1,11 @@
-# kindle-lsp for Neovim
+# incin-lsp for Neovim
 
-Routes Neovim's `rust_analyzer` LSP client through the `kindle-lsp` proxy, so
+Routes Neovim's `rust_analyzer` LSP client through the `incin-lsp` proxy, so
 shape errors and inlay hints show up humanized (decimal shapes instead of
 `UInt<...>` walls) — see `docs/growth/02-ide-extensions.md` for the
 architecture. This is a ~40-line Lua module with **no typenum-parsing logic
-of its own**; all humanization happens in the `kindle-diagnostics` Rust crate
-behind `kindle-lsp`.
+of its own**; all humanization happens in the `incin-diagnostics` Rust crate
+behind `incin-lsp`.
 
 Targets Neovim's native `vim.lsp.config`/`vim.lsp.enable` (0.11+) by default.
 **If your config drives `nvim-lspconfig`'s own `.setup()` — directly, or
@@ -21,8 +21,8 @@ works with any of the three integration styles this file documents.
 
 - Neovim 0.11+ (for `vim.lsp.config`/`vim.lsp.enable`), **or**
   nvim-lspconfig on any supported Neovim version.
-- `kindle-lsp` on your `$PATH` (`cargo install --path crates/kindle-lsp --bin
-  kindle-lsp` from the Kindle repo — the explicit `--bin` matters: the crate
+- `incin-lsp` on your `$PATH` (`cargo install --path crates/incin-lsp --bin
+  incin-lsp` from the Incin repo — the explicit `--bin` matters: the crate
   also builds a `mock-rust-analyzer` test fixture that you don't want on your
   `PATH`), or pass `lsp_path` to `setup()`/`server_opts()`.
 
@@ -30,15 +30,15 @@ works with any of the three integration styles this file documents.
 
 ```lua
 {
-  dir = "/path/to/kindle/editors/nvim", -- or your own fork's URL
-  name = "kindle-lsp",
+  dir = "/path/to/incin/editors/nvim", -- or your own fork's URL
+  name = "incin-lsp",
   -- No `ft`/`event` lazy-load trigger: `setup()` just registers config and
   -- an autocmd via `vim.lsp.enable` — negligible cost, and gating a plugin
   -- whose whole job is registering a FileType-triggered autostart *behind
   -- its own* FileType trigger risks the first matching buffer's own event
   -- having already fired before this plugin loads. Load it unconditionally.
   config = function()
-    require("kindle-lsp").setup()
+    require("incin-lsp").setup()
   end,
 },
 ```
@@ -49,7 +49,7 @@ works with any of the three integration styles this file documents.
 table feeding a `mason-lspconfig.setup({ handlers = {...} })` call** (as in
 kickstart.nvim and most configs derived from it), or if you call
 `require("lspconfig").rust_analyzer.setup(...)` directly yourself. Add
-`kindle-lsp` as a plain dependency (it has no `config`/lazy-load trigger of
+`incin-lsp` as a plain dependency (it has no `config`/lazy-load trigger of
 its own to invoke here — `merge_into` is called explicitly instead) and
 merge its override into the `rust_analyzer` server table before it reaches
 `lspconfig`:
@@ -59,11 +59,11 @@ merge its override into the `rust_analyzer` server table before it reaches
 dependencies = {
   "williamboman/mason.nvim",
   "williamboman/mason-lspconfig.nvim",
-  { dir = "/path/to/kindle/editors/nvim", name = "kindle-lsp" },
+  { dir = "/path/to/incin/editors/nvim", name = "incin-lsp" },
 },
 config = function()
   local servers = {
-    rust_analyzer = require("kindle-lsp").merge_into({
+    rust_analyzer = require("incin-lsp").merge_into({
       settings = { ["rust-analyzer"] = { --[[ your existing settings ]] } },
     }),
     -- ...your other servers, untouched...
@@ -86,18 +86,18 @@ anything else you put in `server` are preserved untouched.
 No mason, just a direct call?
 
 ```lua
-require("lspconfig").rust_analyzer.setup(require("kindle-lsp").merge_into({
+require("lspconfig").rust_analyzer.setup(require("incin-lsp").merge_into({
   settings = { ["rust-analyzer"] = { --[[ your existing settings, if any ]] } },
 }))
 ```
 
 ## Manual install
 
-Copy `lua/kindle-lsp.lua` onto your `runtimepath` (e.g.
-`~/.config/nvim/lua/kindle-lsp.lua`), then in `init.lua`:
+Copy `lua/incin-lsp.lua` onto your `runtimepath` (e.g.
+`~/.config/nvim/lua/incin-lsp.lua`), then in `init.lua`:
 
 ```lua
-require("kindle-lsp").setup()
+require("incin-lsp").setup()
 ```
 
 ## Options
@@ -106,13 +106,13 @@ require("kindle-lsp").setup()
 table (as their last argument, for `merge_into`):
 
 ```lua
-require("kindle-lsp").setup({
-  lsp_path = "kindle-lsp",   -- default: resolved via $PATH
+require("incin-lsp").setup({
+  lsp_path = "incin-lsp",   -- default: resolved via $PATH
   hints_enabled = true,      -- default: true — set false to disable hint rewriting
   shorten_backend = false,   -- default: false — true drops the backend/dtype/grad tail
 })
 ```
 
 To toggle at runtime, call `setup()` again with new options and restart the
-client (`:LspRestart`) — `kindle-lsp` reads its config from the environment
+client (`:LspRestart`) — `incin-lsp` reads its config from the environment
 once at startup.

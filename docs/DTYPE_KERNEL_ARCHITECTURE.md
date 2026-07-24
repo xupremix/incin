@@ -2,7 +2,7 @@
 
 ## Decision
 
-Kindle will not maintain one handwritten kernel per operation and dtype. It
+Incin will not maintain one handwritten kernel per operation and dtype. It
 will maintain a small set of operation-family templates and specialize them
 lazily from a typed execution description:
 
@@ -18,7 +18,7 @@ logical op graph
 This is deliberately more than textual substitution. Dtype, layout,
 vectorization, accumulation, hardware features, and numerical mode are all
 part of the specialization identity. The first implementation slice lives in
-`kindle-backends/src/kernel.rs`: CUDA pointwise, reduction, and normalization
+`incin-backends/src/kernel.rs`: CUDA pointwise, reduction, and normalization
 kernels share operation-family templates while rendering F16, BF16, F32, and
 F64 storage variants with typed, schema-versioned specialization keys. CUDA
 buffers, serialization, and raw launch ABIs carry truthful float-family dtype
@@ -27,7 +27,7 @@ F32-only until every reachable operation family is either dtype-safe or
 rejected before launch.
 
 The second implementation slice lives in
-`kindle-backends/src/dtype_policy.rs`. It is the single capability resolver
+`incin-backends/src/dtype_policy.rs`. It is the single capability resolver
 for CPU, CUDA, and WGPU and distinguishes storage, fill, random, pointwise,
 reduction, and normalization support. It returns explicit storage, compute,
 accumulator, and output dtypes. Dispatch, creation, CUDA rendering,
@@ -68,7 +68,7 @@ The common pattern is: express semantics once, specialize only meaningful
 combinations, prefer tuned libraries for structured kernels, fuse
 bandwidth-bound graphs, and cache the result.
 
-## Current Kindle gaps
+## Current Incin gaps
 
 | Area | Current state | Consequence |
 | --- | --- | --- |
@@ -238,7 +238,7 @@ indexing, and fusion glue.
 ## Planned repository layout
 
 ```text
-crates/kindle-backends/src/kernel/
+crates/incin-backends/src/kernel/
     mod.rs          # internal API and implementation selection
     dtype.rs        # DTypePolicy and promotion/capability tables
     key.rs          # canonical specialization/cache key
@@ -464,7 +464,7 @@ in its declared region; otherwise the simpler fallback remains selected.
 
 The initial dependency-free CPU baseline can be run with:
 
-    cargo test -p kindle-backends --release --no-default-features \
+    cargo test -p incin-backends --release --no-default-features \
       --features std,cpu benchmark_cpu_binary_kernels -- --ignored --nocapture
 
 It emits CSV rows for F32 addition from 1 Ki through 4 Mi elements across

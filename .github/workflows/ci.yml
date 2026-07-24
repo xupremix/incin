@@ -1,4 +1,4 @@
-name: Kindle CI
+name: Incin CI
 
 on:
   push:
@@ -38,10 +38,10 @@ jobs:
       run: cargo fmt --all -- --check
       
     - name: Clippy Lints
-      run: cargo clippy --workspace --all-targets --no-default-features --features kindle-backends/cpu,kindle/cpu -- -D warnings
+      run: cargo clippy --workspace --all-targets --no-default-features --features incin-backends/cpu,incin/cpu -- -D warnings
 
     - name: Run Unit & Integration Tests
-      run: cargo test --workspace --all-targets --no-default-features --features kindle-backends/cpu,kindle/cpu
+      run: cargo test --workspace --all-targets --no-default-features --features incin-backends/cpu,incin/cpu
 
     - name: Build Examples
-      run: cargo build --examples --workspace --no-default-features --features kindle-backends/cpu,kindle/cpu
+      run: cargo build --examples --workspace --no-default-features --features incin-backends/cpu,incin/cpu

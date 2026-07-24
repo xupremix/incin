@@ -1,0 +1,15 @@
+[package]
+name = "dataloader"
+edition.workspace = true
+version.workspace = true
+readme.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+incin = { path = "../..", version = "0.0.0" }
+incin-data = { path = "../../../incin-data", version = "0.0.0" }
+rayon = "1.12.0"
+
+[lints]
+workspace = true

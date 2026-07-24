@@ -1,6 +1,6 @@
-# Contributing to Kindle
+# Contributing to Incin
 
-First off, thank you for considering contributing to Kindle! It's people like you that make Kindle such a great tool.
+First off, thank you for considering contributing to Incin! It's people like you that make Incin such a great tool.
 
 ## Where do I go from here?
 
@@ -11,7 +11,7 @@ If you've noticed a bug or have a feature request, make sure to check if there's
 1. Clone the repository
 2. Run `cargo build`
 3. Run `cargo test --workspace` to ensure everything works
-4. (Optional) Run `cargo check -p kindle-wgpu --all-features` to verify GPU features.
+4. (Optional) Run `cargo check -p incin-wgpu --all-features` to verify GPU features.
 
 ## Submitting a Pull Request
 

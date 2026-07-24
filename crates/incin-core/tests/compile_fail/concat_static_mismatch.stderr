@@ -1,0 +1,18 @@
+error[E0277]: Cannot concatenate shape `(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UTerm, B1>, B1>)` with `(UInt<UInt<UInt<UTerm, B1>, B0>, B0>, UInt<UInt<UTerm, B1>, B1>)` along axis `UInt<UTerm, B1>`
+  --> tests/compile_fail/concat_static_mismatch.rs:11:16
+   |
+11 |     let _ = t1.concat::<s![4, 3], typenum::U1>(&t2);
+   |                ^^^^^^ Shape mismatch during concatenation
+   |
+   = help: the trait `incin::shapes::concat::ConcatShape<(UInt<UInt<UInt<UTerm, B1>, B0>, B0>, UInt<UInt<UTerm, B1>, B1>), UInt<UTerm, B1>>` is not implemented for `(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UTerm, B1>, B1>)`
+   = note: Concatenation requires all dimensions except the given axis to match exactly
+   = help: the following other types implement trait `incin::shapes::concat::ConcatShape<S2, Axis>`:
+             `(D0, D1)` implements `incin::shapes::concat::ConcatShape<(D0, D1_), UInt<UTerm, B1>>`
+             `(D0, D1)` implements `incin::shapes::concat::ConcatShape<(D0_, D1), UTerm>`
+             `(D0, D1, D2)` implements `incin::shapes::concat::ConcatShape<(D0, D1, D2_), UInt<UInt<UTerm, B1>, B0>>`
+             `(D0, D1, D2)` implements `incin::shapes::concat::ConcatShape<(D0, D1_, D2), UInt<UTerm, B1>>`
+             `(D0, D1, D2)` implements `incin::shapes::concat::ConcatShape<(D0_, D1, D2), UTerm>`
+             `(D0, D1, D2, D3)` implements `incin::shapes::concat::ConcatShape<(D0, D1, D2, D3_), UInt<UInt<UTerm, B1>, B1>>`
+             `(D0, D1, D2, D3)` implements `incin::shapes::concat::ConcatShape<(D0, D1, D2_, D3), UInt<UInt<UTerm, B1>, B0>>`
+             `(D0, D1, D2, D3)` implements `incin::shapes::concat::ConcatShape<(D0, D1_, D2, D3), UInt<UTerm, B1>>`
+           and $N others

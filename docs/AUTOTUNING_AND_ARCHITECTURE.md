@@ -1,23 +1,23 @@
-# Kindle Architecture & GPU Autotuning Specification
+# Incin Architecture & GPU Autotuning Specification
 
 ## Executive Overview
-`kindle` is a high-performance, strongly-typed deep learning framework written in Rust. This document describes the backend architecture, CUDA/WGPU GPU execution models, and the zero-overhead autotuning engine.
+`incin` is a high-performance, strongly-typed deep learning framework written in Rust. This document describes the backend architecture, CUDA/WGPU GPU execution models, and the zero-overhead autotuning engine.
 
 ---
 
 ## 1. Workspace Architecture & Backend Separation
 
-`kindle` separates tensor operations, autograd graph tracking, and hardware execution across dedicated layers:
+`incin` separates tensor operations, autograd graph tracking, and hardware execution across dedicated layers:
 
 ```
                   +-----------------------------------+
-                  |           kindle (API)            |
+                  |           incin (API)            |
                   |   Tensor<S, B, K, G>, Module      |
                   +-----------------------------------+
                                     |
                                     v
                   +-----------------------------------+
-                  |            kindle-core            |
+                  |            incin-core            |
                   |  Backend Traits, DType, Shape,    |
                   |  Autograd Tape Graph Interfaces   |
                   +-----------------------------------+
@@ -26,7 +26,7 @@
             |                       |                       |
             v                       v                       v
   +------------------+    +-------------------+    +------------------+
-  |  kindle-backends |    |  kindle-backends  |    |  kindle-backends |
+  |  incin-backends |    |  incin-backends  |    |  incin-backends |
   |      (cpu)       |    |      (cuda)       |    |      (wgpu)      |
   +------------------+    +-------------------+    +------------------+
 ```
@@ -44,9 +44,9 @@ Users never write low-level GPU parameters, block dimensions, or raw memory poin
 
 ### User View
 ```rust
-use kindle::prelude::*;
+use incin::prelude::*;
 
-type B = KindleBackend<f32, Cuda>;
+type B = IncinBackend<f32, Cuda>;
 
 fn main() -> Result<()> {
     let device = CudaDevice::new(0)?;
@@ -60,7 +60,7 @@ fn main() -> Result<()> {
 ```
 
 ### Execution Flow Under the Hood
-1. `a.add(&b)` invokes `NumericOps::add` on the backend selected by `KindleBackend`.
+1. `a.add(&b)` invokes `NumericOps::add` on the backend selected by `IncinBackend`.
 2. The CUDA implementation queries `CudaAutoTuner::get_1d_config(numel, op_code)` for the optimal launch parameters.
 3. The kernel is dispatched via `cudarc` default stream with Grid-Stride Loop execution.
 
@@ -83,12 +83,12 @@ GPU hardware performance is heavily bounded by **Occupancy, Streaming Multiproce
 ```
 
 ### Tier 1: Compile-Time Proc-Macro (`cuda_launch_config!`)
-In `kindle-macros`, static shape annotations (e.g. `s![128, 512]`) compute grid and block layout at **compile time**:
+In `incin-macros`, static shape annotations (e.g. `s![128, 512]`) compute grid and block layout at **compile time**:
 - Block dimensions are warp-aligned ($32, 64, 128, 256, 512, 1024$).
 - Emits literal `cudarc::driver::LaunchConfig` constants into the binary during `rustc` compilation (0 runtime overhead).
 
 ### Tier 2: Dynamic Hardware Occupancy Calculation
-For dynamic runtime shapes (`Dyn`), `kindle-backends` queries GPU driver attributes:
+For dynamic runtime shapes (`Dyn`), `incin-backends` queries GPU driver attributes:
 - `MULTIPROCESSOR_COUNT` ($N_{\text{SM}}$)
 - `WARP_SIZE` ($32$)
 - `MAX_THREADS_PER_BLOCK` ($1024$)

@@ -1,0 +1,16 @@
+[package]
+publish = true
+name = "incin-viz-plugin-api"
+edition.workspace = true
+version.workspace = true
+readme.workspace = true
+license.workspace = true
+
+[dependencies]
+incin-telemetry = { path = "../incin-telemetry", version = "0.0.0" }
+thiserror.workspace = true
+ratatui-core = "0.1.2"
+ratatui-widgets = "0.3.2"
+
+[lints]
+workspace = true

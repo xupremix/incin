@@ -19,7 +19,7 @@ By default, any module, struct, enum, trait, or function **MUST** use `pub(crate
 - **Internal Modules:** `pub mod ops; pub mod tape;` $\rightarrow$ **Use `pub(crate) mod ops; pub(crate) mod tape;`**.
 
 ### Examples of what MAY be `pub`:
-- Concrete backend implementations: `pub struct KindleBackend<T, D>;`
+- Concrete backend implementations: `pub struct IncinBackend<T, D>;`
 - Associated types satisfying the `Backend` trait: `pub struct CpuVar; pub struct CpuGrads;`
 - Re-exports of core traits (`Backend`, `ModuleOps`, `OptimizerOps`, `TensorOps`).
 

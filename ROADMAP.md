@@ -1,4 +1,4 @@
-# Kindle — Release Roadmap
+# Incin — Release Roadmap
 
 > **2026-07-22: see `IMPLEMENTATION_PLAN.md` (repo root) for the ground-truth,
 > task-by-task execution plan** — it cites exact file/line locations for what
@@ -51,11 +51,11 @@ policy remain.
 > Adding a function later is semver-compatible; removing or changing one is not.
 
 > **2026-07-21 full-codebase audit.** This document was rewritten after a
-> line-by-line review of every crate (kindle-core, kindle-backends, kindle-macros,
-> kindle, kindle-data, kindle-telemetry, kindle-viz, kindle-viz-plugin-api). The
+> line-by-line review of every crate (incin-core, incin-backends, incin-macros,
+> incin, incin-data, incin-telemetry, incin-viz, incin-viz-plugin-api). The
 > previous version of this roadmap had drifted significantly from reality — it
-> described crates (`kindle-native`, `kindle-wgpu`) that no longer exist (both were
-> consolidated into `kindle-backends`), marked several already-fixed bugs as open,
+> described crates (`incin-native`, `incin-wgpu`) that no longer exist (both were
+> consolidated into `incin-backends`), marked several already-fixed bugs as open,
 > and — more importantly — missed real correctness bugs that are now the top
 > priority below. Treat the "Critical" section as the actual release blocker list;
 > the old B-1..B-6 numbering is kept only for traceability and mapped to its
@@ -92,7 +92,7 @@ policy remain.
 > to an already-wired op) found that most of the list below this note is
 > **already gradient-correct on `main`**, apparently from WGPU/conv-pool
 > autograd work done in a later session that never updated this file (see
-> `git log -- crates/kindle-backends/src/wgpu/backend.rs`, e.g. "fix: resolve
+> `git log -- crates/incin-backends/src/wgpu/backend.rs`, e.g. "fix: resolve
 > clippy errors in WGPU conv/pool autograd backward"). Confirmed wired, either
 > directly or by composition: `mish`/`elu`/`gelu` (direct), `softmax` (composed
 > from `log_softmax`'s already-wired `sub`/`exp`/`sum_keepdim`/`log`/`broadcast_as`
@@ -227,18 +227,18 @@ policy remain.
 
 | Crate | Tests | Status |
 |-------|-------|--------|
-| `kindle-core` | Passing, +2 Miri-verified tests | ✅ C-6/C-7/C-10 (real UB in `to_scalar`/`to_vec1`, Miri-confirmed) fixed; C-3 (autograd design gaps) still open |
-| `kindle-backends` (cpu) | Passing, +2 new regression tests | ✅ C-2 (f32 downcast), C-5 (overflow), C-8 (mis-gated `elementwise` module — CPU couldn't build standalone) fixed |
-| `kindle-backends` (cuda) | Compiles (no GPU in this env to run it) | ✅ C-1 fixed; ⚠ C-4: add/sub/mul/div now gradient-wired (unverified on real hardware); everything else (`CreationOps`/`FloatOps`/norm/embedding/quant/reduce/loss) is still an empty trait impl falling to `Err` |
-| `kindle-backends` (wgpu) | Passing, 97/97, +21 tests this audit | ✅ C-9 (embedding/cross_entropy index bit-reinterpret) fixed; ⚠ C-3: elementwise/activation/`matmul`/`TensorOps`/`embedding`/`conv*`/all reductions (incl. `_keepdim` variants)/`layer_norm`/`batch_norm`/pooling/`cross_entropy_loss` autograd all wired and tested against a real adapter (see 2026-07-22 follow-ups); only `quantize`/`dequantize`/`quantized_matmul` remain — not a WGPU-specific gap, unwired on CPU too |
-| `kindle-backends` (legacy: candle only now) | Partial | ✅ `ndarray`/`burn` backends + deps deleted (2026-07-21, both were permanently dead code); only `CandleBackend` remains |
-| `kindle-macros` | Passing | ✅ Solid — hygiene good, doc examples present |
-| `kindle-data` | 9 tests | ✅ `DataLoader` tested (incl. multi-worker concurrency); `default-features = false` fixed on its `kindle-backends` dep (was leaking `cuda`/`wgpu`, see C-8) |
-| `kindle` (facade) | Passing | ⚠ API surface leaks internals via wildcard re-exports |
-| `kindle-viz` / `kindle-telemetry` / `kindle-viz-plugin-api` | Passing | 🔲 Prototype, correctly marked `publish = false` |
+| `incin-core` | Passing, +2 Miri-verified tests | ✅ C-6/C-7/C-10 (real UB in `to_scalar`/`to_vec1`, Miri-confirmed) fixed; C-3 (autograd design gaps) still open |
+| `incin-backends` (cpu) | Passing, +2 new regression tests | ✅ C-2 (f32 downcast), C-5 (overflow), C-8 (mis-gated `elementwise` module — CPU couldn't build standalone) fixed |
+| `incin-backends` (cuda) | Compiles (no GPU in this env to run it) | ✅ C-1 fixed; ⚠ C-4: add/sub/mul/div now gradient-wired (unverified on real hardware); everything else (`CreationOps`/`FloatOps`/norm/embedding/quant/reduce/loss) is still an empty trait impl falling to `Err` |
+| `incin-backends` (wgpu) | Passing, 97/97, +21 tests this audit | ✅ C-9 (embedding/cross_entropy index bit-reinterpret) fixed; ⚠ C-3: elementwise/activation/`matmul`/`TensorOps`/`embedding`/`conv*`/all reductions (incl. `_keepdim` variants)/`layer_norm`/`batch_norm`/pooling/`cross_entropy_loss` autograd all wired and tested against a real adapter (see 2026-07-22 follow-ups); only `quantize`/`dequantize`/`quantized_matmul` remain — not a WGPU-specific gap, unwired on CPU too |
+| `incin-backends` (legacy: candle only now) | Partial | ✅ `ndarray`/`burn` backends + deps deleted (2026-07-21, both were permanently dead code); only `CandleBackend` remains |
+| `incin-macros` | Passing | ✅ Solid — hygiene good, doc examples present |
+| `incin-data` | 9 tests | ✅ `DataLoader` tested (incl. multi-worker concurrency); `default-features = false` fixed on its `incin-backends` dep (was leaking `cuda`/`wgpu`, see C-8) |
+| `incin` (facade) | Passing | ⚠ API surface leaks internals via wildcard re-exports |
+| `incin-viz` / `incin-telemetry` / `incin-viz-plugin-api` | Passing | 🔲 Prototype, correctly marked `publish = false` |
 
-`kindle-native` and `kindle-wgpu` **no longer exist as separate crates** — CPU,
-CUDA, and WGPU execution all live under `crates/kindle-backends/src/{cpu,cuda,wgpu}`
+`incin-native` and `incin-wgpu` **no longer exist as separate crates** — CPU,
+CUDA, and WGPU execution all live under `crates/incin-backends/src/{cpu,cuda,wgpu}`
 now. Anything below referencing those old crate names has been corrected.
 
 ---
@@ -249,7 +249,7 @@ These are silent-wrong-answer or guaranteed-panic bugs in the numeric core, not
 style issues. None of them were on the previous roadmap.
 
 ### C-1 — Every CUDA op panics on its first invocation — ✅ FIXED (2026-07-21)
-`crates/kindle-backends/src/cuda/ops/{elementwise,norm,embedding,quant,reduce,shape,loss}.rs`
+`crates/incin-backends/src/cuda/ops/{elementwise,norm,embedding,quant,reduce,shape,loss}.rs`
 (e.g. `elementwise.rs:132-134`). The pattern
 `let mut x = out_b.data.clone(); Arc::get_mut(&mut x).unwrap();` required the
 `Arc` refcount to be exactly 1, but `out_b` (holding the other strong reference)
@@ -262,13 +262,13 @@ in CI (no GPU runner), which is why it shipped silently.
 files — `out_b.data` (etc.) is freshly allocated immediately before each of
 these blocks, so it's already uniquely owned (refcount 1); `Arc::get_mut`
 now operates on it directly instead of on a doomed clone. Verified with
-`cargo check -p kindle-backends --features cuda` (compiles clean) and the
+`cargo check -p incin-backends --features cuda` (compiles clean) and the
 existing CPU/WGPU test suite (no regressions); actual GPU execution couldn't
 be runtime-tested in this environment (no CUDA hardware/toolkit available) —
 **still needs a real-GPU CI job or manual verification before shipping.**
 
 ### C-2 — CPU elementwise ops silently downcast every dtype to f32 — ✅ FIXED (2026-07-21)
-`crates/kindle-backends/src/cpu/ops/elementwise.rs:85-88,108-111`. Regardless of
+`crates/incin-backends/src/cpu/ops/elementwise.rs:85-88,108-111`. Regardless of
 the operands' actual `DTypeId` (F64, F16, BF16, ...), the result was always
 constructed as `CpuBuffer::F32(out)`. Every add/sub/mul/div/relu/exp/log/tanh/
 sigmoid/gelu/softmax on a non-f32 tensor silently lost precision with no error.
@@ -282,10 +282,10 @@ a buffer matching the *input's* actual dtype variant instead of hardcoding F32;
 (`add_preserves_f64_dtype_and_precision`, `relu_preserves_f64_dtype` in
 `cpu/ops/elementwise.rs`) using values exactly representable in f64 but not in
 f32, so a silent f32 round-trip would fail them. Full workspace test suite
-passes (285 tests in `kindle-backends`, up from 281).
+passes (285 tests in `incin-backends`, up from 281).
 
 ### C-3 — WGPU autograd silently produces no gradients — ⚠ PARTIALLY FIXED (2026-07-21)
-`crates/kindle-backends/src/wgpu/tape.rs` + `wgpu/backend.rs:91,96`. `backward()`
+`crates/incin-backends/src/wgpu/tape.rs` + `wgpu/backend.rs:91,96`. `backward()`
 was wired to `tape::backward`, but `tape::push` (`tape.rs:26`) had **zero call
 sites** anywhere under `wgpu/*.rs`. The tape was always empty, so `backward()`
 only ever returned a gradient for the loss node itself — no parameter tensor
@@ -309,7 +309,7 @@ plus `chained_ops_accumulate_gradient_through_multiple_hops`, which composes
 `mul`+`add`+`relu` with a tensor reused by two ops and asserts the gradient
 contributions are *summed*, not overwritten — the CPUBACK-05 correctness class
 of bug this same tape design already guards against on the CPU backend. All
-298 `kindle-backends` `--features wgpu` tests pass (up from 283, actually run
+298 `incin-backends` `--features wgpu` tests pass (up from 283, actually run
 end-to-end against a software WGPU adapter in this environment, not just
 compile-checked).
 
@@ -329,7 +329,7 @@ need the same treatment; prioritize `matmul` and `layer_norm`/`batch_norm`
 next since those are on the critical path for any real network.
 
 ### C-4 — CUDA autograd is fully disconnected — ⚠ PARTIALLY FIXED (2026-07-21), and the backend itself is far less complete than C-4 originally described
-`crates/kindle-backends/src/cuda/backend.rs`: `type Grads` was `()`, `backward()`
+`crates/incin-backends/src/cuda/backend.rs`: `type Grads` was `()`, `backward()`
 unconditionally returned `Ok(())`, `get_grad()` always returned `Ok(None)`.
 `cuda/tape.rs`'s `push`/`backward`/`unbroadcast`/`sum_dim_*` had zero callers
 anywhere in `cuda/`.
@@ -363,7 +363,7 @@ same `unbroadcast` helper, already present unused in `cuda/tape.rs`). Wired
 `Backend::backward`/`backward_with_nan_check`/`get_grad` to the real
 `cuda::tape` functions instead of the `()`/`Ok(None)` placeholders, and
 changed `type Grads` from `()` to `crate::cuda::tape::CudaGrads`. Verified via
-`cargo check`/`cargo test --no-run -p kindle-backends --features cuda`
+`cargo check`/`cargo test --no-run -p incin-backends --features cuda`
 (compiles clean, test binaries build) — **not runtime-verified**, unlike C-3's
 WGPU fix: this environment has no CUDA hardware/toolkit, so unlike WGPU (which
 ran against a real software adapter), these 4 ops' gradients have not been
@@ -391,7 +391,7 @@ hardware-verified follow-up, not blind.
 > `OptimizerOps`, `ModuleOps`, `LossOps`. `TensorOps` still has only `concat`.
 
 ### C-5 — Unchecked shape-multiplication overflow feeds allocation and stride math — ✅ FIXED (2026-07-21)
-`crates/kindle-backends/src/cpu/stride.rs:17-19` (`contiguous_strides`, plain
+`crates/incin-backends/src/cpu/stride.rs:17-19` (`contiguous_strides`, plain
 `*`) and `cpu/creation.rs:70,81,98,127` (`shape.iter().product()` for `Vec`
 length). No overflow guard on user-supplied shapes. In release builds (integer
 overflow checks are off by default) a crafted or accidentally-huge shape could
@@ -406,8 +406,8 @@ called from dozens of sites across the codebase, all currently assuming
 `rand`/`randn` in `cpu/creation.rs` to it, since those are already
 `Result`-returning and can propagate a real `Err` instead of panicking.
 
-### C-6 — kindle-core's dynamic-shape broadcast doesn't actually verify anything — ✅ FIXED (2026-07-21), impact was smaller than first assessed
-`crates/kindle-core/src/shapes/broadcast.rs:329-420` (all `(usize,)` /
+### C-6 — incin-core's dynamic-shape broadcast doesn't actually verify anything — ✅ FIXED (2026-07-21), impact was smaller than first assessed
+`crates/incin-core/src/shapes/broadcast.rs:329-420` (all `(usize,)` /
 `(usize, B)` / `(usize, B, C)` dynamic-dim impls). `output_shape` computed
 `lhs.0.max(rhs.0)` with **no check** that the two dims are equal or that one is
 1. **Correction after tracing every call site:** this is *not* reachable as a
@@ -415,7 +415,7 @@ live "silently accepts and computes wrong data" bug via the public `Tensor`
 API. The only caller (`impl_broadcast_binary_op!`/`impl_std_ops!` in
 `tensor/ops/binary.rs`) always computes this value, then calls the backend's
 `add`/`sub`/`mul`/`div`, which independently calls the already-correctly-validated
-`kindle_backends::cpu::stride::broadcast_shape` (returns `Err` on real
+`incin_backends::cpu::stride::broadcast_shape` (returns `Err` on real
 mismatch, with its own passing tests) and propagates its error via `?` *before*
 the fabricated shape is ever used to build a `Tensor`. So today, a genuine
 shape mismatch already errors out correctly through that separate path. It's
@@ -431,7 +431,7 @@ used it at all 4 call sites (the `(usize,)`/`(usize,B)`/`(usize,B,C)`/
 no behavior change on the only real call site.
 
 ### C-7 — Arithmetic operators panic instead of propagating errors — ✅ FIXED (2026-07-21)
-`crates/kindle-core/src/tensor/ops/binary.rs:196,220,243,266` and the scalar
+`crates/incin-core/src/tensor/ops/binary.rs:196,220,243,266` and the scalar
 variants in `unary.rs`. `impl core::ops::Add/Sub/Mul/Div for Tensor` called
 `self.backend_method(&rhs).unwrap()` with a bare `.unwrap()` and no context.
 Since C-6's fix confirms shape mismatches already error out cleanly before
@@ -447,18 +447,18 @@ instead of a bare "called `Result::unwrap()` on an `Err` value" with no context.
 
 ### C-8 — `cpu::ops::elementwise` was `#[cfg(feature = "cuda")]`-gated; CI's "cpu-only" test run silently never tested cpu-only — ✅ FIXED (2026-07-21)
 Two compounding bugs, both found while wiring up CI (item 12):
-1. `crates/kindle-backends/src/cpu/ops/mod.rs` had `pub mod elementwise;` — the
+1. `crates/incin-backends/src/cpu/ops/mod.rs` had `pub mod elementwise;` — the
    module implementing `NumericOps`/`FloatOps` for `CpuBackendImpl`, i.e. the
    entire reason the CPU backend can add/mul/relu/etc. — preceded by *seven*
    duplicate `#[cfg(feature = "cuda")]` attributes. With `cuda` off,
    `cpu::ops::elementwise` didn't exist at all and `CpuBackendImpl` failed to
    implement `NumericOps`/`FloatOps`, i.e. **the CPU backend could not compile
    standalone**.
-2. This was invisible because it never *was* standalone: `kindle-data/Cargo.toml`
-   depended on `kindle-backends` without `default-features = false`, so every
+2. This was invisible because it never *was* standalone: `incin-data/Cargo.toml`
+   depended on `incin-backends` without `default-features = false`, so every
    `cargo test --workspace ...` — including CI's own
-   `--no-default-features --features kindle-backends/cpu,kindle/cpu` — silently
-   re-enabled `kindle-backends`' full default feature set (`std, cpu, wgpu,
+   `--no-default-features --features incin-backends/cpu,incin/cpu` — silently
+   re-enabled `incin-backends`' full default feature set (`std, cpu, wgpu,
    cuda`) through that one crate, masking bug (1) for the whole session and,
    presumably, since whenever these two files were introduced. Two example
    crates (`tui_graph_demo`, `native_training_demo`) had the same leak pattern
@@ -466,7 +466,7 @@ Two compounding bugs, both found while wiring up CI (item 12):
 **Fixed:** removed the 7 stray `#[cfg(feature = "cuda")]` attributes; added
 `default-features = false` to all three leaking `Cargo.toml`s, keeping only
 the features each crate actually needs. Re-verified: `cargo check -p
-kindle-backends --no-default-features --features cpu,std` now compiles clean,
+incin-backends --no-default-features --features cpu,std` now compiles clean,
 and the full workspace test suite (48 suites, 0 failed) still passes under
 the *real* cpu-only feature set — this is the first time in the audit this
 was actually verified rather than assumed. This is the same class of bug as
@@ -475,7 +475,7 @@ root cause the roadmap already flagged: no CI job ever verified a feature
 combination actually meant what its name said.
 
 ### C-9 — WGPU `embedding` backward and `cross_entropy_loss` bit-reinterpreted index storage instead of converting it — ✅ FIXED (2026-07-22)
-`crates/kindle-backends/src/wgpu/backend.rs`: `embedding`'s backward closure
+`crates/incin-backends/src/wgpu/backend.rs`: `embedding`'s backward closure
 did `indices_capture.buffer.to_vec::<u32>()`, and `cross_entropy_loss`'s
 one-hot construction did `target.buffer.to_vec::<u32>()`. WGPU has no genuine
 integer storage — index/target tensors are physically F32 bytes, and the
@@ -506,7 +506,7 @@ confirming both pass. Full `--features wgpu,std` suite: 88/88 passing,
 actually run against the real software WGPU adapter in this environment.
 
 ### C-10 — `Tensor::to_scalar<E>`/`to_vec1<E>` could construct an invalid `bool`: real, Miri-confirmed undefined behavior — ✅ FIXED (2026-07-22)
-`crates/kindle-core/src/tensor/ops/manipulation.rs`. Both generic accessors
+`crates/incin-core/src/tensor/ops/manipulation.rs`. Both generic accessors
 only checked byte-length equality against `size_of::<E>()`, never that the
 tensor's actual `DTypeId` is compatible with `E`, before an unsafe
 `read_unaligned`/`copy_nonoverlapping` reinterpret. This is the "Unsound
@@ -516,7 +516,7 @@ theoretical soundness concern). `bool` has exactly two valid bit patterns
 (`0x00`/`0x01`); there is no `DTypeId::Bool` — ONNX-style boolean tensors are
 stored as another dtype (typically `U8`) and read out via
 `to_scalar::<bool>()`'s truthy-conversion fallback (see
-`kindle-macros/src/onnx.rs`'s `If`/`Loop` codegen) — so reading a stored byte
+`incin-macros/src/onnx.rs`'s `If`/`Loop` codegen) — so reading a stored byte
 that's neither `0` nor `1` (a perfectly valid `U8` value, e.g. `5`) as `bool`
 via `read_unaligned` constructs an invalid `bool`: undefined behavior, not a
 logic bug.
@@ -538,13 +538,13 @@ mismatch; now only `bool` gets the truthy conversion. Adds
 checked every call site in the workspace uses concrete `'static` scalar
 types already (`f32`, `f64`, `i64`, `bool`, `u8`). New tests:
 `to_scalar_bool_handles_nonzero_non_unit_byte_without_ub`,
-`to_vec1_bool_handles_nonzero_non_unit_bytes_without_ub` (`kindle/tests/tensor_ops.rs`).
+`to_vec1_bool_handles_nonzero_non_unit_bytes_without_ub` (`incin/tests/tensor_ops.rs`).
 
 ---
 
 ## High priority — real gaps, not yet release-blocking on their own
 
-- **`kindle-data` has zero tests — ✅ FIXED (2026-07-21).** Added 9 tests in
+- **`incin-data` has zero tests — ✅ FIXED (2026-07-21).** Added 9 tests in
   `loader.rs` covering single-threaded ordering, exact/short final batches,
   empty dataset, batch size larger than the dataset, shuffle (verifies the
   full item *set* is preserved, just reordered), and — the actual
@@ -564,15 +564,15 @@ types already (`f32`, `f64`, `i64`, `bool`, `u8`). New tests:
   analyzing dead code too; it was never reachable under any feature flag,
   not just incomplete. `burn_backend` additionally implemented a
   `Backend<(D,)>`/`RawTensor` shape from an old API that doesn't match the
-  current `kindle-core::Backend` trait at all, so it couldn't have compiled
+  current `incin-core::Backend` trait at all, so it couldn't have compiled
   even if unlocked. **Fix:** deleted both modules outright (~1,200 lines) —
   dead code with no realistic path back to working, not worth a rewrite
   ticket. Removed the now-unused `ndarray`/`burn` optional dependencies from
   `Cargo.toml` and `legacy = [...]`'s feature list; confirmed via
-  `cargo tree -p kindle-backends --features legacy` that neither appears in
+  `cargo tree -p incin-backends --features legacy` that neither appears in
   the dependency tree anymore (`Cargo.lock` shrank by ~4,400 lines). Only
   `legacy::candle` (the real, live `CandleBackend`) remains. Verified
-  `cargo check`/`cargo test -p kindle-backends --features legacy` and the
+  `cargo check`/`cargo test -p incin-backends --features legacy` and the
   full workspace suite all still pass.
 - **`pub` API leakage across backends — ✅ FIXED (2026-07-21).** `wgpu` was
   already correctly scoped. Brought `cuda` up to the same standard:
@@ -586,9 +586,9 @@ types already (`f32`, `f64`, `i64`, `bool`, `u8`). New tests:
   `grads` field (previously `pub`) and `WgpuGrads`'s (same issue, not
   previously flagged) are now `pub(crate)`, each with a `.get(id)` accessor
   method instead (added one for `WgpuGrads`/`CudaGrads`; `CpuGrads` already
-  had one). `kindle-core`'s `tensor::tracing::TRACING_GRAPH` static is now
+  had one). `incin-core`'s `tensor::tracing::TRACING_GRAPH` static is now
   `pub(crate)` — it turned out to be a genuine (if leaky) cross-crate
-  integration point, not just an oversight: `kindle-backends`' `cpu/tape.rs`
+  integration point, not just an oversight: `incin-backends`' `cpu/tape.rs`
   and `wgpu/tape.rs` read it for telemetry snapshots, and the
   `tui_graph_demo`/`onnx_export` examples wrote to it directly via
   `.lock().mark_input(...)`. Added three narrow public functions instead —
@@ -603,19 +603,19 @@ types already (`f32`, `f64`, `i64`, `bool`, `u8`). New tests:
   construction could violate — unlike the raw GPU-context/slice handles this
   fix targeted. Full workspace test suite + `cargo build --examples
   --workspace` both pass with zero regressions.
-- **Facade (`kindle`) blanket-exports internals via wildcard globs — ✅ FIXED (2026-07-21) for `kindle_macros::*`.**
-  `crates/kindle/src/lib.rs`'s `pub mod macros` and `prelude` module both used
-  `kindle_macros::{idx, impl_arg_into, s}` / `kindle_macros::*`, which pulled in
+- **Facade (`incin`) blanket-exports internals via wildcard globs — ✅ FIXED (2026-07-21) for `incin_macros::*`.**
+  `crates/incin/src/lib.rs`'s `pub mod macros` and `prelude` module both used
+  `incin_macros::{idx, impl_arg_into, s}` / `incin_macros::*`, which pulled in
   `generate_shape_ops` and `impl_arg_into` — internal codegen helpers invoked
-  only by `kindle-core` itself (`kindle_macros::generate_shape_ops!()` in
-  `shapes/shape_ops.rs`, `kindle_macros::impl_arg_into!(7)` in
+  only by `incin-core` itself (`incin_macros::generate_shape_ops!()` in
+  `shapes/shape_ops.rs`, `incin_macros::impl_arg_into!(7)` in
   `tensor/arg_into.rs`; confirmed via grep that no end-user code calls either).
   Both are now explicit lists (`{idx, s}` and `{idx, import_model, module, s}`)
-  with neither leaked symbol included. **`pub use kindle_backends::*;`
+  with neither leaked symbol included. **`pub use incin_backends::*;`
   (crate root) deliberately left as-is** — narrowing it risks breaking
   external consumers I can't fully enumerate in this pass, and unlike the
   macros case, everything it pulls in (`cpu`/`cuda`/`wgpu` modules) is already
-  intentionally `pub` within `kindle-backends` itself; this is redundant
+  intentionally `pub` within `incin-backends` itself; this is redundant
   multi-path exposure of already-public items, not the same class of leak as
   a genuinely-internal symbol escaping. Worth a dedicated follow-up.
 - **`DefaultBackend` silently degrades to `()` when `cpu` is disabled — ✅ FIXED (2026-07-21).**
@@ -625,7 +625,7 @@ types already (`f32`, `f64`, `i64`, `bool`, `u8`). New tests:
   the 9 other `B`-taking aliases (`Linear`, `Conv1d`, `Conv2d`, `BatchNorm2d`,
   `LayerNorm`, `Param`, `RNNCell`, `RNN`, `Embedding`), which previously all
   still defaulted to the broken `()`. Verified both
-  `cargo check -p kindle --features cpu` and `--no-default-features` (cpu off)
+  `cargo check -p incin --features cpu` and `--no-default-features` (cpu off)
   compile clean, and the full workspace test suite still passes.
 - **Dead `#[cfg(feature = "candle")]` block in the facade — ✅ FIXED (2026-07-21).**
   The crate's top-doc comment (`lib.rs:8`) claiming to wrap Candle "out of the
@@ -634,7 +634,7 @@ types already (`f32`, `f64`, `i64`, `bool`, `u8`). New tests:
   never ran, since `candle` isn't a real feature) was replaced with a real,
   `#[cfg(feature = "cpu")]`-gated assertion that actually exercises
   `Tensor`/`DefaultBackend` end-to-end — confirmed it now runs and passes
-  (`cargo test -p kindle --features cpu`).
+  (`cargo test -p incin --features cpu`).
 - **CUDA autotuning — 🟡 FOUNDATION IMPLEMENTED, coordinator wired (2026-07-22).**
   The `autotune` feature now provides typed canonical problem keys,
   pointwise/reduction launch candidates, synchronized-median winner selection,
@@ -681,13 +681,13 @@ types already (`f32`, `f64`, `i64`, `bool`, `u8`). New tests:
   `Err("ONNX loading is currently unsupported...")`, but `nn/save.rs:340-356`
   (`ModelExt::load`) calls it as a normal code path. (Note: the actual
   `import_model!` protobuf parsing that runs at compile time lives in
-  `kindle-macros`, is separate from this, and works — so there's no untrusted-
+  `incin-macros`, is separate from this, and works — so there's no untrusted-
   file attack surface here, just a misleading dead-end runtime API.)
 - ✅ **FIXED (2026-07-22).** Dead `if true {...} else {...}` branches across
   CUDA ops (`elementwise.rs`/`reduce.rs`/`norm.rs` had already lost theirs,
   presumably during this session's `kernel.rs` dtype-policy refactor;
   `embedding.rs`/`quant.rs` still had 4 — removed). Verified zero remain via
-  `grep -rn "if true {" crates/kindle-backends/src/cuda/ops/*.rs`.
+  `grep -rn "if true {" crates/incin-backends/src/cuda/ops/*.rs`.
 - **CUDA kernel templates accept trusted internal scalar expressions.** The
   templates and dtype policy now live in `kernel.rs`, validate operation
   identifiers, specialize float storage/compute conversions, and use distinct
@@ -696,9 +696,9 @@ types already (`f32`, `f64`, `i64`, `bool`, `u8`). New tests:
   a closed scalar IR and renderer so source injection is structurally
   impossible.
 - ✅ **RESOLVED (verified 2026-07-22).** `PROJECT_MEMORY.md` describing
-  `KindleBackend<T, D>` as the unified backend spelling is now accurate, not
-  aspirational: `pub type KindleBackend<T = f32, D = Cpu> = <D as
-  BackendFor<T>>::Backend;` exists (`kindle-backends/src/lib.rs:26`) and is
+  `IncinBackend<T, D>` as the unified backend spelling is now accurate, not
+  aspirational: `pub type IncinBackend<T = f32, D = Cpu> = <D as
+  BackendFor<T>>::Backend;` exists (`incin-backends/src/lib.rs:26`) and is
   the documented public API surface (see `6a401ab feat!: complete unified
   backend transfer and builder API`, landed before this session). The
   concrete `CpuBackendImpl`/`CudaBackendImpl`/`WgpuBackendImpl` structs still
@@ -706,7 +706,7 @@ types already (`f32`, `f64`, `i64`, `bool`, `u8`). New tests:
   unification (`BackendFor` resolves to them), not a discrepancy with what
   `PROJECT_MEMORY.md` claims.
 - ✅ **FIXED, since this was written (verified 2026-07-22):**
-  `kindle-telemetry`'s file transport now sets `0o600` explicitly
+  `incin-telemetry`'s file transport now sets `0o600` explicitly
   (`transport/file.rs:41`, `opts.mode(0o600)`) rather than relying on the
   default umask. Matches CHANGELOG.md's `[0.2.0]` entry ("`FileTransport::open`
   now sets Unix file permissions to `0o600`"), which this roadmap section
@@ -722,7 +722,7 @@ types already (`f32`, `f64`, `i64`, `bool`, `u8`). New tests:
   to receive them). Fixed 2026-07-22 by deleting both params and updating
   all call sites; no behavior change, full test suite + clippy green.
 - ✅ **FIXED, since this was written:** `DummyBackend` conv/pool shape math
-  (`kindle-core/tensor/backend.rs`, conv1d/conv2d/conv_transpose2d/max_pool2d/
+  (`incin-core/tensor/backend.rs`, conv1d/conv2d/conv_transpose2d/max_pool2d/
   avg_pool2d) risked unsigned underflow/panic for small input + large
   kernel/dilation/padding. Fixed 2026-07-22 by adding `conv_out_size`/
   `conv_transpose_out_size` helpers using saturating arithmetic throughout,
@@ -730,11 +730,11 @@ types already (`f32`, `f64`, `i64`, `bool`, `u8`). New tests:
   this exact case. Verified by reproducing the panic against the old raw
   formula (1x1x2x2 input vs. a dilation-3 5x5 kernel: "attempt to subtract
   with overflow") and confirming a regression test passes cleanly with the fix.
-- ✅ **FIXED, since this was written:** `kindle-viz/src/panels/graph.rs:163` had
+- ✅ **FIXED, since this was written:** `incin-viz/src/panels/graph.rs:163` had
   a fragile `unwrap()` that was only safe because of an early-return three
   lines above. Fixed 2026-07-22 by collapsing the check and extraction into
   a single `let Some(snapshot) = self.snapshot.as_ref() else { return };`.
-- Doc comments across most of `kindle-core`/`kindle-native`/`kindle-wgpu`-successor
+- Doc comments across most of `incin-core`/`incin-native`/`incin-wgpu`-successor
   code are content-free templates ("Auto-generated documentation for X") —
   they satisfy a doc-coverage lint while conveying nothing. The real
   documentation debt is hidden behind an apparently-met bar, not resolved.
@@ -744,22 +744,22 @@ types already (`f32`, `f64`, `i64`, `bool`, `u8`). New tests:
   API entry points (see C-7, the manipulation.rs and serialize.rs items above
   for the ones already confirmed reachable from user code).
 - ✅ **FIXED, since this was written:** `s![]`/`idx![]`/`#[module]` doc examples
-  in `kindle-macros/src/lib.rs` are now real, compiled doctests (verified
-  2026-07-22: `cargo test --doc -p kindle-macros` → 4 passed, 0 failed). Only
+  in `incin-macros/src/lib.rs` are now real, compiled doctests (verified
+  2026-07-22: `cargo test --doc -p incin-macros` → 4 passed, 0 failed). Only
   `import_model`'s example stays `rust,ignore` (reasonably — it needs an
   actual ONNX file on disk to compile against).
-- ✅ **FIXED, since this was written:** `crates/kindle/Cargo.toml` no longer
+- ✅ **FIXED, since this was written:** `crates/incin/Cargo.toml` no longer
   has an `anyhow` dependency at all (verified 2026-07-22, grep returns
   nothing) — the example-crate restructuring since this note was written
   gave each example (including the two that use `anyhow`) its own
   `Cargo.toml`, which already achieves what this item asked for.
-- ✅ **FIXED, since this was written:** `kindle-telemetry`'s `HyperparamEvent`
+- ✅ **FIXED, since this was written:** `incin-telemetry`'s `HyperparamEvent`
   is a free-form value bag with no automatic capture of env vars or paths —
   if a caller logs a secret-bearing string as a "hyperparameter," it persists
   verbatim in shareable JSONL output. Fixed 2026-07-22: added a doc caveat
   directly on the struct in `events.rs`.
 - graphify's own knowledge graph (`graphify-out/`) contains stale nodes
-  referencing a `kindle-core/src/dashboard/` module that no longer exists in the
+  referencing a `incin-core/src/dashboard/` module that no longer exists in the
   tree — re-run `graphify update .` (per `.agents/rules/graphify.md`) after
   landing any of the fixes above.
 
@@ -771,8 +771,8 @@ This supersedes the old "Summary Checklist" — it's re-ordered around what's
 actually load-bearing for correctness, not just release paperwork.
 
 **Phase 0 — stop the bleeding (do first, small and isolated)**
-1. Fix CI (`kindle-backends/native` → a real feature — **done in this pass**,
-   now runs `--no-default-features --features kindle-backends/cpu,kindle/cpu`).
+1. Fix CI (`incin-backends/native` → a real feature — **done in this pass**,
+   now runs `--no-default-features --features incin-backends/cpu,incin/cpu`).
    GPU-gated jobs (cuda/wgpu) still need a runner with actual hardware or a
    software fallback before they can be added — currently there is no CI
    coverage at all for the two backends with the worst bugs (C-1, C-3, C-4),
@@ -786,7 +786,7 @@ actually load-bearing for correctness, not just release paperwork.
 
 **Phase 1 — autograd correctness (the framework's actual value proposition)**
 6. Fix C-3 (wire WGPU tape) and C-4 (wire CUDA tape). Consider lifting the
-   duplicated tape/autograd logic into `kindle-core` as a backend-generic
+   duplicated tape/autograd logic into `incin-core` as a backend-generic
    implementation instead of three parallel copies, only one of which works.
 7. Add a cross-backend gradient-parity test (CPU vs WGPU vs CUDA, numeric
    tolerance) as a permanent regression guard — this class of bug is invisible
@@ -795,19 +795,19 @@ actually load-bearing for correctness, not just release paperwork.
 **Phase 2 — API surface & encapsulation audit**
 8. ✅ DONE (2026-07-21): closed B-3 for real — `cuda` and `cpu` modules brought
    to the same `pub(crate)` discipline `wgpu` already has; removed the
-   `kindle-core` `TRACING_GRAPH` leak (now `pub(crate)`, with 3 narrow public
+   `incin-core` `TRACING_GRAPH` leak (now `pub(crate)`, with 3 narrow public
    functions replacing direct `Mutex<Graph>` access). Still worth a follow-up
    design question: is a process-wide singleton the right shape at all vs. a
    graph handle threaded through the API? Not changed in this pass — only the
    encapsulation, not the underlying design.
-9. Audit `kindle`'s wildcard re-exports (`pub use kindle_backends::*` /
-   `kindle_macros::*`) down to an explicit allowlist.
+9. Audit `incin`'s wildcard re-exports (`pub use incin_backends::*` /
+   `incin_macros::*`) down to an explicit allowlist.
 10. Fix or remove `DefaultBackend = ()` fallback; fix or delete the dead
     `#[cfg(feature = "candle")]` block.
 11. Add `#[non_exhaustive]` / doc-coverage items already tracked below.
 
 **Phase 3 — test debt**
-12. ✅ DONE (2026-07-21): wrote tests for `kindle-data`'s `DataLoader`
+12. ✅ DONE (2026-07-21): wrote tests for `incin-data`'s `DataLoader`
     (highest-risk untested code) — 9 tests incl. multi-worker concurrency.
 13. ✅ DONE (2026-07-21): deleted `legacy::burn_backend` AND
     `legacy::ndarray_backend` (both permanently dead code, `#[cfg(any())]`)
@@ -815,7 +815,7 @@ actually load-bearing for correctness, not just release paperwork.
 14. ✅ DONE (2026-07-21): repo-wide `cargo fmt --all` pass (237 files) as its
     own change; found and fixed C-8 (see above) while getting CI's cpu-only
     test command to actually mean what it said; brought `cargo clippy
-    --workspace --all-targets --features kindle-backends/cpu,kindle/cpu -- -D
+    --workspace --all-targets --features incin-backends/cpu,incin/cpu -- -D
     warnings` from ~120 real errors (after subtracting C-8's false-positive
     noise) to a clean pass — `cargo fmt --all -- --check` and this clippy
     invocation are now both genuinely green, not just untested.
@@ -830,8 +830,8 @@ actually load-bearing for correctness, not just release paperwork.
 | ID | Was | Now |
 |----|-----|-----|
 | B-1 | wgpu `test_adamw_step` GPU/CPU race | ✅ Fixed — `device.poll` present at `wgpu/dispatch.rs:214` |
-| B-2 | `kindle` facade linker bus-error | ✅ Fixed — `cargo test -p kindle` passes clean, full suite + doctests |
-| B-3 | Accidental `pub` leakage across crates | ⚠ **Partially fixed** — `wgpu` done correctly; `cuda`, `cpu`, and a new `kindle-core` leak (`TRACING_GRAPH`) are open. Do not mark this done — see High priority section above. |
+| B-2 | `incin` facade linker bus-error | ✅ Fixed — `cargo test -p incin` passes clean, full suite + doctests |
+| B-3 | Accidental `pub` leakage across crates | ⚠ **Partially fixed** — `wgpu` done correctly; `cuda`, `cpu`, and a new `incin-core` leak (`TRACING_GRAPH`) are open. Do not mark this done — see High priority section above. |
 | B-4 | Legacy backends ignore `FloatElem` generic | ✅ Fixed — both Candle and Ndarray legacy wrappers do `type FloatElem = T` correctly now |
 | B-5 | `DummyBackend` conv/pool shape math wrong | ✅ Fixed; underflow-hardening also done 2026-07-22, see Low-priority section above |
 | B-6 | Compile-fail tests exercising wrong failure | ✅ Fixed — macro imports present, `.stderr` snapshots updated |
@@ -844,27 +844,27 @@ actually load-bearing for correctness, not just release paperwork.
 
 | Symbol | Crate | Stable? |
 |--------|-------|---------|
-| `Backend` trait + all sub-traits (`FloatOps`, `NumericOps`, ...) | `kindle-core` | ✅ Yes — this is the extension point |
-| `Tensor<S, B, K, G>` type and its inherent methods | `kindle-core` | ✅ Yes |
-| `s![]`, `idx![]` macros | `kindle-macros` | ✅ Yes |
-| `CpuBackendImpl<T>`, `CudaBackendImpl<T>`, `WgpuBackendImpl<T>` | `kindle-backends` | ✅ Yes (the structs only) |
-| `Error` enum variants | `kindle-core` | ✅ Yes (`#[non_exhaustive]` — already applied) |
-| `nn::Linear`, `Conv2d`, `LayerNorm`, etc. | `kindle-core` | ✅ Yes |
-| `dispatch_*` / `launch_*` functions | `kindle-backends` (cuda, wgpu) | ❌ No — `pub(crate)` everywhere ✅ (2026-07-21) |
-| `CudaBuffer`, `WgpuBuffer`/`WgpuStorage` fields | `kindle-backends` | ❌ No — `pub(crate)` ✅ (2026-07-21). `CpuBuffer` itself stays `pub` (intentional, see High priority section) |
-| `TRACING_GRAPH` static | `kindle-core` | ❌ No — `pub(crate)` ✅ (2026-07-21) |
-| Internal modules (`tape`, `stride`, `creation`, `ops`, `gpu`) | `kindle-backends` | ❌ No — `pub(crate)` |
+| `Backend` trait + all sub-traits (`FloatOps`, `NumericOps`, ...) | `incin-core` | ✅ Yes — this is the extension point |
+| `Tensor<S, B, K, G>` type and its inherent methods | `incin-core` | ✅ Yes |
+| `s![]`, `idx![]` macros | `incin-macros` | ✅ Yes |
+| `CpuBackendImpl<T>`, `CudaBackendImpl<T>`, `WgpuBackendImpl<T>` | `incin-backends` | ✅ Yes (the structs only) |
+| `Error` enum variants | `incin-core` | ✅ Yes (`#[non_exhaustive]` — already applied) |
+| `nn::Linear`, `Conv2d`, `LayerNorm`, etc. | `incin-core` | ✅ Yes |
+| `dispatch_*` / `launch_*` functions | `incin-backends` (cuda, wgpu) | ❌ No — `pub(crate)` everywhere ✅ (2026-07-21) |
+| `CudaBuffer`, `WgpuBuffer`/`WgpuStorage` fields | `incin-backends` | ❌ No — `pub(crate)` ✅ (2026-07-21). `CpuBuffer` itself stays `pub` (intentional, see High priority section) |
+| `TRACING_GRAPH` static | `incin-core` | ❌ No — `pub(crate)` ✅ (2026-07-21) |
+| Internal modules (`tape`, `stride`, `creation`, `ops`, `gpu`) | `incin-backends` | ❌ No — `pub(crate)` |
 
 ### `#[non_exhaustive]` status
-- `Error` enum — ✅ already applied (`kindle-core/src/err.rs:8`)
-- `DTypeId` enum — ✅ already applied (`kindle-core/src/tensor/dtype.rs:43`)
+- `Error` enum — ✅ already applied (`incin-core/src/err.rs:8`)
+- `DTypeId` enum — ✅ already applied (`incin-core/src/tensor/dtype.rs:43`)
 - `DeviceId` struct — check and apply if missing
 
 ### Semver implications
 Adding a new associated type or method to the `Backend` trait is a **breaking
 change** (implementors must add it). Default impls returning
 `Err(Error::UnsupportedBackendOperation {...})` are already in place for
-non-critical `Backend` sub-trait methods (`kindle-core/src/tensor/backend.rs:495-563`)
+non-critical `Backend` sub-trait methods (`incin-core/src/tensor/backend.rs:495-563`)
 — keep this pattern for any new methods.
 
 ---
@@ -872,7 +872,7 @@ non-critical `Backend` sub-trait methods (`kindle-core/src/tensor/backend.rs:495
 ## Documentation Requirements
 
 Doc-coverage is nominally met but hollow: most `pub` items across
-`kindle-core`/`kindle-backends` have a `///` comment, but it's frequently an
+`incin-core`/`incin-backends` have a `///` comment, but it's frequently an
 "Auto-generated documentation for X" template with no real content. Treat doc
 coverage as **not done** until comments describe actual behavior, not just
 satisfy a lint.
@@ -887,23 +887,23 @@ type has a *compiled* usage example (not `rust,ignore`).
 
 | Type | Current | Target for `0.1.0` |
 |------|---------|---------------------|
-| Unit tests (per-op) | Present in core/cpu, absent in kindle-data | All crates covered, 0 known-failing |
+| Unit tests (per-op) | Present in core/cpu, absent in incin-data | All crates covered, 0 known-failing |
 | Cross-backend numeric parity | None | CPU vs WGPU vs CUDA parity to 1e-4, **including gradients** (would have caught C-1/C-3/C-4) |
 | Compile-fail shape tests | Fixed (B-6) | Extend to cover the C-6 dynamic-broadcast gap once fixed |
 | Doc tests | Present but `rust,ignore` | At least `s![]`/`idx![]` compiled as real doctests |
-| Concurrency tests | ✅ `kindle-data` covered (2026-07-21) | Extend the same pattern to any future concurrent code |
+| Concurrency tests | ✅ `incin-data` covered (2026-07-21) | Extend the same pattern to any future concurrent code |
 
 ---
 
 ## Repository Hygiene
 
 - [x] Scratch files at root (`diagnostic_test.rs`, `scratch*.py`, etc.) — already gone
-- [x] `publish = false` on `kindle-viz` / `kindle-telemetry` / `kindle-viz-plugin-api` — already set
+- [x] `publish = false` on `incin-viz` / `incin-telemetry` / `incin-viz-plugin-api` — already set
 - [x] README no longer claims to "wrap candle and burn" as the primary story — fixed in this pass
 - [x] Move planning docs (`FUTURE_ROADMAP.md`, `GPU_ROADMAP.md`, etc.) to `docs/` — none exist at root (verified 2026-07-22, only CHANGELOG/CONTRIBUTING/PROJECT_MEMORY/README/ROADMAP.md)
-- [x] `anyhow` dev-dependency in `kindle` facade — already gone entirely (verified 2026-07-22, see Medium priority section)
+- [x] `anyhow` dev-dependency in `incin` facade — already gone entirely (verified 2026-07-22, see Medium priority section)
 - [ ] Add `[workspace.metadata.release]` or similar to control which crates get published
-- [x] CI feature flag fixed (`kindle-backends/native` → `kindle-backends/cpu,kindle/cpu`) in this pass
+- [x] CI feature flag fixed (`incin-backends/native` → `incin-backends/cpu,incin/cpu`) in this pass
 - [ ] Add GPU-hardware-gated CI jobs for `cuda`/`wgpu` (or explicit software-fallback jobs) — currently zero CI coverage for the backends with C-1/C-3/C-4
 - [x] **New finding (2026-07-21), since fixed:** `cargo fmt --all -- --check` used to fail across most of the repository. A later session did the dedicated repo-wide `cargo fmt --all` pass this note asked for (see `git log` — `f126d6b`/`b9544a7` era); re-verified clean (`cargo fmt --all -- --check` exits 0, 0 diff lines) as of 2026-07-22 in this session, after touching another ~10 files across this session's own commits.
 - [x] Add `CHANGELOG.md` following Keep-a-Changelog format — exists (`CHANGELOG.md`, Keep-a-Changelog style); `[Unreleased]` populated with this session's changes 2026-07-22
@@ -914,13 +914,13 @@ type has a *compiled* usage example (not `rust,ignore`).
 ## Feature Flag Audit
 
 ```bash
-cargo check -p kindle-core --no-default-features
-cargo check -p kindle-core --all-features
-cargo check -p kindle-backends --no-default-features
-cargo check -p kindle-backends --features cuda    # needs CUDA env, CI-gated
-cargo check -p kindle-backends --features wgpu
-cargo check -p kindle --no-default-features
-cargo check -p kindle --features legacy
+cargo check -p incin-core --no-default-features
+cargo check -p incin-core --all-features
+cargo check -p incin-backends --no-default-features
+cargo check -p incin-backends --features cuda    # needs CUDA env, CI-gated
+cargo check -p incin-backends --features wgpu
+cargo check -p incin --no-default-features
+cargo check -p incin --features legacy
 ```
 
 Known gap: `--features legacy` pulls in `burn` for a permanently-dead
@@ -931,17 +931,17 @@ Known gap: `--features legacy` pulls in `burn` for a permanently-dead
 ## Publish Order (dependency graph)
 
 ```
-kindle-macros   (no workspace deps)
+incin-macros   (no workspace deps)
     ↓
-kindle-core     (dep: kindle-macros)
+incin-core     (dep: incin-macros)
     ↓
-kindle-backends (dep: kindle-core)
+incin-backends (dep: incin-core)
     ↓
-kindle          (dep: kindle-core, kindle-macros, kindle-backends, kindle-data)
-kindle-data     (dep: none from workspace, could publish independently)
+incin          (dep: incin-core, incin-macros, incin-backends, incin-data)
+incin-data     (dep: none from workspace, could publish independently)
 ```
 
-Publish `kindle-viz`, `kindle-telemetry`, `kindle-viz-plugin-api` after `kindle`
+Publish `incin-viz`, `incin-telemetry`, `incin-viz-plugin-api` after `incin`
 is stable.
 
 ---
@@ -979,11 +979,11 @@ is stable.
    has 6 CPU-vs-WGPU tests (elementwise, softmax, matmul, layer_norm,
    max_pool2d, cross_entropy_loss w/ nonzero target). CUDA parity still
    blocked on real hardware.
-7. ~~Close B-3 for real: `cuda`/`cpu` `pub(crate)` audit + `kindle-core` `TRACING_GRAPH` leak~~ — ✅ fixed 2026-07-21
-8. ~~Audit `kindle` facade wildcard re-exports; fix `DefaultBackend = ()` trap; remove dead `candle` cfg~~ — ✅ fixed 2026-07-21 (macros wildcard narrowed, `kindle_backends::*` deliberately left, see High priority section for why)
-9. ~~Write `kindle-data` `DataLoader` tests~~ — ✅ fixed 2026-07-21 (9 tests, incl. multi-worker concurrency)
+7. ~~Close B-3 for real: `cuda`/`cpu` `pub(crate)` audit + `incin-core` `TRACING_GRAPH` leak~~ — ✅ fixed 2026-07-21
+8. ~~Audit `incin` facade wildcard re-exports; fix `DefaultBackend = ()` trap; remove dead `candle` cfg~~ — ✅ fixed 2026-07-21 (macros wildcard narrowed, `incin_backends::*` deliberately left, see High priority section for why)
+9. ~~Write `incin-data` `DataLoader` tests~~ — ✅ fixed 2026-07-21 (9 tests, incl. multi-worker concurrency)
 10. ~~Decide `legacy::burn_backend`'s fate; stop paying its dependency cost~~ — ✅ fixed 2026-07-21 (deleted, along with equally-dead `ndarray_backend`)
-11. ~~**C-8** `cpu::ops::elementwise` mis-gated behind `#[cfg(feature = "cuda")]`; `kindle-data`/example crates leaked `kindle-backends`' default features, masking it~~ — ✅ fixed 2026-07-21 (see C-8 above) — found *while* doing item 12
+11. ~~**C-8** `cpu::ops::elementwise` mis-gated behind `#[cfg(feature = "cuda")]`; `incin-data`/example crates leaked `incin-backends`' default features, masking it~~ — ✅ fixed 2026-07-21 (see C-8 above) — found *while* doing item 12
 12. ~~Run a dedicated `cargo fmt --all` pass (repo-wide) as its own commit, and get `cargo clippy --workspace --all-targets -- -D warnings` genuinely green~~ — ✅ fixed 2026-07-21 (237 files reformatted; ~120 real clippy errors fixed; both gates are real now, not silently red)
 13. Add GPU-gated CI jobs (cuda/wgpu), and update `.github/workflows/ci.yml`'s fmt/clippy steps to match what's now actually green — the CI gap (no GPU jobs, an unverified cpu-only feature set) is why C-1/C-3/C-4/C-8 all shipped unnoticed
 14. Make doc comments real (not templates); make `s![]`/`idx![]` doctests compile for real
@@ -1027,7 +1027,7 @@ Named Symbolic Dimensions provide **type-level identity** for tensor shapes whil
 
 ### Phase 3: Hardware Autotuning Engine & Cache Persistence (Sprint + 2)
 - **Cache Persistence & Key Identity**:
-  - Extend CUDA autotuning engine (`tuning.rs`) to persist LRU cache entries to disk (`~/.cache/kindle/autotune.json`).
+  - Extend CUDA autotuning engine (`tuning.rs`) to persist LRU cache entries to disk (`~/.cache/incin/autotune.json`).
   - Key identity includes GPU device UUID, compute capability, driver version, and canonical problem identity key (`KernelKey`).
 - **Reduction Occupancy Pruning**:
   - Query driver occupancy (`cuOccupancyMaxActiveBlocksPerMultiprocessor`) for reduction launch selection prior to timing.
@@ -1040,7 +1040,7 @@ Named Symbolic Dimensions provide **type-level identity** for tensor shapes whil
 
 ### Phase 5: Production Benchmarks & Crates.io Release (Sprint + 4)
 - **Benchmarking Suite (`benches/`)**:
-  - Criterion-based benchmarks (`benches/tensor_ops.rs`, `benches/resnet_forward.rs`) measuring latency & memory throughput for Kindle (CPU & WGPU) vs Candle vs PyTorch.
+  - Criterion-based benchmarks (`benches/tensor_ops.rs`, `benches/resnet_forward.rs`) measuring latency & memory throughput for Incin (CPU & WGPU) vs Candle vs PyTorch.
 - **Cratering & Dry-Run Release**:
-  - Perform `cargo publish --dry-run` across all 5 workspace crates (`kindle-core`, `kindle-backends`, `kindle-macros`, `kindle-data`, `kindle`).
+  - Perform `cargo publish --dry-run` across all 5 workspace crates (`incin-core`, `incin-backends`, `incin-macros`, `incin-data`, `incin`).
 

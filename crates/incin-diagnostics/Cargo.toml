@@ -1,0 +1,11 @@
+[package]
+authors = ["xupremix <xupremix.me@gmail.com>"]
+name = "incin-diagnostics"
+description = "Typenum-to-decimal diagnostic humanization shared by cargo-incin and Incin's IDE tooling."
+edition.workspace = true
+version.workspace = true
+readme.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true

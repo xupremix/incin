@@ -1,4 +1,4 @@
-# 07 — The Kindle Book ("The Kindlenomicon")
+# 07 — The Incin Book ("The Incinnomicon")
 
 > **Depends on:** the features it documents (`01`–`06`) — write each chapter as
 > its feature lands, never speculatively ahead. **Effort:** ongoing. **Priority:**
@@ -7,7 +7,7 @@
 ## Goal
 
 A rustnomicon-quality book that teaches a newcomer **every technique and idiom of
-Kindle**, from "install Rust" to "export a quantized model to Ollama" — with a
+Incin**, from "install Rust" to "export a quantized model to Ollama" — with a
 special, honest focus on the thing that trips people up (the type-level shape
 system) and the thing that delights them (compile-time safety + the TUI). The
 tone: like *The Rustonomicon* and *The Little Book of Rust Macros* — precise,
@@ -21,7 +21,7 @@ example-first, unafraid of the hard parts, but always motivating *why* before
   `docs/book/src/**/*.md`.
 - **Every code block is a real, tested doctest or example.** Wire the book's
   snippets to compile: prefer pulling code via `{{#include ../../..
-  /crates/kindle/examples/…}}` (mdBook include) so examples cannot rot, or use
+  /crates/incin/examples/…}}` (mdBook include) so examples cannot rot, or use
   `mdbook-keeper`/`skeptic`-style testing. A code sample that no longer compiles
   is the fastest way to lose trust — CI must build the book's code.
 - Add a CI job: `mdbook build docs/book` + `mdbook test docs/book` (the latter
@@ -59,10 +59,10 @@ from, so a writer (or agent) knows exactly what to demonstrate and where the
 ground-truth code is.
 
 ### Part I — Getting Started (make them succeed in 10 minutes)
-1. **Why Kindle?** — the shapes-are-types pitch, honest positioning (safety +
+1. **Why Incin?** — the shapes-are-types pitch, honest positioning (safety +
    deployment + observability, *not* research flexibility). Objective: reader
    can articulate the one differentiator. Artifact: `README.md`.
-2. **Install & `cargo kindle new`** — Rust toolchain, `protoc`, first project in
+2. **Install & `cargo incin new`** — Rust toolchain, `protoc`, first project in
    two commands. Objective: a running MNIST loop with the live TUI. Artifact:
    doc `05` scaffolder, `examples/mnist_training.rs`.
 3. **Your first tensor** — `Tensor::<s![2,3]>::zeros`, `Dyn`, backends. Objective:
@@ -71,11 +71,11 @@ ground-truth code is.
 ### Part II — The Type-Level Shape System (the hard, differentiating core)
 4. **`s!` and the shape type** — what `s![2,3]` expands to, `ConstShape` vs
    `DynShape` vs `PartialDynShape`. Objective: read a `Tensor<…>` type and know
-   its shape. Artifact: `shapes/shape.rs`, `kindle-macros` `s`.
+   its shape. Artifact: `shapes/shape.rs`, `incin-macros` `s`.
 5. **Reading typenum (and why you rarely have to)** — `UInt`/`UTerm` demystified,
-   and the tooling (`cargo kindle`, the IDE extension) that means you read
+   and the tooling (`cargo incin`, the IDE extension) that means you read
    decimals, not this. Objective: never be scared by a `UInt<…>` again.
-   Artifact: `kindle-diagnostics`, doc `01`/`02`.
+   Artifact: `incin-diagnostics`, doc `01`/`02`.
 6. **Shape-changing ops** — reshape, transpose, broadcast, concat, stack, matmul
    — each with a *deliberately broken* example and the (readable) compile error
    it produces. Objective: predict which ops compile. Artifact: `shapes/*`, the
@@ -89,7 +89,7 @@ ground-truth code is.
 ### Part III — Building & Training Models
 9. **`#[module]` and `Parameters`/`StateDict`** — defining models, how the macro
    derives traversal. Objective: build a multi-layer model. Artifact:
-   `kindle-macros/src/module.rs`, `nn/module.rs`.
+   `incin-macros/src/module.rs`, `nn/module.rs`.
 10. **`Sequential`, `seq!`, `seq_type!`** — composing layers, PyTorch-flat state
     dict keys. Artifact: `nn/`, README.
 11. **Autograd, `Grad`/`NoGrad`, and no `zero_grad()`** — gradients as a *type*;
@@ -100,13 +100,13 @@ ground-truth code is.
     Artifact: `optim/`, `tests/optim_tests.rs`.
 13. **Losses & metrics.** Artifact: `nn/loss`, `metrics.rs`.
 14. **Data loading** — `Dataset`, `DataLoader` as an `Iterator`, parallel
-    batching. Artifact: `kindle-data`, `examples/dataloader`.
+    batching. Artifact: `incin-data`, `examples/dataloader`.
 15. **A full training run + the live TUI** — end-to-end MNIST/CNN, watched in the
-    terminal, reading the anomaly panel. Artifact: doc `05`, `kindle-viz`.
+    terminal, reading the anomaly panel. Artifact: doc `05`, `incin-viz`.
 
 ### Part IV — Backends & Performance
 16. **Backends & `TransferTo`** — write once, run on CPU/CUDA/WGPU; move a model
-    between them. Artifact: `kindle-backends`, `examples/backends`.
+    between them. Artifact: `incin-backends`, `examples/backends`.
 17. **Mixed precision & dtypes** — the dtype policy, low-precision storage with
     f32 compute. Artifact: `dtype_policy.rs`, `docs/DTYPE_KERNEL_ARCHITECTURE.md`.
 18. **CUDA internals (advanced)** — NVRTC codegen, autotuning. Objective: know
@@ -117,24 +117,24 @@ ground-truth code is.
 
 ### Part V — Interop & Deployment
 20. **ONNX import (`import_model!`)** — compile-time ONNX → typed struct.
-    Artifact: `kindle-macros` `import_model`, `tests/onnx_import.rs`.
+    Artifact: `incin-macros` `import_model`, `tests/onnx_import.rs`.
 21. **SafeTensors & `from_pretrained`** — load HF weights. Artifact: `nn/save`,
-    `kindle::hub`.
+    `incin::hub`.
 22. **GGUF & MLX export** — quantize, export, run in Ollama; inspect files.
     Artifact: doc `06`, `io/`.
 23. **Single-binary & browser deployment.** Artifact: doc `06`.
 
-### Part VI — Extending Kindle (the "nomicon" deep end)
+### Part VI — Extending Incin (the "nomicon" deep end)
 24. **Writing a custom layer** (implementing `Module`/`Parameters`/`StateDict`
     by hand). 
 25. **Custom `symbolic_dim!` patterns & shape traits** — for library authors.
-26. **Writing a `kindle-viz` panel plugin.** Artifact: `kindle-viz-plugin-api`,
-    `kindle-viz/examples/custom_panel.rs`.
+26. **Writing a `incin-viz` panel plugin.** Artifact: `incin-viz-plugin-api`,
+    `incin-viz/examples/custom_panel.rs`.
 27. **The macro internals** — how `s!`/`idx!`/`#[module]` generate their types
-    (for contributors). Artifact: `kindle-macros`.
+    (for contributors). Artifact: `incin-macros`.
 
 ### Appendices
-- **A. PyTorch → Kindle Rosetta** — a big two-column table (`torch.nn.Linear` →
+- **A. PyTorch → Incin Rosetta** — a big two-column table (`torch.nn.Linear` →
   `Linear<s![…]>`, `optim.SGD(model.parameters())` → `SGD::new(model.
   parameters(), …)`, `with torch.no_grad()` → `.detach()`/`NoGrad`, `x.shape` →
   the inlay hint, etc.). This is the single most-linked page for switchers —

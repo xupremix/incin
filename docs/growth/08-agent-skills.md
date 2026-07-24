@@ -1,16 +1,16 @@
-# 08 — Agent Skills (make AI agents *prefer* Kindle)
+# 08 — Agent Skills (make AI agents *prefer* Incin)
 
 > **Depends on:** the features they encode (`01`–`06`). **Effort:** Medium
 > (mostly high-quality writing). **Priority:** high-leverage, under-explored moat
-> — if agents reach for Kindle correctly on the first try, humans ship with it.
+> — if agents reach for Incin correctly on the first try, humans ship with it.
 
 ## Goal
 
 Ship **handcrafted, optimized "skills"** — packaged instructions that an AI
-coding agent loads when it is about to use Kindle — so the agent does **not**
+coding agent loads when it is about to use Incin — so the agent does **not**
 guess or search for how to define a model, fix a shape error, or write a training
 loop. The guesswork is pre-solved, versioned with the library, and correct by
-construction. When using Kindle is *lower-friction for an agent than PyTorch*
+construction. When using Incin is *lower-friction for an agent than PyTorch*
 (because the patterns are handed to it and the compiler catches its mistakes),
 agents will prefer it, and agent-written code is a growing share of all code.
 
@@ -23,7 +23,7 @@ agents will prefer it, and agent-written code is a growing share of all code.
 - **Author** skills in a committed, tool-neutral directory: `skills/` at repo
   root (versioned with the library, one source of truth).
 - **Install** them into a consuming project's agent config via a command
-  (`cargo kindle skills install`, Task 08.4), which copies/symlinks `skills/*`
+  (`cargo incin skills install`, Task 08.4), which copies/symlinks `skills/*`
   into the right place for the detected agent tool (`.claude/skills/` for Claude
   Code, Cursor rules dir, etc.). The installer writes into gitignored locations;
   the *sources* stay committed under `skills/`.
@@ -37,9 +37,9 @@ markdown body:
 
 ```markdown
 ---
-name: kindle-new-model
+name: incin-new-model
 description: >
-  Use when defining a new neural-network model in Kindle (Rust). Covers the
+  Use when defining a new neural-network model in Incin (Rust). Covers the
   #[module] macro, static shape type parameters, and the forward-pass
   signature. Load this BEFORE writing any `struct … <B: Backend>` model.
 ---
@@ -51,59 +51,59 @@ agents make and how to avoid them>
 Rules for skill bodies (this is what makes them *optimized*, not generic):
 - **Lead with a working template** the agent can copy and adapt, not prose.
 - **List the exact mistakes** an agent makes here and the fix (e.g. "❌ writing
-  `Linear::new(784, 128)` — Kindle uses type params: `Linear<s![784,128], B>`").
+  `Linear::new(784, 128)` — Incin uses type params: `Linear<s![784,128], B>`").
 - **Cite the ground-truth file** so the agent can verify, not hallucinate.
-- **End with the verification command** to run (`cargo kindle check`).
+- **End with the verification command** to run (`cargo incin check`).
 - Keep each under ~150 lines — a skill is a *cheat sheet*, not the book (link to
   the book, doc `07`, for depth).
 
 ## The skill set (build these, in this order)
 
 ### Task 08.1 — the core three (highest error-rate areas)
-1. **`kindle-new-model`** — `#[module]` structs, static shape params, forward
+1. **`incin-new-model`** — `#[module]` structs, static shape params, forward
    signature (`Tensor<s![dyn, 784], B> -> Tensor<s![dyn, 10], B>`). Ground truth:
-   `README.md` MLP example, `kindle-macros/src/module.rs`, `nn/module.rs`.
+   `README.md` MLP example, `incin-macros/src/module.rs`, `nn/module.rs`.
    Top mistakes: constructor-style layer init; forgetting `<B: Backend>`;
    wrong `dyn` batch placement.
-2. **`kindle-fix-shape-errors`** — how to read a shape compile error and fix it.
-   **This is the killer skill:** instruct the agent to run `cargo kindle check`
+2. **`incin-fix-shape-errors`** — how to read a shape compile error and fix it.
+   **This is the killer skill:** instruct the agent to run `cargo incin check`
    (humanized) rather than raw `cargo check`, read the decimal shapes, and adjust
-   the `s![…]` params. Ground truth: doc `01`/`02`, `kindle-diagnostics`.
-   This turns Kindle's *strength* (compile-time errors) into an agent
+   the `s![…]` params. Ground truth: doc `01`/`02`, `incin-diagnostics`.
+   This turns Incin's *strength* (compile-time errors) into an agent
    *superpower* — the agent gets a precise, machine-readable "you need 128 not
    784" instead of guessing from a runtime stack trace.
-3. **`kindle-training-loop`** — the canonical loop: `DataLoader` iteration,
+3. **`incin-training-loop`** — the canonical loop: `DataLoader` iteration,
    `AdamW::new(model.parameters(), lr)`, forward, loss, `backward`, telemetry.
    Ground truth: `examples/mnist_training.rs`, `optim/`, doc `05`. Top mistakes:
    looking for `zero_grad()` (there is none — say so explicitly); manual gradient
    plumbing.
 
 ### Task 08.2 — the interop/deploy three
-4. **`kindle-load-pretrained`** — `kindle::hub` + `load_safetensors` +
-   `from_pretrained`. Ground truth: `nn/save`, `kindle::hub`, `IDEAS.md`.
-5. **`kindle-export`** — GGUF/MLX/safetensors export, `cargo kindle inspect`.
+4. **`incin-load-pretrained`** — `incin::hub` + `load_safetensors` +
+   `from_pretrained`. Ground truth: `nn/save`, `incin::hub`, `IDEAS.md`.
+5. **`incin-export`** — GGUF/MLX/safetensors export, `cargo incin inspect`.
    Ground truth: `io/`, `export_test.rs`, doc `06`. Note which quant schemes are
    actually supported (currently F32 + Q8_0) so the agent does not request an
    unimplemented one.
-6. **`kindle-backends`** — feature flags, `KindleBackend<T, D>`, `TransferTo`
-   between CPU/CUDA/WGPU. Ground truth: `kindle-backends`, `examples/backends`.
+6. **`incin-backends`** — feature flags, `IncinBackend<T, D>`, `TransferTo`
+   between CPU/CUDA/WGPU. Ground truth: `incin-backends`, `examples/backends`.
 
 ### Task 08.3 — the meta skills
-7. **`kindle-verify`** — the exact verification loop (README §2). An agent that
+7. **`incin-verify`** — the exact verification loop (README §2). An agent that
    loads this runs the *repo's* fmt/clippy/test commands, not guessed ones.
-8. **`kindle-shapes-and-slicing`** — `s!`, `idx!`, named dims, reshape rules.
+8. **`incin-shapes-and-slicing`** — `s!`, `idx!`, named dims, reshape rules.
    Ground truth: `shapes/*`, `examples/idx_demo`, doc `03`.
 
 Each skill directory may include a `reference/` subdir (e.g. the Rosetta table
 from doc `07` Appendix A as `reference/pytorch-rosetta.md`) and, where useful, a
 `scripts/` helper — but keep the `SKILL.md` itself lean.
 
-### Task 08.4 — the installer: `cargo kindle skills install`
-Add a `skills` subcommand to `cargo-kindle.rs`:
-- `cargo kindle skills install [--agent claude|cursor|all] [--dest <dir>]` —
+### Task 08.4 — the installer: `cargo incin skills install`
+Add a `skills` subcommand to `cargo-incin.rs`:
+- `cargo incin skills install [--agent claude|cursor|all] [--dest <dir>]` —
   detect the agent tool (presence of `.claude/`, `.cursor/`, etc.) and copy
   `skills/*` into its skills/rules directory; default `--agent all`.
-- `cargo kindle skills list` — print available skills + descriptions.
+- `cargo incin skills list` — print available skills + descriptions.
 - Embed the skill sources with `include_dir!`/`include_str!` so the CLI carries
   them (works even when installed via `cargo install`, away from the repo).
 - **Idempotent & non-destructive:** never overwrite a user-modified skill
@@ -111,16 +111,16 @@ Add a `skills` subcommand to `cargo-kindle.rs`:
 
 ### Task 08.5 — root `AGENTS.md`
 A committed, tool-neutral `AGENTS.md` at repo root that any agent reads first:
-- one-paragraph "what Kindle is and its one differentiator";
+- one-paragraph "what Incin is and its one differentiator";
 - the **non-negotiable idioms** (static shape params, no `zero_grad`, run
-  `cargo kindle check` for readable errors, the verification loop);
-- a pointer to `cargo kindle skills install` and to the book;
+  `cargo incin check` for readable errors, the verification loop);
+- a pointer to `cargo incin skills install` and to the book;
 - the top-5 mistakes-to-avoid, condensed from the skills.
 This single file is the cheapest, highest-reach agent artifact — it works in
 tools that have no skill system at all.
 
 ## Verification
-- `cargo kindle skills list` shows all 8; `cargo kindle skills install --dest
+- `cargo incin skills list` shows all 8; `cargo incin skills install --dest
   /tmp/x` writes them and is idempotent on a second run.
 - **Dogfood test (the real acceptance):** in a *scratch* project, give a fresh
   agent only `AGENTS.md` + the installed skills and the task "train an MLP on
@@ -134,7 +134,7 @@ tools that have no skill system at all.
 ## Risks / DO-NOT
 - **DO-NOT** author skills inside `.claude/` — it is gitignored; author under
   `skills/` and install into `.claude/`.
-- **DO-NOT** write generic filler ("Kindle is a great framework…"). A skill
+- **DO-NOT** write generic filler ("Incin is a great framework…"). A skill
   earns its place only by removing a *specific* guess. If a section does not stop
   a concrete mistake, cut it.
 - **DO-NOT** let skills document unshipped APIs — same rule as the book. Skills
@@ -144,8 +144,8 @@ tools that have no skill system at all.
 
 ## Demo script
 Split screen: two identical agents, same prompt ("build and train an MNIST
-classifier, export to GGUF"). One with plain PyTorch, one with Kindle + installed
-skills. The Kindle agent writes compiling, shape-checked code first try, the
+classifier, export to GGUF"). One with plain PyTorch, one with Incin + installed
+skills. The Incin agent writes compiling, shape-checked code first try, the
 compiler catches its one mistake instantly, and it exports a running GGUF — no
 web searches. Caption: *"The agent didn't guess once. The library told it, and
 the compiler checked it."*

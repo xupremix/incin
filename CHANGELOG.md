@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to the Kindle framework will be documented in this file.
+All notable changes to the Incin framework will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
@@ -74,7 +74,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Tensor allocation uses one `zeros`, `ones`, `rand`, or `randn` entry point for
   static and dynamic metadata. Allocating layers expose `build`.
 - `from_slice` accepts the element type associated with its static dtype.
-- `KindleBackend<T, D>` is the only concrete backend spelling exported by the
+- `IncinBackend<T, D>` is the only concrete backend spelling exported by the
   public prelude; the former CPU, WGPU, and CUDA backend type names were removed. Device changes now use `TransferTo`, rebuilding destination-native storage through checked, dtype-aware host staging.
 
 ### Fixed
@@ -91,7 +91,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **WGPU Autograd:** Implemented backward passes for `gelu`, `elu`, and `mish`
   activations in `WgpuBackendImpl`, including WGSL gradient kernels (`gelu_grad`,
   `elu_grad`, `mish_grad`) and tape entries in the autograd system.
-- **Cross-Backend Parity Tests:** New `crates/kindle-backends/tests/gradient_parity.rs`
+- **Cross-Backend Parity Tests:** New `crates/incin-backends/tests/gradient_parity.rs`
   test suite verifies numeric agreement (≤ 1e-4) between `CpuBackendImpl` and
   `WgpuBackendImpl` for elementwise add, matmul, layer_norm, softmax, and
   cross_entropy_loss forward+backward passes.
@@ -103,12 +103,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   structs that call `to_device`.
 - **Docs:** All 2,541 filler doc comments (`/// Core abstraction for \`X\`…`)
   replaced with real one-line descriptions across the entire workspace
-  (`kindle-core`, `kindle-backends`, `kindle-data`, `kindle-macros`,
-  `kindle-telemetry`, `kindle-viz`, `kindle-viz-plugin-api`, test and
+  (`incin-core`, `incin-backends`, `incin-data`, `incin-macros`,
+  `incin-telemetry`, `incin-viz`, `incin-viz-plugin-api`, test and
   example crates).
 - **Real Doctests:** `s![]`, `idx![]`, and `#[module]` macro doc examples in
-  `kindle-macros/src/lib.rs` are compiled doctests (not `ignore`) and pass
-  `cargo test --doc -p kindle-macros`.
+  `incin-macros/src/lib.rs` are compiled doctests (not `ignore`) and pass
+  `cargo test --doc -p incin-macros`.
 
 ### Fixed
 - **Safety:** `to_scalar` and `to_vec1` now validate the raw byte slice length
@@ -119,7 +119,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   `shapes/idx.rs` (multiple inferred dims) with clean `Result::Err` returns.
 - **Security:** `FileTransport::open` now sets Unix file permissions to `0o600`
   (owner read/write only) on newly created telemetry log files.
-- **Test Isolation:** All integration tests in `crates/kindle/tests/` now
+- **Test Isolation:** All integration tests in `crates/incin/tests/` now
   explicitly target `CpuBackendImpl<f32, Cpu>` rather than `DefaultBackend`,
   preventing failures when `--features cuda` is active on CPU-only CI hosts.
 - **CPU Feature Gate (C-8):** `cpu::ops::elementwise` components were previously
@@ -135,7 +135,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 - **Backend Crates:** Moved `native`, `wgpu`, and `cuda` backends into their own
-  distinct crate (`kindle-backends`), standardizing trait bounds
+  distinct crate (`incin-backends`), standardizing trait bounds
   (`NumericOps`, `ModuleOps`, `ReductionOps`, etc.) across devices.
 - **WGPU Migration:** Transitioned core components, backends, and app libraries
   from Metal to WGPU for unified cross-platform execution.

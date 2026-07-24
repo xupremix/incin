@@ -1,0 +1,17 @@
+[package]
+name = "native_training_demo"
+edition.workspace = true
+version.workspace = true
+readme.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+incin = { path = "../..", version = "0.0.0", features = ["cpu"] }
+incin-backends = { path = "../../../incin-backends", version = "0.0.0", default-features = false, features = ["cpu", "wgpu"] }
+incin-telemetry = { path = "../../../incin-telemetry", version = "0.0.0" }
+incin-core = { path = "../../../incin-core", version = "0.0.0" }
+anyhow = "1.0.103"
+
+[lints]
+workspace = true

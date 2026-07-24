@@ -1,7 +1,7 @@
 # 06 — Deployment (single binary · GGUF loop · browser/WASM)
 
 > **Status:** PARTIAL — GGUF Q8_0 export + inspector already landed (see
-> `crates/kindle-core/src/io/`). **Effort:** Low (packaging/benchmark) →
+> `crates/incin-core/src/io/`). **Effort:** Low (packaging/benchmark) →
 > Medium-High (WASM). **Priority:** the credibility close — "safe *and* it ships
 > anywhere."
 
@@ -19,10 +19,10 @@ Three deployment stories PyTorch handles badly:
 
 - GGUF export with **real** Q8_0 block quantization + F32 passthrough, and a
   full GGUF metadata/tensor-table inspector, already exist:
-  `crates/kindle-core/src/io/{gguf.rs,inspect.rs,mlx.rs,mod.rs}`,
-  `cargo kindle inspect`, and `crates/kindle-core/tests/export_test.rs`.
+  `crates/incin-core/src/io/{gguf.rs,inspect.rs,mlx.rs,mod.rs}`,
+  `cargo incin inspect`, and `crates/incin-core/tests/export_test.rs`.
 - Native CPU backend is dependency-light; WGPU backend works
-  (`crates/kindle/examples/backends` runs ops on `WgpuB`).
+  (`crates/incin/examples/backends` runs ops on `WgpuB`).
 - WASM blocker is documented in `IDEAS.md` "Open questions": `getrandom 0.2`
   refuses to build for bare `wasm32-unknown-unknown` without an entropy opt-in;
   this blocks `CreationOps::rand`/`randn` and therefore any WASM build.
@@ -35,7 +35,7 @@ A minimal example crate that trains a tiny model, saves safetensors, and has an
 binary is self-contained: `ldd` shows no exotic deps; record its size.
 
 ### Task 06.A2 — the benchmark/comparison artifact
-A reproducible `bench/` comparing: Kindle release-binary size + cold-start vs. a
+A reproducible `bench/` comparing: Incin release-binary size + cold-start vs. a
 minimal PyTorch inference Docker image size + cold-start, for the same model.
 This is a *marketing artifact* as much as a benchmark — put the numbers in the
 README and the book's deployment chapter. Be honest and reproducible (script it).
@@ -47,8 +47,8 @@ README and the book's deployment chapter. Be honest and reproducible (script it)
 `QuantScheme`s (by design, after the recent fix). Implement the next-most-wanted
 scheme, `Q4_K_M` (or `Q4_0` first as a stepping stone), end-to-end: the backend
 `QuantizedOps::quantize` for the new `QuantDType` (mirror
-`crates/kindle-backends/src/cpu/ops/quant.rs`'s `BlockQ8_0` path), the
-`to_bytes` block serialization (`crates/kindle-backends/src/cpu/mod.rs` Q8_0
+`crates/incin-backends/src/cpu/ops/quant.rs`'s `BlockQ8_0` path), the
+`to_bytes` block serialization (`crates/incin-backends/src/cpu/mod.rs` Q8_0
 arm), and the exporter's per-tensor eligibility rule (`gguf.rs` `save`). Add a
 byte-layout regression test in `export_test.rs` like the Q8_0 one.
 **Verify against a real consumer:** load the exported file in `llama.cpp`/Ollama
@@ -77,7 +77,7 @@ own milestone after A and B land.
 
 ## Verification
 - A/B: `cargo build --release -p <deploy-example>`; run the benchmark script;
-  `cargo test -p kindle-core --test export_test`.
+  `cargo test -p incin-core --test export_test`.
 - B: **plus** a manual "does llama.cpp/Ollama load it" check — record the exact
   command and output in the PR.
 - C: `cargo build --target wasm32-unknown-unknown …` (document the exact feature
@@ -94,7 +94,7 @@ own milestone after A and B land.
   deps into core crates; keep WASM glue in a separate example/crate.
 
 ## Demo scripts
-- *"My PyTorch inference image is 2.1 GB. My Kindle model is one 5 MB binary —
+- *"My PyTorch inference image is 2.1 GB. My Incin model is one 5 MB binary —
   same model, same output."*
 - *"Trained in Rust. Exported to GGUF. Running in Ollama. Zero Python touched
   this model, ever."*

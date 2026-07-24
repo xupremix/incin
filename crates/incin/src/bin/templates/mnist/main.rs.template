@@ -1,0 +1,61 @@
+//! Scaffolded by `cargo incin new mnist` -- a 784 -> 128 -> 10 MLP training
+//! loop with live telemetry pre-wired, so `cargo run` plus `cargo incin
+//! watch` gives you a live loss curve in the terminal with zero extra setup.
+//!
+//! This trains on synthetic random data (not real MNIST), deliberately, so
+//! the scaffold builds and runs immediately with no external download. Swap
+//! in the real dataset by following incin's own
+//! `crates/incin/examples/mnist_training.rs`, which loads
+//! `incin_data::vision::mnist::MnistDataset` from a `./data/mnist`
+//! directory instead of the `Tensor::rand`/`Tensor::from_slice` calls below.
+
+use incin::Flatten;
+use incin::prelude::*;
+use incin_telemetry::emitter::Emitter;
+use incin_telemetry::reporter::Reporter;
+
+type Backend = incin::DefaultBackend;
+
+fn main() -> incin::Result<()> {
+    let (reporter, run) = Emitter::to_run_dir(None).expect("failed to start telemetry");
+    println!(
+        "Telemetry run `{}` started -- watch it live in another terminal with:\n    cargo incin watch --run-id {}",
+        run.run_id, run.run_id
+    );
+
+    let model = seq![
+        Flatten::<1, 3>::new(),
+        Linear::<Dyn, Backend>::build((784, 128))?,
+        ReLU,
+        Linear::<Dyn, Backend>::build((128, 10))?
+    ];
+
+    let mut optim = incin::AdamW::<Backend>::new(model.parameters(), 0.001);
+
+    let batch_size = 32;
+    println!("Starting training on synthetic data...");
+    // Kept small so a debug (`cargo run`) build finishes in well under 30s;
+    // bump this up (and add `--release`) once you swap in real data.
+    for step in 0..30 {
+        let images = Tensor::<Dyn, Backend>::rand(vec![batch_size, 1, 28, 28])?;
+        // Synthetic class labels (0..10) -- not learnable signal, just enough
+        // to exercise the full forward/backward/optimizer/telemetry loop.
+        let labels_data: Vec<f32> = (0..batch_size).map(|i| ((step + i) % 10) as f32).collect();
+        let labels = Tensor::<Dyn, Backend>::from_slice(&labels_data, vec![batch_size])?;
+
+        let output = model.forward(images)?;
+        let loss = output.cross_entropy_loss(&labels)?;
+        let grads = loss.backward()?;
+        optim.step(&grads)?;
+
+        let loss_value = loss.to_scalar::<f32>()?;
+        reporter.scalar("loss", step, loss_value as f64);
+
+        if step % 5 == 0 {
+            println!("step {step}: loss = {loss_value:.4}");
+        }
+    }
+
+    println!("Done -- see the module doc comment for how to swap in real MNIST data.");
+    Ok(())
+}

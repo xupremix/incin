@@ -17,10 +17,10 @@ opt-in, perpetually "experimental", and silently drop names through most ops.
 
 ## Grounding (what exists today)
 
-- The `symbolic_dim!` macro (`crates/kindle-core/src/shapes/dim.rs:60`) already
+- The `symbolic_dim!` macro (`crates/incin-core/src/shapes/dim.rs:60`) already
   generates a distinct `pub struct <Name>(pub usize)` implementing `Dim`.
 - A working example exists but is buried:
-  `crates/kindle/examples/named_tensors/src/main.rs` uses
+  `crates/incin/examples/named_tensors/src/main.rs` uses
   `symbolic_dim!(Batch, Seq, Feature)` and shows a wrong `.add` failing to
   compile.
 - `Dim` is the trait (`shapes/dim.rs`), and `s![Batch, 10]` already accepts a
@@ -39,7 +39,7 @@ opt-in, perpetually "experimental", and silently drop names through most ops.
    Confirm what the compiler currently prints and, if ugly, apply doc `01`'s
    `on_unimplemented` treatment to the `Dim`-equality bound.
 4. **Name preservation through ops:** audit which ops keep vs. drop names.
-   PyTorch's failure is that names evaporate; Kindle's selling point is they
+   PyTorch's failure is that names evaporate; Incin's selling point is they
    don't. Any op that *should* preserve a name but doesn't is a bug to file.
 
 ## Task list
@@ -78,13 +78,13 @@ existing arg system.
 - Book chapter (doc `07`) gets a dedicated "Named Dimensions" page.
 
 ### Task 03.5 — a compelling standalone example
-`crates/kindle/examples/named_dims_safety/`: a function that expects
+`crates/incin/examples/named_dims_safety/`: a function that expects
 `Tensor<[Batch, Feature]>`, plus a commented-out call passing
 `Tensor<[Batch, Seq]>` that "// does not compile — uncomment to see the error".
 This is the artifact the demo/video points at.
 
 ## Verification
-Standard loop **plus** `cargo test -p kindle-core --test compile_tests` for any
+Standard loop **plus** `cargo test -p incin-core --test compile_tests` for any
 new `compile_fail` snapshots. Confirm the promoted example builds:
 `cargo build -p named_dims_safety` (or via the examples workspace glob).
 
@@ -120,7 +120,7 @@ itself turned out to be an unreliable predictor — see the E0308 finding).
 | `+`/`-`/`*`/`/` operators, `broadcast_add` etc. | ✅ **yes, as of 2026-07-23** (see below) — every impl in `shapes/broadcast.rs` now bounds on the shared `StaticOrNamedDim` marker | ✅ — plus a real runtime safety net: two same-typed named dims with disagreeing values now panic via `checked_broadcast_dim` instead of silently zeroing | `named_dims.rs::plus_operator_works_...`, `broadcast_add_prepends_a_named_leading_dim_...`, `broadcast_add_with_usize_leading_axis_...`, `broadcast_add_panics_on_disagreeing_...` |
 | `.transpose()` | ✅ yes (`Transpose` bounded only by `Dim`) | ✅ **both** names, correctly swapped | `named_dims.rs::transpose_swaps_and_preserves_both_named_dims` |
 | `.sum_dim()`/`.mean_dim()` etc. (`ReduceDim`) | ✅ yes (bounded only by `Dim`) | ✅ the *other* axis's name | `named_dims.rs::sum_dim_over_a_named_axis_preserves_the_other_named_axis` |
-| `.sum_keepdim()` etc. (`ReduceKeepDim`) | ✅ yes | ⚠️ the reduced axis becomes `typenum::U1` (correct — it's genuinely a new singleton axis, not "the same" dim anymore) | read `kindle-macros/src/shape_ops.rs` codegen; not separately compile-tested |
+| `.sum_keepdim()` etc. (`ReduceKeepDim`) | ✅ yes | ⚠️ the reduced axis becomes `typenum::U1` (correct — it's genuinely a new singleton axis, not "the same" dim anymore) | read `incin-macros/src/shape_ops.rs` codegen; not separately compile-tested |
 | `.concat()` | ✅ yes, **but only on axes it isn't concatenating along** — the concatenated axis needs `Dim: Add<Dim>`, which `symbolic_dim!` types don't implement | ✅ the non-concatenated axis's name | `named_dims.rs::concat_along_a_literal_axis_preserves_a_named_dim_on_the_other_axis`; rejection case not separately tested (follows directly from `Add` not being implemented) |
 | `.stack()` | ✅ yes (`StackShape` bounded only by `Dim`) | ✅ preserved, new axis inserted at the right position | `named_dims.rs::stack_preserves_a_named_dim_and_inserts_the_new_axis_at_the_right_position` |
 | `.reshape()` | ❌ **no** — `ElementCount` (the trait `ReshapeShape`'s blanket impl relies on) is implemented only for tuples of `typenum::Unsigned` | n/a | read `shapes/reshape.rs`; not separately compile-tested |
@@ -197,7 +197,7 @@ and structurally can't be helped by adding one (its failure mode is
 leave alone: `E0308`'s own message already names the real types directly
 (`Batch` vs `Seq`, not typenum), and the existing translator cleans up any
 numeric noise inside them with zero new code — verified by piping the
-actual generated `.stderr` through `cargo kindle translate`.
+actual generated `.stderr` through `cargo incin translate`.
 
 **Task 03.2 is done — no code changes were needed**, only this verification
 (and one self-correction along the way).
@@ -207,8 +207,8 @@ actual generated `.stderr` through `cargo kindle translate`.
 ## 2026-07-23 (later same day) — `.matmul()` gap closed on explicit request
 
 The "not fixed, flag to the user" item above was raised with the user, who
-asked for it. Implemented in `crates/kindle-core/src/tensor/matmul.rs` and
-`crates/kindle-core/src/shapes/dim.rs`.
+asked for it. Implemented in `crates/incin-core/src/tensor/matmul.rs` and
+`crates/incin-core/src/shapes/dim.rs`.
 
 **The coherence trap that shaped the design:** the obvious fix — relax every
 `M: StaticDim`/`K: StaticDim`/`N: StaticDim` bound in `MatMulShape`'s impls to
@@ -264,8 +264,8 @@ tensor in the workspace):**
   to compile, but it succeeded" — direct proof the feature works, not an
   assumption).
 - Full existing matmul coverage re-run and unchanged: `cargo run -p matmul`,
-  `cargo run --example batched_matmul`, `kindle/tests/parity_tests.rs`
-  (`--features wgpu`, CPU/WGPU numerical parity), `kindle-backends`'s own
+  `cargo run --example batched_matmul`, `incin/tests/parity_tests.rs`
+  (`--features wgpu`, CPU/WGPU numerical parity), `incin-backends`'s own
   wgpu matmul unit tests. All pass byte-for-byte identical to before this
   change — the refactor is behavior-preserving for every pre-existing
   (typenum-only) call site.
@@ -290,7 +290,7 @@ separately if wanted.
 The tuple-arg constructor form (`Tensor::zeros((32usize, ()))`) is not a
 named-dim-specific awkwardness — it's the same general mixed-static/dynamic
 positional-argument convention `ArgInto`/`TensorArgs`
-(`kindle-core/src/tensor/arg_into.rs`) already uses everywhere in the
+(`incin-core/src/tensor/arg_into.rs`) already uses everywhere in the
 codebase (every shape-component position takes its own arg: `usize` for a
 runtime-sized `Dim` including named ones, `()` for a compile-time-fixed one).
 Inventing a `zeros_named(batch = 32, ...)`-style builder would create a
@@ -305,7 +305,7 @@ comments (03.5) rather than new code.
 Writing the compile-pass proofs for 03.1 surfaced a genuine, previously
 invisible correctness bug, **not specific to named dims** but only ever
 exercised by them (or any `usize`-runtime dim) until now: `Tensor::concat`
-and `Tensor::stack` (`kindle-core/src/tensor/ops/manipulation.rs`) built
+and `Tensor::stack` (`incin-core/src/tensor/ops/manipulation.rs`) built
 their output shape's runtime `Field` via `Default::default()` instead of the
 operands' actual dimension values. Invisible for purely-typenum shapes (a
 zero-sized `PhantomData` either way — `Default` and "the real value" are the
@@ -320,19 +320,19 @@ Fixed both to reconstruct the output `Field` from the real operand dims via
 used. Regression tests: `named_dims.rs::concat_along_a_literal_axis_...` and
 `::stack_preserves_a_named_dim_...` (both assert the *correct*, non-zero
 runtime dims, not just that the code compiles). Full existing
-`concat`/`stack` test suites (`concat_stack.rs`, `kindle/tests/tensor_ops.rs`)
+`concat`/`stack` test suites (`concat_stack.rs`, `incin/tests/tensor_ops.rs`)
 still pass unchanged — the fix is behavior-preserving for every
 purely-typenum call site that exercised this code before.
 
 ### Tasks 03.4 / 03.5 — done
 - README "Named Dimensions" bullet added.
-- `crates/kindle/examples/named_dims_safety/` — the compelling standalone
+- `crates/incin/examples/named_dims_safety/` — the compelling standalone
   example: a `classify(&Tensor<s![Batch, Feature]>)` function, a commented-out
   wrong call passing `Tensor<s![Batch, Seq]>` (its claimed error text was
   verified by actually uncommenting it, capturing the real compiler output,
   then re-commenting), plus *working* transpose/concat calls proving names
   are preserved through real ops, not just checked once.
-- The original buried `crates/kindle/examples/named_tensors` was kept (still
+- The original buried `crates/incin/examples/named_tensors` was kept (still
   the minimal smoke test) with a pointer comment to the new one, rather than
   deleted — no reason to remove a passing, still-correct example.
 - Book chapter: still pending — doc `07` (the book itself) hasn't been
@@ -443,7 +443,7 @@ This is not an oversight to fix later; it's a permanent boundary, same as
   compiles clean (no hardware to run it).
 - Existing conv/pool/broadcast test suites (`layers.rs`, `nn_tests.rs`,
   `builder_permutations.rs`, `tensor_ops.rs`'s broadcast tests,
-  `kindle-core/tests/broadcast.rs`) all still pass unchanged — every fix in
+  `incin-core/tests/broadcast.rs`) all still pass unchanged — every fix in
   this pass is behavior-preserving for every pre-existing (typenum/`usize`
   -only) call site.
 

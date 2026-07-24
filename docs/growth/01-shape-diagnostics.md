@@ -1,6 +1,6 @@
 # 01 — Compile-Time Shape Diagnostics
 
-> **Depends on:** task `00` (the `kindle-diagnostics` crate).
+> **Depends on:** task `00` (the `incin-diagnostics` crate).
 > **Effort:** Medium. **Priority:** #1 — build this first. It fixes the exact
 > friction point where a curious PyTorch dev bounces *today*, and it is the
 > single most shareable demo.
@@ -36,10 +36,10 @@ error[E0271]: type mismatch resolving `<(UInt<UInt<UTerm, B1>, B0>, ...) as Elem
   `AdaptiveAvgPool2dShape` (`shapes/spatial.rs`), `ReshapeTarget`/`SliceTarget`
   (`shapes/idx.rs`), `Transpose`/`ReduceDim`/`ReduceKeepDim`/`Flatten`
   (`shapes/shape_ops.rs`).
-- The `cargo kindle` translator already post-processes rendered diagnostics
-  (`translate_typenum_text`, now in `kindle-diagnostics` after task 00).
+- The `cargo incin` translator already post-processes rendered diagnostics
+  (`translate_typenum_text`, now in `incin-diagnostics` after task 00).
 - A representative failing case + its exact stderr is captured at
-  `crates/kindle-core/tests/compile_fail/reshape_static_mismatch.{rs,stderr}`.
+  `crates/incin-core/tests/compile_fail/reshape_static_mismatch.{rs,stderr}`.
 
 ## The technical crux (READ THIS — it is why the messages are still ugly)
 
@@ -75,7 +75,7 @@ and route the count comparison through it. Then a count mismatch becomes an
 *unsatisfied trait bound* (`E0277`), which `on_unimplemented` **does** decorate.
 
 ```rust
-// in kindle-core/src/shapes/reshape.rs
+// in incin-core/src/shapes/reshape.rs
 
 /// Witness that two type-level element counts are identical. Implemented
 /// reflexively — only `SameCount<N>` for the *same* `N` exists — so requiring
@@ -125,7 +125,7 @@ hole.
 > reads better than the single-sided draft above once both counts are shown.
 > Regenerating `reshape_static_mismatch.stderr` and `reshape_rank_mismatch.stderr`
 > confirms the top-level error code actually flipped from `E0271` to `E0277`,
-> and piping the regenerated message through `cargo kindle translate` produces
+> and piping the regenerated message through `cargo incin translate` produces
 > exactly the target end state: `Cannot reshape: source has 6 elements but the
 > target shape has 8 elements`. The `= note: required for ... to implement
 > ReshapeShape<...>` / `required by a bound in reshape` trailer is *retained*
@@ -137,7 +137,7 @@ hole.
 > (`reshape_static_mismatch.stderr`, `reshape_rank_mismatch.stderr`), and both
 > go through `ReshapeShape`/`ElementCount`. **No other shape trait needs this
 > treatment right now** — `BroadcastShape`, `ConcatShape`, `StackShape`,
-> `MatMulShape` (`kindle-core/src/tensor/matmul.rs:21-25` — note this trait
+> `MatMulShape` (`incin-core/src/tensor/matmul.rs:21-25` — note this trait
 > lives outside `shapes/`, not in the list this doc originally enumerated) and
 > the `spatial.rs` conv/pool traits all already fail as `E0277` because their
 > blanket impls are ordinary trait-impl resolution, not associated-type
@@ -211,8 +211,8 @@ hole.
 > and `forward_conv2d_static_mismatch.rs` were **all four already broken**
 > before today, in a way their checked-in `.stderr` snapshots masked rather
 > than caught:
-> - All four had a duplicate `use kindle_core as kindle;` alongside
->   `extern crate kindle_core as kindle;` (E0254) and a stray, dangling
+> - All four had a duplicate `use incin_core as incin;` alongside
+>   `extern crate incin_core as incin;` (E0254) and a stray, dangling
 >   `#[derive(Clone, Default)]` above `fn main` (E0774, "derive may only be
 >   applied to structs/enums/unions") — both harmless-looking copy/paste
 >   leftovers that `trybuild` had been faithfully snapshotting as if they
@@ -242,7 +242,7 @@ hole.
 > None of this was visible from reading the traits or the doc's own prior
 > status update — only from actually trying to regenerate every snapshot
 > and reading what came out. Full verification after all of the above:
-> `cargo test -p kindle-core --test compile_tests` (19 files, all green),
+> `cargo test -p incin-core --test compile_tests` (19 files, all green),
 > then the complete workspace loop (fmt / clippy `-D warnings` / full
 > `cargo test --workspace --all-targets` / examples build / WGPU lib tests
 > / CUDA compile-check) — all clean. `docs/growth/README.md`'s "no other
@@ -266,7 +266,7 @@ rustc trait solving:
 rendered diagnostic (may still contain UInt<…> in {Self}/{Rhs})
         │
         ├─▶ plain `cargo build`  : readable message, numbers as UInt<…>
-        ├─▶ `cargo kindle build`  : kindle-diagnostics rewrites UInt<…> → 6 / 8
+        ├─▶ `cargo incin build`  : incin-diagnostics rewrites UInt<…> → 6 / 8
         └─▶ IDE (doc 02)          : LSP rewrites the same, inline in the editor
 ```
 
@@ -275,8 +275,8 @@ rendered diagnostic (may still contain UInt<…> in {Self}/{Rhs})
 ### Task 01.1 — audit which traits fail as E0271 vs E0277
 Grep the compile-fail snapshots for the actual error codes:
 ```bash
-grep -l "E0271" crates/kindle-core/tests/compile_fail/*.stderr
-grep -l "E0277" crates/kindle-core/tests/compile_fail/*.stderr
+grep -l "E0271" crates/incin-core/tests/compile_fail/*.stderr
+grep -l "E0277" crates/incin-core/tests/compile_fail/*.stderr
 ```
 Every trait whose failure shows up as **E0271** (associated-type equality) needs
 the `SameCount`-style restructuring. Every trait already failing as **E0277**
@@ -293,8 +293,8 @@ types).
 As in the crux section. Add a `compile_fail` test is unnecessary (one exists);
 instead **regenerate** the existing snapshot and eyeball it:
 ```bash
-TRYBUILD=overwrite cargo test -p kindle-core --test compile_tests
-git diff crates/kindle-core/tests/compile_fail/reshape_static_mismatch.stderr
+TRYBUILD=overwrite cargo test -p incin-core --test compile_tests
+git diff crates/incin-core/tests/compile_fail/reshape_static_mismatch.stderr
 ```
 **Acceptance:** the new `.stderr` shows the `SameCount` `message` line and is
 anchored at the `reshape` call site, and does **not** contain a top-level
@@ -319,12 +319,12 @@ Example targets:
 Ensure every op a beginner hits early (matmul, add/broadcast, reshape, concat,
 stack, conv2d, linear) has a `compile_fail` test so its message is **snapshot-
 locked** and cannot silently regress. Model them on the existing files in
-`crates/kindle-core/tests/compile_fail/`.
+`crates/incin-core/tests/compile_fail/`.
 
 ## Verification
 Standard loop (§2 of README) **plus**:
 ```bash
-cargo test -p kindle-core --test compile_tests    # trybuild snapshots
+cargo test -p incin-core --test compile_tests    # trybuild snapshots
 ```
 After any snapshot change, manually read the regenerated `.stderr` and confirm a
 non-Rust-expert could understand it.
@@ -343,6 +343,6 @@ non-Rust-expert could understand it.
 ## Demo script (the video)
 Split screen. Left: PyTorch, a 6-layer model, one wrong `nn.Linear`, `python
 train.py` → 40 s of epoch bar → `RuntimeError: mat1 and mat2 shapes cannot be
-multiplied`. Right: the same bug in Kindle, red squiggle in VS Code before
+multiplied`. Right: the same bug in Incin, red squiggle in VS Code before
 running, hover shows "Cannot matmul: inner dimensions differ (784 vs 128)".
 Caption: *"Same bug. One of them told me before I hit run."*

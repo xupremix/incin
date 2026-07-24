@@ -1,0 +1,37 @@
+[package]
+authors = ["xupremix <xupremix.me@gmail.com>"]
+name = "incin"
+edition.workspace = true
+version.workspace = true
+readme.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+default = ["std", "cpu"]
+std = ["incin-core/std", "incin-macros/std", "incin-backends/std"]
+nightly = ["incin-core/nightly", "incin-macros/nightly"]
+cpu = ["incin-backends/cpu"]
+cuda = ["incin-core/cuda", "incin-backends/cuda"]
+wgpu = ["incin-backends/wgpu"]
+legacy = ["incin-backends/legacy"]
+
+[dependencies]
+incin-core = { path = "../incin-core", version = "0.0.0", default-features = false }
+incin-macros = { path = "../incin-macros/", version = "0.0.0", default-features = false }
+incin-backends = { path = "../incin-backends", version = "0.0.0", default-features = false }
+incin-data = { version = "0.0.0", path = "../incin-data" }
+incin-diagnostics = { version = "0.0.0", path = "../incin-diagnostics" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[[bin]]
+name = "cargo-incin"
+path = "src/bin/cargo-incin.rs"
+
+[dev-dependencies]
+candle-core = { workspace = true }
+hashbrown = "0.14.5"
+bytemuck = "1"

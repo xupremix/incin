@@ -2,25 +2,25 @@
 resolver = "2"
 
 members = [
-    "crates/kindle",
-    "crates/kindle-backends",
-    "crates/kindle-core",
-    "crates/kindle-diagnostics",
-    "crates/kindle-lsp",
-    "crates/kindle-data",
-    "crates/kindle-macros",
-    "crates/kindle-telemetry",
-    "crates/kindle-viz-plugin-api",
-    "crates/kindle-viz",
-    "crates/kindle/examples/*",
-    "crates/kindle-core/examples/*"
+    "crates/incin",
+    "crates/incin-backends",
+    "crates/incin-core",
+    "crates/incin-diagnostics",
+    "crates/incin-lsp",
+    "crates/incin-data",
+    "crates/incin-macros",
+    "crates/incin-telemetry",
+    "crates/incin-viz-plugin-api",
+    "crates/incin-viz",
+    "crates/incin/examples/*",
+    "crates/incin-core/examples/*"
 ]
 
 exclude = []
 
 [workspace.package]
 edition = "2024"
-version = "0.2.0"
+version = "0.0.0"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
 

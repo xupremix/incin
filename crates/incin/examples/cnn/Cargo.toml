@@ -1,0 +1,11 @@
+[package]
+name = "cnn"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+incin = { path = "../..", version = "0.0.0" }
+
+[lints]
+workspace = true

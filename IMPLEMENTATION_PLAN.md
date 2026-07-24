@@ -1,4 +1,4 @@
-# Kindle — Implementation Plan (Ground-Truth Edition)
+# Incin — Implementation Plan (Ground-Truth Edition)
 
 > **Ground truth as of:** commit `64e41b6` (2026-07-22 22:02), branch `develop`,
 > plus two uncommitted working-tree files documented in Phase 0.
@@ -39,22 +39,22 @@ prevent from repeating. Rules:
 
 ```bash
 cargo fmt --all -- --check
-cargo clippy --workspace --all-targets --no-default-features --features kindle-backends/cpu,kindle/cpu -- -D warnings
-cargo test --workspace --all-targets --no-default-features --features kindle-backends/cpu,kindle/cpu
-cargo build --examples --workspace --no-default-features --features kindle-backends/cpu,kindle/cpu
+cargo clippy --workspace --all-targets --no-default-features --features incin-backends/cpu,incin/cpu -- -D warnings
+cargo test --workspace --all-targets --no-default-features --features incin-backends/cpu,incin/cpu
+cargo build --examples --workspace --no-default-features --features incin-backends/cpu,incin/cpu
 ```
 
 For anything touching `wgpu`, additionally run:
 ```bash
-cargo test -p kindle-backends --no-default-features --features wgpu,std --all-targets
+cargo test -p incin-backends --no-default-features --features wgpu,std --all-targets
 ```
 
 For anything touching `cuda`, you can only do this — **there is no CUDA
 hardware in either Claude Code's or (per `.planning/STATE.md`) Antigravity's
 environment**:
 ```bash
-cargo check -p kindle-backends --no-default-features --features cuda,std
-cargo test --no-run -p kindle-backends --no-default-features --features cuda,std
+cargo check -p incin-backends --no-default-features --features cuda,std
+cargo test --no-run -p incin-backends --no-default-features --features cuda,std
 ```
 Never claim a CUDA change "works," "passes," or "is verified" — the accurate
 phrasing, used consistently throughout `ROADMAP.md`, is **"compiles clean,
@@ -82,8 +82,8 @@ not run."** State this explicitly in every commit message touching
 
 ### 0.3 Hard DO-NOT list
 
-- **Do NOT create `kindle-native` or `kindle-wgpu` as separate crates.** They
-  were consolidated into `kindle-backends/src/{cpu,cuda,wgpu}` — this is
+- **Do NOT create `incin-native` or `incin-wgpu` as separate crates.** They
+  were consolidated into `incin-backends/src/{cpu,cuda,wgpu}` — this is
   called out explicitly in `ROADMAP.md`'s 2026-07-21 header note because an
   earlier version of that document described a stale architecture. The
   workspace member list in root `Cargo.toml` is the authority on what crates
@@ -95,7 +95,7 @@ not run."** State this explicitly in every commit message touching
   feature. Do not add the `burn`/`ndarray` dependencies back.
 - **Do NOT invent `Backend` trait methods that don't exist.** In particular:
   there is **no `sgd_step` method** on `OptimizerOps` — only `adamw_step`
-  (see §1.7). `SGD` and `Adam` (kindle-core's `optim` module) are generic,
+  (see §1.7). `SGD` and `Adam` (incin-core's `optim` module) are generic,
   composed-from-primitives optimizers that work on any backend implementing
   `NumericOps`+`FloatOps` already; only `AdamW` calls a dedicated
   `Backend::adamw_step` fast path. Do not add a `sgd_step`/`adam_step`
@@ -103,7 +103,7 @@ not run."** State this explicitly in every commit message touching
 - **Do NOT change any `Backend`-family trait signature** (`Backend`,
   `NumericOps`, `FloatOps`, `TensorOps`, `CreationOps`, `ReductionOps`,
   `ModuleOps`, `LossOps`, `QuantizedOps`, `OptimizerOps`, all in
-  `kindle-core/src/tensor/backend.rs`) without flagging it explicitly as a
+  `incin-core/src/tensor/backend.rs`) without flagging it explicitly as a
   **semver-breaking change** and stopping for user sign-off first. Every
   implementor (`CpuBackendImpl`, `CudaBackendImpl`, `WgpuBackendImpl`, and
   `legacy::CandleBackend`) must add the method too. See "API Stability
@@ -134,7 +134,7 @@ important anti-hallucination artifact in this document: it separates "exists
 and works," "exists but unwired," and "doesn't exist at all" per method, per
 backend, with exact citations.
 
-### 1.1 `TensorOps` (`kindle-core/src/tensor/backend.rs:357-509`)
+### 1.1 `TensorOps` (`incin-core/src/tensor/backend.rs:357-509`)
 
 | Method | CPU | WGPU | CUDA |
 |---|---|---|---|
@@ -156,7 +156,7 @@ original guidance (assumed metadata-only views would work on CUDA the way
 they do on CPU; they don't, mirrors WGPU's materializing approach instead).
 Compile-verified only, not run on real hardware — see §3.1.
 
-### 1.2 `ModuleOps` (`kindle-core/src/tensor/backend.rs:745-883`)
+### 1.2 `ModuleOps` (`incin-core/src/tensor/backend.rs:745-883`)
 
 | Method | CPU | WGPU | CUDA |
 |---|---|---|---|
@@ -170,7 +170,7 @@ Compile-verified only, not run on real hardware — see §3.1.
 | `avg_pool2d` | ✅ | ✅ | ✅ (2026-07-22, `3ab5088`) |
 | `adaptive_avg_pool2d` | ✅ | ✅ | ✅ (2026-07-22, `3ab5088`) |
 
-### 1.3 `LossOps` (`kindle-core/src/tensor/backend.rs:884-960`, supertrait bound: `NumericOps + FloatOps + ReductionOps`)
+### 1.3 `LossOps` (`incin-core/src/tensor/backend.rs:884-960`, supertrait bound: `NumericOps + FloatOps + ReductionOps`)
 
 | Method | CPU | WGPU | CUDA |
 |---|---|---|---|
@@ -182,7 +182,7 @@ Compile-verified only, not run on real hardware — see §3.1.
 **Correction (2026-07-22): these three needed even less than "no new
 kernel."** `mse_loss`/`l1_loss`/`bce_with_logits_loss` aren't implemented
 per-backend at all, anywhere — they're **default trait method bodies on
-`LossOps` itself** (`kindle-core/src/tensor/backend.rs:885-940`), composed
+`LossOps` itself** (`incin-core/src/tensor/backend.rs:885-940`), composed
 from the `NumericOps`/`FloatOps`/`ReductionOps` supertrait bounds every
 `LossOps` implementor already has. `cpu/ops/loss.rs`'s own module doc says
 this outright ("composed strictly from already-tape-tracked primitives") —
@@ -194,7 +194,7 @@ three **already worked on CUDA with zero code from anyone** — verified with
 resolution compiles and runs correctly, not to add functionality that
 didn't exist.
 
-### 1.4 `FloatOps` (`kindle-core/src/tensor/backend.rs:203-322`)
+### 1.4 `FloatOps` (`incin-core/src/tensor/backend.rs:203-322`)
 
 | Method | CPU | WGPU | CUDA |
 |---|---|---|---|
@@ -203,7 +203,7 @@ didn't exist.
 | `elu` | ✅ | ✅ (direct) | ✅ (2026-07-22, `31e3e62`) |
 | `gelu` | ✅ | ✅ (direct — WGPU has no `erf` primitive, uses polynomial approx) | ✅ (2026-07-22, `31e3e62` — uses CUDA's native `erff` device intrinsic directly, no approximation needed) |
 
-### 1.5 `ReductionOps` (`kindle-core/src/tensor/backend.rs:607-744`)
+### 1.5 `ReductionOps` (`incin-core/src/tensor/backend.rs:607-744`)
 
 | Method | CPU | WGPU | CUDA |
 |---|---|---|---|
@@ -211,7 +211,7 @@ didn't exist.
 | `argmax`/`argmin` | ✅ | ✅ | ✅ (2026-07-22, `c33cbcc` — `launch_reduce_with_indices_op` covered exactly this) |
 | `topk`/`argsort` | ✅ | ✅ | ✅ (2026-07-23 — `cuda_topk_host`/`cuda_argsort_host` in `cuda/backend.rs`, host-readback-and-sort ported verbatim from WGPU's own implementation, see §1.6 below) |
 
-### 1.6 `QuantizedOps` (`kindle-core/src/tensor/backend.rs:961-992`)
+### 1.6 `QuantizedOps` (`incin-core/src/tensor/backend.rs:961-992`)
 
 | Method | CPU | WGPU | CUDA |
 |---|---|---|---|
@@ -219,11 +219,11 @@ didn't exist.
 | `dequantize` | ✅ | ❌ | ✅ `cuda/backend.rs:690` → `launch_dequantize` |
 | `quantized_matmul` | ✅ **Q8_0 only**, `Err(UnsupportedBackendOperation)` for any other `QuantDType` — see `cpu/ops/quant.rs:111-120` | ❌ | ✅ (2026-07-22, `606a4af` — Q8_0 only, dequantize+matmul composition, not a fused kernel like CPU's — see commit for why) |
 
-### 1.7 `OptimizerOps` (`kindle-core/src/tensor/backend.rs:993+`, single method: `adamw_step`)
+### 1.7 `OptimizerOps` (`incin-core/src/tensor/backend.rs:993+`, single method: `adamw_step`)
 
 | Method | CPU | WGPU | CUDA |
 |---|---|---|---|
-| `adamw_step` | ✅ | ✅ | ✅ (2026-07-22, `96b8d04` — default-body resolution, same pattern as `LossOps`; blocked until `18d0034` fixed a device-hardcoding bug in `kindle-core`'s `AdamW::step` itself — see §1.7 below) |
+| `adamw_step` | ✅ | ✅ | ✅ (2026-07-22, `96b8d04` — default-body resolution, same pattern as `LossOps`; blocked until `18d0034` fixed a device-hardcoding bug in `incin-core`'s `AdamW::step` itself — see §1.7 below) |
 
 **A raw CUDA kernel for this already exists and is complete:**
 `cuda/ops/kernels/fused_adamw.cu` — signature:
@@ -237,12 +237,12 @@ extern "C" __global__ void fused_adamw_step(
 )
 ```
 Note it takes a separate `p`/`p_out` (out-of-place), while `Backend::adamw_step`'s
-signature (`kindle-core/src/tensor/backend.rs:1000`) takes `var: &mut B::RawVar`
+signature (`incin-core/src/tensor/backend.rs:1000`) takes `var: &mut B::RawVar`
 (in-place). Check the exact trait signature before writing the wrapper — do
 not assume the kernel's parameter order maps 1:1 without reading both.
 
 **🔴 Blocking prerequisite bug, not currently tracked anywhere else:**
-`kindle-core/src/optim/mod.rs`, `AdamW::step()` (lines ~124-140), lazily
+`incin-core/src/optim/mod.rs`, `AdamW::step()` (lines ~124-140), lazily
 initializes the `m`/`v` momentum buffers with:
 ```rust
 let zero = B::var_zeros::<K>(B::shape::<K>(&t).as_slice(), DTypeId::F32, &DeviceId::cpu())
@@ -254,10 +254,10 @@ On CUDA, `CreationOps::var_zeros` → `cuda_from_f32` → `validate_cuda` →
 DeviceKind::Cuda` with `Error::DeviceInitializationError`. **This means
 `AdamW::step()` will error on its very first call on the CUDA backend even
 after `OptimizerOps::adamw_step` is fully wired**, because it never gets
-that far — it fails earlier, inside `kindle-core`, trying to allocate its
+that far — it fails earlier, inside `incin-core`, trying to allocate its
 own state. Fix this first (thread the real device through, e.g. via
 `B::storage_device` on an existing var, or store the `DeviceId` in `AdamW`
-at construction) — **this bug is backend-agnostic kindle-core code, not
+at construction) — **this bug is backend-agnostic incin-core code, not
 CUDA-specific**, so it also silently means AdamW on WGPU has been getting
 lucky only because `var_zeros` on WGPU presumably doesn't validate device
 kind as strictly (verify this — do not assume WGPU is unaffected just
@@ -292,12 +292,12 @@ These three are candidates for §9 (new feature proposals), not Phase 1 — they
 require new public API surface, not just filling in an existing empty `impl`
 block.
 
-### 1.9 `NumericOps` (`kindle-core/src/tensor/backend.rs:323-356`)
+### 1.9 `NumericOps` (`incin-core/src/tensor/backend.rs:323-356`)
 
 Fully wired on all three backends (`add`/`sub`/`mul`/`div`) — no work needed.
 Listed for completeness only.
 
-### 1.10 `CreationOps` (`kindle-core/src/tensor/backend.rs:510-606`)
+### 1.10 `CreationOps` (`incin-core/src/tensor/backend.rs:510-606`)
 
 Fully implemented on CUDA (`cuda/backend.rs:505-557`: `zeros`/`ones`/`rand`/
 `randn`/`var_zeros`/`var_ones`/`var_rand`/`var_randn`). **`ROADMAP.md`
@@ -327,8 +327,8 @@ throughout. No real ARM/WASM hardware available to run either path.
 ### (original Phase 0 description, kept for reference)
 
 `git status` currently shows two **uncommitted, modified** files:
-- `crates/kindle-backends/src/cpu/ops/elementwise_kernel.rs` (+390 lines)
-- `crates/kindle-backends/src/cpu/ops/matmul.rs` (+104 lines)
+- `crates/incin-backends/src/cpu/ops/elementwise_kernel.rs` (+390 lines)
+- `crates/incin-backends/src/cpu/ops/matmul.rs` (+104 lines)
 
 Both add ARM NEON (`aarch64`) and WASM SIMD128 (`wasm32`) vector codepaths
 alongside the existing AVX2 (`x86_64`) ones, addressing the "Non-x86 CPU
@@ -353,7 +353,7 @@ vector paths" item `ROADMAP.md`'s intro paragraph lists as remaining work.
   errored on `E0463: can't find crate for core` before reaching this repo's
   own code at all).
 - `x86_64`/`cpu,std` still builds clean with this diff present (verified:
-  `cargo check -p kindle-backends --no-default-features --features cpu,std`
+  `cargo check -p incin-backends --no-default-features --features cpu,std`
   → exit 0), because all the new code is behind `#[cfg(target_arch = ...)]`
   gates that don't apply on `x86_64`.
 
@@ -368,9 +368,9 @@ option A):**
      mirroring the existing `wasm_binary_f32`/`wasm_scalar_f32` exactly (same
      structure, `f64x2` WASM SIMD intrinsics instead of `f32x4`, since WASM
      SIMD128 lanes are 128 bits = 2×f64).
-  3. `cargo check --target aarch64-unknown-linux-gnu -p kindle-backends
+  3. `cargo check --target aarch64-unknown-linux-gnu -p incin-backends
      --no-default-features --features cpu,std` and
-     `cargo check --target wasm32-unknown-unknown -p kindle-backends
+     `cargo check --target wasm32-unknown-unknown -p incin-backends
      --no-default-features --features cpu,std` (note: NEON/WASM intrinsics
      need `unsafe` blocks already present in the diff — check they compile,
      don't re-derive them).
@@ -385,7 +385,7 @@ option A):**
      SIMD128 elementwise/matmul kernels`. State plainly in the commit body
      which paths were hardware-verified vs. compile-verified-only, exactly
      like the CUDA precedent.
-- **Option B: revert.** `git checkout -- crates/kindle-backends/src/cpu/ops/elementwise_kernel.rs crates/kindle-backends/src/cpu/ops/matmul.rs`
+- **Option B: revert.** `git checkout -- crates/incin-backends/src/cpu/ops/elementwise_kernel.rs crates/incin-backends/src/cpu/ops/matmul.rs`
   if the user says this was exploratory/unwanted. **Do not do this without
   the user explicitly confirming** — per the global safety protocol, this
   discards uncommitted work.
@@ -440,18 +440,18 @@ shape exactly, don't invent a new one):
    like the CPU version (`cpu/ops/loss.rs`) does. Copy the CPU version's
    formula verbatim — do not re-derive the math.
 4. Add the corresponding `impl` method to `cuda/backend.rs`, matching the
-   exact trait signature from `kindle-core/src/tensor/backend.rs` (line
+   exact trait signature from `incin-core/src/tensor/backend.rs` (line
    numbers in §1's tables) — generic parameters, `Result` wrapping, and all.
 5. **Autograd:** every op that needs a gradient must call `cuda::tape::push`
    with a `TapeEntry` (`cuda/tape.rs:9-13`), mirroring how `NumericOps`
    (`add`/`sub`/`mul`/`div`) and `FloatOps` were wired in `dc46447` — check
-   that commit's diff (`git show dc46447 -- crates/kindle-backends/src/cuda/backend.rs`)
+   that commit's diff (`git show dc46447 -- crates/incin-backends/src/cuda/backend.rs`)
    for the exact call pattern before writing a new one. Pure-metadata ops
    (reshape etc.) need `unbroadcast`/shape-restoring backward closures, same
    as `wgpu/backend.rs` and `cpu/tape.rs` already do — port their closures,
    don't rederive the math.
-6. Compile-verify only (`cargo check -p kindle-backends --features cuda,std`
-   and `cargo test --no-run -p kindle-backends --features cuda,std`) — no
+6. Compile-verify only (`cargo check -p incin-backends --features cuda,std`
+   and `cargo test --no-run -p incin-backends --features cuda,std`) — no
    hardware available. State this plainly in the commit message.
 7. Add unit tests even though they can't run here — mirror the CPU/WGPU test
    shapes (`#[cfg(test)] mod tests` at the bottom of the same file, following
@@ -702,25 +702,25 @@ input), `topk` k-clamping, `topk` axis-rejection, `argsort` value check
 ### 1.7 `OptimizerOps` — `adamw_step`
 
 **Do this only after fixing the device-hardcoding bug in
-`kindle-core/src/optim/mod.rs` documented in §1.7 above** — wiring the CUDA
+`incin-core/src/optim/mod.rs` documented in §1.7 above** — wiring the CUDA
 side first would produce a change that compiles but still can't be exercised
 even once real hardware is available, because the caller breaks before
 reaching it.
 
-1. Fix `kindle-core/src/optim/mod.rs`'s `AdamW::step()`: replace the
+1. Fix `incin-core/src/optim/mod.rs`'s `AdamW::step()`: replace the
    hardcoded `&DeviceId::cpu()` (both occurrences, `m` and `v`
    initialization) with the actual device of `t` — check what accessor
-   exists (`Backend::storage_device`, `kindle-core/src/tensor/backend.rs:126`,
+   exists (`Backend::storage_device`, `incin-core/src/tensor/backend.rs:126`,
    looks like the right one, but it returns `Option<DeviceId>` with a
    default `None` — verify every backend actually overrides it before
    relying on it, or find another route, e.g. storing the `DeviceId` in
    `AdamW` at construction time and threading it through). This is a
-   `kindle-core` change, verify against **all three** backends' test suites
+   `incin-core` change, verify against **all three** backends' test suites
    (cpu/wgpu directly, cuda compile-only), since it's backend-agnostic code.
 2. New `cuda/ops/optim.rs`, `launch_adamw_step` wrapping
    `kernels/fused_adamw.cu`'s `fused_adamw_step`. Reconcile the
    out-of-place kernel signature (`p`, separate `p_out`) against the
-   in-place trait method signature (`kindle-core/src/tensor/backend.rs:1000`,
+   in-place trait method signature (`incin-core/src/tensor/backend.rs:1000`,
    `var: &mut B::RawVar`) — likely means allocating a fresh output buffer
    per step and swapping it into `var`, similar to how other in-place-style
    ops already handle `CudaVar` mutation elsewhere in `cuda/backend.rs` (grep
@@ -735,7 +735,7 @@ reaching it.
 
 ## 4. Phase 2 — Cross-backend gradient-parity expansion — ✅ DONE (2026-07-23)
 
-`crates/kindle-backends/tests/gradient_parity.rs` updated:
+`crates/incin-backends/tests/gradient_parity.rs` updated:
 1. `parity_conv2d` added comparing CPU vs WGPU forward and backward gradients at ≤ 1e-4.
 2. CUDA arms (`cuda_parity_elementwise_add`, `cuda_parity_matmul`, `cuda_parity_conv2d`, `cuda_parity_batch_norm`) added, gated on `#[cfg(feature = "cuda")]` and `#[ignore = "requires CUDA hardware"]`.
 3. File level `#![cfg(feature = "cpu")]` and conditional feature imports updated to allow per-backend target compilation.
@@ -756,7 +756,7 @@ Antigravity's. Concretely, before writing any CI YAML:
    test suite already runs against a *software* Vulkan/WGPU adapter
    (`llvmpipe`) in this very environment (confirmed repeatedly throughout
    `ROADMAP.md`'s WGPU fixes). Adding a CI job that runs
-   `cargo test -p kindle-backends --features wgpu,std` on a plain
+   `cargo test -p incin-backends --features wgpu,std` on a plain
    `ubuntu-latest` runner (with Mesa/llvmpipe available, which Ubuntu
    runners ship by default) is very likely to just work — try this first,
    it's low-risk and immediately raises real coverage.
@@ -775,17 +775,17 @@ met but hollow." Concretely:
    `a0b0e47`, `4176aca`, `f1b5f23`, `e9dffbe`, `ef9550e`, `25e79de`,
    `3abbad3` all touched real documentation; **re-run the grep, don't trust
    any prior count including this document's**).
-2. Work crate-by-crate, smallest first. `kindle-macros` was already flagged
-   solid in `.planning/STATE.md`. Given the commits above, `kindle-core` may
+2. Work crate-by-crate, smallest first. `incin-macros` was already flagged
+   solid in `.planning/STATE.md`. Given the commits above, `incin-core` may
    already be mostly done too — verify with the grep before assuming work
    remains.
 3. One real line per `pub` item describing actual behavior, not a
    restatement of the signature. Every crate needs a real `//!` module doc.
 4. Doctests: `s![]`/`idx![]`/`#[module]` are already real, compiled doctests
-   (`ROADMAP.md`, verified 2026-07-22 — `cargo test --doc -p kindle-macros`
+   (`ROADMAP.md`, verified 2026-07-22 — `cargo test --doc -p incin-macros`
    → 4 passed). Only `import_model!`'s example should stay `rust,ignore`
    (needs a real `.onnx` file on disk at compile time to run for real).
-   Check other crates (`kindle-core`, `kindle`) for any remaining
+   Check other crates (`incin-core`, `incin`) for any remaining
    `rust,ignore` blocks that could be made real — `grep -rn "rust,ignore"`.
 
 ---
@@ -794,8 +794,8 @@ met but hollow." Concretely:
 
 Per `ROADMAP.md`'s checklist, only one item is still open:
 - **Add `[workspace.metadata.release]` entries (or equivalent) to control
-  which crates get published.** `kindle-viz`/`kindle-telemetry`/
-  `kindle-viz-plugin-api` already have `publish = false` in their own
+  which crates get published.** `incin-viz`/`incin-telemetry`/
+  `incin-viz-plugin-api` already have `publish = false` in their own
   `Cargo.toml`s (confirmed, not just claimed) — this task is about the
   root `Cargo.toml`'s `[workspace.metadata.release]` block (currently just
   `shared-version = true` + `tag-name`), deciding explicit publish order if
@@ -811,8 +811,8 @@ both are confirmed done with citations in `ROADMAP.md`.**
 ## 8. Macro & API UX proposals — require explicit user sign-off before implementing
 
 These are grounded in real, observed friction points in the current macro
-and API surface (`kindle-macros/src/lib.rs`, `kindle-core/src/nn/module.rs`,
-`kindle-core/src/optim/mod.rs`), not invented wishlist items. **None of these
+and API surface (`incin-macros/src/lib.rs`, `incin-core/src/nn/module.rs`,
+`incin-core/src/optim/mod.rs`), not invented wishlist items. **None of these
 should be started without the user explicitly picking one** — this section
 exists to give informed options, not a queue of approved work.
 
@@ -820,11 +820,11 @@ exists to give informed options, not a queue of approved work.
 
 **Correction to this section's original claim:** a value-level macro for
 chaining more than two layers **already existed** before this proposal —
-`seq!` (`kindle-core/src/nn/module.rs`, `#[macro_export]`,
+`seq!` (`incin-core/src/nn/module.rs`, `#[macro_export]`,
 `seq!(l1, l2, l3)` → `Sequential(l1, Sequential(l2, l3))`), exported via
-`kindle::prelude::*` and already used in real code
-(`kindle/examples/mnist_training.rs`, `kindle/tests/nn_tests.rs`,
-`kindle/tests/named_layers_tests.rs`). The original bullet above was written
+`incin::prelude::*` and already used in real code
+(`incin/examples/mnist_training.rs`, `incin/tests/nn_tests.rs`,
+`incin/tests/named_layers_tests.rs`). The original bullet above was written
 without checking for this first — exactly the kind of stale-claim mistake
 §0 warns about. Verify before trusting this document's older claims, not just
 the ones already marked corrected.
@@ -832,26 +832,26 @@ the ones already marked corrected.
 The **actual** remaining gap was type-level, not value-level: `seq!` builds
 a right-nested *value*, but naming the matching *type* (e.g. for a
 `#[module]` struct field) still required hand-writing
-`Sequential<A, Sequential<B, C>>` — demonstrated by `kindle`'s own top-of-crate
+`Sequential<A, Sequential<B, C>>` — demonstrated by `incin`'s own top-of-crate
 doc example, which wrote the same 3-layer list twice, once by hand as a type
 and once via `seq!` as a value.
 
 **Fixed:** added `seq_type!` (same file, right next to `seq!`), a
 `macro_rules!` mirroring `seq!`'s exact right-nesting rule at the type level:
 `seq_type!(L1, L2, L3)` → `Sequential<L1, Sequential<L2, L3>>`. Exported the
-same way (`kindle-core/src/lib.rs`'s prelude, next to `pub use crate::seq;`).
-Updated `kindle/src/lib.rs`'s crate-level doc example to use it, eliminating
+same way (`incin-core/src/lib.rs`'s prelude, next to `pub use crate::seq;`).
+Updated `incin/src/lib.rs`'s crate-level doc example to use it, eliminating
 the exact duplication that example used to demonstrate — verified via
-`cargo test -p kindle --features cpu --doc` (the `#[module]` struct field
+`cargo test -p incin --features cpu --doc` (the `#[module]` struct field
 `net: seq_type!(...)` compiles through the `#[module]` attribute macro
-correctly, confirmed by checking `kindle-macros/src/module.rs`'s field-type
+correctly, confirmed by checking `incin-macros/src/module.rs`'s field-type
 handling doesn't structurally require `syn::Type::Path` for non-`PhantomData`
 fields). Added `test_seq_type_matches_seq_value_type` to
-`kindle/tests/nn_tests.rs` — an executed (not just compiled) test that
+`incin/tests/nn_tests.rs` — an executed (not just compiled) test that
 assigns a `seq!(...)` value directly to a `seq_type!(...)`-named local,
 which only compiles at all if the two macros' nesting rules stay in sync;
 also exercises `.forward()` and `.parameters()` through the aliased type.
-Full verification loop (fmt/clippy/workspace tests/examples build/kindle
+Full verification loop (fmt/clippy/workspace tests/examples build/incin
 doctests) all green with this change present.
 
 ### 8.2 Generic `Optimizer` device-safety
@@ -867,7 +867,7 @@ that's fragile, not designed-in safety.
 
 ### 8.3 `import_model!` runtime variant
 
-`import_model!("model.onnx", Name)` (`kindle-macros/src/lib.rs`) requires
+`import_model!("model.onnx", Name)` (`incin-macros/src/lib.rs`) requires
 the `.onnx` file to exist **at compile time**, relative to the crate root.
 This is a deliberate, powerful design (compile-time shape verification) —
 but it means the file path is fixed at compile time, so there's no way to
@@ -883,7 +883,7 @@ this if the user wants it, not a macro change.
 
 ### 8.4 Error-message ergonomics for shape mismatches
 
-`Error::ShapeMismatch` (`kindle-core/src/err.rs`) already carries `op`,
+`Error::ShapeMismatch` (`incin-core/src/err.rs`) already carries `op`,
 `expected`, `got`, and a free-form `msg` — reasonably good today. One real
 gap: nothing in the current error surface tells you *which line of user
 code* produced a shape mismatch when it happens deep inside a `#[module]`-
@@ -895,7 +895,7 @@ minor perf/binary-size cost?") rather than assuming it's wanted.
 ### 8.5 `Module::train()`/`eval()` mode propagation — ✅ IMPLEMENTED (2026-07-23)
 
 **Gap found while surveying UX proposals:** `Module` had no train/eval
-concept at all. `Dropout` (`kindle-core/src/nn/dropout.rs`) already had its
+concept at all. `Dropout` (`incin-core/src/nn/dropout.rs`) already had its
 own local `is_training: bool` gating identity-vs-random-zeroing behavior,
 but nothing let a caller flip it network-wide — a user would have had to
 reach into a `#[module]`-built model tree by hand to find every nested
@@ -912,9 +912,9 @@ as an honest no-op rather than silently overclaiming a behavior change.
 
 **Design, and the non-obvious pitfall hit while building it:** added
 `TrainMode` (`train()`/`eval()`/`set_training(bool)`) to
-`kindle-core/src/nn/module.rs`, plus an `AutorefTrainMode`/
+`incin-core/src/nn/module.rs`, plus an `AutorefTrainMode`/
 `AutorefTrainModeFallback` pair mirroring `Parameters`/`StateDict`'s own
-autoref-specialization pattern exactly, and `kindle-macros/src/module.rs`
+autoref-specialization pattern exactly, and `incin-macros/src/module.rs`
 auto-generates `impl TrainMode` for every `#[module]`-derived struct (one
 more `train_mode_calls` collection, same shape as `param_calls`/
 `load_state_calls`). `set_training` defaults to a no-op so any stateless
@@ -949,14 +949,14 @@ deliberately skipped: their `forward` signature returns a tuple
 `Module<Input>` chaining in the first place, so there's no realistic case
 needing them to implement `TrainMode` today.
 
-1 new test (`kindle/tests/nn_tests.rs::test_train_mode_propagates_through_sequential_dropout`)
+1 new test (`incin/tests/nn_tests.rs::test_train_mode_propagates_through_sequential_dropout`)
 — not just a shape check: builds `seq!(Linear, Dropout::new(0.9))`, calls
 `.eval()`, and asserts the output *exactly* equals calling the `Linear`
 layer alone (eval-mode `Dropout` is a true identity function, so this is a
 real, deterministic, non-probabilistic correctness check, not a "probably
 different" random-seed comparison). Full verification loop (fmt/clippy
 workspace CPU+WGPU/tests, plus `cargo check --features cuda,std` since
-`kindle-core` is shared) all green, 0 regressions.
+`incin-core` is shared) all green, 0 regressions.
 
 ---
 
@@ -986,7 +986,7 @@ re-derive from scratch.
 ### 9.3 CUDA autotune cache persistence
 
 Also already scoped in `ROADMAP.md` ("Cache Persistence & Key Identity" —
-`~/.cache/kindle/autotune.json`, keyed by device UUID + compute capability +
+`~/.cache/incin/autotune.json`, keyed by device UUID + compute capability +
 driver version + `KernelKey`). The in-memory autotuning coordinator this
 session's work (`tuning.rs`) already built is real and unit-tested per
 `ROADMAP.md`'s High-priority section — persistence is additive, not a
@@ -997,7 +997,7 @@ only, same caveat as the rest of Phase 1.
 
 ### 9.4 Benchmark suite (`benches/`)
 
-Scoped in `ROADMAP.md`'s Phase 5 ("Kindle vs Candle vs PyTorch" Criterion
+Scoped in `ROADMAP.md`'s Phase 5 ("Incin vs Candle vs PyTorch" Criterion
 benchmarks). No `benches/` directory currently exists in any crate
 (`find crates -name benches -type d` returns nothing as of this document) —
 this is greenfield, not a partial-completion task. Sequence this after
@@ -1010,40 +1010,40 @@ CPU/WGPU and give a skewed picture.
 
 To address the complete lifecycle (Implementation -> Training -> Testing/Validation -> Datasets -> Persistence):
 
-1. **Data Augmentation & Processing (`kindle-data::transforms`)**:
+1. **Data Augmentation & Processing (`incin-data::transforms`)**:
    - Added `Transform` trait (`fn transform(&self, input: Self::Input) -> Result<Self::Output>`).
    - Implemented `Normalize` (per-channel image normalization with `imagenet()` preset), `Scale`, `RandomHorizontalFlip`, `CenterCrop`, and `Compose` (pipeline chaining).
-   - Re-exported in `kindle-data` and `kindle` preludes.
+   - Re-exported in `incin-data` and `incin` preludes.
 
 2. **Optimizer Checkpointing (`StateDict` for `AdamW`/`Adam`/`SGD`)**:
-   - Implemented `state_dict`, `load_state_dict`, `step_count`, `set_step_count`, and `StateDict<B>` for `AdamW`, `Adam`, and `SGD` in `kindle-core/src/optim/mod.rs`.
+   - Implemented `state_dict`, `load_state_dict`, `step_count`, `set_step_count`, and `StateDict<B>` for `AdamW`, `Adam`, and `SGD` in `incin-core/src/optim/mod.rs`.
    - Preserves $m$ and $v$ momentum tensors and step counters across checkpoints. Unit-tested in `optim_tests.rs`.
 
-3. **Evaluation Metrics Library (`kindle-core::metrics`)**:
+3. **Evaluation Metrics Library (`incin-core::metrics`)**:
    - Added `Metric` trait (`value()`, `reset()`).
    - Implemented classification and regression metrics: `Accuracy`, `Precision`, `Recall`, `F1Score`, `MSE`, and `ConfusionMatrix`.
-   - Re-exported in `kindle-core` prelude.
+   - Re-exported in `incin-core` prelude.
 
 4. **Model Architecture Visualization (`model.summary()`)**:
-   - Added `summary(&self) -> String` to `NamedLayers` and `format_layer_summary` in `kindle-core/src/nn/module.rs`.
+   - Added `summary(&self) -> String` to `NamedLayers` and `format_layer_summary` in `incin-core/src/nn/module.rs`.
    - Generates human-readable printable tree tables showing layer hierarchy, names, types, and shape/parameter specifications. Unit-tested in `named_layers_tests.rs`.
 
 5. **HuggingFace Hub Shortcut (`from_pretrained`)**:
-   - Added `kindle::hub::from_pretrained(repo_id, filename, device)` and `HubRepo::load_safetensors` to download model weights directly from HuggingFace Hub into a state map.
+   - Added `incin::hub::from_pretrained(repo_id, filename, device)` and `HubRepo::load_safetensors` to download model weights directly from HuggingFace Hub into a state map.
 
 ---
 
 ## 12. Public API Re-exports, Bare-Metal (`no_std`) Audit & Release Roadmap — ✅ DONE (2026-07-23)
 
 ### 12.1 Public API & Namespace Cleanups
-- **Single Entry Point (`kindle`)**: Re-exported all core subsystems directly under `kindle` (`kindle::nn`, `kindle::optim`, `kindle::metrics`, `kindle::data`, `kindle::transforms`, `kindle::hub`, `kindle::typenum`). Users can import everything cleanly from the `kindle` root crate without reaching into internal `kindle-core` dependencies.
-- **Prelude Pollution Removal**: Removed internal codegen macros (`alloc::format`, `alloc::vec`, `B0`, `B1`, `Bit`, `Diff`, `Prod`, `Quot`, `Sum`, `UInt`, `UTerm`, `Unsigned`) from `kindle-core` and `kindle` preludes. `kindle::typenum` remains available for explicit type-level integer access.
+- **Single Entry Point (`incin`)**: Re-exported all core subsystems directly under `incin` (`incin::nn`, `incin::optim`, `incin::metrics`, `incin::data`, `incin::transforms`, `incin::hub`, `incin::typenum`). Users can import everything cleanly from the `incin` root crate without reaching into internal `incin-core` dependencies.
+- **Prelude Pollution Removal**: Removed internal codegen macros (`alloc::format`, `alloc::vec`, `B0`, `B1`, `Bit`, `Diff`, `Prod`, `Quot`, `Sum`, `UInt`, `UTerm`, `Unsigned`) from `incin-core` and `incin` preludes. `incin::typenum` remains available for explicit type-level integer access.
 
 ### 12.2 PyTorch Sequential Parity Verification
 - **Sequential Flat State-Dict Keys**: Confirmed `Sequential<L1, L2>` state-dict extraction generates flat PyTorch-indexed keys (`0.weight`, `0.bias`, `1.weight`, `1.bias`) rather than nested structures, ensuring seamless compatibility with PyTorch `.safetensors` checkpoints.
 
 ### 12.3 Bare-Metal (`no_std`) Compatibility
-- `kindle-core` and `kindle-data` use `#![cfg_attr(not(feature = "std"), no_std)]` with explicit `alloc` references (`Vec`, `BTreeMap`, `Box`, `String`), maintaining full compatibility for embedded/bare-metal targets without leaking `std` dependencies.
+- `incin-core` and `incin-data` use `#![cfg_attr(not(feature = "std"), no_std)]` with explicit `alloc` references (`Vec`, `BTreeMap`, `Box`, `String`), maintaining full compatibility for embedded/bare-metal targets without leaking `std` dependencies.
 
 ### 12.4 Roadmap Steps Towards 0.2.0 / 1.0 Release
 

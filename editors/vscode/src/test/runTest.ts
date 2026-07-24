@@ -1,10 +1,10 @@
 // Real, automated smoke test: launches an actual VS Code Extension
 // Development Host (under whatever display/Xvfb is available) with this
 // extension loaded from source, opens a throwaway workspace containing a
-// Cargo.toml that mentions "kindle", and runs src/test/suite/extension.test.ts
+// Cargo.toml that mentions "incin", and runs src/test/suite/extension.test.ts
 // inside it. This exercises the extension's own activation and
 // settings-rewriting logic for real — it does not spin up rust-analyzer or
-// kindle-lsp themselves, so it cannot prove the end-to-end humanized-
+// incin-lsp themselves, so it cannot prove the end-to-end humanized-
 // diagnostic pipeline; see docs/growth/02-ide-extensions.md for what that
 // would additionally require.
 import * as path from "path";
@@ -21,10 +21,10 @@ async function main(): Promise<void> {
   const extensionDevelopmentPath = path.resolve(__dirname, "../../");
   const extensionTestsPath = path.resolve(__dirname, "./suite/index");
 
-  const workspaceDir = fs.mkdtempSync(path.join(os.tmpdir(), "kindle-vscode-ws-"));
+  const workspaceDir = fs.mkdtempSync(path.join(os.tmpdir(), "incin-vscode-ws-"));
   fs.writeFileSync(
     path.join(workspaceDir, "Cargo.toml"),
-    '[package]\nname = "kindle-test-fixture"\nversion = "0.1.0"\nedition = "2021"\n\n[dependencies]\nkindle = "0.2"\n'
+    '[package]\nname = "incin-test-fixture"\nversion = "0.1.0"\nedition = "2021"\n\n[dependencies]\nincin = "0.2"\n'
   );
 
   // Deliberately does NOT point at the system's snap-packaged `code`: snap's
@@ -34,7 +34,7 @@ async function main(): Promise<void> {
   // use its own unconfined VS Code build is the standard, documented, and
   // (here) actually-working path.
   const vscodeExecutablePath =
-    process.env.KINDLE_TEST_VSCODE_PATH || (await downloadAndUnzipVSCode());
+    process.env.INCIN_TEST_VSCODE_PATH || (await downloadAndUnzipVSCode());
 
   // package.json declares `rust-lang.rust-analyzer` as an extensionDependency
   // (deliberately — see docs/growth/02-ide-extensions.md's 2026-07-23
