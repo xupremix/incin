@@ -5,11 +5,12 @@
 /// Environment variable naming the real rust-analyzer binary to spawn.
 /// Falls back to `"rust-analyzer"`, resolved via `PATH`.
 pub const RA_PATH_VAR: &str = "KINDLE_LSP_RA_PATH";
-/// Set to `"0"` to disable inlay-hint label rewriting (diagnostics are
-/// still humanized regardless of this flag).
+/// Set to `"0"` to disable inlay-hint and hover label rewriting
+/// (diagnostics are still humanized regardless of this flag).
 pub const HINTS_VAR: &str = "KINDLE_LSP_HINTS";
 /// Set to `"1"` to also drop the backend/dtype/grad tail from a rewritten
-/// inlay hint (`Tensor<[2, 3]>` instead of `Tensor<[2, 3], CpuBackendImpl<f32, Cpu>>`).
+/// inlay hint or hover label (`Tensor<[2, 3]>` instead of
+/// `Tensor<[2, 3], CpuBackendImpl<f32, Cpu>>`).
 pub const SHORTEN_BACKEND_VAR: &str = "KINDLE_LSP_SHORTEN_BACKEND";
 
 /// The proxy's resolved configuration for one run.

@@ -1,8 +1,25 @@
-use kindle_diagnostics::humanize_diagnostic;
+use kindle_diagnostics::{humanize_diagnostic, parse_matmul_mismatch};
 use serde_json::Value;
 use std::env;
 use std::io::{self, BufRead, Read};
 use std::process::{Command, Stdio};
+
+/// Embedded `cargo kindle new` scaffold templates (Task 05.3). Only `mnist`
+/// exists today -- `cnn`/`mlp` are noted as future work in
+/// `docs/growth/05-observability-and-scaffolding.md` rather than built
+/// speculatively ahead of a second real template.
+mod templates {
+    pub const MNIST_CARGO_TOML: &str = include_str!("templates/mnist/Cargo.toml.template");
+    pub const MNIST_MAIN_RS: &str = include_str!("templates/mnist/main.rs.template");
+    pub const MNIST_README: &str = include_str!("templates/mnist/README.md.template");
+}
+
+/// Absolute path to this crate's own manifest directory (`crates/kindle`),
+/// baked in at `cargo-kindle`'s own compile time. Scaffolded projects use
+/// this to path-depend on the exact kindle checkout that built the
+/// `cargo-kindle` binary generating them -- see the `Cargo.toml.template`
+/// comment for why this can't simply be a crates.io version dependency yet.
+const KINDLE_MANIFEST_DIR: &str = env!("CARGO_MANIFEST_DIR");
 
 /// Renders a message with its translated typenum hints appended underneath.
 fn render_translated_diagnostic(original: &str, raw: bool, explain: bool) {
@@ -28,8 +45,19 @@ fn render_translated_diagnostic(original: &str, raw: bool, explain: bool) {
             );
         } else if original.contains("MatMulShape") || original.contains("matmul") {
             eprintln!(
-                "  └── 📖 [Explain - MatMul Rule]: Inner dimensions must match: [M, K] x [K, N] -> [M, N]."
+                "  └── 📖 [Explain - MatMul Rule]: matmul requires [M, K] x [K, N] -> [M, N] — the inner dimensions (K) must match."
             );
+            // The trait's own `#[diagnostic::on_unimplemented]` message is a
+            // fixed, project-controlled format ("Cannot matrix-multiply
+            // shape `{Self}` with `{Rhs}`"), so it's reliably parseable —
+            // unlike generic rustc/rust-analyzer trait-bound text, which
+            // varies by version. When it parses and the mismatch is really
+            // just the inner dimension (as opposed to some other rank
+            // failure), show exactly which two values conflict and how to
+            // fix it, instead of just repeating the generic rule above.
+            if let Some(mismatch) = parse_matmul_mismatch(original) {
+                eprintln!("{}", mismatch.render());
+            }
         } else if original.contains("Conv2d") {
             eprintln!(
                 "  └── 📖 [Explain - Conv2D Rule]: Input channels must match kernel input channels, and spatial dims must fit stride/padding."
@@ -54,6 +82,11 @@ fn print_help() {
     println!("               Same real-time typenum error translation as above");
     println!("    inspect    Inspect a .safetensors, .gguf, or .onnx model file metadata");
     println!("    translate  Translate raw text containing typenum expressions from stdin or arg");
+    println!("    new <template> [path]");
+    println!("               Scaffold a ready-to-run training project (templates: mnist)");
+    println!(
+        "    watch      Launch the kindle-viz live telemetry TUI ([--run-id ID] or [--run-dir PATH])"
+    );
     println!("    <anything else>");
     println!("               Delegated straight to `cargo <subcommand>` untouched — this");
     println!("               covers every other built-in (fmt, tree, add, update, ...) and");
@@ -145,6 +178,104 @@ fn main() -> io::Result<()> {
             let mut buffer = String::new();
             io::stdin().read_to_string(&mut buffer)?;
             render_translated_diagnostic(&buffer, raw_mode, explain_mode);
+        }
+        return Ok(());
+    }
+
+    if subcommand == "new" {
+        let Some(template_name) = cargo_args.first().cloned() else {
+            eprintln!("Error: please specify a template (e.g. `cargo kindle new mnist`)");
+            std::process::exit(1);
+        };
+        let (cargo_toml, main_rs, readme) = match template_name.as_str() {
+            "mnist" => (
+                templates::MNIST_CARGO_TOML,
+                templates::MNIST_MAIN_RS,
+                templates::MNIST_README,
+            ),
+            other => {
+                eprintln!("Error: unknown template `{other}` (available: mnist)");
+                std::process::exit(1);
+            }
+        };
+        let target = cargo_args
+            .get(1)
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| std::path::PathBuf::from(&template_name));
+
+        if target.exists() {
+            eprintln!("Error: `{}` already exists", target.display());
+            std::process::exit(1);
+        }
+
+        let project_name = target
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or(&template_name)
+            .to_string();
+
+        let kindle_path = std::path::Path::new(KINDLE_MANIFEST_DIR);
+        // `KINDLE_MANIFEST_DIR` is `.../crates/kindle`; `kindle-telemetry`
+        // is its workspace sibling under the same `crates/` parent.
+        let kindle_telemetry_path = kindle_path
+            .parent()
+            .expect("crates/kindle always has a parent directory")
+            .join("kindle-telemetry");
+
+        let substitute = |template: &str| -> String {
+            template
+                .replace("{{PROJECT_NAME}}", &project_name)
+                .replace("{{KINDLE_PATH}}", &kindle_path.display().to_string())
+                .replace(
+                    "{{KINDLE_TELEMETRY_PATH}}",
+                    &kindle_telemetry_path.display().to_string(),
+                )
+        };
+
+        std::fs::create_dir_all(target.join("src"))?;
+        std::fs::write(target.join("Cargo.toml"), substitute(cargo_toml))?;
+        std::fs::write(target.join("src/main.rs"), substitute(main_rs))?;
+        std::fs::write(target.join("README.md"), substitute(readme))?;
+
+        println!(
+            "Scaffolded `{template_name}` project at {}",
+            target.display()
+        );
+        println!("    cd {} && cargo run", target.display());
+        return Ok(());
+    }
+
+    if subcommand == "watch" {
+        match Command::new("kindle-viz").args(&cargo_args).status() {
+            Ok(status) => {
+                if !status.success() {
+                    std::process::exit(status.code().unwrap_or(1));
+                }
+            }
+            Err(e) if e.kind() == io::ErrorKind::NotFound => {
+                // Not installed as a standalone binary (no `cargo install
+                // kindle-viz` yet) -- fall back to `cargo run -p
+                // kindle-viz`, which works from inside this workspace (or
+                // any checkout where `kindle-viz` is a member) with no
+                // separate install step. Note: only the `--file`-transport
+                // (default, XDG run-dir) path is supported here --
+                // `kindle-viz` has no socket *reader* yet (only
+                // `kindle-telemetry`'s write-side `SocketTransport` exists),
+                // so there is no `--socket` flag to pass through.
+                let mut fallback_args = vec![
+                    "run".to_string(),
+                    "--quiet".to_string(),
+                    "-p".to_string(),
+                    "kindle-viz".to_string(),
+                    "--".to_string(),
+                ];
+                fallback_args.extend(cargo_args);
+                let status = Command::new("cargo").args(&fallback_args).status()?;
+                if !status.success() {
+                    std::process::exit(status.code().unwrap_or(1));
+                }
+            }
+            Err(e) => return Err(e),
         }
         return Ok(());
     }

@@ -1,0 +1,14 @@
+[package]
+name = "{{PROJECT_NAME}}"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# Path dependencies pointing at the kindle checkout that generated this
+# scaffold (via `cargo kindle new`). `kindle-telemetry` is `publish = false`
+# (see its Cargo.toml), so it can never be a crates.io version dependency --
+# a path (or git) dependency is the only option, from any kindle checkout.
+# Once `kindle`/`kindle-data` are published, those two lines can switch to
+# `kindle = "0.2"` / `kindle-data = "0.2"` instead.
+kindle = { path = "{{KINDLE_PATH}}", default-features = false, features = ["std", "cpu"] }
+kindle-telemetry = { path = "{{KINDLE_TELEMETRY_PATH}}" }

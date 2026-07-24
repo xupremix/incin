@@ -206,6 +206,39 @@ anything. The editor already knows every shape."*
 > handling and that `setup()` runs without error. `server_opts()` still
 > returns a plain table for nvim-lspconfig users on older Neovim.
 >
+> **2026-07-23 follow-up — a real, popular config style was missing
+> entirely, found via a real user's actual config, not a hypothetical.**
+> `M.setup()`'s `vim.lsp.enable`-based path (and `server_opts()`'s bare
+> `require("lspconfig").rust_analyzer.setup(...)` example) both assumed
+> nvim-lspconfig is driven directly. Checked against a real, installed
+> nvim-lspconfig v2.11.0 (`~/.local/share/nvim/lazy/nvim-lspconfig`,
+> reading `lua/lspconfig/configs.lua`/`manager.lua` directly, not from
+> memory): calling `require("lspconfig").<name>.setup(...)` — which is
+> what `mason-lspconfig.setup({ handlers = {...} })` does internally for
+> every server, the standard kickstart.nvim-derived pattern — goes through
+> nvim-lspconfig's own legacy manager and **never touches
+> `vim.lsp.config`/`vim.lsp.enable` at all**. Both previously-documented
+> integration paths were silent no-ops for anyone using that pattern —
+> confirmed against the actual user's real `lua/xupremix/plugins/lsp.lua`,
+> which uses exactly this `mason-lspconfig` `handlers` structure.
+>
+> Added `M.merge_into(server, opts)` — merges the `cmd`/`cmd_env` override
+> into an existing nvim-lspconfig-shaped table instead of trying to drive
+> `vim.lsp.enable` — and verified the fix two ways: (1) confirmed
+> `manager.lua`'s actual client-start call is `lsp.start(new_config, ...)`,
+> which does honor `cmd`/`cmd_env` from whatever table reaches it, and (2)
+> reproduced nvim-lspconfig's exact internal merge
+> (`vim.tbl_deep_extend('keep', user_config, default_config)`) in an
+> isolated headless-Neovim script and confirmed the final resolved config
+> has `cmd = {"kindle-lsp"}` with the user's own `rust-analyzer` settings
+> (clippy `checkOnSave`, etc.) fully preserved. Fixed the real user's
+> `lsp.lua` directly (added `kindle-lsp` as a plain dependency, wrapped its
+> `rust_analyzer` server table in `merge_into`) rather than only fixing the
+> shipped module and leaving them to work out the integration themselves.
+> README gained a third documented path (`mason-lspconfig` / direct
+> `.setup()` call) alongside the existing two, each now stating plainly
+> which mechanism it does and doesn't cover instead of implying either
+> works universally.
 > **RustRover (02.7): fallback only, shipped and tested; LSP mode still
 > unverified — do not claim it works.** `editors/rustrover/kindle-check.sh`
 > (wraps `cargo kindle check`) was actually executed against this repo.
@@ -326,3 +359,55 @@ anything. The editor already knows every shape."*
 > Platform SDK project that doesn't exist yet — installing the IDE itself
 > doesn't change that. Nothing to update; Option A remains the only
 > verified path.
+>
+> **2026-07-23, same day, third follow-up: the previous mason-lspconfig fix
+> was itself wrong — a newer mason-lspconfig version made `handlers` dead
+> code, and a real `humanize_inlay_label` gap was found live.** Debugging
+> continued against the real user's config once `kindle-lsp` was actually
+> reachable (see below), and turned up two more things, both now fixed:
+>
+> 1. **The second follow-up's fix (`merge_into` inside a `handlers`
+>    function) never actually ran.** Read the *installed*
+>    `mason-lspconfig.nvim`'s `lua/mason-lspconfig/init.lua` directly:
+>    `M.setup` never references `config.handlers` at all in this version —
+>    it was replaced by `automatic_enable` (on **unconditionally** by
+>    default, regardless of whether `handlers` is also supplied), which
+>    calls `vim.lsp.config`/`vim.lsp.enable` directly using whichever base
+>    config nvim-lspconfig's own auto-discovered `lsp/<name>.lua` already
+>    registered. `handlers` being silently ignored rather than erroring is
+>    exactly why this stayed invisible — the user's carefully-configured
+>    `rust-analyzer` settings (clippy `checkOnSave`, `cargo.allFeatures`,
+>    etc.) had *never* been reaching the server, kindle-lsp or not. Fixed by
+>    replacing the `handlers` table with direct `vim.lsp.config(name, cfg)`
+>    + `vim.lsp.enable(names)` calls in the user's `lsp.lua`, confirmed
+>    against `nvim-lspconfig`'s actual `lsp/rust_analyzer.lua` (its
+>    `before_init` hook that routes `settings['rust-analyzer']` into
+>    `initializationOptions` is what makes this route the settings
+>    correctly, not something that needed reimplementing).
+> 2. **`humanize_inlay_label` only recognized a bare `Tensor<(...)>` shell**
+>    — confirmed via a real screenshot showing `let conv: Conv2d<(usize,
+>    usize, UInt<...>, ...), CpuBackendImpl>` rendered completely raw. Any
+>    `let` binding of a layer/module (not just a raw tensor) hits this, and
+>    it's arguably *more* common than the bare-`Tensor` case the function
+>    was built for. Fixed: falls back to a generic, whole-label
+>    `translate_typenum_text` rewrite (the same one `humanize_diagnostic`
+>    uses) for any label that isn't specifically the `Tensor<(...`
+>    shape-tuple shell — every `UInt`/`UTerm` chain still becomes a plain
+>    decimal in place, just without the `[...]` bracket treatment (there's
+>    no single tuple that's unambiguously "the shape" for an arbitrary
+>    struct type the way it is for `Tensor`'s first generic param). New
+>    regression test added; `kindle-lsp` rebuilt and reinstalled
+>    (`cargo install --path crates/kindle-lsp --bin kindle-lsp --force`) so
+>    the fix is actually live.
+>
+> **Also found and fixed, environment-level, not code:** `~/.cargo/bin` was
+> not on `$PATH` anywhere on this machine (system `cargo` is `/usr/bin/cargo`,
+> not rustup-managed) — meaning `kindle-lsp` was never actually spawnable by
+> Neovim regardless of how correctly it was configured. Added it to
+> `~/.bashrc`. Separately, `nvim-treesitter` needed `branch = "main"` (see
+> the second follow-up above) *and* the `tree-sitter` CLI, which also
+> wasn't installed (`cargo install tree-sitter-cli`) — its `main` branch
+> builds parsers from source rather than downloading prebuilt binaries.
+> None of this is a kindle-lsp or kindle-repo bug; it's what "real user's
+> actual machine" debugging finds that a from-scratch verification never
+> would.

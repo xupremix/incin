@@ -59,13 +59,16 @@ pub fn list_runs(
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use std::sync::Mutex;
 
     // `default_run_dir()` reads/writes a process-wide env var, so tests
-    // that touch it must not run concurrently with each other.
-    static ENV_LOCK: Mutex<()> = Mutex::new(());
+    // that touch it must not run concurrently with each other. `pub(crate)`
+    // so `emitter::tests` (which also exercises `default_run_dir()`
+    // indirectly via `Emitter::to_run_dir`) can share the same lock instead
+    // of racing on the same env var through a second, uncoordinated one.
+    pub(crate) static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     /// Returns a fresh, unique temp directory path (not yet created) for
     /// a single test, derived from `generate_run_id()` so parallel test

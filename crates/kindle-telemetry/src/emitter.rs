@@ -11,6 +11,7 @@
 
 use alloc::sync::Arc;
 use crossbeam_channel::{Receiver, Sender, TryRecvError, TrySendError, bounded};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
@@ -20,6 +21,20 @@ use crate::events::{
 };
 use crate::reporter::Reporter;
 use crate::transport::Transport;
+
+/// Identifies the run an [`Emitter::to_run_dir`] call started: the
+/// generated (or caller-supplied) run id, and the on-disk JSONL path a
+/// `kindle-viz` reader (`FileTransportReader`/`cargo kindle watch`) tails to
+/// observe it live.
+#[derive(Debug, Clone)]
+pub struct RunInfo {
+    /// The run's id -- either a fresh UUIDv7 ([`crate::run_dir::generate_run_id`])
+    /// or the caller-supplied name passed to [`Emitter::to_run_dir`].
+    pub run_id: String,
+    /// Full path to this run's `.jsonl` transport file, inside the default
+    /// XDG run directory ([`crate::run_dir::default_run_dir`]).
+    pub path: PathBuf,
+}
 
 /// Bounded capacity of the always-delivered priority channel
 /// (`HyperparamEvent`/`GraphSnapshotEvent`/`EpochEvent`/`MemoryEvent`).
@@ -114,6 +129,33 @@ impl Emitter {
             write_error_count,
             writer_handle: Some(writer_handle),
         }
+    }
+
+    /// One-call constructor for the common case: write to the default XDG
+    /// run directory ([`crate::run_dir::default_run_dir`]) under a fresh
+    /// (or caller-supplied) run id, via a single [`crate::transport::file::FileTransport`].
+    /// This is Task 05.1's ergonomic entry point -- instead of manually
+    /// chaining `default_run_dir` / `generate_run_id` / `FileTransport::open`
+    /// / `Emitter::new`, a training loop writes:
+    /// ```no_run
+    /// # use kindle_telemetry::emitter::Emitter;
+    /// # use kindle_telemetry::reporter::Reporter;
+    /// let (reporter, run) = Emitter::to_run_dir(None).unwrap();
+    /// reporter.scalar("loss", 0, 0.42);
+    /// println!("watch it live: cargo kindle watch --run-id {}", run.run_id);
+    /// ```
+    /// `name`: `None` generates a fresh UUIDv7 run id
+    /// ([`crate::run_dir::generate_run_id`]); `Some(id)` reuses/creates the
+    /// file at that exact id (e.g. to resume writing into a known run name).
+    pub fn to_run_dir(name: Option<&str>) -> crate::err::Result<(Self, RunInfo)> {
+        let dir = crate::run_dir::default_run_dir()?;
+        let run_id = name
+            .map(|s| s.to_string())
+            .unwrap_or_else(crate::run_dir::generate_run_id);
+        let path = dir.join(format!("{run_id}.jsonl"));
+        let transport = crate::transport::file::FileTransport::open(&path)?;
+        let emitter = Self::new(vec![Box::new(transport)]);
+        Ok((emitter, RunInfo { run_id, path }))
     }
 
     /// Explicitly drains and shuts down this `Emitter`: drops both senders
@@ -578,5 +620,80 @@ mod tests {
             .filter(|e| matches!(e, Event::Scalar(_)))
             .count();
         assert!(scalar_count <= 100);
+    }
+
+    /// `default_run_dir()` reads/writes a process-wide env var (via
+    /// `KINDLE_TELEMETRY_RUN_DIR`, `#[cfg(test)]`-only); shares
+    /// `run_dir::tests::ENV_LOCK` with that module's own tests so the two
+    /// don't race on the same env var from separate test threads.
+    fn env_lock() -> &'static Mutex<()> {
+        &crate::run_dir::tests::ENV_LOCK
+    }
+
+    #[test]
+    /// `to_run_dir` writes a valid, readable JSONL file at the expected
+    /// path, and the returned `RunInfo` matches it.
+    fn to_run_dir_creates_a_readable_jsonl_file_at_the_expected_path() {
+        let _guard = env_lock().lock().unwrap();
+        let dir = std::env::temp_dir().join(format!(
+            "kindle-telemetry-emitter-to-run-dir-test-{}",
+            crate::run_dir::generate_run_id()
+        ));
+        // SAFETY: guarded by env_lock(), no other test reads/writes this
+        // env var concurrently.
+        unsafe {
+            std::env::set_var("KINDLE_TELEMETRY_RUN_DIR", &dir);
+        }
+
+        let (emitter, run) =
+            Emitter::to_run_dir(Some("fixed-run-id")).expect("to_run_dir should succeed");
+        assert_eq!(run.run_id, "fixed-run-id");
+        assert_eq!(run.path, dir.join("fixed-run-id.jsonl"));
+
+        emitter.scalar("loss", 0, 0.5);
+        emitter.shutdown();
+
+        let contents = std::fs::read_to_string(&run.path).expect("run file should be readable");
+        let event: Event =
+            serde_json::from_str(contents.trim_end()).expect("line should parse as Event");
+        match event {
+            Event::Scalar(s) => {
+                assert_eq!(s.name, "loss");
+                assert_eq!(s.step, 0);
+                assert_eq!(s.value, 0.5);
+            }
+            other => panic!("expected Event::Scalar, got {other:?}"),
+        }
+
+        unsafe {
+            std::env::remove_var("KINDLE_TELEMETRY_RUN_DIR");
+        }
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    /// `to_run_dir(None)` generates a fresh run id rather than reusing a
+    /// fixed name.
+    fn to_run_dir_with_none_generates_a_fresh_run_id() {
+        let _guard = env_lock().lock().unwrap();
+        let dir = std::env::temp_dir().join(format!(
+            "kindle-telemetry-emitter-to-run-dir-none-test-{}",
+            crate::run_dir::generate_run_id()
+        ));
+        unsafe {
+            std::env::set_var("KINDLE_TELEMETRY_RUN_DIR", &dir);
+        }
+
+        let (_emitter, run) = Emitter::to_run_dir(None).expect("to_run_dir should succeed");
+        assert!(
+            uuid::Uuid::parse_str(&run.run_id).is_ok(),
+            "run_id should be a generated UUID when name is None: {}",
+            run.run_id
+        );
+
+        unsafe {
+            std::env::remove_var("KINDLE_TELEMETRY_RUN_DIR");
+        }
+        std::fs::remove_dir_all(&dir).ok();
     }
 }
