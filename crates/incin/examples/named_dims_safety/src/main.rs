@@ -8,7 +8,7 @@
 //! Run with `cargo run -p named_dims_safety`.
 use incin::prelude::*;
 
-symbolic_dim!(Batch, Seq, Feature);
+dim!(Batch, Seq, Feature);
 
 /// A function that only accepts a `(Batch, Feature)`-shaped tensor — e.g.
 /// the output of some per-token feature projection, ready to feed into a

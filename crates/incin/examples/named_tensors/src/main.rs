@@ -1,10 +1,9 @@
-//! Minimal smoke test for `symbolic_dim!` — for a fuller tour (transpose and
-//! concat preserving names, a realistic name-mismatch, the exact compiler
-//! error it produces), see `crates/incin/examples/named_dims_safety`.
+//! Minimal smoke test for `dim!` — for a fuller tour (transpose and
+//! reshape safety, dimension unwrapping), run `cargo run -p named_dims_safety`.
 extern crate alloc;
 use incin::prelude::*;
 
-symbolic_dim!(Batch, Seq, Feature);
+dim!(Batch, Seq, Feature);
 
 fn main() {
     let _dev = DeviceId::cpu();

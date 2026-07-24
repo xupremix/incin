@@ -1,6 +1,6 @@
 use incin::prelude::*;
 
-import_model!("resnet18.onnx", Resnet18);
+model!("resnet18.onnx", Resnet18);
 
 fn main() {
     println!("ResNet18 successfully parsed into Rust AST!");

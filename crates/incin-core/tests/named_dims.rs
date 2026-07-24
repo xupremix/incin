@@ -9,7 +9,7 @@ use incin_core::prelude::dummy::DummyBackend;
 use incin_core::prelude::*;
 use incin_macros::s;
 
-incin_core::symbolic_dim!(Batch, Feature);
+incin_core::dim!(Batch, Feature);
 
 type TestBackend = DummyBackend<f32, Cpu>;
 
@@ -189,7 +189,7 @@ fn broadcast_add_panics_on_disagreeing_same_named_type_dims() {
 // `Default::default()` bug on their batch/`COut` positions, both fixed.
 // ─────────────────────────────────────────────────────────────────────────
 
-incin_core::symbolic_dim!(Channel);
+incin_core::dim!(Channel);
 
 /// `Pool2dShape` needed no fix — confirms it, rather than assumes it.
 #[test]

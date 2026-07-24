@@ -36,7 +36,7 @@ fn test_s_macro() {
     assert_eq!(<RepetitionShape as ConstShape>::DIMS, [64, 64, 64]);
 
     // Symbolic dim with doc comments
-    symbolic_dim! {
+    dim! {
         /// Batch size dimension
         DocBatch,
         /// Sequence length dimension

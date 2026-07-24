@@ -3,7 +3,7 @@ use incin_core::prelude::*;
 use incin_core::prelude::dummy::DummyBackend;
 use incin_macros::s;
 
-incin_core::symbolic_dim!(Batch);
+incin_core::dim!(Batch);
 
 fn main() {
     let t1: Tensor<s![Batch, 10], DummyBackend<f32, Cpu>> = Tensor::zeros((32usize, ())).unwrap();

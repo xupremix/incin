@@ -9,6 +9,7 @@
 //! * **`s![...]`**: Defines a shape directly from integer literals (e.g., `s![1, 3, 224, 224]`).
 //! * **`idx![...]`**: Defines an indexing/slicing operation for tensors (e.g., `idx![1..3, .., 0..2]`).
 //! * **`#[module]`**: Derives neural network module traits automatically for structs, similar to `#[derive(Module)]` but specifically tailored for Incin.
+//! * **`model!("model.onnx", Name)`**: Compiles an ONNX model file into a fully-typed Rust module structurally matching the ONNX graph.
 //! * **`import_model!("model.onnx", Name)`**: Compiles an ONNX model file into a fully-typed Rust module structurally matching the ONNX graph.
 #[macro_use]
 extern crate alloc;
@@ -143,29 +144,17 @@ pub fn generate_shape_ops(input: TokenStream) -> TokenStream {
 /// determines the static shapes of all parameters (weights, biases, layer norms) and connections,
 /// and emits a complete Rust `struct` containing all the layers.
 ///
-/// ## Automatic `Module` Generation
-/// For `.onnx` files, this macro goes a step further: it parses the computational graph and
-/// automatically generates the `forward` method. The generated `forward` pass contains verified
-/// type bounds, meaning that passing an incorrectly shaped tensor into the ONNX model will
-/// result in a compile-time error, rather than a runtime panic.
-///
-/// Supported ONNX operators are mapped natively to Incin operations (e.g. `Gemm` -> `Linear`,
-/// `Conv` -> `Conv2d`, `Relu` -> `ReLU`, etc).
-///
 /// ## Examples
 /// ```rust,ignore
 /// use incin::prelude::*;
 ///
-/// // Generates a struct named `MyResNet` from "resnet18.onnx".
-/// // The file must exist relative to the crate root at compile time.
-/// import_model!("resnet18.onnx", MyResNet);
-///
-/// fn main() {
-///     // The generated struct requires all parameters to be populated.
-///     // You typically initialize this by deserializing a safetensors file into it.
-///     // let model = MyResNet { ... };
-/// }
+/// model!("resnet18.onnx", MyResNet);
 /// ```
+#[proc_macro]
+pub fn model(input: TokenStream) -> TokenStream {
+    safetensors::import_model(TokenStream::new(), input)
+}
+
 #[proc_macro]
 pub fn import_model(input: TokenStream) -> TokenStream {
     safetensors::import_model(TokenStream::new(), input)

@@ -995,7 +995,7 @@ where
 ///
 /// Naming the *type* of that value (e.g. for a `#[module]` struct field)
 /// still requires hand-nesting `Sequential<L1, Sequential<L2, L3>>` — see
-/// [`seq_type!`], which generates that same nesting from the same
+/// [`SeqTy!`], which generates that same nesting from the same
 /// flat layer list so it never has to be written out by hand.
 #[macro_export]
 macro_rules! seq {
@@ -1015,7 +1015,7 @@ macro_rules! seq {
 /// (`Sequential<A, Sequential<B, C>>`) even though `seq!(a, b, c)` already
 /// builds the matching value without that nesting spelled out. This macro
 /// mirrors `seq!`'s exact right-nesting rule at the type level:
-/// `seq_type!(L1, L2, L3)` expands to `Sequential<L1, Sequential<L2, L3>>`,
+/// `SeqTy!(L1, L2, L3)` expands to `Sequential<L1, Sequential<L2, L3>>`,
 /// so a layer list only needs to be written once per meaning (the type via
 /// this macro, the value via `seq!`) instead of the type being re-derived by
 /// hand every time the layer list changes.
@@ -1026,9 +1026,7 @@ macro_rules! seq {
 ///
 /// type Backend = IncinBackend<f32, Cpu>;
 ///
-/// // Instead of writing:
-/// //   Sequential<Linear<s![768, 256], Backend>, Sequential<ReLU, Linear<s![256, 10], Backend>>>
-/// type Net = seq_type!(
+/// type Net = SeqTy!(
 ///     Linear<s![768, 256], Backend>,
 ///     ReLU,
 ///     Linear<s![256, 10], Backend>
@@ -1042,11 +1040,27 @@ macro_rules! seq {
 /// # Ok::<(), Error>(())
 /// ```
 #[macro_export]
-macro_rules! seq_type {
+macro_rules! SeqTy {
     ($l1:ty) => {
         $l1
     };
     ($l1:ty, $($tail:ty),+ $(,)?) => {
-        $crate::prelude::Sequential<$l1, $crate::seq_type!($($tail),+)>
+        $crate::prelude::Sequential<$l1, $crate::SeqTy!($($tail),+)>
+    };
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! seq_ty {
+    ($($tokens:tt)*) => {
+        $crate::SeqTy!($($tokens)*)
+    };
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! seq_type {
+    ($($tokens:tt)*) => {
+        $crate::SeqTy!($($tokens)*)
     };
 }

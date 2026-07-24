@@ -6,7 +6,7 @@
 //!
 //! * **Compile-time Shape Verification**: Write tensor operations with `Tensor<s![Batch, Channels, Height, Width], Backend>` and let the compiler guarantee that shapes align for operations like `matmul`, `conv2d`, `concat`, etc.
 //! * **Backend Agnostic**: Incin is built on a trait-based backend system, with native CPU, CUDA, and WGPU execution backends shipped out of the box. `candle`/`ndarray`/`burn` wrappers exist behind the `legacy` feature for interop.
-//! * **Macro-driven Ergonomics**: Powerful macros like `s![]` for shape definitions, `idx![]` for expressive slicing and reshaping, and `import_model![]` for generating fully typed Rust structs directly from ONNX files.
+//! * **Macro-driven Ergonomics**: Powerful macros like `s![]` for shape definitions, `idx![]` for expressive slicing and reshaping, and `model![]` for generating fully typed Rust structs directly from ONNX files.
 //! * **Zero-Cost Abstractions**: The static shape information (`typenum`) exists entirely in the type system and evaporates at runtime, introducing zero overhead to the underlying backend operations.
 //!
 //! ## Quick Start
@@ -29,7 +29,7 @@
 //! ## Neural Network Modules
 //!
 //! Building and running a model is straightforward using the `#[module]` attribute and the
-//! `seq!`/`seq_type!` macros — `seq_type!` names the same nested `Sequential<...>`
+//! `seq!`/`SeqTy!` macros — `SeqTy!` names the same nested `Sequential<...>`
 //! type that `seq!` builds a value of, so a layer list only needs to be written once per meaning
 //! instead of the field type being hand-nested separately:
 //!
@@ -40,7 +40,7 @@
 //!
 //! #[module]
 //! pub struct MLP {
-//!     net: seq_type!(
+//!     net: SeqTy!(
 //!         Linear<s![768, 256], Backend>,
 //!         ReLU,
 //!         Linear<s![256, 10], Backend>

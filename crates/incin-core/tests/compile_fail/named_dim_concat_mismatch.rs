@@ -3,7 +3,7 @@ use incin_core::prelude::*;
 use incin_core::prelude::dummy::DummyBackend;
 use incin_macros::s;
 
-incin_core::symbolic_dim!(Batch, OtherBatch);
+incin_core::dim!(Batch, OtherBatch);
 
 fn main() {
     // Concatenating along axis 1 (Feature) requires axis 0 to be the exact

@@ -5,7 +5,7 @@
 /// (`usize` for a fully dynamic axis).
 ///
 /// In practice, you rarely need to implement or use `Dim` directly. The `s![]` macro generates
-/// the correct implementations automatically. Custom symbolic dimensions can be created via `symbolic_dim!`.
+/// the correct implementations automatically. Custom symbolic dimensions can be created via `sym_dim!`.
 pub trait Dim: 'static + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + PartialEq {
     /// The user-facing constructor argument (e.g. `()` for compile-time-
     /// fixed dimensions, `usize` for runtime-sized ones).
@@ -54,10 +54,10 @@ impl Dim for usize {
 /// ensuring that symbolic dimensions match at compile time.
 ///
 /// ```rust
-/// incin_core::symbolic_dim!(Batch, Seq);
+/// incin_core::dim!(Batch, Seq);
 /// ```
 #[macro_export]
-macro_rules! symbolic_dim {
+macro_rules! dim {
     ($( $(#[$meta:meta])* $name:ident ),+ $(,)?) => {
         $(
             $(#[$meta])*
@@ -93,15 +93,24 @@ macro_rules! symbolic_dim {
                 }
             }
 
-            // Deliberately `StaticOrNamedDim`, not `StaticDim`: a named dim isn't
-            // a `typenum` compile-time constant (it can't do type-level
-            // arithmetic), but it *can* appear in a matmul's `M`/`N`/batch
-            // positions, which only need identity/carry-through, not
-            // arithmetic. `StaticDim` itself is left untouched here since
-            // `BroadcastShape`/`conv2d` also key off it and haven't been
-            // audited for real (non-zero-sized) runtime dimension state.
             impl $crate::prelude::StaticOrNamedDim for $name {}
         )+
+    };
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! sym_dim {
+    ($($tokens:tt)*) => {
+        $crate::dim!($($tokens)*);
+    };
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! symbolic_dim {
+    ($($tokens:tt)*) => {
+        $crate::dim!($($tokens)*);
     };
 }
 

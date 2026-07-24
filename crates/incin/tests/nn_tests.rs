@@ -132,11 +132,11 @@ fn test_sequential_state_dict_keys_are_flat_like_pytorch() -> Result<()> {
 }
 
 #[test]
-/// `seq_type!` must name the exact type `seq!` builds a value of —
+/// `SeqTy!` must name the exact type `seq!` builds a value of —
 /// this only compiles at all if the two macros' nesting rules stay in sync,
 /// so it's a compile-time proof, not just a runtime assertion.
-fn test_seq_type_matches_seq_value_type() -> Result<()> {
-    type Net = seq_type!(
+fn test_seq_ty_matches_seq_value_type() -> Result<()> {
+    type Net = SeqTy!(
         Linear<s![10, 5], CpuBackendImpl>,
         ReLU,
         Linear<s![5, 2], CpuBackendImpl>

@@ -3,7 +3,7 @@ use incin::prelude::*;
 #[test]
 /// Test onnx advanced ops.
 fn test_onnx_advanced_ops() {
-    import_model!("../../test_models/advanced.onnx", TestOps);
+    model!("../../test_models/advanced.onnx", TestOps);
 
     /// Backend.
     type Backend = incin_backends::cpu::CpuBackendImpl;
@@ -21,7 +21,7 @@ fn test_onnx_advanced_ops() {
 #[test]
 /// Test onnx control flow if.
 fn test_onnx_control_flow_if() {
-    import_model!("../../test_models/if.onnx", TestIf);
+    model!("../../test_models/if.onnx", TestIf);
     /// Backend.
     type Backend = incin_backends::cpu::CpuBackendImpl;
 

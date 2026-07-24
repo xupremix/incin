@@ -1,11 +1,11 @@
-// import_model! reads the safetensors file AT COMPILE TIME to build the nested module struct.
+// model! reads the safetensors file AT COMPILE TIME to build the nested module struct.
 // For this example to compile, `resnet18.safetensors` must exist locally during compilation.
 // In a real workflow, you would typically download it once in a build.rs script,
-// or use `import_model!` on a generic ONNX/Safetensors file you have locally.
+// or use `model!` on a generic ONNX/Safetensors file you have locally.
 //
 // Uncomment below when you have a valid Safetensors file:
 //
-// import_model!("resnet18.safetensors", ResNet18);
+// model!("resnet18.safetensors", ResNet18);
 //
 // fn main() -> Result<()> {
 //     // Download weights from Hugging Face Hub (this will be fast if already cached!)

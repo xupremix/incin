@@ -68,8 +68,9 @@ pub mod prelude {
             AutorefComputeStats, AutorefComputeStatsFallback, ComputeStats, LayerStats, ModelStats,
         },
     };
+    pub use crate::dim;
     pub use crate::seq;
-    pub use crate::seq_type;
+    pub use crate::SeqTy;
     pub use incin_macros::{idx, module, s};
 
     pub use super::shapes::prelude::*;
@@ -90,7 +91,6 @@ pub mod prelude {
     pub use crate::serialize::{Format, ModelExt};
     pub use crate::shapes::dim::Dim;
     pub use crate::shapes::shape::{ConstShape, DynShape, PartialDynShape, Shape};
-    pub use crate::symbolic_dim;
     pub use alloc::boxed::Box;
     pub use alloc::collections::BTreeMap;
     pub use alloc::format;
