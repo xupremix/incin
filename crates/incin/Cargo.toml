@@ -8,6 +8,10 @@ version.workspace = true
 readme.workspace = true
 license.workspace = true
 
+exclude = [
+    "*.onnx",
+]
+
 [lints]
 workspace = true
 
