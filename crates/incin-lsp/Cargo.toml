@@ -1,6 +1,5 @@
 [package]
 repository = "https://github.com/xupremix/incin"
-publish = false
 authors = ["xupremix <xupremix.me@gmail.com>"]
 name = "incin-lsp"
 description = "Transparent LSP proxy that rewrites typenum shape diagnostics and inlay hints between an editor and rust-analyzer."
