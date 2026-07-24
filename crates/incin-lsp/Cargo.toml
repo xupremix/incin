@@ -1,4 +1,5 @@
 [package]
+repository = "https://github.com/xupremix/incin"
 publish = false
 authors = ["xupremix <xupremix.me@gmail.com>"]
 name = "incin-lsp"

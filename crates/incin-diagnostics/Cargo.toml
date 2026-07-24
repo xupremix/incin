@@ -1,4 +1,5 @@
 [package]
+repository = "https://github.com/xupremix/incin"
 authors = ["xupremix <xupremix.me@gmail.com>"]
 name = "incin-diagnostics"
 description = "Typenum-to-decimal diagnostic humanization shared by cargo-incin and Incin's IDE tooling."

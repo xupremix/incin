@@ -1,4 +1,6 @@
 [package]
+description = "Machine learning framework for setting fire to dimensionality bugs"
+repository = "https://github.com/xupremix/incin"
 authors = ["xupremix <xupremix.me@gmail.com>"]
 name = "incin"
 edition.workspace = true

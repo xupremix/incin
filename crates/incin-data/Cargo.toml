@@ -1,4 +1,6 @@
 [package]
+description = "Dataset loading and streaming utilities for incin"
+repository = "https://github.com/xupremix/incin"
 name = "incin-data"
 edition.workspace = true
 version.workspace = true

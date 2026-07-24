@@ -1,4 +1,6 @@
 [package]
+description = "TUI visualization and metric inspector for incin"
+repository = "https://github.com/xupremix/incin"
 publish = true
 name = "incin-viz"
 edition.workspace = true

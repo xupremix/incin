@@ -1,4 +1,6 @@
 [package]
+description = "Plugin API for incin visualization tools"
+repository = "https://github.com/xupremix/incin"
 publish = true
 name = "incin-viz-plugin-api"
 edition.workspace = true

@@ -1,4 +1,6 @@
 [package]
+description = "Core tensor operations and static shape checking for incin"
+repository = "https://github.com/xupremix/incin"
 authors = ["xupremix <xupremix.me@gmail.com>"]
 name = "incin-core"
 edition.workspace = true
@@ -50,7 +52,7 @@ hashbrown = { version = "0.14", default-features = false, features = ["alloc", "
 trybuild = "1.0.117"
 serde_json = "1.0.120"
 tempfile = "3.27"
-incin-backends = { path = "../incin-backends", version = "0.0.0" }
+incin-backends = { path = "../incin-backends" }
 
 [build-dependencies]
 prost-build = "0.14.4"

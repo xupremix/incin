@@ -1,4 +1,4 @@
-#![doc = include_str!("../../../README.md")]
+//! Core tensor operations, static shape checking, and autograd for Incin.
 #![allow(dead_code)]
 #![allow(unused_imports)]
 #![cfg_attr(not(feature = "std"), no_std)]

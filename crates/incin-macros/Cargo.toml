@@ -1,4 +1,6 @@
 [package]
+description = "Procedural macros and static dimension verification for incin"
+repository = "https://github.com/xupremix/incin"
 authors = ["xupremix <xupremix.me@gmail.com>"]
 name = "incin-macros"
 edition.workspace = true

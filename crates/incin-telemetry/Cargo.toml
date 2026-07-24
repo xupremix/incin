@@ -1,4 +1,6 @@
 [package]
+description = "Observability and run telemetry for incin"
+repository = "https://github.com/xupremix/incin"
 publish = true
 name = "incin-telemetry"
 edition.workspace = true

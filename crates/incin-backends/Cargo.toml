@@ -1,4 +1,6 @@
 [package]
+description = "Compute backends (CPU, WGPU, CUDA) for incin"
+repository = "https://github.com/xupremix/incin"
 name = "incin-backends"
 edition.workspace = true
 version.workspace = true
