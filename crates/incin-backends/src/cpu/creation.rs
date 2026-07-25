@@ -172,8 +172,14 @@ impl<T: DType, D: Device> CreationOps<Self> for CpuBackendImpl<T, D> {
         step: f64,
         shape: &[usize],
         dtype: DTypeId,
-        _device: &DeviceId,
+        device: &DeviceId,
     ) -> Result<<Self as incin_core::prelude::Backend>::Storage<K>> {
+        if device.kind() != incin_core::prelude::DeviceKind::Cpu {
+            return Err(Error::DeviceInitializationError {
+                expected: "cpu".into(),
+                got: alloc::format!("{:?}", device.kind()),
+            });
+        }
         let total: usize = crate::cpu::stride::checked_numel(shape)?;
         resolve_dtype_policy(BackendFamily::Cpu, OperationFamily::Fill, dtype, "arange")?;
         let data: Vec<f64> = (0..total).map(|i| start + (i as f64) * step).collect();
@@ -203,8 +209,14 @@ impl<T: DType, D: Device> CreationOps<Self> for CpuBackendImpl<T, D> {
         end: f64,
         shape: &[usize],
         dtype: DTypeId,
-        _device: &DeviceId,
+        device: &DeviceId,
     ) -> Result<<Self as incin_core::prelude::Backend>::Storage<K>> {
+        if device.kind() != incin_core::prelude::DeviceKind::Cpu {
+            return Err(Error::DeviceInitializationError {
+                expected: "cpu".into(),
+                got: alloc::format!("{:?}", device.kind()),
+            });
+        }
         let total: usize = crate::cpu::stride::checked_numel(shape)?;
         resolve_dtype_policy(BackendFamily::Cpu, OperationFamily::Fill, dtype, "linspace")?;
         let step = if total > 1 {
