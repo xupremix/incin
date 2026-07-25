@@ -172,7 +172,7 @@ impl<T: DType, D: Device> CreationOps<Self> for CpuBackendImpl<T, D> {
         step: f64,
         shape: &[usize],
         dtype: DTypeId,
-        device: &DeviceId,
+        _device: &DeviceId,
     ) -> Result<<Self as incin_core::prelude::Backend>::Storage<K>> {
         let total: usize = crate::cpu::stride::checked_numel(shape)?;
         resolve_dtype_policy(BackendFamily::Cpu, OperationFamily::Fill, dtype, "arange")?;
@@ -203,7 +203,7 @@ impl<T: DType, D: Device> CreationOps<Self> for CpuBackendImpl<T, D> {
         end: f64,
         shape: &[usize],
         dtype: DTypeId,
-        device: &DeviceId,
+        _device: &DeviceId,
     ) -> Result<<Self as incin_core::prelude::Backend>::Storage<K>> {
         let total: usize = crate::cpu::stride::checked_numel(shape)?;
         resolve_dtype_policy(BackendFamily::Cpu, OperationFamily::Fill, dtype, "linspace")?;

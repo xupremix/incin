@@ -494,10 +494,10 @@ impl<T: DType, D: Device> CreationOps<Self> for DispatchBackend<T, D> {
             DeviceKind::Cpu => {
                 #[cfg(feature = "cpu")]
                 {
-                    return crate::cpu::CpuBackendImpl::<T, Cpu>::full::<K>(
+                    crate::cpu::CpuBackendImpl::<T, Cpu>::full::<K>(
                         val, shape, dtype, device,
                     )
-                    .map(DispatchStorage::Cpu);
+                    .map(DispatchStorage::Cpu)
                 }
                 #[cfg(not(feature = "cpu"))]
                 Err(unavailable(DeviceKind::Cpu))
@@ -505,10 +505,10 @@ impl<T: DType, D: Device> CreationOps<Self> for DispatchBackend<T, D> {
             DeviceKind::Wgpu => {
                 #[cfg(feature = "wgpu")]
                 {
-                    return crate::wgpu::WgpuBackendImpl::<T, Wgpu>::full::<K>(
+                    crate::wgpu::WgpuBackendImpl::<T, Wgpu>::full::<K>(
                         val, shape, dtype, device,
                     )
-                    .map(DispatchStorage::Wgpu);
+                    .map(DispatchStorage::Wgpu)
                 }
                 #[cfg(not(feature = "wgpu"))]
                 Err(unavailable(DeviceKind::Wgpu))
@@ -516,10 +516,10 @@ impl<T: DType, D: Device> CreationOps<Self> for DispatchBackend<T, D> {
             DeviceKind::Cuda => {
                 #[cfg(feature = "cuda")]
                 {
-                    return crate::cuda::CudaBackendImpl::<T, Cuda>::full::<K>(
+                    crate::cuda::CudaBackendImpl::<T, Cuda>::full::<K>(
                         val, shape, dtype, device,
                     )
-                    .map(DispatchStorage::Cuda);
+                    .map(DispatchStorage::Cuda)
                 }
                 #[cfg(not(feature = "cuda"))]
                 Err(unavailable(DeviceKind::Cuda))
@@ -538,10 +538,10 @@ impl<T: DType, D: Device> CreationOps<Self> for DispatchBackend<T, D> {
             DeviceKind::Cpu => {
                 #[cfg(feature = "cpu")]
                 {
-                    return crate::cpu::CpuBackendImpl::<T, Cpu>::arange::<K>(
+                    crate::cpu::CpuBackendImpl::<T, Cpu>::arange::<K>(
                         start, step, shape, dtype, device,
                     )
-                    .map(DispatchStorage::Cpu);
+                    .map(DispatchStorage::Cpu)
                 }
                 #[cfg(not(feature = "cpu"))]
                 Err(unavailable(DeviceKind::Cpu))
@@ -549,10 +549,10 @@ impl<T: DType, D: Device> CreationOps<Self> for DispatchBackend<T, D> {
             DeviceKind::Wgpu => {
                 #[cfg(feature = "wgpu")]
                 {
-                    return crate::wgpu::WgpuBackendImpl::<T, Wgpu>::arange::<K>(
+                    crate::wgpu::WgpuBackendImpl::<T, Wgpu>::arange::<K>(
                         start, step, shape, dtype, device,
                     )
-                    .map(DispatchStorage::Wgpu);
+                    .map(DispatchStorage::Wgpu)
                 }
                 #[cfg(not(feature = "wgpu"))]
                 Err(unavailable(DeviceKind::Wgpu))
@@ -560,10 +560,10 @@ impl<T: DType, D: Device> CreationOps<Self> for DispatchBackend<T, D> {
             DeviceKind::Cuda => {
                 #[cfg(feature = "cuda")]
                 {
-                    return crate::cuda::CudaBackendImpl::<T, Cuda>::arange::<K>(
+                    crate::cuda::CudaBackendImpl::<T, Cuda>::arange::<K>(
                         start, step, shape, dtype, device,
                     )
-                    .map(DispatchStorage::Cuda);
+                    .map(DispatchStorage::Cuda)
                 }
                 #[cfg(not(feature = "cuda"))]
                 Err(unavailable(DeviceKind::Cuda))
@@ -582,10 +582,10 @@ impl<T: DType, D: Device> CreationOps<Self> for DispatchBackend<T, D> {
             DeviceKind::Cpu => {
                 #[cfg(feature = "cpu")]
                 {
-                    return crate::cpu::CpuBackendImpl::<T, Cpu>::linspace::<K>(
+                    crate::cpu::CpuBackendImpl::<T, Cpu>::linspace::<K>(
                         start, end, shape, dtype, device,
                     )
-                    .map(DispatchStorage::Cpu);
+                    .map(DispatchStorage::Cpu)
                 }
                 #[cfg(not(feature = "cpu"))]
                 Err(unavailable(DeviceKind::Cpu))
@@ -593,10 +593,10 @@ impl<T: DType, D: Device> CreationOps<Self> for DispatchBackend<T, D> {
             DeviceKind::Wgpu => {
                 #[cfg(feature = "wgpu")]
                 {
-                    return crate::wgpu::WgpuBackendImpl::<T, Wgpu>::linspace::<K>(
+                    crate::wgpu::WgpuBackendImpl::<T, Wgpu>::linspace::<K>(
                         start, end, shape, dtype, device,
                     )
-                    .map(DispatchStorage::Wgpu);
+                    .map(DispatchStorage::Wgpu)
                 }
                 #[cfg(not(feature = "wgpu"))]
                 Err(unavailable(DeviceKind::Wgpu))
@@ -604,10 +604,10 @@ impl<T: DType, D: Device> CreationOps<Self> for DispatchBackend<T, D> {
             DeviceKind::Cuda => {
                 #[cfg(feature = "cuda")]
                 {
-                    return crate::cuda::CudaBackendImpl::<T, Cuda>::linspace::<K>(
+                    crate::cuda::CudaBackendImpl::<T, Cuda>::linspace::<K>(
                         start, end, shape, dtype, device,
                     )
-                    .map(DispatchStorage::Cuda);
+                    .map(DispatchStorage::Cuda)
                 }
                 #[cfg(not(feature = "cuda"))]
                 Err(unavailable(DeviceKind::Cuda))

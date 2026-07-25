@@ -872,7 +872,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         let rank = t.shape.len();
         if rank == 1 {
             let n = t.shape[0];
-            let k_abs = k.abs() as usize;
+            let k_abs = k.unsigned_abs() as usize;
             let out_dim = n + k_abs;
             let mut out = vec![0.0f64; out_dim * out_dim];
             for i in 0..n {
@@ -1366,7 +1366,6 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
             ));
         }
         let mut out = Vec::with_capacity(total);
-        let mut idx = vec![0usize; t.shape.len()];
         let group_size = total / groups;
         for g in 0..groups {
             let mut sum = 0.0f64;
