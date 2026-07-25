@@ -494,7 +494,10 @@ impl<T: DType, D: Device> CreationOps<Self> for DispatchBackend<T, D> {
             DeviceKind::Cpu => {
                 #[cfg(feature = "cpu")]
                 {
-                    return crate::cpu::CpuBackendImpl::<T, Cpu>::full::<K>(val, shape, dtype, device).map(DispatchStorage::Cpu);
+                    return crate::cpu::CpuBackendImpl::<T, Cpu>::full::<K>(
+                        val, shape, dtype, device,
+                    )
+                    .map(DispatchStorage::Cpu);
                 }
                 #[cfg(not(feature = "cpu"))]
                 Err(unavailable(DeviceKind::Cpu))
@@ -502,7 +505,10 @@ impl<T: DType, D: Device> CreationOps<Self> for DispatchBackend<T, D> {
             DeviceKind::Wgpu => {
                 #[cfg(feature = "wgpu")]
                 {
-                    return crate::wgpu::WgpuBackendImpl::<T, Wgpu>::full::<K>(val, shape, dtype, device).map(DispatchStorage::Wgpu);
+                    return crate::wgpu::WgpuBackendImpl::<T, Wgpu>::full::<K>(
+                        val, shape, dtype, device,
+                    )
+                    .map(DispatchStorage::Wgpu);
                 }
                 #[cfg(not(feature = "wgpu"))]
                 Err(unavailable(DeviceKind::Wgpu))
@@ -510,7 +516,10 @@ impl<T: DType, D: Device> CreationOps<Self> for DispatchBackend<T, D> {
             DeviceKind::Cuda => {
                 #[cfg(feature = "cuda")]
                 {
-                    return crate::cuda::CudaBackendImpl::<T, Cuda>::full::<K>(val, shape, dtype, device).map(DispatchStorage::Cuda);
+                    return crate::cuda::CudaBackendImpl::<T, Cuda>::full::<K>(
+                        val, shape, dtype, device,
+                    )
+                    .map(DispatchStorage::Cuda);
                 }
                 #[cfg(not(feature = "cuda"))]
                 Err(unavailable(DeviceKind::Cuda))
@@ -529,7 +538,10 @@ impl<T: DType, D: Device> CreationOps<Self> for DispatchBackend<T, D> {
             DeviceKind::Cpu => {
                 #[cfg(feature = "cpu")]
                 {
-                    return crate::cpu::CpuBackendImpl::<T, Cpu>::arange::<K>(start, step, shape, dtype, device).map(DispatchStorage::Cpu);
+                    return crate::cpu::CpuBackendImpl::<T, Cpu>::arange::<K>(
+                        start, step, shape, dtype, device,
+                    )
+                    .map(DispatchStorage::Cpu);
                 }
                 #[cfg(not(feature = "cpu"))]
                 Err(unavailable(DeviceKind::Cpu))
@@ -537,7 +549,10 @@ impl<T: DType, D: Device> CreationOps<Self> for DispatchBackend<T, D> {
             DeviceKind::Wgpu => {
                 #[cfg(feature = "wgpu")]
                 {
-                    return crate::wgpu::WgpuBackendImpl::<T, Wgpu>::arange::<K>(start, step, shape, dtype, device).map(DispatchStorage::Wgpu);
+                    return crate::wgpu::WgpuBackendImpl::<T, Wgpu>::arange::<K>(
+                        start, step, shape, dtype, device,
+                    )
+                    .map(DispatchStorage::Wgpu);
                 }
                 #[cfg(not(feature = "wgpu"))]
                 Err(unavailable(DeviceKind::Wgpu))
@@ -545,7 +560,10 @@ impl<T: DType, D: Device> CreationOps<Self> for DispatchBackend<T, D> {
             DeviceKind::Cuda => {
                 #[cfg(feature = "cuda")]
                 {
-                    return crate::cuda::CudaBackendImpl::<T, Cuda>::arange::<K>(start, step, shape, dtype, device).map(DispatchStorage::Cuda);
+                    return crate::cuda::CudaBackendImpl::<T, Cuda>::arange::<K>(
+                        start, step, shape, dtype, device,
+                    )
+                    .map(DispatchStorage::Cuda);
                 }
                 #[cfg(not(feature = "cuda"))]
                 Err(unavailable(DeviceKind::Cuda))
@@ -564,7 +582,10 @@ impl<T: DType, D: Device> CreationOps<Self> for DispatchBackend<T, D> {
             DeviceKind::Cpu => {
                 #[cfg(feature = "cpu")]
                 {
-                    return crate::cpu::CpuBackendImpl::<T, Cpu>::linspace::<K>(start, end, shape, dtype, device).map(DispatchStorage::Cpu);
+                    return crate::cpu::CpuBackendImpl::<T, Cpu>::linspace::<K>(
+                        start, end, shape, dtype, device,
+                    )
+                    .map(DispatchStorage::Cpu);
                 }
                 #[cfg(not(feature = "cpu"))]
                 Err(unavailable(DeviceKind::Cpu))
@@ -572,7 +593,10 @@ impl<T: DType, D: Device> CreationOps<Self> for DispatchBackend<T, D> {
             DeviceKind::Wgpu => {
                 #[cfg(feature = "wgpu")]
                 {
-                    return crate::wgpu::WgpuBackendImpl::<T, Wgpu>::linspace::<K>(start, end, shape, dtype, device).map(DispatchStorage::Wgpu);
+                    return crate::wgpu::WgpuBackendImpl::<T, Wgpu>::linspace::<K>(
+                        start, end, shape, dtype, device,
+                    )
+                    .map(DispatchStorage::Wgpu);
                 }
                 #[cfg(not(feature = "wgpu"))]
                 Err(unavailable(DeviceKind::Wgpu))
@@ -580,7 +604,10 @@ impl<T: DType, D: Device> CreationOps<Self> for DispatchBackend<T, D> {
             DeviceKind::Cuda => {
                 #[cfg(feature = "cuda")]
                 {
-                    return crate::cuda::CudaBackendImpl::<T, Cuda>::linspace::<K>(start, end, shape, dtype, device).map(DispatchStorage::Cuda);
+                    return crate::cuda::CudaBackendImpl::<T, Cuda>::linspace::<K>(
+                        start, end, shape, dtype, device,
+                    )
+                    .map(DispatchStorage::Cuda);
                 }
                 #[cfg(not(feature = "cuda"))]
                 Err(unavailable(DeviceKind::Cuda))
@@ -660,61 +687,132 @@ impl<T: DType, D: Device> TensorOps<Self> for DispatchBackend<T, D> {
         match (mask, on_true, on_false) {
             #[cfg(feature = "cpu")]
             (DispatchStorage::Cpu(m), DispatchStorage::Cpu(t), DispatchStorage::Cpu(f)) => {
-                crate::cpu::CpuBackendImpl::<T, Cpu>::where_cond::<K, KMask>(m, t, f).map(DispatchStorage::Cpu)
+                crate::cpu::CpuBackendImpl::<T, Cpu>::where_cond::<K, KMask>(m, t, f)
+                    .map(DispatchStorage::Cpu)
             }
             #[cfg(feature = "wgpu")]
             (DispatchStorage::Wgpu(m), DispatchStorage::Wgpu(t), DispatchStorage::Wgpu(f)) => {
-                crate::wgpu::WgpuBackendImpl::<T, Wgpu>::where_cond::<K, KMask>(m, t, f).map(DispatchStorage::Wgpu)
+                crate::wgpu::WgpuBackendImpl::<T, Wgpu>::where_cond::<K, KMask>(m, t, f)
+                    .map(DispatchStorage::Wgpu)
             }
             #[cfg(feature = "cuda")]
             (DispatchStorage::Cuda(m), DispatchStorage::Cuda(t), DispatchStorage::Cuda(f)) => {
-                crate::cuda::CudaBackendImpl::<T, Cuda>::where_cond::<K, KMask>(m, t, f).map(DispatchStorage::Cuda)
+                crate::cuda::CudaBackendImpl::<T, Cuda>::where_cond::<K, KMask>(m, t, f)
+                    .map(DispatchStorage::Cuda)
             }
-            _ => Err(Error::DeviceMismatch { left: storage_device(on_true), right: storage_device(on_false) }),
+            _ => Err(Error::DeviceMismatch {
+                left: storage_device(on_true),
+                right: storage_device(on_false),
+            }),
         }
     }
-    fn gather<K: DType, KInt: DType>(t: &DispatchStorage, dim: usize, index: &DispatchStorage) -> Result<DispatchStorage> {
+    fn gather<K: DType, KInt: DType>(
+        t: &DispatchStorage,
+        dim: usize,
+        index: &DispatchStorage,
+    ) -> Result<DispatchStorage> {
         match (t, index) {
             #[cfg(feature = "cpu")]
-            (DispatchStorage::Cpu(t), DispatchStorage::Cpu(idx)) => crate::cpu::CpuBackendImpl::<T, Cpu>::gather::<K, KInt>(t, dim, idx).map(DispatchStorage::Cpu),
+            (DispatchStorage::Cpu(t), DispatchStorage::Cpu(idx)) => {
+                crate::cpu::CpuBackendImpl::<T, Cpu>::gather::<K, KInt>(t, dim, idx)
+                    .map(DispatchStorage::Cpu)
+            }
             #[cfg(feature = "wgpu")]
-            (DispatchStorage::Wgpu(t), DispatchStorage::Wgpu(idx)) => crate::wgpu::WgpuBackendImpl::<T, Wgpu>::gather::<K, KInt>(t, dim, idx).map(DispatchStorage::Wgpu),
+            (DispatchStorage::Wgpu(t), DispatchStorage::Wgpu(idx)) => {
+                crate::wgpu::WgpuBackendImpl::<T, Wgpu>::gather::<K, KInt>(t, dim, idx)
+                    .map(DispatchStorage::Wgpu)
+            }
             #[cfg(feature = "cuda")]
-            (DispatchStorage::Cuda(t), DispatchStorage::Cuda(idx)) => crate::cuda::CudaBackendImpl::<T, Cuda>::gather::<K, KInt>(t, dim, idx).map(DispatchStorage::Cuda),
-            _ => Err(Error::DeviceMismatch { left: storage_device(t), right: storage_device(index) }),
+            (DispatchStorage::Cuda(t), DispatchStorage::Cuda(idx)) => {
+                crate::cuda::CudaBackendImpl::<T, Cuda>::gather::<K, KInt>(t, dim, idx)
+                    .map(DispatchStorage::Cuda)
+            }
+            _ => Err(Error::DeviceMismatch {
+                left: storage_device(t),
+                right: storage_device(index),
+            }),
         }
     }
-    fn scatter<K: DType, KInt: DType>(t: &DispatchStorage, dim: usize, index: &DispatchStorage, src: &DispatchStorage) -> Result<DispatchStorage> {
+    fn scatter<K: DType, KInt: DType>(
+        t: &DispatchStorage,
+        dim: usize,
+        index: &DispatchStorage,
+        src: &DispatchStorage,
+    ) -> Result<DispatchStorage> {
         match (t, index, src) {
             #[cfg(feature = "cpu")]
-            (DispatchStorage::Cpu(t), DispatchStorage::Cpu(idx), DispatchStorage::Cpu(s)) => crate::cpu::CpuBackendImpl::<T, Cpu>::scatter::<K, KInt>(t, dim, idx, s).map(DispatchStorage::Cpu),
+            (DispatchStorage::Cpu(t), DispatchStorage::Cpu(idx), DispatchStorage::Cpu(s)) => {
+                crate::cpu::CpuBackendImpl::<T, Cpu>::scatter::<K, KInt>(t, dim, idx, s)
+                    .map(DispatchStorage::Cpu)
+            }
             #[cfg(feature = "wgpu")]
-            (DispatchStorage::Wgpu(t), DispatchStorage::Wgpu(idx), DispatchStorage::Wgpu(s)) => crate::wgpu::WgpuBackendImpl::<T, Wgpu>::scatter::<K, KInt>(t, dim, idx, s).map(DispatchStorage::Wgpu),
+            (DispatchStorage::Wgpu(t), DispatchStorage::Wgpu(idx), DispatchStorage::Wgpu(s)) => {
+                crate::wgpu::WgpuBackendImpl::<T, Wgpu>::scatter::<K, KInt>(t, dim, idx, s)
+                    .map(DispatchStorage::Wgpu)
+            }
             #[cfg(feature = "cuda")]
-            (DispatchStorage::Cuda(t), DispatchStorage::Cuda(idx), DispatchStorage::Cuda(s)) => crate::cuda::CudaBackendImpl::<T, Cuda>::scatter::<K, KInt>(t, dim, idx, s).map(DispatchStorage::Cuda),
-            _ => Err(Error::DeviceMismatch { left: storage_device(t), right: storage_device(src) }),
+            (DispatchStorage::Cuda(t), DispatchStorage::Cuda(idx), DispatchStorage::Cuda(s)) => {
+                crate::cuda::CudaBackendImpl::<T, Cuda>::scatter::<K, KInt>(t, dim, idx, s)
+                    .map(DispatchStorage::Cuda)
+            }
+            _ => Err(Error::DeviceMismatch {
+                left: storage_device(t),
+                right: storage_device(src),
+            }),
         }
     }
-    fn index_select<K: DType, KInt: DType>(t: &DispatchStorage, dim: usize, index: &DispatchStorage) -> Result<DispatchStorage> {
+    fn index_select<K: DType, KInt: DType>(
+        t: &DispatchStorage,
+        dim: usize,
+        index: &DispatchStorage,
+    ) -> Result<DispatchStorage> {
         match (t, index) {
             #[cfg(feature = "cpu")]
-            (DispatchStorage::Cpu(t), DispatchStorage::Cpu(idx)) => crate::cpu::CpuBackendImpl::<T, Cpu>::index_select::<K, KInt>(t, dim, idx).map(DispatchStorage::Cpu),
+            (DispatchStorage::Cpu(t), DispatchStorage::Cpu(idx)) => {
+                crate::cpu::CpuBackendImpl::<T, Cpu>::index_select::<K, KInt>(t, dim, idx)
+                    .map(DispatchStorage::Cpu)
+            }
             #[cfg(feature = "wgpu")]
-            (DispatchStorage::Wgpu(t), DispatchStorage::Wgpu(idx)) => crate::wgpu::WgpuBackendImpl::<T, Wgpu>::index_select::<K, KInt>(t, dim, idx).map(DispatchStorage::Wgpu),
+            (DispatchStorage::Wgpu(t), DispatchStorage::Wgpu(idx)) => {
+                crate::wgpu::WgpuBackendImpl::<T, Wgpu>::index_select::<K, KInt>(t, dim, idx)
+                    .map(DispatchStorage::Wgpu)
+            }
             #[cfg(feature = "cuda")]
-            (DispatchStorage::Cuda(t), DispatchStorage::Cuda(idx)) => crate::cuda::CudaBackendImpl::<T, Cuda>::index_select::<K, KInt>(t, dim, idx).map(DispatchStorage::Cuda),
-            _ => Err(Error::DeviceMismatch { left: storage_device(t), right: storage_device(index) }),
+            (DispatchStorage::Cuda(t), DispatchStorage::Cuda(idx)) => {
+                crate::cuda::CudaBackendImpl::<T, Cuda>::index_select::<K, KInt>(t, dim, idx)
+                    .map(DispatchStorage::Cuda)
+            }
+            _ => Err(Error::DeviceMismatch {
+                left: storage_device(t),
+                right: storage_device(index),
+            }),
         }
     }
-    fn masked_fill<K: DType, KMask: DType>(t: &DispatchStorage, mask: &DispatchStorage, value: f64) -> Result<DispatchStorage> {
+    fn masked_fill<K: DType, KMask: DType>(
+        t: &DispatchStorage,
+        mask: &DispatchStorage,
+        value: f64,
+    ) -> Result<DispatchStorage> {
         match (t, mask) {
             #[cfg(feature = "cpu")]
-            (DispatchStorage::Cpu(t), DispatchStorage::Cpu(m)) => crate::cpu::CpuBackendImpl::<T, Cpu>::masked_fill::<K, KMask>(t, m, value).map(DispatchStorage::Cpu),
+            (DispatchStorage::Cpu(t), DispatchStorage::Cpu(m)) => {
+                crate::cpu::CpuBackendImpl::<T, Cpu>::masked_fill::<K, KMask>(t, m, value)
+                    .map(DispatchStorage::Cpu)
+            }
             #[cfg(feature = "wgpu")]
-            (DispatchStorage::Wgpu(t), DispatchStorage::Wgpu(m)) => crate::wgpu::WgpuBackendImpl::<T, Wgpu>::masked_fill::<K, KMask>(t, m, value).map(DispatchStorage::Wgpu),
+            (DispatchStorage::Wgpu(t), DispatchStorage::Wgpu(m)) => {
+                crate::wgpu::WgpuBackendImpl::<T, Wgpu>::masked_fill::<K, KMask>(t, m, value)
+                    .map(DispatchStorage::Wgpu)
+            }
             #[cfg(feature = "cuda")]
-            (DispatchStorage::Cuda(t), DispatchStorage::Cuda(m)) => crate::cuda::CudaBackendImpl::<T, Cuda>::masked_fill::<K, KMask>(t, m, value).map(DispatchStorage::Cuda),
-            _ => Err(Error::DeviceMismatch { left: storage_device(t), right: storage_device(mask) }),
+            (DispatchStorage::Cuda(t), DispatchStorage::Cuda(m)) => {
+                crate::cuda::CudaBackendImpl::<T, Cuda>::masked_fill::<K, KMask>(t, m, value)
+                    .map(DispatchStorage::Cuda)
+            }
+            _ => Err(Error::DeviceMismatch {
+                left: storage_device(t),
+                right: storage_device(mask),
+            }),
         }
     }
     fn unsqueeze<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
@@ -723,7 +821,11 @@ impl<T: DType, D: Device> TensorOps<Self> for DispatchBackend<T, D> {
     fn repeat<K: DType>(t: &DispatchStorage, repeats: &[usize]) -> Result<DispatchStorage> {
         dispatch_unary!(t, repeat, repeats)
     }
-    fn pad<K: DType>(t: &DispatchStorage, padding: &[(usize, usize)], val: f64) -> Result<DispatchStorage> {
+    fn pad<K: DType>(
+        t: &DispatchStorage,
+        padding: &[(usize, usize)],
+        val: f64,
+    ) -> Result<DispatchStorage> {
         dispatch_unary!(t, pad, padding, val)
     }
     fn triu<K: DType>(t: &DispatchStorage, k: i64) -> Result<DispatchStorage> {
@@ -792,10 +894,16 @@ impl<T: DType, D: Device> TensorOps<Self> for DispatchBackend<T, D> {
         dispatch_binary!(lhs, rhs, cmp_ge)
     }
 
-    fn logical_and<K: DType>(lhs: &DispatchStorage, rhs: &DispatchStorage) -> Result<DispatchStorage> {
+    fn logical_and<K: DType>(
+        lhs: &DispatchStorage,
+        rhs: &DispatchStorage,
+    ) -> Result<DispatchStorage> {
         dispatch_binary!(lhs, rhs, logical_and)
     }
-    fn logical_or<K: DType>(lhs: &DispatchStorage, rhs: &DispatchStorage) -> Result<DispatchStorage> {
+    fn logical_or<K: DType>(
+        lhs: &DispatchStorage,
+        rhs: &DispatchStorage,
+    ) -> Result<DispatchStorage> {
         dispatch_binary!(lhs, rhs, logical_or)
     }
     fn logical_not<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
@@ -818,11 +926,18 @@ impl<T: DType, D: Device> TensorOps<Self> for DispatchBackend<T, D> {
     fn abs_diff<K: DType>(lhs: &DispatchStorage, rhs: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_binary!(lhs, rhs, abs_diff)
     }
-    fn lerp<K: DType>(start: &DispatchStorage, end: &DispatchStorage, weight: f64) -> Result<DispatchStorage> {
+    fn lerp<K: DType>(
+        start: &DispatchStorage,
+        end: &DispatchStorage,
+        weight: f64,
+    ) -> Result<DispatchStorage> {
         match (start, end) {
             (DispatchStorage::Cpu(s), DispatchStorage::Cpu(e)) => {
                 #[cfg(feature = "cpu")]
-                { crate::cpu::CpuBackendImpl::<T, Cpu>::lerp::<K>(s, e, weight).map(DispatchStorage::Cpu) }
+                {
+                    crate::cpu::CpuBackendImpl::<T, Cpu>::lerp::<K>(s, e, weight)
+                        .map(DispatchStorage::Cpu)
+                }
                 #[cfg(not(feature = "cpu"))]
                 Err(unavailable(DeviceKind::Cpu))
             }
@@ -830,11 +945,20 @@ impl<T: DType, D: Device> TensorOps<Self> for DispatchBackend<T, D> {
         }
     }
 
-    fn addmm<K: DType>(mat: &DispatchStorage, mat1: &DispatchStorage, mat2: &DispatchStorage, beta: f64, alpha: f64) -> Result<DispatchStorage> {
+    fn addmm<K: DType>(
+        mat: &DispatchStorage,
+        mat1: &DispatchStorage,
+        mat2: &DispatchStorage,
+        beta: f64,
+        alpha: f64,
+    ) -> Result<DispatchStorage> {
         match (mat, mat1, mat2) {
             (DispatchStorage::Cpu(m), DispatchStorage::Cpu(m1), DispatchStorage::Cpu(m2)) => {
                 #[cfg(feature = "cpu")]
-                { crate::cpu::CpuBackendImpl::<T, Cpu>::addmm::<K>(m, m1, m2, beta, alpha).map(DispatchStorage::Cpu) }
+                {
+                    crate::cpu::CpuBackendImpl::<T, Cpu>::addmm::<K>(m, m1, m2, beta, alpha)
+                        .map(DispatchStorage::Cpu)
+                }
                 #[cfg(not(feature = "cpu"))]
                 Err(unavailable(DeviceKind::Cpu))
             }
@@ -852,7 +976,11 @@ impl<T: DType, D: Device> TensorOps<Self> for DispatchBackend<T, D> {
         scale: Option<f64>,
     ) -> Result<DispatchStorage> {
         match (q, k, v) {
-            (DispatchStorage::Cpu(q_cpu), DispatchStorage::Cpu(k_cpu), DispatchStorage::Cpu(v_cpu)) => {
+            (
+                DispatchStorage::Cpu(q_cpu),
+                DispatchStorage::Cpu(k_cpu),
+                DispatchStorage::Cpu(v_cpu),
+            ) => {
                 #[cfg(feature = "cpu")]
                 {
                     let m_cpu = match mask {
@@ -860,7 +988,10 @@ impl<T: DType, D: Device> TensorOps<Self> for DispatchBackend<T, D> {
                         None => None,
                         _ => return Err(Error::Msg("mismatched mask backend".into())),
                     };
-                    crate::cpu::CpuBackendImpl::<T, Cpu>::scaled_dot_product_attention::<K>(q_cpu, k_cpu, v_cpu, m_cpu, scale).map(DispatchStorage::Cpu)
+                    crate::cpu::CpuBackendImpl::<T, Cpu>::scaled_dot_product_attention::<K>(
+                        q_cpu, k_cpu, v_cpu, m_cpu, scale,
+                    )
+                    .map(DispatchStorage::Cpu)
                 }
                 #[cfg(not(feature = "cpu"))]
                 Err(unavailable(DeviceKind::Cpu))
@@ -869,13 +1000,25 @@ impl<T: DType, D: Device> TensorOps<Self> for DispatchBackend<T, D> {
         }
     }
 
-    fn unfold<K: DType>(t: &DispatchStorage, dim: usize, size: usize, step: usize) -> Result<DispatchStorage> {
+    fn unfold<K: DType>(
+        t: &DispatchStorage,
+        dim: usize,
+        size: usize,
+        step: usize,
+    ) -> Result<DispatchStorage> {
         dispatch_unary!(t, unfold, dim, size, step)
     }
-    fn pixel_shuffle<K: DType>(t: &DispatchStorage, upscale_factor: usize) -> Result<DispatchStorage> {
+    fn pixel_shuffle<K: DType>(
+        t: &DispatchStorage,
+        upscale_factor: usize,
+    ) -> Result<DispatchStorage> {
         dispatch_unary!(t, pixel_shuffle, upscale_factor)
     }
-    fn group_norm<K: DType>(t: &DispatchStorage, groups: usize, eps: f64) -> Result<DispatchStorage> {
+    fn group_norm<K: DType>(
+        t: &DispatchStorage,
+        groups: usize,
+        eps: f64,
+    ) -> Result<DispatchStorage> {
         dispatch_unary!(t, group_norm, groups, eps)
     }
     fn instance_norm<K: DType>(t: &DispatchStorage, eps: f64) -> Result<DispatchStorage> {
@@ -974,6 +1117,57 @@ impl<T: DType, D: Device> FloatOps<Self> for DispatchBackend<T, D> {
     }
     fn cos<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_unary!(t, cos)
+    }
+    fn tan<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+        dispatch_unary!(t, tan)
+    }
+    fn asin<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+        dispatch_unary!(t, asin)
+    }
+    fn acos<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+        dispatch_unary!(t, acos)
+    }
+    fn atan<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+        dispatch_unary!(t, atan)
+    }
+    fn atan2<K: DType>(y: &DispatchStorage, x: &DispatchStorage) -> Result<DispatchStorage> {
+        dispatch_binary!(y, x, atan2)
+    }
+    fn sinh<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+        dispatch_unary!(t, sinh)
+    }
+    fn cosh<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+        dispatch_unary!(t, cosh)
+    }
+    fn asinh<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+        dispatch_unary!(t, asinh)
+    }
+    fn acosh<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+        dispatch_unary!(t, acosh)
+    }
+    fn atanh<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+        dispatch_unary!(t, atanh)
+    }
+    fn erf<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+        dispatch_unary!(t, erf)
+    }
+    fn rsqrt<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+        dispatch_unary!(t, rsqrt)
+    }
+    fn trunc<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+        dispatch_unary!(t, trunc)
+    }
+    fn frac<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+        dispatch_unary!(t, frac)
+    }
+    fn fmod<K: DType>(lhs: &DispatchStorage, rhs: &DispatchStorage) -> Result<DispatchStorage> {
+        dispatch_binary!(lhs, rhs, fmod)
+    }
+    fn remainder<K: DType>(
+        lhs: &DispatchStorage,
+        rhs: &DispatchStorage,
+    ) -> Result<DispatchStorage> {
+        dispatch_binary!(lhs, rhs, remainder)
     }
 }
 impl<T: DType, D: Device> ReductionOps<Self> for DispatchBackend<T, D> {

@@ -26,6 +26,59 @@ macro_rules! impl_unary_op {
 
 impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tensor<S, B, K, G> {
     impl_unary_op!(
+        /// Elementwise tangent.
+        tan, tan
+    );
+    impl_unary_op!(
+        /// Elementwise arcsine.
+        asin, asin
+    );
+    impl_unary_op!(
+        /// Elementwise arccosine.
+        acos, acos
+    );
+    impl_unary_op!(
+        /// Elementwise arctangent.
+        atan, atan
+    );
+    impl_unary_op!(
+        /// Elementwise hyperbolic sine.
+        sinh, sinh
+    );
+    impl_unary_op!(
+        /// Elementwise hyperbolic cosine.
+        cosh, cosh
+    );
+    impl_unary_op!(
+        /// Elementwise inverse hyperbolic sine.
+        asinh, asinh
+    );
+    impl_unary_op!(
+        /// Elementwise inverse hyperbolic cosine.
+        acosh, acosh
+    );
+    impl_unary_op!(
+        /// Elementwise inverse hyperbolic tangent.
+        atanh, atanh
+    );
+    impl_unary_op!(
+        /// Elementwise error function.
+        erf, erf
+    );
+    impl_unary_op!(
+        /// Elementwise reciprocal square root $1/\sqrt{x}$.
+        rsqrt, rsqrt
+    );
+    impl_unary_op!(
+        /// Elementwise integer truncation toward zero.
+        trunc, trunc
+    );
+    impl_unary_op!(
+        /// Elementwise fractional part.
+        frac, frac
+    );
+
+    impl_unary_op!(
         /// Logical NOT: 1.0 if element is 0.0, else 0.0.
         logical_not, logical_not
     );

@@ -646,6 +646,275 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
         });
         Ok(out)
     }
+
+    /// `tan`.
+    fn tan<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+        let out = elementwise_unary_typed(UnaryOp::Tan, t)?;
+        let out_capture = out.clone();
+        let (t_id, out_id) = (t.id, out.id);
+        tape::push(TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id],
+            backward: Box::new(move |grad_out: &CpuStorage| {
+                let grad = elementwise_binary(grad_out, &out_capture, &grad_out.shape, |g, o| {
+                    g * (1.0 + o * o)
+                })
+                .unwrap();
+                vec![grad]
+            }),
+        });
+        Ok(out)
+    }
+
+    /// `asin`.
+    fn asin<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+        let out = elementwise_unary_typed(UnaryOp::Asin, t)?;
+        let t_capture = t.clone();
+        let (t_id, out_id) = (t.id, out.id);
+        tape::push(TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id],
+            backward: Box::new(move |grad_out: &CpuStorage| {
+                let grad = elementwise_binary(grad_out, &t_capture, &grad_out.shape, |g, x| {
+                    g / (1.0 - x * x).sqrt()
+                })
+                .unwrap();
+                vec![grad]
+            }),
+        });
+        Ok(out)
+    }
+
+    /// `acos`.
+    fn acos<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+        let out = elementwise_unary_typed(UnaryOp::Acos, t)?;
+        let t_capture = t.clone();
+        let (t_id, out_id) = (t.id, out.id);
+        tape::push(TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id],
+            backward: Box::new(move |grad_out: &CpuStorage| {
+                let grad = elementwise_binary(grad_out, &t_capture, &grad_out.shape, |g, x| {
+                    -g / (1.0 - x * x).sqrt()
+                })
+                .unwrap();
+                vec![grad]
+            }),
+        });
+        Ok(out)
+    }
+
+    /// `atan`.
+    fn atan<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+        let out = elementwise_unary_typed(UnaryOp::Atan, t)?;
+        let t_capture = t.clone();
+        let (t_id, out_id) = (t.id, out.id);
+        tape::push(TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id],
+            backward: Box::new(move |grad_out: &CpuStorage| {
+                let grad = elementwise_binary(grad_out, &t_capture, &grad_out.shape, |g, x| {
+                    g / (1.0 + x * x)
+                })
+                .unwrap();
+                vec![grad]
+            }),
+        });
+        Ok(out)
+    }
+
+    /// `atan2`.
+    fn atan2<K: DType>(
+        y: &<Self as Backend>::Storage<K>,
+        x: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let out_atan = elementwise_binary(y, x, &y.shape, |y_val, x_val| y_val.atan2(x_val))?;
+        let (y_id, x_id, out_id) = (y.id, x.id, out_atan.id);
+        let (y_cap, x_cap) = (y.clone(), x.clone());
+        tape::push(TapeEntry {
+            output_id: out_id,
+            input_ids: vec![y_id, x_id],
+            backward: Box::new(move |grad_out: &CpuStorage| {
+                let denom = elementwise_binary(&y_cap, &x_cap, &grad_out.shape, |y_v, x_v| {
+                    x_v * x_v + y_v * y_v
+                })
+                .unwrap();
+                let grad_y =
+                    elementwise_binary(grad_out, &x_cap, &grad_out.shape, |g, x_v| g * x_v)
+                        .unwrap();
+                let grad_y =
+                    elementwise_binary(&grad_y, &denom, &grad_out.shape, |gy, d| gy / d).unwrap();
+                let grad_x =
+                    elementwise_binary(grad_out, &y_cap, &grad_out.shape, |g, y_v| -g * y_v)
+                        .unwrap();
+                let grad_x =
+                    elementwise_binary(&grad_x, &denom, &grad_out.shape, |gx, d| gx / d).unwrap();
+                vec![
+                    tape::unbroadcast(&grad_y, &y_cap.shape).unwrap(),
+                    tape::unbroadcast(&grad_x, &x_cap.shape).unwrap(),
+                ]
+            }),
+        });
+        Ok(out_atan)
+    }
+
+    /// `sinh`.
+    fn sinh<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+        let out = elementwise_unary_typed(UnaryOp::Sinh, t)?;
+        let t_capture = t.clone();
+        let (t_id, out_id) = (t.id, out.id);
+        tape::push(TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id],
+            backward: Box::new(move |grad_out: &CpuStorage| {
+                let grad =
+                    elementwise_binary(grad_out, &t_capture, &grad_out.shape, |g, x| g * x.cosh())
+                        .unwrap();
+                vec![grad]
+            }),
+        });
+        Ok(out)
+    }
+
+    /// `cosh`.
+    fn cosh<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+        let out = elementwise_unary_typed(UnaryOp::Cosh, t)?;
+        let t_capture = t.clone();
+        let (t_id, out_id) = (t.id, out.id);
+        tape::push(TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id],
+            backward: Box::new(move |grad_out: &CpuStorage| {
+                let grad =
+                    elementwise_binary(grad_out, &t_capture, &grad_out.shape, |g, x| g * x.sinh())
+                        .unwrap();
+                vec![grad]
+            }),
+        });
+        Ok(out)
+    }
+
+    /// `asinh`.
+    fn asinh<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+        let out = elementwise_unary_typed(UnaryOp::Asinh, t)?;
+        let t_capture = t.clone();
+        let (t_id, out_id) = (t.id, out.id);
+        tape::push(TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id],
+            backward: Box::new(move |grad_out: &CpuStorage| {
+                let grad = elementwise_binary(grad_out, &t_capture, &grad_out.shape, |g, x| {
+                    g / (x * x + 1.0).sqrt()
+                })
+                .unwrap();
+                vec![grad]
+            }),
+        });
+        Ok(out)
+    }
+
+    /// `acosh`.
+    fn acosh<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+        let out = elementwise_unary_typed(UnaryOp::Acosh, t)?;
+        let t_capture = t.clone();
+        let (t_id, out_id) = (t.id, out.id);
+        tape::push(TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id],
+            backward: Box::new(move |grad_out: &CpuStorage| {
+                let grad = elementwise_binary(grad_out, &t_capture, &grad_out.shape, |g, x| {
+                    g / (x * x - 1.0).sqrt()
+                })
+                .unwrap();
+                vec![grad]
+            }),
+        });
+        Ok(out)
+    }
+
+    /// `atanh`.
+    fn atanh<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+        let out = elementwise_unary_typed(UnaryOp::Atanh, t)?;
+        let t_capture = t.clone();
+        let (t_id, out_id) = (t.id, out.id);
+        tape::push(TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id],
+            backward: Box::new(move |grad_out: &CpuStorage| {
+                let grad = elementwise_binary(grad_out, &t_capture, &grad_out.shape, |g, x| {
+                    g / (1.0 - x * x)
+                })
+                .unwrap();
+                vec![grad]
+            }),
+        });
+        Ok(out)
+    }
+
+    /// `erf`.
+    fn erf<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+        let out = elementwise_unary_typed(UnaryOp::Erf, t)?;
+        let t_capture = t.clone();
+        let (t_id, out_id) = (t.id, out.id);
+        tape::push(TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id],
+            backward: Box::new(move |grad_out: &CpuStorage| {
+                let coeff = 2.0 / core::f64::consts::PI.sqrt();
+                let grad = elementwise_binary(grad_out, &t_capture, &grad_out.shape, |g, x| {
+                    g * coeff * (-x * x).exp()
+                })
+                .unwrap();
+                vec![grad]
+            }),
+        });
+        Ok(out)
+    }
+
+    /// `rsqrt`.
+    fn rsqrt<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+        let out = elementwise_unary_typed(UnaryOp::Rsqrt, t)?;
+        let t_capture = t.clone();
+        let (t_id, out_id) = (t.id, out.id);
+        tape::push(TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id],
+            backward: Box::new(move |grad_out: &CpuStorage| {
+                let grad = elementwise_binary(grad_out, &t_capture, &grad_out.shape, |g, x| {
+                    -0.5 * g / (x * x.sqrt())
+                })
+                .unwrap();
+                vec![grad]
+            }),
+        });
+        Ok(out)
+    }
+
+    /// `trunc`.
+    fn trunc<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+        elementwise_unary_typed(UnaryOp::Trunc, t)
+    }
+
+    /// `frac`.
+    fn frac<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+        elementwise_unary_typed(UnaryOp::Frac, t)
+    }
+
+    /// `fmod`.
+    fn fmod<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        elementwise_binary(lhs, rhs, &lhs.shape, |a, b| a % b)
+    }
+
+    /// `remainder`.
+    fn remainder<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        elementwise_binary(lhs, rhs, &lhs.shape, |a, b| a.rem_euclid(b))
+    }
     /// `softmax`.
     fn softmax<K: DType>(
         t: &<Self as Backend>::Storage<K>,
@@ -676,58 +945,42 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
     }
 
     /// `sign`.
-    fn sign<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    fn sign<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         elementwise_unary_typed(UnaryOp::Sign, t)
     }
 
     /// `floor`.
-    fn floor<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    fn floor<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         elementwise_unary_typed(UnaryOp::Floor, t)
     }
 
     /// `ceil`.
-    fn ceil<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    fn ceil<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         elementwise_unary_typed(UnaryOp::Ceil, t)
     }
 
     /// `round`.
-    fn round<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    fn round<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         elementwise_unary_typed(UnaryOp::Round, t)
     }
 
     /// `log2`.
-    fn log2<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    fn log2<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         elementwise_unary_typed(UnaryOp::Log2, t)
     }
 
     /// `log10`.
-    fn log10<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    fn log10<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         elementwise_unary_typed(UnaryOp::Log10, t)
     }
 
     /// `sin`.
-    fn sin<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    fn sin<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         elementwise_unary_typed(UnaryOp::Sin, t)
     }
 
     /// `cos`.
-    fn cos<K: DType>(
-        t: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Storage<K>> {
+    fn cos<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         elementwise_unary_typed(UnaryOp::Cos, t)
     }
 }

@@ -385,7 +385,10 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Ten
     }
 
     /// Computes outer product of vectors `self` and `rhs`.
-    pub fn outer<S2: Shape + DynShape>(&self, rhs: &Tensor<S2, B, K, G>) -> Result<Tensor<Dyn, B, K, G>>
+    pub fn outer<S2: Shape + DynShape>(
+        &self,
+        rhs: &Tensor<S2, B, K, G>,
+    ) -> Result<Tensor<Dyn, B, K, G>>
     where
         S1: DynShape,
     {
@@ -447,7 +450,8 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Ten
         S4: DynShape,
     {
         let mask_inner = mask.map(|m| &m.inner);
-        let inner = B::scaled_dot_product_attention::<K>(&q.inner, &k.inner, &v.inner, mask_inner, scale)?;
+        let inner =
+            B::scaled_dot_product_attention::<K>(&q.inner, &k.inner, &v.inner, mask_inner, scale)?;
         let out_shape = B::shape(&inner);
         Ok(Tensor::from_parts_unchecked(
             inner,

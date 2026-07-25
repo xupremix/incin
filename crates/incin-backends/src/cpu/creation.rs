@@ -184,8 +184,15 @@ impl<T: DType, D: Device> CreationOps<Self> for CpuBackendImpl<T, D> {
             DTypeId::U32 => CpuBuffer::U32(data.iter().map(|&x| x as u32).collect()),
             DTypeId::I64 => CpuBuffer::I64(data.iter().map(|&x| x as i64).collect()),
             DTypeId::F16 => CpuBuffer::F16(data.iter().map(|&x| half::f16::from_f64(x)).collect()),
-            DTypeId::BF16 => CpuBuffer::BF16(data.iter().map(|&x| half::bf16::from_f64(x)).collect()),
-            _ => return Err(Error::UnsupportedBackendOperation { op: "arange", backend: "Cpu" }),
+            DTypeId::BF16 => {
+                CpuBuffer::BF16(data.iter().map(|&x| half::bf16::from_f64(x)).collect())
+            }
+            _ => {
+                return Err(Error::UnsupportedBackendOperation {
+                    op: "arange",
+                    backend: "Cpu",
+                });
+            }
         };
         Ok(CpuStorage::from_contiguous(buffer, shape.to_vec()))
     }
@@ -200,8 +207,20 @@ impl<T: DType, D: Device> CreationOps<Self> for CpuBackendImpl<T, D> {
     ) -> Result<<Self as incin_core::prelude::Backend>::Storage<K>> {
         let total: usize = crate::cpu::stride::checked_numel(shape)?;
         resolve_dtype_policy(BackendFamily::Cpu, OperationFamily::Fill, dtype, "linspace")?;
-        let step = if total > 1 { (end - start) / ((total - 1) as f64) } else { 0.0 };
-        let data: Vec<f64> = (0..total).map(|i| if i == total - 1 { end } else { start + (i as f64) * step }).collect();
+        let step = if total > 1 {
+            (end - start) / ((total - 1) as f64)
+        } else {
+            0.0
+        };
+        let data: Vec<f64> = (0..total)
+            .map(|i| {
+                if i == total - 1 {
+                    end
+                } else {
+                    start + (i as f64) * step
+                }
+            })
+            .collect();
         let buffer = match dtype {
             DTypeId::F32 => CpuBuffer::F32(data.iter().map(|&x| x as f32).collect()),
             DTypeId::F64 => CpuBuffer::F64(data),
@@ -209,8 +228,15 @@ impl<T: DType, D: Device> CreationOps<Self> for CpuBackendImpl<T, D> {
             DTypeId::U32 => CpuBuffer::U32(data.iter().map(|&x| x as u32).collect()),
             DTypeId::I64 => CpuBuffer::I64(data.iter().map(|&x| x as i64).collect()),
             DTypeId::F16 => CpuBuffer::F16(data.iter().map(|&x| half::f16::from_f64(x)).collect()),
-            DTypeId::BF16 => CpuBuffer::BF16(data.iter().map(|&x| half::bf16::from_f64(x)).collect()),
-            _ => return Err(Error::UnsupportedBackendOperation { op: "linspace", backend: "Cpu" }),
+            DTypeId::BF16 => {
+                CpuBuffer::BF16(data.iter().map(|&x| half::bf16::from_f64(x)).collect())
+            }
+            _ => {
+                return Err(Error::UnsupportedBackendOperation {
+                    op: "linspace",
+                    backend: "Cpu",
+                });
+            }
         };
         Ok(CpuStorage::from_contiguous(buffer, shape.to_vec()))
     }

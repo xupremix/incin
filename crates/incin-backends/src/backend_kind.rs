@@ -38,8 +38,7 @@ impl<T: DType> BackendFor<T> for Wgpu {
 }
 
 #[cfg(feature = "wgpu")]
-impl<T: DType, N> sealed::Sealed<T> for WgpuN<N>
-where
+impl<T: DType, N> sealed::Sealed<T> for WgpuN<N> where
     N: incin_core::typenum::Unsigned
         + 'static
         + Send
@@ -47,8 +46,9 @@ where
         + Clone
         + Eq
         + PartialEq
-        + core::fmt::Debug,
-{}
+        + core::fmt::Debug
+{
+}
 
 #[cfg(feature = "wgpu")]
 impl<T: DType, N> BackendFor<T> for WgpuN<N>
@@ -77,8 +77,7 @@ impl<T: DType> BackendFor<T> for Cuda {
 }
 
 #[cfg(feature = "cuda")]
-impl<T: DType, N> sealed::Sealed<T> for CudaN<N>
-where
+impl<T: DType, N> sealed::Sealed<T> for CudaN<N> where
     N: incin_core::typenum::Unsigned
         + 'static
         + Send
@@ -86,8 +85,9 @@ where
         + Clone
         + Eq
         + PartialEq
-        + core::fmt::Debug,
-{}
+        + core::fmt::Debug
+{
+}
 
 #[cfg(feature = "cuda")]
 impl<T: DType, N> BackendFor<T> for CudaN<N>

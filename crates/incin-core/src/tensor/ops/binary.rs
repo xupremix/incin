@@ -138,7 +138,78 @@ impl_binary_op!(
     AbsDiff, abs_diff, abs_diff
 );
 
+impl_binary_op!(
+    /// Element-wise 2-argument arctangent `atan2(self, rhs)`.
+    Atan2, atan2, atan2
+);
+impl_binary_op!(
+    /// Element-wise floating point remainder `self % rhs`.
+    Fmod, fmod, fmod
+);
+impl_binary_op!(
+    /// Element-wise IEEE remainder.
+    Remainder, remainder, remainder
+);
+
 impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tensor<S, B, K, G> {
+    /// In-place addition: mutates `self` by adding `rhs` element-wise.
+    pub fn add_<S2: Shape, G2: RequiresGrad>(&mut self, rhs: &Tensor<S2, B, K, G2>) -> Result<()>
+    where
+        S: ShapeEq<S2>,
+    {
+        let _ = <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
+        let res = self.add(rhs)?;
+        self.inner = res.inner;
+        Ok(())
+    }
+
+    /// In-place subtraction: mutates `self` by subtracting `rhs` element-wise.
+    pub fn sub_<S2: Shape, G2: RequiresGrad>(&mut self, rhs: &Tensor<S2, B, K, G2>) -> Result<()>
+    where
+        S: ShapeEq<S2>,
+    {
+        let _ = <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
+        let res = self.sub(rhs)?;
+        self.inner = res.inner;
+        Ok(())
+    }
+
+    /// In-place multiplication: mutates `self` by multiplying `rhs` element-wise.
+    pub fn mul_<S2: Shape, G2: RequiresGrad>(&mut self, rhs: &Tensor<S2, B, K, G2>) -> Result<()>
+    where
+        S: ShapeEq<S2>,
+    {
+        let _ = <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
+        let res = self.mul(rhs)?;
+        self.inner = res.inner;
+        Ok(())
+    }
+
+    /// In-place division: mutates `self` by dividing by `rhs` element-wise.
+    pub fn div_<S2: Shape, G2: RequiresGrad>(&mut self, rhs: &Tensor<S2, B, K, G2>) -> Result<()>
+    where
+        S: ShapeEq<S2>,
+    {
+        let _ = <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
+        let res = self.div(rhs)?;
+        self.inner = res.inner;
+        Ok(())
+    }
+
+    /// In-place zero: fills all elements with 0.0.
+    pub fn zero_(&mut self) -> Result<()> {
+        let res = self.mul_scalar(0.0)?;
+        self.inner = res.inner;
+        Ok(())
+    }
+
+    /// In-place fill: fills all elements with scalar `val`.
+    pub fn fill_(&mut self, val: f64) -> Result<()> {
+        let res = self.mul_scalar(0.0)?.add_scalar(val)?;
+        self.inner = res.inner;
+        Ok(())
+    }
+
     /// Subtracts a scalar: `self - scalar`.
     pub fn sub_scalar(&self, val: f64) -> Result<Self> {
         let inner = B::sub_scalar::<K>(&self.inner, val)?;
@@ -164,7 +235,11 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
     }
 
     /// Linear interpolation: `self + weight * (end - self)`.
-    pub fn lerp<S2: Shape, G2: RequiresGrad>(&self, end: &Tensor<S2, B, K, G2>, weight: f64) -> Result<Self>
+    pub fn lerp<S2: Shape, G2: RequiresGrad>(
+        &self,
+        end: &Tensor<S2, B, K, G2>,
+        weight: f64,
+    ) -> Result<Self>
     where
         S: ShapeEq<S2>,
     {

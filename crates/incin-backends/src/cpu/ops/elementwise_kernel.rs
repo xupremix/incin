@@ -61,6 +61,19 @@ pub(crate) enum UnaryOp {
     Log10,
     Sin,
     Cos,
+    Tan,
+    Asin,
+    Acos,
+    Atan,
+    Sinh,
+    Cosh,
+    Asinh,
+    Acosh,
+    Atanh,
+    Erf,
+    Rsqrt,
+    Trunc,
+    Frac,
 }
 
 impl UnaryOp {
@@ -125,6 +138,19 @@ impl UnaryOp {
             Self::Log10 => value.log10(),
             Self::Sin => value.sin(),
             Self::Cos => value.cos(),
+            Self::Tan => value.tan(),
+            Self::Asin => value.asin(),
+            Self::Acos => value.acos(),
+            Self::Atan => value.atan(),
+            Self::Sinh => value.sinh(),
+            Self::Cosh => value.cosh(),
+            Self::Asinh => value.asinh(),
+            Self::Acosh => value.acosh(),
+            Self::Atanh => value.atanh(),
+            Self::Erf => erf_approx_f64(f64::from(value)) as f32,
+            Self::Rsqrt => 1.0 / value.sqrt(),
+            Self::Trunc => value.trunc(),
+            Self::Frac => value.fract(),
         }
     }
 
@@ -183,6 +209,19 @@ impl UnaryOp {
             Self::Log10 => value.log10(),
             Self::Sin => value.sin(),
             Self::Cos => value.cos(),
+            Self::Tan => value.tan(),
+            Self::Asin => value.asin(),
+            Self::Acos => value.acos(),
+            Self::Atan => value.atan(),
+            Self::Sinh => value.sinh(),
+            Self::Cosh => value.cosh(),
+            Self::Asinh => value.asinh(),
+            Self::Acosh => value.acosh(),
+            Self::Atanh => value.atanh(),
+            Self::Erf => erf_approx_f64(value),
+            Self::Rsqrt => 1.0 / value.sqrt(),
+            Self::Trunc => value.trunc(),
+            Self::Frac => value.fract(),
         }
     }
 }

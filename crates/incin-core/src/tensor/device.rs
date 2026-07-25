@@ -171,7 +171,7 @@ pub use wgpu_partial::Wgpu;
 #[cfg(feature = "cuda")]
 mod cuda_static {
     use super::{ConstDevice, Device, DeviceId, PhantomData, Result};
-    use typenum::{Unsigned, U0};
+    use typenum::{U0, Unsigned};
 
     #[derive(Debug, Default, Clone, PartialEq, Eq)]
     /// **Tier 3** CUDA device: both the backend kind *and* the device
@@ -220,7 +220,7 @@ pub use cuda_static::CudaN;
 #[cfg(feature = "wgpu")]
 mod wgpu_static {
     use super::{ConstDevice, Device, DeviceId, PhantomData, Result};
-    use typenum::{Unsigned, U0};
+    use typenum::{U0, Unsigned};
 
     #[derive(Debug, Default, Clone, PartialEq, Eq)]
     /// **Tier 3** WGPU device: both the backend kind *and* the adapter

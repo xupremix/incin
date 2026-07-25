@@ -147,13 +147,16 @@ pub fn replace_truncated_spans(text: &str, file_lines: &[String]) -> String {
                 let span = &text[start + 1..end - 1];
 
                 if span.contains("...") || span.contains("...") || span.contains("UInt<") {
-                    let matched_line = file_lines.iter().find(|l| {
-                        let prefix = span.split("...").next().unwrap_or("").trim();
-                        let prefix_clean = prefix.trim_end_matches(|c: char| c == ',' || c == '<' || c.is_whitespace());
-                        !prefix_clean.is_empty() && l.starts_with(prefix_clean)
-                    }).or_else(|| {
-                        file_lines.get(line_idx)
-                    });
+                    let matched_line = file_lines
+                        .iter()
+                        .find(|l| {
+                            let prefix = span.split("...").next().unwrap_or("").trim();
+                            let prefix_clean = prefix.trim_end_matches(|c: char| {
+                                c == ',' || c == '<' || c.is_whitespace()
+                            });
+                            !prefix_clean.is_empty() && l.starts_with(prefix_clean)
+                        })
+                        .or_else(|| file_lines.get(line_idx));
 
                     if let Some(replacement) = matched_line {
                         result.push_str(&text[last_end..start + 1]);
@@ -742,7 +745,12 @@ pub fn parse_transpose_mismatch(text: &str) -> Option<TransposeMismatch> {
     let rank = shape.len();
 
     if d1 >= rank || d2 >= rank {
-        Some(TransposeMismatch { shape, d1, d2, rank })
+        Some(TransposeMismatch {
+            shape,
+            d1,
+            d2,
+            rank,
+        })
     } else {
         None
     }
@@ -1021,10 +1029,7 @@ pub struct ShapeEqMismatch {
 impl ShapeEqMismatch {
     pub fn render(&self) -> String {
         const INDENT: &str = "      ";
-        format!(
-            "{INDENT}shape mismatch \u{2192} {msg}",
-            msg = self.message,
-        )
+        format!("{INDENT}shape mismatch \u{2192} {msg}", msg = self.message,)
     }
 }
 
@@ -1054,7 +1059,9 @@ impl BmmMismatch {
 
 pub fn parse_bmm_mismatch(text: &str) -> Option<BmmMismatch> {
     if text.contains("bmm") || text.contains("batched matrix multiplication") {
-        Some(BmmMismatch { message: "BMM requires 3D tensors (B, M, K) x (B, K, N)".to_string() })
+        Some(BmmMismatch {
+            message: "BMM requires 3D tensors (B, M, K) x (B, K, N)".to_string(),
+        })
     } else {
         None
     }
@@ -1075,7 +1082,9 @@ impl UnfoldMismatch {
 
 pub fn parse_unfold_mismatch(text: &str) -> Option<UnfoldMismatch> {
     if text.contains("unfold size cannot exceed dimension length") {
-        Some(UnfoldMismatch { message: "unfold size exceeds target dimension length".to_string() })
+        Some(UnfoldMismatch {
+            message: "unfold size exceeds target dimension length".to_string(),
+        })
     } else {
         None
     }
@@ -1090,13 +1099,18 @@ pub struct PixelShuffleMismatch {
 impl PixelShuffleMismatch {
     pub fn render(&self) -> String {
         const INDENT: &str = "      ";
-        format!("{INDENT}pixel_shuffle mismatch \u{2192} {msg}", msg = self.message)
+        format!(
+            "{INDENT}pixel_shuffle mismatch \u{2192} {msg}",
+            msg = self.message
+        )
     }
 }
 
 pub fn parse_pixel_shuffle_mismatch(text: &str) -> Option<PixelShuffleMismatch> {
     if text.contains("pixel_shuffle channels must be divisible") {
-        Some(PixelShuffleMismatch { message: "channel count must be divisible by upscale_factor^2".to_string() })
+        Some(PixelShuffleMismatch {
+            message: "channel count must be divisible by upscale_factor^2".to_string(),
+        })
     } else {
         None
     }
@@ -1111,13 +1125,75 @@ pub struct GroupNormMismatch {
 impl GroupNormMismatch {
     pub fn render(&self) -> String {
         const INDENT: &str = "      ";
-        format!("{INDENT}group_norm mismatch \u{2192} {msg}", msg = self.message)
+        format!(
+            "{INDENT}group_norm mismatch \u{2192} {msg}",
+            msg = self.message
+        )
     }
 }
 
 pub fn parse_group_norm_mismatch(text: &str) -> Option<GroupNormMismatch> {
     if text.contains("group_norm: channels must be divisible by groups") {
-        Some(GroupNormMismatch { message: "channels count must be divisible by groups".to_string() })
+        Some(GroupNormMismatch {
+            message: "channels count must be divisible by groups".to_string(),
+        })
+    } else {
+        None
+    }
+}
+
+/// A math domain error diagnostic (e.g., asin/acos out of bounds, rsqrt non-positive).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MathDomainError {
+    pub message: String,
+}
+
+impl MathDomainError {
+    pub fn render(&self) -> String {
+        const INDENT: &str = "      ";
+        format!(
+            "{INDENT}math domain error \u{2192} {msg}",
+            msg = self.message
+        )
+    }
+}
+
+pub fn parse_math_domain_error(text: &str) -> Option<MathDomainError> {
+    if text.contains("out of domain")
+        || text.contains("NaN domain")
+        || text.contains("domain error")
+    {
+        Some(MathDomainError {
+            message: "argument value is outside the real domain of the function".to_string(),
+        })
+    } else {
+        None
+    }
+}
+
+/// An in-place shape mismatch diagnostic.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InPlaceShapeMismatch {
+    pub message: String,
+}
+
+impl InPlaceShapeMismatch {
+    pub fn render(&self) -> String {
+        const INDENT: &str = "      ";
+        format!(
+            "{INDENT}in-place shape mismatch \u{2192} {msg}",
+            msg = self.message
+        )
+    }
+}
+
+pub fn parse_inplace_shape_mismatch(text: &str) -> Option<InPlaceShapeMismatch> {
+    if text.contains("in-place operand shape mismatch") || text.contains("cannot mutate in-place") {
+        Some(InPlaceShapeMismatch {
+            message:
+                "target tensor and operand tensor must have identical shapes for in-place mutation"
+                    .to_string(),
+        })
     } else {
         None
     }
@@ -1591,7 +1667,11 @@ mod tests {
     fn test_parse_shape_eq_mismatch() {
         let text = "evaluation of constant value failed\nShape Mismatch: Attempted to operate on tensors of incompatible shapes.";
         let mismatch = parse_shape_eq_mismatch(text).unwrap();
-        assert!(mismatch.message.contains("Attempted to operate on tensors of incompatible shapes"));
+        assert!(
+            mismatch
+                .message
+                .contains("Attempted to operate on tensors of incompatible shapes")
+        );
         let rendered = mismatch.render();
         assert!(rendered.contains("shape mismatch"));
     }
@@ -1609,6 +1689,12 @@ mod tests {
 
         let text_group = "group_norm: channels must be divisible by groups";
         assert!(parse_group_norm_mismatch(text_group).is_some());
+
+        let text_domain = "out of domain error";
+        assert!(parse_math_domain_error(text_domain).is_some());
+
+        let text_inplace = "in-place operand shape mismatch";
+        assert!(parse_inplace_shape_mismatch(text_inplace).is_some());
     }
 
     #[test]
@@ -1626,9 +1712,21 @@ mod tests {
 
         let translated = humanize_diagnostic(&diagnostic);
         assert!(translated.text.contains("📄 [Expanded Full Type]"));
-        assert!(translated.text.contains("Tensor<[2, 3], CpuBackendImpl<f32, Cpu>>"));
-        assert!(translated.hints.contains(&("2".to_string(), "UInt<UInt<UTerm, B1>, B0>".to_string())));
-        assert!(translated.hints.contains(&("3".to_string(), "UInt<UInt<UTerm, B1>, B1>".to_string())));
+        assert!(
+            translated
+                .text
+                .contains("Tensor<[2, 3], CpuBackendImpl<f32, Cpu>>")
+        );
+        assert!(
+            translated
+                .hints
+                .contains(&("2".to_string(), "UInt<UInt<UTerm, B1>, B0>".to_string()))
+        );
+        assert!(
+            translated
+                .hints
+                .contains(&("3".to_string(), "UInt<UInt<UTerm, B1>, B1>".to_string()))
+        );
 
         let _ = std::fs::remove_file(temp_file);
     }

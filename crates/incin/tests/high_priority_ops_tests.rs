@@ -3,7 +3,7 @@ use incin::prelude::*;
 #[test]
 fn test_elementwise_math_ops() -> Result<()> {
     let t = Tensor::<s![4], DefaultBackend>::from_slice(&[-2.5, 0.0, 1.5, 4.0], ())?;
-    
+
     let abs_t = t.abs()?;
     assert_eq!(abs_t.to_vec1::<f32>()?, vec![2.5, 0.0, 1.5, 4.0]);
 
@@ -48,7 +48,10 @@ fn test_creation_factory_ops() -> Result<()> {
     assert_eq!(arange_t.to_vec1::<f32>()?, vec![0.0, 2.0, 4.0, 6.0, 8.0]);
 
     let linspace_t = Tensor::<s![5], DefaultBackend>::linspace(0.0, 1.0, ())?;
-    assert_eq!(linspace_t.to_vec1::<f32>()?, vec![0.0, 0.25, 0.5, 0.75, 1.0]);
+    assert_eq!(
+        linspace_t.to_vec1::<f32>()?,
+        vec![0.0, 0.25, 0.5, 0.75, 1.0]
+    );
 
     Ok(())
 }

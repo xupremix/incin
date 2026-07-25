@@ -663,7 +663,12 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Fills elements where `mask` is non-zero with `value`.
-    pub fn masked_fill<S2: Shape, KMask: crate::tensor::dtype::DType, G2: RequiresGrad, Sc: Into<crate::tensor::backend::ScalarValue>>(
+    pub fn masked_fill<
+        S2: Shape,
+        KMask: crate::tensor::dtype::DType,
+        G2: RequiresGrad,
+        Sc: Into<crate::tensor::backend::ScalarValue>,
+    >(
         &self,
         mask: &Tensor<S2, B, KMask, G2>,
         value: Sc,
@@ -700,7 +705,13 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Scatters `src` values along `dim` into `self` using `index`.
-    pub fn scatter<S2: Shape, S3: Shape, KInt: crate::tensor::dtype::DType, G2: RequiresGrad, G3: RequiresGrad>(
+    pub fn scatter<
+        S2: Shape,
+        S3: Shape,
+        KInt: crate::tensor::dtype::DType,
+        G2: RequiresGrad,
+        G3: RequiresGrad,
+    >(
         &self,
         dim: usize,
         index: &Tensor<S2, B, KInt, G2>,
@@ -819,10 +830,16 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Splits tensor into `chunks` equal parts along `dim`.
-    pub fn chunk(&self, chunks: usize, dim: usize) -> Result<alloc::vec::Vec<Tensor<Dyn, B, K, G>>> {
+    pub fn chunk(
+        &self,
+        chunks: usize,
+        dim: usize,
+    ) -> Result<alloc::vec::Vec<Tensor<Dyn, B, K, G>>> {
         let dim_size = S::dims(&self._shape).as_ref()[dim];
         if chunks == 0 {
-            return Err(crate::err::Error::Msg("chunk expects positive number of chunks".into()));
+            return Err(crate::err::Error::Msg(
+                "chunk expects positive number of chunks".into(),
+            ));
         }
         let chunk_size = (dim_size + chunks - 1) / chunks;
         let mut out = alloc::vec::Vec::with_capacity(chunks);
@@ -838,10 +855,16 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Splits tensor into sections of size `split_size` along `dim`.
-    pub fn split(&self, split_size: usize, dim: usize) -> Result<alloc::vec::Vec<Tensor<Dyn, B, K, G>>> {
+    pub fn split(
+        &self,
+        split_size: usize,
+        dim: usize,
+    ) -> Result<alloc::vec::Vec<Tensor<Dyn, B, K, G>>> {
         let dim_size = S::dims(&self._shape).as_ref()[dim];
         if split_size == 0 {
-            return Err(crate::err::Error::Msg("split expects positive split_size".into()));
+            return Err(crate::err::Error::Msg(
+                "split expects positive split_size".into(),
+            ));
         }
         let chunks = (dim_size + split_size - 1) / split_size;
         let mut out = alloc::vec::Vec::with_capacity(chunks);

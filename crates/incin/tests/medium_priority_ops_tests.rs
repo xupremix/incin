@@ -55,7 +55,13 @@ fn test_fused_matmul_and_sdpa() -> Result<()> {
     let q = Tensor::<s![1, 2, 4], DefaultBackend>::ones(())?;
     let k = Tensor::<s![1, 2, 4], DefaultBackend>::ones(())?;
     let v = Tensor::<s![1, 2, 4], DefaultBackend>::ones(())?;
-    let attn = Tensor::scaled_dot_product_attention(&q, &k, &v, None::<&Tensor<Dyn, DefaultBackend>>, None)?;
+    let attn = Tensor::scaled_dot_product_attention(
+        &q,
+        &k,
+        &v,
+        None::<&Tensor<Dyn, DefaultBackend>>,
+        None,
+    )?;
     assert_eq!(attn.dims().to_vec(), vec![1, 2, 4]);
 
     Ok(())

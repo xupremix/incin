@@ -274,7 +274,11 @@ where
     }
 
     /// Creates a 1D tensor starting at `start` with step `step`.
-    pub fn arange<Sc: Into<crate::tensor::backend::ScalarValue>, A>(start: Sc, step: Sc, args: A) -> Result<Self>
+    pub fn arange<Sc: Into<crate::tensor::backend::ScalarValue>, A>(
+        start: Sc,
+        step: Sc,
+        args: A,
+    ) -> Result<Self>
     where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
     {
@@ -289,7 +293,11 @@ where
     }
 
     /// Creates a 1D tensor with linearly spaced values between `start` and `end`.
-    pub fn linspace<Sc: Into<crate::tensor::backend::ScalarValue>, A>(start: Sc, end: Sc, args: A) -> Result<Self>
+    pub fn linspace<Sc: Into<crate::tensor::backend::ScalarValue>, A>(
+        start: Sc,
+        end: Sc,
+        args: A,
+    ) -> Result<Self>
     where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
     {

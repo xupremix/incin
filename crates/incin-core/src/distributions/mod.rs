@@ -58,7 +58,13 @@ impl Distribution<f32> for Uniform<f32> {
         let range = (self.high - self.low) as f64;
         let scaled = B::add_scalar_float(&B::mul_scalar_float(&raw_rand, range)?, self.low as f64)?;
 
-        Tensor::from_parts(scaled, shape, Default::default(), device.clone(), Default::default())
+        Tensor::from_parts(
+            scaled,
+            shape,
+            Default::default(),
+            device.clone(),
+            Default::default(),
+        )
     }
 }
 
@@ -98,9 +104,18 @@ impl Distribution<f32> for Normal<f32> {
         let raw_randn = B::randn(dims.as_ref(), dtype, &device_id)?;
 
         // Scale: mean + std * randn
-        let scaled = B::add_scalar_float(&B::mul_scalar_float(&raw_randn, self.std as f64)?, self.mean as f64)?;
+        let scaled = B::add_scalar_float(
+            &B::mul_scalar_float(&raw_randn, self.std as f64)?,
+            self.mean as f64,
+        )?;
 
-        Tensor::from_parts(scaled, shape, Default::default(), device.clone(), Default::default())
+        Tensor::from_parts(
+            scaled,
+            shape,
+            Default::default(),
+            device.clone(),
+            Default::default(),
+        )
     }
 }
 
@@ -136,7 +151,13 @@ impl Distribution<f32> for Bernoulli<f32> {
         let sub = B::add_scalar_float(&B::neg(&raw_rand)?, self.p as f64)?;
         let step = B::step(&sub)?;
 
-        Tensor::from_parts(step, shape, Default::default(), device.clone(), Default::default())
+        Tensor::from_parts(
+            step,
+            shape,
+            Default::default(),
+            device.clone(),
+            Default::default(),
+        )
     }
 }
 
@@ -173,7 +194,13 @@ impl Distribution<f32> for Exponential<f32> {
         let log_val = B::log(&one_minus_u)?;
         let scaled = B::mul_scalar_float(&B::neg(&log_val)?, 1.0 / self.lambda as f64)?;
 
-        Tensor::from_parts(scaled, shape, Default::default(), device.clone(), Default::default())
+        Tensor::from_parts(
+            scaled,
+            shape,
+            Default::default(),
+            device.clone(),
+            Default::default(),
+        )
     }
 }
 
@@ -219,7 +246,13 @@ impl Distribution<f32> for Gumbel<f32> {
         let scaled = B::mul_scalar_float(&log_neg_log, self.scale as f64)?;
         let gumbel = B::add_scalar_float(&B::neg(&scaled)?, self.loc as f64)?;
 
-        Tensor::from_parts(gumbel, shape, Default::default(), device.clone(), Default::default())
+        Tensor::from_parts(
+            gumbel,
+            shape,
+            Default::default(),
+            device.clone(),
+            Default::default(),
+        )
     }
 }
 
@@ -282,7 +315,13 @@ mod tests {
                 let dtype = B::resolve_dtype(&Default::default(), &device_id)?;
                 let zeros = B::zeros(dims.as_ref(), dtype, &device_id)?;
                 let add = B::add_scalar_float(&zeros, self.0 as f64)?;
-                Tensor::from_parts(add, shape, Default::default(), device.clone(), Default::default())
+                Tensor::from_parts(
+                    add,
+                    shape,
+                    Default::default(),
+                    device.clone(),
+                    Default::default(),
+                )
             }
         }
 

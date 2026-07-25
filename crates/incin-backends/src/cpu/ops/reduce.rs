@@ -941,7 +941,11 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                     let mut step_idx = idx.clone();
                     step_idx[dim] = step;
                     current += t.get(&step_idx);
-                    let flat_dest: usize = step_idx.iter().zip(strides.iter()).map(|(&i, &s)| i * s).sum();
+                    let flat_dest: usize = step_idx
+                        .iter()
+                        .zip(strides.iter())
+                        .map(|(&i, &s)| i * s)
+                        .sum();
                     out_data[flat_dest] = current;
                 }
             }
