@@ -373,4 +373,88 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Ten
             self._grad.clone(),
         ))
     }
+
+    /// Computes vector dot product of 1D/matching tensors `self` and `rhs`, returning a scalar tensor.
+    pub fn dot<S2: Shape>(&self, rhs: &Tensor<S2, B, K, G>) -> Result<Tensor<(), B, K, G>>
+    where
+        S1: crate::tensor::ops::ShapeEq<S2>,
+    {
+        let _ = <S1 as crate::tensor::ops::ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
+        let mul = self.mul(rhs)?;
+        mul.sum_all()
+    }
+
+    /// Computes outer product of vectors `self` and `rhs`.
+    pub fn outer<S2: Shape + DynShape>(&self, rhs: &Tensor<S2, B, K, G>) -> Result<Tensor<Dyn, B, K, G>>
+    where
+        S1: DynShape,
+    {
+        let u1 = self.unsqueeze(1)?;
+        let u2 = rhs.unsqueeze(0)?;
+        u1.broadcast_mul(&u2)
+    }
+
+    /// Fused add-matmul: `beta * self + alpha * (mat1 x mat2)`.
+    pub fn addmm<S2: Shape, S3: Shape>(
+        &self,
+        mat1: &Tensor<S2, B, K, G>,
+        mat2: &Tensor<S3, B, K, G>,
+        beta: f64,
+        alpha: f64,
+    ) -> Result<Self>
+    where
+        S1: DynShape,
+    {
+        let inner = B::addmm::<K>(&self.inner, &mat1.inner, &mat2.inner, beta, alpha)?;
+        Ok(Tensor::from_parts_unchecked(
+            inner,
+            self._shape.clone(),
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        ))
+    }
+
+    /// Batched matrix multiplication for 3D tensors: `(B, M, K) x (B, K, N) -> (B, M, N)`.
+    pub fn bmm<S2: Shape>(&self, rhs: &Tensor<S2, B, K, G>) -> Result<Tensor<Dyn, B, K, G>>
+    where
+        S1: DynShape,
+        S2: DynShape,
+    {
+        let inner = B::bmm::<K>(&self.inner, &rhs.inner)?;
+        let out_shape = B::shape(&inner);
+        Ok(Tensor::from_parts_unchecked(
+            inner,
+            out_shape,
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        ))
+    }
+
+    /// Scaled Dot-Product Attention: `softmax(q * k^T / scale) * v`.
+    pub fn scaled_dot_product_attention<S2: Shape, S3: Shape, S4: Shape>(
+        q: &Tensor<S1, B, K, G>,
+        k: &Tensor<S2, B, K, G>,
+        v: &Tensor<S3, B, K, G>,
+        mask: Option<&Tensor<S4, B, K, G>>,
+        scale: Option<f64>,
+    ) -> Result<Tensor<Dyn, B, K, G>>
+    where
+        S1: DynShape,
+        S2: DynShape,
+        S3: DynShape,
+        S4: DynShape,
+    {
+        let mask_inner = mask.map(|m| &m.inner);
+        let inner = B::scaled_dot_product_attention::<K>(&q.inner, &k.inner, &v.inner, mask_inner, scale)?;
+        let out_shape = B::shape(&inner);
+        Ok(Tensor::from_parts_unchecked(
+            inner,
+            out_shape,
+            q._dtype.clone(),
+            q._device.clone(),
+            q._grad.clone(),
+        ))
+    }
 }

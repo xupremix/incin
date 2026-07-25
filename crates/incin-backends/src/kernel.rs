@@ -385,10 +385,7 @@ fn render_cuda(
         layout,
         KernelAccess::Scalar { unroll_width },
     )?;
-    let entry_point = format!(
-        "incin_{family}_{}_u{unroll_width}_{op_name}",
-        scalar.suffix
-    );
+    let entry_point = format!("incin_{family}_{}_u{unroll_width}_{op_name}", scalar.suffix);
     let source = template
         .replace("{PREAMBLE}", scalar.preamble)
         .replace("{ENTRY_POINT}", &entry_point)

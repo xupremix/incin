@@ -77,9 +77,7 @@ pub(crate) fn launch_matmul(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<Cuda
             .arg(&(k as i32))
             .arg(&(n as i32))
             .launch(cfg)
-            .map_err(|e| {
-                incin_core::prelude::Error::Msg(format!("matmul launch failed: {e:?}"))
-            })?;
+            .map_err(|e| incin_core::prelude::Error::Msg(format!("matmul launch failed: {e:?}")))?;
     }
 
     let strides = crate::cpu::stride::contiguous_strides(&out_shape);

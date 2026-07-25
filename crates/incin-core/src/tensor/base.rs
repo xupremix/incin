@@ -259,6 +259,61 @@ where
         Self::from_parts(inner, _shape, _dtype, _device, _grad)
     }
 
+    /// Creates a tensor filled with scalar `val`.
+    pub fn full<Sc: Into<crate::tensor::backend::ScalarValue>, A>(val: Sc, args: A) -> Result<Self>
+    where
+        A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
+    {
+        let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg());
+        let dims = S::dims(&_shape);
+        let device = B::Device::to_incin(&_device)?;
+        let dtype = B::resolve_dtype(&_dtype, &device)?;
+        let scalar_f64 = val.into().to_f64();
+        let inner = B::full(scalar_f64, dims.as_ref(), dtype, &device)?;
+        Self::from_parts(inner, _shape, _dtype, _device, _grad)
+    }
+
+    /// Creates a 1D tensor starting at `start` with step `step`.
+    pub fn arange<Sc: Into<crate::tensor::backend::ScalarValue>, A>(start: Sc, step: Sc, args: A) -> Result<Self>
+    where
+        A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
+    {
+        let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg());
+        let dims = S::dims(&_shape);
+        let device = B::Device::to_incin(&_device)?;
+        let dtype = B::resolve_dtype(&_dtype, &device)?;
+        let s_f64 = start.into().to_f64();
+        let st_f64 = step.into().to_f64();
+        let inner = B::arange(s_f64, st_f64, dims.as_ref(), dtype, &device)?;
+        Self::from_parts(inner, _shape, _dtype, _device, _grad)
+    }
+
+    /// Creates a 1D tensor with linearly spaced values between `start` and `end`.
+    pub fn linspace<Sc: Into<crate::tensor::backend::ScalarValue>, A>(start: Sc, end: Sc, args: A) -> Result<Self>
+    where
+        A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
+    {
+        let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg());
+        let dims = S::dims(&_shape);
+        let device = B::Device::to_incin(&_device)?;
+        let dtype = B::resolve_dtype(&_dtype, &device)?;
+        let s_f64 = start.into().to_f64();
+        let e_f64 = end.into().to_f64();
+        let inner = B::linspace(s_f64, e_f64, dims.as_ref(), dtype, &device)?;
+        Self::from_parts(inner, _shape, _dtype, _device, _grad)
+    }
+
+    /// Samples a tensor of shape `shape` from a probability distribution `dist`.
+    pub fn sample<D: crate::distributions::Distribution<K>, A>(dist: &D, args: A) -> Result<Self>
+    where
+        A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
+        B: SupportsDType<K>,
+        B: Backend<FloatElem = K>,
+    {
+        let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg());
+        dist.sample::<S, B, G>(_shape, &_device)
+    }
+
     /// Wraps an existing backend storage in a Tensor.
     pub fn from_raw<A>(raw_tensor: B::Storage<K>, args: A) -> Result<Self>
     where

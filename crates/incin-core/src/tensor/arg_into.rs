@@ -11,10 +11,10 @@
 use core::marker::PhantomData;
 
 #[cfg(feature = "cuda")]
-use crate::prelude::Cuda;
+use crate::prelude::{Cuda, CudaN};
 
 #[cfg(feature = "wgpu")]
-use crate::prelude::Wgpu;
+use crate::prelude::{Wgpu, WgpuN};
 
 use crate::prelude::{Cpu, DTypeId, DeviceId, Dim, Grad, NoGrad};
 use typenum::{Bit, UInt, UTerm, Unsigned};
@@ -119,20 +119,40 @@ where
     }
 }
 
+// Tier 2: Cuda / Wgpu (partial compile-time, runtime usize ordinal)
 #[cfg(feature = "cuda")]
-impl<const N: usize> ArgInto<Cuda<N>> for Cuda<N> {
+impl ArgInto<Cuda> for Cuda {
     #[inline(always)]
     /// Converts `self` into the target representation.
-    fn into_arg(self) -> Cuda<N> {
+    fn into_arg(self) -> Cuda {
         self
     }
 }
 
 #[cfg(feature = "wgpu")]
-impl<const N: usize> ArgInto<Wgpu<N>> for Wgpu<N> {
+impl ArgInto<Wgpu> for Wgpu {
     #[inline(always)]
     /// Converts `self` into the target representation.
-    fn into_arg(self) -> Wgpu<N> {
+    fn into_arg(self) -> Wgpu {
+        self
+    }
+}
+
+// Tier 3: CudaN<N> / WgpuN<N> (fully compile-time, typenum ordinal)
+#[cfg(feature = "cuda")]
+impl<N: Unsigned> ArgInto<CudaN<N>> for CudaN<N> {
+    #[inline(always)]
+    /// Converts `self` into the target representation.
+    fn into_arg(self) -> CudaN<N> {
+        self
+    }
+}
+
+#[cfg(feature = "wgpu")]
+impl<N: Unsigned> ArgInto<WgpuN<N>> for WgpuN<N> {
+    #[inline(always)]
+    /// Converts `self` into the target representation.
+    fn into_arg(self) -> WgpuN<N> {
         self
     }
 }
@@ -228,11 +248,19 @@ where
 {
 }
 
+// Tier 2: runtime ordinal
 #[cfg(feature = "cuda")]
-impl<const N: usize> NotUnit for Cuda<N> {}
+impl NotUnit for Cuda {}
 
 #[cfg(feature = "wgpu")]
-impl<const N: usize> NotUnit for Wgpu<N> {}
+impl NotUnit for Wgpu {}
+
+// Tier 3: typenum ordinal
+#[cfg(feature = "cuda")]
+impl<N: Unsigned> NotUnit for CudaN<N> {}
+
+#[cfg(feature = "wgpu")]
+impl<N: Unsigned> NotUnit for WgpuN<N> {}
 
 impl<D: Dim> NotUnit for Vec<D> {}
 // Handled in shape.rs

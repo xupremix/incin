@@ -657,6 +657,79 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
         let ls = log_softmax::<T, D, K>(t, dim)?;
         <Self as FloatOps<Self>>::exp::<K>(&ls)
     }
+
+    /// `powf`.
+    fn powf<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        exponent: f64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        elementwise_unary_typed(UnaryOp::Powf(exponent), t)
+    }
+
+    /// `clamp`.
+    fn clamp<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        min: f64,
+        max: f64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        elementwise_unary_typed(UnaryOp::Clamp(min, max), t)
+    }
+
+    /// `sign`.
+    fn sign<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        elementwise_unary_typed(UnaryOp::Sign, t)
+    }
+
+    /// `floor`.
+    fn floor<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        elementwise_unary_typed(UnaryOp::Floor, t)
+    }
+
+    /// `ceil`.
+    fn ceil<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        elementwise_unary_typed(UnaryOp::Ceil, t)
+    }
+
+    /// `round`.
+    fn round<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        elementwise_unary_typed(UnaryOp::Round, t)
+    }
+
+    /// `log2`.
+    fn log2<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        elementwise_unary_typed(UnaryOp::Log2, t)
+    }
+
+    /// `log10`.
+    fn log10<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        elementwise_unary_typed(UnaryOp::Log10, t)
+    }
+
+    /// `sin`.
+    fn sin<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        elementwise_unary_typed(UnaryOp::Sin, t)
+    }
+
+    /// `cos`.
+    fn cos<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        elementwise_unary_typed(UnaryOp::Cos, t)
+    }
 }
 
 // ---------------------------------------------------------------------------

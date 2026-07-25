@@ -9,9 +9,9 @@ use incin_core::prelude::*;
 
 type CpuB = CpuBackendImpl;
 #[cfg(feature = "wgpu")]
-type WgpuB = WgpuBackendImpl<f32, incin_core::prelude::Wgpu<0>>;
+type WgpuB = WgpuBackendImpl<f32, incin_core::prelude::WgpuN<incin_core::typenum::U0>>;
 #[cfg(feature = "cuda")]
-type CudaB = CudaBackendImpl<f32, incin_core::prelude::Cuda<0>>;
+type CudaB = CudaBackendImpl<f32, incin_core::prelude::CudaN<incin_core::typenum::U0>>;
 
 fn read_f32<B: Backend>(s: &B::Storage<f32>) -> Vec<f32> {
     let bytes = B::to_bytes::<f32>(s).unwrap();

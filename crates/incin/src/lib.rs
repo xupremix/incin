@@ -86,7 +86,7 @@ extern crate alloc;
 
 pub use incin_backends::*;
 
-pub use incin_macros::{import_model, module};
+pub use incin_macros::{import_model, model, module};
 
 /// Neural network modules, activation functions, layers, and building blocks.
 pub mod nn {
@@ -265,7 +265,7 @@ pub mod prelude {
     // (`incin_macros::generate_shape_ops!()` in `shapes/shape_ops.rs`,
     // `incin_macros::impl_arg_into!(7)` in `tensor/arg_into.rs`) — neither
     // has a documented public contract or any end-user call site.
-    pub use incin_macros::{idx, import_model, module, s};
+    pub use incin_macros::{idx, import_model, model, module, s};
 
     // We intentionally overshadow incin_core::Tensor and NN modules with our aliased versions
     #[cfg(feature = "cpu")]

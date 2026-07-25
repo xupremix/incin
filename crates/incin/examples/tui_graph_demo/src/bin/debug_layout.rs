@@ -3,9 +3,7 @@ use alloc::collections::BTreeMap;
 use incin::prelude::*;
 use incin::{Linear, Module};
 use incin_backends::cpu::CpuBackendImpl;
-use incin_core::prelude::{
-    TracingBackend, extract_graph, tracing_mark_input, tracing_mark_output,
-};
+use incin_core::prelude::{TracingBackend, extract_graph, tracing_mark_input, tracing_mark_output};
 
 /// Nb.
 type NB = CpuBackendImpl;

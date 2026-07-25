@@ -538,6 +538,603 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
 
         Ok(CpuStorage::from_contiguous(new_buffer, t.shape.clone()))
     }
+
+    fn where_cond<K: DType, KMask: DType>(
+        mask: &<Self as Backend>::Storage<KMask>,
+        on_true: &<Self as Backend>::Storage<K>,
+        on_false: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let out_shape = crate::cpu::stride::broadcast_shape(&on_true.shape, &on_false.shape)?;
+        let total: usize = out_shape.iter().product();
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; out_shape.len()];
+        for _ in 0..total {
+            let m_val = mask.get(&idx);
+            let val = if m_val != 0.0 {
+                on_true.get(&idx)
+            } else {
+                on_false.get(&idx)
+            };
+            out.push(val);
+            if !out_shape.is_empty() {
+                crate::cpu::storage::increment_index(&mut idx, &out_shape);
+            }
+        }
+        let buffer = on_true.buffer.from_f64_values(out);
+        Ok(CpuStorage::from_contiguous(buffer, out_shape))
+    }
+
+    fn gather<K: DType, KInt: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        dim: usize,
+        index: &<Self as Backend>::Storage<KInt>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let out_shape = index.shape.clone();
+        let total: usize = out_shape.iter().product();
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; out_shape.len()];
+        for _ in 0..total {
+            let target_i = index.get(&idx) as usize;
+            let mut src_idx = idx.clone();
+            src_idx[dim] = target_i;
+            out.push(t.get(&src_idx));
+            if !out_shape.is_empty() {
+                crate::cpu::storage::increment_index(&mut idx, &out_shape);
+            }
+        }
+        let buffer = t.buffer.from_f64_values(out);
+        Ok(CpuStorage::from_contiguous(buffer, out_shape))
+    }
+
+    fn scatter<K: DType, KInt: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        dim: usize,
+        index: &<Self as Backend>::Storage<KInt>,
+        src: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let t_total: usize = t.shape.iter().product();
+        let mut out_data: Vec<f64> = (0..t_total).map(|i| {
+            let nd = crate::cpu::ops::elementwise::flat_to_nd(i, &t.shape);
+            t.get(&nd)
+        }).collect();
+        let index_total: usize = index.shape.iter().product();
+        let mut idx = vec![0usize; index.shape.len()];
+        for _ in 0..index_total {
+            let target_i = index.get(&idx) as usize;
+            let src_val = src.get(&idx);
+            let mut dest_idx = idx.clone();
+            dest_idx[dim] = target_i;
+            let strides = crate::cpu::stride::contiguous_strides(&t.shape);
+            let flat_dest: usize = dest_idx.iter().zip(strides.iter()).map(|(&i, &s)| i * s).sum();
+            if flat_dest < out_data.len() {
+                out_data[flat_dest] = src_val;
+            }
+            if !index.shape.is_empty() {
+                crate::cpu::storage::increment_index(&mut idx, &index.shape);
+            }
+        }
+        let buffer = t.buffer.from_f64_values(out_data);
+        Ok(CpuStorage::from_contiguous(buffer, t.shape.clone()))
+    }
+
+    fn index_select<K: DType, KInt: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        dim: usize,
+        index: &<Self as Backend>::Storage<KInt>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let idx_total: usize = index.shape.iter().product();
+        let idx_vec: Vec<f64> = (0..idx_total)
+            .map(|i| index.get(&crate::cpu::ops::elementwise::flat_to_nd(i, &index.shape)))
+            .collect();
+        let mut out_shape = t.shape.clone();
+        out_shape[dim] = idx_vec.len();
+        let total: usize = out_shape.iter().product();
+        let mut out = Vec::with_capacity(total);
+        let mut out_idx = vec![0usize; out_shape.len()];
+        for _ in 0..total {
+            let selected_pos = idx_vec[out_idx[dim]] as usize;
+            let mut src_idx = out_idx.clone();
+            src_idx[dim] = selected_pos;
+            out.push(t.get(&src_idx));
+            if !out_shape.is_empty() {
+                crate::cpu::storage::increment_index(&mut out_idx, &out_shape);
+            }
+        }
+        let buffer = t.buffer.from_f64_values(out);
+        Ok(CpuStorage::from_contiguous(buffer, out_shape))
+    }
+
+    fn masked_fill<K: DType, KMask: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        mask: &<Self as Backend>::Storage<KMask>,
+        value: f64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let total: usize = t.shape.iter().product();
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; t.shape.len()];
+        for _ in 0..total {
+            let m_val = mask.get(&idx);
+            let val = if m_val != 0.0 { value } else { t.get(&idx) };
+            out.push(val);
+            if !t.shape.is_empty() {
+                crate::cpu::storage::increment_index(&mut idx, &t.shape);
+            }
+        }
+        let buffer = t.buffer.from_f64_values(out);
+        Ok(CpuStorage::from_contiguous(buffer, t.shape.clone()))
+    }
+
+    fn unsqueeze<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        dim: usize,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let mut target_shape = t.shape.clone();
+        if dim <= target_shape.len() {
+            target_shape.insert(dim, 1);
+        } else {
+            target_shape.push(1);
+        }
+        Self::reshape::<K>(t, &target_shape)
+    }
+
+    fn repeat<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        repeats: &[usize],
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let mut out_shape = vec![];
+        for (a, b) in t.shape.iter().zip(repeats.iter()) {
+            out_shape.push(a * b);
+        }
+        let total: usize = out_shape.iter().product();
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; out_shape.len()];
+        for _ in 0..total {
+            let mut src_idx = vec![];
+            for (i, &s) in idx.iter().enumerate() {
+                src_idx.push(s % t.shape[i]);
+            }
+            out.push(t.get(&src_idx));
+            if !out_shape.is_empty() {
+                crate::cpu::storage::increment_index(&mut idx, &out_shape);
+            }
+        }
+        let buffer = t.buffer.from_f64_values(out);
+        Ok(CpuStorage::from_contiguous(buffer, out_shape))
+    }
+
+    fn pad<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        padding: &[(usize, usize)],
+        val: f64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let mut out_shape = vec![];
+        for (s, &(before, after)) in t.shape.iter().zip(padding.iter()) {
+            out_shape.push(s + before + after);
+        }
+        let total: usize = out_shape.iter().product();
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; out_shape.len()];
+        for _ in 0..total {
+            let mut inside = true;
+            let mut src_idx = vec![];
+            for (i, &p) in idx.iter().enumerate() {
+                let (before, _) = padding[i];
+                if p < before || p >= before + t.shape[i] {
+                    inside = false;
+                    break;
+                }
+                src_idx.push(p - before);
+            }
+            if inside {
+                out.push(t.get(&src_idx));
+            } else {
+                out.push(val);
+            }
+            if !out_shape.is_empty() {
+                crate::cpu::storage::increment_index(&mut idx, &out_shape);
+            }
+        }
+        let buffer = t.buffer.from_f64_values(out);
+        Ok(CpuStorage::from_contiguous(buffer, out_shape))
+    }
+
+    fn triu<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        k: i64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let total: usize = t.shape.iter().product();
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; t.shape.len()];
+        let rank = t.shape.len();
+        for _ in 0..total {
+            let (r, c) = if rank >= 2 {
+                (idx[rank - 2] as i64, idx[rank - 1] as i64)
+            } else {
+                (0, idx[0] as i64)
+            };
+            let val = if c >= r + k { t.get(&idx) } else { 0.0 };
+            out.push(val);
+            if !t.shape.is_empty() {
+                crate::cpu::storage::increment_index(&mut idx, &t.shape);
+            }
+        }
+        let buffer = t.buffer.from_f64_values(out);
+        Ok(CpuStorage::from_contiguous(buffer, t.shape.clone()))
+    }
+
+    fn tril<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        k: i64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let total: usize = t.shape.iter().product();
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; t.shape.len()];
+        let rank = t.shape.len();
+        for _ in 0..total {
+            let (r, c) = if rank >= 2 {
+                (idx[rank - 2] as i64, idx[rank - 1] as i64)
+            } else {
+                (0, idx[0] as i64)
+            };
+            let val = if c <= r + k { t.get(&idx) } else { 0.0 };
+            out.push(val);
+            if !t.shape.is_empty() {
+                crate::cpu::storage::increment_index(&mut idx, &t.shape);
+            }
+        }
+        let buffer = t.buffer.from_f64_values(out);
+        Ok(CpuStorage::from_contiguous(buffer, t.shape.clone()))
+    }
+
+    fn diag<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        k: i64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let rank = t.shape.len();
+        if rank == 1 {
+            let n = t.shape[0];
+            let k_abs = k.abs() as usize;
+            let out_dim = n + k_abs;
+            let mut out = vec![0.0f64; out_dim * out_dim];
+            for i in 0..n {
+                let r = if k >= 0 { i } else { i + k_abs };
+                let c = if k >= 0 { i + k_abs } else { i };
+                if r < out_dim && c < out_dim {
+                    out[r * out_dim + c] = t.get(&[i]);
+                }
+            }
+            let buffer = t.buffer.from_f64_values(out);
+            Ok(CpuStorage::from_contiguous(buffer, vec![out_dim, out_dim]))
+        } else {
+            let r_len = t.shape[rank - 2];
+            let c_len = t.shape[rank - 1];
+            let mut diag_vals = vec![];
+            for r in 0..r_len {
+                let c = (r as i64 + k) as usize;
+                if c < c_len {
+                    let mut idx = vec![0; rank];
+                    idx[rank - 2] = r;
+                    idx[rank - 1] = c;
+                    diag_vals.push(t.get(&idx));
+                }
+            }
+            let buffer = t.buffer.from_f64_values(diag_vals.clone());
+            let out_len = diag_vals.len();
+            Ok(CpuStorage::from_contiguous(buffer, vec![out_len]))
+        }
+    }
+
+    fn cmp_eq<K: DType>(lhs: &<Self as Backend>::Storage<K>, rhs: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+        let total: usize = lhs.shape.iter().product();
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; lhs.shape.len()];
+        for _ in 0..total {
+            let v = if lhs.get(&idx) == rhs.get(&idx) { 1.0 } else { 0.0 };
+            out.push(v);
+            if !lhs.shape.is_empty() { crate::cpu::storage::increment_index(&mut idx, &lhs.shape); }
+        }
+        Ok(CpuStorage::from_contiguous(lhs.buffer.from_f64_values(out), lhs.shape.clone()))
+    }
+
+    fn cmp_ne<K: DType>(lhs: &<Self as Backend>::Storage<K>, rhs: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+        let total: usize = lhs.shape.iter().product();
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; lhs.shape.len()];
+        for _ in 0..total {
+            let v = if lhs.get(&idx) != rhs.get(&idx) { 1.0 } else { 0.0 };
+            out.push(v);
+            if !lhs.shape.is_empty() { crate::cpu::storage::increment_index(&mut idx, &lhs.shape); }
+        }
+        Ok(CpuStorage::from_contiguous(lhs.buffer.from_f64_values(out), lhs.shape.clone()))
+    }
+
+    fn cmp_lt<K: DType>(lhs: &<Self as Backend>::Storage<K>, rhs: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+        let total: usize = lhs.shape.iter().product();
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; lhs.shape.len()];
+        for _ in 0..total {
+            let v = if lhs.get(&idx) < rhs.get(&idx) { 1.0 } else { 0.0 };
+            out.push(v);
+            if !lhs.shape.is_empty() { crate::cpu::storage::increment_index(&mut idx, &lhs.shape); }
+        }
+        Ok(CpuStorage::from_contiguous(lhs.buffer.from_f64_values(out), lhs.shape.clone()))
+    }
+
+    fn cmp_le<K: DType>(lhs: &<Self as Backend>::Storage<K>, rhs: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+        let total: usize = lhs.shape.iter().product();
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; lhs.shape.len()];
+        for _ in 0..total {
+            let v = if lhs.get(&idx) <= rhs.get(&idx) { 1.0 } else { 0.0 };
+            out.push(v);
+            if !lhs.shape.is_empty() { crate::cpu::storage::increment_index(&mut idx, &lhs.shape); }
+        }
+        Ok(CpuStorage::from_contiguous(lhs.buffer.from_f64_values(out), lhs.shape.clone()))
+    }
+
+    fn cmp_gt<K: DType>(lhs: &<Self as Backend>::Storage<K>, rhs: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+        let total: usize = lhs.shape.iter().product();
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; lhs.shape.len()];
+        for _ in 0..total {
+            let v = if lhs.get(&idx) > rhs.get(&idx) { 1.0 } else { 0.0 };
+            out.push(v);
+            if !lhs.shape.is_empty() { crate::cpu::storage::increment_index(&mut idx, &lhs.shape); }
+        }
+        Ok(CpuStorage::from_contiguous(lhs.buffer.from_f64_values(out), lhs.shape.clone()))
+    }
+
+    fn cmp_ge<K: DType>(lhs: &<Self as Backend>::Storage<K>, rhs: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+        let total: usize = lhs.shape.iter().product();
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; lhs.shape.len()];
+        for _ in 0..total {
+            let v = if lhs.get(&idx) >= rhs.get(&idx) { 1.0 } else { 0.0 };
+            out.push(v);
+            if !lhs.shape.is_empty() { crate::cpu::storage::increment_index(&mut idx, &lhs.shape); }
+        }
+        Ok(CpuStorage::from_contiguous(lhs.buffer.from_f64_values(out), lhs.shape.clone()))
+    }
+
+    fn logical_and<K: DType>(lhs: &<Self as Backend>::Storage<K>, rhs: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+        let total: usize = lhs.shape.iter().product();
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; lhs.shape.len()];
+        for _ in 0..total {
+            let v = if lhs.get(&idx) != 0.0 && rhs.get(&idx) != 0.0 { 1.0 } else { 0.0 };
+            out.push(v);
+            if !lhs.shape.is_empty() { crate::cpu::storage::increment_index(&mut idx, &lhs.shape); }
+        }
+        Ok(CpuStorage::from_contiguous(lhs.buffer.from_f64_values(out), lhs.shape.clone()))
+    }
+
+    fn logical_or<K: DType>(lhs: &<Self as Backend>::Storage<K>, rhs: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+        let total: usize = lhs.shape.iter().product();
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; lhs.shape.len()];
+        for _ in 0..total {
+            let v = if lhs.get(&idx) != 0.0 || rhs.get(&idx) != 0.0 { 1.0 } else { 0.0 };
+            out.push(v);
+            if !lhs.shape.is_empty() { crate::cpu::storage::increment_index(&mut idx, &lhs.shape); }
+        }
+        Ok(CpuStorage::from_contiguous(lhs.buffer.from_f64_values(out), lhs.shape.clone()))
+    }
+
+    fn logical_not<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+        let total: usize = t.shape.iter().product();
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; t.shape.len()];
+        for _ in 0..total {
+            let v = if t.get(&idx) == 0.0 { 1.0 } else { 0.0 };
+            out.push(v);
+            if !t.shape.is_empty() { crate::cpu::storage::increment_index(&mut idx, &t.shape); }
+        }
+        Ok(CpuStorage::from_contiguous(t.buffer.from_f64_values(out), t.shape.clone()))
+    }
+
+    fn sub_scalar<K: DType>(t: &<Self as Backend>::Storage<K>, val: f64) -> Result<<Self as Backend>::Storage<K>> {
+        let total: usize = t.shape.iter().product();
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; t.shape.len()];
+        for _ in 0..total {
+            out.push(t.get(&idx) - val);
+            if !t.shape.is_empty() { crate::cpu::storage::increment_index(&mut idx, &t.shape); }
+        }
+        Ok(CpuStorage::from_contiguous(t.buffer.from_f64_values(out), t.shape.clone()))
+    }
+
+    fn div_scalar<K: DType>(t: &<Self as Backend>::Storage<K>, val: f64) -> Result<<Self as Backend>::Storage<K>> {
+        let total: usize = t.shape.iter().product();
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; t.shape.len()];
+        for _ in 0..total {
+            out.push(t.get(&idx) / val);
+            if !t.shape.is_empty() { crate::cpu::storage::increment_index(&mut idx, &t.shape); }
+        }
+        Ok(CpuStorage::from_contiguous(t.buffer.from_f64_values(out), t.shape.clone()))
+    }
+
+    fn maximum<K: DType>(lhs: &<Self as Backend>::Storage<K>, rhs: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+        let total: usize = lhs.shape.iter().product();
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; lhs.shape.len()];
+        for _ in 0..total {
+            let v = lhs.get(&idx).max(rhs.get(&idx));
+            out.push(v);
+            if !lhs.shape.is_empty() { crate::cpu::storage::increment_index(&mut idx, &lhs.shape); }
+        }
+        Ok(CpuStorage::from_contiguous(lhs.buffer.from_f64_values(out), lhs.shape.clone()))
+    }
+
+    fn minimum<K: DType>(lhs: &<Self as Backend>::Storage<K>, rhs: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+        let total: usize = lhs.shape.iter().product();
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; lhs.shape.len()];
+        for _ in 0..total {
+            let v = lhs.get(&idx).min(rhs.get(&idx));
+            out.push(v);
+            if !lhs.shape.is_empty() { crate::cpu::storage::increment_index(&mut idx, &lhs.shape); }
+        }
+        Ok(CpuStorage::from_contiguous(lhs.buffer.from_f64_values(out), lhs.shape.clone()))
+    }
+
+    fn abs_diff<K: DType>(lhs: &<Self as Backend>::Storage<K>, rhs: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+        let total: usize = lhs.shape.iter().product();
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; lhs.shape.len()];
+        for _ in 0..total {
+            let v = (lhs.get(&idx) - rhs.get(&idx)).abs();
+            out.push(v);
+            if !lhs.shape.is_empty() { crate::cpu::storage::increment_index(&mut idx, &lhs.shape); }
+        }
+        Ok(CpuStorage::from_contiguous(lhs.buffer.from_f64_values(out), lhs.shape.clone()))
+    }
+
+    fn lerp<K: DType>(start: &<Self as Backend>::Storage<K>, end: &<Self as Backend>::Storage<K>, weight: f64) -> Result<<Self as Backend>::Storage<K>> {
+        let total: usize = start.shape.iter().product();
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; start.shape.len()];
+        for _ in 0..total {
+            let s = start.get(&idx);
+            let e = end.get(&idx);
+            out.push(s + weight * (e - s));
+            if !start.shape.is_empty() { crate::cpu::storage::increment_index(&mut idx, &start.shape); }
+        }
+        Ok(CpuStorage::from_contiguous(start.buffer.from_f64_values(out), start.shape.clone()))
+    }
+
+    fn addmm<K: DType>(
+        mat: &<Self as Backend>::Storage<K>,
+        mat1: &<Self as Backend>::Storage<K>,
+        mat2: &<Self as Backend>::Storage<K>,
+        beta: f64,
+        alpha: f64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let mm = Self::matmul::<K>(mat1, mat2)?;
+        let mm_alpha = Self::mul_scalar_float::<K>(&mm, alpha)?;
+        let mat_beta = Self::mul_scalar_float::<K>(mat, beta)?;
+        Self::add::<K>(&mat_beta, &mm_alpha)
+    }
+
+    fn bmm<K: DType>(lhs: &<Self as Backend>::Storage<K>, rhs: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+        Self::matmul::<K>(lhs, rhs)
+    }
+
+    fn scaled_dot_product_attention<K: DType>(
+        q: &<Self as Backend>::Storage<K>,
+        k: &<Self as Backend>::Storage<K>,
+        v: &<Self as Backend>::Storage<K>,
+        mask: Option<&<Self as Backend>::Storage<K>>,
+        scale: Option<f64>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let k_rank = k.shape.len();
+        let k_t = if k_rank >= 2 {
+            Self::transpose::<K>(k, k_rank - 2, k_rank - 1)?
+        } else {
+            k.clone()
+        };
+        let scores = Self::matmul::<K>(q, &k_t)?;
+        let d_k = *q.shape.last().unwrap_or(&1) as f64;
+        let s = scale.unwrap_or_else(|| 1.0 / d_k.sqrt());
+        let scaled_scores = Self::mul_scalar_float::<K>(&scores, s)?;
+        let masked_scores = if let Some(m) = mask {
+            Self::add::<K>(&scaled_scores, m)?
+        } else {
+            scaled_scores
+        };
+        let attn = Self::softmax::<K>(&masked_scores, scores.shape.len() - 1)?;
+        Self::matmul::<K>(&attn, v)
+    }
+
+    fn unfold<K: DType>(t: &<Self as Backend>::Storage<K>, dim: usize, size: usize, step: usize) -> Result<<Self as Backend>::Storage<K>> {
+        let dim_len = t.shape[dim];
+        if size > dim_len {
+            return Err(Error::Msg("unfold size cannot exceed dimension length".into()));
+        }
+        let n_windows = (dim_len - size) / step + 1;
+        let mut out_shape = t.shape.clone();
+        out_shape[dim] = n_windows;
+        out_shape.push(size);
+        let total: usize = out_shape.iter().product();
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; out_shape.len()];
+        for _ in 0..total {
+            let win_idx = idx[dim];
+            let offset_idx = idx[out_shape.len() - 1];
+            let mut src_idx = idx[..t.shape.len()].to_vec();
+            src_idx[dim] = win_idx * step + offset_idx;
+            out.push(t.get(&src_idx));
+            crate::cpu::storage::increment_index(&mut idx, &out_shape);
+        }
+        Ok(CpuStorage::from_contiguous(t.buffer.from_f64_values(out), out_shape))
+    }
+
+    fn pixel_shuffle<K: DType>(t: &<Self as Backend>::Storage<K>, upscale_factor: usize) -> Result<<Self as Backend>::Storage<K>> {
+        if t.shape.len() != 4 {
+            return Err(Error::Msg("pixel_shuffle expects 4D tensor (N, C, H, W)".into()));
+        }
+        let (n, c, h, w) = (t.shape[0], t.shape[1], t.shape[2], t.shape[3]);
+        let r = upscale_factor;
+        let r_sq = r * r;
+        if c % r_sq != 0 {
+            return Err(Error::Msg("pixel_shuffle channels must be divisible by upscale_factor^2".into()));
+        }
+        let out_c = c / r_sq;
+        let out_h = h * r;
+        let out_w = w * r;
+        let out_shape = vec![n, out_c, out_h, out_w];
+        let total: usize = out_shape.iter().product();
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; 4];
+        for _ in 0..total {
+            let (b, c_out, h_out, w_out) = (idx[0], idx[1], idx[2], idx[3]);
+            let h_in = h_out / r;
+            let w_in = w_out / r;
+            let r_h = h_out % r;
+            let r_w = w_out % r;
+            let c_in = c_out * r_sq + r_h * r + r_w;
+            out.push(t.get(&[b, c_in, h_in, w_in]));
+            crate::cpu::storage::increment_index(&mut idx, &out_shape);
+        }
+        Ok(CpuStorage::from_contiguous(t.buffer.from_f64_values(out), out_shape))
+    }
+
+    fn group_norm<K: DType>(t: &<Self as Backend>::Storage<K>, groups: usize, eps: f64) -> Result<<Self as Backend>::Storage<K>> {
+        let total: usize = t.shape.iter().product();
+        let channels = if t.shape.len() >= 2 { t.shape[1] } else { 1 };
+        if channels % groups != 0 {
+            return Err(Error::Msg("group_norm: channels must be divisible by groups".into()));
+        }
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; t.shape.len()];
+        let group_size = total / groups;
+        for g in 0..groups {
+            let mut sum = 0.0f64;
+            let mut sq_sum = 0.0f64;
+            for i in 0..group_size {
+                let flat_i = g * group_size + i;
+                let multi_i = crate::cpu::ops::elementwise::flat_to_nd(flat_i, &t.shape);
+                let val = t.get(&multi_i);
+                sum += val;
+                sq_sum += val * val;
+            }
+            let mean = sum / group_size as f64;
+            let var = (sq_sum / group_size as f64 - mean * mean).max(0.0);
+            let inv_std = 1.0 / (var + eps).sqrt();
+            for i in 0..group_size {
+                let flat_i = g * group_size + i;
+                let multi_i = crate::cpu::ops::elementwise::flat_to_nd(flat_i, &t.shape);
+                let norm_val = (t.get(&multi_i) - mean) * inv_std;
+                out.push(norm_val);
+            }
+        }
+        Ok(CpuStorage::from_contiguous(t.buffer.from_f64_values(out), t.shape.clone()))
+    }
+
+    fn instance_norm<K: DType>(t: &<Self as Backend>::Storage<K>, eps: f64) -> Result<<Self as Backend>::Storage<K>> {
+        let channels = if t.shape.len() >= 2 { t.shape[1] } else { 1 };
+        Self::group_norm::<K>(t, channels, eps)
+    }
 }
 
 #[cfg(test)]

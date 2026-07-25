@@ -51,6 +51,16 @@ pub(crate) enum UnaryOp {
     Tanh,
     Sigmoid,
     Swish,
+    Powf(f64),
+    Clamp(f64, f64),
+    Sign,
+    Floor,
+    Ceil,
+    Round,
+    Log2,
+    Log10,
+    Sin,
+    Cos,
 }
 
 impl UnaryOp {
@@ -97,6 +107,24 @@ impl UnaryOp {
             Self::Tanh => value.tanh(),
             Self::Sigmoid => 1.0 / (1.0 + (-value).exp()),
             Self::Swish => value / (1.0 + (-value).exp()),
+            Self::Powf(exp) => value.powf(exp as f32),
+            Self::Clamp(min, max) => value.clamp(min as f32, max as f32),
+            Self::Sign => {
+                if value > 0.0 {
+                    1.0
+                } else if value < 0.0 {
+                    -1.0
+                } else {
+                    0.0
+                }
+            }
+            Self::Floor => value.floor(),
+            Self::Ceil => value.ceil(),
+            Self::Round => value.round(),
+            Self::Log2 => value.log2(),
+            Self::Log10 => value.log10(),
+            Self::Sin => value.sin(),
+            Self::Cos => value.cos(),
         }
     }
 
@@ -137,6 +165,24 @@ impl UnaryOp {
             Self::Tanh => value.tanh(),
             Self::Sigmoid => 1.0 / (1.0 + (-value).exp()),
             Self::Swish => value / (1.0 + (-value).exp()),
+            Self::Powf(exp) => value.powf(exp),
+            Self::Clamp(min, max) => value.clamp(min, max),
+            Self::Sign => {
+                if value > 0.0 {
+                    1.0
+                } else if value < 0.0 {
+                    -1.0
+                } else {
+                    0.0
+                }
+            }
+            Self::Floor => value.floor(),
+            Self::Ceil => value.ceil(),
+            Self::Round => value.round(),
+            Self::Log2 => value.log2(),
+            Self::Log10 => value.log10(),
+            Self::Sin => value.sin(),
+            Self::Cos => value.cos(),
         }
     }
 }

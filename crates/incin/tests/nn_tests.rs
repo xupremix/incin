@@ -202,10 +202,7 @@ fn test_train_mode_propagates_through_sequential_dropout() -> Result<()> {
 fn test_embedding() -> Result<()> {
     // Vocab=100, EmbedDim=32
     /// Embed shape.
-    type EmbedShape = (
-        incin::prelude::typenum::U100,
-        incin::prelude::typenum::U32,
-    );
+    type EmbedShape = (incin::prelude::typenum::U100, incin::prelude::typenum::U32);
     let weight = Param::<EmbedShape, CpuBackendImpl>::randn(())?;
     let emb = Embedding::<EmbedShape, CpuBackendImpl> { weight };
     // Input: Batch=2, SeqLen=10

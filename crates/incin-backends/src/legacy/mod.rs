@@ -56,8 +56,8 @@ pub mod candle {
         }
     }
 
-    impl<T: incin_core::prelude::DType, D: incin_core::prelude::Device>
-        incin_core::prelude::Backend for CandleBackend<T, D>
+    impl<T: incin_core::prelude::DType, D: incin_core::prelude::Device> incin_core::prelude::Backend
+        for CandleBackend<T, D>
     {
         /// The device type, forwarded unchanged from the `D` generic parameter.
         type Device = D;

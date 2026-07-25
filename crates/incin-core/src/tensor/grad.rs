@@ -10,7 +10,7 @@ pub trait RequiresGrad: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
     type Arg;
     /// The runtime-stored representation (a `PhantomData` for the
     /// compile-time-fixed markers, `bool` for `Dyn`).
-    type Field: Clone + Debug + Send + Sync + PartialEq;
+    type Field: Clone + Debug + Send + Sync + PartialEq + Default;
     /// Returns whether gradient tracking is enabled.
     fn requires_grad(grad: &Self::Field) -> bool;
     /// Converts a user-facing `Arg` into the stored `Field` representation.

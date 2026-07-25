@@ -26,7 +26,7 @@ fn vec_approx_eq(a: &[f32], b: &[f32], tol: f32) -> bool {
 }
 
 /// `B`.
-type B = WgpuBackendImpl<f32, Wgpu<0>>;
+type B = WgpuBackendImpl<f32, WgpuN<incin_core::typenum::U0>>;
 
 // ── Creation ──────────────────────────────────────────────────────────────
 
@@ -741,8 +741,7 @@ fn test_quantize_dequantize() {
         *d = (i as f32 - 32.0) * 0.1; // ranging -3.2 to +3.1
     }
     let s = storage(data.clone(), vec![2, 32]);
-    let q_storage =
-        <B as QuantizedOps<B>>::quantize::<f32, incin_core::prelude::Q8_0>(&s).unwrap();
+    let q_storage = <B as QuantizedOps<B>>::quantize::<f32, incin_core::prelude::Q8_0>(&s).unwrap();
     let deq_storage =
         <B as QuantizedOps<B>>::dequantize::<incin_core::prelude::Q8_0, f32>(&q_storage).unwrap();
     let deq_data = readback(&deq_storage);

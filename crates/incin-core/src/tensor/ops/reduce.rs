@@ -201,6 +201,49 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         /// ```
         min_keepdim, min_keepdim, ReduceKeepDim, true
     );
+
+    impl_reduction_op!(
+        /// Product of all elements in the tensor, reducing it to a scalar tensor.
+        prod_all, prod_all
+    );
+
+    impl_reduction_dim_op!(
+        /// Product along a specific dimension, removing that dimension.
+        prod_dim, prod_dim, ReduceDim, false
+    );
+
+    /// Cumulative sum along dimension `DIM`.
+    pub fn cumsum<const DIM: usize>(&self) -> Result<Self>
+    where
+        S: DynShape,
+    {
+        let inner = B::cumsum::<K>(&self.inner, DIM)?;
+        Ok(Tensor::from_parts_unchecked(
+            inner,
+            self._shape.clone(),
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        ))
+    }
+
+    /// Computes the vector p-norm (`p` norm: 1.0 = L1, 2.0 = L2) over all elements.
+    pub fn norm(&self, p: f64) -> Result<Tensor<(), B, K, G>>
+    where
+        B: crate::tensor::backend::FloatOps<B>,
+    {
+        if (p - 1.0).abs() < 1e-6 {
+            self.abs()?.sum_all()
+        } else if (p - 2.0).abs() < 1e-6 {
+            let sq = self.mul(self)?;
+            sq.sum_all()?.sqrt()
+        } else {
+            let abs_t = self.abs()?;
+            let pow_t = abs_t.powf(p)?;
+            let sum_t = pow_t.sum_all()?;
+            sum_t.powf(1.0 / p)
+        }
+    }
 }
 
 impl<

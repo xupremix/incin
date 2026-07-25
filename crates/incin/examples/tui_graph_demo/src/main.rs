@@ -3,9 +3,7 @@ extern crate alloc;
 use incin::prelude::*;
 use incin::{Linear, Module};
 use incin_backends::cpu::CpuBackendImpl;
-use incin_core::prelude::{
-    TracingBackend, extract_graph, tracing_mark_input, tracing_mark_output,
-};
+use incin_core::prelude::{TracingBackend, extract_graph, tracing_mark_input, tracing_mark_output};
 use incin_telemetry::events::GraphSnapshotEvent;
 use incin_telemetry::reporter::Reporter;
 

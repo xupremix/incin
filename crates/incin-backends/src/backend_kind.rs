@@ -27,19 +27,81 @@ impl<T: DType> BackendFor<T> for Cpu {
 }
 
 #[cfg(feature = "wgpu")]
-impl<T: DType, const N: usize> sealed::Sealed<T> for incin_core::prelude::Wgpu<N> {}
+use incin_core::prelude::{Wgpu, WgpuN};
 
 #[cfg(feature = "wgpu")]
-impl<T: DType, const N: usize> BackendFor<T> for incin_core::prelude::Wgpu<N> {
-    type Backend = crate::wgpu::WgpuBackendImpl<T, incin_core::prelude::Wgpu<N>>;
+impl<T: DType> sealed::Sealed<T> for Wgpu {}
+
+#[cfg(feature = "wgpu")]
+impl<T: DType> BackendFor<T> for Wgpu {
+    type Backend = crate::wgpu::WgpuBackendImpl<T, Wgpu>;
+}
+
+#[cfg(feature = "wgpu")]
+impl<T: DType, N> sealed::Sealed<T> for WgpuN<N>
+where
+    N: incin_core::typenum::Unsigned
+        + 'static
+        + Send
+        + Sync
+        + Clone
+        + Eq
+        + PartialEq
+        + core::fmt::Debug,
+{}
+
+#[cfg(feature = "wgpu")]
+impl<T: DType, N> BackendFor<T> for WgpuN<N>
+where
+    N: incin_core::typenum::Unsigned
+        + 'static
+        + Send
+        + Sync
+        + Clone
+        + Eq
+        + PartialEq
+        + core::fmt::Debug,
+{
+    type Backend = crate::wgpu::WgpuBackendImpl<T, WgpuN<N>>;
 }
 
 #[cfg(feature = "cuda")]
-impl<T: DType, const N: usize> sealed::Sealed<T> for incin_core::prelude::Cuda<N> {}
+use incin_core::prelude::{Cuda, CudaN};
 
 #[cfg(feature = "cuda")]
-impl<T: DType, const N: usize> BackendFor<T> for incin_core::prelude::Cuda<N> {
-    type Backend = crate::cuda::CudaBackendImpl<T, incin_core::prelude::Cuda<N>>;
+impl<T: DType> sealed::Sealed<T> for Cuda {}
+
+#[cfg(feature = "cuda")]
+impl<T: DType> BackendFor<T> for Cuda {
+    type Backend = crate::cuda::CudaBackendImpl<T, Cuda>;
+}
+
+#[cfg(feature = "cuda")]
+impl<T: DType, N> sealed::Sealed<T> for CudaN<N>
+where
+    N: incin_core::typenum::Unsigned
+        + 'static
+        + Send
+        + Sync
+        + Clone
+        + Eq
+        + PartialEq
+        + core::fmt::Debug,
+{}
+
+#[cfg(feature = "cuda")]
+impl<T: DType, N> BackendFor<T> for CudaN<N>
+where
+    N: incin_core::typenum::Unsigned
+        + 'static
+        + Send
+        + Sync
+        + Clone
+        + Eq
+        + PartialEq
+        + core::fmt::Debug,
+{
+    type Backend = crate::cuda::CudaBackendImpl<T, CudaN<N>>;
 }
 
 impl<T: DType> sealed::Sealed<T> for Dyn {}

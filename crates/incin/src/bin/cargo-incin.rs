@@ -1,4 +1,9 @@
-use incin_diagnostics::{humanize_diagnostic, parse_matmul_mismatch};
+use incin_diagnostics::{
+    humanize_diagnostic, parse_broadcast_mismatch, parse_concat_mismatch, parse_conv1d_mismatch,
+    parse_conv2d_mismatch, parse_flatten_mismatch, parse_matmul_mismatch,
+    parse_module_forward_mismatch, parse_pool2d_mismatch, parse_reduce_dim_mismatch,
+    parse_reshape_mismatch, parse_slice_mismatch, parse_transpose_mismatch,
+};
 use serde_json::Value;
 use std::env;
 use std::io::{self, BufRead, Read};
@@ -39,29 +44,133 @@ fn render_translated_diagnostic(original: &str, raw: bool, explain: bool) {
     }
 
     if explain {
-        if original.contains("ConcatShape") {
+        if translated.text.contains("ConcatShape")
+            || translated.text.contains("Cannot concatenate shape")
+            || original.contains("ConcatShape")
+        {
             eprintln!(
                 "  └── 📖 [Explain - Concatenation Rule]: All tensor dimensions except the concatenation axis must match exactly."
             );
-        } else if original.contains("MatMulShape") || original.contains("matmul") {
+            if let Some(mismatch) = parse_concat_mismatch(&translated.text) {
+                eprintln!("{}", mismatch.render());
+            }
+        } else if translated.text.contains("MatMulShape")
+            || translated.text.contains("matrix-multiply")
+            || original.contains("MatMulShape")
+            || original.contains("matmul")
+        {
             eprintln!(
                 "  └── 📖 [Explain - MatMul Rule]: matmul requires [M, K] x [K, N] -> [M, N] — the inner dimensions (K) must match."
             );
-            // The trait's own `#[diagnostic::on_unimplemented]` message is a
-            // fixed, project-controlled format ("Cannot matrix-multiply
-            // shape `{Self}` with `{Rhs}`"), so it's reliably parseable —
-            // unlike generic rustc/rust-analyzer trait-bound text, which
-            // varies by version. When it parses and the mismatch is really
-            // just the inner dimension (as opposed to some other rank
-            // failure), show exactly which two values conflict and how to
-            // fix it, instead of just repeating the generic rule above.
-            if let Some(mismatch) = parse_matmul_mismatch(original) {
+            if let Some(mismatch) = parse_matmul_mismatch(&translated.text) {
                 eprintln!("{}", mismatch.render());
             }
-        } else if original.contains("Conv2d") {
+        } else if translated.text.contains("Conv2D")
+            || translated.text.contains("Conv2d")
+            || translated.text.contains("incompatible with kernel shape")
+            || original.contains("Conv2d")
+        {
             eprintln!(
                 "  └── 📖 [Explain - Conv2D Rule]: Input channels must match kernel input channels, and spatial dims must fit stride/padding."
             );
+            if let Some(mismatch) = parse_conv2d_mismatch(&translated.text) {
+                eprintln!("{}", mismatch.render());
+            }
+        } else if translated.text.contains("BroadcastShape")
+            || translated.text.contains("Cannot broadcast shape")
+            || original.contains("Broadcast")
+        {
+            eprintln!(
+                "  └── 📖 [Explain - Broadcast Rule]: Dimensions must either match exactly or one of them must be 1."
+            );
+            if let Some(mismatch) = parse_broadcast_mismatch(&translated.text) {
+                eprintln!("{}", mismatch.render());
+            }
+        } else if translated.text.contains("ReshapeShape")
+            || translated.text.contains("Cannot reshape from")
+            || original.contains("Reshape")
+        {
+            eprintln!(
+                "  └── 📖 [Explain - Reshape Rule]: Total number of elements (product of dimensions) before and after reshape must be identical."
+            );
+            if let Some(mismatch) = parse_reshape_mismatch(&translated.text) {
+                eprintln!("{}", mismatch.render());
+            }
+        } else if translated.text.contains("StackShape")
+            || translated.text.contains("Cannot stack shape")
+            || original.contains("Stack")
+        {
+            eprintln!(
+                "  └── 📖 [Explain - Stack Rule]: All tensors being stacked must have identical shapes."
+            );
+        } else if translated.text.contains("Slice")
+            || translated.text.contains("Cannot slice dimension")
+            || original.contains("Slice")
+            || original.contains("idx!")
+        {
+            eprintln!(
+                "  └── 📖 [Explain - Slice/Indexing Rule]: Slice ranges must be within tensor dimension bounds."
+            );
+            if let Some(mismatch) = parse_slice_mismatch(&translated.text) {
+                eprintln!("{}", mismatch.render());
+            }
+        } else if translated.text.contains("Conv1D")
+            || translated.text.contains("Conv1d")
+            || translated.text.contains("1D convolution")
+        {
+            eprintln!(
+                "  └── 📖 [Explain - Conv1D Rule]: Conv1D requires a 2D or 3D tensor (C, L) or (B, C, L)."
+            );
+            if let Some(mismatch) = parse_conv1d_mismatch(&translated.text) {
+                eprintln!("{}", mismatch.render());
+            }
+        } else if translated.text.contains("Transpose")
+            || translated.text.contains("Cannot transpose dimensions")
+            || original.contains("Transpose")
+        {
+            eprintln!(
+                "  └── 📖 [Explain - Transpose Rule]: Transpose indices must be < the rank of the tensor."
+            );
+            if let Some(mismatch) = parse_transpose_mismatch(&translated.text) {
+                eprintln!("{}", mismatch.render());
+            }
+        } else if translated.text.contains("ReduceDim")
+            || translated.text.contains("Cannot reduce dimension")
+            || original.contains("ReduceDim")
+        {
+            eprintln!(
+                "  └── 📖 [Explain - Reduction Rule]: Reduction dimension index must be < the rank of the tensor."
+            );
+            if let Some(mismatch) = parse_reduce_dim_mismatch(&translated.text) {
+                eprintln!("{}", mismatch.render());
+            }
+        } else if translated.text.contains("Flatten")
+            || translated.text.contains("Cannot flatten shape")
+            || original.contains("Flatten")
+        {
+            eprintln!(
+                "  └── 📖 [Explain - Flatten Rule]: Flatten range [START, END] requires START <= END and END < rank."
+            );
+            if let Some(mismatch) = parse_flatten_mismatch(&translated.text) {
+                eprintln!("{}", mismatch.render());
+            }
+        } else if translated.text.contains("Pool2d") || original.contains("Pool") {
+            eprintln!(
+                "  └── 📖 [Explain - Pooling Rule]: Spatial input dimensions (H, W) must be larger than or equal to kernel dimensions."
+            );
+            if let Some(mismatch) = parse_pool2d_mismatch(&translated.text) {
+                eprintln!("{}", mismatch.render());
+            }
+        } else if translated.text.contains("Module")
+            || translated.text.contains("forward")
+            || original.contains("Module")
+        {
+            eprintln!(
+                "  └── 📖 [Explain - Module Forward Rule]: Layer / Module forward pass input shape must match the layer's expected input shape."
+            );
+            if let Some(mismatch) = parse_module_forward_mismatch(&translated.text) {
+                eprintln!("{}", mismatch.render());
+            }
         }
     }
 }

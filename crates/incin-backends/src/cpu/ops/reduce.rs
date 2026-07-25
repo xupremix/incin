@@ -885,6 +885,72 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
         }
     }
 
+    fn prod_all<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let total: usize = t.shape.iter().product();
+        let mut idx = vec![0usize; t.shape.len()];
+        let mut prod = 1.0f64;
+        for _ in 0..total {
+            prod *= t.get(&idx);
+            if !t.shape.is_empty() {
+                increment_index(&mut idx, &t.shape);
+            }
+        }
+        let out = CpuStorage::from_contiguous(CpuBuffer::F32(vec![prod as f32]), vec![]);
+        Ok(out)
+    }
+
+    fn prod_dim<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        dim: usize,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let mut out_shape = t.shape.clone();
+        out_shape.remove(dim);
+        let mut keep_shape = t.shape.clone();
+        keep_shape[dim] = 1;
+        let total: usize = keep_shape.iter().product();
+        let mut prods = vec![1.0f64; total];
+        let src_total: usize = t.shape.iter().product();
+        let mut idx = vec![0usize; t.shape.len()];
+        for _ in 0..src_total {
+            let mut out_idx = idx.clone();
+            out_idx[dim] = 0;
+            let flat_out = flatten_index(&out_idx, &keep_shape);
+            prods[flat_out] *= t.get(&idx);
+            increment_index(&mut idx, &t.shape);
+        }
+        let buffer = t.buffer.from_f64_values(prods);
+        let storage = CpuStorage::from_contiguous(buffer, keep_shape);
+        storage.reshape(&out_shape)
+    }
+
+    fn cumsum<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        dim: usize,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let total: usize = t.shape.iter().product();
+        let mut out_data = vec![0.0f64; total];
+        let dim_len = t.shape[dim];
+        let strides = contiguous_strides(&t.shape);
+        let mut idx = vec![0usize; t.shape.len()];
+        for _ in 0..total {
+            if idx[dim] == 0 {
+                let mut current = 0.0f64;
+                for step in 0..dim_len {
+                    let mut step_idx = idx.clone();
+                    step_idx[dim] = step;
+                    current += t.get(&step_idx);
+                    let flat_dest: usize = step_idx.iter().zip(strides.iter()).map(|(&i, &s)| i * s).sum();
+                    out_data[flat_dest] = current;
+                }
+            }
+            increment_index(&mut idx, &t.shape);
+        }
+        let buffer = t.buffer.from_f64_values(out_data);
+        Ok(CpuStorage::from_contiguous(buffer, t.shape.clone()))
+    }
+
     /// `topk`.
     fn topk<K: DType, KInt: DType>(
         t: &<Self as Backend>::Storage<K>,

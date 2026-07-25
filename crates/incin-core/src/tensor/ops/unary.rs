@@ -26,6 +26,11 @@ macro_rules! impl_unary_op {
 
 impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tensor<S, B, K, G> {
     impl_unary_op!(
+        /// Logical NOT: 1.0 if element is 0.0, else 0.0.
+        logical_not, logical_not
+    );
+
+    impl_unary_op!(
         /// Computes the absolute value of each element in the tensor.
         ///
         /// # Examples
@@ -165,6 +170,72 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         /// let exp_t = t.exp().unwrap(); // [1.0]
         /// ```
         exp, exp
+    );
+
+    /// Raises tensor elements to power `exponent`.
+    #[inline]
+    pub fn powf(&self, exponent: f64) -> Result<Self> {
+        let inner = B::powf::<K>(&self.inner, exponent)?;
+        Ok(Tensor::from_parts_unchecked(
+            inner,
+            self._shape.clone(),
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        ))
+    }
+
+    /// Clamps tensor elements to range `[min, max]`.
+    #[inline]
+    pub fn clamp(&self, min: f64, max: f64) -> Result<Self> {
+        let inner = B::clamp::<K>(&self.inner, min, max)?;
+        Ok(Tensor::from_parts_unchecked(
+            inner,
+            self._shape.clone(),
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        ))
+    }
+
+    impl_unary_op!(
+        /// Elementwise sign function (-1.0, 0.0, or +1.0).
+        sign, sign
+    );
+
+    impl_unary_op!(
+        /// Computes the floor of each element.
+        floor, floor
+    );
+
+    impl_unary_op!(
+        /// Computes the ceiling of each element.
+        ceil, ceil
+    );
+
+    impl_unary_op!(
+        /// Rounds each element to nearest integer.
+        round, round
+    );
+
+    impl_unary_op!(
+        /// Computes base-2 logarithm elementwise.
+        log2, log2
+    );
+
+    impl_unary_op!(
+        /// Computes base-10 logarithm elementwise.
+        log10, log10
+    );
+
+    impl_unary_op!(
+        /// Computes sine elementwise.
+        sin, sin
+    );
+
+    impl_unary_op!(
+        /// Computes cosine elementwise.
+        cos, cos
     );
 
     impl_unary_op!(

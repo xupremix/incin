@@ -91,6 +91,95 @@ impl_binary_op!(
     Div, div, div
 );
 
+impl_binary_op!(
+    /// Element-wise equality (`self == rhs`).
+    CmpEq, eq, cmp_eq
+);
+impl_binary_op!(
+    /// Element-wise inequality (`self != rhs`).
+    CmpNe, ne, cmp_ne
+);
+impl_binary_op!(
+    /// Element-wise less-than (`self < rhs`).
+    CmpLt, lt, cmp_lt
+);
+impl_binary_op!(
+    /// Element-wise less-than-or-equal (`self <= rhs`).
+    CmpLe, le, cmp_le
+);
+impl_binary_op!(
+    /// Element-wise greater-than (`self > rhs`).
+    CmpGt, gt, cmp_gt
+);
+impl_binary_op!(
+    /// Element-wise greater-than-or-equal (`self >= rhs`).
+    CmpGe, ge, cmp_ge
+);
+
+impl_binary_op!(
+    /// Element-wise logical AND.
+    LogicalAnd, logical_and, logical_and
+);
+impl_binary_op!(
+    /// Element-wise logical OR.
+    LogicalOr, logical_or, logical_or
+);
+
+impl_binary_op!(
+    /// Element-wise maximum of two tensors.
+    Maximum, maximum, maximum
+);
+impl_binary_op!(
+    /// Element-wise minimum of two tensors.
+    Minimum, minimum, minimum
+);
+impl_binary_op!(
+    /// Element-wise absolute difference `|self - rhs|`.
+    AbsDiff, abs_diff, abs_diff
+);
+
+impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tensor<S, B, K, G> {
+    /// Subtracts a scalar: `self - scalar`.
+    pub fn sub_scalar(&self, val: f64) -> Result<Self> {
+        let inner = B::sub_scalar::<K>(&self.inner, val)?;
+        Ok(Tensor::from_parts_unchecked(
+            inner,
+            self._shape.clone(),
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        ))
+    }
+
+    /// Divides by a scalar: `self / scalar`.
+    pub fn div_scalar(&self, val: f64) -> Result<Self> {
+        let inner = B::div_scalar::<K>(&self.inner, val)?;
+        Ok(Tensor::from_parts_unchecked(
+            inner,
+            self._shape.clone(),
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        ))
+    }
+
+    /// Linear interpolation: `self + weight * (end - self)`.
+    pub fn lerp<S2: Shape, G2: RequiresGrad>(&self, end: &Tensor<S2, B, K, G2>, weight: f64) -> Result<Self>
+    where
+        S: ShapeEq<S2>,
+    {
+        let _ = <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
+        let inner = B::lerp::<K>(&self.inner, &end.inner, weight)?;
+        Ok(Tensor::from_parts_unchecked(
+            inner,
+            self._shape.clone(),
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        ))
+    }
+}
+
 macro_rules! impl_broadcast_binary_op {
     (
         $(#[$meta:meta])*

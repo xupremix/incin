@@ -11,7 +11,7 @@ use incin_backends::cpu::CpuBackendImpl;
 use incin_backends::wgpu::WgpuBackendImpl;
 
 type Native = CpuBackendImpl;
-type Wgpu = WgpuBackendImpl<f32, incin::Wgpu<0>>;
+type Wgpu = WgpuBackendImpl<f32, incin::WgpuN<incin::typenum::U0>>;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers

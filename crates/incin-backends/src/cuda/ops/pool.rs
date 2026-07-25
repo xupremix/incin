@@ -346,9 +346,7 @@ pub(crate) fn launch_avg_pool2d_backward(
             .arg(&pw)
             .launch(cfg)
             .map_err(|e| {
-                incin_core::prelude::Error::Msg(format!(
-                    "avg_pool2d_backward launch failed: {e:?}"
-                ))
+                incin_core::prelude::Error::Msg(format!("avg_pool2d_backward launch failed: {e:?}"))
             })?;
     }
 

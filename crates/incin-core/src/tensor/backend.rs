@@ -315,6 +315,76 @@ pub trait FloatOps<B: Backend> {
             backend: core::any::type_name::<Self>(),
         })
     }
+    /// Elementwise power by float exponent `exponent`.
+    fn powf<K: DType>(_t: &B::Storage<K>, _exponent: f64) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation {
+            op: "powf",
+            backend: core::any::type_name::<Self>(),
+        })
+    }
+    /// Elementwise clamp to `[min, max]`.
+    fn clamp<K: DType>(_t: &B::Storage<K>, _min: f64, _max: f64) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation {
+            op: "clamp",
+            backend: core::any::type_name::<Self>(),
+        })
+    }
+    /// Elementwise sign (-1.0 for negative, 0.0 for zero, +1.0 for positive).
+    fn sign<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation {
+            op: "sign",
+            backend: core::any::type_name::<Self>(),
+        })
+    }
+    /// Elementwise floor.
+    fn floor<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation {
+            op: "floor",
+            backend: core::any::type_name::<Self>(),
+        })
+    }
+    /// Elementwise ceil.
+    fn ceil<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation {
+            op: "ceil",
+            backend: core::any::type_name::<Self>(),
+        })
+    }
+    /// Elementwise round.
+    fn round<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation {
+            op: "round",
+            backend: core::any::type_name::<Self>(),
+        })
+    }
+    /// Elementwise base-2 logarithm.
+    fn log2<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation {
+            op: "log2",
+            backend: core::any::type_name::<Self>(),
+        })
+    }
+    /// Elementwise base-10 logarithm.
+    fn log10<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation {
+            op: "log10",
+            backend: core::any::type_name::<Self>(),
+        })
+    }
+    /// Elementwise sine.
+    fn sin<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation {
+            op: "sin",
+            backend: core::any::type_name::<Self>(),
+        })
+    }
+    /// Elementwise cosine.
+    fn cos<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation {
+            op: "cos",
+            backend: core::any::type_name::<Self>(),
+        })
+    }
 }
 
 // NumericOps operates generically over any TensorKind!
@@ -448,21 +518,229 @@ pub trait TensorOps<B: Backend> {
             backend: core::any::type_name::<Self>(),
         })
     }
+    /// Selects elements from `on_true` where `mask` is true/non-zero, and `on_false` elsewhere.
+    fn where_cond<K: DType, KMask: DType>(
+        _mask: &B::Storage<KMask>,
+        _on_true: &B::Storage<K>,
+        _on_false: &B::Storage<K>,
+    ) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation {
+            op: "where_cond",
+            backend: core::any::type_name::<Self>(),
+        })
+    }
+    /// Gathers values along `dim` using `index` tensor.
+    fn gather<K: DType, KInt: DType>(
+        _t: &B::Storage<K>,
+        _dim: usize,
+        _index: &B::Storage<KInt>,
+    ) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation {
+            op: "gather",
+            backend: core::any::type_name::<Self>(),
+        })
+    }
+    /// Scatters `src` values along `dim` into `t` using `index` tensor.
+    fn scatter<K: DType, KInt: DType>(
+        _t: &B::Storage<K>,
+        _dim: usize,
+        _index: &B::Storage<KInt>,
+        _src: &B::Storage<K>,
+    ) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation {
+            op: "scatter",
+            backend: core::any::type_name::<Self>(),
+        })
+    }
+    /// Selects slice along `dim` according to 1D `index` tensor.
+    fn index_select<K: DType, KInt: DType>(
+        _t: &B::Storage<K>,
+        _dim: usize,
+        _index: &B::Storage<KInt>,
+    ) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation {
+            op: "index_select",
+            backend: core::any::type_name::<Self>(),
+        })
+    }
+    /// Fills elements of `t` where `mask` is true with scalar `value`.
+    fn masked_fill<K: DType, KMask: DType>(
+        _t: &B::Storage<K>,
+        _mask: &B::Storage<KMask>,
+        _value: f64,
+    ) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation {
+            op: "masked_fill",
+            backend: core::any::type_name::<Self>(),
+        })
+    }
+    /// Inserts a 1-sized dimension at `dim`.
+    fn unsqueeze<K: DType>(_t: &B::Storage<K>, _dim: usize) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation {
+            op: "unsqueeze",
+            backend: core::any::type_name::<Self>(),
+        })
+    }
+    /// Repeats tensor data along each dimension according to `repeats`.
+    fn repeat<K: DType>(_t: &B::Storage<K>, _repeats: &[usize]) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation {
+            op: "repeat",
+            backend: core::any::type_name::<Self>(),
+        })
+    }
+    /// Pads tensor with `val` according to `padding` (before, after) pairs.
+    fn pad<K: DType>(
+        _t: &B::Storage<K>,
+        _padding: &[(usize, usize)],
+        _val: f64,
+    ) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation {
+            op: "pad",
+            backend: core::any::type_name::<Self>(),
+        })
+    }
+    /// Retains upper triangular part of matrix, zeroing the rest.
+    fn triu<K: DType>(_t: &B::Storage<K>, _k: i64) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation {
+            op: "triu",
+            backend: core::any::type_name::<Self>(),
+        })
+    }
+    /// Retains lower triangular part of matrix, zeroing the rest.
+    fn tril<K: DType>(_t: &B::Storage<K>, _k: i64) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation {
+            op: "tril",
+            backend: core::any::type_name::<Self>(),
+        })
+    }
+    /// Extracts diagonal or constructs diagonal matrix.
+    fn diag<K: DType>(_t: &B::Storage<K>, _k: i64) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation {
+            op: "diag",
+            backend: core::any::type_name::<Self>(),
+        })
+    }
+    /// Reads a single-element floating-point tensor's value as `f64`.
+    /// Errors if `t` has more than one element.
+    fn float_to_scalar<K: DType>(_t: &B::Storage<K>) -> Result<f64> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation {
+            op: "float_to_scalar",
+            backend: core::any::type_name::<Self>(),
+        })
+    }
+
+    /// Element-wise equality (`self == rhs`).
+    fn cmp_eq<K: DType>(_lhs: &B::Storage<K>, _rhs: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "cmp_eq", backend: core::any::type_name::<Self>() })
+    }
+    /// Element-wise inequality (`self != rhs`).
+    fn cmp_ne<K: DType>(_lhs: &B::Storage<K>, _rhs: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "cmp_ne", backend: core::any::type_name::<Self>() })
+    }
+    /// Element-wise less-than (`self < rhs`).
+    fn cmp_lt<K: DType>(_lhs: &B::Storage<K>, _rhs: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "cmp_lt", backend: core::any::type_name::<Self>() })
+    }
+    /// Element-wise less-than-or-equal (`self <= rhs`).
+    fn cmp_le<K: DType>(_lhs: &B::Storage<K>, _rhs: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "cmp_le", backend: core::any::type_name::<Self>() })
+    }
+    /// Element-wise greater-than (`self > rhs`).
+    fn cmp_gt<K: DType>(_lhs: &B::Storage<K>, _rhs: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "cmp_gt", backend: core::any::type_name::<Self>() })
+    }
+    /// Element-wise greater-than-or-equal (`self >= rhs`).
+    fn cmp_ge<K: DType>(_lhs: &B::Storage<K>, _rhs: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "cmp_ge", backend: core::any::type_name::<Self>() })
+    }
+
+    /// Logical AND.
+    fn logical_and<K: DType>(_lhs: &B::Storage<K>, _rhs: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "logical_and", backend: core::any::type_name::<Self>() })
+    }
+    /// Logical OR.
+    fn logical_or<K: DType>(_lhs: &B::Storage<K>, _rhs: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "logical_or", backend: core::any::type_name::<Self>() })
+    }
+    /// Logical NOT.
+    fn logical_not<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "logical_not", backend: core::any::type_name::<Self>() })
+    }
+
+    /// Subtract scalar (`self - scalar`).
+    fn sub_scalar<K: DType>(_t: &B::Storage<K>, _val: f64) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "sub_scalar", backend: core::any::type_name::<Self>() })
+    }
+    /// Divide scalar (`self / scalar`).
+    fn div_scalar<K: DType>(_t: &B::Storage<K>, _val: f64) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "div_scalar", backend: core::any::type_name::<Self>() })
+    }
+
+    /// Element-wise maximum of two tensors.
+    fn maximum<K: DType>(_lhs: &B::Storage<K>, _rhs: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "maximum", backend: core::any::type_name::<Self>() })
+    }
+    /// Element-wise minimum of two tensors.
+    fn minimum<K: DType>(_lhs: &B::Storage<K>, _rhs: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "minimum", backend: core::any::type_name::<Self>() })
+    }
+    /// Element-wise absolute difference `|lhs - rhs|`.
+    fn abs_diff<K: DType>(_lhs: &B::Storage<K>, _rhs: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "abs_diff", backend: core::any::type_name::<Self>() })
+    }
+    /// Linear interpolation `start + weight * (end - start)`.
+    fn lerp<K: DType>(_start: &B::Storage<K>, _end: &B::Storage<K>, _weight: f64) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "lerp", backend: core::any::type_name::<Self>() })
+    }
+
+    /// Fused add-matmul: `beta * mat + alpha * (mat1 x mat2)`.
+    fn addmm<K: DType>(
+        _mat: &B::Storage<K>,
+        _mat1: &B::Storage<K>,
+        _mat2: &B::Storage<K>,
+        _beta: f64,
+        _alpha: f64,
+    ) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "addmm", backend: core::any::type_name::<Self>() })
+    }
+    /// Batched matrix multiplication for 3D tensors.
+    fn bmm<K: DType>(_lhs: &B::Storage<K>, _rhs: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "bmm", backend: core::any::type_name::<Self>() })
+    }
+    /// Scaled Dot-Product Attention: `softmax(q * k^T / scale) * v`.
+    fn scaled_dot_product_attention<K: DType>(
+        _q: &B::Storage<K>,
+        _k: &B::Storage<K>,
+        _v: &B::Storage<K>,
+        _mask: Option<&B::Storage<K>>,
+        _scale: Option<f64>,
+    ) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "scaled_dot_product_attention", backend: core::any::type_name::<Self>() })
+    }
+
+    /// Sliding window extraction along `dim`.
+    fn unfold<K: DType>(_t: &B::Storage<K>, _dim: usize, _size: usize, _step: usize) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "unfold", backend: core::any::type_name::<Self>() })
+    }
+    /// Pixel shuffle upscaling for 4D (N, C, H, W) tensors.
+    fn pixel_shuffle<K: DType>(_t: &B::Storage<K>, _upscale_factor: usize) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "pixel_shuffle", backend: core::any::type_name::<Self>() })
+    }
+    /// Group normalization across `groups`.
+    fn group_norm<K: DType>(_t: &B::Storage<K>, _groups: usize, _eps: f64) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "group_norm", backend: core::any::type_name::<Self>() })
+    }
+    /// Instance normalization for 4D (N, C, H, W) tensors.
+    fn instance_norm<K: DType>(_t: &B::Storage<K>, _eps: f64) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation { op: "instance_norm", backend: core::any::type_name::<Self>() })
+    }
+
     /// Prepends size-1 dimensions on the left until `t` has as many
     /// dimensions as `shape`, then broadcasts to `shape` (the NumPy
     /// "align on the right" convention for broadcasting mismatched ranks).
     fn broadcast_left<K: DType>(_t: &B::Storage<K>, _shape: &[usize]) -> Result<B::Storage<K>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "broadcast_left",
-            backend: core::any::type_name::<Self>(),
-        })
-    }
-
-    /// Reads a single-element floating-point tensor's value as `f64`.
-    /// Errors if `t` has more than one element.
-    fn float_to_scalar<K: DType>(_t: &B::Storage<K>) -> Result<f64> {
-        Err(crate::prelude::Error::UnsupportedBackendOperation {
-            op: "float_to_scalar",
             backend: core::any::type_name::<Self>(),
         })
     }
@@ -599,6 +877,44 @@ pub trait CreationOps<B: Backend> {
             backend: core::any::type_name::<Self>(),
         })
     }
+    /// Allocates a `shape`-sized tensor filled with `val`.
+    fn full<K: DType>(
+        _val: f64,
+        _shape: &[usize],
+        _dtype: DTypeId,
+        _device: &DeviceId,
+    ) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation {
+            op: "full",
+            backend: core::any::type_name::<Self>(),
+        })
+    }
+    /// Allocates a 1D tensor with values from `start` with step `step`.
+    fn arange<K: DType>(
+        _start: f64,
+        _step: f64,
+        _shape: &[usize],
+        _dtype: DTypeId,
+        _device: &DeviceId,
+    ) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation {
+            op: "arange",
+            backend: core::any::type_name::<Self>(),
+        })
+    }
+    /// Allocates a 1D tensor of `shape` with linearly spaced values between `start` and `end`.
+    fn linspace<K: DType>(
+        _start: f64,
+        _end: f64,
+        _shape: &[usize],
+        _dtype: DTypeId,
+        _device: &DeviceId,
+    ) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation {
+            op: "linspace",
+            backend: core::any::type_name::<Self>(),
+        })
+    }
 }
 
 /// Reductions that collapse a tensor along one or all dimensions —
@@ -710,6 +1026,27 @@ pub trait ReductionOps<B: Backend> {
     ) -> Result<B::Storage<KInt>> {
         Err(crate::prelude::Error::UnsupportedBackendOperation {
             op: "argmin",
+            backend: core::any::type_name::<Self>(),
+        })
+    }
+    /// Product of all elements in tensor.
+    fn prod_all<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation {
+            op: "prod_all",
+            backend: core::any::type_name::<Self>(),
+        })
+    }
+    /// Product of elements along `dim`.
+    fn prod_dim<K: DType>(_t: &B::Storage<K>, _dim: usize) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation {
+            op: "prod_dim",
+            backend: core::any::type_name::<Self>(),
+        })
+    }
+    /// Cumulative sum along `dim`.
+    fn cumsum<K: DType>(_t: &B::Storage<K>, _dim: usize) -> Result<B::Storage<K>> {
+        Err(crate::prelude::Error::UnsupportedBackendOperation {
+            op: "cumsum",
             backend: core::any::type_name::<Self>(),
         })
     }

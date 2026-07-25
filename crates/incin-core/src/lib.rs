@@ -14,6 +14,7 @@ pub(crate) extern crate alloc;
 pub(crate) mod err;
 
 pub(crate) mod graph;
+pub mod distributions;
 #[cfg(feature = "std")]
 pub mod io;
 pub mod metrics;
@@ -36,6 +37,9 @@ pub mod loss {
 /// Core prelude re-exporting common types, neural network modules, shapes, and backend traits.
 pub mod prelude {
     pub use super::err::*;
+    pub use crate::SeqTy;
+    pub use crate::dim;
+    pub use crate::distributions::{Bernoulli, Distribution, Exponential, Gumbel, Normal, Uniform};
     pub use crate::graph::{Graph, OpType};
     pub use crate::metrics::{Accuracy, ConfusionMatrix, F1Score, MSE, Metric, Precision, Recall};
     pub use crate::nn::{
@@ -68,9 +72,7 @@ pub mod prelude {
             AutorefComputeStats, AutorefComputeStatsFallback, ComputeStats, LayerStats, ModelStats,
         },
     };
-    pub use crate::dim;
     pub use crate::seq;
-    pub use crate::SeqTy;
     pub use incin_macros::{idx, module, s};
 
     pub use super::shapes::prelude::*;

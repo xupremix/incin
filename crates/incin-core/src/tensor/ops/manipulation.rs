@@ -641,6 +641,272 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             self._grad.clone(),
         ))
     }
+
+    /// Conditional selection: picks elements from `on_true` where `self` is non-zero, and `on_false` elsewhere.
+    pub fn where_cond<S2: Shape, G2: RequiresGrad, G3: RequiresGrad>(
+        &self,
+        on_true: &Tensor<S2, B, K, G2>,
+        on_false: &Tensor<S2, B, K, G3>,
+    ) -> Result<Tensor<S2, B, K, G2>>
+    where
+        S: ShapeEq<S2>,
+    {
+        let _ = <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
+        let inner = B::where_cond::<K, K>(&self.inner, &on_true.inner, &on_false.inner)?;
+        Ok(Tensor::from_parts_unchecked(
+            inner,
+            on_true._shape.clone(),
+            on_true._dtype.clone(),
+            on_true._device.clone(),
+            on_true._grad.clone(),
+        ))
+    }
+
+    /// Fills elements where `mask` is non-zero with `value`.
+    pub fn masked_fill<S2: Shape, KMask: crate::tensor::dtype::DType, G2: RequiresGrad, Sc: Into<crate::tensor::backend::ScalarValue>>(
+        &self,
+        mask: &Tensor<S2, B, KMask, G2>,
+        value: Sc,
+    ) -> Result<Self>
+    where
+        S: ShapeEq<S2>,
+    {
+        let _ = <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
+        let val_f64 = value.into().to_f64();
+        let inner = B::masked_fill::<K, KMask>(&self.inner, &mask.inner, val_f64)?;
+        Ok(Tensor::from_parts_unchecked(
+            inner,
+            self._shape.clone(),
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        ))
+    }
+
+    /// Gathers values along `dim` specified by `index`.
+    pub fn gather<S2: Shape, KInt: crate::tensor::dtype::DType, G2: RequiresGrad>(
+        &self,
+        dim: usize,
+        index: &Tensor<S2, B, KInt, G2>,
+    ) -> Result<Tensor<S2, B, K, G>> {
+        let inner = B::gather::<K, KInt>(&self.inner, dim, &index.inner)?;
+        Ok(Tensor::from_parts_unchecked(
+            inner,
+            index._shape.clone(),
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        ))
+    }
+
+    /// Scatters `src` values along `dim` into `self` using `index`.
+    pub fn scatter<S2: Shape, S3: Shape, KInt: crate::tensor::dtype::DType, G2: RequiresGrad, G3: RequiresGrad>(
+        &self,
+        dim: usize,
+        index: &Tensor<S2, B, KInt, G2>,
+        src: &Tensor<S3, B, K, G3>,
+    ) -> Result<Self>
+    where
+        S2: ShapeEq<S3>,
+    {
+        let _ = <S2 as ShapeEq<S3>>::ASSERT_SHAPES_MATCH;
+        let inner = B::scatter::<K, KInt>(&self.inner, dim, &index.inner, &src.inner)?;
+        Ok(Tensor::from_parts_unchecked(
+            inner,
+            self._shape.clone(),
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        ))
+    }
+
+    /// Selects slices along `dim` given 1D `index`.
+    pub fn index_select<S2: Shape, KInt: crate::tensor::dtype::DType, G2: RequiresGrad>(
+        &self,
+        dim: usize,
+        index: &Tensor<S2, B, KInt, G2>,
+    ) -> Result<Tensor<Dyn, B, K, G>> {
+        let inner = B::index_select::<K, KInt>(&self.inner, dim, &index.inner)?;
+        let out_shape = B::shape(&inner);
+        Ok(Tensor::from_parts_unchecked(
+            inner,
+            out_shape,
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        ))
+    }
+
+    /// Inserts a 1-sized dimension at position `dim`.
+    pub fn unsqueeze(&self, dim: usize) -> Result<Tensor<Dyn, B, K, G>> {
+        let inner = B::unsqueeze::<K>(&self.inner, dim)?;
+        let out_shape = B::shape(&inner);
+        Ok(Tensor::from_parts_unchecked(
+            inner,
+            out_shape,
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        ))
+    }
+
+    /// Repeats tensor data along each dimension according to `repeats`.
+    pub fn repeat(&self, repeats: &[usize]) -> Result<Tensor<Dyn, B, K, G>> {
+        let inner = B::repeat::<K>(&self.inner, repeats)?;
+        let out_shape = B::shape(&inner);
+        Ok(Tensor::from_parts_unchecked(
+            inner,
+            out_shape,
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        ))
+    }
+
+    /// Pads tensor according to `padding` (before, after) pairs per dimension with `val`.
+    pub fn pad<Sc: Into<crate::tensor::backend::ScalarValue>>(
+        &self,
+        padding: &[(usize, usize)],
+        val: Sc,
+    ) -> Result<Tensor<Dyn, B, K, G>> {
+        let val_f64 = val.into().to_f64();
+        let inner = B::pad::<K>(&self.inner, padding, val_f64)?;
+        let out_shape = B::shape(&inner);
+        Ok(Tensor::from_parts_unchecked(
+            inner,
+            out_shape,
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        ))
+    }
+
+    /// Returns upper triangular part of matrix.
+    pub fn triu(&self, k: i64) -> Result<Self> {
+        let inner = B::triu::<K>(&self.inner, k)?;
+        Ok(Tensor::from_parts_unchecked(
+            inner,
+            self._shape.clone(),
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        ))
+    }
+
+    /// Returns lower triangular part of matrix.
+    pub fn tril(&self, k: i64) -> Result<Self> {
+        let inner = B::tril::<K>(&self.inner, k)?;
+        Ok(Tensor::from_parts_unchecked(
+            inner,
+            self._shape.clone(),
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        ))
+    }
+
+    /// Extracts or constructs diagonal tensor.
+    pub fn diag(&self, k: i64) -> Result<Tensor<Dyn, B, K, G>> {
+        let inner = B::diag::<K>(&self.inner, k)?;
+        let out_shape = B::shape(&inner);
+        Ok(Tensor::from_parts_unchecked(
+            inner,
+            out_shape,
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        ))
+    }
+
+    /// Splits tensor into `chunks` equal parts along `dim`.
+    pub fn chunk(&self, chunks: usize, dim: usize) -> Result<alloc::vec::Vec<Tensor<Dyn, B, K, G>>> {
+        let dim_size = S::dims(&self._shape).as_ref()[dim];
+        if chunks == 0 {
+            return Err(crate::err::Error::Msg("chunk expects positive number of chunks".into()));
+        }
+        let chunk_size = (dim_size + chunks - 1) / chunks;
+        let mut out = alloc::vec::Vec::with_capacity(chunks);
+        for i in 0..chunks {
+            let start = i * chunk_size;
+            if start >= dim_size {
+                break;
+            }
+            let len = (dim_size - start).min(chunk_size);
+            out.push(self.clone().try_narrow(dim, start, len)?);
+        }
+        Ok(out)
+    }
+
+    /// Splits tensor into sections of size `split_size` along `dim`.
+    pub fn split(&self, split_size: usize, dim: usize) -> Result<alloc::vec::Vec<Tensor<Dyn, B, K, G>>> {
+        let dim_size = S::dims(&self._shape).as_ref()[dim];
+        if split_size == 0 {
+            return Err(crate::err::Error::Msg("split expects positive split_size".into()));
+        }
+        let chunks = (dim_size + split_size - 1) / split_size;
+        let mut out = alloc::vec::Vec::with_capacity(chunks);
+        for i in 0..chunks {
+            let start = i * split_size;
+            let len = (dim_size - start).min(split_size);
+            out.push(self.clone().try_narrow(dim, start, len)?);
+        }
+        Ok(out)
+    }
+
+    /// Expands the tensor to target shape `S2`.
+    pub fn expand<S2: Shape + DynShape>(&self, args: S2::Arg) -> Result<Tensor<S2, B, K, G>> {
+        self.broadcast_to::<S2>(args)
+    }
+
+    /// Extracts sliding window slices along `dim`.
+    pub fn unfold(&self, dim: usize, size: usize, step: usize) -> Result<Tensor<Dyn, B, K, G>> {
+        let inner = B::unfold::<K>(&self.inner, dim, size, step)?;
+        let out_shape = B::shape(&inner);
+        Ok(Tensor::from_parts_unchecked(
+            inner,
+            out_shape,
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        ))
+    }
+
+    /// Rearranges elements in a 4D tensor of shape (N, C, H, W) to (N, C / r^2, H * r, W * r).
+    pub fn pixel_shuffle(&self, upscale_factor: usize) -> Result<Tensor<Dyn, B, K, G>> {
+        let inner = B::pixel_shuffle::<K>(&self.inner, upscale_factor)?;
+        let out_shape = B::shape(&inner);
+        Ok(Tensor::from_parts_unchecked(
+            inner,
+            out_shape,
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        ))
+    }
+
+    /// Group normalization across `groups`.
+    pub fn group_norm(&self, groups: usize, eps: f64) -> Result<Self> {
+        let inner = B::group_norm::<K>(&self.inner, groups, eps)?;
+        Ok(Tensor::from_parts_unchecked(
+            inner,
+            self._shape.clone(),
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        ))
+    }
+
+    /// Instance normalization for 4D (N, C, H, W) tensors.
+    pub fn instance_norm(&self, eps: f64) -> Result<Self> {
+        let inner = B::instance_norm::<K>(&self.inner, eps)?;
+        Ok(Tensor::from_parts_unchecked(
+            inner,
+            self._shape.clone(),
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        ))
+    }
 }
 
 /// `try_stack_tensors`.

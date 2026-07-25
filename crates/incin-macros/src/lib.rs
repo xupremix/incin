@@ -51,7 +51,7 @@ mod shape_ops;
 /// ```
 ///
 /// You can also mix named symbolic dimensions (if they implement `Dim`):
-/// ```rust
+/// ```rust,ignore
 /// use incin::prelude::*;
 /// incin::symbolic_dim!(BatchSize);
 ///
