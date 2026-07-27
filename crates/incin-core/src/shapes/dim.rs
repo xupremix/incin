@@ -7,6 +7,23 @@
 /// In practice, you rarely need to implement or use `Dim` directly. The `s![]` macro generates
 /// the correct implementations automatically. Custom symbolic dimensions can be created via `sym_dim!`.
 pub trait Dim: 'static + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + PartialEq {
+    /// Whether this axis's *size* is fixed by the type rather than supplied at
+    /// runtime.
+    ///
+    /// This is the per-axis input to
+    /// [`ProofLevel`](crate::exec::ProofLevel): a shape whose every axis is
+    /// statically sized carries a `Static` proof, and one axis that is not
+    /// weakens the whole shape to `Mixed`. Note that a *named* dimension
+    /// (`dim!(Batch)`) is `false` here — naming an axis makes it distinct in
+    /// the type system, which is why it can be checked at compile time, but its
+    /// size is still a runtime value.
+    ///
+    /// It defaults to `false` so that a `Dim` implemented outside this crate
+    /// claims no static proof it has not demonstrated. Claiming `true`
+    /// incorrectly would let a descriptor be built on a size the compiler never
+    /// checked.
+    const STATIC_SIZE: bool = false;
+
     /// The user-facing constructor argument (e.g. `()` for compile-time-
     /// fixed dimensions, `usize` for runtime-sized ones).
     type Arg: Clone + Default + core::fmt::Debug;
@@ -22,6 +39,9 @@ pub trait Dim: 'static + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + Pa
 }
 
 impl Dim for usize {
+    /// The canonical runtime axis: its size arrives with the data.
+    const STATIC_SIZE: bool = false;
+
     /// A runtime dimension's argument is just its size.
     type Arg = Self;
 
@@ -123,6 +143,11 @@ macro_rules! symbolic_dim {
 pub struct ProdDim<A, B>(pub usize, core::marker::PhantomData<(A, B)>);
 
 impl<A: Dim, B: Dim> Dim for ProdDim<A, B> {
+    /// A product is statically sized exactly when both factors are. This is
+    /// what keeps a `reshape` that folds two static axes together from
+    /// degrading the result's proof to `Mixed`.
+    const STATIC_SIZE: bool = A::STATIC_SIZE && B::STATIC_SIZE;
+
     /// The pair of constituent dimensions' own arguments.
     type Arg = (A::Arg, B::Arg);
 
@@ -170,6 +195,9 @@ impl<A: Dim + Default, B: Dim + Default> Default for ProdDim<A, B> {
 use typenum::{Bit, UInt, UTerm, Unsigned};
 
 impl Dim for UTerm {
+    /// Fixed by the type: `UTerm` is typenum's zero and denotes size 0.
+    const STATIC_SIZE: bool = true;
+
     /// No argument needed — `UTerm` (typenum's zero) is always size 0.
     type Arg = ();
 
@@ -211,6 +239,9 @@ where
         + PartialEq
         + 'static,
 {
+    /// Fixed by the type: the size is the `typenum` value itself.
+    const STATIC_SIZE: bool = true;
+
     /// No argument needed — the size is fixed by the `typenum` type itself.
     type Arg = ();
 

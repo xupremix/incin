@@ -15,6 +15,21 @@ use typenum::Unsigned;
 ///
 /// In practice, shapes are most often constructed via the `s![]` macro.
 pub trait Shape: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
+    /// How much of this shape the compiler settled, as opposed to the runtime.
+    ///
+    /// This is the shape-level lift of `Dim::STATIC_SIZE`: rank and every
+    /// axis size known from the type gives
+    /// [`ProofLevel::Static`](crate::exec::ProofLevel::Static); a known rank
+    /// with at least one runtime or named axis gives
+    /// [`Mixed`](crate::exec::ProofLevel::Mixed); a runtime rank gives
+    /// [`Dynamic`](crate::exec::ProofLevel::Dynamic).
+    ///
+    /// A lowering rule reads this to stamp the `Validated<O>` it produces
+    /// without knowing which concrete shape it was handed. It defaults to
+    /// `Dynamic` so a `Shape` implemented outside this crate is credited with
+    /// no proof it has not shown.
+    const PROOF: crate::exec::ProofLevel = crate::exec::ProofLevel::Dynamic;
+
     /// The user-facing constructor argument type (e.g. a tuple of
     /// `usize`/`typenum` values, or `Vec<usize>` for `Dyn`).
     type Arg;
@@ -166,6 +181,11 @@ pub trait ConstShape: Shape<Field: Default> {
 /// --- Dyn ---
 ///
 impl Shape for Dyn {
+    /// Not even the rank is known until the shape exists, which is the whole
+    /// point of `Dyn`. Stated rather than inherited from the default so that
+    /// changing the default cannot silently upgrade it.
+    const PROOF: crate::exec::ProofLevel = crate::exec::ProofLevel::Dynamic;
+
     /// The user-facing constructor argument type for this concrete shape.
     type Arg = Vec<usize>;
     /// The runtime-stored representation for this concrete shape.
@@ -210,6 +230,13 @@ impl<D: Dim> AppendDim<D> for Dyn {
 macro_rules! impl_shape_for_tuple {
     ($n:expr $(, $name:ident $idx:tt)* $(,)?) => {
         impl< $($name: Dim,)* > Shape for ( $($name,)*) {
+            /// A tuple fixes its rank, so the only question is the axes: all
+            /// statically sized means `Static`, otherwise `Mixed`. One `Shape`
+            /// impl covers `(U2, U3)` and `(U2, usize)` alike, which is why
+            /// this is folded from the axes rather than written per rank.
+            const PROOF: $crate::exec::ProofLevel =
+                $crate::exec::ProofLevel::of_ranked(true $(&& $name::STATIC_SIZE)*);
+
             /// The user-facing constructor argument type for this concrete shape.
             type Arg = ($(<$name as Dim>::Arg,)*);
             /// The runtime-stored representation for this concrete shape.
@@ -262,6 +289,11 @@ macro_rules! impl_shape_for_tuple {
         }
 
         impl Shape for [usize; ($n)] {
+            /// Rank comes from the array length; every size is a runtime
+            /// `usize`. That is `Mixed` by definition, including at rank 0,
+            /// where the claim is vacuous but costs nothing to keep uniform.
+            const PROOF: $crate::exec::ProofLevel = $crate::exec::ProofLevel::Mixed;
+
             /// The user-facing constructor argument type for this concrete shape.
             type Arg = Self;
             /// The runtime-stored representation for this concrete shape.
@@ -307,6 +339,10 @@ macro_rules! impl_shape_for_tuple {
 }
 
 impl Shape for () {
+    /// A scalar has no axis that could be dynamic, so everything about it is
+    /// known at compile time.
+    const PROOF: crate::exec::ProofLevel = crate::exec::ProofLevel::Static;
+
     /// The user-facing constructor argument type for this concrete shape.
     type Arg = ();
     /// The runtime-stored representation for this concrete shape.

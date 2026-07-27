@@ -53,7 +53,7 @@ T = [
 ("EXE-001","core","exec","x",["SHP-003","GOV-002"],"crates/incin-core/src/exec/spec.rs",
  "Freeze the operation taxonomy and descriptor schema; promote OperationFamily to OperationKind rather than duplicating it",
  "cargo test -p incin-core --test descriptor_schema"),
-("EXE-002","core","exec"," ",["EXE-001"],"crates/incin-core/src/exec/proof.rs",
+("EXE-002","core","exec","x",["EXE-001"],"crates/incin-core/src/exec/proof.rs",
  "Sealed Validated<O> and proof provenance, with privacy compile-fail tests and the paranoid-validation feature",
  "cargo test -p incin-core --test compile_tests"),
 ("EXE-003","core","exec"," ",["EXE-002"],"crates/incin-core/src/exec/rule.rs",
@@ -331,6 +331,18 @@ COMPLETED = {
  "SHP-003": ("2026-07-27", "cargo test -p incin-core --test shape_buf -> 17 passed; 0 failed. shapes/buf.rs adds InlineOrHeap (inline to INLINE_RANK=8, spills to Vec), ShapeBuf, and StrideBuf. checked_numel/checked_byte_len/contiguous_for/checked_span all use checked_mul and return ShapeError::ArithmeticOverflow naming the failing term; no derived value is cached. Properties are checked against u128 references over 5000 cases each from a fixed-seed generator biased to 0/1/usize::MAX/2^32, with assertions that both the overflow and non-overflow branches were reached. The suite found a real ordering bug in the first implementation: a left-to-right fold made numel([MAX,0,MAX]) = Ok(0) but numel([MAX,MAX,0]) = Err, so the zero case is now short-circuited and order independence is pinned by numel_does_not_depend_on_axis_order (reversal plus rotation). Replaces the panicking cpu::stride::contiguous_strides; EXE-004 migrates the storages. Workspace check, no-default-features check, and cargo test -p incin-core all clean"),
  "EXE-001": ("2026-07-27", "cargo test -p incin-core --test descriptor_schema -> 42 passed; 0 failed; full workspace 0 failures. crates/incin-core/src/exec/{mod,spec}.rs adds DescriptorSchemaVersion (pinned at 1 by test), AxisMask, the sealed OperationSpec trait that binds each descriptor to one OperationKind, and the four descriptors PROPOSALS.md 1.2.1 names: BroadcastSpec, MatMulSpec, ReductionSpec, Conv2dSpec. Every descriptor is #[non_exhaustive] with pub fields -- readable by any backend, constructible only through the checked constructors -- and every field a constructor did not receive is DERIVED from the ones it did: broadcast masks from strides, output shapes from operands, outer/reduced/inner from the input, h_out/w_out via SHP-005's spatial_out_size() rather than a second copy of the formula. Descriptors hold logical geometry only; storage offset, dtype, device, and alignment stay for TensorMeta (EXE-004), which is what lets one descriptor be reused as a cache key. OperationFamily deleted per D-008: incin-backends/src/dtype_policy.rs re-exports incin_core OperationKind and folds through the new OperationKind::family(), which maps the accumulating ops (matmul, conv, pool) onto Reduction and the reindexing ops (every shape manipulation, plus embedding) onto Storage; family() is total and idempotent, asserted over all 23 variants. Design finding the test suite forced: reducing away the only zero axis of [MAX,0,MAX] leaves [MAX,MAX], an output whose element count overflows usize, so all four constructors now reject an unrepresentable output at resolution rather than handing a backend a descriptor it cannot launch. Two SHP loose ends closed while here: INLINE_RANK is now MAX_RANK rather than a literal 8 (the SHP-006 comment promised this), and StrideBuf gained push/pop to match ShapeBuf, needed by the stride-normalizing loops. rustdoc, no-default-features, and tools/audit-shapes.sh --check all clean"),
  "SHP-002": ("2026-07-27", "cargo test -p incin-core --test shape_errors -> 14 passed; 0 failed. shapes/error.rs adds ShapeError (6 variants), OperationKind (23 variants, superset of incin-backends OperationFamily so EXE-001 can delete it per D-008), Axis, RankExpectation, DimensionConstraint. One exact-string rendering test per ShapeError variant plus one per component variant; Error::Shape(#[from] ShapeError) added to err.rs and its ? path tested. Every type is Copy and allocation-free (&'static str + usize only), asserted by test and verified by cargo check -p incin-core --no-default-features. Full workspace check and cargo test -p incin-core clean"),
+ "EXE-002": ("2026-07-27", "cargo test -p incin-core --test compile_tests -> 1 passed (55 trybuild cases, 3 new); --test proof_provenance -> 12 passed; --lib exec::proof -> 9 passed, 10 with --features paranoid-validation; full workspace 0 failures. crates/incin-core/src/exec/proof.rs adds ProofLevel (Static/Mixed/Dynamic) and Validated<O>, whose fields are private and whose new() is pub(crate) -- the seal PROPOSALS.md 1.2.1 specifies. Three compile_fail cases prove it from outside the crate and each fails for the right reason, checked by reading the generated .stderr: E0624 on Validated::new, E0451 on a struct literal naming both private fields, E0277 on the Sealed bound when a foreign type tries to join the descriptor taxonomy. The second case matters on its own -- blocking the constructor without private fields would leave a struct literal as an open forgery path. ProofLevel is a meet semilattice topped by Static: meet() takes the weaker operand, and commutativity, idempotence and associativity are asserted over all 27 triples so folding N operands is order-independent. The paranoid-validation feature gates Validated::audit(), which re-derives the constructor obligation EXE-001 established (a representable output), plus a paranoid_audit! macro that expands to nothing when the feature is off so an executor can call it on a hot path. Provenance is derived, never asserted: a caller who could stamp Static on a runtime shape would hand kernels a constant that does not exist"),
+}
+
+# Where the implementation departed from PROPOSALS.md, and why. Recorded per
+# task so `deviations` in the TOML mirror is a real field rather than a
+# placeholder -- an unrecorded deviation is how an RFC quietly stops describing
+# the code.
+DEVIATIONS = {
+ "EXE-002": [
+   "PROPOSALS.md 1.2.1 sketches ProofLevel::of::<L, R>() over two operands. Implemented as of::<S>() over one, combined with meet(), because Conv2d lowers three operands (input, weight, bias) and the binary form has nowhere to put the third. The RFC's call is of::<L>().meet(of::<R>()); a test folds the three-operand conv case and asserts it agrees with the pairwise answer.",
+   "Deriving the level from the shape types required extending two types outside the task's stated target file: Dim gains STATIC_SIZE (defaulted false) and Shape gains PROOF (defaulted Dynamic). Both defaults are the conservative answer, so a Dim or Shape implemented outside the crate is credited with no proof it has not shown. A lowering rule is generic over its shapes and cannot inspect their axes, so without a per-type const there is no way to compute a proof level at all -- adding a new marker trait instead was rejected as it would need an Appendix A row for a type the design does not otherwise name.",
+ ],
 }
 
 MATURITY = {"core": 0, "preview": 1, "exploratory": 2}
@@ -416,7 +428,14 @@ def toml():
         date, ev = COMPLETED.get(tid, ("", ""))
         L.append("completed_on = " + tstr(date))
         L.append("completed_evidence = " + tstr(ev))
-        L.append("deviations = []")
+        dev = DEVIATIONS.get(tid, [])
+        if dev:
+            L.append("deviations = [")
+            for d in dev:
+                L.append("  " + tstr(d) + ",")
+            L.append("]")
+        else:
+            L.append("deviations = []")
         L.append("")
     return "\n".join(L)
 

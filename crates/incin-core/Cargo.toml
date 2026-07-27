@@ -27,6 +27,10 @@ std = [
 ]
 # Enables nightly-only experiments. Empty on stable builds by design.
 nightly = []
+# Recomputes a descriptor's own invariants inside executors (EXE-002). A debug
+# and test aid only: the contract is that a `Validated<O>` was already checked
+# by the lowering rule that minted it, so a release build must never need this.
+paranoid-validation = []
 # Enables CUDA device marker metadata used by CUDA-capable backend crates.
 cuda = []
 # Enables WGPU device marker metadata used by WGPU-capable backend crates.

@@ -1,0 +1,27 @@
+error[E0277]: the trait bound `RogueSpec: exec::sealed::Sealed` is not satisfied
+  --> tests/compile_fail/operation_spec_is_sealed.rs:13:24
+   |
+13 | impl OperationSpec for RogueSpec {
+   |                        ^^^^^^^^^ unsatisfied trait bound
+   |
+help: the trait `exec::sealed::Sealed` is not implemented for `RogueSpec`
+  --> tests/compile_fail/operation_spec_is_sealed.rs:9:1
+   |
+ 9 | struct RogueSpec {
+   | ^^^^^^^^^^^^^^^^
+   = help: the following other types implement trait `exec::sealed::Sealed`:
+             BroadcastSpec
+             Conv2dSpec
+             MatMulSpec
+             ReductionSpec
+note: required by a bound in `OperationSpec`
+  --> src/exec/spec.rs
+   |
+   | pub trait OperationSpec: Clone + fmt::Debug + Sealed {
+   |                                               ^^^^^^ required by this bound in `OperationSpec`
+   = note: `OperationSpec` is a "sealed trait", because to implement it you also need to implement `incin_core::exec::sealed::Sealed`, which is not accessible; this is usually done to force you to use one of the provided types that already implement it
+   = help: the following types implement the trait:
+             incin_core::exec::BroadcastSpec
+             incin_core::exec::MatMulSpec
+             incin_core::exec::ReductionSpec
+             incin_core::exec::Conv2dSpec

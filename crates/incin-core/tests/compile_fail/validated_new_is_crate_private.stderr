@@ -1,0 +1,10 @@
+error[E0624]: associated function `new` is private
+  --> tests/compile_fail/validated_new_is_crate_private.rs:17:30
+   |
+17 |     let _forged = Validated::new(spec, ProofLevel::Static);
+   |                              ^^^ private associated function
+   |
+  ::: src/exec/proof.rs
+   |
+   |     pub(crate) const fn new(descriptor: O, proof: ProofLevel) -> Self {
+   |     ----------------------------------------------------------------- private associated function defined here

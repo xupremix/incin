@@ -216,14 +216,17 @@ deviations = []
 id = "EXE-002"
 tier = "core"
 theme = "exec"
-status = "planned"
+status = "complete"
 deps = ["EXE-001"]
 target = ["crates/incin-core/src/exec/proof.rs"]
 deliverable = "Sealed Validated<O> and proof provenance, with privacy compile-fail tests and the paranoid-validation feature"
 evidence = ["cargo test -p incin-core --test compile_tests"]
-completed_on = ""
-completed_evidence = ""
-deviations = []
+completed_on = "2026-07-27"
+completed_evidence = "cargo test -p incin-core --test compile_tests -> 1 passed (55 trybuild cases, 3 new); --test proof_provenance -> 12 passed; --lib exec::proof -> 9 passed, 10 with --features paranoid-validation; full workspace 0 failures. crates/incin-core/src/exec/proof.rs adds ProofLevel (Static/Mixed/Dynamic) and Validated<O>, whose fields are private and whose new() is pub(crate) -- the seal PROPOSALS.md 1.2.1 specifies. Three compile_fail cases prove it from outside the crate and each fails for the right reason, checked by reading the generated .stderr: E0624 on Validated::new, E0451 on a struct literal naming both private fields, E0277 on the Sealed bound when a foreign type tries to join the descriptor taxonomy. The second case matters on its own -- blocking the constructor without private fields would leave a struct literal as an open forgery path. ProofLevel is a meet semilattice topped by Static: meet() takes the weaker operand, and commutativity, idempotence and associativity are asserted over all 27 triples so folding N operands is order-independent. The paranoid-validation feature gates Validated::audit(), which re-derives the constructor obligation EXE-001 established (a representable output), plus a paranoid_audit! macro that expands to nothing when the feature is off so an executor can call it on a hot path. Provenance is derived, never asserted: a caller who could stamp Static on a runtime shape would hand kernels a constant that does not exist"
+deviations = [
+  "PROPOSALS.md 1.2.1 sketches ProofLevel::of::<L, R>() over two operands. Implemented as of::<S>() over one, combined with meet(), because Conv2d lowers three operands (input, weight, bias) and the binary form has nowhere to put the third. The RFC's call is of::<L>().meet(of::<R>()); a test folds the three-operand conv case and asserts it agrees with the pairwise answer.",
+  "Deriving the level from the shape types required extending two types outside the task's stated target file: Dim gains STATIC_SIZE (defaulted false) and Shape gains PROOF (defaulted Dynamic). Both defaults are the conservative answer, so a Dim or Shape implemented outside the crate is credited with no proof it has not shown. A lowering rule is generic over its shapes and cannot inspect their axes, so without a per-type const there is no way to compute a proof level at all -- adding a new marker trait instead was rejected as it would need an Appendix A row for a type the design does not otherwise name.",
+]
 
 [[task]]
 id = "EXE-003"
