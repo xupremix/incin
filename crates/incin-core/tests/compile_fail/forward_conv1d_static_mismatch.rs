@@ -1,7 +1,6 @@
 extern crate incin_core as incin;
 use incin_core::prelude::*;
 use incin_core::prelude::dummy::DummyBackend;
-use incin_core::nn::*;
 
 fn main() {
     let layer = Conv1d::<s![16, 3, 3, 1, 1, 1], DummyBackend<f32, Cpu>>::build(()).unwrap();

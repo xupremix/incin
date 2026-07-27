@@ -1,17 +1,5 @@
-error[E0254]: the name `incin` is defined multiple times
- --> tests/compile_fail/macro_module_invalid.rs:2:5
-  |
-1 | extern crate incin_core as incin;
-  | --------------------------------- previous import of the extern crate `incin` here
-2 | use incin_core as incin;
-  |     ^^^^^^^^^^^^^^^^^^^ `incin` reimported here
-  |
-  = note: `incin` must be defined only once in the type namespace of this module
-
-warning: unused import: `incin_core as incin`
- --> tests/compile_fail/macro_module_invalid.rs:2:5
-  |
-2 | use incin_core as incin;
-  |     ^^^^^^^^^^^^^^^^^^^
-  |
-  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+error: unknown attribute argument for #[module], expected `ignore`
+  --> tests/compile_fail/macro_module_invalid.rs:22:14
+   |
+22 |     #[module(ignor)]
+   |              ^^^^^

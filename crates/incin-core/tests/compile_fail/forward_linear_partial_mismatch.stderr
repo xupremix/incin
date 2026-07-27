@@ -1,28 +1,20 @@
-warning: unused import: `incin_core::nn::*`
- --> tests/compile_fail/forward_linear_partial_mismatch.rs:4:5
-  |
-4 | use incin_core::nn::*;
-  |     ^^^^^^^^^^^^^^^^^
-  |
-  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
-
 error[E0277]: Cannot use shape `(usize, UInt<UInt<UInt<UTerm, B1>, B0>, B1>)` here: its last dimension must be `UInt<UInt<UTerm, B1>, B1>`
-  --> tests/compile_fail/forward_linear_partial_mismatch.rs:10:19
-   |
-10 |     layer.forward(input).unwrap();
-   |           ------- ^^^^^ wrong trailing dimension
-   |           |
-   |           required by a bound introduced by this call
-   |
-   = help: the trait `EndsWith<UInt<UInt<UTerm, B1>, B1>>` is not implemented for `(usize, UInt<UInt<UInt<UTerm, B1>, B0>, B1>)`
-   = note: the input's last dimension must match this layer's expected input size
-   = help: the following other types implement trait `EndsWith<D>`:
-             `(D0, D1)` implements `EndsWith<D1>`
-             `(D0, D1, D2)` implements `EndsWith<D2>`
-             `(D0, D1, D2, D3)` implements `EndsWith<D3>`
-             `(D0, D1, D2, D3, D4)` implements `EndsWith<D4>`
-             `(D0, D1, D2, D3, D4, D5)` implements `EndsWith<D5>`
-             `(D0, D1, D2, D3, D4, D5, D6)` implements `EndsWith<D6>`
-             `(D0, D1, D2, D3, D4, D5, D6, D7)` implements `EndsWith<D7>`
-             `(D0,)` implements `EndsWith<D0>`
-   = note: required for `incin::nn::Linear<(UInt<UInt<UTerm, B1>, B1>, UInt<UInt<UInt<UTerm, B1>, B0>, B0>), DummyBackend<f32, incin::prelude::Cpu>>` to implement `incin::nn::Module<incin::prelude::Tensor<(usize, UInt<UInt<UInt<UTerm, B1>, B0>, B1>), DummyBackend<f32, incin::prelude::Cpu>, f32>>`
+ --> tests/compile_fail/forward_linear_partial_mismatch.rs:9:19
+  |
+9 |     layer.forward(input).unwrap();
+  |           ------- ^^^^^ wrong trailing dimension
+  |           |
+  |           required by a bound introduced by this call
+  |
+  = help: the trait `EndsWith<UInt<UInt<UTerm, B1>, B1>>` is not implemented for `(usize, UInt<UInt<UInt<UTerm, B1>, B0>, B1>)`
+  = note: the input's last dimension must match this layer's expected input size
+  = help: the following other types implement trait `EndsWith<D>`:
+            `(D0, D1)` implements `EndsWith<D1>`
+            `(D0, D1, D2)` implements `EndsWith<D2>`
+            `(D0, D1, D2, D3)` implements `EndsWith<D3>`
+            `(D0, D1, D2, D3, D4)` implements `EndsWith<D4>`
+            `(D0, D1, D2, D3, D4, D5)` implements `EndsWith<D5>`
+            `(D0, D1, D2, D3, D4, D5, D6)` implements `EndsWith<D6>`
+            `(D0, D1, D2, D3, D4, D5, D6, D7)` implements `EndsWith<D7>`
+            `(D0,)` implements `EndsWith<D0>`
+  = note: required for `incin::nn::Linear<(UInt<UInt<UTerm, B1>, B1>, UInt<UInt<UInt<UTerm, B1>, B0>, B0>), DummyBackend<f32, incin::prelude::Cpu>>` to implement `incin::nn::Module<incin::prelude::Tensor<(usize, UInt<UInt<UInt<UTerm, B1>, B0>, B1>), DummyBackend<f32, incin::prelude::Cpu>, f32>>`

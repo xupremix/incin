@@ -1,5 +1,4 @@
 extern crate incin_core as incin;
-use incin_core as incin;
 use incin_macros::s;
 
 /// Bad shape.

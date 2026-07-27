@@ -1,7 +1,6 @@
 extern crate incin_core as incin;
 use incin_core::prelude::*;
 use incin_core::prelude::dummy::DummyBackend;
-use incin_core::nn::*;
 
 fn main() {
     let layer = Linear::<s![3, 4], DummyBackend<f32, Cpu>>::build(()).unwrap();
