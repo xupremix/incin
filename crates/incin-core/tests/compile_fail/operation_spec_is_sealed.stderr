@@ -13,7 +13,9 @@ help: the trait `exec::sealed::Sealed` is not implemented for `RogueSpec`
              BroadcastSpec
              Conv2dSpec
              MatMulSpec
+             Pool2dSpec
              ReductionSpec
+             ReshapeSpec
 note: required by a bound in `OperationSpec`
   --> src/exec/spec.rs
    |
@@ -25,3 +27,5 @@ note: required by a bound in `OperationSpec`
              incin_core::exec::MatMulSpec
              incin_core::exec::ReductionSpec
              incin_core::exec::Conv2dSpec
+             incin_core::exec::Pool2dSpec
+             incin_core::exec::ReshapeSpec

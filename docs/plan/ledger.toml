@@ -232,14 +232,19 @@ deviations = [
 id = "EXE-003"
 tier = "core"
 theme = "exec"
-status = "planned"
+status = "complete"
 deps = ["EXE-002"]
 target = ["crates/incin-core/src/exec/rule.rs"]
 deliverable = "ShapeRule lowering for broadcast, reduction, reshape, matmul, conv, and pool, each restating its frontend trait Output"
 evidence = ["cargo test -p incin-core --test lowering_parity"]
-completed_on = ""
-completed_evidence = ""
-deviations = []
+completed_on = "2026-07-27"
+completed_evidence = "cargo test -p incin-core --test lowering_parity -> 23 passed; --test compile_tests -> 1 passed (56 trybuild cases, 1 new); full workspace 74 test binaries, 0 failures; --no-default-features clean; --features paranoid-validation clean; RUSTDOCFLAGS=-D warnings cargo doc clean. crates/incin-core/src/exec/rule.rs adds ShapeRule and the six lowering rules the task names: BroadcastRule, MatMulRule, ReduceRule<D>/ReduceKeepRule<D>, ReshapeRule, Conv2dRule and Pool2dRule. Each restates the Output its frontend trait already computes, which is decision D-007 discharged at the type level; the runtime half is that every rule computes its output twice and compares. Where the frontend trait computes a Field -- BroadcastShape, MatMulShape, SpatialConv2d, Pool2dShape -- its answer is checked against the descriptor axis by axis. Where the trait only names a type -- ReduceDim, ReduceKeepDim -- the descriptor dimensions are rebuilt into that type Field via field_from_dims, which fails on a rank the type does not have and on a statically fixed axis that disagrees. This is the first caller of Validated::new, which EXE-002 left with none. Descriptor is bounded by the sealed OperationSpec, so an outside implementation of ShapeRule can neither invent a descriptor nor wrap one it did not obtain from a rule here; that is why ShapeRule itself is not sealed, and the note says so. A new compile_fail case pins the frontend binding: lowering (U3,U4) against (U3,U5) fails with the BroadcastShape on_unimplemented diagnostic plus a required for BroadcastRule to implement ShapeRule note, verified by reading the generated .stderr"
+deviations = [
+  "The RFC signature is lower(inputs: &Inputs, args), but its own worked example passes &(L::Field, R::Field) while writing ShapeRule<(L, R)>. A tuple of shapes is not itself a Shape, so &Inputs cannot name the runtime half; the trait gains an associated type Operands, which each impl sets to the operand fields. No new nameable type is introduced.",
+  "Pooling and reshape had no descriptor: 4 of the ledger 6 operations. Added Pool2dSpec and ReshapeSpec to exec/spec.rs, outside the task stated target file, with Appendix A rows and decision D-018. Reusing Conv2dSpec for pooling as a depthwise convolution gives the right geometry and the wrong OperationKind, which every capability query and kernel cache keyed on it would then answer wrongly.",
+  "Rules lower dense row-major operands and take no strides. Operand layout is a per-tensor fact owned by TensorMeta (EXE-004), so Args is left as the place it arrives; MatMulSpec::transposed is applied after lowering for the same reason.",
+  "BroadcastShape has no same-rank implementation that stretches a U1, so the obvious (U3,U4) against (U1,U4) pair does not typecheck and the tests lower (U3,U4) against (U4,) instead. The gap is SHP-007 scope and is recorded in the test that works around it.",
+]
 
 [[task]]
 id = "EXE-004"

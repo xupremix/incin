@@ -25,27 +25,37 @@
 //! |---|---|---|
 //! | [`spec`] | `EXE-001` | the descriptors themselves, and the schema they are frozen at |
 //! | [`proof`] | `EXE-002` | [`ProofLevel`] and the sealed [`Validated<O>`](Validated) wrapper |
-//! | `rule` | `EXE-003` | `ShapeRule`, binding each descriptor to the frontend trait that names its `Output` |
+//! | [`rule`] | `EXE-003` | [`ShapeRule`], binding each descriptor to the frontend trait that names its `Output` |
 //! | `meta` | `EXE-004` | `TensorMeta`, `LayoutClass`, `Alignment` |
 //! | `capability` | `EXE-005` | the capability registry |
 //!
-//! The first two exist today. A bare descriptor from [`spec`] is internally
-//! consistent — its constructors derive every field rather than accepting it —
-//! but anyone can build one, so it carries no evidence that a shape proof
-//! stood behind it. [`Validated<O>`](Validated) is that evidence, and
-//! `EXE-003` supplies the rules that mint it. Until then nothing inside the
-//! crate calls the constructor, which is why the descriptors keep validating
-//! their own arguments.
+//! The first three exist today, and together they close the loop. A bare
+//! descriptor from [`spec`] is internally consistent — its constructors derive
+//! every field rather than accepting it — but anyone can build one, so it
+//! carries no evidence that a shape proof stood behind it.
+//! [`Validated<O>`](Validated) is that evidence, and [`rule`] is what mints it:
+//! a descriptor wrapped in `Validated` came from a typed operand whose frontend
+//! trait had already proved the operation legal.
+//!
+//! What is still missing is the consumer. Nothing executes a descriptor until
+//! `EXE-006` splits the backend trait, so the frontend continues to call
+//! backends directly and the rules here run only under test.
 
 /// The sealed wrapper and the provenance it carries.
 pub mod proof;
+/// Lowering rules binding each descriptor to its frontend shape trait.
+pub mod rule;
 /// Frozen operation descriptors and the schema version they are pinned to.
 pub mod spec;
 
 pub use proof::{ProofLevel, Validated};
+pub use rule::{
+    BroadcastRule, Conv2dArgs, Conv2dRule, MatMulRule, Pool2dRule, ReduceKeepRule, ReduceRule,
+    ReshapeRule, ShapeRule,
+};
 pub use spec::{
     AxisMask, BroadcastSpec, Conv2dSpec, DescriptorSchemaVersion, MatMulSpec, OperationSpec,
-    ReductionSpec,
+    Pool2dSpec, ReductionSpec, ReshapeSpec,
 };
 
 /// Supertrait used to seal public traits in this module against outside

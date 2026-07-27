@@ -5,7 +5,9 @@
 //! proved legal. `PROPOSALS.md` §1.2.1 lists the four that anchor the design,
 //! chosen because their launch parameters are direct consequences of shape
 //! proofs — [`MatMulSpec`], [`BroadcastSpec`], [`ReductionSpec`], and
-//! [`Conv2dSpec`].
+//! [`Conv2dSpec`]. [`Pool2dSpec`] and [`ReshapeSpec`] joined them under
+//! `EXE-003`, which needs a descriptor for each of the six operations it
+//! lowers; decision `D-018` records why neither reuses one of the first four.
 //!
 //! # What "frozen" means
 //!
@@ -1060,6 +1062,197 @@ impl Conv2dSpec {
 impl Sealed for Conv2dSpec {}
 
 impl OperationSpec for Conv2dSpec {
+    const KIND: OperationKind = Self::OP;
+
+    fn output(&self) -> &ShapeBuf {
+        &self.output
+    }
+}
+
+// --- two-dimensional pooling ------------------------------------------------
+
+/// Two-dimensional pooling geometry.
+///
+/// The sliding window is the same one [`Conv2dSpec`] describes, and the output
+/// sizes come from the same [`spatial_out_size`]. What differs is the channel
+/// axis: a convolution replaces it, a pool passes it through, so there is no
+/// `c_out` and no `groups` here. Sharing [`Conv2dSpec`] with `c_out = c_in` and
+/// `groups = c_in` would express the same geometry, but it would also report
+/// [`OperationKind::Conv2d`], and a capability query or a kernel cache keyed on
+/// that would answer for the wrong operation.
+///
+/// Which reduction runs inside the window — maximum, mean — is not geometry and
+/// is not here. One descriptor serves max and average pooling.
+///
+/// Input and output are `NCHW`.
+#[non_exhaustive]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Pool2dSpec {
+    /// The result dimensions, `[n, channels, h_out, w_out]`.
+    pub output: ShapeBuf,
+    /// Batch size.
+    pub n: usize,
+    /// Channels, unchanged from input to output.
+    pub channels: usize,
+    /// Input height.
+    pub h_in: usize,
+    /// Input width.
+    pub w_in: usize,
+    /// Output height.
+    pub h_out: usize,
+    /// Output width.
+    pub w_out: usize,
+    /// Window extent, `[height, width]`.
+    pub kernel: [usize; 2],
+    /// Stride, `[height, width]`.
+    pub stride: [usize; 2],
+    /// Zero padding applied to both sides of each axis, `[height, width]`.
+    pub padding: [usize; 2],
+    /// Dilation, `[height, width]`.
+    pub dilation: [usize; 2],
+}
+
+impl Pool2dSpec {
+    /// See [`BroadcastSpec::OP`].
+    const OP: OperationKind = OperationKind::Pool2d;
+
+    /// Resolve an `NCHW` input and window parameters into a geometry.
+    ///
+    /// Rejects a stride, window, or dilation of 0, and a window that does not
+    /// fit its padded input.
+    pub fn new(
+        input: &ShapeBuf,
+        kernel: [usize; 2],
+        stride: [usize; 2],
+        padding: [usize; 2],
+        dilation: [usize; 2],
+    ) -> Result<Self, ShapeError> {
+        if input.rank() != 4 {
+            return Err(ShapeError::RankMismatch {
+                operation: Self::OP,
+                expected: RankExpectation::Exactly(4),
+                actual: input.rank(),
+            });
+        }
+        let [n, channels, h_in, w_in] = [
+            input.dims()[0],
+            input.dims()[1],
+            input.dims()[2],
+            input.dims()[3],
+        ];
+
+        let h_out = spatial_out_size(
+            Self::OP,
+            Axis::Named("height"),
+            h_in,
+            kernel[0],
+            stride[0],
+            padding[0],
+            dilation[0],
+        )?;
+        let w_out = spatial_out_size(
+            Self::OP,
+            Axis::Named("width"),
+            w_in,
+            kernel[1],
+            stride[1],
+            padding[1],
+            dilation[1],
+        )?;
+
+        let output = ShapeBuf::from_slice(&[n, channels, h_out, w_out]);
+        check_output(Self::OP, &output)?;
+
+        Ok(Self {
+            output,
+            n,
+            channels,
+            h_in,
+            w_in,
+            h_out,
+            w_out,
+            kernel,
+            stride,
+            padding,
+            dilation,
+        })
+    }
+}
+
+impl Sealed for Pool2dSpec {}
+
+impl OperationSpec for Pool2dSpec {
+    const KIND: OperationKind = Self::OP;
+
+    fn output(&self) -> &ShapeBuf {
+        &self.output
+    }
+}
+
+// --- reshape ----------------------------------------------------------------
+
+/// A reinterpretation of one shape as another with the same element count.
+///
+/// Reshape is the one descriptor here whose output is an *operand* rather than
+/// a derivation: the caller chooses the target shape, and no rule can compute
+/// it from the input. What the constructor derives is the thing that makes the
+/// pair legal — the element count — and it refuses any pair where the two
+/// counts differ. The rest of the "derived, never asserted" property holds
+/// unchanged, because [`elements`](Self::elements) is never an argument.
+///
+/// Keeping the input shape alongside the output is what lets a backend decide
+/// between re-addressing storage and copying it. That decision also needs the
+/// input's strides, which are a per-tensor fact belonging to `TensorMeta`
+/// (`EXE-004`), so it is not made here.
+#[non_exhaustive]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ReshapeSpec {
+    /// The dimensions being reinterpreted.
+    pub input: ShapeBuf,
+    /// The dimensions they are reinterpreted as.
+    pub output: ShapeBuf,
+    /// The element count both shapes share.
+    pub elements: usize,
+}
+
+impl ReshapeSpec {
+    /// See [`BroadcastSpec::OP`].
+    const OP: OperationKind = OperationKind::Reshape;
+
+    /// Resolve an input shape and a target shape into a reinterpretation.
+    ///
+    /// Rejects a target whose element count differs from the input's, and
+    /// either shape whose count overflows `usize`.
+    pub fn new(input: &ShapeBuf, output: &ShapeBuf) -> Result<Self, ShapeError> {
+        check_rank_ceiling(Self::OP, input.rank())?;
+        check_rank_ceiling(Self::OP, output.rank())?;
+
+        let elements = input.checked_numel(Self::OP)?;
+        let target = output.checked_numel(Self::OP)?;
+        if elements != target {
+            return Err(ShapeError::DimensionMismatch {
+                operation: Self::OP,
+                // The rule constrains the shapes as wholes; no single axis is
+                // at fault, and naming one would send a reader to the wrong
+                // place.
+                axis: Axis::Whole,
+                lhs: elements,
+                rhs: target,
+                constraint: DimensionConstraint::Equal,
+            });
+        }
+
+        Ok(Self {
+            input: input.clone(),
+            output: output.clone(),
+            elements,
+        })
+    }
+}
+
+impl Sealed for ReshapeSpec {}
+
+impl OperationSpec for ReshapeSpec {
     const KIND: OperationKind = Self::OP;
 
     fn output(&self) -> &ShapeBuf {
