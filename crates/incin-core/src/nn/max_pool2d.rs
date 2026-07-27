@@ -62,7 +62,7 @@ impl<
         )?;
 
         let shape =
-            <I as crate::shapes::Pool2dShape<K, S, P, D>>::compute_output_shape(x.shape_field());
+            <I as crate::shapes::Pool2dShape<K, S, P, D>>::compute_output_shape(x.shape_field())?;
         Ok(Tensor::from_parts_unchecked(
             out,
             shape,

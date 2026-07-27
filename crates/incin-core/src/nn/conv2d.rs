@@ -222,7 +222,7 @@ where
             <I as crate::shapes::SpatialConv2d<COut, S::K, S::S, S::P, S::D>>::compute_output_shape(
                 x.shape_field(),
                 weight.dims()[0],
-            );
+            )?;
 
         let out_shape = <I::Output as DynShape>::dims(&shape);
         let out = if rank > 4 {
@@ -288,7 +288,7 @@ where
             <I as crate::shapes::SpatialConv2d<COut, S::K, S::S, S::P, S::D>>::compute_output_shape(
                 x.shape_field(),
                 weight.dims()[0],
-            );
+            )?;
 
         let out_shape = <I::Output as DynShape>::dims(&shape);
         let out = if rank > 4 {
@@ -358,7 +358,7 @@ where
             <I as crate::shapes::SpatialConv2d<COut, S::K, S::S, S::P, S::D>>::compute_output_shape(
                 x.shape_field(),
                 weight.dims()[0],
-            );
+            )?;
 
         let out_shape = <I::Output as DynShape>::dims(&shape);
         let out = if rank > 4 {

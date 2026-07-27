@@ -1,3 +1,5 @@
+use crate::shapes::error::OperationKind;
+use crate::shapes::shape::field_from_dims;
 use crate::nn::{Module, Param};
 use crate::prelude::*;
 use core::marker::PhantomData;
@@ -101,7 +103,7 @@ impl<
         }
         let mean_sq = Tensor::<Dyn, B, B::FloatElem, Grad>::from_parts_unchecked(
             mean_sq_inner,
-            Dyn::from_dyn(&mean_shape).unwrap(),
+            field_from_dims::<Dyn>(OperationKind::Normalization, &mean_shape)?,
             x._dtype.clone(),
             x._device.clone(),
             x._grad, // We propagate grad context
