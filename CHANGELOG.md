@@ -1,5 +1,8 @@
 # Changelog
 
+> The workspace intentionally remains at `0.0.0`. Dated version headings below
+> are development snapshots retained for traceability, not published releases.
+
 All notable changes to the Incin framework will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
@@ -10,8 +13,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   storage/compute/accumulator/output dtype resolver for CPU/CUDA/WGPU),
   `iteration.rs` (backend-neutral broadcast/layout iteration plan), and
   `kernel.rs` (typed CUDA source generation shared across pointwise,
-  reduction, and normalization operation families). See
-  `docs/DTYPE_KERNEL_ARCHITECTURE.md` for the full design and phased status.
+  reduction, and normalization operation families). See `PROPOSALS.md` §3 for the consolidated design and phased roadmap.
 - **CUDA autotuning foundation** (new `autotune` feature, `tuning.rs`): typed
   canonical launch-candidate keys, CUDA-event warmup/sample measurement,
   compute-capability-scoped caching, a Condvar-coordinated in-flight
@@ -44,6 +46,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   checks, the permanent regression class this file exists to catch.
 
 ### Fixed
+- **Feature isolation and naming:** a bare install now enables only `std` and `cpu`; CUDA, WGPU, Candle, autotuning, and telemetry are explicit opt-ins. The third-party Candle adapter moved from `legacy::candle` to `external::candle`, and accelerator-only builds no longer reference CPU-only dispatch variants. Candle dtype conversion now returns an error instead of panicking on unsupported types.
 - **C-10:** `Tensor::to_scalar<E>`/`to_vec1<E>` could construct an invalid `bool`
   (Miri-confirmed undefined behavior) when reading non-0/1 byte values from
   storage. Fixed by special-casing `bool` `TypeId` checks and enforcing a
@@ -63,7 +66,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   `tests/gradient_parity.rs` assuming `cpu` was always enabled alongside
   `cuda`/`wgpu`.
 
-## [0.2.0] - 2026-07-22
+## Development snapshot — 2026-07-22
 
 ### Changed
 
@@ -131,7 +134,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [0.1.0-alpha.1] - Backend Refactoring Sprint
+## Development snapshot — Backend Refactoring Sprint
 
 ### Changed
 - **Backend Crates:** Moved `native`, `wgpu`, and `cuda` backends into their own
@@ -139,7 +142,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   (`NumericOps`, `ModuleOps`, `ReductionOps`, etc.) across devices.
 - **WGPU Migration:** Transitioned core components, backends, and app libraries
   from Metal to WGPU for unified cross-platform execution.
-- **Legacy Removal:** Deleted obsolete, dead-code `ndarray` and `burn`
+- **External Adapter Cleanup:** Deleted obsolete, dead-code `ndarray` and `burn`
   compatibility wrappers.
 
 ### Added

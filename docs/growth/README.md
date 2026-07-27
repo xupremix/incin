@@ -7,10 +7,9 @@
 > paths and line ranges so you can act without holding the whole codebase in
 > your head.
 
-This plan is the operational sibling of the root-level `IMPLEMENTATION_PLAN.md`
-(backend/kernel work) and `IDEAS.md` (the un-scoped idea pool these documents
-graduate from). It follows the **same conventions** as `IMPLEMENTATION_PLAN.md`
-§0 — read those below before touching anything.
+This is a focused implementation specification under the canonical architecture,
+release-readiness roadmap, and execution ledger in [`PROPOSALS.md`](../../PROPOSALS.md).
+If this plan conflicts with that RFC or current code, the RFC and code win.
 
 ---
 
@@ -23,15 +22,15 @@ graduate from). It follows the **same conventions** as `IMPLEMENTATION_PLAN.md`
 2. **Every claim here is cited to a file/line.** Code moves. Before acting on a
    claim like "`translate_typenum_text` lives at `cargo-incin.rs:32`", open the
    cited location and confirm it still says that. **If the code contradicts this
-   doc, trust the code** and append a dated correction to the relevant doc (do
-   not silently rewrite — mirror the `ROADMAP.md` "follow-up" convention).
+   doc, trust the code** and record a dated correction rather than silently
+   rewriting history.
 3. **Run the verification loop (§2) after every change, before every commit.**
 4. **Read the DO-NOT list (§4) before writing any code.**
 5. **Do not invent scope.** If something seems missing, add it as a new dated
    task in the relevant doc; don't silently build it.
 6. When a task says **"compiles clean, not run"** (CUDA / no-hardware paths),
    never upgrade that to "works"/"verified" — that exact conflation is a
-   documented past failure mode (see `IMPLEMENTATION_PLAN.md` §0.3).
+   documented past failure mode.
 
 ---
 
@@ -168,24 +167,25 @@ incin-diagnostics crate`.
 | 07 | The Book (mdBook) | [`07-the-book.md`](07-the-book.md) | NOT STARTED | 01–06 land first |
 | 08 | Agent skills | [`08-agent-skills.md`](08-agent-skills.md) | NOT STARTED | 01–06 land first |
 
-Update this table (and the target doc's own header) as work lands, with a date
-and commit hash, exactly like `IMPLEMENTATION_PLAN.md` does.
+Update this table and the target document as work lands, with a date, commit hash,
+and verification evidence. Mirror active work in `PROPOSALS.md` when it affects
+the canonical execution ledger.
 
 ---
 
-## 6. Global DO-NOT list (in addition to `IMPLEMENTATION_PLAN.md` §0.3)
+## 6. Global DO-NOT list
 
 - **Do NOT change any `Backend`-family trait signature** for any feature here.
   None of these features require it. If you think one does, stop and ask — it is
   a semver-break needing sign-off.
 - **Do NOT add AI-attribution trailers** (`Co-Authored-By: Claude`, etc.) to
-  commits — repo-wide user preference (`IMPLEMENTATION_PLAN.md` §0.2).
+  commits — repo-wide user preference.
 - **Do NOT write template doc comments** ("Auto-generated documentation for X").
   Every new `pub` item gets one real sentence of real behavior.
 - **Do NOT let `incin-diagnostics` or the LSP depend on a GPU backend.** They
   must build on any machine with only a Rust toolchain.
 - **Do NOT commit anything under `.claude/`, `.planning/`, `.agents/`** — they
-  are gitignored (`IMPLEMENTATION_PLAN.md` §0.2). The **book** (`docs/book/`) and
+  are gitignored. The **book** (`docs/book/`) and
   these growth docs (`docs/growth/`) *are* committed.
 - **Do NOT hand-roll a second typenum parser** anywhere. Everything routes
   through `incin-diagnostics` (task 00). If you need a new capability, add it

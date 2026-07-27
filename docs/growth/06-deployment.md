@@ -23,7 +23,7 @@ Three deployment stories PyTorch handles badly:
   `cargo incin inspect`, and `crates/incin-core/tests/export_test.rs`.
 - Native CPU backend is dependency-light; WGPU backend works
   (`crates/incin/examples/backends` runs ops on `WgpuB`).
-- WASM blocker is documented in `IDEAS.md` "Open questions": `getrandom 0.2`
+- The current WASM blocker is that `getrandom 0.2`
   refuses to build for bare `wasm32-unknown-unknown` without an entropy opt-in;
   this blocks `CreationOps::rand`/`randn` and therefore any WASM build.
 
@@ -62,7 +62,7 @@ tolerance (the Q8_0 fidelity test at `cpu/ops/quant.rs::tests` is the model).
 ## Workstream C — browser/WASM (Effort: Medium-High)
 
 ### Task 06.C1 — resolve the getrandom/WASM decision (needs a product call)
-`IDEAS.md` lists three options. Recommended default: **`getrandom` `js` feature
+The recommended default is **`getrandom` `js` feature
 as a `wasm32`-only target dependency** for a browser demo (commits to a JS host,
 which a browser demo already assumes), while leaving an issue open for the
 `custom` hook for non-JS WASM hosts. **Flag this to the user before committing**

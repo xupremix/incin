@@ -16,8 +16,7 @@ agents will prefer it, and agent-written code is a growing share of all code.
 
 ## The distribution constraint (solve this first)
 
-`.claude/`, `.agents/`, `.gemini/` are **gitignored** in this repo
-(`IMPLEMENTATION_PLAN.md` §0.2). So skills **cannot** be authored directly in
+`.claude/`, `.agents/`, `.gemini/` are **gitignored** in this repo. Therefore skills **cannot** be authored directly in
 `.claude/skills/` — they would never be committed. Instead:
 
 - **Author** skills in a committed, tool-neutral directory: `skills/` at repo
@@ -80,7 +79,7 @@ Rules for skill bodies (this is what makes them *optimized*, not generic):
 
 ### Task 08.2 — the interop/deploy three
 4. **`incin-load-pretrained`** — `incin::hub` + `load_safetensors` +
-   `from_pretrained`. Ground truth: `nn/save`, `incin::hub`, `IDEAS.md`.
+   `from_pretrained`. Ground truth: `nn/save`, `incin::hub and `PROPOSALS.md`.
 5. **`incin-export`** — GGUF/MLX/safetensors export, `cargo incin inspect`.
    Ground truth: `io/`, `export_test.rs`, doc `06`. Note which quant schemes are
    actually supported (currently F32 + Q8_0) so the agent does not request an

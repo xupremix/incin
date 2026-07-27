@@ -1,5 +1,5 @@
 use crate::cuda::storage::CudaStorage;
-use crate::dtype_policy::{BackendFamily, OperationFamily, resolve_dtype_policy};
+use crate::dtype_policy::{BackendFamily, OperationKind, resolve_dtype_policy};
 use alloc::sync::Arc;
 use incin_core::prelude::*;
 
@@ -12,7 +12,7 @@ impl<T: DType, D: Device> SupportsDType<f32> for CudaBackendImpl<T, D> {}
 
 impl<T: DType, D: Device> SupportsDType<Dyn> for CudaBackendImpl<T, D> {
     fn resolve_dtype(field: &DTypeId, _device: &DeviceId) -> Result<DTypeId> {
-        resolve_dtype_policy(BackendFamily::Cuda, OperationFamily::Fill, *field, "create")
+        resolve_dtype_policy(BackendFamily::Cuda, OperationKind::Fill, *field, "create")
             .map(|_| *field)
     }
 }
@@ -102,8 +102,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
         Ok(out)
     }
 
-    /// Matmul is only wired for unbatched 2D operands so far (see
-    /// `IMPLEMENTATION_PLAN.md` §3.1) — falls through to the `Backend`
+    /// Matmul is only wired for unbatched 2D operands so far — falls through to the `Backend`
     /// trait's default `Err(UnsupportedBackendOperation)` for anything else.
     fn matmul<K: DType>(
         lhs: &<Self as Backend>::Storage<K>,
@@ -752,8 +751,7 @@ impl<T: DType, D: Device> FloatOps<Self> for CudaBackendImpl<T, D> {
 
     /// `gelu(x) = x * 0.5 * (1 + erf(x/sqrt(2)))`, using CUDA's native
     /// `erff` device intrinsic (unlike WGPU, which has no `erf` primitive
-    /// and needed a polynomial approximation — see `ROADMAP.md`'s C-3
-    /// notes). Backward ported verbatim from
+    /// and needed a polynomial approximation). Backward ported verbatim from
     /// `cpu/ops/elementwise.rs::gelu`'s backward closure (input-based:
     /// `cdf(x) + x * pdf(x)`).
     fn gelu<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
@@ -1258,7 +1256,7 @@ impl<T: DType, D: Device> OptimizerOps<Self> for CudaBackendImpl<T, D> {}
 /// entirely from already-tape-tracked primitives (`narrow`/`reshape`/
 /// `matmul`/`concat` plus this) with NO hand-written backward closure of
 /// their own — mirroring the `LossOps`/`OptimizerOps` "free via composition"
-/// discovery documented in `IMPLEMENTATION_PLAN.md`.
+/// discovery documented by the backend conformance audit.
 fn im2col_2d_tape(
     t: &CudaStorage,
     kh: usize,
@@ -1573,8 +1571,7 @@ impl<T: DType, D: Device> ModuleOps<Self> for CudaBackendImpl<T, D> {
     /// Composed entirely from already-tape-tracked primitives (`narrow`,
     /// `im2col_1d_tape`, `reshape`, `matmul`, `concat`) — no hand-written
     /// backward closure of its own, unlike CPU/WGPU's `conv1d`. Per-group,
-    /// per-batch `matmul` (CUDA's own `matmul` is unbatched 2D only, see
-    /// `IMPLEMENTATION_PLAN.md` §3.1) trades kernel-launch count for zero
+    /// per-batch `matmul` (CUDA’s own `matmul` is currently unbatched and 2D only) trades kernel-launch count for zero
     /// new hand-derived backward math in a compile-verified-only environment
     /// (no CUDA hardware here to gradcheck against).
     fn conv1d<K: DType>(
@@ -1928,7 +1925,7 @@ impl<T: DType, D: Device> Backend for CudaBackendImpl<T, D> {
 
 fn validate_cuda(dtype: DTypeId, device: &DeviceId, op: &'static str) -> Result<()> {
     validate_cuda_device(device)?;
-    resolve_dtype_policy(BackendFamily::Cuda, OperationFamily::Fill, dtype, op).map(|_| ())
+    resolve_dtype_policy(BackendFamily::Cuda, OperationKind::Fill, dtype, op).map(|_| ())
 }
 
 fn validate_cuda_storage(dtype: DTypeId, device: &DeviceId, op: &'static str) -> Result<()> {
@@ -1937,7 +1934,7 @@ fn validate_cuda_storage(dtype: DTypeId, device: &DeviceId, op: &'static str) ->
 }
 
 fn validate_cuda_storage_dtype(dtype: DTypeId, op: &'static str) -> Result<()> {
-    resolve_dtype_policy(BackendFamily::Cuda, OperationFamily::Storage, dtype, op).map(|_| ())
+    resolve_dtype_policy(BackendFamily::Cuda, OperationKind::Storage, dtype, op).map(|_| ())
 }
 
 fn validate_cuda_device(device: &DeviceId) -> Result<()> {
@@ -2255,9 +2252,8 @@ mod tests {
     // The tests below exercise real GPU dispatch (`TensorOps::{reshape,
     // transpose, narrow, broadcast_as, squeeze, stack, slice, flatten,
     // broadcast_left, matmul}`) and therefore need a real CUDA device to
-    // run — none is available in this environment (see
-    // `IMPLEMENTATION_PLAN.md` §3's verification-loop note: compile-verified
-    // only). `#[ignore]`d so `cargo test` stays green everywhere; run with
+    // run — none is available in this environment, so this path is compile-verified
+    // only locally. `#[ignore]`d so `cargo test` stays green everywhere; run with
     // `cargo test --features cuda,std -- --ignored` on real hardware.
 
     type B = CudaBackendImpl<f32, Cuda>;
@@ -2857,8 +2853,7 @@ mod tests {
     // compiles, not to add new functionality. The dedicated
     // `kernels/fused_adamw.cu` kernel remains genuinely unused - wiring it
     // would be a performance optimization over this composed default, not a
-    // correctness fix, and is deliberately deferred (see
-    // `IMPLEMENTATION_PLAN.md` §1.7).
+    // correctness fix, and is deliberately deferred (tracked as a performance opportunity in `PROPOSALS.md`).
     #[test]
     #[ignore = "requires CUDA hardware"]
     fn adamw_step_default_impl_resolves_and_runs_on_cuda() {

@@ -1,7 +1,7 @@
 //! Wires `kernels/matmul.cu`'s tiled shared-memory GEMM (`BM=128, BN=128,
 //! BK=8, TM=8, TN=8`, 16x16 thread blocks) into the CUDA backend. Unbatched
 //! 2D operands only, matching `TensorOps::matmul`'s currently-wired scope on
-//! this backend (see `IMPLEMENTATION_PLAN.md` §3.1) — batched matmul is not
+//! this backend — batched matmul is not
 //! implemented here.
 
 use crate::cuda::storage::{CudaBuffer, CudaStorage, TensorId};

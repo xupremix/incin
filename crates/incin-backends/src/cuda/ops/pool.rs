@@ -1,8 +1,7 @@
 //! Wires `kernels/pool.cu`'s max/avg/adaptive-avg 2D pooling kernels
 //! (forward + backward, all present already, none previously called from
 //! anywhere) into the CUDA backend. Unlike WGPU's pooling backward (which
-//! reads back to a host `Vec` and computes with plain Rust loops — see
-//! `ROADMAP.md`'s 2026-07-22 sixth follow-up — CUDA's backward kernels
+//! reads back to a host `Vec` and computes with plain Rust loops); CUDA’s backward kernels
 //! already exist as real device code, so the round trip stays entirely on
 //! the GPU.
 

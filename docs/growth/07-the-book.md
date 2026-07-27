@@ -108,10 +108,10 @@ ground-truth code is.
 16. **Backends & `TransferTo`** — write once, run on CPU/CUDA/WGPU; move a model
     between them. Artifact: `incin-backends`, `examples/backends`.
 17. **Mixed precision & dtypes** — the dtype policy, low-precision storage with
-    f32 compute. Artifact: `dtype_policy.rs`, `docs/DTYPE_KERNEL_ARCHITECTURE.md`.
+    f32 compute. Artifact: `dtype_policy.rs`, `PROPOSALS.md` §3.
 18. **CUDA internals (advanced)** — NVRTC codegen, autotuning. Objective: know
     *why* it is fast. Artifact: `cuda/{kernel,tuning}.rs`,
-    `docs/AUTOTUNING_AND_ARCHITECTURE.md`.
+    `PROPOSALS.md` §§3.6–3.7.
 19. **Compile-time model stats** — `PARAMS`/`FLOPS` consts, budgets. Artifact:
     doc `04`.
 
@@ -126,7 +126,7 @@ ground-truth code is.
 
 ### Part VI — Extending Incin (the "nomicon" deep end)
 24. **Writing a custom layer** (implementing `Module`/`Parameters`/`StateDict`
-    by hand). 
+    by hand).
 25. **Custom `symbolic_dim!` patterns & shape traits** — for library authors.
 26. **Writing a `incin-viz` panel plugin.** Artifact: `incin-viz-plugin-api`,
     `incin-viz/examples/custom_panel.rs`.
