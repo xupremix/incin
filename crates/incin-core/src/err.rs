@@ -53,8 +53,21 @@ pub enum Error {
         ordinal: usize,
     },
 
+    #[error("{0}")]
+    /// A shape rule could not be discharged.
+    ///
+    /// This is the structured successor to [`Error::ShapeMismatch`]: it names
+    /// the operation, the axis, and the violated rule instead of a free-form
+    /// message. New fallible shape code returns
+    /// [`ShapeError`](crate::shapes::error::ShapeError) directly; `SHP-004`
+    /// and `SHP-005` migrate the existing call sites onto it.
+    Shape(#[from] crate::shapes::error::ShapeError),
+
     #[error("Shape mismatch during '{op}': expected {expected:?}, got {got:?}. {msg}")]
     /// Incompatible shape during tensor operation execution.
+    ///
+    /// Superseded by [`Error::Shape`]; retained until the last unmigrated call
+    /// site moves over.
     ShapeMismatch {
         /// Name of the operation that failed.
         op: &'static str,

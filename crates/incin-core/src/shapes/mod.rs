@@ -15,10 +15,14 @@ pub mod arithmetic;
 /// `broadcast`.
 pub mod broadcast;
 
+/// `buf`.
+pub mod buf;
 /// `concat`.
 pub mod concat;
 /// The dimension along which this operation is applied.
 pub mod dim;
+/// `error`.
+pub mod error;
 /// `idx`.
 pub mod idx;
 /// `named`.
@@ -38,7 +42,9 @@ pub mod tail_shape;
 
 pub use arithmetic::*;
 pub use broadcast::BroadcastShape;
+pub use buf::*;
 pub use dim::*;
+pub use error::*;
 pub use idx::*;
 pub use reshape::*;
 pub use shape::*;
@@ -50,10 +56,16 @@ pub use tail_shape::*;
 pub mod prelude {
     pub use super::arithmetic::*;
     pub use super::broadcast::*;
+    pub use super::buf::*;
+    pub use super::concat::*;
 
     pub use super::dim::*;
+    pub use super::error::*;
     pub use super::idx::*;
     pub use super::named::*;
+    pub use super::reshape::*;
     pub use super::shape::*;
+    pub use super::spatial::*;
+    pub use super::stack::*;
     pub use super::tail_shape::*;
 }
