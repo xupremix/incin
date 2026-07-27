@@ -38,6 +38,32 @@ pub trait Dim: 'static + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + Pa
     fn arg(&self) -> Self::Arg;
 }
 
+/// A dimension whose *type* is not the literal `U1`.
+///
+/// Broadcasting stretches an axis of extent 1 to meet its partner, so the rule
+/// relating a pair of axes has three cases: the two types agree, the left is
+/// `U1`, or the right is `U1`. Those cases only stay disjoint — and the impls
+/// expressing them only stay coherent — if "not `U1`" is sayable, and Rust has
+/// no negative bound to say it with. This marker says it structurally instead.
+///
+/// A canonical `typenum` value is either `UTerm`, which is zero, or a
+/// `UInt<U, B>`, and `U1` is the single shape `UInt<UTerm, B1>`. So everything
+/// that is not `U1` is either `UTerm` or has a nested `UInt` in its high bits,
+/// which is exactly what the two impls below name. A `dim!` name carries a
+/// runtime size and is never the type `U1`, so the macro implements this for
+/// each name it defines.
+///
+/// A `usize` axis is deliberately absent: it is not the type `U1`, but neither
+/// is it statically sized, and the mixed broadcast families relate it by their
+/// own rules.
+pub trait NotOne: Dim {}
+
+/// `UTerm` is typenum's zero.
+impl NotOne for UTerm {}
+
+/// A nested `UInt` in the high bits means a value of 2 or more.
+impl<U, B, C> NotOne for UInt<UInt<U, B>, C> where UInt<UInt<U, B>, C>: Dim {}
+
 impl Dim for usize {
     /// The canonical runtime axis: its size arrives with the data.
     const STATIC_SIZE: bool = false;
@@ -114,6 +140,11 @@ macro_rules! dim {
             }
 
             impl $crate::prelude::StaticOrNamedDim for $name {}
+
+            // A name is a distinct type, never the type `U1`, so it may sit on
+            // the non-stretched side of a broadcast. Its runtime size may still
+            // be 1; that is a value, and nothing here claims otherwise.
+            impl $crate::prelude::NotOne for $name {}
         )+
     };
 }

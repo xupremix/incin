@@ -30,22 +30,17 @@ fn field<S: Shape>(dims: &[usize]) -> S::Field {
 
 // -- broadcast ------------------------------------------------------------
 
-/// The pair the broadcast tests lower: a rank-2 shape against the rank-1
-/// suffix it stretches over.
-///
-/// Not `(U3, U4)` against `(U1, U4)`, which would be the more obvious spelling
-/// of the same broadcast — `BroadcastShape` has no same-rank implementation
-/// that stretches a `U1`, so that pair does not typecheck today. The gap is
-/// `SHP-007`'s, not this task's.
-type Rank2AgainstSuffix = ((U3, U4), (U4,));
+/// The pair the broadcast tests lower: a rank-2 shape against a leading axis
+/// of extent 1 that stretches to meet it.
+type Rank2AgainstStretched = ((U3, U4), (U1, U4));
 
 #[test]
 fn a_static_broadcast_lowers_to_the_shape_the_frontend_names() {
-    let lowered = <BroadcastRule as ShapeRule<Rank2AgainstSuffix>>::lower(
-        &(field::<(U3, U4)>(&[3, 4]), field::<(U4,)>(&[4])),
+    let lowered = <BroadcastRule as ShapeRule<Rank2AgainstStretched>>::lower(
+        &(field::<(U3, U4)>(&[3, 4]), field::<(U1, U4)>(&[1, 4])),
         (),
     )
-    .expect("3x4 against 4 broadcasts");
+    .expect("3x4 against 1x4 broadcasts");
 
     assert_eq!(lowered.descriptor().output.dims(), &[3, 4]);
     assert_eq!(lowered.proof_level(), ProofLevel::Static);
@@ -53,11 +48,11 @@ fn a_static_broadcast_lowers_to_the_shape_the_frontend_names() {
 
 #[test]
 fn a_stretched_axis_gets_a_zero_stride_rather_than_a_branch() {
-    let lowered = <BroadcastRule as ShapeRule<Rank2AgainstSuffix>>::lower(
-        &(field::<(U3, U4)>(&[3, 4]), field::<(U4,)>(&[4])),
+    let lowered = <BroadcastRule as ShapeRule<Rank2AgainstStretched>>::lower(
+        &(field::<(U3, U4)>(&[3, 4]), field::<(U1, U4)>(&[1, 4])),
         (),
     )
-    .expect("3x4 against 4 broadcasts");
+    .expect("3x4 against 1x4 broadcasts");
     let spec = lowered.descriptor();
 
     assert!(spec.rhs_broadcast_mask.contains(0));
@@ -346,11 +341,11 @@ fn pooling_and_reshape_report_their_own_kinds() {
 
 #[test]
 fn every_descriptor_a_rule_produces_can_state_its_element_count() {
-    let lowered = <BroadcastRule as ShapeRule<Rank2AgainstSuffix>>::lower(
-        &(field::<(U3, U4)>(&[3, 4]), field::<(U4,)>(&[4])),
+    let lowered = <BroadcastRule as ShapeRule<Rank2AgainstStretched>>::lower(
+        &(field::<(U3, U4)>(&[3, 4]), field::<(U1, U4)>(&[1, 4])),
         (),
     )
-    .expect("3x4 against 4 broadcasts");
+    .expect("3x4 against 1x4 broadcasts");
 
     assert_eq!(lowered.descriptor().output_elements(), Ok(12));
 }
@@ -360,14 +355,14 @@ fn the_descriptor_a_rule_mints_equals_the_one_built_by_hand() {
     // Lowering adds provenance; it does not add or reinterpret geometry. A
     // caller who builds the descriptor directly gets the same fields, minus any
     // evidence that a shape proof stood behind them.
-    let lowered = <BroadcastRule as ShapeRule<Rank2AgainstSuffix>>::lower(
-        &(field::<(U3, U4)>(&[3, 4]), field::<(U4,)>(&[4])),
+    let lowered = <BroadcastRule as ShapeRule<Rank2AgainstStretched>>::lower(
+        &(field::<(U3, U4)>(&[3, 4]), field::<(U1, U4)>(&[1, 4])),
         (),
     )
-    .expect("3x4 against 4 broadcasts");
+    .expect("3x4 against 1x4 broadcasts");
     let by_hand =
-        BroadcastSpec::contiguous(&ShapeBuf::from_slice(&[3, 4]), &ShapeBuf::from_slice(&[4]))
-            .expect("3x4 against 4 broadcasts");
+        BroadcastSpec::contiguous(&ShapeBuf::from_slice(&[3, 4]), &ShapeBuf::from_slice(&[1, 4]))
+            .expect("3x4 against 1x4 broadcasts");
 
     assert_eq!(lowered.into_descriptor(), by_hand);
 }

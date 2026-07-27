@@ -38,6 +38,10 @@ enum Form {
     RankedPairs,
     /// `A, B, C, …` — single-letter parameters, as the broadcast rules spell it.
     Letters,
+    /// `L0, L1, …; R0, R1, …` — two independent parameter lists of the same
+    /// length, one per operand. For rules that relate a pair of equal-rank
+    /// shapes axis by axis rather than requiring the axes to be identical.
+    OperandPairs,
     /// `B, C, D, …` — letters from `B`, for rules whose first axis is a fixed
     /// `usize` and so is not a parameter.
     LettersFromB,
@@ -58,6 +62,10 @@ enum Form {
     /// `(); (B, C)` — the same split, lettered from `B` and allowing an empty
     /// left operand, for the rules whose leading axis is a fixed `usize`.
     UsizePrepend,
+    /// `(P0); (L0, L1); (R0, R1)` — the prepend split with the shared suffix
+    /// given twice, once per operand, for rules that relate the overlapping
+    /// axes pairwise rather than requiring them to be identical.
+    OperandPairsPrepend,
     /// `D0 ; D1 ; D2 ; U1` — the names before the target axis, the axis itself,
     /// the names after it, and the axis index. For per-axis rules like
     /// concatenation, which rewrite one axis and pass the rest through.
@@ -77,18 +85,20 @@ impl FromStr for Form {
             "names_from1" => Self::NamesFrom1,
             "ranked_pairs" => Self::RankedPairs,
             "letters" => Self::Letters,
+            "operand_pairs" => Self::OperandPairs,
             "letters_from_b" => Self::LettersFromB,
             "conv1d" => Self::Conv1d,
             "conv2d" => Self::Conv2d,
             "pool2d" => Self::Pool2d,
             "prepend" => Self::Prepend,
             "usize_prepend" => Self::UsizePrepend,
+            "operand_pairs_prepend" => Self::OperandPairsPrepend,
             "axis_split" => Self::AxisSplit,
             "axis_insert" => Self::AxisInsert,
             other => {
                 return Err(format!(
                     "unknown rank_sweep form `{other}`; expected one of names, \
-                     names_from1, ranked_pairs, letters, letters_from_b, conv1d, conv2d, pool2d, prepend, usize_prepend, axis_split, axis_insert"
+                     names_from1, ranked_pairs, letters, operand_pairs, letters_from_b, conv1d, conv2d, pool2d, prepend, usize_prepend, operand_pairs_prepend, axis_split, axis_insert"
                 ));
             }
         })
@@ -147,6 +157,7 @@ impl Form {
                 vec![format!("{rank}, {pairs}")]
             }
             Self::Letters => vec![letters(b'A')],
+            Self::OperandPairs => vec![format!("{}; {}", names("L", 0), names("R", 0))],
             Self::LettersFromB => vec![letters(b'B')],
             Self::Conv1d => vec![format!("{}; {}", rank + 1, colon_pairs())],
             Self::Conv2d => vec![format!("{}, {}; {}", rank + 1, rank + 2, colon_pairs())],
@@ -155,6 +166,24 @@ impl Form {
             }
             // A non-empty left operand: `(A); (B)` but never `(); (A)`.
             Self::Prepend => splits(b'A', 1),
+            // The same splits, but the shared suffix is listed once per
+            // operand so the rule can relate the two axis by axis.
+            Self::OperandPairsPrepend => (1..rank)
+                .map(|lead| {
+                    let run = |prefix: &str, from: usize, count: usize| {
+                        (0..count)
+                            .map(|i| format!("{prefix}{}", from + i))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    };
+                    format!(
+                        "({}); ({}); ({})",
+                        run("P", 0, lead),
+                        run("L", 0, rank - lead),
+                        run("R", 0, rank - lead)
+                    )
+                })
+                .collect(),
             // An empty left operand is meaningful here, because the rule's
             // leading `usize` axis already stands outside the letter list.
             Self::UsizePrepend => splits(b'B', 0),

@@ -1,6 +1,8 @@
 //! Compile-time broadcasting shape verification.
 use crate::prelude::*;
+use crate::shapes::dim::NotOne;
 use crate::tensor::matmul::StaticOrNamedDim;
+use typenum::U1;
 
 /// Resolve one runtime (`Dyn`) broadcast dimension, reporting incompatible
 /// sizes instead of silently fabricating a wrong result via a bare `.max()`.
@@ -113,27 +115,77 @@ impl BroadcastShape<()> for () {
 }
 
 // ============================================================================
+// Per-axis rule: the three ways two axes may meet.
+// ============================================================================
+
+/// One axis of the left operand against the axis facing it on the right.
+///
+/// Broadcasting is a per-axis rule, and lifting it to whole shapes one axis at
+/// a time is what lets `(N, C, H, W)` meet `(U1, C, U1, U1)` — the bias-add
+/// shape, and the reason this trait exists. Before `SHP-007` the same-rank
+/// family required every axis to be the *identical* type, so that pair did not
+/// typecheck at all and callers reached for a rank-changing spelling or `Dyn`.
+///
+/// The three impls are disjoint, which is what keeps them coherent: the two
+/// types agree, or the left is `U1` and the right is [`NotOne`], or the reverse.
+/// There is no fourth case, because two axes that disagree and are both
+/// `NotOne` do not broadcast, and the absence of an impl is how that is
+/// reported.
+#[diagnostic::on_unimplemented(
+    message = "Cannot broadcast axis `{Self}` against `{Rhs}`",
+    label = "incompatible axis",
+    note = "two axes broadcast when their types are the same, or one of them is `U1`"
+)]
+pub trait BroadcastDim<Rhs: StaticOrNamedDim>: StaticOrNamedDim {
+    /// The axis the two resolve to.
+    type Output: StaticOrNamedDim;
+}
+
+/// Two axes of the same type pass through unchanged. This is also the only
+/// case that relates two `dim!` names, so a `Batch` still cannot silently meet
+/// a `Seq`.
+impl<D: StaticOrNamedDim> BroadcastDim<D> for D {
+    /// The resulting axis after broadcasting `Self` against the other operand.
+    type Output = D;
+}
+
+/// A left axis of extent 1 stretches to meet the right.
+impl<D: StaticOrNamedDim + NotOne> BroadcastDim<D> for U1 {
+    /// The resulting axis after broadcasting `Self` against the other operand.
+    type Output = D;
+}
+
+/// A right axis of extent 1 stretches to meet the left.
+impl<D: StaticOrNamedDim + NotOne> BroadcastDim<U1> for D {
+    /// The resulting axis after broadcasting `Self` against the other operand.
+    type Output = D;
+}
+
+// ============================================================================
 // Static family: every axis is `StaticOrNamedDim` (typenum or `symbolic_dim!`).
 // ============================================================================
 
-/// Same rank on both operands, every axis the identical type.
+/// Same rank on both operands, each axis pair related by [`BroadcastDim`].
 macro_rules! impl_broadcast_same_rank {
-    ($($dim:ident),+) => {
-        impl<$($dim: StaticOrNamedDim),+> BroadcastShape<($($dim,)+)> for ($($dim,)+) {
+    ($($lhs:ident),+ ; $($rhs:ident),+) => {
+        impl<$($lhs: StaticOrNamedDim,)+ $($rhs: StaticOrNamedDim,)+> BroadcastShape<($($rhs,)+)> for ($($lhs,)+)
+        where
+            $($lhs: BroadcastDim<$rhs>,)+
+        {
             /// The resulting shape after broadcasting `Self` against the other operand.
-            type Output = ($($dim,)+);
+            type Output = ($(<$lhs as BroadcastDim<$rhs>>::Output,)+);
             /// Computes the runtime `Field` (dimension values) of `Output`.
             fn output_shape(
                 lhs: &<Self as Shape>::Field,
-                rhs: &<($($dim,)+) as Shape>::Field,
+                rhs: &<($($rhs,)+) as Shape>::Field,
             ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
-                field_from_dims::<Self::Output>(OperationKind::Broadcast, &broadcast_dims::<Self, ($($dim,)+)>(lhs, rhs)?)
+                field_from_dims::<Self::Output>(OperationKind::Broadcast, &broadcast_dims::<Self, ($($rhs,)+)>(lhs, rhs)?)
             }
         }
     };
 }
-// Both operands the same rank, every axis the identical type.
-incin_macros::rank_sweep!(letters => impl_broadcast_same_rank);
+// Both operands the same rank, resolved one axis at a time.
+incin_macros::rank_sweep!(operand_pairs => impl_broadcast_same_rank);
 
 /// Rank-0 (`()`) on one side, a full static shape on the other, in both directions.
 macro_rules! impl_broadcast_empty_to_full {
@@ -165,42 +217,46 @@ macro_rules! impl_broadcast_empty_to_full {
 // Rank 0 against a full shape, in both directions.
 incin_macros::rank_sweep!(letters => impl_broadcast_empty_to_full);
 
-/// Different ranks, the shorter shape's dims a literal *suffix* of the
-/// longer one's (implicit leading 1s fill the rest) — both directions.
+/// Different ranks: the shorter shape right-aligns against the longer one's
+/// trailing axes, and the leading axes it does not reach pass through. The
+/// overlapping axes are related by [`BroadcastDim`], not required to be
+/// identical, so `(N, C, H, W)` accepts `(C, U1, U1)`. Both directions.
 macro_rules! impl_broadcast_prepend {
-    ( ($($prefix:ident),+) ; ($($suffix:ident),+) ) => {
-        impl<$($prefix: StaticOrNamedDim,)+ $($suffix: StaticOrNamedDim),+> BroadcastShape<($($prefix,)+ $($suffix,)+)> for ($($suffix,)+)
+    ( ($($prefix:ident),+) ; ($($lhs:ident),+) ; ($($rhs:ident),+) ) => {
+        impl<$($prefix: StaticOrNamedDim,)+ $($lhs: StaticOrNamedDim,)+ $($rhs: StaticOrNamedDim,)+> BroadcastShape<($($prefix,)+ $($rhs,)+)> for ($($lhs,)+)
         where
-            ($($suffix,)+): DynShape,
+            ($($lhs,)+): DynShape,
+            $($lhs: BroadcastDim<$rhs>,)+
         {
             /// The resulting shape after broadcasting `Self` against the other operand.
-            type Output = ($($prefix,)+ $($suffix,)+);
+            type Output = ($($prefix,)+ $(<$lhs as BroadcastDim<$rhs>>::Output,)+);
             /// Computes the runtime `Field` (dimension values) of `Output`.
             fn output_shape(
                 lhs: &<Self as Shape>::Field,
-                rhs: &<($($prefix,)+ $($suffix,)+) as Shape>::Field,
+                rhs: &<($($prefix,)+ $($rhs,)+) as Shape>::Field,
             ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
-                field_from_dims::<Self::Output>(OperationKind::Broadcast, &broadcast_dims::<Self, ($($prefix,)+ $($suffix,)+)>(lhs, rhs)?)
+                field_from_dims::<Self::Output>(OperationKind::Broadcast, &broadcast_dims::<Self, ($($prefix,)+ $($rhs,)+)>(lhs, rhs)?)
             }
         }
-        impl<$($prefix: StaticOrNamedDim,)+ $($suffix: StaticOrNamedDim),+> BroadcastShape<($($suffix,)+)> for ($($prefix,)+ $($suffix,)+)
+        impl<$($prefix: StaticOrNamedDim,)+ $($lhs: StaticOrNamedDim,)+ $($rhs: StaticOrNamedDim,)+> BroadcastShape<($($rhs,)+)> for ($($prefix,)+ $($lhs,)+)
         where
-            ($($suffix,)+): DynShape,
+            ($($rhs,)+): DynShape,
+            $($lhs: BroadcastDim<$rhs>,)+
         {
             /// The resulting shape after broadcasting `Self` against the other operand.
-            type Output = ($($prefix,)+ $($suffix,)+);
+            type Output = ($($prefix,)+ $(<$lhs as BroadcastDim<$rhs>>::Output,)+);
             /// Computes the runtime `Field` (dimension values) of `Output`.
             fn output_shape(
                 lhs: &<Self as Shape>::Field,
-                rhs: &<($($suffix,)+) as Shape>::Field,
+                rhs: &<($($rhs,)+) as Shape>::Field,
             ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
-                field_from_dims::<Self::Output>(OperationKind::Broadcast, &broadcast_dims::<Self, ($($suffix,)+)>(lhs, rhs)?)
+                field_from_dims::<Self::Output>(OperationKind::Broadcast, &broadcast_dims::<Self, ($($rhs,)+)>(lhs, rhs)?)
             }
         }
     };
 }
 // Shorter against longer: one invocation per split of the output rank.
-incin_macros::rank_sweep!(prepend => impl_broadcast_prepend);
+incin_macros::rank_sweep!(operand_pairs_prepend => impl_broadcast_prepend);
 
 // ============================================================================
 // Partially dynamic: a leading `usize` batch dim, `StaticOrNamedDim` tail.

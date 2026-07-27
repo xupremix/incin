@@ -1,4 +1,4 @@
-error[E0277]: Cannot broadcast shape `(UInt<UInt<UTerm, B1>, B1>, UInt<UInt<UInt<UTerm, B1>, B0>, B0>)` to `(UInt<UInt<UTerm, B1>, B1>, UInt<UInt<UInt<UTerm, B1>, B0>, B1>)`
+error[E0277]: Cannot broadcast axis `UInt<UInt<UInt<UTerm, B1>, B0>, B0>` against `UInt<UInt<UInt<UTerm, B1>, B0>, B1>`
   --> tests/compile_fail/shape_rule_needs_the_frontend_proof.rs:13:13
    |
 13 |       let _ = <BroadcastRule as ShapeRule<((U3, U4), (U3, U5))>>::lower(
@@ -6,18 +6,11 @@ error[E0277]: Cannot broadcast shape `(UInt<UInt<UTerm, B1>, B1>, UInt<UInt<UInt
 14 | |         &((Default::default(), Default::default()), (Default::default(), Default::default())),
 15 | |         (),
 16 | |     );
-   | |_____^ Shape mismatch during broadcast
+   | |_____^ incompatible axis
    |
-   = help: the trait `BroadcastShape<(UInt<UInt<UTerm, B1>, B1>, UInt<UInt<UInt<UTerm, B1>, B0>, B1>)>` is not implemented for `(UInt<UInt<UTerm, B1>, B1>, UInt<UInt<UInt<UTerm, B1>, B0>, B0>)`
-   = note: Broadcast requires dimensions to be equal, or one of them to be 1
-   = help: the following other types implement trait `BroadcastShape<Rhs>`:
-             `()` implements `BroadcastShape<()>`
-             `()` implements `BroadcastShape<(A, B)>`
-             `()` implements `BroadcastShape<(A, B, C)>`
-             `()` implements `BroadcastShape<(A, B, C, D)>`
-             `()` implements `BroadcastShape<(A, B, C, D, E)>`
-             `()` implements `BroadcastShape<(A, B, C, D, E, F)>`
-             `()` implements `BroadcastShape<(A, B, C, D, E, F, G)>`
-             `()` implements `BroadcastShape<(A, B, C, D, E, F, G, H)>`
-           and $N others
+   = note: two axes broadcast when their types are the same, or one of them is `U1`
+   = help: the trait `BroadcastDim<UInt<UInt<UInt<UTerm, B1>, B0>, B1>>` is not implemented for `UInt<UInt<UInt<UTerm, B1>, B0>, B0>`
+           but it is implemented for `UInt<UTerm, B1>`
+   = help: for that trait implementation, expected `UTerm`, found `UInt<UInt<UTerm, B1>, B0>`
+   = note: required for `(UInt<UInt<UTerm, B1>, B1>, UInt<UInt<UInt<UTerm, B1>, B0>, B0>)` to implement `BroadcastShape<(UInt<UInt<UTerm, B1>, B1>, UInt<UInt<UInt<UTerm, B1>, B0>, B1>)>`
    = note: required for `BroadcastRule` to implement `ShapeRule<((UInt<UInt<UTerm, B1>, B1>, UInt<UInt<UInt<UTerm, B1>, B0>, B0>), (UInt<UInt<UTerm, B1>, B1>, UInt<UInt<UInt<UTerm, B1>, B0>, B1>))>`
