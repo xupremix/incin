@@ -178,15 +178,15 @@ the canonical execution ledger.
 - **Do NOT change any `Backend`-family trait signature** for any feature here.
   None of these features require it. If you think one does, stop and ask — it is
   a semver-break needing sign-off.
-- **Do NOT add AI-attribution trailers** (`Co-Authored-By: Claude`, etc.) to
-  commits — repo-wide user preference.
+- **Do NOT add third-party attribution trailers** to commits. Keep subjects
+  under 72 characters and write bodies as plain prose, not bullet lists.
 - **Do NOT write template doc comments** ("Auto-generated documentation for X").
   Every new `pub` item gets one real sentence of real behavior.
 - **Do NOT let `incin-diagnostics` or the LSP depend on a GPU backend.** They
   must build on any machine with only a Rust toolchain.
-- **Do NOT commit anything under `.claude/`, `.planning/`, `.agents/`** — they
-  are gitignored. The **book** (`docs/book/`) and
-  these growth docs (`docs/growth/`) *are* committed.
+- **Do NOT commit local editor or tooling directories.** They are excluded per
+  clone via `.git/info/exclude`, not via the tracked `.gitignore`. The **book**
+  (`docs/book/`) and these growth docs (`docs/growth/`) *are* committed.
 - **Do NOT hand-roll a second typenum parser** anywhere. Everything routes
   through `incin-diagnostics` (task 00). If you need a new capability, add it
   there.
