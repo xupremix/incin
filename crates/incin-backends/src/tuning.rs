@@ -468,7 +468,7 @@ mod tests {
 
     fn test_kernel() -> KernelKey {
         KernelKey::cuda(
-            crate::dtype_policy::OperationFamily::Pointwise,
+            crate::dtype_policy::OperationKind::Pointwise,
             KernelFamily::PointwiseUnary,
             "neg",
             DTypeId::F32,

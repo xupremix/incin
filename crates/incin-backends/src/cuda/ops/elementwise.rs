@@ -5,7 +5,7 @@ use crate::iteration::{
 use alloc::sync::Arc;
 use incin_core::prelude::{DTypeId, DeviceId, Error, Result};
 
-use crate::dtype_policy::{BackendFamily, OperationFamily, resolve_dtype_policy};
+use crate::dtype_policy::{BackendFamily, OperationKind, resolve_dtype_policy};
 
 fn validate_kernel_abi(kernel: &crate::kernel::RenderedKernel, dtype: DTypeId) -> Result<()> {
     if kernel.dtype != dtype || kernel.element_size != dtype.element_size() {
@@ -21,7 +21,7 @@ fn validate_kernel_abi(kernel: &crate::kernel::RenderedKernel, dtype: DTypeId) -
 }
 
 fn validate_elementwise_dtype(dtype: DTypeId, op: &'static str) -> Result<()> {
-    resolve_dtype_policy(BackendFamily::Cuda, OperationFamily::Pointwise, dtype, op).map(|_| ())
+    resolve_dtype_policy(BackendFamily::Cuda, OperationKind::Pointwise, dtype, op).map(|_| ())
 }
 
 fn checked_i32(value: usize, field: &'static str) -> Result<i32> {

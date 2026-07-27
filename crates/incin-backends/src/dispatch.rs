@@ -2,7 +2,7 @@
 
 use incin_core::prelude::*;
 
-use crate::dtype_policy::{BackendFamily, OperationFamily, resolve_dtype_policy};
+use crate::dtype_policy::{BackendFamily, OperationKind, resolve_dtype_policy};
 
 /// Backend whose concrete implementation is selected from a [`DeviceId`].
 #[derive(Clone)]
@@ -17,7 +17,7 @@ impl<T: DType, D: Device, K: DType> SupportsDType<K> for DispatchBackend<T, D> {
             DeviceKind::Cuda => BackendFamily::Cuda,
             _ => return Err(Error::BackendUnavailable { backend: "Unknown" }),
         };
-        resolve_dtype_policy(backend, OperationFamily::Fill, dtype, "create").map(|_| dtype)
+        resolve_dtype_policy(backend, OperationKind::Fill, dtype, "create").map(|_| dtype)
     }
 }
 
@@ -494,10 +494,8 @@ impl<T: DType, D: Device> CreationOps<Self> for DispatchBackend<T, D> {
             DeviceKind::Cpu => {
                 #[cfg(feature = "cpu")]
                 {
-                    crate::cpu::CpuBackendImpl::<T, Cpu>::full::<K>(
-                        val, shape, dtype, device,
-                    )
-                    .map(DispatchStorage::Cpu)
+                    crate::cpu::CpuBackendImpl::<T, Cpu>::full::<K>(val, shape, dtype, device)
+                        .map(DispatchStorage::Cpu)
                 }
                 #[cfg(not(feature = "cpu"))]
                 Err(unavailable(DeviceKind::Cpu))
@@ -505,10 +503,8 @@ impl<T: DType, D: Device> CreationOps<Self> for DispatchBackend<T, D> {
             DeviceKind::Wgpu => {
                 #[cfg(feature = "wgpu")]
                 {
-                    crate::wgpu::WgpuBackendImpl::<T, Wgpu>::full::<K>(
-                        val, shape, dtype, device,
-                    )
-                    .map(DispatchStorage::Wgpu)
+                    crate::wgpu::WgpuBackendImpl::<T, Wgpu>::full::<K>(val, shape, dtype, device)
+                        .map(DispatchStorage::Wgpu)
                 }
                 #[cfg(not(feature = "wgpu"))]
                 Err(unavailable(DeviceKind::Wgpu))
@@ -516,10 +512,8 @@ impl<T: DType, D: Device> CreationOps<Self> for DispatchBackend<T, D> {
             DeviceKind::Cuda => {
                 #[cfg(feature = "cuda")]
                 {
-                    crate::cuda::CudaBackendImpl::<T, Cuda>::full::<K>(
-                        val, shape, dtype, device,
-                    )
-                    .map(DispatchStorage::Cuda)
+                    crate::cuda::CudaBackendImpl::<T, Cuda>::full::<K>(val, shape, dtype, device)
+                        .map(DispatchStorage::Cuda)
                 }
                 #[cfg(not(feature = "cuda"))]
                 Err(unavailable(DeviceKind::Cuda))
@@ -929,17 +923,16 @@ impl<T: DType, D: Device> TensorOps<Self> for DispatchBackend<T, D> {
     fn lerp<K: DType>(
         start: &DispatchStorage,
         end: &DispatchStorage,
-        weight: f64,
+        _weight: f64,
     ) -> Result<DispatchStorage> {
         match (start, end) {
+            #[cfg(feature = "cpu")]
             (DispatchStorage::Cpu(s), DispatchStorage::Cpu(e)) => {
                 #[cfg(feature = "cpu")]
                 {
-                    crate::cpu::CpuBackendImpl::<T, Cpu>::lerp::<K>(s, e, weight)
+                    crate::cpu::CpuBackendImpl::<T, Cpu>::lerp::<K>(s, e, _weight)
                         .map(DispatchStorage::Cpu)
                 }
-                #[cfg(not(feature = "cpu"))]
-                Err(unavailable(DeviceKind::Cpu))
             }
             _ => Err(Error::Msg("mismatched backends in lerp".into())),
         }
@@ -949,18 +942,17 @@ impl<T: DType, D: Device> TensorOps<Self> for DispatchBackend<T, D> {
         mat: &DispatchStorage,
         mat1: &DispatchStorage,
         mat2: &DispatchStorage,
-        beta: f64,
-        alpha: f64,
+        _beta: f64,
+        _alpha: f64,
     ) -> Result<DispatchStorage> {
         match (mat, mat1, mat2) {
+            #[cfg(feature = "cpu")]
             (DispatchStorage::Cpu(m), DispatchStorage::Cpu(m1), DispatchStorage::Cpu(m2)) => {
                 #[cfg(feature = "cpu")]
                 {
-                    crate::cpu::CpuBackendImpl::<T, Cpu>::addmm::<K>(m, m1, m2, beta, alpha)
+                    crate::cpu::CpuBackendImpl::<T, Cpu>::addmm::<K>(m, m1, m2, _beta, _alpha)
                         .map(DispatchStorage::Cpu)
                 }
-                #[cfg(not(feature = "cpu"))]
-                Err(unavailable(DeviceKind::Cpu))
             }
             _ => Err(Error::Msg("mismatched backends in addmm".into())),
         }
@@ -972,10 +964,11 @@ impl<T: DType, D: Device> TensorOps<Self> for DispatchBackend<T, D> {
         q: &DispatchStorage,
         k: &DispatchStorage,
         v: &DispatchStorage,
-        mask: Option<&DispatchStorage>,
-        scale: Option<f64>,
+        _mask: Option<&DispatchStorage>,
+        _scale: Option<f64>,
     ) -> Result<DispatchStorage> {
         match (q, k, v) {
+            #[cfg(feature = "cpu")]
             (
                 DispatchStorage::Cpu(q_cpu),
                 DispatchStorage::Cpu(k_cpu),
@@ -983,18 +976,16 @@ impl<T: DType, D: Device> TensorOps<Self> for DispatchBackend<T, D> {
             ) => {
                 #[cfg(feature = "cpu")]
                 {
-                    let m_cpu = match mask {
+                    let m_cpu = match _mask {
                         Some(DispatchStorage::Cpu(m)) => Some(m),
                         None => None,
                         _ => return Err(Error::Msg("mismatched mask backend".into())),
                     };
                     crate::cpu::CpuBackendImpl::<T, Cpu>::scaled_dot_product_attention::<K>(
-                        q_cpu, k_cpu, v_cpu, m_cpu, scale,
+                        q_cpu, k_cpu, v_cpu, m_cpu, _scale,
                     )
                     .map(DispatchStorage::Cpu)
                 }
-                #[cfg(not(feature = "cpu"))]
-                Err(unavailable(DeviceKind::Cpu))
             }
             _ => Err(Error::Msg("mismatched backends in SDPA".into())),
         }

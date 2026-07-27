@@ -1,5 +1,5 @@
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
-use crate::dtype_policy::{BackendFamily, OperationFamily, resolve_dtype_policy};
+use crate::dtype_policy::{BackendFamily, OperationKind, resolve_dtype_policy};
 use alloc::sync::Arc;
 use incin_core::prelude::{Error, Result};
 
@@ -114,7 +114,7 @@ pub(crate) fn launch_layer_norm(
     let buffer = &*input.buffer;
     let policy = resolve_dtype_policy(
         BackendFamily::Cuda,
-        OperationFamily::Normalization,
+        OperationKind::Normalization,
         buffer.dtype,
         "layer_norm",
     )?;
@@ -221,7 +221,7 @@ pub(crate) fn launch_batch_norm(
     let buffer = &*input.buffer;
     resolve_dtype_policy(
         BackendFamily::Cuda,
-        OperationFamily::Normalization,
+        OperationKind::Normalization,
         buffer.dtype,
         "batch_norm",
     )?;

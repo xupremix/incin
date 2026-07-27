@@ -1,5 +1,5 @@
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
-use crate::dtype_policy::{BackendFamily, OperationFamily, resolve_dtype_policy};
+use crate::dtype_policy::{BackendFamily, OperationKind, resolve_dtype_policy};
 use crate::iteration::OperandIteration;
 use alloc::sync::Arc;
 use incin_core::prelude::{DTypeId, Error, Result};
@@ -32,7 +32,7 @@ fn validate_reduction<'a>(
     let buffer = &*storage.buffer;
     resolve_dtype_policy(
         BackendFamily::Cuda,
-        OperationFamily::Reduction,
+        OperationKind::Reduction,
         buffer.dtype,
         op_name,
     )?;
@@ -220,7 +220,7 @@ pub(crate) fn launch_reduce_op(
         if fast {
             let policy = resolve_dtype_policy(
                 BackendFamily::Cuda,
-                OperationFamily::Reduction,
+                OperationKind::Reduction,
                 buffer.dtype,
                 op_name,
             )?;

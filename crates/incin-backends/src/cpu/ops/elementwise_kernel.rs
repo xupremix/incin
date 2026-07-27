@@ -13,7 +13,7 @@ use rayon::prelude::*;
 
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
 use crate::cpu::stride;
-use crate::dtype_policy::{BackendFamily, OperationFamily, resolve_dtype_policy};
+use crate::dtype_policy::{BackendFamily, OperationKind, resolve_dtype_policy};
 use crate::iteration::{IterationPlan, OperandIteration, OperandLayout, UnaryIterationPlan};
 
 // The release microbenchmark shows thread-pool dispatch dominates through
@@ -262,7 +262,7 @@ pub(crate) fn execute_binary(
     }
     if resolve_dtype_policy(
         BackendFamily::Cpu,
-        OperationFamily::Pointwise,
+        OperationKind::Pointwise,
         lhs.buffer.dtype_id(),
         "elementwise_binary",
     )
@@ -417,7 +417,7 @@ fn execute_strided_f64(
 pub(crate) fn execute_unary(op: UnaryOp, input: &CpuStorage) -> Result<Option<CpuStorage>> {
     if resolve_dtype_policy(
         BackendFamily::Cpu,
-        OperationFamily::Pointwise,
+        OperationKind::Pointwise,
         input.buffer.dtype_id(),
         "elementwise_unary",
     )

@@ -20,11 +20,11 @@ use rayon::prelude::*;
 
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
 use crate::cpu::var;
-use crate::dtype_policy::{BackendFamily, OperationFamily, resolve_dtype_policy};
+use crate::dtype_policy::{BackendFamily, OperationKind, resolve_dtype_policy};
 
 /// `fill_buffer`.
 fn fill_buffer(total: usize, value: f64, dtype: DTypeId, device: &DeviceId) -> Result<CpuBuffer> {
-    resolve_dtype_policy(BackendFamily::Cpu, OperationFamily::Fill, dtype, "fill")?;
+    resolve_dtype_policy(BackendFamily::Cpu, OperationKind::Fill, dtype, "fill")?;
     let host_buf = match dtype {
         DTypeId::F32 => CpuBuffer::F32(vec![value as f32; total]),
         DTypeId::F64 => CpuBuffer::F64(vec![value; total]),
@@ -86,7 +86,7 @@ impl<T: DType, D: Device> CreationOps<Self> for CpuBackendImpl<T, D> {
         dtype: DTypeId,
         device: &DeviceId,
     ) -> Result<<Self as incin_core::prelude::Backend>::Storage<K>> {
-        resolve_dtype_policy(BackendFamily::Cpu, OperationFamily::Random, dtype, "rand")?;
+        resolve_dtype_policy(BackendFamily::Cpu, OperationKind::Random, dtype, "rand")?;
         let total: usize = crate::cpu::stride::checked_numel(shape)?;
         #[cfg(feature = "std")]
         let mut rng = rand::thread_rng();
@@ -123,7 +123,7 @@ impl<T: DType, D: Device> CreationOps<Self> for CpuBackendImpl<T, D> {
         dtype: DTypeId,
         device: &DeviceId,
     ) -> Result<<Self as incin_core::prelude::Backend>::Storage<K>> {
-        resolve_dtype_policy(BackendFamily::Cpu, OperationFamily::Random, dtype, "randn")?;
+        resolve_dtype_policy(BackendFamily::Cpu, OperationKind::Random, dtype, "randn")?;
         let total: usize = crate::cpu::stride::checked_numel(shape)?;
         #[cfg(feature = "std")]
         let mut rng = rand::thread_rng();
@@ -181,7 +181,7 @@ impl<T: DType, D: Device> CreationOps<Self> for CpuBackendImpl<T, D> {
             });
         }
         let total: usize = crate::cpu::stride::checked_numel(shape)?;
-        resolve_dtype_policy(BackendFamily::Cpu, OperationFamily::Fill, dtype, "arange")?;
+        resolve_dtype_policy(BackendFamily::Cpu, OperationKind::Fill, dtype, "arange")?;
         let data: Vec<f64> = (0..total).map(|i| start + (i as f64) * step).collect();
         let buffer = match dtype {
             DTypeId::F32 => CpuBuffer::F32(data.iter().map(|&x| x as f32).collect()),
@@ -218,7 +218,7 @@ impl<T: DType, D: Device> CreationOps<Self> for CpuBackendImpl<T, D> {
             });
         }
         let total: usize = crate::cpu::stride::checked_numel(shape)?;
-        resolve_dtype_policy(BackendFamily::Cpu, OperationFamily::Fill, dtype, "linspace")?;
+        resolve_dtype_policy(BackendFamily::Cpu, OperationKind::Fill, dtype, "linspace")?;
         let step = if total > 1 {
             (end - start) / ((total - 1) as f64)
         } else {

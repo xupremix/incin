@@ -1,4 +1,4 @@
-use crate::dtype_policy::{BackendFamily, OperationFamily, resolve_dtype_policy};
+use crate::dtype_policy::{BackendFamily, OperationKind, resolve_dtype_policy};
 use crate::wgpu::dispatch;
 use crate::wgpu::storage::{WgpuBuffer, WgpuStorage};
 use incin_core::prelude::*;
@@ -11,7 +11,7 @@ impl<T: DType, D: Device> SupportsDType<f32> for WgpuBackendImpl<T, D> {}
 
 impl<T: DType, D: Device> SupportsDType<Dyn> for WgpuBackendImpl<T, D> {
     fn resolve_dtype(field: &DTypeId, _device: &DeviceId) -> Result<DTypeId> {
-        resolve_dtype_policy(BackendFamily::Wgpu, OperationFamily::Fill, *field, "create")
+        resolve_dtype_policy(BackendFamily::Wgpu, OperationKind::Fill, *field, "create")
             .map(|_| *field)
     }
 }
@@ -36,7 +36,7 @@ pub(crate) fn num_elements(shape: &[usize]) -> usize {
 fn validate_wgpu(
     dtype: DTypeId,
     device: &DeviceId,
-    family: OperationFamily,
+    family: OperationKind,
     op: &'static str,
 ) -> Result<()> {
     if device.kind() != DeviceKind::Wgpu {
@@ -142,7 +142,7 @@ impl<T: DType, D: Device> Backend for WgpuBackendImpl<T, D> {
         dtype: DTypeId,
         device: &DeviceId,
     ) -> Result<Self::Storage<K>> {
-        validate_wgpu(dtype, device, OperationFamily::Storage, "from_bytes")?;
+        validate_wgpu(dtype, device, OperationKind::Storage, "from_bytes")?;
         let expected = num_elements(shape) * core::mem::size_of::<f32>();
         if bytes.len() != expected {
             return Err(Error::InvalidByteLength {
@@ -165,7 +165,7 @@ impl<T: DType, D: Device> CreationOps<Self> for WgpuBackendImpl<T, D> {
         dtype: DTypeId,
         device: &DeviceId,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        validate_wgpu(dtype, device, OperationFamily::Fill, "zeros")?;
+        validate_wgpu(dtype, device, OperationKind::Fill, "zeros")?;
         let n = num_elements(shape);
         let data: Vec<f32> = vec![0.0; n];
         let buf = WgpuBuffer::from_slice(&data);
@@ -178,7 +178,7 @@ impl<T: DType, D: Device> CreationOps<Self> for WgpuBackendImpl<T, D> {
         dtype: DTypeId,
         device: &DeviceId,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        validate_wgpu(dtype, device, OperationFamily::Fill, "ones")?;
+        validate_wgpu(dtype, device, OperationKind::Fill, "ones")?;
         let n = num_elements(shape);
         let data: Vec<f32> = vec![1.0; n];
         let buf = WgpuBuffer::from_slice(&data);
@@ -191,7 +191,7 @@ impl<T: DType, D: Device> CreationOps<Self> for WgpuBackendImpl<T, D> {
         dtype: DTypeId,
         device: &DeviceId,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        validate_wgpu(dtype, device, OperationFamily::Random, "rand")?;
+        validate_wgpu(dtype, device, OperationKind::Random, "rand")?;
         use std::time::{SystemTime, UNIX_EPOCH};
         let n = num_elements(shape);
         // Simple LCG for now – GPU-side random generation would need more infrastructure
@@ -218,7 +218,7 @@ impl<T: DType, D: Device> CreationOps<Self> for WgpuBackendImpl<T, D> {
         dtype: DTypeId,
         device: &DeviceId,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        validate_wgpu(dtype, device, OperationFamily::Random, "randn")?;
+        validate_wgpu(dtype, device, OperationKind::Random, "randn")?;
         use std::time::{SystemTime, UNIX_EPOCH};
         let n = num_elements(shape);
         let seed = SystemTime::now()

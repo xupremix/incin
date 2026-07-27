@@ -14,6 +14,7 @@ pub(crate) extern crate alloc;
 pub(crate) mod err;
 
 pub mod distributions;
+pub mod exec;
 pub(crate) mod graph;
 #[cfg(feature = "std")]
 pub mod io;

@@ -7,7 +7,7 @@
 use alloc::{boxed::Box, string::String};
 use incin_core::prelude::{DTypeId, Error, Result};
 
-use crate::dtype_policy::{BackendFamily, OperationFamily, resolve_dtype_policy};
+use crate::dtype_policy::{BackendFamily, OperationKind, resolve_dtype_policy};
 use crate::iteration::{BinaryLayoutClass, UnaryLayoutClass};
 
 const KERNEL_KEY_SCHEMA_VERSION: u8 = 1;
@@ -171,7 +171,7 @@ pub(crate) struct KernelKey {
 
 impl KernelKey {
     pub(crate) fn cuda(
-        policy_family: OperationFamily,
+        policy_family: OperationKind,
         family: KernelFamily,
         operation: &str,
         dtype: DTypeId,
@@ -264,7 +264,7 @@ struct CudaScalarSpec {
 impl CudaScalarSpec {
     fn for_float(dtype: DTypeId, op: &'static str) -> Result<Self> {
         let policy =
-            resolve_dtype_policy(BackendFamily::Cuda, OperationFamily::Pointwise, dtype, op)?;
+            resolve_dtype_policy(BackendFamily::Cuda, OperationKind::Pointwise, dtype, op)?;
         match dtype {
             DTypeId::F16 => Ok(Self {
                 suffix: "f16",
@@ -378,7 +378,7 @@ fn render_cuda(
         }
     };
     let key = KernelKey::cuda(
-        OperationFamily::Pointwise,
+        OperationKind::Pointwise,
         key_family,
         op_name,
         dtype,
@@ -517,7 +517,7 @@ fn render_cuda_packed(
         }
     };
     let key = KernelKey::cuda(
-        OperationFamily::Pointwise,
+        OperationKind::Pointwise,
         key_family,
         op_name,
         dtype,
@@ -952,7 +952,7 @@ pub(crate) fn render_cuda_reduction(
     let scalar = CudaScalarSpec::for_float(dtype, "render_reduction")?;
     let policy = resolve_dtype_policy(
         BackendFamily::Cuda,
-        OperationFamily::Reduction,
+        OperationKind::Reduction,
         dtype,
         "render_reduction",
     )?;
@@ -1005,7 +1005,7 @@ pub(crate) fn render_cuda_reduction(
         scalar.suffix, op_name, index_suffix
     );
     let key = KernelKey::cuda(
-        OperationFamily::Reduction,
+        OperationKind::Reduction,
         KernelFamily::Reduction,
         &format!("{op_name}{index_suffix}"),
         dtype,
@@ -1178,14 +1178,14 @@ pub(crate) fn render_cuda_normalization(op_name: &str, dtype: DTypeId) -> Result
     let scalar = CudaScalarSpec::for_float(dtype, "render_normalization")?;
     let policy = resolve_dtype_policy(
         BackendFamily::Cuda,
-        OperationFamily::Normalization,
+        OperationKind::Normalization,
         dtype,
         "render_normalization",
     )?;
     debug_assert_eq!(policy.accumulator, policy.compute);
     let entry_point = format!("incin_normalization_{}_{}", scalar.suffix, op_name);
     let key = KernelKey::cuda(
-        OperationFamily::Normalization,
+        OperationKind::Normalization,
         KernelFamily::Normalization,
         op_name,
         dtype,
@@ -1397,7 +1397,7 @@ mod tests {
     #[test]
     fn canonical_keys_separate_binary_specializations_from_tuning_problems() {
         let scalar = KernelKey::cuda(
-            OperationFamily::Pointwise,
+            OperationKind::Pointwise,
             KernelFamily::PointwiseUnary,
             "neg",
             DTypeId::F32,
