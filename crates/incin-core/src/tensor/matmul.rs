@@ -112,11 +112,79 @@ fn checked_contraction(lhs_k: usize, rhs_k: usize) -> core::result::Result<(), S
     }
 }
 
+/// Check that a batch axis agrees between the two operands.
+///
+/// The same obligation the contraction check discharges, one axis over. A
+/// batch axis typed the same on both sides is only proved equal when that type
+/// is a `typenum`; a `dim!` name carries a runtime size and may differ. The
+/// output takes its batch axes from the left operand, so a disagreement would
+/// otherwise be resolved silently in the left's favour.
+#[inline]
+fn checked_batch(axis: usize, lhs: usize, rhs: usize) -> core::result::Result<(), ShapeError> {
+    if lhs == rhs {
+        Ok(())
+    } else {
+        Err(ShapeError::DimensionMismatch {
+            operation: OperationKind::MatMul,
+            axis: Axis::Index(axis),
+            lhs,
+            rhs,
+            constraint: DimensionConstraint::Equal,
+        })
+    }
+}
+
+/// Two contraction axes that may be multiplied against each other.
+///
+/// Matrix multiplication requires the left operand's trailing axis and the
+/// right operand's leading one to have the same extent. Where both are sized by
+/// their types that is a compile-time fact; where either is a runtime `usize`
+/// it is not, and the check moves to a runtime comparison. This trait is the
+/// line between the two, and it exists so the rank-2 rule can be written once
+/// rather than once per combination of which axes happen to be runtime.
+///
+/// Before `SHP-007` the five rank-2 impls each required `K` to be the identical
+/// type on both sides, so `(U2, usize)` could not be multiplied by
+/// `(usize, U4)` at all — a contraction nobody can settle statically had no
+/// rule, rather than a runtime one.
+///
+/// The impls are disjoint for the same reason [`BroadcastDim`] is: no
+/// downstream crate can implement `StaticOrNamedDim` for `usize`, since both
+/// the trait and the type would be foreign to it.
+///
+/// [`BroadcastDim`]: crate::shapes::broadcast::BroadcastDim
+#[diagnostic::on_unimplemented(
+    message = "Cannot contract dimension `{Self}` with `{Rhs}`",
+    label = "inner dimensions do not match",
+    note = "Matrix multiplication requires the last dim of lhs and the second-to-last of rhs to be the same, or one of them to be a runtime `usize`"
+)]
+pub trait ContractsWith<Rhs: Dim>: Dim {}
+
+/// Two axes of the same type contract, and the compiler has already agreed.
+impl<D: StaticOrNamedDim> ContractsWith<D> for D {}
+
+/// A runtime axis contracts against a sized one if their values agree.
+impl<D: StaticOrNamedDim> ContractsWith<D> for usize {}
+
+/// The same, with the operands the other way round.
+impl<D: StaticOrNamedDim> ContractsWith<usize> for D {}
+
+/// Two runtime axes settle nothing in advance and are checked as values.
+impl ContractsWith<usize> for usize {}
+
 // ============================================================================
-// Fully static: (M, K) × (K, N) → (M, N)
+// Rank 2: (M, K) × (K, N) → (M, N), whichever axes are runtime.
 // ============================================================================
-impl<M: StaticOrNamedDim, K: StaticOrNamedDim, N: StaticOrNamedDim> MatMulShape<(K, N)> for (M, K) {
+impl<M: Dim, KL: Dim, KR: Dim, N: Dim> MatMulShape<(KR, N)> for (M, KL)
+where
+    KL: ContractsWith<KR>,
+{
     /// The resulting shape after multiplying `Self` by `Rhs`.
+    ///
+    /// `M` and `N` pass through from the operands that named them, so a runtime
+    /// axis stays runtime and a sized one stays sized. The contraction axis
+    /// does not appear, which is why the two sides may disagree about how it is
+    /// spelled as long as [`ContractsWith`] relates them.
     type Output = (M, N);
 
     #[inline(always)]
@@ -124,75 +192,7 @@ impl<M: StaticOrNamedDim, K: StaticOrNamedDim, N: StaticOrNamedDim> MatMulShape<
     /// the operands' own runtime fields.
     fn output_shape(
         lhs: &<Self as Shape>::Field,
-        rhs: &<(K, N) as Shape>::Field,
-    ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
-        checked_contraction(lhs.1.size(), rhs.0.size())?;
-        Ok((lhs.0, rhs.1))
-    }
-}
-
-// ============================================================================
-// Partially dynamic: dynamic batch or dynamic inner dims
-// ============================================================================
-
-// (usize, K) × (K, N) → (usize, N)
-impl<K: StaticOrNamedDim, N: StaticOrNamedDim> MatMulShape<(K, N)> for (usize, K) {
-    /// The resulting shape after multiplying `Self` by `Rhs`.
-    type Output = (usize, N);
-
-    /// Computes the runtime `Field` (dimension values) of `Output` from
-    /// the operands' own runtime fields.
-    fn output_shape(
-        lhs: &<Self as Shape>::Field,
-        rhs: &<(K, N) as Shape>::Field,
-    ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
-        checked_contraction(lhs.1.size(), rhs.0.size())?;
-        Ok((lhs.0, rhs.1))
-    }
-}
-
-// (M, K) × (K, usize) → (M, usize)
-impl<M: StaticOrNamedDim, K: StaticOrNamedDim> MatMulShape<(K, usize)> for (M, K) {
-    /// The resulting shape after multiplying `Self` by `Rhs`.
-    type Output = (M, usize);
-
-    /// Computes the runtime `Field` (dimension values) of `Output` from
-    /// the operands' own runtime fields.
-    fn output_shape(
-        lhs: &<Self as Shape>::Field,
-        rhs: &<(K, usize) as Shape>::Field,
-    ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
-        checked_contraction(lhs.1.size(), rhs.0.size())?;
-        Ok((lhs.0, rhs.1))
-    }
-}
-
-// (usize, K) × (K, usize) → (usize, usize)
-impl<K: StaticOrNamedDim> MatMulShape<(K, usize)> for (usize, K) {
-    /// The resulting shape after multiplying `Self` by `Rhs`.
-    type Output = (usize, usize);
-
-    /// Computes the runtime `Field` (dimension values) of `Output` from
-    /// the operands' own runtime fields.
-    fn output_shape(
-        lhs: &<Self as Shape>::Field,
-        rhs: &<(K, usize) as Shape>::Field,
-    ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
-        checked_contraction(lhs.1.size(), rhs.0.size())?;
-        Ok((lhs.0, rhs.1))
-    }
-}
-
-// (usize, usize) × (usize, usize) → (usize, usize)
-impl MatMulShape<(usize, usize)> for (usize, usize) {
-    /// The resulting shape after multiplying `Self` by `Rhs`.
-    type Output = (usize, usize);
-
-    /// Computes the runtime `Field` (dimension values) of `Output` from
-    /// the operands' own runtime fields.
-    fn output_shape(
-        lhs: &<Self as Shape>::Field,
-        rhs: &<(usize, usize) as Shape>::Field,
+        rhs: &<(KR, N) as Shape>::Field,
     ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
         checked_contraction(lhs.1.size(), rhs.0.size())?;
         Ok((lhs.0, rhs.1))
@@ -286,6 +286,15 @@ macro_rules! impl_batched_matmul {
                 let mut dims: Vec<usize> = <Self as DynShape>::dims(lhs).into();
                 let rhs_dims: Vec<usize> = <( $($batch,)* K, N) as DynShape>::dims(rhs).into();
                 let last = dims.len() - 1;
+                // The batch axes and the contraction share a type on both
+                // sides, which proves nothing when that type is a `dim!` name:
+                // the same name may carry a different size on each operand.
+                // Neither the contraction nor a disagreeing batch axis survives
+                // into `Output`, so nothing downstream can catch it.
+                for axis in 0..last - 1 {
+                    checked_batch(axis, dims[axis], rhs_dims[axis])?;
+                }
+                checked_contraction(dims[last], rhs_dims[rhs_dims.len() - 2])?;
                 dims[last] = rhs_dims[rhs_dims.len() - 1];
                 field_from_dims::<Self::Output>(OperationKind::MatMul, &dims)
             }
@@ -306,6 +315,7 @@ macro_rules! impl_batched_matmul {
             ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
                 let mut dims: Vec<usize> = <Self as DynShape>::dims(lhs).into();
                 let last = dims.len() - 1;
+                checked_contraction(dims[last], rhs.0.size())?;
                 dims[last] = rhs.1.size();
                 field_from_dims::<Self::Output>(OperationKind::MatMul, &dims)
             }
@@ -326,6 +336,7 @@ macro_rules! impl_batched_matmul {
             ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
                 let mut dims: Vec<usize> = <( $($batch,)* K, N) as DynShape>::dims(rhs).into();
                 let second_last = dims.len() - 2;
+                checked_contraction(lhs.1.size(), dims[second_last])?;
                 dims[second_last] = lhs.0.size();
                 field_from_dims::<Self::Output>(OperationKind::MatMul, &dims)
             }
@@ -349,6 +360,8 @@ impl<M: StaticOrNamedDim, K: StaticOrNamedDim, N: StaticOrNamedDim> MatMulShape<
         lhs: &<Self as Shape>::Field,
         rhs: &<(usize, K, N) as Shape>::Field,
     ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
+        checked_batch(0, lhs.0, rhs.0)?;
+        checked_contraction(lhs.2.size(), rhs.1.size())?;
         Ok((lhs.0, lhs.1, rhs.2))
     }
 }
@@ -363,6 +376,7 @@ impl<M: StaticOrNamedDim, K: StaticOrNamedDim, N: StaticOrNamedDim> MatMulShape<
         lhs: &<Self as Shape>::Field,
         rhs: &<(K, N) as Shape>::Field,
     ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
+        checked_contraction(lhs.2.size(), rhs.0.size())?;
         Ok((lhs.0, lhs.1, rhs.1))
     }
 }
@@ -391,6 +405,7 @@ impl<M: StaticOrNamedDim, K: StaticOrNamedDim, N: StaticOrNamedDim> MatMulShape<
         lhs: &<Self as Shape>::Field,
         rhs: &<(usize, K, N) as Shape>::Field,
     ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
+        checked_contraction(lhs.1.size(), rhs.1.size())?;
         Ok((rhs.0, lhs.0, rhs.2))
     }
 }
