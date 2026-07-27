@@ -1,3 +1,5 @@
+use crate::shapes::error::OperationKind;
+use crate::shapes::shape::field_from_dims;
 use crate::nn::module::Module;
 use crate::prelude::*;
 
@@ -279,7 +281,7 @@ where
             let w_dims = <(OutF, InF) as DynShape>::dims(self.weight.as_tensor()?.shape_field());
             dims[last_idx] = w_dims[0];
         }
-        let shape = <InShape::Output as Shape>::from_dyn(&dims).unwrap();
+        let shape = field_from_dims::<InShape::Output>(OperationKind::MatMul, &dims)?;
 
         let weight_dyn = self.weight.as_tensor()?.into_shape::<Dyn>()?;
         let weight_t = weight_dyn.transpose::<0, 1>()?;
@@ -329,7 +331,7 @@ where
             let w_dims = <(OutF, InF) as DynShape>::dims(self.weight.as_tensor()?.shape_field());
             dims[last_idx] = w_dims[0];
         }
-        let shape = <InShape::Output as Shape>::from_dyn(&dims).unwrap();
+        let shape = field_from_dims::<InShape::Output>(OperationKind::MatMul, &dims)?;
 
         let weight_dyn = self.weight.as_tensor()?.into_shape::<Dyn>()?;
         let weight_t = weight_dyn.transpose::<0, 1>()?;
@@ -371,7 +373,7 @@ where
             let w_dims = <(OutF, InF) as DynShape>::dims(self.weight.as_tensor()?.shape_field());
             dims[last_idx] = w_dims[0];
         }
-        let shape = <InShape::Output as Shape>::from_dyn(&dims).unwrap();
+        let shape = field_from_dims::<InShape::Output>(OperationKind::MatMul, &dims)?;
 
         let weight_dyn = self.weight.as_tensor()?.into_shape::<Dyn>()?;
         let weight_t = weight_dyn.transpose::<0, 1>()?;

@@ -4,6 +4,8 @@
 //! without necessarily changing the underlying data. It includes reshaping, transposition,
 //! squeezing, flattening, and broadcasting. These operations heavily leverage the
 //! compile-time type system to ensure the resulting shapes are strictly valid.
+use crate::shapes::error::OperationKind;
+use crate::shapes::shape::field_from_dims;
 use crate::prelude::{
     Backend, Dyn, DynShape, RequiresGrad, Result, Shape, SupportsDType, Tensor, TransferTo,
 };
@@ -132,7 +134,7 @@ impl<
         let shape =
             <S as crate::shapes::Pool2dShape<KShape, SShape, P, Dilation>>::compute_output_shape(
                 &self._shape,
-            );
+            )?;
         Ok(Tensor::from_parts_unchecked(
             out,
             shape,
@@ -193,7 +195,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         let inner = B::reshape(&self.inner, &out_shape_vec)?;
         Ok(Tensor::from_parts_unchecked(
             inner,
-            T::Output::from_dyn(&out_shape_vec).unwrap(),
+            field_from_dims::<T::Output>(OperationKind::Reshape, &out_shape_vec)?,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
@@ -215,7 +217,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
 
         Ok(Tensor::from_parts_unchecked(
             inner,
-            T::Output::from_dyn(&out_shape_vec).unwrap(),
+            field_from_dims::<T::Output>(OperationKind::Reshape, &out_shape_vec)?,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
@@ -447,7 +449,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
 
         Ok(Tensor::from_parts_unchecked(
             inner,
-            S::Output::from_dyn(&out_dims).unwrap(),
+            field_from_dims::<S::Output>(OperationKind::Reshape, &out_dims)?,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
@@ -455,7 +457,10 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Flattens dimensions from `START` to `END` inclusive.
-    /// Uses `ProdDim` algebraically to track shapes.
+    ///
+    /// The range uses const generics because its values are axis indices, not
+    /// dimension sizes. The shape dimensions remain type-level `Dim` values,
+    /// and `ProdDim` computes the flattened output dimension in the type system.
     ///
     /// # Examples
     /// ```rust,ignore
@@ -482,7 +487,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
 
         Ok(Tensor::from_parts_unchecked(
             inner,
-            S::Output::from_dyn(&out_dims).unwrap(),
+            field_from_dims::<S::Output>(OperationKind::Reshape, &out_dims)?,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
@@ -507,7 +512,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         out_shape[dim] = tensors.iter().map(|t| B::shape(&t.inner)[dim]).sum();
         Ok(Tensor::from_parts_unchecked(
             inner,
-            <Dyn as Shape>::from_dyn(&out_shape).unwrap(),
+            field_from_dims::<Dyn>(OperationKind::Reshape, &out_shape)?,
             tensors[0]._dtype.clone(),
             tensors[0]._device.clone(),
             tensors[0]._grad.clone(),
@@ -564,7 +569,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         out_shape[dim] += B::shape(&other.inner)[dim];
         Ok(Tensor::from_parts_unchecked(
             inner,
-            <Dyn as Shape>::from_dyn(&out_shape).unwrap(),
+            field_from_dims::<Dyn>(OperationKind::Reshape, &out_shape)?,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
@@ -588,7 +593,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         out_shape.insert(dim, tensors.len());
         Ok(Tensor::from_parts_unchecked(
             inner,
-            <Dyn as Shape>::from_dyn(&out_shape).unwrap(),
+            field_from_dims::<Dyn>(OperationKind::Reshape, &out_shape)?,
             tensors[0]._dtype.clone(),
             tensors[0]._device.clone(),
             tensors[0]._grad.clone(),
@@ -635,7 +640,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         out_shape.insert(dim, 2);
         Ok(Tensor::from_parts_unchecked(
             inner,
-            <Dyn as Shape>::from_dyn(&out_shape).unwrap(),
+            field_from_dims::<Dyn>(OperationKind::Reshape, &out_shape)?,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
@@ -651,7 +656,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     where
         S: ShapeEq<S2>,
     {
-        let _ = <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
+        <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
         let inner = B::where_cond::<K, K>(&self.inner, &on_true.inner, &on_false.inner)?;
         Ok(Tensor::from_parts_unchecked(
             inner,
@@ -676,7 +681,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     where
         S: ShapeEq<S2>,
     {
-        let _ = <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
+        <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
         let val_f64 = value.into().to_f64();
         let inner = B::masked_fill::<K, KMask>(&self.inner, &mask.inner, val_f64)?;
         Ok(Tensor::from_parts_unchecked(
@@ -720,7 +725,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     where
         S2: ShapeEq<S3>,
     {
-        let _ = <S2 as ShapeEq<S3>>::ASSERT_SHAPES_MATCH;
+        <S2 as ShapeEq<S3>>::ASSERT_SHAPES_MATCH;
         let inner = B::scatter::<K, KInt>(&self.inner, dim, &index.inner, &src.inner)?;
         Ok(Tensor::from_parts_unchecked(
             inner,
@@ -841,7 +846,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
                 "chunk expects positive number of chunks".into(),
             ));
         }
-        let chunk_size = (dim_size + chunks - 1) / chunks;
+        let chunk_size = dim_size.div_ceil(chunks);
         let mut out = alloc::vec::Vec::with_capacity(chunks);
         for i in 0..chunks {
             let start = i * chunk_size;
@@ -866,7 +871,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
                 "split expects positive split_size".into(),
             ));
         }
-        let chunks = (dim_size + split_size - 1) / split_size;
+        let chunks = dim_size.div_ceil(split_size);
         let mut out = alloc::vec::Vec::with_capacity(chunks);
         for i in 0..chunks {
             let start = i * split_size;

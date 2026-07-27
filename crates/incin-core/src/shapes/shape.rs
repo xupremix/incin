@@ -43,6 +43,42 @@ pub trait Shape: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
     fn from_dyn(dims: &[usize]) -> Option<Self::Field>;
 }
 
+/// The highest tuple rank every shape rule is implemented for.
+///
+/// Single-sourced from `incin_macros::max_rank!()`. A proc-macro crate cannot
+/// export a `const`, so the number lives there and is re-exported here;
+/// duplicating it would reintroduce exactly the per-rule drift `SHP-006`
+/// removes.
+///
+/// A rule that *adds* an axis (`AppendDim`, `StackShape`) correctly stops one
+/// rank below this, because its `Output` is bounded by `Shape` and no tuple
+/// above `MAX_RANK` implements `Shape`.
+pub const MAX_RANK: usize = incin_macros::max_rank!();
+
+/// Rebuild a typed shape field from computed dimensions, reporting instead of
+/// panicking.
+///
+/// This is the checked replacement for the `from_dyn(&dims).unwrap()` chain
+/// that `SHP-001` inventoried across 39 sites. The unwrap was a proof
+/// obligation that no type stated and no test covered: the caller had already
+/// erased a known-rank shape to a `Vec<usize>`, and then asserted the
+/// round-trip back would succeed.
+///
+/// Prefer building the field axis by axis where the arity is known — that
+/// avoids the erasure entirely and yields a
+/// [`DimensionMismatch`](crate::shapes::error::ShapeError::DimensionMismatch)
+/// naming the offending axis. Use this where the shape is only available
+/// generically.
+pub fn field_from_dims<S: Shape>(
+    operation: crate::shapes::error::OperationKind,
+    dims: &[usize],
+) -> Result<S::Field, crate::shapes::error::ShapeError> {
+    S::from_dyn(dims).ok_or(crate::shapes::error::ShapeError::TargetShapeRejected {
+        operation,
+        rank: dims.len(),
+    })
+}
+
 /// A shape with runtime-accessible dimension information (rank, total elements, per-axis sizes).
 ///
 /// All implementors of `Shape` that support dynamic rank queries also implement `DynShape`.
@@ -322,14 +358,8 @@ impl DynShape for () {
     }
 }
 
-impl_shape_for_tuple!(1, D0 0);
-impl_shape_for_tuple!(2, D0 0, D1 1);
-impl_shape_for_tuple!(3, D0 0, D1 1, D2 2);
-impl_shape_for_tuple!(4, D0 0, D1 1, D2 2, D3 3);
-impl_shape_for_tuple!(5, D0 0, D1 1, D2 2, D3 3, D4 4);
-impl_shape_for_tuple!(6, D0 0, D1 1, D2 2, D3 3, D4 4, D5 5);
-impl_shape_for_tuple!(7, D0 0, D1 1, D2 2, D3 3, D4 4, D5 5, D6 6);
-impl_shape_for_tuple!(8, D0 0, D1 1, D2 2, D3 3, D4 4, D5 5, D6 6, D7 7);
+// Rank ladder: rank-preserving, so it reaches `MAX_RANK` itself.
+incin_macros::rank_sweep!(ranked_pairs => impl_shape_for_tuple);
 
 macro_rules! impl_append_dim_for_tuple {
     ($($name:ident),*) => {
@@ -340,201 +370,36 @@ macro_rules! impl_append_dim_for_tuple {
     };
 }
 
-impl_append_dim_for_tuple!(D0);
-impl_append_dim_for_tuple!(D0, D1);
-impl_append_dim_for_tuple!(D0, D1, D2);
-impl_append_dim_for_tuple!(D0, D1, D2, D3);
-impl_append_dim_for_tuple!(D0, D1, D2, D3, D4);
-impl_append_dim_for_tuple!(D0, D1, D2, D3, D4, D5);
-impl_append_dim_for_tuple!(D0, D1, D2, D3, D4, D5, D6);
+// `AppendDim`'s `Output` is rank N+1 and is bounded by `Shape`, so its input
+// ceiling is one below `MAX_RANK` — at `MAX_RANK` the output tuple would have
+// no `Shape` impl. This is a real ceiling, not a gap.
+incin_macros::rank_sweep!(names => impl_append_dim_for_tuple, max = 7);
 // Note: Rust standard library only implements traits (Debug, Eq, etc.) for tuples up to size 12.
 // We cap at rank 8 — appending to a 7-dim tuple yields rank 8, the maximum.
 
 macro_rules! impl_replace_last_dim_for_tuple {
-    ($last:ident) => {
-        impl<$last: Dim, NewDim: Dim> ReplaceLastDim<NewDim> for ($last,) {
-            /// `Self`'s dimensions with the last one replaced by `NewDim`.
-            type Output = (NewDim,);
-        }
-    };
-    ($n1:ident, $last:ident) => {
-        impl<$n1: Dim, $last: Dim, NewDim: Dim> ReplaceLastDim<NewDim> for ($n1, $last) {
-            /// `Self`'s dimensions with the last one replaced by `NewDim`.
-            type Output = ($n1, NewDim);
-        }
-    };
-    ($n1:ident, $n2:ident, $last:ident) => {
-        impl<$n1: Dim, $n2: Dim, $last: Dim, NewDim: Dim> ReplaceLastDim<NewDim>
-            for ($n1, $n2, $last)
+    // Variadic, replacing twelve hand-written arms. The last four described
+    // tuples of rank 9 through 12 — ranks at which no tuple implements `Shape`
+    // at all, so those impls could never be selected. `ReplaceLastDim` is
+    // rank-preserving, so its ceiling is `MAX_RANK` exactly.
+    ($($n:ident),+) => { impl_replace_last_dim_for_tuple!(@split [] $($n),+); };
+    (@split [$($acc:ident)*] $last:ident) => {
+        impl<$($acc: Dim,)* $last: Dim, NewDim: Dim> ReplaceLastDim<NewDim>
+            for ($($acc,)* $last,)
         {
             /// `Self`'s dimensions with the last one replaced by `NewDim`.
-            type Output = ($n1, $n2, NewDim);
+            type Output = ($($acc,)* NewDim,);
         }
     };
-    ($n1:ident, $n2:ident, $n3:ident, $last:ident) => {
-        impl<$n1: Dim, $n2: Dim, $n3: Dim, $last: Dim, NewDim: Dim> ReplaceLastDim<NewDim>
-            for ($n1, $n2, $n3, $last)
-        {
-            /// `Self`'s dimensions with the last one replaced by `NewDim`.
-            type Output = ($n1, $n2, $n3, NewDim);
-        }
-    };
-    ($n1:ident, $n2:ident, $n3:ident, $n4:ident, $last:ident) => {
-        impl<$n1: Dim, $n2: Dim, $n3: Dim, $n4: Dim, $last: Dim, NewDim: Dim> ReplaceLastDim<NewDim>
-            for ($n1, $n2, $n3, $n4, $last)
-        {
-            /// `Self`'s dimensions with the last one replaced by `NewDim`.
-            type Output = ($n1, $n2, $n3, $n4, NewDim);
-        }
-    };
-    ($n1:ident, $n2:ident, $n3:ident, $n4:ident, $n5:ident, $last:ident) => {
-        impl<$n1: Dim, $n2: Dim, $n3: Dim, $n4: Dim, $n5: Dim, $last: Dim, NewDim: Dim>
-            ReplaceLastDim<NewDim> for ($n1, $n2, $n3, $n4, $n5, $last)
-        {
-            /// `Self`'s dimensions with the last one replaced by `NewDim`.
-            type Output = ($n1, $n2, $n3, $n4, $n5, NewDim);
-        }
-    };
-    ($n1:ident, $n2:ident, $n3:ident, $n4:ident, $n5:ident, $n6:ident, $last:ident) => {
-        impl<$n1: Dim, $n2: Dim, $n3: Dim, $n4: Dim, $n5: Dim, $n6: Dim, $last: Dim, NewDim: Dim>
-            ReplaceLastDim<NewDim> for ($n1, $n2, $n3, $n4, $n5, $n6, $last)
-        {
-            /// `Self`'s dimensions with the last one replaced by `NewDim`.
-            type Output = ($n1, $n2, $n3, $n4, $n5, $n6, NewDim);
-        }
-    };
-    ($n1:ident, $n2:ident, $n3:ident, $n4:ident, $n5:ident, $n6:ident, $n7:ident, $last:ident) => {
-        impl<
-            $n1: Dim,
-            $n2: Dim,
-            $n3: Dim,
-            $n4: Dim,
-            $n5: Dim,
-            $n6: Dim,
-            $n7: Dim,
-            $last: Dim,
-            NewDim: Dim,
-        > ReplaceLastDim<NewDim> for ($n1, $n2, $n3, $n4, $n5, $n6, $n7, $last)
-        {
-            /// `Self`'s dimensions with the last one replaced by `NewDim`.
-            type Output = ($n1, $n2, $n3, $n4, $n5, $n6, $n7, NewDim);
-        }
-    };
-    ($n1:ident, $n2:ident, $n3:ident, $n4:ident, $n5:ident, $n6:ident, $n7:ident, $n8:ident, $last:ident) => {
-        impl<
-            $n1: Dim,
-            $n2: Dim,
-            $n3: Dim,
-            $n4: Dim,
-            $n5: Dim,
-            $n6: Dim,
-            $n7: Dim,
-            $n8: Dim,
-            $last: Dim,
-            NewDim: Dim,
-        > ReplaceLastDim<NewDim> for ($n1, $n2, $n3, $n4, $n5, $n6, $n7, $n8, $last)
-        {
-            /// `Self`'s dimensions with the last one replaced by `NewDim`.
-            type Output = ($n1, $n2, $n3, $n4, $n5, $n6, $n7, $n8, NewDim);
-        }
-    };
-    ($n1:ident, $n2:ident, $n3:ident, $n4:ident, $n5:ident, $n6:ident, $n7:ident, $n8:ident, $n9:ident, $last:ident) => {
-        impl<
-            $n1: Dim,
-            $n2: Dim,
-            $n3: Dim,
-            $n4: Dim,
-            $n5: Dim,
-            $n6: Dim,
-            $n7: Dim,
-            $n8: Dim,
-            $n9: Dim,
-            $last: Dim,
-            NewDim: Dim,
-        > ReplaceLastDim<NewDim> for ($n1, $n2, $n3, $n4, $n5, $n6, $n7, $n8, $n9, $last)
-        {
-            /// `Self`'s dimensions with the last one replaced by `NewDim`.
-            type Output = ($n1, $n2, $n3, $n4, $n5, $n6, $n7, $n8, $n9, NewDim);
-        }
-    };
-    ($n1:ident, $n2:ident, $n3:ident, $n4:ident, $n5:ident, $n6:ident, $n7:ident, $n8:ident, $n9:ident, $n10:ident, $last:ident) => {
-        impl<
-            $n1: Dim,
-            $n2: Dim,
-            $n3: Dim,
-            $n4: Dim,
-            $n5: Dim,
-            $n6: Dim,
-            $n7: Dim,
-            $n8: Dim,
-            $n9: Dim,
-            $n10: Dim,
-            $last: Dim,
-            NewDim: Dim,
-        > ReplaceLastDim<NewDim> for ($n1, $n2, $n3, $n4, $n5, $n6, $n7, $n8, $n9, $n10, $last)
-        {
-            /// `Self`'s dimensions with the last one replaced by `NewDim`.
-            type Output = ($n1, $n2, $n3, $n4, $n5, $n6, $n7, $n8, $n9, $n10, NewDim);
-        }
-    };
-    ($n1:ident, $n2:ident, $n3:ident, $n4:ident, $n5:ident, $n6:ident, $n7:ident, $n8:ident, $n9:ident, $n10:ident, $n11:ident, $last:ident) => {
-        impl<
-            $n1: Dim,
-            $n2: Dim,
-            $n3: Dim,
-            $n4: Dim,
-            $n5: Dim,
-            $n6: Dim,
-            $n7: Dim,
-            $n8: Dim,
-            $n9: Dim,
-            $n10: Dim,
-            $n11: Dim,
-            $last: Dim,
-            NewDim: Dim,
-        > ReplaceLastDim<NewDim>
-            for (
-                $n1,
-                $n2,
-                $n3,
-                $n4,
-                $n5,
-                $n6,
-                $n7,
-                $n8,
-                $n9,
-                $n10,
-                $n11,
-                $last,
-            )
-        {
-            /// `Self`'s dimensions with the last one replaced by `NewDim`.
-            type Output = (
-                $n1,
-                $n2,
-                $n3,
-                $n4,
-                $n5,
-                $n6,
-                $n7,
-                $n8,
-                $n9,
-                $n10,
-                $n11,
-                NewDim,
-            );
-        }
+    (@split [$($acc:ident)*] $head:ident, $($rest:ident),+) => {
+        impl_replace_last_dim_for_tuple!(@split [$($acc)* $head] $($rest),+);
     };
 }
 
-impl_replace_last_dim_for_tuple!(D0);
-impl_replace_last_dim_for_tuple!(D0, D1);
-impl_replace_last_dim_for_tuple!(D0, D1, D2);
-impl_replace_last_dim_for_tuple!(D0, D1, D2, D3);
-impl_replace_last_dim_for_tuple!(D0, D1, D2, D3, D4);
-impl_replace_last_dim_for_tuple!(D0, D1, D2, D3, D4, D5);
-impl_replace_last_dim_for_tuple!(D0, D1, D2, D3, D4, D5, D6);
-impl_replace_last_dim_for_tuple!(D0, D1, D2, D3, D4, D5, D6, D7);
+// Rank-preserving. This family used to run to rank 12, four above `Shape`'s
+// ceiling: those impls could never be selected, because no tuple above rank 8
+// implements `Shape` in the first place.
+incin_macros::rank_sweep!(names => impl_replace_last_dim_for_tuple);
 
 impl<NewDim: Dim> ReplaceLastDim<NewDim> for Dyn {
     /// `Self`'s dimensions with the last one replaced by `NewDim`.
@@ -614,53 +479,61 @@ mod tests {
 }
 
 macro_rules! impl_ends_with_for_tuple {
-    ($last:ident) => {
-        impl<$last: Dim> EndsWith<$last> for ($last,) {}
+    // Variadic, so one arm covers every rank the sweep asks for. This used to
+    // be six hand-written arms, which is why `EndsWith` capped at rank 6 while
+    // `Shape` reached 8: the ceiling was the arm count, not a property of the
+    // rule. `EndsWith` is rank-preserving and has no reason to cap below
+    // `MAX_RANK`.
+    ($($n:ident),+) => { impl_ends_with_for_tuple!(@split [] $($n),+); };
+    // Peel one name at a time into the accumulator until only the last
+    // remains; `macro_rules!` cannot match "all but the final token" directly.
+    (@split [$($acc:ident)*] $last:ident) => {
+        // The trailing comma is required: at rank 1 the accumulator is empty and
+        // `($last)` is a parenthesized type, not a 1-tuple.
+        impl<$($acc: Dim,)* $last: Dim> EndsWith<$last> for ($($acc,)* $last,) {}
     };
-    ($n1:ident, $last:ident) => {
-        impl<$n1: Dim, $last: Dim> EndsWith<$last> for ($n1, $last) {}
-    };
-    ($n1:ident, $n2:ident, $last:ident) => {
-        impl<$n1: Dim, $n2: Dim, $last: Dim> EndsWith<$last> for ($n1, $n2, $last) {}
-    };
-    ($n1:ident, $n2:ident, $n3:ident, $last:ident) => {
-        impl<$n1: Dim, $n2: Dim, $n3: Dim, $last: Dim> EndsWith<$last> for ($n1, $n2, $n3, $last) {}
-    };
-    ($n1:ident, $n2:ident, $n3:ident, $n4:ident, $last:ident) => {
-        impl<$n1: Dim, $n2: Dim, $n3: Dim, $n4: Dim, $last: Dim> EndsWith<$last>
-            for ($n1, $n2, $n3, $n4, $last)
-        {
-        }
-    };
-    ($n1:ident, $n2:ident, $n3:ident, $n4:ident, $n5:ident, $last:ident) => {
-        impl<$n1: Dim, $n2: Dim, $n3: Dim, $n4: Dim, $n5: Dim, $last: Dim> EndsWith<$last>
-            for ($n1, $n2, $n3, $n4, $n5, $last)
-        {
-        }
+    (@split [$($acc:ident)*] $head:ident, $($rest:ident),+) => {
+        impl_ends_with_for_tuple!(@split [$($acc)* $head] $($rest),+);
     };
 }
 
-impl_ends_with_for_tuple!(D0);
-impl_ends_with_for_tuple!(D0, D1);
-impl_ends_with_for_tuple!(D0, D1, D2);
-impl_ends_with_for_tuple!(D0, D1, D2, D3);
-impl_ends_with_for_tuple!(D0, D1, D2, D3, D4);
-impl_ends_with_for_tuple!(D0, D1, D2, D3, D4, D5);
+// Rank-preserving marker.
+incin_macros::rank_sweep!(names => impl_ends_with_for_tuple);
 
 macro_rules! impl_has_channels_1d_for_tuple {
-    ($n1:ident, $c:ident, $n3:ident) => {
-        impl<$n1: Dim, $c: Dim, $n3: Dim> HasChannels1D<$c> for ($n1, $c, $n3) {}
+    // Channels sit at the second-to-last axis: `[.., C, L]`. The rule is
+    // rank-preserving and cares only about the last two axes, so it holds for
+    // every rank from 2 up. It used to be a single arm covering rank 3 alone —
+    // so `(C, L)` itself, which the trait's own documentation names as valid,
+    // did not implement it.
+    ($($n:ident),+) => { impl_has_channels_1d_for_tuple!(@split [] $($n),+); };
+    // The two-element arm must precede the recursive one, or the recursion
+    // consumes the pair it is meant to terminate on.
+    (@split [$($acc:ident)*] $c:ident, $l:ident) => {
+        impl<$($acc: Dim,)* $c: Dim, $l: Dim> HasChannels1D<$c> for ($($acc,)* $c, $l,) {}
+    };
+    (@split [$($acc:ident)*] $head:ident, $($rest:ident),+) => {
+        impl_has_channels_1d_for_tuple!(@split [$($acc)* $head] $($rest),+);
     };
 }
 
-// Conv1d typically accepts 3D tensors: (Batch, Channels, Length)
-impl_has_channels_1d_for_tuple!(D0, D1, D2);
+// Conv1d/BatchNorm1d: (.., Channels, Length), from rank 2 to the ceiling.
+incin_macros::rank_sweep!(names => impl_has_channels_1d_for_tuple, min = 2);
 
 macro_rules! impl_has_channels_2d_for_tuple {
-    ($n1:ident, $c:ident, $n3:ident, $n4:ident) => {
-        impl<$n1: Dim, $c: Dim, $n3: Dim, $n4: Dim> HasChannels2D<$c> for ($n1, $c, $n3, $n4) {}
+    // Channels sit at the third-to-last axis: `[.., C, H, W]`. As with the 1D
+    // form this held for exactly one rank, so `(C, H, W)` did not implement it.
+    ($($n:ident),+) => { impl_has_channels_2d_for_tuple!(@split [] $($n),+); };
+    (@split [$($acc:ident)*] $c:ident, $h:ident, $w:ident) => {
+        impl<$($acc: Dim,)* $c: Dim, $h: Dim, $w: Dim> HasChannels2D<$c>
+            for ($($acc,)* $c, $h, $w,)
+        {
+        }
+    };
+    (@split [$($acc:ident)*] $head:ident, $($rest:ident),+) => {
+        impl_has_channels_2d_for_tuple!(@split [$($acc)* $head] $($rest),+);
     };
 }
 
-// Conv2d typically accepts 4D tensors: (Batch, Channels, Height, Width)
-impl_has_channels_2d_for_tuple!(D0, D1, D2, D3);
+// Conv2d/BatchNorm2d: (.., Channels, Height, Width), from rank 3 to the ceiling.
+incin_macros::rank_sweep!(names => impl_has_channels_2d_for_tuple, min = 3);

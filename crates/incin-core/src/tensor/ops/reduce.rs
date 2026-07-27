@@ -4,6 +4,8 @@
 //! or dimensionless tensor) as well as along specific axes. It supports both static type-level
 //! dimensional reductions using `Axis` where the shape statically changes, and dynamic
 //! dimensional reductions where the shape becomes `Dyn`.
+use crate::shapes::error::OperationKind;
+use crate::shapes::shape::field_from_dims;
 use crate::prelude::{Backend, DynShape, RequiresGrad, Result, Shape, Tensor};
 
 macro_rules! impl_reduction_op {
@@ -48,7 +50,7 @@ macro_rules! impl_reduction_dim_op {
 
             Ok(Tensor::from_parts_unchecked(
                 inner,
-                S::Output::from_dyn(&out_dims).unwrap(),
+                field_from_dims::<S::Output>(OperationKind::Reduction, &out_dims)?,
                 self._dtype.clone(),
                 self._device.clone(),
                 self._grad.clone(),
@@ -281,7 +283,7 @@ impl<
 
         Ok(Tensor::from_parts_unchecked(
             inner,
-            crate::prelude::Dyn::from_dyn(&out_dims).unwrap(),
+            field_from_dims::<crate::prelude::Dyn>(OperationKind::Reduction, &out_dims)?,
             core::marker::PhantomData,
             self._device.clone(),
             crate::prelude::NoGrad::init(()),
@@ -316,7 +318,7 @@ impl<
 
         Ok(Tensor::from_parts_unchecked(
             inner,
-            crate::prelude::Dyn::from_dyn(&out_dims).unwrap(),
+            field_from_dims::<crate::prelude::Dyn>(OperationKind::Reduction, &out_dims)?,
             core::marker::PhantomData,
             self._device.clone(),
             crate::prelude::NoGrad::init(()),
@@ -337,7 +339,7 @@ impl<
         let (values_inner, indices_inner) = B::topk::<K, u32>(&self.inner, k, dim, largest)?;
         let mut out_dims = S::dims(&self._shape).into();
         out_dims[dim] = k;
-        let out_shape = crate::prelude::Dyn::from_dyn(&out_dims).unwrap();
+        let out_shape = field_from_dims::<crate::prelude::Dyn>(OperationKind::Reduction, &out_dims)?;
 
         let values = Tensor::from_parts_unchecked(
             values_inner,

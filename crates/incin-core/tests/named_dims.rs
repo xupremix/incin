@@ -171,14 +171,36 @@ fn broadcast_add_with_usize_leading_axis_and_named_tail_dim() {
 /// instances can legitimately hold different numbers) — `checked_
 /// broadcast_dim` is the actual safety net for that case, and this proves
 /// it still fires: two `Batch`-typed axes with disagreeing real sizes,
-/// neither equal to 1, must panic rather than silently produce a wrong
+/// neither equal to 1, must be rejected rather than silently produce a wrong
 /// shape (which `Default::default()` would have done before this fix).
+///
+/// `SHP-004` converted the guard from an `assert!` to a `Result` per decision
+/// `D-013`, so this asserts the returned error rather than a panic — and can
+/// now check *which* axis disagreed, which the panic message never carried in
+/// a machine-readable form.
 #[test]
-#[should_panic(expected = "cannot broadcast dynamic dimension")]
-fn broadcast_add_panics_on_disagreeing_same_named_type_dims() {
+fn broadcast_add_rejects_disagreeing_same_named_type_dims() {
     let a: Tensor<s![Batch, Feature], TestBackend> = Tensor::zeros((3usize, 5usize)).unwrap();
     let b: Tensor<s![Batch, Feature], TestBackend> = Tensor::zeros((4usize, 5usize)).unwrap();
-    let _ = a.broadcast_add(&b);
+
+    let err = a.broadcast_add(&b).unwrap_err();
+    let Error::Shape(shape_err) = err else {
+        panic!("expected a shape error, got {err}");
+    };
+    assert_eq!(
+        shape_err,
+        ShapeError::DimensionMismatch {
+            operation: OperationKind::Broadcast,
+            axis: Axis::Index(0),
+            lhs: 3,
+            rhs: 4,
+            constraint: DimensionConstraint::Broadcastable,
+        }
+    );
+    assert_eq!(
+        shape_err.to_string(),
+        "broadcast: axis 0 mismatch: 3 vs 4, which must be equal, or one of them 1"
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────

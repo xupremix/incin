@@ -157,7 +157,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
     where
         S: ShapeEq<S2>,
     {
-        let _ = <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
+        <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
         let res = self.add(rhs)?;
         self.inner = res.inner;
         Ok(())
@@ -168,7 +168,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
     where
         S: ShapeEq<S2>,
     {
-        let _ = <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
+        <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
         let res = self.sub(rhs)?;
         self.inner = res.inner;
         Ok(())
@@ -179,7 +179,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
     where
         S: ShapeEq<S2>,
     {
-        let _ = <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
+        <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
         let res = self.mul(rhs)?;
         self.inner = res.inner;
         Ok(())
@@ -190,7 +190,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
     where
         S: ShapeEq<S2>,
     {
-        let _ = <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
+        <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
         let res = self.div(rhs)?;
         self.inner = res.inner;
         Ok(())
@@ -243,7 +243,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
     where
         S: ShapeEq<S2>,
     {
-        let _ = <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
+        <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
         let inner = B::lerp::<K>(&self.inner, &end.inner, weight)?;
         Ok(Tensor::from_parts_unchecked(
             inner,
@@ -270,7 +270,7 @@ macro_rules! impl_broadcast_binary_op {
                 S1: crate::shapes::broadcast::BroadcastShape<S2>,
                 <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output: Shape,
             {
-                let b_shape = <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::output_shape(self.shape_field(), rhs.shape_field());
+                let b_shape = <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::output_shape(self.shape_field(), rhs.shape_field())?;
 
                 let inner = B::$backend_method(&self.inner, &rhs.inner)?;
                 Ok(Tensor::from_parts_unchecked(

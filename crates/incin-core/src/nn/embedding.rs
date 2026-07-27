@@ -1,8 +1,10 @@
+use crate::shapes::error::OperationKind;
+use crate::shapes::shape::field_from_dims;
 use crate::nn::{Module, Param};
 use crate::prelude::*;
 
 /// A shape marker trait specifying an [`Embedding`] layer's vocabulary size
-/// and embedding dimension, analogous to [`LinearShape`](crate::nn::linear::LinearShape).
+/// and embedding dimension, analogous to [`crate::nn::linear::LinearShape`].
 /// The typical usage is `(Vocab, Embed)` for a static layer, or `Dyn` for
 /// runtime-determined sizes.
 pub trait EmbeddingShape: Shape + DynShape {
@@ -109,7 +111,10 @@ where
         let mut dims = <InS as DynShape>::dims(x.shape_field()).into();
         dims.push(<S::Embed as typenum::Unsigned>::USIZE);
 
-        let shape = <InS as AppendDim<S::Embed>>::Output::from_dyn(&dims).unwrap();
+        let shape = field_from_dims::<<InS as AppendDim<S::Embed>>::Output>(
+            OperationKind::Embedding,
+            &dims,
+        )?;
 
         Ok(Tensor::from_parts_unchecked(
             out,

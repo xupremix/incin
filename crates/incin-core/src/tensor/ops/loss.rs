@@ -4,6 +4,8 @@
 //! Loss functions automatically compute and track their required reduction shape
 //! (e.g. reducing down to a scalar or maintaining a batched shape) using type-level
 //! logic to ensure that backpropagation can flow correctly from the scalar loss.
+use crate::shapes::error::OperationKind;
+use crate::shapes::shape::field_from_dims;
 use crate::nn::loss::{
     BceReductionShape, CrossEntropyReductionShape, L1ReductionShape, Mean, MseReductionShape,
     Reduction, ReductionMode,
@@ -51,7 +53,7 @@ impl<
                 out_shape_dims.remove(1); // usually class dim
             }
         }
-        let out_shape = <R::Output as Shape>::from_dyn(&out_shape_dims).unwrap();
+        let out_shape = field_from_dims::<R::Output>(OperationKind::Reduction, &out_shape_dims)?;
         Ok(Tensor::from_parts_unchecked(
             inner,
             out_shape,
@@ -87,7 +89,7 @@ impl<
         if R::as_enum() == Reduction::None {
             out_shape_dims = self.dims().into();
         }
-        let out_shape = <R::Output as Shape>::from_dyn(&out_shape_dims).unwrap();
+        let out_shape = field_from_dims::<R::Output>(OperationKind::Reduction, &out_shape_dims)?;
         Ok(Tensor::from_parts_unchecked(
             inner,
             out_shape,
@@ -115,7 +117,7 @@ impl<
         if R::as_enum() == Reduction::None {
             out_shape_dims = self.dims().into();
         }
-        let out_shape = <R::Output as Shape>::from_dyn(&out_shape_dims).unwrap();
+        let out_shape = field_from_dims::<R::Output>(OperationKind::Reduction, &out_shape_dims)?;
         Ok(Tensor::from_parts_unchecked(
             inner,
             out_shape,
@@ -146,7 +148,7 @@ impl<
         if R::as_enum() == Reduction::None {
             out_shape_dims = self.dims().into();
         }
-        let out_shape = <R::Output as Shape>::from_dyn(&out_shape_dims).unwrap();
+        let out_shape = field_from_dims::<R::Output>(OperationKind::Reduction, &out_shape_dims)?;
         Ok(Tensor::from_parts_unchecked(
             inner,
             out_shape,

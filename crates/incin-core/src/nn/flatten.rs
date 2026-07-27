@@ -4,6 +4,10 @@ use crate::prelude::*;
 #[derive(Debug, Clone)]
 #[incin_macros::module(internal)]
 /// Collapses dimensions `[START, END]` (inclusive) into a single dimension.
+///
+/// `START` and `END` are const-generic axis indices, while the sizes stored in
+/// the input shape remain type-level `Dim` values. The module therefore keeps
+/// the complete output shape in its `Module::Output` type.
 pub struct Flatten<const START: usize, const END: usize> {}
 
 impl<const START: usize, const END: usize> Default for Flatten<START, END> {

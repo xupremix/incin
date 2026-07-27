@@ -49,6 +49,85 @@ where
     type Count = Prod<Prod<Prod<A, B>, C>, D>;
 }
 
+// Ranks 5 through `MAX_RANK`. This is the gap `PROPOSALS.md` names as the
+// motivating case for `SHP-006`: `ElementCount` stopped at rank 4 while `Shape`
+// reached 8, so a rank-5 tensor was expressible but could not be reshaped —
+// the frontend accepted the type and then had no proof to offer.
+//
+// These stay hand-written where the rest of the workstream is generated, and
+// the reason is specific: `rank_sweep!` varies a *parameter list*, but each
+// rank here needs a differently-nested `Prod` fold in both the associated type
+// and every intermediate `where` bound. Generating that needs a fold over type
+// expressions, not a longer list. `EXE-003` revisits it when the lowering layer
+// gains a real element-count rule; until then four explicit impls are cheaper
+// to read than the macro that would emit them.
+
+impl<A: Unsigned, B: Unsigned, C: Unsigned, D: Unsigned, E: Unsigned> ElementCount
+    for (A, B, C, D, E)
+where
+    A: Mul<B>,
+    Prod<A, B>: Mul<C>,
+    Prod<Prod<A, B>, C>: Mul<D>,
+    Prod<Prod<Prod<A, B>, C>, D>: Mul<E>,
+    Prod<Prod<Prod<Prod<A, B>, C>, D>, E>: Unsigned,
+{
+    /// `Count`.
+    type Count = Prod<Prod<Prod<Prod<A, B>, C>, D>, E>;
+}
+
+impl<A: Unsigned, B: Unsigned, C: Unsigned, D: Unsigned, E: Unsigned, F: Unsigned> ElementCount
+    for (A, B, C, D, E, F)
+where
+    A: Mul<B>,
+    Prod<A, B>: Mul<C>,
+    Prod<Prod<A, B>, C>: Mul<D>,
+    Prod<Prod<Prod<A, B>, C>, D>: Mul<E>,
+    Prod<Prod<Prod<Prod<A, B>, C>, D>, E>: Mul<F>,
+    Prod<Prod<Prod<Prod<Prod<A, B>, C>, D>, E>, F>: Unsigned,
+{
+    /// `Count`.
+    type Count = Prod<Prod<Prod<Prod<Prod<A, B>, C>, D>, E>, F>;
+}
+
+impl<A: Unsigned, B: Unsigned, C: Unsigned, D: Unsigned, E: Unsigned, F: Unsigned, G: Unsigned>
+    ElementCount for (A, B, C, D, E, F, G)
+where
+    A: Mul<B>,
+    Prod<A, B>: Mul<C>,
+    Prod<Prod<A, B>, C>: Mul<D>,
+    Prod<Prod<Prod<A, B>, C>, D>: Mul<E>,
+    Prod<Prod<Prod<Prod<A, B>, C>, D>, E>: Mul<F>,
+    Prod<Prod<Prod<Prod<Prod<A, B>, C>, D>, E>, F>: Mul<G>,
+    Prod<Prod<Prod<Prod<Prod<Prod<A, B>, C>, D>, E>, F>, G>: Unsigned,
+{
+    /// `Count`.
+    type Count = Prod<Prod<Prod<Prod<Prod<Prod<A, B>, C>, D>, E>, F>, G>;
+}
+
+impl<
+    A: Unsigned,
+    B: Unsigned,
+    C: Unsigned,
+    D: Unsigned,
+    E: Unsigned,
+    F: Unsigned,
+    G: Unsigned,
+    H: Unsigned,
+> ElementCount for (A, B, C, D, E, F, G, H)
+where
+    A: Mul<B>,
+    Prod<A, B>: Mul<C>,
+    Prod<Prod<A, B>, C>: Mul<D>,
+    Prod<Prod<Prod<A, B>, C>, D>: Mul<E>,
+    Prod<Prod<Prod<Prod<A, B>, C>, D>, E>: Mul<F>,
+    Prod<Prod<Prod<Prod<Prod<A, B>, C>, D>, E>, F>: Mul<G>,
+    Prod<Prod<Prod<Prod<Prod<Prod<A, B>, C>, D>, E>, F>, G>: Mul<H>,
+    Prod<Prod<Prod<Prod<Prod<Prod<Prod<A, B>, C>, D>, E>, F>, G>, H>: Unsigned,
+{
+    /// `Count`.
+    type Count = Prod<Prod<Prod<Prod<Prod<Prod<Prod<A, B>, C>, D>, E>, F>, G>, H>;
+}
+
 /// Witness that two type-level element counts are identical. Implemented
 /// reflexively — only `SameCount<N>` for the *same* `N` exists — so
 /// requiring `A: SameCount<B>` is a compile-time assertion that `A == B`,

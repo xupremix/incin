@@ -1,3 +1,5 @@
+use crate::shapes::error::OperationKind;
+use crate::shapes::shape::field_from_dims;
 use crate::prelude::*;
 
 /// Specifies the runtime reduction to apply to the output of a loss function.
@@ -155,7 +157,7 @@ impl<R: ReductionMode> MSELoss<R> {
         if R::as_enum() == Reduction::None {
             out_shape_dims = pred.dims().into();
         }
-        let out_shape = <R::Output as Shape>::from_dyn(&out_shape_dims).unwrap();
+        let out_shape = field_from_dims::<R::Output>(OperationKind::Reduction, &out_shape_dims)?;
         Ok(Tensor::from_parts_unchecked(
             inner,
             out_shape,
@@ -214,7 +216,7 @@ impl<R: ReductionMode> CrossEntropyLoss<R> {
                 out_shape_dims.remove(1); // Usually class dim
             }
         }
-        let out_shape = <R::Output as Shape>::from_dyn(&out_shape_dims).unwrap();
+        let out_shape = field_from_dims::<R::Output>(OperationKind::Reduction, &out_shape_dims)?;
         Ok(Tensor::from_parts_unchecked(
             inner,
             out_shape,
@@ -258,7 +260,7 @@ impl<R: ReductionMode> L1Loss<R> {
         if R::as_enum() == Reduction::None {
             out_shape_dims = pred.dims().into();
         }
-        let out_shape = <R::Output as Shape>::from_dyn(&out_shape_dims).unwrap();
+        let out_shape = field_from_dims::<R::Output>(OperationKind::Reduction, &out_shape_dims)?;
         Ok(Tensor::from_parts_unchecked(
             inner,
             out_shape,
@@ -302,7 +304,7 @@ impl<R: ReductionMode> BCEWithLogitsLoss<R> {
         if R::as_enum() == Reduction::None {
             out_shape_dims = pred.dims().into();
         }
-        let out_shape = <R::Output as Shape>::from_dyn(&out_shape_dims).unwrap();
+        let out_shape = field_from_dims::<R::Output>(OperationKind::Reduction, &out_shape_dims)?;
         Ok(Tensor::from_parts_unchecked(
             inner,
             out_shape,

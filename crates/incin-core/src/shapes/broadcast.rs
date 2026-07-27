@@ -2,29 +2,41 @@
 use crate::prelude::*;
 use crate::tensor::matmul::StaticOrNamedDim;
 
-/// Resolve one runtime (`Dyn`) broadcast dimension, panicking with a clear
-/// message on incompatible sizes instead of silently fabricating a wrong
-/// result via a bare `.max()`. NumPy/PyTorch broadcast rule: two dims are
-/// compatible iff they're equal or one of them is 1.
+/// Resolve one runtime (`Dyn`) broadcast dimension, reporting incompatible
+/// sizes instead of silently fabricating a wrong result via a bare `.max()`.
+/// NumPy/PyTorch broadcast rule: two dims are compatible iff they're equal or
+/// one of them is 1.
 ///
 /// Every `BroadcastShape` call site reachable through the public `Tensor` API
 /// (`broadcast_add`/`sub`/`mul`/`div` and the `+`/`-`/`*`/`/` operator
 /// overloads in `tensor::ops::binary`) already calls into the backend's own
 /// validated `broadcast_shape` first and propagates its `Err` via `?` before
-/// this value is ever used — so today this assert is not reachable from that
-/// path. It exists as defense-in-depth for any future or direct caller of
-/// `BroadcastShape::output_shape` that doesn't already validate independently,
-/// and — since a `symbolic_dim!` name (unlike `typenum`) can legitimately
-/// hold a *different* runtime value on each operand even when both share the
-/// exact same type — as the actual guard against two same-typed named dims
-/// whose real sizes happen to disagree.
+/// this value is ever used. It exists as defense-in-depth for any future or
+/// direct caller of `BroadcastShape::output_shape` that doesn't already
+/// validate independently, and — since a `symbolic_dim!` name (unlike
+/// `typenum`) can legitimately hold a *different* runtime value on each operand
+/// even when both share the exact same type — as the actual guard against two
+/// same-typed named dims whose real sizes happen to disagree.
+///
+/// `SHP-004` converts it from an `assert!` to a `Result` per decision `D-013`,
+/// which records that it must be converted rather than deleted: it is the only
+/// guard against that same-typed-named-dims case.
 #[inline]
-fn checked_broadcast_dim(lhs: usize, rhs: usize) -> usize {
-    assert!(
-        lhs == rhs || lhs == 1 || rhs == 1,
-        "cannot broadcast dynamic dimension: {lhs} vs {rhs} (dims must be equal, or one of them must be 1)"
-    );
-    lhs.max(rhs)
+fn checked_broadcast_dim(axis: Axis, lhs: usize, rhs: usize) -> core::result::Result<usize, ShapeError> {
+    if lhs == rhs || lhs == 1 || rhs == 1 {
+        // Not `lhs.max(rhs)`: a size-1 axis broadcast against a size-**0** one
+        // must yield 0, and `max` yields 1. Picking the non-1 side is the
+        // actual NumPy rule and is correct at 0.
+        Ok(if lhs == 1 { rhs } else { lhs })
+    } else {
+        Err(ShapeError::DimensionMismatch {
+            operation: OperationKind::Broadcast,
+            axis,
+            lhs,
+            rhs,
+            constraint: DimensionConstraint::Broadcastable,
+        })
+    }
 }
 
 /// Generic NumPy-style right-aligned broadcast: computes the output's
@@ -38,7 +50,10 @@ fn checked_broadcast_dim(lhs: usize, rhs: usize) -> usize {
 /// so "the default" and "the real value" coincide) but would have silently
 /// zeroed any runtime-carrying dimension (a `usize` axis, or a
 /// `symbolic_dim!` name).
-fn broadcast_dims<L: DynShape, R: DynShape>(lhs: &L::Field, rhs: &R::Field) -> Vec<usize> {
+fn broadcast_dims<L: DynShape, R: DynShape>(
+    lhs: &L::Field,
+    rhs: &R::Field,
+) -> core::result::Result<Vec<usize>, ShapeError> {
     let lhs_dims: Vec<usize> = L::dims(lhs).into();
     let rhs_dims: Vec<usize> = R::dims(rhs).into();
     let out_rank = lhs_dims.len().max(rhs_dims.len());
@@ -53,14 +68,19 @@ fn broadcast_dims<L: DynShape, R: DynShape>(lhs: &L::Field, rhs: &R::Field) -> V
             .len()
             .checked_sub(from_end)
             .map(|idx| rhs_dims[idx]);
-        out.push(match (l, r) {
-            (Some(a), Some(b)) => checked_broadcast_dim(a, b),
-            (Some(a), None) => a,
-            (None, Some(b)) => b,
-            (None, None) => unreachable!("out_rank is the max of both operands' ranks"),
-        });
+        // An axis the shorter operand does not reach is an implicit 1 — that is
+        // exactly NumPy's right-alignment rule, and 1 is the identity for
+        // broadcasting. Writing it that way makes the fourth case ("neither
+        // operand reaches this axis") disappear rather than be asserted away
+        // with `unreachable!`: `out_rank` is the max of the two ranks, so it
+        // cannot occur, and if it did, the answer would still be 1.
+        out.push(checked_broadcast_dim(
+            Axis::Index(i),
+            l.unwrap_or(1),
+            r.unwrap_or(1),
+        )?);
     }
-    out
+    Ok(out)
 }
 
 /// Trait that verifies two shapes are broadcastable and determines the output shape.
@@ -79,7 +99,7 @@ pub trait BroadcastShape<Rhs: Shape>: Shape {
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         rhs: &<Rhs as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field;
+    ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError>;
 }
 
 impl BroadcastShape<()> for () {
@@ -87,7 +107,9 @@ impl BroadcastShape<()> for () {
     type Output = ();
     #[inline(always)]
     /// Computes the runtime `Field` (dimension values) of `Output`.
-    fn output_shape(_: &(), _: &()) {}
+    fn output_shape(_: &(), _: &()) -> core::result::Result<(), ShapeError> {
+        Ok(())
+    }
 }
 
 // ============================================================================
@@ -104,16 +126,14 @@ macro_rules! impl_broadcast_same_rank {
             fn output_shape(
                 lhs: &<Self as Shape>::Field,
                 rhs: &<($($dim,)+) as Shape>::Field,
-            ) -> <Self::Output as Shape>::Field {
-                <Self::Output as Shape>::from_dyn(&broadcast_dims::<Self, ($($dim,)+)>(lhs, rhs)).unwrap()
+            ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
+                field_from_dims::<Self::Output>(OperationKind::Broadcast, &broadcast_dims::<Self, ($($dim,)+)>(lhs, rhs)?)
             }
         }
     };
 }
-impl_broadcast_same_rank!(A);
-impl_broadcast_same_rank!(A, B);
-impl_broadcast_same_rank!(A, B, C);
-impl_broadcast_same_rank!(A, B, C, D);
+// Both operands the same rank, every axis the identical type.
+incin_macros::rank_sweep!(letters => impl_broadcast_same_rank);
 
 /// Rank-0 (`()`) on one side, a full static shape on the other, in both directions.
 macro_rules! impl_broadcast_empty_to_full {
@@ -125,8 +145,8 @@ macro_rules! impl_broadcast_empty_to_full {
             fn output_shape(
                 lhs: &<Self as Shape>::Field,
                 rhs: &<($($dim,)+) as Shape>::Field,
-            ) -> <Self::Output as Shape>::Field {
-                <Self::Output as Shape>::from_dyn(&broadcast_dims::<Self, ($($dim,)+)>(lhs, rhs)).unwrap()
+            ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
+                field_from_dims::<Self::Output>(OperationKind::Broadcast, &broadcast_dims::<Self, ($($dim,)+)>(lhs, rhs)?)
             }
         }
         impl<$($dim: StaticOrNamedDim),+> BroadcastShape<()> for ($($dim,)+) {
@@ -136,16 +156,14 @@ macro_rules! impl_broadcast_empty_to_full {
             fn output_shape(
                 lhs: &<Self as Shape>::Field,
                 rhs: &<() as Shape>::Field,
-            ) -> <Self::Output as Shape>::Field {
-                <Self::Output as Shape>::from_dyn(&broadcast_dims::<Self, ()>(lhs, rhs)).unwrap()
+            ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
+                field_from_dims::<Self::Output>(OperationKind::Broadcast, &broadcast_dims::<Self, ()>(lhs, rhs)?)
             }
         }
     };
 }
-impl_broadcast_empty_to_full!(A);
-impl_broadcast_empty_to_full!(A, B);
-impl_broadcast_empty_to_full!(A, B, C);
-impl_broadcast_empty_to_full!(A, B, C, D);
+// Rank 0 against a full shape, in both directions.
+incin_macros::rank_sweep!(letters => impl_broadcast_empty_to_full);
 
 /// Different ranks, the shorter shape's dims a literal *suffix* of the
 /// longer one's (implicit leading 1s fill the rest) — both directions.
@@ -161,8 +179,8 @@ macro_rules! impl_broadcast_prepend {
             fn output_shape(
                 lhs: &<Self as Shape>::Field,
                 rhs: &<($($prefix,)+ $($suffix,)+) as Shape>::Field,
-            ) -> <Self::Output as Shape>::Field {
-                <Self::Output as Shape>::from_dyn(&broadcast_dims::<Self, ($($prefix,)+ $($suffix,)+)>(lhs, rhs)).unwrap()
+            ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
+                field_from_dims::<Self::Output>(OperationKind::Broadcast, &broadcast_dims::<Self, ($($prefix,)+ $($suffix,)+)>(lhs, rhs)?)
             }
         }
         impl<$($prefix: StaticOrNamedDim,)+ $($suffix: StaticOrNamedDim),+> BroadcastShape<($($suffix,)+)> for ($($prefix,)+ $($suffix,)+)
@@ -175,18 +193,14 @@ macro_rules! impl_broadcast_prepend {
             fn output_shape(
                 lhs: &<Self as Shape>::Field,
                 rhs: &<($($suffix,)+) as Shape>::Field,
-            ) -> <Self::Output as Shape>::Field {
-                <Self::Output as Shape>::from_dyn(&broadcast_dims::<Self, ($($suffix,)+)>(lhs, rhs)).unwrap()
+            ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
+                field_from_dims::<Self::Output>(OperationKind::Broadcast, &broadcast_dims::<Self, ($($suffix,)+)>(lhs, rhs)?)
             }
         }
     };
 }
-impl_broadcast_prepend!((A); (B));
-impl_broadcast_prepend!((A); (B, C));
-impl_broadcast_prepend!((A, B); (C));
-impl_broadcast_prepend!((A); (B, C, D));
-impl_broadcast_prepend!((A, B); (C, D));
-impl_broadcast_prepend!((A, B, C); (D));
+// Shorter against longer: one invocation per split of the output rank.
+incin_macros::rank_sweep!(prepend => impl_broadcast_prepend);
 
 // ============================================================================
 // Partially dynamic: a leading `usize` batch dim, `StaticOrNamedDim` tail.
@@ -199,8 +213,8 @@ impl BroadcastShape<(usize,)> for (usize,) {
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         rhs: &<Self as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        (checked_broadcast_dim(lhs.0, rhs.0),)
+    ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
+        Ok((checked_broadcast_dim(Axis::Index(0), lhs.0, rhs.0)?,))
     }
 }
 impl BroadcastShape<()> for (usize,) {
@@ -210,8 +224,8 @@ impl BroadcastShape<()> for (usize,) {
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         _: &<() as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        (lhs.0,)
+    ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
+        Ok((lhs.0,))
     }
 }
 impl BroadcastShape<(usize,)> for () {
@@ -221,8 +235,8 @@ impl BroadcastShape<(usize,)> for () {
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<(usize,) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        (rhs.0,)
+    ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
+        Ok((rhs.0,))
     }
 }
 
@@ -236,15 +250,14 @@ macro_rules! impl_broadcast_usize_same_rank {
             fn output_shape(
                 lhs: &<Self as Shape>::Field,
                 rhs: &<(usize, $($dim,)+) as Shape>::Field,
-            ) -> <Self::Output as Shape>::Field {
-                <Self::Output as Shape>::from_dyn(&broadcast_dims::<Self, (usize, $($dim,)+)>(lhs, rhs)).unwrap()
+            ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
+                field_from_dims::<Self::Output>(OperationKind::Broadcast, &broadcast_dims::<Self, (usize, $($dim,)+)>(lhs, rhs)?)
             }
         }
     };
 }
-impl_broadcast_usize_same_rank!(B);
-impl_broadcast_usize_same_rank!(B, C);
-impl_broadcast_usize_same_rank!(B, C, D);
+// Shape is `(usize, Tail..)`, so rank = tail length + 1.
+incin_macros::rank_sweep!(letters_from_b => impl_broadcast_usize_same_rank, max = 7);
 
 /// Rank-0 (`()`) on one side, a `(usize, ...)` shape on the other.
 macro_rules! impl_broadcast_usize_empty_to_full {
@@ -256,8 +269,8 @@ macro_rules! impl_broadcast_usize_empty_to_full {
             fn output_shape(
                 lhs: &<Self as Shape>::Field,
                 rhs: &<(usize, $($dim,)+) as Shape>::Field,
-            ) -> <Self::Output as Shape>::Field {
-                <Self::Output as Shape>::from_dyn(&broadcast_dims::<Self, (usize, $($dim,)+)>(lhs, rhs)).unwrap()
+            ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
+                field_from_dims::<Self::Output>(OperationKind::Broadcast, &broadcast_dims::<Self, (usize, $($dim,)+)>(lhs, rhs)?)
             }
         }
         impl<$($dim: StaticOrNamedDim),+> BroadcastShape<()> for (usize, $($dim,)+) {
@@ -267,15 +280,14 @@ macro_rules! impl_broadcast_usize_empty_to_full {
             fn output_shape(
                 lhs: &<Self as Shape>::Field,
                 rhs: &<() as Shape>::Field,
-            ) -> <Self::Output as Shape>::Field {
-                <Self::Output as Shape>::from_dyn(&broadcast_dims::<Self, ()>(lhs, rhs)).unwrap()
+            ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
+                field_from_dims::<Self::Output>(OperationKind::Broadcast, &broadcast_dims::<Self, ()>(lhs, rhs)?)
             }
         }
     };
 }
-impl_broadcast_usize_empty_to_full!(B);
-impl_broadcast_usize_empty_to_full!(B, C);
-impl_broadcast_usize_empty_to_full!(B, C, D);
+// Shape is `(usize, Tail..)`, so rank = tail length + 1.
+incin_macros::rank_sweep!(letters_from_b => impl_broadcast_usize_empty_to_full, max = 7);
 
 /// Different ranks, one of them `(usize, prefix..., suffix...)`, the other
 /// just `(suffix...)` (a literal suffix of the first) — both directions.
@@ -292,8 +304,8 @@ macro_rules! impl_broadcast_usize_prepend {
             fn output_shape(
                 lhs: &<Self as Shape>::Field,
                 rhs: &<(usize, $($prefix,)* $($suffix,)+) as Shape>::Field,
-            ) -> <Self::Output as Shape>::Field {
-                <Self::Output as Shape>::from_dyn(&broadcast_dims::<Self, (usize, $($prefix,)* $($suffix,)+)>(lhs, rhs)).unwrap()
+            ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
+                field_from_dims::<Self::Output>(OperationKind::Broadcast, &broadcast_dims::<Self, (usize, $($prefix,)* $($suffix,)+)>(lhs, rhs)?)
             }
         }
         impl<$($prefix: StaticOrNamedDim,)* $($suffix: StaticOrNamedDim),+> BroadcastShape<($($suffix,)+)> for (usize, $($prefix,)* $($suffix,)+)
@@ -306,18 +318,14 @@ macro_rules! impl_broadcast_usize_prepend {
             fn output_shape(
                 lhs: &<Self as Shape>::Field,
                 rhs: &<($($suffix,)+) as Shape>::Field,
-            ) -> <Self::Output as Shape>::Field {
-                <Self::Output as Shape>::from_dyn(&broadcast_dims::<Self, ($($suffix,)+)>(lhs, rhs)).unwrap()
+            ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
+                field_from_dims::<Self::Output>(OperationKind::Broadcast, &broadcast_dims::<Self, ($($suffix,)+)>(lhs, rhs)?)
             }
         }
     };
 }
-impl_broadcast_usize_prepend!((); (B));
-impl_broadcast_usize_prepend!((); (B, C));
-impl_broadcast_usize_prepend!((B); (C));
-impl_broadcast_usize_prepend!((); (B, C, D));
-impl_broadcast_usize_prepend!((B); (C, D));
-impl_broadcast_usize_prepend!((B, C); (D));
+// Shape is `(usize, Tail..)`, so rank = tail length + 1.
+incin_macros::rank_sweep!(usize_prepend => impl_broadcast_usize_prepend, max = 7);
 
 // ============================================================================
 // Fully dynamic: `Dyn` on at least one side. The backend itself independently
@@ -338,7 +346,7 @@ impl BroadcastShape<Dyn> for Dyn {
     fn output_shape(
         lhs: &<Dyn as Shape>::Field,
         rhs: &<Dyn as Shape>::Field,
-    ) -> <Dyn as Shape>::Field {
+    ) -> core::result::Result<<Dyn as Shape>::Field, ShapeError> {
         broadcast_dims::<Dyn, Dyn>(lhs, rhs)
     }
 }
@@ -349,8 +357,8 @@ impl BroadcastShape<()> for Dyn {
     fn output_shape(
         lhs: &<Dyn as Shape>::Field,
         _: &<() as Shape>::Field,
-    ) -> <Dyn as Shape>::Field {
-        lhs.clone() // At runtime candle will compute output shape properly
+    ) -> core::result::Result<<Dyn as Shape>::Field, ShapeError> {
+        Ok(lhs.clone()) // At runtime candle will compute output shape properly
     }
 }
 impl BroadcastShape<Dyn> for () {
@@ -360,8 +368,8 @@ impl BroadcastShape<Dyn> for () {
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<Dyn as Shape>::Field,
-    ) -> <Dyn as Shape>::Field {
-        rhs.clone() // At runtime candle will compute output shape properly
+    ) -> core::result::Result<<Dyn as Shape>::Field, ShapeError> {
+        Ok(rhs.clone()) // At runtime candle will compute output shape properly
     }
 }
 
@@ -378,8 +386,8 @@ macro_rules! impl_broadcast_dyn_static {
             fn output_shape(
                 lhs: &<Dyn as Shape>::Field,
                 _: &<($($dim,)+) as Shape>::Field,
-            ) -> <Dyn as Shape>::Field {
-                lhs.clone() // At runtime candle will compute output shape properly
+            ) -> core::result::Result<<Dyn as Shape>::Field, ShapeError> {
+                Ok(lhs.clone()) // At runtime candle will compute output shape properly
             }
         }
         impl<$($dim: StaticOrNamedDim),+> BroadcastShape<Dyn> for ($($dim,)+) {
@@ -389,16 +397,14 @@ macro_rules! impl_broadcast_dyn_static {
             fn output_shape(
                 _: &<Self as Shape>::Field,
                 rhs: &<Dyn as Shape>::Field,
-            ) -> <Dyn as Shape>::Field {
-                rhs.clone() // At runtime candle will compute output shape properly
+            ) -> core::result::Result<<Dyn as Shape>::Field, ShapeError> {
+                Ok(rhs.clone()) // At runtime candle will compute output shape properly
             }
         }
     };
 }
-impl_broadcast_dyn_static!(A);
-impl_broadcast_dyn_static!(A, B);
-impl_broadcast_dyn_static!(A, B, C);
-impl_broadcast_dyn_static!(A, B, C, D);
+// `Dyn` against a full static shape, in both directions.
+incin_macros::rank_sweep!(letters => impl_broadcast_dyn_static);
 
 impl BroadcastShape<(usize,)> for Dyn {
     /// The resulting shape after broadcasting `Self` against the other operand.
@@ -407,8 +413,8 @@ impl BroadcastShape<(usize,)> for Dyn {
     fn output_shape(
         lhs: &<Dyn as Shape>::Field,
         _: &<(usize,) as Shape>::Field,
-    ) -> <Dyn as Shape>::Field {
-        lhs.clone() // At runtime candle will compute output shape properly
+    ) -> core::result::Result<<Dyn as Shape>::Field, ShapeError> {
+        Ok(lhs.clone()) // At runtime candle will compute output shape properly
     }
 }
 impl BroadcastShape<Dyn> for (usize,) {
@@ -418,8 +424,8 @@ impl BroadcastShape<Dyn> for (usize,) {
     fn output_shape(
         _: &<Self as Shape>::Field,
         rhs: &<Dyn as Shape>::Field,
-    ) -> <Dyn as Shape>::Field {
-        rhs.clone() // At runtime candle will compute output shape properly
+    ) -> core::result::Result<<Dyn as Shape>::Field, ShapeError> {
+        Ok(rhs.clone()) // At runtime candle will compute output shape properly
     }
 }
 
@@ -433,8 +439,8 @@ macro_rules! impl_broadcast_dyn_usize {
             fn output_shape(
                 lhs: &<Dyn as Shape>::Field,
                 _: &<(usize, $($dim,)+) as Shape>::Field,
-            ) -> <Dyn as Shape>::Field {
-                lhs.clone() // At runtime candle will compute output shape properly
+            ) -> core::result::Result<<Dyn as Shape>::Field, ShapeError> {
+                Ok(lhs.clone()) // At runtime candle will compute output shape properly
             }
         }
         impl<$($dim: StaticOrNamedDim),+> BroadcastShape<Dyn> for (usize, $($dim,)+) {
@@ -444,12 +450,11 @@ macro_rules! impl_broadcast_dyn_usize {
             fn output_shape(
                 _: &<Self as Shape>::Field,
                 rhs: &<Dyn as Shape>::Field,
-            ) -> <Dyn as Shape>::Field {
-                rhs.clone() // At runtime candle will compute output shape properly
+            ) -> core::result::Result<<Dyn as Shape>::Field, ShapeError> {
+                Ok(rhs.clone()) // At runtime candle will compute output shape properly
             }
         }
     };
 }
-impl_broadcast_dyn_usize!(B);
-impl_broadcast_dyn_usize!(B, C);
-impl_broadcast_dyn_usize!(B, C, D);
+// Shape is `(usize, Tail..)`, so rank = tail length + 1.
+incin_macros::rank_sweep!(letters_from_b => impl_broadcast_dyn_usize, max = 7);

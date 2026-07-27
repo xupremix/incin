@@ -409,10 +409,15 @@ impl<S1: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad> Tensor<S1, B, 
         Tensor::from_parts(self.inner, s2_shape, self._dtype, self._device, self._grad)
     }
 
-    /// Converts this tensor to a dynamically-shaped Tensor<Dyn>.
+    /// Converts this tensor to a dynamically-shaped `Tensor<Dyn>`.
     pub fn into_dyn(self) -> Tensor<crate::prelude::Dyn, B, K, G> {
         let dims = S1::dims(&self._shape);
-        let s2_shape = <crate::prelude::Dyn as Shape>::from_dyn(dims.as_ref()).unwrap();
+        // `Dyn`'s field *is* the dimension vector, so there is nothing to
+        // re-parse and nothing that can fail — the old
+        // `Dyn::from_dyn(..).unwrap()` was asserting `Some(dims.to_vec())` is
+        // `Some`. Building it directly makes that structural rather than
+        // assumed, and is the last of the 39 sites `SHP-004` removes.
+        let s2_shape: <crate::prelude::Dyn as Shape>::Field = dims.as_ref().to_vec();
         Tensor::from_parts_unchecked(self.inner, s2_shape, self._dtype, self._device, self._grad)
     }
 

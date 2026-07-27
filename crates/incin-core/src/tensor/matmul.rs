@@ -7,6 +7,8 @@
 //! **Static shapes**: The compiler rejects mismatched inner dims at compile time.
 //! **Dynamic shapes**: Mismatches are caught at runtime by candle.
 
+use crate::shapes::error::OperationKind;
+use crate::shapes::shape::field_from_dims;
 use crate::prelude::*;
 
 // ============================================================================
@@ -33,7 +35,7 @@ pub trait MatMulShape<Rhs: Shape>: Shape {
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         rhs: &<Rhs as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field;
+    ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError>;
 }
 
 /// Marker for a compile-time-fixed (`typenum`) dimension usable in
@@ -84,6 +86,33 @@ impl<A: StaticDim, B: StaticDim> StaticDim for ProdDim<A, B> {}
 pub trait StaticOrNamedDim: Dim {}
 impl<T: StaticDim> StaticOrNamedDim for T {}
 
+
+/// Check that the contracted dimension agrees between the two operands.
+///
+/// For a `typenum` `K` the type system already proves this. For a `dim!` name
+/// it does not: the same named type can legitimately carry a *different*
+/// runtime size on each operand, which is exactly the case decision `D-013`
+/// records for broadcasting and which applies identically to the matmul
+/// contraction. For a `usize` axis nothing is proven at all.
+///
+/// Before `SHP-004` no impl checked this — `output_shape` took `lhs.0` and
+/// `rhs.1` and never looked at `K`, so a disagreement produced a confidently
+/// wrong output shape rather than an error.
+#[inline]
+fn checked_contraction(lhs_k: usize, rhs_k: usize) -> core::result::Result<(), ShapeError> {
+    if lhs_k == rhs_k {
+        Ok(())
+    } else {
+        Err(ShapeError::DimensionMismatch {
+            operation: OperationKind::MatMul,
+            axis: Axis::Named("k"),
+            lhs: lhs_k,
+            rhs: rhs_k,
+            constraint: DimensionConstraint::Equal,
+        })
+    }
+}
+
 // ============================================================================
 // Fully static: (M, K) × (K, N) → (M, N)
 // ============================================================================
@@ -97,8 +126,9 @@ impl<M: StaticOrNamedDim, K: StaticOrNamedDim, N: StaticOrNamedDim> MatMulShape<
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         rhs: &<(K, N) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        (lhs.0, rhs.1)
+    ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
+        checked_contraction(lhs.1.size(), rhs.0.size())?;
+        Ok((lhs.0, rhs.1))
     }
 }
 
@@ -116,8 +146,9 @@ impl<K: StaticOrNamedDim, N: StaticOrNamedDim> MatMulShape<(K, N)> for (usize, K
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         rhs: &<(K, N) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        (lhs.0, rhs.1)
+    ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
+        checked_contraction(lhs.1.size(), rhs.0.size())?;
+        Ok((lhs.0, rhs.1))
     }
 }
 
@@ -131,8 +162,9 @@ impl<M: StaticOrNamedDim, K: StaticOrNamedDim> MatMulShape<(K, usize)> for (M, K
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         rhs: &<(K, usize) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        (lhs.0, rhs.1)
+    ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
+        checked_contraction(lhs.1.size(), rhs.0.size())?;
+        Ok((lhs.0, rhs.1))
     }
 }
 
@@ -146,8 +178,9 @@ impl<K: StaticOrNamedDim> MatMulShape<(K, usize)> for (usize, K) {
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         rhs: &<(K, usize) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        (lhs.0, rhs.1)
+    ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
+        checked_contraction(lhs.1.size(), rhs.0.size())?;
+        Ok((lhs.0, rhs.1))
     }
 }
 
@@ -161,8 +194,9 @@ impl MatMulShape<(usize, usize)> for (usize, usize) {
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         rhs: &<(usize, usize) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        (lhs.0, rhs.1)
+    ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
+        checked_contraction(lhs.1.size(), rhs.0.size())?;
+        Ok((lhs.0, rhs.1))
     }
 }
 
@@ -178,24 +212,45 @@ impl MatMulShape<Dyn> for Dyn {
     fn output_shape(
         lhs: &<Dyn as Shape>::Field,
         rhs: &<Dyn as Shape>::Field,
-    ) -> <Dyn as Shape>::Field {
-        if lhs.len() == 2 && rhs.len() == 2 {
-            alloc::vec![lhs[0], rhs[1]]
-        } else if lhs.len() == 3 && rhs.len() == 3 {
-            alloc::vec![lhs[0], lhs[1], rhs[2]]
-        } else if lhs.len() == 4 && rhs.len() == 2 {
-            // Flattened batch, e.g. [4, 10816] and [10816, 10]
-            alloc::vec![lhs[0], rhs[1]]
-        } else if lhs.len() == 2 && rhs.len() == 1 {
-            alloc::vec![]
-        } else if lhs.len() >= 2 && rhs.len() == 2 {
-            let mut out = lhs.clone();
-            let last = out.len() - 1;
-            out[last] = rhs[1];
-            out
-        } else {
-            alloc::vec![]
+    ) -> core::result::Result<<Dyn as Shape>::Field, ShapeError> {
+        const OP: OperationKind = OperationKind::MatMul;
+
+        if lhs.len() == 4 && rhs.len() == 2 {
+            // Preserved as-is: the "flattened batch" convention, where a
+            // rank-4 `[N, C, H, W]` operand meets a `[C*H*W, out]` weight and
+            // the caller folds the three trailing axes into the contraction.
+            // The contracted extents therefore do not match axis-for-axis and
+            // deliberately are not checked here.
+            return Ok(alloc::vec![lhs[0], rhs[1]]);
         }
+
+        if lhs.len() < 2 {
+            return Err(ShapeError::RankMismatch {
+                operation: OP,
+                expected: RankExpectation::AtLeast(2),
+                actual: lhs.len(),
+            });
+        }
+        if rhs.is_empty() {
+            return Err(ShapeError::RankMismatch {
+                operation: OP,
+                expected: RankExpectation::AtLeast(1),
+                actual: 0,
+            });
+        }
+
+        // A rank-1 `rhs` is a vector: it contracts against `lhs`'s last axis
+        // and contributes no output axis. This used to return the *empty*
+        // shape — a scalar — for `[m, k] x [k]`, whose correct result is `[m]`.
+        let vector_rhs = rhs.len() == 1;
+        let rhs_k = if vector_rhs { rhs[0] } else { rhs[rhs.len() - 2] };
+        checked_contraction(lhs[lhs.len() - 1], rhs_k)?;
+
+        let mut out: alloc::vec::Vec<usize> = lhs[..lhs.len() - 1].to_vec();
+        if !vector_rhs {
+            out.push(rhs[rhs.len() - 1]);
+        }
+        Ok(out)
     }
 }
 
@@ -224,12 +279,12 @@ macro_rules! impl_batched_matmul {
             fn output_shape(
                 lhs: &<Self as Shape>::Field,
                 rhs: &<( $($batch,)* K, N) as Shape>::Field,
-            ) -> <Self::Output as Shape>::Field {
+            ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
                 let mut dims: Vec<usize> = <Self as DynShape>::dims(lhs).into();
                 let rhs_dims: Vec<usize> = <( $($batch,)* K, N) as DynShape>::dims(rhs).into();
                 let last = dims.len() - 1;
                 dims[last] = rhs_dims[rhs_dims.len() - 1];
-                <Self::Output as Shape>::from_dyn(&dims).unwrap()
+                field_from_dims::<Self::Output>(OperationKind::MatMul, &dims)
             }
         }
         // Lhs has batch
@@ -245,11 +300,11 @@ macro_rules! impl_batched_matmul {
             fn output_shape(
                 lhs: &<Self as Shape>::Field,
                 rhs: &<(K, N) as Shape>::Field,
-            ) -> <Self::Output as Shape>::Field {
+            ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
                 let mut dims: Vec<usize> = <Self as DynShape>::dims(lhs).into();
                 let last = dims.len() - 1;
                 dims[last] = rhs.1.size();
-                <Self::Output as Shape>::from_dyn(&dims).unwrap()
+                field_from_dims::<Self::Output>(OperationKind::MatMul, &dims)
             }
         }
         // Rhs has batch
@@ -265,11 +320,11 @@ macro_rules! impl_batched_matmul {
             fn output_shape(
                 lhs: &<Self as Shape>::Field,
                 rhs: &<( $($batch,)* K, N) as Shape>::Field,
-            ) -> <Self::Output as Shape>::Field {
+            ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
                 let mut dims: Vec<usize> = <( $($batch,)* K, N) as DynShape>::dims(rhs).into();
                 let second_last = dims.len() - 2;
                 dims[second_last] = lhs.0.size();
-                <Self::Output as Shape>::from_dyn(&dims).unwrap()
+                field_from_dims::<Self::Output>(OperationKind::MatMul, &dims)
             }
         }
     };
@@ -290,8 +345,8 @@ impl<M: StaticOrNamedDim, K: StaticOrNamedDim, N: StaticOrNamedDim> MatMulShape<
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         rhs: &<(usize, K, N) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        (lhs.0, lhs.1, rhs.2)
+    ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
+        Ok((lhs.0, lhs.1, rhs.2))
     }
 }
 impl<M: StaticOrNamedDim, K: StaticOrNamedDim, N: StaticOrNamedDim> MatMulShape<(K, N)>
@@ -304,8 +359,8 @@ impl<M: StaticOrNamedDim, K: StaticOrNamedDim, N: StaticOrNamedDim> MatMulShape<
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         rhs: &<(K, N) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        (lhs.0, lhs.1, rhs.1)
+    ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
+        Ok((lhs.0, lhs.1, rhs.1))
     }
 }
 impl<M: StaticOrNamedDim, K: StaticOrNamedDim, N: StaticOrNamedDim> MatMulShape<(K, N)>
@@ -318,8 +373,8 @@ impl<M: StaticOrNamedDim, K: StaticOrNamedDim, N: StaticOrNamedDim> MatMulShape<
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         rhs: &<(K, N) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        (lhs.0, lhs.1, lhs.2, rhs.1)
+    ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
+        Ok((lhs.0, lhs.1, lhs.2, rhs.1))
     }
 }
 impl<M: StaticOrNamedDim, K: StaticOrNamedDim, N: StaticOrNamedDim> MatMulShape<(usize, K, N)>
@@ -332,8 +387,8 @@ impl<M: StaticOrNamedDim, K: StaticOrNamedDim, N: StaticOrNamedDim> MatMulShape<
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         rhs: &<(usize, K, N) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        (rhs.0, lhs.0, rhs.2)
+    ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
+        Ok((rhs.0, lhs.0, rhs.2))
     }
 }
 impl<M: StaticOrNamedDim, K: StaticOrNamedDim, N: StaticOrNamedDim>
@@ -346,8 +401,8 @@ impl<M: StaticOrNamedDim, K: StaticOrNamedDim, N: StaticOrNamedDim>
     fn output_shape(
         lhs: &<Self as Shape>::Field,
         rhs: &<(usize, usize, K, N) as Shape>::Field,
-    ) -> <Self::Output as Shape>::Field {
-        (rhs.0, rhs.1, lhs.0, rhs.3)
+    ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
+        Ok((rhs.0, rhs.1, lhs.0, rhs.3))
     }
 }
 
@@ -364,7 +419,7 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Ten
         S1: MatMulShape<S2>,
     {
         let inner = B::matmul::<K>(&self.inner, &rhs.inner)?;
-        let output_shape = S1::output_shape(&self._shape, &rhs._shape);
+        let output_shape = S1::output_shape(&self._shape, &rhs._shape)?;
         Ok(Tensor::from_parts_unchecked(
             inner,
             output_shape,
@@ -379,7 +434,7 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Ten
     where
         S1: crate::tensor::ops::ShapeEq<S2>,
     {
-        let _ = <S1 as crate::tensor::ops::ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
+        <S1 as crate::tensor::ops::ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
         let mul = self.mul(rhs)?;
         mul.sum_all()
     }
