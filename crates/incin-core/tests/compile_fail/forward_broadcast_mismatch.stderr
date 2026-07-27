@@ -4,8 +4,9 @@ error[E0277]: Cannot broadcast axis `UInt<UInt<UTerm, B1>, B0>` against `UInt<UI
 9 |     let _out = t1.broadcast_add(&t2).unwrap();
   |                   ^^^^^^^^^^^^^ incompatible axis
   |
-  = note: two axes broadcast when their types are the same, or one of them is `U1`
   = help: the trait `BroadcastDim<UInt<UInt<UTerm, B1>, B1>>` is not implemented for `UInt<UInt<UTerm, B1>, B0>`
-          but it is implemented for `UInt<UTerm, B1>`
-  = help: for that trait implementation, expected `UTerm`, found `UInt<UTerm, B1>`
+  = note: two axes broadcast when their types are the same, or one of them is `U1`
+  = help: the following other types implement trait `BroadcastDim<Rhs>`:
+            `UInt<UTerm, B1>` implements `BroadcastDim<D>`
+            `UInt<UTerm, B1>` implements `BroadcastDim<usize>`
   = note: required for `(UInt<UTerm, B1>, UInt<UInt<UTerm, B1>, B0>)` to implement `BroadcastShape<(UInt<UInt<UTerm, B1>, B1>, UInt<UInt<UTerm, B1>, B1>)>`

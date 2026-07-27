@@ -197,3 +197,68 @@ fn a_five_element_axis_is_not_related_to_a_four_element_one() {
         vec![5, 4]
     );
 }
+
+// -- a runtime axis meeting a static one ----------------------------------
+
+#[test]
+fn a_runtime_axis_may_sit_anywhere_rather_than_only_in_front() {
+    // Before SHP-007 a `usize` axis was only related by the mixed families,
+    // every one of which required it to be axis 0 and the remaining axes to be
+    // identical on both sides. `(U3, usize)` had no partner at all.
+    assert_eq!(
+        resolved::<(U3, usize), (U3, U4), (U3, U4)>(&[3, 4], &[3, 4]),
+        vec![3, 4]
+    );
+}
+
+#[test]
+fn meeting_a_static_axis_recovers_the_size_the_runtime_one_lost() {
+    // The output type is `(U3, U4)`, not `(usize, U4)`. A `usize` axis that
+    // broadcasts against `U3` is either 3 or 1, and the result is 3 in both
+    // cases, so the static side is the more precise answer and keeping it is
+    // free. What was a runtime axis on the way in is a proved one on the way
+    // out.
+    assert_eq!(
+        resolved::<(usize, U4), (U3, U4), (U3, U4)>(&[3, 4], &[3, 4]),
+        vec![3, 4]
+    );
+    assert_eq!(
+        resolved::<(usize, U4), (U3, U4), (U3, U4)>(&[1, 4], &[3, 4]),
+        vec![3, 4]
+    );
+}
+
+#[test]
+fn meeting_a_literal_one_keeps_the_axis_dynamic() {
+    // The mirror of the case above, and the reason it cannot be stated as "the
+    // static side always wins": `U1` proves nothing about the result, so the
+    // runtime axis is what survives.
+    assert_eq!(
+        resolved::<(usize, U4), (U1, U4), (usize, U4)>(&[7, 4], &[1, 4]),
+        vec![7, 4]
+    );
+}
+
+#[test]
+fn two_runtime_axes_stay_runtime() {
+    assert_eq!(
+        resolved::<(usize, U4), (usize, U4), (usize, U4)>(&[5, 4], &[1, 4]),
+        vec![5, 4]
+    );
+}
+
+#[test]
+fn a_runtime_axis_that_contradicts_its_static_partner_is_rejected() {
+    // The type admitted the pair; the value does not satisfy it. This is the
+    // check that has to happen at runtime, and it happens once.
+    let error = <(usize, U4) as BroadcastShape<(U3, U4)>>::output_shape(
+        &field::<(usize, U4)>(&[5, 4]),
+        &field::<(U3, U4)>(&[3, 4]),
+    )
+    .expect_err("5 and 3 do not broadcast");
+
+    assert_eq!(
+        error.operation(),
+        incin_core::prelude::OperationKind::Broadcast
+    );
+}
