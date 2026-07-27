@@ -195,10 +195,8 @@ where
         let resolved = L::output_shape(&operands.0, &operands.1)?;
         let expected = dims_of::<Self::Output>(&resolved);
 
-        let spec = BroadcastSpec::contiguous(
-            &dims_of::<L>(&operands.0),
-            &dims_of::<R>(&operands.1),
-        )?;
+        let spec =
+            BroadcastSpec::contiguous(&dims_of::<L>(&operands.0), &dims_of::<R>(&operands.1))?;
         agree(OperationKind::Broadcast, &expected, &spec.output)?;
 
         Ok(Validated::new(
@@ -225,7 +223,10 @@ where
     type Args = ();
     type Descriptor = MatMulSpec;
 
-    fn lower(operands: &Self::Operands, (): Self::Args) -> Result<Validated<MatMulSpec>, ShapeError> {
+    fn lower(
+        operands: &Self::Operands,
+        (): Self::Args,
+    ) -> Result<Validated<MatMulSpec>, ShapeError> {
         let resolved = L::output_shape(&operands.0, &operands.1)?;
         let expected = dims_of::<Self::Output>(&resolved);
 

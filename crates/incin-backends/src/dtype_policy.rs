@@ -177,13 +177,9 @@ mod tests {
     #[test]
     fn low_precision_storage_uses_f32_compute_and_accumulation() {
         for dtype in [DTypeId::F16, DTypeId::BF16] {
-            let pointwise = resolve_dtype_policy(
-                BackendFamily::Cuda,
-                OperationKind::Pointwise,
-                dtype,
-                "test",
-            )
-            .unwrap();
+            let pointwise =
+                resolve_dtype_policy(BackendFamily::Cuda, OperationKind::Pointwise, dtype, "test")
+                    .unwrap();
             assert_eq!(pointwise.storage, dtype);
             assert_eq!(pointwise.compute, DTypeId::F32);
             assert_eq!(pointwise.accumulator, DTypeId::F32);

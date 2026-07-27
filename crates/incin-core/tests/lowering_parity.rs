@@ -187,11 +187,9 @@ fn transposition_is_applied_after_lowering_because_it_is_not_a_shape_fact() {
 
 #[test]
 fn reducing_an_axis_drops_it_and_splits_the_shape_into_three_regions() {
-    let lowered = <ReduceRule<1> as ShapeRule<(U2, U3, U4)>>::lower(
-        &field::<(U2, U3, U4)>(&[2, 3, 4]),
-        (),
-    )
-    .expect("axis 1 is in range");
+    let lowered =
+        <ReduceRule<1> as ShapeRule<(U2, U3, U4)>>::lower(&field::<(U2, U3, U4)>(&[2, 3, 4]), ())
+            .expect("axis 1 is in range");
     let spec = lowered.descriptor();
 
     assert_eq!(spec.output.dims(), &[2, 4]);
@@ -262,8 +260,11 @@ fn a_reshape_between_static_shapes_of_different_sizes_does_not_typecheck() {
     // same typenum, so `ReshapeRule` cannot be handed a mismatched pair at all.
     // The constructor still rejects one, because a caller can reach it directly
     // and a dynamic reshape will once one exists.
-    let error = ReshapeSpec::new(&ShapeBuf::from_slice(&[2, 6]), &ShapeBuf::from_slice(&[5, 5]))
-        .expect_err("12 elements cannot become 25");
+    let error = ReshapeSpec::new(
+        &ShapeBuf::from_slice(&[2, 6]),
+        &ShapeBuf::from_slice(&[5, 5]),
+    )
+    .expect_err("12 elements cannot become 25");
 
     assert_eq!(error.operation(), OperationKind::Reshape);
 }
@@ -304,9 +305,11 @@ fn grouping_that_does_not_divide_the_channels_is_rejected() {
 
 #[test]
 fn pooling_halves_the_spatial_axes_and_leaves_the_channels_alone() {
-    let lowered =
-        <Pool2x2 as ShapeRule<(U1, U3, U8, U8)>>::lower(&field::<(U1, U3, U8, U8)>(&[1, 3, 8, 8]), ())
-            .expect("a 2x2 window strided by 2 tiles an 8x8 input");
+    let lowered = <Pool2x2 as ShapeRule<(U1, U3, U8, U8)>>::lower(
+        &field::<(U1, U3, U8, U8)>(&[1, 3, 8, 8]),
+        (),
+    )
+    .expect("a 2x2 window strided by 2 tiles an 8x8 input");
     let spec = lowered.descriptor();
 
     assert_eq!(spec.output.dims(), &[1, 3, 4, 4]);
@@ -360,9 +363,11 @@ fn the_descriptor_a_rule_mints_equals_the_one_built_by_hand() {
         (),
     )
     .expect("3x4 against 1x4 broadcasts");
-    let by_hand =
-        BroadcastSpec::contiguous(&ShapeBuf::from_slice(&[3, 4]), &ShapeBuf::from_slice(&[1, 4]))
-            .expect("3x4 against 1x4 broadcasts");
+    let by_hand = BroadcastSpec::contiguous(
+        &ShapeBuf::from_slice(&[3, 4]),
+        &ShapeBuf::from_slice(&[1, 4]),
+    )
+    .expect("3x4 against 1x4 broadcasts");
 
     assert_eq!(lowered.into_descriptor(), by_hand);
 }

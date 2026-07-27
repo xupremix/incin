@@ -1,7 +1,7 @@
-use crate::shapes::error::OperationKind;
-use crate::shapes::shape::field_from_dims;
 use crate::nn::{Module, Param};
 use crate::prelude::*;
+use crate::shapes::error::OperationKind;
+use crate::shapes::shape::field_from_dims;
 use core::marker::PhantomData;
 
 /// Shape traits for RMSNorm.

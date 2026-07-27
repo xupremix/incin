@@ -47,9 +47,7 @@ use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign};
 
 use super::sealed::Sealed;
 use crate::shapes::buf::{ShapeBuf, StrideBuf};
-use crate::shapes::error::{
-    Axis, DimensionConstraint, OperationKind, RankExpectation, ShapeError,
-};
+use crate::shapes::error::{Axis, DimensionConstraint, OperationKind, RankExpectation, ShapeError};
 use crate::shapes::spatial::spatial_out_size;
 
 // --- schema version ---------------------------------------------------------

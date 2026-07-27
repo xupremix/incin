@@ -7,9 +7,9 @@
 //! **Static shapes**: The compiler rejects mismatched inner dims at compile time.
 //! **Dynamic shapes**: Mismatches are caught at runtime by candle.
 
+use crate::prelude::*;
 use crate::shapes::error::OperationKind;
 use crate::shapes::shape::field_from_dims;
-use crate::prelude::*;
 
 // ============================================================================
 // MatMulShape trait — compile-time shape compatibility for matmul
@@ -85,7 +85,6 @@ impl<A: StaticDim, B: StaticDim> StaticDim for ProdDim<A, B> {}
 /// this change) keeps the fix scoped to matmul.
 pub trait StaticOrNamedDim: Dim {}
 impl<T: StaticDim> StaticOrNamedDim for T {}
-
 
 /// Check that the contracted dimension agrees between the two operands.
 ///
@@ -243,7 +242,11 @@ impl MatMulShape<Dyn> for Dyn {
         // and contributes no output axis. This used to return the *empty*
         // shape — a scalar — for `[m, k] x [k]`, whose correct result is `[m]`.
         let vector_rhs = rhs.len() == 1;
-        let rhs_k = if vector_rhs { rhs[0] } else { rhs[rhs.len() - 2] };
+        let rhs_k = if vector_rhs {
+            rhs[0]
+        } else {
+            rhs[rhs.len() - 2]
+        };
         checked_contraction(lhs[lhs.len() - 1], rhs_k)?;
 
         let mut out: alloc::vec::Vec<usize> = lhs[..lhs.len() - 1].to_vec();

@@ -412,10 +412,7 @@ impl StrideBuf {
     /// overflow path is a `panic!`: an unchecked multiply here can wrap to a
     /// small stride that is then used to index a buffer sized from the same
     /// wrapped arithmetic.
-    pub fn contiguous_for(
-        shape: &ShapeBuf,
-        operation: OperationKind,
-    ) -> Result<Self, ShapeError> {
+    pub fn contiguous_for(shape: &ShapeBuf, operation: OperationKind) -> Result<Self, ShapeError> {
         let dims = shape.dims();
         let mut strides = InlineOrHeap::from_slice(&[]);
         for _ in dims {
@@ -439,8 +436,7 @@ impl StrideBuf {
     /// stride buffer, so overflow answers `false` rather than propagating.
     #[must_use]
     pub fn is_contiguous_for(&self, shape: &ShapeBuf) -> bool {
-        Self::contiguous_for(shape, OperationKind::Storage)
-            .is_ok_and(|expected| expected == *self)
+        Self::contiguous_for(shape, OperationKind::Storage).is_ok_and(|expected| expected == *self)
     }
 
     /// Number of elements the view spans, from its first element through its

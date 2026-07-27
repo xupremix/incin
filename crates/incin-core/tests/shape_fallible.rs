@@ -71,8 +71,8 @@ fn broadcast_right_aligns_operands_of_different_rank() {
 
 #[test]
 fn dyn_broadcast_reports_a_right_aligned_axis_index() {
-    let err = <Dyn as BroadcastShape<Dyn>>::output_shape(&vec![2, 3, 4], &vec![2, 9, 4])
-        .unwrap_err();
+    let err =
+        <Dyn as BroadcastShape<Dyn>>::output_shape(&vec![2, 3, 4], &vec![2, 9, 4]).unwrap_err();
     assert_eq!(err.operation(), OperationKind::Broadcast);
     assert_eq!(err.axis(), Some(Axis::Index(1)));
 }
@@ -148,8 +148,8 @@ fn the_flattened_batch_convention_is_preserved() {
     // path: `[N, C, H, W] x [C*H*W, out] -> [N, out]`. Its contracted extents
     // deliberately do not match axis-for-axis, so it keeps its own arm and is
     // not routed through the contraction check.
-    let out = <Dyn as MatMulShape<Dyn>>::output_shape(&vec![4, 4, 52, 52], &vec![10816, 10])
-        .unwrap();
+    let out =
+        <Dyn as MatMulShape<Dyn>>::output_shape(&vec![4, 4, 52, 52], &vec![10816, 10]).unwrap();
     assert_eq!(out, vec![4, 10]);
 }
 

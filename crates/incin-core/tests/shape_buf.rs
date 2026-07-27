@@ -153,7 +153,10 @@ fn numel_agrees_with_u128_and_reports_overflow() {
         match buf.checked_numel(OP) {
             Ok(n) => {
                 saw_success = true;
-                assert!(fits(reference), "case {case}: {dims:?} should have overflowed");
+                assert!(
+                    fits(reference),
+                    "case {case}: {dims:?} should have overflowed"
+                );
                 assert_eq!(Some(n as u128), reference, "case {case}: {dims:?}");
             }
             Err(err) => {
@@ -170,8 +173,14 @@ fn numel_agrees_with_u128_and_reports_overflow() {
 
     // A property test that only ever exercises one branch proves nothing about
     // the other; assert the generator reached both.
-    assert!(saw_overflow, "generator never produced an overflowing shape");
-    assert!(saw_success, "generator never produced a representable shape");
+    assert!(
+        saw_overflow,
+        "generator never produced an overflowing shape"
+    );
+    assert!(
+        saw_success,
+        "generator never produced a representable shape"
+    );
 }
 
 #[test]
@@ -211,8 +220,14 @@ fn numel_does_not_depend_on_axis_order() {
 #[test]
 fn an_empty_tensor_is_empty_however_large_its_other_axes_are() {
     // The regression this pins: the fold used to error on the second form.
-    assert_eq!(ShapeBuf::from_slice(&[usize::MAX, 0, usize::MAX]).numel(), Some(0));
-    assert_eq!(ShapeBuf::from_slice(&[usize::MAX, usize::MAX, 0]).numel(), Some(0));
+    assert_eq!(
+        ShapeBuf::from_slice(&[usize::MAX, 0, usize::MAX]).numel(),
+        Some(0)
+    );
+    assert_eq!(
+        ShapeBuf::from_slice(&[usize::MAX, usize::MAX, 0]).numel(),
+        Some(0)
+    );
     assert_eq!(
         ShapeBuf::from_slice(&[usize::MAX, usize::MAX, 0])
             .checked_byte_len(8, OP)
@@ -272,7 +287,10 @@ fn contiguous_strides_agree_with_u128_and_report_overflow() {
 
         match StrideBuf::contiguous_for(&shape, OP) {
             Ok(strides) => {
-                assert!(representable, "case {case}: {dims:?} should have overflowed");
+                assert!(
+                    representable,
+                    "case {case}: {dims:?} should have overflowed"
+                );
                 assert_eq!(strides.len(), dims.len(), "case {case}");
                 let reference = reference.as_ref().expect("representable");
                 for (axis, (&got, &want)) in strides.strides().iter().zip(reference).enumerate() {
@@ -385,7 +403,9 @@ fn broadcast_strides_span_less_than_the_element_count() {
 fn span_rejects_a_stride_buffer_of_the_wrong_rank() {
     let shape = ShapeBuf::from_slice(&[2, 3, 4]);
     let strides = StrideBuf::from_slice(&[12, 4]);
-    let err = strides.checked_span(&shape, OperationKind::Slice).unwrap_err();
+    let err = strides
+        .checked_span(&shape, OperationKind::Slice)
+        .unwrap_err();
     assert_eq!(
         err,
         ShapeError::RankMismatch {
@@ -404,7 +424,11 @@ fn spill_boundary_is_exactly_inline_rank() {
     let inline = ShapeBuf::from_slice(&vec![2; INLINE_RANK]);
     let spilled = ShapeBuf::from_slice(&vec![2; INLINE_RANK + 1]);
     assert!(inline.is_inline(), "rank {INLINE_RANK} should stay inline");
-    assert!(!spilled.is_inline(), "rank {} should spill", INLINE_RANK + 1);
+    assert!(
+        !spilled.is_inline(),
+        "rank {} should spill",
+        INLINE_RANK + 1
+    );
 
     // Contents survive the spill, and the two ranks stay distinguishable.
     assert_eq!(inline.dims().len(), INLINE_RANK);
@@ -447,7 +471,9 @@ fn overflow_terms_are_named_distinctly() {
     );
 
     let wide = ShapeBuf::from_slice(&[usize::MAX / 2]);
-    let byte_err = wide.checked_byte_len(4, OperationKind::Storage).unwrap_err();
+    let byte_err = wide
+        .checked_byte_len(4, OperationKind::Storage)
+        .unwrap_err();
     assert_eq!(
         byte_err.to_string(),
         "storage: arithmetic overflow evaluating 'element count * element size'"

@@ -4,9 +4,9 @@
 //! or dimensionless tensor) as well as along specific axes. It supports both static type-level
 //! dimensional reductions using `Axis` where the shape statically changes, and dynamic
 //! dimensional reductions where the shape becomes `Dyn`.
+use crate::prelude::{Backend, DynShape, RequiresGrad, Result, Shape, Tensor};
 use crate::shapes::error::OperationKind;
 use crate::shapes::shape::field_from_dims;
-use crate::prelude::{Backend, DynShape, RequiresGrad, Result, Shape, Tensor};
 
 macro_rules! impl_reduction_op {
     (
@@ -339,7 +339,8 @@ impl<
         let (values_inner, indices_inner) = B::topk::<K, u32>(&self.inner, k, dim, largest)?;
         let mut out_dims = S::dims(&self._shape).into();
         out_dims[dim] = k;
-        let out_shape = field_from_dims::<crate::prelude::Dyn>(OperationKind::Reduction, &out_dims)?;
+        let out_shape =
+            field_from_dims::<crate::prelude::Dyn>(OperationKind::Reduction, &out_dims)?;
 
         let values = Tensor::from_parts_unchecked(
             values_inner,

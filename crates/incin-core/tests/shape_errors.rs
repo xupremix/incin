@@ -97,7 +97,10 @@ fn every_rank_expectation_renders() {
         (RankExpectation::Exactly(4), "exactly 4"),
         (RankExpectation::AtLeast(2), "at least 2"),
         (RankExpectation::AtMost(8), "at most 8"),
-        (RankExpectation::Between { min: 2, max: 4 }, "between 2 and 4"),
+        (
+            RankExpectation::Between { min: 2, max: 4 },
+            "between 2 and 4",
+        ),
         (
             RankExpectation::SameAs {
                 operand: "lhs",
@@ -115,7 +118,10 @@ fn every_rank_expectation_renders() {
 fn every_dimension_constraint_renders() {
     let cases = [
         (DimensionConstraint::Equal, "equal"),
-        (DimensionConstraint::Broadcastable, "equal, or one of them 1"),
+        (
+            DimensionConstraint::Broadcastable,
+            "equal, or one of them 1",
+        ),
         (DimensionConstraint::DivisibleBy, "an exact multiple"),
         (DimensionConstraint::AtLeast, "greater than or equal"),
     ];

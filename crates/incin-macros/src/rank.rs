@@ -162,7 +162,13 @@ impl Form {
             Self::Conv1d => vec![format!("{}; {}", rank + 1, colon_pairs())],
             Self::Conv2d => vec![format!("{}, {}; {}", rank + 1, rank + 2, colon_pairs())],
             Self::Pool2d => {
-                vec![format!("{}, {}, {}; {}", rank, rank + 1, rank + 2, colon_pairs())]
+                vec![format!(
+                    "{}, {}, {}; {}",
+                    rank,
+                    rank + 1,
+                    rank + 2,
+                    colon_pairs()
+                )]
             }
             // A non-empty left operand: `(A); (B)` but never `(); (A)`.
             Self::Prepend => splits(b'A', 1),
@@ -191,9 +197,16 @@ impl Form {
             Self::AxisSplit => (0..rank)
                 .map(|axis| {
                     let run = |from: usize, to: usize| {
-                        (from..to).map(|i| format!("D{i}")).collect::<Vec<_>>().join(", ")
+                        (from..to)
+                            .map(|i| format!("D{i}"))
+                            .collect::<Vec<_>>()
+                            .join(", ")
                     };
-                    format!("{} ; D{axis} ; {} ; U{axis}", run(0, axis), run(axis + 1, rank))
+                    format!(
+                        "{} ; D{axis} ; {} ; U{axis}",
+                        run(0, axis),
+                        run(axis + 1, rank)
+                    )
                 })
                 .collect(),
             // One per *insertion point*, of which a rank-`rank` shape has
@@ -202,7 +215,10 @@ impl Form {
             Self::AxisInsert => (0..=rank)
                 .map(|axis| {
                     let run = |from: usize, to: usize| {
-                        (from..to).map(|i| format!("D{i}")).collect::<Vec<_>>().join(", ")
+                        (from..to)
+                            .map(|i| format!("D{i}"))
+                            .collect::<Vec<_>>()
+                            .join(", ")
                     };
                     format!("{} ; {} ; U{axis}", run(0, axis), run(axis, rank))
                 })
@@ -286,7 +302,10 @@ pub(crate) fn rank_sweep(input: TokenStream) -> TokenStream {
     TokenStream::from_str(&lines).unwrap_or_else(|_| {
         TokenStream::from_str(&format!(
             "compile_error!({:?});",
-            format!("rank_sweep produced invalid Rust for `{}`", sweep.macro_name)
+            format!(
+                "rank_sweep produced invalid Rust for `{}`",
+                sweep.macro_name
+            )
         ))
         .expect("compile_error! is valid Rust")
     })

@@ -4,13 +4,13 @@
 //! Loss functions automatically compute and track their required reduction shape
 //! (e.g. reducing down to a scalar or maintaining a batched shape) using type-level
 //! logic to ensure that backpropagation can flow correctly from the scalar loss.
-use crate::shapes::error::OperationKind;
-use crate::shapes::shape::field_from_dims;
 use crate::nn::loss::{
     BceReductionShape, CrossEntropyReductionShape, L1ReductionShape, Mean, MseReductionShape,
     Reduction, ReductionMode,
 };
 use crate::prelude::{Backend, RequiresGrad, Result, Shape, Tensor};
+use crate::shapes::error::OperationKind;
+use crate::shapes::shape::field_from_dims;
 use alloc::vec::Vec;
 
 impl<

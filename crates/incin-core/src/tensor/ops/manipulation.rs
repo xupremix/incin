@@ -4,11 +4,11 @@
 //! without necessarily changing the underlying data. It includes reshaping, transposition,
 //! squeezing, flattening, and broadcasting. These operations heavily leverage the
 //! compile-time type system to ensure the resulting shapes are strictly valid.
-use crate::shapes::error::OperationKind;
-use crate::shapes::shape::field_from_dims;
 use crate::prelude::{
     Backend, Dyn, DynShape, RequiresGrad, Result, Shape, SupportsDType, Tensor, TransferTo,
 };
+use crate::shapes::error::OperationKind;
+use crate::shapes::shape::field_from_dims;
 use crate::tensor::ops::*;
 
 use alloc::string::ToString;

@@ -66,7 +66,10 @@ fn expected_reasons() -> BTreeMap<&'static str, &'static str> {
         ("validated_new_is_crate_private", "E0624"),
         // Macros, which emit their own diagnostics and carry no error code.
         ("macro_idx_invalid", "expected `..=`"),
-        ("macro_module_invalid", "unknown attribute argument for #[module]"),
+        (
+            "macro_module_invalid",
+            "unknown attribute argument for #[module]",
+        ),
         ("macro_s_invalid", "expected identifier"),
     ])
 }

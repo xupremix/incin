@@ -202,7 +202,6 @@ impl<O> Validated<O> {
     pub fn into_descriptor(self) -> O {
         self.descriptor
     }
-
 }
 
 impl<O: fmt::Debug> fmt::Display for Validated<O> {
@@ -347,7 +346,11 @@ mod tests {
 
     #[test]
     fn a_sealed_descriptor_still_reads_back_exactly() {
-        let spec = BroadcastSpec::contiguous(&ShapeBuf::from_slice(&[2, 3]), &ShapeBuf::from_slice(&[1, 3])).unwrap();
+        let spec = BroadcastSpec::contiguous(
+            &ShapeBuf::from_slice(&[2, 3]),
+            &ShapeBuf::from_slice(&[1, 3]),
+        )
+        .unwrap();
         let validated = Validated::new(spec.clone(), ProofLevel::Mixed);
 
         assert_eq!(validated.descriptor(), &spec);
@@ -360,7 +363,11 @@ mod tests {
         // A `Static` stamp on a runtime-built descriptor is a lie the type
         // system cannot catch, which is exactly why `new` is crate-private:
         // only a lowering rule holding the shape types may call it.
-        let spec = BroadcastSpec::contiguous(&ShapeBuf::from_slice(&[2, 3]), &ShapeBuf::from_slice(&[2, 3])).unwrap();
+        let spec = BroadcastSpec::contiguous(
+            &ShapeBuf::from_slice(&[2, 3]),
+            &ShapeBuf::from_slice(&[2, 3]),
+        )
+        .unwrap();
         let validated = Validated::new(spec, ProofLevel::of::<(U2, U3)>());
         assert!(validated.proof_level().is_static());
     }
@@ -368,7 +375,11 @@ mod tests {
     #[cfg(feature = "paranoid-validation")]
     #[test]
     fn audit_passes_for_a_descriptor_from_a_checked_constructor() {
-        let spec = BroadcastSpec::contiguous(&ShapeBuf::from_slice(&[2, 3]), &ShapeBuf::from_slice(&[1, 3])).unwrap();
+        let spec = BroadcastSpec::contiguous(
+            &ShapeBuf::from_slice(&[2, 3]),
+            &ShapeBuf::from_slice(&[1, 3]),
+        )
+        .unwrap();
         let validated = Validated::new(spec, ProofLevel::Mixed);
         assert!(validated.audit().is_ok());
     }

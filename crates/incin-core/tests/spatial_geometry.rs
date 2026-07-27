@@ -95,11 +95,9 @@ fn out_size_matches_the_reference_formula() {
                     for d in [1usize, 2, 3] {
                         let got = spatial_out_size(OP, H, input, k, s, p, d);
                         match reference(input, k, s, p, d) {
-                            Some(want) => assert_eq!(
-                                got.unwrap(),
-                                want,
-                                "in={input} k={k} s={s} p={p} d={d}"
-                            ),
+                            Some(want) => {
+                                assert_eq!(got.unwrap(), want, "in={input} k={k} s={s} p={p} d={d}")
+                            }
                             None => assert_eq!(
                                 got.unwrap_err(),
                                 ShapeError::EmptyOutput {
@@ -206,7 +204,8 @@ fn a_unit_kernel_with_unit_stride_is_the_identity() {
 #[test]
 fn dyn_pool2d_handles_both_accepted_ranks() {
     // Rank 4 is (B, C, H, W).
-    let out = <Dyn as Pool2dShape<U2, U2, U0, U1>>::compute_output_shape(&vec![1, 3, 8, 8]).unwrap();
+    let out =
+        <Dyn as Pool2dShape<U2, U2, U0, U1>>::compute_output_shape(&vec![1, 3, 8, 8]).unwrap();
     assert_eq!(out, vec![1, 3, 4, 4]);
 
     // Rank 3 is (C, H, W). This used to fall through the `len() == 4` test and
@@ -217,11 +216,9 @@ fn dyn_pool2d_handles_both_accepted_ranks() {
 
 #[test]
 fn dyn_conv2d_handles_both_accepted_ranks() {
-    let out = <Dyn as SpatialConv2d<usize, U3, U1, U1, U1>>::compute_output_shape(
-        &vec![1, 3, 8, 8],
-        16,
-    )
-    .unwrap();
+    let out =
+        <Dyn as SpatialConv2d<usize, U3, U1, U1, U1>>::compute_output_shape(&vec![1, 3, 8, 8], 16)
+            .unwrap();
     assert_eq!(out, vec![1, 16, 8, 8]);
 
     let out =
@@ -237,9 +234,8 @@ fn dyn_conv1d_handles_both_accepted_ranks() {
             .unwrap();
     assert_eq!(out, vec![1, 4, 8]);
 
-    let out =
-        <Dyn as SpatialConv1d<usize, U3, U1, U0, U1>>::compute_output_shape(&vec![3, 10], 4)
-            .unwrap();
+    let out = <Dyn as SpatialConv1d<usize, U3, U1, U0, U1>>::compute_output_shape(&vec![3, 10], 4)
+        .unwrap();
     assert_eq!(out, vec![4, 8], "rank 2 was returned unconvolved");
 }
 
@@ -257,9 +253,8 @@ fn dyn_rules_reject_a_rank_they_cannot_handle() {
         "pool2d: expected rank between 3 and 4, got 2"
     );
 
-    let err =
-        <Dyn as SpatialConv2d<usize, U3, U1, U1, U1>>::compute_output_shape(&vec![8], 4)
-            .unwrap_err();
+    let err = <Dyn as SpatialConv2d<usize, U3, U1, U1, U1>>::compute_output_shape(&vec![8], 4)
+        .unwrap_err();
     assert!(matches!(err, ShapeError::RankMismatch { actual: 1, .. }));
 }
 
@@ -287,8 +282,8 @@ fn adaptive_pool_fixes_the_output_extent() {
     assert_eq!(out.2.size(), 4);
     assert_eq!(out.3.size(), 4);
 
-    let out = <Dyn as AdaptiveAvgPool2dShape<U4, U4>>::compute_output_shape(&vec![1, 3, 37, 41])
-        .unwrap();
+    let out =
+        <Dyn as AdaptiveAvgPool2dShape<U4, U4>>::compute_output_shape(&vec![1, 3, 37, 41]).unwrap();
     assert_eq!(out, vec![1, 3, 4, 4]);
 
     // Rank 3 used to be returned unchanged.

@@ -32,10 +32,10 @@ pub(crate) mod tuning;
 pub type IncinBackend<T = f32, D = incin_core::prelude::Cpu> = <D as BackendFor<T>>::Backend;
 
 pub mod prelude {
-    #[cfg(any(feature = "cpu", feature = "wgpu", feature = "cuda"))]
-    pub use super::{BackendFor, IncinBackend};
     #[cfg(feature = "std")]
     pub use super::detect::{detect_device, detect_device_in};
+    #[cfg(any(feature = "cpu", feature = "wgpu", feature = "cuda"))]
+    pub use super::{BackendFor, IncinBackend};
 }
 
 #[cfg(any(feature = "cpu", feature = "cuda"))]

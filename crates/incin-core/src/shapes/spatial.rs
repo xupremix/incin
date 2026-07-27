@@ -1,9 +1,7 @@
 use core::ops::{Add, Div, Mul, Sub};
 use typenum::{U1, U2, UInt, UTerm};
 
-use super::error::{
-    Axis, DimensionConstraint, OperationKind, RankExpectation, ShapeError,
-};
+use super::error::{Axis, DimensionConstraint, OperationKind, RankExpectation, ShapeError};
 
 /// Compile-time formula for a single spatial dimension's conv/pool
 /// output size: `(in + 2*Padding - Dilation*(Kernel-1) - 1) / Stride + 1`.

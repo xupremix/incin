@@ -134,7 +134,11 @@ fn operation_family_is_idempotent_and_lands_on_a_coarse_variant() {
             COARSE.contains(&family),
             "{kind} folds to {family}, which is not one of the six policy families"
         );
-        assert_eq!(family.family(), family, "family() is not idempotent at {kind}");
+        assert_eq!(
+            family.family(),
+            family,
+            "family() is not idempotent at {kind}"
+        );
     }
     for coarse in COARSE {
         assert_eq!(coarse.family(), coarse, "{coarse} is not its own family");
@@ -185,10 +189,17 @@ fn axis_mask_membership_and_iteration_agree() {
     // Ascending, whatever order the axes were given in.
     assert_eq!(mask.axes().collect::<Vec<_>>(), vec![0, 2, 3]);
     for axis in 0..5 {
-        assert_eq!(mask.contains(axis), [0, 2, 3].contains(&axis), "axis {axis}");
+        assert_eq!(
+            mask.contains(axis),
+            [0, 2, 3].contains(&axis),
+            "axis {axis}"
+        );
     }
     assert_eq!(
-        mask.complement_within(5).unwrap().axes().collect::<Vec<_>>(),
+        mask.complement_within(5)
+            .unwrap()
+            .axes()
+            .collect::<Vec<_>>(),
         vec![1, 4]
     );
     assert_eq!(mask.remove(2).axes().collect::<Vec<_>>(), vec![0, 3]);
@@ -360,9 +371,13 @@ fn broadcast_rejects_incompatible_dimensions() {
 
 #[test]
 fn broadcast_rejects_a_stride_count_that_does_not_match_its_shape() {
-    let error =
-        BroadcastSpec::new(&shape(&[2, 3]), &strides(&[3]), &shape(&[2, 3]), &dense(&[2, 3]))
-            .unwrap_err();
+    let error = BroadcastSpec::new(
+        &shape(&[2, 3]),
+        &strides(&[3]),
+        &shape(&[2, 3]),
+        &dense(&[2, 3]),
+    )
+    .unwrap_err();
     assert!(matches!(
         error,
         ShapeError::RankMismatch {
@@ -471,7 +486,10 @@ fn matmul_transpose_flags_are_layout_only() {
     // Everything logical is untouched: the flags say how storage is read, not
     // what the operation computes.
     assert_eq!(flagged.output, plain.output);
-    assert_eq!((flagged.m, flagged.k, flagged.n), (plain.m, plain.k, plain.n));
+    assert_eq!(
+        (flagged.m, flagged.k, flagged.n),
+        (plain.m, plain.k, plain.n)
+    );
     assert_eq!(flagged.lhs_batch_strides, plain.lhs_batch_strides);
 }
 
@@ -603,8 +621,8 @@ fn an_output_too_large_to_index_is_rejected_at_resolution() {
     // element count overflows `usize`, so no backend could allocate or index
     // it. The useful place to say so is here, while the operands are still in
     // hand — not at launch, where the diagnostic is a kernel argument.
-    let error = ReductionSpec::over_axes(&shape(&[usize::MAX, 0, usize::MAX]), [1], false)
-        .unwrap_err();
+    let error =
+        ReductionSpec::over_axes(&shape(&[usize::MAX, 0, usize::MAX]), [1], false).unwrap_err();
     assert!(matches!(
         error,
         ShapeError::ArithmeticOverflow {
@@ -613,12 +631,12 @@ fn an_output_too_large_to_index_is_rejected_at_resolution() {
         }
     ));
 
-    let broadcast = BroadcastSpec::contiguous(&shape(&[usize::MAX, 1]), &shape(&[usize::MAX]))
-        .unwrap_err();
+    let broadcast =
+        BroadcastSpec::contiguous(&shape(&[usize::MAX, 1]), &shape(&[usize::MAX])).unwrap_err();
     assert_eq!(broadcast.operation(), OperationKind::Broadcast);
 
-    let matmul = MatMulSpec::new(&shape(&[usize::MAX, 2, 2]), &shape(&[usize::MAX, 2, 2]))
-        .unwrap_err();
+    let matmul =
+        MatMulSpec::new(&shape(&[usize::MAX, 2, 2]), &shape(&[usize::MAX, 2, 2])).unwrap_err();
     assert_eq!(matmul.operation(), OperationKind::MatMul);
 }
 
@@ -632,12 +650,18 @@ fn every_constructed_descriptor_has_a_representable_output() {
             BroadcastSpec::contiguous(&shape(&[4, 1, 3]), &shape(&[5, 3]))?.output_elements()
         }),
         Box::new(|| MatMulSpec::new(&shape(&[2, 3, 4]), &shape(&[4, 5]))?.output_elements()),
+        Box::new(|| ReductionSpec::over_axes(&shape(&[2, 3, 4]), [1], true)?.output_elements()),
         Box::new(|| {
-            ReductionSpec::over_axes(&shape(&[2, 3, 4]), [1], true)?.output_elements()
-        }),
-        Box::new(|| {
-            Conv2dSpec::new(&shape(&[8, 3, 32, 32]), 16, [3, 3], [1, 1], [1, 1], [1, 1], 1)?
-                .output_elements()
+            Conv2dSpec::new(
+                &shape(&[8, 3, 32, 32]),
+                16,
+                [3, 3],
+                [1, 1],
+                [1, 1],
+                [1, 1],
+                1,
+            )?
+            .output_elements()
         }),
     ];
     for (i, case) in cases.iter().enumerate() {
@@ -650,8 +674,16 @@ fn every_constructed_descriptor_has_a_representable_output() {
 #[test]
 fn conv2d_resolves_spatial_geometry() {
     // 3x3 kernel, stride 1, padding 1: the classic same-size convolution.
-    let spec = Conv2dSpec::new(&shape(&[8, 3, 32, 32]), 16, [3, 3], [1, 1], [1, 1], [1, 1], 1)
-        .unwrap();
+    let spec = Conv2dSpec::new(
+        &shape(&[8, 3, 32, 32]),
+        16,
+        [3, 3],
+        [1, 1],
+        [1, 1],
+        [1, 1],
+        1,
+    )
+    .unwrap();
 
     assert_eq!(spec.output.dims(), &[8, 16, 32, 32]);
     assert_eq!((spec.n, spec.c_in, spec.c_out), (8, 3, 16));
@@ -663,8 +695,16 @@ fn conv2d_resolves_spatial_geometry() {
 fn conv2d_honors_stride_padding_and_dilation_per_axis() {
     // Asymmetric on purpose: a formula that swapped height and width would
     // still pass a square case.
-    let spec = Conv2dSpec::new(&shape(&[1, 4, 10, 20]), 8, [3, 5], [2, 3], [1, 0], [2, 1], 4)
-        .unwrap();
+    let spec = Conv2dSpec::new(
+        &shape(&[1, 4, 10, 20]),
+        8,
+        [3, 5],
+        [2, 3],
+        [1, 0],
+        [2, 1],
+        4,
+    )
+    .unwrap();
 
     // h: (10 + 2 - 2*(3-1) - 1)/2 + 1 = 4;  w: (20 + 0 - 1*(5-1) - 1)/3 + 1 = 6
     assert_eq!((spec.h_out, spec.w_out), (4, 6));
@@ -733,8 +773,8 @@ fn conv2d_reports_a_kernel_that_does_not_fit_rather_than_underflowing() {
 
 #[test]
 fn conv2d_requires_an_nchw_input() {
-    let error = Conv2dSpec::new(&shape(&[3, 8, 8]), 4, [1, 1], [1, 1], [0, 0], [1, 1], 1)
-        .unwrap_err();
+    let error =
+        Conv2dSpec::new(&shape(&[3, 8, 8]), 4, [1, 1], [1, 1], [0, 0], [1, 1], 1).unwrap_err();
     assert!(matches!(
         error,
         ShapeError::RankMismatch {

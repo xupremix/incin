@@ -1,6 +1,6 @@
+use crate::prelude::*;
 use crate::shapes::error::OperationKind;
 use crate::shapes::shape::field_from_dims;
-use crate::prelude::*;
 
 /// Specifies the runtime reduction to apply to the output of a loss function.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

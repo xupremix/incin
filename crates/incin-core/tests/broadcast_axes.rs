@@ -36,8 +36,8 @@ where
     R: Shape,
     Expected: incin_core::prelude::DynShape,
 {
-    let out = L::output_shape(&field::<L>(lhs), &field::<R>(rhs))
-        .expect("these operands broadcast");
+    let out =
+        L::output_shape(&field::<L>(lhs), &field::<R>(rhs)).expect("these operands broadcast");
     Expected::dims(&out).as_ref().to_vec()
 }
 
@@ -81,7 +81,10 @@ fn both_operands_may_stretch_at_different_axes() {
 
 #[test]
 fn two_axes_of_extent_one_stay_one() {
-    assert_eq!(resolved::<(U1, U1), (U1, U1), (U1, U1)>(&[1, 1], &[1, 1]), vec![1, 1]);
+    assert_eq!(
+        resolved::<(U1, U1), (U1, U1), (U1, U1)>(&[1, 1], &[1, 1]),
+        vec![1, 1]
+    );
 }
 
 #[test]
@@ -153,10 +156,7 @@ fn the_shorter_operand_may_be_on_either_side() {
 
 #[test]
 fn a_scalar_broadcasts_against_anything() {
-    assert_eq!(
-        resolved::<(), (U2, U3), (U2, U3)>(&[], &[2, 3]),
-        vec![2, 3]
-    );
+    assert_eq!(resolved::<(), (U2, U3), (U2, U3)>(&[], &[2, 3]), vec![2, 3]);
 }
 
 // -- what still fails, and where ------------------------------------------
@@ -165,11 +165,9 @@ fn a_scalar_broadcasts_against_anything() {
 fn incompatible_sizes_are_refused_at_runtime_when_the_type_cannot_see_them() {
     // Two `Dyn` operands settle nothing statically, so the rule runs entirely
     // on values. 2 against 5 is neither equal nor 1.
-    let error = <Dyn as BroadcastShape<Dyn>>::output_shape(
-        &field::<Dyn>(&[2, 4]),
-        &field::<Dyn>(&[5, 4]),
-    )
-    .expect_err("2 and 5 do not broadcast");
+    let error =
+        <Dyn as BroadcastShape<Dyn>>::output_shape(&field::<Dyn>(&[2, 4]), &field::<Dyn>(&[5, 4]))
+            .expect_err("2 and 5 do not broadcast");
 
     assert_eq!(
         error.operation(),

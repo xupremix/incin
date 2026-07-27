@@ -103,15 +103,13 @@ fn probe_wgpu() -> Option<DeviceId> {
         backends: wgpu::Backends::PRIMARY,
         ..Default::default()
     });
-    pollster::block_on(
-        instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            compatible_surface: None,
-            // A software adapter would be reported as a GPU while performing
-            // worse than the CPU backend, so it does not count as available.
-            force_fallback_adapter: false,
-        }),
-    )
+    pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+        power_preference: wgpu::PowerPreference::HighPerformance,
+        compatible_surface: None,
+        // A software adapter would be reported as a GPU while performing
+        // worse than the CPU backend, so it does not count as available.
+        force_fallback_adapter: false,
+    }))
     .map(|_| DeviceId::wgpu(0))
 }
 
@@ -147,7 +145,10 @@ mod tests {
     fn a_family_that_is_not_compiled_in_is_never_detected() {
         for kind in [DeviceKind::Cuda, DeviceKind::Wgpu, DeviceKind::Cpu] {
             if !is_compiled_in(kind) {
-                assert!(probe(kind).is_none(), "{kind:?} probed while not compiled in");
+                assert!(
+                    probe(kind).is_none(),
+                    "{kind:?} probed while not compiled in"
+                );
             }
         }
     }

@@ -24,7 +24,11 @@ use typenum::U1;
 /// which records that it must be converted rather than deleted: it is the only
 /// guard against that same-typed-named-dims case.
 #[inline]
-fn checked_broadcast_dim(axis: Axis, lhs: usize, rhs: usize) -> core::result::Result<usize, ShapeError> {
+fn checked_broadcast_dim(
+    axis: Axis,
+    lhs: usize,
+    rhs: usize,
+) -> core::result::Result<usize, ShapeError> {
     if lhs == rhs || lhs == 1 || rhs == 1 {
         // Not `lhs.max(rhs)`: a size-1 axis broadcast against a size-**0** one
         // must yield 0, and `max` yields 1. Picking the non-1 side is the
