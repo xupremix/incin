@@ -1,4 +1,5 @@
 [alias]
+xtask = ["run", "--quiet", "--package", "xtask", "--"]
 hb = ["hack", "--all", "--feature-powerset", "build"]
 ht = ["hack", "--all", "--feature-powerset", "test"]
 hr = ["hack", "--all", "--feature-powerset", "run", "--bin"]

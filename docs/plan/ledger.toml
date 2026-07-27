@@ -1,0 +1,1306 @@
+# Machine-readable mirror of the PROPOSALS.md execution ledger (GOV-003).
+# Regenerate with `python3 tools/gen-ledger.py toml`; validate with `cargo xtask ledger`.
+
+schema = 1
+snapshot = "2026-07-27"
+
+[[task]]
+id = "GOV-001"
+tier = "core"
+theme = "gov"
+status = "complete"
+deps = []
+target = ["PROPOSALS.md"]
+deliverable = "Architecture RFC exists and is internally consistent"
+evidence = ["test -f PROPOSALS.md"]
+completed_on = "2026-07-27"
+completed_evidence = "PROPOSALS.md present; internal-consistency script reports 0 undefined deps, 0 cycles, 0 tier violations"
+deviations = []
+
+[[task]]
+id = "GOV-002"
+tier = "core"
+theme = "gov"
+status = "complete"
+deps = ["GOV-001"]
+target = ["PROPOSALS.md :: Appendix C"]
+deliverable = "Decision log locks proof, executor, mesh, and compatibility contracts; one entry per resolved contradiction"
+evidence = ["cargo xtask ledger"]
+completed_on = "2026-07-27"
+completed_evidence = "PROPOSALS.md Appendix C records D-001..D-014; every contradiction in the review maps to exactly one entry"
+deviations = []
+
+[[task]]
+id = "GOV-003"
+tier = "core"
+theme = "gov"
+status = "complete"
+deps = ["GOV-002"]
+target = ["docs/plan/ledger.toml", "xtask/src/ledger.rs"]
+deliverable = "Machine-readable task mirror and validator round-trip every ID, dependency, tier, and evidence field"
+evidence = ["cargo xtask ledger && cargo test -p xtask"]
+completed_on = "2026-07-27"
+completed_evidence = "cargo xtask ledger -> ok: 100 tasks, 5 complete; 5 unit tests pass; fault injection confirms it fails on unknown dependency, tier violation, table/mirror divergence, and completed-without-evidence"
+deviations = []
+
+[[task]]
+id = "GOV-004"
+tier = "core"
+theme = "gov"
+status = "planned"
+deps = ["GOV-002"]
+target = ["crates/incin/benches/", "docs/plan/baselines/"]
+deliverable = "CPU and GPU capability, performance, and compile-size baselines with environment metadata"
+evidence = ["cargo bench -p incin -- --save-baseline main"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "GOV-005"
+tier = "core"
+theme = "gov"
+status = "planned"
+deps = ["GOV-004"]
+target = [".github/workflows/ci.yml"]
+deliverable = "Regression budgets and feature inventory enforced in CI"
+evidence = ["cargo xtask budgets"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "GOV-006"
+tier = "core"
+theme = "gov"
+status = "complete"
+deps = ["GOV-002"]
+target = ["crates/incin-backends/src/external/", "crates/incin-core/err.rs", "*/Cargo.toml"]
+deliverable = "Repo hygiene: track and split external/, delete the orphan crates/incin-core/err.rs, rename candle to external-candle with a deprecated alias"
+evidence = ["cargo check --workspace --features external-candle"]
+completed_on = "2026-07-27"
+completed_evidence = "external/ tracked and split into candle/{mod,convert,backend,ops/*} (13 files, max 248 lines, was one 1359-line file); orphan crates/incin-core/err.rs removed; candle -> external-candle with alias. cargo check passes for external-candle and the candle alias; fmt/clippy/no_std/cuda-compile clean; 528 tests pass"
+deviations = []
+
+[[task]]
+id = "GOV-007"
+tier = "core"
+theme = "gov"
+status = "complete"
+deps = ["GOV-002"]
+target = [".agents/API_DESIGN.md", "docs/API_DESIGN.md"]
+deliverable = "Docs source-of-truth consolidation; .agents/API_DESIGN.md becomes a pointer, not a paraphrase"
+evidence = ["test $(wc -l < .agents/API_DESIGN.md) -lt 10"]
+completed_on = "2026-07-27"
+completed_evidence = ".agents/API_DESIGN.md reduced to a 10-line pointer; its one unique rule merged into docs/API_DESIGN.md as item 3"
+deviations = []
+
+[[task]]
+id = "SHP-001"
+tier = "core"
+theme = "shape"
+status = "complete"
+deps = ["GOV-002"]
+target = ["docs/audit/shape-proof-inventory.md", "tools/audit-shapes.sh"]
+deliverable = "Audit every shape, dtype, backend, and device rule by proof stage; inventory panic, unwrap, overflow, and static-selector gaps"
+evidence = ["tools/audit-shapes.sh --check"]
+completed_on = "2026-07-27"
+completed_evidence = "tools/audit-shapes.sh --check -> ok; docs/audit/shape-proof-inventory.md classifies 19 rules by proof stage (T/L/B/N/U) and records the baseline: 28 from_dyn().unwrap(), 2 from_size().unwrap(), 4 Default::default() spatial zeroing, 9 rules short of rank 8 and 1 over, SupportsDType blanket default proving nothing (backend.rs:61). Confirmed defect for SHP-005: Pool2dShape on (U1,U1,usize,usize) with 8x8/k2/s2/p0/d1 returns spatial dims (0,0) instead of (4,4) -- a wrong shape that propagates, not a panic. Fault injection confirms --check fails on both a doctored count in the document and a new unwrap in the source tree"
+deviations = []
+
+[[task]]
+id = "SHP-002"
+tier = "core"
+theme = "shape"
+status = "complete"
+deps = ["SHP-001"]
+target = ["crates/incin-core/src/shapes/error.rs", "crates/incin-core/src/err.rs"]
+deliverable = "Structured ShapeError plus OperationKind, Axis, RankExpectation, DimensionConstraint, with one rendering test per variant"
+evidence = ["cargo test -p incin-core --test shape_errors"]
+completed_on = "2026-07-27"
+completed_evidence = "cargo test -p incin-core --test shape_errors -> 14 passed; 0 failed. shapes/error.rs adds ShapeError (6 variants), OperationKind (23 variants, superset of incin-backends OperationFamily so EXE-001 can delete it per D-008), Axis, RankExpectation, DimensionConstraint. One exact-string rendering test per ShapeError variant plus one per component variant; Error::Shape(#[from] ShapeError) added to err.rs and its ? path tested. Every type is Copy and allocation-free (&'static str + usize only), asserted by test and verified by cargo check -p incin-core --no-default-features. Full workspace check and cargo test -p incin-core clean"
+deviations = []
+
+[[task]]
+id = "SHP-003"
+tier = "core"
+theme = "shape"
+status = "complete"
+deps = ["SHP-002"]
+target = ["crates/incin-core/src/shapes/buf.rs"]
+deliverable = "Checked inline ShapeBuf and StrideBuf with checked numel and byte_len, plus property tests"
+evidence = ["cargo test -p incin-core --test shape_buf"]
+completed_on = "2026-07-27"
+completed_evidence = "cargo test -p incin-core --test shape_buf -> 17 passed; 0 failed. shapes/buf.rs adds InlineOrHeap (inline to INLINE_RANK=8, spills to Vec), ShapeBuf, and StrideBuf. checked_numel/checked_byte_len/contiguous_for/checked_span all use checked_mul and return ShapeError::ArithmeticOverflow naming the failing term; no derived value is cached. Properties are checked against u128 references over 5000 cases each from a fixed-seed generator biased to 0/1/usize::MAX/2^32, with assertions that both the overflow and non-overflow branches were reached. The suite found a real ordering bug in the first implementation: a left-to-right fold made numel([MAX,0,MAX]) = Ok(0) but numel([MAX,MAX,0]) = Err, so the zero case is now short-circuited and order independence is pinned by numel_does_not_depend_on_axis_order (reversal plus rotation). Replaces the panicking cpu::stride::contiguous_strides; EXE-004 migrates the storages. Workspace check, no-default-features check, and cargo test -p incin-core all clean"
+deviations = []
+
+[[task]]
+id = "SHP-004"
+tier = "core"
+theme = "shape"
+status = "complete"
+deps = ["SHP-003"]
+target = ["crates/incin-core/src/shapes/{broadcast,reshape,shape_ops}.rs", "crates/incin-core/src/tensor/ops/"]
+deliverable = "Fallible broadcast, reshape, and flatten with no panic or sentinel output; the from_dyn().unwrap() chain is removed"
+evidence = ["cargo test -p incin-core --test shape_fallible"]
+completed_on = "2026-07-27"
+completed_evidence = "cargo test -p incin-core --test shape_fallible -> 13 passed; 0 failed; full workspace 733 passed, 0 failed. The from_dyn().unwrap() chain is at 0, down from the corrected baseline of 39 live sites across 11 files (tools/audit-shapes.sh --check). The shapes surface fell from 13 unwraps to 1 and from 1 panic!-class site to 0. BroadcastShape::output_shape and MatMulShape::output_shape are now fallible; shapes/shape.rs adds field_from_dims() and error.rs adds ShapeError::TargetShapeRejected for the residual generic cases. checked_broadcast_dim converted from assert! to Result per decision D-013, and the named_dims.rs test that asserted the panic now asserts the error and its axis. Three latent wrong-answer bugs found and fixed while converting: (1) broadcast used lhs.max(rhs), so a size-1 axis against a size-0 one yielded 1 instead of 0; (2) Dyn matmul returned vec![] -- the scalar shape -- as a sentinel for every unmatched rank combination, including [m,k] x [k], whose answer is [m] not a scalar; (3) no MatMulShape impl ever checked the contracted dimension, so a disagreeing K produced a confidently wrong output shape (now DimensionMismatch on axis 'k'). The rank-4 x rank-2 'flattened batch' convention is preserved deliberately and pinned by a test. broadcast_dims' unreachable!() arm is gone: a missing axis is now an implicit 1, which is the actual right-alignment rule. no-default-features check clean"
+deviations = []
+
+[[task]]
+id = "SHP-005"
+tier = "core"
+theme = "shape"
+status = "complete"
+deps = ["SHP-003"]
+target = ["crates/incin-core/src/shapes/spatial.rs"]
+deliverable = "Fallible matmul, conv, and pool geometry as a named checked sequence; rejects stride 0 and stops zeroing spatial dims"
+evidence = ["cargo test -p incin-core --test spatial_geometry"]
+completed_on = "2026-07-27"
+completed_evidence = "cargo test -p incin-core --test spatial_geometry -> 17 passed; 0 failed; full workspace 709 passed, 0 failed. spatial.rs gains spatial_out_size(), a named checked sequence for (in + 2p - d*(k-1) - 1)/s + 1: it rejects a 0 stride/kernel/dilation by parameter name, reports a kernel that does not fit its padded input as EmptyOutput instead of underflowing the subtraction, and names each overflowing term individually ('2 * padding', 'input + 2 * padding', 'dilation * (kernel - 1)'). compute_output_shape on Pool2dShape, SpatialConv1d, SpatialConv2d, and AdaptiveAvgPool2dShape now returns Result<Field, ShapeError>; 10 call sites take ?. Confirmed regression closed: pool2d on (U1,U1,usize,usize) with 8x8/k2/s2/p0/d1 returns (4,4), was (0,0). Two further silent defects found and fixed while here: the Dyn conv/pool rules tested len()==4 (or ==3) and returned the input shape unchanged for every other rank, so rank-3 (C,H,W) was never pooled and an unsupported rank was never reported; both accepted ranks are now handled and others report RankMismatch. from_size().unwrap() 2->0 and Default::default() in spatial output 4->0, both verified by tools/audit-shapes.sh --check. The audit's rank scan was corrected twice in the process (variadic macros with fixed trailing tuple elements were undercounted: SpatialConv1d 5->7, SpatialConv2d 4->7; and the repetition-strip pattern missed the $(..)+ form, inflating BroadcastShape 4->6); the SHP-001 exit table also said 9 rules short of rank 8 while its own table listed 14, now corrected. A third measurement fix re-baselined SHP-004: the from_dyn().unwrap() chain was counted with a regex that stops at the first inner ')', so it never matched from_dyn(&broadcast_dims::<Self, (A, B)>(lhs, rhs)).unwrap() -- 14 of the sites were invisible. Counted by balancing parentheses the true figure is 39 live sites across 11 files, not 28"
+deviations = []
+
+[[task]]
+id = "SHP-006"
+tier = "core"
+theme = "shape"
+status = "complete"
+deps = ["SHP-001"]
+target = ["crates/incin-macros/src/rank.rs", "crates/incin-core/src/shapes/"]
+deliverable = "One rank generator behind a single MAX_RANK; closes the ElementCount rank-4 versus Shape rank-8 gap"
+evidence = ["cargo test -p incin-core --test rank_matrix"]
+completed_on = "2026-07-27"
+completed_evidence = "cargo test -p incin-core --test rank_matrix -> 13 passed; 0 failed; full workspace 746 passed, 0 failed. MAX_RANK now lives only in crates/incin-macros/src/rank.rs and is re-exported as incin_core::shapes::MAX_RANK (a proc-macro crate cannot export a const, and a second copy would reintroduce the drift). rank_sweep! generates every ladder from it, with nine forms covering the argument shapes the existing macro_rules families accept, including two-dimensional rank-pair sweeps for broadcast prepend and rank x axis sweeps for concat and stack; a `max` above MAX_RANK is rejected so no rule can set its own ceiling. All 19 rules now sit at their correct ceiling: 17 rank-preserving at 8, and AppendDim/StackShape at 7 because their Output gains an axis and is bounded by Shape. Nothing sits above the ceiling. Closes the RFC's motivating gap, ElementCount 4->8. Notable finds: ReplaceLastDim generated impls to rank 12, four ranks at which no tuple implements Shape at all, so they could never be selected; HasChannels1D and HasChannels2D each held for exactly ONE rank, so (C, L) and (C, H, W) -- the unbatched forms their own docs name as valid -- did not implement them. 48 hand-written per-axis impls in concat.rs and stack.rs replaced by two macros. Recorded cost: raising a marker trait from one impl to eight loses rustc's 'but trait X is implemented for it' hint, so those diagnostics are less specific; the on_unimplemented note still carries the guidance and the compile failure is unchanged. 11 compile_fail expectations regenerated, every case still errors. The audit tool needed three corrections to measure this honestly, all documented in the inventory. Compile time unchanged (incin-core check ~1.4s). no-default-features clean"
+deviations = []
+
+[[task]]
+id = "SHP-007"
+tier = "core"
+theme = "shape"
+status = "planned"
+deps = ["SHP-004", "SHP-005", "SHP-006"]
+target = ["crates/incin-core/tests/", "crates/incin-core/tests/compile_fail/"]
+deliverable = "Close mixed, named, and rank gaps; compile-pass, compile-fail, and fuzz suites"
+evidence = ["cargo test -p incin-core"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "SHP-008"
+tier = "core"
+theme = "shape"
+status = "planned"
+deps = ["SHP-007"]
+target = ["crates/incin-core/src/tensor/base.rs"]
+deliverable = "Restrict unchecked construction to a witnessed constructor; audit all ~45 obligations and test Flatten diagnostics"
+evidence = ["cargo test -p incin-core --test construction_witness"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "EXE-001"
+tier = "core"
+theme = "exec"
+status = "complete"
+deps = ["SHP-003", "GOV-002"]
+target = ["crates/incin-core/src/exec/spec.rs"]
+deliverable = "Freeze the operation taxonomy and descriptor schema; promote OperationFamily to OperationKind rather than duplicating it"
+evidence = ["cargo test -p incin-core --test descriptor_schema"]
+completed_on = "2026-07-27"
+completed_evidence = "cargo test -p incin-core --test descriptor_schema -> 42 passed; 0 failed; full workspace 0 failures. crates/incin-core/src/exec/{mod,spec}.rs adds DescriptorSchemaVersion (pinned at 1 by test), AxisMask, the sealed OperationSpec trait that binds each descriptor to one OperationKind, and the four descriptors PROPOSALS.md 1.2.1 names: BroadcastSpec, MatMulSpec, ReductionSpec, Conv2dSpec. Every descriptor is #[non_exhaustive] with pub fields -- readable by any backend, constructible only through the checked constructors -- and every field a constructor did not receive is DERIVED from the ones it did: broadcast masks from strides, output shapes from operands, outer/reduced/inner from the input, h_out/w_out via SHP-005's spatial_out_size() rather than a second copy of the formula. Descriptors hold logical geometry only; storage offset, dtype, device, and alignment stay for TensorMeta (EXE-004), which is what lets one descriptor be reused as a cache key. OperationFamily deleted per D-008: incin-backends/src/dtype_policy.rs re-exports incin_core OperationKind and folds through the new OperationKind::family(), which maps the accumulating ops (matmul, conv, pool) onto Reduction and the reindexing ops (every shape manipulation, plus embedding) onto Storage; family() is total and idempotent, asserted over all 23 variants. Design finding the test suite forced: reducing away the only zero axis of [MAX,0,MAX] leaves [MAX,MAX], an output whose element count overflows usize, so all four constructors now reject an unrepresentable output at resolution rather than handing a backend a descriptor it cannot launch. Two SHP loose ends closed while here: INLINE_RANK is now MAX_RANK rather than a literal 8 (the SHP-006 comment promised this), and StrideBuf gained push/pop to match ShapeBuf, needed by the stride-normalizing loops. rustdoc, no-default-features, and tools/audit-shapes.sh --check all clean"
+deviations = []
+
+[[task]]
+id = "EXE-002"
+tier = "core"
+theme = "exec"
+status = "planned"
+deps = ["EXE-001"]
+target = ["crates/incin-core/src/exec/proof.rs"]
+deliverable = "Sealed Validated<O> and proof provenance, with privacy compile-fail tests and the paranoid-validation feature"
+evidence = ["cargo test -p incin-core --test compile_tests"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "EXE-003"
+tier = "core"
+theme = "exec"
+status = "planned"
+deps = ["EXE-002"]
+target = ["crates/incin-core/src/exec/rule.rs"]
+deliverable = "ShapeRule lowering for broadcast, reduction, reshape, matmul, conv, and pool, each restating its frontend trait Output"
+evidence = ["cargo test -p incin-core --test lowering_parity"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "EXE-004"
+tier = "core"
+theme = "exec"
+status = "planned"
+deps = ["SHP-003"]
+target = ["crates/incin-core/src/exec/meta.rs", "crates/incin-backends/src/{cpu,cuda,wgpu}/storage.rs"]
+deliverable = "Normalize TensorMeta and unify the three LayoutClass enums; view, offset, alignment, and bounds tests"
+evidence = ["cargo test -p incin-backends --test tensor_meta"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "EXE-005"
+tier = "core"
+theme = "exec"
+status = "planned"
+deps = ["EXE-001"]
+target = ["crates/incin-core/src/exec/capability.rs"]
+deliverable = "Capability registry whose generated matrix matches execution tests"
+evidence = ["cargo test -p incin-backends --test capability_matrix"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "EXE-006"
+tier = "core"
+theme = "exec"
+status = "planned"
+deps = ["EXE-002", "EXE-005"]
+target = ["crates/incin-core/src/tensor/backend.rs"]
+deliverable = "Split storage, Execute<O>, and Capabilities out of the 254-method supertrait; give SupportsDType<K> real per-backend impls"
+evidence = ["cargo test -p incin-core --test compile_tests"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "EXE-007"
+tier = "core"
+theme = "exec"
+status = "planned"
+deps = ["EXE-003", "EXE-004", "EXE-006"]
+target = ["crates/incin-backends/src/cpu/"]
+deliverable = "Migrate the CPU vertical slice with parity and overhead evidence"
+evidence = ["cargo test -p incin-backends --no-default-features --features std,cpu"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "EXE-008"
+tier = "core"
+theme = "exec"
+status = "planned"
+deps = ["EXE-007"]
+target = ["crates/incin-backends/src/{cuda,wgpu,external}/", "crates/incin-backends/src/dispatch.rs"]
+deliverable = "Migrate CUDA, WGPU, dispatch, and external adapters; replace the F32-hardcoded byte arithmetic with checked dtype.size_bytes()"
+evidence = ["cargo test -p incin-backends --no-default-features --features std,cpu,wgpu"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "EXE-009"
+tier = "core"
+theme = "exec"
+status = "planned"
+deps = ["EXE-008"]
+target = ["crates/incin-core/src/tensor/backend.rs", "crates/incin-backends/src/dispatch.rs"]
+deliverable = "Remove the monolithic adapter and the default unsupported-operation surface"
+evidence = ["cargo test --workspace"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "EXE-010"
+tier = "preview"
+theme = "exec"
+status = "planned"
+deps = ["EXE-008"]
+target = ["crates/incin-backends/src/external/"]
+deliverable = "external-candle SDK conformance suite and a backend-authoring template"
+evidence = ["cargo test -p incin-backends --features external-candle --test conformance"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "TUN-000"
+tier = "preview"
+theme = "tune"
+status = "complete"
+deps = []
+target = ["crates/incin-backends/src/tuning.rs"]
+deliverable = "Existing CUDA tuner inventoried: 2 warmups, 7 samples, median selection, 1024-entry cache, single-flight coordination"
+evidence = ["cargo test -p incin-backends --features autotune"]
+completed_on = "2026-07-27"
+completed_evidence = "tuning.rs verified: 2 warmups (line 24), 7 samples (line 26), median select (220-222), 1024-entry cache (line 22), single-flight coordinator (284-296)"
+deviations = []
+
+[[task]]
+id = "TUN-001"
+tier = "preview"
+theme = "tune"
+status = "planned"
+deps = ["GOV-004"]
+target = ["crates/incin-backends/src/tuning/identity.rs"]
+deliverable = "Stable device, compiler, and topology identities replacing ordinal plus compute capability; alias tests"
+evidence = ["cargo test -p incin-backends --features autotune --test tuning_identity"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "TUN-002"
+tier = "preview"
+theme = "tune"
+status = "planned"
+deps = ["TUN-001"]
+target = ["crates/incin-backends/src/tuning/cache.rs"]
+deliverable = "Atomic bounded persistent cache with corruption, schema, and eviction tests"
+evidence = ["cargo test -p incin-backends --features autotune --test tuning_cache"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "TUN-003"
+tier = "preview"
+theme = "tune"
+status = "planned"
+deps = ["EXE-005", "TUN-002"]
+target = ["crates/incin-backends/src/tuning/service.rs"]
+deliverable = "General disabled, heuristic, coordinated-warmup, and profile-guided tuning service"
+evidence = ["cargo test -p incin-backends --features autotune --test tuning_service"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "TUN-004"
+tier = "preview"
+theme = "tune"
+status = "planned"
+deps = ["EXE-003", "TUN-003"]
+target = ["crates/incin-backends/src/tuning/signature.rs"]
+deliverable = "Shape and layout driven legal-candidate pruning; extends KernelKey rather than adding a parallel KernelSignature"
+evidence = ["cargo test -p incin-backends --features autotune --test tuning_pruning"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "TUN-005"
+tier = "preview"
+theme = "tune"
+status = "planned"
+deps = ["TUN-004"]
+target = ["crates/incin-backends/src/cuda/ops/"]
+deliverable = "Pointwise, reduction, and normalization CUDA tuning parity"
+evidence = ["cargo test -p incin-backends --features cuda,autotune  # CUDA hardware"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "TUN-006"
+tier = "preview"
+theme = "tune"
+status = "planned"
+deps = ["TUN-005"]
+target = ["crates/incin-backends/src/cuda/ops/{matmul,conv}.rs"]
+deliverable = "GEMM and convolution library-versus-native tuning with a crossover report"
+evidence = ["cargo test -p incin-backends --features cuda,autotune  # CUDA hardware"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "TUN-007"
+tier = "preview"
+theme = "tune"
+status = "planned"
+deps = ["TUN-003"]
+target = ["crates/incin-backends/src/tuning/telemetry.rs"]
+deliverable = "Tuning telemetry, provenance, and explain output"
+evidence = ["cargo test -p incin-backends --features autotune,telemetry"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "TUN-008"
+tier = "preview"
+theme = "tune"
+status = "planned"
+deps = ["TUN-006", "GOV-005"]
+target = [".github/workflows/ci.yml"]
+deliverable = "Time, memory, and cache budgets with a no-regression gate"
+evidence = ["cargo xtask budgets"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "PRF-001"
+tier = "core"
+theme = "perf"
+status = "planned"
+deps = ["EXE-003", "EXE-004"]
+target = ["crates/incin-backends/src/iteration.rs"]
+deliverable = "Remove repeated hot-path metadata allocation; latency and allocation evidence"
+evidence = ["cargo bench -p incin -- eager"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "PRF-002"
+tier = "core"
+theme = "perf"
+status = "planned"
+deps = ["EXE-007"]
+target = ["crates/incin-backends/src/cpu/ops/matmul.rs"]
+deliverable = "CPU iteration plans, batched GEMM, optional cpu-blas, and isolated bare-CPU tests"
+evidence = ["cargo test -p incin-backends --no-default-features --features std,cpu"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "PRF-003"
+tier = "preview"
+theme = "perf"
+status = "planned"
+deps = ["EXE-008", "TUN-005"]
+target = ["crates/incin-backends/src/{cuda,wgpu}/"]
+deliverable = "CUDA descriptor launches and WGPU specialization; hardware and sanitizer evidence"
+evidence = ["cargo test -p incin-backends --features cuda  # CUDA hardware"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "PRF-004"
+tier = "preview"
+theme = "perf"
+status = "planned"
+deps = ["TUN-006"]
+target = ["crates/incin-backends/src/cuda/ops/"]
+deliverable = "Vendor-versus-native selection behind cuda-vendor with numerical and crossover reports"
+evidence = ["cargo test -p incin-backends --features cuda,cuda-vendor  # CUDA hardware"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "MTL-001"
+tier = "preview"
+theme = "metal"
+status = "planned"
+deps = ["EXE-005", "EXE-008"]
+target = ["crates/incin-backends/src/metal/"]
+deliverable = "Native Metal feature, device capabilities, storage modes, and unified-memory guards"
+evidence = ["cargo test -p incin-backends --features metal  # Apple Silicon"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "MTL-002"
+tier = "preview"
+theme = "metal"
+status = "planned"
+deps = ["MTL-001", "EXE-003"]
+target = ["crates/incin-backends/src/metal/shaders/"]
+deliverable = "Generated MSL pointwise and reduction descriptors with parity tests"
+evidence = ["cargo test -p incin-backends --features metal  # Apple Silicon"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "MTL-003"
+tier = "preview"
+theme = "metal"
+status = "planned"
+deps = ["MTL-001", "PRF-004"]
+target = ["crates/incin-backends/src/metal/mps.rs"]
+deliverable = "MPS and MPSGraph structured candidates with explicit native fallback"
+evidence = ["cargo test -p incin-backends --features metal-mps  # Apple Silicon"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "MTL-004"
+tier = "preview"
+theme = "metal"
+status = "planned"
+deps = ["MTL-002", "MTL-003", "GRD-003"]
+target = ["crates/incin-backends/src/metal/"]
+deliverable = "Metal forward and backward hardware parity with no hidden readback"
+evidence = ["cargo test -p incin-backends --features metal  # Apple Silicon"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "MTL-005"
+tier = "preview"
+theme = "metal"
+status = "planned"
+deps = ["MTL-003", "TUN-003"]
+target = ["crates/incin-backends/src/metal/tuning.rs"]
+deliverable = "Metal kernel and storage-mode autotuning with a fingerprinted cache"
+evidence = ["cargo test -p incin-backends --features metal  # Apple Silicon"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "MTL-006"
+tier = "preview"
+theme = "metal"
+status = "planned"
+deps = ["MTL-004", "MTL-005"]
+target = ["docs/", "README.md"]
+deliverable = "Apple Silicon UX, docs, and laptop plus desktop hardware baselines"
+evidence = ["cargo bench -p incin --features metal  # Apple Silicon"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "CMP-001"
+tier = "preview"
+theme = "compile"
+status = "planned"
+deps = ["EXE-009"]
+target = ["crates/incin-core/src/compiled/capture.rs"]
+deliverable = "Capture the eager graph into validated IR with descriptor parity"
+evidence = ["cargo test -p incin-core --test compiled_capture"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "CMP-002"
+tier = "preview"
+theme = "compile"
+status = "planned"
+deps = ["CMP-001"]
+target = ["crates/incin-core/src/compiled/plan.rs"]
+deliverable = "Immutable compiled plans and dynamic guards"
+evidence = ["cargo test -p incin-core --test compiled_guards"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "CMP-003"
+tier = "preview"
+theme = "compile"
+status = "planned"
+deps = ["CMP-002", "PRF-001"]
+target = ["crates/incin-core/src/compiled/alloc.rs"]
+deliverable = "Liveness and allocation planner with alias and peak-memory tests"
+evidence = ["cargo test -p incin-core --test compiled_alloc"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "CMP-004"
+tier = "preview"
+theme = "compile"
+status = "planned"
+deps = ["CMP-002"]
+target = ["crates/incin-core/src/compiled/fold.rs"]
+deliverable = "Constant folding, weight prepacking, and bounded shape buckets"
+evidence = ["cargo test -p incin-core --test compiled_fold"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "CMP-005"
+tier = "preview"
+theme = "compile"
+status = "planned"
+deps = ["CMP-003", "CMP-004"]
+target = ["crates/incin-core/src/compiled/fusion.rs"]
+deliverable = "Safe fusion and backward hooks; gradient parity and launch-count reduction"
+evidence = ["cargo test -p incin-core --test compiled_fusion"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "CMP-006"
+tier = "preview"
+theme = "compile"
+status = "planned"
+deps = ["CMP-005"]
+target = ["crates/incin-core/src/compiled/artifact.rs"]
+deliverable = "Versioned compiled artifacts with compatibility and corruption tests"
+evidence = ["cargo test -p incin-core --test compiled_artifact"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "GRD-001"
+tier = "core"
+theme = "grad"
+status = "planned"
+deps = ["EXE-006"]
+target = ["crates/incin-core/src/exec/context.rs"]
+deliverable = "Explicit ExecutionContext with nested and concurrent tests"
+evidence = ["cargo test -p incin-core --test exec_context"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "GRD-002"
+tier = "core"
+theme = "grad"
+status = "planned"
+deps = ["GRD-001"]
+target = ["crates/incin-core/src/exec/context.rs", "crates/incin-core/src/tensor/grad.rs"]
+deliverable = "G to GradMode propagation; NoGrad records zero nodes and saves nothing"
+evidence = ["cargo test -p incin-core --test nograd_records_nothing"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "GRD-003"
+tier = "core"
+theme = "grad"
+status = "planned"
+deps = ["GRD-001"]
+target = ["crates/incin-core/src/exec/tape.rs"]
+deliverable = "Backend-neutral tape nodes with CPU parity"
+evidence = ["cargo test -p incin-backends --no-default-features --features std,cpu --test gradient_parity"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "GRD-004"
+tier = "core"
+theme = "grad"
+status = "planned"
+deps = ["GRD-003", "EXE-008"]
+target = ["crates/incin-backends/src/{cuda,wgpu}/"]
+deliverable = "CUDA and WGPU gradient recipes with hardware parity"
+evidence = ["cargo test -p incin-backends --features wgpu --test gradient_parity"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "GRD-005"
+tier = "core"
+theme = "grad"
+status = "planned"
+deps = ["GRD-003"]
+target = ["crates/incin-core/src/exec/tape.rs"]
+deliverable = "Structured backward and NaN failures; no expected-failure panic paths"
+evidence = ["cargo test -p incin-core --test backward_errors"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "GRD-006"
+tier = "core"
+theme = "grad"
+status = "planned"
+deps = ["GRD-004"]
+target = ["crates/incin-backends/src/{cpu,cuda,wgpu}/tape.rs"]
+deliverable = "Saved-tensor lifetime owned by the graph; delete all three backend-local tapes"
+evidence = ["cargo test --workspace"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "GRD-007"
+tier = "preview"
+theme = "grad"
+status = "planned"
+deps = ["GRD-006", "CMP-003"]
+target = ["crates/incin-core/src/compiled/alloc.rs"]
+deliverable = "Compiled-graph saved-tensor liveness and fusion integration"
+evidence = ["cargo test -p incin-core --test compiled_alloc"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "DST-001"
+tier = "preview"
+theme = "dist"
+status = "planned"
+deps = ["GOV-002", "SHP-007"]
+target = ["crates/incin-core/src/dist/mesh.rs"]
+deliverable = "Typed meshes and ValidMesh; valid and invalid world-size compile tests"
+evidence = ["cargo test -p incin-core --test mesh_compile"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "DST-002"
+tier = "preview"
+theme = "dist"
+status = "planned"
+deps = ["DST-001", "EXE-005"]
+target = ["crates/incin-core/src/dist/mesh.rs"]
+deliverable = "Physical binding, topology fingerprint, and runtime guards"
+evidence = ["cargo test -p incin-core --test mesh_bind"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "DST-003"
+tier = "preview"
+theme = "dist"
+status = "planned"
+deps = ["DST-001", "EXE-002"]
+target = ["crates/incin-core/src/dist/placement.rs", "crates/incin-core/src/dist/rule.rs"]
+deliverable = "Placement typestates, PlacementKind, and rules; divisibility and transition compile tests; ValidatedDistributed sealed like Validated"
+evidence = ["cargo test -p incin-core --test placement_rules"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "DST-004"
+tier = "preview"
+theme = "dist"
+status = "planned"
+deps = ["DST-003", "EXE-004"]
+target = ["crates/incin-core/src/tensor/base.rs"]
+deliverable = "Unified Tensor global and local metadata with reshard invariants"
+evidence = ["cargo test -p incin-core --test placement_tensor"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "DST-005"
+tier = "preview"
+theme = "dist"
+status = "planned"
+deps = ["DST-002"]
+target = ["crates/incin-backends/src/dist/reference.rs"]
+deliverable = "Deterministic CPU reference collectives and their adjoints"
+evidence = ["cargo test -p incin-backends --features distributed-reference"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "DST-006"
+tier = "preview"
+theme = "dist"
+status = "planned"
+deps = ["DST-002", "GOV-004"]
+target = ["crates/incin-backends/src/dist/nccl.rs"]
+deliverable = "Optional NCCL transport; three-GPU order, count, and failure tests"
+evidence = ["cargo test -p incin-backends --features distributed-nccl  # 3x CUDA"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "DST-007"
+tier = "preview"
+theme = "dist"
+status = "planned"
+deps = ["DST-003", "DST-005"]
+target = ["crates/incin-core/src/dist/plan.rs"]
+deliverable = "Collective plans and sequence tokens; divergent-plan preflight test"
+evidence = ["cargo test -p incin-core --test collective_plan"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "DST-008"
+tier = "preview"
+theme = "dist"
+status = "planned"
+deps = ["DST-006", "DST-007", "GRD-004"]
+target = ["crates/incin-core/src/dist/"]
+deliverable = "DP=3 training with single-GPU numerical and gradient parity"
+evidence = ["cargo test -p incin --features distributed-nccl --test dp3  # 3x CUDA"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "DST-009"
+tier = "preview"
+theme = "dist"
+status = "planned"
+deps = ["DST-004", "DST-006", "DST-007"]
+target = ["crates/incin-core/src/nn/linear.rs"]
+deliverable = "TP=3 column and row linear plus attention parity"
+evidence = ["cargo test -p incin --features distributed-nccl --test tp3  # 3x CUDA"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "DST-010"
+tier = "preview"
+theme = "dist"
+status = "planned"
+deps = ["CMP-002", "DST-006", "DST-007"]
+target = ["crates/incin-core/src/dist/pipeline.rs"]
+deliverable = "GPipe then 1F1B PP=3; parity, bubble, and deadlock evidence"
+evidence = ["cargo test -p incin --features distributed-nccl --test pp3  # 3x CUDA"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "DST-011"
+tier = "preview"
+theme = "dist"
+status = "planned"
+deps = ["DST-008", "DST-009", "DST-010"]
+target = ["crates/incin-core/src/dist/plan.rs"]
+deliverable = "Hybrid planner and report with feasibility and memory evidence"
+evidence = ["cargo test -p incin-core --test hybrid_plan"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "DST-012"
+tier = "preview"
+theme = "dist"
+status = "planned"
+deps = ["TUN-003", "DST-006"]
+target = ["crates/incin-backends/src/dist/tuning.rs"]
+deliverable = "Coordinated collective tuning; maximum-rank objective and all-rank commit tests"
+evidence = ["cargo test -p incin-backends --features distributed-nccl  # 3x CUDA"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "DST-013"
+tier = "preview"
+theme = "dist"
+status = "planned"
+deps = ["CMP-004", "DST-011", "DST-012"]
+target = ["crates/incin-core/src/compiled/tuning.rs"]
+deliverable = "Bounded plan tuning measured against a one-GPU baseline"
+evidence = ["cargo test -p incin-core --test plan_tuning"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "DST-014"
+tier = "exploratory"
+theme = "dist"
+status = "planned"
+deps = ["CMP-003", "GRD-007", "DST-008"]
+target = ["crates/incin-core/src/dist/fsdp.rs"]
+deliverable = "FSDP and ZeRO prototype with persistent and transient memory parity"
+evidence = ["cargo test -p incin --features distributed-nccl --test fsdp  # 3x CUDA"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "DST-015"
+tier = "preview"
+theme = "dist"
+status = "planned"
+deps = ["DST-011"]
+target = ["crates/incin-core/src/dist/context.rs"]
+deliverable = "Multi-process rendezvous and launcher with timeout and shutdown tests"
+evidence = ["cargo test -p incin --features distributed-nccl --test rendezvous"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "DST-016"
+tier = "preview"
+theme = "dist"
+status = "planned"
+deps = ["DST-011", "DST-015"]
+target = ["crates/incin-core/src/nn/save.rs"]
+deliverable = "Global checkpoint manifest and explicit cross-mesh resharded load"
+evidence = ["cargo test -p incin-core --test checkpoint_reshard"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "UX-001"
+tier = "preview"
+theme = "ux"
+status = "planned"
+deps = ["EXE-005"]
+target = ["crates/incin/src/train.rs"]
+deliverable = "Automatic Trainer; an unchanged model runs on CPU and on three GPUs"
+evidence = ["cargo test -p incin --test trainer"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "UX-002"
+tier = "preview"
+theme = "ux"
+status = "planned"
+deps = ["DST-001"]
+target = ["crates/incin-macros/src/mesh.rs"]
+deliverable = "mesh! with expansion, hygiene, span, and compile-fail tests"
+evidence = ["cargo test -p incin-macros --test mesh_macro"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "UX-003"
+tier = "preview"
+theme = "ux"
+status = "planned"
+deps = ["DST-003"]
+target = ["crates/incin-macros/src/placement.rs"]
+deliverable = "placement! grammar and operation-bound diagnostics"
+evidence = ["cargo test -p incin-macros --test placement_macro"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "UX-004"
+tier = "preview"
+theme = "ux"
+status = "planned"
+deps = ["DST-003"]
+target = ["crates/incin-macros/src/module.rs"]
+deliverable = "#[parallel] and #[shard] template and conflict tests"
+evidence = ["cargo test -p incin-macros --test parallel_attrs"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "UX-005"
+tier = "preview"
+theme = "ux"
+status = "planned"
+deps = ["DST-011", "UX-001"]
+target = ["crates/incin/src/bin/cargo-incin.rs"]
+deliverable = ".explain() and cargo incin plan with golden text and JSON reports"
+evidence = ["cargo test -p incin --test plan_report"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "UX-006"
+tier = "preview"
+theme = "ux"
+status = "planned"
+deps = ["TUN-007", "UX-005"]
+target = ["crates/incin/src/bin/cargo-incin.rs"]
+deliverable = "cargo incin tune with an offline and stale-cache round trip"
+evidence = ["cargo test -p incin --test tune_cli"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "UX-007"
+tier = "preview"
+theme = "ux"
+status = "planned"
+deps = ["DST-015"]
+target = ["crates/incin-macros/src/distributed_main.rs"]
+deliverable = "Launcher and #[distributed_main] with shutdown and error tests"
+evidence = ["cargo test -p incin-macros --test distributed_main"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "UX-008"
+tier = "preview"
+theme = "ux"
+status = "planned"
+deps = ["CMP-002", "DST-011"]
+target = ["crates/incin-core/src/compiled/manifest.rs"]
+deliverable = "Reproducibility manifest replay and incompatibility diffs"
+evidence = ["cargo test -p incin-core --test manifest_replay"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "UX-009"
+tier = "preview"
+theme = "ux"
+status = "planned"
+deps = ["SHP-007"]
+target = ["crates/incin-macros/src/axes.rs"]
+deliverable = "Named axes! with ambiguous and missing-axis diagnostics"
+evidence = ["cargo test -p incin-macros --test axes_macro"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "UX-010"
+tier = "exploratory"
+theme = "ux"
+status = "planned"
+deps = ["EXE-003", "DST-003"]
+target = ["crates/incin-macros/src/einsum.rs"]
+deliverable = "Typed einsum! with parser, shape, placement, and parity tests. Requires a recorded justification before starting"
+evidence = ["cargo test -p incin-macros --test einsum_macro"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "UX-011"
+tier = "exploratory"
+theme = "ux"
+status = "planned"
+deps = ["DST-004"]
+target = ["crates/incin-macros/src/parallel_block.rs"]
+deliverable = "Evaluate parallel!; implement only with recorded usability evidence"
+evidence = ["cargo test -p incin-macros --test parallel_block"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "UX-012"
+tier = "preview"
+theme = "ux"
+status = "planned"
+deps = ["UX-005", "UX-006"]
+target = ["crates/incin-viz/src/"]
+deliverable = "Visualize placement, memory, timeline, and critical path"
+evidence = ["cargo test -p incin-viz"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "UX-013"
+tier = "core"
+theme = "ux"
+status = "planned"
+deps = ["GOV-005", "EXE-005", "UX-014"]
+target = ["docs/", "README.md"]
+deliverable = "Feature and capability documentation generated from tested registrations, with compiled examples"
+evidence = ["cargo test --workspace --doc"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "UX-014"
+tier = "core"
+theme = "ux"
+status = "planned"
+deps = ["EXE-005"]
+target = ["crates/incin/src/bin/cargo-incin.rs"]
+deliverable = "cargo incin doctor with stable text and JSON output and mocked hardware tests"
+evidence = ["cargo test -p incin --test doctor"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "UX-015"
+tier = "preview"
+theme = "ux"
+status = "planned"
+deps = ["EXE-005", "GRD-001"]
+target = ["crates/incin-core/src/exec/precision.rs"]
+deliverable = "PrecisionPolicy and loss scaling extending the existing DTypePolicy; mixed-precision parity tests"
+evidence = ["cargo test -p incin-core --test precision_policy"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "CI-001"
+tier = "core"
+theme = "ci"
+status = "planned"
+deps = ["GOV-005", "GOV-003"]
+target = [".github/workflows/ci.yml"]
+deliverable = "Feature-powerset CI preserving the bare CPU default; adds cargo doc and drops blanket package exclusions"
+evidence = ["act -j powerset  # or CI run"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "CI-002"
+tier = "core"
+theme = "ci"
+status = "planned"
+deps = ["EXE-008"]
+target = [".github/workflows/hardware.yml"]
+deliverable = "Scheduled CUDA and WGPU hardware matrix"
+evidence = ["gh workflow run hardware.yml"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "CI-003"
+tier = "preview"
+theme = "ci"
+status = "planned"
+deps = ["DST-008", "DST-009", "DST-010"]
+target = [".github/workflows/hardware.yml"]
+deliverable = "Homogeneous three-GPU DP, TP, and PP CI"
+evidence = ["gh workflow run hardware.yml -f job=dist3"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "CI-004"
+tier = "preview"
+theme = "ci"
+status = "planned"
+deps = ["DST-015"]
+target = [".github/workflows/hardware.yml"]
+deliverable = "Multi-process and multi-node CI with topology metadata"
+evidence = ["gh workflow run hardware.yml -f job=multinode"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "CI-005"
+tier = "core"
+theme = "ci"
+status = "planned"
+deps = ["GOV-005"]
+target = ["crates/incin-macros/tests/"]
+deliverable = "Macro trybuild, rustfmt, rename, and hygiene suite for the existing s!, idx!, and #[module]"
+evidence = ["cargo test -p incin-macros"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "CI-006"
+tier = "preview"
+theme = "ci"
+status = "planned"
+deps = ["GOV-005", "TUN-008", "DST-013"]
+target = [".github/workflows/ci.yml"]
+deliverable = "CPU, GPU, and distributed performance and cache gates"
+evidence = ["cargo xtask budgets"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "CI-007"
+tier = "preview"
+theme = "ci"
+status = "planned"
+deps = ["MTL-004"]
+target = [".github/workflows/hardware.yml"]
+deliverable = "Scheduled Apple Silicon Metal hardware matrix"
+evidence = ["gh workflow run hardware.yml -f job=metal"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "CI-008"
+tier = "preview"
+theme = "ci"
+status = "planned"
+deps = ["UX-002", "UX-003", "UX-004"]
+target = ["crates/incin-macros/tests/"]
+deliverable = "Distributed macro trybuild suite for mesh!, placement!, #[parallel], and #[shard]"
+evidence = ["cargo test -p incin-macros --features distributed"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "REL-001"
+tier = "core"
+theme = "release"
+status = "planned"
+deps = ["SHP-008", "EXE-009", "GRD-006", "CI-001", "GOV-006", "GOV-007"]
+target = ["CHANGELOG.md", "docs/MIGRATION.md"]
+deliverable = "Core stabilization review and migration guide"
+evidence = ["cargo test --workspace && cargo doc --workspace --no-deps"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "REL-002"
+tier = "core"
+theme = "release"
+status = "planned"
+deps = ["REL-001", "CI-002", "CI-005", "UX-013", "UX-014", "PRF-002", "GRD-002", "GRD-005"]
+target = ["CHANGELOG.md"]
+deliverable = "Single-device release-readiness evidence; the deprecated candle alias is removed here"
+evidence = ["cargo test --workspace --all-features"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "REL-003"
+tier = "preview"
+theme = "release"
+status = "planned"
+deps = ["REL-002", "CI-003", "CI-006", "CI-007", "CI-008", "UX-005", "UX-007", "UX-008", "UX-009", "UX-012", "UX-015", "DST-011", "EXE-010", "CMP-006", "MTL-006", "PRF-003", "PRF-004", "TUN-008", "GRD-007"]
+target = ["CHANGELOG.md"]
+deliverable = "Distributed preview readiness and the fail-stop contract"
+evidence = ["gh workflow run hardware.yml"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
+id = "REL-004"
+tier = "preview"
+theme = "release"
+status = "planned"
+deps = ["REL-003", "CI-004", "DST-016"]
+target = ["CHANGELOG.md"]
+deliverable = "Multi-node preview scope and recovery limits published"
+evidence = ["gh workflow run hardware.yml -f job=multinode"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+

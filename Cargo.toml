@@ -13,7 +13,8 @@ members = [
     "crates/incin-viz-plugin-api",
     "crates/incin-viz",
     "crates/incin/examples/*",
-    "crates/incin-core/examples/*"
+    "crates/incin-core/examples/*",
+    "xtask"
 ]
 
 exclude = []
@@ -24,7 +25,13 @@ version = "0.0.0"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
 
+[workspace.lints.rust]
+# Evaluating ShapeEq associated consts as statements triggers compile-time shape assertions.
+path_statements = "allow"
+
 [workspace.lints.clippy]
+# Public generic signatures keep primary trait bounds near parameters and capability bounds in where clauses.
+multiple_bound_locations = "allow"
 type_complexity = "allow"
 too_many_arguments = "allow"
 [workspace.dependencies]

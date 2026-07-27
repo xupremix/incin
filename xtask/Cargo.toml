@@ -1,0 +1,12 @@
+[package]
+name = "xtask"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "Repository maintenance tasks for the Incin workspace."
+
+[dependencies]
+toml = "0.8"
+
+[lints]
+workspace = true
