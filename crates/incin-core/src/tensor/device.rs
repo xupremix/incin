@@ -24,14 +24,16 @@
 //! Tensor::<s![2, 3], IncinBackend<f32, Cuda>>::zeros(2)  // runtime ordinal 2
 //! ```
 //!
-//! ## Tier 3 — Fully Compile-Time (`Cuda<N>` / `Wgpu<N>`)
+//! ## Tier 3 — Fully Static Selection (`CudaN<N>` / `WgpuN<N>`)
 //!
 //! Both the backend family and the device ordinal are encoded at the type
 //! level via [`typenum`] unsigned integers. The tensor type fully describes
-//! which physical device it lives on. No runtime argument is required.
+//! the requested logical device address. No constructor argument is required.
+//! Hardware existence, driver compatibility, and capabilities are necessarily
+//! validated when the program initializes that device at runtime.
 //!
 //! ```text
-//! Tensor::<s![2, 3], IncinBackend<f32, Cuda<U1>>>::zeros(())  // always GPU 1
+//! Tensor::<s![2, 3], IncinBackend<f32, CudaN<U1>>>::zeros(())  // always GPU 1
 //! ```
 
 use core::fmt::Debug;
@@ -45,17 +47,17 @@ use crate::prelude::{Dyn, Result};
 /// |------------------|------------------------|-------------------------|-----------------|
 /// | `Dyn`            | ✗                      | ✗                       | `DeviceId`      |
 /// | `Cuda` / `Wgpu`  | ✓                      | ✗                       | `usize`         |
-/// | `Cuda<N>` / `Wgpu<N>` | ✓               | ✓                       | `()`            |
+/// | `CudaN<N>` / `WgpuN<N>` | ✓               | ✓                       | `()`            |
 pub trait Device: 'static + Send + Sync + Clone + Eq + PartialEq + Debug + Sized {
     /// The user-facing constructor argument:
     /// - `DeviceId` for `Dyn` (fully runtime)
     /// - `usize` for `Cuda`/`Wgpu` (partial — ordinal at runtime)
-    /// - `()` for `Cuda<N>`/`Wgpu<N>` (fully static)
+    /// - `()` for `CudaN<N>`/`WgpuN<N>` (fully static)
     type Arg: Clone;
     /// The runtime-stored representation:
     /// - `DeviceId` for `Dyn`
     /// - `usize` for `Cuda`/`Wgpu`
-    /// - `PhantomData<Self>` for `Cuda<N>`/`Wgpu<N>`
+    /// - `PhantomData<Self>` for `CudaN<N>`/`WgpuN<N>`
     type Field: Debug + Clone + Default;
     /// Converts a user-facing `Arg` into the stored `Field` representation.
     fn init(arg: Self::Arg) -> Self::Field;
@@ -63,11 +65,12 @@ pub trait Device: 'static + Send + Sync + Clone + Eq + PartialEq + Debug + Sized
     fn to_incin(dev: &Self::Field) -> Result<DeviceId>;
 }
 
-/// A [`Device`] whose identity is **fully known at compile time** — both the
-/// backend family and the ordinal are encoded in the type. Takes no
+/// A [`Device`] whose logical selector is **fully known at compile time** —
+/// both the backend family and ordinal are encoded in the type. This does not
+/// prove that matching hardware exists on the runtime host. Takes no
 /// constructor argument (`Arg = ()`).
 ///
-/// Implemented by `Cpu`, `Cuda<N: Unsigned>`, and `Wgpu<N: Unsigned>`.
+/// Implemented by `Cpu`, `CudaN<N: Unsigned>`, and `WgpuN<N: Unsigned>`.
 pub trait ConstDevice: Default + Device<Arg = ()> {}
 
 // ============================================================================
@@ -107,7 +110,7 @@ mod cuda_partial {
     /// Use this when you know you want CUDA but which GPU to use is
     /// determined at runtime (e.g. via a CLI flag or environment variable).
     ///
-    /// For a fully compile-time device use `Cuda<N>` where `N` is a
+    /// For a fully static device selector use `CudaN<N>` where `N` is a
     /// [`typenum`] unsigned (e.g. `Cuda<U0>` for GPU 0).
     pub struct Cuda(pub usize);
 
@@ -141,7 +144,7 @@ mod wgpu_partial {
     /// Use this when you know you want WGPU but which adapter to use is
     /// determined at runtime.
     ///
-    /// For a fully compile-time device use `Wgpu<N>` where `N` is a
+    /// For a fully static device selector use `WgpuN<N>` where `N` is a
     /// [`typenum`] unsigned (e.g. `Wgpu<U0>` for adapter 0).
     pub struct Wgpu(pub usize);
 
@@ -165,7 +168,7 @@ mod wgpu_partial {
 pub use wgpu_partial::Wgpu;
 
 // ============================================================================
-// Tier 3: Fully Compile-Time — Cuda<N> / Wgpu<N> (typenum ordinal)
+// Tier 3: Fully Static Selection — CudaN<N> / WgpuN<N> (typenum ordinal)
 // ============================================================================
 
 #[cfg(feature = "cuda")]
@@ -264,12 +267,12 @@ mod wgpu_static {
 pub use wgpu_static::WgpuN;
 
 // ============================================================================
-// CPU — always fully compile-time (there is only one CPU)
+// CPU — always fully static (there is only one CPU)
 // ============================================================================
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 /// The CPU device. A zero-sized type — there is only one CPU, so no ordinal
-/// is needed. This is a **Tier 3** (fully compile-time) device.
+/// is needed. This is a **Tier 3** (fully static) device selector.
 pub struct Cpu;
 
 impl ConstDevice for Cpu {}

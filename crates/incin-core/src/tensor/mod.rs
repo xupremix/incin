@@ -1,5 +1,7 @@
 /// Connects `Tensor`'s type parameters to the runtime arguments needed to construct one.
 pub mod arg;
+/// Compile-time device selection from enabled features.
+pub mod auto_device;
 /// Converts user-facing constructor arguments into each `TensorArgs` field.
 pub mod arg_into;
 /// The `Backend` trait family and the test-only `DummyBackend` stand-in.
@@ -24,6 +26,7 @@ pub mod tracing;
 /// Re-exports the public tensor-layer API: `Tensor`, `Backend`, `Device`, `DType`, and their supporting traits.
 pub mod prelude {
     pub use super::arg::*;
+    pub use super::auto_device::*;
     pub use super::arg_into::*;
     pub use super::backend::*;
     pub use super::base::*;
