@@ -24,6 +24,8 @@ mod idx;
 mod module;
 /// Helper module for parsing ONNX model graphs into Rust structs.
 mod onnx;
+/// The single rank ceiling and the sweep that generates every rank ladder.
+mod rank;
 /// Helper module for importing model weights from safetensors.
 mod safetensors;
 /// Helper module for static shape macro expansion.
@@ -158,4 +160,44 @@ pub fn model(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn import_model(input: TokenStream) -> TokenStream {
     safetensors::import_model(TokenStream::new(), input)
+}
+
+/// The single rank ceiling every shape rule is generated up to.
+///
+/// Expands to a `usize` literal. `incin-core` re-exports it as
+/// `shapes::MAX_RANK`; this macro exists because a proc-macro crate cannot
+/// export a `const`, and duplicating the number would reintroduce exactly the
+/// drift `SHP-006` removed.
+#[proc_macro]
+pub fn max_rank(_input: TokenStream) -> TokenStream {
+    rank::max_rank()
+}
+
+/// Generate a shape rule's rank ladder from `MAX_RANK`.
+///
+/// ```ignore
+/// rank_sweep!(names => impl_append_dim_for_tuple);
+/// rank_sweep!(ranked_pairs => impl_shape_for_tuple);
+/// rank_sweep!(conv2d => impl_conv2d_shape, min = 1, max = 5);
+/// ```
+///
+/// Expands to one `macro_name!(..);` per rank in `min..=max`, defaulting to
+/// `1..=MAX_RANK`. The forms match the argument shapes the existing
+/// `macro_rules!` families already accept:
+///
+/// | Form | Arguments for rank 3 |
+/// |---|---|
+/// | `names` | `D0, D1, D2` |
+/// | `names_from1` | `D1, D2, D3` |
+/// | `ranked_pairs` | `3, D0 0, D1 1, D2 2` |
+/// | `letters` | `A, B, C` |
+/// | `letters_from_b` | `B, C, D` |
+/// | `conv1d` | `4; B0: 0, B1: 1, B2: 2` |
+/// | `conv2d` | `4, 5; B0: 0, B1: 1, B2: 2` |
+///
+/// A `max` above `MAX_RANK` is rejected rather than honored: the point of the
+/// sweep is that no rule sets its own ceiling.
+#[proc_macro]
+pub fn rank_sweep(input: TokenStream) -> TokenStream {
+    rank::rank_sweep(input)
 }

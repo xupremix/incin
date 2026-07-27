@@ -160,10 +160,9 @@ macro_rules! impl_reshape_target {
     };
 }
 
-impl_reshape_target!(D1);
-impl_reshape_target!(D1, D2);
-impl_reshape_target!(D1, D2, D3);
-impl_reshape_target!(D1, D2, D3, D4);
+// Already variadic; it was simply never invoked above rank 4, so a rank-5
+// reshape target had no impl while the rank-5 shape it targeted did.
+incin_macros::rank_sweep!(names_from1 => impl_reshape_target);
 
 /// A trait for types that describe a slicing operation along a single tensor axis in the `idx![]` macro.
 ///
@@ -271,10 +270,8 @@ macro_rules! impl_slice_target {
     };
 }
 
-impl_slice_target!(D1);
-impl_slice_target!(D1, D2);
-impl_slice_target!(D1, D2, D3);
-impl_slice_target!(D1, D2, D3, D4);
+// Already variadic; same four-rank invocation ceiling as the reshape target.
+incin_macros::rank_sweep!(names_from1 => impl_slice_target);
 
 #[cfg(test)]
 mod tests {

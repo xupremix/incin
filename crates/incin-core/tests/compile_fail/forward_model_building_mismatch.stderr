@@ -38,5 +38,7 @@ error[E0277]: Cannot use shape `(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UInt<UInt<
              `(D0, D1, D2, D3)` implements `EndsWith<D3>`
              `(D0, D1, D2, D3, D4)` implements `EndsWith<D4>`
              `(D0, D1, D2, D3, D4, D5)` implements `EndsWith<D5>`
+             `(D0, D1, D2, D3, D4, D5, D6)` implements `EndsWith<D6>`
+             `(D0, D1, D2, D3, D4, D5, D6, D7)` implements `EndsWith<D7>`
              `(D0,)` implements `EndsWith<D0>`
    = note: required for `incin::nn::Linear<(UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B1>, B1>, B1>, B0>, UInt<UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B1>, B0>, B0>, B0>), DummyBackend<f32, incin::prelude::Cpu>>` to implement `incin::nn::Module<incin::prelude::Tensor<(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B1>, B0>, B0>), DummyBackend<f32, incin::prelude::Cpu>, f32>>`

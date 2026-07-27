@@ -4,15 +4,15 @@ error[E0277]: Cannot concatenate shape `(Batch, UInt<UInt<UInt<UTerm, B1>, B0>, 
 14 |     let _ = a.concat::<s![OtherBatch, 8], typenum::U1>(&b);
    |               ^^^^^^ Shape mismatch during concatenation
    |
-   = help: the trait `incin::shapes::concat::ConcatShape<(OtherBatch, UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>), UInt<UTerm, B1>>` is not implemented for `(Batch, UInt<UInt<UInt<UTerm, B1>, B0>, B0>)`
+   = help: the trait `ConcatShape<(OtherBatch, UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>), UInt<UTerm, B1>>` is not implemented for `(Batch, UInt<UInt<UInt<UTerm, B1>, B0>, B0>)`
    = note: Concatenation requires all dimensions except the given axis to match exactly
-   = help: the following other types implement trait `incin::shapes::concat::ConcatShape<S2, Axis>`:
-             `(D0, D1)` implements `incin::shapes::concat::ConcatShape<(D0, D1_), UInt<UTerm, B1>>`
-             `(D0, D1)` implements `incin::shapes::concat::ConcatShape<(D0_, D1), UTerm>`
-             `(D0, D1, D2)` implements `incin::shapes::concat::ConcatShape<(D0, D1, D2_), UInt<UInt<UTerm, B1>, B0>>`
-             `(D0, D1, D2)` implements `incin::shapes::concat::ConcatShape<(D0, D1_, D2), UInt<UTerm, B1>>`
-             `(D0, D1, D2)` implements `incin::shapes::concat::ConcatShape<(D0_, D1, D2), UTerm>`
-             `(D0, D1, D2, D3)` implements `incin::shapes::concat::ConcatShape<(D0, D1, D2, D3_), UInt<UInt<UTerm, B1>, B1>>`
-             `(D0, D1, D2, D3)` implements `incin::shapes::concat::ConcatShape<(D0, D1, D2_, D3), UInt<UInt<UTerm, B1>, B0>>`
-             `(D0, D1, D2, D3)` implements `incin::shapes::concat::ConcatShape<(D0, D1_, D2, D3), UInt<UTerm, B1>>`
+   = help: the following other types implement trait `ConcatShape<S2, Axis>`:
+             `(D0, D1)` implements `ConcatShape<(D0, Rhs), UInt<UTerm, B1>>`
+             `(D0, D1)` implements `ConcatShape<(Rhs, D1), UTerm>`
+             `(D0, D1, D2)` implements `ConcatShape<(D0, D1, Rhs), UInt<UInt<UTerm, B1>, B0>>`
+             `(D0, D1, D2)` implements `ConcatShape<(D0, Rhs, D2), UInt<UTerm, B1>>`
+             `(D0, D1, D2)` implements `ConcatShape<(Rhs, D1, D2), UTerm>`
+             `(D0, D1, D2, D3)` implements `ConcatShape<(D0, D1, D2, Rhs), UInt<UInt<UTerm, B1>, B1>>`
+             `(D0, D1, D2, D3)` implements `ConcatShape<(D0, D1, Rhs, D3), UInt<UInt<UTerm, B1>, B0>>`
+             `(D0, D1, D2, D3)` implements `ConcatShape<(D0, Rhs, D2, D3), UInt<UTerm, B1>>`
            and $N others
