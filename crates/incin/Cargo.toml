@@ -16,13 +16,26 @@ exclude = [
 workspace = true
 
 [features]
+# The normal installation is a standard-library CPU build.
 default = ["std", "cpu"]
+# Enables standard-library functionality, serialization, and filesystem APIs.
 std = ["incin-core/std", "incin-macros/std", "incin-backends/std"]
+# Enables nightly-only APIs in the core and macro crates.
 nightly = ["incin-core/nightly", "incin-macros/nightly"]
+# Enables the built-in CPU backend. This is the only default backend.
 cpu = ["incin-backends/cpu"]
+# Enables the native CUDA backend. CUDA is never enabled implicitly.
 cuda = ["incin-core/cuda", "incin-backends/cuda"]
+# Enables the cross-platform WGPU backend. WGPU is never enabled implicitly.
 wgpu = ["incin-backends/wgpu"]
-legacy = ["incin-backends/legacy"]
+# Enables the external Candle backend at `incin::external::candle`.
+external-candle = ["std", "incin-backends/external-candle"]
+# Deprecated alias for `external-candle`. Removed at REL-002; see PROPOSALS.md D-014.
+candle = ["external-candle"]
+# Enables CUDA launch autotuning.
+autotune = ["cuda", "incin-backends/autotune"]
+# Enables backend telemetry hooks.
+telemetry = ["std", "incin-backends/telemetry"]
 
 [dependencies]
 incin-core = { path = "../incin-core", version = "0.0.0", default-features = false }
@@ -38,6 +51,5 @@ name = "cargo-incin"
 path = "src/bin/cargo-incin.rs"
 
 [dev-dependencies]
-candle-core = { workspace = true }
 hashbrown = "0.14.5"
 bytemuck = "1"

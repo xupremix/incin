@@ -15,8 +15,11 @@ proc-macro = true
 workspace = true
 
 [features]
+# Procedural macros use the standard library by default.
 default = ["std"]
+# Standard-library support for compile-time model and file processing.
 std = []
+# Enables nightly-only macro experiments. Empty on stable by design.
 nightly = []
 
 [dependencies]

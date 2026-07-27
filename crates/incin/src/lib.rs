@@ -5,7 +5,7 @@
 //! ## Key Features
 //!
 //! * **Compile-time Shape Verification**: Write tensor operations with `Tensor<s![Batch, Channels, Height, Width], Backend>` and let the compiler guarantee that shapes align for operations like `matmul`, `conv2d`, `concat`, etc.
-//! * **Backend Agnostic**: Incin is built on a trait-based backend system, with native CPU, CUDA, and WGPU execution backends shipped out of the box. `candle`/`ndarray`/`burn` wrappers exist behind the `legacy` feature for interop.
+//! * **Backend Agnostic**: CPU is enabled by default; native CUDA and WGPU are explicit opt-ins. The third-party Candle adapter is available through the `external-candle` feature under `external::candle`.
 //! * **Macro-driven Ergonomics**: Powerful macros like `s![]` for shape definitions, `idx![]` for expressive slicing and reshaping, and `model![]` for generating fully typed Rust structs directly from ONNX files.
 //! * **Zero-Cost Abstractions**: The static shape information (`typenum`) exists entirely in the type system and evaporates at runtime, introducing zero overhead to the underlying backend operations.
 //!
@@ -121,16 +121,18 @@ pub mod hub {
 /// Typenum compile-time type-level integers.
 pub use incin_core::typenum;
 
-// We define a type alias to restore the default Backend behavior without cyclical dependencies
-#[cfg(feature = "cuda")]
-/// Default device.
-pub type DefaultDevice = crate::prelude::Cuda;
-#[cfg(all(not(feature = "cuda"), feature = "wgpu"))]
-/// Default device.
-pub type DefaultDevice = crate::prelude::Wgpu;
-#[cfg(all(not(feature = "cuda"), not(feature = "wgpu")))]
-/// Default device.
+// Enabling an accelerator must never silently change application behavior.
+// CPU remains the default whenever it is available; accelerator-only builds
+// get the one enabled device family.
+#[cfg(feature = "cpu")]
+/// Default device used by the standard installation.
 pub type DefaultDevice = incin_core::prelude::Cpu;
+#[cfg(all(not(feature = "cpu"), feature = "wgpu"))]
+/// Default device for a WGPU-only build.
+pub type DefaultDevice = crate::prelude::Wgpu;
+#[cfg(all(not(feature = "cpu"), not(feature = "wgpu"), feature = "cuda"))]
+/// Default device for a CUDA-only build.
+pub type DefaultDevice = crate::prelude::Cuda;
 
 #[cfg(feature = "cpu")]
 /// Default backend (CPU with f32). Equivalent to `IncinBackend<f32, Cpu>`.

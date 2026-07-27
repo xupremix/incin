@@ -10,6 +10,12 @@ pub use backend_kind::BackendFor;
 pub mod dispatch;
 pub use dispatch::DispatchBackend;
 
+/// Runtime detection of the best device this machine can actually run on.
+#[cfg(feature = "std")]
+pub mod detect;
+#[cfg(feature = "std")]
+pub use detect::{detect_device, detect_device_in};
+
 pub(crate) mod dtype_policy;
 
 #[cfg(any(feature = "cpu", feature = "cuda"))]
@@ -28,6 +34,8 @@ pub type IncinBackend<T = f32, D = incin_core::prelude::Cpu> = <D as BackendFor<
 pub mod prelude {
     #[cfg(any(feature = "cpu", feature = "wgpu", feature = "cuda"))]
     pub use super::{BackendFor, IncinBackend};
+    #[cfg(feature = "std")]
+    pub use super::detect::{detect_device, detect_device_in};
 }
 
 #[cfg(any(feature = "cpu", feature = "cuda"))]
@@ -39,8 +47,9 @@ pub mod cuda;
 #[cfg(feature = "wgpu")]
 pub mod wgpu;
 
-#[cfg(feature = "legacy")]
-pub mod legacy;
+#[cfg(feature = "external-candle")]
+/// Third-party backend integrations that are separate from native Incin backends.
+pub mod external;
 
 #[cfg(feature = "telemetry")]
 pub mod telemetry;

@@ -8,10 +8,8 @@ readme.workspace = true
 license.workspace = true
 
 [dependencies]
-candle-core.workspace = true
 hf-hub = { version = "0.5.0", default-features = false, features = ["tokio", "rustls-tls", "ureq"] }
 incin-core = { version = "0.0.0", path = "../incin-core" }
-incin-backends = { version = "0.0.0", path = "../incin-backends", default-features = false, features = ["std", "legacy"] }
 rayon = "1.12.0"
 anyhow = "1.0.103"
 rand = "0.8"

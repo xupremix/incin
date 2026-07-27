@@ -9,7 +9,9 @@ readme.workspace = true
 license.workspace = true
 
 [features]
+# Diagnostic rewriting uses the standard library by default.
 default = ["std"]
+# Standard-library support for filesystem-backed diagnostic expansion.
 std = []
 
 [lints]

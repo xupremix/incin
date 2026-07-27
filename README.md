@@ -6,13 +6,59 @@ Incin enforces shape and type bounds at compile time to prevent tensor shape mis
 
 ## Features
 
-- **Compile-Time Shape Verification**: Tensor shapes can be statically tracked using `s![]` macros, catching dimension and matrix multiplication mismatches at build time.
-- **Named Dimensions**: `symbolic_dim!(Batch, Seq, Feature)` gives an axis a name that's part of its *type* — `Tensor<s![Batch, Feature]>` and `Tensor<s![Batch, Seq]>` are different types even when both axes are the same runtime size, so passing one where the other is expected is a compile error, not a silently-wrong result. Unlike PyTorch's named tensors (runtime, opt-in, easy to bypass), a Incin name can't be forgotten — see `crates/incin/examples/named_dims_safety`.
-- **Python-Style Slicing**: Expressive index manipulation macros (`idx![]`) enable Python-like slicing and dynamic index selection.
-- **ONNX Model Importing**: Convert ONNX models directly into fully-typed Rust module structs at compile time with `import_model!`.
-- **Multi-Backend Support**: Abstract `Backend` design with native execution implementations for CPU, CUDA, and WGPU, plus Candle interop via `legacy`.
-- **Parallel Data Loading**: Efficient multi-threaded batching and data loading (`incin-data`).
-- **Telemetry & Visualization**: Real-time graph extraction and terminal UI visualization tools (`incin-telemetry` and `incin-viz`).
+A normal `incin = "0.0.0"` dependency enables only the standard library and
+the native CPU backend. CUDA, WGPU, telemetry, autotuning, nightly experiments,
+and third-party backends are opt-in. Enabling an accelerator does not change
+`DefaultBackend`, which remains CPU whenever the `cpu` feature is enabled.
+
+- **Compile-Time Shape Verification**: static `s![]` shapes catch incompatible tensor operations during compilation.
+- **Named Dimensions**: `symbolic_dim!` makes semantic axis names part of the tensor type.
+- **Python-Style Slicing**: `idx![]` provides checked range and index expressions.
+- **ONNX Model Importing**: `import_model!` generates typed Rust modules at compile time. Runtime ONNX weight loading is not implemented; use safetensors for runtime loading.
+- **Native Backends**: CPU is the default; CUDA and WGPU are explicit features.
+- **External Backends**: Candle interoperability is available explicitly through `candle` and `incin::external::candle`.
+- **Data and Tooling**: parallel loading, diagnostics, telemetry, visualization, and editor integrations live in focused workspace crates.
+
+### Facade feature matrix
+
+| Feature | Default | Purpose |
+|---|---:|---|
+| `std` | yes | Filesystem, serialization, model I/O, and standard error integrations. |
+| `cpu` | yes | Built-in pure-Rust CPU execution. This is the only default backend. |
+| `cuda` | no | Native CUDA execution through `cudarc`; requires a compatible CUDA installation at runtime. |
+| `wgpu` | no | Cross-platform GPU execution through Vulkan, Metal, or DX12 via `wgpu`. |
+| `candle` | no | Third-party Candle adapter under `incin::external::candle`. |
+| `autotune` | no | CUDA launch-candidate measurement and caching; implies `cuda`. |
+| `telemetry` | no | Backend event and autograd hooks through `incin-telemetry`. |
+| `nightly` | no | Nightly-only experimental APIs. Stable Rust remains the supported default. |
+
+Examples:
+
+```toml
+# Bare/default CPU installation
+incin = "0.0.0"
+
+# WGPU in addition to the default CPU backend
+incin = { version = "0.0.0", features = ["wgpu"] }
+
+# CUDA-only application (use explicit CUDA backend/device types)
+incin = { version = "0.0.0", default-features = false, features = ["std", "cuda"] }
+
+# Third-party Candle interoperability
+incin = { version = "0.0.0", features = ["external-candle"] }
+```
+
+### Lower-level crate features
+
+- `incin-backends`: defaults to `std,cpu`; optional `cuda`, `wgpu`, `candle`, `autotune`, and `telemetry`.
+- `incin-core`: defaults to `std`; optional `nightly`, `cuda`, and `wgpu`. The GPU flags expose device metadata needed by backend crates and do not execute kernels themselves.
+- `incin-macros`: defaults to `std`; optional `nightly`.
+- `incin-diagnostics`: defaults to `std`; disabling defaults gives the allocation-only diagnostic core.
+- `incin-data`, `incin-telemetry`, `incin-viz`, `incin-viz-plugin-api`, and `incin-lsp` currently expose no Cargo features.
+
+`incin-backends` can also be used without default features when implementing a
+backend-specific binary. At least one of `cpu`, `cuda`, or `wgpu` is needed for
+`IncinBackend` execution; `candle` exposes its separate external adapter.
 
 ## Setup & Requirements
 
@@ -95,7 +141,7 @@ fn main() -> Result<()> {
 - `incin`: Primary facade crate providing unified imports and prelude, plus
   the `cargo-incin` CLI binary.
 - `incin-core`: Statically-typed `Tensor` implementation, traits, and graph definitions.
-- `incin-backends`: Native CPU, CUDA, WGPU, and legacy Candle execution engines.
+- `incin-backends`: Native CPU, opt-in CUDA and WGPU execution engines, plus an external Candle adapter.
 - `incin-macros`: Procedural macros (`s!`, `idx!`, `module`, `import_model!`).
 - `incin-data`: Data loading utilities, dataset traits, and HuggingFace Hub support.
 - `incin-telemetry`: Event emission, transport streams, and graph snapshot recording.

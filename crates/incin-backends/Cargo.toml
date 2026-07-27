@@ -8,7 +8,10 @@ readme.workspace = true
 license.workspace = true
 
 [features]
-default = ["std", "cpu", "wgpu", "cuda"]
+# A bare dependency is a standard-library CPU build. GPU and external
+# integrations are always explicit opt-ins.
+default = ["std", "cpu"]
+# Enables APIs that require the Rust standard library.
 std = [
     "incin-core/std",
     "anyhow/std",
@@ -17,13 +20,20 @@ std = [
     "rand_distr/std",
     "half/std"
 ]
+# Enables Incin's built-in pure-Rust CPU backend.
 cpu = []
-cuda = ["dep:cudarc", "incin-core/cuda"]
-wgpu = ["dep:wgpu", "dep:pollster", "incin-core/wgpu"]
-fused = []
+# Enables Incin's native CUDA backend through cudarc.
+cuda = ["std", "dep:cudarc", "incin-core/cuda"]
+# Enables Incin's cross-platform GPU backend through wgpu.
+wgpu = ["std", "dep:wgpu", "dep:pollster", "incin-core/wgpu"]
+# Benchmarks legal CUDA launch configurations and caches the selected candidate.
 autotune = ["cuda"]
-legacy = ["dep:candle-core", "dep:candle-nn"]
-telemetry = ["dep:incin-telemetry"]
+# Enables the external Candle backend at `incin_backends::external::candle`.
+external-candle = ["std", "dep:candle-core", "dep:candle-nn"]
+# Deprecated alias for `external-candle`. Removed at REL-002; see PROPOSALS.md D-014.
+candle = ["external-candle"]
+# Connects backend execution and autograd events to `incin-telemetry`.
+telemetry = ["std", "dep:incin-telemetry"]
 
 [dependencies]
 incin-core = { path = "../incin-core", default-features = false, version = "0.0.0" }
@@ -46,7 +56,7 @@ pollster = { version = "0.3.0", optional = true }
 # CUDA Backend
 cudarc = { version = "0.19.8", optional = true, features = ["cuda-12000", "nvrtc", "cublas", "cudnn", "f16"] }
 
-# Legacy Backends
+# External backend integration
 candle-core = { workspace = true, optional = true }
 candle-nn = { workspace = true, optional = true }
 
