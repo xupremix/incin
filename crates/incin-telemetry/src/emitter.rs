@@ -1,4 +1,4 @@
-//! `Emitter`: the first concrete implementor of the [`Reporter`] trait.
+//! `Emitter`: the first concrete implementor of the [`crate::reporter::Reporter`] trait.
 //!
 //! Two `crossbeam-channel` bounded channels (priority + bulk) drain into one
 //! dedicated background writer thread, satisfying TELEM-02's non-blocking
@@ -54,7 +54,7 @@ const BULK_DRAIN_BATCH: usize = 256;
 /// busy-spin when both channels are empty; never used for dequeue ordering.
 const IDLE_WAIT: Duration = Duration::from_millis(200);
 
-/// Non-blocking [`Reporter`] implementation. Holds two
+/// Non-blocking [`crate::reporter::Reporter`] implementation. Holds two
 /// `crossbeam_channel::Sender<Event>` handles -- one small, always-delivered
 /// priority lane, one larger, drop-eligible bulk lane -- plus an atomic
 /// dropped-event counter. Construction spawns exactly one background thread

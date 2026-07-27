@@ -1,5 +1,5 @@
 //! Optional lower-latency Unix-socket/named-pipe transport (TELEM-05),
-//! layered on top of the always-on [`super::file::FileTransport`]. Uses
+//! layered on top of the always-on [`crate::transport::file::FileTransport`]. Uses
 //! `interprocess` 2.4.2's cross-platform `local_socket` API so the same code
 //! path works on Unix domain sockets and Windows named pipes.
 //!
@@ -66,8 +66,8 @@ fn validate_run_id(run_id: &str) -> std::io::Result<()> {
     Ok(())
 }
 
-/// Broadcasts one JSONL line per [`Event`] to every currently-connected
-/// client stream. Byte-identical framing to [`super::file::FileTransport`]
+/// Broadcasts one JSONL line per [`crate::events::Event`] to every currently-connected
+/// client stream. Byte-identical framing to [`crate::transport::file::FileTransport`]
 /// (TELEM-05's "same event schema" requirement): exactly one
 /// `serde_json::to_string(event) + "\n"` per event, one `write_all` per
 /// client.

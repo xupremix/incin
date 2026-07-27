@@ -1,6 +1,6 @@
 //! Contains the `Panel` trait which defines the core interface for UI plugins.
 //!
-//! A [`Panel`] acts as a single, self-contained view within the `incin-viz` dashboard.
+//! A [`crate::panel::Panel`] acts as a single, self-contained view within the `incin-viz` dashboard.
 //! It is responsible for tracking its own state, responding to incoming telemetry events,
 //! handling user input (like mouse clicks or key presses when focused), and rendering
 //! its contents into a designated region on the screen.

@@ -18,7 +18,7 @@ use std::path::Path;
 use crate::events::Event;
 use crate::transport::Transport;
 
-/// Appends one complete, self-delimited JSONL line per [`Event`] written.
+/// Appends one complete, self-delimited JSONL line per [`crate::events::Event`] written.
 /// Opens with `O_APPEND` semantics so a *process* crash mid-write can only
 /// ever truncate the tail of the *last* line, never corrupt prior records
 /// (T-07-02). See the module-level doc comment (WR-04) for the precise

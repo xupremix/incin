@@ -11,13 +11,13 @@ env:
 
 jobs:
   test:
-    name: Test Suite
+    name: CPU Test Suite
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Cache Cargo modules
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/.cargo/registry
@@ -33,15 +33,76 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y protobuf-compiler libvulkan-dev mesa-vulkan-drivers
 
-      
     - name: Check Formatting
       run: cargo fmt --all -- --check
-      
+
+    # The three excluded packages are example crates that hard-depend on the
+    # `wgpu` feature, so they cannot build in a CPU-only feature set. They are
+    # built by the `wgpu` job below, not skipped.
     - name: Clippy Lints
-      run: cargo clippy --workspace --all-targets --no-default-features --features incin-backends/cpu,incin/cpu -- -D warnings
+      run: cargo clippy --workspace --all-targets --exclude backends --exclude tui_graph_demo --exclude native_training_demo --no-default-features --features incin-backends/cpu,incin/cpu -- -D warnings
 
     - name: Run Unit & Integration Tests
-      run: cargo test --workspace --all-targets --no-default-features --features incin-backends/cpu,incin/cpu
+      run: cargo test --workspace --all-targets --exclude backends --exclude tui_graph_demo --exclude native_training_demo --no-default-features --features incin-backends/cpu,incin/cpu
 
     - name: Build Examples
-      run: cargo build --examples --workspace --no-default-features --features incin-backends/cpu,incin/cpu
+      run: cargo build --examples --workspace --exclude backends --exclude tui_graph_demo --exclude native_training_demo --no-default-features --features incin-backends/cpu,incin/cpu
+
+  ledger:
+    name: Execution Ledger Validation
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@stable
+    - name: Validate PROPOSALS.md against docs/plan/ledger.toml
+      run: cargo xtask ledger
+    - name: Run xtask unit tests
+      run: cargo test -p xtask
+
+  docs:
+    name: Documentation Build
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@stable
+    - name: Install protobuf compiler
+      run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+    - name: Build docs with warnings denied
+      env:
+        RUSTDOCFLAGS: -D warnings
+      run: cargo doc --workspace --no-deps --no-default-features --features incin-backends/cpu,incin/cpu
+
+  core-no-std:
+    name: Core no_std Check
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@stable
+    - name: Check incin-core without default features
+      run: cargo check -p incin-core --no-default-features
+
+  wgpu:
+    name: WGPU Software Adapter Tests
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@stable
+    - name: Install WGPU system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y protobuf-compiler libvulkan-dev mesa-vulkan-drivers
+    - name: Run WGPU tests with CPU parity
+      run: cargo test -p incin-backends --all-targets --no-default-features --features std,cpu,wgpu
+    - name: Build WGPU example packages
+      run: cargo build -p backends -p tui_graph_demo -p native_training_demo
+
+  cuda-compile:
+    name: CUDA Compile Check
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@stable
+    - name: Install protobuf compiler
+      run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+    - name: Compile CUDA backend without requiring a GPU
+      run: cargo check -p incin-backends --all-targets --no-default-features --features std,cpu,cuda

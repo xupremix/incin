@@ -83,7 +83,7 @@ fn test_matrix_and_reductions() -> Result<()> {
     assert_eq!(l1_norm.to_scalar::<f32>()?, 6.0);
 
     let l2_norm = v1.norm(2.0)?;
-    assert!((l2_norm.to_scalar::<f32>()? - 3.74165738).abs() < 1e-4);
+    assert!((l2_norm.to_scalar::<f32>()? - 3.741_657_5).abs() < 1e-4);
 
     let prod = v1.clone().prod_all()?;
     assert_eq!(prod.to_scalar::<f32>()?, 6.0);

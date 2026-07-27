@@ -8,19 +8,19 @@
 //!
 //! # Architecture
 //!
-//! The plugin architecture revolves around the [`Panel`] trait. A `Panel` is a stateful
+//! The plugin architecture revolves around the [`panel::Panel`] trait. A `Panel` is a stateful
 //! struct that:
-//! 1. Receives incoming `incin-telemetry` [`Event`]s via `update()`.
-//! 2. Renders itself to a bounded screen region using a [`RenderCtx`] via `render()`.
+//! 1. Receives incoming `incin-telemetry` `Event`s via `update()`.
+//! 2. Renders itself to a bounded screen region using a [`render_ctx::RenderCtx`] via `render()`.
 //! 3. Responds to keyboard and mouse inputs via `handle_event()`.
 //!
-//! The [`RenderCtx`] provides a safe, abstracted interface to the underlying rendering
+//! The [`render_ctx::RenderCtx`] provides a safe, abstracted interface to the underlying rendering
 //! engine (`ratatui`), preventing plugins from accidentally overwriting other panels
 //! or crashing the host application by drawing outside their assigned boundaries.
 //!
 //! # Getting Started
 //!
-//! To create a custom panel, implement the [`Panel`] trait:
+//! To create a custom panel, implement the [`panel::Panel`] trait:
 //!
 //! ```rust,no_run
 //! use incin_viz_plugin_api::prelude::*;

@@ -6,7 +6,7 @@
 //! Source: `.planning/phases/08-plugin-api-base-tui-shell/08-RESEARCH.md`
 //! Pattern 3 (the full `tokio::select!` event loop) -- adapted to this
 //! plan's empty-panel-registry skeleton. Plan 08-05 registers the real
-//! loss/panic-test panels via [`App::register_panel`].
+//! loss/panic-test panels via [`App::register_panel`](crate::app::App::register_panel).
 
 use std::time::Duration;
 
@@ -51,7 +51,7 @@ pub enum LayoutMode {
 /// the transport being tailed.
 pub struct App {
     /// Registered panels. Empty this plan -- Plan 08-05 populates it via
-    /// [`App::register_panel`].
+    /// [`App::register_panel`](crate::app::App::register_panel).
     panels: Vec<Box<dyn Panel>>,
     /// Per-panel crash state, indexed alongside `panels`. A crashed panel
     /// is never rendered into / updated again until an explicit reset

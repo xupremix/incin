@@ -251,7 +251,7 @@ impl ConfusionMatrix {
         }
     }
 
-    /// Updates the matrix with target and prediction indices (matrix[target][pred]).
+    /// Updates the matrix with target and prediction indices (`matrix[target][pred]`).
     pub fn update(&mut self, preds: &[usize], targets: &[usize]) {
         let count = preds.len().min(targets.len());
         for i in 0..count {

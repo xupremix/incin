@@ -63,19 +63,20 @@ pub fn expand_and_substitute_type_files(text: &str) -> (String, Vec<(String, Str
             let match_start = search_idx + pos;
             let after_prefix = &text[match_start + prefix.len()..];
 
-            // Extract path until closing quote or line break
-            let (path_str, bytes_consumed) = if after_prefix.starts_with('\'') {
-                if let Some(end_quote) = after_prefix[1..].find('\'') {
-                    (&after_prefix[1..1 + end_quote], 1 + end_quote + 1)
-                } else {
-                    (&after_prefix[1..], after_prefix.len())
-                }
-            } else if after_prefix.starts_with('"') {
-                if let Some(end_quote) = after_prefix[1..].find('"') {
-                    (&after_prefix[1..1 + end_quote], 1 + end_quote + 1)
-                } else {
-                    (&after_prefix[1..], after_prefix.len())
-                }
+            // Extract path until closing quote or line break.
+            let quoted_path = |quote| {
+                after_prefix.strip_prefix(quote).map(|stripped| {
+                    if let Some(end_quote) = stripped.find(quote) {
+                        (&stripped[..end_quote], 1 + end_quote + 1)
+                    } else {
+                        (stripped, after_prefix.len())
+                    }
+                })
+            };
+            let (path_str, bytes_consumed) = if let Some(quoted) =
+                quoted_path(char::from(39)).or_else(|| quoted_path(char::from(34)))
+            {
+                quoted
             } else {
                 let end = after_prefix
                     .find(|c: char| c.is_whitespace() || c == '\n' || c == '\r')
@@ -161,7 +162,7 @@ pub fn replace_truncated_spans(text: &str, file_lines: &[String]) -> String {
                     if let Some(replacement) = matched_line {
                         result.push_str(&text[last_end..start + 1]);
                         result.push_str(replacement);
-                        result.push_str("`");
+                        result.push('`');
                         last_end = end;
                         line_idx = (line_idx + 1) % file_lines.len();
                     }

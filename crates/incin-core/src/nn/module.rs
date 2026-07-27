@@ -752,7 +752,7 @@ pub trait NamedLayers {
     /// [`Self::summary`] plus a params/MACs/FLOPs totals footer at the given
     /// batch size — see [`format_layer_summary_with_stats`]. Only callable
     /// when `Self` also implements
-    /// [`ComputeStats`](crate::nn::stats::ComputeStats) (every `#[module]`
+    /// [`crate::nn::stats::ComputeStats`] (every `#[module]`
     /// struct does, automatically).
     fn summary_with_stats(&self, batch: u64) -> String
     where

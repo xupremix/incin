@@ -1,4 +1,4 @@
-#![cfg(feature = "legacy")]
+#![cfg(feature = "external-candle")]
 //! Cross-backend parity: `CpuBackendImpl` vs `CandleBackend<f32,
 //! Cpu>`, driven purely through the `Backend` trait surface (D-03), one
 //! `#[test]` per individual op for failure localization.
@@ -15,7 +15,7 @@
 //! Requires `--features native,candle`.
 
 use incin_backends::cpu::CpuBackendImpl;
-use incin_backends::legacy::candle::CandleBackend;
+use incin_backends::external::candle::CandleBackend;
 use incin_core::prelude::Reduction;
 use incin_core::prelude::*;
 

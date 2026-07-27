@@ -1,4 +1,4 @@
-#![cfg(feature = "cpu")]
+#![cfg(all(feature = "cpu", any(feature = "wgpu", feature = "cuda")))]
 
 use incin_backends::cpu::CpuBackendImpl;
 #[cfg(feature = "cuda")]
@@ -30,6 +30,7 @@ fn approx_eq_slice(a: &[f32], b: &[f32], tol: f32) -> bool {
     true
 }
 
+#[cfg(feature = "wgpu")]
 #[test]
 fn parity_elementwise_add() {
     let shape = vec![2, 3];
@@ -97,6 +98,7 @@ fn parity_elementwise_add() {
     );
 }
 
+#[cfg(feature = "wgpu")]
 #[test]
 fn parity_activations_softmax() {
     let shape = vec![1, 4];
@@ -143,6 +145,7 @@ fn parity_activations_softmax() {
     );
 }
 
+#[cfg(feature = "wgpu")]
 #[test]
 fn parity_matmul() {
     let shape_a = vec![2, 3];
@@ -207,6 +210,7 @@ fn parity_matmul() {
     );
 }
 
+#[cfg(feature = "wgpu")]
 #[test]
 fn parity_layer_norm() {
     let shape_x = vec![1, 4];
@@ -273,6 +277,7 @@ fn parity_layer_norm() {
     );
 }
 
+#[cfg(feature = "wgpu")]
 #[test]
 fn parity_max_pool2d() {
     // Exercises the newest, most complex WGPU backward in this file (host
@@ -324,6 +329,7 @@ fn parity_max_pool2d() {
     );
 }
 
+#[cfg(feature = "wgpu")]
 #[test]
 fn parity_cross_entropy_loss_nonzero_target() {
     // Regression coverage for C-9 (embedding/cross_entropy_loss bit-
@@ -394,6 +400,7 @@ fn parity_cross_entropy_loss_nonzero_target() {
     );
 }
 
+#[cfg(feature = "wgpu")]
 #[test]
 fn wgpu_cross_entropy_rejects_unsupported_u32_targets() {
     let shape_pred = vec![2, 3];
@@ -447,6 +454,7 @@ fn wgpu_cross_entropy_rejects_unsupported_u32_targets() {
     ));
 }
 
+#[cfg(feature = "wgpu")]
 #[test]
 fn parity_activations_relu() {
     let shape = vec![2, 3];
@@ -491,6 +499,7 @@ fn parity_activations_relu() {
     );
 }
 
+#[cfg(feature = "wgpu")]
 #[test]
 fn parity_activations_gelu() {
     let shape = vec![2, 3];
@@ -535,6 +544,7 @@ fn parity_activations_gelu() {
     );
 }
 
+#[cfg(feature = "wgpu")]
 #[test]
 fn parity_batch_norm() {
     let shape_x = vec![2, 2, 2, 2];
@@ -602,6 +612,7 @@ fn parity_batch_norm() {
     );
 }
 
+#[cfg(feature = "wgpu")]
 #[test]
 fn parity_reductions_sum_and_mean() {
     let shape = vec![2, 3];

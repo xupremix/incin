@@ -75,24 +75,3 @@ impl<T: DType, D: Device> OptimizerOps<Self> for CpuBackendImpl<T, D> {
         })
     }
 }
-
-#[cfg(test)]
-#[allow(unused_imports)]
-/// `tests`.
-mod tests {
-    use super::*;
-    use crate::cpu::CpuBackendImpl;
-    use incin_core::prelude::*;
-
-    #[test]
-    #[ignore = "Requires CUDA GPU"]
-    #[cfg(all(feature = "cuda", feature = "fused"))]
-    /// `test_fused_adamw_step`.
-    fn test_fused_adamw_step() {
-        // Here we would test the backend directly, checking the result
-        // against a CPU-based implementation to ensure 100% mathematical parity.
-        let _device = DeviceId::cuda(0);
-        // create variables, run adamw_step, assert elements.
-        // Left unimplemented dynamically due to local hardware constraint.
-    }
-}
