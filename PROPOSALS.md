@@ -2375,6 +2375,15 @@ week and a claim that quietly rots. `CudaStorage` also now compares its
 allocation's byte length against the element count its metadata declares, which
 is the check that would have named the quantize defect directly instead of
 leaving it to a bounds failure two layers up.
+`EXE-005`'s CUDA obligation is discharged too, and it needed no code at all. All
+thirteen `CUDA_CAPABILITIES` rows executed the operation they advertise and
+returned the dtype and device they claim, so nothing was removed. That is worth
+saying plainly rather than passing over: the WGPU rows failed the first time they
+met hardware, the four false CUDA claims this row's audit had already deleted
+were found by inspection, and the surviving set turns out to be accurate. A
+capability registry that survives its first execution is the exception, not the
+expectation, and recording which of the three rows cost a fix and which did not
+is the only way the next hardware obligation can be estimated honestly.
 `EXE-009` is active and partially landed: the default
 unsupported-operation surface is now gone from all nine operation families, so a
 backend that does not implement an operation says so at its own definition and a
