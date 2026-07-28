@@ -41,7 +41,7 @@ fn validate_reduction<'a>(
         )));
     }
     let operand = OperandIteration {
-        strides: storage.strides.to_vec(),
+        strides: storage.strides.clone(),
         offset: storage.offset_elements,
     };
     if let Some(max_index) = operand.max_physical_index(&storage.shape)?

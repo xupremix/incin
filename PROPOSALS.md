@@ -2624,6 +2624,25 @@ one here would mean asserting an accumulation-order property for every
 advertised CUDA, WGPU and CPU row without having analyzed a single kernel. That
 is the exact false claim `EXE-005`'s audit existed to delete, so the registry
 change waits for a row that can measure what it asserts.
+`PRF-001` is complete, and the allocation half of it is a test rather than a
+number in a comment. A rank-2 broadcasting add cost twenty-one heap allocations,
+of which exactly one held the result. `IterationPlan` held its dimensions and
+strides in `Vec`s and `coalesce_dimensions` collected per-operand working
+strides into a vector of vectors, on a structure whose operand count is one or
+two and whose rank `SHP-003` had already bounded. They are `ShapeBuf` and
+`StrideBuf` and a fixed-size array now, so a plan allocates nothing for any rank
+the typed frontend can express. The other two came from
+`cpu::stride::is_contiguous`, which answered a question about a stride list by
+materializing a second one and comparing, twice per elementwise operation.
+The count is now thirteen for a broadcasting add and thirteen for an aligned
+one, and the test asserts those two are equal rather than asserting either
+number: describing a broadcast operand costs nothing that describing an aligned
+one does not. `eager/add_f32/1024` moved 9.4 percent and `eager/add_f32/65536`
+5.9 percent on this host, and the operands in that benchmark are aligned, so
+that improvement is entirely the `is_contiguous` repair. The eleven remaining
+allocations are named in the test rather than rounded off: two hold the result,
+two are the tape entry, and the rest are rank-2 vectors passed through
+signatures that `EXE-009` is still removing.
 `EXE-010` is next eligible on the executor track.
 The complete Shape-track evidence is recorded in the mirror and
 `docs/plan/tasks/SHP-007.md` through `SHP-008.md`. The §4 themes above
@@ -2715,7 +2734,7 @@ Silicon · `compile` compiled execution · `grad` autograd · `dist` distributed
 | TUN-006 | preview | tune | [ ] | TUN-005 | `crates/incin-backends/src/cuda/ops/{matmul,conv}.rs` | GEMM and convolution library-versus-native tuning with a crossover report | `cargo test -p incin-backends --features cuda,autotune  # CUDA hardware` |
 | TUN-007 | preview | tune | [ ] | TUN-003 | `crates/incin-backends/src/tuning/telemetry.rs` | Tuning telemetry, provenance, and explain output | `cargo test -p incin-backends --features autotune,telemetry` |
 | TUN-008 | preview | tune | [ ] | TUN-006,GOV-005 | `.github/workflows/ci.yml` | Time, memory, and cache budgets with a no-regression gate | `cargo xtask budgets` |
-| PRF-001 | core | perf | [ ] | EXE-003,EXE-004 | `crates/incin-backends/src/iteration.rs` | Remove repeated hot-path metadata allocation; latency and allocation evidence | `cargo bench -p incin -- eager` |
+| PRF-001 | core | perf | [x] | EXE-003,EXE-004 | `crates/incin-backends/src/iteration.rs` | Remove repeated hot-path metadata allocation; latency and allocation evidence | `cargo bench -p incin -- eager` |
 | PRF-002 | core | perf | [x] | EXE-007 | `crates/incin-backends/src/cpu/ops/matmul.rs` | CPU iteration plans, batched GEMM, optional cpu-blas, and isolated bare-CPU tests | `cargo test -p incin-backends --no-default-features --features std,cpu` |
 | PRF-003 | preview | perf | [ ] | EXE-008,TUN-005 | `crates/incin-backends/src/{cuda,wgpu}/` | CUDA descriptor launches and WGPU specialization; hardware and sanitizer evidence | `cargo test -p incin-backends --features cuda  # CUDA hardware` |
 | PRF-004 | preview | perf | [ ] | TUN-006 | `crates/incin-backends/src/cuda/ops/` | Vendor-versus-native selection behind cuda-vendor with numerical and crossover reports | `cargo test -p incin-backends --features cuda,cuda-vendor  # CUDA hardware` |

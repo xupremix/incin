@@ -3,29 +3,39 @@
 //! Operation implementations consume normalized, output-rank strides. A
 //! broadcast dimension has stride zero, so kernels do not need separate
 //! input-shape branches in their inner loops.
+//!
+//! Nothing here allocates for a shape the typed frontend can express. A plan
+//! is built once per operation and read once per element, so its own cost is
+//! pure overhead against the kernel it precedes, and a `[64, 8] + [64, 1]` add
+//! used to spend six heap allocations describing two operands of rank two.
+//! The dimension and stride lists are [`ShapeBuf`] and [`StrideBuf`], which
+//! `SHP-003` already made inline up to `MAX_RANK`, and the per-operand working
+//! storage in `coalesce_dimensions` is a fixed-size array rather than a vector
+//! of vectors, because an iteration plan has exactly one or two operands and
+//! the count is known to the type system.
 
-use alloc::vec::Vec;
 #[cfg(feature = "cuda")]
 use incin_core::exec::LayoutClass;
-use incin_core::prelude::{Error, Result};
+use incin_core::prelude::{Error, Result, ShapeBuf, StrideBuf};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct OperandIteration {
-    pub(crate) strides: Vec<usize>,
+    pub(crate) strides: StrideBuf,
     pub(crate) offset: usize,
 }
 
 impl OperandIteration {
     #[inline]
     pub(crate) fn physical_index(&self, mut flat_index: usize, output_shape: &[usize]) -> usize {
-        debug_assert_eq!(self.strides.len(), output_shape.len());
+        let strides = self.strides.strides();
+        debug_assert_eq!(strides.len(), output_shape.len());
         let mut physical = self.offset;
         for axis in (0..output_shape.len()).rev() {
             let dimension = output_shape[axis];
             if dimension != 0 {
                 let coordinate = flat_index % dimension;
                 flat_index /= dimension;
-                physical += coordinate * self.strides[axis];
+                physical += coordinate * strides[axis];
             }
         }
         physical
@@ -33,12 +43,12 @@ impl OperandIteration {
 
     pub(crate) fn max_physical_index(&self, output_shape: &[usize]) -> Result<Option<usize>> {
         if self.strides.len() != output_shape.len() {
-            return Err(iteration_shape_error(output_shape, &self.strides));
+            return Err(iteration_shape_error(output_shape, self.strides.strides()));
         }
         if output_shape.contains(&0) {
             return Ok(None);
         }
-        let max_offset = output_shape.iter().zip(&self.strides).try_fold(
+        let max_offset = output_shape.iter().zip(self.strides.strides()).try_fold(
             0usize,
             |offset, (&dimension, &stride)| {
                 let axis_offset =
@@ -49,14 +59,14 @@ impl OperandIteration {
                             Error::Msg(format!(
                                 "stride overflow building iteration bounds for shape \
                                  {output_shape:?} and strides {:?}",
-                                self.strides
+                                self.strides.strides()
                             ))
                         })?;
                 offset.checked_add(axis_offset).ok_or_else(|| {
                     Error::Msg(format!(
                         "offset overflow building iteration bounds for shape \
                              {output_shape:?} and strides {:?}",
-                        self.strides
+                        self.strides.strides()
                     ))
                 })
             },
@@ -77,14 +87,14 @@ pub(crate) struct OperandLayout<'a> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct IterationPlan {
-    pub(crate) output_shape: Vec<usize>,
+    pub(crate) output_shape: ShapeBuf,
     pub(crate) numel: usize,
     pub(crate) operands: [OperandIteration; 2],
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct UnaryIterationPlan {
-    pub(crate) output_shape: Vec<usize>,
+    pub(crate) output_shape: ShapeBuf,
     pub(crate) numel: usize,
     pub(crate) operand: OperandIteration,
 }
@@ -92,7 +102,7 @@ pub(crate) struct UnaryIterationPlan {
 #[cfg(feature = "cuda")]
 fn is_contiguous(operand: &OperandIteration, output_shape: &[usize]) -> bool {
     let mut expected_stride = 1usize;
-    for (&dimension, &stride) in output_shape.iter().zip(&operand.strides).rev() {
+    for (&dimension, &stride) in output_shape.iter().zip(operand.strides.strides()).rev() {
         if stride != expected_stride {
             return false;
         }
@@ -106,14 +116,20 @@ fn is_contiguous(operand: &OperandIteration, output_shape: &[usize]) -> bool {
 
 #[cfg(feature = "cuda")]
 fn is_scalar_broadcast(operand: &OperandIteration) -> bool {
-    operand.strides.iter().all(|&stride| stride == 0)
+    operand.strides.strides().iter().all(|&stride| stride == 0)
 }
 
 impl UnaryIterationPlan {
     pub(crate) fn new(input: OperandLayout<'_>) -> Result<Self> {
-        let mut operand = normalize_operand(input.shape, input.strides, input.offset, input.shape)?;
+        let mut operands = [normalize_operand(
+            input.shape,
+            input.strides,
+            input.offset,
+            input.shape,
+        )?];
         let numel = checked_numel(input.shape)?;
-        let output_shape = coalesce_dimensions(input.shape, core::slice::from_mut(&mut operand))?;
+        let output_shape = coalesce_dimensions(input.shape, &mut operands)?;
+        let [operand] = operands;
         Ok(Self {
             output_shape,
             numel,
@@ -123,7 +139,7 @@ impl UnaryIterationPlan {
 
     #[cfg(feature = "cuda")]
     pub(crate) fn layout_class(&self) -> LayoutClass {
-        if is_contiguous(&self.operand, &self.output_shape) {
+        if is_contiguous(&self.operand, self.output_shape.dims()) {
             LayoutClass::Contiguous
         } else {
             LayoutClass::Strided
@@ -152,8 +168,8 @@ impl IterationPlan {
 
     #[cfg(feature = "cuda")]
     pub(crate) fn binary_layout_class(&self) -> LayoutClass {
-        let lhs_contiguous = is_contiguous(&self.operands[0], &self.output_shape);
-        let rhs_contiguous = is_contiguous(&self.operands[1], &self.output_shape);
+        let lhs_contiguous = is_contiguous(&self.operands[0], self.output_shape.dims());
+        let rhs_contiguous = is_contiguous(&self.operands[1], self.output_shape.dims());
         if lhs_contiguous && rhs_contiguous {
             LayoutClass::Contiguous
         } else if is_scalar_broadcast(&self.operands[0]) && rhs_contiguous {
@@ -166,12 +182,18 @@ impl IterationPlan {
     }
 }
 
-fn coalesce_dimensions(
+/// Merge axes that are contiguous for *every* operand, and drop unit axes.
+///
+/// `N` is the operand count, one or two, and it is a const parameter so the
+/// per-operand working strides are a fixed-size array. A vector of vectors here
+/// cost one allocation for the outer list plus one per operand, on a structure
+/// whose length the caller always knew.
+fn coalesce_dimensions<const N: usize>(
     output_shape: &[usize],
-    operands: &mut [OperandIteration],
-) -> Result<Vec<usize>> {
-    let mut coalesced_shape = Vec::<usize>::with_capacity(output_shape.len());
-    let mut coalesced_strides = vec![Vec::with_capacity(output_shape.len()); operands.len()];
+    operands: &mut [OperandIteration; N],
+) -> Result<ShapeBuf> {
+    let mut coalesced_shape = ShapeBuf::SCALAR;
+    let mut coalesced_strides = [const { StrideBuf::EMPTY }; N];
 
     for (axis, &dimension) in output_shape.iter().enumerate() {
         // A unit dimension never changes a physical index, so its stride is
@@ -180,37 +202,36 @@ fn coalesce_dimensions(
             continue;
         }
 
-        let merge = coalesced_shape.last().is_some_and(|_| {
-            operands
+        let merge = coalesced_shape.rank() != 0
+            && operands
                 .iter()
                 .zip(&coalesced_strides)
                 .all(|(operand, strides)| {
-                    strides.last().is_some_and(|&outer_stride| {
-                        operand.strides[axis]
+                    strides.strides().last().is_some_and(|&outer_stride| {
+                        operand.strides.strides()[axis]
                             .checked_mul(dimension)
                             .is_some_and(|expected| outer_stride == expected)
                     })
-                })
-        });
+                });
 
         if merge {
-            let outer_dimension = coalesced_shape
+            let outer = coalesced_shape
+                .dims_mut()
                 .last_mut()
                 .expect("merge requires an existing dimension");
-            *outer_dimension = outer_dimension.checked_mul(dimension).ok_or_else(|| {
+            *outer = outer.checked_mul(dimension).ok_or_else(|| {
                 Error::Msg(format!(
                     "shape overflow coalescing iteration plan for {output_shape:?}"
                 ))
             })?;
             for (operand, strides) in operands.iter().zip(&mut coalesced_strides) {
-                *strides
-                    .last_mut()
-                    .expect("merge requires an existing stride") = operand.strides[axis];
+                strides.pop();
+                strides.push(operand.strides.strides()[axis]);
             }
         } else {
             coalesced_shape.push(dimension);
             for (operand, strides) in operands.iter().zip(&mut coalesced_strides) {
-                strides.push(operand.strides[axis]);
+                strides.push(operand.strides.strides()[axis]);
             }
         }
     }
@@ -231,19 +252,24 @@ fn normalize_operand(
         return Err(iteration_shape_error(output_shape, shape));
     }
 
+    // Built by pushing rather than by indexing into a zero-filled buffer: the
+    // leading axes an operand does not have are exactly the broadcast ones, and
+    // their stride is the zero this pushes.
     let leading = output_shape.len() - shape.len();
-    let mut normalized = vec![0; output_shape.len()];
+    let mut normalized = StrideBuf::EMPTY;
+    for _ in 0..leading {
+        normalized.push(0);
+    }
     for (input_axis, (&input_dim, &stride)) in shape.iter().zip(strides).enumerate() {
-        let output_axis = leading + input_axis;
-        let output_dim = output_shape[output_axis];
+        let output_dim = output_shape[leading + input_axis];
         if input_dim != output_dim && input_dim != 1 {
             return Err(iteration_shape_error(output_shape, shape));
         }
-        normalized[output_axis] = if input_dim == 1 && output_dim != 1 {
+        normalized.push(if input_dim == 1 && output_dim != 1 {
             0
         } else {
             stride
-        };
+        });
     }
 
     Ok(OperandIteration {

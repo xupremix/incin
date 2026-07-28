@@ -496,14 +496,18 @@ deviations = []
 id = "PRF-001"
 tier = "core"
 theme = "perf"
-status = "planned"
+status = "complete"
 deps = ["EXE-003", "EXE-004"]
 target = ["crates/incin-backends/src/iteration.rs"]
 deliverable = "Remove repeated hot-path metadata allocation; latency and allocation evidence"
 evidence = ["cargo bench -p incin -- eager"]
-completed_on = ""
-completed_evidence = ""
-deviations = []
+completed_on = "2026-07-28"
+completed_evidence = "cargo bench -p incin -- eager, run on this host against a detached worktree at 556ce7a: eager/add_f32/1024 went from 723.47/726.73/730.11 ns to 655.91/658.75/662.37 ns and eager/add_f32/65536 from 6.4156/6.4327/6.4477 to 5.9882/6.0504/6.1027 us. capability/cpu/f32_create moved from 267.56/268.43/269.26 to 257.08/258.16/259.21 ns. The sum and matmul series are unchanged within overlapping confidence intervals, which is expected: neither builds an iteration plan. The allocation half is a test rather than a number in a comment, at crates/incin/tests/hot_path_allocations.rs, with a per-thread counting global allocator. A rank-2 broadcasting add cost 21 allocations before this row and costs 13 now; an aligned one cost 15 and costs 13. The two are now asserted equal, which is the invariant: describing a broadcast operand costs nothing that describing an aligned one does not. A rank-6 broadcasting add is asserted to cost exactly what the rank-2 one does, which fails if INLINE_RANK is ever lowered under the ranks the frontend can express. IterationPlan and UnaryIterationPlan hold ShapeBuf and StrideBuf rather than Vec, so nothing in a plan allocates for a rank the typed frontend can express. coalesce_dimensions took a vector of vectors for per-operand working strides and now takes a fixed-size array behind a const operand count, removing the outer allocation and one per operand. normalize_operand builds by pushing instead of indexing into a zero-filled vector. That is six allocations per planned operation. The other two came from cpu::stride::is_contiguous, which answered a question about an existing stride list by materializing a second one and comparing. It walks the axes now. It is called on both operands of every elementwise op, so a bench whose operands are aligned and never reach the plan at all still moved 9.4 percent at 1024 elements, which is where a small operation's metadata cost actually shows up."
+deviations = [
+  "The row names crates/incin-backends/src/iteration.rs and the fix is not confined to it. Two of the eight allocations removed were in cpu::stride::is_contiguous, which is not the plan but is on the same hot path and was the single largest remaining source: it built a stride vector on every call in order to compare it against one that already existed, twice per elementwise operation. Leaving it would have meant a row about removing repeated hot-path metadata allocation that walked past the most repeated one in the file next door.",
+  "Eleven allocations remain on a rank-2 binary elementwise operation and the test names what they are rather than treating 13 as a target. Two hold the result and its Arc and two are the tape entry. The rest are rank-2 dimension and stride vectors passed between the tensor frontend, the backend shape accessor and the storage constructor, all of which take and return Vec<usize> in their signatures. Removing those means changing CpuStorage::try_from_parts and Backend::shape to speak ShapeBuf and StrideBuf, which is a signature change across the backend surface EXE-009 is still removing. Doing it underneath that work would be churn against a moving file.",
+  "The improvement is not written back into docs/plan/baselines/main.toml. The eager series there were captured on the [environment] host and the numbers above are from the second host, and the README forbids rewriting a series from a machine that did not produce it. There is also no allocation series to add: the budget schema carries runtime nanoseconds and artifact bytes, and an allocation count is neither, so the assertion lives in the test suite where it runs on every push rather than in a document that is only checked when someone re-benchmarks.",
+]
 
 [[task]]
 id = "PRF-002"

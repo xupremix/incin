@@ -34,8 +34,29 @@ pub(crate) fn contiguous_strides(shape: &[usize]) -> Vec<usize> {
 
 /// Returns true if `strides` matches the contiguous (row-major) strides for
 /// `shape`.
+///
+/// Walks the axes from the fastest-moving one instead of materializing the
+/// contiguous strides and comparing. This is called on both operands of every
+/// elementwise op, so building a vector to answer a question about a vector
+/// that already exists was two heap allocations per operation for nothing
+/// (PRF-001). The overflow behaviour differs from `contiguous_strides` on
+/// purpose: a shape whose stride product overflows cannot equal any real
+/// stride list, so this answers `false` where the constructor panics.
 pub(crate) fn is_contiguous(shape: &[usize], strides: &[usize]) -> bool {
-    strides == contiguous_strides(shape)
+    if shape.len() != strides.len() {
+        return false;
+    }
+    let mut expected = 1usize;
+    for (&dimension, &stride) in shape.iter().zip(strides).rev() {
+        if stride != expected {
+            return false;
+        }
+        let Some(next) = expected.checked_mul(dimension) else {
+            return false;
+        };
+        expected = next;
+    }
+    true
 }
 
 /// Total element count of `shape`, i.e. the product of all dims — but via
