@@ -187,23 +187,24 @@ high_ns = 56650000.0
 id = "capability/cuda/f32_create"
 backend = "cuda"
 host = "cuda_host"
-low_ns = 182270000.0
-point_ns = 183010000.0
-high_ns = 183790000.0
-note = "Dominated by device setup, not allocation: cuda_from_bytes calls CudaContext::new on every tensor creation, bypassing the get_cuda_device cache in cuda/gpu.rs. A direct probe measures CudaContext::new at 114 ms per call even when a context already exists. Recorded as measured rather than adjusted; the fix belongs to PRF-001/PRF-003 and will move this series by orders of magnitude."
+low_ns = 4904.3
+point_ns = 4931.8
+high_ns = 4959.9
+note = "First captured at 183 ms, which was a defect rather than a device cost. CudaContext::new retains the device primary context, so every call returns the same context, but cuda_from_bytes built a fresh Arc per tensor; the last one dropped released the primary context and the next allocation paid full re-initialization. Measured directly: 131 ms with no context held against 1 us with one held. Routing allocation through the process-wide cache in cuda/gpu.rs holds one handle for the life of the process and moved this series from 183 ms to 4.93 us."
 
 [[runtime]]
 id = "gpu/cuda/add_f32/65536"
 backend = "cuda"
 host = "cuda_host"
-low_ns = 15359.0
-point_ns = 15459.0
-high_ns = 15524.0
+low_ns = 15573.0
+point_ns = 15764.0
+high_ns = 15978.0
 
 [[runtime]]
 id = "gpu/cuda/matmul_f32/64"
 backend = "cuda"
 host = "cuda_host"
-low_ns = 24382.0
-point_ns = 24393.0
-high_ns = 24408.0
+low_ns = 24753.0
+point_ns = 25997.0
+high_ns = 27614.0
+note = "The interval is wider than the other CUDA series because the device also drives the desktop display; see display_attached in the cuda_host environment."

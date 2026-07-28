@@ -87,7 +87,12 @@ fn probe_cuda() -> Option<DeviceId> {
     // fails to initialize (wrong driver version, exhausted device, no
     // permission inside a container). Only the thing we are about to do proves
     // it can be done.
-    cudarc::driver::CudaContext::new(0)
+    //
+    // Through the cache, so the probe both answers the question and leaves the
+    // context retained. Creating one here and dropping it would release the
+    // primary context, making the very next allocation pay the 131 ms
+    // re-initialization that detection just proved was possible.
+    crate::cuda::gpu::cuda_cache::try_get_cuda_device(0)
         .ok()
         .map(|_| DeviceId::cuda(0))
 }

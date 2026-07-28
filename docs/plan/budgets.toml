@@ -181,20 +181,20 @@ max_bytes = 13327412
 [[runtime]]
 id = "capability/cuda/f32_create"
 backend = "cuda"
-baseline_high_ns = 183790000.0
-max_high_ns = 275685000.0
+baseline_high_ns = 4959.9
+max_high_ns = 7439.8
 
 [[runtime]]
 id = "gpu/cuda/add_f32/65536"
 backend = "cuda"
-baseline_high_ns = 15524.0
-max_high_ns = 23286.0
+baseline_high_ns = 15978.0
+max_high_ns = 23967.0
 
 [[runtime]]
 id = "gpu/cuda/matmul_f32/64"
 backend = "cuda"
-baseline_high_ns = 24408.0
-max_high_ns = 36612.0
+baseline_high_ns = 27614.0
+max_high_ns = 41421.0
 
 # Artifact bounds use the 1.2x headroom every other profile uses. These sizes
 # come from a different host and linker than the cpu and wgpu profiles and are

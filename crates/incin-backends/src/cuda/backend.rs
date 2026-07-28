@@ -2066,11 +2066,17 @@ fn cuda_from_bytes(
             got: bytes.len(),
         });
     }
-    let context =
-        cudarc::driver::CudaContext::new(ordinal).map_err(|_| Error::InvalidDeviceOrdinal {
+    // Through the process-wide cache rather than CudaContext::new directly. Both
+    // retain the same primary context, but a fresh Arc per tensor means the last
+    // one dropped releases it, and the next allocation pays 131 ms to bring it
+    // back. The cache holds one handle forever, which keeps this on the 1 us
+    // path. See cuda::gpu::cuda_cache::try_get_cuda_device.
+    let context = crate::cuda::gpu::cuda_cache::try_get_cuda_device(ordinal).map_err(|_| {
+        Error::InvalidDeviceOrdinal {
             backend: "Cuda",
             ordinal,
-        })?;
+        }
+    })?;
     let data = context
         .default_stream()
         .clone_htod(bytes)

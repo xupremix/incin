@@ -2407,15 +2407,20 @@ captured on the second host and marked as such: the CPU and WGPU rows came from
 a machine with no NVIDIA device, so `[environment.cuda_host]` exists and every
 CUDA series, capability block, and compile profile names it. Compile sizes are
 called out as non-comparable across the two hosts because they run different
-linkers. The first capture was worth more than the numbers. `capability/cuda/
-f32_create` measures 183 ms against 1.8 µs for its WGPU counterpart, and the
-cause is not the allocation: `cuda_from_bytes` builds a fresh `CudaContext` for
-every tensor rather than using the cache `cuda/gpu.rs` already provides, and a
-direct probe puts `CudaContext::new` at 114 ms per call even with a context
-already live. The series is recorded as measured, with the cause named in its
-note, rather than adjusted or left out. Repairing it is `PRF-001` or `PRF-003`
-work; a baseline row exists to make exactly this visible, and it did so on the
-first run.
+linkers. The first capture was worth more than the numbers. `capability/cuda/f32_create`
+measured 183 ms against 1.8 µs for its WGPU counterpart, and the cause was a
+defect rather than a device cost. `CudaContext::new` retains the device's
+*primary* context, so every call hands back the same context and allocations
+across them are mutually valid; the expense is at the edge. `cuda_from_bytes`
+built a fresh `Arc` per tensor, so the last one dropped released the primary
+context and the next allocation paid full re-initialization. Separating the two
+cases settles it: 131 ms per call with no context held, 1.014 µs with one held.
+Routing allocation through the cache `cuda/gpu.rs` already provides, behind a new
+fallible `try_get_cuda_device` so no panic is added, holds one handle for the
+life of the process and moved the series to 4.93 µs. `detect.rs::probe_cuda`
+went the same way: it created a context and dropped it, releasing the primary
+context immediately after proving it could be created. A baseline row exists to
+make exactly this visible, and it did so on the first run.
 One correction applies across several rows. Earlier entries record that clippy is
 unavailable on the installed Rust 1.92 toolchain, which was true of the machine
 that wrote them. The CUDA host's 1.92.0 does ship clippy 0.1.92, so the lint gate
