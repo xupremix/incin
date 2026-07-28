@@ -2,7 +2,7 @@
 # Regenerate with `python3 tools/gen-ledger.py toml`; validate with `cargo xtask ledger`.
 
 schema = 1
-snapshot = "2026-07-27"
+snapshot = "2026-07-28"
 
 [[task]]
 id = "GOV-001"
@@ -47,14 +47,16 @@ deviations = []
 id = "GOV-004"
 tier = "core"
 theme = "gov"
-status = "planned"
+status = "complete"
 deps = ["GOV-002"]
 target = ["crates/incin/benches/", "docs/plan/baselines/"]
 deliverable = "CPU and GPU capability, performance, and compile-size baselines with environment metadata"
 evidence = ["cargo bench -p incin -- --save-baseline main"]
-completed_on = ""
-completed_evidence = ""
-deviations = []
+completed_on = "2026-07-27"
+completed_evidence = "cargo bench -p incin -- --save-baseline main -> 8 stable CPU Criterion series covering f32/u32 creation, f32 add and sum at 1,024 and 65,536 elements, and f32 matmul at 16 and 64; cargo bench -p incin --features wgpu --bench baselines -- '^(capability/wgpu|gpu/)' --save-baseline wgpu-main -> 3 real WGPU series on the AMD Radeon 680M. docs/plan/baselines/main.toml records 95% confidence intervals, exact feature sets, OS, architecture, CPU, memory, Rust/Cargo/LLVM/Criterion versions, revision, device availability, build time, and raw release artifact sizes. CUDA is explicitly unavailable because no NVIDIA adapter or nvidia-smi executable was present. cargo check passes for both default and WGPU benchmark targets; cargo test --workspace completed with no failures, including 32 semantic trybuild cases and all doctests. Formatting, TOML parsing, diff-check, and ledger validation clean. Clippy unavailable: the installed Rust 1.92 toolchain reports cargo-clippy is not applicable."
+deviations = [
+  "The required evidence command uses the default CPU feature set and therefore cannot truthfully benchmark an optional accelerator. WGPU measurements were captured with a second explicitly feature-enabled command on real hardware; CUDA remains an explicit unavailable capability rather than a synthetic passing series.",
+]
 
 [[task]]
 id = "GOV-005"

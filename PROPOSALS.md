@@ -560,23 +560,24 @@ in a named sequence so diagnostics identify the failing term.
 Replace the single broad obligation with composable interfaces:
 
 ```rust
-pub trait StorageBackend {
+pub trait StorageBackend<P: Placement = Local> {
     /// Storage remains generic over dtype, as it already is today
-    /// (`Tensor` holds `B::Storage<K>`), and gains a placement parameter that
-    /// defaults to `Local` so all existing single-device code is unaffected.
+    /// (`Tensor` holds `<B as StorageBackend<P>>::Storage<K>`), while the
+    /// backend implementation is selected for one placement. `P` defaults to
+    /// `Local` so all existing single-device code is unaffected.
     /// §2.11 refines the placement half of this contract; it does not redefine
     /// the trait.
-    type Storage<K: DType, P: Placement = Local>;
+    type Storage<K: DType>;
     type Device;
 
-    fn metadata<K: DType, P: Placement>(
-        storage: &Self::Storage<K, P>,
+    fn metadata<K: DType>(
+        storage: &Self::Storage<K>,
     ) -> &TensorMeta;
 }
 
 pub struct ExecutionRequest<'a, O, B: StorageBackend> {
     pub operation: &'a Validated<O>,
-    pub inputs: &'a [TensorHandle],
+    pub inputs: &'a [TensorHandle<'a>],
     pub context: &'a ExecutionContext<B>,
 }
 
@@ -589,6 +590,14 @@ pub trait Execute<O>: StorageBackend + Sized {
     ) -> Result<Self::Output, BackendError>;
 }
 ```
+
+Rust does not permit defaults on generic parameters of associated types, so
+the earlier `type Storage<K, P = Local>` spelling cannot compile on stable
+Rust. D-020 moves `P = Local` to the trait while preserving both axes of the
+contract: storage is still selected by dtype and placement, and distributed
+code writes `<B as StorageBackend<P>>::Storage<K>`. The local shorthand remains
+`<B as StorageBackend>::Storage<K>`. This is an encoding correction, not a
+reduction of the placement model.
 
 `TensorMeta` (§1.2.1) is the single name for physical tensor metadata
 throughout this document; there is no second `PhysicalTensorMeta` type.
@@ -1106,17 +1115,17 @@ pub enum PlacementKind {
 
 /// `StorageBackend` is defined once, in §1.2.4. This is the placement half of
 /// that same contract, shown here for readability — it is not a second trait.
-/// `Storage<K, P>` varies by placement: `Local` owns one storage, while a
-/// distributed placement owns or references a validated shard set.
+/// `<B as StorageBackend<P>>::Storage<K>` varies by placement: `Local` owns one
+/// storage, while a distributed placement owns or references a validated shard set.
 pub struct Tensor<S, B, K, G, P = Local>
 where
     S: Shape,
-    B: StorageBackend,
+    B: StorageBackend<P>,
     K: DType,
     G: RequiresGrad,
     P: Placement,
 {
-    storage: B::Storage<K, P>,
+    storage: <B as StorageBackend<P>>::Storage<K>,
     global_shape: S::Field,
     physical: TensorMeta,
     _marker: PhantomData<(S, K, G, P)>,
@@ -2340,9 +2349,11 @@ Exit criteria:
 
 ### Canonical AI execution ledger
 
-This is the implementation handoff contract. Snapshot: **2026-07-27**. No
-implementation task is active. `GOV-002`, `GOV-006`, and `GOV-007` are
-complete; `GOV-003` is next eligible. The §4 themes above
+This is the implementation handoff contract. Snapshot: **2026-07-27**.
+`GOV-004` is complete: the CPU and WGPU baseline suite, the confidence
+intervals it records, and the environment metadata that makes a later
+comparison meaningful all exist. `GOV-005` is next eligible, and it is what
+turns those numbers into a gate. The §4 themes above
 describe intent; **this ledger and its dependency graph define order**, and the
 tier column defines what a release is entitled to rely on. Where a theme
 narrative and the graph disagree, the graph wins — themes are prose, edges are
@@ -2400,7 +2411,7 @@ Silicon · `compile` compiled execution · `grad` autograd · `dist` distributed
 | GOV-001 | core | gov | [x] | — | `PROPOSALS.md` | Architecture RFC exists and is internally consistent | `test -f PROPOSALS.md` |
 | GOV-002 | core | gov | [x] | GOV-001 | `PROPOSALS.md :: Appendix C` | Decision log locks proof, executor, mesh, and compatibility contracts; one entry per resolved contradiction | `cargo xtask ledger` |
 | GOV-003 | core | gov | [x] | GOV-002 | `docs/plan/ledger.toml; xtask/src/ledger.rs` | Machine-readable task mirror and validator round-trip every ID, dependency, tier, and evidence field | `cargo xtask ledger && cargo test -p xtask` |
-| GOV-004 | core | gov | [ ] | GOV-002 | `crates/incin/benches/; docs/plan/baselines/` | CPU and GPU capability, performance, and compile-size baselines with environment metadata | `cargo bench -p incin -- --save-baseline main` |
+| GOV-004 | core | gov | [x] | GOV-002 | `crates/incin/benches/; docs/plan/baselines/` | CPU and GPU capability, performance, and compile-size baselines with environment metadata | `cargo bench -p incin -- --save-baseline main` |
 | GOV-005 | core | gov | [ ] | GOV-004 | `.github/workflows/ci.yml` | Regression budgets and feature inventory enforced in CI | `cargo xtask budgets` |
 | GOV-006 | core | gov | [x] | GOV-002 | `crates/incin-backends/src/external/; crates/incin-core/err.rs; */Cargo.toml` | Repo hygiene: track and split external/, delete the orphan crates/incin-core/err.rs, rename candle to external-candle with a deprecated alias | `cargo check --workspace --features external-candle` |
 | GOV-007 | core | gov | [x] | GOV-002 | `.agents/API_DESIGN.md; docs/API_DESIGN.md` | Docs source-of-truth consolidation; .agents/API_DESIGN.md becomes a pointer, not a paraphrase | `test $(wc -l < .agents/API_DESIGN.md) -lt 10` |
@@ -2905,7 +2916,7 @@ justification as an entry before it may start.
 
 | # | Decision | Alternative rejected |
 |---|---|---|
-| D-001 | `StorageBackend` is defined **once**, with `type Storage<K: DType, P: Placement = Local>`. §2.11 refines the placement half; it does not redefine the trait. | The §2.11 form dropped both the dtype parameter and the `metadata` accessor. Since the real `Tensor` already holds `B::Storage<K>`, adopting it would have regressed against shipped code. |
+| D-001 (superseded by D-020) | `StorageBackend` is defined **once**, with dtype and placement selecting storage. Its original `type Storage<K: DType, P: Placement = Local>` spelling is corrected by D-020. §2.11 refines the placement half; it does not redefine the trait. | The §2.11 form dropped both the dtype parameter and the `metadata` accessor. Since the real `Tensor` already holds `B::Storage<K>`, adopting it would have regressed against shipped code. |
 | D-002 | `ExecutionRequest<'a, O, B>` carries `&'a ExecutionContext<B>`; `Execute<O>` gains `Sized`. | Leaving `ExecutionContext` unparameterized at the use site. It does not compile against its own declaration. |
 | D-003 | Tensor metadata is named `TensorMeta` everywhere. `PhysicalTensorMeta` does not exist. | Keeping both names. Two names for one concept is how the storage layer drifted in the first place. |
 | D-004 | `Placement` is a trait (a bound on `P`); `PlacementKind` is the runtime enum stored in descriptors and printed in diagnostics. | One name for both. The RFC used `Placement` as a struct field type, which cannot typecheck against its use as a bound. |
@@ -2923,3 +2934,10 @@ justification as an entry before it may start.
 | D-016 | `cargo doc --workspace` with `-D warnings` is a required CI gate. | Leaving documentation unchecked. Enabling the gate surfaced 13 genuine broken intra-doc links across four crates, all fixed under `GOV-006`. |
 | D-017 | The CPU CI job keeps excluding `backends`, `tui_graph_demo`, and `native_training_demo`. | Removing the exclusions, as the repair plan originally proposed. All three example packages hard-depend on the `wgpu` feature and cannot build in a CPU-only feature set; the `wgpu` job builds them. The exclusions are correct, and a comment now records why. |
 | D-018 | Pooling and reshape get descriptors of their own (`Pool2dSpec`, `ReshapeSpec`), added under EXE-003 rather than EXE-001. | Reusing `Conv2dSpec` for pooling with `c_out = c_in` and `groups = c_in`, and giving reshape no descriptor at all. The depthwise encoding produces the right geometry and the wrong `OperationKind`, so every capability query and kernel-cache lookup keyed on it would answer for a convolution. Reshape's proof obligation — two shapes with equal element counts — has to be discharged somewhere, and `Validated` is where the discharge is recorded. §4's ledger asks EXE-003 for six rules while Appendix A supplied four descriptors; adding two is the smaller correction. |
+| D-019 | `Shape` owns runtime `dims`; `DynShape` retains the derived `rank` and `numel` queries. | Requiring `DynShape` only at construction call sites. `Tensor<S>` accepts every `Shape`, and operation-associated outputs are commonly bounded only by `Shape`; caller-local bounds would leave the constructor unable to enforce its invariant for the exact generic outputs SHP-008 must cover. |
+
+### 2026-07-28 — Stable storage interface encoding
+
+| # | Decision | Alternative rejected |
+|---|---|---|
+| D-020 | Encode the two-axis storage family as `StorageBackend<P: Placement = Local> { type Storage<K: DType>; }`. The projection is `<B as StorageBackend<P>>::Storage<K>`; omitting `P` selects `Local`. This supersedes only D-001's syntax and preserves its semantics. | `type Storage<K: DType, P: Placement = Local>`: stable Rust rejects defaults on generic parameters of associated types. Dropping placement would compile but contradict the distributed design. Nightly-only associated-type defaults would make a Core interface toolchain-dependent. |

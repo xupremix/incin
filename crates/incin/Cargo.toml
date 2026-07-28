@@ -15,6 +15,9 @@ exclude = [
 [lints]
 workspace = true
 
+[lib]
+bench = false
+
 [features]
 # The normal installation is a standard-library CPU build.
 default = ["std", "cpu"]
@@ -49,7 +52,13 @@ serde_json = "1"
 [[bin]]
 name = "cargo-incin"
 path = "src/bin/cargo-incin.rs"
+bench = false
 
 [dev-dependencies]
 hashbrown = "0.14.5"
 bytemuck = "1"
+criterion = { version = "0.5.1", default-features = false, features = ["cargo_bench_support"] }
+
+[[bench]]
+name = "baselines"
+harness = false

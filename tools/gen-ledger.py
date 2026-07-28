@@ -12,7 +12,7 @@ T = [
 ("GOV-003","core","gov","x",["GOV-002"],"docs/plan/ledger.toml; xtask/src/ledger.rs",
  "Machine-readable task mirror and validator round-trip every ID, dependency, tier, and evidence field",
  "cargo xtask ledger && cargo test -p xtask"),
-("GOV-004","core","gov"," ",["GOV-002"],"crates/incin/benches/; docs/plan/baselines/",
+("GOV-004","core","gov","x",["GOV-002"],"crates/incin/benches/; docs/plan/baselines/",
  "CPU and GPU capability, performance, and compile-size baselines with environment metadata",
  "cargo bench -p incin -- --save-baseline main"),
 ("GOV-005","core","gov"," ",["GOV-004"],".github/workflows/ci.yml",
@@ -318,6 +318,7 @@ T = [
 
 # id -> (date, evidence output). Rule: no task may be "x" without an entry here.
 COMPLETED = {
+ "GOV-004": ("2026-07-27", "cargo bench -p incin -- --save-baseline main -> 8 stable CPU Criterion series covering f32/u32 creation, f32 add and sum at 1,024 and 65,536 elements, and f32 matmul at 16 and 64; cargo bench -p incin --features wgpu --bench baselines -- '^(capability/wgpu|gpu/)' --save-baseline wgpu-main -> 3 real WGPU series on the AMD Radeon 680M. docs/plan/baselines/main.toml records 95% confidence intervals, exact feature sets, OS, architecture, CPU, memory, Rust/Cargo/LLVM/Criterion versions, revision, device availability, build time, and raw release artifact sizes. CUDA is explicitly unavailable because no NVIDIA adapter or nvidia-smi executable was present. cargo check passes for both default and WGPU benchmark targets; cargo test --workspace completed with no failures, including 32 semantic trybuild cases and all doctests. Formatting, TOML parsing, diff-check, and ledger validation clean. Clippy unavailable: the installed Rust 1.92 toolchain reports cargo-clippy is not applicable."),
  "GOV-001": ("2026-07-27", "PROPOSALS.md present; internal-consistency script reports 0 undefined deps, 0 cycles, 0 tier violations"),
  "GOV-002": ("2026-07-27", "PROPOSALS.md Appendix C records D-001..D-014; every contradiction in the review maps to exactly one entry"),
  "GOV-003": ("2026-07-27", "cargo xtask ledger -> ok: 100 tasks, 5 complete; 5 unit tests pass; fault injection confirms it fails on unknown dependency, tier violation, table/mirror divergence, and completed-without-evidence"),
@@ -340,6 +341,9 @@ COMPLETED = {
 # placeholder -- an unrecorded deviation is how an RFC quietly stops describing
 # the code.
 DEVIATIONS = {
+ "GOV-004": [
+   "The required evidence command uses the default CPU feature set and therefore cannot truthfully benchmark an optional accelerator. WGPU measurements were captured with a second explicitly feature-enabled command on real hardware; CUDA remains an explicit unavailable capability rather than a synthetic passing series.",
+ ],
  "EXE-003": [
    "The RFC signature is lower(inputs: &Inputs, args), but its own worked example passes &(L::Field, R::Field) while writing ShapeRule<(L, R)>. A tuple of shapes is not itself a Shape, so &Inputs cannot name the runtime half; the trait gains an associated type Operands, which each impl sets to the operand fields. No new nameable type is introduced.",
    "Pooling and reshape had no descriptor: 4 of the ledger 6 operations. Added Pool2dSpec and ReshapeSpec to exec/spec.rs, outside the task stated target file, with Appendix A rows and decision D-018. Reusing Conv2dSpec for pooling as a depthwise convolution gives the right geometry and the wrong OperationKind, which every capability query and kernel cache keyed on it would then answer wrongly.",
@@ -420,7 +424,7 @@ def toml():
          "# Regenerate with `python3 tools/gen-ledger.py toml`; validate with `cargo xtask ledger`.",
          "",
          'schema = 1',
-         'snapshot = "2026-07-27"',
+         'snapshot = "2026-07-28"',
          "", ]
     for tid, tier, theme, st, deps, target, deliv, ev in T:
         L.append("[[task]]")
