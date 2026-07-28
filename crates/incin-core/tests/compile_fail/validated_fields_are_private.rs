@@ -8,6 +8,7 @@ fn main() {
     let spec = BroadcastSpec::contiguous(
         &ShapeBuf::from_slice(&[2, 3]),
         &ShapeBuf::from_slice(&[2, 3]),
+        None,
     )
     .unwrap();
 

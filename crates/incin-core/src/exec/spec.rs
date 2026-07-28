@@ -72,7 +72,12 @@ impl DescriptorSchemaVersion {
     /// v2 gave [`ReductionSpec`] and [`Pool2dSpec`] the operator that runs
     /// inside their geometry. A v1 cache entry keyed on either records a window
     /// without saying what accumulated in it, so it cannot be replayed.
-    pub const CURRENT: Self = Self(2);
+    ///
+    /// v3 gave [`BroadcastSpec`] the same treatment, with an operator that may
+    /// be absent. A v2 entry keyed on one cannot say whether it described a
+    /// stretch or the geometry of a binary operation, and the two produce
+    /// different output storage from identical strides.
+    pub const CURRENT: Self = Self(3);
 
     /// Name a specific version, for reading a cache entry or plan back.
     #[must_use]
@@ -140,6 +145,44 @@ impl fmt::Display for ReduceOp {
             Self::Max => "max",
             Self::Min => "min",
             Self::Prod => "prod",
+        })
+    }
+}
+
+/// Which elementwise combination a [`BroadcastSpec`] performs.
+///
+/// [`BroadcastSpec`] is the one descriptor whose operator may be absent, because
+/// it is the one descriptor that is useful without one: it describes iteration
+/// geometry, and a named broadcast stretches an operand without combining it
+/// with anything. `Option<BinaryOp>` is that distinction — `None` is a stretch,
+/// `Some` is a stretch a kernel then folds two operands through.
+///
+/// The set is closed at the four operations the shared broadcasting path
+/// implements. `maximum` and `minimum` are deliberately absent: they read only
+/// the left operand's shape and index both with it, so they require equal shapes
+/// and would ask this geometry for something no kernel behind it performs.
+/// Comparisons are absent for the reason `argmax` is absent from [`ReduceOp`] —
+/// their result dtype is not their input's, so they are a different operation
+/// wearing the same shape rule.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum BinaryOp {
+    /// Add the paired elements.
+    Add,
+    /// Subtract the right element from the left.
+    Sub,
+    /// Multiply the paired elements.
+    Mul,
+    /// Divide the left element by the right.
+    Div,
+}
+
+impl fmt::Display for BinaryOp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::Add => "add",
+            Self::Sub => "sub",
+            Self::Mul => "mul",
+            Self::Div => "div",
         })
     }
 }
@@ -480,6 +523,12 @@ pub struct BroadcastSpec {
     pub lhs_broadcast_mask: AxisMask,
     /// Axes the right operand is stretched along.
     pub rhs_broadcast_mask: AxisMask,
+    /// What the kernel folds the paired elements through, if anything.
+    ///
+    /// `None` is a stretch: the geometry is resolved and the output is the left
+    /// operand read through the broadcast strides. See [`BinaryOp`] for why this
+    /// is the only descriptor whose operator is optional.
+    pub op: Option<BinaryOp>,
 }
 
 impl BroadcastSpec {
@@ -500,6 +549,7 @@ impl BroadcastSpec {
         lhs_strides: &StrideBuf,
         rhs: &ShapeBuf,
         rhs_strides: &StrideBuf,
+        op: Option<BinaryOp>,
     ) -> Result<Self, ShapeError> {
         check_operand(Self::OP, "lhs", lhs, lhs_strides)?;
         check_operand(Self::OP, "rhs", rhs, rhs_strides)?;
@@ -515,6 +565,7 @@ impl BroadcastSpec {
             rhs_strides,
             lhs_broadcast_mask,
             rhs_broadcast_mask,
+            op,
         })
     }
 
@@ -522,10 +573,14 @@ impl BroadcastSpec {
     ///
     /// The common case, and the one worth not making callers spell: both
     /// operands are contiguous, so their strides follow from their shapes.
-    pub fn contiguous(lhs: &ShapeBuf, rhs: &ShapeBuf) -> Result<Self, ShapeError> {
+    pub fn contiguous(
+        lhs: &ShapeBuf,
+        rhs: &ShapeBuf,
+        op: Option<BinaryOp>,
+    ) -> Result<Self, ShapeError> {
         let lhs_strides = StrideBuf::contiguous_for(lhs, Self::OP)?;
         let rhs_strides = StrideBuf::contiguous_for(rhs, Self::OP)?;
-        Self::new(lhs, &lhs_strides, rhs, &rhs_strides)
+        Self::new(lhs, &lhs_strides, rhs, &rhs_strides, op)
     }
 
     /// The broadcast result of two shapes, without building a descriptor.

@@ -11,9 +11,9 @@
 //! can reach: rules and descriptors are public, and `Validated::new` is not.
 
 use incin_core::exec::{
-    BroadcastRule, BroadcastSpec, Conv2dArgs, Conv2dRule, MatMulRule, OperationSpec, Pool2dRule,
-    Pool2dSpec, PoolOp, ProofLevel, ReduceKeepRule, ReduceOp, ReduceRule, ReshapeRule, ReshapeSpec,
-    ShapeRule,
+    BinaryOp, BroadcastRule, BroadcastSpec, Conv2dArgs, Conv2dRule, MatMulRule, OperationSpec,
+    Pool2dRule, Pool2dSpec, PoolOp, ProofLevel, ReduceKeepRule, ReduceOp, ReduceRule, ReshapeRule,
+    ReshapeSpec, ShapeRule,
 };
 use incin_core::prelude::{Axis, Dyn, OperationKind, Shape, ShapeBuf};
 use typenum::{U0, U1, U2, U3, U4, U6, U8, U16};
@@ -39,7 +39,7 @@ type Rank2AgainstStretched = ((U3, U4), (U1, U4));
 fn a_static_broadcast_lowers_to_the_shape_the_frontend_names() {
     let lowered = <BroadcastRule as ShapeRule<Rank2AgainstStretched>>::lower(
         &(field::<(U3, U4)>(&[3, 4]), field::<(U1, U4)>(&[1, 4])),
-        (),
+        None,
     )
     .expect("3x4 against 1x4 broadcasts");
 
@@ -48,10 +48,34 @@ fn a_static_broadcast_lowers_to_the_shape_the_frontend_names() {
 }
 
 #[test]
+fn the_operator_reaches_the_descriptor_through_args() {
+    // The shape types cannot say which operation this is: the same rule over
+    // the same pair of shapes serves a stretch and all four binary operations.
+    // `Args` is the only place the answer can come from, which is where
+    // `Conv2dArgs` puts grouping and the reduce rules put `ReduceOp`.
+    for op in [
+        None,
+        Some(BinaryOp::Add),
+        Some(BinaryOp::Sub),
+        Some(BinaryOp::Mul),
+        Some(BinaryOp::Div),
+    ] {
+        let lowered = <BroadcastRule as ShapeRule<Rank2AgainstStretched>>::lower(
+            &(field::<(U3, U4)>(&[3, 4]), field::<(U1, U4)>(&[1, 4])),
+            op,
+        )
+        .expect("3x4 against 1x4 broadcasts");
+
+        assert_eq!(lowered.descriptor().op, op);
+        assert_eq!(lowered.descriptor().output.dims(), &[3, 4]);
+    }
+}
+
+#[test]
 fn a_stretched_axis_gets_a_zero_stride_rather_than_a_branch() {
     let lowered = <BroadcastRule as ShapeRule<Rank2AgainstStretched>>::lower(
         &(field::<(U3, U4)>(&[3, 4]), field::<(U1, U4)>(&[1, 4])),
-        (),
+        None,
     )
     .expect("3x4 against 1x4 broadcasts");
     let spec = lowered.descriptor();
@@ -68,7 +92,7 @@ fn one_runtime_operand_weakens_the_whole_lowering() {
     // level alongside.
     let lowered = <BroadcastRule as ShapeRule<((usize, U4), (U4,))>>::lower(
         &(field::<(usize, U4)>(&[3, 4]), field::<(U4,)>(&[4])),
-        (),
+        None,
     )
     .expect("3x4 against 4 broadcasts");
 
@@ -80,7 +104,7 @@ fn one_runtime_operand_weakens_the_whole_lowering() {
 fn an_unranked_operand_leaves_nothing_settled_in_advance() {
     let lowered = <BroadcastRule as ShapeRule<(Dyn, Dyn)>>::lower(
         &(field::<Dyn>(&[2, 1, 5]), field::<Dyn>(&[3, 5])),
-        (),
+        None,
     )
     .expect("2x1x5 against 3x5 broadcasts");
 
@@ -92,7 +116,7 @@ fn an_unranked_operand_leaves_nothing_settled_in_advance() {
 fn incompatible_dynamic_operands_are_reported_not_lowered() {
     let error = <BroadcastRule as ShapeRule<(Dyn, Dyn)>>::lower(
         &(field::<Dyn>(&[2, 3]), field::<Dyn>(&[4, 3])),
-        (),
+        None,
     )
     .expect_err("2 and 4 do not broadcast");
 
@@ -106,7 +130,7 @@ fn a_named_axis_is_typed_but_not_sized_so_one_side_may_still_stretch() {
     // of 1 broadcasts here exactly as it would on an anonymous axis.
     let lowered = <BroadcastRule as ShapeRule<((Batch, U4), (Batch, U4))>>::lower(
         &(field::<(Batch, U4)>(&[1, 4]), field::<(Batch, U4)>(&[4, 4])),
-        (),
+        None,
     )
     .expect("a `Batch` of 1 stretches to a `Batch` of 4");
 
@@ -121,7 +145,7 @@ fn two_uses_of_one_named_axis_must_still_be_compatible_at_runtime() {
     // the pair typechecks.
     let error = <BroadcastRule as ShapeRule<((Batch, U4), (Batch, U4))>>::lower(
         &(field::<(Batch, U4)>(&[3, 4]), field::<(Batch, U4)>(&[5, 4])),
-        (),
+        None,
     )
     .expect_err("a `Batch` cannot be both 3 and 5");
 
@@ -395,7 +419,7 @@ fn pooling_and_reshape_report_their_own_kinds() {
 fn every_descriptor_a_rule_produces_can_state_its_element_count() {
     let lowered = <BroadcastRule as ShapeRule<Rank2AgainstStretched>>::lower(
         &(field::<(U3, U4)>(&[3, 4]), field::<(U1, U4)>(&[1, 4])),
-        (),
+        None,
     )
     .expect("3x4 against 1x4 broadcasts");
 
@@ -409,12 +433,13 @@ fn the_descriptor_a_rule_mints_equals_the_one_built_by_hand() {
     // evidence that a shape proof stood behind them.
     let lowered = <BroadcastRule as ShapeRule<Rank2AgainstStretched>>::lower(
         &(field::<(U3, U4)>(&[3, 4]), field::<(U1, U4)>(&[1, 4])),
-        (),
+        None,
     )
     .expect("3x4 against 1x4 broadcasts");
     let by_hand = BroadcastSpec::contiguous(
         &ShapeBuf::from_slice(&[3, 4]),
         &ShapeBuf::from_slice(&[1, 4]),
+        None,
     )
     .expect("3x4 against 1x4 broadcasts");
 

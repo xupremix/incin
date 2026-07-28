@@ -45,7 +45,7 @@ fn main() {
 
     let validated = <BroadcastRule as ShapeRule<((U2, U3), (U2, U3))>>::lower(
         &Default::default(),
-        (),
+        None,
     )
     .unwrap();
     let storage = Storage {

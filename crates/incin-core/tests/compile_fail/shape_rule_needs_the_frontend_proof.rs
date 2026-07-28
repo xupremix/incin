@@ -12,6 +12,6 @@ fn main() {
     // `(U3, U5)` and `BroadcastRule` is not implemented for the pair.
     let _ = <BroadcastRule as ShapeRule<((U3, U4), (U3, U5))>>::lower(
         &((Default::default(), Default::default()), (Default::default(), Default::default())),
-        (),
+        None,
     );
 }

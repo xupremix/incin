@@ -2389,11 +2389,22 @@ depending on which noticed first; a backend that declares an operation
 unsupported at its impl site now produces the same `Unsupported` the registry
 would have, which is how WGPU and CUDA answer for the product reduction neither
 has a shader for.
-`BroadcastSpec` is the one descriptor still without an operator, and it is a
-different question: it is iteration geometry that serves both a named broadcast
-and any binary pointwise operation, so an operator field there needs a form that
-can also say "none". That, and the multi-axis reduction the routed kernels
-cannot take one call at a time, are what remain before the adapter can go.
+`BroadcastSpec` now has its operator too, and it took the form the question
+demanded: `Option<BinaryOp>`, where `None` is a stretch rather than a missing
+field. It is the one descriptor useful without an operator, because it is
+iteration geometry that a named broadcast uses on its own and that four binary
+operations read the same way. The set is closed at those four. `maximum` and
+`minimum` are absent because they index both operands with the left operand's
+shape and so require equal shapes, which is geometry this descriptor does not
+describe; comparisons are absent for the reason `argmax` is absent from
+`ReduceOp`, in that their result dtype is not their input's. Recording it moved
+`DescriptorSchemaVersion::CURRENT` to `v3`, since a `v2` entry cannot say
+whether it described a stretch or an operation, and the pinning test is again
+what made that deliberate. The operator arrives through `ShapeRule::Args`,
+where `Conv2dArgs` puts grouping and the reduce rules put `ReduceOp`, on the
+same grounds: the shape types do not determine it.
+The multi-axis reduction the routed kernels cannot take one call at a time is
+now the only thing left before the adapter can go.
 `EXE-010` is next eligible on the executor track.
 The complete Shape-track evidence is recorded in the mirror and
 `docs/plan/tasks/SHP-007.md` through `SHP-008.md`. The §4 themes above

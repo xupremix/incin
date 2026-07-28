@@ -1,7 +1,7 @@
 error[E0624]: associated function `new` is private
-  --> tests/compile_fail/validated_new_is_crate_private.rs:17:30
+  --> tests/compile_fail/validated_new_is_crate_private.rs:18:30
    |
-17 |     let _forged = Validated::new(spec, ProofLevel::Static);
+18 |     let _forged = Validated::new(spec, ProofLevel::Static);
    |                              ^^^ private associated function
    |
   ::: src/exec/proof.rs

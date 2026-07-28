@@ -24,7 +24,7 @@ fn main() {
         incin_core::prelude::OperationKind::Broadcast,
     )
     .unwrap();
-    let descriptor = BroadcastSpec::new(&shape, &strides, &shape, &strides).unwrap();
+    let descriptor = BroadcastSpec::new(&shape, &strides, &shape, &strides, None).unwrap();
     let context = ExecutionContext::new(StorageOnly);
     let inputs = [];
     let _: ExecutionRequest<'_, BroadcastSpec, StorageOnly> = ExecutionRequest {

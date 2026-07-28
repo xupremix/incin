@@ -72,8 +72,8 @@ pub use rule::{
     ReshapeRule, ShapeRule,
 };
 pub use spec::{
-    AxisMask, BroadcastSpec, Conv2dSpec, DescriptorSchemaVersion, MatMulSpec, OperationSpec,
-    Pool2dSpec, PoolOp, ReduceOp, ReductionSpec, ReshapeSpec,
+    AxisMask, BinaryOp, BroadcastSpec, Conv2dSpec, DescriptorSchemaVersion, MatMulSpec,
+    OperationSpec, Pool2dSpec, PoolOp, ReduceOp, ReductionSpec, ReshapeSpec,
 };
 
 /// Supertrait used to seal public traits in this module against outside

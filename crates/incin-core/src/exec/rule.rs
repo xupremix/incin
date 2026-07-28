@@ -59,7 +59,7 @@ use core::marker::PhantomData;
 
 use super::proof::{ProofLevel, Validated};
 use super::spec::{
-    BroadcastSpec, Conv2dSpec, MatMulSpec, OperationSpec, Pool2dSpec, PoolOp, ReduceOp,
+    BinaryOp, BroadcastSpec, Conv2dSpec, MatMulSpec, OperationSpec, Pool2dSpec, PoolOp, ReduceOp,
     ReductionSpec, ReshapeSpec,
 };
 use crate::shapes::broadcast::BroadcastShape;
@@ -102,12 +102,13 @@ pub trait ShapeRule<Inputs>: Sized {
     /// Everything the shape types do not determine.
     ///
     /// `()` wherever the operation is fixed by its operand types alone, as
-    /// broadcasting, matmul, and reshape are. It is not empty where a family of
-    /// operations shares one shape rule: `ReduceDim<D>` carries the axis but not
-    /// the accumulation, and `Pool2dShape<K, S, P, D>` carries the window but not
-    /// what runs inside it, so both take their operator here. `Conv2dArgs`
-    /// carries grouping for the same reason — it constrains the channel axes
-    /// without being a shape parameter.
+    /// matmul and reshape are. It is not empty where a family of operations
+    /// shares one shape rule: `ReduceDim<D>` carries the axis but not the
+    /// accumulation, `Pool2dShape<K, S, P, D>` carries the window but not what
+    /// runs inside it, and `BroadcastShape<Rhs>` carries the geometry of a
+    /// stretch that four binary operations read the same way, so each takes its
+    /// operator here. `Conv2dArgs` carries grouping for the same reason — it
+    /// constrains the channel axes without being a shape parameter.
     type Args;
 
     /// The descriptor this rule resolves to.
@@ -186,12 +187,16 @@ where
 {
     type Output = <L as BroadcastShape<R>>::Output;
     type Operands = (<L as Shape>::Field, <R as Shape>::Field);
-    type Args = ();
+    /// The operator, which the shape types do not determine: the same
+    /// broadcast geometry serves a stretch and all four binary operations.
+    /// This is where `Conv2dArgs` puts grouping and the reduce rules put
+    /// [`ReduceOp`], for the same reason.
+    type Args = Option<BinaryOp>;
     type Descriptor = BroadcastSpec;
 
     fn lower(
         operands: &Self::Operands,
-        (): Self::Args,
+        op: Self::Args,
     ) -> Result<Validated<BroadcastSpec>, ShapeError> {
         // The frontend runs first because it, not the descriptor, is bound to
         // the output *type*: `output_shape` rebuilds that type's field from the
@@ -201,7 +206,7 @@ where
         let expected = dims_of::<Self::Output>(&resolved);
 
         let spec =
-            BroadcastSpec::contiguous(&dims_of::<L>(&operands.0), &dims_of::<R>(&operands.1))?;
+            BroadcastSpec::contiguous(&dims_of::<L>(&operands.0), &dims_of::<R>(&operands.1), op)?;
         agree(OperationKind::Broadcast, &expected, &spec.output)?;
 
         Ok(Validated::new(

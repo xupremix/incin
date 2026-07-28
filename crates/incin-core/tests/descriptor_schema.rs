@@ -18,8 +18,8 @@
 //! hold.
 
 use incin_core::exec::{
-    AxisMask, BroadcastSpec, Conv2dSpec, DescriptorSchemaVersion, MatMulSpec, OperationSpec,
-    ReduceOp, ReductionSpec,
+    AxisMask, BinaryOp, BroadcastSpec, Conv2dSpec, DescriptorSchemaVersion, MatMulSpec,
+    OperationSpec, ReduceOp, ReductionSpec,
 };
 use incin_core::prelude::{
     Axis, DimensionConstraint, OperationKind, RankExpectation, ShapeBuf, ShapeError, StrideBuf,
@@ -44,7 +44,7 @@ fn dense(dims: &[usize]) -> StrideBuf {
 fn schema_version_is_pinned() {
     assert_eq!(
         DescriptorSchemaVersion::CURRENT.get(),
-        2,
+        3,
         "the descriptor field layout changed; bump CURRENT and invalidate any \
          cache keyed on descriptor contents"
     );
@@ -87,7 +87,7 @@ fn schema_compatibility_is_exact() {
     let current = DescriptorSchemaVersion::CURRENT;
     assert!(current.is_compatible_with(current));
     assert!(!current.is_compatible_with(DescriptorSchemaVersion::new(current.get() + 1)));
-    assert_eq!(current.to_string(), "v2");
+    assert_eq!(current.to_string(), "v3");
 }
 
 // --- the promoted operation vocabulary --------------------------------------
@@ -280,7 +280,7 @@ fn axis_mask_debug_names_its_axes() {
 fn broadcast_derives_output_and_masks_from_operand_layouts() {
     // Rank 2 against rank 3: the shorter operand right-aligns, and every axis
     // it is length 1 along is stretched.
-    let spec = BroadcastSpec::contiguous(&shape(&[4, 1, 3]), &shape(&[5, 3])).unwrap();
+    let spec = BroadcastSpec::contiguous(&shape(&[4, 1, 3]), &shape(&[5, 3]), None).unwrap();
 
     assert_eq!(spec.output.dims(), &[4, 5, 3]);
     assert_eq!(spec.output_elements().unwrap(), 60);
@@ -306,7 +306,7 @@ fn broadcast_masks_are_exactly_the_zero_strides_that_stretch() {
         (vec![3, 1, 1, 5], vec![1, 2, 4, 1]),
     ];
     for (lhs, rhs) in cases {
-        let spec = BroadcastSpec::contiguous(&shape(&lhs), &shape(&rhs)).unwrap();
+        let spec = BroadcastSpec::contiguous(&shape(&lhs), &shape(&rhs), None).unwrap();
         for (name, strides, mask) in [
             ("lhs", &spec.lhs_strides, spec.lhs_broadcast_mask),
             ("rhs", &spec.rhs_strides, spec.rhs_broadcast_mask),
@@ -332,6 +332,7 @@ fn broadcast_keeps_non_contiguous_view_strides() {
         &strides(&[10, 1]),
         &shape(&[3, 4]),
         &strides(&[100, 7]),
+        None,
     )
     .unwrap();
 
@@ -343,7 +344,7 @@ fn broadcast_keeps_non_contiguous_view_strides() {
 
 #[test]
 fn broadcast_scalar_operand_reads_one_element_throughout() {
-    let spec = BroadcastSpec::contiguous(&shape(&[2, 3]), &ShapeBuf::scalar()).unwrap();
+    let spec = BroadcastSpec::contiguous(&shape(&[2, 3]), &ShapeBuf::scalar(), None).unwrap();
 
     assert_eq!(spec.output.dims(), &[2, 3]);
     assert_eq!(spec.rhs_strides.strides(), &[0, 0]);
@@ -356,7 +357,7 @@ fn broadcast_scalar_operand_reads_one_element_throughout() {
 
 #[test]
 fn broadcast_rejects_incompatible_dimensions() {
-    let error = BroadcastSpec::contiguous(&shape(&[2, 3]), &shape(&[2, 4])).unwrap_err();
+    let error = BroadcastSpec::contiguous(&shape(&[2, 3]), &shape(&[2, 4]), None).unwrap_err();
     assert_eq!(
         error,
         ShapeError::DimensionMismatch {
@@ -376,6 +377,7 @@ fn broadcast_rejects_a_stride_count_that_does_not_match_its_shape() {
         &strides(&[3]),
         &shape(&[2, 3]),
         &dense(&[2, 3]),
+        None,
     )
     .unwrap_err();
     assert!(matches!(
@@ -389,6 +391,48 @@ fn broadcast_rejects_a_stride_count_that_does_not_match_its_shape() {
             actual: 1,
         }
     ));
+}
+
+#[test]
+fn broadcast_carries_its_operator_and_the_absence_of_one() {
+    // `None` is not a missing field, it is the answer for a stretch: the
+    // geometry is complete and nothing folds the operands together.
+    let stretch = BroadcastSpec::contiguous(&shape(&[2, 3]), &shape(&[3]), None).unwrap();
+    assert_eq!(stretch.op, None);
+
+    for op in [BinaryOp::Add, BinaryOp::Sub, BinaryOp::Mul, BinaryOp::Div] {
+        let spec = BroadcastSpec::contiguous(&shape(&[2, 3]), &shape(&[3]), Some(op)).unwrap();
+        assert_eq!(spec.op, Some(op));
+    }
+}
+
+#[test]
+fn broadcast_geometry_is_independent_of_its_operator() {
+    // The operator says what a kernel computes, not where it reads. Two
+    // descriptors over the same layouts must agree on every stride and mask,
+    // or a cache keyed on geometry could not be shared across operations.
+    let stretch = BroadcastSpec::contiguous(&shape(&[4, 1, 3]), &shape(&[5, 3]), None).unwrap();
+    let divided =
+        BroadcastSpec::contiguous(&shape(&[4, 1, 3]), &shape(&[5, 3]), Some(BinaryOp::Div))
+            .unwrap();
+
+    assert_eq!(stretch.output.dims(), divided.output.dims());
+    assert_eq!(stretch.lhs_strides.strides(), divided.lhs_strides.strides());
+    assert_eq!(stretch.rhs_strides.strides(), divided.rhs_strides.strides());
+    assert_eq!(stretch.lhs_broadcast_mask, divided.lhs_broadcast_mask);
+    assert_eq!(stretch.rhs_broadcast_mask, divided.rhs_broadcast_mask);
+
+    // ... and are still distinguishable, which is the point of recording it.
+    assert_ne!(stretch, divided);
+}
+
+#[test]
+fn broadcast_operators_are_named_distinctly() {
+    let names: Vec<_> = [BinaryOp::Add, BinaryOp::Sub, BinaryOp::Mul, BinaryOp::Div]
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    assert_eq!(names, ["add", "sub", "mul", "div"]);
 }
 
 // --- matrix multiplication --------------------------------------------------
@@ -644,7 +688,8 @@ fn an_output_too_large_to_index_is_rejected_at_resolution() {
     ));
 
     let broadcast =
-        BroadcastSpec::contiguous(&shape(&[usize::MAX, 1]), &shape(&[usize::MAX])).unwrap_err();
+        BroadcastSpec::contiguous(&shape(&[usize::MAX, 1]), &shape(&[usize::MAX]), None)
+            .unwrap_err();
     assert_eq!(broadcast.operation(), OperationKind::Broadcast);
 
     let matmul =
@@ -659,7 +704,7 @@ fn an_output_too_large_to_index_is_rejected_at_resolution() {
 fn every_constructed_descriptor_has_a_representable_output() {
     let cases: [Box<dyn Fn() -> Result<usize, ShapeError>>; 4] = [
         Box::new(|| {
-            BroadcastSpec::contiguous(&shape(&[4, 1, 3]), &shape(&[5, 3]))?.output_elements()
+            BroadcastSpec::contiguous(&shape(&[4, 1, 3]), &shape(&[5, 3]), None)?.output_elements()
         }),
         Box::new(|| MatMulSpec::new(&shape(&[2, 3, 4]), &shape(&[4, 5]))?.output_elements()),
         Box::new(|| {
@@ -812,7 +857,7 @@ fn descriptors_are_shareable_and_comparable() {
         assert!(!format!("{spec:?}").is_empty());
     }
 
-    assert_usable(&BroadcastSpec::contiguous(&shape(&[2, 3]), &shape(&[3])).unwrap());
+    assert_usable(&BroadcastSpec::contiguous(&shape(&[2, 3]), &shape(&[3]), None).unwrap());
     assert_usable(&MatMulSpec::new(&shape(&[2, 3]), &shape(&[3, 4])).unwrap());
     assert_usable(&ReductionSpec::over_axes(&shape(&[2, 3]), [1], false, ReduceOp::Sum).unwrap());
     assert_usable(
@@ -828,7 +873,7 @@ fn resolving_the_same_operation_twice_gives_the_same_descriptor() {
     let twice = MatMulSpec::new(&shape(&[2, 3, 4]), &shape(&[4, 5])).unwrap();
     assert_eq!(once, twice);
 
-    let broadcast_once = BroadcastSpec::contiguous(&shape(&[4, 1]), &shape(&[3])).unwrap();
-    let broadcast_twice = BroadcastSpec::contiguous(&shape(&[4, 1]), &shape(&[3])).unwrap();
+    let broadcast_once = BroadcastSpec::contiguous(&shape(&[4, 1]), &shape(&[3]), None).unwrap();
+    let broadcast_twice = BroadcastSpec::contiguous(&shape(&[4, 1]), &shape(&[3]), None).unwrap();
     assert_eq!(broadcast_once, broadcast_twice);
 }

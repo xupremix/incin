@@ -349,6 +349,7 @@ mod tests {
         let spec = BroadcastSpec::contiguous(
             &ShapeBuf::from_slice(&[2, 3]),
             &ShapeBuf::from_slice(&[1, 3]),
+            None,
         )
         .unwrap();
         let validated = Validated::new(spec.clone(), ProofLevel::Mixed);
@@ -366,6 +367,7 @@ mod tests {
         let spec = BroadcastSpec::contiguous(
             &ShapeBuf::from_slice(&[2, 3]),
             &ShapeBuf::from_slice(&[2, 3]),
+            None,
         )
         .unwrap();
         let validated = Validated::new(spec, ProofLevel::of::<(U2, U3)>());
@@ -378,6 +380,7 @@ mod tests {
         let spec = BroadcastSpec::contiguous(
             &ShapeBuf::from_slice(&[2, 3]),
             &ShapeBuf::from_slice(&[1, 3]),
+            None,
         )
         .unwrap();
         let validated = Validated::new(spec, ProofLevel::Mixed);
