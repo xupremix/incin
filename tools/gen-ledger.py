@@ -280,7 +280,7 @@ T = [
 ("CI-001","core","ci"," ",["GOV-005","GOV-003"],".github/workflows/ci.yml",
  "Feature-powerset CI preserving the bare CPU default; adds cargo doc and drops blanket package exclusions",
  "act -j powerset  # or CI run"),
-("CI-002","core","ci"," ",["EXE-008"],".github/workflows/hardware.yml",
+("CI-002","core","ci","~",["EXE-008"],".github/workflows/hardware.yml",
  "Scheduled CUDA and WGPU hardware matrix",
  "gh workflow run hardware.yml"),
 ("CI-003","preview","ci"," ",["DST-008","DST-009","DST-010"],".github/workflows/hardware.yml",

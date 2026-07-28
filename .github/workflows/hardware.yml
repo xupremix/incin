@@ -1,0 +1,237 @@
+# Scheduled hardware matrix (CI-002).
+#
+# `ci.yml` proves the CUDA backend compiles and runs WGPU against whatever
+# adapter a GitHub-hosted runner provides. Neither is a hardware claim. This
+# workflow runs the suites that need a real device, including the `--ignored`
+# tests that stay ignored precisely so `cargo test` passes on a machine without
+# one.
+#
+# A GitHub-hosted runner has no NVIDIA device, so the CUDA jobs need a
+# self-hosted runner. Naming a label that no runner carries makes a job queue
+# until it times out, which reads as "still running" for hours and then as a
+# failure that has nothing to do with the code. The `select` job therefore
+# resolves runner availability from the `HARDWARE_CUDA_RUNNER` and
+# `HARDWARE_WGPU_RUNNER` repository variables first, and states what it skipped
+# and why.
+name: Hardware Matrix
+
+on:
+  schedule:
+    # Weekly, Monday 05:00 UTC. Hardware obligations are regression checks on
+    # code that already passed review, not a pre-merge gate.
+    - cron: '0 5 * * 1'
+  workflow_dispatch:
+    inputs:
+      job:
+        description: 'Which hardware job to run: all, cuda, wgpu'
+        required: false
+        default: 'all'
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: read
+
+jobs:
+  select:
+    name: Resolve Hardware Availability
+    runs-on: ubuntu-latest
+    outputs:
+      cuda: ${{ steps.resolve.outputs.cuda }}
+      cuda_runner: ${{ steps.resolve.outputs.cuda_runner }}
+      wgpu_software: ${{ steps.resolve.outputs.wgpu_software }}
+      wgpu_native: ${{ steps.resolve.outputs.wgpu_native }}
+      wgpu_runner: ${{ steps.resolve.outputs.wgpu_runner }}
+    steps:
+      - name: Resolve requested jobs against registered runners
+        id: resolve
+        env:
+          REQUESTED: ${{ github.event.inputs.job || 'all' }}
+          CUDA_RUNNER: ${{ vars.HARDWARE_CUDA_RUNNER }}
+          WGPU_RUNNER: ${{ vars.HARDWARE_WGPU_RUNNER }}
+        run: |
+          set -euo pipefail
+
+          # Job names owned by rows that have not landed. Accepting them
+          # silently would report a green run for a matrix that does not exist.
+          case "$REQUESTED" in
+            dist3)
+              echo "::error::job=dist3 is owned by CI-003, which is not implemented"
+              exit 1 ;;
+            multinode)
+              echo "::error::job=multinode is owned by CI-004, which is not implemented"
+              exit 1 ;;
+            metal)
+              echo "::error::job=metal is owned by CI-007, which is not implemented"
+              exit 1 ;;
+            all|cuda|wgpu) ;;
+            *)
+              echo "::error::unknown job '$REQUESTED'; expected all, cuda, or wgpu"
+              exit 1 ;;
+          esac
+
+          cuda=false
+          wgpu_software=false
+          wgpu_native=false
+          if [ "$REQUESTED" = "all" ] || [ "$REQUESTED" = "cuda" ]; then cuda=true; fi
+          if [ "$REQUESTED" = "all" ] || [ "$REQUESTED" = "wgpu" ]; then
+            wgpu_software=true
+            wgpu_native=true
+          fi
+
+          # A runner variable holds a JSON array of labels, e.g.
+          # ["self-hosted","linux","cuda"]. Unset means no such runner is
+          # registered, which is the repository's current state.
+          if [ -z "${CUDA_RUNNER:-}" ]; then
+            if [ "$REQUESTED" = "cuda" ]; then
+              echo "::error::job=cuda was requested but the HARDWARE_CUDA_RUNNER variable is unset, so no GPU runner is registered"
+              exit 1
+            fi
+            cuda=false
+            echo "::warning::CUDA hardware job skipped: HARDWARE_CUDA_RUNNER is unset, so no NVIDIA runner is registered"
+          fi
+          if [ -z "${WGPU_RUNNER:-}" ]; then
+            wgpu_native=false
+            echo "::notice::WGPU native-adapter job skipped: HARDWARE_WGPU_RUNNER is unset. The software-adapter job still runs."
+          fi
+
+          {
+            echo "cuda=$cuda"
+            echo "cuda_runner=${CUDA_RUNNER:-[\"ubuntu-latest\"]}"
+            echo "wgpu_software=$wgpu_software"
+            echo "wgpu_native=$wgpu_native"
+            echo "wgpu_runner=${WGPU_RUNNER:-[\"ubuntu-latest\"]}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Summarize what this run covers
+        run: |
+          {
+            echo "## Hardware matrix selection"
+            echo ""
+            echo "| Job | Runs | Reason |"
+            echo "|---|---|---|"
+            echo "| cuda | ${{ steps.resolve.outputs.cuda }} | HARDWARE_CUDA_RUNNER ${{ vars.HARDWARE_CUDA_RUNNER && 'set' || 'unset' }} |"
+            echo "| wgpu-software | ${{ steps.resolve.outputs.wgpu_software }} | GitHub-hosted lavapipe |"
+            echo "| wgpu-native | ${{ steps.resolve.outputs.wgpu_native }} | HARDWARE_WGPU_RUNNER ${{ vars.HARDWARE_WGPU_RUNNER && 'set' || 'unset' }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  cuda:
+    name: CUDA Hardware Suite
+    needs: select
+    if: needs.select.outputs.cuda == 'true'
+    runs-on: ${{ fromJSON(needs.select.outputs.cuda_runner) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # The toolchain is pinned by rust-toolchain.toml. A self-hosted runner
+      # keeps its state between runs, so this installs the pinned version rather
+      # than assuming whatever the last job left behind.
+      - name: Install the pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.92.0'
+
+      - name: Record device and driver
+        run: |
+          set -euo pipefail
+          {
+            echo "## CUDA environment"
+            echo ""
+            echo '```'
+            nvidia-smi --query-gpu=name,driver_version,memory.total,compute_cap \
+              --format=csv,noheader
+            nvcc --version | tail -2
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # `cargo test` runs the suite that passes anywhere; the `--ignored` run is
+      # the one this workflow exists for. Both are recorded so a device-specific
+      # failure is distinguishable from a general one.
+      - name: CUDA suite, default tests
+        run: cargo test -p incin-backends --no-default-features --features std,cpu,cuda
+
+      - name: CUDA suite, hardware tests
+        run: |
+          set -euo pipefail
+          cargo test -p incin-backends --no-default-features --features std,cpu,cuda \
+            -- --ignored 2>&1 | tee hardware.log
+          # A run with no device present reports "0 passed" and exits zero, which
+          # is indistinguishable from a pass by exit code alone. EXE-004,
+          # EXE-005, and EXE-008 were discharged by 63 ignored tests; require
+          # that the suite still executes rather than evaporates.
+          passed=$(awk '/^test result: ok\./ { gsub(/\./, "", $4); total += $4 } END { print total + 0 }' hardware.log)
+          echo "ignored CUDA tests executed: $passed"
+          if [ "$passed" -lt 60 ]; then
+            echo "::error::only $passed ignored CUDA tests ran; expected at least 60. The device or driver is probably missing."
+            exit 1
+          fi
+
+      - name: Capability matrix against real execution
+        run: cargo test -p incin-backends --features cuda --test capability_matrix -- --ignored
+
+      - name: Gradient parity against CPU
+        run: cargo test -p incin-backends --features cuda --test gradient_parity -- --ignored
+
+      - name: Storage metadata against real device pointers
+        run: cargo test -p incin-backends --features cuda --test tensor_meta -- --ignored
+
+  wgpu-software:
+    name: WGPU Software Adapter
+    needs: select
+    if: needs.select.outputs.wgpu_software == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.92.0'
+
+      - name: Install WGPU system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler libvulkan-dev mesa-vulkan-drivers
+
+      - name: Record adapter
+        run: |
+          {
+            echo "## WGPU software adapter"
+            echo ""
+            echo '```'
+            vulkaninfo --summary 2>/dev/null | head -40 || echo "vulkaninfo unavailable"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: WGPU suite with CPU parity
+        run: cargo test -p incin-backends --all-targets --no-default-features --features std,cpu,wgpu
+
+  wgpu-native:
+    name: WGPU Native Adapter
+    needs: select
+    if: needs.select.outputs.wgpu_native == 'true'
+    runs-on: ${{ fromJSON(needs.select.outputs.wgpu_runner) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.92.0'
+
+      - name: Record adapter
+        run: |
+          {
+            echo "## WGPU native adapter"
+            echo ""
+            echo '```'
+            vulkaninfo --summary 2>/dev/null | head -40 || echo "vulkaninfo unavailable"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: WGPU suite with CPU parity
+        run: cargo test -p incin-backends --all-targets --no-default-features --features std,cpu,wgpu
+
+      - name: WGPU hardware tests
+        run: cargo test -p incin-backends --no-default-features --features std,cpu,wgpu -- --ignored
