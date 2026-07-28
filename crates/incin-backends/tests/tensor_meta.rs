@@ -125,6 +125,55 @@ fn wgpu_materialized_views_report_contiguous_zero_offset_metadata() {
     assert_eq!(metadata.device, DeviceId::wgpu(0));
 }
 
+/// CUDA metadata reports the alignment the device allocator actually provides.
+///
+/// EXE-004 originally recorded `Alignment::BYTE` here, because `CudaSlice<u8>`
+/// is the only thing the Rust type system knows about a CUDA allocation and one
+/// byte is all it proves. It is a true claim and a useless one: every CUDA
+/// tensor would answer "unaligned" to a kernel choosing between a scalar and a
+/// vector load. The first run on real hardware settled it — the driver returns
+/// 256-byte-aligned addresses, as its own documentation promises — so the claim
+/// now matches the allocator, and a view offset still weakens it.
+#[cfg(feature = "cuda")]
+#[test]
+#[ignore = "requires a CUDA device and driver"]
+fn cuda_metadata_reports_the_measured_device_allocation_alignment() {
+    type CudaB = incin_backends::cuda::CudaBackendImpl<
+        f32,
+        incin_core::prelude::CudaN<incin_core::typenum::U0>,
+    >;
+
+    let values = [1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
+    let storage = CudaB::from_bytes::<f32>(
+        bytemuck::cast_slice(&values),
+        &[8],
+        DTypeId::F32,
+        &DeviceId::cuda(0),
+    )
+    .unwrap();
+    let metadata: &TensorMeta = &storage;
+    assert_eq!(metadata.device, DeviceId::cuda(0));
+    assert!(
+        metadata.alignment.supports(256),
+        "CUDA storage reported {:?}",
+        metadata.alignment
+    );
+
+    // One f32 into the allocation is four-byte aligned and nothing more, which
+    // is the property that makes this a guarantee rather than a preference.
+    let view = TensorMeta::try_new(
+        [4].as_slice().into(),
+        [1].as_slice().into(),
+        1,
+        DTypeId::F32,
+        DeviceId::cuda(0),
+        Alignment::new(256).unwrap(),
+        8,
+    )
+    .unwrap();
+    assert_eq!(view.alignment.bytes(), 4);
+}
+
 #[test]
 fn invalid_alignment_rank_and_arithmetic_overflow_are_rejected() {
     assert!(Alignment::new(0).is_err());

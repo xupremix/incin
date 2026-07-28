@@ -2363,6 +2363,18 @@ thirty-four bytes for thirty-two values. That the defect was in the one dtype
 whose byte length is not a width, in the one file that had not been migrated to
 the checked helper, is the argument for hardware evidence in one sentence: the
 compiler had signed off on all of it.
+`EXE-004`'s CUDA deviation is discharged by the same run. It recorded
+`Alignment::BYTE` for every CUDA tensor, which was true — `CudaSlice<u8>` proves
+exactly one byte — and useless, because a kernel choosing between a scalar and a
+vector load would have taken the scalar path forever. Eleven awkward allocation
+sizes measured on the device all come back 256-byte aligned, matching what the
+CUDA C Programming Guide promises, so the recorded guarantee is now 256 and a
+nonzero view offset still weakens it. The measurement is a hardware test rather
+than a comment, which is the difference between a claim `CI-002` re-checks every
+week and a claim that quietly rots. `CudaStorage` also now compares its
+allocation's byte length against the element count its metadata declares, which
+is the check that would have named the quantize defect directly instead of
+leaving it to a bounds failure two layers up.
 `EXE-009` is active and partially landed: the default
 unsupported-operation surface is now gone from all nine operation families, so a
 backend that does not implement an operation says so at its own definition and a
