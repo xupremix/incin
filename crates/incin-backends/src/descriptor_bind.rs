@@ -13,9 +13,11 @@
 use alloc::string::ToString;
 
 use incin_core::exec::{
-    Conv2dSpec, Pool2dSpec, PoolOp, ReductionSpec, TensorMeta, UnsupportedReason,
+    Conv2dSpec, Pool2dSpec, PoolOp, ReduceOp, ReductionSpec, TensorMeta, UnsupportedReason,
 };
-use incin_core::prelude::{BackendError, Error, OperationKind};
+use incin_core::prelude::{
+    Backend, BackendError, DType, Error, OperationKind, ReductionOps, TensorOps,
+};
 
 /// Build an `InvalidInput` error for a descriptor binder.
 pub(crate) const fn invalid(operation: OperationKind, reason: &'static str) -> BackendError {
@@ -194,23 +196,92 @@ pub(crate) fn check_pool2d_operand(
     Ok(())
 }
 
-/// The single axis a routed reduction collapses.
+/// The contiguous axis run a reduction collapses, or `None` for no axes.
 ///
-/// `ReductionSpec` describes a contiguous *run* of axes, while every legacy
-/// reduction entry point takes one `dim`. The lowering rules only ever produce a
-/// one-axis run — `ReduceDim<D>` names a single axis — so a wider run reaching a
-/// backend means the descriptor came from somewhere else, and collapsing it with
-/// repeated single-axis calls would change the accumulation order for `mean` and
-/// the intermediate range for `prod`. It is refused instead.
-pub(crate) fn reduction_axis(spec: &ReductionSpec) -> Result<usize, BackendError> {
+/// `ReductionSpec::new` rejects a non-contiguous axis set, so a descriptor that
+/// names any axes names a half-open range. Returning the endpoints rather than a
+/// single axis is what lets a backend collapse a wider run; an empty set is
+/// legal and reduces nothing, which the spec's own constructor documents.
+pub(crate) fn reduction_run(spec: &ReductionSpec) -> Result<Option<(usize, usize)>, BackendError> {
     let mut axes = spec.axes.axes();
-    let (Some(axis), None) = (axes.next(), axes.next()) else {
+    let Some(first) = axes.next() else {
+        return Ok(None);
+    };
+    let last = axes.last().unwrap_or(first);
+    if last < first {
         return Err(invalid(
             OperationKind::Reduction,
-            "the routed kernel reduces one axis; this descriptor names none or several",
+            "reduction axis run is not ordered",
         ));
+    }
+    Ok(Some((first, last + 1)))
+}
+
+/// Collapse a run of two or more axes with repeated single-axis calls.
+///
+/// This was previously refused, on the grounds that repeating a single-axis call
+/// would change the accumulation order for `mean` and the intermediate range for
+/// `prod`. Refusing it left a hole instead: `ReductionSpec` accepts any
+/// contiguous run and the lowering rules can produce one, so a validated
+/// descriptor existed that no backend would execute.
+///
+/// Every accumulation `ReduceOp` names is associative, so collapsing the axes in
+/// sequence gives the same result as collapsing them at once in exact
+/// arithmetic. `Mean` is included: averaging over a run of length `a` and then
+/// one of length `b` divides by `a` then by `b`, which is a division by `a * b`.
+/// What differs is floating-point rounding, since the divisions and the
+/// summation groupings happen in a different order, and that is a ULP-level
+/// difference rather than a semantic one.
+///
+/// Each step keeps the axis it reduced as length 1, which is what makes the loop
+/// safe: axis indices never shift underneath it, so the run can be walked in
+/// order without renumbering. The single reshape at the end drops those axes
+/// when the descriptor asked for them dropped, moving no element.
+pub(crate) fn reduce_axis_run<B, K>(
+    spec: &ReductionSpec,
+    input: &B::Storage<K>,
+    input_dims: &[usize],
+    start: usize,
+    end: usize,
+) -> Result<B::Storage<K>, Error>
+where
+    B: Backend + ReductionOps<B> + TensorOps<B>,
+    K: DType,
+{
+    let mut dims = input_dims.to_vec();
+    let mut current: Option<B::Storage<K>> = None;
+
+    for axis in start..end {
+        let source = current.as_ref().unwrap_or(input);
+        let reduced = match spec.op {
+            ReduceOp::Sum => <B as ReductionOps<B>>::sum_keepdim::<K>(source, axis)?,
+            ReduceOp::Mean => <B as ReductionOps<B>>::mean_keepdim::<K>(source, axis)?,
+            ReduceOp::Max => <B as ReductionOps<B>>::max_keepdim::<K>(source, axis)?,
+            ReduceOp::Min => <B as ReductionOps<B>>::min_keepdim::<K>(source, axis)?,
+            // `ReductionOps` has no `prod_keepdim`, so the axis is dropped and
+            // reinserted. The reshape moves no element, which is why this is the
+            // same operation rather than an approximation of it.
+            ReduceOp::Prod => {
+                let dropped = <B as ReductionOps<B>>::prod_dim::<K>(source, axis)?;
+                let mut kept = dims.clone();
+                kept[axis] = 1;
+                <B as TensorOps<B>>::reshape::<K>(&dropped, &kept)?
+            }
+        };
+        dims[axis] = 1;
+        current = Some(reduced);
+    }
+
+    let collapsed = match current {
+        Some(storage) => storage,
+        // An empty run reduces nothing; the reshape below still normalizes the
+        // handle to the descriptor's output shape.
+        None => input.clone(),
     };
-    Ok(axis)
+    if dims == spec.output.dims() {
+        return Ok(collapsed);
+    }
+    <B as TensorOps<B>>::reshape::<K>(&collapsed, spec.output.dims())
 }
 
 /// Check the reduction operand's metadata against the sealed descriptor.
@@ -222,7 +293,7 @@ pub(crate) fn reduction_axis(spec: &ReductionSpec) -> Result<usize, BackendError
 /// nest walks correctly.
 pub(crate) fn check_reduction_operand(
     spec: &ReductionSpec,
-    axis: usize,
+    run: Option<(usize, usize)>,
     input: &TensorMeta,
 ) -> Result<(), BackendError> {
     let dims = input.shape().dims();
@@ -231,9 +302,13 @@ pub(crate) fn check_reduction_operand(
             .try_fold(1usize, |acc, &dim| acc.checked_mul(dim))
     };
 
-    if dims.get(axis) != Some(&spec.reduced)
-        || region(&dims[..axis]) != Some(spec.outer)
-        || region(&dims[axis + 1..]) != Some(spec.inner)
+    // An empty run collapses nothing, so the spec records the whole input as
+    // `outer` with `reduced` and `inner` both 1.
+    let (start, end) = run.unwrap_or((dims.len(), dims.len()));
+    if end > dims.len()
+        || region(&dims[start..end]) != Some(spec.reduced)
+        || region(&dims[..start]) != Some(spec.outer)
+        || region(&dims[end..]) != Some(spec.inner)
     {
         return Err(invalid(
             OperationKind::Reduction,
@@ -381,23 +456,66 @@ mod tests {
         assert_eq!(window.kernel, (2, 2));
     }
 
+    /// Every axis set `ReductionSpec` accepts resolves to a run a backend can walk.
+    ///
+    /// The previous binder answered only a one-axis run and refused the rest,
+    /// which meant a descriptor the schema had already validated reached a
+    /// backend that would not execute it. The endpoints are what a caller needs,
+    /// and an empty set is `None` rather than an error because reducing no axes
+    /// is a legal identity that `ReductionSpec::new` documents.
     #[test]
-    fn a_reduction_over_several_axes_does_not_route_to_a_one_axis_kernel() {
+    fn every_axis_set_the_schema_accepts_resolves_to_a_run() {
         let input = ShapeBuf::from_slice(&[2, 3, 4]);
-        let single = ReductionSpec::over_axes(&input, [1], false, ReduceOp::Sum).unwrap();
-        assert_eq!(reduction_axis(&single).expect("one axis routes"), 1);
 
-        for axes in [vec![], vec![0, 1]] {
-            let spec = ReductionSpec::over_axes(&input, axes, false, ReduceOp::Sum).unwrap();
-            let error = reduction_axis(&spec).expect_err("only a one-axis run routes");
-            assert!(matches!(
-                error,
-                BackendError::InvalidInput {
-                    operation: OperationKind::Reduction,
-                    ..
-                }
-            ));
+        for (axes, expected) in [
+            (vec![1], Some((1, 2))),
+            (vec![0, 1], Some((0, 2))),
+            (vec![0, 1, 2], Some((0, 3))),
+            (vec![], None),
+        ] {
+            let spec = ReductionSpec::over_axes(&input, axes.clone(), false, ReduceOp::Sum)
+                .expect("a contiguous run is a legal descriptor");
+            assert_eq!(
+                reduction_run(&spec).expect("a validated run resolves"),
+                expected,
+                "axes {axes:?}"
+            );
         }
+    }
+
+    /// The operand check follows the whole run, not one axis of it.
+    ///
+    /// A two-axis run over `[2, 3, 4]` collapses `2 * 3` into `reduced`, leaves
+    /// `outer` empty and `inner` at 4. Checking only the first axis would accept
+    /// an operand whose second reduced axis disagreed with the descriptor.
+    #[test]
+    fn the_operand_check_spans_the_whole_reduced_run() {
+        let input = ShapeBuf::from_slice(&[2, 3, 4]);
+        let spec = ReductionSpec::over_axes(&input, [0, 1], false, ReduceOp::Sum).unwrap();
+        let run = reduction_run(&spec).unwrap();
+        assert_eq!((spec.outer, spec.reduced, spec.inner), (1, 6, 4));
+
+        let meta = |dims: &[usize]| {
+            TensorMeta::contiguous(
+                ShapeBuf::from_slice(dims),
+                incin_core::prelude::DTypeId::F32,
+                incin_core::prelude::DeviceId::cpu(),
+                incin_core::exec::Alignment::of::<f32>(),
+                dims.iter().product(),
+            )
+            .unwrap()
+        };
+
+        check_reduction_operand(&spec, run, &meta(&[2, 3, 4])).expect("the descriptor's own shape");
+        let error = check_reduction_operand(&spec, run, &meta(&[2, 4, 3]))
+            .expect_err("a run whose second axis disagrees is not this descriptor's operand");
+        assert!(matches!(
+            error,
+            BackendError::InvalidInput {
+                operation: OperationKind::Reduction,
+                ..
+            }
+        ));
     }
 
     #[test]
@@ -416,10 +534,11 @@ mod tests {
             ReductionSpec::over_axes(&ShapeBuf::from_slice(&[2, 3, 4]), [1], false, ReduceOp::Sum)
                 .unwrap();
 
-        check_reduction_operand(&spec, 1, &meta(&[2, 3, 4])).expect("the original operand binds");
+        check_reduction_operand(&spec, Some((1, 2)), &meta(&[2, 3, 4]))
+            .expect("the original operand binds");
         // Same element count, wrong axis lengths: `outer` and `inner` catch it
         // where a bare `numel` comparison would not.
-        let error = check_reduction_operand(&spec, 1, &meta(&[4, 3, 2]))
+        let error = check_reduction_operand(&spec, Some((1, 2)), &meta(&[4, 3, 2]))
             .expect_err("a permuted operand must not bind");
         assert!(matches!(
             error,

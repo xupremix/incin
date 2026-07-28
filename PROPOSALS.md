@@ -2501,8 +2501,28 @@ whether it described a stretch or an operation, and the pinning test is again
 what made that deliberate. The operator arrives through `ShapeRule::Args`,
 where `Conv2dArgs` puts grouping and the reduce rules put `ReduceOp`, on the
 same grounds: the shape types do not determine it.
-The multi-axis reduction the routed kernels cannot take one call at a time is
-now the only thing left before the adapter can go.
+The multi-axis reduction the routed kernels could not take one call at a time is
+now done, and doing it showed the hole was wider than a binder check.
+`ReductionSpec` has always accepted a contiguous run of axes; the binder refused
+anything wider than one, and no lowering rule produced one either, so the schema
+described an operation that nothing could construct and nothing would execute.
+Refusing it had been justified on the grounds that repeated single-axis calls
+would change the accumulation order for `mean` and the intermediate range for
+`prod`. Every `ReduceOp` accumulation is associative, so the sequence gives the
+same answer as the whole in exact arithmetic — averaging over a run of length `a`
+and then one of length `b` divides by `a * b` either way — and what actually
+differs is floating-point rounding, which is a ULP-level difference rather than a
+semantic one. Each step now keeps the axis it reduced at length 1, so indices
+never shift under the loop, and one reshape at the end drops them.
+`ReduceAllRule` is what makes that reachable. Total reduction had no descriptor
+at all, which meant the operation every training step ends with — turning a loss
+into a scalar — was the one operation that could not be expressed as one. Its
+output is `Scalar`, rank 0, so the `[1]` stand-in `EXE-005` caught WGPU returning
+is rejected by the rule rather than by a backend.
+Removing the adapter itself is what remains. That is not a descriptor gap any
+more; it is the 287-method legacy `Backend` surface the descriptor executors
+still delegate to, and retiring it needs the direct kernel work `PRF-002` and
+`PRF-003` own.
 `EXE-010` is next eligible on the executor track.
 The complete Shape-track evidence is recorded in the mirror and
 `docs/plan/tasks/SHP-007.md` through `SHP-008.md`. The §4 themes above

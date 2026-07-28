@@ -68,8 +68,8 @@ pub use policy::MathMode;
 pub use proof::{ProofLevel, Validated};
 pub use request::TensorHandle;
 pub use rule::{
-    BroadcastRule, Conv2dArgs, Conv2dRule, MatMulRule, Pool2dRule, ReduceKeepRule, ReduceRule,
-    ReshapeRule, ShapeRule,
+    BroadcastRule, Conv2dArgs, Conv2dRule, MatMulRule, Pool2dRule, ReduceAllRule, ReduceKeepRule,
+    ReduceRule, ReshapeRule, ShapeRule,
 };
 pub use spec::{
     AxisMask, BinaryOp, BroadcastSpec, Conv2dSpec, DescriptorSchemaVersion, MatMulSpec,

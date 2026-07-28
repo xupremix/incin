@@ -18,7 +18,7 @@ use super::backend::CudaBackendImpl;
 use super::storage::CudaStorage;
 use crate::descriptor_bind::{
     check_conv2d_operands, check_pool2d_operand, check_reduction_operand, conv2d_window, invalid,
-    kernel_error, pool2d_window, reduction_axis,
+    kernel_error, pool2d_window, reduce_axis_run, reduction_run,
 };
 
 impl<T: DType, D: Device> StorageBackend for CudaBackendImpl<T, D> {
@@ -436,31 +436,62 @@ impl<T: DType, D: Device> Execute<ReductionSpec> for CudaBackendImpl<T, D> {
     ) -> Result<Self::Output, BackendError> {
         let _ = self;
         let spec = request.operation.descriptor();
-        let axis = reduction_axis(spec)?;
+        let run = reduction_run(spec)?;
         let input = bind_single_operand(
             &request,
             OperationKind::Reduction,
             "a reduction expects exactly one tensor input",
             "reduction input must use a CUDA device",
         )?;
-        check_reduction_operand(spec, axis, input.metadata())?;
+        check_reduction_operand(spec, run, input.metadata())?;
 
         // Like WGPU, CUDA declares `prod_dim` unsupported at its impl site, so
         // `ReduceOp::Prod` is answered as unsupported rather than as a fault.
-        let output = match (spec.op, spec.keep_dims) {
-            (ReduceOp::Sum, false) => <Self as ReductionOps<Self>>::sum_dim::<T>(input, axis),
-            (ReduceOp::Sum, true) => <Self as ReductionOps<Self>>::sum_keepdim::<T>(input, axis),
-            (ReduceOp::Mean, false) => <Self as ReductionOps<Self>>::mean_dim::<T>(input, axis),
-            (ReduceOp::Mean, true) => <Self as ReductionOps<Self>>::mean_keepdim::<T>(input, axis),
-            (ReduceOp::Max, false) => <Self as ReductionOps<Self>>::max_dim::<T>(input, axis),
-            (ReduceOp::Max, true) => <Self as ReductionOps<Self>>::max_keepdim::<T>(input, axis),
-            (ReduceOp::Min, false) => <Self as ReductionOps<Self>>::min_dim::<T>(input, axis),
-            (ReduceOp::Min, true) => <Self as ReductionOps<Self>>::min_keepdim::<T>(input, axis),
-            (ReduceOp::Prod, false) => <Self as ReductionOps<Self>>::prod_dim::<T>(input, axis),
-            (ReduceOp::Prod, true) => <Self as ReductionOps<Self>>::prod_dim::<T>(input, axis)
-                .and_then(|dropped| {
-                    <Self as TensorOps<Self>>::reshape::<T>(&dropped, spec.output.dims())
-                }),
+        // A one-axis run keeps the direct call it always used. A wider run is
+        // collapsed a step at a time by the shared helper, which was previously
+        // refused outright and left validated descriptors no backend would run.
+        let output = match run {
+            Some((start, end)) if end - start > 1 => {
+                reduce_axis_run::<Self, T>(spec, input, input.metadata().shape().dims(), start, end)
+            }
+            _ => {
+                let axis = run.map_or(0, |(start, _)| start);
+                match (spec.op, spec.keep_dims) {
+                    (ReduceOp::Sum, false) => {
+                        <Self as ReductionOps<Self>>::sum_dim::<T>(input, axis)
+                    }
+                    (ReduceOp::Sum, true) => {
+                        <Self as ReductionOps<Self>>::sum_keepdim::<T>(input, axis)
+                    }
+                    (ReduceOp::Mean, false) => {
+                        <Self as ReductionOps<Self>>::mean_dim::<T>(input, axis)
+                    }
+                    (ReduceOp::Mean, true) => {
+                        <Self as ReductionOps<Self>>::mean_keepdim::<T>(input, axis)
+                    }
+                    (ReduceOp::Max, false) => {
+                        <Self as ReductionOps<Self>>::max_dim::<T>(input, axis)
+                    }
+                    (ReduceOp::Max, true) => {
+                        <Self as ReductionOps<Self>>::max_keepdim::<T>(input, axis)
+                    }
+                    (ReduceOp::Min, false) => {
+                        <Self as ReductionOps<Self>>::min_dim::<T>(input, axis)
+                    }
+                    (ReduceOp::Min, true) => {
+                        <Self as ReductionOps<Self>>::min_keepdim::<T>(input, axis)
+                    }
+                    (ReduceOp::Prod, false) => {
+                        <Self as ReductionOps<Self>>::prod_dim::<T>(input, axis)
+                    }
+                    (ReduceOp::Prod, true) => <Self as ReductionOps<Self>>::prod_dim::<T>(
+                        input, axis,
+                    )
+                    .and_then(|dropped| {
+                        <Self as TensorOps<Self>>::reshape::<T>(&dropped, spec.output.dims())
+                    }),
+                }
+            }
         }
         .map_err(|error| kernel_error(OperationKind::Reduction, error))?;
 

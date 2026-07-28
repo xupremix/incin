@@ -16,6 +16,9 @@
 //! | [`BroadcastRule`] | `BroadcastShape<Rhs>` | [`BroadcastSpec`] |
 //! | [`MatMulRule`] | `MatMulShape<Rhs>` | [`MatMulSpec`] |
 //! | [`ReduceRule`] / [`ReduceKeepRule`] | `ReduceDim<D>` / `ReduceKeepDim<D>` | [`ReductionSpec`] |
+//! | [`ReduceAllRule`] | none; the output is always [`Scalar`] | [`ReductionSpec`] |
+//!
+//! [`Scalar`]: crate::shapes::shape::Scalar
 //! | [`ReshapeRule`] | `ReshapeShape<Target>` | [`ReshapeSpec`] |
 //! | [`Conv2dRule`] | `SpatialConv2d<COut, K, S, P, D>` | [`Conv2dSpec`] |
 //! | [`Pool2dRule`] | `Pool2dShape<K, S, P, D>` | [`Pool2dSpec`] |
@@ -32,6 +35,11 @@
 //! * traits that only name a type — `ReduceDim`, `ReduceKeepDim` — are checked
 //!   by rebuilding that type's `Field` from the descriptor's dimensions, which
 //!   fails if the rank differs or a statically fixed axis disagrees.
+//!
+//! [`ReduceAllRule`] has no frontend trait to restate, because reducing every
+//! axis constrains nothing about the input: any shape reduces to a scalar. The
+//! runtime check is the same rebuild against [`Scalar`], which has rank 0, so a
+//! descriptor claiming `[1]` is rejected rather than accepted as close enough.
 //!
 //! Either way the two computations are independent and must agree, which is the
 //! runtime half of what `D-007` asks the type system for.
@@ -67,7 +75,7 @@ use crate::shapes::buf::ShapeBuf;
 use crate::shapes::dim::Dim;
 use crate::shapes::error::{Axis, DimensionConstraint, OperationKind, RankExpectation, ShapeError};
 use crate::shapes::reshape::ReshapeShape;
-use crate::shapes::shape::{DynShape, Shape, field_from_dims};
+use crate::shapes::shape::{DynShape, Scalar, Shape, field_from_dims};
 use crate::shapes::shape_ops::{ReduceDim, ReduceKeepDim};
 use crate::shapes::spatial::{Pool2dShape, SpatialConv2d};
 use crate::tensor::matmul::MatMulShape;
@@ -259,6 +267,41 @@ pub struct ReduceRule<const D: usize>;
 /// Lowers a reduction along axis `D` that keeps the axis at length 1.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Default)]
 pub struct ReduceKeepRule<const D: usize>;
+
+/// Lowers a reduction over every axis, producing a scalar.
+///
+/// The single-axis rules cover `ReduceDim<D>`, which names one axis at compile
+/// time. Total reduction has no axis to name: `ReductionOps::sum_all` and its
+/// siblings already exist on every backend and are what autograd calls to turn a
+/// loss into a scalar, but they had no descriptor, so the one operation every
+/// training step ends with was the one that could not be expressed as one.
+///
+/// The output is [`Scalar`], which is the honest answer and was not always the
+/// one given: `EXE-005` found WGPU reporting `[1]` for an all-reduction, a rank-1
+/// tensor standing in for a rank-0 one. `()` has rank 0 and `NUMEL` 1, so
+/// `field_from_dims` rejects any descriptor that disagrees.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Default)]
+pub struct ReduceAllRule;
+
+impl<S> ShapeRule<S> for ReduceAllRule
+where
+    S: DynShape,
+{
+    type Output = Scalar;
+    type Operands = <S as Shape>::Field;
+    /// See [`ReduceRule::Args`](ShapeRule::Args).
+    type Args = ReduceOp;
+    type Descriptor = ReductionSpec;
+
+    fn lower(
+        operands: &Self::Operands,
+        op: Self::Args,
+    ) -> Result<Validated<ReductionSpec>, ShapeError> {
+        let spec = ReductionSpec::over_all(&dims_of::<S>(operands), false, op)?;
+        field_from_dims::<Self::Output>(OperationKind::Reduction, spec.output.dims())?;
+        Ok(Validated::new(spec, ProofLevel::of::<S>()))
+    }
+}
 
 /// Resolve a single-axis reduction and check it against the type it must produce.
 ///

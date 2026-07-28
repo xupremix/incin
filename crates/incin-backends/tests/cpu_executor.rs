@@ -7,8 +7,8 @@ use std::time::Instant;
 use incin_backends::cpu::{CpuBackendImpl, CpuBuffer, CpuStorage};
 use incin_core::exec::{
     Alignment, Conv2dArgs, Conv2dRule, Conv2dSpec, ExecutionContext, MatMulRule, MatMulSpec,
-    Pool2dRule, Pool2dSpec, PoolOp, ReduceKeepRule, ReduceOp, ReduceRule, ReductionSpec,
-    ReshapeRule, ReshapeSpec, ShapeRule, TensorHandle, TensorMeta, Validated,
+    Pool2dRule, Pool2dSpec, PoolOp, ReduceAllRule, ReduceKeepRule, ReduceOp, ReduceRule,
+    ReductionSpec, ReshapeRule, ReshapeSpec, ShapeRule, TensorHandle, TensorMeta, Validated,
 };
 use incin_core::prelude::{
     Backend, BackendError, Cpu, DType, DTypeId, DeviceId, Dyn, Execute, ExecutionRequest, Local,
@@ -806,6 +806,45 @@ fn a_reduction_descriptor_routes_to_the_accumulation_it_names() {
 
         assert_eq!(output.shape().dims(), &[2], "{op} drops the reduced axis");
         assert_eq!(values(&output), expected.to_vec(), "{op} over axis 1");
+    }
+}
+
+/// A reduction over every axis executes, and matches reducing them one by one.
+///
+/// `ReductionSpec` has always accepted a contiguous run of axes, but the binder
+/// refused anything wider than one and no rule produced one, so the schema
+/// described an operation nothing could execute. `ReduceAllRule` produces it and
+/// the executor collapses it a step at a time. The reference is the same data
+/// reduced along axis 1 and then axis 0, which is what "associative" means here.
+#[test]
+fn a_reduction_over_every_axis_collapses_the_whole_run() {
+    let backend = TestBackend::new();
+    let context = ExecutionContext::new(TestBackend::new());
+    let input = f32_storage(&[2, 3], &[1., 2., 3., 4., 5., 6.]);
+
+    for (op, expected) in [
+        (ReduceOp::Sum, 21.0),
+        (ReduceOp::Mean, 3.5),
+        (ReduceOp::Max, 6.0),
+        (ReduceOp::Min, 1.0),
+        (ReduceOp::Prod, 720.0),
+    ] {
+        let validated =
+            <ReduceAllRule as ShapeRule<(U2, U3)>>::lower(&field::<(U2, U3)>(&[2, 3]), op)
+                .expect("every axis is in range");
+        let spec = validated.descriptor();
+        assert_eq!(spec.axes.axes().count(), 2, "{op} names both axes");
+        assert_eq!(spec.reduced, 6, "{op} collapses every element");
+
+        let output = execute_one(&backend, &context, &validated, &input)
+            .unwrap_or_else(|error| panic!("{op} over every axis must execute: {error:?}"));
+
+        // Rank 0, not `[1]`. EXE-005 found WGPU reporting the latter.
+        assert!(
+            output.shape().dims().is_empty(),
+            "{op} produces a scalar, not a rank-1 stand-in"
+        );
+        assert_eq!(values(&output), vec![expected], "{op} over every axis");
     }
 }
 
