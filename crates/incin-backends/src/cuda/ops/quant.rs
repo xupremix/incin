@@ -32,12 +32,24 @@ pub(crate) fn launch_quantize(inp: &CudaStorage) -> Result<CudaStorage> {
     }
 
     let num_blocks = n / 32;
-    let out_bytes = num_blocks * core::mem::size_of::<BlockQ8_0>();
+    debug_assert_eq!(
+        core::mem::size_of::<BlockQ8_0>(),
+        incin_core::prelude::DTypeId::Q8_0.block_bytes()
+    );
 
+    // `len` is a logical element count for every other CUDA buffer, and
+    // `CudaStorage` bounds-checks the shape's span against it. Recording the
+    // block count here instead made a `[2, 32]` quantized tensor claim a
+    // two-element allocation, which is what the hardware run rejected.
     let mut out_buf = CudaBuffer {
-        len: num_blocks,
+        len: n,
         dtype: incin_core::prelude::DTypeId::Q8_0,
-        data: Arc::new(stream.alloc_zeros::<u8>(out_bytes).unwrap()),
+        data: Arc::new(alloc_zeroed_bytes(
+            &stream,
+            incin_core::prelude::DTypeId::Q8_0,
+            n,
+            OperationKind::Storage,
+        )?),
         device: b_inp.device.clone(),
         device_id,
     };
@@ -95,7 +107,16 @@ pub(crate) fn launch_dequantize(inp: &CudaStorage) -> Result<CudaStorage> {
     let stream = b_inp.device.default_stream();
 
     let n = inp.shape.iter().product::<usize>();
-    let num_blocks = b_inp.len;
+    if n % 32 != 0 {
+        return Err(incin_core::prelude::Error::Msg(alloc::format!(
+            "dequantize requires length multiple of 32, got {}",
+            n
+        )));
+    }
+    // Derived from the shape rather than read from the buffer, so the block
+    // count follows the tensor being dequantized rather than the unit its
+    // allocation happened to be recorded in.
+    let num_blocks = n / 32;
     let out_numel = n;
 
     let mut out_buf = CudaBuffer {

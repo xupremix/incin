@@ -2350,7 +2350,20 @@ Exit criteria:
 ### Canonical AI execution ledger
 
 This is the implementation handoff contract. Snapshot: **2026-07-28**.
-`EXE-008` is complete. `EXE-009` is active and partially landed: the default
+`EXE-008` is complete, and its CUDA half is no longer compile-verified only. It
+has run on a GeForce GTX 1650, and the run paid for itself immediately. Sixty-one
+of the sixty-three hardware tests passed unchanged, but the CUDA quantize path
+sized its output with a literal `size_of::<BlockQ8_0>()` — the exact hardcoded
+width this row exists to remove — and recorded `CudaBuffer::len` in blocks where
+every other CUDA buffer records logical elements. A `[2, 32]` `Q8_0` tensor
+therefore declared sixty-four elements over a two-element allocation, which
+`EXE-004`'s bounds check refused. Both sites now go through
+`DTypeId::size_bytes`, which is the only thing that knows a `Q8_0` block is
+thirty-four bytes for thirty-two values. That the defect was in the one dtype
+whose byte length is not a width, in the one file that had not been migrated to
+the checked helper, is the argument for hardware evidence in one sentence: the
+compiler had signed off on all of it.
+`EXE-009` is active and partially landed: the default
 unsupported-operation surface is now gone from all nine operation families, so a
 backend that does not implement an operation says so at its own definition and a
 missing one is a compile error. `TensorOps` was the last and largest family, and
@@ -2367,7 +2380,8 @@ Coverage has since grown from one operation to five. `ReshapeSpec` and
 `Conv2dSpec` came first, alongside the `MatMulSpec` slice `EXE-007` and
 `EXE-008` established, on CPU and WGPU under test, on dispatch through the
 backend holding the operands, and — for reshape — on Candle. CUDA implements
-both and is compile-verified only, as its matmul row already is. Two defects
+both; its descriptor executors are compile-verified only, though the operations
+they route to are now covered by the `EXE-008` hardware run. Two defects
 surfaced there. `DispatchBackend` had no public constructor, so its descriptor
 executors were unreachable from outside the crate; and WGPU's biased `conv2d`
 and `conv1d` added a `[1, C_out, 1, 1]` bias through an elementwise `add` that
