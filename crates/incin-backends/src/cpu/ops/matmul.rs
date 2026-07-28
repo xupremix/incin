@@ -1,17 +1,32 @@
-//! Naive, stride-aware, unbatched-2D-only `matmul` for `CpuBackendImpl`.
+//! Stride-aware CPU `matmul`, batched and unbatched, driven by an iteration
+//! plan over the batch axes.
 //!
-//! Per CONTEXT.md's explicit Phase 1 scope decision, batch-broadcast matmul
-//! (>2D operands) is out of scope here (deferred to Phase 3 / CPUBACK-07).
-//! The inner loop reads through each operand's own shape/strides/offset via
-//! `CpuStorage::get` directly — it never forces a `.contiguous()`
-//! materialization first, so a transposed (non-contiguous) view produces
-//! correct values without a hidden copy (CPUBACK-02 / Pitfall 3).
+//! Every kernel here addresses its operands through a [`MatrixView`]: a base
+//! offset plus a row and a column stride into a shared `CpuBuffer`. A
+//! transposed operand, a batch slice, and a batch axis that is only being
+//! broadcast are then the same thing to the inner loop, so none of them ever
+//! forces a `.contiguous()` materialization first (CPUBACK-02 / Pitfall 3).
 //!
-//! This file only contributes a plain function, `matmul_impl`, rather than
-//! its own `impl TensorOps` block: Rust does not allow two separate `impl
-//! TensorOps<..> for CpuBackendImpl<..>` blocks for the same trait+type
-//! across two files, so `ops/shape_ops.rs`'s single `TensorOps` impl block
-//! calls into `matmul_impl` for its `matmul` method.
+//! Batching reuses `crate::iteration`'s existing normalization rather than a
+//! second copy of the broadcast rule: the batch axes of both operands are
+//! normalized to the broadcast batch shape, a broadcast axis becomes a
+//! zero stride, and the per-slice base offset is one `physical_index` call.
+//! The previous implementation instead expanded both operands to the full
+//! broadcast shape and reshaped, which is metadata-only for a contiguous
+//! operand but materializes the entire expansion for any other one, so a
+//! `[1, 3, 4]` operand batched against `[64, 4, 5]` copied `lhs` 64 times
+//! before computing anything.
+//!
+//! With `cpu-blas` enabled, large `f32` GEMMs are handed to a blocked,
+//! register-tiled kernel instead. That path is off by default and changes
+//! only the order floating-point terms are accumulated in; the pure-Rust
+//! path below stays complete and is what a default build runs.
+//!
+//! This file only contributes plain functions rather than its own `impl
+//! TensorOps` block: Rust does not allow two separate `impl TensorOps<..> for
+//! CpuBackendImpl<..>` blocks for the same trait+type across two files, so
+//! `ops/shape_ops.rs`'s single `TensorOps` impl block calls into
+//! `matmul_impl`/`batched_matmul_impl` for its `matmul` method.
 
 use incin_core::prelude::Error;
 use incin_core::prelude::Result;
@@ -19,6 +34,78 @@ use incin_core::prelude::Result;
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
 use crate::cpu::stride;
 use crate::cpu::tape::{self, TapeEntry};
+use crate::iteration::{IterationPlan, OperandLayout};
+
+/// A rank-2 view of one operand: where its `[0, 0]` element lives and how far
+/// apart its rows and columns are. Constructing one is free, which is the
+/// point: the batch loop below builds `batch_total` of them.
+#[derive(Clone, Copy)]
+struct MatrixView<'a> {
+    buffer: &'a CpuBuffer,
+    offset: usize,
+    row_stride: usize,
+    col_stride: usize,
+}
+
+impl<'a> MatrixView<'a> {
+    /// View the trailing two axes of a rank `>= 2` operand. Callers check the
+    /// rank first, because they can report a better error than this can.
+    fn trailing(storage: &'a CpuStorage) -> Self {
+        let rank = storage.strides.len();
+        debug_assert!(rank >= 2, "matrix views need a rank of at least two");
+        Self {
+            buffer: &storage.buffer,
+            offset: storage.offset_elements,
+            row_stride: storage.strides[rank - 2],
+            col_stride: storage.strides[rank - 1],
+        }
+    }
+
+    /// The same matrix rebased onto another batch slice.
+    fn at(self, offset: usize) -> Self {
+        Self { offset, ..self }
+    }
+
+    #[inline]
+    fn index(&self, row: usize, col: usize) -> usize {
+        self.offset + row * self.row_stride + col * self.col_stride
+    }
+
+    #[inline]
+    fn get(&self, row: usize, col: usize) -> f64 {
+        self.buffer.get_f64(self.index(row, col))
+    }
+
+    /// The backing slice when this operand is already `f32`, which is what the
+    /// SIMD and blocked kernels need in order to read it without converting.
+    fn f32_data(&self) -> Option<&'a [f32]> {
+        match self.buffer {
+            CpuBuffer::F32(values) => Some(values),
+            _ => None,
+        }
+    }
+
+    /// True when every index of a `rows` by `cols` read lands inside `len`.
+    /// Only the corner has to be checked because strides are unsigned, and it
+    /// is checked in full so the `cpu-blas` path can pass raw pointers. Every
+    /// other kernel here indexes slices, so this exists only for that path.
+    #[cfg(feature = "cpu-blas")]
+    fn fits_within(&self, rows: usize, cols: usize, len: usize) -> bool {
+        if rows == 0 || cols == 0 {
+            return true;
+        }
+        let corner = rows
+            .checked_sub(1)
+            .and_then(|last| last.checked_mul(self.row_stride))
+            .zip(
+                cols.checked_sub(1)
+                    .and_then(|last| last.checked_mul(self.col_stride)),
+            )
+            .and_then(|(down, across)| down.checked_add(across))
+            .and_then(|extent| extent.checked_add(self.offset));
+        corner.is_some_and(|corner| corner < len)
+    }
+}
 
 /// Swap the two axes of a 2D `CpuStorage` (thin wrapper over
 /// `CpuStorage::transpose(0, 1)`, reused by the backward closure so the
@@ -40,24 +127,55 @@ pub(crate) fn transpose_last2(t: &CpuStorage) -> CpuStorage {
 }
 
 /// Batched matmul: broadcasts both operands' batch dims (every axis except
-/// the trailing 2), flattens to `[batch, M, K]`/`[batch, K, N]`, and loops
-/// calling `matmul_impl` per batch index (D-01: naive, no rayon).
+/// the trailing 2) and runs one GEMM per output batch slice.
 ///
-/// Handles the unbatched case too (`lhs.shape.len() == 2 && rhs.shape.len()
-/// == 2`) as the degenerate `batch_total == 1` case — ONE uniform code path
-/// for all batch ranks, no `<=3D` vs `>3D` special-casing.
-///
-/// This function ONLY implements the forward computation (Task 1). Task 2
-/// adds this op's own hand-composed top-level `TapeEntry` (using
-/// `transpose_last2` + recursive `batched_matmul_impl` calls +
-/// `tape::unbroadcast`), layered on top of this forward result.
+/// Handles the unbatched case too as the degenerate `batch_total == 1` case,
+/// with no separate code path: an operand with no batch axes normalizes to an
+/// empty stride list whose only `physical_index` is its own offset.
 pub(crate) fn batched_matmul_impl(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStorage> {
-    let (l_rank, r_rank) = (lhs.shape.len(), rhs.shape.len());
-    if l_rank < 2 || r_rank < 2 {
+    let out = batched_gemm(lhs, rhs)?;
+
+    // Backward is hand-composed from transpose_last2 + recursive forward
+    // calls + tape::unbroadcast per operand (Pattern 2), not a bespoke
+    // gradient derivation. The operands are captured as they were given,
+    // NOT batch-expanded: `batched_gemm` broadcasts batch axes itself, so
+    // the expanded copies the previous implementation had to capture never
+    // have to exist. `unbroadcast`'s target is still each operand's OWN full
+    // original shape, trailing [M,K]/[K,N] dims included (Pitfall 2).
+    let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
+    let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
+    let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
+    tape::push(TapeEntry {
+        output_id: out_id,
+        input_ids: vec![lhs_id, rhs_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            // grad_lhs = grad_out @ rhs^T, summed back down to lhs's own shape.
+            let grad_lhs = batched_gemm(grad_out, &transpose_last2(&rhs_capture))
+                .and_then(|grad| tape::unbroadcast(&grad, &lhs_shape))
+                .expect("batched matmul backward: grad_out @ rhs^T down to lhs's own shape");
+            // grad_rhs = lhs^T @ grad_out, summed back down to rhs's own shape.
+            let grad_rhs = batched_gemm(&transpose_last2(&lhs_capture), grad_out)
+                .and_then(|grad| tape::unbroadcast(&grad, &rhs_shape))
+                .expect("batched matmul backward: lhs^T @ grad_out down to rhs's own shape");
+            vec![grad_lhs, grad_rhs]
+        }),
+    });
+
+    Ok(out)
+}
+
+/// The batched forward computation on its own, with no tape recording.
+///
+/// Keeping this separate from `batched_matmul_impl` is what stops a batch of
+/// `B` slices from leaving `B + 1` entries on the tape, and stops the backward
+/// closure from pushing entries during a walk that has already drained it.
+fn batched_gemm(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStorage> {
+    let (lhs_rank, rhs_rank) = (lhs.shape.len(), rhs.shape.len());
+    if lhs_rank < 2 || rhs_rank < 2 {
         return Err(Error::ShapeMismatch {
             op: "matmul",
             expected: vec![2],
-            got: vec![l_rank, r_rank],
+            got: vec![lhs_rank, rhs_rank],
             msg: format!(
                 "batched matmul requires both operands to have rank >= 2; got lhs.shape={:?}, rhs.shape={:?}",
                 lhs.shape, rhs.shape
@@ -65,15 +183,15 @@ pub(crate) fn batched_matmul_impl(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<
         });
     }
 
-    let (m, k_lhs) = (lhs.shape[l_rank - 2], lhs.shape[l_rank - 1]);
-    let (k_rhs, n) = (rhs.shape[r_rank - 2], rhs.shape[r_rank - 1]);
-    if k_lhs != k_rhs {
+    let (m, lhs_k) = (lhs.shape[lhs_rank - 2], lhs.shape[lhs_rank - 1]);
+    let (rhs_k, n) = (rhs.shape[rhs_rank - 2], rhs.shape[rhs_rank - 1]);
+    if lhs_k != rhs_k {
         return Err(Error::ShapeMismatch {
             op: "matmul",
-            expected: vec![k_lhs],
-            got: vec![k_rhs],
+            expected: vec![lhs_k],
+            got: vec![rhs_k],
             msg: format!(
-                "matmul inner dims must match: lhs.shape={:?} (K={k_lhs}), rhs.shape={:?} (K={k_rhs})",
+                "matmul inner dims must match: lhs.shape={:?} (K={lhs_k}), rhs.shape={:?} (K={rhs_k})",
                 lhs.shape, rhs.shape
             ),
         });
@@ -82,84 +200,84 @@ pub(crate) fn batched_matmul_impl(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<
     // Batch dims = every axis except the trailing 2, right-aligned per
     // stride::broadcast_shape's existing NumPy-style rule (REUSED, not
     // reimplemented).
-    let lhs_batch = &lhs.shape[..l_rank - 2];
-    let rhs_batch = &rhs.shape[..r_rank - 2];
+    let lhs_batch = &lhs.shape[..lhs_rank - 2];
+    let rhs_batch = &rhs.shape[..rhs_rank - 2];
     let out_batch = stride::broadcast_shape(lhs_batch, rhs_batch)?;
 
-    let mut lhs_target = out_batch.clone();
-    lhs_target.extend_from_slice(&[m, k_lhs]);
-    let mut rhs_target = out_batch.clone();
-    rhs_target.extend_from_slice(&[k_rhs, n]);
+    // The plan carries the broadcast rule for the batch axes only. Its numel
+    // is the batch count: an empty batch shape gives the empty product 1, the
+    // unbatched case, while a genuine size-0 batch axis gives 0 and is NOT
+    // conflated with it (Pitfall 6).
+    let batch = IterationPlan::binary(
+        OperandLayout {
+            shape: lhs_batch,
+            strides: &lhs.strides[..lhs_rank - 2],
+            offset: lhs.offset_elements,
+        },
+        OperandLayout {
+            shape: rhs_batch,
+            strides: &rhs.strides[..rhs_rank - 2],
+            offset: rhs.offset_elements,
+        },
+        &out_batch,
+    )?;
 
-    let lhs_b = lhs.broadcast_as(&lhs_target)?;
-    let rhs_b = rhs.broadcast_as(&rhs_target)?;
+    let tile = m
+        .checked_mul(n)
+        .ok_or_else(|| Error::Msg(format!("matmul output overflow for [{m}, {n}]")))?;
+    let total = batch.numel.checked_mul(tile).ok_or_else(|| {
+        Error::Msg(format!(
+            "matmul output overflow for {out_batch:?} of [{m}, {n}]"
+        ))
+    })?;
 
-    // `Iterator::product()` over an empty `out_batch` (the unbatched,
-    // no-batch-dims-at-all case) already correctly yields `1` (empty
-    // product) with no `.max(1)` guard needed — and a genuine size-0 batch
-    // axis correctly yields `batch_total == 0` via the same plain product,
-    // so this does NOT conflate a size-0 axis with the unbatched case
-    // (Pitfall 6).
-    let batch_total: usize = out_batch.iter().product();
-
-    let lhs_flat = lhs_b.reshape(&[batch_total, m, k_lhs])?;
-    let rhs_flat = rhs_b.reshape(&[batch_total, k_rhs, n])?;
-
-    let mut out_data: Vec<f32> = Vec::with_capacity(batch_total * m * n);
-    for b in 0..batch_total {
-        let lhs_slice = lhs_flat.narrow(0, b, 1)?.reshape(&[m, k_lhs])?;
-        let rhs_slice = rhs_flat.narrow(0, b, 1)?.reshape(&[k_rhs, n])?;
-        let out_slice = matmul_impl(&lhs_slice, &rhs_slice)?;
-        for mi in 0..m {
-            for ni in 0..n {
-                out_data.push(out_slice.get(&[mi, ni]) as f32);
-            }
+    let lhs_matrix = MatrixView::trailing(lhs);
+    let rhs_matrix = MatrixView::trailing(rhs);
+    let mut out_data = vec![0f32; total];
+    // `chunks_mut` requires a nonzero chunk size, and a zero-sized tile has
+    // nothing to compute anyway: the output shape already carries the zero.
+    if tile != 0 {
+        for (index, out_tile) in out_data.chunks_mut(tile).enumerate() {
+            let lhs_base = batch.operands[0].physical_index(index, &batch.output_shape);
+            let rhs_base = batch.operands[1].physical_index(index, &batch.output_shape);
+            gemm(
+                m,
+                lhs_k,
+                n,
+                lhs_matrix.at(lhs_base),
+                rhs_matrix.at(rhs_base),
+                out_tile,
+            );
         }
     }
 
     let mut out_shape = out_batch;
     out_shape.extend_from_slice(&[m, n]);
+    CpuStorage::try_from_contiguous(CpuBuffer::F32(out_data), out_shape)
+}
 
-    let out = CpuStorage::from_contiguous(CpuBuffer::F32(out_data), out_shape);
+/// Unbatched 2D matmul: `lhs` (`[M,K]`) @ `rhs` (`[K,N]`) -> `[M,N]`, reading
+/// through each operand's own strides and offset so a transposed
+/// (non-contiguous) operand is handled without an implicit contiguous
+/// materialization.
+///
+/// Pushes a `TapeEntry` whose backward closure computes
+/// `grad_lhs = grad_out @ rhs^T` and `grad_rhs = lhs^T @ grad_out`, composed
+/// from the forward kernel itself plus `transpose_2d` — not a bespoke
+/// hand-derived kernel.
+pub(crate) fn matmul_impl(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStorage> {
+    let out = matmul_forward(lhs, rhs)?;
 
-    // Backward: hand-composed from transpose_last2 + recursive
-    // batched_matmul_impl calls + tape::unbroadcast per operand (Pattern 2),
-    // not a bespoke gradient derivation. Capture BOTH the original
-    // (pre-broadcast) and broadcast-expanded operands: the matmul formula
-    // below needs lhs_b/rhs_b (same batch shape as grad_out), while
-    // unbroadcast's target is each operand's OWN full original shape
-    // (trailing [M,K]/[K,N] dims included, per Pitfall 2).
-    let (lhs_orig_shape, rhs_orig_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
-    let (lhs_b_capture, rhs_b_capture) = (lhs_b.clone(), rhs_b.clone());
+    let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
     let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
     tape::push(TapeEntry {
         output_id: out_id,
         input_ids: vec![lhs_id, rhs_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
-            // grad_lhs_broadcast = grad_out @ rhs_b^T (at the BROADCAST out_batch shape)
-            let grad_lhs_broadcast = batched_matmul_impl(
-                grad_out,
-                &transpose_last2(&rhs_b_capture),
-            )
-            .expect(
-                "grad_lhs_broadcast = grad_out @ rhs_b^T cannot fail (shapes proven compatible)",
-            );
-            // grad_rhs_broadcast = lhs_b^T @ grad_out (at the BROADCAST out_batch shape)
-            let grad_rhs_broadcast = batched_matmul_impl(
-                &transpose_last2(&lhs_b_capture),
-                grad_out,
-            )
-            .expect(
-                "grad_rhs_broadcast = lhs_b^T @ grad_out cannot fail (shapes proven compatible)",
-            );
-
-            let grad_lhs = tape::unbroadcast(&grad_lhs_broadcast, &lhs_orig_shape).expect(
-                "batched matmul backward: unbroadcast grad_lhs to lhs's own original shape",
-            );
-            let grad_rhs = tape::unbroadcast(&grad_rhs_broadcast, &rhs_orig_shape).expect(
-                "batched matmul backward: unbroadcast grad_rhs to rhs's own original shape",
-            );
-
+            let grad_lhs = matmul_forward(grad_out, &transpose_2d(&rhs_capture))
+                .expect("grad_lhs = grad_out @ rhs^T cannot fail (shapes proven compatible)");
+            let grad_rhs = matmul_forward(&transpose_2d(&lhs_capture), grad_out)
+                .expect("grad_rhs = lhs^T @ grad_out cannot fail (shapes proven compatible)");
             vec![grad_lhs, grad_rhs]
         }),
     });
@@ -167,16 +285,8 @@ pub(crate) fn batched_matmul_impl(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<
     Ok(out)
 }
 
-/// Naive triple-nested-loop 2D matmul: `lhs` (`[M,K]`) @ `rhs` (`[K,N]`) ->
-/// `[M,N]`. Reads through each operand's own strides/offset (via
-/// `CpuStorage::get`), so a transposed (non-contiguous) operand is
-/// handled correctly without an implicit contiguous materialization.
-///
-/// Pushes a `TapeEntry` whose backward closure computes
-/// `grad_lhs = grad_out @ rhs^T` and `grad_rhs = lhs^T @ grad_out`, composed
-/// by recursing into `matmul_impl` itself plus `transpose_2d` — not a
-/// bespoke hand-derived kernel.
-pub(crate) fn matmul_impl(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStorage> {
+/// The unbatched forward computation on its own, with no tape recording.
+fn matmul_forward(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStorage> {
     if lhs.shape.len() != 2 || rhs.shape.len() != 2 || lhs.shape[1] != rhs.shape[0] {
         return Err(Error::ShapeMismatch {
             op: "matmul",
@@ -189,103 +299,231 @@ pub(crate) fn matmul_impl(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStora
         });
     }
 
-    let m = lhs.shape[0];
-    let k = lhs.shape[1];
-    let n = rhs.shape[1];
-
-    let mut out_data = vec![0.0f32; m * n];
-
-    // Check if rhs is contiguous in N and both buffers are F32
-    let can_use_avx2 = rhs.strides[1] == 1
-        && matches!(*lhs.buffer, CpuBuffer::F32(_))
-        && matches!(*rhs.buffer, CpuBuffer::F32(_));
-
-    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-    let has_avx2 = is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma");
-    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
-    let has_avx2 = false;
-
-    if can_use_avx2 && has_avx2 {
-        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-        {
-            // SAFETY: CPU feature checked, arrays are F32.
-            unsafe { f32_matmul_avx2(m, k, n, lhs, rhs, &mut out_data) }
-        }
-    } else if can_use_avx2 {
-        #[cfg(target_arch = "aarch64")]
-        {
-            unsafe { f32_matmul_neon(m, k, n, lhs, rhs, &mut out_data) }
-        }
-        #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
-        {
-            unsafe { f32_matmul_wasm(m, k, n, lhs, rhs, &mut out_data) }
-        }
-        #[cfg(not(any(
-            target_arch = "aarch64",
-            all(target_arch = "wasm32", target_feature = "simd128")
-        )))]
-        {
-            f32_matmul_scalar(m, k, n, lhs, rhs, &mut out_data);
-        }
-    } else {
-        f32_matmul_scalar(m, k, n, lhs, rhs, &mut out_data);
-    }
-
-    let out = CpuStorage::from_contiguous(CpuBuffer::F32(out_data), vec![m, n]);
-
-    let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
-    let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
-    tape::push(TapeEntry {
-        output_id: out_id,
-        input_ids: vec![lhs_id, rhs_id],
-        backward: Box::new(move |grad_out: &CpuStorage| {
-            let grad_lhs = matmul_impl(grad_out, &transpose_2d(&rhs_capture))
-                .expect("grad_lhs = grad_out @ rhs^T cannot fail (shapes proven compatible)");
-            let grad_rhs = matmul_impl(&transpose_2d(&lhs_capture), grad_out)
-                .expect("grad_rhs = lhs^T @ grad_out cannot fail (shapes proven compatible)");
-            vec![grad_lhs, grad_rhs]
-        }),
-    });
-
-    Ok(out)
+    let (m, k, n) = (lhs.shape[0], lhs.shape[1], rhs.shape[1]);
+    let mut out_data = vec![0f32; m * n];
+    gemm(
+        m,
+        k,
+        n,
+        MatrixView::trailing(lhs),
+        MatrixView::trailing(rhs),
+        &mut out_data,
+    );
+    CpuStorage::try_from_contiguous(CpuBuffer::F32(out_data), vec![m, n])
 }
 
-#[inline]
-/// `f32_matmul_scalar`.
-fn f32_matmul_scalar(
+/// One `[m, k] @ [k, n]` product into a zeroed, contiguous row-major `out`.
+///
+/// The kernels are tried in decreasing order of specificity, and each one
+/// reports whether it applied rather than being selected by a condition
+/// duplicated at the call site.
+fn gemm(m: usize, k: usize, n: usize, lhs: MatrixView<'_>, rhs: MatrixView<'_>, out: &mut [f32]) {
+    debug_assert_eq!(out.len(), m * n);
+
+    #[cfg(feature = "cpu-blas")]
+    if blocked_gemm(m, k, n, lhs, rhs, out) {
+        return;
+    }
+
+    if simd_gemm(m, k, n, lhs, rhs, out) {
+        return;
+    }
+
+    scalar_gemm(m, k, n, lhs, rhs, out);
+}
+
+/// Hand the product to `matrixmultiply`'s blocked, register-tiled kernel.
+///
+/// Declines small problems: the packing this kernel does to get its cache
+/// behavior is only worth paying for once the product is large enough to
+/// reuse the packed panels, and below that the row-streaming kernels below
+/// are faster.
+#[cfg(feature = "cpu-blas")]
+fn blocked_gemm(
     m: usize,
     k: usize,
     n: usize,
-    lhs: &CpuStorage,
-    rhs: &CpuStorage,
+    lhs: MatrixView<'_>,
+    rhs: MatrixView<'_>,
+    out: &mut [f32],
+) -> bool {
+    /// Roughly a 64-cubed product, measured as the point where packing starts
+    /// paying for itself rather than chosen for its roundness.
+    const MIN_PRODUCT: usize = 64 * 64 * 64;
+
+    if m.saturating_mul(k).saturating_mul(n) < MIN_PRODUCT {
+        return false;
+    }
+    let (Some(lhs_data), Some(rhs_data)) = (lhs.f32_data(), rhs.f32_data()) else {
+        return false;
+    };
+    if !lhs.fits_within(m, k, lhs_data.len()) || !rhs.fits_within(k, n, rhs_data.len()) {
+        return false;
+    }
+    if out.len() != m * n {
+        return false;
+    }
+
+    // SAFETY: `fits_within` proved every index this kernel reads is inside
+    // the corresponding slice, and `out` was just checked to be exactly the
+    // `m * n` elements the row stride of `n` addresses. `beta = 0.0` means
+    // `out`'s prior contents are overwritten rather than read, so its zeroing
+    // is not relied on here.
+    unsafe {
+        matrixmultiply::sgemm(
+            m,
+            k,
+            n,
+            1.0,
+            lhs_data.as_ptr().add(lhs.offset),
+            lhs.row_stride as isize,
+            lhs.col_stride as isize,
+            rhs_data.as_ptr().add(rhs.offset),
+            rhs.row_stride as isize,
+            rhs.col_stride as isize,
+            0.0,
+            out.as_mut_ptr(),
+            n as isize,
+            1,
+        );
+    }
+    true
+}
+
+/// Stream whole rows of `rhs` through a SIMD accumulator.
+///
+/// Requires `rhs`'s columns to be adjacent and both operands to already hold
+/// `f32`; the `lhs` requirement is what keeps a wider dtype on the
+/// double-accumulating path in `scalar_gemm` rather than silently narrowing
+/// it here.
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+fn simd_gemm(
+    m: usize,
+    k: usize,
+    n: usize,
+    lhs: MatrixView<'_>,
+    rhs: MatrixView<'_>,
+    out: &mut [f32],
+) -> bool {
+    let (Some(_), Some(rhs_data)) = (lhs.f32_data(), rhs.f32_data()) else {
+        return false;
+    };
+    if rhs.col_stride != 1 {
+        return false;
+    }
+    if !is_x86_feature_detected!("avx2") || !is_x86_feature_detected!("fma") {
+        return false;
+    }
+    // SAFETY: avx2 and fma were just detected on this CPU, and every load
+    // below is bounds-checked against `rhs_data` and `out` by the loop
+    // arithmetic that `gemm`'s callers derive from the operands' own shapes.
+    unsafe { gemm_avx2(m, k, n, lhs, rhs, rhs_data, out) };
+    true
+}
+
+#[cfg(target_arch = "aarch64")]
+fn simd_gemm(
+    m: usize,
+    k: usize,
+    n: usize,
+    lhs: MatrixView<'_>,
+    rhs: MatrixView<'_>,
+    out: &mut [f32],
+) -> bool {
+    let (Some(_), Some(rhs_data)) = (lhs.f32_data(), rhs.f32_data()) else {
+        return false;
+    };
+    if rhs.col_stride != 1 {
+        return false;
+    }
+    // SAFETY: NEON is part of the aarch64 baseline, and every load below is
+    // bounds-checked by the loop arithmetic `gemm`'s callers derive from the
+    // operands' own shapes.
+    unsafe { gemm_neon(m, k, n, lhs, rhs, rhs_data, out) };
+    true
+}
+
+#[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+fn simd_gemm(
+    m: usize,
+    k: usize,
+    n: usize,
+    lhs: MatrixView<'_>,
+    rhs: MatrixView<'_>,
+    out: &mut [f32],
+) -> bool {
+    let (Some(_), Some(rhs_data)) = (lhs.f32_data(), rhs.f32_data()) else {
+        return false;
+    };
+    if rhs.col_stride != 1 {
+        return false;
+    }
+    // SAFETY: simd128 is a compile-time target feature here, and every load
+    // below is bounds-checked by the loop arithmetic `gemm`'s callers derive
+    // from the operands' own shapes.
+    unsafe { gemm_wasm(m, k, n, lhs, rhs, rhs_data, out) };
+    true
+}
+
+/// Targets with no vector kernel decline unconditionally and fall through to
+/// `scalar_gemm`, which computes the same values.
+#[cfg(not(any(
+    target_arch = "x86",
+    target_arch = "x86_64",
+    target_arch = "aarch64",
+    all(target_arch = "wasm32", target_feature = "simd128")
+)))]
+fn simd_gemm(
+    _m: usize,
+    _k: usize,
+    _n: usize,
+    _lhs: MatrixView<'_>,
+    _rhs: MatrixView<'_>,
+    _out: &mut [f32],
+) -> bool {
+    false
+}
+
+/// The kernel every other one falls back to, and the only one that is always
+/// correct for every dtype and layout.
+///
+/// Two shapes, and the difference between them is deliberate. When `rhs`'s
+/// columns are adjacent and already `f32`, whole rows are streamed and
+/// accumulated in `f32`. Otherwise each output element is accumulated in
+/// `f64` before being narrowed once, which is what a widened dtype gets. The
+/// row-streaming branch is guarded on `rhs` actually holding `f32`: reaching
+/// it on any other buffer used to leave the output untouched, so a plain
+/// contiguous `f64` matmul returned zeros.
+fn scalar_gemm(
+    m: usize,
+    k: usize,
+    n: usize,
+    lhs: MatrixView<'_>,
+    rhs: MatrixView<'_>,
     out: &mut [f32],
 ) {
-    if rhs.strides[1] == 1 {
-        let rhs_data = match &*rhs.buffer {
-            CpuBuffer::F32(v) => v,
-            _ => return,
-        };
-        let rhs_stride_k = rhs.strides[0];
-
-        for mi in 0..m {
-            for ki in 0..k {
-                let a_val = lhs.get(&[mi, ki]) as f32;
-                let rhs_row_start = rhs.offset_elements + ki * rhs_stride_k;
-                let out_row_start = mi * n;
-
-                for ni in 0..n {
-                    out[out_row_start + ni] += a_val * rhs_data[rhs_row_start + ni];
+    match rhs.f32_data() {
+        Some(rhs_data) if rhs.col_stride == 1 => {
+            for row in 0..m {
+                for depth in 0..k {
+                    let scale = lhs.get(row, depth) as f32;
+                    let rhs_row = rhs.index(depth, 0);
+                    let out_row = row * n;
+                    for col in 0..n {
+                        out[out_row + col] += scale * rhs_data[rhs_row + col];
+                    }
                 }
             }
         }
-    } else {
-        for mi in 0..m {
-            for ni in 0..n {
-                let mut acc = 0f64;
-                for ki in 0..k {
-                    acc += lhs.get(&[mi, ki]) * rhs.get(&[ki, ni]);
+        _ => {
+            for row in 0..m {
+                for col in 0..n {
+                    let mut acc = 0f64;
+                    for depth in 0..k {
+                        acc += lhs.get(row, depth) * rhs.get(depth, col);
+                    }
+                    out[row * n + col] = acc as f32;
                 }
-                out[mi * n + ni] = acc as f32;
             }
         }
     }
@@ -294,13 +532,13 @@ fn f32_matmul_scalar(
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[target_feature(enable = "avx2", enable = "fma")]
 #[inline]
-/// `f32_matmul_avx2`.
-unsafe fn f32_matmul_avx2(
+unsafe fn gemm_avx2(
     m: usize,
     k: usize,
     n: usize,
-    lhs: &CpuStorage,
-    rhs: &CpuStorage,
+    lhs: MatrixView<'_>,
+    rhs: MatrixView<'_>,
+    rhs_data: &[f32],
     out: &mut [f32],
 ) {
     #[cfg(target_arch = "x86")]
@@ -308,33 +546,27 @@ unsafe fn f32_matmul_avx2(
     #[cfg(target_arch = "x86_64")]
     use core::arch::x86_64::*;
 
-    let rhs_stride_k = rhs.strides[0];
-    let rhs_data = match &*rhs.buffer {
-        CpuBuffer::F32(v) => v,
-        _ => return,
-    };
-
     let n_vec = n - (n % 8);
 
-    for mi in 0..m {
-        for ki in 0..k {
-            let a_val = lhs.get(&[mi, ki]) as f32;
-            let a_vec = _mm256_set1_ps(a_val);
+    for row in 0..m {
+        for depth in 0..k {
+            let scale = lhs.get(row, depth) as f32;
+            let scale_vec = _mm256_set1_ps(scale);
 
-            let rhs_row_start = rhs.offset_elements + ki * rhs_stride_k;
-            let out_row_start = mi * n;
+            let rhs_row = rhs.index(depth, 0);
+            let out_row = row * n;
 
-            for ni in (0..n_vec).step_by(8) {
+            for col in (0..n_vec).step_by(8) {
                 unsafe {
-                    let b = _mm256_loadu_ps(rhs_data.as_ptr().add(rhs_row_start + ni));
-                    let mut c = _mm256_loadu_ps(out.as_ptr().add(out_row_start + ni));
-                    c = _mm256_fmadd_ps(a_vec, b, c);
-                    _mm256_storeu_ps(out.as_mut_ptr().add(out_row_start + ni), c);
+                    let b = _mm256_loadu_ps(rhs_data.as_ptr().add(rhs_row + col));
+                    let mut c = _mm256_loadu_ps(out.as_ptr().add(out_row + col));
+                    c = _mm256_fmadd_ps(scale_vec, b, c);
+                    _mm256_storeu_ps(out.as_mut_ptr().add(out_row + col), c);
                 }
             }
 
-            for ni in n_vec..n {
-                out[out_row_start + ni] += a_val * rhs_data[rhs_row_start + ni];
+            for col in n_vec..n {
+                out[out_row + col] += scale * rhs_data[rhs_row + col];
             }
         }
     }
@@ -342,43 +574,40 @@ unsafe fn f32_matmul_avx2(
 
 #[cfg(target_arch = "aarch64")]
 #[inline]
-unsafe fn f32_matmul_neon(
+unsafe fn gemm_neon(
     m: usize,
     k: usize,
     n: usize,
-    lhs: &CpuStorage,
-    rhs: &CpuStorage,
+    lhs: MatrixView<'_>,
+    rhs: MatrixView<'_>,
+    rhs_data: &[f32],
     out: &mut [f32],
 ) {
     use core::arch::aarch64::{vdupq_n_f32, vfmaq_f32, vld1q_f32, vst1q_f32};
 
-    let rhs_stride_k = rhs.strides[0];
-    let rhs_data = match &*rhs.buffer {
-        CpuBuffer::F32(v) => v,
-        _ => return,
-    };
-
     let n_vec = n - (n % 4);
 
-    for mi in 0..m {
-        for ki in 0..k {
-            let a_val = lhs.get(&[mi, ki]) as f32;
-            let a_vec = unsafe { vdupq_n_f32(a_val) };
+    for row in 0..m {
+        for depth in 0..k {
+            let scale = lhs.get(row, depth) as f32;
+            let scale_vec = unsafe { vdupq_n_f32(scale) };
 
-            let rhs_row_start = rhs.offset_elements + ki * rhs_stride_k;
-            let out_row_start = mi * n;
+            let rhs_row = rhs.index(depth, 0);
+            let out_row = row * n;
 
-            for ni in (0..n_vec).step_by(4) {
+            for col in (0..n_vec).step_by(4) {
                 unsafe {
-                    let b = vld1q_f32(rhs_data.as_ptr().add(rhs_row_start + ni));
-                    let c = vld1q_f32(out.as_ptr().add(out_row_start + ni));
-                    let result = vfmaq_f32(c, a_vec, b);
-                    vst1q_f32(out.as_mut_ptr().add(out_row_start + ni), result);
+                    let b = vld1q_f32(rhs_data.as_ptr().add(rhs_row + col));
+                    let c = vld1q_f32(out.as_ptr().add(out_row + col));
+                    vst1q_f32(
+                        out.as_mut_ptr().add(out_row + col),
+                        vfmaq_f32(c, scale_vec, b),
+                    );
                 }
             }
 
-            for ni in n_vec..n {
-                out[out_row_start + ni] += a_val * rhs_data[rhs_row_start + ni];
+            for col in n_vec..n {
+                out[out_row + col] += scale * rhs_data[rhs_row + col];
             }
         }
     }
@@ -386,43 +615,40 @@ unsafe fn f32_matmul_neon(
 
 #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
 #[inline]
-unsafe fn f32_matmul_wasm(
+unsafe fn gemm_wasm(
     m: usize,
     k: usize,
     n: usize,
-    lhs: &CpuStorage,
-    rhs: &CpuStorage,
+    lhs: MatrixView<'_>,
+    rhs: MatrixView<'_>,
+    rhs_data: &[f32],
     out: &mut [f32],
 ) {
     use core::arch::wasm32::{f32x4_add, f32x4_mul, f32x4_splat, v128_load, v128_store};
 
-    let rhs_stride_k = rhs.strides[0];
-    let rhs_data = match &*rhs.buffer {
-        CpuBuffer::F32(v) => v,
-        _ => return,
-    };
-
     let n_vec = n - (n % 4);
 
-    for mi in 0..m {
-        for ki in 0..k {
-            let a_val = lhs.get(&[mi, ki]) as f32;
-            let a_vec = f32x4_splat(a_val);
+    for row in 0..m {
+        for depth in 0..k {
+            let scale = lhs.get(row, depth) as f32;
+            let scale_vec = f32x4_splat(scale);
 
-            let rhs_row_start = rhs.offset_elements + ki * rhs_stride_k;
-            let out_row_start = mi * n;
+            let rhs_row = rhs.index(depth, 0);
+            let out_row = row * n;
 
-            for ni in (0..n_vec).step_by(4) {
+            for col in (0..n_vec).step_by(4) {
                 unsafe {
-                    let b = v128_load(rhs_data.as_ptr().add(rhs_row_start + ni).cast());
-                    let c = v128_load(out.as_ptr().add(out_row_start + ni).cast());
-                    let result = f32x4_add(c, f32x4_mul(a_vec, b));
-                    v128_store(out.as_mut_ptr().add(out_row_start + ni).cast(), result);
+                    let b = v128_load(rhs_data.as_ptr().add(rhs_row + col).cast());
+                    let c = v128_load(out.as_ptr().add(out_row + col).cast());
+                    v128_store(
+                        out.as_mut_ptr().add(out_row + col).cast(),
+                        f32x4_add(c, f32x4_mul(scale_vec, b)),
+                    );
                 }
             }
 
-            for ni in n_vec..n {
-                out[out_row_start + ni] += a_val * rhs_data[rhs_row_start + ni];
+            for col in n_vec..n {
+                out[out_row + col] += scale * rhs_data[rhs_row + col];
             }
         }
     }
@@ -864,5 +1090,267 @@ mod tests {
             max_rel_err < 1e-2,
             "gradcheck max relative error too high: {max_rel_err}"
         );
+    }
+
+    // --- PRF-002: kernel isolation, layout coverage, and tape accounting ---
+
+    /// Run one `[m,k] @ [k,n]` product through `gemm`'s real dispatch and
+    /// through `scalar_gemm` directly, and return both. Comparing the two is
+    /// how every layout below is checked without a second reference
+    /// implementation: `scalar_gemm` is the kernel that is always correct,
+    /// and `gemm` is whichever specialization this build and this layout
+    /// selected.
+    fn dispatched_and_scalar(
+        m: usize,
+        k: usize,
+        n: usize,
+        lhs: &CpuStorage,
+        rhs: &CpuStorage,
+    ) -> (Vec<f32>, Vec<f32>) {
+        let (lhs_view, rhs_view) = (MatrixView::trailing(lhs), MatrixView::trailing(rhs));
+        let mut dispatched = vec![0f32; m * n];
+        gemm(m, k, n, lhs_view, rhs_view, &mut dispatched);
+        let mut scalar = vec![0f32; m * n];
+        scalar_gemm(m, k, n, lhs_view, rhs_view, &mut scalar);
+        (dispatched, scalar)
+    }
+
+    /// Whatever kernel this build selects has to agree with `scalar_gemm` on
+    /// every layout the views can describe: both operands contiguous, either
+    /// one transposed, both transposed, and a non-zero view offset.
+    ///
+    /// The tolerance is relative and loose enough for reassociation, because
+    /// that is the only difference any of these kernels is allowed to have.
+    #[test]
+    fn every_layout_agrees_with_the_kernel_that_is_always_correct() {
+        let base_lhs: Vec<f32> = (1..=24).map(|x| x as f32 * 0.25).collect();
+        let base_rhs: Vec<f32> = (1..=30).map(|x| x as f32 * 0.125).collect();
+
+        let contiguous_lhs = matrix(base_lhs.clone(), 4, 6);
+        let contiguous_rhs = matrix(base_rhs.clone(), 6, 5);
+        // A [6,4] buffer read as a transposed [4,6] view: same logical matrix,
+        // a column stride of 6 instead of 1.
+        let transposed_lhs = matrix(base_lhs.clone(), 6, 4).transpose(0, 1).unwrap();
+        let transposed_rhs = matrix(base_rhs.clone(), 5, 6).transpose(0, 1).unwrap();
+        // A view that starts partway into its buffer, so `offset` is not zero.
+        let offset_rhs = matrix(
+            (0..36).map(|x| x as f32 * 0.125).collect::<Vec<f32>>(),
+            6,
+            6,
+        )
+        .narrow(1, 1, 5)
+        .unwrap();
+
+        let cases: [(&str, &CpuStorage, &CpuStorage); 5] = [
+            ("both contiguous", &contiguous_lhs, &contiguous_rhs),
+            ("transposed lhs", &transposed_lhs, &contiguous_rhs),
+            ("transposed rhs", &contiguous_lhs, &transposed_rhs),
+            ("both transposed", &transposed_lhs, &transposed_rhs),
+            ("offset rhs view", &contiguous_lhs, &offset_rhs),
+        ];
+
+        for (name, lhs, rhs) in cases {
+            let (dispatched, scalar) = dispatched_and_scalar(4, 6, 5, lhs, rhs);
+            for (index, (got, want)) in dispatched.iter().zip(&scalar).enumerate() {
+                let tolerance = 1e-4 * want.abs().max(1.0);
+                assert!(
+                    (got - want).abs() <= tolerance,
+                    "{name}: element {index} was {got}, scalar kernel says {want}"
+                );
+            }
+        }
+    }
+
+    /// The same agreement at a size large enough to cross `cpu-blas`'s
+    /// crossover, so a build with that feature on is actually exercising the
+    /// blocked kernel here rather than repeating the test above.
+    #[test]
+    fn a_large_product_agrees_with_the_kernel_that_is_always_correct() {
+        let (m, k, n) = (96, 80, 72);
+        let lhs = matrix(
+            (0..m * k)
+                .map(|x| ((x % 17) as f32 - 8.0) * 0.125)
+                .collect(),
+            m,
+            k,
+        );
+        let rhs = matrix(
+            (0..k * n)
+                .map(|x| ((x % 23) as f32 - 11.0) * 0.0625)
+                .collect(),
+            k,
+            n,
+        );
+
+        let (dispatched, scalar) = dispatched_and_scalar(m, k, n, &lhs, &rhs);
+        for (index, (got, want)) in dispatched.iter().zip(&scalar).enumerate() {
+            let tolerance = 1e-3 * want.abs().max(1.0);
+            assert!(
+                (got - want).abs() <= tolerance,
+                "element {index} was {got}, scalar kernel says {want}"
+            );
+        }
+    }
+
+    /// A contiguous non-`f32` matmul used to return all zeros: the
+    /// row-streaming branch was chosen on stride alone and then bailed out on
+    /// finding a buffer it could not read, leaving the zeroed output as the
+    /// answer. Values, not just the shape, are asserted here.
+    #[test]
+    fn a_contiguous_f64_matmul_computes_values_rather_than_zeros() {
+        let lhs = CpuStorage::from_contiguous(CpuBuffer::F64(vec![1.0, 2.0, 3.0, 4.0]), vec![2, 2]);
+        let identity =
+            CpuStorage::from_contiguous(CpuBuffer::F64(vec![1.0, 0.0, 0.0, 1.0]), vec![2, 2]);
+
+        let out = matmul_impl(&lhs, &identity).unwrap();
+        assert_eq!(out.shape, vec![2, 2]);
+        assert_eq!(f32_vec(&out), vec![1.0, 2.0, 3.0, 4.0]);
+    }
+
+    /// A batched matmul records exactly one tape entry, whatever the batch
+    /// count. It used to record one per batch slice plus one, because the
+    /// batch loop called the tape-recording unbatched entry point; those
+    /// extra entries were unreachable during a backward walk but still held
+    /// every intermediate slice alive.
+    #[test]
+    fn a_batched_matmul_records_one_tape_entry_per_call_not_one_per_slice() {
+        let lhs = tensor((1..=96).map(|x| x as f32 * 0.01).collect(), vec![8, 3, 4]);
+        let rhs = tensor((1..=160).map(|x| x as f32 * 0.01).collect(), vec![8, 4, 5]);
+
+        let before = tape::len();
+        let out = batched_matmul_impl(&lhs, &rhs).unwrap();
+        assert_eq!(
+            tape::len() - before,
+            1,
+            "an 8-slice batched matmul recorded more than one entry"
+        );
+
+        // And the walk itself must not leave anything behind either: the
+        // backward closure recurses into the forward kernel, which no longer
+        // records. Entries pushed during a walk are dead weight, because
+        // `backward` drains the tape before it starts.
+        let sum = TestBackend::sum_all::<f32>(&out).unwrap();
+        let grads = tape::backward(&sum).unwrap();
+        assert!(grads.get(lhs.id).is_some());
+        assert_eq!(
+            tape::len(),
+            0,
+            "backward left entries on a tape it had already drained"
+        );
+    }
+
+    /// The blocked kernel has to actually be the one running when `cpu-blas`
+    /// is on, and has to actually decline below its crossover. Without this,
+    /// the agreement tests above would still pass on a build where
+    /// `blocked_gemm` silently returned `false` for every input.
+    #[cfg(feature = "cpu-blas")]
+    #[test]
+    fn the_blocked_kernel_takes_large_products_and_declines_small_ones() {
+        let big_lhs = matrix(vec![0.5; 96 * 80], 96, 80);
+        let big_rhs = matrix(vec![0.25; 80 * 72], 80, 72);
+        let mut out = vec![0f32; 96 * 72];
+        assert!(blocked_gemm(
+            96,
+            80,
+            72,
+            MatrixView::trailing(&big_lhs),
+            MatrixView::trailing(&big_rhs),
+            &mut out,
+        ));
+
+        let small_lhs = matrix(vec![0.5; 8 * 8], 8, 8);
+        let small_rhs = matrix(vec![0.25; 8 * 8], 8, 8);
+        let mut out = vec![0f32; 64];
+        assert!(!blocked_gemm(
+            8,
+            8,
+            8,
+            MatrixView::trailing(&small_lhs),
+            MatrixView::trailing(&small_rhs),
+            &mut out,
+        ));
+
+        // And it declines a dtype it cannot read, rather than reinterpreting it.
+        let f64_lhs = CpuStorage::from_contiguous(CpuBuffer::F64(vec![0.5; 96 * 80]), vec![96, 80]);
+        let mut out = vec![0f32; 96 * 72];
+        assert!(!blocked_gemm(
+            96,
+            80,
+            72,
+            MatrixView::trailing(&f64_lhs),
+            MatrixView::trailing(&big_rhs),
+            &mut out,
+        ));
+    }
+
+    /// A batch-broadcast operand that is also non-contiguous is the case the
+    /// previous implementation had to materialize: expanding `[1,3,4]` to
+    /// `[6,3,4]` and reshaping copied the operand six times, and a transposed
+    /// operand made the copy unavoidable. The plan reads it in place, so this
+    /// asserts the values are still right.
+    #[test]
+    fn a_broadcast_non_contiguous_operand_matches_its_per_slice_reference() {
+        // [1,4,3] transposed on its last two axes is a non-contiguous [1,3,4].
+        let lhs_source = tensor((1..=12).map(|x| x as f32).collect(), vec![1, 4, 3]);
+        let lhs = transpose_last2(&lhs_source);
+        assert!(!crate::cpu::stride::is_contiguous(&lhs.shape, &lhs.strides));
+        assert_eq!(lhs.shape, vec![1, 3, 4]);
+
+        let rhs = tensor((1..=120).map(|x| x as f32).collect(), vec![6, 4, 5]);
+
+        let out = batched_matmul_impl(&lhs, &rhs).unwrap();
+        assert_eq!(out.shape, vec![6, 3, 5]);
+
+        // The single lhs slice, materialized once, against each rhs slice.
+        let lhs_flat: Vec<f32> = (0..3)
+            .flat_map(|row| (0..4).map(move |col| (row, col)))
+            .map(|(row, col)| lhs.get(&[0, row, col]) as f32)
+            .collect();
+        let out_data = f32_vec(&out);
+        for slice in 0..6 {
+            let rhs_slice: Vec<f32> = (0..20).map(|x| (slice * 20 + x + 1) as f32).collect();
+            let reference =
+                matmul_impl(&matrix(lhs_flat.clone(), 3, 4), &matrix(rhs_slice, 4, 5)).unwrap();
+            assert_eq!(
+                &out_data[slice * 15..slice * 15 + 15],
+                &f32_vec(&reference)[..],
+                "batch slice {slice}"
+            );
+        }
+    }
+
+    /// An operand whose batch axes are broadcast on both sides at once, which
+    /// is where a batch index that ignores the coalescing the plan performs
+    /// would go wrong. `[2,1,3,4]` against `[1,5,4,6]` broadcasts each
+    /// operand along the axis the other one owns.
+    #[test]
+    fn batch_axes_broadcast_on_both_sides_index_the_right_slices() {
+        let lhs = tensor((1..=24).map(|x| x as f32 * 0.5).collect(), vec![2, 1, 3, 4]);
+        let rhs = tensor(
+            (1..=120).map(|x| x as f32 * 0.25).collect(),
+            vec![1, 5, 4, 6],
+        );
+
+        let out = batched_matmul_impl(&lhs, &rhs).unwrap();
+        assert_eq!(out.shape, vec![2, 5, 3, 6]);
+
+        let out_data = f32_vec(&out);
+        for outer in 0..2 {
+            let lhs_slice: Vec<f32> = (0..12).map(|x| (outer * 12 + x + 1) as f32 * 0.5).collect();
+            for inner in 0..5 {
+                let rhs_slice: Vec<f32> = (0..24)
+                    .map(|x| (inner * 24 + x + 1) as f32 * 0.25)
+                    .collect();
+                let reference =
+                    matmul_impl(&matrix(lhs_slice.clone(), 3, 4), &matrix(rhs_slice, 4, 6))
+                        .unwrap();
+                let start = (outer * 5 + inner) * 18;
+                assert_eq!(
+                    &out_data[start..start + 18],
+                    &f32_vec(&reference)[..],
+                    "slice ({outer}, {inner})"
+                );
+            }
+        }
     }
 }

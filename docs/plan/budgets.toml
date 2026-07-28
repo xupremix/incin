@@ -56,6 +56,14 @@ backend = "cpu"
 baseline_high_ns = 24819.0
 max_high_ns = 31024.0
 
+# Captured on the second host, like the cuda series below, and given the same
+# 1.25x headroom every other cpu row uses.
+[[runtime]]
+id = "eager/batched_matmul_f32/32x64"
+backend = "cpu"
+baseline_high_ns = 907770.0
+max_high_ns = 1134712.5
+
 [[runtime]]
 id = "capability/wgpu/f32_create"
 backend = "wgpu"
@@ -308,6 +316,10 @@ name = "cpu"
 enables = []
 
 [[feature_crate.feature]]
+name = "cpu-blas"
+enables = ["std", "cpu", "dep:matrixmultiply"]
+
+[[feature_crate.feature]]
 name = "cuda"
 enables = ["std", "dep:cudarc", "incin-core/cuda"]
 
@@ -347,6 +359,10 @@ enables = ["incin-core/nightly", "incin-macros/nightly"]
 [[feature_crate.feature]]
 name = "cpu"
 enables = ["incin-backends/cpu"]
+
+[[feature_crate.feature]]
+name = "cpu-blas"
+enables = ["std", "cpu", "incin-backends/cpu-blas"]
 
 [[feature_crate.feature]]
 name = "cuda"

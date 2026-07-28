@@ -83,7 +83,7 @@ pub(crate) fn push(entry: TapeEntry) {
 /// Number of entries currently on the tape. Exposed for tests proving the
 /// tape drains fully between `backward()` calls (D-06).
 #[cfg(test)]
-fn len() -> usize {
+pub(crate) fn len() -> usize {
     TAPE.with(|t| t.borrow().len())
 }
 

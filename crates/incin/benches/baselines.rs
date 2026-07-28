@@ -53,6 +53,19 @@ fn eager_baselines(c: &mut Criterion) {
             b.iter(|| black_box(lhs.matmul(black_box(&rhs)).unwrap()))
         });
     }
+
+    // The batched path, which reaches an entirely different driver than the
+    // rank-2 series above and is what an attention or batched-linear layer
+    // actually runs. Both operands carry the same batch axis because the
+    // typed `Tensor::matmul` still requires the output to keep the left
+    // operand's shape, so a broadcast batch axis is not reachable from here.
+    {
+        let lhs = Tensor::<Dyn, B>::ones(vec![32, 64, 64]).unwrap();
+        let rhs = Tensor::<Dyn, B>::ones(vec![32, 64, 64]).unwrap();
+        group.bench_function("batched_matmul_f32/32x64", |b| {
+            b.iter(|| black_box(lhs.matmul(black_box(&rhs)).unwrap()))
+        });
+    }
     group.finish();
 }
 

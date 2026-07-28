@@ -57,6 +57,17 @@ jobs:
     - name: Build Examples
       run: cargo build --examples --workspace --exclude backends --exclude tui_graph_demo --exclude native_training_demo --no-default-features --features incin-backends/cpu,incin/cpu
 
+    # The workspace run above resolves features across every member, so a
+    # backend crate that had come to depend on something another member turns
+    # on would still pass it. These two build incin-backends alone, on the
+    # bare feature set a CPU-only consumer actually gets, and then again with
+    # the optional blocked GEMM so its parity tests run somewhere.
+    - name: Run Isolated Bare-CPU Tests
+      run: cargo test -p incin-backends --no-default-features --features std,cpu
+
+    - name: Run Bare-CPU Tests With The Optional Blocked GEMM
+      run: cargo test -p incin-backends --no-default-features --features std,cpu,cpu-blas
+
   ledger:
     name: Execution Ledger Validation
     runs-on: ubuntu-latest

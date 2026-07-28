@@ -853,6 +853,7 @@ Transcribed from the four manifests. These exist today.
 |---|---|---|
 | `std` | all four | Standard library, serialization, model I/O |
 | `cpu` | `incin`, `incin-backends` | Pure-Rust CPU backend. The only default backend |
+| `cpu-blas` | `incin`, `incin-backends` | Blocked GEMM for large `f32` CPU matmuls. Implies `cpu` |
 | `cuda` | `incin`, `incin-core`, `incin-backends` | Native CUDA through `cudarc` |
 | `wgpu` | `incin`, `incin-core`, `incin-backends` | Cross-platform GPU through `wgpu` |
 | `candle` | `incin`, `incin-backends` | External Candle backend at `incin::external::candle` |
@@ -862,12 +863,12 @@ Transcribed from the four manifests. These exist today.
 
 #### Target features
 
-Added or renamed by the tasks named below. Nothing here exists yet.
+Added or renamed by the tasks named below. A row leaves this table for the
+current-features table above when its task lands it.
 
 | Feature | Task | Status | Notes |
 |---|---|---|---|
 | `external-candle` | GOV-006 | rename of `candle` | `candle` is retained as a deprecated alias for one release |
-| `cpu-blas` | PRF-002 | new | Optional BLAS for large GEMM. The pure-Rust CPU path stays complete and default |
 | `cuda-vendor` | PRF-004 | new | Gates cuBLASLt/cuDNN call sites. `cudarc` is already built with the `cublas` and `cudnn` features, but **no call site exists today** — this is greenfield, not a toggle |
 | `metal` | MTL-001 | new | Native Metal on Apple targets |
 | `metal-mps` | MTL-003 | new | MPS/MPSGraph structured primitives. Implies `metal` |
@@ -889,6 +890,34 @@ Feature documentation must state:
 - whether it changes numerical behavior;
 - compatible and incompatible feature combinations;
 - how it is tested in CI.
+
+##### `cpu-blas`
+
+Answering those seven points for the one optional acceleration feature that
+exists so far.
+
+It routes `f32` CPU matmuls whose `M * K * N` product reaches roughly 64 cubed
+to a blocked, register-tiled GEMM, and leaves everything else on the kernels in
+`crates/incin-backends/src/cpu/ops/matmul.rs`. It adds one direct dependency,
+`matrixmultiply`, which is pure Rust and pulls in nothing further at the
+default feature set this crate uses. It requires no system library, driver, or
+hardware, and it supports every target the CPU backend does, because a target
+without a vector unit still gets the same blocked kernel compiled from the same
+Rust. It implies `std` and `cpu`, and composes with every other feature; it
+changes nothing about the GPU backends.
+
+It does change numerical behavior. A blocked kernel accumulates a dot product
+in a different order than a row-streaming one, so results move at the level of
+floating-point rounding. Nothing in the repository asserts bit-identical
+`f32` matmul output across feature sets, and the tests that cover this path
+compare against the always-correct scalar kernel within a relative tolerance
+rather than exactly.
+
+CI runs it. The CPU job builds `incin-backends` alone twice, once on
+`std,cpu` and once on `std,cpu,cpu-blas`, so the kernel-agreement tests run
+against both the default kernels and the blocked one on every push. That is
+two named steps rather than a generated matrix; the generated matrix is
+`CI-001`'s work.
 
 ### 2.6 Runtime model import without weakening type guarantees
 
@@ -2523,6 +2552,44 @@ Removing the adapter itself is what remains. That is not a descriptor gap any
 more; it is the 287-method legacy `Backend` surface the descriptor executors
 still delegate to, and retiring it needs the direct kernel work `PRF-002` and
 `PRF-003` own.
+`PRF-002` is complete, and its CPU half of that direct kernel work is done. The
+batched driver used to expand both operands to the broadcast shape and reshape
+them before looping, which is metadata-only for a contiguous operand and a full
+copy for any other one, so a `[1, 3, 4]` weight batched against `[64, 4, 5]`
+activations was copied sixty-four times before a single multiply. It now builds
+one `IterationPlan` over the batch axes alone — the same normalization
+`crate::iteration` already performs for elementwise ops, not a second copy of
+the broadcast rule — and reads each slice in place from a base offset. The
+rank-2 kernels moved with it, onto a `MatrixView` that is three numbers instead
+of a `CpuStorage::get` call resolving a logical multi-index against heap
+shape and stride vectors once per element. Measured on this host against a
+detached worktree at the previous commit, the batched series went from 1.99 ms
+to 900 µs and the two rank-2 series from 3.14 µs and 44.3 µs to 2.00 µs and
+28.0 µs.
+Two defects fell out of the rewrite, and the more serious one had nothing to do
+with speed. A contiguous non-`f32` matmul returned **all zeros**: the
+row-streaming kernel was chosen on stride alone and then gave up on finding a
+buffer it could not read, leaving the zeroed output as the answer, so an `f64`
+tensor times the identity came back empty through the public `TensorOps::matmul`
+with no error anywhere. Selecting a kernel on a condition the kernel then
+rechecks and silently declines is the shape of that bug, and the fix is that
+declining now falls through to the kernel that is always correct rather than
+returning. The second is cheaper: a batched matmul recorded one tape entry per
+batch slice plus one, because the batch loop called the tape-recording entry
+point rather than the computation. Separating the two means a batch of eight
+records one entry, and a backward walk leaves at zero the tape it had already
+drained.
+`cpu-blas` is the row's optional acceleration, and it is not what the feature
+table implied. It binds `matrixmultiply`, a pure-Rust blocked GEMM, rather than
+a system CBLAS. Neither machine this repository has been developed on carries
+the development package a system binding would link against, and `REL-002`
+verifies with `--all-features`, so that binding would have been a feature
+nobody here could build, tested by compilation on a host that never ran it —
+the exact standard the CUDA rows were just held to. Binding something that
+compiles everywhere is what lets CI run its parity tests on every push instead.
+Its dispatch is asserted rather than assumed: the blocked path is proven to
+take a large product, decline a small one, and decline a dtype it cannot read,
+so the agreement tests cannot quietly pass on a build where it never runs.
 `EXE-010` is next eligible on the executor track.
 The complete Shape-track evidence is recorded in the mirror and
 `docs/plan/tasks/SHP-007.md` through `SHP-008.md`. The §4 themes above
@@ -2615,7 +2682,7 @@ Silicon · `compile` compiled execution · `grad` autograd · `dist` distributed
 | TUN-007 | preview | tune | [ ] | TUN-003 | `crates/incin-backends/src/tuning/telemetry.rs` | Tuning telemetry, provenance, and explain output | `cargo test -p incin-backends --features autotune,telemetry` |
 | TUN-008 | preview | tune | [ ] | TUN-006,GOV-005 | `.github/workflows/ci.yml` | Time, memory, and cache budgets with a no-regression gate | `cargo xtask budgets` |
 | PRF-001 | core | perf | [ ] | EXE-003,EXE-004 | `crates/incin-backends/src/iteration.rs` | Remove repeated hot-path metadata allocation; latency and allocation evidence | `cargo bench -p incin -- eager` |
-| PRF-002 | core | perf | [ ] | EXE-007 | `crates/incin-backends/src/cpu/ops/matmul.rs` | CPU iteration plans, batched GEMM, optional cpu-blas, and isolated bare-CPU tests | `cargo test -p incin-backends --no-default-features --features std,cpu` |
+| PRF-002 | core | perf | [x] | EXE-007 | `crates/incin-backends/src/cpu/ops/matmul.rs` | CPU iteration plans, batched GEMM, optional cpu-blas, and isolated bare-CPU tests | `cargo test -p incin-backends --no-default-features --features std,cpu` |
 | PRF-003 | preview | perf | [ ] | EXE-008,TUN-005 | `crates/incin-backends/src/{cuda,wgpu}/` | CUDA descriptor launches and WGPU specialization; hardware and sanitizer evidence | `cargo test -p incin-backends --features cuda  # CUDA hardware` |
 | PRF-004 | preview | perf | [ ] | TUN-006 | `crates/incin-backends/src/cuda/ops/` | Vendor-versus-native selection behind cuda-vendor with numerical and crossover reports | `cargo test -p incin-backends --features cuda,cuda-vendor  # CUDA hardware` |
 | MTL-001 | preview | metal | [ ] | EXE-005,EXE-008 | `crates/incin-backends/src/metal/` | Native Metal feature, device capabilities, storage modes, and unified-memory guards | `cargo test -p incin-backends --features metal  # Apple Silicon` |

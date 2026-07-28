@@ -161,6 +161,21 @@ low_ns = 24756.0
 point_ns = 24788.0
 high_ns = 24819.0
 
+# PRF-002 added this series and could only measure it on the second machine,
+# so it carries the same host key the cuda-backed series do. That name is
+# historical: `cuda_host` identifies the machine, not the backend, and a
+# cpu-backed series measured there belongs to it exactly as much as a
+# cuda-backed one does. It must not be diffed against the cpu series above,
+# which were taken on the [environment] host.
+[[runtime]]
+id = "eager/batched_matmul_f32/32x64"
+backend = "cpu"
+host = "cuda_host"
+low_ns = 890900.0
+point_ns = 899780.0
+high_ns = 907770.0
+note = "The same workload on the same host measured 1.9843/1.9931/2.0011 ms before PRF-002 replaced the per-slice narrow-reshape-copy driver with an iteration plan over the batch axes. The two rank-2 matmul series above moved on this host too, from 3.1188/3.1353/3.1525 us to 1.9857/2.0040/2.0361 us at size 16 and from 44.101/44.297/44.483 us to 27.831/27.952/28.078 us at size 64, but their recorded rows stay as captured because they belong to the [environment] host and cannot be rewritten from here."
+
 [[runtime]]
 id = "capability/wgpu/f32_create"
 backend = "wgpu"

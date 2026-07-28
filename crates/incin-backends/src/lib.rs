@@ -24,6 +24,10 @@ pub use detect::{detect_device, detect_device_in};
 #[cfg(any(feature = "cuda", feature = "wgpu", feature = "external-candle"))]
 pub(crate) mod bytes;
 pub(crate) mod dtype_policy;
+// Every caller of these macros is a GPU or external backend, so a CPU-only
+// build declared four macros it could not use and warned about all of them.
+// Gated the same way `bytes` above it already is.
+#[cfg(any(feature = "cuda", feature = "wgpu", feature = "external-candle"))]
 pub(crate) mod unsupported;
 
 #[cfg(any(feature = "cpu", feature = "cuda"))]

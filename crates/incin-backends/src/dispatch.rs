@@ -41,6 +41,14 @@ impl<T: DType, D: Device, K: DType> SupportsDType<K> for DispatchBackend<T, D> {
 }
 
 /// Storage owned by a runtime-selected backend.
+///
+/// Allowed for the same reason `DispatchVar` below is, and only visible in a
+/// single-backend build: storage embeds `TensorMeta`, whose `ShapeBuf` and
+/// `StrideBuf` are inline to `MAX_RANK` so eager operations allocate nothing
+/// for their metadata (SHP-003), which leaves any one backend's variant far
+/// larger than the empty `Unavailable` one. Boxing it would put back the heap
+/// allocation SHP-003 removed. Revisit when `EXE-009` settles.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone)]
 #[non_exhaustive]
 pub enum DispatchStorage {
