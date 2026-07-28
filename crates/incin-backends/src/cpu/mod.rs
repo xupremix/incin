@@ -35,6 +35,12 @@ pub(crate) mod var;
 //   - CpuBuffer         for pattern-matching in to_bytes / from_bytes
 pub use storage::{CpuBuffer, CpuStorage};
 pub use tape::CpuGrads;
+/// Number of entries currently on this backend's autograd tape.
+///
+/// Re-exported since `GRD-002`: the row claims a `NoGrad` chain records
+/// nothing, and its evidence test lives outside this crate. A guarantee
+/// nothing outside can observe is not a guarantee.
+pub use tape::depth as tape_depth;
 pub use var::CpuVar;
 
 /// The CPU pure-Rust `Backend` implementor. `T` genuinely drives

@@ -4,6 +4,7 @@
 //! or dimensionless tensor) as well as along specific axes. It supports both static type-level
 //! dimensional reductions using `Axis` where the shape statically changes, and dynamic
 //! dimensional reductions where the shape becomes `Dyn`.
+use crate::exec::GradMode;
 use crate::prelude::{Backend, DynShape, RequiresGrad, Result, Shape, Tensor};
 use crate::shapes::error::OperationKind;
 use crate::shapes::shape::field_from_dims;
@@ -15,7 +16,7 @@ macro_rules! impl_reduction_op {
     ) => {
         $(#[$meta])*
         pub fn $method(self) -> Result<Tensor<(), B, K, G>> {
-            let inner = B::$backend_method(&self.inner)?;
+            let inner = self.under_grad_mode(|| B::$backend_method(&self.inner))?;
             Tensor::from_parts(
                 inner,
                 (), // Scalar shape field
@@ -37,7 +38,7 @@ macro_rules! impl_reduction_dim_op {
         where
             S: DynShape + crate::shapes::$trait_bound<DIM>,
         {
-            let inner = B::$backend_method(&self.inner, DIM)?;
+            let inner = self.under_grad_mode(|| B::$backend_method(&self.inner, DIM))?;
 
             // We just use from_dyn to construct the resulting shape field dynamically,
             // since we know it's a dimensional reduction.
@@ -219,7 +220,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
     where
         S: DynShape,
     {
-        let inner = B::cumsum::<K>(&self.inner, DIM)?;
+        let inner = self.under_grad_mode(|| B::cumsum::<K>(&self.inner, DIM))?;
         Tensor::from_parts(
             inner,
             self._shape.clone(),
@@ -262,8 +263,8 @@ impl<
         &self,
         dim: Option<usize>,
     ) -> Result<Tensor<crate::prelude::Dyn, B, u32, crate::prelude::NoGrad>> {
-        let inner = match dim {
-            Some(d) => B::argmax::<K, u32>(&self.inner, Some(d))?,
+        let inner = GradMode::Disabled.restrict(|| match dim {
+            Some(d) => B::argmax::<K, u32>(&self.inner, Some(d)),
             None => {
                 let rank = self.rank();
                 let flat = if rank == 0 {
@@ -271,9 +272,9 @@ impl<
                 } else {
                     B::flatten::<K>(&self.inner, 0, rank - 1)?
                 };
-                B::argmax::<K, u32>(&flat, Some(0))?
+                B::argmax::<K, u32>(&flat, Some(0))
             }
-        };
+        })?;
         let mut out_dims = S::dims(&self._shape).into();
         if let Some(d) = dim {
             out_dims.remove(d);
@@ -297,8 +298,8 @@ impl<
         &self,
         dim: Option<usize>,
     ) -> Result<Tensor<crate::prelude::Dyn, B, u32, crate::prelude::NoGrad>> {
-        let inner = match dim {
-            Some(d) => B::argmin::<K, u32>(&self.inner, Some(d))?,
+        let inner = GradMode::Disabled.restrict(|| match dim {
+            Some(d) => B::argmin::<K, u32>(&self.inner, Some(d)),
             None => {
                 let rank = self.rank();
                 let flat = if rank == 0 {
@@ -306,9 +307,9 @@ impl<
                 } else {
                     B::flatten::<K>(&self.inner, 0, rank - 1)?
                 };
-                B::argmin::<K, u32>(&flat, Some(0))?
+                B::argmin::<K, u32>(&flat, Some(0))
             }
-        };
+        })?;
         let mut out_dims = S::dims(&self._shape).into();
         if let Some(d) = dim {
             out_dims.remove(d);
@@ -336,7 +337,8 @@ impl<
         Tensor<crate::prelude::Dyn, B, K, crate::prelude::NoGrad>,
         Tensor<crate::prelude::Dyn, B, u32, crate::prelude::NoGrad>,
     )> {
-        let (values_inner, indices_inner) = B::topk::<K, u32>(&self.inner, k, dim, largest)?;
+        let (values_inner, indices_inner) =
+            GradMode::Disabled.restrict(|| B::topk::<K, u32>(&self.inner, k, dim, largest))?;
         let mut out_dims = S::dims(&self._shape).into();
         out_dims[dim] = k;
         let out_shape =
@@ -365,7 +367,11 @@ impl<
         dim: usize,
         descending: bool,
     ) -> Result<Tensor<S, B, u32, crate::prelude::NoGrad>> {
-        let indices_inner = B::argsort::<K, u32>(&self.inner, dim, descending)?;
+        // Disabled rather than this tensor's own mode: the result is `NoGrad`
+        // whatever the receiver was, and sec. 1.2.5 makes that a statement
+        // about what runs, not only about which APIs the result offers.
+        let indices_inner =
+            GradMode::Disabled.restrict(|| B::argsort::<K, u32>(&self.inner, dim, descending))?;
         Tensor::from_parts(
             indices_inner,
             self._shape.clone(),

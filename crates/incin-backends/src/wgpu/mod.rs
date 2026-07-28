@@ -16,6 +16,12 @@ pub(crate) mod storage;
 pub(crate) mod tape;
 
 pub use backend::{WgpuBackendImpl, WgpuGrads, WgpuVar};
+/// Number of entries currently on this backend's autograd tape.
+///
+/// Re-exported since `GRD-002`: the row claims a `NoGrad` chain records
+/// nothing, and its evidence test lives outside this crate. A guarantee
+/// nothing outside can observe is not a guarantee.
+pub use tape::depth as tape_depth;
 
 /// `tests`.
 mod tests;

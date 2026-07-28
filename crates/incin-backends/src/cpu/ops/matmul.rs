@@ -1217,10 +1217,10 @@ mod tests {
         let lhs = tensor((1..=96).map(|x| x as f32 * 0.01).collect(), vec![8, 3, 4]);
         let rhs = tensor((1..=160).map(|x| x as f32 * 0.01).collect(), vec![8, 4, 5]);
 
-        let before = tape::len();
+        let before = tape::depth();
         let out = batched_matmul_impl(&lhs, &rhs).unwrap();
         assert_eq!(
-            tape::len() - before,
+            tape::depth() - before,
             1,
             "an 8-slice batched matmul recorded more than one entry"
         );
@@ -1233,7 +1233,7 @@ mod tests {
         let grads = tape::backward(&sum).unwrap();
         assert!(grads.get(lhs.id).is_some());
         assert_eq!(
-            tape::len(),
+            tape::depth(),
             0,
             "backward left entries on a tape it had already drained"
         );

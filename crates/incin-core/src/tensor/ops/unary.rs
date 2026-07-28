@@ -12,7 +12,7 @@ macro_rules! impl_unary_op {
     ) => {
         $(#[$meta])*
         pub fn $method(&self) -> Result<Self> {
-            let inner = B::$backend_method::<K>(&self.inner)?;
+            let inner = self.under_grad_mode(|| B::$backend_method::<K>(&self.inner))?;
             Tensor::from_parts(
                 inner,
                 self._shape.clone(),
@@ -180,7 +180,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
     /// ```
     #[inline]
     pub fn softmax(&self, dim: usize) -> Result<Tensor<S, B, K, G>> {
-        let inner = B::softmax::<K>(&self.inner, dim)?;
+        let inner = self.under_grad_mode(|| B::softmax::<K>(&self.inner, dim))?;
         Tensor::from_parts(
             inner,
             self._shape.clone(),
@@ -228,7 +228,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
     /// Raises tensor elements to power `exponent`.
     #[inline]
     pub fn powf(&self, exponent: f64) -> Result<Self> {
-        let inner = B::powf::<K>(&self.inner, exponent)?;
+        let inner = self.under_grad_mode(|| B::powf::<K>(&self.inner, exponent))?;
         Tensor::from_parts(
             inner,
             self._shape.clone(),
@@ -241,7 +241,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
     /// Clamps tensor elements to range `[min, max]`.
     #[inline]
     pub fn clamp(&self, min: f64, max: f64) -> Result<Self> {
-        let inner = B::clamp::<K>(&self.inner, min, max)?;
+        let inner = self.under_grad_mode(|| B::clamp::<K>(&self.inner, min, max))?;
         Tensor::from_parts(
             inner,
             self._shape.clone(),
@@ -340,7 +340,8 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         scalar: Sc,
     ) -> Result<Self> {
         let scalar_val = scalar.into();
-        let inner = B::mul_scalar_float(&self.inner, scalar_val.to_f64())?;
+        let inner =
+            self.under_grad_mode(|| B::mul_scalar_float(&self.inner, scalar_val.to_f64()))?;
         Tensor::from_parts(
             inner,
             self._shape.clone(),
@@ -363,7 +364,8 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         scalar: Sc,
     ) -> Result<Self> {
         let scalar_val = scalar.into();
-        let inner = B::add_scalar_float(&self.inner, scalar_val.to_f64())?;
+        let inner =
+            self.under_grad_mode(|| B::add_scalar_float(&self.inner, scalar_val.to_f64()))?;
         Tensor::from_parts(
             inner,
             self._shape.clone(),

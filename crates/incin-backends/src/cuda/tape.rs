@@ -3,6 +3,7 @@ use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
 use core::cell::RefCell;
 
+use incin_core::exec::GradMode;
 use incin_core::prelude::Result;
 
 use crate::cuda::storage::{CudaBuffer, CudaStorage, TensorId};
@@ -17,8 +18,21 @@ thread_local! {
     static TAPE: RefCell<Vec<TapeEntry>> = const { RefCell::new(Vec::new()) };
 }
 
+/// Push a `TapeEntry`, unless the ambient [`GradMode`] forbids recording
+/// (`GRD-002`). One gate per tape rather than one per call site: a `NoGrad`
+/// operation must record nothing whichever of the backend's kernels ran it.
 pub(crate) fn push(entry: TapeEntry) {
+    if !GradMode::current().records() {
+        return;
+    }
     TAPE.with(|t| t.borrow_mut().push(entry));
+}
+
+/// Number of entries currently on the tape, for tests outside this crate that
+/// have to observe the `GRD-002` guarantee rather than take it on faith.
+#[must_use]
+pub fn depth() -> usize {
+    TAPE.with(|t| t.borrow().len())
 }
 
 /// The CUDA backend's gradient container (`Backend::Grads`). The `grads`

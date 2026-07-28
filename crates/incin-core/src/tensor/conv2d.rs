@@ -123,15 +123,17 @@ impl<
         KShape: Shape + DynShape,
         S1: KernelConv2dShape<KShape, Stride, Padding>,
     {
-        let inner = B::conv2d::<K>(
-            &self.inner,
-            &weight.inner,
-            bias.map(|b| b.inner()),
-            <Stride as typenum::Unsigned>::USIZE,
-            <Padding as typenum::Unsigned>::USIZE,
-            1, // Default dilation
-            1, // Default groups
-        )?;
+        let inner = self.under_grad_mode(|| {
+            B::conv2d::<K>(
+                &self.inner,
+                &weight.inner,
+                bias.map(|b| b.inner()),
+                <Stride as typenum::Unsigned>::USIZE,
+                <Padding as typenum::Unsigned>::USIZE,
+                1, // Default dilation
+                1, // Default groups
+            )
+        })?;
 
         let output_shape = S1::output_shape(&self._shape, &weight._shape);
         Tensor::from_parts(

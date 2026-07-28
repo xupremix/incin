@@ -6,15 +6,15 @@
 //! silently copy to the host" is a value the caller passes rather than a
 //! global someone else configured.
 //!
-//! Two of the fields sec. 1.2.5 lists are deliberately absent here. `GradMode`
-//! is derived from the existing `Grad`/`NoGrad` markers and belongs to
-//! `GRD-002`, which owns that derivation; `AutotunePolicy` lives in
-//! `incin-backends::tuning` and belongs to `TUN-003`. Both extend this same
-//! type when they land. Neither is declared early as an inert field, because a
+//! `GRD-002` supplies the `GradMode` sec. 1.2.5 lists, derived from the
+//! existing `Grad`/`NoGrad` markers rather than declared beside them. One
+//! field of that section is still absent: `AutotunePolicy` lives in
+//! `incin-backends::tuning` and belongs to `TUN-003`, which extends this same
+//! type when it lands. It is not declared early as an inert field, because a
 //! field a caller can set and nothing reads is worse than a missing one.
 
 use crate::exec::policy::{
-    AllocatorPolicy, Determinism, ExecutionPolicy, FallbackPolicy, MathMode,
+    AllocatorPolicy, Determinism, ExecutionPolicy, FallbackPolicy, GradMode, MathMode,
 };
 use crate::tensor::backend::StorageBackend;
 
@@ -99,6 +99,16 @@ impl<B: StorageBackend> ExecutionContext<B> {
         self.policy.allocator
     }
 
+    /// The ceiling this context puts on gradient recording.
+    ///
+    /// A context that permits recording does not cause it: an operation
+    /// records only if its operand's `G` also permits it. A context that
+    /// disables it does decide, for everything run under it.
+    #[must_use]
+    pub const fn grad_mode(&self) -> GradMode {
+        self.policy.grad_mode
+    }
+
     #[must_use]
     pub const fn with_math_mode(mut self, math_mode: MathMode) -> Self {
         self.policy.math_mode = math_mode;
@@ -120,6 +130,12 @@ impl<B: StorageBackend> ExecutionContext<B> {
     #[must_use]
     pub const fn with_allocator(mut self, allocator: AllocatorPolicy) -> Self {
         self.policy.allocator = allocator;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_grad_mode(mut self, grad_mode: GradMode) -> Self {
+        self.policy.grad_mode = grad_mode;
         self
     }
 }

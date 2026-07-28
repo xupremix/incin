@@ -17,7 +17,9 @@ impl<
         eps: f32,
     ) -> Result<Tensor<S, B, K, G>> {
         // weight and bias should technically be 1D tensors matching the last dimension, but we use DynShape for now
-        let inner = B::layer_norm::<K>(&self.inner, &weight.inner, Some(&bias.inner), eps)?;
+        let inner = self.under_grad_mode(|| {
+            B::layer_norm::<K>(&self.inner, &weight.inner, Some(&bias.inner), eps)
+        })?;
         Tensor::from_parts(
             inner,
             self._shape.clone(),
@@ -37,15 +39,17 @@ impl<
         running_var: &Tensor<Dyn, B, K, G>,
         eps: f32,
     ) -> Result<Tensor<S, B, K, G>> {
-        let inner = B::batch_norm::<K>(
-            &self.inner,
-            Some(&weight.inner),
-            Some(&bias.inner),
-            Some(&running_mean.inner),
-            Some(&running_var.inner),
-            eps,
-            0.1,
-        )?;
+        let inner = self.under_grad_mode(|| {
+            B::batch_norm::<K>(
+                &self.inner,
+                Some(&weight.inner),
+                Some(&bias.inner),
+                Some(&running_mean.inner),
+                Some(&running_var.inner),
+                eps,
+                0.1,
+            )
+        })?;
         Tensor::from_parts(
             inner,
             self._shape.clone(),

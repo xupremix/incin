@@ -9,6 +9,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- **`GradMode` and `no_grad` (`GRD-002`):** the type-level `Grad`/`NoGrad`
+  markers now reach the layer that records. `GradMode` joins the other axes on
+  `ExecutionPolicy`, is derived from `RequiresGrad::requires_grad` rather than
+  declared beside it, and travels to the backends through the ambient policy
+  `GRD-001` already installs. Every frontend operation runs its kernel under
+  the mode its *result*'s marker derives, and the CPU, WGPU, and CUDA tapes
+  refuse a push when that mode does not record — so a `NoGrad` chain creates no
+  autograd node and retains no saved tensor, as `PROPOSALS.md` §1.2.5 requires.
+  `incin_core::exec::no_grad(|| ..)` is the inference form and applies to
+  `Grad` tensors too; an operand can only tighten the ambient mode, never raise
+  it. `cpu::tape_depth()` (likewise `wgpu`, `cuda`) is newly public so the
+  guarantee can be counted rather than assumed.
 - **Dtype/kernel specialization architecture:** new `dtype_policy.rs` (single
   storage/compute/accumulator/output dtype resolver for CPU/CUDA/WGPU),
   `iteration.rs` (backend-neutral broadcast/layout iteration plan), and

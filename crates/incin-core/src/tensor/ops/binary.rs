@@ -26,7 +26,7 @@ macro_rules! impl_binary_op {
                 S: ShapeEq<S2>,
             {
                 let _ = <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
-                let inner = B::$backend_method(&self.inner, &rhs.inner)?;
+                let inner = self.under_grad_mode(|| B::$backend_method(&self.inner, &rhs.inner))?;
                 Tensor::from_parts(
                     inner,
                     self._shape.clone(),
@@ -212,7 +212,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
 
     /// Subtracts a scalar: `self - scalar`.
     pub fn sub_scalar(&self, val: f64) -> Result<Self> {
-        let inner = B::sub_scalar::<K>(&self.inner, val)?;
+        let inner = self.under_grad_mode(|| B::sub_scalar::<K>(&self.inner, val))?;
         Tensor::from_parts(
             inner,
             self._shape.clone(),
@@ -224,7 +224,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
 
     /// Divides by a scalar: `self / scalar`.
     pub fn div_scalar(&self, val: f64) -> Result<Self> {
-        let inner = B::div_scalar::<K>(&self.inner, val)?;
+        let inner = self.under_grad_mode(|| B::div_scalar::<K>(&self.inner, val))?;
         Tensor::from_parts(
             inner,
             self._shape.clone(),
@@ -244,7 +244,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         S: ShapeEq<S2>,
     {
         <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
-        let inner = B::lerp::<K>(&self.inner, &end.inner, weight)?;
+        let inner = self.under_grad_mode(|| B::lerp::<K>(&self.inner, &end.inner, weight))?;
         Tensor::from_parts(
             inner,
             self._shape.clone(),
@@ -272,7 +272,7 @@ macro_rules! impl_broadcast_binary_op {
             {
                 let b_shape = <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::output_shape(self.shape_field(), rhs.shape_field())?;
 
-                let inner = B::$backend_method(&self.inner, &rhs.inner)?;
+                let inner = self.under_grad_mode(|| B::$backend_method(&self.inner, &rhs.inner))?;
                 Tensor::from_parts(
                     inner,
                     b_shape,

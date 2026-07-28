@@ -45,7 +45,8 @@ impl<
     where
         R: ReductionMode + CrossEntropyReductionShape<S>,
     {
-        let inner = B::cross_entropy_loss(&self.inner, &target.inner, R::as_enum())?;
+        let inner = self
+            .under_grad_mode(|| B::cross_entropy_loss(&self.inner, &target.inner, R::as_enum()))?;
         let mut out_shape_dims: Vec<usize> = vec![];
         if R::as_enum() == Reduction::None {
             out_shape_dims = self.dims().into();
@@ -84,7 +85,8 @@ impl<
     where
         R: ReductionMode + MseReductionShape<S>,
     {
-        let inner = B::mse_loss(&self.inner, &target.inner, R::as_enum())?;
+        let inner =
+            self.under_grad_mode(|| B::mse_loss(&self.inner, &target.inner, R::as_enum()))?;
         let mut out_shape_dims: Vec<usize> = vec![];
         if R::as_enum() == Reduction::None {
             out_shape_dims = self.dims().into();
@@ -112,7 +114,8 @@ impl<
     where
         R: ReductionMode + L1ReductionShape<S>,
     {
-        let inner = B::l1_loss(&self.inner, &target.inner, R::as_enum())?;
+        let inner =
+            self.under_grad_mode(|| B::l1_loss(&self.inner, &target.inner, R::as_enum()))?;
         let mut out_shape_dims: Vec<usize> = vec![];
         if R::as_enum() == Reduction::None {
             out_shape_dims = self.dims().into();
@@ -143,7 +146,9 @@ impl<
     where
         R: ReductionMode + BceReductionShape<S>,
     {
-        let inner = B::bce_with_logits_loss(&self.inner, &target.inner, R::as_enum())?;
+        let inner = self.under_grad_mode(|| {
+            B::bce_with_logits_loss(&self.inner, &target.inner, R::as_enum())
+        })?;
         let mut out_shape_dims: Vec<usize> = vec![];
         if R::as_enum() == Reduction::None {
             out_shape_dims = self.dims().into();

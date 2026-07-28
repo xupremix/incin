@@ -1,6 +1,7 @@
-//! The autograd tape: unconditional per-op recording (D-05), reverse-walk
-//! gradient accumulation with drain-on-return (D-06), and the shared
-//! `unbroadcast` helper (CPUBACK-06).
+//! The autograd tape: per-op recording gated on the ambient `GradMode`
+//! (`GRD-002`, superseding D-05's unconditional push), reverse-walk gradient
+//! accumulation with drain-on-return (D-06), and the shared `unbroadcast`
+//! helper (CPUBACK-06).
 //!
 //! This tape is deliberately independent from `incin-core`'s
 //! `tensor::tracing` module (`TRACING_GRAPH`, used for ONNX export) — D-04.
@@ -16,6 +17,7 @@
 use alloc::collections::BTreeMap;
 use core::cell::RefCell;
 
+use incin_core::exec::GradMode;
 use incin_core::prelude::Result;
 
 use crate::cpu::storage::{CpuBuffer, CpuStorage, TensorId};
@@ -35,9 +37,11 @@ pub(crate) type BackwardFn = Box<dyn Fn(&CpuStorage) -> Vec<CpuStorage> + Send +
 /// and a boxed backward closure mapping an accumulated output-gradient to
 /// one gradient per input (same order as `input_ids`).
 ///
-/// Per D-05, `push()` records every op unconditionally — the backend has no
-/// visibility into whether the surrounding `Tensor<..., G>`'s `G` is `Grad`
-/// or `NoGrad`.
+/// D-05 had `push()` record every op unconditionally, because the backend has
+/// no visibility into whether the surrounding `Tensor<..., G>`'s `G` is `Grad`
+/// or `NoGrad`. It still has none: `GRD-002` carries the answer down as an
+/// ambient [`GradMode`] instead, which the frontend sets from `G` and `push`
+/// reads.
 pub(crate) struct TapeEntry {
     /// `output_id`.
     pub(crate) output_id: TensorId,
@@ -68,8 +72,20 @@ thread_local! {
     static TAPE: RefCell<Vec<TapeEntry>> = const { RefCell::new(Vec::new()) };
 }
 
-/// Push a `TapeEntry` onto the thread-local tape, unconditionally (D-05).
+/// Push a `TapeEntry` onto the thread-local tape, unless the ambient
+/// [`GradMode`] forbids recording (`GRD-002`, superseding D-05's
+/// unconditional push).
+///
+/// The gate is here rather than at the thirty-one call sites in this file
+/// because the guarantee PROPOSALS.md sec. 1.2.5 states — a `NoGrad` operation
+/// produces no node — must not depend on thirty-one correct edits, nor on the
+/// next kernel author remembering a convention. `entry` is dropped on the spot
+/// when the mode refuses it, which releases the saved operands its backward
+/// closure captured.
 pub(crate) fn push(entry: TapeEntry) {
+    if !GradMode::current().records() {
+        return;
+    }
     TAPE.with(|t| t.borrow_mut().push(entry));
     // Emit a scalar tracking tape depth when telemetry is enabled.
     #[cfg(feature = "telemetry")]
@@ -80,10 +96,15 @@ pub(crate) fn push(entry: TapeEntry) {
     }
 }
 
-/// Number of entries currently on the tape. Exposed for tests proving the
-/// tape drains fully between `backward()` calls (D-06).
-#[cfg(test)]
-pub(crate) fn len() -> usize {
+/// Number of entries currently on the tape.
+///
+/// Public rather than `#[cfg(test)]` since `GRD-002`: the row's claim is that
+/// a `NoGrad` chain records nothing, and its evidence test lives in
+/// `incin-core`, outside this crate. A guarantee nothing outside can observe
+/// is not a guarantee. Unit tests in this crate also use it to prove the tape
+/// drains fully between `backward()` calls (D-06).
+#[must_use]
+pub fn depth() -> usize {
     TAPE.with(|t| t.borrow().len())
 }
 
@@ -520,7 +541,7 @@ mod tests {
         assert_eq!(grads1.get(x1.id).unwrap().get(&[]), 10.0);
 
         // Tape must be empty immediately after backward() returns.
-        assert_eq!(len(), 0);
+        assert_eq!(depth(), 0);
 
         // Second, independent small graph — must not see any entry from
         // the first call, and must not be contaminated by grads1's map.
@@ -538,7 +559,7 @@ mod tests {
 
         // grads2 must not contain x1's id (proves no cross-call leakage).
         assert!(grads2.get(x1.id).is_none());
-        assert_eq!(len(), 0);
+        assert_eq!(depth(), 0);
     }
 
     #[test]
@@ -552,7 +573,7 @@ mod tests {
             backward: Box::new(|grad_out: &CpuStorage| vec![grad_out.clone()]),
         });
         let _ = backward(&out).unwrap();
-        assert_eq!(len(), 0);
+        assert_eq!(depth(), 0);
     }
 
     #[test]

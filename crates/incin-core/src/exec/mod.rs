@@ -64,7 +64,11 @@ pub use capability::{
 };
 pub use context::ExecutionContext;
 pub use meta::{Alignment, LayoutClass, MetaError, TensorMeta};
-pub use policy::{AllocatorPolicy, Determinism, ExecutionPolicy, FallbackPolicy, MathMode};
+#[cfg(feature = "std")]
+pub use policy::no_grad;
+pub use policy::{
+    AllocatorPolicy, Determinism, ExecutionPolicy, FallbackPolicy, GradMode, MathMode,
+};
 pub use proof::{ProofLevel, Validated};
 pub use request::TensorHandle;
 pub use rule::{

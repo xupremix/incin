@@ -382,6 +382,26 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G> {
         G::requires_grad(&self._grad)
     }
 
+    /// Runs `body` — a backend call producing this tensor's successor — under
+    /// the gradient mode `G` derives (`GRD-002`).
+    ///
+    /// This is the propagation PROPOSALS.md sec. 1.2.5 requires. `G` is known
+    /// here and nowhere below: the backend method `body` calls receives
+    /// `B::Storage<K>` and has no way to ask whether the tensor around it was
+    /// `Grad` or `NoGrad`, which is why every tape recorded unconditionally
+    /// before this row.
+    ///
+    /// The mode belongs to the operation's *result*, not to its receiver. The
+    /// two coincide for every operation that preserves `G`, which is nearly
+    /// all of them; the handful whose result is `NoGrad` whatever they were
+    /// called on — `argmax`, `argmin`, `topk`, `argsort` — call
+    /// [`GradMode::Disabled.restrict`](crate::exec::GradMode::restrict)
+    /// directly rather than this.
+    #[inline]
+    pub(crate) fn under_grad_mode<R>(&self, body: impl FnOnce() -> R) -> R {
+        G::grad_mode(&self._grad).restrict(body)
+    }
+
     /// Computes the backward pass starting from this tensor, returning the gradients.
     pub fn backward(&self) -> Result<crate::optim::Gradients<B::Grads>> {
         B::backward(&self.inner).map(crate::optim::Gradients)

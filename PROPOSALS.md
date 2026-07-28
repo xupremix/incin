@@ -645,7 +645,8 @@ pub struct ExecutionPolicy {
     pub determinism: Determinism,
     pub fallback: FallbackPolicy,
     pub allocator: AllocatorPolicy,
-    // grad_mode arrives with GRD-002, autotune with TUN-003.
+    pub grad_mode: GradMode,
+    // autotune arrives with TUN-003.
 }
 
 pub struct ExecutionContext<B> {
@@ -2381,7 +2382,7 @@ Exit criteria:
 
 ### Canonical AI execution ledger
 
-This is the implementation handoff contract. Snapshot: **2026-07-28**.
+This is the implementation handoff contract. Snapshot: **2026-07-29**.
 `EXE-008` is complete, and its CUDA half is no longer compile-verified only. It
 has run on a GeForce GTX 1650, and the run paid for itself immediately. Sixty-one
 of the sixty-three hardware tests passed unchanged, but the CUDA quantize path
@@ -2614,10 +2615,10 @@ threads held inside their own scopes simultaneously rather than in sequence.
 The nesting and panic tests were re-run against a mutant whose guard restored
 the default instead of the enclosing policy, and both failed, which is the only
 reason to believe they test anything.
-Two fields §1.2.5 lists are absent, and one that is present does not yet bite.
-`GradMode` belongs to `GRD-002` and `AutotunePolicy` to `TUN-003` per Appendix
-A, and declaring either early would have meant a field a caller can set that
-nothing reads. `Determinism` and `FallbackPolicy` are vocabulary and defaults
+Two fields §1.2.5 lists were absent when this row landed, and one that is
+present does not yet bite. `GradMode` belonged to `GRD-002` and has since
+arrived; `AutotunePolicy` belongs to `TUN-003` per Appendix A, and declaring
+either early would have meant a field a caller can set that nothing reads. `Determinism` and `FallbackPolicy` are vocabulary and defaults
 rather than enforcement: nothing filters a kernel on `Determinism::Required`
 yet, because `CapabilityRule` has no per-kernel determinism claim, and inventing
 one here would mean asserting an accumulation-order property for every
@@ -2682,7 +2683,55 @@ anybody editing an argument list. `cargo doc` gained a second build with every
 backend enabled at once, because an intra-doc link into `incin_backends::cuda`
 resolves only when `cuda` is on and a CPU-only doc build cannot see a broken one.
 
-`EXE-010` is next eligible on the executor track.
+`GRD-002` closes the gap between the typed marker and the layer that records.
+`G` was decided at the frontend and consumed nowhere: `cpu/tape.rs` said so at
+the declaration of `push`, which recorded every operation unconditionally
+because "the backend has no visibility into whether the surrounding
+`Tensor<..., G>`'s `G` is `Grad` or `NoGrad`." It still has none. What changed
+is that the answer now travels as a value. `GradMode` is the field GRD-001 left
+out of `ExecutionPolicy` on the grounds that a field nobody reads is worse than
+a missing one, and it is derived from `requires_grad` as a default trait body
+rather than supplied per impl, so a marker cannot claim it tracks gradients and
+then decline to record.
+
+The design turns on one asymmetry, and the tests are what hold it. An operand's
+mode may only *tighten* the ambient one — `GradMode::restrict` — while a caller
+who names a mode *installs* it — `GradMode::scope`. Collapse the two and a
+`no_grad` block is undone by the first `Grad` tensor inside it; a mutant that
+did exactly that failed two tests, one of them a real recording count. The
+corollary is that `Grad` installs nothing at all, so the overwhelmingly common
+path reads no thread-local and pays nothing for a decision made at compile time.
+The propagation reads the *result's* marker rather than the receiver's, which
+differs only for `argmax`, `argmin`, `topk`, and `argsort` — they return
+`NoGrad` whatever they were called on, and the third mutant proved the
+distinction matters by failing when they were switched to the receiver's.
+
+The gate itself is one line in each of the three tapes, not 116 at the call
+sites, because a guarantee that depends on 116 correct edits is not a guarantee.
+`cpu::tape::len` was `#[cfg(test)]` and is now `pub fn depth`: the row's claim is
+about what an outside observer can count, and an evidence test that infers
+"nothing was recorded" from a backward pass finding no gradients would pass
+equally well against a tape that recorded entries nothing happened to reach.
+What the row does not do is prevent the clone — a CPU backward closure captures
+its saved operands just before pushing, so a refused push drops them at once
+rather than never making them. `CpuStorage` is `Rc`-backed, so that is a
+refcount bump; building the entry lazily means touching all 116 sites and a
+`TapeEntry` type `GRD-003` is about to replace.
+
+Writing the test surfaced a defect this row deliberately did not fix.
+`Tensor::argmax` and `Tensor::argmin` cannot succeed on the CPU backend at all:
+the frontend types the result `u32` while the kernel fills an `I64` buffer, so
+`from_parts` rejects the storage its own backend just produced. Nothing caught
+it because the backend unit tests call `B::argmax::<f32, i64>` directly and
+never cross the frontend that names the dtype. The kernel still runs before the
+check, so the recording assertion over those two is meaningful rather than
+vacuous, and the test asserts `is_err` explicitly so it fails loudly the day
+somebody fixes it.
+
+`EXE-009` stays `[~]` rather than being displaced. Its remainder is the
+287-method legacy `Backend` surface, which needs `PRF-003`'s direct kernel work,
+and `PRF-003` needs CUDA hardware. `GRD-003` is next eligible on the grad track
+and `EXE-010` on the executor track.
 The complete Shape-track evidence is recorded in the mirror and
 `docs/plan/tasks/SHP-007.md` through `SHP-008.md`. The §4 themes above
 describe intent; **this ledger and its dependency graph define order**, and the
@@ -2790,7 +2839,7 @@ Silicon · `compile` compiled execution · `grad` autograd · `dist` distributed
 | CMP-005 | preview | compile | [ ] | CMP-003,CMP-004 | `crates/incin-core/src/compiled/fusion.rs` | Safe fusion and backward hooks; gradient parity and launch-count reduction | `cargo test -p incin-core --test compiled_fusion` |
 | CMP-006 | preview | compile | [ ] | CMP-005 | `crates/incin-core/src/compiled/artifact.rs` | Versioned compiled artifacts with compatibility and corruption tests | `cargo test -p incin-core --test compiled_artifact` |
 | GRD-001 | core | grad | [x] | EXE-006 | `crates/incin-core/src/exec/context.rs` | Explicit ExecutionContext with nested and concurrent tests | `cargo test -p incin-core --test exec_context` |
-| GRD-002 | core | grad | [ ] | GRD-001 | `crates/incin-core/src/exec/context.rs; crates/incin-core/src/tensor/grad.rs` | G to GradMode propagation; NoGrad records zero nodes and saves nothing | `cargo test -p incin-core --test nograd_records_nothing` |
+| GRD-002 | core | grad | [x] | GRD-001 | `crates/incin-core/src/exec/context.rs; crates/incin-core/src/tensor/grad.rs` | G to GradMode propagation; NoGrad records zero nodes and saves nothing | `cargo test -p incin-core --test nograd_records_nothing` |
 | GRD-003 | core | grad | [ ] | GRD-001 | `crates/incin-core/src/exec/tape.rs` | Backend-neutral tape nodes with CPU parity | `cargo test -p incin-backends --no-default-features --features std,cpu --test gradient_parity` |
 | GRD-004 | core | grad | [ ] | GRD-003,EXE-008 | `crates/incin-backends/src/{cuda,wgpu}/` | CUDA and WGPU gradient recipes with hardware parity | `cargo test -p incin-backends --features wgpu --test gradient_parity` |
 | GRD-005 | core | grad | [ ] | GRD-003 | `crates/incin-core/src/exec/tape.rs` | Structured backward and NaN failures; no expected-failure panic paths | `cargo test -p incin-core --test backward_errors` |
@@ -3273,3 +3322,11 @@ justification as an entry before it may start.
 | # | Decision | Alternative rejected |
 |---|---|---|
 | D-020 | Encode the two-axis storage family as `StorageBackend<P: Placement = Local> { type Storage<K: DType>; }`. The projection is `<B as StorageBackend<P>>::Storage<K>`; omitting `P` selects `Local`. This supersedes only D-001's syntax and preserves its semantics. | `type Storage<K: DType, P: Placement = Local>`: stable Rust rejects defaults on generic parameters of associated types. Dropping placement would compile but contradict the distributed design. Nightly-only associated-type defaults would make a Core interface toolchain-dependent. |
+
+### 2026-07-29 — Gradient-mode propagation
+
+| # | Decision | Alternative rejected |
+|---|---|---|
+| D-021 | An operand's `GradMode` **tightens** the ambient one and can never raise it (`GradMode::restrict`); only a caller naming a mode installs it (`GradMode::scope`). `no_grad` is therefore a ceiling over everything inside it, and `Grad` is a permission rather than an instruction. | One combinator that installs whatever it is given. A `no_grad` block would then be silently undone by the first `Grad` tensor inside it, which is the single thing callers reach for the block to prevent. It also costs: installing on `Grad` means a thread-local write on the common path for a decision the type already made. |
+| D-022 | Propagation reads the **result's** `G`, not the receiver's. `argmax`, `argmin`, `topk`, and `argsort` return `NoGrad` whatever they were called on, so they run under `GradMode::Disabled` unconditionally. | Reading the receiver's marker, which is the same answer for every operation that preserves `G` and the wrong one for exactly those four. §1.2.5 makes `NoGrad` a statement about what runs, not only about which APIs the result offers; the CPU backend had already reached the same conclusion as a per-kernel exception in `argmax`, which this makes a policy instead. |
+| D-023 | The tape gate lives in each backend's `push`, and `tape::depth` is public. | Gating at the 116 call sites, and leaving the depth `#[cfg(test)]`. A guarantee that depends on 116 correct edits — and on the next kernel author knowing the convention — is not a guarantee; and one that nothing outside the crate can count is not evidence. The alternative evidence, inferring "nothing was recorded" from a backward pass finding no gradients, passes equally well against a tape holding entries nothing happened to reach. |

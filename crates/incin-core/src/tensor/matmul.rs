@@ -351,7 +351,7 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Ten
         S2: Shape,
         S1: MatMulShape<S2>,
     {
-        let inner = B::matmul::<K>(&self.inner, &rhs.inner)?;
+        let inner = self.under_grad_mode(|| B::matmul::<K>(&self.inner, &rhs.inner))?;
         let output_shape = S1::output_shape(&self._shape, &rhs._shape)?;
         Tensor::from_parts(
             inner,
@@ -396,7 +396,9 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Ten
     where
         S1: DynShape,
     {
-        let inner = B::addmm::<K>(&self.inner, &mat1.inner, &mat2.inner, beta, alpha)?;
+        let inner = self.under_grad_mode(|| {
+            B::addmm::<K>(&self.inner, &mat1.inner, &mat2.inner, beta, alpha)
+        })?;
         Tensor::from_parts(
             inner,
             self._shape.clone(),
@@ -412,7 +414,7 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Ten
         S1: DynShape,
         S2: DynShape,
     {
-        let inner = B::bmm::<K>(&self.inner, &rhs.inner)?;
+        let inner = self.under_grad_mode(|| B::bmm::<K>(&self.inner, &rhs.inner))?;
         let out_shape = B::shape(&inner);
         Tensor::from_parts(
             inner,
@@ -438,8 +440,9 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Ten
         S4: DynShape,
     {
         let mask_inner = mask.map(|m| &m.inner);
-        let inner =
-            B::scaled_dot_product_attention::<K>(&q.inner, &k.inner, &v.inner, mask_inner, scale)?;
+        let inner = q.under_grad_mode(|| {
+            B::scaled_dot_product_attention::<K>(&q.inner, &k.inner, &v.inner, mask_inner, scale)
+        })?;
         let out_shape = B::shape(&inner);
         Tensor::from_parts(
             inner,

@@ -4,6 +4,7 @@ use alloc::collections::btree_map::Entry;
 use alloc::vec::Vec;
 use core::cell::RefCell;
 
+use incin_core::exec::GradMode;
 use incin_core::prelude::{DTypeId, OperationKind, Result};
 
 use crate::wgpu::dispatch;
@@ -19,12 +20,26 @@ thread_local! {
     static TAPE: RefCell<Vec<TapeEntry>> = const { RefCell::new(Vec::new()) };
 }
 
+/// Number of entries currently on the tape, for tests outside this crate that
+/// have to observe the `GRD-002` guarantee rather than take it on faith.
+#[must_use]
+pub fn depth() -> usize {
+    TAPE.with(|t| t.borrow().len())
+}
+
 #[cfg(feature = "telemetry")]
 thread_local! {
     static BACKWARD_STEP: RefCell<usize> = const { RefCell::new(0) };
 }
 
+/// Push a `TapeEntry`, unless the ambient [`GradMode`] forbids recording
+/// (`GRD-002`). One gate per tape rather than one per call site: a `NoGrad`
+/// operation must record nothing whichever of this file's twenty-nine kernels
+/// ran it.
 pub fn push(entry: TapeEntry) {
+    if !GradMode::current().records() {
+        return;
+    }
     TAPE.with(|t| t.borrow_mut().push(entry));
     #[cfg(feature = "telemetry")]
     {

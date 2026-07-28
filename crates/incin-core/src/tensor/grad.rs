@@ -1,3 +1,4 @@
+use crate::exec::policy::GradMode;
 use crate::prelude::Dyn;
 use core::fmt::Debug;
 use core::marker::PhantomData;
@@ -15,6 +16,21 @@ pub trait RequiresGrad: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
     fn requires_grad(grad: &Self::Field) -> bool;
     /// Converts a user-facing `Arg` into the stored `Field` representation.
     fn init(arg: Self::Arg) -> Self::Field;
+
+    /// The execution-layer form of this marker (`GRD-002`).
+    ///
+    /// The backend that actually records an autograd node receives storage
+    /// and never sees `G`, so the marker has to cross that boundary as a
+    /// value. This is that value, and it is *derived* rather than supplied per
+    /// impl: a marker cannot claim it tracks gradients and then decline to
+    /// record, because there is only one answer and this reads it.
+    fn grad_mode(grad: &Self::Field) -> GradMode {
+        if Self::requires_grad(grad) {
+            GradMode::Enabled
+        } else {
+            GradMode::Disabled
+        }
+    }
 }
 
 /// Marker for `RequiresGrad` implementors whose value is resolved at
