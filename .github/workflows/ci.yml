@@ -25,8 +25,16 @@ jobs:
           target
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
+    # rust-toolchain.toml pins 1.92.0, so `@stable` installs a toolchain that
+    # rustup then overrides, leaving 1.92.0 without rustfmt or clippy. Every run
+    # in this repository's visible history failed on the first `cargo fmt` for
+    # that reason, which also meant the clippy gate below had never executed.
+    # Naming the pinned toolchain and its components is what makes the gate real.
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: '1.92.0'
+        components: rustfmt, clippy
 
     - name: Install System Dependencies
       run: |
@@ -53,7 +61,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - uses: dtolnay/rust-toolchain@stable
+    - uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: '1.92.0'
     - name: Validate PROPOSALS.md against docs/plan/ledger.toml
       run: cargo xtask ledger
     - name: Run xtask unit tests
@@ -68,7 +78,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - uses: dtolnay/rust-toolchain@stable
+    - uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: '1.92.0'
     - name: Install protobuf compiler
       run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
     - name: Build docs with warnings denied
@@ -81,7 +93,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - uses: dtolnay/rust-toolchain@stable
+    - uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: '1.92.0'
     - name: Check incin-core without default features
       run: cargo check -p incin-core --no-default-features
 
@@ -90,7 +104,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - uses: dtolnay/rust-toolchain@stable
+    - uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: '1.92.0'
     - name: Install WGPU system dependencies
       run: |
         sudo apt-get update
@@ -105,7 +121,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - uses: dtolnay/rust-toolchain@stable
+    - uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: '1.92.0'
     - name: Install protobuf compiler
       run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
     - name: Compile CUDA backend without requiring a GPU
