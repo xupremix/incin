@@ -64,7 +64,7 @@ pub use capability::{
 };
 pub use context::ExecutionContext;
 pub use meta::{Alignment, LayoutClass, MetaError, TensorMeta};
-pub use policy::MathMode;
+pub use policy::{AllocatorPolicy, Determinism, ExecutionPolicy, FallbackPolicy, MathMode};
 pub use proof::{ProofLevel, Validated};
 pub use request::TensorHandle;
 pub use rule::{

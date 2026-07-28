@@ -640,14 +640,17 @@ pub enum GradMode {
     Enabled,
 }
 
-pub struct ExecutionContext<B> {
-    pub backend: B,
-    pub grad_mode: GradMode,
+pub struct ExecutionPolicy {
     pub math_mode: MathMode,
     pub determinism: Determinism,
     pub fallback: FallbackPolicy,
     pub allocator: AllocatorPolicy,
-    pub autotune: AutotunePolicy,
+    // grad_mode arrives with GRD-002, autotune with TUN-003.
+}
+
+pub struct ExecutionContext<B> {
+    pub backend: B,
+    pub policy: ExecutionPolicy,
     // Internal graph/tape and telemetry handles.
 }
 ```
@@ -2590,6 +2593,37 @@ compiles everywhere is what lets CI run its parity tests on every push instead.
 Its dispatch is asserted rather than assumed: the blocked path is proven to
 take a large product, decline a small one, and decline a dtype it cannot read,
 so the agreement tests cannot quietly pass on a build where it never runs.
+`GRD-001` is complete, and it opens the gradient track. `ExecutionContext` had
+carried a backend and nothing else since `EXE-006` put it in
+`ExecutionRequest`; it now carries an `ExecutionPolicy` beside it, so a decision
+like "this run must be reproducible" or "never silently copy to the host" is a
+value the caller passes rather than a global someone else configured. The
+defaults are the part worth stating: precise arithmetic, no determinism promise,
+and `FallbackPolicy::Deny`. A context nobody configured cannot round-trip
+through the host, which is the single easiest way to turn a GPU program into a
+slower CPU program with nothing in the code saying so.
+The policy is grouped rather than flat, and §1.2.5 has been updated to match.
+That is a consequence of the scoped default the same section asks for: a
+thread-local cannot be generic over a backend type parameter, so the ambient
+value a scope installs has to be the part of a context that names no backend.
+The flat spelling survives as builders, so `with_determinism` still reads as
+declared. `ExecutionPolicy::scope` restores through a `Drop` guard rather than
+at the end of the call, and the three tests that matter are the ones covering
+what a scope could leak: nesting three deep, an unwinding panic, and four
+threads held inside their own scopes simultaneously rather than in sequence.
+The nesting and panic tests were re-run against a mutant whose guard restored
+the default instead of the enclosing policy, and both failed, which is the only
+reason to believe they test anything.
+Two fields §1.2.5 lists are absent, and one that is present does not yet bite.
+`GradMode` belongs to `GRD-002` and `AutotunePolicy` to `TUN-003` per Appendix
+A, and declaring either early would have meant a field a caller can set that
+nothing reads. `Determinism` and `FallbackPolicy` are vocabulary and defaults
+rather than enforcement: nothing filters a kernel on `Determinism::Required`
+yet, because `CapabilityRule` has no per-kernel determinism claim, and inventing
+one here would mean asserting an accumulation-order property for every
+advertised CUDA, WGPU and CPU row without having analyzed a single kernel. That
+is the exact false claim `EXE-005`'s audit existed to delete, so the registry
+change waits for a row that can measure what it asserts.
 `EXE-010` is next eligible on the executor track.
 The complete Shape-track evidence is recorded in the mirror and
 `docs/plan/tasks/SHP-007.md` through `SHP-008.md`. The §4 themes above
@@ -2697,7 +2731,7 @@ Silicon · `compile` compiled execution · `grad` autograd · `dist` distributed
 | CMP-004 | preview | compile | [ ] | CMP-002 | `crates/incin-core/src/compiled/fold.rs` | Constant folding, weight prepacking, and bounded shape buckets | `cargo test -p incin-core --test compiled_fold` |
 | CMP-005 | preview | compile | [ ] | CMP-003,CMP-004 | `crates/incin-core/src/compiled/fusion.rs` | Safe fusion and backward hooks; gradient parity and launch-count reduction | `cargo test -p incin-core --test compiled_fusion` |
 | CMP-006 | preview | compile | [ ] | CMP-005 | `crates/incin-core/src/compiled/artifact.rs` | Versioned compiled artifacts with compatibility and corruption tests | `cargo test -p incin-core --test compiled_artifact` |
-| GRD-001 | core | grad | [ ] | EXE-006 | `crates/incin-core/src/exec/context.rs` | Explicit ExecutionContext with nested and concurrent tests | `cargo test -p incin-core --test exec_context` |
+| GRD-001 | core | grad | [x] | EXE-006 | `crates/incin-core/src/exec/context.rs` | Explicit ExecutionContext with nested and concurrent tests | `cargo test -p incin-core --test exec_context` |
 | GRD-002 | core | grad | [ ] | GRD-001 | `crates/incin-core/src/exec/context.rs; crates/incin-core/src/tensor/grad.rs` | G to GradMode propagation; NoGrad records zero nodes and saves nothing | `cargo test -p incin-core --test nograd_records_nothing` |
 | GRD-003 | core | grad | [ ] | GRD-001 | `crates/incin-core/src/exec/tape.rs` | Backend-neutral tape nodes with CPU parity | `cargo test -p incin-backends --no-default-features --features std,cpu --test gradient_parity` |
 | GRD-004 | core | grad | [ ] | GRD-003,EXE-008 | `crates/incin-backends/src/{cuda,wgpu}/` | CUDA and WGPU gradient recipes with hardware parity | `cargo test -p incin-backends --features wgpu --test gradient_parity` |
@@ -3053,7 +3087,8 @@ changing nothing.
 |---|---|---|---|
 | `ExecutionContext<B>` | `incin-core::exec::context` | GRD-001 | replaces the three thread-local tapes |
 | `GradMode` | `incin-core::exec::context` | GRD-002 | derived from the existing `Grad`/`NoGrad` markers (`tensor/grad.rs`) |
-| `Determinism`, `FallbackPolicy`, `AllocatorPolicy` | `incin-core::exec::policy` | GRD-001 | — |
+| `Determinism`, `FallbackPolicy`, `AllocatorPolicy` | `incin-core::exec::policy` | GRD-001 | `Determinism` is the split half of the promoted `KernelMathMode` per D-008 |
+| `ExecutionPolicy` | `incin-core::exec::policy` | GRD-001 | the backend-free half of `ExecutionContext`, so a scope has something to carry |
 | `PrecisionPolicy`, `LossScaling` | `incin-core::exec::precision` | UX-015 | **extend** `DTypePolicy` (`dtype_policy.rs:40`), which already carries storage/compute/accumulator/output |
 
 ### A.5 Tuning
