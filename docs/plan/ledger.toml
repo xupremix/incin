@@ -62,14 +62,17 @@ deviations = [
 id = "GOV-005"
 tier = "core"
 theme = "gov"
-status = "planned"
+status = "complete"
 deps = ["GOV-004"]
 target = [".github/workflows/ci.yml"]
 deliverable = "Regression budgets and feature inventory enforced in CI"
 evidence = ["cargo xtask budgets"]
-completed_on = ""
-completed_evidence = ""
-deviations = []
+completed_on = "2026-07-27"
+completed_evidence = "cargo xtask budgets -> budgets ok: 11 runtime, 16 artifacts, 5 feature crates, 25 features. docs/plan/budgets.toml declares complete upper-bound coverage for every GOV-004 runtime confidence-interval high and every compile *_bytes metric; the validator rejects missing or duplicate series, baseline drift, invalid maxima, exceeded budgets, unknown schemas, and unsafe paths. The feature inventory matches exact defaults and forwarding in every feature-bearing workspace member discovered by cargo metadata, so a new uninventoried crate cannot bypass the gate. cargo test -p xtask -> 12 passed, including exceeded-budget, missing-series, duplicate-series, feature-drift, uninventoried-crate, and unsafe-path faults. .github/workflows/ci.yml runs budgets and the shape audit on every ledger job. cargo test --workspace completed with no failures, including 32 semantic trybuild cases and all doctests; formatting, audit-shapes, diff-check, and ledger clean."
+deviations = [
+  "The ledger names only .github/workflows/ci.yml as its target, but an enforceable cargo xtask budgets command requires implementation in xtask and versioned contracts in docs/plan/budgets.toml. CI remains the enforcement point; the additional files are the executable policy it invokes.",
+  "GOV-005 validates checked-in runtime and artifact baselines deterministically rather than timing shared CI runners. Live time, memory, cache, and hardware regression execution remains assigned to TUN-008 and CI-006, preventing this governance gate from making noisy performance claims ahead of those tasks.",
+]
 
 [[task]]
 id = "GOV-006"

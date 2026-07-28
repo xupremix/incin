@@ -6,6 +6,7 @@
 //! dependencies, so putting a TOML parser in `crates/incin` would put it in
 //! every downstream user's dependency graph.
 
+mod budgets;
 mod ledger;
 
 use std::process::ExitCode;
@@ -13,6 +14,7 @@ use std::process::ExitCode;
 fn main() -> ExitCode {
     let task = std::env::args().nth(1);
     match task.as_deref() {
+        Some("budgets") => budgets::check(),
         Some("ledger") => ledger::check(),
         Some(other) => {
             eprintln!("unknown task `{other}`");
@@ -35,4 +37,6 @@ fn usage() {
     eprintln!("TASKS:");
     eprintln!("    ledger    Validate the PROPOSALS.md execution ledger against");
     eprintln!("              docs/plan/ledger.toml (GOV-003)");
+    eprintln!("    budgets   Validate regression budgets and the Cargo feature");
+    eprintln!("              inventory (GOV-005)");
 }

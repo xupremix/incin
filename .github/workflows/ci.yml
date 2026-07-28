@@ -58,6 +58,10 @@ jobs:
       run: cargo xtask ledger
     - name: Run xtask unit tests
       run: cargo test -p xtask
+    - name: Enforce regression budgets and feature inventory
+      run: cargo xtask budgets
+    - name: Enforce shape-proof audit budgets
+      run: tools/audit-shapes.sh --check
 
   docs:
     name: Documentation Build

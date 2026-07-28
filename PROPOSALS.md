@@ -2350,10 +2350,10 @@ Exit criteria:
 ### Canonical AI execution ledger
 
 This is the implementation handoff contract. Snapshot: **2026-07-27**.
-`GOV-004` is complete: the CPU and WGPU baseline suite, the confidence
-intervals it records, and the environment metadata that makes a later
-comparison meaningful all exist. `GOV-005` is next eligible, and it is what
-turns those numbers into a gate. The §4 themes above
+`GOV-005` is complete: every GOV-004 series now has a declared upper bound
+that CI enforces, and the feature inventory is checked against what cargo
+actually reports rather than against a hand-kept list. The shape track is next
+eligible at `SHP-007`. The §4 themes above
 describe intent; **this ledger and its dependency graph define order**, and the
 tier column defines what a release is entitled to rely on. Where a theme
 narrative and the graph disagree, the graph wins — themes are prose, edges are
@@ -2412,7 +2412,7 @@ Silicon · `compile` compiled execution · `grad` autograd · `dist` distributed
 | GOV-002 | core | gov | [x] | GOV-001 | `PROPOSALS.md :: Appendix C` | Decision log locks proof, executor, mesh, and compatibility contracts; one entry per resolved contradiction | `cargo xtask ledger` |
 | GOV-003 | core | gov | [x] | GOV-002 | `docs/plan/ledger.toml; xtask/src/ledger.rs` | Machine-readable task mirror and validator round-trip every ID, dependency, tier, and evidence field | `cargo xtask ledger && cargo test -p xtask` |
 | GOV-004 | core | gov | [x] | GOV-002 | `crates/incin/benches/; docs/plan/baselines/` | CPU and GPU capability, performance, and compile-size baselines with environment metadata | `cargo bench -p incin -- --save-baseline main` |
-| GOV-005 | core | gov | [ ] | GOV-004 | `.github/workflows/ci.yml` | Regression budgets and feature inventory enforced in CI | `cargo xtask budgets` |
+| GOV-005 | core | gov | [x] | GOV-004 | `.github/workflows/ci.yml` | Regression budgets and feature inventory enforced in CI | `cargo xtask budgets` |
 | GOV-006 | core | gov | [x] | GOV-002 | `crates/incin-backends/src/external/; crates/incin-core/err.rs; */Cargo.toml` | Repo hygiene: track and split external/, delete the orphan crates/incin-core/err.rs, rename candle to external-candle with a deprecated alias | `cargo check --workspace --features external-candle` |
 | GOV-007 | core | gov | [x] | GOV-002 | `.agents/API_DESIGN.md; docs/API_DESIGN.md` | Docs source-of-truth consolidation; .agents/API_DESIGN.md becomes a pointer, not a paraphrase | `test $(wc -l < .agents/API_DESIGN.md) -lt 10` |
 | SHP-001 | core | shape | [x] | GOV-002 | `docs/audit/shape-proof-inventory.md; tools/audit-shapes.sh` | Audit every shape, dtype, backend, and device rule by proof stage; inventory panic, unwrap, overflow, and static-selector gaps | `tools/audit-shapes.sh --check` |

@@ -1,0 +1,298 @@
+# Deterministic governance budgets (GOV-005).
+#
+# Runtime maxima are checked against the versioned GOV-004 confidence-interval
+# upper bounds, not against noisy CI wall-clock samples. TUN-008 and CI-006 add
+# live performance, memory, and cache gates. A changed workload receives a new
+# series ID; a deliberate budget change updates both baseline_* and max_* in a
+# reviewed commit. Every baseline runtime and *_bytes metric must appear once.
+schema = 1
+baseline = "docs/plan/baselines/main.toml"
+
+[[runtime]]
+id = "capability/cpu/f32_create"
+backend = "cpu"
+baseline_high_ns = 87.543
+max_high_ns = 110.0
+
+[[runtime]]
+id = "capability/cpu/u32_create"
+backend = "cpu"
+baseline_high_ns = 92.058
+max_high_ns = 116.0
+
+[[runtime]]
+id = "eager/add_f32/1024"
+backend = "cpu"
+baseline_high_ns = 426.72
+max_high_ns = 534.0
+
+[[runtime]]
+id = "eager/sum_f32/1024"
+backend = "cpu"
+baseline_high_ns = 4619.8
+max_high_ns = 5775.0
+
+[[runtime]]
+id = "eager/add_f32/65536"
+backend = "cpu"
+baseline_high_ns = 5341.0
+max_high_ns = 6677.0
+
+[[runtime]]
+id = "eager/sum_f32/65536"
+backend = "cpu"
+baseline_high_ns = 299460.0
+max_high_ns = 374325.0
+
+[[runtime]]
+id = "eager/matmul_f32/16"
+backend = "cpu"
+baseline_high_ns = 1463.9
+max_high_ns = 1830.0
+
+[[runtime]]
+id = "eager/matmul_f32/64"
+backend = "cpu"
+baseline_high_ns = 24819.0
+max_high_ns = 31024.0
+
+[[runtime]]
+id = "capability/wgpu/f32_create"
+backend = "wgpu"
+baseline_high_ns = 1923.1
+max_high_ns = 2885.0
+
+[[runtime]]
+id = "gpu/add_f32/65536"
+backend = "wgpu"
+baseline_high_ns = 121630000.0
+max_high_ns = 182445000.0
+
+[[runtime]]
+id = "gpu/matmul_f32/64"
+backend = "wgpu"
+baseline_high_ns = 56650000.0
+max_high_ns = 84975000.0
+
+[[artifact]]
+profile = "cpu"
+metric = "incin_rlib_bytes"
+baseline_bytes = 43708
+max_bytes = 52450
+
+[[artifact]]
+profile = "cpu"
+metric = "incin_backends_rlib_bytes"
+baseline_bytes = 4930698
+max_bytes = 5916838
+
+[[artifact]]
+profile = "cpu"
+metric = "incin_core_rlib_bytes"
+baseline_bytes = 13807130
+max_bytes = 16568556
+
+[[artifact]]
+profile = "cpu"
+metric = "incin_data_rlib_bytes"
+baseline_bytes = 609606
+max_bytes = 731528
+
+[[artifact]]
+profile = "cpu"
+metric = "incin_diagnostics_rlib_bytes"
+baseline_bytes = 347500
+max_bytes = 417000
+
+[[artifact]]
+profile = "cpu"
+metric = "incin_macros_dylib_bytes"
+baseline_bytes = 4756328
+max_bytes = 5707594
+
+[[artifact]]
+profile = "cpu"
+metric = "component_total_bytes"
+baseline_bytes = 24494970
+max_bytes = 29393964
+
+[[artifact]]
+profile = "cpu"
+metric = "benchmark_binary_bytes"
+baseline_bytes = 3640344
+max_bytes = 4368413
+
+[[artifact]]
+profile = "wgpu"
+metric = "incin_rlib_bytes"
+baseline_bytes = 45756
+max_bytes = 54908
+
+[[artifact]]
+profile = "wgpu"
+metric = "incin_backends_rlib_bytes"
+baseline_bytes = 6436868
+max_bytes = 7724242
+
+[[artifact]]
+profile = "wgpu"
+metric = "incin_core_rlib_bytes"
+baseline_bytes = 13829840
+max_bytes = 16595808
+
+[[artifact]]
+profile = "wgpu"
+metric = "incin_data_rlib_bytes"
+baseline_bytes = 609584
+max_bytes = 731501
+
+[[artifact]]
+profile = "wgpu"
+metric = "incin_diagnostics_rlib_bytes"
+baseline_bytes = 347500
+max_bytes = 417000
+
+[[artifact]]
+profile = "wgpu"
+metric = "incin_macros_dylib_bytes"
+baseline_bytes = 4756328
+max_bytes = 5707594
+
+[[artifact]]
+profile = "wgpu"
+metric = "component_total_bytes"
+baseline_bytes = 26025876
+max_bytes = 31231052
+
+[[artifact]]
+profile = "wgpu"
+metric = "benchmark_binary_bytes"
+baseline_bytes = 11106176
+max_bytes = 13327412
+
+# Cargo feature inventory. Values are compared as sets, so harmless ordering
+# changes do not fail the gate; names, defaults, and forwarding are exact.
+[[feature_crate]]
+package = "incin-core"
+manifest = "crates/incin-core/Cargo.toml"
+default = ["std"]
+
+[[feature_crate.feature]]
+name = "std"
+enables = ["thiserror/std", "half/std", "anyhow/std", "serde/std", "prost/std", "bytes/std", "safetensors", "serde_json", "bincode"]
+
+[[feature_crate.feature]]
+name = "nightly"
+enables = []
+
+[[feature_crate.feature]]
+name = "paranoid-validation"
+enables = []
+
+[[feature_crate.feature]]
+name = "cuda"
+enables = []
+
+[[feature_crate.feature]]
+name = "wgpu"
+enables = []
+
+[[feature_crate]]
+package = "incin-macros"
+manifest = "crates/incin-macros/Cargo.toml"
+default = ["std"]
+
+[[feature_crate.feature]]
+name = "std"
+enables = []
+
+[[feature_crate.feature]]
+name = "nightly"
+enables = []
+
+[[feature_crate]]
+package = "incin-diagnostics"
+manifest = "crates/incin-diagnostics/Cargo.toml"
+default = ["std"]
+
+[[feature_crate.feature]]
+name = "std"
+enables = []
+
+[[feature_crate]]
+package = "incin-backends"
+manifest = "crates/incin-backends/Cargo.toml"
+default = ["std", "cpu"]
+
+[[feature_crate.feature]]
+name = "std"
+enables = ["incin-core/std", "anyhow/std", "rand/std", "rand/std_rng", "rand_distr/std", "half/std"]
+
+[[feature_crate.feature]]
+name = "cpu"
+enables = []
+
+[[feature_crate.feature]]
+name = "cuda"
+enables = ["std", "dep:cudarc", "incin-core/cuda"]
+
+[[feature_crate.feature]]
+name = "wgpu"
+enables = ["std", "dep:wgpu", "dep:pollster", "incin-core/wgpu"]
+
+[[feature_crate.feature]]
+name = "autotune"
+enables = ["cuda"]
+
+[[feature_crate.feature]]
+name = "external-candle"
+enables = ["std", "dep:candle-core", "dep:candle-nn"]
+
+[[feature_crate.feature]]
+name = "candle"
+enables = ["external-candle"]
+
+[[feature_crate.feature]]
+name = "telemetry"
+enables = ["std", "dep:incin-telemetry"]
+
+[[feature_crate]]
+package = "incin"
+manifest = "crates/incin/Cargo.toml"
+default = ["std", "cpu"]
+
+[[feature_crate.feature]]
+name = "std"
+enables = ["incin-core/std", "incin-macros/std", "incin-backends/std"]
+
+[[feature_crate.feature]]
+name = "nightly"
+enables = ["incin-core/nightly", "incin-macros/nightly"]
+
+[[feature_crate.feature]]
+name = "cpu"
+enables = ["incin-backends/cpu"]
+
+[[feature_crate.feature]]
+name = "cuda"
+enables = ["incin-core/cuda", "incin-backends/cuda"]
+
+[[feature_crate.feature]]
+name = "wgpu"
+enables = ["incin-backends/wgpu"]
+
+[[feature_crate.feature]]
+name = "external-candle"
+enables = ["std", "incin-backends/external-candle"]
+
+[[feature_crate.feature]]
+name = "candle"
+enables = ["external-candle"]
+
+[[feature_crate.feature]]
+name = "autotune"
+enables = ["cuda", "incin-backends/autotune"]
+
+[[feature_crate.feature]]
+name = "telemetry"
+enables = ["std", "incin-backends/telemetry"]

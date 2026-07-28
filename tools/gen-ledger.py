@@ -15,7 +15,7 @@ T = [
 ("GOV-004","core","gov","x",["GOV-002"],"crates/incin/benches/; docs/plan/baselines/",
  "CPU and GPU capability, performance, and compile-size baselines with environment metadata",
  "cargo bench -p incin -- --save-baseline main"),
-("GOV-005","core","gov"," ",["GOV-004"],".github/workflows/ci.yml",
+("GOV-005","core","gov","x",["GOV-004"],".github/workflows/ci.yml",
  "Regression budgets and feature inventory enforced in CI",
  "cargo xtask budgets"),
 ("GOV-006","core","gov","x",["GOV-002"],"crates/incin-backends/src/external/; crates/incin-core/err.rs; */Cargo.toml",
@@ -318,6 +318,7 @@ T = [
 
 # id -> (date, evidence output). Rule: no task may be "x" without an entry here.
 COMPLETED = {
+ "GOV-005": ("2026-07-27", "cargo xtask budgets -> budgets ok: 11 runtime, 16 artifacts, 5 feature crates, 25 features. docs/plan/budgets.toml declares complete upper-bound coverage for every GOV-004 runtime confidence-interval high and every compile *_bytes metric; the validator rejects missing or duplicate series, baseline drift, invalid maxima, exceeded budgets, unknown schemas, and unsafe paths. The feature inventory matches exact defaults and forwarding in every feature-bearing workspace member discovered by cargo metadata, so a new uninventoried crate cannot bypass the gate. cargo test -p xtask -> 12 passed, including exceeded-budget, missing-series, duplicate-series, feature-drift, uninventoried-crate, and unsafe-path faults. .github/workflows/ci.yml runs budgets and the shape audit on every ledger job. cargo test --workspace completed with no failures, including 32 semantic trybuild cases and all doctests; formatting, audit-shapes, diff-check, and ledger clean."),
  "GOV-004": ("2026-07-27", "cargo bench -p incin -- --save-baseline main -> 8 stable CPU Criterion series covering f32/u32 creation, f32 add and sum at 1,024 and 65,536 elements, and f32 matmul at 16 and 64; cargo bench -p incin --features wgpu --bench baselines -- '^(capability/wgpu|gpu/)' --save-baseline wgpu-main -> 3 real WGPU series on the AMD Radeon 680M. docs/plan/baselines/main.toml records 95% confidence intervals, exact feature sets, OS, architecture, CPU, memory, Rust/Cargo/LLVM/Criterion versions, revision, device availability, build time, and raw release artifact sizes. CUDA is explicitly unavailable because no NVIDIA adapter or nvidia-smi executable was present. cargo check passes for both default and WGPU benchmark targets; cargo test --workspace completed with no failures, including 32 semantic trybuild cases and all doctests. Formatting, TOML parsing, diff-check, and ledger validation clean. Clippy unavailable: the installed Rust 1.92 toolchain reports cargo-clippy is not applicable."),
  "GOV-001": ("2026-07-27", "PROPOSALS.md present; internal-consistency script reports 0 undefined deps, 0 cycles, 0 tier violations"),
  "GOV-002": ("2026-07-27", "PROPOSALS.md Appendix C records D-001..D-014; every contradiction in the review maps to exactly one entry"),
@@ -341,6 +342,10 @@ COMPLETED = {
 # placeholder -- an unrecorded deviation is how an RFC quietly stops describing
 # the code.
 DEVIATIONS = {
+ "GOV-005": [
+   "The ledger names only .github/workflows/ci.yml as its target, but an enforceable cargo xtask budgets command requires implementation in xtask and versioned contracts in docs/plan/budgets.toml. CI remains the enforcement point; the additional files are the executable policy it invokes.",
+   "GOV-005 validates checked-in runtime and artifact baselines deterministically rather than timing shared CI runners. Live time, memory, cache, and hardware regression execution remains assigned to TUN-008 and CI-006, preventing this governance gate from making noisy performance claims ahead of those tasks.",
+ ],
  "GOV-004": [
    "The required evidence command uses the default CPU feature set and therefore cannot truthfully benchmark an optional accelerator. WGPU measurements were captured with a second explicitly feature-enabled command on real hardware; CUDA remains an explicit unavailable capability rather than a synthetic passing series.",
  ],
