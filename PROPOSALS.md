@@ -2384,16 +2384,24 @@ were found by inspection, and the surviving set turns out to be accurate. A
 capability registry that survives its first execution is the exception, not the
 expectation, and recording which of the three rows cost a fix and which did not
 is the only way the next hardware obligation can be estimated honestly.
-`CI-002` is active. `.github/workflows/hardware.yml` exists and runs the
-`--ignored` suites weekly, but the repository has no registered self-hosted
-runner and no GitHub-hosted runner carries an NVIDIA device, so the CUDA job is
-gated behind a `HARDWARE_CUDA_RUNNER` variable and skips with a stated reason
-until one is registered. Naming the labels unconditionally would queue the job
-for a day and then report a failure that has nothing to do with the code. The
-WGPU software-adapter job runs on every schedule today. Each hardware job also
-asserts that tests actually executed, because a run on a machine without the
-device reports zero tests and exits zero, which no exit code can distinguish
-from a pass.
+`CI-002` is complete, with one thing it cannot prove stated rather than implied.
+`.github/workflows/hardware.yml` runs weekly and on dispatch, and the dispatch
+succeeded: run 30359916370 resolved the matrix, ran the WGPU software adapter to
+374 passing library tests on the pinned toolchain, and skipped the CUDA job with
+the reason written into the run summary. That skip is the honest part. The
+repository has no registered self-hosted runner and no GitHub-hosted runner
+carries an NVIDIA device, so the CUDA jobs are gated behind a
+`HARDWARE_CUDA_RUNNER` variable; naming hardware labels unconditionally would
+queue the job for a day and then report a failure that has nothing to do with
+the code, every week. Registering a runner activates the jobs with no further
+change, and a dispatch that explicitly asks for the CUDA job while no runner
+exists fails rather than skipping, because an operator who named the job wants
+an answer. Each hardware job also asserts that tests actually executed: a CUDA
+run on a machine without the device reports zero tests and exits zero, which no
+exit code can tell apart from a pass, so the ignored suite must return at least
+sixty results to count. Until a runner is registered, the CUDA half of this row
+rests on the same commands having been run by hand, which is what the three
+`EXE` rows above record.
 `EXE-009` is active and partially landed: the default
 unsupported-operation surface is now gone from all nine operation families, so a
 backend that does not implement an operation says so at its own definition and a
@@ -2596,7 +2604,7 @@ Silicon · `compile` compiled execution · `grad` autograd · `dist` distributed
 | UX-014 | core | ux | [ ] | EXE-005 | `crates/incin/src/bin/cargo-incin.rs` | cargo incin doctor with stable text and JSON output and mocked hardware tests | `cargo test -p incin --test doctor` |
 | UX-015 | preview | ux | [ ] | EXE-005,GRD-001 | `crates/incin-core/src/exec/precision.rs` | PrecisionPolicy and loss scaling extending the existing DTypePolicy; mixed-precision parity tests | `cargo test -p incin-core --test precision_policy` |
 | CI-001 | core | ci | [ ] | GOV-005,GOV-003 | `.github/workflows/ci.yml` | Feature-powerset CI preserving the bare CPU default; adds cargo doc and drops blanket package exclusions | `act -j powerset  # or CI run` |
-| CI-002 | core | ci | [~] | EXE-008 | `.github/workflows/hardware.yml` | Scheduled CUDA and WGPU hardware matrix | `gh workflow run hardware.yml` |
+| CI-002 | core | ci | [x] | EXE-008 | `.github/workflows/hardware.yml` | Scheduled CUDA and WGPU hardware matrix | `gh workflow run hardware.yml` |
 | CI-003 | preview | ci | [ ] | DST-008,DST-009,DST-010 | `.github/workflows/hardware.yml` | Homogeneous three-GPU DP, TP, and PP CI | `gh workflow run hardware.yml -f job=dist3` |
 | CI-004 | preview | ci | [ ] | DST-015 | `.github/workflows/hardware.yml` | Multi-process and multi-node CI with topology metadata | `gh workflow run hardware.yml -f job=multinode` |
 | CI-005 | core | ci | [ ] | GOV-005 | `crates/incin-macros/tests/` | Macro trybuild, rustfmt, rename, and hygiene suite for the existing s!, idx!, and #[module] | `cargo test -p incin-macros` |

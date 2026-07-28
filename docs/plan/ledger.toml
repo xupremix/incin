@@ -1209,14 +1209,17 @@ deviations = []
 id = "CI-002"
 tier = "core"
 theme = "ci"
-status = "active"
+status = "complete"
 deps = ["EXE-008"]
 target = [".github/workflows/hardware.yml"]
 deliverable = "Scheduled CUDA and WGPU hardware matrix"
 evidence = ["gh workflow run hardware.yml"]
-completed_on = ""
-completed_evidence = ""
-deviations = []
+completed_on = "2026-07-28"
+completed_evidence = "gh workflow run hardware.yml -> run 30359916370 on develop, conclusion success. Resolve Hardware Availability passed in 2s and emitted the two annotations that are the point of the job: 'CUDA hardware job skipped: HARDWARE_CUDA_RUNNER is unset, so no NVIDIA runner is registered' and 'WGPU native-adapter job skipped: HARDWARE_WGPU_RUNNER is unset. The software-adapter job still runs.' WGPU Software Adapter passed in 1m27s with 374 lib tests, 1 ignored, plus 5 wgpu_executor, 21 cpu_executor, 10 dispatch_parity, 12 gradient_parity, 6 ops, 1 safetensors, 6 tensor_meta, and 13 candle/native rows, 0 failed -- the same counts the local run reports, on the pinned 1.92.0 toolchain rather than whatever stable resolves to. .github/workflows/hardware.yml runs weekly and on dispatch. The CUDA job runs the four suites the EXE-004, EXE-005, and EXE-008 hardware obligations name, including both --ignored sets, and writes nvidia-smi and nvcc output into the run summary. Each hardware job asserts tests actually executed: the ignored CUDA suite must report at least 60 results, verified against a real local log that totals 71, because a device-less run reports zero tests and exits zero. The dispatch input rejects dist3, multinode, and metal by name against CI-003, CI-004, and CI-007 rather than matching nothing silently. Full local gate clean: cargo fmt --all --check, cargo test --workspace, cargo xtask ledger, cargo xtask budgets, and tools/audit-shapes.sh --check. Clippy remains unavailable on the installed Rust 1.92 toolchain."
+deviations = [
+  "The row asks for a scheduled CUDA and WGPU hardware matrix, and the CUDA half cannot execute in this repository today. xupremix/incin has zero registered self-hosted runners and no GitHub-hosted runner carries an NVIDIA device, so runs-on with hardware labels would queue the job for roughly a day and then fail for a reason unrelated to the code, on every weekly schedule. The CUDA and native-WGPU jobs are therefore gated behind the HARDWARE_CUDA_RUNNER and HARDWARE_WGPU_RUNNER repository variables, each holding a JSON label array, and the select job records which jobs it skipped and why in the run summary. Registering a runner and setting the variable activates them with no further change; a dispatch that explicitly asks for job=cuda while the variable is unset fails rather than skipping, because an operator who named the job wants an answer. What is proved here is the workflow, the selection logic, and the WGPU software matrix; the CUDA jobs are proved only by the identical commands having been run by hand on a GeForce GTX 1650, which is what EXE-004, EXE-005, and EXE-008 record.",
+  "The dispatch input is a free-form string rather than a choice, so the select job can reject dist3, multinode, and metal with a message naming CI-003, CI-004, and CI-007. A choice list containing only the implemented jobs would reject those values with a generic dispatch error instead, and a choice list containing all of them would accept a selector that matches no job and report green.",
+]
 
 [[task]]
 id = "CI-003"
