@@ -181,20 +181,20 @@ max_bytes = 13327412
 [[runtime]]
 id = "capability/cuda/f32_create"
 backend = "cuda"
-baseline_high_ns = 4959.9
-max_high_ns = 7439.8
+baseline_high_ns = 4904.3
+max_high_ns = 7356.5
 
 [[runtime]]
 id = "gpu/cuda/add_f32/65536"
 backend = "cuda"
-baseline_high_ns = 15978.0
-max_high_ns = 23967.0
+baseline_high_ns = 16971.0
+max_high_ns = 25456.5
 
 [[runtime]]
 id = "gpu/cuda/matmul_f32/64"
 backend = "cuda"
-baseline_high_ns = 27614.0
-max_high_ns = 41421.0
+baseline_high_ns = 24428.0
+max_high_ns = 36642.0
 
 # Artifact bounds use the 1.2x headroom every other profile uses. These sizes
 # come from a different host and linker than the cpu and wgpu profiles and are
@@ -202,50 +202,50 @@ max_high_ns = 41421.0
 [[artifact]]
 profile = "cuda"
 metric = "incin_rlib_bytes"
-baseline_bytes = 44556
-max_bytes = 53467
+baseline_bytes = 45808
+max_bytes = 54969
 
 [[artifact]]
 profile = "cuda"
 metric = "incin_backends_rlib_bytes"
-baseline_bytes = 7522098
-max_bytes = 9026517
+baseline_bytes = 9469028
+max_bytes = 11362833
 
 [[artifact]]
 profile = "cuda"
 metric = "incin_core_rlib_bytes"
-baseline_bytes = 14391252
-max_bytes = 17269502
+baseline_bytes = 15086302
+max_bytes = 18103562
 
 [[artifact]]
 profile = "cuda"
 metric = "incin_data_rlib_bytes"
-baseline_bytes = 610302
-max_bytes = 732362
+baseline_bytes = 627582
+max_bytes = 753098
 
 [[artifact]]
 profile = "cuda"
 metric = "incin_diagnostics_rlib_bytes"
-baseline_bytes = 347580
-max_bytes = 417096
+baseline_bytes = 333558
+max_bytes = 400269
 
 [[artifact]]
 profile = "cuda"
 metric = "incin_macros_dylib_bytes"
-baseline_bytes = 5555792
-max_bytes = 6666950
+baseline_bytes = 6194456
+max_bytes = 7433347
 
 [[artifact]]
 profile = "cuda"
 metric = "component_total_bytes"
-baseline_bytes = 28471180
-max_bytes = 34165416
+baseline_bytes = 31756734
+max_bytes = 38108080
 
 [[artifact]]
 profile = "cuda"
 metric = "benchmark_binary_bytes"
-baseline_bytes = 4343088
-max_bytes = 5211705
+baseline_bytes = 4815792
+max_bytes = 5778950
 
 [[feature_crate]]
 package = "incin-core"

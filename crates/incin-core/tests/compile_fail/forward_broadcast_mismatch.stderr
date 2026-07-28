@@ -6,7 +6,12 @@ error[E0277]: Cannot broadcast axis `UInt<UInt<UTerm, B1>, B0>` against `UInt<UI
   |
   = help: the trait `BroadcastDim<UInt<UInt<UTerm, B1>, B1>>` is not implemented for `UInt<UInt<UTerm, B1>, B0>`
   = note: two axes broadcast when their types are the same, or one of them is `U1`
-  = help: the following other types implement trait `BroadcastDim<Rhs>`:
-            `UInt<UTerm, B1>` implements `BroadcastDim<D>`
-            `UInt<UTerm, B1>` implements `BroadcastDim<usize>`
+help: `UInt<UTerm, B1>` implements trait `BroadcastDim<Rhs>`
+ --> src/shapes/broadcast.rs
+  |
+  | impl<D: StaticOrNamedDim + NotOne> BroadcastDim<D> for U1 {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `BroadcastDim<D>`
+...
+  | impl BroadcastDim<usize> for U1 {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `BroadcastDim<usize>`
   = note: required for `(UInt<UTerm, B1>, UInt<UInt<UTerm, B1>, B0>)` to implement `BroadcastShape<(UInt<UInt<UTerm, B1>, B1>, UInt<UInt<UTerm, B1>, B1>)>`

@@ -2421,6 +2421,18 @@ life of the process and moved the series to 4.93 µs. `detect.rs::probe_cuda`
 went the same way: it created a context and dropped it, releasing the primary
 context immediately after proving it could be created. A baseline row exists to
 make exactly this visible, and it did so on the first run.
+The toolchain now tracks `stable` rather than a pinned `1.92.0`, with `rustfmt`
+and `clippy` named as components so the gate exists wherever the toolchain does.
+One consequence is worth writing down rather than discovering. The trybuild
+fixtures record rustc's exact diagnostic text, and rustc rewords diagnostics
+between releases, so a new stable can turn those cases red with nothing in this
+repository having changed. Five of them already needed regenerating for `1.97.1`,
+and the diffs were purely rustc rendering impl sites where it used to list types.
+What the cases actually assert does not drift: `compile_fail_cases_fail_for_
+their_stated_reason` pins each one by error code and passed unchanged across the
+move. The recovery is to confirm that guard still passes, then regenerate with
+`TRYBUILD=overwrite`, which `rust-toolchain.toml` now says at the point someone
+will need it.
 One correction applies across several rows. Earlier entries record that clippy is
 unavailable on the installed Rust 1.92 toolchain, which was true of the machine
 that wrote them. The CUDA host's 1.92.0 does ship clippy 0.1.92, so the lint gate

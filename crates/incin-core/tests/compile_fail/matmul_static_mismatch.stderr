@@ -6,7 +6,12 @@ error[E0277]: Cannot contract dimension `UInt<UInt<UTerm, B1>, B1>` with `UInt<U
    |
    = help: the trait `ContractsWith<UInt<UInt<UInt<UTerm, B1>, B0>, B0>>` is not implemented for `UInt<UInt<UTerm, B1>, B1>`
    = note: Matrix multiplication requires the last dim of lhs and the second-to-last of rhs to be the same, or one of them to be a runtime `usize`
-   = help: the following other types implement trait `ContractsWith<Rhs>`:
-             `usize` implements `ContractsWith<D>`
-             `usize` implements `ContractsWith<usize>`
+help: `usize` implements trait `ContractsWith<Rhs>`
+  --> src/tensor/matmul.rs
+   |
+   | impl<D: StaticOrNamedDim> ContractsWith<D> for usize {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `ContractsWith<D>`
+...
+   | impl ContractsWith<usize> for usize {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `ContractsWith<usize>`
    = note: required for `(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UTerm, B1>, B1>)` to implement `MatMulShape<(UInt<UInt<UInt<UTerm, B1>, B0>, B0>, UInt<UInt<UInt<UTerm, B1>, B0>, B1>)>`

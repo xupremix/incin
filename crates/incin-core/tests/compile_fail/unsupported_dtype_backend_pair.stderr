@@ -4,9 +4,14 @@ error[E0277]: the trait bound `WgpuBackendImpl: SupportsDType<f64>` is not satis
 10 |     requires_f64::<WgpuBackendImpl<f32, Wgpu>>();
    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `SupportsDType<f64>` is not implemented for `WgpuBackendImpl`
    |
-   = help: the following other types implement trait `SupportsDType<K>`:
-             `WgpuBackendImpl<T, D>` implements `SupportsDType<Dyn>`
-             `WgpuBackendImpl<T, D>` implements `SupportsDType<f32>`
+help: `WgpuBackendImpl<T, D>` implements trait `SupportsDType<K>`
+  --> $WORKSPACE/crates/incin-backends/src/wgpu/backend.rs
+   |
+   | impl<T: DType, D: Device> SupportsDType<f32> for WgpuBackendImpl<T, D> {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `SupportsDType<f32>`
+...
+   | impl<T: DType, D: Device> SupportsDType<Dyn> for WgpuBackendImpl<T, D> {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `SupportsDType<Dyn>`
 note: required by a bound in `requires_f64`
   --> tests/compile_fail/unsupported_dtype_backend_pair.rs:7:20
    |

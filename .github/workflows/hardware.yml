@@ -124,13 +124,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The toolchain is pinned by rust-toolchain.toml. A self-hosted runner
-      # keeps its state between runs, so this installs the pinned version rather
-      # than assuming whatever the last job left behind.
-      - name: Install the pinned Rust toolchain
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: '1.92.0'
+      # A self-hosted runner keeps its state between runs, so the toolchain is
+      # installed explicitly rather than assuming whatever the last job left
+      # behind. rust-toolchain.toml tracks stable, so this matches it.
+      - name: Install the Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Record device and driver
         run: |
@@ -184,10 +182,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install the pinned Rust toolchain
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: '1.92.0'
+      - name: Install the Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Install WGPU system dependencies
         run: |
@@ -215,10 +211,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install the pinned Rust toolchain
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: '1.92.0'
+      - name: Install the Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Record adapter
         run: |
