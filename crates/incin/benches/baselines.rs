@@ -13,6 +13,9 @@ type B = incin::DefaultBackend;
 #[cfg(feature = "wgpu")]
 type WgpuB = incin_backends::wgpu::WgpuBackendImpl<f32, incin::WgpuN<incin::typenum::U0>>;
 
+#[cfg(feature = "cuda")]
+type CudaB = incin_backends::cuda::CudaBackendImpl<f32, incin::CudaN<incin::typenum::U0>>;
+
 fn capability_baselines(c: &mut Criterion) {
     let mut group = c.benchmark_group("capability");
     group.bench_function("cpu/f32_create", |b| {
@@ -81,10 +84,46 @@ fn gpu_baselines(c: &mut Criterion) {
 #[cfg(not(feature = "wgpu"))]
 fn gpu_baselines(_: &mut Criterion) {}
 
+/// CUDA counterparts of the WGPU series.
+///
+/// The IDs carry the backend even inside the `gpu` group, unlike the WGPU rows
+/// whose spelling is frozen by GOV-005. Two accelerators sharing one Criterion
+/// ID would collide the moment a build enabled both features, and the budget
+/// key is `(backend, id)` rather than `id` alone, so the collision would be
+/// silent in `target/criterion` and invisible to the gate.
+#[cfg(feature = "cuda")]
+fn cuda_baselines(c: &mut Criterion) {
+    let mut capability = c.benchmark_group("capability");
+    capability.bench_function("cuda/f32_create", |b| {
+        b.iter(|| black_box(Tensor::<s![1], CudaB>::zeros(()).unwrap()))
+    });
+    capability.finish();
+
+    let mut group = c.benchmark_group("gpu");
+    group.measurement_time(Duration::from_secs(3));
+    group.sample_size(20);
+
+    let input = Tensor::<Dyn, CudaB>::ones(vec![65_536]).unwrap();
+    group.bench_function("cuda/add_f32/65536", |b| {
+        b.iter(|| black_box(input.add(black_box(&input)).unwrap()))
+    });
+
+    let lhs = Tensor::<Dyn, CudaB>::ones(vec![64, 64]).unwrap();
+    let rhs = Tensor::<Dyn, CudaB>::ones(vec![64, 64]).unwrap();
+    group.bench_function("cuda/matmul_f32/64", |b| {
+        b.iter(|| black_box(lhs.matmul(black_box(&rhs)).unwrap()))
+    });
+    group.finish();
+}
+
+#[cfg(not(feature = "cuda"))]
+fn cuda_baselines(_: &mut Criterion) {}
+
 criterion_group!(
     baselines,
     capability_baselines,
     eager_baselines,
-    gpu_baselines
+    gpu_baselines,
+    cuda_baselines
 );
 criterion_main!(baselines);

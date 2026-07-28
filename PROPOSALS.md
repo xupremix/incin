@@ -2402,6 +2402,20 @@ exit code can tell apart from a pass, so the ignored suite must return at least
 sixty results to count. Until a runner is registered, the CUDA half of this row
 rests on the same commands having been run by hand, which is what the three
 `EXE` rows above record.
+`GOV-004` recorded CUDA as explicitly unavailable and now has three real series,
+captured on the second host and marked as such: the CPU and WGPU rows came from
+a machine with no NVIDIA device, so `[environment.cuda_host]` exists and every
+CUDA series, capability block, and compile profile names it. Compile sizes are
+called out as non-comparable across the two hosts because they run different
+linkers. The first capture was worth more than the numbers. `capability/cuda/
+f32_create` measures 183 ms against 1.8 µs for its WGPU counterpart, and the
+cause is not the allocation: `cuda_from_bytes` builds a fresh `CudaContext` for
+every tensor rather than using the cache `cuda/gpu.rs` already provides, and a
+direct probe puts `CudaContext::new` at 114 ms per call even with a context
+already live. The series is recorded as measured, with the cause named in its
+note, rather than adjusted or left out. Repairing it is `PRF-001` or `PRF-003`
+work; a baseline row exists to make exactly this visible, and it did so on the
+first run.
 `EXE-009` is active and partially landed: the default
 unsupported-operation surface is now gone from all nine operation families, so a
 backend that does not implement an operation says so at its own definition and a

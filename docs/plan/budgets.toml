@@ -172,6 +172,81 @@ max_bytes = 13327412
 
 # Cargo feature inventory. Values are compared as sets, so harmless ordering
 # changes do not fail the gate; names, defaults, and forwarding are exact.
+
+# CUDA series, captured on the cuda_host environment recorded in the
+# baseline document. Accelerator runtime bounds use the 1.5x headroom the
+# WGPU rows use, not the 1.25x the CPU rows use: a GPU shares the device
+# with a compositor and its samples are correspondingly noisier.
+
+[[runtime]]
+id = "capability/cuda/f32_create"
+backend = "cuda"
+baseline_high_ns = 183790000.0
+max_high_ns = 275685000.0
+
+[[runtime]]
+id = "gpu/cuda/add_f32/65536"
+backend = "cuda"
+baseline_high_ns = 15524.0
+max_high_ns = 23286.0
+
+[[runtime]]
+id = "gpu/cuda/matmul_f32/64"
+backend = "cuda"
+baseline_high_ns = 24408.0
+max_high_ns = 36612.0
+
+# Artifact bounds use the 1.2x headroom every other profile uses. These sizes
+# come from a different host and linker than the cpu and wgpu profiles and are
+# a bound on cuda-profile drift only.
+[[artifact]]
+profile = "cuda"
+metric = "incin_rlib_bytes"
+baseline_bytes = 44556
+max_bytes = 53467
+
+[[artifact]]
+profile = "cuda"
+metric = "incin_backends_rlib_bytes"
+baseline_bytes = 7522098
+max_bytes = 9026517
+
+[[artifact]]
+profile = "cuda"
+metric = "incin_core_rlib_bytes"
+baseline_bytes = 14391252
+max_bytes = 17269502
+
+[[artifact]]
+profile = "cuda"
+metric = "incin_data_rlib_bytes"
+baseline_bytes = 610302
+max_bytes = 732362
+
+[[artifact]]
+profile = "cuda"
+metric = "incin_diagnostics_rlib_bytes"
+baseline_bytes = 347580
+max_bytes = 417096
+
+[[artifact]]
+profile = "cuda"
+metric = "incin_macros_dylib_bytes"
+baseline_bytes = 5555792
+max_bytes = 6666950
+
+[[artifact]]
+profile = "cuda"
+metric = "component_total_bytes"
+baseline_bytes = 28471180
+max_bytes = 34165416
+
+[[artifact]]
+profile = "cuda"
+metric = "benchmark_binary_bytes"
+baseline_bytes = 4343088
+max_bytes = 5211705
+
 [[feature_crate]]
 package = "incin-core"
 manifest = "crates/incin-core/Cargo.toml"
