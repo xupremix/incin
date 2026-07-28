@@ -37,7 +37,7 @@ pub trait Shape: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
     /// `Tensor` (produced from `Arg` via `init`).
     type Field: Debug + Clone + Send + Sync;
     /// A fixed-size or `Vec`-backed collection of this shape's
-    /// per-dimension sizes, as returned by `DynShape::dims`.
+    /// per-dimension sizes, as returned by `Shape::dims`.
     type Dims: Debug
         + Clone
         + Default
@@ -56,6 +56,12 @@ pub trait Shape: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
     /// dimensions, returning `None` if `dims` doesn't match `Self`
     /// (e.g. wrong rank, or a statically-fixed dimension that disagrees).
     fn from_dyn(dims: &[usize]) -> Option<Self::Field>;
+    /// Returns every runtime dimension represented by `field`.
+    ///
+    /// This belongs to `Shape`, rather than the legacy `DynShape` extension,
+    /// because safe tensor construction must be able to validate storage for
+    /// every type accepted by `Tensor<S, ..>`.
+    fn dims(field: &Self::Field) -> Self::Dims;
 }
 
 /// The highest tuple rank every shape rule is implemented for.
@@ -104,8 +110,6 @@ pub trait DynShape: Shape {
     fn rank(shape: &Self::Field) -> usize;
     /// Returns the total element count (product of all dimension sizes).
     fn numel(shape: &Self::Field) -> usize;
-    /// Returns each dimension's size.
-    fn dims(shape: &Self::Field) -> Self::Dims;
 }
 
 /// Appends dimension `D` to the end of `Self`'s shape.
@@ -200,6 +204,9 @@ impl Shape for Dyn {
     fn from_dyn(dims: &[usize]) -> Option<Self::Field> {
         Some(dims.to_vec())
     }
+    fn dims(shape: &Self::Field) -> Self::Dims {
+        shape.clone()
+    }
 }
 
 impl DynShape for Dyn {
@@ -213,12 +220,6 @@ impl DynShape for Dyn {
     /// Returns the total element count.
     fn numel(shape: &Self::Field) -> usize {
         shape.iter().product()
-    }
-
-    #[inline(always)]
-    /// Returns each dimension's size.
-    fn dims(shape: &Self::Field) -> Self::Dims {
-        shape.clone()
     }
 }
 
@@ -256,18 +257,15 @@ macro_rules! impl_shape_for_tuple {
                     $name::from_size(dims[$idx])?,
                 )*))
             }
+            fn dims(shape: &Self::Field) -> Self::Dims {
+                [$(shape.$idx.size()),*]
+            }
         }
         impl< $($name: Dim,)* > PartialDynShape for ( $($name,)*) {
             /// The compile-time-known number of dimensions.
             const RANK: usize = $n;
         }
         impl< $($name: Dim,)* > DynShape for ( $($name,)*) {
-            #[inline(always)]
-            /// Returns each dimension's size.
-            fn dims(shape: &Self::Field) -> Self::Dims {
-                [$(shape.$idx.size()),*]
-            }
-
             #[inline(always)]
             /// Returns the number of dimensions.
             fn rank(_: &Self::Field) -> usize {
@@ -308,14 +306,11 @@ macro_rules! impl_shape_for_tuple {
             fn from_dyn(dims: &[usize]) -> Option<Self::Field> {
                 dims.try_into().ok()
             }
-        }
-        impl DynShape for [usize; ($n)] {
-            #[inline(always)]
-            /// Returns each dimension's size.
             fn dims(shape: &Self::Field) -> Self::Dims {
                 *shape
             }
-
+        }
+        impl DynShape for [usize; ($n)] {
             #[inline(always)]
             /// Returns the number of dimensions.
             fn rank(_: &Self::Field) -> usize {
@@ -355,6 +350,9 @@ impl Shape for () {
     fn from_dyn(dims: &[usize]) -> Option<Self::Field> {
         if dims.is_empty() { Some(()) } else { None }
     }
+    fn dims(_: &Self::Field) -> Self::Dims {
+        []
+    }
 }
 
 impl PartialDynShape for () {
@@ -385,12 +383,6 @@ impl DynShape for () {
     /// Returns the total element count.
     fn numel(_: &Self::Field) -> usize {
         1
-    }
-
-    #[inline(always)]
-    /// Returns each dimension's size.
-    fn dims(_: &Self::Field) -> Self::Dims {
-        []
     }
 }
 
@@ -457,6 +449,9 @@ impl<D: Dim> Shape for Vec<D> {
     fn from_dyn(dims: &[usize]) -> Option<Self::Field> {
         dims.iter().map(|&d| D::from_size(d)).collect()
     }
+    fn dims(shape: &Self::Field) -> Self::Dims {
+        shape.iter().map(|d| d.size()).collect()
+    }
 }
 
 impl<D: Dim> DynShape for Vec<D> {
@@ -470,12 +465,6 @@ impl<D: Dim> DynShape for Vec<D> {
     /// Returns the total element count.
     fn numel(shape: &Self::Field) -> usize {
         shape.iter().map(|d| d.size()).product()
-    }
-
-    #[inline(always)]
-    /// Returns each dimension's size.
-    fn dims(shape: &Self::Field) -> Self::Dims {
-        shape.iter().map(|d| d.size()).collect()
     }
 }
 
@@ -491,7 +480,7 @@ mod tests {
         assert_eq!(<() as DynShape>::rank(&()), 0);
         assert_eq!(<() as DynShape>::numel(&()), 1);
         let empty_dims: [usize; 0] = [];
-        assert_eq!(<() as DynShape>::dims(&()), empty_dims);
+        assert_eq!(<() as Shape>::dims(&()), empty_dims);
         assert_eq!(<() as DynShape>::rank(&()), 0);
         assert_eq!(<() as ConstShape>::DIMS, empty_dims);
     }
@@ -501,7 +490,7 @@ mod tests {
         let d = vec![2, 3, 4];
         assert_eq!(<Dyn as DynShape>::rank(&d), 3);
         assert_eq!(<Dyn as DynShape>::numel(&d), 24);
-        assert_eq!(<Dyn as DynShape>::dims(&d), vec![2, 3, 4]);
+        assert_eq!(<Dyn as Shape>::dims(&d), vec![2, 3, 4]);
     }
 
     #[test]
@@ -509,7 +498,7 @@ mod tests {
         let shape: [usize; 3] = [2, 3, 4];
         assert_eq!(<[usize; 3] as DynShape>::rank(&shape), 3);
         assert_eq!(<[usize; 3] as DynShape>::numel(&shape), 24);
-        assert_eq!(<[usize; 3] as DynShape>::dims(&shape), [2, 3, 4]);
+        assert_eq!(<[usize; 3] as Shape>::dims(&shape), [2, 3, 4]);
         assert_eq!(<[usize; 3] as PartialDynShape>::RANK, 3);
     }
 }

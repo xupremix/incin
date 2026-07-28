@@ -18,13 +18,13 @@ impl<
     ) -> Result<Tensor<S, B, K, G>> {
         // weight and bias should technically be 1D tensors matching the last dimension, but we use DynShape for now
         let inner = B::layer_norm::<K>(&self.inner, &weight.inner, Some(&bias.inner), eps)?;
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             self._shape.clone(),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 
     #[inline]
@@ -46,12 +46,12 @@ impl<
             eps,
             0.1,
         )?;
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             self._shape.clone(),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 }

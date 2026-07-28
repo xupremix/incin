@@ -17,19 +17,19 @@ fn test_s_macro() {
     type DynShapeType = s![dyn, dyn];
     let arg = (10, 20); // Arg depends on the dynamic fields
     let field = <DynShapeType as Shape>::init(arg);
-    assert_eq!(<DynShapeType as DynShape>::dims(&field), [10, 20]);
+    assert_eq!(<DynShapeType as Shape>::dims(&field), [10, 20]);
 
     // Mixed dimensions
     /// Mixed shape.
     type MixedShape = s![2, dyn, 5, dyn];
     let mixed_arg = ((), 3, (), 7);
     let mixed_field = <MixedShape as Shape>::init(mixed_arg);
-    assert_eq!(<MixedShape as DynShape>::dims(&mixed_field), [2, 3, 5, 7]);
+    assert_eq!(<MixedShape as Shape>::dims(&mixed_field), [2, 3, 5, 7]);
 
     // Wildcard '_' dimensions
     type WildcardShape = s![_, _];
     let wildcard_field = <WildcardShape as Shape>::init((15, 30));
-    assert_eq!(<WildcardShape as DynShape>::dims(&wildcard_field), [15, 30]);
+    assert_eq!(<WildcardShape as Shape>::dims(&wildcard_field), [15, 30]);
 
     // Array repetition ';' syntax
     type RepetitionShape = s![64; 3];
@@ -44,13 +44,13 @@ fn test_s_macro() {
     }
     type SymDocShape = s![DocBatch, DocSeq];
     let sym_field = <SymDocShape as Shape>::init((32, 128));
-    assert_eq!(<SymDocShape as DynShape>::dims(&sym_field), [32, 128]);
+    assert_eq!(<SymDocShape as Shape>::dims(&sym_field), [32, 128]);
 
     // Tail Ellipsis '..' syntax (s![.., 128])
     type TailFeatureShape = s![.., 128];
     let tail_field = <TailFeatureShape as Shape>::init(vec![32, 16, 128]);
     assert_eq!(
-        <TailFeatureShape as DynShape>::dims(&tail_field),
+        <TailFeatureShape as Shape>::dims(&tail_field),
         [32, 16, 128]
     );
     assert_eq!(<TailFeatureShape as DynShape>::rank(&tail_field), 3);
@@ -59,7 +59,7 @@ fn test_s_macro() {
     type HeadFeatureShape = s![128, ..];
     let head_field = <HeadFeatureShape as Shape>::init(vec![128, 64, 32]);
     assert_eq!(
-        <HeadFeatureShape as DynShape>::dims(&head_field),
+        <HeadFeatureShape as Shape>::dims(&head_field),
         [128, 64, 32]
     );
     assert_eq!(<HeadFeatureShape as DynShape>::rank(&head_field), 3);
@@ -68,7 +68,7 @@ fn test_s_macro() {
     type SpanFeatureShape = s![32, .., 128];
     let span_field = <SpanFeatureShape as Shape>::init(vec![32, 16, 8, 128]);
     assert_eq!(
-        <SpanFeatureShape as DynShape>::dims(&span_field),
+        <SpanFeatureShape as Shape>::dims(&span_field),
         [32, 16, 8, 128]
     );
     assert_eq!(<SpanFeatureShape as DynShape>::rank(&span_field), 4);

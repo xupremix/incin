@@ -2350,10 +2350,11 @@ Exit criteria:
 ### Canonical AI execution ledger
 
 This is the implementation handoff contract. Snapshot: **2026-07-27**.
-`GOV-005` is complete: every GOV-004 series now has a declared upper bound
-that CI enforces, and the feature inventory is checked against what cargo
-actually reports rather than against a hand-kept list. The shape track is next
-eligible at `SHP-007`. The §4 themes above
+`SHP-007` and `SHP-008` are complete, and they landed together because the
+generalized matmul rules cannot be constructed under the old bound. The
+broadcast and matmul rules now cover mixed, named, and runtime axis spellings
+at every rank the generator emits, and tensor construction is witnessed rather
+than trusted. `EXE-004` is next eligible. The §4 themes above
 describe intent; **this ledger and its dependency graph define order**, and the
 tier column defines what a release is entitled to rely on. Where a theme
 narrative and the graph disagree, the graph wins — themes are prose, edges are
@@ -2421,8 +2422,8 @@ Silicon · `compile` compiled execution · `grad` autograd · `dist` distributed
 | SHP-004 | core | shape | [x] | SHP-003 | `crates/incin-core/src/shapes/{broadcast,reshape,shape_ops}.rs; crates/incin-core/src/tensor/ops/` | Fallible broadcast, reshape, and flatten with no panic or sentinel output; the from_dyn().unwrap() chain is removed | `cargo test -p incin-core --test shape_fallible` |
 | SHP-005 | core | shape | [x] | SHP-003 | `crates/incin-core/src/shapes/spatial.rs` | Fallible matmul, conv, and pool geometry as a named checked sequence; rejects stride 0 and stops zeroing spatial dims | `cargo test -p incin-core --test spatial_geometry` |
 | SHP-006 | core | shape | [x] | SHP-001 | `crates/incin-macros/src/rank.rs; crates/incin-core/src/shapes/` | One rank generator behind a single MAX_RANK; closes the ElementCount rank-4 versus Shape rank-8 gap | `cargo test -p incin-core --test rank_matrix` |
-| SHP-007 | core | shape | [ ] | SHP-004,SHP-005,SHP-006 | `crates/incin-core/tests/; crates/incin-core/tests/compile_fail/` | Close mixed, named, and rank gaps; compile-pass, compile-fail, and fuzz suites | `cargo test -p incin-core` |
-| SHP-008 | core | shape | [ ] | SHP-007 | `crates/incin-core/src/tensor/base.rs` | Restrict unchecked construction to a witnessed constructor; audit all ~45 obligations and test Flatten diagnostics | `cargo test -p incin-core --test construction_witness` |
+| SHP-007 | core | shape | [x] | SHP-004,SHP-005,SHP-006 | `crates/incin-core/tests/; crates/incin-core/tests/compile_fail/` | Close mixed, named, and rank gaps; compile-pass, compile-fail, and fuzz suites | `cargo test -p incin-core` |
+| SHP-008 | core | shape | [x] | SHP-007 | `crates/incin-core/src/tensor/base.rs` | Restrict unchecked construction to a witnessed constructor; audit all ~45 obligations and test Flatten diagnostics | `cargo test -p incin-core --test construction_witness` |
 | EXE-001 | core | exec | [x] | SHP-003,GOV-002 | `crates/incin-core/src/exec/spec.rs` | Freeze the operation taxonomy and descriptor schema; promote OperationFamily to OperationKind rather than duplicating it | `cargo test -p incin-core --test descriptor_schema` |
 | EXE-002 | core | exec | [x] | EXE-001 | `crates/incin-core/src/exec/proof.rs` | Sealed Validated<O> and proof provenance, with privacy compile-fail tests and the paranoid-validation feature | `cargo test -p incin-core --test compile_tests` |
 | EXE-003 | core | exec | [x] | EXE-002 | `crates/incin-core/src/exec/rule.rs` | ShapeRule lowering for broadcast, reduction, reshape, matmul, conv, and pool, each restating its frontend trait Output | `cargo test -p incin-core --test lowering_parity` |

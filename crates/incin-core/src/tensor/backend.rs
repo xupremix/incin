@@ -2117,16 +2117,45 @@ pub mod dummy {
     /// still no element values exist behind any of it.
     impl<T: DType, D: Device + Clone + 'static> TensorOps<Self> for DummyBackend<T, D> {
         /// Replaces the trailing dimension with `rhs`'s trailing dimension,
-        /// mirroring real matmul's output shape.
+        /// contraction, mirroring real matmul's output shape.
         fn matmul<K: DType>(
             lhs: &<Self as Backend>::Storage<K>,
             rhs: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
-            let mut out = lhs.clone();
-            if out.len() >= 2 && rhs.len() >= 2 {
-                let len = out.len();
-                out[len - 1] = rhs[rhs.len() - 1];
+            if lhs.len() < 2 || rhs.len() < 2 || lhs[lhs.len() - 1] != rhs[rhs.len() - 2] {
+                return Err(crate::err::Error::ShapeMismatch {
+                    op: "matmul",
+                    expected: lhs.clone(),
+                    got: rhs.clone(),
+                    msg: "matmul requires rank >= 2 and equal contraction dimensions".into(),
+                });
             }
+
+            let lhs_batch = &lhs[..lhs.len() - 2];
+            let rhs_batch = &rhs[..rhs.len() - 2];
+            let rank = lhs_batch.len().max(rhs_batch.len());
+            let mut out = alloc::vec::Vec::with_capacity(rank + 2);
+            for axis in 0..rank {
+                let from_end = rank - axis;
+                let l = lhs_batch
+                    .len()
+                    .checked_sub(from_end)
+                    .map_or(1, |index| lhs_batch[index]);
+                let r = rhs_batch
+                    .len()
+                    .checked_sub(from_end)
+                    .map_or(1, |index| rhs_batch[index]);
+                if l != r && l != 1 && r != 1 {
+                    return Err(crate::err::Error::ShapeMismatch {
+                        op: "matmul",
+                        expected: lhs.clone(),
+                        got: rhs.clone(),
+                        msg: "matmul batch dimensions are not broadcast-compatible".into(),
+                    });
+                }
+                out.push(if l == 1 { r } else { l });
+            }
+            out.extend_from_slice(&[lhs[lhs.len() - 2], rhs[rhs.len() - 1]]);
             Ok(out)
         }
         /// Always `0.0` — there is no real element value to read.

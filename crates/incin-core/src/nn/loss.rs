@@ -158,13 +158,13 @@ impl<R: ReductionMode> MSELoss<R> {
             out_shape_dims = pred.dims().into();
         }
         let out_shape = field_from_dims::<R::Output>(OperationKind::Reduction, &out_shape_dims)?;
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             out_shape,
             pred._dtype.clone(),
             pred._device.clone(),
             pred._grad.clone(),
-        ))
+        )
     }
 }
 
@@ -217,13 +217,13 @@ impl<R: ReductionMode> CrossEntropyLoss<R> {
             }
         }
         let out_shape = field_from_dims::<R::Output>(OperationKind::Reduction, &out_shape_dims)?;
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             out_shape,
             pred._dtype.clone(),
             pred._device.clone(),
             pred._grad.clone(),
-        ))
+        )
     }
 }
 
@@ -261,13 +261,13 @@ impl<R: ReductionMode> L1Loss<R> {
             out_shape_dims = pred.dims().into();
         }
         let out_shape = field_from_dims::<R::Output>(OperationKind::Reduction, &out_shape_dims)?;
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             out_shape,
             pred._dtype.clone(),
             pred._device.clone(),
             pred._grad.clone(),
-        ))
+        )
     }
 }
 
@@ -305,12 +305,12 @@ impl<R: ReductionMode> BCEWithLogitsLoss<R> {
             out_shape_dims = pred.dims().into();
         }
         let out_shape = field_from_dims::<R::Output>(OperationKind::Reduction, &out_shape_dims)?;
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             out_shape,
             pred._dtype.clone(),
             pred._device.clone(),
             pred._grad.clone(),
-        ))
+        )
     }
 }

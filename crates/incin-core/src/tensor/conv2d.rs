@@ -134,12 +134,12 @@ impl<
         )?;
 
         let output_shape = S1::output_shape(&self._shape, &weight._shape);
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             output_shape,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 }

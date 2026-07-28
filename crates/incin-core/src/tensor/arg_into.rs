@@ -225,7 +225,9 @@ impl<T1, T2> NotUnit for (T1, T2) {}
 impl<T1, T2, T3> NotUnit for (T1, T2, T3) {}
 impl<T1, T2, T3, T4> NotUnit for (T1, T2, T3, T4) {}
 impl<T1, T2, T3, T4, T5> NotUnit for (T1, T2, T3, T4, T5) {}
+impl<T1, T2, T3, T4, T5, T6> NotUnit for (T1, T2, T3, T4, T5, T6) {}
 impl<T1, T2, T3, T4, T5, T6, T7> NotUnit for (T1, T2, T3, T4, T5, T6, T7) {}
+impl<T1, T2, T3, T4, T5, T6, T7, T8> NotUnit for (T1, T2, T3, T4, T5, T6, T7, T8) {}
 
 impl<T, const N: usize> NotUnit for [T; N] {}
 impl<T, const N: usize> NotUnit for &[T; N] {}
@@ -289,6 +291,7 @@ impl_dim_tuple_arg_into!(D0, D1, D2);
 impl_dim_tuple_arg_into!(D0, D1, D2, D3, D4);
 impl_dim_tuple_arg_into!(D0, D1, D2, D3, D4, D5);
 impl_dim_tuple_arg_into!(D0, D1, D2, D3, D4, D5, D6);
+impl_dim_tuple_arg_into!(D0, D1, D2, D3, D4, D5, D6, D7);
 
 // ============================================================================
 // Fully-static shape construction from ()
@@ -297,7 +300,7 @@ impl_dim_tuple_arg_into!(D0, D1, D2, D3, D4, D5, D6);
 
 macro_rules! impl_const_dim_tuple_from_unit {
     ($($name:ident),+ $(,)?) => {
-        // Handled by incin_macros::impl_arg_into!(7)
+        // Handled by incin_macros::impl_arg_into!(), through MAX_RANK.
     };
 }
 
@@ -321,7 +324,7 @@ impl_const_dim_tuple_from_unit!(D0, D1, D2, D3, D4, D5, D6);
 // partially-static shapes.
 // ============================================================================
 
-incin_macros::impl_arg_into!(7);
+incin_macros::impl_arg_into!();
 
 // ============================================================================
 // 4-tuple lifting: converts user args into TensorArgsData

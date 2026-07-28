@@ -70,13 +70,13 @@ where
         // Generate uniform mask in [0, 1)
         let dtype = <B::FloatElem as ConstDType>::DTYPE;
         let mask_inner = B::rand(x.dims().as_ref(), dtype, &x.device()?)?;
-        let mask = Tensor::<S, B, B::FloatElem, NoGrad>::from_parts_unchecked(
+        let mask = Tensor::<S, B, B::FloatElem, NoGrad>::from_parts(
             mask_inner,
             x._shape.clone(),
             x._dtype.clone(),
             x._device.clone(),
             core::marker::PhantomData,
-        );
+        )?;
 
         // mask - p is positive for (1 - p) proportion of elements
         let mask = mask.add_scalar(-self.p)?;

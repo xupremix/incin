@@ -1,0 +1,32 @@
+error[E0624]: associated function `from_parts_witnessed` is private
+ --> tests/compile_fail/construction_witness_is_private.rs:5:44
+  |
+5 |       let _ = Tensor::<Dyn, CpuBackendImpl>::from_parts_witnessed();
+  |                                              ^^^^^^^^^^^^^^^^^^^^ private associated function
+  |
+ ::: src/tensor/base.rs
+  |
+  | /     fn from_parts_witnessed(
+  | |         inner: B::Storage<K>,
+  | |         shape: S::Field,
+  | |         dtype: K::Field,
+... |
+  | |         _witness: ConstructionWitness,
+  | |     ) -> Self {
+  | |_____________- private associated function defined here
+
+error[E0061]: this function takes 6 arguments but 0 arguments were supplied
+ --> tests/compile_fail/construction_witness_is_private.rs:5:13
+  |
+5 |     let _ = Tensor::<Dyn, CpuBackendImpl>::from_parts_witnessed();
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^-- multiple arguments are missing
+  |
+note: associated function defined here
+ --> src/tensor/base.rs
+  |
+  |     fn from_parts_witnessed(
+  |        ^^^^^^^^^^^^^^^^^^^^
+help: provide the arguments
+  |
+5 |     let _ = Tensor::<Dyn, CpuBackendImpl>::from_parts_witnessed(/* CpuStorage */, /* Vec<usize> */, /* PhantomData<f32> */, /* PhantomData<incin_backends::Cpu> */, /* PhantomData<Grad> */, /* incin_core::tensor::base::ConstructionWitness */);
+  |                                                                 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++

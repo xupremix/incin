@@ -108,7 +108,7 @@ where
         let weight = self.weight.as_tensor()?;
         let out = B::embedding(x.inner(), weight.inner())?;
 
-        let mut dims = <InS as DynShape>::dims(x.shape_field()).into();
+        let mut dims = <InS as Shape>::dims(x.shape_field()).into();
         dims.push(<S::Embed as typenum::Unsigned>::USIZE);
 
         let shape = field_from_dims::<<InS as AppendDim<S::Embed>>::Output>(
@@ -116,12 +116,12 @@ where
             &dims,
         )?;
 
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             out,
             shape,
             x._dtype.clone(),
             x._device.clone(),
             core::marker::PhantomData,
-        ))
+        )
     }
 }

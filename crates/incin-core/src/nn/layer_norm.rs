@@ -109,12 +109,12 @@ impl<
         let weight = self.weight.as_tensor()?.into_dyn();
         let bias = self.bias.as_tensor()?.into_dyn();
         let out = B::layer_norm(x.inner(), weight.inner(), Some(bias.inner()), self.eps)?;
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             out,
             x._shape.clone(),
             x._dtype.clone(),
             x._device.clone(),
             x._grad,
-        ))
+        )
     }
 }

@@ -54,13 +54,13 @@ impl<
             }
         }
         let out_shape = field_from_dims::<R::Output>(OperationKind::Reduction, &out_shape_dims)?;
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             out_shape,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 
     /// Computes the Mean Squared Error (MSE) loss.
@@ -90,13 +90,13 @@ impl<
             out_shape_dims = self.dims().into();
         }
         let out_shape = field_from_dims::<R::Output>(OperationKind::Reduction, &out_shape_dims)?;
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             out_shape,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 
     /// `l1_loss`.
@@ -118,13 +118,13 @@ impl<
             out_shape_dims = self.dims().into();
         }
         let out_shape = field_from_dims::<R::Output>(OperationKind::Reduction, &out_shape_dims)?;
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             out_shape,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 
     /// `bce_with_logits_loss`.
@@ -149,12 +149,12 @@ impl<
             out_shape_dims = self.dims().into();
         }
         let out_shape = field_from_dims::<R::Output>(OperationKind::Reduction, &out_shape_dims)?;
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             out_shape,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 }

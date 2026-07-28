@@ -70,19 +70,9 @@ impl StaticDim for typenum::UTerm {}
 
 impl<A: StaticDim, B: StaticDim> StaticDim for ProdDim<A, B> {}
 
-/// Marker for a dimension usable in a static matmul shape position: any
-/// `Dim` that isn't `usize` — `typenum` dims, `ProdDim` (post-flatten
-/// composites), and `symbolic_dim!`-named dims all qualify.
+/// Marker for a dimension with a type-level identity: typenum dims, ProdDim composites, and symbolic names, but not a runtime usize.
 ///
-/// Deliberately **not** just `Dim` directly: `usize: Dim` already holds, and
-/// `MatMulShape`'s "partially/fully dynamic" impls below are hardcoded for
-/// `usize` specifically (e.g. `MatMulShape<(K, N)> for (usize, K)`). If the
-/// fully-static impl's `M`/`K`/`N` were bounded by plain `Dim`, `M = usize`
-/// would also satisfy it, directly overlapping/conflicting with that
-/// `usize`-specific impl — a coherence error (E0119). Routing through this
-/// dedicated marker (rather than widening `StaticDim` itself, which
-/// `BroadcastShape`/`conv2d` also key off of and haven't been audited for
-/// this change) keeps the fix scoped to matmul.
+/// ContractsWith and the broadcast axis rule use this marker to keep their identity and runtime impls disjoint. Whole matmul shapes are otherwise bounded by Dim, so a runtime axis may appear at any supported position.
 pub trait StaticOrNamedDim: Dim {}
 impl<T: StaticDim> StaticOrNamedDim for T {}
 
@@ -266,10 +256,11 @@ impl MatMulShape<Dyn> for Dyn {
 macro_rules! impl_batched_matmul {
     // Both have same batch
     ( $( $batch:ident ),+ ) => {
-        impl< $($batch: StaticOrNamedDim,)* M: StaticOrNamedDim, K: StaticOrNamedDim, N: StaticOrNamedDim> MatMulShape<( $($batch,)* K, N)> for ( $($batch,)* M, K)
+        impl< $($batch: Dim,)* M: Dim, KL: Dim, KR: Dim, N: Dim> MatMulShape<( $($batch,)* KR, N)> for ( $($batch,)* M, KL)
         where
-            ( $($batch,)* M, K): DynShape,
-            ( $($batch,)* K, N): DynShape,
+            ( $($batch,)* M, KL): DynShape,
+            ( $($batch,)* KR, N): DynShape,
+            KL: ContractsWith<KR>,
         {
             /// The resulting shape after multiplying `Self` by `Rhs`.
             type Output = ( $($batch,)* M, N);
@@ -281,10 +272,10 @@ macro_rules! impl_batched_matmul {
             /// invoked with.
             fn output_shape(
                 lhs: &<Self as Shape>::Field,
-                rhs: &<( $($batch,)* K, N) as Shape>::Field,
+                rhs: &<( $($batch,)* KR, N) as Shape>::Field,
             ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
-                let mut dims: Vec<usize> = <Self as DynShape>::dims(lhs).into();
-                let rhs_dims: Vec<usize> = <( $($batch,)* K, N) as DynShape>::dims(rhs).into();
+                let mut dims: Vec<usize> = <Self as Shape>::dims(lhs).into();
+                let rhs_dims: Vec<usize> = <( $($batch,)* KR, N) as Shape>::dims(rhs).into();
                 let last = dims.len() - 1;
                 // The batch axes and the contraction share a type on both
                 // sides, which proves nothing when that type is a `dim!` name:
@@ -300,9 +291,10 @@ macro_rules! impl_batched_matmul {
             }
         }
         // Lhs has batch
-        impl< $($batch: StaticOrNamedDim,)* M: StaticOrNamedDim, K: StaticOrNamedDim, N: StaticOrNamedDim> MatMulShape<(K, N)> for ( $($batch,)* M, K)
+        impl< $($batch: Dim,)* M: Dim, KL: Dim, KR: Dim, N: Dim> MatMulShape<(KR, N)> for ( $($batch,)* M, KL)
         where
-            ( $($batch,)* M, K): DynShape,
+            ( $($batch,)* M, KL): DynShape,
+            KL: ContractsWith<KR>,
         {
             /// The resulting shape after multiplying `Self` by `Rhs`.
             type Output = ( $($batch,)* M, N);
@@ -311,9 +303,9 @@ macro_rules! impl_batched_matmul {
             /// plain `(K, N)` here, so direct field access is simplest).
             fn output_shape(
                 lhs: &<Self as Shape>::Field,
-                rhs: &<(K, N) as Shape>::Field,
+                rhs: &<(KR, N) as Shape>::Field,
             ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
-                let mut dims: Vec<usize> = <Self as DynShape>::dims(lhs).into();
+                let mut dims: Vec<usize> = <Self as Shape>::dims(lhs).into();
                 let last = dims.len() - 1;
                 checked_contraction(dims[last], rhs.0.size())?;
                 dims[last] = rhs.1.size();
@@ -321,9 +313,10 @@ macro_rules! impl_batched_matmul {
             }
         }
         // Rhs has batch
-        impl< $($batch: StaticOrNamedDim,)* M: StaticOrNamedDim, K: StaticOrNamedDim, N: StaticOrNamedDim> MatMulShape<( $($batch,)* K, N)> for (M, K)
+        impl< $($batch: Dim,)* M: Dim, KL: Dim, KR: Dim, N: Dim> MatMulShape<( $($batch,)* KR, N)> for (M, KL)
         where
-            ( $($batch,)* K, N): DynShape,
+            ( $($batch,)* KR, N): DynShape,
+            KL: ContractsWith<KR>,
         {
             /// The resulting shape after multiplying `Self` by `Rhs`.
             type Output = ( $($batch,)* M, N);
@@ -332,9 +325,9 @@ macro_rules! impl_batched_matmul {
             /// (`lhs` is always a plain `(M, K)` here).
             fn output_shape(
                 lhs: &<Self as Shape>::Field,
-                rhs: &<( $($batch,)* K, N) as Shape>::Field,
+                rhs: &<( $($batch,)* KR, N) as Shape>::Field,
             ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
-                let mut dims: Vec<usize> = <( $($batch,)* K, N) as DynShape>::dims(rhs).into();
+                let mut dims: Vec<usize> = <( $($batch,)* KR, N) as Shape>::dims(rhs).into();
                 let second_last = dims.len() - 2;
                 checked_contraction(lhs.1.size(), dims[second_last])?;
                 dims[second_last] = lhs.0.size();
@@ -344,85 +337,7 @@ macro_rules! impl_batched_matmul {
     };
 }
 
-impl_batched_matmul!(B1);
-impl_batched_matmul!(B1, B2);
-impl_batched_matmul!(B1, B2, B3);
-
-// Dynamic batch implementation
-impl<M: StaticOrNamedDim, K: StaticOrNamedDim, N: StaticOrNamedDim> MatMulShape<(usize, K, N)>
-    for (usize, M, K)
-{
-    /// The resulting shape after multiplying `Self` by `Rhs`.
-    type Output = (usize, M, N);
-    /// Computes the runtime `Field` (dimension values) of `Output` from
-    /// the operands' own runtime fields.
-    fn output_shape(
-        lhs: &<Self as Shape>::Field,
-        rhs: &<(usize, K, N) as Shape>::Field,
-    ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
-        checked_batch(0, lhs.0, rhs.0)?;
-        checked_contraction(lhs.2.size(), rhs.1.size())?;
-        Ok((lhs.0, lhs.1, rhs.2))
-    }
-}
-impl<M: StaticOrNamedDim, K: StaticOrNamedDim, N: StaticOrNamedDim> MatMulShape<(K, N)>
-    for (usize, M, K)
-{
-    /// The resulting shape after multiplying `Self` by `Rhs`.
-    type Output = (usize, M, N);
-    /// Computes the runtime `Field` (dimension values) of `Output` from
-    /// the operands' own runtime fields.
-    fn output_shape(
-        lhs: &<Self as Shape>::Field,
-        rhs: &<(K, N) as Shape>::Field,
-    ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
-        checked_contraction(lhs.2.size(), rhs.0.size())?;
-        Ok((lhs.0, lhs.1, rhs.1))
-    }
-}
-impl<M: StaticOrNamedDim, K: StaticOrNamedDim, N: StaticOrNamedDim> MatMulShape<(K, N)>
-    for (usize, usize, M, K)
-{
-    /// The resulting shape after multiplying `Self` by `Rhs`.
-    type Output = (usize, usize, M, N);
-    /// Computes the runtime `Field` (dimension values) of `Output` from
-    /// the operands' own runtime fields.
-    fn output_shape(
-        lhs: &<Self as Shape>::Field,
-        rhs: &<(K, N) as Shape>::Field,
-    ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
-        Ok((lhs.0, lhs.1, lhs.2, rhs.1))
-    }
-}
-impl<M: StaticOrNamedDim, K: StaticOrNamedDim, N: StaticOrNamedDim> MatMulShape<(usize, K, N)>
-    for (M, K)
-{
-    /// The resulting shape after multiplying `Self` by `Rhs`.
-    type Output = (usize, M, N);
-    /// Computes the runtime `Field` (dimension values) of `Output` from
-    /// the operands' own runtime fields.
-    fn output_shape(
-        lhs: &<Self as Shape>::Field,
-        rhs: &<(usize, K, N) as Shape>::Field,
-    ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
-        checked_contraction(lhs.1.size(), rhs.1.size())?;
-        Ok((rhs.0, lhs.0, rhs.2))
-    }
-}
-impl<M: StaticOrNamedDim, K: StaticOrNamedDim, N: StaticOrNamedDim>
-    MatMulShape<(usize, usize, K, N)> for (M, K)
-{
-    /// The resulting shape after multiplying `Self` by `Rhs`.
-    type Output = (usize, usize, M, N);
-    /// Computes the runtime `Field` (dimension values) of `Output` from
-    /// the operands' own runtime fields.
-    fn output_shape(
-        lhs: &<Self as Shape>::Field,
-        rhs: &<(usize, usize, K, N) as Shape>::Field,
-    ) -> core::result::Result<<Self::Output as Shape>::Field, ShapeError> {
-        Ok((rhs.0, rhs.1, lhs.0, rhs.3))
-    }
-}
+incin_macros::rank_sweep!(matmul_batch => impl_batched_matmul, min = 3);
 
 // ============================================================================
 // The matmul method on Tensor
@@ -438,13 +353,13 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Ten
     {
         let inner = B::matmul::<K>(&self.inner, &rhs.inner)?;
         let output_shape = S1::output_shape(&self._shape, &rhs._shape)?;
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             output_shape,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 
     /// Computes vector dot product of 1D/matching tensors `self` and `rhs`, returning a scalar tensor.
@@ -482,13 +397,13 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Ten
         S1: DynShape,
     {
         let inner = B::addmm::<K>(&self.inner, &mat1.inner, &mat2.inner, beta, alpha)?;
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             self._shape.clone(),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 
     /// Batched matrix multiplication for 3D tensors: `(B, M, K) x (B, K, N) -> (B, M, N)`.
@@ -499,13 +414,13 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Ten
     {
         let inner = B::bmm::<K>(&self.inner, &rhs.inner)?;
         let out_shape = B::shape(&inner);
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             out_shape,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 
     /// Scaled Dot-Product Attention: `softmax(q * k^T / scale) * v`.
@@ -526,12 +441,12 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Ten
         let inner =
             B::scaled_dot_product_attention::<K>(&q.inner, &k.inner, &v.inner, mask_inner, scale)?;
         let out_shape = B::shape(&inner);
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             out_shape,
             q._dtype.clone(),
             q._device.clone(),
             q._grad.clone(),
-        ))
+        )
     }
 }

@@ -92,13 +92,13 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
 
         let out_shape = B::shape(&inner);
 
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             out_shape,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 }
 
@@ -135,13 +135,13 @@ impl<
             <S as crate::shapes::Pool2dShape<KShape, SShape, P, Dilation>>::compute_output_shape(
                 &self._shape,
             )?;
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             out,
             shape,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 }
 
@@ -170,13 +170,13 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         let new_dims = S2::dims(&new_shape_field);
 
         let inner = B::reshape(&self.inner, new_dims.as_ref())?;
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             new_shape_field,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 
     /// Reshapes a tensor based on python-like slicing syntax via the `idx!` macro.
@@ -193,13 +193,13 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         let in_shape_vec = S::dims(&self._shape);
         let out_shape_vec = T::calculate_shape(in_shape_vec.as_ref());
         let inner = B::reshape(&self.inner, &out_shape_vec)?;
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             field_from_dims::<T::Output>(OperationKind::Reshape, &out_shape_vec)?,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 
     /// Slices a tensor based on python-like slicing syntax via the `idx!` macro.
@@ -215,13 +215,13 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             out_shape_vec.push(end - start);
         }
 
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             field_from_dims::<T::Output>(OperationKind::Reshape, &out_shape_vec)?,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 
     /// Narrows the tensor dynamically, returning a tensor with `Dyn` shape.
@@ -291,13 +291,13 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         }
 
         let inner = B::reshape(&self.inner, new_dims.as_ref())?;
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             new_shape_field,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 
     /// Broadcast the tensor to the specific shape `S2`.
@@ -305,13 +305,13 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         let new_shape_field = S2::init(args);
         let new_dims = S2::dims(&new_shape_field);
         let inner = B::broadcast_as(&self.inner, new_dims.as_ref())?;
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             new_shape_field,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 
     /// `to_dtype`.
@@ -321,13 +321,13 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         let field = T2::init(());
         let incin_dtype = T2::to_incin(&field);
         let inner = B::tensor_to_dtype::<K, T2>(&self.inner, incin_dtype)?;
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             self._shape.clone(),
             field,
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 
     /// Extracts a single scalar value from a 0D or 1D tensor.
@@ -447,13 +447,13 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         let mut out_dims = S::dims(&self._shape).into();
         out_dims.swap(D1, D2);
 
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             field_from_dims::<S::Output>(OperationKind::Reshape, &out_dims)?,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 
     /// Flattens dimensions from `START` to `END` inclusive.
@@ -474,24 +474,40 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     where
         S: crate::shapes::Flatten<START, END>,
     {
-        let inner = B::flatten(&self.inner, START, END)?;
         let in_dims: Vec<usize> = S::dims(&self._shape).into();
+        if START > END || END >= in_dims.len() {
+            return Err(crate::shapes::ShapeError::InvalidAxisRange {
+                operation: OperationKind::Flatten,
+                start: START,
+                end: END,
+                rank: in_dims.len(),
+            }
+            .into());
+        }
+
+        let inner = B::flatten(&self.inner, START, END)?;
         let mut out_dims = Vec::new();
 
         out_dims.extend_from_slice(&in_dims[0..START]);
 
-        let prod: usize = in_dims[START..=END].iter().product();
+        let prod = in_dims[START..=END]
+            .iter()
+            .try_fold(1usize, |acc, &dim| acc.checked_mul(dim))
+            .ok_or(crate::shapes::ShapeError::ArithmeticOverflow {
+                operation: OperationKind::Flatten,
+                expression: "flattened dimension product",
+            })?;
         out_dims.push(prod);
 
         out_dims.extend_from_slice(&in_dims[(END + 1)..]);
 
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             field_from_dims::<S::Output>(OperationKind::Reshape, &out_dims)?,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 
     /// Dynamically concatenates a slice of tensors along `dim`.
@@ -510,13 +526,13 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         let inner = B::concat(&raw_tensors, dim)?;
         let mut out_shape = B::shape(&tensors[0].inner);
         out_shape[dim] = tensors.iter().map(|t| B::shape(&t.inner)[dim]).sum();
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             field_from_dims::<Dyn>(OperationKind::Reshape, &out_shape)?,
             tensors[0]._dtype.clone(),
             tensors[0]._device.clone(),
             tensors[0]._grad.clone(),
-        ))
+        )
     }
 
     /// Statically concatenates `self` with `other` along `Axis`.
@@ -543,7 +559,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         let other_dims: Vec<usize> = S2::dims(&other._shape).into();
         out_dims[dim] += other_dims[dim];
 
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             <<S as crate::shapes::concat::ConcatShape<S2, Axis>>::Output as Shape>::from_dyn(
                 &out_dims,
@@ -552,7 +568,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 
     /// Dynamically concatenates `self` with `other` along `dim`.
@@ -567,13 +583,13 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         let inner = B::concat(&[&self.inner, &other.inner], dim)?;
         let mut out_shape = B::shape(&self.inner);
         out_shape[dim] += B::shape(&other.inner)[dim];
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             field_from_dims::<Dyn>(OperationKind::Reshape, &out_shape)?,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 
     /// Dynamically stacks a slice of tensors along `dim`.
@@ -591,13 +607,13 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         let inner = B::stack(&raw_tensors, dim)?;
         let mut out_shape = B::shape(&tensors[0].inner);
         out_shape.insert(dim, tensors.len());
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             field_from_dims::<Dyn>(OperationKind::Reshape, &out_shape)?,
             tensors[0]._dtype.clone(),
             tensors[0]._device.clone(),
             tensors[0]._grad.clone(),
-        ))
+        )
     }
 
     /// Statically stacks `self` with `other` along `Axis`.
@@ -619,14 +635,14 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         let mut out_dims: Vec<usize> = S::dims(&self._shape).into();
         out_dims.insert(dim, 2);
 
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             <<S as crate::shapes::stack::StackShape<Axis>>::Output as Shape>::from_dyn(&out_dims)
                 .unwrap(),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 
     /// Dynamically stacks `self` with `other` along `dim`.
@@ -638,13 +654,13 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         let inner = B::stack(&[&self.inner, &other.inner], dim)?;
         let mut out_shape = B::shape(&self.inner);
         out_shape.insert(dim, 2);
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             field_from_dims::<Dyn>(OperationKind::Reshape, &out_shape)?,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 
     /// Conditional selection: picks elements from `on_true` where `self` is non-zero, and `on_false` elsewhere.
@@ -658,13 +674,13 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     {
         <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
         let inner = B::where_cond::<K, K>(&self.inner, &on_true.inner, &on_false.inner)?;
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             on_true._shape.clone(),
             on_true._dtype.clone(),
             on_true._device.clone(),
             on_true._grad.clone(),
-        ))
+        )
     }
 
     /// Fills elements where `mask` is non-zero with `value`.
@@ -684,13 +700,13 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
         let val_f64 = value.into().to_f64();
         let inner = B::masked_fill::<K, KMask>(&self.inner, &mask.inner, val_f64)?;
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             self._shape.clone(),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 
     /// Gathers values along `dim` specified by `index`.
@@ -700,13 +716,13 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         index: &Tensor<S2, B, KInt, G2>,
     ) -> Result<Tensor<S2, B, K, G>> {
         let inner = B::gather::<K, KInt>(&self.inner, dim, &index.inner)?;
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             index._shape.clone(),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 
     /// Scatters `src` values along `dim` into `self` using `index`.
@@ -727,13 +743,13 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     {
         <S2 as ShapeEq<S3>>::ASSERT_SHAPES_MATCH;
         let inner = B::scatter::<K, KInt>(&self.inner, dim, &index.inner, &src.inner)?;
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             self._shape.clone(),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 
     /// Selects slices along `dim` given 1D `index`.
@@ -744,39 +760,39 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     ) -> Result<Tensor<Dyn, B, K, G>> {
         let inner = B::index_select::<K, KInt>(&self.inner, dim, &index.inner)?;
         let out_shape = B::shape(&inner);
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             out_shape,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 
     /// Inserts a 1-sized dimension at position `dim`.
     pub fn unsqueeze(&self, dim: usize) -> Result<Tensor<Dyn, B, K, G>> {
         let inner = B::unsqueeze::<K>(&self.inner, dim)?;
         let out_shape = B::shape(&inner);
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             out_shape,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 
     /// Repeats tensor data along each dimension according to `repeats`.
     pub fn repeat(&self, repeats: &[usize]) -> Result<Tensor<Dyn, B, K, G>> {
         let inner = B::repeat::<K>(&self.inner, repeats)?;
         let out_shape = B::shape(&inner);
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             out_shape,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 
     /// Pads tensor according to `padding` (before, after) pairs per dimension with `val`.
@@ -788,50 +804,50 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         let val_f64 = val.into().to_f64();
         let inner = B::pad::<K>(&self.inner, padding, val_f64)?;
         let out_shape = B::shape(&inner);
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             out_shape,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 
     /// Returns upper triangular part of matrix.
     pub fn triu(&self, k: i64) -> Result<Self> {
         let inner = B::triu::<K>(&self.inner, k)?;
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             self._shape.clone(),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 
     /// Returns lower triangular part of matrix.
     pub fn tril(&self, k: i64) -> Result<Self> {
         let inner = B::tril::<K>(&self.inner, k)?;
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             self._shape.clone(),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 
     /// Extracts or constructs diagonal tensor.
     pub fn diag(&self, k: i64) -> Result<Tensor<Dyn, B, K, G>> {
         let inner = B::diag::<K>(&self.inner, k)?;
         let out_shape = B::shape(&inner);
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             out_shape,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 
     /// Splits tensor into `chunks` equal parts along `dim`.
@@ -890,50 +906,50 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     pub fn unfold(&self, dim: usize, size: usize, step: usize) -> Result<Tensor<Dyn, B, K, G>> {
         let inner = B::unfold::<K>(&self.inner, dim, size, step)?;
         let out_shape = B::shape(&inner);
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             out_shape,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 
     /// Rearranges elements in a 4D tensor of shape (N, C, H, W) to (N, C / r^2, H * r, W * r).
     pub fn pixel_shuffle(&self, upscale_factor: usize) -> Result<Tensor<Dyn, B, K, G>> {
         let inner = B::pixel_shuffle::<K>(&self.inner, upscale_factor)?;
         let out_shape = B::shape(&inner);
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             out_shape,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 
     /// Group normalization across `groups`.
     pub fn group_norm(&self, groups: usize, eps: f64) -> Result<Self> {
         let inner = B::group_norm::<K>(&self.inner, groups, eps)?;
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             self._shape.clone(),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 
     /// Instance normalization for 4D (N, C, H, W) tensors.
     pub fn instance_norm(&self, eps: f64) -> Result<Self> {
         let inner = B::instance_norm::<K>(&self.inner, eps)?;
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             self._shape.clone(),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 }
 
@@ -988,12 +1004,6 @@ where
     fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output> {
         let field = NewD::init(arg.clone());
         let inner = B::transfer_storage(&self.inner, &self._dtype, &field)?;
-        Ok(Tensor::from_parts_unchecked(
-            inner,
-            self._shape,
-            self._dtype,
-            field,
-            self._grad,
-        ))
+        Tensor::from_parts(inner, self._shape, self._dtype, field, self._grad)
     }
 }

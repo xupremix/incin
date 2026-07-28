@@ -101,13 +101,13 @@ impl<
         if !mean_shape.is_empty() {
             mean_shape[dim] = 1;
         }
-        let mean_sq = Tensor::<Dyn, B, B::FloatElem, Grad>::from_parts_unchecked(
+        let mean_sq = Tensor::<Dyn, B, B::FloatElem, Grad>::from_parts(
             mean_sq_inner,
             field_from_dims::<Dyn>(OperationKind::Normalization, &mean_shape)?,
             x._dtype.clone(),
             x._device.clone(),
             x._grad, // We propagate grad context
-        );
+        )?;
 
         // mean(x^2) + eps
         let var = mean_sq.add_scalar(self.eps)?;

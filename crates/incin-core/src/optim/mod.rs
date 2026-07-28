@@ -132,25 +132,27 @@ impl<B: Backend, K: DType> AdamW<B, K> {
         };
         for (name, m_val) in &self.m {
             let shape = B::shape(m_val);
-            let tensor = Tensor::<Dyn, B, K>::from_parts_unchecked(
+            if let Ok(tensor) = Tensor::<Dyn, B, K>::from_parts(
                 m_val.clone(),
                 shape,
                 Default::default(),
                 Default::default(),
                 core::marker::PhantomData,
-            );
-            dict.insert(alloc::format!("{}m.{}", p, name), tensor);
+            ) {
+                dict.insert(alloc::format!("{}m.{}", p, name), tensor);
+            }
         }
         for (name, v_val) in &self.v {
             let shape = B::shape(v_val);
-            let tensor = Tensor::<Dyn, B, K>::from_parts_unchecked(
+            if let Ok(tensor) = Tensor::<Dyn, B, K>::from_parts(
                 v_val.clone(),
                 shape,
                 Default::default(),
                 Default::default(),
                 core::marker::PhantomData,
-            );
-            dict.insert(alloc::format!("{}v.{}", p, name), tensor);
+            ) {
+                dict.insert(alloc::format!("{}v.{}", p, name), tensor);
+            }
         }
     }
 
@@ -309,25 +311,27 @@ impl<B: Backend, K: DType> Adam<B, K> {
         };
         for (name, m_val) in &self.m {
             let shape = B::shape(m_val);
-            let tensor = Tensor::<Dyn, B, K>::from_parts_unchecked(
+            if let Ok(tensor) = Tensor::<Dyn, B, K>::from_parts(
                 m_val.clone(),
                 shape,
                 Default::default(),
                 Default::default(),
                 core::marker::PhantomData,
-            );
-            dict.insert(alloc::format!("{}m.{}", p, name), tensor);
+            ) {
+                dict.insert(alloc::format!("{}m.{}", p, name), tensor);
+            }
         }
         for (name, v_val) in &self.v {
             let shape = B::shape(v_val);
-            let tensor = Tensor::<Dyn, B, K>::from_parts_unchecked(
+            if let Ok(tensor) = Tensor::<Dyn, B, K>::from_parts(
                 v_val.clone(),
                 shape,
                 Default::default(),
                 Default::default(),
                 core::marker::PhantomData,
-            );
-            dict.insert(alloc::format!("{}v.{}", p, name), tensor);
+            ) {
+                dict.insert(alloc::format!("{}v.{}", p, name), tensor);
+            }
         }
     }
 

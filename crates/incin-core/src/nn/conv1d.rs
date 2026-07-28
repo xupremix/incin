@@ -216,20 +216,20 @@ where
                 weight.dims()[0],
             )?;
 
-        let out_shape = <I::Output as DynShape>::dims(&shape);
+        let out_shape = <I::Output as Shape>::dims(&shape);
         let out = if rank > 3 {
             B::reshape(&out, out_shape.as_ref())?
         } else {
             out
         };
 
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             out,
             shape,
             x._dtype.clone(),
             weight._device.clone(),
             *x.grad_field(),
-        ))
+        )
     }
 }
 
@@ -281,20 +281,20 @@ where
                 weight.dims()[0],
             )?;
 
-        let out_shape = <I::Output as DynShape>::dims(&shape);
+        let out_shape = <I::Output as Shape>::dims(&shape);
         let out = if rank > 3 {
             B::reshape(&out, out_shape.as_ref())?
         } else {
             out
         };
 
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             out,
             shape,
             x._dtype.clone(),
             weight._device.clone(),
             *x.grad_field(),
-        ))
+        )
     }
 }
 
@@ -350,19 +350,19 @@ where
                 weight.dims()[0],
             )?;
 
-        let out_shape = <I::Output as DynShape>::dims(&shape);
+        let out_shape = <I::Output as Shape>::dims(&shape);
         let out = if rank > 3 {
             B::reshape(&out, out_shape.as_ref())?
         } else {
             out
         };
 
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             out,
             shape,
             x._dtype.clone(),
             weight._device.clone(),
             *x.grad_field(),
-        ))
+        )
     }
 }

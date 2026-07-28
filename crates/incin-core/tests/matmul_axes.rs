@@ -8,7 +8,7 @@
 //! a diagnostic rather than a wrong shape.
 
 use incin_core::prelude::{Axis, MatMulShape, OperationKind, Shape};
-use typenum::{U2, U3, U4, U5};
+use typenum::{U1, U2, U3, U4, U5};
 
 incin_core::dim!(Batch, Contract);
 
@@ -155,4 +155,101 @@ fn the_rank_four_by_rank_two_convention_is_unchanged() {
         resolved::<(U2, U2, U3, U5), (U5, U4), (U2, U2, U3, U4)>(&[2, 2, 3, 5], &[5, 4]),
         vec![2, 2, 3, 4]
     );
+}
+
+#[test]
+fn typed_batched_matmul_resolves_at_every_supported_rank() {
+    // Rank 2 is the base rule; ranks 3 through MAX_RANK are emitted by the
+    // shared rank sweep. Each expected output is pinned, so this proves both
+    // that the impl exists and that it rewrites only the trailing matrix axes.
+    assert_eq!(
+        resolved::<(U3, U2), (U2, U4), (U3, U4)>(&[3, 2], &[2, 4]),
+        vec![3, 4]
+    );
+    assert_eq!(
+        resolved::<(U1, U3, U2), (U1, U2, U4), (U1, U3, U4)>(&[1, 3, 2], &[1, 2, 4]),
+        vec![1, 3, 4]
+    );
+    assert_eq!(
+        resolved::<(U1, U1, U3, U2), (U1, U1, U2, U4), (U1, U1, U3, U4)>(
+            &[1, 1, 3, 2],
+            &[1, 1, 2, 4]
+        ),
+        vec![1, 1, 3, 4]
+    );
+    assert_eq!(
+        resolved::<(U1, U1, U1, U3, U2), (U1, U1, U1, U2, U4), (U1, U1, U1, U3, U4)>(
+            &[1, 1, 1, 3, 2],
+            &[1, 1, 1, 2, 4]
+        ),
+        vec![1, 1, 1, 3, 4]
+    );
+    assert_eq!(
+        resolved::<(U1, U1, U1, U1, U3, U2), (U1, U1, U1, U1, U2, U4), (U1, U1, U1, U1, U3, U4)>(
+            &[1, 1, 1, 1, 3, 2],
+            &[1, 1, 1, 1, 2, 4]
+        ),
+        vec![1, 1, 1, 1, 3, 4]
+    );
+    assert_eq!(
+        resolved::<
+            (U1, U1, U1, U1, U1, U3, U2),
+            (U1, U1, U1, U1, U1, U2, U4),
+            (U1, U1, U1, U1, U1, U3, U4),
+        >(&[1, 1, 1, 1, 1, 3, 2], &[1, 1, 1, 1, 1, 2, 4]),
+        vec![1, 1, 1, 1, 1, 3, 4]
+    );
+    assert_eq!(
+        resolved::<
+            (U1, U1, U1, U1, U1, U1, U3, U2),
+            (U1, U1, U1, U1, U1, U1, U2, U4),
+            (U1, U1, U1, U1, U1, U1, U3, U4),
+        >(&[1, 1, 1, 1, 1, 1, 3, 2], &[1, 1, 1, 1, 1, 1, 2, 4]),
+        vec![1, 1, 1, 1, 1, 1, 3, 4]
+    );
+}
+
+#[test]
+fn rank_four_mixed_paths_check_the_contraction() {
+    let lhs_error = <(usize, usize, U3, Contract) as MatMulShape<(Contract, U4)>>::output_shape(
+        &field::<(usize, usize, U3, Contract)>(&[2, 5, 3, 7]),
+        &field::<(Contract, U4)>(&[9, 4]),
+    )
+    .expect_err("7 and 9 do not contract");
+    assert_eq!(lhs_error.axis(), Some(Axis::Named("k")));
+
+    let rhs_error = <(U3, Contract) as MatMulShape<(usize, usize, Contract, U4)>>::output_shape(
+        &field::<(U3, Contract)>(&[3, 7]),
+        &field::<(usize, usize, Contract, U4)>(&[2, 5, 9, 4]),
+    )
+    .expect_err("7 and 9 do not contract");
+    assert_eq!(rhs_error.axis(), Some(Axis::Named("k")));
+}
+
+#[test]
+fn runtime_batch_axes_are_generated_through_rank_eight() {
+    assert_eq!(
+        resolved::<
+            (usize, usize, usize, usize, usize, usize, U3, U2),
+            (usize, usize, usize, usize, usize, usize, U2, U4),
+            (usize, usize, usize, usize, usize, usize, U3, U4),
+        >(&[2, 3, 4, 5, 6, 7, 3, 2], &[2, 3, 4, 5, 6, 7, 2, 4]),
+        vec![2, 3, 4, 5, 6, 7, 3, 4]
+    );
+
+    let error = <(usize, usize, usize, usize, usize, usize, U3, U2) as MatMulShape<(
+        usize,
+        usize,
+        usize,
+        usize,
+        usize,
+        usize,
+        U2,
+        U4,
+    )>>::output_shape(
+        &field::<(usize, usize, usize, usize, usize, usize, U3, U2)>(&[2, 3, 4, 5, 6, 7, 3, 2]),
+        &field::<(usize, usize, usize, usize, usize, usize, U2, U4)>(&[2, 3, 9, 5, 6, 7, 2, 4]),
+    )
+    .expect_err("batch axis 2 disagrees");
+    assert_eq!(error.axis(), Some(Axis::Index(2)));
 }

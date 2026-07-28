@@ -13,13 +13,13 @@ macro_rules! impl_unary_op {
         $(#[$meta])*
         pub fn $method(&self) -> Result<Self> {
             let inner = B::$backend_method::<K>(&self.inner)?;
-            Ok(Tensor::from_parts_unchecked(
+            Tensor::from_parts(
                 inner,
                 self._shape.clone(),
                 self._dtype.clone(),
                 self._device.clone(),
                 self._grad.clone(),
-            ))
+            )
         }
     };
 }
@@ -181,13 +181,13 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
     #[inline]
     pub fn softmax(&self, dim: usize) -> Result<Tensor<S, B, K, G>> {
         let inner = B::softmax::<K>(&self.inner, dim)?;
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             self._shape.clone(),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
     impl_unary_op!(
         /// Negates the tensor element-wise.
@@ -229,26 +229,26 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
     #[inline]
     pub fn powf(&self, exponent: f64) -> Result<Self> {
         let inner = B::powf::<K>(&self.inner, exponent)?;
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             self._shape.clone(),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 
     /// Clamps tensor elements to range `[min, max]`.
     #[inline]
     pub fn clamp(&self, min: f64, max: f64) -> Result<Self> {
         let inner = B::clamp::<K>(&self.inner, min, max)?;
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             self._shape.clone(),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 
     impl_unary_op!(
@@ -341,13 +341,13 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
     ) -> Result<Self> {
         let scalar_val = scalar.into();
         let inner = B::mul_scalar_float(&self.inner, scalar_val.to_f64())?;
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             self._shape.clone(),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 
     /// Adds a scalar value to the tensor element-wise.
@@ -364,13 +364,13 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
     ) -> Result<Self> {
         let scalar_val = scalar.into();
         let inner = B::add_scalar_float(&self.inner, scalar_val.to_f64())?;
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             self._shape.clone(),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 }
 

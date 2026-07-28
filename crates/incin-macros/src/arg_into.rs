@@ -16,7 +16,15 @@ impl Parse for MaxRank {
 
 /// Impl arg into.
 pub fn impl_arg_into(input: TokenStream) -> TokenStream {
-    let MaxRank(max_rank) = parse_macro_input!(input as MaxRank);
+    if !input.is_empty() {
+        return syn::Error::new(
+            proc_macro2::Span::call_site(),
+            "impl_arg_into! takes no rank; it uses the shared MAX_RANK",
+        )
+        .to_compile_error()
+        .into();
+    }
+    let max_rank = crate::rank::MAX_RANK;
     let mut output = quote!();
 
     // Loop over all ranks from 1 to MAX

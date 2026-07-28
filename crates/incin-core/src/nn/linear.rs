@@ -275,10 +275,10 @@ where
         let dtype = x._dtype.clone();
         let device = x._device.clone();
 
-        let mut dims = <InShape as DynShape>::dims(x.shape_field()).into();
+        let mut dims = <InShape as Shape>::dims(x.shape_field()).into();
         let last_idx = dims.len().saturating_sub(1);
         if last_idx < dims.len() {
-            let w_dims = <(OutF, InF) as DynShape>::dims(self.weight.as_tensor()?.shape_field());
+            let w_dims = <(OutF, InF) as Shape>::dims(self.weight.as_tensor()?.shape_field());
             dims[last_idx] = w_dims[0];
         }
         let shape = field_from_dims::<InShape::Output>(OperationKind::MatMul, &dims)?;
@@ -296,13 +296,13 @@ where
             .into_shape::<Dyn>()?;
         let out_final = out_dyn.broadcast_add(&bias_dyn)?;
 
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             out_final.into_inner(),
             shape,
             dtype,
             device,
             core::marker::PhantomData,
-        ))
+        )
     }
 }
 
@@ -325,10 +325,10 @@ where
         let dtype = x._dtype.clone();
         let device = x._device.clone();
 
-        let mut dims = <InShape as DynShape>::dims(x.shape_field()).into();
+        let mut dims = <InShape as Shape>::dims(x.shape_field()).into();
         let last_idx = dims.len().saturating_sub(1);
         if last_idx < dims.len() {
-            let w_dims = <(OutF, InF) as DynShape>::dims(self.weight.as_tensor()?.shape_field());
+            let w_dims = <(OutF, InF) as Shape>::dims(self.weight.as_tensor()?.shape_field());
             dims[last_idx] = w_dims[0];
         }
         let shape = field_from_dims::<InShape::Output>(OperationKind::MatMul, &dims)?;
@@ -338,13 +338,13 @@ where
         let x_dyn = x.into_shape::<Dyn>()?;
         let out_final = x_dyn.matmul(&weight_t)?;
 
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             out_final.into_inner(),
             shape,
             dtype,
             device,
             core::marker::PhantomData,
-        ))
+        )
     }
 }
 
@@ -367,10 +367,10 @@ where
         let dtype = x._dtype.clone();
         let device = x._device.clone();
 
-        let mut dims = <InShape as DynShape>::dims(x.shape_field()).into();
+        let mut dims = <InShape as Shape>::dims(x.shape_field()).into();
         let last_idx = dims.len().saturating_sub(1);
         if last_idx < dims.len() {
-            let w_dims = <(OutF, InF) as DynShape>::dims(self.weight.as_tensor()?.shape_field());
+            let w_dims = <(OutF, InF) as Shape>::dims(self.weight.as_tensor()?.shape_field());
             dims[last_idx] = w_dims[0];
         }
         let shape = field_from_dims::<InShape::Output>(OperationKind::MatMul, &dims)?;
@@ -387,12 +387,12 @@ where
             out_dyn
         };
 
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             out_final.into_inner(),
             shape,
             dtype,
             device,
             core::marker::PhantomData,
-        ))
+        )
     }
 }

@@ -163,12 +163,12 @@ impl<
             self.eps,
             self.momentum as f64,
         )?;
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             out,
             x._shape.clone(),
             x._dtype.clone(),
             x._device.clone(),
             x._grad,
-        ))
+        )
     }
 }

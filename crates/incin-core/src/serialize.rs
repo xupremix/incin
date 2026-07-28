@@ -154,7 +154,8 @@ impl<'a> Deserializer for SafetensorsDeserializer<'a> {
             let _grad = Default::default();
 
             let tensor: Tensor<Dyn, B> =
-                Tensor::from_parts_unchecked(raw_tensor, dyn_shape, _dtype, _device, _grad);
+                Tensor::from_parts(raw_tensor, dyn_shape, _dtype, _device, _grad)
+                    .map_err(|e| anyhow::anyhow!("Invalid tensor storage metadata: {}", e))?;
             state_dict.insert(name, tensor);
         }
 
@@ -283,7 +284,8 @@ impl<'a> Deserializer for BincodeDeserializer<'a> {
             let _grad = Default::default();
 
             let tensor: Tensor<Dyn, B> =
-                Tensor::from_parts_unchecked(raw_tensor, dyn_shape, _dtype, _device, _grad);
+                Tensor::from_parts(raw_tensor, dyn_shape, _dtype, _device, _grad)
+                    .map_err(|e| anyhow::anyhow!("Invalid tensor storage metadata: {}", e))?;
             state_dict.insert(k, tensor);
         }
 

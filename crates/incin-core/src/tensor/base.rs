@@ -61,6 +61,18 @@ pub struct Tensor<
     pub(crate) _grad: G::Field,
 }
 
+/// Proof that raw storage and tensor metadata may be joined without repeating
+/// their invariant checks inside the constructor.
+///
+/// This type and both of its variants are private to this module. Other
+/// modules must use `try_from_storage`; metadata-only retagging is implemented
+/// here, where the old tensor is available as the proof source.
+#[derive(Clone, Copy)]
+enum ConstructionWitness {
+    StorageValidated,
+    MetadataPreserved,
+}
+
 impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Clone for Tensor<S, B, K, G> {
     fn clone(&self) -> Self {
         Self {
@@ -74,13 +86,14 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Clone for Tensor<S, B, K, 
 }
 
 impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G> {
-    /// Creates a tensor from raw component parts without shape verification.
-    pub(crate) fn from_parts_unchecked(
+    /// Joins component parts after this module has witnessed their invariants.
+    fn from_parts_witnessed(
         inner: B::Storage<K>,
         shape: S::Field,
         dtype: K::Field,
         device: <B::Device as Device>::Field,
         grad: G::Field,
+        _witness: ConstructionWitness,
     ) -> Self {
         Self {
             inner,
@@ -122,10 +135,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G> {
         dtype: K::Field,
         device: <B::Device as Device>::Field,
         grad: G::Field,
-    ) -> Result<Self>
-    where
-        S: DynShape,
-    {
+    ) -> Result<Self> {
         let expected = S::dims(&shape).as_ref().to_vec();
         let got = B::shape(&inner);
         if expected != got {
@@ -154,8 +164,13 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G> {
                 got,
             });
         }
-        Ok(Self::from_parts_unchecked(
-            inner, shape, dtype, device, grad,
+        Ok(Self::from_parts_witnessed(
+            inner,
+            shape,
+            dtype,
+            device,
+            grad,
+            ConstructionWitness::StorageValidated,
         ))
     }
 
@@ -165,10 +180,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G> {
         dtype: K::Field,
         device: <B::Device as Device>::Field,
         grad: G::Field,
-    ) -> Result<Self>
-    where
-        S: DynShape,
-    {
+    ) -> Result<Self> {
         Self::try_from_storage(inner, shape, dtype, device, grad)
     }
 }
@@ -385,13 +397,13 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G> {
         <B as TransferTo<D2>>::Output: SupportsDType<K>,
     {
         let new_inner = B::transfer_storage(&self.inner, &self._dtype, _device)?;
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             new_inner,
             self._shape.clone(),
             self._dtype.clone(),
             _device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 }
 
@@ -418,7 +430,14 @@ impl<S1: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad> Tensor<S1, B, 
         // `Some`. Building it directly makes that structural rather than
         // assumed, and is the last of the 39 sites `SHP-004` removes.
         let s2_shape: <crate::prelude::Dyn as Shape>::Field = dims.as_ref().to_vec();
-        Tensor::from_parts_unchecked(self.inner, s2_shape, self._dtype, self._device, self._grad)
+        Tensor::from_parts_witnessed(
+            self.inner,
+            s2_shape,
+            self._dtype,
+            self._device,
+            self._grad,
+            ConstructionWitness::MetadataPreserved,
+        )
     }
 
     /// Copies and converts this tensor to a new static shape S2.
@@ -444,12 +463,13 @@ impl<S1: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad> Tensor<S1, B, 
 impl<S: Shape, B: Backend, K: DType> Tensor<S, B, K, NoGrad> {
     /// Marks this tensor to require gradient tracking.
     pub fn require_grad(self) -> Tensor<S, B, K, Grad> {
-        Tensor::from_parts_unchecked(
+        Tensor::from_parts_witnessed(
             self.inner,
             self._shape,
             self._dtype,
             self._device,
             core::marker::PhantomData,
+            ConstructionWitness::MetadataPreserved,
         )
     }
 }
@@ -457,12 +477,13 @@ impl<S: Shape, B: Backend, K: DType> Tensor<S, B, K, NoGrad> {
 impl<S: Shape, B: Backend, K: DType> Tensor<S, B, K, Grad> {
     /// Detaches this tensor from autodiff tape tracking, returning a NoGrad tensor.
     pub fn detach(self) -> Tensor<S, B, K, NoGrad> {
-        Tensor::from_parts_unchecked(
+        Tensor::from_parts_witnessed(
             self.inner,
             self._shape,
             self._dtype,
             self._device,
             core::marker::PhantomData,
+            ConstructionWitness::MetadataPreserved,
         )
     }
 }

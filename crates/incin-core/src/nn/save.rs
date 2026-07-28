@@ -63,13 +63,13 @@ where
 
     for (name, storage) in map {
         let shape = B::shape(&storage);
-        let tensor = Tensor::<Dyn, B>::from_parts_unchecked(
+        let tensor = Tensor::<Dyn, B>::from_parts(
             storage,
             shape,
             Default::default(),
             Default::default(),
             core::marker::PhantomData,
-        );
+        )?;
         mapped_tensors.insert(name, tensor);
     }
 

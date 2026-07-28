@@ -27,13 +27,13 @@ macro_rules! impl_binary_op {
             {
                 let _ = <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
                 let inner = B::$backend_method(&self.inner, &rhs.inner)?;
-                Ok(Tensor::from_parts_unchecked(
+                Tensor::from_parts(
                     inner,
                     self._shape.clone(),
                     self._dtype.clone(),
                     self._device.clone(),
                     self._grad.clone(),
-                ))
+                )
             }
         }
     };
@@ -213,25 +213,25 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
     /// Subtracts a scalar: `self - scalar`.
     pub fn sub_scalar(&self, val: f64) -> Result<Self> {
         let inner = B::sub_scalar::<K>(&self.inner, val)?;
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             self._shape.clone(),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 
     /// Divides by a scalar: `self / scalar`.
     pub fn div_scalar(&self, val: f64) -> Result<Self> {
         let inner = B::div_scalar::<K>(&self.inner, val)?;
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             self._shape.clone(),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 
     /// Linear interpolation: `self + weight * (end - self)`.
@@ -245,13 +245,13 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
     {
         <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
         let inner = B::lerp::<K>(&self.inner, &end.inner, weight)?;
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             self._shape.clone(),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 }
 
@@ -273,13 +273,13 @@ macro_rules! impl_broadcast_binary_op {
                 let b_shape = <S1 as crate::shapes::broadcast::BroadcastShape<S2>>::output_shape(self.shape_field(), rhs.shape_field())?;
 
                 let inner = B::$backend_method(&self.inner, &rhs.inner)?;
-                Ok(Tensor::from_parts_unchecked(
+                Tensor::from_parts(
                     inner,
                     b_shape,
                     self._dtype.clone(),
                     self._device.clone(),
                     self._grad.clone(),
-                ))
+                )
             }
         }
     };

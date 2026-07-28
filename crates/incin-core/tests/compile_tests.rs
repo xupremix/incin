@@ -35,6 +35,7 @@ fn expected_reasons() -> BTreeMap<&'static str, &'static str> {
     BTreeMap::from([
         // Shape rules, all unsatisfied trait bounds.
         ("concat_static_mismatch", "E0277"),
+        ("construction_witness_is_private", "E0624"),
         ("conv2d_invalid_shape", "E0277"),
         ("forward_batchnorm_mismatch", "E0277"),
         ("forward_broadcast_mismatch", "E0277"),
@@ -43,10 +44,12 @@ fn expected_reasons() -> BTreeMap<&'static str, &'static str> {
         ("forward_linear_partial_mismatch", "E0277"),
         ("forward_linear_static_mismatch", "E0277"),
         ("forward_model_building_mismatch", "E0277"),
+        ("flatten_invalid_range", "Invalid flatten range"),
         ("kernel_conv2d_channel_mismatch", "E0277"),
         ("layer_builder_invalid_count", "E0277"),
         ("layer_builder_invalid_order", "E0277"),
         ("matmul_static_mismatch", "E0277"),
+        ("matmul_rank8_static_mismatch", "E0277"),
         ("named_dim_concat_mismatch", "E0277"),
         ("reshape_static_mismatch", "E0277"),
         // Shape rules the compiler reports as a type mismatch rather than an

@@ -12,7 +12,7 @@
 //! the broadcast rule actually turns on, so they are drawn far more often than
 //! chance would give.
 
-use incin_core::prelude::{BroadcastShape, Dyn, DynShape, Shape};
+use incin_core::prelude::{BroadcastShape, Dyn, Shape};
 
 // --- deterministic generator -------------------------------------------
 

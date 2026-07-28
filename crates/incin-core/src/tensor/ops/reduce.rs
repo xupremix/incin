@@ -16,13 +16,13 @@ macro_rules! impl_reduction_op {
         $(#[$meta])*
         pub fn $method(self) -> Result<Tensor<(), B, K, G>> {
             let inner = B::$backend_method(&self.inner)?;
-            Ok(Tensor::from_parts_unchecked(
+            Tensor::from_parts(
                 inner,
                 (), // Scalar shape field
                 self._dtype,
                 self._device,
                 self._grad,
-            ))
+            )
         }
     };
 }
@@ -48,13 +48,13 @@ macro_rules! impl_reduction_dim_op {
                 out_dims.remove(DIM);
             }
 
-            Ok(Tensor::from_parts_unchecked(
+            Tensor::from_parts(
                 inner,
                 field_from_dims::<S::Output>(OperationKind::Reduction, &out_dims)?,
                 self._dtype.clone(),
                 self._device.clone(),
                 self._grad.clone(),
-            ))
+            )
         }
     };
 }
@@ -220,13 +220,13 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         S: DynShape,
     {
         let inner = B::cumsum::<K>(&self.inner, DIM)?;
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             self._shape.clone(),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
-        ))
+        )
     }
 
     /// Computes the vector p-norm (`p` norm: 1.0 = L1, 2.0 = L2) over all elements.
@@ -281,13 +281,13 @@ impl<
             out_dims = alloc::vec![];
         }
 
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             field_from_dims::<crate::prelude::Dyn>(OperationKind::Reduction, &out_dims)?,
             core::marker::PhantomData,
             self._device.clone(),
             crate::prelude::NoGrad::init(()),
-        ))
+        )
     }
 
     /// Computes the argmin of the tensor.
@@ -316,13 +316,13 @@ impl<
             out_dims = alloc::vec![];
         }
 
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             inner,
             field_from_dims::<crate::prelude::Dyn>(OperationKind::Reduction, &out_dims)?,
             core::marker::PhantomData,
             self._device.clone(),
             crate::prelude::NoGrad::init(()),
-        ))
+        )
     }
 
     /// Computes the top `k` elements of the tensor along the given dimension.
@@ -342,20 +342,20 @@ impl<
         let out_shape =
             field_from_dims::<crate::prelude::Dyn>(OperationKind::Reduction, &out_dims)?;
 
-        let values = Tensor::from_parts_unchecked(
+        let values = Tensor::from_parts(
             values_inner,
             out_shape.clone(),
             self._dtype.clone(),
             self._device.clone(),
             crate::prelude::NoGrad::init(()),
-        );
-        let indices = Tensor::from_parts_unchecked(
+        )?;
+        let indices = Tensor::from_parts(
             indices_inner,
             out_shape,
             core::marker::PhantomData,
             self._device.clone(),
             crate::prelude::NoGrad::init(()),
-        );
+        )?;
         Ok((values, indices))
     }
 
@@ -366,13 +366,13 @@ impl<
         descending: bool,
     ) -> Result<Tensor<S, B, u32, crate::prelude::NoGrad>> {
         let indices_inner = B::argsort::<K, u32>(&self.inner, dim, descending)?;
-        Ok(Tensor::from_parts_unchecked(
+        Tensor::from_parts(
             indices_inner,
             self._shape.clone(),
             core::marker::PhantomData,
             self._device.clone(),
             crate::prelude::NoGrad::init(()),
-        ))
+        )
     }
 }
 

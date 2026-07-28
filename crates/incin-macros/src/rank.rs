@@ -74,6 +74,10 @@ enum Form {
     /// after, plus its index. For rules like stacking, which add an axis rather
     /// than rewriting one, so the index may equal the rank.
     AxisInsert,
+    /// `B0, B1, …` — the batch axes of a rank-`n` matrix shape. The final
+    /// two axes (`M, K`) are fixed in the consumer macro, so rank 3 emits one
+    /// batch name and rank `MAX_RANK` emits `MAX_RANK - 2` names.
+    MatmulBatch,
 }
 
 impl FromStr for Form {
@@ -95,10 +99,11 @@ impl FromStr for Form {
             "operand_pairs_prepend" => Self::OperandPairsPrepend,
             "axis_split" => Self::AxisSplit,
             "axis_insert" => Self::AxisInsert,
+            "matmul_batch" => Self::MatmulBatch,
             other => {
                 return Err(format!(
                     "unknown rank_sweep form `{other}`; expected one of names, \
-                     names_from1, ranked_pairs, letters, operand_pairs, letters_from_b, conv1d, conv2d, pool2d, prepend, usize_prepend, operand_pairs_prepend, axis_split, axis_insert"
+                     names_from1, ranked_pairs, letters, operand_pairs, letters_from_b, conv1d, conv2d, pool2d, prepend, usize_prepend, operand_pairs_prepend, axis_split, axis_insert, matmul_batch"
                 ));
             }
         })
@@ -223,6 +228,12 @@ impl Form {
                     format!("{} ; {} ; U{axis}", run(0, axis), run(axis, rank))
                 })
                 .collect(),
+            Self::MatmulBatch => vec![
+                (0..rank.saturating_sub(2))
+                    .map(|i| format!("B{i}"))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            ],
         }
     }
 }

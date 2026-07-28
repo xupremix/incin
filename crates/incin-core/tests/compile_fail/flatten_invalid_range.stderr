@@ -1,0 +1,18 @@
+error[E0277]: Cannot flatten shape `(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UTerm, B1>, B1>, UInt<UInt<UInt<UTerm, B1>, B0>, B0>)` from dimension `2` to `1`
+ --> tests/compile_fail/flatten_invalid_range.rs:9:20
+  |
+9 |     let _ = tensor.flatten::<2, 1>();
+  |                    ^^^^^^^ Invalid flatten range
+  |
+  = help: the trait `incin::shapes::shape_ops::Flatten<2, 1>` is not implemented for `(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UTerm, B1>, B1>, UInt<UInt<UInt<UTerm, B1>, B0>, B0>)`
+  = note: Flatten requires START <= END and END < the rank of the tensor
+  = help: the following other types implement trait `incin::shapes::shape_ops::Flatten<START, END>`:
+            `(D0, D1)` implements `incin::shapes::shape_ops::Flatten<0, 0>`
+            `(D0, D1)` implements `incin::shapes::shape_ops::Flatten<0, 1>`
+            `(D0, D1)` implements `incin::shapes::shape_ops::Flatten<1, 1>`
+            `(D0, D1, D2)` implements `incin::shapes::shape_ops::Flatten<0, 0>`
+            `(D0, D1, D2)` implements `incin::shapes::shape_ops::Flatten<0, 1>`
+            `(D0, D1, D2)` implements `incin::shapes::shape_ops::Flatten<0, 2>`
+            `(D0, D1, D2)` implements `incin::shapes::shape_ops::Flatten<1, 1>`
+            `(D0, D1, D2)` implements `incin::shapes::shape_ops::Flatten<1, 2>`
+          and $N others

@@ -53,6 +53,20 @@ enum Repr<T: Copy + Default> {
     Heap(Vec<T>),
 }
 
+impl InlineOrHeap<usize> {
+    /// The empty buffer, usable in a `const` context.
+    ///
+    /// `new` cannot be `const` because `T::default()` is not a `const fn` in a
+    /// generic context. The dimension and stride buffers are always `usize`, so
+    /// they get a `const` empty value spelled out for that one element type.
+    pub const EMPTY: Self = Self {
+        repr: Repr::Inline {
+            len: 0,
+            items: [0; INLINE_RANK],
+        },
+    };
+}
+
 impl<T: Copy + Default> InlineOrHeap<T> {
     /// An empty buffer. Allocates nothing.
     #[must_use]
@@ -209,6 +223,11 @@ pub struct ShapeBuf {
 }
 
 impl ShapeBuf {
+    /// The rank-0 shape, usable in a `const` context.
+    pub const SCALAR: Self = Self {
+        dims: InlineOrHeap::EMPTY,
+    };
+
     /// The rank-0 shape, which holds a single scalar element.
     #[must_use]
     pub fn scalar() -> Self {
@@ -321,6 +340,18 @@ impl ShapeBuf {
     }
 }
 
+impl PartialEq<Vec<usize>> for ShapeBuf {
+    fn eq(&self, other: &Vec<usize>) -> bool {
+        self.dims() == other.as_slice()
+    }
+}
+
+impl PartialEq<&[usize]> for ShapeBuf {
+    fn eq(&self, other: &&[usize]) -> bool {
+        self.dims() == *other
+    }
+}
+
 impl Deref for ShapeBuf {
     type Target = [usize];
 
@@ -360,6 +391,11 @@ pub struct StrideBuf {
 }
 
 impl StrideBuf {
+    /// The rank-0 stride list, usable in a `const` context.
+    pub const EMPTY: Self = Self {
+        strides: InlineOrHeap::EMPTY,
+    };
+
     /// Build from strides.
     #[must_use]
     pub fn from_slice(strides: &[usize]) -> Self {
@@ -479,6 +515,12 @@ impl StrideBuf {
                 })?;
         }
         Ok(span)
+    }
+}
+
+impl PartialEq<Vec<usize>> for StrideBuf {
+    fn eq(&self, other: &Vec<usize>) -> bool {
+        self.strides() == other.as_slice()
     }
 }
 

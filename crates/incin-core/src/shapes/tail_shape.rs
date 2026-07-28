@@ -66,6 +66,12 @@ where
             tail_field,
         })
     }
+    fn dims(shape: &Self::Field) -> Self::Dims {
+        let mut full = shape.leading_dims.clone();
+        let tail_dims = Tail::dims(&shape.tail_field);
+        full.extend_from_slice(tail_dims.as_ref());
+        full
+    }
 }
 
 impl<Tail: DynShape<Field: Default>> DynShape for TailShape<Tail>
@@ -81,13 +87,6 @@ where
         let leading_numel: usize = shape.leading_dims.iter().product();
         let tail_numel = Tail::numel(&shape.tail_field);
         leading_numel * tail_numel
-    }
-
-    fn dims(shape: &Self::Field) -> Self::Dims {
-        let mut full = shape.leading_dims.clone();
-        let tail_dims = Tail::dims(&shape.tail_field);
-        full.extend_from_slice(tail_dims.as_ref());
-        full
     }
 }
 
@@ -173,6 +172,12 @@ where
             trailing_dims: dims[head_rank..].to_vec(),
         })
     }
+    fn dims(shape: &Self::Field) -> Self::Dims {
+        let head_dims = Head::dims(&shape.head_field);
+        let mut full = head_dims.as_ref().to_vec();
+        full.extend_from_slice(&shape.trailing_dims);
+        full
+    }
 }
 
 impl<Head: DynShape<Field: Default>> DynShape for HeadShape<Head>
@@ -188,13 +193,6 @@ where
         let head_numel = Head::numel(&shape.head_field);
         let trailing_numel: usize = shape.trailing_dims.iter().product();
         head_numel * trailing_numel
-    }
-
-    fn dims(shape: &Self::Field) -> Self::Dims {
-        let head_dims = Head::dims(&shape.head_field);
-        let mut full = head_dims.as_ref().to_vec();
-        full.extend_from_slice(&shape.trailing_dims);
-        full
     }
 }
 
@@ -291,6 +289,14 @@ where
             tail_field,
         })
     }
+    fn dims(shape: &Self::Field) -> Self::Dims {
+        let head_dims = Head::dims(&shape.head_field);
+        let tail_dims = Tail::dims(&shape.tail_field);
+        let mut full = head_dims.as_ref().to_vec();
+        full.extend_from_slice(&shape.middle_dims);
+        full.extend_from_slice(tail_dims.as_ref());
+        full
+    }
 }
 
 impl<Head: DynShape<Field: Default>, Tail: DynShape<Field: Default>> DynShape
@@ -310,15 +316,6 @@ where
         let middle_numel: usize = shape.middle_dims.iter().product();
         let tail_numel = Tail::numel(&shape.tail_field);
         head_numel * middle_numel * tail_numel
-    }
-
-    fn dims(shape: &Self::Field) -> Self::Dims {
-        let head_dims = Head::dims(&shape.head_field);
-        let tail_dims = Tail::dims(&shape.tail_field);
-        let mut full = head_dims.as_ref().to_vec();
-        full.extend_from_slice(&shape.middle_dims);
-        full.extend_from_slice(tail_dims.as_ref());
-        full
     }
 }
 
