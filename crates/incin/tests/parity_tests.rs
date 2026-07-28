@@ -1,4 +1,4 @@
-#![cfg(feature = "wgpu")]
+#![cfg(all(feature = "wgpu", feature = "cpu"))]
 
 //! Cross-backend numerical parity tests.
 //!

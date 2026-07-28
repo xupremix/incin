@@ -1,3 +1,5 @@
+#![cfg(feature = "cpu")]
+
 use incin::prelude::*;
 /// B.
 type B = incin::DefaultBackend;

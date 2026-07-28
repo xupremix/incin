@@ -1,3 +1,5 @@
+#![cfg(feature = "cpu")]
+
 use incin::prelude::*;
 use incin::{Conv2d, Linear};
 /// B.

@@ -1,3 +1,5 @@
+#![cfg(feature = "cpu")]
+
 use incin::StateDict;
 use incin::prelude::*;
 extern crate alloc;

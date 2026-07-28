@@ -1,3 +1,5 @@
+#![cfg(feature = "cpu")]
+
 use std::ops::Deref;
 use std::sync::Arc;
 

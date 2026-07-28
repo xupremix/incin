@@ -20,8 +20,11 @@ std = [
     "rand_distr/std",
     "half/std"
 ]
-# Enables Incin's built-in pure-Rust CPU backend.
-cpu = []
+# Enables Incin's built-in pure-Rust CPU backend. Declares `std` for the same
+# reason `cuda` and `wgpu` do: the kernels reach for `Vec` and `Box` through the
+# std prelude and the autograd tape is a `thread_local!`, so `cpu` without `std`
+# was a combination the manifest offered and the crate never compiled under.
+cpu = ["std"]
 # Hands large f32 CPU matmuls to a blocked, register-tiled GEMM. Off by
 # default: the pure-Rust kernels in cpu/ops/matmul.rs stay complete without
 # it, and enabling it changes only floating-point accumulation order.

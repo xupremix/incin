@@ -1,3 +1,5 @@
+#![cfg(feature = "cpu")]
+
 use incin_backends::cpu::CpuBackendImpl;
 use incin_core::prelude::*;
 use std::collections::BTreeMap;

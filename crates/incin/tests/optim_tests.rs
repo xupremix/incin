@@ -1,3 +1,5 @@
+#![cfg(feature = "cpu")]
+
 use incin::prelude::*;
 use incin::{Adam, AdamW, SGD};
 

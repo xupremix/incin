@@ -1,3 +1,5 @@
+#![cfg(feature = "cpu")]
+
 use incin_backends::capability::{
     CPU_CAPABILITIES, CUDA_CAPABILITIES, WGPU_CAPABILITIES, registry, support,
 };

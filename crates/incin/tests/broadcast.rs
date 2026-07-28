@@ -1,3 +1,5 @@
+#![cfg(feature = "cpu")]
+
 use incin_core::prelude::*;
 use typenum::{U2, U3};
 

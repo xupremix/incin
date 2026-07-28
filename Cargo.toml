@@ -17,6 +17,33 @@ members = [
     "xtask"
 ]
 
+# Everything above that a CPU-only build can compile. Three example crates ask
+# for `incin/wgpu` in their own manifests, so a workspace-wide CPU build either
+# fails on them or quietly turns WGPU on for every other member; CI used to name
+# them on every command line as `--exclude`, which also meant they were never
+# linted or tested anywhere. They are absent here and present in the WGPU job's
+# `--workspace`, so the CPU gate does not have to name them and nothing added to
+# the workspace later can escape both gates.
+default-members = [
+    "crates/incin",
+    "crates/incin-backends",
+    "crates/incin-core",
+    "crates/incin-diagnostics",
+    "crates/incin-lsp",
+    "crates/incin-data",
+    "crates/incin-macros",
+    "crates/incin-telemetry",
+    "crates/incin-viz-plugin-api",
+    "crates/incin-viz",
+    "crates/incin/examples/cnn",
+    "crates/incin/examples/dataloader",
+    "crates/incin/examples/matmul",
+    "crates/incin/examples/named_dims_safety",
+    "crates/incin/examples/named_tensors",
+    "crates/incin/examples/tensors",
+    "xtask"
+]
+
 exclude = []
 
 [workspace.package]

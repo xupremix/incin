@@ -855,7 +855,7 @@ Transcribed from the four manifests. These exist today.
 | Feature | Crate | Enables |
 |---|---|---|
 | `std` | all four | Standard library, serialization, model I/O |
-| `cpu` | `incin`, `incin-backends` | Pure-Rust CPU backend. The only default backend |
+| `cpu` | `incin`, `incin-backends` | Pure-Rust CPU backend. The only default backend. Implies `std` |
 | `cpu-blas` | `incin`, `incin-backends` | Blocked GEMM for large `f32` CPU matmuls. Implies `cpu` |
 | `cuda` | `incin`, `incin-core`, `incin-backends` | Native CUDA through `cudarc` |
 | `wgpu` | `incin`, `incin-core`, `incin-backends` | Cross-platform GPU through `wgpu` |
@@ -2643,6 +2643,45 @@ that improvement is entirely the `is_contiguous` repair. The eleven remaining
 allocations are named in the test rather than rounded off: two hold the result,
 two are the tape entry, and the rest are rank-2 vectors passed through
 signatures that `EXE-009` is still removing.
+`CI-001` builds the feature combinations the manifests offer instead of trusting
+them. Five jobs each pinned one feature set, which left most of what a dependent
+can actually write in a `Cargo.toml` untested, and the first powerset run found
+the consequence immediately: `incin-backends` with `cpu` and without `std` had
+never compiled. Not broke recently — the CPU kernels reach for `Vec` and `Box`
+through the std prelude and the autograd tape is a `thread_local!`, so a hundred
+and four errors say that documented pair was never once buildable. `cpu` now
+declares `std` the way `cuda` and `wgpu` already did, and the feature inventory
+`cargo xtask budgets` compares as sets records the new forwarding, so the
+manifest and the ledger still say the same thing. Fourteen integration tests
+assumed a backend they never named and now carry the crate-level
+`#![cfg(feature = "cpu")]` the rest of the suite already used; three examples and
+one benchmark carry `required-features` instead, because cfg-ing a binary out
+leaves it without a `main` rather than skipping it.
+
+The powerset is complete rather than depth-limited, across all five
+feature-bearing crates: 24, 3, 3, 121 and 132 combinations, at four and a half
+minutes for the largest. `nightly` is excluded because it enables `#![feature]`,
+which the stable channel rejects before any of this crate's code is reached, and
+`candle` because it expands to exactly `external-candle` (D-014) and so doubles
+the count without covering anything new. The bare CPU default is preserved by a
+check rather than by convention: `cargo tree` on the default feature set must
+not contain `wgpu`, `cudarc`, `candle-core`, `candle-nn`, or `matrixmultiply`,
+and naming each of `wgpu`, `cuda`, `external-candle`, and `cpu-blas` puts
+exactly one of them back, so the check is known to fail for the right reason
+rather than to never match anything.
+
+The blanket package exclusions are gone. `--exclude backends --exclude
+tui_graph_demo --exclude native_training_demo` appeared on three command lines
+in the CPU job, and the cost was never the repetition: those three example
+crates were linted and tested nowhere, and a fourth crate with the same
+constraint would have needed a fourth flag on each line. The CPU-capable members
+are `default-members` in the root manifest now, so the CPU job names no packages
+at all, and the WGPU job runs `--workspace`, which lints all three for the first
+time and means a member added later is covered by one job or the other without
+anybody editing an argument list. `cargo doc` gained a second build with every
+backend enabled at once, because an intra-doc link into `incin_backends::cuda`
+resolves only when `cuda` is on and a CPU-only doc build cannot see a broken one.
+
 `EXE-010` is next eligible on the executor track.
 The complete Shape-track evidence is recorded in the mirror and
 `docs/plan/tasks/SHP-007.md` through `SHP-008.md`. The §4 themes above
@@ -2788,7 +2827,7 @@ Silicon · `compile` compiled execution · `grad` autograd · `dist` distributed
 | UX-013 | core | ux | [ ] | GOV-005,EXE-005,UX-014 | `docs/; README.md` | Feature and capability documentation generated from tested registrations, with compiled examples | `cargo test --workspace --doc` |
 | UX-014 | core | ux | [ ] | EXE-005 | `crates/incin/src/bin/cargo-incin.rs` | cargo incin doctor with stable text and JSON output and mocked hardware tests | `cargo test -p incin --test doctor` |
 | UX-015 | preview | ux | [ ] | EXE-005,GRD-001 | `crates/incin-core/src/exec/precision.rs` | PrecisionPolicy and loss scaling extending the existing DTypePolicy; mixed-precision parity tests | `cargo test -p incin-core --test precision_policy` |
-| CI-001 | core | ci | [ ] | GOV-005,GOV-003 | `.github/workflows/ci.yml` | Feature-powerset CI preserving the bare CPU default; adds cargo doc and drops blanket package exclusions | `act -j powerset  # or CI run` |
+| CI-001 | core | ci | [x] | GOV-005,GOV-003 | `.github/workflows/ci.yml` | Feature-powerset CI preserving the bare CPU default; adds cargo doc and drops blanket package exclusions | `act -j powerset  # or CI run` |
 | CI-002 | core | ci | [x] | EXE-008 | `.github/workflows/hardware.yml` | Scheduled CUDA and WGPU hardware matrix | `gh workflow run hardware.yml` |
 | CI-003 | preview | ci | [ ] | DST-008,DST-009,DST-010 | `.github/workflows/hardware.yml` | Homogeneous three-GPU DP, TP, and PP CI | `gh workflow run hardware.yml -f job=dist3` |
 | CI-004 | preview | ci | [ ] | DST-015 | `.github/workflows/hardware.yml` | Multi-process and multi-node CI with topology metadata | `gh workflow run hardware.yml -f job=multinode` |

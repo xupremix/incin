@@ -1,3 +1,5 @@
+#![cfg(feature = "cpu")]
+
 //! PRF-001: how many heap allocations one eager operation costs.
 //!
 //! Latency is what a benchmark measures and allocation count is what explains

@@ -45,17 +45,23 @@ jobs:
     - name: Check Formatting
       run: cargo fmt --all -- --check
 
-    # The three excluded packages are example crates that hard-depend on the
-    # `wgpu` feature, so they cannot build in a CPU-only feature set. They are
-    # built by the `wgpu` job below, not skipped.
+    # These three commands used to carry `--workspace --exclude backends
+    # --exclude tui_graph_demo --exclude native_training_demo`, which is now
+    # `default-members` in the root manifest instead. The exclusions were
+    # blanket in the literal sense: repeating them on every command meant the
+    # three example crates were linted and tested nowhere, and a fourth crate
+    # with the same problem would have needed a fourth `--exclude` on each line.
+    # The WGPU job below now runs `--workspace`, so those three are covered
+    # there rather than merely built, and the CPU set is a manifest fact rather
+    # than an argument list that has to be kept in sync across three commands.
     - name: Clippy Lints
-      run: cargo clippy --workspace --all-targets --exclude backends --exclude tui_graph_demo --exclude native_training_demo --no-default-features --features incin-backends/cpu,incin/cpu -- -D warnings
+      run: cargo clippy --all-targets --no-default-features --features incin-backends/cpu,incin/cpu -- -D warnings
 
     - name: Run Unit & Integration Tests
-      run: cargo test --workspace --all-targets --exclude backends --exclude tui_graph_demo --exclude native_training_demo --no-default-features --features incin-backends/cpu,incin/cpu
+      run: cargo test --all-targets --no-default-features --features incin-backends/cpu,incin/cpu
 
     - name: Build Examples
-      run: cargo build --examples --workspace --exclude backends --exclude tui_graph_demo --exclude native_training_demo --no-default-features --features incin-backends/cpu,incin/cpu
+      run: cargo build --examples --no-default-features --features incin-backends/cpu,incin/cpu
 
     # The workspace run above resolves features across every member, so a
     # backend crate that had come to depend on something another member turns
@@ -67,6 +73,75 @@ jobs:
 
     - name: Run Bare-CPU Tests With The Optional Blocked GEMM
       run: cargo test -p incin-backends --no-default-features --features std,cpu,cpu-blas
+
+  # Every job above pins one feature set each. Between them they leave most of
+  # the combinations a dependent can actually write untested, and the manifest
+  # is what offers those combinations: `incin-backends/cpu` without `std` was a
+  # documented feature pair that had never compiled, because nothing ever built
+  # it. This job builds the combinations instead of trusting them.
+  powerset:
+    name: Feature Powerset
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Cache Cargo modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-powerset-${{ hashFiles('**/Cargo.lock') }}
+
+    - uses: dtolnay/rust-toolchain@stable
+    - uses: taiki-e/install-action@cargo-hack
+
+    - name: Install System Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y protobuf-compiler libvulkan-dev mesa-vulkan-drivers
+
+    # The claim the default feature set makes is that installing incin gets a
+    # CPU build and nothing else. That claim is about the dependency graph, so
+    # it is checked against the dependency graph: each of these crates enters
+    # the tree only through a feature a user has to name, and any of them
+    # appearing under the defaults means a forwarding rule leaked. Turning on
+    # wgpu, cuda, external-candle, or cpu-blas each puts one of them back, so
+    # this fails for the right reason rather than by never matching anything.
+    - name: Assert the default install stays a bare CPU build
+      run: |
+        leaked=$(cargo tree -p incin --edges normal --prefix none | sort -u \
+          | grep -iE '^(wgpu|cudarc|candle-core|candle-nn|matrixmultiply) ' || true)
+        if [ -n "$leaked" ]; then
+          echo "the default feature set pulled in optional backend dependencies:"
+          echo "$leaked"
+          exit 1
+        fi
+        echo "default features resolve without wgpu, cudarc, candle, or matrixmultiply"
+
+    # `nightly` is excluded everywhere because it enables `#![feature]`, which
+    # the stable channel rejects before any of this crate's own code is
+    # reached, and `candle` because it is a deprecated alias that expands to
+    # exactly `external-candle` (D-014) and so doubles the combination count
+    # without covering anything new.
+    - name: incin-core, every feature combination
+      run: cargo hack check -p incin-core --feature-powerset --all-targets --exclude-features nightly
+
+    # `--no-dev-deps` rather than `--all-targets`: this crate's dev-dependency
+    # is `incin` itself, so building its test targets rebuilds the facade under
+    # every combination of a feature set the facade does not have.
+    - name: incin-macros, every feature combination
+      run: cargo hack check -p incin-macros --feature-powerset --no-dev-deps --exclude-features nightly
+
+    - name: incin-diagnostics, every feature combination
+      run: cargo hack check -p incin-diagnostics --feature-powerset --all-targets
+
+    - name: incin-backends, every feature combination
+      run: cargo hack check -p incin-backends --feature-powerset --all-targets --exclude-features candle
+
+    - name: incin, every feature combination
+      run: cargo hack check -p incin --feature-powerset --all-targets --exclude-features nightly,candle
 
   ledger:
     name: Execution Ledger Validation
@@ -89,12 +164,25 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - uses: dtolnay/rust-toolchain@stable
-    - name: Install protobuf compiler
-      run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+    # The WGPU dependencies are here for the all-backend build below, which
+    # compiles wgpu in order to document what sits on top of it.
+    - name: Install System Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y protobuf-compiler libvulkan-dev mesa-vulkan-drivers
     - name: Build docs with warnings denied
       env:
         RUSTDOCFLAGS: -D warnings
-      run: cargo doc --workspace --no-deps --no-default-features --features incin-backends/cpu,incin/cpu
+      run: cargo doc --no-deps --no-default-features --features incin-backends/cpu,incin/cpu
+    # The build above documents what a default install exposes, which leaves
+    # every GPU and external-backend item undocumented by CI: an intra-doc link
+    # into `incin_backends::cuda` resolves only when `cuda` is on, so a broken
+    # one is invisible to a CPU-only doc build. This is the set docs.rs would
+    # publish, minus `nightly`, which the stable channel rejects outright.
+    - name: Build docs with every backend enabled
+      env:
+        RUSTDOCFLAGS: -D warnings
+      run: cargo doc -p incin -p incin-backends -p incin-core --no-deps --no-default-features --features incin/cpu,incin/cuda,incin/wgpu,incin/telemetry,incin/external-candle
 
   core-no-std:
     name: Core no_std Check
@@ -123,8 +211,14 @@ jobs:
         sudo apt-get install -y protobuf-compiler libvulkan-dev mesa-vulkan-drivers
     - name: Run WGPU tests with CPU parity
       run: cargo test -p incin-backends --all-targets --no-default-features --features std,cpu,wgpu
-    - name: Build WGPU example packages
-      run: cargo build -p backends -p tui_graph_demo -p native_training_demo
+    # `--workspace` rather than the three package names the CPU job used to
+    # exclude. Those three are the only members that cannot build without WGPU,
+    # so covering the whole workspace here is what lets the CPU job stop naming
+    # them, and it means a member added later is linted by one job or the other
+    # without anybody remembering to list it. This also lints the three example
+    # crates, which the previous `cargo build` of them did not.
+    - name: Lint the whole workspace with WGPU enabled
+      run: cargo clippy --workspace --all-targets --no-default-features --features incin-backends/cpu,incin-backends/wgpu,incin/cpu,incin/wgpu -- -D warnings
 
   cuda-compile:
     name: CUDA Compile Check

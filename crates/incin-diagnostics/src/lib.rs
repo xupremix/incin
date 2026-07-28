@@ -1323,6 +1323,11 @@ pub fn translate_typenum_text(text: &str) -> (String, Vec<(String, String)>) {
 
 #[cfg(test)]
 mod tests {
+    // The crate is `no_std` without the `std` feature, so `vec!` is not in the
+    // prelude for either configuration of this module. Importing it from
+    // `alloc` is what makes the tests compile under both.
+    use alloc::vec;
+
     use super::*;
 
     #[test]

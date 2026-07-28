@@ -62,6 +62,23 @@ hashbrown = "0.14.5"
 bytemuck = "1"
 criterion = { version = "0.5.1", default-features = false, features = ["cargo_bench_support"] }
 
+# The examples and the benchmark are binaries, so the crate-level `#![cfg]` the
+# integration tests use would leave them without a `main` rather than skipping
+# them. `required-features` is the mechanism that skips a binary target, and it
+# is what lets the feature powerset build every combination.
 [[bench]]
 name = "baselines"
 harness = false
+required-features = ["cpu"]
+
+[[example]]
+name = "batched_matmul"
+required-features = ["cpu"]
+
+[[example]]
+name = "mnist_training"
+required-features = ["cpu"]
+
+[[example]]
+name = "rnn_sequence_prediction"
+required-features = ["cpu"]

@@ -1,4 +1,4 @@
-#![cfg(feature = "external-candle")]
+#![cfg(all(feature = "external-candle", feature = "cpu"))]
 //! Cross-backend parity: `CpuBackendImpl` vs `CandleBackend<f32,
 //! Cpu>`, driven purely through the `Backend` trait surface (D-03), one
 //! `#[test]` per individual op for failure localization.

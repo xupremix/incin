@@ -313,7 +313,7 @@ enables = ["incin-core/std", "anyhow/std", "rand/std", "rand/std_rng", "rand_dis
 
 [[feature_crate.feature]]
 name = "cpu"
-enables = []
+enables = ["std"]
 
 [[feature_crate.feature]]
 name = "cpu-blas"
