@@ -106,9 +106,8 @@ fn numerical_grad(
 /// difference directly approximates the whole gradient contribution.
 pub fn gradcheck(op: impl Fn(&[CpuStorage]) -> CpuStorage, inputs: &[CpuStorage], eps: f64) -> f64 {
     let out = op(inputs);
-    assert_eq!(
+    assert!(
         out.shape.is_empty(),
-        true,
         "gradcheck requires a scalar-output op (got shape {:?})",
         out.shape
     );

@@ -2416,6 +2416,20 @@ already live. The series is recorded as measured, with the cause named in its
 note, rather than adjusted or left out. Repairing it is `PRF-001` or `PRF-003`
 work; a baseline row exists to make exactly this visible, and it did so on the
 first run.
+One correction applies across several rows. Earlier entries record that clippy is
+unavailable on the installed Rust 1.92 toolchain, which was true of the machine
+that wrote them. The CUDA host's 1.92.0 does ship clippy 0.1.92, so the lint gate
+ran for the first time and found that `ci.yml`'s own Clippy Lints step was
+failing on `develop`. `DTypeId::size_bytes`, added by `EXE-008`, spells a
+divisibility test as a remainder comparison, which clippy 1.92 rejects under
+`-D warnings`; nine further findings sat behind it in `EXE-008`'s and `SHP-007`'s
+code. All are fixed, or allowed with the reason written at the site — the fuzz
+seeds spell their case in ASCII and clippy's regrouping would destroy that, and
+`DispatchVar`'s size spread follows from `SHP-003` inlining tensor metadata,
+which is the allocation that row exists to remove. `cargo clippy` now exits zero
+for CI's exact invocation and for the CUDA and WGPU feature sets. Rows completed
+before this point were verified without a lint gate, which is worth knowing when
+reading their evidence.
 `EXE-009` is active and partially landed: the default
 unsupported-operation surface is now gone from all nine operation families, so a
 backend that does not implement an operation says so at its own definition and a

@@ -128,7 +128,7 @@ impl DTypeId {
         operation: OperationKind,
     ) -> Result<usize, ShapeError> {
         let per_block = self.block_elements();
-        if elements % per_block != 0 {
+        if !elements.is_multiple_of(per_block) {
             return Err(ShapeError::InvalidParameter {
                 operation,
                 parameter: "elements",

@@ -130,7 +130,7 @@ impl WgpuStorage {
             .size
             .checked_div(DTypeId::F32.element_size())
             .ok_or_else(|| Error::Msg("WGPU element size must be nonzero".into()))?;
-        if buffer.size % DTypeId::F32.element_size() != 0 {
+        if !buffer.size.is_multiple_of(DTypeId::F32.element_size()) {
             return Err(Error::Msg(format!(
                 "WGPU buffer byte size {} is not a whole number of f32 elements",
                 buffer.size

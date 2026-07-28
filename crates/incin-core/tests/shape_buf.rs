@@ -421,8 +421,8 @@ fn span_rejects_a_stride_buffer_of_the_wrong_rank() {
 
 #[test]
 fn spill_boundary_is_exactly_inline_rank() {
-    let inline = ShapeBuf::from_slice(&vec![2; INLINE_RANK]);
-    let spilled = ShapeBuf::from_slice(&vec![2; INLINE_RANK + 1]);
+    let inline = ShapeBuf::from_slice(&[2; INLINE_RANK]);
+    let spilled = ShapeBuf::from_slice(&[2; INLINE_RANK + 1]);
     assert!(inline.is_inline(), "rank {INLINE_RANK} should stay inline");
     assert!(
         !spilled.is_inline(),

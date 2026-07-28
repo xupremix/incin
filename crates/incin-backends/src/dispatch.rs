@@ -76,6 +76,17 @@ impl DispatchStorage {
 }
 
 /// Mutable parameter storage owned by a runtime-selected backend.
+///
+/// The variants differ in size by design rather than by oversight. A backend
+/// variable embeds its storage, and storage embeds `TensorMeta`, whose
+/// `ShapeBuf` and `StrideBuf` are inline to `MAX_RANK` so that ordinary eager
+/// operations allocate nothing for their metadata (SHP-003). That inlining is
+/// what makes `WgpuVar` 216 bytes against `CpuVar`'s 8, and boxing the large
+/// variant would put the heap allocation back on the path SHP-003 removed it
+/// from. This enum is also `EXE-009`'s active target, which is reshaping the
+/// dispatch surface; changing the layout of a public enum underneath that work
+/// would be churn against a moving file. Revisit when `EXE-009` settles.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone)]
 #[non_exhaustive]
 pub enum DispatchVar {

@@ -172,13 +172,14 @@ fn accumulating_operations_are_reductions_and_reindexing_ones_are_storage() {
 
 // --- axis mask --------------------------------------------------------------
 
-#[test]
-fn axis_mask_holds_every_rank_the_frontend_can_express() {
-    assert!(
-        AxisMask::MAX_AXES >= incin_core::prelude::MAX_RANK,
-        "a shape the type system can express must fit in a mask"
-    );
-}
+/// Both operands are constants, so this is a compile-time guarantee rather than
+/// something a test run discovers. Stating it as a `const` assertion is what it
+/// always meant: raising `MAX_RANK` past the mask's width stops the build here
+/// instead of failing a test somebody has to run first.
+const _: () = assert!(
+    AxisMask::MAX_AXES >= incin_core::prelude::MAX_RANK,
+    "a shape the type system can express must fit in a mask"
+);
 
 #[test]
 fn axis_mask_membership_and_iteration_agree() {

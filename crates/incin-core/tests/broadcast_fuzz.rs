@@ -12,6 +12,12 @@
 //! the broadcast rule actually turns on, so they are drawn far more often than
 //! chance would give.
 
+// Each seed is ASCII spelling the case it drives, so an unadorned run still
+// says which generator produced a failure. Clippy reads the digit grouping as a
+// malformed byte pattern and would regroup it into something no longer
+// readable; the grouping is the point.
+#![allow(clippy::unusual_byte_groupings)]
+
 use incin_core::prelude::{BroadcastShape, Dyn, Shape};
 
 // --- deterministic generator -------------------------------------------
@@ -41,7 +47,7 @@ impl Rng {
     /// from a uniform range where 0 and 1 would essentially never appear.
     fn dim(&mut self) -> usize {
         match self.below(8) {
-            0 | 1 | 2 => 1,
+            0..=2 => 1,
             3 => 0,
             _ => self.below(6) as usize + 2,
         }
@@ -213,13 +219,13 @@ fn a_result_axis_is_never_one_where_an_operand_axis_was_zero() {
         };
 
         let rank = out.len();
-        for axis in 0..rank {
+        for (axis, &dim) in out.iter().enumerate() {
             let from_end = rank - axis;
             let l = lhs.len().checked_sub(from_end).map_or(1, |i| lhs[i]);
             let r = rhs.len().checked_sub(from_end).map_or(1, |i| rhs[i]);
             if l == 0 || r == 0 {
                 assert_eq!(
-                    out[axis], 0,
+                    dim, 0,
                     "case {case}: {lhs:?} against {rhs:?} lost a zero at axis {axis}"
                 );
                 zeros_seen += 1;
