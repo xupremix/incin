@@ -1,0 +1,14 @@
+error[E0277]: the trait bound `WgpuBackendImpl: SupportsDType<f64>` is not satisfied
+  --> tests/compile_fail/unsupported_dtype_backend_pair.rs:10:20
+   |
+10 |     requires_f64::<WgpuBackendImpl<f32, Wgpu>>();
+   |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `SupportsDType<f64>` is not implemented for `WgpuBackendImpl`
+   |
+   = help: the following other types implement trait `SupportsDType<K>`:
+             `WgpuBackendImpl<T, D>` implements `SupportsDType<Dyn>`
+             `WgpuBackendImpl<T, D>` implements `SupportsDType<f32>`
+note: required by a bound in `requires_f64`
+  --> tests/compile_fail/unsupported_dtype_backend_pair.rs:7:20
+   |
+ 7 | fn requires_f64<B: SupportsDType<f64>>() {}
+   |                    ^^^^^^^^^^^^^^^^^^ required by this bound in `requires_f64`

@@ -1,4 +1,7 @@
 use alloc::sync::Arc;
+use core::ops::Deref;
+use incin_core::exec::{Alignment, TensorMeta};
+use incin_core::prelude::{DTypeId, DeviceId, Error, OperationKind, Result};
 use wgpu::util::DeviceExt;
 
 use crate::wgpu::device::get_device_state;
@@ -25,6 +28,21 @@ impl WgpuBuffer {
             buffer,
             size: size_bytes,
         })
+    }
+
+    /// Allocate a zeroed buffer sized for `elements` values of `dtype`.
+    ///
+    /// The dtype decides the width and the multiplication is checked, so an
+    /// element count whose byte length overflows `usize` is reported instead of
+    /// wrapping into an undersized buffer that a shader would then write past.
+    pub(crate) fn new_zeros_for(
+        dtype: DTypeId,
+        elements: usize,
+        operation: OperationKind,
+    ) -> Result<Arc<Self>> {
+        Ok(Self::new_zeros(crate::bytes::byte_len(
+            dtype, elements, operation,
+        )?))
     }
 
     pub(crate) fn from_slice<T: bytemuck::Pod>(data: &[T]) -> Arc<Self> {
@@ -94,25 +112,86 @@ impl TensorId {
 #[derive(Clone)]
 pub struct WgpuStorage {
     pub(crate) buffer: Arc<WgpuBuffer>,
-    pub(crate) shape: Vec<usize>,
-    pub(crate) strides: Vec<usize>,
+    pub(crate) meta: TensorMeta,
     pub(crate) id: TensorId,
 }
 
+impl Deref for WgpuStorage {
+    type Target = TensorMeta;
+
+    fn deref(&self) -> &Self::Target {
+        &self.meta
+    }
+}
+
 impl WgpuStorage {
-    pub(crate) fn new(buffer: Arc<WgpuBuffer>, shape: Vec<usize>) -> Self {
-        // Strides are computed lazily / contiguous-assumed for now.
-        let ndim = shape.len();
-        let mut strides = vec![1usize; ndim];
-        for i in (0..ndim.saturating_sub(1)).rev() {
-            strides[i] = strides[i + 1] * shape[i + 1];
+    pub(crate) fn try_new(buffer: Arc<WgpuBuffer>, shape: Vec<usize>) -> Result<Self> {
+        let capacity = buffer
+            .size
+            .checked_div(DTypeId::F32.element_size())
+            .ok_or_else(|| Error::Msg("WGPU element size must be nonzero".into()))?;
+        if buffer.size % DTypeId::F32.element_size() != 0 {
+            return Err(Error::Msg(format!(
+                "WGPU buffer byte size {} is not a whole number of f32 elements",
+                buffer.size
+            )));
         }
-        Self {
+        let meta = TensorMeta::contiguous(
+            shape.as_slice().into(),
+            DTypeId::F32,
+            DeviceId::wgpu(0),
+            Alignment::of::<f32>(),
+            capacity,
+        )
+        .map_err(|error| Error::Msg(format!("invalid WGPU storage metadata: {error}")))?;
+        Ok(Self {
             buffer,
-            shape,
-            strides,
+            meta,
             id: TensorId::next(),
+        })
+    }
+
+    pub(crate) fn try_new_packed_q8(buffer: Arc<WgpuBuffer>, shape: Vec<usize>) -> Result<Self> {
+        let logical_elements = shape
+            .iter()
+            .try_fold(1usize, |count, &dim| count.checked_mul(dim))
+            .ok_or_else(|| Error::Msg("WGPU Q8_0 logical element count overflowed".into()))?;
+        if !logical_elements.is_multiple_of(32) {
+            return Err(Error::Msg(format!(
+                "WGPU Q8_0 storage requires a multiple of 32 logical elements, got {logical_elements}"
+            )));
         }
+        let expected_bytes = (logical_elements / 32)
+            .checked_mul(34)
+            .ok_or_else(|| Error::Msg("WGPU Q8_0 packed byte length overflowed".into()))?;
+        if buffer.size != expected_bytes {
+            return Err(Error::Msg(format!(
+                "WGPU Q8_0 buffer has {} bytes, expected {expected_bytes}",
+                buffer.size
+            )));
+        }
+        let meta = TensorMeta::contiguous(
+            shape.as_slice().into(),
+            DTypeId::Q8_0,
+            DeviceId::wgpu(0),
+            Alignment::BYTE,
+            logical_elements,
+        )
+        .map_err(|error| Error::Msg(format!("invalid WGPU Q8_0 storage metadata: {error}")))?;
+        Ok(Self {
+            buffer,
+            meta,
+            id: TensorId::next(),
+        })
+    }
+
+    pub(crate) fn new(buffer: Arc<WgpuBuffer>, shape: Vec<usize>) -> Self {
+        Self::try_new(buffer, shape)
+            .expect("backend-created contiguous WGPU storage must match its allocation")
+    }
+
+    pub fn metadata(&self) -> &TensorMeta {
+        &self.meta
     }
 }
 
@@ -123,7 +202,14 @@ pub(crate) fn scatter_into_zeros(
 ) -> WgpuStorage {
     use crate::wgpu::dispatch;
     let out_n = crate::wgpu::backend::num_elements(out_shape);
-    let out_buf = WgpuBuffer::new_zeros(out_n * 4);
+    // The tape's backward closure is `Fn(&WgpuStorage) -> Vec<WgpuStorage>`, so
+    // this path cannot report. `out_shape` is the recorded shape of a tensor
+    // that was already allocated in the forward pass, so its byte length has
+    // already been computed successfully once; the same discipline as
+    // `WgpuStorage::new` below applies. Making the whole backward signature
+    // fallible belongs with the explicit gradient context in GRD-001.
+    let out_buf = WgpuBuffer::new_zeros_for(DTypeId::F32, out_n, OperationKind::Storage)
+        .expect("a shape allocated in the forward pass must size in the backward pass");
     let in_n = crate::wgpu::backend::num_elements(&grad_out.shape) as u32;
 
     let params = dispatch::prepare_shape_params(

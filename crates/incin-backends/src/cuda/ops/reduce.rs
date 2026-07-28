@@ -16,14 +16,6 @@ fn checked_i32_vec(values: &[usize], field: &'static str) -> Result<Vec<i32>> {
         .collect()
 }
 
-fn checked_byte_len(numel: usize, element_size: usize) -> Result<usize> {
-    numel.checked_mul(element_size).ok_or_else(|| {
-        Error::Msg(format!(
-            "CUDA reduction allocation overflow: {numel} elements of {element_size} bytes"
-        ))
-    })
-}
-
 fn validate_reduction<'a>(
     storage: &'a CudaStorage,
     axis: usize,
@@ -49,8 +41,8 @@ fn validate_reduction<'a>(
         )));
     }
     let operand = OperandIteration {
-        strides: storage.strides.clone(),
-        offset: storage.offset,
+        strides: storage.strides.to_vec(),
+        offset: storage.offset_elements,
     };
     if let Some(max_index) = operand.max_physical_index(&storage.shape)?
         && max_index >= buffer.len
@@ -189,7 +181,7 @@ pub(crate) fn launch_reduce_op(
         reduction_launch_selection(&buffer.device, &kernel, out_numel, reduce_dim_size, fast)?;
 
     let stream = buffer.device.default_stream();
-    let byte_len = checked_byte_len(out_numel, kernel.element_size)?;
+    let byte_len = crate::bytes::byte_len(kernel.dtype, out_numel, OperationKind::Reduction)?;
     let mut out_buffer = CudaBuffer {
         len: out_numel,
         dtype: buffer.dtype,
@@ -208,7 +200,7 @@ pub(crate) fn launch_reduce_op(
     ensure_reduction_loaded(buffer.device_id, &kernel)?;
     let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(buffer.device_id);
     let function = dispatcher.get_function(&kernel.cache_key, &kernel.entry_point)?;
-    let in_offset = checked_i32(storage.offset, "input offset")?;
+    let in_offset = checked_i32(storage.offset_elements, "input offset")?;
     let reduce_dim = checked_i32(reduce_dim_size, "axis length")?;
     let out_numel_i32 = checked_i32(out_numel, "output element count")?;
 
@@ -347,7 +339,11 @@ pub(crate) fn launch_reduce_with_indices_op(
         dtype: buffer.dtype,
         data: Arc::new(
             stream
-                .alloc_zeros::<u8>(checked_byte_len(out_numel, kernel.element_size)?)
+                .alloc_zeros::<u8>(crate::bytes::byte_len(
+                    kernel.dtype,
+                    out_numel,
+                    OperationKind::Reduction,
+                )?)
                 .map_err(|error| {
                     Error::Msg(format!("CUDA reduction value allocation failed: {error:?}"))
                 })?,
@@ -360,7 +356,11 @@ pub(crate) fn launch_reduce_with_indices_op(
         dtype: DTypeId::U32,
         data: Arc::new(
             stream
-                .alloc_zeros::<u8>(checked_byte_len(out_numel, DTypeId::U32.element_size())?)
+                .alloc_zeros::<u8>(crate::bytes::byte_len(
+                    DTypeId::U32,
+                    out_numel,
+                    OperationKind::Reduction,
+                )?)
                 .map_err(|error| {
                     Error::Msg(format!("CUDA reduction index allocation failed: {error:?}"))
                 })?,
@@ -412,7 +412,7 @@ pub(crate) fn launch_reduce_with_indices_op(
             Error::Msg("fresh CUDA reduction index buffer was unexpectedly shared".into())
         })?;
         use cudarc::driver::PushKernelArg;
-        let in_offset = checked_i32(storage.offset, "input offset")?;
+        let in_offset = checked_i32(storage.offset_elements, "input offset")?;
         let axis_i32 = checked_i32(axis, "axis")?;
         let reduce_dim = checked_i32(reduce_dim_size, "axis length")?;
         let ndim = checked_i32(storage.shape.len(), "rank")?;
@@ -528,7 +528,7 @@ pub(crate) fn indices_u32_to_i64(idx: &CudaStorage) -> Result<CudaStorage> {
         device: buf.device.clone(),
         device_id: buf.device_id,
     };
-    Ok(CudaStorage::new(Arc::new(new_buf), idx.shape.clone()))
+    Ok(CudaStorage::new(Arc::new(new_buf), idx.shape.to_vec()))
 }
 
 #[cfg(test)]
@@ -539,7 +539,9 @@ mod tests {
     fn checked_reduction_metadata_rejects_narrowing_and_overflow() {
         assert_eq!(checked_i32(i32::MAX as usize, "test").unwrap(), i32::MAX);
         assert!(checked_i32(i32::MAX as usize + 1, "test").is_err());
-        assert!(checked_byte_len(usize::MAX, 2).is_err());
+        assert!(
+            crate::bytes::byte_len(DTypeId::F16, usize::MAX, OperationKind::Reduction).is_err()
+        );
     }
 
     #[test]

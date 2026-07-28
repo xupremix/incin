@@ -30,7 +30,7 @@ fn perturbed(storage: &CpuStorage, flat_idx: usize, delta: f64) -> CpuStorage {
     let buffer = match &*storage.buffer {
         CpuBuffer::F32(v) => {
             let mut v = v.clone();
-            let mut flat = storage.offset;
+            let mut flat = storage.offset_elements;
             for (i, s) in idx.iter().zip(storage.strides.iter()) {
                 flat += i * s;
             }
@@ -39,7 +39,7 @@ fn perturbed(storage: &CpuStorage, flat_idx: usize, delta: f64) -> CpuStorage {
         }
         CpuBuffer::F64(v) => {
             let mut v = v.clone();
-            let mut flat = storage.offset;
+            let mut flat = storage.offset_elements;
             for (i, s) in idx.iter().zip(storage.strides.iter()) {
                 flat += i * s;
             }
@@ -58,7 +58,7 @@ fn perturbed(storage: &CpuStorage, flat_idx: usize, delta: f64) -> CpuStorage {
         stride::contiguous_strides(&contiguous_shape).len(),
         storage.strides.len()
     );
-    CpuStorage::from_contiguous(buffer, contiguous_shape)
+    CpuStorage::from_contiguous(buffer, contiguous_shape.to_vec())
 }
 
 /// Read the scalar at flat buffer position `flat_idx` (logical row-major
@@ -107,8 +107,8 @@ fn numerical_grad(
 pub fn gradcheck(op: impl Fn(&[CpuStorage]) -> CpuStorage, inputs: &[CpuStorage], eps: f64) -> f64 {
     let out = op(inputs);
     assert_eq!(
-        out.shape,
-        Vec::<usize>::new(),
+        out.shape.is_empty(),
+        true,
         "gradcheck requires a scalar-output op (got shape {:?})",
         out.shape
     );

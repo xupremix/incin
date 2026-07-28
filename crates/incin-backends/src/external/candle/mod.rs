@@ -3,9 +3,11 @@
 
 mod backend;
 pub mod convert;
+mod executor;
 mod ops;
 
-pub use convert::{to_candle_device, to_candle_dtype};
+pub use convert::{from_candle_device, from_candle_dtype, to_candle_device, to_candle_dtype};
+pub use executor::CandleStorage;
 
 /// # Backend Float Element Limitation (B-4)
 /// **Known Limitation:** `CandleBackend` ignores its compile-time `T` generic
@@ -14,11 +16,27 @@ pub use convert::{to_candle_device, to_candle_dtype};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CandleBackend<T, D>(core::marker::PhantomData<(T, D)>);
 
+impl<T, D> CandleBackend<T, D> {
+    /// Construct the stateless Candle executor.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self(core::marker::PhantomData)
+    }
+}
+
+impl<T, D> Default for CandleBackend<T, D> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 /// Unit tests for the candle dtype and device conversion helpers.
 mod tests {
     use super::*;
 
+    use candle_core as candle;
+    use incin_core::prelude::{DTypeId, DeviceId};
     #[test]
     /// Checks that `to_candle_dtype` maps `F32` and `I64` to the
     /// corresponding candle dtypes.

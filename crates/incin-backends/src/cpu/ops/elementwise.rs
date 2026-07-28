@@ -55,12 +55,12 @@ pub(crate) fn elementwise_binary(
         OperandLayout {
             shape: &lhs.shape,
             strides: &lhs.strides,
-            offset: lhs.offset,
+            offset: lhs.offset_elements,
         },
         OperandLayout {
             shape: &rhs.shape,
             strides: &rhs.strides,
-            offset: rhs.offset,
+            offset: rhs.offset_elements,
         },
         out_shape,
     )?;
@@ -113,7 +113,7 @@ pub(crate) fn elementwise_unary(
     // Preserve t's actual dtype variant instead of hardcoding F32 (C-2: this
     // used to silently downcast every non-f32 dtype through f32).
     let out_buffer = t.buffer.from_f64_values(out);
-    Ok(CpuStorage::from_contiguous(out_buffer, t.shape.clone()))
+    Ok(CpuStorage::from_contiguous(out_buffer, t.shape.to_vec()))
 }
 
 fn elementwise_unary_typed(op: UnaryOp, input: &CpuStorage) -> Result<CpuStorage> {
@@ -162,7 +162,7 @@ impl<T: DType, D: Device> NumericOps<Self> for CpuBackendImpl<T, D> {
         let out_shape = crate::cpu::stride::broadcast_shape(&lhs.shape, &rhs.shape)?;
         let out = elementwise_binary_numeric(BinaryOp::Add, lhs, rhs, &out_shape)?;
 
-        let (lhs_shape, rhs_shape) = (lhs.shape.clone(), rhs.shape.clone());
+        let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
         let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
         tape::push(TapeEntry {
             output_id: out_id,
@@ -185,7 +185,7 @@ impl<T: DType, D: Device> NumericOps<Self> for CpuBackendImpl<T, D> {
         let out_shape = crate::cpu::stride::broadcast_shape(&lhs.shape, &rhs.shape)?;
         let out = elementwise_binary_numeric(BinaryOp::Sub, lhs, rhs, &out_shape)?;
 
-        let (lhs_shape, rhs_shape) = (lhs.shape.clone(), rhs.shape.clone());
+        let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
         let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
         tape::push(TapeEntry {
             output_id: out_id,
@@ -212,7 +212,7 @@ impl<T: DType, D: Device> NumericOps<Self> for CpuBackendImpl<T, D> {
         // Capture cloned copies of lhs/rhs's CpuStorage (cheap, Rc-backed)
         // since the backward closure needs their VALUES, not just shapes.
         let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
-        let (lhs_shape, rhs_shape) = (lhs.shape.clone(), rhs.shape.clone());
+        let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
         let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
         tape::push(TapeEntry {
             output_id: out_id,
@@ -254,7 +254,7 @@ impl<T: DType, D: Device> NumericOps<Self> for CpuBackendImpl<T, D> {
         // unbroadcast — best-effort correctness, not exercised by this
         // phase's example/tests.
         let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
-        let (lhs_shape, rhs_shape) = (lhs.shape.clone(), rhs.shape.clone());
+        let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
         let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
         tape::push(TapeEntry {
             output_id: out_id,
@@ -333,7 +333,7 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
                 }
                 vec![CpuStorage::from_contiguous(
                     grad_out.buffer.from_f64_values(scaled),
-                    grad_out.shape.clone(),
+                    grad_out.shape.to_vec(),
                 )]
             }),
         });
@@ -377,7 +377,7 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
                 let zeros = vec![0.0f64; total];
                 vec![CpuStorage::from_contiguous(
                     grad_out.buffer.from_f64_values(zeros),
-                    grad_out.shape.clone(),
+                    grad_out.shape.to_vec(),
                 )]
             }),
         });
@@ -640,7 +640,7 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
                     .collect();
                 vec![CpuStorage::from_contiguous(
                     grad_out.buffer.from_f64_values(grad),
-                    grad_out.shape.clone(),
+                    grad_out.shape.to_vec(),
                 )]
             }),
         });

@@ -1,4 +1,5 @@
 use crate::prelude::Dyn;
+use crate::shapes::error::{OperationKind, ShapeError};
 
 use core::{fmt::Debug, marker::PhantomData};
 pub use half::{bf16, f16};
@@ -45,7 +46,9 @@ pub trait QuantDType: DType {}
 pub struct Q8_0;
 
 #[non_exhaustive]
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Default, Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize,
+)]
 /// The runtime-identifiable element type a storage handle holds — every
 /// `DType::to_incin` resolves to one of these.
 pub enum DTypeId {
@@ -70,6 +73,11 @@ pub enum DTypeId {
 
 impl DTypeId {
     /// Returns the size in bytes of a single element of this dtype.
+    ///
+    /// This is the *scalar* element width. It is not a storage width for
+    /// block-quantized dtypes: `Q8_0` reports 1 because one quantized value is
+    /// one `i8`, but 32 of them share an `f16` scale and occupy a 34-byte
+    /// block. Use [`size_bytes`](Self::size_bytes) to size an allocation.
     pub fn element_size(&self) -> usize {
         match self {
             DTypeId::U8 | DTypeId::Q8_0 => 1,
@@ -77,6 +85,62 @@ impl DTypeId {
             DTypeId::F32 | DTypeId::U32 => 4,
             DTypeId::F64 | DTypeId::I64 => 8,
         }
+    }
+
+    /// Logical values packed into one physical storage block.
+    ///
+    /// Scalar dtypes store one value per block. `Q8_0` packs 32.
+    #[must_use]
+    pub const fn block_elements(self) -> usize {
+        match self {
+            DTypeId::Q8_0 => 32,
+            _ => 1,
+        }
+    }
+
+    /// Bytes occupied by one physical storage block.
+    ///
+    /// For scalar dtypes this equals [`element_size`](Self::element_size). A
+    /// `Q8_0` block is an `f16` scale followed by 32 `i8` values: 34 bytes for
+    /// 32 logical values, which is why byte lengths cannot be derived from the
+    /// element width alone.
+    #[must_use]
+    pub const fn block_bytes(self) -> usize {
+        match self {
+            DTypeId::U8 => 1,
+            DTypeId::F16 | DTypeId::BF16 => 2,
+            DTypeId::F32 | DTypeId::U32 => 4,
+            DTypeId::F64 | DTypeId::I64 => 8,
+            DTypeId::Q8_0 => 34,
+        }
+    }
+
+    /// Bytes occupied by `elements` logical values of this dtype.
+    ///
+    /// This is the single byte-arithmetic entry point for storage sizing. It
+    /// is checked, so an element count that fits `usize` but whose byte length
+    /// does not is reported rather than silently truncated into an undersized
+    /// allocation. A block-quantized count that does not fill whole blocks is
+    /// rejected: half a `Q8_0` block has no representation.
+    pub fn size_bytes(
+        self,
+        elements: usize,
+        operation: OperationKind,
+    ) -> Result<usize, ShapeError> {
+        let per_block = self.block_elements();
+        if elements % per_block != 0 {
+            return Err(ShapeError::InvalidParameter {
+                operation,
+                parameter: "elements",
+                value: elements,
+            });
+        }
+        (elements / per_block)
+            .checked_mul(self.block_bytes())
+            .ok_or(ShapeError::ArithmeticOverflow {
+                operation,
+                expression: "block count * block size",
+            })
     }
 }
 

@@ -22,6 +22,36 @@ pub fn to_candle_device(dev: &DeviceId) -> Result<candle::Device> {
     }
 }
 
+/// Recovers the Incin `DeviceId` a candle `Device` stands for.
+///
+/// This is the inverse of [`to_candle_device`] and is what lets a foreign
+/// tensor report checked [`TensorMeta`](incin_core::exec::TensorMeta): the
+/// descriptor contract records the device the data actually sits on, and only
+/// candle knows that once it owns the allocation.
+pub fn from_candle_device(device: &candle::Device) -> Result<DeviceId> {
+    match device.location() {
+        candle::DeviceLocation::Cpu => Ok(DeviceId::cpu()),
+        candle::DeviceLocation::Cuda { gpu_id } => Ok(DeviceId::cuda(gpu_id)),
+        candle::DeviceLocation::Metal { gpu_id } => Ok(DeviceId::wgpu(gpu_id)),
+    }
+}
+
+/// Recovers the Incin dtype a candle `DType` stands for.
+///
+/// The inverse of [`to_candle_dtype`]. Candle has no `Q8_0`, so the mapping is
+/// total in this direction.
+pub fn from_candle_dtype(dtype: candle::DType) -> DTypeId {
+    match dtype {
+        candle::DType::U8 => DTypeId::U8,
+        candle::DType::U32 => DTypeId::U32,
+        candle::DType::I64 => DTypeId::I64,
+        candle::DType::BF16 => DTypeId::BF16,
+        candle::DType::F16 => DTypeId::F16,
+        candle::DType::F32 => DTypeId::F32,
+        candle::DType::F64 => DTypeId::F64,
+    }
+}
+
 /// Maps an Incin dtype to Candle, returning a typed error when Candle has
 /// no native representation for it.
 pub fn to_candle_dtype(dtype: DTypeId) -> Result<candle::DType> {

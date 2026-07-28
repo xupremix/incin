@@ -6,8 +6,13 @@ extern crate alloc;
 pub use incin_core::prelude::*;
 
 pub mod backend_kind;
+pub mod capability;
 pub use backend_kind::BackendFor;
+#[cfg(any(feature = "cpu", feature = "wgpu", feature = "cuda"))]
+pub(crate) mod descriptor_bind;
 pub mod dispatch;
+#[cfg(any(feature = "cpu", feature = "wgpu", feature = "cuda"))]
+mod dispatch_executor;
 pub use dispatch::DispatchBackend;
 
 /// Runtime detection of the best device this machine can actually run on.
@@ -16,7 +21,10 @@ pub mod detect;
 #[cfg(feature = "std")]
 pub use detect::{detect_device, detect_device_in};
 
+#[cfg(any(feature = "cuda", feature = "wgpu", feature = "external-candle"))]
+pub(crate) mod bytes;
 pub(crate) mod dtype_policy;
+pub(crate) mod unsupported;
 
 #[cfg(any(feature = "cpu", feature = "cuda"))]
 pub(crate) mod iteration;

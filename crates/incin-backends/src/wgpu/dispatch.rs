@@ -3,6 +3,8 @@ use wgpu::ComputePipeline;
 
 use crate::wgpu::device::get_device_state;
 use crate::wgpu::pipeline::get_or_create_pipeline;
+use incin_core::prelude::{DTypeId, OperationKind, Result};
+
 use crate::wgpu::storage::WgpuBuffer;
 
 /// `WG_SIZE`.
@@ -112,14 +114,19 @@ pub(crate) fn dispatch_scalar(inp: &WgpuBuffer, out: &Arc<WgpuBuffer>, params_da
 
 /// Full reduction over `n` elements. Returns a scalar WgpuStorage (shape=[1]).
 /// reduce_mode: 0=sum, 1=max, 2=min
-pub(crate) fn dispatch_reduce_all(inp: &WgpuBuffer, n: u32, reduce_mode: u32) -> Arc<WgpuBuffer> {
+pub(crate) fn dispatch_reduce_all(
+    inp: &WgpuBuffer,
+    n: u32,
+    reduce_mode: u32,
+) -> Result<Arc<WgpuBuffer>> {
     let state = get_device_state();
     let shader = include_str!("shaders/reduce.wgsl");
     let pipeline = get_or_create_pipeline("reduce", shader, "main");
 
     // First pass: reduce into n_wg partial results
     let n_wg = n.div_ceil(WG_SIZE);
-    let partial_buf = WgpuBuffer::new_zeros(n_wg as usize * 4);
+    let partial_buf =
+        WgpuBuffer::new_zeros_for(DTypeId::F32, n_wg as usize, OperationKind::Reduction)?;
     let params = [n, reduce_mode];
     let params_buf = WgpuBuffer::from_slice(&params);
 
@@ -146,7 +153,7 @@ pub(crate) fn dispatch_reduce_all(inp: &WgpuBuffer, n: u32, reduce_mode: u32) ->
 
     // If already a single element, done
     if n_wg == 1 {
-        return partial_buf;
+        return Ok(partial_buf);
     }
 
     // Second pass: reduce partials

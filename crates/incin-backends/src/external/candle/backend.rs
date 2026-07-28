@@ -139,9 +139,30 @@ impl<T: incin_core::prelude::DType, D: incin_core::prelude::Device> incin_core::
     }
 }
 
-impl<T: incin_core::prelude::DType, D: incin_core::prelude::Device, K: incin_core::prelude::DType>
-    incin_core::prelude::SupportsDType<K> for CandleBackend<T, D>
-{
+macro_rules! impl_candle_storage_dtype {
+    ($($dtype:ty),+ $(,)?) => {
+        $(
+            impl<T: DType, D: Device> SupportsDType<$dtype> for CandleBackend<T, D> {
+                fn resolve_dtype(
+                    field: &<$dtype as DType>::Field,
+                    _device: &DeviceId,
+                ) -> Result<DTypeId> {
+                    let dtype = <$dtype as DType>::to_incin(field);
+                    to_candle_dtype(dtype)?;
+                    Ok(dtype)
+                }
+            }
+        )+
+    };
+}
+
+impl_candle_storage_dtype!(f32, f64, f16, bf16, u8, u32, i64);
+
+impl<T: DType, D: Device> SupportsDType<Dyn> for CandleBackend<T, D> {
+    fn resolve_dtype(field: &DTypeId, _device: &DeviceId) -> Result<DTypeId> {
+        to_candle_dtype(*field)?;
+        Ok(*field)
+    }
 }
 
 impl<T, D, NewD> incin_core::prelude::TransferTo<NewD> for CandleBackend<T, D>

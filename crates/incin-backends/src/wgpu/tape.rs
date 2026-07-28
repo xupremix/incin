@@ -1,9 +1,10 @@
 use alloc::boxed::Box;
 use alloc::collections::BTreeMap;
+use alloc::collections::btree_map::Entry;
 use alloc::vec::Vec;
 use core::cell::RefCell;
 
-use incin_core::prelude::Result;
+use incin_core::prelude::{DTypeId, OperationKind, Result};
 
 use crate::wgpu::dispatch;
 use crate::wgpu::storage::{TensorId, WgpuBuffer, WgpuStorage};
@@ -54,7 +55,7 @@ pub fn backward(loss: &WgpuStorage) -> Result<WgpuGrads> {
     let n = loss.shape.iter().product::<usize>();
     let data: Vec<f32> = vec![1.0; n];
     let buf = WgpuBuffer::from_slice(&data);
-    grads.insert(loss.id, WgpuStorage::new(buf, loss.shape.clone()));
+    grads.insert(loss.id, WgpuStorage::new(buf, loss.shape.to_vec()));
 
     let entries = TAPE.with(|t| core::mem::take(&mut *t.borrow_mut()));
     #[cfg(feature = "telemetry")]
@@ -66,10 +67,15 @@ pub fn backward(loss: &WgpuStorage) -> Result<WgpuGrads> {
         };
         let input_grads = (entry.backward)(&grad_out);
         for (input_id, g) in entry.input_ids.into_iter().zip(input_grads) {
-            grads
-                .entry(input_id)
-                .and_modify(|acc| *acc = add_wgpu_storage(acc, &g))
-                .or_insert(g);
+            match grads.entry(input_id) {
+                Entry::Occupied(mut slot) => {
+                    let accumulated = add_wgpu_storage(slot.get(), &g)?;
+                    slot.insert(accumulated);
+                }
+                Entry::Vacant(slot) => {
+                    slot.insert(g);
+                }
+            }
         }
     }
     #[cfg(feature = "telemetry")]
@@ -110,7 +116,7 @@ pub fn backward_with_nan_check(loss: &WgpuStorage) -> Result<WgpuGrads> {
     let n = loss.shape.iter().product::<usize>();
     let data: Vec<f32> = vec![1.0; n];
     let buf = WgpuBuffer::from_slice(&data);
-    grads.insert(loss.id, WgpuStorage::new(buf, loss.shape.clone()));
+    grads.insert(loss.id, WgpuStorage::new(buf, loss.shape.to_vec()));
 
     let entries = TAPE.with(|t| core::mem::take(&mut *t.borrow_mut()));
 
@@ -121,29 +127,32 @@ pub fn backward_with_nan_check(loss: &WgpuStorage) -> Result<WgpuGrads> {
         let input_grads = (entry.backward)(&grad_out);
         for (input_id, g) in entry.input_ids.into_iter().zip(input_grads) {
             check_nan(&g, input_id);
-            grads
-                .entry(input_id)
-                .and_modify(|acc| {
-                    *acc = add_wgpu_storage(acc, &g);
-                    check_nan(acc, input_id);
-                })
-                .or_insert(g);
+            match grads.entry(input_id) {
+                Entry::Occupied(mut slot) => {
+                    let accumulated = add_wgpu_storage(slot.get(), &g)?;
+                    check_nan(&accumulated, input_id);
+                    slot.insert(accumulated);
+                }
+                Entry::Vacant(slot) => {
+                    slot.insert(g);
+                }
+            }
         }
     }
 
     Ok(WgpuGrads { grads })
 }
 
-fn add_wgpu_storage(a: &WgpuStorage, b: &WgpuStorage) -> WgpuStorage {
+fn add_wgpu_storage(a: &WgpuStorage, b: &WgpuStorage) -> Result<WgpuStorage> {
     debug_assert_eq!(
         a.shape, b.shape,
         "tape accumulation requires matching shapes"
     );
     let n = a.shape.iter().product::<usize>();
-    let out_buf = WgpuBuffer::new_zeros(n * core::mem::size_of::<f32>());
+    let out_buf = WgpuBuffer::new_zeros_for(DTypeId::F32, n, OperationKind::Storage)?;
     let params = [0, n as u32]; // op_mode 0=add
     dispatch::dispatch_binary(&a.buffer, &b.buffer, &out_buf, &params);
-    WgpuStorage::new(out_buf, a.shape.clone())
+    Ok(WgpuStorage::new(out_buf, a.shape.to_vec()))
 }
 
 pub fn unbroadcast(grad: &WgpuStorage, target_shape: &[usize]) -> Result<WgpuStorage> {
@@ -156,31 +165,31 @@ pub fn unbroadcast(grad: &WgpuStorage, target_shape: &[usize]) -> Result<WgpuSto
 
     // Reduce leading dims
     for _ in 0..ndim_diff {
-        result = sum_dim_squeeze(&result, 0);
+        result = sum_dim_squeeze(&result, 0)?;
     }
 
     // Reduce keepdim dims
     for (i, &t_dim) in target_shape.iter().enumerate() {
         if t_dim == 1 && result.shape[i] != 1 {
-            result = sum_dim_keepdim(&result, i);
+            result = sum_dim_keepdim(&result, i)?;
         }
     }
 
     Ok(result)
 }
 
-fn sum_dim_squeeze(storage: &WgpuStorage, axis: usize) -> WgpuStorage {
-    let reduced = sum_dim_keepdim(storage, axis);
-    let mut new_shape = reduced.shape.clone();
+fn sum_dim_squeeze(storage: &WgpuStorage, axis: usize) -> Result<WgpuStorage> {
+    let reduced = sum_dim_keepdim(storage, axis)?;
+    let mut new_shape = reduced.shape.to_vec();
     new_shape.remove(axis);
-    WgpuStorage::new(reduced.buffer.clone(), new_shape)
+    Ok(WgpuStorage::new(reduced.buffer.clone(), new_shape))
 }
 
-fn sum_dim_keepdim(storage: &WgpuStorage, axis: usize) -> WgpuStorage {
-    let mut out_shape = storage.shape.clone();
+fn sum_dim_keepdim(storage: &WgpuStorage, axis: usize) -> Result<WgpuStorage> {
+    let mut out_shape = storage.shape.to_vec();
     out_shape[axis] = 1;
     let total: usize = out_shape.iter().product();
-    let out_buf = WgpuBuffer::new_zeros(total * core::mem::size_of::<f32>());
+    let out_buf = WgpuBuffer::new_zeros_for(DTypeId::F32, total, OperationKind::Storage)?;
 
     let inner_stride: usize = storage.shape[axis + 1..].iter().product();
 
@@ -192,5 +201,5 @@ fn sum_dim_keepdim(storage: &WgpuStorage, axis: usize) -> WgpuStorage {
         inner_stride as u32,
         total as u32,
     );
-    WgpuStorage::new(out_buf, out_shape)
+    Ok(WgpuStorage::new(out_buf, out_shape))
 }

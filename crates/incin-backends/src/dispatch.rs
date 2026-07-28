@@ -8,6 +8,25 @@ use crate::dtype_policy::{BackendFamily, OperationKind, resolve_dtype_policy};
 #[derive(Clone)]
 pub struct DispatchBackend<T = f32, D = Dyn>(core::marker::PhantomData<(T, D)>);
 
+impl<T, D> DispatchBackend<T, D> {
+    /// Construct the stateless dispatching executor.
+    ///
+    /// Without this the descriptor path on the runtime-selected backend is
+    /// unreachable from outside the crate: `ExecutionContext` owns a backend
+    /// value and the `PhantomData` field is private, so no caller could build
+    /// one to hand to `Execute`.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self(core::marker::PhantomData)
+    }
+}
+
+impl<T, D> Default for DispatchBackend<T, D> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T: DType, D: Device, K: DType> SupportsDType<K> for DispatchBackend<T, D> {
     fn resolve_dtype(field: &K::Field, device: &DeviceId) -> Result<DTypeId> {
         let dtype = K::to_incin(field);
@@ -17,7 +36,7 @@ impl<T: DType, D: Device, K: DType> SupportsDType<K> for DispatchBackend<T, D> {
             DeviceKind::Cuda => BackendFamily::Cuda,
             _ => return Err(Error::BackendUnavailable { backend: "Unknown" }),
         };
-        resolve_dtype_policy(backend, OperationKind::Fill, dtype, "create").map(|_| dtype)
+        resolve_dtype_policy(backend, OperationKind::Storage, dtype, "storage").map(|_| dtype)
     }
 }
 
@@ -36,6 +55,24 @@ pub enum DispatchStorage {
     Cuda(crate::cuda::storage::CudaStorage),
     #[doc(hidden)]
     Unavailable,
+}
+
+impl DispatchStorage {
+    /// Checked physical metadata of whichever backend currently holds the data.
+    #[must_use]
+    pub fn metadata(&self) -> &incin_core::exec::TensorMeta {
+        match self {
+            #[cfg(feature = "cpu")]
+            Self::Cpu(storage) => storage.metadata(),
+            #[cfg(feature = "wgpu")]
+            Self::Wgpu(storage) => storage.metadata(),
+            #[cfg(feature = "cuda")]
+            Self::Cuda(storage) => storage.metadata(),
+            // This variant exists only so the enum has a shape when no backend
+            // feature is enabled, and it owns no allocation to describe.
+            Self::Unavailable => &incin_core::exec::TensorMeta::UNALLOCATED,
+        }
+    }
 }
 
 /// Mutable parameter storage owned by a runtime-selected backend.
@@ -88,6 +125,88 @@ fn storage_device(storage: &DispatchStorage) -> DeviceId {
     }
 }
 
+/// Operand extractors for operations that take more than two tensors.
+///
+/// An operation routed by [`DispatchBackend`] executes on exactly one concrete
+/// backend, so every operand has to be sitting on that same backend already.
+/// These recover the concrete storage and report [`Error::DeviceMismatch`]
+/// against the operand that decided the route, rather than silently reading a
+/// buffer that lives on another device.
+macro_rules! operand_accessors {
+    ($($fname:ident, $optname:ident, $variant:ident, $concrete:ty, $feature:literal;)*) => {
+        $(
+            #[cfg(feature = $feature)]
+            fn $fname<'a>(
+                routed: &DispatchStorage,
+                operand: &'a DispatchStorage,
+            ) -> Result<&'a $concrete> {
+                match operand {
+                    DispatchStorage::$variant(value) => Ok(value),
+                    other => Err(Error::DeviceMismatch {
+                        left: storage_device(routed),
+                        right: storage_device(other),
+                    }),
+                }
+            }
+
+            #[cfg(feature = $feature)]
+            fn $optname<'a>(
+                routed: &DispatchStorage,
+                operand: Option<&'a DispatchStorage>,
+            ) -> Result<Option<&'a $concrete>> {
+                operand.map(|value| $fname(routed, value)).transpose()
+            }
+        )*
+    };
+}
+
+operand_accessors! {
+    cpu_operand, cpu_optional, Cpu, crate::cpu::CpuStorage, "cpu";
+    wgpu_operand, wgpu_optional, Wgpu, crate::wgpu::storage::WgpuStorage, "wgpu";
+    cuda_operand, cuda_optional, Cuda, crate::cuda::storage::CudaStorage, "cuda";
+}
+
+/// Routes a multi-operand operation to the backend holding its first operand.
+///
+/// `req` and `opt` name the remaining required and optional tensor operands;
+/// each is checked against the routed backend, so a mixed-device call fails
+/// with a device mismatch instead of reaching a kernel.
+macro_rules! dispatch_same_device {
+    (
+        $primary:expr, $method:ident::<$($generic:ty),*>,
+        req = [$($req:expr),*], opt = [$($opt:expr),*], args = [$($arg:expr),*]
+    ) => {{
+        let routed = $primary;
+        match routed {
+            #[cfg(feature = "cpu")]
+            DispatchStorage::Cpu(value) => crate::cpu::CpuBackendImpl::<T, Cpu>::$method::<$($generic),*>(
+                value,
+                $(cpu_operand(routed, $req)?,)*
+                $(cpu_optional(routed, $opt)?,)*
+                $($arg),*
+            )
+            .map(DispatchStorage::Cpu),
+            #[cfg(feature = "wgpu")]
+            DispatchStorage::Wgpu(value) => crate::wgpu::WgpuBackendImpl::<T, Wgpu>::$method::<$($generic),*>(
+                value,
+                $(wgpu_operand(routed, $req)?,)*
+                $(wgpu_optional(routed, $opt)?,)*
+                $($arg),*
+            )
+            .map(DispatchStorage::Wgpu),
+            #[cfg(feature = "cuda")]
+            DispatchStorage::Cuda(value) => crate::cuda::CudaBackendImpl::<T, Cuda>::$method::<$($generic),*>(
+                value,
+                $(cuda_operand(routed, $req)?,)*
+                $(cuda_optional(routed, $opt)?,)*
+                $($arg),*
+            )
+            .map(DispatchStorage::Cuda),
+            DispatchStorage::Unavailable => Err(unavailable(DeviceKind::Cpu)),
+        }
+    }};
+}
+
 macro_rules! dispatch_unary {
     ($storage:expr, $method:ident $(, $arg:expr)*) => {
         match $storage {
@@ -103,6 +222,59 @@ macro_rules! dispatch_unary {
             DispatchStorage::Unavailable => Err(unavailable(DeviceKind::Cpu)),
         }
     };
+}
+
+/// Routes an operation taking a slice of operands to the backend holding the
+/// first one, checking every remaining operand against that route.
+///
+/// `stack` and `concat` are the only `TensorOps` members with this shape. An
+/// empty slice names no device to route on, so it is reported here with the
+/// same message the concrete backends use rather than reaching a kernel.
+macro_rules! dispatch_slice {
+    ($operands:expr, $method:ident, $dim:expr) => {{
+        let operands: &[&DispatchStorage] = $operands;
+        let Some(routed) = operands.first().copied() else {
+            return Err(Error::ShapeMismatch {
+                op: stringify!($method),
+                expected: Vec::new(),
+                got: Vec::new(),
+                msg: String::from(concat!(
+                    stringify!($method),
+                    " requires at least one input tensor"
+                )),
+            });
+        };
+        match routed {
+            #[cfg(feature = "cpu")]
+            DispatchStorage::Cpu(_) => {
+                let concrete = operands
+                    .iter()
+                    .map(|operand| cpu_operand(routed, operand))
+                    .collect::<Result<Vec<_>>>()?;
+                crate::cpu::CpuBackendImpl::<T, Cpu>::$method::<K>(&concrete, $dim)
+                    .map(DispatchStorage::Cpu)
+            }
+            #[cfg(feature = "wgpu")]
+            DispatchStorage::Wgpu(_) => {
+                let concrete = operands
+                    .iter()
+                    .map(|operand| wgpu_operand(routed, operand))
+                    .collect::<Result<Vec<_>>>()?;
+                crate::wgpu::WgpuBackendImpl::<T, Wgpu>::$method::<K>(&concrete, $dim)
+                    .map(DispatchStorage::Wgpu)
+            }
+            #[cfg(feature = "cuda")]
+            DispatchStorage::Cuda(_) => {
+                let concrete = operands
+                    .iter()
+                    .map(|operand| cuda_operand(routed, operand))
+                    .collect::<Result<Vec<_>>>()?;
+                crate::cuda::CudaBackendImpl::<T, Cuda>::$method::<K>(&concrete, $dim)
+                    .map(DispatchStorage::Cuda)
+            }
+            DispatchStorage::Unavailable => Err(unavailable(DeviceKind::Cpu)),
+        }
+    }};
 }
 
 macro_rules! dispatch_binary {
@@ -667,6 +839,12 @@ impl<T: DType, D: Device> TensorOps<Self> for DispatchBackend<T, D> {
     fn squeeze<K: DType>(t: &DispatchStorage, dim: usize) -> Result<DispatchStorage> {
         dispatch_unary!(t, squeeze, dim)
     }
+    fn stack<K: DType>(t: &[&DispatchStorage], dim: usize) -> Result<DispatchStorage> {
+        dispatch_slice!(t, stack, dim)
+    }
+    fn concat<K: DType>(t: &[&DispatchStorage], dim: usize) -> Result<DispatchStorage> {
+        dispatch_slice!(t, concat, dim)
+    }
     fn slice<K: DType>(t: &DispatchStorage, ranges: &[(usize, usize)]) -> Result<DispatchStorage> {
         dispatch_unary!(t, slice, ranges)
     }
@@ -864,6 +1042,63 @@ impl<T: DType, D: Device> TensorOps<Self> for DispatchBackend<T, D> {
             #[cfg(feature = "cuda")]
             DispatchStorage::Cuda(value) => {
                 crate::cuda::CudaBackendImpl::<T, Cuda>::float_to_vec1::<K>(value)
+            }
+            DispatchStorage::Unavailable => Err(unavailable(DeviceKind::Cpu)),
+        }
+    }
+    fn int_to_scalar<K: DType>(t: &DispatchStorage) -> Result<i64> {
+        match t {
+            #[cfg(feature = "cpu")]
+            DispatchStorage::Cpu(value) => {
+                crate::cpu::CpuBackendImpl::<T, Cpu>::int_to_scalar::<K>(value)
+            }
+            #[cfg(feature = "wgpu")]
+            DispatchStorage::Wgpu(value) => {
+                crate::wgpu::WgpuBackendImpl::<T, Wgpu>::int_to_scalar::<K>(value)
+            }
+            #[cfg(feature = "cuda")]
+            DispatchStorage::Cuda(value) => {
+                crate::cuda::CudaBackendImpl::<T, Cuda>::int_to_scalar::<K>(value)
+            }
+            DispatchStorage::Unavailable => Err(unavailable(DeviceKind::Cpu)),
+        }
+    }
+    fn int_to_vec1<K: DType>(t: &DispatchStorage) -> Result<Vec<i64>> {
+        match t {
+            #[cfg(feature = "cpu")]
+            DispatchStorage::Cpu(value) => {
+                crate::cpu::CpuBackendImpl::<T, Cpu>::int_to_vec1::<K>(value)
+            }
+            #[cfg(feature = "wgpu")]
+            DispatchStorage::Wgpu(value) => {
+                crate::wgpu::WgpuBackendImpl::<T, Wgpu>::int_to_vec1::<K>(value)
+            }
+            #[cfg(feature = "cuda")]
+            DispatchStorage::Cuda(value) => {
+                crate::cuda::CudaBackendImpl::<T, Cuda>::int_to_vec1::<K>(value)
+            }
+            DispatchStorage::Unavailable => Err(unavailable(DeviceKind::Cpu)),
+        }
+    }
+    fn tensor_to_dtype<K: DType, K2: DType>(
+        t: &DispatchStorage,
+        dtype: DTypeId,
+    ) -> Result<DispatchStorage> {
+        match t {
+            #[cfg(feature = "cpu")]
+            DispatchStorage::Cpu(value) => {
+                crate::cpu::CpuBackendImpl::<T, Cpu>::tensor_to_dtype::<K, K2>(value, dtype)
+                    .map(DispatchStorage::Cpu)
+            }
+            #[cfg(feature = "wgpu")]
+            DispatchStorage::Wgpu(value) => {
+                crate::wgpu::WgpuBackendImpl::<T, Wgpu>::tensor_to_dtype::<K, K2>(value, dtype)
+                    .map(DispatchStorage::Wgpu)
+            }
+            #[cfg(feature = "cuda")]
+            DispatchStorage::Cuda(value) => {
+                crate::cuda::CudaBackendImpl::<T, Cuda>::tensor_to_dtype::<K, K2>(value, dtype)
+                    .map(DispatchStorage::Cuda)
             }
             DispatchStorage::Unavailable => Err(unavailable(DeviceKind::Cpu)),
         }
@@ -1162,6 +1397,69 @@ impl<T: DType, D: Device> FloatOps<Self> for DispatchBackend<T, D> {
     }
 }
 impl<T: DType, D: Device> ReductionOps<Self> for DispatchBackend<T, D> {
+    fn argmax<K: DType, KInt: DType>(
+        t: &DispatchStorage,
+        dim: Option<usize>,
+    ) -> Result<DispatchStorage> {
+        dispatch_same_device!(t, argmax::<K, KInt>, req = [], opt = [], args = [dim])
+    }
+    fn argmin<K: DType, KInt: DType>(
+        t: &DispatchStorage,
+        dim: Option<usize>,
+    ) -> Result<DispatchStorage> {
+        dispatch_same_device!(t, argmin::<K, KInt>, req = [], opt = [], args = [dim])
+    }
+    fn argsort<K: DType, KInt: DType>(
+        t: &DispatchStorage,
+        dim: usize,
+        descending: bool,
+    ) -> Result<DispatchStorage> {
+        dispatch_same_device!(
+            t,
+            argsort::<K, KInt>,
+            req = [],
+            opt = [],
+            args = [dim, descending]
+        )
+    }
+    // `topk` returns a value/index pair rather than one storage, so it does
+    // not fit `dispatch_same_device!` and is routed by hand.
+    fn topk<K: DType, KInt: DType>(
+        t: &DispatchStorage,
+        k: usize,
+        dim: usize,
+        largest: bool,
+    ) -> Result<(DispatchStorage, DispatchStorage)> {
+        match t {
+            #[cfg(feature = "cpu")]
+            DispatchStorage::Cpu(value) => {
+                let (values, indices) =
+                    crate::cpu::CpuBackendImpl::<T, Cpu>::topk::<K, KInt>(value, k, dim, largest)?;
+                Ok((DispatchStorage::Cpu(values), DispatchStorage::Cpu(indices)))
+            }
+            #[cfg(feature = "wgpu")]
+            DispatchStorage::Wgpu(value) => {
+                let (values, indices) = crate::wgpu::WgpuBackendImpl::<T, Wgpu>::topk::<K, KInt>(
+                    value, k, dim, largest,
+                )?;
+                Ok((
+                    DispatchStorage::Wgpu(values),
+                    DispatchStorage::Wgpu(indices),
+                ))
+            }
+            #[cfg(feature = "cuda")]
+            DispatchStorage::Cuda(value) => {
+                let (values, indices) = crate::cuda::CudaBackendImpl::<T, Cuda>::topk::<K, KInt>(
+                    value, k, dim, largest,
+                )?;
+                Ok((
+                    DispatchStorage::Cuda(values),
+                    DispatchStorage::Cuda(indices),
+                ))
+            }
+            DispatchStorage::Unavailable => Err(unavailable(DeviceKind::Cpu)),
+        }
+    }
     fn sum_all<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
         dispatch_unary!(t, sum_all)
     }
@@ -1208,7 +1506,174 @@ impl<T: DType, D: Device> ReductionOps<Self> for DispatchBackend<T, D> {
         dispatch_unary!(t, cumsum, dim)
     }
 }
-impl<T: DType, D: Device> QuantizedOps<Self> for DispatchBackend<T, D> {}
+impl<T: DType, D: Device> QuantizedOps<Self> for DispatchBackend<T, D> {
+    fn quantize<K: FloatDType, Q: QuantDType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+        dispatch_same_device!(t, quantize::<K, Q>, req = [], opt = [], args = [])
+    }
+    fn dequantize<Q: QuantDType, K: FloatDType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+        dispatch_same_device!(t, dequantize::<Q, K>, req = [], opt = [], args = [])
+    }
+    fn quantized_matmul<Q: QuantDType>(
+        lhs: &DispatchStorage,
+        rhs: &DispatchStorage,
+    ) -> Result<DispatchStorage> {
+        dispatch_same_device!(lhs, quantized_matmul::<Q>, req = [rhs], opt = [], args = [])
+    }
+}
+
+// `OptimizerOps`'s methods are composed from `NumericOps`/`FloatOps` rather
+// than defaulted to an unsupported error, so the routed backend supplies a
+// working update rule and this impl has nothing to override.
 impl<T: DType, D: Device> OptimizerOps<Self> for DispatchBackend<T, D> {}
-impl<T: DType, D: Device> ModuleOps<Self> for DispatchBackend<T, D> {}
-impl<T: DType, D: Device> LossOps<Self> for DispatchBackend<T, D> {}
+
+impl<T: DType, D: Device> ModuleOps<Self> for DispatchBackend<T, D> {
+    fn layer_norm<K: DType>(
+        t: &DispatchStorage,
+        weight: &DispatchStorage,
+        bias: Option<&DispatchStorage>,
+        eps: f32,
+    ) -> Result<DispatchStorage> {
+        dispatch_same_device!(
+            t,
+            layer_norm::<K>,
+            req = [weight],
+            opt = [bias],
+            args = [eps]
+        )
+    }
+    fn batch_norm<K: DType>(
+        t: &DispatchStorage,
+        w: Option<&DispatchStorage>,
+        b: Option<&DispatchStorage>,
+        rm: Option<&DispatchStorage>,
+        rv: Option<&DispatchStorage>,
+        e: f32,
+        momentum: f64,
+    ) -> Result<DispatchStorage> {
+        dispatch_same_device!(
+            t,
+            batch_norm::<K>,
+            req = [],
+            opt = [w, b, rm, rv],
+            args = [e, momentum]
+        )
+    }
+    fn embedding<K: DType, KInt: DType>(
+        t: &DispatchStorage,
+        w: &DispatchStorage,
+    ) -> Result<DispatchStorage> {
+        dispatch_same_device!(t, embedding::<K, KInt>, req = [w], opt = [], args = [])
+    }
+    fn conv1d<K: DType>(
+        t: &DispatchStorage,
+        w: &DispatchStorage,
+        b: Option<&DispatchStorage>,
+        stride: usize,
+        padding: usize,
+        dilation: usize,
+        groups: usize,
+    ) -> Result<DispatchStorage> {
+        dispatch_same_device!(
+            t,
+            conv1d::<K>,
+            req = [w],
+            opt = [b],
+            args = [stride, padding, dilation, groups]
+        )
+    }
+    fn conv2d<K: DType>(
+        t: &DispatchStorage,
+        w: &DispatchStorage,
+        b: Option<&DispatchStorage>,
+        stride: usize,
+        padding: usize,
+        dilation: usize,
+        groups: usize,
+    ) -> Result<DispatchStorage> {
+        dispatch_same_device!(
+            t,
+            conv2d::<K>,
+            req = [w],
+            opt = [b],
+            args = [stride, padding, dilation, groups]
+        )
+    }
+    fn conv_transpose2d<K: DType>(
+        t: &DispatchStorage,
+        w: &DispatchStorage,
+        b: Option<&DispatchStorage>,
+        stride: usize,
+        padding: usize,
+        output_padding: usize,
+        dilation: usize,
+        groups: usize,
+    ) -> Result<DispatchStorage> {
+        dispatch_same_device!(
+            t,
+            conv_transpose2d::<K>,
+            req = [w],
+            opt = [b],
+            args = [stride, padding, output_padding, dilation, groups]
+        )
+    }
+    fn max_pool2d<K: DType>(
+        t: &DispatchStorage,
+        kernel_size: (usize, usize),
+        stride: (usize, usize),
+        padding: (usize, usize),
+        dilation: (usize, usize),
+    ) -> Result<DispatchStorage> {
+        dispatch_same_device!(
+            t,
+            max_pool2d::<K>,
+            req = [],
+            opt = [],
+            args = [kernel_size, stride, padding, dilation]
+        )
+    }
+    fn avg_pool2d<K: DType>(
+        t: &DispatchStorage,
+        kernel_size: (usize, usize),
+        stride: (usize, usize),
+        padding: (usize, usize),
+    ) -> Result<DispatchStorage> {
+        dispatch_same_device!(
+            t,
+            avg_pool2d::<K>,
+            req = [],
+            opt = [],
+            args = [kernel_size, stride, padding]
+        )
+    }
+    fn adaptive_avg_pool2d<K: DType>(
+        t: &DispatchStorage,
+        output_size: (usize, usize),
+    ) -> Result<DispatchStorage> {
+        dispatch_same_device!(
+            t,
+            adaptive_avg_pool2d::<K>,
+            req = [],
+            opt = [],
+            args = [output_size]
+        )
+    }
+}
+
+impl<T: DType, D: Device> LossOps<Self> for DispatchBackend<T, D> {
+    // `mse_loss`, `l1_loss`, and `bce_with_logits_loss` are composed from the
+    // routed backend's numeric and reduction ops. `cross_entropy_loss` is the
+    // one method with no composed default, so it has to be routed explicitly.
+    fn cross_entropy_loss<K: DType, KInt: DType>(
+        pred: &DispatchStorage,
+        target: &DispatchStorage,
+        reduction: incin_core::nn::loss::Reduction,
+    ) -> Result<DispatchStorage> {
+        dispatch_same_device!(
+            pred,
+            cross_entropy_loss::<K, KInt>,
+            req = [target],
+            opt = [],
+            args = [reduction]
+        )
+    }
+}

@@ -742,6 +742,10 @@ fn test_quantize_dequantize() {
     }
     let s = storage(data.clone(), vec![2, 32]);
     let q_storage = <B as QuantizedOps<B>>::quantize::<f32, incin_core::prelude::Q8_0>(&s).unwrap();
+    assert_eq!(q_storage.dtype, DTypeId::Q8_0);
+    assert_eq!(q_storage.device, DeviceId::wgpu(0));
+    assert_eq!(q_storage.shape, vec![2, 32]);
+    assert_eq!(q_storage.offset_elements, 0);
     let deq_storage =
         <B as QuantizedOps<B>>::dequantize::<incin_core::prelude::Q8_0, f32>(&q_storage).unwrap();
     let deq_data = readback(&deq_storage);
@@ -1126,10 +1130,10 @@ fn numerical_grad_wgpu(
     let mut minus = inputs.to_vec();
     let mut plus_data = readback(&inputs[input_idx]);
     plus_data[flat_idx] += eps;
-    plus[input_idx] = storage(plus_data, inputs[input_idx].shape.clone());
+    plus[input_idx] = storage(plus_data, inputs[input_idx].shape.to_vec());
     let mut minus_data = readback(&inputs[input_idx]);
     minus_data[flat_idx] -= eps;
-    minus[input_idx] = storage(minus_data, inputs[input_idx].shape.clone());
+    minus[input_idx] = storage(minus_data, inputs[input_idx].shape.to_vec());
 
     let f_plus = readback(&f(&plus))[0];
     let f_minus = readback(&f(&minus))[0];

@@ -28,7 +28,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
     ) -> Result<<Self as Backend>::Storage<K>> {
         let out = t.reshape(shape)?;
 
-        let original_shape = t.shape.clone();
+        let original_shape = t.shape.to_vec();
         let (t_id, out_id) = (t.id, out.id);
         tape::push(TapeEntry {
             output_id: out_id,
@@ -76,7 +76,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
     ) -> Result<<Self as Backend>::Storage<K>> {
         let out = t.broadcast_as(shape)?;
 
-        let original_shape = t.shape.clone();
+        let original_shape = t.shape.to_vec();
         let (t_id, out_id) = (t.id, out.id);
         tape::push(TapeEntry {
             output_id: out_id,
@@ -112,7 +112,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
     ) -> Result<<Self as Backend>::Storage<K>> {
         let out = t.narrow(dim, start, len)?;
 
-        let original_shape = t.shape.clone();
+        let original_shape = t.shape.to_vec();
         let mut region_start = vec![0usize; original_shape.len()];
         region_start[dim] = start;
         let (t_id, out_id) = (t.id, out.id);
@@ -139,7 +139,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
             return Err(Error::ShapeMismatch {
                 op: "squeeze",
                 expected: vec![1],
-                got: t.shape.clone(),
+                got: t.shape.to_vec(),
                 msg: format!(
                     "squeeze requires axis {dim} to have size 1, got size {} in shape {:?}",
                     t.shape.get(dim).copied().unwrap_or(0),
@@ -148,7 +148,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
             });
         }
 
-        let mut target_shape = t.shape.clone();
+        let mut target_shape = t.shape.to_vec();
         target_shape.remove(dim);
         Self::reshape::<K>(t, &target_shape)
     }
@@ -171,7 +171,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         if dim > rank {
             return Err(Error::ShapeMismatch {
                 op: "stack",
-                expected: tensors[0].shape.clone(),
+                expected: tensors[0].shape.to_vec(),
                 got: vec![dim],
                 msg: format!(
                     "stack dim {dim} out of range for rank-{rank} shape {:?} (dim may equal rank to append at the end)",
@@ -184,8 +184,8 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
             if t.shape != tensors[0].shape {
                 return Err(Error::ShapeMismatch {
                     op: "stack",
-                    expected: tensors[0].shape.clone(),
-                    got: t.shape.clone(),
+                    expected: tensors[0].shape.to_vec(),
+                    got: t.shape.to_vec(),
                     msg: format!(
                         "stack requires every input to have an IDENTICAL shape; expected {:?}, got {:?}",
                         tensors[0].shape, t.shape
@@ -201,7 +201,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         // concat's own tape entries compose correctly on their own.
         let mut unsqueezed = Vec::with_capacity(tensors.len());
         for t in tensors.iter() {
-            let mut target_shape = t.shape.clone();
+            let mut target_shape = t.shape.to_vec();
             target_shape.insert(dim, 1);
             unsqueezed.push(Self::reshape::<K>(t, &target_shape)?);
         }
@@ -228,7 +228,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         if dim >= rank {
             return Err(Error::ShapeMismatch {
                 op: "concat",
-                expected: tensors[0].shape.clone(),
+                expected: tensors[0].shape.to_vec(),
                 got: vec![dim],
                 msg: format!(
                     "concat dim {dim} out of range for rank-{rank} shape {:?}",
@@ -241,8 +241,8 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
             if t.shape.len() != rank {
                 return Err(Error::ShapeMismatch {
                     op: "concat",
-                    expected: tensors[0].shape.clone(),
-                    got: t.shape.clone(),
+                    expected: tensors[0].shape.to_vec(),
+                    got: t.shape.to_vec(),
                     msg: format!(
                         "concat requires every input to have the same rank; expected rank {rank}, got shape {:?}",
                         t.shape
@@ -257,8 +257,8 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
                 if axis != dim && a != b {
                     return Err(Error::ShapeMismatch {
                         op: "concat",
-                        expected: tensors[0].shape.clone(),
-                        got: t.shape.clone(),
+                        expected: tensors[0].shape.to_vec(),
+                        got: t.shape.to_vec(),
                         msg: format!(
                             "concat requires exact equality on every non-concat axis; axis {axis} has size {a} vs {b}"
                         ),
@@ -267,7 +267,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
             }
         }
 
-        let mut out_shape = tensors[0].shape.clone();
+        let mut out_shape = tensors[0].shape.to_vec();
         out_shape[dim] = tensors.iter().map(|t| t.shape[dim]).sum();
         let out_strides = crate::cpu::stride::contiguous_strides(&out_shape);
         let total: usize = out_shape.iter().product();
@@ -392,7 +392,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         if start_dim > end_dim || end_dim >= t.shape.len() {
             return Err(Error::ShapeMismatch {
                 op: "flatten",
-                expected: t.shape.clone(),
+                expected: t.shape.to_vec(),
                 got: vec![start_dim, end_dim],
                 msg: format!(
                     "flatten(start_dim={start_dim}, end_dim={end_dim}) out of bounds for shape {:?}",
@@ -425,7 +425,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
             return Err(Error::ShapeMismatch {
                 op: "float_to_scalar",
                 expected: vec![1],
-                got: t.shape.clone(),
+                got: t.shape.to_vec(),
                 msg: alloc::string::String::from(
                     "float_to_scalar requires a single-element tensor",
                 ),
@@ -454,7 +454,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
             return Err(Error::ShapeMismatch {
                 op: "int_to_scalar",
                 expected: vec![1],
-                got: t.shape.clone(),
+                got: t.shape.to_vec(),
                 msg: alloc::string::String::from("int_to_scalar requires a single-element tensor"),
             });
         }
@@ -536,7 +536,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
             }
         };
 
-        Ok(CpuStorage::from_contiguous(new_buffer, t.shape.clone()))
+        Ok(CpuStorage::from_contiguous(new_buffer, t.shape.to_vec()))
     }
 
     fn where_cond<K: DType, KMask: DType>(
@@ -590,11 +590,11 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
                 }
                 let g_true = CpuStorage::from_contiguous(
                     grad_out.buffer.from_f64_values(grad_true),
-                    grad_out.shape.clone(),
+                    grad_out.shape.to_vec(),
                 );
                 let g_false = CpuStorage::from_contiguous(
                     grad_out.buffer.from_f64_values(grad_false),
-                    grad_out.shape.clone(),
+                    grad_out.shape.to_vec(),
                 );
                 vec![
                     tape::unbroadcast(&g_true, &on_true_cap.shape).unwrap(),
@@ -610,7 +610,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         dim: usize,
         index: &<Self as Backend>::Storage<KInt>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let out_shape = index.shape.clone();
+        let out_shape = index.shape.to_vec();
         let total: usize = out_shape.iter().product();
         let mut out = Vec::with_capacity(total);
         let mut idx = vec![0usize; out_shape.len()];
@@ -652,7 +652,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
                 }
                 vec![CpuStorage::from_contiguous(
                     grad_out.buffer.from_f64_values(grad_t_data),
-                    t_cap.shape.clone(),
+                    t_cap.shape.to_vec(),
                 )]
             }),
         });
@@ -693,7 +693,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
             }
         }
         let buffer = t.buffer.from_f64_values(out_data);
-        Ok(CpuStorage::from_contiguous(buffer, t.shape.clone()))
+        Ok(CpuStorage::from_contiguous(buffer, t.shape.to_vec()))
     }
 
     fn index_select<K: DType, KInt: DType>(
@@ -705,7 +705,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         let idx_vec: Vec<f64> = (0..idx_total)
             .map(|i| index.get(&crate::cpu::ops::elementwise::flat_to_nd(i, &index.shape)))
             .collect();
-        let mut out_shape = t.shape.clone();
+        let mut out_shape = t.shape.to_vec();
         out_shape[dim] = idx_vec.len();
         let total: usize = out_shape.iter().product();
         let mut out = Vec::with_capacity(total);
@@ -740,14 +740,14 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
             }
         }
         let buffer = t.buffer.from_f64_values(out);
-        Ok(CpuStorage::from_contiguous(buffer, t.shape.clone()))
+        Ok(CpuStorage::from_contiguous(buffer, t.shape.to_vec()))
     }
 
     fn unsqueeze<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let mut target_shape = t.shape.clone();
+        let mut target_shape = t.shape.to_vec();
         if dim <= target_shape.len() {
             target_shape.insert(dim, 1);
         } else {
@@ -838,7 +838,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
             }
         }
         let buffer = t.buffer.from_f64_values(out);
-        Ok(CpuStorage::from_contiguous(buffer, t.shape.clone()))
+        Ok(CpuStorage::from_contiguous(buffer, t.shape.to_vec()))
     }
 
     fn tril<K: DType>(
@@ -862,7 +862,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
             }
         }
         let buffer = t.buffer.from_f64_values(out);
-        Ok(CpuStorage::from_contiguous(buffer, t.shape.clone()))
+        Ok(CpuStorage::from_contiguous(buffer, t.shape.to_vec()))
     }
 
     fn diag<K: DType>(
@@ -923,7 +923,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         }
         Ok(CpuStorage::from_contiguous(
             lhs.buffer.from_f64_values(out),
-            lhs.shape.clone(),
+            lhs.shape.to_vec(),
         ))
     }
 
@@ -947,7 +947,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         }
         Ok(CpuStorage::from_contiguous(
             lhs.buffer.from_f64_values(out),
-            lhs.shape.clone(),
+            lhs.shape.to_vec(),
         ))
     }
 
@@ -971,7 +971,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         }
         Ok(CpuStorage::from_contiguous(
             lhs.buffer.from_f64_values(out),
-            lhs.shape.clone(),
+            lhs.shape.to_vec(),
         ))
     }
 
@@ -995,7 +995,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         }
         Ok(CpuStorage::from_contiguous(
             lhs.buffer.from_f64_values(out),
-            lhs.shape.clone(),
+            lhs.shape.to_vec(),
         ))
     }
 
@@ -1019,7 +1019,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         }
         Ok(CpuStorage::from_contiguous(
             lhs.buffer.from_f64_values(out),
-            lhs.shape.clone(),
+            lhs.shape.to_vec(),
         ))
     }
 
@@ -1043,7 +1043,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         }
         Ok(CpuStorage::from_contiguous(
             lhs.buffer.from_f64_values(out),
-            lhs.shape.clone(),
+            lhs.shape.to_vec(),
         ))
     }
 
@@ -1067,7 +1067,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         }
         Ok(CpuStorage::from_contiguous(
             lhs.buffer.from_f64_values(out),
-            lhs.shape.clone(),
+            lhs.shape.to_vec(),
         ))
     }
 
@@ -1091,7 +1091,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         }
         Ok(CpuStorage::from_contiguous(
             lhs.buffer.from_f64_values(out),
-            lhs.shape.clone(),
+            lhs.shape.to_vec(),
         ))
     }
 
@@ -1110,7 +1110,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         }
         Ok(CpuStorage::from_contiguous(
             t.buffer.from_f64_values(out),
-            t.shape.clone(),
+            t.shape.to_vec(),
         ))
     }
 
@@ -1129,7 +1129,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         }
         Ok(CpuStorage::from_contiguous(
             t.buffer.from_f64_values(out),
-            t.shape.clone(),
+            t.shape.to_vec(),
         ))
     }
 
@@ -1148,7 +1148,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         }
         Ok(CpuStorage::from_contiguous(
             t.buffer.from_f64_values(out),
-            t.shape.clone(),
+            t.shape.to_vec(),
         ))
     }
 
@@ -1168,7 +1168,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         }
         Ok(CpuStorage::from_contiguous(
             lhs.buffer.from_f64_values(out),
-            lhs.shape.clone(),
+            lhs.shape.to_vec(),
         ))
     }
 
@@ -1188,7 +1188,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         }
         Ok(CpuStorage::from_contiguous(
             lhs.buffer.from_f64_values(out),
-            lhs.shape.clone(),
+            lhs.shape.to_vec(),
         ))
     }
 
@@ -1208,7 +1208,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         }
         Ok(CpuStorage::from_contiguous(
             lhs.buffer.from_f64_values(out),
-            lhs.shape.clone(),
+            lhs.shape.to_vec(),
         ))
     }
 
@@ -1230,7 +1230,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         }
         Ok(CpuStorage::from_contiguous(
             start.buffer.from_f64_values(out),
-            start.shape.clone(),
+            start.shape.to_vec(),
         ))
     }
 
@@ -1293,7 +1293,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
             ));
         }
         let n_windows = (dim_len - size) / step + 1;
-        let mut out_shape = t.shape.clone();
+        let mut out_shape = t.shape.to_vec();
         out_shape[dim] = n_windows;
         out_shape.push(size);
         let total: usize = out_shape.iter().product();
@@ -1389,7 +1389,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         }
         Ok(CpuStorage::from_contiguous(
             t.buffer.from_f64_values(out),
-            t.shape.clone(),
+            t.shape.to_vec(),
         ))
     }
 

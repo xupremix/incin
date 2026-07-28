@@ -9,9 +9,11 @@
 //! nothing in this file mutates a `CpuBuffer` in place.
 
 use alloc::sync::Arc;
+use core::ops::Deref;
 use core::sync::atomic::{AtomicU64, Ordering};
 
 use half::{bf16, f16};
+use incin_core::exec::{Alignment, TensorMeta};
 use incin_core::prelude::Result;
 use incin_core::prelude::{DTypeId, Error};
 
@@ -84,6 +86,19 @@ impl CpuBuffer {
             Self::F16(_) => DTypeId::F16,
             Self::BF16(_) => DTypeId::BF16,
             Self::Q8_0(_) => DTypeId::Q8_0,
+        }
+    }
+
+    fn alignment(&self) -> Alignment {
+        match self {
+            Self::F32(_) => Alignment::of::<f32>(),
+            Self::F64(_) => Alignment::of::<f64>(),
+            Self::U8(_) => Alignment::of::<u8>(),
+            Self::U32(_) => Alignment::of::<u32>(),
+            Self::I64(_) => Alignment::of::<i64>(),
+            Self::F16(_) => Alignment::of::<f16>(),
+            Self::BF16(_) => Alignment::of::<bf16>(),
+            Self::Q8_0(_) => Alignment::of::<BlockQ8_0>(),
         }
     }
 
@@ -197,24 +212,56 @@ impl CpuBuffer {
 #[derive(Debug, Clone)]
 pub struct CpuStorage {
     pub(crate) buffer: Arc<CpuBuffer>,
-    pub(crate) shape: Vec<usize>,
-    pub(crate) strides: Vec<usize>,
-    pub(crate) offset: usize,
+    pub(crate) meta: TensorMeta,
     pub(crate) id: TensorId,
+}
+
+impl Deref for CpuStorage {
+    type Target = TensorMeta;
+
+    fn deref(&self) -> &Self::Target {
+        &self.meta
+    }
 }
 
 impl CpuStorage {
     /// Build a `CpuStorage` from a contiguous (row-major) buffer and
     /// shape. Strides are computed via `stride::contiguous_strides`.
-    pub fn from_contiguous(data: CpuBuffer, shape: Vec<usize>) -> Self {
-        let strides = stride::contiguous_strides(&shape);
-        CpuStorage {
-            buffer: Arc::new(data),
-            shape,
-            strides,
-            offset: 0,
+    pub fn try_from_parts(
+        buffer: Arc<CpuBuffer>,
+        shape: Vec<usize>,
+        strides: Vec<usize>,
+        offset_elements: usize,
+    ) -> Result<Self> {
+        let meta = TensorMeta::try_new(
+            shape.as_slice().into(),
+            strides.as_slice().into(),
+            offset_elements,
+            buffer.dtype_id(),
+            incin_core::prelude::DeviceId::cpu(),
+            buffer.alignment(),
+            buffer.len(),
+        )
+        .map_err(|error| Error::Msg(format!("invalid CPU storage metadata: {error}")))?;
+        Ok(Self {
+            buffer,
+            meta,
             id: TensorId::next(),
-        }
+        })
+    }
+
+    pub fn try_from_contiguous(data: CpuBuffer, shape: Vec<usize>) -> Result<Self> {
+        let strides = stride::contiguous_strides(&shape);
+        Self::try_from_parts(Arc::new(data), shape, strides, 0)
+    }
+
+    pub fn from_contiguous(data: CpuBuffer, shape: Vec<usize>) -> Self {
+        Self::try_from_contiguous(data, shape)
+            .expect("backend-created contiguous CPU storage must match its allocation")
+    }
+
+    pub fn metadata(&self) -> &TensorMeta {
+        &self.meta
     }
 
     /// Build a fresh, contiguous, all-ones `CpuStorage` with the same
@@ -234,17 +281,17 @@ impl CpuStorage {
             CpuBuffer::Q8_0(_) => panic!("ones_like not supported on Q8_0 buffer"),
         };
 
-        CpuStorage::from_contiguous(new_buffer, other.shape.clone())
+        CpuStorage::from_contiguous(new_buffer, other.shape.to_vec())
     }
 
-    /// Resolve a logical multi-index through `self.strides`/`self.offset`
+    /// Resolve a logical multi-index through `self.strides`/`self.offset_elements`
     /// into the underlying `CpuBuffer`, returning the value as `f64`.
     ///
     /// This works correctly through a non-contiguous (e.g. transposed) view
     /// without requiring a prior call to `contiguous()`.
     pub fn get(&self, idx: &[usize]) -> f64 {
         debug_assert_eq!(idx.len(), self.shape.len());
-        let mut flat = self.offset;
+        let mut flat = self.offset_elements;
         for (i, s) in idx.iter().zip(self.strides.iter()) {
             flat += i * s;
         }
@@ -257,13 +304,12 @@ impl CpuStorage {
     /// recurses.
     pub fn reshape(&self, new_shape: &[usize]) -> Result<Self> {
         if stride::is_contiguous(&self.shape, &self.strides) {
-            Ok(CpuStorage {
-                buffer: self.buffer.clone(),
-                shape: new_shape.to_vec(),
-                strides: stride::contiguous_strides(new_shape),
-                offset: self.offset,
-                id: TensorId::next(),
-            })
+            Self::try_from_parts(
+                self.buffer.clone(),
+                new_shape.to_vec(),
+                stride::contiguous_strides(new_shape),
+                self.offset_elements,
+            )
         } else {
             let materialized = self.contiguous();
             materialized.reshape(new_shape)
@@ -276,7 +322,7 @@ impl CpuStorage {
         if dim1 >= self.shape.len() || dim2 >= self.shape.len() {
             return Err(Error::ShapeMismatch {
                 op: "transpose",
-                expected: self.shape.clone(),
+                expected: self.shape.to_vec(),
                 got: vec![dim1, dim2],
                 msg: format!(
                     "transpose dims ({dim1}, {dim2}) out of range for shape {:?}",
@@ -284,17 +330,11 @@ impl CpuStorage {
                 ),
             });
         }
-        let mut shape = self.shape.clone();
-        let mut strides = self.strides.clone();
+        let mut shape = self.shape.to_vec();
+        let mut strides = self.strides.to_vec();
         shape.swap(dim1, dim2);
         strides.swap(dim1, dim2);
-        Ok(CpuStorage {
-            buffer: self.buffer.clone(),
-            shape,
-            strides,
-            offset: self.offset,
-            id: TensorId::next(),
-        })
+        Self::try_from_parts(self.buffer.clone(), shape, strides, self.offset_elements)
     }
 
     /// Broadcast this storage to `target_shape`. Metadata-only: any
@@ -325,7 +365,7 @@ impl CpuStorage {
                     return Err(Error::ShapeMismatch {
                         op: "broadcast_as",
                         expected: target_shape.to_vec(),
-                        got: self.shape.clone(),
+                        got: self.shape.to_vec(),
                         msg: format!("cannot broadcast dim {src_dim} to {tgt_dim} at axis {i}"),
                     });
                 }
@@ -333,13 +373,12 @@ impl CpuStorage {
             // else: newly-inserted leading dim -> stride 0 (already set above).
         }
 
-        Ok(CpuStorage {
-            buffer: self.buffer.clone(),
-            shape: target_shape.to_vec(),
-            strides: new_strides,
-            offset: self.offset,
-            id: TensorId::next(),
-        })
+        Self::try_from_parts(
+            self.buffer.clone(),
+            target_shape.to_vec(),
+            new_strides,
+            self.offset_elements,
+        )
     }
 
     /// Narrow dimension `dim` to the half-open range `[start, start + len)`.
@@ -350,10 +389,11 @@ impl CpuStorage {
     /// or otherwise non-contiguous source view), and only adjusts `offset`
     /// (by `start * strides[dim]`) and `shape[dim]` (to `len`).
     pub fn narrow(&self, dim: usize, start: usize, len: usize) -> Result<Self> {
-        if dim >= self.shape.len() || start + len > self.shape[dim] {
+        let end = start.checked_add(len);
+        if dim >= self.shape.len() || end.is_none_or(|end| end > self.shape[dim]) {
             return Err(Error::ShapeMismatch {
                 op: "narrow",
-                expected: self.shape.clone(),
+                expected: self.shape.to_vec(),
                 got: vec![dim, start, len],
                 msg: format!(
                     "narrow(dim={dim}, start={start}, len={len}) out of bounds for shape {:?}",
@@ -361,15 +401,16 @@ impl CpuStorage {
                 ),
             });
         }
-        let mut shape = self.shape.clone();
+        let mut shape = self.shape.to_vec();
         shape[dim] = len;
-        Ok(CpuStorage {
-            buffer: self.buffer.clone(),
-            shape,
-            strides: self.strides.clone(),
-            offset: self.offset + start * self.strides[dim],
-            id: TensorId::next(),
-        })
+        let offset_delta = start
+            .checked_mul(self.strides[dim])
+            .ok_or_else(|| Error::Msg("CPU narrow offset multiplication overflowed".into()))?;
+        let offset = self
+            .offset_elements
+            .checked_add(offset_delta)
+            .ok_or_else(|| Error::Msg("CPU narrow storage offset overflowed".into()))?;
+        Self::try_from_parts(self.buffer.clone(), shape, self.strides.to_vec(), offset)
     }
 
     /// Materialize a fresh, contiguous copy of this storage by walking the
@@ -420,7 +461,7 @@ impl CpuStorage {
             CpuBuffer::Q8_0(_) => panic!("materialize not supported on Q8_0 buffer"),
         };
 
-        CpuStorage::from_contiguous(new_buffer, self.shape.clone())
+        CpuStorage::from_contiguous(new_buffer, self.shape.to_vec())
     }
 }
 

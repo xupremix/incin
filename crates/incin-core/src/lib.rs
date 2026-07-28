@@ -13,6 +13,7 @@ pub(crate) extern crate alloc;
 
 pub(crate) mod err;
 
+pub mod dist;
 pub mod distributions;
 pub mod exec;
 pub(crate) mod graph;
@@ -40,6 +41,7 @@ pub mod prelude {
     pub use super::err::*;
     pub use crate::SeqTy;
     pub use crate::dim;
+    pub use crate::dist::{Local, Placement, PlacementKind};
     pub use crate::distributions::{Bernoulli, Distribution, Exponential, Gumbel, Normal, Uniform};
     pub use crate::graph::{Graph, OpType};
     pub use crate::metrics::{Accuracy, ConfusionMatrix, F1Score, MSE, Metric, Precision, Recall};

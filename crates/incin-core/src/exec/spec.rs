@@ -68,7 +68,11 @@ pub struct DescriptorSchemaVersion(u32);
 
 impl DescriptorSchemaVersion {
     /// The schema the descriptors in this module are currently frozen at.
-    pub const CURRENT: Self = Self(1);
+    ///
+    /// v2 gave [`ReductionSpec`] and [`Pool2dSpec`] the operator that runs
+    /// inside their geometry. A v1 cache entry keyed on either records a window
+    /// without saying what accumulated in it, so it cannot be replayed.
+    pub const CURRENT: Self = Self(2);
 
     /// Name a specific version, for reading a cache entry or plan back.
     #[must_use]
@@ -97,6 +101,71 @@ impl DescriptorSchemaVersion {
 impl fmt::Display for DescriptorSchemaVersion {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "v{}", self.0)
+    }
+}
+
+// --- operators --------------------------------------------------------------
+
+/// Which accumulation a [`ReductionSpec`] performs.
+///
+/// The geometry of a reduction says how many elements collapse into each result
+/// element. It does not say what happens to them, and a backend cannot execute
+/// one without knowing: `sum` and `max` walk identical loops and compute
+/// different answers. This is the part the descriptor names.
+///
+/// The set is closed at the five accumulations whose result has the shape
+/// [`ReductionSpec`] derives. `argmax` and `argmin` collapse the same axes but
+/// return indices, so their result dtype differs from their input's and they are
+/// a different operation; `cumsum` and `topk` do not collapse an axis at all.
+/// None of the three is expressible here, deliberately.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ReduceOp {
+    /// Add the collapsed elements.
+    Sum,
+    /// Average the collapsed elements.
+    Mean,
+    /// Take the largest collapsed element.
+    Max,
+    /// Take the smallest collapsed element.
+    Min,
+    /// Multiply the collapsed elements.
+    Prod,
+}
+
+impl fmt::Display for ReduceOp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::Sum => "sum",
+            Self::Mean => "mean",
+            Self::Max => "max",
+            Self::Min => "min",
+            Self::Prod => "prod",
+        })
+    }
+}
+
+/// Which accumulation a [`Pool2dSpec`] performs inside its window.
+///
+/// Separate from [`ReduceOp`] even though both are window accumulations, because
+/// the two sets are not the same one: pooling has no product or sum form in any
+/// backend here, and `Average` over a padded window is not `Mean` over the
+/// elements present. Merging them would let a descriptor ask for a pool no
+/// kernel implements and would have to be refused later, at the backend, instead
+/// of being unrepresentable.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum PoolOp {
+    /// Take the largest element in the window.
+    Max,
+    /// Average the window, counting padded positions as zero.
+    Average,
+}
+
+impl fmt::Display for PoolOp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::Max => "max",
+            Self::Average => "average",
+        })
     }
 }
 
@@ -807,11 +876,17 @@ fn batch_strides(
 /// such decomposition without first permuting the tensor, so it is rejected here
 /// rather than mis-lowered; a later task may lower it as a transpose followed by
 /// a contiguous reduction.
+///
+/// The three extents are the loop; [`op`](Self::op) is what runs inside it. Both
+/// halves are needed to execute, and neither determines the other — which is why
+/// the operator is a field the constructors take rather than one they derive.
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ReductionSpec {
     /// The result dimensions.
     pub output: ShapeBuf,
+    /// The accumulation applied across the collapsed axes.
+    pub op: ReduceOp,
     /// The axes being collapsed.
     pub axes: AxisMask,
     /// Elements in the region outside the reduced axes.
@@ -833,7 +908,12 @@ impl ReductionSpec {
     /// An empty axis set is legal and reduces nothing: `reduced` is 1 and the
     /// output equals the input. Keeping that case total means callers that build
     /// an axis list dynamically do not need a special case for "no axes given".
-    pub fn new(input: &ShapeBuf, axes: AxisMask, keep_dims: bool) -> Result<Self, ShapeError> {
+    pub fn new(
+        input: &ShapeBuf,
+        axes: AxisMask,
+        keep_dims: bool,
+        op: ReduceOp,
+    ) -> Result<Self, ShapeError> {
         let rank = input.rank();
         check_rank_ceiling(Self::OP, rank)?;
 
@@ -883,6 +963,7 @@ impl ReductionSpec {
 
         Ok(Self {
             output,
+            op,
             axes,
             outer,
             reduced,
@@ -898,19 +979,20 @@ impl ReductionSpec {
         input: &ShapeBuf,
         axes: impl IntoIterator<Item = usize>,
         keep_dims: bool,
+        op: ReduceOp,
     ) -> Result<Self, ShapeError> {
         let mask = AxisMask::try_from_axes(Self::OP, input.rank(), axes)?;
-        Self::new(input, mask, keep_dims)
+        Self::new(input, mask, keep_dims, op)
     }
 
     /// Resolve a reduction over every axis, producing a scalar.
-    pub fn over_all(input: &ShapeBuf, keep_dims: bool) -> Result<Self, ShapeError> {
+    pub fn over_all(input: &ShapeBuf, keep_dims: bool, op: ReduceOp) -> Result<Self, ShapeError> {
         let mask = AxisMask::all_below(input.rank()).ok_or(ShapeError::RankMismatch {
             operation: Self::OP,
             expected: RankExpectation::AtMost(AxisMask::MAX_AXES),
             actual: input.rank(),
         })?;
-        Self::new(input, mask, keep_dims)
+        Self::new(input, mask, keep_dims, op)
     }
 }
 
@@ -1079,8 +1161,10 @@ impl OperationSpec for Conv2dSpec {
 /// [`OperationKind::Conv2d`], and a capability query or a kernel cache keyed on
 /// that would answer for the wrong operation.
 ///
-/// Which reduction runs inside the window — maximum, mean — is not geometry and
-/// is not here. One descriptor serves max and average pooling.
+/// Which reduction runs inside the window is not geometry, but a backend still
+/// cannot execute a pool without it, so [`op`](Self::op) names it. It is the one
+/// field here that is not derived from the input shape, and it is what
+/// distinguishes this descriptor from the window it shares with [`Conv2dSpec`].
 ///
 /// Input and output are `NCHW`.
 #[non_exhaustive]
@@ -1088,6 +1172,8 @@ impl OperationSpec for Conv2dSpec {
 pub struct Pool2dSpec {
     /// The result dimensions, `[n, channels, h_out, w_out]`.
     pub output: ShapeBuf,
+    /// The accumulation applied inside each window.
+    pub op: PoolOp,
     /// Batch size.
     pub n: usize,
     /// Channels, unchanged from input to output.
@@ -1124,6 +1210,7 @@ impl Pool2dSpec {
         stride: [usize; 2],
         padding: [usize; 2],
         dilation: [usize; 2],
+        op: PoolOp,
     ) -> Result<Self, ShapeError> {
         if input.rank() != 4 {
             return Err(ShapeError::RankMismatch {
@@ -1163,6 +1250,7 @@ impl Pool2dSpec {
 
         Ok(Self {
             output,
+            op,
             n,
             channels,
             h_in,

@@ -129,6 +129,72 @@ pub enum OpType {
     TopK,
     /// Argsort indices along a dimension.
     Argsort,
+    /// Elementwise selection between two tensors driven by a mask.
+    WhereCond,
+    /// Gathers elements along a dimension using an index tensor of the same rank.
+    Gather,
+    /// Writes source elements into a copy of the target along a dimension.
+    Scatter,
+    /// Selects whole slices along a dimension using a 1-D index tensor.
+    IndexSelect,
+    /// Replaces masked positions with a scalar.
+    MaskedFill,
+    /// Inserts a size-1 dimension.
+    Unsqueeze,
+    /// Tiles a tensor a given number of times per dimension.
+    Repeat,
+    /// Pads each dimension with a constant value.
+    Pad,
+    /// Upper-triangular part, zeroing below the `k`-th diagonal.
+    Triu,
+    /// Lower-triangular part, zeroing above the `k`-th diagonal.
+    Tril,
+    /// Extracts or constructs a diagonal.
+    Diag,
+    /// Elementwise equality comparison.
+    CmpEq,
+    /// Elementwise inequality comparison.
+    CmpNe,
+    /// Elementwise less-than comparison.
+    CmpLt,
+    /// Elementwise less-than-or-equal comparison.
+    CmpLe,
+    /// Elementwise greater-than comparison.
+    CmpGt,
+    /// Elementwise greater-than-or-equal comparison.
+    CmpGe,
+    /// Elementwise logical conjunction.
+    LogicalAnd,
+    /// Elementwise logical disjunction.
+    LogicalOr,
+    /// Elementwise logical negation.
+    LogicalNot,
+    /// Scalar subtraction.
+    SubScalar,
+    /// Scalar division.
+    DivScalar,
+    /// Elementwise maximum of two tensors.
+    Maximum,
+    /// Elementwise minimum of two tensors.
+    Minimum,
+    /// Elementwise absolute difference.
+    AbsDiff,
+    /// Elementwise linear interpolation between two tensors.
+    Lerp,
+    /// Fused `beta * input + alpha * (lhs @ rhs)`.
+    Addmm,
+    /// Batched matrix multiplication.
+    Bmm,
+    /// Scaled dot-product attention.
+    ScaledDotProductAttention,
+    /// Sliding-window extraction along a dimension.
+    Unfold,
+    /// Rearranges channel depth into spatial resolution.
+    PixelShuffle,
+    /// Group normalization.
+    GroupNorm,
+    /// Instance normalization.
+    InstanceNorm,
 }
 
 impl OpType {
@@ -195,6 +261,44 @@ impl OpType {
             OpType::Constant => "Constant",
             OpType::TopK => "TopK",
             OpType::Argsort => "Argsort",
+            OpType::WhereCond => "Where",
+            // ONNX splits what most frameworks call "gather": `GatherElements`
+            // indexes elementwise with a same-rank index tensor, while `Gather`
+            // selects whole slices along one axis.
+            OpType::Gather => "GatherElements",
+            OpType::Scatter => "ScatterElements",
+            OpType::IndexSelect => "Gather",
+            OpType::MaskedFill => "MaskedFill",
+            OpType::Unsqueeze => "Unsqueeze",
+            OpType::Repeat => "Tile",
+            OpType::Pad => "Pad",
+            OpType::Triu => "Trilu",
+            OpType::Tril => "Trilu",
+            OpType::Diag => "Diag",
+            OpType::CmpEq => "Equal",
+            // ONNX defines no standard `NotEqual`, so this keeps its own name
+            // rather than claiming a standard op that importers would reject.
+            OpType::CmpNe => "CmpNe",
+            OpType::CmpLt => "Less",
+            OpType::CmpLe => "LessOrEqual",
+            OpType::CmpGt => "Greater",
+            OpType::CmpGe => "GreaterOrEqual",
+            OpType::LogicalAnd => "And",
+            OpType::LogicalOr => "Or",
+            OpType::LogicalNot => "Not",
+            OpType::SubScalar => "SubScalar",
+            OpType::DivScalar => "DivScalar",
+            OpType::Maximum => "Max",
+            OpType::Minimum => "Min",
+            OpType::AbsDiff => "AbsDiff",
+            OpType::Lerp => "Lerp",
+            OpType::Addmm => "Gemm",
+            OpType::Bmm => "MatMul",
+            OpType::ScaledDotProductAttention => "ScaledDotProductAttention",
+            OpType::Unfold => "Unfold",
+            OpType::PixelShuffle => "DepthToSpace",
+            OpType::GroupNorm => "GroupNormalization",
+            OpType::InstanceNorm => "InstanceNormalization",
         }
     }
 }

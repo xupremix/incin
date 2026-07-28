@@ -5,11 +5,10 @@
 //! Cartesian product of operations, dtypes, layouts, and devices.
 
 use alloc::{boxed::Box, string::String};
+use incin_core::exec::{LayoutClass, MathMode};
 use incin_core::prelude::{DTypeId, Error, Result};
 
 use crate::dtype_policy::{BackendFamily, OperationKind, resolve_dtype_policy};
-use crate::iteration::{BinaryLayoutClass, UnaryLayoutClass};
-
 const KERNEL_KEY_SCHEMA_VERSION: u8 = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -27,31 +26,6 @@ impl KernelFamily {
             Self::PointwiseBinary => "pointwise-binary",
             Self::Reduction => "reduction",
             Self::Normalization => "normalization",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub(crate) enum KernelLayout {
-    Strided,
-    Contiguous,
-    ScalarLeft,
-    ScalarRight,
-    ContiguousLastAxis,
-    RowWise,
-    ChannelWise,
-}
-
-impl KernelLayout {
-    fn tag(self) -> &'static str {
-        match self {
-            Self::Strided => "strided",
-            Self::Contiguous => "contiguous",
-            Self::ScalarLeft => "scalar-left",
-            Self::ScalarRight => "scalar-right",
-            Self::ContiguousLastAxis => "contiguous-last-axis",
-            Self::RowWise => "row-wise",
-            Self::ChannelWise => "channel-wise",
         }
     }
 }
@@ -135,25 +109,6 @@ impl KernelIndexWidth {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-// Fast/deterministic modes are encoded now so enabling them cannot alias precise binaries.
-#[allow(dead_code)]
-pub(crate) enum KernelMathMode {
-    Precise,
-    Fast,
-    Deterministic,
-}
-
-impl KernelMathMode {
-    fn tag(self) -> &'static str {
-        match self {
-            Self::Precise => "precise",
-            Self::Fast => "fast",
-            Self::Deterministic => "deterministic",
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) struct KernelKey {
     schema_version: u8,
@@ -163,10 +118,10 @@ pub(crate) struct KernelKey {
     compute: KernelDType,
     accumulator: KernelDType,
     output: KernelDType,
-    pub(crate) layout: KernelLayout,
+    pub(crate) layout: LayoutClass,
     pub(crate) access: KernelAccess,
     pub(crate) index_width: KernelIndexWidth,
-    pub(crate) math_mode: KernelMathMode,
+    pub(crate) math_mode: MathMode,
 }
 
 impl KernelKey {
@@ -175,7 +130,7 @@ impl KernelKey {
         family: KernelFamily,
         operation: &str,
         dtype: DTypeId,
-        layout: KernelLayout,
+        layout: LayoutClass,
         access: KernelAccess,
     ) -> Result<Self> {
         let policy = resolve_dtype_policy(BackendFamily::Cuda, policy_family, dtype, "kernel_key")?;
@@ -190,7 +145,7 @@ impl KernelKey {
             layout,
             access,
             index_width: KernelIndexWidth::I32,
-            math_mode: KernelMathMode::Precise,
+            math_mode: MathMode::Precise,
         })
     }
 
@@ -204,10 +159,10 @@ impl KernelKey {
             self.compute.tag(),
             self.accumulator.tag(),
             self.output.tag(),
-            self.layout.tag(),
+            self.layout.as_str(),
             self.access.tag(),
             self.index_width.tag(),
-            self.math_mode.tag(),
+            self.math_mode.as_str(),
         )
     }
 
@@ -222,9 +177,9 @@ impl KernelKey {
             self.compute.tag(),
             self.accumulator.tag(),
             self.output.tag(),
-            self.layout.tag(),
+            self.layout.as_str(),
             self.index_width.tag(),
-            self.math_mode.tag(),
+            self.math_mode.as_str(),
         )
     }
 }
@@ -359,17 +314,15 @@ fn render_cuda(
     validate_identifier(op_name)?;
     let scalar = CudaScalarSpec::for_float(dtype, "render_elementwise")?;
     let (key_family, layout) = match family {
-        "elementwise_unary" => (KernelFamily::PointwiseUnary, KernelLayout::Strided),
-        "elementwise_unary_contiguous" => (KernelFamily::PointwiseUnary, KernelLayout::Contiguous),
-        "elementwise_binary" => (KernelFamily::PointwiseBinary, KernelLayout::Strided),
-        "elementwise_binary_contiguous" => {
-            (KernelFamily::PointwiseBinary, KernelLayout::Contiguous)
-        }
+        "elementwise_unary" => (KernelFamily::PointwiseUnary, LayoutClass::Strided),
+        "elementwise_unary_contiguous" => (KernelFamily::PointwiseUnary, LayoutClass::Contiguous),
+        "elementwise_binary" => (KernelFamily::PointwiseBinary, LayoutClass::Strided),
+        "elementwise_binary_contiguous" => (KernelFamily::PointwiseBinary, LayoutClass::Contiguous),
         "elementwise_binary_scalar_left" => {
-            (KernelFamily::PointwiseBinary, KernelLayout::ScalarLeft)
+            (KernelFamily::PointwiseBinary, LayoutClass::ScalarLeft)
         }
         "elementwise_binary_scalar_right" => {
-            (KernelFamily::PointwiseBinary, KernelLayout::ScalarRight)
+            (KernelFamily::PointwiseBinary, LayoutClass::ScalarRight)
         }
         _ => {
             return Err(Error::Msg(format!(
@@ -500,15 +453,13 @@ fn render_cuda_packed(
     validate_identifier(op_name)?;
     let packed = CudaPackedSpec::for_float(dtype)?;
     let (key_family, layout) = match family {
-        "elementwise_unary_contiguous" => (KernelFamily::PointwiseUnary, KernelLayout::Contiguous),
-        "elementwise_binary_contiguous" => {
-            (KernelFamily::PointwiseBinary, KernelLayout::Contiguous)
-        }
+        "elementwise_unary_contiguous" => (KernelFamily::PointwiseUnary, LayoutClass::Contiguous),
+        "elementwise_binary_contiguous" => (KernelFamily::PointwiseBinary, LayoutClass::Contiguous),
         "elementwise_binary_scalar_left" => {
-            (KernelFamily::PointwiseBinary, KernelLayout::ScalarLeft)
+            (KernelFamily::PointwiseBinary, LayoutClass::ScalarLeft)
         }
         "elementwise_binary_scalar_right" => {
-            (KernelFamily::PointwiseBinary, KernelLayout::ScalarRight)
+            (KernelFamily::PointwiseBinary, LayoutClass::ScalarRight)
         }
         _ => {
             return Err(Error::Msg(format!(
@@ -709,11 +660,11 @@ pub(crate) fn render_cuda_unary_for_layout(
     op_name: &str,
     op_expr: &str,
     dtype: DTypeId,
-    layout: UnaryLayoutClass,
+    layout: LayoutClass,
     unroll_width: u8,
 ) -> Result<RenderedKernel> {
     match layout {
-        UnaryLayoutClass::Contiguous => render_cuda(
+        LayoutClass::Contiguous => render_cuda(
             CUDA_UNARY_CONTIGUOUS_TEMPLATE,
             "elementwise_unary_contiguous",
             op_name,
@@ -721,12 +672,14 @@ pub(crate) fn render_cuda_unary_for_layout(
             dtype,
             unroll_width,
         ),
-        UnaryLayoutClass::Strided if unroll_width == 1 => {
-            render_cuda_unary(op_name, op_expr, dtype)
-        }
-        UnaryLayoutClass::Strided => Err(Error::Msg(
+        LayoutClass::Strided if unroll_width == 1 => render_cuda_unary(op_name, op_expr, dtype),
+        LayoutClass::Strided => Err(Error::Msg(
             "strided CUDA unary kernels require unroll width 1".into(),
         )),
+        other => Err(Error::Msg(format!(
+            "layout {} is not valid for a CUDA unary kernel",
+            other.as_str()
+        ))),
     }
 }
 
@@ -749,32 +702,38 @@ pub(crate) fn render_cuda_binary_for_layout(
     op_name: &str,
     op_expr: &str,
     dtype: DTypeId,
-    layout: BinaryLayoutClass,
+    layout: LayoutClass,
     unroll_width: u8,
 ) -> Result<RenderedKernel> {
     let (family, lhs_index, rhs_index) = match layout {
-        BinaryLayoutClass::Contiguous => (
+        LayoutClass::Contiguous => (
             "elementwise_binary_contiguous",
             "lhs_offset + idx",
             "rhs_offset + idx",
         ),
-        BinaryLayoutClass::ScalarLeft => (
+        LayoutClass::ScalarLeft => (
             "elementwise_binary_scalar_left",
             "lhs_offset",
             "rhs_offset + idx",
         ),
-        BinaryLayoutClass::ScalarRight => (
+        LayoutClass::ScalarRight => (
             "elementwise_binary_scalar_right",
             "lhs_offset + idx",
             "rhs_offset",
         ),
-        BinaryLayoutClass::Strided if unroll_width == 1 => {
+        LayoutClass::Strided if unroll_width == 1 => {
             return render_cuda_binary(op_name, op_expr, dtype);
         }
-        BinaryLayoutClass::Strided => {
+        LayoutClass::Strided => {
             return Err(Error::Msg(
                 "strided CUDA binary kernels require unroll width 1".into(),
             ));
+        }
+        other => {
+            return Err(Error::Msg(format!(
+                "layout {} is not valid for a CUDA binary kernel",
+                other.as_str()
+            )));
         }
     };
     let template = CUDA_BINARY_DENSE_TEMPLATE
@@ -787,9 +746,9 @@ pub(crate) fn render_cuda_unary_packed(
     op_name: &str,
     op_expr: &str,
     dtype: DTypeId,
-    layout: UnaryLayoutClass,
+    layout: LayoutClass,
 ) -> Result<RenderedKernel> {
-    if layout != UnaryLayoutClass::Contiguous {
+    if layout != LayoutClass::Contiguous {
         return Err(Error::Msg(
             "packed CUDA unary kernels require contiguous input".into(),
         ));
@@ -836,12 +795,12 @@ pub(crate) fn render_cuda_binary_packed(
     op_name: &str,
     op_expr: &str,
     dtype: DTypeId,
-    layout: BinaryLayoutClass,
+    layout: LayoutClass,
 ) -> Result<RenderedKernel> {
     let packed = CudaPackedSpec::for_float(dtype)?;
     let scalar = packed.scalar;
     let (family, lhs_index, rhs_index, packed_loads, lane_bindings) = match layout {
-        BinaryLayoutClass::Contiguous => {
+        LayoutClass::Contiguous => {
             let loads = format!(
                 "        const {storage} lhs_storage = reinterpret_cast<const {storage}*>(lhs + lhs_offset)[packet_idx];\n        const {storage} rhs_storage = reinterpret_cast<const {storage}*>(rhs + rhs_offset)[packet_idx];\n        const {compute} packed_lhs = {unpack_prefix}lhs_storage{unpack_suffix};\n        const {compute} packed_rhs = {unpack_prefix}rhs_storage{unpack_suffix};",
                 storage = packed.storage_type,
@@ -863,7 +822,7 @@ pub(crate) fn render_cuda_binary_packed(
                 Box::new(bindings) as Box<dyn Fn(&str) -> String>,
             )
         }
-        BinaryLayoutClass::ScalarLeft => {
+        LayoutClass::ScalarLeft => {
             let loads = format!(
                 "        const {scalar_compute} scalar_lhs = {load_prefix}lhs[lhs_offset]{load_suffix};\n        const {storage} rhs_storage = reinterpret_cast<const {storage}*>(rhs + rhs_offset)[packet_idx];\n        const {packed_compute} packed_rhs = {unpack_prefix}rhs_storage{unpack_suffix};",
                 scalar_compute = scalar.compute_type,
@@ -888,7 +847,7 @@ pub(crate) fn render_cuda_binary_packed(
                 Box::new(bindings) as Box<dyn Fn(&str) -> String>,
             )
         }
-        BinaryLayoutClass::ScalarRight => {
+        LayoutClass::ScalarRight => {
             let loads = format!(
                 "        const {storage} lhs_storage = reinterpret_cast<const {storage}*>(lhs + lhs_offset)[packet_idx];\n        const {packed_compute} packed_lhs = {unpack_prefix}lhs_storage{unpack_suffix};\n        const {scalar_compute} scalar_rhs = {load_prefix}rhs[rhs_offset]{load_suffix};",
                 storage = packed.storage_type,
@@ -913,10 +872,16 @@ pub(crate) fn render_cuda_binary_packed(
                 Box::new(bindings) as Box<dyn Fn(&str) -> String>,
             )
         }
-        BinaryLayoutClass::Strided => {
+        LayoutClass::Strided => {
             return Err(Error::Msg(
                 "packed CUDA binary kernels require dense or scalar-broadcast input".into(),
             ));
+        }
+        other => {
+            return Err(Error::Msg(format!(
+                "layout {} is not valid for a packed CUDA binary kernel",
+                other.as_str()
+            )));
         }
     };
     let arguments = format!(
@@ -1010,9 +975,9 @@ pub(crate) fn render_cuda_reduction(
         &format!("{op_name}{index_suffix}"),
         dtype,
         if contiguous_last_axis {
-            KernelLayout::ContiguousLastAxis
+            LayoutClass::ContiguousLastAxis
         } else {
-            KernelLayout::Strided
+            LayoutClass::Strided
         },
         if contiguous_last_axis {
             KernelAccess::WarpReduction
@@ -1190,9 +1155,9 @@ pub(crate) fn render_cuda_normalization(op_name: &str, dtype: DTypeId) -> Result
         op_name,
         dtype,
         if op_name == "layer_norm" {
-            KernelLayout::RowWise
+            LayoutClass::RowWise
         } else {
-            KernelLayout::ChannelWise
+            LayoutClass::ChannelWise
         },
         if op_name == "layer_norm" {
             KernelAccess::Welford
@@ -1401,7 +1366,7 @@ mod tests {
             KernelFamily::PointwiseUnary,
             "neg",
             DTypeId::F32,
-            KernelLayout::Contiguous,
+            LayoutClass::Contiguous,
             KernelAccess::Scalar { unroll_width: 4 },
         )
         .unwrap();
@@ -1411,7 +1376,7 @@ mod tests {
         assert_eq!(scalar.tuning_problem_id(), packed.tuning_problem_id());
 
         let mut strided = scalar.clone();
-        strided.layout = KernelLayout::Strided;
+        strided.layout = LayoutClass::Strided;
         assert_ne!(scalar.cache_id(), strided.cache_id());
         assert_ne!(scalar.tuning_problem_id(), strided.tuning_problem_id());
 
@@ -1473,30 +1438,15 @@ mod tests {
 
     #[test]
     fn layout_specializations_share_expressions_but_have_distinct_abis_and_keys() {
-        let contiguous = render_cuda_binary_for_layout(
-            "sub",
-            "a - b",
-            DTypeId::F32,
-            BinaryLayoutClass::Contiguous,
-            4,
-        )
-        .unwrap();
-        let scalar_left = render_cuda_binary_for_layout(
-            "sub",
-            "a - b",
-            DTypeId::F32,
-            BinaryLayoutClass::ScalarLeft,
-            2,
-        )
-        .unwrap();
-        let strided = render_cuda_binary_for_layout(
-            "sub",
-            "a - b",
-            DTypeId::F32,
-            BinaryLayoutClass::Strided,
-            1,
-        )
-        .unwrap();
+        let contiguous =
+            render_cuda_binary_for_layout("sub", "a - b", DTypeId::F32, LayoutClass::Contiguous, 4)
+                .unwrap();
+        let scalar_left =
+            render_cuda_binary_for_layout("sub", "a - b", DTypeId::F32, LayoutClass::ScalarLeft, 2)
+                .unwrap();
+        let strided =
+            render_cuda_binary_for_layout("sub", "a - b", DTypeId::F32, LayoutClass::Strided, 1)
+                .unwrap();
 
         assert_ne!(contiguous.cache_key, scalar_left.cache_key);
         assert_ne!(contiguous.cache_key, strided.cache_key);
@@ -1515,19 +1465,14 @@ mod tests {
         assert!(!contiguous.source.contains("out_shape"));
         assert!(strided.source.contains("out_shape"));
 
-        let unary = render_cuda_unary_for_layout(
-            "neg",
-            "-x",
-            DTypeId::BF16,
-            UnaryLayoutClass::Contiguous,
-            2,
-        )
-        .unwrap();
+        let unary =
+            render_cuda_unary_for_layout("neg", "-x", DTypeId::BF16, LayoutClass::Contiguous, 2)
+                .unwrap();
         assert!(unary.source.contains("input[offset + idx]"));
         assert!(!unary.source.contains("strides"));
         assert_eq!(unary.unroll_width, 2);
         assert!(
-            render_cuda_unary_for_layout("neg", "-x", DTypeId::F32, UnaryLayoutClass::Strided, 4,)
+            render_cuda_unary_for_layout("neg", "-x", DTypeId::F32, LayoutClass::Strided, 4,)
                 .is_err()
         );
     }
@@ -1535,8 +1480,7 @@ mod tests {
     #[test]
     fn packed_templates_use_vector_storage_and_mask_scalar_tails() {
         let unary =
-            render_cuda_unary_packed("neg", "-x", DTypeId::F32, UnaryLayoutClass::Contiguous)
-                .unwrap();
+            render_cuda_unary_packed("neg", "-x", DTypeId::F32, LayoutClass::Contiguous).unwrap();
         assert_eq!(unary.unroll_width, 1);
         assert_eq!(unary.vector_width, 4);
         assert_eq!(unary.elements_per_thread(), 4);
@@ -1550,9 +1494,8 @@ mod tests {
         assert!(unary.source.contains("if (base + 4 <= numel)"));
         assert!(unary.source.contains("input[offset + idx]"));
 
-        let half =
-            render_cuda_binary_packed("add", "a + b", DTypeId::F16, BinaryLayoutClass::Contiguous)
-                .unwrap();
+        let half = render_cuda_binary_packed("add", "a + b", DTypeId::F16, LayoutClass::Contiguous)
+            .unwrap();
         assert_eq!(half.vector_width, 2);
         assert!(half.source.contains("const __half2 lhs_storage"));
         assert!(half.source.contains("__half22float2(lhs_storage)"));
@@ -1562,7 +1505,7 @@ mod tests {
         );
 
         let scalar_left =
-            render_cuda_binary_packed("sub", "a - b", DTypeId::BF16, BinaryLayoutClass::ScalarLeft)
+            render_cuda_binary_packed("sub", "a - b", DTypeId::BF16, LayoutClass::ScalarLeft)
                 .unwrap();
         assert!(scalar_left.source.contains("const float scalar_lhs"));
         assert!(
@@ -1572,8 +1515,7 @@ mod tests {
         );
         assert!(scalar_left.source.contains("a = scalar_lhs"));
         assert!(
-            render_cuda_binary_packed("add", "a + b", DTypeId::F32, BinaryLayoutClass::Strided,)
-                .is_err()
+            render_cuda_binary_packed("add", "a + b", DTypeId::F32, LayoutClass::Strided,).is_err()
         );
     }
 
@@ -1583,14 +1525,14 @@ mod tests {
     fn packed_templates_compile_with_nvrtc_for_every_float_family() {
         for dtype in [DTypeId::F16, DTypeId::BF16, DTypeId::F32, DTypeId::F64] {
             let unary =
-                render_cuda_unary_packed("neg", "-x", dtype, UnaryLayoutClass::Contiguous).unwrap();
+                render_cuda_unary_packed("neg", "-x", dtype, LayoutClass::Contiguous).unwrap();
             crate::cuda::gpu::compile_ptx_with_cuda_includes(&unary.source)
                 .unwrap_or_else(|error| panic!("NVRTC rejected packed unary {dtype:?}: {error:?}"));
 
             for layout in [
-                BinaryLayoutClass::Contiguous,
-                BinaryLayoutClass::ScalarLeft,
-                BinaryLayoutClass::ScalarRight,
+                LayoutClass::Contiguous,
+                LayoutClass::ScalarLeft,
+                LayoutClass::ScalarRight,
             ] {
                 let binary = render_cuda_binary_packed("add", "a + b", dtype, layout).unwrap();
                 crate::cuda::gpu::compile_ptx_with_cuda_includes(&binary.source).unwrap_or_else(
@@ -1603,7 +1545,7 @@ mod tests {
     #[test]
     fn reduction_templates_share_structure_and_apply_accumulator_policy() {
         let half_fast = render_cuda_reduction("sum", DTypeId::F16, false, true).unwrap();
-        assert_eq!(half_fast.key.layout, KernelLayout::ContiguousLastAxis);
+        assert_eq!(half_fast.key.layout, LayoutClass::ContiguousLastAxis);
         assert_eq!(half_fast.key.access, KernelAccess::WarpReduction);
         assert!(half_fast.cache_key.contains("/reduction/sum/s=f16"));
         assert!(half_fast.cache_key.contains("layout=contiguous-last-axis"));
@@ -1623,7 +1565,7 @@ mod tests {
         assert!(half_fast.source.contains("shared[warp] = acc"));
 
         let double_mean = render_cuda_reduction("mean", DTypeId::F64, false, false).unwrap();
-        assert_eq!(double_mean.key.layout, KernelLayout::Strided);
+        assert_eq!(double_mean.key.layout, LayoutClass::Strided);
         assert!(double_mean.cache_key.contains("/reduction/mean/s=f64"));
         assert!(double_mean.source.contains("double acc"));
         assert!(double_mean.source.contains("acc / (double)reduce_dim_size"));

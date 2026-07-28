@@ -1,6 +1,8 @@
+use super::alloc_zeroed_bytes;
 use crate::cpu::storage::BlockQ8_0;
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
+use incin_core::prelude::OperationKind;
 use incin_core::prelude::Result;
 
 #[cfg(feature = "cuda")]
@@ -70,7 +72,7 @@ pub(crate) fn launch_quantize(inp: &CudaStorage) -> Result<CudaStorage> {
 
     Ok(CudaStorage::new(
         alloc::sync::Arc::new(out_buf),
-        inp.shape.clone(),
+        inp.shape.to_vec(),
     ))
 }
 
@@ -99,7 +101,12 @@ pub(crate) fn launch_dequantize(inp: &CudaStorage) -> Result<CudaStorage> {
     let mut out_buf = CudaBuffer {
         len: out_numel,
         dtype: incin_core::prelude::DTypeId::F32,
-        data: Arc::new(stream.alloc_zeros::<u8>(out_numel * 4).unwrap()),
+        data: Arc::new(alloc_zeroed_bytes(
+            &stream,
+            incin_core::prelude::DTypeId::F32,
+            out_numel,
+            OperationKind::Storage,
+        )?),
         device: b_inp.device.clone(),
         device_id,
     };
@@ -134,6 +141,6 @@ pub(crate) fn launch_dequantize(inp: &CudaStorage) -> Result<CudaStorage> {
 
     Ok(CudaStorage::new(
         alloc::sync::Arc::new(out_buf),
-        inp.shape.clone(),
+        inp.shape.to_vec(),
     ))
 }

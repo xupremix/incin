@@ -129,7 +129,7 @@ pub(crate) fn batched_matmul_impl(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<
     // below needs lhs_b/rhs_b (same batch shape as grad_out), while
     // unbroadcast's target is each operand's OWN full original shape
     // (trailing [M,K]/[K,N] dims included, per Pitfall 2).
-    let (lhs_orig_shape, rhs_orig_shape) = (lhs.shape.clone(), rhs.shape.clone());
+    let (lhs_orig_shape, rhs_orig_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
     let (lhs_b_capture, rhs_b_capture) = (lhs_b.clone(), rhs_b.clone());
     let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
     tape::push(TapeEntry {
@@ -181,7 +181,7 @@ pub(crate) fn matmul_impl(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStora
         return Err(Error::ShapeMismatch {
             op: "matmul",
             expected: vec![lhs.shape[0], rhs.shape.first().copied().unwrap_or(0)],
-            got: rhs.shape.clone(),
+            got: rhs.shape.to_vec(),
             msg: format!(
                 "matmul requires unbatched 2D operands with lhs.shape[1] == rhs.shape[0]; got lhs={:?}, rhs={:?}",
                 lhs.shape, rhs.shape
@@ -270,7 +270,7 @@ fn f32_matmul_scalar(
         for mi in 0..m {
             for ki in 0..k {
                 let a_val = lhs.get(&[mi, ki]) as f32;
-                let rhs_row_start = rhs.offset + ki * rhs_stride_k;
+                let rhs_row_start = rhs.offset_elements + ki * rhs_stride_k;
                 let out_row_start = mi * n;
 
                 for ni in 0..n {
@@ -321,7 +321,7 @@ unsafe fn f32_matmul_avx2(
             let a_val = lhs.get(&[mi, ki]) as f32;
             let a_vec = _mm256_set1_ps(a_val);
 
-            let rhs_row_start = rhs.offset + ki * rhs_stride_k;
+            let rhs_row_start = rhs.offset_elements + ki * rhs_stride_k;
             let out_row_start = mi * n;
 
             for ni in (0..n_vec).step_by(8) {
@@ -365,7 +365,7 @@ unsafe fn f32_matmul_neon(
             let a_val = lhs.get(&[mi, ki]) as f32;
             let a_vec = unsafe { vdupq_n_f32(a_val) };
 
-            let rhs_row_start = rhs.offset + ki * rhs_stride_k;
+            let rhs_row_start = rhs.offset_elements + ki * rhs_stride_k;
             let out_row_start = mi * n;
 
             for ni in (0..n_vec).step_by(4) {
@@ -409,7 +409,7 @@ unsafe fn f32_matmul_wasm(
             let a_val = lhs.get(&[mi, ki]) as f32;
             let a_vec = f32x4_splat(a_val);
 
-            let rhs_row_start = rhs.offset + ki * rhs_stride_k;
+            let rhs_row_start = rhs.offset_elements + ki * rhs_stride_k;
             let out_row_start = mi * n;
 
             for ni in (0..n_vec).step_by(4) {

@@ -5,8 +5,10 @@
 //! already exist as real device code, so the round trip stays entirely on
 //! the GPU.
 
-use crate::cuda::storage::{CudaBuffer, CudaStorage, TensorId};
+use super::alloc_zeroed_bytes;
+use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
+use incin_core::prelude::OperationKind;
 use incin_core::prelude::{DTypeId, Result};
 
 /// `[N, C, H, W]`-style output spatial size, matching
@@ -42,15 +44,19 @@ fn alloc_zeroed(
     device_id: usize,
     dtype: DTypeId,
     numel: usize,
-    elem_bytes: usize,
-) -> CudaBuffer {
-    CudaBuffer {
+) -> Result<CudaBuffer> {
+    Ok(CudaBuffer {
         len: numel,
         dtype,
-        data: Arc::new(stream.alloc_zeros::<u8>(numel * elem_bytes).unwrap()),
+        data: Arc::new(alloc_zeroed_bytes(
+            stream,
+            dtype,
+            numel,
+            OperationKind::Pool2d,
+        )?),
         device: device.clone(),
         device_id,
-    }
+    })
 }
 
 fn launch_cfg(n: usize) -> cudarc::driver::LaunchConfig {
@@ -92,15 +98,8 @@ pub(crate) fn launch_max_pool2d_forward(
     let out_shape = alloc::vec![n, c, oh, ow];
     let out_total = n * c * oh * ow;
 
-    let mut out_b = alloc_zeroed(&stream, &t_buf.device, device_id, t_buf.dtype, out_total, 4);
-    let mut idx_b = alloc_zeroed(
-        &stream,
-        &t_buf.device,
-        device_id,
-        DTypeId::U32,
-        out_total,
-        4,
-    );
+    let mut out_b = alloc_zeroed(&stream, &t_buf.device, device_id, t_buf.dtype, out_total)?;
+    let mut idx_b = alloc_zeroed(&stream, &t_buf.device, device_id, DTypeId::U32, out_total)?;
 
     let cfg = launch_cfg(out_total);
     unsafe {
@@ -139,20 +138,9 @@ pub(crate) fn launch_max_pool2d_forward(
     }
 
     let out_strides = crate::cpu::stride::contiguous_strides(&out_shape);
-    let output = CudaStorage {
-        buffer: Arc::new(out_b),
-        shape: out_shape.clone(),
-        strides: out_strides.clone(),
-        offset: 0,
-        id: TensorId::next(),
-    };
-    let max_indices = CudaStorage {
-        buffer: Arc::new(idx_b),
-        shape: out_shape,
-        strides: out_strides,
-        offset: 0,
-        id: TensorId::next(),
-    };
+    let output =
+        CudaStorage::try_from_parts(Arc::new(out_b), out_shape.clone(), out_strides.clone(), 0)?;
+    let max_indices = CudaStorage::try_from_parts(Arc::new(idx_b), out_shape, out_strides, 0)?;
     Ok((output, max_indices))
 }
 
@@ -174,14 +162,7 @@ pub(crate) fn launch_scatter_pool_grad_2d(
 
     let out_total: usize = grad_out.shape.iter().product();
     let in_total: usize = input_shape.iter().product();
-    let mut grad_in_b = alloc_zeroed(
-        &stream,
-        &go_buf.device,
-        device_id,
-        go_buf.dtype,
-        in_total,
-        4,
-    );
+    let mut grad_in_b = alloc_zeroed(&stream, &go_buf.device, device_id, go_buf.dtype, in_total)?;
 
     let cfg = launch_cfg(out_total);
     unsafe {
@@ -208,13 +189,7 @@ pub(crate) fn launch_scatter_pool_grad_2d(
     }
 
     let strides = crate::cpu::stride::contiguous_strides(input_shape);
-    Ok(CudaStorage {
-        buffer: Arc::new(grad_in_b),
-        shape: input_shape.to_vec(),
-        strides,
-        offset: 0,
-        id: TensorId::next(),
-    })
+    CudaStorage::try_from_parts(Arc::new(grad_in_b), input_shape.to_vec(), strides, 0)
 }
 
 /// Forward avg_pool2d (no dilation — matches `ModuleOps::avg_pool2d`'s
@@ -242,7 +217,7 @@ pub(crate) fn launch_avg_pool2d_forward(
     let out_shape = alloc::vec![n, c, oh, ow];
     let out_total = n * c * oh * ow;
 
-    let mut out_b = alloc_zeroed(&stream, &t_buf.device, device_id, t_buf.dtype, out_total, 4);
+    let mut out_b = alloc_zeroed(&stream, &t_buf.device, device_id, t_buf.dtype, out_total)?;
     let cfg = launch_cfg(out_total);
     unsafe {
         let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();
@@ -274,13 +249,7 @@ pub(crate) fn launch_avg_pool2d_forward(
     }
 
     let strides = crate::cpu::stride::contiguous_strides(&out_shape);
-    Ok(CudaStorage {
-        buffer: Arc::new(out_b),
-        shape: out_shape,
-        strides,
-        offset: 0,
-        id: TensorId::next(),
-    })
+    CudaStorage::try_from_parts(Arc::new(out_b), out_shape, strides, 0)
 }
 
 #[cfg(feature = "cuda")]
@@ -311,14 +280,7 @@ pub(crate) fn launch_avg_pool2d_backward(
     let in_total = n * c * h * w;
     let out_total = n * c * oh * ow;
 
-    let mut grad_in_b = alloc_zeroed(
-        &stream,
-        &go_buf.device,
-        device_id,
-        go_buf.dtype,
-        in_total,
-        4,
-    );
+    let mut grad_in_b = alloc_zeroed(&stream, &go_buf.device, device_id, go_buf.dtype, in_total)?;
     let cfg = launch_cfg(out_total);
     unsafe {
         let go_f32 = go_buf.data.transmute::<f32>(go_buf.len).unwrap();
@@ -350,13 +312,7 @@ pub(crate) fn launch_avg_pool2d_backward(
     }
 
     let strides = crate::cpu::stride::contiguous_strides(input_shape);
-    Ok(CudaStorage {
-        buffer: Arc::new(grad_in_b),
-        shape: input_shape.to_vec(),
-        strides,
-        offset: 0,
-        id: TensorId::next(),
-    })
+    CudaStorage::try_from_parts(Arc::new(grad_in_b), input_shape.to_vec(), strides, 0)
 }
 
 #[cfg(feature = "cuda")]
@@ -376,7 +332,7 @@ pub(crate) fn launch_adaptive_avg_pool2d_forward(
     let out_shape = alloc::vec![n, c, oh, ow];
     let out_total = n * c * oh * ow;
 
-    let mut out_b = alloc_zeroed(&stream, &t_buf.device, device_id, t_buf.dtype, out_total, 4);
+    let mut out_b = alloc_zeroed(&stream, &t_buf.device, device_id, t_buf.dtype, out_total)?;
     let cfg = launch_cfg(out_total);
     unsafe {
         let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();
@@ -404,13 +360,7 @@ pub(crate) fn launch_adaptive_avg_pool2d_forward(
     }
 
     let strides = crate::cpu::stride::contiguous_strides(&out_shape);
-    Ok(CudaStorage {
-        buffer: Arc::new(out_b),
-        shape: out_shape,
-        strides,
-        offset: 0,
-        id: TensorId::next(),
-    })
+    CudaStorage::try_from_parts(Arc::new(out_b), out_shape, strides, 0)
 }
 
 #[cfg(feature = "cuda")]
@@ -435,14 +385,7 @@ pub(crate) fn launch_adaptive_avg_pool2d_backward(
     let in_total = n * c * h * w;
     let out_total = n * c * oh * ow;
 
-    let mut grad_in_b = alloc_zeroed(
-        &stream,
-        &go_buf.device,
-        device_id,
-        go_buf.dtype,
-        in_total,
-        4,
-    );
+    let mut grad_in_b = alloc_zeroed(&stream, &go_buf.device, device_id, go_buf.dtype, in_total)?;
     let cfg = launch_cfg(out_total);
     unsafe {
         let go_f32 = go_buf.data.transmute::<f32>(go_buf.len).unwrap();
@@ -470,11 +413,5 @@ pub(crate) fn launch_adaptive_avg_pool2d_backward(
     }
 
     let strides = crate::cpu::stride::contiguous_strides(input_shape);
-    Ok(CudaStorage {
-        buffer: Arc::new(grad_in_b),
-        shape: input_shape.to_vec(),
-        strides,
-        offset: 0,
-        id: TensorId::next(),
-    })
+    CudaStorage::try_from_parts(Arc::new(grad_in_b), input_shape.to_vec(), strides, 0)
 }

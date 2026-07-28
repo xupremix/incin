@@ -1,5 +1,7 @@
+use super::alloc_zeroed_bytes;
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
+use incin_core::prelude::OperationKind;
 use incin_core::prelude::Result;
 
 #[cfg(feature = "cuda")]
@@ -31,7 +33,12 @@ pub(crate) fn launch_nll_loss(
     let mut out_b = CudaBuffer {
         len: out_numel,
         dtype: b_log_sm.dtype,
-        data: Arc::new(stream.alloc_zeros::<u8>(out_numel * 4).unwrap()),
+        data: Arc::new(alloc_zeroed_bytes(
+            &stream,
+            b_log_sm.dtype,
+            out_numel,
+            OperationKind::Reduction,
+        )?),
         device: b_log_sm.device.clone(),
         device_id,
     };

@@ -8,6 +8,12 @@ use candle_core as candle;
 impl<T: incin_core::prelude::DType, D: incin_core::prelude::Device>
     incin_core::prelude::CreationOps<Self> for CandleBackend<T, D>
 {
+    // This adapter does not route candle's fill or sequence constructors yet.
+    crate::unsupported::unsupported_creation_ops! {
+        fill: full;
+        sequence: arange, linspace;
+    }
+
     /// Allocates a tensor of `shape` filled with zeros on `device` with the
     /// given dtype.
     fn zeros<K: incin_core::prelude::DType>(

@@ -337,6 +337,12 @@ impl DeviceId {
         self.ordinal
     }
 
+    /// The single CPU device, usable in a `const` context.
+    pub const CPU: Self = Self {
+        kind: DeviceKind::Cpu,
+        ordinal: 0,
+    };
+
     /// The single CPU device (ordinal always 0).
     pub fn cpu() -> Self {
         Self {

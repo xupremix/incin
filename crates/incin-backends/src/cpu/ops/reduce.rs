@@ -85,7 +85,7 @@ fn unflatten_index(flat: usize, shape: &[usize]) -> Vec<usize> {
 /// Sum-reduce `storage` over `axis`, *keeping* that axis as size 1
 /// (e.g. `[4, 3]` over axis 0 → `[1, 3]`).
 pub(crate) fn sum_axis_keepdim(storage: &CpuStorage, axis: usize) -> CpuStorage {
-    let mut out_shape = storage.shape.clone();
+    let mut out_shape = storage.shape.to_vec();
     out_shape[axis] = 1;
     let total: usize = out_shape.iter().product();
 
@@ -117,14 +117,14 @@ pub(crate) fn sum_axis_keepdim(storage: &CpuStorage, axis: usize) -> CpuStorage 
         CpuBuffer::Q8_0(_) => panic!("sum_axis_keepdim not supported on Q8_0 buffer"),
     };
 
-    CpuStorage::from_contiguous(new_buffer, out_shape)
+    CpuStorage::from_contiguous(new_buffer, out_shape.to_vec())
 }
 
 /// Sum-reduce `storage` over `axis`, *removing* that axis from the shape
 /// entirely (e.g. `[4, 3]` over axis 0 → `[3]`).
 pub(crate) fn sum_axis_squeeze(storage: &CpuStorage, axis: usize) -> CpuStorage {
     let reduced = sum_axis_keepdim(storage, axis);
-    let mut new_shape = reduced.shape.clone();
+    let mut new_shape = reduced.shape.to_vec();
     new_shape.remove(axis);
     // Squeezing a size-1 keepdim result is a pure metadata reshape (no data
     // movement) since the output is already contiguous.
@@ -158,7 +158,7 @@ fn fill_like(like: &CpuStorage, shape: &[usize], scalar_value: f64) -> CpuStorag
 /// Ties: strict `>` (not `>=`) naturally picks first-encountered winner
 /// during forward iteration (Pitfall 3 mitigation, T-02-07).
 fn max_axis_with_indices(storage: &CpuStorage, axis: usize) -> (CpuStorage, Vec<usize>) {
-    let mut out_shape = storage.shape.clone();
+    let mut out_shape = storage.shape.to_vec();
     out_shape[axis] = 1;
     let out_total: usize = out_shape.iter().product();
     let mut best_val = vec![f64::NEG_INFINITY; out_total];
@@ -187,7 +187,7 @@ fn max_axis_with_indices(storage: &CpuStorage, axis: usize) -> (CpuStorage, Vec<
 /// Mirror of `max_axis_with_indices`, seeded with `f64::INFINITY` and a
 /// strict `<` comparison — same first-encountered-winner convention.
 fn min_axis_with_indices(storage: &CpuStorage, axis: usize) -> (CpuStorage, Vec<usize>) {
-    let mut out_shape = storage.shape.clone();
+    let mut out_shape = storage.shape.to_vec();
     out_shape[axis] = 1;
     let out_total: usize = out_shape.iter().product();
     let mut best_val = vec![f64::INFINITY; out_total];
@@ -257,7 +257,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
         }
         let out = CpuStorage::from_contiguous(CpuBuffer::F32(vec![sum as f32]), vec![]);
 
-        let original_shape = t.shape.clone();
+        let original_shape = t.shape.to_vec();
         let t_clone = t.clone(); // dtype reference for fill_like
         let (t_id, out_id) = (t.id, out.id);
         tape::push(TapeEntry {
@@ -292,7 +292,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
         let mean = if total > 0 { sum / total as f64 } else { 0.0 };
         let out = CpuStorage::from_contiguous(CpuBuffer::F32(vec![mean as f32]), vec![]);
 
-        let original_shape = t.shape.clone();
+        let original_shape = t.shape.to_vec();
         let t_clone = t.clone();
         let n = total as f64;
         let (t_id, out_id) = (t.id, out.id);
@@ -334,7 +334,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
         }
         let out = CpuStorage::from_contiguous(CpuBuffer::F32(vec![best_val as f32]), vec![]);
 
-        let original_shape = t.shape.clone();
+        let original_shape = t.shape.to_vec();
         let (t_id, out_id) = (t.id, out.id);
         tape::push(TapeEntry {
             output_id: out_id,
@@ -346,7 +346,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                 vals[best_flat_idx] = scalar_grad as f32;
                 vec![CpuStorage::from_contiguous(
                     CpuBuffer::F32(vals),
-                    original_shape.clone(),
+                    original_shape.to_vec(),
                 )]
             }),
         });
@@ -375,7 +375,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
         }
         let out = CpuStorage::from_contiguous(CpuBuffer::F32(vec![best_val as f32]), vec![]);
 
-        let original_shape = t.shape.clone();
+        let original_shape = t.shape.to_vec();
         let (t_id, out_id) = (t.id, out.id);
         tape::push(TapeEntry {
             output_id: out_id,
@@ -387,7 +387,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                 vals[best_flat_idx] = scalar_grad as f32;
                 vec![CpuStorage::from_contiguous(
                     CpuBuffer::F32(vals),
-                    original_shape.clone(),
+                    original_shape.to_vec(),
                 )]
             }),
         });
@@ -404,14 +404,14 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
         if dim >= t.shape.len() {
             return Err(Error::ShapeMismatch {
                 op: "sum_dim",
-                expected: t.shape.clone(),
+                expected: t.shape.to_vec(),
                 got: vec![dim],
                 msg: format!("sum_dim: axis {dim} out of range for shape {:?}", t.shape),
             });
         }
         let out = sum_axis_squeeze(t, dim);
 
-        let original_shape = t.shape.clone();
+        let original_shape = t.shape.to_vec();
         let (t_id, out_id) = (t.id, out.id);
         tape::push(TapeEntry {
             output_id: out_id,
@@ -419,7 +419,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
             backward: Box::new(move |grad_out: &CpuStorage| {
                 // Backward of sum_dim (squeeze): reinsert the axis with size 1,
                 // then broadcast back to the original shape.
-                let mut keepdim_shape = grad_out.shape.clone();
+                let mut keepdim_shape = grad_out.shape.to_vec();
                 keepdim_shape.insert(dim, 1);
                 let keepdim = grad_out
                     .reshape(&keepdim_shape)
@@ -439,7 +439,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                 }
                 vec![CpuStorage::from_contiguous(
                     CpuBuffer::F32(vals),
-                    original_shape.clone(),
+                    original_shape.to_vec(),
                 )]
             }),
         });
@@ -456,7 +456,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
         if dim >= t.shape.len() {
             return Err(Error::ShapeMismatch {
                 op: "sum_keepdim",
-                expected: t.shape.clone(),
+                expected: t.shape.to_vec(),
                 got: vec![dim],
                 msg: format!(
                     "sum_keepdim: axis {dim} out of range for shape {:?}",
@@ -466,7 +466,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
         }
         let out = sum_axis_keepdim(t, dim);
 
-        let original_shape = t.shape.clone();
+        let original_shape = t.shape.to_vec();
         let (t_id, out_id) = (t.id, out.id);
         tape::push(TapeEntry {
             output_id: out_id,
@@ -487,7 +487,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                 }
                 vec![CpuStorage::from_contiguous(
                     CpuBuffer::F32(vals),
-                    original_shape.clone(),
+                    original_shape.to_vec(),
                 )]
             }),
         });
@@ -505,14 +505,14 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
         if dim >= t.shape.len() {
             return Err(Error::ShapeMismatch {
                 op: "mean_dim",
-                expected: t.shape.clone(),
+                expected: t.shape.to_vec(),
                 got: vec![dim],
                 msg: format!("mean_dim: axis {dim} out of range for shape {:?}", t.shape),
             });
         }
         let axis_len = t.shape[dim] as f64;
         let summed = sum_axis_squeeze(t, dim);
-        let out_shape = summed.shape.clone();
+        let out_shape = summed.shape.to_vec();
         let total: usize = out_shape.iter().product();
         let mut idx = vec![0usize; out_shape.len()];
         let mut vals = Vec::with_capacity(total);
@@ -520,9 +520,9 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
             vals.push((summed.get(&idx) / axis_len) as f32);
             increment_index(&mut idx, &out_shape);
         }
-        let out = CpuStorage::from_contiguous(CpuBuffer::F32(vals), out_shape);
+        let out = CpuStorage::from_contiguous(CpuBuffer::F32(vals), out_shape.to_vec());
 
-        let original_shape = t.shape.clone();
+        let original_shape = t.shape.to_vec();
         let (t_id, out_id) = (t.id, out.id);
         tape::push(TapeEntry {
             output_id: out_id,
@@ -532,7 +532,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                 // 1, broadcast back to the original shape, then scale every
                 // materialized value by 1/axis_len (mirrors mean_all's 1/n
                 // relationship to sum_all).
-                let mut keepdim_shape = grad_out.shape.clone();
+                let mut keepdim_shape = grad_out.shape.to_vec();
                 keepdim_shape.insert(dim, 1);
                 let keepdim = grad_out
                     .reshape(&keepdim_shape)
@@ -549,7 +549,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                 }
                 vec![CpuStorage::from_contiguous(
                     CpuBuffer::F32(vals),
-                    original_shape.clone(),
+                    original_shape.to_vec(),
                 )]
             }),
         });
@@ -567,7 +567,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
         if dim >= t.shape.len() {
             return Err(Error::ShapeMismatch {
                 op: "mean_keepdim",
-                expected: t.shape.clone(),
+                expected: t.shape.to_vec(),
                 got: vec![dim],
                 msg: format!(
                     "mean_keepdim: axis {dim} out of range for shape {:?}",
@@ -577,7 +577,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
         }
         let axis_len = t.shape[dim] as f64;
         let summed = sum_axis_keepdim(t, dim);
-        let out_shape = summed.shape.clone();
+        let out_shape = summed.shape.to_vec();
         let total: usize = out_shape.iter().product();
         let mut idx = vec![0usize; out_shape.len()];
         let mut vals = Vec::with_capacity(total);
@@ -585,9 +585,9 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
             vals.push((summed.get(&idx) / axis_len) as f32);
             increment_index(&mut idx, &out_shape);
         }
-        let out = CpuStorage::from_contiguous(CpuBuffer::F32(vals), out_shape);
+        let out = CpuStorage::from_contiguous(CpuBuffer::F32(vals), out_shape.to_vec());
 
-        let original_shape = t.shape.clone();
+        let original_shape = t.shape.to_vec();
         let (t_id, out_id) = (t.id, out.id);
         tape::push(TapeEntry {
             output_id: out_id,
@@ -608,7 +608,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                 }
                 vec![CpuStorage::from_contiguous(
                     CpuBuffer::F32(vals),
-                    original_shape.clone(),
+                    original_shape.to_vec(),
                 )]
             }),
         });
@@ -626,19 +626,19 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
         if dim >= t.shape.len() {
             return Err(Error::ShapeMismatch {
                 op: "max_dim",
-                expected: t.shape.clone(),
+                expected: t.shape.to_vec(),
                 got: vec![dim],
                 msg: format!("max_dim: axis {dim} out of range for shape {:?}", t.shape),
             });
         }
         let (keepdim_out, winning_flat_src_idx) = max_axis_with_indices(t, dim);
-        let mut squeeze_shape = keepdim_out.shape.clone();
+        let mut squeeze_shape = keepdim_out.shape.to_vec();
         squeeze_shape.remove(dim);
         let out = keepdim_out
             .reshape(&squeeze_shape)
             .expect("max_dim: squeeze reshape of size-1 keepdim result cannot fail");
 
-        let original_shape = t.shape.clone();
+        let original_shape = t.shape.to_vec();
         let (t_id, out_id) = (t.id, out.id);
         tape::push(TapeEntry {
             output_id: out_id,
@@ -663,7 +663,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
         if dim >= t.shape.len() {
             return Err(Error::ShapeMismatch {
                 op: "max_keepdim",
-                expected: t.shape.clone(),
+                expected: t.shape.to_vec(),
                 got: vec![dim],
                 msg: format!(
                     "max_keepdim: axis {dim} out of range for shape {:?}",
@@ -673,7 +673,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
         }
         let (out, winning_flat_src_idx) = max_axis_with_indices(t, dim);
 
-        let original_shape = t.shape.clone();
+        let original_shape = t.shape.to_vec();
         let (t_id, out_id) = (t.id, out.id);
         tape::push(TapeEntry {
             output_id: out_id,
@@ -699,19 +699,19 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
         if dim >= t.shape.len() {
             return Err(Error::ShapeMismatch {
                 op: "min_dim",
-                expected: t.shape.clone(),
+                expected: t.shape.to_vec(),
                 got: vec![dim],
                 msg: format!("min_dim: axis {dim} out of range for shape {:?}", t.shape),
             });
         }
         let (keepdim_out, winning_flat_src_idx) = min_axis_with_indices(t, dim);
-        let mut squeeze_shape = keepdim_out.shape.clone();
+        let mut squeeze_shape = keepdim_out.shape.to_vec();
         squeeze_shape.remove(dim);
         let out = keepdim_out
             .reshape(&squeeze_shape)
             .expect("min_dim: squeeze reshape of size-1 keepdim result cannot fail");
 
-        let original_shape = t.shape.clone();
+        let original_shape = t.shape.to_vec();
         let (t_id, out_id) = (t.id, out.id);
         tape::push(TapeEntry {
             output_id: out_id,
@@ -737,7 +737,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
         if dim >= t.shape.len() {
             return Err(Error::ShapeMismatch {
                 op: "min_keepdim",
-                expected: t.shape.clone(),
+                expected: t.shape.to_vec(),
                 got: vec![dim],
                 msg: format!(
                     "min_keepdim: axis {dim} out of range for shape {:?}",
@@ -747,7 +747,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
         }
         let (out, winning_flat_src_idx) = min_axis_with_indices(t, dim);
 
-        let original_shape = t.shape.clone();
+        let original_shape = t.shape.to_vec();
         let (t_id, out_id) = (t.id, out.id);
         tape::push(TapeEntry {
             output_id: out_id,
@@ -781,13 +781,13 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                 if d >= t.shape.len() {
                     return Err(Error::ShapeMismatch {
                         op: "argmax",
-                        expected: t.shape.clone(),
+                        expected: t.shape.to_vec(),
                         got: vec![d],
                         msg: format!("argmax: axis {d} out of range for shape {:?}", t.shape),
                     });
                 }
                 let (_, winning_flat_src_idx) = max_axis_with_indices(t, d);
-                let mut out_shape = t.shape.clone();
+                let mut out_shape = t.shape.to_vec();
                 out_shape[d] = 1;
                 // Convert each winning FLAT source index into its coordinate
                 // along `d` (the axis-position the winner occupied), not the
@@ -799,8 +799,9 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                         multi[d] as i64
                     })
                     .collect();
-                let keepdim_out = CpuStorage::from_contiguous(CpuBuffer::I64(idx_vals), out_shape);
-                let mut squeeze_shape = keepdim_out.shape.clone();
+                let keepdim_out =
+                    CpuStorage::from_contiguous(CpuBuffer::I64(idx_vals), out_shape.to_vec());
+                let mut squeeze_shape = keepdim_out.shape.to_vec();
                 squeeze_shape.remove(d);
                 Ok(keepdim_out
                     .reshape(&squeeze_shape)
@@ -840,13 +841,13 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                 if d >= t.shape.len() {
                     return Err(Error::ShapeMismatch {
                         op: "argmin",
-                        expected: t.shape.clone(),
+                        expected: t.shape.to_vec(),
                         got: vec![d],
                         msg: format!("argmin: axis {d} out of range for shape {:?}", t.shape),
                     });
                 }
                 let (_, winning_flat_src_idx) = min_axis_with_indices(t, d);
-                let mut out_shape = t.shape.clone();
+                let mut out_shape = t.shape.to_vec();
                 out_shape[d] = 1;
                 let idx_vals: Vec<i64> = winning_flat_src_idx
                     .iter()
@@ -855,8 +856,9 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                         multi[d] as i64
                     })
                     .collect();
-                let keepdim_out = CpuStorage::from_contiguous(CpuBuffer::I64(idx_vals), out_shape);
-                let mut squeeze_shape = keepdim_out.shape.clone();
+                let keepdim_out =
+                    CpuStorage::from_contiguous(CpuBuffer::I64(idx_vals), out_shape.to_vec());
+                let mut squeeze_shape = keepdim_out.shape.to_vec();
                 squeeze_shape.remove(d);
                 Ok(keepdim_out
                     .reshape(&squeeze_shape)
@@ -905,9 +907,9 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let mut out_shape = t.shape.clone();
+        let mut out_shape = t.shape.to_vec();
         out_shape.remove(dim);
-        let mut keep_shape = t.shape.clone();
+        let mut keep_shape = t.shape.to_vec();
         keep_shape[dim] = 1;
         let total: usize = keep_shape.iter().product();
         let mut prods = vec![1.0f64; total];
@@ -952,7 +954,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
             increment_index(&mut idx, &t.shape);
         }
         let buffer = t.buffer.from_f64_values(out_data);
-        Ok(CpuStorage::from_contiguous(buffer, t.shape.clone()))
+        Ok(CpuStorage::from_contiguous(buffer, t.shape.to_vec()))
     }
 
     /// `topk`.
@@ -965,11 +967,11 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
         <Self as Backend>::Storage<K>,
         <Self as Backend>::Storage<KInt>,
     )> {
-        let shape = &t.shape;
+        let shape = t.shape.to_vec();
         if dim >= shape.len() {
             return Err(Error::ShapeMismatch {
                 op: "topk",
-                expected: shape.clone(),
+                expected: shape.to_vec(),
                 got: vec![dim],
                 msg: format!("topk: axis {} out of range", dim),
             });
@@ -1015,8 +1017,8 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
             }
         }
         Ok((
-            CpuStorage::from_contiguous(CpuBuffer::F32(out_vals), out_shape.clone()),
-            CpuStorage::from_contiguous(CpuBuffer::U32(out_indices), out_shape),
+            CpuStorage::from_contiguous(CpuBuffer::F32(out_vals), out_shape.to_vec()),
+            CpuStorage::from_contiguous(CpuBuffer::U32(out_indices), out_shape.to_vec()),
         ))
     }
 
@@ -1026,11 +1028,11 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
         dim: usize,
         descending: bool,
     ) -> Result<<Self as Backend>::Storage<KInt>> {
-        let shape = &t.shape;
+        let shape = t.shape.to_vec();
         if dim >= shape.len() {
             return Err(Error::ShapeMismatch {
                 op: "argsort",
-                expected: shape.clone(),
+                expected: shape.to_vec(),
                 got: vec![dim],
                 msg: format!("argsort: axis {} out of range", dim),
             });
@@ -1062,13 +1064,13 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
             }
             for (k, &(_, idx)) in slice_vals.iter().enumerate() {
                 coords[dim] = k;
-                let flat = flatten_index(&coords, shape);
+                let flat = flatten_index(&coords, &shape);
                 out[flat] = idx;
             }
         }
         Ok(CpuStorage::from_contiguous(
             CpuBuffer::U32(out),
-            shape.clone(),
+            shape.to_vec(),
         ))
     }
 }

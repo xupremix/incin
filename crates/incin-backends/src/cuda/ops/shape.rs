@@ -1,6 +1,8 @@
-use crate::cuda::storage::{CudaBuffer, CudaStorage, TensorId};
+use super::alloc_zeroed_bytes;
+use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
+use incin_core::prelude::OperationKind;
 use incin_core::prelude::Result;
 
 /// Packs the `[u32; 21]` params buffer `kernels/shape.cu`'s `shape_op` kernel
@@ -100,7 +102,12 @@ fn launch_shape_op(
     let mut out_b = CudaBuffer {
         len: n_elements,
         dtype: t_buf.dtype,
-        data: Arc::new(stream.alloc_zeros::<u8>(n_elements * 4).unwrap()),
+        data: Arc::new(alloc_zeroed_bytes(
+            &stream,
+            t_buf.dtype,
+            n_elements,
+            OperationKind::Reshape,
+        )?),
         device: t_buf.device.clone(),
         device_id,
     };
@@ -136,13 +143,7 @@ fn launch_shape_op(
     }
 
     let strides = crate::cpu::stride::contiguous_strides(&out_shape);
-    Ok(CudaStorage {
-        buffer: Arc::new(out_b),
-        shape: out_shape,
-        strides,
-        offset: 0,
-        id: TensorId::next(),
-    })
+    CudaStorage::try_from_parts(Arc::new(out_b), out_shape, strides, 0)
 }
 
 /// Narrows dimension `dim` of `t` to the half-open range `[start, start+len)`.
@@ -158,7 +159,7 @@ pub(crate) fn launch_narrow(
     start: usize,
     len: usize,
 ) -> Result<CudaStorage> {
-    let mut out_shape = t.shape.clone();
+    let mut out_shape = t.shape.to_vec();
     out_shape[dim] = len;
     let mut aux = alloc::vec![0usize; t.shape.len()];
     aux[dim] = start;
@@ -169,7 +170,7 @@ pub(crate) fn launch_narrow(
 /// Swaps dims `dim1`/`dim2`. Materializes (see `launch_narrow`'s doc for why).
 #[cfg(feature = "cuda")]
 pub(crate) fn launch_transpose(t: &CudaStorage, dim1: usize, dim2: usize) -> Result<CudaStorage> {
-    let mut out_shape = t.shape.clone();
+    let mut out_shape = t.shape.to_vec();
     out_shape.swap(dim1, dim2);
     // aux[output_dim] = source_dim it reads from, i.e. the same permutation
     // that produced out_shape from t.shape.
@@ -233,7 +234,7 @@ pub(crate) fn launch_concat(tensors: &[&CudaStorage], dim: usize) -> Result<Cuda
     let f = dispatcher.get_function("concat", "concat_f32")?;
     let stream = first_buf.device.default_stream();
 
-    let mut out_shape = tensors[0].shape.clone();
+    let mut out_shape = tensors[0].shape.to_vec();
     let out_dim_total: usize = tensors.iter().map(|t| t.shape[dim]).sum();
     out_shape[dim] = out_dim_total;
 
@@ -241,7 +242,12 @@ pub(crate) fn launch_concat(tensors: &[&CudaStorage], dim: usize) -> Result<Cuda
     let mut out_b = CudaBuffer {
         len: total,
         dtype: first_buf.dtype,
-        data: Arc::new(stream.alloc_zeros::<u8>(total * 4).unwrap()),
+        data: Arc::new(alloc_zeroed_bytes(
+            &stream,
+            first_buf.dtype,
+            total,
+            OperationKind::Concat,
+        )?),
         device: first_buf.device.clone(),
         device_id,
     };
@@ -301,11 +307,5 @@ pub(crate) fn launch_concat(tensors: &[&CudaStorage], dim: usize) -> Result<Cuda
     }
 
     let strides = crate::cpu::stride::contiguous_strides(&out_shape);
-    Ok(CudaStorage {
-        buffer: Arc::new(out_b),
-        shape: out_shape,
-        strides,
-        offset: 0,
-        id: TensorId::next(),
-    })
+    CudaStorage::try_from_parts(Arc::new(out_b), out_shape, strides, 0)
 }

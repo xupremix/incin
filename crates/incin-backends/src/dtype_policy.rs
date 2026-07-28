@@ -4,7 +4,8 @@
 //! capabilities. Keeping them distinct prevents a backend from advertising a
 //! dtype merely because it can copy that dtype's bytes.
 
-use incin_core::prelude::{DTypeId, Error, Result};
+use incin_core::exec::{CapabilityQuery, LayoutClass, MathMode};
+use incin_core::prelude::{DTypeId, DeviceKind, Error, Result};
 
 /// The operation vocabulary, owned by `incin-core`.
 ///
@@ -19,20 +20,14 @@ use incin_core::prelude::{DTypeId, Error, Result};
 /// before it reaches the table below.
 pub(crate) use incin_core::prelude::OperationKind;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum BackendFamily {
-    Cpu,
-    Cuda,
-    Wgpu,
-}
+pub(crate) use incin_core::prelude::DeviceKind as BackendFamily;
 
-impl BackendFamily {
-    pub(crate) const fn name(self) -> &'static str {
-        match self {
-            Self::Cpu => "Cpu",
-            Self::Cuda => "Cuda",
-            Self::Wgpu => "Wgpu",
-        }
+fn backend_name(backend: BackendFamily) -> &'static str {
+    match backend {
+        DeviceKind::Cpu => "Cpu",
+        DeviceKind::Cuda => "Cuda",
+        DeviceKind::Wgpu => "Wgpu",
+        _ => "Unknown",
     }
 }
 
@@ -44,38 +39,24 @@ pub(crate) struct DTypePolicy {
     pub(crate) output: DTypeId,
 }
 
-fn is_float(dtype: DTypeId) -> bool {
-    matches!(
-        dtype,
-        DTypeId::F16 | DTypeId::BF16 | DTypeId::F32 | DTypeId::F64
+fn supports(backend: BackendFamily, operation: OperationKind, dtype: DTypeId) -> bool {
+    crate::capability::support(
+        backend,
+        &CapabilityQuery {
+            operation,
+            dtype,
+            layout: LayoutClass::Contiguous,
+            rank: match operation {
+                OperationKind::Normalization => 1,
+                OperationKind::MatMul => 2,
+                OperationKind::Conv2d | OperationKind::Pool2d => 3,
+                _ => 0,
+            },
+            training: false,
+            math_mode: MathMode::Precise,
+        },
     )
-}
-
-/// Whether `backend` can run `family` — already folded by
-/// [`OperationKind::family`] — on `dtype`.
-///
-/// The wildcard arms cover the compute families, which are float-only
-/// everywhere. Writing them as a wildcard rather than an exhaustive list is
-/// forced by [`OperationKind`] being `#[non_exhaustive]`, and is also the
-/// answer we want for a family added later: refuse the exotic dtype until a
-/// backend author says otherwise.
-fn supports(backend: BackendFamily, family: OperationKind, dtype: DTypeId) -> bool {
-    match backend {
-        BackendFamily::Cpu => match family {
-            OperationKind::Storage => true,
-            OperationKind::Fill => dtype != DTypeId::Q8_0,
-            _ => is_float(dtype),
-        },
-        BackendFamily::Cuda => match family {
-            // I64 storage is index-only (embedding lookup indices) — it never
-            // reaches Pointwise/Reduction/Normalization compute, which stay
-            // float-only below.
-            OperationKind::Storage => is_float(dtype) || dtype == DTypeId::I64,
-            OperationKind::Fill | OperationKind::Random => dtype == DTypeId::F32,
-            _ => is_float(dtype),
-        },
-        BackendFamily::Wgpu => dtype == DTypeId::F32,
-    }
+    .is_supported()
 }
 
 pub(crate) fn resolve_dtype_policy(
@@ -92,7 +73,7 @@ pub(crate) fn resolve_dtype_policy(
     if !supports(backend, family, storage) {
         return Err(Error::UnsupportedDType {
             dtype: storage,
-            backend: backend.name(),
+            backend: backend_name(backend),
             op,
         });
     }

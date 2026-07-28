@@ -11,9 +11,11 @@
 //! `launch_im2col_2d`/`launch_col2im_2d` as each other's forward/backward,
 //! same for the 1D pair).
 
-use crate::cuda::storage::{CudaBuffer, CudaStorage, TensorId};
+use super::alloc_zeroed_bytes;
+use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
+use incin_core::prelude::OperationKind;
 use incin_core::prelude::Result;
 
 /// `L_out`/`H_out`/`W_out` output-size formula, matching
@@ -64,14 +66,19 @@ fn alloc_zeroed(
     device_id: usize,
     dtype: incin_core::prelude::DTypeId,
     numel: usize,
-) -> CudaBuffer {
-    CudaBuffer {
+) -> Result<CudaBuffer> {
+    Ok(CudaBuffer {
         len: numel,
         dtype,
-        data: Arc::new(stream.alloc_zeros::<u8>(numel * 4).unwrap()),
+        data: Arc::new(alloc_zeroed_bytes(
+            stream,
+            dtype,
+            numel,
+            OperationKind::Conv2d,
+        )?),
         device: device.clone(),
         device_id,
-    }
+    })
 }
 
 #[cfg(feature = "cuda")]
@@ -110,7 +117,7 @@ pub(crate) fn launch_im2col_2d(
     let out_total: usize = out_shape.iter().product();
     let thread_total = b * c * h_out * w_out;
 
-    let mut out_b = alloc_zeroed(&stream, &t_buf.device, device_id, t_buf.dtype, out_total);
+    let mut out_b = alloc_zeroed(&stream, &t_buf.device, device_id, t_buf.dtype, out_total)?;
     let cfg = launch_cfg(thread_total);
     unsafe {
         let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();
@@ -144,13 +151,7 @@ pub(crate) fn launch_im2col_2d(
     }
 
     let strides = crate::cpu::stride::contiguous_strides(&out_shape);
-    Ok(CudaStorage {
-        buffer: Arc::new(out_b),
-        shape: out_shape,
-        strides,
-        offset: 0,
-        id: TensorId::next(),
-    })
+    CudaStorage::try_from_parts(Arc::new(out_b), out_shape, strides, 0)
 }
 
 /// Exact inverse of `launch_im2col_2d`: scatter-ADDs (`atomicAdd`) `cols:
@@ -192,7 +193,7 @@ pub(crate) fn launch_col2im_2d(
         device_id,
         cols_buf.dtype,
         out_total,
-    );
+    )?;
     let cfg = launch_cfg(thread_total);
     unsafe {
         let col_f32 = cols_buf.data.transmute::<f32>(cols_buf.len).unwrap();
@@ -226,13 +227,7 @@ pub(crate) fn launch_col2im_2d(
     }
 
     let strides = crate::cpu::stride::contiguous_strides(target_shape);
-    Ok(CudaStorage {
-        buffer: Arc::new(out_b),
-        shape: target_shape.to_vec(),
-        strides,
-        offset: 0,
-        id: TensorId::next(),
-    })
+    CudaStorage::try_from_parts(Arc::new(out_b), target_shape.to_vec(), strides, 0)
 }
 
 /// 1D analogue of `launch_im2col_2d`: unfolds `t: [B, C, L]` into
@@ -258,7 +253,7 @@ pub(crate) fn launch_im2col_1d(
     let out_total: usize = out_shape.iter().product();
     let thread_total = b * c * l_out;
 
-    let mut out_b = alloc_zeroed(&stream, &t_buf.device, device_id, t_buf.dtype, out_total);
+    let mut out_b = alloc_zeroed(&stream, &t_buf.device, device_id, t_buf.dtype, out_total)?;
     let cfg = launch_cfg(thread_total);
     unsafe {
         let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();
@@ -286,13 +281,7 @@ pub(crate) fn launch_im2col_1d(
     }
 
     let strides = crate::cpu::stride::contiguous_strides(&out_shape);
-    Ok(CudaStorage {
-        buffer: Arc::new(out_b),
-        shape: out_shape,
-        strides,
-        offset: 0,
-        id: TensorId::next(),
-    })
+    CudaStorage::try_from_parts(Arc::new(out_b), out_shape, strides, 0)
 }
 
 /// Exact inverse of `launch_im2col_1d`. `l_out` (`cols.shape[2]`) is the
@@ -325,7 +314,7 @@ pub(crate) fn launch_col2im_1d(
         device_id,
         cols_buf.dtype,
         out_total,
-    );
+    )?;
     let cfg = launch_cfg(thread_total);
     unsafe {
         let col_f32 = cols_buf.data.transmute::<f32>(cols_buf.len).unwrap();
@@ -353,11 +342,5 @@ pub(crate) fn launch_col2im_1d(
     }
 
     let strides = crate::cpu::stride::contiguous_strides(target_shape);
-    Ok(CudaStorage {
-        buffer: Arc::new(out_b),
-        shape: target_shape.to_vec(),
-        strides,
-        offset: 0,
-        id: TensorId::next(),
-    })
+    CudaStorage::try_from_parts(Arc::new(out_b), target_shape.to_vec(), strides, 0)
 }

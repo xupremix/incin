@@ -243,7 +243,7 @@ fn add_cpu_storage(a: &CpuStorage, b: &CpuStorage) -> CpuStorage {
         }
     };
 
-    CpuStorage::from_contiguous(new_buffer, a.shape.clone())
+    CpuStorage::from_contiguous(new_buffer, a.shape.to_vec())
 }
 
 /// Right-align `grad.shape` and `target_shape`; sum-reduce over any leading
@@ -251,9 +251,9 @@ fn add_cpu_storage(a: &CpuStorage, b: &CpuStorage) -> CpuStorage {
 /// it away entirely), then sum-reduce (with keepdim) over any axis where
 /// `target_shape` has size 1 but `grad`'s corresponding axis is `>1`.
 ///
-/// A no-op (returns a clone) when `grad.shape == target_shape`.
+/// A no-op (returns a clone) when `grad.shape.dims() == target_shape`.
 pub(crate) fn unbroadcast(grad: &CpuStorage, target_shape: &[usize]) -> Result<CpuStorage> {
-    if grad.shape == target_shape {
+    if grad.shape.dims() == target_shape {
         return Ok(grad.clone());
     }
 
@@ -281,7 +281,7 @@ pub(crate) fn unbroadcast(grad: &CpuStorage, target_shape: &[usize]) -> Result<C
 /// entirely (e.g. `[4,3]` reduced over axis 0 -> `[3]`).
 fn sum_dim_squeeze(storage: &CpuStorage, axis: usize) -> CpuStorage {
     let reduced = sum_dim_keepdim(storage, axis);
-    let mut new_shape = reduced.shape.clone();
+    let mut new_shape = reduced.shape.to_vec();
     new_shape.remove(axis);
     // Squeezing a size-1 axis out of an already-contiguous buffer is a pure
     // metadata reshape (no data movement) since the buffer already excludes
@@ -294,7 +294,7 @@ fn sum_dim_squeeze(storage: &CpuStorage, axis: usize) -> CpuStorage {
 /// Sum-reduce `storage` over `axis`, keeping the axis present with size 1
 /// (e.g. `[4,3]` reduced over axis 0 with keepdim -> `[1,3]`).
 fn sum_dim_keepdim(storage: &CpuStorage, axis: usize) -> CpuStorage {
-    let mut out_shape = storage.shape.clone();
+    let mut out_shape = storage.shape.to_vec();
     out_shape[axis] = 1;
     let total: usize = out_shape.iter().product();
 

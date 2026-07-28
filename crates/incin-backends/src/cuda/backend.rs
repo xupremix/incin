@@ -8,12 +8,46 @@ use incin_core::prelude::*;
 #[derive(Clone)]
 pub struct CudaBackendImpl<T = f32, D = Cuda>(core::marker::PhantomData<(T, D)>);
 
-impl<T: DType, D: Device> SupportsDType<f32> for CudaBackendImpl<T, D> {}
+impl<T, D> CudaBackendImpl<T, D> {
+    /// Construct the stateless CUDA executor.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self(core::marker::PhantomData)
+    }
+}
+
+impl<T, D> Default for CudaBackendImpl<T, D> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+macro_rules! impl_cuda_storage_dtype {
+    ($($dtype:ty),+ $(,)?) => {
+        $(
+            impl<T: DType, D: Device> SupportsDType<$dtype> for CudaBackendImpl<T, D> {
+                fn resolve_dtype(
+                    field: &<$dtype as DType>::Field,
+                    _device: &DeviceId,
+                ) -> Result<DTypeId> {
+                    Ok(<$dtype as DType>::to_incin(field))
+                }
+            }
+        )+
+    };
+}
+
+impl_cuda_storage_dtype!(f32, f64, f16, bf16, i64);
 
 impl<T: DType, D: Device> SupportsDType<Dyn> for CudaBackendImpl<T, D> {
     fn resolve_dtype(field: &DTypeId, _device: &DeviceId) -> Result<DTypeId> {
-        resolve_dtype_policy(BackendFamily::Cuda, OperationKind::Fill, *field, "create")
-            .map(|_| *field)
+        resolve_dtype_policy(
+            BackendFamily::Cuda,
+            OperationKind::Storage,
+            *field,
+            "storage",
+        )
+        .map(|_| *field)
     }
 }
 
@@ -25,6 +59,21 @@ pub struct CudaVar {
 pub type CudaGrads = crate::cuda::tape::CudaGrads;
 
 impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
+    // No CUDA kernels exist for these yet. The four host-readback conversions
+    // and `tensor_to_dtype` are listed too: CUDA has no device-to-host path
+    // wired up here, and the trait default made that read as coverage.
+    crate::unsupported::unsupported_tensor_ops! {
+        where_cond, gather, scatter, index_select, masked_fill, unsqueeze,
+        repeat, pad, triu, tril, diag,
+        cmp_eq, cmp_ne, cmp_lt, cmp_le, cmp_gt, cmp_ge,
+        logical_and, logical_or, logical_not,
+        sub_scalar, div_scalar, maximum, minimum, abs_diff, lerp,
+        addmm, bmm, scaled_dot_product_attention,
+        unfold, pixel_shuffle, group_norm, instance_norm,
+        float_to_scalar, float_to_vec1, int_to_scalar, int_to_vec1,
+        tensor_to_dtype,
+    }
+
     fn concat<K: DType>(
         tensors: &[&<Self as Backend>::Storage<K>],
         dim: usize,
@@ -47,7 +96,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
         if old_numel != new_numel {
             return Err(Error::ShapeMismatch {
                 op: "reshape",
-                expected: t.shape.clone(),
+                expected: t.shape.to_vec(),
                 got: shape.to_vec(),
                 msg: format!(
                     "reshape requires the same element count; {:?} has {old_numel}, target {:?} has {new_numel}",
@@ -56,7 +105,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
             });
         }
         let out = CudaStorage::new(t.buffer.clone(), shape.to_vec());
-        let original_shape = t.shape.clone();
+        let original_shape = t.shape.to_vec();
         let (t_id, out_id) = (t.id, out.id);
         crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
             output_id: out_id,
@@ -78,7 +127,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
         if dim1 >= t.shape.len() || dim2 >= t.shape.len() {
             return Err(Error::ShapeMismatch {
                 op: "transpose",
-                expected: t.shape.clone(),
+                expected: t.shape.to_vec(),
                 got: vec![dim1, dim2],
                 msg: format!(
                     "transpose dims ({dim1}, {dim2}) out of range for shape {:?}",
@@ -112,7 +161,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
             return Err(Error::ShapeMismatch {
                 op: "matmul",
                 expected: vec![lhs.shape[0], rhs.shape.first().copied().unwrap_or(0)],
-                got: rhs.shape.clone(),
+                got: rhs.shape.to_vec(),
                 msg: format!(
                     "matmul requires unbatched 2D operands with lhs.shape[1] == rhs.shape[0]; got lhs={:?}, rhs={:?}",
                     lhs.shape, rhs.shape
@@ -151,7 +200,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
         crate::cpu::stride::broadcast_shape(&t.shape, shape)?;
 
         let out = crate::cuda::ops::shape::launch_broadcast(t, shape)?;
-        let original_shape = t.shape.clone();
+        let original_shape = t.shape.to_vec();
         let (t_id, out_id) = (t.id, out.id);
         crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
             output_id: out_id,
@@ -176,7 +225,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
         if dim >= t.shape.len() || start + len > t.shape[dim] {
             return Err(Error::ShapeMismatch {
                 op: "narrow",
-                expected: t.shape.clone(),
+                expected: t.shape.to_vec(),
                 got: vec![dim, start, len],
                 msg: format!(
                     "narrow(dim={dim}, start={start}, len={len}) out of bounds for shape {:?}",
@@ -185,7 +234,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
             });
         }
         let out = crate::cuda::ops::shape::launch_narrow(t, dim, start, len)?;
-        let original_shape = t.shape.clone();
+        let original_shape = t.shape.to_vec();
         let mut region_start = vec![0usize; original_shape.len()];
         region_start[dim] = start;
         let (t_id, out_id) = (t.id, out.id);
@@ -212,7 +261,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
             return Err(Error::ShapeMismatch {
                 op: "squeeze",
                 expected: vec![1],
-                got: t.shape.clone(),
+                got: t.shape.to_vec(),
                 msg: format!(
                     "squeeze requires axis {dim} to have size 1, got size {} in shape {:?}",
                     t.shape.get(dim).copied().unwrap_or(0),
@@ -220,7 +269,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
                 ),
             });
         }
-        let mut target_shape = t.shape.clone();
+        let mut target_shape = t.shape.to_vec();
         target_shape.remove(dim);
         Self::reshape::<K>(t, &target_shape)
     }
@@ -244,7 +293,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
         if dim > rank {
             return Err(Error::ShapeMismatch {
                 op: "stack",
-                expected: tensors[0].shape.clone(),
+                expected: tensors[0].shape.to_vec(),
                 got: vec![dim],
                 msg: format!(
                     "stack dim {dim} out of range for rank-{rank} shape {:?} (dim may equal rank to append at the end)",
@@ -256,8 +305,8 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
             if t.shape != tensors[0].shape {
                 return Err(Error::ShapeMismatch {
                     op: "stack",
-                    expected: tensors[0].shape.clone(),
-                    got: t.shape.clone(),
+                    expected: tensors[0].shape.to_vec(),
+                    got: t.shape.to_vec(),
                     msg: format!(
                         "stack requires every input to have an IDENTICAL shape; expected {:?}, got {:?}",
                         tensors[0].shape, t.shape
@@ -267,7 +316,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
         }
         let mut unsqueezed = Vec::with_capacity(tensors.len());
         for t in tensors.iter() {
-            let mut target_shape = t.shape.clone();
+            let mut target_shape = t.shape.to_vec();
             target_shape.insert(dim, 1);
             unsqueezed.push(Self::reshape::<K>(t, &target_shape)?);
         }
@@ -296,7 +345,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
         if start_dim > end_dim || end_dim >= t.shape.len() {
             return Err(Error::ShapeMismatch {
                 op: "flatten",
-                expected: t.shape.clone(),
+                expected: t.shape.to_vec(),
                 got: vec![start_dim, end_dim],
                 msg: format!(
                     "flatten(start_dim={start_dim}, end_dim={end_dim}) out of bounds for shape {:?}",
@@ -330,7 +379,7 @@ impl<T: DType, D: Device> NumericOps<Self> for CudaBackendImpl<T, D> {
         let out_shape = crate::cpu::stride::broadcast_shape(&lhs.shape, &rhs.shape)?;
         let out =
             crate::cuda::ops::elementwise::launch_binary_op("add", "a + b", lhs, rhs, &out_shape)?;
-        let (lhs_shape, rhs_shape) = (lhs.shape.clone(), rhs.shape.clone());
+        let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
         let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
         crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
             output_id: out_id,
@@ -354,7 +403,7 @@ impl<T: DType, D: Device> NumericOps<Self> for CudaBackendImpl<T, D> {
         let out_shape = crate::cpu::stride::broadcast_shape(&lhs.shape, &rhs.shape)?;
         let out =
             crate::cuda::ops::elementwise::launch_binary_op("sub", "a - b", lhs, rhs, &out_shape)?;
-        let (lhs_shape, rhs_shape) = (lhs.shape.clone(), rhs.shape.clone());
+        let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
         let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
         crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
             output_id: out_id,
@@ -382,7 +431,7 @@ impl<T: DType, D: Device> NumericOps<Self> for CudaBackendImpl<T, D> {
         let out =
             crate::cuda::ops::elementwise::launch_binary_op("mul", "a * b", lhs, rhs, &out_shape)?;
         let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
-        let (lhs_shape, rhs_shape) = (lhs.shape.clone(), rhs.shape.clone());
+        let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
         let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
         crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
             output_id: out_id,
@@ -429,7 +478,7 @@ impl<T: DType, D: Device> NumericOps<Self> for CudaBackendImpl<T, D> {
         let out =
             crate::cuda::ops::elementwise::launch_binary_op("div", "a / b", lhs, rhs, &out_shape)?;
         let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
-        let (lhs_shape, rhs_shape) = (lhs.shape.clone(), rhs.shape.clone());
+        let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
         let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
         crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
             output_id: out_id,
@@ -509,6 +558,16 @@ fn push_unary_tape_entry(
 }
 
 impl<T: DType, D: Device> FloatOps<Self> for CudaBackendImpl<T, D> {
+    // No CUDA kernel is launched for these yet. They are declared rather than
+    // inherited so the gap is visible from the backend that has it.
+    crate::unsupported::unsupported_float_ops! {
+        unary: sign, floor, ceil, round, log2, log10, sin, cos, tan, asin, acos,
+               atan, sinh, cosh, asinh, acosh, atanh, erf, rsqrt, trunc, frac;
+        exponent: powf;
+        bounds: clamp;
+        binary: atan2, fmod, remainder;
+    }
+
     fn relu<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
         let out = crate::cuda::ops::elementwise::launch_unary_op("relu", "x > 0.0f ? x : 0.0f", t)?;
         let t_capture = t.clone();
@@ -932,6 +991,12 @@ pub(crate) fn log_softmax<T: DType, K: DType>(t: &CudaStorage, dim: usize) -> Re
 }
 
 impl<T: DType, D: Device> CreationOps<Self> for CudaBackendImpl<T, D> {
+    // No kernel fills an arbitrary value or generates a sequence yet.
+    crate::unsupported::unsupported_creation_ops! {
+        fill: full;
+        sequence: arange, linspace;
+    }
+
     fn zeros<K: DType>(shape: &[usize], dtype: DTypeId, device: &DeviceId) -> Result<CudaStorage> {
         cuda_from_f32(
             shape,
@@ -985,6 +1050,12 @@ impl<T: DType, D: Device> CreationOps<Self> for CudaBackendImpl<T, D> {
     }
 }
 impl<T: DType, D: Device> ReductionOps<Self> for CudaBackendImpl<T, D> {
+    // No product-reduction or prefix-scan kernel exists yet.
+    crate::unsupported::unsupported_reduction_ops! {
+        all: prod_all;
+        dim: prod_dim, cumsum;
+    }
+
     fn sum_all<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
         let rank = t.shape.len();
         if rank == 0 {
@@ -1033,7 +1104,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CudaBackendImpl<T, D> {
 
     fn sum_dim<K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
         let out = crate::cuda::ops::reduce::launch_reduce_op("sum", t, dim, false)?;
-        let t_shape = t.shape.clone();
+        let t_shape = t.shape.to_vec();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
             crate::cuda::tape::unbroadcast(grad_out, &t_shape).expect("unbroadcast sum_dim")
         });
@@ -1042,7 +1113,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CudaBackendImpl<T, D> {
 
     fn sum_keepdim<K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
         let out = crate::cuda::ops::reduce::launch_reduce_op("sum", t, dim, true)?;
-        let t_shape = t.shape.clone();
+        let t_shape = t.shape.to_vec();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
             crate::cuda::tape::unbroadcast(grad_out, &t_shape).expect("unbroadcast sum_keepdim")
         });
@@ -1057,7 +1128,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CudaBackendImpl<T, D> {
         } else {
             sum
         };
-        let t_shape = t.shape.clone();
+        let t_shape = t.shape.to_vec();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
             let unb =
                 crate::cuda::tape::unbroadcast(grad_out, &t_shape).expect("unbroadcast mean_dim");
@@ -1080,7 +1151,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CudaBackendImpl<T, D> {
         } else {
             sum
         };
-        let t_shape = t.shape.clone();
+        let t_shape = t.shape.to_vec();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
             let unb = crate::cuda::tape::unbroadcast(grad_out, &t_shape)
                 .expect("unbroadcast mean_keepdim");
@@ -1122,7 +1193,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CudaBackendImpl<T, D> {
                 if d >= t.shape.len() {
                     return Err(Error::ShapeMismatch {
                         op: "argmax",
-                        expected: t.shape.clone(),
+                        expected: t.shape.to_vec(),
                         got: vec![d],
                         msg: format!("argmax: axis {d} out of range for shape {:?}", t.shape),
                     });
@@ -1145,7 +1216,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CudaBackendImpl<T, D> {
                 if d >= t.shape.len() {
                     return Err(Error::ShapeMismatch {
                         op: "argmin",
-                        expected: t.shape.clone(),
+                        expected: t.shape.to_vec(),
                         got: vec![d],
                         msg: format!("argmin: axis {d} out of range for shape {:?}", t.shape),
                     });
@@ -1242,7 +1313,7 @@ impl<T: DType, D: Device> QuantizedOps<Self> for CudaBackendImpl<T, D> {
         let rhs_t = crate::cuda::ops::shape::launch_transpose(&rhs_f32, 0, 1)?;
         let out_2d = crate::cuda::ops::matmul::launch_matmul(&lhs_2d, &rhs_t)?;
 
-        let mut out_shape = lhs.shape.clone();
+        let mut out_shape = lhs.shape.to_vec();
         let last = out_shape.len() - 1;
         out_shape[last] = n;
         <Self as TensorOps<Self>>::reshape::<f32>(&out_2d, &out_shape)
@@ -1266,7 +1337,7 @@ fn im2col_2d_tape(
     dilation: usize,
 ) -> Result<CudaStorage> {
     let out = crate::cuda::ops::conv::launch_im2col_2d(t, kh, kw, stride, padding, dilation)?;
-    let original_shape = t.shape.clone();
+    let original_shape = t.shape.to_vec();
     let (t_id, out_id) = (t.id, out.id);
     crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
         output_id: out_id,
@@ -1320,7 +1391,7 @@ fn col2im_2d_tape(
         padding,
         dilation,
     )?;
-    let cols_shape = cols.shape.clone();
+    let cols_shape = cols.shape.to_vec();
     let (cols_id, out_id) = (cols.id, out.id);
     crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
         output_id: out_id,
@@ -1346,7 +1417,7 @@ fn im2col_1d_tape(
     dilation: usize,
 ) -> Result<CudaStorage> {
     let out = crate::cuda::ops::conv::launch_im2col_1d(t, k, stride, padding, dilation)?;
-    let original_shape = t.shape.clone();
+    let original_shape = t.shape.to_vec();
     let (t_id, out_id) = (t.id, out.id);
     crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
         output_id: out_id,
@@ -1448,7 +1519,7 @@ impl<T: DType, D: Device> ModuleOps<Self> for CudaBackendImpl<T, D> {
             return Err(Error::ShapeMismatch {
                 op: "embedding",
                 expected: vec![0, 0],
-                got: w.shape.clone(),
+                got: w.shape.to_vec(),
                 msg: format!(
                     "embedding: weight table must be rank-2 [vocab_size, hidden_size], got shape {:?}",
                     w.shape
@@ -1494,7 +1565,7 @@ impl<T: DType, D: Device> ModuleOps<Self> for CudaBackendImpl<T, D> {
             padding,
             dilation,
         )?;
-        let input_shape = t.shape.clone();
+        let input_shape = t.shape.to_vec();
         let (t_id, out_id) = (t.id, out.id);
         crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
             output_id: out_id,
@@ -1524,7 +1595,7 @@ impl<T: DType, D: Device> ModuleOps<Self> for CudaBackendImpl<T, D> {
     ) -> Result<<Self as Backend>::Storage<K>> {
         let out =
             crate::cuda::ops::pool::launch_avg_pool2d_forward(t, kernel_size, stride, padding)?;
-        let input_shape = t.shape.clone();
+        let input_shape = t.shape.to_vec();
         let (t_id, out_id) = (t.id, out.id);
         crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
             output_id: out_id,
@@ -1550,7 +1621,7 @@ impl<T: DType, D: Device> ModuleOps<Self> for CudaBackendImpl<T, D> {
         output_size: (usize, usize),
     ) -> Result<<Self as Backend>::Storage<K>> {
         let out = crate::cuda::ops::pool::launch_adaptive_avg_pool2d_forward(t, output_size)?;
-        let input_shape = t.shape.clone();
+        let input_shape = t.shape.to_vec();
         let (t_id, out_id) = (t.id, out.id);
         crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
             output_id: out_id,
@@ -1852,7 +1923,7 @@ impl<T: DType, D: Device> Backend for CudaBackendImpl<T, D> {
     type InnerBackend = Self;
 
     fn shape<K: DType>(t: &Self::Storage<K>) -> alloc::vec::Vec<usize> {
-        t.shape.clone()
+        t.shape.to_vec()
     }
     fn storage_dtype<K: DType>(t: &Self::Storage<K>) -> Option<DTypeId> {
         Some(t.buffer.dtype)
@@ -2084,7 +2155,7 @@ fn cuda_topk_host(
     dim: usize,
     largest: bool,
 ) -> Result<(CudaStorage, CudaStorage)> {
-    let shape = t.shape.clone();
+    let shape = t.shape.to_vec();
     if dim >= shape.len() {
         return Err(Error::ShapeMismatch {
             op: "topk",
@@ -2154,7 +2225,7 @@ fn cuda_topk_host(
 /// See `cuda_topk_host`'s doc — same "no CUDA kernel on any backend, ported
 /// verbatim from WGPU's host loop" note applies here.
 fn cuda_argsort_host(t: &CudaStorage, dim: usize, descending: bool) -> Result<CudaStorage> {
-    let shape = t.shape.clone();
+    let shape = t.shape.to_vec();
     if dim >= shape.len() {
         return Err(Error::ShapeMismatch {
             op: "argsort",

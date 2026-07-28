@@ -37,25 +37,43 @@
 //! a descriptor wrapped in `Validated` came from a typed operand whose frontend
 //! trait had already proved the operation legal.
 //!
-//! What is still missing is the consumer. Nothing executes a descriptor until
-//! `EXE-006` splits the backend trait, so the frontend continues to call
-//! backends directly and the rules here run only under test.
+//! [`Execute<O>`](crate::prelude::Execute) is now the descriptor consumer.
+//! Concrete backend migrations are staged through `EXE-007` and `EXE-008`, so
+//! the legacy operation families remain callable until `EXE-009` removes them.
 
+/// Backend-neutral capability queries and registry resolution.
+pub mod capability;
+/// Backend-owning execution context foundation.
+pub mod context;
+/// Checked physical storage metadata shared by all backends.
+pub mod meta;
+/// Backend-neutral execution policy vocabulary.
+pub mod policy;
 /// The sealed wrapper and the provenance it carries.
 pub mod proof;
+/// Checked, type-erased inputs for descriptor execution.
+pub mod request;
 /// Lowering rules binding each descriptor to its frontend shape trait.
 pub mod rule;
 /// Frozen operation descriptors and the schema version they are pinned to.
 pub mod spec;
 
+pub use capability::{
+    Capabilities, CapabilityQuery, CapabilityRegistry, CapabilityRule, ImplementationKind,
+    SupportLevel, UnsupportedReason,
+};
+pub use context::ExecutionContext;
+pub use meta::{Alignment, LayoutClass, MetaError, TensorMeta};
+pub use policy::MathMode;
 pub use proof::{ProofLevel, Validated};
+pub use request::TensorHandle;
 pub use rule::{
     BroadcastRule, Conv2dArgs, Conv2dRule, MatMulRule, Pool2dRule, ReduceKeepRule, ReduceRule,
     ReshapeRule, ShapeRule,
 };
 pub use spec::{
     AxisMask, BroadcastSpec, Conv2dSpec, DescriptorSchemaVersion, MatMulSpec, OperationSpec,
-    Pool2dSpec, ReductionSpec, ReshapeSpec,
+    Pool2dSpec, PoolOp, ReduceOp, ReductionSpec, ReshapeSpec,
 };
 
 /// Supertrait used to seal public traits in this module against outside

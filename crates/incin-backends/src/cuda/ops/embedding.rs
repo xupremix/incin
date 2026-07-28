@@ -1,5 +1,7 @@
+use super::alloc_zeroed_bytes;
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
+use incin_core::prelude::OperationKind;
 use incin_core::prelude::Result;
 
 #[cfg(feature = "cuda")]
@@ -36,14 +38,19 @@ pub(crate) fn launch_embedding_forward(
     let hidden_size = weight.shape[1];
     let num_indices = indices.shape.iter().product::<usize>();
 
-    let mut out_shape = indices.shape.clone();
+    let mut out_shape = indices.shape.to_vec();
     out_shape.push(hidden_size);
     let out_numel = num_indices * hidden_size;
 
     let mut out_b = CudaBuffer {
         len: out_numel,
         dtype: w_b.dtype,
-        data: Arc::new(stream.alloc_zeros::<u8>(out_numel * 4).unwrap()),
+        data: Arc::new(alloc_zeroed_bytes(
+            &stream,
+            w_b.dtype,
+            out_numel,
+            OperationKind::Storage,
+        )?),
         device: w_b.device.clone(),
         device_id,
     };
@@ -79,13 +86,7 @@ pub(crate) fn launch_embedding_forward(
     }
 
     let out_strides = crate::cpu::stride::contiguous_strides(&out_shape);
-    Ok(CudaStorage {
-        buffer: Arc::new(out_b),
-        shape: out_shape,
-        strides: out_strides,
-        offset: 0,
-        id: crate::cuda::storage::TensorId::next(),
-    })
+    CudaStorage::try_from_parts(Arc::new(out_b), out_shape, out_strides, 0)
 }
 
 #[cfg(feature = "cuda")]
@@ -109,7 +110,12 @@ pub(crate) fn launch_embedding_backward(
     let mut grad_w_b = CudaBuffer {
         len: out_numel,
         dtype: go_b.dtype,
-        data: Arc::new(stream.alloc_zeros::<u8>(out_numel * 4).unwrap()),
+        data: Arc::new(alloc_zeroed_bytes(
+            &stream,
+            go_b.dtype,
+            out_numel,
+            OperationKind::Storage,
+        )?),
         device: go_b.device.clone(),
         device_id,
     };
@@ -145,11 +151,5 @@ pub(crate) fn launch_embedding_backward(
 
     let out_shape = vec![vocab_size, hidden_size];
     let out_strides = crate::cpu::stride::contiguous_strides(&out_shape);
-    Ok(CudaStorage {
-        buffer: Arc::new(grad_w_b),
-        shape: out_shape,
-        strides: out_strides,
-        offset: 0,
-        id: crate::cuda::storage::TensorId::next(),
-    })
+    CudaStorage::try_from_parts(Arc::new(grad_w_b), out_shape, out_strides, 0)
 }

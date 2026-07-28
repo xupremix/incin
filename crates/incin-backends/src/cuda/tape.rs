@@ -54,7 +54,7 @@ pub(crate) fn backward(loss: &CudaStorage) -> Result<CudaGrads> {
     };
     grads.insert(
         loss.id,
-        CudaStorage::new(alloc::sync::Arc::new(buf), loss.shape.clone()),
+        CudaStorage::new(alloc::sync::Arc::new(buf), loss.shape.to_vec()),
     );
 
     let entries = TAPE.with(|t| core::mem::take(&mut *t.borrow_mut()));
@@ -108,7 +108,7 @@ pub(crate) fn unbroadcast(grad: &CudaStorage, target_shape: &[usize]) -> Result<
 
 fn sum_dim_squeeze(storage: &CudaStorage, axis: usize) -> CudaStorage {
     let reduced = sum_dim_keepdim(storage, axis);
-    let mut new_shape = reduced.shape.clone();
+    let mut new_shape = reduced.shape.to_vec();
     new_shape.remove(axis);
     CudaStorage::new(reduced.buffer.clone(), new_shape)
 }

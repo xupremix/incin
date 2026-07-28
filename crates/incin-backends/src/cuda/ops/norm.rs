@@ -19,14 +19,6 @@ fn checked_numel(shape: &[usize]) -> Result<usize> {
     })
 }
 
-fn checked_byte_len(numel: usize, element_size: usize) -> Result<usize> {
-    numel.checked_mul(element_size).ok_or_else(|| {
-        Error::Msg(format!(
-            "CUDA normalization allocation overflow: {numel} elements of {element_size} bytes"
-        ))
-    })
-}
-
 fn validate_contiguous(storage: &CudaStorage, name: &'static str) -> Result<usize> {
     let numel = checked_numel(&storage.shape)?;
     if storage.strides != crate::cpu::stride::contiguous_strides(&storage.shape) {
@@ -35,7 +27,7 @@ fn validate_contiguous(storage: &CudaStorage, name: &'static str) -> Result<usiz
         )));
     }
     let end = storage
-        .offset
+        .offset_elements
         .checked_add(numel)
         .ok_or_else(|| Error::Msg(format!("CUDA normalization {name} storage bound overflow")))?;
     if end > storage.buffer.len {
@@ -131,7 +123,11 @@ pub(crate) fn launch_layer_norm(
         dtype: buffer.dtype,
         data: Arc::new(
             stream
-                .alloc_zeros::<u8>(checked_byte_len(input_numel, kernel.element_size)?)
+                .alloc_zeros::<u8>(crate::bytes::byte_len(
+                    kernel.dtype,
+                    input_numel,
+                    OperationKind::Normalization,
+                )?)
                 .map_err(|error| {
                     Error::Msg(format!("CUDA layer norm allocation failed: {error:?}"))
                 })?,
@@ -140,7 +136,7 @@ pub(crate) fn launch_layer_norm(
         device_id: buffer.device_id,
     };
     if input_numel == 0 {
-        return Ok(CudaStorage::new(Arc::new(output), input.shape.clone()));
+        return Ok(CudaStorage::new(Arc::new(output), input.shape.to_vec()));
     }
 
     ensure_normalization_loaded(buffer.device_id, &kernel)?;
@@ -178,14 +174,14 @@ pub(crate) fn launch_layer_norm(
             .arg(&checked_i32(norm_size, "normalized axis length")?)
             .arg(&has_bias)
             .arg(&checked_i32(batch_size, "batch count")?)
-            .arg(&checked_i32(input.offset, "input offset")?)
-            .arg(&checked_i32(weight.offset, "weight offset")?)
-            .arg(&checked_i32(bias_storage.offset, "bias offset")?)
+            .arg(&checked_i32(input.offset_elements, "input offset")?)
+            .arg(&checked_i32(weight.offset_elements, "weight offset")?)
+            .arg(&checked_i32(bias_storage.offset_elements, "bias offset")?)
             .launch(config)
             .map_err(|error| Error::Msg(format!("CUDA layer norm launch failed: {error:?}")))?;
     }
 
-    Ok(CudaStorage::new(Arc::new(output), input.shape.clone()))
+    Ok(CudaStorage::new(Arc::new(output), input.shape.to_vec()))
 }
 
 #[cfg(feature = "cuda")]
@@ -232,7 +228,11 @@ pub(crate) fn launch_batch_norm(
         dtype: buffer.dtype,
         data: Arc::new(
             stream
-                .alloc_zeros::<u8>(checked_byte_len(total_elements, kernel.element_size)?)
+                .alloc_zeros::<u8>(crate::bytes::byte_len(
+                    kernel.dtype,
+                    total_elements,
+                    OperationKind::Normalization,
+                )?)
                 .map_err(|error| {
                     Error::Msg(format!("CUDA batch norm allocation failed: {error:?}"))
                 })?,
@@ -241,7 +241,7 @@ pub(crate) fn launch_batch_norm(
         device_id: buffer.device_id,
     };
     if total_elements == 0 {
-        return Ok(CudaStorage::new(Arc::new(output), input.shape.clone()));
+        return Ok(CudaStorage::new(Arc::new(output), input.shape.to_vec()));
     }
 
     ensure_normalization_loaded(buffer.device_id, &kernel)?;
@@ -280,27 +280,36 @@ pub(crate) fn launch_batch_norm(
             .arg(&i32::from(bias.is_some()))
             .arg(&i32::from(running_mean.is_some()))
             .arg(&i32::from(running_variance.is_some()))
-            .arg(&checked_i32(input.offset, "input offset")?)
-            .arg(&checked_i32(weight_storage.offset, "weight offset")?)
-            .arg(&checked_i32(bias_storage.offset, "bias offset")?)
-            .arg(&checked_i32(mean_storage.offset, "mean offset")?)
-            .arg(&checked_i32(variance_storage.offset, "variance offset")?)
+            .arg(&checked_i32(input.offset_elements, "input offset")?)
+            .arg(&checked_i32(
+                weight_storage.offset_elements,
+                "weight offset",
+            )?)
+            .arg(&checked_i32(bias_storage.offset_elements, "bias offset")?)
+            .arg(&checked_i32(mean_storage.offset_elements, "mean offset")?)
+            .arg(&checked_i32(
+                variance_storage.offset_elements,
+                "variance offset",
+            )?)
             .launch(config)
             .map_err(|error| Error::Msg(format!("CUDA batch norm launch failed: {error:?}")))?;
     }
 
-    Ok(CudaStorage::new(Arc::new(output), input.shape.clone()))
+    Ok(CudaStorage::new(Arc::new(output), input.shape.to_vec()))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use incin_core::prelude::DTypeId;
 
     #[test]
     fn normalization_metadata_checks_reject_overflow() {
         assert_eq!(checked_i32(i32::MAX as usize, "test").unwrap(), i32::MAX);
         assert!(checked_i32(i32::MAX as usize + 1, "test").is_err());
         assert!(checked_numel(&[usize::MAX, 2]).is_err());
-        assert!(checked_byte_len(usize::MAX, 2).is_err());
+        assert!(
+            crate::bytes::byte_len(DTypeId::F16, usize::MAX, OperationKind::Normalization).is_err()
+        );
     }
 }

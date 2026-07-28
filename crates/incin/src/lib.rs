@@ -250,7 +250,7 @@ pub type Embedding<S, B> = incin_core::prelude::Embedding<S, B>;
 pub mod macros {
     // `impl_arg_into` deliberately excluded: it's an internal codegen helper
     // invoked once, internally, by `incin-core` itself
-    // (`incin_macros::impl_arg_into!(7)` in `tensor/arg_into.rs`) — no
+    // (`incin_macros::impl_arg_into!()` in `tensor/arg_into.rs`) — no
     // end-user code calls it, and it has no documented public contract.
     pub use incin_macros::{idx, s};
 }
@@ -265,7 +265,7 @@ pub mod prelude {
     // in `generate_shape_ops` and `impl_arg_into`, internal codegen helpers
     // invoked only by incin-core's own macro expansions
     // (`incin_macros::generate_shape_ops!()` in `shapes/shape_ops.rs`,
-    // `incin_macros::impl_arg_into!(7)` in `tensor/arg_into.rs`) — neither
+    // `incin_macros::impl_arg_into!()` in `tensor/arg_into.rs`) — neither
     // has a documented public contract or any end-user call site.
     pub use incin_macros::{idx, import_model, model, module, s};
 

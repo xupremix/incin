@@ -65,7 +65,7 @@ impl<T: DType, D: Device> QuantizedOps<Self> for CpuBackendImpl<T, D> {
 
         Ok(CpuStorage::from_contiguous(
             CpuBuffer::Q8_0(blocks),
-            _t.shape.clone(),
+            _t.shape.to_vec(),
         ))
     }
 
@@ -103,7 +103,7 @@ impl<T: DType, D: Device> QuantizedOps<Self> for CpuBackendImpl<T, D> {
 
         Ok(CpuStorage::from_contiguous(
             CpuBuffer::F32(f32_data),
-            _t.shape.clone(),
+            _t.shape.to_vec(),
         ))
     }
 
@@ -170,7 +170,7 @@ impl<T: DType, D: Device> QuantizedOps<Self> for CpuBackendImpl<T, D> {
             )));
         }
 
-        let mut out_shape = lhs_shape.clone();
+        let mut out_shape = lhs_shape.to_vec();
         let out_len = out_shape.len();
         out_shape[out_len - 1] = n;
 
@@ -221,7 +221,7 @@ impl<T: DType, D: Device> QuantizedOps<Self> for CpuBackendImpl<T, D> {
 
         Ok(CpuStorage::from_contiguous(
             CpuBuffer::F32(out_data),
-            out_shape,
+            out_shape.to_vec(),
         ))
     }
 }

@@ -464,7 +464,8 @@ fn elapsed_milliseconds_to_nanoseconds(elapsed_ms: f32) -> Result<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::kernel::{KernelFamily, KernelLayout};
+    use crate::kernel::KernelFamily;
+    use incin_core::exec::LayoutClass;
 
     fn test_kernel() -> KernelKey {
         KernelKey::cuda(
@@ -472,7 +473,7 @@ mod tests {
             KernelFamily::PointwiseUnary,
             "neg",
             DTypeId::F32,
-            KernelLayout::Contiguous,
+            LayoutClass::Contiguous,
             KernelAccess::Scalar { unroll_width: 1 },
         )
         .unwrap()

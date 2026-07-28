@@ -2349,12 +2349,54 @@ Exit criteria:
 
 ### Canonical AI execution ledger
 
-This is the implementation handoff contract. Snapshot: **2026-07-27**.
-`SHP-007` and `SHP-008` are complete, and they landed together because the
-generalized matmul rules cannot be constructed under the old bound. The
-broadcast and matmul rules now cover mixed, named, and runtime axis spellings
-at every rank the generator emits, and tensor construction is witnessed rather
-than trusted. `EXE-004` is next eligible. The §4 themes above
+This is the implementation handoff contract. Snapshot: **2026-07-28**.
+`EXE-008` is complete. `EXE-009` is active and partially landed: the default
+unsupported-operation surface is now gone from all nine operation families, so a
+backend that does not implement an operation says so at its own definition and a
+missing one is a compile error. `TensorOps` was the last and largest family, and
+removing its forty-nine defaults showed what they had been concealing: every
+backend except the CPU one carried the same thirty-three-operation hole, and two
+of those backends refused only because of the default. `TracingBackend` and
+`DispatchBackend` both delegate to a real inner backend that implements the
+operation, so a trait default could not distinguish a missing kernel from a
+wrapper that forgot to forward. Both now forward, which took thirty-three new
+`OpType` variants so tracing records what it executes rather than exporting a
+graph with holes in it. Removing the monolithic adapter itself remains open,
+because that requires descriptor coverage the schema does not yet supply.
+Coverage has since grown from one operation to five. `ReshapeSpec` and
+`Conv2dSpec` came first, alongside the `MatMulSpec` slice `EXE-007` and
+`EXE-008` established, on CPU and WGPU under test, on dispatch through the
+backend holding the operands, and — for reshape — on Candle. CUDA implements
+both and is compile-verified only, as its matmul row already is. Two defects
+surfaced there. `DispatchBackend` had no public constructor, so its descriptor
+executors were unreachable from outside the crate; and WGPU's biased `conv2d`
+and `conv1d` added a `[1, C_out, 1, 1]` bias through an elementwise `add` that
+requires equal shapes, which fails for every biased convolution — the bias is
+now stretched to the output shape first.
+`ReductionSpec` and `Pool2dSpec` followed, once the question they were blocked
+on was answered: both describe a loop and neither said what runs inside it, so
+neither was a complete request. They now name it. `ReduceOp` is closed at the
+five accumulations whose result has the shape the descriptor derives — `argmax`
+returns indices and `cumsum` collapses nothing, so neither is expressible —
+and `PoolOp` is separate from it because `Average` over a padded window is not
+`Mean` over the elements present. Both arrive through `ShapeRule::Args`, which
+is where `Conv2dArgs` already puts grouping, on the same grounds: the shape
+types do not determine it. The field set is a versioned contract, so
+`DescriptorSchemaVersion::CURRENT` is now `v2` and the pinning test that caught
+the change is what makes that deliberate. Executing them also revealed that a
+kernel gap and a registry rejection were reported as different kinds of error
+depending on which noticed first; a backend that declares an operation
+unsupported at its impl site now produces the same `Unsupported` the registry
+would have, which is how WGPU and CUDA answer for the product reduction neither
+has a shader for.
+`BroadcastSpec` is the one descriptor still without an operator, and it is a
+different question: it is iteration geometry that serves both a named broadcast
+and any binary pointwise operation, so an operator field there needs a form that
+can also say "none". That, and the multi-axis reduction the routed kernels
+cannot take one call at a time, are what remain before the adapter can go.
+`EXE-010` is next eligible on the executor track.
+The complete Shape-track evidence is recorded in the mirror and
+`docs/plan/tasks/SHP-007.md` through `SHP-008.md`. The §4 themes above
 describe intent; **this ledger and its dependency graph define order**, and the
 tier column defines what a release is entitled to rely on. Where a theme
 narrative and the graph disagree, the graph wins — themes are prose, edges are
@@ -2427,12 +2469,12 @@ Silicon · `compile` compiled execution · `grad` autograd · `dist` distributed
 | EXE-001 | core | exec | [x] | SHP-003,GOV-002 | `crates/incin-core/src/exec/spec.rs` | Freeze the operation taxonomy and descriptor schema; promote OperationFamily to OperationKind rather than duplicating it | `cargo test -p incin-core --test descriptor_schema` |
 | EXE-002 | core | exec | [x] | EXE-001 | `crates/incin-core/src/exec/proof.rs` | Sealed Validated<O> and proof provenance, with privacy compile-fail tests and the paranoid-validation feature | `cargo test -p incin-core --test compile_tests` |
 | EXE-003 | core | exec | [x] | EXE-002 | `crates/incin-core/src/exec/rule.rs` | ShapeRule lowering for broadcast, reduction, reshape, matmul, conv, and pool, each restating its frontend trait Output | `cargo test -p incin-core --test lowering_parity` |
-| EXE-004 | core | exec | [ ] | SHP-003 | `crates/incin-core/src/exec/meta.rs; crates/incin-backends/src/{cpu,cuda,wgpu}/storage.rs` | Normalize TensorMeta and unify the three LayoutClass enums; view, offset, alignment, and bounds tests | `cargo test -p incin-backends --test tensor_meta` |
-| EXE-005 | core | exec | [ ] | EXE-001 | `crates/incin-core/src/exec/capability.rs` | Capability registry whose generated matrix matches execution tests | `cargo test -p incin-backends --test capability_matrix` |
-| EXE-006 | core | exec | [ ] | EXE-002,EXE-005 | `crates/incin-core/src/tensor/backend.rs` | Split storage, Execute<O>, and Capabilities out of the 254-method supertrait; give SupportsDType<K> real per-backend impls | `cargo test -p incin-core --test compile_tests` |
-| EXE-007 | core | exec | [ ] | EXE-003,EXE-004,EXE-006 | `crates/incin-backends/src/cpu/` | Migrate the CPU vertical slice with parity and overhead evidence | `cargo test -p incin-backends --no-default-features --features std,cpu` |
-| EXE-008 | core | exec | [ ] | EXE-007 | `crates/incin-backends/src/{cuda,wgpu,external}/; crates/incin-backends/src/dispatch.rs` | Migrate CUDA, WGPU, dispatch, and external adapters; replace the F32-hardcoded byte arithmetic with checked dtype.size_bytes() | `cargo test -p incin-backends --no-default-features --features std,cpu,wgpu` |
-| EXE-009 | core | exec | [ ] | EXE-008 | `crates/incin-core/src/tensor/backend.rs; crates/incin-backends/src/dispatch.rs` | Remove the monolithic adapter and the default unsupported-operation surface | `cargo test --workspace` |
+| EXE-004 | core | exec | [x] | SHP-003 | `crates/incin-core/src/exec/meta.rs; crates/incin-backends/src/{cpu,cuda,wgpu}/storage.rs` | Normalize TensorMeta and unify the three LayoutClass enums; view, offset, alignment, and bounds tests | `cargo test -p incin-backends --test tensor_meta` |
+| EXE-005 | core | exec | [x] | EXE-001 | `crates/incin-core/src/exec/capability.rs` | Capability registry whose generated matrix matches execution tests | `cargo test -p incin-backends --test capability_matrix` |
+| EXE-006 | core | exec | [x] | EXE-002,EXE-005 | `crates/incin-core/src/tensor/backend.rs` | Split storage, Execute<O>, and Capabilities out of the 254-method supertrait; give SupportsDType<K> real per-backend impls | `cargo test -p incin-core --test compile_tests` |
+| EXE-007 | core | exec | [x] | EXE-003,EXE-004,EXE-006 | `crates/incin-backends/src/cpu/` | Migrate the CPU vertical slice with parity and overhead evidence | `cargo test -p incin-backends --no-default-features --features std,cpu` |
+| EXE-008 | core | exec | [x] | EXE-007 | `crates/incin-backends/src/{cuda,wgpu,external}/; crates/incin-backends/src/dispatch.rs` | Migrate CUDA, WGPU, dispatch, and external adapters; replace the F32-hardcoded byte arithmetic with checked dtype.size_bytes() | `cargo test -p incin-backends --no-default-features --features std,cpu,wgpu` |
+| EXE-009 | core | exec | [~] | EXE-008 | `crates/incin-core/src/tensor/backend.rs; crates/incin-backends/src/dispatch.rs` | Remove the monolithic adapter and the default unsupported-operation surface | `cargo test --workspace` |
 | EXE-010 | preview | exec | [ ] | EXE-008 | `crates/incin-backends/src/external/` | external-candle SDK conformance suite and a backend-authoring template | `cargo test -p incin-backends --features external-candle --test conformance` |
 | TUN-000 | preview | tune | [x] | — | `crates/incin-backends/src/tuning.rs` | Existing CUDA tuner inventoried: 2 warmups, 7 samples, median selection, 1024-entry cache, single-flight coordination | `cargo test -p incin-backends --features autotune` |
 | TUN-001 | preview | tune | [ ] | GOV-004 | `crates/incin-backends/src/tuning/identity.rs` | Stable device, compiler, and topology identities replacing ordinal plus compute capability; alias tests | `cargo test -p incin-backends --features autotune --test tuning_identity` |

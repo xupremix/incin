@@ -1,6 +1,9 @@
 use alloc::sync::Arc;
+use core::ops::Deref;
 use core::sync::atomic::{AtomicU64, Ordering};
-use incin_core::prelude::DTypeId;
+
+use incin_core::exec::{Alignment, TensorMeta};
+use incin_core::prelude::{DTypeId, DeviceId, Error, Result};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct TensorId(u64);
@@ -46,25 +49,67 @@ impl Clone for CudaBuffer {
 #[derive(Clone, Debug, PartialEq)]
 pub struct CudaStorage {
     pub(crate) buffer: Arc<CudaBuffer>,
-    pub(crate) shape: Vec<usize>,
-    pub(crate) strides: Vec<usize>,
+    pub(crate) meta: TensorMeta,
     pub(crate) id: TensorId,
-    pub(crate) offset: usize,
+}
+
+impl Deref for CudaStorage {
+    type Target = TensorMeta;
+
+    fn deref(&self) -> &Self::Target {
+        &self.meta
+    }
 }
 
 impl CudaStorage {
-    pub fn new(buffer: Arc<CudaBuffer>, shape: Vec<usize>) -> Self {
-        let ndim = shape.len();
-        let mut strides = vec![1usize; ndim];
-        for i in (0..ndim.saturating_sub(1)).rev() {
-            strides[i] = strides[i + 1] * shape[i + 1];
-        }
-        Self {
+    pub fn try_from_parts(
+        buffer: Arc<CudaBuffer>,
+        shape: Vec<usize>,
+        strides: Vec<usize>,
+        offset_elements: usize,
+    ) -> Result<Self> {
+        // `CudaBuffer` is byte-addressed (`CudaSlice<u8>`), so the Rust type
+        // only proves byte alignment. Higher device-pointer alignment can be
+        // introduced later when the allocator exposes that guarantee.
+        let meta = TensorMeta::try_new(
+            shape.as_slice().into(),
+            strides.as_slice().into(),
+            offset_elements,
+            buffer.dtype,
+            DeviceId::cuda(buffer.device_id),
+            Alignment::BYTE,
+            buffer.len,
+        )
+        .map_err(|error| Error::Msg(format!("invalid CUDA storage metadata: {error}")))?;
+        Ok(Self {
             buffer,
-            shape,
-            strides,
+            meta,
             id: TensorId::next(),
-            offset: 0,
-        }
+        })
+    }
+
+    pub fn try_new(buffer: Arc<CudaBuffer>, shape: Vec<usize>) -> Result<Self> {
+        let meta = TensorMeta::contiguous(
+            shape.as_slice().into(),
+            buffer.dtype,
+            DeviceId::cuda(buffer.device_id),
+            Alignment::BYTE,
+            buffer.len,
+        )
+        .map_err(|error| Error::Msg(format!("invalid CUDA storage metadata: {error}")))?;
+        Ok(Self {
+            buffer,
+            meta,
+            id: TensorId::next(),
+        })
+    }
+
+    pub fn new(buffer: Arc<CudaBuffer>, shape: Vec<usize>) -> Self {
+        Self::try_new(buffer, shape)
+            .expect("backend-created contiguous CUDA storage must match its allocation")
+    }
+
+    pub fn metadata(&self) -> &TensorMeta {
+        &self.meta
     }
 }

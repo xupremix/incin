@@ -92,6 +92,33 @@ impl<B: Backend> TracingBackend<B> {
         }
     }
 
+    /// Records an op's output as a new graph node with an arbitrary number of
+    /// already-traced inputs, for the ops that take three or more operands
+    /// (`where_cond`, `scatter`, `addmm`, attention) and so fit neither
+    /// [`Self::trace_unary`] nor [`Self::trace_binary`].
+    fn trace_nary<KOut: super::dtype::DType>(
+        op: OpType,
+        inputs: alloc::vec::Vec<ValueId>,
+        inner_res: &B::Storage<KOut>,
+    ) -> TracingTensor<B::Storage<KOut>> {
+        let shape = B::shape(inner_res);
+        let value_id = {
+            let mut g = TRACING_GRAPH.lock();
+            let out_id = g.add_value(shape, DTypeId::F32, None);
+            g.add_node(
+                op,
+                inputs,
+                vec![out_id],
+                alloc::collections::BTreeMap::new(),
+            );
+            out_id
+        };
+        TracingTensor {
+            inner: inner_res.clone(),
+            value_id,
+        }
+    }
+
     /// Records a unary op's output as a new graph node with `t` as its
     /// input, wrapping `inner_res` with the new node's id.
     fn trace_unary<K: super::dtype::DType, KOut: super::dtype::DType>(
@@ -273,6 +300,47 @@ impl<B: Backend> CreationOps<Self> for TracingBackend<B> {
         Ok(TracingTensor { inner, value_id })
     }
 
+    /// Delegates to `B::full`, additionally recording a new
+    /// tracing-graph value node for the result.
+    fn full<K: super::dtype::DType>(
+        val: f64,
+        shape: &[usize],
+        dtype: DTypeId,
+        device: &DeviceId,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::full(val, shape, dtype, device)?;
+        let value_id = TRACING_GRAPH.lock().add_value(shape.to_vec(), dtype, None);
+        Ok(TracingTensor { inner, value_id })
+    }
+
+    /// Delegates to `B::arange`, additionally recording a new
+    /// tracing-graph value node for the result.
+    fn arange<K: super::dtype::DType>(
+        start: f64,
+        step: f64,
+        shape: &[usize],
+        dtype: DTypeId,
+        device: &DeviceId,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::arange(start, step, shape, dtype, device)?;
+        let value_id = TRACING_GRAPH.lock().add_value(shape.to_vec(), dtype, None);
+        Ok(TracingTensor { inner, value_id })
+    }
+
+    /// Delegates to `B::linspace`, additionally recording a new
+    /// tracing-graph value node for the result.
+    fn linspace<K: super::dtype::DType>(
+        start: f64,
+        end: f64,
+        shape: &[usize],
+        dtype: DTypeId,
+        device: &DeviceId,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::linspace(start, end, shape, dtype, device)?;
+        let value_id = TRACING_GRAPH.lock().add_value(shape.to_vec(), dtype, None);
+        Ok(TracingTensor { inner, value_id })
+    }
+
     /// Delegates to `B::rand`, additionally recording a new
     /// tracing-graph value node for the result.
     fn rand<K: super::dtype::DType>(
@@ -437,7 +505,79 @@ impl<B: Backend> NumericOps<Self> for TracingBackend<B> {
     }
 }
 
+/// The error a tracing-only gap reports.
+///
+/// Identical to what `FloatOps`' removed default bodies produced, so this
+/// changes where the refusal is written down, not what a caller observes.
+fn untraceable<B: Backend>(op: &'static str) -> Error {
+    Error::UnsupportedBackendOperation {
+        op,
+        backend: core::any::type_name::<TracingBackend<B>>(),
+    }
+}
+
+/// Float operations the tracing graph has no node for.
+///
+/// [`OpType`] carries no variant for any of these, and ONNX export builds its
+/// node list from that vocabulary, so recording them is not possible without
+/// extending both. Delegating to `B` *without* recording would be worse than
+/// refusing: the exported graph would silently omit the operation and stop
+/// describing the model it came from.
+///
+/// Writing them out is the point. Until `EXE-009` these were inherited from
+/// `FloatOps`' default bodies, which left an operation this backend cannot
+/// trace indistinguishable, at this impl site, from one it can.
+macro_rules! untraced_float_ops {
+    (
+        unary: $($unary:ident),* $(,)?;
+        exponent: $($exponent:ident),* $(,)?;
+        bounds: $($bounds:ident),* $(,)?;
+        binary: $($binary:ident),* $(,)?;
+    ) => {
+        $(
+            fn $unary<K: super::dtype::DType>(
+                _t: &<Self as Backend>::Storage<K>,
+            ) -> Result<<Self as Backend>::Storage<K>> {
+                Err(untraceable::<B>(stringify!($unary)))
+            }
+        )*
+        $(
+            fn $exponent<K: super::dtype::DType>(
+                _t: &<Self as Backend>::Storage<K>,
+                _exponent: f64,
+            ) -> Result<<Self as Backend>::Storage<K>> {
+                Err(untraceable::<B>(stringify!($exponent)))
+            }
+        )*
+        $(
+            fn $bounds<K: super::dtype::DType>(
+                _t: &<Self as Backend>::Storage<K>,
+                _min: f64,
+                _max: f64,
+            ) -> Result<<Self as Backend>::Storage<K>> {
+                Err(untraceable::<B>(stringify!($bounds)))
+            }
+        )*
+        $(
+            fn $binary<K: super::dtype::DType>(
+                _lhs: &<Self as Backend>::Storage<K>,
+                _rhs: &<Self as Backend>::Storage<K>,
+            ) -> Result<<Self as Backend>::Storage<K>> {
+                Err(untraceable::<B>(stringify!($binary)))
+            }
+        )*
+    };
+}
+
 impl<B: Backend> FloatOps<Self> for TracingBackend<B> {
+    untraced_float_ops! {
+        unary: sign, floor, ceil, round, log2, log10, sin, cos, tan, asin, acos,
+               atan, sinh, cosh, asinh, acosh, atanh, erf, rsqrt, trunc, frac;
+        exponent: powf;
+        bounds: clamp;
+        binary: atan2, fmod, remainder;
+    }
+
     /// Delegates to `B::add_scalar_float`, additionally recording an
     /// `OpType::AddScalar` node.
     fn add_scalar_float<K: super::dtype::DType>(
@@ -593,6 +733,31 @@ impl<B: Backend> FloatOps<Self> for TracingBackend<B> {
 }
 
 impl<B: Backend> ReductionOps<Self> for TracingBackend<B> {
+    /// `OpType` has no product or cumulative-sum node, so these cannot be
+    /// recorded. Refusing keeps an exported graph honest; delegating silently
+    /// would drop the operation from the model the graph claims to describe.
+    fn prod_all<K: super::dtype::DType>(
+        _t: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        Err(untraceable::<B>("prod_all"))
+    }
+
+    /// Untraceable for the same reason as [`prod_all`](Self::prod_all).
+    fn prod_dim<K: super::dtype::DType>(
+        _t: &<Self as Backend>::Storage<K>,
+        _dim: usize,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        Err(untraceable::<B>("prod_dim"))
+    }
+
+    /// Untraceable for the same reason as [`prod_all`](Self::prod_all).
+    fn cumsum<K: super::dtype::DType>(
+        _t: &<Self as Backend>::Storage<K>,
+        _dim: usize,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        Err(untraceable::<B>("cumsum"))
+    }
+
     /// Delegates to `B::sum_all`, additionally recording an `OpType::SumAll` node.
     fn sum_all<K: super::dtype::DType>(
         t: &<Self as Backend>::Storage<K>,
@@ -1026,6 +1191,363 @@ impl<B: Backend> TensorOps<Self> for TracingBackend<B> {
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<alloc::vec::Vec<i64>> {
         B::int_to_vec1(&t.inner)
+    }
+
+    /// Delegates to `B::where_cond`, recording an `OpType::WhereCond` node
+    /// whose inputs are the mask and both branches.
+    fn where_cond<K: super::dtype::DType, KMask: super::dtype::DType>(
+        mask: &<Self as Backend>::Storage<KMask>,
+        on_true: &<Self as Backend>::Storage<K>,
+        on_false: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::where_cond::<K, KMask>(&mask.inner, &on_true.inner, &on_false.inner)?;
+        Ok(Self::trace_nary(
+            OpType::WhereCond,
+            alloc::vec![mask.value_id, on_true.value_id, on_false.value_id],
+            &inner,
+        ))
+    }
+
+    /// Delegates to `B::gather`, recording an `OpType::Gather` node.
+    fn gather<K: super::dtype::DType, KInt: super::dtype::DType>(
+        t: &<Self as Backend>::Storage<K>,
+        dim: usize,
+        index: &<Self as Backend>::Storage<KInt>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::gather::<K, KInt>(&t.inner, dim, &index.inner)?;
+        Ok(Self::trace_nary(
+            OpType::Gather,
+            alloc::vec![t.value_id, index.value_id],
+            &inner,
+        ))
+    }
+
+    /// Delegates to `B::scatter`, recording an `OpType::Scatter` node whose
+    /// inputs are the target, the index, and the source.
+    fn scatter<K: super::dtype::DType, KInt: super::dtype::DType>(
+        t: &<Self as Backend>::Storage<K>,
+        dim: usize,
+        index: &<Self as Backend>::Storage<KInt>,
+        src: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::scatter::<K, KInt>(&t.inner, dim, &index.inner, &src.inner)?;
+        Ok(Self::trace_nary(
+            OpType::Scatter,
+            alloc::vec![t.value_id, index.value_id, src.value_id],
+            &inner,
+        ))
+    }
+
+    /// Delegates to `B::index_select`, recording an `OpType::IndexSelect` node.
+    fn index_select<K: super::dtype::DType, KInt: super::dtype::DType>(
+        t: &<Self as Backend>::Storage<K>,
+        dim: usize,
+        index: &<Self as Backend>::Storage<KInt>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::index_select::<K, KInt>(&t.inner, dim, &index.inner)?;
+        Ok(Self::trace_nary(
+            OpType::IndexSelect,
+            alloc::vec![t.value_id, index.value_id],
+            &inner,
+        ))
+    }
+
+    /// Delegates to `B::masked_fill`, recording an `OpType::MaskedFill` node.
+    fn masked_fill<K: super::dtype::DType, KMask: super::dtype::DType>(
+        t: &<Self as Backend>::Storage<K>,
+        mask: &<Self as Backend>::Storage<KMask>,
+        value: f64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::masked_fill::<K, KMask>(&t.inner, &mask.inner, value)?;
+        Ok(Self::trace_nary(
+            OpType::MaskedFill,
+            alloc::vec![t.value_id, mask.value_id],
+            &inner,
+        ))
+    }
+
+    /// Delegates to `B::unsqueeze`, recording an `OpType::Unsqueeze` node.
+    fn unsqueeze<K: super::dtype::DType>(
+        t: &<Self as Backend>::Storage<K>,
+        dim: usize,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::unsqueeze(&t.inner, dim)?;
+        Ok(Self::trace_unary(OpType::Unsqueeze, t, &inner))
+    }
+
+    /// Delegates to `B::repeat`, recording an `OpType::Repeat` node.
+    fn repeat<K: super::dtype::DType>(
+        t: &<Self as Backend>::Storage<K>,
+        repeats: &[usize],
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::repeat(&t.inner, repeats)?;
+        Ok(Self::trace_unary(OpType::Repeat, t, &inner))
+    }
+
+    /// Delegates to `B::pad`, recording an `OpType::Pad` node.
+    fn pad<K: super::dtype::DType>(
+        t: &<Self as Backend>::Storage<K>,
+        padding: &[(usize, usize)],
+        val: f64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::pad(&t.inner, padding, val)?;
+        Ok(Self::trace_unary(OpType::Pad, t, &inner))
+    }
+
+    /// Delegates to `B::triu`, recording an `OpType::Triu` node.
+    fn triu<K: super::dtype::DType>(
+        t: &<Self as Backend>::Storage<K>,
+        k: i64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::triu(&t.inner, k)?;
+        Ok(Self::trace_unary(OpType::Triu, t, &inner))
+    }
+
+    /// Delegates to `B::tril`, recording an `OpType::Tril` node.
+    fn tril<K: super::dtype::DType>(
+        t: &<Self as Backend>::Storage<K>,
+        k: i64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::tril(&t.inner, k)?;
+        Ok(Self::trace_unary(OpType::Tril, t, &inner))
+    }
+
+    /// Delegates to `B::diag`, recording an `OpType::Diag` node.
+    fn diag<K: super::dtype::DType>(
+        t: &<Self as Backend>::Storage<K>,
+        k: i64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::diag(&t.inner, k)?;
+        Ok(Self::trace_unary(OpType::Diag, t, &inner))
+    }
+
+    /// Delegates to `B::cmp_eq`, recording an `OpType::CmpEq` node.
+    fn cmp_eq<K: super::dtype::DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::cmp_eq(&lhs.inner, &rhs.inner)?;
+        Ok(Self::trace_binary(OpType::CmpEq, lhs, rhs, &inner))
+    }
+
+    /// Delegates to `B::cmp_ne`, recording an `OpType::CmpNe` node.
+    fn cmp_ne<K: super::dtype::DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::cmp_ne(&lhs.inner, &rhs.inner)?;
+        Ok(Self::trace_binary(OpType::CmpNe, lhs, rhs, &inner))
+    }
+
+    /// Delegates to `B::cmp_lt`, recording an `OpType::CmpLt` node.
+    fn cmp_lt<K: super::dtype::DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::cmp_lt(&lhs.inner, &rhs.inner)?;
+        Ok(Self::trace_binary(OpType::CmpLt, lhs, rhs, &inner))
+    }
+
+    /// Delegates to `B::cmp_le`, recording an `OpType::CmpLe` node.
+    fn cmp_le<K: super::dtype::DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::cmp_le(&lhs.inner, &rhs.inner)?;
+        Ok(Self::trace_binary(OpType::CmpLe, lhs, rhs, &inner))
+    }
+
+    /// Delegates to `B::cmp_gt`, recording an `OpType::CmpGt` node.
+    fn cmp_gt<K: super::dtype::DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::cmp_gt(&lhs.inner, &rhs.inner)?;
+        Ok(Self::trace_binary(OpType::CmpGt, lhs, rhs, &inner))
+    }
+
+    /// Delegates to `B::cmp_ge`, recording an `OpType::CmpGe` node.
+    fn cmp_ge<K: super::dtype::DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::cmp_ge(&lhs.inner, &rhs.inner)?;
+        Ok(Self::trace_binary(OpType::CmpGe, lhs, rhs, &inner))
+    }
+
+    /// Delegates to `B::logical_and`, recording an `OpType::LogicalAnd` node.
+    fn logical_and<K: super::dtype::DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::logical_and(&lhs.inner, &rhs.inner)?;
+        Ok(Self::trace_binary(OpType::LogicalAnd, lhs, rhs, &inner))
+    }
+
+    /// Delegates to `B::logical_or`, recording an `OpType::LogicalOr` node.
+    fn logical_or<K: super::dtype::DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::logical_or(&lhs.inner, &rhs.inner)?;
+        Ok(Self::trace_binary(OpType::LogicalOr, lhs, rhs, &inner))
+    }
+
+    /// Delegates to `B::logical_not`, recording an `OpType::LogicalNot` node.
+    fn logical_not<K: super::dtype::DType>(
+        t: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::logical_not(&t.inner)?;
+        Ok(Self::trace_unary(OpType::LogicalNot, t, &inner))
+    }
+
+    /// Delegates to `B::sub_scalar`, recording an `OpType::SubScalar` node.
+    fn sub_scalar<K: super::dtype::DType>(
+        t: &<Self as Backend>::Storage<K>,
+        val: f64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::sub_scalar(&t.inner, val)?;
+        Ok(Self::trace_unary(OpType::SubScalar, t, &inner))
+    }
+
+    /// Delegates to `B::div_scalar`, recording an `OpType::DivScalar` node.
+    fn div_scalar<K: super::dtype::DType>(
+        t: &<Self as Backend>::Storage<K>,
+        val: f64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::div_scalar(&t.inner, val)?;
+        Ok(Self::trace_unary(OpType::DivScalar, t, &inner))
+    }
+
+    /// Delegates to `B::maximum`, recording an `OpType::Maximum` node.
+    fn maximum<K: super::dtype::DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::maximum(&lhs.inner, &rhs.inner)?;
+        Ok(Self::trace_binary(OpType::Maximum, lhs, rhs, &inner))
+    }
+
+    /// Delegates to `B::minimum`, recording an `OpType::Minimum` node.
+    fn minimum<K: super::dtype::DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::minimum(&lhs.inner, &rhs.inner)?;
+        Ok(Self::trace_binary(OpType::Minimum, lhs, rhs, &inner))
+    }
+
+    /// Delegates to `B::abs_diff`, recording an `OpType::AbsDiff` node.
+    fn abs_diff<K: super::dtype::DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::abs_diff(&lhs.inner, &rhs.inner)?;
+        Ok(Self::trace_binary(OpType::AbsDiff, lhs, rhs, &inner))
+    }
+
+    /// Delegates to `B::lerp`, recording an `OpType::Lerp` node.
+    fn lerp<K: super::dtype::DType>(
+        start: &<Self as Backend>::Storage<K>,
+        end: &<Self as Backend>::Storage<K>,
+        weight: f64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::lerp(&start.inner, &end.inner, weight)?;
+        Ok(Self::trace_binary(OpType::Lerp, start, end, &inner))
+    }
+
+    /// Delegates to `B::addmm`, recording an `OpType::Addmm` node whose inputs
+    /// are the added matrix and both multiplicands.
+    fn addmm<K: super::dtype::DType>(
+        mat: &<Self as Backend>::Storage<K>,
+        mat1: &<Self as Backend>::Storage<K>,
+        mat2: &<Self as Backend>::Storage<K>,
+        beta: f64,
+        alpha: f64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::addmm(&mat.inner, &mat1.inner, &mat2.inner, beta, alpha)?;
+        Ok(Self::trace_nary(
+            OpType::Addmm,
+            alloc::vec![mat.value_id, mat1.value_id, mat2.value_id],
+            &inner,
+        ))
+    }
+
+    /// Delegates to `B::bmm`, recording an `OpType::Bmm` node.
+    fn bmm<K: super::dtype::DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::bmm(&lhs.inner, &rhs.inner)?;
+        Ok(Self::trace_binary(OpType::Bmm, lhs, rhs, &inner))
+    }
+
+    /// Delegates to `B::scaled_dot_product_attention`, recording an
+    /// `OpType::ScaledDotProductAttention` node. The optional mask becomes a
+    /// fourth input only when one was supplied, so the recorded arity matches
+    /// the call.
+    fn scaled_dot_product_attention<K: super::dtype::DType>(
+        q: &<Self as Backend>::Storage<K>,
+        k: &<Self as Backend>::Storage<K>,
+        v: &<Self as Backend>::Storage<K>,
+        mask: Option<&<Self as Backend>::Storage<K>>,
+        scale: Option<f64>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::scaled_dot_product_attention(
+            &q.inner,
+            &k.inner,
+            &v.inner,
+            mask.map(|m| &m.inner),
+            scale,
+        )?;
+        let mut inputs = alloc::vec![q.value_id, k.value_id, v.value_id];
+        if let Some(m) = mask {
+            inputs.push(m.value_id);
+        }
+        Ok(Self::trace_nary(
+            OpType::ScaledDotProductAttention,
+            inputs,
+            &inner,
+        ))
+    }
+
+    /// Delegates to `B::unfold`, recording an `OpType::Unfold` node.
+    fn unfold<K: super::dtype::DType>(
+        t: &<Self as Backend>::Storage<K>,
+        dim: usize,
+        size: usize,
+        step: usize,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::unfold(&t.inner, dim, size, step)?;
+        Ok(Self::trace_unary(OpType::Unfold, t, &inner))
+    }
+
+    /// Delegates to `B::pixel_shuffle`, recording an `OpType::PixelShuffle` node.
+    fn pixel_shuffle<K: super::dtype::DType>(
+        t: &<Self as Backend>::Storage<K>,
+        upscale_factor: usize,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::pixel_shuffle(&t.inner, upscale_factor)?;
+        Ok(Self::trace_unary(OpType::PixelShuffle, t, &inner))
+    }
+
+    /// Delegates to `B::group_norm`, recording an `OpType::GroupNorm` node.
+    fn group_norm<K: super::dtype::DType>(
+        t: &<Self as Backend>::Storage<K>,
+        groups: usize,
+        eps: f64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::group_norm(&t.inner, groups, eps)?;
+        Ok(Self::trace_unary(OpType::GroupNorm, t, &inner))
+    }
+
+    /// Delegates to `B::instance_norm`, recording an `OpType::InstanceNorm` node.
+    fn instance_norm<K: super::dtype::DType>(
+        t: &<Self as Backend>::Storage<K>,
+        eps: f64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let inner = B::instance_norm(&t.inner, eps)?;
+        Ok(Self::trace_unary(OpType::InstanceNorm, t, &inner))
     }
 }
 

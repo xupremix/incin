@@ -16,6 +16,7 @@
 pub use incin_core::prelude::*;
 
 pub(crate) mod creation;
+mod executor;
 /// GPU dispatcher modules (CUDA/Metal) — internal only.
 pub(crate) mod gradcheck;
 pub(crate) mod ops;
@@ -43,7 +44,25 @@ pub use var::CpuVar;
 #[derive(Clone)]
 pub struct CpuBackendImpl<T = f32, D = Cpu>(core::marker::PhantomData<(T, D)>);
 
-impl<T: DType, D: Device, K: DType> SupportsDType<K> for CpuBackendImpl<T, D> {}
+impl<T, D> CpuBackendImpl<T, D> {
+    /// Construct the stateless CPU executor.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self(core::marker::PhantomData)
+    }
+}
+
+impl<T, D> Default for CpuBackendImpl<T, D> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<T: DType, D: Device, K: DType> SupportsDType<K> for CpuBackendImpl<T, D> {
+    fn resolve_dtype(field: &K::Field, _device: &DeviceId) -> Result<DTypeId> {
+        Ok(K::to_incin(field))
+    }
+}
 
 impl<T: DType, D: Device> incin_core::prelude::Backend for CpuBackendImpl<T, D> {
     /// `Device`.
@@ -63,7 +82,7 @@ impl<T: DType, D: Device> incin_core::prelude::Backend for CpuBackendImpl<T, D> 
     type InnerBackend = Self;
     /// `shape`.
     fn shape<K: DType>(t: &Self::Storage<K>) -> alloc::vec::Vec<usize> {
-        t.shape.clone()
+        t.shape.to_vec()
     }
 
     fn storage_dtype<K: DType>(t: &Self::Storage<K>) -> Option<DTypeId> {
@@ -85,7 +104,7 @@ impl<T: DType, D: Device> incin_core::prelude::Backend for CpuBackendImpl<T, D> 
             "CpuStorage(shape={:?}, strides={:?}, offset={})",
             t.shape,
             t.strides,
-            t.offset
+            t.offset_elements
         )
     }
 
@@ -111,7 +130,7 @@ impl<T: DType, D: Device> incin_core::prelude::Backend for CpuBackendImpl<T, D> 
     fn to_bytes<K: DType>(t: &Self::Storage<K>) -> Result<alloc::vec::Vec<u8>> {
         let t_contig = t.contiguous();
         let num_elements = t_contig.shape.iter().product::<usize>();
-        let offset = t_contig.offset;
+        let offset = t_contig.offset_elements;
         match &*t_contig.buffer {
             storage::CpuBuffer::F32(v) => {
                 Ok(bytemuck::cast_slice(&v[offset..offset + num_elements]).to_vec())

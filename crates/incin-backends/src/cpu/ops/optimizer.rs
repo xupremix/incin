@@ -58,13 +58,12 @@ impl<T: DType, D: Device> OptimizerOps<Self> for CpuBackendImpl<T, D> {
                 v_data[i] -= effective_lr * m_data[i] / (v2_data[i].sqrt() + eps_f32);
             }
 
-            let updated_storage = crate::cpu::storage::CpuStorage {
-                buffer: v_buf_arc,
-                shape: var_storage.shape.clone(),
-                strides: var_storage.strides.clone(),
-                offset: var_storage.offset,
-                id: crate::cpu::storage::TensorId::next(),
-            };
+            let updated_storage = crate::cpu::storage::CpuStorage::try_from_parts(
+                v_buf_arc,
+                var_storage.shape.to_vec(),
+                var_storage.strides.to_vec(),
+                var_storage.offset_elements,
+            )?;
             crate::cpu::var::assign_var(_var, &updated_storage)?;
             return Ok(());
         }

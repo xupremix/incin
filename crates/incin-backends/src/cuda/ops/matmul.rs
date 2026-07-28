@@ -4,8 +4,10 @@
 //! this backend — batched matmul is not
 //! implemented here.
 
-use crate::cuda::storage::{CudaBuffer, CudaStorage, TensorId};
+use super::alloc_zeroed_bytes;
+use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
+use incin_core::prelude::OperationKind;
 use incin_core::prelude::Result;
 
 const BM: u32 = 128;
@@ -46,7 +48,12 @@ pub(crate) fn launch_matmul(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<Cuda
     let mut out_b = CudaBuffer {
         len: total,
         dtype: lhs_buf.dtype,
-        data: Arc::new(stream.alloc_zeros::<u8>(total * 4).unwrap()),
+        data: Arc::new(alloc_zeroed_bytes(
+            &stream,
+            lhs_buf.dtype,
+            total,
+            OperationKind::MatMul,
+        )?),
         device: lhs_buf.device.clone(),
         device_id,
     };
@@ -81,11 +88,5 @@ pub(crate) fn launch_matmul(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<Cuda
     }
 
     let strides = crate::cpu::stride::contiguous_strides(&out_shape);
-    Ok(CudaStorage {
-        buffer: Arc::new(out_b),
-        shape: out_shape,
-        strides,
-        offset: 0,
-        id: TensorId::next(),
-    })
+    CudaStorage::try_from_parts(Arc::new(out_b), out_shape, strides, 0)
 }

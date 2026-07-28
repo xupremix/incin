@@ -449,7 +449,7 @@ pub(crate) fn execute_unary(op: UnaryOp, input: &CpuStorage) -> Result<Option<Cp
 
     Ok(output
         .transpose()?
-        .map(|buffer| CpuStorage::from_contiguous(buffer, input.shape.clone())))
+        .map(|buffer| CpuStorage::from_contiguous(buffer, input.shape.to_vec())))
 }
 
 fn execute_unary_layout<T>(
@@ -467,7 +467,7 @@ where
     let plan = UnaryIterationPlan::new(OperandLayout {
         shape: &input.shape,
         strides: &input.strides,
-        offset: input.offset,
+        offset: input.offset_elements,
     })?;
     validate_bounds(&plan.operand, &plan.output_shape, values.len())?;
     Ok(map_unary_strided(values, &plan, &op))
@@ -522,12 +522,12 @@ fn binary_iteration_plan(
         OperandLayout {
             shape: &lhs.shape,
             strides: &lhs.strides,
-            offset: lhs.offset,
+            offset: lhs.offset_elements,
         },
         OperandLayout {
             shape: &rhs.shape,
             strides: &rhs.strides,
-            offset: rhs.offset,
+            offset: rhs.offset_elements,
         },
         output_shape,
     )?;
@@ -1721,18 +1721,22 @@ fn dense_range(
     buffer_len: usize,
     output_shape: &[usize],
 ) -> Option<Range<usize>> {
-    if storage.shape != output_shape || !stride::is_contiguous(&storage.shape, &storage.strides) {
+    if storage.shape.dims() != output_shape
+        || !stride::is_contiguous(&storage.shape, &storage.strides)
+    {
         return None;
     }
-    let end = storage.offset.checked_add(checked_numel(output_shape)?)?;
-    (end <= buffer_len).then_some(storage.offset..end)
+    let end = storage
+        .offset_elements
+        .checked_add(checked_numel(output_shape)?)?;
+    (end <= buffer_len).then_some(storage.offset_elements..end)
 }
 
 fn scalar_value<T: Copy>(storage: &CpuStorage, values: &[T]) -> Option<T> {
     if checked_numel(&storage.shape)? != 1 {
         return None;
     }
-    values.get(storage.offset).copied()
+    values.get(storage.offset_elements).copied()
 }
 
 fn validate_bounds(

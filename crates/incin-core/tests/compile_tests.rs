@@ -18,6 +18,7 @@ use std::path::Path;
 /// Compile fail.
 fn compile_fail() {
     let t = trybuild::TestCases::new();
+    t.pass("tests/compile_pass/*.rs");
     t.compile_fail("tests/compile_fail/*.rs");
 }
 
@@ -44,6 +45,8 @@ fn expected_reasons() -> BTreeMap<&'static str, &'static str> {
         ("forward_linear_partial_mismatch", "E0277"),
         ("forward_linear_static_mismatch", "E0277"),
         ("forward_model_building_mismatch", "E0277"),
+        ("execution_request_requires_validated", "E0308"),
+        ("execute_is_not_blanket", "E0277"),
         ("flatten_invalid_range", "Invalid flatten range"),
         ("kernel_conv2d_channel_mismatch", "E0277"),
         ("layer_builder_invalid_count", "E0277"),
@@ -67,6 +70,12 @@ fn expected_reasons() -> BTreeMap<&'static str, &'static str> {
         ("shape_rule_needs_the_frontend_proof", "E0277"),
         ("validated_fields_are_private", "E0451"),
         ("validated_new_is_crate_private", "E0624"),
+        ("unsupported_dtype_backend_pair", "E0277"),
+        // `EXE-009`: an operation family with no unsupported default, so a
+        // backend that omits a method fails to compile instead of answering
+        // the call with an error at run time.
+        ("module_ops_has_no_unsupported_default", "E0046"),
+        ("tensor_ops_has_no_unsupported_default", "E0046"),
         // Macros, which emit their own diagnostics and carry no error code.
         ("macro_idx_invalid", "expected `..=`"),
         (

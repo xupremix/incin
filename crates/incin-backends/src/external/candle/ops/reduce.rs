@@ -6,6 +6,12 @@ use crate::external::*;
 impl<T: incin_core::prelude::DType, D: incin_core::prelude::Device>
     incin_core::prelude::ReductionOps<Self> for CandleBackend<T, D>
 {
+    // This adapter does not route candle's product or cumulative sum yet.
+    crate::unsupported::unsupported_reduction_ops! {
+        all: prod_all;
+        dim: prod_dim, cumsum;
+    }
+
     /// Sums all elements into a scalar tensor.
     fn sum_all<K: incin_core::prelude::DType>(
         t: &<Self as incin_core::prelude::Backend>::Storage<K>,

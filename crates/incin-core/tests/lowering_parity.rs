@@ -12,7 +12,8 @@
 
 use incin_core::exec::{
     BroadcastRule, BroadcastSpec, Conv2dArgs, Conv2dRule, MatMulRule, OperationSpec, Pool2dRule,
-    Pool2dSpec, ProofLevel, ReduceKeepRule, ReduceRule, ReshapeRule, ReshapeSpec, ShapeRule,
+    Pool2dSpec, PoolOp, ProofLevel, ReduceKeepRule, ReduceOp, ReduceRule, ReshapeRule, ReshapeSpec,
+    ShapeRule,
 };
 use incin_core::prelude::{Axis, Dyn, OperationKind, Shape, ShapeBuf};
 use typenum::{U0, U1, U2, U3, U4, U6, U8, U16};
@@ -187,9 +188,11 @@ fn transposition_is_applied_after_lowering_because_it_is_not_a_shape_fact() {
 
 #[test]
 fn reducing_an_axis_drops_it_and_splits_the_shape_into_three_regions() {
-    let lowered =
-        <ReduceRule<1> as ShapeRule<(U2, U3, U4)>>::lower(&field::<(U2, U3, U4)>(&[2, 3, 4]), ())
-            .expect("axis 1 is in range");
+    let lowered = <ReduceRule<1> as ShapeRule<(U2, U3, U4)>>::lower(
+        &field::<(U2, U3, U4)>(&[2, 3, 4]),
+        ReduceOp::Sum,
+    )
+    .expect("axis 1 is in range");
     let spec = lowered.descriptor();
 
     assert_eq!(spec.output.dims(), &[2, 4]);
@@ -200,12 +203,14 @@ fn reducing_an_axis_drops_it_and_splits_the_shape_into_three_regions() {
 
 #[test]
 fn keeping_the_axis_changes_the_output_but_not_the_three_extents() {
-    let dropped =
-        <ReduceRule<1> as ShapeRule<(U2, U3, U4)>>::lower(&field::<(U2, U3, U4)>(&[2, 3, 4]), ())
-            .expect("axis 1 is in range");
+    let dropped = <ReduceRule<1> as ShapeRule<(U2, U3, U4)>>::lower(
+        &field::<(U2, U3, U4)>(&[2, 3, 4]),
+        ReduceOp::Sum,
+    )
+    .expect("axis 1 is in range");
     let kept = <ReduceKeepRule<1> as ShapeRule<(U2, U3, U4)>>::lower(
         &field::<(U2, U3, U4)>(&[2, 3, 4]),
-        (),
+        ReduceOp::Sum,
     )
     .expect("axis 1 is in range");
 
@@ -230,11 +235,38 @@ fn a_reduction_output_that_the_typed_shape_rejects_is_an_error() {
     // `Dyn` accepts any rank, so this exercises the rebuild path rather than a
     // rank check: the descriptor's dimensions must round-trip into the output
     // type's field, and for `Dyn` they always do.
-    let lowered = <ReduceRule<0> as ShapeRule<Dyn>>::lower(&field::<Dyn>(&[7, 2]), ())
+    let lowered = <ReduceRule<0> as ShapeRule<Dyn>>::lower(&field::<Dyn>(&[7, 2]), ReduceOp::Sum)
         .expect("axis 0 is in range");
 
     assert_eq!(lowered.descriptor().output.dims(), &[2]);
     assert_eq!(lowered.proof_level(), ProofLevel::Dynamic);
+}
+
+#[test]
+fn the_accumulation_is_carried_into_the_descriptor_rather_than_defaulted() {
+    // The geometry is identical for all five, so nothing downstream could tell
+    // them apart if the rule dropped the argument on the way through.
+    for op in [
+        ReduceOp::Sum,
+        ReduceOp::Mean,
+        ReduceOp::Max,
+        ReduceOp::Min,
+        ReduceOp::Prod,
+    ] {
+        let dropped = <ReduceRule<1> as ShapeRule<(U2, U3, U4)>>::lower(
+            &field::<(U2, U3, U4)>(&[2, 3, 4]),
+            op,
+        )
+        .expect("axis 1 is in range");
+        let kept = <ReduceKeepRule<1> as ShapeRule<(U2, U3, U4)>>::lower(
+            &field::<(U2, U3, U4)>(&[2, 3, 4]),
+            op,
+        )
+        .expect("axis 1 is in range");
+
+        assert_eq!(dropped.descriptor().op, op);
+        assert_eq!(kept.descriptor().op, op);
+    }
 }
 
 // -- reshape --------------------------------------------------------------
@@ -307,7 +339,7 @@ fn grouping_that_does_not_divide_the_channels_is_rejected() {
 fn pooling_halves_the_spatial_axes_and_leaves_the_channels_alone() {
     let lowered = <Pool2x2 as ShapeRule<(U1, U3, U8, U8)>>::lower(
         &field::<(U1, U3, U8, U8)>(&[1, 3, 8, 8]),
-        (),
+        PoolOp::Max,
     )
     .expect("a 2x2 window strided by 2 tiles an 8x8 input");
     let spec = lowered.descriptor();
@@ -318,6 +350,22 @@ fn pooling_halves_the_spatial_axes_and_leaves_the_channels_alone() {
 }
 
 #[test]
+fn pooling_carries_the_accumulation_that_shares_its_window() {
+    for op in [PoolOp::Max, PoolOp::Average] {
+        let lowered = <Pool2x2 as ShapeRule<(U1, U3, U8, U8)>>::lower(
+            &field::<(U1, U3, U8, U8)>(&[1, 3, 8, 8]),
+            op,
+        )
+        .expect("a 2x2 window strided by 2 tiles an 8x8 input");
+
+        // One geometry, two operations. `Pool2dSpec` is only a complete request
+        // because it records which.
+        assert_eq!(lowered.descriptor().op, op);
+        assert_eq!(lowered.descriptor().output.dims(), &[1, 3, 4, 4]);
+    }
+}
+
+#[test]
 fn a_window_larger_than_its_padded_input_is_reported_not_collapsed() {
     let error = Pool2dSpec::new(
         &ShapeBuf::from_slice(&[1, 3, 2, 2]),
@@ -325,6 +373,7 @@ fn a_window_larger_than_its_padded_input_is_reported_not_collapsed() {
         [1, 1],
         [0, 0],
         [1, 1],
+        PoolOp::Max,
     )
     .expect_err("a 4x4 window does not fit a 2x2 input");
 

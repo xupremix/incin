@@ -1,0 +1,16 @@
+error[E0277]: the trait bound `StorageOnly: Execute<BroadcastSpec>` is not satisfied
+  --> tests/compile_fail/execute_is_not_blanket.rs:21:26
+   |
+21 |     requires_broadcast::<StorageOnly>();
+   |                          ^^^^^^^^^^^ unsatisfied trait bound
+   |
+help: the trait `Execute<BroadcastSpec>` is not implemented for `StorageOnly`
+  --> tests/compile_fail/execute_is_not_blanket.rs:7:1
+   |
+ 7 | struct StorageOnly;
+   | ^^^^^^^^^^^^^^^^^^
+note: required by a bound in `requires_broadcast`
+  --> tests/compile_fail/execute_is_not_blanket.rs:18:26
+   |
+18 | fn requires_broadcast<B: Execute<BroadcastSpec>>() {}
+   |                          ^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `requires_broadcast`

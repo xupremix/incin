@@ -10,6 +10,7 @@
 pub(crate) mod backend;
 pub(crate) mod device;
 pub(crate) mod dispatch;
+pub(crate) mod executor;
 pub(crate) mod pipeline;
 pub(crate) mod storage;
 pub(crate) mod tape;

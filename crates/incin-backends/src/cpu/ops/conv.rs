@@ -798,9 +798,9 @@ fn concat_along_dim0(parts: &[CpuStorage]) -> CpuStorage {
 /// `concat_along_dim`.
 fn concat_along_dim(parts: &[CpuStorage], dim: usize) -> CpuStorage {
     let rank = parts[0].shape.len();
-    let mut out_shape = parts[0].shape.clone();
+    let mut out_shape = parts[0].shape.to_vec();
     out_shape[dim] = parts.iter().map(|p| p.shape[dim]).sum();
-    let out_strides = crate::cpu::stride::contiguous_strides(&out_shape);
+    let out_strides = crate::cpu::stride::contiguous_strides(&out_shape.to_vec());
     let total: usize = out_shape.iter().product();
     let mut out = vec![0.0f32; total];
 
@@ -820,7 +820,7 @@ fn concat_along_dim(parts: &[CpuStorage], dim: usize) -> CpuStorage {
         offset += part.shape[dim];
     }
 
-    CpuStorage::from_contiguous(CpuBuffer::F32(out), out_shape)
+    CpuStorage::from_contiguous(CpuBuffer::F32(out), out_shape.to_vec())
 }
 
 // ---------------------------------------------------------------------------

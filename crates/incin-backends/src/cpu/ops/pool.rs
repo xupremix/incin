@@ -141,7 +141,7 @@ pub(crate) fn max_pool2d_impl<T: DType, D: incin_core::prelude::Device, K: DType
 ) -> Result<CpuStorage> {
     let (out, winning_flat_src_idx) = max_window_2d(t, kernel_size, stride, padding, dilation);
 
-    let input_shape = t.shape.clone();
+    let input_shape = t.shape.to_vec();
     let (t_id, out_id) = (t.id, out.id);
     tape::push(TapeEntry {
         output_id: out_id,
@@ -213,7 +213,7 @@ pub(crate) fn avg_pool2d_impl<T: DType, D: incin_core::prelude::Device, K: DType
     }
     let out = CpuStorage::from_contiguous(CpuBuffer::F32(out_vals), vec![b, c, h_out, w_out]);
 
-    let input_shape = t.shape.clone();
+    let input_shape = t.shape.to_vec();
     let (t_id, out_id) = (t.id, out.id);
     tape::push(TapeEntry {
         output_id: out_id,
@@ -314,7 +314,7 @@ pub(crate) fn adaptive_avg_pool2d_impl<T: DType, D: incin_core::prelude::Device,
     }
     let out = CpuStorage::from_contiguous(CpuBuffer::F32(out_vals), vec![b, c, h_out, w_out]);
 
-    let input_shape = t.shape.clone();
+    let input_shape = t.shape.to_vec();
     let (t_id, out_id) = (t.id, out.id);
     tape::push(TapeEntry {
         output_id: out_id,

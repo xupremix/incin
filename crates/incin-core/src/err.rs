@@ -2,6 +2,43 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use core::fmt::Debug;
 
+#[non_exhaustive]
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
+/// Structured failure returned by descriptor executors.
+pub enum BackendError {
+    #[error("{reason}")]
+    /// A capability query rejected the request before launch.
+    Unsupported {
+        reason: crate::exec::capability::UnsupportedReason,
+    },
+
+    #[error("invalid input for {operation}: {reason}")]
+    /// A checked handle could not be interpreted by the selected backend.
+    InvalidInput {
+        operation: crate::shapes::error::OperationKind,
+        reason: &'static str,
+    },
+
+    #[error("backend execution failed for {operation}: {message}")]
+    /// A device or native library failed after validation.
+    Execution {
+        operation: crate::shapes::error::OperationKind,
+        message: String,
+    },
+
+    #[error("device {device:?} was lost during execution")]
+    /// The fingerprinted device disappeared or was reset.
+    DeviceLost {
+        device: crate::tensor::device::DeviceId,
+    },
+}
+
+impl From<crate::exec::capability::UnsupportedReason> for BackendError {
+    fn from(reason: crate::exec::capability::UnsupportedReason) -> Self {
+        Self::Unsupported { reason }
+    }
+}
+
 /// Convenience type alias for `Result<T, Error>`.
 pub type Result<T> = core::result::Result<T, Error>;
 
@@ -9,6 +46,10 @@ pub type Result<T> = core::result::Result<T, Error>;
 #[derive(thiserror::Error)]
 /// Central error enum for the Incin framework.
 pub enum Error {
+    #[error(transparent)]
+    /// A descriptor executor rejected or failed a validated request.
+    Backend(#[from] BackendError),
+
     #[error("Backend '{backend}' is unavailable in this build")]
     /// A runtime-selected backend was not enabled.
     BackendUnavailable { backend: &'static str },

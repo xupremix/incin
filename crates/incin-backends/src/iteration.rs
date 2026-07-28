@@ -5,6 +5,8 @@
 //! input-shape branches in their inner loops.
 
 use alloc::vec::Vec;
+#[cfg(feature = "cuda")]
+use incin_core::exec::LayoutClass;
 use incin_core::prelude::{Error, Result};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -87,22 +89,6 @@ pub(crate) struct UnaryIterationPlan {
     pub(crate) operand: OperandIteration,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg(feature = "cuda")]
-pub(crate) enum UnaryLayoutClass {
-    Contiguous,
-    Strided,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg(feature = "cuda")]
-pub(crate) enum BinaryLayoutClass {
-    Contiguous,
-    ScalarLeft,
-    ScalarRight,
-    Strided,
-}
-
 #[cfg(feature = "cuda")]
 fn is_contiguous(operand: &OperandIteration, output_shape: &[usize]) -> bool {
     let mut expected_stride = 1usize;
@@ -136,11 +122,11 @@ impl UnaryIterationPlan {
     }
 
     #[cfg(feature = "cuda")]
-    pub(crate) fn layout_class(&self) -> UnaryLayoutClass {
+    pub(crate) fn layout_class(&self) -> LayoutClass {
         if is_contiguous(&self.operand, &self.output_shape) {
-            UnaryLayoutClass::Contiguous
+            LayoutClass::Contiguous
         } else {
-            UnaryLayoutClass::Strided
+            LayoutClass::Strided
         }
     }
 }
@@ -165,17 +151,17 @@ impl IterationPlan {
     }
 
     #[cfg(feature = "cuda")]
-    pub(crate) fn binary_layout_class(&self) -> BinaryLayoutClass {
+    pub(crate) fn binary_layout_class(&self) -> LayoutClass {
         let lhs_contiguous = is_contiguous(&self.operands[0], &self.output_shape);
         let rhs_contiguous = is_contiguous(&self.operands[1], &self.output_shape);
         if lhs_contiguous && rhs_contiguous {
-            BinaryLayoutClass::Contiguous
+            LayoutClass::Contiguous
         } else if is_scalar_broadcast(&self.operands[0]) && rhs_contiguous {
-            BinaryLayoutClass::ScalarLeft
+            LayoutClass::ScalarLeft
         } else if lhs_contiguous && is_scalar_broadcast(&self.operands[1]) {
-            BinaryLayoutClass::ScalarRight
+            LayoutClass::ScalarRight
         } else {
-            BinaryLayoutClass::Strided
+            LayoutClass::Strided
         }
     }
 }
@@ -314,7 +300,7 @@ mod tests {
         assert_eq!(plan.operands[1].strides, vec![1]);
         assert_eq!(plan.operands[1].offset, 4);
         #[cfg(feature = "cuda")]
-        assert_eq!(plan.binary_layout_class(), BinaryLayoutClass::Contiguous);
+        assert_eq!(plan.binary_layout_class(), LayoutClass::Contiguous);
     }
 
     #[test]
@@ -339,7 +325,7 @@ mod tests {
         assert_eq!(plan.operands[0].physical_index(5, &[3, 4]), 3);
         assert_eq!(plan.operands[1].physical_index(5, &[3, 4]), 1);
         #[cfg(feature = "cuda")]
-        assert_eq!(plan.binary_layout_class(), BinaryLayoutClass::Strided);
+        assert_eq!(plan.binary_layout_class(), LayoutClass::Strided);
     }
 
     #[test]
@@ -359,10 +345,7 @@ mod tests {
             &[2, 4],
         )
         .unwrap();
-        assert_eq!(
-            scalar_left.binary_layout_class(),
-            BinaryLayoutClass::ScalarLeft
-        );
+        assert_eq!(scalar_left.binary_layout_class(), LayoutClass::ScalarLeft);
 
         let scalar_right = IterationPlan::binary(
             OperandLayout {
@@ -378,10 +361,7 @@ mod tests {
             &[8],
         )
         .unwrap();
-        assert_eq!(
-            scalar_right.binary_layout_class(),
-            BinaryLayoutClass::ScalarRight
-        );
+        assert_eq!(scalar_right.binary_layout_class(), LayoutClass::ScalarRight);
     }
 
     #[test]
@@ -442,7 +422,7 @@ mod tests {
         assert_eq!(plan.operand.strides, vec![1]);
         assert_eq!(plan.operand.physical_index(11, &plan.output_shape), 16);
         #[cfg(feature = "cuda")]
-        assert_eq!(plan.layout_class(), UnaryLayoutClass::Contiguous);
+        assert_eq!(plan.layout_class(), LayoutClass::Contiguous);
     }
 
     #[test]

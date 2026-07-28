@@ -6,6 +6,17 @@ use crate::external::*;
 impl<T: incin_core::prelude::DType, D: incin_core::prelude::Device>
     incin_core::prelude::FloatOps<Self> for CandleBackend<T, D>
 {
+    // Candle has native equivalents for several of these, but this adapter
+    // does not route them yet. Declaring the gap here keeps it visible instead
+    // of leaving it to a trait default that reads as full coverage.
+    crate::unsupported::unsupported_float_ops! {
+        unary: sign, floor, ceil, round, log2, log10, sin, cos, tan, asin, acos,
+               atan, sinh, cosh, asinh, acosh, atanh, erf, rsqrt, trunc, frac;
+        exponent: powf;
+        bounds: clamp;
+        binary: atan2, fmod, remainder;
+    }
+
     /// Adds a scalar to every element of `t`.
     fn add_scalar_float<K: incin_core::prelude::DType>(
         t: &<Self as incin_core::prelude::Backend>::Storage<K>,

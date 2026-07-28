@@ -60,7 +60,7 @@ hashbrown = { version = "0.14", default-features = false, features = ["alloc", "
 trybuild = "1.0.117"
 serde_json = "1.0.120"
 tempfile = "3.27"
-incin-backends = { path = "../incin-backends", default-features = false, features = ["std", "cpu"] }
+incin-backends = { path = "../incin-backends", default-features = false, features = ["std", "cpu", "wgpu"] }
 
 [build-dependencies]
 prost-build = "0.14.4"

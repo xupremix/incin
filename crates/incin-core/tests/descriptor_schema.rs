@@ -19,7 +19,7 @@
 
 use incin_core::exec::{
     AxisMask, BroadcastSpec, Conv2dSpec, DescriptorSchemaVersion, MatMulSpec, OperationSpec,
-    ReductionSpec,
+    ReduceOp, ReductionSpec,
 };
 use incin_core::prelude::{
     Axis, DimensionConstraint, OperationKind, RankExpectation, ShapeBuf, ShapeError, StrideBuf,
@@ -44,7 +44,7 @@ fn dense(dims: &[usize]) -> StrideBuf {
 fn schema_version_is_pinned() {
     assert_eq!(
         DescriptorSchemaVersion::CURRENT.get(),
-        1,
+        2,
         "the descriptor field layout changed; bump CURRENT and invalidate any \
          cache keyed on descriptor contents"
     );
@@ -87,7 +87,7 @@ fn schema_compatibility_is_exact() {
     let current = DescriptorSchemaVersion::CURRENT;
     assert!(current.is_compatible_with(current));
     assert!(!current.is_compatible_with(DescriptorSchemaVersion::new(current.get() + 1)));
-    assert_eq!(current.to_string(), "v1");
+    assert_eq!(current.to_string(), "v2");
 }
 
 // --- the promoted operation vocabulary --------------------------------------
@@ -505,7 +505,7 @@ fn reduction_decomposition_multiplies_back_to_the_input() {
         (vec![1, 2], (2, 12, 5)),
         (vec![0, 1, 2, 3], (1, 120, 1)),
     ] {
-        let spec = ReductionSpec::over_axes(&input, axes.clone(), false).unwrap();
+        let spec = ReductionSpec::over_axes(&input, axes.clone(), false, ReduceOp::Sum).unwrap();
         assert_eq!(
             (spec.outer, spec.reduced, spec.inner),
             expected,
@@ -528,11 +528,11 @@ fn reduction_decomposition_multiplies_back_to_the_input() {
 fn reduction_output_respects_keep_dims() {
     let input = shape(&[2, 3, 4]);
 
-    let dropped = ReductionSpec::over_axes(&input, [1], false).unwrap();
+    let dropped = ReductionSpec::over_axes(&input, [1], false, ReduceOp::Sum).unwrap();
     assert_eq!(dropped.output.dims(), &[2, 4]);
     assert!(!dropped.keep_dims);
 
-    let kept = ReductionSpec::over_axes(&input, [1], true).unwrap();
+    let kept = ReductionSpec::over_axes(&input, [1], true, ReduceOp::Sum).unwrap();
     assert_eq!(kept.output.dims(), &[2, 1, 4]);
     assert!(kept.keep_dims);
     // The two describe the same work, only shaped differently.
@@ -544,12 +544,12 @@ fn reduction_output_respects_keep_dims() {
 
 #[test]
 fn reduction_over_all_axes_produces_a_scalar() {
-    let spec = ReductionSpec::over_all(&shape(&[2, 3, 4]), false).unwrap();
+    let spec = ReductionSpec::over_all(&shape(&[2, 3, 4]), false, ReduceOp::Sum).unwrap();
     assert_eq!(spec.output.rank(), 0);
     assert_eq!(spec.output_elements().unwrap(), 1);
     assert_eq!((spec.outer, spec.reduced, spec.inner), (1, 24, 1));
 
-    let kept = ReductionSpec::over_all(&shape(&[2, 3, 4]), true).unwrap();
+    let kept = ReductionSpec::over_all(&shape(&[2, 3, 4]), true, ReduceOp::Sum).unwrap();
     assert_eq!(kept.output.dims(), &[1, 1, 1]);
 }
 
@@ -558,7 +558,7 @@ fn reduction_over_no_axes_is_the_identity() {
     // Total rather than a special case, so a caller building an axis list
     // dynamically does not need one either.
     let input = shape(&[2, 3]);
-    let spec = ReductionSpec::new(&input, AxisMask::EMPTY, false).unwrap();
+    let spec = ReductionSpec::new(&input, AxisMask::EMPTY, false, ReduceOp::Sum).unwrap();
 
     assert_eq!(spec.output, input);
     assert_eq!((spec.outer, spec.reduced, spec.inner), (6, 1, 1));
@@ -568,7 +568,8 @@ fn reduction_over_no_axes_is_the_identity() {
 fn reduction_rejects_scattered_axes() {
     // {0, 2} has no outer/reduced/inner decomposition without a permutation
     // first, so it is refused rather than mis-lowered.
-    let error = ReductionSpec::over_axes(&shape(&[2, 3, 4]), [0, 2], false).unwrap_err();
+    let error =
+        ReductionSpec::over_axes(&shape(&[2, 3, 4]), [0, 2], false, ReduceOp::Sum).unwrap_err();
     assert!(matches!(
         error,
         ShapeError::InvalidAxisRange {
@@ -582,7 +583,7 @@ fn reduction_rejects_scattered_axes() {
 
 #[test]
 fn reduction_rejects_an_axis_past_the_input_rank() {
-    let listed = ReductionSpec::over_axes(&shape(&[2, 3]), [2], false).unwrap_err();
+    let listed = ReductionSpec::over_axes(&shape(&[2, 3]), [2], false, ReduceOp::Sum).unwrap_err();
     assert!(matches!(
         listed,
         ShapeError::InvalidParameter {
@@ -593,8 +594,13 @@ fn reduction_rejects_an_axis_past_the_input_rank() {
     ));
 
     // Also when the mask is built directly and skips `try_from_axes`.
-    let masked =
-        ReductionSpec::new(&shape(&[2, 3]), AxisMask::EMPTY.insert(5).unwrap(), false).unwrap_err();
+    let masked = ReductionSpec::new(
+        &shape(&[2, 3]),
+        AxisMask::EMPTY.insert(5).unwrap(),
+        false,
+        ReduceOp::Sum,
+    )
+    .unwrap_err();
     assert!(matches!(
         masked,
         ShapeError::InvalidParameter {
@@ -609,7 +615,8 @@ fn reduction_rejects_an_axis_past_the_input_rank() {
 fn reduction_keeps_an_empty_input_empty() {
     // The zero axis survives into the output, so it collapses every product it
     // takes part in and nothing overflows despite the `usize::MAX` axis.
-    let spec = ReductionSpec::over_axes(&shape(&[usize::MAX, 4, 0]), [1], false).unwrap();
+    let spec =
+        ReductionSpec::over_axes(&shape(&[usize::MAX, 4, 0]), [1], false, ReduceOp::Sum).unwrap();
     assert_eq!(spec.output.dims(), &[usize::MAX, 0]);
     assert_eq!((spec.outer, spec.reduced, spec.inner), (usize::MAX, 4, 0));
     assert_eq!(spec.output_elements().unwrap(), 0);
@@ -621,8 +628,13 @@ fn an_output_too_large_to_index_is_rejected_at_resolution() {
     // element count overflows `usize`, so no backend could allocate or index
     // it. The useful place to say so is here, while the operands are still in
     // hand — not at launch, where the diagnostic is a kernel argument.
-    let error =
-        ReductionSpec::over_axes(&shape(&[usize::MAX, 0, usize::MAX]), [1], false).unwrap_err();
+    let error = ReductionSpec::over_axes(
+        &shape(&[usize::MAX, 0, usize::MAX]),
+        [1],
+        false,
+        ReduceOp::Sum,
+    )
+    .unwrap_err();
     assert!(matches!(
         error,
         ShapeError::ArithmeticOverflow {
@@ -650,7 +662,10 @@ fn every_constructed_descriptor_has_a_representable_output() {
             BroadcastSpec::contiguous(&shape(&[4, 1, 3]), &shape(&[5, 3]))?.output_elements()
         }),
         Box::new(|| MatMulSpec::new(&shape(&[2, 3, 4]), &shape(&[4, 5]))?.output_elements()),
-        Box::new(|| ReductionSpec::over_axes(&shape(&[2, 3, 4]), [1], true)?.output_elements()),
+        Box::new(|| {
+            ReductionSpec::over_axes(&shape(&[2, 3, 4]), [1], true, ReduceOp::Sum)?
+                .output_elements()
+        }),
         Box::new(|| {
             Conv2dSpec::new(
                 &shape(&[8, 3, 32, 32]),
@@ -799,7 +814,7 @@ fn descriptors_are_shareable_and_comparable() {
 
     assert_usable(&BroadcastSpec::contiguous(&shape(&[2, 3]), &shape(&[3])).unwrap());
     assert_usable(&MatMulSpec::new(&shape(&[2, 3]), &shape(&[3, 4])).unwrap());
-    assert_usable(&ReductionSpec::over_axes(&shape(&[2, 3]), [1], false).unwrap());
+    assert_usable(&ReductionSpec::over_axes(&shape(&[2, 3]), [1], false, ReduceOp::Sum).unwrap());
     assert_usable(
         &Conv2dSpec::new(&shape(&[1, 1, 4, 4]), 1, [3, 3], [1, 1], [1, 1], [1, 1], 1).unwrap(),
     );

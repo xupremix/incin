@@ -1,8 +1,7 @@
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
-use crate::iteration::{
-    BinaryLayoutClass, IterationPlan, OperandLayout, UnaryIterationPlan, UnaryLayoutClass,
-};
+use crate::iteration::{IterationPlan, OperandLayout, UnaryIterationPlan};
 use alloc::sync::Arc;
+use incin_core::exec::LayoutClass;
 use incin_core::prelude::{DTypeId, DeviceId, Error, Result};
 
 use crate::dtype_policy::{BackendFamily, OperationKind, resolve_dtype_policy};
@@ -34,14 +33,6 @@ fn checked_i32_vec(values: &[usize], field: &'static str) -> Result<Vec<i32>> {
         .iter()
         .map(|&value| checked_i32(value, field))
         .collect()
-}
-
-fn checked_byte_len(numel: usize, element_size: usize) -> Result<usize> {
-    numel.checked_mul(element_size).ok_or_else(|| {
-        Error::Msg(format!(
-            "CUDA allocation byte length overflow: {numel} elements of {element_size} bytes"
-        ))
-    })
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -302,7 +293,7 @@ fn render_unary_strategy(
     op_name: &str,
     op_expr: &str,
     dtype: DTypeId,
-    layout: UnaryLayoutClass,
+    layout: LayoutClass,
     strategy: PointwiseStrategy,
 ) -> Result<crate::kernel::RenderedKernel> {
     match strategy {
@@ -325,7 +316,7 @@ fn render_binary_strategy(
     op_name: &str,
     op_expr: &str,
     dtype: DTypeId,
-    layout: BinaryLayoutClass,
+    layout: LayoutClass,
     strategy: PointwiseStrategy,
 ) -> Result<crate::kernel::RenderedKernel> {
     match strategy {
@@ -346,12 +337,12 @@ fn render_binary_strategy(
 
 fn select_unary_strategy(
     dtype: DTypeId,
-    layout: UnaryLayoutClass,
+    layout: LayoutClass,
     numel: usize,
     offset: usize,
 ) -> Result<PointwiseStrategy> {
     let width = crate::tuning::preferred_pointwise_width(dtype);
-    let dense = layout == UnaryLayoutClass::Contiguous;
+    let dense = layout == LayoutClass::Contiguous;
     pointwise_strategy(
         dtype,
         numel,
@@ -362,21 +353,27 @@ fn select_unary_strategy(
 
 fn select_binary_strategy(
     dtype: DTypeId,
-    layout: BinaryLayoutClass,
+    layout: LayoutClass,
     numel: usize,
     lhs_offset: usize,
     rhs_offset: usize,
 ) -> Result<PointwiseStrategy> {
     let width = crate::tuning::preferred_pointwise_width(dtype);
     let aligned = match layout {
-        BinaryLayoutClass::Contiguous => {
+        LayoutClass::Contiguous => {
             lhs_offset.is_multiple_of(width.into()) && rhs_offset.is_multiple_of(width.into())
         }
-        BinaryLayoutClass::ScalarLeft => rhs_offset.is_multiple_of(width.into()),
-        BinaryLayoutClass::ScalarRight => lhs_offset.is_multiple_of(width.into()),
-        BinaryLayoutClass::Strided => false,
+        LayoutClass::ScalarLeft => rhs_offset.is_multiple_of(width.into()),
+        LayoutClass::ScalarRight => lhs_offset.is_multiple_of(width.into()),
+        LayoutClass::Strided => false,
+        other => {
+            return Err(Error::Msg(format!(
+                "layout {} is not valid for CUDA binary strategy selection",
+                other.as_str()
+            )));
+        }
     };
-    pointwise_strategy(dtype, numel, layout != BinaryLayoutClass::Strided, aligned)
+    pointwise_strategy(dtype, numel, layout != LayoutClass::Strided, aligned)
 }
 
 fn launch_config(
@@ -419,7 +416,7 @@ pub(crate) fn launch_unary_op(
     let plan = UnaryIterationPlan::new(OperandLayout {
         shape: &t.shape,
         strides: &t.strides,
-        offset: t.offset,
+        offset: t.offset_elements,
     })?;
     if let Some(max_index) = plan.operand.max_physical_index(&plan.output_shape)?
         && max_index >= b.len
@@ -435,7 +432,7 @@ pub(crate) fn launch_unary_op(
     let strategy = select_unary_strategy(b.dtype, layout, numel, plan.operand.offset)?;
     let kernel = render_unary_strategy(op_name, op_expr, b.dtype, layout, strategy)?;
     let packed_width = crate::tuning::preferred_pointwise_width(b.dtype);
-    let dense = layout == UnaryLayoutClass::Contiguous;
+    let dense = layout == LayoutClass::Contiguous;
     let selection = pointwise_launch_selection(
         &b.device,
         &kernel,
@@ -448,15 +445,15 @@ pub(crate) fn launch_unary_op(
     let prepared = prepare_pointwise_kernels(device_id, &selection, b.dtype, |strategy| {
         render_unary_strategy(op_name, op_expr, b.dtype, layout, strategy)
     })?;
-    let element_size = prepared
+    let dtype = prepared
         .first()
         .ok_or_else(|| Error::Msg("CUDA unary candidate set is empty".into()))?
         .kernel
-        .element_size;
-    let byte_len = checked_byte_len(numel, element_size)?;
+        .dtype;
+    let byte_len = crate::bytes::byte_len(dtype, numel, OperationKind::Pointwise)?;
     let offset_i32 = checked_i32(plan.operand.offset, "offset")?;
     let numel_i32 = checked_i32(numel, "element count")?;
-    let strided_metadata = if layout == UnaryLayoutClass::Strided {
+    let strided_metadata = if layout == LayoutClass::Strided {
         Some((
             checked_i32_vec(&plan.output_shape, "shape")?,
             checked_i32_vec(&plan.operand.strides, "stride")?,
@@ -479,7 +476,7 @@ pub(crate) fn launch_unary_op(
         };
 
     if numel == 0 {
-        return Ok(CudaStorage::new(Arc::new(out_b), t.shape.clone()));
+        return Ok(CudaStorage::new(Arc::new(out_b), t.shape.to_vec()));
     }
 
     unsafe {
@@ -540,7 +537,7 @@ pub(crate) fn launch_unary_op(
 
     Ok(CudaStorage::new(
         alloc::sync::Arc::new(out_b),
-        t.shape.clone(),
+        t.shape.to_vec(),
     ))
 }
 
@@ -571,12 +568,12 @@ pub(crate) fn launch_binary_op(
         OperandLayout {
             shape: &lhs.shape,
             strides: &lhs.strides,
-            offset: lhs.offset,
+            offset: lhs.offset_elements,
         },
         OperandLayout {
             shape: &rhs.shape,
             strides: &rhs.strides,
-            offset: rhs.offset,
+            offset: rhs.offset_elements,
         },
         out_shape,
     )?;
@@ -602,36 +599,42 @@ pub(crate) fn launch_binary_op(
     let kernel = render_binary_strategy(op_name, op_expr, lhs_b.dtype, layout, strategy)?;
     let packed_width = crate::tuning::preferred_pointwise_width(lhs_b.dtype);
     let packed_aligned = match layout {
-        BinaryLayoutClass::Contiguous => {
+        LayoutClass::Contiguous => {
             lhs_plan.offset.is_multiple_of(packed_width.into())
                 && rhs_plan.offset.is_multiple_of(packed_width.into())
         }
-        BinaryLayoutClass::ScalarLeft => rhs_plan.offset.is_multiple_of(packed_width.into()),
-        BinaryLayoutClass::ScalarRight => lhs_plan.offset.is_multiple_of(packed_width.into()),
-        BinaryLayoutClass::Strided => false,
+        LayoutClass::ScalarLeft => rhs_plan.offset.is_multiple_of(packed_width.into()),
+        LayoutClass::ScalarRight => lhs_plan.offset.is_multiple_of(packed_width.into()),
+        LayoutClass::Strided => false,
+        other => {
+            return Err(Error::Msg(format!(
+                "layout {} is not valid for a CUDA binary launch",
+                other.as_str()
+            )));
+        }
     };
     let selection = pointwise_launch_selection(
         &lhs_b.device,
         &kernel,
         lhs_b.dtype,
         numel,
-        layout != BinaryLayoutClass::Strided,
+        layout != LayoutClass::Strided,
         packed_aligned,
         strategy,
     )?;
     let prepared = prepare_pointwise_kernels(device_id, &selection, lhs_b.dtype, |strategy| {
         render_binary_strategy(op_name, op_expr, lhs_b.dtype, layout, strategy)
     })?;
-    let element_size = prepared
+    let dtype = prepared
         .first()
         .ok_or_else(|| Error::Msg("CUDA binary candidate set is empty".into()))?
         .kernel
-        .element_size;
-    let byte_len = checked_byte_len(numel, element_size)?;
+        .dtype;
+    let byte_len = crate::bytes::byte_len(dtype, numel, OperationKind::Pointwise)?;
     let lhs_offset_i32 = checked_i32(lhs_plan.offset, "lhs offset")?;
     let rhs_offset_i32 = checked_i32(rhs_plan.offset, "rhs offset")?;
     let numel_i32 = checked_i32(numel, "element count")?;
-    let strided_metadata = if layout == BinaryLayoutClass::Strided {
+    let strided_metadata = if layout == LayoutClass::Strided {
         Some((
             checked_i32_vec(&plan.output_shape, "shape")?,
             checked_i32_vec(&lhs_plan.strides, "lhs stride")?,
@@ -760,7 +763,9 @@ mod tests {
             checked_i32_vec(&[0, 7, 31], "stride").unwrap(),
             vec![0, 7, 31]
         );
-        assert!(checked_byte_len(usize::MAX, 2).is_err());
+        assert!(
+            crate::bytes::byte_len(DTypeId::F16, usize::MAX, OperationKind::Pointwise).is_err()
+        );
     }
 
     #[test]
@@ -778,37 +783,35 @@ mod tests {
     #[test]
     fn strategy_selection_separates_packed_alignment_from_scalar_unrolling() {
         assert_eq!(
-            select_unary_strategy(DTypeId::F32, UnaryLayoutClass::Contiguous, 4096, 0).unwrap(),
+            select_unary_strategy(DTypeId::F32, LayoutClass::Contiguous, 4096, 0).unwrap(),
             PointwiseStrategy::Packed {
                 vector_width: 4,
                 block_size: 256
             }
         );
         assert_eq!(
-            select_unary_strategy(DTypeId::F32, UnaryLayoutClass::Contiguous, 4096, 1).unwrap(),
+            select_unary_strategy(DTypeId::F32, LayoutClass::Contiguous, 4096, 1).unwrap(),
             PointwiseStrategy::Scalar {
                 unroll_width: 4,
                 block_size: 256
             }
         );
         assert_eq!(
-            select_binary_strategy(DTypeId::F16, BinaryLayoutClass::ScalarLeft, 4096, 1, 2)
-                .unwrap(),
+            select_binary_strategy(DTypeId::F16, LayoutClass::ScalarLeft, 4096, 1, 2).unwrap(),
             PointwiseStrategy::Packed {
                 vector_width: 2,
                 block_size: 256
             }
         );
         assert_eq!(
-            select_binary_strategy(DTypeId::F64, BinaryLayoutClass::Strided, 4096, 0, 0).unwrap(),
+            select_binary_strategy(DTypeId::F64, LayoutClass::Strided, 4096, 0, 0).unwrap(),
             PointwiseStrategy::Scalar {
                 unroll_width: 1,
                 block_size: 256
             }
         );
         assert_eq!(
-            select_binary_strategy(DTypeId::F32, BinaryLayoutClass::Contiguous, 1023, 0, 0)
-                .unwrap(),
+            select_binary_strategy(DTypeId::F32, LayoutClass::Contiguous, 1023, 0, 0).unwrap(),
             PointwiseStrategy::Scalar {
                 unroll_width: 1,
                 block_size: 256

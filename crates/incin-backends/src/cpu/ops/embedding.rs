@@ -39,7 +39,7 @@ pub(crate) fn embedding_impl<T: DType, D: incin_core::prelude::Device, K: DType,
         return Err(Error::ShapeMismatch {
             op: "embedding",
             expected: vec![0, 0],
-            got: w.shape.clone(),
+            got: w.shape.to_vec(),
             msg: format!(
                 "embedding: weight table must be rank-2 [vocab_size, hidden_size], got shape {:?}",
                 w.shape
@@ -78,14 +78,14 @@ pub(crate) fn embedding_impl<T: DType, D: incin_core::prelude::Device, K: DType,
         }
     }
 
-    let mut out_shape = t.shape.clone();
+    let mut out_shape = t.shape.to_vec();
     out_shape.push(hidden_size);
     let out = CpuStorage::from_contiguous(CpuBuffer::F32(out_vals), out_shape);
 
     let w_total: usize = w.shape.iter().product();
-    let t_shape = t.shape.clone();
+    let t_shape = t.shape.to_vec();
     let (w_id, out_id) = (w.id, out.id);
-    let w_shape_for_backward = w.shape.clone();
+    let w_shape_for_backward = w.shape.to_vec();
     tape::push(TapeEntry {
         output_id: out_id,
         input_ids: vec![w_id],

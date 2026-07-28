@@ -59,7 +59,8 @@ use core::marker::PhantomData;
 
 use super::proof::{ProofLevel, Validated};
 use super::spec::{
-    BroadcastSpec, Conv2dSpec, MatMulSpec, OperationSpec, Pool2dSpec, ReductionSpec, ReshapeSpec,
+    BroadcastSpec, Conv2dSpec, MatMulSpec, OperationSpec, Pool2dSpec, PoolOp, ReduceOp,
+    ReductionSpec, ReshapeSpec,
 };
 use crate::shapes::broadcast::BroadcastShape;
 use crate::shapes::buf::ShapeBuf;
@@ -100,9 +101,13 @@ pub trait ShapeRule<Inputs>: Sized {
 
     /// Everything the shape types do not determine.
     ///
-    /// `()` wherever the operation's parameters are already type-level, which
-    /// is most of them: `ReduceDim<D>` carries its axis as a const generic and
-    /// `Pool2dShape<K, S, P, D>` carries its window as `typenum` parameters.
+    /// `()` wherever the operation is fixed by its operand types alone, as
+    /// broadcasting, matmul, and reshape are. It is not empty where a family of
+    /// operations shares one shape rule: `ReduceDim<D>` carries the axis but not
+    /// the accumulation, and `Pool2dShape<K, S, P, D>` carries the window but not
+    /// what runs inside it, so both take their operator here. `Conv2dArgs`
+    /// carries grouping for the same reason — it constrains the channel axes
+    /// without being a shape parameter.
     type Args;
 
     /// The descriptor this rule resolves to.
@@ -262,12 +267,13 @@ fn lower_reduction<S, Output>(
     field: &S::Field,
     axis: usize,
     keep_dims: bool,
+    op: ReduceOp,
 ) -> Result<Validated<ReductionSpec>, ShapeError>
 where
     S: DynShape,
     Output: Shape,
 {
-    let spec = ReductionSpec::over_axes(&dims_of::<S>(field), [axis], keep_dims)?;
+    let spec = ReductionSpec::over_axes(&dims_of::<S>(field), [axis], keep_dims, op)?;
     field_from_dims::<Output>(OperationKind::Reduction, spec.output.dims())?;
     Ok(Validated::new(spec, ProofLevel::of::<S>()))
 }
@@ -278,14 +284,17 @@ where
 {
     type Output = <S as ReduceDim<D>>::Output;
     type Operands = <S as Shape>::Field;
-    type Args = ();
+    /// `ReduceDim<D>` fixes the axis and says nothing about the accumulation, so
+    /// the accumulation is what the caller still has to supply. Every reduction
+    /// in the set shares this rule and this output type.
+    type Args = ReduceOp;
     type Descriptor = ReductionSpec;
 
     fn lower(
         operands: &Self::Operands,
-        (): Self::Args,
+        op: Self::Args,
     ) -> Result<Validated<ReductionSpec>, ShapeError> {
-        lower_reduction::<S, Self::Output>(operands, D, false)
+        lower_reduction::<S, Self::Output>(operands, D, false, op)
     }
 }
 
@@ -295,14 +304,15 @@ where
 {
     type Output = <S as ReduceKeepDim<D>>::Output;
     type Operands = <S as Shape>::Field;
-    type Args = ();
+    /// See [`ReduceRule::Args`](ShapeRule::Args).
+    type Args = ReduceOp;
     type Descriptor = ReductionSpec;
 
     fn lower(
         operands: &Self::Operands,
-        (): Self::Args,
+        op: Self::Args,
     ) -> Result<Validated<ReductionSpec>, ShapeError> {
-        lower_reduction::<S, Self::Output>(operands, D, true)
+        lower_reduction::<S, Self::Output>(operands, D, true, op)
     }
 }
 
@@ -428,12 +438,14 @@ where
 {
     type Output = <Sh as Pool2dShape<K, S, P, D>>::Output;
     type Operands = <Sh as Shape>::Field;
-    type Args = ();
+    /// `Pool2dShape` fixes the window as `typenum` parameters, which leaves the
+    /// accumulation inside it as the one thing the shape types do not determine.
+    type Args = PoolOp;
     type Descriptor = Pool2dSpec;
 
     fn lower(
         operands: &Self::Operands,
-        (): Self::Args,
+        op: Self::Args,
     ) -> Result<Validated<Pool2dSpec>, ShapeError> {
         let resolved = Sh::compute_output_shape(operands)?;
         let expected = dims_of::<Self::Output>(&resolved);
@@ -444,6 +456,7 @@ where
             [S::USIZE; 2],
             [P::USIZE; 2],
             [D::USIZE; 2],
+            op,
         )?;
         agree(OperationKind::Pool2d, &expected, &spec.output)?;
 
