@@ -9,6 +9,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- **Generated capability and feature documentation (`UX-013`):**
+  `docs/capabilities.md` is rendered from `CPU_CAPABILITIES`,
+  `CUDA_CAPABILITIES` and `WGPU_CAPABILITIES` by
+  `incin_backends::capability_docs`, and `README.md`'s two feature tables are
+  rendered from the Cargo manifests by `cargo xtask docs` — including the
+  `Purpose` column, which comes from the `#` comment above each feature in the
+  manifest. Both have a check that runs in CI (`cargo xtask docs --check` and
+  the `generated_docs` suite), because a generator nobody runs is a handwritten
+  table with extra steps. `DTypeId::name`, `DeviceKind::name` and
+  `ImplementationKind::name` give the enums one spelling each, so the tables,
+  the conformance suite and `cargo incin doctor` cannot disagree about what to
+  call `f32`.
 - **External-backend SDK and conformance suite (`EXE-010`):**
   `incin_backends::external::conformance` is the backend-authoring surface from
   `PROPOSALS.md` §2.9 — a `Subject` trait carrying the three things only an
@@ -107,6 +119,29 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   `incin_core::exec::TensorId`; three independent identity counters became one.
 
 ### Fixed
+- **Every public example is compiled (`UX-013`).** 70 of the workspace's 79 doc
+  examples were fenced ```` ```rust,ignore ````, so `cargo test --workspace
+  --doc` reported success having compiled nine — and CI never ran it at all,
+  because `cargo test --all-targets` excludes doctests. Compiling them found
+  the examples documenting an API that does not exist: `from_slice` shown with
+  one argument where it takes two (fifteen examples), `Param<Tensor<S, B>>`
+  where the type is `Param<S, B>`, a rank-1 reshape argument written `()` where
+  it is `((),)`, `dims()` compared against a `Vec` where a static shape returns
+  an array, `incin::symbolic_dim!` which does not resolve (`dim!` is the public
+  macro; `symbolic_dim!` is a `#[doc(hidden)]` alias the facade does not
+  re-export), and an `incin-data` front page built on a `DataLoader` builder API
+  that was never written. A test now fails on any reintroduced `ignore` fence.
+- **`IndexSpec`, `LSTM` and `LSTMCell` are reachable from the prelude
+  (`UX-013`).** `Tensor::slice` takes `&[IndexSpec]` and `IndexSpec` was not
+  exported, so the documented call could not be written by a user of the
+  prelude; `RNN` and `RNNCell` were exported while `LSTM` and `LSTMCell` were
+  not.
+- **`DummyBackend`'s binary operations broadcast (`UX-013`).** They returned the
+  left operand's shape unchanged, which disagrees with every real backend:
+  `broadcast_add` and its siblings reach `Backend::add` with differently shaped
+  operands and hand the result to `Tensor::from_parts` against the *broadcast*
+  type. `incin_core::shapes::broadcast::broadcast_dim_slices` is the one
+  right-aligned rule both paths now use.
 - **`--features external-candle` failed `clippy -D warnings` (`EXE-010`):** the
   `bytes` module was gated on `external-candle` alongside `cuda` and `wgpu`,
   but the Candle adapter never allocates by byte length, so that feature set

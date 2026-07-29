@@ -15,12 +15,16 @@ use typenum::Unsigned;
 /// and verifies at compile time that the output dimension is non-negative.
 ///
 /// ## Examples
-/// ```rust,ignore
+/// ```rust
+/// # extern crate incin_core as incin;
+/// # fn main() -> incin::prelude::Result<()> {
+/// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
 /// use incin::prelude::*;
 ///
 /// // A statically typed 3×3, stride-1, padding-0, dilation-1 conv: 3 in → 64 out
 /// type S = s![64, 3, 3, 1, 0, 1]; // (OutC, InC, K, Stride, Padding, Dilation)
-/// let conv = Conv2d::<S, MyBackend>::build(())?;
+/// let conv = Conv2d::<S, DefaultBackend>::build(())?;
+/// # Ok(()) }
 /// ```
 #[derive(Debug, Clone)]
 #[incin_macros::module(internal)]

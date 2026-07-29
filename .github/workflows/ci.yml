@@ -155,6 +155,12 @@ jobs:
       run: cargo test -p xtask
     - name: Enforce regression budgets and feature inventory
       run: cargo xtask budgets
+    # UX-013. README.md's feature tables are generated from the Cargo
+    # manifests; this fails when the checked-in text and the manifests
+    # disagree. The capability tables have a different authority and are
+    # checked by `incin-backends`' `generated_docs` suite instead.
+    - name: Check README.md's generated feature tables
+      run: cargo xtask docs --check
     - name: Enforce shape-proof audit budgets
       run: tools/audit-shapes.sh --check
 
@@ -183,6 +189,12 @@ jobs:
       env:
         RUSTDOCFLAGS: -D warnings
       run: cargo doc -p incin -p incin-backends -p incin-core --no-deps --no-default-features --features incin/cpu,incin/cuda,incin/wgpu,incin/telemetry,incin/external-candle
+    # UX-013. `cargo test --all-targets` in the `test` job does NOT run
+    # doctests — `--all-targets` excludes them — so until this step existed no
+    # job compiled a single public example. That is how the workspace reached
+    # seventy `ignore`-fenced examples with a green pipeline.
+    - name: Compile every public example
+      run: cargo test --workspace --doc
 
   core-no-std:
     name: Core no_std Check

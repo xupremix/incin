@@ -7,6 +7,9 @@ pub use incin_core::prelude::*;
 
 pub mod backend_kind;
 pub mod capability;
+/// The generated support tables in `docs/capabilities.md` (`UX-013`).
+#[cfg(feature = "std")]
+pub mod capability_docs;
 pub use backend_kind::BackendFor;
 #[cfg(any(feature = "cpu", feature = "wgpu", feature = "cuda"))]
 pub(crate) mod descriptor_bind;

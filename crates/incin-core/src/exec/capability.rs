@@ -24,6 +24,18 @@ pub enum ImplementationKind {
     Fallback,
 }
 
+impl ImplementationKind {
+    /// The lowercase name used in generated documentation.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Native => "native",
+            Self::Composed => "composed",
+            Self::Fallback => "fallback",
+        }
+    }
+}
+
 /// Stable reason an otherwise valid tensor request cannot execute.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

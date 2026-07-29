@@ -5,48 +5,43 @@
 //!
 //! ## Examples
 //!
-//! Using a basic `DataLoader` with an in-memory `Dataset`:
+//! A `Dataset` supplies items by index; a `Collate` turns a batch of them into
+//! whatever the training step wants; a `DataLoader` joins the two.
 //!
-//! ```rust,ignore
-//! use incin_data::prelude::*;
-//! use incin_data::{Dataset, DataLoader};
-//! use incin::prelude::*;
+//! ```rust
+//! use incin_data::{Collate, DataLoader, Dataset};
 //!
-//! struct MyDataset {
-//!     images: Tensor<s![100, 3, 224, 224], CpuBackendImpl>,
-//!     labels: Tensor<s![100], CpuBackendImpl>,
-//! }
+//! struct Squares;
 //!
-//! impl Dataset for MyDataset {
-//!     type Item = (Tensor<s![3, 224, 224], CpuBackendImpl>, Tensor<s![], CpuBackendImpl>);
-//!     
+//! impl Dataset for Squares {
+//!     type Item = u32;
+//!
 //!     fn len(&self) -> usize {
 //!         100
 //!     }
-//!     
-//!     fn get(&self, idx: usize) -> Option<Self::Item> {
-//!         if idx >= 100 { return None; }
-//!         let img = self.images.slice_dyn(vec![idx..idx+1, 0..3, 0..224, 0..224]).unwrap();
-//!         let label = self.labels.slice_dyn(vec![idx..idx+1]).unwrap();
-//!         // Return properly shaped items...
-//!         todo!()
+//!
+//!     fn get(&self, index: usize) -> Option<Self::Item> {
+//!         u32::try_from(index).ok().filter(|_| index < self.len()).map(|i| i * i)
 //!     }
 //! }
 //!
-//! fn main() {
-//!     let dataset = MyDataset {
-//!         images: Tensor::zeros(()).unwrap(),
-//!         labels: Tensor::zeros(()).unwrap(),
-//!     };
-//!     
-//!     // Create a dataloader with batch size 32, shuffling enabled
-//!     let loader = DataLoader::new(dataset).batch_size(32).shuffle(true);
-//!     
-//!     for batch in loader.iter() {
-//!         let (images, labels) = batch;
-//!         // train model...
+//! struct IntoBatch;
+//!
+//! impl Collate<u32> for IntoBatch {
+//!     type Output = Vec<u32>;
+//!
+//!     fn collate(&self, batch: Vec<u32>) -> Self::Output {
+//!         batch
 //!     }
 //! }
+//!
+//! // Batches of 32, shuffled. Loading happens on worker threads; iterating
+//! // borrows the loader, so the same one can be iterated each epoch.
+//! let loader = DataLoader::new(Squares, IntoBatch, 32).with_shuffle(true);
+//!
+//! let batches: Vec<Vec<u32>> = (&loader).into_iter().collect();
+//! assert_eq!(batches.len(), 4); // 100 items is three full batches and a short one
+//! assert_eq!(batches.iter().map(Vec::len).sum::<usize>(), 100);
 //! ```
 
 #[macro_use]

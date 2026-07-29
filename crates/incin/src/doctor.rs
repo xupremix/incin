@@ -643,32 +643,20 @@ fn findings(
     out
 }
 
-const fn device_name(kind: DeviceKind) -> &'static str {
-    match kind {
-        DeviceKind::Cpu => "cpu",
-        DeviceKind::Cuda => "cuda",
-        DeviceKind::Wgpu => "wgpu",
-        // `DeviceKind` is `#[non_exhaustive]`, so a family added later reaches
-        // here. Naming it "unknown" keeps the report renderable rather than
-        // failing to build a diagnostic about an unrecognized device.
-        _ => "unknown",
-    }
+// `device_name` and `dtype_name` were private copies here until `UX-013`. Both
+// needed a `_ => "unknown"` arm, because these enums are `#[non_exhaustive]`
+// outside `incin-core` — which meant a dtype added later would have rendered as
+// the literal string "unknown" in a support report rather than failing to
+// build. `DeviceKind::name` and `DTypeId::name` live beside the enums now, where
+// the match is exhaustive, and the generated capability tables read the same
+// two functions. §2.10 asks for one manifest behind the matrix, the reference
+// docs and these probes; two spellings of `f32` would be two manifests.
+fn device_name(kind: DeviceKind) -> &'static str {
+    kind.name()
 }
 
-const fn dtype_name(dtype: DTypeId) -> &'static str {
-    match dtype {
-        DTypeId::U8 => "u8",
-        DTypeId::U32 => "u32",
-        DTypeId::I64 => "i64",
-        DTypeId::BF16 => "bf16",
-        DTypeId::F16 => "f16",
-        DTypeId::F32 => "f32",
-        DTypeId::F64 => "f64",
-        DTypeId::Q8_0 => "q8_0",
-        // `DTypeId` is `#[non_exhaustive]` for the same reason `DeviceKind`
-        // is; a dtype added later renders rather than failing to build.
-        _ => "unknown",
-    }
+fn dtype_name(dtype: DTypeId) -> &'static str {
+    dtype.name()
 }
 
 // ============================================================================

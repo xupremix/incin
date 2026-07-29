@@ -53,9 +53,9 @@ mod shape_ops;
 /// ```
 ///
 /// You can also mix named symbolic dimensions (if they implement `Dim`):
-/// ```rust,ignore
+/// ```rust
 /// use incin::prelude::*;
-/// incin::symbolic_dim!(BatchSize);
+/// dim!(BatchSize);
 ///
 /// type BatchedFeatures = s![BatchSize, 128];
 /// ```
@@ -183,7 +183,11 @@ pub fn generate_shape_ops(input: TokenStream) -> TokenStream {
 /// and emits a complete Rust `struct` containing all the layers.
 ///
 /// ## Examples
-/// ```rust,ignore
+///
+/// The path is read at compile time, so this is shown rather than compiled —
+/// there is no feature set in which a doctest has `resnet18.onnx` to open.
+///
+/// ```text
 /// use incin::prelude::*;
 ///
 /// model!("resnet18.onnx", MyResNet);
@@ -211,7 +215,7 @@ pub fn max_rank(_input: TokenStream) -> TokenStream {
 
 /// Generate a shape rule's rank ladder from `MAX_RANK`.
 ///
-/// ```ignore
+/// ```text
 /// rank_sweep!(names => impl_append_dim_for_tuple);
 /// rank_sweep!(ranked_pairs => impl_shape_for_tuple);
 /// rank_sweep!(conv2d => impl_conv2d_shape, min = 1, max = 5);

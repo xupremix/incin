@@ -310,6 +310,19 @@ pub enum DeviceKind {
     Wgpu,
 }
 
+impl DeviceKind {
+    /// The lowercase name used in diagnostics, generated documentation, and
+    /// `cargo incin doctor`'s report.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Cpu => "cpu",
+            Self::Cuda => "cuda",
+            Self::Wgpu => "wgpu",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 /// A runtime device identifier: a backend family ([`DeviceKind`]) plus an
 /// ordinal distinguishing multiple devices of the same family (e.g. GPU 0

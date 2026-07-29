@@ -22,7 +22,11 @@ use incin_core::prelude::{DeviceId, DeviceKind};
 /// selects a device once per process should hold on to the result; a caller
 /// that wants to react to hardware appearing or disappearing can call it again.
 ///
-/// ```ignore
+/// ```rust
+/// # extern crate incin_backends as incin;
+/// use incin_backends::prelude::*;
+/// use incin_core::prelude::*;
+///
 /// let device = incin_backends::detect_device();
 /// let t = Tensor::<Dyn, IncinBackend<Dyn, Dyn>>::zeros(([2, 3], DTypeId::F32, device));
 /// ```

@@ -420,13 +420,22 @@ impl<T: TrainMode> AutorefTrainMode for &mut T {
 /// not part of this one.
 ///
 /// ## Examples
-/// ```rust,ignore
+/// ```rust
+/// # extern crate incin_core as incin;
+/// # fn main() -> incin::prelude::Result<()> {
+/// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
 /// use incin::prelude::*;
 ///
-/// let mut model = MyModel::build(...)?;
+/// let mut model = seq!(
+///     Linear::<s![4, 4], DefaultBackend>::build(())?,
+///     Dropout::new(0.5)
+/// );
+/// let x = Tensor::<Dyn, DefaultBackend>::zeros(vec![1, 4])?;
+///
 /// model.eval();   // nested Dropout layers become identity functions
 /// let out = model.forward(x)?;
 /// model.train();  // back to normal (randomized) training behavior
+/// # Ok(()) }
 /// ```
 pub trait TrainMode {
     /// Sets training mode on this module and recursively on every
@@ -461,13 +470,14 @@ pub trait TrainMode {
 /// While you can implement `Module` manually, the recommended approach is to use the `#[module]` attribute macro
 /// provided by `incin-macros`. This automatically derives `Parameters`, `StateDict`, and generates structural boilerplate.
 ///
-/// ```rust,ignore
+/// ```rust
+/// # extern crate incin_core as incin;
 /// use incin::prelude::*;
 ///
 /// #[module]
 /// pub struct MyLayer<B: Backend> {
-///     weight: Param<Tensor<s![128, 128], B>>,
-///     bias: Param<Tensor<s![128], B>>,
+///     weight: Param<s![128, 128], B>,
+///     bias: Param<s![128], B>,
 /// }
 ///
 /// impl<B: Backend> Module<Tensor<s![1, 128], B>> for MyLayer<B> {
@@ -1021,23 +1031,24 @@ macro_rules! seq {
 /// hand every time the layer list changes.
 ///
 /// ## Examples
-/// ```rust,ignore
+/// ```rust
+/// # extern crate incin_core as incin;
+/// # fn main() -> incin::prelude::Result<()> {
+/// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
 /// use incin::prelude::*;
 ///
-/// type Backend = IncinBackend<f32, Cpu>;
-///
 /// type Net = SeqTy!(
-///     Linear<s![768, 256], Backend>,
+///     Linear<s![768, 256], DefaultBackend>,
 ///     ReLU,
-///     Linear<s![256, 10], Backend>
+///     Linear<s![256, 10], DefaultBackend>
 /// );
 ///
 /// let net: Net = seq!(
-///     Linear::<s![768, 256], Backend>::build(())?,
+///     Linear::<s![768, 256], DefaultBackend>::build(())?,
 ///     ReLU,
-///     Linear::<s![256, 10], Backend>::build(())?
+///     Linear::<s![256, 10], DefaultBackend>::build(())?
 /// );
-/// # Ok::<(), Error>(())
+/// # Ok(()) }
 /// ```
 #[macro_export]
 macro_rules! SeqTy {

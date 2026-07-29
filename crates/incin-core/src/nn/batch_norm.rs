@@ -50,11 +50,15 @@ impl BatchNormShape for Dyn {
 /// must be handled at the backend level). During inference, these stored statistics are used.
 ///
 /// ## Examples
-/// ```rust,ignore
+/// ```rust
+/// # extern crate incin_core as incin;
+/// # fn main() -> incin::prelude::Result<()> {
+/// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
 /// use incin::prelude::*;
 ///
 /// // BatchNorm for 64-channel feature maps
-/// let bn = BatchNorm2d::<(typenum::U64,), MyBackend>::build((1e-5, 0.1))?;
+/// let bn = BatchNorm2d::<(typenum::U64,), DefaultBackend>::build((1e-5, 0.1))?;
+/// # Ok(()) }
 /// ```
 pub struct BatchNorm2d<S: BatchNormShape, B: Backend> {
     /// The learnable weight matrix parameter.

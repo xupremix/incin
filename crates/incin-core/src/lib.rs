@@ -60,6 +60,7 @@ pub mod prelude {
         loss::{
             BCEWithLogitsLoss, CrossEntropyLoss, L1Loss, MSELoss, Mean, NoneReduction, Reduction,
         },
+        lstm::{LSTM, LSTMCell},
         max_pool2d::MaxPool2d,
         module::{
             AutorefNamedLayers, AutorefNamedLayersFallback, AutorefParameters,
@@ -76,6 +77,7 @@ pub mod prelude {
         },
     };
     pub use crate::seq;
+    pub use crate::tensor::ops::index::IndexSpec;
     pub use incin_macros::{idx, module, s};
 
     pub use super::shapes::prelude::*;

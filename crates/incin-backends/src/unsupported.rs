@@ -132,7 +132,7 @@ pub(crate) use unsupported_reduction_ops;
 /// every call site spelling out the empty ones. Matching on the operation name
 /// instead keeps the declaration a flat list of exactly the gap:
 ///
-/// ```ignore
+/// ```text
 /// crate::unsupported::unsupported_tensor_ops! {
 ///     gather, scatter, triu, tril,
 /// }

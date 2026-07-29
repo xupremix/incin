@@ -43,7 +43,9 @@ impl_binary_op!(
     /// Adds another tensor element-wise.
     ///
     /// # Examples
-    /// ```rust,ignore
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let a = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
     /// let b = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
@@ -56,7 +58,9 @@ impl_binary_op!(
     /// Subtracts another tensor element-wise.
     ///
     /// # Examples
-    /// ```rust,ignore
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let a = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
     /// let b = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
@@ -69,7 +73,9 @@ impl_binary_op!(
     /// Multiplies by another tensor element-wise.
     ///
     /// # Examples
-    /// ```rust,ignore
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let a = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
     /// let b = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
@@ -82,7 +88,9 @@ impl_binary_op!(
     /// Divides by another tensor element-wise.
     ///
     /// # Examples
-    /// ```rust,ignore
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let a = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
     /// let b = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
@@ -289,7 +297,9 @@ impl_broadcast_binary_op!(
     /// Adds two tensors, broadcasting their shapes if necessary according to NumPy semantics.
     ///
     /// # Examples
-    /// ```rust,ignore
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let a = Tensor::<s![2, 1], DefaultBackend>::ones(()).unwrap();
     /// let b = Tensor::<s![1, 2], DefaultBackend>::ones(()).unwrap();
@@ -302,7 +312,9 @@ impl_broadcast_binary_op!(
     /// Subtracts the right tensor from the left tensor, broadcasting shapes if necessary.
     ///
     /// # Examples
-    /// ```rust,ignore
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let a = Tensor::<s![2, 1], DefaultBackend>::ones(()).unwrap();
     /// let b = Tensor::<s![1, 2], DefaultBackend>::ones(()).unwrap();
@@ -315,7 +327,9 @@ impl_broadcast_binary_op!(
     /// Multiplies two tensors element-wise, broadcasting shapes if necessary.
     ///
     /// # Examples
-    /// ```rust,ignore
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let a = Tensor::<s![2, 1], DefaultBackend>::ones(()).unwrap();
     /// let b = Tensor::<s![1, 2], DefaultBackend>::ones(()).unwrap();
@@ -328,7 +342,9 @@ impl_broadcast_binary_op!(
     /// Divides the left tensor by the right tensor, broadcasting shapes if necessary.
     ///
     /// # Examples
-    /// ```rust,ignore
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let a = Tensor::<s![2, 1], DefaultBackend>::ones(()).unwrap();
     /// let b = Tensor::<s![1, 2], DefaultBackend>::ones(()).unwrap();

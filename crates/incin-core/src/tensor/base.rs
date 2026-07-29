@@ -28,23 +28,23 @@ pub struct Dyn(pub ());
 /// ## Examples
 ///
 /// Creating and inspecting statically shaped tensors:
-/// ```rust,ignore
+/// ```rust
+/// # extern crate incin_core as incin;
+/// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
 /// use incin::prelude::*;
-/// type Backend = IncinBackend<f32, Cpu>;
-///
 /// // Compile-time 3D tensor of shape [2, 5, 10]
-/// let t = Tensor::<s![2, 5, 10], Backend>::zeros(()).unwrap();
+/// let t = Tensor::<s![2, 5, 10], DefaultBackend>::zeros(()).unwrap();
 ///
-/// assert_eq!(t.dims(), vec![2, 5, 10]);
+/// assert_eq!(t.dims(), [2, 5, 10]);
 /// ```
 ///
 /// Using dynamically shaped tensors:
-/// ```rust,ignore
+/// ```rust
+/// # extern crate incin_core as incin;
+/// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
 /// use incin::prelude::*;
-/// type Backend = IncinBackend<f32, Cpu>;
-///
 /// // Shape determined at runtime
-/// let dyn_t = Tensor::<Dyn, Backend>::ones(vec![32, 64]).unwrap();
+/// let dyn_t = Tensor::<Dyn, DefaultBackend>::ones(vec![32, 64]).unwrap();
 ///
 /// assert_eq!(dyn_t.dims(), vec![32, 64]);
 /// ```

@@ -168,8 +168,9 @@ pub trait PartialDynShape: DynShape {
 /// that operations (like reshape) are element-count-preserving without any runtime checks.
 ///
 /// ## Example
-/// ```rust,ignore
-/// use incin_core::shapes::shape::ConstShape;
+/// ```rust
+/// # extern crate incin_core as incin;
+/// use incin_core::prelude::{ConstShape, s};
 /// type MyShape = s![2, 3, 4];
 /// assert_eq!(<MyShape as ConstShape>::NUMEL, 24);
 /// ```

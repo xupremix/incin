@@ -24,7 +24,9 @@ impl<
     /// Uses the default `Mean` reduction.
     ///
     /// # Examples
-    /// ```rust,ignore
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let pred = Tensor::<s![2, 10], DefaultBackend>::zeros(()).unwrap();
     /// let target = Tensor::<s![2], DefaultBackend>::zeros(()).unwrap();
@@ -67,7 +69,9 @@ impl<
     /// Computes the Mean Squared Error (MSE) loss.
     ///
     /// # Examples
-    /// ```rust,ignore
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let pred = Tensor::<s![2], DefaultBackend>::ones(()).unwrap();
     /// let target = Tensor::<s![2], DefaultBackend>::zeros(()).unwrap();

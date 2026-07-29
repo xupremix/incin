@@ -72,6 +72,27 @@ pub enum DTypeId {
 }
 
 impl DTypeId {
+    /// The lowercase name used in diagnostics, generated documentation, and
+    /// `cargo incin doctor`'s report.
+    ///
+    /// The counterpart of [`OperationKind::name`](crate::prelude::OperationKind::name)
+    /// and [`LayoutClass::as_str`](crate::exec::LayoutClass::as_str): one
+    /// spelling per dtype, so the capability tables, the doctor's probe lines
+    /// and a shape error cannot disagree about what to call `F32`.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::U8 => "u8",
+            Self::U32 => "u32",
+            Self::I64 => "i64",
+            Self::BF16 => "bf16",
+            Self::F16 => "f16",
+            Self::F32 => "f32",
+            Self::F64 => "f64",
+            Self::Q8_0 => "q8_0",
+        }
+    }
+
     /// Returns the size in bytes of a single element of this dtype.
     ///
     /// This is the *scalar* element width. It is not a storage width for

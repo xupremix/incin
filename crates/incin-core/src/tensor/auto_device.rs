@@ -52,9 +52,11 @@ use crate::prelude::WgpuN;
 /// exists; that is checked when the device is initialized, and is why
 /// `Device::to_incin` returns a `Result`.
 ///
-/// ```ignore
+/// ```rust
+/// # extern crate incin_core as incin;
+/// use incin::prelude::*;
 /// type Dev = incin_core::prelude::BestDevice;
-/// let t = Tensor::<s![2, 3], IncinBackend<f32, Dev>>::zeros(());
+/// let t = Tensor::<s![2, 3], dummy::DummyBackend<f32, Dev>>::zeros(()).unwrap();
 /// ```
 #[cfg(feature = "cuda")]
 pub type BestDevice = CudaN<typenum::U0>;
@@ -118,9 +120,9 @@ impl<N> IgnoreOrdinal for (Cpu, core::marker::PhantomData<N>) {
 /// `macro_rules!` body is evaluated against the *calling* crate's features, so
 /// it would read as disabled in every downstream crate and silently select CPU.
 ///
-/// ```ignore
+/// ```rust
 /// type Dev = incin_core::best_device!();
-/// type Second = incin_core::best_device!(typenum::U1);
+/// type Second = incin_core::best_device!(incin_core::typenum::U1);
 /// ```
 #[macro_export]
 macro_rules! best_device {

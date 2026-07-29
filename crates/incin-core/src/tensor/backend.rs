@@ -1160,36 +1160,43 @@ pub mod dummy {
         }
     }
 
-    /// Every binary op is a shape no-op: it returns `lhs`'s shape unchanged
-    /// (broadcasting between differing shapes is not modeled).
+    /// Every binary op broadcasts its two shapes the way a real backend does.
+    ///
+    /// These returned `lhs`'s shape unchanged until `UX-013`, which is wrong for
+    /// the same reason it was invisible: `add` is reached with differently
+    /// shaped operands only through `broadcast_add` and friends, which then
+    /// hand the result to `Tensor::from_parts` against the *broadcast* type. A
+    /// stand-in whose shape arithmetic disagrees with every real backend's is
+    /// not a stand-in, and this crate's own documented examples of
+    /// `broadcast_add` were the first thing to run into it.
     impl<T: DType, D: Device + Clone + 'static> NumericOps<Self> for DummyBackend<T, D> {
-        /// Returns `lhs`'s shape unchanged.
+        /// Returns the two operands' broadcast shape.
         fn add<K: DType>(
             lhs: &<Self as Backend>::Storage<K>,
-            _rhs: &<Self as Backend>::Storage<K>,
+            rhs: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
-            Ok(lhs.clone())
+            Ok(crate::shapes::broadcast::broadcast_dim_slices(lhs, rhs)?)
         }
-        /// Returns `lhs`'s shape unchanged.
+        /// Returns the two operands' broadcast shape.
         fn sub<K: DType>(
             lhs: &<Self as Backend>::Storage<K>,
-            _rhs: &<Self as Backend>::Storage<K>,
+            rhs: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
-            Ok(lhs.clone())
+            Ok(crate::shapes::broadcast::broadcast_dim_slices(lhs, rhs)?)
         }
-        /// Returns `lhs`'s shape unchanged.
+        /// Returns the two operands' broadcast shape.
         fn mul<K: DType>(
             lhs: &<Self as Backend>::Storage<K>,
-            _rhs: &<Self as Backend>::Storage<K>,
+            rhs: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
-            Ok(lhs.clone())
+            Ok(crate::shapes::broadcast::broadcast_dim_slices(lhs, rhs)?)
         }
-        /// Returns `lhs`'s shape unchanged.
+        /// Returns the two operands' broadcast shape.
         fn div<K: DType>(
             lhs: &<Self as Backend>::Storage<K>,
-            _rhs: &<Self as Backend>::Storage<K>,
+            rhs: &<Self as Backend>::Storage<K>,
         ) -> Result<<Self as Backend>::Storage<K>> {
-            Ok(lhs.clone())
+            Ok(crate::shapes::broadcast::broadcast_dim_slices(lhs, rhs)?)
         }
     }
 

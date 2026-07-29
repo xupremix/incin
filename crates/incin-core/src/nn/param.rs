@@ -61,14 +61,18 @@ where
 /// by the backend during the backward pass and read by the optimizer during a training step.
 ///
 /// ## Examples
-/// ```rust,ignore
+/// ```rust
+/// # extern crate incin_core as incin;
+/// # fn main() -> incin::prelude::Result<()> {
+/// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
 /// use incin::prelude::*;
 ///
 /// // A 128×256 weight matrix initialized with Kaiming uniform
-/// let w: Param<s![128, 256], MyBackend> = Param::zeros(())?;
+/// let w: Param<s![128, 256], DefaultBackend> = Param::zeros(())?;
 ///
 /// // Convert to a tensor for use in a forward pass
 /// let w_tensor = w.as_tensor()?;
+/// # Ok(()) }
 /// ```
 pub struct Param<S: Shape, B: Backend> {
     pub(crate) inner: <B as Backend>::RawVar,

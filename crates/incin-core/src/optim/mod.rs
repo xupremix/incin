@@ -23,11 +23,18 @@ pub trait Optimizer<B: Backend> {
 /// Applies the update rule: `w ← w - lr * ∂L/∂w`.
 ///
 /// ## Examples
-/// ```rust,ignore
+/// ```rust
+/// # extern crate incin_core as incin;
+/// # fn main() -> incin::prelude::Result<()> {
+/// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
 /// use incin::prelude::*;
 ///
-/// let optimizer = SGD::new(model.parameters(), 0.01);
+/// let model = Linear::<s![4, 2], DefaultBackend>::build(())?;
+/// let gradients = Tensor::<s![1, 2], DefaultBackend>::zeros(())?.backward()?;
+///
+/// let mut optimizer = SGD::<DefaultBackend>::new(model.parameters(), 0.01);
 /// optimizer.step(&gradients)?;
+/// # Ok(()) }
 /// ```
 pub struct SGD<B: Backend, K: DType = f32> {
     params: alloc::collections::BTreeMap<String, B::RawVar>,
@@ -70,11 +77,18 @@ impl<B: Backend, K: DType> Optimizer<B> for SGD<B, K> {
 /// training transformer models and deep networks.
 ///
 /// ## Examples
-/// ```rust,ignore
+/// ```rust
+/// # extern crate incin_core as incin;
+/// # fn main() -> incin::prelude::Result<()> {
+/// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
 /// use incin::prelude::*;
 ///
-/// let optimizer = AdamW::new(model.parameters(), 1e-4);
+/// let model = Linear::<s![4, 2], DefaultBackend>::build(())?;
+/// let gradients = Tensor::<s![1, 2], DefaultBackend>::zeros(())?.backward()?;
+///
+/// let mut optimizer = AdamW::<DefaultBackend>::new(model.parameters(), 1e-4);
 /// optimizer.step(&gradients)?;
+/// # Ok(()) }
 /// ```
 pub struct AdamW<B: Backend, K: DType = f32> {
     params: alloc::collections::BTreeMap<String, B::RawVar>,
@@ -252,11 +266,18 @@ impl<B: Backend, K: DType> Optimizer<B> for AdamW<B, K> {
 /// For models sensitive to weight decay (like Transformers), prefer [`AdamW`].
 ///
 /// ## Examples
-/// ```rust,ignore
+/// ```rust
+/// # extern crate incin_core as incin;
+/// # fn main() -> incin::prelude::Result<()> {
+/// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
 /// use incin::prelude::*;
 ///
-/// let optimizer = Adam::new(model.parameters(), 1e-3);
+/// let model = Linear::<s![4, 2], DefaultBackend>::build(())?;
+/// let gradients = Tensor::<s![1, 2], DefaultBackend>::zeros(())?.backward()?;
+///
+/// let mut optimizer = Adam::<DefaultBackend>::new(model.parameters(), 1e-3);
 /// optimizer.step(&gradients)?;
+/// # Ok(()) }
 /// ```
 pub struct Adam<B: Backend, K: DType = f32> {
     params: alloc::collections::BTreeMap<String, B::RawVar>,

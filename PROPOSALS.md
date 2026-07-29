@@ -2942,6 +2942,47 @@ particular integration — an author writing a backend for an ecosystem this
 repository has never heard of would have had to enable the Candle adapter to
 test it. The module is unconditional now, and the suite passes with no native
 backend compiled at all.
+
+`UX-013` reads §2.10 as the prohibition it is written as — "do not maintain
+independent handwritten support tables that can drift from code" — so the row is
+done when the tables *cannot* drift, which is a different thing from their
+currently being right. They were not: the facade matrix listed `candle`, which
+`GOV-006` renamed to `external-candle` and left as a deprecated alias, four
+lines above an installation example using the new name, and it omitted
+`cpu-blas` and `paranoid-validation` altogether.
+
+The two halves have different authorities, so they have different generators. A
+feature's name, its default-ness and what it enables are facts about a manifest,
+and `cargo xtask docs` reads the manifests — including the `#` comment above
+each feature, which is the only prose description of a feature that already
+lives beside the thing it describes. What a backend supports is a Rust static,
+so `incin_backends::capability_docs` reads the registrations `EXE-005` tests.
+Both have a check, and both checks run in CI, because a generator nobody runs is
+a handwritten table with extra steps.
+
+The other half of §2.10 is the sentence that says every public example is
+compiled in the minimum documented feature set, and it is the half the evidence
+command measures. It was measuring nothing: 70 of 79 examples were fenced
+`rust,ignore`, `cargo test --workspace --doc` reported success having compiled
+nine, and CI never ran that command at all — `cargo test --all-targets`
+excludes doctests. Compiling them found the examples documenting an API that
+does not exist. `from_slice` was shown with one argument and takes two, in
+fifteen places. `Param` was shown as `Param<Tensor<S, B>>` and is `Param<S, B>`.
+A rank-1 reshape's argument was written `()` and is `((),)`. The `s!` macro's own
+example advertised `incin::symbolic_dim!`, which does not resolve: that name is
+a `#[doc(hidden)]` alias for `dim!` and the facade does not re-export it.
+
+Three defects came out from under the examples rather than in them. `IndexSpec`
+is the argument type of the public `Tensor::slice` and was not reachable from
+the prelude, so the documented call could not be written; the regenerated
+trybuild expectation is the proof, because rustc had been printing the full
+`incin::tensor::ops::index::IndexSpec` path for want of a shorter one. `LSTM`
+and `LSTMCell` were missing from the prelude while `RNN` and `RNNCell` one line
+above were present. And `DummyBackend`'s four binary operations returned the
+left operand's shape unchanged, which disagrees with every real backend —
+`broadcast_add` reaches `Backend::add` with differently shaped operands and
+hands the result to `from_parts` against the broadcast type. Nothing had ever
+run a `broadcast_*` example, which is exactly why it survived.
 The complete Shape-track evidence is recorded in the mirror and
 `docs/plan/tasks/SHP-007.md` through `SHP-008.md`. The §4 themes above
 describe intent; **this ledger and its dependency graph define order**, and the
@@ -3083,7 +3124,7 @@ Silicon · `compile` compiled execution · `grad` autograd · `dist` distributed
 | UX-010 | exploratory | ux | [ ] | EXE-003,DST-003 | `crates/incin-macros/src/einsum.rs` | Typed einsum! with parser, shape, placement, and parity tests. Requires a recorded justification before starting | `cargo test -p incin-macros --test einsum_macro` |
 | UX-011 | exploratory | ux | [ ] | DST-004 | `crates/incin-macros/src/parallel_block.rs` | Evaluate parallel!; implement only with recorded usability evidence | `cargo test -p incin-macros --test parallel_block` |
 | UX-012 | preview | ux | [ ] | UX-005,UX-006 | `crates/incin-viz/src/` | Visualize placement, memory, timeline, and critical path | `cargo test -p incin-viz` |
-| UX-013 | core | ux | [ ] | GOV-005,EXE-005,UX-014 | `docs/; README.md` | Feature and capability documentation generated from tested registrations, with compiled examples | `cargo test --workspace --doc` |
+| UX-013 | core | ux | [x] | GOV-005,EXE-005,UX-014 | `docs/; README.md` | Feature and capability documentation generated from tested registrations, with compiled examples | `cargo test --workspace --doc` |
 | UX-014 | core | ux | [x] | EXE-005 | `crates/incin/src/bin/cargo-incin.rs` | cargo incin doctor with stable text and JSON output and mocked hardware tests | `cargo test -p incin --test doctor` |
 | UX-015 | preview | ux | [ ] | EXE-005,GRD-001 | `crates/incin-core/src/exec/precision.rs` | PrecisionPolicy and loss scaling extending the existing DTypePolicy; mixed-precision parity tests | `cargo test -p incin-core --test precision_policy` |
 | CI-001 | core | ci | [x] | GOV-005,GOV-003 | `.github/workflows/ci.yml` | Feature-powerset CI preserving the bare CPU default; adds cargo doc and drops blanket package exclusions | `act -j powerset  # or CI run` |
@@ -3584,3 +3625,9 @@ justification as an entry before it may start.
 | D-040 | The conformance harness catches panics and reports them as failures of the check that panicked. | Letting them propagate. A backend that panics where the contract says to return a `BackendError` is the finding, and a harness that dies on it reports one check instead of eight — the failure mode `UX-014` hit when a `SIGSEGV` took a test binary down and reported nothing at all. |
 | D-041 | The template backend lives in `tests/conformance.rs`, not in `src/`. | Shipping a reference backend to every downstream user, which `D-015` already refused for a TOML parser on the same reasoning. It is still in the repository, still compiled, and still asserted to pass the suite on every run, which is what keeps it from going stale. |
 | D-042 | The suite carries four deliberately broken backends, each asserted to fail exactly one check. | A suite of positive cases only. A check that has never failed is indistinguishable from a check that cannot fail, and a conformance suite is the one place that distinction is the entire product. |
+| D-043 | The two generated documents have two generators: `cargo xtask docs` for the feature tables, `incin_backends::capability_docs` for the capability tables. | One generator in `xtask`, which would have to either parse Rust to reach the capability statics or link against `incin-backends` — making `cargo xtask ledger` compile the whole backend stack for a task that reads a TOML file. A generator belongs with its authority: features are a manifest fact, capabilities are a Rust static. |
+| D-044 | The README's `Purpose` column is generated from the `#` comment above each feature in `Cargo.toml`. | A second prose description in the README. The manifest comment already exists and already sits beside the declaration it describes; a table written separately is the drift §2.10 prohibits, in the same file that prohibits it. |
+| D-045 | The capability summary table's cell is the element-type list, not a support tick. | A yes/no matrix. All three backends register the same eleven operations, so it renders as eleven rows of "yes" and reads as parity — while CPU registers `reduction` for `f32` alone and CUDA registers it for every float. |
+| D-046 | An example that cannot compile where it lives is fenced ```` ```text ````, and a test fails on any ```` ```ignore ```` fence in `crates/*/src`. | Leaving `ignore` for the handful of genuine cases. `ignore` is indistinguishable from "we did not get round to it" — which is how seventy of them accumulated — and a rule with an exception nobody can mechanically tell apart from a violation is not enforceable. |
+| D-047 | `incin-core`'s examples satisfy their backend parameter with a hidden `DummyBackend` alias rather than the facade's `DefaultBackend`. | A dev-dependency cycle from `incin-core` on `incin`. It compiles, and `incin-macros` already has one, but it would put the facade in `incin-core`'s dev graph under `cargo hack check --feature-powerset --all-targets`, where unification would enable `incin-core/std` and silently stop the no_std powerset check from checking no_std. The visible text of an example documents the API; which concrete type satisfies `B` does not. |
+| D-048 | `DTypeId::name`, `DeviceKind::name` and `ImplementationKind::name` live on the enums in `incin-core`. | The private copies `cargo incin doctor` carried. Those needed a `_ => "unknown"` arm because the enums are `#[non_exhaustive]` outside the defining crate — so a dtype added later would have rendered as the literal string "unknown" in a support report. Inside `incin-core` the match is exhaustive and the same addition is a compile error. |

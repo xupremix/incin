@@ -12,25 +12,29 @@ and third-party backends are opt-in. Enabling an accelerator does not change
 `DefaultBackend`, which remains CPU whenever the `cpu` feature is enabled.
 
 - **Compile-Time Shape Verification**: static `s![]` shapes catch incompatible tensor operations during compilation.
-- **Named Dimensions**: `symbolic_dim!` makes semantic axis names part of the tensor type.
+- **Named Dimensions**: `dim!` makes semantic axis names part of the tensor type.
 - **Python-Style Slicing**: `idx![]` provides checked range and index expressions.
 - **ONNX Model Importing**: `import_model!` generates typed Rust modules at compile time. Runtime ONNX weight loading is not implemented; use safetensors for runtime loading.
 - **Native Backends**: CPU is the default; CUDA and WGPU are explicit features.
-- **External Backends**: Candle interoperability is available explicitly through `candle` and `incin::external::candle`.
+- **External Backends**: Candle interoperability is available explicitly through `external-candle` and `incin::external::candle`.
 - **Data and Tooling**: parallel loading, diagnostics, telemetry, visualization, and editor integrations live in focused workspace crates.
 
 ### Facade feature matrix
 
+<!-- BEGIN GENERATED: facade-features -->
 | Feature | Default | Purpose |
-|---|---:|---|
-| `std` | yes | Filesystem, serialization, model I/O, and standard error integrations. |
-| `cpu` | yes | Built-in pure-Rust CPU execution. This is the only default backend. |
-| `cuda` | no | Native CUDA execution through `cudarc`; requires a compatible CUDA installation at runtime. |
-| `wgpu` | no | Cross-platform GPU execution through Vulkan, Metal, or DX12 via `wgpu`. |
-| `candle` | no | Third-party Candle adapter under `incin::external::candle`. |
-| `autotune` | no | CUDA launch-candidate measurement and caching; implies `cuda`. |
-| `telemetry` | no | Backend event and autograd hooks through `incin-telemetry`. |
-| `nightly` | no | Nightly-only experimental APIs. Stable Rust remains the supported default. |
+|---|:--:|---|
+| `std` | yes | Enables standard-library functionality, serialization, and filesystem APIs. |
+| `nightly` | no | Enables nightly-only APIs in the core and macro crates. |
+| `cpu` | yes | Enables the built-in CPU backend. This is the only default backend. |
+| `cpu-blas` | no | Hands large f32 CPU matmuls to a blocked GEMM. The CPU backend is complete without it; see incin-backends for what it does and does not change. |
+| `cuda` | no | Enables the native CUDA backend. CUDA is never enabled implicitly. |
+| `wgpu` | no | Enables the cross-platform WGPU backend. WGPU is never enabled implicitly. |
+| `external-candle` | no | Enables the external Candle backend at `incin::external::candle`. |
+| `candle` | no | Deprecated alias for `external-candle`. Removed at REL-002; see PROPOSALS.md D-014. |
+| `autotune` | no | Enables CUDA launch autotuning. |
+| `telemetry` | no | Enables backend telemetry hooks. `cargo incin doctor` also reports the run directory under this feature, which is why the dependency is direct here and not only through incin-backends. |
+<!-- END GENERATED: facade-features -->
 
 Examples:
 
@@ -50,15 +54,26 @@ incin = { version = "0.0.0", features = ["external-candle"] }
 
 ### Lower-level crate features
 
-- `incin-backends`: defaults to `std,cpu`; optional `cuda`, `wgpu`, `candle`, `autotune`, and `telemetry`.
-- `incin-core`: defaults to `std`; optional `nightly`, `cuda`, and `wgpu`. The GPU flags expose device metadata needed by backend crates and do not execute kernels themselves.
+<!-- BEGIN GENERATED: crate-features -->
+- `incin-backends`: defaults to `std,cpu`; optional `cpu-blas`, `cuda`, `wgpu`, `autotune`, `external-candle`, `candle`, and `telemetry`.
+- `incin-core`: defaults to `std`; optional `nightly`, `paranoid-validation`, `cuda`, and `wgpu`.
 - `incin-macros`: defaults to `std`; optional `nightly`.
-- `incin-diagnostics`: defaults to `std`; disabling defaults gives the allocation-only diagnostic core.
-- `incin-data`, `incin-telemetry`, `incin-viz`, `incin-viz-plugin-api`, and `incin-lsp` currently expose no Cargo features.
+- `incin-diagnostics`: defaults to `std`.
+- `incin-data`, `incin-telemetry`, `incin-viz`, `incin-viz-plugin-api`, and `incin-lsp` expose no Cargo features.
+<!-- END GENERATED: crate-features -->
+
+`incin-core`'s `cuda` and `wgpu` flags expose the device metadata backend crates
+need; they do not execute kernels themselves. Disabling `incin-diagnostics`'
+defaults gives the allocation-only diagnostic core.
+
+The per-backend support tables — which operations each backend registers, for
+which element types, layouts and ranks — are generated from those registrations
+into [docs/capabilities.md](docs/capabilities.md). `cargo incin doctor` reports
+which of them this machine can actually reach.
 
 `incin-backends` can also be used without default features when implementing a
 backend-specific binary. At least one of `cpu`, `cuda`, or `wgpu` is needed for
-`IncinBackend` execution; `candle` exposes its separate external adapter.
+`IncinBackend` execution; `external-candle` exposes its separate external adapter.
 
 ## Setup & Requirements
 

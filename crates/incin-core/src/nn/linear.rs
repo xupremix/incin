@@ -10,9 +10,13 @@ use crate::shapes::shape::field_from_dims;
 /// * `OutF` — Number of output features.
 ///
 /// ## Examples
-/// ```rust,ignore
+/// ```rust
+/// # extern crate incin_core as incin;
+/// use incin_core::prelude::{LinearShape, s};
 /// // Static linear layer: 784 inputs → 256 outputs
 /// type S = s![784, 256];
+/// # fn assert_is_a_linear_shape<T: LinearShape>() {}
+/// # assert_is_a_linear_shape::<S>();
 /// ```
 pub trait LinearShape: Shape + DynShape {
     /// The number of input features (last dimension of the input tensor).
@@ -91,14 +95,18 @@ impl LinearShape for Dyn {
 ///
 /// ## Examples
 ///
-/// ```rust,ignore
+/// ```rust
+/// # extern crate incin_core as incin;
+/// # fn main() -> incin::prelude::Result<()> {
+/// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
 /// use incin::prelude::*;
 ///
 /// // A fully static linear layer: 512 inputs → 256 outputs
-/// let layer = Linear::<s![512, 256], MyBackend>::build(())?;
+/// let layer = Linear::<s![512, 256], DefaultBackend>::build(())?;
 ///
 /// // A dynamic linear layer — shape known only at runtime
-/// let layer = Linear::<Dyn, MyBackend>::build((512, 256))?;
+/// let layer = Linear::<Dyn, DefaultBackend>::build((512, 256))?;
+/// # Ok(()) }
 /// ```
 #[derive(Debug, Clone)]
 #[incin_macros::module(internal, no_stats)]

@@ -7,6 +7,7 @@
 //! every downstream user's dependency graph.
 
 mod budgets;
+mod docs;
 mod ledger;
 
 use std::process::ExitCode;
@@ -16,6 +17,7 @@ fn main() -> ExitCode {
     match task.as_deref() {
         Some("budgets") => budgets::check(),
         Some("ledger") => ledger::check(),
+        Some("docs") => docs::run(std::env::args().nth(2).as_deref() == Some("--check")),
         Some(other) => {
             eprintln!("unknown task `{other}`");
             usage();
@@ -39,4 +41,6 @@ fn usage() {
     eprintln!("              docs/plan/ledger.toml (GOV-003)");
     eprintln!("    budgets   Validate regression budgets and the Cargo feature");
     eprintln!("              inventory (GOV-005)");
+    eprintln!("    docs      Regenerate README.md's feature tables from the Cargo");
+    eprintln!("              manifests; --check fails instead of writing (UX-013)");
 }

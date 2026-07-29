@@ -39,21 +39,24 @@ impl LstmShape for Dyn {
 ///
 /// ## Examples
 ///
-/// ```rust,ignore
+/// ```rust
+/// # extern crate incin_core as incin;
+/// # fn main() -> incin::prelude::Result<()> {
+/// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
 /// use incin::prelude::*;
-/// use incin::nn::optional::{True, False};
 ///
 /// // Fully static, both biases present (default)
-/// let cell = LSTMCell::<s![10, 20], B>::build(())?;
+/// let cell = LSTMCell::<s![10, 20], DefaultBackend>::build(())?;
 ///
 /// // Fully static, input bias present, hidden bias absent
-/// let cell = LSTMCell::<s![10, 20], B, True, False>::build(())?;
+/// let cell = LSTMCell::<s![10, 20], DefaultBackend, True, False>::build(())?;
 ///
 /// // Fully dynamic shape, both biases always present
-/// let cell = LSTMCell::<Dyn, B>::build((10, 20))?;
+/// let cell = LSTMCell::<Dyn, DefaultBackend>::build((10, 20))?;
 ///
 /// // Fully dynamic shape, no biases
-/// let cell = LSTMCell::<Dyn, B, False, False>::build((10, 20))?;
+/// let cell = LSTMCell::<Dyn, DefaultBackend, False, False>::build((10, 20))?;
+/// # Ok(()) }
 /// ```
 #[derive(Debug, Clone)]
 pub struct LSTMCell<

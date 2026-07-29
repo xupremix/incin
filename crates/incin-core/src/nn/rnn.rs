@@ -146,18 +146,22 @@ where
 /// * `S` — An `RnnShape` describing the input and output feature dimensions.
 ///
 /// ## Examples
-/// ```rust,ignore
+/// ```rust
+/// # extern crate incin_core as incin;
+/// # fn main() -> incin::prelude::Result<()> {
+/// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
 /// use incin::prelude::*;
 ///
 /// let cell = RNNCell::new(
-///     Linear::<s![10, 20], Backend>::build(())?,
-///     Linear::<s![20, 20], Backend>::build(())?,
+///     Linear::<s![10, 20], DefaultBackend>::build(())?,
+///     Linear::<s![20, 20], DefaultBackend>::build(())?,
 /// );
-/// let rnn = RNN::<s![10, 20], Backend>::new(cell);
-/// let input = Tensor::<s![2, 5, 10], Backend>::zeros(()).unwrap();
-/// let h0   = Tensor::<s![2, 20], Backend>::zeros(()).unwrap();
+/// let rnn = RNN::<s![10, 20], DefaultBackend>::new(cell);
+/// let input = Tensor::<s![2, 5, 10], DefaultBackend>::zeros(()).unwrap();
+/// let h0   = Tensor::<s![2, 20], DefaultBackend>::zeros(()).unwrap();
 /// let (output, h_n) = rnn.forward((input, h0)).unwrap();
 /// // output shape: [2, 5, 20], h_n shape: [2, 20]
+/// # Ok(()) }
 /// ```
 #[derive(Debug, Clone)]
 pub struct RNN<

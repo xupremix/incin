@@ -21,7 +21,9 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// Returns a dynamically shaped tensor (`Dyn`).
     ///
     /// # Examples
-    /// ```rust,ignore
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let t = Tensor::<s![3, 3], DefaultBackend>::ones(()).unwrap();
     /// let s = t.slice(&[IndexSpec::All, IndexSpec::Index(0)]).unwrap();
@@ -33,8 +35,14 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// Ergonomic slicing and indexing API using `IndexArgs`.
     ///
     /// # Examples
-    /// ```rust,ignore
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # fn main() -> incin::prelude::Result<()> {
+    /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
+    /// use incin::prelude::*;
+    /// let tensor = Tensor::<s![2, 4, 4], DefaultBackend>::ones(())?;
     /// let sliced = tensor.get((0, 1..3, ..))?;
+    /// # Ok(()) }
     /// ```
     pub fn get<I: crate::tensor::ops::index::IndexArgs>(
         &self,
@@ -164,10 +172,12 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// This is guaranteed at compile-time to have matching elements.
     ///
     /// # Examples
-    /// ```rust,ignore
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let t = Tensor::<s![2, 3], DefaultBackend>::ones(()).unwrap();
-    /// let r = t.reshape::<s![6]>(()).unwrap();
+    /// let r = t.reshape::<s![6]>(((),)).unwrap();
     /// ```
     pub fn reshape<S2>(&self, args: S2::Arg) -> Result<Tensor<S2, B, K, G>>
     where
@@ -190,7 +200,9 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// Reshapes a tensor based on python-like slicing syntax via the `idx!` macro.
     ///
     /// # Examples
-    /// ```rust,ignore
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let t = Tensor::<s![2, 3], DefaultBackend>::ones(()).unwrap();
     /// let r = t.reshape_idx::<idx![6]>().unwrap();
@@ -235,7 +247,9 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// Narrows the tensor dynamically, returning a tensor with `Dyn` shape.
     ///
     /// # Examples
-    /// ```rust,ignore
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let t = Tensor::<s![10], DefaultBackend>::ones(()).unwrap();
     /// let n = t.try_narrow(0, 2, 5).unwrap(); // shape [5]
@@ -256,7 +270,9 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// Squeezes the tensor dynamically by removing the dimension `dim` if its size is 1.
     ///
     /// # Examples
-    /// ```rust,ignore
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let t = Tensor::<s![1, 5], DefaultBackend>::ones(()).unwrap();
     /// let sq = t.try_squeeze(0).unwrap(); // shape [5]
@@ -443,7 +459,9 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// Strongly typed output shape via `Transpose<D1, D2>`.
     ///
     /// # Examples
-    /// ```rust,ignore
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let t = Tensor::<s![2, 3], DefaultBackend>::ones(()).unwrap();
     /// let tr = t.transpose::<0, 1>().unwrap(); // shape [3, 2]
@@ -472,7 +490,9 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// and `ProdDim` computes the flattened output dimension in the type system.
     ///
     /// # Examples
-    /// ```rust,ignore
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let t = Tensor::<s![2, 3, 4], DefaultBackend>::ones(()).unwrap();
     /// let f = t.flatten::<1, 2>().unwrap(); // shape [2, 12]

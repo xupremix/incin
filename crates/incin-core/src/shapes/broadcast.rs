@@ -62,6 +62,20 @@ fn broadcast_dims<L: DynShape, R: DynShape>(
 ) -> core::result::Result<Vec<usize>, ShapeError> {
     let lhs_dims: Vec<usize> = L::dims(lhs).into();
     let rhs_dims: Vec<usize> = R::dims(rhs).into();
+    broadcast_dim_slices(&lhs_dims, &rhs_dims)
+}
+
+/// The same right-aligned rule as [`broadcast_dims`], reached from raw
+/// dimensions rather than from a typed `Field`.
+///
+/// A backend holds `&[usize]`, not an `L::Field`, so without this it would have
+/// to re-derive NumPy's alignment rule — and a second copy of a broadcast rule
+/// is a second answer waiting to disagree with the first. `broadcast_dims`
+/// delegates here so there is exactly one.
+pub fn broadcast_dim_slices(
+    lhs_dims: &[usize],
+    rhs_dims: &[usize],
+) -> core::result::Result<Vec<usize>, ShapeError> {
     let out_rank = lhs_dims.len().max(rhs_dims.len());
     let mut out = Vec::with_capacity(out_rank);
     for i in 0..out_rank {
