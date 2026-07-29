@@ -10,7 +10,6 @@
 
 use alloc::sync::Arc;
 use core::ops::Deref;
-use core::sync::atomic::{AtomicU64, Ordering};
 
 use half::{bf16, f16};
 use incin_core::exec::{Alignment, TensorMeta};
@@ -21,25 +20,13 @@ use crate::cpu::stride;
 
 /// A monotonic identity tag for a `CpuStorage` value.
 ///
-/// Backed by a global `AtomicU64` counter (never derived from a pointer
-/// address, per the anti-pattern of using `Rc` pointer identity — pointer
-/// reuse after drop is a real, hard-to-reproduce bug class). Two
-/// independently constructed `TensorId`s are never equal, even after many
-/// calls to `next()`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct TensorId(u64);
-
-/// `NEXT_TENSOR_ID`.
-static NEXT_TENSOR_ID: AtomicU64 = AtomicU64::new(0);
-
-impl TensorId {
-    /// Allocate a fresh, never-before-seen `TensorId`.
-    pub(crate) fn next() -> Self {
-        // Ordering::Relaxed is sufficient: this counter is an identity
-        // source, not a synchronization primitive guarding shared data.
-        TensorId(NEXT_TENSOR_ID.fetch_add(1, Ordering::Relaxed))
-    }
-}
+/// `GRD-003` moved this to `incin_core::exec::tape`, where one counter serves
+/// the whole workspace. Three backends each running their own counter handed
+/// out the same integers to different allocations, which is harmless only for
+/// as long as no two backends share a tape — the thing `GRD-006` ends. The
+/// re-export keeps every `use crate::cpu::storage::TensorId` in this backend
+/// spelled as it was.
+pub use incin_core::exec::TensorId;
 
 /// Dtype-tagged raw data buffer.
 ///

@@ -1,6 +1,5 @@
 use alloc::sync::Arc;
 use core::ops::Deref;
-use core::sync::atomic::{AtomicU64, Ordering};
 
 use incin_core::exec::{Alignment, TensorMeta};
 use incin_core::prelude::{DTypeId, DeviceId, Error, OperationKind, Result};
@@ -18,16 +17,9 @@ use incin_core::prelude::{DTypeId, DeviceId, Error, OperationKind, Result};
 /// documentation, so this constant is verified on hardware instead of assumed.
 pub(crate) const CUDA_ALLOCATION_ALIGNMENT_BYTES: usize = 256;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct TensorId(u64);
-
-static NEXT_TENSOR_ID: AtomicU64 = AtomicU64::new(0);
-
-impl TensorId {
-    pub(crate) fn next() -> Self {
-        TensorId(NEXT_TENSOR_ID.fetch_add(1, Ordering::Relaxed))
-    }
-}
+/// Re-exported from `incin_core::exec::tape` since `GRD-003`: one identity
+/// counter serves the whole workspace.
+pub use incin_core::exec::TensorId;
 
 #[derive(Debug)]
 pub struct CudaBuffer {

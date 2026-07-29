@@ -1,10 +1,24 @@
-#![cfg(all(feature = "cpu", any(feature = "wgpu", feature = "cuda")))]
+//! Gradient parity.
+//!
+//! Two things live here and they answer different questions. The
+//! cross-backend cases compare CPU against WGPU or CUDA and need that
+//! hardware. The CPU cases below them compare the backward pass against
+//! hand-computed calculus and against the invariants the shared walk is
+//! responsible for, and need nothing.
+//!
+//! The file was `#![cfg(all(feature = "cpu", any(feature = "wgpu", feature =
+//! "cuda")))]` until `GRD-003`, which is to say the row that names
+//! `--features std,cpu --test gradient_parity` as its evidence compiled zero
+//! tests under it.
+
+#![cfg(feature = "cpu")]
 
 use incin_backends::cpu::CpuBackendImpl;
 #[cfg(feature = "cuda")]
 use incin_backends::cuda::CudaBackendImpl;
 #[cfg(feature = "wgpu")]
 use incin_backends::wgpu::WgpuBackendImpl;
+use incin_core::exec::TapeStorage;
 use incin_core::prelude::*;
 
 type CpuB = CpuBackendImpl;
@@ -18,6 +32,10 @@ fn read_f32<B: Backend>(s: &B::Storage<f32>) -> Vec<f32> {
     bytemuck::cast_slice::<u8, f32>(&bytes).to_vec()
 }
 
+/// Only the cross-backend cases compare within a tolerance; the CPU ones below
+/// assert exact values, because they are asserting arithmetic rather than
+/// agreement between two devices.
+#[cfg(any(feature = "wgpu", feature = "cuda"))]
 fn approx_eq_slice(a: &[f32], b: &[f32], tol: f32) -> bool {
     if a.len() != b.len() {
         return false;
@@ -994,4 +1012,196 @@ fn cuda_parity_batch_norm() {
     let cpu_res = read_f32::<CpuB>(&cpu_out);
     let cuda_res = read_f32::<CudaB>(&cuda_out);
     assert!(approx_eq_slice(&cpu_res, &cuda_res, 1e-3));
+}
+
+// ── CPU (`GRD-003`) ──────────────────────────────────────────────────────────
+//
+// These need no accelerator, and they are the reason this file's crate-level
+// cfg changed. They are not a second copy of the cross-backend cases above:
+// those ask whether two devices agree, and these ask whether the shared
+// backward walk in `incin_core::exec::tape` still computes calculus, still
+// sums a reused tensor's contributions rather than overwriting them, and still
+// drains before it invokes anything.
+
+/// A CPU tensor from `data` with `shape`.
+fn cpu(data: &[f32], shape: &[usize]) -> <CpuB as Backend>::Storage<f32> {
+    CpuB::from_bytes::<f32>(
+        bytemuck::cast_slice(data),
+        shape,
+        DTypeId::F32,
+        &DeviceId::cpu(),
+    )
+    .unwrap()
+}
+
+/// The gradient the backward pass accumulated for `t`.
+fn grad_of(
+    t: &<CpuB as Backend>::Storage<f32>,
+    grads: &<CpuB as Backend>::Grads,
+) -> Option<Vec<f32>> {
+    CpuB::get_grad::<f32>(t, grads)
+        .unwrap()
+        .map(|g| read_f32::<CpuB>(&g))
+}
+
+#[test]
+fn a_product_differentiates_to_the_other_operand() {
+    // d(a*b)/da = b and d(a*b)/db = a. Asserted against the arithmetic rather
+    // than against a recording of what the old walk returned, so the test
+    // still means something after the next migration.
+    let a = cpu(&[1.0, 2.0, 3.0, 4.0], &[2, 2]);
+    let b = cpu(&[10.0, 20.0, 30.0, 40.0], &[2, 2]);
+
+    let out = CpuB::mul::<f32>(&a, &b).unwrap();
+    let grads = CpuB::backward::<f32>(&out).unwrap();
+
+    assert_eq!(grad_of(&a, &grads).unwrap(), vec![10.0, 20.0, 30.0, 40.0]);
+    assert_eq!(grad_of(&b, &grads).unwrap(), vec![1.0, 2.0, 3.0, 4.0]);
+}
+
+#[test]
+fn a_tensor_used_twice_receives_the_sum_of_both_contributions() {
+    // `x + x` differentiates to 2, not to 1. Writing the accumulation as an
+    // insert returns 1 and loses one of the two contributions silently: that
+    // is CPUBACK-05, and the walk it was found in now lives in the core, so
+    // this is the test that follows it there.
+    let x = cpu(&[1.0, 2.0, 3.0], &[3]);
+
+    let out = CpuB::add::<f32>(&x, &x).unwrap();
+    let grads = CpuB::backward::<f32>(&out).unwrap();
+
+    assert_eq!(grad_of(&x, &grads).unwrap(), vec![2.0, 2.0, 2.0]);
+}
+
+#[test]
+fn a_deeper_reuse_still_sums_every_path() {
+    // y = x*x, so dy/dx = 2x through two separate paths of the product rule.
+    let x = cpu(&[1.0, 2.0, 3.0, 4.0], &[4]);
+
+    let out = CpuB::mul::<f32>(&x, &x).unwrap();
+    let grads = CpuB::backward::<f32>(&out).unwrap();
+
+    assert_eq!(grad_of(&x, &grads).unwrap(), vec![2.0, 4.0, 6.0, 8.0]);
+}
+
+#[test]
+fn the_loss_is_seeded_with_ones() {
+    let x = cpu(&[5.0, -1.0], &[2]);
+    let out = CpuB::relu::<f32>(&x).unwrap();
+
+    let grads = CpuB::backward::<f32>(&out).unwrap();
+
+    // Seeded with ones and then masked by relu's own derivative, which is the
+    // only thing that could have turned the second entry into a zero.
+    assert_eq!(grad_of(&x, &grads).unwrap(), vec![1.0, 0.0]);
+}
+
+#[test]
+fn the_tape_is_drained_before_any_recipe_runs() {
+    let x = cpu(&[1.0, 2.0], &[2]);
+    let y = cpu(&[3.0, 4.0], &[2]);
+    let out = CpuB::mul::<f32>(&x, &y).unwrap();
+
+    assert!(incin_backends::cpu::tape_depth() > 0);
+    let first = CpuB::backward::<f32>(&out).unwrap();
+    assert_eq!(incin_backends::cpu::tape_depth(), 0);
+
+    // A second pass over the same loss has nothing left to walk, so it reaches
+    // the seed and nothing else. Draining afterwards instead of before would
+    // make this return the first pass's gradients a second time, and a caller
+    // looping over batches would silently double them.
+    let second = CpuB::backward::<f32>(&out).unwrap();
+    assert_eq!(grad_of(&x, &first).unwrap(), vec![3.0, 4.0]);
+    assert!(grad_of(&x, &second).is_none());
+}
+
+#[test]
+fn an_output_nothing_reached_is_skipped_rather_than_failed() {
+    // `unrelated` is recorded on the same tape but is not upstream of the loss
+    // the walk starts from. Its node must be passed over, not treated as a
+    // missing gradient.
+    let a = cpu(&[1.0, 2.0], &[2]);
+    let b = cpu(&[3.0, 4.0], &[2]);
+    let unrelated = CpuB::mul::<f32>(&a, &b).unwrap();
+
+    let c = cpu(&[5.0, 6.0], &[2]);
+    let loss = CpuB::add::<f32>(&c, &c).unwrap();
+
+    let grads = CpuB::backward::<f32>(&loss).unwrap();
+
+    assert_eq!(grad_of(&c, &grads).unwrap(), vec![2.0, 2.0]);
+    assert!(grad_of(&unrelated, &grads).is_none());
+    assert!(grad_of(&a, &grads).is_none());
+}
+
+#[test]
+fn a_recipe_that_records_while_it_runs_does_not_deadlock_the_tape() {
+    // Convolution backward is built out of other backend operations, each of
+    // which records. A walk that still held the tape it was draining would
+    // re-enter it — and with the tape behind a RefCell, that is a panic on the
+    // second borrow rather than anything to do with gradients. This is the
+    // case that made `tape::backward` take its nodes by value.
+    let input = cpu(
+        &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
+        &[1, 1, 3, 3],
+    );
+    let weight = cpu(&[1.0, 0.0, 0.0, 1.0], &[1, 1, 2, 2]);
+
+    let out = CpuB::conv2d::<f32>(&input, &weight, None, 1, 0, 1, 1).unwrap();
+    let grads = CpuB::backward::<f32>(&out).unwrap();
+
+    // The weight sees each 2x2 window it was applied to, summed over the four
+    // output positions: the top-left taps are 1+2+4+5 = 12, and each step
+    // right or down adds one to every tap.
+    assert_eq!(
+        grad_of(&weight, &grads).unwrap(),
+        vec![12.0, 16.0, 24.0, 28.0]
+    );
+    // Every input element is credited once per window that covered it, and the
+    // kernel's off-diagonal taps are zero, so the corners differ from the
+    // middle.
+    assert_eq!(
+        grad_of(&input, &grads).unwrap(),
+        vec![1.0, 1.0, 0.0, 1.0, 2.0, 1.0, 0.0, 1.0, 1.0]
+    );
+}
+
+#[test]
+fn identities_are_unique_across_allocations() {
+    // One counter serves the whole workspace since `GRD-003`. Two allocations
+    // that shared an id would have their gradients merged into one entry.
+    let a = cpu(&[1.0], &[1]);
+    let b = cpu(&[1.0], &[1]);
+    assert_ne!(TapeStorage::id(&a), TapeStorage::id(&b));
+}
+
+#[test]
+#[should_panic(expected = "NaN or Infinity detected in gradient")]
+fn the_nan_check_names_the_tensor_it_found() {
+    let x = cpu(&[0.0, 1.0], &[2]);
+    let zero = cpu(&[0.0, 0.0], &[2]);
+    let out = CpuB::div::<f32>(&x, &zero).unwrap();
+
+    let _ = CpuB::backward_with_nan_check::<f32>(&out);
+}
+
+#[test]
+fn a_chain_propagates_through_every_layer() {
+    // Two dependent operations, which is the shortest chain that can tell a
+    // reverse walk from a forward one. Walking forward reaches the first
+    // node before anything has credited its output, so it is skipped as an
+    // unreached branch and `x` comes back with no gradient at all — the same
+    // silence a correct walk produces for a genuinely unrelated tensor.
+    let x = cpu(&[1.0, 2.0], &[2]);
+    let a = cpu(&[3.0, 3.0], &[2]);
+    let b = cpu(&[5.0, 5.0], &[2]);
+
+    let first = CpuB::mul::<f32>(&x, &a).unwrap();
+    let second = CpuB::mul::<f32>(&first, &b).unwrap();
+    let grads = CpuB::backward::<f32>(&second).unwrap();
+
+    // d(x*a*b)/dx = a*b = 15, and the intermediate carries b alone.
+    assert_eq!(grad_of(&x, &grads).unwrap(), vec![15.0, 15.0]);
+    assert_eq!(grad_of(&first, &grads).unwrap(), vec![5.0, 5.0]);
+    assert_eq!(grad_of(&a, &grads).unwrap(), vec![5.0, 10.0]);
 }

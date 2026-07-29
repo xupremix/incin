@@ -1,26 +1,28 @@
-//! The autograd tape: per-op recording gated on the ambient `GradMode`
-//! (`GRD-002`, superseding D-05's unconditional push), reverse-walk gradient
-//! accumulation with drain-on-return (D-06), and the shared `unbroadcast`
-//! helper (CPUBACK-06).
+//! The CPU backend's half of the autograd tape.
+//!
+//! `GRD-003` moved the node type, the reverse walk, and the accumulation loop
+//! into `incin_core::exec::tape`, where they are written once instead of three
+//! times. What is left here is what is genuinely CPU-specific: how a
+//! `CpuStorage` is seeded, summed, and tested for a non-finite value — the
+//! three methods [`TapeStorage`] asks for — plus the thread-local that owns
+//! the tape and the `unbroadcast` helper every recipe in this backend calls
+//! (`CPUBACK-06`).
+//!
+//! The thread-local stays here until `GRD-006` gives saved-tensor lifetime to
+//! the graph and deletes all three of them.
 //!
 //! This tape is deliberately independent from `incin-core`'s
 //! `tensor::tracing` module (`TRACING_GRAPH`, used for ONNX export) — D-04.
 //! The two thread-locals never reference each other; this file must not
 //! import or reference `TRACING_GRAPH` anywhere.
-//!
-//! The single highest-risk correctness surface here is
-//! `backward()`'s accumulation loop: a tensor read by two downstream ops
-//! MUST have its gradient contributions summed (`entry().and_modify()`),
-//! never overwritten (a bare `.insert()`) — this is CPUBACK-05's literal
-//! correctness gate.
 
-use alloc::collections::BTreeMap;
 use core::cell::RefCell;
 
-use incin_core::exec::GradMode;
+use incin_core::exec::tape;
+use incin_core::exec::{GradientMap, NanCheck, Tape, TapeNode, TapeStorage, TensorId};
 use incin_core::prelude::Result;
 
-use crate::cpu::storage::{CpuBuffer, CpuStorage, TensorId};
+use crate::cpu::storage::{CpuBuffer, CpuStorage};
 
 // A thread-local backward-call counter for telemetry step tracking.
 #[cfg(feature = "telemetry")]
@@ -28,69 +30,94 @@ thread_local! {
     static BACKWARD_STEP: RefCell<usize> = const { RefCell::new(0) };
 }
 
-/// A boxed backward closure: receives the accumulated gradient for a
-/// `TapeEntry`'s `output_id` and returns one gradient per `input_id`, in
-/// the same order.
-pub(crate) type BackwardFn = Box<dyn Fn(&CpuStorage) -> Vec<CpuStorage> + Send + Sync>;
-
-/// One recorded operation: the output it produced, the inputs it consumed,
-/// and a boxed backward closure mapping an accumulated output-gradient to
-/// one gradient per input (same order as `input_ids`).
+/// One recorded operation, as the core defines it.
 ///
-/// D-05 had `push()` record every op unconditionally, because the backend has
-/// no visibility into whether the surrounding `Tensor<..., G>`'s `G` is `Grad`
-/// or `NoGrad`. It still has none: `GRD-002` carries the answer down as an
-/// ambient [`GradMode`] instead, which the frontend sets from `G` and `push`
-/// reads.
-pub(crate) struct TapeEntry {
-    /// `output_id`.
-    pub(crate) output_id: TensorId,
-    /// `input_ids`.
-    pub(crate) input_ids: Vec<TensorId>,
-    /// `backward`.
-    pub(crate) backward: BackwardFn,
+/// The name is kept because it is what thirty-one call sites in this backend
+/// write, and the field names with it. Renaming a type that did not change
+/// shape would have made a mechanical migration look like a redesign.
+pub(crate) type TapeEntry = TapeNode<CpuStorage>;
+
+/// The three things a reverse walk needs of CPU storage.
+///
+/// Nothing here is new; it is `ones_like`, the tape-internal `add_cpu_storage`,
+/// and the old `check_nan` predicate, given the names the shared walk calls
+/// them by.
+impl TapeStorage for CpuStorage {
+    fn id(&self) -> TensorId {
+        self.id
+    }
+
+    fn ones_like(&self) -> Result<Self> {
+        // Infallible on this backend — a CPU allocation of a known length
+        // cannot fail the way a device one can — so the shared signature is
+        // satisfied rather than exercised.
+        Ok(Self::ones_like(self))
+    }
+
+    fn accumulate(&self, contribution: &Self) -> Result<Self> {
+        Ok(add_cpu_storage(self, contribution))
+    }
+
+    fn has_non_finite(&self) -> bool {
+        match &*self.buffer {
+            CpuBuffer::F32(v) => v.iter().any(|x| x.is_nan() || x.is_infinite()),
+            CpuBuffer::F64(v) => v.iter().any(|x| x.is_nan() || x.is_infinite()),
+            CpuBuffer::F16(v) => v.iter().any(|x| x.is_nan() || x.is_infinite()),
+            CpuBuffer::BF16(v) => v.iter().any(|x| x.is_nan() || x.is_infinite()),
+            // An integer buffer has no non-finite representation to find.
+            _ => false,
+        }
+    }
 }
 
-/// The backend's gradient container: `Backend::Grads` in a later plan's
-/// `lib.rs` impl. Wraps a plain `BTreeMap` keyed by `TensorId`.
+/// The backend's gradient container: `Backend::Grads`.
+///
+/// A newtype over the core map rather than the map itself, because
+/// `Backend::Grads` is named in signatures across this crate and in
+/// `incin_core::optim::Gradients`, and an alias to a generic would spell the
+/// storage type at every one of them.
 pub struct CpuGrads {
     // Private per B-3 (.agents/API_DESIGN.md "pub(crate) is default"): use
-    // `.get(id)` — downstream crates shouldn't inspect/mutate the internal
-    // BTreeMap beyond the intended query API.
-    pub(crate) grads: BTreeMap<TensorId, CpuStorage>,
+    // `.get(id)` — downstream crates shouldn't inspect/mutate the map beyond
+    // the intended query API.
+    pub(crate) grads: GradientMap<CpuStorage>,
 }
 
 impl CpuGrads {
     /// Look up the accumulated gradient for a given tensor id, if any.
+    #[must_use]
     pub fn get(&self, id: TensorId) -> Option<&CpuStorage> {
-        self.grads.get(&id)
+        self.grads.get(id)
+    }
+
+    /// How many tensors the backward pass reached.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.grads.len()
+    }
+
+    /// Whether it reached none.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.grads.is_empty()
     }
 }
 
 thread_local! {
     /// `TAPE`.
-    static TAPE: RefCell<Vec<TapeEntry>> = const { RefCell::new(Vec::new()) };
+    static TAPE: RefCell<Tape<CpuStorage>> = const { RefCell::new(Tape::new()) };
 }
 
-/// Push a `TapeEntry` onto the thread-local tape, unless the ambient
-/// [`GradMode`] forbids recording (`GRD-002`, superseding D-05's
-/// unconditional push).
+/// Record one operation.
 ///
-/// The gate is here rather than at the thirty-one call sites in this file
-/// because the guarantee PROPOSALS.md sec. 1.2.5 states — a `NoGrad` operation
-/// produces no node — must not depend on thirty-one correct edits, nor on the
-/// next kernel author remembering a convention. `entry` is dropped on the spot
-/// when the mode refuses it, which releases the saved operands its backward
-/// closure captured.
+/// The `GradMode` gate (`GRD-002`) and the recording itself both live in
+/// `Tape::push` now; this is the thread-local lookup and the telemetry hook.
 pub(crate) fn push(entry: TapeEntry) {
-    if !GradMode::current().records() {
-        return;
-    }
     TAPE.with(|t| t.borrow_mut().push(entry));
     // Emit a scalar tracking tape depth when telemetry is enabled.
     #[cfg(feature = "telemetry")]
     {
-        let depth = TAPE.with(|t| t.borrow().len()) as f64;
+        let depth = depth() as f64;
         let step = BACKWARD_STEP.with(|s| *s.borrow());
         crate::telemetry::emit_scalar(step, "tape/depth", depth);
     }
@@ -105,47 +132,24 @@ pub(crate) fn push(entry: TapeEntry) {
 /// drains fully between `backward()` calls (D-06).
 #[must_use]
 pub fn depth() -> usize {
-    TAPE.with(|t| t.borrow().len())
+    TAPE.with(|t| t.borrow().depth())
 }
 
-/// Walk the tape backward, seeding `loss`'s gradient with ones, accumulating
-/// (never overwriting) contributions for reused tensors, and draining the
-/// tape before returning (D-06).
+/// Walk this thread's tape backward from `loss`.
 ///
-/// Algorithm (RESEARCH.md Pattern 3):
-/// 1. Seed `grads[loss.id] = ones_like(loss)`.
-/// 2. Drain the tape via `mem::take` BEFORE walking it (D-06) — this must
-///    happen before any entry is invoked, not just before returning.
-/// 3. Walk the drained entries in reverse insertion order. For each entry,
-///    look up the accumulated gradient for `output_id`; if absent, `continue`
-///    (an unreached branch, not an error). Otherwise invoke the backward
-///    closure and accumulate each resulting gradient via
-///    `entry(id).and_modify(sum).or_insert(new)` — never a bare `.insert()`.
+/// Seeding, draining before the first recipe runs (D-06), reverse order, and
+/// summing rather than overwriting a reused tensor's contributions
+/// (`CPUBACK-05`) are all `incin_core::exec::Tape::backward`. This resolves the
+/// thread-local, names the storage type, and emits telemetry.
 pub fn backward(loss: &CpuStorage) -> Result<CpuGrads> {
-    let mut grads: BTreeMap<TensorId, CpuStorage> = BTreeMap::new();
-    grads.insert(loss.id, CpuStorage::ones_like(loss));
-
-    // Drain BEFORE walking (D-06) — mirrors tracing.rs's extract_graph()
-    // mem::take idiom, but on an independent thread-local (D-04).
-    let entries = TAPE.with(|t| core::mem::take(&mut *t.borrow_mut()));
     #[cfg(feature = "telemetry")]
-    let n_ops = entries.len();
+    let n_ops = depth();
 
-    for entry in entries.into_iter().rev() {
-        let Some(grad_out) = grads.get(&entry.output_id).cloned() else {
-            continue;
-        };
-        let input_grads = (entry.backward)(&grad_out);
-        for (input_id, g) in entry.input_ids.into_iter().zip(input_grads) {
-            grads
-                .entry(input_id)
-                .and_modify(|acc| *acc = add_cpu_storage(acc, &g))
-                .or_insert(g);
-            //           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-            // NEVER a bare `.insert()` here — that's the literal
-            // CPUBACK-05 overwrite bug this loop must not reintroduce.
-        }
-    }
+    // Drain under the borrow, walk outside it. A convolution backward recipe
+    // records while it runs, and a walk holding this `RefCell` would panic on
+    // its second borrow rather than on anything to do with gradients.
+    let nodes = TAPE.with(|t| t.borrow_mut().drain());
+    let grads = tape::backward(nodes, loss, NanCheck::Skip)?;
 
     #[cfg(feature = "telemetry")]
     {
@@ -173,54 +177,23 @@ fn emit_backward_telemetry(step: usize, n_ops: usize) {
     }
 }
 
-/// Helper to check if a tensor contains NaN or Infinity
-fn check_nan(storage: &CpuStorage, id: TensorId) {
-    let has_nan = match &*storage.buffer {
-        CpuBuffer::F32(v) => v.iter().any(|x| x.is_nan() || x.is_infinite()),
-        CpuBuffer::F64(v) => v.iter().any(|x| x.is_nan() || x.is_infinite()),
-        CpuBuffer::F16(v) => v.iter().any(|x| x.is_nan() || x.is_infinite()),
-        CpuBuffer::BF16(v) => v.iter().any(|x| x.is_nan() || x.is_infinite()),
-        _ => false,
-    };
-    if has_nan {
-        panic!("NaN or Infinity detected in gradient for TensorId {:?}", id);
-    }
-}
-
-/// Same as `backward()`, but aggressively validates every intermediate gradient
-/// for NaN or Infinity values, panicking immediately to pinpoint the exact operation.
+/// Same as [`backward`], but validates every intermediate gradient for `NaN`
+/// or infinity, panicking at the operation that produced it rather than at the
+/// end of the pass.
+///
+/// `GRD-005` owns replacing that panic with a structured failure.
 pub fn backward_with_nan_check(loss: &CpuStorage) -> Result<CpuGrads> {
-    let mut grads: BTreeMap<TensorId, CpuStorage> = BTreeMap::new();
-    grads.insert(loss.id, CpuStorage::ones_like(loss));
-
-    let entries = TAPE.with(|t| core::mem::take(&mut *t.borrow_mut()));
-
-    for entry in entries.into_iter().rev() {
-        let Some(grad_out) = grads.get(&entry.output_id).cloned() else {
-            continue;
-        };
-        let input_grads = (entry.backward)(&grad_out);
-        for (input_id, g) in entry.input_ids.into_iter().zip(input_grads) {
-            check_nan(&g, input_id);
-            grads
-                .entry(input_id)
-                .and_modify(|acc| {
-                    *acc = add_cpu_storage(acc, &g);
-                    check_nan(acc, input_id);
-                })
-                .or_insert(g);
-        }
-    }
-
+    let nodes = TAPE.with(|t| t.borrow_mut().drain());
+    let grads = tape::backward(nodes, loss, NanCheck::Enforce)?;
     Ok(CpuGrads { grads })
 }
 
 /// Elementwise sum of two ALREADY-shape-matching gradients.
 ///
-/// This is intentionally NOT the public `NumericOps::add` a later plan
-/// implements (which must broadcast) — tape-internal accumulation only ever
-/// sums two gradients that have already been shape-matched to their target
-/// via `unbroadcast`, so no broadcast logic is needed here.
+/// This is intentionally NOT the public `NumericOps::add` (which must
+/// broadcast) — tape-internal accumulation only ever sums two gradients that
+/// have already been shape-matched to their target via `unbroadcast`, so no
+/// broadcast logic is needed here.
 fn add_cpu_storage(a: &CpuStorage, b: &CpuStorage) -> CpuStorage {
     debug_assert_eq!(
         a.shape, b.shape,

@@ -57,6 +57,8 @@ pub mod request;
 pub mod rule;
 /// Frozen operation descriptors and the schema version they are pinned to.
 pub mod spec;
+/// The backend-neutral autograd tape.
+pub mod tape;
 
 pub use capability::{
     Capabilities, CapabilityQuery, CapabilityRegistry, CapabilityRule, ImplementationKind,
@@ -79,6 +81,7 @@ pub use spec::{
     AxisMask, BinaryOp, BroadcastSpec, Conv2dSpec, DescriptorSchemaVersion, MatMulSpec,
     OperationSpec, Pool2dSpec, PoolOp, ReduceOp, ReductionSpec, ReshapeSpec,
 };
+pub use tape::{BackwardFn, GradientMap, NanCheck, Tape, TapeNode, TapeStorage, TensorId};
 
 /// Supertrait used to seal public traits in this module against outside
 /// implementations.

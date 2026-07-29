@@ -9,6 +9,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- **Backend-neutral autograd tape (`GRD-003`):** `incin_core::exec::tape` now
+  owns the graph `PROPOSALS.md` §1.2.5 puts in the core — one `TensorId`, a
+  `TapeNode` holding a node's inputs and backward recipe, a `Tape` owning the
+  nodes, and the reverse walk that consumes them. `TapeStorage` is the whole of
+  what a backend still supplies: identity, a ones seed, a fallible accumulate,
+  and a non-finite predicate. The CPU backend runs on it; `GRD-004` moves WGPU
+  and CUDA. The walk takes its nodes by value, so a backward recipe that itself
+  records — every convolution backward does — cannot re-enter the tape it is
+  draining.
+
 - **`GradMode` and `no_grad` (`GRD-002`):** the type-level `Grad`/`NoGrad`
   markers now reach the layer that records. `GradMode` joins the other axes on
   `ExecutionPolicy`, is derived from `RequiresGrad::requires_grad` rather than
@@ -56,6 +66,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Cross-backend gradient parity:** extended `tests/gradient_parity.rs` with
   `max_pool2d` and `cross_entropy_loss` (non-zero target class) CPU-vs-WGPU
   checks, the permanent regression class this file exists to catch.
+
+### Changed
+- `incin_backends::{cpu,wgpu,cuda}::storage::TensorId` are re-exports of
+  `incin_core::exec::TensorId`; three independent identity counters became one.
 
 ### Fixed
 - **Feature isolation and naming:** a bare install now enables only `std` and `cpu`; CUDA, WGPU, Candle, autotuning, and telemetry are explicit opt-ins. The third-party Candle adapter moved from `legacy::candle` to `external::candle`, and accelerator-only builds no longer reference CPU-only dispatch variants. Candle dtype conversion now returns an error instead of panicking on unsupported types.

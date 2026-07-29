@@ -193,6 +193,32 @@ impl GradMode {
         }
     }
 
+    /// The mode ambient on this thread, or [`GradMode::Enabled`] outside any
+    /// scope.
+    ///
+    /// The tapes read this. It is the only thing standing between a `NoGrad`
+    /// frontend operation and a recorded node, because a backend kernel
+    /// receives storage and never sees `G`.
+    ///
+    /// Without `std` there is no thread-local to read and no [`scope`] to have
+    /// installed anything, so the answer is the default. That is the true
+    /// state rather than a weakened guarantee: nothing in a `no_std` build can
+    /// express a disabled scope, and every tape in the workspace lives in a
+    /// backend that requires `std`.
+    ///
+    /// [`scope`]: Self::scope
+    #[must_use]
+    pub fn current() -> Self {
+        #[cfg(feature = "std")]
+        {
+            ExecutionPolicy::current().grad_mode
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            Self::Enabled
+        }
+    }
+
     /// Run `body` under this mode combined with the ambient one, per
     /// [`and`](Self::and).
     ///
@@ -202,10 +228,9 @@ impl GradMode {
     /// the common path — an operation on a `Grad` tensor — reads no
     /// thread-local at all.
     ///
-    /// Without `std` there is no thread-local to install into, and no tape to
-    /// install it for: every tape in the workspace lives in a backend that
-    /// requires `std`. Running `body` unchanged is the whole `no_std` story
-    /// here, not a silently weakened guarantee.
+    /// Without `std` there is nothing to install into; see
+    /// [`current`](Self::current) for why that is the true answer rather than
+    /// a weakened one.
     ///
     /// [`scope`]: Self::scope
     #[inline]
@@ -340,17 +365,6 @@ mod scope {
     }
 
     impl GradMode {
-        /// The mode ambient on this thread, or [`GradMode::Enabled`] outside
-        /// any scope.
-        ///
-        /// The tapes read this. It is the only thing standing between a
-        /// `NoGrad` frontend operation and a recorded node, because a backend
-        /// kernel receives storage and never sees `G`.
-        #[must_use]
-        pub fn current() -> Self {
-            ExecutionPolicy::current().grad_mode
-        }
-
         /// Run `body` with this mode ambient, leaving every other policy axis
         /// as it was.
         ///

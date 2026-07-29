@@ -2716,7 +2716,7 @@ What the row does not do is prevent the clone — a CPU backward closure capture
 its saved operands just before pushing, so a refused push drops them at once
 rather than never making them. `CpuStorage` is `Rc`-backed, so that is a
 refcount bump; building the entry lazily means touching all 116 sites and a
-`TapeEntry` type `GRD-003` is about to replace.
+`TapeEntry` type `GRD-003` has since replaced with a backend-neutral node.
 
 Writing the test surfaced a defect this row deliberately did not fix.
 `Tensor::argmax` and `Tensor::argmin` cannot succeed on the CPU backend at all:
@@ -2730,8 +2730,50 @@ somebody fixes it.
 
 `EXE-009` stays `[~]` rather than being displaced. Its remainder is the
 287-method legacy `Backend` surface, which needs `PRF-003`'s direct kernel work,
-and `PRF-003` needs CUDA hardware. `GRD-003` is next eligible on the grad track
-and `EXE-010` on the executor track.
+and `PRF-003` needs CUDA hardware.
+
+`GRD-003` gives the core the graph §1.2.5 says it owns. There were three, and
+the core owned none: `cpu`, `wgpu`, and `cuda` each declared a `TensorId`, an
+entry type, and a copy of the same reverse walk. They were not similar by
+accident — seed, drain, reverse, accumulate is one algorithm, and writing it
+three times is how the CPU copy earned the comment marking the exact line where
+a bare `insert` silently dropped one of two gradient contributions
+(`CPUBACK-05`). It is written once now, and `TapeStorage` names precisely what
+is left to a backend: identity, a ones seed, a fallible accumulate, and a
+non-finite predicate. Accumulation is fallible because one of the three
+backends already was — WGPU allocates to add and CPU does not — and a shared
+walk has to carry the weaker guarantee. `cpu/tape.rs` lost 130 lines and gained
+103.
+
+The signature was decided by a failure, not by taste. The first migration held
+the tape across the walk, and four convolution tests failed with `RefCell
+already borrowed`: conv backward is built out of other backend operations, each
+of which records, so a walk still holding the tape re-entered it. `D-06` had
+said "drain before invoking anything" as a comment for as long as the walk was
+written next to the thread-local. Taking `Vec<TapeNode<S>>` by value makes it
+structural — there is no way to call the walk without having already taken the
+nodes out — and a recipe that records during a pass lands on the fresh tape,
+where it belongs.
+
+The row's own evidence command was running zero tests. `gradient_parity.rs` was
+`#![cfg(all(feature = "cpu", any(feature = "wgpu", feature = "cuda")))]`, so
+`--features std,cpu --test gradient_parity` compiled an empty binary and exited
+zero. Its ten CPU cases assert calculus rather than a recording of the previous
+implementation, which is what makes them survive the next migration too. One of
+them exists because a mutant survived: walking forward instead of in reverse
+failed nothing, since every case was a single operation deep, and a
+three-factor chain is the shortest thing that can tell the two apart.
+
+`TapeNode` does not carry the operation kind §1.2.5 lists. Supplying it means
+editing 116 push sites to name a value nothing reads, and the ruling against
+that is already recorded twice — `GRD-001` on `GradMode` and on
+`AutotunePolicy`. It belongs to the first row that reads it. `GRD-004` migrates
+WGPU and CUDA onto this node on hardware, `GRD-005` owns the `panic!` the NaN
+check still uses, and `GRD-006` owns the three thread-locals that still hold
+the tapes.
+
+`GRD-004` is next on the grad track but needs a GPU; `GRD-005` and `EXE-010`
+are the next unblocked rows.
 The complete Shape-track evidence is recorded in the mirror and
 `docs/plan/tasks/SHP-007.md` through `SHP-008.md`. The §4 themes above
 describe intent; **this ledger and its dependency graph define order**, and the
@@ -2840,7 +2882,7 @@ Silicon · `compile` compiled execution · `grad` autograd · `dist` distributed
 | CMP-006 | preview | compile | [ ] | CMP-005 | `crates/incin-core/src/compiled/artifact.rs` | Versioned compiled artifacts with compatibility and corruption tests | `cargo test -p incin-core --test compiled_artifact` |
 | GRD-001 | core | grad | [x] | EXE-006 | `crates/incin-core/src/exec/context.rs` | Explicit ExecutionContext with nested and concurrent tests | `cargo test -p incin-core --test exec_context` |
 | GRD-002 | core | grad | [x] | GRD-001 | `crates/incin-core/src/exec/context.rs; crates/incin-core/src/tensor/grad.rs` | G to GradMode propagation; NoGrad records zero nodes and saves nothing | `cargo test -p incin-core --test nograd_records_nothing` |
-| GRD-003 | core | grad | [ ] | GRD-001 | `crates/incin-core/src/exec/tape.rs` | Backend-neutral tape nodes with CPU parity | `cargo test -p incin-backends --no-default-features --features std,cpu --test gradient_parity` |
+| GRD-003 | core | grad | [x] | GRD-001 | `crates/incin-core/src/exec/tape.rs` | Backend-neutral tape nodes with CPU parity | `cargo test -p incin-backends --no-default-features --features std,cpu --test gradient_parity` |
 | GRD-004 | core | grad | [ ] | GRD-003,EXE-008 | `crates/incin-backends/src/{cuda,wgpu}/` | CUDA and WGPU gradient recipes with hardware parity | `cargo test -p incin-backends --features wgpu --test gradient_parity` |
 | GRD-005 | core | grad | [ ] | GRD-003 | `crates/incin-core/src/exec/tape.rs` | Structured backward and NaN failures; no expected-failure panic paths | `cargo test -p incin-core --test backward_errors` |
 | GRD-006 | core | grad | [ ] | GRD-004 | `crates/incin-backends/src/{cpu,cuda,wgpu}/tape.rs` | Saved-tensor lifetime owned by the graph; delete all three backend-local tapes | `cargo test --workspace` |
@@ -3330,3 +3372,11 @@ justification as an entry before it may start.
 | D-021 | An operand's `GradMode` **tightens** the ambient one and can never raise it (`GradMode::restrict`); only a caller naming a mode installs it (`GradMode::scope`). `no_grad` is therefore a ceiling over everything inside it, and `Grad` is a permission rather than an instruction. | One combinator that installs whatever it is given. A `no_grad` block would then be silently undone by the first `Grad` tensor inside it, which is the single thing callers reach for the block to prevent. It also costs: installing on `Grad` means a thread-local write on the common path for a decision the type already made. |
 | D-022 | Propagation reads the **result's** `G`, not the receiver's. `argmax`, `argmin`, `topk`, and `argsort` return `NoGrad` whatever they were called on, so they run under `GradMode::Disabled` unconditionally. | Reading the receiver's marker, which is the same answer for every operation that preserves `G` and the wrong one for exactly those four. §1.2.5 makes `NoGrad` a statement about what runs, not only about which APIs the result offers; the CPU backend had already reached the same conclusion as a per-kernel exception in `argmax`, which this makes a policy instead. |
 | D-023 | The tape gate lives in each backend's `push`, and `tape::depth` is public. | Gating at the 116 call sites, and leaving the depth `#[cfg(test)]`. A guarantee that depends on 116 correct edits — and on the next kernel author knowing the convention — is not a guarantee; and one that nothing outside the crate can count is not evidence. The alternative evidence, inferring "nothing was recorded" from a backward pass finding no gradients, passes equally well against a tape holding entries nothing happened to reach. |
+
+### 2026-07-29 — Backend-neutral tape
+
+| # | Decision | Alternative rejected |
+|---|---|---|
+| D-024 | The backward walk takes its nodes **by value** (`tape::backward(nodes, loss, check)`); a `Tape` is drained into it. | `Tape::backward(&mut self, ..)`. A backward recipe may itself record — every convolution backward on the CPU backend does — so a walk still holding the tape re-enters it, which with the tape behind a `RefCell` is a panic on the second borrow. Four tests found this within minutes of the migration. `D-06` had stated the ordering as a comment for as long as the walk lived beside the thread-local; by value, it is not statable any other way. |
+| D-025 | `TapeStorage::accumulate` is **fallible**, even though the CPU implementation cannot fail. | An infallible signature with WGPU's allocating add unwrapping inside it. One of the three backends already returns a `Result` here, and a shared walk has to carry the weaker guarantee: an accumulation that cannot report a failure turns a dropped contribution into a wrong gradient rather than an error. |
+| D-026 | One `TensorId` for the workspace, re-exported by each backend's storage module. | Three per-backend newtypes over three counters. They hand out the same integers to different allocations, which is harmless exactly as long as no two backends share a tape — the thing `GRD-006` ends. Re-exporting rather than renaming keeps every existing `use` site spelled as it was. |
