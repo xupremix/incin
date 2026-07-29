@@ -121,6 +121,14 @@ pub mod hub {
 /// Typenum compile-time type-level integers.
 pub use incin_core::typenum;
 
+/// The `cargo incin doctor` report: devices, features, caches, and probes.
+///
+/// In the library rather than in `src/bin/cargo-incin.rs` because an
+/// integration test links the library and not the binary, and `UX-014`'s
+/// evidence command is `cargo test -p incin --test doctor`.
+#[cfg(feature = "std")]
+pub mod doctor;
+
 // Enabling an accelerator must never silently change application behavior.
 // CPU remains the default whenever it is available; accelerator-only builds
 // get the one enabled device family.

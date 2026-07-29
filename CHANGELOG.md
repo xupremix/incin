@@ -9,6 +9,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- **`cargo incin doctor` (`UX-014`):** one command reporting toolchain and
+  crate versions, enabled Cargo features, the CPU ISA extensions the kernels
+  branch on, each backend family's compiled-in and available state, cache paths
+  and writeability, and capability probes for eight representative operations
+  on every device that answered. Stable `key: value` text by default, `--json`
+  for CI and support reports with a `schema_version`. Findings carry stable
+  codes — `no-backend-compiled`, `backend-unavailable`, `cache-not-writable`,
+  `deprecated-feature`, `toolchain-unknown`, `isa-unavailable` — and only the
+  first exits non-zero. The report is `incin::doctor`, a library module, so it
+  is testable; every observation goes behind a `Host` trait, so a three-GPU
+  machine can be put in front of it on a runner with none. The command is
+  read-only: writeability is read from mode bits rather than probed by writing.
 - **Macro test suite (`CI-005`):** `crates/incin-macros/tests/` now carries the
   compile-pass, compile-fail, hygiene, rename, and rustfmt cases the macro
   policy in `PROPOSALS.md` requires — twelve trybuild cases plus guards that
@@ -85,6 +97,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   `incin_core::exec::TensorId`; three independent identity counters became one.
 
 ### Fixed
+- **WGPU device detection crashed when probed more than once (`UX-014`):**
+  `incin_backends::detect::probe` built a fresh `wgpu::Instance` per call and
+  dropped it, and two threads each probing twice segfaulted inside adapter
+  enumeration. The instance is shared for the process lifetime now, matching
+  what the WGPU backend already did; detection is still performed per call.
 - **Macro hygiene (`CI-005`):** `s!`, `idx!`, `#[module]`, `model!`, and
   `import_model!` expanded to a relative `incin::prelude::…`, so any caller
   item named `incin` captured the expansion. All five emit absolute `::incin`

@@ -1962,6 +1962,7 @@ dependencies = [
  "incin-data",
  "incin-diagnostics",
  "incin-macros",
+ "incin-telemetry",
  "serde",
  "serde_json",
 ]

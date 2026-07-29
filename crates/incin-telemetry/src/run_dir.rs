@@ -15,20 +15,29 @@ use std::path::{Path, PathBuf};
 /// telemetry output to an arbitrary writable path). D-01/D-03 remain the
 /// user-facing contract (fixed XDG default, no user-facing path override).
 pub fn default_run_dir() -> crate::err::Result<PathBuf> {
+    let dir = default_run_dir_path()?;
+    std::fs::create_dir_all(&dir)?;
+    Ok(dir)
+}
+
+/// Where [`default_run_dir`] would put the run directory, without creating it.
+///
+/// Same resolution, and deliberately the same code path, so the two cannot
+/// disagree about the answer. This exists for callers that need to *name* the
+/// directory rather than write to it — `cargo incin doctor` reports it, and a
+/// read-only diagnostic must not create the thing it is reporting on.
+pub fn default_run_dir_path() -> crate::err::Result<PathBuf> {
     #[cfg(test)]
     let override_dir = std::env::var("INCIN_TELEMETRY_RUN_DIR").ok();
     #[cfg(not(test))]
     let override_dir: Option<String> = None;
 
-    let dir = if let Some(override_dir) = override_dir {
-        PathBuf::from(override_dir)
-    } else {
-        let base = dirs::data_dir()
-            .ok_or_else(|| crate::err::Error::Msg("could not resolve XDG data directory".into()))?;
-        base.join("incin").join("runs")
-    };
-    std::fs::create_dir_all(&dir)?;
-    Ok(dir)
+    if let Some(override_dir) = override_dir {
+        return Ok(PathBuf::from(override_dir));
+    }
+    let base = dirs::data_dir()
+        .ok_or_else(|| crate::err::Error::Msg("could not resolve XDG data directory".into()))?;
+    Ok(base.join("incin").join("runs"))
 }
 
 /// Generates a sortable, unique run-id (D-02) via a UUIDv7.
@@ -94,6 +103,41 @@ pub(crate) mod tests {
 
         assert_eq!(result, dir);
         assert!(dir.is_dir(), "run dir should exist on disk after the call");
+
+        unsafe {
+            std::env::remove_var("INCIN_TELEMETRY_RUN_DIR");
+        }
+    }
+
+    /// `default_run_dir_path` names the same directory without creating it.
+    ///
+    /// `cargo incin doctor` (`UX-014`) reports this path and is read-only by
+    /// contract, so the two halves of this test are the whole reason the
+    /// function exists: the same answer, and no directory afterwards.
+    #[test]
+    fn default_run_dir_path_resolves_without_creating() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        let dir = unique_test_dir("run-dir-path");
+        // SAFETY: guarded by ENV_LOCK, no other test reads/writes this
+        // env var concurrently.
+        unsafe {
+            std::env::set_var("INCIN_TELEMETRY_RUN_DIR", &dir);
+        }
+
+        let resolved = default_run_dir_path().expect("path resolution should succeed");
+
+        assert_eq!(resolved, dir);
+        assert!(
+            !dir.exists(),
+            "resolving the path must not create {}",
+            dir.display()
+        );
+
+        // And it agrees with the creating call, which is the property that
+        // makes it safe for the doctor to report.
+        let created = default_run_dir().expect("default_run_dir should succeed");
+        assert_eq!(created, resolved);
+        let _ = std::fs::remove_dir_all(&dir);
 
         unsafe {
             std::env::remove_var("INCIN_TELEMETRY_RUN_DIR");

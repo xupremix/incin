@@ -102,11 +102,29 @@ fn probe_cuda() -> Option<DeviceId> {
     None
 }
 
+/// The one `wgpu::Instance` this crate's probe uses.
+///
+/// Shared rather than created per call because creating and dropping instances
+/// concurrently takes the process down: two threads each probing twice is a
+/// reproducible `SIGSEGV` inside adapter enumeration on a Mesa/llvmpipe stack,
+/// found by `UX-014`'s `cargo incin doctor` — which was the first caller to
+/// probe the same family more than once in a process.
+///
+/// This does not cache *detection*, which the module contract says is
+/// performed on every call: [`wgpu::Instance::request_adapter`] still runs per
+/// probe, so hardware appearing or disappearing is still observed. Only the
+/// instance is long-lived, which is what `wgpu::device::get_device_state`
+/// already does with the instance the backend runs on.
+#[cfg(feature = "wgpu")]
+static WGPU_INSTANCE: std::sync::OnceLock<wgpu::Instance> = std::sync::OnceLock::new();
+
 #[cfg(feature = "wgpu")]
 fn probe_wgpu() -> Option<DeviceId> {
-    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-        backends: wgpu::Backends::PRIMARY,
-        ..Default::default()
+    let instance = WGPU_INSTANCE.get_or_init(|| {
+        wgpu::Instance::new(wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::PRIMARY,
+            ..Default::default()
+        })
     });
     pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
         power_preference: wgpu::PowerPreference::HighPerformance,
@@ -155,6 +173,37 @@ mod tests {
                     "{kind:?} probed while not compiled in"
                 );
             }
+        }
+    }
+
+    /// Probing the same family repeatedly from more than one thread must not
+    /// take the process down.
+    ///
+    /// This is a regression test for a real `SIGSEGV`, not a hypothetical.
+    /// `probe_wgpu` used to build a `wgpu::Instance` per call and drop it; two
+    /// threads each probing twice crashed inside adapter enumeration, three
+    /// times out of three. `UX-014`'s `cargo incin doctor` found it by being
+    /// the first caller to probe a family twice in one process.
+    ///
+    /// Deliberately not `wgpu`-specific: `probe` is documented as callable
+    /// repeatedly, and that has to hold for whatever families the build has.
+    /// On a CPU-only build this passes trivially, which is the correct amount
+    /// of work for a build with no driver to crash in.
+    #[test]
+    fn probing_repeatedly_from_several_threads_is_survivable() {
+        let threads: std::vec::Vec<_> = (0..2)
+            .map(|_| {
+                std::thread::spawn(|| {
+                    for _ in 0..2 {
+                        for kind in [DeviceKind::Cpu, DeviceKind::Cuda, DeviceKind::Wgpu] {
+                            let _ = probe(kind);
+                        }
+                    }
+                })
+            })
+            .collect();
+        for thread in threads {
+            thread.join().expect("a probing thread must not panic");
         }
     }
 

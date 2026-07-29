@@ -2851,8 +2851,53 @@ now — the in-crate form the parser has always accepted and nothing in the
 repository used. The integration crates under `tests/` were unaffected:
 `extern crate incin_core as incin` does create the crate-root entry.
 
+`UX-014` builds `cargo incin doctor` as §2.3 describes it — a subcommand on the
+dispatcher that already exists, not a second binary. The report itself lives in
+`crates/incin/src/doctor.rs` rather than in `cargo-incin.rs`, because the row's
+own evidence command is an integration test and an integration test links the
+library; a doctor written in the binary could not be reached by the command
+meant to prove it works.
+
+"Mocked hardware tests" is the constraint that shaped everything else. A report
+assembled from ambient hardware asserts one configuration — the one with no
+GPU, which is every runner here. The whole impure surface is six methods on one
+`Host` trait, and assembling, concluding, and rendering are pure functions of
+its answers, so twenty-three of the twenty-five tests describe a machine that
+does not exist. The capability answers in them are not mocked: `Host` fakes
+which hardware is *there*, and the registries are static data every build
+carries, so a mocked CUDA device gets CUDA's real registrations. The first
+golden had `matmul f16` and `reduction f64` backwards on CUDA, which is exactly
+what a golden recorded from output would have preserved.
+
+Findings carry stable codes, since a support workflow greps the code and a
+human reads the message. A rejected capability probe deliberately is not one.
+The first draft made it one, and the healthy-machine test showed the cost: an
+ordinary CPU laptop opened its report with two notes saying `f16` matmul and
+`f64` reduction are unsupported — not a fault, not actionable, and already
+printed a few lines above. A section that always has something in it is a
+section people stop reading.
+
+The row found a `SIGSEGV`, and it was not in the doctor. `cargo test
+--workspace` unifies the `wgpu` feature into `incin`, and under it the suite
+died rather than failed. The doctor's own share was real — `gather` probed each
+family twice, once to report it and once to decide what to ask its registry —
+but fixing that only made the crash rarer. Underneath, `detect::probe_wgpu`
+built a `wgpu::Instance` per call and dropped it, and two threads each probing
+twice took the process down three times out of three with no doctor code
+involved. `cargo incin doctor` was simply the first caller ever to probe one
+family more than once in a process. The instance is shared through a `OnceLock`
+now — what `wgpu::device::get_device_state` one file over already does — while
+detection stays per-call, because `request_adapter` still is.
+
+Read-only is structural rather than promised. Writeability is read from mode
+bits instead of probed by writing, and the telemetry run directory resolves
+through a new non-creating `default_run_dir_path` rather than through
+`default_run_dir`, which creates it. `cache_state` is public precisely so the
+contract can be asserted: pointing it at a path that does not exist leaves it
+not existing.
+
 `GRD-004` is next on the grad track but needs a GPU, and `GRD-006` needs it
-first. `EXE-010` and `UX-014` are the unblocked rows.
+first. `EXE-010` is the unblocked row, and `UX-013` is unblocked by this one.
 The complete Shape-track evidence is recorded in the mirror and
 `docs/plan/tasks/SHP-007.md` through `SHP-008.md`. The §4 themes above
 describe intent; **this ledger and its dependency graph define order**, and the
@@ -2995,7 +3040,7 @@ Silicon · `compile` compiled execution · `grad` autograd · `dist` distributed
 | UX-011 | exploratory | ux | [ ] | DST-004 | `crates/incin-macros/src/parallel_block.rs` | Evaluate parallel!; implement only with recorded usability evidence | `cargo test -p incin-macros --test parallel_block` |
 | UX-012 | preview | ux | [ ] | UX-005,UX-006 | `crates/incin-viz/src/` | Visualize placement, memory, timeline, and critical path | `cargo test -p incin-viz` |
 | UX-013 | core | ux | [ ] | GOV-005,EXE-005,UX-014 | `docs/; README.md` | Feature and capability documentation generated from tested registrations, with compiled examples | `cargo test --workspace --doc` |
-| UX-014 | core | ux | [ ] | EXE-005 | `crates/incin/src/bin/cargo-incin.rs` | cargo incin doctor with stable text and JSON output and mocked hardware tests | `cargo test -p incin --test doctor` |
+| UX-014 | core | ux | [x] | EXE-005 | `crates/incin/src/bin/cargo-incin.rs` | cargo incin doctor with stable text and JSON output and mocked hardware tests | `cargo test -p incin --test doctor` |
 | UX-015 | preview | ux | [ ] | EXE-005,GRD-001 | `crates/incin-core/src/exec/precision.rs` | PrecisionPolicy and loss scaling extending the existing DTypePolicy; mixed-precision parity tests | `cargo test -p incin-core --test precision_policy` |
 | CI-001 | core | ci | [x] | GOV-005,GOV-003 | `.github/workflows/ci.yml` | Feature-powerset CI preserving the bare CPU default; adds cargo doc and drops blanket package exclusions | `act -j powerset  # or CI run` |
 | CI-002 | core | ci | [x] | EXE-008 | `.github/workflows/hardware.yml` | Scheduled CUDA and WGPU hardware matrix | `gh workflow run hardware.yml` |
@@ -3475,3 +3520,13 @@ justification as an entry before it may start.
 | D-030 | Every macro expands to an **absolute** `::incin::…` path, and in-crate callers use the `@` form that expands to `crate::…`. | The relative `incin::…` the macros emitted, which resolves against whatever the caller has in scope: a module of their own named `incin` silently wins, and the diagnostic points at their macro invocation rather than at the macro. `incin-core`'s own tests had been leaning on that relative form through a `use crate as incin` alias, which is the one spelling an absolute path cannot see — so the `@` form the parser already accepted, and nothing used, is what they take. |
 | D-031 | A **package rename** in a caller's `Cargo.toml` is documented as unsupported rather than resolved. | Depending on `proc-macro-crate`, which reads the caller's manifest during expansion. The macro policy in §4 forbids filesystem access outside the explicit import macros, and a path resolution that depends on where the manifest is makes expansion depend on the build layout. The limit is stated on all three macros. |
 | D-032 | `#[module]`'s struct-level arguments are parsed as a closed vocabulary. | The `attr.to_string().contains(..)` it used, which accepted `#[module(no_such_argument)]` as bare `#[module]` and `#[module(not_internal)]` as `internal`. The policy requires a versioned grammar that rejects unknown keys, and substring matching cannot reject anything. |
+
+### 2026-07-29 — `cargo incin doctor`
+
+| # | Decision | Alternative rejected |
+|---|---|---|
+| D-033 | The report is a library module (`incin::doctor`); `cargo-incin.rs` is the dispatcher §2.3 calls it. | Writing the report in the binary, as the row's target column reads. An integration test links the library and not the `[[bin]]`, so the row's own evidence command — `cargo test -p incin --test doctor` — could not reach a single line of it. |
+| D-034 | Every impure observation goes behind one `Host` trait, and assembling, concluding, and rendering are pure functions of its answers. | Reading hardware where it is needed. A report assembled from ambient hardware asserts exactly one configuration, the one with no GPU that every runner here has, and "mocked hardware tests" is in the deliverable. |
+| D-035 | A rejected capability probe is **reported but is not a finding**. | Emitting a note per rejection, which the first draft did. `f16` matmul and `f64` reduction are unsupported on the CPU registry, so every healthy laptop opened its report with two notes about how the CPU backend simply is — not a fault, not actionable, and duplicating the probe section verbatim. |
+| D-036 | `detect::probe_wgpu` shares one `wgpu::Instance` through a `OnceLock`; detection itself stays per call. | Building an instance per probe, which is what it did. Two threads each probing twice is a reproducible `SIGSEGV` inside adapter enumeration, and `probe` is public and documented as callable repeatedly. `request_adapter` still runs per call, so hardware appearing or disappearing is still observed. |
+| D-037 | Cache writeability is read from mode bits, and the telemetry run directory resolves through a non-creating `default_run_dir_path`. | Attempting a write, which is the accurate test, and calling `default_run_dir`, which creates the directory. §2.3 makes the command read-only absent an explicit flag, and a diagnostic that changes what it is diagnosing is not one. The weaker answer is documented at the function. |

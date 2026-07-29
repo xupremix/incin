@@ -189,6 +189,7 @@ fn print_help() {
     println!("    run        Run cargo run with real-time typenum error translation");
     println!("    bench, doc, fix, clippy");
     println!("               Same real-time typenum error translation as above");
+    println!("    doctor     Report devices, features, caches, and capability probes [--json]");
     println!("    inspect    Inspect a .safetensors, .gguf, or .onnx model file metadata");
     println!("    translate  Translate raw text containing typenum expressions from stdin or arg");
     println!("    new <template> [path]");
@@ -236,6 +237,24 @@ fn main() -> io::Result<()> {
         } else {
             cargo_args.push(arg);
         }
+    }
+
+    if subcommand == "doctor" {
+        // The report itself lives in the library (`incin::doctor`), not here:
+        // `UX-014`'s evidence command is an integration test, and an
+        // integration test links the library rather than this binary.
+        let (rendered, code) = incin::doctor::run(&cargo_args);
+        // A report goes to stdout even when it found something wrong, because
+        // a report is what was asked for; only a usage error goes to stderr.
+        if code == incin::doctor::EXIT_USAGE {
+            eprint!("{rendered}");
+        } else {
+            print!("{rendered}");
+        }
+        if code != 0 {
+            std::process::exit(code);
+        }
+        return Ok(());
     }
 
     if subcommand == "inspect" {

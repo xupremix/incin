@@ -40,8 +40,10 @@ external-candle = ["std", "incin-backends/external-candle"]
 candle = ["external-candle"]
 # Enables CUDA launch autotuning.
 autotune = ["cuda", "incin-backends/autotune"]
-# Enables backend telemetry hooks.
-telemetry = ["std", "incin-backends/telemetry"]
+# Enables backend telemetry hooks. `cargo incin doctor` also reports the run
+# directory under this feature, which is why the dependency is direct here and
+# not only through incin-backends.
+telemetry = ["std", "incin-backends/telemetry", "dep:incin-telemetry"]
 
 [dependencies]
 incin-core = { path = "../incin-core", version = "0.0.0", default-features = false }
@@ -49,6 +51,7 @@ incin-macros = { path = "../incin-macros/", version = "0.0.0", default-features 
 incin-backends = { path = "../incin-backends", version = "0.0.0", default-features = false }
 incin-data = { version = "0.0.0", path = "../incin-data" }
 incin-diagnostics = { version = "0.0.0", path = "../incin-diagnostics" }
+incin-telemetry = { version = "0.0.0", path = "../incin-telemetry", optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
