@@ -422,9 +422,275 @@ impl WgpuDevice {
     }
 }
 
+/// An ordered, non-empty set of devices a run is asked to use.
+///
+/// `UX-001`. Appendix A.8 assigns this row `DeviceSet` and `DevicePreference`
+/// alongside a `BackendKind`; that third type is [`DeviceKind`], which already
+/// means "the runtime-identifiable backend family a `DeviceId` belongs to", so
+/// this builds on it rather than adding a second spelling (`D-008`).
+///
+/// Order is kept because it is meaningful — the first device is where a
+/// single-device run happens and where rank 0 sits — and duplicates are
+/// rejected, because a set naming the same GPU twice describes a run that
+/// cannot exist.
+///
+/// ```rust
+/// use incin_core::prelude::{DeviceKind, DeviceSet};
+///
+/// let one = DeviceSet::cpu();
+/// assert_eq!(one.len(), 1);
+/// assert!(!one.is_multi_device());
+///
+/// let three = DeviceSet::cuda(0..3).unwrap();
+/// assert_eq!(three.len(), 3);
+/// assert!(three.is_multi_device());
+/// assert_eq!(three.kind(), Some(DeviceKind::Cuda));
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeviceSet {
+    devices: alloc::vec::Vec<DeviceId>,
+}
+
+/// Why a [`DeviceSet`] could not be built.
+///
+/// Separate from `ShapeError` because none of these are about shapes, and
+/// separate from the trainer's own error because a `DeviceSet` is constructed
+/// long before there is a trainer to report through.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum DeviceSetError {
+    /// The set would have been empty.
+    ///
+    /// A run has to happen somewhere, and the alternative to rejecting this is
+    /// picking a device on the caller's behalf — which is the silent fallback
+    /// sec. 2 rules out.
+    Empty,
+    /// The same device was named more than once.
+    Duplicate {
+        /// The device that appeared twice.
+        device: DeviceId,
+    },
+    /// The set mixes backend families.
+    ///
+    /// Rejected for now rather than forever: a CPU/GPU heterogeneous run is a
+    /// real thing, but it is `DST-016`'s, and a set that silently permits it
+    /// here would be validated by nothing.
+    Mixed {
+        /// The family the first device belongs to.
+        first: DeviceKind,
+        /// The family that disagreed with it.
+        found: DeviceKind,
+    },
+}
+
+impl core::fmt::Display for DeviceSetError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Empty => f.write_str("a device set must name at least one device"),
+            Self::Duplicate { device } => write!(
+                f,
+                "device {}:{} appears more than once",
+                device.kind().name(),
+                device.ordinal()
+            ),
+            Self::Mixed { first, found } => write!(
+                f,
+                "a device set cannot mix backend families: {} and {}",
+                first.name(),
+                found.name()
+            ),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for DeviceSetError {}
+
+impl DeviceSet {
+    /// Builds a set from devices in the order given.
+    ///
+    /// # Errors
+    ///
+    /// [`DeviceSetError`] if the list is empty, repeats a device, or mixes
+    /// backend families.
+    pub fn new(
+        devices: impl IntoIterator<Item = DeviceId>,
+    ) -> core::result::Result<Self, DeviceSetError> {
+        let devices: alloc::vec::Vec<DeviceId> = devices.into_iter().collect();
+        let first = *devices.first().ok_or(DeviceSetError::Empty)?;
+        for (index, &device) in devices.iter().enumerate() {
+            if device.kind() != first.kind() {
+                return Err(DeviceSetError::Mixed {
+                    first: first.kind(),
+                    found: device.kind(),
+                });
+            }
+            if devices[..index].contains(&device) {
+                return Err(DeviceSetError::Duplicate { device });
+            }
+        }
+        Ok(Self { devices })
+    }
+
+    /// The single CPU device.
+    #[must_use]
+    pub fn cpu() -> Self {
+        Self {
+            devices: alloc::vec![DeviceId::cpu()],
+        }
+    }
+
+    /// CUDA devices at the given ordinals — `DeviceSet::cuda(0..3)` in sec. 2's
+    /// example.
+    ///
+    /// # Errors
+    ///
+    /// [`DeviceSetError::Empty`] if the range is empty. An ordinal range cannot
+    /// repeat or mix families, so those variants are unreachable here.
+    pub fn cuda(
+        ordinals: impl IntoIterator<Item = usize>,
+    ) -> core::result::Result<Self, DeviceSetError> {
+        Self::new(ordinals.into_iter().map(DeviceId::cuda))
+    }
+
+    /// WGPU devices at the given ordinals.
+    ///
+    /// # Errors
+    ///
+    /// [`DeviceSetError::Empty`] if the range is empty.
+    pub fn wgpu(
+        ordinals: impl IntoIterator<Item = usize>,
+    ) -> core::result::Result<Self, DeviceSetError> {
+        Self::new(ordinals.into_iter().map(DeviceId::wgpu))
+    }
+
+    /// The devices, in the order they were given.
+    #[must_use]
+    pub fn devices(&self) -> &[DeviceId] {
+        &self.devices
+    }
+
+    /// The device a single-device run happens on, and rank 0 otherwise.
+    #[must_use]
+    pub fn primary(&self) -> DeviceId {
+        self.devices[0]
+    }
+
+    /// How many devices the set names. Never zero.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.devices.len()
+    }
+
+    /// Always `false`. Present because clippy asks for it beside `len`, and
+    /// because a caller reading `is_empty` should get the real answer rather
+    /// than have to know the invariant.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        false
+    }
+
+    /// Whether this set needs collectives to run at all.
+    #[must_use]
+    pub fn is_multi_device(&self) -> bool {
+        self.devices.len() > 1
+    }
+
+    /// The one backend family every device in the set belongs to.
+    ///
+    /// `Option` only because [`DeviceKind`] is `#[non_exhaustive]`: the set is
+    /// never empty, so this is `Some` for every family this build knows.
+    #[must_use]
+    pub fn kind(&self) -> Option<DeviceKind> {
+        self.devices.first().map(|device| device.kind())
+    }
+}
+
+/// What a caller wants when they have not named specific devices.
+///
+/// Distinct from [`DeviceSet`] on purpose: a preference is resolved against a
+/// machine and can fail, a set is already resolved. Keeping them one type is
+/// what makes "I asked for CUDA and got CPU" possible to express, and sec. 2
+/// rules that out — "'easy' must not mean silent CPU transfer".
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum DevicePreference {
+    /// Use exactly these devices, or fail.
+    Exactly(DeviceSet),
+    /// Use the fastest family this build was compiled with and that the
+    /// machine actually has, falling back through the preference order.
+    ///
+    /// This is the one variant permitted to end up on the CPU, because it is
+    /// the one where the caller said they did not mind.
+    Fastest,
+    /// Use the CPU.
+    Cpu,
+}
+
+impl Default for DevicePreference {
+    /// [`DevicePreference::Cpu`].
+    ///
+    /// Not `Fastest`: a default that silently moves a run onto a GPU when one
+    /// appears is the same class of surprise as one that silently moves it off.
+    fn default() -> Self {
+        Self::Cpu
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_device_set_keeps_the_order_it_was_given() {
+        let set = DeviceSet::new([DeviceId::cuda(2), DeviceId::cuda(0), DeviceId::cuda(1)])
+            .expect("three distinct CUDA devices are a valid set");
+        assert_eq!(set.primary(), DeviceId::cuda(2));
+        assert_eq!(set.len(), 3);
+        assert!(set.is_multi_device());
+    }
+
+    #[test]
+    fn a_device_set_rejects_what_cannot_describe_a_run() {
+        assert_eq!(DeviceSet::new([]), Err(DeviceSetError::Empty));
+        assert_eq!(
+            DeviceSet::new([DeviceId::cuda(0), DeviceId::cuda(0)]),
+            Err(DeviceSetError::Duplicate {
+                device: DeviceId::cuda(0)
+            })
+        );
+        assert_eq!(
+            DeviceSet::new([DeviceId::cuda(0), DeviceId::cpu()]),
+            Err(DeviceSetError::Mixed {
+                first: DeviceKind::Cuda,
+                found: DeviceKind::Cpu
+            })
+        );
+    }
+
+    /// `DeviceSet::cuda(0..3)` is the literal call in sec. 2's example.
+    #[test]
+    fn the_rfcs_three_gpu_call_builds_three_cuda_devices() {
+        let set = DeviceSet::cuda(0..3).expect("an ordinal range is a valid set");
+        assert_eq!(
+            set.devices(),
+            [DeviceId::cuda(0), DeviceId::cuda(1), DeviceId::cuda(2)]
+        );
+        assert_eq!(set.kind(), Some(DeviceKind::Cuda));
+    }
+
+    #[test]
+    fn an_empty_ordinal_range_is_rejected_rather_than_defaulted() {
+        assert_eq!(DeviceSet::cuda(0..0), Err(DeviceSetError::Empty));
+        assert_eq!(DeviceSet::wgpu(0..0), Err(DeviceSetError::Empty));
+    }
+
+    /// The default has to be the boring one. A `Fastest` default would move an
+    /// unchanged program onto a GPU the day one appears.
+    #[test]
+    fn the_default_preference_is_the_cpu() {
+        assert_eq!(DevicePreference::default(), DevicePreference::Cpu);
+    }
 
     #[test]
     fn test_device_variants() {

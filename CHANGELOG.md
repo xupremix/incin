@@ -9,6 +9,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- **Automatic `Trainer` (`UX-001`, `train` feature):** `incin::train` builds
+  `PROPOSALS.md` §2's level-1 workflow — pick devices, get a validated plan,
+  train. The load-bearing property is a refusal: an unsatisfiable device request
+  is an error, never a CPU fallback, and `NotCompiledIn` (fix your
+  `Cargo.toml`) is a separate variant from `DeviceUnavailable` (fix your
+  machine). `DeviceSet` and `DevicePreference` join
+  `incin_core::tensor::device`; they are separate types so that "I asked for
+  CUDA and got CPU" is something the API can refuse rather than express.
+  `DevicePreference::Fastest` may resolve to the CPU — that is what asking for
+  it means — and records every family it skipped. Availability is answered
+  through a `Machine` trait, so a three-GPU plan is testable on a runner with
+  none. Multi-device `fit` is an explicit `CollectivesUnavailable` naming
+  `DST-005` rather than a quiet single-GPU run.
 - **Generated capability and feature documentation (`UX-013`):**
   `docs/capabilities.md` is rendered from `CPU_CAPABILITIES`,
   `CUDA_CAPABILITIES` and `WGPU_CAPABILITIES` by

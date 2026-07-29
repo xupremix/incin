@@ -684,6 +684,7 @@ fn compiled_features() -> Vec<Feature> {
         Feature::new("external-candle", cfg!(feature = "external-candle")),
         Feature::new("candle", cfg!(feature = "candle")),
         Feature::new("autotune", cfg!(feature = "autotune")),
+        Feature::new("train", cfg!(feature = "train")),
         Feature::new("telemetry", cfg!(feature = "telemetry")),
     ]
 }

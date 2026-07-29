@@ -33,6 +33,7 @@ and third-party backends are opt-in. Enabling an accelerator does not change
 | `external-candle` | no | Enables the external Candle backend at `incin::external::candle`. |
 | `candle` | no | Deprecated alias for `external-candle`. Removed at REL-002; see PROPOSALS.md D-014. |
 | `autotune` | no | Enables CUDA launch autotuning. |
+| `train` | no | Enables the automatic `Trainer` at `incin::train`. Preview tier: useful and tested, but the interface may change without a migration path. |
 | `telemetry` | no | Enables backend telemetry hooks. `cargo incin doctor` also reports the run directory under this feature, which is why the dependency is direct here and not only through incin-backends. |
 <!-- END GENERATED: facade-features -->
 

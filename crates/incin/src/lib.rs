@@ -144,6 +144,11 @@ pub type DefaultDevice = crate::prelude::Cuda;
 
 #[cfg(feature = "cpu")]
 /// Default backend (CPU with f32). Equivalent to `IncinBackend<f32, Cpu>`.
+/// The automatic `Trainer` (`UX-001`). Preview tier, so it ships behind the
+/// non-default `train` feature.
+#[cfg(feature = "train")]
+pub mod train;
+
 pub type DefaultBackend = incin_backends::IncinBackend<f32, incin_core::prelude::Cpu>;
 
 /// Re-export of the unified backend type.

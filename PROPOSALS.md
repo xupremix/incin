@@ -2983,6 +2983,43 @@ left operand's shape unchanged, which disagrees with every real backend —
 `broadcast_add` reaches `Backend::add` with differently shaped operands and
 hands the result to `from_parts` against the broadcast type. Nothing had ever
 run a `broadcast_*` example, which is exactly why it survived.
+
+`UX-001` builds level 1 of §2's three-level UX ladder — "select three devices
+and let Incin produce and explain a safe plan" — and the sentence that shapes it
+is the one after the list: "'Easy' must not mean silent CPU transfer […] Every
+automatic decision is inspectable and reproducible." A `Trainer` that quietly
+runs on the CPU when the CUDA devices it was handed are absent is worse than no
+`Trainer`, because the failure mode is a training run that finishes. So most of
+the row is refusals, and most of its tests assert one.
+
+`DeviceSet` and `DevicePreference` stay separate types. A preference is resolved
+against a machine and may land somewhere the caller did not name; a set is
+already resolved and may not. That distinction is the whole mechanism: `Exactly`
+fails rather than substitutes, `Fastest` may reach the CPU because that is what
+the caller asked for, and even then every family it skipped is in the report,
+since a fallback nobody can see is the silent one under another name. The
+default is `Cpu`, because a default that moves an unchanged program onto a GPU
+the day one appears is the same surprise in the other direction.
+
+Availability sits behind a `Machine` trait for the reason `UX-014`'s `Host`
+does: the row's deliverable is that an unchanged model runs on CPU and on three
+GPUs, and a test that can only describe the runner it is on cannot check the
+second half. A three-GPU machine costs a unit struct, and the model fixture is
+written once and used by both halves — its signature taking no device argument
+is itself the assertion.
+
+What the row does not do is pretend. `ParallelStrategy` is `DST-011`'s,
+`.explain()` is `UX-005`'s, and collectives are `DST-005`'s, so `fit` on a
+multi-device plan is an explicit error naming `DST-005` rather than a run on the
+primary device. The plan still validates and reports all three GPUs, which is
+the part that can be true today.
+
+Two things the row's own tests caught. The CPU training test first asserted only
+that the final loss was finite — which a `fit` that never stepped the optimizer
+would also satisfy — so it now probes the same model before and after and
+asserts the parameters moved. And the evidence command as written ran zero tests
+and printed `ok`, because Appendix B puts a preview row behind a non-default
+feature; it carries `--features train` now.
 The complete Shape-track evidence is recorded in the mirror and
 `docs/plan/tasks/SHP-007.md` through `SHP-008.md`. The §4 themes above
 describe intent; **this ledger and its dependency graph define order**, and the
@@ -3112,7 +3149,7 @@ Silicon · `compile` compiled execution · `grad` autograd · `dist` distributed
 | DST-014 | exploratory | dist | [ ] | CMP-003,GRD-007,DST-008 | `crates/incin-core/src/dist/fsdp.rs` | FSDP and ZeRO prototype with persistent and transient memory parity | `cargo test -p incin --features distributed-nccl --test fsdp  # 3x CUDA` |
 | DST-015 | preview | dist | [ ] | DST-011 | `crates/incin-core/src/dist/context.rs` | Multi-process rendezvous and launcher with timeout and shutdown tests | `cargo test -p incin --features distributed-nccl --test rendezvous` |
 | DST-016 | preview | dist | [ ] | DST-011,DST-015 | `crates/incin-core/src/nn/save.rs` | Global checkpoint manifest and explicit cross-mesh resharded load | `cargo test -p incin-core --test checkpoint_reshard` |
-| UX-001 | preview | ux | [ ] | EXE-005 | `crates/incin/src/train.rs` | Automatic Trainer; an unchanged model runs on CPU and on three GPUs | `cargo test -p incin --test trainer` |
+| UX-001 | preview | ux | [x] | EXE-005 | `crates/incin/src/train.rs` | Automatic Trainer; an unchanged model runs on CPU and on three GPUs | `cargo test -p incin --features train --test trainer` |
 | UX-002 | preview | ux | [ ] | DST-001 | `crates/incin-macros/src/mesh.rs` | mesh! with expansion, hygiene, span, and compile-fail tests | `cargo test -p incin-macros --test mesh_macro` |
 | UX-003 | preview | ux | [ ] | DST-003 | `crates/incin-macros/src/placement.rs` | placement! grammar and operation-bound diagnostics | `cargo test -p incin-macros --test placement_macro` |
 | UX-004 | preview | ux | [ ] | DST-003 | `crates/incin-macros/src/module.rs` | #[parallel] and #[shard] template and conflict tests | `cargo test -p incin-macros --test parallel_attrs` |
@@ -3631,3 +3668,8 @@ justification as an entry before it may start.
 | D-046 | An example that cannot compile where it lives is fenced ```` ```text ````, and a test fails on any ```` ```ignore ```` fence in `crates/*/src`. | Leaving `ignore` for the handful of genuine cases. `ignore` is indistinguishable from "we did not get round to it" — which is how seventy of them accumulated — and a rule with an exception nobody can mechanically tell apart from a violation is not enforceable. |
 | D-047 | `incin-core`'s examples satisfy their backend parameter with a hidden `DummyBackend` alias rather than the facade's `DefaultBackend`. | A dev-dependency cycle from `incin-core` on `incin`. It compiles, and `incin-macros` already has one, but it would put the facade in `incin-core`'s dev graph under `cargo hack check --feature-powerset --all-targets`, where unification would enable `incin-core/std` and silently stop the no_std powerset check from checking no_std. The visible text of an example documents the API; which concrete type satisfies `B` does not. |
 | D-048 | `DTypeId::name`, `DeviceKind::name` and `ImplementationKind::name` live on the enums in `incin-core`. | The private copies `cargo incin doctor` carried. Those needed a `_ => "unknown"` arm because the enums are `#[non_exhaustive]` outside the defining crate — so a dtype added later would have rendered as the literal string "unknown" in a support report. Inside `incin-core` the match is exhaustive and the same addition is a compile error. |
+| D-049 | Appendix A.8's `BackendKind` is not built; `DeviceSet` is built from the existing `DeviceKind`. | A second type meaning "the runtime-identifiable backend family a `DeviceId` belongs to", which is `DeviceKind`'s documented definition. `D-008` records what two vocabularies for one concept cost. |
+| D-050 | `DevicePreference` and `DeviceSet` are separate types rather than one enum with a "resolve" method. | Collapsing them. A preference is resolved against a machine and may land somewhere the caller did not name; a set is already resolved and may not. Keeping them apart is what makes "I asked for CUDA and got CPU" a thing the type system can refuse, and §2 rules it out in as many words. |
+| D-051 | `DevicePreference::default()` is `Cpu`, not `Fastest`. | A default that picks the best available device. It moves an unchanged program onto a GPU the day one appears, which is the same class of surprise as silently moving it off one — and §2's objection is to the surprise, not to its direction. |
+| D-052 | `Trainer::fit` on a multi-device plan returns `CollectivesUnavailable` naming `DST-005`. | Running the plan on its primary device. A three-GPU request that trains on one GPU and reports success is the silent-fallback failure with extra steps; naming the row that will fix it also makes the code to delete findable. |
+| D-053 | `UX-001`'s evidence command gained `--features train`. | `cargo test -p incin --test trainer`, which ran zero tests and printed `ok`: Appendix B requires a preview row behind a non-default feature, and the suite is `#![cfg(feature = "train")]`. An evidence command that passes without compiling its subject is the defect `UX-013` removed. |

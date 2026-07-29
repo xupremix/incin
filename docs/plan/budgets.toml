@@ -385,5 +385,9 @@ name = "autotune"
 enables = ["cuda", "incin-backends/autotune"]
 
 [[feature_crate.feature]]
+name = "train"
+enables = ["std"]
+
+[[feature_crate.feature]]
 name = "telemetry"
 enables = ["std", "incin-backends/telemetry", "dep:incin-telemetry"]

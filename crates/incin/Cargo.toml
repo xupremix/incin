@@ -40,6 +40,9 @@ external-candle = ["std", "incin-backends/external-candle"]
 candle = ["external-candle"]
 # Enables CUDA launch autotuning.
 autotune = ["cuda", "incin-backends/autotune"]
+# Enables the automatic `Trainer` at `incin::train`. Preview tier: useful and
+# tested, but the interface may change without a migration path.
+train = ["std"]
 # Enables backend telemetry hooks. `cargo incin doctor` also reports the run
 # directory under this feature, which is why the dependency is direct here and
 # not only through incin-backends.
