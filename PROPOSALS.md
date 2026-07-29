@@ -3055,6 +3055,82 @@ five scaffolding failures `SHP-007` added that check to catch. Two directories
 are not two properties, so the "say what this case proves" registry moved into
 `tests/support/` and both suites call it.
 
+`DST-002` builds the other half of §2.11 — the one that section says is not
+checkable at all until a process looks at a machine — in the same file, on
+purpose. The failure §2.11 is warning about is a single type making the logical
+claim and the physical one at once, and that boundary is easier to hold with
+both sides of it on the screen than with a module between them. A `MeshSpec`
+still holds no device; a `DeviceMesh<M>` holds nothing but devices and can only
+be built by `bind`.
+
+Nothing in the row reads hardware, and that is the design rather than a
+limitation of the test machine. Every question binding asks a machine goes
+through one trait, `TopologyProbe`, and every decision made from its answers is
+a pure function — which is why the evidence binds §2.11's own three-GPU example
+on a runner with no GPU, and why all eight rejections are ordinary test cases
+instead of eight configurations nobody has. No implementor ships here: a probe
+that answers questions about CUDA link topology has to call CUDA, and
+`incin-core` is `no_std` and links no driver, so `DST-005` and `DST-006` own the
+real ones and their own evidence is where "the answers are true" gets checked.
+
+Two of the guards exist because §2.11 says the ordinal is not an identity, and
+they are not the same guard. `RepeatedDevice` catches the same number twice —
+the launcher misconfiguration that runs, at half speed, double-counting a
+gradient. `AliasedDevice` catches two *different* numbers that a visibility mask
+has pointed at one card, which no amount of ordinal checking finds and which
+only the vendor-stable id can see. `MixedArchitecture` is the same shape of
+argument one level down: same backend family, different `sm_`, ranks that do not
+agree on which kernels exist.
+
+The rank layout had to be decided rather than inherited, since a rank is one
+integer and a mesh is three-dimensional. It is data outermost, then pipeline,
+then tensor innermost, so tensor-parallel peers are a contiguous run — that axis
+exchanges activations on every layer and launchers put consecutive ranks on one
+host, so the innermost axis is the one that lands on the fastest link.
+`CollectiveGroups` computes this over an axis array rather than three named
+degrees, which is what keeps §2.11's expert-parallel axis an array entry later
+instead of a convention re-cut two rows on. The round-trip test alone does not
+protect it: reversing the axis order stays perfectly self-consistent, so the
+test that tensor peers are adjacent and data replicas are far apart sits beside
+it.
+
+`MeshId` folds the fingerprint digest together with the logical degrees, and the
+evidence contains the case that proves both halves are needed. `DP=6` and `TP=6`
+over six fully-connected devices probe the same pairs in the same order, so
+their fingerprints are byte-identical — and they are incompatible programs.
+Only the degrees tell them apart. The digest itself is a hand-rolled FNV-1a,
+because it has to be identical in two processes that never speak to each other:
+`ahash` is seeded per process and `DefaultHasher` is documented as unstable
+across releases, and either would make a computed mesh id a coin flip.
+
+Eleven mutants, all caught. Each of the eight guards defeated in turn failed its
+own named test. Dropping the degrees from `MeshId` failed the `DP=6`/`TP=6`
+case. Removing the digest's per-field length prefix failed the case that
+distinguishes `"GPU-1" + "sm_90"` from `"GPU-" + "1sm_90"` — a test written only
+after a first mutation run showed nothing covered it. Reversing the axis order
+failed the adjacency test, and recording links in one direction only failed the
+fingerprint's link-count test. One mutation was rejected as unfaithful rather
+than recorded as a survivor: zeroing `M::DATA` alone leaves `MeshId` unchanged
+in every reachable case, because two meshes differing only in their data degree
+have different world sizes and so cannot bind the same devices.
+
+What the row deliberately does not do is the rest of §2.11's binding list.
+Backend and dtype capabilities need a `CapabilityRegistry` per rank, which
+arrives with the backends; estimated peak memory needs a plan to estimate, which
+is `DST-007`; communicator health cannot be answered by inspection at all, since
+a communicator has to exist first, and `DST-006` creates them. `EXE-005` is a
+dependency of this row because binding will consult the registry through its
+`Capabilities` trait, not because this row consults it. Placements remain
+`DST-003`, `mesh![...]` remains `UX-002`, and the `incin` facade still gains no
+`distributed` feature — a `DeviceMesh` that no tensor can be placed on is still
+not something the facade takes.
+
+The next eligible row is `DST-003`, which turns a `DeviceMesh` into something a
+tensor can be placed on and is the reason the facade still has nothing to
+enable. `DST-005` and `DST-006` are unblocked by this row and are where
+`TopologyProbe` acquires its first real implementor; `GRD-004`, the only newly
+eligible Core-tier row, is unrelated to this track.
+
 The complete Shape-track evidence is recorded in the mirror and
 `docs/plan/tasks/SHP-007.md` through `SHP-008.md`. The §4 themes above
 describe intent; **this ledger and its dependency graph define order**, and the
@@ -3169,7 +3245,7 @@ Silicon · `compile` compiled execution · `grad` autograd · `dist` distributed
 | GRD-006 | core | grad | [ ] | GRD-004 | `crates/incin-backends/src/{cpu,cuda,wgpu}/tape.rs` | Saved-tensor lifetime owned by the graph; delete all three backend-local tapes | `cargo test --workspace` |
 | GRD-007 | preview | grad | [ ] | GRD-006,CMP-003 | `crates/incin-core/src/compiled/alloc.rs` | Compiled-graph saved-tensor liveness and fusion integration | `cargo test -p incin-core --test compiled_alloc` |
 | DST-001 | preview | dist | [x] | GOV-002,SHP-007 | `crates/incin-core/src/dist/mesh.rs` | Typed meshes and ValidMesh; valid and invalid world-size compile tests | `cargo test -p incin-core --features distributed --test mesh_compile` |
-| DST-002 | preview | dist | [ ] | DST-001,EXE-005 | `crates/incin-core/src/dist/mesh.rs` | Physical binding, topology fingerprint, and runtime guards | `cargo test -p incin-core --test mesh_bind` |
+| DST-002 | preview | dist | [x] | DST-001,EXE-005 | `crates/incin-core/src/dist/mesh.rs` | Physical binding, topology fingerprint, and runtime guards | `cargo test -p incin-core --features distributed --test mesh_bind` |
 | DST-003 | preview | dist | [ ] | DST-001,EXE-002 | `crates/incin-core/src/dist/placement.rs; crates/incin-core/src/dist/rule.rs` | Placement typestates, PlacementKind, and rules; divisibility and transition compile tests; ValidatedDistributed sealed like Validated | `cargo test -p incin-core --test placement_rules` |
 | DST-004 | preview | dist | [ ] | DST-003,EXE-004 | `crates/incin-core/src/tensor/base.rs` | Unified Tensor global and local metadata with reshard invariants | `cargo test -p incin-core --test placement_tensor` |
 | DST-005 | preview | dist | [ ] | DST-002 | `crates/incin-backends/src/dist/reference.rs` | Deterministic CPU reference collectives and their adjoints | `cargo test -p incin-backends --features distributed-reference` |
@@ -3541,7 +3617,7 @@ changing nothing.
 | Type | Owning module | Task | Existing analogue |
 |---|---|---|---|
 | `MeshSpec`, `Data`, `TensorParallel`, `Pipeline`, `ValidMesh` | `incin-core::dist::mesh` | DST-001 | built: reuses the typenum `Mul` already used by shapes; the `Div`/`Rem` proofs are shard divisibility and arrive with `DST-003` |
-| `DeviceMesh`, `MeshId`, `CollectiveGroups`, `TopologyFingerprint` | `incin-core::dist::mesh` | DST-002 | — |
+| `DeviceMesh`, `MeshId`, `CollectiveGroups`, `TopologyFingerprint` | `incin-core::dist::mesh` | DST-002 | built: `TopologyProbe` is the observation seam, implemented by `DST-005` and `DST-006` rather than here |
 | `Placement` (trait), `PlacementKind` (enum), `Local`, `Replicated`, `Sharded`, `Partial`, `PipelineStage`, `PlacementBuf`, `ShardRemainderPolicy` | `incin-core::dist::placement` | DST-003 | — |
 | `DistributedRule`, `ValidatedDistributed`, `DistributedError` | `incin-core::dist::rule` | DST-003 | sealed on the same terms as `Validated<O>` |
 | `CollectiveBackend`, `CollectivePlan`, `GroupId`, `StreamId`, `ReduceOp` | `incin-backends::dist::collective` | DST-005 | — |
@@ -3713,3 +3789,9 @@ justification as an entry before it may start.
 | D-056 (2026-07-29) | The mesh types are not re-exported from `incin_core::prelude`, and `incin` gains no `distributed` feature in this row. | Both. `Data` and `Pipeline` are ordinary enough words that a glob prelude re-exporting them changes what `use incin::prelude::*` means for existing code the day a preview feature is enabled. And nothing in the facade accepts a mesh yet: `DeviceMesh` is `DST-002` and placements are `DST-003`, so forwarding the feature now would expose a type with no verbs — at the price of doubling `incin`'s feature-powerset job. |
 | D-057 (2026-07-29) | The mesh compile-fail cases live in `crates/incin-core/tests/mesh_compile_fail/`, a second trybuild directory. | Adding them to `tests/compile_fail/`. That directory is built without `distributed`, so a mesh case there fails with `E0433`, "a path that does not resolve" — one of the five scaffolding failures `SHP-007` added its registry check to catch. The registry itself moved to `tests/support/` so two directories do not become two implementations of one property. |
 | D-058 (2026-07-29) | CI gained a step running the preview-tier evidence commands for `UX-001` and `DST-001`. | Leaving them to the powerset job, which runs `cargo hack check` and so compiles those suites without executing them, and to the default test job, which does not enable their features at all. `DST-001`'s trybuild cases in particular assert nothing under `check`. |
+| D-059 (2026-07-29) | `DeviceMesh::bind` reads a `TopologyProbe` trait rather than any ambient hardware. | Querying the machine directly. §2.11's physical proof is about installed devices, link topology, and process layout, and a suite that could only run where those happen to be right would exercise no rejection at all. This is `UX-014`'s `Host` seam for the same reason: `tests/mesh_bind.rs` binds a three-GPU mesh on a runner with no GPU. No implementor ships in this row — a probe that answers questions about CUDA link topology has to call CUDA, and `incin-core` is `no_std`; `DST-005` and `DST-006` own the real ones. |
+| D-060 (2026-07-29) | `BindError` is a standalone enum in `dist::mesh`, not a variant set on a core error type. | Adding variants to `crate::err`. It exists only under the `distributed` feature, and a core error enum whose variant set depends on a feature is one that callers cannot match on portably. `BackendError` and `BackwardError` are the precedent for one enum per failure domain. |
+| D-061 (2026-07-29) | The rank layout is fixed at data-outermost, pipeline, tensor-innermost, and `CollectiveGroups` computes it over an axis array rather than three named degrees. | Leaving the convention implicit, or hardcoding three axes. Tensor parallelism exchanges activations on every layer and launchers assign consecutive ranks to one host, so the innermost axis is the one that lands on the fastest link; data parallelism communicates once per step and is outermost. Writing it over `[(MeshAxis, usize); AXIS_COUNT]` means §2.11's expert-parallel axis is an array entry later rather than a re-cut convention — and the round-trip test alone would not catch a reordering, which is why the adjacency test exists beside it. |
+| D-062 (2026-07-29) | Reachability is required within every collective group, and only within them. | Requiring every pair to reach every pair, or only the tensor group. Two ranks that share no group never run a collective together, so a missing path between them is not this module's business; two that do share one cannot run the collective that axis is made of. Only `Unreachable` is refused — a slow link is a performance judgement no library should silently make for a caller. |
+| D-063 (2026-07-29) | The fingerprint digest is a hand-rolled FNV-1a with a length prefix before every field. | `ahash` (seeded per process) or `DefaultHasher` (explicitly unstable across releases). The digest has to be identical in two processes that never speak to each other, which is the whole point of computing a `MeshId` instead of agreeing on one. It is not used as a cryptographic hash. The length prefix is what keeps `persistent = "GPU-1", architecture = "sm_90"` distinct from `persistent = "GPU-", architecture = "1sm_90"`. |
+| D-064 (2026-07-29) | `MeshAxis`'s variants are `Data`, `Pipeline`, and `Tensor`, shadowing the marker type names, and `DST-001`'s trybuild baselines were re-blessed to match. | Renaming the variants to avoid the collision. The typestate/projection pairing is the same one `Placement` and `PlacementKind` already use, and an axis enum whose variants are not named after the axes is worse to read at every call site. The cost is real and is recorded rather than absorbed: rustc now fully qualifies `incin_core::dist::mesh::Data` in `mesh_axes_out_of_order.stderr` and `mesh_zero_axis.stderr`, because the short name became ambiguous inside the module, so `DST-001`'s headline diagnostic is longer than it was. Nothing about what those cases assert changed — both still fail with `E0277` and still pass `every_mesh_case_names_the_rule_it_pins`. |

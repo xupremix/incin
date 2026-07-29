@@ -1,12 +1,12 @@
-error[E0277]: `MeshSpec<Data<UInt<UTerm, B1>>, Pipeline<UInt<UInt<UTerm, B1>, B1>>, TensorParallel<UInt<UTerm, B1>>>` is not a valid logical mesh
+error[E0277]: `MeshSpec<incin_core::dist::mesh::Data<UInt<UTerm, B1>>, incin_core::dist::mesh::Pipeline<UInt<UInt<UTerm, B1>, B1>>, TensorParallel<UInt<UTerm, B1>>>` is not a valid logical mesh
   --> tests/mesh_compile_fail/mesh_axes_out_of_order.rs:10:14
    |
 10 |     let _ = <MeshSpec<Data<U1>, Pipeline<U3>, TensorParallel<U1>> as ValidMesh>::WORLD;
    |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid mesh topology
    |
-   = help: the trait `ValidMesh` is not implemented for `MeshSpec<Data<UInt<UTerm, B1>>, Pipeline<UInt<UInt<UTerm, B1>, B1>>, TensorParallel<UInt<UTerm, B1>>>`
+   = help: the trait `ValidMesh` is not implemented for `MeshSpec<incin_core::dist::mesh::Data<UInt<UTerm, B1>>, incin_core::dist::mesh::Pipeline<UInt<UInt<UTerm, B1>, B1>>, TensorParallel<UInt<UTerm, B1>>>`
    = note: A mesh is `MeshSpec<Data<DP>, TensorParallel<TP>, Pipeline<PP>>` with the axes in that order and every degree nonzero
-help: the trait `ValidMesh` is implemented for `MeshSpec<Data<DP>, TensorParallel<TP>, Pipeline<PP>>`
+help: the trait `ValidMesh` is implemented for `MeshSpec<incin_core::dist::mesh::Data<DP>, TensorParallel<TP>, incin_core::dist::mesh::Pipeline<PP>>`
   --> src/dist/mesh.rs
    |
    | / impl<DP, TP, PP> ValidMesh for MeshSpec<Data<DP>, TensorParallel<TP>, Pipeline<PP>>

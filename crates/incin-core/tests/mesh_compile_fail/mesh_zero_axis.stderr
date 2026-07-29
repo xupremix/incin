@@ -21,4 +21,4 @@ help: the following other types implement trait `incin_core::typenum::NonZero`
   |
   | impl<U: Unsigned, B: Bit> NonZero for UInt<U, B> {}
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `UInt<U, B>`
-  = note: required for `MeshSpec<Data<UTerm>, TensorParallel<UInt<UInt<UTerm, B1>, B1>>>` to implement `ValidMesh`
+  = note: required for `MeshSpec<incin_core::dist::mesh::Data<UTerm>, TensorParallel<UInt<UInt<UTerm, B1>, B1>>>` to implement `ValidMesh`
