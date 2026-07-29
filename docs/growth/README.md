@@ -93,6 +93,11 @@ build/test commands in its "Verification" section.
    └────────────────────────┘   └──────────────────────────┘
 ```
 
+`09` (sharded checkpoints, model hub, MoE) is deliberately off this graph. It
+shares no code with `00`–`08` and is gated by the canonical ledger's `DST-*`
+rows rather than by anything here, so it is sequenced against `PROPOSALS.md`,
+not against this diagram. Its own internal order is in the doc.
+
 **Rule:** `07` (book) and `08` (agent skills) are written *after* the feature
 they document lands, or in lockstep with it — never speculatively ahead, or they
 document an API that then changes. They may be built incrementally (one chapter /
@@ -166,6 +171,7 @@ incin-diagnostics crate`.
 | 06 | Deployment (binary/GGUF/WASM) | [`06-deployment.md`](06-deployment.md) | PARTIAL (GGUF Q8_0 done) | — |
 | 07 | The Book (mdBook) | [`07-the-book.md`](07-the-book.md) | NOT STARTED | 01–06 land first |
 | 08 | Agent skills | [`08-agent-skills.md`](08-agent-skills.md) | NOT STARTED | 01–06 land first |
+| 09 | Sharded checkpoints, model hub, MoE | [`09-model-hub-and-moe.md`](09-model-hub-and-moe.md) | NOT STARTED (specified 2026-07-29) | independent of 00–08; §D depends on §A |
 
 Update this table and the target document as work lands, with a date, commit hash,
 and verification evidence. Mirror active work in `PROPOSALS.md` when it affects
