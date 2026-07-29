@@ -57,7 +57,7 @@ incin = { version = "0.0.0", features = ["external-candle"] }
 
 <!-- BEGIN GENERATED: crate-features -->
 - `incin-backends`: defaults to `std,cpu`; optional `cpu-blas`, `cuda`, `wgpu`, `autotune`, `external-candle`, `candle`, and `telemetry`.
-- `incin-core`: defaults to `std`; optional `nightly`, `paranoid-validation`, `cuda`, and `wgpu`.
+- `incin-core`: defaults to `std`; optional `nightly`, `paranoid-validation`, `distributed`, `cuda`, and `wgpu`.
 - `incin-macros`: defaults to `std`; optional `nightly`.
 - `incin-diagnostics`: defaults to `std`.
 - `incin-data`, `incin-telemetry`, `incin-viz`, `incin-viz-plugin-api`, and `incin-lsp` expose no Cargo features.

@@ -8,10 +8,12 @@
 //! (`macro_module_invalid`) produced no error from the macro at all.
 //!
 //! [`compile_fail_cases_fail_for_their_stated_reason`] is the guard against that
-//! happening again.
+//! happening again. It is shared with `mesh_compile`, which has its own
+//! directory for the reason recorded in [`support`].
+
+mod support;
 
 use std::collections::BTreeMap;
-use std::fs;
 use std::path::Path;
 
 #[test]
@@ -28,10 +30,6 @@ fn compile_fail() {
 /// is pinning: `E0624` is "this associated function is private" and nothing
 /// else. Macro rejections have no code, so those are matched on the message the
 /// macro emits.
-///
-/// Adding a case to `tests/compile_fail/` without adding a row here fails this
-/// test. That is deliberate: writing down what the case proves is the point,
-/// and a case nobody could name a reason for is a case that is not pinning one.
 fn expected_reasons() -> BTreeMap<&'static str, &'static str> {
     BTreeMap::from([
         // Shape rules, all unsatisfied trait bounds.
@@ -86,82 +84,10 @@ fn expected_reasons() -> BTreeMap<&'static str, &'static str> {
     ])
 }
 
-/// Output that means the case failed on its own scaffolding.
-///
-/// Every entry here was found in this directory: a `typenum::typenum::U2`
-/// import that never resolved, a file importing `incin_core` twice, and a path
-/// through `incin_core::shapes`, which is `pub(crate)`. Each produced a
-/// confident red test that proved nothing about shapes.
-const SCAFFOLDING_FAILURES: &[(&str, &str)] = &[
-    ("E0432", "an import that does not resolve"),
-    ("E0254", "a name imported twice"),
-    ("E0433", "a path that does not resolve"),
-    ("E0603", "a path into a private module"),
-    ("E0412", "a type that does not exist"),
-];
-
 #[test]
 fn compile_fail_cases_fail_for_their_stated_reason() {
-    let expected = expected_reasons();
-    let dir = Path::new("tests/compile_fail");
-    let mut problems = Vec::new();
-
-    let mut stems: Vec<String> = fs::read_dir(dir)
-        .expect("tests/compile_fail must exist")
-        .map(|entry| entry.expect("readable directory entry").path())
-        .filter(|path| path.extension().is_some_and(|ext| ext == "rs"))
-        .map(|path| {
-            path.file_stem()
-                .expect("a .rs file has a stem")
-                .to_string_lossy()
-                .into_owned()
-        })
-        .collect();
-    stems.sort();
-
-    for stem in &stems {
-        let Some(reason) = expected.get(stem.as_str()) else {
-            problems.push(format!(
-                "{stem}: no row in expected_reasons(); say what this case proves"
-            ));
-            continue;
-        };
-
-        let recorded = dir.join(format!("{stem}.stderr"));
-        let Ok(output) = fs::read_to_string(&recorded) else {
-            problems.push(format!("{stem}: no recorded .stderr next to the case"));
-            continue;
-        };
-
-        if !output.contains(reason) {
-            problems.push(format!(
-                "{stem}: recorded output does not mention {reason:?}, so the case \
-                 is no longer failing for the reason it claims"
-            ));
-        }
-        for (marker, description) in SCAFFOLDING_FAILURES {
-            if output.contains(marker) {
-                problems.push(format!(
-                    "{stem}: recorded output contains {marker} ({description}); \
-                     the case fails on its own scaffolding, not on the rule"
-                ));
-            }
-        }
-        if output.lines().any(|line| line.starts_with("warning")) {
-            problems.push(format!(
-                "{stem}: recorded output carries a warning, which will churn the \
-                 baseline on unrelated changes"
-            ));
-        }
-    }
-
-    for stem in expected.keys() {
-        if !stems.iter().any(|present| present == stem) {
-            problems.push(format!(
-                "{stem}: has a row in expected_reasons() but no case file"
-            ));
-        }
-    }
-
-    assert!(problems.is_empty(), "{}", problems.join("\n"));
+    support::compile_fail_cases_name_their_reason(
+        Path::new("tests/compile_fail"),
+        &expected_reasons(),
+    );
 }

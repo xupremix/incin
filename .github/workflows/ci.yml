@@ -68,6 +68,15 @@ jobs:
     # on would still pass it. These two build incin-backends alone, on the
     # bare feature set a CPU-only consumer actually gets, and then again with
     # the optional blocked GEMM so its parity tests run somewhere.
+    # Appendix B ships a preview-tier row behind a non-default feature, so the
+    # default run above executes none of them: `cargo test` on a `cfg`-gated
+    # suite reports `ok` having run nothing. These are the evidence commands
+    # for `UX-001` and `DST-001` verbatim.
+    - name: Run Preview-Feature Tests
+      run: |
+        cargo test -p incin --features train --test trainer
+        cargo test -p incin-core --features distributed --test mesh_compile
+
     - name: Run Isolated Bare-CPU Tests
       run: cargo test -p incin-backends --no-default-features --features std,cpu
 
@@ -193,8 +202,12 @@ jobs:
     # doctests — `--all-targets` excludes them — so until this step existed no
     # job compiled a single public example. That is how the workspace reached
     # seventy `ignore`-fenced examples with a green pipeline.
+    # `incin-core/distributed` is named because a `cfg`-gated module's examples
+    # are excluded from a default doc run for exactly the reason its tests are,
+    # and "no public example is excluded from compilation" has to mean the
+    # preview surface too.
     - name: Compile every public example
-      run: cargo test --workspace --doc
+      run: cargo test --workspace --doc --features incin-core/distributed
 
   core-no-std:
     name: Core no_std Check

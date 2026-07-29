@@ -3020,6 +3020,41 @@ would also satisfy — so it now probes the same model before and after and
 asserts the parameters moved. And the evidence command as written ran zero tests
 and printed `ok`, because Appendix B puts a preview row behind a non-default
 feature; it carries `--features train` now.
+
+`DST-001` opens the distributed track with the first half of §3.8's split
+between logical and physical proof, and with none of the second. A `MeshSpec`
+says how many ranks a topology has along each of the data, tensor, and pipeline
+axes; it holds no `DeviceId`, because §3.8 is explicit that the compile-time
+claim is *logical device selection and validation, never compile-time hardware
+existence validation*, and a mesh type carrying devices would be making the
+second claim while checking the first. `DeviceMesh::bind` and the topology
+fingerprint are `DST-002`.
+
+`ValidMesh` is implemented for exactly one shape of type — three correctly
+ordered axis markers over nonzero degrees — so every way of being an invalid
+topology is the absence of an implementation rather than a check something has
+to remember to call. §3.8 asks for "nonzero axes and checked `DP × TP × PP`
+multiplication on stable Rust"; both are bounds, `NonZero` being `typenum`'s
+own marker and the product being the same `Mul` the shape rules use, so a mesh
+and a shape agree about multiplication by construction rather than by review.
+`World` is an associated type and not only a constant, which is what turns
+§3.8's sentence about three GPUs — "valid examples are `DP=3`, `TP=3`, or
+`PP=3`. A rectangular `2 × 2` mesh is not valid" — into a `World = U3` bound
+and a compile error for the `2 × 2`.
+
+The axes being positional is the third compile-fail case and the one worth
+having. `Data<U1> × Pipeline<U3> × TensorParallel<U1>` is three ranks either
+way; swapping the two markers changes three-way tensor parallelism into three
+pipeline stages, and nothing downstream would notice. The impl covering one
+ordering is what makes the swap an error rather than a different program.
+
+The mesh cases needed their own trybuild directory, because a preview row is
+behind a non-default feature and a case in `tests/compile_fail/` is built
+without it — it would fail with "path does not resolve", which is one of the
+five scaffolding failures `SHP-007` added that check to catch. Two directories
+are not two properties, so the "say what this case proves" registry moved into
+`tests/support/` and both suites call it.
+
 The complete Shape-track evidence is recorded in the mirror and
 `docs/plan/tasks/SHP-007.md` through `SHP-008.md`. The §4 themes above
 describe intent; **this ledger and its dependency graph define order**, and the
@@ -3133,7 +3168,7 @@ Silicon · `compile` compiled execution · `grad` autograd · `dist` distributed
 | GRD-005 | core | grad | [x] | GRD-003 | `crates/incin-core/src/exec/tape.rs` | Structured backward and NaN failures; no expected-failure panic paths | `cargo test -p incin-core --test backward_errors` |
 | GRD-006 | core | grad | [ ] | GRD-004 | `crates/incin-backends/src/{cpu,cuda,wgpu}/tape.rs` | Saved-tensor lifetime owned by the graph; delete all three backend-local tapes | `cargo test --workspace` |
 | GRD-007 | preview | grad | [ ] | GRD-006,CMP-003 | `crates/incin-core/src/compiled/alloc.rs` | Compiled-graph saved-tensor liveness and fusion integration | `cargo test -p incin-core --test compiled_alloc` |
-| DST-001 | preview | dist | [ ] | GOV-002,SHP-007 | `crates/incin-core/src/dist/mesh.rs` | Typed meshes and ValidMesh; valid and invalid world-size compile tests | `cargo test -p incin-core --test mesh_compile` |
+| DST-001 | preview | dist | [x] | GOV-002,SHP-007 | `crates/incin-core/src/dist/mesh.rs` | Typed meshes and ValidMesh; valid and invalid world-size compile tests | `cargo test -p incin-core --features distributed --test mesh_compile` |
 | DST-002 | preview | dist | [ ] | DST-001,EXE-005 | `crates/incin-core/src/dist/mesh.rs` | Physical binding, topology fingerprint, and runtime guards | `cargo test -p incin-core --test mesh_bind` |
 | DST-003 | preview | dist | [ ] | DST-001,EXE-002 | `crates/incin-core/src/dist/placement.rs; crates/incin-core/src/dist/rule.rs` | Placement typestates, PlacementKind, and rules; divisibility and transition compile tests; ValidatedDistributed sealed like Validated | `cargo test -p incin-core --test placement_rules` |
 | DST-004 | preview | dist | [ ] | DST-003,EXE-004 | `crates/incin-core/src/tensor/base.rs` | Unified Tensor global and local metadata with reshard invariants | `cargo test -p incin-core --test placement_tensor` |
@@ -3505,7 +3540,7 @@ changing nothing.
 
 | Type | Owning module | Task | Existing analogue |
 |---|---|---|---|
-| `MeshSpec`, `Data`, `TensorParallel`, `Pipeline`, `ValidMesh` | `incin-core::dist::mesh` | DST-001 | reuses the typenum `Mul`/`Div`/`Rem` engine already used by shapes |
+| `MeshSpec`, `Data`, `TensorParallel`, `Pipeline`, `ValidMesh` | `incin-core::dist::mesh` | DST-001 | built: reuses the typenum `Mul` already used by shapes; the `Div`/`Rem` proofs are shard divisibility and arrive with `DST-003` |
 | `DeviceMesh`, `MeshId`, `CollectiveGroups`, `TopologyFingerprint` | `incin-core::dist::mesh` | DST-002 | — |
 | `Placement` (trait), `PlacementKind` (enum), `Local`, `Replicated`, `Sharded`, `Partial`, `PipelineStage`, `PlacementBuf`, `ShardRemainderPolicy` | `incin-core::dist::placement` | DST-003 | — |
 | `DistributedRule`, `ValidatedDistributed`, `DistributedError` | `incin-core::dist::rule` | DST-003 | sealed on the same terms as `Validated<O>` |
@@ -3673,3 +3708,8 @@ justification as an entry before it may start.
 | D-051 | `DevicePreference::default()` is `Cpu`, not `Fastest`. | A default that picks the best available device. It moves an unchanged program onto a GPU the day one appears, which is the same class of surprise as silently moving it off one — and §2's objection is to the surprise, not to its direction. |
 | D-052 | `Trainer::fit` on a multi-device plan returns `CollectivesUnavailable` naming `DST-005`. | Running the plan on its primary device. A three-GPU request that trains on one GPU and reports success is the silent-fallback failure with extra steps; naming the row that will fix it also makes the code to delete findable. |
 | D-053 | `UX-001`'s evidence command gained `--features train`. | `cargo test -p incin --test trainer`, which ran zero tests and printed `ok`: Appendix B requires a preview row behind a non-default feature, and the suite is `#![cfg(feature = "train")]`. An evidence command that passes without compiling its subject is the defect `UX-013` removed. |
+| D-054 (2026-07-29) | `ValidMesh` exposes `World` as an associated type with `WORLD` as its defaulted projection. | A `WORLD` constant alone. §3.8 distinguishes valid three-GPU meshes from a `2 × 2`, and a `usize` cannot be bounded on; `M: ValidMesh<World = U3>` is what makes that sentence a compile error. The constant stays defaulted so no implementation can set the two independently — a mesh that reports a world size other than its own binds the wrong number of devices. |
+| D-055 (2026-07-29) | `MeshSpec`'s axes are positional and each position accepts only its own marker, so `ValidMesh` has exactly one impl. | A single `MeshAxis` bound on all three parameters. That accepts `MeshSpec<Data<U1>, Pipeline<U3>, TensorParallel<U1>>`, which has the same world size as the mesh it was meant to be and describes three pipeline stages instead of three-way tensor parallelism. The swap is silent everywhere downstream. |
+| D-056 (2026-07-29) | The mesh types are not re-exported from `incin_core::prelude`, and `incin` gains no `distributed` feature in this row. | Both. `Data` and `Pipeline` are ordinary enough words that a glob prelude re-exporting them changes what `use incin::prelude::*` means for existing code the day a preview feature is enabled. And nothing in the facade accepts a mesh yet: `DeviceMesh` is `DST-002` and placements are `DST-003`, so forwarding the feature now would expose a type with no verbs — at the price of doubling `incin`'s feature-powerset job. |
+| D-057 (2026-07-29) | The mesh compile-fail cases live in `crates/incin-core/tests/mesh_compile_fail/`, a second trybuild directory. | Adding them to `tests/compile_fail/`. That directory is built without `distributed`, so a mesh case there fails with `E0433`, "a path that does not resolve" — one of the five scaffolding failures `SHP-007` added its registry check to catch. The registry itself moved to `tests/support/` so two directories do not become two implementations of one property. |
+| D-058 (2026-07-29) | CI gained a step running the preview-tier evidence commands for `UX-001` and `DST-001`. | Leaving them to the powerset job, which runs `cargo hack check` and so compiles those suites without executing them, and to the default test job, which does not enable their features at all. `DST-001`'s trybuild cases in particular assert nothing under `check`. |

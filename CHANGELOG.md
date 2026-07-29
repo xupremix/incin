@@ -9,6 +9,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- **Typed logical device meshes (`DST-001`, `incin-core`'s `distributed`
+  feature):** `incin_core::dist::mesh` adds `MeshSpec<Data<DP>,
+  TensorParallel<TP>, Pipeline<PP>>` and `ValidMesh`, the compile-time half of
+  `PROPOSALS.md` §3.8. A mesh holds no `DeviceId` — the claim is logical device
+  selection, never hardware existence — so `ValidMesh` proves only that the
+  degrees are nonzero and that `DP × TP × PP` is countable, over the same
+  `typenum` `Mul` the shape rules use. `World` is an associated type so a
+  caller can write `M: ValidMesh<World = U3>`, which is how §3.8's "`DP=3`,
+  `TP=3`, or `PP=3` are valid for three GPUs and a rectangular `2 × 2` is not"
+  becomes a compile error. The axes are positional and each position accepts
+  only its own marker, because swapping tensor and pipeline keeps the world
+  size and changes the meaning. Omitted axes default to one. `DeviceMesh::bind`,
+  the topology fingerprint, and the runtime guards are `DST-002`.
 - **Automatic `Trainer` (`UX-001`, `train` feature):** `incin::train` builds
   `PROPOSALS.md` §2's level-1 workflow — pick devices, get a validated plan,
   train. The load-bearing property is a refusal: an unsatisfiable device request

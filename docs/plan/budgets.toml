@@ -273,6 +273,10 @@ name = "paranoid-validation"
 enables = []
 
 [[feature_crate.feature]]
+name = "distributed"
+enables = []
+
+[[feature_crate.feature]]
 name = "cuda"
 enables = []
 
