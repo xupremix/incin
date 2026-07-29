@@ -21,7 +21,13 @@ pub mod detect;
 #[cfg(feature = "std")]
 pub use detect::{detect_device, detect_device_in};
 
-#[cfg(any(feature = "cuda", feature = "wgpu", feature = "external-candle"))]
+// Only the two backends that allocate device buffers by byte length. The
+// external Candle adapter was in this list and never called `byte_len` — Candle
+// owns its own allocations — so `--features external-candle` without a GPU
+// backend compiled a module whose only function was dead, which
+// `-D warnings` rejects. `unsupported` below keeps `external-candle`, because
+// the Candle adapter does use those macros.
+#[cfg(any(feature = "cuda", feature = "wgpu"))]
 pub(crate) mod bytes;
 pub(crate) mod dtype_policy;
 // Every caller of these macros is a GPU or external backend, so a CPU-only
@@ -59,8 +65,12 @@ pub mod cuda;
 #[cfg(feature = "wgpu")]
 pub mod wgpu;
 
-#[cfg(feature = "external-candle")]
-/// Third-party backend integrations that are separate from native Incin backends.
+/// Third-party backend integrations, and the conformance suite an author of one
+/// runs against their own backend.
+///
+/// Unconditional since `EXE-010`. The module was gated on `external-candle`,
+/// which made the backend-authoring surface reachable only by enabling one
+/// particular integration; the Candle adapter inside it keeps that gate.
 pub mod external;
 
 #[cfg(feature = "telemetry")]

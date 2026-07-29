@@ -9,6 +9,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- **External-backend SDK and conformance suite (`EXE-010`):**
+  `incin_backends::external::conformance` is the backend-authoring surface from
+  `PROPOSALS.md` §2.9 — a `Subject` trait carrying the three things only an
+  author can supply, `Tolerance` profiles, and eight checks identical for every
+  backend. Every check consults the capability registry first, so an operation
+  a backend does not claim is *skipped*, not failed. `external` is no longer
+  gated on `external-candle`: authoring a backend no longer requires enabling
+  the Candle adapter. `crates/incin-backends/tests/conformance.rs` carries a
+  complete minimal template backend to copy, four deliberately broken ones that
+  each fail exactly one check, and the Candle adapter passing all eight.
 - **`cargo incin doctor` (`UX-014`):** one command reporting toolchain and
   crate versions, enabled Cargo features, the CPU ISA extensions the kernels
   branch on, each backend family's compiled-in and available state, cache paths
@@ -97,6 +107,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   `incin_core::exec::TensorId`; three independent identity counters became one.
 
 ### Fixed
+- **`--features external-candle` failed `clippy -D warnings` (`EXE-010`):** the
+  `bytes` module was gated on `external-candle` alongside `cuda` and `wgpu`,
+  but the Candle adapter never allocates by byte length, so that feature set
+  compiled a module whose only function was dead.
 - **WGPU device detection crashed when probed more than once (`UX-014`):**
   `incin_backends::detect::probe` built a fresh `wgpu::Instance` per call and
   dropped it, and two threads each probing twice segfaulted inside adapter

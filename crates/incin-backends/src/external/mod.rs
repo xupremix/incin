@@ -5,10 +5,20 @@
 
 pub use incin_core::prelude::*;
 
+/// The conformance suite an external backend runs against itself (`EXE-010`).
+///
+/// Not gated on any particular integration: it is the authoring surface
+/// PROPOSALS.md sec. 2.9 describes, and an author writing a backend for some
+/// ecosystem this repository has never heard of should not have to enable the
+/// Candle adapter to test it.
+#[cfg(feature = "std")]
+pub mod conformance;
+
 // ----------------------------------------------------------------------------
 // CandleBackend
 // ----------------------------------------------------------------------------
 
 /// Wraps the `candle_core` crate, providing `CandleBackend` as a `Backend`
 /// implementation backed by Candle's own tensor type.
+#[cfg(feature = "external-candle")]
 pub mod candle;

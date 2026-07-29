@@ -2897,7 +2897,51 @@ contract can be asserted: pointing it at a path that does not exist leaves it
 not existing.
 
 `GRD-004` is next on the grad track but needs a GPU, and `GRD-006` needs it
-first. `EXE-010` is the unblocked row, and `UX-013` is unblocked by this one.
+first. `UX-013` is unblocked by this one.
+
+`EXE-010` builds the external-backend SDK §2.9 specifies, and the sentence that
+shaped it is the section's last one: "An external backend implements only the
+operation descriptors it supports. Missing support is visible through the
+capability registry rather than hundreds of default trait methods." A
+conformance check for an operation a backend never claimed must therefore
+*skip*, not fail — a suite that fails a half-written backend for not
+implementing something it never advertised is a suite authors route around. So
+every check asks the registry first.
+
+The surface is one `Subject` trait carrying the three things only an author can
+supply — their backend, storage built from values, values read back — plus
+tolerance profiles and eight checks that are identical for every backend.
+Everything the harness *can* know it does not ask for, because a conformance
+suite whose expectations come from its subject is not testing the subject.
+
+Most of the value is in the negative controls, and they are the half a
+conformance suite usually skips: one that has never failed a backend is
+indistinguishable from one that cannot. Four deliberately broken backends sit
+beside the template. A registry claiming `Native` for everything fails only the
+agreement check. An executor that indexes `request.inputs` instead of matching
+on it panics on a wrong arity and fails only the arity check — reported as a
+failure, with the seven checks after it still running, which is the harness's
+own contract and the lesson `UX-014` learned when a `SIGSEGV` took a binary
+down and reported nothing. A backend multiplying its operands the wrong way
+round produces a correctly *shaped* result and fails only the tolerance check,
+which a shape-only suite would have passed. And a backend registering nothing
+must **pass**, with exactly five checks skipped.
+
+The template is a complete minimal backend rather than prose about §2.9's seven
+bullets, because prose goes stale and a backend that compiles and passes the
+suite cannot. The Candle adapter is the real subject: a foreign tensor type
+carrying no `TensorMeta`, never designed against this contract, passing all
+eight with nothing skipped.
+
+Two things had to be repaired first. `bytes` was gated on `external-candle`
+beside `cuda` and `wgpu`, but the Candle adapter never allocates by byte
+length, so that feature set compiled a module whose only function was dead and
+`-D warnings` rejected the row's own build. And `pub mod external` was itself
+gated on `external-candle`, which put the backend-authoring surface behind one
+particular integration — an author writing a backend for an ecosystem this
+repository has never heard of would have had to enable the Candle adapter to
+test it. The module is unconditional now, and the suite passes with no native
+backend compiled at all.
 The complete Shape-track evidence is recorded in the mirror and
 `docs/plan/tasks/SHP-007.md` through `SHP-008.md`. The §4 themes above
 describe intent; **this ledger and its dependency graph define order**, and the
@@ -2978,7 +3022,7 @@ Silicon · `compile` compiled execution · `grad` autograd · `dist` distributed
 | EXE-007 | core | exec | [x] | EXE-003,EXE-004,EXE-006 | `crates/incin-backends/src/cpu/` | Migrate the CPU vertical slice with parity and overhead evidence | `cargo test -p incin-backends --no-default-features --features std,cpu` |
 | EXE-008 | core | exec | [x] | EXE-007 | `crates/incin-backends/src/{cuda,wgpu,external}/; crates/incin-backends/src/dispatch.rs` | Migrate CUDA, WGPU, dispatch, and external adapters; replace the F32-hardcoded byte arithmetic with checked dtype.size_bytes() | `cargo test -p incin-backends --no-default-features --features std,cpu,wgpu` |
 | EXE-009 | core | exec | [~] | EXE-008 | `crates/incin-core/src/tensor/backend.rs; crates/incin-backends/src/dispatch.rs` | Remove the monolithic adapter and the default unsupported-operation surface | `cargo test --workspace` |
-| EXE-010 | preview | exec | [ ] | EXE-008 | `crates/incin-backends/src/external/` | external-candle SDK conformance suite and a backend-authoring template | `cargo test -p incin-backends --features external-candle --test conformance` |
+| EXE-010 | preview | exec | [x] | EXE-008 | `crates/incin-backends/src/external/` | external-candle SDK conformance suite and a backend-authoring template | `cargo test -p incin-backends --features external-candle --test conformance` |
 | TUN-000 | preview | tune | [x] | — | `crates/incin-backends/src/tuning.rs` | Existing CUDA tuner inventoried: 2 warmups, 7 samples, median selection, 1024-entry cache, single-flight coordination | `cargo test -p incin-backends --features autotune` |
 | TUN-001 | preview | tune | [ ] | GOV-004 | `crates/incin-backends/src/tuning/identity.rs` | Stable device, compiler, and topology identities replacing ordinal plus compute capability; alias tests | `cargo test -p incin-backends --features autotune --test tuning_identity` |
 | TUN-002 | preview | tune | [ ] | TUN-001 | `crates/incin-backends/src/tuning/cache.rs` | Atomic bounded persistent cache with corruption, schema, and eviction tests | `cargo test -p incin-backends --features autotune --test tuning_cache` |
@@ -3530,3 +3574,13 @@ justification as an entry before it may start.
 | D-035 | A rejected capability probe is **reported but is not a finding**. | Emitting a note per rejection, which the first draft did. `f16` matmul and `f64` reduction are unsupported on the CPU registry, so every healthy laptop opened its report with two notes about how the CPU backend simply is — not a fault, not actionable, and duplicating the probe section verbatim. |
 | D-036 | `detect::probe_wgpu` shares one `wgpu::Instance` through a `OnceLock`; detection itself stays per call. | Building an instance per probe, which is what it did. Two threads each probing twice is a reproducible `SIGSEGV` inside adapter enumeration, and `probe` is public and documented as callable repeatedly. `request_adapter` still runs per call, so hardware appearing or disappearing is still observed. |
 | D-037 | Cache writeability is read from mode bits, and the telemetry run directory resolves through a non-creating `default_run_dir_path`. | Attempting a write, which is the accurate test, and calling `default_run_dir`, which creates the directory. §2.3 makes the command read-only absent an explicit flag, and a diagnostic that changes what it is diagnosing is not one. The weaker answer is documented at the function. |
+
+### 2026-07-29 — External-backend SDK
+
+| # | Decision | Alternative rejected |
+|---|---|---|
+| D-038 | `incin_backends::external` is unconditional; only the Candle adapter inside it stays behind `external-candle`. | Leaving the module gated, which put the backend-authoring surface behind one particular third-party integration. An author writing a backend for an ecosystem this repository has never heard of would have had to enable the Candle adapter to test it. |
+| D-039 | A conformance check for an operation the backend's registry does not claim **skips**. | Failing it, or requiring every backend to implement everything. §2.9 says an external backend implements only the descriptors it supports, so a half-written backend passing with checks skipped is the correct verdict rather than a lenient one. |
+| D-040 | The conformance harness catches panics and reports them as failures of the check that panicked. | Letting them propagate. A backend that panics where the contract says to return a `BackendError` is the finding, and a harness that dies on it reports one check instead of eight — the failure mode `UX-014` hit when a `SIGSEGV` took a test binary down and reported nothing at all. |
+| D-041 | The template backend lives in `tests/conformance.rs`, not in `src/`. | Shipping a reference backend to every downstream user, which `D-015` already refused for a TOML parser on the same reasoning. It is still in the repository, still compiled, and still asserted to pass the suite on every run, which is what keeps it from going stale. |
+| D-042 | The suite carries four deliberately broken backends, each asserted to fail exactly one check. | A suite of positive cases only. A check that has never failed is indistinguishable from a check that cannot fail, and a conformance suite is the one place that distinction is the entire product. |
