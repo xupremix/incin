@@ -59,6 +59,18 @@ mod shape_ops;
 ///
 /// type BatchedFeatures = s![BatchSize, 128];
 /// ```
+///
+/// ## Path resolution
+///
+/// The expansion names `::incin::prelude::…` absolutely, so it resolves
+/// against the crate rather than against whatever the caller happens to have
+/// in scope — including a module of their own called `incin` (`CI-005`).
+///
+/// The one form it cannot survive is a *package* rename in the caller's
+/// `Cargo.toml` (`incin_x = { package = "incin" }`), because `::incin` then
+/// names a crate that is not there. Resolving the real name requires reading
+/// the caller's manifest at expansion time, which the macro policy in
+/// `PROPOSALS.md` forbids.
 #[proc_macro]
 pub fn s(input: TokenStream) -> TokenStream {
     shape::shape(input)
@@ -101,6 +113,18 @@ pub fn impl_layer_args(input: TokenStream) -> TokenStream {
 /// let view = t.slice_idx::<idx![0..5, .., 15..30]>().unwrap();
 /// assert_eq!(view.dims().as_ref(), &[5, 20, 15]);
 /// ```
+///
+/// ## Path resolution
+///
+/// The expansion names `::incin::prelude::…` absolutely, so it resolves
+/// against the crate rather than against whatever the caller happens to have
+/// in scope — including a module of their own called `incin` (`CI-005`).
+///
+/// The one form it cannot survive is a *package* rename in the caller's
+/// `Cargo.toml` (`incin_x = { package = "incin" }`), because `::incin` then
+/// names a crate that is not there. Resolving the real name requires reading
+/// the caller's manifest at expansion time, which the macro policy in
+/// `PROPOSALS.md` forbids.
 #[proc_macro]
 pub fn idx(input: TokenStream) -> TokenStream {
     idx::idx(input)
@@ -129,6 +153,18 @@ pub fn idx(input: TokenStream) -> TokenStream {
 ///
 /// // Now `MyModel` automatically implements `.parameters()` and `.state_dict()`!
 /// ```
+///
+/// ## Path resolution
+///
+/// The expansion names `::incin::prelude::…` absolutely, so it resolves
+/// against the crate rather than against whatever the caller happens to have
+/// in scope — including a module of their own called `incin` (`CI-005`).
+///
+/// The one form it cannot survive is a *package* rename in the caller's
+/// `Cargo.toml` (`incin_x = { package = "incin" }`), because `::incin` then
+/// names a crate that is not there. Resolving the real name requires reading
+/// the caller's manifest at expansion time, which the macro policy in
+/// `PROPOSALS.md` forbids.
 #[proc_macro_attribute]
 pub fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
     module::module(attr, item)

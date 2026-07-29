@@ -1,0 +1,5 @@
+error: expected one of: `struct`, `enum`, `union`
+ --> tests/compile_fail/module_rejects_a_non_struct.rs:7:5
+  |
+7 | pub fn not_a_struct() {}
+  |     ^^

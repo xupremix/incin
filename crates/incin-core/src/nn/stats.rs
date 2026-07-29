@@ -181,14 +181,14 @@ impl LayerStats {
 
 #[cfg(test)]
 mod tests {
-    // The `s!` macro's expansion hardcodes `incin::...` paths (it's
-    // written for the `incin` facade crate's consumers, not for
-    // `incin-core`'s own internal tests) — this alias is what every real
-    // (non-doc-comment) `s![...]` usage in this codebase relies on,
-    // otherwise done via `extern crate incin_core as incin;` in the
-    // separate `tests/` integration crates.
+    // `s!` is written for consumers of the `incin` facade, so it expands to
+    // `::incin::prelude::…`. `s![@ ..]` is the in-crate form and expands to
+    // `crate::prelude::…` instead — which is what this module needs, since
+    // `incin-core` does not depend on `incin`. The integration crates under
+    // `tests/` use `extern crate incin_core as incin;`, which does create the
+    // crate-root entry the absolute path resolves against; a `use crate as
+    // incin` alias, which is what stood here before `CI-005`, does not.
     use super::*;
-    use crate as incin;
 
     #[test]
     fn layer_stats_add_sums_both_fields() {
@@ -236,8 +236,8 @@ mod tests {
     // doc's hand math agree.
     #[module(internal)]
     struct TestMlp<Bk: Backend> {
-        fc1: Linear<s![784, 128], Bk>,
-        fc2: Linear<s![128, 10], Bk>,
+        fc1: Linear<s![@ 784, 128], Bk>,
+        fc2: Linear<s![@ 128, 10], Bk>,
     }
 
     type TestBackend = dummy::DummyBackend<f32, Cpu>;
@@ -270,7 +270,7 @@ mod tests {
 
     #[test]
     fn sequential_of_linear_and_relu_sums_correctly_and_relu_contributes_nothing() {
-        let seq = Sequential(Linear::<s![16, 8], TestBackend>::build(()).unwrap(), ReLU);
+        let seq = Sequential(Linear::<s![@ 16, 8], TestBackend>::build(()).unwrap(), ReLU);
         let stats = seq.stats(2);
         // Only the Linear side has params/MACs; ReLU is a verified 0/0 no-op.
         assert_eq!(stats.params, 16 * 8 + 8);

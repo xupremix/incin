@@ -1,0 +1,7 @@
+error: unexpected end of input, expected integer literal
+ --> tests/compile_fail/s_rejects_a_repeat_without_a_count.rs:5:12
+  |
+5 | type Bad = s![4; ];
+  |            ^^^^^^^
+  |
+  = note: this error originates in the macro `s` (in Nightly builds, run with -Z macro-backtrace for more info)

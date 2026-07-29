@@ -34,4 +34,5 @@ prost = "0.6"
 
 [dev-dependencies]
 incin = { path = "../incin" }
+trybuild = "1.0.117"
 

@@ -1,0 +1,23 @@
+error: idx! currently only supports `..` or `start..end`
+ --> tests/compile_fail/idx_rejects_an_open_ended_range.rs:7:32
+  |
+7 |     let _ = t.slice_idx::<idx![0.., ..]>();
+  |                                ^^^
+
+error[E0277]: Cannot slice dimension with `()`
+ --> tests/compile_fail/idx_rejects_an_open_ended_range.rs:7:15
+  |
+7 |     let _ = t.slice_idx::<idx![0.., ..]>();
+  |               ^^^^^^^^^ Invalid slice target
+  |
+  = help: the trait `SliceTarget<(UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B1>, B0>, UInt<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B1>, B0>, B0>)>` is not implemented for `()`
+  = note: The slice range must be within the bounds of the original dimension
+  = help: the following other types implement trait `SliceTarget<In>`:
+            (D1, D2)
+            (D1, D2, D3)
+            (D1, D2, D3, D4)
+            (D1, D2, D3, D4, D5)
+            (D1, D2, D3, D4, D5, D6)
+            (D1, D2, D3, D4, D5, D6, D7)
+            (D1, D2, D3, D4, D5, D6, D7, D8)
+            (D1,)

@@ -2809,8 +2809,50 @@ gradient goes bad now. The other two mutants — ignoring the policy in each
 direction — fail four tests and one respectively, and the one is the case
 proving the default costs nothing rather than merely not failing.
 
+`CI-005` writes the suite the macro policy has required all along, and writing
+it found two defects. The policy lists five obligations per public macro, one
+of which is "provide compile-pass, compile-fail, hygiene, rename, and rustfmt
+tests". `crates/incin-macros` had no `tests/` directory, so the row's own
+evidence command ran zero tests and exited zero doing it.
+
+The first defect is one character. `s!`, `idx!`, and `#[module]` expanded to a
+*relative* `incin::prelude::…`, so a caller with any item named `incin` in
+scope had the expansion resolve against theirs — surfacing as "cannot find
+`typenum` in `prelude`" pointed at their own macro invocation. A hygiene test
+is the only kind that finds this, which is presumably why the policy lists it.
+All three are absolute now; `model!` and `import_model!` had the identical bug
+and are fixed with them, because fixing three and leaving two would have been
+an arbitrary line.
+
+The second is the gap `SHP-007` deferred here by name: "the struct-level
+argument is still accepted silently; that gap belongs to `CI-005`".
+`#[module]`'s arguments were read with `attr.to_string().contains(..)`, so
+`#[module(no_such_argument)]` expanded as though it had been written
+`#[module]`, and `#[module(not_internal)]` was accepted *as* `internal` —
+which is the failure mode where a typo changes behaviour rather than failing.
+The list is parsed against a closed vocabulary now, which is what "a versioned
+grammar and reject unknown keys" asks for. The compile-fail case for it passed
+when it should have failed, which is how it was found.
+
+Twelve trybuild cases and four harness tests, of which three are guards rather
+than cases. `compile_fail_cases_fail_for_their_stated_reason` is `SHP-007`'s,
+which refuses a case with no recorded reason and one whose output shows its own
+scaffolding failing. `every_policy_category_is_covered` fails if the hygiene,
+rename, or rustfmt case disappears, because those are precisely the three
+nobody notices missing. And the rustfmt check formats a fixture using all three
+macros and asserts a fixed point: a macro whose invocation form defeats
+`rustfmt` costs every downstream user their formatting, and nothing else here
+would notice, because the macros' own sources format fine.
+
+One consequence was repaired rather than worked around. `incin-core`'s
+`stats.rs` tests relied on `use crate as incin` so the old relative path would
+resolve, and an absolute `::incin` cannot see a use-alias. They use `s![@ ..]`
+now — the in-crate form the parser has always accepted and nothing in the
+repository used. The integration crates under `tests/` were unaffected:
+`extern crate incin_core as incin` does create the crate-root entry.
+
 `GRD-004` is next on the grad track but needs a GPU, and `GRD-006` needs it
-first. `EXE-010`, `CI-005`, and `UX-014` are the unblocked rows.
+first. `EXE-010` and `UX-014` are the unblocked rows.
 The complete Shape-track evidence is recorded in the mirror and
 `docs/plan/tasks/SHP-007.md` through `SHP-008.md`. The §4 themes above
 describe intent; **this ledger and its dependency graph define order**, and the
@@ -2959,7 +3001,7 @@ Silicon · `compile` compiled execution · `grad` autograd · `dist` distributed
 | CI-002 | core | ci | [x] | EXE-008 | `.github/workflows/hardware.yml` | Scheduled CUDA and WGPU hardware matrix | `gh workflow run hardware.yml` |
 | CI-003 | preview | ci | [ ] | DST-008,DST-009,DST-010 | `.github/workflows/hardware.yml` | Homogeneous three-GPU DP, TP, and PP CI | `gh workflow run hardware.yml -f job=dist3` |
 | CI-004 | preview | ci | [ ] | DST-015 | `.github/workflows/hardware.yml` | Multi-process and multi-node CI with topology metadata | `gh workflow run hardware.yml -f job=multinode` |
-| CI-005 | core | ci | [ ] | GOV-005 | `crates/incin-macros/tests/` | Macro trybuild, rustfmt, rename, and hygiene suite for the existing s!, idx!, and #[module] | `cargo test -p incin-macros` |
+| CI-005 | core | ci | [x] | GOV-005 | `crates/incin-macros/tests/` | Macro trybuild, rustfmt, rename, and hygiene suite for the existing s!, idx!, and #[module] | `cargo test -p incin-macros` |
 | CI-006 | preview | ci | [ ] | GOV-005,TUN-008,DST-013 | `.github/workflows/ci.yml` | CPU, GPU, and distributed performance and cache gates | `cargo xtask budgets` |
 | CI-007 | preview | ci | [ ] | MTL-004 | `.github/workflows/hardware.yml` | Scheduled Apple Silicon Metal hardware matrix | `gh workflow run hardware.yml -f job=metal` |
 | CI-008 | preview | ci | [ ] | UX-002,UX-003,UX-004 | `crates/incin-macros/tests/` | Distributed macro trybuild suite for mesh!, placement!, #[parallel], and #[shard] | `cargo test -p incin-macros --features distributed` |
@@ -3425,3 +3467,11 @@ justification as an entry before it may start.
 | D-027 | NaN checking is a `NanPolicy` axis on `ExecutionPolicy`, read once per backward pass by every backend's walk. `Backend::backward_with_nan_check` is deleted. | Keeping the second entry point. It conflated two independent choices — whether to inspect gradients, and whether to abort — so wanting the check without the abort had no spelling, and `D-008` rules against shipping both vocabularies for one question. The default is `Permit` because the check reads every element of every gradient, which on a device backend is a full readback per contribution. |
 | D-028 | `BackwardError::NonFinite` carries the tensor id **and** a `NonFiniteSite` distinguishing a recipe's output from an accumulation. | Reporting only that some gradient went non-finite. Two finite contributions can sum to an infinity, and the entire value of checking is knowing which operation to look at; a report that cannot separate the two cases sends the reader to the wrong one. |
 | D-029 | `BackwardFn` is fallible for all three backends in this row, even though WGPU and CUDA still own their walks until `GRD-004`. | Converting the CPU recipes only. §3.9 says backward closures return structured errors, and a signature two of three backends do not satisfy is not a contract. `EXE-008` had already deferred this once, to `GRD-001`, which landed without it. |
+
+### 2026-07-29 — Macro path resolution
+
+| # | Decision | Alternative rejected |
+|---|---|---|
+| D-030 | Every macro expands to an **absolute** `::incin::…` path, and in-crate callers use the `@` form that expands to `crate::…`. | The relative `incin::…` the macros emitted, which resolves against whatever the caller has in scope: a module of their own named `incin` silently wins, and the diagnostic points at their macro invocation rather than at the macro. `incin-core`'s own tests had been leaning on that relative form through a `use crate as incin` alias, which is the one spelling an absolute path cannot see — so the `@` form the parser already accepted, and nothing used, is what they take. |
+| D-031 | A **package rename** in a caller's `Cargo.toml` is documented as unsupported rather than resolved. | Depending on `proc-macro-crate`, which reads the caller's manifest during expansion. The macro policy in §4 forbids filesystem access outside the explicit import macros, and a path resolution that depends on where the manifest is makes expansion depend on the build layout. The limit is stated on all three macros. |
+| D-032 | `#[module]`'s struct-level arguments are parsed as a closed vocabulary. | The `attr.to_string().contains(..)` it used, which accepted `#[module(no_such_argument)]` as bare `#[module]` and `#[module(not_internal)]` as `internal`. The policy requires a versioned grammar that rejects unknown keys, and substring matching cannot reject anything. |

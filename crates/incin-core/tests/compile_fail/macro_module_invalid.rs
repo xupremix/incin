@@ -3,10 +3,12 @@
 //! fields are treated as parameters.
 //!
 //! This case previously wrote `#[module(foo = "bar")]` on the *struct*, which
-//! the macro accepts and discards, so the file's only error came from an
+//! the macro accepted and discarded, so the file's only error came from an
 //! unrelated duplicate import and it asserted nothing about the macro at all.
-//! The struct-level argument is still accepted silently; that gap belongs to
-//! `CI-005`, which owns the macro hygiene suite.
+//! `CI-005` closed the struct-level half: the argument list is parsed against
+//! a closed vocabulary now, and
+//! `incin-macros/tests/compile_fail/module_rejects_an_unknown_argument.rs`
+//! pins it. This case remains the *field*-level one.
 
 // The macro aborts before the struct is expanded, so its imports look unused.
 #![allow(unused_imports)]

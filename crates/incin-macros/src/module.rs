@@ -1,17 +1,61 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{DeriveInput, parse_macro_input};
+use syn::punctuated::Punctuated;
+use syn::{DeriveInput, Ident, Token, parse_macro_input};
+
+/// The complete struct-level argument vocabulary.
+///
+/// PROPOSALS.md's macro policy requires every public macro to "have a
+/// versioned grammar and reject unknown keys", and until `CI-005` this one
+/// did not: the arguments were read with `attr.to_string().contains(..)`, so
+/// `#[module(no_such_argument)]` expanded as though it had been written
+/// `#[module]`. Substring matching also accepted `#[module(not_internal)]` as
+/// `internal`, which is the failure mode that makes a typo change behaviour
+/// rather than fail.
+const STRUCT_ARGUMENTS: &[&str] = &["internal", "no_stats"];
+
+/// Parse the struct-level argument list, rejecting anything not in the
+/// vocabulary.
+fn parse_arguments(attr: TokenStream) -> syn::Result<(bool, bool)> {
+    let attr: proc_macro2::TokenStream = attr.into();
+    if attr.is_empty() {
+        return Ok((false, false));
+    }
+
+    let parser = Punctuated::<Ident, Token![,]>::parse_terminated;
+    let arguments = syn::parse::Parser::parse2(parser, attr)?;
+
+    let (mut internal, mut no_stats) = (false, false);
+    for argument in arguments {
+        match () {
+            () if argument == "internal" => internal = true,
+            () if argument == "no_stats" => no_stats = true,
+            () => {
+                return Err(syn::Error::new_spanned(
+                    &argument,
+                    format!(
+                        "unknown attribute argument for #[module], expected one of {}",
+                        STRUCT_ARGUMENTS.join(", ")
+                    ),
+                ));
+            }
+        }
+    }
+    Ok((internal, no_stats))
+}
 
 pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let (is_internal, no_stats) = match parse_arguments(attr) {
+        Ok(parsed) => parsed,
+        Err(error) => return error.to_compile_error().into(),
+    };
+
     let mut input = parse_macro_input!(item as DeriveInput);
     let name = &input.ident;
-
-    let is_internal = attr.to_string().contains("internal");
-    let no_stats = attr.to_string().contains("no_stats");
     let k_crate = if is_internal {
         quote! { crate }
     } else {
-        quote! { incin }
+        quote! { ::incin }
     };
 
     let format_mac = quote! { #k_crate::prelude::format! };

@@ -1,0 +1,5 @@
+error: expected identifier
+ --> tests/compile_fail/s_rejects_a_non_path_dim.rs:6:15
+  |
+6 | type Bad = s!["two", 3];
+  |               ^^^^^

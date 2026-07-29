@@ -1,5 +1,5 @@
 error: unknown attribute argument for #[module], expected `ignore`
-  --> tests/compile_fail/macro_module_invalid.rs:22:14
+  --> tests/compile_fail/macro_module_invalid.rs:24:14
    |
-22 |     #[module(ignor)]
+24 |     #[module(ignor)]
    |              ^^^^^

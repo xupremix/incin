@@ -9,6 +9,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- **Macro test suite (`CI-005`):** `crates/incin-macros/tests/` now carries the
+  compile-pass, compile-fail, hygiene, rename, and rustfmt cases the macro
+  policy in `PROPOSALS.md` requires — twelve trybuild cases plus guards that
+  fail when a case stops asserting what it claims or when one of the five
+  categories disappears. `cargo test -p incin-macros` previously ran nothing.
 - **Structured backward failures and `NanPolicy` (`GRD-005`):** backward
   recipes return `Result` — the 115 `.expect("unbroadcast lhs (add)")` and
   `.unwrap()` sites inside them propagate now — and a failure arrives as
@@ -78,6 +83,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Changed
 - `incin_backends::{cpu,wgpu,cuda}::storage::TensorId` are re-exports of
   `incin_core::exec::TensorId`; three independent identity counters became one.
+
+### Fixed
+- **Macro hygiene (`CI-005`):** `s!`, `idx!`, `#[module]`, `model!`, and
+  `import_model!` expanded to a relative `incin::prelude::…`, so any caller
+  item named `incin` captured the expansion. All five emit absolute `::incin`
+  paths now; use `s![@ ..]` inside the workspace, which expands to
+  `crate::prelude::…`. A package rename in a caller's `Cargo.toml` remains
+  unsupported and is documented on each macro.
+- **`#[module]` argument validation (`CI-005`):** struct-level arguments were
+  matched as substrings, so `#[module(no_such_argument)]` was silently accepted
+  as `#[module]` and `#[module(not_internal)]` as `#[module(internal)]`. The
+  list is parsed against a closed vocabulary and unknown keys are rejected.
 
 ### Removed
 - `Backend::backward_with_nan_check` and its four implementations. NaN checking

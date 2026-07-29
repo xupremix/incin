@@ -411,7 +411,7 @@ pub(crate) fn parse_onnx(
             );
             forward_stmts.push(
                 quote! {
-                    let #ident = self.#ident.as_tensor()?.into_shape::<incin::prelude::Dyn>()?;
+                    let #ident = self.#ident.as_tensor()?.into_shape::<::incin::prelude::Dyn>()?;
                 }
                 .to_string(),
             );
@@ -469,13 +469,13 @@ pub(crate) fn parse_onnx(
                 .replace("-", "_")
         );
         let p_dims = meta.param_shapes[i].iter().map(|&d| {
-            let path = quote! { incin::prelude:: };
+            let path = quote! { ::incin::prelude:: };
             crate::shape::lit_to_typenum(d, &path)
         });
-        fields.push(quote! { pub #ident: incin::prelude::Param<(#(#p_dims,)*), B> });
+        fields.push(quote! { pub #ident: ::incin::prelude::Param<(#(#p_dims,)*), B> });
 
         inits.push(quote! {
-            #ident: incin::prelude::Param::zeros(()).unwrap()
+            #ident: ::incin::prelude::Param::zeros(()).unwrap()
         });
     }
 
@@ -490,12 +490,12 @@ pub(crate) fn parse_onnx(
         );
         let dims = shape.iter().map(|d| match d {
             OnnxDim::Const(v) => {
-                let path = quote! { incin::prelude:: };
+                let path = quote! { ::incin::prelude:: };
                 crate::shape::lit_to_typenum(*v, &path)
             }
             OnnxDim::Dyn => quote! { usize },
         });
-        user_inputs.push(quote! { #ident: incin::prelude::Tensor<(#(#dims,)*), B> });
+        user_inputs.push(quote! { #ident: ::incin::prelude::Tensor<(#(#dims,)*), B> });
     }
 
     let mut forward_stmts = Vec::new();
@@ -508,7 +508,7 @@ pub(crate) fn parse_onnx(
                 .replace("-", "_")
         );
         forward_stmts.push(quote! {
-            let #ident = #ident.into_shape::<incin::prelude::Dyn>()?;
+            let #ident = #ident.into_shape::<::incin::prelude::Dyn>()?;
         });
     }
     for stmt_str in &meta.forward_stmts {
@@ -519,7 +519,7 @@ pub(crate) fn parse_onnx(
 
     let out_dims = meta.last_output_shape.iter().map(|d| match d {
         OnnxDim::Const(v) => {
-            let path = quote! { incin::prelude:: };
+            let path = quote! { ::incin::prelude:: };
             crate::shape::lit_to_typenum(*v, &path)
         }
         OnnxDim::Dyn => quote! { usize },
@@ -529,17 +529,17 @@ pub(crate) fn parse_onnx(
     let forward_attr = quote! {};
 
     let root_impl = quote! {
-        #[incin::prelude::module]
-        pub struct #root_name<B: incin::prelude::Backend> {
+        #[::incin::prelude::module]
+        pub struct #root_name<B: ::incin::prelude::Backend> {
             #(#fields,)*
             #[module(ignore)]
             _marker: std::marker::PhantomData<B>,
         }
 
-        impl<B: incin::prelude::Backend> #root_name<B>
+        impl<B: ::incin::prelude::Backend> #root_name<B>
         where
-            B::FloatElem: incin::prelude::ConstDType,
-            B::Device: incin::prelude::ConstDevice,
+            B::FloatElem: ::incin::prelude::ConstDType,
+            B::Device: ::incin::prelude::ConstDevice,
         {
             /// New.
             pub fn new() -> Self {
@@ -550,19 +550,19 @@ pub(crate) fn parse_onnx(
             }
 
             /// Load default weights.
-            pub fn load_default_weights(&mut self) -> incin::prelude::Result<()> {
+            pub fn load_default_weights(&mut self) -> ::incin::prelude::Result<()> {
                 Ok(())
             }
         }
 
         #forward_attr
-        impl<B: incin::prelude::Backend> #root_name<B>
+        impl<B: ::incin::prelude::Backend> #root_name<B>
         where
-            B::FloatElem: incin::prelude::ConstDType,
-            B::Device: incin::prelude::ConstDevice,
+            B::FloatElem: ::incin::prelude::ConstDType,
+            B::Device: ::incin::prelude::ConstDevice,
         {
             /// Forward.
-            pub fn forward(&self, #(#user_inputs),*) -> incin::prelude::Result<incin::prelude::Tensor<#out_shape_type, B>> {
+            pub fn forward(&self, #(#user_inputs),*) -> ::incin::prelude::Result<::incin::prelude::Tensor<#out_shape_type, B>> {
                 #(#forward_stmts)*
                 let final_out = #last_output;
                 final_out.into_shape::<#out_shape_type>()

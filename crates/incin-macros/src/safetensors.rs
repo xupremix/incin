@@ -99,18 +99,18 @@ fn generate_structs(
         match v {
             Node::Leaf { shape, is_buffer } => {
                 let shape_tokens = shape.iter().map(|&d| {
-                    let path = quote! { incin::prelude:: };
+                    let path = quote! { ::incin::prelude:: };
                     crate::shape::lit_to_typenum(d, &path)
                 });
                 let shape_ty = quote! { (#(#shape_tokens,)*) };
                 let ty = if *is_buffer {
-                    quote! { incin::prelude::Buffer<#shape_ty, B> }
+                    quote! { ::incin::prelude::Buffer<#shape_ty, B> }
                 } else {
-                    quote! { incin::prelude::Param<#shape_ty, B> }
+                    quote! { ::incin::prelude::Param<#shape_ty, B> }
                 };
 
-                let _common_bound = quote! { RawVar = <B as incin::prelude::Backend>::RawVar, RawTensor = <B as incin::prelude::Backend>::RawTensor };
-                bounds.push(quote! { B: incin::prelude::Backend });
+                let _common_bound = quote! { RawVar = <B as ::incin::prelude::Backend>::RawVar, RawTensor = <B as ::incin::prelude::Backend>::RawTensor };
+                bounds.push(quote! { B: ::incin::prelude::Backend });
                 fields.push(quote! { pub #field_name_ident: #ty });
             }
             Node::Dir(_) => {
@@ -123,9 +123,9 @@ fn generate_structs(
     }
 
     let def = quote! {
-        #[incin::prelude::module]
+        #[::incin::prelude::module]
         #[allow(non_camel_case_types)]
-        pub struct #name<B: incin::prelude::Backend>
+        pub struct #name<B: ::incin::prelude::Backend>
         where
             #(#bounds,)*
         {
@@ -228,13 +228,13 @@ pub(crate) fn import_model(_attr: TokenStream, item: TokenStream) -> TokenStream
     // root implementation of load_default_weights
     let path_str = input.path.value();
     let root_impl = quote! {
-        impl<B: incin::prelude::Backend> #root_name<B>
+        impl<B: ::incin::prelude::Backend> #root_name<B>
         where
             #(#bounds,)*
         {
             /// Load default weights.
-            pub fn load_default_weights(&mut self) -> incin::prelude::Result<()> {
-                incin::prelude::load_safetensors(self, #path_str)
+            pub fn load_default_weights(&mut self) -> ::incin::prelude::Result<()> {
+                ::incin::prelude::load_safetensors(self, #path_str)
             }
         }
     };

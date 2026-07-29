@@ -1,0 +1,5 @@
+error: unknown attribute argument for #[module], expected one of internal, no_stats
+ --> tests/compile_fail/module_rejects_an_unknown_argument.rs:5:10
+  |
+5 | #[module(no_such_argument)]
+  |          ^^^^^^^^^^^^^^^^

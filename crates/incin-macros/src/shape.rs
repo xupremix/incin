@@ -160,7 +160,7 @@ pub(crate) fn shape(input: TokenStream) -> TokenStream {
     let path = if internal {
         quote! { crate::prelude:: }
     } else {
-        quote! { incin::prelude:: }
+        quote! { ::incin::prelude:: }
     };
 
     let render_dim = |elem: &Dim| -> proc_macro2::TokenStream {
