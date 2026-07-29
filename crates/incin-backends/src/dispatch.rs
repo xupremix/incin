@@ -478,27 +478,6 @@ impl<T: DType, D: Device> Backend for DispatchBackend<T, D> {
         }
     }
 
-    fn backward_with_nan_check<K: DType>(storage: &Self::Storage<K>) -> Result<Self::Grads> {
-        match storage {
-            #[cfg(feature = "cpu")]
-            DispatchStorage::Cpu(value) => {
-                crate::cpu::CpuBackendImpl::<T, Cpu>::backward_with_nan_check::<K>(value)
-                    .map(DispatchGrads::Cpu)
-            }
-            #[cfg(feature = "wgpu")]
-            DispatchStorage::Wgpu(value) => {
-                crate::wgpu::WgpuBackendImpl::<T, Wgpu>::backward_with_nan_check::<K>(value)
-                    .map(DispatchGrads::Wgpu)
-            }
-            #[cfg(feature = "cuda")]
-            DispatchStorage::Cuda(value) => {
-                crate::cuda::CudaBackendImpl::<T, Cuda>::backward_with_nan_check::<K>(value)
-                    .map(DispatchGrads::Cuda)
-            }
-            DispatchStorage::Unavailable => Err(unavailable(DeviceKind::Cpu)),
-        }
-    }
-
     fn get_grad<K: DType>(
         storage: &Self::Storage<K>,
         grads: &Self::Grads,

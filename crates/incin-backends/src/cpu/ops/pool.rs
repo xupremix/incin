@@ -147,11 +147,11 @@ pub(crate) fn max_pool2d_impl<T: DType, D: incin_core::prelude::Device, K: DType
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
-            vec![scatter_pool_grad_2d(
+            Ok(vec![scatter_pool_grad_2d(
                 grad_out,
                 &winning_flat_src_idx,
                 &input_shape,
-            )]
+            )])
         }),
     });
 
@@ -257,10 +257,10 @@ pub(crate) fn avg_pool2d_impl<T: DType, D: incin_core::prelude::Device, K: DType
                     }
                 }
             }
-            vec![CpuStorage::from_contiguous(
+            Ok(vec![CpuStorage::from_contiguous(
                 CpuBuffer::F32(vals),
                 input_shape.clone(),
-            )]
+            )])
         }),
     });
 
@@ -351,10 +351,10 @@ pub(crate) fn adaptive_avg_pool2d_impl<T: DType, D: incin_core::prelude::Device,
                     }
                 }
             }
-            vec![CpuStorage::from_contiguous(
+            Ok(vec![CpuStorage::from_contiguous(
                 CpuBuffer::F32(vals),
                 input_shape.clone(),
-            )]
+            )])
         }),
     });
 

@@ -169,11 +169,13 @@ pub trait Backend:
 
     /// Runs backpropagation from `t` through the backend's recorded tape,
     /// returning the resulting per-tensor gradients.
+    ///
+    /// There is one of these since `GRD-005`. Whether the pass checks its
+    /// gradients for a non-finite value is
+    /// [`NanPolicy`](crate::exec::NanPolicy), an ambient execution-policy axis
+    /// every backend's walk reads, rather than a second method that also
+    /// decided to abort the process on failure.
     fn backward<K: DType>(t: &Self::Storage<K>) -> Result<Self::Grads>;
-    /// Same as `backward`, but additionally checks intermediate gradients
-    /// for `NaN`/`Inf` and reports them as an error instead of silently
-    /// propagating corrupted values.
-    fn backward_with_nan_check<K: DType>(t: &Self::Storage<K>) -> Result<Self::Grads>;
     /// Looks up the gradient computed for `t` in a `Grads` collection
     /// returned by `backward`. `None` if `t` received no gradient (e.g. it
     /// wasn't reachable from the tensor `backward` was called on).
@@ -942,10 +944,6 @@ pub mod dummy {
         }
         /// No-op: there is no tape to run backward through.
         fn backward<K: DType>(_t: &Self::Storage<K>) -> Result<Self::Grads> {
-            Ok(())
-        }
-        /// No-op: there is no tape to run backward through.
-        fn backward_with_nan_check<K: DType>(_t: &Self::Storage<K>) -> Result<Self::Grads> {
             Ok(())
         }
         /// Always `None`: `Grads` carries no data to look a gradient up in.

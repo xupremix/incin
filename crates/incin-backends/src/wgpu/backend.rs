@@ -140,11 +140,6 @@ impl<T: DType, D: Device> Backend for WgpuBackendImpl<T, D> {
         crate::wgpu::tape::backward(loss)
     }
 
-    /// `backward_with_nan_check`.
-    fn backward_with_nan_check<K: DType>(loss: &Self::Storage<K>) -> Result<Self::Grads> {
-        crate::wgpu::tape::backward_with_nan_check(loss)
-    }
-
     /// `get_grad`.
     fn get_grad<K: DType>(
         t: &Self::Storage<K>,
@@ -356,12 +351,10 @@ impl<T: DType, D: Device> NumericOps<Self> for WgpuBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![lhs_id, rhs_id],
             backward: Box::new(move |grad_out: &WgpuStorage| {
-                vec![
-                    crate::wgpu::tape::unbroadcast(grad_out, &lhs_shape)
-                        .expect("unbroadcast lhs (add)"),
-                    crate::wgpu::tape::unbroadcast(grad_out, &rhs_shape)
-                        .expect("unbroadcast rhs (add)"),
-                ]
+                Ok(vec![
+                    crate::wgpu::tape::unbroadcast(grad_out, &lhs_shape)?,
+                    crate::wgpu::tape::unbroadcast(grad_out, &rhs_shape)?,
+                ])
             }),
         });
         Ok(out)
@@ -378,13 +371,11 @@ impl<T: DType, D: Device> NumericOps<Self> for WgpuBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![lhs_id, rhs_id],
             backward: Box::new(move |grad_out: &WgpuStorage| {
-                let neg_grad = unary_op::<T>(grad_out, 5).expect("neg (sub backward)");
-                vec![
-                    crate::wgpu::tape::unbroadcast(grad_out, &lhs_shape)
-                        .expect("unbroadcast lhs (sub)"),
-                    crate::wgpu::tape::unbroadcast(&neg_grad, &rhs_shape)
-                        .expect("unbroadcast rhs (sub)"),
-                ]
+                let neg_grad = unary_op::<T>(grad_out, 5)?;
+                Ok(vec![
+                    crate::wgpu::tape::unbroadcast(grad_out, &lhs_shape)?,
+                    crate::wgpu::tape::unbroadcast(&neg_grad, &rhs_shape)?,
+                ])
             }),
         });
         Ok(out)
@@ -402,16 +393,12 @@ impl<T: DType, D: Device> NumericOps<Self> for WgpuBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![lhs_id, rhs_id],
             backward: Box::new(move |grad_out: &WgpuStorage| {
-                let grad_lhs = binary_op::<T>(grad_out, &rhs_capture, 2, "mul_grad")
-                    .expect("mul backward (lhs)");
-                let grad_rhs = binary_op::<T>(grad_out, &lhs_capture, 2, "mul_grad")
-                    .expect("mul backward (rhs)");
-                vec![
-                    crate::wgpu::tape::unbroadcast(&grad_lhs, &lhs_shape)
-                        .expect("unbroadcast lhs (mul)"),
-                    crate::wgpu::tape::unbroadcast(&grad_rhs, &rhs_shape)
-                        .expect("unbroadcast rhs (mul)"),
-                ]
+                let grad_lhs = binary_op::<T>(grad_out, &rhs_capture, 2, "mul_grad")?;
+                let grad_rhs = binary_op::<T>(grad_out, &lhs_capture, 2, "mul_grad")?;
+                Ok(vec![
+                    crate::wgpu::tape::unbroadcast(&grad_lhs, &lhs_shape)?,
+                    crate::wgpu::tape::unbroadcast(&grad_rhs, &rhs_shape)?,
+                ])
             }),
         });
         Ok(out)
@@ -430,23 +417,17 @@ impl<T: DType, D: Device> NumericOps<Self> for WgpuBackendImpl<T, D> {
             input_ids: vec![lhs_id, rhs_id],
             backward: Box::new(move |grad_out: &WgpuStorage| {
                 // d(lhs/rhs)/dlhs = 1/rhs -> grad_lhs = grad_out / rhs
-                let grad_lhs = binary_op::<T>(grad_out, &rhs_capture, 3, "div_grad_lhs")
-                    .expect("div backward (lhs)");
+                let grad_lhs = binary_op::<T>(grad_out, &rhs_capture, 3, "div_grad_lhs")?;
                 // d(lhs/rhs)/drhs = -lhs/rhs^2 -> grad_rhs = grad_out * (-lhs/rhs^2)
-                let rhs_sq = binary_op::<T>(&rhs_capture, &rhs_capture, 2, "div_grad_rhs_sq")
-                    .expect("rhs^2 (div backward)");
+                let rhs_sq = binary_op::<T>(&rhs_capture, &rhs_capture, 2, "div_grad_rhs_sq")?;
                 let lhs_over_rhs_sq =
-                    binary_op::<T>(&lhs_capture, &rhs_sq, 3, "div_grad_rhs_ratio")
-                        .expect("lhs/rhs^2 (div backward)");
-                let neg_ratio = unary_op::<T>(&lhs_over_rhs_sq, 5).expect("neg (div backward)");
-                let grad_rhs = binary_op::<T>(grad_out, &neg_ratio, 2, "div_grad_rhs")
-                    .expect("div backward (rhs)");
-                vec![
-                    crate::wgpu::tape::unbroadcast(&grad_lhs, &lhs_shape)
-                        .expect("unbroadcast lhs (div)"),
-                    crate::wgpu::tape::unbroadcast(&grad_rhs, &rhs_shape)
-                        .expect("unbroadcast rhs (div)"),
-                ]
+                    binary_op::<T>(&lhs_capture, &rhs_sq, 3, "div_grad_rhs_ratio")?;
+                let neg_ratio = unary_op::<T>(&lhs_over_rhs_sq, 5)?;
+                let grad_rhs = binary_op::<T>(grad_out, &neg_ratio, 2, "div_grad_rhs")?;
+                Ok(vec![
+                    crate::wgpu::tape::unbroadcast(&grad_lhs, &lhs_shape)?,
+                    crate::wgpu::tape::unbroadcast(&grad_rhs, &rhs_shape)?,
+                ])
             }),
         });
         Ok(out)
@@ -489,7 +470,7 @@ fn push_unary_tape_entry(
     crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
         output_id: out_id,
         input_ids: vec![t_id],
-        backward: Box::new(move |grad_out: &WgpuStorage| vec![grad_fn(grad_out)]),
+        backward: Box::new(move |grad_out: &WgpuStorage| Ok(vec![grad_fn(grad_out)])),
     });
 }
 
@@ -855,23 +836,17 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackendImpl<T, D> {
             input_ids: vec![lhs_id, rhs_id],
             backward: Box::new(move |grad_out: &WgpuStorage| {
                 let rhs_rank = rhs_capture.shape.len();
-                let rhs_t = Self::transpose::<K>(&rhs_capture, rhs_rank - 2, rhs_rank - 1)
-                    .expect("rhs^T (matmul backward)");
-                let grad_lhs_full = Self::matmul::<K>(grad_out, &rhs_t)
-                    .expect("grad_out @ rhs^T (matmul backward)");
+                let rhs_t = Self::transpose::<K>(&rhs_capture, rhs_rank - 2, rhs_rank - 1)?;
+                let grad_lhs_full = Self::matmul::<K>(grad_out, &rhs_t)?;
 
                 let lhs_rank = lhs_capture.shape.len();
-                let lhs_t = Self::transpose::<K>(&lhs_capture, lhs_rank - 2, lhs_rank - 1)
-                    .expect("lhs^T (matmul backward)");
-                let grad_rhs_full = Self::matmul::<K>(&lhs_t, grad_out)
-                    .expect("lhs^T @ grad_out (matmul backward)");
+                let lhs_t = Self::transpose::<K>(&lhs_capture, lhs_rank - 2, lhs_rank - 1)?;
+                let grad_rhs_full = Self::matmul::<K>(&lhs_t, grad_out)?;
 
-                vec![
-                    crate::wgpu::tape::unbroadcast(&grad_lhs_full, &lhs_shape)
-                        .expect("unbroadcast lhs (matmul backward)"),
-                    crate::wgpu::tape::unbroadcast(&grad_rhs_full, &rhs_shape)
-                        .expect("unbroadcast rhs (matmul backward)"),
-                ]
+                Ok(vec![
+                    crate::wgpu::tape::unbroadcast(&grad_lhs_full, &lhs_shape)?,
+                    crate::wgpu::tape::unbroadcast(&grad_rhs_full, &rhs_shape)?,
+                ])
             }),
         });
         Ok(out)
@@ -897,7 +872,7 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
-                vec![Self::reshape::<K>(grad_out, &original_shape).expect("reshape backward")]
+                Ok(vec![Self::reshape::<K>(grad_out, &original_shape)?])
             }),
         });
         Ok(out)
@@ -932,7 +907,7 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
-                vec![Self::transpose::<K>(grad_out, dim1, dim2).expect("transpose backward")]
+                Ok(vec![Self::transpose::<K>(grad_out, dim1, dim2)?])
             }),
         });
         Ok(out)
@@ -998,11 +973,11 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
-                vec![crate::wgpu::storage::scatter_into_zeros(
+                Ok(vec![crate::wgpu::storage::scatter_into_zeros(
                     &original_shape,
                     &region_start,
                     grad_out,
-                )]
+                )])
             }),
         });
         Ok(out)
@@ -1033,10 +1008,10 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
-                vec![
-                    crate::wgpu::tape::unbroadcast(grad_out, &original_shape)
-                        .expect("broadcast_as backward"),
-                ]
+                Ok(vec![crate::wgpu::tape::unbroadcast(
+                    grad_out,
+                    &original_shape,
+                )?])
             }),
         });
         Ok(out)
@@ -1129,13 +1104,13 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackendImpl<T, D> {
         crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
             output_id: out_id,
             input_ids,
+            // Collecting an iterator of `Result` straight into `Result<Vec<_>>`
+            // is the whole conversion here, as on the CPU side.
             backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
                 offsets
                     .iter()
                     .zip(input_dim_sizes.iter())
-                    .map(|(&offset, &len)| {
-                        Self::narrow::<K>(grad_out, dim, offset, len).expect("concat backward")
-                    })
+                    .map(|(&offset, &len)| Self::narrow::<K>(grad_out, dim, offset, len))
                     .collect()
             }),
         });
@@ -1287,10 +1262,10 @@ fn push_extremum_dim_tape_entry(t: &WgpuStorage, out: &WgpuStorage, dim: usize, 
                     grad_input[best_flat] = grad_data[flat_out];
                 }
             }
-            vec![WgpuStorage::new(
+            Ok(vec![WgpuStorage::new(
                 WgpuBuffer::from_slice(&grad_input),
                 input_shape.clone(),
-            )]
+            )])
         }),
     });
 }
@@ -1321,10 +1296,10 @@ fn push_extremum_all_tape_entry(t: &WgpuStorage, out: &WgpuStorage, is_max: bool
             }
             let mut grad_input = vec![0.0f32; input_data.len()];
             grad_input[best_flat] = grad_val;
-            vec![WgpuStorage::new(
+            Ok(vec![WgpuStorage::new(
                 WgpuBuffer::from_slice(&grad_input),
                 input_shape.clone(),
-            )]
+            )])
         }),
     });
 }
@@ -1347,10 +1322,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
-                vec![
-                    Self::broadcast_as::<K>(grad_out, &original_shape)
-                        .expect("sum_all backward failed"),
-                ]
+                Ok(vec![Self::broadcast_as::<K>(grad_out, &original_shape)?])
             }),
         });
         Ok(out)
@@ -1368,11 +1340,8 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
-                let scaled = scalar_op::<T>(grad_out, 1.0 / n, 1).unwrap();
-                vec![
-                    Self::broadcast_as::<K>(&scaled, &original_shape)
-                        .expect("mean_all backward failed"),
-                ]
+                let scaled = scalar_op::<T>(grad_out, 1.0 / n, 1)?;
+                Ok(vec![Self::broadcast_as::<K>(&scaled, &original_shape)?])
             }),
         });
         Ok(out)
@@ -1408,11 +1377,8 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackendImpl<T, D> {
             backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
                 let mut keepdim_shape = grad_out.shape.to_vec();
                 keepdim_shape.insert(dim, 1);
-                let keepdim = Self::reshape::<K>(grad_out, &keepdim_shape).unwrap();
-                vec![
-                    Self::broadcast_as::<K>(&keepdim, &original_shape)
-                        .expect("sum_dim backward failed"),
-                ]
+                let keepdim = Self::reshape::<K>(grad_out, &keepdim_shape)?;
+                Ok(vec![Self::broadcast_as::<K>(&keepdim, &original_shape)?])
             }),
         });
         Ok(out)
@@ -1429,10 +1395,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
-                vec![
-                    Self::broadcast_as::<K>(grad_out, &original_shape)
-                        .expect("sum_keepdim backward failed"),
-                ]
+                Ok(vec![Self::broadcast_as::<K>(grad_out, &original_shape)?])
             }),
         });
         Ok(out)
@@ -1453,9 +1416,9 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackendImpl<T, D> {
             backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
                 let mut keepdim_shape = grad_out.shape.to_vec();
                 keepdim_shape.insert(dim, 1);
-                let keepdim = Self::reshape::<K>(grad_out, &keepdim_shape).unwrap();
-                let expanded = Self::broadcast_as::<K>(&keepdim, &original_shape).unwrap();
-                vec![scalar_op::<T>(&expanded, 1.0 / n, 1).unwrap()]
+                let keepdim = Self::reshape::<K>(grad_out, &keepdim_shape)?;
+                let expanded = Self::broadcast_as::<K>(&keepdim, &original_shape)?;
+                Ok(vec![scalar_op::<T>(&expanded, 1.0 / n, 1)?])
             }),
         });
         Ok(out)
@@ -1474,8 +1437,8 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
-                let expanded = Self::broadcast_as::<K>(grad_out, &original_shape).unwrap();
-                vec![scalar_op::<T>(&expanded, 1.0 / n, 1).unwrap()]
+                let expanded = Self::broadcast_as::<K>(grad_out, &original_shape)?;
+                Ok(vec![scalar_op::<T>(&expanded, 1.0 / n, 1)?])
             }),
         });
         Ok(out)
@@ -2108,10 +2071,10 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
                     }
                 }
 
-                vec![WgpuStorage::new(
+                Ok(vec![WgpuStorage::new(
                     WgpuBuffer::from_slice(&weight_grad),
                     weight_shape.clone(),
-                )]
+                )])
             }),
         });
 
@@ -2302,10 +2265,10 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
                         }
                     }
                 }
-                vec![WgpuStorage::new(
+                Ok(vec![WgpuStorage::new(
                     WgpuBuffer::from_slice(&grad_input),
                     input_shape.clone(),
-                )]
+                )])
             }),
         });
 
@@ -2392,10 +2355,10 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
                         }
                     }
                 }
-                vec![WgpuStorage::new(
+                Ok(vec![WgpuStorage::new(
                     WgpuBuffer::from_slice(&grad_input),
                     input_shape.clone(),
-                )]
+                )])
             }),
         });
 
@@ -2495,10 +2458,10 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
                         }
                     }
                 }
-                vec![WgpuStorage::new(
+                Ok(vec![WgpuStorage::new(
                     WgpuBuffer::from_slice(&grad_input),
                     input_shape.clone(),
-                )]
+                )])
             }),
         });
 
@@ -2649,7 +2612,7 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
                     }
                 }
 
-                vec![
+                Ok(vec![
                     WgpuStorage::new(
                         WgpuBuffer::from_slice(&grad_input_data),
                         inp_capture.shape.to_vec(),
@@ -2658,7 +2621,7 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
                         WgpuBuffer::from_slice(&grad_weight_data),
                         w_capture.shape.to_vec(),
                     ),
-                ]
+                ])
             }),
         });
 
@@ -2811,7 +2774,7 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
                     }
                 }
 
-                vec![
+                Ok(vec![
                     WgpuStorage::new(
                         WgpuBuffer::from_slice(&grad_input_data),
                         inp_capture.shape.to_vec(),
@@ -2820,7 +2783,7 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
                         WgpuBuffer::from_slice(&grad_weight_data),
                         w_capture.shape.to_vec(),
                     ),
-                ]
+                ])
             }),
         });
 
@@ -3009,13 +2972,13 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
                 );
                 let gw_summed = cpu_sum_batch(&gw_mat, batch, c_in, c_out * kh * kw);
 
-                vec![
+                Ok(vec![
                     WgpuStorage::new(
                         WgpuBuffer::from_slice(&grad_input_data),
                         inp_capture.shape.to_vec(),
                     ),
                     WgpuStorage::new(WgpuBuffer::from_slice(&gw_summed), w_capture.shape.to_vec()),
-                ]
+                ])
             }),
         });
 

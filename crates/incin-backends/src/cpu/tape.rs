@@ -19,7 +19,7 @@
 use core::cell::RefCell;
 
 use incin_core::exec::tape;
-use incin_core::exec::{GradientMap, NanCheck, Tape, TapeNode, TapeStorage, TensorId};
+use incin_core::exec::{GradientMap, Tape, TapeNode, TapeStorage, TensorId};
 use incin_core::prelude::Result;
 
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
@@ -137,6 +137,11 @@ pub fn depth() -> usize {
 
 /// Walk this thread's tape backward from `loss`.
 ///
+/// There is one entry point since `GRD-005`. Whether gradients are checked for
+/// a non-finite value is [`NanPolicy`](incin_core::exec::NanPolicy), an
+/// ambient axis the shared walk reads, rather than a second method that also
+/// decided to panic on failure.
+///
 /// Seeding, draining before the first recipe runs (D-06), reverse order, and
 /// summing rather than overwriting a reused tensor's contributions
 /// (`CPUBACK-05`) are all `incin_core::exec::Tape::backward`. This resolves the
@@ -149,7 +154,7 @@ pub fn backward(loss: &CpuStorage) -> Result<CpuGrads> {
     // records while it runs, and a walk holding this `RefCell` would panic on
     // its second borrow rather than on anything to do with gradients.
     let nodes = TAPE.with(|t| t.borrow_mut().drain());
-    let grads = tape::backward(nodes, loss, NanCheck::Skip)?;
+    let grads = tape::backward(nodes, loss)?;
 
     #[cfg(feature = "telemetry")]
     {
@@ -175,17 +180,6 @@ fn emit_backward_telemetry(step: usize, n_ops: usize) {
             crate::telemetry::emit_graph_snapshot(g);
         }
     }
-}
-
-/// Same as [`backward`], but validates every intermediate gradient for `NaN`
-/// or infinity, panicking at the operation that produced it rather than at the
-/// end of the pass.
-///
-/// `GRD-005` owns replacing that panic with a structured failure.
-pub fn backward_with_nan_check(loss: &CpuStorage) -> Result<CpuGrads> {
-    let nodes = TAPE.with(|t| t.borrow_mut().drain());
-    let grads = tape::backward(nodes, loss, NanCheck::Enforce)?;
-    Ok(CpuGrads { grads })
 }
 
 /// Elementwise sum of two ALREADY-shape-matching gradients.
@@ -442,7 +436,7 @@ mod tests {
                 let data: Vec<f32> = (0..grad_out.shape[0])
                     .map(|i| (grad_out.get(&[i]) * 2.0) as f32)
                     .collect();
-                vec![vector(data)]
+                Ok(vec![vector(data)])
             }),
         });
 
@@ -454,7 +448,7 @@ mod tests {
                 let data: Vec<f32> = (0..grad_out.shape[0])
                     .map(|i| (grad_out.get(&[i]) * 3.0) as f32)
                     .collect();
-                vec![vector(data)]
+                Ok(vec![vector(data)])
             }),
         });
 
@@ -482,7 +476,10 @@ mod tests {
             output_id: total_loss_id,
             input_ids: vec![out1_id, out2_id],
             backward: Box::new(|_grad_out: &CpuStorage| {
-                vec![vector(vec![1.0, 1.0, 1.0]), vector(vec![1.0, 1.0, 1.0])]
+                Ok(vec![
+                    vector(vec![1.0, 1.0, 1.0]),
+                    vector(vec![1.0, 1.0, 1.0]),
+                ])
             }),
         });
 
@@ -507,7 +504,7 @@ mod tests {
             output_id: out1.id,
             input_ids: vec![x1.id],
             backward: Box::new(|grad_out: &CpuStorage| {
-                vec![scalar((grad_out.get(&[]) * 10.0) as f32)]
+                Ok(vec![scalar((grad_out.get(&[]) * 10.0) as f32)])
             }),
         });
         let grads1 = backward(&out1).unwrap();
@@ -524,7 +521,7 @@ mod tests {
             output_id: out2.id,
             input_ids: vec![x2.id],
             backward: Box::new(|grad_out: &CpuStorage| {
-                vec![scalar((grad_out.get(&[]) * 100.0) as f32)]
+                Ok(vec![scalar((grad_out.get(&[]) * 100.0) as f32)])
             }),
         });
         let grads2 = backward(&out2).unwrap();
@@ -543,23 +540,32 @@ mod tests {
         push(TapeEntry {
             output_id: out.id,
             input_ids: vec![x.id],
-            backward: Box::new(|grad_out: &CpuStorage| vec![grad_out.clone()]),
+            backward: Box::new(|grad_out: &CpuStorage| Ok(vec![grad_out.clone()])),
         });
         let _ = backward(&out).unwrap();
         assert_eq!(depth(), 0);
     }
 
     #[test]
-    #[should_panic(expected = "NaN or Infinity detected in gradient")]
-    /// `backward_with_nan_check_panics_on_nan`.
-    fn backward_with_nan_check_panics_on_nan() {
+    /// `a_non_finite_gradient_is_returned_rather_than_panicked`.
+    fn a_non_finite_gradient_is_returned_rather_than_panicked() {
         let x = scalar(1.0);
         let out = scalar(2.0);
         push(TapeEntry {
             output_id: out.id,
             input_ids: vec![x.id],
-            backward: Box::new(|_grad_out: &CpuStorage| vec![scalar(f32::NAN)]),
+            backward: Box::new(|_grad_out: &CpuStorage| Ok(vec![scalar(f32::NAN)])),
         });
-        let _ = backward_with_nan_check(&out);
+        // Under the policy that asks for it (`GRD-005`); the default pass does
+        // not look, and this used to be a separate method that aborted.
+        let Err(err) = incin_core::exec::check_gradients(|| backward(&out)) else {
+            panic!("a NaN gradient was not reported under NanPolicy::Reject");
+        };
+        assert!(matches!(
+            err,
+            incin_core::prelude::Error::Backward(
+                incin_core::prelude::BackwardError::NonFinite { .. }
+            )
+        ));
     }
 }

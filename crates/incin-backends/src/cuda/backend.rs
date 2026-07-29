@@ -111,7 +111,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &CudaStorage| {
-                vec![Self::reshape::<K>(grad_out, &original_shape).expect("reshape backward")]
+                Ok(vec![Self::reshape::<K>(grad_out, &original_shape)?])
             }),
         });
         Ok(out)
@@ -142,10 +142,9 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
             input_ids: vec![t_id],
             // Re-applying the same transpose is its own inverse.
             backward: Box::new(move |grad_out: &CudaStorage| {
-                vec![
-                    crate::cuda::ops::shape::launch_transpose(grad_out, dim1, dim2)
-                        .expect("transpose backward"),
-                ]
+                Ok(vec![crate::cuda::ops::shape::launch_transpose(
+                    grad_out, dim1, dim2,
+                )?])
             }),
         });
         Ok(out)
@@ -176,15 +175,11 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
             input_ids: vec![lhs_id, rhs_id],
             backward: Box::new(move |grad_out: &CudaStorage| {
                 // grad_lhs = grad_out @ rhs.T ; grad_rhs = lhs.T @ grad_out
-                let rhs_t = crate::cuda::ops::shape::launch_transpose(&rhs_capture, 0, 1)
-                    .expect("matmul backward: transpose rhs");
-                let grad_lhs = crate::cuda::ops::matmul::launch_matmul(grad_out, &rhs_t)
-                    .expect("matmul backward: grad_lhs");
-                let lhs_t = crate::cuda::ops::shape::launch_transpose(&lhs_capture, 0, 1)
-                    .expect("matmul backward: transpose lhs");
-                let grad_rhs = crate::cuda::ops::matmul::launch_matmul(&lhs_t, grad_out)
-                    .expect("matmul backward: grad_rhs");
-                vec![grad_lhs, grad_rhs]
+                let rhs_t = crate::cuda::ops::shape::launch_transpose(&rhs_capture, 0, 1)?;
+                let grad_lhs = crate::cuda::ops::matmul::launch_matmul(grad_out, &rhs_t)?;
+                let lhs_t = crate::cuda::ops::shape::launch_transpose(&lhs_capture, 0, 1)?;
+                let grad_rhs = crate::cuda::ops::matmul::launch_matmul(&lhs_t, grad_out)?;
+                Ok(vec![grad_lhs, grad_rhs])
             }),
         });
         Ok(out)
@@ -206,10 +201,10 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &CudaStorage| {
-                vec![
-                    crate::cuda::tape::unbroadcast(grad_out, &original_shape)
-                        .expect("broadcast_as backward"),
-                ]
+                Ok(vec![crate::cuda::tape::unbroadcast(
+                    grad_out,
+                    &original_shape,
+                )?])
             }),
         });
         Ok(out)
@@ -242,11 +237,11 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &CudaStorage| {
-                vec![crate::cuda::ops::shape::scatter_into_zeros(
+                Ok(vec![crate::cuda::ops::shape::scatter_into_zeros(
                     &original_shape,
                     &region_start,
                     grad_out,
-                )]
+                )])
             }),
         });
         Ok(out)
@@ -385,12 +380,10 @@ impl<T: DType, D: Device> NumericOps<Self> for CudaBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![lhs_id, rhs_id],
             backward: Box::new(move |grad_out: &CudaStorage| {
-                vec![
-                    crate::cuda::tape::unbroadcast(grad_out, &lhs_shape)
-                        .expect("unbroadcast lhs (add)"),
-                    crate::cuda::tape::unbroadcast(grad_out, &rhs_shape)
-                        .expect("unbroadcast rhs (add)"),
-                ]
+                Ok(vec![
+                    crate::cuda::tape::unbroadcast(grad_out, &lhs_shape)?,
+                    crate::cuda::tape::unbroadcast(grad_out, &rhs_shape)?,
+                ])
             }),
         });
         Ok(out)
@@ -410,14 +403,11 @@ impl<T: DType, D: Device> NumericOps<Self> for CudaBackendImpl<T, D> {
             input_ids: vec![lhs_id, rhs_id],
             backward: Box::new(move |grad_out: &CudaStorage| {
                 let neg_grad =
-                    crate::cuda::ops::elementwise::launch_unary_op("neg", "-x", grad_out)
-                        .expect("neg (sub backward)");
-                vec![
-                    crate::cuda::tape::unbroadcast(grad_out, &lhs_shape)
-                        .expect("unbroadcast lhs (sub)"),
-                    crate::cuda::tape::unbroadcast(&neg_grad, &rhs_shape)
-                        .expect("unbroadcast rhs (sub)"),
-                ]
+                    crate::cuda::ops::elementwise::launch_unary_op("neg", "-x", grad_out)?;
+                Ok(vec![
+                    crate::cuda::tape::unbroadcast(grad_out, &lhs_shape)?,
+                    crate::cuda::tape::unbroadcast(&neg_grad, &rhs_shape)?,
+                ])
             }),
         });
         Ok(out)
@@ -438,33 +428,27 @@ impl<T: DType, D: Device> NumericOps<Self> for CudaBackendImpl<T, D> {
             input_ids: vec![lhs_id, rhs_id],
             backward: Box::new(move |grad_out: &CudaStorage| {
                 let grad_lhs_shape =
-                    crate::cpu::stride::broadcast_shape(&grad_out.shape, &rhs_capture.shape)
-                        .expect("mul backward shape (lhs)");
+                    crate::cpu::stride::broadcast_shape(&grad_out.shape, &rhs_capture.shape)?;
                 let grad_lhs = crate::cuda::ops::elementwise::launch_binary_op(
                     "mul",
                     "a * b",
                     grad_out,
                     &rhs_capture,
                     &grad_lhs_shape,
-                )
-                .expect("mul backward (lhs)");
+                )?;
                 let grad_rhs_shape =
-                    crate::cpu::stride::broadcast_shape(&grad_out.shape, &lhs_capture.shape)
-                        .expect("mul backward shape (rhs)");
+                    crate::cpu::stride::broadcast_shape(&grad_out.shape, &lhs_capture.shape)?;
                 let grad_rhs = crate::cuda::ops::elementwise::launch_binary_op(
                     "mul",
                     "a * b",
                     grad_out,
                     &lhs_capture,
                     &grad_rhs_shape,
-                )
-                .expect("mul backward (rhs)");
-                vec![
-                    crate::cuda::tape::unbroadcast(&grad_lhs, &lhs_shape)
-                        .expect("unbroadcast lhs (mul)"),
-                    crate::cuda::tape::unbroadcast(&grad_rhs, &rhs_shape)
-                        .expect("unbroadcast rhs (mul)"),
-                ]
+                )?;
+                Ok(vec![
+                    crate::cuda::tape::unbroadcast(&grad_lhs, &lhs_shape)?,
+                    crate::cuda::tape::unbroadcast(&grad_rhs, &rhs_shape)?,
+                ])
             }),
         });
         Ok(out)
@@ -486,59 +470,48 @@ impl<T: DType, D: Device> NumericOps<Self> for CudaBackendImpl<T, D> {
             backward: Box::new(move |grad_out: &CudaStorage| {
                 // d(lhs/rhs)/dlhs = 1/rhs -> grad_lhs = grad_out / rhs
                 let grad_lhs_shape =
-                    crate::cpu::stride::broadcast_shape(&grad_out.shape, &rhs_capture.shape)
-                        .expect("div backward shape (lhs)");
+                    crate::cpu::stride::broadcast_shape(&grad_out.shape, &rhs_capture.shape)?;
                 let grad_lhs = crate::cuda::ops::elementwise::launch_binary_op(
                     "div",
                     "a / b",
                     grad_out,
                     &rhs_capture,
                     &grad_lhs_shape,
-                )
-                .expect("div backward (lhs)");
+                )?;
                 // d(lhs/rhs)/drhs = -lhs/rhs^2 -> grad_rhs = grad_out * (-lhs/rhs^2)
                 let rhs_sq_shape =
-                    crate::cpu::stride::broadcast_shape(&rhs_capture.shape, &rhs_capture.shape)
-                        .expect("div backward shape (rhs^2)");
+                    crate::cpu::stride::broadcast_shape(&rhs_capture.shape, &rhs_capture.shape)?;
                 let rhs_sq = crate::cuda::ops::elementwise::launch_binary_op(
                     "mul",
                     "a * b",
                     &rhs_capture,
                     &rhs_capture,
                     &rhs_sq_shape,
-                )
-                .expect("rhs^2 (div backward)");
+                )?;
                 let ratio_shape =
-                    crate::cpu::stride::broadcast_shape(&lhs_capture.shape, &rhs_sq.shape)
-                        .expect("div backward shape (ratio)");
+                    crate::cpu::stride::broadcast_shape(&lhs_capture.shape, &rhs_sq.shape)?;
                 let lhs_over_rhs_sq = crate::cuda::ops::elementwise::launch_binary_op(
                     "div",
                     "a / b",
                     &lhs_capture,
                     &rhs_sq,
                     &ratio_shape,
-                )
-                .expect("lhs/rhs^2 (div backward)");
+                )?;
                 let neg_ratio =
-                    crate::cuda::ops::elementwise::launch_unary_op("neg", "-x", &lhs_over_rhs_sq)
-                        .expect("neg (div backward)");
+                    crate::cuda::ops::elementwise::launch_unary_op("neg", "-x", &lhs_over_rhs_sq)?;
                 let grad_rhs_shape =
-                    crate::cpu::stride::broadcast_shape(&grad_out.shape, &neg_ratio.shape)
-                        .expect("div backward shape (rhs)");
+                    crate::cpu::stride::broadcast_shape(&grad_out.shape, &neg_ratio.shape)?;
                 let grad_rhs = crate::cuda::ops::elementwise::launch_binary_op(
                     "mul",
                     "a * b",
                     grad_out,
                     &neg_ratio,
                     &grad_rhs_shape,
-                )
-                .expect("div backward (rhs)");
-                vec![
-                    crate::cuda::tape::unbroadcast(&grad_lhs, &lhs_shape)
-                        .expect("unbroadcast lhs (div)"),
-                    crate::cuda::tape::unbroadcast(&grad_rhs, &rhs_shape)
-                        .expect("unbroadcast rhs (div)"),
-                ]
+                )?;
+                Ok(vec![
+                    crate::cuda::tape::unbroadcast(&grad_lhs, &lhs_shape)?,
+                    crate::cuda::tape::unbroadcast(&grad_rhs, &rhs_shape)?,
+                ])
             }),
         });
         Ok(out)
@@ -553,7 +526,7 @@ fn push_unary_tape_entry(
     crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
         output_id: out_id,
         input_ids: vec![t_id],
-        backward: Box::new(move |grad_out: &CudaStorage| vec![grad_fn(grad_out)]),
+        backward: Box::new(move |grad_out: &CudaStorage| Ok(vec![grad_fn(grad_out)])),
     });
 }
 
@@ -1347,20 +1320,17 @@ fn im2col_2d_tape(
                 crate::cuda::ops::conv::out_size(original_shape[2], kh, stride, padding, dilation);
             let w_out =
                 crate::cuda::ops::conv::out_size(original_shape[3], kw, stride, padding, dilation);
-            vec![
-                crate::cuda::ops::conv::launch_col2im_2d(
-                    grad_out,
-                    &original_shape,
-                    h_out,
-                    w_out,
-                    kh,
-                    kw,
-                    stride,
-                    padding,
-                    dilation,
-                )
-                .expect("im2col_2d backward"),
-            ]
+            Ok(vec![crate::cuda::ops::conv::launch_col2im_2d(
+                grad_out,
+                &original_shape,
+                h_out,
+                w_out,
+                kh,
+                kw,
+                stride,
+                padding,
+                dilation,
+            )?])
         }),
     });
     Ok(out)
@@ -1399,10 +1369,9 @@ fn col2im_2d_tape(
         backward: Box::new(move |grad_out: &CudaStorage| {
             let cols_grad = crate::cuda::ops::conv::launch_im2col_2d(
                 grad_out, kh, kw, stride, padding, dilation,
-            )
-            .expect("col2im_2d backward");
+            )?;
             debug_assert_eq!(cols_grad.shape, cols_shape);
-            vec![cols_grad]
+            Ok(vec![cols_grad])
         }),
     });
     Ok(out)
@@ -1425,18 +1394,15 @@ fn im2col_1d_tape(
         backward: Box::new(move |grad_out: &CudaStorage| {
             let l_out =
                 crate::cuda::ops::conv::out_size(original_shape[2], k, stride, padding, dilation);
-            vec![
-                crate::cuda::ops::conv::launch_col2im_1d(
-                    grad_out,
-                    &original_shape,
-                    l_out,
-                    k,
-                    stride,
-                    padding,
-                    dilation,
-                )
-                .expect("im2col_1d backward"),
-            ]
+            Ok(vec![crate::cuda::ops::conv::launch_col2im_1d(
+                grad_out,
+                &original_shape,
+                l_out,
+                k,
+                stride,
+                padding,
+                dilation,
+            )?])
         }),
     });
     Ok(out)
@@ -1456,11 +1422,9 @@ fn pad_trailing_zeros_2d_tape(t: &CudaStorage, pad_h: usize, pad_w: usize) -> Re
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CudaStorage| {
-            let narrowed_h = crate::cuda::ops::shape::launch_narrow(grad_out, 2, 0, h)
-                .expect("pad_trailing_zeros_2d backward: narrow H");
-            let narrowed = crate::cuda::ops::shape::launch_narrow(&narrowed_h, 3, 0, w)
-                .expect("pad_trailing_zeros_2d backward: narrow W");
-            vec![narrowed]
+            let narrowed_h = crate::cuda::ops::shape::launch_narrow(grad_out, 2, 0, h)?;
+            let narrowed = crate::cuda::ops::shape::launch_narrow(&narrowed_h, 3, 0, w)?;
+            Ok(vec![narrowed])
         }),
     });
     Ok(out)
@@ -1534,15 +1498,14 @@ impl<T: DType, D: Device> ModuleOps<Self> for CudaBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![w_id],
             backward: Box::new(move |grad_out: &CudaStorage| {
-                vec![
+                Ok(vec![
                     crate::cuda::ops::embedding::launch_embedding_backward(
                         grad_out,
                         &indices_capture,
                         vocab_size,
                         hidden_size,
-                    )
-                    .expect("embedding backward"),
-                ]
+                    )?,
+                ])
             }),
         });
         Ok(out)
@@ -1571,14 +1534,11 @@ impl<T: DType, D: Device> ModuleOps<Self> for CudaBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &CudaStorage| {
-                vec![
-                    crate::cuda::ops::pool::launch_scatter_pool_grad_2d(
-                        grad_out,
-                        &max_indices,
-                        &input_shape,
-                    )
-                    .expect("max_pool2d backward"),
-                ]
+                Ok(vec![crate::cuda::ops::pool::launch_scatter_pool_grad_2d(
+                    grad_out,
+                    &max_indices,
+                    &input_shape,
+                )?])
             }),
         });
         Ok(out)
@@ -1601,16 +1561,13 @@ impl<T: DType, D: Device> ModuleOps<Self> for CudaBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &CudaStorage| {
-                vec![
-                    crate::cuda::ops::pool::launch_avg_pool2d_backward(
-                        grad_out,
-                        &input_shape,
-                        kernel_size,
-                        stride,
-                        padding,
-                    )
-                    .expect("avg_pool2d backward"),
-                ]
+                Ok(vec![crate::cuda::ops::pool::launch_avg_pool2d_backward(
+                    grad_out,
+                    &input_shape,
+                    kernel_size,
+                    stride,
+                    padding,
+                )?])
             }),
         });
         Ok(out)
@@ -1627,13 +1584,12 @@ impl<T: DType, D: Device> ModuleOps<Self> for CudaBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &CudaStorage| {
-                vec![
+                Ok(vec![
                     crate::cuda::ops::pool::launch_adaptive_avg_pool2d_backward(
                         grad_out,
                         &input_shape,
-                    )
-                    .expect("adaptive_avg_pool2d backward"),
-                ]
+                    )?,
+                ])
             }),
         });
         Ok(out)
@@ -1939,9 +1895,6 @@ impl<T: DType, D: Device> Backend for CudaBackendImpl<T, D> {
     }
     fn backward<K: DType>(loss: &Self::Storage<K>) -> Result<Self::Grads> {
         crate::cuda::tape::backward(loss)
-    }
-    fn backward_with_nan_check<K: DType>(loss: &Self::Storage<K>) -> Result<Self::Grads> {
-        crate::cuda::tape::backward_with_nan_check(loss)
     }
     fn get_grad<K: DType>(
         t: &Self::Storage<K>,

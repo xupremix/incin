@@ -1962,8 +1962,9 @@ Compile-time output shapes and validated descriptors improve backward execution:
   backward consumer;
 - fused forward operations can register fused backward recipes.
 
-Backward closures must return structured errors. NaN checking is an execution
-policy applied consistently across backends, not a panic-only backend helper.
+Backward closures return structured errors, and NaN checking is an execution
+policy applied consistently across backends rather than a panic-only backend
+helper (`GRD-005`).
 
 ### 3.10 Native-library selection policy
 
@@ -2772,8 +2773,44 @@ WGPU and CUDA onto this node on hardware, `GRD-005` owns the `panic!` the NaN
 check still uses, and `GRD-006` owns the three thread-locals that still hold
 the tapes.
 
-`GRD-004` is next on the grad track but needs a GPU; `GRD-005` and `EXE-010`
-are the next unblocked rows.
+`GRD-005` makes both sentences of §3.9 true. "Backward closures must return
+structured errors" was false in a way the count states plainly: an infallible
+`Fn(&S) -> Vec<S>` gave a recipe exactly one way to report that it could not
+produce a gradient, and 115 sites across three backends took it — as
+`.expect("unbroadcast lhs (add)")` and as `.unwrap()` on kernels that
+genuinely fail. All 92 recipes propagate now. Five of those unwraps turned out
+to be on an `Option` rather than a `Result`, which is how they were found: a
+bare `?` does not compile there, and each names what it expected and did not
+get.
+
+"NaN checking is an execution policy applied consistently across backends, not
+a panic-only backend helper" was false in a more interesting way. It was a
+*second entry point*, `Backend::backward_with_nan_check`, which panicked — so
+choosing it changed both what was checked and what happened on failure. A
+caller who wanted the check without the abort had no spelling at all, and one
+who wanted the abort had no reason to want it. `NanPolicy` is an axis beside
+the five `GRD-001` and `GRD-002` established, the method and its four
+implementations are gone, and a failure is a `BackwardError::NonFinite`
+carrying the tensor id and whether it was a recipe's own output or the sum of
+two contributions — two finite values can sum to an infinity, and a report that
+cannot tell those apart sends the reader to the wrong operation.
+
+"Consistently across backends" was worth taking literally. CUDA had no check at
+all: its `backward_with_nan_check` delegated straight to `backward`, so a CUDA
+user asking where a `NaN` came from was told nothing. It reads its gradients
+back and answers now. The same pass found CUDA accumulating through
+`and_modify`, which cannot carry a failure, so its adding kernel unwrapped — a
+launch failure during backward aborted the process.
+
+One assertion in the evidence test started as a tautology and the mutants found
+it. `assert!(tensor > 0 || tensor == 0)` is true of every `u64`, and a mutant
+reporting a fixed id passed it; the test names the exact operand whose `1/0`
+gradient goes bad now. The other two mutants — ignoring the policy in each
+direction — fail four tests and one respectively, and the one is the case
+proving the default costs nothing rather than merely not failing.
+
+`GRD-004` is next on the grad track but needs a GPU, and `GRD-006` needs it
+first. `EXE-010`, `CI-005`, and `UX-014` are the unblocked rows.
 The complete Shape-track evidence is recorded in the mirror and
 `docs/plan/tasks/SHP-007.md` through `SHP-008.md`. The §4 themes above
 describe intent; **this ledger and its dependency graph define order**, and the
@@ -2884,7 +2921,7 @@ Silicon · `compile` compiled execution · `grad` autograd · `dist` distributed
 | GRD-002 | core | grad | [x] | GRD-001 | `crates/incin-core/src/exec/context.rs; crates/incin-core/src/tensor/grad.rs` | G to GradMode propagation; NoGrad records zero nodes and saves nothing | `cargo test -p incin-core --test nograd_records_nothing` |
 | GRD-003 | core | grad | [x] | GRD-001 | `crates/incin-core/src/exec/tape.rs` | Backend-neutral tape nodes with CPU parity | `cargo test -p incin-backends --no-default-features --features std,cpu --test gradient_parity` |
 | GRD-004 | core | grad | [ ] | GRD-003,EXE-008 | `crates/incin-backends/src/{cuda,wgpu}/` | CUDA and WGPU gradient recipes with hardware parity | `cargo test -p incin-backends --features wgpu --test gradient_parity` |
-| GRD-005 | core | grad | [ ] | GRD-003 | `crates/incin-core/src/exec/tape.rs` | Structured backward and NaN failures; no expected-failure panic paths | `cargo test -p incin-core --test backward_errors` |
+| GRD-005 | core | grad | [x] | GRD-003 | `crates/incin-core/src/exec/tape.rs` | Structured backward and NaN failures; no expected-failure panic paths | `cargo test -p incin-core --test backward_errors` |
 | GRD-006 | core | grad | [ ] | GRD-004 | `crates/incin-backends/src/{cpu,cuda,wgpu}/tape.rs` | Saved-tensor lifetime owned by the graph; delete all three backend-local tapes | `cargo test --workspace` |
 | GRD-007 | preview | grad | [ ] | GRD-006,CMP-003 | `crates/incin-core/src/compiled/alloc.rs` | Compiled-graph saved-tensor liveness and fusion integration | `cargo test -p incin-core --test compiled_alloc` |
 | DST-001 | preview | dist | [ ] | GOV-002,SHP-007 | `crates/incin-core/src/dist/mesh.rs` | Typed meshes and ValidMesh; valid and invalid world-size compile tests | `cargo test -p incin-core --test mesh_compile` |
@@ -3380,3 +3417,11 @@ justification as an entry before it may start.
 | D-024 | The backward walk takes its nodes **by value** (`tape::backward(nodes, loss, check)`); a `Tape` is drained into it. | `Tape::backward(&mut self, ..)`. A backward recipe may itself record — every convolution backward on the CPU backend does — so a walk still holding the tape re-enters it, which with the tape behind a `RefCell` is a panic on the second borrow. Four tests found this within minutes of the migration. `D-06` had stated the ordering as a comment for as long as the walk lived beside the thread-local; by value, it is not statable any other way. |
 | D-025 | `TapeStorage::accumulate` is **fallible**, even though the CPU implementation cannot fail. | An infallible signature with WGPU's allocating add unwrapping inside it. One of the three backends already returns a `Result` here, and a shared walk has to carry the weaker guarantee: an accumulation that cannot report a failure turns a dropped contribution into a wrong gradient rather than an error. |
 | D-026 | One `TensorId` for the workspace, re-exported by each backend's storage module. | Three per-backend newtypes over three counters. They hand out the same integers to different allocations, which is harmless exactly as long as no two backends share a tape — the thing `GRD-006` ends. Re-exporting rather than renaming keeps every existing `use` site spelled as it was. |
+
+### 2026-07-29 — Backward failure reporting
+
+| # | Decision | Alternative rejected |
+|---|---|---|
+| D-027 | NaN checking is a `NanPolicy` axis on `ExecutionPolicy`, read once per backward pass by every backend's walk. `Backend::backward_with_nan_check` is deleted. | Keeping the second entry point. It conflated two independent choices — whether to inspect gradients, and whether to abort — so wanting the check without the abort had no spelling, and `D-008` rules against shipping both vocabularies for one question. The default is `Permit` because the check reads every element of every gradient, which on a device backend is a full readback per contribution. |
+| D-028 | `BackwardError::NonFinite` carries the tensor id **and** a `NonFiniteSite` distinguishing a recipe's output from an accumulation. | Reporting only that some gradient went non-finite. Two finite contributions can sum to an infinity, and the entire value of checking is knowing which operation to look at; a report that cannot separate the two cases sends the reader to the wrong one. |
+| D-029 | `BackwardFn` is fallible for all three backends in this row, even though WGPU and CUDA still own their walks until `GRD-004`. | Converting the CPU recipes only. §3.9 says backward closures return structured errors, and a signature two of three backends do not satisfy is not a contract. `EXE-008` had already deferred this once, to `GRD-001`, which landed without it. |

@@ -78,14 +78,6 @@ impl<T: incin_core::prelude::DType, D: incin_core::prelude::Device> incin_core::
             .map_err(|e: candle_core::Error| anyhow::anyhow!(e).into())
     }
 
-    /// Identical to `backward`; candle has no separate NaN-checking
-    /// backward pass, so this simply delegates.
-    fn backward_with_nan_check<K: incin_core::prelude::DType>(
-        loss: &<Self as incin_core::prelude::Backend>::Storage<K>,
-    ) -> Result<<Self as incin_core::prelude::Backend>::Grads> {
-        Self::backward::<K>(loss)
-    }
-
     /// Looks up the accumulated gradient for `t` in `grads`, if one was
     /// recorded during backward.
     fn get_grad<K: incin_core::prelude::DType>(

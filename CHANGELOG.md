@@ -9,6 +9,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- **Structured backward failures and `NanPolicy` (`GRD-005`):** backward
+  recipes return `Result` — the 115 `.expect("unbroadcast lhs (add)")` and
+  `.unwrap()` sites inside them propagate now — and a failure arrives as
+  `BackwardError`, naming the tensor and whether the non-finite value came from
+  a recipe or from summing two contributions. NaN checking is an
+  `ExecutionPolicy` axis (`incin_core::exec::check_gradients(|| ..)`), read by
+  every backend's walk, and defaults to off because the check reads every
+  element of every gradient. The CUDA backend had no check at all before this.
 - **Backend-neutral autograd tape (`GRD-003`):** `incin_core::exec::tape` now
   owns the graph `PROPOSALS.md` §1.2.5 puts in the core — one `TensorId`, a
   `TapeNode` holding a node's inputs and backward recipe, a `Tape` owning the
@@ -70,6 +78,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Changed
 - `incin_backends::{cpu,wgpu,cuda}::storage::TensorId` are re-exports of
   `incin_core::exec::TensorId`; three independent identity counters became one.
+
+### Removed
+- `Backend::backward_with_nan_check` and its four implementations. NaN checking
+  is `NanPolicy` on `ExecutionPolicy`; wrap the ordinary `backward` in
+  `incin_core::exec::check_gradients(|| ..)`, which returns an error where the
+  old method panicked.
 
 ### Fixed
 - **Feature isolation and naming:** a bare install now enables only `std` and `cpu`; CUDA, WGPU, Candle, autotuning, and telemetry are explicit opt-ins. The third-party Candle adapter moved from `legacy::candle` to `external::candle`, and accelerator-only builds no longer reference CPU-only dispatch variants. Candle dtype conversion now returns an error instead of panicking on unsupported types.

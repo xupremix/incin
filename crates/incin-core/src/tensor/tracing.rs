@@ -227,13 +227,6 @@ impl<B: Backend> Backend for TracingBackend<B> {
         B::backward(&loss.inner)
     }
 
-    /// Delegates to `B::backward_with_nan_check` — tracing does not itself affect gradient computation.
-    fn backward_with_nan_check<K: super::dtype::DType>(
-        loss: &<Self as Backend>::Storage<K>,
-    ) -> Result<<Self as Backend>::Grads> {
-        B::backward_with_nan_check(&loss.inner)
-    }
-
     /// Always `None` — tracing doesn't maintain its own gradient map;
     /// gradient lookup must go through the wrapped backend `B` directly.
     fn get_grad<K: super::dtype::DType>(

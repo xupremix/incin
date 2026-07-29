@@ -249,6 +249,69 @@ impl GradMode {
     }
 }
 
+/// Whether a backward pass validates each gradient as it is produced.
+///
+/// PROPOSALS.md sec. 3.9 requires this to be "an execution policy applied
+/// consistently across backends, not a panic-only backend helper", and before
+/// `GRD-005` it was the second of those: a `Backend::backward_with_nan_check`
+/// beside `Backend::backward`, panicking. A caller who wanted the check
+/// without the abort had no spelling, and one who wanted the abort without the
+/// check had no reason to want it.
+///
+/// As an axis it composes with the rest: a debugging run sets it beside
+/// `MathMode::Precise` and leaves everything else alone, and the one walk all
+/// backends share is what reads it.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum NanPolicy {
+    /// Do not inspect gradient values. The default, and the only one that
+    /// costs nothing: the check reads every element of every gradient, which
+    /// on a device backend is a full readback per contribution.
+    #[default]
+    Permit,
+    /// Fail at the first non-finite gradient, naming the tensor it was found
+    /// on.
+    ///
+    /// The point is *where* rather than *whether*: a training run notices a
+    /// `NaN` loss on its own, and what it cannot do is say which operation
+    /// produced it.
+    Reject,
+}
+
+impl NanPolicy {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Permit => "permit",
+            Self::Reject => "reject",
+        }
+    }
+
+    /// True when a backward pass must inspect the values it produces.
+    #[must_use]
+    pub const fn checks(self) -> bool {
+        matches!(self, Self::Reject)
+    }
+
+    /// The policy ambient on this thread, or [`NanPolicy::Permit`] outside any
+    /// scope.
+    ///
+    /// The shared backward walk reads this. Without `std` there is no scope to
+    /// have installed anything, so the answer is the default — see
+    /// [`GradMode::current`] for why that is the true answer rather than a
+    /// weakened one.
+    #[must_use]
+    pub fn current() -> Self {
+        #[cfg(feature = "std")]
+        {
+            ExecutionPolicy::current().nan_policy
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            Self::Permit
+        }
+    }
+}
+
 /// The complete policy half of an execution context: everything that is a
 /// decision rather than a device.
 ///
@@ -263,6 +326,7 @@ pub struct ExecutionPolicy {
     pub fallback: FallbackPolicy,
     pub allocator: AllocatorPolicy,
     pub grad_mode: GradMode,
+    pub nan_policy: NanPolicy,
 }
 
 impl ExecutionPolicy {
@@ -283,6 +347,7 @@ impl ExecutionPolicy {
             fallback: FallbackPolicy::Deny,
             allocator: AllocatorPolicy::Direct,
             grad_mode: GradMode::Enabled,
+            nan_policy: NanPolicy::Permit,
         }
     }
 
@@ -315,11 +380,17 @@ impl ExecutionPolicy {
         self.grad_mode = grad_mode;
         self
     }
+
+    #[must_use]
+    pub const fn with_nan_policy(mut self, nan_policy: NanPolicy) -> Self {
+        self.nan_policy = nan_policy;
+        self
+    }
 }
 
 #[cfg(feature = "std")]
 mod scope {
-    use super::{ExecutionPolicy, GradMode};
+    use super::{ExecutionPolicy, GradMode, NanPolicy};
     use core::cell::Cell;
 
     std::thread_local! {
@@ -364,6 +435,23 @@ mod scope {
         }
     }
 
+    impl NanPolicy {
+        /// Run `body` with this policy ambient, leaving every other axis as it
+        /// was.
+        pub fn scope<R>(self, body: impl FnOnce() -> R) -> R {
+            ExecutionPolicy::current().with_nan_policy(self).scope(body)
+        }
+    }
+
+    /// Run `body` with every gradient checked for a non-finite value.
+    ///
+    /// The debugging counterpart to [`no_grad`]: a backward pass inside this
+    /// fails at the operation that first produced a `NaN` instead of at
+    /// whatever notices later.
+    pub fn check_gradients<R>(body: impl FnOnce() -> R) -> R {
+        NanPolicy::Reject.scope(body)
+    }
+
     impl GradMode {
         /// Run `body` with this mode ambient, leaving every other policy axis
         /// as it was.
@@ -396,4 +484,4 @@ mod scope {
 }
 
 #[cfg(feature = "std")]
-pub use scope::no_grad;
+pub use scope::{check_gradients, no_grad};

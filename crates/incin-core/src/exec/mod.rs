@@ -66,11 +66,11 @@ pub use capability::{
 };
 pub use context::ExecutionContext;
 pub use meta::{Alignment, LayoutClass, MetaError, TensorMeta};
-#[cfg(feature = "std")]
-pub use policy::no_grad;
 pub use policy::{
-    AllocatorPolicy, Determinism, ExecutionPolicy, FallbackPolicy, GradMode, MathMode,
+    AllocatorPolicy, Determinism, ExecutionPolicy, FallbackPolicy, GradMode, MathMode, NanPolicy,
 };
+#[cfg(feature = "std")]
+pub use policy::{check_gradients, no_grad};
 pub use proof::{ProofLevel, Validated};
 pub use request::TensorHandle;
 pub use rule::{
@@ -81,7 +81,7 @@ pub use spec::{
     AxisMask, BinaryOp, BroadcastSpec, Conv2dSpec, DescriptorSchemaVersion, MatMulSpec,
     OperationSpec, Pool2dSpec, PoolOp, ReduceOp, ReductionSpec, ReshapeSpec,
 };
-pub use tape::{BackwardFn, GradientMap, NanCheck, Tape, TapeNode, TapeStorage, TensorId};
+pub use tape::{BackwardFn, GradientMap, Tape, TapeNode, TapeStorage, TensorId};
 
 /// Supertrait used to seal public traits in this module against outside
 /// implementations.

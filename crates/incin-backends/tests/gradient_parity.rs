@@ -18,7 +18,7 @@ use incin_backends::cpu::CpuBackendImpl;
 use incin_backends::cuda::CudaBackendImpl;
 #[cfg(feature = "wgpu")]
 use incin_backends::wgpu::WgpuBackendImpl;
-use incin_core::exec::TapeStorage;
+use incin_core::exec::{TapeStorage, check_gradients};
 use incin_core::prelude::*;
 
 type CpuB = CpuBackendImpl;
@@ -1176,13 +1176,20 @@ fn identities_are_unique_across_allocations() {
 }
 
 #[test]
-#[should_panic(expected = "NaN or Infinity detected in gradient")]
-fn the_nan_check_names_the_tensor_it_found() {
+fn the_nan_check_returns_rather_than_aborts() {
+    // `GRD-005`: this was `Backend::backward_with_nan_check`, which panicked.
+    // The check is an execution-policy axis now, and its failure is a value.
     let x = cpu(&[0.0, 1.0], &[2]);
     let zero = cpu(&[0.0, 0.0], &[2]);
     let out = CpuB::div::<f32>(&x, &zero).unwrap();
 
-    let _ = CpuB::backward_with_nan_check::<f32>(&out);
+    let Err(err) = check_gradients(|| CpuB::backward::<f32>(&out)) else {
+        panic!("a NaN gradient was not reported under NanPolicy::Reject");
+    };
+    assert!(matches!(
+        err,
+        Error::Backward(BackwardError::NonFinite { .. })
+    ));
 }
 
 #[test]

@@ -34,11 +34,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &CpuStorage| {
-                vec![
-                    grad_out
-                        .reshape(&original_shape)
-                        .expect("reshape backward: grad_out reshape to original shape cannot fail (same element count)"),
-                ]
+                Ok(vec![grad_out.reshape(&original_shape)?])
             }),
         });
         Ok(out)
@@ -59,11 +55,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
             // Transposing the same two axes twice is idempotent, so the
             // backward closure is the same transpose applied to grad_out.
             backward: Box::new(move |grad_out: &CpuStorage| {
-                vec![
-                    grad_out
-                        .transpose(dim1, dim2)
-                        .expect("transpose backward: re-applying the same transpose cannot fail"),
-                ]
+                Ok(vec![grad_out.transpose(dim1, dim2)?])
             }),
         });
         Ok(out)
@@ -82,10 +74,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &CpuStorage| {
-                vec![
-                    tape::unbroadcast(grad_out, &original_shape)
-                        .expect("broadcast_as backward: unbroadcast to original shape"),
-                ]
+                Ok(vec![tape::unbroadcast(grad_out, &original_shape)?])
             }),
         });
         Ok(out)
@@ -120,11 +109,11 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &CpuStorage| {
-                vec![crate::cpu::storage::scatter_into_zeros(
+                Ok(vec![crate::cpu::storage::scatter_into_zeros(
                     &original_shape,
                     &region_start,
                     grad_out,
-                )]
+                )])
             }),
         });
         Ok(out)
@@ -355,15 +344,14 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         tape::push(TapeEntry {
             output_id: out_id,
             input_ids,
+            // Collecting an iterator of `Result` straight into
+            // `Result<Vec<_>>` is the whole conversion here: the recipe's
+            // return type is now exactly what `collect` already produced.
             backward: Box::new(move |grad_out: &CpuStorage| {
                 offsets
                     .iter()
                     .zip(input_dim_sizes.iter())
-                    .map(|(&offset, &len)| {
-                        grad_out
-                            .narrow(dim, offset, len)
-                            .expect("concat backward: narrow of grad_out at a valid cumulative offset cannot fail")
-                    })
+                    .map(|(&offset, &len)| grad_out.narrow(dim, offset, len))
                     .collect()
             }),
         });
@@ -596,10 +584,10 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
                     grad_out.buffer.from_f64_values(grad_false),
                     grad_out.shape.to_vec(),
                 );
-                vec![
-                    tape::unbroadcast(&g_true, &on_true_cap.shape).unwrap(),
-                    tape::unbroadcast(&g_false, &on_false_cap.shape).unwrap(),
-                ]
+                Ok(vec![
+                    tape::unbroadcast(&g_true, &on_true_cap.shape)?,
+                    tape::unbroadcast(&g_false, &on_false_cap.shape)?,
+                ])
             }),
         });
         Ok(out_storage)
@@ -650,10 +638,10 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
                         crate::cpu::storage::increment_index(&mut idx, &index_cap.shape);
                     }
                 }
-                vec![CpuStorage::from_contiguous(
+                Ok(vec![CpuStorage::from_contiguous(
                     grad_out.buffer.from_f64_values(grad_t_data),
                     t_cap.shape.to_vec(),
-                )]
+                )])
             }),
         });
         Ok(out_storage)

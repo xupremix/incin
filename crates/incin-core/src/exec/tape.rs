@@ -31,8 +31,8 @@ use alloc::collections::btree_map::Entry;
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU64, Ordering};
 
-use crate::err::Result;
-use crate::exec::policy::GradMode;
+use crate::err::{BackwardError, NonFiniteSite, Result};
+use crate::exec::policy::{GradMode, NanPolicy};
 
 /// A monotonic identity tag for one backend allocation.
 ///
@@ -93,7 +93,8 @@ pub trait TapeStorage: Clone + 'static {
 
     /// Whether this gradient holds a `NaN` or an infinity.
     ///
-    /// Only [`backward`] under [`NanCheck::Enforce`] calls this, and only because
+    /// Only [`backward`] under [`NanPolicy::Reject`](crate::exec::NanPolicy) calls
+    /// this, and only because
     /// finding the operation that first produced a `NaN` is otherwise a
     /// bisection over the whole graph.
     fn has_non_finite(&self) -> bool;
@@ -102,10 +103,13 @@ pub trait TapeStorage: Clone + 'static {
 /// A backward recipe: given the accumulated gradient of a node's output,
 /// produce one gradient per input, in the same order as [`TapeNode::input_ids`].
 ///
-/// Still infallible. `EXE-008` recorded that making it fallible touches
-/// nineteen WGPU closures and belongs with the explicit gradient context;
-/// `GRD-005` owns that, along with the `panic!` the NaN check still uses.
-pub type BackwardFn<S> = Box<dyn Fn(&S) -> Vec<S> + Send + Sync>;
+/// Fallible since `GRD-005`. PROPOSALS.md sec. 3.9 requires it — "backward
+/// closures must return structured errors" — and the count is the argument:
+/// an infallible signature gave a recipe exactly one way to report that it
+/// could not produce a gradient, and 115 sites across three backends took it,
+/// as `.expect("unbroadcast lhs (add)")` and `.unwrap()` on kernels that
+/// genuinely can fail.
+pub type BackwardFn<S> = Box<dyn Fn(&S) -> Result<Vec<S>> + Send + Sync>;
 
 /// One recorded operation: what it produced, what it consumed, and how to run
 /// it backwards.
@@ -171,19 +175,6 @@ impl<S> Default for GradientMap<S> {
             grads: BTreeMap::new(),
         }
     }
-}
-
-/// Whether a backward walk validates each gradient as it is produced.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub enum NanCheck {
-    /// Walk without inspecting values. The normal path.
-    #[default]
-    Skip,
-    /// Test every contribution and every accumulation for a non-finite value.
-    ///
-    /// A debugging aid whose whole purpose is to fail at the operation that
-    /// first produced the `NaN` rather than at the end of the pass.
-    Enforce,
 }
 
 /// The recorded operations of one backward-reachable graph.
@@ -269,11 +260,12 @@ impl<S> Tape<S> {
 ///    contributions. Writing that as an insert instead of an accumulate is the
 ///    `CPUBACK-05` defect, which is why [`Entry`] is matched here rather than a
 ///    `contains_key` guarding an assignment.
-pub fn backward<S: TapeStorage>(
-    nodes: Vec<TapeNode<S>>,
-    loss: &S,
-    check: NanCheck,
-) -> Result<GradientMap<S>> {
+pub fn backward<S: TapeStorage>(nodes: Vec<TapeNode<S>>, loss: &S) -> Result<GradientMap<S>> {
+    // Read once, not per gradient: the policy is ambient for the whole pass,
+    // and a walk that re-read it could check some contributions and not
+    // others if a recipe installed a scope.
+    let checked = NanPolicy::current().checks();
+
     let mut grads: BTreeMap<TensorId, S> = BTreeMap::new();
     grads.insert(loss.id(), loss.ones_like()?);
 
@@ -281,15 +273,20 @@ pub fn backward<S: TapeStorage>(
         let Some(grad_out) = grads.get(&node.output_id).cloned() else {
             continue;
         };
-        for (input, contribution) in node.input_ids.into_iter().zip((node.backward)(&grad_out)) {
-            if check == NanCheck::Enforce {
-                assert_finite(&contribution, input);
+        let contributions = (node.backward)(&grad_out)?;
+        for (input, contribution) in node.input_ids.into_iter().zip(contributions) {
+            if checked {
+                check_finite(&contribution, input, NonFiniteSite::Contribution)?;
             }
             match grads.entry(input) {
                 Entry::Occupied(mut slot) => {
                     let summed = slot.get().accumulate(&contribution)?;
-                    if check == NanCheck::Enforce {
-                        assert_finite(&summed, input);
+                    if checked {
+                        // Checked separately from the contribution because two
+                        // finite values can sum to an infinity, and a report
+                        // that cannot say which happened sends the reader to
+                        // the wrong operation.
+                        check_finite(&summed, input, NonFiniteSite::Accumulation)?;
                     }
                     slot.insert(summed);
                 }
@@ -303,15 +300,20 @@ pub fn backward<S: TapeStorage>(
     Ok(GradientMap { grads })
 }
 
-/// Panic naming the tensor whose gradient went non-finite.
+/// Report the tensor whose gradient went non-finite.
 ///
-/// A panic rather than an error because that is what all three backends did
-/// before this module and moving code is not the place to change behaviour.
-/// `GRD-005` owns replacing it: "structured backward and NaN failures; no
-/// expected-failure panic paths".
-fn assert_finite<S: TapeStorage>(grad: &S, id: TensorId) {
-    assert!(
-        !grad.has_non_finite(),
-        "NaN or Infinity detected in gradient for TensorId {id:?}"
-    );
+/// A returned error rather than the `panic!` all three backends used before
+/// `GRD-005`. PROPOSALS.md sec. 3.9 asks for exactly this: a check that is
+/// "an execution policy applied consistently across backends, not a
+/// panic-only backend helper". A caller who wants to know where a `NaN` came
+/// from should not have to accept an aborted process to find out.
+fn check_finite<S: TapeStorage>(grad: &S, id: TensorId, site: NonFiniteSite) -> Result<()> {
+    if grad.has_non_finite() {
+        return Err(BackwardError::NonFinite {
+            tensor: id.get(),
+            operation: site,
+        }
+        .into());
+    }
+    Ok(())
 }

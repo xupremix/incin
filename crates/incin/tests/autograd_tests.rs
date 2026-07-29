@@ -2,6 +2,7 @@
 
 use incin::prelude::*;
 use incin::{Optimizer, SGD};
+use incin_core::exec::check_gradients;
 
 /// Implementation of `CpuBackendImpl` for the respective backend.
 type CpuBackendImpl = incin_backends::cpu::CpuBackendImpl;
@@ -33,8 +34,12 @@ fn test_simple_linear_regression() -> Result<()> {
 }
 
 #[test]
-/// Test backward with nan check success.
-fn test_backward_with_nan_check_success() -> Result<()> {
+/// Test a checked backward pass over finite gradients.
+///
+/// `GRD-005` replaced `Backend::backward_with_nan_check` with a `NanPolicy`
+/// axis: the check is a scope around the ordinary `backward`, and a failure is
+/// a returned error rather than a panic.
+fn test_backward_under_nan_checking_succeeds() -> Result<()> {
     let model = Linear::<s![1, 1], CpuBackendImpl>::build(())?;
     let mut optim = SGD::<CpuBackendImpl>::new(model.parameters(), 0.01);
 
@@ -43,7 +48,7 @@ fn test_backward_with_nan_check_success() -> Result<()> {
 
     let pred = model.forward(x.clone())?;
     let loss = pred.mse_loss(&y)?;
-    let raw_grads = CpuBackendImpl::backward_with_nan_check::<f32>(loss.inner())?; // Should succeed
+    let raw_grads = check_gradients(|| CpuBackendImpl::backward::<f32>(loss.inner()))?;
     let grads = incin::Gradients(raw_grads);
     optim.step(&grads)?;
 

@@ -151,13 +151,11 @@ pub(crate) fn batched_matmul_impl(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<
         backward: Box::new(move |grad_out: &CpuStorage| {
             // grad_lhs = grad_out @ rhs^T, summed back down to lhs's own shape.
             let grad_lhs = batched_gemm(grad_out, &transpose_last2(&rhs_capture))
-                .and_then(|grad| tape::unbroadcast(&grad, &lhs_shape))
-                .expect("batched matmul backward: grad_out @ rhs^T down to lhs's own shape");
+                .and_then(|grad| tape::unbroadcast(&grad, &lhs_shape))?;
             // grad_rhs = lhs^T @ grad_out, summed back down to rhs's own shape.
             let grad_rhs = batched_gemm(&transpose_last2(&lhs_capture), grad_out)
-                .and_then(|grad| tape::unbroadcast(&grad, &rhs_shape))
-                .expect("batched matmul backward: lhs^T @ grad_out down to rhs's own shape");
-            vec![grad_lhs, grad_rhs]
+                .and_then(|grad| tape::unbroadcast(&grad, &rhs_shape))?;
+            Ok(vec![grad_lhs, grad_rhs])
         }),
     });
 
@@ -274,11 +272,9 @@ pub(crate) fn matmul_impl(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStora
         output_id: out_id,
         input_ids: vec![lhs_id, rhs_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
-            let grad_lhs = matmul_forward(grad_out, &transpose_2d(&rhs_capture))
-                .expect("grad_lhs = grad_out @ rhs^T cannot fail (shapes proven compatible)");
-            let grad_rhs = matmul_forward(&transpose_2d(&lhs_capture), grad_out)
-                .expect("grad_rhs = lhs^T @ grad_out cannot fail (shapes proven compatible)");
-            vec![grad_lhs, grad_rhs]
+            let grad_lhs = matmul_forward(grad_out, &transpose_2d(&rhs_capture))?;
+            let grad_rhs = matmul_forward(&transpose_2d(&lhs_capture), grad_out)?;
+            Ok(vec![grad_lhs, grad_rhs])
         }),
     });
 

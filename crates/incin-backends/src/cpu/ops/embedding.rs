@@ -14,6 +14,7 @@
 //! rather than via multiple `TapeEntry` pushes.
 
 use incin_core::prelude::Error;
+use incin_core::prelude::{BackwardError, OperationKind};
 use incin_core::prelude::{DType, Result};
 
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
@@ -101,7 +102,10 @@ pub(crate) fn embedding_impl<T: DType, D: incin_core::prelude::Device, K: DType,
                 let mut full_idx = leading_idx.clone();
                 full_idx.push(0);
                 for h in 0..hidden_size {
-                    *full_idx.last_mut().unwrap() = h;
+                    *full_idx.last_mut().ok_or(BackwardError::Recipe {
+                        operation: OperationKind::Embedding,
+                        reason: "the embedding index has no trailing hidden axis",
+                    })? = h;
                     let g = grad_out.get(&full_idx);
                     grad_w[row_idx * hidden_size + h] += g as f32;
                 }
@@ -109,10 +113,10 @@ pub(crate) fn embedding_impl<T: DType, D: incin_core::prelude::Device, K: DType,
                     crate::cpu::ops::elementwise::increment_index(&mut leading_idx, &t_shape);
                 }
             }
-            vec![CpuStorage::from_contiguous(
+            Ok(vec![CpuStorage::from_contiguous(
                 CpuBuffer::F32(grad_w),
                 w_shape_for_backward.clone(),
-            )]
+            )])
         }),
     });
 

@@ -4,7 +4,8 @@ use alloc::collections::btree_map::Entry;
 use alloc::vec::Vec;
 use core::cell::RefCell;
 
-use incin_core::exec::GradMode;
+use incin_core::exec::{GradMode, NanPolicy};
+use incin_core::prelude::{BackwardError, NonFiniteSite};
 use incin_core::prelude::{DTypeId, OperationKind, Result};
 
 use crate::wgpu::dispatch;
@@ -13,7 +14,10 @@ use crate::wgpu::storage::{TensorId, WgpuBuffer, WgpuStorage};
 pub struct TapeEntry {
     pub output_id: TensorId,
     pub input_ids: Vec<TensorId>,
-    pub backward: Box<dyn Fn(&WgpuStorage) -> Vec<WgpuStorage> + Send + Sync>,
+    /// Fallible since `GRD-005`: a recipe that cannot produce a gradient
+    /// reports it. `GRD-004` replaces this whole type with the core's
+    /// `TapeNode`, which already has this signature.
+    pub backward: Box<dyn Fn(&WgpuStorage) -> Result<Vec<WgpuStorage>> + Send + Sync>,
 }
 
 thread_local! {
@@ -76,15 +80,26 @@ pub fn backward(loss: &WgpuStorage) -> Result<WgpuGrads> {
     #[cfg(feature = "telemetry")]
     let n_ops = entries.len();
 
+    // Read once for the whole pass, exactly as the core walk does: the point
+    // of `GRD-005` making this a policy is that every backend answers the same
+    // question the same way.
+    let checked = NanPolicy::current().checks();
+
     for entry in entries.into_iter().rev() {
         let Some(grad_out) = grads.get(&entry.output_id).cloned() else {
             continue;
         };
-        let input_grads = (entry.backward)(&grad_out);
+        let input_grads = (entry.backward)(&grad_out)?;
         for (input_id, g) in entry.input_ids.into_iter().zip(input_grads) {
+            if checked {
+                check_finite(&g, input_id, NonFiniteSite::Contribution)?;
+            }
             match grads.entry(input_id) {
                 Entry::Occupied(mut slot) => {
                     let accumulated = add_wgpu_storage(slot.get(), &g)?;
+                    if checked {
+                        check_finite(&accumulated, input_id, NonFiniteSite::Accumulation)?;
+                    }
                     slot.insert(accumulated);
                 }
                 Entry::Vacant(slot) => {
@@ -117,45 +132,22 @@ fn emit_backward_telemetry(step: usize, n_ops: usize) {
     }
 }
 
-fn check_nan(storage: &WgpuStorage, id: TensorId) {
+/// Report the tensor whose gradient went non-finite.
+///
+/// A returned error since `GRD-005`, where this was a `panic!` reachable only
+/// through a second `backward_with_nan_check` entry point. Reading the buffer
+/// back is why the policy defaults to permitting: on this backend the check is
+/// a full device-to-host copy per gradient.
+fn check_finite(storage: &WgpuStorage, id: TensorId, site: NonFiniteSite) -> Result<()> {
     let data: Vec<f32> = storage.buffer.to_vec();
     if data.iter().any(|x| x.is_nan() || x.is_infinite()) {
-        panic!("NaN or Infinity detected in gradient for TensorId {:?}", id);
-    }
-}
-
-pub fn backward_with_nan_check(loss: &WgpuStorage) -> Result<WgpuGrads> {
-    let mut grads: BTreeMap<TensorId, WgpuStorage> = BTreeMap::new();
-
-    // Seed with ones
-    let n = loss.shape.iter().product::<usize>();
-    let data: Vec<f32> = vec![1.0; n];
-    let buf = WgpuBuffer::from_slice(&data);
-    grads.insert(loss.id, WgpuStorage::new(buf, loss.shape.to_vec()));
-
-    let entries = TAPE.with(|t| core::mem::take(&mut *t.borrow_mut()));
-
-    for entry in entries.into_iter().rev() {
-        let Some(grad_out) = grads.get(&entry.output_id).cloned() else {
-            continue;
-        };
-        let input_grads = (entry.backward)(&grad_out);
-        for (input_id, g) in entry.input_ids.into_iter().zip(input_grads) {
-            check_nan(&g, input_id);
-            match grads.entry(input_id) {
-                Entry::Occupied(mut slot) => {
-                    let accumulated = add_wgpu_storage(slot.get(), &g)?;
-                    check_nan(&accumulated, input_id);
-                    slot.insert(accumulated);
-                }
-                Entry::Vacant(slot) => {
-                    slot.insert(g);
-                }
-            }
+        return Err(BackwardError::NonFinite {
+            tensor: id.get(),
+            operation: site,
         }
+        .into());
     }
-
-    Ok(WgpuGrads { grads })
+    Ok(())
 }
 
 fn add_wgpu_storage(a: &WgpuStorage, b: &WgpuStorage) -> Result<WgpuStorage> {

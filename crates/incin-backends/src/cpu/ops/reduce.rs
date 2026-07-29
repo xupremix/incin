@@ -268,7 +268,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                 // the original shape (the backward of sum is "distribute
                 // everywhere").
                 let scalar_grad = grad_out.get(&vec![0usize; grad_out.shape.len()]);
-                vec![fill_like(&t_clone, &original_shape, scalar_grad)]
+                Ok(vec![fill_like(&t_clone, &original_shape, scalar_grad)])
             }),
         });
 
@@ -303,7 +303,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                 let scalar_grad = grad_out.get(&vec![0usize; grad_out.shape.len()]);
                 // d(mean)/d(x_i) = 1/n for each element.
                 let scaled = if n > 0.0 { scalar_grad / n } else { 0.0 };
-                vec![fill_like(&t_clone, &original_shape, scaled)]
+                Ok(vec![fill_like(&t_clone, &original_shape, scaled)])
             }),
         });
 
@@ -344,10 +344,10 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                 let total: usize = original_shape.iter().product();
                 let mut vals = vec![0.0f32; total];
                 vals[best_flat_idx] = scalar_grad as f32;
-                vec![CpuStorage::from_contiguous(
+                Ok(vec![CpuStorage::from_contiguous(
                     CpuBuffer::F32(vals),
                     original_shape.to_vec(),
-                )]
+                )])
             }),
         });
 
@@ -385,10 +385,10 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                 let total: usize = original_shape.iter().product();
                 let mut vals = vec![0.0f32; total];
                 vals[best_flat_idx] = scalar_grad as f32;
-                vec![CpuStorage::from_contiguous(
+                Ok(vec![CpuStorage::from_contiguous(
                     CpuBuffer::F32(vals),
                     original_shape.to_vec(),
-                )]
+                )])
             }),
         });
 
@@ -421,12 +421,8 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                 // then broadcast back to the original shape.
                 let mut keepdim_shape = grad_out.shape.to_vec();
                 keepdim_shape.insert(dim, 1);
-                let keepdim = grad_out
-                    .reshape(&keepdim_shape)
-                    .expect("sum_dim backward: reinserting squeezed axis cannot fail");
-                let expanded = keepdim
-                    .broadcast_as(&original_shape)
-                    .expect("sum_dim backward: broadcast to original shape cannot fail");
+                let keepdim = grad_out.reshape(&keepdim_shape)?;
+                let expanded = keepdim.broadcast_as(&original_shape)?;
                 // Materialize the broadcast view (walk all elements) so the
                 // gradient is a concrete contiguous tensor, not a strided view
                 // that upstream accumulation might mis-sum.
@@ -437,10 +433,10 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                     vals.push(expanded.get(&idx) as f32);
                     increment_index(&mut idx, &original_shape);
                 }
-                vec![CpuStorage::from_contiguous(
+                Ok(vec![CpuStorage::from_contiguous(
                     CpuBuffer::F32(vals),
                     original_shape.to_vec(),
-                )]
+                )])
             }),
         });
 
@@ -475,9 +471,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                 // Backward of sum_keepdim: broadcast the keepdim gradient
                 // (which already has size 1 on `dim`) back to the original
                 // shape, then materialize it.
-                let expanded = grad_out
-                    .broadcast_as(&original_shape)
-                    .expect("sum_keepdim backward: broadcast to original shape cannot fail");
+                let expanded = grad_out.broadcast_as(&original_shape)?;
                 let total: usize = original_shape.iter().product();
                 let mut idx = vec![0usize; original_shape.len()];
                 let mut vals = Vec::with_capacity(total);
@@ -485,10 +479,10 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                     vals.push(expanded.get(&idx) as f32);
                     increment_index(&mut idx, &original_shape);
                 }
-                vec![CpuStorage::from_contiguous(
+                Ok(vec![CpuStorage::from_contiguous(
                     CpuBuffer::F32(vals),
                     original_shape.to_vec(),
-                )]
+                )])
             }),
         });
 
@@ -534,12 +528,8 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                 // relationship to sum_all).
                 let mut keepdim_shape = grad_out.shape.to_vec();
                 keepdim_shape.insert(dim, 1);
-                let keepdim = grad_out
-                    .reshape(&keepdim_shape)
-                    .expect("mean_dim backward: reinserting squeezed axis cannot fail");
-                let expanded = keepdim
-                    .broadcast_as(&original_shape)
-                    .expect("mean_dim backward: broadcast to original shape cannot fail");
+                let keepdim = grad_out.reshape(&keepdim_shape)?;
+                let expanded = keepdim.broadcast_as(&original_shape)?;
                 let total: usize = original_shape.iter().product();
                 let mut idx = vec![0usize; original_shape.len()];
                 let mut vals = Vec::with_capacity(total);
@@ -547,10 +537,10 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                     vals.push((expanded.get(&idx) / axis_len) as f32);
                     increment_index(&mut idx, &original_shape);
                 }
-                vec![CpuStorage::from_contiguous(
+                Ok(vec![CpuStorage::from_contiguous(
                     CpuBuffer::F32(vals),
                     original_shape.to_vec(),
-                )]
+                )])
             }),
         });
 
@@ -596,9 +586,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                 // Backward of mean_keepdim: broadcast the keepdim gradient
                 // (already size 1 on `dim`) back to the original shape, then
                 // scale by 1/axis_len.
-                let expanded = grad_out
-                    .broadcast_as(&original_shape)
-                    .expect("mean_keepdim backward: broadcast to original shape cannot fail");
+                let expanded = grad_out.broadcast_as(&original_shape)?;
                 let total: usize = original_shape.iter().product();
                 let mut idx = vec![0usize; original_shape.len()];
                 let mut vals = Vec::with_capacity(total);
@@ -606,10 +594,10 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                     vals.push((expanded.get(&idx) / axis_len) as f32);
                     increment_index(&mut idx, &original_shape);
                 }
-                vec![CpuStorage::from_contiguous(
+                Ok(vec![CpuStorage::from_contiguous(
                     CpuBuffer::F32(vals),
                     original_shape.to_vec(),
-                )]
+                )])
             }),
         });
 
@@ -644,11 +632,11 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &CpuStorage| {
-                vec![scatter_axis_grad(
+                Ok(vec![scatter_axis_grad(
                     grad_out,
                     &winning_flat_src_idx,
                     &original_shape,
-                )]
+                )])
             }),
         });
 
@@ -679,11 +667,11 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &CpuStorage| {
-                vec![scatter_axis_grad(
+                Ok(vec![scatter_axis_grad(
                     grad_out,
                     &winning_flat_src_idx,
                     &original_shape,
-                )]
+                )])
             }),
         });
 
@@ -717,11 +705,11 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &CpuStorage| {
-                vec![scatter_axis_grad(
+                Ok(vec![scatter_axis_grad(
                     grad_out,
                     &winning_flat_src_idx,
                     &original_shape,
-                )]
+                )])
             }),
         });
 
@@ -753,11 +741,11 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &CpuStorage| {
-                vec![scatter_axis_grad(
+                Ok(vec![scatter_axis_grad(
                     grad_out,
                     &winning_flat_src_idx,
                     &original_shape,
-                )]
+                )])
             }),
         });
 
@@ -1235,11 +1223,13 @@ mod tests {
             output_id: loss_id,
             input_ids: vec![sum_id],
             backward: Box::new(|_grad_out: &CpuStorage| {
-                // d(2 * sum_out) / d(sum_out) = 2
-                vec![CpuStorage::from_contiguous(
-                    CpuBuffer::F32(vec![2.0f32]),
-                    vec![],
-                )]
+                Ok(
+                    // d(2 * sum_out) / d(sum_out) = 2
+                    vec![CpuStorage::from_contiguous(
+                        CpuBuffer::F32(vec![2.0f32]),
+                        vec![],
+                    )],
+                )
             }),
         });
         let grads = tape::backward(&loss).unwrap();

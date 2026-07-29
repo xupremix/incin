@@ -41,6 +41,7 @@
 //! `CandleBackend::conv_transpose2d`'s own confirmed effective behavior.
 
 use incin_core::prelude::Error;
+use incin_core::prelude::{BackwardError, OperationKind};
 use incin_core::prelude::{DType, NumericOps, Result, TensorOps};
 
 use crate::cpu::CpuBackendImpl;
@@ -355,30 +356,19 @@ pub(crate) fn conv1d_impl<T: DType, D: incin_core::prelude::Device, K: DType>(
         input_ids: vec![input_id, weight_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
             // grad_out: [B, Cout, L_out] -> [B, L_out, Cout]
-            let grad_out_t = grad_out
-                .transpose(1, 2)
-                .expect("conv1d backward: transpose grad_out cannot fail");
+            let grad_out_t = grad_out.transpose(1, 2)?;
 
             let mut grad_input_groups: Vec<CpuStorage> = Vec::with_capacity(groups);
             let mut grad_weight_groups: Vec<CpuStorage> = Vec::with_capacity(groups);
             for g in 0..groups {
-                let input_g = input_capture
-                    .narrow(1, g * cin_g, cin_g)
-                    .expect("conv1d backward: narrow input group cannot fail");
-                let weight_g = weight_capture
-                    .narrow(0, g * cout_g, cout_g)
-                    .expect("conv1d backward: narrow weight group cannot fail");
-                let grad_out_g = grad_out_t
-                    .narrow(2, g * cout_g, cout_g)
-                    .expect("conv1d backward: narrow grad_out group cannot fail");
+                let input_g = input_capture.narrow(1, g * cin_g, cin_g)?;
+                let weight_g = weight_capture.narrow(0, g * cout_g, cout_g)?;
+                let grad_out_g = grad_out_t.narrow(2, g * cout_g, cout_g)?;
 
-                let weight_mat = weight_g
-                    .reshape(&[cout_g, cin_g * kernel_size])
-                    .expect("conv1d backward: reshape weight group cannot fail");
+                let weight_mat = weight_g.reshape(&[cout_g, cin_g * kernel_size])?;
 
                 // grad_cols = grad_out_g @ weight_mat : [B, L_out, Cout_g] @ [Cout_g, Cin_g*K]
-                let grad_cols = batched_matmul_impl(&grad_out_g, &weight_mat)
-                    .expect("conv1d backward: grad_cols matmul cannot fail");
+                let grad_cols = batched_matmul_impl(&grad_out_g, &weight_mat)?;
                 let grad_input_g = col2im_1d(
                     &grad_cols,
                     &[b, cin_g, len],
@@ -391,28 +381,37 @@ pub(crate) fn conv1d_impl<T: DType, D: incin_core::prelude::Device, K: DType>(
 
                 // grad_weight_mat = grad_out_g^T @ cols : [Cout_g, B*L_out] view via batched matmul
                 let cols = im2col_1d(&input_g, kernel_size, stride, padding, dilation);
-                let grad_weight_mat = batched_matmul_impl(&transpose_last2(&grad_out_g), &cols)
-                    .expect("conv1d backward: grad_weight matmul cannot fail");
+                let grad_weight_mat = batched_matmul_impl(&transpose_last2(&grad_out_g), &cols)?;
                 // grad_weight_mat: [B, Cout_g, Cin_g*K] -> sum over batch -> [Cout_g, Cin_g*K]
                 let grad_weight_summed = sum_batch_dim(&grad_weight_mat);
-                let grad_weight_g = grad_weight_summed
-                    .reshape(&[cout_g, cin_g, kernel_size])
-                    .expect("conv1d backward: reshape grad_weight group cannot fail");
+                let grad_weight_g = grad_weight_summed.reshape(&[cout_g, cin_g, kernel_size])?;
                 grad_weight_groups.push(grad_weight_g);
             }
 
             let grad_input = if groups == 1 {
-                grad_input_groups.into_iter().next().unwrap()
+                grad_input_groups
+                    .into_iter()
+                    .next()
+                    .ok_or(BackwardError::Recipe {
+                        operation: OperationKind::Conv2d,
+                        reason: "the single convolution group produced no input gradient",
+                    })?
             } else {
                 concat_along_dim1(&grad_input_groups)
             };
             let grad_weight = if groups == 1 {
-                grad_weight_groups.into_iter().next().unwrap()
+                grad_weight_groups
+                    .into_iter()
+                    .next()
+                    .ok_or(BackwardError::Recipe {
+                        operation: OperationKind::Conv2d,
+                        reason: "the single convolution group produced no weight gradient",
+                    })?
             } else {
                 concat_along_dim0(&grad_weight_groups)
             };
 
-            vec![grad_input, grad_weight]
+            Ok(vec![grad_input, grad_weight])
         }),
     });
 
@@ -498,32 +497,19 @@ pub(crate) fn conv2d_impl<T: DType, D: incin_core::prelude::Device, K: DType>(
         input_ids: vec![input_id, weight_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
             // grad_out: [B, Cout, H_out, W_out] -> [B, Cout, H_out*W_out] -> [B, H_out*W_out, Cout]
-            let grad_out_flat = grad_out
-                .reshape(&[b, cout, h_out * w_out])
-                .expect("conv2d backward: reshape grad_out cannot fail");
-            let grad_out_t = grad_out_flat
-                .transpose(1, 2)
-                .expect("conv2d backward: transpose grad_out cannot fail");
+            let grad_out_flat = grad_out.reshape(&[b, cout, h_out * w_out])?;
+            let grad_out_t = grad_out_flat.transpose(1, 2)?;
 
             let mut grad_input_groups: Vec<CpuStorage> = Vec::with_capacity(groups);
             let mut grad_weight_groups: Vec<CpuStorage> = Vec::with_capacity(groups);
             for g in 0..groups {
-                let input_g = input_capture
-                    .narrow(1, g * cin_g, cin_g)
-                    .expect("conv2d backward: narrow input group cannot fail");
-                let weight_g = weight_capture
-                    .narrow(0, g * cout_g, cout_g)
-                    .expect("conv2d backward: narrow weight group cannot fail");
-                let grad_out_g = grad_out_t
-                    .narrow(2, g * cout_g, cout_g)
-                    .expect("conv2d backward: narrow grad_out group cannot fail");
+                let input_g = input_capture.narrow(1, g * cin_g, cin_g)?;
+                let weight_g = weight_capture.narrow(0, g * cout_g, cout_g)?;
+                let grad_out_g = grad_out_t.narrow(2, g * cout_g, cout_g)?;
 
-                let weight_mat = weight_g
-                    .reshape(&[cout_g, cin_g * kh * kw])
-                    .expect("conv2d backward: reshape weight group cannot fail");
+                let weight_mat = weight_g.reshape(&[cout_g, cin_g * kh * kw])?;
 
-                let grad_cols = batched_matmul_impl(&grad_out_g, &weight_mat)
-                    .expect("conv2d backward: grad_cols matmul cannot fail");
+                let grad_cols = batched_matmul_impl(&grad_out_g, &weight_mat)?;
                 let grad_input_g = col2im_2d(
                     &grad_cols,
                     &[b, cin_g, h, w],
@@ -536,27 +522,36 @@ pub(crate) fn conv2d_impl<T: DType, D: incin_core::prelude::Device, K: DType>(
                 grad_input_groups.push(grad_input_g);
 
                 let cols = im2col_2d(&input_g, kh, kw, stride, padding, dilation);
-                let grad_weight_mat = batched_matmul_impl(&transpose_last2(&grad_out_g), &cols)
-                    .expect("conv2d backward: grad_weight matmul cannot fail");
+                let grad_weight_mat = batched_matmul_impl(&transpose_last2(&grad_out_g), &cols)?;
                 let grad_weight_summed = sum_batch_dim(&grad_weight_mat);
-                let grad_weight_g = grad_weight_summed
-                    .reshape(&[cout_g, cin_g, kh, kw])
-                    .expect("conv2d backward: reshape grad_weight group cannot fail");
+                let grad_weight_g = grad_weight_summed.reshape(&[cout_g, cin_g, kh, kw])?;
                 grad_weight_groups.push(grad_weight_g);
             }
 
             let grad_input = if groups == 1 {
-                grad_input_groups.into_iter().next().unwrap()
+                grad_input_groups
+                    .into_iter()
+                    .next()
+                    .ok_or(BackwardError::Recipe {
+                        operation: OperationKind::Conv2d,
+                        reason: "the single convolution group produced no input gradient",
+                    })?
             } else {
                 concat_along_dim1(&grad_input_groups)
             };
             let grad_weight = if groups == 1 {
-                grad_weight_groups.into_iter().next().unwrap()
+                grad_weight_groups
+                    .into_iter()
+                    .next()
+                    .ok_or(BackwardError::Recipe {
+                        operation: OperationKind::Conv2d,
+                        reason: "the single convolution group produced no weight gradient",
+                    })?
             } else {
                 concat_along_dim0(&grad_weight_groups)
             };
 
-            vec![grad_input, grad_weight]
+            Ok(vec![grad_input, grad_weight])
         }),
     });
 
@@ -696,8 +691,7 @@ pub(crate) fn conv_transpose2d_impl<T: DType, D: incin_core::prelude::Device, K:
             } else {
                 grad_out
                     .narrow(2, 0, h_nat)
-                    .and_then(|t| t.narrow(3, 0, w_nat))
-                    .expect("conv_transpose2d backward: narrow away output_padding cannot fail")
+                    .and_then(|t| t.narrow(3, 0, w_nat))?
             };
 
             // conv_transpose2d's OWN backward w.r.t. its input is exactly
@@ -710,18 +704,11 @@ pub(crate) fn conv_transpose2d_impl<T: DType, D: incin_core::prelude::Device, K:
             // orientation) to recover grad_input.
             let grad_out_cols = im2col_2d(&grad_out_nat, kh, kw, stride, padding, dilation);
             // grad_out_cols: [B, H*W, Cout*Kh*Kw] @ weight_mat^T: [Cout*Kh*Kw, Cin] -> [B, H*W, Cin]
-            let weight_mat = weight_capture
-                .reshape(&[cin, cout * kh * kw])
-                .expect("conv_transpose2d backward: reshape weight cannot fail");
+            let weight_mat = weight_capture.reshape(&[cin, cout * kh * kw])?;
             let grad_input_flat =
-                batched_matmul_impl(&grad_out_cols, &transpose_last2(&weight_mat))
-                    .expect("conv_transpose2d backward: grad_input matmul cannot fail");
+                batched_matmul_impl(&grad_out_cols, &transpose_last2(&weight_mat))?;
             // [B, H*W, Cin] -> [B, Cin, H*W] -> [B, Cin, H, W]
-            let grad_input = grad_input_flat
-                .transpose(1, 2)
-                .expect("conv_transpose2d backward: transpose grad_input cannot fail")
-                .reshape(&[b, cin, h, w])
-                .expect("conv_transpose2d backward: reshape grad_input cannot fail");
+            let grad_input = grad_input_flat.transpose(1, 2)?.reshape(&[b, cin, h, w])?;
 
             // grad_weight follows the same per-position outer-product-and-sum
             // structure conv2d_impl's own grad_weight closure uses, with
@@ -731,21 +718,14 @@ pub(crate) fn conv_transpose2d_impl<T: DType, D: incin_core::prelude::Device, K:
             // versa) — this swap is the least-obvious part of this reuse:
             // grad_weight_mat = input_t^T @ grad_out_cols :
             // [Cin, B*H*W] view via batched matmul against [B, H*W, Cout*Kh*Kw].
-            let input_flat = input_capture
-                .reshape(&[b, cin, h * w])
-                .expect("conv_transpose2d backward: reshape input cannot fail");
-            let input_t = input_flat
-                .transpose(1, 2)
-                .expect("conv_transpose2d backward: transpose input cannot fail");
-            let grad_weight_mat = batched_matmul_impl(&transpose_last2(&input_t), &grad_out_cols)
-                .expect("conv_transpose2d backward: grad_weight matmul cannot fail");
+            let input_flat = input_capture.reshape(&[b, cin, h * w])?;
+            let input_t = input_flat.transpose(1, 2)?;
+            let grad_weight_mat = batched_matmul_impl(&transpose_last2(&input_t), &grad_out_cols)?;
             // grad_weight_mat: [B, Cin, Cout*Kh*Kw] -> sum over batch -> [Cin, Cout*Kh*Kw]
             let grad_weight_summed = sum_batch_dim(&grad_weight_mat);
-            let grad_weight = grad_weight_summed
-                .reshape(&[cin, cout, kh, kw])
-                .expect("conv_transpose2d backward: reshape grad_weight cannot fail");
+            let grad_weight = grad_weight_summed.reshape(&[cin, cout, kh, kw])?;
 
-            vec![grad_input, grad_weight]
+            Ok(vec![grad_input, grad_weight])
         }),
     });
 

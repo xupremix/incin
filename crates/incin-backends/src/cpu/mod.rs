@@ -119,11 +119,6 @@ impl<T: DType, D: Device> incin_core::prelude::Backend for CpuBackendImpl<T, D> 
         tape::backward(t)
     }
 
-    /// `backward_with_nan_check`.
-    fn backward_with_nan_check<K: DType>(t: &Self::Storage<K>) -> Result<Self::Grads> {
-        tape::backward_with_nan_check(t)
-    }
-
     /// `get_grad`.
     fn get_grad<K: DType>(
         t: &Self::Storage<K>,

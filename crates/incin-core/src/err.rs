@@ -39,6 +39,69 @@ impl From<crate::exec::capability::UnsupportedReason> for BackendError {
     }
 }
 
+/// Structured failure raised while walking the autograd tape backward
+/// (`GRD-005`).
+///
+/// PROPOSALS.md sec. 3.9: "Backward closures must return structured errors.
+/// NaN checking is an execution policy applied consistently across backends,
+/// not a panic-only backend helper." Both halves of that produce one of these.
+/// Before this type a recipe that could not produce a gradient had exactly one
+/// way to say so, and 115 sites across three backends took it.
+#[non_exhaustive]
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
+pub enum BackwardError {
+    #[error("gradient for tensor {tensor} is not finite (produced by {operation})")]
+    /// A gradient held a `NaN` or an infinity, and the ambient
+    /// [`NanPolicy`](crate::exec::NanPolicy) asked for that to be caught.
+    ///
+    /// The tensor is named because the value of checking at all is knowing
+    /// *which* operation first produced it; a pass that reports only that some
+    /// gradient went non-finite leaves the caller bisecting the graph.
+    NonFinite {
+        /// The tensor whose accumulated gradient failed the check.
+        tensor: u64,
+        /// Where in the pass it was found.
+        operation: NonFiniteSite,
+    },
+
+    #[error("backward recipe for {operation} could not produce a gradient: {reason}")]
+    /// A recipe reached a state it has no gradient for.
+    ///
+    /// Distinct from a kernel failure, which arrives as a
+    /// [`BackendError`](crate::err::BackendError) through the same `?`: this
+    /// is the recipe's own bookkeeping, and before `GRD-005` every one of them
+    /// was an `unwrap` on an `Option` the author believed could not be `None`.
+    Recipe {
+        /// The forward operation whose gradient was being computed.
+        operation: crate::shapes::error::OperationKind,
+        /// What the recipe expected and did not find.
+        reason: &'static str,
+    },
+}
+
+/// Where a non-finite gradient was found.
+///
+/// A contribution and an accumulation fail for different reasons — one recipe
+/// produced a bad value, or two individually finite contributions summed to an
+/// infinity — and a report that cannot tell them apart sends the reader to the
+/// wrong place.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NonFiniteSite {
+    /// A single recipe's output, before it was summed with anything.
+    Contribution,
+    /// The running total after summing two contributions.
+    Accumulation,
+}
+
+impl core::fmt::Display for NonFiniteSite {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(match self {
+            Self::Contribution => "a backward recipe",
+            Self::Accumulation => "accumulating two contributions",
+        })
+    }
+}
+
 /// Convenience type alias for `Result<T, Error>`.
 pub type Result<T> = core::result::Result<T, Error>;
 
@@ -49,6 +112,10 @@ pub enum Error {
     #[error(transparent)]
     /// A descriptor executor rejected or failed a validated request.
     Backend(#[from] BackendError),
+
+    #[error(transparent)]
+    /// A backward pass failed (`GRD-005`).
+    Backward(#[from] BackwardError),
 
     #[error("Backend '{backend}' is unavailable in this build")]
     /// A runtime-selected backend was not enabled.
