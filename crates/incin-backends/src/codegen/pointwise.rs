@@ -1,8 +1,8 @@
 //! Pointwise kernel specification and target emitters for CUDA, WGSL, and MSL (PRF-007).
 
+use alloc::{boxed::Box, string::String, vec::Vec};
+use core::fmt::Write;
 use incin_core::prelude::DTypeId;
-
-use std::fmt::Write;
 
 /// Unary pointwise mathematical operators.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
