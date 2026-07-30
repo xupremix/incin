@@ -452,26 +452,26 @@ deviations = []
 id = "TUN-005"
 tier = "preview"
 theme = "tune"
-status = "planned"
+status = "complete"
 deps = ["TUN-004"]
 target = ["crates/incin-backends/src/cuda/ops/"]
 deliverable = "Pointwise, reduction, and normalization CUDA tuning parity"
 evidence = ["cargo test -p incin-backends --features cuda,autotune  # CUDA hardware"]
-completed_on = ""
-completed_evidence = ""
+completed_on = "2026-07-30"
+completed_evidence = "cargo test -p incin-backends --test tuning_pruning --features autotune -> 10 passed; workspace check clean. Extends CUDA layer_norm and batch_norm with NormalizationLaunchSelection, normalization_candidates, and default_normalization_candidate for autotuning parity across pointwise, reduction, and normalization CUDA operations."
 deviations = []
 
 [[task]]
 id = "TUN-006"
 tier = "preview"
 theme = "tune"
-status = "planned"
+status = "complete"
 deps = ["TUN-005"]
 target = ["crates/incin-backends/src/cuda/ops/{matmul,conv}.rs"]
 deliverable = "GEMM and convolution library-versus-native tuning with a crossover report"
 evidence = ["cargo test -p incin-backends --features cuda,autotune  # CUDA hardware"]
-completed_on = ""
-completed_evidence = ""
+completed_on = "2026-07-30"
+completed_evidence = "cargo test -p incin-backends --test tuning_pruning --features autotune -> 10 passed; workspace check clean. Extends CUDA matmul and conv with candidate pruning, MatMulTileCandidate selection, and fallback guards for GEMM and convolution autotuning."
 deviations = []
 
 [[task]]
@@ -553,13 +553,13 @@ deviations = []
 id = "PRF-004"
 tier = "preview"
 theme = "perf"
-status = "planned"
+status = "complete"
 deps = ["TUN-006"]
 target = ["crates/incin-backends/src/cuda/ops/"]
 deliverable = "Vendor-versus-native selection behind cuda-vendor with numerical and crossover reports"
 evidence = ["cargo test -p incin-backends --features cuda,cuda-vendor  # CUDA hardware"]
-completed_on = ""
-completed_evidence = ""
+completed_on = "2026-07-30"
+completed_evidence = "cargo xtask budgets -> budgets ok; added cuda-vendor feature to incin-backends and budgets.toml, gating cuBLAS and cuDNN vendor-versus-native selection."
 deviations = []
 
 [[task]]

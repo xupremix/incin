@@ -82,6 +82,79 @@ fn ensure_normalization_loaded(
     Ok(())
 }
 
+struct NormalizationLaunchSelection {
+    candidate: crate::tuning::LaunchCandidate,
+    #[cfg(feature = "autotune")]
+    tuning_permit: Option<crate::tuning::TuningPermit>,
+}
+
+fn normalization_launch_selection(
+    context: &cudarc::driver::CudaContext,
+    kernel: &crate::kernel::RenderedKernel,
+    batch_size: usize,
+    norm_size: usize,
+    is_layer_norm: bool,
+) -> Result<NormalizationLaunchSelection> {
+    let candidates = crate::tuning::normalization_candidates(is_layer_norm);
+    let fallback = crate::tuning::default_normalization_candidate(&candidates)?;
+    #[cfg(feature = "autotune")]
+    {
+        let key = crate::tuning::TuningKey::new(
+            crate::tuning::identity::TuningEnvironmentFingerprint::<
+                incin_core::prelude::Cuda,
+            >::from_cuda_context(context)?
+            .erase(),
+            &kernel.key,
+            crate::tuning::WorkloadBucket::normalization(batch_size, norm_size),
+        );
+        match crate::tuning::claim_tuning(key, &candidates)? {
+            crate::tuning::TuningDecision::Cached(tuned) => Ok(NormalizationLaunchSelection {
+                candidate: tuned.candidate,
+                tuning_permit: None,
+            }),
+            crate::tuning::TuningDecision::Measure(permit) => Ok(NormalizationLaunchSelection {
+                candidate: fallback,
+                tuning_permit: Some(permit),
+            }),
+        }
+    }
+    #[cfg(not(feature = "autotune"))]
+    {
+        let _ = (context, kernel, batch_size, norm_size, is_layer_norm);
+        Ok(NormalizationLaunchSelection {
+            candidate: fallback,
+        })
+    }
+}
+
+#[cfg(feature = "cuda")]
+fn empirically_select_normalization_candidate<F>(
+    stream: &cudarc::driver::CudaStream,
+    selection: NormalizationLaunchSelection,
+    is_layer_norm: bool,
+    mut launch: F,
+) -> Result<crate::tuning::LaunchCandidate>
+where
+    F: FnMut(crate::tuning::LaunchCandidate) -> Result<()>,
+{
+    #[cfg(feature = "autotune")]
+    if let Some(permit) = selection.tuning_permit {
+        let candidates = crate::tuning::normalization_candidates(is_layer_norm);
+        let mut measurements = Vec::with_capacity(candidates.len());
+        for candidate in candidates {
+            measurements.push(crate::tuning::measure_cuda_candidate(
+                stream,
+                candidate,
+                || launch(candidate),
+            )?);
+        }
+        return Ok(permit.record(&measurements)?.candidate);
+    }
+    #[cfg(not(feature = "autotune"))]
+    let _ = (stream, is_layer_norm, &mut launch);
+    Ok(selection.candidate)
+}
+
 #[cfg(feature = "cuda")]
 pub(crate) fn launch_layer_norm(
     input: &CudaStorage,
@@ -139,23 +212,16 @@ pub(crate) fn launch_layer_norm(
         return Ok(CudaStorage::new(Arc::new(output), input.shape.to_vec()));
     }
 
+    let selection = normalization_launch_selection(
+        &buffer.device,
+        &kernel,
+        batch_size,
+        norm_size,
+        true,
+    )?;
     ensure_normalization_loaded(buffer.device_id, &kernel)?;
     let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(buffer.device_id);
     let function = dispatcher.get_function(&kernel.cache_key, &kernel.entry_point)?;
-    let warp_count = 256usize / 32;
-    let shared_bytes = warp_count
-        .checked_mul(policy.accumulator.element_size())
-        .and_then(|bytes| bytes.checked_mul(2))
-        .and_then(|bytes| bytes.checked_add(warp_count * core::mem::size_of::<i32>()))
-        .and_then(|bytes| u32::try_from(bytes).ok())
-        .ok_or_else(|| Error::Msg("CUDA layer norm shared-memory size overflow".into()))?;
-    let grid = u32::try_from(batch_size)
-        .map_err(|_| Error::Msg("CUDA layer norm batch count exceeds u32 grid ABI".into()))?;
-    let config = cudarc::driver::LaunchConfig {
-        grid_dim: (grid, 1, 1),
-        block_dim: (256, 1, 1),
-        shared_mem_bytes: shared_bytes,
-    };
     let bias_storage = bias.unwrap_or(weight);
     let has_bias = i32::from(bias.is_some());
 
@@ -164,21 +230,41 @@ pub(crate) fn launch_layer_norm(
             Error::Msg("fresh CUDA layer norm output was unexpectedly shared".into())
         })?;
         use cudarc::driver::PushKernelArg;
-        stream
-            .launch_builder(&function)
-            .arg(&*buffer.data)
-            .arg(&*weight.buffer.data)
-            .arg(&*bias_storage.buffer.data)
-            .arg(output_u8)
-            .arg(&eps)
-            .arg(&checked_i32(norm_size, "normalized axis length")?)
-            .arg(&has_bias)
-            .arg(&checked_i32(batch_size, "batch count")?)
-            .arg(&checked_i32(input.offset_elements, "input offset")?)
-            .arg(&checked_i32(weight.offset_elements, "weight offset")?)
-            .arg(&checked_i32(bias_storage.offset_elements, "bias offset")?)
-            .launch(config)
-            .map_err(|error| Error::Msg(format!("CUDA layer norm launch failed: {error:?}")))?;
+        let mut launch = |candidate: crate::tuning::LaunchCandidate| -> Result<()> {
+            let block_size = u32::from(candidate.block_size);
+            let warp_count = (block_size as usize) / 32;
+            let shared_bytes = warp_count
+                .checked_mul(policy.accumulator.element_size())
+                .and_then(|bytes| bytes.checked_mul(2))
+                .and_then(|bytes| bytes.checked_add(warp_count * core::mem::size_of::<i32>()))
+                .and_then(|bytes| u32::try_from(bytes).ok())
+                .ok_or_else(|| Error::Msg("CUDA layer norm shared-memory size overflow".into()))?;
+            let grid = u32::try_from(batch_size)
+                .map_err(|_| Error::Msg("CUDA layer norm batch count exceeds u32 grid ABI".into()))?;
+            let config = cudarc::driver::LaunchConfig {
+                grid_dim: (grid, 1, 1),
+                block_dim: (block_size, 1, 1),
+                shared_mem_bytes: shared_bytes,
+            };
+            stream
+                .launch_builder(&function)
+                .arg(&*buffer.data)
+                .arg(&*weight.buffer.data)
+                .arg(&*bias_storage.buffer.data)
+                .arg(&mut *output_u8)
+                .arg(&eps)
+                .arg(&checked_i32(norm_size, "normalized axis length")?)
+                .arg(&has_bias)
+                .arg(&checked_i32(batch_size, "batch count")?)
+                .arg(&checked_i32(input.offset_elements, "input offset")?)
+                .arg(&checked_i32(weight.offset_elements, "weight offset")?)
+                .arg(&checked_i32(bias_storage.offset_elements, "bias offset")?)
+                .launch(config)
+                .map(|_| ())
+                .map_err(|error| Error::Msg(format!("CUDA layer norm launch failed: {error:?}")))
+        };
+        let candidate = empirically_select_normalization_candidate(&stream, selection, true, &mut launch)?;
+        launch(candidate)?;
     }
 
     Ok(CudaStorage::new(Arc::new(output), input.shape.to_vec()))
@@ -222,6 +308,13 @@ pub(crate) fn launch_batch_norm(
         "batch_norm",
     )?;
     let kernel = crate::kernel::render_cuda_normalization("batch_norm", buffer.dtype)?;
+    let selection = normalization_launch_selection(
+        &buffer.device,
+        &kernel,
+        total_elements,
+        num_channels,
+        false,
+    )?;
     let stream = buffer.device.default_stream();
     let mut output = CudaBuffer {
         len: total_elements,
@@ -247,13 +340,6 @@ pub(crate) fn launch_batch_norm(
     ensure_normalization_loaded(buffer.device_id, &kernel)?;
     let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(buffer.device_id);
     let function = dispatcher.get_function(&kernel.cache_key, &kernel.entry_point)?;
-    let work_items = u32::try_from(total_elements)
-        .map_err(|_| Error::Msg("CUDA batch norm element count exceeds u32 grid ABI".into()))?;
-    let config = cudarc::driver::LaunchConfig {
-        grid_dim: (work_items.div_ceil(256), 1, 1),
-        block_dim: (256, 1, 1),
-        shared_mem_bytes: 0,
-    };
     let weight_storage = weight.unwrap_or(input);
     let bias_storage = bias.unwrap_or(input);
     let mean_storage = running_mean.unwrap_or(input);
@@ -264,35 +350,48 @@ pub(crate) fn launch_batch_norm(
             Error::Msg("fresh CUDA batch norm output was unexpectedly shared".into())
         })?;
         use cudarc::driver::PushKernelArg;
-        stream
-            .launch_builder(&function)
-            .arg(&*buffer.data)
-            .arg(&*weight_storage.buffer.data)
-            .arg(&*bias_storage.buffer.data)
-            .arg(&*mean_storage.buffer.data)
-            .arg(&*variance_storage.buffer.data)
-            .arg(output_u8)
-            .arg(&eps)
-            .arg(&checked_i32(num_channels, "channel count")?)
-            .arg(&checked_i32(spatial_size, "spatial size")?)
-            .arg(&checked_i32(total_elements, "element count")?)
-            .arg(&i32::from(weight.is_some()))
-            .arg(&i32::from(bias.is_some()))
-            .arg(&i32::from(running_mean.is_some()))
-            .arg(&i32::from(running_variance.is_some()))
-            .arg(&checked_i32(input.offset_elements, "input offset")?)
-            .arg(&checked_i32(
-                weight_storage.offset_elements,
-                "weight offset",
-            )?)
-            .arg(&checked_i32(bias_storage.offset_elements, "bias offset")?)
-            .arg(&checked_i32(mean_storage.offset_elements, "mean offset")?)
-            .arg(&checked_i32(
-                variance_storage.offset_elements,
-                "variance offset",
-            )?)
-            .launch(config)
-            .map_err(|error| Error::Msg(format!("CUDA batch norm launch failed: {error:?}")))?;
+        let mut launch = |candidate: crate::tuning::LaunchCandidate| -> Result<()> {
+            let block_size = u32::from(candidate.block_size);
+            let work_items = u32::try_from(total_elements)
+                .map_err(|_| Error::Msg("CUDA batch norm element count exceeds u32 grid ABI".into()))?;
+            let config = cudarc::driver::LaunchConfig {
+                grid_dim: (work_items.div_ceil(block_size), 1, 1),
+                block_dim: (block_size, 1, 1),
+                shared_mem_bytes: 0,
+            };
+            stream
+                .launch_builder(&function)
+                .arg(&*buffer.data)
+                .arg(&*weight_storage.buffer.data)
+                .arg(&*bias_storage.buffer.data)
+                .arg(&*mean_storage.buffer.data)
+                .arg(&*variance_storage.buffer.data)
+                .arg(&mut *output_u8)
+                .arg(&eps)
+                .arg(&checked_i32(num_channels, "channel count")?)
+                .arg(&checked_i32(spatial_size, "spatial size")?)
+                .arg(&checked_i32(total_elements, "element count")?)
+                .arg(&i32::from(weight.is_some()))
+                .arg(&i32::from(bias.is_some()))
+                .arg(&i32::from(running_mean.is_some()))
+                .arg(&i32::from(running_variance.is_some()))
+                .arg(&checked_i32(input.offset_elements, "input offset")?)
+                .arg(&checked_i32(
+                    weight_storage.offset_elements,
+                    "weight offset",
+                )?)
+                .arg(&checked_i32(bias_storage.offset_elements, "bias offset")?)
+                .arg(&checked_i32(mean_storage.offset_elements, "mean offset")?)
+                .arg(&checked_i32(
+                    variance_storage.offset_elements,
+                    "variance offset",
+                )?)
+                .launch(config)
+                .map(|_| ())
+                .map_err(|error| Error::Msg(format!("CUDA batch norm launch failed: {error:?}")))
+        };
+        let candidate = empirically_select_normalization_candidate(&stream, selection, false, &mut launch)?;
+        launch(candidate)?;
     }
 
     Ok(CudaStorage::new(Arc::new(output), input.shape.to_vec()))

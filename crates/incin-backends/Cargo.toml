@@ -31,6 +31,8 @@ cpu = ["std"]
 cpu-blas = ["std", "cpu", "dep:matrixmultiply"]
 # Enables Incin's native CUDA backend through cudarc.
 cuda = ["std", "dep:cudarc", "incin-core/cuda"]
+# Gates cuBLAS / cuDNN vendor library call sites.
+cuda-vendor = ["cuda"]
 # Enables Incin's cross-platform GPU backend through wgpu.
 wgpu = ["std", "dep:wgpu", "dep:pollster", "incin-core/wgpu"]
 # Enables Incin's native Metal backend for Apple Silicon.

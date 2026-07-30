@@ -336,6 +336,10 @@ name = "cuda"
 enables = ["std", "dep:cudarc", "incin-core/cuda"]
 
 [[feature_crate.feature]]
+name = "cuda-vendor"
+enables = ["cuda"]
+
+[[feature_crate.feature]]
 name = "wgpu"
 enables = ["std", "dep:wgpu", "dep:pollster", "incin-core/wgpu"]
 

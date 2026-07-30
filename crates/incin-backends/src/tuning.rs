@@ -65,6 +65,14 @@ impl WorkloadBucket {
             packed_alignment: false,
         }
     }
+
+    pub(crate) fn normalization(batch_size: usize, norm_size: usize) -> Self {
+        Self {
+            elements_log2: size_log2_bucket(batch_size),
+            reduction_log2: size_log2_bucket(norm_size),
+            packed_alignment: false,
+        }
+    }
 }
 
 #[cfg(any(feature = "autotune", test))]
@@ -175,6 +183,28 @@ pub(crate) fn default_reduction_candidate(
         .copied()
         .find(|candidate| candidate.block_size == 256)
         .ok_or_else(|| Error::Msg("reduction candidate set has no 256-thread fallback".into()))
+}
+
+pub(crate) fn normalization_candidates(is_layer_norm: bool) -> Vec<LaunchCandidate> {
+    let access = if is_layer_norm {
+        KernelAccess::Welford
+    } else {
+        KernelAccess::Scalar { unroll_width: 1 }
+    };
+    [128, 256, 512]
+        .into_iter()
+        .map(|block_size| LaunchCandidate { block_size, access })
+        .collect()
+}
+
+pub(crate) fn default_normalization_candidate(
+    candidates: &[LaunchCandidate],
+) -> Result<LaunchCandidate> {
+    candidates
+        .iter()
+        .copied()
+        .find(|candidate| candidate.block_size == 256)
+        .ok_or_else(|| Error::Msg("normalization candidate set has no 256-thread fallback".into()))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -513,6 +543,26 @@ mod tests {
             LaunchCandidate {
                 block_size: 256,
                 access: KernelAccess::WarpReduction,
+            }
+        );
+
+        let normalization_ln = normalization_candidates(true);
+        assert_eq!(normalization_ln.len(), 3);
+        assert_eq!(
+            default_normalization_candidate(&normalization_ln).unwrap(),
+            LaunchCandidate {
+                block_size: 256,
+                access: KernelAccess::Welford,
+            }
+        );
+
+        let normalization_bn = normalization_candidates(false);
+        assert_eq!(normalization_bn.len(), 3);
+        assert_eq!(
+            default_normalization_candidate(&normalization_bn).unwrap(),
+            LaunchCandidate {
+                block_size: 256,
+                access: KernelAccess::Scalar { unroll_width: 1 },
             }
         );
     }
