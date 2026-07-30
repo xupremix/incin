@@ -20,7 +20,7 @@ use crate::tensor::base::Dyn;
 /// Runtime projection of a compile-time placement.
 ///
 /// Mesh identity is deliberately absent. A placement typestate names a logical
-/// mesh type, but [`MeshId`](crate::dist::mesh::MeshId) is produced only after
+/// mesh type, but `MeshId` is produced only after
 /// that mesh is bound to physical devices. Putting a `MeshId` here would force
 /// [`Placement::to_incin`] either to fabricate one or to read runtime state
 /// from a static marker. Distributed descriptors pair this logical projection
