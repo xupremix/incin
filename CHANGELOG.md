@@ -9,6 +9,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- **Distributed placement proofs (`DST-003`, `incin-core`'s `distributed`
+  feature):** `Replicated`, `Sharded`, `Partial`, and `PipelineStage` extend
+  the existing `Local` placement typestate, with `PlacementKind` as their
+  runtime projection. `ShardDivisible` proves an exact typenum quotient through
+  a zero `Rem`; dynamic extents use the same rule through `validate_shard`.
+  `LegalTransition` admits only identity, local shard, all-gather, all-reduce,
+  and reduce-scatter, while `CompletePlacement` prevents an unreduced
+  `Partial` from reaching an ordinary consumer. `PlacementTransitionRule`
+  validates typed global shape, descriptor output, input placements, and every
+  local shape against mesh-derived world, tensor, and pipeline degrees before
+  minting the private-field, private-constructor
+  `ValidatedDistributed`. Physical mesh identity remains supplied by
+  `DeviceMesh`, and executable collective ordering remains `DST-007`.
 - **Typed logical device meshes (`DST-001`, `incin-core`'s `distributed`
   feature):** `incin_core::dist::mesh` adds `MeshSpec<Data<DP>,
   TensorParallel<TP>, Pipeline<PP>>` and `ValidMesh`, the compile-time half of

@@ -1,11 +1,10 @@
 //! Shared checks for the trybuild suites.
 //!
-//! There are two compile-fail directories, because `tests/mesh_compile_fail/`
-//! needs the non-default `distributed` feature and cases in
-//! `tests/compile_fail/` are built without it — a mesh case sitting there would
-//! fail with "path does not resolve", which is precisely the scaffolding
-//! failure [`compile_fail_cases_name_their_reason`] exists to catch. Two
-//! directories is not two properties, so the property lives here once.
+//! Separate feature and task-focused compile-fail directories keep each
+//! acceptance command scoped to the rules it owns. A mesh case sitting in the
+//! default suite, for example, would fail with "path does not resolve" when
+//! the non-default feature is absent. Multiple directories are not multiple
+//! properties, so the registry check lives here once.
 
 use std::collections::BTreeMap;
 use std::fs;

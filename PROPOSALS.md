@@ -1140,10 +1140,10 @@ pub struct PipelineStage<Mesh, const INDEX: usize>(PhantomData<Mesh>);
 #[non_exhaustive]
 pub enum PlacementKind {
     Local,
-    Replicated { mesh: MeshId },
-    Sharded { mesh: MeshId, axis: Axis },
-    Partial { mesh: MeshId, reduction: ReduceOp },
-    PipelineStage { mesh: MeshId, index: usize },
+    Replicated,
+    Sharded { axis: usize },
+    Partial { reduction: ReduceOp },
+    PipelineStage { index: usize },
 }
 
 /// `StorageBackend` is defined once, in §1.2.4. This is the placement half of
@@ -1164,6 +1164,12 @@ where
     _marker: PhantomData<(S, K, G, P)>,
 }
 ```
+
+`PlacementKind` is the runtime projection of the logical typestate and therefore
+contains only facts the type carries. A physical `MeshId` does not exist until
+`DeviceMesh::bind`; distributed execution pairs the validated placement with
+that separately bound mesh rather than fabricating an id inside the static
+`Placement::kind()` method.
 
 The field list above is illustrative of the *added* placement dimension. The
 concrete struct in `crates/incin-core/src/tensor/base.rs` additionally carries
@@ -1190,14 +1196,13 @@ local sums; an all-reduce turns them into `Replicated`. An API requiring a
 complete tensor cannot consume `Partial<_>`.
 
 ```rust
-pub trait DistributedRule<Inputs, Mesh> {
+pub trait DistributedRule<Inputs> {
     type GlobalOutput: Shape;
-    type OutputPlacement;
-    type Descriptor;
+    type OutputPlacement: Placement;
+    type Descriptor: OperationSpec;
 
     fn lower_distributed(
         inputs: &Inputs,
-        mesh: &Mesh,
     ) -> Result<ValidatedDistributed<Self::Descriptor>, DistributedError>;
 }
 
@@ -1210,7 +1215,7 @@ pub struct ValidatedDistributed<O> {
     local_shapes: Vec<ShapeBuf>,
     input_placements: PlacementBuf,
     output_placement: PlacementKind,
-    collectives: CollectivePlan,
+    transition: PlacementTransition,
 }
 
 impl<O> ValidatedDistributed<O> {
@@ -1219,7 +1224,7 @@ impl<O> ValidatedDistributed<O> {
     pub fn local_shapes(&self) -> &[ShapeBuf];
     pub fn input_placements(&self) -> &PlacementBuf;
     pub fn output_placement(&self) -> PlacementKind;
-    pub fn collectives(&self) -> &CollectivePlan;
+    pub fn transition(&self) -> PlacementTransition;
 
     // No public constructor, checked or unchecked.
     pub(crate) fn new(/* validated fields */) -> Self;
@@ -1252,7 +1257,7 @@ can prove:
 - integral local GEMM/convolution dimensions;
 - producer/consumer placement compatibility;
 - valid transitions between `Partial`, `Sharded`, and `Replicated`;
-- pipeline-stage indices and mesh cardinality;
+- pipeline-stage identity at compile time and index/cardinality at runtime;
 - collective input/output placement semantics.
 
 Named and dynamic dimensions use the same rules as checked runtime guards. For
@@ -3125,11 +3130,49 @@ dependency of this row because binding will consult the registry through its
 `distributed` feature — a `DeviceMesh` that no tensor can be placed on is still
 not something the facade takes.
 
-The next eligible row is `DST-003`, which turns a `DeviceMesh` into something a
-tensor can be placed on and is the reason the facade still has nothing to
-enable. `DST-005` and `DST-006` are unblocked by this row and are where
-`TopologyProbe` acquires its first real implementor; `GRD-004`, the only newly
-eligible Core-tier row, is unrelated to this track.
+`DST-003` adds the logical placement proof between those meshes and the tensors
+that will carry them. The distributed marker types implement `Placement` only
+over `ValidMesh`: a placement cannot use an arbitrary marker as a mesh and
+silently bypass `DST-001`. `ShardDivisible<Degree>` is the static half of the
+rule. Its one blanket impl requires both `Div` and `Rem`, and requires the
+remainder to be exactly `U0`, so `U12` over `U3` projects a local `U4` and
+`U10` over `U3` has no implementation. `validate_shard` applies the same rule
+after a dynamic dimension exists.
+
+Placement changes are constructive too. `LegalTransition<To>` exists for
+identity, replicated-to-sharded local selection, sharded-to-replicated
+all-gather, and the two ways a partial becomes usable: all-reduce to replicated
+or reduce-scatter to sharded. There is deliberately no blanket transition.
+Changing mesh types, treating an operation-produced partial as a reshard, or
+sending directly between pipeline stages are compile errors. `Partial` is
+absent from `CompletePlacement`, so an ordinary consumer cannot merely forget
+the collective.
+
+The runtime projection contains only logical facts. The original sketch put a
+`MeshId` into every non-local `PlacementKind`, but `Placement::kind()` is static
+and a `MeshId` exists only after `DeviceMesh::bind` fingerprints a real
+machine. The implementation does not invent one: the kind carries category,
+tensor axis, reduction, or stage, and execution pairs it with the separately
+bound mesh. For the same boundary, `ValidatedDistributed` records the proved
+`PlacementTransition` and not an executable `CollectivePlan`; group ids,
+sequence tokens, streams, and divergence preflight remain `DST-007`.
+
+`PlacementTransitionRule` is the checked constructor path for the new seal. It
+ties an `OperationSpec` output back to a typed global `Shape`, checks every
+input projection, derives local-result cardinality from `M::WORLD`, shard extent
+from `M::TENSOR`, and pipeline bounds from `M::PIPELINE`, then validates every
+local shape before its crate-private constructor mints
+`ValidatedDistributed`. Seven trybuild cases prove the two privacy barriers,
+non-divisibility, partial consumption, cross-mesh moves, operation-produced
+partials, and pipeline sends all fail for the stated reason rather than on test
+scaffolding.
+
+`DST-004` is now the next distributed row: it puts these placements on the one
+public `Tensor` and defines reshard metadata invariants. `DST-005` and
+`DST-006` remain independently unblocked by `DST-002`; `DST-007`, `UX-003`,
+and `UX-004` are newly unblocked by this row. The facade still gains no
+`distributed` feature until `DST-004`, because no public tensor accepts a
+distributed placement yet.
 
 The complete Shape-track evidence is recorded in the mirror and
 `docs/plan/tasks/SHP-007.md` through `SHP-008.md`. The §4 themes above
@@ -3246,7 +3289,7 @@ Silicon · `compile` compiled execution · `grad` autograd · `dist` distributed
 | GRD-007 | preview | grad | [ ] | GRD-006,CMP-003 | `crates/incin-core/src/compiled/alloc.rs` | Compiled-graph saved-tensor liveness and fusion integration | `cargo test -p incin-core --test compiled_alloc` |
 | DST-001 | preview | dist | [x] | GOV-002,SHP-007 | `crates/incin-core/src/dist/mesh.rs` | Typed meshes and ValidMesh; valid and invalid world-size compile tests | `cargo test -p incin-core --features distributed --test mesh_compile` |
 | DST-002 | preview | dist | [x] | DST-001,EXE-005 | `crates/incin-core/src/dist/mesh.rs` | Physical binding, topology fingerprint, and runtime guards | `cargo test -p incin-core --features distributed --test mesh_bind` |
-| DST-003 | preview | dist | [ ] | DST-001,EXE-002 | `crates/incin-core/src/dist/placement.rs; crates/incin-core/src/dist/rule.rs` | Placement typestates, PlacementKind, and rules; divisibility and transition compile tests; ValidatedDistributed sealed like Validated | `cargo test -p incin-core --test placement_rules` |
+| DST-003 | preview | dist | [x] | DST-001,EXE-002 | `crates/incin-core/src/dist/placement.rs; crates/incin-core/src/dist/rule.rs` | Placement typestates, PlacementKind, and rules; divisibility and transition compile tests; ValidatedDistributed sealed like Validated | `cargo test -p incin-core --features distributed --test placement_rules` |
 | DST-004 | preview | dist | [ ] | DST-003,EXE-004 | `crates/incin-core/src/tensor/base.rs` | Unified Tensor global and local metadata with reshard invariants | `cargo test -p incin-core --test placement_tensor` |
 | DST-005 | preview | dist | [ ] | DST-002 | `crates/incin-backends/src/dist/reference.rs` | Deterministic CPU reference collectives and their adjoints | `cargo test -p incin-backends --features distributed-reference` |
 | DST-006 | preview | dist | [ ] | DST-002,GOV-004 | `crates/incin-backends/src/dist/nccl.rs` | Optional NCCL transport; three-GPU order, count, and failure tests | `cargo test -p incin-backends --features distributed-nccl  # 3x CUDA` |
@@ -3795,3 +3838,8 @@ justification as an entry before it may start.
 | D-062 (2026-07-29) | Reachability is required within every collective group, and only within them. | Requiring every pair to reach every pair, or only the tensor group. Two ranks that share no group never run a collective together, so a missing path between them is not this module's business; two that do share one cannot run the collective that axis is made of. Only `Unreachable` is refused — a slow link is a performance judgement no library should silently make for a caller. |
 | D-063 (2026-07-29) | The fingerprint digest is a hand-rolled FNV-1a with a length prefix before every field. | `ahash` (seeded per process) or `DefaultHasher` (explicitly unstable across releases). The digest has to be identical in two processes that never speak to each other, which is the whole point of computing a `MeshId` instead of agreeing on one. It is not used as a cryptographic hash. The length prefix is what keeps `persistent = "GPU-1", architecture = "sm_90"` distinct from `persistent = "GPU-", architecture = "1sm_90"`. |
 | D-064 (2026-07-29) | `MeshAxis`'s variants are `Data`, `Pipeline`, and `Tensor`, shadowing the marker type names, and `DST-001`'s trybuild baselines were re-blessed to match. | Renaming the variants to avoid the collision. The typestate/projection pairing is the same one `Placement` and `PlacementKind` already use, and an axis enum whose variants are not named after the axes is worse to read at every call site. The cost is real and is recorded rather than absorbed: rustc now fully qualifies `incin_core::dist::mesh::Data` in `mesh_axes_out_of_order.stderr` and `mesh_zero_axis.stderr`, because the short name became ambiguous inside the module, so `DST-001`'s headline diagnostic is longer than it was. Nothing about what those cases assert changed — both still fail with `E0277` and still pass `every_mesh_case_names_the_rule_it_pins`. |
+| D-065 (2026-07-30) | `PlacementKind` projects only logical placement facts; a bound `DeviceMesh` supplies `MeshId` separately at execution. | Putting `MeshId` in each non-local variant as the original sketch did. `Placement::kind()` is a static method over a typestate, while `MeshId` is a runtime value derived from a physical topology fingerprint. The method would have to fabricate an identity or consult ambient state, violating the logical/physical proof split. |
+| D-066 (2026-07-30) | `ValidatedDistributed` records a proved `PlacementTransition`, not a `CollectivePlan`. | Defining a placeholder collective plan in `DST-003`. `DST-007` owns group ids, sequence tokens, streams, and divergent-plan preflight; an empty plan would be a value executors could mistake for executable ordering, while moving that planner into this row would collapse two ledger tasks. |
+| D-067 (2026-07-30) | `PipelineStage<Mesh, INDEX>` proves same-stage identity statically and checks `INDEX < stages` at runtime. | A generic const bound comparing `INDEX` with `M::PIPELINE`. The crate promises stable Rust, and comparing a const parameter with a trait-associated const requires unstable generic const expressions. Replacing `INDEX` with typenum would contradict the public shape fixed in §2.11. |
+| D-068 (2026-07-30) | `DST-003`'s evidence command includes `--features distributed`, and its trybuild cases have a dedicated directory. | The original ungated command and the default compile-fail directory. Appendix B requires Preview API behind a non-default feature; the original command would run zero cfg-gated tests and print success, while cases in the default directory would fail because their imports are absent rather than because a placement rule rejected them. |
+| D-069 (2026-07-30) | Distributed `Placement` implementations require `Mesh: ValidMesh`; their marker `Clone` and `Debug` implementations do not require those traits from `Mesh`. | Accepting any `'static` type as a mesh, or deriving the marker traits. The first bypasses `DST-001` completely. The second makes `Replicated<MeshSpec<...>>` fail its own `Placement` supertraits because `MeshSpec` is a proof marker that intentionally implements neither `Clone` nor `Debug`. |

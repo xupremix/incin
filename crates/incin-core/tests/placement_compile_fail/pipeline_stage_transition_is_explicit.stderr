@@ -1,0 +1,24 @@
+error[E0277]: placement transition from `incin_core::dist::PipelineStage<MeshSpec<incin_core::dist::mesh::Data<UInt<UTerm, B1>>, TensorParallel<UInt<UTerm, B1>>, incin_core::dist::mesh::Pipeline<UInt<UInt<UTerm, B1>, B0>>>, 0>` to `incin_core::dist::PipelineStage<MeshSpec<incin_core::dist::mesh::Data<UInt<UTerm, B1>>, TensorParallel<UInt<UTerm, B1>>, incin_core::dist::mesh::Pipeline<UInt<UInt<UTerm, B1>, B0>>>, 1>` is not legal
+  --> tests/placement_compile_fail/pipeline_stage_transition_is_explicit.rs:16:34
+   |
+16 |     requires_direct_transition::<PipelineStage<Mesh, 0>, PipelineStage<Mesh, 1>>();
+   |                                  ^^^^^^^^^^^^^^^^^^^^^^ no direct placement transition
+   |
+   = note: use an explicit replicated intermediate when no direct collective exists
+help: the trait `LegalTransition<incin_core::dist::PipelineStage<MeshSpec<incin_core::dist::mesh::Data<UInt<UTerm, B1>>, TensorParallel<UInt<UTerm, B1>>, incin_core::dist::mesh::Pipeline<UInt<UInt<UTerm, B1>, B0>>>, 1>>` is not implemented for `incin_core::dist::PipelineStage<MeshSpec<incin_core::dist::mesh::Data<UInt<UTerm, B1>>, TensorParallel<UInt<UTerm, B1>>, incin_core::dist::mesh::Pipeline<UInt<UInt<UTerm, B1>, B0>>>, 0>`
+      but trait `LegalTransition<incin_core::dist::PipelineStage<MeshSpec<incin_core::dist::mesh::Data<UInt<UTerm, B1>>, TensorParallel<UInt<UTerm, B1>>, incin_core::dist::mesh::Pipeline<UInt<UInt<UTerm, B1>, B0>>>, 0>>` is implemented for it
+  --> src/dist/rule.rs
+   |
+   | / impl<Mesh, const INDEX: usize> LegalTransition<PipelineStage<Mesh, INDEX>>
+   | |     for PipelineStage<Mesh, INDEX>
+   | | where
+   | |     Mesh: ValidMesh,
+   | |____________________^
+note: required by a bound in `requires_direct_transition`
+  --> tests/placement_compile_fail/pipeline_stage_transition_is_explicit.rs:9:11
+   |
+ 7 | fn requires_direct_transition<From, To>()
+   |    -------------------------- required by a bound in this function
+ 8 | where
+ 9 |     From: LegalTransition<To>,
+   |           ^^^^^^^^^^^^^^^^^^^ required by this bound in `requires_direct_transition`

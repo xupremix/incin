@@ -1,0 +1,29 @@
+error[E0277]: placement transition from `incin_core::dist::Replicated<MeshSpec<incin_core::dist::mesh::Data<UInt<UInt<UTerm, B1>, B0>>>>` to `incin_core::dist::Sharded<MeshSpec<incin_core::dist::mesh::Data<UInt<UTerm, B1>>, TensorParallel<UInt<UInt<UTerm, B1>, B0>>>, UTerm>` is not legal
+  --> tests/placement_compile_fail/cross_mesh_transition.rs:17:34
+   |
+17 |     requires_direct_transition::<Replicated<FirstMesh>, Sharded<SecondMesh, U0>>();
+   |                                  ^^^^^^^^^^^^^^^^^^^^^ no direct placement transition
+   |
+   = help: the trait `LegalTransition<incin_core::dist::Sharded<MeshSpec<incin_core::dist::mesh::Data<UInt<UTerm, B1>>, TensorParallel<UInt<UInt<UTerm, B1>, B0>>>, UTerm>>` is not implemented for `incin_core::dist::Replicated<MeshSpec<incin_core::dist::mesh::Data<UInt<UInt<UTerm, B1>, B0>>>>`
+   = note: use an explicit replicated intermediate when no direct collective exists
+help: `incin_core::dist::Replicated<Mesh>` implements trait `LegalTransition<To>`
+  --> src/dist/rule.rs
+   |
+   | / impl<Mesh> LegalTransition<Replicated<Mesh>> for Replicated<Mesh>
+   | | where
+   | |     Mesh: ValidMesh,
+   | |____________________^ `LegalTransition<incin_core::dist::Replicated<Mesh>>`
+...
+   | / impl<Mesh, Axis> LegalTransition<Sharded<Mesh, Axis>> for Replicated<Mesh>
+   | | where
+   | |     Mesh: ValidMesh,
+   | |     Axis: crate::dist::placement::PlacementAxis,
+   | |________________________________________________^ `LegalTransition<incin_core::dist::Sharded<Mesh, Axis>>`
+note: required by a bound in `requires_direct_transition`
+  --> tests/placement_compile_fail/cross_mesh_transition.rs:10:11
+   |
+ 8 | fn requires_direct_transition<From, To>()
+   |    -------------------------- required by a bound in this function
+ 9 | where
+10 |     From: LegalTransition<To>,
+   |           ^^^^^^^^^^^^^^^^^^^ required by this bound in `requires_direct_transition`

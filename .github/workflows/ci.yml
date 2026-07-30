@@ -71,12 +71,13 @@ jobs:
     # Appendix B ships a preview-tier row behind a non-default feature, so the
     # default run above executes none of them: `cargo test` on a `cfg`-gated
     # suite reports `ok` having run nothing. These are the evidence commands
-    # for `UX-001`, `DST-001`, and `DST-002` verbatim.
+    # for `UX-001` and the completed distributed rows verbatim.
     - name: Run Preview-Feature Tests
       run: |
         cargo test -p incin --features train --test trainer
         cargo test -p incin-core --features distributed --test mesh_compile
         cargo test -p incin-core --features distributed --test mesh_bind
+        cargo test -p incin-core --features distributed --test placement_rules
 
     - name: Run Isolated Bare-CPU Tests
       run: cargo test -p incin-backends --no-default-features --features std,cpu

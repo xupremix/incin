@@ -1,0 +1,16 @@
+error[E0624]: associated function `new` is private
+  --> tests/placement_compile_fail/validated_distributed_new_is_private.rs:12:35
+   |
+12 |       let _ = ValidatedDistributed::new(
+   |                                     ^^^ private associated function
+   |
+  ::: src/dist/rule.rs
+   |
+   | /     pub(crate) fn new(
+   | |         operation: O,
+   | |         global_shape: ShapeBuf,
+   | |         local_shapes: Vec<ShapeBuf>,
+...  |
+   | |         transition: PlacementTransition,
+   | |     ) -> Self {
+   | |_____________- private associated function defined here

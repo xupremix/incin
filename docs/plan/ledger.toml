@@ -2,7 +2,7 @@
 # Regenerate with `python3 tools/gen-ledger.py toml`; validate with `cargo xtask ledger`.
 
 schema = 1
-snapshot = "2026-07-29"
+snapshot = "2026-07-30"
 
 [[task]]
 id = "GOV-001"
@@ -875,14 +875,21 @@ deviations = [
 id = "DST-003"
 tier = "preview"
 theme = "dist"
-status = "planned"
+status = "complete"
 deps = ["DST-001", "EXE-002"]
 target = ["crates/incin-core/src/dist/placement.rs", "crates/incin-core/src/dist/rule.rs"]
 deliverable = "Placement typestates, PlacementKind, and rules; divisibility and transition compile tests; ValidatedDistributed sealed like Validated"
-evidence = ["cargo test -p incin-core --test placement_rules"]
-completed_on = ""
-completed_evidence = ""
-deviations = []
+evidence = ["cargo test -p incin-core --features distributed --test placement_rules"]
+completed_on = "2026-07-30"
+completed_evidence = "cargo test -p incin-core --features distributed --test placement_rules -> 15 passed, 0 failed, including seven trybuild compile-fail cases. The distributed Placement impls exist only over ValidMesh, so no arbitrary marker can bypass DST-001. ShardDivisible uses typenum Div and Rem with a remainder exactly U0; U12/U3 projects U4 and U10/U3 is an unmet bound. validate_shard applies the same rule to dynamic extents and reports zero shards, an absent axis, non-divisibility, or a remainder policy whose semantics do not exist yet. LegalTransition has no blanket impl: identity, replicated-to-sharded local selection, sharded-to-replicated all-gather, partial-to-replicated all-reduce, and partial-to-sharded reduce-scatter are the complete set. Cross-mesh moves, an operation-produced Partial treated as a reshard, and direct pipeline-stage changes are compile errors. ReduceShardedAxis produces the Partial state, and Partial is absent from CompletePlacement, so an ordinary consumer cannot forget the collective. PlacementTransitionRule ties an OperationSpec output back to a typed global Shape, checks every input PlacementKind, derives rank-local cardinality from M::WORLD, shard extent from M::TENSOR and pipeline bounds from M::PIPELINE, and validates every local shape before minting ValidatedDistributed. The wrapper has private fields, a pub(crate) constructor, and read-only accessors; both privacy boundaries have dedicated E0451/E0624 cases. PlacementKind does not contain MeshId: Placement::kind is static and MeshId exists only after DeviceMesh::bind fingerprints physical devices, so execution pairs the logical kind with its bound mesh rather than fabricating an identity. ValidatedDistributed records PlacementTransition, not the CollectivePlan DST-007 owns. PipelineStage keeps const INDEX and checks index/cardinality at runtime because stable Rust cannot compare it with M::PIPELINE in a generic const bound. The evidence command gained --features distributed because Appendix B gates Preview API; the original command would run zero tests. cargo test --workspace -> every suite passed, 0 failed. cargo test --workspace --doc --features incin-core/distributed -> incin-core 68 passed, 0 ignored, and all workspace doctests passed. cargo clippy --workspace --all-targets -- -D warnings and cargo clippy -p incin-core --features distributed --all-targets -- -D warnings exit zero. cargo check -p incin-core --no-default-features --features distributed --all-targets passes, so the rules remain no_std. RUSTDOCFLAGS='-D warnings' cargo doc -p incin-core --features distributed --no-deps, cargo fmt --all --check, cargo xtask budgets, cargo xtask docs --check, and tools/audit-shapes.sh --check all pass."
+deviations = [
+  "PlacementKind's distributed variants carry only their logical category, tensor axis, reduction, or pipeline index rather than MeshId. Placement::kind() is static, while MeshId is derived only after DeviceMesh::bind observes a physical topology; execution pairs the validated logical kind with that separately bound mesh.",
+  "ValidatedDistributed records PlacementTransition instead of CollectivePlan. DST-007 owns group ids, sequence tokens, streams, and divergent-plan preflight; a placeholder plan here would be an apparently executable value with no ordering proof.",
+  "PipelineStage<Mesh, INDEX> proves same-stage identity at compile time and validate_pipeline_stage checks INDEX against the runtime pipeline degree. Comparing a const parameter with M::PIPELINE in a generic bound requires unstable generic const expressions, while the crate promises stable Rust and the RFC fixes INDEX as a const generic.",
+  "The evidence command gained --features distributed and the trybuild cases use tests/placement_compile_fail/. Appendix B requires a Preview row behind a non-default feature; the original command would run zero cfg-gated tests, and the default compile-fail directory would reject the feature-gated imports rather than the placement rules.",
+  "Distributed Placement implementations require Mesh: ValidMesh. The marker traits are implemented manually so they do not also require Clone or Debug from MeshSpec, which is a proof marker and intentionally implements neither.",
+  "PadAndMask and Ragged are represented but return UnsupportedRemainderPolicy. Padding requires an operation-specific neutral value, and ragged sharding requires variable-count collective and kernel capabilities; accepting either before those semantics exist would turn an explicit policy into silent behavior.",
+]
 
 [[task]]
 id = "DST-004"

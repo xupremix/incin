@@ -1,0 +1,17 @@
+error[E0451]: fields `operation`, `global_shape`, `local_shapes`, `input_placements`, `output_placement` and `transition` of struct `ValidatedDistributed` are private
+  --> tests/placement_compile_fail/validated_distributed_fields_are_private.rs:13:9
+   |
+12 |     let _ = ValidatedDistributed {
+   |             -------------------- in this type
+13 |         operation,
+   |         ^^^^^^^^^ private field
+14 |         global_shape: shape.clone(),
+   |         ^^^^^^^^^^^^ private field
+15 |         local_shapes: vec![shape],
+   |         ^^^^^^^^^^^^ private field
+16 |         input_placements: PlacementBuf::from([PlacementKind::Local]),
+   |         ^^^^^^^^^^^^^^^^ private field
+17 |         output_placement: PlacementKind::Local,
+   |         ^^^^^^^^^^^^^^^^ private field
+18 |         transition: PlacementTransition::Identity,
+   |         ^^^^^^^^^^ private field

@@ -1,0 +1,30 @@
+error[E0277]: placement transition from `incin_core::dist::Sharded<MeshSpec<incin_core::dist::mesh::Data<UInt<UTerm, B1>>>, UTerm>` to `incin_core::dist::Partial<MeshSpec<incin_core::dist::mesh::Data<UInt<UTerm, B1>>>, incin_core::dist::Sum>` is not legal
+  --> tests/placement_compile_fail/illegal_partial_transition.rs:16:34
+   |
+16 |     requires_direct_transition::<Sharded<Mesh, U0>, Partial<Mesh, Sum>>();
+   |                                  ^^^^^^^^^^^^^^^^^ no direct placement transition
+   |
+   = help: the trait `LegalTransition<incin_core::dist::Partial<MeshSpec<incin_core::dist::mesh::Data<UInt<UTerm, B1>>>, incin_core::dist::Sum>>` is not implemented for `incin_core::dist::Sharded<MeshSpec<incin_core::dist::mesh::Data<UInt<UTerm, B1>>>, UTerm>`
+   = note: use an explicit replicated intermediate when no direct collective exists
+help: `incin_core::dist::Sharded<Mesh, Axis>` implements trait `LegalTransition<To>`
+  --> src/dist/rule.rs
+   |
+   | / impl<Mesh, Axis> LegalTransition<Sharded<Mesh, Axis>> for Sharded<Mesh, Axis>
+   | | where
+   | |     Mesh: ValidMesh,
+   | |     Axis: crate::dist::placement::PlacementAxis,
+   | |________________________________________________^ `LegalTransition<incin_core::dist::Sharded<Mesh, Axis>>`
+...
+   | / impl<Mesh, Axis> LegalTransition<Replicated<Mesh>> for Sharded<Mesh, Axis>
+   | | where
+   | |     Mesh: ValidMesh,
+   | |     Axis: crate::dist::placement::PlacementAxis,
+   | |________________________________________________^ `LegalTransition<incin_core::dist::Replicated<Mesh>>`
+note: required by a bound in `requires_direct_transition`
+  --> tests/placement_compile_fail/illegal_partial_transition.rs:9:11
+   |
+ 7 | fn requires_direct_transition<From, To>()
+   |    -------------------------- required by a bound in this function
+ 8 | where
+ 9 |     From: LegalTransition<To>,
+   |           ^^^^^^^^^^^^^^^^^^^ required by this bound in `requires_direct_transition`

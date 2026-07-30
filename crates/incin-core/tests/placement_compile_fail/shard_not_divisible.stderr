@@ -1,0 +1,12 @@
+error[E0277]: the trait bound `UInt<UTerm, B1>: Same<UTerm>` is not satisfied
+ --> tests/placement_compile_fail/shard_not_divisible.rs:8:29
+  |
+8 |     requires_equal_shards::<U10>();
+  |                             ^^^ the trait `Same<UTerm>` is not implemented for `UInt<UTerm, B1>`
+  |
+  = note: required for `UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B1>, B0>` to implement `ShardDivisible<UInt<UInt<UTerm, B1>, B1>>`
+note: required by a bound in `requires_equal_shards`
+ --> tests/placement_compile_fail/shard_not_divisible.rs:4:34
+  |
+4 | fn requires_equal_shards<Extent: ShardDivisible<U3>>() {}
+  |                                  ^^^^^^^^^^^^^^^^^^ required by this bound in `requires_equal_shards`

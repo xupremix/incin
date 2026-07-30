@@ -65,7 +65,7 @@ fn broadcast_dims<L: DynShape, R: DynShape>(
     broadcast_dim_slices(&lhs_dims, &rhs_dims)
 }
 
-/// The same right-aligned rule as [`broadcast_dims`], reached from raw
+/// The same right-aligned rule as the typed broadcast helper, reached from raw
 /// dimensions rather than from a typed `Field`.
 ///
 /// A backend holds `&[usize]`, not an `L::Field`, so without this it would have
