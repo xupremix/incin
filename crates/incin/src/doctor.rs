@@ -8,10 +8,11 @@
 //!
 //! *Read-only* is why writeability is inferred from mode bits instead of by
 //! attempting a write, and why the telemetry run directory is reported without
-//! being resolved through [`incin_telemetry::run_dir::default_run_dir`], which
+//! being resolved through `incin_telemetry::run_dir::default_run_dir`, which
 //! creates it. A diagnostic that changes the thing it is diagnosing is not one.
 //!
-//! *Testable* is why every impure observation goes behind [`Host`]. Assembling
+//! *Testable* is why every impure observation goes behind
+//! [`Host`](crate::doctor::Host). Assembling
 //! the report, deriving its findings, and rendering it are pure functions of
 //! that trait's answers, so `tests/doctor.rs` can put a machine with three
 //! GPUs and an unwritable cache in front of the doctor on a CI runner that has
@@ -685,6 +686,12 @@ fn compiled_features() -> Vec<Feature> {
         Feature::new("candle", cfg!(feature = "candle")),
         Feature::new("autotune", cfg!(feature = "autotune")),
         Feature::new("train", cfg!(feature = "train")),
+        Feature::new("distributed", cfg!(feature = "distributed")),
+        Feature::new(
+            "distributed-reference",
+            cfg!(feature = "distributed-reference"),
+        ),
+        Feature::new("distributed-nccl", cfg!(feature = "distributed-nccl")),
         Feature::new("telemetry", cfg!(feature = "telemetry")),
     ]
 }

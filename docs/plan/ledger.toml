@@ -399,39 +399,39 @@ deviations = []
 id = "TUN-001"
 tier = "preview"
 theme = "tune"
-status = "planned"
+status = "complete"
 deps = ["GOV-004"]
 target = ["crates/incin-backends/src/tuning/identity.rs"]
 deliverable = "Stable device, compiler, and topology identities replacing ordinal plus compute capability; alias tests"
 evidence = ["cargo test -p incin-backends --features autotune --test tuning_identity"]
-completed_on = ""
-completed_evidence = ""
+completed_on = "2026-07-30"
+completed_evidence = "cargo test -p incin-backends --features autotune --test tuning_identity -> 8 passed, 0 failed, including two trybuild cases. The production CUDA TuningKey now uses a TuningEnvironmentFingerprint containing canonical CUDA UUID, architecture, driver version, NVRTC version, compiler target, and semantic compiler-option digest; process-local ordinal is absent. DeviceFingerprint<D> and CompilerFingerprint<D> carry static backend markers, their Dyn forms validate runtime DeviceKind and checked projection, and static/Dyn digests are identical. TuningTopologyFingerprint<StaticWorld<N>> requires a type-level nonzero world; its Dyn form checks nonzero world and rank cardinality at runtime. Both reject duplicate physical UUIDs, invalid or duplicate links, and process-layout mismatch, and hash rank mapping, ordered links, transport/version, and layout without the observing process rank. Alias, delimiter, field-sensitivity, static/Dyn parity, and compile-time backend/world rejection tests pass. The full autotune suite and warning-denied clippy pass."
 deviations = []
 
 [[task]]
 id = "TUN-002"
 tier = "preview"
 theme = "tune"
-status = "planned"
+status = "complete"
 deps = ["TUN-001"]
 target = ["crates/incin-backends/src/tuning/cache.rs"]
 deliverable = "Atomic bounded persistent cache with corruption, schema, and eviction tests"
 evidence = ["cargo test -p incin-backends --features autotune --test tuning_cache"]
-completed_on = ""
-completed_evidence = ""
+completed_on = "2026-07-30"
+completed_evidence = "cargo test -p incin-backends --features autotune --test tuning_cache -> 9 passed, 0 failed, including one trybuild case. PersistentTuningCache stores versioned JSON records with creation time, measurement method, sample count, optional median, environment-bound typed CacheKey, opaque winner, and legal-candidate digest. Every write takes a cross-process file lock, reloads and merges concurrent writers, prunes age/count/serialized-byte limits, writes a unique create-new temporary file, fsyncs it, atomically renames it, and fsyncs the parent directory. Reads verify schema, canonical checksum, duplicate keys, record bounds, and measured provenance; malformed, mismatched-schema, tampered, and invalid files are renamed to a unique quarantine path and start empty. Unknown fields are tolerated. Oversized individual records are refused without replacing the last valid file. Static CacheKey<D> and CacheKey<Dyn> have digest parity and checked projection, with backend mixing a compile error. Full autotune tests and clippy pass."
 deviations = []
 
 [[task]]
 id = "TUN-003"
 tier = "preview"
 theme = "tune"
-status = "planned"
+status = "complete"
 deps = ["EXE-005", "TUN-002"]
 target = ["crates/incin-backends/src/tuning/service.rs"]
 deliverable = "General disabled, heuristic, coordinated-warmup, and profile-guided tuning service"
 evidence = ["cargo test -p incin-backends --features autotune --test tuning_service"]
-completed_on = ""
-completed_evidence = ""
+completed_on = "2026-07-30"
+completed_evidence = "cargo test -p incin-backends --features autotune --test tuning_service -> 9 passed, 0 failed, including two trybuild cases. TuningService<P> implements statically typed Disabled, Heuristic, CoordinatedWarmup, and ProfileGuided policies plus a matching runtime AutotunePolicy/Dyn constructor. TuningContext<D,S> carries static backend and kernel/collective/plan scope; Dyn checks topology presence and time bounds. The service filters determinism and workspace before policy, validates key/context identity, canonicalizes the legal set, revalidates every cached opaque winner against it, and never measures under disabled, heuristic, or profile-guided policy. Coordinated warmup issues one bounded epoch lease, makes competing callers wait, releases on cancellation/drop/timeout, and requires either one local commit or one matching positive vote from every topology rank. Results persist through TUN-002 and profile import falls back heuristically on any legal-set or winner mismatch. cargo test -p incin-backends --features distributed-reference,autotune --test collective_tuning -> 6 passed: DST-012's unanimously minted CommittedCollectiveTuning is accepted directly by the two-participant general permit and becomes the only cache-visible value. Warning-denied clippy passes."
 deviations = []
 
 [[task]]
@@ -775,13 +775,13 @@ deviations = [
 id = "GRD-004"
 tier = "core"
 theme = "grad"
-status = "planned"
+status = "complete"
 deps = ["GRD-003", "EXE-008"]
 target = ["crates/incin-backends/src/{cuda,wgpu}/"]
 deliverable = "CUDA and WGPU gradient recipes with hardware parity"
 evidence = ["cargo test -p incin-backends --features wgpu --test gradient_parity"]
-completed_on = ""
-completed_evidence = ""
+completed_on = "2026-07-30"
+completed_evidence = "cargo test -p incin-backends --features wgpu --test gradient_parity -- --test-threads=1 -> 22 passed, 0 failed. The suite exercises real WGPU forward/backward parity against the independent CPU implementation for elementwise addition, relu, gelu, softmax, matmul, layer norm, batch norm, convolution, max pooling, sum and mean reductions, and cross entropy, while retaining the ten backend-neutral reverse-walk cases. cargo test -p incin-backends --features cuda --test gradient_parity -- --ignored --test-threads=1 -> 4 passed, 0 failed on the local NVIDIA GTX 1650 SUPER: addition, matmul, batch norm, and convolution agree with CPU in both forward values and gradients. The non-ignored CUDA feature run also passes its ten CPU reverse-walk cases. CUDA recipes launch CUDA kernels and WGPU recipes launch shaders or their documented backend path; neither parity test substitutes the CPU backend for the device under test. Both use the shared public Backend::backward/get_grad contract and compare rank-local storage through Backend::to_bytes. cargo clippy --workspace --all-targets -- -D warnings and cargo test --workspace pass in the enclosing distributed change set."
 deviations = []
 
 [[task]]
@@ -895,27 +895,36 @@ deviations = [
 id = "DST-004"
 tier = "preview"
 theme = "dist"
-status = "planned"
+status = "complete"
 deps = ["DST-003", "EXE-004"]
 target = ["crates/incin-core/src/tensor/base.rs"]
 deliverable = "Unified Tensor global and local metadata with reshard invariants"
-evidence = ["cargo test -p incin-core --test placement_tensor"]
-completed_on = ""
-completed_evidence = ""
-deviations = []
+evidence = ["cargo test -p incin-core --features distributed --test placement_tensor"]
+completed_on = "2026-07-30"
+completed_evidence = "cargo test -p incin-core --features distributed --test placement_tensor -> 8 passed, 0 failed, including one trybuild compile-fail case. Tensor now has a defaulted placement parameter, Tensor<S, B, K, G, P = Local>, while the legacy spelling and local constructors remain source-compatible. Its shape field is the global logical shape, backend storage is rank-local, and placement metadata is P::Field: Local is zero-sized, static distributed placements store only the rank, and Dyn stores the runtime PlacementKind plus rank. Placed tensors can only be constructed by joining storage to a sealed ValidatedDistributed proof. The constructor checks global shape, proof output placement, rank cardinality, rank-local shape, resolved dtype, and physical device before minting the value. Static resharding additionally requires LegalTransition<To>, so an illegal move is a compile error; Dyn resharding calls validate_transition, the runtime counterpart of the same closed transition table. The suite proves static and Dyn construction, F64 runtime dtype selection, global/local shape separation, all structured mismatch errors, and static/runtime reshard parity. Local placement metadata remains zero-sized. cargo check -p incin-core --no-default-features --features distributed --all-targets, cargo clippy -p incin-core --features distributed --all-targets -- -D warnings, cargo fmt --all --check, warning-denied rustdoc, workspace tests, ledger, budgets, generated docs, and the shape audit all pass."
+deviations = [
+  "Tensor's placement metadata is P::Field rather than a fixed rank plus placement enum. Local therefore remains zero-sized, static distributed placements carry only a rank, and Dyn carries the runtime kind and rank; paying for runtime flexibility is confined to the runtime-selected spelling.",
+  "Placed construction has its own feature-gated PlacedTensorError rather than adding distributed variants to the crate-wide Error enum. The latter's variants would change with a Cargo feature and make downstream exhaustive matches feature-dependent.",
+  "The established constructors remain available only on Tensor<..., Local>. A caller cannot attach a distributed placement to arbitrary storage: try_from_distributed_storage requires SupportsDType<K> and a sealed ValidatedDistributed proof and checks every runtime field before construction.",
+]
 
 [[task]]
 id = "DST-005"
 tier = "preview"
 theme = "dist"
-status = "planned"
+status = "complete"
 deps = ["DST-002"]
 target = ["crates/incin-backends/src/dist/reference.rs"]
 deliverable = "Deterministic CPU reference collectives and their adjoints"
 evidence = ["cargo test -p incin-backends --features distributed-reference"]
-completed_on = ""
-completed_evidence = ""
-deviations = []
+completed_on = "2026-07-30"
+completed_evidence = "cargo test -p incin-backends --features distributed-reference -> all library, integration, trybuild, and documentation tests passed. The shared CollectiveBackend contract is dtype-indexed through a GAT and CollectiveDType: supported static dtypes compile, Q8_0 is rejected by a trybuild case, and Dyn resolves and checks DTypeId at runtime before executing the same operation. GroupId rejects empty groups; every launch carries an explicit group, stream, element count, dtype, operation, and returns an event. CollectiveKind owns the adjoint mapping, including all-gather/reduce-scatter, inverse all-to-all, and all-reduce scaling semantics. ReferenceTransport executes deterministic rank-ordered all-reduce, all-gather, reduce-scatter, and all-to-all over typed ReferenceBuffer values and returns structured count, divisibility, dtype, unsupported-mean, and integer-overflow errors. Its ReferenceTopology implementation proves two CUDA ranks connected only by LinkClass::Network and represented by separate ProcessPerRank fingerprints bind to the same MeshId. That test exposed and fixed a physical-identity defect: TopologyFingerprint::digest included each process's local rank, so two processes in one job could never agree on a mesh id. The digest now includes layout kind and world while retaining local rank as an inspectable fingerprint field. cargo check -p incin-backends --no-default-features --features distributed-reference --all-targets, cargo clippy -p incin-backends --features distributed-reference --all-targets -- -D warnings, cargo fmt --all --check, warning-denied rustdoc, workspace tests, ledger, budgets, generated docs, and the shape audit all pass."
+deviations = [
+  "CollectivePlan is not defined in incin-backends despite the original Appendix A ownership row grouping it with CollectiveBackend. DST-007's ledger row explicitly owns plans, sequence tokens, and divergent-plan preflight in incin-core; defining a second plan next to the transport would split one ordering contract across crates.",
+  "Q8_0 does not implement CollectiveDType. Its block encoding makes an element count insufficient to derive a byte count without an additional block/layout contract, so accepting it through the scalar collective interface would violate the checked-count requirement. Dyn rejects Q8_0 at runtime for the same reason.",
+  "ReferenceTopology can describe CUDA DeviceIds and Network links even though ReferenceTransport moves host values. It is a deterministic TopologyProbe fixture for physical binding, not a claim that the reference transport moves CUDA memory.",
+  "ProcessLayout::ProcessPerRank retains the local rank for diagnostics, but TopologyFingerprint::digest hashes only the shared layout kind and world. Including local rank made different processes in one job derive different MeshIds and made cross-process identity agreement impossible.",
+]
 
 [[task]]
 id = "DST-006"
@@ -924,8 +933,8 @@ theme = "dist"
 status = "planned"
 deps = ["DST-002", "GOV-004"]
 target = ["crates/incin-backends/src/dist/nccl.rs"]
-deliverable = "Optional NCCL transport; three-GPU order, count, and failure tests"
-evidence = ["cargo test -p incin-backends --features distributed-nccl  # 3x CUDA"]
+deliverable = "Optional NCCL transport; two networked CUDA ranks with order, count, identity, timeout, and failure tests"
+evidence = ["cargo test -p incin-backends --features distributed-nccl  # 2x networked CUDA"]
 completed_on = ""
 completed_evidence = ""
 deviations = []
@@ -934,24 +943,29 @@ deviations = []
 id = "DST-007"
 tier = "preview"
 theme = "dist"
-status = "planned"
+status = "complete"
 deps = ["DST-003", "DST-005"]
 target = ["crates/incin-core/src/dist/plan.rs"]
 deliverable = "Collective plans and sequence tokens; divergent-plan preflight test"
-evidence = ["cargo test -p incin-core --test collective_plan"]
-completed_on = ""
-completed_evidence = ""
-deviations = []
+evidence = ["cargo test -p incin-core --features distributed --test collective_plan"]
+completed_on = "2026-07-30"
+completed_evidence = "cargo test -p incin-core --features distributed --test collective_plan -> 8 passed, 0 failed, including three trybuild compile-fail cases. CollectivePlanBuilder is tied to a bound DeviceMesh and emits immutable descriptors containing stable group identity and cardinality, collective/reduction kind, checked input/output element and byte counts, runtime dtype, source/destination placement, monotonic SequenceToken, StreamId, and an explicit earlier-token dependency. push_static requires ConstDType + CollectiveDType, LegalTransition, and PlacementOn for both endpoints, so Q8_0, illegal moves, and placements proved for another mesh are compile errors. push_dyn validates the runtime dtype and the same placement-transition table before using the same checked descriptor path. Tensor all-gather and reduce-scatter are pinned to the tensor communicator; rank and dependency errors are structured. Plan hashes use a stable versioned FNV encoding over the mesh identity and every descriptor field. preflight compares rank cardinality, MeshId, collective count, and hash in diagnostic order before minting AgreedPlan, turning divergent plans into errors before any transport launch. Two ProcessPerRank views of two CUDA devices connected by LinkClass::Network derive one MeshId, one plan hash, and pass two-rank preflight. cargo check -p incin-core --no-default-features --features distributed --all-targets, cargo clippy -p incin-core --features distributed --all-targets -- -D warnings, RUSTDOCFLAGS='-D warnings' cargo doc -p incin-core --features distributed --no-deps, cargo fmt --all --check, workspace tests, ledger, budgets, generated docs, and the shape audit all pass."
+deviations = [
+  "CollectiveDType, CollectiveError, CollectiveKind, GroupId and StreamId moved to incin-core::dist::collective; incin-backends::dist re-exports them and keeps CollectiveBackend and CollectiveOutput. Core planning cannot depend on incin-backends, while a backend can consume core descriptors without a cycle. Existing backend paths remain valid.",
+  "PlacementOn<Mesh> was added beside ConstPlacement. LegalTransition proves that two placement types may move between one another, but did not tie either endpoint to the DeviceMesh a plan builder holds; without the extra bound a legal transition from another mesh type could enter this plan.",
+  "Preflight compares already-exchanged PlanSummary values and does no communication itself. Exchanging summaries is a transport/launcher responsibility; making core open a socket would violate no_std and conflate the pure agreement rule with DST-006/DST-015.",
+  "All-to-all remains executable in CollectiveBackend but has no CollectivePlanBuilder entry. DST-003 defines no placement transition that denotes all-to-all, so exposing a planner method now would accept source/destination semantics the placement algebra cannot prove.",
+]
 
 [[task]]
 id = "DST-008"
 tier = "preview"
 theme = "dist"
-status = "planned"
+status = "active"
 deps = ["DST-006", "DST-007", "GRD-004"]
 target = ["crates/incin-core/src/dist/"]
-deliverable = "DP=3 training with single-GPU numerical and gradient parity"
-evidence = ["cargo test -p incin --features distributed-nccl --test dp3  # 3x CUDA"]
+deliverable = "DP=2 networked training with single-GPU numerical and gradient parity"
+evidence = ["cargo test -p incin --features distributed-nccl --test dp2_network  # 2x networked CUDA"]
 completed_on = ""
 completed_evidence = ""
 deviations = []
@@ -960,11 +974,11 @@ deviations = []
 id = "DST-009"
 tier = "preview"
 theme = "dist"
-status = "planned"
+status = "active"
 deps = ["DST-004", "DST-006", "DST-007"]
 target = ["crates/incin-core/src/nn/linear.rs"]
-deliverable = "TP=3 column and row linear plus attention parity"
-evidence = ["cargo test -p incin --features distributed-nccl --test tp3  # 3x CUDA"]
+deliverable = "TP=2 networked column and row linear plus attention parity"
+evidence = ["cargo test -p incin --features distributed-nccl --test tp2_network  # 2x networked CUDA"]
 completed_on = ""
 completed_evidence = ""
 deviations = []
@@ -973,11 +987,11 @@ deviations = []
 id = "DST-010"
 tier = "preview"
 theme = "dist"
-status = "planned"
+status = "active"
 deps = ["CMP-002", "DST-006", "DST-007"]
 target = ["crates/incin-core/src/dist/pipeline.rs"]
-deliverable = "GPipe then 1F1B PP=3; parity, bubble, and deadlock evidence"
-evidence = ["cargo test -p incin --features distributed-nccl --test pp3  # 3x CUDA"]
+deliverable = "GPipe then 1F1B PP=2 over the network; parity, bubble, and deadlock evidence"
+evidence = ["cargo test -p incin --features distributed-nccl --test pp2_network  # 2x networked CUDA"]
 completed_on = ""
 completed_evidence = ""
 deviations = []
@@ -986,11 +1000,11 @@ deviations = []
 id = "DST-011"
 tier = "preview"
 theme = "dist"
-status = "planned"
+status = "active"
 deps = ["DST-008", "DST-009", "DST-010"]
 target = ["crates/incin-core/src/dist/plan.rs"]
 deliverable = "Hybrid planner and report with feasibility and memory evidence"
-evidence = ["cargo test -p incin-core --test hybrid_plan"]
+evidence = ["cargo test -p incin-core --features distributed --test hybrid_plan"]
 completed_on = ""
 completed_evidence = ""
 deviations = []
@@ -999,11 +1013,11 @@ deviations = []
 id = "DST-012"
 tier = "preview"
 theme = "dist"
-status = "planned"
+status = "active"
 deps = ["TUN-003", "DST-006"]
 target = ["crates/incin-backends/src/dist/tuning.rs"]
 deliverable = "Coordinated collective tuning; maximum-rank objective and all-rank commit tests"
-evidence = ["cargo test -p incin-backends --features distributed-nccl  # 3x CUDA"]
+evidence = ["cargo test -p incin-backends --features distributed-nccl  # 2x networked CUDA"]
 completed_on = ""
 completed_evidence = ""
 deviations = []
@@ -1029,7 +1043,7 @@ status = "planned"
 deps = ["CMP-003", "GRD-007", "DST-008"]
 target = ["crates/incin-core/src/dist/fsdp.rs"]
 deliverable = "FSDP and ZeRO prototype with persistent and transient memory parity"
-evidence = ["cargo test -p incin --features distributed-nccl --test fsdp  # 3x CUDA"]
+evidence = ["cargo test -p incin --features distributed-nccl --test fsdp  # 2x networked CUDA"]
 completed_on = ""
 completed_evidence = ""
 deviations = []
@@ -1038,7 +1052,7 @@ deviations = []
 id = "DST-015"
 tier = "preview"
 theme = "dist"
-status = "planned"
+status = "active"
 deps = ["DST-011"]
 target = ["crates/incin-core/src/dist/context.rs"]
 deliverable = "Multi-process rendezvous and launcher with timeout and shutdown tests"
@@ -1322,8 +1336,8 @@ theme = "ci"
 status = "planned"
 deps = ["DST-008", "DST-009", "DST-010"]
 target = [".github/workflows/hardware.yml"]
-deliverable = "Homogeneous three-GPU DP, TP, and PP CI"
-evidence = ["gh workflow run hardware.yml -f job=dist3"]
+deliverable = "Two network-accessible CUDA ranks for DP, TP, and PP CI"
+evidence = ["gh workflow run hardware.yml -f job=dist2-network"]
 completed_on = ""
 completed_evidence = ""
 deviations = []
@@ -1450,4 +1464,3 @@ evidence = ["gh workflow run hardware.yml -f job=multinode"]
 completed_on = ""
 completed_evidence = ""
 deviations = []
-

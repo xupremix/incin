@@ -14,13 +14,14 @@ use std::path::Path;
 
 use incin_core::dist::mesh::{Data, MeshSpec, Pipeline, TensorParallel};
 use incin_core::dist::{
-    CompletePlacement, DistributedError, DistributedInputs, ElementwisePlacement, LegalTransition,
-    Local, Partial, PipelineStage, Placement, PlacementBuf, PlacementKind, PlacementTransition,
-    PlacementTransitionRule, ReduceShardedAxis, Replicated, ShardDivisible, ShardRemainderPolicy,
-    Sharded, Sum, validate_pipeline_stage, validate_shard,
+    CompletePlacement, ConstPlacement, DistributedError, DistributedInputs, ElementwisePlacement,
+    LegalTransition, Local, Partial, PipelineStage, Placement, PlacementBuf, PlacementKind,
+    PlacementTransition, PlacementTransitionRule, ReduceShardedAxis, Replicated, ShardDivisible,
+    ShardRemainderPolicy, Sharded, Sum, validate_pipeline_stage, validate_shard,
+    validate_transition,
 };
 use incin_core::exec::{ReduceOp, ReshapeSpec};
-use incin_core::prelude::{Shape, ShapeBuf};
+use incin_core::prelude::{Dyn, Shape, ShapeBuf};
 use incin_core::typenum::{U0, U1, U2, U3, U4, U10, U12};
 
 type Mesh = MeshSpec<Data<U1>, TensorParallel<U3>>;
@@ -68,27 +69,65 @@ where
 
 #[test]
 fn every_typestate_has_one_runtime_projection() {
-    assert_eq!(Local::kind(), PlacementKind::Local);
-    assert_eq!(Replicated::<Mesh>::kind(), PlacementKind::Replicated);
+    assert_eq!(Local::PLACEMENT, PlacementKind::Local);
+    assert_eq!(Replicated::<Mesh>::PLACEMENT, PlacementKind::Replicated);
     assert_eq!(
-        Sharded::<Mesh, U1>::kind(),
+        Sharded::<Mesh, U1>::PLACEMENT,
         PlacementKind::Sharded { axis: 1 }
     );
     assert_eq!(
-        Partial::<Mesh, Sum>::kind(),
+        Partial::<Mesh, Sum>::PLACEMENT,
         PlacementKind::Partial {
             reduction: ReduceOp::Sum
         }
     );
     assert_eq!(
-        PipelineStage::<PipelineMesh, 2>::kind(),
+        PipelineStage::<PipelineMesh, 2>::PLACEMENT,
         PlacementKind::PipelineStage { index: 2 }
     );
 
     assert!(PlacementKind::Local.is_complete());
-    assert!(!Partial::<Mesh, Sum>::kind().is_complete());
+    assert!(!Partial::<Mesh, Sum>::PLACEMENT.is_complete());
     assert!(!PlacementKind::Local.is_distributed());
-    assert!(Replicated::<Mesh>::kind().is_distributed());
+    assert!(Replicated::<Mesh>::PLACEMENT.is_distributed());
+
+    let dynamic = <Dyn as Placement>::try_from_incin(PlacementKind::Sharded { axis: 1 }, 2)
+        .expect("Dyn accepts runtime placement metadata");
+    assert_eq!(
+        <Dyn as Placement>::to_incin(&dynamic),
+        PlacementKind::Sharded { axis: 1 }
+    );
+    assert_eq!(<Dyn as Placement>::rank(&dynamic), 2);
+}
+
+#[test]
+fn runtime_selected_transitions_match_the_static_legal_transition_table() {
+    assert_eq!(
+        validate_transition(
+            PlacementKind::Replicated,
+            PlacementKind::Sharded { axis: 0 }
+        ),
+        Ok(PlacementTransition::LocalShard)
+    );
+    assert_eq!(
+        validate_transition(
+            PlacementKind::Partial {
+                reduction: ReduceOp::Sum,
+            },
+            PlacementKind::Replicated,
+        ),
+        Ok(PlacementTransition::AllReduce)
+    );
+    assert_eq!(
+        validate_transition(
+            PlacementKind::PipelineStage { index: 0 },
+            PlacementKind::PipelineStage { index: 1 },
+        ),
+        Err(DistributedError::IllegalTransition {
+            from: PlacementKind::PipelineStage { index: 0 },
+            to: PlacementKind::PipelineStage { index: 1 },
+        })
+    );
 }
 
 #[test]
@@ -211,7 +250,7 @@ fn a_valid_transition_mints_an_inspectable_distributed_proof() {
             ShapeBuf::from_slice(&[3, 4]),
             ShapeBuf::from_slice(&[3, 4]),
         ],
-        PlacementBuf::from([Replicated::<Mesh>::kind()]),
+        PlacementBuf::from([Replicated::<Mesh>::PLACEMENT]),
     );
 
     let validated = Rule::lower(&inputs).unwrap();
@@ -250,7 +289,7 @@ fn distributed_lowering_rejects_metadata_that_does_not_match_its_types() {
         reshape(&[36], &[3, 12]),
         Global::from_dyn(&[3, 12]).unwrap(),
         vec![ShapeBuf::from_slice(&[3, 4]); 3],
-        PlacementBuf::from([Sharded::<Mesh, U1>::kind()]),
+        PlacementBuf::from([Sharded::<Mesh, U1>::PLACEMENT]),
     );
     assert!(matches!(
         Rule::lower(&wrong_placement),
@@ -283,7 +322,7 @@ fn local_shape_cardinality_is_derived_from_the_logical_mesh() {
         reshape(&[36], &[3, 12]),
         Global::from_dyn(&[3, 12]).unwrap(),
         vec![ShapeBuf::from_slice(&[3, 4]); 6],
-        PlacementBuf::from([Replicated::<HybridMesh>::kind()]),
+        PlacementBuf::from([Replicated::<HybridMesh>::PLACEMENT]),
     );
     assert_eq!(HybridRule::lower(&hybrid).unwrap().local_shapes().len(), 6);
 
@@ -291,7 +330,7 @@ fn local_shape_cardinality_is_derived_from_the_logical_mesh() {
         reshape(&[36], &[3, 12]),
         Global::from_dyn(&[3, 12]).unwrap(),
         vec![ShapeBuf::from_slice(&[3, 4]); 3],
-        PlacementBuf::from([Replicated::<HybridMesh>::kind()]),
+        PlacementBuf::from([Replicated::<HybridMesh>::PLACEMENT]),
     );
     assert_eq!(
         HybridRule::lower(&too_few),
@@ -332,7 +371,7 @@ fn pipeline_lowering_checks_the_index_encoded_by_the_typestate() {
         operation.clone(),
         Global::from_dyn(&[3, 4]).unwrap(),
         vec![ShapeBuf::from_slice(&[3, 4])],
-        PlacementBuf::from([PipelineStage::<PipelineMesh, 2>::kind()]),
+        PlacementBuf::from([PipelineStage::<PipelineMesh, 2>::PLACEMENT]),
     );
     assert!(ValidRule::lower(&valid).is_ok());
 
@@ -340,7 +379,7 @@ fn pipeline_lowering_checks_the_index_encoded_by_the_typestate() {
         operation,
         Global::from_dyn(&[3, 4]).unwrap(),
         vec![ShapeBuf::from_slice(&[3, 4])],
-        PlacementBuf::from([PipelineStage::<PipelineMesh, 3>::kind()]),
+        PlacementBuf::from([PipelineStage::<PipelineMesh, 3>::PLACEMENT]),
     );
     assert_eq!(
         InvalidRule::lower(&invalid),
@@ -361,7 +400,7 @@ fn a_partial_value_becomes_complete_only_through_its_collective_transition() {
         operation,
         Global::from_dyn(&[3, 4]).unwrap(),
         vec![ShapeBuf::from_slice(&[3, 4]); 3],
-        PlacementBuf::from([Partial::<Mesh, Sum>::kind()]),
+        PlacementBuf::from([Partial::<Mesh, Sum>::PLACEMENT]),
     );
 
     let validated = Rule::lower(&inputs).unwrap();

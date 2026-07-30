@@ -1114,6 +1114,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fs2"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9564fc758e15025b46aa6643b1b77d047d1a56a1aea6e01002ac0c7026876213"
+dependencies = [
+ "libc",
+ "winapi",
+]
+
+[[package]]
 name = "futures"
 version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1965,6 +1975,7 @@ dependencies = [
  "incin-telemetry",
  "serde",
  "serde_json",
+ "trybuild",
 ]
 
 [[package]]
@@ -1976,6 +1987,7 @@ dependencies = [
  "candle-core",
  "candle-nn",
  "cudarc",
+ "fs2",
  "ggml-quants",
  "half",
  "hashbrown 0.14.5",
@@ -1987,7 +1999,12 @@ dependencies = [
  "rand 0.8.6",
  "rand_distr 0.4.3",
  "rayon",
+ "serde",
+ "serde_json",
  "spin",
+ "tempfile",
+ "thiserror 2.0.18",
+ "trybuild",
  "wgpu",
 ]
 

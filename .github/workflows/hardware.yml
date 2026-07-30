@@ -56,8 +56,8 @@ jobs:
           # Job names owned by rows that have not landed. Accepting them
           # silently would report a green run for a matrix that does not exist.
           case "$REQUESTED" in
-            dist3)
-              echo "::error::job=dist3 is owned by CI-003, which is not implemented"
+            dist2-network)
+              echo "::error::job=dist2-network is owned by CI-003, which is not implemented"
               exit 1 ;;
             multinode)
               echo "::error::job=multinode is owned by CI-004, which is not implemented"

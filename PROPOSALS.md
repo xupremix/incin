@@ -1046,11 +1046,12 @@ guards must still prove the second category at runtime. The API must call this
 *compile-time logical device selection and validation*, never compile-time
 hardware existence validation.
 
-The initial production scope should be synchronous, homogeneous CUDA execution
-within one process using NCCL, followed by multi-process CUDA. A deterministic
-CPU reference transport is required for conformance tests. Elastic training,
-transparent heterogeneous tensor parallelism, and automatic recovery are later
-layers.
+The initial production scope is synchronous, homogeneous NCCL execution across
+exactly two CUDA ranks that may live in separate processes on separate
+network-reachable hosts. A deterministic CPU reference transport is required
+for conformance tests. Single-process execution remains a useful fixture, but
+cannot discharge a network claim. Elastic training, transparent heterogeneous
+tensor parallelism, and automatic recovery are later layers.
 
 #### Parallelism choices
 
@@ -1063,10 +1064,12 @@ layers.
 | Expert parallel | Distribute experts; all-to-all tokens | Natural MoE scaling | Load imbalance and network sensitivity |
 | Hybrid | Product mesh such as DP × TP × PP | Combines capacity and throughput | Largest planning and tuning search space |
 
-For three GPUs, valid examples are `DP=3`, `TP=3`, or `PP=3`. A rectangular
-`2 × 2` mesh is not valid and must not be partially populated implicitly.
-Three-way tensor parallelism additionally requires relevant hidden, vocabulary,
-or attention-head dimensions to divide by three unless padding is explicit.
+For the first production topology, valid examples are `DP=2`, `TP=2`, or
+`PP=2` over two network-accessible CUDA ranks. A rectangular `2 × 2` mesh has
+world size four and is not valid for that device set; it must not be partially
+populated implicitly. Two-way tensor parallelism additionally requires
+relevant hidden, vocabulary, or attention-head dimensions to divide by two
+unless padding is explicit.
 
 #### Typed logical mesh and physical binding
 
@@ -1388,8 +1391,8 @@ Distributed execution, proof lowering, and autotuning must not force a
 researcher to understand placement algebra before running an experiment. The
 public surface follows progressive disclosure:
 
-1. **Automatic:** select three devices and let Incin produce and explain a safe
-   plan.
+1. **Automatic:** select two network-reachable CUDA ranks and let Incin produce
+   and explain a safe plan.
 2. **Configured:** choose data/tensor/pipeline policy and memory constraints,
    while placement and collectives remain compiler-generated.
 3. **Explicit:** use typed meshes, placements, collectives, and schedules when
@@ -1399,11 +1402,13 @@ The automatic path and expert path lower into the same validated plan. “Easy�
 must not mean silent CPU transfer, hidden padding, relaxed determinism, or
 unbounded autotuning. Every automatic decision is inspectable and reproducible.
 
-The minimal three-GPU workflow should remain ordinary Rust:
+The minimal two-rank network workflow should remain ordinary Rust. The launcher
+supplies one local CUDA device and the same rendezvous identity to each process:
 
 ```rust
+let context = DistributedContext::from_env()?;
 let run = Trainer::new(model, optimizer)
-    .devices(DeviceSet::cuda(0..3))
+    .devices(context.cuda_devices(2)?)
     .parallel(ParallelStrategy::Auto)
     .build()?;
 
@@ -2331,24 +2336,27 @@ Deliverables:
 - logical mesh, physical binding, topology fingerprints, and plan guards;
 - unified `Tensor` placement types and distributed operation rules;
 - deterministic CPU reference collectives and optional NCCL transport;
-- data-parallel all-reduce, three-way tensor-parallel linear layers, and
-  three-stage pipeline execution;
+- data-parallel all-reduce, two-way tensor-parallel linear layers, and
+  two-stage pipeline execution across the network;
 - collective adjoints integrated with unified autograd;
 - per-rank memory planning, plan-hash agreement, and fail-stop errors;
 - collective and plan autotuning with distributed permits and cache separation;
 - FSDP/ZeRO design validation after basic DP/TP/PP correctness;
-- multi-process rendezvous only after single-process multi-GPU stability.
+- a two-process test harness that supplies NCCL identity externally and proves
+  fail-stop shutdown; the general public rendezvous/launcher remains DST-015.
 
 Exit criteria:
 
 - invalid static sharding fails compilation and invalid dynamic sharding fails
   before allocation or communicator launch;
-- binding a three-GPU plan to any other device count fails clearly;
+- binding a two-rank plan to any other device count or network identity fails
+  clearly;
 - all ranks agree on graph hash, collective sequence, count, dtype, and bytes;
 - distributed forward/backward matches single-device references;
-- `DP=3`, `TP=3`, and `PP=3` reference models pass hardware CI;
+- `DP=2`, `TP=2`, and `PP=2` reference models pass on two network-accessible
+  CUDA workers;
 - a failed tuning candidate or rank never commits a cache entry;
-- three-GPU performance reports separate compute, communication, overlap,
+- two-rank network performance reports separate compute, communication, overlap,
   bubbles, and imbalance instead of reporting only aggregate speedup.
 
 ### Phase 7: High-level capabilities and developer UX
@@ -2360,7 +2368,7 @@ Deliverables:
 
 - `cargo incin doctor`;
 - explicit device selection;
-- automatic three-GPU `Trainer` workflow and explainable planning report;
+- automatic two-rank network `Trainer` workflow and explainable planning report;
 - `mesh!`, `placement!`, `axes!`, and model helper attributes;
 - explicit placement-aware `Tensor` API before optional `parallel!` block syntax;
 - `cargo incin plan`, `run`, `tune`, and `explain` workflows;
@@ -2381,7 +2389,7 @@ Exit criteria:
 - no optional backend is described as legacy merely because it is external;
 - capability documentation is generated from tested registrations;
 - diagnostic output provides a concrete remediation for common failures.
-- a three-GPU example contains no hand-written collective calls;
+- a two-rank network example contains no hand-written collective calls;
 - every automatic placement and tuning decision is inspectable;
 - macro errors point to user syntax rather than expanded typenum internals;
 - exported manifests reproduce a plan or enumerate incompatibilities.
@@ -3256,9 +3264,9 @@ Silicon · `compile` compiled execution · `grad` autograd · `dist` distributed
 | EXE-009 | core | exec | [~] | EXE-008 | `crates/incin-core/src/tensor/backend.rs; crates/incin-backends/src/dispatch.rs` | Remove the monolithic adapter and the default unsupported-operation surface | `cargo test --workspace` |
 | EXE-010 | preview | exec | [x] | EXE-008 | `crates/incin-backends/src/external/` | external-candle SDK conformance suite and a backend-authoring template | `cargo test -p incin-backends --features external-candle --test conformance` |
 | TUN-000 | preview | tune | [x] | — | `crates/incin-backends/src/tuning.rs` | Existing CUDA tuner inventoried: 2 warmups, 7 samples, median selection, 1024-entry cache, single-flight coordination | `cargo test -p incin-backends --features autotune` |
-| TUN-001 | preview | tune | [ ] | GOV-004 | `crates/incin-backends/src/tuning/identity.rs` | Stable device, compiler, and topology identities replacing ordinal plus compute capability; alias tests | `cargo test -p incin-backends --features autotune --test tuning_identity` |
-| TUN-002 | preview | tune | [ ] | TUN-001 | `crates/incin-backends/src/tuning/cache.rs` | Atomic bounded persistent cache with corruption, schema, and eviction tests | `cargo test -p incin-backends --features autotune --test tuning_cache` |
-| TUN-003 | preview | tune | [ ] | EXE-005,TUN-002 | `crates/incin-backends/src/tuning/service.rs` | General disabled, heuristic, coordinated-warmup, and profile-guided tuning service | `cargo test -p incin-backends --features autotune --test tuning_service` |
+| TUN-001 | preview | tune | [x] | GOV-004 | `crates/incin-backends/src/tuning/identity.rs` | Stable device, compiler, and topology identities replacing ordinal plus compute capability; alias tests | `cargo test -p incin-backends --features autotune --test tuning_identity` |
+| TUN-002 | preview | tune | [x] | TUN-001 | `crates/incin-backends/src/tuning/cache.rs` | Atomic bounded persistent cache with corruption, schema, and eviction tests | `cargo test -p incin-backends --features autotune --test tuning_cache` |
+| TUN-003 | preview | tune | [x] | EXE-005,TUN-002 | `crates/incin-backends/src/tuning/service.rs` | General disabled, heuristic, coordinated-warmup, and profile-guided tuning service | `cargo test -p incin-backends --features autotune --test tuning_service` |
 | TUN-004 | preview | tune | [ ] | EXE-003,TUN-003 | `crates/incin-backends/src/tuning/signature.rs` | Shape and layout driven legal-candidate pruning; extends KernelKey rather than adding a parallel KernelSignature | `cargo test -p incin-backends --features autotune --test tuning_pruning` |
 | TUN-005 | preview | tune | [ ] | TUN-004 | `crates/incin-backends/src/cuda/ops/` | Pointwise, reduction, and normalization CUDA tuning parity | `cargo test -p incin-backends --features cuda,autotune  # CUDA hardware` |
 | TUN-006 | preview | tune | [ ] | TUN-005 | `crates/incin-backends/src/cuda/ops/{matmul,conv}.rs` | GEMM and convolution library-versus-native tuning with a crossover report | `cargo test -p incin-backends --features cuda,autotune  # CUDA hardware` |
@@ -3283,25 +3291,25 @@ Silicon · `compile` compiled execution · `grad` autograd · `dist` distributed
 | GRD-001 | core | grad | [x] | EXE-006 | `crates/incin-core/src/exec/context.rs` | Explicit ExecutionContext with nested and concurrent tests | `cargo test -p incin-core --test exec_context` |
 | GRD-002 | core | grad | [x] | GRD-001 | `crates/incin-core/src/exec/context.rs; crates/incin-core/src/tensor/grad.rs` | G to GradMode propagation; NoGrad records zero nodes and saves nothing | `cargo test -p incin-core --test nograd_records_nothing` |
 | GRD-003 | core | grad | [x] | GRD-001 | `crates/incin-core/src/exec/tape.rs` | Backend-neutral tape nodes with CPU parity | `cargo test -p incin-backends --no-default-features --features std,cpu --test gradient_parity` |
-| GRD-004 | core | grad | [ ] | GRD-003,EXE-008 | `crates/incin-backends/src/{cuda,wgpu}/` | CUDA and WGPU gradient recipes with hardware parity | `cargo test -p incin-backends --features wgpu --test gradient_parity` |
+| GRD-004 | core | grad | [x] | GRD-003,EXE-008 | `crates/incin-backends/src/{cuda,wgpu}/` | CUDA and WGPU gradient recipes with hardware parity | `cargo test -p incin-backends --features wgpu --test gradient_parity` |
 | GRD-005 | core | grad | [x] | GRD-003 | `crates/incin-core/src/exec/tape.rs` | Structured backward and NaN failures; no expected-failure panic paths | `cargo test -p incin-core --test backward_errors` |
 | GRD-006 | core | grad | [ ] | GRD-004 | `crates/incin-backends/src/{cpu,cuda,wgpu}/tape.rs` | Saved-tensor lifetime owned by the graph; delete all three backend-local tapes | `cargo test --workspace` |
 | GRD-007 | preview | grad | [ ] | GRD-006,CMP-003 | `crates/incin-core/src/compiled/alloc.rs` | Compiled-graph saved-tensor liveness and fusion integration | `cargo test -p incin-core --test compiled_alloc` |
 | DST-001 | preview | dist | [x] | GOV-002,SHP-007 | `crates/incin-core/src/dist/mesh.rs` | Typed meshes and ValidMesh; valid and invalid world-size compile tests | `cargo test -p incin-core --features distributed --test mesh_compile` |
 | DST-002 | preview | dist | [x] | DST-001,EXE-005 | `crates/incin-core/src/dist/mesh.rs` | Physical binding, topology fingerprint, and runtime guards | `cargo test -p incin-core --features distributed --test mesh_bind` |
 | DST-003 | preview | dist | [x] | DST-001,EXE-002 | `crates/incin-core/src/dist/placement.rs; crates/incin-core/src/dist/rule.rs` | Placement typestates, PlacementKind, and rules; divisibility and transition compile tests; ValidatedDistributed sealed like Validated | `cargo test -p incin-core --features distributed --test placement_rules` |
-| DST-004 | preview | dist | [ ] | DST-003,EXE-004 | `crates/incin-core/src/tensor/base.rs` | Unified Tensor global and local metadata with reshard invariants | `cargo test -p incin-core --test placement_tensor` |
-| DST-005 | preview | dist | [ ] | DST-002 | `crates/incin-backends/src/dist/reference.rs` | Deterministic CPU reference collectives and their adjoints | `cargo test -p incin-backends --features distributed-reference` |
-| DST-006 | preview | dist | [ ] | DST-002,GOV-004 | `crates/incin-backends/src/dist/nccl.rs` | Optional NCCL transport; three-GPU order, count, and failure tests | `cargo test -p incin-backends --features distributed-nccl  # 3x CUDA` |
-| DST-007 | preview | dist | [ ] | DST-003,DST-005 | `crates/incin-core/src/dist/plan.rs` | Collective plans and sequence tokens; divergent-plan preflight test | `cargo test -p incin-core --test collective_plan` |
-| DST-008 | preview | dist | [ ] | DST-006,DST-007,GRD-004 | `crates/incin-core/src/dist/` | DP=3 training with single-GPU numerical and gradient parity | `cargo test -p incin --features distributed-nccl --test dp3  # 3x CUDA` |
-| DST-009 | preview | dist | [ ] | DST-004,DST-006,DST-007 | `crates/incin-core/src/nn/linear.rs` | TP=3 column and row linear plus attention parity | `cargo test -p incin --features distributed-nccl --test tp3  # 3x CUDA` |
-| DST-010 | preview | dist | [ ] | CMP-002,DST-006,DST-007 | `crates/incin-core/src/dist/pipeline.rs` | GPipe then 1F1B PP=3; parity, bubble, and deadlock evidence | `cargo test -p incin --features distributed-nccl --test pp3  # 3x CUDA` |
-| DST-011 | preview | dist | [ ] | DST-008,DST-009,DST-010 | `crates/incin-core/src/dist/plan.rs` | Hybrid planner and report with feasibility and memory evidence | `cargo test -p incin-core --test hybrid_plan` |
-| DST-012 | preview | dist | [ ] | TUN-003,DST-006 | `crates/incin-backends/src/dist/tuning.rs` | Coordinated collective tuning; maximum-rank objective and all-rank commit tests | `cargo test -p incin-backends --features distributed-nccl  # 3x CUDA` |
+| DST-004 | preview | dist | [x] | DST-003,EXE-004 | `crates/incin-core/src/tensor/base.rs` | Unified Tensor global and local metadata with reshard invariants | `cargo test -p incin-core --features distributed --test placement_tensor` |
+| DST-005 | preview | dist | [x] | DST-002 | `crates/incin-backends/src/dist/reference.rs` | Deterministic CPU reference collectives and their adjoints | `cargo test -p incin-backends --features distributed-reference` |
+| DST-006 | preview | dist | [ ] | DST-002,GOV-004 | `crates/incin-backends/src/dist/nccl.rs` | Optional NCCL transport; two networked CUDA ranks with order, count, identity, timeout, and failure tests | `cargo test -p incin-backends --features distributed-nccl  # 2x networked CUDA` |
+| DST-007 | preview | dist | [x] | DST-003,DST-005 | `crates/incin-core/src/dist/plan.rs` | Collective plans and sequence tokens; divergent-plan preflight test | `cargo test -p incin-core --features distributed --test collective_plan` |
+| DST-008 | preview | dist | [~] | DST-006,DST-007,GRD-004 | `crates/incin-core/src/dist/` | DP=2 networked training with single-GPU numerical and gradient parity | `cargo test -p incin --features distributed-nccl --test dp2_network  # 2x networked CUDA` |
+| DST-009 | preview | dist | [~] | DST-004,DST-006,DST-007 | `crates/incin-core/src/nn/linear.rs` | TP=2 networked column and row linear plus attention parity | `cargo test -p incin --features distributed-nccl --test tp2_network  # 2x networked CUDA` |
+| DST-010 | preview | dist | [~] | CMP-002,DST-006,DST-007 | `crates/incin-core/src/dist/pipeline.rs` | GPipe then 1F1B PP=2 over the network; parity, bubble, and deadlock evidence | `cargo test -p incin --features distributed-nccl --test pp2_network  # 2x networked CUDA` |
+| DST-011 | preview | dist | [~] | DST-008,DST-009,DST-010 | `crates/incin-core/src/dist/plan.rs` | Hybrid planner and report with feasibility and memory evidence | `cargo test -p incin-core --features distributed --test hybrid_plan` |
+| DST-012 | preview | dist | [~] | TUN-003,DST-006 | `crates/incin-backends/src/dist/tuning.rs` | Coordinated collective tuning; maximum-rank objective and all-rank commit tests | `cargo test -p incin-backends --features distributed-nccl  # 2x networked CUDA` |
 | DST-013 | preview | dist | [ ] | CMP-004,DST-011,DST-012 | `crates/incin-core/src/compiled/tuning.rs` | Bounded plan tuning measured against a one-GPU baseline | `cargo test -p incin-core --test plan_tuning` |
-| DST-014 | exploratory | dist | [ ] | CMP-003,GRD-007,DST-008 | `crates/incin-core/src/dist/fsdp.rs` | FSDP and ZeRO prototype with persistent and transient memory parity | `cargo test -p incin --features distributed-nccl --test fsdp  # 3x CUDA` |
-| DST-015 | preview | dist | [ ] | DST-011 | `crates/incin-core/src/dist/context.rs` | Multi-process rendezvous and launcher with timeout and shutdown tests | `cargo test -p incin --features distributed-nccl --test rendezvous` |
+| DST-014 | exploratory | dist | [ ] | CMP-003,GRD-007,DST-008 | `crates/incin-core/src/dist/fsdp.rs` | FSDP and ZeRO prototype with persistent and transient memory parity | `cargo test -p incin --features distributed-nccl --test fsdp  # 2x networked CUDA` |
+| DST-015 | preview | dist | [~] | DST-011 | `crates/incin-core/src/dist/context.rs` | Multi-process rendezvous and launcher with timeout and shutdown tests | `cargo test -p incin --features distributed-nccl --test rendezvous` |
 | DST-016 | preview | dist | [ ] | DST-011,DST-015 | `crates/incin-core/src/nn/save.rs` | Global checkpoint manifest and explicit cross-mesh resharded load | `cargo test -p incin-core --test checkpoint_reshard` |
 | UX-001 | preview | ux | [x] | EXE-005 | `crates/incin/src/train.rs` | Automatic Trainer; an unchanged model runs on CPU and on three GPUs | `cargo test -p incin --features train --test trainer` |
 | UX-002 | preview | ux | [ ] | DST-001 | `crates/incin-macros/src/mesh.rs` | mesh! with expansion, hygiene, span, and compile-fail tests | `cargo test -p incin-macros --test mesh_macro` |
@@ -3320,7 +3328,7 @@ Silicon · `compile` compiled execution · `grad` autograd · `dist` distributed
 | UX-015 | preview | ux | [ ] | EXE-005,GRD-001 | `crates/incin-core/src/exec/precision.rs` | PrecisionPolicy and loss scaling extending the existing DTypePolicy; mixed-precision parity tests | `cargo test -p incin-core --test precision_policy` |
 | CI-001 | core | ci | [x] | GOV-005,GOV-003 | `.github/workflows/ci.yml` | Feature-powerset CI preserving the bare CPU default; adds cargo doc and drops blanket package exclusions | `act -j powerset  # or CI run` |
 | CI-002 | core | ci | [x] | EXE-008 | `.github/workflows/hardware.yml` | Scheduled CUDA and WGPU hardware matrix | `gh workflow run hardware.yml` |
-| CI-003 | preview | ci | [ ] | DST-008,DST-009,DST-010 | `.github/workflows/hardware.yml` | Homogeneous three-GPU DP, TP, and PP CI | `gh workflow run hardware.yml -f job=dist3` |
+| CI-003 | preview | ci | [ ] | DST-008,DST-009,DST-010 | `.github/workflows/hardware.yml` | Two network-accessible CUDA ranks for DP, TP, and PP CI | `gh workflow run hardware.yml -f job=dist2-network` |
 | CI-004 | preview | ci | [ ] | DST-015 | `.github/workflows/hardware.yml` | Multi-process and multi-node CI with topology metadata | `gh workflow run hardware.yml -f job=multinode` |
 | CI-005 | core | ci | [x] | GOV-005 | `crates/incin-macros/tests/` | Macro trybuild, rustfmt, rename, and hygiene suite for the existing s!, idx!, and #[module] | `cargo test -p incin-macros` |
 | CI-006 | preview | ci | [ ] | GOV-005,TUN-008,DST-013 | `.github/workflows/ci.yml` | CPU, GPU, and distributed performance and cache gates | `cargo xtask budgets` |
@@ -3330,7 +3338,6 @@ Silicon · `compile` compiled execution · `grad` autograd · `dist` distributed
 | REL-002 | core | release | [ ] | REL-001,CI-002,CI-005,UX-013,UX-014,PRF-002,GRD-002,GRD-005 | `CHANGELOG.md` | Single-device release-readiness evidence; the deprecated candle alias is removed here | `cargo test --workspace --all-features` |
 | REL-003 | preview | release | [ ] | REL-002,CI-003,CI-006,CI-007,CI-008,UX-005,UX-007,UX-008,UX-009,UX-012,UX-015,DST-011,EXE-010,CMP-006,MTL-006,PRF-003,PRF-004,TUN-008,GRD-007 | `CHANGELOG.md` | Distributed preview readiness and the fail-stop contract | `gh workflow run hardware.yml` |
 | REL-004 | preview | release | [ ] | REL-003,CI-004,DST-016 | `CHANGELOG.md` | Multi-node preview scope and recovery limits published | `gh workflow run hardware.yml -f job=multinode` |
-
 ### Impact versus effort matrix
 
 | Proposal | Tasks | Effort | Correctness | Performance | UX | Actual developer/researcher impact |
@@ -3359,12 +3366,12 @@ Silicon · `compile` compiled execution · `grad` autograd · `dist` distributed
 | Typed logical device mesh | DST-001,DST-002 | High | High | Medium | Medium | Experts prove topology; ordinary users only select devices. |
 | Unified `Tensor` placement | DST-003,DST-004 | High | High | High | High | One tensor type; local code unchanged, explicit sharding optional/inferred. |
 | NCCL transport | DST-006 | High | High | High | Medium | Normal models need no handwritten multi-GPU communication. |
-| DP/TP/PP parallelism | DST-008,DST-009,DST-010 | High | High | High | High | Models span three GPUs through policy rather than rewrites. |
+| DP/TP/PP parallelism | DST-008,DST-009,DST-010 | High | High | High | High | Models span two networked CUDA ranks through policy rather than rewrites. |
 | FSDP/ZeRO | DST-014 | High | High | High | High | Larger training fits through memory policy, not manual gathering. |
 | Collective autotuning | DST-012 | High | Medium | High | Low | Communication adapts to topology within explicit budgets. |
 | Distributed-plan tuning | DST-013 | High | Medium | High | Medium | Auto mode measures, selects, and explains DP/TP/PP choices. |
 | Distributed visualization | UX-012 | Medium | Medium | Medium | High | See shards, collectives, bubbles, memory, and scaling bottlenecks. |
-| Automatic `Trainer` planning | UX-001 | High | Medium | High | High | Moving to three GPUs is mainly a device/policy change. |
+| Automatic `Trainer` planning | UX-001 | High | Medium | High | High | Moving to two networked CUDA ranks is mainly a device/policy change. |
 | `mesh!`/`placement!` | UX-002,UX-003 | Medium | High | Low | High | Readable topology/sharding without type-tree boilerplate. |
 | Module parallel attributes | UX-004 | High | High | Medium | High | Placement intent on layers; no manual scatter/all-reduce plumbing. |
 | `axes!`/`einsum!` | UX-009,UX-010 | High | High | Medium | High | Semantic names/equations replace fragile indices/reshape chains. |
@@ -3455,7 +3462,7 @@ Cargo aliases only when technically safe.
 | Distributed tuning leader fails | Expiring distributed lease; discard partial measurements |
 | Cached plan targets another topology | Exact topology/transport fingerprint and runtime guard |
 | FSDP transient memory is underestimated | Model collective workspaces, enforce headroom, allocation dry run |
-| Three GPUs regress performance | Single-device baseline, critical-path telemetry, planner may reject scaling |
+| Two networked CUDA ranks regress performance | Single-device baseline, critical-path telemetry, planner may reject scaling |
 | Rank failure corrupts training state | Fail-stop context invalidation; resume only from a consistent checkpoint |
 | Static placement types harm UX | High-level planner, aliases, global/local shape diagnostics, graph view |
 
@@ -3501,7 +3508,8 @@ For every advertised descriptor:
 - dynamic guards for device count, dimension divisibility, memory, and topology;
 - collective count/dtype/byte/sequence agreement across ranks;
 - reference transport tests for all collective operations and adjoints;
-- numerical and gradient parity for `DP=3`, `TP=3`, and `PP=3` models;
+- numerical and gradient parity for `DP=2`, `TP=2`, and `PP=2` models across
+  the network;
 - reshape, transpose, reduction, and reshard placement-property tests;
 - injected rank timeout, communicator failure, divergent graph, and tuning
   leader failure without deadlock or partial cache commit;
@@ -3514,9 +3522,9 @@ candidate, maximum-rank time drives selection, topology changes invalidate
 results, illegal cached winners are ignored, budgets terminate search, and
 candidate measurement cannot mutate model state.
 
-Hardware CI must include at least one homogeneous three-GPU worker. Multi-node
-claims require a separate worker topology and network metadata; a single-node
-test cannot validate them.
+Hardware CI must include two homogeneous CUDA workers reachable over a real
+network, with one rank per process and recorded topology metadata. A
+single-node or loopback-only test cannot validate that claim.
 
 #### Performance gates
 
@@ -3556,7 +3564,8 @@ At minimum, CI covers:
 - WGPU runtime tests on a controlled adapter where available;
 - compiled documentation examples for their minimum feature sets;
 - CPU reference-collective conformance without distributed default features;
-- single-process three-GPU NCCL forward/backward and failure-injection tests;
+- two-process, two-host NCCL forward/backward, timeout, and failure-injection
+  tests;
 - distributed autotuning agreement and cache-invalidation tests;
 - multi-process and multi-node jobs before advertising those deployment modes;
 - feature-isolated `distributed-nccl` builds so bare CPU remains unaffected.
@@ -3663,7 +3672,9 @@ changing nothing.
 | `DeviceMesh`, `MeshId`, `CollectiveGroups`, `TopologyFingerprint` | `incin-core::dist::mesh` | DST-002 | built: `TopologyProbe` is the observation seam, implemented by `DST-005` and `DST-006` rather than here |
 | `Placement` (trait), `PlacementKind` (enum), `Local`, `Replicated`, `Sharded`, `Partial`, `PipelineStage`, `PlacementBuf`, `ShardRemainderPolicy` | `incin-core::dist::placement` | DST-003 | — |
 | `DistributedRule`, `ValidatedDistributed`, `DistributedError` | `incin-core::dist::rule` | DST-003 | sealed on the same terms as `Validated<O>` |
-| `CollectiveBackend`, `CollectivePlan`, `GroupId`, `StreamId`, `ReduceOp` | `incin-backends::dist::collective` | DST-005 | — |
+| `CollectiveDType`, `CollectiveKind`, `CollectiveError`, `GroupId`, `StreamId` | `incin-core::dist::collective` | DST-005,DST-007 | re-exported by `incin-backends::dist`; shared vocabulary cannot live below core planning |
+| `CollectiveBackend`, `CollectiveOutput` | `incin-backends::dist::collective` | DST-005 | consumes the core vocabulary without making core depend on a backend |
+| `CollectivePlan`, `CollectiveDescriptor`, `SequenceToken`, plan hash, preflight agreement | `incin-core::dist::plan` | DST-007 | consumes placement proofs and the transport-neutral collective vocabulary |
 | `ParallelOptions`, `ParallelStrategy`, `StrategySet`, `MemoryLimit`, `PipelineSchedule`, `PlanObjective` | `incin-core::dist::plan` | DST-011 | — |
 | `DistributedContext` | `incin-core::dist::context` | DST-015 | — |
 
@@ -3843,3 +3854,38 @@ justification as an entry before it may start.
 | D-067 (2026-07-30) | `PipelineStage<Mesh, INDEX>` proves same-stage identity statically and checks `INDEX < stages` at runtime. | A generic const bound comparing `INDEX` with `M::PIPELINE`. The crate promises stable Rust, and comparing a const parameter with a trait-associated const requires unstable generic const expressions. Replacing `INDEX` with typenum would contradict the public shape fixed in §2.11. |
 | D-068 (2026-07-30) | `DST-003`'s evidence command includes `--features distributed`, and its trybuild cases have a dedicated directory. | The original ungated command and the default compile-fail directory. Appendix B requires Preview API behind a non-default feature; the original command would run zero cfg-gated tests and print success, while cases in the default directory would fail because their imports are absent rather than because a placement rule rejected them. |
 | D-069 (2026-07-30) | Distributed `Placement` implementations require `Mesh: ValidMesh`; their marker `Clone` and `Debug` implementations do not require those traits from `Mesh`. | Accepting any `'static` type as a mesh, or deriving the marker traits. The first bypasses `DST-001` completely. The second makes `Replicated<MeshSpec<...>>` fail its own `Placement` supertraits because `MeshSpec` is a proof marker that intentionally implements neither `Clone` nor `Debug`. |
+| D-070 (2026-07-30) | `Tensor<S, B, K, G, P = Local>` stores placement through `P::Field`: zero bytes for `Local`, one rank for static distributed placements, and kind plus rank for `Dyn`. | Storing `PlacementKind` and rank in every tensor. That would charge local and statically selected programs for runtime flexibility they did not request, contradicting the static/`Dyn` policy already used by shapes, dtypes, and devices. |
+| D-071 (2026-07-30) | A placed tensor can only be minted from rank-local storage plus a sealed `ValidatedDistributed` proof; distributed construction failures use feature-gated `PlacedTensorError`. | Reusing local constructors with a placement argument, or adding feature-dependent variants to the crate-wide `Error`. The first permits arbitrary storage/placement pairs; the second makes downstream exhaustive matches depend on the feature set. |
+| D-072 (2026-07-30) | `ProcessPerRank` fingerprints retain the local rank for diagnostics, but their stable digest hashes the shared layout kind and world, not the observer's rank. | Hashing the entire process-local view. Rank zero and rank one would then derive different `MeshId` values for the same physical job and could never pass the identity agreement required before a collective. |
+| D-073 (2026-07-30) | The first CUDA distributed runtime target is two ranks in separate processes on network-accessible hosts; future DP/TP/PP, NCCL, tuning, and CI acceptance rows use that topology. | The earlier planned three-CUDA-device, primarily single-process target. Two real network ranks exercise process identity, transport reachability, timeout, and fail-stop behavior that three devices in one host do not. Completed three-rank logical-mesh evidence remains historical and valid because the mesh algebra is cardinality-generic; it is not a future hardware requirement. |
+| D-074 (2026-07-30) | Transport-neutral dtype, kind, error, group, and stream vocabulary lives in `incin-core::dist::collective`; backends re-export and implement it, while plans, sequence tokens, hashes, and preflight also remain in core. | Keeping the original Appendix A row that grouped every collective type with the backend transport. Core planning cannot depend on `incin-backends` without a crate cycle, and duplicating the vocabulary would let a plan and executor disagree. |
+| D-075 (2026-07-30) | Static plan endpoints require `PlacementOn<M>` in addition to `LegalTransition`, where `M` is the builder's bound `DeviceMesh`. | Treating any legal transition as legal in any plan. `Sharded<MeshA, Axis> -> Replicated<MeshA>` is internally legal but must not enter a plan physically bound for `MeshB`; placement kinds deliberately omit runtime mesh identity, so the type bound is the proof. |
+| D-076 (2026-07-30) | Core preflight is a pure comparison over one `PlanSummary` per rank and returns sealed `AgreedPlan`; exchanging summaries belongs to the transport/launcher. | Opening sockets or invoking a collective from `incin-core`. That would break `no_std`, introduce a backend dependency cycle, and make the agreement rule untestable without a live communicator—the exact deadlock preflight exists to precede. |
+| D-077 (2026-07-30) | Native NCCL execution is rank-local and plan-bound: one process submits one `NcclBuffer<K>`, while the deterministic reference backend retains its all-rank `CollectiveBackend` interface. | Forcing NCCL through the reference backend's slice of every rank's buffers. A process-per-rank host cannot possess its peer's CUDA allocation, so that signature would either lie about ownership or stage peer data through host memory and cease to be NCCL execution. |
+| D-078 (2026-07-30) | Two-host startup uses two versioned, bounded TCP sessions: first exchange physical CUDA/NCCL identity to bind one mesh, then exchange the resulting plan summary and NCCL unique id before communicator creation. | Asking operators to copy both GPU UUIDs/architectures into environment variables, or initializing NCCL before comparing plans. The first makes persistent identity an unchecked deployment convention; the second reintroduces the divergent-order deadlock preflight exists to prevent. |
+| D-079 (2026-07-30) | The first NCCL communicator submits the agreed plan strictly in sequence on one physical CUDA stream; logical `StreamId` remains observable but does not imply concurrency yet. | Creating one CUDA/NCCL communicator per logical stream before dependency scheduling exists. Serial submission satisfies every ordering edge and is the correctness baseline; premature concurrency would turn `depends_on` from checked metadata into an unenforced suggestion. |
+| D-080 (2026-07-30) | Collective descriptors carry a caller-stable semantic tag in the plan hash; DP uses it as `GradientId`. | Hashing only kind, dtype, shape, placement, and sequence. Two parameters can share every one of those fields, so ranks that swap them would agree on the old hash and silently reduce each gradient into the other parameter. |
+| D-081 (2026-07-30) | DP=2 is the exact static mesh `MeshSpec<Data<U2>>`; every local gradient is `Partial<Mean>` and becomes `Replicated`, and the NCCL entry point accepts a typed `Tensor` so `K` is inferred rather than caller-asserted. | A world-size runtime check over an arbitrary mesh, or a raw-storage method with a freely chosen dtype generic. The first would let TP=2 masquerade as DP=2; the second would let a caller claim an integer buffer was `f32`, bypassing the static/`Dyn` split. |
+| D-082 (2026-07-30) | Reduction legality has both `CollectiveReductionDType<R>` and `validate_collective_reduction`: static integer mean and local-only transitions are compile errors, while `Dyn` rejects an integer mean while building the plan. | Treating every scalar-encodable dtype as valid for every reduction and waiting for NCCL execution to reject it. That made an invalid static program compile and moved a deterministic semantic error past cross-rank preflight. |
+| D-083 (2026-07-30) | TP=2 is the exact static mesh `MeshSpec<Data<U1>, TensorParallel<U2>, Pipeline<U1>>`; static linear/head extents require `ShardDivisible<U2>` and floating dtypes, while `Dyn` checks the same extent, axis, overflow, and dtype rules before planning. | A world-size runtime check plus freely supplied counts and dtypes. That would let DP=2 masquerade as TP=2 and would move deterministic shape/dtype failures past cross-rank preflight. |
+| D-084 (2026-07-30) | A tensor-parallel semantic tag encodes both stable `TensorParallelId` and column/row/attention kind, and direct NCCL execution infers `K` from the input `Tensor`. | Tagging only by shape/collective kind, or accepting a raw buffer with a caller-selected dtype. Equal-shaped column and attention gathers could then swap silently, while a raw buffer could bypass the static/`Dyn` dtype split. |
+| D-085 (2026-07-30) | NCCL all-gather remains rank-major at the transport boundary; the typed tensor path validates the requested global shape and materializes rank-axis movement on CUDA before returning a replicated tensor layout. | Reinterpreting concatenated rank shards directly as row-major global storage. That is correct only for a leading sharded axis or batch one and silently permutes batched column-parallel outputs. |
+| D-086 (2026-07-30) | A pipeline boundary is one global `SendRecv { source, destination }` descriptor hashed identically by both ranks; its adjoint reverses the endpoints. | Hashing a local `Send` on one process and a local `Recv` on the other. Those plans necessarily differ before launch, while omitting direction from the hash lets ranks disagree on peers and deadlock. |
+| D-087 (2026-07-30) | PP=2 is the exact static mesh `MeshSpec<Data<U1>, TensorParallel<U1>, Pipeline<U2>>`; static dtype, shape, nonzero microbatch count, and schedule are type-selected, while the `Dyn` builder validates the matching runtime dtype, shape cardinality, count, and schedule. | A world-size runtime check with freely supplied payload metadata. That would let DP=2 or TP=2 masquerade as PP=2 and move deterministic dtype/count errors past preflight. |
+| D-088 (2026-07-30) | GPipe and 1F1B store an explicit two-stage clock timeline, bubble count, and peak live-activation count, while transport launch order remains one dependency chain on the initial communicator. | Treating the schedule as a label over an unordered send/receive list, or claiming logical overlap creates physical stream concurrency. The explicit timeline makes bubbles and activation residency testable; serial communication remains the fail-safe correctness baseline. |
+| D-089 (2026-07-30) | The two-rank hybrid planner compares DP=2, TP=2, and PP=2 over a `TwoRankPlanningTopology` that retains only shared physical identity and link assumptions. | Carrying the `MeshId` of one candidate into the search. A `MeshId` includes logical degrees, so beginning from a DP=2 identity would make TP=2 and PP=2 appear to target a different machine even when all three interpretations use the same two devices. |
+| D-090 (2026-07-30) | Static manual entry points prove only the selected strategy's constraints, while static auto proves every candidate's dtype, divisibility, nonzero count, and bound; `Dyn` filters the same candidates with structured runtime reasons. | Making a runtime `StrategySet` weaken generic bounds. Stable Rust cannot conditionally require `ShardDivisible<U2>` from a bitmask value, and accepting invalid static alternatives would contradict the static/`Dyn` contract. Manual entry points avoid forcing irrelevant DP, TP, or PP proofs. |
+| D-091 (2026-07-30) | Planning reports label step cost as a deterministic analytical score and expose its memory, communication, and topology inputs; measured calibration belongs to DST-012/DST-013. | Presenting link-weighted byte arithmetic as elapsed time. Until coordinated dry runs and measurements exist, a duration-like value would be false precision and could make an inspectable heuristic look like hardware evidence. |
+| D-092 (2026-07-30) | `dist::tuning` owns a policy-neutral coordination contract—problem/candidate identity, legal reports, scoring, and commit—while TUN-003 still owns `AutotunePolicy`, distributed permits, and cache lifecycle. | Defining a second general tuning service because TUN-003 is not implemented yet. That would split policy and cache semantics before the dependency lands; the coordination layer can be tested independently without inventing those types twice. |
+| D-093 (2026-07-30) | A candidate's score is the median of synchronized per-sample maximum-rank durations, with rank-local medians retained only for imbalance diagnostics. | Averaging ranks, taking the maximum of independently computed medians, or optimizing rank zero. A collective completes when its slowest participant completes each sample, and independently reordering rank samples before taking a maximum loses the barrier-aligned experiment. |
+| D-094 (2026-07-30) | Measurement produces `ProvisionalCollectiveTuning`; only one matching positive vote from each of the two ranks mints `CommittedCollectiveTuning`. | Returning a cacheable winner directly from rank-zero selection. A peer timeout, failed validation, or candidate-hash disagreement would then leave a partial result visible to later steps even though no distributed experiment committed it. |
+| D-095 (2026-07-30) | `DistributedContext<M, R>` admits a static `M: ValidMesh<World = U2>` and only `R = U0/U1`; its `Dyn, Dyn` form checks the same world, rank, role, timeout, and launch-device cardinality at runtime. | Treating launcher identity as environment-only data. That would make the expert static surface weaker than tensors, dtypes, and plans, and would allow an impossible static rank to reach a socket before failing. |
+| D-096 (2026-07-30) | Process rendezvous retains one bounded TCP control connection for abort and coordinated shutdown, separate from NCCL's topology and plan/unique-id sessions. | Closing rendezvous immediately after startup or merging all protocols into one untyped byte stream. The first cannot propagate fail-stop lifecycle; the second couples a `no_std` process-identity contract to one communicator implementation and makes phase confusion harder to diagnose. |
+| D-097 (2026-07-30) | A two-host launch plan records one process-local CUDA ordinal per rank and permits both to be ordinal zero; persistent cross-host identity remains NCCL topology discovery's job. | Requiring distinct CUDA ordinals across ranks. Ordinals are scoped to each host and visibility mask, so two correct one-GPU hosts commonly both expose their device as `cuda:0`; rejecting that layout would reject the target deployment. |
+| D-098 (2026-07-30) | NCCL startup, launch validation, CUDA/NCCL submission, and completion-event timeout share a cloned `DistributedContextHandle`; any returned failure invalidates the context before the caller can attempt another step. | Invalidating only on explicit launcher abort. A rank whose NCCL event times out while its context still says active can start another collective against a peer that has already failed, violating the initial fail-stop contract. |
+| D-099 (2026-07-30) | Persistent kernel identity is CUDA UUID + architecture + driver + NVRTC/target/options; ordinal is diagnostic-only and never enters a tuning key. | Ordinal plus compute capability. Visibility masks and separate hosts can both expose `cuda:0` while naming different cards, and the same card can move ordinals between runs. |
+| D-100 (2026-07-30) | Tuning identities carry static backend/nonzero-world markers and matching `Dyn` runtime projection checks; topology rejects one persistent device mapped to two ranks and hashes rank mapping, links, transport, and process layout. | One untyped digest constructor. That would make the tuning surface weaker than tensor device/dtype and distributed mesh APIs, and would let a cache key be built from a topology the typed program could not inhabit. |
+| D-101 (2026-07-30) | A persistent tuning write locks, reloads, merges, prunes, writes and fsyncs a unique temporary, atomically renames, then fsyncs the parent; corrupt/schema/checksum-invalid input is quarantined. | Process-local writes or truncating the live file. The former loses another rank/process's result and the latter turns a crash into a zero-length database. |
+| D-102 (2026-07-30) | Persistent winners are opaque hints paired with the digest of the legal candidate set; the service must find the decoded winner in the current filtered set before use. | Deserializing a cached candidate as proof. Imported cache bytes are untrusted and cannot override current determinism, workspace, dtype, layout, or backend legality. |
+| D-103 (2026-07-30) | `TuningService<P>` and `TuningContext<D,S>` expose static policy/backend/scope forms plus checked `Dyn` forms; disabled, heuristic, and profile-guided modes never issue a measurement lease. | One runtime enum threaded through otherwise static APIs, or background tuning. The first discards compile-time policy/scope mistakes; the second can perturb active distributed collective order. |
+| D-104 (2026-07-30) | Coordinated warmup uses a bounded single-flight epoch lease with the exact topology participant set; drop, cancellation, timeout, or any mismatching vote prevents cache commit, and DST-012's unanimous result is the two-rank commit proof. | Letting the leader write its provisional winner or leaving an unbounded in-flight flag. Either makes a rank failure or crashed leader poison future steps with a partial result. |

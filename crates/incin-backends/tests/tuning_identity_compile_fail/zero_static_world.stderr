@@ -1,0 +1,42 @@
+error[E0277]: the trait bound `UTerm: incin_backends::typenum::NonZero` is not satisfied
+ --> tests/tuning_identity_compile_fail/zero_static_world.rs:8:13
+  |
+8 |     let _ = TuningTopologyFingerprint::<StaticWorld<U0>>::new(
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `incin_backends::typenum::NonZero` is not implemented for `UTerm`
+  |
+help: the following other types implement trait `incin_backends::typenum::NonZero`
+ --> $CARGO/typenum-$VERSION/src/bit.rs
+  |
+  | impl NonZero for B1 {}
+  | ^^^^^^^^^^^^^^^^^^^ `B1`
+  |
+ ::: $CARGO/typenum-$VERSION/src/int.rs
+  |
+  | impl<U: Unsigned + NonZero> NonZero for PInt<U> {}
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `PInt<U>`
+  | impl<U: Unsigned + NonZero> NonZero for NInt<U> {}
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `NInt<U>`
+  |
+ ::: $CARGO/typenum-$VERSION/src/uint.rs
+  |
+  | impl<U: Unsigned, B: Bit> NonZero for UInt<U, B> {}
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `UInt<U, B>`
+note: required by a bound in `StaticWorld`
+ --> src/tuning/identity.rs
+  |
+  | pub struct StaticWorld<N: Unsigned + NonZero>(PhantomData<N>);
+  |                                      ^^^^^^^ required by this bound in `StaticWorld`
+
+error[E0599]: the associated function or constant `new` exists for struct `TuningTopologyFingerprint<StaticWorld<UTerm>>`, but its trait bounds were not satisfied
+ --> tests/tuning_identity_compile_fail/zero_static_world.rs:8:59
+  |
+8 |     let _ = TuningTopologyFingerprint::<StaticWorld<U0>>::new(
+  |                                                           ^^^ associated function or constant cannot be called on `TuningTopologyFingerprint<StaticWorld<UTerm>>` due to unsatisfied trait bounds
+  |
+ ::: $CARGO/typenum-$VERSION/src/uint.rs
+  |
+  | pub struct UTerm;
+  | ---------------- doesn't satisfy `UTerm: incin_backends::typenum::NonZero`
+  |
+  = note: the following trait bounds were not satisfied:
+          `UTerm: incin_backends::typenum::NonZero`

@@ -14,7 +14,7 @@ pub(crate) struct TapeEntry {
     pub(crate) output_id: TensorId,
     pub(crate) input_ids: Vec<TensorId>,
     /// Fallible since `GRD-005`: a recipe that cannot produce a gradient
-    /// reports it. `GRD-004` replaces this whole type with the core's
+    /// reports it. `GRD-006` replaces this backend-local type with the core's
     /// `TapeNode`, which already has this signature.
     pub(crate) backward: Box<dyn Fn(&CudaStorage) -> Result<Vec<CudaStorage>> + Send + Sync>,
 }

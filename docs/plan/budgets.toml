@@ -347,6 +347,18 @@ enables = ["external-candle"]
 name = "telemetry"
 enables = ["std", "dep:incin-telemetry"]
 
+[[feature_crate.feature]]
+name = "distributed"
+enables = ["std", "incin-core/distributed"]
+
+[[feature_crate.feature]]
+name = "distributed-reference"
+enables = ["distributed"]
+
+[[feature_crate.feature]]
+name = "distributed-nccl"
+enables = ["distributed", "cuda", "autotune", "cudarc/nccl"]
+
 [[feature_crate]]
 package = "incin"
 manifest = "crates/incin/Cargo.toml"
@@ -391,6 +403,18 @@ enables = ["cuda", "incin-backends/autotune"]
 [[feature_crate.feature]]
 name = "train"
 enables = ["std"]
+
+[[feature_crate.feature]]
+name = "distributed"
+enables = ["incin-core/distributed"]
+
+[[feature_crate.feature]]
+name = "distributed-reference"
+enables = ["distributed", "incin-backends/distributed-reference"]
+
+[[feature_crate.feature]]
+name = "distributed-nccl"
+enables = ["distributed", "cuda", "incin-backends/distributed-nccl"]
 
 [[feature_crate.feature]]
 name = "telemetry"

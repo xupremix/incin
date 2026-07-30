@@ -1,0 +1,42 @@
+error[E0277]: `incin_core::dist::Replicated<MeshSpec<incin_core::dist::mesh::Data<UInt<UTerm, B1>>, TensorParallel<UInt<UInt<UTerm, B1>, B0>>>>` to `incin_core::dist::Sharded<MeshSpec<incin_core::dist::mesh::Data<UInt<UTerm, B1>>, TensorParallel<UInt<UInt<UTerm, B1>, B0>>>, UInt<UTerm, B1>>` is not a collective supported for dtype `f32`
+  --> tests/collective_plan_compile_fail/non_collective_static_transition.rs:12:29
+   |
+12 |         .push_static::<f32, Replica, Shard>(
+   |          -----------        ^^^^^^^ no statically valid collective transition
+   |          |
+   |          required by a bound introduced by this call
+   |
+   = help: the trait `PlannedCollectiveTransition<f32, incin_core::dist::Sharded<MeshSpec<incin_core::dist::mesh::Data<UInt<UTerm, B1>>, TensorParallel<UInt<UInt<UTerm, B1>, B0>>>, UInt<UTerm, B1>>>` is not implemented for `incin_core::dist::Replicated<MeshSpec<incin_core::dist::mesh::Data<UInt<UTerm, B1>>, TensorParallel<UInt<UInt<UTerm, B1>, B0>>>>`
+   = note: integer mean reductions require a floating dtype; local-only placement changes do not belong in a collective plan
+help: the following other types implement trait `PlannedCollectiveTransition<K, To>`
+  --> src/dist/plan.rs
+   |
+   | / impl<K, M, Axis> PlannedCollectiveTransition<K, Replicated<M>> for Sharded<M, Axis>
+   | | where
+   | |     K: CollectiveDType,
+   | |     M: ValidMesh,
+   | |     Axis: PlacementAxis,
+   | |________________________^ `incin_core::dist::Sharded<M, Axis>` implements `PlannedCollectiveTransition<K, incin_core::dist::Replicated<M>>`
+...
+   | / impl<K, M, R> PlannedCollectiveTransition<K, Replicated<M>> for Partial<M, R>
+   | | where
+   | |     K: CollectiveReductionDType<R>,
+   | |     M: ValidMesh,
+   | |     R: PartialReduction,
+   | |________________________^ `incin_core::dist::Partial<M, R>` implements `PlannedCollectiveTransition<K, incin_core::dist::Replicated<M>>`
+...
+   | / impl<K, M, R, Axis> PlannedCollectiveTransition<K, Sharded<M, Axis>> for Partial<M, R>
+   | | where
+   | |     K: CollectiveReductionDType<R>,
+   | |     M: ValidMesh,
+   | |     R: PartialReduction,
+   | |     Axis: PlacementAxis,
+   | |________________________^ `incin_core::dist::Partial<M, R>` implements `PlannedCollectiveTransition<K, incin_core::dist::Sharded<M, Axis>>`
+note: required by a bound in `CollectivePlanBuilder::<'a, M>::push_static`
+  --> src/dist/plan.rs
+   |
+   |     pub fn push_static<K, From, To>(
+   |            ----------- required by a bound in this associated function
+...
+   |         From: ConstPlacement + PlannedCollectiveTransition<K, To> + PlacementOn<M>,
+   |                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `CollectivePlanBuilder::<'a, M>::push_static`

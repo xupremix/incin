@@ -1,0 +1,15 @@
+error[E0308]: mismatched types
+  --> tests/tuning_service_compile_fail/scope_mismatch.rs:34:25
+   |
+34 |     requires_collective(context);
+   |     ------------------- ^^^^^^^ expected `TuningContext<Cuda, CollectiveTuning>`, found `TuningContext<Cuda, KernelTuning>`
+   |     |
+   |     arguments to this function are incorrect
+   |
+   = note: expected struct `TuningContext<incin_backends::Cuda, CollectiveTuning>`
+              found struct `TuningContext<incin_backends::Cuda, KernelTuning>`
+note: function defined here
+  --> tests/tuning_service_compile_fail/scope_mismatch.rs:8:4
+   |
+ 8 | fn requires_collective(_: TuningContext<Cuda, CollectiveTuning>) {}
+   |    ^^^^^^^^^^^^^^^^^^^ ----------------------------------------

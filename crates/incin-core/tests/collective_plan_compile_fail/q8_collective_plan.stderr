@@ -1,0 +1,25 @@
+error[E0277]: the trait bound `incin_core::prelude::Q8_0: CollectiveDType` is not satisfied
+  --> tests/collective_plan_compile_fail/q8_collective_plan.rs:12:9
+   |
+11 |     let _ = builder.push_static::<
+   |                     ----------- required by a bound introduced by this call
+12 |         Q8_0,
+   |         ^^^^ the trait `CollectiveDType` is not implemented for `incin_core::prelude::Q8_0`
+   |
+   = help: the following other types implement trait `CollectiveDType`:
+             Dyn
+             f32
+             f64
+             i64
+             incin_core::prelude::bf16
+             incin_core::prelude::f16
+             u32
+             u8
+note: required by a bound in `CollectivePlanBuilder::<'a, M>::push_static`
+  --> src/dist/plan.rs
+   |
+   |     pub fn push_static<K, From, To>(
+   |            ----------- required by a bound in this associated function
+...
+   |         K: ConstDType + CollectiveDType,
+   |                         ^^^^^^^^^^^^^^^ required by this bound in `CollectivePlanBuilder::<'a, M>::push_static`

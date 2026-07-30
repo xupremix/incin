@@ -18,6 +18,10 @@ pub mod dispatch;
 mod dispatch_executor;
 pub use dispatch::DispatchBackend;
 
+/// Collective transport contracts and optional implementations.
+#[cfg(feature = "distributed")]
+pub mod dist;
+
 /// Runtime detection of the best device this machine can actually run on.
 #[cfg(feature = "std")]
 pub mod detect;
@@ -44,7 +48,7 @@ pub(crate) mod iteration;
 #[cfg(feature = "cuda")]
 pub(crate) mod kernel;
 #[cfg(feature = "cuda")]
-pub(crate) mod tuning;
+pub mod tuning;
 
 /// Unified backend selected by its float element type and device.
 ///

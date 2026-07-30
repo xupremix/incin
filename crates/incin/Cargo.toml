@@ -43,6 +43,14 @@ autotune = ["cuda", "incin-backends/autotune"]
 # Enables the automatic `Trainer` at `incin::train`. Preview tier: useful and
 # tested, but the interface may change without a migration path.
 train = ["std"]
+# Enables typed meshes, static/runtime tensor placements, and distributed
+# lowering proofs. Transports remain separate opt-in backend features.
+distributed = ["incin-core/distributed"]
+# Enables the deterministic in-process collective transport used by
+# conformance tests and local distributed-plan development.
+distributed-reference = ["distributed", "incin-backends/distributed-reference"]
+# Two-host process-per-rank CUDA transport and its TCP bootstrap.
+distributed-nccl = ["distributed", "cuda", "incin-backends/distributed-nccl"]
 # Enables backend telemetry hooks. `cargo incin doctor` also reports the run
 # directory under this feature, which is why the dependency is direct here and
 # not only through incin-backends.
@@ -67,6 +75,7 @@ bench = false
 hashbrown = "0.14.5"
 bytemuck = "1"
 criterion = { version = "0.5.1", default-features = false, features = ["cargo_bench_support"] }
+trybuild = "1.0.117"
 
 # The examples and the benchmark are binaries, so the crate-level `#![cfg]` the
 # integration tests use would leave them without a `main` rather than skipping

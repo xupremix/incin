@@ -1,0 +1,31 @@
+error[E0277]: the trait bound `UTerm: incin_core::typenum::NonZero` is not satisfied
+ --> tests/pipeline_compile_fail/zero_microbatches.rs:9:53
+  |
+9 |     PipelinePlanBuilder::build_static::<f32, (U2,), U0, GPipe>(
+  |                                                     ^^ the trait `incin_core::typenum::NonZero` is not implemented for `UTerm`
+  |
+help: the following other types implement trait `incin_core::typenum::NonZero`
+ --> $CARGO/typenum-$VERSION/src/bit.rs
+  |
+  | impl NonZero for B1 {}
+  | ^^^^^^^^^^^^^^^^^^^ `B1`
+  |
+ ::: $CARGO/typenum-$VERSION/src/int.rs
+  |
+  | impl<U: Unsigned + NonZero> NonZero for PInt<U> {}
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `PInt<U>`
+  | impl<U: Unsigned + NonZero> NonZero for NInt<U> {}
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `NInt<U>`
+  |
+ ::: $CARGO/typenum-$VERSION/src/uint.rs
+  |
+  | impl<U: Unsigned, B: Bit> NonZero for UInt<U, B> {}
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `UInt<U, B>`
+note: required by a bound in `PipelinePlanBuilder::build_static`
+ --> src/dist/pipeline.rs
+  |
+  |     pub fn build_static<K, S, Microbatches, Schedule>(
+  |            ------------ required by a bound in this associated function
+...
+  |         Microbatches: Unsigned + NonZero + IsLessOrEqual<U4294967295, Output = B1>,
+  |                                  ^^^^^^^ required by this bound in `PipelinePlanBuilder::build_static`

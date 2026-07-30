@@ -11,9 +11,10 @@
 //! for an operation a backend never claimed must **skip**, not fail — a suite
 //! that fails a backend for not implementing something it was never asked to
 //! implement is a suite nobody runs. So every check asks
-//! [`Capabilities::support`] first and reports what it found.
+//! [`incin_core::exec::Capabilities::support`] first and reports what it found.
 //!
-//! The three things only the author can supply are on [`Subject`]: their
+//! The three things only the author can supply are on
+//! [`Subject`](crate::external::conformance::Subject): their
 //! backend, storage built from values, and values read back out. Everything
 //! else — descriptors, expected results, tolerances, the verdict — belongs to
 //! the harness, because those are the parts that must be the same for every

@@ -103,6 +103,17 @@ pub mod metrics {
     pub use incin_core::metrics::*;
 }
 
+/// Typed meshes, placement rules, and distributed tensor metadata.
+#[cfg(feature = "distributed")]
+pub mod dist {
+    #[cfg(feature = "distributed-nccl")]
+    pub use incin_backends::dist::{
+        BootstrapRole, NcclBuffer, NcclEvent, NcclTopology, NcclTransport, NcclTransportError,
+        TwoRankBootstrapConfig,
+    };
+    pub use incin_core::dist::*;
+}
+
 /// Dataset abstractions and data loading utilities.
 pub mod data {
     pub use incin_data::*;
@@ -170,7 +181,8 @@ pub type Tensor<
     B = DefaultBackend,
     K = <B as incin_core::prelude::Backend>::FloatElem,
     G = incin_core::prelude::Grad,
-> = incin_core::prelude::Tensor<S, B, K, G>;
+    P = incin_core::dist::Local,
+> = incin_core::prelude::Tensor<S, B, K, G, P>;
 
 #[cfg(not(feature = "cpu"))]
 /// Tensor.
@@ -179,7 +191,8 @@ pub type Tensor<
     B, // User must specify backend if Cpu is disabled
     K = <B as incin_core::prelude::Backend>::FloatElem,
     G = incin_core::prelude::Grad,
-> = incin_core::prelude::Tensor<S, B, K, G>;
+    P = incin_core::dist::Local,
+> = incin_core::prelude::Tensor<S, B, K, G, P>;
 
 // Neural Network Layer Aliases
 //

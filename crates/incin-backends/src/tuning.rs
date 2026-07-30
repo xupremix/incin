@@ -4,6 +4,16 @@
 //! A caller must supply real synchronized device timings before a winner is
 //! cached; static fallback order is never recorded as if it were benchmarked.
 
+/// Atomic, bounded persistent storage for verified tuning results.
+#[cfg(any(feature = "autotune", test))]
+pub mod cache;
+/// Stable device, compiler, and topology identities used by tuning keys.
+#[cfg(any(feature = "autotune", test))]
+pub mod identity;
+/// Policy-aware kernel, collective, and execution-plan tuning service.
+#[cfg(any(feature = "autotune", test))]
+pub mod service;
+
 use crate::kernel::KernelAccess;
 #[cfg(any(feature = "autotune", test))]
 use crate::kernel::KernelKey;
@@ -24,40 +34,6 @@ const MAX_TUNING_ENTRIES: usize = 1024;
 const CUDA_TUNING_WARMUPS: usize = 2;
 #[cfg(all(feature = "cuda", feature = "autotune"))]
 const CUDA_TUNING_SAMPLES: usize = 7;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[cfg(any(feature = "autotune", test))]
-pub(crate) struct CudaDeviceKey {
-    pub(crate) ordinal: u32,
-    pub(crate) compute_capability: Option<(u16, u16)>,
-}
-
-#[cfg(all(feature = "cuda", feature = "autotune"))]
-impl CudaDeviceKey {
-    pub(crate) fn from_context(context: &cudarc::driver::CudaContext) -> Result<Self> {
-        let ordinal = u32::try_from(context.ordinal())
-            .map_err(|_| Error::Msg("CUDA device ordinal exceeds u32".into()))?;
-        let (major, minor) = context.compute_capability().map_err(|error| {
-            Error::Msg(format!(
-                "failed to query CUDA device {ordinal} compute capability: {error:?}"
-            ))
-        })?;
-        let major = u16::try_from(major).map_err(|_| {
-            Error::Msg(format!(
-                "CUDA device {ordinal} reported invalid compute-capability major {major}"
-            ))
-        })?;
-        let minor = u16::try_from(minor).map_err(|_| {
-            Error::Msg(format!(
-                "CUDA device {ordinal} reported invalid compute-capability minor {minor}"
-            ))
-        })?;
-        Ok(Self {
-            ordinal,
-            compute_capability: Some((major, minor)),
-        })
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg(any(feature = "autotune", test))]
@@ -98,16 +74,20 @@ fn size_log2_bucket(size: usize) -> u8 {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg(any(feature = "autotune", test))]
 pub(crate) struct TuningKey {
-    pub(crate) device: CudaDeviceKey,
+    pub(crate) environment: identity::TuningEnvironmentFingerprint,
     pub(crate) problem: String,
     pub(crate) workload: WorkloadBucket,
 }
 
 #[cfg(any(feature = "autotune", test))]
 impl TuningKey {
-    pub(crate) fn new(device: CudaDeviceKey, kernel: &KernelKey, workload: WorkloadBucket) -> Self {
+    pub(crate) fn new(
+        environment: identity::TuningEnvironmentFingerprint,
+        kernel: &KernelKey,
+        workload: WorkloadBucket,
+    ) -> Self {
         Self {
-            device,
+            environment,
             problem: kernel.tuning_problem_id(),
             workload,
         }
@@ -467,6 +447,27 @@ mod tests {
     use crate::kernel::KernelFamily;
     use incin_core::exec::LayoutClass;
 
+    fn test_environment(id: &str) -> identity::TuningEnvironmentFingerprint {
+        identity::TuningEnvironmentFingerprint::<incin_core::prelude::Dyn>::new_dyn(
+            identity::DeviceFingerprint::new_dyn(
+                incin_core::prelude::DeviceKind::Cuda,
+                id,
+                "sm_90",
+                identity::SoftwareVersion::new(12, 8, 0),
+            )
+            .unwrap(),
+            identity::CompilerFingerprint::new_dyn(
+                incin_core::prelude::DeviceKind::Cuda,
+                "nvrtc",
+                identity::SoftwareVersion::new(12, 8, 0),
+                "sm_90",
+                &["incin-nvrtc-options-v1"],
+            )
+            .unwrap(),
+        )
+        .unwrap()
+    }
+
     fn test_kernel() -> KernelKey {
         KernelKey::cuda(
             crate::dtype_policy::OperationKind::Pointwise,
@@ -547,10 +548,7 @@ mod tests {
     #[test]
     fn measured_results_round_trip_through_device_scoped_cache() {
         let key = TuningKey::new(
-            CudaDeviceKey {
-                ordinal: 7,
-                compute_capability: Some((9, 0)),
-            },
+            test_environment("GPU-00000000-0000-0000-0000-000000000007"),
             &test_kernel(),
             WorkloadBucket::pointwise(4096, true),
         );
@@ -580,10 +578,7 @@ mod tests {
     #[test]
     fn tuning_claim_is_single_flight_and_commits_a_measured_winner() {
         let key = TuningKey::new(
-            CudaDeviceKey {
-                ordinal: 99,
-                compute_capability: Some((8, 9)),
-            },
+            test_environment("GPU-00000000-0000-0000-0000-000000000099"),
             &test_kernel(),
             WorkloadBucket::pointwise(8192, true),
         );

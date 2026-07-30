@@ -675,9 +675,13 @@ impl TopologyFingerprint {
 
         digest = match self.layout {
             ProcessLayout::SingleProcess => digest,
-            ProcessLayout::ProcessPerRank { rank, world } => {
-                digest.number(rank as u64).number(world as u64)
-            }
+            // `rank` is this process's coordinate, not a property of the
+            // mesh. Including it makes rank 0 and rank 1 derive different
+            // MeshIds for the same multi-process job, defeating the plan-hash
+            // agreement the identifier exists to support. The layout kind and
+            // world size are shared physical facts; the local rank remains
+            // available through `TopologyFingerprint::layout`.
+            ProcessLayout::ProcessPerRank { world, .. } => digest.number(world as u64),
         };
 
         digest.finish()
@@ -699,6 +703,15 @@ impl TopologyFingerprint {
 pub struct MeshId(u64);
 
 impl MeshId {
+    /// Rebuild an identity received from another process.
+    ///
+    /// This is only data until collective-plan preflight compares it with the
+    /// local identity.
+    #[must_use]
+    pub const fn from_digest(digest: u64) -> Self {
+        Self(digest)
+    }
+
     /// The underlying digest.
     #[must_use]
     pub const fn digest(self) -> u64 {

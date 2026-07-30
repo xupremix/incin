@@ -1,0 +1,23 @@
+error[E0277]: the trait bound `u32: DataParallelDType` is not satisfied
+ --> tests/data_parallel_compile_fail/integer_gradient.rs:5:24
+  |
+5 |         .push_static::<u32>(
+  |          -----------   ^^^ the trait `DataParallelDType` is not implemented for `u32`
+  |          |
+  |          required by a bound introduced by this call
+  |
+help: the following other types implement trait `DataParallelDType`
+ --> src/dist/data_parallel.rs
+  |
+  | impl DataParallelDType for f32 {}
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `f32`
+  | impl DataParallelDType for f64 {}
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `f64`
+note: required by a bound in `DataParallelPlanBuilder::<'a>::push_static`
+ --> src/dist/data_parallel.rs
+  |
+  |     pub fn push_static<K>(
+  |            ----------- required by a bound in this associated function
+...
+  |         K: ConstDType + DataParallelDType,
+  |                         ^^^^^^^^^^^^^^^^^ required by this bound in `DataParallelPlanBuilder::<'a>::push_static`

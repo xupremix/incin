@@ -31,10 +31,10 @@ nightly = []
 # and test aid only: the contract is that a `Validated<O>` was already checked
 # by the lowering rule that minted it, so a release build must never need this.
 paranoid-validation = []
-# Typed logical meshes (DST-001), physical binding (DST-002), and placement
-# proofs (DST-003). Preview-tier and therefore not default; it adds no
-# dependency, and reads no hardware outside `DeviceMesh::bind` through a
-# `TopologyProbe` this crate never implements.
+# Typed logical meshes, physical binding, placement proofs, and placement-aware
+# tensors (DST-001 through DST-004). Preview-tier and therefore not default; it
+# adds no dependency, and reads no hardware outside `DeviceMesh::bind` through
+# a `TopologyProbe` this crate never implements.
 distributed = []
 # Enables CUDA device marker metadata used by CUDA-capable backend crates.
 cuda = []

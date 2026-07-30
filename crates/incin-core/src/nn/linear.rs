@@ -88,6 +88,48 @@ impl LinearShape for Dyn {
     }
 }
 
+/// A statically shaped linear layer whose output-feature axis can be split
+/// evenly across the first two-rank tensor-parallel mesh.
+///
+/// Dynamic shapes use
+/// [`TensorParallelPlanBuilder::push_column_dyn`](crate::dist::TensorParallelPlanBuilder::push_column_dyn)
+/// and receive the equivalent check at runtime.
+#[cfg(feature = "distributed")]
+pub trait TwoWayColumnLinearShape: LinearShape {
+    /// Output features held by each TP rank.
+    const LOCAL_OUT_FEATURES: usize;
+}
+
+#[cfg(feature = "distributed")]
+impl<InF, OutF> TwoWayColumnLinearShape for (InF, OutF)
+where
+    InF: Dim,
+    OutF: Dim + crate::dist::ShardDivisible<typenum::U2>,
+{
+    const LOCAL_OUT_FEATURES: usize = <OutF as crate::dist::ShardDivisible<typenum::U2>>::LOCAL;
+}
+
+/// A statically shaped linear layer whose contraction/input-feature axis can
+/// be split evenly across the first two-rank tensor-parallel mesh.
+///
+/// Dynamic shapes use
+/// [`TensorParallelPlanBuilder::push_row_dyn`](crate::dist::TensorParallelPlanBuilder::push_row_dyn)
+/// and receive the equivalent check at runtime.
+#[cfg(feature = "distributed")]
+pub trait TwoWayRowLinearShape: LinearShape {
+    /// Input features held by each TP rank.
+    const LOCAL_IN_FEATURES: usize;
+}
+
+#[cfg(feature = "distributed")]
+impl<InF, OutF> TwoWayRowLinearShape for (InF, OutF)
+where
+    InF: Dim + crate::dist::ShardDivisible<typenum::U2>,
+    OutF: Dim,
+{
+    const LOCAL_IN_FEATURES: usize = <InF as crate::dist::ShardDivisible<typenum::U2>>::LOCAL;
+}
+
 /// A fully connected (dense) linear layer: `y = x @ Wᵀ + b`.
 ///
 /// `S` encodes both the input and output feature dimensions via [`LinearShape`]. The most common

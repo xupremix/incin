@@ -1,3 +1,4 @@
+use crate::dist::{Local, Placement, PlacementKind};
 use crate::prelude::{
     ArgInto, Backend, ConstDType, DType, DTypeId, Device, DeviceId, DynShape, Error, Grad, NoGrad,
     RequiresGrad, Result, Shape, SupportsDType, TensorArgs, TransferTo,
@@ -23,7 +24,10 @@ pub struct Dyn(pub ());
 /// ## Type Parameters
 /// * `S`: The [`Shape`] of the tensor. This can be static (e.g., `s![2, 3, 224, 224]`), dynamic (`Dyn`), or partially dynamic.
 /// * `B`: The underlying compute [`Backend`]. It defines how the tensor is stored in memory and how mathematical operations are executed.
+/// * `K`: Element [`DType`], which may also be [`Dyn`] and runtime-checked.
 /// * `G`: Trait marker representing whether the tensor requires gradients ([`Grad`] or [`NoGrad`]). Defaults to `Grad`.
+/// * `P`: Logical [`Placement`]. Defaults to [`Local`]; distributed code may
+///   select a static placement or [`Dyn`] for runtime placement metadata.
 ///
 /// ## Examples
 ///
@@ -53,12 +57,15 @@ pub struct Tensor<
     B: Backend,
     K: DType = <B as Backend>::FloatElem,
     G: RequiresGrad = Grad,
+    P: Placement = Local,
 > {
     pub(crate) inner: B::Storage<K>,
+    /// Global logical shape. Backend storage carries this rank's local shape.
     pub(crate) _shape: S::Field,
     pub(crate) _dtype: K::Field,
     pub(crate) _device: <B::Device as Device>::Field,
     pub(crate) _grad: G::Field,
+    pub(crate) _placement: P::Field,
 }
 
 /// Proof that raw storage and tensor metadata may be joined without repeating
@@ -73,7 +80,95 @@ enum ConstructionWitness {
     MetadataPreserved,
 }
 
-impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Clone for Tensor<S, B, K, G> {
+/// Failure while joining a distributed proof to one rank's physical storage.
+///
+/// This remains separate from [`Error`]: placement APIs are preview-gated,
+/// while the central error enum must not change its matchable variants when a
+/// Cargo feature is toggled.
+#[cfg(feature = "distributed")]
+#[non_exhaustive]
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
+pub enum PlacedTensorError {
+    /// The tensor's static/dynamic global shape disagrees with the proof.
+    #[error("tensor global shape {tensor:?} does not match distributed proof {proof:?}")]
+    GlobalShape {
+        /// Shape represented by `S::Field`.
+        tensor: alloc::vec::Vec<usize>,
+        /// Shape carried by the sealed proof.
+        proof: alloc::vec::Vec<usize>,
+    },
+    /// The tensor placement parameter disagrees with the proof's output.
+    #[error("tensor placement {tensor:?} does not match distributed proof {proof:?}")]
+    OutputPlacement {
+        /// Static or runtime tensor placement.
+        tensor: PlacementKind,
+        /// Placement carried by the sealed proof.
+        proof: PlacementKind,
+    },
+    /// The requested rank has no local result in the proof.
+    #[error("rank {rank} is outside a distributed result with {ranks} local values")]
+    RankOutOfRange {
+        /// Requested rank.
+        rank: usize,
+        /// Number of rank-local results in the proof.
+        ranks: usize,
+    },
+    /// Physical rank-local storage has the wrong shape.
+    #[error("rank {rank} storage shape {storage:?} does not match proof {proof:?}")]
+    LocalShape {
+        /// Requested rank.
+        rank: usize,
+        /// Shape reported by backend storage.
+        storage: alloc::vec::Vec<usize>,
+        /// Expected local shape.
+        proof: alloc::vec::Vec<usize>,
+    },
+    /// Physical storage has the wrong runtime dtype.
+    #[error("tensor dtype {expected:?} does not match rank-local storage {got:?}")]
+    DType {
+        /// Dtype selected statically or through `Dyn`.
+        expected: DTypeId,
+        /// Dtype reported by storage.
+        got: DTypeId,
+    },
+    /// Physical storage is attached to the wrong runtime device.
+    #[error("tensor device {expected:?} does not match rank-local storage {got:?}")]
+    Device {
+        /// Device selected by the tensor field.
+        expected: DeviceId,
+        /// Device reported by storage.
+        got: DeviceId,
+    },
+    /// A static/runtime device or dtype selection could not be resolved.
+    #[error("cannot resolve placed tensor metadata: {message}")]
+    MetadataResolution {
+        /// Underlying typed resolution failure.
+        message: alloc::string::String,
+    },
+    /// A sealed proof does not describe the tensor's current placement.
+    #[error("distributed proof expects input {proof:?}, tensor is {tensor:?}")]
+    InputPlacement {
+        /// Placement of the tensor being resharded.
+        tensor: PlacementKind,
+        /// Placement expected by the proof.
+        proof: PlacementKind,
+    },
+    /// Runtime placement transition validation failed.
+    #[error(transparent)]
+    Distributed(#[from] crate::dist::DistributedError),
+    /// A static transition proof and the sealed runtime proof disagree.
+    #[error("static transition {expected:?} does not match distributed proof {proof:?}")]
+    Transition {
+        /// Transition selected by `LegalTransition`.
+        expected: crate::dist::PlacementTransition,
+        /// Transition carried by the sealed proof.
+        proof: crate::dist::PlacementTransition,
+    },
+}
+
+impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Clone
+    for Tensor<S, B, K, G, P>
+{
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
@@ -81,11 +176,273 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Clone for Tensor<S, B, K, 
             _dtype: self._dtype.clone(),
             _device: self._device.clone(),
             _grad: self._grad.clone(),
+            _placement: self._placement.clone(),
         }
     }
 }
 
-impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G> {
+impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Tensor<S, B, K, G, P> {
+    #[inline]
+    /// Returns a reference to the backend-specific rank-local storage handle.
+    pub fn inner(&self) -> &B::Storage<K> {
+        &self.inner
+    }
+
+    #[inline]
+    /// Consumes the tensor and returns its rank-local storage handle.
+    pub fn into_inner(self) -> B::Storage<K> {
+        self.inner
+    }
+
+    #[inline]
+    /// Returns the static/dynamic global-shape field representation.
+    pub fn shape_field(&self) -> &S::Field {
+        &self._shape
+    }
+
+    #[inline]
+    /// Returns a reference to the gradient marker field.
+    pub fn grad_field(&self) -> &G::Field {
+        &self._grad
+    }
+
+    /// Runtime projection of the tensor's placement.
+    #[must_use]
+    pub fn placement(&self) -> PlacementKind {
+        P::to_incin(&self._placement)
+    }
+
+    /// Rank whose local storage this tensor owns.
+    #[must_use]
+    pub fn rank_index(&self) -> usize {
+        P::rank(&self._placement)
+    }
+
+    /// Shape of the rank-local physical storage.
+    ///
+    /// [`dims`](Self::dims) reports the global logical shape.
+    #[must_use]
+    pub fn local_dims(&self) -> alloc::vec::Vec<usize> {
+        B::shape(&self.inner)
+    }
+
+    /// Returns the Incin data type variant.
+    #[must_use]
+    pub fn dtype(&self) -> DTypeId {
+        K::to_incin(&self._dtype)
+    }
+
+    /// Returns the physical device on which this rank-local storage resides.
+    pub fn device(&self) -> Result<DeviceId> {
+        B::Device::to_incin(&self._device)
+    }
+
+    /// Whether this tensor computes and accumulates gradients.
+    #[must_use]
+    pub fn requires_grad(&self) -> bool {
+        G::requires_grad(&self._grad)
+    }
+
+    /// Join one rank's storage to a sealed distributed lowering proof.
+    ///
+    /// Static `S`, `K`, device, and `P` choices retain their trait-level
+    /// guarantees. Any [`Dyn`] choice is checked here against physical storage
+    /// and the proof before the tensor can be constructed.
+    #[cfg(feature = "distributed")]
+    pub fn try_from_distributed_storage<O>(
+        inner: B::Storage<K>,
+        global_shape: S::Field,
+        dtype: K::Field,
+        device: <B::Device as Device>::Field,
+        grad: G::Field,
+        rank: usize,
+        proof: &crate::dist::ValidatedDistributed<O>,
+    ) -> core::result::Result<Self, PlacedTensorError>
+    where
+        O: crate::exec::OperationSpec,
+        B: SupportsDType<K>,
+    {
+        let tensor_global = S::dims(&global_shape).as_ref().to_vec();
+        let proof_global = proof.global_shape().dims().to_vec();
+        if tensor_global != proof_global {
+            return Err(PlacedTensorError::GlobalShape {
+                tensor: tensor_global,
+                proof: proof_global,
+            });
+        }
+
+        let Some(placement) = P::try_from_incin(proof.output_placement(), rank) else {
+            return Err(PlacedTensorError::OutputPlacement {
+                tensor: P::to_incin(&P::Field::default()),
+                proof: proof.output_placement(),
+            });
+        };
+
+        let Some(expected_local) = proof.local_shapes().get(rank) else {
+            return Err(PlacedTensorError::RankOutOfRange {
+                rank,
+                ranks: proof.local_shapes().len(),
+            });
+        };
+        let storage_local = B::shape(&inner);
+        if storage_local.as_slice() != expected_local.dims() {
+            return Err(PlacedTensorError::LocalShape {
+                rank,
+                storage: storage_local,
+                proof: expected_local.dims().to_vec(),
+            });
+        }
+
+        let expected_device = B::Device::to_incin(&device).map_err(|error| {
+            PlacedTensorError::MetadataResolution {
+                message: error.to_string(),
+            }
+        })?;
+        let expected_dtype = B::resolve_dtype(&dtype, &expected_device).map_err(|error| {
+            PlacedTensorError::MetadataResolution {
+                message: error.to_string(),
+            }
+        })?;
+        if let Some(got) = B::storage_dtype(&inner)
+            && got != expected_dtype
+        {
+            return Err(PlacedTensorError::DType {
+                expected: expected_dtype,
+                got,
+            });
+        }
+        if let Some(got) = B::storage_device(&inner)
+            && got != expected_device
+        {
+            return Err(PlacedTensorError::Device {
+                expected: expected_device,
+                got,
+            });
+        }
+
+        Ok(Self {
+            inner,
+            _shape: global_shape,
+            _dtype: dtype,
+            _device: device,
+            _grad: grad,
+            _placement: placement,
+        })
+    }
+
+    /// Reshard a statically placed tensor through a compile-time legal
+    /// transition and a sealed runtime proof.
+    #[cfg(feature = "distributed")]
+    pub fn try_reshard<To, O>(
+        self,
+        inner: B::Storage<K>,
+        rank: usize,
+        proof: &crate::dist::ValidatedDistributed<O>,
+    ) -> core::result::Result<Tensor<S, B, K, G, To>, PlacedTensorError>
+    where
+        O: crate::exec::OperationSpec,
+        P: crate::dist::ConstPlacement + crate::dist::LegalTransition<To>,
+        To: crate::dist::ConstPlacement,
+        B: SupportsDType<K>,
+    {
+        validate_reshard_proof(P::PLACEMENT, To::PLACEMENT, proof)?;
+        if proof.transition() != P::TRANSITION {
+            return Err(PlacedTensorError::Transition {
+                expected: P::TRANSITION,
+                proof: proof.transition(),
+            });
+        }
+        Tensor::<S, B, K, G, To>::try_from_distributed_storage(
+            inner,
+            self._shape,
+            self._dtype,
+            self._device,
+            self._grad,
+            rank,
+            proof,
+        )
+    }
+}
+
+#[cfg(feature = "distributed")]
+impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G, Dyn> {
+    /// Reshard a runtime-placed tensor through the checked counterpart of
+    /// `LegalTransition`.
+    pub fn try_reshard_dyn<O>(
+        self,
+        inner: B::Storage<K>,
+        to: PlacementKind,
+        rank: usize,
+        proof: &crate::dist::ValidatedDistributed<O>,
+    ) -> core::result::Result<Self, PlacedTensorError>
+    where
+        O: crate::exec::OperationSpec,
+        B: SupportsDType<K>,
+    {
+        let from = self.placement();
+        validate_reshard_proof(from, to, proof)?;
+        let expected = crate::dist::validate_transition(from, to)?;
+        if proof.transition() != expected {
+            return Err(PlacedTensorError::Transition {
+                expected,
+                proof: proof.transition(),
+            });
+        }
+        Self::try_from_distributed_storage(
+            inner,
+            self._shape,
+            self._dtype,
+            self._device,
+            self._grad,
+            rank,
+            proof,
+        )
+    }
+}
+
+#[cfg(feature = "distributed")]
+fn validate_reshard_proof<O>(
+    from: PlacementKind,
+    to: PlacementKind,
+    proof: &crate::dist::ValidatedDistributed<O>,
+) -> core::result::Result<(), PlacedTensorError> {
+    let Some(&proof_input) = proof.input_placements().as_slice().first() else {
+        return Err(crate::dist::DistributedError::NoInputPlacements.into());
+    };
+    if proof_input != from {
+        return Err(PlacedTensorError::InputPlacement {
+            tensor: from,
+            proof: proof_input,
+        });
+    }
+    if proof
+        .input_placements()
+        .as_slice()
+        .iter()
+        .any(|&placement| placement != from)
+    {
+        let proof_input = proof
+            .input_placements()
+            .as_slice()
+            .iter()
+            .copied()
+            .find(|&placement| placement != from)
+            .unwrap_or(proof_input);
+        return Err(PlacedTensorError::InputPlacement {
+            tensor: from,
+            proof: proof_input,
+        });
+    }
+    if proof.output_placement() != to {
+        return Err(PlacedTensorError::OutputPlacement {
+            tensor: to,
+            proof: proof.output_placement(),
+        });
+    }
+    Ok(())
+}
+
+impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G, Local> {
     /// Joins component parts after this module has witnessed their invariants.
     fn from_parts_witnessed(
         inner: B::Storage<K>,
@@ -101,31 +458,8 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G> {
             _dtype: dtype,
             _device: device,
             _grad: grad,
+            _placement: core::marker::PhantomData,
         }
-    }
-
-    #[inline]
-    /// Returns a reference to the backend-specific storage handle.
-    pub fn inner(&self) -> &B::Storage<K> {
-        &self.inner
-    }
-
-    #[inline]
-    /// Consumes the Tensor and returns the backend-specific storage handle.
-    pub fn into_inner(self) -> B::Storage<K> {
-        self.inner
-    }
-
-    #[inline]
-    /// Returns a reference to the static/dynamic shape field representation.
-    pub fn shape_field(&self) -> &S::Field {
-        &self._shape
-    }
-
-    #[inline]
-    /// Returns a reference to the gradient marker field.
-    pub fn grad_field(&self) -> &G::Field {
-        &self._grad
     }
 
     /// Creates a tensor from parts, checking that storage shape matches expected shape.
@@ -344,7 +678,9 @@ where
     }
 }
 
-impl<S: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G> {
+impl<S: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad, P: Placement>
+    Tensor<S, B, K, G, P>
+{
     #[inline]
     /// Returns the number of dimensions (rank) of the tensor.
     pub fn rank(&self) -> usize {
@@ -365,23 +701,6 @@ impl<S: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K,
 }
 
 impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G> {
-    #[inline]
-    /// Returns the Incin data type variant.
-    pub fn dtype(&self) -> DTypeId {
-        K::to_incin(&self._dtype)
-    }
-
-    /// Returns the device on which this tensor is allocated.
-    pub fn device(&self) -> Result<DeviceId> {
-        B::Device::to_incin(&self._device)
-    }
-
-    #[inline]
-    /// Returns true if this tensor computes and accumulates gradients.
-    pub fn requires_grad(&self) -> bool {
-        G::requires_grad(&self._grad)
-    }
-
     /// Runs `body` — a backend call producing this tensor's successor — under
     /// the gradient mode `G` derives (`GRD-002`).
     ///
@@ -508,8 +827,8 @@ impl<S: Shape, B: Backend, K: DType> Tensor<S, B, K, Grad> {
     }
 }
 
-impl<S: crate::prelude::Shape, B: crate::prelude::Backend, K: DType, G: RequiresGrad>
-    core::fmt::Display for Tensor<S, B, K, G>
+impl<S: crate::prelude::Shape, B: crate::prelude::Backend, K: DType, G: RequiresGrad, P: Placement>
+    core::fmt::Display for Tensor<S, B, K, G, P>
 {
     /// Delegates to the backend's own display formatting of its storage.
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -517,17 +836,20 @@ impl<S: crate::prelude::Shape, B: crate::prelude::Backend, K: DType, G: Requires
     }
 }
 
-impl<S: crate::prelude::Shape, B: crate::prelude::Backend, K: DType, G: RequiresGrad>
-    core::fmt::Debug for Tensor<S, B, K, G>
+impl<S: crate::prelude::Shape, B: crate::prelude::Backend, K: DType, G: RequiresGrad, P: Placement>
+    core::fmt::Debug for Tensor<S, B, K, G, P>
 {
     /// Prints the backend type name, runtime shape, and the backend's own
     /// debug rendering of its storage.
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(
             f,
-            "Tensor({}, shape={:?})\n{}",
+            "Tensor({}, global_shape={:?}, local_shape={:?}, placement={:?}, rank={})\n{}",
             core::any::type_name::<B>(),
+            S::dims(&self._shape).as_ref(),
             B::shape(&self.inner),
+            self.placement(),
+            self.rank_index(),
             B::format_tensor_debug(&self.inner)
         )
     }

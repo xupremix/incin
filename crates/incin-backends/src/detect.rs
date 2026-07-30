@@ -75,6 +75,9 @@ pub fn probe(kind: DeviceKind) -> Option<DeviceId> {
 /// Independent of whether hardware is present: `is_compiled_in(Cuda)` can be
 /// `true` on a machine with no GPU.
 #[must_use]
+// With every backend feature enabled Clippy can fold this to `matches!`, but
+// each arm intentionally retains its own feature gate for powerset builds.
+#[allow(clippy::match_like_matches_macro)]
 pub const fn is_compiled_in(kind: DeviceKind) -> bool {
     match kind {
         DeviceKind::Cpu => cfg!(feature = "cpu"),

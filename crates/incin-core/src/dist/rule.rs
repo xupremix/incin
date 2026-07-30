@@ -7,7 +7,8 @@
 
 use crate::dist::mesh::ValidMesh;
 use crate::dist::placement::{
-    Local, Partial, PipelineStage, Placement, PlacementBuf, PlacementKind, Replicated, Sharded,
+    ConstPlacement, Local, Partial, PipelineStage, Placement, PlacementBuf, PlacementKind,
+    Replicated, Sharded,
 };
 use crate::exec::OperationSpec;
 use crate::shapes::buf::ShapeBuf;
@@ -327,6 +328,60 @@ pub enum DistributedError {
         /// Placement supplied by the descriptor input.
         found: PlacementKind,
     },
+    /// A runtime-selected placement transition has no legal static analogue.
+    #[error("placement transition from {from:?} to {to:?} is not legal")]
+    IllegalTransition {
+        /// Runtime source placement.
+        from: PlacementKind,
+        /// Runtime destination placement.
+        to: PlacementKind,
+    },
+}
+
+/// Runtime counterpart of [`LegalTransition`].
+///
+/// Static placement pairs fail through trait resolution. A tensor whose
+/// placement parameter is [`Dyn`](crate::prelude::Dyn) reaches this checked
+/// path and receives the same transition vocabulary as a structured error.
+pub fn validate_transition(
+    from: PlacementKind,
+    to: PlacementKind,
+) -> Result<PlacementTransition, DistributedError> {
+    let transition = match (from, to) {
+        (PlacementKind::Local, PlacementKind::Local)
+        | (PlacementKind::Replicated, PlacementKind::Replicated) => PlacementTransition::Identity,
+        (PlacementKind::Sharded { axis: from_axis }, PlacementKind::Sharded { axis: to_axis })
+            if from_axis == to_axis =>
+        {
+            PlacementTransition::Identity
+        }
+        (
+            PlacementKind::Partial {
+                reduction: from_reduction,
+            },
+            PlacementKind::Partial {
+                reduction: to_reduction,
+            },
+        ) if from_reduction == to_reduction => PlacementTransition::Identity,
+        (
+            PlacementKind::PipelineStage { index: from_index },
+            PlacementKind::PipelineStage { index: to_index },
+        ) if from_index == to_index => PlacementTransition::Identity,
+        (PlacementKind::Replicated, PlacementKind::Sharded { .. }) => {
+            PlacementTransition::LocalShard
+        }
+        (PlacementKind::Sharded { .. }, PlacementKind::Replicated) => {
+            PlacementTransition::AllGather
+        }
+        (PlacementKind::Partial { .. }, PlacementKind::Replicated) => {
+            PlacementTransition::AllReduce
+        }
+        (PlacementKind::Partial { .. }, PlacementKind::Sharded { .. }) => {
+            PlacementTransition::ReduceScatter
+        }
+        _ => return Err(DistributedError::IllegalTransition { from, to }),
+    };
+    Ok(transition)
 }
 
 /// Validate one equal local shard of a runtime-resolved global shape.
@@ -513,8 +568,8 @@ impl<From, To> PlacementTransitionRule<From, To> {
     where
         O: OperationSpec,
         S: Shape,
-        From: LegalTransition<To>,
-        To: Placement,
+        From: LegalTransition<To> + ConstPlacement,
+        To: ConstPlacement,
     {
         <Self as DistributedRule<DistributedInputs<O, S>>>::lower_distributed(inputs)
     }
@@ -524,8 +579,8 @@ impl<O, S, From, To> DistributedRule<DistributedInputs<O, S>> for PlacementTrans
 where
     O: OperationSpec,
     S: Shape,
-    From: LegalTransition<To>,
-    To: Placement,
+    From: LegalTransition<To> + ConstPlacement,
+    To: ConstPlacement,
 {
     type GlobalOutput = S;
     type OutputPlacement = To;
@@ -541,7 +596,7 @@ where
         if inputs.input_placements.is_empty() {
             return Err(DistributedError::NoInputPlacements);
         }
-        let expected_input = From::kind();
+        let expected_input = From::PLACEMENT;
         for (input, &found) in inputs.input_placements.as_slice().iter().enumerate() {
             if found != expected_input {
                 return Err(DistributedError::UnexpectedInputPlacement {
@@ -552,7 +607,7 @@ where
             }
         }
 
-        let output = To::kind();
+        let output = To::PLACEMENT;
         validate_placement::<From>(expected_input)?;
         validate_placement::<To>(output)?;
         validate_local_shapes::<To>(&global, &inputs.local_shapes, output)?;

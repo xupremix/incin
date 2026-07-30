@@ -91,7 +91,10 @@ fn reduction_launch_selection(
     #[cfg(feature = "autotune")]
     {
         let key = crate::tuning::TuningKey::new(
-            crate::tuning::CudaDeviceKey::from_context(context)?,
+            crate::tuning::identity::TuningEnvironmentFingerprint::<
+                incin_core::prelude::Cuda,
+            >::from_cuda_context(context)?
+            .erase(),
             &kernel.key,
             crate::tuning::WorkloadBucket::reduction(rows, reduction_size),
         );

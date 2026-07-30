@@ -1,0 +1,31 @@
+error[E0277]: the trait bound `UTerm: incin_backends::typenum::NonZero` is not satisfied
+ --> tests/collective_tuning_compile_fail/zero_channels.rs:5:67
+  |
+5 |     let _ = CollectiveTuningCandidate::new_static::<Ring, Simple, U0, U16>(
+  |                                                                   ^^ the trait `incin_backends::typenum::NonZero` is not implemented for `UTerm`
+  |
+help: the following other types implement trait `incin_backends::typenum::NonZero`
+ --> $CARGO/typenum-$VERSION/src/bit.rs
+  |
+  | impl NonZero for B1 {}
+  | ^^^^^^^^^^^^^^^^^^^ `B1`
+  |
+ ::: $CARGO/typenum-$VERSION/src/int.rs
+  |
+  | impl<U: Unsigned + NonZero> NonZero for PInt<U> {}
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `PInt<U>`
+  | impl<U: Unsigned + NonZero> NonZero for NInt<U> {}
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `NInt<U>`
+  |
+ ::: $CARGO/typenum-$VERSION/src/uint.rs
+  |
+  | impl<U: Unsigned, B: Bit> NonZero for UInt<U, B> {}
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `UInt<U, B>`
+note: required by a bound in `CollectiveTuningCandidate::new_static`
+ --> src/dist/tuning.rs
+  |
+  |     pub fn new_static<Algorithm, Protocol, Channels, ChunkBytes>(
+  |            ---------- required by a bound in this associated function
+...
+  |         Channels: Unsigned + NonZero + IsLessOrEqual<U32, Output = B1>,
+  |                              ^^^^^^^ required by this bound in `CollectiveTuningCandidate::new_static`

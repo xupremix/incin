@@ -112,6 +112,7 @@ impl<S: Shape, B: Backend> Param<S, B> {
             _dtype: self._dtype.clone(),
             _device: self._device.clone(),
             _grad: core::marker::PhantomData,
+            _placement: core::marker::PhantomData,
         })
     }
 }
@@ -451,6 +452,7 @@ impl<S: Shape, B: Backend> Buffer<S, B> {
             _dtype: self._dtype.clone(),
             _device: self._device.clone(),
             _grad: core::marker::PhantomData,
+            _placement: core::marker::PhantomData,
         })
     }
 }

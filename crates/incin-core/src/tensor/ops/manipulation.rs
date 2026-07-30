@@ -264,6 +264,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             _dtype: self._dtype,
             _device: self._device,
             _grad: self._grad,
+            _placement: core::marker::PhantomData,
         })
     }
 
@@ -287,6 +288,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             _dtype: self._dtype,
             _device: self._device,
             _grad: self._grad,
+            _placement: core::marker::PhantomData,
         })
     }
     /// `try_reshape`.
@@ -1020,6 +1022,7 @@ where
         _dtype: tensors[0]._dtype.clone(),
         _device: tensors[0]._device.clone(),
         _grad: tensors[0]._grad.clone(),
+        _placement: core::marker::PhantomData,
     })
 }
 

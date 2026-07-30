@@ -11,19 +11,20 @@ use crate::exec::ReduceOp;
 use alloc::vec::Vec;
 #[cfg(feature = "distributed")]
 use core::fmt;
-#[cfg(feature = "distributed")]
 use core::marker::PhantomData;
 #[cfg(feature = "distributed")]
 use typenum::Unsigned;
+
+use crate::tensor::base::Dyn;
 
 /// Runtime projection of a compile-time placement.
 ///
 /// Mesh identity is deliberately absent. A placement typestate names a logical
 /// mesh type, but [`MeshId`](crate::dist::mesh::MeshId) is produced only after
 /// that mesh is bound to physical devices. Putting a `MeshId` here would force
-/// [`Placement::kind`] either to fabricate one or to read runtime state from a
-/// static method. Distributed descriptors pair this logical projection with
-/// their separately validated bound mesh.
+/// [`Placement::to_incin`] either to fabricate one or to read runtime state
+/// from a static marker. Distributed descriptors pair this logical projection
+/// with their separately validated bound mesh.
 #[non_exhaustive]
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PlacementKind {
@@ -77,8 +78,23 @@ impl PlacementKind {
 
 /// Compile-time placement carried by storage and lowering rules.
 pub trait Placement: 'static + Clone + core::fmt::Debug + Send + Sync {
-    /// Project this typestate into descriptor metadata.
-    fn kind() -> PlacementKind;
+    /// Runtime representation stored by a placement-bearing tensor.
+    ///
+    /// [`Local`] uses a zero-sized `PhantomData`; static distributed
+    /// placements store only the runtime rank, and [`Dyn`] stores both rank
+    /// and [`PlacementKind`]. This follows the same static/runtime split as
+    /// tensor shape, dtype, and device without enlarging ordinary tensors.
+    type Field: Clone + core::fmt::Debug + Default + Send + Sync;
+
+    /// Build a checked stored field from runtime placement metadata.
+    #[doc(hidden)]
+    fn try_from_incin(kind: PlacementKind, rank: usize) -> Option<Self::Field>;
+
+    /// Resolve the placement represented by a tensor field.
+    fn to_incin(field: &Self::Field) -> PlacementKind;
+
+    /// Resolve the rank represented by a tensor field.
+    fn rank(field: &Self::Field) -> usize;
 
     /// Number of rank-local results this placement's mesh contains.
     #[doc(hidden)]
@@ -93,13 +109,108 @@ pub trait Placement: 'static + Clone + core::fmt::Debug + Send + Sync {
     const PIPELINE_DEGREE: usize = 1;
 }
 
+/// A placement whose complete logical identity is known at compile time.
+///
+/// Runtime-selected [`Dyn`] placement deliberately does not implement this
+/// trait. Rules needing a static proof require `ConstPlacement`; APIs that
+/// accept `Dyn` validate its [`PlacementKind`] at their checked boundary.
+pub trait ConstPlacement: Placement {
+    /// Compile-time projection used by distributed lowering rules.
+    const PLACEMENT: PlacementKind;
+}
+
+/// A distributed placement attached to one specific logical mesh.
+///
+/// Collective planning uses this bound to prevent a placement proved for one
+/// mesh type from being inserted into a plan bound to another mesh.
+#[cfg(feature = "distributed")]
+pub trait PlacementOn<Mesh: crate::dist::mesh::ValidMesh>: Placement {}
+
+/// Rank metadata for a compile-time-known distributed placement.
+///
+/// `Local` does not use this field and therefore pays no rank-storage cost.
+#[doc(hidden)]
+pub struct RankedPlacement<P> {
+    rank: usize,
+    marker: PhantomData<fn() -> P>,
+}
+
+impl<P> RankedPlacement<P> {
+    fn new(rank: usize) -> Self {
+        Self {
+            rank,
+            marker: PhantomData,
+        }
+    }
+}
+
+impl<P> Clone for RankedPlacement<P> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<P> Copy for RankedPlacement<P> {}
+
+impl<P> Default for RankedPlacement<P> {
+    fn default() -> Self {
+        Self::new(0)
+    }
+}
+
+impl<P> core::fmt::Debug for RankedPlacement<P> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("RankedPlacement")
+            .field("rank", &self.rank)
+            .finish()
+    }
+}
+
+/// Placement and rank metadata for `Tensor<..., P = Dyn>`.
+#[doc(hidden)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct DynamicPlacement {
+    kind: PlacementKind,
+    rank: usize,
+}
+
 /// A tensor held by one backend device.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Local;
 
 impl Placement for Local {
-    fn kind() -> PlacementKind {
-        PlacementKind::Local
+    type Field = PhantomData<Self>;
+
+    fn try_from_incin(kind: PlacementKind, rank: usize) -> Option<Self::Field> {
+        (kind == Self::PLACEMENT && rank == 0).then_some(PhantomData)
+    }
+
+    fn to_incin(_: &Self::Field) -> PlacementKind {
+        Self::PLACEMENT
+    }
+
+    fn rank(_: &Self::Field) -> usize {
+        0
+    }
+}
+
+impl ConstPlacement for Local {
+    const PLACEMENT: PlacementKind = PlacementKind::Local;
+}
+
+impl Placement for Dyn {
+    type Field = DynamicPlacement;
+
+    fn try_from_incin(kind: PlacementKind, rank: usize) -> Option<Self::Field> {
+        Some(DynamicPlacement { kind, rank })
+    }
+
+    fn to_incin(field: &Self::Field) -> PlacementKind {
+        field.kind
+    }
+
+    fn rank(field: &Self::Field) -> usize {
+        field.rank
     }
 }
 
@@ -226,12 +337,32 @@ impl<Mesh> Placement for Replicated<Mesh>
 where
     Mesh: crate::dist::mesh::ValidMesh,
 {
+    type Field = RankedPlacement<Self>;
     const RANKS: usize = Mesh::WORLD;
 
-    fn kind() -> PlacementKind {
-        PlacementKind::Replicated
+    fn try_from_incin(kind: PlacementKind, rank: usize) -> Option<Self::Field> {
+        (kind == Self::PLACEMENT).then(|| RankedPlacement::new(rank))
+    }
+
+    fn to_incin(_: &Self::Field) -> PlacementKind {
+        Self::PLACEMENT
+    }
+
+    fn rank(field: &Self::Field) -> usize {
+        field.rank
     }
 }
+
+#[cfg(feature = "distributed")]
+impl<Mesh> ConstPlacement for Replicated<Mesh>
+where
+    Mesh: crate::dist::mesh::ValidMesh,
+{
+    const PLACEMENT: PlacementKind = PlacementKind::Replicated;
+}
+
+#[cfg(feature = "distributed")]
+impl<Mesh> PlacementOn<Mesh> for Replicated<Mesh> where Mesh: crate::dist::mesh::ValidMesh {}
 
 #[cfg(feature = "distributed")]
 impl<Mesh, Axis> Placement for Sharded<Mesh, Axis>
@@ -239,12 +370,38 @@ where
     Mesh: crate::dist::mesh::ValidMesh,
     Axis: PlacementAxis,
 {
+    type Field = RankedPlacement<Self>;
     const RANKS: usize = Mesh::WORLD;
     const SHARD_DEGREE: usize = Mesh::TENSOR;
 
-    fn kind() -> PlacementKind {
-        PlacementKind::Sharded { axis: Axis::INDEX }
+    fn try_from_incin(kind: PlacementKind, rank: usize) -> Option<Self::Field> {
+        (kind == Self::PLACEMENT).then(|| RankedPlacement::new(rank))
     }
+
+    fn to_incin(_: &Self::Field) -> PlacementKind {
+        Self::PLACEMENT
+    }
+
+    fn rank(field: &Self::Field) -> usize {
+        field.rank
+    }
+}
+
+#[cfg(feature = "distributed")]
+impl<Mesh, Axis> ConstPlacement for Sharded<Mesh, Axis>
+where
+    Mesh: crate::dist::mesh::ValidMesh,
+    Axis: PlacementAxis,
+{
+    const PLACEMENT: PlacementKind = PlacementKind::Sharded { axis: Axis::INDEX };
+}
+
+#[cfg(feature = "distributed")]
+impl<Mesh, Axis> PlacementOn<Mesh> for Sharded<Mesh, Axis>
+where
+    Mesh: crate::dist::mesh::ValidMesh,
+    Axis: PlacementAxis,
+{
 }
 
 #[cfg(feature = "distributed")]
@@ -253,13 +410,39 @@ where
     Mesh: crate::dist::mesh::ValidMesh,
     Reduction: PartialReduction,
 {
+    type Field = RankedPlacement<Self>;
     const RANKS: usize = Mesh::WORLD;
 
-    fn kind() -> PlacementKind {
-        PlacementKind::Partial {
-            reduction: Reduction::OP,
-        }
+    fn try_from_incin(kind: PlacementKind, rank: usize) -> Option<Self::Field> {
+        (kind == Self::PLACEMENT).then(|| RankedPlacement::new(rank))
     }
+
+    fn to_incin(_: &Self::Field) -> PlacementKind {
+        Self::PLACEMENT
+    }
+
+    fn rank(field: &Self::Field) -> usize {
+        field.rank
+    }
+}
+
+#[cfg(feature = "distributed")]
+impl<Mesh, Reduction> ConstPlacement for Partial<Mesh, Reduction>
+where
+    Mesh: crate::dist::mesh::ValidMesh,
+    Reduction: PartialReduction,
+{
+    const PLACEMENT: PlacementKind = PlacementKind::Partial {
+        reduction: Reduction::OP,
+    };
+}
+
+#[cfg(feature = "distributed")]
+impl<Mesh, Reduction> PlacementOn<Mesh> for Partial<Mesh, Reduction>
+where
+    Mesh: crate::dist::mesh::ValidMesh,
+    Reduction: PartialReduction,
+{
 }
 
 #[cfg(feature = "distributed")]
@@ -267,12 +450,35 @@ impl<Mesh, const INDEX: usize> Placement for PipelineStage<Mesh, INDEX>
 where
     Mesh: crate::dist::mesh::ValidMesh,
 {
+    type Field = RankedPlacement<Self>;
     const RANKS: usize = Mesh::WORLD;
     const PIPELINE_DEGREE: usize = Mesh::PIPELINE;
 
-    fn kind() -> PlacementKind {
-        PlacementKind::PipelineStage { index: INDEX }
+    fn try_from_incin(kind: PlacementKind, rank: usize) -> Option<Self::Field> {
+        (kind == Self::PLACEMENT).then(|| RankedPlacement::new(rank))
     }
+
+    fn to_incin(_: &Self::Field) -> PlacementKind {
+        Self::PLACEMENT
+    }
+
+    fn rank(field: &Self::Field) -> usize {
+        field.rank
+    }
+}
+
+#[cfg(feature = "distributed")]
+impl<Mesh, const INDEX: usize> ConstPlacement for PipelineStage<Mesh, INDEX>
+where
+    Mesh: crate::dist::mesh::ValidMesh,
+{
+    const PLACEMENT: PlacementKind = PlacementKind::PipelineStage { index: INDEX };
+}
+
+#[cfg(feature = "distributed")]
+impl<Mesh, const INDEX: usize> PlacementOn<Mesh> for PipelineStage<Mesh, INDEX> where
+    Mesh: crate::dist::mesh::ValidMesh
+{
 }
 
 /// Runtime placements of an operation's inputs.

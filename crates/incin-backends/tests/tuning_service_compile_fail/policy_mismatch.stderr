@@ -1,0 +1,15 @@
+error[E0308]: mismatched types
+ --> tests/tuning_service_compile_fail/policy_mismatch.rs:8:21
+  |
+8 |     requires_warmup(TuningService::<DisabledTuning>::disabled());
+  |     --------------- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `TuningService<CoordinatedWarmupTuning>`, found `TuningService<DisabledTuning>`
+  |     |
+  |     arguments to this function are incorrect
+  |
+  = note: expected struct `TuningService<CoordinatedWarmupTuning>`
+             found struct `TuningService<DisabledTuning>`
+note: function defined here
+ --> tests/tuning_service_compile_fail/policy_mismatch.rs:5:4
+  |
+5 | fn requires_warmup(_: TuningService<CoordinatedWarmupTuning>) {}
+  |    ^^^^^^^^^^^^^^^ -----------------------------------------

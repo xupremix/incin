@@ -1,0 +1,24 @@
+error[E0277]: the trait bound `u32: DataParallelDType` is not satisfied
+  --> tests/nccl_compile_fail/integer_gradient_sync.rs:17:9
+   |
+15 |     let _ = transport.synchronize_gradient(
+   |                       -------------------- required by a bound introduced by this call
+16 |         GradientId::new(1).unwrap(),
+17 |         parameter,
+   |         ^^^^^^^^^ the trait `DataParallelDType` is not implemented for `u32`
+   |
+help: the following other types implement trait `DataParallelDType`
+  --> $WORKSPACE/crates/incin-core/src/dist/data_parallel.rs
+   |
+   | impl DataParallelDType for f32 {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `f32`
+   | impl DataParallelDType for f64 {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `f64`
+note: required by a bound in `NcclTransport::synchronize_gradient`
+  --> src/dist/nccl.rs
+   |
+   |     pub fn synchronize_gradient<S, T, D, K, G, P>(
+   |            -------------------- required by a bound in this associated function
+...
+   |         K: DataParallelDType,
+   |            ^^^^^^^^^^^^^^^^^ required by this bound in `NcclTransport::synchronize_gradient`

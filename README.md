@@ -34,6 +34,9 @@ and third-party backends are opt-in. Enabling an accelerator does not change
 | `candle` | no | Deprecated alias for `external-candle`. Removed at REL-002; see PROPOSALS.md D-014. |
 | `autotune` | no | Enables CUDA launch autotuning. |
 | `train` | no | Enables the automatic `Trainer` at `incin::train`. Preview tier: useful and tested, but the interface may change without a migration path. |
+| `distributed` | no | Enables typed meshes, static/runtime tensor placements, and distributed lowering proofs. Transports remain separate opt-in backend features. |
+| `distributed-reference` | no | Enables the deterministic in-process collective transport used by conformance tests and local distributed-plan development. |
+| `distributed-nccl` | no | Two-host process-per-rank CUDA transport and its TCP bootstrap. |
 | `telemetry` | no | Enables backend telemetry hooks. `cargo incin doctor` also reports the run directory under this feature, which is why the dependency is direct here and not only through incin-backends. |
 <!-- END GENERATED: facade-features -->
 
@@ -56,12 +59,26 @@ incin = { version = "0.0.0", features = ["external-candle"] }
 ### Lower-level crate features
 
 <!-- BEGIN GENERATED: crate-features -->
-- `incin-backends`: defaults to `std,cpu`; optional `cpu-blas`, `cuda`, `wgpu`, `autotune`, `external-candle`, `candle`, and `telemetry`.
+- `incin-backends`: defaults to `std,cpu`; optional `cpu-blas`, `cuda`, `wgpu`, `autotune`, `external-candle`, `candle`, `telemetry`, `distributed`, `distributed-reference`, and `distributed-nccl`.
 - `incin-core`: defaults to `std`; optional `nightly`, `paranoid-validation`, `distributed`, `cuda`, and `wgpu`.
 - `incin-macros`: defaults to `std`; optional `nightly`.
 - `incin-diagnostics`: defaults to `std`.
 - `incin-data`, `incin-telemetry`, `incin-viz`, `incin-viz-plugin-api`, and `incin-lsp` expose no Cargo features.
 <!-- END GENERATED: crate-features -->
+
+The two-host launcher uses one process per rank. `DistributedContext::from_env`
+checks `INCIN_RANK`, `INCIN_WORLD_SIZE`, `INCIN_RUN_ID`,
+`INCIN_LOCAL_CUDA_DEVICE`, `INCIN_RENDEZVOUS_ADDR`, and
+`INCIN_RENDEZVOUS_TIMEOUT_MS` before communicator creation. Both hosts may use
+local CUDA ordinal zero; the address on rank zero is a bind address and the
+address on rank one must reach rank zero over the network.
+
+With `autotune`, `incin_backends::tuning` exposes stable UUID/compiler/topology
+identities, an atomic bounded persistent cache, and statically typed or `Dyn`
+disabled, heuristic, coordinated-warmup, and profile-guided services. Cached
+winners are treated as untrusted hints and are reused only after the current
+legal candidate set matches. Distributed warmup uses one bounded epoch permit
+and requires every topology rank to accept the same result before commit.
 
 `incin-core`'s `cuda` and `wgpu` flags expose the device metadata backend crates
 need; they do not execute kernels themselves. Disabling `incin-diagnostics`'

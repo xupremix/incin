@@ -1,0 +1,17 @@
+error[E0599]: no associated function or constant named `root` found for struct `StaticRendezvousConfig<UInt<UTerm, B1>>` in the current scope
+ --> tests/rendezvous_compile_fail/rank_one_cannot_build_root.rs:5:43
+  |
+5 |     let _ = StaticRendezvousConfig::<U1>::root(
+  |                                           ^^^^ associated function or constant not found in `StaticRendezvousConfig<UInt<UTerm, B1>>`
+  |
+note: if you're trying to build a new `StaticRendezvousConfig<UInt<UTerm, B1>>`, consider using `StaticRendezvousConfig::<UInt<UTerm, B1>>::peer` which returns `StaticRendezvousConfig<UInt<UTerm, B1>>`
+ --> $WORKSPACE/crates/incin-core/src/dist/context.rs
+  |
+  | /     pub const fn peer(
+  | |         run_id: RunId,
+  | |         root: SocketAddr,
+  | |         local_cuda_device: usize,
+  | |         timeout: Duration,
+  | |     ) -> Self {
+  | |_____________^
+  = note: the associated function or constant was found for `StaticRendezvousConfig<UTerm>`

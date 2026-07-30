@@ -1,0 +1,13 @@
+error[E0599]: the associated function or constant `new_static` exists for struct `TwoRankLaunchPlan<MeshSpec<incin::dist::mesh::Data<UInt<UInt<UTerm, B1>, B1>>>>`, but its trait bounds were not satisfied
+ --> tests/rendezvous_compile_fail/wrong_static_world.rs:8:46
+  |
+8 |     let _ = TwoRankLaunchPlan::<ThreeRanks>::new_static(
+  |                                              ^^^^^^^^^^ associated function or constant cannot be called due to unsatisfied trait bounds
+  |
+ ::: $WORKSPACE/crates/incin-core/src/dist/mesh.rs
+  |
+  | pub struct MeshSpec<DP, TP = TensorParallel<U1>, PP = Pipeline<U1>>(PhantomData<(DP, TP, PP)>);
+  | ------------------------------------------------------------------- doesn't satisfy `<_ as ValidMesh>::World = UInt<UInt<UTerm, B1>, B0>`
+  |
+  = note: the following trait bounds were not satisfied:
+          `<MeshSpec<incin::dist::mesh::Data<UInt<UInt<UTerm, B1>, B1>>> as ValidMesh>::World = UInt<UInt<UTerm, B1>, B0>`

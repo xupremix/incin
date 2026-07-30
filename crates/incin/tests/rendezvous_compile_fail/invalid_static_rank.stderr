@@ -1,0 +1,19 @@
+error[E0277]: `UInt<UInt<UTerm, B1>, B0>` is not a valid rank in a two-rank distributed context
+  --> tests/rendezvous_compile_fail/invalid_static_rank.rs:12:32
+   |
+12 |     let _ = plan.rank_static::<U2>();
+   |                  -----------   ^^ expected typenum::U0 or typenum::U1
+   |                  |
+   |                  required by a bound introduced by this call
+   |
+   = help: the trait `StaticTwoRank` is not implemented for `UInt<UInt<UTerm, B1>, B0>`
+help: the trait `StaticTwoRank` is implemented for `UInt<UTerm, B1>`
+  --> $WORKSPACE/crates/incin-core/src/dist/context.rs
+   |
+   | impl StaticTwoRank for U1 {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^
+note: required by a bound in `TwoRankLaunchPlan::<M>::rank_static`
+  --> $WORKSPACE/crates/incin-core/src/dist/context.rs
+   |
+   |     pub fn rank_static<R: StaticTwoRank>(&self) -> RankLaunch {
+   |                           ^^^^^^^^^^^^^ required by this bound in `TwoRankLaunchPlan::<M>::rank_static`

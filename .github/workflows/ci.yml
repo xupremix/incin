@@ -78,6 +78,25 @@ jobs:
         cargo test -p incin-core --features distributed --test mesh_compile
         cargo test -p incin-core --features distributed --test mesh_bind
         cargo test -p incin-core --features distributed --test placement_rules
+        cargo test -p incin-core --features distributed --test placement_tensor
+        cargo test -p incin-core --features distributed --test collective_plan
+        cargo test -p incin-core --features distributed --test data_parallel
+        cargo test -p incin-core --features distributed --test tensor_parallel
+        cargo test -p incin-core --features distributed --test pipeline
+        cargo test -p incin-core --features distributed --test hybrid_plan
+        cargo test -p incin-backends --features distributed-reference --test reference_collectives
+        cargo test -p incin-backends --features distributed-reference --test data_parallel_reference
+        cargo test -p incin-backends --features distributed-reference --test tensor_parallel_reference
+        cargo test -p incin-backends --features distributed-reference --test pipeline_reference
+        cargo test -p incin-backends --features distributed-reference,autotune --test collective_tuning
+        cargo test -p incin-backends --features autotune --test tuning_identity
+        cargo test -p incin-backends --features autotune --test tuning_cache
+        cargo test -p incin-backends --features autotune --test tuning_service
+        cargo test -p incin-backends --features distributed-nccl --test nccl_contract
+        cargo test -p incin --features distributed-nccl --test rendezvous
+        cargo test -p incin --features distributed-nccl --test dp2_network --no-run
+        cargo test -p incin --features distributed-nccl --test tp2_network --no-run
+        cargo test -p incin --features distributed-nccl --test pp2_network --no-run
 
     - name: Run Isolated Bare-CPU Tests
       run: cargo test -p incin-backends --no-default-features --features std,cpu

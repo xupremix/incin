@@ -1,0 +1,23 @@
+error[E0277]: the trait bound `u32: TensorParallelDType` is not satisfied
+ --> tests/tensor_parallel_compile_fail/integer_value.rs:6:31
+  |
+6 |         .push_column_static::<u32, U1, U4>(
+  |          ------------------   ^^^ the trait `TensorParallelDType` is not implemented for `u32`
+  |          |
+  |          required by a bound introduced by this call
+  |
+help: the following other types implement trait `TensorParallelDType`
+ --> src/dist/tensor_parallel.rs
+  |
+  | impl TensorParallelDType for f32 {}
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `f32`
+  | impl TensorParallelDType for f64 {}
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `f64`
+note: required by a bound in `TensorParallelPlanBuilder::<'a>::push_column_static`
+ --> src/dist/tensor_parallel.rs
+  |
+  |     pub fn push_column_static<K, Axis, Out>(
+  |            ------------------ required by a bound in this associated function
+...
+  |         K: ConstDType + TensorParallelDType,
+  |                         ^^^^^^^^^^^^^^^^^^^ required by this bound in `TensorParallelPlanBuilder::<'a>::push_column_static`

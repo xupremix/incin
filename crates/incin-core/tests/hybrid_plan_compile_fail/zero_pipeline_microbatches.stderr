@@ -1,0 +1,31 @@
+error[E0277]: the trait bound `UTerm: incin_core::typenum::NonZero` is not satisfied
+ --> tests/hybrid_plan_compile_fail/zero_pipeline_microbatches.rs:8:65
+  |
+8 |     let _ = HybridPlanner::plan_pipeline_static::<f32, U16, U4, U0, GPipe>(
+  |                                                                 ^^ the trait `incin_core::typenum::NonZero` is not implemented for `UTerm`
+  |
+help: the following other types implement trait `incin_core::typenum::NonZero`
+ --> $CARGO/typenum-$VERSION/src/bit.rs
+  |
+  | impl NonZero for B1 {}
+  | ^^^^^^^^^^^^^^^^^^^ `B1`
+  |
+ ::: $CARGO/typenum-$VERSION/src/int.rs
+  |
+  | impl<U: Unsigned + NonZero> NonZero for PInt<U> {}
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `PInt<U>`
+  | impl<U: Unsigned + NonZero> NonZero for NInt<U> {}
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `NInt<U>`
+  |
+ ::: $CARGO/typenum-$VERSION/src/uint.rs
+  |
+  | impl<U: Unsigned, B: Bit> NonZero for UInt<U, B> {}
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `UInt<U, B>`
+note: required by a bound in `HybridPlanner::plan_pipeline_static`
+ --> src/dist/plan.rs
+  |
+  |     pub fn plan_pipeline_static<K, Parameters, Activations, Microbatches, Schedule>(
+  |            -------------------- required by a bound in this associated function
+...
+  |         Microbatches: Unsigned + NonZero + IsLessOrEqual<U4294967295, Output = B1>,
+  |                                  ^^^^^^^ required by this bound in `HybridPlanner::plan_pipeline_static`

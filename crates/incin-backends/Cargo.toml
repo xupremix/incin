@@ -41,6 +41,14 @@ external-candle = ["std", "dep:candle-core", "dep:candle-nn"]
 candle = ["external-candle"]
 # Connects backend execution and autograd events to `incin-telemetry`.
 telemetry = ["std", "dep:incin-telemetry"]
+# Shared distributed contracts and topology types. Transport implementations
+# remain opt-in so the normal CPU build does not gain communication machinery.
+distributed = ["std", "incin-core/distributed"]
+# Deterministic in-process CPU reference collectives used for conformance,
+# adjoint, and planner tests.
+distributed-reference = ["distributed"]
+# Real process-per-rank CUDA collectives. cudarc loads NCCL at runtime.
+distributed-nccl = ["distributed", "cuda", "autotune", "cudarc/nccl"]
 
 [dependencies]
 incin-core = { path = "../incin-core", default-features = false, version = "0.0.0" }
@@ -49,6 +57,7 @@ spin = { version = "0.9.8", default-features = false, features = ["rwlock", "mut
 rand = { version = "0.8", default-features = false, features = ["alloc", "small_rng"] }
 rand_distr = { version = "0.4", default-features = false, features = ["alloc"] }
 half = { workspace = true, default-features = false }
+thiserror = { workspace = true, default-features = false }
 bytemuck = { version = "1.25", default-features = false, features = ["derive"] }
 ggml-quants = "0.1.0"
 incin-telemetry = { path = "../incin-telemetry", version = "0.0.0", optional = true }
@@ -56,6 +65,9 @@ hashbrown = { version = "0.14", default-features = false, features = ["alloc", "
 rayon = "1.10.0"
 matrixmultiply = { version = "0.3.11", optional = true }
 log = "0.4.22"
+fs2 = "0.4.3"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.120"
 
 # WGPU Backend
 wgpu = { version = "22.0.0", optional = true }
@@ -67,6 +79,10 @@ cudarc = { version = "0.19.8", optional = true, features = ["cuda-12000", "nvrtc
 # External backend integration
 candle-core = { workspace = true, optional = true }
 candle-nn = { workspace = true, optional = true }
+
+[dev-dependencies]
+trybuild = "1.0.117"
+tempfile = "3.27"
 
 [lints]
 workspace = true
