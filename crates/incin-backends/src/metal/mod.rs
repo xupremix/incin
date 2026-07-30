@@ -11,8 +11,13 @@ pub mod mps;
 pub mod shaders;
 pub mod storage;
 pub mod tape;
+pub mod tuning;
 
 pub use backend::{MetalBackendImpl, MetalVar};
 pub use storage::{MetalStorage, MetalStorageMode, is_unified_memory};
 pub use tape::MetalGrads;
-
+pub use tuning::{
+    MetalLaunchCandidate, default_metal_pointwise_candidate, default_metal_reduction_candidate,
+    metal_environment_fingerprint, metal_matmul_candidates, metal_normalization_candidates,
+    metal_pointwise_candidates, metal_reduction_candidates, preferred_metal_storage_mode,
+};

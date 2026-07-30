@@ -117,7 +117,8 @@ impl CompiledArtifact {
         if computed != self.header.checksum {
             return Err(Error::Msg(alloc::format!(
                 "artifact integrity check failed: stored checksum {:#010x}, computed {:#010x}",
-                self.header.checksum, computed
+                self.header.checksum,
+                computed
             )));
         }
         Ok(())
@@ -128,7 +129,8 @@ impl CompiledArtifact {
         if !self.header.version.is_compatible_with(required) {
             return Err(Error::Msg(alloc::format!(
                 "artifact version {:?} is incompatible with required {:?}",
-                self.header.version, required
+                self.header.version,
+                required
             )));
         }
         Ok(())

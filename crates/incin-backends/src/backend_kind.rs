@@ -148,7 +148,6 @@ impl<T: DType> BackendFor<T> for Dyn {
     type Backend = crate::dispatch::DispatchBackend<T, Dyn>;
 }
 
-
 macro_rules! impl_transfer {
     ($source:ty) => {
         impl<T: DType, D: Device, NewD> incin_core::prelude::TransferTo<NewD> for $source
@@ -236,7 +235,6 @@ impl_transfer!(crate::cuda::CudaBackendImpl<T, D>);
 #[cfg(feature = "metal")]
 impl_transfer!(crate::metal::MetalBackendImpl<T, D>);
 impl_transfer!(crate::dispatch::DispatchBackend<T, D>);
-
 
 #[cfg(test)]
 mod tests {

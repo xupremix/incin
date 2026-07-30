@@ -421,8 +421,6 @@ fn an_absent_or_unset_cache_is_not_a_finding() {
     }
 }
 
-
-
 #[test]
 fn an_absent_isa_extension_is_a_note_about_the_scalar_path() {
     let host = FakeHost {

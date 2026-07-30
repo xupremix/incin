@@ -153,12 +153,16 @@ pub type DefaultDevice = crate::prelude::Wgpu;
 /// Default device for a CUDA-only build.
 pub type DefaultDevice = crate::prelude::Cuda;
 
+#[cfg(feature = "train")]
+pub mod plan_report;
 #[cfg(feature = "cpu")]
 /// Default backend (CPU with f32). Equivalent to `IncinBackend<f32, Cpu>`.
 /// The automatic `Trainer` (`UX-001`). Preview tier, so it ships behind the
 /// non-default `train` feature.
 #[cfg(feature = "train")]
 pub mod train;
+#[cfg(feature = "std")]
+pub mod tune_report;
 
 pub type DefaultBackend = incin_backends::IncinBackend<f32, incin_core::prelude::Cpu>;
 
@@ -293,7 +297,9 @@ pub mod prelude {
     // (`incin_macros::generate_shape_ops!()` in `shapes/shape_ops.rs`,
     // `incin_macros::impl_arg_into!()` in `tensor/arg_into.rs`) — neither
     // has a documented public contract or any end-user call site.
-    pub use incin_macros::{axes, einsum, idx, import_model, mesh, model, module, parallel, placement, s};
+    pub use incin_macros::{
+        axes, einsum, idx, import_model, mesh, model, module, parallel, placement, s,
+    };
 
     // We intentionally overshadow incin_core::Tensor and NN modules with our aliased versions
     #[cfg(feature = "cpu")]

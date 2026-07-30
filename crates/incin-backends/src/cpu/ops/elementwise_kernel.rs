@@ -13,6 +13,7 @@ use rayon::prelude::*;
 
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
 use crate::cpu::stride;
+use crate::cpu::typed_kernel::{TypedKernel, map_binary_typed, map_unary_typed};
 use crate::dtype_policy::{BackendFamily, OperationKind, resolve_dtype_policy};
 use crate::iteration::{IterationPlan, OperandIteration, OperandLayout, UnaryIterationPlan};
 
@@ -458,7 +459,7 @@ fn execute_unary_layout<T>(
     op: impl Fn(T) -> T + Send + Sync,
 ) -> Result<Vec<T>>
 where
-    T: Copy + Send + Sync,
+    T: TypedKernel,
 {
     if let Some(range) = dense_range(input, values.len(), &input.shape) {
         return Ok(map_unary(&values[range], &op));
@@ -482,7 +483,7 @@ fn execute_layout<T>(
     op: impl Fn(T, T) -> T + Send + Sync,
 ) -> Result<Vec<T>>
 where
-    T: Copy + Send + Sync,
+    T: TypedKernel,
 {
     if let (Some(lhs_range), Some(rhs_range)) = (
         dense_range(lhs, lhs_values.len(), output_shape),
@@ -536,22 +537,11 @@ fn binary_iteration_plan(
     Ok(plan)
 }
 
-fn map_binary<T, F>(lhs: &[T], rhs: &[T], op: &F) -> Vec<T>
+fn map_binary<T: TypedKernel, F>(lhs: &[T], rhs: &[T], op: &F) -> Vec<T>
 where
-    T: Copy + Send + Sync,
     F: Fn(T, T) -> T + Send + Sync,
 {
-    if lhs.len() < DENSE_PARALLEL_GRAIN {
-        lhs.iter()
-            .zip(rhs)
-            .map(|(&lhs, &rhs)| op(lhs, rhs))
-            .collect()
-    } else {
-        lhs.par_iter()
-            .zip(rhs)
-            .map(|(&lhs, &rhs)| op(lhs, rhs))
-            .collect()
-    }
+    map_binary_typed(lhs, rhs, op)
 }
 
 #[cfg_attr(
@@ -562,13 +552,20 @@ where
     allow(unreachable_code)
 )]
 fn map_binary_f32(op: BinaryOp, lhs: &[f32], rhs: &[f32]) -> Vec<f32> {
+    // simd_lanes::<f32>() is a const fn — the compiler resolves it at compile
+    // time and can dead-code-eliminate the branch entirely on targets without
+    // AVX2, avoiding the runtime feature-detection call on every invocation.
     #[cfg(all(feature = "std", target_arch = "x86_64"))]
-    if std::arch::is_x86_feature_detected!("avx2") {
-        if lhs.len() < DENSE_PARALLEL_GRAIN {
-            // SAFETY: runtime feature detection proves AVX2 support.
-            return unsafe { avx2_binary_f32(op, lhs, rhs) };
+    {
+        const LANES: usize = crate::simd::simd_lanes::<f32>();
+        if LANES >= 8 {
+            if lhs.len() < DENSE_PARALLEL_GRAIN {
+                // SAFETY: LANES >= 8 proves AVX2 (or wider) is a compile-time
+                // target feature, so the avx2 intrinsic path is always valid.
+                return unsafe { avx2_binary_f32(op, lhs, rhs) };
+            }
+            return parallel_avx2_binary_f32(op, lhs, rhs);
         }
-        return parallel_avx2_binary_f32(op, lhs, rhs);
     }
     #[cfg(target_arch = "aarch64")]
     {
@@ -593,13 +590,20 @@ fn map_binary_f32(op: BinaryOp, lhs: &[f32], rhs: &[f32]) -> Vec<f32> {
     allow(unreachable_code)
 )]
 fn map_binary_f64(op: BinaryOp, lhs: &[f64], rhs: &[f64]) -> Vec<f64> {
+    // simd_lanes::<f64>() is a const fn — the compiler resolves it at compile
+    // time and can dead-code-eliminate the branch entirely on targets without
+    // AVX2, avoiding the runtime feature-detection call on every invocation.
     #[cfg(all(feature = "std", target_arch = "x86_64"))]
-    if std::arch::is_x86_feature_detected!("avx2") {
-        if lhs.len() < DENSE_PARALLEL_GRAIN {
-            // SAFETY: runtime feature detection proves AVX2 support.
-            return unsafe { avx2_binary_f64(op, lhs, rhs) };
+    {
+        const LANES: usize = crate::simd::simd_lanes::<f64>();
+        if LANES >= 4 {
+            if lhs.len() < DENSE_PARALLEL_GRAIN {
+                // SAFETY: LANES >= 4 proves AVX2 (or wider) is a compile-time
+                // target feature, so the avx2 intrinsic path is always valid.
+                return unsafe { avx2_binary_f64(op, lhs, rhs) };
+            }
+            return parallel_avx2_binary_f64(op, lhs, rhs);
         }
-        return parallel_avx2_binary_f64(op, lhs, rhs);
     }
     #[cfg(target_arch = "aarch64")]
     {
@@ -624,13 +628,20 @@ fn map_binary_f64(op: BinaryOp, lhs: &[f64], rhs: &[f64]) -> Vec<f64> {
     allow(unreachable_code)
 )]
 fn map_scalar_f32(op: BinaryOp, dense: &[f32], scalar: f32, scalar_left: bool) -> Vec<f32> {
+    // simd_lanes::<f32>() is a const fn — the compiler resolves it at compile
+    // time and can dead-code-eliminate the branch entirely on targets without
+    // AVX2, avoiding the runtime feature-detection call on every invocation.
     #[cfg(all(feature = "std", target_arch = "x86_64"))]
-    if std::arch::is_x86_feature_detected!("avx2") {
-        if dense.len() < DENSE_PARALLEL_GRAIN {
-            // SAFETY: runtime feature detection proves AVX2 support.
-            return unsafe { avx2_scalar_f32(op, dense, scalar, scalar_left) };
+    {
+        const LANES: usize = crate::simd::simd_lanes::<f32>();
+        if LANES >= 8 {
+            if dense.len() < DENSE_PARALLEL_GRAIN {
+                // SAFETY: LANES >= 8 proves AVX2 (or wider) is a compile-time
+                // target feature, so the avx2 intrinsic path is always valid.
+                return unsafe { avx2_scalar_f32(op, dense, scalar, scalar_left) };
+            }
+            return parallel_avx2_scalar_f32(op, dense, scalar, scalar_left);
         }
-        return parallel_avx2_scalar_f32(op, dense, scalar, scalar_left);
     }
     #[cfg(target_arch = "aarch64")]
     {
@@ -659,13 +670,20 @@ fn map_scalar_f32(op: BinaryOp, dense: &[f32], scalar: f32, scalar_left: bool) -
     allow(unreachable_code)
 )]
 fn map_scalar_f64(op: BinaryOp, dense: &[f64], scalar: f64, scalar_left: bool) -> Vec<f64> {
+    // simd_lanes::<f64>() is a const fn — the compiler resolves it at compile
+    // time and can dead-code-eliminate the branch entirely on targets without
+    // AVX2, avoiding the runtime feature-detection call on every invocation.
     #[cfg(all(feature = "std", target_arch = "x86_64"))]
-    if std::arch::is_x86_feature_detected!("avx2") {
-        if dense.len() < DENSE_PARALLEL_GRAIN {
-            // SAFETY: runtime feature detection proves AVX2 support.
-            return unsafe { avx2_scalar_f64(op, dense, scalar, scalar_left) };
+    {
+        const LANES: usize = crate::simd::simd_lanes::<f64>();
+        if LANES >= 4 {
+            if dense.len() < DENSE_PARALLEL_GRAIN {
+                // SAFETY: LANES >= 4 proves AVX2 (or wider) is a compile-time
+                // target feature, so the avx2 intrinsic path is always valid.
+                return unsafe { avx2_scalar_f64(op, dense, scalar, scalar_left) };
+            }
+            return parallel_avx2_scalar_f64(op, dense, scalar, scalar_left);
         }
-        return parallel_avx2_scalar_f64(op, dense, scalar, scalar_left);
     }
     #[cfg(target_arch = "aarch64")]
     {
@@ -1525,16 +1543,11 @@ define_avx2_iteration_kernel!(
     avx2_scalar_f64_into
 );
 
-fn map_unary<T, F>(input: &[T], op: &F) -> Vec<T>
+fn map_unary<T: TypedKernel, F>(input: &[T], op: &F) -> Vec<T>
 where
-    T: Copy + Send + Sync,
     F: Fn(T) -> T + Send + Sync,
 {
-    if input.len() < PARALLEL_GRAIN {
-        input.iter().map(|&value| op(value)).collect()
-    } else {
-        input.par_iter().map(|&value| op(value)).collect()
-    }
+    map_unary_typed(input, op)
 }
 
 fn map_binary_strided<T, F>(lhs: &[T], rhs: &[T], plan: &IterationPlan, op: &F) -> Vec<T>
@@ -1716,7 +1729,7 @@ where
     }
 }
 
-fn dense_range(
+pub(crate) fn dense_range(
     storage: &CpuStorage,
     buffer_len: usize,
     output_shape: &[usize],

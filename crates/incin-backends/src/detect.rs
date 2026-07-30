@@ -109,7 +109,6 @@ fn probe_metal() -> Option<DeviceId> {
     None
 }
 
-
 #[cfg(feature = "cuda")]
 fn probe_cuda() -> Option<DeviceId> {
     // Constructing a context is the actual availability question: a driver can

@@ -36,6 +36,9 @@ cuda = ["incin-core/cuda", "incin-backends/cuda"]
 wgpu = ["incin-backends/wgpu"]
 # Enables the native Metal backend for Apple Silicon. Metal is never enabled implicitly.
 metal = ["incin-backends/metal"]
+# Enables MPS and MPSGraph structured primitives for Apple Silicon.
+metal-mps = ["incin-backends/metal-mps"]
+
 
 # Enables the external Candle backend at `incin::external::candle`.
 external-candle = ["std", "incin-backends/external-candle"]

@@ -615,8 +615,6 @@ fn findings(
         }
     }
 
-
-
     for isa in cpu_isa {
         if !isa.available {
             out.push(Finding::new(
@@ -674,7 +672,7 @@ fn compiled_features() -> Vec<Feature> {
         Feature::new("wgpu", cfg!(feature = "wgpu")),
         Feature::new("external-candle", cfg!(feature = "external-candle")),
         Feature::new("metal", cfg!(feature = "metal")),
-
+        Feature::new("metal-mps", cfg!(feature = "metal-mps")),
         Feature::new("autotune", cfg!(feature = "autotune")),
         Feature::new("train", cfg!(feature = "train")),
         Feature::new("distributed", cfg!(feature = "distributed")),

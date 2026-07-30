@@ -91,8 +91,19 @@ mod tests {
 
     #[test]
     fn test_lane_ratio_matches_type_size() {
-        assert_eq!(simd_lanes::<u8>(), simd_lanes::<f32>() * 4);
-        assert_eq!(simd_lanes::<f16>(), simd_lanes::<f32>() * 2);
-        assert_eq!(simd_lanes::<f64>(), simd_lanes::<f32>() / 2);
+        // When no vector extension is compiled in, all types return 1 and the
+        // width-based ratios collapse. Only assert ratios when vectorisation is
+        // active (f32 lanes > 1).
+        let f32_lanes = simd_lanes::<f32>();
+        if f32_lanes > 1 {
+            assert_eq!(simd_lanes::<u8>(), f32_lanes * 4);
+            assert_eq!(simd_lanes::<f16>(), f32_lanes * 2);
+            assert_eq!(simd_lanes::<f64>(), f32_lanes / 2);
+        } else {
+            // Scalar fallback: all types return 1.
+            assert_eq!(simd_lanes::<u8>(), 1);
+            assert_eq!(simd_lanes::<f16>(), 1);
+            assert_eq!(simd_lanes::<f64>(), 1);
+        }
     }
 }

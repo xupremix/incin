@@ -224,6 +224,9 @@ mod tests {
         // compile time whether this host *is* Apple Silicon, so we only
         // assert the invariant that is knowable without hardware.
         #[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
-        assert!(!MPS_AVAILABLE, "MPS_AVAILABLE must be false on non-Apple-Silicon");
+        assert!(
+            !MPS_AVAILABLE,
+            "MPS_AVAILABLE must be false on non-Apple-Silicon"
+        );
     }
 }

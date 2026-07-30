@@ -22,6 +22,13 @@ cargo bench -p incin --features cuda --bench baselines -- \
   '^(capability/cuda|gpu/cuda)' --save-baseline cuda-main
 ```
 
+On an Apple Silicon device with Metal support, record the Metal series:
+
+```text
+cargo bench -p incin --features metal,metal-mps --bench baselines -- \
+  '^(capability/metal|gpu/metal)' --save-baseline metal-main
+```
+
 The CUDA IDs carry the backend inside the `gpu` group, unlike the WGPU IDs whose
 spelling predates them and is frozen. Two accelerators sharing one Criterion ID
 would collide the moment a build enabled both features, and the budget key is

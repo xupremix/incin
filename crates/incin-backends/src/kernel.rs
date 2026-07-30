@@ -224,6 +224,7 @@ impl KernelKey {
 
 /// A rendered kernel and the identity used by the backend module cache.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(dead_code)]
 pub(crate) struct RenderedKernel {
     pub(crate) entry_point: String,
     pub(crate) cache_key: String,
@@ -236,12 +237,14 @@ pub(crate) struct RenderedKernel {
 }
 
 impl RenderedKernel {
+    #[allow(dead_code)]
     pub(crate) fn elements_per_thread(&self) -> u8 {
         self.unroll_width.max(self.vector_width)
     }
 }
 
 #[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
 struct CudaScalarSpec {
     suffix: &'static str,
     storage_type: &'static str,
@@ -322,6 +325,7 @@ impl CudaScalarSpec {
     }
 }
 
+#[allow(dead_code)]
 fn validate_identifier(identifier: &str) -> Result<()> {
     let mut chars = identifier.chars();
     let valid_start = chars
@@ -336,6 +340,7 @@ fn validate_identifier(identifier: &str) -> Result<()> {
     }
 }
 
+#[allow(dead_code)]
 fn render_cuda(
     template: &str,
     family: &str,
@@ -402,6 +407,7 @@ fn render_cuda(
 }
 
 #[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
 struct CudaPackedSpec {
     scalar: CudaScalarSpec,
     storage_type: &'static str,
@@ -414,6 +420,7 @@ struct CudaPackedSpec {
     components: &'static [&'static str],
 }
 
+#[allow(dead_code)]
 impl CudaPackedSpec {
     fn for_float(dtype: DTypeId) -> Result<Self> {
         let scalar = CudaScalarSpec::for_float(dtype, "render_packed_elementwise")?;
@@ -478,6 +485,7 @@ impl CudaPackedSpec {
     }
 }
 
+#[allow(dead_code)]
 fn render_cuda_packed(
     family: &str,
     op_name: &str,
@@ -574,6 +582,7 @@ extern "C" __global__ void {entry_point}(
     })
 }
 
+#[allow(dead_code)]
 const CUDA_UNARY_TEMPLATE: &str = r#"
 {PREAMBLE}
 extern "C" __global__ void {ENTRY_POINT}(
@@ -601,6 +610,7 @@ extern "C" __global__ void {ENTRY_POINT}(
 }
 "#;
 
+#[allow(dead_code)]
 const CUDA_BINARY_TEMPLATE: &str = r#"
 {PREAMBLE}
 extern "C" __global__ void {ENTRY_POINT}(
@@ -634,6 +644,7 @@ extern "C" __global__ void {ENTRY_POINT}(
 }
 "#;
 
+#[allow(dead_code)]
 const CUDA_UNARY_CONTIGUOUS_TEMPLATE: &str = r#"
 {PREAMBLE}
 extern "C" __global__ void {ENTRY_POINT}(
@@ -655,6 +666,7 @@ extern "C" __global__ void {ENTRY_POINT}(
 }
 "#;
 
+#[allow(dead_code)]
 const CUDA_BINARY_DENSE_TEMPLATE: &str = r#"
 {PREAMBLE}
 extern "C" __global__ void {ENTRY_POINT}(
@@ -679,6 +691,7 @@ extern "C" __global__ void {ENTRY_POINT}(
 }
 "#;
 
+#[allow(dead_code)]
 pub(crate) fn render_cuda_unary(
     op_name: &str,
     op_expr: &str,
@@ -694,6 +707,7 @@ pub(crate) fn render_cuda_unary(
     )
 }
 
+#[allow(dead_code)]
 pub(crate) fn render_cuda_unary_for_layout(
     op_name: &str,
     op_expr: &str,
@@ -721,6 +735,7 @@ pub(crate) fn render_cuda_unary_for_layout(
     }
 }
 
+#[allow(dead_code)]
 pub(crate) fn render_cuda_binary(
     op_name: &str,
     op_expr: &str,

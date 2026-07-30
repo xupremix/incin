@@ -24,8 +24,7 @@ impl Parse for EinsumInput {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let subscript: LitStr = input.parse()?;
         input.parse::<Token![;]>()?;
-        let operands: Punctuated<Expr, Token![,]> =
-            Punctuated::parse_terminated(input)?;
+        let operands: Punctuated<Expr, Token![,]> = Punctuated::parse_terminated(input)?;
         Ok(EinsumInput {
             subscript,
             operands: operands.into_iter().collect(),
@@ -40,11 +39,7 @@ impl Parse for EinsumInput {
 /// - Input subscripts are comma-separated, one per operand.
 /// - Each character in the output must appear in the input side.
 /// - All index characters must be ASCII lowercase letters.
-fn validate_subscript(
-    subscript: &str,
-    n_operands: usize,
-    span: Span,
-) -> syn::Result<()> {
+fn validate_subscript(subscript: &str, n_operands: usize, span: Span) -> syn::Result<()> {
     // Split on "->"
     let parts: Vec<&str> = subscript.splitn(2, "->").collect();
     if parts.len() != 2 {
@@ -87,17 +82,17 @@ fn validate_subscript(
     }
 
     // Collect all input index characters
-    let input_indices: std::collections::HashSet<char> =
-        input_part.chars().filter(|c| c.is_ascii_lowercase()).collect();
+    let input_indices: std::collections::HashSet<char> = input_part
+        .chars()
+        .filter(|c| c.is_ascii_lowercase())
+        .collect();
 
     // Each output index must appear in the input
     for ch in output_part.chars() {
         if !input_indices.contains(&ch) {
             return Err(syn::Error::new(
                 span,
-                format!(
-                    "einsum! output index '{ch}' does not appear in any input subscript"
-                ),
+                format!("einsum! output index '{ch}' does not appear in any input subscript"),
             ));
         }
     }

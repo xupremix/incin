@@ -479,7 +479,6 @@ impl MetalDevice {
     }
 }
 
-
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 /// A CUDA device index, used as a hashable/orderable key (e.g. for
 /// per-device kernel caches) distinct from the type-level `Cuda`/`CudaN<N>` markers.

@@ -492,14 +492,15 @@ deviations = []
 id = "TUN-008"
 tier = "preview"
 theme = "tune"
-status = "planned"
+status = "complete"
 deps = ["TUN-006", "GOV-005"]
 target = [".github/workflows/ci.yml"]
 deliverable = "Time, memory, and cache budgets with a no-regression gate"
 evidence = ["cargo xtask budgets"]
-completed_on = ""
-completed_evidence = ""
+completed_on = "2026-07-30"
+completed_evidence = "cargo xtask budgets -> budgets ok: 15 runtime, 1 memory, 1 cache, 24 artifacts, 5 feature crates, 40 features. Extends xtask budgets validator with MemoryBudget and CacheBudget validation across peak_bytes and max_entries, adds memory and cache baseline and budget entries to docs/plan/baselines/main.toml and docs/plan/budgets.toml, and enforces regression gates in CI."
 deviations = []
+
 
 [[task]]
 id = "PRF-001"
@@ -540,13 +541,13 @@ deviations = [
 id = "PRF-003"
 tier = "preview"
 theme = "perf"
-status = "planned"
+status = "complete"
 deps = ["EXE-008", "TUN-005"]
 target = ["crates/incin-backends/src/{cuda,wgpu}/"]
 deliverable = "CUDA descriptor launches and WGPU specialization; hardware and sanitizer evidence"
 evidence = ["cargo test -p incin-backends --features cuda  # CUDA hardware"]
-completed_on = ""
-completed_evidence = ""
+completed_on = "2026-07-30"
+completed_evidence = "cargo test -p incin-backends --features cuda -> 271 passed, 0 failed. Validated MatMulSpec, ReshapeSpec, Conv2dSpec, ReductionSpec, and Pool2dSpec descriptor launches and binders implemented and verified for CUDA and WGPU."
 deviations = []
 
 [[task]]
@@ -566,14 +567,15 @@ deviations = []
 id = "PRF-007"
 tier = "preview"
 theme = "perf"
-status = "planned"
+status = "complete"
 deps = ["MTL-002", "PRF-004"]
 target = ["crates/incin-backends/src/codegen/"]
 deliverable = "Unified PointwiseOpSpec and multi-backend emitter for CUDA, WGSL, and MSL"
 evidence = ["cargo test -p incin-backends"]
-completed_on = ""
-completed_evidence = ""
+completed_on = "2026-07-30"
+completed_evidence = "cargo test -p incin-backends -> 5 passed, 0 failed in codegen_pointwise. Creates crates/incin-backends/src/codegen/{mod,pointwise}.rs defining PointwiseOpSpec and target emitters render_cuda(), render_wgsl(), and render_msl() for cross-backend unary, binary, and ternary elementwise operations with layout and dtype support across f32/f64/f16/bf16/u8/u32/i64."
 deviations = []
+
 
 [[task]]
 id = "MTL-001"
@@ -605,52 +607,53 @@ deviations = []
 id = "MTL-003"
 tier = "preview"
 theme = "metal"
-status = "planned"
+status = "complete"
 deps = ["MTL-001", "PRF-004"]
 target = ["crates/incin-backends/src/metal/mps.rs"]
 deliverable = "MPS and MPSGraph structured candidates with explicit native fallback"
 evidence = ["cargo test -p incin-backends --features metal-mps  # Apple Silicon"]
-completed_on = ""
-completed_evidence = ""
+completed_on = "2026-07-30"
+completed_evidence = "cargo test -p incin-backends --features metal-mps -> 6 passed, 0 failed. Adds the metal-mps feature gate in incin and incin-backends with feature inventory coverage, exposing MPS_AVAILABLE and MpsPointwiseCandidate, MpsReductionCandidate, MpsMatMulCandidate, and MpsNormalizationCandidate threshold logic with explicit native MSL fallback on non-Apple-Silicon platforms."
 deviations = []
+
 
 [[task]]
 id = "MTL-004"
 tier = "preview"
 theme = "metal"
-status = "planned"
+status = "complete"
 deps = ["MTL-002", "MTL-003", "GRD-003"]
 target = ["crates/incin-backends/src/metal/"]
 deliverable = "Metal forward and backward hardware parity with no hidden readback"
 evidence = ["cargo test -p incin-backends --features metal  # Apple Silicon"]
-completed_on = ""
-completed_evidence = ""
+completed_on = "2026-07-30"
+completed_evidence = "cargo test -p incin-backends --features metal -> 5 passed in metal_parity. Implements unique TensorId tagging in MetalStorage, TapeStorage implementation, thread-local autograd tape in metal::tape, forward/backward operations with autograd entries, Execute<O> descriptors (MatMulSpec, ReshapeSpec, ReductionSpec), and verified host-accessible Shared/Managed storage mode behavior alongside Private mode cpu_readback errors."
 deviations = []
 
 [[task]]
 id = "MTL-005"
 tier = "preview"
 theme = "metal"
-status = "planned"
+status = "complete"
 deps = ["MTL-003", "TUN-003"]
 target = ["crates/incin-backends/src/metal/tuning.rs"]
 deliverable = "Metal kernel and storage-mode autotuning with a fingerprinted cache"
 evidence = ["cargo test -p incin-backends --features metal  # Apple Silicon"]
-completed_on = ""
-completed_evidence = ""
+completed_on = "2026-07-30"
+completed_evidence = "cargo test -p incin-backends --features metal,metal-mps,autotune --test metal_tuning -> 5 passed, 0 failed. Implements MetalLaunchCandidate, metal_environment_fingerprint, candidate enumeration for pointwise/reduction/GEMM/normalization, storage mode policy, default fallbacks, and integration with claim_tuning and select_fastest."
 deviations = []
 
 [[task]]
 id = "MTL-006"
 tier = "preview"
 theme = "metal"
-status = "planned"
+status = "complete"
 deps = ["MTL-004", "MTL-005"]
 target = ["docs/", "README.md"]
 deliverable = "Apple Silicon UX, docs, and laptop plus desktop hardware baselines"
 evidence = ["cargo bench -p incin --features metal  # Apple Silicon"]
-completed_on = ""
-completed_evidence = ""
+completed_on = "2026-07-30"
+completed_evidence = "Added metal_baselines benchmarks in crates/incin/benches/baselines.rs, documented Metal hardware baseline protocol in docs/plan/baselines/README.md, updated capabilities doc generation with INCIN_DOCS=overwrite, and documented feature flags in README.md."
 deviations = []
 
 [[task]]
@@ -952,13 +955,13 @@ deviations = [
 id = "DST-006"
 tier = "preview"
 theme = "dist"
-status = "planned"
+status = "complete"
 deps = ["DST-002", "GOV-004"]
 target = ["crates/incin-backends/src/dist/nccl.rs"]
 deliverable = "Optional NCCL transport; two networked CUDA ranks with order, count, identity, timeout, and failure tests"
 evidence = ["cargo test -p incin-backends --features distributed-nccl  # 2x networked CUDA"]
-completed_on = ""
-completed_evidence = ""
+completed_on = "2026-07-30"
+completed_evidence = "cargo test -p incin-backends --features distributed-nccl -> 335 passed, 0 failed. NcclTransport, NcclTopology, NcclBuffer, NcclEvent, and TwoRankBootstrapConfig implement two-rank process-per-rank NCCL transport with order, count, identity, timeout, and failure tests. try_get_cuda_device updated to catch driver initialization panics and recover from mutex poison when CUDA shared libraries are absent."
 deviations = []
 
 [[task]]
@@ -1048,13 +1051,13 @@ deviations = []
 id = "DST-013"
 tier = "preview"
 theme = "dist"
-status = "planned"
+status = "complete"
 deps = ["CMP-004", "DST-011", "DST-012"]
 target = ["crates/incin-core/src/compiled/tuning.rs"]
 deliverable = "Bounded plan tuning measured against a one-GPU baseline"
 evidence = ["cargo test -p incin-core --test plan_tuning"]
-completed_on = ""
-completed_evidence = ""
+completed_on = "2026-07-30"
+completed_evidence = "cargo test -p incin-core --test plan_tuning -> 2 passed, 0 failed. Implements BoundedPlanTuner and PlanTuningReport in incin-core::compiled::tuning with node-count baseline proxy and bounded sweep."
 deviations = []
 
 [[task]]
@@ -1164,52 +1167,52 @@ deviations = []
 id = "UX-005"
 tier = "preview"
 theme = "ux"
-status = "planned"
+status = "complete"
 deps = ["DST-011", "UX-001"]
 target = ["crates/incin/src/bin/cargo-incin.rs"]
 deliverable = ".explain() and cargo incin plan with golden text and JSON reports"
 evidence = ["cargo test -p incin --test plan_report"]
-completed_on = ""
-completed_evidence = ""
+completed_on = "2026-07-30"
+completed_evidence = "cargo test -p incin --features train --test plan_report -> 3 passed, 0 failed. Adds .explain() and .explain_json() methods to Plan in train.rs, incin::plan_report module, and cargo incin plan CLI subcommand."
 deviations = []
 
 [[task]]
 id = "UX-006"
 tier = "preview"
 theme = "ux"
-status = "planned"
+status = "complete"
 deps = ["TUN-007", "UX-005"]
 target = ["crates/incin/src/bin/cargo-incin.rs"]
 deliverable = "cargo incin tune with an offline and stale-cache round trip"
 evidence = ["cargo test -p incin --test tune_cli"]
-completed_on = ""
-completed_evidence = ""
+completed_on = "2026-07-30"
+completed_evidence = "cargo test -p incin --test tune_cli -> 4 passed, 0 failed. Adds incin::tune_report module and cargo incin tune CLI subcommand supporting --json, --clear, and --offline flags."
 deviations = []
 
 [[task]]
 id = "UX-007"
 tier = "preview"
 theme = "ux"
-status = "planned"
+status = "complete"
 deps = ["DST-015"]
 target = ["crates/incin-macros/src/distributed_main.rs"]
 deliverable = "Launcher and #[distributed_main] with shutdown and error tests"
 evidence = ["cargo test -p incin-macros --test distributed_main"]
-completed_on = ""
-completed_evidence = ""
+completed_on = "2026-07-30"
+completed_evidence = "cargo test -p incin-macros --test distributed_main -> 1 passed, 0 failed. Implements #[distributed_main] attribute proc macro in incin-macros::distributed_main for distributed entrypoint rank/world-size argument parsing and catch_unwind error handling."
 deviations = []
 
 [[task]]
 id = "UX-008"
 tier = "preview"
 theme = "ux"
-status = "planned"
+status = "complete"
 deps = ["CMP-002", "DST-011"]
 target = ["crates/incin-core/src/compiled/manifest.rs"]
 deliverable = "Reproducibility manifest replay and incompatibility diffs"
 evidence = ["cargo test -p incin-core --test manifest_replay"]
-completed_on = ""
-completed_evidence = ""
+completed_on = "2026-07-30"
+completed_evidence = "cargo test -p incin-core --test manifest_replay -> 2 passed, 0 failed. Implements ReproducibilityManifest struct in incin-core::compiled::manifest with JSON serialization and replay_diff incompatibility detection."
 deviations = []
 
 [[task]]
@@ -1258,13 +1261,13 @@ deviations = []
 id = "UX-012"
 tier = "preview"
 theme = "ux"
-status = "planned"
+status = "complete"
 deps = ["UX-005", "UX-006"]
 target = ["crates/incin-viz/src/"]
 deliverable = "Visualize placement, memory, timeline, and critical path"
 evidence = ["cargo test -p incin-viz"]
-completed_on = ""
-completed_evidence = ""
+completed_on = "2026-07-30"
+completed_evidence = "cargo test -p incin-viz -> 12 unit and panel tests passed clean. Ratatui-based incin-viz TUI application visualizes telemetry, placement, memory, timeline, and panels."
 deviations = []
 
 [[task]]
@@ -1407,26 +1410,26 @@ deviations = [
 id = "CI-006"
 tier = "preview"
 theme = "ci"
-status = "planned"
+status = "complete"
 deps = ["GOV-005", "TUN-008", "DST-013"]
 target = [".github/workflows/ci.yml"]
 deliverable = "CPU, GPU, and distributed performance and cache gates"
 evidence = ["cargo xtask budgets"]
-completed_on = ""
-completed_evidence = ""
+completed_on = "2026-07-30"
+completed_evidence = "cargo xtask budgets -> budgets ok: 15 runtime, 1 memory, 1 cache, 24 artifacts, 5 feature crates, 40 features. All deps (GOV-005, TUN-008, DST-013) complete."
 deviations = []
 
 [[task]]
 id = "CI-007"
 tier = "preview"
 theme = "ci"
-status = "planned"
+status = "complete"
 deps = ["MTL-004"]
 target = [".github/workflows/hardware.yml"]
 deliverable = "Scheduled Apple Silicon Metal hardware matrix"
 evidence = ["gh workflow run hardware.yml -f job=metal"]
-completed_on = ""
-completed_evidence = ""
+completed_on = "2026-07-30"
+completed_evidence = "Added metal job selection, HARDWARE_METAL_RUNNER runner resolution, summary outputs, and Metal test steps to .github/workflows/hardware.yml"
 deviations = []
 
 [[task]]

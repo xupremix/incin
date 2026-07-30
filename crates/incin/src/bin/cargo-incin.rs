@@ -191,6 +191,8 @@ fn print_help() {
     println!("               Same real-time typenum error translation as above");
     println!("    doctor     Report devices, features, caches, and capability probes [--json]");
     println!("    inspect    Inspect a .safetensors, .gguf, or .onnx model file metadata");
+    println!("    plan       Generate execution plan report [--json] [--devices DEV] [--epochs N]");
+    println!("    tune       Inspect and manage autotune cache [--json] [--clear] [--offline]");
     println!("    translate  Translate raw text containing typenum expressions from stdin or arg");
     println!("    new <template> [path]");
     println!("               Scaffold a ready-to-run training project (templates: mnist)");
@@ -247,6 +249,40 @@ fn main() -> io::Result<()> {
         // A report goes to stdout even when it found something wrong, because
         // a report is what was asked for; only a usage error goes to stderr.
         if code == incin::doctor::EXIT_USAGE {
+            eprint!("{rendered}");
+        } else {
+            print!("{rendered}");
+        }
+        if code != 0 {
+            std::process::exit(code);
+        }
+        return Ok(());
+    }
+
+    if subcommand == "plan" {
+        #[cfg(feature = "train")]
+        {
+            let (rendered, code) = incin::plan_report::run(&cargo_args);
+            if code == incin::plan_report::EXIT_USAGE {
+                eprint!("{rendered}");
+            } else {
+                print!("{rendered}");
+            }
+            if code != 0 {
+                std::process::exit(code);
+            }
+            return Ok(());
+        }
+        #[cfg(not(feature = "train"))]
+        {
+            eprintln!("Error: cargo incin plan requires the `train` feature.");
+            std::process::exit(1);
+        }
+    }
+
+    if subcommand == "tune" {
+        let (rendered, code) = incin::tune_report::run(&cargo_args);
+        if code == incin::tune_report::EXIT_USAGE {
             eprint!("{rendered}");
         } else {
             print!("{rendered}");

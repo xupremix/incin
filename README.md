@@ -31,6 +31,7 @@ and third-party backends are opt-in. Enabling an accelerator does not change
 | `cuda` | no | Enables the native CUDA backend. CUDA is never enabled implicitly. |
 | `wgpu` | no | Enables the cross-platform WGPU backend. WGPU is never enabled implicitly. |
 | `metal` | no | Enables the native Metal backend for Apple Silicon. Metal is never enabled implicitly. |
+| `metal-mps` | no | Enables MPS and MPSGraph structured primitives for Apple Silicon. |
 | `external-candle` | no | Enables the external Candle backend at `incin::external::candle`. |
 | `autotune` | no | Enables CUDA launch autotuning. |
 | `train` | no | Enables the automatic `Trainer` at `incin::train`. Preview tier: useful and tested, but the interface may change without a migration path. |
@@ -59,7 +60,7 @@ incin = { version = "0.0.0", features = ["external-candle"] }
 ### Lower-level crate features
 
 <!-- BEGIN GENERATED: crate-features -->
-- `incin-backends`: defaults to `std,cpu`; optional `cpu-blas`, `cuda`, `wgpu`, `metal`, `autotune`, `external-candle`, `telemetry`, `distributed`, `distributed-reference`, and `distributed-nccl`.
+- `incin-backends`: defaults to `std,cpu`; optional `cpu-blas`, `cuda`, `cuda-vendor`, `wgpu`, `metal`, `metal-mps`, `autotune`, `external-candle`, `telemetry`, `distributed`, `distributed-reference`, and `distributed-nccl`.
 - `incin-core`: defaults to `std`; optional `nightly`, `paranoid-validation`, `distributed`, `cuda`, `wgpu`, and `metal`.
 - `incin-macros`: defaults to `std`; optional `nightly` and `distributed`.
 - `incin-diagnostics`: defaults to `std`.

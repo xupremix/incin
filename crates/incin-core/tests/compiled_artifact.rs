@@ -1,9 +1,9 @@
-use std::collections::BTreeMap;
 use incin_core::compiled::{
-    ArtifactVersion, CapturedGraph, CompiledArtifact, CompiledPlan, CompileOptions,
+    ArtifactVersion, CapturedGraph, CompileOptions, CompiledArtifact, CompiledPlan,
 };
 use incin_core::graph::{Graph, OpType};
 use incin_core::prelude::DTypeId;
+use std::collections::BTreeMap;
 
 fn make_test_plan() -> CompiledPlan {
     let mut graph = Graph::new();
@@ -35,7 +35,9 @@ fn test_artifact_integrity_valid() {
     let plan = make_test_plan();
     let artifact = CompiledArtifact::new(plan, current_version(), "integrity_test".into())
         .expect("artifact creation should succeed");
-    artifact.verify_integrity().expect("integrity check should pass for unmodified artifact");
+    artifact
+        .verify_integrity()
+        .expect("integrity check should pass for unmodified artifact");
 }
 
 #[test]

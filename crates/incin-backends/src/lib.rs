@@ -10,6 +10,7 @@ pub mod capability;
 /// The generated support tables in `docs/capabilities.md` (`UX-013`).
 #[cfg(feature = "std")]
 pub mod capability_docs;
+pub mod codegen;
 pub use backend_kind::BackendFor;
 #[cfg(any(feature = "cpu", feature = "wgpu", feature = "cuda"))]
 pub(crate) mod descriptor_bind;
@@ -40,14 +41,38 @@ pub(crate) mod dtype_policy;
 // Every caller of these macros is a GPU or external backend, so a CPU-only
 // build declared four macros it could not use and warned about all of them.
 // Gated the same way `bytes` above it already is.
-#[cfg(any(feature = "cuda", feature = "wgpu", feature = "external-candle", feature = "metal"))]
+#[cfg(any(
+    feature = "cuda",
+    feature = "wgpu",
+    feature = "external-candle",
+    feature = "metal"
+))]
 pub(crate) mod unsupported;
 
 #[cfg(any(feature = "cpu", feature = "cuda"))]
-pub(crate) mod iteration;
-#[cfg(feature = "cuda")]
+pub mod iteration;
+
+/// Compile-time SIMD lane-width resolution for type-specialized kernels.
+///
+/// [`simd_lanes`] returns the number of elements of type `T` that fit into one
+/// SIMD register on the compile target.  It is a pure `const fn` — no runtime
+/// feature detection, no overhead.
+pub mod simd;
+pub use simd::simd_lanes;
+
+#[cfg(any(
+    feature = "cuda",
+    feature = "metal",
+    feature = "wgpu",
+    feature = "autotune"
+))]
 pub(crate) mod kernel;
-#[cfg(feature = "cuda")]
+#[cfg(any(
+    feature = "cuda",
+    feature = "metal",
+    feature = "wgpu",
+    feature = "autotune"
+))]
 pub mod tuning;
 
 /// Unified backend selected by its float element type and device.
@@ -74,7 +99,6 @@ pub mod wgpu;
 
 #[cfg(feature = "metal")]
 pub mod metal;
-
 
 /// Third-party backend integrations, and the conformance suite an author of one
 /// runs against their own backend.

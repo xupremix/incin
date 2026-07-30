@@ -212,13 +212,8 @@ pub(crate) fn launch_layer_norm(
         return Ok(CudaStorage::new(Arc::new(output), input.shape.to_vec()));
     }
 
-    let selection = normalization_launch_selection(
-        &buffer.device,
-        &kernel,
-        batch_size,
-        norm_size,
-        true,
-    )?;
+    let selection =
+        normalization_launch_selection(&buffer.device, &kernel, batch_size, norm_size, true)?;
     ensure_normalization_loaded(buffer.device_id, &kernel)?;
     let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(buffer.device_id);
     let function = dispatcher.get_function(&kernel.cache_key, &kernel.entry_point)?;
@@ -239,8 +234,9 @@ pub(crate) fn launch_layer_norm(
                 .and_then(|bytes| bytes.checked_add(warp_count * core::mem::size_of::<i32>()))
                 .and_then(|bytes| u32::try_from(bytes).ok())
                 .ok_or_else(|| Error::Msg("CUDA layer norm shared-memory size overflow".into()))?;
-            let grid = u32::try_from(batch_size)
-                .map_err(|_| Error::Msg("CUDA layer norm batch count exceeds u32 grid ABI".into()))?;
+            let grid = u32::try_from(batch_size).map_err(|_| {
+                Error::Msg("CUDA layer norm batch count exceeds u32 grid ABI".into())
+            })?;
             let config = cudarc::driver::LaunchConfig {
                 grid_dim: (grid, 1, 1),
                 block_dim: (block_size, 1, 1),
@@ -263,7 +259,8 @@ pub(crate) fn launch_layer_norm(
                 .map(|_| ())
                 .map_err(|error| Error::Msg(format!("CUDA layer norm launch failed: {error:?}")))
         };
-        let candidate = empirically_select_normalization_candidate(&stream, selection, true, &mut launch)?;
+        let candidate =
+            empirically_select_normalization_candidate(&stream, selection, true, &mut launch)?;
         launch(candidate)?;
     }
 
@@ -352,8 +349,9 @@ pub(crate) fn launch_batch_norm(
         use cudarc::driver::PushKernelArg;
         let mut launch = |candidate: crate::tuning::LaunchCandidate| -> Result<()> {
             let block_size = u32::from(candidate.block_size);
-            let work_items = u32::try_from(total_elements)
-                .map_err(|_| Error::Msg("CUDA batch norm element count exceeds u32 grid ABI".into()))?;
+            let work_items = u32::try_from(total_elements).map_err(|_| {
+                Error::Msg("CUDA batch norm element count exceeds u32 grid ABI".into())
+            })?;
             let config = cudarc::driver::LaunchConfig {
                 grid_dim: (work_items.div_ceil(block_size), 1, 1),
                 block_dim: (block_size, 1, 1),
@@ -390,7 +388,8 @@ pub(crate) fn launch_batch_norm(
                 .map(|_| ())
                 .map_err(|error| Error::Msg(format!("CUDA batch norm launch failed: {error:?}")))
         };
-        let candidate = empirically_select_normalization_candidate(&stream, selection, false, &mut launch)?;
+        let candidate =
+            empirically_select_normalization_candidate(&stream, selection, false, &mut launch)?;
         launch(candidate)?;
     }
 

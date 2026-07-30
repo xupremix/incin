@@ -23,7 +23,7 @@ on:
   workflow_dispatch:
     inputs:
       job:
-        description: 'Which hardware job to run: all, cuda, wgpu'
+        description: 'Which hardware job to run: all, cuda, wgpu, metal'
         required: false
         default: 'all'
 
@@ -43,6 +43,8 @@ jobs:
       wgpu_software: ${{ steps.resolve.outputs.wgpu_software }}
       wgpu_native: ${{ steps.resolve.outputs.wgpu_native }}
       wgpu_runner: ${{ steps.resolve.outputs.wgpu_runner }}
+      metal: ${{ steps.resolve.outputs.metal }}
+      metal_runner: ${{ steps.resolve.outputs.metal_runner }}
     steps:
       - name: Resolve requested jobs against registered runners
         id: resolve
@@ -50,6 +52,7 @@ jobs:
           REQUESTED: ${{ github.event.inputs.job || 'all' }}
           CUDA_RUNNER: ${{ vars.HARDWARE_CUDA_RUNNER }}
           WGPU_RUNNER: ${{ vars.HARDWARE_WGPU_RUNNER }}
+          METAL_RUNNER: ${{ vars.HARDWARE_METAL_RUNNER }}
         run: |
           set -euo pipefail
 
@@ -62,23 +65,22 @@ jobs:
             multinode)
               echo "::error::job=multinode is owned by CI-004, which is not implemented"
               exit 1 ;;
-            metal)
-              echo "::error::job=metal is owned by CI-007, which is not implemented"
-              exit 1 ;;
-            all|cuda|wgpu) ;;
+            all|cuda|wgpu|metal) ;;
             *)
-              echo "::error::unknown job '$REQUESTED'; expected all, cuda, or wgpu"
+              echo "::error::unknown job '$REQUESTED'; expected all, cuda, wgpu, or metal"
               exit 1 ;;
           esac
 
           cuda=false
           wgpu_software=false
           wgpu_native=false
+          metal=false
           if [ "$REQUESTED" = "all" ] || [ "$REQUESTED" = "cuda" ]; then cuda=true; fi
           if [ "$REQUESTED" = "all" ] || [ "$REQUESTED" = "wgpu" ]; then
             wgpu_software=true
             wgpu_native=true
           fi
+          if [ "$REQUESTED" = "all" ] || [ "$REQUESTED" = "metal" ]; then metal=true; fi
 
           # A runner variable holds a JSON array of labels, e.g.
           # ["self-hosted","linux","cuda"]. Unset means no such runner is
@@ -102,6 +104,8 @@ jobs:
             echo "wgpu_software=$wgpu_software"
             echo "wgpu_native=$wgpu_native"
             echo "wgpu_runner=${WGPU_RUNNER:-[\"ubuntu-latest\"]}"
+            echo "metal=$metal"
+            echo "metal_runner=${METAL_RUNNER:-[\"macos-latest\"]}"
           } >> "$GITHUB_OUTPUT"
 
       - name: Summarize what this run covers
@@ -114,6 +118,7 @@ jobs:
             echo "| cuda | ${{ steps.resolve.outputs.cuda }} | HARDWARE_CUDA_RUNNER ${{ vars.HARDWARE_CUDA_RUNNER && 'set' || 'unset' }} |"
             echo "| wgpu-software | ${{ steps.resolve.outputs.wgpu_software }} | GitHub-hosted lavapipe |"
             echo "| wgpu-native | ${{ steps.resolve.outputs.wgpu_native }} | HARDWARE_WGPU_RUNNER ${{ vars.HARDWARE_WGPU_RUNNER && 'set' || 'unset' }} |"
+            echo "| metal | ${{ steps.resolve.outputs.metal }} | HARDWARE_METAL_RUNNER ${{ vars.HARDWARE_METAL_RUNNER && 'set' || 'unset' }} |"
           } >> "$GITHUB_STEP_SUMMARY"
 
   cuda:
@@ -229,3 +234,35 @@ jobs:
 
       - name: WGPU hardware tests
         run: cargo test -p incin-backends --no-default-features --features std,cpu,wgpu -- --ignored
+
+  metal:
+    name: Metal Hardware Suite (Apple Silicon)
+    needs: select
+    if: needs.select.outputs.metal == 'true'
+    runs-on: ${{ fromJSON(needs.select.outputs.metal_runner) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Record Metal system details
+        run: |
+          set -euo pipefail
+          {
+            echo "## Metal environment"
+            echo ""
+            echo '```'
+            system_profiler SPDisplaysDataType || echo "system_profiler unavailable"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Metal backend suite
+        run: cargo test -p incin-backends --no-default-features --features std,cpu,metal,metal-mps,autotune
+
+      - name: Metal parity integration tests
+        run: cargo test -p incin-backends --features metal,metal-mps --test metal_parity
+
+      - name: Metal autotuning integration tests
+        run: cargo test -p incin-backends --features metal,metal-mps,autotune --test metal_tuning
+

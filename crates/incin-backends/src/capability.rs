@@ -269,7 +269,12 @@ pub static WGPU_CAPABILITIES: &[CapabilityRule] = &[
 ];
 
 pub static METAL_CAPABILITIES: &[CapabilityRule] = &[
-    native(OperationKind::Storage, CUDA_STORAGE_DTYPES, CONTIGUOUS, false),
+    native(
+        OperationKind::Storage,
+        CUDA_STORAGE_DTYPES,
+        CONTIGUOUS,
+        false,
+    ),
     native(OperationKind::Fill, F32_ONLY, CONTIGUOUS, false),
     native(OperationKind::Random, F32_ONLY, CONTIGUOUS, false),
     native(OperationKind::Pointwise, FLOAT_DTYPES, CONTIGUOUS, true),

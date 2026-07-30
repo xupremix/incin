@@ -32,6 +32,8 @@ mod module;
 /// Internal helper module for tensor placement macro.
 mod placement;
 
+/// Internal helper module for distributed main macro.
+mod distributed_main;
 /// Internal helper module for parallel block macro.
 mod parallel_block;
 
@@ -335,3 +337,8 @@ pub fn parallel(input: TokenStream) -> TokenStream {
     parallel_block::parallel_block(input)
 }
 
+/// Attributes a main function to initialize and run distributed launcher boilerplate.
+#[proc_macro_attribute]
+pub fn distributed_main(attr: TokenStream, item: TokenStream) -> TokenStream {
+    distributed_main::distributed_main(attr, item)
+}

@@ -37,6 +37,9 @@ cuda-vendor = ["cuda"]
 wgpu = ["std", "dep:wgpu", "dep:pollster", "incin-core/wgpu"]
 # Enables Incin's native Metal backend for Apple Silicon.
 metal = ["std", "incin-core/metal"]
+# Enables MPS and MPSGraph structured primitives for Apple Silicon.
+metal-mps = ["metal"]
+
 
 # Benchmarks legal CUDA launch configurations and caches the selected candidate.
 autotune = ["cuda"]

@@ -18,6 +18,10 @@ struct BudgetConfig {
     #[serde(default)]
     artifact: Vec<ArtifactBudget>,
     #[serde(default)]
+    memory: Vec<MemoryBudget>,
+    #[serde(default)]
+    cache: Vec<CacheBudget>,
+    #[serde(default)]
     feature_crate: Vec<FeatureCrate>,
 }
 
@@ -37,6 +41,24 @@ struct ArtifactBudget {
     metric: String,
     baseline_bytes: u64,
     max_bytes: u64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MemoryBudget {
+    id: String,
+    backend: String,
+    baseline_peak_bytes: u64,
+    max_peak_bytes: u64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CacheBudget {
+    id: String,
+    kind: String,
+    baseline_max_entries: u32,
+    max_entries: u32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -63,6 +85,10 @@ struct Baseline {
     compile: BTreeMap<String, BTreeMap<String, toml::Value>>,
     #[serde(default)]
     runtime: Vec<BaselineRuntime>,
+    #[serde(default)]
+    memory: Vec<BaselineMemory>,
+    #[serde(default)]
+    cache: Vec<BaselineCache>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -70,6 +96,20 @@ struct BaselineRuntime {
     id: String,
     backend: String,
     high_ns: f64,
+}
+
+#[derive(Debug, Deserialize)]
+struct BaselineMemory {
+    id: String,
+    backend: String,
+    peak_bytes: u64,
+}
+
+#[derive(Debug, Deserialize)]
+struct BaselineCache {
+    id: String,
+    kind: String,
+    max_entries: u32,
 }
 
 pub fn check() -> ExitCode {
@@ -81,8 +121,13 @@ pub fn check() -> ExitCode {
     match check_root(&root) {
         Ok(summary) => {
             println!(
-                "budgets ok: {} runtime, {} artifacts, {} feature crates, {} features",
-                summary.runtime, summary.artifacts, summary.feature_crates, summary.features
+                "budgets ok: {} runtime, {} memory, {} cache, {} artifacts, {} feature crates, {} features",
+                summary.runtime,
+                summary.memory,
+                summary.cache,
+                summary.artifacts,
+                summary.feature_crates,
+                summary.features
             );
             ExitCode::SUCCESS
         }
@@ -99,6 +144,8 @@ pub fn check() -> ExitCode {
 #[derive(Debug, PartialEq, Eq)]
 struct Summary {
     runtime: usize,
+    memory: usize,
+    cache: usize,
     artifacts: usize,
     feature_crates: usize,
     features: usize,
@@ -128,6 +175,8 @@ fn check_root(root: &Path) -> Result<Summary, Vec<String>> {
     if errors.is_empty() {
         Ok(Summary {
             runtime: config.runtime.len(),
+            memory: config.memory.len(),
+            cache: config.cache.len(),
             artifacts: config.artifact.len(),
             feature_crates: config.feature_crate.len(),
             features: config
@@ -283,6 +332,124 @@ fn validate_numeric(config: &BudgetConfig, baseline: &Baseline) -> Vec<String> {
             ));
         }
     }
+
+    let mut actual_memory = BTreeMap::new();
+    for mem in &baseline.memory {
+        let key = (mem.backend.as_str(), mem.id.as_str());
+        if actual_memory.insert(key, mem.peak_bytes).is_some() {
+            errors.push(format!(
+                "duplicate baseline memory series {}/{}",
+                mem.backend, mem.id
+            ));
+        }
+    }
+
+    let mut budget_memory = BTreeSet::new();
+    for budget in &config.memory {
+        let key = (budget.backend.as_str(), budget.id.as_str());
+        if !budget_memory.insert(key) {
+            errors.push(format!(
+                "duplicate memory budget {}/{}",
+                budget.backend, budget.id
+            ));
+            continue;
+        }
+        match actual_memory.get(&key) {
+            None => errors.push(format!(
+                "memory budget {}/{} has no baseline series",
+                budget.backend, budget.id
+            )),
+            Some(actual) => {
+                if *actual != budget.baseline_peak_bytes {
+                    errors.push(format!(
+                        "memory {}/{} baseline drifted: config {}, baseline {}",
+                        budget.backend, budget.id, budget.baseline_peak_bytes, actual
+                    ));
+                }
+                if budget.max_peak_bytes < budget.baseline_peak_bytes {
+                    errors.push(format!(
+                        "memory {}/{} maximum {} is below its declared baseline {}",
+                        budget.backend,
+                        budget.id,
+                        budget.max_peak_bytes,
+                        budget.baseline_peak_bytes
+                    ));
+                }
+                if *actual > budget.max_peak_bytes {
+                    errors.push(format!(
+                        "memory {}/{} exceeds budget: {} > {} bytes",
+                        budget.backend, budget.id, actual, budget.max_peak_bytes
+                    ));
+                }
+            }
+        }
+    }
+    for key in actual_memory.keys() {
+        if !budget_memory.contains(key) {
+            errors.push(format!(
+                "baseline memory series {}/{} has no budget",
+                key.0, key.1
+            ));
+        }
+    }
+
+    let mut actual_cache = BTreeMap::new();
+    for entry in &baseline.cache {
+        let key = (entry.kind.as_str(), entry.id.as_str());
+        if actual_cache.insert(key, entry.max_entries).is_some() {
+            errors.push(format!(
+                "duplicate baseline cache series {}/{}",
+                entry.kind, entry.id
+            ));
+        }
+    }
+
+    let mut budget_cache = BTreeSet::new();
+    for budget in &config.cache {
+        let key = (budget.kind.as_str(), budget.id.as_str());
+        if !budget_cache.insert(key) {
+            errors.push(format!(
+                "duplicate cache budget {}/{}",
+                budget.kind, budget.id
+            ));
+            continue;
+        }
+        match actual_cache.get(&key) {
+            None => errors.push(format!(
+                "cache budget {}/{} has no baseline series",
+                budget.kind, budget.id
+            )),
+            Some(actual) => {
+                if *actual != budget.baseline_max_entries {
+                    errors.push(format!(
+                        "cache {}/{} baseline drifted: config {}, baseline {}",
+                        budget.kind, budget.id, budget.baseline_max_entries, actual
+                    ));
+                }
+                if budget.max_entries < budget.baseline_max_entries {
+                    errors.push(format!(
+                        "cache {}/{} maximum {} is below its declared baseline {}",
+                        budget.kind, budget.id, budget.max_entries, budget.baseline_max_entries
+                    ));
+                }
+                if *actual > budget.max_entries {
+                    errors.push(format!(
+                        "cache {}/{} exceeds budget: {} > {} entries",
+                        budget.kind, budget.id, actual, budget.max_entries
+                    ));
+                }
+            }
+        }
+    }
+    for key in actual_cache.keys() {
+        if !budget_cache.contains(key) {
+            errors.push(format!(
+                "baseline cache series {}/{} has no budget",
+                key.0, key.1
+            ));
+        }
+    }
+
     errors
 }
 

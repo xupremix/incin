@@ -2,9 +2,7 @@ use incin_macros::parallel;
 
 #[test]
 fn test_parallel_block_simple() {
-    let val = parallel!({
-        10 + 20
-    });
+    let val = parallel!({ 10 + 20 });
     assert_eq!(val, 30);
 }
 

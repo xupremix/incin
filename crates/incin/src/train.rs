@@ -164,6 +164,47 @@ impl Plan {
     pub fn is_multi_device(&self) -> bool {
         self.devices.is_multi_device()
     }
+
+    /// Renders a human-readable text explanation of the plan and decisions.
+    #[must_use]
+    pub fn explain(&self) -> String {
+        let mut out = String::new();
+        out.push_str("Execution Plan:\n");
+        out.push_str(&format!(
+            "  • Devices: {} device(s) ({})\n",
+            self.devices.len(),
+            self.devices.primary().kind().name()
+        ));
+        out.push_str(&format!("  • Epochs: {}\n", self.epochs));
+        out.push_str("  • Decisions:\n");
+        for decision in &self.decisions {
+            out.push_str(&format!(
+                "      - [{}]: {}\n",
+                decision.code, decision.detail
+            ));
+        }
+        out
+    }
+
+    /// Renders a JSON representation of the plan.
+    #[must_use]
+    pub fn explain_json(&self) -> String {
+        let decisions: Vec<serde_json::Value> = self
+            .decisions
+            .iter()
+            .map(|d| serde_json::json!({ "code": d.code, "detail": d.detail }))
+            .collect();
+        let json = serde_json::json!({
+            "devices": {
+                "count": self.devices.len(),
+                "primary": self.devices.primary().kind().name(),
+                "is_multi_device": self.is_multi_device(),
+            },
+            "epochs": self.epochs,
+            "decisions": decisions,
+        });
+        serde_json::to_string_pretty(&json).unwrap_or_default()
+    }
 }
 
 // ============================================================================

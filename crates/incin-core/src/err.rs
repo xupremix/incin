@@ -237,7 +237,6 @@ impl From<crate::exec::MetaError> for Error {
     }
 }
 
-
 impl Debug for Error {
     /// Format error using Display representation.
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {

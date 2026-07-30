@@ -16,6 +16,9 @@ type WgpuB = incin_backends::wgpu::WgpuBackendImpl<f32, incin::WgpuN<incin::type
 #[cfg(feature = "cuda")]
 type CudaB = incin_backends::cuda::CudaBackendImpl<f32, incin::CudaN<incin::typenum::U0>>;
 
+#[cfg(feature = "metal")]
+type MetalB = incin_backends::metal::MetalBackendImpl<f32, incin::MetalN<incin::typenum::U0>>;
+
 fn capability_baselines(c: &mut Criterion) {
     let mut group = c.benchmark_group("capability");
     group.bench_function("cpu/f32_create", |b| {
@@ -132,11 +135,41 @@ fn cuda_baselines(c: &mut Criterion) {
 #[cfg(not(feature = "cuda"))]
 fn cuda_baselines(_: &mut Criterion) {}
 
+/// Metal counterparts of the GPU series.
+#[cfg(feature = "metal")]
+fn metal_baselines(c: &mut Criterion) {
+    let mut capability = c.benchmark_group("capability");
+    capability.bench_function("metal/f32_create", |b| {
+        b.iter(|| black_box(Tensor::<s![1], MetalB>::zeros(()).unwrap()))
+    });
+    capability.finish();
+
+    let mut group = c.benchmark_group("gpu");
+    group.measurement_time(Duration::from_secs(3));
+    group.sample_size(20);
+
+    let input = Tensor::<Dyn, MetalB>::ones(vec![65_536]).unwrap();
+    group.bench_function("metal/add_f32/65536", |b| {
+        b.iter(|| black_box(input.add(black_box(&input)).unwrap()))
+    });
+
+    let lhs = Tensor::<Dyn, MetalB>::ones(vec![64, 64]).unwrap();
+    let rhs = Tensor::<Dyn, MetalB>::ones(vec![64, 64]).unwrap();
+    group.bench_function("metal/matmul_f32/64", |b| {
+        b.iter(|| black_box(lhs.matmul(black_box(&rhs)).unwrap()))
+    });
+    group.finish();
+}
+
+#[cfg(not(feature = "metal"))]
+fn metal_baselines(_: &mut Criterion) {}
+
 criterion_group!(
     baselines,
     capability_baselines,
     eager_baselines,
     gpu_baselines,
-    cuda_baselines
+    cuda_baselines,
+    metal_baselines
 );
 criterion_main!(baselines);

@@ -500,27 +500,31 @@ fn scalar_gemm(
 ) {
     match rhs.f32_data() {
         Some(rhs_data) if rhs.col_stride == 1 => {
-            for row in 0..m {
-                for depth in 0..k {
-                    let scale = lhs.get(row, depth) as f32;
-                    let rhs_row = rhs.index(depth, 0);
-                    let out_row = row * n;
-                    for col in 0..n {
-                        out[out_row + col] += scale * rhs_data[rhs_row + col];
+            crate::iteration::tile_2d::<64, 64>(m, n, |r0, r1, c0, c1| {
+                for row in r0..r1 {
+                    for depth in 0..k {
+                        let scale = lhs.get(row, depth) as f32;
+                        let rhs_row = rhs.index(depth, 0);
+                        let out_row = row * n;
+                        for col in c0..c1 {
+                            out[out_row + col] += scale * rhs_data[rhs_row + col];
+                        }
                     }
                 }
-            }
+            });
         }
         _ => {
-            for row in 0..m {
-                for col in 0..n {
-                    let mut acc = 0f64;
-                    for depth in 0..k {
-                        acc += lhs.get(row, depth) * rhs.get(depth, col);
+            crate::iteration::tile_2d::<64, 64>(m, n, |r0, r1, c0, c1| {
+                for row in r0..r1 {
+                    for col in c0..c1 {
+                        let mut acc = 0f64;
+                        for depth in 0..k {
+                            acc += lhs.get(row, depth) * rhs.get(depth, col);
+                        }
+                        out[row * n + col] = acc as f32;
                     }
-                    out[row * n + col] = acc as f32;
                 }
-            }
+            });
         }
     }
 }

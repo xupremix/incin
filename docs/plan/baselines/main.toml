@@ -223,3 +223,14 @@ low_ns = 24341.0
 point_ns = 24380.0
 high_ns = 24428.0
 note = "The interval is wider than the other CUDA series because the device also drives the desktop display; see display_attached in the cuda_host environment."
+
+[[memory]]
+id = "alloc/cpu/peak"
+backend = "cpu"
+peak_bytes = 67108864
+
+[[cache]]
+id = "autotune/cuda/kernel_cache"
+kind = "autotune"
+max_entries = 1024
+

@@ -124,13 +124,24 @@ pub(crate) mod cuda {
         /// last handle is precisely the expensive event.
         pub fn try_get_cuda_device(id: usize) -> Result<Arc<CudaContext>, DriverError> {
             let map_mutex = CUDA_DEVICES.get_or_init(|| Mutex::new(BTreeMap::new()));
-            let mut map = map_mutex.lock().unwrap();
+            let mut map = match map_mutex.lock() {
+                Ok(guard) => guard,
+                Err(poisoned) => poisoned.into_inner(),
+            };
             if let Some(dev) = map.get(&id) {
                 return Ok(dev.clone());
             }
-            let dev = CudaContext::new(id)?;
-            map.insert(id, dev.clone());
-            Ok(dev)
+            let res = std::panic::catch_unwind(|| CudaContext::new(id));
+            match res {
+                Ok(Ok(dev)) => {
+                    map.insert(id, dev.clone());
+                    Ok(dev)
+                }
+                Ok(Err(err)) => Err(err),
+                Err(_) => Err(DriverError(
+                    cudarc::driver::sys::CUresult::CUDA_ERROR_UNKNOWN,
+                )),
+            }
         }
 
         /// Panicking wrapper over [`try_get_cuda_device`] for existing callers.

@@ -34,6 +34,13 @@ fn every_registration_generates_supported_boundary_cases_without_fallback() {
     #[cfg(feature = "metal")]
     use incin_backends::capability::METAL_CAPABILITIES;
 
+    #[cfg(not(feature = "metal"))]
+    let devices: Vec<(DeviceKind, &[incin_core::exec::CapabilityRule])> = vec![
+        (DeviceKind::Cpu, CPU_CAPABILITIES),
+        (DeviceKind::Cuda, CUDA_CAPABILITIES),
+        (DeviceKind::Wgpu, WGPU_CAPABILITIES),
+    ];
+    #[cfg(feature = "metal")]
     let mut devices: Vec<(DeviceKind, &[incin_core::exec::CapabilityRule])> = vec![
         (DeviceKind::Cpu, CPU_CAPABILITIES),
         (DeviceKind::Cuda, CUDA_CAPABILITIES),
@@ -43,7 +50,6 @@ fn every_registration_generates_supported_boundary_cases_without_fallback() {
     devices.push((DeviceKind::Metal, METAL_CAPABILITIES));
 
     for (device, rules) in devices {
-
         assert!(!rules.is_empty());
         for rule in rules {
             assert!(!rule.dtypes.is_empty());

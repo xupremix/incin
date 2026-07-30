@@ -16,8 +16,10 @@ use core::{
     hash::{Hash, Hasher},
     marker::PhantomData,
 };
+#[cfg(feature = "cuda")]
+use incin_core::prelude::{Cuda, CudaN};
 use incin_core::{
-    prelude::{Cpu, Cuda, CudaN, DeviceKind, Dyn, Error, Result},
+    prelude::{Cpu, DeviceKind, Dyn},
     typenum::{NonZero, Unsigned},
 };
 
@@ -40,6 +42,8 @@ pub enum BackendIdentity {
     Cuda,
     /// WebGPU execution.
     Wgpu,
+    /// Native Apple Metal execution.
+    Metal,
 }
 
 impl BackendIdentity {
@@ -50,6 +54,7 @@ impl BackendIdentity {
             Self::Cpu => "cpu",
             Self::Cuda => "cuda",
             Self::Wgpu => "wgpu",
+            Self::Metal => "metal",
         }
     }
 
@@ -58,6 +63,7 @@ impl BackendIdentity {
             DeviceKind::Cpu => Ok(Self::Cpu),
             DeviceKind::Cuda => Ok(Self::Cuda),
             DeviceKind::Wgpu => Ok(Self::Wgpu),
+            DeviceKind::Metal => Ok(Self::Metal),
             _ => Err(IdentityError::UnsupportedBackend),
         }
     }
@@ -242,12 +248,16 @@ impl StaticBackend for Cpu {
     const BACKEND: BackendIdentity = BackendIdentity::Cpu;
 }
 
+#[cfg(feature = "cuda")]
 impl sealed::Sealed for Cuda {}
+#[cfg(feature = "cuda")]
 impl StaticBackend for Cuda {
     const BACKEND: BackendIdentity = BackendIdentity::Cuda;
 }
 
+#[cfg(feature = "cuda")]
 impl<N: Unsigned + 'static> sealed::Sealed for CudaN<N> {}
+#[cfg(feature = "cuda")]
 impl<N: Unsigned + 'static> StaticBackend for CudaN<N> {
     const BACKEND: BackendIdentity = BackendIdentity::Cuda;
 }
@@ -1158,6 +1168,7 @@ impl<W> PartialEq for TuningTopologyFingerprint<W> {
 
 impl<W> Eq for TuningTopologyFingerprint<W> {}
 
+#[cfg(feature = "cuda")]
 impl DeviceFingerprint<Cuda> {
     /// Queries UUID, architecture, and driver version from a live CUDA
     /// context. The context ordinal is used only in diagnostics and never
@@ -1191,6 +1202,7 @@ impl DeviceFingerprint<Cuda> {
     }
 }
 
+#[cfg(feature = "cuda")]
 impl CompilerFingerprint<Cuda> {
     /// Queries NVRTC and the target architecture used for this CUDA context.
     pub fn from_cuda_context(
@@ -1223,6 +1235,7 @@ impl CompilerFingerprint<Cuda> {
     }
 }
 
+#[cfg(feature = "cuda")]
 impl TuningEnvironmentFingerprint<Cuda> {
     /// Queries the complete CUDA device/compiler environment.
     pub fn from_cuda_context(context: &cudarc::driver::CudaContext) -> Result<Self> {
@@ -1236,6 +1249,7 @@ impl TuningEnvironmentFingerprint<Cuda> {
     }
 }
 
+#[cfg(feature = "cuda")]
 fn cuda_driver_version() -> core::result::Result<SoftwareVersion, IdentityError> {
     let mut encoded = 0_i32;
     let result = unsafe { cudarc::driver::sys::cuDriverGetVersion(&mut encoded) };
@@ -1259,6 +1273,7 @@ fn cuda_driver_version() -> core::result::Result<SoftwareVersion, IdentityError>
     ))
 }
 
+#[cfg(feature = "cuda")]
 fn nvrtc_version() -> core::result::Result<SoftwareVersion, IdentityError> {
     let mut major = 0_i32;
     let mut minor = 0_i32;
@@ -1278,6 +1293,7 @@ fn nvrtc_version() -> core::result::Result<SoftwareVersion, IdentityError> {
     Ok(SoftwareVersion::new(major as u32, minor as u32, 0))
 }
 
+#[allow(dead_code)]
 fn format_cuda_uuid(bytes: [core::ffi::c_char; 16]) -> String {
     let mut output = String::from("GPU-");
     for (index, byte) in bytes.into_iter().enumerate() {

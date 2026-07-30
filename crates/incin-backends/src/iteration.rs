@@ -299,6 +299,31 @@ fn iteration_shape_error(output_shape: &[usize], input_shape: &[usize]) -> Error
     }
 }
 
+/// Decomposes a 2D iteration space `(rows × cols)` into 2D tiles of size `(TY × TX)`.
+///
+/// Calls `f(r0, r1, c0, c1)` for each tile, where `[r0..r1)` is the row range
+/// (step size `TY`) and `[c0..c1)` is the column range (step size `TX`).
+pub fn tile_2d<const TX: usize, const TY: usize>(
+    rows: usize,
+    cols: usize,
+    mut f: impl FnMut(usize, usize, usize, usize),
+) {
+    if rows == 0 || cols == 0 {
+        return;
+    }
+    let mut r0 = 0;
+    while r0 < rows {
+        let r1 = (r0 + TY).min(rows);
+        let mut c0 = 0;
+        while c0 < cols {
+            let c1 = (c0 + TX).min(cols);
+            f(r0, r1, c0, c1);
+            c0 += TX;
+        }
+        r0 += TY;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

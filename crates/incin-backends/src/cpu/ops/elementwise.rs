@@ -15,7 +15,7 @@ use incin_core::prelude::*;
 use incin_core::prelude::{Backend, DType, FloatOps, NumericOps, Result};
 
 use crate::cpu::ops::elementwise_kernel::{self, BinaryOp, UnaryOp};
-use crate::cpu::storage::CpuStorage;
+use crate::cpu::storage::{CpuBuffer, CpuStorage};
 use crate::cpu::tape::{self, TapeEntry};
 use crate::iteration::{IterationPlan, OperandLayout};
 
@@ -51,6 +51,56 @@ pub(crate) fn elementwise_binary(
     out_shape: &[usize],
     f: impl Fn(f64, f64) -> f64 + Send + Sync,
 ) -> Result<CpuStorage> {
+    if let (Some(l_range), Some(r_range)) = (
+        elementwise_kernel::dense_range(lhs, lhs.buffer.len(), out_shape),
+        elementwise_kernel::dense_range(rhs, rhs.buffer.len(), out_shape),
+    ) {
+        let buffer = match (&*lhs.buffer, &*rhs.buffer) {
+            (CpuBuffer::F32(l), CpuBuffer::F32(r)) => {
+                let out =
+                    crate::cpu::typed_kernel::map_binary_typed(&l[l_range], &r[r_range], |a, b| {
+                        f(a as f64, b as f64) as f32
+                    });
+                CpuBuffer::F32(out)
+            }
+            (CpuBuffer::F64(l), CpuBuffer::F64(r)) => {
+                let out = crate::cpu::typed_kernel::map_binary_typed(&l[l_range], &r[r_range], &f);
+                CpuBuffer::F64(out)
+            }
+            _ => {
+                let plan = IterationPlan::binary(
+                    OperandLayout {
+                        shape: &lhs.shape,
+                        strides: &lhs.strides,
+                        offset: lhs.offset_elements,
+                    },
+                    OperandLayout {
+                        shape: &rhs.shape,
+                        strides: &rhs.strides,
+                        offset: rhs.offset_elements,
+                    },
+                    out_shape,
+                )?;
+                let lhs_plan = &plan.operands[0];
+                let rhs_plan = &plan.operands[1];
+                let out: Vec<f64> = (0..plan.numel)
+                    .into_par_iter()
+                    .map(|flat_idx| {
+                        let a = lhs
+                            .buffer
+                            .get_f64(lhs_plan.physical_index(flat_idx, &plan.output_shape));
+                        let b = rhs
+                            .buffer
+                            .get_f64(rhs_plan.physical_index(flat_idx, &plan.output_shape));
+                        f(a, b)
+                    })
+                    .collect();
+                lhs.buffer.from_f64_values(out)
+            }
+        };
+        return Ok(CpuStorage::from_contiguous(buffer, out_shape.to_vec()));
+    }
+
     let plan = IterationPlan::binary(
         OperandLayout {
             shape: &lhs.shape,
@@ -78,8 +128,6 @@ pub(crate) fn elementwise_binary(
             f(a, b)
         })
         .collect();
-    // Preserve lhs's actual dtype variant instead of hardcoding F32 (C-2:
-    // this used to silently downcast every non-f32 dtype through f32).
     let out_buffer = lhs.buffer.from_f64_values(out);
     Ok(CpuStorage::from_contiguous(out_buffer, out_shape.to_vec()))
 }
@@ -102,6 +150,44 @@ pub(crate) fn elementwise_unary(
     t: &CpuStorage,
     f: impl Fn(f64) -> f64 + Send + Sync,
 ) -> Result<CpuStorage> {
+    if let Some(range) = elementwise_kernel::dense_range(t, t.buffer.len(), &t.shape) {
+        let buffer = match &*t.buffer {
+            CpuBuffer::F32(v) => {
+                let out =
+                    crate::cpu::typed_kernel::map_unary_typed(&v[range], |x| f(x as f64) as f32);
+                CpuBuffer::F32(out)
+            }
+            CpuBuffer::F64(v) => {
+                let out = crate::cpu::typed_kernel::map_unary_typed(&v[range], &f);
+                CpuBuffer::F64(out)
+            }
+            CpuBuffer::F16(v) => {
+                let out = crate::cpu::typed_kernel::map_unary_typed(&v[range], |x| {
+                    half::f16::from_f64(f(x.to_f64()))
+                });
+                CpuBuffer::F16(out)
+            }
+            CpuBuffer::BF16(v) => {
+                let out = crate::cpu::typed_kernel::map_unary_typed(&v[range], |x| {
+                    half::bf16::from_f64(f(x.to_f64()))
+                });
+                CpuBuffer::BF16(out)
+            }
+            _ => {
+                let total: usize = t.shape.iter().product();
+                let out: Vec<f64> = (0..total)
+                    .into_par_iter()
+                    .map(|flat_idx| {
+                        let nd_idx = flat_to_nd(flat_idx, &t.shape);
+                        f(t.get(&nd_idx))
+                    })
+                    .collect();
+                t.buffer.from_f64_values(out)
+            }
+        };
+        return Ok(CpuStorage::from_contiguous(buffer, t.shape.to_vec()));
+    }
+
     let total: usize = t.shape.iter().product();
     let out: Vec<f64> = (0..total)
         .into_par_iter()
@@ -110,8 +196,6 @@ pub(crate) fn elementwise_unary(
             f(t.get(&nd_idx))
         })
         .collect();
-    // Preserve t's actual dtype variant instead of hardcoding F32 (C-2: this
-    // used to silently downcast every non-f32 dtype through f32).
     let out_buffer = t.buffer.from_f64_values(out);
     Ok(CpuStorage::from_contiguous(out_buffer, t.shape.to_vec()))
 }

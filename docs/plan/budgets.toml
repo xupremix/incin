@@ -255,6 +255,19 @@ metric = "benchmark_binary_bytes"
 baseline_bytes = 4815792
 max_bytes = 5778950
 
+[[memory]]
+id = "alloc/cpu/peak"
+backend = "cpu"
+baseline_peak_bytes = 67108864
+max_peak_bytes = 134217728
+
+[[cache]]
+id = "autotune/cuda/kernel_cache"
+kind = "autotune"
+baseline_max_entries = 1024
+max_entries = 2048
+
+
 [[feature_crate]]
 package = "incin-core"
 manifest = "crates/incin-core/Cargo.toml"
@@ -348,6 +361,11 @@ name = "metal"
 enables = ["std", "incin-core/metal"]
 
 [[feature_crate.feature]]
+name = "metal-mps"
+enables = ["metal"]
+
+
+[[feature_crate.feature]]
 name = "autotune"
 enables = ["cuda"]
 
@@ -403,6 +421,11 @@ enables = ["incin-backends/wgpu"]
 [[feature_crate.feature]]
 name = "metal"
 enables = ["incin-backends/metal"]
+
+[[feature_crate.feature]]
+name = "metal-mps"
+enables = ["incin-backends/metal-mps"]
+
 
 [[feature_crate.feature]]
 name = "external-candle"

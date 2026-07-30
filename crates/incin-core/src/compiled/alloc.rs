@@ -115,18 +115,13 @@ impl LivenessMap {
     ///
     /// Saved tensors must remain live until the backward pass (represented by
     /// `backward_end_node`), even if they appear unused after the forward node.
-    pub fn extend_for_saved_tensors(
-        &mut self,
-        saved: &SavedTensorSet,
-        backward_end_node: usize,
-    ) {
+    pub fn extend_for_saved_tensors(&mut self, saved: &SavedTensorSet, backward_end_node: usize) {
         for &vid in &saved.values {
             if let Some(interval) = self.intervals.get_mut(&vid)
                 && interval.last_use_node < backward_end_node
             {
                 interval.last_use_node = backward_end_node;
             }
-
         }
     }
 }
@@ -156,7 +151,6 @@ impl SavedTensorSet {
         self.values.contains(&value_id)
     }
 }
-
 
 /// Allocation slot for a buffer, identified by an index.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]

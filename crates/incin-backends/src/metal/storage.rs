@@ -4,12 +4,15 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::fmt::Debug;
 
-use incin_core::exec::{Alignment, TensorMeta};
+pub use incin_core::exec::TensorId;
+use incin_core::exec::{Alignment, TapeStorage, TensorMeta};
 use incin_core::prelude::{DTypeId, DeviceId, Error, Result};
 use incin_core::shapes::{OperationKind, ShapeBuf};
 
 /// Storage access mode for Metal buffers on Apple Silicon and macOS.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
 #[serde(rename_all = "lowercase")]
 pub enum MetalStorageMode {
     /// Shared memory — CPU and GPU access the same physical memory space.
@@ -50,6 +53,7 @@ pub fn is_unified_memory() -> bool {
 /// Storage handle backing tensors on Metal devices.
 #[derive(Clone)]
 pub struct MetalStorage {
+    pub(crate) id: TensorId,
     data: Arc<Vec<u8>>,
     metadata: TensorMeta,
     mode: MetalStorageMode,
@@ -59,6 +63,7 @@ pub struct MetalStorage {
 impl Debug for MetalStorage {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("MetalStorage")
+            .field("id", &self.id)
             .field("metadata", &self.metadata)
             .field("mode", &self.mode)
             .field("device_ordinal", &self.device_ordinal)
@@ -107,6 +112,7 @@ impl MetalStorage {
             });
         }
         Ok(Self {
+            id: TensorId::next(),
             data: Arc::new(bytes),
             metadata,
             mode,
@@ -143,6 +149,12 @@ impl MetalStorage {
     #[must_use]
     pub fn metadata(&self) -> &TensorMeta {
         &self.metadata
+    }
+
+    /// Slice of dimensions of this storage.
+    #[must_use]
+    pub fn shape(&self) -> &[usize] {
+        self.metadata.shape().dims()
     }
 
     /// The Metal storage mode (`Shared`, `Managed`, or `Private`).
@@ -190,6 +202,69 @@ impl MetalStorage {
     pub fn device(&self) -> DeviceId {
         DeviceId::metal(self.device_ordinal)
     }
+
+    /// Unique identifier for this storage handle.
+    #[must_use]
+    pub fn id(&self) -> TensorId {
+        self.id
+    }
+}
+
+impl TapeStorage for MetalStorage {
+    fn id(&self) -> TensorId {
+        self.id
+    }
+
+    fn ones_like(&self) -> Result<Self> {
+        let numel = self.metadata.shape.checked_numel(OperationKind::Storage)?;
+        let data_f32: Vec<f32> = vec![1.0; numel];
+        let bytes: Vec<u8> = bytemuck::cast_slice(&data_f32).to_vec();
+        let meta = TensorMeta::contiguous(
+            self.metadata.shape.clone(),
+            self.metadata.dtype,
+            self.device(),
+            Self::alignment(),
+            numel,
+        )?;
+        Self::from_bytes(bytes, meta, self.mode, self.device_ordinal)
+    }
+
+    fn accumulate(&self, contribution: &Self) -> Result<Self> {
+        if self.metadata.shape.dims() != contribution.metadata.shape.dims() {
+            return Err(Error::ShapeMismatch {
+                op: "accumulate",
+                expected: self.metadata.shape.dims().to_vec(),
+                got: contribution.metadata.shape.dims().to_vec(),
+                msg: "shapes must match for gradient accumulation".to_string(),
+            });
+        }
+        let a_bytes = self.as_bytes()?;
+        let b_bytes = contribution.as_bytes()?;
+        let a_slice: &[f32] = bytemuck::cast_slice(a_bytes);
+        let b_slice: &[f32] = bytemuck::cast_slice(b_bytes);
+        let out_data: Vec<f32> = a_slice
+            .iter()
+            .zip(b_slice.iter())
+            .map(|(x, y)| x + y)
+            .collect();
+        let out_bytes: Vec<u8> = bytemuck::cast_slice(&out_data).to_vec();
+        Self::from_bytes(
+            out_bytes,
+            self.metadata.clone(),
+            self.mode,
+            self.device_ordinal,
+        )
+    }
+
+    fn has_non_finite(&self) -> bool {
+        match self.as_bytes() {
+            Ok(bytes) => {
+                let slice: &[f32] = bytemuck::cast_slice(bytes);
+                slice.iter().any(|x| x.is_nan() || x.is_infinite())
+            }
+            Err(_) => false,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -235,8 +310,8 @@ mod tests {
         .unwrap();
 
         // 400 bytes required, pass only 10
-        let err = MetalStorage::from_bytes(vec![0; 10], meta, MetalStorageMode::Shared, 0)
-            .unwrap_err();
+        let err =
+            MetalStorage::from_bytes(vec![0; 10], meta, MetalStorageMode::Shared, 0).unwrap_err();
         assert!(matches!(err, Error::InvalidByteLength { .. }));
     }
 }

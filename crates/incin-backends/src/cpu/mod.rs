@@ -24,6 +24,7 @@ pub(crate) mod ops;
 pub(crate) mod storage;
 pub(crate) mod stride;
 pub(crate) mod tape;
+pub mod typed_kernel;
 pub(crate) mod var;
 
 // ── Public re-exports ─────────────────────────────────────────────────────────
