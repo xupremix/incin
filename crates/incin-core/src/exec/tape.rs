@@ -151,6 +151,11 @@ impl<S> GradientMap<S> {
         self.grads.get(&id)
     }
 
+    /// Insert or replace the accumulated gradient for `id`.
+    pub fn insert(&mut self, id: TensorId, grad: S) -> Option<S> {
+        self.grads.insert(id, grad)
+    }
+
     /// How many tensors received a gradient.
     #[must_use]
     pub fn len(&self) -> usize {

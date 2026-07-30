@@ -268,6 +268,66 @@ pub static WGPU_CAPABILITIES: &[CapabilityRule] = &[
     ),
 ];
 
+pub static METAL_CAPABILITIES: &[CapabilityRule] = &[
+    native(OperationKind::Storage, CUDA_STORAGE_DTYPES, CONTIGUOUS, false),
+    native(OperationKind::Fill, F32_ONLY, CONTIGUOUS, false),
+    native(OperationKind::Random, F32_ONLY, CONTIGUOUS, false),
+    native(OperationKind::Pointwise, FLOAT_DTYPES, CONTIGUOUS, true),
+    native(OperationKind::Reduction, FLOAT_DTYPES, CONTIGUOUS, true),
+    native_ranked(
+        OperationKind::Normalization,
+        FLOAT_DTYPES,
+        CONTIGUOUS,
+        1,
+        MAX_RANK,
+        true,
+    ),
+    native(
+        OperationKind::Broadcast,
+        CUDA_STORAGE_DTYPES,
+        CONTIGUOUS,
+        false,
+    ),
+    native(OperationKind::Broadcast, FLOAT_DTYPES, CONTIGUOUS, true),
+    native(
+        OperationKind::Reshape,
+        CUDA_STORAGE_DTYPES,
+        CONTIGUOUS,
+        false,
+    ),
+    native(OperationKind::Reshape, FLOAT_DTYPES, CONTIGUOUS, true),
+    CapabilityRule::new(
+        OperationKind::MatMul,
+        FLOAT_DTYPES,
+        CONTIGUOUS,
+        2,
+        MAX_RANK,
+        true,
+        PRECISE,
+        ImplementationKind::Native,
+    ),
+    CapabilityRule::new(
+        OperationKind::Conv2d,
+        F32_ONLY,
+        CONTIGUOUS,
+        3,
+        4,
+        true,
+        PRECISE,
+        ImplementationKind::Native,
+    ),
+    CapabilityRule::new(
+        OperationKind::Pool2d,
+        F32_ONLY,
+        CONTIGUOUS,
+        3,
+        4,
+        true,
+        PRECISE,
+        ImplementationKind::Native,
+    ),
+];
+
 static EMPTY_CAPABILITIES: &[CapabilityRule] = &[];
 
 #[must_use]
@@ -276,6 +336,7 @@ pub fn registry(device: DeviceKind) -> CapabilityRegistry {
         DeviceKind::Cpu => CPU_CAPABILITIES,
         DeviceKind::Cuda => CUDA_CAPABILITIES,
         DeviceKind::Wgpu => WGPU_CAPABILITIES,
+        DeviceKind::Metal => METAL_CAPABILITIES,
         _ => EMPTY_CAPABILITIES,
     };
     CapabilityRegistry::new(rules)

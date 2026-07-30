@@ -1,0 +1,13 @@
+error[E0308]: mismatched types
+ --> tests/tuning_pruning_compile_fail/pruning_type_mismatch.rs:6:23
+  |
+6 |     accepts_signature(RankClass::Vector);
+  |     ----------------- ^^^^^^^^^^^^^^^^^ expected `KernelSignature`, found `RankClass`
+  |     |
+  |     arguments to this function are incorrect
+  |
+note: function defined here
+ --> tests/tuning_pruning_compile_fail/pruning_type_mismatch.rs:3:4
+  |
+3 | fn accepts_signature(_: KernelSignature) {}
+  |    ^^^^^^^^^^^^^^^^^ ------------------

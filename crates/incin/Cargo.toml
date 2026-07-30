@@ -34,10 +34,13 @@ cpu-blas = ["std", "cpu", "incin-backends/cpu-blas"]
 cuda = ["incin-core/cuda", "incin-backends/cuda"]
 # Enables the cross-platform WGPU backend. WGPU is never enabled implicitly.
 wgpu = ["incin-backends/wgpu"]
+# Enables the native Metal backend for Apple Silicon. Metal is never enabled implicitly.
+metal = ["incin-backends/metal"]
+
 # Enables the external Candle backend at `incin::external::candle`.
 external-candle = ["std", "incin-backends/external-candle"]
-# Deprecated alias for `external-candle`. Removed at REL-002; see PROPOSALS.md D-014.
-candle = ["external-candle"]
+
+
 # Enables CUDA launch autotuning.
 autotune = ["cuda", "incin-backends/autotune"]
 # Enables the automatic `Trainer` at `incin::train`. Preview tier: useful and

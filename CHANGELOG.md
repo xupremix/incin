@@ -9,6 +9,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- **Core Stabilization & Migration Guide (`REL-001`):** Completed comprehensive core stabilization review and added `docs/MIGRATION.md` detailing API migration pathways across backend storage decoupling (`EXE-006`..`EXE-009`), unified autograd graph engine (`GRD-001`..`GRD-006`), proof-carrying shape safety (`SHP-001`..`SHP-008`), and distributed placement proofs (`DST-001`..`DST-005`). `docs/MIGRATION.md` section 7 added for the compiled-graph subsystem.
+- **Compiled graph capture (`CMP-001`, `incin-core::compiled::capture`):** `CapturedGraph` and `CapturedNode` provide a serializable IR snapshot of an eager `Graph` for offline analysis, inspection, and compilation passes.
+- **Immutable compiled plans and dynamic guards (`CMP-002`, `incin-core::compiled::plan`):** `CompiledPlan` bundles a `CapturedGraph` with `CompileOptions` and per-input `ShapeGuard` entries for runtime dtype/shape verification. `DynamicShapePolicy` and `FusionPolicy` are the two knobs.
+- **Constant folding, weight prepacking, and shape buckets (`CMP-004`, `incin-core::compiled::fold`):** `ConstantFolder` propagates compile-time-known values, `WeightPrepacker` tiles weights into contiguous layouts, and `ShapeBucket` bins dynamic shapes to reduce recompilation.
+- **Liveness and allocation planner (`CMP-003`, `incin-core::compiled::alloc`):** `LivenessMap` computes per-node def/use intervals; `AllocationPlanner` assigns buffer slots with slot reuse; `MemoryPlan` reports peak live slot count and alias candidates for buffer aliasing.
+- **Compiled-graph saved-tensor liveness (`GRD-007`, `incin-core::compiled::alloc`):** `SavedTensorSet` and `LivenessMap::extend_for_saved_tensors` extend forward liveness intervals through the backward pass, preventing premature buffer reuse for autograd-retained tensors.
+- **Safe kernel fusion pass (`CMP-005`, `incin-core::compiled::fusion`):** `FusionPass` identifies adjacent pointwise chains (`FusionCandidate`) and applies them (`FusedKernel`), reducing launch count. `FusionBlocker` documents why two ops may not fuse.
+- **Versioned compiled artifacts (`CMP-006`, `incin-core::compiled::artifact`):** `CompiledArtifact` wraps a `CompiledPlan` with an `ArtifactHeader` containing an `ArtifactVersion` and an Adler-32 integrity checksum. `serialize` / `deserialize` / `load` cover the full roundtrip; `verify_integrity` and `check_compatibility` guard against corruption and version skew.
 - **Distributed placement proofs (`DST-003`, `incin-core`'s `distributed`
   feature):** `Replicated`, `Sharded`, `Partial`, and `PipelineStage` extend
   the existing `Local` placement typestate, with `PlacementKind` as their
@@ -202,6 +210,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   list is parsed against a closed vocabulary and unknown keys are rejected.
 
 ### Removed
+- **Deprecated `candle` feature alias (`REL-002`, `D-014`):** Removed `candle` feature alias from `incin` and `incin-backends` in favor of explicit `external-candle`.
 - `Backend::backward_with_nan_check` and its four implementations. NaN checking
   is `NanPolicy` on `ExecutionPolicy`; wrap the ordinary `backward` in
   `incin_core::exec::check_gradients(|| ..)`, which returns an error where the

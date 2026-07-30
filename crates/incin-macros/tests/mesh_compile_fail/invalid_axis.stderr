@@ -1,0 +1,5 @@
+error: unknown mesh axis `invalid`; valid axes are `dp`, `tp`, and `pp`
+ --> tests/mesh_compile_fail/invalid_axis.rs:4:29
+  |
+4 |     type InvalidKey = mesh![invalid = 4];
+  |                             ^^^^^^^

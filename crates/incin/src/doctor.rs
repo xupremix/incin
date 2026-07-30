@@ -555,7 +555,7 @@ fn run_probe(kind: DeviceKind, spec: &ProbeSpec) -> Probe {
 /// that always has something in it is a section people stop reading.
 fn findings(
     toolchain: &Toolchain,
-    features: &[Feature],
+    _features: &[Feature],
     cpu_isa: &[IsaFeature],
     devices: &[DeviceReport],
     caches: &[Cache],
@@ -615,17 +615,7 @@ fn findings(
         }
     }
 
-    if features
-        .iter()
-        .any(|feature| feature.name == "candle" && feature.enabled)
-    {
-        out.push(Finding::new(
-            Severity::Warning,
-            "deprecated-feature",
-            "the candle feature is a deprecated alias and is removed at REL-002".to_string(),
-            Some("depend on external-candle instead"),
-        ));
-    }
+
 
     for isa in cpu_isa {
         if !isa.available {
@@ -683,7 +673,7 @@ fn compiled_features() -> Vec<Feature> {
         Feature::new("cuda", cfg!(feature = "cuda")),
         Feature::new("wgpu", cfg!(feature = "wgpu")),
         Feature::new("external-candle", cfg!(feature = "external-candle")),
-        Feature::new("candle", cfg!(feature = "candle")),
+
         Feature::new("autotune", cfg!(feature = "autotune")),
         Feature::new("train", cfg!(feature = "train")),
         Feature::new("distributed", cfg!(feature = "distributed")),

@@ -266,6 +266,64 @@ mod wgpu_static {
 #[cfg(feature = "wgpu")]
 pub use wgpu_static::WgpuN;
 
+#[cfg(feature = "metal")]
+mod metal_partial {
+    use super::{Device, DeviceId, Result};
+
+    #[derive(Debug, Default, Clone, PartialEq, Eq)]
+    /// **Tier 2** Metal device: backend kind known at compile time, ordinal
+    /// supplied at runtime as a `usize`.
+    pub struct Metal(pub usize);
+
+    impl Device for Metal {
+        type Arg = usize;
+        type Field = usize;
+
+        fn to_incin(dev: &Self::Field) -> Result<DeviceId> {
+            Ok(DeviceId::metal(*dev))
+        }
+
+        fn init(arg: Self::Arg) -> Self::Field {
+            arg
+        }
+    }
+}
+
+#[cfg(feature = "metal")]
+pub use metal_partial::Metal;
+
+#[cfg(feature = "metal")]
+mod metal_static {
+    use super::{ConstDevice, Device, DeviceId, PhantomData, Result};
+    use core::fmt::Debug;
+    use typenum::{U0, Unsigned};
+
+    #[derive(Debug, Default, Clone, PartialEq, Eq)]
+    /// **Tier 3** Metal device: both backend kind and device ordinal `N` are known at compile time.
+    pub struct MetalN<N: Unsigned = U0>(PhantomData<N>);
+
+    impl<N: Unsigned + 'static + Send + Sync + Clone + Eq + PartialEq + Debug> ConstDevice
+        for MetalN<N>
+    {
+    }
+
+    impl<N: Unsigned + 'static + Send + Sync + Clone + Eq + PartialEq + Debug> Device for MetalN<N> {
+        type Arg = ();
+        type Field = PhantomData<Self>;
+
+        fn to_incin(_: &Self::Field) -> Result<DeviceId> {
+            Ok(DeviceId::metal(N::USIZE))
+        }
+
+        fn init(_: Self::Arg) -> Self::Field {
+            PhantomData
+        }
+    }
+}
+
+#[cfg(feature = "metal")]
+pub use metal_static::MetalN;
+
 // ============================================================================
 // CPU — always fully static (there is only one CPU)
 // ============================================================================
@@ -308,6 +366,8 @@ pub enum DeviceKind {
     Cuda,
     /// The WGPU backend family.
     Wgpu,
+    /// The Metal backend family for Apple Silicon.
+    Metal,
 }
 
 impl DeviceKind {
@@ -319,6 +379,7 @@ impl DeviceKind {
             Self::Cpu => "cpu",
             Self::Cuda => "cuda",
             Self::Wgpu => "wgpu",
+            Self::Metal => "metal",
         }
     }
 }
@@ -379,6 +440,14 @@ impl DeviceId {
             ordinal: ord,
         }
     }
+
+    /// A Metal device at ordinal `ord`.
+    pub fn metal(ord: usize) -> Self {
+        Self {
+            kind: DeviceKind::Metal,
+            ordinal: ord,
+        }
+    }
 }
 
 /// Whether this build was compiled with the `cuda` feature enabled
@@ -391,6 +460,25 @@ pub const fn cuda_is_available() -> bool {
 pub const fn wgpu_is_available() -> bool {
     cfg!(feature = "wgpu")
 }
+/// Whether this build was compiled with the `metal` feature enabled.
+pub const fn metal_is_available() -> bool {
+    cfg!(feature = "metal")
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+/// A Metal device index, used as a hashable/orderable key.
+pub struct MetalDevice {
+    /// The Metal device ordinal.
+    pub id: usize,
+}
+
+impl MetalDevice {
+    /// Creates a new instance with the given device ordinal.
+    pub fn new(id: usize) -> Self {
+        Self { id }
+    }
+}
+
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 /// A CUDA device index, used as a hashable/orderable key (e.g. for

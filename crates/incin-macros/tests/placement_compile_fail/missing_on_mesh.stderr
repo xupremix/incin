@@ -1,0 +1,7 @@
+error: distributed placement requires `on <Mesh>`
+ --> tests/placement_compile_fail/missing_on_mesh.rs:4:20
+  |
+4 |     type Invalid = placement![Replicated];
+  |                    ^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the macro `placement` (in Nightly builds, run with -Z macro-backtrace for more info)

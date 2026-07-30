@@ -1,0 +1,5 @@
+error: duplicate axis `Batch` in axes!
+ --> tests/axes_compile_fail/duplicate_axis.rs:7:43
+  |
+7 |     type Invalid = axes![Batch, Channels, Batch];
+  |                                           ^^^^^

@@ -46,6 +46,7 @@ pub use buf::*;
 pub use dim::*;
 pub use error::*;
 pub use idx::*;
+pub use named::*;
 pub use reshape::*;
 pub use shape::*;
 pub use shape_ops::*;

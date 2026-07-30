@@ -21,6 +21,10 @@ default = ["std"]
 std = []
 # Enables nightly-only macro experiments. Empty on stable by design.
 nightly = []
+# Enables distributed macro tests and integrations.
+distributed = ["incin/distributed"]
+
+
 
 [dependencies]
 proc-macro2 = { workspace = true}
@@ -34,5 +38,8 @@ prost = "0.6"
 
 [dev-dependencies]
 incin = { path = "../incin" }
+incin-core = { path = "../incin-core", features = ["distributed"] }
 trybuild = "1.0.117"
+
+
 

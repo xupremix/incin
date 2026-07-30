@@ -124,7 +124,6 @@ fn the_text_rendering_is_stable() {
             Feature::new("cpu", true),
             Feature::new("cuda", true),
             Feature::new("wgpu", true),
-            Feature::new("candle", true),
         ],
         isa: vec![IsaFeature::new("avx2", false)],
         compiled: vec![DeviceKind::Cpu, DeviceKind::Cuda, DeviceKind::Wgpu],
@@ -151,7 +150,6 @@ std: on
 cpu: on
 cuda: on
 wgpu: on
-candle: on
 
 [cpu]
 avx2: unavailable (scalar path)
@@ -188,8 +186,6 @@ warning backend-unavailable: wgpu is compiled into this build but no device answ
   remedy: check that a non-software adapter is visible to this process
 warning cache-not-writable: the hub cache at /var/cache/incin/hub is not writable
   remedy: fix the directory's permissions or point the cache elsewhere
-warning deprecated-feature: the candle feature is a deprecated alias and is removed at REL-002
-  remedy: depend on external-candle instead
 note isa-unavailable: avx2 is not available, so the CPU kernels that branch on it take their scalar path
 ";
 
@@ -425,27 +421,7 @@ fn an_absent_or_unset_cache_is_not_a_finding() {
     }
 }
 
-#[test]
-fn the_deprecated_candle_alias_is_a_warning() {
-    let host = FakeHost {
-        features: vec![
-            Feature::new("external-candle", true),
-            Feature::new("candle", true),
-        ],
-        ..FakeHost::healthy()
-    };
-    let report = Report::gather(&host);
 
-    assert_eq!(codes(&report), ["deprecated-feature"]);
-    assert!(report.findings[0].message.contains("REL-002"));
-
-    // Off, it says nothing — the alias is only a problem when it is used.
-    let host = FakeHost {
-        features: vec![Feature::new("candle", false)],
-        ..FakeHost::healthy()
-    };
-    assert_eq!(codes(&Report::gather(&host)), Vec::<&str>::new());
-}
 
 #[test]
 fn an_absent_isa_extension_is_a_note_about_the_scalar_path() {

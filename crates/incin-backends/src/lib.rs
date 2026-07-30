@@ -40,7 +40,7 @@ pub(crate) mod dtype_policy;
 // Every caller of these macros is a GPU or external backend, so a CPU-only
 // build declared four macros it could not use and warned about all of them.
 // Gated the same way `bytes` above it already is.
-#[cfg(any(feature = "cuda", feature = "wgpu", feature = "external-candle"))]
+#[cfg(any(feature = "cuda", feature = "wgpu", feature = "external-candle", feature = "metal"))]
 pub(crate) mod unsupported;
 
 #[cfg(any(feature = "cpu", feature = "cuda"))]
@@ -71,6 +71,10 @@ pub mod cuda;
 
 #[cfg(feature = "wgpu")]
 pub mod wgpu;
+
+#[cfg(feature = "metal")]
+pub mod metal;
+
 
 /// Third-party backend integrations, and the conformance suite an author of one
 /// runs against their own backend.

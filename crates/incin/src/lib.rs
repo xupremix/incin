@@ -293,7 +293,7 @@ pub mod prelude {
     // (`incin_macros::generate_shape_ops!()` in `shapes/shape_ops.rs`,
     // `incin_macros::impl_arg_into!()` in `tensor/arg_into.rs`) — neither
     // has a documented public contract or any end-user call site.
-    pub use incin_macros::{idx, import_model, model, module, s};
+    pub use incin_macros::{axes, einsum, idx, import_model, mesh, model, module, parallel, placement, s};
 
     // We intentionally overshadow incin_core::Tensor and NN modules with our aliased versions
     #[cfg(feature = "cpu")]

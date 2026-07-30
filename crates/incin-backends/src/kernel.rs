@@ -12,7 +12,7 @@ use crate::dtype_policy::{BackendFamily, OperationKind, resolve_dtype_policy};
 const KERNEL_KEY_SCHEMA_VERSION: u8 = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub(crate) enum KernelFamily {
+pub enum KernelFamily {
     PointwiseUnary,
     PointwiseBinary,
     Reduction,
@@ -31,7 +31,7 @@ impl KernelFamily {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub(crate) enum KernelAccess {
+pub enum KernelAccess {
     Scalar { unroll_width: u8 },
     Packed { vector_width: u8 },
     WarpReduction,
@@ -109,29 +109,58 @@ impl KernelIndexWidth {
     }
 }
 
+use crate::tuning::signature::{AlignmentClass, RankClass, ShapeBucket};
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub(crate) struct KernelKey {
+pub struct KernelKey {
     schema_version: u8,
-    pub(crate) family: KernelFamily,
-    pub(crate) operation: String,
+    pub family: KernelFamily,
+    pub operation: String,
     storage: KernelDType,
     compute: KernelDType,
     accumulator: KernelDType,
     output: KernelDType,
-    pub(crate) layout: LayoutClass,
-    pub(crate) access: KernelAccess,
+    pub layout: LayoutClass,
+    pub access: KernelAccess,
     pub(crate) index_width: KernelIndexWidth,
-    pub(crate) math_mode: MathMode,
+    pub math_mode: MathMode,
+    pub rank_class: RankClass,
+    pub shape_bucket: ShapeBucket,
+    pub alignment: AlignmentClass,
 }
 
 impl KernelKey {
-    pub(crate) fn cuda(
+    pub fn cuda(
         policy_family: OperationKind,
         family: KernelFamily,
         operation: &str,
         dtype: DTypeId,
         layout: LayoutClass,
         access: KernelAccess,
+    ) -> Result<Self> {
+        Self::cuda_with_signature(
+            policy_family,
+            family,
+            operation,
+            dtype,
+            layout,
+            access,
+            RankClass::Vector,
+            ShapeBucket::from_numel(1024),
+            AlignmentClass::Align256,
+        )
+    }
+
+    pub fn cuda_with_signature(
+        policy_family: OperationKind,
+        family: KernelFamily,
+        operation: &str,
+        dtype: DTypeId,
+        layout: LayoutClass,
+        access: KernelAccess,
+        rank_class: RankClass,
+        shape_bucket: ShapeBucket,
+        alignment: AlignmentClass,
     ) -> Result<Self> {
         let policy = resolve_dtype_policy(BackendFamily::Cuda, policy_family, dtype, "kernel_key")?;
         Ok(Self {
@@ -146,12 +175,15 @@ impl KernelKey {
             access,
             index_width: KernelIndexWidth::I32,
             math_mode: MathMode::Precise,
+            rank_class,
+            shape_bucket,
+            alignment,
         })
     }
 
-    pub(crate) fn cache_id(&self) -> String {
+    pub fn cache_id(&self) -> String {
         format!(
-            "k{}/cuda/{}/{}/s={}/c={}/a={}/o={}/layout={}/access={}/index={}/math={}",
+            "k{}/cuda/{}/{}/s={}/c={}/a={}/o={}/layout={}/access={}/index={}/math={}/rank={}/bucket={}/align={}",
             self.schema_version,
             self.family.tag(),
             self.operation,
@@ -163,13 +195,16 @@ impl KernelKey {
             self.access.tag(),
             self.index_width.tag(),
             self.math_mode.as_str(),
+            self.rank_class.tag(),
+            self.shape_bucket.tag(),
+            self.alignment.tag(),
         )
     }
 
     #[cfg(any(feature = "autotune", test))]
-    pub(crate) fn tuning_problem_id(&self) -> String {
+    pub fn tuning_problem_id(&self) -> String {
         format!(
-            "k{}/cuda/{}/{}/s={}/c={}/a={}/o={}/layout={}/index={}/math={}",
+            "k{}/cuda/{}/{}/s={}/c={}/a={}/o={}/layout={}/index={}/math={}/rank={}/bucket={}/align={}",
             self.schema_version,
             self.family.tag(),
             self.operation,
@@ -180,6 +215,9 @@ impl KernelKey {
             self.layout.as_str(),
             self.index_width.tag(),
             self.math_mode.as_str(),
+            self.rank_class.tag(),
+            self.shape_bucket.tag(),
+            self.alignment.tag(),
         )
     }
 }

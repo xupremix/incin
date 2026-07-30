@@ -18,10 +18,23 @@ use proc_macro::TokenStream;
 
 /// Internal helper module for generating ArgInto implementations.
 mod arg_into;
+/// Internal helper module for named axis specification macro.
+mod axes;
+/// Internal helper module for einsum subscript validation macro.
+mod einsum;
+
 /// Internal helper module for tensor index and slicing macro.
 mod idx;
+/// Internal helper module for mesh topology macro.
+mod mesh;
 /// Helper module for deriving neural network module traits.
 mod module;
+/// Internal helper module for tensor placement macro.
+mod placement;
+
+/// Internal helper module for parallel block macro.
+mod parallel_block;
+
 /// Helper module for parsing ONNX model graphs into Rust structs.
 mod onnx;
 /// The single rank ceiling and the sweep that generates every rank ladder.
@@ -241,3 +254,84 @@ pub fn max_rank(_input: TokenStream) -> TokenStream {
 pub fn rank_sweep(input: TokenStream) -> TokenStream {
     rank::rank_sweep(input)
 }
+
+/// Constructs a type-level logical `MeshSpec` for distributed execution.
+///
+/// Accepts named keyword parameters `dp`, `tp`, `pp` representing Data, Tensor,
+/// and Pipeline parallel degrees. Omitted axes default to `1`.
+///
+/// ## Examples
+/// ```text
+/// type MyMesh = mesh![dp = 2, tp = 4];
+/// ```
+#[proc_macro]
+pub fn mesh(input: TokenStream) -> TokenStream {
+    mesh::mesh(input)
+}
+
+/// Constructs a compile-time tensor placement.
+///
+/// Supports `Local`, `Replicated on Mesh`, `Sharded(axis) on Mesh`, `Partial(Op) on Mesh`,
+/// and `PipelineStage(index) on Mesh`.
+///
+/// ## Examples
+/// ```text
+/// type P1 = placement![Local];
+/// type P2 = placement![Replicated on MyMesh];
+/// type P3 = placement![Sharded(0) on MyMesh];
+/// type P4 = placement![Partial(Sum) on MyMesh];
+/// type P5 = placement![PipelineStage(0) on MyMesh];
+/// ```
+#[proc_macro]
+pub fn placement(input: TokenStream) -> TokenStream {
+    placement::placement(input)
+}
+
+/// Constructs a tuple of type-level named axes.
+///
+/// Accepts a comma-separated list of axis tag identifiers.
+///
+/// ## Examples
+/// ```text
+/// type ImageAxes = axes![Batch, Channels, Height, Width];
+/// ```
+#[proc_macro]
+pub fn axes(input: TokenStream) -> TokenStream {
+    axes::axes(input)
+}
+
+/// A macro that validates an einsum subscript at compile time.
+///
+/// Parses the subscript string (e.g., `"ij,jk->ik"`) at expand time,
+/// checking that:
+/// - exactly one `->` separator exists,
+/// - the number of comma-separated input groups matches the operand count,
+/// - every output index appears in the input side.
+///
+/// The macro expands to a tuple `(subscript_str, operand0, operand1, ...)` so
+/// callers can destructure it or pass it to a contraction backend.
+///
+/// ## Examples
+/// ```text
+/// let (sub, a, b) = einsum!("ij,jk->ik"; mat_a, mat_b);
+/// assert_eq!(sub, "ij,jk->ik");
+/// ```
+#[proc_macro]
+pub fn einsum(input: TokenStream) -> TokenStream {
+    einsum::einsum(input)
+}
+
+/// Evaluates a computation block in a parallel mesh context.
+///
+/// Accepts `parallel!(mesh => { ... })` or `parallel!({ ... })`.
+///
+/// ## Examples
+/// ```text
+/// let val = parallel!(mesh => { 42 });
+/// assert_eq!(val, 42);
+/// ```
+#[proc_macro]
+pub fn parallel(input: TokenStream) -> TokenStream {
+    parallel_block::parallel_block(input)
+}
+

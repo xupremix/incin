@@ -44,6 +44,142 @@ fn parse_arguments(attr: TokenStream) -> syn::Result<(bool, bool)> {
     Ok((internal, no_stats))
 }
 
+fn parse_parallel_attr(a: &syn::Attribute) -> syn::Result<()> {
+    if a.meta.require_path_only().is_ok() {
+        return Ok(());
+    }
+    let nested =
+        a.parse_args_with(syn::punctuated::Punctuated::<syn::Meta, Token![,]>::parse_terminated)?;
+    for meta in nested {
+        let path = meta.path();
+        let key = path.segments.last().map(|s| s.ident.to_string());
+        match key.as_deref() {
+            Some("mesh" | "stage" | "dp" | "tp" | "pp") => {}
+            Some(other) => {
+                return Err(syn::Error::new_spanned(
+                    meta,
+                    format!(
+                        "unknown attribute argument for #[parallel], expected one of mesh, stage, dp, tp, pp (found `{other}`)"
+                    ),
+                ));
+            }
+            None => {
+                return Err(syn::Error::new_spanned(
+                    meta,
+                    "invalid attribute argument for #[parallel]",
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn parse_shard_attr(a: &syn::Attribute) -> syn::Result<()> {
+    if a.meta.require_path_only().is_ok() {
+        return Ok(());
+    }
+    let nested =
+        a.parse_args_with(syn::punctuated::Punctuated::<syn::Meta, Token![,]>::parse_terminated)?;
+    for meta in nested {
+        let path = meta.path();
+        let key = path.segments.last().map(|s| s.ident.to_string());
+        match key.as_deref() {
+            Some("mesh" | "axis") => {}
+            Some(other) => {
+                return Err(syn::Error::new_spanned(
+                    meta,
+                    format!(
+                        "unknown attribute argument for #[shard], expected one of mesh, axis (found `{other}`)"
+                    ),
+                ));
+            }
+            None => {
+                return Err(syn::Error::new_spanned(
+                    meta,
+                    "invalid attribute argument for #[shard]",
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn process_field_attributes(attrs: &mut Vec<syn::Attribute>) -> Result<bool, syn::Error> {
+    let mut ignore = false;
+    let mut has_parallel = false;
+    let mut has_shard = false;
+    let mut err = None;
+
+    attrs.retain(|a| {
+        if err.is_some() {
+            return true;
+        }
+        let seg = a.path().segments.last();
+        if let Some(seg) = seg {
+            let ident_str = seg.ident.to_string();
+            match ident_str.as_str() {
+                "module" => match a.parse_args::<syn::Ident>() {
+                    Ok(i) if i == "ignore" => {
+                        ignore = true;
+                        false
+                    }
+                    Ok(i) => {
+                        err = Some(syn::Error::new_spanned(
+                            i,
+                            "unknown attribute argument for #[module], expected `ignore`",
+                        ));
+                        false
+                    }
+                    Err(e) => {
+                        err = Some(syn::Error::new_spanned(
+                            a,
+                            format!("invalid #[module] attribute: {}", e),
+                        ));
+                        false
+                    }
+                },
+                "parallel" => {
+                    if has_shard {
+                        err = Some(syn::Error::new_spanned(
+                            a,
+                            "conflicting attributes `#[parallel]` and `#[shard]` on the same field",
+                        ));
+                        return false;
+                    }
+                    has_parallel = true;
+                    if let Err(e) = parse_parallel_attr(a) {
+                        err = Some(e);
+                    }
+                    false
+                }
+                "shard" => {
+                    if has_parallel {
+                        err = Some(syn::Error::new_spanned(
+                            a,
+                            "conflicting attributes `#[parallel]` and `#[shard]` on the same field",
+                        ));
+                        return false;
+                    }
+                    has_shard = true;
+                    if let Err(e) = parse_shard_attr(a) {
+                        err = Some(e);
+                    }
+                    false
+                }
+                _ => true,
+            }
+        } else {
+            true
+        }
+    });
+
+    if let Some(e) = err {
+        Err(e)
+    } else {
+        Ok(ignore)
+    }
+}
+
 pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
     let (is_internal, no_stats) = match parse_arguments(attr) {
         Ok(parsed) => parsed,
@@ -112,32 +248,10 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
         match &mut data.fields {
             syn::Fields::Named(fields) => {
                 for field in &mut fields.named {
-                    let mut ignore = false;
-                    let mut error_tokens = None;
-                    field.attrs.retain(|a| {
-                        if a.path().segments.last().map(|s| s.ident == "module").unwrap_or(false) {
-                            match a.parse_args::<syn::Ident>() {
-                                Ok(i) if i == "ignore" => {
-                                    ignore = true;
-                                    false
-                                }
-                                Ok(i) => {
-                                    error_tokens = Some(syn::Error::new_spanned(i, "unknown attribute argument for #[module], expected `ignore`").to_compile_error());
-                                    false
-                                }
-                                Err(e) => {
-                                    error_tokens = Some(syn::Error::new_spanned(a, format!("invalid #[module] attribute: {}", e)).to_compile_error());
-                                    false
-                                }
-                            }
-                        } else {
-                            true
-                        }
-                    });
-
-                    if let Some(err) = error_tokens {
-                        return TokenStream::from(err);
-                    }
+                    let ignore = match process_field_attributes(&mut field.attrs) {
+                        Ok(ig) => ig,
+                        Err(e) => return TokenStream::from(e.to_compile_error()),
+                    };
 
                     let fname = &field.ident;
                     let fname_str = fname
@@ -223,34 +337,13 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
             }
             syn::Fields::Unnamed(fields) => {
                 for (i, field) in fields.unnamed.iter_mut().enumerate() {
-                    let mut ignore = false;
-                    let mut error_tokens = None;
-                    field.attrs.retain(|a| {
-                        if a.path().segments.last().map(|s| s.ident == "module").unwrap_or(false) {
-                            match a.parse_args::<syn::Ident>() {
-                                Ok(i) if i == "ignore" => {
-                                    ignore = true;
-                                    false
-                                }
-                                Ok(i) => {
-                                    error_tokens = Some(syn::Error::new_spanned(i, "unknown attribute argument for #[module], expected `ignore`").to_compile_error());
-                                    false
-                                }
-                                Err(e) => {
-                                    error_tokens = Some(syn::Error::new_spanned(a, format!("invalid #[module] attribute: {}", e)).to_compile_error());
-                                    false
-                                }
-                            }
-                        } else {
-                            true
-                        }
-                    });
-
-                    if let Some(err) = error_tokens {
-                        return TokenStream::from(err);
-                    }
+                    let ignore = match process_field_attributes(&mut field.attrs) {
+                        Ok(ig) => ig,
+                        Err(e) => return TokenStream::from(e.to_compile_error()),
+                    };
 
                     let idx = syn::Index::from(i);
+
                     let idx_str = i.to_string();
 
                     if ignore {

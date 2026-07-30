@@ -31,7 +31,6 @@ and third-party backends are opt-in. Enabling an accelerator does not change
 | `cuda` | no | Enables the native CUDA backend. CUDA is never enabled implicitly. |
 | `wgpu` | no | Enables the cross-platform WGPU backend. WGPU is never enabled implicitly. |
 | `external-candle` | no | Enables the external Candle backend at `incin::external::candle`. |
-| `candle` | no | Deprecated alias for `external-candle`. Removed at REL-002; see PROPOSALS.md D-014. |
 | `autotune` | no | Enables CUDA launch autotuning. |
 | `train` | no | Enables the automatic `Trainer` at `incin::train`. Preview tier: useful and tested, but the interface may change without a migration path. |
 | `distributed` | no | Enables typed meshes, static/runtime tensor placements, and distributed lowering proofs. Transports remain separate opt-in backend features. |
@@ -59,9 +58,9 @@ incin = { version = "0.0.0", features = ["external-candle"] }
 ### Lower-level crate features
 
 <!-- BEGIN GENERATED: crate-features -->
-- `incin-backends`: defaults to `std,cpu`; optional `cpu-blas`, `cuda`, `wgpu`, `autotune`, `external-candle`, `candle`, `telemetry`, `distributed`, `distributed-reference`, and `distributed-nccl`.
+- `incin-backends`: defaults to `std,cpu`; optional `cpu-blas`, `cuda`, `wgpu`, `autotune`, `external-candle`, `telemetry`, `distributed`, `distributed-reference`, and `distributed-nccl`.
 - `incin-core`: defaults to `std`; optional `nightly`, `paranoid-validation`, `distributed`, `cuda`, and `wgpu`.
-- `incin-macros`: defaults to `std`; optional `nightly`.
+- `incin-macros`: defaults to `std`; optional `nightly` and `distributed`.
 - `incin-diagnostics`: defaults to `std`.
 - `incin-data`, `incin-telemetry`, `incin-viz`, `incin-viz-plugin-api`, and `incin-lsp` expose no Cargo features.
 <!-- END GENERATED: crate-features -->

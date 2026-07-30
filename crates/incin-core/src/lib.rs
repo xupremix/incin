@@ -13,10 +13,12 @@ pub(crate) extern crate alloc;
 
 pub(crate) mod err;
 
+pub mod compiled;
 pub mod dist;
 pub mod distributions;
 pub mod exec;
-pub(crate) mod graph;
+pub mod graph;
+
 #[cfg(feature = "std")]
 pub mod io;
 pub mod metrics;
@@ -27,7 +29,8 @@ pub(crate) mod onnx_exporter;
 pub(crate) mod onnx_pb;
 pub mod optim;
 pub(crate) mod serialize;
-pub(crate) mod shapes;
+pub mod shapes;
+
 pub(crate) mod tensor;
 pub use typenum;
 
@@ -40,9 +43,20 @@ pub mod loss {
 pub mod prelude {
     pub use super::err::*;
     pub use crate::SeqTy;
+    pub use crate::compiled::{
+        AllocationPlanner, ArtifactHeader, ArtifactVersion, BufferSlot, CapturedGraph,
+        CapturedNode, CompileOptions, CompiledArtifact, CompiledPlan, ConstantFolder,
+        DynamicShapePolicy, FusedKernel, FusionBlocker, FusionCandidate, FusionPass, FusionPolicy,
+        LivenessInterval, LivenessMap, MemoryPlan, SavedTensorSet, ShapeBucket, ShapeGuard,
+        WeightPrepacker,
+    };
+
     pub use crate::dim;
+
     pub use crate::dist::{Local, Placement, PlacementKind};
     pub use crate::distributions::{Bernoulli, Distribution, Exponential, Gumbel, Normal, Uniform};
+    pub use crate::exec::{LossScaling, PrecisionPolicy};
+
     pub use crate::graph::{Graph, OpType};
     pub use crate::metrics::{Accuracy, ConfusionMatrix, F1Score, MSE, Metric, Precision, Recall};
     pub use crate::nn::{

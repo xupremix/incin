@@ -2062,6 +2062,7 @@ name = "incin-macros"
 version = "0.0.0"
 dependencies = [
  "incin",
+ "incin-core",
  "onnx-pb",
  "proc-macro2",
  "prost 0.6.1",

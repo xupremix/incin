@@ -3261,16 +3261,18 @@ Silicon · `compile` compiled execution · `grad` autograd · `dist` distributed
 | EXE-006 | core | exec | [x] | EXE-002,EXE-005 | `crates/incin-core/src/tensor/backend.rs` | Split storage, Execute<O>, and Capabilities out of the 254-method supertrait; give SupportsDType<K> real per-backend impls | `cargo test -p incin-core --test compile_tests` |
 | EXE-007 | core | exec | [x] | EXE-003,EXE-004,EXE-006 | `crates/incin-backends/src/cpu/` | Migrate the CPU vertical slice with parity and overhead evidence | `cargo test -p incin-backends --no-default-features --features std,cpu` |
 | EXE-008 | core | exec | [x] | EXE-007 | `crates/incin-backends/src/{cuda,wgpu,external}/; crates/incin-backends/src/dispatch.rs` | Migrate CUDA, WGPU, dispatch, and external adapters; replace the F32-hardcoded byte arithmetic with checked dtype.size_bytes() | `cargo test -p incin-backends --no-default-features --features std,cpu,wgpu` |
-| EXE-009 | core | exec | [~] | EXE-008 | `crates/incin-core/src/tensor/backend.rs; crates/incin-backends/src/dispatch.rs` | Remove the monolithic adapter and the default unsupported-operation surface | `cargo test --workspace` |
+| EXE-009 | core | exec | [x] | EXE-008 | `crates/incin-core/src/tensor/backend.rs; crates/incin-backends/src/dispatch.rs` | Remove the monolithic adapter and the default unsupported-operation surface | `cargo test --workspace` |
 | EXE-010 | preview | exec | [x] | EXE-008 | `crates/incin-backends/src/external/` | external-candle SDK conformance suite and a backend-authoring template | `cargo test -p incin-backends --features external-candle --test conformance` |
 | TUN-000 | preview | tune | [x] | — | `crates/incin-backends/src/tuning.rs` | Existing CUDA tuner inventoried: 2 warmups, 7 samples, median selection, 1024-entry cache, single-flight coordination | `cargo test -p incin-backends --features autotune` |
 | TUN-001 | preview | tune | [x] | GOV-004 | `crates/incin-backends/src/tuning/identity.rs` | Stable device, compiler, and topology identities replacing ordinal plus compute capability; alias tests | `cargo test -p incin-backends --features autotune --test tuning_identity` |
 | TUN-002 | preview | tune | [x] | TUN-001 | `crates/incin-backends/src/tuning/cache.rs` | Atomic bounded persistent cache with corruption, schema, and eviction tests | `cargo test -p incin-backends --features autotune --test tuning_cache` |
 | TUN-003 | preview | tune | [x] | EXE-005,TUN-002 | `crates/incin-backends/src/tuning/service.rs` | General disabled, heuristic, coordinated-warmup, and profile-guided tuning service | `cargo test -p incin-backends --features autotune --test tuning_service` |
-| TUN-004 | preview | tune | [ ] | EXE-003,TUN-003 | `crates/incin-backends/src/tuning/signature.rs` | Shape and layout driven legal-candidate pruning; extends KernelKey rather than adding a parallel KernelSignature | `cargo test -p incin-backends --features autotune --test tuning_pruning` |
+| TUN-004 | preview | tune | [x] | EXE-003,TUN-003 | `crates/incin-backends/src/tuning/signature.rs` | Shape and layout driven legal-candidate pruning; extends KernelKey rather than adding a parallel KernelSignature | `cargo test -p incin-backends --features autotune --test tuning_pruning` |
+
 | TUN-005 | preview | tune | [ ] | TUN-004 | `crates/incin-backends/src/cuda/ops/` | Pointwise, reduction, and normalization CUDA tuning parity | `cargo test -p incin-backends --features cuda,autotune  # CUDA hardware` |
 | TUN-006 | preview | tune | [ ] | TUN-005 | `crates/incin-backends/src/cuda/ops/{matmul,conv}.rs` | GEMM and convolution library-versus-native tuning with a crossover report | `cargo test -p incin-backends --features cuda,autotune  # CUDA hardware` |
-| TUN-007 | preview | tune | [ ] | TUN-003 | `crates/incin-backends/src/tuning/telemetry.rs` | Tuning telemetry, provenance, and explain output | `cargo test -p incin-backends --features autotune,telemetry` |
+| TUN-007 | preview | tune | [x] | TUN-003 | `crates/incin-backends/src/tuning/telemetry.rs` | Tuning telemetry, provenance, and explain output | `cargo test -p incin-backends --features autotune,telemetry` |
+
 | TUN-008 | preview | tune | [ ] | TUN-006,GOV-005 | `.github/workflows/ci.yml` | Time, memory, and cache budgets with a no-regression gate | `cargo xtask budgets` |
 | PRF-001 | core | perf | [x] | EXE-003,EXE-004 | `crates/incin-backends/src/iteration.rs` | Remove repeated hot-path metadata allocation; latency and allocation evidence | `cargo bench -p incin -- eager` |
 | PRF-002 | core | perf | [x] | EXE-007 | `crates/incin-backends/src/cpu/ops/matmul.rs` | CPU iteration plans, batched GEMM, optional cpu-blas, and isolated bare-CPU tests | `cargo test -p incin-backends --no-default-features --features std,cpu` |
@@ -3282,19 +3284,26 @@ Silicon · `compile` compiled execution · `grad` autograd · `dist` distributed
 | MTL-004 | preview | metal | [ ] | MTL-002,MTL-003,GRD-003 | `crates/incin-backends/src/metal/` | Metal forward and backward hardware parity with no hidden readback | `cargo test -p incin-backends --features metal  # Apple Silicon` |
 | MTL-005 | preview | metal | [ ] | MTL-003,TUN-003 | `crates/incin-backends/src/metal/tuning.rs` | Metal kernel and storage-mode autotuning with a fingerprinted cache | `cargo test -p incin-backends --features metal  # Apple Silicon` |
 | MTL-006 | preview | metal | [ ] | MTL-004,MTL-005 | `docs/; README.md` | Apple Silicon UX, docs, and laptop plus desktop hardware baselines | `cargo bench -p incin --features metal  # Apple Silicon` |
-| CMP-001 | preview | compile | [ ] | EXE-009 | `crates/incin-core/src/compiled/capture.rs` | Capture the eager graph into validated IR with descriptor parity | `cargo test -p incin-core --test compiled_capture` |
-| CMP-002 | preview | compile | [ ] | CMP-001 | `crates/incin-core/src/compiled/plan.rs` | Immutable compiled plans and dynamic guards | `cargo test -p incin-core --test compiled_guards` |
-| CMP-003 | preview | compile | [ ] | CMP-002,PRF-001 | `crates/incin-core/src/compiled/alloc.rs` | Liveness and allocation planner with alias and peak-memory tests | `cargo test -p incin-core --test compiled_alloc` |
-| CMP-004 | preview | compile | [ ] | CMP-002 | `crates/incin-core/src/compiled/fold.rs` | Constant folding, weight prepacking, and bounded shape buckets | `cargo test -p incin-core --test compiled_fold` |
-| CMP-005 | preview | compile | [ ] | CMP-003,CMP-004 | `crates/incin-core/src/compiled/fusion.rs` | Safe fusion and backward hooks; gradient parity and launch-count reduction | `cargo test -p incin-core --test compiled_fusion` |
-| CMP-006 | preview | compile | [ ] | CMP-005 | `crates/incin-core/src/compiled/artifact.rs` | Versioned compiled artifacts with compatibility and corruption tests | `cargo test -p incin-core --test compiled_artifact` |
+| CMP-001 | preview | compile | [x] | EXE-009 | `crates/incin-core/src/compiled/capture.rs` | Capture the eager graph into validated IR with descriptor parity | `cargo test -p incin-core --test compiled_capture` |
+
+| CMP-002 | preview | compile | [x] | CMP-001 | `crates/incin-core/src/compiled/plan.rs` | Immutable compiled plans and dynamic guards | `cargo test -p incin-core --test compiled_guards` |
+
+| CMP-003 | preview | compile | [x] | CMP-002,PRF-001 | `crates/incin-core/src/compiled/alloc.rs` | Liveness and allocation planner with alias and peak-memory tests | `cargo test -p incin-core --test compiled_alloc` |
+
+| CMP-004 | preview | compile | [x] | CMP-002 | `crates/incin-core/src/compiled/fold.rs` | Constant folding, weight prepacking, and bounded shape buckets | `cargo test -p incin-core --test compiled_fold` |
+
+| CMP-005 | preview | compile | [x] | CMP-003,CMP-004 | `crates/incin-core/src/compiled/fusion.rs` | Safe fusion and backward hooks; gradient parity and launch-count reduction | `cargo test -p incin-core --test compiled_fusion` |
+
+| CMP-006 | preview | compile | [x] | CMP-005 | `crates/incin-core/src/compiled/artifact.rs` | Versioned compiled artifacts with compatibility and corruption tests | `cargo test -p incin-core --test compiled_artifact` |
+
 | GRD-001 | core | grad | [x] | EXE-006 | `crates/incin-core/src/exec/context.rs` | Explicit ExecutionContext with nested and concurrent tests | `cargo test -p incin-core --test exec_context` |
 | GRD-002 | core | grad | [x] | GRD-001 | `crates/incin-core/src/exec/context.rs; crates/incin-core/src/tensor/grad.rs` | G to GradMode propagation; NoGrad records zero nodes and saves nothing | `cargo test -p incin-core --test nograd_records_nothing` |
 | GRD-003 | core | grad | [x] | GRD-001 | `crates/incin-core/src/exec/tape.rs` | Backend-neutral tape nodes with CPU parity | `cargo test -p incin-backends --no-default-features --features std,cpu --test gradient_parity` |
 | GRD-004 | core | grad | [x] | GRD-003,EXE-008 | `crates/incin-backends/src/{cuda,wgpu}/` | CUDA and WGPU gradient recipes with hardware parity | `cargo test -p incin-backends --features wgpu --test gradient_parity` |
 | GRD-005 | core | grad | [x] | GRD-003 | `crates/incin-core/src/exec/tape.rs` | Structured backward and NaN failures; no expected-failure panic paths | `cargo test -p incin-core --test backward_errors` |
-| GRD-006 | core | grad | [ ] | GRD-004 | `crates/incin-backends/src/{cpu,cuda,wgpu}/tape.rs` | Saved-tensor lifetime owned by the graph; delete all three backend-local tapes | `cargo test --workspace` |
-| GRD-007 | preview | grad | [ ] | GRD-006,CMP-003 | `crates/incin-core/src/compiled/alloc.rs` | Compiled-graph saved-tensor liveness and fusion integration | `cargo test -p incin-core --test compiled_alloc` |
+| GRD-006 | core | grad | [x] | GRD-004 | `crates/incin-backends/src/{cpu,cuda,wgpu}/tape.rs` | Saved-tensor lifetime owned by the graph; delete all three backend-local tapes | `cargo test --workspace` |
+| GRD-007 | preview | grad | [x] | GRD-006,CMP-003 | `crates/incin-core/src/compiled/alloc.rs` | Compiled-graph saved-tensor liveness and fusion integration | `cargo test -p incin-core --test compiled_alloc` |
+
 | DST-001 | preview | dist | [x] | GOV-002,SHP-007 | `crates/incin-core/src/dist/mesh.rs` | Typed meshes and ValidMesh; valid and invalid world-size compile tests | `cargo test -p incin-core --features distributed --test mesh_compile` |
 | DST-002 | preview | dist | [x] | DST-001,EXE-005 | `crates/incin-core/src/dist/mesh.rs` | Physical binding, topology fingerprint, and runtime guards | `cargo test -p incin-core --features distributed --test mesh_bind` |
 | DST-003 | preview | dist | [x] | DST-001,EXE-002 | `crates/incin-core/src/dist/placement.rs; crates/incin-core/src/dist/rule.rs` | Placement typestates, PlacementKind, and rules; divisibility and transition compile tests; ValidatedDistributed sealed like Validated | `cargo test -p incin-core --features distributed --test placement_rules` |
@@ -3312,20 +3321,27 @@ Silicon · `compile` compiled execution · `grad` autograd · `dist` distributed
 | DST-015 | preview | dist | [~] | DST-011 | `crates/incin-core/src/dist/context.rs` | Multi-process rendezvous and launcher with timeout and shutdown tests | `cargo test -p incin --features distributed-nccl --test rendezvous` |
 | DST-016 | preview | dist | [ ] | DST-011,DST-015 | `crates/incin-core/src/nn/save.rs` | Global checkpoint manifest and explicit cross-mesh resharded load | `cargo test -p incin-core --test checkpoint_reshard` |
 | UX-001 | preview | ux | [x] | EXE-005 | `crates/incin/src/train.rs` | Automatic Trainer; an unchanged model runs on CPU and on three GPUs | `cargo test -p incin --features train --test trainer` |
-| UX-002 | preview | ux | [ ] | DST-001 | `crates/incin-macros/src/mesh.rs` | mesh! with expansion, hygiene, span, and compile-fail tests | `cargo test -p incin-macros --test mesh_macro` |
-| UX-003 | preview | ux | [ ] | DST-003 | `crates/incin-macros/src/placement.rs` | placement! grammar and operation-bound diagnostics | `cargo test -p incin-macros --test placement_macro` |
-| UX-004 | preview | ux | [ ] | DST-003 | `crates/incin-macros/src/module.rs` | #[parallel] and #[shard] template and conflict tests | `cargo test -p incin-macros --test parallel_attrs` |
+| UX-002 | preview | ux | [x] | DST-001 | `crates/incin-macros/src/mesh.rs` | mesh! with expansion, hygiene, span, and compile-fail tests | `cargo test -p incin-macros --test mesh_macro` |
+
+| UX-003 | preview | ux | [x] | DST-003 | `crates/incin-macros/src/placement.rs` | placement! grammar and operation-bound diagnostics | `cargo test -p incin-macros --test placement_macro` |
+
+| UX-004 | preview | ux | [x] | DST-003 | `crates/incin-macros/src/module.rs` | #[parallel] and #[shard] template and conflict tests | `cargo test -p incin-macros --test parallel_attrs` |
+
 | UX-005 | preview | ux | [ ] | DST-011,UX-001 | `crates/incin/src/bin/cargo-incin.rs` | .explain() and cargo incin plan with golden text and JSON reports | `cargo test -p incin --test plan_report` |
 | UX-006 | preview | ux | [ ] | TUN-007,UX-005 | `crates/incin/src/bin/cargo-incin.rs` | cargo incin tune with an offline and stale-cache round trip | `cargo test -p incin --test tune_cli` |
 | UX-007 | preview | ux | [ ] | DST-015 | `crates/incin-macros/src/distributed_main.rs` | Launcher and #[distributed_main] with shutdown and error tests | `cargo test -p incin-macros --test distributed_main` |
 | UX-008 | preview | ux | [ ] | CMP-002,DST-011 | `crates/incin-core/src/compiled/manifest.rs` | Reproducibility manifest replay and incompatibility diffs | `cargo test -p incin-core --test manifest_replay` |
-| UX-009 | preview | ux | [ ] | SHP-007 | `crates/incin-macros/src/axes.rs` | Named axes! with ambiguous and missing-axis diagnostics | `cargo test -p incin-macros --test axes_macro` |
-| UX-010 | exploratory | ux | [ ] | EXE-003,DST-003 | `crates/incin-macros/src/einsum.rs` | Typed einsum! with parser, shape, placement, and parity tests. Requires a recorded justification before starting | `cargo test -p incin-macros --test einsum_macro` |
-| UX-011 | exploratory | ux | [ ] | DST-004 | `crates/incin-macros/src/parallel_block.rs` | Evaluate parallel!; implement only with recorded usability evidence | `cargo test -p incin-macros --test parallel_block` |
+| UX-009 | preview | ux | [x] | SHP-007 | `crates/incin-macros/src/axes.rs` | Named axes! with ambiguous and missing-axis diagnostics | `cargo test -p incin-macros --test axes_macro` |
+
+| UX-010 | exploratory | ux | [x] | EXE-003,DST-003 | `crates/incin-macros/src/einsum.rs` | Typed einsum! with parser, shape, placement, and parity tests. Requires a recorded justification before starting | `cargo test -p incin-macros --test einsum_macro` |
+
+| UX-011 | exploratory | ux | [x] | DST-004 | `crates/incin-macros/src/parallel_block.rs` | Evaluate parallel!; implement only with recorded usability evidence | `cargo test -p incin-macros --test parallel_block` |
+
 | UX-012 | preview | ux | [ ] | UX-005,UX-006 | `crates/incin-viz/src/` | Visualize placement, memory, timeline, and critical path | `cargo test -p incin-viz` |
 | UX-013 | core | ux | [x] | GOV-005,EXE-005,UX-014 | `docs/; README.md` | Feature and capability documentation generated from tested registrations, with compiled examples | `cargo test --workspace --doc` |
 | UX-014 | core | ux | [x] | EXE-005 | `crates/incin/src/bin/cargo-incin.rs` | cargo incin doctor with stable text and JSON output and mocked hardware tests | `cargo test -p incin --test doctor` |
-| UX-015 | preview | ux | [ ] | EXE-005,GRD-001 | `crates/incin-core/src/exec/precision.rs` | PrecisionPolicy and loss scaling extending the existing DTypePolicy; mixed-precision parity tests | `cargo test -p incin-core --test precision_policy` |
+| UX-015 | preview | ux | [x] | EXE-005,GRD-001 | `crates/incin-core/src/exec/precision.rs` | PrecisionPolicy and loss scaling extending the existing DTypePolicy; mixed-precision parity tests | `cargo test -p incin-core --test precision_policy` |
+
 | CI-001 | core | ci | [x] | GOV-005,GOV-003 | `.github/workflows/ci.yml` | Feature-powerset CI preserving the bare CPU default; adds cargo doc and drops blanket package exclusions | `act -j powerset  # or CI run` |
 | CI-002 | core | ci | [x] | EXE-008 | `.github/workflows/hardware.yml` | Scheduled CUDA and WGPU hardware matrix | `gh workflow run hardware.yml` |
 | CI-003 | preview | ci | [ ] | DST-008,DST-009,DST-010 | `.github/workflows/hardware.yml` | Two network-accessible CUDA ranks for DP, TP, and PP CI | `gh workflow run hardware.yml -f job=dist2-network` |
@@ -3333,9 +3349,12 @@ Silicon · `compile` compiled execution · `grad` autograd · `dist` distributed
 | CI-005 | core | ci | [x] | GOV-005 | `crates/incin-macros/tests/` | Macro trybuild, rustfmt, rename, and hygiene suite for the existing s!, idx!, and #[module] | `cargo test -p incin-macros` |
 | CI-006 | preview | ci | [ ] | GOV-005,TUN-008,DST-013 | `.github/workflows/ci.yml` | CPU, GPU, and distributed performance and cache gates | `cargo xtask budgets` |
 | CI-007 | preview | ci | [ ] | MTL-004 | `.github/workflows/hardware.yml` | Scheduled Apple Silicon Metal hardware matrix | `gh workflow run hardware.yml -f job=metal` |
-| CI-008 | preview | ci | [ ] | UX-002,UX-003,UX-004 | `crates/incin-macros/tests/` | Distributed macro trybuild suite for mesh!, placement!, #[parallel], and #[shard] | `cargo test -p incin-macros --features distributed` |
-| REL-001 | core | release | [ ] | SHP-008,EXE-009,GRD-006,CI-001,GOV-006,GOV-007 | `CHANGELOG.md; docs/MIGRATION.md` | Core stabilization review and migration guide | `cargo test --workspace && cargo doc --workspace --no-deps` |
-| REL-002 | core | release | [ ] | REL-001,CI-002,CI-005,UX-013,UX-014,PRF-002,GRD-002,GRD-005 | `CHANGELOG.md` | Single-device release-readiness evidence; the deprecated candle alias is removed here | `cargo test --workspace --all-features` |
+| CI-008 | preview | ci | [x] | UX-002,UX-003,UX-004 | `crates/incin-macros/tests/` | Distributed macro trybuild suite for mesh!, placement!, #[parallel], and #[shard] | `cargo test -p incin-macros --features distributed` |
+
+| REL-001 | core | release | [x] | SHP-008,EXE-009,GRD-006,CI-001,GOV-006,GOV-007 | `CHANGELOG.md; docs/MIGRATION.md` | Core stabilization review and migration guide | `cargo test --workspace && cargo doc --workspace --no-deps` |
+
+| REL-002 | core | release | [x] | REL-001,CI-002,CI-005,UX-013,UX-014,PRF-002,GRD-002,GRD-005 | `CHANGELOG.md` | Single-device release-readiness evidence; the deprecated candle alias is removed here | `cargo test --workspace --all-features` |
+
 | REL-003 | preview | release | [ ] | REL-002,CI-003,CI-006,CI-007,CI-008,UX-005,UX-007,UX-008,UX-009,UX-012,UX-015,DST-011,EXE-010,CMP-006,MTL-006,PRF-003,PRF-004,TUN-008,GRD-007 | `CHANGELOG.md` | Distributed preview readiness and the fail-stop contract | `gh workflow run hardware.yml` |
 | REL-004 | preview | release | [ ] | REL-003,CI-004,DST-016 | `CHANGELOG.md` | Multi-node preview scope and recovery limits published | `gh workflow run hardware.yml -f job=multinode` |
 ### Impact versus effort matrix

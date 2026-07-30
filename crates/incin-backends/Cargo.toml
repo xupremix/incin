@@ -33,12 +33,13 @@ cpu-blas = ["std", "cpu", "dep:matrixmultiply"]
 cuda = ["std", "dep:cudarc", "incin-core/cuda"]
 # Enables Incin's cross-platform GPU backend through wgpu.
 wgpu = ["std", "dep:wgpu", "dep:pollster", "incin-core/wgpu"]
+# Enables Incin's native Metal backend for Apple Silicon.
+metal = ["std", "incin-core/metal"]
+
 # Benchmarks legal CUDA launch configurations and caches the selected candidate.
 autotune = ["cuda"]
 # Enables the external Candle backend at `incin_backends::external::candle`.
 external-candle = ["std", "dep:candle-core", "dep:candle-nn"]
-# Deprecated alias for `external-candle`. Removed at REL-002; see PROPOSALS.md D-014.
-candle = ["external-candle"]
 # Connects backend execution and autograd events to `incin-telemetry`.
 telemetry = ["std", "dep:incin-telemetry"]
 # Shared distributed contracts and topology types. Transport implementations

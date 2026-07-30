@@ -49,6 +49,8 @@ pub mod context;
 pub mod meta;
 /// Backend-neutral execution policy vocabulary.
 pub mod policy;
+/// Floating-point precision policies and loss scaling for mixed-precision training.
+pub mod precision;
 /// The sealed wrapper and the provenance it carries.
 pub mod proof;
 /// Checked, type-erased inputs for descriptor execution.
@@ -71,7 +73,9 @@ pub use policy::{
 };
 #[cfg(feature = "std")]
 pub use policy::{check_gradients, no_grad};
+pub use precision::{LossScaling, PrecisionPolicy};
 pub use proof::{ProofLevel, Validated};
+
 pub use request::TensorHandle;
 pub use rule::{
     BroadcastRule, Conv2dArgs, Conv2dRule, MatMulRule, Pool2dRule, ReduceAllRule, ReduceKeepRule,

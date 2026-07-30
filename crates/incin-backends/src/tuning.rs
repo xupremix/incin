@@ -13,6 +13,11 @@ pub mod identity;
 /// Policy-aware kernel, collective, and execution-plan tuning service.
 #[cfg(any(feature = "autotune", test))]
 pub mod service;
+/// Shape and layout driven signatures and candidate pruning.
+pub mod signature;
+/// Tuning telemetry, provenance, and explain formatting.
+#[cfg(any(feature = "autotune", test))]
+pub mod telemetry;
 
 use crate::kernel::KernelAccess;
 #[cfg(any(feature = "autotune", test))]
@@ -95,9 +100,9 @@ impl TuningKey {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub(crate) struct LaunchCandidate {
-    pub(crate) block_size: u16,
-    pub(crate) access: KernelAccess,
+pub struct LaunchCandidate {
+    pub block_size: u16,
+    pub access: KernelAccess,
 }
 
 pub(crate) fn preferred_pointwise_width(dtype: DTypeId) -> u8 {

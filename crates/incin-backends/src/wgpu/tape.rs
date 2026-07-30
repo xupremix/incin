@@ -1,34 +1,47 @@
-use alloc::boxed::Box;
-use alloc::collections::BTreeMap;
-use alloc::collections::btree_map::Entry;
 use alloc::vec::Vec;
 use core::cell::RefCell;
 
-use incin_core::exec::{GradMode, NanPolicy};
-use incin_core::prelude::{BackwardError, NonFiniteSite};
+use incin_core::exec::tape;
+use incin_core::exec::{GradientMap, Tape, TapeNode, TapeStorage};
 use incin_core::prelude::{DTypeId, OperationKind, Result};
 
 use crate::wgpu::dispatch;
 use crate::wgpu::storage::{TensorId, WgpuBuffer, WgpuStorage};
 
-pub struct TapeEntry {
-    pub output_id: TensorId,
-    pub input_ids: Vec<TensorId>,
-    /// Fallible since `GRD-005`: a recipe that cannot produce a gradient
-    /// reports it. `GRD-006` replaces this backend-local type with the core's
-    /// `TapeNode`, which already has this signature.
-    pub backward: Box<dyn Fn(&WgpuStorage) -> Result<Vec<WgpuStorage>> + Send + Sync>,
-}
+/// One recorded operation, as the core defines it.
+pub(crate) type TapeEntry = TapeNode<WgpuStorage>;
 
 thread_local! {
-    static TAPE: RefCell<Vec<TapeEntry>> = const { RefCell::new(Vec::new()) };
+    static TAPE: RefCell<Tape<WgpuStorage>> = const { RefCell::new(Tape::new()) };
 }
 
-/// Number of entries currently on the tape, for tests outside this crate that
-/// have to observe the `GRD-002` guarantee rather than take it on faith.
+/// The three things a reverse walk needs of WGPU storage.
+impl TapeStorage for WgpuStorage {
+    fn id(&self) -> TensorId {
+        self.id
+    }
+
+    fn ones_like(&self) -> Result<Self> {
+        let n = self.shape.iter().product::<usize>();
+        let data: Vec<f32> = vec![1.0; n];
+        let buf = WgpuBuffer::from_slice(&data);
+        Ok(WgpuStorage::new(buf, self.shape.to_vec()))
+    }
+
+    fn accumulate(&self, contribution: &Self) -> Result<Self> {
+        add_wgpu_storage(self, contribution)
+    }
+
+    fn has_non_finite(&self) -> bool {
+        let data: Vec<f32> = self.buffer.to_vec();
+        data.iter().any(|x| x.is_nan() || x.is_infinite())
+    }
+}
+
+/// Number of entries currently on the tape.
 #[must_use]
 pub fn depth() -> usize {
-    TAPE.with(|t| t.borrow().len())
+    TAPE.with(|t| t.borrow().depth())
 }
 
 #[cfg(feature = "telemetry")]
@@ -36,78 +49,48 @@ thread_local! {
     static BACKWARD_STEP: RefCell<usize> = const { RefCell::new(0) };
 }
 
-/// Push a `TapeEntry`, unless the ambient [`GradMode`] forbids recording
-/// (`GRD-002`). One gate per tape rather than one per call site: a `NoGrad`
-/// operation must record nothing whichever of this file's twenty-nine kernels
-/// ran it.
+/// Push a `TapeEntry` unless `GradMode` forbids recording.
 pub fn push(entry: TapeEntry) {
-    if !GradMode::current().records() {
-        return;
-    }
     TAPE.with(|t| t.borrow_mut().push(entry));
     #[cfg(feature = "telemetry")]
     {
-        let depth = TAPE.with(|t| t.borrow().len()) as f64;
+        let depth = depth() as f64;
         let step = BACKWARD_STEP.with(|s| *s.borrow());
         crate::telemetry::emit_scalar(step, "tape/depth", depth);
     }
 }
 
 pub struct WgpuGrads {
-    // Private per B-3 (.agents/API_DESIGN.md "pub(crate) is default"): use
-    // `.get(id)` — downstream crates shouldn't inspect/mutate the internal
-    // BTreeMap beyond the intended query API.
-    pub(crate) grads: BTreeMap<TensorId, WgpuStorage>,
+    pub(crate) grads: GradientMap<WgpuStorage>,
 }
 
 impl WgpuGrads {
     /// Look up the accumulated gradient for a given tensor id, if any.
+    #[must_use]
     pub fn get(&self, id: TensorId) -> Option<&WgpuStorage> {
-        self.grads.get(&id)
+        self.grads.get(id)
+    }
+
+    /// How many tensors the backward pass reached.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.grads.len()
+    }
+
+    /// Whether it reached none.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.grads.is_empty()
     }
 }
 
 pub fn backward(loss: &WgpuStorage) -> Result<WgpuGrads> {
-    let mut grads: BTreeMap<TensorId, WgpuStorage> = BTreeMap::new();
-
-    // Seed with ones
-    let n = loss.shape.iter().product::<usize>();
-    let data: Vec<f32> = vec![1.0; n];
-    let buf = WgpuBuffer::from_slice(&data);
-    grads.insert(loss.id, WgpuStorage::new(buf, loss.shape.to_vec()));
-
-    let entries = TAPE.with(|t| core::mem::take(&mut *t.borrow_mut()));
     #[cfg(feature = "telemetry")]
-    let n_ops = entries.len();
+    let n_ops = depth();
 
-    // Read once for the whole pass, exactly as the core walk does: the point
-    // of `GRD-005` making this a policy is that every backend answers the same
-    // question the same way.
-    let checked = NanPolicy::current().checks();
+    let nodes = TAPE.with(|t| t.borrow_mut().drain());
+    let grads = tape::backward(nodes, loss)?;
 
-    for entry in entries.into_iter().rev() {
-        let Some(grad_out) = grads.get(&entry.output_id).cloned() else {
-            continue;
-        };
-        let input_grads = (entry.backward)(&grad_out)?;
-        for (input_id, g) in entry.input_ids.into_iter().zip(input_grads) {
-            if checked {
-                check_finite(&g, input_id, NonFiniteSite::Contribution)?;
-            }
-            match grads.entry(input_id) {
-                Entry::Occupied(mut slot) => {
-                    let accumulated = add_wgpu_storage(slot.get(), &g)?;
-                    if checked {
-                        check_finite(&accumulated, input_id, NonFiniteSite::Accumulation)?;
-                    }
-                    slot.insert(accumulated);
-                }
-                Entry::Vacant(slot) => {
-                    slot.insert(g);
-                }
-            }
-        }
-    }
     #[cfg(feature = "telemetry")]
     {
         let step = BACKWARD_STEP.with(|s| {
@@ -130,24 +113,6 @@ fn emit_backward_telemetry(step: usize, n_ops: usize) {
             crate::telemetry::emit_graph_snapshot(g);
         }
     }
-}
-
-/// Report the tensor whose gradient went non-finite.
-///
-/// A returned error since `GRD-005`, where this was a `panic!` reachable only
-/// through a second `backward_with_nan_check` entry point. Reading the buffer
-/// back is why the policy defaults to permitting: on this backend the check is
-/// a full device-to-host copy per gradient.
-fn check_finite(storage: &WgpuStorage, id: TensorId, site: NonFiniteSite) -> Result<()> {
-    let data: Vec<f32> = storage.buffer.to_vec();
-    if data.iter().any(|x| x.is_nan() || x.is_infinite()) {
-        return Err(BackwardError::NonFinite {
-            tensor: id.get(),
-            operation: site,
-        }
-        .into());
-    }
-    Ok(())
 }
 
 fn add_wgpu_storage(a: &WgpuStorage, b: &WgpuStorage) -> Result<WgpuStorage> {

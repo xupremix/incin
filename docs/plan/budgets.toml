@@ -340,10 +340,6 @@ name = "external-candle"
 enables = ["std", "dep:candle-core", "dep:candle-nn"]
 
 [[feature_crate.feature]]
-name = "candle"
-enables = ["external-candle"]
-
-[[feature_crate.feature]]
 name = "telemetry"
 enables = ["std", "dep:incin-telemetry"]
 
@@ -391,10 +387,6 @@ enables = ["incin-backends/wgpu"]
 [[feature_crate.feature]]
 name = "external-candle"
 enables = ["std", "incin-backends/external-candle"]
-
-[[feature_crate.feature]]
-name = "candle"
-enables = ["external-candle"]
 
 [[feature_crate.feature]]
 name = "autotune"

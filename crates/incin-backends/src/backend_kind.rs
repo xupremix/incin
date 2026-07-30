@@ -103,12 +103,51 @@ where
 {
     type Backend = crate::cuda::CudaBackendImpl<T, CudaN<N>>;
 }
+#[cfg(feature = "metal")]
+use incin_core::prelude::{Metal, MetalN};
+
+#[cfg(feature = "metal")]
+impl<T: DType> sealed::Sealed<T> for Metal {}
+
+#[cfg(feature = "metal")]
+impl<T: DType> BackendFor<T> for Metal {
+    type Backend = crate::metal::MetalBackendImpl<T, Metal>;
+}
+
+#[cfg(feature = "metal")]
+impl<T: DType, N> sealed::Sealed<T> for MetalN<N> where
+    N: incin_core::typenum::Unsigned
+        + 'static
+        + Send
+        + Sync
+        + Clone
+        + Eq
+        + PartialEq
+        + core::fmt::Debug
+{
+}
+
+#[cfg(feature = "metal")]
+impl<T: DType, N> BackendFor<T> for MetalN<N>
+where
+    N: incin_core::typenum::Unsigned
+        + 'static
+        + Send
+        + Sync
+        + Clone
+        + Eq
+        + PartialEq
+        + core::fmt::Debug,
+{
+    type Backend = crate::metal::MetalBackendImpl<T, MetalN<N>>;
+}
 
 impl<T: DType> sealed::Sealed<T> for Dyn {}
 
 impl<T: DType> BackendFor<T> for Dyn {
     type Backend = crate::dispatch::DispatchBackend<T, Dyn>;
 }
+
 
 macro_rules! impl_transfer {
     ($source:ty) => {
@@ -194,7 +233,10 @@ impl_transfer!(crate::cpu::CpuBackendImpl<T, D>);
 impl_transfer!(crate::wgpu::WgpuBackendImpl<T, D>);
 #[cfg(feature = "cuda")]
 impl_transfer!(crate::cuda::CudaBackendImpl<T, D>);
+#[cfg(feature = "metal")]
+impl_transfer!(crate::metal::MetalBackendImpl<T, D>);
 impl_transfer!(crate::dispatch::DispatchBackend<T, D>);
+
 
 #[cfg(test)]
 mod tests {

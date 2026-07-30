@@ -36,7 +36,12 @@ pub fn detect_device() -> DeviceId {
 }
 
 /// The families [`detect_device`] tries, most capable first.
-pub const PREFERENCE: &[DeviceKind] = &[DeviceKind::Cuda, DeviceKind::Wgpu, DeviceKind::Cpu];
+pub const PREFERENCE: &[DeviceKind] = &[
+    DeviceKind::Cuda,
+    DeviceKind::Metal,
+    DeviceKind::Wgpu,
+    DeviceKind::Cpu,
+];
 
 /// [`detect_device`] over a caller-chosen preference order.
 ///
@@ -66,6 +71,7 @@ pub fn probe(kind: DeviceKind) -> Option<DeviceId> {
         DeviceKind::Cpu => cfg!(feature = "cpu").then(DeviceId::cpu),
         DeviceKind::Cuda => probe_cuda(),
         DeviceKind::Wgpu => probe_wgpu(),
+        DeviceKind::Metal => probe_metal(),
         _ => None,
     }
 }
@@ -83,9 +89,26 @@ pub const fn is_compiled_in(kind: DeviceKind) -> bool {
         DeviceKind::Cpu => cfg!(feature = "cpu"),
         DeviceKind::Cuda => cfg!(feature = "cuda"),
         DeviceKind::Wgpu => cfg!(feature = "wgpu"),
+        DeviceKind::Metal => cfg!(feature = "metal"),
         _ => false,
     }
 }
+
+#[cfg(feature = "metal")]
+fn probe_metal() -> Option<DeviceId> {
+    // Probes for Metal availability on Apple Silicon / macOS.
+    if crate::metal::is_unified_memory() {
+        Some(DeviceId::metal(0))
+    } else {
+        None
+    }
+}
+
+#[cfg(not(feature = "metal"))]
+fn probe_metal() -> Option<DeviceId> {
+    None
+}
+
 
 #[cfg(feature = "cuda")]
 fn probe_cuda() -> Option<DeviceId> {

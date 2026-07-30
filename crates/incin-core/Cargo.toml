@@ -40,6 +40,9 @@ distributed = []
 cuda = []
 # Enables WGPU device marker metadata used by WGPU-capable backend crates.
 wgpu = []
+# Enables Metal device marker metadata used by Metal-capable backend crates.
+metal = []
+
 
 # candle = ["dep:candle-core", "dep:candle-nn"]
 # cuda = ["dep:candle-core?/cuda", "dep:candle-nn?/cuda"]

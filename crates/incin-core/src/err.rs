@@ -228,6 +228,16 @@ impl From<std::io::Error> for Error {
     }
 }
 
+impl From<crate::exec::MetaError> for Error {
+    fn from(err: crate::exec::MetaError) -> Self {
+        match err {
+            crate::exec::MetaError::Shape(s) => Error::Shape(s),
+            other => Error::Msg(other.to_string()),
+        }
+    }
+}
+
+
 impl Debug for Error {
     /// Format error using Display representation.
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
