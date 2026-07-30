@@ -92,9 +92,17 @@ cargo test -p incin-backends --all-targets --no-default-features --features std,
 cargo clippy --workspace --all-targets --no-default-features --features incin-backends/cpu,incin-backends/wgpu,incin/cpu,incin/wgpu -- -D warnings || fail "WGPU clippy failed!"
 success "WGPU OK"
 
-step "10. CUDA Compile Check"
-cargo check -p incin-backends --all-targets --no-default-features --features std,cpu,cuda || fail "CUDA check failed!"
-success "CUDA Check OK"
+step "10. CUDA Check & Tests"
+if command -v nvidia-smi &> /dev/null && nvidia-smi &> /dev/null; then
+    echo "CUDA GPU detected via nvidia-smi. Running CUDA compile check and hardware tests..."
+    cargo check -p incin-backends --all-targets --no-default-features --features std,cpu,cuda || fail "CUDA compile check failed!"
+    cargo test -p incin-backends --no-default-features --features std,cpu,cuda || fail "CUDA hardware runtime tests failed!"
+    success "CUDA Hardware & Runtime Tests OK"
+else
+    echo -e "${YELLOW}⚠ WARNING: No CUDA hardware / nvidia-smi detected on this system. Running CUDA compile check only.${NC}"
+    cargo check -p incin-backends --all-targets --no-default-features --features std,cpu,cuda || fail "CUDA compile check failed!"
+    success "CUDA Compile Check OK (hardware runtime tests skipped)"
+fi
 
 step "11. Documentation Build & Public Doctests"
 RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --no-default-features --features incin-backends/cpu,incin/cpu || fail "Default doc build failed!"
