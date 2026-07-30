@@ -284,6 +284,10 @@ enables = []
 name = "wgpu"
 enables = []
 
+[[feature_crate.feature]]
+name = "metal"
+enables = []
+
 [[feature_crate]]
 package = "incin-macros"
 manifest = "crates/incin-macros/Cargo.toml"
@@ -296,6 +300,10 @@ enables = []
 [[feature_crate.feature]]
 name = "nightly"
 enables = []
+
+[[feature_crate.feature]]
+name = "distributed"
+enables = ["incin/distributed"]
 
 [[feature_crate]]
 package = "incin-diagnostics"
@@ -330,6 +338,10 @@ enables = ["std", "dep:cudarc", "incin-core/cuda"]
 [[feature_crate.feature]]
 name = "wgpu"
 enables = ["std", "dep:wgpu", "dep:pollster", "incin-core/wgpu"]
+
+[[feature_crate.feature]]
+name = "metal"
+enables = ["std", "incin-core/metal"]
 
 [[feature_crate.feature]]
 name = "autotune"
@@ -383,6 +395,10 @@ enables = ["incin-core/cuda", "incin-backends/cuda"]
 [[feature_crate.feature]]
 name = "wgpu"
 enables = ["incin-backends/wgpu"]
+
+[[feature_crate.feature]]
+name = "metal"
+enables = ["incin-backends/metal"]
 
 [[feature_crate.feature]]
 name = "external-candle"

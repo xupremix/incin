@@ -673,6 +673,7 @@ fn compiled_features() -> Vec<Feature> {
         Feature::new("cuda", cfg!(feature = "cuda")),
         Feature::new("wgpu", cfg!(feature = "wgpu")),
         Feature::new("external-candle", cfg!(feature = "external-candle")),
+        Feature::new("metal", cfg!(feature = "metal")),
 
         Feature::new("autotune", cfg!(feature = "autotune")),
         Feature::new("train", cfg!(feature = "train")),
