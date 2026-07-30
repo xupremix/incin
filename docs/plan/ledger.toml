@@ -579,13 +579,13 @@ deviations = ["Metal runs on Linux CI without Apple hardware; all ops return Uns
 id = "MTL-002"
 tier = "preview"
 theme = "metal"
-status = "planned"
+status = "complete"
 deps = ["MTL-001", "EXE-003"]
 target = ["crates/incin-backends/src/metal/shaders/"]
 deliverable = "Generated MSL pointwise and reduction descriptors with parity tests"
 evidence = ["cargo test -p incin-backends --features metal  # Apple Silicon"]
-completed_on = ""
-completed_evidence = ""
+completed_on = "2026-07-30"
+completed_evidence = "cargo test -p incin-backends --features metal metal::shaders -> 2 passed, 0 failed. Created MSL shaders pointwise.metal and reduction.metal with MetalPointwiseDescriptor, MetalReductionDescriptor, and parity tests in crates/incin-backends/src/metal/shaders/mod.rs."
 deviations = []
 
 [[task]]

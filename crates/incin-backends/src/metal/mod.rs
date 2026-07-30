@@ -2,6 +2,7 @@
 
 pub mod backend;
 pub mod executor;
+pub mod shaders;
 pub mod storage;
 pub mod tape;
 
