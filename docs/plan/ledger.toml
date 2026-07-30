@@ -563,6 +563,19 @@ completed_evidence = ""
 deviations = []
 
 [[task]]
+id = "PRF-007"
+tier = "preview"
+theme = "perf"
+status = "planned"
+deps = ["MTL-002", "PRF-004"]
+target = ["crates/incin-backends/src/codegen/"]
+deliverable = "Unified PointwiseOpSpec and multi-backend emitter for CUDA, WGSL, and MSL"
+evidence = ["cargo test -p incin-backends"]
+completed_on = ""
+completed_evidence = ""
+deviations = []
+
+[[task]]
 id = "MTL-001"
 tier = "preview"
 theme = "metal"
