@@ -108,13 +108,13 @@ pub enum AlignmentClass {
 
 impl AlignmentClass {
     pub fn from_bytes(bytes: usize) -> Self {
-        if bytes == 0 || bytes % 256 == 0 {
+        if bytes == 0 || bytes.is_multiple_of(256) {
             Self::Align256
-        } else if bytes % 16 == 0 {
+        } else if bytes.is_multiple_of(16) {
             Self::Quad
-        } else if bytes % 4 == 0 {
+        } else if bytes.is_multiple_of(4) {
             Self::Word
-        } else if bytes % 2 == 0 {
+        } else if bytes.is_multiple_of(2) {
             Self::Short
         } else {
             Self::Byte
