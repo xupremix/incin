@@ -1238,7 +1238,10 @@ impl CompilerFingerprint<Cuda> {
 #[cfg(feature = "cuda")]
 impl TuningEnvironmentFingerprint<Cuda> {
     /// Queries the complete CUDA device/compiler environment.
-    pub fn from_cuda_context(context: &cudarc::driver::CudaContext) -> Result<Self> {
+    pub fn from_cuda_context(
+        context: &cudarc::driver::CudaContext,
+    ) -> incin_core::prelude::Result<Self> {
+        use incin_core::prelude::Error;
         Self::new(
             DeviceFingerprint::from_cuda_context(context)
                 .map_err(|error| Error::Msg(error.to_string()))?,
