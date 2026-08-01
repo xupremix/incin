@@ -45,6 +45,8 @@ jobs:
       wgpu_runner: ${{ steps.resolve.outputs.wgpu_runner }}
       metal: ${{ steps.resolve.outputs.metal }}
       metal_runner: ${{ steps.resolve.outputs.metal_runner }}
+      dist2_network: ${{ steps.resolve.outputs.dist2_network }}
+      multinode: ${{ steps.resolve.outputs.multinode }}
     steps:
       - name: Resolve requested jobs against registered runners
         id: resolve
@@ -59,15 +61,9 @@ jobs:
           # Job names owned by rows that have not landed. Accepting them
           # silently would report a green run for a matrix that does not exist.
           case "$REQUESTED" in
-            dist2-network)
-              echo "::error::job=dist2-network is owned by CI-003, which is not implemented"
-              exit 1 ;;
-            multinode)
-              echo "::error::job=multinode is owned by CI-004, which is not implemented"
-              exit 1 ;;
-            all|cuda|wgpu|metal) ;;
+            all|cuda|wgpu|metal|dist2-network|multinode) ;;
             *)
-              echo "::error::unknown job '$REQUESTED'; expected all, cuda, wgpu, or metal"
+              echo "::error::unknown job '$REQUESTED'; expected all, cuda, wgpu, metal, dist2-network, or multinode"
               exit 1 ;;
           esac
 
@@ -75,12 +71,16 @@ jobs:
           wgpu_software=false
           wgpu_native=false
           metal=false
+          dist2_network=false
+          multinode=false
           if [ "$REQUESTED" = "all" ] || [ "$REQUESTED" = "cuda" ]; then cuda=true; fi
           if [ "$REQUESTED" = "all" ] || [ "$REQUESTED" = "wgpu" ]; then
             wgpu_software=true
             wgpu_native=true
           fi
           if [ "$REQUESTED" = "all" ] || [ "$REQUESTED" = "metal" ]; then metal=true; fi
+          if [ "$REQUESTED" = "all" ] || [ "$REQUESTED" = "dist2-network" ]; then dist2_network=true; fi
+          if [ "$REQUESTED" = "all" ] || [ "$REQUESTED" = "multinode" ]; then multinode=true; fi
 
           # A runner variable holds a JSON array of labels, e.g.
           # ["self-hosted","linux","cuda"]. Unset means no such runner is
@@ -106,6 +106,8 @@ jobs:
             echo "wgpu_runner=${WGPU_RUNNER:-[\"ubuntu-latest\"]}"
             echo "metal=$metal"
             echo "metal_runner=${METAL_RUNNER:-[\"macos-latest\"]}"
+            echo "dist2_network=$dist2_network"
+            echo "multinode=$multinode"
           } >> "$GITHUB_OUTPUT"
 
       - name: Summarize what this run covers
@@ -119,6 +121,8 @@ jobs:
             echo "| wgpu-software | ${{ steps.resolve.outputs.wgpu_software }} | GitHub-hosted lavapipe |"
             echo "| wgpu-native | ${{ steps.resolve.outputs.wgpu_native }} | HARDWARE_WGPU_RUNNER ${{ vars.HARDWARE_WGPU_RUNNER && 'set' || 'unset' }} |"
             echo "| metal | ${{ steps.resolve.outputs.metal }} | HARDWARE_METAL_RUNNER ${{ vars.HARDWARE_METAL_RUNNER && 'set' || 'unset' }} |"
+            echo "| dist2-network | ${{ steps.resolve.outputs.dist2_network }} | CI-003 2-rank CUDA network matrix |"
+            echo "| multinode | ${{ steps.resolve.outputs.multinode }} | CI-004 multi-process rendezvous & reshard |"
           } >> "$GITHUB_STEP_SUMMARY"
 
   cuda:
@@ -265,4 +269,42 @@ jobs:
 
       - name: Metal autotuning integration tests
         run: cargo test -p incin-backends --features metal,metal-mps,autotune --test metal_tuning
+
+  dist2-network:
+    name: Distributed 2-Rank Network Suite (CI-003)
+    needs: select
+    if: needs.select.outputs.dist2_network == 'true'
+    runs-on: ${{ fromJSON(needs.select.outputs.cuda_runner) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Data Parallel (DP2) Networked Training Test
+        run: cargo test -p incin --features distributed-nccl --test dp2_network
+
+      - name: Tensor Parallel (TP2) Networked Linear/Attention Test
+        run: cargo test -p incin --features distributed-nccl --test tp2_network
+
+      - name: Pipeline Parallel (PP2) Networked Execution Test
+        run: cargo test -p incin --features distributed-nccl --test pp2_network
+
+  multinode:
+    name: Multi-Node & Rendezvous Suite (CI-004)
+    needs: select
+    if: needs.select.outputs.multinode == 'true'
+    runs-on: ${{ fromJSON(needs.select.outputs.cuda_runner) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Multi-Process Rendezvous & Shutdown Test
+        run: cargo test -p incin --features distributed-nccl --test rendezvous
+
+      - name: Global Checkpoint Manifest & Reshard Load Test
+        run: cargo test -p incin-core --test checkpoint_reshard
+
 

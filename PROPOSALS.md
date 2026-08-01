@@ -3315,15 +3315,15 @@ Silicon · `compile` compiled execution · `grad` autograd · `dist` distributed
 | DST-005 | preview | dist | [x] | DST-002 | `crates/incin-backends/src/dist/reference.rs` | Deterministic CPU reference collectives and their adjoints | `cargo test -p incin-backends --features distributed-reference` |
 | DST-006 | preview | dist | [x] | DST-002,GOV-004 | `crates/incin-backends/src/dist/nccl.rs` | Optional NCCL transport; two networked CUDA ranks with order, count, identity, timeout, and failure tests | `cargo test -p incin-backends --features distributed-nccl  # 2x networked CUDA` |
 | DST-007 | preview | dist | [x] | DST-003,DST-005 | `crates/incin-core/src/dist/plan.rs` | Collective plans and sequence tokens; divergent-plan preflight test | `cargo test -p incin-core --features distributed --test collective_plan` |
-| DST-008 | preview | dist | [~] | DST-006,DST-007,GRD-004 | `crates/incin-core/src/dist/` | DP=2 networked training with single-GPU numerical and gradient parity | `cargo test -p incin --features distributed-nccl --test dp2_network  # 2x networked CUDA` |
-| DST-009 | preview | dist | [~] | DST-004,DST-006,DST-007 | `crates/incin-core/src/nn/linear.rs` | TP=2 networked column and row linear plus attention parity | `cargo test -p incin --features distributed-nccl --test tp2_network  # 2x networked CUDA` |
-| DST-010 | preview | dist | [~] | CMP-002,DST-006,DST-007 | `crates/incin-core/src/dist/pipeline.rs` | GPipe then 1F1B PP=2 over the network; parity, bubble, and deadlock evidence | `cargo test -p incin --features distributed-nccl --test pp2_network  # 2x networked CUDA` |
-| DST-011 | preview | dist | [~] | DST-008,DST-009,DST-010 | `crates/incin-core/src/dist/plan.rs` | Hybrid planner and report with feasibility and memory evidence | `cargo test -p incin-core --features distributed --test hybrid_plan` |
-| DST-012 | preview | dist | [~] | TUN-003,DST-006 | `crates/incin-backends/src/dist/tuning.rs` | Coordinated collective tuning; maximum-rank objective and all-rank commit tests | `cargo test -p incin-backends --features distributed-nccl  # 2x networked CUDA` |
+| DST-008 | preview | dist | [x] | DST-006,DST-007,GRD-004 | `crates/incin-core/src/dist/` | DP=2 networked training with single-GPU numerical and gradient parity | `cargo test -p incin --features distributed-nccl --test dp2_network  # 2x networked CUDA` |
+| DST-009 | preview | dist | [x] | DST-004,DST-006,DST-007 | `crates/incin-core/src/nn/linear.rs` | TP=2 networked column and row linear plus attention parity | `cargo test -p incin --features distributed-nccl --test tp2_network  # 2x networked CUDA` |
+| DST-010 | preview | dist | [x] | CMP-002,DST-006,DST-007 | `crates/incin-core/src/dist/pipeline.rs` | GPipe then 1F1B PP=2 over the network; parity, bubble, and deadlock evidence | `cargo test -p incin --features distributed-nccl --test pp2_network  # 2x networked CUDA` |
+| DST-011 | preview | dist | [x] | DST-008,DST-009,DST-010 | `crates/incin-core/src/dist/plan.rs` | Hybrid planner and report with feasibility and memory evidence | `cargo test -p incin-core --features distributed --test hybrid_plan` |
+| DST-012 | preview | dist | [x] | TUN-003,DST-006 | `crates/incin-backends/src/dist/tuning.rs` | Coordinated collective tuning; maximum-rank objective and all-rank commit tests | `cargo test -p incin-backends --features distributed-nccl  # 2x networked CUDA` |
 | DST-013 | preview | dist | [x] | CMP-004,DST-011,DST-012 | `crates/incin-core/src/compiled/tuning.rs` | Bounded plan tuning measured against a one-GPU baseline | `cargo test -p incin-core --test plan_tuning` |
 | DST-014 | exploratory | dist | [ ] | CMP-003,GRD-007,DST-008 | `crates/incin-core/src/dist/fsdp.rs` | FSDP and ZeRO prototype with persistent and transient memory parity | `cargo test -p incin --features distributed-nccl --test fsdp  # 2x networked CUDA` |
-| DST-015 | preview | dist | [~] | DST-011 | `crates/incin-core/src/dist/context.rs` | Multi-process rendezvous and launcher with timeout and shutdown tests | `cargo test -p incin --features distributed-nccl --test rendezvous` |
-| DST-016 | preview | dist | [ ] | DST-011,DST-015 | `crates/incin-core/src/nn/save.rs` | Global checkpoint manifest and explicit cross-mesh resharded load | `cargo test -p incin-core --test checkpoint_reshard` |
+| DST-015 | preview | dist | [x] | DST-011 | `crates/incin-core/src/dist/context.rs` | Multi-process rendezvous and launcher with timeout and shutdown tests | `cargo test -p incin --features distributed-nccl --test rendezvous` |
+| DST-016 | preview | dist | [x] | DST-011,DST-015 | `crates/incin-core/src/nn/save.rs` | Global checkpoint manifest and explicit cross-mesh resharded load | `cargo test -p incin-core --test checkpoint_reshard` |
 | UX-001 | preview | ux | [x] | EXE-005 | `crates/incin/src/train.rs` | Automatic Trainer; an unchanged model runs on CPU and on three GPUs | `cargo test -p incin --features train --test trainer` |
 | UX-002 | preview | ux | [x] | DST-001 | `crates/incin-macros/src/mesh.rs` | mesh! with expansion, hygiene, span, and compile-fail tests | `cargo test -p incin-macros --test mesh_macro` |
 | UX-003 | preview | ux | [x] | DST-003 | `crates/incin-macros/src/placement.rs` | placement! grammar and operation-bound diagnostics | `cargo test -p incin-macros --test placement_macro` |
@@ -3347,8 +3347,8 @@ Silicon · `compile` compiled execution · `grad` autograd · `dist` distributed
 
 | CI-001 | core | ci | [x] | GOV-005,GOV-003 | `.github/workflows/ci.yml` | Feature-powerset CI preserving the bare CPU default; adds cargo doc and drops blanket package exclusions | `act -j powerset  # or CI run` |
 | CI-002 | core | ci | [x] | EXE-008 | `.github/workflows/hardware.yml` | Scheduled CUDA and WGPU hardware matrix | `gh workflow run hardware.yml` |
-| CI-003 | preview | ci | [ ] | DST-008,DST-009,DST-010 | `.github/workflows/hardware.yml` | Two network-accessible CUDA ranks for DP, TP, and PP CI | `gh workflow run hardware.yml -f job=dist2-network` |
-| CI-004 | preview | ci | [ ] | DST-015 | `.github/workflows/hardware.yml` | Multi-process and multi-node CI with topology metadata | `gh workflow run hardware.yml -f job=multinode` |
+| CI-003 | preview | ci | [x] | DST-008,DST-009,DST-010 | `.github/workflows/hardware.yml` | Two network-accessible CUDA ranks for DP, TP, and PP CI | `gh workflow run hardware.yml -f job=dist2-network` |
+| CI-004 | preview | ci | [x] | DST-015 | `.github/workflows/hardware.yml` | Multi-process and multi-node CI with topology metadata | `gh workflow run hardware.yml -f job=multinode` |
 | CI-005 | core | ci | [x] | GOV-005 | `crates/incin-macros/tests/` | Macro trybuild, rustfmt, rename, and hygiene suite for the existing s!, idx!, and #[module] | `cargo test -p incin-macros` |
 | CI-006 | preview | ci | [x] | GOV-005,TUN-008,DST-013 | `.github/workflows/ci.yml` | CPU, GPU, and distributed performance and cache gates | `cargo xtask budgets` |
 | CI-007 | preview | ci | [x] | MTL-004 | `.github/workflows/hardware.yml` | Scheduled Apple Silicon Metal hardware matrix | `gh workflow run hardware.yml -f job=metal` |
@@ -3358,8 +3358,8 @@ Silicon · `compile` compiled execution · `grad` autograd · `dist` distributed
 
 | REL-002 | core | release | [x] | REL-001,CI-002,CI-005,UX-013,UX-014,PRF-002,GRD-002,GRD-005 | `CHANGELOG.md` | Single-device release-readiness evidence; the deprecated candle alias is removed here | `cargo test --workspace --all-features` |
 
-| REL-003 | preview | release | [ ] | REL-002,CI-003,CI-006,CI-007,CI-008,UX-005,UX-007,UX-008,UX-009,UX-012,UX-015,DST-011,EXE-010,CMP-006,MTL-006,PRF-003,PRF-004,TUN-008,GRD-007 | `CHANGELOG.md` | Distributed preview readiness and the fail-stop contract | `gh workflow run hardware.yml` |
-| REL-004 | preview | release | [ ] | REL-003,CI-004,DST-016 | `CHANGELOG.md` | Multi-node preview scope and recovery limits published | `gh workflow run hardware.yml -f job=multinode` |
+| REL-003 | preview | release | [x] | REL-002,CI-003,CI-006,CI-007,CI-008,UX-005,UX-007,UX-008,UX-009,UX-012,UX-015,DST-011,EXE-010,CMP-006,MTL-006,PRF-003,PRF-004,TUN-008,GRD-007 | `CHANGELOG.md` | Distributed preview readiness and the fail-stop contract | `gh workflow run hardware.yml` |
+| REL-004 | preview | release | [x] | REL-003,CI-004,DST-016 | `CHANGELOG.md` | Multi-node preview scope and recovery limits published | `gh workflow run hardware.yml -f job=multinode` |
 ### Impact versus effort matrix
 
 | Proposal | Tasks | Effort | Correctness | Performance | UX | Actual developer/researcher impact |

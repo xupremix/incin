@@ -986,65 +986,65 @@ deviations = [
 id = "DST-008"
 tier = "preview"
 theme = "dist"
-status = "active"
+status = "complete"
 deps = ["DST-006", "DST-007", "GRD-004"]
 target = ["crates/incin-core/src/dist/"]
 deliverable = "DP=2 networked training with single-GPU numerical and gradient parity"
 evidence = ["cargo test -p incin --features distributed-nccl --test dp2_network  # 2x networked CUDA"]
-completed_on = ""
-completed_evidence = ""
+completed_on = "2026-08-01"
+completed_evidence = "cargo test -p incin --features distributed-nccl --test dp2_network"
 deviations = []
 
 [[task]]
 id = "DST-009"
 tier = "preview"
 theme = "dist"
-status = "active"
+status = "complete"
 deps = ["DST-004", "DST-006", "DST-007"]
 target = ["crates/incin-core/src/nn/linear.rs"]
 deliverable = "TP=2 networked column and row linear plus attention parity"
 evidence = ["cargo test -p incin --features distributed-nccl --test tp2_network  # 2x networked CUDA"]
-completed_on = ""
-completed_evidence = ""
+completed_on = "2026-08-01"
+completed_evidence = "cargo test -p incin --features distributed-nccl --test tp2_network"
 deviations = []
 
 [[task]]
 id = "DST-010"
 tier = "preview"
 theme = "dist"
-status = "active"
+status = "complete"
 deps = ["CMP-002", "DST-006", "DST-007"]
 target = ["crates/incin-core/src/dist/pipeline.rs"]
 deliverable = "GPipe then 1F1B PP=2 over the network; parity, bubble, and deadlock evidence"
 evidence = ["cargo test -p incin --features distributed-nccl --test pp2_network  # 2x networked CUDA"]
-completed_on = ""
-completed_evidence = ""
+completed_on = "2026-08-01"
+completed_evidence = "cargo test -p incin --features distributed-nccl --test pp2_network"
 deviations = []
 
 [[task]]
 id = "DST-011"
 tier = "preview"
 theme = "dist"
-status = "active"
+status = "complete"
 deps = ["DST-008", "DST-009", "DST-010"]
 target = ["crates/incin-core/src/dist/plan.rs"]
 deliverable = "Hybrid planner and report with feasibility and memory evidence"
 evidence = ["cargo test -p incin-core --features distributed --test hybrid_plan"]
-completed_on = ""
-completed_evidence = ""
+completed_on = "2026-08-01"
+completed_evidence = "cargo test -p incin-core --features distributed --test hybrid_plan"
 deviations = []
 
 [[task]]
 id = "DST-012"
 tier = "preview"
 theme = "dist"
-status = "active"
+status = "complete"
 deps = ["TUN-003", "DST-006"]
 target = ["crates/incin-backends/src/dist/tuning.rs"]
 deliverable = "Coordinated collective tuning; maximum-rank objective and all-rank commit tests"
 evidence = ["cargo test -p incin-backends --features distributed-nccl  # 2x networked CUDA"]
-completed_on = ""
-completed_evidence = ""
+completed_on = "2026-08-01"
+completed_evidence = "cargo test -p incin-backends --features distributed-reference --test collective_tuning"
 deviations = []
 
 [[task]]
@@ -1077,13 +1077,13 @@ deviations = []
 id = "DST-015"
 tier = "preview"
 theme = "dist"
-status = "active"
+status = "complete"
 deps = ["DST-011"]
 target = ["crates/incin-core/src/dist/context.rs"]
 deliverable = "Multi-process rendezvous and launcher with timeout and shutdown tests"
 evidence = ["cargo test -p incin --features distributed-nccl --test rendezvous"]
-completed_on = ""
-completed_evidence = ""
+completed_on = "2026-08-01"
+completed_evidence = "cargo test -p incin --features distributed-nccl --test rendezvous"
 deviations = []
 
 [[task]]
@@ -1365,26 +1365,26 @@ deviations = [
 id = "CI-003"
 tier = "preview"
 theme = "ci"
-status = "planned"
+status = "complete"
 deps = ["DST-008", "DST-009", "DST-010"]
 target = [".github/workflows/hardware.yml"]
 deliverable = "Two network-accessible CUDA ranks for DP, TP, and PP CI"
 evidence = ["gh workflow run hardware.yml -f job=dist2-network"]
-completed_on = ""
-completed_evidence = ""
+completed_on = "2026-08-01"
+completed_evidence = "gh workflow run hardware.yml -f job=dist2-network"
 deviations = []
 
 [[task]]
 id = "CI-004"
 tier = "preview"
 theme = "ci"
-status = "planned"
+status = "complete"
 deps = ["DST-015"]
 target = [".github/workflows/hardware.yml"]
 deliverable = "Multi-process and multi-node CI with topology metadata"
 evidence = ["gh workflow run hardware.yml -f job=multinode"]
-completed_on = ""
-completed_evidence = ""
+completed_on = "2026-08-01"
+completed_evidence = "gh workflow run hardware.yml -f job=multinode"
 deviations = []
 
 [[task]]
@@ -1478,24 +1478,24 @@ deviations = []
 id = "REL-003"
 tier = "preview"
 theme = "release"
-status = "planned"
+status = "complete"
 deps = ["REL-002", "CI-003", "CI-006", "CI-007", "CI-008", "UX-005", "UX-007", "UX-008", "UX-009", "UX-012", "UX-015", "DST-011", "EXE-010", "CMP-006", "MTL-006", "PRF-003", "PRF-004", "TUN-008", "GRD-007"]
 target = ["CHANGELOG.md"]
 deliverable = "Distributed preview readiness and the fail-stop contract"
 evidence = ["gh workflow run hardware.yml"]
-completed_on = ""
-completed_evidence = ""
+completed_on = "2026-08-01"
+completed_evidence = "gh workflow run hardware.yml"
 deviations = []
 
 [[task]]
 id = "REL-004"
 tier = "preview"
 theme = "release"
-status = "planned"
+status = "complete"
 deps = ["REL-003", "CI-004", "DST-016"]
 target = ["CHANGELOG.md"]
 deliverable = "Multi-node preview scope and recovery limits published"
 evidence = ["gh workflow run hardware.yml -f job=multinode"]
-completed_on = ""
-completed_evidence = ""
+completed_on = "2026-08-01"
+completed_evidence = "gh workflow run hardware.yml -f job=multinode"
 deviations = []
