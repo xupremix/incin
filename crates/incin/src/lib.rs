@@ -86,7 +86,7 @@ extern crate alloc;
 
 pub use incin_backends::*;
 
-pub use incin_macros::{import_model, model, module};
+pub use incin_macros::{import_model, mesh, model, module};
 
 /// Neural network modules, activation functions, layers, and building blocks.
 pub mod nn {
@@ -282,7 +282,7 @@ pub mod macros {
     // invoked once, internally, by `incin-core` itself
     // (`incin_macros::impl_arg_into!()` in `tensor/arg_into.rs`) — no
     // end-user code calls it, and it has no documented public contract.
-    pub use incin_macros::{idx, s};
+    pub use incin_macros::{idx, mesh, s};
 }
 
 #[allow(unused_imports)]

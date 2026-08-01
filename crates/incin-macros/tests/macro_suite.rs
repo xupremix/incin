@@ -55,6 +55,18 @@ fn expected_reasons() -> BTreeMap<&'static str, &'static str> {
             "s_rejects_a_repeat_without_a_count",
             "expected integer literal",
         ),
+        (
+            "mesh_rejects_zero_degree",
+            "mesh degree must be a non-zero positive integer",
+        ),
+        (
+            "mesh_rejects_duplicate_axis",
+            "duplicate `dp` / `data` axis in mesh!",
+        ),
+        (
+            "mesh_rejects_unknown_axis",
+            "unknown mesh axis key `foo`; expected `dp`, `tp`, or `pp`",
+        ),
     ])
 }
 
@@ -155,7 +167,12 @@ fn every_policy_category_is_covered() {
     }
 
     // One grammar case per macro in this row's scope.
-    for macro_name in ["s_grammar", "idx_grammar", "module_arguments"] {
+    for macro_name in [
+        "s_grammar",
+        "idx_grammar",
+        "module_arguments",
+        "mesh_grammar",
+    ] {
         assert!(
             names.iter().any(|n| n == macro_name),
             "no compile-pass case covers `{macro_name}`"

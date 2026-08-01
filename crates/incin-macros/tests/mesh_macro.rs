@@ -1,32 +1,24 @@
-use incin_core::dist::mesh::ValidMesh;
-use incin_macros::mesh;
+use incin_core::dist::mesh::{ValidMesh, mesh};
 
 #[test]
-fn mesh_expansion_defaults_and_explicit_axes() {
-    // Single axis specified, defaults dp=3, tp=1, pp=1
-    type DpOnly = mesh![dp = 3];
-    assert_eq!(DpOnly::DATA, 3);
-    assert_eq!(DpOnly::TENSOR, 1);
-    assert_eq!(DpOnly::PIPELINE, 1);
-    assert_eq!(DpOnly::WORLD, 3);
+fn test_mesh_macro_expansion() {
+    type TestMesh1 = mesh![dp = 2, tp = 4, pp = 1];
+    assert_eq!(TestMesh1::DATA, 2);
+    assert_eq!(TestMesh1::TENSOR, 4);
+    assert_eq!(TestMesh1::PIPELINE, 1);
+    assert_eq!(TestMesh1::WORLD, 8);
 
-    // Two axes specified, dp=2, tp=4, pp=1
-    type DpTp = mesh![dp = 2, tp = 4];
-    assert_eq!(DpTp::DATA, 2);
-    assert_eq!(DpTp::TENSOR, 4);
-    assert_eq!(DpTp::PIPELINE, 1);
-    assert_eq!(DpTp::WORLD, 8);
+    // Default parameters (omitted tp and pp default to 1)
+    type TestMesh2 = mesh![dp = 3];
+    assert_eq!(TestMesh2::DATA, 3);
+    assert_eq!(TestMesh2::TENSOR, 1);
+    assert_eq!(TestMesh2::PIPELINE, 1);
+    assert_eq!(TestMesh2::WORLD, 3);
 
-    // All three axes specified, dp=2, tp=2, pp=2
-    type AllAxes = mesh![dp = 2, tp = 2, pp = 2];
-    assert_eq!(AllAxes::DATA, 2);
-    assert_eq!(AllAxes::TENSOR, 2);
-    assert_eq!(AllAxes::PIPELINE, 2);
-    assert_eq!(AllAxes::WORLD, 8);
-}
-
-#[test]
-fn mesh_compile_fail_diagnostics() {
-    let t = trybuild::TestCases::new();
-    t.compile_fail("tests/mesh_compile_fail/*.rs");
+    // Alternative keyword names
+    type TestMesh3 = mesh![data = 2, tensor = 2, pipeline = 2];
+    assert_eq!(TestMesh3::DATA, 2);
+    assert_eq!(TestMesh3::TENSOR, 2);
+    assert_eq!(TestMesh3::PIPELINE, 2);
+    assert_eq!(TestMesh3::WORLD, 8);
 }

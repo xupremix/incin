@@ -44,6 +44,9 @@ fn main() {
     let view = big.slice_idx::<idx![0..5, .., 15..30]>().unwrap();
     assert_eq!(view.dims().as_ref(), &[5, 20, 15]);
 
+    type ShadowedMesh = mesh![dp = 2, tp = 2];
+    assert_eq!(<ShadowedMesh as ::incin::dist::mesh::ValidMesh>::WORLD, 4);
+
     let m = Shadowed::<::incin::prelude::DefaultBackend> {
         fc: ::incin::prelude::Linear::build(()).unwrap(),
     };

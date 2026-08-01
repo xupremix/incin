@@ -92,7 +92,7 @@ pub mod prelude {
     };
     pub use crate::seq;
     pub use crate::tensor::ops::index::IndexSpec;
-    pub use incin_macros::{idx, module, s};
+    pub use incin_macros::{idx, mesh, module, s};
 
     pub use super::shapes::prelude::*;
     pub use super::tensor::prelude::*;

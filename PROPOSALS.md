@@ -3326,7 +3326,6 @@ Silicon · `compile` compiled execution · `grad` autograd · `dist` distributed
 | DST-016 | preview | dist | [ ] | DST-011,DST-015 | `crates/incin-core/src/nn/save.rs` | Global checkpoint manifest and explicit cross-mesh resharded load | `cargo test -p incin-core --test checkpoint_reshard` |
 | UX-001 | preview | ux | [x] | EXE-005 | `crates/incin/src/train.rs` | Automatic Trainer; an unchanged model runs on CPU and on three GPUs | `cargo test -p incin --features train --test trainer` |
 | UX-002 | preview | ux | [x] | DST-001 | `crates/incin-macros/src/mesh.rs` | mesh! with expansion, hygiene, span, and compile-fail tests | `cargo test -p incin-macros --test mesh_macro` |
-
 | UX-003 | preview | ux | [x] | DST-003 | `crates/incin-macros/src/placement.rs` | placement! grammar and operation-bound diagnostics | `cargo test -p incin-macros --test placement_macro` |
 
 | UX-004 | preview | ux | [x] | DST-003 | `crates/incin-macros/src/module.rs` | #[parallel] and #[shard] template and conflict tests | `cargo test -p incin-macros --test parallel_attrs` |

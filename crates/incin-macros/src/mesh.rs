@@ -1,53 +1,61 @@
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{
-    Ident, Token,
+    Ident, LitInt, Token,
     parse::{Parse, ParseStream},
     parse_macro_input,
+    punctuated::Punctuated,
 };
 
-enum AxisDegree {
-    Lit(syn::LitInt),
-    Type(Box<syn::Type>),
+enum MeshKey {
+    Data,
+    Tensor,
+    Pipeline,
 }
 
-impl Parse for AxisDegree {
+struct MeshField {
+    key: MeshKey,
+    key_ident: Ident,
+    val: usize,
+}
+
+impl Parse for MeshField {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        if input.peek(syn::LitInt) {
-            let lit: syn::LitInt = input.parse()?;
-            let val: usize = lit.base10_parse()?;
-            if val == 0 {
-                return Err(syn::Error::new(
-                    lit.span(),
-                    "mesh axis degree must be nonzero",
+        let key_ident: Ident = input.parse()?;
+        let key_str = key_ident.to_string();
+        let key = match key_str.as_str() {
+            "dp" | "data" => MeshKey::Data,
+            "tp" | "tensor" | "tensor_parallel" => MeshKey::Tensor,
+            "pp" | "pipeline" | "pipeline_parallel" => MeshKey::Pipeline,
+            _ => {
+                return Err(syn::Error::new_spanned(
+                    &key_ident,
+                    format!("unknown mesh axis key `{key_str}`; expected `dp`, `tp`, or `pp`"),
                 ));
             }
-            Ok(AxisDegree::Lit(lit))
-        } else {
-            Ok(AxisDegree::Type(Box::new(input.parse::<syn::Type>()?)))
-        }
-    }
-}
+        };
 
-struct KeyVal {
-    key: Ident,
-    degree: AxisDegree,
-}
-
-impl Parse for KeyVal {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        let key: Ident = input.parse()?;
         input.parse::<Token![=]>()?;
-        let degree: AxisDegree = input.parse()?;
-        Ok(KeyVal { key, degree })
+        let lit: LitInt = input.parse()?;
+        let val: usize = lit.base10_parse()?;
+        if val == 0 {
+            return Err(syn::Error::new_spanned(
+                &lit,
+                "mesh degree must be a non-zero positive integer",
+            ));
+        }
+
+        Ok(MeshField {
+            key,
+            key_ident,
+            val,
+        })
     }
 }
 
 struct MeshInput {
     internal: bool,
-    dp: Option<(Ident, AxisDegree)>,
-    tp: Option<(Ident, AxisDegree)>,
-    pp: Option<(Ident, AxisDegree)>,
+    fields: Vec<MeshField>,
 }
 
 impl Parse for MeshInput {
@@ -58,85 +66,84 @@ impl Parse for MeshInput {
             internal = true;
         }
 
-        let mut dp = None;
-        let mut tp = None;
-        let mut pp = None;
-
-        while !input.is_empty() {
-            let kv: KeyVal = input.parse()?;
-            let key_str = kv.key.to_string();
-            match key_str.as_str() {
-                "dp" => {
-                    if dp.is_some() {
-                        return Err(syn::Error::new(kv.key.span(), "duplicate mesh axis `dp`"));
-                    }
-                    dp = Some((kv.key, kv.degree));
-                }
-                "tp" => {
-                    if tp.is_some() {
-                        return Err(syn::Error::new(kv.key.span(), "duplicate mesh axis `tp`"));
-                    }
-                    tp = Some((kv.key, kv.degree));
-                }
-                "pp" => {
-                    if pp.is_some() {
-                        return Err(syn::Error::new(kv.key.span(), "duplicate mesh axis `pp`"));
-                    }
-                    pp = Some((kv.key, kv.degree));
-                }
-                other => {
-                    return Err(syn::Error::new(
-                        kv.key.span(),
-                        format!("unknown mesh axis `{other}`; valid axes are `dp`, `tp`, and `pp`"),
-                    ));
-                }
-            }
-
-            if input.peek(Token![,]) {
-                input.parse::<Token![,]>()?;
-            }
-        }
-
+        let punctuated: Punctuated<MeshField, Token![,]> = Punctuated::parse_terminated(input)?;
         Ok(MeshInput {
             internal,
-            dp,
-            tp,
-            pp,
+            fields: punctuated.into_iter().collect(),
         })
-    }
-}
-
-fn render_degree(
-    deg: &Option<(Ident, AxisDegree)>,
-    path: &proc_macro2::TokenStream,
-) -> proc_macro2::TokenStream {
-    match deg {
-        None => crate::shape::lit_to_typenum(1, path),
-        Some((_, AxisDegree::Lit(lit))) => {
-            let val: usize = lit.base10_parse().unwrap_or(1);
-            crate::shape::lit_to_typenum(val, path)
-        }
-        Some((_, AxisDegree::Type(ty))) => quote! { #ty },
     }
 }
 
 pub(crate) fn mesh(input: TokenStream) -> TokenStream {
     let parsed = parse_macro_input!(input as MeshInput);
-    let path = if parsed.internal {
-        quote! { crate:: }
+
+    let mut data_val = 1;
+    let mut tensor_val = 1;
+    let mut pipeline_val = 1;
+
+    let mut has_data = false;
+    let mut has_tensor = false;
+    let mut has_pipeline = false;
+
+    for field in parsed.fields {
+        match field.key {
+            MeshKey::Data => {
+                if has_data {
+                    return syn::Error::new_spanned(
+                        field.key_ident,
+                        "duplicate `dp` / `data` axis in mesh!",
+                    )
+                    .to_compile_error()
+                    .into();
+                }
+                has_data = true;
+                data_val = field.val;
+            }
+            MeshKey::Tensor => {
+                if has_tensor {
+                    return syn::Error::new_spanned(
+                        field.key_ident,
+                        "duplicate `tp` / `tensor` axis in mesh!",
+                    )
+                    .to_compile_error()
+                    .into();
+                }
+                has_tensor = true;
+                tensor_val = field.val;
+            }
+            MeshKey::Pipeline => {
+                if has_pipeline {
+                    return syn::Error::new_spanned(
+                        field.key_ident,
+                        "duplicate `pp` / `pipeline` axis in mesh!",
+                    )
+                    .to_compile_error()
+                    .into();
+                }
+                has_pipeline = true;
+                pipeline_val = field.val;
+            }
+        }
+    }
+
+    let (mesh_prefix, typenum_prefix) = if parsed.internal {
+        (quote! { crate::dist::mesh:: }, quote! { crate:: })
     } else {
-        quote! { ::incin_core:: }
+        (
+            quote! { ::incin_core::dist::mesh:: },
+            quote! { ::incin_core:: },
+        )
     };
 
-    let dp_rendered = render_degree(&parsed.dp, &path);
-    let tp_rendered = render_degree(&parsed.tp, &path);
-    let pp_rendered = render_degree(&parsed.pp, &path);
+    let dp_typenum = crate::shape::lit_to_typenum(data_val, &typenum_prefix);
+    let tp_typenum = crate::shape::lit_to_typenum(tensor_val, &typenum_prefix);
+    let pp_typenum = crate::shape::lit_to_typenum(pipeline_val, &typenum_prefix);
 
     quote! {
-        #path dist::mesh::MeshSpec<
-            #path dist::mesh::Data<#dp_rendered>,
-            #path dist::mesh::TensorParallel<#tp_rendered>,
-            #path dist::mesh::Pipeline<#pp_rendered>
+        #mesh_prefix MeshSpec<
+            #mesh_prefix Data<#dp_typenum>,
+            #mesh_prefix TensorParallel<#tp_typenum>,
+            #mesh_prefix Pipeline<#pp_typenum>
         >
     }
     .into()

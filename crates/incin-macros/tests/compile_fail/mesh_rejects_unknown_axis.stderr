@@ -1,0 +1,5 @@
+error: unknown mesh axis key `foo`; expected `dp`, `tp`, or `pp`
+ --> tests/compile_fail/mesh_rejects_unknown_axis.rs:4:30
+  |
+4 |     type InvalidMesh = mesh![foo = 2];
+  |                              ^^^

@@ -22,4 +22,7 @@ fn main() {
         head: Linear::build(()).unwrap(),
     };
     assert!(!model.parameters().is_empty());
+
+    type FormattedMesh = mesh![dp = 2, tp = 2, pp = 1];
+    assert_eq!(<FormattedMesh as ::incin::dist::mesh::ValidMesh>::WORLD, 4);
 }

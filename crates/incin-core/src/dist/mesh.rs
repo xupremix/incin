@@ -45,6 +45,8 @@ use typenum::{NonZero, Prod, U1, Unsigned};
 
 use crate::tensor::device::{DeviceId, DeviceKind};
 
+pub use incin_macros::mesh;
+
 // ===========================================================================
 // The logical half: proved by the compiler, holds no device.
 // ===========================================================================

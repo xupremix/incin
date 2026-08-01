@@ -25,7 +25,7 @@ mod einsum;
 
 /// Internal helper module for tensor index and slicing macro.
 mod idx;
-/// Internal helper module for mesh topology macro.
+/// Helper module for logical device mesh topology macro.
 mod mesh;
 /// Helper module for deriving neural network module traits.
 mod module;
@@ -143,6 +143,17 @@ pub fn impl_layer_args(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn idx(input: TokenStream) -> TokenStream {
     idx::idx(input)
+}
+
+/// A macro to construct typed logical device mesh specifications ergonomically.
+///
+/// ## Examples
+/// ```rust,ignore
+/// type MyMesh = mesh![dp = 2, tp = 4, pp = 1];
+/// ```
+#[proc_macro]
+pub fn mesh(input: TokenStream) -> TokenStream {
+    mesh::mesh(input)
 }
 
 /// The `#[module]` attribute automatically derives `StateDict` and `Parameters`
