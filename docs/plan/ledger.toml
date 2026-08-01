@@ -1090,13 +1090,13 @@ deviations = []
 id = "DST-016"
 tier = "preview"
 theme = "dist"
-status = "planned"
+status = "complete"
 deps = ["DST-011", "DST-015"]
 target = ["crates/incin-core/src/nn/save.rs"]
 deliverable = "Global checkpoint manifest and explicit cross-mesh resharded load"
 evidence = ["cargo test -p incin-core --test checkpoint_reshard"]
-completed_on = ""
-completed_evidence = ""
+completed_on = "2026-08-01"
+completed_evidence = "cargo test -p incin-core --test checkpoint_reshard"
 deviations = []
 
 [[task]]
