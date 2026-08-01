@@ -110,7 +110,10 @@ impl SocketTransport {
     fn accept_pending(&mut self) {
         loop {
             match self.listener.accept() {
-                Ok(stream) => self.clients.push(stream),
+                Ok(stream) => {
+                    let _ = stream.set_nonblocking(true);
+                    self.clients.push(stream);
+                }
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => break,
                 Err(_) => break,
             }
@@ -140,6 +143,12 @@ impl Transport for SocketTransport {
         // invisible relative to file-transport failures.
         self.clients.retain_mut(|c| match c.write_all(bytes) {
             Ok(()) => true,
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                eprintln!(
+                    "incin-telemetry: socket client blocked, pruning slow client to prevent stall"
+                );
+                false
+            }
             Err(e) => {
                 eprintln!("incin-telemetry: socket client write failed, pruning client: {e}");
                 false

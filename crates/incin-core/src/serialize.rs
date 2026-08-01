@@ -173,13 +173,13 @@ struct SerializedTensor {
 }
 
 #[cfg(feature = "std")]
-/// `BincodeSerializer`.
-pub struct BincodeSerializer<'a> {
+/// `PostcardSerializer`.
+pub struct PostcardSerializer<'a> {
     path: &'a std::path::Path,
 }
 
 #[cfg(feature = "std")]
-impl<'a> BincodeSerializer<'a> {
+impl<'a> PostcardSerializer<'a> {
     /// Creates a new instance with default (statically inferred) shape arguments.
     pub fn new(path: &'a std::path::Path) -> Self {
         Self { path }
@@ -187,7 +187,7 @@ impl<'a> BincodeSerializer<'a> {
 }
 
 #[cfg(feature = "std")]
-impl<'a> Serializer for BincodeSerializer<'a> {
+impl<'a> Serializer for PostcardSerializer<'a> {
     /// The error type returned if the forward pass fails.
     type Error = anyhow::Error;
 
@@ -225,20 +225,20 @@ impl<'a> Serializer for BincodeSerializer<'a> {
             );
         }
 
-        let file = std::fs::File::create(self.path)?;
-        bincode::serialize_into(file, &map)?;
+        let bytes = postcard::to_stdvec(&map).map_err(|e| anyhow::anyhow!("Postcard serialization failed: {}", e))?;
+        std::fs::write(self.path, bytes)?;
         Ok(())
     }
 }
 
 #[cfg(feature = "std")]
-/// `BincodeDeserializer`.
-pub struct BincodeDeserializer<'a> {
+/// `PostcardDeserializer`.
+pub struct PostcardDeserializer<'a> {
     path: &'a std::path::Path,
 }
 
 #[cfg(feature = "std")]
-impl<'a> BincodeDeserializer<'a> {
+impl<'a> PostcardDeserializer<'a> {
     /// Creates a new instance with default (statically inferred) shape arguments.
     pub fn new(path: &'a std::path::Path) -> Self {
         Self { path }
@@ -246,7 +246,7 @@ impl<'a> BincodeDeserializer<'a> {
 }
 
 #[cfg(feature = "std")]
-impl<'a> Deserializer for BincodeDeserializer<'a> {
+impl<'a> Deserializer for PostcardDeserializer<'a> {
     /// The error type returned if the forward pass fails.
     type Error = anyhow::Error;
 
@@ -259,11 +259,31 @@ impl<'a> Deserializer for BincodeDeserializer<'a> {
         <<B as Backend>::Device as Device>::Field: Default,
         <<B as Backend>::FloatElem as crate::tensor::dtype::DType>::Field: Default,
     {
-        let file = std::fs::File::open(self.path)?;
-        let map: BTreeMap<String, SerializedTensor> = bincode::deserialize_from(file)?;
+        let limits = crate::io::limits::ResourceLimits::model_load_defaults();
+        let metadata = std::fs::metadata(self.path)?;
+        if metadata.len() > limits.max_file_bytes {
+            return Err(anyhow::anyhow!(
+                "Postcard model file size {} exceeds maximum limit {}",
+                metadata.len(),
+                limits.max_file_bytes
+            ));
+        }
+
+        let raw_bytes = std::fs::read(self.path)?;
+        let map: BTreeMap<String, SerializedTensor> =
+            postcard::from_bytes(&raw_bytes).map_err(|e| anyhow::anyhow!("Postcard deserialization failed: {}", e))?;
+
+        if map.len() > limits.max_tensor_count {
+            return Err(anyhow::anyhow!(
+                "Postcard model tensor count {} exceeds limit {}",
+                map.len(),
+                limits.max_tensor_count
+            ));
+        }
 
         let mut state_dict = BTreeMap::new();
         for (k, st) in map {
+            limits.check_shape(&st.shape).map_err(|e| anyhow::anyhow!("Invalid tensor shape: {}", e))?;
             let dtype = match st.dtype.as_str() {
                 "F32" => DTypeId::F32,
                 "F64" => DTypeId::F64,
@@ -273,7 +293,7 @@ impl<'a> Deserializer for BincodeDeserializer<'a> {
                 "I64" => DTypeId::I64,
                 "U8" => DTypeId::U8,
                 "Q8_0" => DTypeId::Q8_0,
-                _ => return Err(anyhow::anyhow!("Unsupported dtype in bincode")),
+                _ => return Err(anyhow::anyhow!("Unsupported dtype in postcard")),
             };
             let raw_tensor = <B as Backend>::from_bytes(&st.data, &st.shape, dtype, device)
                 .map_err(|e| anyhow::anyhow!("Backend from_bytes failed: {}", e))?;
