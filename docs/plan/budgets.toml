@@ -275,7 +275,7 @@ default = ["std"]
 
 [[feature_crate.feature]]
 name = "std"
-enables = ["thiserror/std", "half/std", "anyhow/std", "serde/std", "prost/std", "bytes/std", "safetensors", "serde_json", "bincode"]
+enables = ["thiserror/std", "half/std", "anyhow/std", "serde/std", "prost/std", "bytes/std", "safetensors", "serde_json", "postcard"]
 
 [[feature_crate.feature]]
 name = "nightly"

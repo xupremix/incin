@@ -34,11 +34,13 @@ impl ReproducibilityManifest {
         }
     }
 
+    #[cfg(feature = "serde_json")]
     /// Serializes manifest to JSON format.
     pub fn to_json(&self) -> Result<String, serde_json::Error> {
         serde_json::to_string_pretty(self)
     }
 
+    #[cfg(feature = "serde_json")]
     /// Deserializes manifest from JSON format.
     pub fn from_json(json: &str) -> Result<Self, serde_json::Error> {
         serde_json::from_str(json)

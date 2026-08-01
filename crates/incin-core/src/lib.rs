@@ -19,7 +19,6 @@ pub mod distributions;
 pub mod exec;
 pub mod graph;
 
-#[cfg(feature = "std")]
 pub mod io;
 pub mod metrics;
 pub mod nn;

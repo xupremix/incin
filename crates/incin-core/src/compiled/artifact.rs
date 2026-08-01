@@ -81,6 +81,7 @@ pub struct CompiledArtifact {
 }
 
 impl CompiledArtifact {
+    #[cfg(feature = "serde_json")]
     /// Creates a new artifact from a plan, labeling it and computing a checksum.
     pub fn new(plan: CompiledPlan, version: ArtifactVersion, label: String) -> Result<Self> {
         let plan_bytes = Self::serialize_plan(&plan)?;
@@ -95,11 +96,13 @@ impl CompiledArtifact {
         })
     }
 
+    #[cfg(feature = "serde_json")]
     /// Serializes the inner plan to JSON bytes.
     fn serialize_plan(plan: &CompiledPlan) -> Result<Vec<u8>> {
         serde_json::to_vec(plan).map_err(|e| Error::Msg(alloc::format!("serialize: {e}")))
     }
 
+    #[cfg(feature = "serde_json")]
     /// Serializes the artifact with binary `ARTIFACT_MAGIC` header framing (`SEC-010`).
     pub fn serialize(&self) -> Result<Vec<u8>> {
         let json_bytes =
@@ -110,6 +113,7 @@ impl CompiledArtifact {
         Ok(framed)
     }
 
+    #[cfg(feature = "serde_json")]
     /// Deserializes an artifact from framed bytes or raw JSON.
     pub fn deserialize(bytes: &[u8]) -> Result<Self> {
         let payload = if bytes.starts_with(&ARTIFACT_MAGIC) {
@@ -120,6 +124,7 @@ impl CompiledArtifact {
         serde_json::from_slice(payload).map_err(|e| Error::Msg(alloc::format!("deserialize: {e}")))
     }
 
+    #[cfg(feature = "serde_json")]
     /// Verifies the artifact's integrity by re-computing and comparing the checksum.
     pub fn verify_integrity(&self) -> Result<()> {
         let plan_bytes = Self::serialize_plan(&self.plan)?;
@@ -166,6 +171,7 @@ impl CompiledArtifact {
         Ok(())
     }
 
+    #[cfg(feature = "serde_json")]
     /// Produces a fresh artifact from `bytes`, verifying integrity, compatibility, and semantics.
     pub fn load(bytes: &[u8], required_version: &ArtifactVersion) -> Result<Self> {
         Self::load_with_limits(
@@ -175,6 +181,7 @@ impl CompiledArtifact {
         )
     }
 
+    #[cfg(feature = "serde_json")]
     /// Bounded loader enforcing explicit `ResourceLimits` (`SEC-010`).
     pub fn load_with_limits(
         bytes: &[u8],

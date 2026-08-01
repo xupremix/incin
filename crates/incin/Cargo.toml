@@ -76,6 +76,7 @@ serde_json = "1"
 name = "cargo-incin"
 path = "src/bin/cargo-incin.rs"
 bench = false
+required-features = ["std"]
 
 [dev-dependencies]
 hashbrown = "0.14.5"
