@@ -100,6 +100,70 @@ pub fn field_from_dims<S: Shape>(
     })
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+/// Bounded and verified element count (`SEC-011`).
+pub struct CheckedNumel(pub usize);
+
+impl CheckedNumel {
+    #[inline]
+    pub fn get(self) -> usize {
+        self.0
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+/// Bounded and verified allocation byte length (`SEC-011`).
+pub struct CheckedByteLen(pub usize);
+
+impl CheckedByteLen {
+    #[inline]
+    pub fn get(self) -> usize {
+        self.0
+    }
+}
+
+/// Safely computes shape element count using checked multiplication and limits (`SEC-011`).
+pub fn checked_numel_from_dims(
+    dims: &[usize],
+    limits: &crate::io::limits::ResourceLimits,
+) -> Result<CheckedNumel, crate::shapes::error::ShapeError> {
+    if limits.check_shape(dims).is_err() {
+        return Err(crate::shapes::error::ShapeError::InvalidParameter {
+            operation: crate::shapes::error::OperationKind::Reshape,
+            parameter: "rank",
+            value: dims.len(),
+        });
+    }
+
+    let mut total: usize = 1;
+    for &d in dims {
+        total = total
+            .checked_mul(d)
+            .ok_or(crate::shapes::error::ShapeError::ArithmeticOverflow {
+                operation: crate::shapes::error::OperationKind::Reshape,
+                expression: "shape product overflow",
+            })?;
+    }
+    Ok(CheckedNumel(total))
+}
+
+/// Safely computes byte allocation length using dtype block metrics and limits (`SEC-011`).
+pub fn checked_byte_len_from_dims(
+    dims: &[usize],
+    dtype: crate::tensor::dtype::DTypeId,
+    limits: &crate::io::limits::ResourceLimits,
+) -> Result<CheckedByteLen, crate::shapes::error::ShapeError> {
+    let numel = checked_numel_from_dims(dims, limits)?;
+    let bytes = dtype.size_bytes(numel.get(), crate::shapes::error::OperationKind::Reshape)?;
+    if (bytes as u64) > limits.max_tensor_bytes {
+        return Err(crate::shapes::error::ShapeError::ArithmeticOverflow {
+            operation: crate::shapes::error::OperationKind::Reshape,
+            expression: "tensor byte length exceeds limit",
+        });
+    }
+    Ok(CheckedByteLen(bytes))
+}
+
 /// A shape with runtime-accessible dimension information (rank, total elements, per-axis sizes).
 ///
 /// All implementors of `Shape` that support dynamic rank queries also implement `DynShape`.

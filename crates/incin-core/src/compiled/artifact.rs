@@ -100,14 +100,24 @@ impl CompiledArtifact {
         serde_json::to_vec(plan).map_err(|e| Error::Msg(alloc::format!("serialize: {e}")))
     }
 
-    /// Serializes the entire artifact (header + plan) to JSON bytes.
+    /// Serializes the artifact with binary `ARTIFACT_MAGIC` header framing (`SEC-010`).
     pub fn serialize(&self) -> Result<Vec<u8>> {
-        serde_json::to_vec(self).map_err(|e| Error::Msg(alloc::format!("serialize: {e}")))
+        let json_bytes =
+            serde_json::to_vec(self).map_err(|e| Error::Msg(alloc::format!("serialize: {e}")))?;
+        let mut framed = Vec::with_capacity(ARTIFACT_MAGIC.len() + json_bytes.len());
+        framed.extend_from_slice(&ARTIFACT_MAGIC);
+        framed.extend_from_slice(&json_bytes);
+        Ok(framed)
     }
 
-    /// Deserializes an artifact from JSON bytes.
+    /// Deserializes an artifact from framed bytes or raw JSON.
     pub fn deserialize(bytes: &[u8]) -> Result<Self> {
-        serde_json::from_slice(bytes).map_err(|e| Error::Msg(alloc::format!("deserialize: {e}")))
+        let payload = if bytes.starts_with(&ARTIFACT_MAGIC) {
+            &bytes[ARTIFACT_MAGIC.len()..]
+        } else {
+            bytes
+        };
+        serde_json::from_slice(payload).map_err(|e| Error::Msg(alloc::format!("deserialize: {e}")))
     }
 
     /// Verifies the artifact's integrity by re-computing and comparing the checksum.
@@ -136,11 +146,52 @@ impl CompiledArtifact {
         Ok(())
     }
 
-    /// Produces a fresh artifact from `bytes`, verifying both integrity and compatibility.
+    /// Performs semantic validation of internal plan nodes and allocation descriptors (`SEC-010`).
+    pub fn verify_semantics(&self) -> Result<()> {
+        let nodes = &self.plan.graph.nodes;
+        if nodes.len() > 100_000 {
+            return Err(Error::Msg(alloc::format!(
+                "Artifact node count {} exceeds maximum allowed limit 100,000",
+                nodes.len()
+            )));
+        }
+        for (i, node) in nodes.iter().enumerate() {
+            if node.id != i {
+                return Err(Error::Msg(alloc::format!(
+                    "Artifact semantic failure: node at position {} has non-topological ID {}",
+                    i, node.id
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    /// Produces a fresh artifact from `bytes`, verifying integrity, compatibility, and semantics.
     pub fn load(bytes: &[u8], required_version: &ArtifactVersion) -> Result<Self> {
+        Self::load_with_limits(
+            bytes,
+            required_version,
+            &crate::io::limits::ResourceLimits::compile_time_defaults(),
+        )
+    }
+
+    /// Bounded loader enforcing explicit `ResourceLimits` (`SEC-010`).
+    pub fn load_with_limits(
+        bytes: &[u8],
+        required_version: &ArtifactVersion,
+        limits: &crate::io::limits::ResourceLimits,
+    ) -> Result<Self> {
+        if (bytes.len() as u64) > limits.max_file_bytes {
+            return Err(Error::Msg(alloc::format!(
+                "Artifact file size {} bytes exceeds maximum limit {}",
+                bytes.len(),
+                limits.max_file_bytes
+            )));
+        }
         let artifact = Self::deserialize(bytes)?;
         artifact.verify_integrity()?;
         artifact.check_compatibility(required_version)?;
+        artifact.verify_semantics()?;
         Ok(artifact)
     }
 }

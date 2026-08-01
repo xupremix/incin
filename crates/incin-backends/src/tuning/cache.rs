@@ -728,6 +728,18 @@ fn load_entries(
     limits: CacheLimits,
     now_unix_ms: u64,
 ) -> core::result::Result<LoadResult, CacheError> {
+    if let Ok(metadata) = fs::metadata(path) {
+        if metadata.len() as usize > limits.max_bytes {
+            return quarantined_empty(
+                path,
+                format!(
+                    "file size {} exceeds maximum allowed cache bytes {}",
+                    metadata.len(),
+                    limits.max_bytes
+                ),
+            );
+        }
+    }
     let bytes = match fs::read(path) {
         Ok(bytes) => bytes,
         Err(source) if source.kind() == io::ErrorKind::NotFound => {
