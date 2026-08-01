@@ -1064,13 +1064,13 @@ deviations = []
 id = "DST-014"
 tier = "exploratory"
 theme = "dist"
-status = "planned"
+status = "complete"
 deps = ["CMP-003", "GRD-007", "DST-008"]
 target = ["crates/incin-core/src/dist/fsdp.rs"]
 deliverable = "FSDP and ZeRO prototype with persistent and transient memory parity"
 evidence = ["cargo test -p incin --features distributed-nccl --test fsdp  # 2x networked CUDA"]
-completed_on = ""
-completed_evidence = ""
+completed_on = "2026-08-01"
+completed_evidence = "cargo test -p incin --features distributed-nccl --test fsdp -> 3 passed in incin-core, 2 in incin. Validates ZeRO-1, ZeRO-2, and ZeRO-3 FSDP parameter sharding, peak transient memory bounds, and 2.0x persistent memory reduction ratio."
 deviations = []
 
 [[task]]

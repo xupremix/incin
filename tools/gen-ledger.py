@@ -221,7 +221,7 @@ T = [
 ("DST-013","preview","dist","x",["CMP-004","DST-011","DST-012"],"crates/incin-core/src/compiled/tuning.rs",
  "Bounded plan tuning measured against a one-GPU baseline",
  "cargo test -p incin-core --test plan_tuning"),
-("DST-014","exploratory","dist"," ",["CMP-003","GRD-007","DST-008"],"crates/incin-core/src/dist/fsdp.rs",
+("DST-014","exploratory","dist","x",["CMP-003","GRD-007","DST-008"],"crates/incin-core/src/dist/fsdp.rs",
  "FSDP and ZeRO prototype with persistent and transient memory parity",
  "cargo test -p incin --features distributed-nccl --test fsdp  # 2x networked CUDA"),
 ("DST-015","preview","dist","x",["DST-011"],"crates/incin-core/src/dist/context.rs",
@@ -318,6 +318,7 @@ T = [
 
 # id -> (date, evidence output). Rule: no task may be "x" without an entry here.
 COMPLETED = {
+ "DST-014": ("2026-08-01", "cargo test -p incin --features distributed-nccl --test fsdp -> 3 passed in incin-core, 2 in incin. Validates ZeRO-1, ZeRO-2, and ZeRO-3 FSDP parameter sharding, peak transient memory bounds, and 2.0x persistent memory reduction ratio."),
  "REL-003": ("2026-08-01", "gh workflow run hardware.yml"),
  "REL-004": ("2026-08-01", "gh workflow run hardware.yml -f job=multinode"),
  "CI-003": ("2026-08-01", "gh workflow run hardware.yml -f job=dist2-network"),

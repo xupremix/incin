@@ -16,6 +16,8 @@ pub mod context;
 #[cfg(feature = "distributed")]
 pub mod data_parallel;
 #[cfg(feature = "distributed")]
+pub mod fsdp;
+#[cfg(feature = "distributed")]
 pub mod mesh;
 #[cfg(feature = "distributed")]
 pub mod pipeline;
@@ -84,4 +86,9 @@ pub use tensor_parallel::{
     TensorParallelDimension, TensorParallelError, TensorParallelId, TensorParallelPlan,
     TensorParallelPlanBuilder, TwoRankTensorParallel, TwoWayShard, validate_tensor_parallel_dtype,
     validate_two_way_extent,
+};
+#[cfg(feature = "distributed")]
+pub use fsdp::{
+    FsdpError, FsdpMemoryReport, FsdpParameterDescriptor, FsdpParameterId, FsdpPlan,
+    FsdpPlanBuilder, ZeROStage,
 };
