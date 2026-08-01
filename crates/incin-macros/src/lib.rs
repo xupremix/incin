@@ -268,20 +268,6 @@ pub fn rank_sweep(input: TokenStream) -> TokenStream {
     rank::rank_sweep(input)
 }
 
-/// Constructs a type-level logical `MeshSpec` for distributed execution.
-///
-/// Accepts named keyword parameters `dp`, `tp`, `pp` representing Data, Tensor,
-/// and Pipeline parallel degrees. Omitted axes default to `1`.
-///
-/// ## Examples
-/// ```text
-/// type MyMesh = mesh![dp = 2, tp = 4];
-/// ```
-#[proc_macro]
-pub fn mesh(input: TokenStream) -> TokenStream {
-    mesh::mesh(input)
-}
-
 /// Constructs a compile-time tensor placement.
 ///
 /// Supports `Local`, `Replicated on Mesh`, `Sharded(axis) on Mesh`, `Partial(Op) on Mesh`,
