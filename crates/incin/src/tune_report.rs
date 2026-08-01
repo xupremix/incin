@@ -36,6 +36,18 @@ pub fn run(args: &[String]) -> (String, i32) {
 
     if clear_mode {
         if cache_dir.exists() {
+            let path_str = cache_dir.to_string_lossy();
+            if path_str == "/"
+                || path_str == "."
+                || path_str == ".."
+                || path_str.is_empty()
+                || cache_dir.parent().is_none()
+            {
+                return (
+                    "Error: Refusing to clear root or top-level system directory.\n".to_string(),
+                    EXIT_USAGE,
+                );
+            }
             let _ = std::fs::remove_dir_all(&cache_dir);
         }
         let msg = if json_mode {

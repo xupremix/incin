@@ -24,18 +24,32 @@ pub struct TensorMetaInfo {
     pub size_bytes: usize,
 }
 
-/// Inspects a `.safetensors`, `.gguf`, or `.onnx` file metadata.
+/// Inspects a `.safetensors`, `.gguf`, or `.onnx` file metadata with default resource limits.
 pub fn inspect_file<P: AsRef<Path>>(path: P) -> Result<ModelInfo> {
+    inspect_file_with_limits(path, &crate::io::limits::ResourceLimits::inspection_defaults())
+}
+
+/// Inspects a model file enforcing explicit resource limits.
+pub fn inspect_file_with_limits<P: AsRef<Path>>(
+    path: P,
+    limits: &crate::io::limits::ResourceLimits,
+) -> Result<ModelInfo> {
     let path_ref = path.as_ref();
     let file = File::open(path_ref)?;
     let metadata = file.metadata()?;
     let file_size_bytes = metadata.len();
+    if file_size_bytes > limits.max_file_bytes {
+        return Err(Error::Msg(format!(
+            "File size {} exceeds maximum limit {} bytes",
+            file_size_bytes, limits.max_file_bytes
+        )));
+    }
     let path_str = path_ref.to_string_lossy().to_string();
 
     if path_str.ends_with(".safetensors") {
-        inspect_safetensors(file, &path_str, file_size_bytes)
+        inspect_safetensors(file, &path_str, file_size_bytes, limits)
     } else if path_str.ends_with(".gguf") {
-        inspect_gguf(file, &path_str, file_size_bytes)
+        inspect_gguf(file, &path_str, file_size_bytes, limits)
     } else if path_str.ends_with(".onnx") {
         Ok(ModelInfo {
             format: "ONNX Protocol Buffer".to_string(),
@@ -52,10 +66,17 @@ pub fn inspect_file<P: AsRef<Path>>(path: P) -> Result<ModelInfo> {
     }
 }
 
-fn inspect_safetensors(mut file: File, path: &str, file_size_bytes: u64) -> Result<ModelInfo> {
+fn inspect_safetensors(
+    mut file: File,
+    path: &str,
+    file_size_bytes: u64,
+    limits: &crate::io::limits::ResourceLimits,
+) -> Result<ModelInfo> {
     let mut header_size_bytes = [0u8; 8];
     file.read_exact(&mut header_size_bytes)?;
-    let header_len = u64::from_le_bytes(header_size_bytes) as usize;
+    let header_len_raw = u64::from_le_bytes(header_size_bytes);
+    limits.check_header_bytes(header_len_raw)?;
+    let header_len = header_len_raw as usize;
 
     let mut header_buf = vec![0u8; header_len];
     file.read_exact(&mut header_buf)?;
@@ -149,8 +170,17 @@ fn read_u64<R: Read>(r: &mut R) -> Result<u64> {
     Ok(u64::from_le_bytes(buf))
 }
 
-fn read_gguf_string<R: Read>(r: &mut R) -> Result<String> {
+fn read_gguf_string<R: Read>(
+    r: &mut R,
+    limits: &crate::io::limits::ResourceLimits,
+) -> Result<String> {
     let len = read_u64(r)? as usize;
+    if len > limits.max_string_bytes {
+        return Err(Error::Msg(format!(
+            "GGUF string length {} exceeds limit {}",
+            len, limits.max_string_bytes
+        )));
+    }
     let mut buf = vec![0u8; len];
     r.read_exact(&mut buf)?;
     Ok(String::from_utf8_lossy(&buf).into_owned())
@@ -158,7 +188,11 @@ fn read_gguf_string<R: Read>(r: &mut R) -> Result<String> {
 
 /// Skips over a single GGUF metadata value of the given type id, advancing
 /// past it without allocating for fixed-size scalars.
-fn skip_gguf_value<R: Read + Seek>(r: &mut R, type_id: u32) -> Result<()> {
+fn skip_gguf_value<R: Read + Seek>(
+    r: &mut R,
+    type_id: u32,
+    limits: &crate::io::limits::ResourceLimits,
+) -> Result<()> {
     match type_id {
         0 | 1 | 7 => {
             r.seek(SeekFrom::Current(1))?;
@@ -173,13 +207,19 @@ fn skip_gguf_value<R: Read + Seek>(r: &mut R, type_id: u32) -> Result<()> {
             r.seek(SeekFrom::Current(8))?;
         }
         8 => {
-            let _ = read_gguf_string(r)?;
+            let _ = read_gguf_string(r, limits)?;
         }
         9 => {
             let elem_type = read_u32(r)?;
             let count = read_u64(r)?;
+            if count as usize > limits.max_metadata_entries {
+                return Err(Error::Msg(format!(
+                    "GGUF array metadata count {} exceeds limit",
+                    count
+                )));
+            }
             for _ in 0..count {
-                skip_gguf_value(r, elem_type)?;
+                skip_gguf_value(r, elem_type, limits)?;
             }
         }
         other => {
@@ -192,7 +232,12 @@ fn skip_gguf_value<R: Read + Seek>(r: &mut R, type_id: u32) -> Result<()> {
     Ok(())
 }
 
-fn inspect_gguf(mut file: File, path: &str, file_size_bytes: u64) -> Result<ModelInfo> {
+fn inspect_gguf(
+    mut file: File,
+    path: &str,
+    file_size_bytes: u64,
+    limits: &crate::io::limits::ResourceLimits,
+) -> Result<ModelInfo> {
     let mut magic = [0u8; 4];
     file.read_exact(&mut magic)?;
     if &magic != b"GGUF" {
@@ -203,14 +248,26 @@ fn inspect_gguf(mut file: File, path: &str, file_size_bytes: u64) -> Result<Mode
 
     let version = read_u32(&mut file)?;
     let tensor_count = read_u64(&mut file)? as usize;
+    if tensor_count > limits.max_tensor_count {
+        return Err(Error::Msg(format!(
+            "GGUF tensor count {} exceeds limit {}",
+            tensor_count, limits.max_tensor_count
+        )));
+    }
     let metadata_count = read_u64(&mut file)?;
+    if metadata_count as usize > limits.max_metadata_entries {
+        return Err(Error::Msg(format!(
+            "GGUF metadata count {} exceeds limit {}",
+            metadata_count, limits.max_metadata_entries
+        )));
+    }
 
     // Metadata KV entries are only needed to skip past them to reach the
     // tensor info table; their values aren't surfaced in `ModelInfo` today.
     for _ in 0..metadata_count {
-        let _key = read_gguf_string(&mut file)?;
+        let _key = read_gguf_string(&mut file, limits)?;
         let type_id = read_u32(&mut file)?;
-        skip_gguf_value(&mut file, type_id)?;
+        skip_gguf_value(&mut file, type_id, limits)?;
     }
 
     struct RawTensorHeader {
@@ -222,8 +279,14 @@ fn inspect_gguf(mut file: File, path: &str, file_size_bytes: u64) -> Result<Mode
 
     let mut headers = Vec::with_capacity(tensor_count);
     for _ in 0..tensor_count {
-        let name = read_gguf_string(&mut file)?;
+        let name = read_gguf_string(&mut file, limits)?;
         let n_dims = read_u32(&mut file)?;
+        if n_dims as usize > limits.max_rank {
+            return Err(Error::Msg(format!(
+                "GGUF tensor rank {} exceeds limit {}",
+                n_dims, limits.max_rank
+            )));
+        }
         let mut dims = Vec::with_capacity(n_dims as usize);
         for _ in 0..n_dims {
             dims.push(read_u64(&mut file)?);

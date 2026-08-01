@@ -148,7 +148,7 @@ pub fn idx(input: TokenStream) -> TokenStream {
 /// A macro to construct typed logical device mesh specifications ergonomically.
 ///
 /// ## Examples
-/// ```rust,ignore
+/// ```text
 /// type MyMesh = mesh![dp = 2, tp = 4, pp = 1];
 /// ```
 #[proc_macro]

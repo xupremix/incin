@@ -99,11 +99,25 @@ impl MnistDataset {
         f.read_exact(&mut rows)?;
         f.read_exact(&mut cols)?;
 
+        let magic_val = u32::from_be_bytes(magic);
+        if magic_val != 2051 {
+            return Err(anyhow::anyhow!("Invalid IDX magic number for MNIST images: expected 2051, got {}", magic_val));
+        }
+
         let count = u32::from_be_bytes(count) as usize;
         let rows = u32::from_be_bytes(rows) as usize;
         let cols = u32::from_be_bytes(cols) as usize;
 
-        let mut data = vec![0u8; count * rows * cols];
+        if count > 100_000 || rows > 1000 || cols > 1000 {
+            return Err(anyhow::anyhow!("MNIST image header parameters exceed safe resource limits: count={}, rows={}, cols={}", count, rows, cols));
+        }
+
+        let num_bytes = count
+            .checked_mul(rows)
+            .and_then(|v| v.checked_mul(cols))
+            .ok_or_else(|| anyhow::anyhow!("Arithmetic overflow in MNIST image data size"))?;
+
+        let mut data = vec![0u8; num_bytes];
         f.read_exact(&mut data)?;
 
         Ok(data)
@@ -118,7 +132,15 @@ impl MnistDataset {
         f.read_exact(&mut magic)?;
         f.read_exact(&mut count)?;
 
+        let magic_val = u32::from_be_bytes(magic);
+        if magic_val != 2049 {
+            return Err(anyhow::anyhow!("Invalid IDX magic number for MNIST labels: expected 2049, got {}", magic_val));
+        }
+
         let count = u32::from_be_bytes(count) as usize;
+        if count > 100_000 {
+            return Err(anyhow::anyhow!("MNIST label count exceeds safe resource limit: count={}", count));
+        }
 
         let mut data = vec![0u8; count];
         f.read_exact(&mut data)?;

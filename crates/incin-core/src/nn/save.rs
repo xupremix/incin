@@ -14,7 +14,17 @@ where
     P: AsRef<Path>,
     B: SupportsDType<B::FloatElem>,
 {
-    let buffer = std::fs::read(path)
+    let path_ref = path.as_ref();
+    let metadata = std::fs::metadata(path_ref)?;
+    let limits = ResourceLimits::model_load_defaults();
+    if metadata.len() > limits.max_file_bytes {
+        return Err(Error::Msg(format!(
+            "Safetensors file size {} exceeds limit {} bytes",
+            metadata.len(),
+            limits.max_file_bytes
+        )));
+    }
+    let buffer = std::fs::read(path_ref)
         .map_err(|e| Error::Msg(format!("Failed to read safetensors file: {}", e)))?;
     let tensors = SafeTensors::deserialize(&buffer)
         .map_err(|e| Error::Msg(format!("Safetensors deserialization failed: {:?}", e)))?;
@@ -123,8 +133,20 @@ where
     let serialized = safetensors::serialize(&data_map, &None)
         .map_err(|e| Error::Msg(format!("Safetensors serialization failed: {:?}", e)))?;
 
-    std::fs::write(path, serialized)
-        .map_err(|e| Error::Msg(format!("Failed to write safetensors: {}", e)))?;
+    let path_ref = path.as_ref();
+    let tmp_path = path_ref.with_extension(format!(
+        "{}.tmp",
+        path_ref
+            .extension()
+            .and_then(|s| s.to_str())
+            .unwrap_or("safetensors")
+    ));
+
+    std::fs::write(&tmp_path, serialized)
+        .map_err(|e| Error::Msg(format!("Failed to write safetensors tmp file: {}", e)))?;
+
+    std::fs::rename(&tmp_path, path_ref)
+        .map_err(|e| Error::Msg(format!("Failed to finalize safetensors rename: {}", e)))?;
 
     Ok(())
 }

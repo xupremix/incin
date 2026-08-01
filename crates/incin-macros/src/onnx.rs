@@ -283,7 +283,7 @@ fn parse_graph_nodes(
 pub(crate) fn parse_onnx(
     rel_path: &str,
     root_name: &Ident,
-    no_meta: bool,
+    _no_meta: bool,
 ) -> proc_macro2::TokenStream {
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
     let full_path = PathBuf::from(manifest_dir).join(rel_path);
@@ -292,32 +292,9 @@ pub(crate) fn parse_onnx(
         full_path.extension().unwrap().to_str().unwrap()
     ));
 
-    let use_cache = if no_meta
-        || std::env::var("INCIN_NO_META").unwrap_or_default() == "1"
-        || std::env::var("INCIN_DISABLE_META_CACHE").unwrap_or_default() == "1"
-    {
-        false
-    } else if let (Ok(orig_meta), Ok(cache_meta)) =
-        (fs::metadata(&full_path), fs::metadata(&meta_path))
-    {
-        if let (Ok(orig_time), Ok(cache_time)) = (orig_meta.modified(), cache_meta.modified()) {
-            cache_time >= orig_time
-        } else {
-            false
-        }
-    } else {
-        false
-    };
+    let _use_cache = false;
 
-    let meta = if use_cache {
-        if let Ok(cache_buffer) = fs::read_to_string(&meta_path) {
-            serde_json::from_str::<OnnxMeta>(&cache_buffer).ok()
-        } else {
-            None
-        }
-    } else {
-        None
-    };
+    let meta: Option<OnnxMeta> = None;
 
     let meta = if let Some(m) = meta {
         m

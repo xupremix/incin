@@ -97,7 +97,9 @@ pub mod prelude {
     pub use super::shapes::prelude::*;
     pub use super::tensor::prelude::*;
     #[cfg(feature = "std")]
-    pub use crate::io::{GgufExporter, GgufMetadata, MlxExporter, QuantScheme, inspect_file};
+    pub use crate::io::{
+        GgufExporter, GgufMetadata, MlxExporter, QuantScheme, ResourceLimits, inspect_file,
+    };
     #[cfg(feature = "std")]
     pub use crate::nn::save::{load_safetensors, load_safetensors_map, save_safetensors};
     #[cfg(feature = "std")]
