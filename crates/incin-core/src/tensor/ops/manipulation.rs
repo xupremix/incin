@@ -14,6 +14,25 @@ use crate::tensor::ops::*;
 use alloc::string::ToString;
 use alloc::vec::Vec;
 
+fn is_valid_scalar_type<E: 'static>() -> bool {
+    let tid = core::any::TypeId::of::<E>();
+    tid == core::any::TypeId::of::<bool>()
+        || tid == core::any::TypeId::of::<u8>()
+        || tid == core::any::TypeId::of::<u16>()
+        || tid == core::any::TypeId::of::<u32>()
+        || tid == core::any::TypeId::of::<u64>()
+        || tid == core::any::TypeId::of::<usize>()
+        || tid == core::any::TypeId::of::<i8>()
+        || tid == core::any::TypeId::of::<i16>()
+        || tid == core::any::TypeId::of::<i32>()
+        || tid == core::any::TypeId::of::<i64>()
+        || tid == core::any::TypeId::of::<isize>()
+        || tid == core::any::TypeId::of::<f32>()
+        || tid == core::any::TypeId::of::<f64>()
+        || tid == core::any::TypeId::of::<half::f16>()
+        || tid == core::any::TypeId::of::<half::bf16>()
+}
+
 impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
     Tensor<S, B, K, G>
 {
@@ -370,6 +389,13 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// `read_unaligned` would be undefined behavior whenever that byte
     /// isn't `0` or `1`.
     pub fn to_scalar<E: Copy + 'static>(&self) -> Result<E> {
+        if !is_valid_scalar_type::<E>() {
+            return Err(crate::err::Error::Msg(alloc::format!(
+                "Invalid target scalar type for tensor extraction: {:?}",
+                core::any::type_name::<E>()
+            )));
+        }
+
         let bytes = B::to_bytes(&self.inner)?;
         let dtype = K::to_incin(&self._dtype);
 
@@ -380,8 +406,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
                 ));
             }
             let val = bytes.iter().any(|&byte| byte != 0);
-            // SAFETY: `E` is verified to be exactly `bool` above, so this
-            // reinterprets a genuine, valid `bool` as itself.
+            // SAFETY: `E` is verified to be exactly `bool` above.
             return Ok(unsafe { core::ptr::read_unaligned(&val as *const bool as *const E) });
         }
 
@@ -395,6 +420,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
                 elem_size
             )));
         }
+        // SAFETY: `E` is verified to be a primitive scalar numeric type and bytes.len() == elem_size.
         let val = unsafe { core::ptr::read_unaligned(bytes.as_ptr() as *const E) };
         Ok(val)
     }
@@ -404,6 +430,13 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// See `to_scalar`'s doc comment for why `bool` is handled as a
     /// per-element truthy conversion rather than a raw reinterpret.
     pub fn to_vec1<E: Copy + 'static>(&self) -> Result<alloc::vec::Vec<E>> {
+        if !is_valid_scalar_type::<E>() {
+            return Err(crate::err::Error::Msg(alloc::format!(
+                "Invalid target scalar type for vector extraction: {:?}",
+                core::any::type_name::<E>()
+            )));
+        }
+
         let bytes = B::to_bytes(&self.inner)?;
         let num_elements = S::numel(&self._shape);
         let dtype = K::to_incin(&self._dtype);
@@ -446,13 +479,10 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             )));
         }
         let mut out = alloc::vec::Vec::with_capacity(num_elements);
-        unsafe {
-            core::ptr::copy_nonoverlapping(
-                bytes.as_ptr() as *const E,
-                out.as_mut_ptr(),
-                num_elements,
-            );
-            out.set_len(num_elements);
+        for chunk in bytes.chunks_exact(elem_size) {
+            // SAFETY: `E` is verified to be a primitive scalar type above and chunk is elem_size bytes.
+            let val = unsafe { core::ptr::read_unaligned(chunk.as_ptr() as *const E) };
+            out.push(val);
         }
         Ok(out)
     }

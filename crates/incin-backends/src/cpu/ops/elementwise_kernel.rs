@@ -16,6 +16,7 @@ use crate::cpu::stride;
 use crate::cpu::typed_kernel::{TypedKernel, map_binary_typed, map_unary_typed};
 use crate::dtype_policy::{BackendFamily, OperationKind, resolve_dtype_policy};
 use crate::iteration::{IterationPlan, OperandIteration, OperandLayout, UnaryIterationPlan};
+use crate::simd_lanes;
 
 // The release microbenchmark shows thread-pool dispatch dominates through
 // tens of thousands of elements while large tensors benefit substantially.
@@ -1453,7 +1454,12 @@ macro_rules! define_avx2_iteration_kernel {
             rhs: &[$element],
             plan: &IterationPlan,
         ) -> Option<Vec<$element>> {
-            if !std::arch::is_x86_feature_detected!("avx2") {
+            if simd_lanes::<$element>() < 8 {
+                #[cfg(feature = "std")]
+                if !std::arch::is_x86_feature_detected!("avx2") {
+                    return None;
+                }
+                #[cfg(not(feature = "std"))]
                 return None;
             }
             if plan.numel == 0 {
@@ -1875,7 +1881,7 @@ mod tests {
     #[cfg(all(feature = "std", target_arch = "x86_64"))]
     #[test]
     fn parallel_vector_chunks_preserve_operations_and_tails() {
-        if !std::arch::is_x86_feature_detected!("avx2") {
+        if simd_lanes::<f32>() < 8 && !std::arch::is_x86_feature_detected!("avx2") {
             return;
         }
 
@@ -2223,7 +2229,7 @@ mod tests {
             }
             if layout == "dense_broadcast" {
                 #[cfg(all(feature = "std", target_arch = "x86_64"))]
-                if std::arch::is_x86_feature_detected!("avx2") {
+                if simd_lanes::<f32>() >= 8 || std::arch::is_x86_feature_detected!("avx2") {
                     return if elements >= PARALLEL_GRAIN {
                         "rayon_avx2_broadcast"
                     } else {
@@ -2245,13 +2251,13 @@ mod tests {
             }
             if elements >= DENSE_PARALLEL_GRAIN {
                 #[cfg(all(feature = "std", target_arch = "x86_64"))]
-                if std::arch::is_x86_feature_detected!("avx2") {
+                if simd_lanes::<f32>() >= 8 || std::arch::is_x86_feature_detected!("avx2") {
                     return "rayon_avx2";
                 }
                 return "rayon";
             }
             #[cfg(all(feature = "std", target_arch = "x86_64"))]
-            if std::arch::is_x86_feature_detected!("avx2") {
+            if simd_lanes::<f32>() >= 8 || std::arch::is_x86_feature_detected!("avx2") {
                 return "avx2";
             }
             "scalar"

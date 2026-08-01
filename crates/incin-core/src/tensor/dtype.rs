@@ -27,11 +27,40 @@ pub trait IntDType: DType {}
 /// Marker for the boolean dtype.
 pub trait BoolDType: DType {}
 
+pub mod sealed {
+    pub trait TensorElementSealed {}
+}
+
+/// Marker trait enforcing that a tensor element type is POD, Zeroable, safe, and sealed (`SEC-005`).
+pub trait TensorElement:
+    sealed::TensorElementSealed
+    + bytemuck::Pod
+    + bytemuck::Zeroable
+    + Copy
+    + Debug
+    + Send
+    + Sync
+    + 'static
+{
+}
+
+impl<T> TensorElement for T where
+    T: sealed::TensorElementSealed
+        + bytemuck::Pod
+        + bytemuck::Zeroable
+        + Copy
+        + Debug
+        + Send
+        + Sync
+        + 'static
+{
+}
+
 /// A `DType` whose identity is fully known at compile time (as opposed to
 /// `Dyn`, which is resolved at runtime) — takes no constructor argument.
 pub trait ConstDType: DType<Arg = ()> {
     /// The Rust element type corresponding to this dtype.
-    type Elem: 'static + Copy + Debug + Send + Sync;
+    type Elem: TensorElement;
     /// The compile-time-known `DTypeId`.
     const DTYPE: DTypeId;
 }
@@ -168,6 +197,8 @@ impl DTypeId {
 macro_rules! impl_dtype {
     ($($repr:ident $t:ty),* $(,)?) => {
         $(
+            impl sealed::TensorElementSealed for $t {}
+
             impl DType for $t {
                 /// No argument needed — the dtype is fixed by the Rust type itself.
                 type Arg = ();
@@ -192,6 +223,9 @@ macro_rules! impl_dtype {
     };
 }
 
+unsafe impl bytemuck::Zeroable for Q8_0 {}
+unsafe impl bytemuck::Pod for Q8_0 {}
+
 impl_dtype!(
     F32 f32,
     F64 f64,
@@ -213,6 +247,20 @@ impl IntDType for u32 {}
 impl IntDType for i64 {}
 
 impl QuantDType for Q8_0 {}
+
+/// Marker trait for plain scalar dtypes (excluding block quantization).
+pub trait PlainDType: DType {
+    /// Plain scalar element type.
+    type Elem: TensorElement;
+}
+
+impl PlainDType for f32 { type Elem = f32; }
+impl PlainDType for f64 { type Elem = f64; }
+impl PlainDType for u8 { type Elem = u8; }
+impl PlainDType for u32 { type Elem = u32; }
+impl PlainDType for i64 { type Elem = i64; }
+impl PlainDType for f16 { type Elem = f16; }
+impl PlainDType for bf16 { type Elem = bf16; }
 
 impl DType for Dyn {
     /// The runtime-chosen dtype.

@@ -391,9 +391,19 @@ impl<S: Shape + DynShape, B: Backend> StateDict<B> for Param<S, B> {
         tensors: &BTreeMap<String, Tensor<Dyn, B>>,
     ) -> Result<()> {
         if let Some(t) = tensors.get(prefix) {
-            // we should replace self.inner or copy values into it.
-            // For now, we assume we just replace the RawVar.
-            // In a real framework, you might want in-place copy.
+            let loaded_dims = t.dims();
+            let expected_dims = S::dims(&self._shape);
+            if loaded_dims.as_slice() != expected_dims.as_ref() {
+                return Err(Error::ShapeMismatch {
+                    op: "Param::load_state_dict",
+                    expected: expected_dims.as_ref().to_vec(),
+                    got: loaded_dims,
+                    msg: alloc::format!(
+                        "Checkpoint parameter shape mismatch for key '{}'",
+                        prefix
+                    ),
+                });
+            }
             self.inner = B::var_from_tensor(&t.inner)?;
         }
         Ok(())
@@ -630,6 +640,19 @@ impl<S: Shape + DynShape, B: Backend> StateDict<B> for Buffer<S, B> {
         tensors: &BTreeMap<String, Tensor<Dyn, B>>,
     ) -> Result<()> {
         if let Some(t) = tensors.get(prefix) {
+            let loaded_dims = t.dims();
+            let expected_dims = S::dims(&self._shape);
+            if loaded_dims.as_slice() != expected_dims.as_ref() {
+                return Err(Error::ShapeMismatch {
+                    op: "Buffer::load_state_dict",
+                    expected: expected_dims.as_ref().to_vec(),
+                    got: loaded_dims,
+                    msg: alloc::format!(
+                        "Checkpoint buffer shape mismatch for key '{}'",
+                        prefix
+                    ),
+                });
+            }
             self.inner = B::var_from_tensor(&t.inner)?;
         }
         Ok(())

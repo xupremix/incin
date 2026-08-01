@@ -68,7 +68,8 @@ quote = { version = "1.0.46", default-features = false }
 candle-core = { version = "0.9.1", default-features = false }
 candle-nn = { version = "0.9.1", default-features = false }
 thiserror = { version = "2.0.18", default-features = false }
-half = { version = "2.7.1", default-features = false }
+half = { version = "2.7.1", default-features = false, features = ["bytemuck"] }
+bytemuck = { version = "1.25", default-features = false }
 # miette = "7.6.0"
 [workspace.metadata.release]
 shared-version = true

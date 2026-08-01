@@ -1,3 +1,5 @@
+#![allow(clippy::needless_range_loop)]
+
 use incin_backends::iteration::tile_2d;
 
 #[test]

@@ -751,6 +751,7 @@ pub(crate) fn render_cuda_binary(
     )
 }
 
+#[allow(dead_code)]
 pub(crate) fn render_cuda_binary_for_layout(
     op_name: &str,
     op_expr: &str,
@@ -795,6 +796,7 @@ pub(crate) fn render_cuda_binary_for_layout(
     render_cuda(&template, family, op_name, op_expr, dtype, unroll_width)
 }
 
+#[allow(dead_code)]
 pub(crate) fn render_cuda_unary_packed(
     op_name: &str,
     op_expr: &str,
@@ -844,6 +846,7 @@ pub(crate) fn render_cuda_unary_packed(
     )
 }
 
+#[allow(dead_code)]
 pub(crate) fn render_cuda_binary_packed(
     op_name: &str,
     op_expr: &str,
@@ -961,6 +964,7 @@ pub(crate) fn render_cuda_binary_packed(
     )
 }
 
+#[allow(dead_code)]
 pub(crate) fn render_cuda_reduction(
     op_name: &str,
     dtype: DTypeId,
@@ -1192,6 +1196,7 @@ extern "C" __global__ void {entry_point}(
     })
 }
 
+#[allow(dead_code)]
 pub(crate) fn render_cuda_normalization(op_name: &str, dtype: DTypeId) -> Result<RenderedKernel> {
     let scalar = CudaScalarSpec::for_float(dtype, "render_normalization")?;
     let policy = resolve_dtype_policy(

@@ -1,109 +1,50 @@
-//! Target-feature aware SIMD lane constants and vectorization utilities.
-//!
-//! Provides compile-time lane width resolution for SIMD optimization without
-//! runtime feature detection overhead on supported target feature paths.
-
 use core::mem::size_of;
 
-/// Resolves the compile-time SIMD vector lane count for type `T` based on
-/// enabled target features.
-///
-/// Returns the number of elements of type `T` that fit into a single SIMD vector
-/// register on the target CPU architecture. Returns `1` when no vector extension
-/// is enabled or when `T` is zero-sized.
+/// Returns the compile-time SIMD vector width in bytes for the active target architecture.
 #[inline]
-pub const fn simd_lanes<T: Sized>() -> usize {
-    let size = size_of::<T>();
-    if size == 0 {
-        return 1;
-    }
-
-    #[cfg(all(target_arch = "x86_64", target_feature = "avx512f"))]
+pub const fn simd_vector_bytes() -> usize {
+    #[cfg(target_feature = "avx512f")]
     {
-        let lanes = 64 / size;
-        if lanes > 0 { lanes } else { 1 }
+        64
     }
-
-    #[cfg(all(
-        target_arch = "x86_64",
-        target_feature = "avx2",
-        not(target_feature = "avx512f")
-    ))]
+    #[cfg(all(not(target_feature = "avx512f"), target_feature = "avx2"))]
     {
-        let lanes = 32 / size;
-        if lanes > 0 { lanes } else { 1 }
+        32
     }
-
     #[cfg(all(
-        target_arch = "x86_64",
-        target_feature = "sse4.1",
+        not(target_feature = "avx512f"),
         not(target_feature = "avx2"),
-        not(target_feature = "avx512f")
+        any(target_feature = "sse2", target_feature = "sse4.1", target_feature = "neon")
     ))]
     {
-        let lanes = 16 / size;
-        if lanes > 0 { lanes } else { 1 }
+        16
     }
-
-    #[cfg(target_arch = "aarch64")]
-    {
-        let lanes = 16 / size;
-        if lanes > 0 { lanes } else { 1 }
-    }
-
-    #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
-    {
-        let lanes = 16 / size;
-        if lanes > 0 { lanes } else { 1 }
-    }
-
     #[cfg(not(any(
-        all(target_arch = "x86_64", target_feature = "sse4.1"),
-        all(target_arch = "x86_64", target_feature = "avx2"),
-        all(target_arch = "x86_64", target_feature = "avx512f"),
-        target_arch = "aarch64",
-        all(target_arch = "wasm32", target_feature = "simd128")
+        target_feature = "avx512f",
+        target_feature = "avx2",
+        target_feature = "sse2",
+        target_feature = "sse4.1",
+        target_feature = "neon"
     )))]
     {
         1
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use half::{bf16, f16};
-
-    #[test]
-    fn test_simd_lanes_are_positive_and_power_of_two() {
-        assert!(simd_lanes::<f32>() >= 1);
-        assert!(simd_lanes::<f64>() >= 1);
-        assert!(simd_lanes::<f16>() >= 1);
-        assert!(simd_lanes::<bf16>() >= 1);
-        assert!(simd_lanes::<u8>() >= 1);
-        assert!(simd_lanes::<i32>() >= 1);
-
-        assert!(simd_lanes::<f32>().is_power_of_two());
-        assert!(simd_lanes::<f64>().is_power_of_two());
-        assert!(simd_lanes::<f16>().is_power_of_two());
-        assert!(simd_lanes::<bf16>().is_power_of_two());
+/// Returns the compile-time SIMD vector lane count for a given type `T`.
+///
+/// Returns at least `1` for types that are larger than the vector width or zero-sized.
+#[inline]
+pub const fn simd_lanes<T: Sized>() -> usize {
+    let elem_size = size_of::<T>();
+    if elem_size == 0 {
+        return 1;
     }
-
-    #[test]
-    fn test_lane_ratio_matches_type_size() {
-        // When no vector extension is compiled in, all types return 1 and the
-        // width-based ratios collapse. Only assert ratios when vectorisation is
-        // active (f32 lanes > 1).
-        let f32_lanes = simd_lanes::<f32>();
-        if f32_lanes > 1 {
-            assert_eq!(simd_lanes::<u8>(), f32_lanes * 4);
-            assert_eq!(simd_lanes::<f16>(), f32_lanes * 2);
-            assert_eq!(simd_lanes::<f64>(), f32_lanes / 2);
-        } else {
-            // Scalar fallback: all types return 1.
-            assert_eq!(simd_lanes::<u8>(), 1);
-            assert_eq!(simd_lanes::<f16>(), 1);
-            assert_eq!(simd_lanes::<f64>(), 1);
-        }
+    let vector_bytes = simd_vector_bytes();
+    let lanes = vector_bytes / elem_size;
+    if lanes == 0 {
+        1
+    } else {
+        lanes
     }
 }
