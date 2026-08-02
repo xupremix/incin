@@ -1,5 +1,6 @@
 #![cfg(feature = "cpu")]
 
+use incin::backend_authoring::*;
 use incin::prelude::*;
 
 #[test]

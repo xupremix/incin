@@ -24,9 +24,9 @@ use incin_core::exec::{
     Alignment, Capabilities, CapabilityQuery, MatMulSpec, ReshapeSpec, SupportLevel, TensorMeta,
     UnsupportedReason,
 };
+use incin_core::backend_authoring::{Execute, ExecutionRequest};
 use incin_core::prelude::{
-    BackendError, Cpu, DType, DTypeId, DeviceId, Execute, ExecutionRequest, OperationKind,
-    ShapeBuf, StorageBackend, StrideBuf,
+    BackendError, Cpu, DType, DTypeId, DeviceId, OperationKind, ShapeBuf, StorageBackend, StrideBuf,
 };
 
 // ============================================================================

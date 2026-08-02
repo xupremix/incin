@@ -38,10 +38,8 @@ pub mod loss {
     pub use crate::nn::loss::*;
 }
 
-/// Core prelude re-exporting common types, neural network modules, shapes, and backend traits.
-pub mod prelude {
-    pub use super::err::*;
-    pub use crate::SeqTy;
+/// Compiled graph and compiler execution preview types.
+pub mod compile {
     pub use crate::compiled::{
         AllocationPlanner, ArtifactHeader, ArtifactVersion, BufferSlot, CapturedGraph,
         CapturedNode, CompileOptions, CompiledArtifact, CompiledPlan, ConstantFolder,
@@ -49,14 +47,38 @@ pub mod prelude {
         LivenessInterval, LivenessMap, MemoryPlan, SavedTensorSet, ShapeBucket, ShapeGuard,
         WeightPrepacker,
     };
+}
+
+/// Extension traits and operation descriptor contracts for backend authors.
+pub mod backend_authoring {
+    pub use crate::exec::{
+        CapabilityRegistry, ExecutionContext, LossScaling, OperationSpec, PrecisionPolicy,
+        Validated,
+    };
+    pub use crate::tensor::backend::{
+        Backend, CreationOps, Execute, ExecutionRequest, FloatOps, LossOps, ModuleOps, NumericOps,
+        OptimizerOps, QuantizedOps, ReductionOps, StorageBackend, SupportsDType, TensorOps,
+        TransferTo,
+    };
+}
+
+pub mod test_utils {
+    pub use crate::tensor::backend::dummy::DummyBackend;
+}
+
+/// Core prelude re-exporting common types, neural network modules, shapes, and backend traits.
+pub mod prelude {
+    pub use super::err::*;
+    pub use crate::SeqTy;
+    pub use crate::graph::{Graph, OpType};
+    pub use half::{bf16, f16};
 
     pub use crate::dim;
 
     pub use crate::dist::{Local, Placement, PlacementKind};
     pub use crate::distributions::{Bernoulli, Distribution, Exponential, Gumbel, Normal, Uniform};
-    pub use crate::exec::{LossScaling, PrecisionPolicy};
+    pub use crate::test_utils as dummy;
 
-    pub use crate::graph::{Graph, OpType};
     pub use crate::metrics::{Accuracy, ConfusionMatrix, F1Score, MSE, Metric, Precision, Recall};
     pub use crate::nn::{
         activation::{GELU, ReLU, Sigmoid, Softmax, Swish, Tanh},
@@ -76,18 +98,13 @@ pub mod prelude {
         lstm::{LSTM, LSTMCell},
         max_pool2d::MaxPool2d,
         module::{
-            AutorefNamedLayers, AutorefNamedLayersFallback, AutorefParameters,
-            AutorefParametersFallback, AutorefShapeInfo, AutorefShapeInfoFallback,
-            AutorefStateDict, AutorefStateDictFallback, AutorefTrainMode, AutorefTrainModeFallback,
             LayerNode, Module, NamedLayers, Parameters, Sequential, StateDict, ToDevice, TrainMode,
         },
         optional::{False, OptionalField, True},
         param::Param,
         rms_norm::RMSNorm,
         rnn::{RNN, RNNCell},
-        stats::{
-            AutorefComputeStats, AutorefComputeStatsFallback, ComputeStats, LayerStats, ModelStats,
-        },
+        stats::{ComputeStats, LayerStats, ModelStats},
     };
     pub use crate::seq;
     pub use crate::tensor::ops::index::IndexSpec;
@@ -120,3 +137,4 @@ pub mod prelude {
     pub use alloc::vec::Vec;
     pub use typenum;
 }
+

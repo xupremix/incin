@@ -1,0 +1,354 @@
+pub mod incin
+pub use incin::<<incin_backends::*>>
+pub use incin::IncinBackend
+pub use incin::import_model
+pub use incin::mesh
+pub use incin::model
+pub use incin::module
+pub use incin::typenum
+pub mod incin::data
+pub use incin::data::<<incin_data::*>>
+pub mod incin::doctor
+pub enum incin::doctor::CacheState
+pub incin::doctor::CacheState::Absent
+pub incin::doctor::CacheState::NotCompiled
+pub incin::doctor::CacheState::NotWritable
+pub incin::doctor::CacheState::Unset
+pub incin::doctor::CacheState::Writable
+impl core::clone::Clone for incin::doctor::CacheState
+pub fn incin::doctor::CacheState::clone(&self) -> incin::doctor::CacheState
+impl core::cmp::Eq for incin::doctor::CacheState
+impl core::cmp::PartialEq for incin::doctor::CacheState
+pub fn incin::doctor::CacheState::eq(&self, &incin::doctor::CacheState) -> bool
+impl core::fmt::Debug for incin::doctor::CacheState
+pub fn incin::doctor::CacheState::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for incin::doctor::CacheState
+impl core::marker::StructuralPartialEq for incin::doctor::CacheState
+impl serde_core::ser::Serialize for incin::doctor::CacheState
+pub fn incin::doctor::CacheState::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for incin::doctor::CacheState
+impl core::marker::Send for incin::doctor::CacheState
+impl core::marker::Sync for incin::doctor::CacheState
+impl core::marker::Unpin for incin::doctor::CacheState
+impl core::marker::UnsafeUnpin for incin::doctor::CacheState
+impl core::panic::unwind_safe::RefUnwindSafe for incin::doctor::CacheState
+impl core::panic::unwind_safe::UnwindSafe for incin::doctor::CacheState
+pub enum incin::doctor::Severity
+pub incin::doctor::Severity::Error
+pub incin::doctor::Severity::Note
+pub incin::doctor::Severity::Warning
+impl core::clone::Clone for incin::doctor::Severity
+pub fn incin::doctor::Severity::clone(&self) -> incin::doctor::Severity
+impl core::cmp::Eq for incin::doctor::Severity
+impl core::cmp::Ord for incin::doctor::Severity
+pub fn incin::doctor::Severity::cmp(&self, &incin::doctor::Severity) -> core::cmp::Ordering
+impl core::cmp::PartialEq for incin::doctor::Severity
+pub fn incin::doctor::Severity::eq(&self, &incin::doctor::Severity) -> bool
+impl core::cmp::PartialOrd for incin::doctor::Severity
+pub fn incin::doctor::Severity::partial_cmp(&self, &incin::doctor::Severity) -> core::option::Option<core::cmp::Ordering>
+impl core::fmt::Debug for incin::doctor::Severity
+pub fn incin::doctor::Severity::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for incin::doctor::Severity
+impl core::marker::StructuralPartialEq for incin::doctor::Severity
+impl serde_core::ser::Serialize for incin::doctor::Severity
+pub fn incin::doctor::Severity::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for incin::doctor::Severity
+impl core::marker::Send for incin::doctor::Severity
+impl core::marker::Sync for incin::doctor::Severity
+impl core::marker::Unpin for incin::doctor::Severity
+impl core::marker::UnsafeUnpin for incin::doctor::Severity
+impl core::panic::unwind_safe::RefUnwindSafe for incin::doctor::Severity
+impl core::panic::unwind_safe::UnwindSafe for incin::doctor::Severity
+pub struct incin::doctor::Cache
+pub incin::doctor::Cache::detail: core::option::Option<alloc::string::String>
+pub incin::doctor::Cache::name: alloc::string::String
+pub incin::doctor::Cache::path: core::option::Option<alloc::string::String>
+pub incin::doctor::Cache::state: incin::doctor::CacheState
+impl incin::doctor::Cache
+pub fn incin::doctor::Cache::new(&str, core::option::Option<std::path::PathBuf>, incin::doctor::CacheState) -> Self
+pub fn incin::doctor::Cache::with_detail(self, &str) -> Self
+impl core::clone::Clone for incin::doctor::Cache
+pub fn incin::doctor::Cache::clone(&self) -> incin::doctor::Cache
+impl core::cmp::Eq for incin::doctor::Cache
+impl core::cmp::PartialEq for incin::doctor::Cache
+pub fn incin::doctor::Cache::eq(&self, &incin::doctor::Cache) -> bool
+impl core::fmt::Debug for incin::doctor::Cache
+pub fn incin::doctor::Cache::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for incin::doctor::Cache
+impl serde_core::ser::Serialize for incin::doctor::Cache
+pub fn incin::doctor::Cache::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for incin::doctor::Cache
+impl core::marker::Send for incin::doctor::Cache
+impl core::marker::Sync for incin::doctor::Cache
+impl core::marker::Unpin for incin::doctor::Cache
+impl core::marker::UnsafeUnpin for incin::doctor::Cache
+impl core::panic::unwind_safe::RefUnwindSafe for incin::doctor::Cache
+impl core::panic::unwind_safe::UnwindSafe for incin::doctor::Cache
+pub struct incin::doctor::DeviceReport
+pub incin::doctor::DeviceReport::available: bool
+pub incin::doctor::DeviceReport::compiled_in: bool
+pub incin::doctor::DeviceReport::kind: alloc::string::String
+pub incin::doctor::DeviceReport::ordinal: core::option::Option<usize>
+impl core::clone::Clone for incin::doctor::DeviceReport
+pub fn incin::doctor::DeviceReport::clone(&self) -> incin::doctor::DeviceReport
+impl core::cmp::Eq for incin::doctor::DeviceReport
+impl core::cmp::PartialEq for incin::doctor::DeviceReport
+pub fn incin::doctor::DeviceReport::eq(&self, &incin::doctor::DeviceReport) -> bool
+impl core::fmt::Debug for incin::doctor::DeviceReport
+pub fn incin::doctor::DeviceReport::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for incin::doctor::DeviceReport
+impl serde_core::ser::Serialize for incin::doctor::DeviceReport
+pub fn incin::doctor::DeviceReport::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for incin::doctor::DeviceReport
+impl core::marker::Send for incin::doctor::DeviceReport
+impl core::marker::Sync for incin::doctor::DeviceReport
+impl core::marker::Unpin for incin::doctor::DeviceReport
+impl core::marker::UnsafeUnpin for incin::doctor::DeviceReport
+impl core::panic::unwind_safe::RefUnwindSafe for incin::doctor::DeviceReport
+impl core::panic::unwind_safe::UnwindSafe for incin::doctor::DeviceReport
+pub struct incin::doctor::Feature
+pub incin::doctor::Feature::enabled: bool
+pub incin::doctor::Feature::name: alloc::string::String
+impl incin::doctor::Feature
+pub fn incin::doctor::Feature::new(&str, bool) -> Self
+impl core::clone::Clone for incin::doctor::Feature
+pub fn incin::doctor::Feature::clone(&self) -> incin::doctor::Feature
+impl core::cmp::Eq for incin::doctor::Feature
+impl core::cmp::PartialEq for incin::doctor::Feature
+pub fn incin::doctor::Feature::eq(&self, &incin::doctor::Feature) -> bool
+impl core::fmt::Debug for incin::doctor::Feature
+pub fn incin::doctor::Feature::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for incin::doctor::Feature
+impl serde_core::ser::Serialize for incin::doctor::Feature
+pub fn incin::doctor::Feature::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for incin::doctor::Feature
+impl core::marker::Send for incin::doctor::Feature
+impl core::marker::Sync for incin::doctor::Feature
+impl core::marker::Unpin for incin::doctor::Feature
+impl core::marker::UnsafeUnpin for incin::doctor::Feature
+impl core::panic::unwind_safe::RefUnwindSafe for incin::doctor::Feature
+impl core::panic::unwind_safe::UnwindSafe for incin::doctor::Feature
+pub struct incin::doctor::Finding
+pub incin::doctor::Finding::code: alloc::string::String
+pub incin::doctor::Finding::message: alloc::string::String
+pub incin::doctor::Finding::remedy: core::option::Option<alloc::string::String>
+pub incin::doctor::Finding::severity: incin::doctor::Severity
+impl core::clone::Clone for incin::doctor::Finding
+pub fn incin::doctor::Finding::clone(&self) -> incin::doctor::Finding
+impl core::cmp::Eq for incin::doctor::Finding
+impl core::cmp::PartialEq for incin::doctor::Finding
+pub fn incin::doctor::Finding::eq(&self, &incin::doctor::Finding) -> bool
+impl core::fmt::Debug for incin::doctor::Finding
+pub fn incin::doctor::Finding::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for incin::doctor::Finding
+impl serde_core::ser::Serialize for incin::doctor::Finding
+pub fn incin::doctor::Finding::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for incin::doctor::Finding
+impl core::marker::Send for incin::doctor::Finding
+impl core::marker::Sync for incin::doctor::Finding
+impl core::marker::Unpin for incin::doctor::Finding
+impl core::marker::UnsafeUnpin for incin::doctor::Finding
+impl core::panic::unwind_safe::RefUnwindSafe for incin::doctor::Finding
+impl core::panic::unwind_safe::UnwindSafe for incin::doctor::Finding
+pub struct incin::doctor::HostMachine
+impl core::clone::Clone for incin::doctor::HostMachine
+pub fn incin::doctor::HostMachine::clone(&self) -> incin::doctor::HostMachine
+impl core::default::Default for incin::doctor::HostMachine
+pub fn incin::doctor::HostMachine::default() -> incin::doctor::HostMachine
+impl core::fmt::Debug for incin::doctor::HostMachine
+pub fn incin::doctor::HostMachine::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for incin::doctor::HostMachine
+impl incin::doctor::Host for incin::doctor::HostMachine
+pub fn incin::doctor::HostMachine::caches(&self) -> alloc::vec::Vec<incin::doctor::Cache>
+pub fn incin::doctor::HostMachine::compiled_in(&self, incin_core::tensor::device::DeviceKind) -> bool
+pub fn incin::doctor::HostMachine::cpu_isa(&self) -> alloc::vec::Vec<incin::doctor::IsaFeature>
+pub fn incin::doctor::HostMachine::features(&self) -> alloc::vec::Vec<incin::doctor::Feature>
+pub fn incin::doctor::HostMachine::incin_version(&self) -> alloc::string::String
+pub fn incin::doctor::HostMachine::probe(&self, incin_core::tensor::device::DeviceKind) -> core::option::Option<incin_core::tensor::device::DeviceId>
+pub fn incin::doctor::HostMachine::rustc_version(&self) -> core::option::Option<alloc::string::String>
+impl core::marker::Freeze for incin::doctor::HostMachine
+impl core::marker::Send for incin::doctor::HostMachine
+impl core::marker::Sync for incin::doctor::HostMachine
+impl core::marker::Unpin for incin::doctor::HostMachine
+impl core::marker::UnsafeUnpin for incin::doctor::HostMachine
+impl core::panic::unwind_safe::RefUnwindSafe for incin::doctor::HostMachine
+impl core::panic::unwind_safe::UnwindSafe for incin::doctor::HostMachine
+pub struct incin::doctor::IsaFeature
+pub incin::doctor::IsaFeature::available: bool
+pub incin::doctor::IsaFeature::name: alloc::string::String
+impl incin::doctor::IsaFeature
+pub fn incin::doctor::IsaFeature::new(&str, bool) -> Self
+impl core::clone::Clone for incin::doctor::IsaFeature
+pub fn incin::doctor::IsaFeature::clone(&self) -> incin::doctor::IsaFeature
+impl core::cmp::Eq for incin::doctor::IsaFeature
+impl core::cmp::PartialEq for incin::doctor::IsaFeature
+pub fn incin::doctor::IsaFeature::eq(&self, &incin::doctor::IsaFeature) -> bool
+impl core::fmt::Debug for incin::doctor::IsaFeature
+pub fn incin::doctor::IsaFeature::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for incin::doctor::IsaFeature
+impl serde_core::ser::Serialize for incin::doctor::IsaFeature
+pub fn incin::doctor::IsaFeature::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for incin::doctor::IsaFeature
+impl core::marker::Send for incin::doctor::IsaFeature
+impl core::marker::Sync for incin::doctor::IsaFeature
+impl core::marker::Unpin for incin::doctor::IsaFeature
+impl core::marker::UnsafeUnpin for incin::doctor::IsaFeature
+impl core::panic::unwind_safe::RefUnwindSafe for incin::doctor::IsaFeature
+impl core::panic::unwind_safe::UnwindSafe for incin::doctor::IsaFeature
+pub struct incin::doctor::Probe
+pub incin::doctor::Probe::device: alloc::string::String
+pub incin::doctor::Probe::dtype: alloc::string::String
+pub incin::doctor::Probe::operation: alloc::string::String
+pub incin::doctor::Probe::rank: usize
+pub incin::doctor::Probe::reason: core::option::Option<alloc::string::String>
+pub incin::doctor::Probe::support: alloc::string::String
+pub incin::doctor::Probe::training: bool
+impl core::clone::Clone for incin::doctor::Probe
+pub fn incin::doctor::Probe::clone(&self) -> incin::doctor::Probe
+impl core::cmp::Eq for incin::doctor::Probe
+impl core::cmp::PartialEq for incin::doctor::Probe
+pub fn incin::doctor::Probe::eq(&self, &incin::doctor::Probe) -> bool
+impl core::fmt::Debug for incin::doctor::Probe
+pub fn incin::doctor::Probe::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for incin::doctor::Probe
+impl serde_core::ser::Serialize for incin::doctor::Probe
+pub fn incin::doctor::Probe::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for incin::doctor::Probe
+impl core::marker::Send for incin::doctor::Probe
+impl core::marker::Sync for incin::doctor::Probe
+impl core::marker::Unpin for incin::doctor::Probe
+impl core::marker::UnsafeUnpin for incin::doctor::Probe
+impl core::panic::unwind_safe::RefUnwindSafe for incin::doctor::Probe
+impl core::panic::unwind_safe::UnwindSafe for incin::doctor::Probe
+pub struct incin::doctor::Report
+pub incin::doctor::Report::caches: alloc::vec::Vec<incin::doctor::Cache>
+pub incin::doctor::Report::cpu_isa: alloc::vec::Vec<incin::doctor::IsaFeature>
+pub incin::doctor::Report::devices: alloc::vec::Vec<incin::doctor::DeviceReport>
+pub incin::doctor::Report::features: alloc::vec::Vec<incin::doctor::Feature>
+pub incin::doctor::Report::findings: alloc::vec::Vec<incin::doctor::Finding>
+pub incin::doctor::Report::probes: alloc::vec::Vec<incin::doctor::Probe>
+pub incin::doctor::Report::schema_version: u32
+pub incin::doctor::Report::toolchain: incin::doctor::Toolchain
+impl incin::doctor::Report
+pub fn incin::doctor::Report::exit_code(&self) -> i32
+pub fn incin::doctor::Report::gather(&dyn incin::doctor::Host) -> Self
+pub fn incin::doctor::Report::to_json(&self) -> core::result::Result<alloc::string::String, serde_json::error::Error>
+pub fn incin::doctor::Report::to_text(&self) -> alloc::string::String
+impl core::clone::Clone for incin::doctor::Report
+pub fn incin::doctor::Report::clone(&self) -> incin::doctor::Report
+impl core::cmp::Eq for incin::doctor::Report
+impl core::cmp::PartialEq for incin::doctor::Report
+pub fn incin::doctor::Report::eq(&self, &incin::doctor::Report) -> bool
+impl core::fmt::Debug for incin::doctor::Report
+pub fn incin::doctor::Report::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for incin::doctor::Report
+impl serde_core::ser::Serialize for incin::doctor::Report
+pub fn incin::doctor::Report::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for incin::doctor::Report
+impl core::marker::Send for incin::doctor::Report
+impl core::marker::Sync for incin::doctor::Report
+impl core::marker::Unpin for incin::doctor::Report
+impl core::marker::UnsafeUnpin for incin::doctor::Report
+impl core::panic::unwind_safe::RefUnwindSafe for incin::doctor::Report
+impl core::panic::unwind_safe::UnwindSafe for incin::doctor::Report
+pub struct incin::doctor::Toolchain
+pub incin::doctor::Toolchain::incin: alloc::string::String
+pub incin::doctor::Toolchain::rustc: core::option::Option<alloc::string::String>
+impl core::clone::Clone for incin::doctor::Toolchain
+pub fn incin::doctor::Toolchain::clone(&self) -> incin::doctor::Toolchain
+impl core::cmp::Eq for incin::doctor::Toolchain
+impl core::cmp::PartialEq for incin::doctor::Toolchain
+pub fn incin::doctor::Toolchain::eq(&self, &incin::doctor::Toolchain) -> bool
+impl core::fmt::Debug for incin::doctor::Toolchain
+pub fn incin::doctor::Toolchain::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for incin::doctor::Toolchain
+impl serde_core::ser::Serialize for incin::doctor::Toolchain
+pub fn incin::doctor::Toolchain::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for incin::doctor::Toolchain
+impl core::marker::Send for incin::doctor::Toolchain
+impl core::marker::Sync for incin::doctor::Toolchain
+impl core::marker::Unpin for incin::doctor::Toolchain
+impl core::marker::UnsafeUnpin for incin::doctor::Toolchain
+impl core::panic::unwind_safe::RefUnwindSafe for incin::doctor::Toolchain
+impl core::panic::unwind_safe::UnwindSafe for incin::doctor::Toolchain
+pub const incin::doctor::EXIT_FINDINGS: i32
+pub const incin::doctor::EXIT_OK: i32
+pub const incin::doctor::EXIT_USAGE: i32
+pub const incin::doctor::SCHEMA_VERSION: u32
+pub trait incin::doctor::Host
+pub fn incin::doctor::Host::caches(&self) -> alloc::vec::Vec<incin::doctor::Cache>
+pub fn incin::doctor::Host::compiled_in(&self, incin_core::tensor::device::DeviceKind) -> bool
+pub fn incin::doctor::Host::cpu_isa(&self) -> alloc::vec::Vec<incin::doctor::IsaFeature>
+pub fn incin::doctor::Host::features(&self) -> alloc::vec::Vec<incin::doctor::Feature>
+pub fn incin::doctor::Host::incin_version(&self) -> alloc::string::String
+pub fn incin::doctor::Host::probe(&self, incin_core::tensor::device::DeviceKind) -> core::option::Option<incin_core::tensor::device::DeviceId>
+pub fn incin::doctor::Host::rustc_version(&self) -> core::option::Option<alloc::string::String>
+impl incin::doctor::Host for incin::doctor::HostMachine
+pub fn incin::doctor::HostMachine::caches(&self) -> alloc::vec::Vec<incin::doctor::Cache>
+pub fn incin::doctor::HostMachine::compiled_in(&self, incin_core::tensor::device::DeviceKind) -> bool
+pub fn incin::doctor::HostMachine::cpu_isa(&self) -> alloc::vec::Vec<incin::doctor::IsaFeature>
+pub fn incin::doctor::HostMachine::features(&self) -> alloc::vec::Vec<incin::doctor::Feature>
+pub fn incin::doctor::HostMachine::incin_version(&self) -> alloc::string::String
+pub fn incin::doctor::HostMachine::probe(&self, incin_core::tensor::device::DeviceKind) -> core::option::Option<incin_core::tensor::device::DeviceId>
+pub fn incin::doctor::HostMachine::rustc_version(&self) -> core::option::Option<alloc::string::String>
+pub fn incin::doctor::cache_state(&std::path::Path) -> incin::doctor::CacheState
+pub fn incin::doctor::run(&[alloc::string::String]) -> (alloc::string::String, i32)
+pub mod incin::hub
+pub use incin::hub::<<incin_data::hub::*>>
+pub mod incin::macros
+pub use incin::macros::idx
+pub use incin::macros::mesh
+pub use incin::macros::s
+pub mod incin::metrics
+pub use incin::metrics::<<incin_core::metrics::*>>
+pub mod incin::nn
+pub use incin::nn::<<incin_core::nn::*>>
+pub mod incin::optim
+pub use incin::optim::<<incin_core::optim::*>>
+pub mod incin::prelude
+pub use incin::prelude::<<incin_backends::prelude::*>>
+pub use incin::prelude::<<incin_core::prelude::*>>
+pub use incin::prelude::axes
+pub use incin::prelude::einsum
+pub use incin::prelude::idx
+pub use incin::prelude::import_model
+pub use incin::prelude::mesh
+pub use incin::prelude::model
+pub use incin::prelude::module
+pub use incin::prelude::parallel
+pub use incin::prelude::placement
+pub use incin::prelude::s
+pub type incin::prelude::AvgPool2d<K, S, P, D> = incin_core::nn::avg_pool2d::AvgPool2d<K, S, P, D>
+pub type incin::prelude::BatchNorm2d<C, B> = incin_core::nn::batch_norm::BatchNorm2d<C, B>
+pub type incin::prelude::Conv1d<S, B> = incin_core::nn::conv1d::Conv1d<S, B>
+pub type incin::prelude::Conv2d<S, B> = incin_core::nn::conv2d::Conv2d<S, B>
+pub type incin::prelude::DefaultBackend = incin_backends::IncinBackend<f32, incin_core::tensor::device::Cpu>
+pub type incin::prelude::Embedding<S, B> = incin_core::nn::embedding::Embedding<S, B>
+pub type incin::prelude::LayerNorm<C, B> = incin_core::nn::layer_norm::LayerNorm<C, B>
+pub type incin::prelude::Linear<S, B> = incin_core::nn::linear::Linear<S, B>
+pub type incin::prelude::MaxPool2d<K, S, P, D> = incin_core::nn::max_pool2d::MaxPool2d<K, S, P, D>
+pub type incin::prelude::Param<T, B> = incin_core::nn::param::Param<T, B>
+pub type incin::prelude::RNN<S, B> = incin_core::nn::rnn::RNN<S, B>
+pub type incin::prelude::RNNCell<S, B> = incin_core::nn::rnn::RNNCell<S, B>
+pub type incin::prelude::Tensor<S, B, K, G, P> = incin_core::tensor::base::Tensor<S, B, K, G, P>
+pub mod incin::transforms
+pub use incin::transforms::<<incin_data::transforms::*>>
+pub mod incin::tune_report
+pub const incin::tune_report::EXIT_OK: i32
+pub const incin::tune_report::EXIT_USAGE: i32
+pub fn incin::tune_report::run(&[alloc::string::String]) -> (alloc::string::String, i32)
+pub type incin::AvgPool2d<K, S, P, D> = incin_core::nn::avg_pool2d::AvgPool2d<K, S, P, D>
+pub type incin::BatchNorm2d<C, B> = incin_core::nn::batch_norm::BatchNorm2d<C, B>
+pub type incin::Conv1d<S, B> = incin_core::nn::conv1d::Conv1d<S, B>
+pub type incin::Conv2d<S, B> = incin_core::nn::conv2d::Conv2d<S, B>
+pub type incin::DefaultBackend = incin_backends::IncinBackend<f32, incin_core::tensor::device::Cpu>
+pub type incin::DefaultDevice = incin_core::tensor::device::Cpu
+pub type incin::Embedding<S, B> = incin_core::nn::embedding::Embedding<S, B>
+pub type incin::LayerNorm<C, B> = incin_core::nn::layer_norm::LayerNorm<C, B>
+pub type incin::Linear<S, B> = incin_core::nn::linear::Linear<S, B>
+pub type incin::MaxPool2d<K, S, P, D> = incin_core::nn::max_pool2d::MaxPool2d<K, S, P, D>
+pub type incin::Param<T, B> = incin_core::nn::param::Param<T, B>
+pub type incin::RNN<S, B> = incin_core::nn::rnn::RNN<S, B>
+pub type incin::RNNCell<S, B> = incin_core::nn::rnn::RNNCell<S, B>
+pub type incin::Sequential<L1, L2> = incin_core::nn::module::Sequential<L1, L2>
+pub type incin::Tensor<S, B, K, G, P> = incin_core::tensor::base::Tensor<S, B, K, G, P>

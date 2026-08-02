@@ -1,13 +1,13 @@
 //! Descriptor execution for the native CPU vertical slice.
 
+use incin_core::backend_authoring::{
+    Execute, ExecutionRequest, ModuleOps, ReductionOps, StorageBackend, TensorOps,
+};
 use incin_core::exec::{
     Capabilities, CapabilityQuery, Conv2dSpec, MatMulSpec, MathMode, Pool2dSpec, PoolOp, ReduceOp,
     ReductionSpec, ReshapeSpec, SupportLevel, TensorMeta,
 };
-use incin_core::prelude::{
-    BackendError, DType, DTypeId, Device, DeviceKind, Execute, ExecutionRequest, ModuleOps,
-    OperationKind, ReductionOps, StorageBackend, TensorOps,
-};
+use incin_core::prelude::{BackendError, DType, DTypeId, Device, DeviceKind, OperationKind};
 
 use super::CpuBackendImpl;
 use super::storage::CpuStorage;
@@ -155,7 +155,7 @@ impl<T: DType, D: Device> Execute<MatMulSpec> for CpuBackendImpl<T, D> {
     fn execute(
         &self,
         request: ExecutionRequest<'_, MatMulSpec, Self>,
-    ) -> Result<Self::Output, BackendError> {
+    ) -> Result<CpuStorage, BackendError> {
         let _ = self;
         let spec = request.operation.descriptor();
         let (lhs, rhs) = bind_matmul(&request)?;
@@ -261,7 +261,7 @@ impl<T: DType, D: Device> Execute<ReshapeSpec> for CpuBackendImpl<T, D> {
     fn execute(
         &self,
         request: ExecutionRequest<'_, ReshapeSpec, Self>,
-    ) -> Result<Self::Output, BackendError> {
+    ) -> Result<CpuStorage, BackendError> {
         let _ = self;
         let spec = request.operation.descriptor();
         let input = bind_reshape(&request)?;
@@ -357,7 +357,7 @@ impl<T: DType, D: Device> Execute<Conv2dSpec> for CpuBackendImpl<T, D> {
     fn execute(
         &self,
         request: ExecutionRequest<'_, Conv2dSpec, Self>,
-    ) -> Result<Self::Output, BackendError> {
+    ) -> Result<CpuStorage, BackendError> {
         let _ = self;
         let spec = request.operation.descriptor();
         let window = conv2d_window(spec)?;
@@ -436,7 +436,7 @@ impl<T: DType, D: Device> Execute<ReductionSpec> for CpuBackendImpl<T, D> {
     fn execute(
         &self,
         request: ExecutionRequest<'_, ReductionSpec, Self>,
-    ) -> Result<Self::Output, BackendError> {
+    ) -> Result<CpuStorage, BackendError> {
         let _ = self;
         let spec = request.operation.descriptor();
         let run = reduction_run(spec)?;
@@ -516,7 +516,7 @@ impl<T: DType, D: Device> Execute<Pool2dSpec> for CpuBackendImpl<T, D> {
     fn execute(
         &self,
         request: ExecutionRequest<'_, Pool2dSpec, Self>,
-    ) -> Result<Self::Output, BackendError> {
+    ) -> Result<CpuStorage, BackendError> {
         let _ = self;
         let spec = request.operation.descriptor();
         let window = pool2d_window(spec)?;

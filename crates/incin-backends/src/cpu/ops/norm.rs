@@ -9,7 +9,8 @@
 //! new `tape::push`/backward closures are written here. The existing backward
 //! closures already handle the unbroadcast math correctly for any shape.
 
-use incin_core::prelude::{DType, FloatOps, NumericOps, ReductionOps, Result};
+use incin_core::backend_authoring::{FloatOps, NumericOps, ReductionOps};
+use incin_core::prelude::{DType, Result};
 
 use crate::cpu::CpuBackendImpl;
 use crate::cpu::storage::{CpuBuffer, CpuStorage};

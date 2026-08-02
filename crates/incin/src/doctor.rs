@@ -682,6 +682,7 @@ fn compiled_features() -> Vec<Feature> {
         ),
         Feature::new("distributed-nccl", cfg!(feature = "distributed-nccl")),
         Feature::new("telemetry", cfg!(feature = "telemetry")),
+        Feature::new("test-utils", cfg!(feature = "test-utils")),
     ]
 }
 

@@ -12,9 +12,9 @@ use incin_core::exec::{
     Conv2dArgs, Conv2dRule, Conv2dSpec, ExecutionContext, MatMulRule, MatMulSpec, Pool2dRule,
     PoolOp, ReduceOp, ReduceRule, ReshapeRule, ReshapeSpec, ShapeRule, TensorHandle, Validated,
 };
+use incin_core::backend_authoring::{Execute, ExecutionRequest, ModuleOps, TensorOps};
 use incin_core::prelude::{
-    Backend, BackendError, DTypeId, DeviceId, Dyn, Execute, ExecutionRequest, Local, ModuleOps,
-    OperationKind, Shape, TensorOps, WgpuN,
+    Backend, BackendError, DTypeId, DeviceId, Dyn, Local, OperationKind, Shape, WgpuN,
 };
 use incin_core::typenum::{U0, U1, U2, U3, U4, U6};
 

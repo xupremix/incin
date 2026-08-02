@@ -2,9 +2,8 @@
 //! descriptor that any caller can construct.
 
 use incin_core::exec::{BroadcastSpec, ExecutionContext, TensorMeta};
-use incin_core::prelude::{
-    Cpu, DType, ExecutionRequest, ShapeBuf, StorageBackend, StrideBuf,
-};
+use incin_core::backend_authoring::{ExecutionRequest, StorageBackend};
+use incin_core::prelude::{Cpu, DType, ShapeBuf, StrideBuf};
 
 struct StorageOnly;
 

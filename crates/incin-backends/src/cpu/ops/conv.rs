@@ -42,7 +42,8 @@
 
 use incin_core::prelude::Error;
 use incin_core::prelude::{BackwardError, OperationKind};
-use incin_core::prelude::{DType, NumericOps, Result, TensorOps};
+use incin_core::backend_authoring::{NumericOps, TensorOps};
+use incin_core::prelude::{DType, Result};
 
 use crate::cpu::CpuBackendImpl;
 use crate::cpu::ops::matmul::{batched_matmul_impl, transpose_last2};
@@ -812,7 +813,8 @@ fn concat_along_dim(parts: &[CpuStorage], dim: usize) -> CpuStorage {
 mod tests {
     use super::*;
     use crate::cpu::gradcheck::gradcheck;
-    use incin_core::prelude::{Cpu, ReductionOps};
+    use incin_core::backend_authoring::ReductionOps;
+    use incin_core::prelude::Cpu;
 
     /// `TestBackend`.
     type TestBackend = CpuBackendImpl<f32, Cpu>;

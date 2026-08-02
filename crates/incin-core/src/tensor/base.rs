@@ -885,7 +885,7 @@ mod tests {
     /// (kernel - 1) + 1` used to panic via unchecked `usize` subtraction in
     /// debug builds (or silently wrap in release).
     fn dummy_backend_conv_pool_shape_math_never_panics_on_tiny_input_large_kernel() {
-        use crate::prelude::{Backend, ModuleOps};
+        use crate::backend_authoring::{Backend, ModuleOps};
         type B = crate::tensor::backend::dummy::DummyBackend<f32, crate::prelude::Cpu>;
 
         // 1x1x2x2 input, a 5x5 kernel with dilation 3: `dilation*(kernel-1)+1`
@@ -895,7 +895,7 @@ mod tests {
         let out = <B as ModuleOps<B>>::conv2d::<f32>(&input, &weight, None, 1, 0, 3, 1).unwrap();
         assert_eq!(out.len(), 4);
 
-        let pool_out = <B as crate::prelude::ModuleOps<B>>::max_pool2d::<f32>(
+        let pool_out = <B as ModuleOps<B>>::max_pool2d::<f32>(
             &input,
             (5, 5),
             (1, 1),

@@ -8,7 +8,7 @@
 //! objected. With the defaults gone the omission is an `E0046`, which is where
 //! a missing operation belongs.
 
-use incin_core::prelude::{Backend, ModuleOps};
+use incin_core::backend_authoring::{Backend, ModuleOps};
 
 struct Incomplete<B>(core::marker::PhantomData<B>);
 

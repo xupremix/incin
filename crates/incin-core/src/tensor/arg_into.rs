@@ -11,10 +11,10 @@
 use core::marker::PhantomData;
 
 #[cfg(feature = "cuda")]
-use crate::prelude::{Cuda, CudaN};
+use crate::tensor::device::{Cuda, CudaN};
 
 #[cfg(feature = "wgpu")]
-use crate::prelude::{Wgpu, WgpuN};
+use crate::tensor::device::{Wgpu, WgpuN};
 
 use crate::prelude::{Cpu, DTypeId, DeviceId, Dim, Grad, NoGrad};
 use typenum::{Bit, UInt, UTerm, Unsigned};

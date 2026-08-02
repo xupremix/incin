@@ -10,7 +10,7 @@
 //! tell a missing kernel apart from a wrapper that forgot to forward, so
 //! neither gap was visible until the defaults came off.
 
-use incin_core::prelude::{Backend, TensorOps};
+use incin_core::backend_authoring::{Backend, TensorOps};
 
 struct Incomplete<B>(core::marker::PhantomData<B>);
 

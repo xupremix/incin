@@ -25,15 +25,28 @@ pub mod tracing;
 
 /// Re-exports the public tensor-layer API: `Tensor`, `Backend`, `Device`, `DType`, and their supporting traits.
 pub mod prelude {
-    pub use super::arg::*;
-    pub use super::arg_into::*;
-    pub use super::auto_device::*;
-    pub use super::backend::*;
-    pub use super::base::*;
-    pub use super::conv2d::*;
-    pub use super::device::*;
-    pub use super::dtype::*;
-    pub use super::grad::*;
-    pub use super::matmul::*;
-    pub use super::tracing::*;
+    pub use super::arg::TensorArgs;
+    pub use super::arg_into::{ArgInto, TensorArgsData};
+    pub use super::auto_device::{BestDevice, BestDeviceAt};
+    pub use super::backend::{Backend, StorageBackend, SupportsDType, TransferTo};
+    pub use super::base::{Dyn, Tensor};
+    #[cfg(feature = "distributed")]
+    pub use super::base::PlacedTensorError;
+    pub use super::device::{ConstDevice, Cpu, Device, DeviceId, DeviceKind};
+    #[cfg(feature = "cuda")]
+    pub use super::device::{Cuda, CudaN};
+    #[cfg(feature = "wgpu")]
+    pub use super::device::{Wgpu, WgpuN};
+    #[cfg(feature = "metal")]
+    pub use super::device::{Metal, MetalN};
+
+    pub use super::dtype::{
+        BoolDType, ConstDType, DType, DTypeId, FloatDType, IntDType, PlainDType, Q8_0, QuantDType,
+        TensorElement,
+    };
+    pub use super::grad::{Grad, NoGrad, RequiresGrad};
+    pub use super::matmul::MatMulShape;
+    pub use super::tracing::{
+        TracingBackend, extract_graph, tracing_mark_input, tracing_mark_output,
+    };
 }

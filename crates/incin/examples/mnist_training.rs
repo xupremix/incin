@@ -1,4 +1,3 @@
-use incin::Backend as _;
 use incin::Flatten;
 use incin::prelude::*;
 use incin_data::vision::mnist::MnistDataset;
@@ -40,7 +39,7 @@ impl Collate<(Vec<f32>, u8)> for MnistCollate {
         };
 
         let device = DeviceId::cpu();
-        let images_raw = Backend::from_bytes::<f32>(
+        let images_raw = <Backend as incin::backend_authoring::Backend>::from_bytes::<f32>(
             images_bytes,
             &[batch_size, 1, 28, 28],
             DTypeId::F32,
@@ -48,7 +47,7 @@ impl Collate<(Vec<f32>, u8)> for MnistCollate {
         )
         .unwrap();
         let labels_raw =
-            Backend::from_bytes::<f32>(labels_bytes, &[batch_size], DTypeId::F32, &device).unwrap();
+            <Backend as incin::backend_authoring::Backend>::from_bytes::<f32>(labels_bytes, &[batch_size], DTypeId::F32, &device).unwrap();
 
         (
             Tensor::<Dyn, Backend>::from_raw(images_raw, vec![batch_size, 1, 28, 28]).unwrap(),

@@ -19,7 +19,7 @@ help: `incin_core::dist::Replicated<Mesh>` implements trait `LegalTransition<To>
    | |     Mesh: ValidMesh,
    | |     Axis: crate::dist::placement::PlacementAxis,
    | |________________________________________________^ `LegalTransition<incin_core::dist::Sharded<Mesh, Axis>>`
-note: required by a bound in `incin_backends::Tensor::<S, B, K, G, P>::try_reshard`
+note: required by a bound in `incin_backends::cpu::Tensor::<S, B, K, G, P>::try_reshard`
   --> src/tensor/base.rs
    |
    |     pub fn try_reshard<To, O>(

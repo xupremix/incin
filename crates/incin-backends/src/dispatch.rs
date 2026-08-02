@@ -1,6 +1,14 @@
 //! Runtime backend selection used by `IncinBackend<_, Dyn>`.
 
+use incin_core::backend_authoring::*;
 use incin_core::prelude::*;
+
+#[cfg(feature = "cpu")]
+use incin_core::prelude::Cpu;
+#[cfg(feature = "cuda")]
+use incin_core::prelude::Cuda;
+#[cfg(feature = "wgpu")]
+use incin_core::prelude::Wgpu;
 
 use crate::dtype_policy::{BackendFamily, OperationKind, resolve_dtype_policy};
 

@@ -8,10 +8,10 @@ use incin_core::exec::{
     Capabilities, CapabilityQuery, ImplementationKind, LayoutClass, MathMode, SupportLevel,
     UnsupportedReason,
 };
-use incin_core::prelude::{
-    Backend, CreationOps, DTypeId, DeviceId, DeviceKind, Dyn, ModuleOps, NumericOps, OperationKind,
-    ReductionOps, TensorOps,
+use incin_core::backend_authoring::{
+    Backend, CreationOps, ModuleOps, NumericOps, ReductionOps, TensorOps,
 };
+use incin_core::prelude::{DTypeId, DeviceId, DeviceKind, Dyn, OperationKind};
 
 fn query(
     operation: OperationKind,

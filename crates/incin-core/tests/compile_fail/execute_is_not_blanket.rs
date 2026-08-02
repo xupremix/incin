@@ -2,7 +2,8 @@
 //! execution exists only when the backend implements `Execute<O>`.
 
 use incin_core::exec::{BroadcastSpec, TensorMeta};
-use incin_core::prelude::{Cpu, DType, Execute, StorageBackend};
+use incin_core::backend_authoring::{Execute, StorageBackend};
+use incin_core::prelude::{Cpu, DType};
 
 struct StorageOnly;
 

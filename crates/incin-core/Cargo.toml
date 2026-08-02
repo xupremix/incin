@@ -42,6 +42,8 @@ cuda = []
 wgpu = []
 # Enables Metal device marker metadata used by Metal-capable backend crates.
 metal = []
+# Feature-gated test utilities and mock/dummy backends.
+test-utils = []
 
 
 # candle = ["dep:candle-core", "dep:candle-nn"]

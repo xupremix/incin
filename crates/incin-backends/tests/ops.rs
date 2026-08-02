@@ -1,6 +1,6 @@
 #![cfg(feature = "cpu")]
 
-use incin_backends::Backend;
+use incin_core::backend_authoring::*;
 use incin_core::prelude::*;
 
 /// Cbackend.

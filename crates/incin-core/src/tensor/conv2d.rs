@@ -1,6 +1,7 @@
 //! Conv2d shape verification
 
 use crate::prelude::*;
+use crate::tensor::matmul::StaticDim;
 use typenum::{Diff, Prod, Quot, Sum, U1, U2};
 
 // ConvOutDim already defined in arithmetic.rs and exposed via prelude

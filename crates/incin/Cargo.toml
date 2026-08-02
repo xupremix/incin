@@ -61,6 +61,8 @@ distributed-nccl = ["distributed", "cuda", "incin-backends/distributed-nccl"]
 # directory under this feature, which is why the dependency is direct here and
 # not only through incin-backends.
 telemetry = ["std", "incin-backends/telemetry", "dep:incin-telemetry"]
+# Test-only backends and test utilities.
+test-utils = ["incin-core/test-utils"]
 
 [dependencies]
 incin-core = { path = "../incin-core", version = "0.0.0", default-features = false }

@@ -1,5 +1,6 @@
 use crate::cpu::{CpuBackendImpl, CpuBuffer};
-use incin_core::prelude::{Backend, DType, Device, OptimizerOps, Result};
+use incin_core::backend_authoring::{Backend, OptimizerOps};
+use incin_core::prelude::{DType, Device, Result};
 
 impl<T: DType, D: Device> OptimizerOps<Self> for CpuBackendImpl<T, D> {
     /// Applies a fused AdamW optimization step on the backend.

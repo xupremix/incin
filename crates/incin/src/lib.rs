@@ -84,9 +84,42 @@
 //! ```
 extern crate alloc;
 
-pub use incin_backends::*;
+pub use incin_core::prelude::{
+    Backend, ConstShape, Cpu, DType, DTypeId, DeviceId, Dyn, DynShape, Error, Flatten, Grad,
+    Gradients, Module, NoGrad, PartialDynShape, Result, Shape, StateDict,
+};
+pub use incin_core::optim::{Adam, AdamW, Optimizer, SGD};
+pub use incin_core::backend_authoring::{
+    CreationOps, FloatOps, ModuleOps, NumericOps, ReductionOps, SupportsDType, TensorOps,
+};
 
+pub use incin_backends::IncinBackend;
+
+#[cfg(feature = "cuda")]
+pub use incin_core::prelude::{Cuda, CudaN};
+#[cfg(feature = "wgpu")]
+pub use incin_core::prelude::{Wgpu, WgpuN};
+#[cfg(feature = "metal")]
+pub use incin_core::prelude::{Metal, MetalN};
+
+pub use incin_core::dim;
 pub use incin_macros::{import_model, mesh, model, module};
+
+/// Curated preview types for compiled execution.
+pub mod compile {
+    pub use incin_core::compile::*;
+}
+
+/// Contracts and extension traits for backend authors.
+pub mod backend_authoring {
+    pub use incin_core::backend_authoring::*;
+}
+
+#[cfg(any(test, feature = "test-utils"))]
+/// Test utilities and test backend implementations.
+pub mod test_utils {
+    pub use incin_core::test_utils::*;
+}
 
 /// Neural network modules, activation functions, layers, and building blocks.
 pub mod nn {
@@ -165,9 +198,6 @@ pub mod train;
 pub mod tune_report;
 
 pub type DefaultBackend = incin_backends::IncinBackend<f32, incin_core::prelude::Cpu>;
-
-/// Re-export of the unified backend type.
-pub use incin_backends::IncinBackend;
 
 // No `DefaultBackend` fallback when `cpu` is disabled: a `()` placeholder
 // (the previous approach) doesn't implement `Backend`, so every type alias
@@ -291,23 +321,19 @@ pub mod prelude {
     pub use incin_backends::prelude::*;
     pub use incin_core::prelude::*;
 
-    // Explicit list instead of `incin_macros::*`: the wildcard also pulled
-    // in `generate_shape_ops` and `impl_arg_into`, internal codegen helpers
-    // invoked only by incin-core's own macro expansions
-    // (`incin_macros::generate_shape_ops!()` in `shapes/shape_ops.rs`,
-    // `incin_macros::impl_arg_into!()` in `tensor/arg_into.rs`) — neither
-    // has a documented public contract or any end-user call site.
+    pub use incin_core::dim;
     pub use incin_macros::{
         axes, einsum, idx, import_model, mesh, model, module, parallel, placement, s,
     };
 
-    // We intentionally overshadow incin_core::Tensor and NN modules with our aliased versions
+    pub use super::{Cpu, Error, Result};
     #[cfg(feature = "cpu")]
     pub use super::DefaultBackend;
     pub use super::Tensor;
     pub use super::{AvgPool2d, BatchNorm2d, Conv1d, Conv2d, LayerNorm, Linear, MaxPool2d, Param};
-    pub use super::{Embedding, RNN, RNNCell};
+    pub use super::{Embedding, RNN, RNNCell, Sequential};
 }
+
 
 #[cfg(test)]
 /// Tests.

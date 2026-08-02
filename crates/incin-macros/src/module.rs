@@ -279,25 +279,25 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
 
                     param_calls.push(quote! {
                         {
-                            use #k_crate::prelude::{AutorefParameters, AutorefParametersFallback};
+                            use #k_crate::nn::module::{AutorefParameters, AutorefParametersFallback};
                             (&&self.#fname).maybe_parameters(core::marker::PhantomData::<#b_ident>, &#format_mac("{}{}", prefix, #fname_str), map);
                         }
                     });
                     load_state_calls.push(quote! {
                         {
-                            use #k_crate::prelude::{AutorefStateDict, AutorefStateDictFallback};
+                            use #k_crate::nn::module::{AutorefStateDict, AutorefStateDictFallback};
                             (&mut &mut self.#fname).maybe_load_state_dict(core::marker::PhantomData::<#b_ident>, &#format_mac("{}{}.", prefix, #fname_str), tensors)?;
                         }
                     });
                     state_dict_calls.push(quote! {
                         {
-                            use #k_crate::prelude::{AutorefStateDict, AutorefStateDictFallback};
+                            use #k_crate::nn::module::{AutorefStateDict, AutorefStateDictFallback};
                             (&&self.#fname).maybe_state_dict(core::marker::PhantomData::<#b_ident>, &#format_mac("{}{}.", prefix, #fname_str), tensors);
                         }
                     });
                     named_layer_calls.push(quote! {
                         {
-                            use #k_crate::prelude::{AutorefNamedLayers, AutorefNamedLayersFallback};
+                            use #k_crate::nn::module::{AutorefNamedLayers, AutorefNamedLayersFallback};
                             let child_prefix = if prefix.is_empty() {
                                 #k_crate::prelude::String::from(#fname_str)
                             } else {
@@ -310,7 +310,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                     });
                     shape_info_calls.push(quote! {
                         {
-                            use #k_crate::prelude::{AutorefShapeInfo, AutorefShapeInfoFallback};
+                            use #k_crate::nn::module::{AutorefShapeInfo, AutorefShapeInfoFallback};
                             if let Some(sh) = (&&self.#fname).maybe_shape_info() {
                                 shape_parts.push(#format_mac("{}: {}", #fname_str, sh));
                             }
@@ -318,7 +318,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                     });
                     stats_calls.push(quote! {
                         {
-                            use #k_crate::prelude::{AutorefComputeStats, AutorefComputeStatsFallback};
+                            use #k_crate::nn::stats::{AutorefComputeStats, AutorefComputeStatsFallback};
                             if let Some(s) = (&&self.#fname).maybe_compute_stats(batch) {
                                 total += s;
                             }
@@ -326,7 +326,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                     });
                     train_mode_calls.push(quote! {
                         {
-                            use #k_crate::prelude::{AutorefTrainMode, AutorefTrainModeFallback};
+                            use #k_crate::nn::module::{AutorefTrainMode, AutorefTrainModeFallback};
                             (&mut &mut self.#fname).maybe_set_training(training);
                         }
                     });
@@ -366,25 +366,25 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
 
                     param_calls.push(quote! {
                         {
-                            use #k_crate::prelude::{AutorefParameters, AutorefParametersFallback};
+                            use #k_crate::nn::module::{AutorefParameters, AutorefParametersFallback};
                             (&&self.#idx).maybe_parameters(core::marker::PhantomData::<#b_ident>, &#format_mac("{}{}", prefix, #idx_str), map);
                         }
                     });
                     load_state_calls.push(quote! {
                         {
-                            use #k_crate::prelude::{AutorefStateDict, AutorefStateDictFallback};
+                            use #k_crate::nn::module::{AutorefStateDict, AutorefStateDictFallback};
                             (&mut &mut self.#idx).maybe_load_state_dict(core::marker::PhantomData::<#b_ident>, &#format_mac("{}{}.", prefix, #idx_str), tensors)?;
                         }
                     });
                     state_dict_calls.push(quote! {
                         {
-                            use #k_crate::prelude::{AutorefStateDict, AutorefStateDictFallback};
+                            use #k_crate::nn::module::{AutorefStateDict, AutorefStateDictFallback};
                             (&&self.#idx).maybe_state_dict(core::marker::PhantomData::<#b_ident>, &#format_mac("{}{}.", prefix, #idx_str), tensors);
                         }
                     });
                     named_layer_calls.push(quote! {
                         {
-                            use #k_crate::prelude::{AutorefNamedLayers, AutorefNamedLayersFallback};
+                            use #k_crate::nn::module::{AutorefNamedLayers, AutorefNamedLayersFallback};
                             let child_prefix = if prefix.is_empty() {
                                 #k_crate::prelude::String::from(#idx_str)
                             } else {
@@ -397,7 +397,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                     });
                     shape_info_calls.push(quote! {
                         {
-                            use #k_crate::prelude::{AutorefShapeInfo, AutorefShapeInfoFallback};
+                            use #k_crate::nn::module::{AutorefShapeInfo, AutorefShapeInfoFallback};
                             if let Some(sh) = (&&self.#idx).maybe_shape_info() {
                                 shape_parts.push(#format_mac("{}: {}", #idx_str, sh));
                             }
@@ -405,7 +405,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                     });
                     stats_calls.push(quote! {
                         {
-                            use #k_crate::prelude::{AutorefComputeStats, AutorefComputeStatsFallback};
+                            use #k_crate::nn::stats::{AutorefComputeStats, AutorefComputeStatsFallback};
                             if let Some(s) = (&&self.#idx).maybe_compute_stats(batch) {
                                 total += s;
                             }
@@ -413,10 +413,11 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                     });
                     train_mode_calls.push(quote! {
                         {
-                            use #k_crate::prelude::{AutorefTrainMode, AutorefTrainModeFallback};
+                            use #k_crate::nn::module::{AutorefTrainMode, AutorefTrainModeFallback};
                             (&mut &mut self.#idx).maybe_set_training(training);
                         }
                     });
+
                     to_device_fields.push(quote! {
                         #k_crate::prelude::ToDevice::to_device(self.#idx, arg)?
                     });

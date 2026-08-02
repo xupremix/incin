@@ -3,6 +3,7 @@
 //! These adapters delegate execution to external tensor ecosystems and are
 //! intentionally separate from Incin native CPU, CUDA, and WGPU backends.
 
+pub use incin_core::backend_authoring::*;
 pub use incin_core::prelude::*;
 
 /// The conformance suite an external backend runs against itself (`EXE-010`).

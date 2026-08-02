@@ -33,13 +33,12 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use alloc::{format, vec};
 
+use incin_core::backend_authoring::{Execute, ExecutionRequest};
 use incin_core::exec::{
     Capabilities, CapabilityQuery, ExecutionContext, LayoutClass, MatMulRule, MatMulSpec, MathMode,
     ReshapeRule, ReshapeSpec, ShapeRule, SupportLevel, TensorHandle, Validated,
 };
-use incin_core::prelude::{
-    DTypeId, Dyn, Execute, ExecutionRequest, Local, OperationKind, Shape, StorageBackend,
-};
+use incin_core::prelude::{DTypeId, Dyn, Local, OperationKind, Shape, StorageBackend};
 use incin_core::typenum::{U2, U3};
 
 // ============================================================================

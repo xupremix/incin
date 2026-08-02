@@ -6,6 +6,7 @@
 //! 1e-4 for all common ops. Guards against silent divergence between the
 //! CPU reference implementation and the WGSL shaders.
 
+use incin::backend_authoring::*;
 use incin::prelude::*;
 use incin_backends::cpu::CpuBackendImpl;
 use incin_backends::wgpu::WgpuBackendImpl;

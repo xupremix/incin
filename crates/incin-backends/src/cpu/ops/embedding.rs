@@ -133,7 +133,8 @@ mod tests {
     use super::*;
     use crate::cpu::CpuBackendImpl;
     use crate::cpu::tape;
-    use incin_core::prelude::{Cpu, ReductionOps};
+    use incin_core::backend_authoring::ReductionOps;
+    use incin_core::prelude::Cpu;
 
     /// `B`.
     type B = CpuBackendImpl<f32, Cpu>;

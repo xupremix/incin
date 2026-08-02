@@ -4,9 +4,9 @@ use incin_core::exec::{
     Capabilities, CapabilityQuery, MatMulSpec, MathMode, ReduceOp, ReductionSpec, ReshapeSpec,
     SupportLevel, TensorMeta,
 };
+use incin_core::backend_authoring::{ReductionOps, StorageBackend, TensorOps};
 use incin_core::prelude::{
     BackendError, DType, DTypeId, Device, DeviceKind, Execute, ExecutionRequest, OperationKind,
-    ReductionOps, StorageBackend, TensorOps,
 };
 
 use super::backend::MetalBackendImpl;
@@ -198,7 +198,7 @@ impl<T: DType, D: Device> Execute<ReshapeSpec> for MetalBackendImpl<T, D> {
     fn execute(
         &self,
         request: ExecutionRequest<'_, ReshapeSpec, Self>,
-    ) -> Result<Self::Output, BackendError> {
+    ) -> Result<MetalStorage, BackendError> {
         let _ = self;
         let spec = request.operation.descriptor();
         let input = bind_reshape(&request)?;
@@ -222,7 +222,7 @@ impl<T: DType, D: Device> Execute<MatMulSpec> for MetalBackendImpl<T, D> {
     fn execute(
         &self,
         request: ExecutionRequest<'_, MatMulSpec, Self>,
-    ) -> Result<Self::Output, BackendError> {
+    ) -> Result<MetalStorage, BackendError> {
         let _ = self;
         let spec = request.operation.descriptor();
         let (lhs, rhs) = bind_matmul(&request)?;
@@ -305,7 +305,7 @@ impl<T: DType, D: Device> Execute<ReductionSpec> for MetalBackendImpl<T, D> {
     fn execute(
         &self,
         request: ExecutionRequest<'_, ReductionSpec, Self>,
-    ) -> Result<Self::Output, BackendError> {
+    ) -> Result<MetalStorage, BackendError> {
         let _ = self;
         let spec = request.operation.descriptor();
         let run = reduction_run(spec)?;

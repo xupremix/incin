@@ -69,4 +69,5 @@ pub mod prelude {
     pub use super::spatial::*;
     pub use super::stack::*;
     pub use super::tail_shape::*;
+    pub use crate::tensor::matmul::{StaticDim, StaticOrNamedDim};
 }

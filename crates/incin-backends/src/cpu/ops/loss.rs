@@ -27,7 +27,8 @@
 use crate::cpu::CpuBackendImpl;
 use incin_core::prelude::Reduction;
 use incin_core::prelude::*;
-use incin_core::prelude::{Backend, DType, FloatOps, LossOps, NumericOps, ReductionOps, Result};
+use incin_core::backend_authoring::{Backend, FloatOps, LossOps, NumericOps, ReductionOps};
+use incin_core::prelude::{DType, Result};
 
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
 

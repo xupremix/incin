@@ -3,7 +3,6 @@
 #[macro_use]
 extern crate alloc;
 
-pub use incin_core::prelude::*;
 
 pub mod backend_kind;
 pub mod capability;
@@ -113,3 +112,5 @@ pub mod telemetry;
 
 #[cfg(feature = "telemetry")]
 pub use telemetry::set_emitter;
+
+pub use incin_core::prelude::dummy;

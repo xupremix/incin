@@ -10,9 +10,11 @@ use incin_core::exec::{
     Pool2dRule, Pool2dSpec, PoolOp, ReduceAllRule, ReduceKeepRule, ReduceOp, ReduceRule,
     ReductionSpec, ReshapeRule, ReshapeSpec, ShapeRule, TensorHandle, TensorMeta, Validated,
 };
+use incin_core::backend_authoring::{
+    Backend, Execute, ExecutionRequest, ModuleOps, StorageBackend, TensorOps,
+};
 use incin_core::prelude::{
-    Backend, BackendError, Cpu, DType, DTypeId, DeviceId, Dyn, Execute, ExecutionRequest, Local,
-    ModuleOps, OperationKind, Shape, ShapeBuf, StorageBackend, TensorOps,
+    BackendError, Cpu, DType, DTypeId, DeviceId, Dyn, Local, OperationKind, Shape, ShapeBuf,
 };
 use incin_core::typenum::{U0, U1, U2, U3, U4, U6, U8};
 

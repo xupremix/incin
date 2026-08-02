@@ -216,7 +216,7 @@ impl<T: DType, D: Device> Execute<ReshapeSpec> for CudaBackendImpl<T, D> {
     fn execute(
         &self,
         request: ExecutionRequest<'_, ReshapeSpec, Self>,
-    ) -> Result<Self::Output, BackendError> {
+    ) -> Result<CudaStorage, BackendError> {
         let _ = self;
         let spec = request.operation.descriptor();
         let input = bind_reshape(&request)?;
@@ -240,7 +240,7 @@ impl<T: DType, D: Device> Execute<MatMulSpec> for CudaBackendImpl<T, D> {
     fn execute(
         &self,
         request: ExecutionRequest<'_, MatMulSpec, Self>,
-    ) -> Result<Self::Output, BackendError> {
+    ) -> Result<CudaStorage, BackendError> {
         let _ = self;
         let spec = request.operation.descriptor();
         let (lhs, rhs) = bind_matmul(&request)?;
@@ -360,7 +360,7 @@ impl<T: DType, D: Device> Execute<Conv2dSpec> for CudaBackendImpl<T, D> {
     fn execute(
         &self,
         request: ExecutionRequest<'_, Conv2dSpec, Self>,
-    ) -> Result<Self::Output, BackendError> {
+    ) -> Result<CudaStorage, BackendError> {
         let _ = self;
         let spec = request.operation.descriptor();
         let window = conv2d_window(spec)?;
@@ -433,7 +433,7 @@ impl<T: DType, D: Device> Execute<ReductionSpec> for CudaBackendImpl<T, D> {
     fn execute(
         &self,
         request: ExecutionRequest<'_, ReductionSpec, Self>,
-    ) -> Result<Self::Output, BackendError> {
+    ) -> Result<CudaStorage, BackendError> {
         let _ = self;
         let spec = request.operation.descriptor();
         let run = reduction_run(spec)?;
@@ -511,7 +511,7 @@ impl<T: DType, D: Device> Execute<Pool2dSpec> for CudaBackendImpl<T, D> {
     fn execute(
         &self,
         request: ExecutionRequest<'_, Pool2dSpec, Self>,
-    ) -> Result<Self::Output, BackendError> {
+    ) -> Result<CudaStorage, BackendError> {
         let _ = self;
         let spec = request.operation.descriptor();
         let window = pool2d_window(spec)?;

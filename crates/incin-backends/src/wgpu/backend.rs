@@ -1,6 +1,7 @@
 use crate::dtype_policy::{BackendFamily, OperationKind, resolve_dtype_policy};
 use crate::wgpu::dispatch;
 use crate::wgpu::storage::{WgpuBuffer, WgpuStorage};
+use incin_core::backend_authoring::*;
 use incin_core::prelude::*;
 
 /// WebGPU compute backend for Incin. Type alias for `IncinBackend<T, D>`.

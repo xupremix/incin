@@ -38,9 +38,9 @@
 
 use crate::prelude::Cpu;
 #[cfg(feature = "cuda")]
-use crate::prelude::CudaN;
+use crate::tensor::device::CudaN;
 #[cfg(all(feature = "wgpu", not(feature = "cuda")))]
-use crate::prelude::WgpuN;
+use crate::tensor::device::WgpuN;
 
 /// The most capable device family this build can target, at ordinal 0.
 ///

@@ -4,14 +4,14 @@ error[E0277]: Cannot contract dimension `UInt<UInt<UTerm, B1>, B1>` with `UInt<U
 11 |     let _ = t1.matmul(&t2);
    |                ^^^^^^ inner dimensions do not match
    |
-   = help: the trait `ContractsWith<UInt<UInt<UInt<UTerm, B1>, B0>, B0>>` is not implemented for `UInt<UInt<UTerm, B1>, B1>`
+   = help: the trait `incin::tensor::matmul::ContractsWith<UInt<UInt<UInt<UTerm, B1>, B0>, B0>>` is not implemented for `UInt<UInt<UTerm, B1>, B1>`
    = note: Matrix multiplication requires the last dim of lhs and the second-to-last of rhs to be the same, or one of them to be a runtime `usize`
-help: `usize` implements trait `ContractsWith<Rhs>`
+help: `usize` implements trait `incin::tensor::matmul::ContractsWith<Rhs>`
   --> src/tensor/matmul.rs
    |
    | impl<D: StaticOrNamedDim> ContractsWith<D> for usize {}
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `ContractsWith<D>`
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `incin::tensor::matmul::ContractsWith<D>`
 ...
    | impl ContractsWith<usize> for usize {}
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `ContractsWith<usize>`
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `incin::tensor::matmul::ContractsWith<usize>`
    = note: required for `(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UTerm, B1>, B1>)` to implement `MatMulShape<(UInt<UInt<UInt<UTerm, B1>, B0>, B0>, UInt<UInt<UInt<UTerm, B1>, B0>, B1>)>`

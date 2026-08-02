@@ -13,6 +13,7 @@
 //! after this plan — `TensorOps`/`ReductionOps`/`ModuleOps`/`LossOps` land in
 //! later plans.
 
+pub use incin_core::backend_authoring::*;
 pub use incin_core::prelude::*;
 
 pub(crate) mod creation;

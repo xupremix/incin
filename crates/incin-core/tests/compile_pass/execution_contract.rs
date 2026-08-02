@@ -3,9 +3,9 @@ use incin_backends::wgpu::WgpuBackendImpl;
 use incin_core::exec::{
     Alignment, BroadcastRule, BroadcastSpec, ExecutionContext, ShapeRule, TensorHandle, TensorMeta,
 };
+use incin_core::backend_authoring::{Execute, ExecutionRequest, StorageBackend, SupportsDType};
 use incin_core::prelude::{
-    BackendError, Cpu, DType, DeviceId, DTypeId, Execute, ExecutionRequest, Local, ShapeBuf,
-    StorageBackend, SupportsDType, Wgpu,
+    BackendError, Cpu, DType, DeviceId, DTypeId, Local, ShapeBuf, Wgpu,
 };
 use incin_core::typenum::{U2, U3};
 

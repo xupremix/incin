@@ -1,7 +1,7 @@
 use crate::cpu::CpuBackendImpl;
 use crate::cpu::storage::{BlockQ8_0, CpuBuffer, CpuStorage};
 use incin_core::prelude::*;
-use incin_core::prelude::{Backend, QuantizedOps};
+use incin_core::backend_authoring::{Backend, QuantizedOps};
 use incin_core::prelude::{FloatDType, QuantDType};
 
 extern crate alloc;

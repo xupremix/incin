@@ -11,13 +11,12 @@
 //! executor this module routes to performs the capability query against its own
 //! registry, which is the only device that can answer.
 
+use incin_core::backend_authoring::{Execute, ExecutionRequest};
 use incin_core::exec::{
-    Conv2dSpec, ExecutionContext, MatMulSpec, Pool2dSpec, ReductionSpec, ReshapeSpec, TensorHandle,
-    TensorMeta,
+    Conv2dSpec, ExecutionContext, MatMulSpec, Pool2dSpec, ReductionSpec, ReshapeSpec,
+    TensorHandle, TensorMeta,
 };
-use incin_core::prelude::{
-    BackendError, DType, Device, Execute, ExecutionRequest, OperationKind, StorageBackend,
-};
+use incin_core::prelude::{BackendError, DType, Device, OperationKind, StorageBackend};
 
 use crate::descriptor_bind::invalid;
 use crate::dispatch::{DispatchBackend, DispatchStorage};
@@ -37,7 +36,7 @@ impl<T: DType, D: Device> Execute<MatMulSpec> for DispatchBackend<T, D> {
     fn execute(
         &self,
         request: ExecutionRequest<'_, MatMulSpec, Self>,
-    ) -> Result<Self::Output, BackendError> {
+    ) -> Result<DispatchStorage, BackendError> {
         let _ = self;
         let [lhs, rhs] = request.inputs else {
             return Err(invalid(
@@ -151,7 +150,7 @@ macro_rules! route_single_operand {
             fn execute(
                 &self,
                 request: ExecutionRequest<'_, $spec, Self>,
-            ) -> Result<Self::Output, BackendError> {
+            ) -> Result<DispatchStorage, BackendError> {
                 let _ = self;
                 let [handle] = request.inputs else {
                     return Err(invalid($kind, $arity));
@@ -250,7 +249,7 @@ impl<T: DType, D: Device> Execute<Conv2dSpec> for DispatchBackend<T, D> {
     fn execute(
         &self,
         request: ExecutionRequest<'_, Conv2dSpec, Self>,
-    ) -> Result<Self::Output, BackendError> {
+    ) -> Result<DispatchStorage, BackendError> {
         let _ = self;
         let (input, weight, bias) = match request.inputs {
             [input, weight] => (input, weight, None),
