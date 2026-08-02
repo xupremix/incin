@@ -1,4 +1,4 @@
-use incin_core::prelude::dummy::DummyBackend;
+use incin_core::test_utils::DummyBackend;
 use incin_core::prelude::*;
 
 fn main() {

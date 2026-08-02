@@ -42,7 +42,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
+    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let t = Tensor::<s![3, 3], DefaultBackend>::ones(()).unwrap();
     /// let s = t.slice(&[IndexSpec::All, IndexSpec::Index(0)]).unwrap();
@@ -57,7 +57,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// ```rust
     /// # extern crate incin_core as incin;
     /// # fn main() -> incin::prelude::Result<()> {
-    /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
+    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let tensor = Tensor::<s![2, 4, 4], DefaultBackend>::ones(())?;
     /// let sliced = tensor.get((0, 1..3, ..))?;
@@ -193,7 +193,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
+    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let t = Tensor::<s![2, 3], DefaultBackend>::ones(()).unwrap();
     /// let r = t.reshape::<s![6]>(((),)).unwrap();
@@ -221,7 +221,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
+    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let t = Tensor::<s![2, 3], DefaultBackend>::ones(()).unwrap();
     /// let r = t.reshape_idx::<idx![6]>().unwrap();
@@ -268,7 +268,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
+    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let t = Tensor::<s![10], DefaultBackend>::ones(()).unwrap();
     /// let n = t.try_narrow(0, 2, 5).unwrap(); // shape [5]
@@ -292,7 +292,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
+    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let t = Tensor::<s![1, 5], DefaultBackend>::ones(()).unwrap();
     /// let sq = t.try_squeeze(0).unwrap(); // shape [5]
@@ -493,7 +493,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
+    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let t = Tensor::<s![2, 3], DefaultBackend>::ones(()).unwrap();
     /// let tr = t.transpose::<0, 1>().unwrap(); // shape [3, 2]
@@ -524,7 +524,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
+    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let t = Tensor::<s![2, 3, 4], DefaultBackend>::ones(()).unwrap();
     /// let f = t.flatten::<1, 2>().unwrap(); // shape [2, 12]

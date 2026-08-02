@@ -4,7 +4,7 @@
 //! this test doubles as a check that the doc's illustrative numbers and the
 //! real implementation actually agree.
 extern crate incin_core as incin;
-use incin_core::prelude::dummy::DummyBackend;
+use incin_core::test_utils::DummyBackend;
 use incin_core::prelude::*;
 
 type TestBackend = DummyBackend<f32, Cpu>;

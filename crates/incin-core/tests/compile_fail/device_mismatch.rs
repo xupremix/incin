@@ -1,5 +1,5 @@
 use incin_core::prelude::*;
-use incin_core::prelude::dummy::DummyBackend;
+use incin_core::test_utils::DummyBackend;
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 /// Mock gpu.

@@ -1,7 +1,7 @@
 extern crate incin_core as incin;
 use incin_core::prelude::*;
 use incin_macros::s;
-use incin_core::prelude::dummy::DummyBackend;
+use incin_core::test_utils::DummyBackend;
 
 /// Backend.
 type Backend = DummyBackend<f32, incin_core::prelude::Cpu>;

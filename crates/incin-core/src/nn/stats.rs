@@ -240,7 +240,7 @@ mod tests {
         fc2: Linear<s![@ 128, 10], Bk>,
     }
 
-    type TestBackend = dummy::DummyBackend<f32, Cpu>;
+    type TestBackend = crate::test_utils::DummyBackend<f32, Cpu>;
 
     fn build_test_mlp() -> TestMlp<TestBackend> {
         TestMlp {

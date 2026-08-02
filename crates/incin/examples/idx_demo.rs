@@ -1,8 +1,7 @@
 use incin::prelude::*;
-use incin_backends::dummy::DummyBackend;
 
 fn main() {
-    let t: Tensor<s![2, 3, 4], DummyBackend<f32, Cpu>> = Tensor::zeros(()).unwrap();
+    let t: Tensor<s![2, 3, 4], DefaultBackend> = Tensor::zeros(()).unwrap();
     println!("Original shape: {:?}", t.dims());
 
     // reshape to (2, 12)

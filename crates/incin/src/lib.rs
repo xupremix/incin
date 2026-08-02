@@ -85,14 +85,14 @@
 extern crate alloc;
 
 pub use incin_core::prelude::{
-    Backend, ConstShape, Cpu, DType, DTypeId, DeviceId, Dyn, DynShape, Error, Flatten, Grad,
-    Gradients, Module, NoGrad, PartialDynShape, Result, Shape, StateDict,
+    Backend, ConstShape, Cpu, DType, DTypeId, DeviceId, Dyn, DynShape, Error, Grad, Gradients,
+    Module, NoGrad, PartialDynShape, Result, Shape, StateDict,
 };
-pub use incin_core::optim::{Adam, AdamW, Optimizer, SGD};
-pub use incin_core::backend_authoring::{
-    CreationOps, FloatOps, ModuleOps, NumericOps, ReductionOps, SupportsDType, TensorOps,
+pub use incin_core::optim::{
+    Adam, AdamW, ConstantLR, LRScheduler, LinearLR, Optimizer, SGD,
 };
-
+#[cfg(feature = "std")]
+pub use incin_core::optim::{CosineAnnealingLR, StepLR};
 pub use incin_backends::IncinBackend;
 
 #[cfg(feature = "cuda")]
@@ -105,17 +105,30 @@ pub use incin_core::prelude::{Metal, MetalN};
 pub use incin_core::dim;
 pub use incin_macros::{import_model, mesh, model, module};
 
+#[cfg(feature = "compiled")]
 /// Curated preview types for compiled execution.
 pub mod compile {
     pub use incin_core::compile::*;
 }
 
+#[cfg(feature = "backend-authoring")]
 /// Contracts and extension traits for backend authors.
 pub mod backend_authoring {
     pub use incin_core::backend_authoring::*;
 }
 
-#[cfg(any(test, feature = "test-utils"))]
+#[cfg(feature = "autotune")]
+/// Preview tuning configuration, inspection, context, and fingerprint types.
+pub mod tuning {
+    pub use incin_backends::tuning::{
+        AlignmentClass, AutotunePolicy, CacheLimits, CacheRecovery, CompilerFingerprint,
+        DeviceFingerprint, DTypePolicyId, KernelSignature, PersistentTuningCache, RankClass,
+        SelectionSource, TuningContext, TuningEnvironmentFingerprint, TuningExplain,
+        TuningProvenance, TuningScope, TuningSelection,
+    };
+}
+
+#[cfg(feature = "test-utils")]
 /// Test utilities and test backend implementations.
 pub mod test_utils {
     pub use incin_core::test_utils::*;
@@ -128,7 +141,11 @@ pub mod nn {
 
 /// Optimization algorithms, loss functions, and learning rate schedulers.
 pub mod optim {
-    pub use incin_core::optim::*;
+    pub use incin_core::optim::{
+        Adam, AdamW, ConstantLR, Gradients, LRScheduler, LinearLR, Optimizer, SGD,
+    };
+    #[cfg(feature = "std")]
+    pub use incin_core::optim::{CosineAnnealingLR, StepLR};
 }
 
 /// Evaluation metrics (Accuracy, Precision, Recall, F1Score, MSE, ConfusionMatrix).
@@ -315,23 +332,75 @@ pub mod macros {
     pub use incin_macros::{idx, mesh, s};
 }
 
-#[allow(unused_imports)]
-/// Prelude.
+/// Prelude re-exporting high-frequency user types, macros, NN modules, and optimizers.
 pub mod prelude {
-    pub use incin_backends::prelude::*;
-    pub use incin_core::prelude::*;
+    pub use incin_core::prelude::{
+        Backend, BTreeMap, ComputeStats, ConstDevice, ConstDType, ConstShape, Cpu, DType, DTypeId,
+        Device, DeviceId, DeviceKind, Dim, Dyn, DynShape, Ellipsis, Error, Grad, HeadShape,
+        InferDim, LayerStats, ModelStats, Module, NamedDyn, NoGrad, PartialDynShape, Result, SeqTy,
+        Shape, Slice, SpanShape, StateDict, String, SupportsDType, TailShape, TransferTo, Vec,
+        format,
+    };
+    pub use incin_core::nn::stats::{AutorefComputeStats, AutorefComputeStatsFallback, sum_stats};
+    pub use super::Tensor;
+
+    #[cfg(feature = "cuda")]
+    pub use incin_core::prelude::{Cuda, CudaN};
+    #[cfg(feature = "wgpu")]
+    pub use incin_core::prelude::{Wgpu, WgpuN};
+    #[cfg(feature = "metal")]
+    pub use incin_core::prelude::{Metal, MetalN};
+
+    pub use incin_backends::IncinBackend;
+    #[cfg(feature = "cpu")]
+    pub use super::DefaultBackend;
+    #[cfg(any(feature = "cpu", feature = "wgpu", feature = "cuda"))]
+    pub use super::DefaultDevice;
 
     pub use incin_core::dim;
+    pub use incin_core::seq;
+    pub use incin_core::typenum;
+
     pub use incin_macros::{
         axes, einsum, idx, import_model, mesh, model, module, parallel, placement, s,
     };
 
-    pub use super::{Cpu, Error, Result};
-    #[cfg(feature = "cpu")]
-    pub use super::DefaultBackend;
-    pub use super::Tensor;
-    pub use super::{AvgPool2d, BatchNorm2d, Conv1d, Conv2d, LayerNorm, Linear, MaxPool2d, Param};
-    pub use super::{Embedding, RNN, RNNCell, Sequential};
+    pub use super::{
+        BatchNorm2d, Conv1d, Conv2d, Embedding, LayerNorm, Linear, Param, RNN, RNNCell,
+    };
+
+    pub use incin_core::nn::{
+        activation::{GELU, ReLU, Sigmoid, Softmax, Swish, Tanh},
+        avg_pool2d::AvgPool2d,
+        dropout::Dropout,
+        flatten::Flatten,
+        init::Init,
+        loss::{
+            BCEWithLogitsLoss, CrossEntropyLoss, L1Loss, MSELoss, Mean, NoneReduction, Reduction,
+        },
+        lstm::{LSTM, LSTMCell},
+        max_pool2d::MaxPool2d,
+        module::{
+            LayerNode, NamedLayers, Parameters, Sequential, ToDevice, TrainMode,
+        },
+        rms_norm::RMSNorm,
+    };
+
+    #[cfg(feature = "std")]
+    pub use incin_core::prelude::{Format, ModelExt};
+
+    pub use incin_core::optim::{
+        Adam, AdamW, ConstantLR, Gradients, LRScheduler, LinearLR, Optimizer, SGD,
+    };
+    #[cfg(feature = "std")]
+    pub use incin_core::optim::{CosineAnnealingLR, StepLR};
+
+    pub use incin_core::metrics::{
+        Accuracy, ConfusionMatrix, F1Score, MSE, Metric, Precision, Recall,
+    };
+
+    #[cfg(feature = "distributed")]
+    pub use incin_core::dist::{Local, Placement, PlacementKind};
 }
 
 

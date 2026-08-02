@@ -1,4 +1,3 @@
-use incin::Flatten;
 use incin::prelude::*;
 use incin_data::vision::mnist::MnistDataset;
 use incin_data::{Collate, DataLoader, Dataset};
@@ -39,7 +38,7 @@ impl Collate<(Vec<f32>, u8)> for MnistCollate {
         };
 
         let device = DeviceId::cpu();
-        let images_raw = <Backend as incin::backend_authoring::Backend>::from_bytes::<f32>(
+        let images_raw = <Backend as incin::prelude::Backend>::from_bytes::<f32>(
             images_bytes,
             &[batch_size, 1, 28, 28],
             DTypeId::F32,
@@ -47,7 +46,7 @@ impl Collate<(Vec<f32>, u8)> for MnistCollate {
         )
         .unwrap();
         let labels_raw =
-            <Backend as incin::backend_authoring::Backend>::from_bytes::<f32>(labels_bytes, &[batch_size], DTypeId::F32, &device).unwrap();
+            <Backend as incin::prelude::Backend>::from_bytes::<f32>(labels_bytes, &[batch_size], DTypeId::F32, &device).unwrap();
 
         (
             Tensor::<Dyn, Backend>::from_raw(images_raw, vec![batch_size, 1, 28, 28]).unwrap(),
@@ -79,7 +78,7 @@ fn main() -> incin::Result<()> {
     ];
 
     // 3. Optimizer setup
-    let mut optim = incin::AdamW::<Backend>::new(model.parameters(), 0.001);
+    let mut optim = AdamW::<Backend>::new(model.parameters(), 0.001);
 
     // 4. Real Training Loop
     println!("Starting training...");

@@ -89,7 +89,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         /// # Examples
         /// ```rust
         /// # extern crate incin_core as incin;
-        /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
+        /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
         /// use incin::prelude::*;
         /// let t = Tensor::<s![2, 2], DefaultBackend>::from_slice(&[-1.0, 2.0, -3.0, 4.0], ()).unwrap();
         /// let abs_t = t.abs().unwrap();
@@ -104,7 +104,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         /// # Examples
         /// ```rust
         /// # extern crate incin_core as incin;
-        /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
+        /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
         /// use incin::prelude::*;
         /// let t = Tensor::<s![2], DefaultBackend>::from_slice(&[-1.0, 2.0], ()).unwrap();
         /// let relu_t = t.relu().unwrap(); // [0.0, 2.0]
@@ -118,7 +118,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         /// # Examples
         /// ```rust
         /// # extern crate incin_core as incin;
-        /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
+        /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
         /// use incin::prelude::*;
         /// let t = Tensor::<s![2], DefaultBackend>::from_slice(&[-1.0, 2.0], ()).unwrap();
         /// let gelu_t = t.gelu().unwrap();
@@ -132,7 +132,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         /// # Examples
         /// ```rust
         /// # extern crate incin_core as incin;
-        /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
+        /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
         /// use incin::prelude::*;
         /// let t = Tensor::<s![2], DefaultBackend>::from_slice(&[-1.0, 2.0], ()).unwrap();
         /// let step_t = t.step().unwrap(); // [0.0, 1.0]
@@ -147,7 +147,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         /// # Examples
         /// ```rust
         /// # extern crate incin_core as incin;
-        /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
+        /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
         /// use incin::prelude::*;
         /// let t = Tensor::<s![2], DefaultBackend>::from_slice(&[-1.0, 2.0], ()).unwrap();
         /// let mish_t = t.mish().unwrap();
@@ -161,7 +161,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         /// # Examples
         /// ```rust
         /// # extern crate incin_core as incin;
-        /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
+        /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
         /// use incin::prelude::*;
         /// let t = Tensor::<s![2], DefaultBackend>::from_slice(&[-1.0, 2.0], ()).unwrap();
         /// let elu_t = t.elu().unwrap();
@@ -176,7 +176,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         /// # Examples
         /// ```rust
         /// # extern crate incin_core as incin;
-        /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
+        /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
         /// use incin::prelude::*;
         /// let t = Tensor::<s![2], DefaultBackend>::from_slice(&[-1.0, 2.0], ()).unwrap();
         /// let swish_t = t.swish().unwrap();
@@ -189,7 +189,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
+    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let t = Tensor::<s![2, 2], DefaultBackend>::from_slice(&[1.0, 1.0, 0.0, 1.0], ()).unwrap();
     /// let sm = t.softmax(1).unwrap();
@@ -211,7 +211,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         /// # Examples
         /// ```rust
         /// # extern crate incin_core as incin;
-        /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
+        /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
         /// use incin::prelude::*;
         /// let t = Tensor::<s![2], DefaultBackend>::from_slice(&[1.0, -2.0], ()).unwrap();
         /// let neg_t = t.neg().unwrap(); // [-1.0, 2.0]
@@ -225,7 +225,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         /// # Examples
         /// ```rust
         /// # extern crate incin_core as incin;
-        /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
+        /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
         /// use incin::prelude::*;
         /// let t = Tensor::<s![2], DefaultBackend>::from_slice(&[4.0, 9.0], ()).unwrap();
         /// let sqrt_t = t.sqrt().unwrap(); // [2.0, 3.0]
@@ -239,7 +239,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         /// # Examples
         /// ```rust
         /// # extern crate incin_core as incin;
-        /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
+        /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
         /// use incin::prelude::*;
         /// let t = Tensor::<s![1], DefaultBackend>::from_slice(&[0.0], ()).unwrap();
         /// let exp_t = t.exp().unwrap(); // [1.0]
@@ -319,7 +319,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         /// # Examples
         /// ```rust
         /// # extern crate incin_core as incin;
-        /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
+        /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
         /// use incin::prelude::*;
         /// let t = Tensor::<s![1], DefaultBackend>::from_slice(&[1.0], ()).unwrap();
         /// let log_t = t.log().unwrap(); // [0.0]
@@ -333,7 +333,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         /// # Examples
         /// ```rust
         /// # extern crate incin_core as incin;
-        /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
+        /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
         /// use incin::prelude::*;
         /// let t = Tensor::<s![1], DefaultBackend>::from_slice(&[0.0], ()).unwrap();
         /// let tanh_t = t.tanh().unwrap(); // [0.0]
@@ -347,7 +347,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         /// # Examples
         /// ```rust
         /// # extern crate incin_core as incin;
-        /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
+        /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
         /// use incin::prelude::*;
         /// let t = Tensor::<s![1], DefaultBackend>::from_slice(&[0.0], ()).unwrap();
         /// let sig_t = t.sigmoid().unwrap(); // [0.5]
@@ -360,7 +360,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
+    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let t = Tensor::<s![2], DefaultBackend>::from_slice(&[1.0, 2.0], ()).unwrap();
     /// let res = t.mul_scalar(3.0).unwrap(); // [3.0, 6.0]
@@ -386,7 +386,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
+    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let t = Tensor::<s![2], DefaultBackend>::from_slice(&[1.0, 2.0], ()).unwrap();
     /// let res = t.add_scalar(3.0).unwrap(); // [4.0, 5.0]

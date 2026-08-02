@@ -1,5 +1,5 @@
 use incin_core::prelude::*;
-use incin_core::prelude::dummy::DummyBackend;
+use incin_core::test_utils::DummyBackend;
 
 fn main() {
     let t1: Tensor<[usize; 2], DummyBackend<f32, Cpu>> = Tensor::zeros([2, 3]).unwrap();

@@ -34,7 +34,7 @@ pub struct Dyn(pub ());
 /// Creating and inspecting statically shaped tensors:
 /// ```rust
 /// # extern crate incin_core as incin;
-/// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
+/// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
 /// use incin::prelude::*;
 /// // Compile-time 3D tensor of shape [2, 5, 10]
 /// let t = Tensor::<s![2, 5, 10], DefaultBackend>::zeros(()).unwrap();
@@ -45,7 +45,7 @@ pub struct Dyn(pub ());
 /// Using dynamically shaped tensors:
 /// ```rust
 /// # extern crate incin_core as incin;
-/// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
+/// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
 /// use incin::prelude::*;
 /// // Shape determined at runtime
 /// let dyn_t = Tensor::<Dyn, DefaultBackend>::ones(vec![32, 64]).unwrap();

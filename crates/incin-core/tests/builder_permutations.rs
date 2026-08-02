@@ -1,7 +1,7 @@
 #![allow(unused_imports)]
 extern crate incin_core as incin;
 
-use incin_core::prelude::dummy::DummyBackend;
+use incin_core::test_utils::DummyBackend;
 use incin_core::prelude::*;
 use incin_core::prelude::*;
 use incin_macros::s;

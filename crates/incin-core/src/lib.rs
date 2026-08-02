@@ -38,6 +38,7 @@ pub mod loss {
     pub use crate::nn::loss::*;
 }
 
+#[cfg(feature = "compiled")]
 /// Compiled graph and compiler execution preview types.
 pub mod compile {
     pub use crate::compiled::{
@@ -62,6 +63,7 @@ pub mod backend_authoring {
     };
 }
 
+#[cfg(any(test, feature = "test-utils"))]
 pub mod test_utils {
     pub use crate::tensor::backend::dummy::DummyBackend;
 }
@@ -77,7 +79,6 @@ pub mod prelude {
 
     pub use crate::dist::{Local, Placement, PlacementKind};
     pub use crate::distributions::{Bernoulli, Distribution, Exponential, Gumbel, Normal, Uniform};
-    pub use crate::test_utils as dummy;
 
     pub use crate::metrics::{Accuracy, ConfusionMatrix, F1Score, MSE, Metric, Precision, Recall};
     pub use crate::nn::{

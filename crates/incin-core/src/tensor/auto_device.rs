@@ -56,7 +56,7 @@ use crate::tensor::device::WgpuN;
 /// # extern crate incin_core as incin;
 /// use incin::prelude::*;
 /// type Dev = incin_core::prelude::BestDevice;
-/// let t = Tensor::<s![2, 3], dummy::DummyBackend<f32, Dev>>::zeros(()).unwrap();
+/// let t = Tensor::<s![2, 3], incin_core::test_utils::DummyBackend<f32, Dev>>::zeros(()).unwrap();
 /// ```
 #[cfg(feature = "cuda")]
 pub type BestDevice = CudaN<typenum::U0>;

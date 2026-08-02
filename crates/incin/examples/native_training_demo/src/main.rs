@@ -6,7 +6,6 @@
 #[macro_use]
 extern crate alloc;
 
-use incin::SGD;
 use incin::prelude::*;
 use incin::prelude::{CrossEntropyLoss, Mean};
 use incin_backends::cpu::CpuBackendImpl;
@@ -26,7 +25,7 @@ pub struct SimpleCnn<B: Backend> {
     pub fc: incin::Linear<Dyn, B>,
 }
 
-impl<B: Backend + incin::ModuleOps<B>> SimpleCnn<B>
+impl<B: Backend> SimpleCnn<B>
 where
     B: SupportsDType<B::FloatElem> + SupportsDType<u32>,
     B::FloatElem: ConstDType<Elem = f32>,
@@ -51,7 +50,7 @@ where
     }
 }
 
-impl<B: Backend + incin::ModuleOps<B>> SimpleCnn<B> {
+impl<B: Backend> SimpleCnn<B> {
     pub fn forward(&self, x: Tensor<Dyn, B>) -> Result<Tensor<Dyn, B>> {
         let x = self.conv1.forward(x)?;
         let x = self.bn1.forward(x)?;
@@ -105,7 +104,7 @@ fn train<B>(
     lr: f64,
 ) -> (Vec<f32>, std::time::Duration)
 where
-    B: Backend + incin::ModuleOps<B> + SupportsDType<B::FloatElem> + SupportsDType<u32>,
+    B: Backend + SupportsDType<B::FloatElem> + SupportsDType<u32>,
     B::FloatElem: ConstDType<Elem = f32>,
     B::Device: ConstDevice,
 {

@@ -63,6 +63,10 @@ distributed-nccl = ["distributed", "cuda", "incin-backends/distributed-nccl"]
 telemetry = ["std", "incin-backends/telemetry", "dep:incin-telemetry"]
 # Test-only backends and test utilities.
 test-utils = ["incin-core/test-utils"]
+# Extension contracts for backend authors.
+backend-authoring = []
+# Curated preview types for compiled execution.
+compiled = ["incin-core/compiled"]
 
 [dependencies]
 incin-core = { path = "../incin-core", version = "0.0.0", default-features = false }
@@ -81,6 +85,7 @@ bench = false
 required-features = ["std"]
 
 [dev-dependencies]
+incin = { path = ".", features = ["backend-authoring", "test-utils", "wgpu", "cpu"] }
 hashbrown = "0.14.5"
 bytemuck = "1"
 criterion = { version = "0.5.1", default-features = false, features = ["cargo_bench_support"] }

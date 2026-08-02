@@ -45,7 +45,7 @@ impl_binary_op!(
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
+    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let a = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
     /// let b = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
@@ -60,7 +60,7 @@ impl_binary_op!(
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
+    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let a = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
     /// let b = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
@@ -75,7 +75,7 @@ impl_binary_op!(
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
+    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let a = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
     /// let b = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
@@ -90,7 +90,7 @@ impl_binary_op!(
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
+    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let a = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
     /// let b = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
@@ -299,7 +299,7 @@ impl_broadcast_binary_op!(
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
+    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let a = Tensor::<s![2, 1], DefaultBackend>::ones(()).unwrap();
     /// let b = Tensor::<s![1, 2], DefaultBackend>::ones(()).unwrap();
@@ -314,7 +314,7 @@ impl_broadcast_binary_op!(
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
+    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let a = Tensor::<s![2, 1], DefaultBackend>::ones(()).unwrap();
     /// let b = Tensor::<s![1, 2], DefaultBackend>::ones(()).unwrap();
@@ -329,7 +329,7 @@ impl_broadcast_binary_op!(
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
+    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let a = Tensor::<s![2, 1], DefaultBackend>::ones(()).unwrap();
     /// let b = Tensor::<s![1, 2], DefaultBackend>::ones(()).unwrap();
@@ -344,7 +344,7 @@ impl_broadcast_binary_op!(
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_core::prelude::dummy::DummyBackend<f32, incin_core::prelude::Cpu>;
+    /// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
     /// use incin::prelude::*;
     /// let a = Tensor::<s![2, 1], DefaultBackend>::ones(()).unwrap();
     /// let b = Tensor::<s![1, 2], DefaultBackend>::ones(()).unwrap();

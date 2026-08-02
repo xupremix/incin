@@ -112,5 +112,3 @@ pub mod telemetry;
 
 #[cfg(feature = "telemetry")]
 pub use telemetry::set_emitter;
-
-pub use incin_core::prelude::dummy;
