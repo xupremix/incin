@@ -1,0 +1,24 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.24s
+     Running tests/shape_buf.rs (target/debug/deps/shape_buf-e12ec15198d8b15e)
+
+running 17 tests
+test an_empty_tensor_is_empty_however_large_its_other_axes_are ... ok
+test broadcast_strides_span_less_than_the_element_count ... ok
+test a_zero_dimension_holds_no_elements_and_spans_nothing ... ok
+test is_contiguous_for_is_false_on_a_transposed_view ... ok
+test nothing_derived_is_cached ... ok
+test overflow_terms_are_named_distinctly ... ok
+test scalar_shape_holds_one_element ... ok
+test spill_boundary_is_exactly_inline_rank ... ok
+test span_rejects_a_stride_buffer_of_the_wrong_rank ... ok
+test dims_round_trip_across_the_spill_boundary ... ok
+test push_and_pop_round_trip_across_the_boundary ... ok
+test byte_len_overflows_separately_from_element_count ... ok
+test representation_does_not_affect_equality ... ok
+test numel_agrees_with_u128_and_reports_overflow ... ok
+test contiguous_strides_agree_with_u128_and_report_overflow ... ok
+test numel_does_not_depend_on_axis_order ... ok
+test span_agrees_with_u128 ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

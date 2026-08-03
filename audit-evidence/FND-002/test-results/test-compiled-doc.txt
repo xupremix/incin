@@ -1,0 +1,76 @@
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+   Compiling incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.85s
+   Doc-tests incin_core
+
+running 66 tests
+test crates/incin-core/src/nn/linear.rs - nn::linear::LinearShape (line 13) ... ok
+test crates/incin-core/src/shapes/shape.rs - shapes::shape::ConstShape (line 264) ... ok
+test crates/incin-core/src/shapes/dim.rs - shapes::dim::dim (line 102) ... ok
+test crates/incin-core/src/nn/module.rs - nn::module::Module (line 473) ... ok
+test crates/incin-core/src/compiled/alloc.rs - compiled::alloc::BufferSlot (line 191) - compile fail ... ok
+test crates/incin-core/src/nn/param.rs - nn::param::Param (line 64) ... ok
+test crates/incin-core/src/nn/conv2d.rs - nn::conv2d::Conv2d (line 18) ... ok
+test crates/incin-core/src/nn/batch_norm.rs - nn::batch_norm::BatchNorm2d (line 53) ... ok
+test crates/incin-core/src/nn/module.rs - nn::module::SeqTy (line 1034) ... ok
+test crates/incin-core/src/nn/linear.rs - nn::linear::Linear (line 140) ... ok
+test crates/incin-core/src/tensor/auto_device.rs - tensor::auto_device::best_device (line 123) ... ok
+test crates/incin-core/src/optim/mod.rs - optim::SGD (line 51) ... ok
+test crates/incin-core/src/nn/module.rs - nn::module::TrainMode (line 423) ... ok
+test crates/incin-core/src/nn/lstm.rs - nn::lstm::LSTMCell (line 42) ... ok
+test crates/incin-core/src/optim/mod.rs - optim::Adam (line 294) ... ok
+test crates/incin-core/src/optim/mod.rs - optim::AdamW (line 105) ... ok
+test crates/incin-core/src/tensor/base.rs - tensor::base::Tensor (line 46) ... ok
+test crates/incin-core/src/tensor/device.rs - tensor::device::DeviceSet (line 590) ... ok
+test crates/incin-core/src/tensor/base.rs - tensor::base::Tensor (line 35) ... ok
+test crates/incin-core/src/nn/rnn.rs - nn::rnn::RNN (line 149) ... ok
+test crates/incin-core/src/tensor/ops/binary.rs - tensor::ops::binary::Tensor<S,B,K,G>::add (line 46) ... ok
+test crates/incin-core/src/tensor/ops/binary.rs - tensor::ops::binary::Tensor<S,B,K,G>::sub (line 61) ... ok
+test crates/incin-core/src/tensor/ops/binary.rs - tensor::ops::binary::Tensor<S,B,K,G>::mul (line 76) ... ok
+test crates/incin-core/src/tensor/ops/binary.rs - tensor::ops::binary::Tensor<S,B,K,G>::div (line 91) ... ok
+test crates/incin-core/src/tensor/ops/binary.rs - tensor::ops::binary::Tensor<S1,B,K,G>::broadcast_add (line 300) ... ok
+test crates/incin-core/src/tensor/ops/binary.rs - tensor::ops::binary::Tensor<S1,B,K,G>::broadcast_div (line 345) ... ok
+test crates/incin-core/src/tensor/ops/binary.rs - tensor::ops::binary::Tensor<S1,B,K,G>::broadcast_mul (line 330) ... ok
+test crates/incin-core/src/tensor/ops/binary.rs - tensor::ops::binary::Tensor<S1,B,K,G>::broadcast_sub (line 315) ... ok
+test crates/incin-core/src/tensor/ops/loss.rs - tensor::ops::loss::Tensor<S,B,K,G>::cross_entropy_loss (line 27) ... ok
+test crates/incin-core/src/tensor/ops/manipulation.rs - tensor::ops::manipulation::Tensor<S,B,K,G>::flatten (line 535) ... ok
+test crates/incin-core/src/tensor/ops/loss.rs - tensor::ops::loss::Tensor<S,B,K,G>::mse_loss (line 72) ... ok
+test crates/incin-core/src/tensor/ops/manipulation.rs - tensor::ops::manipulation::Tensor<S,B,K,G>::reshape (line 194) ... ok
+test crates/incin-core/src/tensor/ops/manipulation.rs - tensor::ops::manipulation::Tensor<S,B,K,G>::get (line 57) ... ok
+test crates/incin-core/src/tensor/ops/manipulation.rs - tensor::ops::manipulation::Tensor<S,B,K,G>::slice (line 43) ... ok
+test crates/incin-core/src/tensor/ops/manipulation.rs - tensor::ops::manipulation::Tensor<S,B,K,G>::try_narrow (line 269) ... ok
+test crates/incin-core/src/tensor/ops/manipulation.rs - tensor::ops::manipulation::Tensor<S,B,K,G>::reshape_idx (line 222) ... ok
+test crates/incin-core/src/tensor/ops/manipulation.rs - tensor::ops::manipulation::Tensor<S,B,K,G>::try_squeeze (line 293) ... ok
+test crates/incin-core/src/tensor/ops/manipulation.rs - tensor::ops::manipulation::Tensor<S,B,K,G>::transpose (line 504) ... ok
+test crates/incin-core/src/tensor/ops/reduce.rs - tensor::ops::reduce::Tensor<S,B,K,G>::max_dim (line 180) ... ok
+test crates/incin-core/src/tensor/ops/reduce.rs - tensor::ops::reduce::Tensor<S,B,K,G>::max_all (line 96) ... ok
+test crates/incin-core/src/tensor/ops/reduce.rs - tensor::ops::reduce::Tensor<S,B,K,G>::max_keepdim (line 194) ... ok
+test crates/incin-core/src/tensor/ops/reduce.rs - tensor::ops::reduce::Tensor<S,B,K,G>::mean_all (line 82) ... ok
+test crates/incin-core/src/tensor/ops/reduce.rs - tensor::ops::reduce::Tensor<S,B,K,G>::mean_dim (line 152) ... ok
+test crates/incin-core/src/tensor/ops/reduce.rs - tensor::ops::reduce::Tensor<S,B,K,G>::mean_keepdim (line 166) ... ok
+test crates/incin-core/src/tensor/ops/reduce.rs - tensor::ops::reduce::Tensor<S,B,K,G>::min_dim (line 208) ... ok
+test crates/incin-core/src/tensor/ops/reduce.rs - tensor::ops::reduce::Tensor<S,B,K,G>::min_all (line 110) ... ok
+test crates/incin-core/src/tensor/ops/reduce.rs - tensor::ops::reduce::Tensor<S,B,K,G>::sum_all (line 68) ... ok
+test crates/incin-core/src/tensor/ops/reduce.rs - tensor::ops::reduce::Tensor<S,B,K,G>::min_keepdim (line 222) ... ok
+test crates/incin-core/src/tensor/ops/unary.rs - tensor::ops::unary::Tensor<S,B,K,G>::abs (line 90) ... ok
+test crates/incin-core/src/tensor/ops/reduce.rs - tensor::ops::reduce::Tensor<S,B,K,G>::sum_dim (line 124) ... ok
+test crates/incin-core/src/tensor/ops/unary.rs - tensor::ops::unary::Tensor<S,B,K,G>::elu (line 162) ... ok
+test crates/incin-core/src/tensor/ops/reduce.rs - tensor::ops::reduce::Tensor<S,B,K,G>::sum_keepdim (line 138) ... ok
+test crates/incin-core/src/tensor/ops/unary.rs - tensor::ops::unary::Tensor<S,B,K,G>::add_scalar (line 387) ... ok
+test crates/incin-core/src/tensor/ops/unary.rs - tensor::ops::unary::Tensor<S,B,K,G>::exp (line 240) ... ok
+test crates/incin-core/src/tensor/ops/unary.rs - tensor::ops::unary::Tensor<S,B,K,G>::gelu (line 119) ... ok
+test crates/incin-core/src/tensor/ops/unary.rs - tensor::ops::unary::Tensor<S,B,K,G>::log (line 320) ... ok
+test crates/incin-core/src/tensor/ops/unary.rs - tensor::ops::unary::Tensor<S,B,K,G>::mish (line 148) ... ok
+test crates/incin-core/src/tensor/ops/unary.rs - tensor::ops::unary::Tensor<S,B,K,G>::mul_scalar (line 361) ... ok
+test crates/incin-core/src/tensor/ops/unary.rs - tensor::ops::unary::Tensor<S,B,K,G>::neg (line 212) ... ok
+test crates/incin-core/src/tensor/ops/unary.rs - tensor::ops::unary::Tensor<S,B,K,G>::sqrt (line 226) ... ok
+test crates/incin-core/src/tensor/ops/unary.rs - tensor::ops::unary::Tensor<S,B,K,G>::softmax (line 190) ... ok
+test crates/incin-core/src/tensor/ops/unary.rs - tensor::ops::unary::Tensor<S,B,K,G>::relu (line 105) ... ok
+test crates/incin-core/src/tensor/ops/unary.rs - tensor::ops::unary::Tensor<S,B,K,G>::sigmoid (line 348) ... ok
+test crates/incin-core/src/tensor/ops/unary.rs - tensor::ops::unary::Tensor<S,B,K,G>::step (line 133) ... ok
+test crates/incin-core/src/tensor/ops/unary.rs - tensor::ops::unary::Tensor<S,B,K,G>::swish (line 177) ... ok
+test crates/incin-core/src/tensor/ops/unary.rs - tensor::ops::unary::Tensor<S,B,K,G>::tanh (line 334) ... ok
+
+test result: ok. 66 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.01s
+
+all doctests ran in 8.92s; merged doctests compilation took 6.90s

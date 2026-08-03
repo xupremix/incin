@@ -1,0 +1,5 @@
+error[E0451]: field `fields` of struct `TensorMeta` is private
+  --> tests/compile_fail/tensor_meta_fields_are_private.rs:14:32
+   |
+14 |     let _forged = TensorMeta { fields };
+   |                                ^^^^^^ private field

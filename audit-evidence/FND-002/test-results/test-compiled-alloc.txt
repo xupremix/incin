@@ -1,0 +1,15 @@
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+   Compiling incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.70s
+     Running tests/compiled_alloc.rs (target/debug/deps/compiled_alloc-6c17bbc80c9fa71e)
+
+running 6 tests
+test liveness_deserialization_revalidates_interval_order_and_round_trips ... ok
+test test_allocation_planner_peak_memory ... ok
+test test_liveness_analysis_basic ... ok
+test test_saved_tensor_does_not_shrink_liveness ... ok
+test memory_plan_deserialization_revalidates_slots_and_round_trips ... ok
+test test_saved_tensor_extends_liveness ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

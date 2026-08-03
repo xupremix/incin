@@ -1,0 +1,11 @@
+error[E0423]: cannot initialize a tuple struct which contains private fields
+ --> tests/compile_fail/checked_numel_is_private.rs:4:19
+  |
+4 |     let _forged = CheckedNumel(4);
+  |                   ^^^^^^^^^^^^
+  |
+note: constructor is not visible here due to private fields
+ --> src/shapes/shape.rs
+  |
+  | pub struct CheckedNumel(usize);
+  |                         ^^^^^ private field

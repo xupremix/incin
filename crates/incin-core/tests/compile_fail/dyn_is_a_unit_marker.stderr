@@ -1,0 +1,7 @@
+error[E0618]: expected function, found `Dyn`
+ --> tests/compile_fail/dyn_is_a_unit_marker.rs:4:29
+  |
+4 |     let _old_tuple_marker = Dyn(());
+  |                             ^^^----
+  |                             |
+  |                             call expression requires function

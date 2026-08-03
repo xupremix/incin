@@ -34,6 +34,8 @@ fn expected_reasons() -> BTreeMap<&'static str, &'static str> {
     BTreeMap::from([
         // Shape rules, all unsatisfied trait bounds.
         ("concat_static_mismatch", "E0277"),
+        ("checked_byte_len_is_private", "E0423"),
+        ("checked_numel_is_private", "E0423"),
         ("construction_witness_is_private", "E0624"),
         ("conv2d_invalid_shape", "E0277"),
         ("forward_batchnorm_mismatch", "E0277"),
@@ -57,11 +59,14 @@ fn expected_reasons() -> BTreeMap<&'static str, &'static str> {
         // unmet bound, because the shape appears in the signature directly.
         ("device_mismatch", "E0308"),
         ("dtype_mismatch", "E0308"),
+        ("dyn_is_a_unit_marker", "E0618"),
+        ("gradients_backend_payload_is_private", "E0423"),
         ("loss_cross_entropy_mismatch", "E0308"),
         ("named_dim_identity_mismatch", "E0308"),
         ("named_dim_size_mismatch", "E0308"),
         ("shape_mismatch", "E0308"),
         ("stack_static_mismatch", "E0308"),
+        ("tensor_meta_fields_are_private", "E0451"),
         // Proof lowering: the seal around `Validated` and the descriptor
         // taxonomy (`EXE-002`), and the frontend binding (`EXE-003`).
         ("operation_spec_is_sealed", "E0277"),

@@ -257,9 +257,16 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         }
 
         let mut out_shape = tensors[0].shape.to_vec();
-        out_shape[dim] = tensors.iter().map(|t| t.shape[dim]).sum();
+        out_shape[dim] = tensors.iter().try_fold(0usize, |total, tensor| {
+            total.checked_add(tensor.shape[dim]).ok_or(
+                incin_core::prelude::ShapeError::ArithmeticOverflow {
+                    operation: incin_core::prelude::OperationKind::Concat,
+                    expression: "sum of concatenated axis dimensions",
+                },
+            )
+        })?;
         let out_strides = crate::cpu::stride::contiguous_strides(&out_shape);
-        let total: usize = out_shape.iter().product();
+        let total: usize = crate::cpu::stride::checked_numel(&(out_shape))?;
 
         // Cumulative offset of each input along `dim`, needed by both the
         // forward copy and the backward narrow-based scatter.
@@ -267,7 +274,12 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         let mut running = 0usize;
         for t in tensors.iter() {
             cumulative_offsets.push(running);
-            running += t.shape[dim];
+            running = running.checked_add(t.shape[dim]).ok_or(
+                incin_core::prelude::ShapeError::ArithmeticOverflow {
+                    operation: incin_core::prelude::OperationKind::Concat,
+                    expression: "cumulative concatenation offset",
+                },
+            )?;
         }
 
         macro_rules! concat_variant {
@@ -276,7 +288,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
                 for (t, &offset) in tensors.iter().zip(cumulative_offsets.iter()) {
                     // Read this input through ITS OWN strides directly — no
                     // prior `.contiguous()` materialization.
-                    let value_count: usize = t.shape.iter().product();
+                    let value_count: usize = crate::cpu::stride::checked_numel(&(t.shape))?;
                     let mut multi_idx = vec![0usize; t.shape.len()];
                     for _ in 0..value_count {
                         let mut flat_dest = 0usize;
@@ -301,7 +313,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
             CpuBuffer::F16(_) => {
                 let mut out: Vec<half::f16> = vec![half::f16::from_f64(0.0); total];
                 for (t, &offset) in tensors.iter().zip(cumulative_offsets.iter()) {
-                    let value_count: usize = t.shape.iter().product();
+                    let value_count: usize = crate::cpu::stride::checked_numel(&(t.shape))?;
                     let mut multi_idx = vec![0usize; t.shape.len()];
                     for _ in 0..value_count {
                         let mut flat_dest = 0usize;
@@ -318,7 +330,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
             CpuBuffer::BF16(_) => {
                 let mut out: Vec<half::bf16> = vec![half::bf16::from_f64(0.0); total];
                 for (t, &offset) in tensors.iter().zip(cumulative_offsets.iter()) {
-                    let value_count: usize = t.shape.iter().product();
+                    let value_count: usize = crate::cpu::stride::checked_numel(&(t.shape))?;
                     let mut multi_idx = vec![0usize; t.shape.len()];
                     for _ in 0..value_count {
                         let mut flat_dest = 0usize;
@@ -389,7 +401,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
             });
         }
 
-        let merged: usize = t.shape[start_dim..=end_dim].iter().product();
+        let merged: usize = crate::cpu::stride::checked_numel(&(t.shape[start_dim..=end_dim]))?;
         let mut target_shape = t.shape[..start_dim].to_vec();
         target_shape.push(merged);
         target_shape.extend_from_slice(&t.shape[end_dim + 1..]);
@@ -409,7 +421,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
 
     /// `float_to_scalar`.
     fn float_to_scalar<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<f64> {
-        if t.shape.iter().product::<usize>() != 1 {
+        if crate::cpu::stride::checked_numel(&t.shape)? != 1 {
             return Err(Error::ShapeMismatch {
                 op: "float_to_scalar",
                 expected: vec![1],
@@ -424,7 +436,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
 
     /// `float_to_vec1`.
     fn float_to_vec1<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<alloc::vec::Vec<f64>> {
-        let total: usize = t.shape.iter().product();
+        let total: usize = crate::cpu::stride::checked_numel(&(t.shape))?;
         let mut out = alloc::vec::Vec::with_capacity(total);
         let mut idx = vec![0usize; t.shape.len()];
         for _ in 0..total {
@@ -438,7 +450,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
 
     /// `int_to_scalar`.
     fn int_to_scalar<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<i64> {
-        if t.shape.iter().product::<usize>() != 1 {
+        if crate::cpu::stride::checked_numel(&t.shape)? != 1 {
             return Err(Error::ShapeMismatch {
                 op: "int_to_scalar",
                 expected: vec![1],
@@ -451,7 +463,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
 
     /// `int_to_vec1`.
     fn int_to_vec1<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<alloc::vec::Vec<i64>> {
-        let total: usize = t.shape.iter().product();
+        let total: usize = crate::cpu::stride::checked_numel(&(t.shape))?;
         let mut out = alloc::vec::Vec::with_capacity(total);
         let mut idx = vec![0usize; t.shape.len()];
         for _ in 0..total {
@@ -468,7 +480,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         t: &<Self as Backend>::Storage<K>,
         dtype: DTypeId,
     ) -> Result<<Self as Backend>::Storage<K2>> {
-        let total: usize = t.shape.iter().product();
+        let total: usize = crate::cpu::stride::checked_numel(&(t.shape))?;
         let mut multi_idx = vec![0usize; t.shape.len()];
 
         macro_rules! convert_variant {
@@ -533,7 +545,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         on_false: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
         let out_shape = crate::cpu::stride::broadcast_shape(&on_true.shape, &on_false.shape)?;
-        let total: usize = out_shape.iter().product();
+        let total: usize = crate::cpu::stride::checked_numel(&(out_shape))?;
         let mut out = Vec::with_capacity(total);
         let mut idx = vec![0usize; out_shape.len()];
         for _ in 0..total {
@@ -558,7 +570,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![true_id, false_id],
             backward: Box::new(move |grad_out: &CpuStorage| {
-                let total: usize = grad_out.shape.iter().product();
+                let total: usize = crate::cpu::stride::checked_numel(&(grad_out.shape))?;
                 let mut grad_true = Vec::with_capacity(total);
                 let mut grad_false = Vec::with_capacity(total);
                 let mut idx = vec![0usize; grad_out.shape.len()];
@@ -599,7 +611,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         index: &<Self as Backend>::Storage<KInt>,
     ) -> Result<<Self as Backend>::Storage<K>> {
         let out_shape = index.shape.to_vec();
-        let total: usize = out_shape.iter().product();
+        let total: usize = crate::cpu::stride::checked_numel(&(out_shape))?;
         let mut out = Vec::with_capacity(total);
         let mut idx = vec![0usize; out_shape.len()];
         for _ in 0..total {
@@ -620,9 +632,9 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &CpuStorage| {
-                let t_total: usize = t_cap.shape.iter().product();
+                let t_total: usize = crate::cpu::stride::checked_numel(&(t_cap.shape))?;
                 let mut grad_t_data = vec![0.0; t_total];
-                let index_total: usize = index_cap.shape.iter().product();
+                let index_total: usize = crate::cpu::stride::checked_numel(&(index_cap.shape))?;
                 let mut idx = vec![0usize; index_cap.shape.len()];
                 for _ in 0..index_total {
                     let target_i = index_cap.get(&idx) as usize;
@@ -653,14 +665,14 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         index: &<Self as Backend>::Storage<KInt>,
         src: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let t_total: usize = t.shape.iter().product();
+        let t_total: usize = crate::cpu::stride::checked_numel(&(t.shape))?;
         let mut out_data: Vec<f64> = (0..t_total)
             .map(|i| {
                 let nd = crate::cpu::ops::elementwise::flat_to_nd(i, &t.shape);
                 t.get(&nd)
             })
             .collect();
-        let index_total: usize = index.shape.iter().product();
+        let index_total: usize = crate::cpu::stride::checked_numel(&(index.shape))?;
         let mut idx = vec![0usize; index.shape.len()];
         for _ in 0..index_total {
             let target_i = index.get(&idx) as usize;
@@ -689,13 +701,13 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         dim: usize,
         index: &<Self as Backend>::Storage<KInt>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let idx_total: usize = index.shape.iter().product();
+        let idx_total: usize = crate::cpu::stride::checked_numel(&(index.shape))?;
         let idx_vec: Vec<f64> = (0..idx_total)
             .map(|i| index.get(&crate::cpu::ops::elementwise::flat_to_nd(i, &index.shape)))
             .collect();
         let mut out_shape = t.shape.to_vec();
         out_shape[dim] = idx_vec.len();
-        let total: usize = out_shape.iter().product();
+        let total: usize = crate::cpu::stride::checked_numel(&(out_shape))?;
         let mut out = Vec::with_capacity(total);
         let mut out_idx = vec![0usize; out_shape.len()];
         for _ in 0..total {
@@ -716,7 +728,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         mask: &<Self as Backend>::Storage<KMask>,
         value: f64,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let total: usize = t.shape.iter().product();
+        let total: usize = crate::cpu::stride::checked_numel(&(t.shape))?;
         let mut out = Vec::with_capacity(total);
         let mut idx = vec![0usize; t.shape.len()];
         for _ in 0..total {
@@ -752,7 +764,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         for (a, b) in t.shape.iter().zip(repeats.iter()) {
             out_shape.push(a * b);
         }
-        let total: usize = out_shape.iter().product();
+        let total: usize = crate::cpu::stride::checked_numel(&(out_shape))?;
         let mut out = Vec::with_capacity(total);
         let mut idx = vec![0usize; out_shape.len()];
         for _ in 0..total {
@@ -778,7 +790,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         for (s, &(before, after)) in t.shape.iter().zip(padding.iter()) {
             out_shape.push(s + before + after);
         }
-        let total: usize = out_shape.iter().product();
+        let total: usize = crate::cpu::stride::checked_numel(&(out_shape))?;
         let mut out = Vec::with_capacity(total);
         let mut idx = vec![0usize; out_shape.len()];
         for _ in 0..total {
@@ -809,7 +821,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         t: &<Self as Backend>::Storage<K>,
         k: i64,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let total: usize = t.shape.iter().product();
+        let total: usize = crate::cpu::stride::checked_numel(&(t.shape))?;
         let mut out = Vec::with_capacity(total);
         let mut idx = vec![0usize; t.shape.len()];
         let rank = t.shape.len();
@@ -833,7 +845,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         t: &<Self as Backend>::Storage<K>,
         k: i64,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let total: usize = t.shape.iter().product();
+        let total: usize = crate::cpu::stride::checked_numel(&(t.shape))?;
         let mut out = Vec::with_capacity(total);
         let mut idx = vec![0usize; t.shape.len()];
         let rank = t.shape.len();
@@ -861,8 +873,13 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         if rank == 1 {
             let n = t.shape[0];
             let k_abs = k.unsigned_abs() as usize;
-            let out_dim = n + k_abs;
-            let mut out = vec![0.0f64; out_dim * out_dim];
+            let out_dim = n.checked_add(k_abs).ok_or(ShapeError::ArithmeticOverflow {
+                operation: OperationKind::Storage,
+                expression: "diagonal output dimension",
+            })?;
+            let out_total =
+                ShapeBuf::from_slice(&[out_dim, out_dim]).checked_numel(OperationKind::Storage)?;
+            let mut out = vec![0.0f64; out_total];
             for i in 0..n {
                 let r = if k >= 0 { i } else { i + k_abs };
                 let c = if k >= 0 { i + k_abs } else { i };
@@ -895,7 +912,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let total: usize = lhs.shape.iter().product();
+        let total: usize = crate::cpu::stride::checked_numel(&(lhs.shape))?;
         let mut out = Vec::with_capacity(total);
         let mut idx = vec![0usize; lhs.shape.len()];
         for _ in 0..total {
@@ -919,7 +936,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let total: usize = lhs.shape.iter().product();
+        let total: usize = crate::cpu::stride::checked_numel(&(lhs.shape))?;
         let mut out = Vec::with_capacity(total);
         let mut idx = vec![0usize; lhs.shape.len()];
         for _ in 0..total {
@@ -943,7 +960,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let total: usize = lhs.shape.iter().product();
+        let total: usize = crate::cpu::stride::checked_numel(&(lhs.shape))?;
         let mut out = Vec::with_capacity(total);
         let mut idx = vec![0usize; lhs.shape.len()];
         for _ in 0..total {
@@ -967,7 +984,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let total: usize = lhs.shape.iter().product();
+        let total: usize = crate::cpu::stride::checked_numel(&(lhs.shape))?;
         let mut out = Vec::with_capacity(total);
         let mut idx = vec![0usize; lhs.shape.len()];
         for _ in 0..total {
@@ -991,7 +1008,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let total: usize = lhs.shape.iter().product();
+        let total: usize = crate::cpu::stride::checked_numel(&(lhs.shape))?;
         let mut out = Vec::with_capacity(total);
         let mut idx = vec![0usize; lhs.shape.len()];
         for _ in 0..total {
@@ -1015,7 +1032,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let total: usize = lhs.shape.iter().product();
+        let total: usize = crate::cpu::stride::checked_numel(&(lhs.shape))?;
         let mut out = Vec::with_capacity(total);
         let mut idx = vec![0usize; lhs.shape.len()];
         for _ in 0..total {
@@ -1039,7 +1056,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let total: usize = lhs.shape.iter().product();
+        let total: usize = crate::cpu::stride::checked_numel(&(lhs.shape))?;
         let mut out = Vec::with_capacity(total);
         let mut idx = vec![0usize; lhs.shape.len()];
         for _ in 0..total {
@@ -1063,7 +1080,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let total: usize = lhs.shape.iter().product();
+        let total: usize = crate::cpu::stride::checked_numel(&(lhs.shape))?;
         let mut out = Vec::with_capacity(total);
         let mut idx = vec![0usize; lhs.shape.len()];
         for _ in 0..total {
@@ -1086,7 +1103,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
     fn logical_not<K: DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let total: usize = t.shape.iter().product();
+        let total: usize = crate::cpu::stride::checked_numel(&(t.shape))?;
         let mut out = Vec::with_capacity(total);
         let mut idx = vec![0usize; t.shape.len()];
         for _ in 0..total {
@@ -1106,7 +1123,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         t: &<Self as Backend>::Storage<K>,
         val: f64,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let total: usize = t.shape.iter().product();
+        let total: usize = crate::cpu::stride::checked_numel(&(t.shape))?;
         let mut out = Vec::with_capacity(total);
         let mut idx = vec![0usize; t.shape.len()];
         for _ in 0..total {
@@ -1125,7 +1142,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         t: &<Self as Backend>::Storage<K>,
         val: f64,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let total: usize = t.shape.iter().product();
+        let total: usize = crate::cpu::stride::checked_numel(&(t.shape))?;
         let mut out = Vec::with_capacity(total);
         let mut idx = vec![0usize; t.shape.len()];
         for _ in 0..total {
@@ -1144,7 +1161,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let total: usize = lhs.shape.iter().product();
+        let total: usize = crate::cpu::stride::checked_numel(&(lhs.shape))?;
         let mut out = Vec::with_capacity(total);
         let mut idx = vec![0usize; lhs.shape.len()];
         for _ in 0..total {
@@ -1164,7 +1181,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let total: usize = lhs.shape.iter().product();
+        let total: usize = crate::cpu::stride::checked_numel(&(lhs.shape))?;
         let mut out = Vec::with_capacity(total);
         let mut idx = vec![0usize; lhs.shape.len()];
         for _ in 0..total {
@@ -1184,7 +1201,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let total: usize = lhs.shape.iter().product();
+        let total: usize = crate::cpu::stride::checked_numel(&(lhs.shape))?;
         let mut out = Vec::with_capacity(total);
         let mut idx = vec![0usize; lhs.shape.len()];
         for _ in 0..total {
@@ -1205,7 +1222,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         end: &<Self as Backend>::Storage<K>,
         weight: f64,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let total: usize = start.shape.iter().product();
+        let total: usize = crate::cpu::stride::checked_numel(&(start.shape))?;
         let mut out = Vec::with_capacity(total);
         let mut idx = vec![0usize; start.shape.len()];
         for _ in 0..total {
@@ -1284,7 +1301,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         let mut out_shape = t.shape.to_vec();
         out_shape[dim] = n_windows;
         out_shape.push(size);
-        let total: usize = out_shape.iter().product();
+        let total: usize = crate::cpu::stride::checked_numel(&(out_shape))?;
         let mut out = Vec::with_capacity(total);
         let mut idx = vec![0usize; out_shape.len()];
         for _ in 0..total {
@@ -1322,7 +1339,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         let out_h = h * r;
         let out_w = w * r;
         let out_shape = vec![n, out_c, out_h, out_w];
-        let total: usize = out_shape.iter().product();
+        let total: usize = crate::cpu::stride::checked_numel(&(out_shape))?;
         let mut out = Vec::with_capacity(total);
         let mut idx = vec![0usize; 4];
         for _ in 0..total {
@@ -1346,7 +1363,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         groups: usize,
         eps: f64,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let total: usize = t.shape.iter().product();
+        let total: usize = crate::cpu::stride::checked_numel(&(t.shape))?;
         let channels = if t.shape.len() >= 2 { t.shape[1] } else { 1 };
         if channels % groups != 0 {
             return Err(Error::Msg(

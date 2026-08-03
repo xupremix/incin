@@ -1,0 +1,88 @@
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+   Compiling incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.66s
+     Running unittests src/lib.rs (target/debug/deps/incin_core-9b3fc0dc847caf92)
+
+running 66 tests
+test distributions::tests::test_comptime_known_device_sampling ... ok
+test distributions::tests::test_bernoulli_sampling ... ok
+test distributions::tests::test_custom_distribution ... ok
+test distributions::tests::test_exponential_sampling ... ok
+test distributions::tests::test_gumbel_sampling ... ok
+test distributions::tests::test_normal_sampling ... ok
+test distributions::tests::test_uniform_sampling ... ok
+test err::tests::test_error_formatting ... ok
+test exec::capability::tests::exact_registration_overrides_family_registration ... ok
+test exec::capability::tests::rejection_identifies_the_first_unsatisfied_constraint ... ok
+test exec::meta::tests::a_view_offset_weakens_but_never_strengthens_alignment ... ok
+test exec::meta::tests::contiguous_layout_is_derived_not_asserted ... ok
+test exec::meta::tests::empty_views_may_sit_at_but_not_after_the_allocation_end ... ok
+test exec::meta::tests::invalid_alignment_is_rejected ... ok
+test exec::meta::tests::rank_and_arithmetic_failures_remain_structured ... ok
+test exec::meta::tests::strided_span_and_offset_are_checked_against_capacity ... ok
+test exec::meta::tests::transposed_and_broadcast_views_are_strided ... ok
+test exec::meta::tests::zero_offset_preserves_the_allocation_alignment ... ok
+test exec::proof::tests::a_sealed_descriptor_still_reads_back_exactly ... ok
+test exec::proof::tests::a_named_axis_is_typed_but_not_statically_sized ... ok
+test exec::proof::tests::an_array_shape_knows_its_rank_but_not_its_extents ... ok
+test exec::proof::tests::meet_is_commutative_idempotent_and_topped_by_static ... ok
+test exec::proof::tests::meet_takes_the_weaker_operand ... ok
+test exec::proof::tests::one_runtime_axis_weakens_the_whole_shape ... ok
+test exec::proof::tests::a_fully_typed_shape_proves_itself_statically ... ok
+test exec::proof::tests::an_unranked_shape_proves_nothing_before_it_exists ... ok
+test nn::stats::tests::into_model_stats_doubles_macs_for_flops ... ok
+test exec::proof::tests::the_proof_is_carried_not_recomputed ... ok
+test nn::stats::tests::layer_stats_add_sums_both_fields ... ok
+test nn::stats::tests::layer_stats_sum_over_empty_iter_is_default ... ok
+test metrics::tests::test_accuracy ... ok
+test nn::stats::tests::sequential_of_linear_and_relu_sums_correctly_and_relu_contributes_nothing ... ok
+test nn::stats::tests::named_layers_summary_with_stats_convenience_method_matches_the_free_function ... ok
+test nn::stats::tests::mlp_macs_scale_linearly_with_batch_but_params_do_not ... ok
+test nn::stats::tests::summary_with_stats_appends_a_readable_totals_footer ... ok
+test metrics::tests::test_precision_recall_f1 ... ok
+test nn::stats::tests::mlp_stats_match_the_growth_doc_hand_computed_numbers_at_batch_1 ... ok
+test shapes::buf::tests::checked_span_rejects_rank_and_arithmetic_overflow ... ok
+test shapes::buf::tests::checked_numel_distinguishes_scalar_zero_and_overflow ... ok
+test shapes::idx::tests::slice_full_passthrough ... ok
+test shapes::buf::tests::contiguous_strides_fail_on_live_overflow_but_canonicalize_empty_tensors ... FAILED
+test shapes::idx::tests::slice_range_output_shape ... ok
+test metrics::tests::test_mse ... ok
+test shapes::reshape::tests::reshape_different_rank_same_numel ... ok
+test shapes::reshape::tests::reshape_same_rank_same_numel ... ok
+test shapes::shape::tests::checked_allocation_lengths_cover_scalar_zero_limit_and_overflow_edges ... ok
+test shapes::shape::tests::dyn_is_a_freely_constructible_zero_sized_marker ... ok
+test shapes::shape::tests::test_array_shape ... ok
+test shapes::shape::tests::test_dyn_shape ... ok
+test shapes::shape::tests::test_scalar_shape ... ok
+test shapes::tail_shape::tests::test_head_shape_from_dyn ... ok
+test shapes::tail_shape::tests::test_span_shape_from_dyn ... ok
+test shapes::tail_shape::tests::test_tail_shape_from_dyn ... ok
+test tensor::base::tests::dummy_backend_conv_pool_shape_math_never_panics_on_tiny_input_large_kernel ... ok
+test tensor::base::tests::test_tensor_creation ... ok
+test tensor::base::tests::test_tensor_ones ... ok
+test tensor::device::tests::a_device_set_keeps_the_order_it_was_given ... ok
+test tensor::device::tests::a_device_set_rejects_what_cannot_describe_a_run ... ok
+test tensor::device::tests::an_empty_ordinal_range_is_rejected_rather_than_defaulted ... ok
+test tensor::device::tests::test_device_variants ... ok
+test tensor::device::tests::test_dyn_tier1_fully_runtime ... ok
+test tensor::device::tests::test_wgpu_tier2_runtime_ordinal ... ok
+test tensor::device::tests::test_wgpu_tier3_static_ordinal ... ok
+test tensor::device::tests::the_default_preference_is_the_cpu ... ok
+test tensor::device::tests::the_rfcs_three_gpu_call_builds_three_cuda_devices ... ok
+test tensor::tracing::tests::unary_activations_record_their_own_op_type ... ok
+
+failures:
+
+---- shapes::buf::tests::contiguous_strides_fail_on_live_overflow_but_canonicalize_empty_tensors stdout ----
+
+thread 'shapes::buf::tests::contiguous_strides_fail_on_live_overflow_but_canonicalize_empty_tensors' (696114) panicked at crates/incin-core/src/shapes/buf.rs:590:18:
+called `Result::unwrap()` on an `Err` value: ArithmeticOverflow { operation: Storage, expression: "stride * trailing dimension" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    shapes::buf::tests::contiguous_strides_fail_on_live_overflow_but_canonicalize_empty_tensors
+
+test result: FAILED. 65 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p incin-core --lib`

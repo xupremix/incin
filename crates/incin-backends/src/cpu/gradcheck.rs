@@ -119,7 +119,7 @@ pub fn gradcheck(op: impl Fn(&[CpuStorage]) -> CpuStorage, inputs: &[CpuStorage]
         let analytic = grads
             .get(input.id)
             .expect("gradcheck: missing analytic gradient for input");
-        let total: usize = input.shape.iter().product::<usize>().max(1);
+        let total = stride::validated_numel(&input.shape).max(1);
         for flat_idx in 0..total {
             let numeric = numerical_grad(&op, inputs, i, flat_idx, eps);
             let analytic_val = flat_get(analytic, flat_idx);

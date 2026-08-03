@@ -71,7 +71,7 @@ pub(crate) fn layer_norm_impl<T: DType, D: incin_core::prelude::Device, K: DType
     let bias_ref = match bias {
         Some(b) => b,
         None => {
-            let n = weight.shape.iter().product::<usize>();
+            let n = crate::cpu::stride::checked_numel(&weight.shape)?;
             bias_storage =
                 CpuStorage::from_contiguous(CpuBuffer::F32(vec![0.0f32; n]), weight.shape.to_vec());
             &bias_storage

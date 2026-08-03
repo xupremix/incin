@@ -178,6 +178,34 @@ fn malformed_schema_and_invalid_records_are_quarantined() {
 }
 
 #[test]
+fn direct_deserialization_revalidates_keys_and_records() {
+    let expected_key = key("round-trip");
+    let encoded_key = serde_json::to_value(&expected_key).unwrap();
+    let decoded_key: CacheKey<Dyn> = serde_json::from_value(encoded_key.clone()).unwrap();
+    assert_eq!(decoded_key, expected_key);
+
+    let mut invalid_key = encoded_key;
+    invalid_key["namespace"] = json!("n".repeat(65));
+    assert!(serde_json::from_value::<CacheKey<Dyn>>(invalid_key).is_err());
+
+    let expected_record = record("round-trip-record", 10, "block=128");
+    let encoded_record = serde_json::to_value(&expected_record).unwrap();
+    assert_eq!(
+        serde_json::from_value::<CacheRecord>(encoded_record.clone()).unwrap(),
+        expected_record
+    );
+
+    let mut invalid_winner = encoded_record.clone();
+    invalid_winner["winner"] = json!("w".repeat(4097));
+    assert!(serde_json::from_value::<CacheRecord>(invalid_winner).is_err());
+
+    let mut invalid_measurement = encoded_record;
+    invalid_measurement["sample_count"] = json!(0);
+    invalid_measurement["median_ns"] = Value::Null;
+    assert!(serde_json::from_value::<CacheRecord>(invalid_measurement).is_err());
+}
+
+#[test]
 fn count_and_age_bounds_evict_deterministically() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("bounded.json");

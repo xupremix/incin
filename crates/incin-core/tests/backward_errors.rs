@@ -178,7 +178,9 @@ fn gradient_of(
     t: &Tensor<s![2, 2], B>,
     grads: &incin_core::optim::Gradients<<B as Backend>::Grads>,
 ) -> Vec<f32> {
-    let g = B::get_grad::<f32>(t.inner(), &grads.0).unwrap().unwrap();
+    let g = B::get_grad::<f32>(t.inner(), grads.as_backend())
+        .unwrap()
+        .unwrap();
     let bytes = B::to_bytes::<f32>(&g).unwrap();
     bytes
         .chunks_exact(4)

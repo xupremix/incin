@@ -44,7 +44,7 @@ impl Panel for CustomMetricPanel {
     /// Render.
     fn render(&mut self, ctx: &mut RenderCtx<'_, '_>) {
         // Register a hit region spanning the entire panel area
-        ctx.register_hit_region(ctx.area(), HitId(1));
+        ctx.register_hit_region(ctx.area(), HitId::new(1));
 
         let block = Block::default()
             .borders(Borders::ALL)
@@ -83,7 +83,7 @@ impl Panel for CustomMetricPanel {
 
     /// Hover text.
     fn hover_text(&self, id: HitId) -> Option<String> {
-        if id == HitId(1) {
+        if id == HitId::new(1) {
             Some("Hovering over custom metric panel!".to_string())
         } else {
             None

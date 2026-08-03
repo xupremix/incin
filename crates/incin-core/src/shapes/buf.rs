@@ -551,3 +551,57 @@ impl FromIterator<usize> for StrideBuf {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn checked_numel_distinguishes_scalar_zero_and_overflow() {
+        assert_eq!(
+            ShapeBuf::scalar()
+                .checked_numel(OperationKind::Storage)
+                .unwrap(),
+            1
+        );
+        assert_eq!(
+            ShapeBuf::from_slice(&[usize::MAX, 0, usize::MAX])
+                .checked_numel(OperationKind::Storage)
+                .unwrap(),
+            0
+        );
+        assert!(matches!(
+            ShapeBuf::from_slice(&[usize::MAX, 2]).checked_numel(OperationKind::Storage),
+            Err(ShapeError::ArithmeticOverflow { .. })
+        ));
+    }
+
+    #[test]
+    fn contiguous_strides_reject_unrepresentable_layouts_even_when_empty() {
+        let overflowing = ShapeBuf::from_slice(&[2, usize::MAX, usize::MAX]);
+        assert!(matches!(
+            StrideBuf::contiguous_for(&overflowing, OperationKind::Storage),
+            Err(ShapeError::ArithmeticOverflow { .. })
+        ));
+
+        let empty = ShapeBuf::from_slice(&[0, usize::MAX, usize::MAX]);
+        assert!(matches!(
+            StrideBuf::contiguous_for(&empty, OperationKind::Storage),
+            Err(ShapeError::ArithmeticOverflow { .. })
+        ));
+    }
+
+    #[test]
+    fn checked_span_rejects_rank_and_arithmetic_overflow() {
+        let shape = ShapeBuf::from_slice(&[2, 2]);
+        assert!(matches!(
+            StrideBuf::from_slice(&[1]).checked_span(&shape, OperationKind::Slice),
+            Err(ShapeError::RankMismatch { .. })
+        ));
+        assert!(matches!(
+            StrideBuf::from_slice(&[usize::MAX, usize::MAX])
+                .checked_span(&shape, OperationKind::Slice),
+            Err(ShapeError::ArithmeticOverflow { .. })
+        ));
+    }
+}

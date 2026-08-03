@@ -92,8 +92,8 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
         t: &<Self as Backend>::Storage<K>,
         shape: &[usize],
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let (old_numel, new_numel): (usize, usize) =
-            (t.shape.iter().product(), shape.iter().product());
+        let old_numel = ShapeBuf::from_slice(&t.shape).checked_numel(OperationKind::Reshape)?;
+        let new_numel = ShapeBuf::from_slice(shape).checked_numel(OperationKind::Reshape)?;
         if old_numel != new_numel {
             return Err(Error::ShapeMismatch {
                 op: "reshape",
@@ -242,7 +242,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
                     &original_shape,
                     &region_start,
                     grad_out,
-                )])
+                )?])
             }),
         });
         Ok(out)
@@ -349,7 +349,9 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
                 ),
             });
         }
-        let merged: usize = t.shape[start_dim..=end_dim].iter().product();
+        let merged: usize =
+            incin_core::prelude::ShapeBuf::from_slice(&(t.shape[start_dim..=end_dim]))
+                .checked_numel(incin_core::prelude::OperationKind::Storage)?;
         let mut target_shape = t.shape[..start_dim].to_vec();
         target_shape.push(merged);
         target_shape.extend_from_slice(&t.shape[end_dim + 1..]);
@@ -1175,7 +1177,8 @@ impl<T: DType, D: Device> ReductionOps<Self> for CudaBackendImpl<T, D> {
                 (t.clone(), d)
             }
             None => {
-                let numel: usize = t.shape.iter().product();
+                let numel: usize = incin_core::prelude::ShapeBuf::from_slice(&(t.shape))
+                    .checked_numel(incin_core::prelude::OperationKind::Storage)?;
                 (<Self as TensorOps<Self>>::reshape::<K>(t, &[numel])?, 0)
             }
         };
@@ -1198,7 +1201,8 @@ impl<T: DType, D: Device> ReductionOps<Self> for CudaBackendImpl<T, D> {
                 (t.clone(), d)
             }
             None => {
-                let numel: usize = t.shape.iter().product();
+                let numel: usize = incin_core::prelude::ShapeBuf::from_slice(&(t.shape))
+                    .checked_numel(incin_core::prelude::OperationKind::Storage)?;
                 (<Self as TensorOps<Self>>::reshape::<K>(t, &[numel])?, 0)
             }
         };
@@ -1266,7 +1270,9 @@ impl<T: DType, D: Device> QuantizedOps<Self> for CudaBackendImpl<T, D> {
             ));
         }
         let k = lhs.shape[lhs.shape.len() - 1];
-        let m: usize = lhs.shape[..lhs.shape.len() - 1].iter().product();
+        let m: usize =
+            incin_core::prelude::ShapeBuf::from_slice(&(lhs.shape[..lhs.shape.len() - 1]))
+                .checked_numel(incin_core::prelude::OperationKind::Storage)?;
         let n = rhs.shape[0];
         if k != rhs.shape[1] {
             return Err(Error::Msg(format!(
@@ -1318,9 +1324,9 @@ fn im2col_2d_tape(
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CudaStorage| {
             let h_out =
-                crate::cuda::ops::conv::out_size(original_shape[2], kh, stride, padding, dilation);
+                crate::cuda::ops::conv::out_size(original_shape[2], kh, stride, padding, dilation)?;
             let w_out =
-                crate::cuda::ops::conv::out_size(original_shape[3], kw, stride, padding, dilation);
+                crate::cuda::ops::conv::out_size(original_shape[3], kw, stride, padding, dilation)?;
             Ok(vec![crate::cuda::ops::conv::launch_col2im_2d(
                 grad_out,
                 &original_shape,
@@ -1394,7 +1400,7 @@ fn im2col_1d_tape(
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CudaStorage| {
             let l_out =
-                crate::cuda::ops::conv::out_size(original_shape[2], k, stride, padding, dilation);
+                crate::cuda::ops::conv::out_size(original_shape[2], k, stride, padding, dilation)?;
             Ok(vec![crate::cuda::ops::conv::launch_col2im_1d(
                 grad_out,
                 &original_shape,
@@ -1417,7 +1423,7 @@ fn im2col_1d_tape(
 fn pad_trailing_zeros_2d_tape(t: &CudaStorage, pad_h: usize, pad_w: usize) -> Result<CudaStorage> {
     let (b, c, h, w) = (t.shape[0], t.shape[1], t.shape[2], t.shape[3]);
     let target_shape = vec![b, c, h + pad_h, w + pad_w];
-    let out = crate::cuda::ops::shape::scatter_into_zeros(&target_shape, &[0, 0, 0, 0], t);
+    let out = crate::cuda::ops::shape::scatter_into_zeros(&target_shape, &[0, 0, 0, 0], t)?;
     let (t_id, out_id) = (t.id, out.id);
     crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
         output_id: out_id,
@@ -1626,7 +1632,7 @@ impl<T: DType, D: Device> ModuleOps<Self> for CudaBackendImpl<T, D> {
             });
         }
         let cout_g = cout / groups;
-        let l_out = crate::cuda::ops::conv::out_size(len, k, stride, padding, dilation);
+        let l_out = crate::cuda::ops::conv::out_size(len, k, stride, padding, dilation)?;
 
         let mut group_outputs: Vec<CudaStorage> = Vec::with_capacity(groups);
         for g in 0..groups {
@@ -1698,8 +1704,8 @@ impl<T: DType, D: Device> ModuleOps<Self> for CudaBackendImpl<T, D> {
             });
         }
         let cout_g = cout / groups;
-        let h_out = crate::cuda::ops::conv::out_size(h, kh, stride, padding, dilation);
-        let w_out = crate::cuda::ops::conv::out_size(wid, kw, stride, padding, dilation);
+        let h_out = crate::cuda::ops::conv::out_size(h, kh, stride, padding, dilation)?;
+        let w_out = crate::cuda::ops::conv::out_size(wid, kw, stride, padding, dilation)?;
 
         let mut group_outputs: Vec<CudaStorage> = Vec::with_capacity(groups);
         for g in 0..groups {
@@ -1793,13 +1799,15 @@ impl<T: DType, D: Device> ModuleOps<Self> for CudaBackendImpl<T, D> {
         }
 
         let h_nat =
-            crate::cuda::ops::conv::natural_transpose_out_size(h, kh, stride, padding, dilation);
+            crate::cuda::ops::conv::natural_transpose_out_size(h, kh, stride, padding, dilation)?;
         let w_nat =
-            crate::cuda::ops::conv::natural_transpose_out_size(wid, kw, stride, padding, dilation);
+            crate::cuda::ops::conv::natural_transpose_out_size(wid, kw, stride, padding, dilation)?;
 
         // weight: [Cin, Cout, Kh, Kw] (Candle's conv_transpose2d convention,
         // matching CPU/WGPU).
-        let weight_mat = <Self as TensorOps<Self>>::reshape::<K>(w, &[cin, cout * kh * kw])?;
+        let flattened_weight =
+            ShapeBuf::from_slice(&[cout, kh, kw]).checked_numel(OperationKind::Conv2d)?;
+        let weight_mat = <Self as TensorOps<Self>>::reshape::<K>(w, &[cin, flattened_weight])?;
         let weight_mat_t = <Self as TensorOps<Self>>::transpose::<K>(&weight_mat, 0, 1)?;
         let input_flat = <Self as TensorOps<Self>>::reshape::<K>(t, &[batch, cin, h * wid])?;
 
@@ -2132,8 +2140,10 @@ fn cuda_topk_host(
     let mut base_shape = shape.clone();
     base_shape[dim] = 1;
 
-    let n_slices: usize = base_shape.iter().product();
-    let out_numel: usize = out_shape.iter().product();
+    let n_slices: usize = incin_core::prelude::ShapeBuf::from_slice(&(base_shape))
+        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+    let out_numel: usize = incin_core::prelude::ShapeBuf::from_slice(&(out_shape))
+        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
     let mut out_vals = vec![0.0f32; out_numel];
     let mut out_indices = vec![0u32; out_numel];
 
@@ -2154,7 +2164,7 @@ fn cuda_topk_host(
                 flat += coords[dd] * stride;
                 stride *= shape[dd];
             }
-            slice_vals.push((data[flat], j as u32));
+            slice_vals.push((data[flat], crate::cuda::checked_u32(j, "CUDA topk index")?));
         }
         if largest {
             slice_vals.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(core::cmp::Ordering::Equal));
@@ -2198,8 +2208,9 @@ fn cuda_argsort_host(t: &CudaStorage, dim: usize, descending: bool) -> Result<Cu
 
     let mut base_shape = shape.clone();
     base_shape[dim] = 1;
-    let n_slices: usize = base_shape.iter().product();
-    let mut out = vec![0u32; shape.iter().product()];
+    let n_slices: usize = incin_core::prelude::ShapeBuf::from_slice(&(base_shape))
+        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+    let mut out = vec![0u32; ShapeBuf::from_slice(&shape).checked_numel(OperationKind::Storage)?];
 
     for i in 0..n_slices {
         let mut rem = i;
@@ -2218,7 +2229,10 @@ fn cuda_argsort_host(t: &CudaStorage, dim: usize, descending: bool) -> Result<Cu
                 flat += coords[dd] * stride;
                 stride *= shape[dd];
             }
-            slice_vals.push((data[flat], j as u32));
+            slice_vals.push((
+                data[flat],
+                crate::cuda::checked_u32(j, "CUDA argsort index")?,
+            ));
         }
         if descending {
             slice_vals.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(core::cmp::Ordering::Equal));

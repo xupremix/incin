@@ -175,7 +175,7 @@ pub(crate) fn elementwise_unary(
                 CpuBuffer::BF16(out)
             }
             _ => {
-                let total: usize = t.shape.iter().product();
+                let total: usize = crate::cpu::stride::checked_numel(&(t.shape))?;
                 let out: Vec<f64> = (0..total)
                     .into_par_iter()
                     .map(|flat_idx| {
@@ -189,7 +189,7 @@ pub(crate) fn elementwise_unary(
         return Ok(CpuStorage::from_contiguous(buffer, t.shape.to_vec()));
     }
 
-    let total: usize = t.shape.iter().product();
+    let total: usize = crate::cpu::stride::checked_numel(&(t.shape))?;
     let out: Vec<f64> = (0..total)
         .into_par_iter()
         .map(|flat_idx| {
@@ -401,7 +401,7 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
             // Gradient scales by the same constant (same shape, no
             // unbroadcast needed).
             backward: Box::new(move |grad_out: &CpuStorage| {
-                let total: usize = grad_out.shape.iter().product();
+                let total: usize = crate::cpu::stride::checked_numel(&(grad_out.shape))?;
                 let mut scaled = Vec::with_capacity(total);
                 let mut idx = vec![0usize; grad_out.shape.len()];
                 for _ in 0..total {
@@ -451,7 +451,7 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &CpuStorage| {
-                let total: usize = grad_out.shape.iter().product();
+                let total: usize = crate::cpu::stride::checked_numel(&(grad_out.shape))?;
                 let zeros = vec![0.0f64; total];
                 Ok(vec![CpuStorage::from_contiguous(
                     grad_out.buffer.from_f64_values(zeros),
@@ -694,7 +694,7 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &CpuStorage| {
-                let total: usize = grad_out.shape.iter().product();
+                let total: usize = crate::cpu::stride::checked_numel(&(grad_out.shape))?;
                 let grad: Vec<f64> = (0..total)
                     .into_par_iter()
                     .map(|flat_idx| {

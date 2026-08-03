@@ -123,10 +123,17 @@ impl<S: Shape + DynShape, B: Backend> ComputeStats for Param<S, B> {
     /// has a known formula).
     fn compute_stats(&self, _batch: u64) -> LayerStats {
         LayerStats {
-            params: self.shape_dims().iter().product::<usize>() as u64,
+            params: validated_parameter_count(&self.shape_dims()),
             macs: 0,
         }
     }
+}
+
+pub(crate) fn validated_parameter_count(dims: &[usize]) -> u64 {
+    let elements = ShapeBuf::from_slice(dims)
+        .checked_numel(OperationKind::Storage)
+        .expect("parameter tensor shape crossed checked construction");
+    u64::try_from(elements).expect("usize parameter count must fit u64")
 }
 
 impl<T: ComputeStats> ComputeStats for Option<T> {

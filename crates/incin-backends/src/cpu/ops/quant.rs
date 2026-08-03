@@ -1,7 +1,7 @@
 use crate::cpu::CpuBackendImpl;
 use crate::cpu::storage::{BlockQ8_0, CpuBuffer, CpuStorage};
-use incin_core::prelude::*;
 use incin_core::backend_authoring::{Backend, QuantizedOps};
+use incin_core::prelude::*;
 use incin_core::prelude::{FloatDType, QuantDType};
 
 extern crate alloc;
@@ -153,7 +153,7 @@ impl<T: DType, D: Device> QuantizedOps<Self> for CpuBackendImpl<T, D> {
         let n = rhs_shape[0];
         let k2 = rhs_shape[1];
         let k = lhs_shape[lhs_shape.len() - 1];
-        let m: usize = lhs_shape[..lhs_shape.len() - 1].iter().product();
+        let m: usize = crate::cpu::stride::checked_numel(&(lhs_shape[..lhs_shape.len() - 1]))?;
 
         if k != k2 {
             return Err(Error::Msg(alloc::format!(
@@ -174,7 +174,8 @@ impl<T: DType, D: Device> QuantizedOps<Self> for CpuBackendImpl<T, D> {
         let out_len = out_shape.len();
         out_shape[out_len - 1] = n;
 
-        let mut out_data = alloc::vec![0.0f32; m * n];
+        let out_total = ShapeBuf::from_slice(&[m, n]).checked_numel(OperationKind::MatMul)?;
+        let mut out_data = alloc::vec![0.0f32; out_total];
         let blocks_per_row = k / 32;
 
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]

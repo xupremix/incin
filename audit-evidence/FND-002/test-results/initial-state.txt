@@ -1,0 +1,10 @@
+e906a5b4a9128788b7122d621c53734bee55774d
+ D INCIN_0_1_TO_1_0_MASTER_IMPLEMENTATION_PLAN.md
+ D INCIN_0_1_TO_1_0_MASTER_IMPLEMENTATION_PLAN_SECURITY_AUDITED.md
+?? INCIN_FOUNDATION_FIRST_REMEDIATION_PROMPT.md
+?? audit-evidence/FND-002/
+e906a5b (HEAD -> develop) refactor(fnd-001): establish stable facade and API tiers
+21ba890 audit(fnd-000): reset project truth and contain false claims
+fa8d203 (origin/develop, origin/HEAD) fix(api-001): harden facade; all 1233 workspace tests pass
+8f90364 refactor(core): finalize backend_authoring facade migration and trait visibility
+1264f7b feat(dist): implement FSDP/ZeRO prototype and memory parity contracts (DST-014)

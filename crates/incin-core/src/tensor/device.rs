@@ -16,12 +16,12 @@
 //! ## Tier 2 — Partial Compile-Time (`Cuda` / `Wgpu`)
 //!
 //! The backend family (CUDA or WGPU) is known at compile time, but the
-//! specific device ordinal (which GPU to use) is provided at runtime as a
-//! `usize`. Useful when you know you want CUDA but need to select the GPU
+//! specific device ordinal (which GPU to use) is provided through an explicit
+//! selector value. Useful when you know you want CUDA but need to select the GPU
 //! based on e.g. command-line flags.
 //!
 //! ```text
-//! Tensor::<s![2, 3], IncinBackend<f32, Cuda>>::zeros(2)  // runtime ordinal 2
+//! Tensor::<s![2, 3], IncinBackend<f32, Cuda>>::zeros(Cuda::new(2))
 //! ```
 //!
 //! ## Tier 3 — Fully Static Selection (`CudaN<N>` / `WgpuN<N>`)
@@ -46,17 +46,17 @@ use crate::prelude::{Dyn, Result};
 /// | Type             | Backend at compile time | Ordinal at compile time | Constructor arg |
 /// |------------------|------------------------|-------------------------|-----------------|
 /// | `Dyn`            | ✗                      | ✗                       | `DeviceId`      |
-/// | `Cuda` / `Wgpu`  | ✓                      | ✗                       | `usize`         |
+/// | `Cuda` / `Wgpu`  | ✓                      | ✗                       | selector value  |
 /// | `CudaN<N>` / `WgpuN<N>` | ✓               | ✓                       | `()`            |
 pub trait Device: 'static + Send + Sync + Clone + Eq + PartialEq + Debug + Sized {
     /// The user-facing constructor argument:
     /// - `DeviceId` for `Dyn` (fully runtime)
-    /// - `usize` for `Cuda`/`Wgpu` (partial — ordinal at runtime)
+    /// - an explicit selector for `Cuda`/`Wgpu` (partial — ordinal at runtime)
     /// - `()` for `CudaN<N>`/`WgpuN<N>` (fully static)
     type Arg: Clone;
     /// The runtime-stored representation:
     /// - `DeviceId` for `Dyn`
-    /// - `usize` for `Cuda`/`Wgpu`
+    /// - the selector for `Cuda`/`Wgpu`
     /// - `PhantomData<Self>` for `CudaN<N>`/`WgpuN<N>`
     type Field: Debug + Clone + Default;
     /// Converts a user-facing `Arg` into the stored `Field` representation.
@@ -103,7 +103,7 @@ impl Device for Dyn {
 mod cuda_partial {
     use super::{Device, DeviceId, Result};
 
-    #[derive(Debug, Default, Clone, PartialEq, Eq)]
+    #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
     /// **Tier 2** CUDA device: backend kind known at compile time, ordinal
     /// supplied at runtime as a `usize`.
     ///
@@ -112,16 +112,33 @@ mod cuda_partial {
     ///
     /// For a fully static device selector use `CudaN<N>` where `N` is a
     /// [`typenum`] unsigned (e.g. `Cuda<U0>` for GPU 0).
-    pub struct Cuda(pub usize);
+    pub struct Cuda {
+        ordinal: usize,
+    }
+
+    impl Cuda {
+        /// Selects a logical CUDA ordinal. Hardware availability is checked
+        /// only when a backend initializes the selector.
+        #[must_use]
+        pub const fn new(ordinal: usize) -> Self {
+            Self { ordinal }
+        }
+
+        /// Returns the selected logical ordinal.
+        #[must_use]
+        pub const fn ordinal(self) -> usize {
+            self.ordinal
+        }
+    }
 
     impl Device for Cuda {
         /// Ordinal supplied at construction time.
-        type Arg = usize;
-        /// Ordinal stored directly.
-        type Field = usize;
+        type Arg = Self;
+        /// Validated selector stored directly.
+        type Field = Self;
 
         fn to_incin(dev: &Self::Field) -> Result<DeviceId> {
-            Ok(DeviceId::cuda(*dev))
+            Ok(DeviceId::cuda(dev.ordinal))
         }
 
         fn init(arg: Self::Arg) -> Self::Field {
@@ -137,7 +154,7 @@ pub use cuda_partial::Cuda;
 mod wgpu_partial {
     use super::{Device, DeviceId, Result};
 
-    #[derive(Debug, Default, Clone, PartialEq, Eq)]
+    #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
     /// **Tier 2** WGPU device: backend kind known at compile time, ordinal
     /// supplied at runtime as a `usize`.
     ///
@@ -146,16 +163,33 @@ mod wgpu_partial {
     ///
     /// For a fully static device selector use `WgpuN<N>` where `N` is a
     /// [`typenum`] unsigned (e.g. `Wgpu<U0>` for adapter 0).
-    pub struct Wgpu(pub usize);
+    pub struct Wgpu {
+        ordinal: usize,
+    }
+
+    impl Wgpu {
+        /// Selects a logical WGPU adapter ordinal without claiming that the
+        /// adapter exists on the current host.
+        #[must_use]
+        pub const fn new(ordinal: usize) -> Self {
+            Self { ordinal }
+        }
+
+        /// Returns the selected logical ordinal.
+        #[must_use]
+        pub const fn ordinal(self) -> usize {
+            self.ordinal
+        }
+    }
 
     impl Device for Wgpu {
         /// Ordinal supplied at construction time.
-        type Arg = usize;
-        /// Ordinal stored directly.
-        type Field = usize;
+        type Arg = Self;
+        /// Validated selector stored directly.
+        type Field = Self;
 
         fn to_incin(dev: &Self::Field) -> Result<DeviceId> {
-            Ok(DeviceId::wgpu(*dev))
+            Ok(DeviceId::wgpu(dev.ordinal))
         }
 
         fn init(arg: Self::Arg) -> Self::Field {
@@ -176,7 +210,7 @@ mod cuda_static {
     use super::{ConstDevice, Device, DeviceId, PhantomData, Result};
     use typenum::{U0, Unsigned};
 
-    #[derive(Debug, Default, Clone, PartialEq, Eq)]
+    #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
     /// **Tier 3** CUDA device: both the backend kind *and* the device
     /// ordinal `N` are fully known at compile time via [`typenum`].
     ///
@@ -273,14 +307,31 @@ mod metal_partial {
     #[derive(Debug, Default, Clone, PartialEq, Eq)]
     /// **Tier 2** Metal device: backend kind known at compile time, ordinal
     /// supplied at runtime as a `usize`.
-    pub struct Metal(pub usize);
+    pub struct Metal {
+        ordinal: usize,
+    }
+
+    impl Metal {
+        /// Selects a logical Metal device ordinal without claiming that the
+        /// device exists on the current host.
+        #[must_use]
+        pub const fn new(ordinal: usize) -> Self {
+            Self { ordinal }
+        }
+
+        /// Returns the selected logical ordinal.
+        #[must_use]
+        pub const fn ordinal(self) -> usize {
+            self.ordinal
+        }
+    }
 
     impl Device for Metal {
-        type Arg = usize;
-        type Field = usize;
+        type Arg = Self;
+        type Field = Self;
 
         fn to_incin(dev: &Self::Field) -> Result<DeviceId> {
-            Ok(DeviceId::metal(*dev))
+            Ok(DeviceId::metal(dev.ordinal))
         }
 
         fn init(arg: Self::Arg) -> Self::Field {
@@ -468,8 +519,7 @@ pub const fn metal_is_available() -> bool {
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 /// A Metal device index, used as a hashable/orderable key.
 pub struct MetalDevice {
-    /// The Metal device ordinal.
-    pub id: usize,
+    id: usize,
 }
 
 impl MetalDevice {
@@ -477,14 +527,19 @@ impl MetalDevice {
     pub fn new(id: usize) -> Self {
         Self { id }
     }
+
+    /// Returns the logical device ordinal.
+    #[must_use]
+    pub const fn ordinal(self) -> usize {
+        self.id
+    }
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 /// A CUDA device index, used as a hashable/orderable key (e.g. for
 /// per-device kernel caches) distinct from the type-level `Cuda`/`CudaN<N>` markers.
 pub struct CudaDevice {
-    /// The CUDA device ordinal.
-    pub id: usize,
+    id: usize,
 }
 
 impl CudaDevice {
@@ -492,20 +547,31 @@ impl CudaDevice {
     pub fn new(id: usize) -> Self {
         Self { id }
     }
+
+    /// Returns the logical device ordinal.
+    #[must_use]
+    pub const fn ordinal(self) -> usize {
+        self.id
+    }
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 /// A WGPU device index, used as a hashable/orderable key distinct from
 /// the type-level `Wgpu`/`WgpuN<N>` markers.
 pub struct WgpuDevice {
-    /// The WGPU device ordinal.
-    pub id: usize,
+    id: usize,
 }
 
 impl WgpuDevice {
     /// Creates a new instance with the given device ordinal.
     pub fn new(id: usize) -> Self {
         Self { id }
+    }
+
+    /// Returns the logical device ordinal.
+    #[must_use]
+    pub const fn ordinal(self) -> usize {
+        self.id
     }
 }
 
@@ -807,7 +873,8 @@ mod tests {
     #[test]
     fn test_cuda_tier2_runtime_ordinal() {
         // Tier 2: kind known at compile time, ordinal at runtime
-        let field = <Cuda as Device>::init(3);
+        let field = <Cuda as Device>::init(Cuda::new(3));
+        assert_eq!(field.ordinal(), 3);
         let id = Cuda::to_incin(&field).unwrap();
         assert_eq!(id, DeviceId::cuda(3));
     }
@@ -825,9 +892,18 @@ mod tests {
     #[cfg(feature = "wgpu")]
     #[test]
     fn test_wgpu_tier2_runtime_ordinal() {
-        let field = <Wgpu as Device>::init(1);
+        let field = <Wgpu as Device>::init(Wgpu::new(1));
+        assert_eq!(field.ordinal(), 1);
         let id = Wgpu::to_incin(&field).unwrap();
         assert_eq!(id, DeviceId::wgpu(1));
+    }
+
+    #[cfg(feature = "metal")]
+    #[test]
+    fn test_metal_tier2_runtime_ordinal() {
+        let field = <Metal as Device>::init(Metal::new(2));
+        assert_eq!(field.ordinal(), 2);
+        assert_eq!(Metal::to_incin(&field).unwrap(), DeviceId::metal(2));
     }
 
     #[cfg(feature = "wgpu")]

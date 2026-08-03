@@ -106,7 +106,9 @@ pub trait ReshapeTarget<In: Shape> {
     /// most one `InferDim` inferred from the remaining element count).
     type Output: Shape;
     /// Computes the concrete output dimensions from the input's runtime shape.
-    fn calculate_shape(in_shape_vec: &[usize]) -> Vec<usize>;
+    fn calculate_shape(
+        in_shape_vec: &[usize],
+    ) -> core::result::Result<Vec<usize>, crate::shapes::error::ShapeError>;
 }
 
 // Generate implementations for tuples up to 4D for now to match the user's common cases
@@ -121,8 +123,9 @@ macro_rules! impl_reshape_target {
 
             /// Computes the concrete output dimensions from the input's runtime shape.
 
-            fn calculate_shape(in_shape_vec: &[usize]) -> Vec<usize> {
-                let total_elements: usize = in_shape_vec.iter().product();
+            fn calculate_shape(in_shape_vec: &[usize]) -> core::result::Result<Vec<usize>, crate::shapes::error::ShapeError> {
+                let total_elements = crate::shapes::ShapeBuf::from_slice(in_shape_vec)
+                    .checked_numel(crate::shapes::error::OperationKind::Reshape)?;
                 let mut resolved_sizes = vec![];
                 let mut infer_idx = None;
 
@@ -135,7 +138,11 @@ macro_rules! impl_reshape_target {
                         // In Reshape contexts, InferDim acts as the unique auto-inferred dimension.
 
                         if infer_idx.is_some() {
-                            return vec![];
+                            return Err(crate::shapes::error::ShapeError::InvalidParameter {
+                                operation: crate::shapes::error::OperationKind::Reshape,
+                                parameter: "inferred dimensions",
+                                value: 2,
+                            });
                         }
                         infer_idx = Some(_current_idx);
                         resolved_sizes.push(0); // placeholder
@@ -146,15 +153,31 @@ macro_rules! impl_reshape_target {
                 )*
 
                 if let Some(idx) = infer_idx {
-                    let known_product: usize = resolved_sizes.iter().filter(|&&s| s != 0).product();
+                    let known_product = resolved_sizes
+                        .iter()
+                        .filter(|&&size| size != 0)
+                        .try_fold(1usize, |product, &size| product.checked_mul(size))
+                        .ok_or(crate::shapes::error::ShapeError::ArithmeticOverflow {
+                            operation: crate::shapes::error::OperationKind::Reshape,
+                            expression: "product of specified reshape dimensions",
+                        })?;
                     if known_product > 0 {
+                        if !total_elements.is_multiple_of(known_product) {
+                            return Err(crate::shapes::error::ShapeError::DimensionMismatch {
+                                operation: crate::shapes::error::OperationKind::Reshape,
+                                axis: crate::shapes::error::Axis::Index(idx),
+                                lhs: total_elements,
+                                rhs: known_product,
+                                constraint: crate::shapes::error::DimensionConstraint::DivisibleBy,
+                            });
+                        }
                         resolved_sizes[idx] = total_elements / known_product;
                     } else {
                         resolved_sizes[idx] = 0;
                     }
                 }
 
-                resolved_sizes
+                Ok(resolved_sizes)
             }
         }
     };

@@ -158,11 +158,21 @@ impl std::error::Error for MetaError {}
 
 /// Checked physical metadata shared by every backend storage handle.
 ///
-/// The fields are readable for executor interoperability. Backend storage embeds
-/// this value behind shared access only: it does not implement `DerefMut`, so
-/// attached metadata cannot be changed after validation.
+/// Backend storage embeds this value behind shared access only. Its readable
+/// fields are exposed through a shared-only view; `TensorMeta` does not
+/// implement `DerefMut`, and its private wrapper prevents constructing or
+/// mutating an execution proof without the checked constructors.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TensorMeta {
+    fields: TensorMetaFields,
+}
+
+/// Read-only field view of checked tensor metadata.
+///
+/// Constructing this plain record does not construct a [`TensorMeta`]; only
+/// [`TensorMeta::try_new`] and [`TensorMeta::contiguous`] can do that.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TensorMetaFields {
     /// Runtime dimensions.
     pub shape: ShapeBuf,
     /// Per-axis element strides.
@@ -179,6 +189,14 @@ pub struct TensorMeta {
     pub alignment: Alignment,
 }
 
+impl core::ops::Deref for TensorMeta {
+    type Target = TensorMetaFields;
+
+    fn deref(&self) -> &Self::Target {
+        &self.fields
+    }
+}
+
 impl TensorMeta {
     /// Metadata for a handle that owns no allocation.
     ///
@@ -193,13 +211,15 @@ impl TensorMeta {
     ///
     /// [`StorageBackend::metadata`]: crate::tensor::backend::StorageBackend::metadata
     pub const UNALLOCATED: Self = Self {
-        shape: ShapeBuf::SCALAR,
-        strides: StrideBuf::EMPTY,
-        offset_elements: 0,
-        dtype: DTypeId::F32,
-        device: DeviceId::CPU,
-        layout: LayoutClass::Contiguous,
-        alignment: Alignment::BYTE,
+        fields: TensorMetaFields {
+            shape: ShapeBuf::SCALAR,
+            strides: StrideBuf::EMPTY,
+            offset_elements: 0,
+            dtype: DTypeId::F32,
+            device: DeviceId::CPU,
+            layout: LayoutClass::Contiguous,
+            alignment: Alignment::BYTE,
+        },
     };
 
     /// Validate and bind a strided view to an allocation.
@@ -234,13 +254,15 @@ impl TensorMeta {
             LayoutClass::Strided
         };
         Ok(Self {
-            shape,
-            strides,
-            offset_elements,
-            dtype,
-            device,
-            layout,
-            alignment: allocation_alignment.after_offset_bytes(offset_bytes),
+            fields: TensorMetaFields {
+                shape,
+                strides,
+                offset_elements,
+                dtype,
+                device,
+                layout,
+                alignment: allocation_alignment.after_offset_bytes(offset_bytes),
+            },
         })
     }
 
@@ -267,43 +289,43 @@ impl TensorMeta {
     /// Runtime dimensions.
     #[must_use]
     pub const fn shape(&self) -> &ShapeBuf {
-        &self.shape
+        &self.fields.shape
     }
 
     /// Per-axis element strides.
     #[must_use]
     pub const fn strides(&self) -> &StrideBuf {
-        &self.strides
+        &self.fields.strides
     }
 
     /// First addressed element in the allocation.
     #[must_use]
     pub const fn offset_elements(&self) -> usize {
-        self.offset_elements
+        self.fields.offset_elements
     }
 
     /// Physical element dtype.
     #[must_use]
     pub const fn dtype(&self) -> DTypeId {
-        self.dtype
+        self.fields.dtype
     }
 
     /// Physical runtime device.
     #[must_use]
     pub const fn device(&self) -> DeviceId {
-        self.device
+        self.fields.device
     }
 
     /// Derived layout class.
     #[must_use]
     pub const fn layout(&self) -> LayoutClass {
-        self.layout
+        self.fields.layout
     }
 
     /// Effective byte alignment after applying the view offset.
     #[must_use]
     pub const fn alignment(&self) -> Alignment {
-        self.alignment
+        self.fields.alignment
     }
 }
 

@@ -190,18 +190,14 @@ pub(crate) fn scatter_into_zeros(
     out_shape: &[usize],
     start: &[usize],
     grad_out: &WgpuStorage,
-) -> WgpuStorage {
+) -> incin_core::prelude::Result<WgpuStorage> {
     use crate::wgpu::dispatch;
-    let out_n = crate::wgpu::backend::num_elements(out_shape);
-    // The tape's backward closure is `Fn(&WgpuStorage) -> Vec<WgpuStorage>`, so
-    // this path cannot report. `out_shape` is the recorded shape of a tensor
-    // that was already allocated in the forward pass, so its byte length has
-    // already been computed successfully once; the same discipline as
-    // `WgpuStorage::new` below applies. Making the whole backward signature
-    // fallible belongs with the explicit gradient context in GRD-001.
-    let out_buf = WgpuBuffer::new_zeros_for(DTypeId::F32, out_n, OperationKind::Storage)
-        .expect("a shape allocated in the forward pass must size in the backward pass");
-    let in_n = crate::wgpu::backend::num_elements(&grad_out.shape) as u32;
+    let out_n = crate::wgpu::backend::num_elements(out_shape)?;
+    let out_buf = WgpuBuffer::new_zeros_for(DTypeId::F32, out_n, OperationKind::Storage)?;
+    let in_n = crate::wgpu::backend::checked_u32(
+        crate::wgpu::backend::num_elements(&grad_out.shape)?,
+        "WGPU scatter input element count",
+    )?;
 
     let params = dispatch::prepare_shape_params(
         1, // paste
@@ -209,7 +205,7 @@ pub(crate) fn scatter_into_zeros(
         out_shape,
         &grad_out.shape,
         start,
-    );
+    )?;
     dispatch::dispatch_shape(&grad_out.buffer, &out_buf, &params);
-    WgpuStorage::new(out_buf, out_shape.to_vec())
+    Ok(WgpuStorage::new(out_buf, out_shape.to_vec()))
 }

@@ -7,8 +7,8 @@
 use super::alloc_zeroed_bytes;
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
-use incin_core::prelude::OperationKind;
 use incin_core::prelude::Result;
+use incin_core::prelude::{OperationKind, ShapeBuf};
 
 const BM: u32 = 128;
 const BN: u32 = 128;
@@ -43,7 +43,7 @@ pub(crate) fn launch_matmul(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<Cuda
     let k = lhs.shape[1];
     let n = rhs.shape[1];
     let out_shape = alloc::vec![m, n];
-    let total = m * n;
+    let total = ShapeBuf::from_slice(&out_shape).checked_numel(OperationKind::MatMul)?;
 
     let mut out_b = CudaBuffer {
         len: total,
@@ -58,8 +58,13 @@ pub(crate) fn launch_matmul(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<Cuda
         device_id,
     };
 
+    let m_u32 = crate::cuda::checked_u32(m, "CUDA matmul row grid dimension")?;
+    let n_u32 = crate::cuda::checked_u32(n, "CUDA matmul column grid dimension")?;
+    let m_i32 = crate::cuda::checked_i32(m, "CUDA matmul row count")?;
+    let k_i32 = crate::cuda::checked_i32(k, "CUDA matmul inner dimension")?;
+    let n_i32 = crate::cuda::checked_i32(n, "CUDA matmul column count")?;
     let cfg = cudarc::driver::LaunchConfig {
-        grid_dim: ((n as u32).div_ceil(BN), (m as u32).div_ceil(BM), 1),
+        grid_dim: (n_u32.div_ceil(BN), m_u32.div_ceil(BM), 1),
         block_dim: (16, 16, 1),
         shared_mem_bytes: 0,
     };
@@ -80,9 +85,9 @@ pub(crate) fn launch_matmul(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<Cuda
             .arg(&lhs_f32)
             .arg(&rhs_f32)
             .arg(&mut out_f32)
-            .arg(&(m as i32))
-            .arg(&(k as i32))
-            .arg(&(n as i32))
+            .arg(&m_i32)
+            .arg(&k_i32)
+            .arg(&n_i32)
             .launch(cfg)
             .map_err(|e| incin_core::prelude::Error::Msg(format!("matmul launch failed: {e:?}")))?;
     }

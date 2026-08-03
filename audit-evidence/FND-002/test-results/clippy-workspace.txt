@@ -1,0 +1,64 @@
+    Checking incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Checking incin-data v0.0.0 (/home/xupremix/Projects/incin/crates/incin-data)
+    Checking incin-telemetry v0.0.0 (/home/xupremix/Projects/incin/crates/incin-telemetry)
+    Checking incin-viz-plugin-api v0.0.0 (/home/xupremix/Projects/incin/crates/incin-viz-plugin-api)
+    Checking incin-viz v0.0.0 (/home/xupremix/Projects/incin/crates/incin-viz)
+error[E0433]: cannot find type `Alignment` in this scope
+   --> crates/incin-backends/src/cpu/executor.rs:590:13
+    |
+590 |             Alignment::BYTE,
+    |             ^^^^^^^^^ use of undeclared type `Alignment`
+    |
+help: consider importing one of these enums
+    |
+563 +     use std::fmt::Alignment;
+    |
+563 +     use alloc::fmt::Alignment;
+    |
+
+error[E0433]: cannot find type `ShapeBuf` in this scope
+   --> crates/incin-backends/src/cpu/executor.rs:587:13
+    |
+587 |             ShapeBuf::from_slice(&[2, 3]),
+    |             ^^^^^^^^ use of undeclared type `ShapeBuf`
+
+error: this expression creates a reference which is immediately dereferenced by the compiler
+   --> crates/incin-backends/src/cpu/ops/pool.rs:122:60
+    |
+122 |     let total: usize = crate::cpu::stride::validated_numel(&(input_shape));
+    |                                                            ^^^^^^^^^^^^^^ help: change this to: `(input_shape)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#needless_borrow
+    = note: `-D clippy::needless-borrow` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::needless_borrow)]`
+
+error: this expression creates a reference which is immediately dereferenced by the compiler
+   --> crates/incin-backends/src/cpu/ops/reduce.rs:142:60
+    |
+142 |     let total: usize = crate::cpu::stride::validated_numel(&(shape));
+    |                                                            ^^^^^^^^ help: change this to: `(shape)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#needless_borrow
+
+error: this expression creates a reference which is immediately dereferenced by the compiler
+   --> crates/incin-backends/src/cpu/ops/reduce.rs:227:60
+    |
+227 |     let total: usize = crate::cpu::stride::validated_numel(&(original_shape));
+    |                                                            ^^^^^^^^^^^^^^^^^ help: change this to: `(original_shape)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#needless_borrow
+
+error: this expression creates a reference which is immediately dereferenced by the compiler
+   --> crates/incin-backends/src/cpu/storage.rs:484:60
+    |
+484 |     let total: usize = crate::cpu::stride::validated_numel(&(original_shape));
+    |                                                            ^^^^^^^^^^^^^^^^^ help: change this to: `(original_shape)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#needless_borrow
+
+error: could not compile `incin-backends` (lib) due to 4 previous errors
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `incin-backends` (lib) due to 4 previous errors
+For more information about this error, try `rustc --explain E0433`.
+error: could not compile `incin-backends` (lib test) due to 2 previous errors

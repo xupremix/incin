@@ -4,7 +4,7 @@ use crate::external::candle::CandleBackend;
 use crate::external::*;
 
 impl<T: incin_core::prelude::DType, D: incin_core::prelude::Device>
-    incin_core::prelude::QuantizedOps<Self> for CandleBackend<T, D>
+    incin_core::backend_authoring::QuantizedOps<Self> for CandleBackend<T, D>
 {
     /// Not supported by candle; always returns `UnsupportedBackendOperation`.
     fn quantize<K: incin_core::prelude::FloatDType, Q: incin_core::prelude::QuantDType>(

@@ -4,7 +4,7 @@ use crate::external::candle::CandleBackend;
 use crate::external::*;
 
 impl<T: incin_core::prelude::DType, D: incin_core::prelude::Device>
-    incin_core::prelude::NumericOps<Self> for CandleBackend<T, D>
+    incin_core::backend_authoring::NumericOps<Self> for CandleBackend<T, D>
 {
     /// Element-wise addition with broadcasting.
     fn add<K: incin_core::prelude::DType>(

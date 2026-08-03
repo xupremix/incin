@@ -1,0 +1,15 @@
+error[E0423]: cannot initialize a tuple struct which contains private fields
+ --> tests/compile_fail/gradients_backend_payload_is_private.rs:4:19
+  |
+4 |     let _forged = Gradients(());
+  |                   ^^^^^^^^^
+  |
+note: constructor is not visible here due to private fields
+ --> src/optim/mod.rs
+  |
+  | pub struct Gradients<G>(G);
+  |                         ^ private field
+help: you might have meant to use the `from_backend` associated function
+  |
+4 |     let _forged = Gradients::from_backend(());
+  |                            ++++++++++++++

@@ -53,8 +53,31 @@ pub type WgpuGrads = crate::wgpu::tape::WgpuGrads;
 // Helper: compute flat element count from shape
 // ─────────────────────────────────────────────────────────────────────────────
 /// `num_elements`.
-pub(crate) fn num_elements(shape: &[usize]) -> usize {
-    shape.iter().product()
+pub(crate) fn num_elements(shape: &[usize]) -> Result<usize> {
+    ShapeBuf::from_slice(shape)
+        .checked_numel(OperationKind::Storage)
+        .map_err(Into::into)
+}
+
+pub(crate) fn checked_u32(value: usize, expression: &'static str) -> Result<u32> {
+    u32::try_from(value).map_err(|_| {
+        incin_core::prelude::ShapeError::ArithmeticOverflow {
+            operation: OperationKind::Storage,
+            expression,
+        }
+        .into()
+    })
+}
+
+fn checked_u32_array<const N: usize>(
+    values: [usize; N],
+    expression: &'static str,
+) -> Result<[u32; N]> {
+    let mut checked = [0; N];
+    for (target, value) in checked.iter_mut().zip(values) {
+        *target = checked_u32(value, expression)?;
+    }
+    Ok(checked)
 }
 
 fn validate_wgpu(
@@ -162,7 +185,12 @@ impl<T: DType, D: Device> Backend for WgpuBackendImpl<T, D> {
         device: &DeviceId,
     ) -> Result<Self::Storage<K>> {
         validate_wgpu(dtype, device, OperationKind::Storage, "from_bytes")?;
-        let expected = num_elements(shape) * core::mem::size_of::<f32>();
+        let expected = num_elements(shape)?
+            .checked_mul(core::mem::size_of::<f32>())
+            .ok_or(incin_core::prelude::ShapeError::ArithmeticOverflow {
+                operation: OperationKind::Storage,
+                expression: "WGPU element count * element byte width",
+            })?;
         if bytes.len() != expected {
             return Err(Error::InvalidByteLength {
                 expected,
@@ -191,7 +219,7 @@ impl<T: DType, D: Device> CreationOps<Self> for WgpuBackendImpl<T, D> {
         device: &DeviceId,
     ) -> Result<<Self as Backend>::Storage<K>> {
         validate_wgpu(dtype, device, OperationKind::Fill, "zeros")?;
-        let n = num_elements(shape);
+        let n = num_elements(shape)?;
         let data: Vec<f32> = vec![0.0; n];
         let buf = WgpuBuffer::from_slice(&data);
         Ok(WgpuStorage::new(buf, shape.to_vec()))
@@ -204,7 +232,7 @@ impl<T: DType, D: Device> CreationOps<Self> for WgpuBackendImpl<T, D> {
         device: &DeviceId,
     ) -> Result<<Self as Backend>::Storage<K>> {
         validate_wgpu(dtype, device, OperationKind::Fill, "ones")?;
-        let n = num_elements(shape);
+        let n = num_elements(shape)?;
         let data: Vec<f32> = vec![1.0; n];
         let buf = WgpuBuffer::from_slice(&data);
         Ok(WgpuStorage::new(buf, shape.to_vec()))
@@ -218,7 +246,7 @@ impl<T: DType, D: Device> CreationOps<Self> for WgpuBackendImpl<T, D> {
     ) -> Result<<Self as Backend>::Storage<K>> {
         validate_wgpu(dtype, device, OperationKind::Random, "rand")?;
         use std::time::{SystemTime, UNIX_EPOCH};
-        let n = num_elements(shape);
+        let n = num_elements(shape)?;
         // Simple LCG for now – GPU-side random generation would need more infrastructure
         let seed = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -245,7 +273,7 @@ impl<T: DType, D: Device> CreationOps<Self> for WgpuBackendImpl<T, D> {
     ) -> Result<<Self as Backend>::Storage<K>> {
         validate_wgpu(dtype, device, OperationKind::Random, "randn")?;
         use std::time::{SystemTime, UNIX_EPOCH};
-        let n = num_elements(shape);
+        let n = num_elements(shape)?;
         let seed = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
@@ -332,7 +360,7 @@ fn binary_op<T: DType>(
             msg: "shapes must match for elementwise op".to_string(),
         });
     }
-    let n = num_elements(&lhs.shape) as u32;
+    let n = checked_u32(num_elements(&lhs.shape)?, "WGPU binary element count")?;
     let out_buf = WgpuBuffer::new_zeros(lhs.buffer.size);
     let params = [op_mode, n];
     dispatch::dispatch_binary(&lhs.buffer, &rhs.buffer, &out_buf, &params);
@@ -441,7 +469,7 @@ impl<T: DType, D: Device> NumericOps<Self> for WgpuBackendImpl<T, D> {
 /// `unary_op`.
 #[allow(clippy::extra_unused_type_parameters)]
 fn unary_op<T: DType>(t: &WgpuStorage, op_mode: u32) -> Result<WgpuStorage> {
-    let n = num_elements(&t.shape) as u32;
+    let n = checked_u32(num_elements(&t.shape)?, "WGPU unary element count")?;
     let out_buf = WgpuBuffer::new_zeros(t.buffer.size);
     let params = [op_mode, n];
     dispatch::dispatch_unary(&t.buffer, &out_buf, &params);
@@ -451,7 +479,7 @@ fn unary_op<T: DType>(t: &WgpuStorage, op_mode: u32) -> Result<WgpuStorage> {
 /// `scalar_op`.
 #[allow(clippy::extra_unused_type_parameters)]
 fn scalar_op<T: DType>(t: &WgpuStorage, scalar: f64, op_mode: u32) -> Result<WgpuStorage> {
-    let n = num_elements(&t.shape) as u32;
+    let n = checked_u32(num_elements(&t.shape)?, "WGPU scalar element count")?;
     let out_buf = WgpuBuffer::new_zeros(t.buffer.size);
     let scalar_bits = (scalar as f32).to_bits();
     let params = [op_mode, n, scalar_bits];
@@ -718,11 +746,11 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackendImpl<T, D> {
         let lhs_rank = lhs.shape.len();
         let rhs_rank = rhs.shape.len();
 
-        let m = lhs.shape[lhs_rank - 2] as u32;
-        let k = lhs.shape[lhs_rank - 1] as u32;
-        let n = rhs.shape[rhs_rank - 1] as u32;
+        let m = lhs.shape[lhs_rank - 2];
+        let k = lhs.shape[lhs_rank - 1];
+        let n = rhs.shape[rhs_rank - 1];
 
-        if k as usize != rhs.shape[rhs_rank - 2] {
+        if k != rhs.shape[rhs_rank - 2] {
             return Err(Error::ShapeMismatch {
                 op: "matmul",
                 expected: lhs.shape.to_vec(),
@@ -732,14 +760,10 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackendImpl<T, D> {
         }
 
         // Compute batch dims
-        let mut lhs_batch = 1;
-        for i in 0..lhs_rank - 2 {
-            lhs_batch *= lhs.shape[i];
-        }
-        let mut rhs_batch = 1;
-        for i in 0..rhs_rank - 2 {
-            rhs_batch *= rhs.shape[i];
-        }
+        let lhs_batch = ShapeBuf::from_slice(&lhs.shape[..lhs_rank - 2])
+            .checked_numel(OperationKind::MatMul)?;
+        let rhs_batch = ShapeBuf::from_slice(&rhs.shape[..rhs_rank - 2])
+            .checked_numel(OperationKind::MatMul)?;
 
         let batch = core::cmp::max(lhs_batch, rhs_batch);
         if lhs_batch != 1 && rhs_batch != 1 && lhs_batch != rhs_batch {
@@ -751,8 +775,22 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackendImpl<T, D> {
             });
         }
 
-        let lhs_stride_b = if lhs_batch == 1 { 0 } else { m * k };
-        let rhs_stride_b = if rhs_batch == 1 { 0 } else { k * n };
+        let lhs_stride_b = if lhs_batch == 1 {
+            0
+        } else {
+            m.checked_mul(k).ok_or(ShapeError::ArithmeticOverflow {
+                operation: OperationKind::MatMul,
+                expression: "WGPU matmul lhs batch stride",
+            })?
+        };
+        let rhs_stride_b = if rhs_batch == 1 {
+            0
+        } else {
+            k.checked_mul(n).ok_or(ShapeError::ArithmeticOverflow {
+                operation: OperationKind::MatMul,
+                expression: "WGPU matmul rhs batch stride",
+            })?
+        };
 
         // Output shape matches the larger batched input
         let mut out_shape = if lhs_batch > 1 {
@@ -763,19 +801,34 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackendImpl<T, D> {
         if out_shape.is_empty() && batch > 1 {
             out_shape.push(batch);
         }
-        out_shape.push(m as usize);
-        out_shape.push(n as usize);
+        out_shape.push(m);
+        out_shape.push(n);
 
         let state = crate::wgpu::device::get_device_state();
         let shader = include_str!("shaders/matmul.wgsl");
         let pipeline = crate::wgpu::pipeline::get_or_create_pipeline("matmul", shader, "main");
 
-        let out_buf = WgpuBuffer::new_zeros_for(
-            DTypeId::F32,
-            (batch as u32 * m * n) as usize,
-            OperationKind::MatMul,
+        let out_n = ShapeBuf::from_slice(&out_shape).checked_numel(OperationKind::MatMul)?;
+        let out_buf = WgpuBuffer::new_zeros_for(DTypeId::F32, out_n, OperationKind::MatMul)?;
+        let [
+            m_u32,
+            k_u32,
+            n_u32,
+            batch_u32,
+            lhs_stride_u32,
+            rhs_stride_u32,
+        ] = checked_u32_array(
+            [m, k, n, batch, lhs_stride_b, rhs_stride_b],
+            "WGPU matmul kernel parameter",
         )?;
-        let shape_data = [m, k, n, batch as u32, lhs_stride_b, rhs_stride_b];
+        let shape_data = [
+            m_u32,
+            k_u32,
+            n_u32,
+            batch_u32,
+            lhs_stride_u32,
+            rhs_stride_u32,
+        ];
         let shape_buf = WgpuBuffer::from_slice(&shape_data);
 
         let bgl = pipeline.get_bind_group_layout(0);
@@ -816,7 +869,7 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackendImpl<T, D> {
             });
             cpass.set_pipeline(&pipeline);
             cpass.set_bind_group(0, &bg, &[]);
-            cpass.dispatch_workgroups(n.div_ceil(16), m.div_ceil(16), batch as u32);
+            cpass.dispatch_workgroups(n_u32.div_ceil(16), m_u32.div_ceil(16), batch_u32);
         }
         state.queue.submit(core::iter::once(encoder.finish()));
         let out = WgpuStorage::new(out_buf, out_shape);
@@ -858,7 +911,7 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackendImpl<T, D> {
         t: &<Self as Backend>::Storage<K>,
         shape: &[usize],
     ) -> Result<<Self as Backend>::Storage<K>> {
-        if num_elements(&t.shape) != num_elements(shape) {
+        if num_elements(&t.shape)? != num_elements(shape)? {
             return Err(Error::ShapeMismatch {
                 op: "reshape",
                 expected: t.shape.to_vec(),
@@ -889,7 +942,10 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackendImpl<T, D> {
         let mut new_shape = shape.to_vec();
         new_shape.swap(dim1, dim2);
 
-        let out_n = num_elements(&new_shape) as u32;
+        let out_n = checked_u32(
+            num_elements(&new_shape)?,
+            "WGPU transpose output element count",
+        )?;
         let out_buf = WgpuBuffer::new_zeros(t.buffer.size);
 
         let mut aux = (0..shape.len()).collect::<Vec<_>>();
@@ -898,7 +954,7 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackendImpl<T, D> {
         let params = dispatch::prepare_shape_params(
             2, // op_mode = transpose
             out_n, &new_shape, shape, &aux,
-        );
+        )?;
 
         dispatch::dispatch_shape(&t.buffer, &out_buf, &params);
         let out = WgpuStorage::new(out_buf, new_shape);
@@ -921,7 +977,9 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackendImpl<T, D> {
         end_dim: usize,
     ) -> Result<<Self as Backend>::Storage<K>> {
         let shape = &t.shape;
-        let flat_size: usize = shape[start_dim..=end_dim].iter().product();
+        let flat_size: usize =
+            incin_core::prelude::ShapeBuf::from_slice(&(shape[start_dim..=end_dim]))
+                .checked_numel(incin_core::prelude::OperationKind::Storage)?;
         let mut new_shape: Vec<usize> = shape[..start_dim].to_vec();
         new_shape.push(flat_size);
         new_shape.extend_from_slice(&shape[end_dim + 1..]);
@@ -950,9 +1008,10 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackendImpl<T, D> {
         let mut new_shape = shape.to_vec();
         new_shape[dim] = len;
 
-        let out_n = num_elements(&new_shape) as u32;
+        let out_elements = num_elements(&new_shape)?;
+        let out_n = checked_u32(out_elements, "WGPU narrow output element count")?;
         let out_buf =
-            WgpuBuffer::new_zeros_for(DTypeId::F32, out_n as usize, OperationKind::Storage)?;
+            WgpuBuffer::new_zeros_for(DTypeId::F32, out_elements, OperationKind::Storage)?;
 
         let mut aux = vec![0usize; shape.len()];
         aux[dim] = start;
@@ -960,7 +1019,7 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackendImpl<T, D> {
         let params = dispatch::prepare_shape_params(
             0, // op_mode = slice
             out_n, &new_shape, shape, &aux,
-        );
+        )?;
 
         dispatch::dispatch_shape(&t.buffer, &out_buf, &params);
         let out = WgpuStorage::new(out_buf, new_shape);
@@ -978,7 +1037,7 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackendImpl<T, D> {
                     &original_shape,
                     &region_start,
                     grad_out,
-                )])
+                )?])
             }),
         });
         Ok(out)
@@ -988,9 +1047,10 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackendImpl<T, D> {
         t: &<Self as Backend>::Storage<K>,
         shape: &[usize],
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let out_n = num_elements(shape) as u32;
+        let out_elements = num_elements(shape)?;
+        let out_n = checked_u32(out_elements, "WGPU broadcast output element count")?;
         let out_buf =
-            WgpuBuffer::new_zeros_for(DTypeId::F32, out_n as usize, OperationKind::Storage)?;
+            WgpuBuffer::new_zeros_for(DTypeId::F32, out_elements, OperationKind::Storage)?;
 
         let params = dispatch::prepare_shape_params(
             3, // op_mode = broadcast
@@ -998,7 +1058,7 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackendImpl<T, D> {
             shape,
             &t.shape,
             &[],
-        );
+        )?;
 
         dispatch::dispatch_shape(&t.buffer, &out_buf, &params);
         let out = WgpuStorage::new(out_buf, shape.to_vec());
@@ -1069,24 +1129,37 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackendImpl<T, D> {
         }
         let rank = tensors[0].shape.len();
         let mut out_shape = tensors[0].shape.to_vec();
-        out_shape[dim] = tensors.iter().map(|t| t.shape[dim]).sum();
+        out_shape[dim] = tensors.iter().try_fold(0usize, |total, tensor| {
+            total
+                .checked_add(tensor.shape[dim])
+                .ok_or(ShapeError::ArithmeticOverflow {
+                    operation: OperationKind::Concat,
+                    expression: "WGPU concat output dimension",
+                })
+        })?;
 
-        let out_n = num_elements(&out_shape);
+        let out_n = num_elements(&out_shape)?;
         let out_buf = WgpuBuffer::new_zeros_for(DTypeId::F32, out_n, OperationKind::Storage)?;
 
         let mut current_offset = 0usize;
         for t in tensors {
-            let in_n = num_elements(&t.shape) as u32;
+            let in_n = checked_u32(num_elements(&t.shape)?, "WGPU concat input element count")?;
             let mut aux = vec![0usize; rank];
             aux[dim] = current_offset;
 
             let params = dispatch::prepare_shape_params(
                 1, // op_mode = paste
                 in_n, &out_shape, &t.shape, &aux,
-            );
+            )?;
             dispatch::dispatch_shape(&t.buffer, &out_buf, &params);
 
-            current_offset += t.shape[dim];
+            current_offset =
+                current_offset
+                    .checked_add(t.shape[dim])
+                    .ok_or(ShapeError::ArithmeticOverflow {
+                        operation: OperationKind::Concat,
+                        expression: "WGPU concat cumulative offset",
+                    })?;
         }
         let out = WgpuStorage::new(out_buf, out_shape);
 
@@ -1158,7 +1231,7 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackendImpl<T, D> {
 // ─────────────────────────────────────────────────────────────────────────────
 /// `reduce_all_to_storage`.
 fn reduce_all_to_storage(t: &WgpuStorage, mode: u32) -> Result<WgpuStorage> {
-    let n = num_elements(&t.shape) as u32;
+    let n = checked_u32(num_elements(&t.shape)?, "WGPU reduction element count")?;
     let out = dispatch::dispatch_reduce_all(&t.buffer, n, mode)?;
     Ok(WgpuStorage::new(out, vec![]))
 }
@@ -1173,13 +1246,11 @@ fn reduce_dim_to_storage(
     let shape = &t.shape;
     let mut out_shape = shape.to_vec();
     out_shape[dim] = 1;
-    let out_n = num_elements(&out_shape);
+    let out_n = num_elements(&out_shape)?;
 
-    let dim_size = shape[dim] as u32;
-    let mut inner_stride = 1usize;
-    for d in (dim + 1..shape.len()).rev() {
-        inner_stride *= shape[d];
-    }
+    let dim_size = checked_u32(shape[dim], "WGPU reduction dimension")?;
+    let inner_stride =
+        ShapeBuf::from_slice(&shape[dim + 1..]).checked_numel(OperationKind::Reduction)?;
 
     // mode mapping: CPU reduce_dim mode (0=sum, 1=max, 2=min) maps directly
     // to my shader ops (0=sum, 2=max, 3=min).
@@ -1196,8 +1267,8 @@ fn reduce_dim_to_storage(
         &out_buf,
         op_mode,
         dim_size,
-        inner_stride as u32,
-        out_n as u32,
+        checked_u32(inner_stride, "WGPU reduction inner stride")?,
+        checked_u32(out_n, "WGPU reduction output element count")?,
     );
 
     let final_shape = if keepdim {
@@ -1216,11 +1287,38 @@ fn reduce_dim_to_storage(
 /// any element directly (`outer_idx*(axis*inner) + axis_idx*inner + inner_idx`)
 /// without a general N-dimensional odometer — WGPU storage has no
 /// non-contiguous view support, so this always applies.
-fn axis_reduce_dims(shape: &[usize], dim: usize) -> (usize, usize, usize) {
-    let outer: usize = shape[..dim].iter().product();
+fn axis_reduce_dims(shape: &[usize], dim: usize) -> Result<(usize, usize, usize)> {
+    let outer: usize = incin_core::prelude::ShapeBuf::from_slice(&(shape[..dim]))
+        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
     let axis = shape[dim];
-    let inner: usize = shape[dim + 1..].iter().product();
-    (outer, axis, inner)
+    let inner: usize = incin_core::prelude::ShapeBuf::from_slice(&(shape[dim + 1..]))
+        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+    Ok((outer, axis, inner))
+}
+
+fn checked_flat_index(
+    coords: &[usize],
+    shape: &[usize],
+    operation: OperationKind,
+) -> Result<usize> {
+    let mut flat = 0usize;
+    let mut stride = 1usize;
+    for (&coord, &dimension) in coords.iter().zip(shape).rev() {
+        flat = coord
+            .checked_mul(stride)
+            .and_then(|offset| flat.checked_add(offset))
+            .ok_or(ShapeError::ArithmeticOverflow {
+                operation,
+                expression: "WGPU flat index",
+            })?;
+        stride = stride
+            .checked_mul(dimension)
+            .ok_or(ShapeError::ArithmeticOverflow {
+                operation,
+                expression: "WGPU index stride",
+            })?;
+    }
+    Ok(flat)
 }
 
 /// Backward for `max_dim`/`min_dim`: recomputes each output position's
@@ -1239,10 +1337,12 @@ fn push_extremum_dim_tape_entry(t: &WgpuStorage, out: &WgpuStorage, dim: usize, 
         output_id: out_id,
         input_ids: vec![t_id],
         backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
-            let (outer, axis, inner) = axis_reduce_dims(&input_shape, dim);
+            let (outer, axis, inner) = axis_reduce_dims(&input_shape, dim)?;
             let input_data = t_capture.buffer.to_vec::<f32>();
             let grad_data = grad_out.buffer.to_vec::<f32>();
-            let mut grad_input = vec![0.0f32; outer * axis * inner];
+            let grad_elements = ShapeBuf::from_slice(&[outer, axis, inner])
+                .checked_numel(OperationKind::Reduction)?;
+            let mut grad_input = vec![0.0f32; grad_elements];
             for o in 0..outer {
                 for i in 0..inner {
                     let mut best_val = if is_max {
@@ -1333,7 +1433,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackendImpl<T, D> {
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
         let sum = reduce_all_to_storage(t, 0)?;
-        let n = num_elements(&t.shape) as f64;
+        let n = num_elements(&t.shape)? as f64;
         let out = scalar_op::<T>(&sum, 1.0 / n, 1)?;
         let original_shape = t.shape.to_vec();
         let (t_id, out_id) = (t.id, out.id);
@@ -1512,20 +1612,18 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackendImpl<T, D> {
                     .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
                     .map(|(i, _)| i)
                     .unwrap_or(0);
-                let buf = WgpuBuffer::from_slice(&[idx as u32]);
+                let buf = WgpuBuffer::from_slice(&[checked_u32(idx, "WGPU argmax index")?]);
                 Ok(WgpuStorage::new(buf, vec![1]))
             }
             Some(d) => {
                 let shape = &t.shape;
                 let mut out_shape = shape.to_vec();
                 out_shape[d] = 1;
-                let out_n = num_elements(&out_shape);
+                let out_n = num_elements(&out_shape)?;
 
-                let dim_size = shape[d] as u32;
-                let mut inner_stride = 1usize;
-                for dd in (d + 1..shape.len()).rev() {
-                    inner_stride *= shape[dd];
-                }
+                let dim_size = checked_u32(shape[d], "WGPU argmax dimension")?;
+                let inner_stride = ShapeBuf::from_slice(&shape[d + 1..])
+                    .checked_numel(OperationKind::Reduction)?;
 
                 let out_buf =
                     WgpuBuffer::new_zeros_for(DTypeId::F32, out_n, OperationKind::Storage)?;
@@ -1534,8 +1632,8 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackendImpl<T, D> {
                     &out_buf,
                     4, // argmax
                     dim_size,
-                    inner_stride as u32,
-                    out_n as u32,
+                    checked_u32(inner_stride, "WGPU argmax inner stride")?,
+                    checked_u32(out_n, "WGPU argmax output element count")?,
                 );
 
                 let mut final_shape = shape.to_vec();
@@ -1559,20 +1657,18 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackendImpl<T, D> {
                     .min_by(|a, b| a.1.partial_cmp(b.1).unwrap())
                     .map(|(i, _)| i)
                     .unwrap_or(0);
-                let buf = WgpuBuffer::from_slice(&[idx as u32]);
+                let buf = WgpuBuffer::from_slice(&[checked_u32(idx, "WGPU argmin index")?]);
                 Ok(WgpuStorage::new(buf, vec![1]))
             }
             Some(d) => {
                 let shape = &t.shape;
                 let mut out_shape = shape.to_vec();
                 out_shape[d] = 1;
-                let out_n = num_elements(&out_shape);
+                let out_n = num_elements(&out_shape)?;
 
-                let dim_size = shape[d] as u32;
-                let mut inner_stride = 1usize;
-                for dd in (d + 1..shape.len()).rev() {
-                    inner_stride *= shape[dd];
-                }
+                let dim_size = checked_u32(shape[d], "WGPU argmin dimension")?;
+                let inner_stride = ShapeBuf::from_slice(&shape[d + 1..])
+                    .checked_numel(OperationKind::Reduction)?;
 
                 let out_buf =
                     WgpuBuffer::new_zeros_for(DTypeId::F32, out_n, OperationKind::Storage)?;
@@ -1581,8 +1677,8 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackendImpl<T, D> {
                     &out_buf,
                     5, // argmin
                     dim_size,
-                    inner_stride as u32,
-                    out_n as u32,
+                    checked_u32(inner_stride, "WGPU argmin inner stride")?,
+                    checked_u32(out_n, "WGPU argmin output element count")?,
                 );
 
                 let mut final_shape = shape.to_vec();
@@ -1619,9 +1715,9 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackendImpl<T, D> {
         let mut base_shape = shape.to_vec();
         base_shape[dim] = 1;
 
-        let n_slices = num_elements(&base_shape);
-        let mut out_vals = vec![0.0f32; num_elements(&out_shape)];
-        let mut out_indices = vec![0u32; num_elements(&out_shape)];
+        let n_slices = num_elements(&base_shape)?;
+        let mut out_vals = vec![0.0f32; num_elements(&out_shape)?];
+        let mut out_indices = vec![0u32; num_elements(&out_shape)?];
 
         for i in 0..n_slices {
             let mut rem = i;
@@ -1634,13 +1730,8 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackendImpl<T, D> {
             let mut slice_vals = Vec::with_capacity(shape[dim]);
             for j in 0..shape[dim] {
                 coords[dim] = j;
-                let mut flat = 0usize;
-                let mut stride = 1usize;
-                for dd in (0..shape.len()).rev() {
-                    flat += coords[dd] * stride;
-                    stride *= shape[dd];
-                }
-                slice_vals.push((data[flat], j as u32));
+                let flat = checked_flat_index(&coords, shape, OperationKind::Reduction)?;
+                slice_vals.push((data[flat], checked_u32(j, "WGPU topk index")?));
             }
 
             if largest {
@@ -1654,12 +1745,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackendImpl<T, D> {
             let mut out_coords = coords.clone();
             for (j, &(val, idx)) in slice_vals.iter().enumerate().take(k) {
                 out_coords[dim] = j;
-                let mut flat = 0usize;
-                let mut stride = 1usize;
-                for dd in (0..out_shape.len()).rev() {
-                    flat += out_coords[dd] * stride;
-                    stride *= out_shape[dd];
-                }
+                let flat = checked_flat_index(&out_coords, &out_shape, OperationKind::Reduction)?;
                 out_vals[flat] = val;
                 out_indices[flat] = idx;
             }
@@ -1692,8 +1778,8 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackendImpl<T, D> {
         let mut base_shape = shape.to_vec();
         base_shape[dim] = 1;
 
-        let n_slices = num_elements(&base_shape);
-        let mut out = vec![0u32; num_elements(shape)];
+        let n_slices = num_elements(&base_shape)?;
+        let mut out = vec![0u32; num_elements(shape)?];
 
         for i in 0..n_slices {
             let mut rem = i;
@@ -1706,13 +1792,8 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackendImpl<T, D> {
             let mut slice_vals = Vec::with_capacity(shape[dim]);
             for j in 0..shape[dim] {
                 coords[dim] = j;
-                let mut flat = 0usize;
-                let mut stride = 1usize;
-                for dd in (0..shape.len()).rev() {
-                    flat += coords[dd] * stride;
-                    stride *= shape[dd];
-                }
-                slice_vals.push((data[flat], j as u32));
+                let flat = checked_flat_index(&coords, shape, OperationKind::Reduction)?;
+                slice_vals.push((data[flat], checked_u32(j, "WGPU argsort index")?));
             }
 
             if descending {
@@ -1726,12 +1807,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackendImpl<T, D> {
             let mut out_coords = coords.clone();
             for (j, &(_, idx)) in slice_vals.iter().enumerate() {
                 out_coords[dim] = j;
-                let mut flat = 0usize;
-                let mut stride = 1usize;
-                for dd in (0..shape.len()).rev() {
-                    flat += out_coords[dd] * stride;
-                    stride *= shape[dd];
-                }
+                let flat = checked_flat_index(&out_coords, shape, OperationKind::Reduction)?;
                 out[flat] = idx;
             }
         }
@@ -1761,14 +1837,14 @@ fn im2col_2d_cpu(
     stride: usize,
     padding: usize,
     dilation: usize,
-) -> (Vec<f32>, usize, usize) {
-    let h_out =
-        (h + 2 * padding).saturating_sub(dilation * (kh.saturating_sub(1)) + 1) / stride + 1;
-    let w_out =
-        (w + 2 * padding).saturating_sub(dilation * (kw.saturating_sub(1)) + 1) / stride + 1;
-    let col_len = cin * kh * kw;
-    let spatial = h_out * w_out;
-    let mut out = vec![0.0f32; b * spatial * col_len];
+) -> Result<(Vec<f32>, usize, usize)> {
+    let h_out = pool_output_dim(h, kh, stride, padding, dilation)?;
+    let w_out = pool_output_dim(w, kw, stride, padding, dilation)?;
+    let col_len = ShapeBuf::from_slice(&[cin, kh, kw]).checked_numel(OperationKind::Conv2d)?;
+    let spatial = ShapeBuf::from_slice(&[h_out, w_out]).checked_numel(OperationKind::Conv2d)?;
+    let out_elements =
+        ShapeBuf::from_slice(&[b, spatial, col_len]).checked_numel(OperationKind::Conv2d)?;
+    let mut out = vec![0.0f32; out_elements];
     for bi in 0..b {
         for oh in 0..h_out {
             for ow in 0..w_out {
@@ -1797,7 +1873,7 @@ fn im2col_2d_cpu(
             }
         }
     }
-    (out, h_out, w_out)
+    Ok((out, h_out, w_out))
 }
 
 /// Scatter-ADD a `[B, H_out*W_out, Cin*Kh*Kw]` gradient back into a
@@ -1815,10 +1891,12 @@ fn col2im_2d_cpu(
     stride: usize,
     padding: usize,
     dilation: usize,
-) -> Vec<f32> {
-    let col_len = cin * kh * kw;
-    let spatial = h_out * w_out;
-    let mut out = vec![0.0f32; b * cin * h * w];
+) -> Result<Vec<f32>> {
+    let col_len = ShapeBuf::from_slice(&[cin, kh, kw]).checked_numel(OperationKind::Conv2d)?;
+    let spatial = ShapeBuf::from_slice(&[h_out, w_out]).checked_numel(OperationKind::Conv2d)?;
+    let out_elements =
+        ShapeBuf::from_slice(&[b, cin, h, w]).checked_numel(OperationKind::Conv2d)?;
+    let mut out = vec![0.0f32; out_elements];
     for bi in 0..b {
         for oh in 0..h_out {
             for ow in 0..w_out {
@@ -1845,13 +1923,14 @@ fn col2im_2d_cpu(
             }
         }
     }
-    out
+    Ok(out)
 }
 
 /// Batched matrix multiply on CPU: lhs `[B, M, K]` × rhs `[B, K, N]` → `[B, M, N]`.
 /// Used inside conv backward closures.
-fn cpu_bmm(lhs: &[f32], rhs: &[f32], b: usize, m: usize, k: usize, n: usize) -> Vec<f32> {
-    let mut out = vec![0.0f32; b * m * n];
+fn cpu_bmm(lhs: &[f32], rhs: &[f32], b: usize, m: usize, k: usize, n: usize) -> Result<Vec<f32>> {
+    let out_elements = ShapeBuf::from_slice(&[b, m, n]).checked_numel(OperationKind::MatMul)?;
+    let mut out = vec![0.0f32; out_elements];
     for bi in 0..b {
         for mi in 0..m {
             for ni in 0..n {
@@ -1863,12 +1942,13 @@ fn cpu_bmm(lhs: &[f32], rhs: &[f32], b: usize, m: usize, k: usize, n: usize) -> 
             }
         }
     }
-    out
+    Ok(out)
 }
 
 /// Transpose the last two dimensions of a `[B, M, N]` tensor → `[B, N, M]`.
-fn cpu_transpose_last2(src: &[f32], b: usize, m: usize, n: usize) -> Vec<f32> {
-    let mut out = vec![0.0f32; b * m * n];
+fn cpu_transpose_last2(src: &[f32], b: usize, m: usize, n: usize) -> Result<Vec<f32>> {
+    let out_elements = ShapeBuf::from_slice(&[b, m, n]).checked_numel(OperationKind::Transpose)?;
+    let mut out = vec![0.0f32; out_elements];
     for bi in 0..b {
         for mi in 0..m {
             for ni in 0..n {
@@ -1876,12 +1956,13 @@ fn cpu_transpose_last2(src: &[f32], b: usize, m: usize, n: usize) -> Vec<f32> {
             }
         }
     }
-    out
+    Ok(out)
 }
 
 /// Sum a `[B, M, N]` buffer over its leading batch axis → `[M, N]`.
-fn cpu_sum_batch(src: &[f32], b: usize, m: usize, n: usize) -> Vec<f32> {
-    let mut out = vec![0.0f32; m * n];
+fn cpu_sum_batch(src: &[f32], b: usize, m: usize, n: usize) -> Result<Vec<f32>> {
+    let out_elements = ShapeBuf::from_slice(&[m, n]).checked_numel(OperationKind::Reduction)?;
+    let mut out = vec![0.0f32; out_elements];
     for bi in 0..b {
         for mi in 0..m {
             for ni in 0..n {
@@ -1889,7 +1970,7 @@ fn cpu_sum_batch(src: &[f32], b: usize, m: usize, n: usize) -> Vec<f32> {
             }
         }
     }
-    out
+    Ok(out)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1928,33 +2009,25 @@ impl<T: DType, D: Device> WgpuBackendImpl<T, D> {
         let w_out =
             (w_in + 2 * padding).saturating_sub(dilation * (kw.saturating_sub(1)) + 1) / stride + 1;
 
-        let col_channels = c_in * kh * kw;
-        let col_spatial = h_out * w_out;
-        let col_buf = WgpuBuffer::new_zeros_for(
-            DTypeId::F32,
-            batch * col_channels * col_spatial,
-            OperationKind::Conv2d,
+        let col_channels =
+            ShapeBuf::from_slice(&[c_in, kh, kw]).checked_numel(OperationKind::Conv2d)?;
+        let col_spatial =
+            ShapeBuf::from_slice(&[h_out, w_out]).checked_numel(OperationKind::Conv2d)?;
+        let col_elements = ShapeBuf::from_slice(&[batch, col_channels, col_spatial])
+            .checked_numel(OperationKind::Conv2d)?;
+        let col_buf = WgpuBuffer::new_zeros_for(DTypeId::F32, col_elements, OperationKind::Conv2d)?;
+
+        let params = checked_u32_array(
+            [
+                batch, c_in, h_in, w_in, h_out, w_out, kh, kw, stride, stride, padding, padding,
+                dilation, dilation,
+            ],
+            "WGPU im2col kernel parameter",
         )?;
+        dispatch::dispatch_im2col(&t.buffer, &col_buf, &params)?;
 
-        let params: [u32; 14] = [
-            batch as u32,
-            c_in as u32,
-            h_in as u32,
-            w_in as u32,
-            h_out as u32,
-            w_out as u32,
-            kh as u32,
-            kw as u32,
-            stride as u32,
-            stride as u32,
-            padding as u32,
-            padding as u32,
-            dilation as u32,
-            dilation as u32,
-        ];
-        dispatch::dispatch_im2col(&t.buffer, &col_buf, &params);
-
-        let k_size = c_in_g * kh * kw;
+        let k_size =
+            ShapeBuf::from_slice(&[c_in_g, kh, kw]).checked_numel(OperationKind::Conv2d)?;
 
         if g == 1 {
             let w_storage = WgpuStorage::new(weight.buffer.clone(), vec![c_out, k_size]);
@@ -1967,30 +2040,17 @@ impl<T: DType, D: Device> WgpuBackendImpl<T, D> {
         }
 
         // groups > 1: direct kernel
-        let out_buf = WgpuBuffer::new_zeros_for(
-            DTypeId::F32,
-            batch * c_out * h_out * w_out,
-            OperationKind::Conv2d,
+        let out_elements = ShapeBuf::from_slice(&[batch, c_out, h_out, w_out])
+            .checked_numel(OperationKind::Conv2d)?;
+        let out_buf = WgpuBuffer::new_zeros_for(DTypeId::F32, out_elements, OperationKind::Conv2d)?;
+        let conv_params = checked_u32_array(
+            [
+                batch, c_in, h_in, w_in, c_out, h_out, w_out, kh, kw, stride, stride, padding,
+                padding, dilation, dilation, groups,
+            ],
+            "WGPU convolution kernel parameter",
         )?;
-        let conv_params: [u32; 16] = [
-            batch as u32,
-            c_in as u32,
-            h_in as u32,
-            w_in as u32,
-            c_out as u32,
-            h_out as u32,
-            w_out as u32,
-            kh as u32,
-            kw as u32,
-            stride as u32,
-            stride as u32,
-            padding as u32,
-            padding as u32,
-            dilation as u32,
-            dilation as u32,
-            groups as u32,
-        ];
-        dispatch::dispatch_conv2d_direct(&t.buffer, &weight.buffer, &out_buf, &conv_params);
+        dispatch::dispatch_conv2d_direct(&t.buffer, &weight.buffer, &out_buf, &conv_params)?;
         Ok(WgpuStorage::new(out_buf, vec![batch, c_out, h_out, w_out]))
     }
 }
@@ -2000,13 +2060,12 @@ impl<T: DType, D: Device> WgpuBackendImpl<T, D> {
 /// derives strides from shape), so pooling backward closures — which read
 /// buffers back to a flat host `Vec` — can compute this directly instead of
 /// pulling in `cpu::stride`.
-fn contiguous_strides_4d(shape: &[usize]) -> [usize; 4] {
-    [
-        shape[1] * shape[2] * shape[3],
-        shape[2] * shape[3],
-        shape[3],
-        1,
-    ]
+fn contiguous_strides_4d(shape: &[usize]) -> Result<[usize; 4]> {
+    let strides = StrideBuf::contiguous_for(&ShapeBuf::from_slice(shape), OperationKind::Storage)?;
+    strides
+        .strides()
+        .try_into()
+        .map_err(|_| Error::Msg("WGPU pooling expected rank-four storage".into()))
 }
 
 /// Per-axis adaptive-pooling window bounds: `start = floor(i*input_size/output_size)`,
@@ -2015,10 +2074,131 @@ fn contiguous_strides_4d(shape: &[usize]) -> [usize; 4] {
 /// own `h_start`/`h_end` computation (`shaders/pool2d.wgsl`, mode 0) exactly —
 /// never derives an equivalent fixed kernel_size/stride, which is wrong
 /// whenever `input_size` doesn't evenly divide `output_size`.
-fn adaptive_window_bounds(input_size: usize, output_size: usize, i: usize) -> (usize, usize) {
-    let start = (i * input_size) / output_size;
-    let end = ((i + 1) * input_size).div_ceil(output_size);
-    (start, end)
+fn adaptive_window_bounds(
+    input_size: usize,
+    output_size: usize,
+    i: usize,
+) -> Result<(usize, usize)> {
+    if output_size == 0 {
+        return Err(ShapeError::InvalidParameter {
+            operation: OperationKind::AdaptiveAvgPool2d,
+            parameter: "output size",
+            value: output_size,
+        }
+        .into());
+    }
+    let start = i
+        .checked_mul(input_size)
+        .ok_or(ShapeError::ArithmeticOverflow {
+            operation: OperationKind::AdaptiveAvgPool2d,
+            expression: "adaptive-pooling start index",
+        })?
+        / output_size;
+    let end = i
+        .checked_add(1)
+        .and_then(|next| next.checked_mul(input_size))
+        .ok_or(ShapeError::ArithmeticOverflow {
+            operation: OperationKind::AdaptiveAvgPool2d,
+            expression: "adaptive-pooling end index",
+        })?
+        .div_ceil(output_size);
+    Ok((start, end))
+}
+
+fn pool_output_dim(
+    input: usize,
+    kernel: usize,
+    stride: usize,
+    padding: usize,
+    dilation: usize,
+) -> Result<usize> {
+    if kernel == 0 || stride == 0 || dilation == 0 {
+        return Err(ShapeError::InvalidParameter {
+            operation: OperationKind::Pool2d,
+            parameter: "kernel, stride, and dilation must be nonzero",
+            value: 0,
+        }
+        .into());
+    }
+    let padded = padding
+        .checked_mul(2)
+        .and_then(|twice| input.checked_add(twice))
+        .ok_or(ShapeError::ArithmeticOverflow {
+            operation: OperationKind::Pool2d,
+            expression: "pooling padded input dimension",
+        })?;
+    let effective_kernel = dilation
+        .checked_mul(kernel - 1)
+        .and_then(|span| span.checked_add(1))
+        .ok_or(ShapeError::ArithmeticOverflow {
+            operation: OperationKind::Pool2d,
+            expression: "pooling effective kernel dimension",
+        })?;
+    if effective_kernel > padded {
+        return Err(ShapeError::InvalidParameter {
+            operation: OperationKind::Pool2d,
+            parameter: "effective kernel exceeds padded input",
+            value: effective_kernel,
+        }
+        .into());
+    }
+    (padded - effective_kernel)
+        .checked_div(stride)
+        .and_then(|steps| steps.checked_add(1))
+        .ok_or_else(|| {
+            ShapeError::ArithmeticOverflow {
+                operation: OperationKind::Pool2d,
+                expression: "pooling output dimension",
+            }
+            .into()
+        })
+}
+
+fn conv_transpose_output_dim(
+    input: usize,
+    kernel: usize,
+    stride: usize,
+    padding: usize,
+    dilation: usize,
+    output_padding: usize,
+) -> Result<usize> {
+    if input == 0 || kernel == 0 || stride == 0 || dilation == 0 {
+        return Err(ShapeError::InvalidParameter {
+            operation: OperationKind::Conv2d,
+            parameter: "transposed-convolution dimensions must be nonzero",
+            value: 0,
+        }
+        .into());
+    }
+    let unpadded = (input - 1)
+        .checked_mul(stride)
+        .and_then(|span| {
+            dilation
+                .checked_mul(kernel - 1)
+                .and_then(|effective| span.checked_add(effective))
+        })
+        .and_then(|span| span.checked_add(1))
+        .ok_or(ShapeError::ArithmeticOverflow {
+            operation: OperationKind::Conv2d,
+            expression: "transposed-convolution output dimension",
+        })?;
+    let twice_padding = padding
+        .checked_mul(2)
+        .ok_or(ShapeError::ArithmeticOverflow {
+            operation: OperationKind::Conv2d,
+            expression: "transposed-convolution padding",
+        })?;
+    unpadded
+        .checked_sub(twice_padding)
+        .and_then(|natural| natural.checked_add(output_padding))
+        .ok_or_else(|| {
+            ShapeError::InvalidParameter {
+                operation: OperationKind::Conv2d,
+                parameter: "transposed-convolution padding/output padding",
+                value: padding,
+            }
+            .into()
+        })
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2032,18 +2212,25 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
     ) -> Result<<Self as Backend>::Storage<K>> {
         let embed_dim = weight.shape[1];
         let vocab_size = weight.shape[0];
-        let seq_len = num_elements(&indices.shape);
+        let seq_len = num_elements(&indices.shape)?;
+        let out_elements =
+            ShapeBuf::from_slice(&[seq_len, embed_dim]).checked_numel(OperationKind::Embedding)?;
         let out_buf =
-            WgpuBuffer::new_zeros_for(DTypeId::F32, seq_len * embed_dim, OperationKind::Storage)?;
+            WgpuBuffer::new_zeros_for(DTypeId::F32, out_elements, OperationKind::Storage)?;
+
+        let [seq_len_u32, embed_dim_u32, vocab_size_u32] = checked_u32_array(
+            [seq_len, embed_dim, vocab_size],
+            "WGPU embedding kernel parameter",
+        )?;
 
         dispatch::dispatch_embedding(
             &indices.buffer,
             &weight.buffer,
             &out_buf,
-            seq_len as u32,
-            embed_dim as u32,
-            vocab_size as u32,
-        );
+            seq_len_u32,
+            embed_dim_u32,
+            vocab_size_u32,
+        )?;
 
         let out = WgpuStorage::new(out_buf, vec![seq_len, embed_dim]);
 
@@ -2061,7 +2248,9 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
                 // pattern happens to equal integer 0).
                 let indices_data = indices_capture.buffer.to_vec::<f32>();
                 let grad_data = grad_out.buffer.to_vec::<f32>();
-                let mut weight_grad = vec![0.0f32; vocab_size * embed_dim];
+                let weight_grad_elements = ShapeBuf::from_slice(&[vocab_size, embed_dim])
+                    .checked_numel(OperationKind::Embedding)?;
+                let mut weight_grad = vec![0.0f32; weight_grad_elements];
 
                 for (i, &idx) in indices_data.iter().enumerate() {
                     let idx = idx as usize;
@@ -2115,7 +2304,7 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
                 Self::add::<K>(&scaled, &bias_b)
             }
             None => {
-                let n = num_elements(&t.shape);
+                let n = num_elements(&t.shape)?;
                 let zeros = WgpuStorage::new(
                     WgpuBuffer::new_zeros_for(DTypeId::F32, n, OperationKind::Storage)?,
                     t.shape.to_vec(),
@@ -2204,14 +2393,18 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
         let shape = &t.shape; // [N, C, H, W]
         let (n, c, h, w) = (shape[0], shape[1], shape[2], shape[3]);
         let (oh, ow) = output_size;
-        let out_buf =
-            WgpuBuffer::new_zeros_for(DTypeId::F32, n * c * oh * ow, OperationKind::Pool2d)?;
+        let out_elements = ShapeBuf::from_slice(&[n, c, oh, ow])
+            .checked_numel(OperationKind::AdaptiveAvgPool2d)?;
+        let out_buf = WgpuBuffer::new_zeros_for(DTypeId::F32, out_elements, OperationKind::Pool2d)?;
+        let [n_u32, c_u32, h_u32, w_u32, oh_u32, ow_u32] = checked_u32_array(
+            [n, c, h, w, oh, ow],
+            "WGPU adaptive-pooling kernel parameter",
+        )?;
 
         dispatch::dispatch_pool2d(
             &t.buffer, &out_buf, 0, // mode 0 = adaptive_avg
-            n as u32, c as u32, h as u32, w as u32, oh as u32, ow as u32, 0, 0, 0, 0, 0, 0, 0,
-            0, // unused kernel params
-        );
+            n_u32, c_u32, h_u32, w_u32, oh_u32, ow_u32, 0, 0, 0, 0, 0, 0, 0, 0,
+        )?;
 
         let out = WgpuStorage::new(out_buf, vec![n, c, oh, ow]);
 
@@ -2240,16 +2433,18 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
                     input_shape[3],
                 );
                 let grad_data = grad_out.buffer.to_vec::<f32>();
-                let mut grad_input = vec![0.0f32; b * c * h * w];
-                let in_strides = contiguous_strides_4d(&input_shape);
+                let grad_elements = ShapeBuf::from_slice(&input_shape)
+                    .checked_numel(OperationKind::AdaptiveAvgPool2d)?;
+                let mut grad_input = vec![0.0f32; grad_elements];
+                let in_strides = contiguous_strides_4d(&input_shape)?;
                 let h_out = grad_out.shape[2];
                 let w_out = grad_out.shape[3];
                 for bi in 0..b {
                     for ci in 0..c {
                         for oh in 0..h_out {
-                            let (h_start, h_end) = adaptive_window_bounds(h, h_out, oh);
+                            let (h_start, h_end) = adaptive_window_bounds(h, h_out, oh)?;
                             for ow in 0..w_out {
-                                let (w_start, w_end) = adaptive_window_bounds(w, w_out, ow);
+                                let (w_start, w_end) = adaptive_window_bounds(w, w_out, ow)?;
                                 let count = ((h_end - h_start) * (w_end - w_start)) as f32;
                                 let flat_out = ((bi * c + ci) * h_out + oh) * w_out + ow;
                                 let g = grad_data[flat_out] / count;
@@ -2288,17 +2483,35 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
         let (kh, kw) = kernel_size;
         let (sh, sw) = stride;
         let (ph, pw) = padding;
-        let oh = (h + 2 * ph - kh) / sh + 1;
-        let ow = (w + 2 * pw - kw) / sw + 1;
+        let oh = pool_output_dim(h, kh, sh, ph, 1)?;
+        let ow = pool_output_dim(w, kw, sw, pw, 1)?;
 
-        let out_buf =
-            WgpuBuffer::new_zeros_for(DTypeId::F32, n * c * oh * ow, OperationKind::Pool2d)?;
+        let out_elements =
+            ShapeBuf::from_slice(&[n, c, oh, ow]).checked_numel(OperationKind::Pool2d)?;
+        let out_buf = WgpuBuffer::new_zeros_for(DTypeId::F32, out_elements, OperationKind::Pool2d)?;
+        let [
+            n_u32,
+            c_u32,
+            h_u32,
+            w_u32,
+            oh_u32,
+            ow_u32,
+            kh_u32,
+            kw_u32,
+            sh_u32,
+            sw_u32,
+            ph_u32,
+            pw_u32,
+        ] = checked_u32_array(
+            [n, c, h, w, oh, ow, kh, kw, sh, sw, ph, pw],
+            "WGPU average-pooling kernel parameter",
+        )?;
 
         dispatch::dispatch_pool2d(
             &t.buffer, &out_buf, 1, // mode 1 = avg
-            n as u32, c as u32, h as u32, w as u32, oh as u32, ow as u32, kh as u32, kw as u32,
-            sh as u32, sw as u32, ph as u32, pw as u32, 1, 1, // dilation = 1
-        );
+            n_u32, c_u32, h_u32, w_u32, oh_u32, ow_u32, kh_u32, kw_u32, sh_u32, sw_u32, ph_u32,
+            pw_u32, 1, 1,
+        )?;
 
         let out = WgpuStorage::new(out_buf, vec![n, c, oh, ow]);
 
@@ -2323,8 +2536,10 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
                     input_shape[3],
                 );
                 let grad_data = grad_out.buffer.to_vec::<f32>();
-                let mut grad_input = vec![0.0f32; b * c * h * w];
-                let in_strides = contiguous_strides_4d(&input_shape);
+                let grad_elements =
+                    ShapeBuf::from_slice(&input_shape).checked_numel(OperationKind::Pool2d)?;
+                let mut grad_input = vec![0.0f32; grad_elements];
+                let in_strides = contiguous_strides_4d(&input_shape)?;
                 let h_out = grad_out.shape[2];
                 let w_out = grad_out.shape[3];
                 for bi in 0..b {
@@ -2380,19 +2595,37 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
         let (sh, sw) = stride;
         let (ph, pw) = padding;
         let (dh, dw) = dilation;
-        let eff_kh = dh * (kh - 1) + 1;
-        let eff_kw = dw * (kw - 1) + 1;
-        let oh = (h + 2 * ph - eff_kh) / sh + 1;
-        let ow = (w + 2 * pw - eff_kw) / sw + 1;
+        let oh = pool_output_dim(h, kh, sh, ph, dh)?;
+        let ow = pool_output_dim(w, kw, sw, pw, dw)?;
 
-        let out_buf =
-            WgpuBuffer::new_zeros_for(DTypeId::F32, n * c * oh * ow, OperationKind::Pool2d)?;
+        let out_elements =
+            ShapeBuf::from_slice(&[n, c, oh, ow]).checked_numel(OperationKind::Pool2d)?;
+        let out_buf = WgpuBuffer::new_zeros_for(DTypeId::F32, out_elements, OperationKind::Pool2d)?;
+        let [
+            n_u32,
+            c_u32,
+            h_u32,
+            w_u32,
+            oh_u32,
+            ow_u32,
+            kh_u32,
+            kw_u32,
+            sh_u32,
+            sw_u32,
+            ph_u32,
+            pw_u32,
+            dh_u32,
+            dw_u32,
+        ] = checked_u32_array(
+            [n, c, h, w, oh, ow, kh, kw, sh, sw, ph, pw, dh, dw],
+            "WGPU max-pooling kernel parameter",
+        )?;
 
         dispatch::dispatch_pool2d(
             &t.buffer, &out_buf, 2, // mode 2 = max
-            n as u32, c as u32, h as u32, w as u32, oh as u32, ow as u32, kh as u32, kw as u32,
-            sh as u32, sw as u32, ph as u32, pw as u32, dh as u32, dw as u32,
-        );
+            n_u32, c_u32, h_u32, w_u32, oh_u32, ow_u32, kh_u32, kw_u32, sh_u32, sw_u32, ph_u32,
+            pw_u32, dh_u32, dw_u32,
+        )?;
 
         let out = WgpuStorage::new(out_buf, vec![n, c, oh, ow]);
 
@@ -2419,8 +2652,10 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
                 );
                 let input_data = t_capture.buffer.to_vec::<f32>();
                 let grad_data = grad_out.buffer.to_vec::<f32>();
-                let mut grad_input = vec![0.0f32; b * c * h * w];
-                let in_strides = contiguous_strides_4d(&input_shape);
+                let grad_elements =
+                    ShapeBuf::from_slice(&input_shape).checked_numel(OperationKind::Pool2d)?;
+                let mut grad_input = vec![0.0f32; grad_elements];
+                let in_strides = contiguous_strides_4d(&input_shape)?;
                 let h_out = grad_out.shape[2];
                 let w_out = grad_out.shape[3];
                 for bi in 0..b {
@@ -2519,7 +2754,8 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
 
                 for g in 0..groups {
                     // Slice per-group input/weight/grad_out
-                    let gin_size = n * c_in_g * l_in;
+                    let gin_size = ShapeBuf::from_slice(&[n, c_in_g, l_in])
+                        .checked_numel(OperationKind::Conv1d)?;
                     let mut input_g = vec![0.0f32; gin_size];
                     for bi in 0..n {
                         for ci in 0..c_in_g {
@@ -2530,7 +2766,8 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
                         }
                     }
 
-                    let gwt_size = c_out_g * c_in_g * kl;
+                    let gwt_size = ShapeBuf::from_slice(&[c_out_g, c_in_g, kl])
+                        .checked_numel(OperationKind::Conv1d)?;
                     let mut weight_g = vec![0.0f32; gwt_size];
                     for co in 0..c_out_g {
                         for ci in 0..c_in_g {
@@ -2541,7 +2778,8 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
                         }
                     }
 
-                    let ggo_size = n * c_out_g * l_out;
+                    let ggo_size = ShapeBuf::from_slice(&[n, c_out_g, l_out])
+                        .checked_numel(OperationKind::Conv1d)?;
                     let mut grad_out_g = vec![0.0f32; ggo_size];
                     for bi in 0..n {
                         for co in 0..c_out_g {
@@ -2555,12 +2793,14 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
                     // im2col on input_g treated as [N, C_in_g, 1, L]
                     let (cols, ..) = im2col_2d_cpu(
                         &input_g, n, c_in_g, h, l_in, h, kl, stride, padding, dilation,
-                    );
+                    )?;
                     // cols: [N, L_out, C_in_g*kl]
                     // weight_mat_t: [C_in_g*kl, C_out_g] (transposed for grad_input)
-                    let weight_mat_t = cpu_transpose_last2(&weight_g, 1, c_out_g, c_in_g * kl);
+                    let weight_mat_t = cpu_transpose_last2(&weight_g, 1, c_out_g, c_in_g * kl)?;
                     // grad_out_g: [N, C_out_g, L_out] -> [N, L_out, C_out_g]
-                    let mut go_t = vec![0.0f32; n * l_out * c_out_g];
+                    let go_elements = ShapeBuf::from_slice(&[n, l_out, c_out_g])
+                        .checked_numel(OperationKind::Conv1d)?;
+                    let mut go_t = vec![0.0f32; go_elements];
                     for bi in 0..n {
                         for li in 0..l_out {
                             for co in 0..c_out_g {
@@ -2570,25 +2810,27 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
                         }
                     }
                     // grad_cols = go_t @ weight_mat_t: [N, L_out, C_out_g] @ [C_out_g, C_in_g*kl]
-                    let grad_cols = cpu_bmm(&go_t, &weight_mat_t, n, l_out, c_out_g, c_in_g * kl);
+                    let grad_cols = cpu_bmm(&go_t, &weight_mat_t, n, l_out, c_out_g, c_in_g * kl)?;
                     // col2im: [N, L_out, C_in_g*kl] -> [N, C_in_g, 1, L]
                     let grad_input_g = col2im_2d_cpu(
                         &grad_cols, n, c_in_g, h, l_in, h_out, l_out, h, kl, stride, padding,
                         dilation,
-                    );
+                    )?;
                     grad_input_groups.push(grad_input_g);
 
                     // grad_weight: go_t^T @ cols: [N, C_out_g, L_out] @ [N, L_out, C_in_g*kl]
-                    let go_t2 = cpu_transpose_last2(&go_t, n, l_out, c_out_g);
-                    let gw_mat = cpu_bmm(&go_t2, &cols, n, c_out_g, l_out, c_in_g * kl);
+                    let go_t2 = cpu_transpose_last2(&go_t, n, l_out, c_out_g)?;
+                    let gw_mat = cpu_bmm(&go_t2, &cols, n, c_out_g, l_out, c_in_g * kl)?;
                     // sum over batch: [N, C_out_g, C_in_g*kl] -> [C_out_g, C_in_g*kl]
-                    let gw_summed = cpu_sum_batch(&gw_mat, n, c_out_g, c_in_g * kl);
+                    let gw_summed = cpu_sum_batch(&gw_mat, n, c_out_g, c_in_g * kl)?;
                     // reshape to [C_out_g, C_in_g, Kl]
                     grad_weight_groups.push(gw_summed);
                 }
 
                 // Reassemble gradient tensors
-                let mut grad_input_data = vec![0.0f32; n * c_in * l_in];
+                let grad_input_elements =
+                    ShapeBuf::from_slice(&[n, c_in, l_in]).checked_numel(OperationKind::Conv1d)?;
+                let mut grad_input_data = vec![0.0f32; grad_input_elements];
                 for g in 0..groups {
                     let g_data = &grad_input_groups[g];
                     for bi in 0..n {
@@ -2602,7 +2844,9 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
                     }
                 }
 
-                let mut grad_weight_data = vec![0.0f32; c_out * c_in_g * kl];
+                let grad_weight_elements = ShapeBuf::from_slice(&[c_out, c_in_g, kl])
+                    .checked_numel(OperationKind::Conv1d)?;
+                let mut grad_weight_data = vec![0.0f32; grad_weight_elements];
                 for g in 0..groups {
                     let g_data = &grad_weight_groups[g];
                     for co in 0..c_out_g {
@@ -2670,12 +2914,18 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
                 // grad_out: [N, C_out, H_out, W_out] → flatten to row-major vec
                 let grad_data = grad_out.buffer.to_vec::<f32>();
 
-                let mut grad_input_data = vec![0.0f32; batch * c_in * h_in * w_in];
-                let mut grad_weight_data = vec![0.0f32; c_out * c_in_g * kh * kw];
+                let grad_input_elements = ShapeBuf::from_slice(&[batch, c_in, h_in, w_in])
+                    .checked_numel(OperationKind::Conv2d)?;
+                let grad_weight_elements = ShapeBuf::from_slice(&[c_out, c_in_g, kh, kw])
+                    .checked_numel(OperationKind::Conv2d)?;
+                let mut grad_input_data = vec![0.0f32; grad_input_elements];
+                let mut grad_weight_data = vec![0.0f32; grad_weight_elements];
 
                 for g in 0..groups {
                     // Slice input group [N, C_in_g, H, W]
-                    let mut input_g = vec![0.0f32; batch * c_in_g * h_in * w_in];
+                    let input_group_elements = ShapeBuf::from_slice(&[batch, c_in_g, h_in, w_in])
+                        .checked_numel(OperationKind::Conv2d)?;
+                    let mut input_g = vec![0.0f32; input_group_elements];
                     for bi in 0..batch {
                         for ci in 0..c_in_g {
                             for hi in 0..h_in {
@@ -2693,7 +2943,9 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
                     }
 
                     // Slice weight group [C_out_g, C_in_g, Kh, Kw]
-                    let mut weight_g = vec![0.0f32; c_out_g * c_in_g * kh * kw];
+                    let weight_group_elements = ShapeBuf::from_slice(&[c_out_g, c_in_g, kh, kw])
+                        .checked_numel(OperationKind::Conv2d)?;
+                    let mut weight_g = vec![0.0f32; weight_group_elements];
                     for co in 0..c_out_g {
                         let src_co = g * c_out_g + co;
                         for rest in 0..c_in_g * kh * kw {
@@ -2703,7 +2955,9 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
                     }
 
                     // Slice grad_out group [N, C_out_g, H_out, W_out]
-                    let mut go_g = vec![0.0f32; batch * c_out_g * h_out * w_out];
+                    let go_group_elements = ShapeBuf::from_slice(&[batch, c_out_g, h_out, w_out])
+                        .checked_numel(OperationKind::Conv2d)?;
+                    let mut go_g = vec![0.0f32; go_group_elements];
                     for bi in 0..batch {
                         for co in 0..c_out_g {
                             for hi in 0..h_out {
@@ -2722,11 +2976,14 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
 
                     let (cols, ..) = im2col_2d_cpu(
                         &input_g, batch, c_in_g, h_in, w_in, kh, kw, stride, padding, dilation,
-                    );
+                    )?;
                     // cols: [N, H_out*W_out, C_in_g*Kh*Kw]
                     // go_g: [N, C_out_g, H_out*W_out] → [N, H_out*W_out, C_out_g]
-                    let spatial = h_out * w_out;
-                    let mut go_t = vec![0.0f32; batch * spatial * c_out_g];
+                    let spatial = ShapeBuf::from_slice(&[h_out, w_out])
+                        .checked_numel(OperationKind::Conv2d)?;
+                    let go_transposed_elements = ShapeBuf::from_slice(&[batch, spatial, c_out_g])
+                        .checked_numel(OperationKind::Conv2d)?;
+                    let mut go_t = vec![0.0f32; go_transposed_elements];
                     for bi in 0..batch {
                         for co in 0..c_out_g {
                             for s in 0..spatial {
@@ -2738,12 +2995,12 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
 
                     // grad_cols = go_t @ weight_g: [N, spatial, C_out_g] @ [C_out_g, C_in_g*Kh*Kw]
                     let grad_cols =
-                        cpu_bmm(&go_t, &weight_g, batch, spatial, c_out_g, c_in_g * kh * kw);
+                        cpu_bmm(&go_t, &weight_g, batch, spatial, c_out_g, c_in_g * kh * kw)?;
                     // col2im → grad for input_g [N, C_in_g, H, W]
                     let grad_input_g = col2im_2d_cpu(
                         &grad_cols, batch, c_in_g, h_in, w_in, h_out, w_out, kh, kw, stride,
                         padding, dilation,
-                    );
+                    )?;
 
                     // Accumulate into grad_input_data
                     for bi in 0..batch {
@@ -2763,9 +3020,9 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
                     }
 
                     // grad_weight_g: go_t^T @ cols → [N, C_out_g, C_in_g*Kh*Kw] → sum over batch
-                    let go_t2 = cpu_transpose_last2(&go_t, batch, spatial, c_out_g);
-                    let gw_mat = cpu_bmm(&go_t2, &cols, batch, c_out_g, spatial, c_in_g * kh * kw);
-                    let gw_summed = cpu_sum_batch(&gw_mat, batch, c_out_g, c_in_g * kh * kw);
+                    let go_t2 = cpu_transpose_last2(&go_t, batch, spatial, c_out_g)?;
+                    let gw_mat = cpu_bmm(&go_t2, &cols, batch, c_out_g, spatial, c_in_g * kh * kw)?;
+                    let gw_summed = cpu_sum_batch(&gw_mat, batch, c_out_g, c_in_g * kh * kw)?;
 
                     for co in 0..c_out_g {
                         for rest in 0..c_in_g * kh * kw {
@@ -2839,45 +3096,34 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
         let c_out = c_out_per_group * groups;
         assert_eq!(c_in, w_c_in, "Input channels must match weight in_channels");
 
-        let h_nat = {
-            let unstrided = h_in.saturating_sub(1) * stride;
-            let eff_k = dilation * kh.saturating_sub(1);
-            (unstrided + eff_k + 1).saturating_sub(2 * padding)
-        };
-        let w_nat = {
-            let unstrided = w_in.saturating_sub(1) * stride;
-            let eff_k = dilation * kw.saturating_sub(1);
-            (unstrided + eff_k + 1).saturating_sub(2 * padding)
-        };
-        let h_out = h_nat + output_padding;
-        let w_out = w_nat + output_padding;
+        let h_nat = conv_transpose_output_dim(h_in, kh, stride, padding, dilation, 0)?;
+        let w_nat = conv_transpose_output_dim(w_in, kw, stride, padding, dilation, 0)?;
+        let h_out = h_nat
+            .checked_add(output_padding)
+            .ok_or(ShapeError::ArithmeticOverflow {
+                operation: OperationKind::Conv2d,
+                expression: "transposed-convolution height plus output padding",
+            })?;
+        let w_out = w_nat
+            .checked_add(output_padding)
+            .ok_or(ShapeError::ArithmeticOverflow {
+                operation: OperationKind::Conv2d,
+                expression: "transposed-convolution width plus output padding",
+            })?;
 
-        let out_buf = WgpuBuffer::new_zeros_for(
-            DTypeId::F32,
-            batch * c_out * h_out * w_out,
-            OperationKind::Conv2d,
+        let out_elements = ShapeBuf::from_slice(&[batch, c_out, h_out, w_out])
+            .checked_numel(OperationKind::Conv2d)?;
+        let out_buf = WgpuBuffer::new_zeros_for(DTypeId::F32, out_elements, OperationKind::Conv2d)?;
+
+        let params = checked_u32_array(
+            [
+                batch, c_in, c_out, h_in, w_in, h_out, w_out, kh, kw, stride, stride, padding,
+                padding, dilation, dilation, groups,
+            ],
+            "WGPU transposed-convolution kernel parameter",
         )?;
 
-        let params: [u32; 16] = [
-            batch as u32,
-            c_in as u32,
-            c_out as u32,
-            h_in as u32,
-            w_in as u32,
-            h_out as u32,
-            w_out as u32,
-            kh as u32,
-            kw as u32,
-            stride as u32,
-            stride as u32,
-            padding as u32,
-            padding as u32,
-            dilation as u32,
-            dilation as u32,
-            groups as u32,
-        ];
-
-        dispatch::dispatch_conv_transpose2d(&t.buffer, &weight.buffer, &out_buf, &params);
+        dispatch::dispatch_conv_transpose2d(&t.buffer, &weight.buffer, &out_buf, &params)?;
         let out_storage = WgpuStorage::new(out_buf, vec![batch, c_out, h_out, w_out]);
 
         // Wire autograd tape (groups==1 only; matches CPU backend's documented scope).
@@ -2895,7 +3141,9 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
                 let go_nat: Vec<f32> = if output_padding == 0 {
                     grad_data.clone()
                 } else {
-                    let mut nat = vec![0.0f32; batch * c_out * h_nat * w_nat];
+                    let natural_elements = ShapeBuf::from_slice(&[batch, c_out, h_nat, w_nat])
+                        .checked_numel(OperationKind::Conv2d)?;
+                    let mut nat = vec![0.0f32; natural_elements];
                     for bi in 0..batch {
                         for co in 0..c_out {
                             for hi in 0..h_nat {
@@ -2918,10 +3166,10 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
                 // im2col on go_nat [N, C_out, H_nat, W_nat] using same kernel geometry.
                 let (go_cols, ..) = im2col_2d_cpu(
                     &go_nat, batch, c_out, h_nat, w_nat, kh, kw, stride, padding, dilation,
-                );
+                )?;
                 // go_cols: [N, H_in*W_in, C_out*Kh*Kw]
                 // weight_mat_t: [C_out*Kh*Kw, C_in] (transposed for grad_input: grad = go_cols @ W^T)
-                let weight_mat_t = cpu_transpose_last2(&weight_data, 1, c_in, c_out * kh * kw);
+                let weight_mat_t = cpu_transpose_last2(&weight_data, 1, c_in, c_out * kh * kw)?;
                 // grad_input_flat = go_cols @ weight_mat_t: [N, H_in*W_in, C_out*Kh*Kw] @ [C_out*Kh*Kw, C_in]
                 let spatial_in = h_in * w_in;
                 let grad_input_flat = cpu_bmm(
@@ -2931,9 +3179,11 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
                     spatial_in,
                     c_out * kh * kw,
                     c_in,
-                );
+                )?;
                 // [N, H_in*W_in, C_in] -> [N, C_in, H_in, W_in]
-                let mut grad_input_data = vec![0.0f32; batch * c_in * h_in * w_in];
+                let grad_input_elements = ShapeBuf::from_slice(&[batch, c_in, h_in, w_in])
+                    .checked_numel(OperationKind::Conv2d)?;
+                let mut grad_input_data = vec![0.0f32; grad_input_elements];
                 for bi in 0..batch {
                     for ci in 0..c_in {
                         for s in 0..spatial_in {
@@ -2948,7 +3198,9 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
 
                 // grad_weight: same swap as CPU conv_transpose2d backward:
                 // input_t^T @ go_cols -> [N, C_in, C_out*Kh*Kw] -> sum_batch -> [C_in, C_out, Kh, Kw]
-                let mut input_flat_t = vec![0.0f32; batch * spatial_in * c_in];
+                let input_flat_elements = ShapeBuf::from_slice(&[batch, spatial_in, c_in])
+                    .checked_numel(OperationKind::Conv2d)?;
+                let mut input_flat_t = vec![0.0f32; input_flat_elements];
                 for bi in 0..batch {
                     for ci in 0..c_in {
                         for s in 0..spatial_in {
@@ -2962,7 +3214,7 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
                         }
                     }
                 }
-                let input_t2 = cpu_transpose_last2(&input_flat_t, batch, spatial_in, c_in);
+                let input_t2 = cpu_transpose_last2(&input_flat_t, batch, spatial_in, c_in)?;
                 let gw_mat = cpu_bmm(
                     &input_t2,
                     &go_cols,
@@ -2970,8 +3222,8 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
                     c_in,
                     spatial_in,
                     c_out * kh * kw,
-                );
-                let gw_summed = cpu_sum_batch(&gw_mat, batch, c_in, c_out * kh * kw);
+                )?;
+                let gw_summed = cpu_sum_batch(&gw_mat, batch, c_in, c_out * kh * kw)?;
 
                 Ok(vec![
                     WgpuStorage::new(
@@ -3016,7 +3268,9 @@ impl<T: DType, D: Device> LossOps<Self> for WgpuBackendImpl<T, D> {
         // `to_vec::<u32>()` bit-reinterpret would corrupt every class index
         // except 0.0 (whose bit pattern happens to equal integer 0).
         let target_data = target.buffer.to_vec::<f32>();
-        let mut one_hot_data = vec![0.0f32; batch * classes];
+        let one_hot_elements =
+            ShapeBuf::from_slice(&[batch, classes]).checked_numel(OperationKind::Storage)?;
+        let mut one_hot_data = vec![0.0f32; one_hot_elements];
         for b_idx in 0..batch {
             let class_idx = target_data[b_idx] as usize;
             if class_idx < classes {
@@ -3181,7 +3435,10 @@ impl<T: DType, D: Device> OptimizerOps<Self> for WgpuBackendImpl<T, D> {
         weight_decay: f64,
         step: usize,
     ) -> Result<()> {
-        let n = num_elements(&var.storage.shape) as u32;
+        let n = checked_u32(
+            num_elements(&var.storage.shape)?,
+            "WGPU AdamW parameter element count",
+        )?;
         let bc1 = (1.0 - beta1.powi(step as i32)) as f32;
         let bc2 = (1.0 - beta2.powi(step as i32)) as f32;
 

@@ -1,6 +1,6 @@
 use incin::prelude::*;
 
-const DYN_VALUE: Dyn = Dyn(());
+const DYN_VALUE: Dyn = Dyn;
 
 #[module]
 pub struct ConsumerModule {

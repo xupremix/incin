@@ -123,7 +123,7 @@ impl ResourceLimits {
             )));
         }
         for (idx, &d) in dims.iter().enumerate() {
-            if (d as u64) > self.max_dimension {
+            if u64::try_from(d).map_or(true, |dimension| dimension > self.max_dimension) {
                 return Err(Error::Msg(alloc::format!(
                     "Tensor dimension at axis {} ({}) exceeds limit {}",
                     idx,

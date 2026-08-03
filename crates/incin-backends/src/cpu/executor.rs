@@ -560,8 +560,10 @@ impl<T: DType, D: Device> Execute<Pool2dSpec> for CpuBackendImpl<T, D> {
 
 #[cfg(test)]
 mod tests {
-    use incin_core::exec::{ExecutionContext, MatMulRule, ShapeRule, TensorHandle, Validated};
-    use incin_core::prelude::{Cpu, DeviceId, Dyn, Local, Shape};
+    use incin_core::exec::{
+        Alignment, ExecutionContext, MatMulRule, ShapeRule, TensorHandle, Validated,
+    };
+    use incin_core::prelude::{Cpu, DeviceId, Dyn, Local, Shape, ShapeBuf};
 
     use super::*;
     use crate::cpu::storage::CpuBuffer;
@@ -583,7 +585,14 @@ mod tests {
     #[test]
     fn binder_rejects_corrupted_non_cpu_storage_metadata() {
         let mut lhs = CpuStorage::from_contiguous(CpuBuffer::F32(vec![1.0; 6]), vec![2, 3]);
-        lhs.meta.device = DeviceId::cuda(0);
+        lhs.meta = TensorMeta::contiguous(
+            ShapeBuf::from_slice(&[2, 3]),
+            DTypeId::F32,
+            DeviceId::cuda(0),
+            Alignment::BYTE,
+            6,
+        )
+        .unwrap();
         let rhs = CpuStorage::from_contiguous(CpuBuffer::F32(vec![1.0; 6]), vec![3, 2]);
         let inputs = [
             TensorHandle::from_storage::<TestBackend, f32, Local>(&lhs),

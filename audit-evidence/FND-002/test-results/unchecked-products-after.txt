@@ -1,0 +1,11 @@
+crates/incin-backends/tests/native_parity.rs:48:    let total: usize = shape.iter().product::<usize>().max(1);
+crates/incin-backends/tests/native_parity.rs:77:    let loss = if out_shape.iter().product::<usize>() == 1 {
+crates/incin-backends/tests/native_parity.rs:112:    let loss = if out_shape.iter().product::<usize>() == 1 {
+crates/incin-backends/src/descriptor_bind.rs:365:                dims.iter().product(),
+crates/incin-backends/src/descriptor_bind.rs:397:                dims.iter().product(),
+crates/incin-backends/src/descriptor_bind.rs:503:                dims.iter().product(),
+crates/incin-backends/src/descriptor_bind.rs:528:                dims.iter().product(),
+crates/incin-backends/tests/capability_matrix.rs:317:        assert_eq!(shape.iter().product::<usize>(), 32);
+crates/incin-backends/tests/cpu_executor.rs:71:    let count = shape.dims().iter().product();
+crates/incin-backends/src/wgpu/tests.rs:1157:        out.shape.iter().product::<usize>(),
+crates/incin-backends/src/cpu/stride.rs:56:/// `checked_mul` instead of a bare `.iter().product()`. A crafted or

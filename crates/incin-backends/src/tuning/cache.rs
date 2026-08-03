@@ -375,14 +375,16 @@ impl Serialize for CacheKey<Dyn> {
 
 impl<'de> Deserialize<'de> for CacheKey<Dyn> {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> core::result::Result<Self, D::Error> {
+        use serde::de::Error as _;
+
         let wire = WireCacheKey::deserialize(deserializer)?;
-        Ok(Self {
-            namespace: wire.namespace,
-            backend: wire.backend,
-            environment_digest: wire.environment_digest,
-            problem: wire.problem,
-            marker: PhantomData,
-        })
+        Self::from_parts(
+            &wire.namespace,
+            wire.backend,
+            wire.environment_digest,
+            &wire.problem,
+        )
+        .map_err(D::Error::custom)
     }
 }
 
@@ -402,7 +404,7 @@ pub enum MeasurementMethod {
 }
 
 /// One persistent tuning result.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct CacheRecord {
     key: CacheKey<Dyn>,
     created_unix_ms: u64,
@@ -411,6 +413,35 @@ pub struct CacheRecord {
     median_ns: Option<u64>,
     legal_candidates_digest: u64,
     winner: String,
+}
+
+#[derive(Deserialize)]
+struct WireCacheRecord {
+    key: CacheKey<Dyn>,
+    created_unix_ms: u64,
+    method: MeasurementMethod,
+    sample_count: u32,
+    median_ns: Option<u64>,
+    legal_candidates_digest: u64,
+    winner: String,
+}
+
+impl<'de> Deserialize<'de> for CacheRecord {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> core::result::Result<Self, D::Error> {
+        use serde::de::Error as _;
+
+        let wire = WireCacheRecord::deserialize(deserializer)?;
+        Self::new_at(
+            wire.key,
+            wire.created_unix_ms,
+            wire.method,
+            wire.sample_count,
+            wire.median_ns,
+            wire.legal_candidates_digest,
+            &wire.winner,
+        )
+        .map_err(D::Error::custom)
+    }
 }
 
 impl CacheRecord {

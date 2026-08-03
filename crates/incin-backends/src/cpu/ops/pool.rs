@@ -26,7 +26,7 @@
 //! whenever `input_size` doesn't evenly divide `output_size` (Pitfall 6 /
 //! T-04-15's sibling correctness concern for adaptive's own window sizing).
 
-use incin_core::prelude::{DType, Result};
+use incin_core::prelude::{DType, OperationKind, Result, ShapeBuf, ShapeError};
 
 use crate::cpu::storage::{CpuBuffer, CpuStorage, increment_index};
 use crate::cpu::tape::{self, TapeEntry};
@@ -47,7 +47,7 @@ fn max_window_2d(
     stride: (usize, usize),
     padding: (usize, usize),
     dilation: (usize, usize),
-) -> (CpuStorage, Vec<usize>) {
+) -> Result<(CpuStorage, Vec<usize>)> {
     let (b, c, h, w) = (
         input.shape[0],
         input.shape[1],
@@ -59,10 +59,11 @@ fn max_window_2d(
     let (ph, pw) = padding;
     let (dh, dw) = dilation;
 
-    let h_out = out_size(h, kh, sh, ph, dh);
-    let w_out = out_size(w, kw, sw, pw, dw);
+    let h_out = out_size(h, kh, sh, ph, dh)?;
+    let w_out = out_size(w, kw, sw, pw, dw)?;
 
-    let out_total = b * c * h_out * w_out;
+    let out_total =
+        ShapeBuf::from_slice(&[b, c, h_out, w_out]).checked_numel(OperationKind::Pool2d)?;
     let mut best_val = vec![f64::NEG_INFINITY; out_total];
     let mut best_flat_src_idx = vec![0usize; out_total];
     let input_strides = crate::cpu::stride::contiguous_strides(&input.shape);
@@ -103,7 +104,7 @@ fn max_window_2d(
         CpuBuffer::F32(best_val.iter().map(|&v| v as f32).collect()),
         vec![b, c, h_out, w_out],
     );
-    (out, best_flat_src_idx)
+    Ok((out, best_flat_src_idx))
 }
 
 /// Backward helper for `max_pool2d`: build a zero-filled buffer sized to
@@ -118,9 +119,9 @@ fn scatter_pool_grad_2d(
     winning_flat_src_idx: &[usize],
     input_shape: &[usize],
 ) -> CpuStorage {
-    let total: usize = input_shape.iter().product();
+    let total: usize = crate::cpu::stride::validated_numel(input_shape);
     let mut vals = vec![0.0f32; total];
-    let out_total: usize = grad_out.shape.iter().product();
+    let out_total: usize = crate::cpu::stride::validated_numel(&(grad_out.shape));
     let mut out_idx = vec![0usize; grad_out.shape.len()];
     for flat_out in 0..out_total {
         let g = grad_out.get(&out_idx);
@@ -139,7 +140,7 @@ pub(crate) fn max_pool2d_impl<T: DType, D: incin_core::prelude::Device, K: DType
     padding: (usize, usize),
     dilation: (usize, usize),
 ) -> Result<CpuStorage> {
-    let (out, winning_flat_src_idx) = max_window_2d(t, kernel_size, stride, padding, dilation);
+    let (out, winning_flat_src_idx) = max_window_2d(t, kernel_size, stride, padding, dilation)?;
 
     let input_shape = t.shape.to_vec();
     let (t_id, out_id) = (t.id, out.id);
@@ -182,11 +183,13 @@ pub(crate) fn avg_pool2d_impl<T: DType, D: incin_core::prelude::Device, K: DType
     let (sh, sw) = stride;
     let (ph, pw) = padding;
 
-    let h_out = out_size(h, kh, sh, ph, 1);
-    let w_out = out_size(w, kw, sw, pw, 1);
+    let h_out = out_size(h, kh, sh, ph, 1)?;
+    let w_out = out_size(w, kw, sw, pw, 1)?;
 
-    let window_count = (kh * kw) as f64;
-    let mut out_vals = vec![0.0f32; b * c * h_out * w_out];
+    let window_count = ShapeBuf::from_slice(&[kh, kw]).checked_numel(OperationKind::Pool2d)? as f64;
+    let out_total =
+        ShapeBuf::from_slice(&[b, c, h_out, w_out]).checked_numel(OperationKind::Pool2d)?;
+    let mut out_vals = vec![0.0f32; out_total];
     for bi in 0..b {
         for ci in 0..c {
             for oh in 0..h_out {
@@ -225,7 +228,9 @@ pub(crate) fn avg_pool2d_impl<T: DType, D: incin_core::prelude::Device, K: DType
                 input_shape[2],
                 input_shape[3],
             );
-            let mut vals = vec![0.0f32; b * c * h * w];
+            let input_total =
+                ShapeBuf::from_slice(&input_shape).checked_numel(OperationKind::Pool2d)?;
+            let mut vals = vec![0.0f32; input_total];
             let in_strides = crate::cpu::stride::contiguous_strides(&input_shape);
             let h_out = grad_out.shape[2];
             let w_out = grad_out.shape[3];
@@ -277,10 +282,35 @@ pub(crate) fn avg_pool2d_impl<T: DType, D: incin_core::prelude::Device, K: DType
 /// Never derives an equivalent fixed `kernel_size`/`stride` — that produces
 /// wrong results whenever `input_size` does not evenly divide `output_size`
 /// (e.g. 5 -> 3 produces window sizes `[2, 3, 2]`, not a uniform kernel).
-fn adaptive_window_bounds(input_size: usize, output_size: usize, i: usize) -> (usize, usize) {
-    let start = (i * input_size) / output_size;
-    let end = ((i + 1) * input_size).div_ceil(output_size);
-    (start, end)
+fn adaptive_window_bounds(
+    input_size: usize,
+    output_size: usize,
+    i: usize,
+) -> Result<(usize, usize)> {
+    if output_size == 0 {
+        return Err(ShapeError::InvalidParameter {
+            operation: OperationKind::AdaptiveAvgPool2d,
+            parameter: "output size",
+            value: output_size,
+        }
+        .into());
+    }
+    let start = i
+        .checked_mul(input_size)
+        .ok_or(ShapeError::ArithmeticOverflow {
+            operation: OperationKind::AdaptiveAvgPool2d,
+            expression: "adaptive-pooling start index",
+        })?
+        / output_size;
+    let end = i
+        .checked_add(1)
+        .and_then(|next| next.checked_mul(input_size))
+        .ok_or(ShapeError::ArithmeticOverflow {
+            operation: OperationKind::AdaptiveAvgPool2d,
+            expression: "adaptive-pooling end index",
+        })?
+        .div_ceil(output_size);
+    Ok((start, end))
 }
 
 /// `ModuleOps::adaptive_avg_pool2d`'s `CpuBackendImpl` implementation.
@@ -292,13 +322,15 @@ pub(crate) fn adaptive_avg_pool2d_impl<T: DType, D: incin_core::prelude::Device,
     let (b, c, h, w) = (t.shape[0], t.shape[1], t.shape[2], t.shape[3]);
     let (h_out, w_out) = output_size;
 
-    let mut out_vals = vec![0.0f32; b * c * h_out * w_out];
+    let out_total = ShapeBuf::from_slice(&[b, c, h_out, w_out])
+        .checked_numel(OperationKind::AdaptiveAvgPool2d)?;
+    let mut out_vals = vec![0.0f32; out_total];
     for bi in 0..b {
         for ci in 0..c {
             for oh in 0..h_out {
-                let (h_start, h_end) = adaptive_window_bounds(h, h_out, oh);
+                let (h_start, h_end) = adaptive_window_bounds(h, h_out, oh)?;
                 for ow in 0..w_out {
-                    let (w_start, w_end) = adaptive_window_bounds(w, w_out, ow);
+                    let (w_start, w_end) = adaptive_window_bounds(w, w_out, ow)?;
                     let mut sum = 0.0f64;
                     for ih in h_start..h_end {
                         for iw in w_start..w_end {
@@ -326,16 +358,18 @@ pub(crate) fn adaptive_avg_pool2d_impl<T: DType, D: incin_core::prelude::Device,
                 input_shape[2],
                 input_shape[3],
             );
-            let mut vals = vec![0.0f32; b * c * h * w];
+            let input_total = ShapeBuf::from_slice(&input_shape)
+                .checked_numel(OperationKind::AdaptiveAvgPool2d)?;
+            let mut vals = vec![0.0f32; input_total];
             let in_strides = crate::cpu::stride::contiguous_strides(&input_shape);
             let h_out = grad_out.shape[2];
             let w_out = grad_out.shape[3];
             for bi in 0..b {
                 for ci in 0..c {
                     for oh in 0..h_out {
-                        let (h_start, h_end) = adaptive_window_bounds(h, h_out, oh);
+                        let (h_start, h_end) = adaptive_window_bounds(h, h_out, oh)?;
                         for ow in 0..w_out {
-                            let (w_start, w_end) = adaptive_window_bounds(w, w_out, ow);
+                            let (w_start, w_end) = adaptive_window_bounds(w, w_out, ow)?;
                             let count = ((h_end - h_start) * (w_end - w_start)) as f64;
                             let g = grad_out.get(&[bi, ci, oh, ow]) / count;
                             for ih in h_start..h_end {
@@ -372,10 +406,30 @@ fn out_size(
     stride: usize,
     padding: usize,
     dilation: usize,
-) -> usize {
-    let padded = len + 2 * padding;
-    let effective_kernel = dilation * kernel_size.saturating_sub(1) + 1;
-    padded.saturating_sub(effective_kernel) / stride + 1
+) -> Result<usize> {
+    if kernel_size == 0 || stride == 0 || dilation == 0 {
+        return Err(ShapeError::InvalidParameter {
+            operation: OperationKind::Pool2d,
+            parameter: "kernel, stride, and dilation must be nonzero",
+            value: 0,
+        }
+        .into());
+    }
+    let padded = padding
+        .checked_mul(2)
+        .and_then(|twice| len.checked_add(twice))
+        .ok_or(ShapeError::ArithmeticOverflow {
+            operation: OperationKind::Pool2d,
+            expression: "pooling padded input dimension",
+        })?;
+    let effective_kernel = dilation
+        .checked_mul(kernel_size - 1)
+        .and_then(|span| span.checked_add(1))
+        .ok_or(ShapeError::ArithmeticOverflow {
+            operation: OperationKind::Pool2d,
+            expression: "pooling effective kernel",
+        })?;
+    Ok(padded.saturating_sub(effective_kernel) / stride + 1)
 }
 
 // ---------------------------------------------------------------------------
@@ -611,9 +665,9 @@ mod tests {
     #[test]
     fn adaptive_avg_pool2d_non_evenly_dividing_produces_variable_windows() {
         // H=5 -> output 3: windows [0,2), [1,4), [3,5) -> sizes [2,3,2].
-        assert_eq!(adaptive_window_bounds(5, 3, 0), (0, 2));
-        assert_eq!(adaptive_window_bounds(5, 3, 1), (1, 4));
-        assert_eq!(adaptive_window_bounds(5, 3, 2), (3, 5));
+        assert_eq!(adaptive_window_bounds(5, 3, 0).unwrap(), (0, 2));
+        assert_eq!(adaptive_window_bounds(5, 3, 1).unwrap(), (1, 4));
+        assert_eq!(adaptive_window_bounds(5, 3, 2).unwrap(), (3, 5));
 
         // Build a [1,1,5,1] input (W axis trivial, size 1) with distinct
         // values so each H-window's mean is hand-verifiable.

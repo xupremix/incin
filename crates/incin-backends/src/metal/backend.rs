@@ -2,8 +2,8 @@
 
 use core::marker::PhantomData;
 
-use incin_core::exec::TensorMeta;
 use incin_core::backend_authoring::*;
+use incin_core::exec::TensorMeta;
 use incin_core::prelude::*;
 use incin_core::shapes::ShapeBuf;
 
@@ -67,8 +67,10 @@ fn validate_metal(
     resolve_dtype_policy(BackendFamily::Wgpu, family, dtype, op).map(|_| ())
 }
 
-fn num_elements(shape: &[usize]) -> usize {
-    shape.iter().product()
+fn num_elements(shape: &[usize]) -> Result<usize> {
+    ShapeBuf::from_slice(shape)
+        .checked_numel(OperationKind::Storage)
+        .map_err(Into::into)
 }
 
 fn unsupported(op: &'static str) -> Error {
@@ -145,7 +147,7 @@ impl<T: DType, D: Device> Backend for MetalBackendImpl<T, D> {
     ) -> Result<Self::Storage<K>> {
         validate_metal(dtype, device, OperationKind::Storage, "from_bytes")?;
         let shape_buf = incin_core::shapes::ShapeBuf::from_slice(shape);
-        let numel = num_elements(shape);
+        let numel = num_elements(shape)?;
         let meta =
             TensorMeta::contiguous(shape_buf, dtype, *device, MetalStorage::alignment(), numel)?;
         MetalStorage::from_bytes(
@@ -187,7 +189,7 @@ impl<T: DType, D: Device> CreationOps<Self> for MetalBackendImpl<T, D> {
     ) -> Result<<Self as Backend>::Storage<K>> {
         validate_metal(dtype, device, OperationKind::Fill, "ones")?;
         let shape_buf = incin_core::shapes::ShapeBuf::from_slice(shape);
-        let n = num_elements(shape);
+        let n = num_elements(shape)?;
         let data: Vec<f32> = vec![1.0; n];
         let bytes: Vec<u8> = bytemuck::cast_slice(&data).to_vec();
         let meta = TensorMeta::contiguous(shape_buf, dtype, *device, MetalStorage::alignment(), n)?;
@@ -201,7 +203,7 @@ impl<T: DType, D: Device> CreationOps<Self> for MetalBackendImpl<T, D> {
     ) -> Result<<Self as Backend>::Storage<K>> {
         validate_metal(dtype, device, OperationKind::Random, "rand")?;
         let shape_buf = incin_core::shapes::ShapeBuf::from_slice(shape);
-        let n = num_elements(shape);
+        let n = num_elements(shape)?;
         let data: Vec<f32> = vec![0.5; n];
         let bytes: Vec<u8> = bytemuck::cast_slice(&data).to_vec();
         let meta = TensorMeta::contiguous(shape_buf, dtype, *device, MetalStorage::alignment(), n)?;
@@ -215,7 +217,7 @@ impl<T: DType, D: Device> CreationOps<Self> for MetalBackendImpl<T, D> {
     ) -> Result<<Self as Backend>::Storage<K>> {
         validate_metal(dtype, device, OperationKind::Random, "randn")?;
         let shape_buf = incin_core::shapes::ShapeBuf::from_slice(shape);
-        let n = num_elements(shape);
+        let n = num_elements(shape)?;
         let data: Vec<f32> = vec![0.0; n];
         let bytes: Vec<u8> = bytemuck::cast_slice(&data).to_vec();
         let meta = TensorMeta::contiguous(shape_buf, dtype, *device, MetalStorage::alignment(), n)?;
@@ -352,7 +354,8 @@ fn binary_op_metal(
                 });
             }
         }
-        let total: usize = out_shape.iter().product();
+        let total: usize = incin_core::prelude::ShapeBuf::from_slice(&(out_shape))
+            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
         let a_bytes = lhs.as_bytes()?;
         let b_bytes = rhs.as_bytes()?;
         let a_slice: &[f32] = bytemuck::cast_slice(a_bytes);
@@ -437,14 +440,17 @@ fn sum_dim_impl(t: &MetalStorage, axis: usize, keepdim: bool) -> Result<MetalSto
     } else {
         out_dims.remove(axis);
     }
-    let out_numel: usize = out_dims.iter().product();
+    let out_numel: usize = incin_core::prelude::ShapeBuf::from_slice(&(out_dims))
+        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
     let mut out_data = vec![0.0f32; out_numel];
 
     let bytes = t.as_bytes()?;
     let in_slice: &[f32] = bytemuck::cast_slice(bytes);
-    let outer: usize = dims[..axis].iter().product();
+    let outer: usize = incin_core::prelude::ShapeBuf::from_slice(&(dims[..axis]))
+        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
     let axis_len = dims[axis];
-    let inner: usize = dims[axis + 1..].iter().product();
+    let inner: usize = incin_core::prelude::ShapeBuf::from_slice(&(dims[axis + 1..]))
+        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
 
     for o in 0..outer {
         for a in 0..axis_len {
@@ -509,8 +515,12 @@ fn matmul_metal(lhs: &MetalStorage, rhs: &MetalStorage) -> Result<MetalStorage> 
         });
     }
 
-    let lhs_batch: usize = lhs_dims[..lhs_dims.len() - 2].iter().product();
-    let rhs_batch: usize = rhs_dims[..rhs_dims.len() - 2].iter().product();
+    let lhs_batch: usize =
+        incin_core::prelude::ShapeBuf::from_slice(&(lhs_dims[..lhs_dims.len() - 2]))
+            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+    let rhs_batch: usize =
+        incin_core::prelude::ShapeBuf::from_slice(&(rhs_dims[..rhs_dims.len() - 2]))
+            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
     let batch = lhs_batch.max(rhs_batch).max(1);
 
     let mut out_shape = if lhs_batch >= rhs_batch && lhs_dims.len() > 2 {
@@ -523,7 +533,8 @@ fn matmul_metal(lhs: &MetalStorage, rhs: &MetalStorage) -> Result<MetalStorage> 
     out_shape.push(m);
     out_shape.push(n);
 
-    let out_numel: usize = out_shape.iter().product();
+    let out_numel: usize = incin_core::prelude::ShapeBuf::from_slice(&(out_shape))
+        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
     let mut out_data = vec![0.0f32; out_numel];
 
     let a_bytes = lhs.as_bytes()?;
@@ -567,7 +578,8 @@ fn reshape_metal(storage: &MetalStorage, shape: &[usize]) -> Result<MetalStorage
         .metadata()
         .shape()
         .checked_numel(OperationKind::Storage)?;
-    let new_numel: usize = shape.iter().product();
+    let new_numel: usize = incin_core::prelude::ShapeBuf::from_slice(&(shape))
+        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
     if numel != new_numel {
         return Err(Error::ShapeMismatch {
             op: "reshape",
@@ -605,7 +617,8 @@ fn transpose_metal(storage: &MetalStorage, dim0: usize, dim1: usize) -> Result<M
     let mut out_dims = dims.to_vec();
     out_dims.swap(dim0, dim1);
 
-    let numel: usize = out_dims.iter().product();
+    let numel: usize = incin_core::prelude::ShapeBuf::from_slice(&(out_dims))
+        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
     let bytes = storage.as_bytes()?;
     let in_slice: &[f32] = bytemuck::cast_slice(bytes);
     let mut out_data = vec![0.0f32; numel];
@@ -1214,7 +1227,8 @@ impl<T: DType, D: Device> ReductionOps<Self> for MetalBackendImpl<T, D> {
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
         let dims = t.metadata().shape().dims();
-        let total: usize = dims.iter().product();
+        let total: usize = incin_core::prelude::ShapeBuf::from_slice(&(dims))
+            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
         let sum = Self::sum_all::<K>(t)?;
         scalar_op_metal(&sum, 1.0 / (total as f64), |x, s| x * s)
     }
@@ -1380,14 +1394,17 @@ impl<T: DType, D: Device> TensorOps<Self> for MetalBackendImpl<T, D> {
         }
         let mut out_dims = dims.to_vec();
         out_dims[dim] = len;
-        let out_numel: usize = out_dims.iter().product();
+        let out_numel: usize = incin_core::prelude::ShapeBuf::from_slice(&(out_dims))
+            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
         let mut out_data = Vec::with_capacity(out_numel);
 
         let bytes = t.as_bytes()?;
         let in_slice: &[f32] = bytemuck::cast_slice(bytes);
 
-        let outer: usize = dims[..dim].iter().product();
-        let inner: usize = dims[dim + 1..].iter().product();
+        let outer: usize = incin_core::prelude::ShapeBuf::from_slice(&(dims[..dim]))
+            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+        let inner: usize = incin_core::prelude::ShapeBuf::from_slice(&(dims[dim + 1..]))
+            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
 
         for o in 0..outer {
             for i in start..start + len {
@@ -1422,8 +1439,11 @@ impl<T: DType, D: Device> TensorOps<Self> for MetalBackendImpl<T, D> {
                 let g_slice: &[f32] = bytemuck::cast_slice(g_bytes);
                 let fg_bytes = full_grad.as_bytes()?;
                 let mut fg_data: Vec<f32> = bytemuck::cast_slice(fg_bytes).to_vec();
-                let g_outer: usize = t_dims[..dim].iter().product();
-                let g_inner: usize = t_dims[dim + 1..].iter().product();
+                let g_outer: usize = incin_core::prelude::ShapeBuf::from_slice(&(t_dims[..dim]))
+                    .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+                let g_inner: usize =
+                    incin_core::prelude::ShapeBuf::from_slice(&(t_dims[dim + 1..]))
+                        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
                 for o in 0..g_outer {
                     for i in 0..len {
                         let src_start = o * len * g_inner + i * g_inner;
@@ -1467,7 +1487,8 @@ impl<T: DType, D: Device> TensorOps<Self> for MetalBackendImpl<T, D> {
         }
         let mut new_dims = Vec::new();
         new_dims.extend_from_slice(&dims[..start_dim]);
-        let folded: usize = dims[start_dim..=end_dim].iter().product();
+        let folded: usize = incin_core::prelude::ShapeBuf::from_slice(&(dims[start_dim..=end_dim]))
+            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
         new_dims.push(folded);
         new_dims.extend_from_slice(&dims[end_dim + 1..]);
         Self::reshape::<K>(t, &new_dims)
@@ -1536,9 +1557,12 @@ impl<T: DType, D: Device> TensorOps<Self> for MetalBackendImpl<T, D> {
         }
         out_dims[dim] = total_concat_len;
 
-        let outer: usize = first_dims[..dim].iter().product();
-        let inner: usize = first_dims[dim + 1..].iter().product();
-        let out_numel: usize = out_dims.iter().product();
+        let outer: usize = incin_core::prelude::ShapeBuf::from_slice(&(first_dims[..dim]))
+            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+        let inner: usize = incin_core::prelude::ShapeBuf::from_slice(&(first_dims[dim + 1..]))
+            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+        let out_numel: usize = incin_core::prelude::ShapeBuf::from_slice(&(out_dims))
+            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
         let mut out_data = Vec::with_capacity(out_numel);
 
         for o in 0..outer {
@@ -1585,7 +1609,9 @@ impl<T: DType, D: Device> TensorOps<Self> for MetalBackendImpl<T, D> {
                 for &len in &slice_lens {
                     let mut sub_dims = out_dims.clone();
                     sub_dims[dim] = len;
-                    let sub_numel: usize = sub_dims.iter().product();
+                    let sub_numel: usize =
+                        incin_core::prelude::ShapeBuf::from_slice(&(sub_dims))
+                            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
                     let mut sub_data = Vec::with_capacity(sub_numel);
 
                     let g_bytes = grad_out.as_bytes()?;
@@ -1659,7 +1685,8 @@ impl<T: DType, D: Device> ModuleOps<Self> for MetalBackendImpl<T, D> {
     ) -> Result<<Self as Backend>::Storage<K>> {
         let dims = t.metadata().shape().dims();
         let last_dim = dims[dims.len() - 1];
-        let outer: usize = dims[..dims.len() - 1].iter().product();
+        let outer: usize = incin_core::prelude::ShapeBuf::from_slice(&(dims[..dims.len() - 1]))
+            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
 
         let bytes = t.as_bytes()?;
         let in_slice: &[f32] = bytemuck::cast_slice(bytes);
@@ -1720,7 +1747,8 @@ impl<T: DType, D: Device> ModuleOps<Self> for MetalBackendImpl<T, D> {
         }
         let batch = dims[0];
         let channels = dims[1];
-        let spatial: usize = dims[2..].iter().product();
+        let spatial: usize = incin_core::prelude::ShapeBuf::from_slice(&(dims[2..]))
+            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
 
         let bytes = t.as_bytes()?;
         let in_slice: &[f32] = bytemuck::cast_slice(bytes);

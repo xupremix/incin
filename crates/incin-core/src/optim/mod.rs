@@ -7,7 +7,32 @@ pub use scheduler::*;
 ///
 /// This is a newtype wrapper around the backend's raw gradient container (e.g., `candle_core::backprop::GradStore`).
 /// Obtain it by calling `.backward()` on a scalar loss tensor. Pass it to [`Optimizer::step`] to update parameters.
-pub struct Gradients<G>(pub G);
+pub struct Gradients<G>(G);
+
+impl<G> Gradients<G> {
+    pub(crate) fn from_backend(inner: G) -> Self {
+        Self(inner)
+    }
+
+    /// Borrows the backend-specific gradient container.
+    #[must_use]
+    pub fn as_backend(&self) -> &G {
+        &self.0
+    }
+
+    /// Mutably borrows the backend container for backend-authoring and
+    /// distributed gradient synchronization.
+    #[must_use]
+    pub fn as_backend_mut(&mut self) -> &mut G {
+        &mut self.0
+    }
+
+    /// Consumes this handle and returns its backend-specific container.
+    #[must_use]
+    pub fn into_backend(self) -> G {
+        self.0
+    }
+}
 
 /// Trait defining a generic optimization algorithm.
 ///

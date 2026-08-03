@@ -4,7 +4,7 @@ use crate::external::candle::CandleBackend;
 use crate::external::*;
 
 impl<T: incin_core::prelude::DType, D: incin_core::prelude::Device>
-    incin_core::prelude::ModuleOps<Self> for CandleBackend<T, D>
+    incin_core::backend_authoring::ModuleOps<Self> for CandleBackend<T, D>
 {
     /// Candle has no native adaptive pooling; returns an error
     /// instead of panicking so callers can handle the unsupported case.

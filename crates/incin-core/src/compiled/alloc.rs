@@ -9,19 +9,60 @@ use crate::graph::ValueId;
 use crate::prelude::Result;
 
 /// The liveness interval of a value in the compiled graph.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
 pub struct LivenessInterval {
     /// Index of the node that defines this value.
-    pub def_node: usize,
+    def_node: usize,
     /// Index of the last node that uses this value.
-    pub last_use_node: usize,
+    last_use_node: usize,
 }
 
 impl LivenessInterval {
+    const fn new(def_node: usize, last_use_node: usize) -> Self {
+        Self {
+            def_node,
+            last_use_node,
+        }
+    }
+
+    /// Returns the defining node index.
+    #[must_use]
+    pub const fn def_node(self) -> usize {
+        self.def_node
+    }
+
+    /// Returns the final using node index.
+    #[must_use]
+    pub const fn last_use_node(self) -> usize {
+        self.last_use_node
+    }
+
     /// Returns `true` if this interval overlaps with another.
     #[must_use]
     pub fn overlaps_with(&self, other: &Self) -> bool {
         self.def_node <= other.last_use_node && other.def_node <= self.last_use_node
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct WireLivenessInterval {
+    def_node: usize,
+    last_use_node: usize,
+}
+
+impl<'de> serde::Deserialize<'de> for LivenessInterval {
+    fn deserialize<D: serde::Deserializer<'de>>(
+        deserializer: D,
+    ) -> core::result::Result<Self, D::Error> {
+        use serde::de::Error as _;
+
+        let wire = <WireLivenessInterval as serde::Deserialize>::deserialize(deserializer)?;
+        if wire.def_node > wire.last_use_node {
+            return Err(D::Error::custom(
+                "liveness interval defines a value after its last use",
+            ));
+        }
+        Ok(Self::new(wire.def_node, wire.last_use_node))
     }
 }
 
@@ -39,13 +80,7 @@ impl LivenessMap {
 
         // Input values are live from the beginning
         for &input in &graph.inputs {
-            intervals.insert(
-                input,
-                LivenessInterval {
-                    def_node: 0,
-                    last_use_node: 0,
-                },
-            );
+            intervals.insert(input, LivenessInterval::new(0, 0));
         }
 
         // Walk nodes and track def/use
@@ -54,10 +89,7 @@ impl LivenessMap {
             for &out_id in &node.outputs {
                 intervals
                     .entry(out_id)
-                    .or_insert(LivenessInterval {
-                        def_node: node_idx,
-                        last_use_node: node_idx,
-                    })
+                    .or_insert(LivenessInterval::new(node_idx, node_idx))
                     .last_use_node = node_idx;
             }
             // Inputs used at this node — extend their last use
@@ -152,17 +184,85 @@ impl SavedTensorSet {
     }
 }
 
-/// Allocation slot for a buffer, identified by an index.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-pub struct BufferSlot(pub usize);
+/// Allocation slot for a buffer, identified by a planner-assigned index.
+///
+/// Slots cannot be forged outside the planner:
+///
+/// ```compile_fail
+/// use incin_core::experimental::compiled::BufferSlot;
+/// let forged = BufferSlot(0);
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
+pub struct BufferSlot(usize);
+
+impl BufferSlot {
+    const fn new(index: usize) -> Self {
+        Self(index)
+    }
+
+    /// Returns the planner-assigned slot index.
+    #[must_use]
+    pub const fn index(self) -> usize {
+        self.0
+    }
+}
 
 /// A memory plan assigning each value to a buffer slot.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct MemoryPlan {
-    /// Mapping from value ID to buffer slot.
-    pub assignments: BTreeMap<ValueId, BufferSlot>,
-    /// Estimated peak number of simultaneously live slots.
-    pub peak_live_slots: usize,
+    assignments: BTreeMap<ValueId, BufferSlot>,
+    peak_live_slots: usize,
+}
+
+impl MemoryPlan {
+    /// Returns the planner-owned value-to-slot assignments.
+    #[must_use]
+    pub const fn assignments(&self) -> &BTreeMap<ValueId, BufferSlot> {
+        &self.assignments
+    }
+
+    /// Returns the estimated peak number of simultaneously live slots.
+    #[must_use]
+    pub const fn peak_live_slots(&self) -> usize {
+        self.peak_live_slots
+    }
+
+    fn validate(&self) -> core::result::Result<(), &'static str> {
+        if self
+            .assignments
+            .values()
+            .any(|slot| slot.index() >= self.peak_live_slots)
+        {
+            return Err("memory-plan slot is outside peak_live_slots");
+        }
+        Ok(())
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct WireMemoryPlan {
+    assignments: BTreeMap<ValueId, usize>,
+    peak_live_slots: usize,
+}
+
+impl<'de> serde::Deserialize<'de> for MemoryPlan {
+    fn deserialize<D: serde::Deserializer<'de>>(
+        deserializer: D,
+    ) -> core::result::Result<Self, D::Error> {
+        use serde::de::Error as _;
+
+        let wire = <WireMemoryPlan as serde::Deserialize>::deserialize(deserializer)?;
+        let plan = Self {
+            assignments: wire
+                .assignments
+                .into_iter()
+                .map(|(value, slot)| (value, BufferSlot::new(slot)))
+                .collect(),
+            peak_live_slots: wire.peak_live_slots,
+        };
+        plan.validate().map_err(D::Error::custom)?;
+        Ok(plan)
+    }
 }
 
 /// Allocation planner producing a `MemoryPlan` from liveness analysis.
@@ -180,8 +280,10 @@ impl AllocationPlanner {
 
         // Pre-assign slots to graph inputs
         for &input in &graph.inputs {
-            let slot = BufferSlot(next_slot);
-            next_slot += 1;
+            let slot = BufferSlot::new(next_slot);
+            next_slot = next_slot
+                .checked_add(1)
+                .ok_or_else(|| crate::prelude::Error::Msg("buffer-slot index overflowed".into()))?;
             assignments.insert(input, slot);
             currently_live.insert(input);
         }
@@ -213,8 +315,10 @@ impl AllocationPlanner {
                     let slot = if let Some(s) = free_slots.pop() {
                         s
                     } else {
-                        let s = BufferSlot(next_slot);
-                        next_slot += 1;
+                        let s = BufferSlot::new(next_slot);
+                        next_slot = next_slot.checked_add(1).ok_or_else(|| {
+                            crate::prelude::Error::Msg("buffer-slot index overflowed".into())
+                        })?;
                         s
                     };
                     assignments.insert(out_id, slot);

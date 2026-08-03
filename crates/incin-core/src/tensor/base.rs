@@ -5,12 +5,12 @@ use crate::prelude::{
 };
 use alloc::string::ToString;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
 /// A marker used as `Shape`, `DType`, `Device`, or their runtime-chosen
 /// variant across `Tensor`'s type parameters, deferring that choice from
 /// compile time to runtime (e.g. `Tensor<Dyn, B>` has a shape resolved at
 /// construction rather than baked into the type).
-pub struct Dyn(pub ());
+pub struct Dyn;
 
 /// The core `Tensor` type representing an n-dimensional array.
 ///
@@ -723,7 +723,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G> {
 
     /// Computes the backward pass starting from this tensor, returning the gradients.
     pub fn backward(&self) -> Result<crate::optim::Gradients<B::Grads>> {
-        B::backward(&self.inner).map(crate::optim::Gradients)
+        B::backward(&self.inner).map(crate::optim::Gradients::from_backend)
     }
 
     /// Moves this tensor to the specified device, returning a new Tensor.
@@ -895,14 +895,8 @@ mod tests {
         let out = <B as ModuleOps<B>>::conv2d::<f32>(&input, &weight, None, 1, 0, 3, 1).unwrap();
         assert_eq!(out.len(), 4);
 
-        let pool_out = <B as ModuleOps<B>>::max_pool2d::<f32>(
-            &input,
-            (5, 5),
-            (1, 1),
-            (0, 0),
-            (3, 3),
-        )
-        .unwrap();
+        let pool_out =
+            <B as ModuleOps<B>>::max_pool2d::<f32>(&input, (5, 5), (1, 1), (0, 0), (3, 3)).unwrap();
         assert_eq!(pool_out.len(), 4);
     }
 }

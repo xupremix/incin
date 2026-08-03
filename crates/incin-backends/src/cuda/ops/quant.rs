@@ -2,8 +2,8 @@ use super::alloc_zeroed_bytes;
 use crate::cpu::storage::BlockQ8_0;
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
-use incin_core::prelude::OperationKind;
 use incin_core::prelude::Result;
+use incin_core::prelude::{OperationKind, ShapeBuf};
 
 #[cfg(feature = "cuda")]
 pub(crate) fn launch_quantize(inp: &CudaStorage) -> Result<CudaStorage> {
@@ -23,7 +23,7 @@ pub(crate) fn launch_quantize(inp: &CudaStorage) -> Result<CudaStorage> {
     let f = dispatcher.get_function("quant", "quantize_q8_0")?;
     let stream = b_inp.device.default_stream();
 
-    let n = inp.shape.iter().product::<usize>();
+    let n = ShapeBuf::from_slice(&inp.shape).checked_numel(OperationKind::Storage)?;
     if n % 32 != 0 {
         return Err(incin_core::prelude::Error::Msg(alloc::format!(
             "quantize requires length multiple of 32, got {}",
@@ -54,8 +54,10 @@ pub(crate) fn launch_quantize(inp: &CudaStorage) -> Result<CudaStorage> {
         device_id,
     };
 
+    let num_blocks_u32 = crate::cuda::checked_u32(num_blocks, "CUDA quantization grid dimension")?;
+    let num_blocks_i32 = crate::cuda::checked_i32(num_blocks, "CUDA quantization block count")?;
     let cfg = cudarc::driver::LaunchConfig {
-        grid_dim: ((num_blocks as u32).div_ceil(256), 1, 1),
+        grid_dim: (num_blocks_u32.div_ceil(256), 1, 1),
         block_dim: (256, 1, 1),
         shared_mem_bytes: 0,
     };
@@ -72,7 +74,7 @@ pub(crate) fn launch_quantize(inp: &CudaStorage) -> Result<CudaStorage> {
             .launch_builder(&f)
             .arg(&inp_ptr)
             .arg(out_u8)
-            .arg(&(num_blocks as i32))
+            .arg(&num_blocks_i32)
             .launch(cfg)
             .map_err(|e| {
                 incin_core::prelude::Error::Msg(alloc::format!(
@@ -106,7 +108,7 @@ pub(crate) fn launch_dequantize(inp: &CudaStorage) -> Result<CudaStorage> {
     let f = dispatcher.get_function("quant", "dequantize_q8_0")?;
     let stream = b_inp.device.default_stream();
 
-    let n = inp.shape.iter().product::<usize>();
+    let n = ShapeBuf::from_slice(&inp.shape).checked_numel(OperationKind::Storage)?;
     if n % 32 != 0 {
         return Err(incin_core::prelude::Error::Msg(alloc::format!(
             "dequantize requires length multiple of 32, got {}",
@@ -132,8 +134,11 @@ pub(crate) fn launch_dequantize(inp: &CudaStorage) -> Result<CudaStorage> {
         device_id,
     };
 
+    let num_blocks_u32 =
+        crate::cuda::checked_u32(num_blocks, "CUDA dequantization grid dimension")?;
+    let num_blocks_i32 = crate::cuda::checked_i32(num_blocks, "CUDA dequantization block count")?;
     let cfg = cudarc::driver::LaunchConfig {
-        grid_dim: ((num_blocks as u32).div_ceil(256), 1, 1),
+        grid_dim: (num_blocks_u32.div_ceil(256), 1, 1),
         block_dim: (256, 1, 1),
         shared_mem_bytes: 0,
     };
@@ -150,7 +155,7 @@ pub(crate) fn launch_dequantize(inp: &CudaStorage) -> Result<CudaStorage> {
             .launch_builder(&f)
             .arg(&*b_inp.data)
             .arg(&mut out_ptr)
-            .arg(&(num_blocks as i32))
+            .arg(&num_blocks_i32)
             .launch(cfg)
             .map_err(|e| {
                 incin_core::prelude::Error::Msg(alloc::format!(

@@ -2,8 +2,8 @@ use super::alloc_zeroed_bytes;
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-use incin_core::prelude::OperationKind;
 use incin_core::prelude::Result;
+use incin_core::prelude::{OperationKind, ShapeBuf, ShapeError};
 
 /// Packs the `[u32; 21]` params buffer `kernels/shape.cu`'s `shape_op` kernel
 /// expects: `[op_mode, rank, n_elements, out_shape(6), inp_shape(6), aux(6)]`,
@@ -19,15 +19,26 @@ fn prepare_shape_params(
     out_shape: &[usize],
     inp_shape: &[usize],
     aux: &[usize],
-) -> [u32; 21] {
+) -> Result<[u32; 21]> {
+    if out_shape.len() > 6 || inp_shape.len() > 6 || aux.len() > 6 {
+        return Err(ShapeError::InvalidParameter {
+            operation: OperationKind::Storage,
+            parameter: "CUDA shape-kernel rank",
+            value: core::cmp::max(out_shape.len(), core::cmp::max(inp_shape.len(), aux.len())),
+        }
+        .into());
+    }
     let mut params = [0u32; 21];
     params[0] = op_mode;
-    params[1] = core::cmp::max(out_shape.len(), inp_shape.len()) as u32;
+    params[1] = crate::cuda::checked_u32(
+        core::cmp::max(out_shape.len(), inp_shape.len()),
+        "CUDA shape-kernel rank",
+    )?;
     params[2] = n_elements;
 
     let pad_out = 6 - out_shape.len();
     for (i, &s) in out_shape.iter().enumerate() {
-        params[3 + pad_out + i] = s as u32;
+        params[3 + pad_out + i] = crate::cuda::checked_u32(s, "CUDA output dimension")?;
     }
     for i in 0..pad_out {
         params[3 + i] = 1;
@@ -35,7 +46,7 @@ fn prepare_shape_params(
 
     let pad_inp = 6 - inp_shape.len();
     for (i, &s) in inp_shape.iter().enumerate() {
-        params[9 + pad_inp + i] = s as u32;
+        params[9 + pad_inp + i] = crate::cuda::checked_u32(s, "CUDA input dimension")?;
     }
     for i in 0..pad_inp {
         params[9 + i] = 1;
@@ -43,9 +54,14 @@ fn prepare_shape_params(
 
     let pad_aux = 6 - aux.len();
     for (i, &s) in aux.iter().enumerate() {
-        let mut val = s as u32;
+        let mut val = crate::cuda::checked_u32(s, "CUDA shape auxiliary value")?;
         if op_mode == 2 {
-            val += pad_out as u32;
+            val = val
+                .checked_add(crate::cuda::checked_u32(pad_out, "CUDA transpose padding")?)
+                .ok_or(ShapeError::ArithmeticOverflow {
+                    operation: OperationKind::Transpose,
+                    expression: "CUDA transpose axis plus padding",
+                })?;
         }
         params[15 + pad_aux + i] = val;
     }
@@ -53,7 +69,7 @@ fn prepare_shape_params(
         params[15 + i] = 0;
     }
 
-    params
+    Ok(params)
 }
 
 #[cfg(feature = "cuda")]
@@ -92,8 +108,10 @@ fn launch_shape_op(
     let f = dispatcher.get_function("shape", "shape_op")?;
     let stream = t_buf.device.default_stream();
 
-    let n_elements: usize = out_shape.iter().product();
-    let params = prepare_shape_params(op_mode, launch_n as u32, &out_shape, &t.shape, aux);
+    let n_elements: usize = incin_core::prelude::ShapeBuf::from_slice(&(out_shape))
+        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+    let launch_n_u32 = crate::cuda::checked_u32(launch_n, "CUDA shape-op grid dimension")?;
+    let params = prepare_shape_params(op_mode, launch_n_u32, &out_shape, &t.shape, aux)?;
     let params_u8: &[u8] = bytemuck::cast_slice(&params);
     let params_dev = stream.clone_htod(params_u8).map_err(|e| {
         incin_core::prelude::Error::Msg(format!("shape params upload failed: {e:?}"))
@@ -113,7 +131,7 @@ fn launch_shape_op(
     };
 
     let block_size: u32 = 256;
-    let grid_size = (launch_n as u32).div_ceil(block_size);
+    let grid_size = launch_n_u32.div_ceil(block_size);
     let cfg = cudarc::driver::LaunchConfig {
         grid_dim: (grid_size, 1, 1),
         block_dim: (block_size, 1, 1),
@@ -163,7 +181,7 @@ pub(crate) fn launch_narrow(
     out_shape[dim] = len;
     let mut aux = alloc::vec![0usize; t.shape.len()];
     aux[dim] = start;
-    let launch_n = out_shape.iter().product();
+    let launch_n = ShapeBuf::from_slice(&out_shape).checked_numel(OperationKind::Storage)?;
     launch_shape_op(0, t, out_shape, &aux, launch_n)
 }
 
@@ -176,7 +194,7 @@ pub(crate) fn launch_transpose(t: &CudaStorage, dim1: usize, dim2: usize) -> Res
     // that produced out_shape from t.shape.
     let mut aux: Vec<usize> = (0..t.shape.len()).collect();
     aux.swap(dim1, dim2);
-    let launch_n = out_shape.iter().product();
+    let launch_n = ShapeBuf::from_slice(&out_shape).checked_numel(OperationKind::Storage)?;
     launch_shape_op(2, t, out_shape, &aux, launch_n)
 }
 
@@ -185,7 +203,7 @@ pub(crate) fn launch_transpose(t: &CudaStorage, dim1: usize, dim2: usize) -> Res
 /// assumes `target_shape` is already a legal broadcast target of `t.shape`.
 #[cfg(feature = "cuda")]
 pub(crate) fn launch_broadcast(t: &CudaStorage, target_shape: &[usize]) -> Result<CudaStorage> {
-    let launch_n = target_shape.iter().product();
+    let launch_n = ShapeBuf::from_slice(target_shape).checked_numel(OperationKind::Broadcast)?;
     launch_shape_op(3, t, target_shape.to_vec(), &[], launch_n)
 }
 
@@ -200,10 +218,9 @@ pub(crate) fn scatter_into_zeros(
     original_shape: &[usize],
     region_start: &[usize],
     values: &CudaStorage,
-) -> CudaStorage {
-    let launch_n = values.shape.iter().product();
+) -> Result<CudaStorage> {
+    let launch_n = ShapeBuf::from_slice(&values.shape).checked_numel(OperationKind::Storage)?;
     launch_shape_op(1, values, original_shape.to_vec(), region_start, launch_n)
-        .expect("scatter_into_zeros: shape_op paste launch")
 }
 
 #[cfg(feature = "cuda")]
@@ -235,10 +252,17 @@ pub(crate) fn launch_concat(tensors: &[&CudaStorage], dim: usize) -> Result<Cuda
     let stream = first_buf.device.default_stream();
 
     let mut out_shape = tensors[0].shape.to_vec();
-    let out_dim_total: usize = tensors.iter().map(|t| t.shape[dim]).sum();
+    let out_dim_total = tensors.iter().try_fold(0usize, |total, tensor| {
+        total
+            .checked_add(tensor.shape[dim])
+            .ok_or(ShapeError::ArithmeticOverflow {
+                operation: OperationKind::Concat,
+                expression: "CUDA concat output dimension",
+            })
+    })?;
     out_shape[dim] = out_dim_total;
 
-    let total = out_shape.iter().product::<usize>();
+    let total = ShapeBuf::from_slice(&out_shape).checked_numel(OperationKind::Storage)?;
     let mut out_b = CudaBuffer {
         len: total,
         dtype: first_buf.dtype,
@@ -252,26 +276,42 @@ pub(crate) fn launch_concat(tensors: &[&CudaStorage], dim: usize) -> Result<Cuda
         device_id,
     };
 
-    let outer_size: usize = out_shape[0..dim].iter().product();
+    let outer_size: usize = incin_core::prelude::ShapeBuf::from_slice(&(out_shape[0..dim]))
+        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
     let inner_size: usize = if dim + 1 < out_shape.len() {
-        out_shape[dim + 1..].iter().product()
+        ShapeBuf::from_slice(&out_shape[dim + 1..]).checked_numel(OperationKind::Concat)?
     } else {
         1
     };
 
-    let mut current_offset: u32 = 0;
+    let outer_size_u32 = crate::cuda::checked_u32(outer_size, "CUDA concat outer size")?;
+    let out_dim_total_u32 =
+        crate::cuda::checked_u32(out_dim_total, "CUDA concat output dimension")?;
+    let inner_size_u32 = crate::cuda::checked_u32(inner_size, "CUDA concat inner size")?;
+    let mut current_offset = 0usize;
     for t in tensors {
         let t_buf = &*t.buffer;
 
         let in_dim_size = t.shape[dim];
-        let elements = outer_size * in_dim_size * inner_size;
+        let elements = ShapeBuf::from_slice(&[outer_size, in_dim_size, inner_size])
+            .checked_numel(OperationKind::Concat)?;
         if elements == 0 {
-            current_offset += in_dim_size as u32;
+            current_offset =
+                current_offset
+                    .checked_add(in_dim_size)
+                    .ok_or(ShapeError::ArithmeticOverflow {
+                        operation: OperationKind::Concat,
+                        expression: "CUDA concat cumulative offset",
+                    })?;
             continue;
         }
 
         let block_size: u32 = 256;
-        let grid_size = (elements as u32).div_ceil(block_size);
+        let grid_size =
+            crate::cuda::checked_u32(elements, "CUDA concat grid dimension")?.div_ceil(block_size);
+        let in_dim_size_u32 = crate::cuda::checked_u32(in_dim_size, "CUDA concat input dimension")?;
+        let current_offset_u32 =
+            crate::cuda::checked_u32(current_offset, "CUDA concat input offset")?;
         let cfg = cudarc::driver::LaunchConfig {
             grid_dim: (grid_size, 1, 1),
             block_dim: (block_size, 1, 1),
@@ -292,18 +332,24 @@ pub(crate) fn launch_concat(tensors: &[&CudaStorage], dim: usize) -> Result<Cuda
                 .launch_builder(&f)
                 .arg(&in_f32)
                 .arg(&mut out_f32)
-                .arg(&(outer_size as u32))
-                .arg(&(in_dim_size as u32))
-                .arg(&(out_dim_total as u32))
-                .arg(&(inner_size as u32))
-                .arg(&current_offset)
+                .arg(&outer_size_u32)
+                .arg(&in_dim_size_u32)
+                .arg(&out_dim_total_u32)
+                .arg(&inner_size_u32)
+                .arg(&current_offset_u32)
                 .launch(cfg)
                 .map_err(|e| {
                     incin_core::prelude::Error::Msg(format!("concat launch failed: {e:?}"))
                 })?;
         }
 
-        current_offset += in_dim_size as u32;
+        current_offset =
+            current_offset
+                .checked_add(in_dim_size)
+                .ok_or(ShapeError::ArithmeticOverflow {
+                    operation: OperationKind::Concat,
+                    expression: "CUDA concat cumulative offset",
+                })?;
     }
 
     let strides = crate::cpu::stride::contiguous_strides(&out_shape);

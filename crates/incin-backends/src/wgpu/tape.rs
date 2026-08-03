@@ -22,7 +22,7 @@ impl TapeStorage for WgpuStorage {
     }
 
     fn ones_like(&self) -> Result<Self> {
-        let n = self.shape.iter().product::<usize>();
+        let n = crate::wgpu::backend::num_elements(&self.shape)?;
         let data: Vec<f32> = vec![1.0; n];
         let buf = WgpuBuffer::from_slice(&data);
         Ok(WgpuStorage::new(buf, self.shape.to_vec()))
@@ -120,9 +120,14 @@ fn add_wgpu_storage(a: &WgpuStorage, b: &WgpuStorage) -> Result<WgpuStorage> {
         a.shape, b.shape,
         "tape accumulation requires matching shapes"
     );
-    let n = a.shape.iter().product::<usize>();
+    let n = crate::wgpu::backend::num_elements(&a.shape)?;
     let out_buf = WgpuBuffer::new_zeros_for(DTypeId::F32, n, OperationKind::Storage)?;
-    let params = [0, n as u32]; // op_mode 0=add
+    let params = [
+        0,
+        u32::try_from(n).map_err(|_| {
+            incin_core::prelude::Error::Msg("WGPU launch element count exceeds u32".into())
+        })?,
+    ]; // op_mode 0=add
     dispatch::dispatch_binary(&a.buffer, &b.buffer, &out_buf, &params);
     Ok(WgpuStorage::new(out_buf, a.shape.to_vec()))
 }
@@ -160,18 +165,29 @@ fn sum_dim_squeeze(storage: &WgpuStorage, axis: usize) -> Result<WgpuStorage> {
 fn sum_dim_keepdim(storage: &WgpuStorage, axis: usize) -> Result<WgpuStorage> {
     let mut out_shape = storage.shape.to_vec();
     out_shape[axis] = 1;
-    let total: usize = out_shape.iter().product();
+    let total: usize = incin_core::prelude::ShapeBuf::from_slice(&(out_shape))
+        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
     let out_buf = WgpuBuffer::new_zeros_for(DTypeId::F32, total, OperationKind::Storage)?;
 
-    let inner_stride: usize = storage.shape[axis + 1..].iter().product();
+    let inner_stride: usize =
+        incin_core::prelude::ShapeBuf::from_slice(&(storage.shape[axis + 1..]))
+            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
 
+    let axis_len = u32::try_from(storage.shape[axis]).map_err(|_| {
+        incin_core::prelude::Error::Msg("WGPU reduction axis length exceeds u32".into())
+    })?;
+    let inner_stride = u32::try_from(inner_stride)
+        .map_err(|_| incin_core::prelude::Error::Msg("WGPU reduction stride exceeds u32".into()))?;
+    let total = u32::try_from(total).map_err(|_| {
+        incin_core::prelude::Error::Msg("WGPU reduction output length exceeds u32".into())
+    })?;
     dispatch::dispatch_reduce_dim(
         &storage.buffer,
         &out_buf,
         0, // sum
-        storage.shape[axis] as u32,
-        inner_stride as u32,
-        total as u32,
+        axis_len,
+        inner_stride,
+        total,
     );
     Ok(WgpuStorage::new(out_buf, out_shape))
 }

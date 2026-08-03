@@ -1,0 +1,53 @@
+    Checking incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+warning: unreachable pattern
+   --> crates/incin-backends/src/external/candle/backend.rs:140:13
+    |
+140 |             other => Err(anyhow::anyhow!("Unsupported Candle dtype for to_bytes: {:?}", other).into()),
+    |             ^^^^^ no value can reach this
+    |
+note: multiple earlier patterns match some of the same values
+   --> crates/incin-backends/src/external/candle/backend.rs:140:13
+    |
+ 98 |             candle_core::DType::F32 => {
+    |             ----------------------- matches some of the same values
+...
+104 |             candle_core::DType::F64 => {
+    |             ----------------------- matches some of the same values
+...
+110 |             candle_core::DType::U8 => {
+    |             ---------------------- matches some of the same values
+...
+116 |             candle_core::DType::U32 => {
+    |             ----------------------- matches some of the same values
+...
+140 |             other => Err(anyhow::anyhow!("Unsupported Candle dtype for to_bytes: {:?}", other).into()),
+    |             ^^^^^ ...and 3 other patterns collectively make this unreachable
+    = note: `#[warn(unreachable_patterns)]` (part of `#[warn(unused)]`) on by default
+
+warning: unreachable pattern
+   --> crates/incin-backends/src/external/candle/backend.rs:216:13
+    |
+216 |             other => Err(anyhow::anyhow!("Unsupported Candle dtype for from_bytes: {:?}", other).into()),
+    |             ^^^^^ no value can reach this
+    |
+note: multiple earlier patterns match some of the same values
+   --> crates/incin-backends/src/external/candle/backend.rs:216:13
+    |
+164 |             candle_core::DType::F32 => {
+    |             ----------------------- matches some of the same values
+...
+172 |             candle_core::DType::F64 => {
+    |             ----------------------- matches some of the same values
+...
+180 |             candle_core::DType::U8 => {
+    |             ---------------------- matches some of the same values
+...
+184 |             candle_core::DType::U32 => {
+    |             ----------------------- matches some of the same values
+...
+216 |             other => Err(anyhow::anyhow!("Unsupported Candle dtype for from_bytes: {:?}", other).into()),
+    |             ^^^^^ ...and 3 other patterns collectively make this unreachable
+
+warning: `incin-backends` (lib) generated 2 warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.67s

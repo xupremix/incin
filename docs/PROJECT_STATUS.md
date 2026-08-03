@@ -27,6 +27,7 @@ verified product capability.
 | `incin` CPU feature build | **Complete and dynamically verified** for the archived CPU check and package tests | This does not prove the canonical descriptor architecture | Stable end-user API | FND-000 CPU check and test outputs | FND-004, then FND-005 |
 | Workspace suite | **Dynamically verified** by the post-containment workspace run; no historical aggregate count is reused | Formatting remains non-clean under the current rustfmt baseline | Workspace validation | `fnd000-test-workspace-after-fixes.txt` | Per-task validation |
 | Stable public facade | **Complete and dynamically verified** for the FND-001 allow-list and isolated consumer contracts | Semver comparison tooling is blocked by its forced all-feature rustdoc build; see FND-001 evidence | Stable root/prelude plus explicit `backend_authoring`, `experimental`, and feature-gated `test_utils` tiers | FND-001 public API, compile-contract, feature-matrix, Clippy, test, and rustdoc outputs | FND-002 invariant opacity |
+| Invariant-bearing values and allocation arithmetic | **Complete and dynamically verified** for the FND-002 opacity, checked-construction, serialization, feature, compile-contract, Clippy, package, workspace, doctest, and rustdoc gates | The workspace-wide formatting baseline still reports pre-existing drift outside the task diff; accelerator execution remains hardware-blocked | Stable values plus backend-authoring/experimental internals | `audit-evidence/FND-002/` | FND-003 typed failure and rollback contracts |
 | CPU eager tensor execution | **Implemented but not yet verified against the canonical contract** | Stable tensor methods still depend on legacy operation-family traits | Stable CPU surface | Source audit and CPU package tests | FND-004, then FND-005 |
 | Typed descriptor execution | **Partial** descriptor validation and execution | Descriptor coverage is incomplete and CPU adapters call legacy traits | Backend-authoring/experimental internals | Descriptor tests and source audit | FND-004 |
 | Compiled execution | **Structural prototype** for capture, plans, and artifacts | No validated executable/run path | `experimental::compiled`, opt-in `compiled` feature | Containment test and compiled feature check | Deferred compiled CPU vertical slice |
@@ -41,5 +42,5 @@ verified product capability.
 
 FND-000 through FND-005 are executed in dependency order. A later foundation
 task is not started until the prior task's acceptance gate is truthfully met.
-FND-000 and FND-001 have passed their archived acceptance gates; FND-002 is
+FND-000 through FND-002 have passed their archived acceptance gates; FND-003 is
 the next active task.

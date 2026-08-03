@@ -5,7 +5,7 @@ use crate::external::candle::convert::to_candle_dtype;
 use crate::external::*;
 
 impl<T: incin_core::prelude::DType, D: incin_core::prelude::Device>
-    incin_core::prelude::TensorOps<Self> for CandleBackend<T, D>
+    incin_core::backend_authoring::TensorOps<Self> for CandleBackend<T, D>
 {
     // Candle has native equivalents for most of these, but this adapter does
     // not route them yet. Declaring the gap here keeps it visible instead of
@@ -79,7 +79,8 @@ impl<T: incin_core::prelude::DType, D: incin_core::prelude::Device>
                 .contiguous()
                 .map_err(|e| anyhow::anyhow!(e))?;
 
-            let batch_size: usize = out_shape.iter().product();
+            let batch_size: usize = incin_core::prelude::ShapeBuf::from_slice(&(out_shape))
+                .checked_numel(incin_core::prelude::OperationKind::Storage)?;
             let lhs_flat = lhs_b
                 .reshape((batch_size, m, k))
                 .map_err(|e| anyhow::anyhow!(e))?;

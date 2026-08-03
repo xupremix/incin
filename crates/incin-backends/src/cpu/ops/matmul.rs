@@ -28,8 +28,7 @@
 //! `ops/shape_ops.rs`'s single `TensorOps` impl block calls into
 //! `matmul_impl`/`batched_matmul_impl` for its `matmul` method.
 
-use incin_core::prelude::Error;
-use incin_core::prelude::Result;
+use incin_core::prelude::{Error, OperationKind, Result, ShapeBuf};
 
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
 use crate::cpu::stride;
@@ -296,7 +295,8 @@ fn matmul_forward(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStorage> {
     }
 
     let (m, k, n) = (lhs.shape[0], lhs.shape[1], rhs.shape[1]);
-    let mut out_data = vec![0f32; m * n];
+    let out_total = ShapeBuf::from_slice(&[m, n]).checked_numel(OperationKind::MatMul)?;
+    let mut out_data = vec![0f32; out_total];
     gemm(
         m,
         k,

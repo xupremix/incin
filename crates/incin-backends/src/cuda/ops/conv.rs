@@ -15,21 +15,49 @@ use super::alloc_zeroed_bytes;
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-use incin_core::prelude::OperationKind;
 use incin_core::prelude::Result;
+use incin_core::prelude::{OperationKind, ShapeBuf, ShapeError};
 
 /// `L_out`/`H_out`/`W_out` output-size formula, matching
-/// `cpu/ops/conv.rs::out_size` exactly (same saturating arithmetic).
+/// Uses checked arithmetic and rejects invalid zero parameters.
 pub(crate) fn out_size(
     len: usize,
     kernel_size: usize,
     stride: usize,
     padding: usize,
     dilation: usize,
-) -> usize {
-    let padded = len + 2 * padding;
-    let effective_kernel = dilation * kernel_size.saturating_sub(1) + 1;
-    padded.saturating_sub(effective_kernel) / stride + 1
+) -> Result<usize> {
+    if kernel_size == 0 || stride == 0 || dilation == 0 {
+        return Err(ShapeError::InvalidParameter {
+            operation: OperationKind::Conv2d,
+            parameter: "kernel, stride, and dilation must be nonzero",
+            value: 0,
+        }
+        .into());
+    }
+    let padded = padding
+        .checked_mul(2)
+        .and_then(|twice| len.checked_add(twice))
+        .ok_or(ShapeError::ArithmeticOverflow {
+            operation: OperationKind::Conv2d,
+            expression: "CUDA convolution padded input dimension",
+        })?;
+    let effective_kernel = dilation
+        .checked_mul(kernel_size - 1)
+        .and_then(|span| span.checked_add(1))
+        .ok_or(ShapeError::ArithmeticOverflow {
+            operation: OperationKind::Conv2d,
+            expression: "CUDA convolution effective kernel",
+        })?;
+    if effective_kernel > padded {
+        return Err(ShapeError::InvalidParameter {
+            operation: OperationKind::Conv2d,
+            parameter: "effective kernel exceeds padded input",
+            value: effective_kernel,
+        }
+        .into());
+    }
+    Ok((padded - effective_kernel) / stride + 1)
 }
 
 /// The "natural" (no `output_padding`) `conv_transpose2d` output size,
@@ -40,10 +68,41 @@ pub(crate) fn natural_transpose_out_size(
     stride: usize,
     padding: usize,
     dilation: usize,
-) -> usize {
-    let unstrided = len.saturating_sub(1) * stride;
-    let effective_kernel = dilation * kernel_size.saturating_sub(1);
-    (unstrided + effective_kernel + 1).saturating_sub(2 * padding)
+) -> Result<usize> {
+    if len == 0 || kernel_size == 0 || stride == 0 || dilation == 0 {
+        return Err(ShapeError::InvalidParameter {
+            operation: OperationKind::Conv2d,
+            parameter: "transposed-convolution dimensions must be nonzero",
+            value: 0,
+        }
+        .into());
+    }
+    let unpadded = (len - 1)
+        .checked_mul(stride)
+        .and_then(|span| {
+            dilation
+                .checked_mul(kernel_size - 1)
+                .and_then(|kernel| span.checked_add(kernel))
+        })
+        .and_then(|span| span.checked_add(1))
+        .ok_or(ShapeError::ArithmeticOverflow {
+            operation: OperationKind::Conv2d,
+            expression: "CUDA transposed-convolution output dimension",
+        })?;
+    let twice_padding = padding
+        .checked_mul(2)
+        .ok_or(ShapeError::ArithmeticOverflow {
+            operation: OperationKind::Conv2d,
+            expression: "CUDA transposed-convolution padding",
+        })?;
+    unpadded.checked_sub(twice_padding).ok_or_else(|| {
+        ShapeError::InvalidParameter {
+            operation: OperationKind::Conv2d,
+            parameter: "transposed-convolution padding",
+            value: padding,
+        }
+        .into()
+    })
 }
 
 #[cfg(feature = "cuda")]
@@ -82,13 +141,17 @@ fn alloc_zeroed(
 }
 
 #[cfg(feature = "cuda")]
-fn launch_cfg(n: usize) -> cudarc::driver::LaunchConfig {
+fn launch_cfg(n: usize) -> Result<cudarc::driver::LaunchConfig> {
     let block_size: u32 = 256;
-    cudarc::driver::LaunchConfig {
-        grid_dim: ((n as u32).div_ceil(block_size), 1, 1),
+    Ok(cudarc::driver::LaunchConfig {
+        grid_dim: (
+            crate::cuda::checked_u32(n, "CUDA convolution grid dimension")?.div_ceil(block_size),
+            1,
+            1,
+        ),
         block_dim: (block_size, 1, 1),
         shared_mem_bytes: 0,
-    }
+    })
 }
 
 /// Unfolds `t: [B, C, H, W]` into `[B, C*Kh*Kw, H_out*W_out]` (channel-major
@@ -111,14 +174,16 @@ pub(crate) fn launch_im2col_2d(
     let stream = t_buf.device.default_stream();
 
     let (b, c, h, w) = (t.shape[0], t.shape[1], t.shape[2], t.shape[3]);
-    let h_out = out_size(h, kh, stride, padding, dilation);
-    let w_out = out_size(w, kw, stride, padding, dilation);
+    let h_out = out_size(h, kh, stride, padding, dilation)?;
+    let w_out = out_size(w, kw, stride, padding, dilation)?;
     let out_shape: Vec<usize> = alloc::vec![b, c * kh * kw, h_out * w_out];
-    let out_total: usize = out_shape.iter().product();
-    let thread_total = b * c * h_out * w_out;
+    let out_total: usize = incin_core::prelude::ShapeBuf::from_slice(&(out_shape))
+        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+    let thread_total =
+        ShapeBuf::from_slice(&[b, c, h_out, w_out]).checked_numel(OperationKind::Conv2d)?;
 
     let mut out_b = alloc_zeroed(&stream, &t_buf.device, device_id, t_buf.dtype, out_total)?;
-    let cfg = launch_cfg(thread_total);
+    let cfg = launch_cfg(thread_total)?;
     unsafe {
         let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();
         let out_u8: &mut cudarc::driver::CudaSlice<u8> =
@@ -184,8 +249,10 @@ pub(crate) fn launch_col2im_2d(
         target_shape[2],
         target_shape[3],
     );
-    let out_total = b * c * h_in * w_in;
-    let thread_total = b * c * h_out * w_out;
+    let out_total =
+        ShapeBuf::from_slice(&[b, c, h_in, w_in]).checked_numel(OperationKind::Conv2d)?;
+    let thread_total =
+        ShapeBuf::from_slice(&[b, c, h_out, w_out]).checked_numel(OperationKind::Conv2d)?;
 
     let mut out_b = alloc_zeroed(
         &stream,
@@ -194,7 +261,7 @@ pub(crate) fn launch_col2im_2d(
         cols_buf.dtype,
         out_total,
     )?;
-    let cfg = launch_cfg(thread_total);
+    let cfg = launch_cfg(thread_total)?;
     unsafe {
         let col_f32 = cols_buf.data.transmute::<f32>(cols_buf.len).unwrap();
         let out_u8: &mut cudarc::driver::CudaSlice<u8> =
@@ -248,13 +315,14 @@ pub(crate) fn launch_im2col_1d(
     let stream = t_buf.device.default_stream();
 
     let (b, c, l) = (t.shape[0], t.shape[1], t.shape[2]);
-    let l_out = out_size(l, k, stride, padding, dilation);
+    let l_out = out_size(l, k, stride, padding, dilation)?;
     let out_shape: Vec<usize> = alloc::vec![b, c * k, l_out];
-    let out_total: usize = out_shape.iter().product();
-    let thread_total = b * c * l_out;
+    let out_total: usize = incin_core::prelude::ShapeBuf::from_slice(&(out_shape))
+        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+    let thread_total = ShapeBuf::from_slice(&[b, c, l_out]).checked_numel(OperationKind::Conv1d)?;
 
     let mut out_b = alloc_zeroed(&stream, &t_buf.device, device_id, t_buf.dtype, out_total)?;
-    let cfg = launch_cfg(thread_total);
+    let cfg = launch_cfg(thread_total)?;
     unsafe {
         let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();
         let out_u8: &mut cudarc::driver::CudaSlice<u8> =
@@ -305,8 +373,8 @@ pub(crate) fn launch_col2im_1d(
     let stream = cols_buf.device.default_stream();
 
     let (b, c, l_in) = (target_shape[0], target_shape[1], target_shape[2]);
-    let out_total = b * c * l_in;
-    let thread_total = b * c * l_out;
+    let out_total = ShapeBuf::from_slice(&[b, c, l_in]).checked_numel(OperationKind::Conv1d)?;
+    let thread_total = ShapeBuf::from_slice(&[b, c, l_out]).checked_numel(OperationKind::Conv1d)?;
 
     let mut out_b = alloc_zeroed(
         &stream,
@@ -315,7 +383,7 @@ pub(crate) fn launch_col2im_1d(
         cols_buf.dtype,
         out_total,
     )?;
-    let cfg = launch_cfg(thread_total);
+    let cfg = launch_cfg(thread_total)?;
     unsafe {
         let col_f32 = cols_buf.data.transmute::<f32>(cols_buf.len).unwrap();
         let out_u8: &mut cudarc::driver::CudaSlice<u8> =

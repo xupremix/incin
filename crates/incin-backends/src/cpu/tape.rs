@@ -196,7 +196,7 @@ fn add_cpu_storage(a: &CpuStorage, b: &CpuStorage) -> CpuStorage {
 
     macro_rules! add_variant {
         ($variant:ident, $a_vec:expr, $b_vec:expr) => {{
-            let total: usize = a.shape.iter().product();
+            let total: usize = crate::cpu::stride::validated_numel(&(a.shape));
             let mut out = Vec::with_capacity(total);
             let mut idx = vec![0usize; a.shape.len()];
             for _ in 0..total {
@@ -284,13 +284,13 @@ fn sum_dim_squeeze(storage: &CpuStorage, axis: usize) -> CpuStorage {
 fn sum_dim_keepdim(storage: &CpuStorage, axis: usize) -> CpuStorage {
     let mut out_shape = storage.shape.to_vec();
     out_shape[axis] = 1;
-    let total: usize = out_shape.iter().product();
+    let total: usize = crate::cpu::stride::validated_numel(&(out_shape));
 
     macro_rules! reduce_variant {
         ($variant:ident, $to_ty:expr) => {{
             let mut out = vec![Default::default(); total];
             let mut idx = vec![0usize; storage.shape.len()];
-            let src_total: usize = storage.shape.iter().product();
+            let src_total: usize = crate::cpu::stride::validated_numel(&(storage.shape));
             for _ in 0..src_total {
                 let mut out_idx = idx.clone();
                 out_idx[axis] = 0;

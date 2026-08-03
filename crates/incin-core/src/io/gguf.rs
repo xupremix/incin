@@ -99,7 +99,9 @@ impl GgufValue {
             Self::Bool(v) => w.write_all(&[*v as u8])?,
             Self::Str(s) => {
                 let bytes = s.as_bytes();
-                w.write_all(&(bytes.len() as u64).to_le_bytes())?;
+                let len = u64::try_from(bytes.len())
+                    .map_err(|_| Error::Msg("GGUF string is too large for the format".into()))?;
+                w.write_all(&len.to_le_bytes())?;
                 w.write_all(bytes)?;
             }
             Self::Uint64(v) => w.write_all(&v.to_le_bytes())?,
@@ -207,7 +209,8 @@ impl<'a, B: Backend, M: StateDict<B>> GgufExporter<'a, B, M> {
 
         let mut mapped_tensors = BTreeMap::new();
         self.module.state_dict("", &mut mapped_tensors);
-        let tensor_count = mapped_tensors.len() as u64;
+        let tensor_count = u64::try_from(mapped_tensors.len())
+            .map_err(|_| Error::Msg("tensor count is too large for the GGUF format".into()))?;
 
         // Auto-set file_type metadata
         let mut final_metadata = self.metadata.clone();
@@ -215,7 +218,8 @@ impl<'a, B: Backend, M: StateDict<B>> GgufExporter<'a, B, M> {
             "general.file_type",
             GgufValue::Uint32(self.quant.file_type_id()),
         );
-        let metadata_count = final_metadata.entries.len() as u64;
+        let metadata_count = u64::try_from(final_metadata.entries.len())
+            .map_err(|_| Error::Msg("metadata count is too large for the GGUF format".into()))?;
 
         file.write_all(&tensor_count.to_le_bytes())?;
         file.write_all(&metadata_count.to_le_bytes())?;
@@ -223,7 +227,9 @@ impl<'a, B: Backend, M: StateDict<B>> GgufExporter<'a, B, M> {
         // 2. Write KV metadata entries
         for (key, val) in &final_metadata.entries {
             let key_bytes = key.as_bytes();
-            file.write_all(&(key_bytes.len() as u64).to_le_bytes())?;
+            let key_len = u64::try_from(key_bytes.len())
+                .map_err(|_| Error::Msg("GGUF metadata key is too large".into()))?;
+            file.write_all(&key_len.to_le_bytes())?;
             file.write_all(key_bytes)?;
             val.write_binary(&mut file)?;
         }
@@ -235,7 +241,8 @@ impl<'a, B: Backend, M: StateDict<B>> GgufExporter<'a, B, M> {
 
         for (name, var) in mapped_tensors {
             let shape = B::shape::<B::FloatElem>(var.inner());
-            let numel: usize = shape.iter().product();
+            let numel = crate::shapes::ShapeBuf::from_slice(&shape)
+                .checked_numel(crate::shapes::error::OperationKind::Storage)?;
 
             // Q8_0 quantizes in blocks of 32 elements; tensors that don't
             // divide evenly (e.g. 1D biases/norm weights) are kept at F32,
@@ -256,10 +263,18 @@ impl<'a, B: Backend, M: StateDict<B>> GgufExporter<'a, B, M> {
                     QuantScheme::F32.ggml_type_id(),
                 )
             };
-            let n_dims = shape.len() as u32;
+            let n_dims = u32::try_from(shape.len())
+                .map_err(|_| Error::Msg("tensor rank is too large for GGUF".into()))?;
 
             // GGUF stores dimensions in reverse (row-major contiguous first)
-            let mut gguf_shape: Vec<u64> = shape.iter().rev().map(|&d| d as u64).collect();
+            let mut gguf_shape: Vec<u64> = shape
+                .iter()
+                .rev()
+                .map(|&dimension| {
+                    u64::try_from(dimension)
+                        .map_err(|_| Error::Msg("tensor dimension is too large for GGUF".into()))
+                })
+                .collect::<Result<_>>()?;
             if gguf_shape.is_empty() {
                 gguf_shape.push(1);
             }
@@ -267,7 +282,8 @@ impl<'a, B: Backend, M: StateDict<B>> GgufExporter<'a, B, M> {
             // Pad current payload to 32-byte alignment
             let padding = (alignment - (payload_bytes.len() % alignment)) % alignment;
             payload_bytes.extend(core::iter::repeat_n(0u8, padding));
-            let data_offset = payload_bytes.len() as u64;
+            let data_offset = u64::try_from(payload_bytes.len())
+                .map_err(|_| Error::Msg("GGUF payload offset exceeds the format".into()))?;
 
             payload_bytes.extend(bytes);
 
@@ -277,7 +293,9 @@ impl<'a, B: Backend, M: StateDict<B>> GgufExporter<'a, B, M> {
         // Write Tensor Information Table
         for (name, n_dims, shape, ggml_type, offset) in tensor_headers {
             let name_bytes = name.as_bytes();
-            file.write_all(&(name_bytes.len() as u64).to_le_bytes())?;
+            let name_len = u64::try_from(name_bytes.len())
+                .map_err(|_| Error::Msg("GGUF tensor name is too large".into()))?;
+            file.write_all(&name_len.to_le_bytes())?;
             file.write_all(name_bytes)?;
             file.write_all(&n_dims.to_le_bytes())?;
             for dim in shape {
@@ -289,7 +307,9 @@ impl<'a, B: Backend, M: StateDict<B>> GgufExporter<'a, B, M> {
 
         // Write 32-byte alignment padding before binary payload
         let current_pos = file.stream_position()?;
-        let header_padding = (alignment - (current_pos as usize % alignment)) % alignment;
+        let current_pos = usize::try_from(current_pos)
+            .map_err(|_| Error::Msg("GGUF header position does not fit this platform".into()))?;
+        let header_padding = (alignment - (current_pos % alignment)) % alignment;
         file.write_all(&vec![0u8; header_padding])?;
 
         // 4. Write Tensor Binary Payload

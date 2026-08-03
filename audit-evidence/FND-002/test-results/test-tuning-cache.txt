@@ -1,0 +1,28 @@
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+   Compiling incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.22s
+     Running tests/tuning_cache.rs (target/debug/deps/tuning_cache-047c75b519cdd0aa)
+
+running 10 tests
+test direct_deserialization_revalidates_keys_and_records ... ok
+test measured_records_require_real_measurement_provenance ... ok
+test static_and_dyn_keys_have_parity_and_runtime_projection_checks_backend ... ok
+test atomic_round_trip_preserves_provenance_and_legal_set_guard ... ok
+test malformed_schema_and_invalid_records_are_quarantined ... ok
+test unknown_fields_are_tolerated_without_weakening_checksum_validation ... ok
+test byte_bound_evicts_old_records_and_rejects_an_oversized_winner ... ok
+test concurrent_process_views_merge_under_the_file_lock ... ok
+test count_and_age_bounds_evict_deterministically ... ok
+    Checking incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Checking incin-backends-tests v0.0.0 (/home/xupremix/Projects/incin/target/tests/trybuild/incin-backends)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.05s
+
+
+test tests/tuning_cache_compile_fail/backend_mismatch.rs ... ok
+
+
+test static_cache_contracts_are_compile_checked ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.20s
+

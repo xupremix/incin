@@ -48,8 +48,7 @@ fn test_backward_under_nan_checking_succeeds() -> Result<()> {
 
     let pred = model.forward(x.clone())?;
     let loss = pred.mse_loss(&y)?;
-    let raw_grads = check_gradients(|| CpuBackendImpl::backward::<f32>(loss.inner()))?;
-    let grads = incin::Gradients(raw_grads);
+    let grads = check_gradients(|| loss.backward())?;
     optim.step(&grads)?;
 
     Ok(())

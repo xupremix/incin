@@ -230,7 +230,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         &self,
     ) -> Result<Tensor<T::Output, B, K, G>> {
         let in_shape_vec = S::dims(&self._shape);
-        let out_shape_vec = T::calculate_shape(in_shape_vec.as_ref());
+        let out_shape_vec = T::calculate_shape(in_shape_vec.as_ref())?;
         let inner = self.under_grad_mode(|| B::reshape(&self.inner, &out_shape_vec))?;
         Tensor::from_parts(
             inner,
@@ -320,8 +320,12 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         let new_dims = S2::dims(&new_shape_field);
 
         // Runtime boundaries checking
-        let source_numel = S::numel(&self._shape);
-        let target_numel = S2::numel(&new_shape_field);
+        let source_numel =
+            S::checked_numel(&self._shape, crate::shapes::error::OperationKind::Reshape)?;
+        let target_numel = S2::checked_numel(
+            &new_shape_field,
+            crate::shapes::error::OperationKind::Reshape,
+        )?;
         if source_numel != target_numel {
             return Err(crate::err::Error::ShapeMismatch {
                 op: "try_reshape",
@@ -438,12 +442,18 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         }
 
         let bytes = B::to_bytes(&self.inner)?;
-        let num_elements = S::numel(&self._shape);
+        let num_elements =
+            S::checked_numel(&self._shape, crate::shapes::error::OperationKind::Storage)?;
         let dtype = K::to_incin(&self._dtype);
 
         if core::any::TypeId::of::<E>() == core::any::TypeId::of::<bool>() {
             let elem_size = dtype.element_size();
-            let expected_bytes = num_elements * elem_size;
+            let expected_bytes = num_elements.checked_mul(elem_size).ok_or(
+                crate::shapes::error::ShapeError::ArithmeticOverflow {
+                    operation: crate::shapes::error::OperationKind::Storage,
+                    expression: "element count * scalar byte width",
+                },
+            )?;
             if bytes.len() != expected_bytes {
                 return Err(crate::err::Error::Msg(alloc::format!(
                     "Size mismatch when converting to vec. Tensor dtype bytes: {}, expected: {}",

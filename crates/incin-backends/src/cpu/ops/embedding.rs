@@ -50,7 +50,7 @@ pub(crate) fn embedding_impl<T: DType, D: incin_core::prelude::Device, K: DType,
     let vocab_size = w.shape[0];
     let hidden_size = w.shape[1];
 
-    let total_indices: usize = t.shape.iter().product();
+    let total_indices: usize = crate::cpu::stride::checked_numel(&(t.shape))?;
     let mut idx = vec![0usize; t.shape.len()];
 
     // Resolved row index (into `w`) for each of the `total_indices` gathered
@@ -83,7 +83,7 @@ pub(crate) fn embedding_impl<T: DType, D: incin_core::prelude::Device, K: DType,
     out_shape.push(hidden_size);
     let out = CpuStorage::from_contiguous(CpuBuffer::F32(out_vals), out_shape);
 
-    let w_total: usize = w.shape.iter().product();
+    let w_total: usize = crate::cpu::stride::checked_numel(&(w.shape))?;
     let t_shape = t.shape.to_vec();
     let (w_id, out_id) = (w.id, out.id);
     let w_shape_for_backward = w.shape.to_vec();

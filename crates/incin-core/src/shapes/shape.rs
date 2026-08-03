@@ -102,9 +102,36 @@ pub fn field_from_dims<S: Shape>(
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 /// Bounded and verified element count (`SEC-011`).
-pub struct CheckedNumel(pub usize);
+pub struct CheckedNumel(usize);
 
 impl CheckedNumel {
+    /// Computes and validates an element count for `dims`.
+    pub fn from_dims(
+        operation: crate::shapes::error::OperationKind,
+        dims: &[usize],
+        limits: &crate::io::limits::ResourceLimits,
+    ) -> Result<Self, crate::shapes::error::ShapeError> {
+        if dims.len() > limits.max_rank {
+            return Err(crate::shapes::error::ShapeError::RankMismatch {
+                operation,
+                expected: crate::shapes::error::RankExpectation::AtMost(limits.max_rank),
+                actual: dims.len(),
+            });
+        }
+        if let Some(&dimension) = dims.iter().find(|&&dimension| {
+            u64::try_from(dimension).map_or(true, |value| value > limits.max_dimension)
+        }) {
+            return Err(crate::shapes::error::ShapeError::InvalidParameter {
+                operation,
+                parameter: "dimension",
+                value: dimension,
+            });
+        }
+        crate::shapes::ShapeBuf::from_slice(dims)
+            .checked_numel(operation)
+            .map(Self)
+    }
+
     #[inline]
     pub fn get(self) -> usize {
         self.0
@@ -113,9 +140,27 @@ impl CheckedNumel {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 /// Bounded and verified allocation byte length (`SEC-011`).
-pub struct CheckedByteLen(pub usize);
+pub struct CheckedByteLen(usize);
 
 impl CheckedByteLen {
+    /// Computes and validates the dense byte length for `dims` and `dtype`.
+    pub fn from_dims(
+        operation: crate::shapes::error::OperationKind,
+        dims: &[usize],
+        dtype: crate::tensor::dtype::DTypeId,
+        limits: &crate::io::limits::ResourceLimits,
+    ) -> Result<Self, crate::shapes::error::ShapeError> {
+        let numel = CheckedNumel::from_dims(operation, dims, limits)?;
+        let bytes = dtype.size_bytes(numel.get(), operation)?;
+        if u64::try_from(bytes).map_or(true, |bytes| bytes > limits.max_tensor_bytes) {
+            return Err(crate::shapes::error::ShapeError::ArithmeticOverflow {
+                operation,
+                expression: "tensor byte length exceeds resource limit",
+            });
+        }
+        Ok(Self(bytes))
+    }
+
     #[inline]
     pub fn get(self) -> usize {
         self.0
@@ -127,24 +172,7 @@ pub fn checked_numel_from_dims(
     dims: &[usize],
     limits: &crate::io::limits::ResourceLimits,
 ) -> Result<CheckedNumel, crate::shapes::error::ShapeError> {
-    if limits.check_shape(dims).is_err() {
-        return Err(crate::shapes::error::ShapeError::InvalidParameter {
-            operation: crate::shapes::error::OperationKind::Reshape,
-            parameter: "rank",
-            value: dims.len(),
-        });
-    }
-
-    let mut total: usize = 1;
-    for &d in dims {
-        total = total
-            .checked_mul(d)
-            .ok_or(crate::shapes::error::ShapeError::ArithmeticOverflow {
-                operation: crate::shapes::error::OperationKind::Reshape,
-                expression: "shape product overflow",
-            })?;
-    }
-    Ok(CheckedNumel(total))
+    CheckedNumel::from_dims(crate::shapes::error::OperationKind::Reshape, dims, limits)
 }
 
 /// Safely computes byte allocation length using dtype block metrics and limits (`SEC-011`).
@@ -153,15 +181,12 @@ pub fn checked_byte_len_from_dims(
     dtype: crate::tensor::dtype::DTypeId,
     limits: &crate::io::limits::ResourceLimits,
 ) -> Result<CheckedByteLen, crate::shapes::error::ShapeError> {
-    let numel = checked_numel_from_dims(dims, limits)?;
-    let bytes = dtype.size_bytes(numel.get(), crate::shapes::error::OperationKind::Reshape)?;
-    if (bytes as u64) > limits.max_tensor_bytes {
-        return Err(crate::shapes::error::ShapeError::ArithmeticOverflow {
-            operation: crate::shapes::error::OperationKind::Reshape,
-            expression: "tensor byte length exceeds limit",
-        });
-    }
-    Ok(CheckedByteLen(bytes))
+    CheckedByteLen::from_dims(
+        crate::shapes::error::OperationKind::Reshape,
+        dims,
+        dtype,
+        limits,
+    )
 }
 
 /// A shape with runtime-accessible dimension information (rank, total elements, per-axis sizes).
@@ -172,8 +197,21 @@ pub fn checked_byte_len_from_dims(
 pub trait DynShape: Shape {
     /// Returns the number of dimensions.
     fn rank(shape: &Self::Field) -> usize;
-    /// Returns the total element count (product of all dimension sizes).
-    fn numel(shape: &Self::Field) -> usize;
+    /// Returns the total element count (product of all dimension sizes) after
+    /// checking for arithmetic overflow.
+    fn checked_numel(
+        shape: &Self::Field,
+        operation: crate::shapes::error::OperationKind,
+    ) -> Result<usize, crate::shapes::error::ShapeError> {
+        crate::shapes::ShapeBuf::from_slice(Self::dims(shape).as_ref()).checked_numel(operation)
+    }
+
+    /// Returns the total element count for shape metadata that has already
+    /// crossed a checked tensor-construction boundary.
+    fn numel(shape: &Self::Field) -> usize {
+        Self::checked_numel(shape, crate::shapes::error::OperationKind::Storage)
+            .expect("validated tensor shape must have a representable element count")
+    }
 }
 
 /// Appends dimension `D` to the end of `Self`'s shape.
@@ -280,12 +318,6 @@ impl DynShape for Dyn {
     fn rank(shape: &Self::Field) -> usize {
         shape.len()
     }
-
-    #[inline(always)]
-    /// Returns the total element count.
-    fn numel(shape: &Self::Field) -> usize {
-        shape.iter().product()
-    }
 }
 
 impl<D: Dim> AppendDim<D> for Dyn {
@@ -337,11 +369,6 @@ macro_rules! impl_shape_for_tuple {
                 ($n)
             }
 
-            #[inline(always)]
-            /// Returns the total element count.
-            fn numel(shape: &Self::Field) -> usize {
-                1 $( * shape.$idx.size())*
-            }
         }
 
         impl<$($name: Unsigned + Dim, )*> ConstShape for ($($name, )*) {
@@ -382,11 +409,6 @@ macro_rules! impl_shape_for_tuple {
                 ($n)
             }
 
-            #[inline(always)]
-            /// Returns the total element count.
-            fn numel(shape: &Self::Field) -> usize {
-                1 $( * shape[$idx])*
-            }
         }
         impl PartialDynShape for [usize; ($n)] {
             /// The compile-time-known number of dimensions.
@@ -442,12 +464,6 @@ impl DynShape for () {
     /// Returns the number of dimensions.
     fn rank(_: &Self::Field) -> usize {
         0
-    }
-
-    #[inline(always)]
-    /// Returns the total element count.
-    fn numel(_: &Self::Field) -> usize {
-        1
     }
 }
 
@@ -525,12 +541,6 @@ impl<D: Dim> DynShape for Vec<D> {
     fn rank(shape: &Self::Field) -> usize {
         shape.len()
     }
-
-    #[inline(always)]
-    /// Returns the total element count.
-    fn numel(shape: &Self::Field) -> usize {
-        shape.iter().map(|d| d.size()).product()
-    }
 }
 
 /// The 0-dimensional (scalar) shape — an alias for `()`.
@@ -539,6 +549,9 @@ pub type Scalar = ();
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::io::limits::ResourceLimits;
+    use crate::shapes::error::{OperationKind, ShapeError};
+    use crate::tensor::dtype::DTypeId;
 
     #[test]
     fn test_scalar_shape() {
@@ -565,6 +578,71 @@ mod tests {
         assert_eq!(<[usize; 3] as DynShape>::numel(&shape), 24);
         assert_eq!(<[usize; 3] as Shape>::dims(&shape), [2, 3, 4]);
         assert_eq!(<[usize; 3] as PartialDynShape>::RANK, 3);
+    }
+
+    #[test]
+    fn dyn_is_a_freely_constructible_zero_sized_marker() {
+        let marker: Dyn = Dyn;
+        assert_eq!(core::mem::size_of_val(&marker), 0);
+        assert_eq!(marker, Dyn);
+    }
+
+    #[test]
+    fn checked_allocation_lengths_cover_scalar_zero_limit_and_overflow_edges() {
+        let mut limits = ResourceLimits::trusted_local_large_model();
+        limits.max_rank = 8;
+        limits.max_dimension = u64::MAX;
+        limits.max_tensor_bytes = u64::MAX;
+
+        assert_eq!(
+            CheckedNumel::from_dims(OperationKind::Storage, &[], &limits)
+                .unwrap()
+                .get(),
+            1
+        );
+        assert_eq!(
+            CheckedNumel::from_dims(
+                OperationKind::Storage,
+                &[usize::MAX, 0, usize::MAX],
+                &limits
+            )
+            .unwrap()
+            .get(),
+            0
+        );
+        assert_eq!(
+            CheckedByteLen::from_dims(OperationKind::Storage, &[2, 3], DTypeId::F32, &limits)
+                .unwrap()
+                .get(),
+            24
+        );
+        assert!(matches!(
+            CheckedNumel::from_dims(OperationKind::Storage, &[usize::MAX, 2], &limits),
+            Err(ShapeError::ArithmeticOverflow { .. })
+        ));
+
+        limits.max_rank = 1;
+        assert!(matches!(
+            CheckedNumel::from_dims(OperationKind::Storage, &[2, 3], &limits),
+            Err(ShapeError::RankMismatch { .. })
+        ));
+        limits.max_rank = 8;
+        limits.max_dimension = 2;
+        assert!(matches!(
+            CheckedNumel::from_dims(OperationKind::Storage, &[3], &limits),
+            Err(ShapeError::InvalidParameter {
+                parameter: "dimension",
+                value: 3,
+                ..
+            })
+        ));
+
+        limits.max_dimension = u64::MAX;
+        limits.max_tensor_bytes = 23;
+        assert!(matches!(
+            CheckedByteLen::from_dims(OperationKind::Storage, &[2, 3], DTypeId::F32, &limits),
+            Err(ShapeError::ArithmeticOverflow { .. })
+        ));
     }
 }
 

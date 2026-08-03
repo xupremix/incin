@@ -1,8 +1,8 @@
 use super::alloc_zeroed_bytes;
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
-use incin_core::prelude::OperationKind;
 use incin_core::prelude::Result;
+use incin_core::prelude::{OperationKind, ShapeBuf};
 
 #[cfg(feature = "cuda")]
 const EMBEDDING_SRC: &str = include_str!("kernels/embedding.cu");
@@ -36,11 +36,13 @@ pub(crate) fn launch_embedding_forward(
 
     let vocab_size = weight.shape[0];
     let hidden_size = weight.shape[1];
-    let num_indices = indices.shape.iter().product::<usize>();
+    let num_indices =
+        ShapeBuf::from_slice(&indices.shape).checked_numel(OperationKind::Embedding)?;
 
     let mut out_shape = indices.shape.to_vec();
     out_shape.push(hidden_size);
-    let out_numel = num_indices * hidden_size;
+    let out_numel = ShapeBuf::from_slice(&[num_indices, hidden_size])
+        .checked_numel(OperationKind::Embedding)?;
 
     let mut out_b = CudaBuffer {
         len: out_numel,
@@ -56,7 +58,11 @@ pub(crate) fn launch_embedding_forward(
     };
 
     let cfg = cudarc::driver::LaunchConfig {
-        grid_dim: (num_indices as u32, 1, 1),
+        grid_dim: (
+            crate::cuda::checked_u32(num_indices, "CUDA embedding grid dimension")?,
+            1,
+            1,
+        ),
         block_dim: (256, 1, 1),
         shared_mem_bytes: 0,
     };
@@ -104,8 +110,10 @@ pub(crate) fn launch_embedding_backward(
     let f = dispatcher.get_function("embedding", "embedding_backward")?;
     let stream = go_b.device.default_stream();
 
-    let num_indices = indices.shape.iter().product::<usize>();
-    let out_numel = vocab_size * hidden_size;
+    let num_indices =
+        ShapeBuf::from_slice(&indices.shape).checked_numel(OperationKind::Embedding)?;
+    let out_numel =
+        ShapeBuf::from_slice(&[vocab_size, hidden_size]).checked_numel(OperationKind::Embedding)?;
 
     let mut grad_w_b = CudaBuffer {
         len: out_numel,
@@ -121,7 +129,11 @@ pub(crate) fn launch_embedding_backward(
     };
 
     let cfg = cudarc::driver::LaunchConfig {
-        grid_dim: (num_indices as u32, 1, 1),
+        grid_dim: (
+            crate::cuda::checked_u32(num_indices, "CUDA embedding-backward grid dimension")?,
+            1,
+            1,
+        ),
         block_dim: (256, 1, 1),
         shared_mem_bytes: 0,
     };

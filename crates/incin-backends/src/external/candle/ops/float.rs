@@ -4,7 +4,7 @@ use crate::external::candle::CandleBackend;
 use crate::external::*;
 
 impl<T: incin_core::prelude::DType, D: incin_core::prelude::Device>
-    incin_core::prelude::FloatOps<Self> for CandleBackend<T, D>
+    incin_core::backend_authoring::FloatOps<Self> for CandleBackend<T, D>
 {
     // Candle has native equivalents for several of these, but this adapter
     // does not route them yet. Declaring the gap here keeps it visible instead

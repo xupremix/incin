@@ -132,7 +132,7 @@ impl<T: DType, D: Device> incin_core::prelude::Backend for CpuBackendImpl<T, D> 
     /// `to_bytes`.
     fn to_bytes<K: DType>(t: &Self::Storage<K>) -> Result<alloc::vec::Vec<u8>> {
         let t_contig = t.contiguous();
-        let num_elements = t_contig.shape.iter().product::<usize>();
+        let num_elements = stride::checked_numel(&t_contig.shape)?;
         let offset = t_contig.offset_elements;
         match &*t_contig.buffer {
             storage::CpuBuffer::F32(v) => {

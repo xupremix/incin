@@ -1268,7 +1268,10 @@ fn cuda_driver_version() -> core::result::Result<SoftwareVersion, IdentityError>
             message: format!("negative encoded version {encoded}"),
         });
     }
-    let encoded = encoded as u32;
+    let encoded = u32::try_from(encoded).map_err(|_| IdentityError::CudaQuery {
+        component: "driver version",
+        message: format!("encoded version {encoded} does not fit u32"),
+    })?;
     Ok(SoftwareVersion::new(
         encoded / 1000,
         (encoded % 1000) / 10,
@@ -1293,7 +1296,15 @@ fn nvrtc_version() -> core::result::Result<SoftwareVersion, IdentityError> {
             message: format!("negative version {major}.{minor}"),
         });
     }
-    Ok(SoftwareVersion::new(major as u32, minor as u32, 0))
+    let major = u32::try_from(major).map_err(|_| IdentityError::CudaQuery {
+        component: "NVRTC version",
+        message: format!("major version {major} does not fit u32"),
+    })?;
+    let minor = u32::try_from(minor).map_err(|_| IdentityError::CudaQuery {
+        component: "NVRTC version",
+        message: format!("minor version {minor} does not fit u32"),
+    })?;
+    Ok(SoftwareVersion::new(major, minor, 0))
 }
 
 #[allow(dead_code)]

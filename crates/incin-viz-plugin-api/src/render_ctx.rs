@@ -8,7 +8,21 @@ use ratatui_core::terminal::Frame;
 /// render (Phase 10 mouse support consumes this; signature only this
 /// phase per UI-SPEC.md).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct HitId(pub u32);
+pub struct HitId(u32);
+
+impl HitId {
+    /// Creates a caller-owned hit-region identifier.
+    #[must_use]
+    pub const fn new(value: u32) -> Self {
+        Self(value)
+    }
+
+    /// Returns the caller-owned numeric identifier.
+    #[must_use]
+    pub const fn get(self) -> u32 {
+        self.0
+    }
+}
 
 /// Thin wrapper over `ratatui::Frame`/`Rect` that every `Panel::render`
 /// call receives. A panel calls `frame_mut().render_widget(widget, area)`

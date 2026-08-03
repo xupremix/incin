@@ -175,11 +175,14 @@ impl<S: LinearShape, B: Backend, Bias: crate::nn::optional::OptionalField> Compu
     /// in/out feature count, so this is exact, not an approximation.
     fn compute_stats(&self, batch: u64) -> LayerStats {
         let dims = self.weight.shape_dims();
-        let (out_f, in_f) = (dims[0] as u64, dims[1] as u64);
+        let (out_f, in_f) = (
+            u64::try_from(dims[0]).expect("validated dimension must fit u64"),
+            u64::try_from(dims[1]).expect("validated dimension must fit u64"),
+        );
         let bias_params = self
             .bias
             .as_ref()
-            .map(|b| b.shape_dims().iter().product::<usize>() as u64)
+            .map(|b| crate::nn::stats::validated_parameter_count(&b.shape_dims()))
             .unwrap_or(0);
         LayerStats {
             params: out_f * in_f + bias_params,

@@ -1887,7 +1887,10 @@ pub mod dummy {
                 return Ok(t.clone());
             }
             let mut out = t[..s].to_vec();
-            out.push(t[s..=e].iter().product());
+            out.push(
+                crate::shapes::ShapeBuf::from_slice(&t[s..=e])
+                    .checked_numel(crate::shapes::error::OperationKind::Flatten)?,
+            );
             out.extend_from_slice(&t[e + 1..]);
             Ok(out)
         }

@@ -4,32 +4,25 @@
 //! operation (`reshape`/`transpose`/`broadcast_as`) is built on. They must be
 //! correct and standalone-tested before any storage/tape code touches them.
 
-use incin_core::prelude::Error;
-use incin_core::prelude::Result;
+use incin_core::prelude::{Error, OperationKind, Result, ShapeBuf};
 
 /// Compute row-major (C-contiguous) strides for `shape`.
 ///
 /// The last dimension has stride 1; each earlier dimension's stride is the
 /// product of all later dimensions' sizes. An empty shape (scalar / 0-d)
 /// returns an empty stride vector.
+pub(crate) fn checked_contiguous_strides(shape: &[usize]) -> Result<Vec<usize>> {
+    incin_core::prelude::StrideBuf::contiguous_for(
+        &ShapeBuf::from_slice(shape),
+        OperationKind::Storage,
+    )
+    .map(|strides| strides.strides().to_vec())
+    .map_err(Into::into)
+}
+
 pub(crate) fn contiguous_strides(shape: &[usize]) -> Vec<usize> {
-    let mut strides = vec![1usize; shape.len()];
-    for i in (0..shape.len().saturating_sub(1)).rev() {
-        // checked_mul instead of a bare `*`: in release builds (overflow
-        // checks off by default) an unchecked multiply here can silently
-        // wrap to a small stride, which downstream code then uses to index
-        // into a buffer sized from the same (also-wrapped) element count —
-        // an out-of-bounds read/write path (C-5). Panic loudly instead.
-        strides[i] = strides[i + 1].checked_mul(shape[i + 1]).unwrap_or_else(|| {
-            panic!(
-                "shape overflow computing strides: stride {} * dim {} overflows usize (shape: {:?})",
-                strides[i + 1],
-                shape[i + 1],
-                shape
-            )
-        });
-    }
-    strides
+    checked_contiguous_strides(shape)
+        .expect("validated CpuStorage shape must have representable contiguous strides")
 }
 
 /// Returns true if `strides` matches the contiguous (row-major) strides for
@@ -67,14 +60,20 @@ pub(crate) fn is_contiguous(shape: &[usize], strides: &[usize]) -> bool {
 /// stride-based indexing (computed from the same, differently-wrapped shape)
 /// reads/writes past the end of that undersized buffer (C-5).
 pub(crate) fn checked_numel(shape: &[usize]) -> Result<usize> {
-    shape.iter().try_fold(1usize, |acc, &dim| {
-        acc.checked_mul(dim).ok_or_else(|| {
-            Error::Msg(format!(
-                "shape overflow computing element count: shape {:?} overflows usize",
-                shape
-            ))
-        })
-    })
+    ShapeBuf::from_slice(shape)
+        .checked_numel(OperationKind::Storage)
+        .map_err(Into::into)
+}
+
+/// Reads an element count from shape metadata already accepted by
+/// `CpuStorage::try_from_parts`.
+///
+/// This is not an allocation-boundary validator. New or untrusted dimensions
+/// must use [`checked_numel`] and propagate its error before constructing
+/// storage.
+pub(crate) fn validated_numel(shape: &[usize]) -> usize {
+    checked_numel(shape)
+        .expect("validated CpuStorage shape must have a representable element count")
 }
 
 /// Resolve the broadcast-compatible output shape of two input shapes, using

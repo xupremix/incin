@@ -26,7 +26,10 @@ pub struct TensorMetaInfo {
 
 /// Inspects a `.safetensors`, `.gguf`, or `.onnx` file metadata with default resource limits.
 pub fn inspect_file<P: AsRef<Path>>(path: P) -> Result<ModelInfo> {
-    inspect_file_with_limits(path, &crate::io::limits::ResourceLimits::inspection_defaults())
+    inspect_file_with_limits(
+        path,
+        &crate::io::limits::ResourceLimits::inspection_defaults(),
+    )
 }
 
 /// Inspects a model file enforcing explicit resource limits.
@@ -76,7 +79,8 @@ fn inspect_safetensors(
     file.read_exact(&mut header_size_bytes)?;
     let header_len_raw = u64::from_le_bytes(header_size_bytes);
     limits.check_header_bytes(header_len_raw)?;
-    let header_len = header_len_raw as usize;
+    let header_len = usize::try_from(header_len_raw)
+        .map_err(|_| Error::Msg("safetensors header length does not fit this platform".into()))?;
 
     let mut header_buf = vec![0u8; header_len];
     file.read_exact(&mut header_buf)?;
@@ -93,19 +97,31 @@ fn inspect_safetensors(
             let dtype = val
                 .get("dtype")
                 .and_then(|v| v.as_str())
-                .unwrap_or("F32")
+                .ok_or_else(|| {
+                    Error::Msg(format!("safetensors tensor `{name}` has no valid dtype"))
+                })?
                 .to_string();
-            let shape: Vec<usize> = val
-                .get("shape")
-                .and_then(|v| v.as_array())
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|d| d.as_u64().map(|n| n as usize))
-                        .collect()
+            let raw_shape = val.get("shape").and_then(|v| v.as_array()).ok_or_else(|| {
+                Error::Msg(format!("safetensors tensor `{name}` has no valid shape"))
+            })?;
+            let shape: Vec<usize> = raw_shape
+                .iter()
+                .enumerate()
+                .map(|(axis, dimension)| {
+                    let dimension = dimension.as_u64().ok_or_else(|| {
+                        Error::Msg(format!(
+                            "safetensors tensor `{name}` axis {axis} is not an unsigned integer"
+                        ))
+                    })?;
+                    usize::try_from(dimension).map_err(|_| {
+                        Error::Msg(format!(
+                            "safetensors tensor `{name}` axis {axis} does not fit this platform"
+                        ))
+                    })
                 })
-                .unwrap_or_default();
+                .collect::<Result<_>>()?;
+            limits.check_shape(&shape)?;
 
-            let elem_count: usize = shape.iter().product();
             let bytes_per_elem = match dtype.as_str() {
                 "F64" | "I64" => 8,
                 "F32" | "I32" => 4,
@@ -113,11 +129,13 @@ fn inspect_safetensors(
                 _ => 1,
             };
 
+            let size_bytes = crate::shapes::ShapeBuf::from_slice(&shape)
+                .checked_byte_len(bytes_per_elem, crate::shapes::error::OperationKind::Storage)?;
             tensors.push(TensorMetaInfo {
                 name: name.clone(),
                 shape,
                 dtype,
-                size_bytes: elem_count * bytes_per_elem,
+                size_bytes,
             });
         }
     }
@@ -174,7 +192,8 @@ fn read_gguf_string<R: Read>(
     r: &mut R,
     limits: &crate::io::limits::ResourceLimits,
 ) -> Result<String> {
-    let len = read_u64(r)? as usize;
+    let len = usize::try_from(read_u64(r)?)
+        .map_err(|_| Error::Msg("GGUF string length does not fit this platform".into()))?;
     if len > limits.max_string_bytes {
         return Err(Error::Msg(format!(
             "GGUF string length {} exceeds limit {}",
@@ -212,7 +231,11 @@ fn skip_gguf_value<R: Read + Seek>(
         9 => {
             let elem_type = read_u32(r)?;
             let count = read_u64(r)?;
-            if count as usize > limits.max_metadata_entries {
+            if count
+                > u64::try_from(limits.max_metadata_entries).map_err(|_| {
+                    Error::Msg("metadata entry limit does not fit the GGUF format".into())
+                })?
+            {
                 return Err(Error::Msg(format!(
                     "GGUF array metadata count {} exceeds limit",
                     count
@@ -247,7 +270,8 @@ fn inspect_gguf(
     }
 
     let version = read_u32(&mut file)?;
-    let tensor_count = read_u64(&mut file)? as usize;
+    let tensor_count = usize::try_from(read_u64(&mut file)?)
+        .map_err(|_| Error::Msg("GGUF tensor count does not fit this platform".into()))?;
     if tensor_count > limits.max_tensor_count {
         return Err(Error::Msg(format!(
             "GGUF tensor count {} exceeds limit {}",
@@ -255,7 +279,10 @@ fn inspect_gguf(
         )));
     }
     let metadata_count = read_u64(&mut file)?;
-    if metadata_count as usize > limits.max_metadata_entries {
+    if metadata_count
+        > u64::try_from(limits.max_metadata_entries)
+            .map_err(|_| Error::Msg("metadata entry limit does not fit the GGUF format".into()))?
+    {
         return Err(Error::Msg(format!(
             "GGUF metadata count {} exceeds limit {}",
             metadata_count, limits.max_metadata_entries
@@ -281,13 +308,15 @@ fn inspect_gguf(
     for _ in 0..tensor_count {
         let name = read_gguf_string(&mut file, limits)?;
         let n_dims = read_u32(&mut file)?;
-        if n_dims as usize > limits.max_rank {
+        let n_dims = usize::try_from(n_dims)
+            .map_err(|_| Error::Msg("GGUF rank does not fit this platform".into()))?;
+        if n_dims > limits.max_rank {
             return Err(Error::Msg(format!(
                 "GGUF tensor rank {} exceeds limit {}",
                 n_dims, limits.max_rank
             )));
         }
-        let mut dims = Vec::with_capacity(n_dims as usize);
+        let mut dims = Vec::with_capacity(n_dims);
         for _ in 0..n_dims {
             dims.push(read_u64(&mut file)?);
         }
@@ -310,15 +339,48 @@ fn inspect_gguf(
         // Exact byte length is derived from consecutive offsets rather
         // than `dims * bytes_per_elem`, since block-quantized types
         // (Q8_0, Q4_0, ...) don't have a fixed per-element byte size.
-        let size_bytes = if i + 1 < headers.len() {
-            (headers[i + 1].offset - h.offset) as usize
+        let size_bytes_u64 = if i + 1 < headers.len() {
+            headers[i + 1].offset.checked_sub(h.offset).ok_or_else(|| {
+                Error::Msg(format!(
+                    "GGUF tensor `{}` has decreasing data offsets",
+                    h.name
+                ))
+            })?
         } else {
-            (file_size_bytes - data_section_start - h.offset) as usize
+            file_size_bytes
+                .checked_sub(data_section_start)
+                .and_then(|remaining| remaining.checked_sub(h.offset))
+                .ok_or_else(|| {
+                    Error::Msg(format!(
+                        "GGUF tensor `{}` data offset is out of bounds",
+                        h.name
+                    ))
+                })?
         };
+        let size_bytes = usize::try_from(size_bytes_u64).map_err(|_| {
+            Error::Msg(format!(
+                "GGUF tensor `{}` byte length does not fit this platform",
+                h.name
+            ))
+        })?;
 
         // GGUF stores dims reversed (fastest-varying first); reverse back
         // to the natural, row-major shape order for display.
-        let shape: Vec<usize> = h.dims.iter().rev().map(|&d| d as usize).collect();
+        let shape: Vec<usize> = h
+            .dims
+            .iter()
+            .rev()
+            .enumerate()
+            .map(|(axis, &dimension)| {
+                usize::try_from(dimension).map_err(|_| {
+                    Error::Msg(format!(
+                        "GGUF tensor `{}` axis {axis} does not fit this platform",
+                        h.name
+                    ))
+                })
+            })
+            .collect::<Result<_>>()?;
+        limits.check_shape(&shape)?;
 
         tensors.push(TensorMetaInfo {
             name: h.name.clone(),

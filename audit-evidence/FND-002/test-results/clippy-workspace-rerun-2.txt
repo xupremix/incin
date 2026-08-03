@@ -1,0 +1,212 @@
+warning: excluded package(s) `incin-cuda-kernels` not found in workspace `/home/xupremix/Projects/incin`
+    Checking incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+    Checking incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+    Checking named_dims_safety v0.0.0 (/home/xupremix/Projects/incin/crates/incin/examples/named_dims_safety)
+    Checking dataloader v0.0.0 (/home/xupremix/Projects/incin/crates/incin/examples/dataloader)
+    Checking matmul v0.0.0 (/home/xupremix/Projects/incin/crates/incin/examples/matmul)
+    Checking tui_graph_demo v0.0.0 (/home/xupremix/Projects/incin/crates/incin/examples/tui_graph_demo)
+    Checking tensors v0.0.0 (/home/xupremix/Projects/incin/crates/incin/examples/tensors)
+    Checking named_tensors v0.0.0 (/home/xupremix/Projects/incin/crates/incin/examples/named_tensors)
+    Checking native_training_demo v0.0.0 (/home/xupremix/Projects/incin/crates/incin/examples/native_training_demo)
+    Checking cnn v0.0.0 (/home/xupremix/Projects/incin/crates/incin/examples/cnn)
+    Checking backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin/examples/backends)
+    Checking incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+error[E0599]: no associated function or constant named `matmul` found for struct `incin_backends::cpu::CpuBackendImpl<T, D>` in the current scope
+   --> crates/incin-backends/tests/gradient_parity.rs:190:25
+    |
+190 |     let cpu_out = CpuB::matmul::<f32>(&cpu_a, &cpu_b).unwrap();
+    |                         ^^^^^^ associated function or constant not found in `incin_backends::cpu::CpuBackendImpl`
+    |
+note: if you're trying to build a new `incin_backends::cpu::CpuBackendImpl`, consider using `incin_backends::cpu::CpuBackendImpl::<T, D>::new` which returns `incin_backends::cpu::CpuBackendImpl<_, _>`
+   --> crates/incin-backends/src/cpu/mod.rs:58:5
+    |
+ 58 |     pub const fn new() -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = help: items from traits can only be used if the trait is in scope
+help: trait `TensorOps` which provides `matmul` is implemented but not in scope; perhaps you want to import it
+    |
+ 16 + use incin_backends::cpu::TensorOps;
+    |
+help: there is an associated function `mul` with a similar name
+    |
+190 -     let cpu_out = CpuB::matmul::<f32>(&cpu_a, &cpu_b).unwrap();
+190 +     let cpu_out = CpuB::mul::<f32>(&cpu_a, &cpu_b).unwrap();
+    |
+
+error[E0599]: no associated function or constant named `matmul` found for struct `incin_backends::wgpu::WgpuBackendImpl<T, D>` in the current scope
+   --> crates/incin-backends/tests/gradient_parity.rs:208:27
+    |
+208 |     let wgpu_out = WgpuB::matmul::<f32>(&wgpu_a, &wgpu_b).unwrap();
+    |                           ^^^^^^ associated function or constant not found in `incin_backends::wgpu::WgpuBackendImpl<f32, incin_backends::cpu::WgpuN>`
+    |
+note: if you're trying to build a new `incin_backends::wgpu::WgpuBackendImpl<f32, incin_backends::cpu::WgpuN>`, consider using `incin_backends::wgpu::WgpuBackendImpl::<T, D>::new` which returns `incin_backends::wgpu::WgpuBackendImpl<_, _>`
+   --> crates/incin-backends/src/wgpu/backend.rs:14:5
+    |
+ 14 |     pub const fn new() -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = help: items from traits can only be used if the trait is in scope
+help: trait `TensorOps` which provides `matmul` is implemented but not in scope; perhaps you want to import it
+    |
+ 16 + use incin_backends::cpu::TensorOps;
+    |
+help: there is an associated function `mul` with a similar name
+    |
+208 -     let wgpu_out = WgpuB::matmul::<f32>(&wgpu_a, &wgpu_b).unwrap();
+208 +     let wgpu_out = WgpuB::mul::<f32>(&wgpu_a, &wgpu_b).unwrap();
+    |
+
+error[E0599]: no associated function or constant named `cross_entropy_loss` found for struct `incin_backends::cpu::CpuBackendImpl<T, D>` in the current scope
+   --> crates/incin-backends/tests/gradient_parity.rs:378:15
+    |
+378 |         CpuB::cross_entropy_loss::<f32, f32>(&cpu_pred, &cpu_tgt, Reduction::Mean).unwrap();
+    |               ^^^^^^^^^^^^^^^^^^ associated function or constant not found in `incin_backends::cpu::CpuBackendImpl`
+    |
+note: if you're trying to build a new `incin_backends::cpu::CpuBackendImpl`, consider using `incin_backends::cpu::CpuBackendImpl::<T, D>::new` which returns `incin_backends::cpu::CpuBackendImpl<_, _>`
+   --> crates/incin-backends/src/cpu/mod.rs:58:5
+    |
+ 58 |     pub const fn new() -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = help: items from traits can only be used if the trait is in scope
+help: trait `LossOps` which provides `cross_entropy_loss` is implemented but not in scope; perhaps you want to import it
+    |
+ 16 + use incin_backends::cpu::LossOps;
+    |
+
+error[E0599]: no associated function or constant named `cross_entropy_loss` found for struct `incin_backends::wgpu::WgpuBackendImpl<T, D>` in the current scope
+   --> crates/incin-backends/tests/gradient_parity.rs:396:16
+    |
+396 |         WgpuB::cross_entropy_loss::<f32, f32>(&wgpu_pred, &wgpu_tgt, Reduction::Mean).unwrap();
+    |                ^^^^^^^^^^^^^^^^^^ associated function or constant not found in `incin_backends::wgpu::WgpuBackendImpl<f32, incin_backends::cpu::WgpuN>`
+    |
+note: if you're trying to build a new `incin_backends::wgpu::WgpuBackendImpl<f32, incin_backends::cpu::WgpuN>`, consider using `incin_backends::wgpu::WgpuBackendImpl::<T, D>::new` which returns `incin_backends::wgpu::WgpuBackendImpl<_, _>`
+   --> crates/incin-backends/src/wgpu/backend.rs:14:5
+    |
+ 14 |     pub const fn new() -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = help: items from traits can only be used if the trait is in scope
+help: trait `LossOps` which provides `cross_entropy_loss` is implemented but not in scope; perhaps you want to import it
+    |
+ 16 + use incin_backends::cpu::LossOps;
+    |
+
+error[E0599]: no associated function or constant named `cross_entropy_loss` found for struct `incin_backends::cpu::CpuBackendImpl<T, D>` in the current scope
+   --> crates/incin-backends/tests/gradient_parity.rs:447:15
+    |
+447 |         CpuB::cross_entropy_loss::<f32, f32>(&cpu_pred, &cpu_tgt, Reduction::Mean).unwrap();
+    |               ^^^^^^^^^^^^^^^^^^ associated function or constant not found in `incin_backends::cpu::CpuBackendImpl`
+    |
+note: if you're trying to build a new `incin_backends::cpu::CpuBackendImpl`, consider using `incin_backends::cpu::CpuBackendImpl::<T, D>::new` which returns `incin_backends::cpu::CpuBackendImpl<_, _>`
+   --> crates/incin-backends/src/cpu/mod.rs:58:5
+    |
+ 58 |     pub const fn new() -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = help: items from traits can only be used if the trait is in scope
+help: trait `LossOps` which provides `cross_entropy_loss` is implemented but not in scope; perhaps you want to import it
+    |
+ 16 + use incin_backends::cpu::LossOps;
+    |
+
+error[E0599]: no associated function or constant named `sum_dim` found for struct `incin_backends::cpu::CpuBackendImpl<T, D>` in the current scope
+   --> crates/incin-backends/tests/gradient_parity.rs:648:25
+    |
+648 |     let cpu_sum = CpuB::sum_dim::<f32>(&cpu_in, 1).unwrap();
+    |                         ^^^^^^^ associated function or constant not found in `incin_backends::cpu::CpuBackendImpl`
+    |
+note: if you're trying to build a new `incin_backends::cpu::CpuBackendImpl`, consider using `incin_backends::cpu::CpuBackendImpl::<T, D>::new` which returns `incin_backends::cpu::CpuBackendImpl<_, _>`
+   --> crates/incin-backends/src/cpu/mod.rs:58:5
+    |
+ 58 |     pub const fn new() -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = help: items from traits can only be used if the trait is in scope
+help: trait `ReductionOps` which provides `sum_dim` is implemented but not in scope; perhaps you want to import it
+    |
+ 16 + use incin_backends::cpu::ReductionOps;
+    |
+help: there is an associated function `sum_keepdim` with a similar name
+    |
+648 |     let cpu_sum = CpuB::sum_keepdim::<f32>(&cpu_in, 1).unwrap();
+    |                             ++++
+
+error[E0599]: no associated function or constant named `sum_dim` found for struct `incin_backends::wgpu::WgpuBackendImpl<T, D>` in the current scope
+   --> crates/incin-backends/tests/gradient_parity.rs:658:27
+    |
+658 |     let wgpu_sum = WgpuB::sum_dim::<f32>(&wgpu_in, 1).unwrap();
+    |                           ^^^^^^^ associated function or constant not found in `incin_backends::wgpu::WgpuBackendImpl<f32, incin_backends::cpu::WgpuN>`
+    |
+note: if you're trying to build a new `incin_backends::wgpu::WgpuBackendImpl<f32, incin_backends::cpu::WgpuN>`, consider using `incin_backends::wgpu::WgpuBackendImpl::<T, D>::new` which returns `incin_backends::wgpu::WgpuBackendImpl<_, _>`
+   --> crates/incin-backends/src/wgpu/backend.rs:14:5
+    |
+ 14 |     pub const fn new() -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = help: items from traits can only be used if the trait is in scope
+help: trait `ReductionOps` which provides `sum_dim` is implemented but not in scope; perhaps you want to import it
+    |
+ 16 + use incin_backends::cpu::ReductionOps;
+    |
+help: there is an associated function `sum_keepdim` with a similar name
+    |
+658 |     let wgpu_sum = WgpuB::sum_keepdim::<f32>(&wgpu_in, 1).unwrap();
+    |                               ++++
+
+error[E0599]: no associated function or constant named `mean_dim` found for struct `incin_backends::cpu::CpuBackendImpl<T, D>` in the current scope
+   --> crates/incin-backends/tests/gradient_parity.rs:680:26
+    |
+680 |     let cpu_mean = CpuB::mean_dim::<f32>(&cpu_in, 0).unwrap();
+    |                          ^^^^^^^^ associated function or constant not found in `incin_backends::cpu::CpuBackendImpl`
+    |
+note: if you're trying to build a new `incin_backends::cpu::CpuBackendImpl`, consider using `incin_backends::cpu::CpuBackendImpl::<T, D>::new` which returns `incin_backends::cpu::CpuBackendImpl<_, _>`
+   --> crates/incin-backends/src/cpu/mod.rs:58:5
+    |
+ 58 |     pub const fn new() -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = help: items from traits can only be used if the trait is in scope
+help: trait `ReductionOps` which provides `mean_dim` is implemented but not in scope; perhaps you want to import it
+    |
+ 16 + use incin_backends::cpu::ReductionOps;
+    |
+help: there is an associated function `mean_keepdim` with a similar name
+    |
+680 |     let cpu_mean = CpuB::mean_keepdim::<f32>(&cpu_in, 0).unwrap();
+    |                               ++++
+
+error[E0599]: no associated function or constant named `mean_dim` found for struct `incin_backends::wgpu::WgpuBackendImpl<T, D>` in the current scope
+   --> crates/incin-backends/tests/gradient_parity.rs:683:28
+    |
+683 |     let wgpu_mean = WgpuB::mean_dim::<f32>(&wgpu_in, 0).unwrap();
+    |                            ^^^^^^^^ associated function or constant not found in `incin_backends::wgpu::WgpuBackendImpl<f32, incin_backends::cpu::WgpuN>`
+    |
+note: if you're trying to build a new `incin_backends::wgpu::WgpuBackendImpl<f32, incin_backends::cpu::WgpuN>`, consider using `incin_backends::wgpu::WgpuBackendImpl::<T, D>::new` which returns `incin_backends::wgpu::WgpuBackendImpl<_, _>`
+   --> crates/incin-backends/src/wgpu/backend.rs:14:5
+    |
+ 14 |     pub const fn new() -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = help: items from traits can only be used if the trait is in scope
+help: trait `ReductionOps` which provides `mean_dim` is implemented but not in scope; perhaps you want to import it
+    |
+ 16 + use incin_backends::cpu::ReductionOps;
+    |
+help: there is an associated function `mean_keepdim` with a similar name
+    |
+683 |     let wgpu_mean = WgpuB::mean_keepdim::<f32>(&wgpu_in, 0).unwrap();
+    |                                 ++++
+
+For more information about this error, try `rustc --explain E0599`.
+error: could not compile `incin-backends` (test "gradient_parity") due to 9 previous errors
+warning: build failed, waiting for other jobs to finish...
+error: use of `default` to create a unit struct
+   --> crates/incin-core/src/shapes/shape.rs:578:28
+    |
+578 |         assert_eq!(marker, Dyn::default());
+    |                            ^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#default_constructed_unit_structs
+    = note: `-D clippy::default-constructed-unit-structs` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::default_constructed_unit_structs)]`
+help: remove this call to `default`
+    |
+578 -         assert_eq!(marker, Dyn::default());
+578 +         assert_eq!(marker, Dyn);
+    |
+
+error: could not compile `incin-core` (lib test) due to 1 previous error

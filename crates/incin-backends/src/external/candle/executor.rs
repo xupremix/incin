@@ -14,13 +14,13 @@
 //! adapter being rewritten, which is the property `EXE-010`'s backend-authoring
 //! template needs to document.
 
+use incin_core::backend_authoring::{Execute, ExecutionRequest, StorageBackend};
 use incin_core::exec::{
     Alignment, Capabilities, CapabilityQuery, MatMulSpec, ReshapeSpec, SupportLevel, TensorMeta,
     UnsupportedReason,
 };
 use incin_core::prelude::{
-    BackendError, DType, Device, Execute, ExecutionRequest, OperationKind, Result, ShapeBuf,
-    StorageBackend, StrideBuf,
+    BackendError, DType, Device, OperationKind, Result, ShapeBuf, StrideBuf,
 };
 
 use super::CandleBackend;

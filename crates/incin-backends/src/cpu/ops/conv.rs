@@ -40,9 +40,9 @@
 //! offset arithmetic (Pitfall 4). Only `groups == 1` is supported, matching
 //! `CandleBackend::conv_transpose2d`'s own confirmed effective behavior.
 
-use incin_core::prelude::Error;
-use incin_core::prelude::{BackwardError, OperationKind};
 use incin_core::backend_authoring::{NumericOps, TensorOps};
+use incin_core::prelude::Error;
+use incin_core::prelude::{BackwardError, OperationKind, ShapeBuf, ShapeError};
 use incin_core::prelude::{DType, Result};
 
 use crate::cpu::CpuBackendImpl;
@@ -65,10 +65,30 @@ fn out_size(
     stride: usize,
     padding: usize,
     dilation: usize,
-) -> usize {
-    let padded = len + 2 * padding;
-    let effective_kernel = dilation * kernel_size.saturating_sub(1) + 1;
-    padded.saturating_sub(effective_kernel) / stride + 1
+) -> Result<usize> {
+    if kernel_size == 0 || stride == 0 || dilation == 0 {
+        return Err(ShapeError::InvalidParameter {
+            operation: OperationKind::Conv2d,
+            parameter: "kernel, stride, and dilation must be nonzero",
+            value: 0,
+        }
+        .into());
+    }
+    let padded = padding
+        .checked_mul(2)
+        .and_then(|twice| len.checked_add(twice))
+        .ok_or(ShapeError::ArithmeticOverflow {
+            operation: OperationKind::Conv2d,
+            expression: "convolution padded input dimension",
+        })?;
+    let effective_kernel = dilation
+        .checked_mul(kernel_size - 1)
+        .and_then(|span| span.checked_add(1))
+        .ok_or(ShapeError::ArithmeticOverflow {
+            operation: OperationKind::Conv2d,
+            expression: "convolution effective kernel",
+        })?;
+    Ok(padded.saturating_sub(effective_kernel) / stride + 1)
 }
 
 /// The "natural" (no `output_padding`) `conv_transpose2d` output size:
@@ -84,10 +104,35 @@ fn natural_transpose_out_size(
     stride: usize,
     padding: usize,
     dilation: usize,
-) -> usize {
-    let unstrided = (len.saturating_sub(1)) * stride;
-    let effective_kernel = dilation * kernel_size.saturating_sub(1);
-    (unstrided + effective_kernel + 1).saturating_sub(2 * padding)
+) -> Result<usize> {
+    if kernel_size == 0 || stride == 0 || dilation == 0 {
+        return Err(ShapeError::InvalidParameter {
+            operation: OperationKind::Conv2d,
+            parameter: "kernel, stride, and dilation must be nonzero",
+            value: 0,
+        }
+        .into());
+    }
+    let unpadded = len
+        .saturating_sub(1)
+        .checked_mul(stride)
+        .and_then(|span| {
+            dilation
+                .checked_mul(kernel_size - 1)
+                .and_then(|kernel| span.checked_add(kernel))
+        })
+        .and_then(|span| span.checked_add(1))
+        .ok_or(ShapeError::ArithmeticOverflow {
+            operation: OperationKind::Conv2d,
+            expression: "transposed-convolution output dimension",
+        })?;
+    let twice_padding = padding
+        .checked_mul(2)
+        .ok_or(ShapeError::ArithmeticOverflow {
+            operation: OperationKind::Conv2d,
+            expression: "transposed-convolution padding",
+        })?;
+    Ok(unpadded.saturating_sub(twice_padding))
 }
 
 /// Validate that `groups` evenly divides both `cin`/`cout`, returning
@@ -118,11 +163,14 @@ fn im2col_1d(
     stride: usize,
     padding: usize,
     dilation: usize,
-) -> CpuStorage {
+) -> Result<CpuStorage> {
     let (b, cin, len) = (input.shape[0], input.shape[1], input.shape[2]);
-    let l_out = out_size(len, kernel_size, stride, padding, dilation);
+    let l_out = out_size(len, kernel_size, stride, padding, dilation)?;
 
-    let mut out = Vec::with_capacity(b * l_out * cin * kernel_size);
+    let columns = ShapeBuf::from_slice(&[cin, kernel_size]).checked_numel(OperationKind::Conv1d)?;
+    let capacity =
+        ShapeBuf::from_slice(&[b, l_out, columns]).checked_numel(OperationKind::Conv1d)?;
+    let mut out = Vec::with_capacity(capacity);
     for bi in 0..b {
         for oi in 0..l_out {
             for ci in 0..cin {
@@ -139,7 +187,7 @@ fn im2col_1d(
         }
     }
 
-    CpuStorage::from_contiguous(CpuBuffer::F32(out), vec![b, l_out, cin * kernel_size])
+    CpuStorage::try_from_contiguous(CpuBuffer::F32(out), vec![b, l_out, columns])
 }
 
 /// Exact inverse of `im2col_1d`: scatter-ADD (never overwrite) each
@@ -153,11 +201,12 @@ fn col2im_1d(
     stride: usize,
     padding: usize,
     dilation: usize,
-) -> CpuStorage {
+) -> Result<CpuStorage> {
     let (b, cin, len) = (input_shape[0], input_shape[1], input_shape[2]);
     let l_out = cols_grad.shape[1];
 
-    let mut out = vec![0.0f32; b * cin * len];
+    let out_total = ShapeBuf::from_slice(input_shape).checked_numel(OperationKind::Conv1d)?;
+    let mut out = vec![0.0f32; out_total];
     let out_strides = crate::cpu::stride::contiguous_strides(input_shape);
 
     for bi in 0..b {
@@ -177,7 +226,7 @@ fn col2im_1d(
         }
     }
 
-    CpuStorage::from_contiguous(CpuBuffer::F32(out), input_shape.to_vec())
+    CpuStorage::try_from_contiguous(CpuBuffer::F32(out), input_shape.to_vec())
 }
 
 // ---------------------------------------------------------------------------
@@ -193,17 +242,22 @@ fn im2col_2d(
     stride: usize,
     padding: usize,
     dilation: usize,
-) -> CpuStorage {
+) -> Result<CpuStorage> {
     let (b, cin, h, w) = (
         input.shape[0],
         input.shape[1],
         input.shape[2],
         input.shape[3],
     );
-    let h_out = out_size(h, kernel_h, stride, padding, dilation);
-    let w_out = out_size(w, kernel_w, stride, padding, dilation);
+    let h_out = out_size(h, kernel_h, stride, padding, dilation)?;
+    let w_out = out_size(w, kernel_w, stride, padding, dilation)?;
 
-    let mut out = Vec::with_capacity(b * h_out * w_out * cin * kernel_h * kernel_w);
+    let spatial = ShapeBuf::from_slice(&[h_out, w_out]).checked_numel(OperationKind::Conv2d)?;
+    let columns =
+        ShapeBuf::from_slice(&[cin, kernel_h, kernel_w]).checked_numel(OperationKind::Conv2d)?;
+    let capacity =
+        ShapeBuf::from_slice(&[b, spatial, columns]).checked_numel(OperationKind::Conv2d)?;
+    let mut out = Vec::with_capacity(capacity);
     for bi in 0..b {
         for oh in 0..h_out {
             for ow in 0..w_out {
@@ -229,10 +283,7 @@ fn im2col_2d(
         }
     }
 
-    CpuStorage::from_contiguous(
-        CpuBuffer::F32(out),
-        vec![b, h_out * w_out, cin * kernel_h * kernel_w],
-    )
+    CpuStorage::try_from_contiguous(CpuBuffer::F32(out), vec![b, spatial, columns])
 }
 
 /// Exact inverse of `im2col_2d`: scatter-ADD each contribution of a
@@ -247,17 +298,18 @@ fn col2im_2d(
     stride: usize,
     padding: usize,
     dilation: usize,
-) -> CpuStorage {
+) -> Result<CpuStorage> {
     let (b, cin, h, w) = (
         input_shape[0],
         input_shape[1],
         input_shape[2],
         input_shape[3],
     );
-    let h_out = out_size(h, kernel_h, stride, padding, dilation);
-    let w_out = out_size(w, kernel_w, stride, padding, dilation);
+    let h_out = out_size(h, kernel_h, stride, padding, dilation)?;
+    let w_out = out_size(w, kernel_w, stride, padding, dilation)?;
 
-    let mut out = vec![0.0f32; b * cin * h * w];
+    let out_total = ShapeBuf::from_slice(input_shape).checked_numel(OperationKind::Conv2d)?;
+    let mut out = vec![0.0f32; out_total];
     let out_strides = crate::cpu::stride::contiguous_strides(input_shape);
 
     for bi in 0..b {
@@ -291,7 +343,7 @@ fn col2im_2d(
         }
     }
 
-    CpuStorage::from_contiguous(CpuBuffer::F32(out), input_shape.to_vec())
+    CpuStorage::try_from_contiguous(CpuBuffer::F32(out), input_shape.to_vec())
 }
 
 // ---------------------------------------------------------------------------
@@ -330,14 +382,16 @@ pub(crate) fn conv1d_impl<T: DType, D: incin_core::prelude::Device, K: DType>(
         });
     }
     let cout_g = cout / groups;
-    let l_out = out_size(len, kernel_size, stride, padding, dilation);
+    let l_out = out_size(len, kernel_size, stride, padding, dilation)?;
+    let input_columns =
+        ShapeBuf::from_slice(&[cin_g, kernel_size]).checked_numel(OperationKind::Conv1d)?;
 
     let mut group_outputs: Vec<CpuStorage> = Vec::with_capacity(groups);
     for g in 0..groups {
         let input_g = input.narrow(1, g * cin_g, cin_g)?;
         let weight_g = weight.narrow(0, g * cout_g, cout_g)?;
-        let cols = im2col_1d(&input_g, kernel_size, stride, padding, dilation);
-        let weight_mat = weight_g.reshape(&[cout_g, cin_g * kernel_size])?;
+        let cols = im2col_1d(&input_g, kernel_size, stride, padding, dilation)?;
+        let weight_mat = weight_g.reshape(&[cout_g, input_columns])?;
         let out_g = batched_matmul_impl(&cols, &transpose_last2(&weight_mat))?;
         group_outputs.push(out_g);
     }
@@ -366,7 +420,7 @@ pub(crate) fn conv1d_impl<T: DType, D: incin_core::prelude::Device, K: DType>(
                 let weight_g = weight_capture.narrow(0, g * cout_g, cout_g)?;
                 let grad_out_g = grad_out_t.narrow(2, g * cout_g, cout_g)?;
 
-                let weight_mat = weight_g.reshape(&[cout_g, cin_g * kernel_size])?;
+                let weight_mat = weight_g.reshape(&[cout_g, input_columns])?;
 
                 // grad_cols = grad_out_g @ weight_mat : [B, L_out, Cout_g] @ [Cout_g, Cin_g*K]
                 let grad_cols = batched_matmul_impl(&grad_out_g, &weight_mat)?;
@@ -377,14 +431,14 @@ pub(crate) fn conv1d_impl<T: DType, D: incin_core::prelude::Device, K: DType>(
                     stride,
                     padding,
                     dilation,
-                );
+                )?;
                 grad_input_groups.push(grad_input_g);
 
                 // grad_weight_mat = grad_out_g^T @ cols : [Cout_g, B*L_out] view via batched matmul
-                let cols = im2col_1d(&input_g, kernel_size, stride, padding, dilation);
+                let cols = im2col_1d(&input_g, kernel_size, stride, padding, dilation)?;
                 let grad_weight_mat = batched_matmul_impl(&transpose_last2(&grad_out_g), &cols)?;
                 // grad_weight_mat: [B, Cout_g, Cin_g*K] -> sum over batch -> [Cout_g, Cin_g*K]
-                let grad_weight_summed = sum_batch_dim(&grad_weight_mat);
+                let grad_weight_summed = sum_batch_dim(&grad_weight_mat)?;
                 let grad_weight_g = grad_weight_summed.reshape(&[cout_g, cin_g, kernel_size])?;
                 grad_weight_groups.push(grad_weight_g);
             }
@@ -398,7 +452,7 @@ pub(crate) fn conv1d_impl<T: DType, D: incin_core::prelude::Device, K: DType>(
                         reason: "the single convolution group produced no input gradient",
                     })?
             } else {
-                concat_along_dim1(&grad_input_groups)
+                concat_along_dim1(&grad_input_groups)?
             };
             let grad_weight = if groups == 1 {
                 grad_weight_groups
@@ -409,7 +463,7 @@ pub(crate) fn conv1d_impl<T: DType, D: incin_core::prelude::Device, K: DType>(
                         reason: "the single convolution group produced no weight gradient",
                     })?
             } else {
-                concat_along_dim0(&grad_weight_groups)
+                concat_along_dim0(&grad_weight_groups)?
             };
 
             Ok(vec![grad_input, grad_weight])
@@ -468,15 +522,18 @@ pub(crate) fn conv2d_impl<T: DType, D: incin_core::prelude::Device, K: DType>(
         });
     }
     let cout_g = cout / groups;
-    let h_out = out_size(h, kh, stride, padding, dilation);
-    let w_out = out_size(w, kw, stride, padding, dilation);
+    let h_out = out_size(h, kh, stride, padding, dilation)?;
+    let w_out = out_size(w, kw, stride, padding, dilation)?;
+    let spatial = ShapeBuf::from_slice(&[h_out, w_out]).checked_numel(OperationKind::Conv2d)?;
+    let input_columns =
+        ShapeBuf::from_slice(&[cin_g, kh, kw]).checked_numel(OperationKind::Conv2d)?;
 
     let mut group_outputs: Vec<CpuStorage> = Vec::with_capacity(groups);
     for g in 0..groups {
         let input_g = input.narrow(1, g * cin_g, cin_g)?;
         let weight_g = weight.narrow(0, g * cout_g, cout_g)?;
-        let cols = im2col_2d(&input_g, kh, kw, stride, padding, dilation);
-        let weight_mat = weight_g.reshape(&[cout_g, cin_g * kh * kw])?;
+        let cols = im2col_2d(&input_g, kh, kw, stride, padding, dilation)?;
+        let weight_mat = weight_g.reshape(&[cout_g, input_columns])?;
         let out_g = batched_matmul_impl(&cols, &transpose_last2(&weight_mat))?;
         group_outputs.push(out_g);
     }
@@ -498,7 +555,7 @@ pub(crate) fn conv2d_impl<T: DType, D: incin_core::prelude::Device, K: DType>(
         input_ids: vec![input_id, weight_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
             // grad_out: [B, Cout, H_out, W_out] -> [B, Cout, H_out*W_out] -> [B, H_out*W_out, Cout]
-            let grad_out_flat = grad_out.reshape(&[b, cout, h_out * w_out])?;
+            let grad_out_flat = grad_out.reshape(&[b, cout, spatial])?;
             let grad_out_t = grad_out_flat.transpose(1, 2)?;
 
             let mut grad_input_groups: Vec<CpuStorage> = Vec::with_capacity(groups);
@@ -508,7 +565,7 @@ pub(crate) fn conv2d_impl<T: DType, D: incin_core::prelude::Device, K: DType>(
                 let weight_g = weight_capture.narrow(0, g * cout_g, cout_g)?;
                 let grad_out_g = grad_out_t.narrow(2, g * cout_g, cout_g)?;
 
-                let weight_mat = weight_g.reshape(&[cout_g, cin_g * kh * kw])?;
+                let weight_mat = weight_g.reshape(&[cout_g, input_columns])?;
 
                 let grad_cols = batched_matmul_impl(&grad_out_g, &weight_mat)?;
                 let grad_input_g = col2im_2d(
@@ -519,12 +576,12 @@ pub(crate) fn conv2d_impl<T: DType, D: incin_core::prelude::Device, K: DType>(
                     stride,
                     padding,
                     dilation,
-                );
+                )?;
                 grad_input_groups.push(grad_input_g);
 
-                let cols = im2col_2d(&input_g, kh, kw, stride, padding, dilation);
+                let cols = im2col_2d(&input_g, kh, kw, stride, padding, dilation)?;
                 let grad_weight_mat = batched_matmul_impl(&transpose_last2(&grad_out_g), &cols)?;
-                let grad_weight_summed = sum_batch_dim(&grad_weight_mat);
+                let grad_weight_summed = sum_batch_dim(&grad_weight_mat)?;
                 let grad_weight_g = grad_weight_summed.reshape(&[cout_g, cin_g, kh, kw])?;
                 grad_weight_groups.push(grad_weight_g);
             }
@@ -538,7 +595,7 @@ pub(crate) fn conv2d_impl<T: DType, D: incin_core::prelude::Device, K: DType>(
                         reason: "the single convolution group produced no input gradient",
                     })?
             } else {
-                concat_along_dim1(&grad_input_groups)
+                concat_along_dim1(&grad_input_groups)?
             };
             let grad_weight = if groups == 1 {
                 grad_weight_groups
@@ -549,7 +606,7 @@ pub(crate) fn conv2d_impl<T: DType, D: incin_core::prelude::Device, K: DType>(
                         reason: "the single convolution group produced no weight gradient",
                     })?
             } else {
-                concat_along_dim0(&grad_weight_groups)
+                concat_along_dim0(&grad_weight_groups)?
             };
 
             Ok(vec![grad_input, grad_weight])
@@ -644,15 +701,18 @@ pub(crate) fn conv_transpose2d_impl<T: DType, D: incin_core::prelude::Device, K:
         });
     }
 
-    let h_nat = natural_transpose_out_size(h, kh, stride, padding, dilation);
-    let w_nat = natural_transpose_out_size(w, kw, stride, padding, dilation);
+    let h_nat = natural_transpose_out_size(h, kh, stride, padding, dilation)?;
+    let w_nat = natural_transpose_out_size(w, kw, stride, padding, dilation)?;
+    let input_spatial = ShapeBuf::from_slice(&[h, w]).checked_numel(OperationKind::Conv2d)?;
+    let weight_columns =
+        ShapeBuf::from_slice(&[cout, kh, kw]).checked_numel(OperationKind::Conv2d)?;
 
     // input: [B, Cin, H, W] -> [B, Cin, H*W] -> [B, H*W, Cin] (mirrors
     // conv2d_impl's backward: "grad_out_t" role, but played by `input` here).
-    let input_flat = input.reshape(&[b, cin, h * w])?;
+    let input_flat = input.reshape(&[b, cin, input_spatial])?;
     let input_t = input_flat.transpose(1, 2)?;
     // weight: [Cin, Cout, Kh, Kw] -> [Cin, Cout*Kh*Kw] ("weight_mat" role).
-    let weight_mat = weight.reshape(&[cin, cout * kh * kw])?;
+    let weight_mat = weight.reshape(&[cin, weight_columns])?;
     // cols = input_t @ weight_mat : [B, H*W, Cin] @ [Cin, Cout*Kh*Kw] -> [B, H*W, Cout*Kh*Kw]
     let cols = batched_matmul_impl(&input_t, &weight_mat)?;
 
@@ -666,12 +726,25 @@ pub(crate) fn conv_transpose2d_impl<T: DType, D: incin_core::prelude::Device, K:
         stride,
         padding,
         dilation,
-    );
+    )?;
 
     let conv_out = if output_padding == 0 {
         natural_out
     } else {
-        let final_shape = vec![b, cout, h_nat + output_padding, w_nat + output_padding];
+        let final_h = h_nat
+            .checked_add(output_padding)
+            .ok_or(ShapeError::ArithmeticOverflow {
+                operation: OperationKind::Conv2d,
+                expression: "transposed-convolution height plus output padding",
+            })?;
+        let final_w = w_nat
+            .checked_add(output_padding)
+            .ok_or(ShapeError::ArithmeticOverflow {
+                operation: OperationKind::Conv2d,
+                expression: "transposed-convolution width plus output padding",
+            })?;
+        ShapeBuf::from_slice(&[b, cout, final_h, final_w]).checked_numel(OperationKind::Conv2d)?;
+        let final_shape = vec![b, cout, final_h, final_w];
         scatter_into_zeros(&final_shape, &[0, 0, 0, 0], &natural_out)
     };
 
@@ -703,9 +776,9 @@ pub(crate) fn conv_transpose2d_impl<T: DType, D: incin_core::prelude::Device, K:
             // the SAME window geometry the forward fold used, then matmuls
             // against weight_mat (transposed relative to the forward's own
             // orientation) to recover grad_input.
-            let grad_out_cols = im2col_2d(&grad_out_nat, kh, kw, stride, padding, dilation);
+            let grad_out_cols = im2col_2d(&grad_out_nat, kh, kw, stride, padding, dilation)?;
             // grad_out_cols: [B, H*W, Cout*Kh*Kw] @ weight_mat^T: [Cout*Kh*Kw, Cin] -> [B, H*W, Cin]
-            let weight_mat = weight_capture.reshape(&[cin, cout * kh * kw])?;
+            let weight_mat = weight_capture.reshape(&[cin, weight_columns])?;
             let grad_input_flat =
                 batched_matmul_impl(&grad_out_cols, &transpose_last2(&weight_mat))?;
             // [B, H*W, Cin] -> [B, Cin, H*W] -> [B, Cin, H, W]
@@ -719,11 +792,11 @@ pub(crate) fn conv_transpose2d_impl<T: DType, D: incin_core::prelude::Device, K:
             // versa) — this swap is the least-obvious part of this reuse:
             // grad_weight_mat = input_t^T @ grad_out_cols :
             // [Cin, B*H*W] view via batched matmul against [B, H*W, Cout*Kh*Kw].
-            let input_flat = input_capture.reshape(&[b, cin, h * w])?;
+            let input_flat = input_capture.reshape(&[b, cin, input_spatial])?;
             let input_t = input_flat.transpose(1, 2)?;
             let grad_weight_mat = batched_matmul_impl(&transpose_last2(&input_t), &grad_out_cols)?;
             // grad_weight_mat: [B, Cin, Cout*Kh*Kw] -> sum over batch -> [Cin, Cout*Kh*Kw]
-            let grad_weight_summed = sum_batch_dim(&grad_weight_mat);
+            let grad_weight_summed = sum_batch_dim(&grad_weight_mat)?;
             let grad_weight = grad_weight_summed.reshape(&[cin, cout, kh, kw])?;
 
             Ok(vec![grad_input, grad_weight])
@@ -750,9 +823,10 @@ pub(crate) fn conv_transpose2d_impl<T: DType, D: incin_core::prelude::Device, K:
 /// Used by both `conv1d_impl`/`conv2d_impl`'s backward to reduce
 /// `grad_weight`'s per-batch matmul contributions down to weight's own
 /// (batch-independent) shape.
-fn sum_batch_dim(t: &CpuStorage) -> CpuStorage {
+fn sum_batch_dim(t: &CpuStorage) -> Result<CpuStorage> {
     let (b, m, n) = (t.shape[0], t.shape[1], t.shape[2]);
-    let mut out = vec![0.0f32; m * n];
+    let out_total = ShapeBuf::from_slice(&[m, n]).checked_numel(OperationKind::Reduction)?;
+    let mut out = vec![0.0f32; out_total];
     for bi in 0..b {
         for mi in 0..m {
             for ni in 0..n {
@@ -760,34 +834,41 @@ fn sum_batch_dim(t: &CpuStorage) -> CpuStorage {
             }
         }
     }
-    CpuStorage::from_contiguous(CpuBuffer::F32(out), vec![m, n])
+    CpuStorage::try_from_contiguous(CpuBuffer::F32(out), vec![m, n])
 }
 
 /// Plain (non-tape-tracked) concat along axis 1 of a list of same-rank
 /// storages, used to re-assemble `grad_input`'s per-group channel slices
 /// inside the hand-composed backward closures above.
-fn concat_along_dim1(parts: &[CpuStorage]) -> CpuStorage {
+fn concat_along_dim1(parts: &[CpuStorage]) -> Result<CpuStorage> {
     concat_along_dim(parts, 1)
 }
 
 /// Plain (non-tape-tracked) concat along axis 0, used to re-assemble
 /// `grad_weight`'s per-group output-channel slices.
-fn concat_along_dim0(parts: &[CpuStorage]) -> CpuStorage {
+fn concat_along_dim0(parts: &[CpuStorage]) -> Result<CpuStorage> {
     concat_along_dim(parts, 0)
 }
 
 /// `concat_along_dim`.
-fn concat_along_dim(parts: &[CpuStorage], dim: usize) -> CpuStorage {
+fn concat_along_dim(parts: &[CpuStorage], dim: usize) -> Result<CpuStorage> {
     let rank = parts[0].shape.len();
     let mut out_shape = parts[0].shape.to_vec();
-    out_shape[dim] = parts.iter().map(|p| p.shape[dim]).sum();
+    out_shape[dim] = parts.iter().try_fold(0usize, |total, part| {
+        total.checked_add(part.shape[dim]).ok_or(
+            incin_core::prelude::ShapeError::ArithmeticOverflow {
+                operation: OperationKind::Concat,
+                expression: "sum of convolution gradient group dimensions",
+            },
+        )
+    })?;
     let out_strides = crate::cpu::stride::contiguous_strides(&out_shape.to_vec());
-    let total: usize = out_shape.iter().product();
+    let total = crate::cpu::stride::checked_numel(&out_shape)?;
     let mut out = vec![0.0f32; total];
 
     let mut offset = 0usize;
     for part in parts {
-        let value_count: usize = part.shape.iter().product();
+        let value_count: usize = crate::cpu::stride::validated_numel(&(part.shape));
         let mut multi_idx = vec![0usize; rank];
         for _ in 0..value_count {
             let mut flat_dest = 0usize;
@@ -798,10 +879,18 @@ fn concat_along_dim(parts: &[CpuStorage], dim: usize) -> CpuStorage {
             out[flat_dest] = part.get(&multi_idx) as f32;
             increment_index(&mut multi_idx, &part.shape);
         }
-        offset += part.shape[dim];
+        offset = offset.checked_add(part.shape[dim]).ok_or(
+            incin_core::prelude::ShapeError::ArithmeticOverflow {
+                operation: OperationKind::Concat,
+                expression: "cumulative convolution gradient group offset",
+            },
+        )?;
     }
 
-    CpuStorage::from_contiguous(CpuBuffer::F32(out), out_shape.to_vec())
+    Ok(CpuStorage::from_contiguous(
+        CpuBuffer::F32(out),
+        out_shape.to_vec(),
+    ))
 }
 
 // ---------------------------------------------------------------------------

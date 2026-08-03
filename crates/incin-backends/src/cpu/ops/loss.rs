@@ -25,9 +25,9 @@
 //! exactly like `mse_loss`/`cross_entropy_loss` above.
 
 use crate::cpu::CpuBackendImpl;
+use incin_core::backend_authoring::{Backend, FloatOps, LossOps, NumericOps, ReductionOps};
 use incin_core::prelude::Reduction;
 use incin_core::prelude::*;
-use incin_core::backend_authoring::{Backend, FloatOps, LossOps, NumericOps, ReductionOps};
 use incin_core::prelude::{DType, Result};
 
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
@@ -70,7 +70,9 @@ impl<T: DType, D: Device> LossOps<Self> for CpuBackendImpl<T, D> {
         let log_probs = crate::cpu::ops::elementwise::log_softmax::<T, D, K>(pred, 1)?;
 
         // CPU FALLBACK
-        let mut one_hot_buf = vec![0.0f32; batch * classes];
+        let one_hot_total =
+            ShapeBuf::from_slice(&[batch, classes]).checked_numel(OperationKind::Storage)?;
+        let mut one_hot_buf = vec![0.0f32; one_hot_total];
         for b_idx in 0..batch {
             let class_idx = target.get(&[b_idx]) as i64 as usize;
             one_hot_buf[b_idx * classes + class_idx] = 1.0;

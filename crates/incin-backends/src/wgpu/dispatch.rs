@@ -3,12 +3,34 @@ use wgpu::ComputePipeline;
 
 use crate::wgpu::device::get_device_state;
 use crate::wgpu::pipeline::get_or_create_pipeline;
-use incin_core::prelude::{DTypeId, OperationKind, Result};
+use incin_core::prelude::{DTypeId, OperationKind, Result, ShapeError};
 
 use crate::wgpu::storage::WgpuBuffer;
 
 /// `WG_SIZE`.
 const WG_SIZE: u32 = 256;
+
+fn checked_workgroups(
+    factors: &[u32],
+    workgroup_size: u32,
+    expression: &'static str,
+) -> Result<u32> {
+    let total = factors.iter().try_fold(1u64, |total, &factor| {
+        total
+            .checked_mul(u64::from(factor))
+            .ok_or(ShapeError::ArithmeticOverflow {
+                operation: OperationKind::Storage,
+                expression,
+            })
+    })?;
+    u32::try_from(total.div_ceil(u64::from(workgroup_size))).map_err(|_| {
+        ShapeError::ArithmeticOverflow {
+            operation: OperationKind::Storage,
+            expression,
+        }
+        .into()
+    })
+}
 
 /// Run a simple 1D dispatch with 3 storage bindings: lhs, rhs, out, plus a u32 params buffer.
 pub(crate) fn dispatch_binary(
@@ -222,7 +244,11 @@ fn run_pipeline(
 
 /// im2col: inp [N,C,H,W] -> col [N, C*Kh*Kw, H_out*W_out]
 /// params: [N, C, H_in, W_in, H_out, W_out, Kh, Kw, sh, sw, ph, pw, dh, dw]
-pub(crate) fn dispatch_im2col(inp: &WgpuBuffer, col: &WgpuBuffer, params_data: &[u32]) {
+pub(crate) fn dispatch_im2col(
+    inp: &WgpuBuffer,
+    col: &WgpuBuffer,
+    params_data: &[u32],
+) -> Result<()> {
     let state = get_device_state();
     let shader = include_str!("shaders/im2col.wgsl");
     let pipeline = get_or_create_pipeline("im2col", shader, "main");
@@ -248,15 +274,20 @@ pub(crate) fn dispatch_im2col(inp: &WgpuBuffer, col: &WgpuBuffer, params_data: &
         ],
     });
     // total threads = N * C*Kh*Kw * H_out*W_out
-    let n = params_data[0] as u64;
-    let c_in = params_data[1] as u64;
-    let h_out = params_data[4] as u64;
-    let w_out = params_data[5] as u64;
-    let kh = params_data[6] as u64;
-    let kw = params_data[7] as u64;
-    let total = n * c_in * kh * kw * h_out * w_out;
-    let wg = total.div_ceil(256) as u32;
+    let wg = checked_workgroups(
+        &[
+            params_data[0],
+            params_data[1],
+            params_data[4],
+            params_data[5],
+            params_data[6],
+            params_data[7],
+        ],
+        256,
+        "WGPU im2col dispatch size",
+    )?;
     run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "Im2Col");
+    Ok(())
 }
 
 /// Fused GPU AdamW.
@@ -312,7 +343,7 @@ pub(crate) fn dispatch_conv_transpose2d(
     weight: &WgpuBuffer,
     out: &WgpuBuffer,
     params_data: &[u32],
-) {
+) -> Result<()> {
     let state = get_device_state();
     let shader = include_str!("shaders/conv_transpose.wgsl");
     let pipeline = get_or_create_pipeline("conv_transpose", shader, "main");
@@ -342,9 +373,18 @@ pub(crate) fn dispatch_conv_transpose2d(
         ],
     });
 
-    let total_out = params_data[0] * params_data[2] * params_data[5] * params_data[6];
-    let wg = total_out.div_ceil(64);
+    let wg = checked_workgroups(
+        &[
+            params_data[0],
+            params_data[2],
+            params_data[5],
+            params_data[6],
+        ],
+        64,
+        "WGPU transposed-convolution dispatch size",
+    )?;
     run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "ConvTranspose");
+    Ok(())
 }
 
 pub(crate) fn dispatch_shape(inp: &WgpuBuffer, out: &Arc<WgpuBuffer>, params_data: &[u32; 21]) {
@@ -383,8 +423,19 @@ pub(crate) fn prepare_shape_params(
     out_shape: &[usize],
     inp_shape: &[usize],
     aux: &[usize],
-) -> [u32; 21] {
-    let rank = core::cmp::max(out_shape.len(), inp_shape.len()) as u32;
+) -> Result<[u32; 21]> {
+    if out_shape.len() > 6 || inp_shape.len() > 6 || aux.len() > 6 {
+        return Err(ShapeError::InvalidParameter {
+            operation: OperationKind::Storage,
+            parameter: "WGPU shape-kernel rank",
+            value: core::cmp::max(out_shape.len(), core::cmp::max(inp_shape.len(), aux.len())),
+        }
+        .into());
+    }
+    let rank = crate::wgpu::backend::checked_u32(
+        core::cmp::max(out_shape.len(), inp_shape.len()),
+        "WGPU shape-kernel rank",
+    )?;
     let mut params = [0u32; 21];
     params[0] = op_mode;
     params[1] = rank;
@@ -392,7 +443,7 @@ pub(crate) fn prepare_shape_params(
 
     let pad_out = 6 - out_shape.len();
     for (i, &s) in out_shape.iter().enumerate() {
-        params[3 + pad_out + i] = s as u32;
+        params[3 + pad_out + i] = crate::wgpu::backend::checked_u32(s, "WGPU output dimension")?;
     }
     for i in 0..pad_out {
         params[3 + i] = 1;
@@ -400,7 +451,7 @@ pub(crate) fn prepare_shape_params(
 
     let pad_inp = 6 - inp_shape.len();
     for (i, &s) in inp_shape.iter().enumerate() {
-        params[9 + pad_inp + i] = s as u32;
+        params[9 + pad_inp + i] = crate::wgpu::backend::checked_u32(s, "WGPU input dimension")?;
     }
     for i in 0..pad_inp {
         params[9 + i] = 1;
@@ -408,9 +459,17 @@ pub(crate) fn prepare_shape_params(
 
     let pad_aux = 6 - aux.len();
     for (i, &s) in aux.iter().enumerate() {
-        let mut val = s as u32;
+        let mut val = crate::wgpu::backend::checked_u32(s, "WGPU shape auxiliary value")?;
         if op_mode == 2 {
-            val += pad_out as u32;
+            val = val
+                .checked_add(crate::wgpu::backend::checked_u32(
+                    pad_out,
+                    "WGPU transpose padding",
+                )?)
+                .ok_or(ShapeError::ArithmeticOverflow {
+                    operation: OperationKind::Transpose,
+                    expression: "WGPU transpose axis plus padding",
+                })?;
         }
         params[15 + pad_aux + i] = val;
     }
@@ -418,7 +477,7 @@ pub(crate) fn prepare_shape_params(
         params[15 + i] = 0;
     }
 
-    params
+    Ok(params)
 }
 
 pub(crate) fn dispatch_reduce_dim(
@@ -464,7 +523,7 @@ pub(crate) fn dispatch_embedding(
     seq_len: u32,
     embed_dim: u32,
     vocab_size: u32,
-) {
+) -> Result<()> {
     let state = get_device_state();
     let shader = include_str!("shaders/embedding.wgsl");
     let pipeline = get_or_create_pipeline("embedding", shader, "main");
@@ -492,9 +551,13 @@ pub(crate) fn dispatch_embedding(
             },
         ],
     });
-    let total = seq_len * embed_dim;
-    let wg = total.div_ceil(WG_SIZE);
+    let wg = checked_workgroups(
+        &[seq_len, embed_dim],
+        WG_SIZE,
+        "WGPU embedding dispatch size",
+    )?;
     run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "Embedding");
+    Ok(())
 }
 
 #[allow(dead_code)]
@@ -629,7 +692,7 @@ pub(crate) fn dispatch_pool2d(
     pw: u32,
     dh: u32,
     dw: u32,
-) {
+) -> Result<()> {
     let state = get_device_state();
     let shader = include_str!("shaders/pool2d.wgsl");
     let pipeline = get_or_create_pipeline("pool2d", shader, "main");
@@ -654,9 +717,9 @@ pub(crate) fn dispatch_pool2d(
             },
         ],
     });
-    let total = n * c * oh * ow;
-    let wg = total.div_ceil(WG_SIZE);
+    let wg = checked_workgroups(&[n, c, oh, ow], WG_SIZE, "WGPU pooling dispatch size")?;
     run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "Pool2D");
+    Ok(())
 }
 
 #[allow(dead_code)] // wired up once WGPU conv bias path is complete
@@ -666,11 +729,17 @@ pub(crate) fn dispatch_bias_add(
     batch: u32,
     channels: u32,
     spatial: u32,
-) {
+) -> Result<()> {
     let state = get_device_state();
     let shader = include_str!("shaders/bias_add.wgsl");
     let pipeline = get_or_create_pipeline("bias_add", shader, "main");
-    let total = batch * channels * spatial;
+    let total = batch
+        .checked_mul(channels)
+        .and_then(|total| total.checked_mul(spatial))
+        .ok_or(ShapeError::ArithmeticOverflow {
+            operation: OperationKind::Pointwise,
+            expression: "WGPU bias-add element count",
+        })?;
     let params_buf = WgpuBuffer::from_slice(&[channels, spatial, total]);
     let bgl = pipeline.get_bind_group_layout(0);
     let bg = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -693,6 +762,7 @@ pub(crate) fn dispatch_bias_add(
     });
     let wg = total.div_ceil(WG_SIZE);
     run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "BiasAdd");
+    Ok(())
 }
 
 pub(crate) fn dispatch_conv2d_direct(
@@ -700,7 +770,7 @@ pub(crate) fn dispatch_conv2d_direct(
     weight: &WgpuBuffer,
     out: &Arc<WgpuBuffer>,
     params: &[u32; 16],
-) {
+) -> Result<()> {
     let state = get_device_state();
     let shader = include_str!("shaders/conv2d_direct.wgsl");
     let pipeline = get_or_create_pipeline("conv2d_direct", shader, "main");
@@ -728,9 +798,13 @@ pub(crate) fn dispatch_conv2d_direct(
             },
         ],
     });
-    let total = params[0] * params[4] * params[5] * params[6];
-    let wg = total.div_ceil(WG_SIZE);
+    let wg = checked_workgroups(
+        &[params[0], params[4], params[5], params[6]],
+        WG_SIZE,
+        "WGPU convolution dispatch size",
+    )?;
     run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "Conv2DDirect");
+    Ok(())
 }
 
 #[allow(dead_code)]

@@ -44,9 +44,9 @@
 //!   silent `Ok(t.clone())` placeholder (T-01-15 mitigation).
 
 use crate::cpu::CpuBackendImpl;
+use incin_core::backend_authoring::{Backend, ReductionOps};
 use incin_core::prelude::Error;
 use incin_core::prelude::*;
-use incin_core::backend_authoring::{Backend, ReductionOps};
 use incin_core::prelude::{DType, Result};
 
 use crate::cpu::ops::elementwise::increment_index;
@@ -88,13 +88,13 @@ fn unflatten_index(flat: usize, shape: &[usize]) -> Vec<usize> {
 pub(crate) fn sum_axis_keepdim(storage: &CpuStorage, axis: usize) -> CpuStorage {
     let mut out_shape = storage.shape.to_vec();
     out_shape[axis] = 1;
-    let total: usize = out_shape.iter().product();
+    let total: usize = crate::cpu::stride::validated_numel(&(out_shape));
 
     macro_rules! reduce_variant {
         ($variant:ident, $to_ty:expr) => {{
             let mut out = vec![Default::default(); total];
             let mut idx = vec![0usize; storage.shape.len()];
-            let src_total: usize = storage.shape.iter().product();
+            let src_total: usize = crate::cpu::stride::validated_numel(&(storage.shape));
             for _ in 0..src_total {
                 let mut out_idx = idx.clone();
                 out_idx[axis] = 0;
@@ -139,7 +139,7 @@ pub(crate) fn sum_axis_squeeze(storage: &CpuStorage, axis: usize) -> CpuStorage 
 /// `mean_all` backward closures to broadcast the incoming scalar gradient back
 /// to the full original shape.
 fn fill_like(like: &CpuStorage, shape: &[usize], scalar_value: f64) -> CpuStorage {
-    let total: usize = shape.iter().product();
+    let total: usize = crate::cpu::stride::validated_numel(shape);
     let new_buffer = match &*like.buffer {
         CpuBuffer::F32(_) => CpuBuffer::F32(vec![scalar_value as f32; total]),
         CpuBuffer::F64(_) => CpuBuffer::F64(vec![scalar_value; total]),
@@ -161,12 +161,12 @@ fn fill_like(like: &CpuStorage, shape: &[usize], scalar_value: f64) -> CpuStorag
 fn max_axis_with_indices(storage: &CpuStorage, axis: usize) -> (CpuStorage, Vec<usize>) {
     let mut out_shape = storage.shape.to_vec();
     out_shape[axis] = 1;
-    let out_total: usize = out_shape.iter().product();
+    let out_total: usize = crate::cpu::stride::validated_numel(&(out_shape));
     let mut best_val = vec![f64::NEG_INFINITY; out_total];
     let mut best_flat_src_idx = vec![0usize; out_total];
 
     let mut idx = vec![0usize; storage.shape.len()];
-    let src_total: usize = storage.shape.iter().product();
+    let src_total: usize = crate::cpu::stride::validated_numel(&(storage.shape));
     for _ in 0..src_total {
         let mut out_idx = idx.clone();
         out_idx[axis] = 0;
@@ -190,12 +190,12 @@ fn max_axis_with_indices(storage: &CpuStorage, axis: usize) -> (CpuStorage, Vec<
 fn min_axis_with_indices(storage: &CpuStorage, axis: usize) -> (CpuStorage, Vec<usize>) {
     let mut out_shape = storage.shape.to_vec();
     out_shape[axis] = 1;
-    let out_total: usize = out_shape.iter().product();
+    let out_total: usize = crate::cpu::stride::validated_numel(&(out_shape));
     let mut best_val = vec![f64::INFINITY; out_total];
     let mut best_flat_src_idx = vec![0usize; out_total];
 
     let mut idx = vec![0usize; storage.shape.len()];
-    let src_total: usize = storage.shape.iter().product();
+    let src_total: usize = crate::cpu::stride::validated_numel(&(storage.shape));
     for _ in 0..src_total {
         let mut out_idx = idx.clone();
         out_idx[axis] = 0;
@@ -224,9 +224,9 @@ fn scatter_axis_grad(
     winning_flat_src_idx: &[usize],
     original_shape: &[usize],
 ) -> CpuStorage {
-    let total: usize = original_shape.iter().product();
+    let total: usize = crate::cpu::stride::validated_numel(original_shape);
     let mut vals = vec![0.0f32; total];
-    let out_total: usize = grad_out.shape.iter().product();
+    let out_total: usize = crate::cpu::stride::validated_numel(&(grad_out.shape));
     let mut out_idx = vec![0usize; grad_out.shape.len()];
     for flat_out in 0..out_total {
         let g = grad_out.get(&out_idx);
@@ -247,7 +247,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
     fn sum_all<K: DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let total: usize = t.shape.iter().product();
+        let total: usize = crate::cpu::stride::validated_numel(&(t.shape));
         let mut idx = vec![0usize; t.shape.len()];
         let mut sum = 0f64;
         for _ in 0..total {
@@ -281,7 +281,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
     fn mean_all<K: DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let total: usize = t.shape.iter().product();
+        let total: usize = crate::cpu::stride::validated_numel(&(t.shape));
         let mut idx = vec![0usize; t.shape.len()];
         let mut sum = 0f64;
         for _ in 0..total {
@@ -319,7 +319,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
     fn max_all<K: DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let total: usize = t.shape.iter().product();
+        let total: usize = crate::cpu::stride::validated_numel(&(t.shape));
         let mut idx = vec![0usize; t.shape.len()];
         let mut best_val = f64::NEG_INFINITY;
         let mut best_flat_idx = 0usize;
@@ -342,7 +342,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &CpuStorage| {
                 let scalar_grad = grad_out.get(&vec![0usize; grad_out.shape.len()]);
-                let total: usize = original_shape.iter().product();
+                let total: usize = crate::cpu::stride::validated_numel(&(original_shape));
                 let mut vals = vec![0.0f32; total];
                 vals[best_flat_idx] = scalar_grad as f32;
                 Ok(vec![CpuStorage::from_contiguous(
@@ -360,7 +360,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
     fn min_all<K: DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let total: usize = t.shape.iter().product();
+        let total: usize = crate::cpu::stride::validated_numel(&(t.shape));
         let mut idx = vec![0usize; t.shape.len()];
         let mut best_val = f64::INFINITY;
         let mut best_flat_idx = 0usize;
@@ -383,7 +383,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
             input_ids: vec![t_id],
             backward: Box::new(move |grad_out: &CpuStorage| {
                 let scalar_grad = grad_out.get(&vec![0usize; grad_out.shape.len()]);
-                let total: usize = original_shape.iter().product();
+                let total: usize = crate::cpu::stride::validated_numel(&(original_shape));
                 let mut vals = vec![0.0f32; total];
                 vals[best_flat_idx] = scalar_grad as f32;
                 Ok(vec![CpuStorage::from_contiguous(
@@ -427,7 +427,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                 // Materialize the broadcast view (walk all elements) so the
                 // gradient is a concrete contiguous tensor, not a strided view
                 // that upstream accumulation might mis-sum.
-                let total: usize = original_shape.iter().product();
+                let total: usize = crate::cpu::stride::validated_numel(&(original_shape));
                 let mut idx = vec![0usize; original_shape.len()];
                 let mut vals = Vec::with_capacity(total);
                 for _ in 0..total {
@@ -473,7 +473,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                 // (which already has size 1 on `dim`) back to the original
                 // shape, then materialize it.
                 let expanded = grad_out.broadcast_as(&original_shape)?;
-                let total: usize = original_shape.iter().product();
+                let total: usize = crate::cpu::stride::validated_numel(&(original_shape));
                 let mut idx = vec![0usize; original_shape.len()];
                 let mut vals = Vec::with_capacity(total);
                 for _ in 0..total {
@@ -508,7 +508,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
         let axis_len = t.shape[dim] as f64;
         let summed = sum_axis_squeeze(t, dim);
         let out_shape = summed.shape.to_vec();
-        let total: usize = out_shape.iter().product();
+        let total: usize = crate::cpu::stride::validated_numel(&(out_shape));
         let mut idx = vec![0usize; out_shape.len()];
         let mut vals = Vec::with_capacity(total);
         for _ in 0..total {
@@ -531,7 +531,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                 keepdim_shape.insert(dim, 1);
                 let keepdim = grad_out.reshape(&keepdim_shape)?;
                 let expanded = keepdim.broadcast_as(&original_shape)?;
-                let total: usize = original_shape.iter().product();
+                let total: usize = crate::cpu::stride::validated_numel(&(original_shape));
                 let mut idx = vec![0usize; original_shape.len()];
                 let mut vals = Vec::with_capacity(total);
                 for _ in 0..total {
@@ -569,7 +569,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
         let axis_len = t.shape[dim] as f64;
         let summed = sum_axis_keepdim(t, dim);
         let out_shape = summed.shape.to_vec();
-        let total: usize = out_shape.iter().product();
+        let total: usize = crate::cpu::stride::validated_numel(&(out_shape));
         let mut idx = vec![0usize; out_shape.len()];
         let mut vals = Vec::with_capacity(total);
         for _ in 0..total {
@@ -588,7 +588,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                 // (already size 1 on `dim`) back to the original shape, then
                 // scale by 1/axis_len.
                 let expanded = grad_out.broadcast_as(&original_shape)?;
-                let total: usize = original_shape.iter().product();
+                let total: usize = crate::cpu::stride::validated_numel(&(original_shape));
                 let mut idx = vec![0usize; original_shape.len()];
                 let mut vals = Vec::with_capacity(total);
                 for _ in 0..total {
@@ -797,7 +797,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                     .expect("argmax: squeeze reshape of size-1 keepdim result cannot fail"))
             }
             None => {
-                let total: usize = t.shape.iter().product();
+                let total: usize = crate::cpu::stride::validated_numel(&(t.shape));
                 let mut idx = vec![0usize; t.shape.len()];
                 let mut best_val = f64::NEG_INFINITY;
                 let mut best_flat_idx = 0i64;
@@ -854,7 +854,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                     .expect("argmin: squeeze reshape of size-1 keepdim result cannot fail"))
             }
             None => {
-                let total: usize = t.shape.iter().product();
+                let total: usize = crate::cpu::stride::validated_numel(&(t.shape));
                 let mut idx = vec![0usize; t.shape.len()];
                 let mut best_val = f64::INFINITY;
                 let mut best_flat_idx = 0i64;
@@ -879,7 +879,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
     fn prod_all<K: DType>(
         t: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let total: usize = t.shape.iter().product();
+        let total: usize = crate::cpu::stride::validated_numel(&(t.shape));
         let mut idx = vec![0usize; t.shape.len()];
         let mut prod = 1.0f64;
         for _ in 0..total {
@@ -900,9 +900,9 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
         out_shape.remove(dim);
         let mut keep_shape = t.shape.to_vec();
         keep_shape[dim] = 1;
-        let total: usize = keep_shape.iter().product();
+        let total: usize = crate::cpu::stride::validated_numel(&(keep_shape));
         let mut prods = vec![1.0f64; total];
-        let src_total: usize = t.shape.iter().product();
+        let src_total: usize = crate::cpu::stride::validated_numel(&(t.shape));
         let mut idx = vec![0usize; t.shape.len()];
         for _ in 0..src_total {
             let mut out_idx = idx.clone();
@@ -920,7 +920,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
         t: &<Self as Backend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let total: usize = t.shape.iter().product();
+        let total: usize = crate::cpu::stride::validated_numel(&(t.shape));
         let mut out_data = vec![0.0f64; total];
         let dim_len = t.shape[dim];
         let strides = contiguous_strides(&t.shape);
@@ -971,10 +971,11 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
 
         let mut base_shape = shape.clone();
         base_shape[dim] = 1;
-        let n_slices = base_shape.iter().product::<usize>();
+        let n_slices = crate::cpu::stride::checked_numel(&base_shape)?;
 
-        let mut out_vals = vec![0.0f32; out_shape.iter().product()];
-        let mut out_indices = vec![0u32; out_shape.iter().product()];
+        let out_len = crate::cpu::stride::checked_numel(&out_shape)?;
+        let mut out_vals = vec![0.0f32; out_len];
+        let mut out_indices = vec![0u32; out_len];
 
         for i in 0..n_slices {
             let mut rem = i;
@@ -987,7 +988,13 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
             let mut slice_vals = Vec::with_capacity(shape[dim]);
             for j in 0..shape[dim] {
                 coords[dim] = j;
-                slice_vals.push((t.get(&coords), j as u32));
+                slice_vals.push((
+                    t.get(&coords),
+                    u32::try_from(j).map_err(|_| ShapeError::ArithmeticOverflow {
+                        operation: OperationKind::Reduction,
+                        expression: "topk index does not fit u32",
+                    })?,
+                ));
             }
             if largest {
                 slice_vals
@@ -1028,8 +1035,8 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
         }
         let mut base_shape = shape.clone();
         base_shape[dim] = 1;
-        let n_slices = base_shape.iter().product::<usize>();
-        let mut out = vec![0u32; shape.iter().product()];
+        let n_slices = crate::cpu::stride::checked_numel(&base_shape)?;
+        let mut out = vec![0u32; crate::cpu::stride::checked_numel(&shape)?];
 
         for i in 0..n_slices {
             let mut rem = i;
@@ -1042,7 +1049,13 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
             let mut slice_vals = Vec::with_capacity(shape[dim]);
             for k in 0..shape[dim] {
                 coords[dim] = k;
-                slice_vals.push((t.get(&coords), k as u32));
+                slice_vals.push((
+                    t.get(&coords),
+                    u32::try_from(k).map_err(|_| ShapeError::ArithmeticOverflow {
+                        operation: OperationKind::Reduction,
+                        expression: "argsort index does not fit u32",
+                    })?,
+                ));
             }
             if descending {
                 slice_vals

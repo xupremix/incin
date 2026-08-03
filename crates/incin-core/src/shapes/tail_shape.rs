@@ -82,12 +82,6 @@ where
         let tail_dims = Tail::dims(&shape.tail_field);
         shape.leading_dims.len() + tail_dims.as_ref().len()
     }
-
-    fn numel(shape: &Self::Field) -> usize {
-        let leading_numel: usize = shape.leading_dims.iter().product();
-        let tail_numel = Tail::numel(&shape.tail_field);
-        leading_numel * tail_numel
-    }
 }
 
 impl<Tail: DynShape<Field: Default>, D: Dim> EndsWith<D> for TailShape<Tail>
@@ -187,12 +181,6 @@ where
     fn rank(shape: &Self::Field) -> usize {
         let head_dims = Head::dims(&shape.head_field);
         head_dims.as_ref().len() + shape.trailing_dims.len()
-    }
-
-    fn numel(shape: &Self::Field) -> usize {
-        let head_numel = Head::numel(&shape.head_field);
-        let trailing_numel: usize = shape.trailing_dims.iter().product();
-        head_numel * trailing_numel
     }
 }
 
@@ -309,13 +297,6 @@ where
         let head_dims = Head::dims(&shape.head_field);
         let tail_dims = Tail::dims(&shape.tail_field);
         head_dims.as_ref().len() + shape.middle_dims.len() + tail_dims.as_ref().len()
-    }
-
-    fn numel(shape: &Self::Field) -> usize {
-        let head_numel = Head::numel(&shape.head_field);
-        let middle_numel: usize = shape.middle_dims.iter().product();
-        let tail_numel = Tail::numel(&shape.tail_field);
-        head_numel * middle_numel * tail_numel
     }
 }
 

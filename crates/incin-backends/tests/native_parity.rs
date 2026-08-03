@@ -977,10 +977,10 @@ fn embedding_forward_and_backward_parity() {
     // so the integer index storage is built directly via NativeStorage's own
     // I64 buffer constructor instead — still purely-Backend-trait on the
     // WEIGHT side, which is the side under gradient test.
-    let n_idx = incin_backends::cpu::CpuStorage::from_contiguous(
+    let n_idx = incin_backends::cpu::CpuStorage::try_from_contiguous(
         incin_backends::cpu::CpuBuffer::I64(vec![1, 3]),
         vec![2],
-    );
+    )?;
 
     let (fwd_n, grad_n) = run_and_grad::<NB>(
         |w| NB::embedding::<f32, i64>(&n_idx, w).unwrap(),
@@ -1288,10 +1288,10 @@ fn bce_with_logits_loss_forward_and_backward_parity() {
 fn cross_entropy_loss_forward_and_backward_parity() {
     // pred [2, 3] logits, target [2] class indices.
     let pred = vec![1.0, 2.0, 0.5, 0.2, 1.5, 3.0];
-    let n_target = incin_backends::cpu::CpuStorage::from_contiguous(
+    let n_target = incin_backends::cpu::CpuStorage::try_from_contiguous(
         incin_backends::cpu::CpuBuffer::I64(vec![1, 2]),
         vec![2],
-    );
+    )?;
     let (fwd_n, grad_n) = run_and_grad::<NB>(
         |p| NB::cross_entropy_loss::<f32, i64>(p, &n_target, Reduction::Mean).unwrap(),
         &pred,

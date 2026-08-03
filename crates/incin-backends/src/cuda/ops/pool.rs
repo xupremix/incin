@@ -9,20 +9,48 @@ use super::alloc_zeroed_bytes;
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
 use incin_core::prelude::OperationKind;
-use incin_core::prelude::{DTypeId, Result};
+use incin_core::prelude::{DTypeId, Result, ShapeBuf, ShapeError};
 
 /// `[N, C, H, W]`-style output spatial size, matching
-/// `cpu/ops/pool.rs::out_size` exactly (same saturating formula).
+/// Uses checked arithmetic and rejects invalid zero parameters.
 fn out_size(
     len: usize,
     kernel_size: usize,
     stride: usize,
     padding: usize,
     dilation: usize,
-) -> usize {
-    let padded = len + 2 * padding;
-    let effective_kernel = dilation * kernel_size.saturating_sub(1) + 1;
-    padded.saturating_sub(effective_kernel) / stride + 1
+) -> Result<usize> {
+    if kernel_size == 0 || stride == 0 || dilation == 0 {
+        return Err(ShapeError::InvalidParameter {
+            operation: OperationKind::Pool2d,
+            parameter: "kernel, stride, and dilation must be nonzero",
+            value: 0,
+        }
+        .into());
+    }
+    let padded = padding
+        .checked_mul(2)
+        .and_then(|twice| len.checked_add(twice))
+        .ok_or(ShapeError::ArithmeticOverflow {
+            operation: OperationKind::Pool2d,
+            expression: "CUDA pooling padded input dimension",
+        })?;
+    let effective_kernel = dilation
+        .checked_mul(kernel_size - 1)
+        .and_then(|span| span.checked_add(1))
+        .ok_or(ShapeError::ArithmeticOverflow {
+            operation: OperationKind::Pool2d,
+            expression: "CUDA pooling effective kernel",
+        })?;
+    if effective_kernel > padded {
+        return Err(ShapeError::InvalidParameter {
+            operation: OperationKind::Pool2d,
+            parameter: "effective kernel exceeds padded input",
+            value: effective_kernel,
+        }
+        .into());
+    }
+    Ok((padded - effective_kernel) / stride + 1)
 }
 
 #[cfg(feature = "cuda")]
@@ -59,13 +87,17 @@ fn alloc_zeroed(
     })
 }
 
-fn launch_cfg(n: usize) -> cudarc::driver::LaunchConfig {
+fn launch_cfg(n: usize) -> Result<cudarc::driver::LaunchConfig> {
     let block_size: u32 = 256;
-    cudarc::driver::LaunchConfig {
-        grid_dim: ((n as u32).div_ceil(block_size), 1, 1),
+    Ok(cudarc::driver::LaunchConfig {
+        grid_dim: (
+            crate::cuda::checked_u32(n, "CUDA pooling grid dimension")?.div_ceil(block_size),
+            1,
+            1,
+        ),
         block_dim: (block_size, 1, 1),
         shared_mem_bytes: 0,
-    }
+    })
 }
 
 /// Forward max_pool2d. Returns `(output, max_indices)` — `max_indices` is a
@@ -93,15 +125,15 @@ pub(crate) fn launch_max_pool2d_forward(
     let (sh, sw) = stride;
     let (ph, pw) = padding;
     let (dh, dw) = dilation;
-    let oh = out_size(h, kh, sh, ph, dh);
-    let ow = out_size(w, kw, sw, pw, dw);
+    let oh = out_size(h, kh, sh, ph, dh)?;
+    let ow = out_size(w, kw, sw, pw, dw)?;
     let out_shape = alloc::vec![n, c, oh, ow];
-    let out_total = n * c * oh * ow;
+    let out_total = ShapeBuf::from_slice(&out_shape).checked_numel(OperationKind::Pool2d)?;
 
     let mut out_b = alloc_zeroed(&stream, &t_buf.device, device_id, t_buf.dtype, out_total)?;
     let mut idx_b = alloc_zeroed(&stream, &t_buf.device, device_id, DTypeId::U32, out_total)?;
 
-    let cfg = launch_cfg(out_total);
+    let cfg = launch_cfg(out_total)?;
     unsafe {
         let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();
         let out_u8: &mut cudarc::driver::CudaSlice<u8> =
@@ -160,11 +192,13 @@ pub(crate) fn launch_scatter_pool_grad_2d(
     let f = dispatcher.get_function("pool", "scatter_pool_grad_2d")?;
     let stream = go_buf.device.default_stream();
 
-    let out_total: usize = grad_out.shape.iter().product();
-    let in_total: usize = input_shape.iter().product();
+    let out_total: usize = incin_core::prelude::ShapeBuf::from_slice(&(grad_out.shape))
+        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+    let in_total: usize = incin_core::prelude::ShapeBuf::from_slice(&(input_shape))
+        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
     let mut grad_in_b = alloc_zeroed(&stream, &go_buf.device, device_id, go_buf.dtype, in_total)?;
 
-    let cfg = launch_cfg(out_total);
+    let cfg = launch_cfg(out_total)?;
     unsafe {
         let go_f32 = go_buf.data.transmute::<f32>(go_buf.len).unwrap();
         let idx_buf = &*max_indices.buffer;
@@ -212,13 +246,13 @@ pub(crate) fn launch_avg_pool2d_forward(
     let (kh, kw) = kernel_size;
     let (sh, sw) = stride;
     let (ph, pw) = padding;
-    let oh = out_size(h, kh, sh, ph, 1);
-    let ow = out_size(w, kw, sw, pw, 1);
+    let oh = out_size(h, kh, sh, ph, 1)?;
+    let ow = out_size(w, kw, sw, pw, 1)?;
     let out_shape = alloc::vec![n, c, oh, ow];
-    let out_total = n * c * oh * ow;
+    let out_total = ShapeBuf::from_slice(&out_shape).checked_numel(OperationKind::Pool2d)?;
 
     let mut out_b = alloc_zeroed(&stream, &t_buf.device, device_id, t_buf.dtype, out_total)?;
-    let cfg = launch_cfg(out_total);
+    let cfg = launch_cfg(out_total)?;
     unsafe {
         let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();
         let out_u8: &mut cudarc::driver::CudaSlice<u8> =
@@ -277,11 +311,11 @@ pub(crate) fn launch_avg_pool2d_backward(
     let (kh, kw) = kernel_size;
     let (sh, sw) = stride;
     let (ph, pw) = padding;
-    let in_total = n * c * h * w;
-    let out_total = n * c * oh * ow;
+    let in_total = ShapeBuf::from_slice(&[n, c, h, w]).checked_numel(OperationKind::Pool2d)?;
+    let out_total = ShapeBuf::from_slice(&[n, c, oh, ow]).checked_numel(OperationKind::Pool2d)?;
 
     let mut grad_in_b = alloc_zeroed(&stream, &go_buf.device, device_id, go_buf.dtype, in_total)?;
-    let cfg = launch_cfg(out_total);
+    let cfg = launch_cfg(out_total)?;
     unsafe {
         let go_f32 = go_buf.data.transmute::<f32>(go_buf.len).unwrap();
         let gi_u8: &mut cudarc::driver::CudaSlice<u8> =
@@ -330,10 +364,11 @@ pub(crate) fn launch_adaptive_avg_pool2d_forward(
     let (n, c, h, w) = (t.shape[0], t.shape[1], t.shape[2], t.shape[3]);
     let (oh, ow) = output_size;
     let out_shape = alloc::vec![n, c, oh, ow];
-    let out_total = n * c * oh * ow;
+    let out_total =
+        ShapeBuf::from_slice(&out_shape).checked_numel(OperationKind::AdaptiveAvgPool2d)?;
 
     let mut out_b = alloc_zeroed(&stream, &t_buf.device, device_id, t_buf.dtype, out_total)?;
-    let cfg = launch_cfg(out_total);
+    let cfg = launch_cfg(out_total)?;
     unsafe {
         let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();
         let out_u8: &mut cudarc::driver::CudaSlice<u8> =
@@ -382,11 +417,13 @@ pub(crate) fn launch_adaptive_avg_pool2d_backward(
         input_shape[3],
     );
     let (oh, ow) = (grad_out.shape[2], grad_out.shape[3]);
-    let in_total = n * c * h * w;
-    let out_total = n * c * oh * ow;
+    let in_total =
+        ShapeBuf::from_slice(&[n, c, h, w]).checked_numel(OperationKind::AdaptiveAvgPool2d)?;
+    let out_total =
+        ShapeBuf::from_slice(&[n, c, oh, ow]).checked_numel(OperationKind::AdaptiveAvgPool2d)?;
 
     let mut grad_in_b = alloc_zeroed(&stream, &go_buf.device, device_id, go_buf.dtype, in_total)?;
-    let cfg = launch_cfg(out_total);
+    let cfg = launch_cfg(out_total)?;
     unsafe {
         let go_f32 = go_buf.data.transmute::<f32>(go_buf.len).unwrap();
         let gi_u8: &mut cudarc::driver::CudaSlice<u8> =

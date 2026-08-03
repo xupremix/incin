@@ -4,7 +4,7 @@ use crate::external::candle::CandleBackend;
 use crate::external::*;
 
 impl<T: incin_core::prelude::DType, D: incin_core::prelude::Device>
-    incin_core::prelude::LossOps<Self> for CandleBackend<T, D>
+    incin_core::backend_authoring::LossOps<Self> for CandleBackend<T, D>
 {
     /// Computes L1 (Mean Absolute Error) loss: `|pred - target|` with
     /// the given `reduction` (Mean, Sum, or None).

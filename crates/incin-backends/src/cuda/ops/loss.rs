@@ -1,8 +1,8 @@
 use super::alloc_zeroed_bytes;
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
-use incin_core::prelude::OperationKind;
 use incin_core::prelude::Result;
+use incin_core::prelude::{OperationKind, ShapeBuf};
 
 #[cfg(feature = "cuda")]
 pub(crate) fn launch_nll_loss(
@@ -27,7 +27,7 @@ pub(crate) fn launch_nll_loss(
     let f = dispatcher.get_function(kernel_name, "nll_loss")?;
     let stream = b_log_sm.device.default_stream();
 
-    let batch = targets.shape.iter().product::<usize>();
+    let batch = ShapeBuf::from_slice(&targets.shape).checked_numel(OperationKind::Reduction)?;
     let out_numel = batch;
 
     let mut out_b = CudaBuffer {
@@ -43,8 +43,11 @@ pub(crate) fn launch_nll_loss(
         device_id,
     };
 
+    let batch_u32 = crate::cuda::checked_u32(batch, "CUDA NLL-loss grid dimension")?;
+    let batch_i32 = crate::cuda::checked_i32(batch, "CUDA NLL-loss batch")?;
+    let classes_i32 = crate::cuda::checked_i32(classes, "CUDA NLL-loss class count")?;
     let cfg = cudarc::driver::LaunchConfig {
-        grid_dim: ((batch as u32).div_ceil(256), 1, 1),
+        grid_dim: (batch_u32.div_ceil(256), 1, 1),
         block_dim: (256, 1, 1),
         shared_mem_bytes: 0,
     };
@@ -66,8 +69,8 @@ pub(crate) fn launch_nll_loss(
             .arg(&log_sm_ptr)
             .arg(&targets_ptr)
             .arg(&mut out_ptr)
-            .arg(&(batch as i32))
-            .arg(&(classes as i32))
+            .arg(&batch_i32)
+            .arg(&classes_i32)
             .launch(cfg)
             .map_err(|e| {
                 incin_core::prelude::Error::Msg(alloc::format!("nll_loss launch failed: {:?}", e))

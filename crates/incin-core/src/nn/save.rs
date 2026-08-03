@@ -125,23 +125,73 @@ pub fn slice_bytes_for_rank(
     local_shape[shard_axis] = local_shard_dim;
 
     let elem_bytes = dtype.element_size();
-    let outer_stride: usize = global_shape[..shard_axis].iter().product();
-    let inner_stride: usize = global_shape[shard_axis + 1..].iter().product();
+    let outer_stride = crate::shapes::ShapeBuf::from_slice(&global_shape[..shard_axis])
+        .checked_numel(crate::shapes::error::OperationKind::Storage)?;
+    let inner_stride = crate::shapes::ShapeBuf::from_slice(&global_shape[shard_axis + 1..])
+        .checked_numel(crate::shapes::error::OperationKind::Storage)?;
 
-    let elem_per_shard_block = local_shard_dim * inner_stride;
-    let bytes_per_shard_block = elem_per_shard_block * elem_bytes;
-    let elem_per_global_block = global_dim * inner_stride;
-    let bytes_per_global_block = elem_per_global_block * elem_bytes;
+    let checked_mul = |lhs: usize, rhs: usize, expression: &'static str| {
+        lhs.checked_mul(rhs)
+            .ok_or(crate::shapes::error::ShapeError::ArithmeticOverflow {
+                operation: crate::shapes::error::OperationKind::Storage,
+                expression,
+            })
+    };
+    let elem_per_shard_block = checked_mul(
+        local_shard_dim,
+        inner_stride,
+        "local shard dimension * inner stride",
+    )?;
+    let bytes_per_shard_block = checked_mul(
+        elem_per_shard_block,
+        elem_bytes,
+        "shard elements * element byte width",
+    )?;
+    let elem_per_global_block = checked_mul(
+        global_dim,
+        inner_stride,
+        "global shard dimension * inner stride",
+    )?;
+    let bytes_per_global_block = checked_mul(
+        elem_per_global_block,
+        elem_bytes,
+        "global block elements * element byte width",
+    )?;
 
-    let mut sliced_bytes = Vec::with_capacity(outer_stride * bytes_per_shard_block);
+    let output_bytes = checked_mul(
+        outer_stride,
+        bytes_per_shard_block,
+        "outer stride * shard block bytes",
+    )?;
+    let mut sliced_bytes = Vec::with_capacity(output_bytes);
 
     for o in 0..outer_stride {
-        let global_offset = o * bytes_per_global_block + rank * bytes_per_shard_block;
-        let end_offset = global_offset + bytes_per_shard_block;
+        let global_offset = checked_mul(
+            o,
+            bytes_per_global_block,
+            "outer index * global block bytes",
+        )?
+        .checked_add(checked_mul(
+            rank,
+            bytes_per_shard_block,
+            "rank * shard block bytes",
+        )?)
+        .ok_or(crate::shapes::error::ShapeError::ArithmeticOverflow {
+            operation: crate::shapes::error::OperationKind::Storage,
+            expression: "global block offset + rank block offset",
+        })?;
+        let end_offset = global_offset.checked_add(bytes_per_shard_block).ok_or(
+            crate::shapes::error::ShapeError::ArithmeticOverflow {
+                operation: crate::shapes::error::OperationKind::Storage,
+                expression: "shard byte offset + shard byte length",
+            },
+        )?;
         if end_offset > bytes.len() {
             return Err(Error::Msg(format!(
                 "Byte slicing offset {}..{} out of buffer len {}",
-                global_offset, end_offset, bytes.len()
+                global_offset,
+                end_offset,
+                bytes.len()
             )));
         }
         sliced_bytes.extend_from_slice(&bytes[global_offset..end_offset]);
@@ -373,9 +423,10 @@ where
             ))
         })?;
 
-        let meta = manifest.tensors.get(&name).ok_or_else(|| {
-            Error::Msg(format!("Parameter {} missing from manifest", name))
-        })?;
+        let meta = manifest
+            .tensors
+            .get(&name)
+            .ok_or_else(|| Error::Msg(format!("Parameter {} missing from manifest", name)))?;
 
         let global_shape = st_view.shape().to_vec();
         let target_shape = B::shape::<B::FloatElem>(current_param.inner());
@@ -386,7 +437,8 @@ where
             (bytes.to_vec(), global_shape)
         } else {
             let mut diff_axes = Vec::new();
-            for (idx, (&g_dim, &t_dim)) in global_shape.iter().zip(target_shape.iter()).enumerate() {
+            for (idx, (&g_dim, &t_dim)) in global_shape.iter().zip(target_shape.iter()).enumerate()
+            {
                 if g_dim != t_dim {
                     diff_axes.push(idx);
                 }
@@ -408,7 +460,14 @@ where
                 )));
             }
 
-            slice_bytes_for_rank(bytes, &global_shape, dtype_id, shard_axis, rank, target_world_size)?
+            slice_bytes_for_rank(
+                bytes,
+                &global_shape,
+                dtype_id,
+                shard_axis,
+                rank,
+                target_world_size,
+            )?
         };
 
         if final_shape != target_shape {

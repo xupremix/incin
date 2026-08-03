@@ -94,9 +94,10 @@ fn local_cuda_static_and_dyn_backward_paths_match() {
     let static_loss = static_weight.mse_loss(&static_target).unwrap();
     assert_close(read_scalar::<CudaB, f32>(static_loss.inner()), 4.0);
     let static_gradients = static_loss.backward().unwrap();
-    let static_gradient = CudaB::get_grad::<f32>(static_weight.inner(), &static_gradients.0)
-        .unwrap()
-        .unwrap();
+    let static_gradient =
+        CudaB::get_grad::<f32>(static_weight.inner(), static_gradients.as_backend())
+            .unwrap()
+            .unwrap();
     assert_close_slice(&read_f32::<CudaB, f32>(&static_gradient), &[2.0, -2.0]);
 
     let args = (vec![2], DTypeId::F32);
@@ -108,7 +109,7 @@ fn local_cuda_static_and_dyn_backward_paths_match() {
     let dyn_loss = dyn_weight.mse_loss(&dyn_target).unwrap();
     assert_close(read_scalar::<CudaB, Dyn>(dyn_loss.inner()), 4.0);
     let dyn_gradients = dyn_loss.backward().unwrap();
-    let dyn_gradient = CudaB::get_grad::<Dyn>(dyn_weight.inner(), &dyn_gradients.0)
+    let dyn_gradient = CudaB::get_grad::<Dyn>(dyn_weight.inner(), dyn_gradients.as_backend())
         .unwrap()
         .unwrap();
     assert_close_slice(&read_f32::<CudaB, Dyn>(&dyn_gradient), &[2.0, -2.0]);
@@ -122,7 +123,7 @@ fn cpu_reference() -> ([f32; 2], Vec<f32>, Vec<f32>) {
     let loss1 = weight.mse_loss(&target1).unwrap();
     let full_loss = loss0.add(&loss1).unwrap().mul_scalar(0.5).unwrap();
     let gradients = full_loss.backward().unwrap();
-    let gradient = CpuB::get_grad::<f32>(weight.inner(), &gradients.0)
+    let gradient = CpuB::get_grad::<f32>(weight.inner(), gradients.as_backend())
         .unwrap()
         .unwrap();
     let update = CpuB::sub::<f32>(
@@ -155,10 +156,19 @@ fn run_static_step(
     assert_close(read_scalar::<CudaB, f32>(loss.inner()), expected_local_loss);
     let mut gradients = loss.backward().unwrap();
     let event = transport
-        .synchronize_gradient(GradientId::new(101).unwrap(), &weight, &mut gradients.0)
+        .synchronize_gradient(
+            GradientId::new(101).unwrap(),
+            &weight,
+            gradients.as_backend_mut(),
+        )
         .expect("static gradient mean all-reduce");
     event.wait_timeout(timeout).expect("static DP completion");
-    assert_synchronized_update::<f32>(&weight, &gradients.0, expected_gradient, expected_update);
+    assert_synchronized_update::<f32>(
+        &weight,
+        gradients.as_backend(),
+        expected_gradient,
+        expected_update,
+    );
 }
 
 fn run_dyn_step(
@@ -180,10 +190,19 @@ fn run_dyn_step(
     assert_close(read_scalar::<CudaB, Dyn>(loss.inner()), expected_local_loss);
     let mut gradients = loss.backward().unwrap();
     let event = transport
-        .synchronize_gradient(GradientId::new(202).unwrap(), &weight, &mut gradients.0)
+        .synchronize_gradient(
+            GradientId::new(202).unwrap(),
+            &weight,
+            gradients.as_backend_mut(),
+        )
         .expect("Dyn gradient mean all-reduce");
     event.wait_timeout(timeout).expect("Dyn DP completion");
-    assert_synchronized_update::<Dyn>(&weight, &gradients.0, expected_gradient, expected_update);
+    assert_synchronized_update::<Dyn>(
+        &weight,
+        gradients.as_backend(),
+        expected_gradient,
+        expected_update,
+    );
 }
 
 fn assert_synchronized_update<K: DType>(

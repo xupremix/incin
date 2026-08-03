@@ -238,11 +238,11 @@ impl CpuStorage {
     }
 
     pub fn try_from_contiguous(data: CpuBuffer, shape: Vec<usize>) -> Result<Self> {
-        let strides = stride::contiguous_strides(&shape);
+        let strides = stride::checked_contiguous_strides(&shape)?;
         Self::try_from_parts(Arc::new(data), shape, strides, 0)
     }
 
-    pub fn from_contiguous(data: CpuBuffer, shape: Vec<usize>) -> Self {
+    pub(crate) fn from_contiguous(data: CpuBuffer, shape: Vec<usize>) -> Self {
         Self::try_from_contiguous(data, shape)
             .expect("backend-created contiguous CPU storage must match its allocation")
     }
@@ -255,7 +255,7 @@ impl CpuStorage {
     /// shape and dtype variant as `other`. Used by `tape::backward()` to
     /// seed the loss tensor's gradient before walking the tape.
     pub fn ones_like(other: &CpuStorage) -> Self {
-        let total: usize = other.shape.iter().product();
+        let total: usize = crate::cpu::stride::validated_numel(&(other.shape));
 
         let new_buffer = match &*other.buffer {
             CpuBuffer::F32(_) => CpuBuffer::F32(vec![1.0f32; total]),
@@ -294,7 +294,7 @@ impl CpuStorage {
             Self::try_from_parts(
                 self.buffer.clone(),
                 new_shape.to_vec(),
-                stride::contiguous_strides(new_shape),
+                stride::checked_contiguous_strides(new_shape)?,
                 self.offset_elements,
             )
         } else {
@@ -409,7 +409,7 @@ impl CpuStorage {
             return self.clone();
         }
 
-        let total: usize = self.shape.iter().product();
+        let total: usize = crate::cpu::stride::validated_numel(&(self.shape));
         let mut multi_idx = vec![0usize; self.shape.len()];
 
         macro_rules! materialize {
@@ -481,10 +481,10 @@ pub(crate) fn scatter_into_zeros(
     region_start: &[usize],
     values: &CpuStorage,
 ) -> CpuStorage {
-    let total: usize = original_shape.iter().product();
+    let total: usize = crate::cpu::stride::validated_numel(original_shape);
     let out_strides = stride::contiguous_strides(original_shape);
     let mut multi_idx = vec![0usize; values.shape.len()];
-    let value_count: usize = values.shape.iter().product();
+    let value_count: usize = crate::cpu::stride::validated_numel(&(values.shape));
 
     macro_rules! scatter_variant {
         ($variant:ident, $ty:ty, $zero:expr) => {{

@@ -190,7 +190,8 @@ where
         let x_shape = x.dims();
         let x_shape = x_shape.as_ref();
         let rank = x_shape.len();
-        let batch_size: usize = x_shape[0..rank - 2].iter().product();
+        let batch_size = crate::shapes::ShapeBuf::from_slice(&x_shape[0..rank - 2])
+            .checked_numel(crate::shapes::error::OperationKind::Conv1d)?;
         let in_channels = x_shape[rank - 2];
         let length = x_shape[rank - 1];
 
@@ -255,7 +256,8 @@ where
         let x_shape = x.dims();
         let x_shape = x_shape.as_ref();
         let rank = x_shape.len();
-        let batch_size: usize = x_shape[0..rank - 2].iter().product();
+        let batch_size = crate::shapes::ShapeBuf::from_slice(&x_shape[0..rank - 2])
+            .checked_numel(crate::shapes::error::OperationKind::Conv1d)?;
         let in_channels = x_shape[rank - 2];
         let length = x_shape[rank - 1];
 
@@ -324,7 +326,8 @@ where
         let x_shape = x.dims();
         let x_shape = x_shape.as_ref();
         let rank = x_shape.len();
-        let batch_size: usize = x_shape[0..rank - 2].iter().product();
+        let batch_size = crate::shapes::ShapeBuf::from_slice(&x_shape[0..rank - 2])
+            .checked_numel(crate::shapes::error::OperationKind::Conv1d)?;
         let in_channels = x_shape[rank - 2];
         let length = x_shape[rank - 1];
 

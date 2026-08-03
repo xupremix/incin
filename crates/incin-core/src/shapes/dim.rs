@@ -171,7 +171,7 @@ macro_rules! symbolic_dim {
 /// For example, after `t.reshape::<s![-1, A_times_B]>()`, the last dimension's type would be `ProdDim<A, B>`.
 /// It preserves static dimensionality information across such operations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ProdDim<A, B>(pub usize, core::marker::PhantomData<(A, B)>);
+pub struct ProdDim<A, B>(usize, core::marker::PhantomData<(A, B)>);
 
 impl<A: Dim, B: Dim> Dim for ProdDim<A, B> {
     /// A product is statically sized exactly when both factors are. This is
@@ -179,8 +179,9 @@ impl<A: Dim, B: Dim> Dim for ProdDim<A, B> {
     /// degrading the result's proof to `Mixed`.
     const STATIC_SIZE: bool = A::STATIC_SIZE && B::STATIC_SIZE;
 
-    /// The pair of constituent dimensions' own arguments.
-    type Arg = (A::Arg, B::Arg);
+    /// The already-checked product size. Multiplying the constituent runtime
+    /// arguments here would make this infallible trait an overflow boundary.
+    type Arg = usize;
 
     #[inline(always)]
     /// The precomputed product `A::size() * B::size()`.
@@ -196,30 +197,25 @@ impl<A: Dim, B: Dim> Dim for ProdDim<A, B> {
     }
 
     #[inline(always)]
-    /// Constructs `A`/`B` from their arguments and stores their product.
+    /// Stores an already-checked product size.
     fn from_arg(arg: Self::Arg) -> Self {
-        let a = A::from_arg(arg.0);
-        let b = B::from_arg(arg.1);
-        Self(a.size() * b.size(), core::marker::PhantomData)
+        Self(arg, core::marker::PhantomData)
     }
 
     #[inline(always)]
-    /// Returns `A`/`B`'s default arguments (the actual product size is
-    /// tracked separately in `self.0`, not reconstructible from `Arg` alone).
+    /// Returns the checked product size.
     fn arg(&self) -> Self::Arg {
-        (
-            <A::Arg as core::default::Default>::default(),
-            <B::Arg as core::default::Default>::default(),
-        )
+        self.0
     }
 }
 
 impl<A: Dim + Default, B: Dim + Default> Default for ProdDim<A, B> {
     fn default() -> Self {
-        Self(
-            A::default().size() * B::default().size(),
-            core::marker::PhantomData,
-        )
+        let product = A::default()
+            .size()
+            .checked_mul(B::default().size())
+            .expect("static ProdDim factors must fit usize");
+        Self(product, core::marker::PhantomData)
     }
 }
 

@@ -2,7 +2,7 @@ use core::cell::RefCell;
 
 use incin_core::exec::tape;
 use incin_core::exec::{GradientMap, Tape, TapeNode, TapeStorage};
-use incin_core::prelude::{Error, Result};
+use incin_core::prelude::{Error, OperationKind, Result, ShapeBuf};
 
 use crate::cuda::storage::{CudaBuffer, CudaStorage, TensorId};
 
@@ -20,7 +20,7 @@ impl TapeStorage for CudaStorage {
     }
 
     fn ones_like(&self) -> Result<Self> {
-        let numel = self.shape.iter().product::<usize>();
+        let numel = ShapeBuf::from_slice(&self.shape).checked_numel(OperationKind::Storage)?;
         let device_id = self.buffer.device_id;
         let stream = self.buffer.device.default_stream();
         let data_ones = vec![1.0f32; numel];
