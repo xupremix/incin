@@ -31,8 +31,8 @@ verified product capability.
 | Typed failures, scalar conversion, and optimizer rollback | **Complete and dynamically verified** for FND-003 | Legacy free-form compatibility variants remain but are not used for new foundation paths; operator outputs are intentionally source-breaking `Result` values | Stable root/prelude plus backend contracts | `audit-evidence/FND-003/` | FND-004 operation semantics |
 | Canonical operation semantics and descriptors | **Complete and dynamically verified** for FND-004: 174 exact identities declared once, typed `Descriptor<O>` per operation, per-operand rank contracts, fail-closed output inference, and exact-identity capability resolution | Execution is not migrated; this task freezes semantics only | Backend-authoring contract plus generated docs | `audit-evidence/FND-004/` | FND-005 CPU migration |
 | Canonical execution path | **Complete and dynamically verified** for FND-005: `exec::dispatch` validates against real storage metadata, queries the exact capability row, derives output metadata, and dispatches to `Execute<Descriptor<O>>` | Reaching it is opt-in; the stable tensor surface does not yet use it | Backend-authoring internals | `audit-evidence/FND-005/` | Remaining FND-005 migration |
-| CPU eager tensor execution | **Partially migrated**: 117 of the 161 backend-executable catalog operations execute canonically, each verified for forward and gradient parity against the legacy path | Stable tensor methods still depend on the legacy operation-family traits, and `Backend` still requires all nine as supertraits | Stable CPU surface | `audit-evidence/FND-005/cpu-migration-status.md` | Remaining FND-005 migration |
-| Typed descriptor execution | **Partial** descriptor validation and execution | Every advertised CPU identity has an executor, proved at compile time; the other 44 backend-executable operations are reachable only through legacy traits, and 13 more sit at an `ExecutionSite` the `Execute` trait cannot carry at all | Backend-authoring/experimental internals | `audit-evidence/FND-005/summary.md` | Remaining FND-005 migration |
+| CPU eager tensor execution | **Partially migrated**: 138 of the 161 backend-executable catalog operations execute canonically, each verified for forward and gradient parity against the legacy path | Stable tensor methods still depend on the legacy operation-family traits, and `Backend` still requires all nine as supertraits | Stable CPU surface | `audit-evidence/FND-005/cpu-migration-status.md` | Remaining FND-005 migration |
+| Typed descriptor execution | **Partial** descriptor validation and execution | Every advertised CPU identity has an executor, proved at compile time; the other 23 backend-executable operations are reachable only through legacy traits, and 13 more sit at an `ExecutionSite` the `Execute` trait cannot carry at all | Backend-authoring/experimental internals | `audit-evidence/FND-005/summary.md` | Remaining FND-005 migration |
 | Compiled execution | **Structural prototype** for capture, plans, and artifacts | No validated executable/run path | `experimental::compiled`, opt-in `compiled` feature | Containment test and compiled feature check | Deferred compiled CPU vertical slice |
 | Constant folding and weight prepacking | **Intentionally unsupported** with typed errors | No transformations are implemented | `experimental::compiled` | `fnd000-test-compiled-containment.txt` | Deferred until canonical CPU descriptors |
 | ONNX macro import | **Partial** stateless eager expansion | No initializers, control flow, custom domains, attributes, or broad opset coverage | `experimental::{model, import_model}` | Macro unit tests and FND-001 facade contracts | Real ONNX initializer/state loading (deferred) |
@@ -48,7 +48,7 @@ task is not started until the prior task's acceptance gate is truthfully met.
 FND-000 through FND-004 have passed their archived acceptance gates. **FND-005
 is active and PARTIAL.** Its completion condition - that stable CPU tensor
 methods no longer rely on the operation-family supertrait architecture - is not
-met: `Backend` still requires all nine supertraits, and 117 of the 161
+met: `Backend` still requires all nine supertraits, and 138 of the 161
 backend-executable catalog operations have a canonical CPU executor.
 `audit-evidence/FND-005/summary.md` records what was delivered and what
 remains, and `audit-evidence/FND-005/cpu-migration-status.md` is generated from
@@ -66,7 +66,7 @@ reason applies to each.
 finished and should not be rewritten while that work proceeds, and orders the
 remaining steps by what blocks what.
 
-The workspace suite at `a247d73` reports **1401 passed, 0 failed, 1
+The workspace suite at `0189de4` reports **1419 passed, 0 failed, 1
 ignored**. The ignored case requires a CUDA device. No historical aggregate
 count is reused.
 

@@ -5,7 +5,7 @@
 FND-005's completion condition is that stable CPU tensor methods no longer rely
 on the operation-family supertrait architecture. That condition is **not met**.
 What this task delivered is the execution architecture that condition depends
-on, plus 117 of the 161 backend-executable operations migrated onto it and
+on, plus 138 of the 161 backend-executable operations migrated onto it and
 verified.
 
 The denominator is not 174. Thirteen catalog operations sit at an
@@ -39,6 +39,13 @@ rather than written by hand, and a test fails if it drifts.
 | `061d04f` | `feat(fnd-005): classify every catalog operation by execution site` |
 | `5cd0101` | `feat(fnd-005): migrate the CPU module family` |
 | `a247d73` | `docs: state which foundations are frozen and what comes next` |
+| `0ed0f00` | `docs(fnd-005): correct the stale migration counts and the public API figure` |
+| `0cea747` | `feat(fnd-005): migrate the dtype conversion and the composed losses` |
+| `8289da0` | `feat(fnd-005): migrate the variance family and the p-norm` |
+| `467abfd` | `feat(fnd-005): migrate the vector products and the axis splits` |
+| `9d8ddbe` | `feat(fnd-005): migrate the quantization family` |
+| `92c1b5c` | `feat(fnd-005): migrate the linear layer and rms norm` |
+| `0189de4` | `feat(fnd-005): migrate dropout` |
 
 Parent: `c538539` (FND-004). No earlier commit was amended, squashed or
 recreated.
@@ -78,13 +85,13 @@ FND-005 requires of it is structural rather than conventional:
 | Capability output is generated from the implementations | PASS | one declaration feeds the rows, the legacy executors and the canonical executors |
 | Non-CPU backends preserve compilation without broadened claims | PASS | `test-results/check-backend-*.txt`; WGPU training rows are `f32` only |
 | **Stable CPU tensor methods no longer use the supertraits** | **NOT MET** | `Backend` still requires all nine; 850 references across 75 files |
-| **The whole stable CPU surface is migrated** | **NOT MET** | 117 of 161 backend-executable; `cpu-migration-status.md` |
+| **The whole stable CPU surface is migrated** | **NOT MET** | 138 of 161 backend-executable; `cpu-migration-status.md` |
 | Workspace suite passes | PASS | `test-results/test-workspace.txt` |
 | Workspace formatter clean | **BLOCKED** | pre-existing drift; see `known-limitations.md` |
 
 ## Migrated in this task
 
-117 exact identities, each with its own `Execute<Descriptor<op::X>>`. The
+138 exact identities, each with its own `Execute<Descriptor<op::X>>`. The
 generated `cpu-migration-status.md` is the authoritative list; the families are:
 
 - pointwise binary and the whole float unary set, including the scalar and
@@ -167,16 +174,36 @@ permissive executor, and one is deliberately not registered at all:
    `a_convolution_with_a_bias_is_not_refused_by_its_own_rank_bound` is the
    regression test.
 
+6. **`AxisVarianceAttributes` validated an axis it then refused to expose.**
+   Output inference reads the axis through an accessor, which these attributes
+   never implemented, so `var_dim`, `var_keepdim`, `std_dim` and `std_keepdim`
+   fell to the fail-closed arm and failed with `MissingInference` for every
+   invocation from the day FND-004 declared them. The existing test covered
+   validation, which could never have caught it; the new one checks the derived
+   shape.
+
+7. **The executor's own capability re-check hardcoded `training = true`.**
+   Invisible while every migrated row supported training, and a refusal of every
+   legal call the moment one did not. The quantization rows are the first that
+   do not: their kernels push no tape entry, so a training row would promise a
+   gradient that never arrives. The re-check now takes the caller's mode from
+   the same source `dispatch::execute` reads, since two answers to one question
+   would let the executor disagree with the dispatch that reached it.
+
+8. **The generated layout probe queried every row with `f32`.** Correct for
+   every row until one did not admit f32, at which point it asserted support the
+   row had never claimed. It now follows the row.
+
 ## Test counts
 
 Reproduced from the committed revision only. No historical count is reused.
 
 | Suite | Result |
 |---|---|
-| `cargo test --workspace` | **1401 passed, 0 failed, 1 ignored** |
+| `cargo test --workspace` | **1419 passed, 0 failed, 1 ignored** |
 | `cargo test --doc --workspace` | 78 passed, 0 failed |
-| `cargo test -p incin-core` | 465 passed, 0 failed |
-| `cargo test -p incin-backends --features cpu` | 430 passed, 0 failed, 1 ignored |
+| `cargo test -p incin-core` | 466 passed, 0 failed |
+| `cargo test -p incin-backends --features cpu` | 445 passed, 0 failed, 1 ignored |
 | `cargo test -p incin` | 119 passed, 0 failed |
 | `cargo test -p incin-backends --features cpu --test canonical_cpu` | 34 passed, 0 failed |
 
@@ -185,7 +212,7 @@ The single ignored test is
 CUDA device.
 
 `cargo public-api -p incin` reports **1159 items**, byte-identical to
-`test-results/public-api.txt` archived at `2b0fb2d`. The whole migration is
+`test-results/public-api.txt` archived at `2b0fb2d`, re-checked at `0189de4`. The whole migration is
 additive behind `backend_authoring` and the feature-gated tiers, and the stable
 facade has not moved.
 
@@ -201,7 +228,7 @@ Sequenced, with the dependency that makes the order necessary. `docs/FROZEN_FOUN
 carries the same list alongside what must not change while it is worked
 through.
 
-1. **Migrate the remaining 44 backend-executable operations onto
+1. **Migrate the remaining 23 backend-executable operations onto
    `Execute<Descriptor<op::X>>`**, moving each kernel body down as the
    pointwise family already did. Until the whole surface is migrated, step 3
    cannot start, because a tensor method cannot depend on a capability that
