@@ -4,7 +4,7 @@ Generated from `CPU_CAPABILITIES` and `incin_core::exec::OPERATION_CATALOG`; the
 
 The denominator is the number of operations that `Execute<Descriptor<O>>` can carry at all, not the whole catalog. An operation whose `ExecutionSite` is not backend-executable is listed separately with the reason: it is a gap in the execution trait rather than an unwritten executor, and counting it here would describe work that cannot be done without changing the contract first.
 
-**145 of 161 backend-executable operations migrated**, out of 174 catalog operations in total. The remaining 16 executable operations are still reachable only through the legacy operation-family traits.
+**154 of 161 backend-executable operations migrated**, out of 174 catalog operations in total. The remaining 7 executable operations are still reachable only through the legacy operation-family traits.
 
 ## Backend-executable operations
 
@@ -12,15 +12,15 @@ The denominator is the number of operations that `Execute<Descriptor<O>>` can ca
 |---|---|:--:|---|
 | `tensor_from_data` | `Creation` | no | `TensorArgsData` |
 | `tensor_from_bytes` | `Creation` | no | `Tensor::from_bytes` |
-| `tensor_to_bytes` | `HostReadback` | no | `Tensor::to_bytes` |
+| `tensor_to_bytes` | `HostReadback` | yes | `Tensor::to_bytes` |
 | `zeros` | `Creation` | yes | `CreationOps::zeros` |
 | `ones` | `Creation` | yes | `CreationOps::ones` |
 | `rand` | `Creation` | yes | `CreationOps::rand` |
 | `randn` | `Creation` | yes | `CreationOps::randn` |
-| `var_zeros` | `Creation` | no | `CreationOps::var_zeros` |
-| `var_ones` | `Creation` | no | `CreationOps::var_ones` |
-| `var_rand` | `Creation` | no | `CreationOps::var_rand` |
-| `var_randn` | `Creation` | no | `CreationOps::var_randn` |
+| `var_zeros` | `Creation` | yes | `CreationOps::var_zeros` |
+| `var_ones` | `Creation` | yes | `CreationOps::var_ones` |
+| `var_rand` | `Creation` | yes | `CreationOps::var_rand` |
+| `var_randn` | `Creation` | yes | `CreationOps::var_randn` |
 | `full` | `Creation` | yes | `CreationOps::full` |
 | `arange` | `Creation` | yes | `CreationOps::arange` |
 | `linspace` | `Creation` | yes | `CreationOps::linspace` |
@@ -119,10 +119,10 @@ The denominator is the number of operations that `Execute<Descriptor<O>>` can ca
 | `group_norm` | `Kernel` | yes | `TensorOps::group_norm` |
 | `instance_norm` | `Kernel` | yes | `TensorOps::instance_norm` |
 | `broadcast_left` | `Kernel` | yes | `TensorOps::broadcast_left` |
-| `float_to_scalar` | `HostReadback` | no | `TensorOps::float_to_scalar` |
-| `float_to_vec1` | `HostReadback` | no | `TensorOps::float_to_vec1` |
-| `int_to_scalar` | `HostReadback` | no | `TensorOps::int_to_scalar` |
-| `int_to_vec1` | `HostReadback` | no | `TensorOps::int_to_vec1` |
+| `float_to_scalar` | `HostReadback` | yes | `TensorOps::float_to_scalar` |
+| `float_to_vec1` | `HostReadback` | yes | `TensorOps::float_to_vec1` |
+| `int_to_scalar` | `HostReadback` | yes | `TensorOps::int_to_scalar` |
+| `int_to_vec1` | `HostReadback` | yes | `TensorOps::int_to_vec1` |
 | `to_dtype` | `Kernel` | yes | `TensorOps::tensor_to_dtype` |
 | `sum_all` | `Kernel` | yes | `ReductionOps::sum_all` |
 | `mean_all` | `Kernel` | yes | `ReductionOps::mean_all` |

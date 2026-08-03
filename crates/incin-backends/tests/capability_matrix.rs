@@ -515,7 +515,11 @@ fn cpu_probe_shape(operation: OperationKind) -> &'static [usize] {
         | OperationKind::Ones
         | OperationKind::UniformRandom
         | OperationKind::NormalRandom
-        | OperationKind::Full => &[2, 2],
+        | OperationKind::Full
+        | OperationKind::VariableZeros
+        | OperationKind::VariableOnes
+        | OperationKind::VariableUniformRandom
+        | OperationKind::VariableNormalRandom => &[2, 2],
         // The ranged fills are one-dimensional by definition.
         OperationKind::Arange | OperationKind::Linspace => &[4],
         OperationKind::ToDType => &[2, 2],
@@ -636,6 +640,26 @@ fn allocation_probe(operation: OperationKind, dtype: DTypeId) -> CpuStorage {
                 step: 1.0,
             },
             &[],
+        )
+        .unwrap(),
+        // The variable forms hand back a `CpuVar`, so their value is read out
+        // before the shared assertions see it. That the executor's output type
+        // differs at all is the point of `Execute` naming it as an associated
+        // type; the probe just has to follow.
+        OperationKind::VariableZeros => CpuBackendImpl::<f32, Cpu>::var_as_tensor::<Dyn>(
+            &dispatch::execute::<op::VariableZeros, _>(&context, plain, &[]).unwrap(),
+        )
+        .unwrap(),
+        OperationKind::VariableOnes => CpuBackendImpl::<f32, Cpu>::var_as_tensor::<Dyn>(
+            &dispatch::execute::<op::VariableOnes, _>(&context, plain, &[]).unwrap(),
+        )
+        .unwrap(),
+        OperationKind::VariableUniformRandom => CpuBackendImpl::<f32, Cpu>::var_as_tensor::<Dyn>(
+            &dispatch::execute::<op::VariableUniformRandom, _>(&context, plain, &[]).unwrap(),
+        )
+        .unwrap(),
+        OperationKind::VariableNormalRandom => CpuBackendImpl::<f32, Cpu>::var_as_tensor::<Dyn>(
+            &dispatch::execute::<op::VariableNormalRandom, _>(&context, plain, &[]).unwrap(),
         )
         .unwrap(),
         _ => dispatch::execute::<op::Linspace, _>(
@@ -788,7 +812,11 @@ fn execute_cpu_probe(operation: OperationKind, layout: LayoutClass) -> CpuStorag
         | OperationKind::NormalRandom
         | OperationKind::Full
         | OperationKind::Arange
-        | OperationKind::Linspace => allocation_probe(operation, DTypeId::F32),
+        | OperationKind::Linspace
+        | OperationKind::VariableZeros
+        | OperationKind::VariableOnes
+        | OperationKind::VariableUniformRandom
+        | OperationKind::VariableNormalRandom => allocation_probe(operation, DTypeId::F32),
         // Probed in inference mode, where dropout is the identity. The
         // training path draws a random mask, and a probe that asserted a shape
         // and a dtype against a random result would be asserting the same two
@@ -1096,9 +1124,32 @@ fn execute_cpu_probe(operation: OperationKind, layout: LayoutClass) -> CpuStorag
     }
 }
 
+/// Whether a row's executor answers with storage.
+///
+/// The readback rows do not: they return an `f64`, a `Vec<i64>` or a byte
+/// buffer, because that is what reading a value back to the host means. The two
+/// probes below assert a shape, a dtype and a device on the result, and none of
+/// those is a question a host value has an answer to. Skipping them here is
+/// narrower than weakening the assertions for every row, and
+/// `the_readback_rows_return_host_values_through_dispatch` checks what they
+/// actually produce.
+fn produces_storage(operation: OperationKind) -> bool {
+    !matches!(
+        operation,
+        OperationKind::ToHostFloatScalar
+            | OperationKind::ToHostFloatVec
+            | OperationKind::ToHostIntScalar
+            | OperationKind::ToHostIntVec
+            | OperationKind::TensorToBytes
+    )
+}
+
 #[test]
 fn generated_cpu_rows_match_real_execution_and_output_metadata() {
     for rule in CPU_CAPABILITIES {
+        if !produces_storage(rule.operation) {
+            continue;
+        }
         for &layout in rule.layouts {
             // The probes build f32 operands wherever the row admits f32. The
             // rows over compressed storage do not admit it, and querying them
@@ -1343,7 +1394,19 @@ fn every_advertised_cpu_dtype_executes_its_registered_operation() {
                 | OperationKind::NormalRandom
                 | OperationKind::Full
                 | OperationKind::Arange
-                | OperationKind::Linspace => allocation_probe(rule.operation, dtype),
+                | OperationKind::Linspace
+                | OperationKind::VariableZeros
+                | OperationKind::VariableOnes
+                | OperationKind::VariableUniformRandom
+                | OperationKind::VariableNormalRandom => allocation_probe(rule.operation, dtype),
+                // Readback answers with a host value rather than storage, so
+                // there is nothing here for the dtype assertion below to read.
+                // Covered by `the_readback_rows_return_host_values_through_dispatch`.
+                OperationKind::ToHostFloatScalar
+                | OperationKind::ToHostFloatVec
+                | OperationKind::ToHostIntScalar
+                | OperationKind::ToHostIntVec
+                | OperationKind::TensorToBytes => continue,
                 // Inference-mode dropout hands the operand straight back, so it
                 // is the one row here that has to answer for every float dtype
                 // the elementwise group advertises rather than for f32 alone.
@@ -1896,4 +1959,85 @@ fn an_exact_query_never_resolves_through_a_broad_family_row() {
          nothing; either the migration is complete and the family rows should be \
          gone, or the derivation above is wrong"
     );
+}
+
+/// Every readback row runs, and answers with the host value its type promises.
+///
+/// This is what the two generated probes cannot check, because their
+/// assertions are about storage metadata and these rows produce none. The
+/// values are hand-computed so that a readback wired to the wrong operand or
+/// the wrong element would fail rather than merely return something.
+#[test]
+fn the_readback_rows_return_host_values_through_dispatch() {
+    // Inference, because a host value is off the tape by definition: the rows
+    // carry `training = false` and refusing a training request is the claim,
+    // not an inconvenience around it.
+    let context =
+        ExecutionContext::new(CpuBackendImpl::<f32, Cpu>::new()).with_grad_mode(GradMode::Disabled);
+    let scalar = f32_storage(&[1], &[7.5]);
+    let vector = f32_storage(&[3], &[1.0, 2.0, 3.0]);
+    let scalar_handle =
+        || TensorHandle::from_storage::<CpuBackendImpl<f32, Cpu>, f32, Local>(&scalar);
+    let vector_handle =
+        || TensorHandle::from_storage::<CpuBackendImpl<f32, Cpu>, f32, Local>(&vector);
+
+    let value = dispatch::execute::<op::ToHostFloatScalar, _>(
+        &context,
+        incin_core::exec::catalog::NoAttributes,
+        &[scalar_handle()],
+    )
+    .unwrap();
+    assert!((value - 7.5).abs() < 1e-6);
+
+    let values = dispatch::execute::<op::ToHostFloatVec, _>(
+        &context,
+        incin_core::exec::catalog::NoAttributes,
+        &[vector_handle()],
+    )
+    .unwrap();
+    assert_eq!(values, vec![1.0, 2.0, 3.0]);
+
+    // The integer readbacks refuse a fractional source rather than rounding it,
+    // which is the FND-003 conversion policy reaching through the canonical
+    // path. Asserted here because it is the behaviour most easily lost by
+    // routing a readback to a cast.
+    let refused = dispatch::execute::<op::ToHostIntScalar, _>(
+        &context,
+        incin_core::exec::catalog::NoAttributes,
+        &[scalar_handle()],
+    );
+    assert!(
+        refused.is_err(),
+        "7.5 has no integer value, so reading it as one must fail"
+    );
+
+    let integral = f32_storage(&[1], &[7.0]);
+    let whole = dispatch::execute::<op::ToHostIntScalar, _>(
+        &context,
+        incin_core::exec::catalog::NoAttributes,
+        &[TensorHandle::from_storage::<
+            CpuBackendImpl<f32, Cpu>,
+            f32,
+            Local,
+        >(&integral)],
+    )
+    .unwrap();
+    assert_eq!(whole, 7);
+
+    let indices = dispatch::execute::<op::ToHostIntVec, _>(
+        &context,
+        incin_core::exec::catalog::NoAttributes,
+        &[vector_handle()],
+    )
+    .unwrap();
+    assert_eq!(indices, vec![1, 2, 3]);
+
+    // Three f32 elements, four bytes each.
+    let bytes = dispatch::execute::<op::TensorToBytes, _>(
+        &context,
+        incin_core::exec::catalog::NoAttributes,
+        &[vector_handle()],
+    )
+    .unwrap();
+    assert_eq!(bytes.len(), 12);
 }

@@ -13,7 +13,7 @@
 //! is the type.
 
 use incin_core::backend_authoring::{
-    CreationOps, Execute, ExecutionRequest, FloatOps, LossOps, ModuleOps, QuantizedOps,
+    Backend, CreationOps, Execute, ExecutionRequest, FloatOps, LossOps, ModuleOps, QuantizedOps,
     ReductionOps, StorageBackend, TensorOps,
 };
 use incin_core::exec::catalog::{
@@ -174,6 +174,104 @@ allocating_executors![
     (Arange, arange, start, step),
     (Linspace, linspace, start, end),
 ];
+
+/// The same four allocations, returning a trainable variable.
+///
+/// A separate macro rather than a fourth column on the one above, because the
+/// output type is what differs and that is exactly the thing the associated
+/// `Output` on `Execute` exists to let vary. Reporting a `CpuVar` as if it were
+/// storage would need a conversion the caller then has to undo.
+///
+/// Their capability rows sit in the same two groups as the storage forms, and
+/// carry `training = false` for the same reason: allocating a variable records
+/// nothing, whatever is done to it afterwards.
+macro_rules! variable_allocating_executors {
+    ($(($operation:ident, $method:ident)),* $(,)?) => {$(
+        impl<T: DType, D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<T, D> {
+            type Output = super::var::CpuVar;
+
+            fn execute(
+                &self,
+                request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
+            ) -> Result<super::var::CpuVar, BackendError> {
+                let operation = OperationKind::$operation;
+                if !request.inputs.is_empty() {
+                    return Err(invalid(operation, "an allocation takes no operand"));
+                }
+                let attributes = request.operation.descriptor().attributes();
+                <Self as CreationOps<Self>>::$method::<T>(
+                    &attributes.shape,
+                    attributes.dtype,
+                    &attributes.device,
+                )
+                .map_err(|error| kernel_error(operation, error))
+            }
+        }
+    )*};
+}
+
+variable_allocating_executors![
+    (VariableZeros, var_zeros),
+    (VariableOnes, var_ones),
+    (VariableUniformRandom, var_rand),
+    (VariableNormalRandom, var_randn),
+];
+
+/// Reading a value back to the host.
+///
+/// These are the only migrated operations that do not produce storage, and the
+/// reason `Execute` names its output as an associated type rather than fixing
+/// it: a scalar readback returns an `f64`, a vector one returns a `Vec<f64>`,
+/// and neither is a tensor. Wrapping them in storage to fit a fixed output type
+/// would create an allocation whose only purpose is to be immediately unwrapped.
+///
+/// Each is a synchronisation point on a device backend even though it is free
+/// here, which is why they are a group of their own rather than tensor
+/// operations that happen to return something small.
+macro_rules! readback_executors {
+    ($(($operation:ident, $method:ident, $output:ty)),* $(,)?) => {$(
+        impl<T: DType, D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<T, D> {
+            type Output = $output;
+
+            fn execute(
+                &self,
+                request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
+            ) -> Result<$output, BackendError> {
+                let operation = OperationKind::$operation;
+                let training = records_gradients(request.context);
+                let input = reduction_operand(self, request.inputs, operation, training)?;
+                <Self as TensorOps<Self>>::$method::<T>(input)
+                    .map_err(|error| kernel_error(operation, error))
+            }
+        }
+    )*};
+}
+
+readback_executors![
+    (ToHostFloatScalar, float_to_scalar, f64),
+    (ToHostFloatVec, float_to_vec1, Vec<f64>),
+    (ToHostIntScalar, int_to_scalar, i64),
+    (ToHostIntVec, int_to_vec1, Vec<i64>),
+];
+
+/// The raw bytes behind an allocation.
+///
+/// On `Backend` rather than on any operation family, which is why it is not in
+/// the macro above: the byte view is a property of an allocation itself and
+/// exists before any operation over it does.
+impl<T: DType, D: Device> Execute<Descriptor<op::TensorToBytes>> for CpuBackendImpl<T, D> {
+    type Output = Vec<u8>;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::TensorToBytes>, Self>,
+    ) -> Result<Vec<u8>, BackendError> {
+        let operation = OperationKind::TensorToBytes;
+        let training = records_gradients(request.context);
+        let input = reduction_operand(self, request.inputs, operation, training)?;
+        <Self as Backend>::to_bytes::<T>(input).map_err(|error| kernel_error(operation, error))
+    }
+}
 
 /// Reshape to the descriptor's declared shape.
 impl<T: DType, D: Device> Execute<Descriptor<op::ReshapeExact>> for CpuBackendImpl<T, D> {

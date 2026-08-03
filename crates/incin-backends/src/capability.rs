@@ -134,8 +134,25 @@ macro_rules! cpu_descriptor_operations {
             // Both groups are `training = false` because a fresh allocation
             // records nothing on the tape; the `var_*` forms that do are not
             // here, because they return a variable rather than storage.
-            filling = [Zeros, Ones, Full, Arange, Linspace],
-            sampling = [UniformRandom, NormalRandom],
+            filling = [
+                Zeros, Ones, Full, Arange, Linspace,
+                // The variable forms produce the same allocation and differ
+                // only in what they hand back, which the row does not describe.
+                VariableZeros, VariableOnes
+            ],
+            sampling = [
+                UniformRandom, NormalRandom,
+                VariableUniformRandom, VariableNormalRandom
+            ],
+            // Reading a value back to the host. One rule shape: any
+            // non-quantized dtype, any layout the accessor handles, any rank,
+            // and no gradient, because a host value is off the tape by
+            // definition and nothing downstream of one can be differentiated.
+            readback = [
+                ToHostFloatScalar, ToHostFloatVec,
+                ToHostIntScalar, ToHostIntVec,
+                TensorToBytes
+            ],
             reduction = [
                 SumAll, MeanAll, MaxAll, MinAll, ProdAll,
                 SumDim, SumKeepDim, MeanDim, MeanKeepDim,
@@ -254,6 +271,7 @@ macro_rules! cuda_descriptor_operations {
             reshape = [ReshapeExact],
             filling = [],
             sampling = [],
+            readback = [],
             reduction = [
                 SumAll, MeanAll, MaxAll, MinAll,
                 SumDim, SumKeepDim, MeanDim, MeanKeepDim,
@@ -285,6 +303,7 @@ macro_rules! wgpu_descriptor_operations {
             reshape = [ReshapeExact],
             filling = [],
             sampling = [],
+            readback = [],
             reduction = [
                 SumAll, MeanAll, MaxAll, MinAll,
                 SumDim, SumKeepDim, MeanDim, MeanKeepDim,
@@ -316,6 +335,7 @@ macro_rules! metal_descriptor_operations {
             reshape = [ReshapeExact],
             filling = [],
             sampling = [],
+            readback = [],
             reduction = [
                 SumAll, MeanAll,
                 SumDim, SumKeepDim, MeanDim, MeanKeepDim
@@ -366,6 +386,7 @@ macro_rules! descriptor_capability_rules {
         reshape = [$($reshape_op:ident),* $(,)?],
         filling = [$($filling_op:ident),* $(,)?],
         sampling = [$($sampling_op:ident),* $(,)?],
+        readback = [$($readback_op:ident),* $(,)?],
         reduction = [$($reduction_op:ident),* $(,)?],
         spatial = [$($spatial_op:ident),* $(,)?],
         matmul = [$($matmul_op:ident),* $(,)?],
@@ -407,6 +428,7 @@ macro_rules! descriptor_capability_rules {
             // is contiguous by construction.
             $(native(OperationKind::$filling_op, $filling_dtypes, CONTIGUOUS, false),)*
             $(native(OperationKind::$sampling_op, $sampling_dtypes, CONTIGUOUS, false),)*
+            $(native(OperationKind::$readback_op, $tensor_dtypes, $tensor_layouts, false),)*
             $(native_ranked(
                 OperationKind::$reduction_op,
                 $reduction,

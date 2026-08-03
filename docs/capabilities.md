@@ -82,8 +82,8 @@ run time.
 | `exp` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `fill_in_place` | — | — | — |
 | `flatten` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
-| `float_to_scalar` | — | — | — |
-| `float_to_vec1` | — | — | — |
+| `float_to_scalar` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
+| `float_to_vec1` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `floor` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `fmod` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `frac` | `bf16`, `f16`, `f32`, `f64` | — | — |
@@ -93,8 +93,8 @@ run time.
 | `group_norm` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `index_select` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `instance_norm` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
-| `int_to_scalar` | — | — | — |
-| `int_to_vec1` | — | — | — |
+| `int_to_scalar` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
+| `int_to_vec1` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `l1_loss` | `f32` | — | — |
 | `layer_norm` | `f32` | — | — |
 | `lerp` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
@@ -178,7 +178,7 @@ run time.
 | `tanh` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `tensor_from_bytes` | — | — | — |
 | `tensor_from_data` | — | — | — |
-| `tensor_to_bytes` | — | — | — |
+| `tensor_to_bytes` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `to_device` | — | — | — |
 | `to_dtype` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `topk` | `f32` | — | — |
@@ -191,10 +191,10 @@ run time.
 | `var_all` | `f32` | — | — |
 | `var_dim` | `f32` | — | — |
 | `var_keepdim` | `f32` | — | — |
-| `var_ones` | — | — | — |
-| `var_rand` | — | — | — |
-| `var_randn` | — | — | — |
-| `var_zeros` | — | — | — |
+| `var_ones` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
+| `var_rand` | `bf16`, `f16`, `f32`, `f64` | — | — |
+| `var_randn` | `bf16`, `f16`, `f32`, `f64` | — | — |
+| `var_zeros` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `where_cond` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `zero_in_place` | — | — | — |
 | `zeros` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
@@ -277,8 +277,17 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `full` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | no | native |
 | `arange` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | no | native |
 | `linspace` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | no | native |
+| `var_zeros` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | no | native |
+| `var_ones` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | no | native |
 | `rand` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | no | native |
 | `randn` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | no | native |
+| `var_rand` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | no | native |
+| `var_randn` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | no | native |
+| `float_to_scalar` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | no | native |
+| `float_to_vec1` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | no | native |
+| `int_to_scalar` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | no | native |
+| `int_to_vec1` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | no | native |
+| `tensor_to_bytes` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | no | native |
 | `sum_all` | `f32` | `contiguous`, `strided` | any | yes | native |
 | `mean_all` | `f32` | `contiguous`, `strided` | any | yes | native |
 | `max_all` | `f32` | `contiguous`, `strided` | any | yes | native |
