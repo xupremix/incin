@@ -25,6 +25,8 @@ const CUDA_STORAGE_DTYPES: &[DTypeId] = &[
     DTypeId::F64,
 ];
 const F32_ONLY: &[DTypeId] = &[DTypeId::F32];
+/// The only quantized representation any backend implements today.
+const Q8_ONLY: &[DTypeId] = &[DTypeId::Q8_0];
 const NON_QUANTIZED: &[DTypeId] = &[
     DTypeId::U8,
     DTypeId::U32,
@@ -196,6 +198,14 @@ macro_rules! cpu_descriptor_operations {
             // `cross_entropy_loss` is absent for the reason `embedding` is: its
             // logits are float and its targets are class indices, and one row
             // states one dtype set.
+            // Two groups rather than one, because the compression and the
+            // operations over compressed storage read opposite dtype sets and a
+            // row states one. `quantize` reads f32 and writes blocks;
+            // `dequantize` and `quantized_matmul` read blocks. Both refuse a
+            // strided operand: the kernels index the block buffer directly and
+            // never consult a stride.
+            quantizing = [Quantize],
+            quantized = [Dequantize, QuantizedMatMul],
             composed_reduction = [
                 MseLoss, L1Loss, BceWithLogitsLoss,
                 // Variance, standard deviation and the p-norm have no kernel of
@@ -236,6 +246,8 @@ macro_rules! cuda_descriptor_operations {
             native_tensor = [],
             composed_tensor = [],
             composed_matmul = [],
+            quantizing = [],
+            quantized = [],
             composed_reduction = []
         }
     };
@@ -262,6 +274,8 @@ macro_rules! wgpu_descriptor_operations {
             native_tensor = [],
             composed_tensor = [],
             composed_matmul = [],
+            quantizing = [],
+            quantized = [],
             composed_reduction = []
         }
     };
@@ -287,6 +301,8 @@ macro_rules! metal_descriptor_operations {
             native_tensor = [],
             composed_tensor = [],
             composed_matmul = [],
+            quantizing = [],
+            quantized = [],
             composed_reduction = []
         }
     };
@@ -309,6 +325,8 @@ macro_rules! descriptor_capability_rules {
         reduction_layouts = $reduction_layouts:expr,
         spatial_layouts = $spatial_layouts:expr,
         matmul_layouts = $matmul_layouts:expr,
+        quantized_dtypes = $quantized_dtypes:expr,
+        quantized_layouts = $quantized_layouts:expr,
         tensor_dtypes = $tensor_dtypes:expr,
         tensor_layouts = $tensor_layouts:expr,
         legacy = [$($legacy:expr),* $(,)?];
@@ -322,6 +340,8 @@ macro_rules! descriptor_capability_rules {
         native_tensor = [$($native_tensor_op:ident),* $(,)?],
         composed_tensor = [$($composed_tensor_op:ident),* $(,)?],
         composed_matmul = [$($composed_matmul_op:ident),* $(,)?],
+        quantizing = [$($quantizing_op:ident),* $(,)?],
+        quantized = [$($quantized_op:ident),* $(,)?],
         composed_reduction = [$($composed_reduction_op:ident),* $(,)?]
     ) => {
         &[
@@ -411,6 +431,29 @@ macro_rules! descriptor_capability_rules {
                 descriptor_max_rank(OperationKind::$composed_matmul_op),
                 true,
             ),)*
+            // The compression reads the float set its kernel accepts, which is
+            // narrower than the elementwise one: it matches on the buffer
+            // variant rather than converting.
+            $(native_ranked(
+                OperationKind::$quantizing_op,
+                $reduction,
+                $quantized_layouts,
+                descriptor_min_rank(OperationKind::$quantizing_op),
+                descriptor_max_rank(OperationKind::$quantizing_op),
+                false,
+            ),)*
+            // Operations over compressed storage. `training` is false on both:
+            // quantization is not differentiable and neither kernel pushes a
+            // tape entry, so advertising them for training would promise a
+            // gradient that never arrives.
+            $(native_ranked(
+                OperationKind::$quantized_op,
+                $quantized_dtypes,
+                $quantized_layouts,
+                descriptor_min_rank(OperationKind::$quantized_op),
+                descriptor_max_rank(OperationKind::$quantized_op),
+                false,
+            ),)*
             // Same relationship to the reduction rows: a loss that ends in an
             // all-reduce cannot claim a dtype the all-reduce refuses.
             $(composed_ranked(
@@ -457,6 +500,9 @@ const fn descriptor_min_rank(operation: OperationKind) -> usize {
         // `softmax` needs one axis to normalize along, and `layer_norm`
         // normalizes over a trailing suffix, so it needs one too.
         OperationKind::MatMulExact => 2,
+        // The quantized product reads its right operand as a two-axis [N, K]
+        // weight and refuses a left operand with fewer than two axes.
+        OperationKind::QuantizedMatMul => 2,
         OperationKind::BatchedMatMul => 3,
         OperationKind::Softmax | OperationKind::LayerNorm => 1,
         // `BatchNormAttributes::validate` refuses an input without a channel
@@ -551,6 +597,8 @@ pub static CPU_CAPABILITIES: &[CapabilityRule] = cpu_descriptor_operations!(
     reduction_layouts = CPU_LAYOUTS,
     spatial_layouts = CONTIGUOUS,
     matmul_layouts = CPU_LAYOUTS,
+    quantized_dtypes = Q8_ONLY,
+    quantized_layouts = CONTIGUOUS,
     tensor_dtypes = NON_QUANTIZED,
     tensor_layouts = CPU_LAYOUTS,
     legacy = [
@@ -651,6 +699,8 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
     reduction_layouts = CONTIGUOUS,
     spatial_layouts = CONTIGUOUS,
     matmul_layouts = CONTIGUOUS,
+    quantized_dtypes = Q8_ONLY,
+    quantized_layouts = CONTIGUOUS,
     tensor_dtypes = F32_ONLY,
     tensor_layouts = CONTIGUOUS,
     legacy = [
@@ -736,6 +786,8 @@ pub static WGPU_CAPABILITIES: &[CapabilityRule] = wgpu_descriptor_operations!(
     reduction_layouts = CONTIGUOUS,
     spatial_layouts = CONTIGUOUS,
     matmul_layouts = CONTIGUOUS,
+    quantized_dtypes = Q8_ONLY,
+    quantized_layouts = CONTIGUOUS,
     tensor_dtypes = F32_ONLY,
     tensor_layouts = CONTIGUOUS,
     legacy = [
@@ -822,6 +874,8 @@ pub static METAL_CAPABILITIES: &[CapabilityRule] = metal_descriptor_operations!(
     reduction_layouts = CONTIGUOUS,
     spatial_layouts = CONTIGUOUS,
     matmul_layouts = CONTIGUOUS,
+    quantized_dtypes = Q8_ONLY,
+    quantized_layouts = CONTIGUOUS,
     tensor_dtypes = F32_ONLY,
     tensor_layouts = CONTIGUOUS,
     legacy = [

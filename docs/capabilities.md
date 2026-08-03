@@ -68,7 +68,7 @@ run time.
 | `cosh` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `cross_entropy_loss` | — | — | — |
 | `cumsum` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
-| `dequantize` | — | — | — |
+| `dequantize` | `q8_0` | — | — |
 | `detach` | — | — | — |
 | `diag` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `div` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` |
@@ -136,8 +136,8 @@ run time.
 | `powf` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `prod_all` | `f32` | — | — |
 | `prod_dim` | `f32` | — | — |
-| `quantize` | — | — | — |
-| `quantized_matmul` | — | — | — |
+| `quantize` | `f32` | — | — |
+| `quantized_matmul` | `q8_0` | — | — |
 | `rand` | — | — | — |
 | `randn` | — | — | — |
 | `relu` | `bf16`, `f16`, `f32`, `f64` | — | — |
@@ -345,6 +345,9 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `scaled_dot_product_attention` | `f32` | `contiguous`, `strided` | 2+ | yes | composed |
 | `dot` | `f32` | `contiguous`, `strided` | any | yes | composed |
 | `outer` | `f32` | `contiguous`, `strided` | any | yes | composed |
+| `quantize` | `f32` | `contiguous` | any | no | native |
+| `dequantize` | `q8_0` | `contiguous` | any | no | native |
+| `quantized_matmul` | `q8_0` | `contiguous` | 2+ | no | native |
 | `mse_loss` | `f32` | `contiguous`, `strided` | any | yes | composed |
 | `l1_loss` | `f32` | `contiguous`, `strided` | any | yes | composed |
 | `bce_with_logits_loss` | `f32` | `contiguous`, `strided` | any | yes | composed |

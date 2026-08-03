@@ -7,7 +7,8 @@ use incin_backends::capability::{
 };
 use incin_backends::cpu::{CpuBackendImpl, CpuBuffer, CpuStorage};
 use incin_core::backend_authoring::{
-    Backend, CreationOps, FloatOps, LossOps, ModuleOps, NumericOps, ReductionOps, TensorOps,
+    Backend, CreationOps, FloatOps, LossOps, ModuleOps, NumericOps, QuantizedOps, ReductionOps,
+    TensorOps,
 };
 use incin_core::exec::catalog::{
     AxisVarianceAttributes, ChunkAttributes, NormAttributes, SplitAttributes, VarianceAttributes,
@@ -18,7 +19,7 @@ use incin_core::exec::{
     MathMode, OPERATION_CATALOG, SupportLevel, TensorHandle, UnsupportedReason, dispatch,
 };
 use incin_core::prelude::{
-    Cpu, DType, DTypeId, DeviceId, DeviceKind, Dyn, Local, OperationKind, Reduction,
+    Cpu, DType, DTypeId, DeviceId, DeviceKind, Dyn, Local, OperationKind, Q8_0, Reduction,
 };
 
 fn query(
@@ -513,6 +514,10 @@ fn cpu_probe_shape(operation: OperationKind) -> &'static [usize] {
         OperationKind::MseLoss | OperationKind::L1Loss | OperationKind::BceWithLogitsLoss => &[],
         OperationKind::VarianceAll | OperationKind::StdAll | OperationKind::Norm => &[],
         OperationKind::Dot => &[],
+        // Thirty-two elements is one Q8_0 block, the smallest buffer the
+        // compression accepts.
+        OperationKind::Quantize | OperationKind::Dequantize => &[32],
+        OperationKind::QuantizedMatMul => &[1, 1],
         OperationKind::Outer => &[2, 2],
         // The first piece of the two each probe asks for.
         OperationKind::Chunk | OperationKind::Split => &[2, 1],
@@ -743,6 +748,23 @@ fn execute_cpu_probe(operation: OperationKind, layout: LayoutClass) -> CpuStorag
             );
             pieces.into_iter().next().unwrap()
         }
+        // The block kernels read the buffer directly and never consult a
+        // stride, so the row admits contiguous only and the probe never
+        // transposes.
+        OperationKind::Quantize | OperationKind::Dequantize | OperationKind::QuantizedMatMul => {
+            let values: Vec<f32> = (0..32).map(|index| index as f32).collect();
+            let blocks = B::quantize::<f32, Q8_0>(&f32_storage(&[32], &values)).unwrap();
+            match operation {
+                OperationKind::Quantize => blocks,
+                OperationKind::Dequantize => B::dequantize::<Q8_0, f32>(&blocks).unwrap(),
+                // The kernel reads `rhs` as `[N, K]` rather than `[K, N]`, so
+                // both operands are one block wide and the result is `[1, 1]`.
+                _ => {
+                    let row = blocks.reshape(&[1, 32]).unwrap();
+                    B::quantized_matmul::<Q8_0>(&row, &row).unwrap()
+                }
+            }
+        }
         OperationKind::Dot | OperationKind::Outer => {
             let lhs = transpose_if_requested(f32_storage(&[2, 2], &[1.0, 2.0, 3.0, 4.0]), layout);
             let rhs = f32_storage(&[2, 2], &[1.0, 0.0, 0.0, 1.0]);
@@ -944,13 +966,22 @@ fn execute_cpu_probe(operation: OperationKind, layout: LayoutClass) -> CpuStorag
 fn generated_cpu_rows_match_real_execution_and_output_metadata() {
     for rule in CPU_CAPABILITIES {
         for &layout in rule.layouts {
-            let case = query(rule.operation, DTypeId::F32, layout, rule.min_rank);
+            // The probes build f32 operands wherever the row admits f32. The
+            // rows over compressed storage do not admit it, and querying them
+            // with f32 would assert support they never claimed, so the query
+            // follows the row rather than the probe's usual choice.
+            let probe_dtype = if rule.dtypes.contains(&DTypeId::F32) {
+                DTypeId::F32
+            } else {
+                rule.dtypes[0]
+            };
+            let case = query(rule.operation, probe_dtype, layout, rule.min_rank);
             assert!(registry(DeviceKind::Cpu).support(&case).is_device_local());
             let output = execute_cpu_probe(rule.operation, layout);
             assert_eq!(&*output.shape, cpu_probe_shape(rule.operation));
             assert_eq!(
                 output.dtype,
-                expected_result_dtype(rule.operation, DTypeId::F32)
+                expected_result_dtype(rule.operation, probe_dtype)
             );
             assert_eq!(output.device, DeviceId::cpu());
         }
@@ -1131,6 +1162,9 @@ fn every_advertised_cpu_dtype_executes_its_registered_operation() {
                 | OperationKind::Norm
                 | OperationKind::Dot
                 | OperationKind::Outer
+                | OperationKind::Quantize
+                | OperationKind::Dequantize
+                | OperationKind::QuantizedMatMul
                 | OperationKind::TopK => execute_cpu_probe(rule.operation, LayoutClass::Contiguous),
                 // `chunk` and `split` are the two rows whose executor returns a
                 // sequence. The probe asserts the piece count here, because the
@@ -1313,6 +1347,18 @@ fn expected_result_dtype(operation: OperationKind, operand: DTypeId) -> DTypeId 
     // result dtype of a conversion is whatever the caller asked for. This
     // mirrors the target the probes above pass.
     if operation == OperationKind::ToDType {
+        return DTypeId::F32;
+    }
+    // The three rows whose result dtype is not the operand's. `quantize`
+    // compresses into blocks; the other two read blocks and answer in f32, so
+    // for them the operand dtype is exactly the wrong answer.
+    if operation == OperationKind::Quantize {
+        return DTypeId::Q8_0;
+    }
+    if matches!(
+        operation,
+        OperationKind::Dequantize | OperationKind::QuantizedMatMul
+    ) {
         return DTypeId::F32;
     }
     let entry = OPERATION_CATALOG
