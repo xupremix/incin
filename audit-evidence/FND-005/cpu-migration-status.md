@@ -2,7 +2,7 @@
 
 Generated from `CPU_CAPABILITIES` and `incin_core::exec::OPERATION_CATALOG`; the Rust source is authoritative. "Migrated" means the CPU backend advertises the exact identity and therefore, by the compile-time proof in `cpu::canonical`, implements `Execute<Descriptor<op::...>>` for it. It does not mean the operation is unreachable through the legacy operation-family traits: those remain the path the stable tensor surface uses.
 
-**92 of 174 catalog operations migrated.** The remaining 82 are still reachable only through the legacy operation-family traits.
+**107 of 174 catalog operations migrated.** The remaining 67 are still reachable only through the legacy operation-family traits.
 
 | Operation | Migrated | Legacy source |
 |---|:--:|---|
@@ -96,31 +96,31 @@ Generated from `CPU_CAPABILITIES` and `incin_core::exec::OPERATION_CATALOG`; the
 | `broadcast_as` | yes | `TensorOps::broadcast_as` |
 | `narrow` | yes | `TensorOps::narrow` |
 | `squeeze` | yes | `TensorOps::squeeze` |
-| `stack` | no | `TensorOps::stack` |
-| `concat` | no | `TensorOps::concat` |
-| `slice` | no | `TensorOps::slice` |
+| `stack` | yes | `TensorOps::stack` |
+| `concat` | yes | `TensorOps::concat` |
+| `slice` | yes | `TensorOps::slice` |
 | `flatten` | yes | `TensorOps::flatten` |
 | `where_cond` | yes | `TensorOps::where_cond` |
-| `gather` | no | `TensorOps::gather` |
-| `scatter` | no | `TensorOps::scatter` |
-| `index_select` | no | `TensorOps::index_select` |
+| `gather` | yes | `TensorOps::gather` |
+| `scatter` | yes | `TensorOps::scatter` |
+| `index_select` | yes | `TensorOps::index_select` |
 | `masked_fill` | yes | `TensorOps::masked_fill` |
 | `unsqueeze` | yes | `TensorOps::unsqueeze` |
-| `repeat` | no | `TensorOps::repeat` |
-| `pad` | no | `TensorOps::pad` |
+| `repeat` | yes | `TensorOps::repeat` |
+| `pad` | yes | `TensorOps::pad` |
 | `triu` | yes | `TensorOps::triu` |
 | `tril` | yes | `TensorOps::tril` |
 | `diag` | yes | `TensorOps::diag` |
 | `chunk` | no | `Tensor::chunk` |
 | `split` | no | `Tensor::split` |
-| `addmm` | no | `TensorOps::addmm` |
+| `addmm` | yes | `TensorOps::addmm` |
 | `bmm` | yes | `TensorOps::bmm` |
-| `scaled_dot_product_attention` | no | `TensorOps::scaled_dot_product_attention` |
-| `unfold` | no | `TensorOps::unfold` |
-| `pixel_shuffle` | no | `TensorOps::pixel_shuffle` |
-| `group_norm` | no | `TensorOps::group_norm` |
-| `instance_norm` | no | `TensorOps::instance_norm` |
-| `broadcast_left` | no | `TensorOps::broadcast_left` |
+| `scaled_dot_product_attention` | yes | `TensorOps::scaled_dot_product_attention` |
+| `unfold` | yes | `TensorOps::unfold` |
+| `pixel_shuffle` | yes | `TensorOps::pixel_shuffle` |
+| `group_norm` | yes | `TensorOps::group_norm` |
+| `instance_norm` | yes | `TensorOps::instance_norm` |
+| `broadcast_left` | yes | `TensorOps::broadcast_left` |
 | `float_to_scalar` | no | `TensorOps::float_to_scalar` |
 | `float_to_vec1` | no | `TensorOps::float_to_vec1` |
 | `int_to_scalar` | no | `TensorOps::int_to_scalar` |

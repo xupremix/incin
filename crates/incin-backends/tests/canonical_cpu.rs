@@ -26,6 +26,16 @@ fn f32_storage(values: Vec<f32>, shape: Vec<usize>) -> CpuStorage {
         .expect("test storage must be well formed")
 }
 
+/// Index storage for the indexing operations.
+///
+/// The descriptor requires an integer index dtype, so a float index is refused
+/// before execution. That refusal is the contract, not an inconvenience, and
+/// the tests honour it rather than working around it.
+fn i64_storage(values: Vec<i64>, shape: Vec<usize>) -> CpuStorage {
+    CpuStorage::try_from_contiguous(CpuBuffer::I64(values), shape)
+        .expect("test storage must be well formed")
+}
+
 fn handle(storage: &CpuStorage) -> TensorHandle<'_> {
     TensorHandle::from_storage::<TestBackend, f32, Local>(storage)
 }
@@ -1390,4 +1400,357 @@ fn a_transpose_axis_outside_the_input_rank_is_refused_before_execution() {
             ..
         })
     ));
+}
+
+/// Parity for the shape and indexing operations that reshape their operand in
+/// ways the descriptor has to derive rather than accept.
+#[test]
+fn the_shape_and_indexing_operations_match_their_legacy_counterparts() {
+    use incin_core::exec::catalog::{
+        AxisAttributes, DuplicateIndexRule, PadAttributes, RepeatAttributes, ScatterAttributes,
+        SliceAttributes, UnfoldAttributes,
+    };
+
+    let context = context();
+    let left = f32_storage(vec![1.0, 2.0, 3.0, 4.0], vec![2, 2]);
+    let right = f32_storage(vec![5.0, 6.0, 7.0, 8.0], vec![2, 2]);
+
+    let joined = dispatch::execute::<op::ConcatExact, _>(
+        &context,
+        AxisAttributes { axis: 0 },
+        &[handle(&left), handle(&right)],
+    )
+    .expect("concat is a registered CPU capability");
+    assert_eq!(
+        values(&joined),
+        values(
+            &<TestBackend as TensorOps<TestBackend>>::concat::<f32>(&[&left, &right], 0).unwrap()
+        )
+    );
+    assert_eq!(dims(&joined), vec![4, 2]);
+
+    let stacked = dispatch::execute::<op::StackExact, _>(
+        &context,
+        AxisAttributes { axis: 0 },
+        &[handle(&left), handle(&right)],
+    )
+    .expect("stack is a registered CPU capability");
+    assert_eq!(
+        values(&stacked),
+        values(
+            &<TestBackend as TensorOps<TestBackend>>::stack::<f32>(&[&left, &right], 0).unwrap()
+        )
+    );
+    assert_eq!(dims(&stacked), vec![2, 2, 2]);
+
+    let sliced = dispatch::execute::<op::SliceExact, _>(
+        &context,
+        SliceAttributes {
+            ranges: vec![(0, 1), (0, 2)],
+        },
+        &[handle(&left)],
+    )
+    .unwrap();
+    assert_eq!(
+        values(&sliced),
+        values(
+            &<TestBackend as TensorOps<TestBackend>>::slice::<f32>(&left, &[(0, 1), (0, 2)])
+                .unwrap()
+        )
+    );
+    assert_eq!(dims(&sliced), vec![1, 2]);
+
+    let index = i64_storage(vec![1, 0, 0, 1], vec![2, 2]);
+    let gathered = dispatch::execute::<op::Gather, _>(
+        &context,
+        AxisAttributes { axis: 1 },
+        &[handle(&left), handle(&index)],
+    )
+    .unwrap();
+    assert_eq!(
+        values(&gathered),
+        values(
+            &<TestBackend as TensorOps<TestBackend>>::gather::<f32, f32>(&left, 1, &index).unwrap()
+        )
+    );
+    // Pinned independently of the legacy path: gather reads column `index[i]`
+    // of row `i`, so a swapped axis or a transposed index would still agree
+    // with a legacy call that made the same mistake.
+    assert_eq!(values(&gathered), vec![2.0, 1.0, 3.0, 4.0]);
+
+    let scattered = dispatch::execute::<op::Scatter, _>(
+        &context,
+        ScatterAttributes {
+            axis: 1,
+            duplicate_indices: DuplicateIndexRule::LastWriteWins,
+        },
+        &[handle(&left), handle(&index), handle(&right)],
+    )
+    .unwrap();
+    assert_eq!(
+        values(&scattered),
+        values(
+            &<TestBackend as TensorOps<TestBackend>>::scatter::<f32, i64>(&left, 1, &index, &right)
+                .unwrap()
+        )
+    );
+
+    let selection = i64_storage(vec![1], vec![1]);
+    let selected = dispatch::execute::<op::IndexSelect, _>(
+        &context,
+        AxisAttributes { axis: 0 },
+        &[handle(&left), handle(&selection)],
+    )
+    .unwrap();
+    assert_eq!(
+        values(&selected),
+        values(
+            &<TestBackend as TensorOps<TestBackend>>::index_select::<f32, i64>(
+                &left, 0, &selection
+            )
+            .unwrap()
+        )
+    );
+    assert_eq!(values(&selected), vec![3.0, 4.0]);
+
+    let repeated = dispatch::execute::<op::Repeat, _>(
+        &context,
+        RepeatAttributes {
+            repeats: vec![2, 1],
+        },
+        &[handle(&left)],
+    )
+    .unwrap();
+    assert_eq!(
+        values(&repeated),
+        values(&<TestBackend as TensorOps<TestBackend>>::repeat::<f32>(&left, &[2, 1]).unwrap())
+    );
+    assert_eq!(dims(&repeated), vec![4, 2]);
+
+    let padded = dispatch::execute::<op::Pad, _>(
+        &context,
+        PadAttributes {
+            padding: vec![(1, 1), (0, 0)],
+            value: -1.0,
+        },
+        &[handle(&left)],
+    )
+    .unwrap();
+    assert_eq!(
+        values(&padded),
+        values(
+            &<TestBackend as TensorOps<TestBackend>>::pad::<f32>(&left, &[(1, 1), (0, 0)], -1.0)
+                .unwrap()
+        )
+    );
+    assert_eq!(dims(&padded), vec![4, 2]);
+
+    let window = f32_storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0], vec![2, 4]);
+    let unfolded = dispatch::execute::<op::Unfold, _>(
+        &context,
+        UnfoldAttributes {
+            axis: 1,
+            size: 2,
+            step: 1,
+        },
+        &[handle(&window)],
+    )
+    .unwrap();
+    assert_eq!(
+        values(&unfolded),
+        values(&<TestBackend as TensorOps<TestBackend>>::unfold::<f32>(&window, 1, 2, 1).unwrap())
+    );
+    assert_eq!(dims(&unfolded), vec![2, 3, 2]);
+}
+
+/// Parity for the operations whose canonical row is `composed` because the CPU
+/// answers them by rewriting into other operations.
+#[test]
+fn the_composed_tensor_operations_match_their_legacy_counterparts() {
+    use incin_core::exec::catalog::{
+        AddmmAttributes, AttentionAttributes, EpsilonAttributes, GroupNormAttributes,
+        PixelShuffleAttributes,
+    };
+
+    let context = context();
+    let matrix = f32_storage(vec![1.0, 2.0, 3.0, 4.0], vec![2, 2]);
+
+    let fused = dispatch::execute::<op::Addmm, _>(
+        &context,
+        AddmmAttributes {
+            alpha: 2.0,
+            beta: 0.5,
+        },
+        &[handle(&matrix), handle(&matrix), handle(&matrix)],
+    )
+    .expect("addmm is a registered CPU capability");
+    assert_eq!(
+        values(&fused),
+        values(
+            &<TestBackend as TensorOps<TestBackend>>::addmm::<f32>(
+                &matrix, &matrix, &matrix, 0.5, 2.0
+            )
+            .unwrap()
+        )
+    );
+
+    let attended = dispatch::execute::<op::ScaledDotProductAttention, _>(
+        &context,
+        AttentionAttributes {
+            scale: Some(0.5),
+            has_mask: false,
+        },
+        &[handle(&matrix), handle(&matrix), handle(&matrix)],
+    )
+    .expect("attention is a registered CPU capability");
+    assert_eq!(
+        values(&attended),
+        values(
+            &<TestBackend as TensorOps<TestBackend>>::scaled_dot_product_attention::<f32>(
+                &matrix,
+                &matrix,
+                &matrix,
+                None,
+                Some(0.5)
+            )
+            .unwrap()
+        )
+    );
+
+    let channels = f32_storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0], vec![1, 4, 2]);
+    let grouped = dispatch::execute::<op::GroupNorm, _>(
+        &context,
+        GroupNormAttributes {
+            groups: 2,
+            epsilon: 1e-5,
+        },
+        &[handle(&channels)],
+    )
+    .unwrap();
+    assert_eq!(
+        values(&grouped),
+        values(
+            &<TestBackend as TensorOps<TestBackend>>::group_norm::<f32>(&channels, 2, 1e-5)
+                .unwrap()
+        )
+    );
+
+    let volume = f32_storage(
+        (0..16).map(|value| value as f32).collect(),
+        vec![1, 4, 2, 2],
+    );
+    let instance = dispatch::execute::<op::InstanceNorm, _>(
+        &context,
+        EpsilonAttributes { epsilon: 1e-5 },
+        &[handle(&volume)],
+    )
+    .unwrap();
+    assert_eq!(
+        values(&instance),
+        values(
+            &<TestBackend as TensorOps<TestBackend>>::instance_norm::<f32>(&volume, 1e-5).unwrap()
+        )
+    );
+
+    // The descriptor's shape is the whole target; the legacy method takes the
+    // prefix. Both spellings of the same request must produce the same tensor.
+    let broadened = dispatch::execute::<op::BroadcastLeft, _>(
+        &context,
+        ShapeAttributes {
+            shape: vec![3, 2, 2],
+        },
+        &[handle(&matrix)],
+    )
+    .unwrap();
+    assert_eq!(
+        values(&broadened),
+        values(
+            &<TestBackend as TensorOps<TestBackend>>::broadcast_left::<f32>(&matrix, &[3]).unwrap()
+        )
+    );
+    assert_eq!(dims(&broadened), vec![3, 2, 2]);
+
+    let picture = f32_storage(
+        (0..16).map(|value| value as f32).collect(),
+        vec![1, 4, 2, 2],
+    );
+    let shuffled = dispatch::execute::<op::PixelShuffle, _>(
+        &context,
+        PixelShuffleAttributes { upscale_factor: 2 },
+        &[handle(&picture)],
+    )
+    .unwrap();
+    assert_eq!(
+        values(&shuffled),
+        values(
+            &<TestBackend as TensorOps<TestBackend>>::pixel_shuffle::<f32>(&picture, 2).unwrap()
+        )
+    );
+    assert_eq!(dims(&shuffled), vec![1, 1, 4, 4]);
+}
+
+/// The CPU scatter kernel writes in index order and has no duplicate
+/// detection, so a descriptor asking for duplicates to be rejected must be
+/// refused rather than answered with last-write-wins.
+#[test]
+fn a_scatter_that_must_reject_duplicates_is_refused_rather_than_approximated() {
+    use incin_core::exec::catalog::{DuplicateIndexRule, ScatterAttributes};
+
+    let context = context();
+    let target = f32_storage(vec![1.0, 2.0, 3.0, 4.0], vec![2, 2]);
+    let index = i64_storage(vec![0, 0, 0, 0], vec![2, 2]);
+    let source = f32_storage(vec![5.0, 6.0, 7.0, 8.0], vec![2, 2]);
+
+    let error = dispatch::execute::<op::Scatter, _>(
+        &context,
+        ScatterAttributes {
+            axis: 1,
+            duplicate_indices: DuplicateIndexRule::Reject,
+        },
+        &[handle(&target), handle(&index), handle(&source)],
+    )
+    .expect_err("the CPU kernel cannot reject duplicate indices");
+    assert!(
+        matches!(error, CanonicalError::Backend(_)),
+        "unexpected refusal: {error}"
+    );
+
+    // The same request with the rule the kernel does implement succeeds, so
+    // the refusal above is about the rule and not about the operands.
+    dispatch::execute::<op::Scatter, _>(
+        &context,
+        ScatterAttributes {
+            axis: 1,
+            duplicate_indices: DuplicateIndexRule::LastWriteWins,
+        },
+        &[handle(&target), handle(&index), handle(&source)],
+    )
+    .expect("last-write-wins is what this kernel does");
+}
+
+/// Attention declares whether it has a mask. Supplying the wrong number of
+/// operands for that declaration is refused before the kernel is reached.
+#[test]
+fn an_attention_mask_declaration_must_match_the_operand_count() {
+    use incin_core::exec::catalog::AttentionAttributes;
+
+    let context = context();
+    let matrix = f32_storage(vec![1.0, 2.0, 3.0, 4.0], vec![2, 2]);
+
+    let error = dispatch::execute::<op::ScaledDotProductAttention, _>(
+        &context,
+        AttentionAttributes {
+            scale: None,
+            has_mask: true,
+        },
+        &[handle(&matrix), handle(&matrix), handle(&matrix)],
+    )
+    .expect_err("a declared mask was not supplied");
+    assert!(
+        matches!(
+            error,
+            CanonicalError::Backend(_) | CanonicalError::Descriptor(_)
+        ),
+        "unexpected refusal: {error}"
+    );
 }

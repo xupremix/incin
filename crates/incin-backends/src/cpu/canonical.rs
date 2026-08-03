@@ -15,7 +15,7 @@
 use incin_core::backend_authoring::{
     Execute, ExecutionRequest, FloatOps, ModuleOps, ReductionOps, TensorOps,
 };
-use incin_core::exec::catalog::{Descriptor, op};
+use incin_core::exec::catalog::{Descriptor, DuplicateIndexRule, op};
 use incin_core::exec::{
     Capabilities, CapabilityQuery, MathMode, SupportLevel, TensorHandle, UnsupportedReason,
 };
@@ -791,6 +791,344 @@ impl<T: DType, D: Device> Execute<Descriptor<op::Lerp>> for CpuBackendImpl<T, D>
     }
 }
 
+/// Bind a variable-length operand list, checking each one.
+///
+/// `concat` and `stack` take one or more operands, so their arity contract is
+/// a lower bound rather than a fixed count. An empty list is still a defect.
+fn variadic_operands<'a, T: DType, D: Device>(
+    backend: &CpuBackendImpl<T, D>,
+    inputs: &'a [TensorHandle<'a>],
+    operation: OperationKind,
+) -> Result<Vec<&'a CpuStorage>, BackendError> {
+    if inputs.is_empty() {
+        return Err(invalid(operation, "operation expects at least one operand"));
+    }
+    inputs
+        .iter()
+        .map(|handle| {
+            let storage = operand(handle, operation)?;
+            admitted(backend, operation, storage)?;
+            Ok(storage)
+        })
+        .collect()
+}
+
+/// Bind the three operands an indexing or fused operation consumes.
+fn ternary_operands<'a, T: DType, D: Device>(
+    backend: &CpuBackendImpl<T, D>,
+    inputs: &'a [TensorHandle<'a>],
+    operation: OperationKind,
+) -> Result<[&'a CpuStorage; 3], BackendError> {
+    let [first, second, third] = inputs else {
+        return Err(invalid(
+            operation,
+            "operation expects exactly three operands",
+        ));
+    };
+    let bound = [
+        operand(first, operation)?,
+        operand(second, operation)?,
+        operand(third, operation)?,
+    ];
+    for storage in bound {
+        admitted(backend, operation, storage)?;
+    }
+    Ok(bound)
+}
+
+/// Join operands along an existing axis.
+impl<T: DType, D: Device> Execute<Descriptor<op::ConcatExact>> for CpuBackendImpl<T, D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::ConcatExact>, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::ConcatExact;
+        let operands = variadic_operands(self, request.inputs, operation)?;
+        let axis = request.operation.descriptor().attributes().axis;
+        <Self as TensorOps<Self>>::concat::<T>(&operands, axis)
+            .map_err(|error| kernel_error(operation, error))
+    }
+}
+
+/// Join operands along a new axis.
+impl<T: DType, D: Device> Execute<Descriptor<op::StackExact>> for CpuBackendImpl<T, D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::StackExact>, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::StackExact;
+        let operands = variadic_operands(self, request.inputs, operation)?;
+        let axis = request.operation.descriptor().attributes().axis;
+        <Self as TensorOps<Self>>::stack::<T>(&operands, axis)
+            .map_err(|error| kernel_error(operation, error))
+    }
+}
+
+/// Take a half-open window per axis.
+impl<T: DType, D: Device> Execute<Descriptor<op::SliceExact>> for CpuBackendImpl<T, D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::SliceExact>, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::SliceExact;
+        let input = reduction_operand(self, request.inputs, operation)?;
+        let ranges = &request.operation.descriptor().attributes().ranges;
+        <Self as TensorOps<Self>>::slice::<T>(input, ranges)
+            .map_err(|error| kernel_error(operation, error))
+    }
+}
+
+/// Indexing operations that read one axis and one index operand.
+macro_rules! indexing_executors {
+    ($(($operation:ident, $method:ident)),* $(,)?) => {$(
+        impl<T: DType, D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<T, D> {
+            type Output = CpuStorage;
+
+            fn execute(
+                &self,
+                request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
+            ) -> Result<CpuStorage, BackendError> {
+                let operation = OperationKind::$operation;
+                let (input, index) = binary_operands(self, request.inputs, operation)?;
+                let axis = request.operation.descriptor().attributes().axis;
+                <Self as TensorOps<Self>>::$method::<T, T>(input, axis, index)
+                    .map_err(|error| kernel_error(operation, error))
+            }
+        }
+    )*};
+}
+
+indexing_executors![(Gather, gather), (IndexSelect, index_select)];
+
+/// Write `src` into the operand at the indexed positions.
+///
+/// The descriptor can ask for duplicate indices to be rejected. The CPU kernel
+/// has no duplicate detection: it writes in index order, so the last write
+/// wins. Answering a `Reject` request with that behaviour would report success
+/// for a contract the backend did not honour, so it is refused instead.
+impl<T: DType, D: Device> Execute<Descriptor<op::Scatter>> for CpuBackendImpl<T, D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::Scatter>, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::Scatter;
+        let [input, index, source] = ternary_operands(self, request.inputs, operation)?;
+        let attributes = request.operation.descriptor().attributes();
+        if attributes.duplicate_indices == DuplicateIndexRule::Reject {
+            return Err(invalid(
+                operation,
+                "this backend applies last-write-wins and cannot reject duplicate indices",
+            ));
+        }
+        <Self as TensorOps<Self>>::scatter::<T, T>(input, attributes.axis, index, source)
+            .map_err(|error| kernel_error(operation, error))
+    }
+}
+
+/// Tile the operand per axis.
+impl<T: DType, D: Device> Execute<Descriptor<op::Repeat>> for CpuBackendImpl<T, D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::Repeat>, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::Repeat;
+        let input = reduction_operand(self, request.inputs, operation)?;
+        let repeats = &request.operation.descriptor().attributes().repeats;
+        <Self as TensorOps<Self>>::repeat::<T>(input, repeats)
+            .map_err(|error| kernel_error(operation, error))
+    }
+}
+
+/// Extend each axis with the declared constant.
+impl<T: DType, D: Device> Execute<Descriptor<op::Pad>> for CpuBackendImpl<T, D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::Pad>, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::Pad;
+        let input = reduction_operand(self, request.inputs, operation)?;
+        let attributes = request.operation.descriptor().attributes();
+        <Self as TensorOps<Self>>::pad::<T>(input, &attributes.padding, attributes.value)
+            .map_err(|error| kernel_error(operation, error))
+    }
+}
+
+/// Extract sliding windows along one axis.
+impl<T: DType, D: Device> Execute<Descriptor<op::Unfold>> for CpuBackendImpl<T, D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::Unfold>, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::Unfold;
+        let input = reduction_operand(self, request.inputs, operation)?;
+        let attributes = request.operation.descriptor().attributes();
+        <Self as TensorOps<Self>>::unfold::<T>(
+            input,
+            attributes.axis,
+            attributes.size,
+            attributes.step,
+        )
+        .map_err(|error| kernel_error(operation, error))
+    }
+}
+
+/// Redistribute channel depth into spatial extent.
+impl<T: DType, D: Device> Execute<Descriptor<op::PixelShuffle>> for CpuBackendImpl<T, D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::PixelShuffle>, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::PixelShuffle;
+        let input = reduction_operand(self, request.inputs, operation)?;
+        let factor = request.operation.descriptor().attributes().upscale_factor;
+        <Self as TensorOps<Self>>::pixel_shuffle::<T>(input, factor)
+            .map_err(|error| kernel_error(operation, error))
+    }
+}
+
+/// Normalize within channel groups.
+impl<T: DType, D: Device> Execute<Descriptor<op::GroupNorm>> for CpuBackendImpl<T, D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::GroupNorm>, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::GroupNorm;
+        let input = reduction_operand(self, request.inputs, operation)?;
+        let attributes = request.operation.descriptor().attributes();
+        <Self as TensorOps<Self>>::group_norm::<T>(input, attributes.groups, attributes.epsilon)
+            .map_err(|error| kernel_error(operation, error))
+    }
+}
+
+/// Normalize each channel independently.
+impl<T: DType, D: Device> Execute<Descriptor<op::InstanceNorm>> for CpuBackendImpl<T, D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::InstanceNorm>, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::InstanceNorm;
+        let input = reduction_operand(self, request.inputs, operation)?;
+        let epsilon = request.operation.descriptor().attributes().epsilon;
+        <Self as TensorOps<Self>>::instance_norm::<T>(input, epsilon)
+            .map_err(|error| kernel_error(operation, error))
+    }
+}
+
+/// Extend the operand on the left to the declared target shape.
+///
+/// The descriptor and the legacy method disagree about what the shape argument
+/// means: the descriptor's `ShapeAttributes` is the whole target shape, and
+/// validates the operand against it, while `TensorOps::broadcast_left` takes
+/// only the extents to prepend. Passing the descriptor's shape straight
+/// through would prepend the target to the operand and produce a tensor of
+/// twice the intended rank, so the prefix is derived here.
+impl<T: DType, D: Device> Execute<Descriptor<op::BroadcastLeft>> for CpuBackendImpl<T, D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::BroadcastLeft>, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::BroadcastLeft;
+        let input = reduction_operand(self, request.inputs, operation)?;
+        let target = &request.operation.descriptor().attributes().shape;
+        let rank = input.metadata().shape().rank();
+        let Some(prefix) = target.len().checked_sub(rank) else {
+            return Err(invalid(
+                operation,
+                "the declared target shape has fewer axes than the operand",
+            ));
+        };
+        <Self as TensorOps<Self>>::broadcast_left::<T>(input, &target[..prefix])
+            .map_err(|error| kernel_error(operation, error))
+    }
+}
+
+/// Fused `beta * mat + alpha * (mat1 @ mat2)`.
+impl<T: DType, D: Device> Execute<Descriptor<op::Addmm>> for CpuBackendImpl<T, D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::Addmm>, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::Addmm;
+        let [mat, lhs, rhs] = ternary_operands(self, request.inputs, operation)?;
+        let attributes = request.operation.descriptor().attributes();
+        <Self as TensorOps<Self>>::addmm::<T>(mat, lhs, rhs, attributes.beta, attributes.alpha)
+            .map_err(|error| kernel_error(operation, error))
+    }
+}
+
+/// Scaled dot-product attention, with the mask as an optional fourth operand.
+///
+/// The attribute set says whether a mask is present, so the operand count and
+/// the declared contract have to agree before anything runs; a descriptor that
+/// declares a mask and supplies three operands is a defect, not a request to
+/// attend without one.
+impl<T: DType, D: Device> Execute<Descriptor<op::ScaledDotProductAttention>>
+    for CpuBackendImpl<T, D>
+{
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::ScaledDotProductAttention>, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::ScaledDotProductAttention;
+        let attributes = request.operation.descriptor().attributes();
+        let (operands, mask) = match request.inputs {
+            [query, key, value] if !attributes.has_mask => ([query, key, value], None),
+            [query, key, value, mask] if attributes.has_mask => {
+                ([query, key, value], Some(operand(mask, operation)?))
+            }
+            _ => {
+                return Err(invalid(
+                    operation,
+                    "operand count does not match the declared mask",
+                ));
+            }
+        };
+        let mut bound = Vec::with_capacity(3);
+        for handle in operands {
+            let storage = operand(handle, operation)?;
+            admitted(self, operation, storage)?;
+            bound.push(storage);
+        }
+        if let Some(mask) = mask {
+            admitted(self, operation, mask)?;
+        }
+        <Self as TensorOps<Self>>::scaled_dot_product_attention::<T>(
+            bound[0],
+            bound[1],
+            bound[2],
+            mask,
+            attributes.scale,
+        )
+        .map_err(|error| kernel_error(operation, error))
+    }
+}
+
 /// Prove, at compile time, that every identity `CPU_CAPABILITIES` advertises
 /// has an executor above.
 ///
@@ -815,6 +1153,9 @@ macro_rules! assert_every_advertised_row_executes {
         elementwise_tensor = [$($elementwise_tensor:ident),* $(,)?],
         view_tensor = [$($view_tensor:ident),* $(,)?],
         composed_view = [$($composed_view:ident),* $(,)?],
+        native_tensor_extra = [$($native_tensor_extra:ident),* $(,)?],
+        composed_tensor_extra = [$($composed_tensor_extra:ident),* $(,)?],
+        composed_float_tensor = [$($composed_float_tensor:ident),* $(,)?],
         diagonal_tensor = [$($diagonal_tensor:ident),* $(,)?],
         bmm = [$($bmm:ident),* $(,)?]
     ) => {
@@ -841,6 +1182,9 @@ macro_rules! assert_every_advertised_row_executes {
                 $(executes::<op::$elementwise_tensor, CpuBackendImpl<T, D>>();)*
                 $(executes::<op::$view_tensor, CpuBackendImpl<T, D>>();)*
                 $(executes::<op::$composed_view, CpuBackendImpl<T, D>>();)*
+                $(executes::<op::$native_tensor_extra, CpuBackendImpl<T, D>>();)*
+                $(executes::<op::$composed_tensor_extra, CpuBackendImpl<T, D>>();)*
+                $(executes::<op::$composed_float_tensor, CpuBackendImpl<T, D>>();)*
                 $(executes::<op::$diagonal_tensor, CpuBackendImpl<T, D>>();)*
                 $(executes::<op::$bmm, CpuBackendImpl<T, D>>();)*
             }

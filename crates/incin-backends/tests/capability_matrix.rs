@@ -233,7 +233,22 @@ fn transpose_if_requested(storage: CpuStorage, layout: LayoutClass) -> CpuStorag
 /// probe on a shape the other never tries.
 fn cpu_tensor_operand_shapes(operation: OperationKind) -> &'static [&'static [usize]] {
     match operation {
-        OperationKind::WhereCond => &[&[2, 2], &[2, 2], &[2, 2]],
+        OperationKind::WhereCond
+        | OperationKind::Scatter
+        | OperationKind::Addmm
+        | OperationKind::ScaledDotProductAttention => &[&[2, 2], &[2, 2], &[2, 2]],
+        OperationKind::ConcatExact | OperationKind::StackExact | OperationKind::Gather => {
+            &[&[2, 2], &[2, 2]]
+        }
+        OperationKind::IndexSelect => &[&[2, 2], &[1]],
+        OperationKind::PixelShuffle => &[&[1, 4, 2, 2]],
+        OperationKind::GroupNorm => &[&[1, 4, 2]],
+        OperationKind::InstanceNorm => &[&[1, 4, 2, 2]],
+        OperationKind::Unfold => &[&[2, 4]],
+        OperationKind::SliceExact
+        | OperationKind::Repeat
+        | OperationKind::Pad
+        | OperationKind::BroadcastLeft => &[&[2, 2]],
         OperationKind::Maximum
         | OperationKind::Minimum
         | OperationKind::AbsDiff
@@ -300,6 +315,24 @@ fn cpu_tensor_probe<K: DType>(operation: OperationKind, operands: &[&CpuStorage]
         OperationKind::Tril => B::tril::<K>(first, 0).unwrap(),
         OperationKind::Diag => B::diag::<K>(first, 0).unwrap(),
         OperationKind::BatchedMatMul => B::bmm::<K>(first, operands[1]).unwrap(),
+        OperationKind::ConcatExact => B::concat::<K>(&[first, operands[1]], 0).unwrap(),
+        OperationKind::StackExact => B::stack::<K>(&[first, operands[1]], 0).unwrap(),
+        OperationKind::SliceExact => B::slice::<K>(first, &[(0, 1), (0, 2)]).unwrap(),
+        OperationKind::Gather => B::gather::<K, K>(first, 1, operands[1]).unwrap(),
+        OperationKind::Scatter => B::scatter::<K, K>(first, 1, operands[1], operands[2]).unwrap(),
+        OperationKind::IndexSelect => B::index_select::<K, K>(first, 0, operands[1]).unwrap(),
+        OperationKind::Repeat => B::repeat::<K>(first, &[2, 1]).unwrap(),
+        OperationKind::Pad => B::pad::<K>(first, &[(1, 1), (0, 0)], 0.0).unwrap(),
+        OperationKind::Unfold => B::unfold::<K>(first, 1, 2, 1).unwrap(),
+        OperationKind::PixelShuffle => B::pixel_shuffle::<K>(first, 2).unwrap(),
+        OperationKind::GroupNorm => B::group_norm::<K>(first, 2, 1e-5).unwrap(),
+        OperationKind::InstanceNorm => B::instance_norm::<K>(first, 1e-5).unwrap(),
+        OperationKind::BroadcastLeft => B::broadcast_left::<K>(first, &[3]).unwrap(),
+        OperationKind::Addmm => B::addmm::<K>(first, operands[1], operands[2], 1.0, 1.0).unwrap(),
+        OperationKind::ScaledDotProductAttention => {
+            B::scaled_dot_product_attention::<K>(first, operands[1], operands[2], None, None)
+                .unwrap()
+        }
         _ => panic!("missing CPU tensor probe for {operation}"),
     }
 }
@@ -310,14 +343,21 @@ fn cpu_tensor_probe<K: DType>(operation: OperationKind, operands: &[&CpuStorage]
 /// counterpart, or the two layout cases would be exercising different
 /// operations. Materialising the last two axes swapped and transposing them
 /// back keeps the shape and changes the strides.
+/// Every element is `1.0`. These probes answer "does the advertised row
+/// execute and produce the declared shape, dtype and device", not "is the
+/// arithmetic right"; numerical agreement is `canonical_cpu`'s job. A uniform
+/// fill also keeps the indexing operations' index operands inside their
+/// extents without a second, position-aware value table.
 fn laid_out(shape: &[usize], layout: LayoutClass) -> CpuStorage {
     let count: usize = shape.iter().product();
-    let values: Vec<f32> = (0..count).map(|index| index as f32 + 1.0).collect();
-    if layout != LayoutClass::Strided {
+    let values = vec![1.0f32; count];
+    let rank = shape.len();
+    // A rank-one operand has no axis pair to permute, so it has no strided
+    // form that keeps its shape. Those operands are index vectors, whose
+    // layout is not what the row under test describes.
+    if layout != LayoutClass::Strided || rank < 2 {
         return f32_storage(shape, &values);
     }
-    let rank = shape.len();
-    assert!(rank >= 2, "a strided probe needs at least two axes");
     let mut swapped = shape.to_vec();
     swapped.swap(rank - 2, rank - 1);
     f32_storage(&swapped, &values)
@@ -427,6 +467,18 @@ fn cpu_probe_shape(operation: OperationKind) -> &'static [usize] {
         OperationKind::SqueezeExact | OperationKind::Diag => &[2],
         OperationKind::UnsqueezeExact => &[1, 2, 2],
         OperationKind::BatchedMatMul => &[1, 2, 2],
+        OperationKind::ConcatExact | OperationKind::Repeat | OperationKind::Pad => &[4, 2],
+        OperationKind::StackExact => &[2, 2, 2],
+        OperationKind::SliceExact | OperationKind::IndexSelect => &[1, 2],
+        OperationKind::Gather
+        | OperationKind::Scatter
+        | OperationKind::Addmm
+        | OperationKind::ScaledDotProductAttention => &[2, 2],
+        OperationKind::Unfold => &[2, 3, 2],
+        OperationKind::PixelShuffle => &[1, 1, 4, 4],
+        OperationKind::GroupNorm => &[1, 4, 2],
+        OperationKind::InstanceNorm => &[1, 4, 2, 2],
+        OperationKind::BroadcastLeft => &[3, 2, 2],
         OperationKind::Conv2d => &[1, 1, 2, 2],
         OperationKind::Conv2dExact => &[1, 1, 2, 2],
         OperationKind::Pool2d => &[1, 1, 1, 1],
@@ -663,7 +715,22 @@ fn execute_cpu_probe(operation: OperationKind, layout: LayoutClass) -> CpuStorag
         | OperationKind::Triu
         | OperationKind::Tril
         | OperationKind::Diag
-        | OperationKind::BatchedMatMul => {
+        | OperationKind::BatchedMatMul
+        | OperationKind::ConcatExact
+        | OperationKind::StackExact
+        | OperationKind::SliceExact
+        | OperationKind::Gather
+        | OperationKind::Scatter
+        | OperationKind::IndexSelect
+        | OperationKind::Repeat
+        | OperationKind::Pad
+        | OperationKind::Unfold
+        | OperationKind::PixelShuffle
+        | OperationKind::GroupNorm
+        | OperationKind::InstanceNorm
+        | OperationKind::BroadcastLeft
+        | OperationKind::Addmm
+        | OperationKind::ScaledDotProductAttention => {
             let operands: Vec<CpuStorage> = cpu_tensor_operand_shapes(operation)
                 .iter()
                 .map(|shape| laid_out(shape, layout))
@@ -918,7 +985,22 @@ fn every_advertised_cpu_dtype_executes_its_registered_operation() {
                 | OperationKind::Triu
                 | OperationKind::Tril
                 | OperationKind::Diag
-                | OperationKind::BatchedMatMul => {
+                | OperationKind::BatchedMatMul
+                | OperationKind::ConcatExact
+                | OperationKind::StackExact
+                | OperationKind::SliceExact
+                | OperationKind::Gather
+                | OperationKind::Scatter
+                | OperationKind::IndexSelect
+                | OperationKind::Repeat
+                | OperationKind::Pad
+                | OperationKind::Unfold
+                | OperationKind::PixelShuffle
+                | OperationKind::GroupNorm
+                | OperationKind::InstanceNorm
+                | OperationKind::BroadcastLeft
+                | OperationKind::Addmm
+                | OperationKind::ScaledDotProductAttention => {
                     let operands: Vec<CpuStorage> = cpu_tensor_operand_shapes(rule.operation)
                         .iter()
                         .map(|shape| B::ones::<Dyn>(shape, dtype, &DeviceId::cpu()).unwrap())

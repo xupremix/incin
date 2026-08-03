@@ -34,7 +34,7 @@ run time.
 | `add` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` |
 | `add_in_place` | — | — | — |
 | `add_scalar` | `bf16`, `f16`, `f32`, `f64` | — | — |
-| `addmm` | — | — | — |
+| `addmm` | `f32` | — | — |
 | `arange` | — | — | — |
 | `argmax` | — | — | — |
 | `argmin` | — | — | — |
@@ -50,7 +50,7 @@ run time.
 | `bce_with_logits_loss` | — | — | — |
 | `bmm` | `f32` | — | — |
 | `broadcast_as` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `q8_0` | `i64`, `bf16`, `f16`, `f32`, `f64` | `f32` |
-| `broadcast_left` | — | — | — |
+| `broadcast_left` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `ceil` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `chunk` | — | — | — |
 | `clamp` | `bf16`, `f16`, `f32`, `f64` | — | — |
@@ -60,7 +60,7 @@ run time.
 | `cmp_le` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `cmp_lt` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `cmp_ne` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
-| `concat` | — | — | — |
+| `concat` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `conv1d` | — | — | — |
 | `conv2d` | `f32` | `f32` | `f32` |
 | `conv_transpose2d` | — | — | — |
@@ -88,11 +88,11 @@ run time.
 | `fmod` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `frac` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `full` | — | — | — |
-| `gather` | — | — | — |
+| `gather` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `gelu` | `bf16`, `f16`, `f32`, `f64` | — | — |
-| `group_norm` | — | — | — |
-| `index_select` | — | — | — |
-| `instance_norm` | — | — | — |
+| `group_norm` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
+| `index_select` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
+| `instance_norm` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `int_to_scalar` | — | — | — |
 | `int_to_vec1` | — | — | — |
 | `l1_loss` | — | — | — |
@@ -131,8 +131,8 @@ run time.
 | `norm` | — | — | — |
 | `ones` | — | — | — |
 | `outer` | — | — | — |
-| `pad` | — | — | — |
-| `pixel_shuffle` | — | — | — |
+| `pad` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
+| `pixel_shuffle` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `powf` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `prod_all` | `f32` | — | — |
 | `prod_dim` | `f32` | — | — |
@@ -142,7 +142,7 @@ run time.
 | `randn` | — | — | — |
 | `relu` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `remainder` | `bf16`, `f16`, `f32`, `f64` | — | — |
-| `repeat` | — | — | — |
+| `repeat` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `require_grad` | — | — | — |
 | `reshape` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `q8_0` | `i64`, `bf16`, `f16`, `f32`, `f64` | `f32` |
 | `rms_norm` | — | — | — |
@@ -150,19 +150,19 @@ run time.
 | `round` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `rsqrt` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `sample` | — | — | — |
-| `scaled_dot_product_attention` | — | — | — |
-| `scatter` | — | — | — |
+| `scaled_dot_product_attention` | `f32` | — | — |
+| `scatter` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `sgd_step` | — | — | — |
 | `sigmoid` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `sign` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `sin` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `sinh` | `bf16`, `f16`, `f32`, `f64` | — | — |
-| `slice` | — | — | — |
+| `slice` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `softmax` | `f32` | — | — |
 | `split` | — | — | — |
 | `sqrt` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `squeeze` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
-| `stack` | — | — | — |
+| `stack` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `std_all` | — | — | — |
 | `std_dim` | — | — | — |
 | `std_keepdim` | — | — | — |
@@ -186,7 +186,7 @@ run time.
 | `tril` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `triu` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `trunc` | `bf16`, `f16`, `f32`, `f64` | — | — |
-| `unfold` | — | — | — |
+| `unfold` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `unsqueeze` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `var_all` | — | — | — |
 | `var_dim` | — | — | — |
@@ -314,6 +314,21 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `flatten` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 1+ | yes | composed |
 | `squeeze` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 1+ | yes | composed |
 | `unsqueeze` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | composed |
+| `concat` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 1+ | yes | native |
+| `gather` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 1+ | yes | native |
+| `scatter` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 1+ | yes | native |
+| `index_select` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 1+ | yes | native |
+| `repeat` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `pad` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `unfold` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 1+ | yes | native |
+| `pixel_shuffle` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 4 | yes | native |
+| `group_norm` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 2+ | yes | native |
+| `stack` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | composed |
+| `slice` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | composed |
+| `instance_norm` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 4 | yes | composed |
+| `broadcast_left` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | composed |
+| `addmm` | `f32` | `contiguous`, `strided` | 2+ | yes | composed |
+| `scaled_dot_product_attention` | `f32` | `contiguous`, `strided` | 2+ | yes | composed |
 | `bmm` | `f32` | `contiguous`, `strided` | 3+ | yes | composed |
 
 ## `cuda`

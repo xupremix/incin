@@ -131,6 +131,12 @@ macro_rules! cpu_descriptor_operations {
             ],
             view_tensor = [TransposeExact, Narrow],
             composed_view = [FlattenExact, SqueezeExact, UnsqueezeExact],
+            native_tensor_extra = [
+                ConcatExact, Gather, Scatter, IndexSelect, Repeat, Pad, Unfold,
+                PixelShuffle, GroupNorm
+            ],
+            composed_tensor_extra = [StackExact, SliceExact, InstanceNorm, BroadcastLeft],
+            composed_float_tensor = [Addmm, ScaledDotProductAttention],
             diagonal_tensor = [Triu, Tril, Diag],
             bmm = [BatchedMatMul]
         }
@@ -168,6 +174,9 @@ macro_rules! cuda_descriptor_operations {
             elementwise_tensor = [],
             view_tensor = [],
             composed_view = [],
+            native_tensor_extra = [],
+            composed_tensor_extra = [],
+            composed_float_tensor = [],
             diagonal_tensor = [],
             bmm = []
         }
@@ -201,6 +210,9 @@ macro_rules! wgpu_descriptor_operations {
             elementwise_tensor = [],
             view_tensor = [],
             composed_view = [],
+            native_tensor_extra = [],
+            composed_tensor_extra = [],
+            composed_float_tensor = [],
             diagonal_tensor = [],
             bmm = []
         }
@@ -233,6 +245,9 @@ macro_rules! metal_descriptor_operations {
             elementwise_tensor = [],
             view_tensor = [],
             composed_view = [],
+            native_tensor_extra = [],
+            composed_tensor_extra = [],
+            composed_float_tensor = [],
             diagonal_tensor = [],
             bmm = []
         }
@@ -273,6 +288,9 @@ macro_rules! descriptor_capability_rules {
         elementwise_tensor = [$($elementwise_tensor_op:ident),* $(,)?],
         view_tensor = [$($view_tensor_op:ident),* $(,)?],
         composed_view = [$($composed_view_op:ident),* $(,)?],
+        native_tensor_extra = [$($native_tensor_extra_op:ident),* $(,)?],
+        composed_tensor_extra = [$($composed_tensor_extra_op:ident),* $(,)?],
+        composed_float_tensor = [$($composed_float_tensor_op:ident),* $(,)?],
         diagonal_tensor = [$($diagonal_tensor_op:ident),* $(,)?],
         bmm = [$($bmm_op:ident),* $(,)?]
     ) => {
@@ -354,6 +372,32 @@ macro_rules! descriptor_capability_rules {
                 descriptor_max_rank(OperationKind::$composed_view_op),
                 true,
             ),)*
+            $(native_ranked(
+                OperationKind::$native_tensor_extra_op,
+                $tensor_dtypes,
+                $tensor_layouts,
+                descriptor_min_rank(OperationKind::$native_tensor_extra_op),
+                descriptor_max_rank(OperationKind::$native_tensor_extra_op),
+                true,
+            ),)*
+            $(composed_ranked(
+                OperationKind::$composed_tensor_extra_op,
+                $tensor_dtypes,
+                $tensor_layouts,
+                descriptor_min_rank(OperationKind::$composed_tensor_extra_op),
+                descriptor_max_rank(OperationKind::$composed_tensor_extra_op),
+                true,
+            ),)*
+            // `addmm` and attention route through `matmul`, so they inherit its
+            // dtype and layout constraint rather than the wider tensor one.
+            $(composed_ranked(
+                OperationKind::$composed_float_tensor_op,
+                $matmul,
+                $matmul_layouts,
+                descriptor_min_rank(OperationKind::$composed_float_tensor_op),
+                descriptor_max_rank(OperationKind::$composed_float_tensor_op),
+                true,
+            ),)*
             $(composed_ranked(OperationKind::$bmm_op, $matmul, $matmul_layouts, 3, MAX_RANK, true),)*
         ]
     };
@@ -382,6 +426,22 @@ const fn descriptor_min_rank(operation: OperationKind) -> usize {
         | OperationKind::Triu
         | OperationKind::Tril
         | OperationKind::Diag => 1,
+        // Measured, not assumed: each of these was run against ranks zero
+        // through four and this is the lowest one that executed. The indexing
+        // operations need an axis to index; `unfold` needs one to slide along;
+        // `concat` needs an existing axis to join on.
+        OperationKind::ConcatExact
+        | OperationKind::Gather
+        | OperationKind::Scatter
+        | OperationKind::IndexSelect
+        | OperationKind::Unfold => 1,
+        OperationKind::Addmm | OperationKind::ScaledDotProductAttention => 2,
+        // Matched to the descriptor, not to the kernel. `group_norm` needs a
+        // channel axis and `instance_norm` needs the full [N, C, H, W] layout;
+        // the CPU kernels accept less than that, but a row wider than what the
+        // descriptor validates advertises requests that can never reach it.
+        OperationKind::GroupNorm => 2,
+        OperationKind::InstanceNorm | OperationKind::PixelShuffle => 4,
         _ => 0,
     }
 }
@@ -393,6 +453,9 @@ const fn descriptor_max_rank(operation: OperationKind) -> usize {
         // wider row would advertise ranks the descriptor rejects before the
         // backend is ever reached.
         OperationKind::Triu | OperationKind::Tril | OperationKind::Diag => 2,
+        // `pixel_shuffle` reads a four-axis (N, C, H, W) layout by name; no
+        // other rank has an interpretation for it.
+        OperationKind::PixelShuffle | OperationKind::InstanceNorm => 4,
         _ => MAX_RANK,
     }
 }
