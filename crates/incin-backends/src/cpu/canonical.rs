@@ -1136,29 +1136,15 @@ impl<T: DType, D: Device> Execute<Descriptor<op::ScaledDotProductAttention>>
 /// declaration that generates the capability rows generates these bounds, so
 /// adding a row without an implementation is a compile error rather than a
 /// support claim discovered at runtime by whoever believed it.
+///
+/// The group names are matched generically. Which capability shape an identity
+/// was declared under is the registry's business; the only thing this proof
+/// asserts is that every advertised identity, in every group, has an executor.
+/// Naming the groups here would mean a second place to update whenever the
+/// declaration grows one, and a group silently omitted from that list would
+/// disable the proof for its members without failing anything.
 macro_rules! assert_every_advertised_row_executes {
-    (
-        ;
-        pointwise = [$($pointwise:ident),* $(,)?],
-        broadcast = [$($broadcast:ident),* $(,)?],
-        reshape = [$($reshape:ident),* $(,)?],
-        reduction = [$($reduction:ident),* $(,)?],
-        spatial = [$($spatial:ident),* $(,)?],
-        matmul = [$($matmul:ident),* $(,)?],
-        unary_float = [$($unary_float:ident),* $(,)?],
-        scalar_float = [$($scalar_float:ident),* $(,)?],
-        clamp = [$($clamp:ident),* $(,)?],
-        softmax = [$($softmax:ident),* $(,)?],
-        binary_float = [$($binary_float:ident),* $(,)?],
-        elementwise_tensor = [$($elementwise_tensor:ident),* $(,)?],
-        view_tensor = [$($view_tensor:ident),* $(,)?],
-        composed_view = [$($composed_view:ident),* $(,)?],
-        native_tensor_extra = [$($native_tensor_extra:ident),* $(,)?],
-        composed_tensor_extra = [$($composed_tensor_extra:ident),* $(,)?],
-        composed_float_tensor = [$($composed_float_tensor:ident),* $(,)?],
-        diagonal_tensor = [$($diagonal_tensor:ident),* $(,)?],
-        bmm = [$($bmm:ident),* $(,)?]
-    ) => {
+    (; $($group:ident = [$($operation:ident),* $(,)?]),* $(,)?) => {
         const _: () = {
             const fn executes<O, B>()
             where
@@ -1168,25 +1154,7 @@ macro_rules! assert_every_advertised_row_executes {
             }
 
             const fn assert_all<T: DType, D: Device>() {
-                $(executes::<op::$pointwise, CpuBackendImpl<T, D>>();)*
-                $(executes::<op::$broadcast, CpuBackendImpl<T, D>>();)*
-                $(executes::<op::$reshape, CpuBackendImpl<T, D>>();)*
-                $(executes::<op::$reduction, CpuBackendImpl<T, D>>();)*
-                $(executes::<op::$spatial, CpuBackendImpl<T, D>>();)*
-                $(executes::<op::$matmul, CpuBackendImpl<T, D>>();)*
-                $(executes::<op::$unary_float, CpuBackendImpl<T, D>>();)*
-                $(executes::<op::$scalar_float, CpuBackendImpl<T, D>>();)*
-                $(executes::<op::$clamp, CpuBackendImpl<T, D>>();)*
-                $(executes::<op::$softmax, CpuBackendImpl<T, D>>();)*
-                $(executes::<op::$binary_float, CpuBackendImpl<T, D>>();)*
-                $(executes::<op::$elementwise_tensor, CpuBackendImpl<T, D>>();)*
-                $(executes::<op::$view_tensor, CpuBackendImpl<T, D>>();)*
-                $(executes::<op::$composed_view, CpuBackendImpl<T, D>>();)*
-                $(executes::<op::$native_tensor_extra, CpuBackendImpl<T, D>>();)*
-                $(executes::<op::$composed_tensor_extra, CpuBackendImpl<T, D>>();)*
-                $(executes::<op::$composed_float_tensor, CpuBackendImpl<T, D>>();)*
-                $(executes::<op::$diagonal_tensor, CpuBackendImpl<T, D>>();)*
-                $(executes::<op::$bmm, CpuBackendImpl<T, D>>();)*
+                $($(executes::<op::$operation, CpuBackendImpl<T, D>>();)*)*
             }
 
             assert_all::<f32, incin_core::prelude::Cpu>();

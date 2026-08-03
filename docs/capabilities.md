@@ -225,28 +225,6 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `sub` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
 | `mul` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
 | `div` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
-| `broadcast_as` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `q8_0` | `contiguous`, `strided` | any | no | native |
-| `reshape` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `q8_0` | `contiguous` | any | no | native |
-| `broadcast_as` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
-| `reshape` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `matmul` | `f32` | `contiguous`, `strided` | 2+ | yes | native |
-| `sum_all` | `f32` | `contiguous`, `strided` | any | yes | native |
-| `mean_all` | `f32` | `contiguous`, `strided` | any | yes | native |
-| `max_all` | `f32` | `contiguous`, `strided` | any | yes | native |
-| `min_all` | `f32` | `contiguous`, `strided` | any | yes | native |
-| `prod_all` | `f32` | `contiguous`, `strided` | any | yes | native |
-| `sum_dim` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
-| `sum_keepdim` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
-| `mean_dim` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
-| `mean_keepdim` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
-| `max_dim` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
-| `max_keepdim` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
-| `min_dim` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
-| `min_keepdim` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
-| `prod_dim` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
-| `conv2d` | `f32` | `contiguous` | 3–4 | yes | native |
-| `max_pool2d` | `f32` | `contiguous` | 3–4 | yes | native |
-| `avg_pool2d` | `f32` | `contiguous` | 3–4 | yes | native |
 | `relu` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
 | `step` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
 | `mish` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
@@ -288,6 +266,28 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `atan2` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
 | `fmod` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
 | `remainder` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `broadcast_as` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `q8_0` | `contiguous`, `strided` | any | no | native |
+| `reshape` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `q8_0` | `contiguous` | any | no | native |
+| `broadcast_as` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `reshape` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
+| `matmul` | `f32` | `contiguous`, `strided` | 2+ | yes | native |
+| `sum_all` | `f32` | `contiguous`, `strided` | any | yes | native |
+| `mean_all` | `f32` | `contiguous`, `strided` | any | yes | native |
+| `max_all` | `f32` | `contiguous`, `strided` | any | yes | native |
+| `min_all` | `f32` | `contiguous`, `strided` | any | yes | native |
+| `prod_all` | `f32` | `contiguous`, `strided` | any | yes | native |
+| `sum_dim` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
+| `sum_keepdim` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
+| `mean_dim` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
+| `mean_keepdim` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
+| `max_dim` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
+| `max_keepdim` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
+| `min_dim` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
+| `min_keepdim` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
+| `prod_dim` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
+| `conv2d` | `f32` | `contiguous` | 3–4 | yes | native |
+| `max_pool2d` | `f32` | `contiguous` | 3–4 | yes | native |
+| `avg_pool2d` | `f32` | `contiguous` | 3–4 | yes | native |
 | `softmax` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
 | `maximum` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
 | `minimum` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
@@ -311,9 +311,6 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `triu` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 1–2 | yes | native |
 | `tril` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 1–2 | yes | native |
 | `diag` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 1–2 | yes | native |
-| `flatten` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 1+ | yes | composed |
-| `squeeze` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 1+ | yes | composed |
-| `unsqueeze` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | composed |
 | `concat` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 1+ | yes | native |
 | `gather` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 1+ | yes | native |
 | `scatter` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 1+ | yes | native |
@@ -323,13 +320,16 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `unfold` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 1+ | yes | native |
 | `pixel_shuffle` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 4 | yes | native |
 | `group_norm` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 2+ | yes | native |
+| `flatten` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 1+ | yes | composed |
+| `squeeze` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 1+ | yes | composed |
+| `unsqueeze` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | composed |
 | `stack` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | composed |
 | `slice` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | composed |
 | `instance_norm` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 4 | yes | composed |
 | `broadcast_left` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | composed |
+| `bmm` | `f32` | `contiguous`, `strided` | 3+ | yes | composed |
 | `addmm` | `f32` | `contiguous`, `strided` | 2+ | yes | composed |
 | `scaled_dot_product_attention` | `f32` | `contiguous`, `strided` | 2+ | yes | composed |
-| `bmm` | `f32` | `contiguous`, `strided` | 3+ | yes | composed |
 
 ## `cuda`
 

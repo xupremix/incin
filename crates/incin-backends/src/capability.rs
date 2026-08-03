@@ -99,11 +99,27 @@ const fn composed_ranked(
 // what capability queries report in the same edit, and the canonical module
 // turns the third consumer into a compile-time obligation: a row advertised
 // without an `Execute<Descriptor<op::...>>` implementation does not build.
+//
+// A group is a *rule shape*, not an operation family. Two identities belong to
+// the same group when they produce an identical `CapabilityRule` apart from the
+// operation name and the per-identity rank bounds, whichever trait their kernel
+// happens to live on today. Grouping by family instead would mean a new group,
+// and therefore a matching arm in every consumer of this declaration, for each
+// family migrated; grouping by rule shape means a migrated identity is one more
+// name in an existing list.
 macro_rules! cpu_descriptor_operations {
     ($callback:ident, $($args:tt)*) => {
         $callback! {
             $($args)*;
-            pointwise = [Add, Sub, Mul, Div],
+            elementwise = [
+                Add, Sub, Mul, Div,
+                Relu, Step, Mish, Elu, Gelu, Abs, Exp, Neg, Sqrt, Log,
+                Tanh, Sigmoid, Swish, Sign, Floor, Ceil, Round, Log2, Log10,
+                Sin, Cos, Tan, Asin, Acos, Atan, Sinh, Cosh, Asinh, Acosh,
+                Atanh, Erf, Rsqrt, Trunc, Frac,
+                AddScalar, MulScalar, Powf, Clamp,
+                Atan2, Fmod, Remainder
+            ],
             broadcast = [BroadcastAs],
             reshape = [ReshapeExact],
             reduction = [
@@ -113,32 +129,21 @@ macro_rules! cpu_descriptor_operations {
             ],
             spatial = [Conv2dExact, MaxPool2d, AvgPool2d],
             matmul = [MatMulExact],
-            unary_float = [
-                Relu, Step, Mish, Elu, Gelu, Abs, Exp, Neg, Sqrt, Log,
-                Tanh, Sigmoid, Swish, Sign, Floor, Ceil, Round, Log2, Log10,
-                Sin, Cos, Tan, Asin, Acos, Atan, Sinh, Cosh, Asinh, Acosh,
-                Atanh, Erf, Rsqrt, Trunc, Frac
-            ],
-            scalar_float = [AddScalar, MulScalar, Powf],
-            clamp = [Clamp],
             softmax = [Softmax],
-            binary_float = [Atan2, Fmod, Remainder],
-            elementwise_tensor = [
+            native_tensor = [
                 Maximum, Minimum, AbsDiff, Lerp, MaskedFill, WhereCond,
                 CmpEq, CmpNe, CmpLt, CmpLe, CmpGt, CmpGe,
                 LogicalAnd, LogicalOr, LogicalNot,
-                SubScalar, DivScalar
-            ],
-            view_tensor = [TransposeExact, Narrow],
-            composed_view = [FlattenExact, SqueezeExact, UnsqueezeExact],
-            native_tensor_extra = [
+                SubScalar, DivScalar,
+                TransposeExact, Narrow, Triu, Tril, Diag,
                 ConcatExact, Gather, Scatter, IndexSelect, Repeat, Pad, Unfold,
                 PixelShuffle, GroupNorm
             ],
-            composed_tensor_extra = [StackExact, SliceExact, InstanceNorm, BroadcastLeft],
-            composed_float_tensor = [Addmm, ScaledDotProductAttention],
-            diagonal_tensor = [Triu, Tril, Diag],
-            bmm = [BatchedMatMul]
+            composed_tensor = [
+                FlattenExact, SqueezeExact, UnsqueezeExact,
+                StackExact, SliceExact, InstanceNorm, BroadcastLeft
+            ],
+            composed_matmul = [BatchedMatMul, Addmm, ScaledDotProductAttention]
         }
     };
 }
@@ -151,7 +156,7 @@ macro_rules! cuda_descriptor_operations {
     ($callback:ident, $($args:tt)*) => {
         $callback! {
             $($args)*;
-            pointwise = [Add, Sub, Mul, Div],
+            elementwise = [Add, Sub, Mul, Div],
             broadcast = [BroadcastAs],
             reshape = [ReshapeExact],
             reduction = [
@@ -161,24 +166,13 @@ macro_rules! cuda_descriptor_operations {
             ],
             spatial = [Conv2dExact, MaxPool2d, AvgPool2d],
             matmul = [MatMulExact],
-            // No canonical float executor was written for this backend, so it
-            // advertises none. An empty group is a truthful claim; a copied one
-            // would not be.
-            unary_float = [],
-            scalar_float = [],
-            clamp = [],
+            // No canonical executor was written for this backend beyond the
+            // groups above, so it advertises none. An empty group is a truthful
+            // claim; a copied one would not be.
             softmax = [],
-            binary_float = [],
-            // As above: no canonical tensor-family executor was written for
-            // this backend, so it advertises none.
-            elementwise_tensor = [],
-            view_tensor = [],
-            composed_view = [],
-            native_tensor_extra = [],
-            composed_tensor_extra = [],
-            composed_float_tensor = [],
-            diagonal_tensor = [],
-            bmm = []
+            native_tensor = [],
+            composed_tensor = [],
+            composed_matmul = []
         }
     };
 }
@@ -187,7 +181,7 @@ macro_rules! wgpu_descriptor_operations {
     ($callback:ident, $($args:tt)*) => {
         $callback! {
             $($args)*;
-            pointwise = [Add, Sub, Mul, Div],
+            elementwise = [Add, Sub, Mul, Div],
             broadcast = [BroadcastAs],
             reshape = [ReshapeExact],
             reduction = [
@@ -197,24 +191,13 @@ macro_rules! wgpu_descriptor_operations {
             ],
             spatial = [Conv2dExact, MaxPool2d, AvgPool2d],
             matmul = [MatMulExact],
-            // No canonical float executor was written for this backend, so it
-            // advertises none. An empty group is a truthful claim; a copied one
-            // would not be.
-            unary_float = [],
-            scalar_float = [],
-            clamp = [],
+            // No canonical executor was written for this backend beyond the
+            // groups above, so it advertises none. An empty group is a truthful
+            // claim; a copied one would not be.
             softmax = [],
-            binary_float = [],
-            // As above: no canonical tensor-family executor was written for
-            // this backend, so it advertises none.
-            elementwise_tensor = [],
-            view_tensor = [],
-            composed_view = [],
-            native_tensor_extra = [],
-            composed_tensor_extra = [],
-            composed_float_tensor = [],
-            diagonal_tensor = [],
-            bmm = []
+            native_tensor = [],
+            composed_tensor = [],
+            composed_matmul = []
         }
     };
 }
@@ -223,7 +206,7 @@ macro_rules! metal_descriptor_operations {
     ($callback:ident, $($args:tt)*) => {
         $callback! {
             $($args)*;
-            pointwise = [Add, Sub, Mul, Div],
+            elementwise = [Add, Sub, Mul, Div],
             broadcast = [BroadcastAs],
             reshape = [ReshapeExact],
             reduction = [
@@ -232,31 +215,20 @@ macro_rules! metal_descriptor_operations {
             ],
             spatial = [Conv2dExact, MaxPool2d, AvgPool2d],
             matmul = [MatMulExact],
-            // No canonical float executor was written for this backend, so it
-            // advertises none. An empty group is a truthful claim; a copied one
-            // would not be.
-            unary_float = [],
-            scalar_float = [],
-            clamp = [],
+            // No canonical executor was written for this backend beyond the
+            // groups above, so it advertises none. An empty group is a truthful
+            // claim; a copied one would not be.
             softmax = [],
-            binary_float = [],
-            // As above: no canonical tensor-family executor was written for
-            // this backend, so it advertises none.
-            elementwise_tensor = [],
-            view_tensor = [],
-            composed_view = [],
-            native_tensor_extra = [],
-            composed_tensor_extra = [],
-            composed_float_tensor = [],
-            diagonal_tensor = [],
-            bmm = []
+            native_tensor = [],
+            composed_tensor = [],
+            composed_matmul = []
         }
     };
 }
 
 macro_rules! descriptor_capability_rules {
     (
-        pointwise = $pointwise:expr,
+        elementwise = $elementwise:expr,
         broadcast = $broadcast:expr,
         reshape = $reshape:expr,
         reduction = $reduction:expr,
@@ -265,7 +237,7 @@ macro_rules! descriptor_capability_rules {
         softmax_dtypes = $softmax_dtypes:expr,
         broadcast_training = $broadcast_training:expr,
         reshape_training = $reshape_training:expr,
-        pointwise_layouts = $pointwise_layouts:expr,
+        elementwise_layouts = $elementwise_layouts:expr,
         broadcast_layouts = $broadcast_layouts:expr,
         reshape_layouts = $reshape_layouts:expr,
         reduction_layouts = $reduction_layouts:expr,
@@ -274,29 +246,25 @@ macro_rules! descriptor_capability_rules {
         tensor_dtypes = $tensor_dtypes:expr,
         tensor_layouts = $tensor_layouts:expr,
         legacy = [$($legacy:expr),* $(,)?];
-        pointwise = [$($pointwise_op:ident),* $(,)?],
+        elementwise = [$($elementwise_op:ident),* $(,)?],
         broadcast = [$($broadcast_op:ident),* $(,)?],
         reshape = [$($reshape_op:ident),* $(,)?],
         reduction = [$($reduction_op:ident),* $(,)?],
         spatial = [$($spatial_op:ident),* $(,)?],
         matmul = [$($matmul_op:ident),* $(,)?],
-        unary_float = [$($unary_float_op:ident),* $(,)?],
-        scalar_float = [$($scalar_float_op:ident),* $(,)?],
-        clamp = [$($clamp_op:ident),* $(,)?],
         softmax = [$($softmax_op:ident),* $(,)?],
-        binary_float = [$($binary_float_op:ident),* $(,)?],
-        elementwise_tensor = [$($elementwise_tensor_op:ident),* $(,)?],
-        view_tensor = [$($view_tensor_op:ident),* $(,)?],
-        composed_view = [$($composed_view_op:ident),* $(,)?],
-        native_tensor_extra = [$($native_tensor_extra_op:ident),* $(,)?],
-        composed_tensor_extra = [$($composed_tensor_extra_op:ident),* $(,)?],
-        composed_float_tensor = [$($composed_float_tensor_op:ident),* $(,)?],
-        diagonal_tensor = [$($diagonal_tensor_op:ident),* $(,)?],
-        bmm = [$($bmm_op:ident),* $(,)?]
+        native_tensor = [$($native_tensor_op:ident),* $(,)?],
+        composed_tensor = [$($composed_tensor_op:ident),* $(,)?],
+        composed_matmul = [$($composed_matmul_op:ident),* $(,)?]
     ) => {
         &[
             $($legacy,)*
-            $(native(OperationKind::$pointwise_op, $pointwise, $pointwise_layouts, true),)*
+            // Everything that walks its operands elementwise and writes one
+            // result of the same shape: the arithmetic binaries, the whole
+            // unary float set, the scalar-parametrised forms, and clamp. They
+            // share one dtype and layout declaration because they share one
+            // traversal, and every rank is a legal operand rank for all of them.
+            $(native(OperationKind::$elementwise_op, $elementwise, $elementwise_layouts, true),)*
             $(native(OperationKind::$broadcast_op, $broadcast, $broadcast_layouts, false),)*
             $(native(OperationKind::$reshape_op, $reshape, $reshape_layouts, false),)*
             // A view operation records a gradient, so it is usable while
@@ -306,7 +274,14 @@ macro_rules! descriptor_capability_rules {
             // resolving the moment those family rows are removed.
             $(native(OperationKind::$broadcast_op, $broadcast_training, $broadcast_layouts, true),)*
             $(native(OperationKind::$reshape_op, $reshape_training, $reshape_layouts, true),)*
-            $(native_ranked(OperationKind::$matmul_op, $matmul, $matmul_layouts, 2, MAX_RANK, true),)*
+            $(native_ranked(
+                OperationKind::$matmul_op,
+                $matmul,
+                $matmul_layouts,
+                descriptor_min_rank(OperationKind::$matmul_op),
+                descriptor_max_rank(OperationKind::$matmul_op),
+                true,
+            ),)*
             $(native_ranked(
                 OperationKind::$reduction_op,
                 $reduction,
@@ -323,82 +298,52 @@ macro_rules! descriptor_capability_rules {
                 descriptor_max_rank(OperationKind::$spatial_op),
                 true,
             ),)*
-            // The float family runs the same elementwise traversal as the
-            // pointwise binaries, so it inherits their dtype and layout sets
-            // rather than declaring a second, separately maintained pair.
-            $(native(OperationKind::$unary_float_op, $pointwise, $pointwise_layouts, true),)*
-            $(native(OperationKind::$scalar_float_op, $pointwise, $pointwise_layouts, true),)*
-            $(native(OperationKind::$clamp_op, $pointwise, $pointwise_layouts, true),)*
-            $(native(OperationKind::$binary_float_op, $pointwise, $pointwise_layouts, true),)*
             // `softmax` normalizes along an axis, so it needs one, and it does
-            // not share the pointwise dtype set: the CPU kernel computes in f32
-            // and returns f32 storage, so advertising the half and double types
-            // for it would be a claim execution does not honour.
-            $(native_ranked(OperationKind::$softmax_op, $softmax_dtypes, $pointwise_layouts, 1, MAX_RANK, true),)*
+            // not share the elementwise dtype set: the CPU kernel computes in
+            // f32 and returns f32 storage, so advertising the half and double
+            // types for it would be a claim execution does not honour.
+            $(native_ranked(
+                OperationKind::$softmax_op,
+                $softmax_dtypes,
+                $elementwise_layouts,
+                descriptor_min_rank(OperationKind::$softmax_op),
+                descriptor_max_rank(OperationKind::$softmax_op),
+                true,
+            ),)*
             // The tensor family reads its operands through the stride-aware
             // accessor and writes a fresh contiguous result, so its dtype and
             // layout sets are one declaration rather than one per operation.
             // The rank bounds are not: each identity states its own, because a
             // transpose and an unsqueeze do not accept the same ranks.
             $(native_ranked(
-                OperationKind::$elementwise_tensor_op,
+                OperationKind::$native_tensor_op,
                 $tensor_dtypes,
                 $tensor_layouts,
-                descriptor_min_rank(OperationKind::$elementwise_tensor_op),
-                descriptor_max_rank(OperationKind::$elementwise_tensor_op),
+                descriptor_min_rank(OperationKind::$native_tensor_op),
+                descriptor_max_rank(OperationKind::$native_tensor_op),
                 true,
             ),)*
-            $(native_ranked(
-                OperationKind::$view_tensor_op,
-                $tensor_dtypes,
-                $tensor_layouts,
-                descriptor_min_rank(OperationKind::$view_tensor_op),
-                descriptor_max_rank(OperationKind::$view_tensor_op),
-                true,
-            ),)*
-            $(native_ranked(
-                OperationKind::$diagonal_tensor_op,
-                $tensor_dtypes,
-                $tensor_layouts,
-                descriptor_min_rank(OperationKind::$diagonal_tensor_op),
-                descriptor_max_rank(OperationKind::$diagonal_tensor_op),
-                true,
-            ),)*
+            // Same shape, reported as composed: these answer by rewriting into
+            // another operation rather than by running a kernel of their own.
             $(composed_ranked(
-                OperationKind::$composed_view_op,
+                OperationKind::$composed_tensor_op,
                 $tensor_dtypes,
                 $tensor_layouts,
-                descriptor_min_rank(OperationKind::$composed_view_op),
-                descriptor_max_rank(OperationKind::$composed_view_op),
+                descriptor_min_rank(OperationKind::$composed_tensor_op),
+                descriptor_max_rank(OperationKind::$composed_tensor_op),
                 true,
             ),)*
-            $(native_ranked(
-                OperationKind::$native_tensor_extra_op,
-                $tensor_dtypes,
-                $tensor_layouts,
-                descriptor_min_rank(OperationKind::$native_tensor_extra_op),
-                descriptor_max_rank(OperationKind::$native_tensor_extra_op),
-                true,
-            ),)*
+            // `bmm`, `addmm` and attention all rewrite into `matmul`, so they
+            // inherit its dtype and layout constraint rather than the wider
+            // tensor one.
             $(composed_ranked(
-                OperationKind::$composed_tensor_extra_op,
-                $tensor_dtypes,
-                $tensor_layouts,
-                descriptor_min_rank(OperationKind::$composed_tensor_extra_op),
-                descriptor_max_rank(OperationKind::$composed_tensor_extra_op),
-                true,
-            ),)*
-            // `addmm` and attention route through `matmul`, so they inherit its
-            // dtype and layout constraint rather than the wider tensor one.
-            $(composed_ranked(
-                OperationKind::$composed_float_tensor_op,
+                OperationKind::$composed_matmul_op,
                 $matmul,
                 $matmul_layouts,
-                descriptor_min_rank(OperationKind::$composed_float_tensor_op),
-                descriptor_max_rank(OperationKind::$composed_float_tensor_op),
+                descriptor_min_rank(OperationKind::$composed_matmul_op),
+                descriptor_max_rank(OperationKind::$composed_matmul_op),
                 true,
             ),)*
-            $(composed_ranked(OperationKind::$bmm_op, $matmul, $matmul_layouts, 3, MAX_RANK, true),)*
         ]
     };
 }
@@ -406,6 +351,11 @@ macro_rules! descriptor_capability_rules {
 const fn descriptor_min_rank(operation: OperationKind) -> usize {
     match operation {
         OperationKind::Conv2dExact | OperationKind::MaxPool2d | OperationKind::AvgPool2d => 3,
+        // A product needs two axes; batching it needs a third to batch over.
+        // `softmax` needs one axis to normalize along.
+        OperationKind::MatMulExact => 2,
+        OperationKind::BatchedMatMul => 3,
+        OperationKind::Softmax => 1,
         OperationKind::SumDim
         | OperationKind::SumKeepDim
         | OperationKind::MeanDim
@@ -462,7 +412,7 @@ const fn descriptor_max_rank(operation: OperationKind) -> usize {
 
 pub static CPU_CAPABILITIES: &[CapabilityRule] = cpu_descriptor_operations!(
     descriptor_capability_rules,
-    pointwise = FLOAT_DTYPES,
+    elementwise = FLOAT_DTYPES,
     broadcast = ALL_DTYPES,
     reshape = ALL_DTYPES,
     reduction = F32_ONLY,
@@ -471,7 +421,7 @@ pub static CPU_CAPABILITIES: &[CapabilityRule] = cpu_descriptor_operations!(
     softmax_dtypes = F32_ONLY,
     broadcast_training = FLOAT_DTYPES,
     reshape_training = FLOAT_DTYPES,
-    pointwise_layouts = CPU_LAYOUTS,
+    elementwise_layouts = CPU_LAYOUTS,
     broadcast_layouts = CPU_LAYOUTS,
     reshape_layouts = CONTIGUOUS,
     reduction_layouts = CPU_LAYOUTS,
@@ -562,7 +512,7 @@ pub static CPU_CAPABILITIES: &[CapabilityRule] = cpu_descriptor_operations!(
 
 pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
     descriptor_capability_rules,
-    pointwise = FLOAT_DTYPES,
+    elementwise = FLOAT_DTYPES,
     broadcast = CUDA_STORAGE_DTYPES,
     reshape = CUDA_STORAGE_DTYPES,
     reduction = FLOAT_DTYPES,
@@ -571,7 +521,7 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
     softmax_dtypes = F32_ONLY,
     broadcast_training = FLOAT_DTYPES,
     reshape_training = FLOAT_DTYPES,
-    pointwise_layouts = CONTIGUOUS,
+    elementwise_layouts = CONTIGUOUS,
     broadcast_layouts = CONTIGUOUS,
     reshape_layouts = CONTIGUOUS,
     reduction_layouts = CONTIGUOUS,
@@ -647,7 +597,7 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
 
 pub static WGPU_CAPABILITIES: &[CapabilityRule] = wgpu_descriptor_operations!(
     descriptor_capability_rules,
-    pointwise = F32_ONLY,
+    elementwise = F32_ONLY,
     broadcast = F32_ONLY,
     reshape = F32_ONLY,
     reduction = F32_ONLY,
@@ -656,7 +606,7 @@ pub static WGPU_CAPABILITIES: &[CapabilityRule] = wgpu_descriptor_operations!(
     softmax_dtypes = F32_ONLY,
     broadcast_training = F32_ONLY,
     reshape_training = F32_ONLY,
-    pointwise_layouts = CONTIGUOUS,
+    elementwise_layouts = CONTIGUOUS,
     broadcast_layouts = CONTIGUOUS,
     reshape_layouts = CONTIGUOUS,
     reduction_layouts = CONTIGUOUS,
@@ -733,7 +683,7 @@ pub static WGPU_CAPABILITIES: &[CapabilityRule] = wgpu_descriptor_operations!(
 
 pub static METAL_CAPABILITIES: &[CapabilityRule] = metal_descriptor_operations!(
     descriptor_capability_rules,
-    pointwise = FLOAT_DTYPES,
+    elementwise = FLOAT_DTYPES,
     broadcast = CUDA_STORAGE_DTYPES,
     reshape = CUDA_STORAGE_DTYPES,
     reduction = FLOAT_DTYPES,
@@ -742,7 +692,7 @@ pub static METAL_CAPABILITIES: &[CapabilityRule] = metal_descriptor_operations!(
     softmax_dtypes = F32_ONLY,
     broadcast_training = FLOAT_DTYPES,
     reshape_training = FLOAT_DTYPES,
-    pointwise_layouts = CONTIGUOUS,
+    elementwise_layouts = CONTIGUOUS,
     broadcast_layouts = CONTIGUOUS,
     reshape_layouts = CONTIGUOUS,
     reduction_layouts = CONTIGUOUS,
