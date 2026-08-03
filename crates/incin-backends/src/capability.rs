@@ -67,6 +67,32 @@ const fn native_ranked(
     )
 }
 
+/// An operation the backend answers by rewriting it into other operations.
+///
+/// `flatten`, `squeeze` and `unsqueeze` compute a target shape and call
+/// `reshape`; `bmm` calls `matmul`. Reporting those as `native` would tell a
+/// caller the backend has a dedicated kernel behind them, which is exactly the
+/// question `ImplementationKind` exists to answer.
+const fn composed_ranked(
+    operation: OperationKind,
+    dtypes: &'static [DTypeId],
+    layouts: &'static [LayoutClass],
+    min_rank: usize,
+    max_rank: usize,
+    training: bool,
+) -> CapabilityRule {
+    CapabilityRule::new(
+        operation,
+        dtypes,
+        layouts,
+        min_rank,
+        max_rank,
+        training,
+        PRECISE,
+        ImplementationKind::Composed,
+    )
+}
+
 // Single declaration consumed by capability generation below, by the grouped
 // legacy descriptor executors, and by the canonical per-identity executors in
 // `cpu::canonical`. Adding an identity here changes what execution admits and
@@ -103,9 +129,8 @@ macro_rules! cpu_descriptor_operations {
                 LogicalAnd, LogicalOr, LogicalNot,
                 SubScalar, DivScalar
             ],
-            view_tensor = [
-                TransposeExact, Narrow, FlattenExact, SqueezeExact, UnsqueezeExact
-            ],
+            view_tensor = [TransposeExact, Narrow],
+            composed_view = [FlattenExact, SqueezeExact, UnsqueezeExact],
             diagonal_tensor = [Triu, Tril, Diag],
             bmm = [BatchedMatMul]
         }
@@ -142,6 +167,7 @@ macro_rules! cuda_descriptor_operations {
             // this backend, so it advertises none.
             elementwise_tensor = [],
             view_tensor = [],
+            composed_view = [],
             diagonal_tensor = [],
             bmm = []
         }
@@ -174,6 +200,7 @@ macro_rules! wgpu_descriptor_operations {
             // this backend, so it advertises none.
             elementwise_tensor = [],
             view_tensor = [],
+            composed_view = [],
             diagonal_tensor = [],
             bmm = []
         }
@@ -205,6 +232,7 @@ macro_rules! metal_descriptor_operations {
             // this backend, so it advertises none.
             elementwise_tensor = [],
             view_tensor = [],
+            composed_view = [],
             diagonal_tensor = [],
             bmm = []
         }
@@ -244,6 +272,7 @@ macro_rules! descriptor_capability_rules {
         binary_float = [$($binary_float_op:ident),* $(,)?],
         elementwise_tensor = [$($elementwise_tensor_op:ident),* $(,)?],
         view_tensor = [$($view_tensor_op:ident),* $(,)?],
+        composed_view = [$($composed_view_op:ident),* $(,)?],
         diagonal_tensor = [$($diagonal_tensor_op:ident),* $(,)?],
         bmm = [$($bmm_op:ident),* $(,)?]
     ) => {
@@ -317,7 +346,15 @@ macro_rules! descriptor_capability_rules {
                 descriptor_max_rank(OperationKind::$diagonal_tensor_op),
                 true,
             ),)*
-            $(native_ranked(OperationKind::$bmm_op, $matmul, $matmul_layouts, 3, MAX_RANK, true),)*
+            $(composed_ranked(
+                OperationKind::$composed_view_op,
+                $tensor_dtypes,
+                $tensor_layouts,
+                descriptor_min_rank(OperationKind::$composed_view_op),
+                descriptor_max_rank(OperationKind::$composed_view_op),
+                true,
+            ),)*
+            $(composed_ranked(OperationKind::$bmm_op, $matmul, $matmul_layouts, 3, MAX_RANK, true),)*
         ]
     };
 }

@@ -814,6 +814,7 @@ macro_rules! assert_every_advertised_row_executes {
         binary_float = [$($binary_float:ident),* $(,)?],
         elementwise_tensor = [$($elementwise_tensor:ident),* $(,)?],
         view_tensor = [$($view_tensor:ident),* $(,)?],
+        composed_view = [$($composed_view:ident),* $(,)?],
         diagonal_tensor = [$($diagonal_tensor:ident),* $(,)?],
         bmm = [$($bmm:ident),* $(,)?]
     ) => {
@@ -839,6 +840,7 @@ macro_rules! assert_every_advertised_row_executes {
                 $(executes::<op::$binary_float, CpuBackendImpl<T, D>>();)*
                 $(executes::<op::$elementwise_tensor, CpuBackendImpl<T, D>>();)*
                 $(executes::<op::$view_tensor, CpuBackendImpl<T, D>>();)*
+                $(executes::<op::$composed_view, CpuBackendImpl<T, D>>();)*
                 $(executes::<op::$diagonal_tensor, CpuBackendImpl<T, D>>();)*
                 $(executes::<op::$bmm, CpuBackendImpl<T, D>>();)*
             }
