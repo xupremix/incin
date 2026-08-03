@@ -96,7 +96,18 @@ macro_rules! cpu_descriptor_operations {
             scalar_float = [AddScalar, MulScalar, Powf],
             clamp = [Clamp],
             softmax = [Softmax],
-            binary_float = [Atan2, Fmod, Remainder]
+            binary_float = [Atan2, Fmod, Remainder],
+            elementwise_tensor = [
+                Maximum, Minimum, AbsDiff, Lerp, MaskedFill, WhereCond,
+                CmpEq, CmpNe, CmpLt, CmpLe, CmpGt, CmpGe,
+                LogicalAnd, LogicalOr, LogicalNot,
+                SubScalar, DivScalar
+            ],
+            view_tensor = [
+                TransposeExact, Narrow, FlattenExact, SqueezeExact, UnsqueezeExact
+            ],
+            diagonal_tensor = [Triu, Tril, Diag],
+            bmm = [BatchedMatMul]
         }
     };
 }
@@ -126,7 +137,13 @@ macro_rules! cuda_descriptor_operations {
             scalar_float = [],
             clamp = [],
             softmax = [],
-            binary_float = []
+            binary_float = [],
+            // As above: no canonical tensor-family executor was written for
+            // this backend, so it advertises none.
+            elementwise_tensor = [],
+            view_tensor = [],
+            diagonal_tensor = [],
+            bmm = []
         }
     };
 }
@@ -152,7 +169,13 @@ macro_rules! wgpu_descriptor_operations {
             scalar_float = [],
             clamp = [],
             softmax = [],
-            binary_float = []
+            binary_float = [],
+            // As above: no canonical tensor-family executor was written for
+            // this backend, so it advertises none.
+            elementwise_tensor = [],
+            view_tensor = [],
+            diagonal_tensor = [],
+            bmm = []
         }
     };
 }
@@ -177,7 +200,13 @@ macro_rules! metal_descriptor_operations {
             scalar_float = [],
             clamp = [],
             softmax = [],
-            binary_float = []
+            binary_float = [],
+            // As above: no canonical tensor-family executor was written for
+            // this backend, so it advertises none.
+            elementwise_tensor = [],
+            view_tensor = [],
+            diagonal_tensor = [],
+            bmm = []
         }
     };
 }
@@ -199,6 +228,8 @@ macro_rules! descriptor_capability_rules {
         reduction_layouts = $reduction_layouts:expr,
         spatial_layouts = $spatial_layouts:expr,
         matmul_layouts = $matmul_layouts:expr,
+        tensor_dtypes = $tensor_dtypes:expr,
+        tensor_layouts = $tensor_layouts:expr,
         legacy = [$($legacy:expr),* $(,)?];
         pointwise = [$($pointwise_op:ident),* $(,)?],
         broadcast = [$($broadcast_op:ident),* $(,)?],
@@ -210,7 +241,11 @@ macro_rules! descriptor_capability_rules {
         scalar_float = [$($scalar_float_op:ident),* $(,)?],
         clamp = [$($clamp_op:ident),* $(,)?],
         softmax = [$($softmax_op:ident),* $(,)?],
-        binary_float = [$($binary_float_op:ident),* $(,)?]
+        binary_float = [$($binary_float_op:ident),* $(,)?],
+        elementwise_tensor = [$($elementwise_tensor_op:ident),* $(,)?],
+        view_tensor = [$($view_tensor_op:ident),* $(,)?],
+        diagonal_tensor = [$($diagonal_tensor_op:ident),* $(,)?],
+        bmm = [$($bmm_op:ident),* $(,)?]
     ) => {
         &[
             $($legacy,)*
@@ -253,6 +288,36 @@ macro_rules! descriptor_capability_rules {
             // and returns f32 storage, so advertising the half and double types
             // for it would be a claim execution does not honour.
             $(native_ranked(OperationKind::$softmax_op, $softmax_dtypes, $pointwise_layouts, 1, MAX_RANK, true),)*
+            // The tensor family reads its operands through the stride-aware
+            // accessor and writes a fresh contiguous result, so its dtype and
+            // layout sets are one declaration rather than one per operation.
+            // The rank bounds are not: each identity states its own, because a
+            // transpose and an unsqueeze do not accept the same ranks.
+            $(native_ranked(
+                OperationKind::$elementwise_tensor_op,
+                $tensor_dtypes,
+                $tensor_layouts,
+                descriptor_min_rank(OperationKind::$elementwise_tensor_op),
+                descriptor_max_rank(OperationKind::$elementwise_tensor_op),
+                true,
+            ),)*
+            $(native_ranked(
+                OperationKind::$view_tensor_op,
+                $tensor_dtypes,
+                $tensor_layouts,
+                descriptor_min_rank(OperationKind::$view_tensor_op),
+                descriptor_max_rank(OperationKind::$view_tensor_op),
+                true,
+            ),)*
+            $(native_ranked(
+                OperationKind::$diagonal_tensor_op,
+                $tensor_dtypes,
+                $tensor_layouts,
+                descriptor_min_rank(OperationKind::$diagonal_tensor_op),
+                descriptor_max_rank(OperationKind::$diagonal_tensor_op),
+                true,
+            ),)*
+            $(native_ranked(OperationKind::$bmm_op, $matmul, $matmul_layouts, 3, MAX_RANK, true),)*
         ]
     };
 }
@@ -269,6 +334,17 @@ const fn descriptor_min_rank(operation: OperationKind) -> usize {
         | OperationKind::MinDim
         | OperationKind::MinKeepDim
         | OperationKind::ProdDim => 1,
+        // A transpose needs two axes to swap; every other view here needs at
+        // least the one axis its attributes name. `unsqueeze` is the exception
+        // that keeps this table honest: it inserts an axis, so a scalar is a
+        // legitimate operand and its minimum stays at zero.
+        OperationKind::TransposeExact => 2,
+        OperationKind::Narrow
+        | OperationKind::FlattenExact
+        | OperationKind::SqueezeExact
+        | OperationKind::Triu
+        | OperationKind::Tril
+        | OperationKind::Diag => 1,
         _ => 0,
     }
 }
@@ -276,6 +352,10 @@ const fn descriptor_min_rank(operation: OperationKind) -> usize {
 const fn descriptor_max_rank(operation: OperationKind) -> usize {
     match operation {
         OperationKind::Conv2dExact | OperationKind::MaxPool2d | OperationKind::AvgPool2d => 4,
+        // `DiagonalAttributes` refuses anything outside rank one or two, so a
+        // wider row would advertise ranks the descriptor rejects before the
+        // backend is ever reached.
+        OperationKind::Triu | OperationKind::Tril | OperationKind::Diag => 2,
         _ => MAX_RANK,
     }
 }
@@ -297,6 +377,8 @@ pub static CPU_CAPABILITIES: &[CapabilityRule] = cpu_descriptor_operations!(
     reduction_layouts = CPU_LAYOUTS,
     spatial_layouts = CONTIGUOUS,
     matmul_layouts = CPU_LAYOUTS,
+    tensor_dtypes = NON_QUANTIZED,
+    tensor_layouts = CPU_LAYOUTS,
     legacy = [
         CapabilityRule::new(
             OperationKind::ReshapeExact,
@@ -395,6 +477,8 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
     reduction_layouts = CONTIGUOUS,
     spatial_layouts = CONTIGUOUS,
     matmul_layouts = CONTIGUOUS,
+    tensor_dtypes = F32_ONLY,
+    tensor_layouts = CONTIGUOUS,
     legacy = [
         native(
             OperationKind::Storage,
@@ -478,6 +562,8 @@ pub static WGPU_CAPABILITIES: &[CapabilityRule] = wgpu_descriptor_operations!(
     reduction_layouts = CONTIGUOUS,
     spatial_layouts = CONTIGUOUS,
     matmul_layouts = CONTIGUOUS,
+    tensor_dtypes = F32_ONLY,
+    tensor_layouts = CONTIGUOUS,
     legacy = [
         native(OperationKind::Storage, F32_ONLY, CONTIGUOUS, false),
         native(OperationKind::Fill, F32_ONLY, CONTIGUOUS, false),
@@ -562,6 +648,8 @@ pub static METAL_CAPABILITIES: &[CapabilityRule] = metal_descriptor_operations!(
     reduction_layouts = CONTIGUOUS,
     spatial_layouts = CONTIGUOUS,
     matmul_layouts = CONTIGUOUS,
+    tensor_dtypes = F32_ONLY,
+    tensor_layouts = CONTIGUOUS,
     legacy = [
         native(
             OperationKind::Storage,

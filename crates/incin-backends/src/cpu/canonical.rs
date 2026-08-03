@@ -12,7 +12,9 @@
 //! could not identify which operation was actually refused. Here the identity
 //! is the type.
 
-use incin_core::backend_authoring::{Execute, ExecutionRequest, FloatOps, ModuleOps, ReductionOps};
+use incin_core::backend_authoring::{
+    Execute, ExecutionRequest, FloatOps, ModuleOps, ReductionOps, TensorOps,
+};
 use incin_core::exec::catalog::{Descriptor, op};
 use incin_core::exec::{
     Capabilities, CapabilityQuery, MathMode, SupportLevel, TensorHandle, UnsupportedReason,
@@ -524,6 +526,271 @@ impl<T: DType, D: Device> Execute<Descriptor<op::Softmax>> for CpuBackendImpl<T,
     }
 }
 
+/// Bind the two operands a binary tensor operation consumes.
+fn binary_operands<'a, T: DType, D: Device>(
+    backend: &CpuBackendImpl<T, D>,
+    inputs: &'a [TensorHandle<'a>],
+    operation: OperationKind,
+) -> Result<(&'a CpuStorage, &'a CpuStorage), BackendError> {
+    let [lhs, rhs] = inputs else {
+        return Err(invalid(operation, "operation expects exactly two operands"));
+    };
+    let lhs = operand(lhs, operation)?;
+    let rhs = operand(rhs, operation)?;
+    admitted(backend, operation, lhs)?;
+    admitted(backend, operation, rhs)?;
+    Ok((lhs, rhs))
+}
+
+/// Binary elementwise tensor operations that take no attributes.
+///
+/// Comparisons and logical connectives are here rather than with the float
+/// family because their semantic profile preserves the operand dtype instead of
+/// producing a boolean one, and because they carry no gradient.
+macro_rules! binary_tensor_executors {
+    ($(($operation:ident, $method:ident)),* $(,)?) => {$(
+        impl<T: DType, D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<T, D> {
+            type Output = CpuStorage;
+
+            fn execute(
+                &self,
+                request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
+            ) -> Result<CpuStorage, BackendError> {
+                let operation = OperationKind::$operation;
+                let (lhs, rhs) = binary_operands(self, request.inputs, operation)?;
+                <Self as TensorOps<Self>>::$method::<T>(lhs, rhs)
+                    .map_err(|error| kernel_error(operation, error))
+            }
+        }
+    )*};
+}
+
+binary_tensor_executors![
+    (Maximum, maximum),
+    (Minimum, minimum),
+    (AbsDiff, abs_diff),
+    (CmpEq, cmp_eq),
+    (CmpNe, cmp_ne),
+    (CmpLt, cmp_lt),
+    (CmpLe, cmp_le),
+    (CmpGt, cmp_gt),
+    (CmpGe, cmp_ge),
+    (LogicalAnd, logical_and),
+    (LogicalOr, logical_or),
+];
+
+/// Batched matrix multiplication, whose operand rank contract differs from the
+/// plain `matmul` row and so does not share its registration.
+impl<T: DType, D: Device> Execute<Descriptor<op::BatchedMatMul>> for CpuBackendImpl<T, D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::BatchedMatMul>, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::BatchedMatMul;
+        let (lhs, rhs) = binary_operands(self, request.inputs, operation)?;
+        <Self as TensorOps<Self>>::bmm::<T>(lhs, rhs)
+            .map_err(|error| kernel_error(operation, error))
+    }
+}
+
+/// Unary tensor operations parametrised by one scalar attribute.
+macro_rules! scalar_tensor_executors {
+    ($(($operation:ident, $method:ident)),* $(,)?) => {$(
+        impl<T: DType, D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<T, D> {
+            type Output = CpuStorage;
+
+            fn execute(
+                &self,
+                request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
+            ) -> Result<CpuStorage, BackendError> {
+                let operation = OperationKind::$operation;
+                let input = reduction_operand(self, request.inputs, operation)?;
+                let value = request.operation.descriptor().attributes().value;
+                <Self as TensorOps<Self>>::$method::<T>(input, value)
+                    .map_err(|error| kernel_error(operation, error))
+            }
+        }
+    )*};
+}
+
+scalar_tensor_executors![(SubScalar, sub_scalar), (DivScalar, div_scalar)];
+
+/// Triangular and diagonal views, parametrised by a signed diagonal offset.
+macro_rules! diagonal_tensor_executors {
+    ($(($operation:ident, $method:ident)),* $(,)?) => {$(
+        impl<T: DType, D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<T, D> {
+            type Output = CpuStorage;
+
+            fn execute(
+                &self,
+                request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
+            ) -> Result<CpuStorage, BackendError> {
+                let operation = OperationKind::$operation;
+                let input = reduction_operand(self, request.inputs, operation)?;
+                let offset = request.operation.descriptor().attributes().offset;
+                <Self as TensorOps<Self>>::$method::<T>(input, offset)
+                    .map_err(|error| kernel_error(operation, error))
+            }
+        }
+    )*};
+}
+
+diagonal_tensor_executors![(Triu, triu), (Tril, tril), (Diag, diag)];
+
+/// Rank-changing views parametrised by a single axis.
+macro_rules! axis_tensor_executors {
+    ($(($operation:ident, $method:ident)),* $(,)?) => {$(
+        impl<T: DType, D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<T, D> {
+            type Output = CpuStorage;
+
+            fn execute(
+                &self,
+                request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
+            ) -> Result<CpuStorage, BackendError> {
+                let operation = OperationKind::$operation;
+                let input = reduction_operand(self, request.inputs, operation)?;
+                let axis = request.operation.descriptor().attributes().axis;
+                <Self as TensorOps<Self>>::$method::<T>(input, axis)
+                    .map_err(|error| kernel_error(operation, error))
+            }
+        }
+    )*};
+}
+
+axis_tensor_executors![(SqueezeExact, squeeze), (UnsqueezeExact, unsqueeze)];
+
+/// Elementwise logical negation.
+impl<T: DType, D: Device> Execute<Descriptor<op::LogicalNot>> for CpuBackendImpl<T, D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::LogicalNot>, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::LogicalNot;
+        let input = reduction_operand(self, request.inputs, operation)?;
+        <Self as TensorOps<Self>>::logical_not::<T>(input)
+            .map_err(|error| kernel_error(operation, error))
+    }
+}
+
+/// Swap the two axes the descriptor names.
+impl<T: DType, D: Device> Execute<Descriptor<op::TransposeExact>> for CpuBackendImpl<T, D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::TransposeExact>, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::TransposeExact;
+        let input = reduction_operand(self, request.inputs, operation)?;
+        let attributes = request.operation.descriptor().attributes();
+        <Self as TensorOps<Self>>::transpose::<T>(input, attributes.first, attributes.second)
+            .map_err(|error| kernel_error(operation, error))
+    }
+}
+
+/// Take a contiguous run along one axis.
+impl<T: DType, D: Device> Execute<Descriptor<op::Narrow>> for CpuBackendImpl<T, D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::Narrow>, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::Narrow;
+        let input = reduction_operand(self, request.inputs, operation)?;
+        let attributes = request.operation.descriptor().attributes();
+        <Self as TensorOps<Self>>::narrow::<T>(
+            input,
+            attributes.axis,
+            attributes.start,
+            attributes.length,
+        )
+        .map_err(|error| kernel_error(operation, error))
+    }
+}
+
+/// Collapse an inclusive axis range into one axis.
+impl<T: DType, D: Device> Execute<Descriptor<op::FlattenExact>> for CpuBackendImpl<T, D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::FlattenExact>, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::FlattenExact;
+        let input = reduction_operand(self, request.inputs, operation)?;
+        let attributes = request.operation.descriptor().attributes();
+        <Self as TensorOps<Self>>::flatten::<T>(input, attributes.start_axis, attributes.end_axis)
+            .map_err(|error| kernel_error(operation, error))
+    }
+}
+
+/// Elementwise selection between two operands under a mask.
+///
+/// The operand order is the one the catalog's legacy source names -
+/// `TensorOps::where_cond(mask, on_true, on_false)` - so a caller that reads
+/// the catalog row gets the same meaning from either path.
+impl<T: DType, D: Device> Execute<Descriptor<op::WhereCond>> for CpuBackendImpl<T, D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::WhereCond>, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::WhereCond;
+        let [mask, on_true, on_false] = request.inputs else {
+            return Err(invalid(
+                operation,
+                "where_cond expects exactly three operands",
+            ));
+        };
+        let mask = operand(mask, operation)?;
+        let on_true = operand(on_true, operation)?;
+        let on_false = operand(on_false, operation)?;
+        for storage in [mask, on_true, on_false] {
+            admitted(self, operation, storage)?;
+        }
+        <Self as TensorOps<Self>>::where_cond::<T, T>(mask, on_true, on_false)
+            .map_err(|error| kernel_error(operation, error))
+    }
+}
+
+/// Overwrite the masked positions with the declared scalar.
+impl<T: DType, D: Device> Execute<Descriptor<op::MaskedFill>> for CpuBackendImpl<T, D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::MaskedFill>, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::MaskedFill;
+        let (input, mask) = binary_operands(self, request.inputs, operation)?;
+        let value = request.operation.descriptor().attributes().value;
+        <Self as TensorOps<Self>>::masked_fill::<T, T>(input, mask, value)
+            .map_err(|error| kernel_error(operation, error))
+    }
+}
+
+/// Interpolate between two operands at the declared weight.
+impl<T: DType, D: Device> Execute<Descriptor<op::Lerp>> for CpuBackendImpl<T, D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::Lerp>, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::Lerp;
+        let (start, end) = binary_operands(self, request.inputs, operation)?;
+        let weight = request.operation.descriptor().attributes().weight;
+        <Self as TensorOps<Self>>::lerp::<T>(start, end, weight)
+            .map_err(|error| kernel_error(operation, error))
+    }
+}
+
 /// Prove, at compile time, that every identity `CPU_CAPABILITIES` advertises
 /// has an executor above.
 ///
@@ -544,7 +811,11 @@ macro_rules! assert_every_advertised_row_executes {
         scalar_float = [$($scalar_float:ident),* $(,)?],
         clamp = [$($clamp:ident),* $(,)?],
         softmax = [$($softmax:ident),* $(,)?],
-        binary_float = [$($binary_float:ident),* $(,)?]
+        binary_float = [$($binary_float:ident),* $(,)?],
+        elementwise_tensor = [$($elementwise_tensor:ident),* $(,)?],
+        view_tensor = [$($view_tensor:ident),* $(,)?],
+        diagonal_tensor = [$($diagonal_tensor:ident),* $(,)?],
+        bmm = [$($bmm:ident),* $(,)?]
     ) => {
         const _: () = {
             const fn executes<O, B>()
@@ -566,6 +837,10 @@ macro_rules! assert_every_advertised_row_executes {
                 $(executes::<op::$clamp, CpuBackendImpl<T, D>>();)*
                 $(executes::<op::$softmax, CpuBackendImpl<T, D>>();)*
                 $(executes::<op::$binary_float, CpuBackendImpl<T, D>>();)*
+                $(executes::<op::$elementwise_tensor, CpuBackendImpl<T, D>>();)*
+                $(executes::<op::$view_tensor, CpuBackendImpl<T, D>>();)*
+                $(executes::<op::$diagonal_tensor, CpuBackendImpl<T, D>>();)*
+                $(executes::<op::$bmm, CpuBackendImpl<T, D>>();)*
             }
 
             assert_all::<f32, incin_core::prelude::Cpu>();

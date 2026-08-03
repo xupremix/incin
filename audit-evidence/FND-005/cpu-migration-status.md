@@ -2,7 +2,7 @@
 
 Generated from `CPU_CAPABILITIES` and `incin_core::exec::OPERATION_CATALOG`; the Rust source is authoritative. "Migrated" means the CPU backend advertises the exact identity and therefore, by the compile-time proof in `cpu::canonical`, implements `Execute<Descriptor<op::...>>` for it. It does not mean the operation is unreachable through the legacy operation-family traits: those remain the path the stable tensor surface uses.
 
-**66 of 174 catalog operations migrated.** The remaining 108 are still reachable only through the legacy operation-family traits.
+**92 of 174 catalog operations migrated.** The remaining 82 are still reachable only through the legacy operation-family traits.
 
 | Operation | Migrated | Legacy source |
 |---|:--:|---|
@@ -67,21 +67,21 @@ Generated from `CPU_CAPABILITIES` and `incin_core::exec::OPERATION_CATALOG`; the
 | `sub` | yes | `NumericOps::sub` |
 | `mul` | yes | `NumericOps::mul` |
 | `div` | yes | `NumericOps::div` |
-| `sub_scalar` | no | `TensorOps::sub_scalar` |
-| `div_scalar` | no | `TensorOps::div_scalar` |
-| `maximum` | no | `TensorOps::maximum` |
-| `minimum` | no | `TensorOps::minimum` |
-| `abs_diff` | no | `TensorOps::abs_diff` |
-| `lerp` | no | `TensorOps::lerp` |
-| `cmp_eq` | no | `TensorOps::cmp_eq` |
-| `cmp_ne` | no | `TensorOps::cmp_ne` |
-| `cmp_lt` | no | `TensorOps::cmp_lt` |
-| `cmp_le` | no | `TensorOps::cmp_le` |
-| `cmp_gt` | no | `TensorOps::cmp_gt` |
-| `cmp_ge` | no | `TensorOps::cmp_ge` |
-| `logical_and` | no | `TensorOps::logical_and` |
-| `logical_or` | no | `TensorOps::logical_or` |
-| `logical_not` | no | `TensorOps::logical_not` |
+| `sub_scalar` | yes | `TensorOps::sub_scalar` |
+| `div_scalar` | yes | `TensorOps::div_scalar` |
+| `maximum` | yes | `TensorOps::maximum` |
+| `minimum` | yes | `TensorOps::minimum` |
+| `abs_diff` | yes | `TensorOps::abs_diff` |
+| `lerp` | yes | `TensorOps::lerp` |
+| `cmp_eq` | yes | `TensorOps::cmp_eq` |
+| `cmp_ne` | yes | `TensorOps::cmp_ne` |
+| `cmp_lt` | yes | `TensorOps::cmp_lt` |
+| `cmp_le` | yes | `TensorOps::cmp_le` |
+| `cmp_gt` | yes | `TensorOps::cmp_gt` |
+| `cmp_ge` | yes | `TensorOps::cmp_ge` |
+| `logical_and` | yes | `TensorOps::logical_and` |
+| `logical_or` | yes | `TensorOps::logical_or` |
+| `logical_not` | yes | `TensorOps::logical_not` |
 | `add_in_place` | no | `Tensor::add_` |
 | `sub_in_place` | no | `Tensor::sub_` |
 | `mul_in_place` | no | `Tensor::mul_` |
@@ -89,32 +89,32 @@ Generated from `CPU_CAPABILITIES` and `incin_core::exec::OPERATION_CATALOG`; the
 | `zero_in_place` | no | `Tensor::zero_` |
 | `fill_in_place` | no | `Tensor::fill_` |
 | `reshape` | yes | `TensorOps::reshape` |
-| `transpose` | no | `TensorOps::transpose` |
+| `transpose` | yes | `TensorOps::transpose` |
 | `matmul` | yes | `TensorOps::matmul` |
 | `dot` | no | `Tensor::dot` |
 | `outer` | no | `Tensor::outer` |
 | `broadcast_as` | yes | `TensorOps::broadcast_as` |
-| `narrow` | no | `TensorOps::narrow` |
-| `squeeze` | no | `TensorOps::squeeze` |
+| `narrow` | yes | `TensorOps::narrow` |
+| `squeeze` | yes | `TensorOps::squeeze` |
 | `stack` | no | `TensorOps::stack` |
 | `concat` | no | `TensorOps::concat` |
 | `slice` | no | `TensorOps::slice` |
-| `flatten` | no | `TensorOps::flatten` |
-| `where_cond` | no | `TensorOps::where_cond` |
+| `flatten` | yes | `TensorOps::flatten` |
+| `where_cond` | yes | `TensorOps::where_cond` |
 | `gather` | no | `TensorOps::gather` |
 | `scatter` | no | `TensorOps::scatter` |
 | `index_select` | no | `TensorOps::index_select` |
-| `masked_fill` | no | `TensorOps::masked_fill` |
-| `unsqueeze` | no | `TensorOps::unsqueeze` |
+| `masked_fill` | yes | `TensorOps::masked_fill` |
+| `unsqueeze` | yes | `TensorOps::unsqueeze` |
 | `repeat` | no | `TensorOps::repeat` |
 | `pad` | no | `TensorOps::pad` |
-| `triu` | no | `TensorOps::triu` |
-| `tril` | no | `TensorOps::tril` |
-| `diag` | no | `TensorOps::diag` |
+| `triu` | yes | `TensorOps::triu` |
+| `tril` | yes | `TensorOps::tril` |
+| `diag` | yes | `TensorOps::diag` |
 | `chunk` | no | `Tensor::chunk` |
 | `split` | no | `Tensor::split` |
 | `addmm` | no | `TensorOps::addmm` |
-| `bmm` | no | `TensorOps::bmm` |
+| `bmm` | yes | `TensorOps::bmm` |
 | `scaled_dot_product_attention` | no | `TensorOps::scaled_dot_product_attention` |
 | `unfold` | no | `TensorOps::unfold` |
 | `pixel_shuffle` | no | `TensorOps::pixel_shuffle` |

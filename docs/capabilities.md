@@ -25,7 +25,7 @@ run time.
 | Operation | cpu | cuda | wgpu |
 |---|---|---|---|
 | `abs` | `bf16`, `f16`, `f32`, `f64` | — | — |
-| `abs_diff` | — | — | — |
+| `abs_diff` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `acos` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `acosh` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `adam_step` | — | — | — |
@@ -48,18 +48,18 @@ run time.
 | `backward` | — | — | — |
 | `batch_norm` | — | — | — |
 | `bce_with_logits_loss` | — | — | — |
-| `bmm` | — | — | — |
+| `bmm` | `f32` | — | — |
 | `broadcast_as` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `q8_0` | `i64`, `bf16`, `f16`, `f32`, `f64` | `f32` |
 | `broadcast_left` | — | — | — |
 | `ceil` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `chunk` | — | — | — |
 | `clamp` | `bf16`, `f16`, `f32`, `f64` | — | — |
-| `cmp_eq` | — | — | — |
-| `cmp_ge` | — | — | — |
-| `cmp_gt` | — | — | — |
-| `cmp_le` | — | — | — |
-| `cmp_lt` | — | — | — |
-| `cmp_ne` | — | — | — |
+| `cmp_eq` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
+| `cmp_ge` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
+| `cmp_gt` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
+| `cmp_le` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
+| `cmp_lt` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
+| `cmp_ne` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `concat` | — | — | — |
 | `conv1d` | — | — | — |
 | `conv2d` | `f32` | `f32` | `f32` |
@@ -70,10 +70,10 @@ run time.
 | `cumsum` | — | — | — |
 | `dequantize` | — | — | — |
 | `detach` | — | — | — |
-| `diag` | — | — | — |
+| `diag` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `div` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` |
 | `div_in_place` | — | — | — |
-| `div_scalar` | — | — | — |
+| `div_scalar` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `dot` | — | — | — |
 | `dropout` | — | — | — |
 | `elu` | `bf16`, `f16`, `f32`, `f64` | — | — |
@@ -81,7 +81,7 @@ run time.
 | `erf` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `exp` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `fill_in_place` | — | — | — |
-| `flatten` | — | — | — |
+| `flatten` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `float_to_scalar` | — | — | — |
 | `float_to_vec1` | — | — | — |
 | `floor` | `bf16`, `f16`, `f32`, `f64` | — | — |
@@ -97,36 +97,36 @@ run time.
 | `int_to_vec1` | — | — | — |
 | `l1_loss` | — | — | — |
 | `layer_norm` | — | — | — |
-| `lerp` | — | — | — |
+| `lerp` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `linear` | — | — | — |
 | `linspace` | — | — | — |
 | `log` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `log10` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `log2` | `bf16`, `f16`, `f32`, `f64` | — | — |
-| `logical_and` | — | — | — |
-| `logical_not` | — | — | — |
-| `logical_or` | — | — | — |
+| `logical_and` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
+| `logical_not` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
+| `logical_or` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `lstm` | — | — | — |
-| `masked_fill` | — | — | — |
+| `masked_fill` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `matmul` | `f32` | `f32` | `f32` |
 | `max_all` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` |
 | `max_dim` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` |
 | `max_keepdim` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` |
 | `max_pool2d` | `f32` | `f32` | `f32` |
-| `maximum` | — | — | — |
+| `maximum` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `mean_all` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` |
 | `mean_dim` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` |
 | `mean_keepdim` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` |
 | `min_all` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` |
 | `min_dim` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` |
 | `min_keepdim` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` |
-| `minimum` | — | — | — |
+| `minimum` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `mish` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `mse_loss` | — | — | — |
 | `mul` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` |
 | `mul_in_place` | — | — | — |
 | `mul_scalar` | `bf16`, `f16`, `f32`, `f64` | — | — |
-| `narrow` | — | — | — |
+| `narrow` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `neg` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `norm` | — | — | — |
 | `ones` | — | — | — |
@@ -161,7 +161,7 @@ run time.
 | `softmax` | `f32` | — | — |
 | `split` | — | — | — |
 | `sqrt` | `bf16`, `f16`, `f32`, `f64` | — | — |
-| `squeeze` | — | — | — |
+| `squeeze` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `stack` | — | — | — |
 | `std_all` | — | — | — |
 | `std_dim` | — | — | — |
@@ -169,7 +169,7 @@ run time.
 | `step` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `sub` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` |
 | `sub_in_place` | — | — | — |
-| `sub_scalar` | — | — | — |
+| `sub_scalar` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `sum_all` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` |
 | `sum_dim` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` |
 | `sum_keepdim` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` |
@@ -182,12 +182,12 @@ run time.
 | `to_device` | — | — | — |
 | `to_dtype` | — | — | — |
 | `topk` | — | — | — |
-| `transpose` | — | — | — |
-| `tril` | — | — | — |
-| `triu` | — | — | — |
+| `transpose` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
+| `tril` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
+| `triu` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `trunc` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `unfold` | — | — | — |
-| `unsqueeze` | — | — | — |
+| `unsqueeze` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `var_all` | — | — | — |
 | `var_dim` | — | — | — |
 | `var_keepdim` | — | — | — |
@@ -195,7 +195,7 @@ run time.
 | `var_rand` | — | — | — |
 | `var_randn` | — | — | — |
 | `var_zeros` | — | — | — |
-| `where_cond` | — | — | — |
+| `where_cond` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `zero_in_place` | — | — | — |
 | `zeros` | — | — | — |
 
@@ -289,6 +289,32 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `fmod` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
 | `remainder` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
 | `softmax` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
+| `maximum` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `minimum` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `abs_diff` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `lerp` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `masked_fill` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `where_cond` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `cmp_eq` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `cmp_ne` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `cmp_lt` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `cmp_le` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `cmp_gt` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `cmp_ge` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `logical_and` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `logical_or` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `logical_not` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `sub_scalar` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `div_scalar` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `transpose` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 2+ | yes | native |
+| `narrow` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 1+ | yes | native |
+| `flatten` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 1+ | yes | native |
+| `squeeze` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 1+ | yes | native |
+| `unsqueeze` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `triu` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 1–2 | yes | native |
+| `tril` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 1–2 | yes | native |
+| `diag` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 1–2 | yes | native |
+| `bmm` | `f32` | `contiguous`, `strided` | 3+ | yes | native |
 
 ## `cuda`
 

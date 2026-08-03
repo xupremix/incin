@@ -1063,3 +1063,331 @@ fn softmax_refuses_a_dtype_it_does_not_advertise() {
         other => panic!("expected a capability refusal, found {other:?}"),
     }
 }
+
+/// Parity for the binary tensor family, which the catalog routes through
+/// `TensorOps` rather than `FloatOps` because these operations preserve the
+/// operand dtype and carry no gradient.
+#[test]
+fn every_migrated_binary_tensor_operation_matches_its_legacy_counterpart() {
+    let context = context();
+    let lhs = f32_storage(vec![1.0, -2.0, 3.0, 3.0], vec![4]);
+    let rhs = f32_storage(vec![2.0, 3.0, 3.0, -1.0], vec![4]);
+
+    macro_rules! check {
+        ($($operation:ident => $method:ident),* $(,)?) => {$(
+            let canonical = dispatch::execute::<op::$operation, _>(
+                &context,
+                NoAttributes,
+                &[handle(&lhs), handle(&rhs)],
+            )
+            .expect(concat!(stringify!($operation), " is a registered CPU capability"));
+            let legacy =
+                <TestBackend as TensorOps<TestBackend>>::$method::<f32>(&lhs, &rhs).unwrap();
+            assert_eq!(
+                values(&canonical),
+                values(&legacy),
+                "{} diverged from its legacy counterpart",
+                stringify!($operation)
+            );
+            assert_eq!(dims(&canonical), dims(&legacy));
+        )*};
+    }
+
+    check! {
+        Maximum => maximum,
+        Minimum => minimum,
+        AbsDiff => abs_diff,
+        CmpEq => cmp_eq,
+        CmpNe => cmp_ne,
+        CmpLt => cmp_lt,
+        CmpLe => cmp_le,
+        CmpGt => cmp_gt,
+        CmpGe => cmp_ge,
+        LogicalAnd => logical_and,
+        LogicalOr => logical_or,
+    }
+}
+
+/// Parity for the tensor operations that carry a scalar or an offset, where a
+/// migration could plausibly read the right kernel with the wrong attribute.
+#[test]
+fn the_attribute_bearing_tensor_operations_match_their_legacy_counterparts() {
+    use incin_core::exec::catalog::{
+        AxisAttributes, DiagonalAttributes, FlattenAttributes, LerpAttributes, NarrowAttributes,
+        ScalarAttributes, TransposeAttributes,
+    };
+
+    let context = context();
+    let matrix = f32_storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
+
+    let subtracted = dispatch::execute::<op::SubScalar, _>(
+        &context,
+        ScalarAttributes { value: 1.5 },
+        &[handle(&matrix)],
+    )
+    .unwrap();
+    assert_eq!(
+        values(&subtracted),
+        values(&<TestBackend as TensorOps<TestBackend>>::sub_scalar::<f32>(&matrix, 1.5).unwrap())
+    );
+
+    let divided = dispatch::execute::<op::DivScalar, _>(
+        &context,
+        ScalarAttributes { value: 2.0 },
+        &[handle(&matrix)],
+    )
+    .unwrap();
+    assert_eq!(
+        values(&divided),
+        values(&<TestBackend as TensorOps<TestBackend>>::div_scalar::<f32>(&matrix, 2.0).unwrap())
+    );
+
+    let transposed = dispatch::execute::<op::TransposeExact, _>(
+        &context,
+        TransposeAttributes {
+            first: 0,
+            second: 1,
+        },
+        &[handle(&matrix)],
+    )
+    .unwrap();
+    assert_eq!(
+        values(&transposed),
+        values(&<TestBackend as TensorOps<TestBackend>>::transpose::<f32>(&matrix, 0, 1).unwrap())
+    );
+    assert_eq!(dims(&transposed), vec![3, 2]);
+
+    let narrowed = dispatch::execute::<op::Narrow, _>(
+        &context,
+        NarrowAttributes {
+            axis: 1,
+            start: 1,
+            length: 2,
+        },
+        &[handle(&matrix)],
+    )
+    .unwrap();
+    assert_eq!(
+        values(&narrowed),
+        values(&<TestBackend as TensorOps<TestBackend>>::narrow::<f32>(&matrix, 1, 1, 2).unwrap())
+    );
+    assert_eq!(dims(&narrowed), vec![2, 2]);
+
+    let flattened = dispatch::execute::<op::FlattenExact, _>(
+        &context,
+        FlattenAttributes {
+            start_axis: 0,
+            end_axis: 1,
+        },
+        &[handle(&matrix)],
+    )
+    .unwrap();
+    assert_eq!(
+        values(&flattened),
+        values(&<TestBackend as TensorOps<TestBackend>>::flatten::<f32>(&matrix, 0, 1).unwrap())
+    );
+    assert_eq!(dims(&flattened), vec![6]);
+
+    let unsqueezed = dispatch::execute::<op::UnsqueezeExact, _>(
+        &context,
+        AxisAttributes { axis: 0 },
+        &[handle(&matrix)],
+    )
+    .unwrap();
+    assert_eq!(
+        values(&unsqueezed),
+        values(&<TestBackend as TensorOps<TestBackend>>::unsqueeze::<f32>(&matrix, 0).unwrap())
+    );
+    assert_eq!(dims(&unsqueezed), vec![1, 2, 3]);
+
+    let column = f32_storage(vec![7.0, 8.0, 9.0], vec![1, 3]);
+    let squeezed = dispatch::execute::<op::SqueezeExact, _>(
+        &context,
+        AxisAttributes { axis: 0 },
+        &[handle(&column)],
+    )
+    .unwrap();
+    assert_eq!(
+        values(&squeezed),
+        values(&<TestBackend as TensorOps<TestBackend>>::squeeze::<f32>(&column, 0).unwrap())
+    );
+    assert_eq!(dims(&squeezed), vec![3]);
+
+    let square = f32_storage(vec![1.0, 2.0, 3.0, 4.0], vec![2, 2]);
+    for (offset, label) in [(0i64, "principal"), (1, "upper"), (-1, "lower")] {
+        let upper = dispatch::execute::<op::Triu, _>(
+            &context,
+            DiagonalAttributes { offset },
+            &[handle(&square)],
+        )
+        .unwrap();
+        assert_eq!(
+            values(&upper),
+            values(&<TestBackend as TensorOps<TestBackend>>::triu::<f32>(&square, offset).unwrap()),
+            "triu diverged on the {label} diagonal"
+        );
+
+        let lower = dispatch::execute::<op::Tril, _>(
+            &context,
+            DiagonalAttributes { offset },
+            &[handle(&square)],
+        )
+        .unwrap();
+        assert_eq!(
+            values(&lower),
+            values(&<TestBackend as TensorOps<TestBackend>>::tril::<f32>(&square, offset).unwrap()),
+            "tril diverged on the {label} diagonal"
+        );
+    }
+
+    let diagonal = dispatch::execute::<op::Diag, _>(
+        &context,
+        DiagonalAttributes { offset: 0 },
+        &[handle(&square)],
+    )
+    .unwrap();
+    assert_eq!(
+        values(&diagonal),
+        values(&<TestBackend as TensorOps<TestBackend>>::diag::<f32>(&square, 0).unwrap())
+    );
+    assert_eq!(dims(&diagonal), vec![2]);
+
+    let start = f32_storage(vec![0.0, 2.0, 4.0, 6.0], vec![4]);
+    let end = f32_storage(vec![1.0, 3.0, 5.0, 7.0], vec![4]);
+    let interpolated = dispatch::execute::<op::Lerp, _>(
+        &context,
+        LerpAttributes { weight: 0.25 },
+        &[handle(&start), handle(&end)],
+    )
+    .unwrap();
+    assert_eq!(
+        values(&interpolated),
+        values(&<TestBackend as TensorOps<TestBackend>>::lerp::<f32>(&start, &end, 0.25).unwrap())
+    );
+}
+
+/// Parity for the mask-driven operations, whose operand order is the one
+/// property a three-operand migration is most likely to get wrong.
+#[test]
+fn the_selection_operations_match_their_legacy_counterparts() {
+    use incin_core::exec::catalog::ScalarAttributes;
+
+    let context = context();
+    let mask = f32_storage(vec![1.0, 0.0, 1.0, 0.0], vec![4]);
+    let on_true = f32_storage(vec![10.0, 20.0, 30.0, 40.0], vec![4]);
+    let on_false = f32_storage(vec![-1.0, -2.0, -3.0, -4.0], vec![4]);
+
+    let selected = dispatch::execute::<op::WhereCond, _>(
+        &context,
+        NoAttributes,
+        &[handle(&mask), handle(&on_true), handle(&on_false)],
+    )
+    .expect("where_cond is a registered CPU capability");
+    let legacy =
+        <TestBackend as TensorOps<TestBackend>>::where_cond::<f32, f32>(&mask, &on_true, &on_false)
+            .unwrap();
+    assert_eq!(values(&selected), values(&legacy));
+    // Stated separately from the parity assertion: if the executor had bound
+    // the operands in the wrong order, both paths would still have to be wrong
+    // in the same way for parity alone to catch it.
+    assert_eq!(values(&selected), vec![10.0, -2.0, 30.0, -4.0]);
+
+    let filled = dispatch::execute::<op::MaskedFill, _>(
+        &context,
+        ScalarAttributes { value: 99.0 },
+        &[handle(&on_true), handle(&mask)],
+    )
+    .expect("masked_fill is a registered CPU capability");
+    assert_eq!(
+        values(&filled),
+        values(
+            &<TestBackend as TensorOps<TestBackend>>::masked_fill::<f32, f32>(
+                &on_true, &mask, 99.0
+            )
+            .unwrap()
+        )
+    );
+    assert_eq!(values(&filled), vec![99.0, 20.0, 99.0, 40.0]);
+
+    let negated =
+        dispatch::execute::<op::LogicalNot, _>(&context, NoAttributes, &[handle(&mask)]).unwrap();
+    assert_eq!(
+        values(&negated),
+        values(&<TestBackend as TensorOps<TestBackend>>::logical_not::<f32>(&mask).unwrap())
+    );
+}
+
+/// `bmm` is a separate identity from `matmul` with its own rank contract, so
+/// it gets its own registration and its own parity check.
+#[test]
+fn batched_matmul_matches_its_legacy_counterpart() {
+    let context = context();
+    let lhs = f32_storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0], vec![2, 2, 2]);
+    let rhs = f32_storage(vec![8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0], vec![2, 2, 2]);
+
+    let canonical = dispatch::execute::<op::BatchedMatMul, _>(
+        &context,
+        NoAttributes,
+        &[handle(&lhs), handle(&rhs)],
+    )
+    .expect("bmm is a registered CPU capability");
+    let legacy = <TestBackend as TensorOps<TestBackend>>::bmm::<f32>(&lhs, &rhs).unwrap();
+    assert_eq!(values(&canonical), values(&legacy));
+    assert_eq!(dims(&canonical), vec![2, 2, 2]);
+}
+
+/// A rank-3 operand for a diagonal operation is refused by the descriptor,
+/// before any kernel that would have silently treated the leading axes as a
+/// batch dimension.
+#[test]
+fn a_diagonal_operation_refuses_a_rank_it_does_not_advertise() {
+    use incin_core::exec::catalog::DiagonalAttributes;
+
+    let context = context();
+    let input = f32_storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0], vec![2, 2, 2]);
+
+    let error = dispatch::execute::<op::Triu, _>(
+        &context,
+        DiagonalAttributes { offset: 0 },
+        &[handle(&input)],
+    )
+    .expect_err("triu is registered for rank one and two only");
+    assert!(
+        matches!(
+            error,
+            CanonicalError::Descriptor(DescriptorError::InvalidAttribute {
+                operation: OperationKind::Triu,
+                attribute: "rank",
+                ..
+            })
+        ),
+        "unexpected refusal: {error}"
+    );
+}
+
+/// A transpose axis outside the operand rank fails during validation, not
+/// inside the kernel.
+#[test]
+fn a_transpose_axis_outside_the_input_rank_is_refused_before_execution() {
+    use incin_core::exec::catalog::TransposeAttributes;
+
+    let context = context();
+    let input = f32_storage(vec![1.0, 2.0, 3.0, 4.0], vec![2, 2]);
+
+    let error = dispatch::execute::<op::TransposeExact, _>(
+        &context,
+        TransposeAttributes {
+            first: 0,
+            second: 5,
+        },
+        &[handle(&input)],
+    )
+    .expect_err("a rank-two operand has no axis five");
+    assert!(matches!(
+        error,
+        CanonicalError::Descriptor(DescriptorError::InvalidAttribute {
+            operation: OperationKind::TransposeExact,
+            ..
+        })
+    ));
+}

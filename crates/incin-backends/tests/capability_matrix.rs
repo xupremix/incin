@@ -13,7 +13,7 @@ use incin_core::exec::{
     Capabilities, CapabilityQuery, ImplementationKind, LayoutClass, MathMode, OPERATION_CATALOG,
     SupportLevel, UnsupportedReason,
 };
-use incin_core::prelude::{DTypeId, DeviceId, DeviceKind, Dyn, OperationKind};
+use incin_core::prelude::{DType, DTypeId, DeviceId, DeviceKind, Dyn, OperationKind};
 
 fn query(
     operation: OperationKind,
@@ -226,6 +226,105 @@ fn transpose_if_requested(storage: CpuStorage, layout: LayoutClass) -> CpuStorag
     }
 }
 
+/// Operand shapes for one tensor-family probe.
+///
+/// Declared once because the layout probe and the dtype probe must build the
+/// same operands from different storage; two copies would let a row pass one
+/// probe on a shape the other never tries.
+fn cpu_tensor_operand_shapes(operation: OperationKind) -> &'static [&'static [usize]] {
+    match operation {
+        OperationKind::WhereCond => &[&[2, 2], &[2, 2], &[2, 2]],
+        OperationKind::Maximum
+        | OperationKind::Minimum
+        | OperationKind::AbsDiff
+        | OperationKind::Lerp
+        | OperationKind::MaskedFill
+        | OperationKind::CmpEq
+        | OperationKind::CmpNe
+        | OperationKind::CmpLt
+        | OperationKind::CmpLe
+        | OperationKind::CmpGt
+        | OperationKind::CmpGe
+        | OperationKind::LogicalAnd
+        | OperationKind::LogicalOr => &[&[2, 2], &[2, 2]],
+        OperationKind::BatchedMatMul => &[&[1, 2, 2], &[1, 2, 2]],
+        // `squeeze` needs an axis of extent one to remove, so its operand is
+        // the one shape in this family that is not the probe matrix.
+        OperationKind::SqueezeExact => &[&[1, 2]],
+        OperationKind::LogicalNot
+        | OperationKind::SubScalar
+        | OperationKind::DivScalar
+        | OperationKind::TransposeExact
+        | OperationKind::Narrow
+        | OperationKind::FlattenExact
+        | OperationKind::UnsqueezeExact
+        | OperationKind::Triu
+        | OperationKind::Tril
+        | OperationKind::Diag => &[&[2, 2]],
+        _ => panic!("missing CPU tensor operand shapes for {operation}"),
+    }
+}
+
+/// Run one tensor-family operation over already-built operands.
+///
+/// Generic over the storage type parameter so the `f32` layout probe and the
+/// `Dyn` dtype probe share one dispatch; the CPU storage handle is the same
+/// type either way, and two copies of this match would drift.
+fn cpu_tensor_probe<K: DType>(operation: OperationKind, operands: &[&CpuStorage]) -> CpuStorage {
+    type B = CpuBackendImpl;
+    let first = operands[0];
+    match operation {
+        OperationKind::Maximum => B::maximum::<K>(first, operands[1]).unwrap(),
+        OperationKind::Minimum => B::minimum::<K>(first, operands[1]).unwrap(),
+        OperationKind::AbsDiff => B::abs_diff::<K>(first, operands[1]).unwrap(),
+        OperationKind::Lerp => B::lerp::<K>(first, operands[1], 0.5).unwrap(),
+        OperationKind::MaskedFill => B::masked_fill::<K, K>(first, operands[1], 0.0).unwrap(),
+        OperationKind::WhereCond => B::where_cond::<K, K>(first, operands[1], operands[2]).unwrap(),
+        OperationKind::CmpEq => B::cmp_eq::<K>(first, operands[1]).unwrap(),
+        OperationKind::CmpNe => B::cmp_ne::<K>(first, operands[1]).unwrap(),
+        OperationKind::CmpLt => B::cmp_lt::<K>(first, operands[1]).unwrap(),
+        OperationKind::CmpLe => B::cmp_le::<K>(first, operands[1]).unwrap(),
+        OperationKind::CmpGt => B::cmp_gt::<K>(first, operands[1]).unwrap(),
+        OperationKind::CmpGe => B::cmp_ge::<K>(first, operands[1]).unwrap(),
+        OperationKind::LogicalAnd => B::logical_and::<K>(first, operands[1]).unwrap(),
+        OperationKind::LogicalOr => B::logical_or::<K>(first, operands[1]).unwrap(),
+        OperationKind::LogicalNot => B::logical_not::<K>(first).unwrap(),
+        OperationKind::SubScalar => B::sub_scalar::<K>(first, 1.0).unwrap(),
+        OperationKind::DivScalar => B::div_scalar::<K>(first, 2.0).unwrap(),
+        OperationKind::TransposeExact => B::transpose::<K>(first, 0, 1).unwrap(),
+        OperationKind::Narrow => B::narrow::<K>(first, 0, 0, 1).unwrap(),
+        OperationKind::FlattenExact => B::flatten::<K>(first, 0, 1).unwrap(),
+        OperationKind::SqueezeExact => B::squeeze::<K>(first, 0).unwrap(),
+        OperationKind::UnsqueezeExact => B::unsqueeze::<K>(first, 0).unwrap(),
+        OperationKind::Triu => B::triu::<K>(first, 0).unwrap(),
+        OperationKind::Tril => B::tril::<K>(first, 0).unwrap(),
+        OperationKind::Diag => B::diag::<K>(first, 0).unwrap(),
+        OperationKind::BatchedMatMul => B::bmm::<K>(first, operands[1]).unwrap(),
+        _ => panic!("missing CPU tensor probe for {operation}"),
+    }
+}
+
+/// Build probe storage with `shape` under the requested layout class.
+///
+/// A strided probe has to carry the same logical shape as its contiguous
+/// counterpart, or the two layout cases would be exercising different
+/// operations. Materialising the last two axes swapped and transposing them
+/// back keeps the shape and changes the strides.
+fn laid_out(shape: &[usize], layout: LayoutClass) -> CpuStorage {
+    let count: usize = shape.iter().product();
+    let values: Vec<f32> = (0..count).map(|index| index as f32 + 1.0).collect();
+    if layout != LayoutClass::Strided {
+        return f32_storage(shape, &values);
+    }
+    let rank = shape.len();
+    assert!(rank >= 2, "a strided probe needs at least two axes");
+    let mut swapped = shape.to_vec();
+    swapped.swap(rank - 2, rank - 1);
+    f32_storage(&swapped, &values)
+        .transpose(rank - 2, rank - 1)
+        .unwrap()
+}
+
 fn cpu_probe_shape(operation: OperationKind) -> &'static [usize] {
     match operation {
         OperationKind::Storage
@@ -301,6 +400,33 @@ fn cpu_probe_shape(operation: OperationKind) -> &'static [usize] {
         | OperationKind::Remainder
         | OperationKind::Clamp
         | OperationKind::Softmax => &[2, 2],
+        // The tensor family, in the same order its capability groups declare
+        // it. Every shape here is the one the probe above actually produces.
+        OperationKind::Maximum
+        | OperationKind::Minimum
+        | OperationKind::AbsDiff
+        | OperationKind::Lerp
+        | OperationKind::MaskedFill
+        | OperationKind::WhereCond
+        | OperationKind::CmpEq
+        | OperationKind::CmpNe
+        | OperationKind::CmpLt
+        | OperationKind::CmpLe
+        | OperationKind::CmpGt
+        | OperationKind::CmpGe
+        | OperationKind::LogicalAnd
+        | OperationKind::LogicalOr
+        | OperationKind::LogicalNot
+        | OperationKind::SubScalar
+        | OperationKind::DivScalar
+        | OperationKind::TransposeExact
+        | OperationKind::Triu
+        | OperationKind::Tril => &[2, 2],
+        OperationKind::Narrow => &[1, 2],
+        OperationKind::FlattenExact => &[4],
+        OperationKind::SqueezeExact | OperationKind::Diag => &[2],
+        OperationKind::UnsqueezeExact => &[1, 2, 2],
+        OperationKind::BatchedMatMul => &[1, 2, 2],
         OperationKind::Conv2d => &[1, 1, 2, 2],
         OperationKind::Conv2dExact => &[1, 1, 2, 2],
         OperationKind::Pool2d => &[1, 1, 1, 1],
@@ -511,6 +637,39 @@ fn execute_cpu_probe(operation: OperationKind, layout: LayoutClass) -> CpuStorag
         | OperationKind::Softmax => {
             let input = transpose_if_requested(f32_storage(&[2, 2], &[1.0, 1.0, 1.0, 1.0]), layout);
             cpu_float_probe(operation, &input)
+        }
+        OperationKind::Maximum
+        | OperationKind::Minimum
+        | OperationKind::AbsDiff
+        | OperationKind::Lerp
+        | OperationKind::MaskedFill
+        | OperationKind::WhereCond
+        | OperationKind::CmpEq
+        | OperationKind::CmpNe
+        | OperationKind::CmpLt
+        | OperationKind::CmpLe
+        | OperationKind::CmpGt
+        | OperationKind::CmpGe
+        | OperationKind::LogicalAnd
+        | OperationKind::LogicalOr
+        | OperationKind::LogicalNot
+        | OperationKind::SubScalar
+        | OperationKind::DivScalar
+        | OperationKind::TransposeExact
+        | OperationKind::Narrow
+        | OperationKind::FlattenExact
+        | OperationKind::SqueezeExact
+        | OperationKind::UnsqueezeExact
+        | OperationKind::Triu
+        | OperationKind::Tril
+        | OperationKind::Diag
+        | OperationKind::BatchedMatMul => {
+            let operands: Vec<CpuStorage> = cpu_tensor_operand_shapes(operation)
+                .iter()
+                .map(|shape| laid_out(shape, layout))
+                .collect();
+            let borrowed: Vec<&CpuStorage> = operands.iter().collect();
+            cpu_tensor_probe::<f32>(operation, &borrowed)
         }
         _ => panic!("missing CPU capability execution probe for {operation}"),
     }
@@ -733,6 +892,39 @@ fn every_advertised_cpu_dtype_executes_its_registered_operation() {
                 | OperationKind::Softmax => {
                     let input = B::ones::<Dyn>(&[2, 2], dtype, &DeviceId::cpu()).unwrap();
                     cpu_float_probe_dyn(rule.operation, &input)
+                }
+                OperationKind::Maximum
+                | OperationKind::Minimum
+                | OperationKind::AbsDiff
+                | OperationKind::Lerp
+                | OperationKind::MaskedFill
+                | OperationKind::WhereCond
+                | OperationKind::CmpEq
+                | OperationKind::CmpNe
+                | OperationKind::CmpLt
+                | OperationKind::CmpLe
+                | OperationKind::CmpGt
+                | OperationKind::CmpGe
+                | OperationKind::LogicalAnd
+                | OperationKind::LogicalOr
+                | OperationKind::LogicalNot
+                | OperationKind::SubScalar
+                | OperationKind::DivScalar
+                | OperationKind::TransposeExact
+                | OperationKind::Narrow
+                | OperationKind::FlattenExact
+                | OperationKind::SqueezeExact
+                | OperationKind::UnsqueezeExact
+                | OperationKind::Triu
+                | OperationKind::Tril
+                | OperationKind::Diag
+                | OperationKind::BatchedMatMul => {
+                    let operands: Vec<CpuStorage> = cpu_tensor_operand_shapes(rule.operation)
+                        .iter()
+                        .map(|shape| B::ones::<Dyn>(shape, dtype, &DeviceId::cpu()).unwrap())
+                        .collect();
+                    let borrowed: Vec<&CpuStorage> = operands.iter().collect();
+                    cpu_tensor_probe::<Dyn>(rule.operation, &borrowed)
                 }
                 _ => panic!("missing dtype conformance probe for {}", rule.operation),
             };
