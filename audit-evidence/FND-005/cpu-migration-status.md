@@ -4,7 +4,7 @@ Generated from `CPU_CAPABILITIES` and `incin_core::exec::OPERATION_CATALOG`; the
 
 The denominator is the number of operations that `Execute<Descriptor<O>>` can carry at all, not the whole catalog. An operation whose `ExecutionSite` is not backend-executable is listed separately with the reason: it is a gap in the execution trait rather than an unwritten executor, and counting it here would describe work that cannot be done without changing the contract first.
 
-**137 of 161 backend-executable operations migrated**, out of 174 catalog operations in total. The remaining 24 executable operations are still reachable only through the legacy operation-family traits.
+**138 of 161 backend-executable operations migrated**, out of 174 catalog operations in total. The remaining 23 executable operations are still reachable only through the legacy operation-family traits.
 
 ## Backend-executable operations
 
@@ -161,7 +161,7 @@ The denominator is the number of operations that `Execute<Descriptor<O>>` can ca
 | `adaptive_avg_pool2d` | `Kernel` | yes | `ModuleOps::adaptive_avg_pool2d` |
 | `linear` | `Kernel` | yes | `Linear::forward` |
 | `rms_norm` | `Kernel` | yes | `RMSNorm::forward` |
-| `dropout` | `Kernel` | no | `Dropout::forward` |
+| `dropout` | `Kernel` | yes | `Dropout::forward` |
 | `rnn` | `Kernel` | no | `RNN::forward` |
 | `lstm` | `Kernel` | no | `LSTM::forward` |
 | `mse_loss` | `Kernel` | yes | `LossOps::mse_loss` |

@@ -120,7 +120,11 @@ macro_rules! cpu_descriptor_operations {
                 Sin, Cos, Tan, Asin, Acos, Atan, Sinh, Cosh, Asinh, Acosh,
                 Atanh, Erf, Rsqrt, Trunc, Frac,
                 AddScalar, MulScalar, Powf, Clamp,
-                Atan2, Fmod, Remainder
+                Atan2, Fmod, Remainder,
+                // `dropout` walks its operand once and writes one result of the
+                // same shape, which is this group exactly. That it consults a
+                // random draw on the way changes nothing the row states.
+                Dropout
             ],
             broadcast = [BroadcastAs],
             reshape = [ReshapeExact],

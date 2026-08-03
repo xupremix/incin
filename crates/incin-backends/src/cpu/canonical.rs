@@ -13,8 +13,8 @@
 //! is the type.
 
 use incin_core::backend_authoring::{
-    Execute, ExecutionRequest, FloatOps, LossOps, ModuleOps, QuantizedOps, ReductionOps,
-    StorageBackend, TensorOps,
+    CreationOps, Execute, ExecutionRequest, FloatOps, LossOps, ModuleOps, QuantizedOps,
+    ReductionOps, StorageBackend, TensorOps,
 };
 use incin_core::exec::catalog::{
     AxisVarianceAttributes, Descriptor, DuplicateIndexRule, LossReduction, VarianceAttributes, op,
@@ -1599,6 +1599,60 @@ impl<T: DType, D: Device> Execute<Descriptor<op::GroupNorm>> for CpuBackendImpl<
     }
 }
 
+/// Zero a random share of the operand and scale the rest to compensate.
+///
+/// The three cases are separate on purpose. Outside training, and at a
+/// probability of zero, dropout is the identity and must not consume a random
+/// draw: doing so would make an inference pass perturb the generator and change
+/// every later training step. At a probability of one it is a multiply by zero,
+/// which the general path cannot express because its compensating scale is
+/// `1 / (1 - p)`.
+///
+/// The mask is drawn fresh on every call and is deliberately not reproducible
+/// from the descriptor. That makes this the one migrated operation whose result
+/// two identical invocations disagree about, which is a property of dropout and
+/// not a defect here, and the reason its test asserts the distribution rather
+/// than the values.
+impl<T: DType, D: Device> Execute<Descriptor<op::Dropout>> for CpuBackendImpl<T, D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::Dropout>, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::Dropout;
+        let training = records_gradients(request.context);
+        let input = reduction_operand(self, request.inputs, operation, training)?;
+        let attributes = request.operation.descriptor().attributes();
+        let wrap = |error| kernel_error(operation, error);
+
+        if !attributes.training || attributes.probability <= 0.0 {
+            return Ok(input.clone());
+        }
+        if attributes.probability >= 1.0 {
+            return <Self as FloatOps<Self>>::mul_scalar_float::<T>(input, 0.0).map_err(wrap);
+        }
+
+        let metadata = input.metadata();
+        let draw = <Self as CreationOps<Self>>::rand::<T>(
+            input.shape.as_ref(),
+            metadata.dtype(),
+            &metadata.device(),
+        )
+        .map_err(wrap)?;
+        // `step` is one above zero and zero at or below it, so shifting the
+        // uniform draw down by the probability turns it into the mask directly
+        // and keeps exactly the share of elements the attribute asked for.
+        let shifted =
+            <Self as FloatOps<Self>>::add_scalar_float::<T>(&draw, -attributes.probability)
+                .map_err(wrap)?;
+        let mask = <Self as FloatOps<Self>>::step::<T>(&shifted).map_err(wrap)?;
+        let kept = crate::cpu::ops::elementwise::mul_storage(input, &mask).map_err(wrap)?;
+        <Self as FloatOps<Self>>::mul_scalar_float::<T>(&kept, 1.0 / (1.0 - attributes.probability))
+            .map_err(wrap)
+    }
+}
+
 /// An affine layer: the operand against a transposed weight, plus a bias.
 ///
 /// The transpose is the whole reason this is not just a matmul. `Linear` stores
@@ -2389,8 +2443,9 @@ mod tests {
     use incin_core::exec::GradMode;
     use incin_core::exec::catalog::{
         AxisAttributes, BatchNormAttributes, ChunkAttributes, Conv1dAttributes, Conv2dAttributes,
-        DTypeAttributes, EpsilonAttributes, LayerNormAttributes, LinearAttributes, LossAttributes,
-        NoAttributes, NormAttributes, QuantizationAttributes, ShapeAttributes, SplitAttributes,
+        DTypeAttributes, DropoutAttributes, EpsilonAttributes, LayerNormAttributes,
+        LinearAttributes, LossAttributes, NoAttributes, NormAttributes, QuantizationAttributes,
+        ShapeAttributes, SplitAttributes,
     };
     use incin_core::exec::{ExecutionContext, TensorHandle, dispatch};
     use incin_core::prelude::{Cpu, Local};
@@ -2861,6 +2916,81 @@ mod tests {
         assert_eq!(output.shape.to_vec(), vec![2]);
         assert_eq!(output.get(&[0]), 1.0);
         assert_eq!(output.get(&[1]), 9.0);
+    }
+
+    /// Dropout keeps roughly the share it promises and scales what survives.
+    ///
+    /// The result is random, so the assertions are about the distribution and
+    /// about the two exact cases. Every surviving element must be the input
+    /// scaled by `1 / (1 - p)` and every other must be zero: that is checkable
+    /// exactly even though which elements survive is not, and it is what
+    /// catches a missing or misapplied compensating scale.
+    #[test]
+    fn dropout_zeroes_some_elements_and_scales_the_rest_by_the_keep_reciprocal() {
+        let context = context();
+        let input = storage(&[1.0; 4096], &[4096]);
+
+        let output = dispatch::execute::<op::Dropout, _>(
+            &context,
+            DropoutAttributes {
+                probability: 0.5,
+                training: true,
+            },
+            &[handle(&input)],
+        )
+        .expect("dropout executes");
+        assert_eq!(output.shape.to_vec(), vec![4096]);
+
+        let mut kept = 0;
+        for index in 0..4096 {
+            let value = output.get(&[index]);
+            if value == 0.0 {
+                continue;
+            }
+            kept += 1;
+            assert!(
+                (value - 2.0).abs() < 1e-6,
+                "a surviving element was {value}, not the input scaled by 1 / (1 - p)"
+            );
+        }
+        // Four standard deviations of a fair coin over 4096 draws is about 128,
+        // so this fails on a genuinely wrong rate and effectively never on an
+        // unlucky draw.
+        assert!(
+            (2048 - 128..=2048 + 128).contains(&kept),
+            "kept {kept} of 4096 elements, which is not a half-probability drop"
+        );
+    }
+
+    /// Dropout outside training is the identity, exactly.
+    ///
+    /// Not approximately, and not a scaled copy: an inference pass that
+    /// perturbed the values would move every evaluation metric, and one that
+    /// merely consumed a random draw would shift every later training step
+    /// without changing anything visible here.
+    #[test]
+    fn dropout_outside_training_returns_the_operand_unchanged() {
+        let context = context();
+        let input = storage(&[1.0, 2.0, 3.0, 4.0], &[4]);
+
+        for (probability, training) in [(0.5, false), (0.0, true)] {
+            let output = dispatch::execute::<op::Dropout, _>(
+                &context,
+                DropoutAttributes {
+                    probability,
+                    training,
+                },
+                &[handle(&input)],
+            )
+            .expect("dropout executes");
+            for index in 0..4 {
+                assert_eq!(
+                    output.get(&[index]),
+                    input.get(&[index]),
+                    "p={probability} training={training} changed element {index}"
+                );
+            }
+        }
     }
 
     /// A linear layer transposes its weight before the product.

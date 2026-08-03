@@ -75,7 +75,7 @@ run time.
 | `div_in_place` | — | — | — |
 | `div_scalar` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `dot` | `f32` | — | — |
-| `dropout` | — | — | — |
+| `dropout` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `elu` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `embedding` | — | — | — |
 | `erf` | `bf16`, `f16`, `f32`, `f64` | — | — |
@@ -266,6 +266,7 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `atan2` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
 | `fmod` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
 | `remainder` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `dropout` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
 | `broadcast_as` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `q8_0` | `contiguous`, `strided` | any | no | native |
 | `reshape` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `q8_0` | `contiguous` | any | no | native |
 | `broadcast_as` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |

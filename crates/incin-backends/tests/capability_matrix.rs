@@ -11,8 +11,8 @@ use incin_core::backend_authoring::{
     TensorOps,
 };
 use incin_core::exec::catalog::{
-    AxisVarianceAttributes, ChunkAttributes, EpsilonAttributes, LinearAttributes, NormAttributes,
-    SplitAttributes, VarianceAttributes, op,
+    AxisVarianceAttributes, ChunkAttributes, DropoutAttributes, EpsilonAttributes,
+    LinearAttributes, NormAttributes, SplitAttributes, VarianceAttributes, op,
 };
 use incin_core::exec::{
     Capabilities, CapabilityQuery, DTypeRule, ExecutionContext, ImplementationKind, LayoutClass,
@@ -508,6 +508,7 @@ fn cpu_probe_shape(operation: OperationKind) -> &'static [usize] {
         OperationKind::ConvTranspose2d => &[1, 1, 2, 2],
         OperationKind::AdaptiveAvgPool2dExact => &[1, 1, 1, 1],
         OperationKind::LayerNorm | OperationKind::RmsNorm | OperationKind::Linear => &[2, 2],
+        OperationKind::Dropout => &[2, 2],
         OperationKind::ToDType => &[2, 2],
         // Probed with `Mean`, so the result is the scalar the reduction
         // produces rather than the elementwise buffer feeding it.
@@ -706,6 +707,24 @@ fn execute_cpu_probe(operation: OperationKind, layout: LayoutClass) -> CpuStorag
             let input = f32_storage(&[2, 2], &[1.0, 2.0, 3.0, 4.0]);
             let weight = f32_storage(&[2], &[1.0, 1.0]);
             B::layer_norm::<f32>(&input, &weight, None, 1e-5).unwrap()
+        }
+        // Probed in inference mode, where dropout is the identity. The
+        // training path draws a random mask, and a probe that asserted a shape
+        // and a dtype against a random result would be asserting the same two
+        // things while pretending to have checked more.
+        OperationKind::Dropout => {
+            let context = ExecutionContext::new(CpuBackendImpl::<f32, Cpu>::new());
+            let input = transpose_if_requested(f32_storage(&[2, 2], &[1.0, 2.0, 3.0, 4.0]), layout);
+            let handle = TensorHandle::from_storage::<CpuBackendImpl<f32, Cpu>, f32, Local>(&input);
+            dispatch::execute::<op::Dropout, _>(
+                &context,
+                DropoutAttributes {
+                    probability: 0.5,
+                    training: false,
+                },
+                &[handle],
+            )
+            .unwrap()
         }
         // Both dispatch, because neither composition exists on a backend
         // trait: `Linear::forward` and `RMSNorm::forward` are module methods
@@ -1236,6 +1255,24 @@ fn every_advertised_cpu_dtype_executes_its_registered_operation() {
                         rule.operation
                     );
                     pieces.into_iter().next().unwrap()
+                }
+                // Inference-mode dropout hands the operand straight back, so it
+                // is the one row here that has to answer for every float dtype
+                // the elementwise group advertises rather than for f32 alone.
+                OperationKind::Dropout => {
+                    let context = ExecutionContext::new(CpuBackendImpl::<f32, Cpu>::new());
+                    let input = B::ones::<Dyn>(&[2, 2], dtype, &DeviceId::cpu()).unwrap();
+                    let handle =
+                        TensorHandle::from_storage::<CpuBackendImpl<f32, Cpu>, Dyn, Local>(&input);
+                    dispatch::execute::<op::Dropout, _>(
+                        &context,
+                        DropoutAttributes {
+                            probability: 0.5,
+                            training: false,
+                        },
+                        &[handle],
+                    )
+                    .unwrap()
                 }
                 // `to_dtype` is the one row whose result dtype is chosen by an
                 // attribute rather than inherited from the operand, so it is
