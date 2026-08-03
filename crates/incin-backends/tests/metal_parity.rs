@@ -54,7 +54,7 @@ fn test_metal_storage_tagging_and_tape_storage_invariants() {
 
     assert_ne!(s1.id(), s2.id(), "TensorId must be unique per MetalStorage");
     assert_eq!(s1.shape(), &[2, 2]);
-    assert!(!s1.has_non_finite());
+    assert!(!s1.has_non_finite().unwrap());
 
     let acc = s1.accumulate(&s2).expect("accumulate should succeed");
     assert_eq!(read_storage(&acc), vec![1.5, 2.5, 3.5, 4.5]);

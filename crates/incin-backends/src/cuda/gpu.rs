@@ -12,9 +12,14 @@ pub(crate) mod cuda {
 
     impl CpuCudaDispatcher {
         /// Creates a new instance with default (statically inferred) shape arguments.
-        pub fn new(device_id: usize) -> Self {
-            let ctx = cuda_cache::get_cuda_device(device_id);
-            Self { device_id, ctx }
+        pub fn new(device_id: usize) -> Result<Self> {
+            let ctx = cuda_cache::try_get_cuda_device(device_id).map_err(|error| {
+                incin_core::prelude::Error::Backend(incin_core::prelude::BackendError::Execution {
+                    operation: incin_core::prelude::OperationKind::Storage,
+                    message: format!("CUDA context initialization failed: {error:?}").into(),
+                })
+            })?;
+            Ok(Self { device_id, ctx })
         }
 
         /// Compile a CUDA C/C++ kernel source string and load it into the device context.
@@ -144,22 +149,21 @@ pub(crate) mod cuda {
             }
         }
 
-        /// Panicking wrapper over [`try_get_cuda_device`] for existing callers.
-        pub fn get_cuda_device(id: usize) -> Arc<CudaContext> {
-            try_get_cuda_device(id).expect("Failed to initialize CUDA context")
-        }
-
         /// `cache_module`.
         pub fn cache_module(device_id: usize, module_name: String, module: Arc<CudaModule>) {
             let map_mutex = CUDA_MODULES.get_or_init(|| Mutex::new(BTreeMap::new()));
-            let mut map = map_mutex.lock().unwrap();
+            let mut map = map_mutex
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             map.insert((device_id, module_name), module);
         }
 
         /// `get_module`.
         pub fn get_module(device_id: usize, module_name: &str) -> Option<Arc<CudaModule>> {
             let map_mutex = CUDA_MODULES.get_or_init(|| Mutex::new(BTreeMap::new()));
-            let map = map_mutex.lock().unwrap();
+            let map = map_mutex
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             map.get(&(device_id, module_name.to_string())).cloned()
         }
     }

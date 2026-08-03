@@ -85,7 +85,7 @@ fn unflatten_index(flat: usize, shape: &[usize]) -> Vec<usize> {
 
 /// Sum-reduce `storage` over `axis`, *keeping* that axis as size 1
 /// (e.g. `[4, 3]` over axis 0 → `[1, 3]`).
-pub(crate) fn sum_axis_keepdim(storage: &CpuStorage, axis: usize) -> CpuStorage {
+pub(crate) fn sum_axis_keepdim(storage: &CpuStorage, axis: usize) -> Result<CpuStorage> {
     let mut out_shape = storage.shape.to_vec();
     out_shape[axis] = 1;
     let total: usize = crate::cpu::stride::validated_numel(&(out_shape));
@@ -115,30 +115,39 @@ pub(crate) fn sum_axis_keepdim(storage: &CpuStorage, axis: usize) -> CpuStorage 
         CpuBuffer::F16(_) => reduce_variant!(F16, |v: f64| half::f16::from_f64(v)),
         CpuBuffer::BF16(_) => reduce_variant!(BF16, |v: f64| half::bf16::from_f64(v)),
 
-        CpuBuffer::Q8_0(_) => panic!("sum_axis_keepdim not supported on Q8_0 buffer"),
+        CpuBuffer::Q8_0(_) => {
+            return Err(Error::UnsupportedDType {
+                dtype: DTypeId::Q8_0,
+                backend: "cpu",
+                op: "sum_axis_keepdim",
+            });
+        }
     };
 
-    CpuStorage::from_contiguous(new_buffer, out_shape.to_vec())
+    Ok(CpuStorage::from_contiguous(new_buffer, out_shape.to_vec()))
 }
 
 /// Sum-reduce `storage` over `axis`, *removing* that axis from the shape
 /// entirely (e.g. `[4, 3]` over axis 0 → `[3]`).
-pub(crate) fn sum_axis_squeeze(storage: &CpuStorage, axis: usize) -> CpuStorage {
-    let reduced = sum_axis_keepdim(storage, axis);
+pub(crate) fn sum_axis_squeeze(storage: &CpuStorage, axis: usize) -> Result<CpuStorage> {
+    let reduced = sum_axis_keepdim(storage, axis)?;
     let mut new_shape = reduced.shape.to_vec();
     new_shape.remove(axis);
     // Squeezing a size-1 keepdim result is a pure metadata reshape (no data
     // movement) since the output is already contiguous.
     reduced
         .reshape(&new_shape)
-        .expect("squeeze reshape of size-1 keepdim result cannot fail (same element count)")
+        .map_err(|_| Error::InternalInvariant {
+            operation: "sum_axis_squeeze",
+            reason: "validated keepdim reduction could not be reshaped",
+        })
 }
 
 /// Build a contiguous `CpuStorage` of `shape` where every element equals
 /// `scalar_value`, matching the dtype variant of `like`. Used by `sum_all` and
 /// `mean_all` backward closures to broadcast the incoming scalar gradient back
 /// to the full original shape.
-fn fill_like(like: &CpuStorage, shape: &[usize], scalar_value: f64) -> CpuStorage {
+fn fill_like(like: &CpuStorage, shape: &[usize], scalar_value: f64) -> Result<CpuStorage> {
     let total: usize = crate::cpu::stride::validated_numel(shape);
     let new_buffer = match &*like.buffer {
         CpuBuffer::F32(_) => CpuBuffer::F32(vec![scalar_value as f32; total]),
@@ -149,9 +158,15 @@ fn fill_like(like: &CpuStorage, shape: &[usize], scalar_value: f64) -> CpuStorag
         CpuBuffer::F16(_) => CpuBuffer::F16(vec![half::f16::from_f64(scalar_value); total]),
         CpuBuffer::BF16(_) => CpuBuffer::BF16(vec![half::bf16::from_f64(scalar_value); total]),
 
-        CpuBuffer::Q8_0(_) => panic!("fill_like not supported on Q8_0 buffer"),
+        CpuBuffer::Q8_0(_) => {
+            return Err(Error::UnsupportedDType {
+                dtype: DTypeId::Q8_0,
+                backend: "cpu",
+                op: "reduction gradient fill",
+            });
+        }
     };
-    CpuStorage::from_contiguous(new_buffer, shape.to_vec())
+    Ok(CpuStorage::from_contiguous(new_buffer, shape.to_vec()))
 }
 
 /// Reduce along `axis`, tracking the WINNING flat-index-into-source at each
@@ -269,7 +284,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                 // the original shape (the backward of sum is "distribute
                 // everywhere").
                 let scalar_grad = grad_out.get(&vec![0usize; grad_out.shape.len()]);
-                Ok(vec![fill_like(&t_clone, &original_shape, scalar_grad)])
+                Ok(vec![fill_like(&t_clone, &original_shape, scalar_grad)?])
             }),
         });
 
@@ -304,7 +319,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                 let scalar_grad = grad_out.get(&vec![0usize; grad_out.shape.len()]);
                 // d(mean)/d(x_i) = 1/n for each element.
                 let scaled = if n > 0.0 { scalar_grad / n } else { 0.0 };
-                Ok(vec![fill_like(&t_clone, &original_shape, scaled)])
+                Ok(vec![fill_like(&t_clone, &original_shape, scaled)?])
             }),
         });
 
@@ -410,7 +425,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                 msg: format!("sum_dim: axis {dim} out of range for shape {:?}", t.shape),
             });
         }
-        let out = sum_axis_squeeze(t, dim);
+        let out = sum_axis_squeeze(t, dim)?;
 
         let original_shape = t.shape.to_vec();
         let (t_id, out_id) = (t.id, out.id);
@@ -461,7 +476,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                 ),
             });
         }
-        let out = sum_axis_keepdim(t, dim);
+        let out = sum_axis_keepdim(t, dim)?;
 
         let original_shape = t.shape.to_vec();
         let (t_id, out_id) = (t.id, out.id);
@@ -506,7 +521,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
             });
         }
         let axis_len = t.shape[dim] as f64;
-        let summed = sum_axis_squeeze(t, dim);
+        let summed = sum_axis_squeeze(t, dim)?;
         let out_shape = summed.shape.to_vec();
         let total: usize = crate::cpu::stride::validated_numel(&(out_shape));
         let mut idx = vec![0usize; out_shape.len()];
@@ -567,7 +582,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
             });
         }
         let axis_len = t.shape[dim] as f64;
-        let summed = sum_axis_keepdim(t, dim);
+        let summed = sum_axis_keepdim(t, dim)?;
         let out_shape = summed.shape.to_vec();
         let total: usize = crate::cpu::stride::validated_numel(&(out_shape));
         let mut idx = vec![0usize; out_shape.len()];
@@ -911,7 +926,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
             prods[flat_out] *= t.get(&idx);
             increment_index(&mut idx, &t.shape);
         }
-        let buffer = t.buffer.from_f64_values(prods);
+        let buffer = t.buffer.from_f64_values(prods)?;
         let storage = CpuStorage::from_contiguous(buffer, keep_shape);
         storage.reshape(&out_shape)
     }
@@ -942,7 +957,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
             }
             increment_index(&mut idx, &t.shape);
         }
-        let buffer = t.buffer.from_f64_values(out_data);
+        let buffer = t.buffer.from_f64_values(out_data)?;
         Ok(CpuStorage::from_contiguous(buffer, t.shape.to_vec()))
     }
 

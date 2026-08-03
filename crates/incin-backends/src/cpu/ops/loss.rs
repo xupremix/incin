@@ -37,11 +37,9 @@ impl<T: DType, D: Device> LossOps<Self> for CpuBackendImpl<T, D> {
     /// kernel (D-02, Plan 04-01).
     ///
     /// `pred`   — logit matrix, shape `[Batch, Classes]`
-    /// `target` — integer class indices held as `f64` in an
-    ///            `I64`-typed `CpuStorage`, shape `[Batch]`.
-    ///            Each value `target[b]` is read as `… as i64 as usize`
-    ///            (matching the existing codebase convention from
-    ///            `argmax`/`argmin`/`embedding` — Pitfall 8).
+    /// `target` — exact integer class indices, shape `[Batch]`. Float-backed
+    ///            storage is accepted only when each value is finite,
+    ///            integral, and in range.
     ///
     /// Algorithm:
     /// 1. `log_probs = log_softmax(pred, class_dim=1)` — tape-tracked via the
@@ -57,14 +55,26 @@ impl<T: DType, D: Device> LossOps<Self> for CpuBackendImpl<T, D> {
         target: &<Self as Backend>::Storage<KInt>,
         reduction: Reduction,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        debug_assert_eq!(
-            pred.shape.len(),
-            2,
-            "cross_entropy_loss: pred must be 2-D [Batch, Classes], got {:?}",
-            pred.shape
-        );
+        if pred.shape.len() != 2 {
+            return Err(ShapeError::RankMismatch {
+                operation: OperationKind::Reduction,
+                expected: RankExpectation::Exactly(2),
+                actual: pred.shape.len(),
+            }
+            .into());
+        }
         let batch = pred.shape[0];
         let classes = pred.shape[1];
+        if target.shape.as_ref() != [batch] {
+            return Err(ShapeError::DimensionMismatch {
+                operation: OperationKind::Reduction,
+                axis: Axis::Index(0),
+                lhs: batch,
+                rhs: target.shape.first().copied().unwrap_or(0),
+                constraint: DimensionConstraint::Equal,
+            }
+            .into());
+        }
 
         // Step 1: log_softmax over the class dimension (axis 1).
         let log_probs = crate::cpu::ops::elementwise::log_softmax::<T, D, K>(pred, 1)?;
@@ -74,7 +84,21 @@ impl<T: DType, D: Device> LossOps<Self> for CpuBackendImpl<T, D> {
             ShapeBuf::from_slice(&[batch, classes]).checked_numel(OperationKind::Storage)?;
         let mut one_hot_buf = vec![0.0f32; one_hot_total];
         for b_idx in 0..batch {
-            let class_idx = target.get(&[b_idx]) as i64 as usize;
+            let class_idx = target.get_i64_checked(&[b_idx], "cross_entropy_target")?;
+            let class_idx = usize::try_from(class_idx).map_err(|_| Error::InvalidConversion {
+                operation: "cross_entropy_target",
+                from: DTypeId::I64,
+                to: DTypeId::U32,
+                reason: ConversionFailure::OutOfRange,
+            })?;
+            if class_idx >= classes {
+                return Err(ShapeError::InvalidParameter {
+                    operation: OperationKind::Reduction,
+                    parameter: "target class index",
+                    value: class_idx,
+                }
+                .into());
+            }
             one_hot_buf[b_idx * classes + class_idx] = 1.0;
         }
         let one_hot =
@@ -121,6 +145,25 @@ mod tests {
         let n = v.len();
         let floats: Vec<f32> = v.iter().map(|&x| x as f32).collect();
         CpuStorage::from_contiguous(CpuBuffer::F32(floats), vec![n])
+    }
+
+    #[test]
+    fn cross_entropy_rejects_fractional_and_out_of_range_targets() {
+        let pred = matrix(vec![1.0, 2.0, 3.0], 1, 3);
+        let fractional = CpuStorage::from_contiguous(CpuBuffer::F64(vec![1.5]), vec![1]);
+        assert!(matches!(
+            B::cross_entropy_loss::<f32, f64>(&pred, &fractional, Reduction::Mean),
+            Err(Error::InvalidConversion {
+                operation: "cross_entropy_target",
+                ..
+            })
+        ));
+
+        let out_of_range = vector_i64(vec![3]);
+        assert!(matches!(
+            B::cross_entropy_loss::<f32, i64>(&pred, &out_of_range, Reduction::Mean),
+            Err(Error::Shape(ShapeError::InvalidParameter { .. }))
+        ));
     }
 
     /// `f32_vec`.

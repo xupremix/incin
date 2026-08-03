@@ -62,7 +62,7 @@ distributed-nccl = ["distributed", "cuda", "incin-backends/distributed-nccl"]
 # not only through incin-backends.
 telemetry = ["std", "incin-backends/telemetry", "dep:incin-telemetry"]
 # Test-only backends and test utilities.
-test-utils = ["incin-core/test-utils"]
+test-utils = ["incin-core/test-utils", "incin-backends/test-utils"]
 # Extension contracts for backend authors.
 backend-authoring = []
 # Curated preview types for compiled execution.

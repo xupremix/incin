@@ -75,7 +75,7 @@ fn prepare_shape_params(
 #[cfg(feature = "cuda")]
 fn ensure_shape_loaded(device_id: usize) -> Result<()> {
     if crate::cuda::gpu::cuda_cache::get_module(device_id, "shape").is_none() {
-        let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
+        let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
         dispatcher.compile_and_load_kernel(
             "shape",
             crate::cuda::ops::kernels::SHAPE_KERNEL,
@@ -104,7 +104,7 @@ fn launch_shape_op(
     let device_id = t_buf.device_id;
     ensure_shape_loaded(device_id)?;
 
-    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
     let f = dispatcher.get_function("shape", "shape_op")?;
     let stream = t_buf.device.default_stream();
 
@@ -229,7 +229,7 @@ const CONCAT_SRC: &str = include_str!("kernels/concat.cu");
 #[cfg(feature = "cuda")]
 fn ensure_concat_loaded(device_id: usize) -> Result<()> {
     if crate::cuda::gpu::cuda_cache::get_module(device_id, "concat").is_none() {
-        let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
+        let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
         dispatcher.compile_and_load_kernel("concat", CONCAT_SRC, "concat")?;
     }
     Ok(())
@@ -247,7 +247,7 @@ pub(crate) fn launch_concat(tensors: &[&CudaStorage], dim: usize) -> Result<Cuda
     let device_id = first_buf.device_id;
     ensure_concat_loaded(device_id)?;
 
-    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
     let f = dispatcher.get_function("concat", "concat_f32")?;
     let stream = first_buf.device.default_stream();
 

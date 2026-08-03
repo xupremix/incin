@@ -140,7 +140,7 @@ impl<T: DType, D: Device> Execute<MatMulSpec> for CandleBackend<T, D> {
 
         let execution_error = |error: candle_core::Error| BackendError::Execution {
             operation: OperationKind::MatMul,
-            message: alloc::format!("{error}"),
+            message: alloc::format!("{error}").into(),
         };
 
         let transposed = |storage: &CandleStorage| {
@@ -166,7 +166,7 @@ impl<T: DType, D: Device> Execute<MatMulSpec> for CandleBackend<T, D> {
             .map_err(execution_error)?;
         let output = CandleStorage::try_new(output).map_err(|error| BackendError::Execution {
             operation: OperationKind::MatMul,
-            message: alloc::format!("{error}"),
+            message: alloc::format!("{error}").into(),
         })?;
 
         if output.metadata().shape().dims() != spec.output.dims() {
@@ -210,7 +210,7 @@ impl<T: DType, D: Device> Execute<ReshapeSpec> for CandleBackend<T, D> {
 
         let execution_error = |error: candle_core::Error| BackendError::Execution {
             operation: OperationKind::Reshape,
-            message: alloc::format!("{error}"),
+            message: alloc::format!("{error}").into(),
         };
         // Candle refuses to reshape a non-contiguous tensor rather than
         // materializing one, so a strided operand surfaces as its own error here
@@ -221,7 +221,7 @@ impl<T: DType, D: Device> Execute<ReshapeSpec> for CandleBackend<T, D> {
             .map_err(execution_error)?;
         let output = CandleStorage::try_new(output).map_err(|error| BackendError::Execution {
             operation: OperationKind::Reshape,
-            message: alloc::format!("{error}"),
+            message: alloc::format!("{error}").into(),
         })?;
 
         if output.metadata().shape().dims() != spec.output.dims() {

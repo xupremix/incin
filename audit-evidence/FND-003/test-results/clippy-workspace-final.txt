@@ -1,0 +1,13 @@
+   Compiling incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+    Checking incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+error: manual `!Range::contains` implementation
+   --> crates/incin-core/src/err.rs:476:8
+    |
+476 |     if candidate < I64_MIN_F64 || candidate >= I64_MAX_EXCLUSIVE_F64 {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: use: `!(I64_MIN_F64..I64_MAX_EXCLUSIVE_F64).contains(&candidate)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#manual_range_contains
+    = note: `-D clippy::manual-range-contains` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::manual_range_contains)]`
+
+error: could not compile `incin-core` (lib) due to 1 previous error

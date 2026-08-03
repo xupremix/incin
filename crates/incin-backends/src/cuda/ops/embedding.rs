@@ -10,7 +10,7 @@ const EMBEDDING_SRC: &str = include_str!("kernels/embedding.cu");
 #[cfg(feature = "cuda")]
 fn ensure_embedding_loaded(device_id: usize) -> Result<()> {
     if crate::cuda::gpu::cuda_cache::get_module(device_id, "embedding").is_none() {
-        let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
+        let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
         dispatcher.compile_and_load_kernel("embedding", EMBEDDING_SRC, "embedding")?;
     }
     Ok(())
@@ -30,7 +30,7 @@ pub(crate) fn launch_embedding_forward(
     }
     ensure_embedding_loaded(device_id)?;
 
-    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
     let f = dispatcher.get_function("embedding", "embedding_forward")?;
     let stream = w_b.device.default_stream();
 
@@ -106,7 +106,7 @@ pub(crate) fn launch_embedding_backward(
     let device_id = go_b.device_id;
     ensure_embedding_loaded(device_id)?;
 
-    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
     let f = dispatcher.get_function("embedding", "embedding_backward")?;
     let stream = go_b.device.default_stream();
 

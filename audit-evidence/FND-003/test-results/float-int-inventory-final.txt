@@ -1,0 +1,300 @@
+crates/incin-backends/src/dispatch.rs:1055:    fn int_to_scalar<K: DType>(t: &DispatchStorage) -> Result<i64> {
+crates/incin-backends/src/dispatch.rs:1059:                crate::cpu::CpuBackendImpl::<T, Cpu>::int_to_scalar::<K>(value)
+crates/incin-backends/src/dispatch.rs:1063:                crate::wgpu::WgpuBackendImpl::<T, Wgpu>::int_to_scalar::<K>(value)
+crates/incin-backends/src/dispatch.rs:1067:                crate::cuda::CudaBackendImpl::<T, Cuda>::int_to_scalar::<K>(value)
+crates/incin-backends/src/dispatch.rs:1072:    fn int_to_vec1<K: DType>(t: &DispatchStorage) -> Result<Vec<i64>> {
+crates/incin-backends/src/dispatch.rs:1076:                crate::cpu::CpuBackendImpl::<T, Cpu>::int_to_vec1::<K>(value)
+crates/incin-backends/src/dispatch.rs:1080:                crate::wgpu::WgpuBackendImpl::<T, Wgpu>::int_to_vec1::<K>(value)
+crates/incin-backends/src/dispatch.rs:1084:                crate::cuda::CudaBackendImpl::<T, Cuda>::int_to_vec1::<K>(value)
+crates/incin-backends/src/tuning.rs:85:        (usize::BITS - (size - 1).leading_zeros()).min(u8::MAX.into()) as u8
+crates/incin-backends/src/tuning.rs:485:    Ok(elapsed_ns.round() as u64)
+crates/incin-backends/src/cpu/mod.rs:167:                        .chain(block.qs.iter().map(|value| *value as u8))
+crates/incin-backends/src/cpu/mod.rs:239:                            *dst = *src as i8;
+crates/incin-backends/src/metal/backend.rs:1282:        float_to_scalar, float_to_vec1, int_to_scalar, int_to_vec1,
+crates/incin-backends/src/cpu/storage.rs:158:            CpuBuffer::U8(_) => CpuBuffer::U8(values.into_iter().map(|v| v as u8).collect()),
+crates/incin-backends/src/cpu/storage.rs:159:            CpuBuffer::U32(_) => CpuBuffer::U32(values.into_iter().map(|v| v as u32).collect()),
+crates/incin-backends/src/cpu/storage.rs:160:            CpuBuffer::I64(_) => CpuBuffer::I64(values.into_iter().map(|v| v as i64).collect()),
+crates/incin-backends/src/cpu/storage.rs:329:            CpuBuffer::F32(values) => incin_core::prelude::convert_f64_to_i64(
+crates/incin-backends/src/cpu/storage.rs:335:            CpuBuffer::F64(values) => incin_core::prelude::convert_f64_to_i64(
+crates/incin-backends/src/cpu/storage.rs:341:            CpuBuffer::F16(values) => incin_core::prelude::convert_f64_to_i64(
+crates/incin-backends/src/cpu/storage.rs:347:            CpuBuffer::BF16(values) => incin_core::prelude::convert_f64_to_i64(
+crates/incin-backends/src/tuning/cache.rs:763:        && metadata.len() as usize > limits.max_bytes
+crates/incin-backends/src/tuning/cache.rs:848:    let maximum_ms = max_age.as_millis().min(u128::from(u64::MAX)) as u64;
+crates/incin-backends/src/tuning/cache.rs:1033:        self.number(bytes.len() as u64).bytes(bytes)
+crates/incin-core/src/err.rs:429:pub fn convert_f64_to_i64(
+crates/incin-core/src/err.rs:491:    Ok(candidate as i64)
+crates/incin-core/src/err.rs:519:            convert_f64_to_i64(
+crates/incin-core/src/err.rs:537:            let err = convert_f64_to_i64(
+crates/incin-core/src/err.rs:559:            convert_f64_to_i64(
+crates/incin-core/src/err.rs:569:            convert_f64_to_i64(
+crates/incin-core/src/err.rs:579:            convert_f64_to_i64(
+crates/incin-core/src/err.rs:589:            convert_f64_to_i64(
+crates/incin-backends/src/tuning/identity.rs:1114:            .number(self.world as u64);
+crates/incin-backends/src/tuning/identity.rs:1120:                .number(link.from as u64)
+crates/incin-backends/src/tuning/identity.rs:1121:                .number(link.to as u64)
+crates/incin-backends/src/tuning/identity.rs:1127:            .number(self.layout.processes as u64)
+crates/incin-backends/src/tuning/identity.rs:1128:            .number(self.layout.ranks_per_process as u64)
+crates/incin-backends/src/tuning/identity.rs:1318:        write!(&mut output, "{:02x}", byte as u8).expect("writing to String cannot fail");
+crates/incin-backends/src/tuning/identity.rs:1342:        self.number(bytes.len() as u64).bytes(bytes)
+crates/incin-core/src/exec/proof.rs:95:        if (self as u8) >= (other as u8) {
+crates/incin-backends/src/cuda/backend.rs:74:        float_to_scalar, float_to_vec1, int_to_scalar, int_to_vec1,
+crates/incin-backends/src/cuda/backend.rs:1141:        crate::cuda::ops::reduce::indices_u32_to_i64(&idx_u32)
+crates/incin-backends/src/cuda/backend.rs:1165:        crate::cuda::ops::reduce::indices_u32_to_i64(&idx_u32)
+crates/incin-backends/src/tuning/service.rs:977:            .number(candidate.workspace_bytes as u64);
+crates/incin-backends/src/tuning/service.rs:1240:        self.number(bytes.len() as u64).bytes(bytes)
+crates/incin-core/src/exec/spec.rs:234:    pub const MAX_AXES: usize = u32::BITS as usize;
+crates/incin-core/src/exec/spec.rs:261:        self.0.count_ones() as usize
+crates/incin-core/src/exec/spec.rs:366:            let axis = bits.trailing_zeros() as usize;
+crates/incin-core/src/exec/spec.rs:813:            lhs_rank: lhs_rank as u8,
+crates/incin-core/src/exec/spec.rs:814:            rhs_rank: rhs_rank as u8,
+crates/incin-backends/src/cpu/tape.rs:308:        CpuBuffer::U8(_) => reduce_variant!(U8, |v: f64| v as u8),
+crates/incin-backends/src/cpu/tape.rs:309:        CpuBuffer::U32(_) => reduce_variant!(U32, |v: f64| v as u32),
+crates/incin-backends/src/cpu/tape.rs:310:        CpuBuffer::I64(_) => reduce_variant!(I64, |v: f64| v as i64),
+crates/incin-backends/src/tuning/signature.rs:30:            r => Self::Higher(r.min(u8::MAX as usize) as u8),
+crates/incin-backends/src/tuning/signature.rs:95:        (usize::BITS - (size - 1).leading_zeros()).min(u8::MAX.into()) as u8
+crates/incin-backends/src/tuning/signature.rs:135:        let required = (vector_width as usize) * element_size;
+crates/incin-backends/src/tuning/signature.rs:186:            self.storage as u8,
+crates/incin-backends/src/tuning/signature.rs:187:            self.compute as u8,
+crates/incin-backends/src/tuning/signature.rs:188:            self.accumulator as u8,
+crates/incin-backends/src/tuning/signature.rs:189:            self.output as u8,
+crates/incin-backends/src/tuning/signature.rs:192:                other.storage as u8,
+crates/incin-backends/src/tuning/signature.rs:193:                other.compute as u8,
+crates/incin-backends/src/tuning/signature.rs:194:                other.accumulator as u8,
+crates/incin-backends/src/tuning/signature.rs:195:                other.output as u8,
+crates/incin-backends/src/tuning/signature.rs:332:            if numel < (vector_width as usize) {
+crates/incin-backends/src/tuning/signature.rs:392:        let shared_mem_bytes = ((candidate.tile_m as usize) * (candidate.tile_k as usize)
+crates/incin-backends/src/tuning/signature.rs:393:            + (candidate.tile_k as usize) * (candidate.tile_n as usize))
+crates/incin-backends/src/cuda/storage.rs:178:                pointer as usize
+crates/incin-backends/src/cpu/ops/reduce.rs:112:        CpuBuffer::U8(_) => reduce_variant!(U8, |v: f64| v as u8),
+crates/incin-backends/src/cpu/ops/reduce.rs:113:        CpuBuffer::U32(_) => reduce_variant!(U32, |v: f64| v as u32),
+crates/incin-backends/src/cpu/ops/reduce.rs:114:        CpuBuffer::I64(_) => reduce_variant!(I64, |v: f64| v as i64),
+crates/incin-backends/src/cpu/ops/reduce.rs:155:        CpuBuffer::U8(_) => CpuBuffer::U8(vec![scalar_value as u8; total]),
+crates/incin-backends/src/cpu/ops/reduce.rs:156:        CpuBuffer::U32(_) => CpuBuffer::U32(vec![scalar_value as u32; total]),
+crates/incin-backends/src/cpu/ops/reduce.rs:157:        CpuBuffer::I64(_) => CpuBuffer::I64(vec![scalar_value as i64; total]),
+crates/incin-backends/src/cpu/ops/reduce.rs:803:                        multi[d] as i64
+crates/incin-backends/src/cpu/ops/reduce.rs:823:                        best_flat_idx = flat as i64;
+crates/incin-backends/src/cpu/ops/reduce.rs:860:                        multi[d] as i64
+crates/incin-backends/src/cpu/ops/reduce.rs:880:                        best_flat_idx = flat as i64;
+crates/incin-core/src/compiled/artifact.rs:191:        if (bytes.len() as u64) > limits.max_file_bytes {
+crates/incin-core/src/io/gguf.rs:93:            Self::Int8(v) => w.write_all(&[*v as u8])?,
+crates/incin-core/src/io/gguf.rs:99:            Self::Bool(v) => w.write_all(&[*v as u8])?,
+crates/incin-backends/src/cpu/creation.rs:26:    let value = convert_f64_to_i64(operation, DTypeId::F64, value, FloatToIntPolicy::Exact)?;
+crates/incin-backends/src/cpu/ops/matmul.rs:375:            lhs.row_stride as isize,
+crates/incin-backends/src/cpu/ops/matmul.rs:376:            lhs.col_stride as isize,
+crates/incin-backends/src/cpu/ops/matmul.rs:378:            rhs.row_stride as isize,
+crates/incin-backends/src/cpu/ops/matmul.rs:379:            rhs.col_stride as isize,
+crates/incin-backends/src/cpu/ops/matmul.rs:382:            n as isize,
+crates/incin-core/src/onnx_exporter.rs:44:        tensor.dims = val.shape.iter().map(|&x| x as i64).collect();
+crates/incin-core/src/onnx_exporter.rs:45:        tensor.data_type = Some(dtype_to_onnx(val.dtype) as i32);
+crates/incin-core/src/onnx_exporter.rs:62:                    attr.r#type = Some(onnx::attribute_proto::AttributeType::Int as i32);
+crates/incin-core/src/onnx_exporter.rs:66:                    attr.r#type = Some(onnx::attribute_proto::AttributeType::Float as i32);
+crates/incin-core/src/onnx_exporter.rs:70:                    attr.r#type = Some(onnx::attribute_proto::AttributeType::String as i32);
+crates/incin-core/src/onnx_exporter.rs:74:                    attr.r#type = Some(onnx::attribute_proto::AttributeType::Ints as i32);
+crates/incin-core/src/onnx_exporter.rs:78:                    attr.r#type = Some(onnx::attribute_proto::AttributeType::Floats as i32);
+crates/incin-core/src/onnx_exporter.rs:122:    tensor_type.elem_type = Some(dtype_to_onnx(val.dtype) as i32);
+crates/incin-core/src/onnx_exporter.rs:128:            d as i64,
+crates/incin-backends/src/cpu/ops/optimizer.rs:44:            let bias_correction1 = 1.0 - beta1_f32.powi(_step as i32);
+crates/incin-backends/src/cpu/ops/optimizer.rs:45:            let bias_correction2 = 1.0 - beta2_f32.powi(_step as i32);
+crates/incin-core/src/tensor/backend.rs:6:use crate::prelude::{DTypeId, DeviceId, FloatToIntPolicy, Result, convert_f64_to_i64};
+crates/incin-core/src/tensor/backend.rs:34:    pub fn to_i64(self, policy: FloatToIntPolicy) -> Result<i64> {
+crates/incin-core/src/tensor/backend.rs:37:                convert_f64_to_i64("scalar_value_to_i64", DTypeId::F64, f, policy)
+crates/incin-core/src/tensor/backend.rs:59:        ScalarValue::Int(v as i64)
+crates/incin-core/src/tensor/backend.rs:78:                .to_i64(FloatToIntPolicy::Exact)
+crates/incin-core/src/tensor/backend.rs:83:            ScalarValue::Float(12.5).to_i64(FloatToIntPolicy::Exact),
+crates/incin-core/src/tensor/backend.rs:91:                .to_i64(FloatToIntPolicy::Truncate)
+crates/incin-core/src/tensor/backend.rs:557:    fn int_to_scalar<K: DType>(_t: &B::Storage<K>) -> Result<i64>;
+crates/incin-core/src/tensor/backend.rs:559:    fn int_to_vec1<K: DType>(_t: &B::Storage<K>) -> Result<alloc::vec::Vec<i64>>;
+crates/incin-core/src/tensor/backend.rs:1871:        fn int_to_scalar<K: DType>(_t: &<Self as Backend>::Storage<K>) -> Result<i64> {
+crates/incin-core/src/tensor/backend.rs:1875:        fn int_to_vec1<K: DType>(
+crates/incin-backends/src/cuda/ops/elementwise.rs:763:        assert_eq!(checked_i32(i32::MAX as usize, "shape").unwrap(), i32::MAX);
+crates/incin-backends/src/cuda/ops/elementwise.rs:764:        assert!(checked_i32(i32::MAX as usize + 1, "shape").is_err());
+crates/incin-backends/src/cuda/ops/elementwise.rs:782:            assert!(launch_config((u32::MAX as usize + 1) * 4, 4, 256).is_err());
+crates/incin-core/src/dist/pipeline.rs:109:            Ok(Self(value as u32))
+crates/incin-core/src/dist/pipeline.rs:116:        self.0 as u64
+crates/incin-core/src/dist/pipeline.rs:155:        CollectiveTag::new((boundary.get() << 33) | ((microbatch as u64) << 1) | direction)
+crates/incin-core/src/dist/pipeline.rs:450:        if microbatches > u32::MAX as usize {
+crates/incin-core/src/dist/pipeline.rs:452:                maximum: u32::MAX as usize,
+crates/incin-backends/src/cuda/ops/norm.rs:230:            let warp_count = (block_size as usize) / 32;
+crates/incin-backends/src/cuda/ops/norm.rs:406:        assert_eq!(checked_i32(i32::MAX as usize, "test").unwrap(), i32::MAX);
+crates/incin-backends/src/cuda/ops/norm.rs:407:        assert!(checked_i32(i32::MAX as usize + 1, "test").is_err());
+crates/incin-core/src/dist/context.rs:799:            timeout_ms: self.timeout.as_millis().min(u128::from(u64::MAX)) as u64,
+crates/incin-core/src/dist/context.rs:1028:            peer_cuda_device: remote.local_cuda_device as usize,
+crates/incin-core/src/dist/context.rs:1189:            world: TWO_RANK_WORLD as u8,
+crates/incin-core/src/dist/context.rs:1194:            run_id_len: run_id.0.len() as u16,
+crates/incin-core/src/dist/context.rs:1203:            world: TWO_RANK_WORLD as u8,
+crates/incin-core/src/dist/context.rs:1214:        bytes[8] = self.kind as u8;
+crates/incin-core/src/dist/context.rs:1262:    if message.world as usize != TWO_RANK_WORLD {
+crates/incin-core/src/dist/context.rs:1265:            found: message.world as usize,
+crates/incin-core/src/dist/context.rs:1268:    if message.rank as usize != expected_rank {
+crates/incin-core/src/dist/context.rs:1271:            found: message.rank as usize,
+crates/incin-core/src/dist/context.rs:1320:            code: failure as u16,
+crates/incin-core/src/dist/context.rs:1327:        bytes[8] = self.kind as u8;
+crates/incin-backends/src/cpu/ops/shape_ops.rs:457:    /// `int_to_scalar`.
+crates/incin-backends/src/cpu/ops/shape_ops.rs:458:    fn int_to_scalar<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<i64> {
+crates/incin-backends/src/cpu/ops/shape_ops.rs:461:                op: "int_to_scalar",
+crates/incin-backends/src/cpu/ops/shape_ops.rs:464:                msg: alloc::string::String::from("int_to_scalar requires a single-element tensor"),
+crates/incin-backends/src/cpu/ops/shape_ops.rs:467:        t.get_i64_checked(&vec![0usize; t.shape.len()], "int_to_scalar")
+crates/incin-backends/src/cpu/ops/shape_ops.rs:470:    /// `int_to_vec1`.
+crates/incin-backends/src/cpu/ops/shape_ops.rs:471:    fn int_to_vec1<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<alloc::vec::Vec<i64>> {
+crates/incin-backends/src/cpu/ops/shape_ops.rs:476:            out.push(t.get_i64_checked(&idx, "int_to_vec1")?);
+crates/incin-backends/src/cpu/ops/shape_ops.rs:624:            let target_i = index.get(&idx) as usize;
+crates/incin-backends/src/cpu/ops/shape_ops.rs:646:                    let target_i = index_cap.get(&idx) as usize;
+crates/incin-backends/src/cpu/ops/shape_ops.rs:684:            let target_i = index.get(&idx) as usize;
+crates/incin-backends/src/cpu/ops/shape_ops.rs:720:            let selected_pos = idx_vec[out_idx[dim]] as usize;
+crates/incin-backends/src/cpu/ops/shape_ops.rs:836:                (idx[rank - 2] as i64, idx[rank - 1] as i64)
+crates/incin-backends/src/cpu/ops/shape_ops.rs:838:                (0, idx[0] as i64)
+crates/incin-backends/src/cpu/ops/shape_ops.rs:860:                (idx[rank - 2] as i64, idx[rank - 1] as i64)
+crates/incin-backends/src/cpu/ops/shape_ops.rs:862:                (0, idx[0] as i64)
+crates/incin-backends/src/cpu/ops/shape_ops.rs:881:            let k_abs = k.unsigned_abs() as usize;
+crates/incin-backends/src/cpu/ops/shape_ops.rs:903:                let c = (r as i64 + k) as usize;
+crates/incin-backends/src/cuda/ops/reduce.rs:492:        indices.into_iter().map(|index| index as usize).collect(),
+crates/incin-backends/src/cuda/ops/reduce.rs:504:pub(crate) fn indices_u32_to_i64(idx: &CudaStorage) -> Result<CudaStorage> {
+crates/incin-backends/src/cuda/ops/reduce.rs:517:            .ok_or_else(|| Error::Msg("indices_u32_to_i64: invalid byte length".into()))?;
+crates/incin-backends/src/cuda/ops/reduce.rs:520:            .map_err(|e| Error::Msg(format!("indices_u32_to_i64: download failed: {e:?}")))?
+crates/incin-backends/src/cuda/ops/reduce.rs:522:    let host_i64: alloc::vec::Vec<i64> = host_u32.iter().map(|&v| v as i64).collect();
+crates/incin-backends/src/cuda/ops/reduce.rs:526:        .map_err(|e| Error::Msg(format!("indices_u32_to_i64: upload failed: {e:?}")))?;
+crates/incin-backends/src/cuda/ops/reduce.rs:543:        assert_eq!(checked_i32(i32::MAX as usize, "test").unwrap(), i32::MAX);
+crates/incin-backends/src/cuda/ops/reduce.rs:544:        assert!(checked_i32(i32::MAX as usize + 1, "test").is_err());
+crates/incin-backends/src/wgpu/backend.rs:255:        let mut state = seed as u64;
+crates/incin-backends/src/wgpu/backend.rs:281:        let mut state = seed as u64;
+crates/incin-backends/src/wgpu/backend.rs:1208:    /// `int_to_scalar`.
+crates/incin-backends/src/wgpu/backend.rs:1209:    fn int_to_scalar<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<i64> {
+crates/incin-backends/src/wgpu/backend.rs:1215:        incin_core::prelude::convert_f64_to_i64(
+crates/incin-backends/src/wgpu/backend.rs:1216:            "int_to_scalar",
+crates/incin-backends/src/wgpu/backend.rs:1223:    /// `int_to_vec1`.
+crates/incin-backends/src/wgpu/backend.rs:1224:    fn int_to_vec1<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<Vec<i64>> {
+crates/incin-backends/src/wgpu/backend.rs:1228:                incin_core::prelude::convert_f64_to_i64(
+crates/incin-backends/src/wgpu/backend.rs:1229:                    "int_to_vec1",
+crates/incin-backends/src/wgpu/backend.rs:2316:                    let idx = idx as usize;
+crates/incin-backends/src/wgpu/backend.rs:3335:            let class_idx = target_data[b_idx] as usize;
+crates/incin-backends/src/wgpu/backend.rs:3410:            out_bytes.push((d_bits & 0xFF) as u8);
+crates/incin-backends/src/wgpu/backend.rs:3411:            out_bytes.push((d_bits >> 8) as u8);
+crates/incin-backends/src/wgpu/backend.rs:3415:                let q = (v * inv_d).round().clamp(-128.0, 127.0) as i8;
+crates/incin-backends/src/wgpu/backend.rs:3416:                out_bytes.push(q as u8);
+crates/incin-backends/src/wgpu/backend.rs:3450:            let d_bits = (block[0] as u16) | ((block[1] as u16) << 8);
+crates/incin-backends/src/wgpu/backend.rs:3453:                let q = block[2 + i] as i8;
+crates/incin-backends/src/wgpu/backend.rs:3502:        let bc1 = (1.0 - beta1.powi(step as i32)) as f32;
+crates/incin-backends/src/wgpu/backend.rs:3503:        let bc2 = (1.0 - beta2.powi(step as i32)) as f32;
+crates/incin-backends/src/cpu/ops/quant.rs:57:                let q = (chunk[i] * inv_d).round() as i8;
+crates/incin-backends/src/cpu/ops/quant.rs:302:            block_sum += (lhs_block.qs[q] as i32) * (rhs_block.qs[q] as i32);
+crates/incin-core/src/dist/mesh.rs:582:        self.number(bytes.len() as u64).bytes(bytes)
+crates/incin-core/src/dist/mesh.rs:654:        digest = digest.number(self.devices.len() as u64);
+crates/incin-core/src/dist/mesh.rs:658:                .number(identity.device.ordinal() as u64)
+crates/incin-core/src/dist/mesh.rs:663:        digest = digest.number(self.links.len() as u64);
+crates/incin-core/src/dist/mesh.rs:666:                .number(from as u64)
+crates/incin-core/src/dist/mesh.rs:667:                .number(to as u64)
+crates/incin-core/src/dist/mesh.rs:686:            ProcessLayout::ProcessPerRank { world, .. } => digest.number(world as u64),
+crates/incin-core/src/dist/mesh.rs:1005:                .number(M::DATA as u64)
+crates/incin-core/src/dist/mesh.rs:1006:                .number(M::PIPELINE as u64)
+crates/incin-core/src/dist/mesh.rs:1007:                .number(M::TENSOR as u64)
+crates/incin-core/src/dist/plan.rs:403:            && dependency.0 >= self.descriptors.len() as u64
+crates/incin-core/src/dist/plan.rs:482:            && dependency.0 >= self.descriptors.len() as u64
+crates/incin-core/src/dist/plan.rs:836:        .number(members.len() as u64);
+crates/incin-core/src/dist/plan.rs:838:        digest = digest.number(rank as u64);
+crates/incin-core/src/dist/plan.rs:847:        .number(descriptors.len() as u64);
+crates/incin-core/src/dist/plan.rs:852:            .number(descriptor.group.ranks() as u64)
+crates/incin-core/src/dist/plan.rs:854:            .number(descriptor.input_elements as u64)
+crates/incin-core/src/dist/plan.rs:855:            .number(descriptor.output_elements as u64)
+crates/incin-core/src/dist/plan.rs:856:            .number(descriptor.input_bytes as u64)
+crates/incin-core/src/dist/plan.rs:857:            .number(descriptor.output_bytes as u64)
+crates/incin-core/src/dist/plan.rs:880:        self = self.number(bytes.len() as u64);
+crates/incin-core/src/dist/plan.rs:913:                .number(source as u64)
+crates/incin-core/src/dist/plan.rs:914:                .number(destination as u64),
+crates/incin-core/src/dist/plan.rs:932:            PlacementKind::Sharded { axis } => self.bytes(b"sharded").number(axis as u64),
+crates/incin-core/src/dist/plan.rs:935:                self.bytes(b"pipeline-stage").number(index as u64)
+crates/incin-core/src/dist/plan.rs:1598:        if workload.microbatches > u32::MAX as usize {
+crates/incin-core/src/dist/plan.rs:1601:                maximum: u32::MAX as usize,
+crates/incin-core/src/dist/plan.rs:1877:            let first = (capacities[0] as f64 * fraction).floor() as usize;
+crates/incin-core/src/dist/plan.rs:1878:            let second = (capacities[1] as f64 * fraction).floor() as usize;
+crates/incin-backends/src/wgpu/dispatch.rs:151:        WgpuBuffer::new_zeros_for(DTypeId::F32, n_wg as usize, OperationKind::Reduction)?;
+crates/incin-core/src/lib.rs:96:        NonFiniteSite, Result, convert_f64_to_i64,
+crates/incin-core/src/tensor/ops/manipulation.rs:90:                let dim_len = current_dims.as_ref()[dim] as isize;
+crates/incin-core/src/tensor/ops/manipulation.rs:94:                        (dim_len + idx) as usize
+crates/incin-core/src/tensor/ops/manipulation.rs:96:                        idx as usize
+crates/incin-core/src/tensor/ops/manipulation.rs:109:                        let len = (dim_len as usize) - r_start;
+crates/incin-core/src/optim/scheduler.rs:127:        let num_steps = (self.current_step / self.step_size) as i32;
+crates/incin-core/src/tensor/ops/index.rs:54:        IndexSpec::Index(idx as isize)
+crates/incin-core/src/tensor/ops/index.rs:60:        IndexSpec::Range(r.start as isize, r.end as isize)
+crates/incin-core/src/tensor/ops/index.rs:66:        IndexSpec::RangeFrom(r.start as isize)
+crates/incin-core/src/tensor/ops/index.rs:72:        IndexSpec::RangeTo(r.end as isize)
+crates/incin-core/src/tensor/ops/index.rs:79:        IndexSpec::Index(idx as isize)
+crates/incin-core/src/tensor/ops/index.rs:86:        IndexSpec::Range(r.start as isize, r.end as isize)
+crates/incin-core/src/tensor/ops/index.rs:92:        IndexSpec::RangeFrom(r.start as isize)
+crates/incin-core/src/tensor/ops/index.rs:98:        IndexSpec::RangeTo(r.end as isize)
+crates/incin-backends/src/wgpu/tests.rs:318:    assert_eq!(out.buffer.to_vec::<u32>().unwrap()[0] as usize, 3);
+crates/incin-backends/src/wgpu/tests.rs:326:    assert_eq!(out.buffer.to_vec::<u32>().unwrap()[0] as usize, 1);
+crates/incin-backends/src/wgpu/tests.rs:628:        step as usize,
+crates/incin-backends/src/wgpu/storage.rs:21:            size: size_bytes as u64,
+crates/incin-backends/src/wgpu/storage.rs:88:            size: self.size as u64,
+crates/incin-backends/src/wgpu/storage.rs:97:        enc.copy_buffer_to_buffer(&self.buffer, 0, &staging, 0, self.size as u64);
+crates/incin-backends/src/unsupported.rs:265:    (@op int_to_scalar) => {
+crates/incin-backends/src/unsupported.rs:266:        fn int_to_scalar<K: DType>(_t: &<Self as Backend>::Storage<K>) -> Result<i64> {
+crates/incin-backends/src/unsupported.rs:267:            Err($crate::unsupported::unsupported::<Self>("int_to_scalar"))
+crates/incin-backends/src/unsupported.rs:270:    (@op int_to_vec1) => {
+crates/incin-backends/src/unsupported.rs:271:        fn int_to_vec1<K: DType>(
+crates/incin-backends/src/unsupported.rs:274:            Err($crate::unsupported::unsupported::<Self>("int_to_vec1"))
+crates/incin-backends/src/dist/nccl.rs:1248:    if descriptor.sequence().get() != cursor as u64 {
+crates/incin-backends/src/dist/nccl.rs:1250:            expected: cursor as u64,
+crates/incin-backends/src/dist/nccl.rs:1287:    let local = TopologyWire::new(config.rank() as u8, &local_identity, &local_transport)?;
+crates/incin-backends/src/dist/nccl.rs:1361:            world: WORLD as u8,
+crates/incin-backends/src/dist/nccl.rs:1376:            DeviceId::cuda(self.rank as usize),
+crates/incin-backends/src/dist/nccl.rs:1462:    if value.len() > N || value.len() > u16::MAX as usize {
+crates/incin-backends/src/dist/nccl.rs:1471:    Ok((bytes, value.len() as u16))
+crates/incin-backends/src/dist/nccl.rs:1496:    if message.world as usize != WORLD {
+crates/incin-backends/src/dist/nccl.rs:1499:            found: message.world as usize,
+crates/incin-backends/src/dist/nccl.rs:1504:            expected: expected_rank as usize,
+crates/incin-backends/src/dist/nccl.rs:1505:            found: message.rank as usize,
+crates/incin-backends/src/dist/nccl.rs:1669:            world: WORLD as u8,
+crates/incin-backends/src/dist/nccl.rs:1672:            collectives: summary.collective_count() as u64,
+crates/incin-backends/src/dist/nccl.rs:1722:    if message.world as usize != WORLD {
+crates/incin-backends/src/dist/nccl.rs:1725:            found: message.world as usize,
+crates/incin-backends/src/dist/nccl.rs:1730:            expected: expected_rank as usize,
+crates/incin-backends/src/dist/nccl.rs:1731:            found: message.rank as usize,
+crates/incin-backends/src/dist/nccl.rs:1754:        *destination = *source as u8;
+crates/incin-backends/src/dist/nccl.rs:1775:        let _ = write!(output, "{:02x}", byte as u8);
+crates/incin-backends/src/dist/nccl.rs:1923:                    comm.send(&input, destination as i32).map_err(nccl_error)?;
+crates/incin-backends/src/dist/nccl.rs:1926:                    comm.recv(&mut output, source as i32).map_err(nccl_error)?;
+crates/incin-backends/src/dist/nccl.rs:2338:        let id = core::array::from_fn(|index| index as u8);
+crates/incin-backends/src/dist/nccl.rs:2459:        let bytes: [c_char; 16] = core::array::from_fn(|index| (0xf0 + index as u8) as c_char);
+crates/incin-core/src/tensor/tracing.rs:719:                crate::graph::AttributeValue::Int(dim as i64),
+crates/incin-core/src/tensor/tracing.rs:899:                crate::graph::AttributeValue::Int(k as i64),
+crates/incin-core/src/tensor/tracing.rs:903:                crate::graph::AttributeValue::Int(dim as i64),
+crates/incin-core/src/tensor/tracing.rs:919:                crate::graph::AttributeValue::Int(k as i64),
+crates/incin-core/src/tensor/tracing.rs:923:                crate::graph::AttributeValue::Int(dim as i64),
+crates/incin-core/src/tensor/tracing.rs:960:                crate::graph::AttributeValue::Int(dim as i64),
+crates/incin-core/src/tensor/tracing.rs:1021:                bytes.extend_from_slice(&(s as i64).to_le_bytes());
+crates/incin-core/src/tensor/tracing.rs:1050:            let mut perm: Vec<i64> = (0..shape_out.len() as i64).collect();
+crates/incin-core/src/tensor/tracing.rs:1089:                crate::graph::AttributeValue::Int(dim as i64),
+crates/incin-core/src/tensor/tracing.rs:1113:                crate::graph::AttributeValue::Int(dim as i64),
+crates/incin-core/src/tensor/tracing.rs:1178:    /// Delegates to `B::int_to_scalar`.
+crates/incin-core/src/tensor/tracing.rs:1179:    fn int_to_scalar<K: super::dtype::DType>(t: &<Self as Backend>::Storage<K>) -> Result<i64> {
+crates/incin-core/src/tensor/tracing.rs:1180:        B::int_to_scalar(&t.inner)
+crates/incin-core/src/tensor/tracing.rs:1182:    /// Delegates to `B::int_to_vec1`.
+crates/incin-core/src/tensor/tracing.rs:1183:    fn int_to_vec1<K: super::dtype::DType>(
+crates/incin-core/src/tensor/tracing.rs:1186:        B::int_to_vec1(&t.inner)
+crates/incin-core/src/tensor/tracing.rs:1580:                crate::graph::AttributeValue::Ints(vec![stride as i64]),
+crates/incin-core/src/tensor/tracing.rs:1584:                crate::graph::AttributeValue::Ints(vec![padding as i64, padding as i64]),
+crates/incin-core/src/tensor/tracing.rs:1588:                crate::graph::AttributeValue::Ints(vec![dilation as i64]),
+crates/incin-core/src/tensor/tracing.rs:1629:                crate::graph::AttributeValue::Ints(vec![stride as i64, stride as i64]),
+crates/incin-core/src/tensor/tracing.rs:1634:                    padding as i64,
+crates/incin-core/src/tensor/tracing.rs:1635:                    padding as i64,
+crates/incin-core/src/tensor/tracing.rs:1636:                    padding as i64,
+crates/incin-core/src/tensor/tracing.rs:1637:                    padding as i64,
+crates/incin-core/src/tensor/tracing.rs:1642:                crate::graph::AttributeValue::Ints(vec![dilation as i64, dilation as i64]),
+crates/incin-backends/src/dist/tuning.rs:310:        if elements > u32::MAX as usize {
+crates/incin-backends/src/dist/tuning.rs:312:                maximum: u32::MAX as usize,
+crates/incin-backends/src/dist/tuning.rs:438:        let channels = channels as u8;
+crates/incin-backends/src/dist/tuning.rs:1017:        (usize::BITS - (size - 1).leading_zeros()).min(u8::MAX.into()) as u8
+crates/incin-backends/src/dist/tuning.rs:1028:        .number(key.group.ranks() as u64)
+crates/incin-backends/src/dist/tuning.rs:1052:        .number(candidate.chunk_bytes as u64)
+crates/incin-backends/src/dist/tuning.rs:1053:        .number(candidate.stream_priority as i64 as u64)
+crates/incin-backends/src/dist/tuning.rs:1055:        .number(candidate.workspace_bytes as u64)
+crates/incin-backends/src/dist/tuning.rs:1072:        self = self.number(bytes.len() as u64);
+crates/incin-backends/src/dist/tuning.rs:1097:                .number(source as u64)
+crates/incin-backends/src/dist/tuning.rs:1098:                .number(destination as u64),
+crates/incin-backends/src/external/candle/ops/tensor.rs:238:    fn int_to_scalar<K: incin_core::prelude::DType>(
+crates/incin-backends/src/external/candle/ops/tensor.rs:241:        let operation = "candle_int_to_scalar";
+crates/incin-backends/src/external/candle/ops/tensor.rs:269:        incin_core::prelude::convert_f64_to_i64(
+crates/incin-backends/src/external/candle/ops/tensor.rs:277:    fn int_to_vec1<K: incin_core::prelude::DType>(
+crates/incin-backends/src/external/candle/ops/tensor.rs:280:        let operation = "candle_int_to_vec1";
+crates/incin-backends/src/external/candle/ops/tensor.rs:325:                incin_core::prelude::convert_f64_to_i64(

@@ -32,14 +32,20 @@ where
     C: Collate<D::Item> + 'static,
 {
     /// New.
-    pub fn new(dataset: D, collate_fn: C, batch_size: usize) -> Self {
-        Self {
+    pub fn new(dataset: D, collate_fn: C, batch_size: usize) -> incin_core::prelude::Result<Self> {
+        if batch_size == 0 {
+            return Err(incin_core::prelude::Error::InvalidModuleState {
+                operation: "data_loader_new",
+                reason: incin_core::prelude::ErrorMessage::new("batch size must be non-zero"),
+            });
+        }
+        Ok(Self {
             dataset: Arc::new(dataset),
             collate_fn: Arc::new(collate_fn),
             batch_size,
             num_workers: 0,
             shuffle: false,
-        }
+        })
     }
 
     /// With num workers.
@@ -133,7 +139,13 @@ where
                 thread::spawn(move || {
                     loop {
                         let next_batch = {
-                            let mut iter = batch_indices.lock().unwrap();
+                            // The lock only protects `Iterator::next`; user
+                            // dataset/collate code runs after it is released.
+                            // Recover the iterator if a worker was aborted
+                            // rather than turning mutex poison into a panic.
+                            let mut iter = batch_indices
+                                .lock()
+                                .unwrap_or_else(std::sync::PoisonError::into_inner);
                             iter.next()
                         };
 
@@ -212,7 +224,7 @@ mod tests {
 
     #[test]
     fn single_threaded_yields_every_item_in_order_when_not_shuffled() {
-        let loader = DataLoader::new(RangeDataset(10), VecCollate, 3);
+        let loader = DataLoader::new(RangeDataset(10), VecCollate, 3).unwrap();
         let batches = collect_with_timeout((&loader).into_iter());
 
         // 10 items / batch_size 3 -> batches of [3,3,3,1], nothing dropped,
@@ -225,28 +237,42 @@ mod tests {
 
     #[test]
     fn single_threaded_exact_division_produces_no_short_final_batch() {
-        let loader = DataLoader::new(RangeDataset(9), VecCollate, 3);
+        let loader = DataLoader::new(RangeDataset(9), VecCollate, 3).unwrap();
         let batches = collect_with_timeout((&loader).into_iter());
         assert_eq!(batches, vec![vec![0, 1, 2], vec![3, 4, 5], vec![6, 7, 8]]);
     }
 
     #[test]
     fn empty_dataset_produces_zero_batches() {
-        let loader = DataLoader::new(RangeDataset(0), VecCollate, 4);
+        let loader = DataLoader::new(RangeDataset(0), VecCollate, 4).unwrap();
         let batches = collect_with_timeout((&loader).into_iter());
         assert!(batches.is_empty());
     }
 
     #[test]
+    fn zero_batch_size_is_a_typed_construction_error() {
+        let result = DataLoader::new(RangeDataset(4), VecCollate, 0);
+        assert!(matches!(
+            result,
+            Err(incin_core::prelude::Error::InvalidModuleState {
+                operation: "data_loader_new",
+                ..
+            })
+        ));
+    }
+
+    #[test]
     fn batch_size_larger_than_dataset_produces_one_short_batch() {
-        let loader = DataLoader::new(RangeDataset(3), VecCollate, 100);
+        let loader = DataLoader::new(RangeDataset(3), VecCollate, 100).unwrap();
         let batches = collect_with_timeout((&loader).into_iter());
         assert_eq!(batches, vec![vec![0, 1, 2]]);
     }
 
     #[test]
     fn shuffle_preserves_the_full_set_of_items_just_reorders_them() {
-        let loader = DataLoader::new(RangeDataset(50), VecCollate, 7).with_shuffle(true);
+        let loader = DataLoader::new(RangeDataset(50), VecCollate, 7)
+            .unwrap()
+            .with_shuffle(true);
         let batches = collect_with_timeout((&loader).into_iter());
 
         let all_items: HashSet<i32> = batches.iter().flatten().copied().collect();
@@ -268,7 +294,9 @@ mod tests {
         // workers racing on the same chunk, or one silently starving) would
         // show up as a missing or duplicated item — this is exactly the kind
         // of concurrency bug that's invisible without a real multi-thread run.
-        let loader = DataLoader::new(RangeDataset(1000), VecCollate, 10).with_num_workers(8);
+        let loader = DataLoader::new(RangeDataset(1000), VecCollate, 10)
+            .unwrap()
+            .with_num_workers(8);
         let batches = collect_with_timeout((&loader).into_iter());
 
         let mut all_items: Vec<i32> = batches.into_iter().flatten().collect();
@@ -284,6 +312,7 @@ mod tests {
     #[test]
     fn multi_worker_with_shuffle_still_covers_every_item_exactly_once() {
         let loader = DataLoader::new(RangeDataset(500), VecCollate, 6)
+            .unwrap()
             .with_num_workers(4)
             .with_shuffle(true);
         let batches = collect_with_timeout((&loader).into_iter());
@@ -299,7 +328,9 @@ mod tests {
         // Edge case: 3 batches total but 8 workers requested. Workers that
         // find the shared iterator already exhausted must exit cleanly
         // instead of spinning or blocking the others.
-        let loader = DataLoader::new(RangeDataset(25), VecCollate, 10).with_num_workers(8);
+        let loader = DataLoader::new(RangeDataset(25), VecCollate, 10)
+            .unwrap()
+            .with_num_workers(8);
         let batches = collect_with_timeout((&loader).into_iter());
 
         let mut all_items: Vec<i32> = batches.into_iter().flatten().collect();
@@ -321,7 +352,7 @@ mod tests {
             }
         }
 
-        let loader = DataLoader::new(RangeDataset(6), SumCollate, 3);
+        let loader = DataLoader::new(RangeDataset(6), SumCollate, 3).unwrap();
         let mut sums = collect_with_timeout((&loader).into_iter());
         sums.sort_unstable();
         // batch [0,1,2] -> 3, batch [3,4,5] -> 12

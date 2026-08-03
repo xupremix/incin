@@ -3,7 +3,7 @@ use crate::err::BackendError;
 use crate::exec::context::ExecutionContext;
 use crate::exec::request::TensorHandle;
 use crate::exec::{OperationSpec, TensorMeta, Validated};
-use crate::prelude::{DTypeId, DeviceId, Result};
+use crate::prelude::{DTypeId, DeviceId, FloatToIntPolicy, Result, convert_f64_to_i64};
 use crate::tensor::device::Device;
 use crate::tensor::dtype::{DType, FloatDType, QuantDType};
 
@@ -28,11 +28,15 @@ impl ScalarValue {
         }
     }
 
-    /// Reads the value as `i64`, truncating from `Float` if needed.
-    pub fn to_i64(self) -> i64 {
+    /// Reads the value as `i64` under an explicitly selected conversion
+    /// policy. Callers that require a lossless conversion use
+    /// [`FloatToIntPolicy::Exact`].
+    pub fn to_i64(self, policy: FloatToIntPolicy) -> Result<i64> {
         match self {
-            ScalarValue::Float(f) => f as i64,
-            ScalarValue::Int(i) => i,
+            ScalarValue::Float(f) => {
+                convert_f64_to_i64("scalar_value_to_i64", DTypeId::F64, f, policy)
+            }
+            ScalarValue::Int(i) => Ok(i),
         }
     }
 }
@@ -59,6 +63,35 @@ impl From<i64> for ScalarValue {
     /// Wraps an `i64` literal as an `Int` scalar.
     fn from(v: i64) -> Self {
         ScalarValue::Int(v)
+    }
+}
+
+#[cfg(test)]
+mod scalar_value_tests {
+    use super::*;
+    use crate::prelude::{ConversionFailure, Error};
+
+    #[test]
+    fn float_to_integer_requires_an_explicit_checked_policy() {
+        assert_eq!(
+            ScalarValue::Float(12.0)
+                .to_i64(FloatToIntPolicy::Exact)
+                .unwrap(),
+            12
+        );
+        assert!(matches!(
+            ScalarValue::Float(12.5).to_i64(FloatToIntPolicy::Exact),
+            Err(Error::InvalidConversion {
+                reason: ConversionFailure::Fractional,
+                ..
+            })
+        ));
+        assert_eq!(
+            ScalarValue::Float(12.5)
+                .to_i64(FloatToIntPolicy::Truncate)
+                .unwrap(),
+            12
+        );
     }
 }
 
@@ -202,6 +235,11 @@ pub trait Backend:
     fn var_from_tensor<K: DType>(t: &Self::Storage<K>) -> Result<Self::RawVar>;
     /// Overwrites a variable's value in place (e.g. an optimizer step),
     /// without changing its identity for gradient-tracking purposes.
+    ///
+    /// An implementation must be failure-atomic for this individual variable:
+    /// returning `Err` guarantees that `var` still contains its exact prior
+    /// bytes. Optimizers rely on that contract to roll back a multi-parameter
+    /// commit when a later assignment fails.
     fn assign_var<K: DType>(var: &mut Self::RawVar, tensor: &Self::Storage<K>) -> Result<()>;
 }
 

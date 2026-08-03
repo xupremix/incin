@@ -37,7 +37,7 @@ fn main() -> incin::Result<()> {
         l4: Linear::build(())?,
     };
 
-    let t: Tensor<s![2, 2, 2, dyn, 10], B> = Tensor::randn(10_usize)? * 2.;
+    let t: Tensor<s![2, 2, 2, dyn, 10], B> = (Tensor::randn(10_usize)? * 2.)?;
 
     let out = model.forward(t)?;
     println!("=== Display ===");

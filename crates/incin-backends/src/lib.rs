@@ -3,7 +3,6 @@
 #[macro_use]
 extern crate alloc;
 
-
 pub mod backend_kind;
 pub mod capability;
 /// The generated support tables in `docs/capabilities.md` (`UX-013`).
@@ -11,7 +10,7 @@ pub mod capability;
 pub mod capability_docs;
 pub mod codegen;
 pub use backend_kind::BackendFor;
-#[cfg(any(feature = "cpu", feature = "wgpu", feature = "cuda"))]
+#[cfg(any(feature = "cpu", feature = "wgpu", feature = "cuda", feature = "metal"))]
 pub(crate) mod descriptor_bind;
 pub mod dispatch;
 #[cfg(any(feature = "cpu", feature = "wgpu", feature = "cuda"))]
@@ -58,6 +57,13 @@ pub mod iteration;
 /// feature detection, no overhead.
 pub mod simd;
 pub use simd::simd_lanes;
+
+/// Test-only deterministic backend fault injection.
+#[cfg(all(feature = "test-utils", feature = "cpu"))]
+#[doc(hidden)]
+pub mod test_utils {
+    pub use crate::cpu::var::{AssignFailureGuard, fail_assign_on};
+}
 
 #[cfg(any(
     feature = "cuda",

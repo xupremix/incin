@@ -56,7 +56,7 @@ fn out_size(
 #[cfg(feature = "cuda")]
 fn ensure_pool_loaded(device_id: usize) -> Result<()> {
     if crate::cuda::gpu::cuda_cache::get_module(device_id, "pool").is_none() {
-        let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
+        let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
         dispatcher.compile_and_load_kernel(
             "pool",
             crate::cuda::ops::kernels::POOL_KERNEL,
@@ -116,7 +116,7 @@ pub(crate) fn launch_max_pool2d_forward(
     let t_buf = &*t.buffer;
     let device_id = t_buf.device_id;
     ensure_pool_loaded(device_id)?;
-    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
     let f = dispatcher.get_function("pool", "max_pool2d_forward")?;
     let stream = t_buf.device.default_stream();
 
@@ -188,7 +188,7 @@ pub(crate) fn launch_scatter_pool_grad_2d(
     let go_buf = &*grad_out.buffer;
     let device_id = go_buf.device_id;
     ensure_pool_loaded(device_id)?;
-    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
     let f = dispatcher.get_function("pool", "scatter_pool_grad_2d")?;
     let stream = go_buf.device.default_stream();
 
@@ -238,7 +238,7 @@ pub(crate) fn launch_avg_pool2d_forward(
     let t_buf = &*t.buffer;
     let device_id = t_buf.device_id;
     ensure_pool_loaded(device_id)?;
-    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
     let f = dispatcher.get_function("pool", "avg_pool2d_forward")?;
     let stream = t_buf.device.default_stream();
 
@@ -297,7 +297,7 @@ pub(crate) fn launch_avg_pool2d_backward(
     let go_buf = &*grad_out.buffer;
     let device_id = go_buf.device_id;
     ensure_pool_loaded(device_id)?;
-    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
     let f = dispatcher.get_function("pool", "avg_pool2d_backward")?;
     let stream = go_buf.device.default_stream();
 
@@ -357,7 +357,7 @@ pub(crate) fn launch_adaptive_avg_pool2d_forward(
     let t_buf = &*t.buffer;
     let device_id = t_buf.device_id;
     ensure_pool_loaded(device_id)?;
-    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
     let f = dispatcher.get_function("pool", "adaptive_avg_pool2d_forward")?;
     let stream = t_buf.device.default_stream();
 
@@ -406,7 +406,7 @@ pub(crate) fn launch_adaptive_avg_pool2d_backward(
     let go_buf = &*grad_out.buffer;
     let device_id = go_buf.device_id;
     ensure_pool_loaded(device_id)?;
-    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
     let f = dispatcher.get_function("pool", "adaptive_avg_pool2d_backward")?;
     let stream = go_buf.device.default_stream();
 

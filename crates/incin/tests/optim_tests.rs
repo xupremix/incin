@@ -8,6 +8,33 @@ use incin::{Adam, AdamW, SGD};
 /// Implementation of `CpuBackendImpl` for the respective backend.
 type CpuBackendImpl = incin_backends::cpu::CpuBackendImpl;
 
+fn parameter_bytes(
+    linear: &Linear<s![10, 5], CpuBackendImpl>,
+) -> Result<BTreeMap<String, Vec<u8>>> {
+    linear
+        .parameters()
+        .into_iter()
+        .map(|(name, var)| {
+            let storage = CpuBackendImpl::var_as_tensor::<f32>(&var)?;
+            Ok((name, CpuBackendImpl::to_bytes::<f32>(&storage)?))
+        })
+        .collect()
+}
+
+fn state_bytes(
+    state: &BTreeMap<String, Tensor<Dyn, CpuBackendImpl>>,
+) -> Result<BTreeMap<String, Vec<u8>>> {
+    state
+        .iter()
+        .map(|(name, tensor)| {
+            Ok((
+                name.clone(),
+                CpuBackendImpl::to_bytes::<f32>(tensor.inner())?,
+            ))
+        })
+        .collect()
+}
+
 /// Get linear and grads.
 fn get_linear_and_grads() -> Result<(
     Linear<s![10, 5], CpuBackendImpl>,
@@ -102,5 +129,85 @@ fn test_adamw_optimizer_state_dict_checkpointing() -> Result<()> {
     optim2.step(&grads)?;
     assert_eq!(optim2.step_count(), 2);
 
+    Ok(())
+}
+
+#[test]
+fn adam_step_rolls_back_parameters_state_and_counter_on_backend_failure() -> Result<()> {
+    let (linear, grads) = get_linear_and_grads()?;
+    let before = parameter_bytes(&linear)?;
+    let mut optim = Adam::<CpuBackendImpl>::new(linear.parameters(), 0.001);
+    let mut state_before = BTreeMap::new();
+    optim.state_dict("", &mut state_before);
+
+    let failure = incin::test_utils::fail_assign_on(2);
+    let error = optim.step(&grads).unwrap_err();
+    drop(failure);
+
+    assert!(matches!(
+        error,
+        Error::Backend(BackendError::Execution { .. })
+    ));
+    assert_eq!(parameter_bytes(&linear)?, before);
+    assert_eq!(optim.step_count(), 0);
+    let mut state_after = BTreeMap::new();
+    optim.state_dict("", &mut state_after);
+    assert_eq!(
+        state_after.keys().collect::<Vec<_>>(),
+        state_before.keys().collect::<Vec<_>>()
+    );
+
+    // The injected failure is one-shot and the rollback leaves a usable
+    // optimizer, not merely one whose visible values happen to match.
+    optim.step(&grads)?;
+    assert_eq!(optim.step_count(), 1);
+    Ok(())
+}
+
+#[test]
+fn adam_step_overflow_preserves_parameters_and_state() -> Result<()> {
+    let (linear, grads) = get_linear_and_grads()?;
+    let before = parameter_bytes(&linear)?;
+    let mut optim = Adam::<CpuBackendImpl>::new(linear.parameters(), 0.001);
+    optim.set_step_count(usize::MAX);
+
+    assert!(matches!(
+        optim.step(&grads),
+        Err(Error::ArithmeticOverflow {
+            operation: "adam_step",
+            ..
+        })
+    ));
+    assert_eq!(parameter_bytes(&linear)?, before);
+    assert_eq!(optim.step_count(), usize::MAX);
+    let mut state = BTreeMap::new();
+    optim.state_dict("", &mut state);
+    assert!(state.is_empty());
+    Ok(())
+}
+
+#[test]
+fn malformed_adam_state_load_is_typed_and_transactional() -> Result<()> {
+    let (linear, grads) = get_linear_and_grads()?;
+    let mut optim = Adam::<CpuBackendImpl>::new(linear.parameters(), 0.001);
+    optim.step(&grads)?;
+
+    let mut valid_state = BTreeMap::new();
+    optim.state_dict("", &mut valid_state);
+    let before = state_bytes(&valid_state)?;
+    let first_key = valid_state.keys().next().cloned().unwrap();
+    valid_state.remove(&first_key);
+
+    assert!(matches!(
+        optim.load_state_dict("", &valid_state),
+        Err(Error::InvalidModuleState {
+            operation: "adam_load_state_dict",
+            ..
+        })
+    ));
+    let mut after_state = BTreeMap::new();
+    optim.state_dict("", &mut after_state);
+    assert_eq!(state_bytes(&after_state)?, before);
+    assert_eq!(optim.step_count(), 1);
     Ok(())
 }

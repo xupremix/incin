@@ -745,7 +745,7 @@ pub(crate) fn conv_transpose2d_impl<T: DType, D: incin_core::prelude::Device, K:
             })?;
         ShapeBuf::from_slice(&[b, cout, final_h, final_w]).checked_numel(OperationKind::Conv2d)?;
         let final_shape = vec![b, cout, final_h, final_w];
-        scatter_into_zeros(&final_shape, &[0, 0, 0, 0], &natural_out)
+        scatter_into_zeros(&final_shape, &[0, 0, 0, 0], &natural_out)?
     };
 
     let (input_capture, weight_capture) = (input.clone(), weight.clone());

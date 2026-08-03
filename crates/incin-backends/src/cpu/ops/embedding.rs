@@ -60,15 +60,20 @@ pub(crate) fn embedding_impl<T: DType, D: incin_core::prelude::Device, K: DType,
     let mut out_vals: Vec<f32> = Vec::with_capacity(total_indices * hidden_size);
 
     for _ in 0..total_indices {
-        let raw = t.get(&idx);
-        let row_idx = raw as i64 as usize;
-        if raw < 0.0 || row_idx >= vocab_size {
-            return Err(Error::ShapeMismatch {
-                op: "embedding",
-                expected: vec![vocab_size],
-                got: vec![row_idx],
-                msg: format!("embedding: index {raw} out of range for vocab_size {vocab_size}"),
-            });
+        let raw = t.get_i64_checked(&idx, "embedding_index")?;
+        let row_idx = usize::try_from(raw).map_err(|_| Error::InvalidConversion {
+            operation: "embedding_index",
+            from: incin_core::prelude::DTypeId::I64,
+            to: incin_core::prelude::DTypeId::U32,
+            reason: incin_core::prelude::ConversionFailure::OutOfRange,
+        })?;
+        if row_idx >= vocab_size {
+            return Err(incin_core::prelude::ShapeError::InvalidParameter {
+                operation: OperationKind::Embedding,
+                parameter: "index",
+                value: row_idx,
+            }
+            .into());
         }
         for h in 0..hidden_size {
             out_vals.push(w.get(&[row_idx, h]) as f32);
@@ -236,20 +241,26 @@ mod tests {
     }
 
     #[test]
-    /// `out_of_range_index_returns_shape_mismatch_error`.
-    fn out_of_range_index_returns_shape_mismatch_error() {
+    /// `out_of_range_index_returns_typed_shape_error`.
+    fn out_of_range_index_returns_typed_shape_error() {
         let w = weight(vec![1.0, 2.0, 3.0, 4.0], 2, 2);
         let idx = indices_i64(vec![5], vec![1]);
         let result = embedding_impl::<f32, Cpu, f32, i64>(&idx, &w);
-        assert!(matches!(result, Err(Error::ShapeMismatch { .. })));
+        assert!(matches!(result, Err(Error::Shape(_))));
     }
 
     #[test]
-    /// `negative_index_returns_shape_mismatch_error_not_panic`.
-    fn negative_index_returns_shape_mismatch_error_not_panic() {
+    /// `negative_index_returns_conversion_error_not_panic`.
+    fn negative_index_returns_conversion_error_not_panic() {
         let w = weight(vec![1.0, 2.0, 3.0, 4.0], 2, 2);
         let idx = indices_i64(vec![-1], vec![1]);
         let result = embedding_impl::<f32, Cpu, f32, i64>(&idx, &w);
-        assert!(matches!(result, Err(Error::ShapeMismatch { .. })));
+        assert!(matches!(
+            result,
+            Err(Error::InvalidConversion {
+                operation: "embedding_index",
+                ..
+            })
+        ));
     }
 }

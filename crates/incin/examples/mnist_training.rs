@@ -45,8 +45,13 @@ impl Collate<(Vec<f32>, u8)> for MnistCollate {
             &device,
         )
         .unwrap();
-        let labels_raw =
-            <Backend as incin::prelude::Backend>::from_bytes::<f32>(labels_bytes, &[batch_size], DTypeId::F32, &device).unwrap();
+        let labels_raw = <Backend as incin::prelude::Backend>::from_bytes::<f32>(
+            labels_bytes,
+            &[batch_size],
+            DTypeId::F32,
+            &device,
+        )
+        .unwrap();
 
         (
             Tensor::<Dyn, Backend>::from_raw(images_raw, vec![batch_size, 1, 28, 28]).unwrap(),
@@ -65,7 +70,7 @@ fn main() -> incin::Result<()> {
     println!("Loaded {} training images", train_data.len());
 
     // Create DataLoader
-    let dataloader = DataLoader::new(train_data, MnistCollate, 32)
+    let dataloader = DataLoader::new(train_data, MnistCollate, 32)?
         .with_shuffle(true)
         .with_num_workers(0); // Using 0 for simple blocking execution
 

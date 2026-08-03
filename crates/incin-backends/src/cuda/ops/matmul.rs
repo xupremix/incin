@@ -16,7 +16,7 @@ const BN: u32 = 128;
 #[cfg(feature = "cuda")]
 fn ensure_matmul_loaded(device_id: usize) -> Result<()> {
     if crate::cuda::gpu::cuda_cache::get_module(device_id, "matmul").is_none() {
-        let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
+        let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
         dispatcher.compile_and_load_kernel(
             "matmul",
             crate::cuda::ops::kernels::MATMUL_KERNEL,
@@ -35,7 +35,7 @@ pub(crate) fn launch_matmul(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<Cuda
     let device_id = lhs_buf.device_id;
     ensure_matmul_loaded(device_id)?;
 
-    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
     let f = dispatcher.get_function("matmul", "matmul")?;
     let stream = lhs_buf.device.default_stream();
 

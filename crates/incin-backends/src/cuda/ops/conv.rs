@@ -108,7 +108,7 @@ pub(crate) fn natural_transpose_out_size(
 #[cfg(feature = "cuda")]
 fn ensure_conv_loaded(device_id: usize) -> Result<()> {
     if crate::cuda::gpu::cuda_cache::get_module(device_id, "conv").is_none() {
-        let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
+        let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
         dispatcher.compile_and_load_kernel(
             "conv",
             crate::cuda::ops::kernels::CONV_KERNEL,
@@ -169,7 +169,7 @@ pub(crate) fn launch_im2col_2d(
     let t_buf = &*t.buffer;
     let device_id = t_buf.device_id;
     ensure_conv_loaded(device_id)?;
-    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
     let f = dispatcher.get_function("conv", "im2col_2d")?;
     let stream = t_buf.device.default_stream();
 
@@ -239,7 +239,7 @@ pub(crate) fn launch_col2im_2d(
     let cols_buf = &*cols.buffer;
     let device_id = cols_buf.device_id;
     ensure_conv_loaded(device_id)?;
-    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
     let f = dispatcher.get_function("conv", "col2im_2d")?;
     let stream = cols_buf.device.default_stream();
 
@@ -310,7 +310,7 @@ pub(crate) fn launch_im2col_1d(
     let t_buf = &*t.buffer;
     let device_id = t_buf.device_id;
     ensure_conv_loaded(device_id)?;
-    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
     let f = dispatcher.get_function("conv", "im2col_1d")?;
     let stream = t_buf.device.default_stream();
 
@@ -368,7 +368,7 @@ pub(crate) fn launch_col2im_1d(
     let cols_buf = &*cols.buffer;
     let device_id = cols_buf.device_id;
     ensure_conv_loaded(device_id)?;
-    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
     let f = dispatcher.get_function("conv", "col2im_1d")?;
     let stream = cols_buf.device.default_stream();
 

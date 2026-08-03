@@ -22,15 +22,48 @@ use crate::cpu::storage::{CpuBuffer, CpuStorage};
 use crate::cpu::var;
 use crate::dtype_policy::{BackendFamily, OperationKind, resolve_dtype_policy};
 
+fn exact_integer(value: f64, dtype: DTypeId, operation: &'static str) -> Result<i64> {
+    let value = convert_f64_to_i64(operation, DTypeId::F64, value, FloatToIntPolicy::Exact)?;
+    let in_range = match dtype {
+        DTypeId::U8 => u8::try_from(value).is_ok(),
+        DTypeId::U32 => u32::try_from(value).is_ok(),
+        DTypeId::I64 => true,
+        _ => false,
+    };
+    if !in_range {
+        return Err(Error::InvalidConversion {
+            operation,
+            from: DTypeId::F64,
+            to: dtype,
+            reason: ConversionFailure::OutOfRange,
+        });
+    }
+    Ok(value)
+}
+
 /// `fill_buffer`.
 fn fill_buffer(total: usize, value: f64, dtype: DTypeId, device: &DeviceId) -> Result<CpuBuffer> {
     resolve_dtype_policy(BackendFamily::Cpu, OperationKind::Fill, dtype, "fill")?;
     let host_buf = match dtype {
         DTypeId::F32 => CpuBuffer::F32(vec![value as f32; total]),
         DTypeId::F64 => CpuBuffer::F64(vec![value; total]),
-        DTypeId::U8 => CpuBuffer::U8(vec![value as u8; total]),
-        DTypeId::U32 => CpuBuffer::U32(vec![value as u32; total]),
-        DTypeId::I64 => CpuBuffer::I64(vec![value as i64; total]),
+        DTypeId::U8 => CpuBuffer::U8(vec![
+            u8::try_from(exact_integer(value, dtype, "fill")?)
+                .map_err(|_| Error::InternalInvariant {
+                    operation: "fill",
+                    reason: "validated U8 conversion became unrepresentable",
+                })?;
+            total
+        ]),
+        DTypeId::U32 => CpuBuffer::U32(vec![
+            u32::try_from(exact_integer(value, dtype, "fill")?)
+                .map_err(|_| Error::InternalInvariant {
+                    operation: "fill",
+                    reason: "validated U32 conversion became unrepresentable",
+                })?;
+            total
+        ]),
+        DTypeId::I64 => CpuBuffer::I64(vec![exact_integer(value, dtype, "fill")?; total]),
         DTypeId::F16 => CpuBuffer::F16(vec![half::f16::from_f64(value); total]),
         DTypeId::BF16 => CpuBuffer::BF16(vec![half::bf16::from_f64(value); total]),
         DTypeId::Q8_0 => {
@@ -186,9 +219,35 @@ impl<T: DType, D: Device> CreationOps<Self> for CpuBackendImpl<T, D> {
         let buffer = match dtype {
             DTypeId::F32 => CpuBuffer::F32(data.iter().map(|&x| x as f32).collect()),
             DTypeId::F64 => CpuBuffer::F64(data),
-            DTypeId::U8 => CpuBuffer::U8(data.iter().map(|&x| x as u8).collect()),
-            DTypeId::U32 => CpuBuffer::U32(data.iter().map(|&x| x as u32).collect()),
-            DTypeId::I64 => CpuBuffer::I64(data.iter().map(|&x| x as i64).collect()),
+            DTypeId::U8 => CpuBuffer::U8(
+                data.iter()
+                    .map(|&x| {
+                        exact_integer(x, dtype, "arange").and_then(|x| {
+                            u8::try_from(x).map_err(|_| Error::InternalInvariant {
+                                operation: "arange",
+                                reason: "validated U8 conversion became unrepresentable",
+                            })
+                        })
+                    })
+                    .collect::<Result<Vec<_>>>()?,
+            ),
+            DTypeId::U32 => CpuBuffer::U32(
+                data.iter()
+                    .map(|&x| {
+                        exact_integer(x, dtype, "arange").and_then(|x| {
+                            u32::try_from(x).map_err(|_| Error::InternalInvariant {
+                                operation: "arange",
+                                reason: "validated U32 conversion became unrepresentable",
+                            })
+                        })
+                    })
+                    .collect::<Result<Vec<_>>>()?,
+            ),
+            DTypeId::I64 => CpuBuffer::I64(
+                data.iter()
+                    .map(|&x| exact_integer(x, dtype, "arange"))
+                    .collect::<Result<Vec<_>>>()?,
+            ),
             DTypeId::F16 => CpuBuffer::F16(data.iter().map(|&x| half::f16::from_f64(x)).collect()),
             DTypeId::BF16 => {
                 CpuBuffer::BF16(data.iter().map(|&x| half::bf16::from_f64(x)).collect())
@@ -236,9 +295,35 @@ impl<T: DType, D: Device> CreationOps<Self> for CpuBackendImpl<T, D> {
         let buffer = match dtype {
             DTypeId::F32 => CpuBuffer::F32(data.iter().map(|&x| x as f32).collect()),
             DTypeId::F64 => CpuBuffer::F64(data),
-            DTypeId::U8 => CpuBuffer::U8(data.iter().map(|&x| x as u8).collect()),
-            DTypeId::U32 => CpuBuffer::U32(data.iter().map(|&x| x as u32).collect()),
-            DTypeId::I64 => CpuBuffer::I64(data.iter().map(|&x| x as i64).collect()),
+            DTypeId::U8 => CpuBuffer::U8(
+                data.iter()
+                    .map(|&x| {
+                        exact_integer(x, dtype, "linspace").and_then(|x| {
+                            u8::try_from(x).map_err(|_| Error::InternalInvariant {
+                                operation: "linspace",
+                                reason: "validated U8 conversion became unrepresentable",
+                            })
+                        })
+                    })
+                    .collect::<Result<Vec<_>>>()?,
+            ),
+            DTypeId::U32 => CpuBuffer::U32(
+                data.iter()
+                    .map(|&x| {
+                        exact_integer(x, dtype, "linspace").and_then(|x| {
+                            u32::try_from(x).map_err(|_| Error::InternalInvariant {
+                                operation: "linspace",
+                                reason: "validated U32 conversion became unrepresentable",
+                            })
+                        })
+                    })
+                    .collect::<Result<Vec<_>>>()?,
+            ),
+            DTypeId::I64 => CpuBuffer::I64(
+                data.iter()
+                    .map(|&x| exact_integer(x, dtype, "linspace"))
+                    .collect::<Result<Vec<_>>>()?,
+            ),
             DTypeId::F16 => CpuBuffer::F16(data.iter().map(|&x| half::f16::from_f64(x)).collect()),
             DTypeId::BF16 => {
                 CpuBuffer::BF16(data.iter().map(|&x| half::bf16::from_f64(x)).collect())
@@ -337,6 +422,42 @@ mod tests {
     fn dyn_dtype_uses_runtime_buffer_variant() {
         let t = TestBackend::ones::<Dyn>(&[2], DTypeId::F64, &dev()).unwrap();
         assert!(matches!(&*t.buffer, CpuBuffer::F64(values) if values == &vec![1.0, 1.0]));
+    }
+
+    #[test]
+    fn integer_fill_rejects_implicit_truncation_and_saturation() {
+        for (value, dtype) in [
+            (1.5, DTypeId::I64),
+            (f64::NAN, DTypeId::I64),
+            (f64::INFINITY, DTypeId::U32),
+            (-1.0, DTypeId::U8),
+            (256.0, DTypeId::U8),
+        ] {
+            assert!(matches!(
+                TestBackend::full::<Dyn>(value, &[1], dtype, &dev()),
+                Err(Error::InvalidConversion { .. })
+            ));
+        }
+    }
+
+    #[test]
+    fn integer_ranges_reject_fractional_values() {
+        assert!(matches!(
+            TestBackend::arange::<Dyn>(0.5, 1.0, &[2], DTypeId::I64, &dev()),
+            Err(Error::InvalidConversion {
+                operation: "arange",
+                reason: ConversionFailure::Fractional,
+                ..
+            })
+        ));
+        assert!(matches!(
+            TestBackend::linspace::<Dyn>(0.0, 1.0, &[3], DTypeId::I64, &dev()),
+            Err(Error::InvalidConversion {
+                operation: "linspace",
+                reason: ConversionFailure::Fractional,
+                ..
+            })
+        ));
     }
 
     #[test]

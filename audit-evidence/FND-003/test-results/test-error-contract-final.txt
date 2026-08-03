@@ -1,0 +1,11 @@
+   Compiling incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+   Compiling incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.21s
+     Running tests/error_contract.rs (target/debug/deps/error_contract-b7aa11d3ad53c587)
+
+running 2 tests
+test stable_facade_exposes_typed_bounded_failure_contract ... ok
+test tensor_operators_propagate_results_instead_of_panicking ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

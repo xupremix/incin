@@ -256,14 +256,10 @@ impl TapeStorage for MetalStorage {
         )
     }
 
-    fn has_non_finite(&self) -> bool {
-        match self.as_bytes() {
-            Ok(bytes) => {
-                let slice: &[f32] = bytemuck::cast_slice(bytes);
-                slice.iter().any(|x| x.is_nan() || x.is_infinite())
-            }
-            Err(_) => false,
-        }
+    fn has_non_finite(&self) -> Result<bool> {
+        let bytes = self.as_bytes()?;
+        let slice: &[f32] = bytemuck::cast_slice(bytes);
+        Ok(slice.iter().any(|x| x.is_nan() || x.is_infinite()))
     }
 }
 

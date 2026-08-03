@@ -133,7 +133,9 @@ macro_rules! impl_reshape_target {
                 let mut _current_idx = 0usize;
                 $(
                     let size = $D::size();
-                    if size.is_none() {
+                    if let Some(size) = size {
+                        resolved_sizes.push(size);
+                    } else {
                         // Both InferDim and NamedDyn can lack a statically known size (returning None).
                         // In Reshape contexts, InferDim acts as the unique auto-inferred dimension.
 
@@ -146,8 +148,6 @@ macro_rules! impl_reshape_target {
                         }
                         infer_idx = Some(_current_idx);
                         resolved_sizes.push(0); // placeholder
-                    } else {
-                        resolved_sizes.push(size.unwrap());
                     }
                     _current_idx += 1;
                 )*

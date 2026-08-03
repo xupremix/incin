@@ -1,0 +1,66 @@
+   Compiling incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+   Compiling incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+   Compiling incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.90s
+     Running unittests src/lib.rs (target/debug/deps/incin_macros-94b16ceab6cce916)
+
+running 2 tests
+test safetensors::tests::malformed_tensor_path_segments_are_diagnostics_not_panics ... ok
+test safetensors::tests::numeric_tensor_path_segment_gets_a_valid_field_name ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s
+
+     Running tests/axes_macro.rs (target/debug/deps/axes_macro-9ca153ae60f6d6c4)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/distributed_macro_suite.rs (target/debug/deps/distributed_macro_suite-9d6e20d97f2b876d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/distributed_main.rs (target/debug/deps/distributed_main-f67d1f44a04e96e9)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/einsum_macro.rs (target/debug/deps/einsum_macro-d10f3f0af57e60f1)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/macro_suite.rs (target/debug/deps/macro_suite-c8bf8f16724577ff)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+     Running tests/mesh_macro.rs (target/debug/deps/mesh_macro-32427577142269d5)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/parallel_attrs.rs (target/debug/deps/parallel_attrs-9443215b1e2e11a2)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/parallel_block.rs (target/debug/deps/parallel_block-96df0cadfab1afb0)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/placement_macro.rs (target/debug/deps/placement_macro-53e1b4451b2059db)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+

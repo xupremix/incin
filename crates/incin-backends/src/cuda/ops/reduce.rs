@@ -149,7 +149,7 @@ where
 #[cfg(feature = "cuda")]
 fn ensure_reduction_loaded(device_id: usize, kernel: &crate::kernel::RenderedKernel) -> Result<()> {
     if crate::cuda::gpu::cuda_cache::get_module(device_id, &kernel.cache_key).is_none() {
-        let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
+        let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
         dispatcher.compile_and_load_kernel(
             &kernel.entry_point,
             &kernel.source,
@@ -201,7 +201,7 @@ pub(crate) fn launch_reduce_op(
     }
 
     ensure_reduction_loaded(buffer.device_id, &kernel)?;
-    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(buffer.device_id);
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(buffer.device_id)?;
     let function = dispatcher.get_function(&kernel.cache_key, &kernel.entry_point)?;
     let in_offset = checked_i32(storage.offset_elements, "input offset")?;
     let reduce_dim = checked_i32(reduce_dim_size, "axis length")?;
@@ -379,7 +379,7 @@ pub(crate) fn launch_reduce_with_indices_op(
     }
 
     ensure_reduction_loaded(buffer.device_id, &kernel)?;
-    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(buffer.device_id);
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(buffer.device_id)?;
     let function = dispatcher.get_function(&kernel.cache_key, &kernel.entry_point)?;
     let in_strides = checked_i32_vec(&storage.strides, "input stride")?;
     let out_shape = checked_i32_vec(&keepdim_shape, "output shape")?;

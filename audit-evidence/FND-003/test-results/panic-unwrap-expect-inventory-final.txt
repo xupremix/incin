@@ -1,0 +1,4 @@
+rg: regex parse error:
+    (?:panic!\\(|unwrap\\(\\)|expect\\()
+               ^
+error: unclosed group

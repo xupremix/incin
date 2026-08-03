@@ -1,0 +1,50 @@
+   Compiling incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.96s
+     Running unittests src/lib.rs (target/debug/deps/incin_backends-7755073f2e43fa65)
+
+running 6 tests
+test cpu::ops::embedding::tests::backward_repeated_index_accumulates_not_overwrites ... ok
+test cpu::ops::embedding::tests::backward_unaddressed_rows_get_exactly_zero_gradient ... ok
+test cpu::ops::embedding::tests::forward_1d_indices_gathers_correct_rows_with_repeats ... ok
+test cpu::ops::embedding::tests::forward_2d_indices_gathers_correct_rows ... ok
+test cpu::ops::embedding::tests::negative_index_returns_conversion_error_not_panic ... ok
+test cpu::ops::embedding::tests::out_of_range_index_returns_typed_shape_error ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 291 filtered out; finished in 0.00s
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running unittests src/lib.rs (target/debug/deps/incin_backends-7755073f2e43fa65)
+
+running 21 tests
+test cpu::ops::loss::tests::bce_with_logits_finite_on_large_positive_logit ... ok
+test cpu::ops::loss::tests::bce_with_logits_finite_on_large_negative_logit ... ok
+test cpu::ops::loss::tests::bce_with_logits_backward_finite_on_extreme_logits ... ok
+test cpu::ops::loss::tests::bce_with_logits_mean_at_zero_logit_equals_log2 ... ok
+test cpu::ops::loss::tests::cross_entropy_loss_finite_on_extreme_logits ... ok
+test cpu::ops::loss::tests::bce_with_logits_gradcheck ... ok
+test cpu::ops::loss::tests::cross_entropy_loss_mean_matches_hand_computed_nll ... ok
+test cpu::ops::loss::tests::bce_with_logits_sum_and_none_dispatch_correctly ... ok
+test cpu::ops::loss::tests::cross_entropy_loss_none_produces_per_sample_nll_vector ... ok
+test cpu::ops::loss::tests::cross_entropy_loss_uniform_logits_equal_log_num_classes ... ok
+test cpu::ops::loss::tests::l1_loss_none_produces_elementwise_absolute_diff ... ok
+test cpu::ops::loss::tests::l1_loss_mean_produces_correct_scalar ... ok
+test cpu::ops::loss::tests::l1_loss_gradcheck ... ok
+test cpu::ops::loss::tests::l1_loss_sum_produces_correct_scalar ... ok
+test cpu::ops::loss::tests::mse_loss_mean_produces_correct_scalar ... ok
+test cpu::ops::loss::tests::cross_entropy_loss_gradcheck ... ok
+test cpu::ops::loss::tests::mse_loss_sum_produces_correct_scalar ... ok
+test cpu::ops::loss::tests::mse_loss_none_produces_elementwise_squared_diff ... ok
+test cpu::ops::loss::tests::mse_loss_mean_backward_matches_analytic_formula_2_times_pred_minus_target_over_n ... ok
+test cpu::ops::loss::tests::cross_entropy_rejects_fractional_and_out_of_range_targets ... ok
+test cpu::ops::loss::tests::cross_entropy_loss_sum_equals_batch_times_mean ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 276 filtered out; finished in 0.00s
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running unittests src/lib.rs (target/debug/deps/incin_backends-7755073f2e43fa65)
+
+running 1 test
+test cpu::ops::quant::tests::unsupported_quantized_elementwise_arithmetic_is_typed ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.00s
+

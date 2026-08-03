@@ -1,0 +1,152 @@
+    Building incin v0.0.0 (current)
+error: running cargo-doc on crate 'incin' failed with output:
+-----
+   Compiling incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+    Checking incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+    Checking incin-telemetry v0.0.0 (/home/xupremix/Projects/incin/crates/incin-telemetry)
+    Checking incin-data v0.0.0 (/home/xupremix/Projects/incin/crates/incin-data)
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+error[E0432]: unresolved import `incin_core::prelude::TensorOps`
+  --> /home/xupremix/Projects/incin/crates/incin-backends/src/dist/nccl.rs:33:83
+   |
+33 |     DType, DTypeId, Device, DeviceId, OperationKind, RequiresGrad, Shape, Tensor, TensorOps,
+   |                                                                                   ^^^^^^^^^ no `TensorOps` in `prelude`
+   |
+   = help: consider importing one of these traits instead:
+           crate::external::TensorOps
+           incin_core::backend_authoring::TensorOps
+help: a similar name exists in the module
+   |
+33 -     DType, DTypeId, Device, DeviceId, OperationKind, RequiresGrad, Shape, Tensor, TensorOps,
+33 +     DType, DTypeId, Device, DeviceId, OperationKind, RequiresGrad, Shape, Tensor, Tensor,
+   |
+
+error[E0425]: cannot find function `tracing_graph_snapshot` in module `incin_core::prelude`
+   --> /home/xupremix/Projects/incin/crates/incin-backends/src/cpu/tape.rs:176:47
+    |
+176 |         if let Some(g) = incin_core::prelude::tracing_graph_snapshot() {
+    |                                               ^^^^^^^^^^^^^^^^^^^^^^ not found in `incin_core::prelude`
+
+error[E0425]: cannot find function `tracing_graph_snapshot` in module `incin_core::prelude`
+   --> /home/xupremix/Projects/incin/crates/incin-backends/src/wgpu/tape.rs:112:47
+    |
+112 |         if let Some(g) = incin_core::prelude::tracing_graph_snapshot() {
+    |                                               ^^^^^^^^^^^^^^^^^^^^^^ not found in `incin_core::prelude`
+
+error[E0004]: non-exhaustive patterns: `candle_core::DType::I16`, `candle_core::DType::I32`, `candle_core::DType::F8E4M3` and 4 more not covered
+  --> /home/xupremix/Projects/incin/crates/incin-backends/src/external/candle/convert.rs:44:11
+   |
+44 |     match dtype {
+   |           ^^^^^ patterns `candle_core::DType::I16`, `candle_core::DType::I32`, `candle_core::DType::F8E4M3` and 4 more not covered
+   |
+note: `candle_core::DType` defined here
+  --> /home/xupremix/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/candle-core-0.9.2/src/dtype.rs:8:1
+   |
+ 8 | pub enum DType {
+   | ^^^^^^^^^^^^^^
+...
+14 |     I16,
+   |     --- not covered
+15 |     // Signed 32 bits integer.
+16 |     I32,
+   |     --- not covered
+...
+28 |     F8E4M3,
+   |     ------ not covered
+29 |     /// 6-bit float with 2 exponent bits and 3 mantissa bits (MX6 format)
+30 |     F6E2M3,
+   |     ------ not covered
+31 |     /// 6-bit float with 3 exponent bits and 2 mantissa bits (MX6 format)
+32 |     F6E3M2,
+   |     ------ not covered
+   = note: the matched value is of type `candle_core::DType`
+help: ensure that all possible cases are being handled by adding a match arm with a wildcard pattern as shown, or multiple match arms
+   |
+51 ~         candle::DType::F64 => DTypeId::F64,
+52 ~         _ => todo!(),
+   |
+
+error[E0004]: non-exhaustive patterns: `candle_core::DType::I16`, `candle_core::DType::I32`, `candle_core::DType::F8E4M3` and 4 more not covered
+   --> /home/xupremix/Projects/incin/crates/incin-backends/src/external/candle/ops/tensor.rs:242:27
+    |
+242 |         let value = match t.dtype() {
+    |                           ^^^^^^^^^ patterns `candle_core::DType::I16`, `candle_core::DType::I32`, `candle_core::DType::F8E4M3` and 4 more not covered
+    |
+note: `candle_core::DType` defined here
+   --> /home/xupremix/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/candle-core-0.9.2/src/dtype.rs:8:1
+    |
+  8 | pub enum DType {
+    | ^^^^^^^^^^^^^^
+...
+ 14 |     I16,
+    |     --- not covered
+ 15 |     // Signed 32 bits integer.
+ 16 |     I32,
+    |     --- not covered
+...
+ 28 |     F8E4M3,
+    |     ------ not covered
+ 29 |     /// 6-bit float with 2 exponent bits and 3 mantissa bits (MX6 format)
+ 30 |     F6E2M3,
+    |     ------ not covered
+ 31 |     /// 6-bit float with 3 exponent bits and 2 mantissa bits (MX6 format)
+ 32 |     F6E3M2,
+    |     ------ not covered
+    = note: the matched value is of type `candle_core::DType`
+help: ensure that all possible cases are being handled by adding a match arm with a wildcard pattern as shown, or multiple match arms
+    |
+267 ~             candle_core::DType::F64 => t.to_scalar::<f64>().map_err(candle_readback_error)?,
+268 ~             _ => todo!(),
+    |
+
+error[E0004]: non-exhaustive patterns: `candle_core::DType::I16`, `candle_core::DType::I32`, `candle_core::DType::F8E4M3` and 4 more not covered
+   --> /home/xupremix/Projects/incin/crates/incin-backends/src/external/candle/ops/tensor.rs:282:28
+    |
+282 |         let values = match t.dtype() {
+    |                            ^^^^^^^^^ patterns `candle_core::DType::I16`, `candle_core::DType::I32`, `candle_core::DType::F8E4M3` and 4 more not covered
+    |
+note: `candle_core::DType` defined here
+   --> /home/xupremix/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/candle-core-0.9.2/src/dtype.rs:8:1
+    |
+  8 | pub enum DType {
+    | ^^^^^^^^^^^^^^
+...
+ 14 |     I16,
+    |     --- not covered
+ 15 |     // Signed 32 bits integer.
+ 16 |     I32,
+    |     --- not covered
+...
+ 28 |     F8E4M3,
+    |     ------ not covered
+ 29 |     /// 6-bit float with 2 exponent bits and 3 mantissa bits (MX6 format)
+ 30 |     F6E2M3,
+    |     ------ not covered
+ 31 |     /// 6-bit float with 3 exponent bits and 2 mantissa bits (MX6 format)
+ 32 |     F6E3M2,
+    |     ------ not covered
+    = note: the matched value is of type `candle_core::DType`
+help: ensure that all possible cases are being handled by adding a match arm with a wildcard pattern as shown, or multiple match arms
+    |
+320 ~             candle_core::DType::F64 => t.to_vec1::<f64>().map_err(candle_readback_error)?,
+321 ~             _ => todo!(),
+    |
+
+Some errors have detailed explanations: E0004, E0425, E0432.
+For more information about an error, try `rustc --explain E0004`.
+error: could not compile `incin-backends` (lib) due to 6 previous errors
+
+-----
+
+error: failed to build rustdoc for crate incin v0.0.0
+note: this is usually due to a compilation error in the crate,
+      and is unlikely to be a bug in cargo-semver-checks
+note: the following command can be used to reproduce the error:
+      cargo new --lib example &&
+          cd example &&
+          echo '[workspace]' >> Cargo.toml &&
+          cargo add --path /home/xupremix/Projects/incin/crates/incin --features autotune,backend-authoring,compiled,cpu,cpu-blas,cuda,default,distributed,distributed-nccl,distributed-reference,external-candle,metal,metal-mps,std,telemetry,test-utils,train,wgpu &&
+          cargo check &&
+          cargo doc
+
+error: aborting due to failure to build rustdoc for crate incin v0.0.0

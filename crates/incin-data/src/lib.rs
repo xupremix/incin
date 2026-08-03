@@ -37,7 +37,7 @@
 //!
 //! // Batches of 32, shuffled. Loading happens on worker threads; iterating
 //! // borrows the loader, so the same one can be iterated each epoch.
-//! let loader = DataLoader::new(Squares, IntoBatch, 32).with_shuffle(true);
+//! let loader = DataLoader::new(Squares, IntoBatch, 32).unwrap().with_shuffle(true);
 //!
 //! let batches: Vec<Vec<u32>> = (&loader).into_iter().collect();
 //! assert_eq!(batches.len(), 4); // 100 items is three full batches and a short one

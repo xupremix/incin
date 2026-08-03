@@ -1,0 +1,16 @@
+   Compiling incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.97s
+     Running tests/optim_tests.rs (target/debug/deps/optim_tests-e180d2c5b2f4b1e5)
+
+running 8 tests
+test adam_step_overflow_preserves_parameters_and_state ... ok
+test test_adam ... ok
+test test_adam_optimizer_state_dict_checkpointing ... ok
+test test_adamw ... ok
+test test_sgd ... ok
+test malformed_adam_state_load_is_typed_and_transactional ... ok
+test adam_step_rolls_back_parameters_state_and_counter_on_backend_failure ... ok
+test test_adamw_optimizer_state_dict_checkpointing ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

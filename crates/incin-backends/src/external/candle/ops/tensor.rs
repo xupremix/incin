@@ -1,8 +1,16 @@
 //! Shape and layout operations for the Candle adapter.
 
 use crate::external::candle::CandleBackend;
-use crate::external::candle::convert::to_candle_dtype;
+use crate::external::candle::convert::{from_candle_dtype, to_candle_dtype};
 use crate::external::*;
+
+fn candle_readback_error(error: candle_core::Error) -> Error {
+    BackendError::Execution {
+        operation: OperationKind::Storage,
+        message: alloc::format!("{error}").into(),
+    }
+    .into()
+}
 
 impl<T: incin_core::prelude::DType, D: incin_core::prelude::Device>
     incin_core::backend_authoring::TensorOps<Self> for CandleBackend<T, D>
@@ -226,29 +234,102 @@ impl<T: incin_core::prelude::DType, D: incin_core::prelude::Device>
             .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
         Ok(vec.into_iter().map(|x| x as f64).collect())
     }
-    /// Casts `t` to `i64` and extracts its single element.
+    /// Extracts one integer without implicit float truncation or saturation.
     fn int_to_scalar<K: incin_core::prelude::DType>(
         t: &<Self as incin_core::prelude::Backend>::Storage<K>,
     ) -> Result<i64> {
-        let v = t
-            .to_dtype(candle_core::DType::I64)
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
-        let s: i64 = v
-            .to_scalar()
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
-        Ok(s)
+        let operation = "candle_int_to_scalar";
+        let value = match t.dtype() {
+            candle_core::DType::U8 => {
+                return Ok(i64::from(
+                    t.to_scalar::<u8>().map_err(candle_readback_error)?,
+                ));
+            }
+            candle_core::DType::U32 => {
+                return Ok(i64::from(
+                    t.to_scalar::<u32>().map_err(candle_readback_error)?,
+                ));
+            }
+            candle_core::DType::I64 => {
+                return t.to_scalar::<i64>().map_err(candle_readback_error);
+            }
+            candle_core::DType::BF16 => t
+                .to_scalar::<half::bf16>()
+                .map_err(candle_readback_error)?
+                .to_f64(),
+            candle_core::DType::F16 => t
+                .to_scalar::<half::f16>()
+                .map_err(candle_readback_error)?
+                .to_f64(),
+            candle_core::DType::F32 => {
+                f64::from(t.to_scalar::<f32>().map_err(candle_readback_error)?)
+            }
+            candle_core::DType::F64 => t.to_scalar::<f64>().map_err(candle_readback_error)?,
+        };
+        incin_core::prelude::convert_f64_to_i64(
+            operation,
+            from_candle_dtype(t.dtype()),
+            value,
+            incin_core::prelude::FloatToIntPolicy::Exact,
+        )
     }
-    /// Casts `t` to `i64` and collects it into a flat `Vec<i64>`.
+    /// Collects integers without implicit float truncation or saturation.
     fn int_to_vec1<K: incin_core::prelude::DType>(
         t: &<Self as incin_core::prelude::Backend>::Storage<K>,
     ) -> Result<Vec<i64>> {
-        let v = t
-            .to_dtype(candle_core::DType::I64)
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
-        let vec: Vec<i64> = v
-            .to_vec1()
-            .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
-        Ok(vec)
+        let operation = "candle_int_to_vec1";
+        let dtype = from_candle_dtype(t.dtype());
+        let values = match t.dtype() {
+            candle_core::DType::U8 => {
+                return Ok(t
+                    .to_vec1::<u8>()
+                    .map_err(candle_readback_error)?
+                    .into_iter()
+                    .map(i64::from)
+                    .collect());
+            }
+            candle_core::DType::U32 => {
+                return Ok(t
+                    .to_vec1::<u32>()
+                    .map_err(candle_readback_error)?
+                    .into_iter()
+                    .map(i64::from)
+                    .collect());
+            }
+            candle_core::DType::I64 => {
+                return t.to_vec1::<i64>().map_err(candle_readback_error);
+            }
+            candle_core::DType::BF16 => t
+                .to_vec1::<half::bf16>()
+                .map_err(candle_readback_error)?
+                .into_iter()
+                .map(|value| value.to_f64())
+                .collect(),
+            candle_core::DType::F16 => t
+                .to_vec1::<half::f16>()
+                .map_err(candle_readback_error)?
+                .into_iter()
+                .map(|value| value.to_f64())
+                .collect(),
+            candle_core::DType::F32 => t
+                .to_vec1::<f32>()
+                .map_err(candle_readback_error)?
+                .into_iter()
+                .map(f64::from)
+                .collect(),
+            candle_core::DType::F64 => t.to_vec1::<f64>().map_err(candle_readback_error)?,
+        };
+        values
+            .into_iter()
+            .map(|value| {
+                incin_core::prelude::convert_f64_to_i64(
+                    operation,
+                    dtype,
+                    value,
+                    incin_core::prelude::FloatToIntPolicy::Exact,
+                )
+            })
+            .collect()
     }
     /// Casts `t` to the candle dtype corresponding to `dtype`.
     fn tensor_to_dtype<K: incin_core::prelude::DType, K2: incin_core::prelude::DType>(

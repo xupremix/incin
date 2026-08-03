@@ -5,8 +5,8 @@
 //! runtime `assert_eq!`.
 
 extern crate incin_core as incin;
-use incin_core::test_utils::DummyBackend;
 use incin_core::prelude::*;
+use incin_core::test_utils::DummyBackend;
 use incin_macros::s;
 
 incin_core::dim!(Batch, Feature);
@@ -138,7 +138,7 @@ fn matmul_batched_with_named_batch_dim_only_on_rhs() {
 fn plus_operator_works_between_two_identically_named_dim_tensors() {
     let a: Tensor<s![Batch, Feature], TestBackend> = Tensor::zeros((3usize, 5usize)).unwrap();
     let b: Tensor<s![Batch, Feature], TestBackend> = Tensor::zeros((3usize, 5usize)).unwrap();
-    let sum: Tensor<s![Batch, Feature], TestBackend> = &a + &b;
+    let sum: Tensor<s![Batch, Feature], TestBackend> = (&a + &b).unwrap();
     let dims: Vec<usize> = sum.dims().into();
     assert_eq!(dims, vec![3, 5]);
 }

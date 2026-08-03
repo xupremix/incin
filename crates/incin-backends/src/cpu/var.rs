@@ -13,7 +13,13 @@
 use alloc::rc::Rc;
 use core::cell::RefCell;
 
+#[cfg(feature = "test-utils")]
+use core::cell::Cell;
+
 use incin_core::prelude::Result;
+
+#[cfg(feature = "test-utils")]
+use incin_core::prelude::{BackendError, Error, OperationKind};
 
 use crate::cpu::storage::CpuStorage;
 
@@ -43,8 +49,65 @@ pub(crate) fn var_as_tensor(var: &CpuVar) -> Result<CpuStorage> {
 /// structurally enforced — grep the crate for `borrow_mut()` to confirm
 /// this is the sole call site).
 pub(crate) fn assign_var(var: &mut CpuVar, tensor: &CpuStorage) -> Result<()> {
+    #[cfg(feature = "test-utils")]
+    if should_fail_assign() {
+        return Err(Error::Backend(BackendError::Execution {
+            operation: OperationKind::Pointwise,
+            message: "injected CPU variable-assignment failure".into(),
+        }));
+    }
     *var.0.borrow_mut() = tensor.clone();
     Ok(())
+}
+
+#[cfg(feature = "test-utils")]
+std::thread_local! {
+    static FAIL_ASSIGN_AT: Cell<Option<usize>> = const { Cell::new(None) };
+    static ASSIGN_COUNT: Cell<usize> = const { Cell::new(0) };
+}
+
+#[cfg(feature = "test-utils")]
+fn should_fail_assign() -> bool {
+    let count = ASSIGN_COUNT.with(|count| {
+        let next = count.get() + 1;
+        count.set(next);
+        next
+    });
+    FAIL_ASSIGN_AT.with(|fail_at| {
+        if fail_at.get() == Some(count) {
+            // One-shot failure: rollback assignments must remain possible.
+            fail_at.set(None);
+            true
+        } else {
+            false
+        }
+    })
+}
+
+/// Scope guard for deterministic CPU assignment fault injection.
+///
+/// Available only with `test-utils`; dropping it always disables the hook.
+#[cfg(feature = "test-utils")]
+#[doc(hidden)]
+pub struct AssignFailureGuard;
+
+#[cfg(feature = "test-utils")]
+impl Drop for AssignFailureGuard {
+    fn drop(&mut self) {
+        FAIL_ASSIGN_AT.with(|fail_at| fail_at.set(None));
+        ASSIGN_COUNT.with(|count| count.set(0));
+    }
+}
+
+/// Injects a one-shot failure at the `nth` CPU variable assignment on this
+/// thread. Test-only: product builds do not compile this hook.
+#[cfg(feature = "test-utils")]
+#[doc(hidden)]
+pub fn fail_assign_on(nth: usize) -> AssignFailureGuard {
+    assert!(nth > 0, "assignment failure index is one-based");
+    ASSIGN_COUNT.with(|count| count.set(0));
+    FAIL_ASSIGN_AT.with(|fail_at| fail_at.set(Some(nth)));
+    AssignFailureGuard
 }
 
 /// Construct a fresh `CpuVar` wrapping a clone of `t`.

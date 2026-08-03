@@ -8,12 +8,12 @@ use incin_core::prelude::*;
 // Helper: create a WgpuStorage from a flat vec and shape
 /// `storage`.
 fn storage(data: Vec<f32>, shape: Vec<usize>) -> WgpuStorage {
-    WgpuStorage::new(WgpuBuffer::from_slice(&data), shape)
+    WgpuStorage::new(WgpuBuffer::try_from_slice(&data).unwrap(), shape)
 }
 
 /// `readback`.
 fn readback(s: &WgpuStorage) -> Vec<f32> {
-    s.buffer.to_vec::<f32>()
+    s.buffer.to_vec::<f32>().unwrap()
 }
 
 /// `approx_eq`.
@@ -315,7 +315,7 @@ fn test_max_dim() {
 fn test_argmax_flat() {
     let a = storage(vec![1.0, 5.0, 3.0, 9.0, 2.0], vec![5]);
     let out = <B as ReductionOps<B>>::argmax::<f32, u32>(&a, None).unwrap();
-    assert_eq!(out.buffer.to_vec::<u32>()[0] as usize, 3);
+    assert_eq!(out.buffer.to_vec::<u32>().unwrap()[0] as usize, 3);
 }
 
 #[test]
@@ -323,7 +323,7 @@ fn test_argmax_flat() {
 fn test_argmin_flat() {
     let a = storage(vec![3.0, -1.0, 5.0], vec![3]);
     let out = <B as ReductionOps<B>>::argmin::<f32, u32>(&a, None).unwrap();
-    assert_eq!(out.buffer.to_vec::<u32>()[0] as usize, 1);
+    assert_eq!(out.buffer.to_vec::<u32>().unwrap()[0] as usize, 1);
 }
 
 // ── Tensor ops ────────────────────────────────────────────────────────────

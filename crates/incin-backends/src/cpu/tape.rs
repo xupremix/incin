@@ -48,25 +48,22 @@ impl TapeStorage for CpuStorage {
     }
 
     fn ones_like(&self) -> Result<Self> {
-        // Infallible on this backend — a CPU allocation of a known length
-        // cannot fail the way a device one can — so the shared signature is
-        // satisfied rather than exercised.
-        Ok(Self::ones_like(self))
+        Self::ones_like(self)
     }
 
     fn accumulate(&self, contribution: &Self) -> Result<Self> {
         Ok(add_cpu_storage(self, contribution))
     }
 
-    fn has_non_finite(&self) -> bool {
-        match &*self.buffer {
+    fn has_non_finite(&self) -> Result<bool> {
+        Ok(match &*self.buffer {
             CpuBuffer::F32(v) => v.iter().any(|x| x.is_nan() || x.is_infinite()),
             CpuBuffer::F64(v) => v.iter().any(|x| x.is_nan() || x.is_infinite()),
             CpuBuffer::F16(v) => v.iter().any(|x| x.is_nan() || x.is_infinite()),
             CpuBuffer::BF16(v) => v.iter().any(|x| x.is_nan() || x.is_infinite()),
             // An integer buffer has no non-finite representation to find.
             _ => false,
-        }
+        })
     }
 }
 
@@ -251,14 +248,14 @@ pub(crate) fn unbroadcast(grad: &CpuStorage, target_shape: &[usize]) -> Result<C
     // Sum over any leading dims that don't exist in target_shape at all —
     // squeeze the axis away entirely (drop it from the shape).
     for _ in 0..ndim_diff {
-        result = sum_dim_squeeze(&result, 0);
+        result = sum_dim_squeeze(&result, 0)?;
     }
 
     // Sum (with keepdim) over any axis where target_shape has size 1 but
     // result's corresponding axis is >1.
     for (i, &t_dim) in target_shape.iter().enumerate() {
         if t_dim == 1 && result.shape[i] != 1 {
-            result = sum_dim_keepdim(&result, i);
+            result = sum_dim_keepdim(&result, i)?;
         }
     }
 
@@ -267,8 +264,8 @@ pub(crate) fn unbroadcast(grad: &CpuStorage, target_shape: &[usize]) -> Result<C
 
 /// Sum-reduce `storage` over `axis`, removing that axis from the shape
 /// entirely (e.g. `[4,3]` reduced over axis 0 -> `[3]`).
-fn sum_dim_squeeze(storage: &CpuStorage, axis: usize) -> CpuStorage {
-    let reduced = sum_dim_keepdim(storage, axis);
+fn sum_dim_squeeze(storage: &CpuStorage, axis: usize) -> Result<CpuStorage> {
+    let reduced = sum_dim_keepdim(storage, axis)?;
     let mut new_shape = reduced.shape.to_vec();
     new_shape.remove(axis);
     // Squeezing a size-1 axis out of an already-contiguous buffer is a pure
@@ -276,12 +273,15 @@ fn sum_dim_squeeze(storage: &CpuStorage, axis: usize) -> CpuStorage {
     // that axis's stride contribution once its size is 1.
     reduced
         .reshape(&new_shape)
-        .expect("squeeze reshape of size-1 axis cannot fail")
+        .map_err(|_| incin_core::prelude::Error::InternalInvariant {
+            operation: "autograd unbroadcast",
+            reason: "validated keepdim reduction could not be reshaped",
+        })
 }
 
 /// Sum-reduce `storage` over `axis`, keeping the axis present with size 1
 /// (e.g. `[4,3]` reduced over axis 0 with keepdim -> `[1,3]`).
-fn sum_dim_keepdim(storage: &CpuStorage, axis: usize) -> CpuStorage {
+fn sum_dim_keepdim(storage: &CpuStorage, axis: usize) -> Result<CpuStorage> {
     let mut out_shape = storage.shape.to_vec();
     out_shape[axis] = 1;
     let total: usize = crate::cpu::stride::validated_numel(&(out_shape));
@@ -311,10 +311,16 @@ fn sum_dim_keepdim(storage: &CpuStorage, axis: usize) -> CpuStorage {
         CpuBuffer::F16(_) => reduce_variant!(F16, |v: f64| half::f16::from_f64(v)),
         CpuBuffer::BF16(_) => reduce_variant!(BF16, |v: f64| half::bf16::from_f64(v)),
 
-        CpuBuffer::Q8_0(_) => panic!("sum_dim_keepdim not supported on Q8_0 buffer"),
+        CpuBuffer::Q8_0(_) => {
+            return Err(incin_core::prelude::Error::UnsupportedDType {
+                dtype: incin_core::prelude::DTypeId::Q8_0,
+                backend: "cpu",
+                op: "autograd unbroadcast",
+            });
+        }
     };
 
-    CpuStorage::from_contiguous(new_buffer, out_shape)
+    Ok(CpuStorage::from_contiguous(new_buffer, out_shape))
 }
 
 /// Compute the flat row-major index of `idx` within `shape`.

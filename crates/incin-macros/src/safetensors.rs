@@ -1,5 +1,5 @@
 use proc_macro::TokenStream;
-use quote::{format_ident, quote};
+use quote::quote;
 use safetensors::SafeTensors;
 use std::collections::BTreeMap;
 use std::fs;
@@ -82,19 +82,27 @@ fn generate_structs(
     node: &Node,
     structs: &mut Vec<proc_macro2::TokenStream>,
     bounds: &mut Vec<proc_macro2::TokenStream>,
-) {
+) -> std::result::Result<(), String> {
     let Node::Dir(map) = node else {
-        return;
+        return Ok(());
     };
 
     let mut fields = Vec::new();
 
     for (k, v) in map {
-        let field_name_ident = if k.chars().next().unwrap().is_ascii_digit() {
-            format_ident!("_{}", k)
+        if k.is_empty() {
+            return Err(format!(
+                "safetensors tensor path for generated model `{name}` contains an empty segment"
+            ));
+        }
+        let field_name = if k.starts_with(|character: char| character.is_ascii_digit()) {
+            format!("_{k}")
         } else {
-            format_ident!("{}", k)
+            k.clone()
         };
+        let field_name_ident = syn::parse_str::<Ident>(&field_name).map_err(|_| {
+            format!("safetensors tensor path segment `{k}` is not a valid Rust field identifier")
+        })?;
 
         match v {
             Node::Leaf { shape, is_buffer } => {
@@ -114,10 +122,13 @@ fn generate_structs(
                 fields.push(quote! { pub #field_name_ident: #ty });
             }
             Node::Dir(_) => {
-                let sub_struct_name = format_ident!("{}_{}", name, k);
+                let sub_struct_name =
+                    syn::parse_str::<Ident>(&format!("{name}_{k}")).map_err(|_| {
+                        format!("safetensors tensor path segment `{k}` cannot name a Rust type")
+                    })?;
                 let ty = quote! { #sub_struct_name<B> };
                 fields.push(quote! { pub #field_name_ident: #ty });
-                generate_structs(&sub_struct_name, v, structs, bounds);
+                generate_structs(&sub_struct_name, v, structs, bounds)?;
             }
         }
     }
@@ -133,6 +144,7 @@ fn generate_structs(
         }
     };
     structs.push(def);
+    Ok(())
 }
 
 pub(crate) fn import_model(_attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -155,10 +167,14 @@ pub(crate) fn import_model(_attr: TokenStream, item: TokenStream) -> TokenStream
 
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
     let full_path = PathBuf::from(manifest_dir).join(&rel_path);
-    let meta_path = full_path.with_extension(format!(
-        "{}.incin_meta",
-        full_path.extension().unwrap().to_str().unwrap()
-    ));
+    let Some(extension) = full_path
+        .extension()
+        .and_then(|extension| extension.to_str())
+    else {
+        let msg = format!("Model path has no valid UTF-8 extension: {rel_path}");
+        return quote! { compile_error!(#msg); }.into();
+    };
+    let meta_path = full_path.with_extension(format!("{extension}.incin_meta"));
 
     let mut root = Node::Dir(BTreeMap::new());
 
@@ -223,7 +239,9 @@ pub(crate) fn import_model(_attr: TokenStream, item: TokenStream) -> TokenStream
     let mut structs = Vec::new();
     let mut bounds = Vec::new();
 
-    generate_structs(&root_name, &root, &mut structs, &mut bounds);
+    if let Err(message) = generate_structs(&root_name, &root, &mut structs, &mut bounds) {
+        return quote! { compile_error!(#message); }.into();
+    }
 
     // root implementation of load_default_weights
     let path_str = input.path.value();
@@ -245,4 +263,46 @@ pub(crate) fn import_model(_attr: TokenStream, item: TokenStream) -> TokenStream
     };
 
     TokenStream::from(expanded)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn malformed_tensor_path_segments_are_diagnostics_not_panics() {
+        let root = syn::parse_str::<Ident>("Imported").unwrap();
+        for segment in ["", "not-valid", "also invalid"] {
+            let mut entries = BTreeMap::new();
+            entries.insert(
+                segment.to_string(),
+                Node::Leaf {
+                    shape: vec![1],
+                    is_buffer: false,
+                },
+            );
+            let mut structs = Vec::new();
+            let mut bounds = Vec::new();
+            let error = generate_structs(&root, &Node::Dir(entries), &mut structs, &mut bounds)
+                .unwrap_err();
+            assert!(error.contains("safetensors tensor path"));
+        }
+    }
+
+    #[test]
+    fn numeric_tensor_path_segment_gets_a_valid_field_name() {
+        let root = syn::parse_str::<Ident>("Imported").unwrap();
+        let mut entries = BTreeMap::new();
+        entries.insert(
+            "0".to_string(),
+            Node::Leaf {
+                shape: vec![1],
+                is_buffer: false,
+            },
+        );
+        let mut structs = Vec::new();
+        let mut bounds = Vec::new();
+        generate_structs(&root, &Node::Dir(entries), &mut structs, &mut bounds).unwrap();
+        assert!(structs[0].to_string().contains("_0"));
+    }
 }

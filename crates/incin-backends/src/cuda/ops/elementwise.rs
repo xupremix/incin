@@ -168,7 +168,7 @@ where
     } else {
         vec![selection.strategy.candidate()]
     };
-    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
     let mut prepared = Vec::with_capacity(candidates.len());
     for candidate in candidates {
         let strategy = strategy_from_candidate(candidate)?;

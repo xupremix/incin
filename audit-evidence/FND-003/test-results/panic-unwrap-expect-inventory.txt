@@ -1,0 +1,1554 @@
+crates/incin/src/bin/cargo-incin.rs:386:            .expect("crates/incin always has a parent directory")
+crates/incin/src/bin/cargo-incin.rs:481:    let stdout = child.stdout.take().expect("Failed to open child stdout");
+crates/incin-viz/src/dispatch.rs:109:            panic!("deliberate test panic");
+crates/incin-viz/src/dispatch.rs:132:        let mut terminal = ratatui::Terminal::new(backend).expect("terminal should construct");
+crates/incin-viz/src/dispatch.rs:145:            .expect("terminal draw should succeed even though the panel panicked");
+crates/incin-viz/src/app.rs:656:                panic!("deliberate test panic");
+crates/incin/src/lib.rs:23://! let x = Tensor::<s![2, 3, 224, 224], Backend>::zeros(()).unwrap();
+crates/incin/src/lib.rs:26://! let y = Tensor::<Dyn, Backend>::ones(vec![2, 3, 224, 224]).unwrap();
+crates/incin/src/lib.rs:511:        let t = Tensor::<Dyn, DefaultBackend, Dyn>::ones((std::vec![2, 2], DTypeId::F64)).unwrap();
+crates/incin/src/lib.rs:519:        let _t = Tensor::<Dyn, DefaultBackend>::zeros(std::vec![2, 2]).unwrap();
+crates/incin-macros/src/rank.rs:302:                .expect("compile_error! is valid Rust");
+crates/incin-macros/src/rank.rs:321:        .expect("compile_error! is valid Rust")
+crates/incin-macros/src/rank.rs:327:    TokenStream::from_str(&format!("{MAX_RANK}usize")).expect("a usize literal is valid Rust")
+crates/incin/src/train.rs:28://!     .devices(DeviceSet::cuda(0..3).unwrap())
+crates/incin/src/train.rs:31://!     .unwrap();
+crates/incin-viz/src/transport_reader.rs:102:        serde_json::to_string(&event).expect("event should serialize")
+crates/incin-viz/src/transport_reader.rs:115:            let mut file = std::fs::File::create(&path).expect("create should succeed");
+crates/incin-viz/src/transport_reader.rs:116:            write!(file, "{complete_line}\n{partial_second_line}").expect("write should succeed");
+crates/incin-viz/src/transport_reader.rs:119:        let mut reader = FileTransportReader::open(&path).expect("open should succeed");
+crates/incin-viz/src/transport_reader.rs:121:        let first_poll = reader.poll_new_events().expect("first poll should succeed");
+crates/incin-viz/src/transport_reader.rs:135:                .expect("append-mode open should succeed");
+crates/incin-viz/src/transport_reader.rs:137:            writeln!(appender, "{remainder}").expect("append write should succeed");
+crates/incin-viz/src/transport_reader.rs:142:            .expect("second poll should succeed");
+crates/incin-viz/src/transport_reader.rs:162:            let mut file = std::fs::File::create(&path).expect("create should succeed");
+crates/incin-viz/src/transport_reader.rs:164:                writeln!(file, "{line}").expect("write should succeed");
+crates/incin-viz/src/transport_reader.rs:168:        let mut reader = FileTransportReader::open(&path).expect("open should succeed");
+crates/incin-viz/src/transport_reader.rs:170:        let first_poll = reader.poll_new_events().expect("first poll should succeed");
+crates/incin-viz/src/transport_reader.rs:180:                .expect("append-mode open should succeed");
+crates/incin-viz/src/transport_reader.rs:182:                writeln!(appender, "{line}").expect("append write should succeed");
+crates/incin-viz/src/transport_reader.rs:188:            .expect("second poll should succeed");
+crates/incin-viz/src/panels/panic_test.rs:44:            panic!("Manual panic triggered from PanicTestPanel");
+crates/incin-macros/src/safetensors.rs:93:        let field_name_ident = if k.chars().next().unwrap().is_ascii_digit() {
+crates/incin-macros/src/safetensors.rs:160:        full_path.extension().unwrap().to_str().unwrap()
+crates/incin-data/src/transforms/mod.rs:261:        let out = scale.transform(data).unwrap();
+crates/incin-data/src/transforms/mod.rs:269:        let (out, shape) = norm.transform((data, vec![2, 2])).unwrap();
+crates/incin-data/src/transforms/mod.rs:281:        let (out, shape) = crop.transform((data, vec![1, 4, 4])).unwrap();
+crates/incin-data/src/loader.rs:136:                            let mut iter = batch_indices.lock().unwrap();
+crates/incin-data/src/loader.rs:210:            .expect("DataLoader iteration did not finish within 10s (possible deadlock/hang)")
+crates/incin-macros/src/onnx.rs:461:            .expect("identity graph should expand")
+crates/incin-macros/src/onnx.rs:471:        model.graph.as_mut().unwrap().input[0] = value("x", None);
+crates/incin-macros/src/onnx.rs:479:        model.graph.as_mut().unwrap().input[0] = value("x", Some(vec![-1]));
+crates/incin-macros/src/onnx.rs:487:        model.graph.as_mut().unwrap().initializer.push(TensorProto {
+crates/incin-macros/src/lib.rs:66:/// let t = Tensor::<ImageBatch>::zeros(()).unwrap();
+crates/incin-macros/src/lib.rs:127:/// let t = Tensor::<s![10, 20, 30]>::zeros(()).unwrap();
+crates/incin-macros/src/lib.rs:128:/// let view = t.slice_idx::<idx![0..5, .., 15..30]>().unwrap();
+crates/incin-core/src/shapes/idx.rs:150:                        resolved_sizes.push(size.unwrap());
+crates/incin-data/src/vision/mnist.rs:28:        let images_file = dir.join(images_url.split('/').next_back().unwrap());
+crates/incin-data/src/vision/mnist.rs:29:        let labels_file = dir.join(labels_url.split('/').next_back().unwrap());
+crates/incin-data/src/vision/mnist.rs:38:                .unwrap()
+crates/incin-data/src/vision/mnist.rs:40:                .unwrap()
+crates/incin-data/src/vision/mnist.rs:42:                .unwrap_or(images_file.file_name().unwrap().to_str().unwrap()),
+crates/incin-data/src/vision/mnist.rs:49:                .unwrap()
+crates/incin-data/src/vision/mnist.rs:51:                .unwrap()
+crates/incin-data/src/vision/mnist.rs:53:                .unwrap_or(labels_file.file_name().unwrap().to_str().unwrap()),
+crates/incin-data/src/vision/mnist.rs:60:                .unwrap()
+crates/incin-data/src/vision/mnist.rs:62:                .unwrap()
+crates/incin-data/src/vision/mnist.rs:64:                .unwrap(),
+crates/incin-data/src/vision/mnist.rs:69:                .unwrap()
+crates/incin-data/src/vision/mnist.rs:71:                .unwrap()
+crates/incin-data/src/vision/mnist.rs:73:                .unwrap(),
+crates/incin-data/src/vision/mnist.rs:237:            .expect("matching image and label counts should construct");
+crates/incin-data/src/vision/mnist.rs:241:        assert_eq!(dataset.get(1).unwrap().1, 7);
+crates/incin-core/src/distributions/mod.rs:267:        let t = Tensor::<Dyn, B>::sample(&u, vec![10, 10]).unwrap();
+crates/incin-core/src/distributions/mod.rs:274:        let t = Tensor::<Dyn, B>::sample(&n, vec![4, 4]).unwrap();
+crates/incin-core/src/distributions/mod.rs:281:        let t = Tensor::<Dyn, B>::sample(&b_dist, vec![100]).unwrap();
+crates/incin-core/src/distributions/mod.rs:288:        let t = Tensor::<Dyn, B>::sample(&exp_dist, vec![20]).unwrap();
+crates/incin-core/src/distributions/mod.rs:295:        let t = Tensor::<Dyn, B>::sample(&g_dist, vec![5, 5]).unwrap();
+crates/incin-core/src/distributions/mod.rs:329:        let t = Tensor::<Dyn, B>::sample(&custom, vec![3, 3]).unwrap();
+crates/incin-core/src/distributions/mod.rs:338:        let t = Tensor::<(U2, U3), B>::sample(&dist, ()).unwrap();
+crates/incin-core/src/shapes/dim.rs:217:            .expect("static ProdDim factors must fit usize");
+crates/incin-core/src/shapes/tail_shape.rs:340:        let field = S::from_dyn(&[32, 16, 128]).unwrap();
+crates/incin-core/src/shapes/tail_shape.rs:354:        let field = S::from_dyn(&[128, 64, 32]).unwrap();
+crates/incin-core/src/shapes/tail_shape.rs:368:        let field = S::from_dyn(&[32, 16, 8, 128]).unwrap();
+crates/incin-core/src/tensor/base.rs:40:/// let t = Tensor::<s![2, 5, 10], DefaultBackend>::zeros(()).unwrap();
+crates/incin-core/src/tensor/base.rs:51:/// let dyn_t = Tensor::<Dyn, DefaultBackend>::ones(vec![32, 64]).unwrap();
+crates/incin-core/src/tensor/base.rs:768:        // `Dyn::from_dyn(..).unwrap()` was asserting `Some(dims.to_vec())` is
+crates/incin-core/src/tensor/base.rs:867:            Tensor::zeros(vec![2, 3]).unwrap();
+crates/incin-core/src/tensor/base.rs:876:            Tensor::ones(vec![4]).unwrap();
+crates/incin-core/src/tensor/base.rs:895:        let out = <B as ModuleOps<B>>::conv2d::<f32>(&input, &weight, None, 1, 0, 3, 1).unwrap();
+crates/incin-core/src/tensor/base.rs:899:            <B as ModuleOps<B>>::max_pool2d::<f32>(&input, (5, 5), (1, 1), (0, 0), (3, 3)).unwrap();
+crates/incin-core/src/shapes/buf.rs:564:                .unwrap(),
+crates/incin-core/src/shapes/buf.rs:570:                .unwrap(),
+crates/incin-lsp/src/bin/mock_rust_analyzer.rs:17:    let request_body = read_frame(&mut stdin)?.expect("harness must send exactly one frame");
+crates/incin-lsp/src/bin/mock_rust_analyzer.rs:19:        serde_json::from_slice(&request_body).expect("harness frame must be valid JSON");
+crates/incin-core/src/exec/proof.rs:263:        panic!("paranoid-validation: descriptor failed its own invariants: {error:?}");
+crates/incin-core/src/exec/proof.rs:354:        .unwrap();
+crates/incin-core/src/exec/proof.rs:372:        .unwrap();
+crates/incin-core/src/exec/proof.rs:385:        .unwrap();
+crates/incin-core/src/shapes/shape.rs:82:/// This is the checked replacement for the `from_dyn(&dims).unwrap()` chain
+crates/incin-core/src/shapes/shape.rs:213:            .expect("validated tensor shape must have a representable element count")
+crates/incin-core/src/shapes/shape.rs:599:                .unwrap()
+crates/incin-core/src/shapes/shape.rs:609:            .unwrap()
+crates/incin-core/src/shapes/shape.rs:615:                .unwrap()
+crates/incin-lsp/src/rewrite.rs:316:        let rewritten = rewrite_incoming_from_server(&msg, &mut pending, true, false).unwrap();
+crates/incin-lsp/src/rewrite.rs:323:        let related = diag["relatedInformation"].as_array().unwrap();
+crates/incin-lsp/src/rewrite.rs:343:        let rewritten = rewrite_incoming_from_server(&msg, &mut pending, true, false).unwrap();
+crates/incin-lsp/src/rewrite.rs:383:        let rewritten = rewrite_incoming_from_server(&response, &mut pending, true, false).unwrap();
+crates/incin-lsp/src/rewrite.rs:389:        let related = item["relatedInformation"].as_array().unwrap();
+crates/incin-lsp/src/rewrite.rs:432:        let rewritten = rewrite_incoming_from_server(&response, &mut pending, true, false).unwrap();
+crates/incin-lsp/src/rewrite.rs:452:        let rewritten = rewrite_incoming_from_server(&response, &mut pending, true, true).unwrap();
+crates/incin-lsp/src/rewrite.rs:498:        let rewritten = rewrite_incoming_from_server(&response, &mut pending, true, false).unwrap();
+crates/incin-lsp/src/rewrite.rs:514:        let rewritten = rewrite_incoming_from_server(&response, &mut pending, true, false).unwrap();
+crates/incin-lsp/src/rewrite.rs:545:        let rewritten = rewrite_incoming_from_server(&response, &mut pending, true, false).unwrap();
+crates/incin-telemetry/src/reporter.rs:139:            *self.scalar.lock().unwrap() = Some(event);
+crates/incin-telemetry/src/reporter.rs:142:            *self.gradient_norm.lock().unwrap() = Some(event);
+crates/incin-telemetry/src/reporter.rs:145:            *self.weight_norm.lock().unwrap() = Some(event);
+crates/incin-telemetry/src/reporter.rs:148:            *self.memory.lock().unwrap() = Some(event);
+crates/incin-telemetry/src/reporter.rs:151:            *self.epoch.lock().unwrap() = Some(event);
+crates/incin-telemetry/src/reporter.rs:154:            *self.hyperparam.lock().unwrap() = Some(event);
+crates/incin-telemetry/src/reporter.rs:166:            .unwrap()
+crates/incin-telemetry/src/reporter.rs:168:            .expect("log_scalar called");
+crates/incin-telemetry/src/reporter.rs:182:            .unwrap()
+crates/incin-telemetry/src/reporter.rs:184:            .expect("log_gradient_norm called");
+crates/incin-telemetry/src/reporter.rs:197:            .unwrap()
+crates/incin-telemetry/src/reporter.rs:199:            .expect("log_weight_norm called");
+crates/incin-telemetry/src/reporter.rs:212:            .unwrap()
+crates/incin-telemetry/src/reporter.rs:214:            .expect("log_memory called");
+crates/incin-telemetry/src/reporter.rs:225:        let event = rep.epoch.lock().unwrap().clone().expect("log_epoch called");
+crates/incin-telemetry/src/reporter.rs:239:            .unwrap()
+crates/incin-telemetry/src/reporter.rs:241:            .expect("log_hyperparam called");
+crates/incin-lsp/src/frame.rs:60:        write_frame(&mut buf, b"{\"hello\":true}").unwrap();
+crates/incin-lsp/src/frame.rs:62:        let body = read_frame(&mut reader).unwrap().unwrap();
+crates/incin-lsp/src/frame.rs:64:        assert!(read_frame(&mut reader).unwrap().is_none());
+crates/incin-lsp/src/frame.rs:71:        let body = read_frame(&mut reader).unwrap().unwrap();
+crates/incin-lsp/src/frame.rs:78:        assert!(read_frame(&mut reader).unwrap().is_none());
+crates/incin-lsp/src/frame.rs:94:        write_frame(&mut buf, &body).unwrap();
+crates/incin-lsp/src/frame.rs:96:        let header_end = buf.windows(4).position(|w| w == b"\r\n\r\n").unwrap();
+crates/incin-lsp/src/frame.rs:97:        let header = std::str::from_utf8(&buf[..header_end]).unwrap();
+crates/incin-lsp/src/frame.rs:100:            .unwrap()
+crates/incin-lsp/src/frame.rs:102:            .unwrap();
+crates/incin-lsp/src/frame.rs:106:        let round_tripped = read_frame(&mut reader).unwrap().unwrap();
+crates/incin-core/src/tensor/ops/binary.rs:50:    /// let a = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
+crates/incin-core/src/tensor/ops/binary.rs:51:    /// let b = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
+crates/incin-core/src/tensor/ops/binary.rs:52:    /// let c = a.add(&b).unwrap(); // Elements are 2.0
+crates/incin-core/src/tensor/ops/binary.rs:65:    /// let a = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
+crates/incin-core/src/tensor/ops/binary.rs:66:    /// let b = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
+crates/incin-core/src/tensor/ops/binary.rs:67:    /// let c = a.sub(&b).unwrap(); // Elements are 0.0
+crates/incin-core/src/tensor/ops/binary.rs:80:    /// let a = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
+crates/incin-core/src/tensor/ops/binary.rs:81:    /// let b = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
+crates/incin-core/src/tensor/ops/binary.rs:82:    /// let c = a.mul(&b).unwrap(); // Elements are 1.0
+crates/incin-core/src/tensor/ops/binary.rs:95:    /// let a = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
+crates/incin-core/src/tensor/ops/binary.rs:96:    /// let b = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
+crates/incin-core/src/tensor/ops/binary.rs:97:    /// let c = a.div(&b).unwrap(); // Elements are 1.0
+crates/incin-core/src/tensor/ops/binary.rs:304:    /// let a = Tensor::<s![2, 1], DefaultBackend>::ones(()).unwrap();
+crates/incin-core/src/tensor/ops/binary.rs:305:    /// let b = Tensor::<s![1, 2], DefaultBackend>::ones(()).unwrap();
+crates/incin-core/src/tensor/ops/binary.rs:306:    /// let c = a.broadcast_add(&b).unwrap(); // shape is [2, 2]
+crates/incin-core/src/tensor/ops/binary.rs:319:    /// let a = Tensor::<s![2, 1], DefaultBackend>::ones(()).unwrap();
+crates/incin-core/src/tensor/ops/binary.rs:320:    /// let b = Tensor::<s![1, 2], DefaultBackend>::ones(()).unwrap();
+crates/incin-core/src/tensor/ops/binary.rs:321:    /// let c = a.broadcast_sub(&b).unwrap(); // shape is [2, 2]
+crates/incin-core/src/tensor/ops/binary.rs:334:    /// let a = Tensor::<s![2, 1], DefaultBackend>::ones(()).unwrap();
+crates/incin-core/src/tensor/ops/binary.rs:335:    /// let b = Tensor::<s![1, 2], DefaultBackend>::ones(()).unwrap();
+crates/incin-core/src/tensor/ops/binary.rs:336:    /// let c = a.broadcast_mul(&b).unwrap(); // shape is [2, 2]
+crates/incin-core/src/tensor/ops/binary.rs:349:    /// let a = Tensor::<s![2, 1], DefaultBackend>::ones(()).unwrap();
+crates/incin-core/src/tensor/ops/binary.rs:350:    /// let b = Tensor::<s![1, 2], DefaultBackend>::ones(()).unwrap();
+crates/incin-core/src/tensor/ops/binary.rs:351:    /// let c = a.broadcast_div(&b).unwrap(); // shape is [2, 2]
+crates/incin-core/src/tensor/ops/binary.rs:377:                    panic!(
+crates/incin-core/src/tensor/ops/binary.rs:410:                    panic!(
+crates/incin-core/src/tensor/ops/binary.rs:442:                    panic!(
+crates/incin-core/src/tensor/ops/binary.rs:474:                    panic!(
+crates/incin-telemetry/src/events.rs:152:        let json = serde_json::to_string(&event).expect("serialize ScalarEvent");
+crates/incin-telemetry/src/events.rs:154:            serde_json::from_str(&json).expect("deserialize ScalarEvent");
+crates/incin-telemetry/src/events.rs:168:            serde_json::from_str(future_event_json).expect("deserialize unknown event variant");
+crates/incin-lsp/src/main.rs:27:    let child_stdin = child.stdin.take().expect("piped child stdin");
+crates/incin-lsp/src/main.rs:28:    let child_stdout = child.stdout.take().expect("piped child stdout");
+crates/incin-lsp/src/main.rs:42:                    .unwrap()
+crates/incin-lsp/src/main.rs:56:            let mut pending = pending.lock().unwrap();
+crates/incin-lsp/src/main.rs:67:                    serde_json::to_vec(&new_msg).expect("serialize rewritten LSP message");
+crates/incin-telemetry/src/run_dir.rs:94:        let _guard = ENV_LOCK.lock().unwrap();
+crates/incin-telemetry/src/run_dir.rs:102:        let result = default_run_dir().expect("default_run_dir should succeed");
+crates/incin-telemetry/src/run_dir.rs:119:        let _guard = ENV_LOCK.lock().unwrap();
+crates/incin-telemetry/src/run_dir.rs:127:        let resolved = default_run_dir_path().expect("path resolution should succeed");
+crates/incin-telemetry/src/run_dir.rs:138:        let created = default_run_dir().expect("default_run_dir should succeed");
+crates/incin-telemetry/src/run_dir.rs:166:        std::fs::create_dir_all(&dir).unwrap();
+crates/incin-telemetry/src/run_dir.rs:168:        let runs = list_runs(&dir).expect("list_runs should succeed on an empty dir");
+crates/incin-telemetry/src/run_dir.rs:176:        std::fs::create_dir_all(&dir).unwrap();
+crates/incin-telemetry/src/run_dir.rs:180:            std::fs::write(dir.join(format!("{id}.jsonl")), b"").unwrap();
+crates/incin-telemetry/src/run_dir.rs:183:        let runs = list_runs(&dir).expect("list_runs should succeed");
+crates/incin-telemetry/src/run_dir.rs:205:        std::fs::create_dir_all(&dir).unwrap();
+crates/incin-telemetry/src/run_dir.rs:208:        std::fs::write(dir.join(format!("{id}.jsonl")), b"").unwrap();
+crates/incin-telemetry/src/run_dir.rs:209:        std::fs::write(dir.join("notes.txt"), b"not a run file").unwrap();
+crates/incin-telemetry/src/run_dir.rs:211:        let runs = list_runs(&dir).expect("list_runs should succeed");
+crates/incin-core/src/exec/meta.rs:356:        let meta = meta(&[2, 3], &[3, 1], 0, 16, 6).unwrap();
+crates/incin-core/src/exec/meta.rs:364:        let transposed = meta(&[3, 2], &[1, 3], 0, 16, 6).unwrap();
+crates/incin-core/src/exec/meta.rs:365:        let broadcast = meta(&[4, 3], &[0, 1], 0, 16, 3).unwrap();
+crates/incin-core/src/exec/meta.rs:372:        let four = meta(&[1], &[1], 1, 16, 4).unwrap();
+crates/incin-core/src/exec/meta.rs:373:        let eight = meta(&[1], &[1], 2, 16, 4).unwrap();
+crates/incin-core/src/exec/meta.rs:382:        let meta = meta(&[2], &[1], 0, 32, 2).unwrap();
+crates/incin-core/src/exec/tape.rs:110:/// as `.expect("unbroadcast lhs (add)")` and `.unwrap()` on kernels that
+crates/incin-core/src/dist/mesh.rs:982:                    .expect("rank is below the world size the count guard already checked");
+crates/incin-core/src/tensor/auto_device.rs:59:/// let t = Tensor::<s![2, 3], incin_core::test_utils::DummyBackend<f32, Dev>>::zeros(()).unwrap();
+crates/incin-core/src/tensor/ops/manipulation.rs:47:    /// let t = Tensor::<s![3, 3], DefaultBackend>::ones(()).unwrap();
+crates/incin-core/src/tensor/ops/manipulation.rs:48:    /// let s = t.slice(&[IndexSpec::All, IndexSpec::Index(0)]).unwrap();
+crates/incin-core/src/tensor/ops/manipulation.rs:198:    /// let t = Tensor::<s![2, 3], DefaultBackend>::ones(()).unwrap();
+crates/incin-core/src/tensor/ops/manipulation.rs:199:    /// let r = t.reshape::<s![6]>(((),)).unwrap();
+crates/incin-core/src/tensor/ops/manipulation.rs:226:    /// let t = Tensor::<s![2, 3], DefaultBackend>::ones(()).unwrap();
+crates/incin-core/src/tensor/ops/manipulation.rs:227:    /// let r = t.reshape_idx::<idx![6]>().unwrap();
+crates/incin-core/src/tensor/ops/manipulation.rs:273:    /// let t = Tensor::<s![10], DefaultBackend>::ones(()).unwrap();
+crates/incin-core/src/tensor/ops/manipulation.rs:274:    /// let n = t.try_narrow(0, 2, 5).unwrap(); // shape [5]
+crates/incin-core/src/tensor/ops/manipulation.rs:297:    /// let t = Tensor::<s![1, 5], DefaultBackend>::ones(()).unwrap();
+crates/incin-core/src/tensor/ops/manipulation.rs:298:    /// let sq = t.try_squeeze(0).unwrap(); // shape [5]
+crates/incin-core/src/tensor/ops/manipulation.rs:508:    /// let t = Tensor::<s![2, 3], DefaultBackend>::ones(()).unwrap();
+crates/incin-core/src/tensor/ops/manipulation.rs:509:    /// let tr = t.transpose::<0, 1>().unwrap(); // shape [3, 2]
+crates/incin-core/src/tensor/ops/manipulation.rs:539:    /// let t = Tensor::<s![2, 3, 4], DefaultBackend>::ones(()).unwrap();
+crates/incin-core/src/tensor/ops/manipulation.rs:540:    /// let f = t.flatten::<1, 2>().unwrap(); // shape [2, 12]
+crates/incin-core/src/tensor/ops/manipulation.rs:638:            .unwrap(),
+crates/incin-core/src/tensor/ops/manipulation.rs:712:                .unwrap(),
+crates/incin-telemetry/src/transport/socket.rs:193:                    panic!("test client did not connect within 5s");
+crates/incin-telemetry/src/transport/socket.rs:205:        let _transport = SocketTransport::bind(&run_id).expect("bind should succeed");
+crates/incin-telemetry/src/transport/socket.rs:221:            Ok(_) => panic!("empty run_id must be rejected"),
+crates/incin-telemetry/src/transport/socket.rs:232:            Ok(_) => panic!("overly long run_id must be rejected"),
+crates/incin-telemetry/src/transport/socket.rs:242:            Ok(_) => panic!("path-like run_id must be rejected"),
+crates/incin-telemetry/src/transport/socket.rs:251:        let mut transport = SocketTransport::bind(&run_id).expect("bind should succeed");
+crates/incin-telemetry/src/transport/socket.rs:255:            .expect("write_event with no clients must still return Ok");
+crates/incin-telemetry/src/transport/socket.rs:262:        let mut socket_transport = SocketTransport::bind(&run_id).expect("bind should succeed");
+crates/incin-telemetry/src/transport/socket.rs:266:            .expect("name conversion should succeed");
+crates/incin-telemetry/src/transport/socket.rs:277:                    Err(e) => panic!("client failed to connect: {e}"),
+crates/incin-telemetry/src/transport/socket.rs:283:        let mut client = client.join().expect("client thread should not panic");
+crates/incin-telemetry/src/transport/socket.rs:291:        let mut file_transport = FileTransport::open(&file_path).expect("file open should succeed");
+crates/incin-telemetry/src/transport/socket.rs:294:            .expect("file write_event should succeed");
+crates/incin-telemetry/src/transport/socket.rs:295:        let expected_line = std::fs::read_to_string(&file_path).expect("file should be readable");
+crates/incin-telemetry/src/transport/socket.rs:300:            .expect("socket write_event should succeed");
+crates/incin-telemetry/src/transport/socket.rs:307:            .expect("client should receive the written bytes");
+crates/incin-telemetry/src/transport/socket.rs:308:        let received = String::from_utf8(buf).expect("received bytes should be valid utf8");
+crates/incin-telemetry/src/transport/socket.rs:320:        let mut transport = SocketTransport::bind(&run_id).expect("bind should succeed");
+crates/incin-telemetry/src/transport/socket.rs:324:            .expect("name conversion should succeed");
+crates/incin-telemetry/src/transport/socket.rs:325:        let client = Stream::connect(name).expect("client should connect");
+crates/incin-telemetry/src/transport/socket.rs:343:            .expect("write_event must not error on a stale client");
+crates/incin-telemetry/src/transport/socket.rs:346:            .expect("write_event must not error on a stale client");
+crates/incin-telemetry/src/transport/file.rs:92:        let _transport = FileTransport::open(&path).expect("open should succeed");
+crates/incin-telemetry/src/transport/file.rs:103:        let mut transport = FileTransport::open(&path).expect("open should succeed");
+crates/incin-telemetry/src/transport/file.rs:113:                .expect("write_event should succeed");
+crates/incin-telemetry/src/transport/file.rs:117:        let file = File::open(&path).expect("file should be readable");
+crates/incin-telemetry/src/transport/file.rs:120:            .map(|l| l.expect("line should be valid utf8"))
+crates/incin-telemetry/src/transport/file.rs:125:            let parsed: Event = serde_json::from_str(line).expect("line should parse as Event");
+crates/incin-telemetry/src/transport/file.rs:132:                _ => panic!("expected Event::Scalar for both parsed and expected"),
+crates/incin-telemetry/src/transport/file.rs:143:        let mut transport = FileTransport::open(&path).expect("open should succeed");
+crates/incin-telemetry/src/transport/file.rs:147:            .expect("write_event should succeed");
+crates/incin-telemetry/src/transport/file.rs:150:        let contents = std::fs::read_to_string(&path).expect("file should be readable");
+crates/incin-telemetry/src/transport/file.rs:164:        let mut first = FileTransport::open(&path).expect("first open should succeed");
+crates/incin-telemetry/src/transport/file.rs:167:            .expect("write_event should succeed");
+crates/incin-telemetry/src/transport/file.rs:170:        let mut second = FileTransport::open(&path).expect("second open should succeed");
+crates/incin-telemetry/src/transport/file.rs:173:            .expect("write_event should succeed");
+crates/incin-telemetry/src/transport/file.rs:176:        let contents = std::fs::read_to_string(&path).expect("file should be readable");
+crates/incin-telemetry/src/transport/file.rs:191:        let line1 = serde_json::to_string(&scalar_event(0, "loss", 0.5)).unwrap();
+crates/incin-telemetry/src/transport/file.rs:192:        let line2 = serde_json::to_string(&scalar_event(1, "loss", 0.4)).unwrap();
+crates/incin-telemetry/src/transport/file.rs:193:        let partial = &serde_json::to_string(&scalar_event(2, "loss", 0.3)).unwrap()[..10];
+crates/incin-telemetry/src/transport/file.rs:200:            .unwrap();
+crates/incin-telemetry/src/transport/file.rs:201:        write!(raw, "{line1}\n{line2}\n{partial}").unwrap();
+crates/incin-telemetry/src/transport/file.rs:206:        let file = File::open(&path).unwrap();
+crates/incin-telemetry/src/transport/file.rs:226:        let mut transport = FileTransport::open(&path).expect("open should succeed");
+crates/incin-telemetry/src/transport/file.rs:236:                .expect("write_event should succeed");
+crates/incin-telemetry/src/transport/file.rs:242:            let file = File::open(&path).expect("read handle should open");
+crates/incin-telemetry/src/transport/file.rs:245:                .map(|l| l.expect("line should be valid utf8"))
+crates/incin-telemetry/src/transport/file.rs:249:                let parsed: Event = serde_json::from_str(line).unwrap();
+crates/incin-telemetry/src/transport/file.rs:252:                    _ => panic!("expected Event::Scalar"),
+crates/incin-telemetry/src/transport/file.rs:263:                .expect("write_event should succeed");
+crates/incin-telemetry/src/transport/file.rs:269:        let file = File::open(&path).expect("reattach read handle should open");
+crates/incin-telemetry/src/transport/file.rs:272:            .map(|l| l.expect("line should be valid utf8"))
+crates/incin-telemetry/src/transport/file.rs:278:            let parsed: Event = serde_json::from_str(line).unwrap();
+crates/incin-telemetry/src/transport/file.rs:284:                _ => panic!("expected Event::Scalar"),
+crates/incin-core/src/tensor/device.rs:597:/// let three = DeviceSet::cuda(0..3).unwrap();
+crates/incin-core/src/tensor/device.rs:800:            .expect("three distinct CUDA devices are a valid set");
+crates/incin-core/src/tensor/device.rs:827:        let set = DeviceSet::cuda(0..3).expect("an ordinal range is a valid set");
+crates/incin-core/src/tensor/device.rs:878:        let id = Cuda::to_incin(&field).unwrap();
+crates/incin-core/src/tensor/device.rs:888:        let id = CudaN::<U2>::to_incin(&field).unwrap();
+crates/incin-core/src/tensor/device.rs:897:        let id = Wgpu::to_incin(&field).unwrap();
+crates/incin-core/src/tensor/device.rs:906:        assert_eq!(Metal::to_incin(&field).unwrap(), DeviceId::metal(2));
+crates/incin-core/src/tensor/device.rs:914:        let id = WgpuN::<U0>::to_incin(&field).unwrap();
+crates/incin-core/src/tensor/device.rs:923:        assert_eq!(Dyn::to_incin(&field).unwrap(), DeviceId::cuda(5));
+crates/incin-core/src/tensor/ops/reduce.rs:72:        /// let t = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
+crates/incin-core/src/tensor/ops/reduce.rs:73:        /// let s = t.sum_all().unwrap(); // shape is ()
+crates/incin-core/src/tensor/ops/reduce.rs:86:        /// let t = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
+crates/incin-core/src/tensor/ops/reduce.rs:87:        /// let m = t.mean_all().unwrap(); // shape is ()
+crates/incin-core/src/tensor/ops/reduce.rs:100:        /// let t = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
+crates/incin-core/src/tensor/ops/reduce.rs:101:        /// let m = t.max_all().unwrap(); // shape is ()
+crates/incin-core/src/tensor/ops/reduce.rs:114:        /// let t = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
+crates/incin-core/src/tensor/ops/reduce.rs:115:        /// let m = t.min_all().unwrap(); // shape is ()
+crates/incin-core/src/tensor/ops/reduce.rs:128:        /// let t = Tensor::<s![2, 3], DefaultBackend>::ones(()).unwrap();
+crates/incin-core/src/tensor/ops/reduce.rs:129:        /// let s = t.sum_dim::<0>().unwrap(); // shape is [3]
+crates/incin-core/src/tensor/ops/reduce.rs:142:        /// let t = Tensor::<s![2, 3], DefaultBackend>::ones(()).unwrap();
+crates/incin-core/src/tensor/ops/reduce.rs:143:        /// let s = t.sum_keepdim::<0>().unwrap(); // shape is [1, 3]
+crates/incin-core/src/tensor/ops/reduce.rs:156:        /// let t = Tensor::<s![2, 3], DefaultBackend>::ones(()).unwrap();
+crates/incin-core/src/tensor/ops/reduce.rs:157:        /// let m = t.mean_dim::<0>().unwrap(); // shape is [3]
+crates/incin-core/src/tensor/ops/reduce.rs:170:        /// let t = Tensor::<s![2, 3], DefaultBackend>::ones(()).unwrap();
+crates/incin-core/src/tensor/ops/reduce.rs:171:        /// let m = t.mean_keepdim::<0>().unwrap(); // shape is [1, 3]
+crates/incin-core/src/tensor/ops/reduce.rs:184:        /// let t = Tensor::<s![2, 3], DefaultBackend>::ones(()).unwrap();
+crates/incin-core/src/tensor/ops/reduce.rs:185:        /// let m = t.max_dim::<0>().unwrap(); // shape is [3]
+crates/incin-core/src/tensor/ops/reduce.rs:198:        /// let t = Tensor::<s![2, 3], DefaultBackend>::ones(()).unwrap();
+crates/incin-core/src/tensor/ops/reduce.rs:199:        /// let m = t.max_keepdim::<0>().unwrap(); // shape is [1, 3]
+crates/incin-core/src/tensor/ops/reduce.rs:212:        /// let t = Tensor::<s![2, 3], DefaultBackend>::ones(()).unwrap();
+crates/incin-core/src/tensor/ops/reduce.rs:213:        /// let m = t.min_dim::<0>().unwrap(); // shape is [3]
+crates/incin-core/src/tensor/ops/reduce.rs:226:        /// let t = Tensor::<s![2, 3], DefaultBackend>::ones(()).unwrap();
+crates/incin-core/src/tensor/ops/reduce.rs:227:        /// let m = t.min_keepdim::<0>().unwrap(); // shape is [1, 3]
+crates/incin-telemetry/src/emitter.rs:74:    // rely on this via `.as_ref().expect(...)`.
+crates/incin-telemetry/src/emitter.rs:143:    /// let (reporter, run) = Emitter::to_run_dir(None).unwrap();
+crates/incin-telemetry/src/emitter.rs:199:        let bulk_tx = self.bulk_tx.as_ref().expect("bulk_tx taken before drop");
+crates/incin-telemetry/src/emitter.rs:231:            .expect("priority_tx taken before drop");
+crates/incin-telemetry/src/emitter.rs:429:            self.0.lock().unwrap().push(event.clone());
+crates/incin-telemetry/src/emitter.rs:446:            self.inner.lock().unwrap().push(event.clone());
+crates/incin-telemetry/src/emitter.rs:559:                .unwrap()
+crates/incin-telemetry/src/emitter.rs:610:            let events = collected.lock().unwrap();
+crates/incin-telemetry/src/emitter.rs:621:                panic!(
+crates/incin-telemetry/src/emitter.rs:630:        let events = collected.lock().unwrap();
+crates/incin-telemetry/src/emitter.rs:650:        let _guard = env_lock().lock().unwrap();
+crates/incin-telemetry/src/emitter.rs:662:            Emitter::to_run_dir(Some("fixed-run-id")).expect("to_run_dir should succeed");
+crates/incin-telemetry/src/emitter.rs:669:        let contents = std::fs::read_to_string(&run.path).expect("run file should be readable");
+crates/incin-telemetry/src/emitter.rs:671:            serde_json::from_str(contents.trim_end()).expect("line should parse as Event");
+crates/incin-telemetry/src/emitter.rs:678:            other => panic!("expected Event::Scalar, got {other:?}"),
+crates/incin-telemetry/src/emitter.rs:691:        let _guard = env_lock().lock().unwrap();
+crates/incin-telemetry/src/emitter.rs:700:        let (_emitter, run) = Emitter::to_run_dir(None).expect("to_run_dir should succeed");
+crates/incin-diagnostics/src/lib.rs:1484:        let mismatch = parse_matmul_mismatch(text).unwrap();
+crates/incin-diagnostics/src/lib.rs:1507:        let lhs_col = lines[0].find('4').unwrap();
+crates/incin-diagnostics/src/lib.rs:1508:        let rhs_col = lines[2].find('5').unwrap();
+crates/incin-diagnostics/src/lib.rs:1509:        assert_eq!(lines[1].find('^').unwrap(), lhs_col);
+crates/incin-diagnostics/src/lib.rs:1510:        assert_eq!(lines[3].find('^').unwrap(), rhs_col);
+crates/incin-diagnostics/src/lib.rs:1544:        let mismatch = parse_matmul_mismatch(rendered).unwrap();
+crates/incin-diagnostics/src/lib.rs:1552:        let mismatch = parse_matmul_mismatch(text).unwrap();
+crates/incin-diagnostics/src/lib.rs:1564:        let mismatch = parse_concat_mismatch(text).unwrap();
+crates/incin-diagnostics/src/lib.rs:1576:        let mismatch = parse_broadcast_mismatch(text).unwrap();
+crates/incin-diagnostics/src/lib.rs:1586:        let mismatch = parse_reshape_mismatch(text).unwrap();
+crates/incin-diagnostics/src/lib.rs:1596:        let mismatch = parse_conv2d_mismatch(text).unwrap();
+crates/incin-diagnostics/src/lib.rs:1606:        let mismatch = parse_transpose_mismatch(text).unwrap();
+crates/incin-diagnostics/src/lib.rs:1617:        let mismatch = parse_reduce_dim_mismatch(text).unwrap();
+crates/incin-diagnostics/src/lib.rs:1627:        let mismatch = parse_flatten_mismatch(text).unwrap();
+crates/incin-diagnostics/src/lib.rs:1638:        let mismatch = parse_module_forward_mismatch(text).unwrap();
+crates/incin-diagnostics/src/lib.rs:1648:        let mismatch = parse_slice_mismatch(text).unwrap();
+crates/incin-diagnostics/src/lib.rs:1657:        let mismatch = parse_conv1d_mismatch(text).unwrap();
+crates/incin-diagnostics/src/lib.rs:1666:        let mismatch = parse_pool2d_mismatch(text).unwrap();
+crates/incin-diagnostics/src/lib.rs:1675:        let mismatch = parse_shape_eq_mismatch(text).unwrap();
+crates/incin-diagnostics/src/lib.rs:1712:        std::fs::write(&temp_file, sample_type).unwrap();
+crates/incin-core/src/tensor/ops/loss.rs:31:    /// let pred = Tensor::<s![2, 10], DefaultBackend>::zeros(()).unwrap();
+crates/incin-core/src/tensor/ops/loss.rs:32:    /// let target = Tensor::<s![2], DefaultBackend>::zeros(()).unwrap();
+crates/incin-core/src/tensor/ops/loss.rs:33:    /// let loss = pred.cross_entropy_loss(&target).unwrap();
+crates/incin-core/src/tensor/ops/loss.rs:76:    /// let pred = Tensor::<s![2], DefaultBackend>::ones(()).unwrap();
+crates/incin-core/src/tensor/ops/loss.rs:77:    /// let target = Tensor::<s![2], DefaultBackend>::zeros(()).unwrap();
+crates/incin-core/src/tensor/ops/loss.rs:78:    /// let loss = pred.mse_loss(&target).unwrap();
+crates/incin-core/src/nn/conv2d.rs:219:            Some(self.bias.as_ref().unwrap().as_tensor()?.inner()),
+crates/incin-core/src/nn/stats.rs:135:        .expect("parameter tensor shape crossed checked construction");
+crates/incin-core/src/nn/stats.rs:136:    u64::try_from(elements).expect("usize parameter count must fit u64")
+crates/incin-core/src/nn/stats.rs:254:            fc1: Linear::build(()).unwrap(),
+crates/incin-core/src/nn/stats.rs:255:            fc2: Linear::build(()).unwrap(),
+crates/incin-core/src/nn/stats.rs:280:        let seq = Sequential(Linear::<s![@ 16, 8], TestBackend>::build(()).unwrap(), ReLU);
+crates/incin-core/src/optim/mod.rs:264:                let mut m_t = self.m.remove(name).unwrap();
+crates/incin-core/src/optim/mod.rs:265:                let mut v_t = self.v.remove(name).unwrap();
+crates/incin-core/src/nn/conv1d.rs:188:        let bias = Some(self.bias.as_ref().unwrap().as_tensor()?.detach());
+crates/incin-core/src/tensor/tracing.rs:1882:            .unwrap_or_else(|| panic!("no node found producing value {value_id}"))
+crates/incin-core/src/tensor/tracing.rs:1914:            let out = f(&t).unwrap();
+crates/incin-core/src/tensor/ops/unary.rs:94:        /// let t = Tensor::<s![2, 2], DefaultBackend>::from_slice(&[-1.0, 2.0, -3.0, 4.0], ()).unwrap();
+crates/incin-core/src/tensor/ops/unary.rs:95:        /// let abs_t = t.abs().unwrap();
+crates/incin-core/src/tensor/ops/unary.rs:109:        /// let t = Tensor::<s![2], DefaultBackend>::from_slice(&[-1.0, 2.0], ()).unwrap();
+crates/incin-core/src/tensor/ops/unary.rs:110:        /// let relu_t = t.relu().unwrap(); // [0.0, 2.0]
+crates/incin-core/src/tensor/ops/unary.rs:123:        /// let t = Tensor::<s![2], DefaultBackend>::from_slice(&[-1.0, 2.0], ()).unwrap();
+crates/incin-core/src/tensor/ops/unary.rs:124:        /// let gelu_t = t.gelu().unwrap();
+crates/incin-core/src/tensor/ops/unary.rs:137:        /// let t = Tensor::<s![2], DefaultBackend>::from_slice(&[-1.0, 2.0], ()).unwrap();
+crates/incin-core/src/tensor/ops/unary.rs:138:        /// let step_t = t.step().unwrap(); // [0.0, 1.0]
+crates/incin-core/src/tensor/ops/unary.rs:152:        /// let t = Tensor::<s![2], DefaultBackend>::from_slice(&[-1.0, 2.0], ()).unwrap();
+crates/incin-core/src/tensor/ops/unary.rs:153:        /// let mish_t = t.mish().unwrap();
+crates/incin-core/src/tensor/ops/unary.rs:166:        /// let t = Tensor::<s![2], DefaultBackend>::from_slice(&[-1.0, 2.0], ()).unwrap();
+crates/incin-core/src/tensor/ops/unary.rs:167:        /// let elu_t = t.elu().unwrap();
+crates/incin-core/src/tensor/ops/unary.rs:181:        /// let t = Tensor::<s![2], DefaultBackend>::from_slice(&[-1.0, 2.0], ()).unwrap();
+crates/incin-core/src/tensor/ops/unary.rs:182:        /// let swish_t = t.swish().unwrap();
+crates/incin-core/src/tensor/ops/unary.rs:194:    /// let t = Tensor::<s![2, 2], DefaultBackend>::from_slice(&[1.0, 1.0, 0.0, 1.0], ()).unwrap();
+crates/incin-core/src/tensor/ops/unary.rs:195:    /// let sm = t.softmax(1).unwrap();
+crates/incin-core/src/tensor/ops/unary.rs:216:        /// let t = Tensor::<s![2], DefaultBackend>::from_slice(&[1.0, -2.0], ()).unwrap();
+crates/incin-core/src/tensor/ops/unary.rs:217:        /// let neg_t = t.neg().unwrap(); // [-1.0, 2.0]
+crates/incin-core/src/tensor/ops/unary.rs:230:        /// let t = Tensor::<s![2], DefaultBackend>::from_slice(&[4.0, 9.0], ()).unwrap();
+crates/incin-core/src/tensor/ops/unary.rs:231:        /// let sqrt_t = t.sqrt().unwrap(); // [2.0, 3.0]
+crates/incin-core/src/tensor/ops/unary.rs:244:        /// let t = Tensor::<s![1], DefaultBackend>::from_slice(&[0.0], ()).unwrap();
+crates/incin-core/src/tensor/ops/unary.rs:245:        /// let exp_t = t.exp().unwrap(); // [1.0]
+crates/incin-core/src/tensor/ops/unary.rs:324:        /// let t = Tensor::<s![1], DefaultBackend>::from_slice(&[1.0], ()).unwrap();
+crates/incin-core/src/tensor/ops/unary.rs:325:        /// let log_t = t.log().unwrap(); // [0.0]
+crates/incin-core/src/tensor/ops/unary.rs:338:        /// let t = Tensor::<s![1], DefaultBackend>::from_slice(&[0.0], ()).unwrap();
+crates/incin-core/src/tensor/ops/unary.rs:339:        /// let tanh_t = t.tanh().unwrap(); // [0.0]
+crates/incin-core/src/tensor/ops/unary.rs:352:        /// let t = Tensor::<s![1], DefaultBackend>::from_slice(&[0.0], ()).unwrap();
+crates/incin-core/src/tensor/ops/unary.rs:353:        /// let sig_t = t.sigmoid().unwrap(); // [0.5]
+crates/incin-core/src/tensor/ops/unary.rs:365:    /// let t = Tensor::<s![2], DefaultBackend>::from_slice(&[1.0, 2.0], ()).unwrap();
+crates/incin-core/src/tensor/ops/unary.rs:366:    /// let res = t.mul_scalar(3.0).unwrap(); // [3.0, 6.0]
+crates/incin-core/src/tensor/ops/unary.rs:391:    /// let t = Tensor::<s![2], DefaultBackend>::from_slice(&[1.0, 2.0], ()).unwrap();
+crates/incin-core/src/tensor/ops/unary.rs:392:    /// let res = t.add_scalar(3.0).unwrap(); // [4.0, 5.0]
+crates/incin-core/src/tensor/ops/unary.rs:423:                    .unwrap_or_else(|e| panic!("Tensor `*` (scalar) operator panicked: {e:?}"))
+crates/incin-core/src/tensor/ops/unary.rs:436:                    .unwrap_or_else(|e| panic!("Tensor `*` (scalar) operator panicked: {e:?}"))
+crates/incin-core/src/tensor/ops/unary.rs:449:                    .unwrap_or_else(|e| panic!("Tensor `+` (scalar) operator panicked: {e:?}"))
+crates/incin-core/src/tensor/ops/unary.rs:462:                    .unwrap_or_else(|e| panic!("Tensor `+` (scalar) operator panicked: {e:?}"))
+crates/incin-backends/src/iteration.rs:221:                .expect("merge requires an existing dimension");
+crates/incin-backends/src/iteration.rs:346:        .unwrap();
+crates/incin-backends/src/iteration.rs:372:        .unwrap();
+crates/incin-backends/src/iteration.rs:398:        .unwrap();
+crates/incin-backends/src/iteration.rs:414:        .unwrap();
+crates/incin-backends/src/iteration.rs:433:        .unwrap();
+crates/incin-backends/src/iteration.rs:454:        .unwrap();
+crates/incin-backends/src/iteration.rs:470:        .unwrap();
+crates/incin-backends/src/iteration.rs:506:        .unwrap();
+crates/incin-backends/src/iteration.rs:511:            plan.operand.max_physical_index(&plan.output_shape).unwrap(),
+crates/incin-backends/src/iteration.rs:523:        .unwrap();
+crates/incin-backends/src/iteration.rs:527:            plan.operand.max_physical_index(&plan.output_shape).unwrap(),
+crates/incin-core/src/nn/rnn.rs:160:/// let input = Tensor::<s![2, 5, 10], DefaultBackend>::zeros(()).unwrap();
+crates/incin-core/src/nn/rnn.rs:161:/// let h0   = Tensor::<s![2, 20], DefaultBackend>::zeros(()).unwrap();
+crates/incin-core/src/nn/rnn.rs:162:/// let (output, h_n) = rnn.forward((input, h0)).unwrap();
+crates/incin-backends/src/dtype_policy.rs:163:                    .unwrap();
+crates/incin-core/src/nn/linear.rs:179:            u64::try_from(dims[0]).expect("validated dimension must fit u64"),
+crates/incin-core/src/nn/linear.rs:180:            u64::try_from(dims[1]).expect("validated dimension must fit u64"),
+crates/incin-core/src/nn/linear.rs:276:        out.add(&self.bias.as_ref().unwrap().as_tensor()?)
+crates/incin-core/src/nn/linear.rs:347:            .unwrap()
+crates/incin-backends/src/descriptor_bind.rs:337:        .expect("a dense 3x3 grouped convolution is valid geometry")
+crates/incin-backends/src/descriptor_bind.rs:367:            .expect("test metadata must be valid")
+crates/incin-backends/src/descriptor_bind.rs:376:            .expect("a correctly grouped weight must bind");
+crates/incin-backends/src/descriptor_bind.rs:399:            .expect("test metadata must be valid")
+crates/incin-backends/src/descriptor_bind.rs:404:        check_conv2d_operands(&spec, &input, &weight, None).expect("no bias is legal");
+crates/incin-backends/src/descriptor_bind.rs:406:            .expect("a bias of c_out is legal");
+crates/incin-backends/src/descriptor_bind.rs:427:        .expect("a 2x2 window strided by 2 tiles an 8x8 input")
+crates/incin-backends/src/descriptor_bind.rs:433:        pool2d_window(&pool(PoolOp::Max, [2, 2])).expect("max pooling is dilatable");
+crates/incin-backends/src/descriptor_bind.rs:452:        let window = pool2d_window(&anisotropic).expect("the kernel takes a stride per axis");
+crates/incin-backends/src/descriptor_bind.rs:476:                .expect("a contiguous run is a legal descriptor");
+crates/incin-backends/src/descriptor_bind.rs:478:                reduction_run(&spec).expect("a validated run resolves"),
+crates/incin-backends/src/descriptor_bind.rs:493:        let spec = ReductionSpec::over_axes(&input, [0, 1], false, ReduceOp::Sum).unwrap();
+crates/incin-backends/src/descriptor_bind.rs:494:        let run = reduction_run(&spec).unwrap();
+crates/incin-backends/src/descriptor_bind.rs:505:            .unwrap()
+crates/incin-backends/src/descriptor_bind.rs:508:        check_reduction_operand(&spec, run, &meta(&[2, 3, 4])).expect("the descriptor's own shape");
+crates/incin-backends/src/descriptor_bind.rs:530:            .expect("test metadata must be valid")
+crates/incin-backends/src/descriptor_bind.rs:534:                .unwrap();
+crates/incin-backends/src/descriptor_bind.rs:537:            .expect("the original operand binds");
+crates/incin-backends/src/kernel.rs:1430:        .unwrap();
+crates/incin-backends/src/kernel.rs:1457:        let f16 = render_cuda_unary("relu", "x > 0.0f ? x : 0.0f", DTypeId::F16).unwrap();
+crates/incin-backends/src/kernel.rs:1458:        let f32 = render_cuda_unary("relu", "x > 0.0f ? x : 0.0f", DTypeId::F32).unwrap();
+crates/incin-backends/src/kernel.rs:1459:        let f64 = render_cuda_unary("relu", "x > 0.0 ? x : 0.0", DTypeId::F64).unwrap();
+crates/incin-backends/src/kernel.rs:1478:        let rendered = render_cuda_binary("add", "a + b", DTypeId::BF16).unwrap();
+crates/incin-backends/src/kernel.rs:1501:                .unwrap();
+crates/incin-backends/src/kernel.rs:1504:                .unwrap();
+crates/incin-backends/src/kernel.rs:1507:                .unwrap();
+crates/incin-backends/src/kernel.rs:1528:                .unwrap();
+crates/incin-backends/src/kernel.rs:1541:            render_cuda_unary_packed("neg", "-x", DTypeId::F32, LayoutClass::Contiguous).unwrap();
+crates/incin-backends/src/kernel.rs:1556:            .unwrap();
+crates/incin-backends/src/kernel.rs:1567:                .unwrap();
+crates/incin-backends/src/kernel.rs:1586:                render_cuda_unary_packed("neg", "-x", dtype, LayoutClass::Contiguous).unwrap();
+crates/incin-backends/src/kernel.rs:1588:                .unwrap_or_else(|error| panic!("NVRTC rejected packed unary {dtype:?}: {error:?}"));
+crates/incin-backends/src/kernel.rs:1595:                let binary = render_cuda_binary_packed("add", "a + b", dtype, layout).unwrap();
+crates/incin-backends/src/kernel.rs:1597:                    |error| panic!("NVRTC rejected packed binary {dtype:?}/{layout:?}: {error:?}"),
+crates/incin-backends/src/kernel.rs:1605:        let half_fast = render_cuda_reduction("sum", DTypeId::F16, false, true).unwrap();
+crates/incin-backends/src/kernel.rs:1625:        let double_mean = render_cuda_reduction("mean", DTypeId::F64, false, false).unwrap();
+crates/incin-backends/src/kernel.rs:1632:        let indexed = render_cuda_reduction("max", DTypeId::BF16, true, false).unwrap();
+crates/incin-backends/src/kernel.rs:1652:                    let kernel = render_cuda_reduction(op, dtype, false, fast).unwrap();
+crates/incin-backends/src/kernel.rs:1655:                            panic!("NVRTC rejected reduction {dtype:?}/{op}/fast={fast}: {error:?}")
+crates/incin-backends/src/kernel.rs:1660:                let kernel = render_cuda_reduction(op, dtype, true, false).unwrap();
+crates/incin-backends/src/kernel.rs:1662:                    |error| panic!("NVRTC rejected indexed reduction {dtype:?}/{op}: {error:?}"),
+crates/incin-backends/src/kernel.rs:1670:        let half = render_cuda_normalization("layer_norm", DTypeId::F16).unwrap();
+crates/incin-backends/src/kernel.rs:1680:        let double = render_cuda_normalization("layer_norm", DTypeId::F64).unwrap();
+crates/incin-backends/src/kernel.rs:1684:        let bfloat_batch = render_cuda_normalization("batch_norm", DTypeId::BF16).unwrap();
+crates/incin-backends/src/kernel.rs:1704:                let kernel = render_cuda_normalization(op, dtype).unwrap();
+crates/incin-backends/src/kernel.rs:1706:                    |error| panic!("NVRTC rejected normalization {dtype:?}/{op}: {error:?}"),
+crates/incin-backends/src/backend_kind.rs:271:        let tensor = Tensor::<Dyn, B, Dyn>::zeros(([2, 3], DTypeId::F64, DeviceId::cpu())).unwrap();
+crates/incin-backends/src/backend_kind.rs:274:        assert_eq!(tensor.device().unwrap(), DeviceId::cpu());
+crates/incin-backends/src/backend_kind.rs:286:            .unwrap()
+crates/incin-backends/src/backend_kind.rs:336:        let tensor = Tensor::<Dyn, B, Dyn>::ones(([2, 2], DTypeId::F32, DeviceId::cpu())).unwrap();
+crates/incin-backends/src/backend_kind.rs:337:        let reduced = tensor.clone().sum_all().unwrap();
+crates/incin-backends/src/backend_kind.rs:338:        assert_eq!(reduced.to_scalar::<f32>().unwrap(), 4.0);
+crates/incin-backends/src/backend_kind.rs:340:        let transferred = Tensor::to_device::<Dyn>(&tensor, &DeviceId::cpu()).unwrap();
+crates/incin-backends/src/backend_kind.rs:343:        assert_eq!(transferred.device().unwrap(), DeviceId::cpu());
+crates/incin-backends/src/backend_kind.rs:345:            transferred.sum_all().unwrap().to_scalar::<f32>().unwrap(),
+crates/incin-backends/src/backend_kind.rs:367:        let tensor = Tensor::<Dyn, Source>::from_slice(&[1.0f32, 2.0, 3.0], [3]).unwrap();
+crates/incin-backends/src/backend_kind.rs:368:        let transferred = Tensor::to_device::<Dyn>(&tensor, &DeviceId::cpu()).unwrap();
+crates/incin-backends/src/backend_kind.rs:375:        assert_eq!(transferred.to_vec1::<f32>().unwrap(), vec![1.0, 2.0, 3.0]);
+crates/incin-backends/src/backend_kind.rs:382:        let linear = Linear::<Dyn, B>::build((10, 20, DTypeId::F32, DeviceId::cpu())).unwrap();
+crates/incin-backends/src/backend_kind.rs:386:            Linear::<Dyn, B, Dyn>::build((10, 20, DTypeId::F32, DeviceId::cpu(), true)).unwrap();
+crates/incin-backends/src/backend_kind.rs:389:        let norm = LayerNorm::<Dyn, B>::build((20, DTypeId::F32, DeviceId::cpu(), 1e-5)).unwrap();
+crates/incin-backends/src/backend_kind.rs:398:        let layer = Linear::<(typenum::U2, typenum::U3), Source>::build(()).unwrap();
+crates/incin-backends/src/backend_kind.rs:399:        let transferred = ToDevice::<Source, Dyn>::to_device(layer, &DeviceId::cpu()).unwrap();
+crates/incin-backends/src/backend_kind.rs:403:            transferred.weight.as_tensor().unwrap().inner(),
+crates/incin-backends/src/tuning.rs:502:            .unwrap(),
+crates/incin-backends/src/tuning.rs:510:            .unwrap(),
+crates/incin-backends/src/tuning.rs:512:        .unwrap()
+crates/incin-backends/src/tuning.rs:524:        .unwrap()
+crates/incin-backends/src/tuning.rs:536:            default_pointwise_candidate(&aligned).unwrap().access,
+crates/incin-backends/src/tuning.rs:551:            default_reduction_candidate(&reduction).unwrap(),
+crates/incin-backends/src/tuning.rs:561:            default_normalization_candidate(&normalization_ln).unwrap(),
+crates/incin-backends/src/tuning.rs:571:            default_normalization_candidate(&normalization_bn).unwrap(),
+crates/incin-backends/src/tuning.rs:599:        .unwrap();
+crates/incin-backends/src/tuning.rs:608:        assert_eq!(elapsed_milliseconds_to_nanoseconds(0.125).unwrap(), 125_000);
+crates/incin-backends/src/tuning.rs:630:        .unwrap();
+crates/incin-backends/src/tuning.rs:653:        let permit = match claim_tuning(key.clone(), &[candidate]).unwrap() {
+crates/incin-backends/src/tuning.rs:655:            TuningDecision::Cached(_) => panic!("fresh tuning key was unexpectedly cached"),
+crates/incin-backends/src/tuning.rs:657:        assert!(coordinator().state.lock().unwrap().in_flight.contains(&key));
+crates/incin-backends/src/tuning.rs:663:            .unwrap();
+crates/incin-backends/src/tuning.rs:665:        assert!(!coordinator().state.lock().unwrap().in_flight.contains(&key));
+crates/incin-backends/src/tuning.rs:667:            claim_tuning(key, &[candidate]).unwrap(),
+crates/incin-backends/src/cuda/tape.rs:142:    crate::cuda::ops::reduce::launch_reduce_op("sum", storage, axis, true).unwrap()
+crates/incin-backends/src/cpu/var.rs:71:            _ => panic!("expected F32 buffer"),
+crates/incin-backends/src/cpu/var.rs:79:        let var = var_from_tensor(&t).unwrap();
+crates/incin-backends/src/cpu/var.rs:80:        let read_back = var_as_tensor(&var).unwrap();
+crates/incin-backends/src/cpu/var.rs:88:        let mut var = var_from_tensor(&t).unwrap();
+crates/incin-backends/src/cpu/var.rs:91:        assign_var(&mut var, &new_value).unwrap();
+crates/incin-backends/src/cpu/var.rs:93:        let read_back = var_as_tensor(&var).unwrap();
+crates/incin-backends/src/cpu/var.rs:105:        let mut var = var_from_tensor(&t).unwrap();
+crates/incin-backends/src/cpu/var.rs:107:        let _read = var_as_tensor(&var).unwrap();
+crates/incin-backends/src/cpu/var.rs:110:        assign_var(&mut var, &storage(vec![2.0])).unwrap();
+crates/incin-backends/src/cpu/var.rs:112:        assert_eq!(f32_vec(&var_as_tensor(&var).unwrap()), vec![2.0]);
+crates/incin-backends/src/cpu/var.rs:119:        let mut var = var_from_tensor(&t).unwrap();
+crates/incin-backends/src/cpu/var.rs:121:        assign_var(&mut var, &storage(vec![1.0])).unwrap();
+crates/incin-backends/src/cpu/var.rs:122:        assign_var(&mut var, &storage(vec![2.0])).unwrap();
+crates/incin-backends/src/cpu/var.rs:124:        assert_eq!(f32_vec(&var_as_tensor(&var).unwrap()), vec![2.0]);
+crates/incin-backends/src/metal/tuning.rs:330:        let fp1 = metal_environment_fingerprint("Apple M1 Max", true).unwrap();
+crates/incin-backends/src/metal/tuning.rs:331:        let fp2 = metal_environment_fingerprint("Apple M1 Max", true).unwrap();
+crates/incin-backends/src/metal/tuning.rs:334:        let fp_discrete = metal_environment_fingerprint("AMD Radeon", false).unwrap();
+crates/incin-backends/src/metal/tuning.rs:368:        let default_c = default_metal_pointwise_candidate(&candidates).unwrap();
+crates/incin-backends/src/metal/tuning.rs:376:        let default_red = default_metal_reduction_candidate(&red_c).unwrap();
+crates/incin-backends/src/metal/tuning.rs:388:        let env = metal_environment_fingerprint("Apple M1 Max", true).unwrap();
+crates/incin-backends/src/metal/tuning.rs:397:        .unwrap();
+crates/incin-backends/src/metal/tuning.rs:408:        .unwrap();
+crates/incin-backends/src/metal/tuning.rs:412:            TuningDecision::Cached(_) => panic!("expected un-cached initial claim"),
+crates/incin-backends/src/metal/tuning.rs:420:        let (winning_metal_c, launch) = select_fastest_metal(&candidates, &measurements).unwrap();
+crates/incin-backends/src/cpu/gradcheck.rs:49:        _ => panic!("gradcheck: perturbation only supported for F32/F64 buffers"),
+crates/incin-backends/src/cpu/gradcheck.rs:115:    let grads = tape::backward(&out).expect("gradcheck: backward() must succeed");
+crates/incin-backends/src/cpu/gradcheck.rs:121:            .expect("gradcheck: missing analytic gradient for input");
+crates/incin-backends/src/cpu/gradcheck.rs:180:            let squared = TestBackend::mul::<f32>(&inputs[0], &inputs[0]).unwrap();
+crates/incin-backends/src/cpu/gradcheck.rs:181:            TestBackend::sum_all::<f32>(&squared).unwrap()
+crates/incin-backends/src/cpu/gradcheck.rs:200:            let x2 = TestBackend::mul::<f32>(x, x).unwrap();
+crates/incin-backends/src/cpu/gradcheck.rs:201:            let x3 = TestBackend::mul::<f32>(&x2, x).unwrap();
+crates/incin-backends/src/cpu/gradcheck.rs:202:            TestBackend::sum_all::<f32>(&x3).unwrap()
+crates/incin-backends/src/cpu/gradcheck.rs:224:            TestBackend::mul::<f32>(&inputs[0], &inputs[0]).unwrap()
+crates/incin-backends/src/bytes.rs:31:            byte_len(DTypeId::F32, 64, OperationKind::Storage).unwrap(),
+crates/incin-backends/src/bytes.rs:35:            byte_len(DTypeId::F64, 64, OperationKind::Storage).unwrap(),
+crates/incin-backends/src/bytes.rs:39:            byte_len(DTypeId::U8, 64, OperationKind::Storage).unwrap(),
+crates/incin-backends/src/bytes.rs:49:            byte_len(DTypeId::Q8_0, 64, OperationKind::Storage).unwrap(),
+crates/incin-backends/src/bytes.rs:53:            byte_len(DTypeId::Q8_0, 64, OperationKind::Storage).unwrap(),
+crates/incin-backends/src/bytes.rs:71:            byte_len(DTypeId::F32, 0, OperationKind::Storage).unwrap(),
+crates/incin-backends/src/bytes.rs:75:            byte_len(DTypeId::Q8_0, 0, OperationKind::Storage).unwrap(),
+crates/incin-backends/src/cpu/mod.rs:208:                        <$ty>::from_ne_bytes(chunk.try_into().expect("checked chunk size"))
+crates/incin-backends/src/cuda/storage.rs:146:            .expect("backend-created contiguous CUDA storage must match its allocation")
+crates/incin-backends/src/cuda/storage.rs:170:        let context = CudaContext::new(0).expect("CUDA device 0");
+crates/incin-backends/src/cuda/storage.rs:175:            let slice = stream.alloc_zeros::<u8>(size).expect("device allocation");
+crates/incin-backends/src/cuda/storage.rs:200:        let context = CudaContext::new(0).expect("CUDA device 0");
+crates/incin-backends/src/cuda/storage.rs:205:            data: Arc::new(stream.alloc_zeros::<u8>(16).expect("device allocation")),
+crates/incin-backends/src/cuda/storage.rs:224:        let context = CudaContext::new(0).expect("CUDA device 0");
+crates/incin-backends/src/cuda/storage.rs:228:            .expect("64 values are two whole blocks");
+crates/incin-backends/src/cuda/storage.rs:233:            data: Arc::new(stream.alloc_zeros::<u8>(bytes).expect("device allocation")),
+crates/incin-backends/src/cuda/storage.rs:237:        let storage = CudaStorage::try_new(buffer, vec![2, 32]).expect("packed Q8_0 storage");
+crates/incin-backends/src/cpu/executor.rs:574:        S::from_dyn(dims).expect("test dimensions must match the shape type")
+crates/incin-backends/src/cpu/executor.rs:582:        .unwrap()
+crates/incin-backends/src/cpu/executor.rs:595:        .unwrap();
+crates/incin-backends/src/codegen/pointwise.rs:136:        writeln!(out, "// Generated by incin-backends codegen (CUDA)").unwrap();
+crates/incin-backends/src/codegen/pointwise.rs:137:        writeln!(out, "#include <cuda_fp16.h>").unwrap();
+crates/incin-backends/src/codegen/pointwise.rs:138:        writeln!(out, "#include <cuda_bf16.h>").unwrap();
+crates/incin-backends/src/codegen/pointwise.rs:139:        writeln!(out, "#include <math.h>").unwrap();
+crates/incin-backends/src/codegen/pointwise.rs:140:        writeln!(out).unwrap();
+crates/incin-backends/src/codegen/pointwise.rs:142:        write!(out, "__global__ void {}(", self.name).unwrap();
+crates/incin-backends/src/codegen/pointwise.rs:144:            write!(out, "const {}* __restrict__ in{}, ", cuda_type(dt), i).unwrap();
+crates/incin-backends/src/codegen/pointwise.rs:146:        write!(out, "{}* __restrict__ out_data, ", out_type).unwrap();
+crates/incin-backends/src/codegen/pointwise.rs:147:        writeln!(out, "const int numel) {{").unwrap();
+crates/incin-backends/src/codegen/pointwise.rs:153:        .unwrap();
+crates/incin-backends/src/codegen/pointwise.rs:154:        writeln!(out, "    if (idx >= numel) return;").unwrap();
+crates/incin-backends/src/codegen/pointwise.rs:159:                    writeln!(out, "    const {} val{} = in1[0];", cuda_type(dt), i).unwrap();
+crates/incin-backends/src/codegen/pointwise.rs:162:                    writeln!(out, "    const {} val{} = in{}[idx];", cuda_type(dt), i, i).unwrap();
+crates/incin-backends/src/codegen/pointwise.rs:173:        .unwrap();
+crates/incin-backends/src/codegen/pointwise.rs:174:        writeln!(out, "}}").unwrap();
+crates/incin-backends/src/codegen/pointwise.rs:185:        writeln!(out, "// Generated by incin-backends codegen (WGSL)").unwrap();
+crates/incin-backends/src/codegen/pointwise.rs:186:        writeln!(out).unwrap();
+crates/incin-backends/src/codegen/pointwise.rs:196:            .unwrap();
+crates/incin-backends/src/codegen/pointwise.rs:204:        .unwrap();
+crates/incin-backends/src/codegen/pointwise.rs:205:        writeln!(out).unwrap();
+crates/incin-backends/src/codegen/pointwise.rs:212:        .unwrap();
+crates/incin-backends/src/codegen/pointwise.rs:217:        .unwrap();
+crates/incin-backends/src/codegen/pointwise.rs:218:        writeln!(out, "    let idx = global_id.x;").unwrap();
+crates/incin-backends/src/codegen/pointwise.rs:219:        writeln!(out, "    if (idx >= arrayLength(&out_data)) {{ return; }}").unwrap();
+crates/incin-backends/src/codegen/pointwise.rs:224:                    writeln!(out, "    let val{} = in1[0];", i).unwrap();
+crates/incin-backends/src/codegen/pointwise.rs:227:                    writeln!(out, "    let val{} = in{}[idx];", i, i).unwrap();
+crates/incin-backends/src/codegen/pointwise.rs:233:        writeln!(out, "    out_data[idx] = {}({});", out_type, expr_str).unwrap();
+crates/incin-backends/src/codegen/pointwise.rs:234:        writeln!(out, "}}").unwrap();
+crates/incin-backends/src/codegen/pointwise.rs:245:        writeln!(out, "// Generated by incin-backends codegen (MSL)").unwrap();
+crates/incin-backends/src/codegen/pointwise.rs:246:        writeln!(out, "#include <metal_stdlib>").unwrap();
+crates/incin-backends/src/codegen/pointwise.rs:247:        writeln!(out, "using namespace metal;").unwrap();
+crates/incin-backends/src/codegen/pointwise.rs:248:        writeln!(out).unwrap();
+crates/incin-backends/src/codegen/pointwise.rs:250:        writeln!(out, "kernel void {}(", self.name).unwrap();
+crates/incin-backends/src/codegen/pointwise.rs:259:            .unwrap();
+crates/incin-backends/src/codegen/pointwise.rs:267:        .unwrap();
+crates/incin-backends/src/codegen/pointwise.rs:268:        writeln!(out, "    uint idx [[thread_position_in_grid]]\n) {{").unwrap();
+crates/incin-backends/src/codegen/pointwise.rs:273:                    writeln!(out, "    const {} val{} = in1[0];", msl_type(dt), i).unwrap();
+crates/incin-backends/src/codegen/pointwise.rs:276:                    writeln!(out, "    const {} val{} = in{}[idx];", msl_type(dt), i, i).unwrap();
+crates/incin-backends/src/codegen/pointwise.rs:287:        .unwrap();
+crates/incin-backends/src/codegen/pointwise.rs:288:        writeln!(out, "}}").unwrap();
+crates/incin-backends/src/cpu/stride.rs:25:        .expect("validated CpuStorage shape must have representable contiguous strides")
+crates/incin-backends/src/cpu/stride.rs:76:        .expect("validated CpuStorage shape must have a representable element count")
+crates/incin-backends/src/cpu/stride.rs:146:        assert_eq!(broadcast_shape(&[3, 1], &[1, 4]).unwrap(), vec![3, 4]);
+crates/incin-backends/src/cpu/stride.rs:152:        assert_eq!(broadcast_shape(&[5], &[3, 5]).unwrap(), vec![3, 5]);
+crates/incin-backends/src/cpu/stride.rs:166:        assert_eq!(broadcast_shape(empty, &[3, 4]).unwrap(), vec![3, 4]);
+crates/incin-backends/src/cpu/tape.rs:279:        .expect("squeeze reshape of size-1 axis cannot fail")
+crates/incin-backends/src/cpu/tape.rs:314:        CpuBuffer::Q8_0(_) => panic!("sum_dim_keepdim not supported on Q8_0 buffer"),
+crates/incin-backends/src/cpu/tape.rs:373:        let result = unbroadcast(&grad, &[3]).unwrap();
+crates/incin-backends/src/cpu/tape.rs:387:        let result = unbroadcast(&grad, &[]).unwrap();
+crates/incin-backends/src/cpu/tape.rs:396:        let result = unbroadcast(&grad, &[3]).unwrap();
+crates/incin-backends/src/cpu/tape.rs:409:        let grads = backward(&loss).unwrap();
+crates/incin-backends/src/cpu/tape.rs:410:        let g = grads.get(loss.id).unwrap();
+crates/incin-backends/src/cpu/tape.rs:486:        let grads = backward(&total_loss).unwrap();
+crates/incin-backends/src/cpu/tape.rs:489:            .expect("x should have an accumulated gradient");
+crates/incin-backends/src/cpu/tape.rs:510:        let grads1 = backward(&out1).unwrap();
+crates/incin-backends/src/cpu/tape.rs:511:        assert_eq!(grads1.get(x1.id).unwrap().get(&[]), 10.0);
+crates/incin-backends/src/cpu/tape.rs:527:        let grads2 = backward(&out2).unwrap();
+crates/incin-backends/src/cpu/tape.rs:528:        assert_eq!(grads2.get(x2.id).unwrap().get(&[]), 100.0);
+crates/incin-backends/src/cpu/tape.rs:545:        let _ = backward(&out).unwrap();
+crates/incin-backends/src/cpu/tape.rs:562:            panic!("a NaN gradient was not reported under NanPolicy::Reject");
+crates/incin-backends/src/cuda/gpu.rs:149:            try_get_cuda_device(id).expect("Failed to initialize CUDA context")
+crates/incin-backends/src/cuda/gpu.rs:155:            let mut map = map_mutex.lock().unwrap();
+crates/incin-backends/src/cuda/gpu.rs:162:            let map = map_mutex.lock().unwrap();
+crates/incin-backends/src/cuda/backend.rs:556:            .expect("step (relu backward)");
+crates/incin-backends/src/cuda/backend.rs:558:                .expect("relu backward shape");
+crates/incin-backends/src/cuda/backend.rs:562:            .expect("relu backward")
+crates/incin-backends/src/cuda/backend.rs:576:                .expect("neg (sigmoid backward)");
+crates/incin-backends/src/cuda/backend.rs:579:                    .expect("1 - out (sigmoid backward)");
+crates/incin-backends/src/cuda/backend.rs:582:                    .expect("sigmoid deriv shape");
+crates/incin-backends/src/cuda/backend.rs:590:            .expect("out*(1-out) (sigmoid backward)");
+crates/incin-backends/src/cuda/backend.rs:592:                .expect("sigmoid grad shape");
+crates/incin-backends/src/cuda/backend.rs:600:            .expect("sigmoid backward")
+crates/incin-backends/src/cuda/backend.rs:611:                    .expect("tanh out^2 shape");
+crates/incin-backends/src/cuda/backend.rs:619:            .expect("out^2 (tanh backward)");
+crates/incin-backends/src/cuda/backend.rs:621:                .expect("neg (tanh backward)");
+crates/incin-backends/src/cuda/backend.rs:624:                    .expect("1 - out^2 (tanh backward)");
+crates/incin-backends/src/cuda/backend.rs:626:                .expect("tanh grad shape");
+crates/incin-backends/src/cuda/backend.rs:634:            .expect("tanh backward")
+crates/incin-backends/src/cuda/backend.rs:650:            .expect("sigmoid(x) (swish backward)");
+crates/incin-backends/src/cuda/backend.rs:652:                .expect("neg (swish backward)");
+crates/incin-backends/src/cuda/backend.rs:655:                    .expect("1 - out (swish backward)");
+crates/incin-backends/src/cuda/backend.rs:658:                    .expect("swish sig_term shape");
+crates/incin-backends/src/cuda/backend.rs:666:            .expect("sigmoid(x)*(1-out) (swish backward)");
+crates/incin-backends/src/cuda/backend.rs:669:                    .expect("swish deriv shape");
+crates/incin-backends/src/cuda/backend.rs:677:            .expect("swish backward deriv");
+crates/incin-backends/src/cuda/backend.rs:679:                .expect("swish grad shape");
+crates/incin-backends/src/cuda/backend.rs:687:            .expect("swish backward")
+crates/incin-backends/src/cuda/backend.rs:709:            .expect("softplus (mish backward)");
+crates/incin-backends/src/cuda/backend.rs:711:                .expect("tanh(softplus) (mish backward)");
+crates/incin-backends/src/cuda/backend.rs:717:            .expect("sigmoid (mish backward)");
+crates/incin-backends/src/cuda/backend.rs:722:            .expect("th^2 (mish backward)");
+crates/incin-backends/src/cuda/backend.rs:725:                    .expect("1 - th^2 (mish backward)");
+crates/incin-backends/src/cuda/backend.rs:733:            .expect("x * sig (mish backward)");
+crates/incin-backends/src/cuda/backend.rs:741:            .expect("x*sig*(1-th^2) (mish backward)");
+crates/incin-backends/src/cuda/backend.rs:745:            .expect("mish deriv");
+crates/incin-backends/src/cuda/backend.rs:753:            .expect("mish backward")
+crates/incin-backends/src/cuda/backend.rs:774:            .expect("elu deriv");
+crates/incin-backends/src/cuda/backend.rs:782:            .expect("elu backward")
+crates/incin-backends/src/cuda/backend.rs:801:                    .expect("cdf (gelu backward)");
+crates/incin-backends/src/cuda/backend.rs:807:            .expect("pdf (gelu backward)");
+crates/incin-backends/src/cuda/backend.rs:815:            .expect("x*pdf (gelu backward)");
+crates/incin-backends/src/cuda/backend.rs:819:            .expect("gelu deriv");
+crates/incin-backends/src/cuda/backend.rs:827:            .expect("gelu backward")
+crates/incin-backends/src/cuda/backend.rs:838:                    .expect("exp grad shape");
+crates/incin-backends/src/cuda/backend.rs:846:            .expect("exp backward")
+crates/incin-backends/src/cuda/backend.rs:856:                .expect("log grad shape");
+crates/incin-backends/src/cuda/backend.rs:864:            .expect("log backward")
+crates/incin-backends/src/cuda/backend.rs:875:                    .expect("sqrt ratio shape");
+crates/incin-backends/src/cuda/backend.rs:883:            .expect("sqrt backward ratio");
+crates/incin-backends/src/cuda/backend.rs:885:                .expect("sqrt backward (halve)")
+crates/incin-backends/src/cuda/backend.rs:894:                .expect("neg backward")
+crates/incin-backends/src/cuda/backend.rs:908:            .expect("sign (abs backward)");
+crates/incin-backends/src/cuda/backend.rs:910:                .expect("abs grad shape");
+crates/incin-backends/src/cuda/backend.rs:918:            .expect("abs backward")
+crates/incin-backends/src/cuda/backend.rs:928:                .expect("step backward (zero grad)")
+crates/incin-backends/src/cuda/backend.rs:946:                .expect("mul_scalar_float backward")
+crates/incin-backends/src/cuda/backend.rs:1085:            crate::cuda::tape::unbroadcast(grad_out, &t_shape).expect("unbroadcast sum_dim")
+crates/incin-backends/src/cuda/backend.rs:1094:            crate::cuda::tape::unbroadcast(grad_out, &t_shape).expect("unbroadcast sum_keepdim")
+crates/incin-backends/src/cuda/backend.rs:1110:                crate::cuda::tape::unbroadcast(grad_out, &t_shape).expect("unbroadcast mean_dim");
+crates/incin-backends/src/cuda/backend.rs:1114:                    .expect("scale mean_dim grad")
+crates/incin-backends/src/cuda/backend.rs:1133:                .expect("unbroadcast mean_keepdim");
+crates/incin-backends/src/cuda/backend.rs:1137:                    .expect("scale mean_keepdim grad")
+crates/incin-backends/src/cuda/backend.rs:1654:                batch_outs.into_iter().next().unwrap()
+crates/incin-backends/src/cuda/backend.rs:1662:            group_outputs.into_iter().next().unwrap()
+crates/incin-backends/src/cuda/backend.rs:1728:                batch_outs.into_iter().next().unwrap()
+crates/incin-backends/src/cuda/backend.rs:1736:            group_outputs.into_iter().next().unwrap()
+crates/incin-backends/src/cuda/backend.rs:1824:            batch_cols.into_iter().next().unwrap()
+crates/incin-backends/src/cuda/backend.rs:2063:        .expect("cuda download");
+crates/incin-backends/src/cuda/backend.rs:2078:        .expect("cuda upload");
+crates/incin-backends/src/cuda/backend.rs:2099:        .expect("cuda upload");
+crates/incin-backends/src/cuda/backend.rs:2264:        assert_eq!(checked_storage_byte_len(7, DTypeId::F16).unwrap(), 14);
+crates/incin-backends/src/cuda/backend.rs:2265:        assert_eq!(checked_storage_byte_len(7, DTypeId::BF16).unwrap(), 14);
+crates/incin-backends/src/cuda/backend.rs:2266:        assert_eq!(checked_storage_byte_len(7, DTypeId::F32).unwrap(), 28);
+crates/incin-backends/src/cuda/backend.rs:2267:        assert_eq!(checked_storage_byte_len(7, DTypeId::F64).unwrap(), 56);
+crates/incin-backends/src/cuda/backend.rs:2281:            validate_cuda_storage(dtype, &device, "test").unwrap();
+crates/incin-backends/src/cuda/backend.rs:2292:        assert_eq!(checked_numel(&[2, 3, 4]).unwrap(), 24);
+crates/incin-backends/src/cuda/backend.rs:2293:        assert_eq!(checked_numel(&[usize::MAX, 0]).unwrap(), 0);
+crates/incin-backends/src/cuda/backend.rs:2307:        cuda_from_f32(shape, DTypeId::F32, &DeviceId::cuda(0), values, "test").unwrap()
+crates/incin-backends/src/cuda/backend.rs:2314:        let out = <B as TensorOps<B>>::reshape::<f32>(&t, &[3, 2]).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2329:        let out = <B as TensorOps<B>>::transpose::<f32>(&t, 0, 1).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2337:        let out = <B as TensorOps<B>>::narrow::<f32>(&t, 0, 1, 2).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2345:        let out = <B as TensorOps<B>>::broadcast_as::<f32>(&t, &[4, 3]).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2360:        let out = <B as TensorOps<B>>::squeeze::<f32>(&t, 0).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2369:        let out = <B as TensorOps<B>>::stack::<f32>(&[&a, &b], 0).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2377:        let out = <B as TensorOps<B>>::slice::<f32>(&t, &[(1, 3), (0, 2)]).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2385:        let out = <B as TensorOps<B>>::flatten::<f32>(&t, 1, 2).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2393:        let out = <B as TensorOps<B>>::broadcast_left::<f32>(&t, &[2, 4]).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2403:        let out = <B as TensorOps<B>>::matmul::<f32>(&lhs, &rhs).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2421:        let out = <B as TensorOps<B>>::matmul::<f32>(&lhs, &rhs).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2422:        let grads = crate::cuda::tape::backward(&out).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2432:        let out = <B as TensorOps<B>>::narrow::<f32>(&t, 0, 1, 2).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2433:        let grads = crate::cuda::tape::backward(&out).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2436:            .expect("narrow input should have a gradient");
+crates/incin-backends/src/cuda/backend.rs:2442:        cuda_from_bytes(shape, DTypeId::I64, DeviceId::cuda(0).ordinal(), &bytes).unwrap()
+crates/incin-backends/src/cuda/backend.rs:2451:        let out = <B as ModuleOps<B>>::embedding::<f32, i64>(&idx, &w).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2469:        let out = <B as ModuleOps<B>>::embedding::<f32, i64>(&idx, &w).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2470:        let grads = crate::cuda::tape::backward(&out).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2473:            .expect("embedding weight should have a gradient");
+crates/incin-backends/src/cuda/backend.rs:2483:            <B as ModuleOps<B>>::max_pool2d::<f32>(&t, (2, 2), (2, 2), (0, 0), (1, 1)).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2493:            <B as ModuleOps<B>>::max_pool2d::<f32>(&t, (2, 2), (2, 2), (0, 0), (1, 1)).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2494:        let grads = crate::cuda::tape::backward(&out).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2497:            .expect("max_pool2d input should have a gradient");
+crates/incin-backends/src/cuda/backend.rs:2505:        let out = <B as ModuleOps<B>>::avg_pool2d::<f32>(&t, (2, 2), (2, 2), (0, 0)).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2513:        let out = <B as ModuleOps<B>>::adaptive_avg_pool2d::<f32>(&t, (3, 3)).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2522:        let out = <B as ModuleOps<B>>::adaptive_avg_pool2d::<f32>(&t, (3, 3)).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2523:        let grads = crate::cuda::tape::backward(&out).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2526:            .expect("adaptive_avg_pool2d input should have a gradient");
+crates/incin-backends/src/cuda/backend.rs:2537:        let out = <B as ModuleOps<B>>::conv1d::<f32>(&t, &w, None, 1, 0, 1, 1).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2549:        let out = <B as ModuleOps<B>>::conv1d::<f32>(&t, &w, None, 1, 0, 1, 1).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2550:        let grads = crate::cuda::tape::backward(&out).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2551:        assert_eq!(grads.get(t_id).unwrap().shape, vec![1, 1, 4]);
+crates/incin-backends/src/cuda/backend.rs:2552:        assert_eq!(grads.get(w_id).unwrap().shape, vec![1, 1, 2]);
+crates/incin-backends/src/cuda/backend.rs:2573:        let out = <B as ModuleOps<B>>::conv2d::<f32>(&t, &w, None, 1, 0, 1, 1).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2585:        let out = <B as ModuleOps<B>>::conv2d::<f32>(&t, &w, Some(&bias), 1, 0, 1, 1).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2599:        let out = <B as ModuleOps<B>>::conv2d::<f32>(&t, &w, None, 1, 0, 1, 1).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2600:        let grads = crate::cuda::tape::backward(&out).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2601:        assert_eq!(grads.get(t_id).unwrap().shape, vec![1, 1, 3, 3]);
+crates/incin-backends/src/cuda/backend.rs:2602:        assert_eq!(grads.get(w_id).unwrap().shape, vec![1, 1, 2, 2]);
+crates/incin-backends/src/cuda/backend.rs:2612:        let out = <B as ModuleOps<B>>::conv2d::<f32>(&t, &w, None, 1, 0, 1, 2).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2627:            <B as ModuleOps<B>>::conv_transpose2d::<f32>(&t, &w, None, 1, 0, 0, 1, 1).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2637:            <B as ModuleOps<B>>::conv_transpose2d::<f32>(&t, &w, None, 1, 0, 1, 1, 1).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2648:            <B as ModuleOps<B>>::conv_transpose2d::<f32>(&t, &w, None, 1, 0, 0, 1, 1).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2649:        let grads = crate::cuda::tape::backward(&out).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2650:        assert_eq!(grads.get(t_id).unwrap().shape, vec![1, 1, 2, 2]);
+crates/incin-backends/src/cuda/backend.rs:2651:        assert_eq!(grads.get(w_id).unwrap().shape, vec![1, 1, 2, 2]);
+crates/incin-backends/src/cuda/backend.rs:2674:        let out = <B as LossOps<B>>::mse_loss::<f32>(&pred, &target, Reduction::Mean).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2683:        let out = <B as LossOps<B>>::l1_loss::<f32>(&pred, &target, Reduction::Sum).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2693:            .unwrap();
+crates/incin-backends/src/cuda/backend.rs:2703:        let out = <B as LossOps<B>>::mse_loss::<f32>(&pred, &target, Reduction::Mean).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2704:        let grads = crate::cuda::tape::backward(&out).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2707:            .expect("mse_loss pred should have a gradient");
+crates/incin-backends/src/cuda/backend.rs:2716:        let out = <B as FloatOps<B>>::mish::<f32>(&t).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2725:        let out = <B as FloatOps<B>>::mish::<f32>(&t).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2726:        let grads = crate::cuda::tape::backward(&out).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2727:        let g = grads.get(t_id).expect("mish input should have a gradient");
+crates/incin-backends/src/cuda/backend.rs:2736:        let out = <B as FloatOps<B>>::elu::<f32>(&t).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2745:        let out = <B as FloatOps<B>>::elu::<f32>(&t).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2746:        let grads = crate::cuda::tape::backward(&out).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2747:        let g = grads.get(t_id).expect("elu input should have a gradient");
+crates/incin-backends/src/cuda/backend.rs:2756:        let out = <B as FloatOps<B>>::gelu::<f32>(&t).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2765:        let out = <B as FloatOps<B>>::gelu::<f32>(&t).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2766:        let grads = crate::cuda::tape::backward(&out).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2767:        let g = grads.get(t_id).expect("gelu input should have a gradient");
+crates/incin-backends/src/cuda/backend.rs:2775:        let out = <B as ReductionOps<B>>::argmax::<f32, i64>(&t, Some(0)).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2783:        let out = <B as ReductionOps<B>>::argmax::<f32, i64>(&t, None).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2791:        let out = <B as ReductionOps<B>>::argmin::<f32, i64>(&t, Some(0)).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2807:        let (vals, indices) = <B as ReductionOps<B>>::topk::<f32, u32>(&t, 2, 1, true).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2816:            .unwrap();
+crates/incin-backends/src/cuda/backend.rs:2825:        let (vals, indices) = <B as ReductionOps<B>>::topk::<f32, u32>(&t, 10, 1, true).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2843:        let out = <B as ReductionOps<B>>::argsort::<f32, u32>(&t, 1, false).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2850:            .unwrap();
+crates/incin-backends/src/cuda/backend.rs:2869:            <B as QuantizedOps<B>>::quantize::<f32, incin_core::prelude::Q8_0>(&lhs_f32).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2871:            <B as QuantizedOps<B>>::quantize::<f32, incin_core::prelude::Q8_0>(&rhs_f32).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2874:                .unwrap();
+crates/incin-backends/src/cuda/backend.rs:2884:            <B as QuantizedOps<B>>::quantize::<f32, incin_core::prelude::Q8_0>(&lhs_f32).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2886:            <B as QuantizedOps<B>>::quantize::<f32, incin_core::prelude::Q8_0>(&rhs_f32).unwrap();
+crates/incin-backends/src/cuda/backend.rs:2913:        .unwrap();
+crates/incin-backends/src/cpu/creation.rs:315:            _ => panic!("expected F32 buffer"),
+crates/incin-backends/src/cpu/creation.rs:322:        let t = TestBackend::zeros::<f32>(&[2, 3], DTypeId::F32, &dev()).unwrap();
+crates/incin-backends/src/cpu/creation.rs:330:        let t = TestBackend::ones::<f32>(&[2, 3], DTypeId::F32, &dev()).unwrap();
+crates/incin-backends/src/cpu/creation.rs:338:        let t = TestBackend::ones::<Dyn>(&[2], DTypeId::F64, &dev()).unwrap();
+crates/incin-backends/src/cpu/creation.rs:345:        let t = TestBackend::rand::<f32>(&[100], DTypeId::F32, &dev()).unwrap();
+crates/incin-backends/src/cpu/creation.rs:355:        let t = TestBackend::randn::<f32>(&[1000], DTypeId::F32, &dev()).unwrap();
+crates/incin-backends/src/cpu/creation.rs:372:        let var = TestBackend::var_zeros::<f32>(&[2, 2], DTypeId::F32, &dev()).unwrap();
+crates/incin-backends/src/cpu/creation.rs:373:        let t = TestBackend::var_as_tensor::<f32>(&var).unwrap();
+crates/incin-backends/src/cpu/creation.rs:381:        let var = TestBackend::var_ones::<f32>(&[2, 2], DTypeId::F32, &dev()).unwrap();
+crates/incin-backends/src/cpu/creation.rs:382:        let t = TestBackend::var_as_tensor::<f32>(&var).unwrap();
+crates/incin-backends/src/cpu/creation.rs:390:        let var = TestBackend::var_rand::<f32>(&[10], DTypeId::F32, &dev()).unwrap();
+crates/incin-backends/src/cpu/creation.rs:391:        let t = TestBackend::var_as_tensor::<f32>(&var).unwrap();
+crates/incin-backends/src/cpu/creation.rs:399:        let var = TestBackend::var_randn::<f32>(&[50], DTypeId::F32, &dev()).unwrap();
+crates/incin-backends/src/cpu/creation.rs:400:        let t = TestBackend::var_as_tensor::<f32>(&var).unwrap();
+crates/incin-backends/src/cpu/creation.rs:408:        let t = TestBackend::zeros::<f32>(&[3], DTypeId::F32, &dev()).unwrap();
+crates/incin-backends/src/cpu/creation.rs:414:        .unwrap();
+crates/incin-backends/src/metal/storage.rs:285:            MetalStorage::zeros(&shape, DTypeId::F32, MetalStorageMode::Shared, 0).unwrap();
+crates/incin-backends/src/metal/storage.rs:289:        assert_eq!(storage.as_bytes().unwrap().len(), 24);
+crates/incin-backends/src/metal/storage.rs:296:            MetalStorage::zeros(&shape, DTypeId::F32, MetalStorageMode::Private, 0).unwrap();
+crates/incin-backends/src/metal/storage.rs:310:        .unwrap();
+crates/incin-backends/src/tuning/identity.rs:1318:        write!(&mut output, "{:02x}", byte as u8).expect("writing to String cannot fail");
+crates/incin-backends/src/detect.rs:235:            thread.join().expect("a probing thread must not panic");
+crates/incin-backends/src/cuda/ops/embedding.rs:71:        let i_ptr = i_b.data.transmute::<i64>(i_b.len).unwrap();
+crates/incin-backends/src/cuda/ops/embedding.rs:72:        let w_ptr = w_b.data.transmute::<f32>(w_b.len).unwrap();
+crates/incin-backends/src/cuda/ops/embedding.rs:76:            .expect("out_b.data is freshly allocated and uniquely owned here");
+crates/incin-backends/src/cuda/ops/embedding.rs:77:        let mut out_ptr = out_u8.transmute_mut::<f32>(out_numel).unwrap();
+crates/incin-backends/src/cuda/ops/embedding.rs:142:        let go_ptr = go_b.data.transmute::<f32>(go_b.len).unwrap();
+crates/incin-backends/src/cuda/ops/embedding.rs:143:        let i_ptr = i_b.data.transmute::<i64>(i_b.len).unwrap();
+crates/incin-backends/src/cuda/ops/embedding.rs:147:            .expect("grad_w_b.data is freshly allocated and uniquely owned here");
+crates/incin-backends/src/cuda/ops/embedding.rs:148:        let mut gw_ptr = gw_u8.transmute_mut::<f32>(out_numel).unwrap();
+crates/incin-backends/src/cuda/ops/shape.rs:142:        let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();
+crates/incin-backends/src/cuda/ops/shape.rs:143:        let params_f32 = params_dev.transmute::<u32>(21).unwrap();
+crates/incin-backends/src/cuda/ops/shape.rs:148:            .expect("out_b.data is freshly allocated and uniquely owned here");
+crates/incin-backends/src/cuda/ops/shape.rs:149:        let mut out_f32 = out_u8.transmute_mut::<f32>(n_elements).unwrap();
+crates/incin-backends/src/cuda/ops/shape.rs:322:            let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();
+crates/incin-backends/src/cuda/ops/shape.rs:327:                .expect("out_b.data is uniquely owned for the lifetime of this loop");
+crates/incin-backends/src/cuda/ops/shape.rs:328:            let mut out_f32 = out_u8.transmute_mut::<f32>(total).unwrap();
+crates/incin-backends/src/cuda/ops/norm.rs:406:        assert_eq!(checked_i32(i32::MAX as usize, "test").unwrap(), i32::MAX);
+crates/incin-backends/src/dist/nccl.rs:2215:        .unwrap();
+crates/incin-backends/src/dist/nccl.rs:2220:        .unwrap();
+crates/incin-backends/src/dist/nccl.rs:2231:            .unwrap();
+crates/incin-backends/src/dist/nccl.rs:2245:        .unwrap();
+crates/incin-backends/src/dist/nccl.rs:2251:            .unwrap();
+crates/incin-backends/src/dist/nccl.rs:2254:            .push_static::<f32>(GradientId::new(41).unwrap(), 4, StreamId::default())
+crates/incin-backends/src/dist/nccl.rs:2255:            .unwrap();
+crates/incin-backends/src/dist/nccl.rs:2256:        builder.finish().unwrap().into_collective_plan()
+crates/incin-backends/src/dist/nccl.rs:2269:        .unwrap();
+crates/incin-backends/src/dist/nccl.rs:2275:            .unwrap();
+crates/incin-backends/src/dist/nccl.rs:2279:                TensorParallelId::new(51).unwrap(),
+crates/incin-backends/src/dist/nccl.rs:2283:            .unwrap();
+crates/incin-backends/src/dist/nccl.rs:2286:                TensorParallelId::new(52).unwrap(),
+crates/incin-backends/src/dist/nccl.rs:2290:            .unwrap();
+crates/incin-backends/src/dist/nccl.rs:2291:        builder.finish().unwrap().into_collective_plan()
+crates/incin-backends/src/dist/nccl.rs:2304:        .unwrap();
+crates/incin-backends/src/dist/nccl.rs:2309:        .unwrap();
+crates/incin-backends/src/dist/nccl.rs:2318:            PipelineBoundaryId::new(61).unwrap(),
+crates/incin-backends/src/dist/nccl.rs:2322:        .unwrap()
+crates/incin-backends/src/dist/nccl.rs:2331:        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+crates/incin-backends/src/dist/nccl.rs:2332:        let address = listener.local_addr().unwrap();
+crates/incin-backends/src/dist/nccl.rs:2342:        let decoded = WireMessage::decode(encoded).unwrap();
+crates/incin-backends/src/dist/nccl.rs:2344:        assert_eq!(decoded.summary().unwrap(), summary(7, 11, 13));
+crates/incin-backends/src/dist/nccl.rs:2355:        let rank0 = NcclTopology::new(identities.clone(), 0, version.clone()).unwrap();
+crates/incin-backends/src/dist/nccl.rs:2356:        let rank1 = NcclTopology::new(identities, 1, version).unwrap();
+crates/incin-backends/src/dist/nccl.rs:2376:        let wire = TopologyWire::new(1, &identity, &transport).unwrap();
+crates/incin-backends/src/dist/nccl.rs:2377:        let decoded = TopologyWire::decode(wire.encode()).unwrap();
+crates/incin-backends/src/dist/nccl.rs:2378:        assert_eq!(decoded.identity().unwrap(), identity);
+crates/incin-backends/src/dist/nccl.rs:2379:        assert_eq!(decoded.transport().unwrap(), transport);
+crates/incin-backends/src/dist/nccl.rs:2405:        .unwrap();
+crates/incin-backends/src/dist/nccl.rs:2406:        let root = root.join().unwrap().unwrap();
+crates/incin-backends/src/dist/nccl.rs:2440:            .unwrap();
+crates/incin-backends/src/dist/nccl.rs:2446:            .unwrap();
+crates/incin-backends/src/dist/nccl.rs:2447:            let (root_topology, root_bootstrap) = root.join().unwrap().unwrap();
+crates/incin-backends/src/dist/nccl.rs:2469:        let identity = NcclTopology::probe_local_cuda_identity(0, 0).unwrap();
+crates/incin-backends/src/dist/nccl.rs:2507:            .unwrap();
+crates/incin-backends/src/dist/nccl.rs:2508:        let root = root.join().unwrap().unwrap();
+crates/incin-backends/src/dist/nccl.rs:2532:        let root = root.join().unwrap();
+crates/incin-backends/src/dist/nccl.rs:2586:        let error = catch_nccl_panic("load test", || panic!("libnccl not found")).unwrap_err();
+crates/incin-backends/src/dist/nccl.rs:2653:                GradientId::new(41).unwrap(),
+crates/incin-backends/src/dist/nccl.rs:2664:                GradientId::new(42).unwrap(),
+crates/incin-backends/src/dist/nccl.rs:2678:                GradientId::new(41).unwrap(),
+crates/incin-backends/src/dist/nccl.rs:2695:                GradientId::new(41).unwrap(),
+crates/incin-backends/src/dist/nccl.rs:2713:                TensorParallelId::new(51).unwrap(),
+crates/incin-backends/src/dist/nccl.rs:2725:                TensorParallelId::new(52).unwrap(),
+crates/incin-backends/src/dist/nccl.rs:2737:                TensorParallelId::new(51).unwrap(),
+crates/incin-backends/src/dist/nccl.rs:2749:                TensorParallelId::new(51).unwrap(),
+crates/incin-backends/src/dist/nccl.rs:2768:            .unwrap(),
+crates/incin-backends/src/dist/nccl.rs:2793:                TensorParallelId::new(52).unwrap(),
+crates/incin-backends/src/dist/nccl.rs:2808:            .unwrap(),
+crates/incin-backends/src/dist/nccl.rs:2815:                TensorParallelId::new(52).unwrap(),
+crates/incin-backends/src/dist/nccl.rs:2833:                PipelineBoundaryId::new(61).unwrap(),
+crates/incin-backends/src/dist/nccl.rs:2846:                PipelineBoundaryId::new(62).unwrap(),
+crates/incin-backends/src/dist/nccl.rs:2859:                PipelineBoundaryId::new(61).unwrap(),
+crates/incin-backends/src/dist/nccl.rs:2872:                PipelineBoundaryId::new(61).unwrap(),
+crates/incin-backends/src/dist/nccl.rs:2889:                PipelineBoundaryId::new(61).unwrap(),
+crates/incin-backends/src/dist/nccl.rs:2920:            Tensor::<incin_core::prelude::Dyn, B>::from_slice(&rank_major, vec![12]).unwrap();
+crates/incin-backends/src/dist/nccl.rs:2927:        .unwrap();
+crates/incin-backends/src/dist/nccl.rs:2928:        let static_bytes = B::to_bytes::<f32>(&static_output).unwrap();
+crates/incin-backends/src/dist/nccl.rs:2936:            .unwrap();
+crates/incin-backends/src/dist/nccl.rs:2943:        .unwrap();
+crates/incin-backends/src/dist/nccl.rs:2944:        let dyn_bytes = B::to_bytes::<incin_core::prelude::Dyn>(&dyn_output).unwrap();
+crates/incin-backends/src/cuda/ops/pool.rs:138:        let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();
+crates/incin-backends/src/cuda/ops/pool.rs:140:            Arc::get_mut(&mut out_b.data).expect("out_b freshly allocated, uniquely owned");
+crates/incin-backends/src/cuda/ops/pool.rs:141:        let mut out_f32 = out_u8.transmute_mut::<f32>(out_total).unwrap();
+crates/incin-backends/src/cuda/ops/pool.rs:143:            Arc::get_mut(&mut idx_b.data).expect("idx_b freshly allocated, uniquely owned");
+crates/incin-backends/src/cuda/ops/pool.rs:144:        let mut idx_u32 = idx_u8.transmute_mut::<u32>(out_total).unwrap();
+crates/incin-backends/src/cuda/ops/pool.rs:203:        let go_f32 = go_buf.data.transmute::<f32>(go_buf.len).unwrap();
+crates/incin-backends/src/cuda/ops/pool.rs:205:        let idx_u32 = idx_buf.data.transmute::<u32>(idx_buf.len).unwrap();
+crates/incin-backends/src/cuda/ops/pool.rs:207:            Arc::get_mut(&mut grad_in_b.data).expect("grad_in_b freshly allocated, uniquely owned");
+crates/incin-backends/src/cuda/ops/pool.rs:208:        let mut gi_f32 = gi_u8.transmute_mut::<f32>(in_total).unwrap();
+crates/incin-backends/src/cuda/ops/pool.rs:257:        let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();
+crates/incin-backends/src/cuda/ops/pool.rs:259:            Arc::get_mut(&mut out_b.data).expect("out_b freshly allocated, uniquely owned");
+crates/incin-backends/src/cuda/ops/pool.rs:260:        let mut out_f32 = out_u8.transmute_mut::<f32>(out_total).unwrap();
+crates/incin-backends/src/cuda/ops/pool.rs:320:        let go_f32 = go_buf.data.transmute::<f32>(go_buf.len).unwrap();
+crates/incin-backends/src/cuda/ops/pool.rs:322:            Arc::get_mut(&mut grad_in_b.data).expect("grad_in_b freshly allocated, uniquely owned");
+crates/incin-backends/src/cuda/ops/pool.rs:323:        let mut gi_f32 = gi_u8.transmute_mut::<f32>(in_total).unwrap();
+crates/incin-backends/src/cuda/ops/pool.rs:373:        let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();
+crates/incin-backends/src/cuda/ops/pool.rs:375:            Arc::get_mut(&mut out_b.data).expect("out_b freshly allocated, uniquely owned");
+crates/incin-backends/src/cuda/ops/pool.rs:376:        let mut out_f32 = out_u8.transmute_mut::<f32>(out_total).unwrap();
+crates/incin-backends/src/cuda/ops/pool.rs:428:        let go_f32 = go_buf.data.transmute::<f32>(go_buf.len).unwrap();
+crates/incin-backends/src/cuda/ops/pool.rs:430:            Arc::get_mut(&mut grad_in_b.data).expect("grad_in_b freshly allocated, uniquely owned");
+crates/incin-backends/src/cuda/ops/pool.rs:431:        let mut gi_f32 = gi_u8.transmute_mut::<f32>(in_total).unwrap();
+crates/incin-backends/src/cuda/ops/quant.rs:66:        let inp_ptr = b_inp.data.transmute::<f32>(b_inp.len).unwrap();
+crates/incin-backends/src/cuda/ops/quant.rs:70:            .expect("out_buf.data is freshly allocated and uniquely owned here");
+crates/incin-backends/src/cuda/ops/quant.rs:150:            .expect("out_buf.data is freshly allocated and uniquely owned here");
+crates/incin-backends/src/cuda/ops/quant.rs:151:        let mut out_ptr = out_u8.transmute_mut::<f32>(out_numel).unwrap();
+crates/incin-backends/src/cuda/ops/matmul.rs:73:        let lhs_f32 = lhs_buf.data.transmute::<f32>(lhs_buf.len).unwrap();
+crates/incin-backends/src/cuda/ops/matmul.rs:74:        let rhs_f32 = rhs_buf.data.transmute::<f32>(rhs_buf.len).unwrap();
+crates/incin-backends/src/cuda/ops/matmul.rs:79:            .expect("out_b.data is freshly allocated and uniquely owned here");
+crates/incin-backends/src/cuda/ops/matmul.rs:80:        let mut out_f32 = out_u8.transmute_mut::<f32>(total).unwrap();
+crates/incin-backends/src/cuda/ops/reduce.rs:543:        assert_eq!(checked_i32(i32::MAX as usize, "test").unwrap(), i32::MAX);
+crates/incin-backends/src/wgpu/storage.rs:84:        slice.map_async(wgpu::MapMode::Read, move |v| tx.send(v).unwrap());
+crates/incin-backends/src/wgpu/storage.rs:86:        rx.recv().unwrap().unwrap();
+crates/incin-backends/src/wgpu/storage.rs:181:            .expect("backend-created contiguous WGPU storage must match its allocation")
+crates/incin-backends/src/cuda/ops/elementwise.rs:744:            validate_elementwise_dtype(dtype, "test").unwrap();
+crates/incin-backends/src/cuda/ops/elementwise.rs:755:            let kernel = crate::kernel::render_cuda_unary("neg", "-x", dtype).unwrap();
+crates/incin-backends/src/cuda/ops/elementwise.rs:756:            validate_kernel_abi(&kernel, dtype).unwrap();
+crates/incin-backends/src/cuda/ops/elementwise.rs:763:        assert_eq!(checked_i32(i32::MAX as usize, "shape").unwrap(), i32::MAX);
+crates/incin-backends/src/cuda/ops/elementwise.rs:766:            checked_i32_vec(&[0, 7, 31], "stride").unwrap(),
+crates/incin-backends/src/cuda/ops/elementwise.rs:776:        assert_eq!(launch_config(1, 1, 256).unwrap().grid_dim.0, 1);
+crates/incin-backends/src/cuda/ops/elementwise.rs:777:        assert_eq!(launch_config(256, 1, 256).unwrap().grid_dim.0, 1);
+crates/incin-backends/src/cuda/ops/elementwise.rs:778:        assert_eq!(launch_config(257, 1, 256).unwrap().grid_dim.0, 2);
+crates/incin-backends/src/cuda/ops/elementwise.rs:779:        assert_eq!(launch_config(1025, 4, 256).unwrap().grid_dim.0, 2);
+crates/incin-backends/src/cuda/ops/elementwise.rs:789:            select_unary_strategy(DTypeId::F32, LayoutClass::Contiguous, 4096, 0).unwrap(),
+crates/incin-backends/src/cuda/ops/elementwise.rs:796:            select_unary_strategy(DTypeId::F32, LayoutClass::Contiguous, 4096, 1).unwrap(),
+crates/incin-backends/src/cuda/ops/elementwise.rs:803:            select_binary_strategy(DTypeId::F16, LayoutClass::ScalarLeft, 4096, 1, 2).unwrap(),
+crates/incin-backends/src/cuda/ops/elementwise.rs:810:            select_binary_strategy(DTypeId::F64, LayoutClass::Strided, 4096, 0, 0).unwrap(),
+crates/incin-backends/src/cuda/ops/elementwise.rs:817:            select_binary_strategy(DTypeId::F32, LayoutClass::Contiguous, 1023, 0, 0).unwrap(),
+crates/incin-backends/src/cuda/ops/conv.rs:188:        let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();
+crates/incin-backends/src/cuda/ops/conv.rs:190:            Arc::get_mut(&mut out_b.data).expect("out_b freshly allocated, uniquely owned");
+crates/incin-backends/src/cuda/ops/conv.rs:191:        let mut out_f32 = out_u8.transmute_mut::<f32>(out_total).unwrap();
+crates/incin-backends/src/cuda/ops/conv.rs:266:        let col_f32 = cols_buf.data.transmute::<f32>(cols_buf.len).unwrap();
+crates/incin-backends/src/cuda/ops/conv.rs:268:            Arc::get_mut(&mut out_b.data).expect("out_b freshly allocated, uniquely owned");
+crates/incin-backends/src/cuda/ops/conv.rs:269:        let mut out_f32 = out_u8.transmute_mut::<f32>(out_total).unwrap();
+crates/incin-backends/src/cuda/ops/conv.rs:327:        let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();
+crates/incin-backends/src/cuda/ops/conv.rs:329:            Arc::get_mut(&mut out_b.data).expect("out_b freshly allocated, uniquely owned");
+crates/incin-backends/src/cuda/ops/conv.rs:330:        let mut out_f32 = out_u8.transmute_mut::<f32>(out_total).unwrap();
+crates/incin-backends/src/cuda/ops/conv.rs:388:        let col_f32 = cols_buf.data.transmute::<f32>(cols_buf.len).unwrap();
+crates/incin-backends/src/cuda/ops/conv.rs:390:            Arc::get_mut(&mut out_b.data).expect("out_b freshly allocated, uniquely owned");
+crates/incin-backends/src/cuda/ops/conv.rs:391:        let mut out_f32 = out_u8.transmute_mut::<f32>(out_total).unwrap();
+crates/incin-backends/src/cuda/ops/loss.rs:57:        let log_sm_ptr = b_log_sm.data.transmute::<f32>(b_log_sm.len).unwrap();
+crates/incin-backends/src/cuda/ops/loss.rs:58:        let targets_ptr = b_targets.data.transmute::<i64>(b_targets.len).unwrap();
+crates/incin-backends/src/cuda/ops/loss.rs:63:            .expect("out_b.data is freshly allocated and uniquely owned here");
+crates/incin-backends/src/cuda/ops/loss.rs:64:        let mut out_ptr = out_u8.transmute_mut::<f32>(out_numel).unwrap();
+crates/incin-backends/src/cpu/storage.rs:170:                panic!("from_f64_values not supported on Q8_0 quantized buffer")
+crates/incin-backends/src/cpu/storage.rs:188:                panic!("get_f64 not supported directly on Q8_0 quantized buffer")
+crates/incin-backends/src/cpu/storage.rs:247:            .expect("backend-created contiguous CPU storage must match its allocation")
+crates/incin-backends/src/cpu/storage.rs:268:            CpuBuffer::Q8_0(_) => panic!("ones_like not supported on Q8_0 buffer"),
+crates/incin-backends/src/cpu/storage.rs:448:            CpuBuffer::Q8_0(_) => panic!("materialize not supported on Q8_0 buffer"),
+crates/incin-backends/src/cpu/storage.rs:534:        CpuBuffer::Q8_0(_) => panic!("scatter_into_zeros not supported on Q8_0 buffer"),
+crates/incin-backends/src/cpu/storage.rs:566:        let r = s.reshape(&[3, 2]).unwrap();
+crates/incin-backends/src/cpu/storage.rs:577:        let t = s.transpose(0, 1).unwrap(); // [3,2], non-contiguous
+crates/incin-backends/src/cpu/storage.rs:580:        let r = t.reshape(&[6]).unwrap();
+crates/incin-backends/src/cpu/storage.rs:589:            panic!("expected F32 buffer");
+crates/incin-backends/src/cpu/storage.rs:598:        let t = s.transpose(0, 1).unwrap();
+crates/incin-backends/src/cpu/storage.rs:610:        let t = s.transpose(0, 1).unwrap(); // [[1,4],[2,5],[3,6]]
+crates/incin-backends/src/cpu/storage.rs:624:        let b = s.broadcast_as(&[4, 3]).unwrap();
+crates/incin-backends/src/cpu/storage.rs:650:        let n = s.narrow(0, 1, 1).unwrap();
+crates/incin-backends/src/cpu/storage.rs:663:        let t = s.transpose(0, 1).unwrap(); // [[1,4],[2,5],[3,6]], non-contiguous
+crates/incin-backends/src/cpu/storage.rs:664:        let n = t.narrow(0, 1, 1).unwrap(); // row 1 of the transposed view -> [2,5]
+crates/incin-backends/src/cpu/storage.rs:694:        let full = s.narrow(1, 0, 3).unwrap();
+crates/incin-backends/src/cpu/storage.rs:700:        let edge = s.narrow(1, 1, 2).unwrap();
+crates/incin-backends/src/wgpu/device.rs:29:            .expect("No suitable GPU adapter found");
+crates/incin-backends/src/wgpu/device.rs:40:            .expect("Failed to create WGPU device");
+crates/incin-backends/src/external/candle/backend.rs:167:                    .map(|chunk| f32::from_ne_bytes(chunk.try_into().unwrap()))
+crates/incin-backends/src/external/candle/backend.rs:175:                    .map(|chunk| f64::from_ne_bytes(chunk.try_into().unwrap()))
+crates/incin-backends/src/external/candle/backend.rs:187:                    .map(|chunk| u32::from_ne_bytes(chunk.try_into().unwrap()))
+crates/incin-backends/src/external/candle/backend.rs:195:                    .map(|chunk| i64::from_ne_bytes(chunk.try_into().unwrap()))
+crates/incin-backends/src/external/candle/backend.rs:203:                    .map(|chunk| half::f16::from_ne_bytes(chunk.try_into().unwrap()))
+crates/incin-backends/src/external/candle/backend.rs:211:                    .map(|chunk| half::bf16::from_ne_bytes(chunk.try_into().unwrap()))
+crates/incin-backends/src/external/candle/mod.rs:44:        assert_eq!(to_candle_dtype(DTypeId::F32).unwrap(), candle::DType::F32);
+crates/incin-backends/src/external/candle/mod.rs:45:        assert_eq!(to_candle_dtype(DTypeId::I64).unwrap(), candle::DType::I64);
+crates/incin-backends/src/external/candle/mod.rs:53:        let c_dev = to_candle_device(&cpu).unwrap();
+crates/incin-backends/src/wgpu/backend.rs:536:            scalar_op::<T>(grad_out, scalar, 1).expect("mul_scalar_float backward")
+crates/incin-backends/src/wgpu/backend.rs:546:            let deriv = unary_op::<T>(&t_capture, 10).expect("step (relu backward)");
+crates/incin-backends/src/wgpu/backend.rs:547:            binary_op::<T>(grad_out, &deriv, 2, "relu_grad").expect("relu backward")
+crates/incin-backends/src/wgpu/backend.rs:556:            scalar_op::<T>(grad_out, 0.0, 1).expect("step backward (zero grad)")
+crates/incin-backends/src/wgpu/backend.rs:565:            binary_op::<T>(grad_out, &t_capture, 5, "elu_grad").expect("elu backward")
+crates/incin-backends/src/wgpu/backend.rs:573:            binary_op::<T>(grad_out, &t_capture, 4, "gelu_grad").expect("gelu backward")
+crates/incin-backends/src/wgpu/backend.rs:581:            binary_op::<T>(grad_out, &t_capture, 6, "mish_grad").expect("mish backward")
+crates/incin-backends/src/wgpu/backend.rs:592:                .expect("out^2 (tanh backward)");
+crates/incin-backends/src/wgpu/backend.rs:593:            let neg_out_sq = unary_op::<T>(&out_sq, 5).expect("neg (tanh backward)");
+crates/incin-backends/src/wgpu/backend.rs:594:            let deriv = scalar_op::<T>(&neg_out_sq, 1.0, 0).expect("1 - out^2 (tanh backward)");
+crates/incin-backends/src/wgpu/backend.rs:595:            binary_op::<T>(grad_out, &deriv, 2, "tanh_grad").expect("tanh backward")
+crates/incin-backends/src/wgpu/backend.rs:607:            let neg_out = unary_op::<T>(&out_capture, 5).expect("neg (sigmoid backward)");
+crates/incin-backends/src/wgpu/backend.rs:609:                scalar_op::<T>(&neg_out, 1.0, 0).expect("1 - out (sigmoid backward)");
+crates/incin-backends/src/wgpu/backend.rs:611:                .expect("out*(1-out) (sigmoid backward)");
+crates/incin-backends/src/wgpu/backend.rs:612:            binary_op::<T>(grad_out, &deriv, 2, "sigmoid_grad").expect("sigmoid backward")
+crates/incin-backends/src/wgpu/backend.rs:623:            let neg_t = unary_op::<T>(&t_capture, 5).expect("neg (abs backward)");
+crates/incin-backends/src/wgpu/backend.rs:624:            let step_pos = unary_op::<T>(&t_capture, 10).expect("step(x) (abs backward)");
+crates/incin-backends/src/wgpu/backend.rs:625:            let step_neg = unary_op::<T>(&neg_t, 10).expect("step(-x) (abs backward)");
+crates/incin-backends/src/wgpu/backend.rs:626:            let neg_step_neg = unary_op::<T>(&step_neg, 5).expect("neg (abs backward)");
+crates/incin-backends/src/wgpu/backend.rs:628:                .expect("sign(x) (abs backward)");
+crates/incin-backends/src/wgpu/backend.rs:629:            binary_op::<T>(grad_out, &sign, 2, "abs_grad").expect("abs backward")
+crates/incin-backends/src/wgpu/backend.rs:638:            unary_op::<T>(grad_out, 5).expect("neg backward")
+crates/incin-backends/src/wgpu/backend.rs:649:                .expect("sqrt backward");
+crates/incin-backends/src/wgpu/backend.rs:650:            scalar_op::<T>(&ratio, 0.5, 1).expect("sqrt backward (halve)")
+crates/incin-backends/src/wgpu/backend.rs:660:            binary_op::<T>(grad_out, &out_capture, 2, "exp_grad").expect("exp backward")
+crates/incin-backends/src/wgpu/backend.rs:670:            binary_op::<T>(grad_out, &t_capture, 3, "log_grad").expect("log backward")
+crates/incin-backends/src/wgpu/backend.rs:681:            let sig = unary_op::<T>(&t_capture, 3).expect("sigmoid(x) (swish backward)");
+crates/incin-backends/src/wgpu/backend.rs:682:            let neg_out = unary_op::<T>(&out_capture, 5).expect("neg (swish backward)");
+crates/incin-backends/src/wgpu/backend.rs:683:            let one_minus_out = scalar_op::<T>(&neg_out, 1.0, 0).expect("1 - out (swish backward)");
+crates/incin-backends/src/wgpu/backend.rs:685:                .expect("sigmoid(x)*(1-out) (swish backward)");
+crates/incin-backends/src/wgpu/backend.rs:687:                .expect("swish backward deriv");
+crates/incin-backends/src/wgpu/backend.rs:688:            binary_op::<T>(grad_out, &deriv, 2, "swish_grad").expect("swish backward")
+crates/incin-backends/src/wgpu/backend.rs:1261:        _ => panic!("Unknown reduce dim mode"),
+crates/incin-backends/src/wgpu/backend.rs:1612:                    .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+crates/incin-backends/src/wgpu/backend.rs:1657:                    .min_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+crates/incin-backends/src/cpu/ops/quant.rs:328:        let q_storage = TestBackend::quantize::<f32, Q8_0>(&storage).unwrap();
+crates/incin-backends/src/cpu/ops/quant.rs:329:        let deq_storage = TestBackend::dequantize::<Q8_0, f32>(&q_storage).unwrap();
+crates/incin-backends/src/cpu/ops/quant.rs:333:            _ => panic!("Expected F32"),
+crates/incin-backends/src/cpu/ops/quant.rs:351:        let lhs_q8 = TestBackend::quantize::<f32, Q8_0>(&lhs_f32).unwrap();
+crates/incin-backends/src/cpu/ops/quant.rs:359:        let rhs_q8 = TestBackend::quantize::<f32, Q8_0>(&rhs_f32).unwrap();
+crates/incin-backends/src/cpu/ops/quant.rs:361:        let out_storage = TestBackend::quantized_matmul::<Q8_0>(&lhs_q8, &rhs_q8).unwrap();
+crates/incin-backends/src/cpu/ops/quant.rs:369:            _ => panic!("Expected F32"),
+crates/incin-backends/src/cpu/ops/pool.rs:460:            _ => panic!("expected F32 buffer"),
+crates/incin-backends/src/cpu/ops/pool.rs:477:        let out = max_pool2d_impl::<f32, Cpu, f32>(&input, (2, 2), (2, 2), (0, 0), (1, 1)).unwrap();
+crates/incin-backends/src/cpu/ops/pool.rs:491:        let out = max_pool2d_impl::<f32, Cpu, f32>(&input, (2, 2), (1, 1), (1, 1), (1, 1)).unwrap();
+crates/incin-backends/src/cpu/ops/pool.rs:516:        let out = max_pool2d_impl::<f32, Cpu, f32>(&input, (2, 2), (2, 2), (0, 0), (1, 1)).unwrap();
+crates/incin-backends/src/cpu/ops/pool.rs:517:        let loss = TestBackend::sum_all::<f32>(&out).unwrap();
+crates/incin-backends/src/cpu/ops/pool.rs:518:        let grads = tape::backward(&loss).unwrap();
+crates/incin-backends/src/cpu/ops/pool.rs:519:        let g = grads.get(input.id).expect("grad_input should exist");
+crates/incin-backends/src/cpu/ops/pool.rs:542:        let out = max_pool2d_impl::<f32, Cpu, f32>(&input, (1, 2), (1, 1), (0, 0), (1, 1)).unwrap();
+crates/incin-backends/src/cpu/ops/pool.rs:547:        let loss = TestBackend::sum_all::<f32>(&out).unwrap();
+crates/incin-backends/src/cpu/ops/pool.rs:548:        let grads = tape::backward(&loss).unwrap();
+crates/incin-backends/src/cpu/ops/pool.rs:549:        let g = grads.get(input.id).expect("grad_input should exist");
+crates/incin-backends/src/cpu/ops/pool.rs:565:                .unwrap();
+crates/incin-backends/src/cpu/ops/pool.rs:566:            TestBackend::sum_all::<f32>(&out).unwrap()
+crates/incin-backends/src/cpu/ops/pool.rs:587:        let out = avg_pool2d_impl::<f32, Cpu, f32>(&input, (2, 2), (2, 2), (0, 0)).unwrap();
+crates/incin-backends/src/cpu/ops/pool.rs:604:        let out = avg_pool2d_impl::<f32, Cpu, f32>(&input, (1, 2), (1, 1), (0, 0)).unwrap();
+crates/incin-backends/src/cpu/ops/pool.rs:609:        let loss = TestBackend::sum_all::<f32>(&out).unwrap();
+crates/incin-backends/src/cpu/ops/pool.rs:610:        let grads = tape::backward(&loss).unwrap();
+crates/incin-backends/src/cpu/ops/pool.rs:611:        let g = grads.get(input.id).expect("grad_input should exist");
+crates/incin-backends/src/cpu/ops/pool.rs:627:            let out = avg_pool2d_impl::<f32, Cpu, f32>(&inputs[0], (2, 2), (1, 1), (0, 0)).unwrap();
+crates/incin-backends/src/cpu/ops/pool.rs:628:            TestBackend::sum_all::<f32>(&out).unwrap()
+crates/incin-backends/src/cpu/ops/pool.rs:649:        let adaptive = adaptive_avg_pool2d_impl::<f32, Cpu, f32>(&input, (2, 2)).unwrap();
+crates/incin-backends/src/cpu/ops/pool.rs:650:        let fixed = avg_pool2d_impl::<f32, Cpu, f32>(&input, (2, 2), (2, 2), (0, 0)).unwrap();
+crates/incin-backends/src/cpu/ops/pool.rs:668:        assert_eq!(adaptive_window_bounds(5, 3, 0).unwrap(), (0, 2));
+crates/incin-backends/src/cpu/ops/pool.rs:669:        assert_eq!(adaptive_window_bounds(5, 3, 1).unwrap(), (1, 4));
+crates/incin-backends/src/cpu/ops/pool.rs:670:        assert_eq!(adaptive_window_bounds(5, 3, 2).unwrap(), (3, 5));
+crates/incin-backends/src/cpu/ops/pool.rs:676:        let out = adaptive_avg_pool2d_impl::<f32, Cpu, f32>(&input, (3, 1)).unwrap();
+crates/incin-backends/src/cpu/ops/pool.rs:693:            let out = adaptive_avg_pool2d_impl::<f32, Cpu, f32>(&inputs[0], (3, 1)).unwrap();
+crates/incin-backends/src/cpu/ops/pool.rs:694:            TestBackend::sum_all::<f32>(&out).unwrap()
+crates/incin-backends/src/cpu/ops/embedding.rs:156:            _ => panic!("expected F32 buffer"),
+crates/incin-backends/src/cpu/ops/embedding.rs:166:        let out = embedding_impl::<f32, Cpu, f32, i64>(&idx, &w).unwrap();
+crates/incin-backends/src/cpu/ops/embedding.rs:188:        let out = embedding_impl::<f32, Cpu, f32, i64>(&idx, &w).unwrap();
+crates/incin-backends/src/cpu/ops/embedding.rs:208:        let out = embedding_impl::<f32, Cpu, f32, i64>(&idx, &w).unwrap();
+crates/incin-backends/src/cpu/ops/embedding.rs:212:        let loss = B::sum_all::<f32>(&out).unwrap();
+crates/incin-backends/src/cpu/ops/embedding.rs:213:        let grads = tape::backward(&loss).unwrap();
+crates/incin-backends/src/cpu/ops/embedding.rs:214:        let g = grads.get(w.id).expect("weight should have gradient");
+crates/incin-backends/src/cpu/ops/embedding.rs:228:        let out = embedding_impl::<f32, Cpu, f32, i64>(&idx, &w).unwrap();
+crates/incin-backends/src/cpu/ops/embedding.rs:229:        let loss = B::sum_all::<f32>(&out).unwrap();
+crates/incin-backends/src/cpu/ops/embedding.rs:230:        let grads = tape::backward(&loss).unwrap();
+crates/incin-backends/src/cpu/ops/embedding.rs:231:        let g = grads.get(w.id).expect("weight should have gradient");
+crates/incin-backends/src/cpu/ops/reduce.rs:118:        CpuBuffer::Q8_0(_) => panic!("sum_axis_keepdim not supported on Q8_0 buffer"),
+crates/incin-backends/src/cpu/ops/reduce.rs:134:        .expect("squeeze reshape of size-1 keepdim result cannot fail (same element count)")
+crates/incin-backends/src/cpu/ops/reduce.rs:152:        CpuBuffer::Q8_0(_) => panic!("fill_like not supported on Q8_0 buffer"),
+crates/incin-backends/src/cpu/ops/reduce.rs:628:            .expect("max_dim: squeeze reshape of size-1 keepdim result cannot fail");
+crates/incin-backends/src/cpu/ops/reduce.rs:701:            .expect("min_dim: squeeze reshape of size-1 keepdim result cannot fail");
+crates/incin-backends/src/cpu/ops/reduce.rs:797:                    .expect("argmax: squeeze reshape of size-1 keepdim result cannot fail"))
+crates/incin-backends/src/cpu/ops/reduce.rs:854:                    .expect("argmin: squeeze reshape of size-1 keepdim result cannot fail"))
+crates/incin-backends/src/cpu/ops/reduce.rs:1109:            _ => panic!("expected F32 buffer"),
+crates/incin-backends/src/cpu/ops/reduce.rs:1119:        let out = B::sum_all::<f32>(&t).unwrap();
+crates/incin-backends/src/cpu/ops/reduce.rs:1128:        let out = B::sum_all::<f32>(&t).unwrap();
+crates/incin-backends/src/cpu/ops/reduce.rs:1129:        let grads = tape::backward(&out).unwrap();
+crates/incin-backends/src/cpu/ops/reduce.rs:1130:        let g = grads.get(t.id).expect("t should have gradient");
+crates/incin-backends/src/cpu/ops/reduce.rs:1142:        let out = B::mean_all::<f32>(&t).unwrap();
+crates/incin-backends/src/cpu/ops/reduce.rs:1153:        let out = B::mean_all::<f32>(&t).unwrap();
+crates/incin-backends/src/cpu/ops/reduce.rs:1154:        let grads = tape::backward(&out).unwrap();
+crates/incin-backends/src/cpu/ops/reduce.rs:1155:        let g = grads.get(t.id).expect("t should have gradient");
+crates/incin-backends/src/cpu/ops/reduce.rs:1172:        let out = B::sum_dim::<f32>(&t, 0).unwrap();
+crates/incin-backends/src/cpu/ops/reduce.rs:1182:        let out = B::sum_dim::<f32>(&t, 1).unwrap();
+crates/incin-backends/src/cpu/ops/reduce.rs:1192:        let out = B::sum_dim::<f32>(&t, 0).unwrap(); // shape [3]
+crates/incin-backends/src/cpu/ops/reduce.rs:1193:        let grads = tape::backward(&out).unwrap();
+crates/incin-backends/src/cpu/ops/reduce.rs:1194:        let g = grads.get(t.id).expect("t should have gradient");
+crates/incin-backends/src/cpu/ops/reduce.rs:1206:        let out = B::sum_keepdim::<f32>(&t, 0).unwrap();
+crates/incin-backends/src/cpu/ops/reduce.rs:1215:        let out = B::sum_keepdim::<f32>(&t, 0).unwrap(); // shape [1, 3]
+crates/incin-backends/src/cpu/ops/reduce.rs:1216:        let grads = tape::backward(&out).unwrap();
+crates/incin-backends/src/cpu/ops/reduce.rs:1217:        let g = grads.get(t.id).expect("t should have gradient");
+crates/incin-backends/src/cpu/ops/reduce.rs:1232:        let sum_out = B::sum_all::<f32>(&t).unwrap();
+crates/incin-backends/src/cpu/ops/reduce.rs:1249:        let grads = tape::backward(&loss).unwrap();
+crates/incin-backends/src/cpu/ops/reduce.rs:1250:        let g = grads.get(t.id).expect("t should have gradient");
+crates/incin-backends/src/cpu/ops/reduce.rs:1262:        let out = B::mean_dim::<f32>(&t, 0).unwrap();
+crates/incin-backends/src/cpu/ops/reduce.rs:1274:        let out = B::mean_keepdim::<f32>(&t, 0).unwrap();
+crates/incin-backends/src/cpu/ops/reduce.rs:1287:            let reduced = B::mean_dim::<f32>(&inputs[0], 0).unwrap();
+crates/incin-backends/src/cpu/ops/reduce.rs:1288:            B::sum_all::<f32>(&reduced).unwrap()
+crates/incin-backends/src/cpu/ops/reduce.rs:1302:            let reduced = B::mean_keepdim::<f32>(&inputs[0], 1).unwrap();
+crates/incin-backends/src/cpu/ops/reduce.rs:1303:            B::sum_all::<f32>(&reduced).unwrap()
+crates/incin-backends/src/cpu/ops/reduce.rs:1318:        let out = B::max_dim::<f32>(&t, 0).unwrap();
+crates/incin-backends/src/cpu/ops/reduce.rs:1327:        let out = B::max_keepdim::<f32>(&t, 0).unwrap();
+crates/incin-backends/src/cpu/ops/reduce.rs:1336:        let out = B::min_dim::<f32>(&t, 0).unwrap();
+crates/incin-backends/src/cpu/ops/reduce.rs:1345:        let out = B::min_keepdim::<f32>(&t, 0).unwrap();
+crates/incin-backends/src/cpu/ops/reduce.rs:1354:        let max_out = B::max_all::<f32>(&t).unwrap();
+crates/incin-backends/src/cpu/ops/reduce.rs:1358:        let min_out = B::min_all::<f32>(&t).unwrap();
+crates/incin-backends/src/cpu/ops/reduce.rs:1368:            let reduced = B::max_dim::<f32>(&inputs[0], 0).unwrap();
+crates/incin-backends/src/cpu/ops/reduce.rs:1369:            B::sum_all::<f32>(&reduced).unwrap()
+crates/incin-backends/src/cpu/ops/reduce.rs:1387:        let out = B::max_dim::<f32>(&t, 0).unwrap();
+crates/incin-backends/src/cpu/ops/reduce.rs:1390:        let grads = tape::backward(&out).unwrap();
+crates/incin-backends/src/cpu/ops/reduce.rs:1391:        let g = grads.get(t.id).expect("t should have gradient");
+crates/incin-backends/src/cpu/ops/reduce.rs:1417:            _ => panic!("expected I64 buffer"),
+crates/incin-backends/src/cpu/ops/reduce.rs:1425:        let out = B::argmax::<f32, i64>(&t, Some(0)).unwrap();
+crates/incin-backends/src/cpu/ops/reduce.rs:1436:        let out = B::argmax::<f32, i64>(&t, None).unwrap();
+crates/incin-backends/src/cpu/ops/reduce.rs:1446:        let out_dim0 = B::argmin::<f32, i64>(&t, Some(0)).unwrap();
+crates/incin-backends/src/cpu/ops/reduce.rs:1452:        let out_none = B::argmin::<f32, i64>(&t, None).unwrap();
+crates/incin-backends/src/cpu/ops/reduce.rs:1465:        let _ = B::argmax::<f32, i64>(&t, Some(0)).unwrap();
+crates/incin-backends/src/cpu/ops/reduce.rs:1466:        let _ = B::argmax::<f32, i64>(&t, None).unwrap();
+crates/incin-backends/src/cpu/ops/reduce.rs:1467:        let _ = B::argmin::<f32, i64>(&t, Some(0)).unwrap();
+crates/incin-backends/src/cpu/ops/reduce.rs:1468:        let _ = B::argmin::<f32, i64>(&t, None).unwrap();
+crates/incin-backends/src/cpu/ops/reduce.rs:1475:        let sum_out = B::sum_all::<f32>(&unrelated).unwrap();
+crates/incin-backends/src/cpu/ops/reduce.rs:1476:        let grads = tape::backward(&sum_out).unwrap();
+crates/incin-backends/src/cpu/ops/reduce.rs:1479:            .expect("unrelated should have gradient");
+crates/incin-backends/src/wgpu/tests.rs:37:    let s = <B as CreationOps<B>>::zeros::<f32>(&[2, 3], DTypeId::F32, &DeviceId::wgpu(0)).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:45:    let s = <B as CreationOps<B>>::ones::<f32>(&[3, 2], DTypeId::F32, &DeviceId::wgpu(0)).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:52:    let s = <B as CreationOps<B>>::rand::<f32>(&[4, 4], DTypeId::F32, &DeviceId::wgpu(0)).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:62:    let s = <B as CreationOps<B>>::randn::<f32>(&[100], DTypeId::F32, &DeviceId::wgpu(0)).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:73:    let out = <B as NumericOps<B>>::add::<f32>(&a, &b).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:82:    let out = <B as NumericOps<B>>::sub::<f32>(&a, &b).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:91:    let out = <B as NumericOps<B>>::mul::<f32>(&a, &b).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:100:    let out = <B as NumericOps<B>>::div::<f32>(&a, &b).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:111:    let out = <B as TensorOps<B>>::matmul::<f32>(&a, &b).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:125:    let out = <B as TensorOps<B>>::matmul::<f32>(&a, &b).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:135:    let out = <B as FloatOps<B>>::relu::<f32>(&a).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:143:    let out = <B as FloatOps<B>>::neg::<f32>(&a).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:151:    let out = <B as FloatOps<B>>::abs::<f32>(&a).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:159:    let out = <B as FloatOps<B>>::sqrt::<f32>(&a).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:167:    let exp_out = <B as FloatOps<B>>::exp::<f32>(&a).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:171:    let log_out = <B as FloatOps<B>>::log::<f32>(&exp_out).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:179:    let out = <B as FloatOps<B>>::sigmoid::<f32>(&a).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:187:    let out = <B as FloatOps<B>>::tanh::<f32>(&a).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:196:    let out = <B as FloatOps<B>>::swish::<f32>(&a).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:207:    let out = <B as FloatOps<B>>::gelu::<f32>(&a).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:215:    let out = <B as FloatOps<B>>::add_scalar_float::<f32>(&a, 10.0).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:223:    let out = <B as FloatOps<B>>::mul_scalar_float::<f32>(&a, 3.0).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:231:    let out = <B as FloatOps<B>>::softmax::<f32>(&a, 1).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:240:        .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+crates/incin-backends/src/wgpu/tests.rs:242:        .unwrap();
+crates/incin-backends/src/wgpu/tests.rs:252:    let out = <B as ReductionOps<B>>::sum_all::<f32>(&a).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:260:    let out = <B as ReductionOps<B>>::mean_all::<f32>(&a).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:268:    let out = <B as ReductionOps<B>>::max_all::<f32>(&a).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:276:    let out = <B as ReductionOps<B>>::min_all::<f32>(&a).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:285:    let out = <B as ReductionOps<B>>::sum_dim::<f32>(&a, 0).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:294:    let out = <B as ReductionOps<B>>::sum_keepdim::<f32>(&a, 0).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:302:    let out = <B as ReductionOps<B>>::mean_dim::<f32>(&a, 0).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:310:    let out = <B as ReductionOps<B>>::max_dim::<f32>(&a, 0).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:317:    let out = <B as ReductionOps<B>>::argmax::<f32, u32>(&a, None).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:325:    let out = <B as ReductionOps<B>>::argmin::<f32, u32>(&a, None).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:335:    let out = <B as TensorOps<B>>::reshape::<f32>(&a, &[3, 2]).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:345:    let out = <B as TensorOps<B>>::transpose::<f32>(&a, 0, 1).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:358:    let out = <B as TensorOps<B>>::flatten::<f32>(&a, 0, 1).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:366:    let out = <B as TensorOps<B>>::squeeze::<f32>(&a, 0).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:375:    let out = <B as TensorOps<B>>::narrow::<f32>(&a, 0, 1, 1).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:385:    let out = <B as TensorOps<B>>::concat::<f32>(&[&a, &b], 0).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:395:    let out = <B as TensorOps<B>>::stack::<f32>(&[&a, &b], 0).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:404:    let val = <B as TensorOps<B>>::float_to_scalar::<f32>(&a).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:423:    let out = <B as ModuleOps<B>>::embedding::<f32, f32>(&indices, &weight).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:438:    let out = <B as ModuleOps<B>>::layer_norm::<f32>(&x, &gamma, Some(&beta), 1e-5).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:453:    let out = <B as ModuleOps<B>>::adaptive_avg_pool2d::<f32>(&inp, (2, 2)).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:468:    let out = <B as ModuleOps<B>>::max_pool2d::<f32>(&inp, (2, 2), (2, 2), (0, 0), (1, 1)).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:490:    .unwrap();
+crates/incin-backends/src/wgpu/tests.rs:515:    .unwrap();
+crates/incin-backends/src/wgpu/tests.rs:540:        .unwrap()
+crates/incin-backends/src/wgpu/tests.rs:567:    .unwrap();
+crates/incin-backends/src/wgpu/tests.rs:630:    .unwrap();
+crates/incin-backends/src/wgpu/tests.rs:653:    let out = <B as ModuleOps<B>>::conv2d::<f32>(&inp, &weight, None, 1, 0, 1, 1).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:670:    let out = <B as ModuleOps<B>>::conv2d::<f32>(&inp, &weight, None, 1, 0, 1, 1).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:685:    let out = <B as ModuleOps<B>>::conv2d::<f32>(&inp, &weight, Some(&bias), 1, 0, 1, 1).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:700:    let out = <B as ModuleOps<B>>::conv2d::<f32>(&inp, &weight, None, 1, 1, 1, 1).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:719:    let out = <B as ModuleOps<B>>::conv2d::<f32>(&inp, &weight, None, 1, 0, 1, 1).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:732:    let out = <B as ModuleOps<B>>::conv1d::<f32>(&inp, &weight, None, 1, 0, 1, 1).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:745:    let q_storage = <B as QuantizedOps<B>>::quantize::<f32, incin_core::prelude::Q8_0>(&s).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:751:        <B as QuantizedOps<B>>::dequantize::<incin_core::prelude::Q8_0, f32>(&q_storage).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:772:    let out = <B as NumericOps<B>>::add::<f32>(&a, &b).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:773:    let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:774:    let ga = grads.get(a.id).expect("a should have a gradient");
+crates/incin-backends/src/wgpu/tests.rs:775:    let gb = grads.get(b.id).expect("b should have a gradient");
+crates/incin-backends/src/wgpu/tests.rs:784:    let out = <B as NumericOps<B>>::sub::<f32>(&a, &b).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:785:    let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:786:    let ga = grads.get(a.id).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:787:    let gb = grads.get(b.id).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:797:    let out = <B as NumericOps<B>>::mul::<f32>(&a, &b).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:798:    let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:799:    let ga = grads.get(a.id).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:800:    let gb = grads.get(b.id).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:810:    let out = <B as NumericOps<B>>::div::<f32>(&a, &b).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:811:    let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:812:    let ga = grads.get(a.id).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:813:    let gb = grads.get(b.id).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:821:    let out = <B as FloatOps<B>>::mul_scalar_float::<f32>(&t, 2.5).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:822:    let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:823:    let gt = grads.get(t.id).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:830:    let out = <B as FloatOps<B>>::relu::<f32>(&t).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:831:    let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:832:    let gt = grads.get(t.id).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:840:    let out = <B as FloatOps<B>>::neg::<f32>(&t).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:841:    let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:842:    let gt = grads.get(t.id).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:849:    let out = <B as FloatOps<B>>::abs::<f32>(&t).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:850:    let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:851:    let gt = grads.get(t.id).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:858:    let out = <B as FloatOps<B>>::sqrt::<f32>(&t).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:859:    let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:860:    let gt = grads.get(t.id).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:868:    let out = <B as FloatOps<B>>::exp::<f32>(&t).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:870:    let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:871:    let gt = grads.get(t.id).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:878:    let out = <B as FloatOps<B>>::log::<f32>(&t).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:879:    let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:880:    let gt = grads.get(t.id).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:887:    let out = <B as FloatOps<B>>::sigmoid::<f32>(&t).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:888:    let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:889:    let gt = grads.get(t.id).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:897:    let out = <B as FloatOps<B>>::tanh::<f32>(&t).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:898:    let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:899:    let gt = grads.get(t.id).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:907:    let out = <B as FloatOps<B>>::swish::<f32>(&t).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:908:    let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:909:    let gt = grads.get(t.id).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:925:    let out = <B as TensorOps<B>>::matmul::<f32>(&lhs, &rhs).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:926:    let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:927:    let lhs_grad = grads.get(lhs.id).expect("lhs should have a gradient");
+crates/incin-backends/src/wgpu/tests.rs:928:    let rhs_grad = grads.get(rhs.id).expect("rhs should have a gradient");
+crates/incin-backends/src/wgpu/tests.rs:952:    let out = <B as TensorOps<B>>::matmul::<f32>(&lhs, &rhs).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:955:    let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:956:    let lhs_grad = grads.get(lhs.id).expect("lhs should have a gradient");
+crates/incin-backends/src/wgpu/tests.rs:972:    let ab = <B as NumericOps<B>>::mul::<f32>(&a, &b).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:973:    let out = <B as NumericOps<B>>::add::<f32>(&ab, &a).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:974:    let loss = <B as FloatOps<B>>::relu::<f32>(&out).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:976:    let grads = <B as Backend>::backward::<f32>(&loss).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:977:    let ga = grads.get(a.id).expect("a should have a gradient");
+crates/incin-backends/src/wgpu/tests.rs:978:    let gb = grads.get(b.id).expect("b should have a gradient");
+crates/incin-backends/src/wgpu/tests.rs:992:    let out = <B as FloatOps<B>>::softmax::<f32>(&t, 1).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:993:    let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:994:    let gt = grads.get(t.id).expect("t should have a gradient");
+crates/incin-backends/src/wgpu/tests.rs:1014:        let sm = <B as FloatOps<B>>::softmax::<f32>(&inputs[0], 1).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:1015:        let weighted = <B as NumericOps<B>>::mul::<f32>(&sm, &inputs[1]).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:1016:        <B as ReductionOps<B>>::sum_all::<f32>(&weighted).unwrap()
+crates/incin-backends/src/wgpu/tests.rs:1035:    let out = <B as ModuleOps<B>>::embedding::<f32, f32>(&indices, &weight).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:1036:    let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:1037:    let g_weight = grads.get(weight.id).expect("weight should have gradient");
+crates/incin-backends/src/wgpu/tests.rs:1065:    let out = <B as ModuleOps<B>>::embedding::<f32, f32>(&indices, &weight).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:1066:    let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:1067:    let g_weight = grads.get(weight.id).expect("weight should have gradient");
+crates/incin-backends/src/wgpu/tests.rs:1080:    let out = <B as FloatOps<B>>::gelu::<f32>(&t).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:1081:    let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:1082:    let gt = grads.get(t.id).expect("t should have gradient");
+crates/incin-backends/src/wgpu/tests.rs:1090:    let out = <B as FloatOps<B>>::elu::<f32>(&t).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:1091:    let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:1092:    let gt = grads.get(t.id).expect("t should have gradient");
+crates/incin-backends/src/wgpu/tests.rs:1101:    let out = <B as FloatOps<B>>::mish::<f32>(&t).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:1102:    let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:1103:    let gt = grads.get(t.id).expect("t should have gradient");
+crates/incin-backends/src/wgpu/tests.rs:1162:    let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:1192:                .unwrap();
+crates/incin-backends/src/wgpu/tests.rs:1193:        <B as ReductionOps<B>>::sum_all::<f32>(&out).unwrap()
+crates/incin-backends/src/wgpu/tests.rs:1220:        .unwrap();
+crates/incin-backends/src/wgpu/tests.rs:1221:        <B as ReductionOps<B>>::sum_all::<f32>(&out).unwrap()
+crates/incin-backends/src/wgpu/tests.rs:1240:            <B as ModuleOps<B>>::avg_pool2d::<f32>(&inputs[0], (2, 2), (2, 2), (0, 0)).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:1241:        <B as ReductionOps<B>>::sum_all::<f32>(&out).unwrap()
+crates/incin-backends/src/wgpu/tests.rs:1260:            <B as ModuleOps<B>>::avg_pool2d::<f32>(&inputs[0], (2, 2), (1, 1), (0, 0)).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:1261:        <B as ReductionOps<B>>::sum_all::<f32>(&out).unwrap()
+crates/incin-backends/src/wgpu/tests.rs:1281:                .unwrap();
+crates/incin-backends/src/wgpu/tests.rs:1282:        <B as ReductionOps<B>>::sum_all::<f32>(&out).unwrap()
+crates/incin-backends/src/wgpu/tests.rs:1299:        let out = <B as ModuleOps<B>>::adaptive_avg_pool2d::<f32>(&inputs[0], (3, 3)).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:1300:        <B as ReductionOps<B>>::sum_all::<f32>(&out).unwrap()
+crates/incin-backends/src/wgpu/tests.rs:1324:    let out = <B as ReductionOps<B>>::max_all::<f32>(&t).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:1325:    let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:1326:    let gt = grads.get(t.id).expect("t should have gradient");
+crates/incin-backends/src/wgpu/tests.rs:1333:    let out = <B as ReductionOps<B>>::min_all::<f32>(&t).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:1334:    let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:1335:    let gt = grads.get(t.id).expect("t should have gradient");
+crates/incin-backends/src/wgpu/tests.rs:1345:        let out = <B as ReductionOps<B>>::max_dim::<f32>(&inputs[0], 0).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:1346:        <B as ReductionOps<B>>::sum_all::<f32>(&out).unwrap()
+crates/incin-backends/src/wgpu/tests.rs:1359:        let out = <B as ReductionOps<B>>::min_dim::<f32>(&inputs[0], 1).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:1360:        <B as ReductionOps<B>>::sum_all::<f32>(&out).unwrap()
+crates/incin-backends/src/wgpu/tests.rs:1378:    let out = <B as ReductionOps<B>>::max_dim::<f32>(&t, 1).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:1379:    let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:1380:    let gt = grads.get(t.id).expect("t should have gradient");
+crates/incin-backends/src/wgpu/tests.rs:1397:        let out = <B as ReductionOps<B>>::max_keepdim::<f32>(&inputs[0], 0).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:1398:        <B as ReductionOps<B>>::sum_all::<f32>(&out).unwrap()
+crates/incin-backends/src/wgpu/tests.rs:1411:        let out = <B as ReductionOps<B>>::min_keepdim::<f32>(&inputs[0], 1).unwrap();
+crates/incin-backends/src/wgpu/tests.rs:1412:        <B as ReductionOps<B>>::sum_all::<f32>(&out).unwrap()
+crates/incin-backends/src/cpu/ops/conv.rs:920:            _ => panic!("expected F32 buffer"),
+crates/incin-backends/src/cpu/ops/conv.rs:934:        let out = conv1d_impl::<f32, Cpu, f32>(&input, &weight, None, 1, 0, 1, 1).unwrap();
+crates/incin-backends/src/cpu/ops/conv.rs:950:        let out = conv1d_impl::<f32, Cpu, f32>(&input, &weight, None, 1, 1, 1, 1).unwrap();
+crates/incin-backends/src/cpu/ops/conv.rs:967:        let out = conv1d_impl::<f32, Cpu, f32>(&input, &weight, None, 1, 0, 1, 2).unwrap();
+crates/incin-backends/src/cpu/ops/conv.rs:974:        let g0_out = conv1d_impl::<f32, Cpu, f32>(&g0_input, &g0_weight, None, 1, 0, 1, 1).unwrap();
+crates/incin-backends/src/cpu/ops/conv.rs:978:        let g1_out = conv1d_impl::<f32, Cpu, f32>(&g1_input, &g1_weight, None, 1, 0, 1, 1).unwrap();
+crates/incin-backends/src/cpu/ops/conv.rs:992:        let out = conv1d_impl::<f32, Cpu, f32>(&input, &weight, Some(&bias), 1, 0, 1, 1).unwrap();
+crates/incin-backends/src/cpu/ops/conv.rs:1001:        let out = conv1d_impl::<f32, Cpu, f32>(&inputs[0], &inputs[1], None, 1, 0, 1, 1).unwrap();
+crates/incin-backends/src/cpu/ops/conv.rs:1002:        TestBackend::sum_all::<f32>(&out).unwrap()
+crates/incin-backends/src/cpu/ops/conv.rs:1027:        let out = conv1d_impl::<f32, Cpu, f32>(&input, &weight, None, 1, 0, 1, 1).unwrap();
+crates/incin-backends/src/cpu/ops/conv.rs:1028:        let loss = TestBackend::sum_all::<f32>(&out).unwrap();
+crates/incin-backends/src/cpu/ops/conv.rs:1029:        let grads = tape::backward(&loss).unwrap();
+crates/incin-backends/src/cpu/ops/conv.rs:1030:        let grad_input = grads.get(input.id).expect("grad_input should exist");
+crates/incin-backends/src/cpu/ops/conv.rs:1050:        let out = conv2d_impl::<f32, Cpu, f32>(&input, &weight, None, 1, 0, 1, 1).unwrap();
+crates/incin-backends/src/cpu/ops/conv.rs:1074:        let out = conv2d_impl::<f32, Cpu, f32>(&input, &weight, None, 1, 0, 1, 2).unwrap();
+crates/incin-backends/src/cpu/ops/conv.rs:1079:        let g0_out = conv2d_impl::<f32, Cpu, f32>(&g0_input, &g0_weight, None, 1, 0, 1, 1).unwrap();
+crates/incin-backends/src/cpu/ops/conv.rs:1083:        let g1_out = conv2d_impl::<f32, Cpu, f32>(&g1_input, &g1_weight, None, 1, 0, 1, 1).unwrap();
+crates/incin-backends/src/cpu/ops/conv.rs:1101:        let out = conv2d_impl::<f32, Cpu, f32>(&input, &weight, None, 1, 0, 1, 3).unwrap();
+crates/incin-backends/src/cpu/ops/conv.rs:1110:                conv2d_impl::<f32, Cpu, f32>(&ch_input, &ch_weight, None, 1, 0, 1, 1).unwrap();
+crates/incin-backends/src/cpu/ops/conv.rs:1120:        let out = conv2d_impl::<f32, Cpu, f32>(&inputs[0], &inputs[1], None, 1, 0, 1, 1).unwrap();
+crates/incin-backends/src/cpu/ops/conv.rs:1121:        TestBackend::sum_all::<f32>(&out).unwrap()
+crates/incin-backends/src/cpu/ops/conv.rs:1153:            conv_transpose2d_impl::<f32, Cpu, f32>(&input, &weight, None, 1, 0, 0, 1, 1).unwrap();
+crates/incin-backends/src/cpu/ops/conv.rs:1172:            conv_transpose2d_impl::<f32, Cpu, f32>(&input, &weight, None, 2, 0, 0, 1, 1).unwrap();
+crates/incin-backends/src/cpu/ops/conv.rs:1195:            conv_transpose2d_impl::<f32, Cpu, f32>(&input, &weight, None, 2, 0, 1, 1, 1).unwrap();
+crates/incin-backends/src/cpu/ops/conv.rs:1237:                .unwrap();
+crates/incin-backends/src/cpu/ops/conv.rs:1238:        TestBackend::sum_all::<f32>(&out).unwrap()
+crates/incin-backends/src/cpu/ops/loss.rs:130:            _ => panic!("expected F32 buffer"),
+crates/incin-backends/src/cpu/ops/loss.rs:147:        let out = B::mse_loss::<f32>(&pred(), &target(), Reduction::Mean).unwrap();
+crates/incin-backends/src/cpu/ops/loss.rs:156:        let out = B::mse_loss::<f32>(&pred(), &target(), Reduction::Sum).unwrap();
+crates/incin-backends/src/cpu/ops/loss.rs:165:        let out = B::mse_loss::<f32>(&pred(), &target(), Reduction::None).unwrap();
+crates/incin-backends/src/cpu/ops/loss.rs:180:        let out = B::mse_loss::<f32>(&p, &t, Reduction::Mean).unwrap();
+crates/incin-backends/src/cpu/ops/loss.rs:181:        let grads = tape::backward(&out).unwrap();
+crates/incin-backends/src/cpu/ops/loss.rs:182:        let g = grads.get(pred_id).expect("pred should have a gradient");
+crates/incin-backends/src/cpu/ops/loss.rs:205:        let out = B::l1_loss::<f32>(&pred(), &target(), Reduction::Mean).unwrap();
+crates/incin-backends/src/cpu/ops/loss.rs:214:        let out = B::l1_loss::<f32>(&pred(), &target(), Reduction::Sum).unwrap();
+crates/incin-backends/src/cpu/ops/loss.rs:223:        let out = B::l1_loss::<f32>(&pred(), &target(), Reduction::None).unwrap();
+crates/incin-backends/src/cpu/ops/loss.rs:238:            B::l1_loss::<f32>(&inputs[0], &t, Reduction::Mean).unwrap()
+crates/incin-backends/src/cpu/ops/loss.rs:263:        let out = B::bce_with_logits_loss::<f32>(&pred_zero, &tgt_one, Reduction::Mean).unwrap();
+crates/incin-backends/src/cpu/ops/loss.rs:278:        let mean_out = B::bce_with_logits_loss::<f32>(&p, &z, Reduction::Mean).unwrap();
+crates/incin-backends/src/cpu/ops/loss.rs:279:        let sum_out = B::bce_with_logits_loss::<f32>(&p, &z, Reduction::Sum).unwrap();
+crates/incin-backends/src/cpu/ops/loss.rs:280:        let none_out = B::bce_with_logits_loss::<f32>(&p, &z, Reduction::None).unwrap();
+crates/incin-backends/src/cpu/ops/loss.rs:303:        let out = B::bce_with_logits_loss::<f32>(&p, &z, Reduction::Mean).unwrap();
+crates/incin-backends/src/cpu/ops/loss.rs:320:        let out = B::bce_with_logits_loss::<f32>(&p, &z, Reduction::Mean).unwrap();
+crates/incin-backends/src/cpu/ops/loss.rs:336:            B::bce_with_logits_loss::<f32>(&inputs[0], &z, Reduction::Mean).unwrap()
+crates/incin-backends/src/cpu/ops/loss.rs:351:        let out = B::bce_with_logits_loss::<f32>(&p, &z, Reduction::Mean).unwrap();
+crates/incin-backends/src/cpu/ops/loss.rs:357:        let grads = tape::backward(&out).unwrap();
+crates/incin-backends/src/cpu/ops/loss.rs:358:        let g = grads.get(p.id).expect("pred should have gradient");
+crates/incin-backends/src/cpu/ops/loss.rs:412:                .unwrap();
+crates/incin-backends/src/cpu/ops/loss.rs:430:                .unwrap();
+crates/incin-backends/src/cpu/ops/loss.rs:433:                .unwrap();
+crates/incin-backends/src/cpu/ops/loss.rs:449:                .unwrap();
+crates/incin-backends/src/cpu/ops/loss.rs:475:            B::cross_entropy_loss::<f32, i64>(&inputs[0], &tgt, Reduction::Mean).unwrap()
+crates/incin-backends/src/cpu/ops/loss.rs:490:            B::cross_entropy_loss::<f32, i64>(&pred_extreme, &target, Reduction::Mean).unwrap();
+crates/incin-backends/src/cpu/ops/loss.rs:497:        let grads = tape::backward(&out).unwrap();
+crates/incin-backends/src/cpu/ops/loss.rs:500:            .expect("pred should have gradient");
+crates/incin-backends/src/cpu/ops/loss.rs:515:            B::cross_entropy_loss::<f32, i64>(&pred_uniform, &target, Reduction::Mean).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise_kernel.rs:1802:            .unwrap()
+crates/incin-backends/src/cpu/ops/elementwise_kernel.rs:1803:            .unwrap();
+crates/incin-backends/src/cpu/ops/elementwise_kernel.rs:1813:            .unwrap()
+crates/incin-backends/src/cpu/ops/elementwise_kernel.rs:1814:            .unwrap();
+crates/incin-backends/src/cpu/ops/elementwise_kernel.rs:1952:            .unwrap()
+crates/incin-backends/src/cpu/ops/elementwise_kernel.rs:1953:            .unwrap();
+crates/incin-backends/src/cpu/ops/elementwise_kernel.rs:1967:            .unwrap()
+crates/incin-backends/src/cpu/ops/elementwise_kernel.rs:1968:            .unwrap();
+crates/incin-backends/src/cpu/ops/elementwise_kernel.rs:1970:            .unwrap()
+crates/incin-backends/src/cpu/ops/elementwise_kernel.rs:1971:            .unwrap();
+crates/incin-backends/src/cpu/ops/elementwise_kernel.rs:1980:        let f32_output = execute_unary(UnaryOp::Relu, &f32_input).unwrap().unwrap();
+crates/incin-backends/src/cpu/ops/elementwise_kernel.rs:1984:        let f64_output = execute_unary(UnaryOp::Exp, &f64_input).unwrap().unwrap();
+crates/incin-backends/src/cpu/ops/elementwise_kernel.rs:1997:            .unwrap()
+crates/incin-backends/src/cpu/ops/elementwise_kernel.rs:1998:            .unwrap();
+crates/incin-backends/src/cpu/ops/elementwise_kernel.rs:2025:                    .unwrap()
+crates/incin-backends/src/cpu/ops/elementwise_kernel.rs:2026:                    .unwrap();
+crates/incin-backends/src/cpu/ops/elementwise_kernel.rs:2052:                    .unwrap()
+crates/incin-backends/src/cpu/ops/elementwise_kernel.rs:2053:                    .unwrap();
+crates/incin-backends/src/cpu/ops/elementwise_kernel.rs:2082:            .unwrap()
+crates/incin-backends/src/cpu/ops/elementwise_kernel.rs:2083:            .unwrap();
+crates/incin-backends/src/cpu/ops/elementwise_kernel.rs:2085:            panic!("expected F32 output");
+crates/incin-backends/src/cpu/ops/elementwise_kernel.rs:2177:            .unwrap();
+crates/incin-backends/src/cpu/ops/elementwise_kernel.rs:2204:                black_box(operation().unwrap().unwrap());
+crates/incin-backends/src/cpu/ops/elementwise_kernel.rs:2211:                    black_box(operation().unwrap().unwrap());
+crates/incin-backends/src/cpu/ops/shape_ops.rs:347:            CpuBuffer::Q8_0(_) => panic!("concat not supported on Q8_0 buffer"),
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1427:            _ => panic!("expected F32 buffer"),
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1435:        let direct = t.reshape(&[3, 2]).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1436:        let via_trait = TestBackend::reshape::<f32>(&t, &[3, 2]).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1445:        let direct = t.transpose(0, 1).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1446:        let via_trait = TestBackend::transpose::<f32>(&t, 0, 1).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1455:        let direct = t.broadcast_as(&[4, 3]).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1456:        let via_trait = TestBackend::broadcast_as::<f32>(&t, &[4, 3]).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1465:        let v = TestBackend::float_to_scalar::<f32>(&t).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1473:        let v = TestBackend::float_to_vec1::<f32>(&t).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1481:        let out = TestBackend::reshape::<f32>(&t, &[6]).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1482:        let grads = tape::backward(&out).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1483:        let g = grads.get(t.id).expect("t should have a gradient");
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1492:        let out = TestBackend::transpose::<f32>(&t, 0, 1).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1493:        let grads = tape::backward(&out).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1494:        let g = grads.get(t.id).expect("t should have a gradient");
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1503:        let out = TestBackend::broadcast_as::<f32>(&t, &[4, 3]).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1504:        let grads = tape::backward(&out).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1505:        let g = grads.get(t.id).expect("t should have a gradient");
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1522:        let out = TestBackend::matmul::<f32>(&lhs, &rhs).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1552:        let direct = t.narrow(0, 1, 1).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1553:        let via_trait = TestBackend::narrow::<f32>(&t, 0, 1, 1).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1563:        let out = TestBackend::narrow::<f32>(&t, 0, 1, 1).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1564:        let grads = tape::backward(&out).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1565:        let g = grads.get(t.id).expect("t should have a gradient");
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1583:        let transposed = TestBackend::transpose::<f32>(&t, 0, 1).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1585:        let narrowed = TestBackend::narrow::<f32>(&transposed, 0, 1, 1).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1602:        let manual = TestBackend::narrow::<f32>(&t, 0, 1, 2).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1603:        let manual = TestBackend::narrow::<f32>(&manual, 1, 0, 2).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1605:        let via_slice = TestBackend::slice::<f32>(&t, &[(1, 3), (0, 2)]).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1616:        let transposed = TestBackend::transpose::<f32>(&t, 0, 1).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1619:        let out = TestBackend::slice::<f32>(&transposed, &[(1, 3), (0, 1)]).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1636:        let out = TestBackend::slice::<f32>(&t, &[(1, 3), (0, 2)]).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1637:        let grads = tape::backward(&out).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1638:        let g = grads.get(t.id).expect("t should have a gradient");
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1672:        let out = TestBackend::squeeze::<f32>(&t, 1).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1686:            other => panic!("expected squeeze-specific ShapeMismatch, got {other:?}"),
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1696:        let out = TestBackend::squeeze::<f32>(&t, 1).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1697:        let grads = tape::backward(&out).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1698:        let g = grads.get(t.id).expect("t should have a gradient");
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1709:        let out = TestBackend::flatten::<f32>(&t, 1, 2).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1720:        let out = TestBackend::flatten::<f32>(&t, 0, 2).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1731:        let out = TestBackend::flatten::<f32>(&t, 1, 2).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1732:        let grads = tape::backward(&out).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1733:        let g = grads.get(t.id).expect("t should have a gradient");
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1751:        let direct = matmul_impl(&lhs, &rhs).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1752:        let via_trait = TestBackend::matmul::<f32>(&lhs, &rhs).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1768:        let direct = batched_matmul_impl(&lhs, &rhs).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1769:        let via_trait = TestBackend::matmul::<f32>(&lhs, &rhs).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1785:        let out = TestBackend::concat::<f32>(&[&a, &b], 0).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1801:        let out = TestBackend::concat::<f32>(&[&a, &b], 1).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1859:        let out = TestBackend::concat::<f32>(&[&a, &b], 0).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1860:        let grads = tape::backward(&out).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1862:        let ga = grads.get(a.id).expect("a should have a gradient");
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1870:        let gb = grads.get(b.id).expect("b should have a gradient");
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1885:        let transposed = TestBackend::transpose::<f32>(&a, 0, 1).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1888:        let out = TestBackend::concat::<f32>(&[&transposed, &b], 0).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1903:        let out = TestBackend::stack::<f32>(&[&a, &b], 0).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1919:        let out = TestBackend::stack::<f32>(&[&a, &b], 2).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1956:        let out = TestBackend::stack::<f32>(&[&a, &b], 0).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1957:        let grads = tape::backward(&out).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1959:        let ga = grads.get(a.id).expect("a should have a gradient");
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1967:        let gb = grads.get(b.id).expect("b should have a gradient");
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1982:        let out = TestBackend::broadcast_left::<f32>(&t, &[4]).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:1996:        let out = TestBackend::broadcast_left::<f32>(&t, &[2, 4]).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:2013:        let out = TestBackend::broadcast_left::<f32>(&t, &[4]).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:2014:        let grads = tape::backward(&out).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:2015:        let g = grads.get(t.id).expect("t should have a gradient");
+crates/incin-backends/src/cpu/ops/shape_ops.rs:2027:        let direct = t.broadcast_as(&[4, 3]).unwrap();
+crates/incin-backends/src/cpu/ops/shape_ops.rs:2028:        let via_trait = TestBackend::broadcast_left::<f32>(&t, &[4]).unwrap();
+crates/incin-backends/src/cpu/ops/matmul.rs:115:        .expect("2D transpose of a 2D matmul operand cannot fail")
+crates/incin-backends/src/cpu/ops/matmul.rs:125:        .expect("transpose of the last two axes of a rank>=2 tensor cannot fail")
+crates/incin-backends/src/cpu/ops/matmul.rs:671:            _ => panic!("expected F32 buffer"),
+crates/incin-backends/src/cpu/ops/matmul.rs:688:        let out = matmul_impl(&lhs, &rhs).unwrap();
+crates/incin-backends/src/cpu/ops/matmul.rs:708:        let lhs = original.transpose(0, 1).unwrap(); // [2,3], non-contiguous
+crates/incin-backends/src/cpu/ops/matmul.rs:718:        let out = matmul_impl(&lhs, &rhs).unwrap();
+crates/incin-backends/src/cpu/ops/matmul.rs:739:        let out = matmul_impl(&lhs, &rhs).unwrap();
+crates/incin-backends/src/cpu/ops/matmul.rs:741:        let grads = tape::backward(&out).unwrap();
+crates/incin-backends/src/cpu/ops/matmul.rs:742:        let lhs_grad = grads.get(lhs.id).expect("lhs should have a gradient");
+crates/incin-backends/src/cpu/ops/matmul.rs:743:        let rhs_grad = grads.get(rhs.id).expect("rhs should have a gradient");
+crates/incin-backends/src/cpu/ops/matmul.rs:799:        let expected = matmul_impl(&lhs, &rhs).unwrap();
+crates/incin-backends/src/cpu/ops/matmul.rs:800:        let out = batched_matmul_impl(&lhs, &rhs).unwrap();
+crates/incin-backends/src/cpu/ops/matmul.rs:824:        let out = batched_matmul_impl(&lhs, &rhs).unwrap();
+crates/incin-backends/src/cpu/ops/matmul.rs:827:        let ref0 = matmul_impl(&matrix(lhs_b0, 3, 4), &matrix(rhs_b0, 4, 5)).unwrap();
+crates/incin-backends/src/cpu/ops/matmul.rs:828:        let ref1 = matmul_impl(&matrix(lhs_b1, 3, 4), &matrix(rhs_b1, 4, 5)).unwrap();
+crates/incin-backends/src/cpu/ops/matmul.rs:849:        let out = batched_matmul_impl(&lhs, &rhs).unwrap();
+crates/incin-backends/src/cpu/ops/matmul.rs:852:        let ref0 = matmul_impl(&matrix(lhs_data.clone(), 3, 4), &matrix(rhs_b0, 4, 5)).unwrap();
+crates/incin-backends/src/cpu/ops/matmul.rs:853:        let ref1 = matmul_impl(&matrix(lhs_data, 3, 4), &matrix(rhs_b1, 4, 5)).unwrap();
+crates/incin-backends/src/cpu/ops/matmul.rs:873:        let out = batched_matmul_impl(&lhs, &rhs).unwrap();
+crates/incin-backends/src/cpu/ops/matmul.rs:876:        let ref0 = matmul_impl(&matrix(lhs_b0, 3, 4), &matrix(rhs_data.clone(), 4, 5)).unwrap();
+crates/incin-backends/src/cpu/ops/matmul.rs:877:        let ref1 = matmul_impl(&matrix(lhs_b1, 3, 4), &matrix(rhs_data, 4, 5)).unwrap();
+crates/incin-backends/src/cpu/ops/matmul.rs:907:        let out = batched_matmul_impl(&lhs, &rhs).unwrap();
+crates/incin-backends/src/cpu/ops/matmul.rs:916:        .unwrap();
+crates/incin-backends/src/cpu/ops/matmul.rs:934:        let out = batched_matmul_impl(&lhs, &rhs).unwrap();
+crates/incin-backends/src/cpu/ops/matmul.rs:946:        let out = batched_matmul_impl(&lhs, &rhs).unwrap();
+crates/incin-backends/src/cpu/ops/matmul.rs:963:        let out = batched_matmul_impl(&lhs, &rhs).unwrap();
+crates/incin-backends/src/cpu/ops/matmul.rs:981:        let out = batched_matmul_impl(&inputs[0], &inputs[1]).unwrap();
+crates/incin-backends/src/cpu/ops/matmul.rs:982:        TestBackend::sum_all::<f32>(&out).unwrap()
+crates/incin-backends/src/cpu/ops/matmul.rs:1049:        let out = batched_matmul_impl(&lhs, &rhs).unwrap();
+crates/incin-backends/src/cpu/ops/matmul.rs:1050:        let sum = TestBackend::sum_all::<f32>(&out).unwrap();
+crates/incin-backends/src/cpu/ops/matmul.rs:1051:        let grads = tape::backward(&sum).unwrap();
+crates/incin-backends/src/cpu/ops/matmul.rs:1052:        let grad_lhs = grads.get(lhs_id).expect("grad_lhs should exist");
+crates/incin-backends/src/cpu/ops/matmul.rs:1074:        let out = batched_matmul_impl(&lhs, &rhs).unwrap();
+crates/incin-backends/src/cpu/ops/matmul.rs:1075:        let sum = TestBackend::sum_all::<f32>(&out).unwrap();
+crates/incin-backends/src/cpu/ops/matmul.rs:1076:        let grads = tape::backward(&sum).unwrap();
+crates/incin-backends/src/cpu/ops/matmul.rs:1077:        let grad_rhs = grads.get(rhs_id).expect("grad_rhs should exist");
+crates/incin-backends/src/cpu/ops/matmul.rs:1134:        let transposed_lhs = matrix(base_lhs.clone(), 6, 4).transpose(0, 1).unwrap();
+crates/incin-backends/src/cpu/ops/matmul.rs:1135:        let transposed_rhs = matrix(base_rhs.clone(), 5, 6).transpose(0, 1).unwrap();
+crates/incin-backends/src/cpu/ops/matmul.rs:1143:        .unwrap();
+crates/incin-backends/src/cpu/ops/matmul.rs:1206:        let out = matmul_impl(&lhs, &identity).unwrap();
+crates/incin-backends/src/cpu/ops/matmul.rs:1222:        let out = batched_matmul_impl(&lhs, &rhs).unwrap();
+crates/incin-backends/src/cpu/ops/matmul.rs:1233:        let sum = TestBackend::sum_all::<f32>(&out).unwrap();
+crates/incin-backends/src/cpu/ops/matmul.rs:1234:        let grads = tape::backward(&sum).unwrap();
+crates/incin-backends/src/cpu/ops/matmul.rs:1302:        let out = batched_matmul_impl(&lhs, &rhs).unwrap();
+crates/incin-backends/src/cpu/ops/matmul.rs:1314:                matmul_impl(&matrix(lhs_flat.clone(), 3, 4), &matrix(rhs_slice, 4, 5)).unwrap();
+crates/incin-backends/src/cpu/ops/matmul.rs:1335:        let out = batched_matmul_impl(&lhs, &rhs).unwrap();
+crates/incin-backends/src/cpu/ops/matmul.rs:1347:                        .unwrap();
+crates/incin-backends/src/cpu/ops/norm.rs:216:            _ => panic!("expected F32 buffer"),
+crates/incin-backends/src/cpu/ops/norm.rs:234:                .unwrap();
+crates/incin-backends/src/cpu/ops/norm.rs:278:                .unwrap();
+crates/incin-backends/src/cpu/ops/norm.rs:312:        .unwrap();
+crates/incin-backends/src/cpu/ops/norm.rs:314:            layer_norm_impl::<f32, incin_core::prelude::Cpu, f32>(&t, &weight, None, eps).unwrap();
+crates/incin-backends/src/cpu/ops/norm.rs:343:            .unwrap();
+crates/incin-backends/src/cpu/ops/norm.rs:344:            TestB::sum_all::<f32>(&out).unwrap()
+crates/incin-backends/src/cpu/ops/norm.rs:375:                .unwrap();
+crates/incin-backends/src/cpu/ops/norm.rs:424:        .unwrap();
+crates/incin-backends/src/cpu/ops/norm.rs:471:        .unwrap();
+crates/incin-backends/src/cpu/ops/norm.rs:481:        .unwrap();
+crates/incin-backends/src/cpu/ops/norm.rs:523:        .unwrap();
+crates/incin-backends/src/cpu/ops/norm.rs:527:        .unwrap();
+crates/incin-backends/src/cpu/ops/norm.rs:569:        .unwrap();
+crates/incin-backends/src/cpu/ops/norm.rs:623:            .unwrap();
+crates/incin-backends/src/cpu/ops/norm.rs:624:            TestB::sum_all::<f32>(&out).unwrap()
+crates/incin-backends/src/cpu/ops/elementwise.rs:213:    elementwise_unary_typed(UnaryOp::Neg, t).unwrap()
+crates/incin-backends/src/cpu/ops/elementwise.rs:1104:            _ => panic!("expected F32 buffer"),
+crates/incin-backends/src/cpu/ops/elementwise.rs:1122:        let out = TestBackend::add::<f64>(&lhs, &rhs).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1133:            other => panic!("expected CpuBuffer::F64, got {other:?}"),
+crates/incin-backends/src/cpu/ops/elementwise.rs:1147:        let f16_out = TestBackend::mul::<half::f16>(&f16_lhs, &f16_rhs).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1161:        let bf16_out = TestBackend::mul::<half::bf16>(&bf16_lhs, &bf16_rhs).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1172:            .unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1175:            .unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1176:        let output = TestBackend::add::<f32>(&lhs, &rhs).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1185:        let out = TestBackend::relu::<f64>(&t).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1191:            other => panic!("expected CpuBuffer::F64, got {other:?}"),
+crates/incin-backends/src/cpu/ops/elementwise.rs:1203:        let out = TestBackend::add::<f32>(&lhs, &rhs).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1213:        let out = TestBackend::add::<f32>(&lhs, &rhs).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1215:        let grads = tape::backward(&out).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1216:        let lhs_grad = grads.get(lhs.id).expect("lhs should have a gradient");
+crates/incin-backends/src/cpu/ops/elementwise.rs:1217:        let rhs_grad = grads.get(rhs.id).expect("rhs should have a gradient");
+crates/incin-backends/src/cpu/ops/elementwise.rs:1233:        let out = TestBackend::sub::<f32>(&lhs, &rhs).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1243:        let out = TestBackend::sub::<f32>(&lhs, &rhs).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1245:        let grads = tape::backward(&out).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1246:        let lhs_grad = grads.get(lhs.id).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1247:        let rhs_grad = grads.get(rhs.id).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1258:        let out = TestBackend::mul::<f32>(&lhs, &rhs).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1271:        let out = TestBackend::mul::<f32>(&a, &b).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1273:        let grads = tape::backward(&out).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1274:        let a_grad = grads.get(a.id).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1275:        let b_grad = grads.get(b.id).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1289:        let out = TestBackend::mul::<f32>(&lhs, &rhs).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1291:        let grads = tape::backward(&out).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1292:        let lhs_grad = grads.get(lhs.id).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1293:        let rhs_grad = grads.get(rhs.id).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1311:        let out = TestBackend::add_scalar_float::<f32>(&t, 1.0).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1314:        let grads = tape::backward(&out).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1315:        let t_grad = grads.get(t.id).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1324:        let out = TestBackend::mul_scalar_float::<f32>(&t, 2.5).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1327:        let grads = tape::backward(&out).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1328:        let t_grad = grads.get(t.id).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1339:        let out = TestBackend::relu::<f32>(&t).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1342:        let grads = tape::backward(&out).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1343:        let t_grad = grads.get(t.id).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1353:            let r = TestBackend::relu::<f32>(&inputs[0]).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1354:            TestBackend::sum_all::<f32>(&r).unwrap()
+crates/incin-backends/src/cpu/ops/elementwise.rs:1367:        let out = TestBackend::abs::<f32>(&t).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1372:            let a = TestBackend::abs::<f32>(&inputs[0]).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1373:            TestBackend::sum_all::<f32>(&a).unwrap()
+crates/incin-backends/src/cpu/ops/elementwise.rs:1386:        let out = TestBackend::neg::<f32>(&t).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1391:            let n = TestBackend::neg::<f32>(&inputs[0]).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1392:            TestBackend::sum_all::<f32>(&n).unwrap()
+crates/incin-backends/src/cpu/ops/elementwise.rs:1407:        let out = TestBackend::exp::<f32>(&t).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1415:            let e = TestBackend::exp::<f32>(&inputs[0]).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1416:            TestBackend::sum_all::<f32>(&e).unwrap()
+crates/incin-backends/src/cpu/ops/elementwise.rs:1429:        let out = TestBackend::sqrt::<f32>(&t).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1434:            let s = TestBackend::sqrt::<f32>(&inputs[0]).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1435:            TestBackend::sum_all::<f32>(&s).unwrap()
+crates/incin-backends/src/cpu/ops/elementwise.rs:1446:        let neg_out = TestBackend::sqrt::<f32>(&neg_input).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1454:        let out = TestBackend::log::<f32>(&t).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1462:            let l = TestBackend::log::<f32>(&inputs[0]).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1463:            TestBackend::sum_all::<f32>(&l).unwrap()
+crates/incin-backends/src/cpu/ops/elementwise.rs:1474:        let zero_out = TestBackend::log::<f32>(&zero_input).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1481:        let neg_out = TestBackend::log::<f32>(&neg_input).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1490:            let th = TestBackend::tanh::<f32>(&inputs[0]).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1491:            TestBackend::sum_all::<f32>(&th).unwrap()
+crates/incin-backends/src/cpu/ops/elementwise.rs:1504:        let out = TestBackend::sigmoid::<f32>(&t).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1509:            let s = TestBackend::sigmoid::<f32>(&inputs[0]).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1510:            TestBackend::sum_all::<f32>(&s).unwrap()
+crates/incin-backends/src/cpu/ops/elementwise.rs:1523:        let out = TestBackend::swish::<f32>(&t).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1528:            let s = TestBackend::swish::<f32>(&inputs[0]).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1529:            TestBackend::sum_all::<f32>(&s).unwrap()
+crates/incin-backends/src/cpu/ops/elementwise.rs:1544:        let out_zero = TestBackend::gelu::<f32>(&zero).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1548:        let out_one = TestBackend::gelu::<f32>(&one).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1565:            let g = TestBackend::gelu::<f32>(&inputs[0]).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1566:            TestBackend::sum_all::<f32>(&g).unwrap()
+crates/incin-backends/src/cpu/ops/elementwise.rs:1581:        let out = TestBackend::softmax::<f32>(&t, 0).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1596:        let out = TestBackend::softmax::<f32>(&t, 1).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1617:        let out = TestBackend::softmax::<f32>(&t, 0).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1633:        let out = TestBackend::softmax::<f32>(&t, 0).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1650:            let s = TestBackend::softmax::<f32>(&inputs[0], 0).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1651:            TestBackend::sum_all::<f32>(&s).unwrap()
+crates/incin-backends/src/cpu/ops/elementwise.rs:1666:        let out = TestBackend::softmax::<f32>(&t, 0).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1668:        let grads = tape::backward(&out).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1669:        let t_grad = grads.get(t.id).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1686:        let ls = log_softmax::<f32, incin_core::prelude::Cpu, f32>(&t, 0).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1687:        let exp_ls = TestBackend::exp::<f32>(&ls).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1703:        let ls = log_softmax::<f32, incin_core::prelude::Cpu, f32>(&t, 0).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1726:        let out = TestBackend::softmax::<f32>(&t, 0).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1743:            let ls = log_softmax::<f32, incin_core::prelude::Cpu, f32>(&inputs[0], 0).unwrap();
+crates/incin-backends/src/cpu/ops/elementwise.rs:1744:            TestBackend::sum_all::<f32>(&ls).unwrap()

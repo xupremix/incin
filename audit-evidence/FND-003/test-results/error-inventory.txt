@@ -1,0 +1,32 @@
+crates/incin-telemetry/src/err.rs:8:pub type Result<T> = core::result::Result<T, Error>;
+crates/incin-telemetry/src/err.rs:12:pub enum Error {
+crates/incin-viz-plugin-api/src/err.rs:8:pub type Result<T> = core::result::Result<T, Error>;
+crates/incin-viz-plugin-api/src/err.rs:12:pub enum Error {
+crates/incin-viz/src/err.rs:7:pub type Result<T> = core::result::Result<T, Error>;
+crates/incin-viz/src/err.rs:11:pub enum Error {
+crates/incin-diagnostics/src/lib.rs:1148:pub struct MathDomainError {
+crates/incin-backends/src/tuning/cache.rs:43:pub enum CacheError {
+crates/incin-core/src/dist/pipeline.rs:805:pub enum PipelineError {
+crates/incin-backends/src/tuning/identity.rs:102:pub enum IdentityError {
+crates/incin-core/src/dist/plan.rs:656:pub enum PlanError {
+crates/incin-core/src/dist/plan.rs:2216:pub enum HybridPlanError {
+crates/incin-core/src/dist/rule.rs:244:pub enum DistributedError {
+crates/incin-core/src/dist/mesh.rs:787:pub enum BindError {
+crates/incin-core/src/dist/context.rs:167:pub enum ContextFailure {
+crates/incin-core/src/dist/context.rs:807:pub enum ContextError {
+crates/incin-backends/src/tuning/service.rs:477:pub enum TuningServiceError {
+crates/incin-core/src/dist/collective.rs:169:pub enum CollectiveError {
+crates/incin-core/src/dist/tensor_parallel.rs:584:pub enum TensorParallelError {
+crates/incin-core/src/dist/fsdp.rs:290:pub enum FsdpError {
+crates/incin-core/src/dist/data_parallel.rs:250:pub enum DataParallelError {
+crates/incin/src/train.rs:220:pub enum TrainError {
+crates/incin-core/src/err.rs:9:pub enum BackendError {
+crates/incin-core/src/err.rs:53:pub enum BackwardError {
+crates/incin-core/src/err.rs:107:pub type Result<T> = core::result::Result<T, Error>;
+crates/incin-core/src/err.rs:112:pub enum Error {
+crates/incin-core/src/shapes/error.rs:282:pub enum ShapeError {
+crates/incin-backends/src/dist/nccl.rs:2004:pub enum NcclTransportError {
+crates/incin-core/src/tensor/base.rs:91:pub enum PlacedTensorError {
+crates/incin-backends/src/dist/tuning.rs:1121:pub enum CollectiveTuningError {
+crates/incin-core/src/exec/meta.rs:111:pub enum MetaError {
+crates/incin-core/src/tensor/device.rs:614:pub enum DeviceSetError {

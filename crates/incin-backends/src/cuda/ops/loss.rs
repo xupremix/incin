@@ -15,7 +15,7 @@ pub(crate) fn launch_nll_loss(
     let kernel_name = "nll_loss";
 
     if crate::cuda::gpu::cuda_cache::get_module(device_id, kernel_name).is_none() {
-        let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
+        let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
         dispatcher.compile_and_load_kernel(
             kernel_name,
             crate::cuda::ops::kernels::LOSS_KERNEL,
@@ -23,7 +23,7 @@ pub(crate) fn launch_nll_loss(
         )?;
     }
 
-    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
     let f = dispatcher.get_function(kernel_name, "nll_loss")?;
     let stream = b_log_sm.device.default_stream();
 

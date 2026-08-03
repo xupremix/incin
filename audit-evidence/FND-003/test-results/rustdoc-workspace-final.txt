@@ -1,0 +1,24 @@
+    Checking incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+ Documenting incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+ Documenting incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Checking incin-data v0.0.0 (/home/xupremix/Projects/incin/crates/incin-data)
+    Checking incin-telemetry v0.0.0 (/home/xupremix/Projects/incin/crates/incin-telemetry)
+ Documenting incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+ Documenting incin-data v0.0.0 (/home/xupremix/Projects/incin/crates/incin-data)
+ Documenting incin-telemetry v0.0.0 (/home/xupremix/Projects/incin/crates/incin-telemetry)
+    Checking incin-viz-plugin-api v0.0.0 (/home/xupremix/Projects/incin/crates/incin-viz-plugin-api)
+ Documenting incin-viz-plugin-api v0.0.0 (/home/xupremix/Projects/incin/crates/incin-viz-plugin-api)
+ Documenting incin-viz v0.0.0 (/home/xupremix/Projects/incin/crates/incin-viz)
+error: public documentation for `new` links to private item `MAX_ERROR_MESSAGE_BYTES`
+  --> crates/incin-core/src/err.rs:16:26
+   |
+16 |     /// Copies at most [`MAX_ERROR_MESSAGE_BYTES`] from `message`, preserving a
+   |                          ^^^^^^^^^^^^^^^^^^^^^^^ this item is private
+   |
+   = note: this link will resolve properly if you pass `--document-private-items`
+   = note: `-D rustdoc::private-intra-doc-links` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(rustdoc::private_intra_doc_links)]`
+
+error: could not document `incin-core`
+warning: build failed, waiting for other jobs to finish...

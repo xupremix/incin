@@ -79,10 +79,11 @@ pub use incin_core::optim::{Adam, AdamW, ConstantLR, LRScheduler, LinearLR, Opti
 #[cfg(feature = "std")]
 pub use incin_core::optim::{CosineAnnealingLR, StepLR};
 pub use incin_core::prelude::{
-    Backend, BoolDType, ConstShape, Cpu, DType, DTypeId, Device, DeviceId, DeviceKind,
-    DevicePreference, DeviceSet, DeviceSetError, Dyn, DynShape, Error, FloatDType, Grad, Gradients,
-    IntDType, Module, NoGrad, PartialDynShape, PlainDType, Q8_0, QuantDType, RequiresGrad, Result,
-    Shape, StateDict, TensorElement, bf16, f16,
+    Backend, BackendError, BackwardError, BoolDType, ConstShape, ConversionFailure, Cpu, DType,
+    DTypeId, Device, DeviceId, DeviceKind, DevicePreference, DeviceSet, DeviceSetError, Dyn,
+    DynShape, Error, ErrorMessage, FloatDType, FloatToIntPolicy, Grad, Gradients, IntDType, Module,
+    NoGrad, NonFiniteSite, PartialDynShape, PlainDType, Q8_0, QuantDType, RequiresGrad, Result,
+    Shape, StateDict, TensorElement, bf16, convert_f64_to_i64, f16,
 };
 
 #[cfg(feature = "cuda")]
@@ -224,6 +225,8 @@ pub mod backend_authoring {
 #[cfg(feature = "test-utils")]
 /// Test utilities and test backend implementations.
 pub mod test_utils {
+    #[cfg(feature = "cpu")]
+    pub use incin_backends::test_utils::{AssignFailureGuard, fail_assign_on};
     pub use incin_core::test_utils::DummyBackend;
 }
 
@@ -437,11 +440,13 @@ pub mod macros {
 pub mod prelude {
     pub use super::Tensor;
     pub use incin_core::prelude::{
-        Backend, BoolDType, ConstDType, ConstDevice, ConstShape, Cpu, DType, DTypeId, Device,
-        DeviceId, DeviceKind, DevicePreference, DeviceSet, DeviceSetError, Dim, Dyn, DynShape,
-        Ellipsis, Error, FloatDType, Grad, HeadShape, InferDim, IntDType, Module, NamedDyn, NoGrad,
-        PartialDynShape, PlainDType, Q8_0, QuantDType, RequiresGrad, Result, SeqTy, Shape, Slice,
-        SpanShape, StateDict, TailShape, TensorElement, bf16, f16,
+        Backend, BackendError, BackwardError, BoolDType, ConstDType, ConstDevice, ConstShape,
+        ConversionFailure, Cpu, DType, DTypeId, Device, DeviceId, DeviceKind, DevicePreference,
+        DeviceSet, DeviceSetError, Dim, Dyn, DynShape, Ellipsis, Error, ErrorMessage, FloatDType,
+        FloatToIntPolicy, Grad, HeadShape, InferDim, IntDType, Module, NamedDyn, NoGrad,
+        NonFiniteSite, PartialDynShape, PlainDType, Q8_0, QuantDType, RequiresGrad, Result, SeqTy,
+        Shape, Slice, SpanShape, StateDict, TailShape, TensorElement, bf16, convert_f64_to_i64,
+        f16,
     };
 
     #[cfg(feature = "cuda")]

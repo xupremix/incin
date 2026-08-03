@@ -97,7 +97,7 @@ pub trait TapeStorage: Clone + 'static {
     /// this, and only because
     /// finding the operation that first produced a `NaN` is otherwise a
     /// bisection over the whole graph.
-    fn has_non_finite(&self) -> bool;
+    fn has_non_finite(&self) -> Result<bool>;
 }
 
 /// A backward recipe: given the accumulated gradient of a node's output,
@@ -313,7 +313,7 @@ pub fn backward<S: TapeStorage>(nodes: Vec<TapeNode<S>>, loss: &S) -> Result<Gra
 /// panic-only backend helper". A caller who wants to know where a `NaN` came
 /// from should not have to accept an aborted process to find out.
 fn check_finite<S: TapeStorage>(grad: &S, id: TensorId, site: NonFiniteSite) -> Result<()> {
-    if grad.has_non_finite() {
+    if grad.has_non_finite()? {
         return Err(BackwardError::NonFinite {
             tensor: id.get(),
             operation: site,

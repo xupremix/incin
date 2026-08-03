@@ -1,0 +1,83 @@
+crates/incin-core/src/tensor/backend.rs:205:    fn assign_var<K: DType>(var: &mut Self::RawVar, tensor: &Self::Storage<K>) -> Result<()>;
+crates/incin-core/src/tensor/backend.rs:243:    fn step<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>>;
+crates/incin-core/src/tensor/backend.rs:841:    fn adamw_step<K: DType>(
+crates/incin-core/src/tensor/backend.rs:882:        B::assign_var::<K>(var, &updated)?;
+crates/incin-core/src/tensor/backend.rs:981:        fn assign_var<K: DType>(var: &mut Self::RawVar, tensor: &Self::Storage<K>) -> Result<()> {
+crates/incin-core/src/tensor/backend.rs:1277:        fn step<K: DType>(
+crates/incin-core/src/optim/mod.rs:43:    fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()>;
+crates/incin-core/src/optim/mod.rs:84:    fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()> {
+crates/incin-core/src/optim/mod.rs:91:                B::assign_var::<K>(&mut *var, &updated)?;
+crates/incin-core/src/optim/mod.rs:152:    pub fn step_count(&self) -> usize {
+crates/incin-core/src/optim/mod.rs:153:        self.step
+crates/incin-core/src/optim/mod.rs:157:    pub fn set_step_count(&mut self, step: usize) {
+crates/incin-core/src/optim/mod.rs:158:        self.step = step;
+crates/incin-core/src/optim/mod.rs:243:    fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()> {
+crates/incin-core/src/optim/mod.rs:244:        self.step += 1;
+crates/incin-core/src/optim/mod.rs:245:        let t_step = self.step as f64;
+crates/incin-core/src/optim/mod.rs:267:                B::adamw_step::<K>(
+crates/incin-core/src/optim/mod.rs:277:                    self.step,
+crates/incin-core/src/optim/mod.rs:338:    pub fn step_count(&self) -> usize {
+crates/incin-core/src/optim/mod.rs:339:        self.step
+crates/incin-core/src/optim/mod.rs:343:    pub fn set_step_count(&mut self, step: usize) {
+crates/incin-core/src/optim/mod.rs:344:        self.step = step;
+crates/incin-core/src/optim/mod.rs:429:    fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()> {
+crates/incin-core/src/optim/mod.rs:430:        self.step += 1;
+crates/incin-core/src/optim/mod.rs:431:        let t_step = self.step as f64;
+crates/incin-core/src/optim/mod.rs:466:                B::assign_var::<K>(&mut *var, &updated)?;
+crates/incin-core/src/optim/scheduler.rs:13:    fn step(&mut self);
+crates/incin-core/src/optim/scheduler.rs:32:    fn step(&mut self) {}
+crates/incin-core/src/optim/scheduler.rs:63:    fn step(&mut self) {
+crates/incin-core/src/optim/scheduler.rs:98:    fn step(&mut self) {
+crates/incin-core/src/optim/scheduler.rs:127:        let num_steps = (self.current_step / self.step_size) as i32;
+crates/incin-core/src/optim/scheduler.rs:131:    fn step(&mut self) {
+crates/incin-backends/src/dispatch.rs:614:    fn assign_var<K: DType>(var: &mut Self::RawVar, storage: &Self::Storage<K>) -> Result<()> {
+crates/incin-backends/src/dispatch.rs:618:                crate::cpu::CpuBackendImpl::<T, Cpu>::assign_var::<K>(var, value)
+crates/incin-backends/src/dispatch.rs:622:                crate::wgpu::WgpuBackendImpl::<T, Wgpu>::assign_var::<K>(var, value)
+crates/incin-backends/src/dispatch.rs:626:                crate::cuda::CudaBackendImpl::<T, Cuda>::assign_var::<K>(var, value)
+crates/incin-backends/src/dispatch.rs:629:                op: "assign_var_cross_device",
+crates/incin-backends/src/dispatch.rs:1278:    fn step<K: DType>(t: &DispatchStorage) -> Result<DispatchStorage> {
+crates/incin-backends/src/metal/backend.rs:122:    fn assign_var<K: DType>(var: &mut Self::RawVar, tensor: &Self::Storage<K>) -> Result<()> {
+crates/incin-backends/src/metal/backend.rs:823:    fn step<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+crates/incin-backends/src/metal/backend.rs:1919:// Uses default adamw_step composed from NumericOps/FloatOps (via trait default).
+crates/incin-backends/src/external/candle/backend.rs:64:    fn assign_var<K: incin_core::prelude::DType>(
+crates/incin-backends/src/cpu/var.rs:6://! `assign_var`. `var_as_tensor` is a scoped `borrow().clone()` that never
+crates/incin-backends/src/cpu/var.rs:8://! borrow across an `assign_var` call would panic on reentrant mutable
+crates/incin-backends/src/cpu/var.rs:10://! drives this exact `var_as_tensor` (read) -> ... -> `assign_var` (write)
+crates/incin-backends/src/cpu/var.rs:22:/// so `assign_var` can replace the value in place while other clones of
+crates/incin-backends/src/cpu/var.rs:33:/// `assign_var` on the same `CpuVar` would panic on reentrant mutable
+crates/incin-backends/src/cpu/var.rs:45:pub(crate) fn assign_var(var: &mut CpuVar, tensor: &CpuStorage) -> Result<()> {
+crates/incin-backends/src/cpu/var.rs:85:    /// `assign_var_replaces_value_and_subsequent_read_reflects_it`.
+crates/incin-backends/src/cpu/var.rs:86:    fn assign_var_replaces_value_and_subsequent_read_reflects_it() {
+crates/incin-backends/src/cpu/var.rs:91:        assign_var(&mut var, &new_value).unwrap();
+crates/incin-backends/src/cpu/var.rs:98:    /// `var_as_tensor_does_not_hold_live_borrow_across_assign_var`.
+crates/incin-backends/src/cpu/var.rs:99:    fn var_as_tensor_does_not_hold_live_borrow_across_assign_var() {
+crates/incin-backends/src/cpu/var.rs:100:        // Calling var_as_tensor immediately followed by assign_var on the
+crates/incin-backends/src/cpu/var.rs:110:        assign_var(&mut var, &storage(vec![2.0])).unwrap();
+crates/incin-backends/src/cpu/var.rs:116:    /// `two_sequential_assign_var_calls_each_succeed_and_final_read_reflects_second`.
+crates/incin-backends/src/cpu/var.rs:117:    fn two_sequential_assign_var_calls_each_succeed_and_final_read_reflects_second() {
+crates/incin-backends/src/cpu/var.rs:121:        assign_var(&mut var, &storage(vec![1.0])).unwrap();
+crates/incin-backends/src/cpu/var.rs:122:        assign_var(&mut var, &storage(vec![2.0])).unwrap();
+crates/incin-backends/src/cuda/backend.rs:923:    fn step<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
+crates/incin-backends/src/cuda/backend.rs:1953:    fn assign_var<K: DType>(var: &mut Self::RawVar, tensor: &Self::Storage<K>) -> Result<()> {
+crates/incin-backends/src/cuda/backend.rs:2893:    // `OptimizerOps::adamw_step` has no override in this file's
+crates/incin-backends/src/cuda/backend.rs:2896:    // composed entirely from `NumericOps`/`FloatOps`/`assign_var` (already
+crates/incin-backends/src/cuda/backend.rs:2904:    fn adamw_step_default_impl_resolves_and_runs_on_cuda() {
+crates/incin-backends/src/cuda/backend.rs:2910:        <B as OptimizerOps<B>>::adamw_step::<f32>(
+crates/incin-backends/src/cpu/mod.rs:10://! `shape`/`backward`/`get_grad`/`format_*`/`var_*`/`assign_var`/`to_bytes`/
+crates/incin-backends/src/cpu/mod.rs:269:    /// `assign_var`.
+crates/incin-backends/src/cpu/mod.rs:270:    fn assign_var<K: DType>(var: &mut Self::RawVar, tensor: &Self::Storage<K>) -> Result<()> {
+crates/incin-backends/src/cpu/mod.rs:271:        var::assign_var(var, tensor)
+crates/incin-backends/src/external/candle/ops/float.rs:52:    fn step<K: incin_core::prelude::DType>(
+crates/incin-backends/src/cpu/ops/optimizer.rs:11:    fn adamw_step<K: DType>(
+crates/incin-backends/src/cpu/ops/optimizer.rs:68:            crate::cpu::var::assign_var(_var, &updated_storage)?;
+crates/incin-backends/src/cpu/ops/optimizer.rs:73:            op: "adamw_step",
+crates/incin-backends/src/cpu/ops/elementwise.rs:445:    fn step<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+crates/incin-backends/src/wgpu/tests.rs:552:/// `test_adamw_step`.
+crates/incin-backends/src/wgpu/tests.rs:553:fn test_adamw_step() {
+crates/incin-backends/src/wgpu/tests.rs:564:    <B as OptimizerOps<B>>::adamw_step::<f32>(
+crates/incin-backends/src/wgpu/tests.rs:618:    <B as OptimizerOps<B>>::adamw_step::<f32>(
+crates/incin-backends/src/wgpu/backend.rs:156:    /// `assign_var`.
+crates/incin-backends/src/wgpu/backend.rs:157:    fn assign_var<K: DType>(var: &mut Self::RawVar, tensor: &Self::Storage<K>) -> Result<()> {
+crates/incin-backends/src/wgpu/backend.rs:552:    fn step<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+crates/incin-backends/src/wgpu/backend.rs:3425:    /// `adamw_step`.
+crates/incin-backends/src/wgpu/backend.rs:3426:    fn adamw_step<K: DType>(

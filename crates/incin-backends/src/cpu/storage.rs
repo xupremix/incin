@@ -150,11 +150,9 @@ impl CpuBuffer {
     /// precision-loss bug: an F64/F16/BF16 tensor would previously come back
     /// out of `add`/`mul`/`relu`/etc. downcast through f32 with no error).
     ///
-    /// Panics if `self` is `Q8_0` — quantized buffers are never produced by
-    /// elementwise float ops.
     #[allow(clippy::wrong_self_convention)]
-    pub(crate) fn from_f64_values(&self, values: Vec<f64>) -> CpuBuffer {
-        match self {
+    pub(crate) fn from_f64_values(&self, values: Vec<f64>) -> Result<CpuBuffer> {
+        Ok(match self {
             CpuBuffer::F32(_) => CpuBuffer::F32(values.into_iter().map(|v| v as f32).collect()),
             CpuBuffer::F64(_) => CpuBuffer::F64(values),
             CpuBuffer::U8(_) => CpuBuffer::U8(values.into_iter().map(|v| v as u8).collect()),
@@ -167,9 +165,13 @@ impl CpuBuffer {
                 CpuBuffer::BF16(values.into_iter().map(half::bf16::from_f64).collect())
             }
             CpuBuffer::Q8_0(_) => {
-                panic!("from_f64_values not supported on Q8_0 quantized buffer")
+                return Err(Error::UnsupportedDType {
+                    dtype: DTypeId::Q8_0,
+                    backend: "cpu",
+                    op: "construct arithmetic result",
+                });
             }
-        }
+        })
     }
 
     /// Read the scalar at flat buffer index `i` as an `f64`, regardless of
@@ -184,8 +186,9 @@ impl CpuBuffer {
             CpuBuffer::I64(v) => v[i] as f64,
             CpuBuffer::F16(v) => v[i].to_f64(),
             CpuBuffer::BF16(v) => v[i].to_f64(),
-            CpuBuffer::Q8_0(_) => {
-                panic!("get_f64 not supported directly on Q8_0 quantized buffer")
+            CpuBuffer::Q8_0(v) => {
+                let block = &v[i / 32];
+                block.d.to_f64() * f64::from(block.qs[i % 32])
             }
         }
     }
@@ -254,7 +257,7 @@ impl CpuStorage {
     /// Build a fresh, contiguous, all-ones `CpuStorage` with the same
     /// shape and dtype variant as `other`. Used by `tape::backward()` to
     /// seed the loss tensor's gradient before walking the tape.
-    pub fn ones_like(other: &CpuStorage) -> Self {
+    pub fn ones_like(other: &CpuStorage) -> Result<Self> {
         let total: usize = crate::cpu::stride::validated_numel(&(other.shape));
 
         let new_buffer = match &*other.buffer {
@@ -265,10 +268,19 @@ impl CpuStorage {
             CpuBuffer::I64(_) => CpuBuffer::I64(vec![1i64; total]),
             CpuBuffer::F16(_) => CpuBuffer::F16(vec![half::f16::from_f64(1.0); total]),
             CpuBuffer::BF16(_) => CpuBuffer::BF16(vec![half::bf16::from_f64(1.0); total]),
-            CpuBuffer::Q8_0(_) => panic!("ones_like not supported on Q8_0 buffer"),
+            CpuBuffer::Q8_0(_) => {
+                return Err(Error::UnsupportedDType {
+                    dtype: DTypeId::Q8_0,
+                    backend: "cpu",
+                    op: "autograd seed",
+                });
+            }
         };
 
-        CpuStorage::from_contiguous(new_buffer, other.shape.to_vec())
+        Ok(CpuStorage::from_contiguous(
+            new_buffer,
+            other.shape.to_vec(),
+        ))
     }
 
     /// Resolve a logical multi-index through `self.strides`/`self.offset_elements`
@@ -285,6 +297,67 @@ impl CpuStorage {
         self.buffer.get_f64(flat)
     }
 
+    /// Reads one logical element as an integer without silently applying
+    /// Rust's float-cast truncation or saturation rules.
+    pub(crate) fn get_i64_checked(&self, idx: &[usize], operation: &'static str) -> Result<i64> {
+        if idx.len() != self.shape.len() {
+            return Err(Error::InternalInvariant {
+                operation,
+                reason: "integer readback index rank disagrees with tensor rank",
+            });
+        }
+        let mut flat = self.offset_elements;
+        for (index, stride) in idx.iter().zip(self.strides.iter()) {
+            flat = flat
+                .checked_add(
+                    index
+                        .checked_mul(*stride)
+                        .ok_or(Error::ArithmeticOverflow {
+                            operation,
+                            expression: "index * stride",
+                        })?,
+                )
+                .ok_or(Error::ArithmeticOverflow {
+                    operation,
+                    expression: "offset + indexed stride",
+                })?;
+        }
+        match &*self.buffer {
+            CpuBuffer::U8(values) => Ok(i64::from(values[flat])),
+            CpuBuffer::U32(values) => Ok(i64::from(values[flat])),
+            CpuBuffer::I64(values) => Ok(values[flat]),
+            CpuBuffer::F32(values) => incin_core::prelude::convert_f64_to_i64(
+                operation,
+                DTypeId::F32,
+                f64::from(values[flat]),
+                incin_core::prelude::FloatToIntPolicy::Exact,
+            ),
+            CpuBuffer::F64(values) => incin_core::prelude::convert_f64_to_i64(
+                operation,
+                DTypeId::F64,
+                values[flat],
+                incin_core::prelude::FloatToIntPolicy::Exact,
+            ),
+            CpuBuffer::F16(values) => incin_core::prelude::convert_f64_to_i64(
+                operation,
+                DTypeId::F16,
+                values[flat].to_f64(),
+                incin_core::prelude::FloatToIntPolicy::Exact,
+            ),
+            CpuBuffer::BF16(values) => incin_core::prelude::convert_f64_to_i64(
+                operation,
+                DTypeId::BF16,
+                values[flat].to_f64(),
+                incin_core::prelude::FloatToIntPolicy::Exact,
+            ),
+            CpuBuffer::Q8_0(_) => Err(Error::UnsupportedDType {
+                dtype: DTypeId::Q8_0,
+                backend: "cpu",
+                op: operation,
+            }),
+        }
+    }
+
     /// Reshape to `new_shape`, per Pattern 1: metadata-only (sharing the
     /// same `Arc<CpuBuffer>`, no allocation) when `self` is already
     /// contiguous; otherwise materializes a contiguous copy first, then
@@ -298,7 +371,7 @@ impl CpuStorage {
                 self.offset_elements,
             )
         } else {
-            let materialized = self.contiguous();
+            let materialized = self.contiguous()?;
             materialized.reshape(new_shape)
         }
     }
@@ -404,9 +477,9 @@ impl CpuStorage {
     /// current shape/strides/offset and copying element-by-element in
     /// row-major order. Used only on the non-contiguous fallback path of
     /// `reshape`.
-    pub(crate) fn contiguous(&self) -> Self {
+    pub(crate) fn contiguous(&self) -> Result<Self> {
         if stride::is_contiguous(&self.shape, &self.strides) {
-            return self.clone();
+            return Ok(self.clone());
         }
 
         let total: usize = crate::cpu::stride::validated_numel(&(self.shape));
@@ -445,10 +518,16 @@ impl CpuStorage {
                 }
                 CpuBuffer::BF16(out)
             }
-            CpuBuffer::Q8_0(_) => panic!("materialize not supported on Q8_0 buffer"),
+            CpuBuffer::Q8_0(_) => {
+                return Err(Error::UnsupportedDType {
+                    dtype: DTypeId::Q8_0,
+                    backend: "cpu",
+                    op: "materialize non-contiguous storage",
+                });
+            }
         };
 
-        CpuStorage::from_contiguous(new_buffer, self.shape.to_vec())
+        Ok(CpuStorage::from_contiguous(new_buffer, self.shape.to_vec()))
     }
 }
 
@@ -480,7 +559,7 @@ pub(crate) fn scatter_into_zeros(
     original_shape: &[usize],
     region_start: &[usize],
     values: &CpuStorage,
-) -> CpuStorage {
+) -> Result<CpuStorage> {
     let total: usize = crate::cpu::stride::validated_numel(original_shape);
     let out_strides = stride::contiguous_strides(original_shape);
     let mut multi_idx = vec![0usize; values.shape.len()];
@@ -531,10 +610,19 @@ pub(crate) fn scatter_into_zeros(
             }
             CpuBuffer::BF16(out)
         }
-        CpuBuffer::Q8_0(_) => panic!("scatter_into_zeros not supported on Q8_0 buffer"),
+        CpuBuffer::Q8_0(_) => {
+            return Err(Error::UnsupportedDType {
+                dtype: DTypeId::Q8_0,
+                backend: "cpu",
+                op: "scatter gradient",
+            });
+        }
     };
 
-    CpuStorage::from_contiguous(new_buffer, original_shape.to_vec())
+    Ok(CpuStorage::from_contiguous(
+        new_buffer,
+        original_shape.to_vec(),
+    ))
 }
 
 #[cfg(test)]
@@ -614,6 +702,39 @@ mod tests {
         assert_eq!(t.get(&[1, 1]), 5.0);
         assert_eq!(t.get(&[2, 0]), 3.0);
         assert_eq!(t.get(&[2, 1]), 6.0);
+    }
+
+    #[test]
+    fn checked_integer_readback_preserves_integer_values() {
+        let signed = CpuStorage::from_contiguous(CpuBuffer::I64(vec![i64::MIN, i64::MAX]), vec![2]);
+        assert_eq!(
+            signed.get_i64_checked(&[0], "test_readback").unwrap(),
+            i64::MIN
+        );
+        assert_eq!(
+            signed.get_i64_checked(&[1], "test_readback").unwrap(),
+            i64::MAX
+        );
+
+        let unsigned = CpuStorage::from_contiguous(CpuBuffer::U32(vec![u32::MAX]), vec![1]);
+        assert_eq!(
+            unsigned.get_i64_checked(&[0], "test_readback").unwrap(),
+            i64::from(u32::MAX)
+        );
+    }
+
+    #[test]
+    fn checked_integer_readback_rejects_lossy_float_values() {
+        for value in [1.5, f64::NAN, f64::INFINITY, 9_223_372_036_854_775_808.0] {
+            let storage = CpuStorage::from_contiguous(CpuBuffer::F64(vec![value]), vec![1]);
+            assert!(matches!(
+                storage.get_i64_checked(&[0], "test_readback"),
+                Err(Error::InvalidConversion {
+                    operation: "test_readback",
+                    ..
+                })
+            ));
+        }
     }
 
     #[test]
@@ -719,7 +840,7 @@ mod tests {
     /// `scatter_into_zeros_partial_overlap_writes_only_target_region`.
     fn scatter_into_zeros_partial_overlap_writes_only_target_region() {
         let values = CpuStorage::from_contiguous(CpuBuffer::F32(vec![7.0, 8.0, 9.0]), vec![1, 3]);
-        let result = scatter_into_zeros(&[4, 3], &[1, 0], &values);
+        let result = scatter_into_zeros(&[4, 3], &[1, 0], &values).unwrap();
         assert_eq!(result.shape, vec![4, 3]);
         for col in 0..3 {
             assert_eq!(result.get(&[1, col]), values.get(&[0, col]));
@@ -736,7 +857,7 @@ mod tests {
     fn scatter_into_zeros_full_overlap_matches_values_exactly() {
         let values =
             CpuStorage::from_contiguous(CpuBuffer::F32(vec![1.0, 2.0, 3.0, 4.0]), vec![2, 2]);
-        let result = scatter_into_zeros(&[2, 2], &[0, 0], &values);
+        let result = scatter_into_zeros(&[2, 2], &[0, 0], &values).unwrap();
         assert_eq!(result.shape, vec![2, 2]);
         for row in 0..2 {
             for col in 0..2 {
@@ -749,7 +870,7 @@ mod tests {
     /// `scatter_into_zeros_returns_fresh_buffer_not_sharing_values_rc`.
     fn scatter_into_zeros_returns_fresh_buffer_not_sharing_values_rc() {
         let values = CpuStorage::from_contiguous(CpuBuffer::F32(vec![7.0, 8.0, 9.0]), vec![1, 3]);
-        let result = scatter_into_zeros(&[4, 3], &[1, 0], &values);
+        let result = scatter_into_zeros(&[4, 3], &[1, 0], &values).unwrap();
         assert!(!Arc::ptr_eq(&values.buffer, &result.buffer));
     }
 
@@ -757,7 +878,7 @@ mod tests {
     /// `scatter_into_zeros_1d_case`.
     fn scatter_into_zeros_1d_case() {
         let values = CpuStorage::from_contiguous(CpuBuffer::F32(vec![9.0, 10.0]), vec![2]);
-        let result = scatter_into_zeros(&[5], &[2], &values);
+        let result = scatter_into_zeros(&[5], &[2], &values).unwrap();
         assert_eq!(result.shape, vec![5]);
         let expected = [0.0, 0.0, 9.0, 10.0, 0.0];
         for (i, exp) in expected.iter().enumerate() {

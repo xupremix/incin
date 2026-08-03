@@ -96,7 +96,7 @@ pub(crate) fn elementwise_binary(
                         f(a, b)
                     })
                     .collect();
-                lhs.buffer.from_f64_values(out)
+                lhs.buffer.from_f64_values(out)?
             }
         };
         return Ok(CpuStorage::from_contiguous(buffer, out_shape.to_vec()));
@@ -129,7 +129,7 @@ pub(crate) fn elementwise_binary(
             f(a, b)
         })
         .collect();
-    let out_buffer = lhs.buffer.from_f64_values(out);
+    let out_buffer = lhs.buffer.from_f64_values(out)?;
     Ok(CpuStorage::from_contiguous(out_buffer, out_shape.to_vec()))
 }
 
@@ -183,7 +183,7 @@ pub(crate) fn elementwise_unary(
                         f(t.get(&nd_idx))
                     })
                     .collect();
-                t.buffer.from_f64_values(out)
+                t.buffer.from_f64_values(out)?
             }
         };
         return Ok(CpuStorage::from_contiguous(buffer, t.shape.to_vec()));
@@ -197,7 +197,7 @@ pub(crate) fn elementwise_unary(
             f(t.get(&nd_idx))
         })
         .collect();
-    let out_buffer = t.buffer.from_f64_values(out);
+    let out_buffer = t.buffer.from_f64_values(out)?;
     Ok(CpuStorage::from_contiguous(out_buffer, t.shape.to_vec()))
 }
 
@@ -411,7 +411,7 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
                     }
                 }
                 Ok(vec![CpuStorage::from_contiguous(
-                    grad_out.buffer.from_f64_values(scaled),
+                    grad_out.buffer.from_f64_values(scaled)?,
                     grad_out.shape.to_vec(),
                 )])
             }),
@@ -454,7 +454,7 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
                 let total: usize = crate::cpu::stride::checked_numel(&(grad_out.shape))?;
                 let zeros = vec![0.0f64; total];
                 Ok(vec![CpuStorage::from_contiguous(
-                    grad_out.buffer.from_f64_values(zeros),
+                    grad_out.buffer.from_f64_values(zeros)?,
                     grad_out.shape.to_vec(),
                 )])
             }),
@@ -708,7 +708,7 @@ impl<T: DType, D: Device> FloatOps<Self> for CpuBackendImpl<T, D> {
                     })
                     .collect();
                 Ok(vec![CpuStorage::from_contiguous(
-                    grad_out.buffer.from_f64_values(grad),
+                    grad_out.buffer.from_f64_values(grad)?,
                     grad_out.shape.to_vec(),
                 )])
             }),

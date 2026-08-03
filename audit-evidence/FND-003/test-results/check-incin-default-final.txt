@@ -1,0 +1,6 @@
+   Compiling incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+    Checking incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Checking incin-data v0.0.0 (/home/xupremix/Projects/incin/crates/incin-data)
+    Checking incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.37s

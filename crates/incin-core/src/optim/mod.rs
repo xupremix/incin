@@ -43,6 +43,247 @@ pub trait Optimizer<B: Backend> {
     fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()>;
 }
 
+struct PreparedUpdate<S> {
+    name: String,
+    before: S,
+    updated: S,
+    first_moment: Option<S>,
+    second_moment: Option<S>,
+}
+
+fn invalid_optimizer_config(operation: &'static str, reason: &'static str) -> Error {
+    Error::InvalidModuleState {
+        operation,
+        reason: ErrorMessage::new(reason),
+    }
+}
+
+fn validate_learning_rate(operation: &'static str, lr: f64) -> Result<()> {
+    if !lr.is_finite() || lr < 0.0 {
+        return Err(invalid_optimizer_config(
+            operation,
+            "learning rate must be finite and non-negative",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_adam_config(
+    operation: &'static str,
+    lr: f64,
+    beta1: f64,
+    beta2: f64,
+    eps: f64,
+    weight_decay: Option<f64>,
+) -> Result<()> {
+    validate_learning_rate(operation, lr)?;
+    if !beta1.is_finite() || !(0.0..1.0).contains(&beta1) {
+        return Err(invalid_optimizer_config(
+            operation,
+            "beta1 must be finite and in [0, 1)",
+        ));
+    }
+    if !beta2.is_finite() || !(0.0..1.0).contains(&beta2) {
+        return Err(invalid_optimizer_config(
+            operation,
+            "beta2 must be finite and in [0, 1)",
+        ));
+    }
+    if !eps.is_finite() || eps <= 0.0 {
+        return Err(invalid_optimizer_config(
+            operation,
+            "epsilon must be finite and positive",
+        ));
+    }
+    if weight_decay.is_some_and(|decay| !decay.is_finite() || decay < 0.0) {
+        return Err(invalid_optimizer_config(
+            operation,
+            "weight decay must be finite and non-negative",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_storage_pair<B: Backend, K: DType>(
+    operation: &'static str,
+    parameter: &B::Storage<K>,
+    other: &B::Storage<K>,
+) -> Result<()> {
+    if B::shape(parameter) != B::shape(other) {
+        return Err(invalid_optimizer_config(
+            operation,
+            "parameter, gradient, and optimizer-state shapes must match",
+        ));
+    }
+    if let (Some(expected), Some(actual)) = (B::storage_dtype(parameter), B::storage_dtype(other))
+        && expected != actual
+    {
+        return Err(Error::DTypeMismatch {
+            operation,
+            expected,
+            actual,
+        });
+    }
+    if let (Some(expected), Some(actual)) = (B::storage_device(parameter), B::storage_device(other))
+        && expected != actual
+    {
+        return Err(Error::PlacementMismatch {
+            operation,
+            expected,
+            actual,
+        });
+    }
+    Ok(())
+}
+
+type AdamState<S> = (
+    alloc::collections::BTreeMap<String, S>,
+    alloc::collections::BTreeMap<String, S>,
+);
+
+fn load_adam_state<B: Backend, K: DType>(
+    operation: &'static str,
+    prefix: &str,
+    params: &alloc::collections::BTreeMap<String, B::RawVar>,
+    dict: &alloc::collections::BTreeMap<String, Tensor<Dyn, B, K>>,
+) -> Result<AdamState<B::Storage<K>>> {
+    let prefix = if prefix.is_empty() {
+        alloc::string::String::new()
+    } else {
+        alloc::format!("{}.", prefix)
+    };
+    let m_prefix = alloc::format!("{}m.", prefix);
+    let v_prefix = alloc::format!("{}v.", prefix);
+    let mut next_m = alloc::collections::BTreeMap::new();
+    let mut next_v = alloc::collections::BTreeMap::new();
+
+    for (key, tensor) in dict {
+        let (name, destination) = if let Some(name) = key.strip_prefix(&m_prefix) {
+            (name, &mut next_m)
+        } else if let Some(name) = key.strip_prefix(&v_prefix) {
+            (name, &mut next_v)
+        } else {
+            continue;
+        };
+        let parameter = params.get(name).ok_or_else(|| {
+            invalid_optimizer_config(operation, "state dictionary names an unknown parameter")
+        })?;
+        let parameter = B::var_as_tensor::<K>(parameter)?;
+        validate_storage_pair::<B, K>(operation, &parameter, tensor.inner())?;
+        destination.insert(name.to_string(), tensor.inner().clone());
+    }
+
+    for name in next_m.keys().chain(next_v.keys()) {
+        if !next_m.contains_key(name) || !next_v.contains_key(name) {
+            return Err(invalid_optimizer_config(
+                operation,
+                "Adam state dictionary must contain both moments for each parameter",
+            ));
+        }
+    }
+    Ok((next_m, next_v))
+}
+
+fn commit_parameter_updates<B: Backend, K: DType>(
+    operation: &'static str,
+    params: &mut alloc::collections::BTreeMap<String, B::RawVar>,
+    updates: &[PreparedUpdate<B::Storage<K>>],
+) -> Result<()> {
+    for update in updates {
+        let var = params
+            .get_mut(&update.name)
+            .ok_or(Error::InternalInvariant {
+                operation,
+                reason: "prepared optimizer update lost its parameter",
+            })?;
+        if let Err(commit_error) = B::assign_var::<K>(var, &update.updated) {
+            for rollback in updates {
+                let rollback_var =
+                    params
+                        .get_mut(&rollback.name)
+                        .ok_or(Error::InternalInvariant {
+                            operation,
+                            reason: "optimizer rollback lost its parameter",
+                        })?;
+                if B::assign_var::<K>(rollback_var, &rollback.before).is_err() {
+                    return Err(Error::InternalInvariant {
+                        operation,
+                        reason: "backend rejected optimizer rollback",
+                    });
+                }
+            }
+            return Err(commit_error);
+        }
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn prepare_adam_update<B: Backend, K: DType>(
+    operation: &'static str,
+    tensor: &B::Storage<K>,
+    grad: &B::Storage<K>,
+    previous_m: Option<&B::Storage<K>>,
+    previous_v: Option<&B::Storage<K>>,
+    lr: f64,
+    beta1: f64,
+    beta2: f64,
+    eps: f64,
+    weight_decay: f64,
+    step: usize,
+) -> Result<(B::Storage<K>, B::Storage<K>, B::Storage<K>)> {
+    validate_storage_pair::<B, K>(operation, tensor, grad)?;
+    if let Some(m) = previous_m {
+        validate_storage_pair::<B, K>(operation, tensor, m)?;
+    }
+    if let Some(v) = previous_v {
+        validate_storage_pair::<B, K>(operation, tensor, v)?;
+    }
+
+    let m_t = if let Some(m) = previous_m {
+        let retained = B::mul_scalar_float::<K>(m, beta1)?;
+        let incoming = B::mul_scalar_float::<K>(grad, 1.0 - beta1)?;
+        B::add::<K>(&retained, &incoming)?
+    } else {
+        B::mul_scalar_float::<K>(grad, 1.0 - beta1)?
+    };
+    let grad_sq = B::mul::<K>(grad, grad)?;
+    let v_t = if let Some(v) = previous_v {
+        let retained = B::mul_scalar_float::<K>(v, beta2)?;
+        let incoming = B::mul_scalar_float::<K>(&grad_sq, 1.0 - beta2)?;
+        B::add::<K>(&retained, &incoming)?
+    } else {
+        B::mul_scalar_float::<K>(&grad_sq, 1.0 - beta2)?
+    };
+
+    let t_step = step as f64;
+    let bias_correction1 = 1.0 - beta1.powf(t_step);
+    let bias_correction2 = 1.0 - beta2.powf(t_step);
+    if !bias_correction1.is_finite()
+        || !bias_correction2.is_finite()
+        || bias_correction1 <= 0.0
+        || bias_correction2 <= 0.0
+    {
+        return Err(Error::ArithmeticOverflow {
+            operation,
+            expression: "Adam bias correction",
+        });
+    }
+
+    let m_hat = B::mul_scalar_float::<K>(&m_t, 1.0 / bias_correction1)?;
+    let v_hat = B::mul_scalar_float::<K>(&v_t, 1.0 / bias_correction2)?;
+    let denom = B::add_scalar_float::<K>(&B::sqrt::<K>(&v_hat)?, eps)?;
+    let step_value = B::mul_scalar_float::<K>(&B::div::<K>(&m_hat, &denom)?, lr)?;
+    let decayed = if weight_decay == 0.0 {
+        tensor.clone()
+    } else {
+        let decay = B::mul_scalar_float::<K>(tensor, weight_decay * lr)?;
+        B::sub::<K>(tensor, &decay)?
+    };
+    let updated = B::sub::<K>(&decayed, &step_value)?;
+    Ok((updated, m_t, v_t))
+}
+
 /// Stochastic Gradient Descent (SGD) optimizer.
 ///
 /// Applies the update rule: `w ← w - lr * ∂L/∂w`.
@@ -82,15 +323,25 @@ impl<B: Backend, K: DType> SGD<B, K> {
 impl<B: Backend, K: DType> Optimizer<B> for SGD<B, K> {
     /// `step`.
     fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()> {
-        for var in self.params.values_mut() {
+        const OPERATION: &str = "sgd_step";
+        validate_learning_rate(OPERATION, self.lr)?;
+        let mut updates = alloc::vec::Vec::new();
+        for (name, var) in &self.params {
             let t = B::var_as_tensor::<K>(var)?;
             if let Some(grad) = B::get_grad::<K>(&t, &grads.0)? {
-                // t = t - lr * grad
+                validate_storage_pair::<B, K>(OPERATION, &t, &grad)?;
                 let grad_scaled = B::mul_scalar_float::<K>(&grad, self.lr)?;
                 let updated = B::sub::<K>(&t, &grad_scaled)?;
-                B::assign_var::<K>(&mut *var, &updated)?;
+                updates.push(PreparedUpdate {
+                    name: name.clone(),
+                    before: t,
+                    updated,
+                    first_moment: None,
+                    second_moment: None,
+                });
             }
         }
+        commit_parameter_updates::<B, K>(OPERATION, &mut self.params, &updates)?;
         Ok(())
     }
 }
@@ -201,21 +452,10 @@ impl<B: Backend, K: DType> AdamW<B, K> {
         prefix: &str,
         dict: &alloc::collections::BTreeMap<String, Tensor<Dyn, B, K>>,
     ) -> Result<()> {
-        let p = if prefix.is_empty() {
-            alloc::string::String::new()
-        } else {
-            alloc::format!("{}.", prefix)
-        };
-        let m_prefix = alloc::format!("{}m.", p);
-        let v_prefix = alloc::format!("{}v.", p);
-
-        for (key, tensor) in dict {
-            if let Some(name) = key.strip_prefix(&m_prefix) {
-                self.m.insert(name.to_string(), tensor.inner().clone());
-            } else if let Some(name) = key.strip_prefix(&v_prefix) {
-                self.v.insert(name.to_string(), tensor.inner().clone());
-            }
-        }
+        let (next_m, next_v) =
+            load_adam_state::<B, K>("adamw_load_state_dict", prefix, &self.params, dict)?;
+        self.m = next_m;
+        self.v = next_v;
         Ok(())
     }
 }
@@ -241,46 +481,63 @@ impl<B: Backend<FloatElem = f32>> crate::nn::module::StateDict<B> for AdamW<B, f
 impl<B: Backend, K: DType> Optimizer<B> for AdamW<B, K> {
     /// `step`.
     fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()> {
-        self.step += 1;
-        let t_step = self.step as f64;
-        let _bias_correction1 = 1.0 - self.beta1.powf(t_step);
-        let _bias_correction2 = 1.0 - self.beta2.powf(t_step);
-
-        for (name, var) in self.params.iter_mut() {
+        const OPERATION: &str = "adamw_step";
+        validate_adam_config(
+            OPERATION,
+            self.lr,
+            self.beta1,
+            self.beta2,
+            self.eps,
+            Some(self.weight_decay),
+        )?;
+        let next_step = self.step.checked_add(1).ok_or(Error::ArithmeticOverflow {
+            operation: OPERATION,
+            expression: "optimizer step + 1",
+        })?;
+        let mut updates = alloc::vec::Vec::new();
+        for (name, var) in &self.params {
             let t = B::var_as_tensor::<K>(var)?;
             if let Some(grad) = B::get_grad::<K>(&t, &grads.0)? {
-                let device = B::storage_device::<K>(&t).unwrap_or_else(DeviceId::cpu);
-                if !self.m.contains_key(name) {
-                    let zero =
-                        B::var_zeros::<K>(B::shape::<K>(&t).as_slice(), DTypeId::F32, &device)?;
-                    self.m.insert(name.clone(), B::var_as_tensor::<K>(&zero)?);
-                }
-                if !self.v.contains_key(name) {
-                    let zero =
-                        B::var_zeros::<K>(B::shape::<K>(&t).as_slice(), DTypeId::F32, &device)?;
-                    self.v.insert(name.clone(), B::var_as_tensor::<K>(&zero)?);
-                }
-
-                let mut m_t = self.m.remove(name).unwrap();
-                let mut v_t = self.v.remove(name).unwrap();
-
-                B::adamw_step::<K>(
-                    var,
+                let (updated, m_t, v_t) = prepare_adam_update::<B, K>(
+                    OPERATION,
+                    &t,
                     &grad,
-                    &mut m_t,
-                    &mut v_t,
+                    self.m.get(name),
+                    self.v.get(name),
                     self.lr,
                     self.beta1,
                     self.beta2,
                     self.eps,
                     self.weight_decay,
-                    self.step,
+                    next_step,
                 )?;
-
-                self.m.insert(name.clone(), m_t);
-                self.v.insert(name.clone(), v_t);
+                updates.push(PreparedUpdate {
+                    name: name.clone(),
+                    before: t,
+                    updated,
+                    first_moment: Some(m_t),
+                    second_moment: Some(v_t),
+                });
             }
         }
+        commit_parameter_updates::<B, K>(OPERATION, &mut self.params, &updates)?;
+        for update in updates {
+            self.m.insert(
+                update.name.clone(),
+                update.first_moment.ok_or(Error::InternalInvariant {
+                    operation: OPERATION,
+                    reason: "prepared AdamW update lost first moment",
+                })?,
+            );
+            self.v.insert(
+                update.name,
+                update.second_moment.ok_or(Error::InternalInvariant {
+                    operation: OPERATION,
+                    reason: "prepared AdamW update lost second moment",
+                })?,
+            );
+        }
+        self.step = next_step;
         Ok(())
     }
 }
@@ -387,21 +644,10 @@ impl<B: Backend, K: DType> Adam<B, K> {
         prefix: &str,
         dict: &alloc::collections::BTreeMap<String, Tensor<Dyn, B, K>>,
     ) -> Result<()> {
-        let p = if prefix.is_empty() {
-            alloc::string::String::new()
-        } else {
-            alloc::format!("{}.", prefix)
-        };
-        let m_prefix = alloc::format!("{}m.", p);
-        let v_prefix = alloc::format!("{}v.", p);
-
-        for (key, tensor) in dict {
-            if let Some(name) = key.strip_prefix(&m_prefix) {
-                self.m.insert(name.to_string(), tensor.inner().clone());
-            } else if let Some(name) = key.strip_prefix(&v_prefix) {
-                self.v.insert(name.to_string(), tensor.inner().clone());
-            }
-        }
+        let (next_m, next_v) =
+            load_adam_state::<B, K>("adam_load_state_dict", prefix, &self.params, dict)?;
+        self.m = next_m;
+        self.v = next_v;
         Ok(())
     }
 }
@@ -427,45 +673,56 @@ impl<B: Backend<FloatElem = f32>> crate::nn::module::StateDict<B> for Adam<B, f3
 impl<B: Backend, K: DType> Optimizer<B> for Adam<B, K> {
     /// `step`.
     fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()> {
-        self.step += 1;
-        let t_step = self.step as f64;
-        let bias_correction1 = 1.0 - self.beta1.powf(t_step);
-        let bias_correction2 = 1.0 - self.beta2.powf(t_step);
-
-        for (name, var) in self.params.iter_mut() {
+        const OPERATION: &str = "adam_step";
+        validate_adam_config(OPERATION, self.lr, self.beta1, self.beta2, self.eps, None)?;
+        let next_step = self.step.checked_add(1).ok_or(Error::ArithmeticOverflow {
+            operation: OPERATION,
+            expression: "optimizer step + 1",
+        })?;
+        let mut updates = alloc::vec::Vec::new();
+        for (name, var) in &self.params {
             let t = B::var_as_tensor::<K>(var)?;
             if let Some(grad) = B::get_grad::<K>(&t, &grads.0)? {
-                let m_t = if let Some(m) = self.m.get(name) {
-                    let term1 = B::mul_scalar_float::<K>(m, self.beta1)?;
-                    let term2 = B::mul_scalar_float::<K>(&grad, 1.0 - self.beta1)?;
-                    B::add::<K>(&term1, &term2)?
-                } else {
-                    B::mul_scalar_float::<K>(&grad, 1.0 - self.beta1)?
-                };
-
-                let grad_sq = B::mul::<K>(&grad, &grad)?;
-                let v_t = if let Some(v) = self.v.get(name) {
-                    let term1 = B::mul_scalar_float::<K>(v, self.beta2)?;
-                    let term2 = B::mul_scalar_float::<K>(&grad_sq, 1.0 - self.beta2)?;
-                    B::add::<K>(&term1, &term2)?
-                } else {
-                    B::mul_scalar_float::<K>(&grad_sq, 1.0 - self.beta2)?
-                };
-
-                self.m.insert(name.clone(), m_t.clone());
-                self.v.insert(name.clone(), v_t.clone());
-
-                let m_hat = B::mul_scalar_float::<K>(&m_t, 1.0 / bias_correction1)?;
-                let v_hat = B::mul_scalar_float::<K>(&v_t, 1.0 / bias_correction2)?;
-
-                // step = lr * m_hat / (sqrt(v_hat) + eps)
-                let denom = B::add_scalar_float::<K>(&B::sqrt::<K>(&v_hat)?, self.eps)?;
-                let step = B::mul_scalar_float::<K>(&B::div::<K>(&m_hat, &denom)?, self.lr)?;
-
-                let updated = B::sub::<K>(&t, &step)?;
-                B::assign_var::<K>(&mut *var, &updated)?;
+                let (updated, m_t, v_t) = prepare_adam_update::<B, K>(
+                    OPERATION,
+                    &t,
+                    &grad,
+                    self.m.get(name),
+                    self.v.get(name),
+                    self.lr,
+                    self.beta1,
+                    self.beta2,
+                    self.eps,
+                    0.0,
+                    next_step,
+                )?;
+                updates.push(PreparedUpdate {
+                    name: name.clone(),
+                    before: t,
+                    updated,
+                    first_moment: Some(m_t),
+                    second_moment: Some(v_t),
+                });
             }
         }
+        commit_parameter_updates::<B, K>(OPERATION, &mut self.params, &updates)?;
+        for update in updates {
+            self.m.insert(
+                update.name.clone(),
+                update.first_moment.ok_or(Error::InternalInvariant {
+                    operation: OPERATION,
+                    reason: "prepared Adam update lost first moment",
+                })?,
+            );
+            self.v.insert(
+                update.name,
+                update.second_moment.ok_or(Error::InternalInvariant {
+                    operation: OPERATION,
+                    reason: "prepared Adam update lost second moment",
+                })?,
+            );
+        }
+        self.step = next_step;
         Ok(())
     }
 }

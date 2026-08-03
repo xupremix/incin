@@ -166,7 +166,7 @@ impl<T: DType, D: Device> Execute<MatMulSpec> for CpuBackendImpl<T, D> {
                 lhs.transpose(rank - 2, rank - 1)
                     .map_err(|error| BackendError::Execution {
                         operation: OperationKind::MatMul,
-                        message: error.to_string(),
+                        message: error.to_string().into(),
                     })?,
             )
         } else {
@@ -178,7 +178,7 @@ impl<T: DType, D: Device> Execute<MatMulSpec> for CpuBackendImpl<T, D> {
                 rhs.transpose(rank - 2, rank - 1)
                     .map_err(|error| BackendError::Execution {
                         operation: OperationKind::MatMul,
-                        message: error.to_string(),
+                        message: error.to_string().into(),
                     })?,
             )
         } else {

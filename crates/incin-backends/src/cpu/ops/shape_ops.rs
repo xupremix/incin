@@ -113,7 +113,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
                     &original_shape,
                     &region_start,
                     grad_out,
-                )])
+                )?])
             }),
         });
         Ok(out)
@@ -344,7 +344,13 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
                 }
                 CpuBuffer::BF16(out)
             }
-            CpuBuffer::Q8_0(_) => panic!("concat not supported on Q8_0 buffer"),
+            CpuBuffer::Q8_0(_) => {
+                return Err(Error::UnsupportedDType {
+                    dtype: DTypeId::Q8_0,
+                    backend: "cpu",
+                    op: "concat",
+                });
+            }
         };
 
         let out = CpuStorage::from_contiguous(new_buffer, out_shape);
@@ -458,7 +464,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
                 msg: alloc::string::String::from("int_to_scalar requires a single-element tensor"),
             });
         }
-        Ok(t.get(&vec![0usize; t.shape.len()]) as i64)
+        t.get_i64_checked(&vec![0usize; t.shape.len()], "int_to_scalar")
     }
 
     /// `int_to_vec1`.
@@ -467,7 +473,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         let mut out = alloc::vec::Vec::with_capacity(total);
         let mut idx = vec![0usize; t.shape.len()];
         for _ in 0..total {
-            out.push(t.get(&idx) as i64);
+            out.push(t.get_i64_checked(&idx, "int_to_vec1")?);
             if !t.shape.is_empty() {
                 crate::cpu::storage::increment_index(&mut idx, &t.shape);
             }
@@ -560,7 +566,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
                 crate::cpu::storage::increment_index(&mut idx, &out_shape);
             }
         }
-        let buffer = on_true.buffer.from_f64_values(out);
+        let buffer = on_true.buffer.from_f64_values(out)?;
         let out_storage = CpuStorage::from_contiguous(buffer, out_shape);
 
         let (mask_cap, on_true_cap, on_false_cap) =
@@ -589,11 +595,11 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
                     }
                 }
                 let g_true = CpuStorage::from_contiguous(
-                    grad_out.buffer.from_f64_values(grad_true),
+                    grad_out.buffer.from_f64_values(grad_true)?,
                     grad_out.shape.to_vec(),
                 );
                 let g_false = CpuStorage::from_contiguous(
-                    grad_out.buffer.from_f64_values(grad_false),
+                    grad_out.buffer.from_f64_values(grad_false)?,
                     grad_out.shape.to_vec(),
                 );
                 Ok(vec![
@@ -623,7 +629,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
                 crate::cpu::storage::increment_index(&mut idx, &out_shape);
             }
         }
-        let buffer = t.buffer.from_f64_values(out);
+        let buffer = t.buffer.from_f64_values(out)?;
         let out_storage = CpuStorage::from_contiguous(buffer, out_shape);
 
         let (t_cap, index_cap) = (t.clone(), index.clone());
@@ -651,7 +657,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
                     }
                 }
                 Ok(vec![CpuStorage::from_contiguous(
-                    grad_out.buffer.from_f64_values(grad_t_data),
+                    grad_out.buffer.from_f64_values(grad_t_data)?,
                     t_cap.shape.to_vec(),
                 )])
             }),
@@ -692,7 +698,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
                 crate::cpu::storage::increment_index(&mut idx, &index.shape);
             }
         }
-        let buffer = t.buffer.from_f64_values(out_data);
+        let buffer = t.buffer.from_f64_values(out_data)?;
         Ok(CpuStorage::from_contiguous(buffer, t.shape.to_vec()))
     }
 
@@ -719,7 +725,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
                 crate::cpu::storage::increment_index(&mut out_idx, &out_shape);
             }
         }
-        let buffer = t.buffer.from_f64_values(out);
+        let buffer = t.buffer.from_f64_values(out)?;
         Ok(CpuStorage::from_contiguous(buffer, out_shape))
     }
 
@@ -739,7 +745,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
                 crate::cpu::storage::increment_index(&mut idx, &t.shape);
             }
         }
-        let buffer = t.buffer.from_f64_values(out);
+        let buffer = t.buffer.from_f64_values(out)?;
         Ok(CpuStorage::from_contiguous(buffer, t.shape.to_vec()))
     }
 
@@ -777,7 +783,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
                 crate::cpu::storage::increment_index(&mut idx, &out_shape);
             }
         }
-        let buffer = t.buffer.from_f64_values(out);
+        let buffer = t.buffer.from_f64_values(out)?;
         Ok(CpuStorage::from_contiguous(buffer, out_shape))
     }
 
@@ -813,7 +819,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
                 crate::cpu::storage::increment_index(&mut idx, &out_shape);
             }
         }
-        let buffer = t.buffer.from_f64_values(out);
+        let buffer = t.buffer.from_f64_values(out)?;
         Ok(CpuStorage::from_contiguous(buffer, out_shape))
     }
 
@@ -837,7 +843,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
                 crate::cpu::storage::increment_index(&mut idx, &t.shape);
             }
         }
-        let buffer = t.buffer.from_f64_values(out);
+        let buffer = t.buffer.from_f64_values(out)?;
         Ok(CpuStorage::from_contiguous(buffer, t.shape.to_vec()))
     }
 
@@ -861,7 +867,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
                 crate::cpu::storage::increment_index(&mut idx, &t.shape);
             }
         }
-        let buffer = t.buffer.from_f64_values(out);
+        let buffer = t.buffer.from_f64_values(out)?;
         Ok(CpuStorage::from_contiguous(buffer, t.shape.to_vec()))
     }
 
@@ -887,7 +893,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
                     out[r * out_dim + c] = t.get(&[i]);
                 }
             }
-            let buffer = t.buffer.from_f64_values(out);
+            let buffer = t.buffer.from_f64_values(out)?;
             Ok(CpuStorage::from_contiguous(buffer, vec![out_dim, out_dim]))
         } else {
             let r_len = t.shape[rank - 2];
@@ -902,7 +908,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
                     diag_vals.push(t.get(&idx));
                 }
             }
-            let buffer = t.buffer.from_f64_values(diag_vals.clone());
+            let buffer = t.buffer.from_f64_values(diag_vals.clone())?;
             let out_len = diag_vals.len();
             Ok(CpuStorage::from_contiguous(buffer, vec![out_len]))
         }
@@ -927,7 +933,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
             }
         }
         Ok(CpuStorage::from_contiguous(
-            lhs.buffer.from_f64_values(out),
+            lhs.buffer.from_f64_values(out)?,
             lhs.shape.to_vec(),
         ))
     }
@@ -951,7 +957,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
             }
         }
         Ok(CpuStorage::from_contiguous(
-            lhs.buffer.from_f64_values(out),
+            lhs.buffer.from_f64_values(out)?,
             lhs.shape.to_vec(),
         ))
     }
@@ -975,7 +981,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
             }
         }
         Ok(CpuStorage::from_contiguous(
-            lhs.buffer.from_f64_values(out),
+            lhs.buffer.from_f64_values(out)?,
             lhs.shape.to_vec(),
         ))
     }
@@ -999,7 +1005,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
             }
         }
         Ok(CpuStorage::from_contiguous(
-            lhs.buffer.from_f64_values(out),
+            lhs.buffer.from_f64_values(out)?,
             lhs.shape.to_vec(),
         ))
     }
@@ -1023,7 +1029,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
             }
         }
         Ok(CpuStorage::from_contiguous(
-            lhs.buffer.from_f64_values(out),
+            lhs.buffer.from_f64_values(out)?,
             lhs.shape.to_vec(),
         ))
     }
@@ -1047,7 +1053,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
             }
         }
         Ok(CpuStorage::from_contiguous(
-            lhs.buffer.from_f64_values(out),
+            lhs.buffer.from_f64_values(out)?,
             lhs.shape.to_vec(),
         ))
     }
@@ -1071,7 +1077,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
             }
         }
         Ok(CpuStorage::from_contiguous(
-            lhs.buffer.from_f64_values(out),
+            lhs.buffer.from_f64_values(out)?,
             lhs.shape.to_vec(),
         ))
     }
@@ -1095,7 +1101,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
             }
         }
         Ok(CpuStorage::from_contiguous(
-            lhs.buffer.from_f64_values(out),
+            lhs.buffer.from_f64_values(out)?,
             lhs.shape.to_vec(),
         ))
     }
@@ -1114,7 +1120,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
             }
         }
         Ok(CpuStorage::from_contiguous(
-            t.buffer.from_f64_values(out),
+            t.buffer.from_f64_values(out)?,
             t.shape.to_vec(),
         ))
     }
@@ -1133,7 +1139,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
             }
         }
         Ok(CpuStorage::from_contiguous(
-            t.buffer.from_f64_values(out),
+            t.buffer.from_f64_values(out)?,
             t.shape.to_vec(),
         ))
     }
@@ -1152,7 +1158,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
             }
         }
         Ok(CpuStorage::from_contiguous(
-            t.buffer.from_f64_values(out),
+            t.buffer.from_f64_values(out)?,
             t.shape.to_vec(),
         ))
     }
@@ -1172,7 +1178,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
             }
         }
         Ok(CpuStorage::from_contiguous(
-            lhs.buffer.from_f64_values(out),
+            lhs.buffer.from_f64_values(out)?,
             lhs.shape.to_vec(),
         ))
     }
@@ -1192,7 +1198,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
             }
         }
         Ok(CpuStorage::from_contiguous(
-            lhs.buffer.from_f64_values(out),
+            lhs.buffer.from_f64_values(out)?,
             lhs.shape.to_vec(),
         ))
     }
@@ -1212,7 +1218,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
             }
         }
         Ok(CpuStorage::from_contiguous(
-            lhs.buffer.from_f64_values(out),
+            lhs.buffer.from_f64_values(out)?,
             lhs.shape.to_vec(),
         ))
     }
@@ -1234,7 +1240,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
             }
         }
         Ok(CpuStorage::from_contiguous(
-            start.buffer.from_f64_values(out),
+            start.buffer.from_f64_values(out)?,
             start.shape.to_vec(),
         ))
     }
@@ -1313,7 +1319,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
             crate::cpu::storage::increment_index(&mut idx, &out_shape);
         }
         Ok(CpuStorage::from_contiguous(
-            t.buffer.from_f64_values(out),
+            t.buffer.from_f64_values(out)?,
             out_shape,
         ))
     }
@@ -1353,7 +1359,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
             crate::cpu::storage::increment_index(&mut idx, &out_shape);
         }
         Ok(CpuStorage::from_contiguous(
-            t.buffer.from_f64_values(out),
+            t.buffer.from_f64_values(out)?,
             out_shape,
         ))
     }
@@ -1393,7 +1399,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
             }
         }
         Ok(CpuStorage::from_contiguous(
-            t.buffer.from_f64_values(out),
+            t.buffer.from_f64_values(out)?,
             t.shape.to_vec(),
         ))
     }

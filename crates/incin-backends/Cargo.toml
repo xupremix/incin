@@ -55,6 +55,9 @@ distributed = ["std", "incin-core/distributed"]
 distributed-reference = ["distributed"]
 # Real process-per-rank CUDA collectives. cudarc loads NCCL at runtime.
 distributed-nccl = ["distributed", "cuda", "autotune", "cudarc/nccl"]
+# Deterministic fault-injection hooks used only by integration tests. This is
+# deliberately opt-in and is never part of a product build.
+test-utils = ["incin-core/test-utils"]
 
 [dependencies]
 incin-core = { path = "../incin-core", default-features = false, version = "0.0.0" }

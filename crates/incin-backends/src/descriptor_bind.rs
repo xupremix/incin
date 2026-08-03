@@ -12,10 +12,10 @@
 
 use alloc::string::ToString;
 
+use incin_core::backend_authoring::{ReductionOps, TensorOps};
 use incin_core::exec::{
     Conv2dSpec, Pool2dSpec, PoolOp, ReduceOp, ReductionSpec, TensorMeta, UnsupportedReason,
 };
-use incin_core::backend_authoring::{ReductionOps, TensorOps};
 use incin_core::prelude::{Backend, BackendError, DType, Error, OperationKind};
 
 /// Build an `InvalidInput` error for a descriptor binder.
@@ -39,7 +39,7 @@ pub(crate) fn kernel_error(operation: OperationKind, error: Error) -> BackendErr
         }
         other => BackendError::Execution {
             operation,
-            message: other.to_string(),
+            message: other.to_string().into(),
         },
     }
 }

@@ -46,19 +46,19 @@ impl TapeStorage for CudaStorage {
         add_cuda_storage(self, contribution)
     }
 
-    fn has_non_finite(&self) -> bool {
-        let bytes = match self
+    fn has_non_finite(&self) -> Result<bool> {
+        let bytes = self
             .buffer
             .device
             .default_stream()
             .clone_dtoh(&*self.buffer.data)
-        {
-            Ok(b) => b,
-            Err(_) => return true,
-        };
-        bytemuck::cast_slice::<u8, f32>(&bytes)
+            .map_err(|error| incin_core::prelude::BackendError::Execution {
+                operation: incin_core::prelude::OperationKind::Storage,
+                message: alloc::format!("CUDA gradient readback failed: {error:?}").into(),
+            })?;
+        Ok(bytemuck::cast_slice::<u8, f32>(&bytes)
             .iter()
-            .any(|x| x.is_nan() || x.is_infinite())
+            .any(|x| x.is_nan() || x.is_infinite()))
     }
 }
 

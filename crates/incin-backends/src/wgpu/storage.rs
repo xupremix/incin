@@ -4,7 +4,7 @@ use incin_core::exec::{Alignment, TensorMeta};
 use incin_core::prelude::{DTypeId, DeviceId, Error, OperationKind, Result};
 use wgpu::util::DeviceExt;
 
-use crate::wgpu::device::get_device_state;
+use crate::wgpu::device::{get_device_state, try_get_device_state};
 
 /// Raw GPU buffer.  All fields are intentionally private — layout and usage
 /// flags are an implementation detail and must not be relied upon by callers.
@@ -63,7 +63,25 @@ impl WgpuBuffer {
         })
     }
 
-    pub(crate) fn to_vec<T: bytemuck::Pod>(&self) -> Vec<T> {
+    pub(crate) fn try_from_slice<T: bytemuck::Pod>(data: &[T]) -> Result<Arc<Self>> {
+        let state = try_get_device_state()?;
+        let bytes = bytemuck::cast_slice(data);
+        let buffer = state
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("WgpuBuffer Init"),
+                contents: bytes,
+                usage: wgpu::BufferUsages::STORAGE
+                    | wgpu::BufferUsages::COPY_SRC
+                    | wgpu::BufferUsages::COPY_DST,
+            });
+        Ok(Arc::new(Self {
+            buffer,
+            size: bytes.len(),
+        }))
+    }
+
+    pub(crate) fn to_vec<T: bytemuck::Pod>(&self) -> Result<Vec<T>> {
         let state = get_device_state();
         let staging = state.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Staging"),
@@ -81,15 +99,29 @@ impl WgpuBuffer {
 
         let slice = staging.slice(..);
         let (tx, rx) = std::sync::mpsc::channel();
-        slice.map_async(wgpu::MapMode::Read, move |v| tx.send(v).unwrap());
+        slice.map_async(wgpu::MapMode::Read, move |result| {
+            let _ = tx.send(result);
+        });
         state.device.poll(wgpu::Maintain::Wait);
-        rx.recv().unwrap().unwrap();
+        rx.recv()
+            .map_err(|error| {
+                Error::Backend(incin_core::prelude::BackendError::Execution {
+                    operation: OperationKind::Storage,
+                    message: alloc::format!("WGPU map callback was lost: {error}").into(),
+                })
+            })?
+            .map_err(|error| {
+                Error::Backend(incin_core::prelude::BackendError::Execution {
+                    operation: OperationKind::Storage,
+                    message: alloc::format!("WGPU buffer mapping failed: {error}").into(),
+                })
+            })?;
 
         let data = slice.get_mapped_range();
         let result = bytemuck::cast_slice(&data).to_vec();
         drop(data);
         staging.unmap();
-        result
+        Ok(result)
     }
 }
 

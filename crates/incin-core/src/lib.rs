@@ -91,7 +91,10 @@ pub mod test_utils {
 
 /// Core prelude re-exporting common types, neural network modules, shapes, and backend traits.
 pub mod prelude {
-    pub use super::err::{BackendError, BackwardError, Error, NonFiniteSite, Result};
+    pub use super::err::{
+        BackendError, BackwardError, ConversionFailure, Error, ErrorMessage, FloatToIntPolicy,
+        NonFiniteSite, Result, convert_f64_to_i64,
+    };
     pub use crate::SeqTy;
     pub use crate::graph::{Graph, OpType};
     pub use half::{bf16, f16};

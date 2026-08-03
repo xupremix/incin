@@ -3,6 +3,91 @@ use alloc::string::ToString;
 use alloc::vec::Vec;
 use core::fmt::Debug;
 
+/// Maximum diagnostic text retained from a backend, parser, or external
+/// library. Errors carry enough context to diagnose a failure without allowing
+/// untrusted input to grow an error value without bound.
+pub const MAX_ERROR_MESSAGE_BYTES: usize = 512;
+
+/// Bounded diagnostic text used by typed failures.
+#[derive(Clone, PartialEq, Eq)]
+pub struct ErrorMessage(String);
+
+impl ErrorMessage {
+    /// Copies at most `MAX_ERROR_MESSAGE_BYTES` from `message`, preserving a
+    /// valid UTF-8 boundary.
+    #[must_use]
+    pub fn new(message: impl AsRef<str>) -> Self {
+        let message = message.as_ref();
+        let mut end = message.len().min(MAX_ERROR_MESSAGE_BYTES);
+        while !message.is_char_boundary(end) {
+            end -= 1;
+        }
+        Self(message[..end].to_string())
+    }
+
+    /// Returns the retained diagnostic text.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl core::fmt::Debug for ErrorMessage {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl core::fmt::Display for ErrorMessage {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl From<String> for ErrorMessage {
+    fn from(message: String) -> Self {
+        Self::new(message)
+    }
+}
+
+impl From<&str> for ErrorMessage {
+    fn from(message: &str) -> Self {
+        Self::new(message)
+    }
+}
+
+/// Explicit behavior requested for a floating-point to integer conversion.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FloatToIntPolicy {
+    /// Require a finite, integral, in-range value.
+    Exact,
+    /// Explicitly discard the fractional part toward zero.
+    Truncate,
+    /// Explicitly clamp finite or infinite values to the destination range.
+    Saturate,
+}
+
+/// Why a checked scalar conversion was rejected.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConversionFailure {
+    /// The source was NaN or infinity and the requested policy did not define it.
+    NonFinite,
+    /// Exact conversion was requested for a fractional value.
+    Fractional,
+    /// The source is outside the destination type's representable range.
+    OutOfRange,
+}
+
+impl core::fmt::Display for ConversionFailure {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(match self {
+            Self::NonFinite => "non-finite value",
+            Self::Fractional => "fractional value",
+            Self::OutOfRange => "out-of-range value",
+        })
+    }
+}
+
 #[non_exhaustive]
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 /// Structured failure returned by descriptor executors.
@@ -24,7 +109,7 @@ pub enum BackendError {
     /// A device or native library failed after validation.
     Execution {
         operation: crate::shapes::error::OperationKind,
-        message: String,
+        message: ErrorMessage,
     },
 
     #[error("device {device:?} was lost during execution")]
@@ -137,6 +222,28 @@ pub enum Error {
         got: crate::prelude::DTypeId,
     },
 
+    #[error("{operation}: cannot convert {from:?} to {to:?}: {reason}")]
+    /// A numeric conversion would silently truncate, saturate, or fabricate a
+    /// value under the requested policy.
+    InvalidConversion {
+        /// Stable operation identity.
+        operation: &'static str,
+        /// Physical source dtype.
+        from: crate::prelude::DTypeId,
+        /// Requested destination dtype.
+        to: crate::prelude::DTypeId,
+        /// Bounded classification of the rejected value.
+        reason: ConversionFailure,
+    },
+
+    #[error("{operation}: dtype mismatch: expected {expected:?}, got {actual:?}")]
+    /// An operation received a dtype outside its declared contract.
+    DTypeMismatch {
+        operation: &'static str,
+        expected: crate::prelude::DTypeId,
+        actual: crate::prelude::DTypeId,
+    },
+
     #[error("Tensor device metadata {expected:?} does not match storage {got:?}")]
     /// Logical device differs from physical storage.
     DeviceStorageMismatch {
@@ -151,6 +258,14 @@ pub enum Error {
         right: crate::prelude::DeviceId,
     },
 
+    #[error("{operation}: device or placement mismatch: expected {expected:?}, got {actual:?}")]
+    /// An operation received storage on a different device or placement.
+    PlacementMismatch {
+        operation: &'static str,
+        expected: crate::prelude::DeviceId,
+        actual: crate::prelude::DeviceId,
+    },
+
     #[error("Invalid byte length: expected {expected}, got {got}")]
     /// Byte payload length does not match shape and dtype.
     InvalidByteLength { expected: usize, got: usize },
@@ -160,6 +275,21 @@ pub enum Error {
     InvalidDeviceOrdinal {
         backend: &'static str,
         ordinal: usize,
+    },
+
+    #[error("{operation}: arithmetic overflow evaluating '{expression}'")]
+    /// Checked non-shape arithmetic overflowed.
+    ArithmeticOverflow {
+        operation: &'static str,
+        expression: &'static str,
+    },
+
+    #[error("{operation}: allocation of {requested} bytes exceeds limit {limit}")]
+    /// An allocation request exceeded address-space or resource limits.
+    AllocationOverflow {
+        operation: &'static str,
+        requested: u64,
+        limit: u64,
     },
 
     #[error("{0}")]
@@ -213,6 +343,44 @@ pub enum Error {
         got: String,
     },
 
+    #[error("{operation}: invalid module or state dictionary: {reason}")]
+    /// Module parameters or serialized state violate the module contract.
+    InvalidModuleState {
+        operation: &'static str,
+        reason: ErrorMessage,
+    },
+
+    #[error("{operation}: malformed {artifact}: {reason}")]
+    /// A model, dataset, cache, or compiled artifact is malformed.
+    MalformedArtifact {
+        operation: &'static str,
+        artifact: &'static str,
+        reason: ErrorMessage,
+    },
+
+    #[error("{operation}: resource '{resource}' value {actual} exceeds limit {limit}")]
+    /// Untrusted input exceeded a configured resource bound.
+    ResourceLimit {
+        operation: &'static str,
+        resource: &'static str,
+        actual: u64,
+        limit: u64,
+    },
+
+    #[error("{operation}: I/O failure: {message}")]
+    /// A filesystem or stream operation failed.
+    Io {
+        operation: &'static str,
+        message: ErrorMessage,
+    },
+
+    #[error("{operation}: internal invariant violation: {reason}")]
+    /// A value that had already crossed validation contradicted its proof.
+    InternalInvariant {
+        operation: &'static str,
+        reason: &'static str,
+    },
+
     #[error("Internal Backend Failure: {0}")]
     /// Internal backend execution failure.
     BackendFailure(#[from] anyhow::Error),
@@ -225,7 +393,10 @@ pub enum Error {
 #[cfg(feature = "std")]
 impl From<std::io::Error> for Error {
     fn from(err: std::io::Error) -> Self {
-        Error::Msg(err.to_string())
+        Error::Io {
+            operation: "io",
+            message: ErrorMessage::new(err.to_string()),
+        }
     }
 }
 
@@ -233,9 +404,91 @@ impl From<crate::exec::MetaError> for Error {
     fn from(err: crate::exec::MetaError) -> Self {
         match err {
             crate::exec::MetaError::Shape(s) => Error::Shape(s),
-            other => Error::Msg(other.to_string()),
+            other => Error::InternalInvariant {
+                operation: "tensor_metadata",
+                reason: match other {
+                    crate::exec::MetaError::InvalidAlignment { .. } => {
+                        "metadata alignment is invalid"
+                    }
+                    crate::exec::MetaError::OutOfBounds { .. } => {
+                        "metadata addresses storage outside its allocation"
+                    }
+                    crate::exec::MetaError::Shape(_) => {
+                        "metadata shape error bypassed its structured conversion"
+                    }
+                },
+            },
         }
     }
+}
+
+/// Converts `value` to `i64` under an explicit policy.
+///
+/// Exact conversion is the default used by tensor integer readback. Callers
+/// must name truncation or saturation when those semantics are intended.
+pub fn convert_f64_to_i64(
+    operation: &'static str,
+    from: crate::prelude::DTypeId,
+    value: f64,
+    policy: FloatToIntPolicy,
+) -> Result<i64> {
+    if value.is_nan() {
+        return Err(Error::InvalidConversion {
+            operation,
+            from,
+            to: crate::prelude::DTypeId::I64,
+            reason: ConversionFailure::NonFinite,
+        });
+    }
+    if value.is_infinite() {
+        return match policy {
+            FloatToIntPolicy::Saturate => Ok(if value.is_sign_negative() {
+                i64::MIN
+            } else {
+                i64::MAX
+            }),
+            FloatToIntPolicy::Exact | FloatToIntPolicy::Truncate => Err(Error::InvalidConversion {
+                operation,
+                from,
+                to: crate::prelude::DTypeId::I64,
+                reason: ConversionFailure::NonFinite,
+            }),
+        };
+    }
+
+    let candidate = match policy {
+        FloatToIntPolicy::Exact if value.fract() != 0.0 => {
+            return Err(Error::InvalidConversion {
+                operation,
+                from,
+                to: crate::prelude::DTypeId::I64,
+                reason: ConversionFailure::Fractional,
+            });
+        }
+        FloatToIntPolicy::Exact | FloatToIntPolicy::Truncate => value.trunc(),
+        FloatToIntPolicy::Saturate => value,
+    };
+
+    // `i64::MAX as f64` rounds to 2^63, which is already one beyond the
+    // inclusive integer range. Keep the upper comparison exclusive.
+    const I64_MIN_F64: f64 = -9_223_372_036_854_775_808.0;
+    const I64_MAX_EXCLUSIVE_F64: f64 = 9_223_372_036_854_775_808.0;
+    if !(I64_MIN_F64..I64_MAX_EXCLUSIVE_F64).contains(&candidate) {
+        return match policy {
+            FloatToIntPolicy::Saturate => Ok(if candidate.is_sign_negative() {
+                i64::MIN
+            } else {
+                i64::MAX
+            }),
+            FloatToIntPolicy::Exact | FloatToIntPolicy::Truncate => Err(Error::InvalidConversion {
+                operation,
+                from,
+                to: crate::prelude::DTypeId::I64,
+                reason: ConversionFailure::OutOfRange,
+            }),
+        };
+    }
+    Ok(candidate as i64)
 }
 
 impl Debug for Error {
@@ -249,6 +502,102 @@ impl Debug for Error {
 /// `tests`.
 mod tests {
     use super::*;
+
+    #[test]
+    fn error_message_is_bounded_at_a_utf8_boundary() {
+        let ascii = ErrorMessage::new("x".repeat(MAX_ERROR_MESSAGE_BYTES + 32));
+        assert_eq!(ascii.as_str().len(), MAX_ERROR_MESSAGE_BYTES);
+
+        let unicode = ErrorMessage::new(format!("{}é", "x".repeat(MAX_ERROR_MESSAGE_BYTES - 1)));
+        assert_eq!(unicode.as_str().len(), MAX_ERROR_MESSAGE_BYTES - 1);
+        assert!(unicode.as_str().is_char_boundary(unicode.as_str().len()));
+    }
+
+    #[test]
+    fn exact_float_to_integer_conversion_rejects_lossy_values() {
+        assert_eq!(
+            convert_f64_to_i64(
+                "index_readback",
+                crate::prelude::DTypeId::F64,
+                42.0,
+                FloatToIntPolicy::Exact,
+            )
+            .unwrap(),
+            42
+        );
+
+        for (value, expected) in [
+            (42.5, ConversionFailure::Fractional),
+            (f64::NAN, ConversionFailure::NonFinite),
+            (f64::INFINITY, ConversionFailure::NonFinite),
+            (f64::NEG_INFINITY, ConversionFailure::NonFinite),
+            (9_223_372_036_854_775_808.0, ConversionFailure::OutOfRange),
+            (-9_223_372_036_854_777_856.0, ConversionFailure::OutOfRange),
+        ] {
+            let err = convert_f64_to_i64(
+                "index_readback",
+                crate::prelude::DTypeId::F64,
+                value,
+                FloatToIntPolicy::Exact,
+            )
+            .unwrap_err();
+            assert!(matches!(
+                err,
+                Error::InvalidConversion {
+                    operation: "index_readback",
+                    from: crate::prelude::DTypeId::F64,
+                    to: crate::prelude::DTypeId::I64,
+                    reason,
+                } if reason == expected
+            ));
+        }
+    }
+
+    #[test]
+    fn lossy_float_to_integer_conversion_requires_an_explicit_policy() {
+        assert_eq!(
+            convert_f64_to_i64(
+                "explicit_truncate",
+                crate::prelude::DTypeId::F64,
+                -42.75,
+                FloatToIntPolicy::Truncate,
+            )
+            .unwrap(),
+            -42
+        );
+        assert_eq!(
+            convert_f64_to_i64(
+                "explicit_saturate",
+                crate::prelude::DTypeId::F64,
+                f64::INFINITY,
+                FloatToIntPolicy::Saturate,
+            )
+            .unwrap(),
+            i64::MAX
+        );
+        assert_eq!(
+            convert_f64_to_i64(
+                "explicit_saturate",
+                crate::prelude::DTypeId::F64,
+                f64::NEG_INFINITY,
+                FloatToIntPolicy::Saturate,
+            )
+            .unwrap(),
+            i64::MIN
+        );
+        assert!(matches!(
+            convert_f64_to_i64(
+                "explicit_saturate",
+                crate::prelude::DTypeId::F64,
+                f64::NAN,
+                FloatToIntPolicy::Saturate,
+            ),
+            Err(Error::InvalidConversion {
+                reason: ConversionFailure::NonFinite,
+                ..
+            })
+        ));
+    }
 
     #[test]
     /// `test_error_formatting`.

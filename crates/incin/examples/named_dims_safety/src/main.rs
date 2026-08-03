@@ -17,7 +17,7 @@ fn classify(x: &Tensor<s![Batch, Feature]>) -> Tensor<s![Batch]> {
     x.sum_dim::<1>().unwrap()
 }
 
-fn main() {
+fn main() -> incin::Result<()> {
     let batch = 4usize;
     let seq = 6usize;
     let feature = 8usize;
@@ -70,8 +70,9 @@ fn main() {
     // identically-shaped named-dim tensors — same as PyTorch, just checked
     // by the compiler instead of at runtime:
     let bias: Tensor<s![Batch, Feature]> = Tensor::zeros((batch, feature)).unwrap();
-    let biased: Tensor<s![Batch, Feature]> = &projected + &bias;
+    let biased: Tensor<s![Batch, Feature]> = (&projected + &bias)?;
     println!("biased shape: {:?}", biased.dims());
 
     println!("Compiled successfully — every shape above was checked before this program ran.");
+    Ok(())
 }

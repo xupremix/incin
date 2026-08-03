@@ -1,0 +1,43 @@
+crates/incin-backends/src/cpu/var.rs:6://! `assign_var`. `var_as_tensor` is a scoped `borrow().clone()` that never
+crates/incin-backends/src/cpu/var.rs:8://! borrow across an `assign_var` call would panic on reentrant mutable
+crates/incin-backends/src/cpu/var.rs:10://! drives this exact `var_as_tensor` (read) -> ... -> `assign_var` (write)
+crates/incin-backends/src/cpu/var.rs:28:/// so `assign_var` can replace the value in place while other clones of
+crates/incin-backends/src/cpu/var.rs:39:/// `assign_var` on the same `CpuVar` would panic on reentrant mutable
+crates/incin-backends/src/cpu/var.rs:51:pub(crate) fn assign_var(var: &mut CpuVar, tensor: &CpuStorage) -> Result<()> {
+crates/incin-backends/src/cpu/var.rs:78:            // One-shot failure: rollback assignments must remain possible.
+crates/incin-backends/src/cpu/var.rs:148:    /// `assign_var_replaces_value_and_subsequent_read_reflects_it`.
+crates/incin-backends/src/cpu/var.rs:149:    fn assign_var_replaces_value_and_subsequent_read_reflects_it() {
+crates/incin-backends/src/cpu/var.rs:154:        assign_var(&mut var, &new_value).unwrap();
+crates/incin-backends/src/cpu/var.rs:161:    /// `var_as_tensor_does_not_hold_live_borrow_across_assign_var`.
+crates/incin-backends/src/cpu/var.rs:162:    fn var_as_tensor_does_not_hold_live_borrow_across_assign_var() {
+crates/incin-backends/src/cpu/var.rs:163:        // Calling var_as_tensor immediately followed by assign_var on the
+crates/incin-backends/src/cpu/var.rs:173:        assign_var(&mut var, &storage(vec![2.0])).unwrap();
+crates/incin-backends/src/cpu/var.rs:179:    /// `two_sequential_assign_var_calls_each_succeed_and_final_read_reflects_second`.
+crates/incin-backends/src/cpu/var.rs:180:    fn two_sequential_assign_var_calls_each_succeed_and_final_read_reflects_second() {
+crates/incin-backends/src/cpu/var.rs:184:        assign_var(&mut var, &storage(vec![1.0])).unwrap();
+crates/incin-backends/src/cpu/var.rs:185:        assign_var(&mut var, &storage(vec![2.0])).unwrap();
+crates/incin-core/src/tensor/backend.rs:243:    fn assign_var<K: DType>(var: &mut Self::RawVar, tensor: &Self::Storage<K>) -> Result<()>;
+crates/incin-core/src/tensor/backend.rs:281:    fn step<K: DType>(_t: &B::Storage<K>) -> Result<B::Storage<K>>;
+crates/incin-core/src/tensor/backend.rs:920:        B::assign_var::<K>(var, &updated)?;
+crates/incin-core/src/tensor/backend.rs:1019:        fn assign_var<K: DType>(var: &mut Self::RawVar, tensor: &Self::Storage<K>) -> Result<()> {
+crates/incin-core/src/tensor/backend.rs:1315:        fn step<K: DType>(
+crates/incin-core/src/optim/mod.rs:43:    fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()>;
+crates/incin-core/src/optim/mod.rs:199:        if let Err(commit_error) = B::assign_var::<K>(var, &update.updated) {
+crates/incin-core/src/optim/mod.rs:200:            for rollback in updates {
+crates/incin-core/src/optim/mod.rs:201:                let rollback_var =
+crates/incin-core/src/optim/mod.rs:203:                        .get_mut(&rollback.name)
+crates/incin-core/src/optim/mod.rs:206:                            reason: "optimizer rollback lost its parameter",
+crates/incin-core/src/optim/mod.rs:208:                if B::assign_var::<K>(rollback_var, &rollback.before).is_err() {
+crates/incin-core/src/optim/mod.rs:211:                        reason: "backend rejected optimizer rollback",
+crates/incin-core/src/optim/mod.rs:325:    fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()> {
+crates/incin-core/src/optim/mod.rs:403:    pub fn step_count(&self) -> usize {
+crates/incin-core/src/optim/mod.rs:408:    pub fn set_step_count(&mut self, step: usize) {
+crates/incin-core/src/optim/mod.rs:483:    fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()> {
+crates/incin-core/src/optim/mod.rs:595:    pub fn step_count(&self) -> usize {
+crates/incin-core/src/optim/mod.rs:600:    pub fn set_step_count(&mut self, step: usize) {
+crates/incin-core/src/optim/mod.rs:675:    fn step(&mut self, grads: &Gradients<B::Grads>) -> Result<()> {
+crates/incin-core/src/optim/scheduler.rs:13:    fn step(&mut self);
+crates/incin-core/src/optim/scheduler.rs:32:    fn step(&mut self) {}
+crates/incin-core/src/optim/scheduler.rs:63:    fn step(&mut self) {
+crates/incin-core/src/optim/scheduler.rs:98:    fn step(&mut self) {
+crates/incin-core/src/optim/scheduler.rs:131:    fn step(&mut self) {

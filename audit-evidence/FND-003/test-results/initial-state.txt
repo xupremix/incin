@@ -1,0 +1,10 @@
+418497534cb7cde3d7542e11f09237a32bb6c83a
+ D INCIN_0_1_TO_1_0_MASTER_IMPLEMENTATION_PLAN.md
+ D INCIN_0_1_TO_1_0_MASTER_IMPLEMENTATION_PLAN_SECURITY_AUDITED.md
+?? INCIN_FOUNDATION_FIRST_REMEDIATION_PROMPT.md
+?? audit-evidence/FND-003/
+4184975 (HEAD -> develop) refactor(fnd-002): make invariant types opaque and arithmetic checked
+e906a5b refactor(fnd-001): establish stable facade and API tiers
+21ba890 audit(fnd-000): reset project truth and contain false claims
+fa8d203 (origin/develop, origin/HEAD) fix(api-001): harden facade; all 1233 workspace tests pass
+8f90364 refactor(core): finalize backend_authoring facade migration and trait visibility

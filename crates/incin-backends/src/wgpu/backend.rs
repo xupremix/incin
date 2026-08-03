@@ -174,7 +174,7 @@ impl<T: DType, D: Device> Backend for WgpuBackendImpl<T, D> {
 
     /// `to_bytes`.
     fn to_bytes<K: DType>(t: &Self::Storage<K>) -> Result<Vec<u8>> {
-        Ok(t.buffer.to_vec::<u8>())
+        t.buffer.to_vec::<u8>()
     }
 
     /// `from_bytes`.
@@ -197,7 +197,7 @@ impl<T: DType, D: Device> Backend for WgpuBackendImpl<T, D> {
                 got: bytes.len(),
             });
         }
-        let buffer = WgpuBuffer::from_slice(bytes);
+        let buffer = WgpuBuffer::try_from_slice(bytes)?;
         Ok(WgpuStorage::new(buffer, shape.to_vec()))
     }
 }
@@ -221,7 +221,7 @@ impl<T: DType, D: Device> CreationOps<Self> for WgpuBackendImpl<T, D> {
         validate_wgpu(dtype, device, OperationKind::Fill, "zeros")?;
         let n = num_elements(shape)?;
         let data: Vec<f32> = vec![0.0; n];
-        let buf = WgpuBuffer::from_slice(&data);
+        let buf = WgpuBuffer::try_from_slice(&data)?;
         Ok(WgpuStorage::new(buf, shape.to_vec()))
     }
 
@@ -234,7 +234,7 @@ impl<T: DType, D: Device> CreationOps<Self> for WgpuBackendImpl<T, D> {
         validate_wgpu(dtype, device, OperationKind::Fill, "ones")?;
         let n = num_elements(shape)?;
         let data: Vec<f32> = vec![1.0; n];
-        let buf = WgpuBuffer::from_slice(&data);
+        let buf = WgpuBuffer::try_from_slice(&data)?;
         Ok(WgpuStorage::new(buf, shape.to_vec()))
     }
 
@@ -261,7 +261,7 @@ impl<T: DType, D: Device> CreationOps<Self> for WgpuBackendImpl<T, D> {
                 ((state >> 33) as f32) / (u32::MAX as f32)
             })
             .collect();
-        let buf = WgpuBuffer::from_slice(&data);
+        let buf = WgpuBuffer::try_from_slice(&data)?;
         Ok(WgpuStorage::new(buf, shape.to_vec()))
     }
 
@@ -296,7 +296,7 @@ impl<T: DType, D: Device> CreationOps<Self> for WgpuBackendImpl<T, D> {
             })
             .take(n)
             .collect();
-        let buf = WgpuBuffer::from_slice(&data);
+        let buf = WgpuBuffer::try_from_slice(&data)?;
         Ok(WgpuStorage::new(buf, shape.to_vec()))
     }
 
@@ -494,12 +494,12 @@ fn scalar_op<T: DType>(t: &WgpuStorage, scalar: f64, op_mode: u32) -> Result<Wgp
 fn push_unary_tape_entry(
     t_id: crate::wgpu::storage::TensorId,
     out_id: crate::wgpu::storage::TensorId,
-    grad_fn: impl Fn(&WgpuStorage) -> WgpuStorage + Send + Sync + 'static,
+    grad_fn: impl Fn(&WgpuStorage) -> Result<WgpuStorage> + Send + Sync + 'static,
 ) {
     crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
         output_id: out_id,
         input_ids: vec![t_id],
-        backward: Box::new(move |grad_out: &WgpuStorage| Ok(vec![grad_fn(grad_out)])),
+        backward: Box::new(move |grad_out: &WgpuStorage| grad_fn(grad_out).map(|grad| vec![grad])),
     });
 }
 
@@ -522,7 +522,7 @@ impl<T: DType, D: Device> FloatOps<Self> for WgpuBackendImpl<T, D> {
         let out = scalar_op::<T>(t, scalar, 0)?;
         // Gradient passes through unchanged (same shape, no unbroadcast
         // needed — scalar ops don't change shape).
-        push_unary_tape_entry(t.id, out.id, |grad_out| grad_out.clone());
+        push_unary_tape_entry(t.id, out.id, |grad_out| Ok(grad_out.clone()));
         Ok(out)
     }
     /// `mul_scalar_float`.
@@ -533,7 +533,7 @@ impl<T: DType, D: Device> FloatOps<Self> for WgpuBackendImpl<T, D> {
         let out = scalar_op::<T>(t, scalar, 1)?;
         // Gradient scales by the same constant.
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
-            scalar_op::<T>(grad_out, scalar, 1).expect("mul_scalar_float backward")
+            scalar_op::<T>(grad_out, scalar, 1)
         });
         Ok(out)
     }
@@ -543,8 +543,8 @@ impl<T: DType, D: Device> FloatOps<Self> for WgpuBackendImpl<T, D> {
         // relu'(x) = step(x) (1 if x>0 else 0) — input-based.
         let t_capture = t.clone();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
-            let deriv = unary_op::<T>(&t_capture, 10).expect("step (relu backward)");
-            binary_op::<T>(grad_out, &deriv, 2, "relu_grad").expect("relu backward")
+            let deriv = unary_op::<T>(&t_capture, 10)?;
+            binary_op::<T>(grad_out, &deriv, 2, "relu_grad")
         });
         Ok(out)
     }
@@ -552,9 +552,7 @@ impl<T: DType, D: Device> FloatOps<Self> for WgpuBackendImpl<T, D> {
     fn step<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         let out = unary_op::<T>(t, 10)?;
         // step'(x) = 0 almost everywhere.
-        push_unary_tape_entry(t.id, out.id, |grad_out| {
-            scalar_op::<T>(grad_out, 0.0, 1).expect("step backward (zero grad)")
-        });
+        push_unary_tape_entry(t.id, out.id, |grad_out| scalar_op::<T>(grad_out, 0.0, 1));
         Ok(out)
     }
     /// `elu`.
@@ -562,7 +560,7 @@ impl<T: DType, D: Device> FloatOps<Self> for WgpuBackendImpl<T, D> {
         let out = unary_op::<T>(t, 12)?;
         let t_capture = t.clone();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
-            binary_op::<T>(grad_out, &t_capture, 5, "elu_grad").expect("elu backward")
+            binary_op::<T>(grad_out, &t_capture, 5, "elu_grad")
         });
         Ok(out)
     }
@@ -570,7 +568,7 @@ impl<T: DType, D: Device> FloatOps<Self> for WgpuBackendImpl<T, D> {
         let out = unary_op::<T>(t, 1)?;
         let t_capture = t.clone();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
-            binary_op::<T>(grad_out, &t_capture, 4, "gelu_grad").expect("gelu backward")
+            binary_op::<T>(grad_out, &t_capture, 4, "gelu_grad")
         });
         Ok(out)
     }
@@ -578,7 +576,7 @@ impl<T: DType, D: Device> FloatOps<Self> for WgpuBackendImpl<T, D> {
         let out = unary_op::<T>(t, 11)?;
         let t_capture = t.clone();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
-            binary_op::<T>(grad_out, &t_capture, 6, "mish_grad").expect("mish backward")
+            binary_op::<T>(grad_out, &t_capture, 6, "mish_grad")
         });
         Ok(out)
     }
@@ -588,11 +586,10 @@ impl<T: DType, D: Device> FloatOps<Self> for WgpuBackendImpl<T, D> {
         // tanh'(x) = 1 - out^2 (output-based).
         let out_capture = out.clone();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
-            let out_sq = binary_op::<T>(&out_capture, &out_capture, 2, "tanh_grad_sq")
-                .expect("out^2 (tanh backward)");
-            let neg_out_sq = unary_op::<T>(&out_sq, 5).expect("neg (tanh backward)");
-            let deriv = scalar_op::<T>(&neg_out_sq, 1.0, 0).expect("1 - out^2 (tanh backward)");
-            binary_op::<T>(grad_out, &deriv, 2, "tanh_grad").expect("tanh backward")
+            let out_sq = binary_op::<T>(&out_capture, &out_capture, 2, "tanh_grad_sq")?;
+            let neg_out_sq = unary_op::<T>(&out_sq, 5)?;
+            let deriv = scalar_op::<T>(&neg_out_sq, 1.0, 0)?;
+            binary_op::<T>(grad_out, &deriv, 2, "tanh_grad")
         });
         Ok(out)
     }
@@ -604,12 +601,10 @@ impl<T: DType, D: Device> FloatOps<Self> for WgpuBackendImpl<T, D> {
         // sigmoid'(x) = out*(1-out) (output-based).
         let out_capture = out.clone();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
-            let neg_out = unary_op::<T>(&out_capture, 5).expect("neg (sigmoid backward)");
-            let one_minus_out =
-                scalar_op::<T>(&neg_out, 1.0, 0).expect("1 - out (sigmoid backward)");
-            let deriv = binary_op::<T>(&out_capture, &one_minus_out, 2, "sigmoid_grad_deriv")
-                .expect("out*(1-out) (sigmoid backward)");
-            binary_op::<T>(grad_out, &deriv, 2, "sigmoid_grad").expect("sigmoid backward")
+            let neg_out = unary_op::<T>(&out_capture, 5)?;
+            let one_minus_out = scalar_op::<T>(&neg_out, 1.0, 0)?;
+            let deriv = binary_op::<T>(&out_capture, &one_minus_out, 2, "sigmoid_grad_deriv")?;
+            binary_op::<T>(grad_out, &deriv, 2, "sigmoid_grad")
         });
         Ok(out)
     }
@@ -620,13 +615,12 @@ impl<T: DType, D: Device> FloatOps<Self> for WgpuBackendImpl<T, D> {
         // 1 if x>0, -1 if x<0, 0 if x==0 — matches the CPU backend exactly.
         let t_capture = t.clone();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
-            let neg_t = unary_op::<T>(&t_capture, 5).expect("neg (abs backward)");
-            let step_pos = unary_op::<T>(&t_capture, 10).expect("step(x) (abs backward)");
-            let step_neg = unary_op::<T>(&neg_t, 10).expect("step(-x) (abs backward)");
-            let neg_step_neg = unary_op::<T>(&step_neg, 5).expect("neg (abs backward)");
-            let sign = binary_op::<T>(&step_pos, &neg_step_neg, 0, "abs_grad_sign")
-                .expect("sign(x) (abs backward)");
-            binary_op::<T>(grad_out, &sign, 2, "abs_grad").expect("abs backward")
+            let neg_t = unary_op::<T>(&t_capture, 5)?;
+            let step_pos = unary_op::<T>(&t_capture, 10)?;
+            let step_neg = unary_op::<T>(&neg_t, 10)?;
+            let neg_step_neg = unary_op::<T>(&step_neg, 5)?;
+            let sign = binary_op::<T>(&step_pos, &neg_step_neg, 0, "abs_grad_sign")?;
+            binary_op::<T>(grad_out, &sign, 2, "abs_grad")
         });
         Ok(out)
     }
@@ -634,9 +628,7 @@ impl<T: DType, D: Device> FloatOps<Self> for WgpuBackendImpl<T, D> {
     fn neg<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
         let out = unary_op::<T>(t, 5)?;
         // neg'(x) = -1 (constant; no input capture needed).
-        push_unary_tape_entry(t.id, out.id, |grad_out| {
-            unary_op::<T>(grad_out, 5).expect("neg backward")
-        });
+        push_unary_tape_entry(t.id, out.id, |grad_out| unary_op::<T>(grad_out, 5));
         Ok(out)
     }
     /// `sqrt`.
@@ -645,9 +637,8 @@ impl<T: DType, D: Device> FloatOps<Self> for WgpuBackendImpl<T, D> {
         // sqrt'(x) = 1/(2*out) (output-based) -> grad = grad_out/out * 0.5.
         let out_capture = out.clone();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
-            let ratio = binary_op::<T>(grad_out, &out_capture, 3, "sqrt_grad_ratio")
-                .expect("sqrt backward");
-            scalar_op::<T>(&ratio, 0.5, 1).expect("sqrt backward (halve)")
+            let ratio = binary_op::<T>(grad_out, &out_capture, 3, "sqrt_grad_ratio")?;
+            scalar_op::<T>(&ratio, 0.5, 1)
         });
         Ok(out)
     }
@@ -657,7 +648,7 @@ impl<T: DType, D: Device> FloatOps<Self> for WgpuBackendImpl<T, D> {
         // exp'(x) = out (output-based).
         let out_capture = out.clone();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
-            binary_op::<T>(grad_out, &out_capture, 2, "exp_grad").expect("exp backward")
+            binary_op::<T>(grad_out, &out_capture, 2, "exp_grad")
         });
         Ok(out)
     }
@@ -667,7 +658,7 @@ impl<T: DType, D: Device> FloatOps<Self> for WgpuBackendImpl<T, D> {
         // log'(x) = 1/x (input-based, NOT output-based).
         let t_capture = t.clone();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
-            binary_op::<T>(grad_out, &t_capture, 3, "log_grad").expect("log backward")
+            binary_op::<T>(grad_out, &t_capture, 3, "log_grad")
         });
         Ok(out)
     }
@@ -678,14 +669,12 @@ impl<T: DType, D: Device> FloatOps<Self> for WgpuBackendImpl<T, D> {
         let t_capture = t.clone();
         let out_capture = out.clone();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
-            let sig = unary_op::<T>(&t_capture, 3).expect("sigmoid(x) (swish backward)");
-            let neg_out = unary_op::<T>(&out_capture, 5).expect("neg (swish backward)");
-            let one_minus_out = scalar_op::<T>(&neg_out, 1.0, 0).expect("1 - out (swish backward)");
-            let sig_term = binary_op::<T>(&sig, &one_minus_out, 2, "swish_grad_sig_term")
-                .expect("sigmoid(x)*(1-out) (swish backward)");
-            let deriv = binary_op::<T>(&out_capture, &sig_term, 0, "swish_grad_deriv")
-                .expect("swish backward deriv");
-            binary_op::<T>(grad_out, &deriv, 2, "swish_grad").expect("swish backward")
+            let sig = unary_op::<T>(&t_capture, 3)?;
+            let neg_out = unary_op::<T>(&out_capture, 5)?;
+            let one_minus_out = scalar_op::<T>(&neg_out, 1.0, 0)?;
+            let sig_term = binary_op::<T>(&sig, &one_minus_out, 2, "swish_grad_sig_term")?;
+            let deriv = binary_op::<T>(&out_capture, &sig_term, 0, "swish_grad_deriv")?;
+            binary_op::<T>(grad_out, &deriv, 2, "swish_grad")
         });
         Ok(out)
     }
@@ -1194,26 +1183,56 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackendImpl<T, D> {
 
     /// `float_to_scalar`.
     fn float_to_scalar<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<f64> {
-        let data: Vec<f32> = t.buffer.to_vec::<f32>();
-        Ok(data.first().copied().unwrap_or(0.0) as f64)
+        let numel = ShapeBuf::from_slice(&t.shape).checked_numel(OperationKind::Storage)?;
+        if numel != 1 {
+            return Err(Error::Shape(ShapeError::InvalidParameter {
+                operation: OperationKind::Storage,
+                parameter: "float_to_scalar element count",
+                value: numel,
+            }));
+        }
+        let data: Vec<f32> = t.buffer.to_vec::<f32>()?;
+        let value = data.first().copied().ok_or(Error::InternalInvariant {
+            operation: "wgpu_float_to_scalar",
+            reason: "validated one-element storage read back no bytes",
+        })?;
+        Ok(f64::from(value))
     }
 
     /// `float_to_vec1`.
     fn float_to_vec1<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<Vec<f64>> {
-        let data: Vec<f32> = t.buffer.to_vec::<f32>();
+        let data: Vec<f32> = t.buffer.to_vec::<f32>()?;
         Ok(data.iter().map(|&x| x as f64).collect())
     }
 
     /// `int_to_scalar`.
     fn int_to_scalar<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<i64> {
-        let data: Vec<f32> = t.buffer.to_vec::<f32>();
-        Ok(data.first().copied().unwrap_or(0.0) as i64)
+        let data: Vec<f32> = t.buffer.to_vec::<f32>()?;
+        let value = data.first().copied().ok_or(Error::InvalidByteLength {
+            expected: core::mem::size_of::<f32>(),
+            got: 0,
+        })?;
+        incin_core::prelude::convert_f64_to_i64(
+            "int_to_scalar",
+            t.dtype,
+            f64::from(value),
+            incin_core::prelude::FloatToIntPolicy::Exact,
+        )
     }
 
     /// `int_to_vec1`.
     fn int_to_vec1<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<Vec<i64>> {
-        let data: Vec<f32> = t.buffer.to_vec::<f32>();
-        Ok(data.iter().map(|&x| x as i64).collect())
+        let data: Vec<f32> = t.buffer.to_vec::<f32>()?;
+        data.into_iter()
+            .map(|value| {
+                incin_core::prelude::convert_f64_to_i64(
+                    "int_to_vec1",
+                    t.dtype,
+                    f64::from(value),
+                    incin_core::prelude::FloatToIntPolicy::Exact,
+                )
+            })
+            .collect()
     }
 
     /// `tensor_to_dtype`.
@@ -1244,6 +1263,14 @@ fn reduce_dim_to_storage(
     keepdim: bool,
 ) -> Result<WgpuStorage> {
     let shape = &t.shape;
+    if dim >= shape.len() {
+        return Err(ShapeError::InvalidParameter {
+            operation: OperationKind::Reduction,
+            parameter: "axis",
+            value: dim,
+        }
+        .into());
+    }
     let mut out_shape = shape.to_vec();
     out_shape[dim] = 1;
     let out_n = num_elements(&out_shape)?;
@@ -1258,7 +1285,12 @@ fn reduce_dim_to_storage(
         0 => 0u32, // sum
         1 => 2u32, // max
         2 => 3u32, // min
-        _ => panic!("Unknown reduce dim mode"),
+        _ => {
+            return Err(Error::Backend(BackendError::InvalidInput {
+                operation: OperationKind::Reduction,
+                reason: "unknown WGPU reduction mode",
+            }));
+        }
     };
 
     let out_buf = WgpuBuffer::new_zeros_for(DTypeId::F32, out_n, OperationKind::Storage)?;
@@ -1338,8 +1370,8 @@ fn push_extremum_dim_tape_entry(t: &WgpuStorage, out: &WgpuStorage, dim: usize, 
         input_ids: vec![t_id],
         backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
             let (outer, axis, inner) = axis_reduce_dims(&input_shape, dim)?;
-            let input_data = t_capture.buffer.to_vec::<f32>();
-            let grad_data = grad_out.buffer.to_vec::<f32>();
+            let input_data = t_capture.buffer.to_vec::<f32>()?;
+            let grad_data = grad_out.buffer.to_vec::<f32>()?;
             let grad_elements = ShapeBuf::from_slice(&[outer, axis, inner])
                 .checked_numel(OperationKind::Reduction)?;
             let mut grad_input = vec![0.0f32; grad_elements];
@@ -1381,8 +1413,12 @@ fn push_extremum_all_tape_entry(t: &WgpuStorage, out: &WgpuStorage, is_max: bool
         output_id: out_id,
         input_ids: vec![t_id],
         backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
-            let input_data = t_capture.buffer.to_vec::<f32>();
-            let grad_val = grad_out.buffer.to_vec::<f32>()[0];
+            let input_data = t_capture.buffer.to_vec::<f32>()?;
+            let grad_values = grad_out.buffer.to_vec::<f32>()?;
+            let grad_val = *grad_values.first().ok_or(Error::InternalInvariant {
+                operation: "wgpu_extremum_backward",
+                reason: "scalar extremum gradient read back no value",
+            })?;
             let mut best_val = if is_max {
                 f32::NEG_INFINITY
             } else {
@@ -1603,20 +1639,32 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackendImpl<T, D> {
         t: &<Self as Backend>::Storage<K>,
         dim: Option<usize>,
     ) -> Result<<Self as Backend>::Storage<KInt>> {
-        let data: Vec<f32> = t.buffer.to_vec::<f32>();
+        let data: Vec<f32> = t.buffer.to_vec::<f32>()?;
         match dim {
             None => {
                 let idx = data
                     .iter()
                     .enumerate()
-                    .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+                    .max_by(|a, b| a.1.total_cmp(b.1))
                     .map(|(i, _)| i)
-                    .unwrap_or(0);
+                    .ok_or(ShapeError::InvalidParameter {
+                        operation: OperationKind::Reduction,
+                        parameter: "non-empty input",
+                        value: 0,
+                    })?;
                 let buf = WgpuBuffer::from_slice(&[checked_u32(idx, "WGPU argmax index")?]);
                 Ok(WgpuStorage::new(buf, vec![1]))
             }
             Some(d) => {
                 let shape = &t.shape;
+                if d >= shape.len() {
+                    return Err(ShapeError::InvalidParameter {
+                        operation: OperationKind::Reduction,
+                        parameter: "axis",
+                        value: d,
+                    }
+                    .into());
+                }
                 let mut out_shape = shape.to_vec();
                 out_shape[d] = 1;
                 let out_n = num_elements(&out_shape)?;
@@ -1648,20 +1696,32 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackendImpl<T, D> {
         t: &<Self as Backend>::Storage<K>,
         dim: Option<usize>,
     ) -> Result<<Self as Backend>::Storage<KInt>> {
-        let data: Vec<f32> = t.buffer.to_vec::<f32>();
+        let data: Vec<f32> = t.buffer.to_vec::<f32>()?;
         match dim {
             None => {
                 let idx = data
                     .iter()
                     .enumerate()
-                    .min_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+                    .min_by(|a, b| a.1.total_cmp(b.1))
                     .map(|(i, _)| i)
-                    .unwrap_or(0);
+                    .ok_or(ShapeError::InvalidParameter {
+                        operation: OperationKind::Reduction,
+                        parameter: "non-empty input",
+                        value: 0,
+                    })?;
                 let buf = WgpuBuffer::from_slice(&[checked_u32(idx, "WGPU argmin index")?]);
                 Ok(WgpuStorage::new(buf, vec![1]))
             }
             Some(d) => {
                 let shape = &t.shape;
+                if d >= shape.len() {
+                    return Err(ShapeError::InvalidParameter {
+                        operation: OperationKind::Reduction,
+                        parameter: "axis",
+                        value: d,
+                    }
+                    .into());
+                }
                 let mut out_shape = shape.to_vec();
                 out_shape[d] = 1;
                 let out_n = num_elements(&out_shape)?;
@@ -1708,7 +1768,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackendImpl<T, D> {
             });
         }
         let k = k.min(shape[dim]);
-        let data: Vec<f32> = t.buffer.to_vec::<f32>();
+        let data: Vec<f32> = t.buffer.to_vec::<f32>()?;
 
         let mut out_shape = shape.to_vec();
         out_shape[dim] = k;
@@ -1773,7 +1833,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackendImpl<T, D> {
                 msg: format!("argsort: axis {} out of range", dim),
             });
         }
-        let data: Vec<f32> = t.buffer.to_vec::<f32>();
+        let data: Vec<f32> = t.buffer.to_vec::<f32>()?;
 
         let mut base_shape = shape.to_vec();
         base_shape[dim] = 1;
@@ -2246,8 +2306,8 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
                 // would bit-reinterpret those bytes instead of converting
                 // the value, corrupting every index except 0.0 (whose bit
                 // pattern happens to equal integer 0).
-                let indices_data = indices_capture.buffer.to_vec::<f32>();
-                let grad_data = grad_out.buffer.to_vec::<f32>();
+                let indices_data = indices_capture.buffer.to_vec::<f32>()?;
+                let grad_data = grad_out.buffer.to_vec::<f32>()?;
                 let weight_grad_elements = ShapeBuf::from_slice(&[vocab_size, embed_dim])
                     .checked_numel(OperationKind::Embedding)?;
                 let mut weight_grad = vec![0.0f32; weight_grad_elements];
@@ -2432,7 +2492,7 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
                     input_shape[2],
                     input_shape[3],
                 );
-                let grad_data = grad_out.buffer.to_vec::<f32>();
+                let grad_data = grad_out.buffer.to_vec::<f32>()?;
                 let grad_elements = ShapeBuf::from_slice(&input_shape)
                     .checked_numel(OperationKind::AdaptiveAvgPool2d)?;
                 let mut grad_input = vec![0.0f32; grad_elements];
@@ -2535,7 +2595,7 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
                     input_shape[2],
                     input_shape[3],
                 );
-                let grad_data = grad_out.buffer.to_vec::<f32>();
+                let grad_data = grad_out.buffer.to_vec::<f32>()?;
                 let grad_elements =
                     ShapeBuf::from_slice(&input_shape).checked_numel(OperationKind::Pool2d)?;
                 let mut grad_input = vec![0.0f32; grad_elements];
@@ -2650,8 +2710,8 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
                     input_shape[2],
                     input_shape[3],
                 );
-                let input_data = t_capture.buffer.to_vec::<f32>();
-                let grad_data = grad_out.buffer.to_vec::<f32>();
+                let input_data = t_capture.buffer.to_vec::<f32>()?;
+                let grad_data = grad_out.buffer.to_vec::<f32>()?;
                 let grad_elements =
                     ShapeBuf::from_slice(&input_shape).checked_numel(OperationKind::Pool2d)?;
                 let mut grad_input = vec![0.0f32; grad_elements];
@@ -2742,9 +2802,9 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
             input_ids: vec![inp_id, w_id],
             backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
                 // grad_out: [N, C_out, L_out]
-                let input_data = inp_capture.buffer.to_vec::<f32>();
-                let weight_data = w_capture.buffer.to_vec::<f32>();
-                let grad_data = grad_out.buffer.to_vec::<f32>();
+                let input_data = inp_capture.buffer.to_vec::<f32>()?;
+                let weight_data = w_capture.buffer.to_vec::<f32>()?;
+                let grad_data = grad_out.buffer.to_vec::<f32>()?;
 
                 // Treat as [N, C_in, 1, L] / [N, C_out, 1, L_out] for the 2D helpers.
                 let (h, h_out) = (1usize, 1usize);
@@ -2909,10 +2969,10 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![inp_id, w_id],
             backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
-                let input_data = inp_capture.buffer.to_vec::<f32>();
-                let weight_data = w_capture.buffer.to_vec::<f32>();
+                let input_data = inp_capture.buffer.to_vec::<f32>()?;
+                let weight_data = w_capture.buffer.to_vec::<f32>()?;
                 // grad_out: [N, C_out, H_out, W_out] → flatten to row-major vec
-                let grad_data = grad_out.buffer.to_vec::<f32>();
+                let grad_data = grad_out.buffer.to_vec::<f32>()?;
 
                 let grad_input_elements = ShapeBuf::from_slice(&[batch, c_in, h_in, w_in])
                     .checked_numel(OperationKind::Conv2d)?;
@@ -3133,9 +3193,9 @@ impl<T: DType, D: Device> ModuleOps<Self> for WgpuBackendImpl<T, D> {
             output_id: out_id,
             input_ids: vec![inp_id, w_id],
             backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
-                let input_data = inp_capture.buffer.to_vec::<f32>();
-                let weight_data = w_capture.buffer.to_vec::<f32>();
-                let grad_data = grad_out.buffer.to_vec::<f32>();
+                let input_data = inp_capture.buffer.to_vec::<f32>()?;
+                let weight_data = w_capture.buffer.to_vec::<f32>()?;
+                let grad_data = grad_out.buffer.to_vec::<f32>()?;
 
                 // Narrow away output_padding rows/cols from grad_out.
                 let go_nat: Vec<f32> = if output_padding == 0 {
@@ -3267,7 +3327,7 @@ impl<T: DType, D: Device> LossOps<Self> for WgpuBackendImpl<T, D> {
         // storage), so read it as F32 and convert the value — a raw
         // `to_vec::<u32>()` bit-reinterpret would corrupt every class index
         // except 0.0 (whose bit pattern happens to equal integer 0).
-        let target_data = target.buffer.to_vec::<f32>();
+        let target_data = target.buffer.to_vec::<f32>()?;
         let one_hot_elements =
             ShapeBuf::from_slice(&[batch, classes]).checked_numel(OperationKind::Storage)?;
         let mut one_hot_data = vec![0.0f32; one_hot_elements];
@@ -3325,7 +3385,7 @@ impl<T: DType, D: Device> QuantizedOps<Self> for WgpuBackendImpl<T, D> {
             });
         }
 
-        let f32_data: Vec<f32> = t.buffer.to_vec::<f32>();
+        let f32_data: Vec<f32> = t.buffer.to_vec::<f32>()?;
         let n = f32_data.len();
         if !n.is_multiple_of(32) {
             return Err(Error::Msg(alloc::format!(
@@ -3374,7 +3434,7 @@ impl<T: DType, D: Device> QuantizedOps<Self> for WgpuBackendImpl<T, D> {
             });
         }
 
-        let raw: Vec<u8> = t.buffer.to_vec::<u8>();
+        let raw: Vec<u8> = t.buffer.to_vec::<u8>()?;
         let block_bytes = 34usize; // 2-byte f16 + 32 × i8
         if !raw.len().is_multiple_of(block_bytes) {
             return Err(Error::Msg(alloc::format!(

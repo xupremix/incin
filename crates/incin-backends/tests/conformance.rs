@@ -20,11 +20,11 @@
 //! here wrote, joining the same contract through the same trait.
 
 use incin_backends::external::conformance::{self, Outcome, Report, Subject, Tolerance};
+use incin_core::backend_authoring::{Execute, ExecutionRequest};
 use incin_core::exec::{
     Alignment, Capabilities, CapabilityQuery, MatMulSpec, ReshapeSpec, SupportLevel, TensorMeta,
     UnsupportedReason,
 };
-use incin_core::backend_authoring::{Execute, ExecutionRequest};
 use incin_core::prelude::{
     BackendError, Cpu, DType, DTypeId, DeviceId, OperationKind, ShapeBuf, StorageBackend, StrideBuf,
 };
@@ -211,7 +211,7 @@ pub mod template {
             TemplateStorage::try_new(spec.output.dims(), out).map_err(|message| {
                 BackendError::Execution {
                     operation: OperationKind::MatMul,
-                    message,
+                    message: message.into(),
                 }
             })
         }
@@ -244,7 +244,7 @@ pub mod template {
             TemplateStorage::try_new(spec.output.dims(), input.values().to_vec()).map_err(
                 |message| BackendError::Execution {
                     operation: OperationKind::Reshape,
-                    message,
+                    message: message.into(),
                 },
             )
         }
@@ -514,7 +514,7 @@ mod broken {
             TemplateStorage::try_new(request.operation.descriptor().output.dims(), out).map_err(
                 |message| BackendError::Execution {
                     operation: OperationKind::MatMul,
-                    message,
+                    message: message.into(),
                 },
             )
         }

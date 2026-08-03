@@ -25,53 +25,30 @@ impl MnistDataset {
             )
         };
 
-        let images_file = dir.join(images_url.split('/').next_back().unwrap());
-        let labels_file = dir.join(labels_url.split('/').next_back().unwrap());
+        let images_archive = if train {
+            "train-images-idx3-ubyte.gz"
+        } else {
+            "t10k-images-idx3-ubyte.gz"
+        };
+        let labels_archive = if train {
+            "train-labels-idx1-ubyte.gz"
+        } else {
+            "t10k-labels-idx1-ubyte.gz"
+        };
+        let images_name = images_archive
+            .strip_suffix(".gz")
+            .ok_or_else(|| anyhow::anyhow!("MNIST image archive is not gzip-compressed"))?;
+        let labels_name = labels_archive
+            .strip_suffix(".gz")
+            .ok_or_else(|| anyhow::anyhow!("MNIST label archive is not gzip-compressed"))?;
 
         std::fs::create_dir_all(dir)?;
 
-        crate::downloader::Downloader::download_and_extract_gz(
-            images_url,
-            dir,
-            images_file
-                .file_name()
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .strip_suffix(".gz")
-                .unwrap_or(images_file.file_name().unwrap().to_str().unwrap()),
-        )?;
-        crate::downloader::Downloader::download_and_extract_gz(
-            labels_url,
-            dir,
-            labels_file
-                .file_name()
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .strip_suffix(".gz")
-                .unwrap_or(labels_file.file_name().unwrap().to_str().unwrap()),
-        )?;
+        crate::downloader::Downloader::download_and_extract_gz(images_url, dir, images_name)?;
+        crate::downloader::Downloader::download_and_extract_gz(labels_url, dir, labels_name)?;
 
-        // Adjust the parsed file path to the extracted file, without .gz
-        let images_file = dir.join(
-            images_file
-                .file_name()
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .strip_suffix(".gz")
-                .unwrap(),
-        );
-        let labels_file = dir.join(
-            labels_file
-                .file_name()
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .strip_suffix(".gz")
-                .unwrap(),
-        );
+        let images_file = dir.join(images_name);
+        let labels_file = dir.join(labels_name);
 
         let images = Self::parse_images(&images_file)?;
         let labels = Self::parse_labels(&labels_file)?;

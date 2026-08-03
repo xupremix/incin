@@ -32,9 +32,9 @@ impl TapeStorage for WgpuStorage {
         add_wgpu_storage(self, contribution)
     }
 
-    fn has_non_finite(&self) -> bool {
-        let data: Vec<f32> = self.buffer.to_vec();
-        data.iter().any(|x| x.is_nan() || x.is_infinite())
+    fn has_non_finite(&self) -> Result<bool> {
+        let data: Vec<f32> = self.buffer.to_vec()?;
+        Ok(data.iter().any(|x| x.is_nan() || x.is_infinite()))
     }
 }
 

@@ -11,7 +11,7 @@ pub(crate) fn launch_quantize(inp: &CudaStorage) -> Result<CudaStorage> {
     let device_id = b_inp.device_id;
 
     if crate::cuda::gpu::cuda_cache::get_module(device_id, "quant").is_none() {
-        let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
+        let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
         dispatcher.compile_and_load_kernel(
             "quantize_q8_0",
             crate::cuda::ops::kernels::QUANT_KERNEL,
@@ -19,7 +19,7 @@ pub(crate) fn launch_quantize(inp: &CudaStorage) -> Result<CudaStorage> {
         )?;
     }
 
-    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
     let f = dispatcher.get_function("quant", "quantize_q8_0")?;
     let stream = b_inp.device.default_stream();
 
@@ -96,7 +96,7 @@ pub(crate) fn launch_dequantize(inp: &CudaStorage) -> Result<CudaStorage> {
     let device_id = b_inp.device_id;
 
     if crate::cuda::gpu::cuda_cache::get_module(device_id, "quant").is_none() {
-        let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
+        let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
         dispatcher.compile_and_load_kernel(
             "dequantize_q8_0",
             crate::cuda::ops::kernels::QUANT_KERNEL,
@@ -104,7 +104,7 @@ pub(crate) fn launch_dequantize(inp: &CudaStorage) -> Result<CudaStorage> {
         )?;
     }
 
-    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
     let f = dispatcher.get_function("quant", "dequantize_q8_0")?;
     let stream = b_inp.device.default_stream();
 

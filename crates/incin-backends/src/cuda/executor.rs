@@ -250,7 +250,7 @@ impl<T: DType, D: Device> Execute<MatMulSpec> for CudaBackendImpl<T, D> {
         // descriptor path and the legacy path run the identical kernel.
         let execution_error = |error: incin_core::prelude::Error| BackendError::Execution {
             operation: OperationKind::MatMul,
-            message: error.to_string(),
+            message: error.to_string().into(),
         };
         let lhs_transposed = if spec.transpose_lhs {
             let rank = lhs.shape().len();

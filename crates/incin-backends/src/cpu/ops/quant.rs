@@ -311,6 +311,7 @@ fn vec_dot_q8_0_scalar(
 /// `tests`.
 mod tests {
     use super::*;
+    use incin_core::backend_authoring::NumericOps;
 
     /// `TestBackend`.
     type TestBackend = CpuBackendImpl<f32, incin_core::prelude::Cpu>;
@@ -373,5 +374,21 @@ mod tests {
         for &val in out_data {
             assert!(val.abs() > 0.0);
         }
+    }
+
+    #[test]
+    fn unsupported_quantized_elementwise_arithmetic_is_typed() {
+        let source = CpuStorage::from_contiguous(CpuBuffer::F32(vec![1.0; 32]), vec![32]);
+        let quantized = TestBackend::quantize::<f32, Q8_0>(&source).unwrap();
+
+        let error = TestBackend::add::<Q8_0>(&quantized, &quantized).unwrap_err();
+        assert!(matches!(
+            error,
+            Error::UnsupportedDType {
+                dtype: DTypeId::Q8_0,
+                backend: "cpu",
+                op: "construct arithmetic result",
+            }
+        ));
     }
 }

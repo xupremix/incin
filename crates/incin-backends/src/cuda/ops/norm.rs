@@ -72,7 +72,7 @@ fn ensure_normalization_loaded(
     kernel: &crate::kernel::RenderedKernel,
 ) -> Result<()> {
     if crate::cuda::gpu::cuda_cache::get_module(device_id, &kernel.cache_key).is_none() {
-        let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id);
+        let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
         dispatcher.compile_and_load_kernel(
             &kernel.entry_point,
             &kernel.source,
@@ -215,7 +215,7 @@ pub(crate) fn launch_layer_norm(
     let selection =
         normalization_launch_selection(&buffer.device, &kernel, batch_size, norm_size, true)?;
     ensure_normalization_loaded(buffer.device_id, &kernel)?;
-    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(buffer.device_id);
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(buffer.device_id)?;
     let function = dispatcher.get_function(&kernel.cache_key, &kernel.entry_point)?;
     let bias_storage = bias.unwrap_or(weight);
     let has_bias = i32::from(bias.is_some());
@@ -335,7 +335,7 @@ pub(crate) fn launch_batch_norm(
     }
 
     ensure_normalization_loaded(buffer.device_id, &kernel)?;
-    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(buffer.device_id);
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(buffer.device_id)?;
     let function = dispatcher.get_function(&kernel.cache_key, &kernel.entry_point)?;
     let weight_storage = weight.unwrap_or(input);
     let bias_storage = bias.unwrap_or(input);

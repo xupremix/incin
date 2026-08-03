@@ -369,20 +369,12 @@ macro_rules! impl_std_ops {
         {
             /// The broadcast-resolved output shape (via `BroadcastShape`),
             /// with the same dtype/device/grad-tracking as the operands.
-            type Output =
-                Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, G>;
+            type Output = crate::prelude::Result<
+                Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, G>,
+            >;
             #[inline]
             fn $method(self, rhs: Tensor<S2, B, K, G>) -> Self::Output {
-                self.$backend_method(&rhs).unwrap_or_else(|e| {
-                    panic!(
-                        "Tensor `{}` operator panicked: {:?} (operands were not \
-                         broadcast-compatible at runtime; call `.{}()` directly \
-                         instead of the operator to handle this as a `Result`)",
-                        stringify!($method),
-                        e,
-                        stringify!($backend_method)
-                    )
-                })
+                self.$backend_method(&rhs)
             }
         }
 
@@ -402,20 +394,12 @@ macro_rules! impl_std_ops {
         {
             /// The broadcast-resolved output shape (via `BroadcastShape`),
             /// with the same dtype/device/grad-tracking as the operands.
-            type Output =
-                Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, G>;
+            type Output = crate::prelude::Result<
+                Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, G>,
+            >;
             #[inline]
             fn $method(self, rhs: &'b Tensor<S2, B, K, G>) -> Self::Output {
-                self.$backend_method(rhs).unwrap_or_else(|e| {
-                    panic!(
-                        "Tensor `{}` operator panicked: {:?} (operands were not \
-                         broadcast-compatible at runtime; call `.{}()` directly \
-                         instead of the operator to handle this as a `Result`)",
-                        stringify!($method),
-                        e,
-                        stringify!($backend_method)
-                    )
-                })
+                self.$backend_method(rhs)
             }
         }
 
@@ -434,20 +418,12 @@ macro_rules! impl_std_ops {
         {
             /// The broadcast-resolved output shape (via `BroadcastShape`),
             /// with the same dtype/device/grad-tracking as the operands.
-            type Output =
-                Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, G>;
+            type Output = crate::prelude::Result<
+                Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, G>,
+            >;
             #[inline]
             fn $method(self, rhs: &'a Tensor<S2, B, K, G>) -> Self::Output {
-                self.$backend_method(rhs).unwrap_or_else(|e| {
-                    panic!(
-                        "Tensor `{}` operator panicked: {:?} (operands were not \
-                         broadcast-compatible at runtime; call `.{}()` directly \
-                         instead of the operator to handle this as a `Result`)",
-                        stringify!($method),
-                        e,
-                        stringify!($backend_method)
-                    )
-                })
+                self.$backend_method(rhs)
             }
         }
 
@@ -466,20 +442,12 @@ macro_rules! impl_std_ops {
         {
             /// The broadcast-resolved output shape (via `BroadcastShape`),
             /// with the same dtype/device/grad-tracking as the operands.
-            type Output =
-                Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, G>;
+            type Output = crate::prelude::Result<
+                Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, G>,
+            >;
             #[inline]
             fn $method(self, rhs: Tensor<S2, B, K, G>) -> Self::Output {
-                self.$backend_method(&rhs).unwrap_or_else(|e| {
-                    panic!(
-                        "Tensor `{}` operator panicked: {:?} (operands were not \
-                         broadcast-compatible at runtime; call `.{}()` directly \
-                         instead of the operator to handle this as a `Result`)",
-                        stringify!($method),
-                        e,
-                        stringify!($backend_method)
-                    )
-                })
+                self.$backend_method(&rhs)
             }
         }
     };
