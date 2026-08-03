@@ -13,6 +13,9 @@ pub(crate) extern crate alloc;
 
 pub(crate) mod err;
 
+#[macro_use]
+mod operation_catalog;
+
 #[cfg(feature = "compiled")]
 mod compiled;
 pub mod dist;
@@ -74,14 +77,38 @@ pub mod experimental {
 /// Extension traits and operation descriptor contracts for backend authors.
 pub mod backend_authoring {
     pub use crate::exec::{
-        CapabilityRegistry, ExecutionContext, LossScaling, OperationSpec, PrecisionPolicy,
-        Validated,
+        CanonicalOperation, CapabilityRegistry, Descriptor, ExecutionContext, ExecutionDescriptor,
+        LossScaling, OPERATION_CATALOG, OperationCatalogEntry, OperationSpec, PrecisionPolicy,
+        Validated, ValidatedInvocation, op,
     };
     pub use crate::tensor::backend::{
         Backend, CreationOps, Execute, ExecutionRequest, FloatOps, LossOps, ModuleOps, NumericOps,
         OptimizerOps, QuantizedOps, ReductionOps, StorageBackend, SupportsDType, TensorOps,
         TransferTo,
     };
+
+    /// Exact operation markers, typed attributes, and storage-free metadata.
+    pub mod operations {
+        pub use crate::exec::catalog::{
+            AdamAttributes, AdamWAttributes, AdaptivePool2dAttributes, AddmmAttributes,
+            ArangeAttributes, ArgsortAttributes, AttentionAttributes, AvgPool2dAttributes,
+            AxisAttributes, AxisVarianceAttributes, BatchNormAttributes, CanonicalOperation,
+            ChunkAttributes, ClampAttributes, Conv1dAttributes, Conv2dAttributes,
+            ConvTranspose2dAttributes, CreationAttributes, DTypeAttributes, Descriptor,
+            DescriptorError, DeviceAttributes, DiagonalAttributes, DistributionAttributes,
+            DropoutAttributes, DuplicateIndexRule, EpsilonAttributes, FlattenAttributes,
+            FullAttributes, GroupNormAttributes, IndexReductionAttributes, LayerNormAttributes,
+            LerpAttributes, LinearAttributes, LinspaceAttributes, LogicalTensorMeta,
+            LossAttributes, LossReduction, NarrowAttributes, NoAttributes, NormAttributes,
+            OPERATION_CATALOG, OperationCatalogEntry, PadAttributes, PixelShuffleAttributes,
+            Pool2dAttributes, QuantizationAttributes, RecurrentAttributes, RepeatAttributes,
+            ScalarAttributes, ScatterAttributes, SgdAttributes, ShapeAttributes, SliceAttributes,
+            SplitAttributes, TopKAttributes, TransposeAttributes, UnfoldAttributes,
+            ValidatedInvocation, VarianceAttributes, catalog_entry, op,
+        };
+        #[cfg(feature = "std")]
+        pub use crate::exec::catalog::{CapturedDescriptor, DescriptorCaptureError};
+    }
 }
 
 #[cfg(any(test, feature = "test-utils"))]

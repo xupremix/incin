@@ -1,0 +1,59 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.13s
+     Running tests/compile_tests.rs (target/debug/deps/compile_tests-18236339f16ac519)
+
+running 2 tests
+test compile_fail_cases_fail_for_their_stated_reason ... ok
+   Compiling incin-core-tests v0.0.0 (/home/xupremix/Projects/incin/target/tests/trybuild/incin-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.16s
+
+
+test tests/compile_pass/execution_contract.rs [should pass] ... ok
+test tests/compile_fail/canonical_descriptor_fields_are_private.rs [should fail to compile] ... ok
+test tests/compile_fail/checked_byte_len_is_private.rs [should fail to compile] ... ok
+test tests/compile_fail/checked_numel_is_private.rs [should fail to compile] ... ok
+test tests/compile_fail/concat_static_mismatch.rs [should fail to compile] ... ok
+test tests/compile_fail/construction_witness_is_private.rs [should fail to compile] ... ok
+test tests/compile_fail/conv2d_invalid_shape.rs [should fail to compile] ... ok
+test tests/compile_fail/device_mismatch.rs [should fail to compile] ... ok
+test tests/compile_fail/dtype_mismatch.rs [should fail to compile] ... ok
+test tests/compile_fail/dyn_is_a_unit_marker.rs [should fail to compile] ... ok
+test tests/compile_fail/execute_is_not_blanket.rs [should fail to compile] ... ok
+test tests/compile_fail/execution_request_requires_validated.rs [should fail to compile] ... ok
+test tests/compile_fail/flatten_invalid_range.rs [should fail to compile] ... ok
+test tests/compile_fail/forward_batchnorm_mismatch.rs [should fail to compile] ... ok
+test tests/compile_fail/forward_broadcast_mismatch.rs [should fail to compile] ... ok
+test tests/compile_fail/forward_conv1d_static_mismatch.rs [should fail to compile] ... ok
+test tests/compile_fail/forward_conv2d_static_mismatch.rs [should fail to compile] ... ok
+test tests/compile_fail/forward_linear_partial_mismatch.rs [should fail to compile] ... ok
+test tests/compile_fail/forward_linear_static_mismatch.rs [should fail to compile] ... ok
+test tests/compile_fail/forward_model_building_mismatch.rs [should fail to compile] ... ok
+test tests/compile_fail/gradients_backend_payload_is_private.rs [should fail to compile] ... ok
+test tests/compile_fail/kernel_conv2d_channel_mismatch.rs [should fail to compile] ... ok
+test tests/compile_fail/layer_builder_invalid_count.rs [should fail to compile] ... ok
+test tests/compile_fail/layer_builder_invalid_order.rs [should fail to compile] ... ok
+test tests/compile_fail/loss_cross_entropy_mismatch.rs [should fail to compile] ... ok
+test tests/compile_fail/macro_idx_invalid.rs [should fail to compile] ... ok
+test tests/compile_fail/macro_module_invalid.rs [should fail to compile] ... ok
+test tests/compile_fail/macro_s_invalid.rs [should fail to compile] ... ok
+test tests/compile_fail/matmul_rank8_static_mismatch.rs [should fail to compile] ... ok
+test tests/compile_fail/matmul_static_mismatch.rs [should fail to compile] ... ok
+test tests/compile_fail/module_ops_has_no_unsupported_default.rs [should fail to compile] ... ok
+test tests/compile_fail/named_dim_concat_mismatch.rs [should fail to compile] ... ok
+test tests/compile_fail/named_dim_identity_mismatch.rs [should fail to compile] ... ok
+test tests/compile_fail/named_dim_size_mismatch.rs [should fail to compile] ... ok
+test tests/compile_fail/operation_spec_is_sealed.rs [should fail to compile] ... ok
+test tests/compile_fail/reshape_static_mismatch.rs [should fail to compile] ... ok
+test tests/compile_fail/shape_mismatch.rs [should fail to compile] ... ok
+test tests/compile_fail/shape_rule_needs_the_frontend_proof.rs [should fail to compile] ... ok
+test tests/compile_fail/stack_static_mismatch.rs [should fail to compile] ... ok
+test tests/compile_fail/tensor_meta_fields_are_private.rs [should fail to compile] ... ok
+test tests/compile_fail/tensor_ops_has_no_unsupported_default.rs [should fail to compile] ... ok
+test tests/compile_fail/unsupported_dtype_backend_pair.rs [should fail to compile] ... ok
+test tests/compile_fail/validated_fields_are_private.rs [should fail to compile] ... ok
+test tests/compile_fail/validated_new_is_crate_private.rs [should fail to compile] ... ok
+
+
+test compile_fail ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.62s
+

@@ -5,13 +5,13 @@ use core::mem::size_of;
 use std::time::Instant;
 
 use incin_backends::cpu::{CpuBackendImpl, CpuBuffer, CpuStorage};
+use incin_core::backend_authoring::{
+    Backend, Execute, ExecutionRequest, ModuleOps, StorageBackend, TensorOps,
+};
 use incin_core::exec::{
     Alignment, Conv2dArgs, Conv2dRule, Conv2dSpec, ExecutionContext, MatMulRule, MatMulSpec,
     Pool2dRule, Pool2dSpec, PoolOp, ReduceAllRule, ReduceKeepRule, ReduceOp, ReduceRule,
     ReductionSpec, ReshapeRule, ReshapeSpec, ShapeRule, TensorHandle, TensorMeta, Validated,
-};
-use incin_core::backend_authoring::{
-    Backend, Execute, ExecutionRequest, ModuleOps, StorageBackend, TensorOps,
 };
 use incin_core::prelude::{
     BackendError, Cpu, DType, DTypeId, DeviceId, Dyn, Local, OperationKind, Shape, ShapeBuf,
@@ -225,7 +225,7 @@ fn binder_rejects_wrong_count_storage_dtype_and_descriptor_binding() {
     assert!(matches!(
         error,
         BackendError::InvalidInput {
-            operation: OperationKind::MatMul,
+            operation: OperationKind::MatMulExact,
             reason: "matmul expects exactly two tensor inputs"
         }
     ));
@@ -276,7 +276,7 @@ fn binder_rejects_wrong_count_storage_dtype_and_descriptor_binding() {
         error,
         BackendError::Unsupported {
             reason: incin_core::exec::UnsupportedReason::DType {
-                operation: OperationKind::MatMul,
+                operation: OperationKind::MatMulExact,
                 dtype: DTypeId::F64
             }
         }
@@ -408,7 +408,7 @@ fn reshape_binder_rejects_wrong_count_storage_and_descriptor_binding() {
     assert!(matches!(
         error,
         BackendError::InvalidInput {
-            operation: OperationKind::Reshape,
+            operation: OperationKind::ReshapeExact,
             reason: "reshape expects exactly one tensor input"
         }
     ));
@@ -698,7 +698,7 @@ fn conv2d_grouping_comes_from_the_descriptor_not_the_operand_shapes() {
     assert!(matches!(
         error,
         BackendError::InvalidInput {
-            operation: OperationKind::Conv2d,
+            operation: OperationKind::Conv2dExact,
             reason: "conv2d weight metadata does not match the validated descriptor"
         }
     ));
@@ -724,7 +724,7 @@ fn conv2d_binder_rejects_a_wrong_operand_count_and_a_mismatched_input() {
     assert!(matches!(
         error,
         BackendError::InvalidInput {
-            operation: OperationKind::Conv2d,
+            operation: OperationKind::Conv2dExact,
             reason: "conv2d expects an input and a weight, and optionally a bias"
         }
     ));
@@ -745,7 +745,7 @@ fn conv2d_binder_rejects_a_wrong_operand_count_and_a_mismatched_input() {
     assert!(matches!(
         error,
         BackendError::InvalidInput {
-            operation: OperationKind::Conv2d,
+            operation: OperationKind::Conv2dExact,
             ..
         }
     ));
@@ -945,7 +945,7 @@ fn a_dilated_average_pool_is_refused_rather_than_quietly_densified() {
     assert!(matches!(
         error,
         BackendError::InvalidInput {
-            operation: OperationKind::Pool2d,
+            operation: OperationKind::AvgPool2d,
             reason: "average pooling has no dilated form; the routed kernel takes no dilation"
         }
     ));

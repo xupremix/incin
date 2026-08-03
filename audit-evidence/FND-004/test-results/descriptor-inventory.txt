@@ -1,0 +1,891 @@
+crates/incin-backends/src/dtype_policy.rs:13:/// and re-exports [`OperationKind`] in its place. Decision `D-008`: a proposed
+crates/incin-backends/src/dtype_policy.rs:19:/// caller's [`OperationKind`] is folded through [`OperationKind::family`]
+crates/incin-backends/src/dtype_policy.rs:21:pub(crate) use incin_core::prelude::OperationKind;
+crates/incin-backends/src/dtype_policy.rs:42:fn supports(backend: BackendFamily, operation: OperationKind, dtype: DTypeId) -> bool {
+crates/incin-backends/src/dtype_policy.rs:50:                OperationKind::Normalization => 1,
+crates/incin-backends/src/dtype_policy.rs:51:                OperationKind::MatMul => 2,
+crates/incin-backends/src/dtype_policy.rs:52:                OperationKind::Conv2d | OperationKind::Pool2d => 3,
+crates/incin-backends/src/dtype_policy.rs:64:    operation: OperationKind,
+crates/incin-backends/src/dtype_policy.rs:86:        OperationKind::Reduction | OperationKind::Normalization
+crates/incin-backends/src/dtype_policy.rs:117:    fn accepted(backend: BackendFamily, family: OperationKind) -> alloc::vec::Vec<DTypeId> {
+crates/incin-backends/src/dtype_policy.rs:127:            accepted(BackendFamily::Cuda, OperationKind::Storage),
+crates/incin-backends/src/dtype_policy.rs:137:            accepted(BackendFamily::Cuda, OperationKind::Pointwise),
+crates/incin-backends/src/dtype_policy.rs:141:            accepted(BackendFamily::Cuda, OperationKind::Reduction),
+crates/incin-backends/src/dtype_policy.rs:145:            accepted(BackendFamily::Cuda, OperationKind::Normalization),
+crates/incin-backends/src/dtype_policy.rs:149:            accepted(BackendFamily::Wgpu, OperationKind::Storage),
+crates/incin-backends/src/dtype_policy.rs:153:            accepted(BackendFamily::Cpu, OperationKind::Random),
+crates/incin-backends/src/dtype_policy.rs:162:                resolve_dtype_policy(BackendFamily::Cuda, OperationKind::Pointwise, dtype, "test")
+crates/incin-backends/src/dtype_policy.rs:176:                OperationKind::Pointwise,
+crates/incin-backends/src/descriptor_bind.rs:19:use incin_core::prelude::{Backend, BackendError, DType, Error, OperationKind};
+crates/incin-backends/src/descriptor_bind.rs:22:pub(crate) const fn invalid(operation: OperationKind, reason: &'static str) -> BackendError {
+crates/incin-backends/src/descriptor_bind.rs:35:pub(crate) fn kernel_error(operation: OperationKind, error: Error) -> BackendError {
+crates/incin-backends/src/descriptor_bind.rs:88:            return Err(invalid(OperationKind::Conv2d, reason));
+crates/incin-backends/src/descriptor_bind.rs:114:            OperationKind::Conv2d,
+crates/incin-backends/src/descriptor_bind.rs:127:            OperationKind::Conv2d,
+crates/incin-backends/src/descriptor_bind.rs:135:            OperationKind::Conv2d,
+crates/incin-backends/src/descriptor_bind.rs:170:            OperationKind::Pool2d,
+crates/incin-backends/src/descriptor_bind.rs:191:            OperationKind::Pool2d,
+crates/incin-backends/src/descriptor_bind.rs:212:            OperationKind::Reduction,
+crates/incin-backends/src/descriptor_bind.rs:313:            OperationKind::Reduction,
+crates/incin-backends/src/descriptor_bind.rs:350:                operation: OperationKind::Conv2d,
+crates/incin-backends/src/descriptor_bind.rs:441:                operation: OperationKind::Pool2d,
+crates/incin-backends/src/descriptor_bind.rs:514:                operation: OperationKind::Reduction,
+crates/incin-backends/src/dispatch.rs:13:use crate::dtype_policy::{BackendFamily, OperationKind, resolve_dtype_policy};
+crates/incin-backends/src/dispatch.rs:47:        resolve_dtype_policy(backend, OperationKind::Storage, dtype, "storage").map(|_| dtype)
+crates/incin-core/src/shapes/idx.rs:128:                    .checked_numel(crate::shapes::error::OperationKind::Reshape)?;
+crates/incin-core/src/shapes/idx.rs:144:                                operation: crate::shapes::error::OperationKind::Reshape,
+crates/incin-core/src/shapes/idx.rs:161:                            operation: crate::shapes::error::OperationKind::Reshape,
+crates/incin-core/src/shapes/idx.rs:167:                                operation: crate::shapes::error::OperationKind::Reshape,
+crates/incin-backends/src/codegen/pointwise.rs:81:pub struct PointwiseOpSpec {
+crates/incin-backends/src/cpu/var.rs:22:use incin_core::prelude::{BackendError, Error, OperationKind};
+crates/incin-backends/src/cpu/var.rs:55:            operation: OperationKind::Pointwise,
+crates/incin-backends/src/kernel.rs:11:use crate::dtype_policy::{BackendFamily, OperationKind, resolve_dtype_policy};
+crates/incin-backends/src/kernel.rs:134:        policy_family: OperationKind,
+crates/incin-backends/src/kernel.rs:155:        policy_family: OperationKind,
+crates/incin-backends/src/kernel.rs:248:struct CudaScalarSpec {
+crates/incin-backends/src/kernel.rs:263:            resolve_dtype_policy(BackendFamily::Cuda, OperationKind::Pointwise, dtype, op)?;
+crates/incin-backends/src/kernel.rs:377:        OperationKind::Pointwise,
+crates/incin-backends/src/kernel.rs:411:struct CudaPackedSpec {
+crates/incin-backends/src/kernel.rs:517:        OperationKind::Pointwise,
+crates/incin-backends/src/kernel.rs:977:        OperationKind::Reduction,
+crates/incin-backends/src/kernel.rs:1030:        OperationKind::Reduction,
+crates/incin-backends/src/kernel.rs:1204:        OperationKind::Normalization,
+crates/incin-backends/src/kernel.rs:1211:        OperationKind::Normalization,
+crates/incin-backends/src/kernel.rs:1423:            OperationKind::Pointwise,
+crates/incin-core/src/shapes/spatial.rs:4:use super::error::{Axis, DimensionConstraint, OperationKind, RankExpectation, ShapeError};
+crates/incin-core/src/shapes/spatial.rs:86:    operation: OperationKind,
+crates/incin-core/src/shapes/spatial.rs:153:    operation: OperationKind,
+crates/incin-core/src/shapes/spatial.rs:168:    operation: OperationKind,
+crates/incin-core/src/shapes/spatial.rs:236:                const OP: OperationKind = OperationKind::Pool2d;
+crates/incin-core/src/shapes/spatial.rs:271:        let op = OperationKind::Pool2d;
+crates/incin-core/src/shapes/spatial.rs:337:                const OP: OperationKind = OperationKind::Conv1d;
+crates/incin-core/src/shapes/spatial.rs:374:        const OP: OperationKind = OperationKind::Conv1d;
+crates/incin-core/src/shapes/spatial.rs:433:                const OP: OperationKind = OperationKind::Conv2d;
+crates/incin-core/src/shapes/spatial.rs:469:        const OP: OperationKind = OperationKind::Conv2d;
+crates/incin-core/src/shapes/spatial.rs:514:            operation: OperationKind::AdaptiveAvgPool2d,
+crates/incin-core/src/shapes/spatial.rs:563:        expect_rank(OperationKind::AdaptiveAvgPool2d, [3, 4], dims.len())?;
+crates/incin-backends/src/cpu/stride.rs:7:use incin_core::prelude::{Error, OperationKind, Result, ShapeBuf};
+crates/incin-backends/src/cpu/stride.rs:17:        OperationKind::Storage,
+crates/incin-backends/src/cpu/stride.rs:64:        .checked_numel(OperationKind::Storage)
+crates/incin-backends/src/bytes.rs:13:use incin_core::prelude::{DTypeId, OperationKind, Result};
+crates/incin-backends/src/bytes.rs:20:pub(crate) fn byte_len(dtype: DTypeId, elements: usize, operation: OperationKind) -> Result<usize> {
+crates/incin-backends/src/bytes.rs:31:            byte_len(DTypeId::F32, 64, OperationKind::Storage).unwrap(),
+crates/incin-backends/src/bytes.rs:35:            byte_len(DTypeId::F64, 64, OperationKind::Storage).unwrap(),
+crates/incin-backends/src/bytes.rs:39:            byte_len(DTypeId::U8, 64, OperationKind::Storage).unwrap(),
+crates/incin-backends/src/bytes.rs:49:            byte_len(DTypeId::Q8_0, 64, OperationKind::Storage).unwrap(),
+crates/incin-backends/src/bytes.rs:53:            byte_len(DTypeId::Q8_0, 64, OperationKind::Storage).unwrap(),
+crates/incin-backends/src/bytes.rs:60:        assert!(byte_len(DTypeId::Q8_0, 33, OperationKind::Storage).is_err());
+crates/incin-backends/src/bytes.rs:65:        assert!(byte_len(DTypeId::F64, usize::MAX, OperationKind::Storage).is_err());
+crates/incin-backends/src/bytes.rs:71:            byte_len(DTypeId::F32, 0, OperationKind::Storage).unwrap(),
+crates/incin-backends/src/bytes.rs:75:            byte_len(DTypeId::Q8_0, 0, OperationKind::Storage).unwrap(),
+crates/incin-core/src/shapes/buf.rs:27:use super::error::{OperationKind, RankExpectation, ShapeError};
+crates/incin-core/src/shapes/buf.rs:310:    pub fn checked_numel(&self, operation: OperationKind) -> Result<usize, ShapeError> {
+crates/incin-core/src/shapes/buf.rs:326:        operation: OperationKind,
+crates/incin-core/src/shapes/buf.rs:451:    pub fn contiguous_for(shape: &ShapeBuf, operation: OperationKind) -> Result<Self, ShapeError> {
+crates/incin-core/src/shapes/buf.rs:475:        Self::contiguous_for(shape, OperationKind::Storage).is_ok_and(|expected| expected == *self)
+crates/incin-core/src/shapes/buf.rs:487:        operation: OperationKind,
+crates/incin-core/src/shapes/buf.rs:563:                .checked_numel(OperationKind::Storage)
+crates/incin-core/src/shapes/buf.rs:569:                .checked_numel(OperationKind::Storage)
+crates/incin-core/src/shapes/buf.rs:574:            ShapeBuf::from_slice(&[usize::MAX, 2]).checked_numel(OperationKind::Storage),
+crates/incin-core/src/shapes/buf.rs:583:            StrideBuf::contiguous_for(&overflowing, OperationKind::Storage),
+crates/incin-core/src/shapes/buf.rs:589:            StrideBuf::contiguous_for(&empty, OperationKind::Storage),
+crates/incin-core/src/shapes/buf.rs:598:            StrideBuf::from_slice(&[1]).checked_span(&shape, OperationKind::Slice),
+crates/incin-core/src/shapes/buf.rs:603:                .checked_span(&shape, OperationKind::Slice),
+crates/incin-backends/src/metal/backend.rs:10:use crate::dtype_policy::{BackendFamily, OperationKind, resolve_dtype_policy};
+crates/incin-backends/src/metal/backend.rs:42:            OperationKind::Storage,
+crates/incin-backends/src/metal/backend.rs:58:    family: OperationKind,
+crates/incin-backends/src/metal/backend.rs:72:        .checked_numel(OperationKind::Storage)
+crates/incin-backends/src/metal/backend.rs:148:        validate_metal(dtype, device, OperationKind::Storage, "from_bytes")?;
+crates/incin-backends/src/metal/backend.rs:175:        validate_metal(dtype, device, OperationKind::Fill, "zeros")?;
+crates/incin-backends/src/metal/backend.rs:190:        validate_metal(dtype, device, OperationKind::Fill, "ones")?;
+crates/incin-backends/src/metal/backend.rs:204:        validate_metal(dtype, device, OperationKind::Random, "rand")?;
+crates/incin-backends/src/metal/backend.rs:218:        validate_metal(dtype, device, OperationKind::Random, "randn")?;
+crates/incin-backends/src/metal/backend.rs:358:            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+crates/incin-backends/src/metal/backend.rs:444:        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+crates/incin-backends/src/metal/backend.rs:450:        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+crates/incin-backends/src/metal/backend.rs:453:        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+crates/incin-backends/src/metal/backend.rs:520:            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+crates/incin-backends/src/metal/backend.rs:523:            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+crates/incin-backends/src/metal/backend.rs:537:        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+crates/incin-backends/src/metal/backend.rs:580:        .checked_numel(OperationKind::Storage)?;
+crates/incin-backends/src/metal/backend.rs:582:        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+crates/incin-backends/src/metal/backend.rs:621:        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+crates/incin-backends/src/metal/backend.rs:1231:            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+crates/incin-backends/src/metal/backend.rs:1398:            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+crates/incin-backends/src/metal/backend.rs:1405:            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+crates/incin-backends/src/metal/backend.rs:1407:            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+crates/incin-backends/src/metal/backend.rs:1443:                    .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+crates/incin-backends/src/metal/backend.rs:1446:                        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+crates/incin-backends/src/metal/backend.rs:1491:            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+crates/incin-backends/src/metal/backend.rs:1561:            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+crates/incin-backends/src/metal/backend.rs:1563:            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+crates/incin-backends/src/metal/backend.rs:1565:            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+crates/incin-backends/src/metal/backend.rs:1614:                            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+crates/incin-backends/src/metal/backend.rs:1689:            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+crates/incin-backends/src/metal/backend.rs:1751:            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+crates/incin-backends/src/capability.rs:7:use incin_core::prelude::{DTypeId, DeviceKind, MAX_RANK, OperationKind};
+crates/incin-backends/src/capability.rs:42:    operation: OperationKind,
+crates/incin-backends/src/capability.rs:51:    operation: OperationKind,
+crates/incin-backends/src/capability.rs:71:    native(OperationKind::Storage, ALL_DTYPES, CPU_LAYOUTS, false),
+crates/incin-backends/src/capability.rs:72:    native(OperationKind::Fill, NON_QUANTIZED, CONTIGUOUS, false),
+crates/incin-backends/src/capability.rs:73:    native(OperationKind::Random, FLOAT_DTYPES, CONTIGUOUS, false),
+crates/incin-backends/src/capability.rs:74:    native(OperationKind::Pointwise, FLOAT_DTYPES, CPU_LAYOUTS, true),
+crates/incin-backends/src/capability.rs:75:    native(OperationKind::Reduction, F32_ONLY, CPU_LAYOUTS, true),
+crates/incin-backends/src/capability.rs:77:        OperationKind::Normalization,
+crates/incin-backends/src/capability.rs:84:    native(OperationKind::Broadcast, ALL_DTYPES, CPU_LAYOUTS, false),
+crates/incin-backends/src/capability.rs:85:    native(OperationKind::Broadcast, FLOAT_DTYPES, CPU_LAYOUTS, true),
+crates/incin-backends/src/capability.rs:86:    native(OperationKind::Reshape, ALL_DTYPES, CONTIGUOUS, false),
+crates/incin-backends/src/capability.rs:87:    native(OperationKind::Reshape, FLOAT_DTYPES, CONTIGUOUS, true),
+crates/incin-backends/src/capability.rs:89:        OperationKind::Reshape,
+crates/incin-backends/src/capability.rs:99:        OperationKind::Reshape,
+crates/incin-backends/src/capability.rs:109:        OperationKind::MatMul,
+crates/incin-backends/src/capability.rs:119:        OperationKind::Conv2d,
+crates/incin-backends/src/capability.rs:129:        OperationKind::Pool2d,
+crates/incin-backends/src/capability.rs:142:        OperationKind::Storage,
+crates/incin-backends/src/capability.rs:147:    native(OperationKind::Fill, F32_ONLY, CONTIGUOUS, false),
+crates/incin-backends/src/capability.rs:148:    native(OperationKind::Random, F32_ONLY, CONTIGUOUS, false),
+crates/incin-backends/src/capability.rs:149:    native(OperationKind::Pointwise, FLOAT_DTYPES, CONTIGUOUS, true),
+crates/incin-backends/src/capability.rs:150:    native(OperationKind::Reduction, FLOAT_DTYPES, CONTIGUOUS, true),
+crates/incin-backends/src/capability.rs:152:        OperationKind::Normalization,
+crates/incin-backends/src/capability.rs:160:        OperationKind::Broadcast,
+crates/incin-backends/src/capability.rs:165:    native(OperationKind::Broadcast, FLOAT_DTYPES, CONTIGUOUS, true),
+crates/incin-backends/src/capability.rs:167:        OperationKind::Reshape,
+crates/incin-backends/src/capability.rs:172:    native(OperationKind::Reshape, FLOAT_DTYPES, CONTIGUOUS, true),
+crates/incin-backends/src/capability.rs:174:        OperationKind::MatMul,
+crates/incin-backends/src/capability.rs:184:        OperationKind::Conv2d,
+crates/incin-backends/src/capability.rs:194:        OperationKind::Pool2d,
+crates/incin-backends/src/capability.rs:206:    native(OperationKind::Storage, F32_ONLY, CONTIGUOUS, false),
+crates/incin-backends/src/capability.rs:207:    native(OperationKind::Fill, F32_ONLY, CONTIGUOUS, false),
+crates/incin-backends/src/capability.rs:208:    native(OperationKind::Random, F32_ONLY, CONTIGUOUS, false),
+crates/incin-backends/src/capability.rs:209:    native(OperationKind::Pointwise, F32_ONLY, CONTIGUOUS, true),
+crates/incin-backends/src/capability.rs:210:    native(OperationKind::Reduction, F32_ONLY, CONTIGUOUS, true),
+crates/incin-backends/src/capability.rs:212:        OperationKind::Normalization,
+crates/incin-backends/src/capability.rs:220:        OperationKind::Broadcast,
+crates/incin-backends/src/capability.rs:230:        OperationKind::Reshape,
+crates/incin-backends/src/capability.rs:240:        OperationKind::MatMul,
+crates/incin-backends/src/capability.rs:250:        OperationKind::Conv2d,
+crates/incin-backends/src/capability.rs:260:        OperationKind::Pool2d,
+crates/incin-backends/src/capability.rs:273:        OperationKind::Storage,
+crates/incin-backends/src/capability.rs:278:    native(OperationKind::Fill, F32_ONLY, CONTIGUOUS, false),
+crates/incin-backends/src/capability.rs:279:    native(OperationKind::Random, F32_ONLY, CONTIGUOUS, false),
+crates/incin-backends/src/capability.rs:280:    native(OperationKind::Pointwise, FLOAT_DTYPES, CONTIGUOUS, true),
+crates/incin-backends/src/capability.rs:281:    native(OperationKind::Reduction, FLOAT_DTYPES, CONTIGUOUS, true),
+crates/incin-backends/src/capability.rs:283:        OperationKind::Normalization,
+crates/incin-backends/src/capability.rs:291:        OperationKind::Broadcast,
+crates/incin-backends/src/capability.rs:296:    native(OperationKind::Broadcast, FLOAT_DTYPES, CONTIGUOUS, true),
+crates/incin-backends/src/capability.rs:298:        OperationKind::Reshape,
+crates/incin-backends/src/capability.rs:303:    native(OperationKind::Reshape, FLOAT_DTYPES, CONTIGUOUS, true),
+crates/incin-backends/src/capability.rs:305:        OperationKind::MatMul,
+crates/incin-backends/src/capability.rs:315:        OperationKind::Conv2d,
+crates/incin-backends/src/capability.rs:325:        OperationKind::Pool2d,
+crates/incin-core/src/shapes/shape.rs:94:    operation: crate::shapes::error::OperationKind,
+crates/incin-core/src/shapes/shape.rs:110:        operation: crate::shapes::error::OperationKind,
+crates/incin-core/src/shapes/shape.rs:148:        operation: crate::shapes::error::OperationKind,
+crates/incin-core/src/shapes/shape.rs:175:    CheckedNumel::from_dims(crate::shapes::error::OperationKind::Reshape, dims, limits)
+crates/incin-core/src/shapes/shape.rs:185:        crate::shapes::error::OperationKind::Reshape,
+crates/incin-core/src/shapes/shape.rs:204:        operation: crate::shapes::error::OperationKind,
+crates/incin-core/src/shapes/shape.rs:212:        Self::checked_numel(shape, crate::shapes::error::OperationKind::Storage)
+crates/incin-core/src/shapes/shape.rs:553:    use crate::shapes::error::{OperationKind, ShapeError};
+crates/incin-core/src/shapes/shape.rs:598:            CheckedNumel::from_dims(OperationKind::Storage, &[], &limits)
+crates/incin-core/src/shapes/shape.rs:605:                OperationKind::Storage,
+crates/incin-core/src/shapes/shape.rs:614:            CheckedByteLen::from_dims(OperationKind::Storage, &[2, 3], DTypeId::F32, &limits)
+crates/incin-core/src/shapes/shape.rs:620:            CheckedNumel::from_dims(OperationKind::Storage, &[usize::MAX, 2], &limits),
+crates/incin-core/src/shapes/shape.rs:626:            CheckedNumel::from_dims(OperationKind::Storage, &[2, 3], &limits),
+crates/incin-core/src/shapes/shape.rs:632:            CheckedNumel::from_dims(OperationKind::Storage, &[3], &limits),
+crates/incin-core/src/shapes/shape.rs:643:            CheckedByteLen::from_dims(OperationKind::Storage, &[2, 3], DTypeId::F32, &limits),
+crates/incin-backends/src/metal/storage.rs:10:use incin_core::shapes::{OperationKind, ShapeBuf};
+crates/incin-backends/src/metal/storage.rs:92:        let element_size = metadata.dtype.size_bytes(1, OperationKind::Storage)?;
+crates/incin-backends/src/metal/storage.rs:100:            .checked_span(&metadata.shape, OperationKind::Storage)?;
+crates/incin-backends/src/metal/storage.rs:105:                operation: OperationKind::Storage,
+crates/incin-backends/src/metal/storage.rs:134:        let numel = shape.checked_numel(OperationKind::Storage)?;
+crates/incin-backends/src/metal/storage.rs:135:        let elem_size = dtype.size_bytes(1, OperationKind::Storage)?;
+crates/incin-backends/src/metal/storage.rs:190:        let elem_size = self.metadata.dtype.size_bytes(1, OperationKind::Storage)?;
+crates/incin-backends/src/metal/storage.rs:195:            .checked_span(&self.metadata.shape, OperationKind::Storage)?;
+crates/incin-backends/src/metal/storage.rs:219:        let numel = self.metadata.shape.checked_numel(OperationKind::Storage)?;
+crates/incin-backends/src/metal/tuning.rs:390:            crate::dtype_policy::OperationKind::Pointwise,
+crates/incin-core/src/shapes/error.rs:38:pub enum OperationKind {
+crates/incin-core/src/shapes/error.rs:87:impl OperationKind {
+crates/incin-core/src/shapes/error.rs:169:impl fmt::Display for OperationKind {
+crates/incin-core/src/shapes/error.rs:287:        operation: OperationKind,
+crates/incin-core/src/shapes/error.rs:298:        operation: OperationKind,
+crates/incin-core/src/shapes/error.rs:313:        operation: OperationKind,
+crates/incin-core/src/shapes/error.rs:327:        operation: OperationKind,
+crates/incin-core/src/shapes/error.rs:341:        operation: OperationKind,
+crates/incin-core/src/shapes/error.rs:360:        operation: OperationKind,
+crates/incin-core/src/shapes/error.rs:374:        operation: OperationKind,
+crates/incin-core/src/shapes/error.rs:384:    pub const fn operation(&self) -> OperationKind {
+crates/incin-backends/src/dispatch_executor.rs:19:use incin_core::prelude::{BackendError, DType, Device, OperationKind, StorageBackend};
+crates/incin-backends/src/dispatch_executor.rs:43:                OperationKind::MatMul,
+crates/incin-backends/src/dispatch_executor.rs:54:                    OperationKind::MatMul,
+crates/incin-backends/src/dispatch_executor.rs:60:                    OperationKind::MatMul,
+crates/incin-backends/src/dispatch_executor.rs:128:                OperationKind::MatMul,
+crates/incin-backends/src/dispatch_executor.rs:224:    OperationKind::Reshape,
+crates/incin-backends/src/dispatch_executor.rs:232:    OperationKind::Reduction,
+crates/incin-backends/src/dispatch_executor.rs:240:    OperationKind::Pool2d,
+crates/incin-backends/src/dispatch_executor.rs:259:                    OperationKind::Conv2d,
+crates/incin-backends/src/dispatch_executor.rs:266:                OperationKind::Conv2d,
+crates/incin-backends/src/dispatch_executor.rs:272:                OperationKind::Conv2d,
+crates/incin-backends/src/dispatch_executor.rs:280:                        OperationKind::Conv2d,
+crates/incin-backends/src/dispatch_executor.rs:374:                OperationKind::Conv2d,
+crates/incin-backends/src/cpu/ops/pool.rs:29:use incin_core::prelude::{DType, OperationKind, Result, ShapeBuf, ShapeError};
+crates/incin-backends/src/cpu/ops/pool.rs:66:        ShapeBuf::from_slice(&[b, c, h_out, w_out]).checked_numel(OperationKind::Pool2d)?;
+crates/incin-backends/src/cpu/ops/pool.rs:189:    let window_count = ShapeBuf::from_slice(&[kh, kw]).checked_numel(OperationKind::Pool2d)? as f64;
+crates/incin-backends/src/cpu/ops/pool.rs:191:        ShapeBuf::from_slice(&[b, c, h_out, w_out]).checked_numel(OperationKind::Pool2d)?;
+crates/incin-backends/src/cpu/ops/pool.rs:232:                ShapeBuf::from_slice(&input_shape).checked_numel(OperationKind::Pool2d)?;
+crates/incin-backends/src/cpu/ops/pool.rs:292:            operation: OperationKind::AdaptiveAvgPool2d,
+crates/incin-backends/src/cpu/ops/pool.rs:301:            operation: OperationKind::AdaptiveAvgPool2d,
+crates/incin-backends/src/cpu/ops/pool.rs:309:            operation: OperationKind::AdaptiveAvgPool2d,
+crates/incin-backends/src/cpu/ops/pool.rs:326:        .checked_numel(OperationKind::AdaptiveAvgPool2d)?;
+crates/incin-backends/src/cpu/ops/pool.rs:362:                .checked_numel(OperationKind::AdaptiveAvgPool2d)?;
+crates/incin-backends/src/cpu/ops/pool.rs:412:            operation: OperationKind::Pool2d,
+crates/incin-backends/src/cpu/ops/pool.rs:422:            operation: OperationKind::Pool2d,
+crates/incin-backends/src/cpu/ops/pool.rs:429:            operation: OperationKind::Pool2d,
+crates/incin-backends/src/cpu/ops/shape_ops.rs:263:                    operation: incin_core::prelude::OperationKind::Concat,
+crates/incin-backends/src/cpu/ops/shape_ops.rs:279:                    operation: incin_core::prelude::OperationKind::Concat,
+crates/incin-backends/src/cpu/ops/shape_ops.rs:883:                operation: OperationKind::Storage,
+crates/incin-backends/src/cpu/ops/shape_ops.rs:887:                ShapeBuf::from_slice(&[out_dim, out_dim]).checked_numel(OperationKind::Storage)?;
+crates/incin-backends/src/metal/executor.rs:10:use incin_core::prelude::{BackendError, DType, DTypeId, Device, DeviceKind, OperationKind};
+crates/incin-backends/src/metal/executor.rs:81:            OperationKind::MatMul,
+crates/incin-backends/src/metal/executor.rs:87:        .ok_or_else(|| invalid(OperationKind::MatMul, "matmul input is not Metal storage"))?;
+crates/incin-backends/src/metal/executor.rs:90:        .ok_or_else(|| invalid(OperationKind::MatMul, "matmul input is not Metal storage"))?;
+crates/incin-backends/src/metal/executor.rs:96:                OperationKind::MatMul,
+crates/incin-backends/src/metal/executor.rs:102:                operation: OperationKind::MatMul,
+crates/incin-backends/src/metal/executor.rs:108:            operation: OperationKind::MatMul,
+crates/incin-backends/src/metal/executor.rs:130:            OperationKind::MatMul,
+crates/incin-backends/src/metal/executor.rs:144:            OperationKind::MatMul,
+crates/incin-backends/src/metal/executor.rs:157:            OperationKind::Reshape,
+crates/incin-backends/src/metal/executor.rs:163:        .ok_or_else(|| invalid(OperationKind::Reshape, "reshape input is not Metal storage"))?;
+crates/incin-backends/src/metal/executor.rs:169:            OperationKind::Reshape,
+crates/incin-backends/src/metal/executor.rs:174:        operation: OperationKind::Reshape,
+crates/incin-backends/src/metal/executor.rs:187:            OperationKind::Reshape,
+crates/incin-backends/src/metal/executor.rs:207:            .map_err(|error| kernel_error(OperationKind::Reshape, error))?;
+crates/incin-backends/src/metal/executor.rs:211:                operation: OperationKind::Reshape,
+crates/incin-backends/src/metal/executor.rs:231:            operation: OperationKind::MatMul,
+crates/incin-backends/src/metal/executor.rs:259:                operation: OperationKind::MatMul,
+crates/incin-backends/src/metal/executor.rs:269:    operation: OperationKind,
+crates/incin-backends/src/metal/executor.rs:274:    O: incin_core::exec::OperationSpec,
+crates/incin-backends/src/metal/executor.rs:314:            OperationKind::Reduction,
+crates/incin-backends/src/metal/executor.rs:363:        .map_err(|error| kernel_error(OperationKind::Reduction, error))?;
+crates/incin-backends/src/metal/executor.rs:367:                operation: OperationKind::Reduction,
+crates/incin-backends/src/cpu/ops/embedding.rs:17:use incin_core::prelude::{BackwardError, OperationKind};
+crates/incin-backends/src/cpu/ops/embedding.rs:72:                operation: OperationKind::Embedding,
+crates/incin-backends/src/cpu/ops/embedding.rs:111:                        operation: OperationKind::Embedding,
+crates/incin-backends/src/cpu/creation.rs:23:use crate::dtype_policy::{BackendFamily, OperationKind, resolve_dtype_policy};
+crates/incin-backends/src/cpu/creation.rs:46:    resolve_dtype_policy(BackendFamily::Cpu, OperationKind::Fill, dtype, "fill")?;
+crates/incin-backends/src/cpu/creation.rs:122:        resolve_dtype_policy(BackendFamily::Cpu, OperationKind::Random, dtype, "rand")?;
+crates/incin-backends/src/cpu/creation.rs:159:        resolve_dtype_policy(BackendFamily::Cpu, OperationKind::Random, dtype, "randn")?;
+crates/incin-backends/src/cpu/creation.rs:217:        resolve_dtype_policy(BackendFamily::Cpu, OperationKind::Fill, dtype, "arange")?;
+crates/incin-backends/src/cpu/creation.rs:280:        resolve_dtype_policy(BackendFamily::Cpu, OperationKind::Fill, dtype, "linspace")?;
+crates/incin-core/src/shapes/broadcast.rs:39:            operation: OperationKind::Broadcast,
+crates/incin-core/src/shapes/broadcast.rs:267:                field_from_dims::<Self::Output>(OperationKind::Broadcast, &broadcast_dims::<Self, ($($rhs,)+)>(lhs, rhs)?)
+crates/incin-core/src/shapes/broadcast.rs:286:                field_from_dims::<Self::Output>(OperationKind::Broadcast, &broadcast_dims::<Self, ($($dim,)+)>(lhs, rhs)?)
+crates/incin-core/src/shapes/broadcast.rs:297:                field_from_dims::<Self::Output>(OperationKind::Broadcast, &broadcast_dims::<Self, ()>(lhs, rhs)?)
+crates/incin-core/src/shapes/broadcast.rs:323:                field_from_dims::<Self::Output>(OperationKind::Broadcast, &broadcast_dims::<Self, ($($prefix,)+ $($rhs,)+)>(lhs, rhs)?)
+crates/incin-core/src/shapes/broadcast.rs:338:                field_from_dims::<Self::Output>(OperationKind::Broadcast, &broadcast_dims::<Self, ($($rhs,)+)>(lhs, rhs)?)
+crates/incin-backends/src/cpu/ops/conv.rs:45:use incin_core::prelude::{BackwardError, OperationKind, ShapeBuf, ShapeError};
+crates/incin-backends/src/cpu/ops/conv.rs:71:            operation: OperationKind::Conv2d,
+crates/incin-backends/src/cpu/ops/conv.rs:81:            operation: OperationKind::Conv2d,
+crates/incin-backends/src/cpu/ops/conv.rs:88:            operation: OperationKind::Conv2d,
+crates/incin-backends/src/cpu/ops/conv.rs:110:            operation: OperationKind::Conv2d,
+crates/incin-backends/src/cpu/ops/conv.rs:126:            operation: OperationKind::Conv2d,
+crates/incin-backends/src/cpu/ops/conv.rs:132:            operation: OperationKind::Conv2d,
+crates/incin-backends/src/cpu/ops/conv.rs:170:    let columns = ShapeBuf::from_slice(&[cin, kernel_size]).checked_numel(OperationKind::Conv1d)?;
+crates/incin-backends/src/cpu/ops/conv.rs:172:        ShapeBuf::from_slice(&[b, l_out, columns]).checked_numel(OperationKind::Conv1d)?;
+crates/incin-backends/src/cpu/ops/conv.rs:208:    let out_total = ShapeBuf::from_slice(input_shape).checked_numel(OperationKind::Conv1d)?;
+crates/incin-backends/src/cpu/ops/conv.rs:255:    let spatial = ShapeBuf::from_slice(&[h_out, w_out]).checked_numel(OperationKind::Conv2d)?;
+crates/incin-backends/src/cpu/ops/conv.rs:257:        ShapeBuf::from_slice(&[cin, kernel_h, kernel_w]).checked_numel(OperationKind::Conv2d)?;
+crates/incin-backends/src/cpu/ops/conv.rs:259:        ShapeBuf::from_slice(&[b, spatial, columns]).checked_numel(OperationKind::Conv2d)?;
+crates/incin-backends/src/cpu/ops/conv.rs:311:    let out_total = ShapeBuf::from_slice(input_shape).checked_numel(OperationKind::Conv2d)?;
+crates/incin-backends/src/cpu/ops/conv.rs:387:        ShapeBuf::from_slice(&[cin_g, kernel_size]).checked_numel(OperationKind::Conv1d)?;
+crates/incin-backends/src/cpu/ops/conv.rs:451:                        operation: OperationKind::Conv2d,
+crates/incin-backends/src/cpu/ops/conv.rs:462:                        operation: OperationKind::Conv2d,
+crates/incin-backends/src/cpu/ops/conv.rs:527:    let spatial = ShapeBuf::from_slice(&[h_out, w_out]).checked_numel(OperationKind::Conv2d)?;
+crates/incin-backends/src/cpu/ops/conv.rs:529:        ShapeBuf::from_slice(&[cin_g, kh, kw]).checked_numel(OperationKind::Conv2d)?;
+crates/incin-backends/src/cpu/ops/conv.rs:594:                        operation: OperationKind::Conv2d,
+crates/incin-backends/src/cpu/ops/conv.rs:605:                        operation: OperationKind::Conv2d,
+crates/incin-backends/src/cpu/ops/conv.rs:706:    let input_spatial = ShapeBuf::from_slice(&[h, w]).checked_numel(OperationKind::Conv2d)?;
+crates/incin-backends/src/cpu/ops/conv.rs:708:        ShapeBuf::from_slice(&[cout, kh, kw]).checked_numel(OperationKind::Conv2d)?;
+crates/incin-backends/src/cpu/ops/conv.rs:737:                operation: OperationKind::Conv2d,
+crates/incin-backends/src/cpu/ops/conv.rs:743:                operation: OperationKind::Conv2d,
+crates/incin-backends/src/cpu/ops/conv.rs:746:        ShapeBuf::from_slice(&[b, cout, final_h, final_w]).checked_numel(OperationKind::Conv2d)?;
+crates/incin-backends/src/cpu/ops/conv.rs:828:    let out_total = ShapeBuf::from_slice(&[m, n]).checked_numel(OperationKind::Reduction)?;
+crates/incin-backends/src/cpu/ops/conv.rs:860:                operation: OperationKind::Concat,
+crates/incin-backends/src/cpu/ops/conv.rs:884:                operation: OperationKind::Concat,
+crates/incin-backends/src/tuning/signature.rs:9:pub use incin_core::prelude::OperationKind;
+crates/incin-backends/src/tuning/signature.rs:208:    pub op_kind: OperationKind,
+crates/incin-backends/src/tuning/signature.rs:218:        op_kind: OperationKind,
+crates/incin-backends/src/cpu/ops/quant.rs:177:        let out_total = ShapeBuf::from_slice(&[m, n]).checked_numel(OperationKind::MatMul)?;
+crates/incin-backends/src/capability_docs.rs:203:    use incin_core::prelude::{DTypeId, OperationKind};
+crates/incin-backends/src/capability_docs.rs:208:    const fn rule(operation: OperationKind, dtypes: &'static [DTypeId]) -> CapabilityRule {
+crates/incin-backends/src/capability_docs.rs:221:    static HAS_MATMUL: &[CapabilityRule] = &[rule(OperationKind::MatMul, &[DTypeId::F32])];
+crates/incin-backends/src/capability_docs.rs:222:    static HAS_NEITHER: &[CapabilityRule] = &[rule(OperationKind::Reshape, &[DTypeId::F32])];
+crates/incin-backends/src/capability_docs.rs:251:            rule(OperationKind::Reshape, &[DTypeId::F32]),
+crates/incin-backends/src/capability_docs.rs:252:            rule(OperationKind::Reshape, &[DTypeId::I64, DTypeId::F32]),
+crates/incin-backends/src/capability_docs.rs:265:        let unbounded = rule(OperationKind::MatMul, &[DTypeId::F32]);
+crates/incin-backends/src/capability_docs.rs:269:            OperationKind::MatMul,
+crates/incin-backends/src/capability_docs.rs:281:            OperationKind::Conv2d,
+crates/incin-backends/src/cpu/executor.rs:10:use incin_core::prelude::{BackendError, DType, DTypeId, Device, DeviceKind, OperationKind};
+crates/incin-backends/src/cpu/executor.rs:81:            OperationKind::MatMul,
+crates/incin-backends/src/cpu/executor.rs:87:        .ok_or_else(|| invalid(OperationKind::MatMul, "matmul input is not CPU storage"))?;
+crates/incin-backends/src/cpu/executor.rs:90:        .ok_or_else(|| invalid(OperationKind::MatMul, "matmul input is not CPU storage"))?;
+crates/incin-backends/src/cpu/executor.rs:96:                OperationKind::MatMul,
+crates/incin-backends/src/cpu/executor.rs:102:                operation: OperationKind::MatMul,
+crates/incin-backends/src/cpu/executor.rs:108:            operation: OperationKind::MatMul,
+crates/incin-backends/src/cpu/executor.rs:130:            OperationKind::MatMul,
+crates/incin-backends/src/cpu/executor.rs:144:            OperationKind::MatMul,
+crates/incin-backends/src/cpu/executor.rs:168:                        operation: OperationKind::MatMul,
+crates/incin-backends/src/cpu/executor.rs:180:                        operation: OperationKind::MatMul,
+crates/incin-backends/src/cpu/executor.rs:195:        .map_err(|error| kernel_error(OperationKind::MatMul, error))?;
+crates/incin-backends/src/cpu/executor.rs:199:                operation: OperationKind::MatMul,
+crates/incin-backends/src/cpu/executor.rs:220:            OperationKind::Reshape,
+crates/incin-backends/src/cpu/executor.rs:226:        .ok_or_else(|| invalid(OperationKind::Reshape, "reshape input is not CPU storage"))?;
+crates/incin-backends/src/cpu/executor.rs:232:            OperationKind::Reshape,
+crates/incin-backends/src/cpu/executor.rs:237:        operation: OperationKind::Reshape,
+crates/incin-backends/src/cpu/executor.rs:250:            OperationKind::Reshape,
+crates/incin-backends/src/cpu/executor.rs:273:            .map_err(|error| kernel_error(OperationKind::Reshape, error))?;
+crates/incin-backends/src/cpu/executor.rs:277:                operation: OperationKind::Reshape,
+crates/incin-backends/src/cpu/executor.rs:298:                OperationKind::Conv2d,
+crates/incin-backends/src/cpu/executor.rs:306:            .ok_or_else(|| invalid(OperationKind::Conv2d, "conv2d input is not CPU storage"))
+crates/incin-backends/src/cpu/executor.rs:317:                OperationKind::Conv2d,
+crates/incin-backends/src/cpu/executor.rs:323:                operation: OperationKind::Conv2d,
+crates/incin-backends/src/cpu/executor.rs:329:            operation: OperationKind::Conv2d,
+crates/incin-backends/src/cpu/executor.rs:375:        .map_err(|error| kernel_error(OperationKind::Conv2d, error))?;
+crates/incin-backends/src/cpu/executor.rs:379:                operation: OperationKind::Conv2d,
+crates/incin-backends/src/cpu/executor.rs:400:    operation: OperationKind,
+crates/incin-backends/src/cpu/executor.rs:405:    O: incin_core::exec::OperationSpec,
+crates/incin-backends/src/cpu/executor.rs:445:            OperationKind::Reduction,
+crates/incin-backends/src/cpu/executor.rs:501:        .map_err(|error| kernel_error(OperationKind::Reduction, error))?;
+crates/incin-backends/src/cpu/executor.rs:505:                operation: OperationKind::Reduction,
+crates/incin-backends/src/cpu/executor.rs:525:            OperationKind::Pool2d,
+crates/incin-backends/src/cpu/executor.rs:549:        .map_err(|error| kernel_error(OperationKind::Pool2d, error))?;
+crates/incin-backends/src/cpu/executor.rs:553:                operation: OperationKind::Pool2d,
+crates/incin-backends/src/cpu/executor.rs:615:                operation: OperationKind::MatMul,
+crates/incin-core/src/dist/rule.rs:13:use crate::exec::OperationSpec;
+crates/incin-core/src/dist/rule.rs:552:    type Descriptor: OperationSpec;
+crates/incin-core/src/dist/rule.rs:569:        O: OperationSpec,
+crates/incin-core/src/dist/rule.rs:580:    O: OperationSpec,
+crates/incin-backends/src/cpu/ops/reduce.rs:1009:                        operation: OperationKind::Reduction,
+crates/incin-backends/src/cpu/ops/reduce.rs:1070:                        operation: OperationKind::Reduction,
+crates/incin-backends/src/external/conformance.rs:41:use incin_core::prelude::{DTypeId, Dyn, Local, OperationKind, Shape, StorageBackend};
+crates/incin-backends/src/external/conformance.rs:139:    fn tolerance(&self, operation: OperationKind) -> Tolerance {
+crates/incin-backends/src/external/conformance.rs:141:            OperationKind::Reshape => Tolerance::EXACT,
+crates/incin-backends/src/external/conformance.rs:223:fn query(operation: OperationKind, rank: usize) -> CapabilityQuery {
+crates/incin-backends/src/external/conformance.rs:337:        .checked_numel(OperationKind::Storage)
+crates/incin-backends/src/external/conformance.rs:377:    let support = subject.backend().support(&query(OperationKind::MatMul, 2));
+crates/incin-backends/src/external/conformance.rs:413:            let tolerance = subject.tolerance(OperationKind::MatMul);
+crates/incin-backends/src/external/conformance.rs:462:    let support = subject.backend().support(&query(OperationKind::Reshape, 2));
+crates/incin-backends/src/external/conformance.rs:502:            let tolerance = subject.tolerance(OperationKind::Reshape);
+crates/incin-backends/src/external/conformance.rs:549:        .support(&query(OperationKind::MatMul, 2))
+crates/incin-backends/src/external/conformance.rs:568:        .support(&query(OperationKind::Reshape, 2))
+crates/incin-backends/src/external/conformance.rs:599:            let mut probe = query(OperationKind::MatMul, 2);
+crates/incin-core/src/dist/pipeline.rs:23:use crate::prelude::{ConstDType, ConstShape, DTypeId, Dyn, OperationKind};
+crates/incin-core/src/dist/pipeline.rs:524:                operation: OperationKind::Storage,
+crates/incin-backends/src/cpu/ops/loss.rs:60:                operation: OperationKind::Reduction,
+crates/incin-backends/src/cpu/ops/loss.rs:70:                operation: OperationKind::Reduction,
+crates/incin-backends/src/cpu/ops/loss.rs:84:            ShapeBuf::from_slice(&[batch, classes]).checked_numel(OperationKind::Storage)?;
+crates/incin-backends/src/cpu/ops/loss.rs:96:                    operation: OperationKind::Reduction,
+crates/incin-backends/src/cpu/ops/elementwise_kernel.rs:17:use crate::dtype_policy::{BackendFamily, OperationKind, resolve_dtype_policy};
+crates/incin-backends/src/cpu/ops/elementwise_kernel.rs:267:        OperationKind::Pointwise,
+crates/incin-backends/src/cpu/ops/elementwise_kernel.rs:422:        OperationKind::Pointwise,
+crates/incin-backends/src/cuda/backend.rs:2:use crate::dtype_policy::{BackendFamily, OperationKind, resolve_dtype_policy};
+crates/incin-backends/src/cuda/backend.rs:47:            OperationKind::Storage,
+crates/incin-backends/src/cuda/backend.rs:95:        let old_numel = ShapeBuf::from_slice(&t.shape).checked_numel(OperationKind::Reshape)?;
+crates/incin-backends/src/cuda/backend.rs:96:        let new_numel = ShapeBuf::from_slice(shape).checked_numel(OperationKind::Reshape)?;
+crates/incin-backends/src/cuda/backend.rs:354:                .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+crates/incin-backends/src/cuda/backend.rs:1051:            operation: OperationKind::Reduction,
+crates/incin-backends/src/cuda/backend.rs:1076:            operation: OperationKind::Reduction,
+crates/incin-backends/src/cuda/backend.rs:1135:                    .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+crates/incin-backends/src/cuda/backend.rs:1159:                    .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+crates/incin-backends/src/cuda/backend.rs:1229:                .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+crates/incin-backends/src/cuda/backend.rs:1763:            ShapeBuf::from_slice(&[cout, kh, kw]).checked_numel(OperationKind::Conv2d)?;
+crates/incin-backends/src/cuda/backend.rs:1915:    resolve_dtype_policy(BackendFamily::Cuda, OperationKind::Fill, dtype, op).map(|_| ())
+crates/incin-backends/src/cuda/backend.rs:1924:    resolve_dtype_policy(BackendFamily::Cuda, OperationKind::Storage, dtype, op).map(|_| ())
+crates/incin-backends/src/cuda/backend.rs:2018:            operation: OperationKind::Storage,
+crates/incin-backends/src/cuda/backend.rs:2036:            operation: OperationKind::Storage,
+crates/incin-backends/src/cuda/backend.rs:2060:            operation: OperationKind::Storage,
+crates/incin-backends/src/cuda/backend.rs:2107:        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+crates/incin-backends/src/cuda/backend.rs:2109:        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+crates/incin-backends/src/cuda/backend.rs:2175:        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+crates/incin-backends/src/cuda/backend.rs:2176:    let mut out = vec![0u32; ShapeBuf::from_slice(&shape).checked_numel(OperationKind::Storage)?];
+crates/incin-backends/src/cuda/mod.rs:25:            operation: incin_core::prelude::OperationKind::Storage,
+crates/incin-backends/src/cuda/mod.rs:38:            operation: incin_core::prelude::OperationKind::Storage,
+crates/incin-backends/src/cpu/ops/matmul.rs:31:use incin_core::prelude::{Error, OperationKind, Result, ShapeBuf};
+crates/incin-backends/src/cpu/ops/matmul.rs:298:    let out_total = ShapeBuf::from_slice(&[m, n]).checked_numel(OperationKind::MatMul)?;
+crates/incin-backends/src/cuda/executor.rs:15:use incin_core::prelude::{BackendError, DType, DTypeId, Device, DeviceKind, OperationKind};
+crates/incin-backends/src/cuda/executor.rs:92:            OperationKind::MatMul,
+crates/incin-backends/src/cuda/executor.rs:98:        .ok_or_else(|| invalid(OperationKind::MatMul, "matmul input is not CUDA storage"))?;
+crates/incin-backends/src/cuda/executor.rs:101:        .ok_or_else(|| invalid(OperationKind::MatMul, "matmul input is not CUDA storage"))?;
+crates/incin-backends/src/cuda/executor.rs:107:                OperationKind::MatMul,
+crates/incin-backends/src/cuda/executor.rs:113:                operation: OperationKind::MatMul,
+crates/incin-backends/src/cuda/executor.rs:119:            operation: OperationKind::MatMul,
+crates/incin-backends/src/cuda/executor.rs:141:            OperationKind::MatMul,
+crates/incin-backends/src/cuda/executor.rs:155:            OperationKind::MatMul,
+crates/incin-backends/src/cuda/executor.rs:175:            OperationKind::Reshape,
+crates/incin-backends/src/cuda/executor.rs:181:        .ok_or_else(|| invalid(OperationKind::Reshape, "reshape input is not CUDA storage"))?;
+crates/incin-backends/src/cuda/executor.rs:187:            OperationKind::Reshape,
+crates/incin-backends/src/cuda/executor.rs:192:        operation: OperationKind::Reshape,
+crates/incin-backends/src/cuda/executor.rs:205:            OperationKind::Reshape,
+crates/incin-backends/src/cuda/executor.rs:225:            .map_err(|error| kernel_error(OperationKind::Reshape, error))?;
+crates/incin-backends/src/cuda/executor.rs:229:                operation: OperationKind::Reshape,
+crates/incin-backends/src/cuda/executor.rs:252:            operation: OperationKind::MatMul,
+crates/incin-backends/src/cuda/executor.rs:280:                operation: OperationKind::MatMul,
+crates/incin-backends/src/cuda/executor.rs:301:                OperationKind::Conv2d,
+crates/incin-backends/src/cuda/executor.rs:309:            .ok_or_else(|| invalid(OperationKind::Conv2d, "conv2d input is not CUDA storage"))
+crates/incin-backends/src/cuda/executor.rs:320:                OperationKind::Conv2d,
+crates/incin-backends/src/cuda/executor.rs:326:                operation: OperationKind::Conv2d,
+crates/incin-backends/src/cuda/executor.rs:332:            operation: OperationKind::Conv2d,
+crates/incin-backends/src/cuda/executor.rs:378:        .map_err(|error| kernel_error(OperationKind::Conv2d, error))?;
+crates/incin-backends/src/cuda/executor.rs:382:                operation: OperationKind::Conv2d,
+crates/incin-backends/src/cuda/executor.rs:397:    operation: OperationKind,
+crates/incin-backends/src/cuda/executor.rs:402:    O: incin_core::exec::OperationSpec,
+crates/incin-backends/src/cuda/executor.rs:442:            OperationKind::Reduction,
+crates/incin-backends/src/cuda/executor.rs:496:        .map_err(|error| kernel_error(OperationKind::Reduction, error))?;
+crates/incin-backends/src/cuda/executor.rs:500:                operation: OperationKind::Reduction,
+crates/incin-backends/src/cuda/executor.rs:520:            OperationKind::Pool2d,
+crates/incin-backends/src/cuda/executor.rs:541:        .map_err(|error| kernel_error(OperationKind::Pool2d, error))?;
+crates/incin-backends/src/cuda/executor.rs:545:                operation: OperationKind::Pool2d,
+crates/incin-backends/src/cuda/gpu.rs:18:                    operation: incin_core::prelude::OperationKind::Storage,
+crates/incin-backends/src/cuda/tape.rs:5:use incin_core::prelude::{Error, OperationKind, Result, ShapeBuf};
+crates/incin-backends/src/cuda/tape.rs:23:        let numel = ShapeBuf::from_slice(&self.shape).checked_numel(OperationKind::Storage)?;
+crates/incin-backends/src/cuda/tape.rs:56:                operation: incin_core::prelude::OperationKind::Storage,
+crates/incin-backends/src/dist/nccl.rs:33:    DType, DTypeId, Device, DeviceId, OperationKind, RequiresGrad, Shape, Tensor, TensorOps,
+crates/incin-backends/src/dist/nccl.rs:287:            .size_bytes(elements, OperationKind::Storage)
+crates/incin-core/src/tensor/backend.rs:5:use crate::exec::{OperationSpec, TensorMeta, Validated};
+crates/incin-core/src/tensor/backend.rs:109:    O: OperationSpec,
+crates/incin-core/src/tensor/backend.rs:120:    O: OperationSpec,
+crates/incin-core/src/tensor/backend.rs:1930:                    .checked_numel(crate::shapes::error::OperationKind::Flatten)?,
+crates/incin-backends/src/wgpu/backend.rs:1:use crate::dtype_policy::{BackendFamily, OperationKind, resolve_dtype_policy};
+crates/incin-backends/src/wgpu/backend.rs:35:            OperationKind::Storage,
+crates/incin-backends/src/wgpu/backend.rs:58:        .checked_numel(OperationKind::Storage)
+crates/incin-backends/src/wgpu/backend.rs:65:            operation: OperationKind::Storage,
+crates/incin-backends/src/wgpu/backend.rs:86:    family: OperationKind,
+crates/incin-backends/src/wgpu/backend.rs:187:        validate_wgpu(dtype, device, OperationKind::Storage, "from_bytes")?;
+crates/incin-backends/src/wgpu/backend.rs:191:                operation: OperationKind::Storage,
+crates/incin-backends/src/wgpu/backend.rs:221:        validate_wgpu(dtype, device, OperationKind::Fill, "zeros")?;
+crates/incin-backends/src/wgpu/backend.rs:234:        validate_wgpu(dtype, device, OperationKind::Fill, "ones")?;
+crates/incin-backends/src/wgpu/backend.rs:247:        validate_wgpu(dtype, device, OperationKind::Random, "rand")?;
+crates/incin-backends/src/wgpu/backend.rs:274:        validate_wgpu(dtype, device, OperationKind::Random, "randn")?;
+crates/incin-backends/src/wgpu/backend.rs:753:            .checked_numel(OperationKind::MatMul)?;
+crates/incin-backends/src/wgpu/backend.rs:755:            .checked_numel(OperationKind::MatMul)?;
+crates/incin-backends/src/wgpu/backend.rs:771:                operation: OperationKind::MatMul,
+crates/incin-backends/src/wgpu/backend.rs:779:                operation: OperationKind::MatMul,
+crates/incin-backends/src/wgpu/backend.rs:800:        let out_n = ShapeBuf::from_slice(&out_shape).checked_numel(OperationKind::MatMul)?;
+crates/incin-backends/src/wgpu/backend.rs:801:        let out_buf = WgpuBuffer::new_zeros_for(DTypeId::F32, out_n, OperationKind::MatMul)?;
+crates/incin-backends/src/wgpu/backend.rs:971:                .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+crates/incin-backends/src/wgpu/backend.rs:1003:            WgpuBuffer::new_zeros_for(DTypeId::F32, out_elements, OperationKind::Storage)?;
+crates/incin-backends/src/wgpu/backend.rs:1042:            WgpuBuffer::new_zeros_for(DTypeId::F32, out_elements, OperationKind::Storage)?;
+crates/incin-backends/src/wgpu/backend.rs:1125:                    operation: OperationKind::Concat,
+crates/incin-backends/src/wgpu/backend.rs:1131:        let out_buf = WgpuBuffer::new_zeros_for(DTypeId::F32, out_n, OperationKind::Storage)?;
+crates/incin-backends/src/wgpu/backend.rs:1149:                        operation: OperationKind::Concat,
+crates/incin-backends/src/wgpu/backend.rs:1186:        let numel = ShapeBuf::from_slice(&t.shape).checked_numel(OperationKind::Storage)?;
+crates/incin-backends/src/wgpu/backend.rs:1189:                operation: OperationKind::Storage,
+crates/incin-backends/src/wgpu/backend.rs:1268:            operation: OperationKind::Reduction,
+crates/incin-backends/src/wgpu/backend.rs:1280:        ShapeBuf::from_slice(&shape[dim + 1..]).checked_numel(OperationKind::Reduction)?;
+crates/incin-backends/src/wgpu/backend.rs:1290:                operation: OperationKind::Reduction,
+crates/incin-backends/src/wgpu/backend.rs:1296:    let out_buf = WgpuBuffer::new_zeros_for(DTypeId::F32, out_n, OperationKind::Storage)?;
+crates/incin-backends/src/wgpu/backend.rs:1324:        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+crates/incin-backends/src/wgpu/backend.rs:1327:        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+crates/incin-backends/src/wgpu/backend.rs:1334:    operation: OperationKind,
+crates/incin-backends/src/wgpu/backend.rs:1376:                .checked_numel(OperationKind::Reduction)?;
+crates/incin-backends/src/wgpu/backend.rs:1651:                        operation: OperationKind::Reduction,
+crates/incin-backends/src/wgpu/backend.rs:1662:                        operation: OperationKind::Reduction,
+crates/incin-backends/src/wgpu/backend.rs:1674:                    .checked_numel(OperationKind::Reduction)?;
+crates/incin-backends/src/wgpu/backend.rs:1677:                    WgpuBuffer::new_zeros_for(DTypeId::F32, out_n, OperationKind::Storage)?;
+crates/incin-backends/src/wgpu/backend.rs:1708:                        operation: OperationKind::Reduction,
+crates/incin-backends/src/wgpu/backend.rs:1719:                        operation: OperationKind::Reduction,
+crates/incin-backends/src/wgpu/backend.rs:1731:                    .checked_numel(OperationKind::Reduction)?;
+crates/incin-backends/src/wgpu/backend.rs:1734:                    WgpuBuffer::new_zeros_for(DTypeId::F32, out_n, OperationKind::Storage)?;
+crates/incin-backends/src/wgpu/backend.rs:1793:                let flat = checked_flat_index(&coords, shape, OperationKind::Reduction)?;
+crates/incin-backends/src/wgpu/backend.rs:1808:                let flat = checked_flat_index(&out_coords, &out_shape, OperationKind::Reduction)?;
+crates/incin-backends/src/wgpu/backend.rs:1855:                let flat = checked_flat_index(&coords, shape, OperationKind::Reduction)?;
+crates/incin-backends/src/wgpu/backend.rs:1870:                let flat = checked_flat_index(&out_coords, shape, OperationKind::Reduction)?;
+crates/incin-backends/src/wgpu/backend.rs:1903:    let col_len = ShapeBuf::from_slice(&[cin, kh, kw]).checked_numel(OperationKind::Conv2d)?;
+crates/incin-backends/src/wgpu/backend.rs:1904:    let spatial = ShapeBuf::from_slice(&[h_out, w_out]).checked_numel(OperationKind::Conv2d)?;
+crates/incin-backends/src/wgpu/backend.rs:1906:        ShapeBuf::from_slice(&[b, spatial, col_len]).checked_numel(OperationKind::Conv2d)?;
+crates/incin-backends/src/wgpu/backend.rs:1955:    let col_len = ShapeBuf::from_slice(&[cin, kh, kw]).checked_numel(OperationKind::Conv2d)?;
+crates/incin-backends/src/wgpu/backend.rs:1956:    let spatial = ShapeBuf::from_slice(&[h_out, w_out]).checked_numel(OperationKind::Conv2d)?;
+crates/incin-backends/src/wgpu/backend.rs:1958:        ShapeBuf::from_slice(&[b, cin, h, w]).checked_numel(OperationKind::Conv2d)?;
+crates/incin-backends/src/wgpu/backend.rs:1992:    let out_elements = ShapeBuf::from_slice(&[b, m, n]).checked_numel(OperationKind::MatMul)?;
+crates/incin-backends/src/wgpu/backend.rs:2010:    let out_elements = ShapeBuf::from_slice(&[b, m, n]).checked_numel(OperationKind::Transpose)?;
+crates/incin-backends/src/wgpu/backend.rs:2024:    let out_elements = ShapeBuf::from_slice(&[m, n]).checked_numel(OperationKind::Reduction)?;
+crates/incin-backends/src/wgpu/backend.rs:2073:            ShapeBuf::from_slice(&[c_in, kh, kw]).checked_numel(OperationKind::Conv2d)?;
+crates/incin-backends/src/wgpu/backend.rs:2075:            ShapeBuf::from_slice(&[h_out, w_out]).checked_numel(OperationKind::Conv2d)?;
+crates/incin-backends/src/wgpu/backend.rs:2077:            .checked_numel(OperationKind::Conv2d)?;
+crates/incin-backends/src/wgpu/backend.rs:2078:        let col_buf = WgpuBuffer::new_zeros_for(DTypeId::F32, col_elements, OperationKind::Conv2d)?;
+crates/incin-backends/src/wgpu/backend.rs:2090:            ShapeBuf::from_slice(&[c_in_g, kh, kw]).checked_numel(OperationKind::Conv2d)?;
+crates/incin-backends/src/wgpu/backend.rs:2104:            .checked_numel(OperationKind::Conv2d)?;
+crates/incin-backends/src/wgpu/backend.rs:2105:        let out_buf = WgpuBuffer::new_zeros_for(DTypeId::F32, out_elements, OperationKind::Conv2d)?;
+crates/incin-backends/src/wgpu/backend.rs:2124:    let strides = StrideBuf::contiguous_for(&ShapeBuf::from_slice(shape), OperationKind::Storage)?;
+crates/incin-backends/src/wgpu/backend.rs:2144:            operation: OperationKind::AdaptiveAvgPool2d,
+crates/incin-backends/src/wgpu/backend.rs:2153:            operation: OperationKind::AdaptiveAvgPool2d,
+crates/incin-backends/src/wgpu/backend.rs:2161:            operation: OperationKind::AdaptiveAvgPool2d,
+crates/incin-backends/src/wgpu/backend.rs:2177:            operation: OperationKind::Pool2d,
+crates/incin-backends/src/wgpu/backend.rs:2187:            operation: OperationKind::Pool2d,
+crates/incin-backends/src/wgpu/backend.rs:2194:            operation: OperationKind::Pool2d,
+crates/incin-backends/src/wgpu/backend.rs:2199:            operation: OperationKind::Pool2d,
+crates/incin-backends/src/wgpu/backend.rs:2210:                operation: OperationKind::Pool2d,
+crates/incin-backends/src/wgpu/backend.rs:2227:            operation: OperationKind::Conv2d,
+crates/incin-backends/src/wgpu/backend.rs:2242:            operation: OperationKind::Conv2d,
+crates/incin-backends/src/wgpu/backend.rs:2248:            operation: OperationKind::Conv2d,
+crates/incin-backends/src/wgpu/backend.rs:2256:                operation: OperationKind::Conv2d,
+crates/incin-backends/src/wgpu/backend.rs:2277:            ShapeBuf::from_slice(&[seq_len, embed_dim]).checked_numel(OperationKind::Embedding)?;
+crates/incin-backends/src/wgpu/backend.rs:2279:            WgpuBuffer::new_zeros_for(DTypeId::F32, out_elements, OperationKind::Storage)?;
+crates/incin-backends/src/wgpu/backend.rs:2312:                    .checked_numel(OperationKind::Embedding)?;
+crates/incin-backends/src/wgpu/backend.rs:2369:                    WgpuBuffer::new_zeros_for(DTypeId::F32, n, OperationKind::Storage)?,
+crates/incin-backends/src/wgpu/backend.rs:2400:                WgpuBuffer::new_zeros_for(DTypeId::F32, c, OperationKind::Storage)?,
+crates/incin-backends/src/wgpu/backend.rs:2408:                    WgpuBuffer::new_zeros_for(DTypeId::F32, c, OperationKind::Storage)?,
+crates/incin-backends/src/wgpu/backend.rs:2419:                    WgpuBuffer::new_zeros_for(DTypeId::F32, c, OperationKind::Storage)?,
+crates/incin-backends/src/wgpu/backend.rs:2429:                WgpuBuffer::new_zeros_for(DTypeId::F32, c, OperationKind::Storage)?,
+crates/incin-backends/src/wgpu/backend.rs:2457:            .checked_numel(OperationKind::AdaptiveAvgPool2d)?;
+crates/incin-backends/src/wgpu/backend.rs:2458:        let out_buf = WgpuBuffer::new_zeros_for(DTypeId::F32, out_elements, OperationKind::Pool2d)?;
+crates/incin-backends/src/wgpu/backend.rs:2497:                    .checked_numel(OperationKind::AdaptiveAvgPool2d)?;
+crates/incin-backends/src/wgpu/backend.rs:2550:            ShapeBuf::from_slice(&[n, c, oh, ow]).checked_numel(OperationKind::Pool2d)?;
+crates/incin-backends/src/wgpu/backend.rs:2551:        let out_buf = WgpuBuffer::new_zeros_for(DTypeId::F32, out_elements, OperationKind::Pool2d)?;
+crates/incin-backends/src/wgpu/backend.rs:2600:                    ShapeBuf::from_slice(&input_shape).checked_numel(OperationKind::Pool2d)?;
+crates/incin-backends/src/wgpu/backend.rs:2662:            ShapeBuf::from_slice(&[n, c, oh, ow]).checked_numel(OperationKind::Pool2d)?;
+crates/incin-backends/src/wgpu/backend.rs:2663:        let out_buf = WgpuBuffer::new_zeros_for(DTypeId::F32, out_elements, OperationKind::Pool2d)?;
+crates/incin-backends/src/wgpu/backend.rs:2716:                    ShapeBuf::from_slice(&input_shape).checked_numel(OperationKind::Pool2d)?;
+crates/incin-backends/src/wgpu/backend.rs:2818:                        .checked_numel(OperationKind::Conv1d)?;
+crates/incin-backends/src/wgpu/backend.rs:2830:                        .checked_numel(OperationKind::Conv1d)?;
+crates/incin-backends/src/wgpu/backend.rs:2842:                        .checked_numel(OperationKind::Conv1d)?;
+crates/incin-backends/src/wgpu/backend.rs:2862:                        .checked_numel(OperationKind::Conv1d)?;
+crates/incin-backends/src/wgpu/backend.rs:2892:                    ShapeBuf::from_slice(&[n, c_in, l_in]).checked_numel(OperationKind::Conv1d)?;
+crates/incin-backends/src/wgpu/backend.rs:2908:                    .checked_numel(OperationKind::Conv1d)?;
+crates/incin-backends/src/wgpu/backend.rs:2978:                    .checked_numel(OperationKind::Conv2d)?;
+crates/incin-backends/src/wgpu/backend.rs:2980:                    .checked_numel(OperationKind::Conv2d)?;
+crates/incin-backends/src/wgpu/backend.rs:2987:                        .checked_numel(OperationKind::Conv2d)?;
+crates/incin-backends/src/wgpu/backend.rs:3007:                        .checked_numel(OperationKind::Conv2d)?;
+crates/incin-backends/src/wgpu/backend.rs:3019:                        .checked_numel(OperationKind::Conv2d)?;
+crates/incin-backends/src/wgpu/backend.rs:3043:                        .checked_numel(OperationKind::Conv2d)?;
+crates/incin-backends/src/wgpu/backend.rs:3045:                        .checked_numel(OperationKind::Conv2d)?;
+crates/incin-backends/src/wgpu/backend.rs:3164:                operation: OperationKind::Conv2d,
+crates/incin-backends/src/wgpu/backend.rs:3170:                operation: OperationKind::Conv2d,
+crates/incin-backends/src/wgpu/backend.rs:3175:            .checked_numel(OperationKind::Conv2d)?;
+crates/incin-backends/src/wgpu/backend.rs:3176:        let out_buf = WgpuBuffer::new_zeros_for(DTypeId::F32, out_elements, OperationKind::Conv2d)?;
+crates/incin-backends/src/wgpu/backend.rs:3205:                        .checked_numel(OperationKind::Conv2d)?;
+crates/incin-backends/src/wgpu/backend.rs:3245:                    .checked_numel(OperationKind::Conv2d)?;
+crates/incin-backends/src/wgpu/backend.rs:3262:                    .checked_numel(OperationKind::Conv2d)?;
+crates/incin-backends/src/wgpu/backend.rs:3332:            ShapeBuf::from_slice(&[batch, classes]).checked_numel(OperationKind::Storage)?;
+crates/incin-backends/src/cuda/storage.rs:5:use incin_core::prelude::{DTypeId, DeviceId, Error, OperationKind, Result};
+crates/incin-backends/src/cuda/storage.rs:91:            .size_bytes(buffer.len, OperationKind::Storage)
+crates/incin-backends/src/cuda/storage.rs:227:            .size_bytes(64, OperationKind::Storage)
+crates/incin-core/src/dist/plan.rs:31:use crate::prelude::{ConstDType, DTypeId, Dyn, OperationKind};
+crates/incin-core/src/dist/plan.rs:436:        let input_bytes = dtype.size_bytes(input_elements, OperationKind::Storage)?;
+crates/incin-core/src/dist/plan.rs:437:        let output_bytes = dtype.size_bytes(output_elements, OperationKind::Storage)?;
+crates/incin-core/src/dist/plan.rs:506:        let input_bytes = dtype.size_bytes(input_elements, OperationKind::Storage)?;
+crates/incin-core/src/dist/plan.rs:802:                operation: OperationKind::Storage,
+crates/incin-core/src/dist/plan.rs:1897:        .size_bytes(workload.parameter_elements, OperationKind::Storage)
+crates/incin-core/src/dist/plan.rs:1902:            OperationKind::Storage,
+crates/incin-backends/src/external/candle/executor.rs:23:    BackendError, DType, Device, OperationKind, Result, ShapeBuf, StrideBuf,
+crates/incin-backends/src/external/candle/executor.rs:48:        let capacity = shape.checked_numel(OperationKind::Storage)?;
+crates/incin-backends/src/external/candle/executor.rs:109:            OperationKind::MatMul | OperationKind::Reshape => SupportLevel::Native,
+crates/incin-backends/src/external/candle/executor.rs:115:const fn invalid(operation: OperationKind, reason: &'static str) -> BackendError {
+crates/incin-backends/src/external/candle/executor.rs:130:                OperationKind::MatMul,
+crates/incin-backends/src/external/candle/executor.rs:136:            .ok_or_else(|| invalid(OperationKind::MatMul, "matmul input is not Candle storage"))?;
+crates/incin-backends/src/external/candle/executor.rs:139:            .ok_or_else(|| invalid(OperationKind::MatMul, "matmul input is not Candle storage"))?;
+crates/incin-backends/src/external/candle/executor.rs:142:            operation: OperationKind::MatMul,
+crates/incin-backends/src/external/candle/executor.rs:168:            operation: OperationKind::MatMul,
+crates/incin-backends/src/external/candle/executor.rs:174:                operation: OperationKind::MatMul,
+crates/incin-backends/src/external/candle/executor.rs:193:                OperationKind::Reshape,
+crates/incin-backends/src/external/candle/executor.rs:199:                OperationKind::Reshape,
+crates/incin-backends/src/external/candle/executor.rs:206:                OperationKind::Reshape,
+crates/incin-backends/src/external/candle/executor.rs:212:            operation: OperationKind::Reshape,
+crates/incin-backends/src/external/candle/executor.rs:223:            operation: OperationKind::Reshape,
+crates/incin-backends/src/external/candle/executor.rs:229:                operation: OperationKind::Reshape,
+crates/incin-core/src/tensor/dtype.rs:2:use crate::shapes::error::{OperationKind, ShapeError};
+crates/incin-core/src/tensor/dtype.rs:107:    /// The counterpart of [`OperationKind::name`](crate::prelude::OperationKind::name)
+crates/incin-core/src/tensor/dtype.rs:178:        operation: OperationKind,
+crates/incin-backends/src/dist/tuning.rs:20:use incin_core::prelude::{ConstDType, DTypeId, OperationKind};
+crates/incin-backends/src/dist/tuning.rs:318:            .size_bytes(elements, OperationKind::Storage)
+crates/incin-backends/src/external/candle/ops/tensor.rs:9:        operation: OperationKind::Storage,
+crates/incin-backends/src/external/candle/ops/tensor.rs:91:                .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+crates/incin-core/src/lib.rs:77:        CapabilityRegistry, ExecutionContext, LossScaling, OperationSpec, PrecisionPolicy,
+crates/incin-core/src/lib.rs:143:        OperationKind, PartialDynShape, Pool2dShape, ProdDim, RankExpectation, ReplaceLastDim,
+crates/incin-backends/src/tuning.rs:517:            crate::dtype_policy::OperationKind::Pointwise,
+crates/incin-core/src/dist/mesh.rs:85:pub struct MeshSpec<DP, TP = TensorParallel<U1>, PP = Pipeline<U1>>(PhantomData<(DP, TP, PP)>);
+crates/incin-backends/src/cuda/ops/pool.rs:11:use incin_core::prelude::OperationKind;
+crates/incin-backends/src/cuda/ops/pool.rs:25:            operation: OperationKind::Pool2d,
+crates/incin-backends/src/cuda/ops/pool.rs:35:            operation: OperationKind::Pool2d,
+crates/incin-backends/src/cuda/ops/pool.rs:42:            operation: OperationKind::Pool2d,
+crates/incin-backends/src/cuda/ops/pool.rs:47:            operation: OperationKind::Pool2d,
+crates/incin-backends/src/cuda/ops/pool.rs:83:            OperationKind::Pool2d,
+crates/incin-backends/src/cuda/ops/pool.rs:131:    let out_total = ShapeBuf::from_slice(&out_shape).checked_numel(OperationKind::Pool2d)?;
+crates/incin-backends/src/cuda/ops/pool.rs:196:        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+crates/incin-backends/src/cuda/ops/pool.rs:198:        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+crates/incin-backends/src/cuda/ops/pool.rs:252:    let out_total = ShapeBuf::from_slice(&out_shape).checked_numel(OperationKind::Pool2d)?;
+crates/incin-backends/src/cuda/ops/pool.rs:314:    let in_total = ShapeBuf::from_slice(&[n, c, h, w]).checked_numel(OperationKind::Pool2d)?;
+crates/incin-backends/src/cuda/ops/pool.rs:315:    let out_total = ShapeBuf::from_slice(&[n, c, oh, ow]).checked_numel(OperationKind::Pool2d)?;
+crates/incin-backends/src/cuda/ops/pool.rs:368:        ShapeBuf::from_slice(&out_shape).checked_numel(OperationKind::AdaptiveAvgPool2d)?;
+crates/incin-backends/src/cuda/ops/pool.rs:421:        ShapeBuf::from_slice(&[n, c, h, w]).checked_numel(OperationKind::AdaptiveAvgPool2d)?;
+crates/incin-backends/src/cuda/ops/pool.rs:423:        ShapeBuf::from_slice(&[n, c, oh, ow]).checked_numel(OperationKind::AdaptiveAvgPool2d)?;
+crates/incin-core/src/tensor/base.rs:262:        O: crate::exec::OperationSpec,
+crates/incin-core/src/tensor/base.rs:343:        O: crate::exec::OperationSpec,
+crates/incin-core/src/tensor/base.rs:379:        O: crate::exec::OperationSpec,
+crates/incin-backends/src/wgpu/dispatch.rs:6:use incin_core::prelude::{DTypeId, OperationKind, Result, ShapeError};
+crates/incin-backends/src/wgpu/dispatch.rs:22:                operation: OperationKind::Storage,
+crates/incin-backends/src/wgpu/dispatch.rs:28:            operation: OperationKind::Storage,
+crates/incin-backends/src/wgpu/dispatch.rs:151:        WgpuBuffer::new_zeros_for(DTypeId::F32, n_wg as usize, OperationKind::Reduction)?;
+crates/incin-backends/src/wgpu/dispatch.rs:429:            operation: OperationKind::Storage,
+crates/incin-backends/src/wgpu/dispatch.rs:470:                    operation: OperationKind::Transpose,
+crates/incin-backends/src/wgpu/dispatch.rs:740:            operation: OperationKind::Pointwise,
+crates/incin-core/src/err.rs:104:        operation: crate::shapes::error::OperationKind,
+crates/incin-core/src/err.rs:111:        operation: crate::shapes::error::OperationKind,
+crates/incin-core/src/err.rs:162:        operation: crate::shapes::error::OperationKind,
+crates/incin-backends/src/wgpu/device.rs:2:use incin_core::prelude::{BackendError, Error, OperationKind, Result};
+crates/incin-backends/src/wgpu/device.rs:39:            operation: OperationKind::Storage,
+crates/incin-backends/src/wgpu/device.rs:54:            operation: OperationKind::Storage,
+crates/incin-core/src/dist/fsdp.rs:13:use crate::shapes::error::OperationKind;
+crates/incin-core/src/dist/fsdp.rs:143:                .size_bytes(p.unsharded_elements, OperationKind::Storage)
+crates/incin-core/src/dist/fsdp.rs:147:                .size_bytes(p.sharded_elements, OperationKind::Storage)
+crates/incin-backends/src/cuda/ops/conv.rs:19:use incin_core::prelude::{OperationKind, ShapeBuf, ShapeError};
+crates/incin-backends/src/cuda/ops/conv.rs:32:            operation: OperationKind::Conv2d,
+crates/incin-backends/src/cuda/ops/conv.rs:42:            operation: OperationKind::Conv2d,
+crates/incin-backends/src/cuda/ops/conv.rs:49:            operation: OperationKind::Conv2d,
+crates/incin-backends/src/cuda/ops/conv.rs:54:            operation: OperationKind::Conv2d,
+crates/incin-backends/src/cuda/ops/conv.rs:74:            operation: OperationKind::Conv2d,
+crates/incin-backends/src/cuda/ops/conv.rs:89:            operation: OperationKind::Conv2d,
+crates/incin-backends/src/cuda/ops/conv.rs:95:            operation: OperationKind::Conv2d,
+crates/incin-backends/src/cuda/ops/conv.rs:100:            operation: OperationKind::Conv2d,
+crates/incin-backends/src/cuda/ops/conv.rs:136:            OperationKind::Conv2d,
+crates/incin-backends/src/cuda/ops/conv.rs:181:        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+crates/incin-backends/src/cuda/ops/conv.rs:183:        ShapeBuf::from_slice(&[b, c, h_out, w_out]).checked_numel(OperationKind::Conv2d)?;
+crates/incin-backends/src/cuda/ops/conv.rs:253:        ShapeBuf::from_slice(&[b, c, h_in, w_in]).checked_numel(OperationKind::Conv2d)?;
+crates/incin-backends/src/cuda/ops/conv.rs:255:        ShapeBuf::from_slice(&[b, c, h_out, w_out]).checked_numel(OperationKind::Conv2d)?;
+crates/incin-backends/src/cuda/ops/conv.rs:321:        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+crates/incin-backends/src/cuda/ops/conv.rs:322:    let thread_total = ShapeBuf::from_slice(&[b, c, l_out]).checked_numel(OperationKind::Conv1d)?;
+crates/incin-backends/src/cuda/ops/conv.rs:376:    let out_total = ShapeBuf::from_slice(&[b, c, l_in]).checked_numel(OperationKind::Conv1d)?;
+crates/incin-backends/src/cuda/ops/conv.rs:377:    let thread_total = ShapeBuf::from_slice(&[b, c, l_out]).checked_numel(OperationKind::Conv1d)?;
+crates/incin-backends/src/wgpu/tape.rs:6:use incin_core::prelude::{DTypeId, OperationKind, Result};
+crates/incin-backends/src/wgpu/tape.rs:124:    let out_buf = WgpuBuffer::new_zeros_for(DTypeId::F32, n, OperationKind::Storage)?;
+crates/incin-backends/src/wgpu/tape.rs:169:        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+crates/incin-backends/src/wgpu/tape.rs:170:    let out_buf = WgpuBuffer::new_zeros_for(DTypeId::F32, total, OperationKind::Storage)?;
+crates/incin-backends/src/wgpu/tape.rs:174:            .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+crates/incin-backends/src/cuda/ops/mod.rs:20:use incin_core::prelude::{DTypeId, Error, OperationKind, Result};
+crates/incin-backends/src/cuda/ops/mod.rs:34:    operation: OperationKind,
+crates/incin-backends/src/wgpu/storage.rs:4:use incin_core::prelude::{DTypeId, DeviceId, Error, OperationKind, Result};
+crates/incin-backends/src/wgpu/storage.rs:41:        operation: OperationKind,
+crates/incin-backends/src/wgpu/storage.rs:109:                    operation: OperationKind::Storage,
+crates/incin-backends/src/wgpu/storage.rs:115:                    operation: OperationKind::Storage,
+crates/incin-backends/src/wgpu/storage.rs:228:    let out_buf = WgpuBuffer::new_zeros_for(DTypeId::F32, out_n, OperationKind::Storage)?;
+crates/incin-backends/src/wgpu/executor.rs:15:use incin_core::prelude::{BackendError, DType, DTypeId, Device, DeviceKind, OperationKind};
+crates/incin-backends/src/wgpu/executor.rs:92:            OperationKind::MatMul,
+crates/incin-backends/src/wgpu/executor.rs:98:        .ok_or_else(|| invalid(OperationKind::MatMul, "matmul input is not WGPU storage"))?;
+crates/incin-backends/src/wgpu/executor.rs:101:        .ok_or_else(|| invalid(OperationKind::MatMul, "matmul input is not WGPU storage"))?;
+crates/incin-backends/src/wgpu/executor.rs:107:                OperationKind::MatMul,
+crates/incin-backends/src/wgpu/executor.rs:113:                operation: OperationKind::MatMul,
+crates/incin-backends/src/wgpu/executor.rs:119:            operation: OperationKind::MatMul,
+crates/incin-backends/src/wgpu/executor.rs:141:            OperationKind::MatMul,
+crates/incin-backends/src/wgpu/executor.rs:155:            OperationKind::MatMul,
+crates/incin-backends/src/wgpu/executor.rs:172:            OperationKind::Reshape,
+crates/incin-backends/src/wgpu/executor.rs:178:        .ok_or_else(|| invalid(OperationKind::Reshape, "reshape input is not WGPU storage"))?;
+crates/incin-backends/src/wgpu/executor.rs:184:            OperationKind::Reshape,
+crates/incin-backends/src/wgpu/executor.rs:192:        operation: OperationKind::Reshape,
+crates/incin-backends/src/wgpu/executor.rs:205:            OperationKind::Reshape,
+crates/incin-backends/src/wgpu/executor.rs:225:            .map_err(|error| kernel_error(OperationKind::Reshape, error))?;
+crates/incin-backends/src/wgpu/executor.rs:229:                operation: OperationKind::Reshape,
+crates/incin-backends/src/wgpu/executor.rs:252:            operation: OperationKind::MatMul,
+crates/incin-backends/src/wgpu/executor.rs:280:                operation: OperationKind::MatMul,
+crates/incin-backends/src/wgpu/executor.rs:301:                OperationKind::Conv2d,
+crates/incin-backends/src/wgpu/executor.rs:309:            .ok_or_else(|| invalid(OperationKind::Conv2d, "conv2d input is not WGPU storage"))
+crates/incin-backends/src/wgpu/executor.rs:320:                OperationKind::Conv2d,
+crates/incin-backends/src/wgpu/executor.rs:326:                operation: OperationKind::Conv2d,
+crates/incin-backends/src/wgpu/executor.rs:332:            operation: OperationKind::Conv2d,
+crates/incin-backends/src/wgpu/executor.rs:378:        .map_err(|error| kernel_error(OperationKind::Conv2d, error))?;
+crates/incin-backends/src/wgpu/executor.rs:382:                operation: OperationKind::Conv2d,
+crates/incin-backends/src/wgpu/executor.rs:397:    operation: OperationKind,
+crates/incin-backends/src/wgpu/executor.rs:402:    O: incin_core::exec::OperationSpec,
+crates/incin-backends/src/wgpu/executor.rs:442:            OperationKind::Reduction,
+crates/incin-backends/src/wgpu/executor.rs:498:        .map_err(|error| kernel_error(OperationKind::Reduction, error))?;
+crates/incin-backends/src/wgpu/executor.rs:502:                operation: OperationKind::Reduction,
+crates/incin-backends/src/wgpu/executor.rs:522:            OperationKind::Pool2d,
+crates/incin-backends/src/wgpu/executor.rs:543:        .map_err(|error| kernel_error(OperationKind::Pool2d, error))?;
+crates/incin-backends/src/wgpu/executor.rs:547:                operation: OperationKind::Pool2d,
+crates/incin-backends/src/cuda/ops/shape.rs:6:use incin_core::prelude::{OperationKind, ShapeBuf, ShapeError};
+crates/incin-backends/src/cuda/ops/shape.rs:25:            operation: OperationKind::Storage,
+crates/incin-backends/src/cuda/ops/shape.rs:62:                    operation: OperationKind::Transpose,
+crates/incin-backends/src/cuda/ops/shape.rs:112:        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+crates/incin-backends/src/cuda/ops/shape.rs:127:            OperationKind::Reshape,
+crates/incin-backends/src/cuda/ops/shape.rs:184:    let launch_n = ShapeBuf::from_slice(&out_shape).checked_numel(OperationKind::Storage)?;
+crates/incin-backends/src/cuda/ops/shape.rs:197:    let launch_n = ShapeBuf::from_slice(&out_shape).checked_numel(OperationKind::Storage)?;
+crates/incin-backends/src/cuda/ops/shape.rs:206:    let launch_n = ShapeBuf::from_slice(target_shape).checked_numel(OperationKind::Broadcast)?;
+crates/incin-backends/src/cuda/ops/shape.rs:222:    let launch_n = ShapeBuf::from_slice(&values.shape).checked_numel(OperationKind::Storage)?;
+crates/incin-backends/src/cuda/ops/shape.rs:259:                operation: OperationKind::Concat,
+crates/incin-backends/src/cuda/ops/shape.rs:265:    let total = ShapeBuf::from_slice(&out_shape).checked_numel(OperationKind::Storage)?;
+crates/incin-backends/src/cuda/ops/shape.rs:273:            OperationKind::Concat,
+crates/incin-backends/src/cuda/ops/shape.rs:280:        .checked_numel(incin_core::prelude::OperationKind::Storage)?;
+crates/incin-backends/src/cuda/ops/shape.rs:282:        ShapeBuf::from_slice(&out_shape[dim + 1..]).checked_numel(OperationKind::Concat)?
+crates/incin-backends/src/cuda/ops/shape.rs:297:            .checked_numel(OperationKind::Concat)?;
+crates/incin-backends/src/cuda/ops/shape.rs:303:                        operation: OperationKind::Concat,
+crates/incin-backends/src/cuda/ops/shape.rs:350:                    operation: OperationKind::Concat,
+crates/incin-backends/src/cuda/ops/embedding.rs:5:use incin_core::prelude::{OperationKind, ShapeBuf};
+crates/incin-backends/src/cuda/ops/embedding.rs:40:        ShapeBuf::from_slice(&indices.shape).checked_numel(OperationKind::Embedding)?;
+crates/incin-backends/src/cuda/ops/embedding.rs:45:        .checked_numel(OperationKind::Embedding)?;
+crates/incin-backends/src/cuda/ops/embedding.rs:54:            OperationKind::Storage,
+crates/incin-backends/src/cuda/ops/embedding.rs:114:        ShapeBuf::from_slice(&indices.shape).checked_numel(OperationKind::Embedding)?;
+crates/incin-backends/src/cuda/ops/embedding.rs:116:        ShapeBuf::from_slice(&[vocab_size, hidden_size]).checked_numel(OperationKind::Embedding)?;
+crates/incin-backends/src/cuda/ops/embedding.rs:125:            OperationKind::Storage,
+crates/incin-backends/src/cuda/ops/reduce.rs:2:use crate::dtype_policy::{BackendFamily, OperationKind, resolve_dtype_policy};
+crates/incin-backends/src/cuda/ops/reduce.rs:27:        OperationKind::Reduction,
+crates/incin-backends/src/cuda/ops/reduce.rs:187:    let byte_len = crate::bytes::byte_len(kernel.dtype, out_numel, OperationKind::Reduction)?;
+crates/incin-backends/src/cuda/ops/reduce.rs:218:                OperationKind::Reduction,
+crates/incin-backends/src/cuda/ops/reduce.rs:348:                    OperationKind::Reduction,
+crates/incin-backends/src/cuda/ops/reduce.rs:365:                    OperationKind::Reduction,
+crates/incin-backends/src/cuda/ops/reduce.rs:546:            crate::bytes::byte_len(DTypeId::F16, usize::MAX, OperationKind::Reduction).is_err()
+crates/incin-backends/src/cuda/ops/elementwise.rs:7:use crate::dtype_policy::{BackendFamily, OperationKind, resolve_dtype_policy};
+crates/incin-backends/src/cuda/ops/elementwise.rs:23:    resolve_dtype_policy(BackendFamily::Cuda, OperationKind::Pointwise, dtype, op).map(|_| ())
+crates/incin-backends/src/cuda/ops/elementwise.rs:456:    let byte_len = crate::bytes::byte_len(dtype, numel, OperationKind::Pointwise)?;
+crates/incin-backends/src/cuda/ops/elementwise.rs:636:    let byte_len = crate::bytes::byte_len(dtype, numel, OperationKind::Pointwise)?;
+crates/incin-backends/src/cuda/ops/elementwise.rs:770:            crate::bytes::byte_len(DTypeId::F16, usize::MAX, OperationKind::Pointwise).is_err()
+crates/incin-backends/src/cuda/ops/norm.rs:2:use crate::dtype_policy::{BackendFamily, OperationKind, resolve_dtype_policy};
+crates/incin-backends/src/cuda/ops/norm.rs:182:        OperationKind::Normalization,
+crates/incin-backends/src/cuda/ops/norm.rs:202:                    OperationKind::Normalization,
+crates/incin-backends/src/cuda/ops/norm.rs:303:        OperationKind::Normalization,
+crates/incin-backends/src/cuda/ops/norm.rs:324:                    OperationKind::Normalization,
+crates/incin-backends/src/cuda/ops/norm.rs:410:            crate::bytes::byte_len(DTypeId::F16, usize::MAX, OperationKind::Normalization).is_err()
+crates/incin-core/src/tensor/ops/manipulation.rs:10:use crate::shapes::error::OperationKind;
+crates/incin-core/src/tensor/ops/manipulation.rs:237:            field_from_dims::<T::Output>(OperationKind::Reshape, &out_shape_vec)?,
+crates/incin-core/src/tensor/ops/manipulation.rs:259:            field_from_dims::<T::Output>(OperationKind::Reshape, &out_shape_vec)?,
+crates/incin-core/src/tensor/ops/manipulation.rs:324:            S::checked_numel(&self._shape, crate::shapes::error::OperationKind::Reshape)?;
+crates/incin-core/src/tensor/ops/manipulation.rs:327:            crate::shapes::error::OperationKind::Reshape,
+crates/incin-core/src/tensor/ops/manipulation.rs:446:            S::checked_numel(&self._shape, crate::shapes::error::OperationKind::Storage)?;
+crates/incin-core/src/tensor/ops/manipulation.rs:453:                    operation: crate::shapes::error::OperationKind::Storage,
+crates/incin-core/src/tensor/ops/manipulation.rs:521:            field_from_dims::<S::Output>(OperationKind::Reshape, &out_dims)?,
+crates/incin-core/src/tensor/ops/manipulation.rs:551:                operation: OperationKind::Flatten,
+crates/incin-core/src/tensor/ops/manipulation.rs:568:                operation: OperationKind::Flatten,
+crates/incin-core/src/tensor/ops/manipulation.rs:577:            field_from_dims::<S::Output>(OperationKind::Reshape, &out_dims)?,
+crates/incin-core/src/tensor/ops/manipulation.rs:602:            field_from_dims::<Dyn>(OperationKind::Reshape, &out_shape)?,
+crates/incin-core/src/tensor/ops/manipulation.rs:659:            field_from_dims::<Dyn>(OperationKind::Reshape, &out_shape)?,
+crates/incin-core/src/tensor/ops/manipulation.rs:683:            field_from_dims::<Dyn>(OperationKind::Reshape, &out_shape)?,
+crates/incin-core/src/tensor/ops/manipulation.rs:730:            field_from_dims::<Dyn>(OperationKind::Reshape, &out_shape)?,
+crates/incin-backends/src/cuda/ops/loss.rs:5:use incin_core::prelude::{OperationKind, ShapeBuf};
+crates/incin-backends/src/cuda/ops/loss.rs:30:    let batch = ShapeBuf::from_slice(&targets.shape).checked_numel(OperationKind::Reduction)?;
+crates/incin-backends/src/cuda/ops/loss.rs:40:            OperationKind::Reduction,
+crates/incin-backends/src/cuda/ops/quant.rs:6:use incin_core::prelude::{OperationKind, ShapeBuf};
+crates/incin-backends/src/cuda/ops/quant.rs:26:    let n = ShapeBuf::from_slice(&inp.shape).checked_numel(OperationKind::Storage)?;
+crates/incin-backends/src/cuda/ops/quant.rs:51:            OperationKind::Storage,
+crates/incin-backends/src/cuda/ops/quant.rs:111:    let n = ShapeBuf::from_slice(&inp.shape).checked_numel(OperationKind::Storage)?;
+crates/incin-backends/src/cuda/ops/quant.rs:131:            OperationKind::Storage,
+crates/incin-core/src/io/inspect.rs:133:                .checked_byte_len(bytes_per_elem, crate::shapes::error::OperationKind::Storage)?;
+crates/incin-backends/src/cuda/ops/matmul.rs:11:use incin_core::prelude::{OperationKind, ShapeBuf};
+crates/incin-backends/src/cuda/ops/matmul.rs:46:    let total = ShapeBuf::from_slice(&out_shape).checked_numel(OperationKind::MatMul)?;
+crates/incin-backends/src/cuda/ops/matmul.rs:55:            OperationKind::MatMul,
+crates/incin-core/src/tensor/ops/reduce.rs:9:use crate::shapes::error::OperationKind;
+crates/incin-core/src/tensor/ops/reduce.rs:54:                field_from_dims::<S::Output>(OperationKind::Reduction, &out_dims)?,
+crates/incin-core/src/tensor/ops/reduce.rs:311:            field_from_dims::<crate::prelude::Dyn>(OperationKind::Reduction, &out_dims)?,
+crates/incin-core/src/tensor/ops/reduce.rs:346:            field_from_dims::<crate::prelude::Dyn>(OperationKind::Reduction, &out_dims)?,
+crates/incin-core/src/tensor/ops/reduce.rs:369:            field_from_dims::<crate::prelude::Dyn>(OperationKind::Reduction, &out_dims)?;
+crates/incin-core/src/nn/conv1d.rs:194:            .checked_numel(crate::shapes::error::OperationKind::Conv1d)?;
+crates/incin-core/src/nn/conv1d.rs:260:            .checked_numel(crate::shapes::error::OperationKind::Conv1d)?;
+crates/incin-core/src/nn/conv1d.rs:330:            .checked_numel(crate::shapes::error::OperationKind::Conv1d)?;
+crates/incin-core/src/tensor/ops/loss.rs:12:use crate::shapes::error::OperationKind;
+crates/incin-core/src/tensor/ops/loss.rs:59:        let out_shape = field_from_dims::<R::Output>(OperationKind::Reduction, &out_shape_dims)?;
+crates/incin-core/src/tensor/ops/loss.rs:98:        let out_shape = field_from_dims::<R::Output>(OperationKind::Reduction, &out_shape_dims)?;
+crates/incin-core/src/tensor/ops/loss.rs:127:        let out_shape = field_from_dims::<R::Output>(OperationKind::Reduction, &out_shape_dims)?;
+crates/incin-core/src/tensor/ops/loss.rs:160:        let out_shape = field_from_dims::<R::Output>(OperationKind::Reduction, &out_shape_dims)?;
+crates/incin-core/src/tensor/matmul.rs:11:use crate::shapes::error::OperationKind;
+crates/incin-core/src/tensor/matmul.rs:96:            operation: OperationKind::MatMul,
+crates/incin-core/src/tensor/matmul.rs:118:            operation: OperationKind::MatMul,
+crates/incin-core/src/tensor/matmul.rs:205:        const OP: OperationKind = OperationKind::MatMul;
+crates/incin-core/src/tensor/matmul.rs:290:                field_from_dims::<Self::Output>(OperationKind::MatMul, &dims)
+crates/incin-core/src/tensor/matmul.rs:312:                field_from_dims::<Self::Output>(OperationKind::MatMul, &dims)
+crates/incin-core/src/tensor/matmul.rs:334:                field_from_dims::<Self::Output>(OperationKind::MatMul, &dims)
+crates/incin-core/src/io/gguf.rs:245:                .checked_numel(crate::shapes::error::OperationKind::Storage)?;
+crates/incin-core/src/nn/linear.rs:3:use crate::shapes::error::OperationKind;
+crates/incin-core/src/nn/linear.rs:337:        let shape = field_from_dims::<InShape::Output>(OperationKind::MatMul, &dims)?;
+crates/incin-core/src/nn/linear.rs:387:        let shape = field_from_dims::<InShape::Output>(OperationKind::MatMul, &dims)?;
+crates/incin-core/src/nn/linear.rs:429:        let shape = field_from_dims::<InShape::Output>(OperationKind::MatMul, &dims)?;
+crates/incin-core/src/nn/loss.rs:2:use crate::shapes::error::OperationKind;
+crates/incin-core/src/nn/loss.rs:160:        let out_shape = field_from_dims::<R::Output>(OperationKind::Reduction, &out_shape_dims)?;
+crates/incin-core/src/nn/loss.rs:219:        let out_shape = field_from_dims::<R::Output>(OperationKind::Reduction, &out_shape_dims)?;
+crates/incin-core/src/nn/loss.rs:263:        let out_shape = field_from_dims::<R::Output>(OperationKind::Reduction, &out_shape_dims)?;
+crates/incin-core/src/nn/loss.rs:307:        let out_shape = field_from_dims::<R::Output>(OperationKind::Reduction, &out_shape_dims)?;
+crates/incin-core/src/nn/rms_norm.rs:3:use crate::shapes::error::OperationKind;
+crates/incin-core/src/nn/rms_norm.rs:106:            field_from_dims::<Dyn>(OperationKind::Normalization, &mean_shape)?,
+crates/incin-core/src/nn/save.rs:129:        .checked_numel(crate::shapes::error::OperationKind::Storage)?;
+crates/incin-core/src/nn/save.rs:131:        .checked_numel(crate::shapes::error::OperationKind::Storage)?;
+crates/incin-core/src/nn/save.rs:136:                operation: crate::shapes::error::OperationKind::Storage,
+crates/incin-core/src/nn/save.rs:180:            operation: crate::shapes::error::OperationKind::Storage,
+crates/incin-core/src/nn/save.rs:185:                operation: crate::shapes::error::OperationKind::Storage,
+crates/incin-core/src/nn/conv2d.rs:205:            .checked_numel(crate::shapes::error::OperationKind::Conv2d)?;
+crates/incin-core/src/nn/conv2d.rs:272:            .checked_numel(crate::shapes::error::OperationKind::Conv2d)?;
+crates/incin-core/src/nn/conv2d.rs:343:            .checked_numel(crate::shapes::error::OperationKind::Conv2d)?;
+crates/incin-core/src/nn/stats.rs:134:        .checked_numel(OperationKind::Storage)
+crates/incin-core/src/nn/embedding.rs:3:use crate::shapes::error::OperationKind;
+crates/incin-core/src/nn/embedding.rs:115:            OperationKind::Embedding,
+crates/incin-core/src/exec/mod.rs:86:    OperationSpec, Pool2dSpec, PoolOp, ReduceOp, ReductionSpec, ReshapeSpec,
+crates/incin-core/src/exec/mod.rs:93:/// Sealing [`OperationSpec`] is deliberate. A descriptor is the *contract*
+crates/incin-core/src/exec/rule.rs:58://! [`OperationSpec`] is sealed, so [`Descriptor`](ShapeRule::Descriptor) can
+crates/incin-core/src/exec/rule.rs:70:    BinaryOp, BroadcastSpec, Conv2dSpec, MatMulSpec, OperationSpec, Pool2dSpec, PoolOp, ReduceOp,
+crates/incin-core/src/exec/rule.rs:76:use crate::shapes::error::{Axis, DimensionConstraint, OperationKind, RankExpectation, ShapeError};
+crates/incin-core/src/exec/rule.rs:124:    /// Bounded by [`OperationSpec`], which is sealed, so a rule cannot invent a
+crates/incin-core/src/exec/rule.rs:127:    type Descriptor: OperationSpec;
+crates/incin-core/src/exec/rule.rs:151:    operation: OperationKind,
+crates/incin-core/src/exec/rule.rs:218:        agree(OperationKind::Broadcast, &expected, &spec.output)?;
+crates/incin-core/src/exec/rule.rs:252:        agree(OperationKind::MatMul, &expected, &spec.output)?;
+crates/incin-core/src/exec/rule.rs:301:        field_from_dims::<Self::Output>(OperationKind::Reduction, spec.output.dims())?;
+crates/incin-core/src/exec/rule.rs:325:    field_from_dims::<Output>(OperationKind::Reduction, spec.output.dims())?;
+crates/incin-core/src/exec/rule.rs:461:        agree(OperationKind::Conv2d, &expected, &spec.output)?;
+crates/incin-core/src/exec/rule.rs:509:        agree(OperationKind::Pool2d, &expected, &spec.output)?;
+crates/incin-core/src/exec/proof.rs:226:impl<O: super::spec::OperationSpec> Validated<O> {
+crates/incin-core/src/exec/proof.rs:261:pub fn __audit_or_panic<O: super::spec::OperationSpec>(validated: &Validated<O>) {
+crates/incin-core/src/exec/capability.rs:6:use crate::prelude::{DTypeId, OperationKind};
+crates/incin-core/src/exec/capability.rs:11:    pub operation: OperationKind,
+crates/incin-core/src/exec/capability.rs:44:        operation: OperationKind,
+crates/incin-core/src/exec/capability.rs:47:        operation: OperationKind,
+crates/incin-core/src/exec/capability.rs:51:        operation: OperationKind,
+crates/incin-core/src/exec/capability.rs:55:        operation: OperationKind,
+crates/incin-core/src/exec/capability.rs:61:        operation: OperationKind,
+crates/incin-core/src/exec/capability.rs:64:        operation: OperationKind,
+crates/incin-core/src/exec/capability.rs:151:    pub operation: OperationKind,
+crates/incin-core/src/exec/capability.rs:164:        operation: OperationKind,
+crates/incin-core/src/exec/capability.rs:309:            OperationKind::Reduction,
+crates/incin-core/src/exec/capability.rs:319:            OperationKind::MatMul,
+crates/incin-core/src/exec/capability.rs:330:    fn query(operation: OperationKind) -> CapabilityQuery {
+crates/incin-core/src/exec/capability.rs:345:            registry.support(&query(OperationKind::Reduction)),
+crates/incin-core/src/exec/capability.rs:349:            registry.support(&query(OperationKind::MatMul)),
+crates/incin-core/src/exec/capability.rs:352:        let mut training = query(OperationKind::MatMul);
+crates/incin-core/src/exec/capability.rs:363:        let mut q = query(OperationKind::Reduction);
+crates/incin-core/src/exec/spec.rs:50:use crate::shapes::error::{Axis, DimensionConstraint, OperationKind, RankExpectation, ShapeError};
+crates/incin-core/src/exec/spec.rs:324:        operation: OperationKind,
+crates/incin-core/src/exec/spec.rs:429:/// [`OperationKind`] it resolves and the schema its fields are frozen at, so
+crates/incin-core/src/exec/spec.rs:437:pub trait OperationSpec: Clone + fmt::Debug + Sealed {
+crates/incin-core/src/exec/spec.rs:439:    const KIND: OperationKind;
+crates/incin-core/src/exec/spec.rs:469:fn check_output(operation: OperationKind, output: &ShapeBuf) -> Result<(), ShapeError> {
+crates/incin-core/src/exec/spec.rs:474:fn check_rank_ceiling(operation: OperationKind, rank: usize) -> Result<(), ShapeError> {
+crates/incin-core/src/exec/spec.rs:490:fn extent(operation: OperationKind, dims: &[usize]) -> Result<usize, ShapeError> {
+crates/incin-core/src/exec/spec.rs:504:/// This descriptor also serves binary [`Pointwise`](OperationKind::Pointwise)
+crates/incin-core/src/exec/spec.rs:515:pub struct BroadcastSpec {
+crates/incin-core/src/exec/spec.rs:536:    /// [`OperationSpec::KIND`] it feeds so the two are never ambiguous.
+crates/incin-core/src/exec/spec.rs:537:    const OP: OperationKind = OperationKind::Broadcast;
+crates/incin-core/src/exec/spec.rs:620:impl OperationSpec for BroadcastSpec {
+crates/incin-core/src/exec/spec.rs:621:    const KIND: OperationKind = Self::OP;
+crates/incin-core/src/exec/spec.rs:643:    operation: OperationKind,
+crates/incin-core/src/exec/spec.rs:686:                    operation: OperationKind::Broadcast,
+crates/incin-core/src/exec/spec.rs:700:                operation: OperationKind::Broadcast,
+crates/incin-core/src/exec/spec.rs:706:                operation: OperationKind::Broadcast,
+crates/incin-core/src/exec/spec.rs:733:pub struct MatMulSpec {
+crates/incin-core/src/exec/spec.rs:762:    const OP: OperationKind = OperationKind::MatMul;
+crates/incin-core/src/exec/spec.rs:845:impl OperationSpec for MatMulSpec {
+crates/incin-core/src/exec/spec.rs:846:    const KIND: OperationKind = Self::OP;
+crates/incin-core/src/exec/spec.rs:940:pub struct ReductionSpec {
+crates/incin-core/src/exec/spec.rs:959:    const OP: OperationKind = OperationKind::Reduction;
+crates/incin-core/src/exec/spec.rs:1056:impl OperationSpec for ReductionSpec {
+crates/incin-core/src/exec/spec.rs:1057:    const KIND: OperationKind = Self::OP;
+crates/incin-core/src/exec/spec.rs:1077:pub struct Conv2dSpec {
+crates/incin-core/src/exec/spec.rs:1108:    const OP: OperationKind = OperationKind::Conv2d;
+crates/incin-core/src/exec/spec.rs:1199:impl OperationSpec for Conv2dSpec {
+crates/incin-core/src/exec/spec.rs:1200:    const KIND: OperationKind = Self::OP;
+crates/incin-core/src/exec/spec.rs:1216:/// [`OperationKind::Conv2d`], and a capability query or a kernel cache keyed on
+crates/incin-core/src/exec/spec.rs:1227:pub struct Pool2dSpec {
+crates/incin-core/src/exec/spec.rs:1256:    const OP: OperationKind = OperationKind::Pool2d;
+crates/incin-core/src/exec/spec.rs:1325:impl OperationSpec for Pool2dSpec {
+crates/incin-core/src/exec/spec.rs:1326:    const KIND: OperationKind = Self::OP;
+crates/incin-core/src/exec/spec.rs:1350:pub struct ReshapeSpec {
+crates/incin-core/src/exec/spec.rs:1361:    const OP: OperationKind = OperationKind::Reshape;
+crates/incin-core/src/exec/spec.rs:1396:impl OperationSpec for ReshapeSpec {
+crates/incin-core/src/exec/spec.rs:1397:    const KIND: OperationKind = Self::OP;
+crates/incin-core/src/exec/meta.rs:11:use crate::shapes::{OperationKind, ShapeBuf, ShapeError, StrideBuf};
+crates/incin-core/src/exec/meta.rs:235:        let span_elements = strides.checked_span(&shape, OperationKind::Storage)?;
+crates/incin-core/src/exec/meta.rs:240:                    operation: OperationKind::Storage,
+crates/incin-core/src/exec/meta.rs:250:        let offset_bytes = dtype.size_bytes(offset_elements, OperationKind::Storage)?;
+crates/incin-core/src/exec/meta.rs:277:        let strides = StrideBuf::contiguous_for(&shape, OperationKind::Storage)?;

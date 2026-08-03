@@ -1,0 +1,19 @@
+   Compiling getrandom v0.4.3
+   Compiling zmij v1.0.21
+   Compiling serde_core v1.0.228
+   Compiling serde_json v1.0.150
+   Compiling serde v1.0.228
+   Compiling thiserror v2.0.18
+   Compiling anyhow v1.0.103
+    Checking bytes v1.12.0
+    Checking spin v0.9.8
+   Compiling tempfile v3.27.0
+   Compiling prost-build v0.6.1
+   Compiling prost-build v0.14.4
+    Checking prost v0.14.4
+   Compiling onnx-pb v0.1.4
+   Compiling safetensors v0.4.5
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+   Compiling incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+    Checking hashbrown v0.14.5
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 7.15s

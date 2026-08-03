@@ -4,8 +4,8 @@ use incin_core::backend_authoring::{
     Execute, ExecutionRequest, ReductionOps, StorageBackend, TensorOps,
 };
 use incin_core::exec::{
-    Capabilities, CapabilityQuery, MatMulSpec, MathMode, ReduceOp, ReductionSpec, ReshapeSpec,
-    SupportLevel, TensorMeta,
+    Capabilities, CapabilityQuery, MatMulSpec, MathMode, OperationSpec, ReduceOp, ReductionSpec,
+    ReshapeSpec, SupportLevel, TensorMeta,
 };
 use incin_core::prelude::{BackendError, DType, DTypeId, Device, DeviceKind, OperationKind};
 
@@ -76,36 +76,35 @@ fn supports_operand(
 fn bind_matmul<'a, T: DType, D: Device>(
     request: &'a ExecutionRequest<'_, MatMulSpec, MetalBackendImpl<T, D>>,
 ) -> Result<(&'a MetalStorage, &'a MetalStorage), BackendError> {
+    let spec = request.operation.descriptor();
+    let operation = spec.operation();
     let [lhs_handle, rhs_handle] = request.inputs else {
         return Err(invalid(
-            OperationKind::MatMul,
+            operation,
             "matmul expects exactly two tensor inputs",
         ));
     };
     let lhs = lhs_handle
         .downcast_ref::<MetalStorage>()
-        .ok_or_else(|| invalid(OperationKind::MatMul, "matmul input is not Metal storage"))?;
+        .ok_or_else(|| invalid(operation, "matmul input is not Metal storage"))?;
     let rhs = rhs_handle
         .downcast_ref::<MetalStorage>()
-        .ok_or_else(|| invalid(OperationKind::MatMul, "matmul input is not Metal storage"))?;
+        .ok_or_else(|| invalid(operation, "matmul input is not Metal storage"))?;
     let spec = request.operation.descriptor();
 
     for metadata in [lhs.metadata(), rhs.metadata()] {
         if metadata.device().kind() != DeviceKind::Metal {
-            return Err(invalid(
-                OperationKind::MatMul,
-                "matmul inputs must use Metal device",
-            ));
+            return Err(invalid(operation, "matmul inputs must use Metal device"));
         }
         if metadata.dtype() != DTypeId::F32 {
             return Err(incin_core::exec::UnsupportedReason::DType {
-                operation: OperationKind::MatMul,
+                operation,
                 dtype: metadata.dtype(),
             }
             .into());
         }
         let query = CapabilityQuery {
-            operation: OperationKind::MatMul,
+            operation: spec.operation(),
             dtype: metadata.dtype(),
             layout: metadata.layout(),
             rank: metadata.shape().rank(),
@@ -127,7 +126,7 @@ fn bind_matmul<'a, T: DType, D: Device>(
         spec.lhs_batch_strides.strides(),
     ) {
         return Err(invalid(
-            OperationKind::MatMul,
+            operation,
             "matmul lhs metadata does not match the validated descriptor",
         ));
     }
@@ -141,7 +140,7 @@ fn bind_matmul<'a, T: DType, D: Device>(
         spec.rhs_batch_strides.strides(),
     ) {
         return Err(invalid(
-            OperationKind::MatMul,
+            operation,
             "matmul rhs metadata does not match the validated descriptor",
         ));
     }
@@ -152,26 +151,25 @@ fn bind_matmul<'a, T: DType, D: Device>(
 fn bind_reshape<'a, T: DType, D: Device>(
     request: &'a ExecutionRequest<'_, ReshapeSpec, MetalBackendImpl<T, D>>,
 ) -> Result<&'a MetalStorage, BackendError> {
+    let spec = request.operation.descriptor();
+    let operation = spec.operation();
     let [handle] = request.inputs else {
         return Err(invalid(
-            OperationKind::Reshape,
+            operation,
             "reshape expects exactly one tensor input",
         ));
     };
     let input = handle
         .downcast_ref::<MetalStorage>()
-        .ok_or_else(|| invalid(OperationKind::Reshape, "reshape input is not Metal storage"))?;
+        .ok_or_else(|| invalid(operation, "reshape input is not Metal storage"))?;
     let spec = request.operation.descriptor();
     let metadata = input.metadata();
 
     if metadata.device().kind() != DeviceKind::Metal {
-        return Err(invalid(
-            OperationKind::Reshape,
-            "reshape input must use Metal device",
-        ));
+        return Err(invalid(operation, "reshape input must use Metal device"));
     }
     let query = CapabilityQuery {
-        operation: OperationKind::Reshape,
+        operation: spec.operation(),
         dtype: metadata.dtype(),
         layout: metadata.layout(),
         rank: metadata.shape().rank(),
@@ -184,7 +182,7 @@ fn bind_reshape<'a, T: DType, D: Device>(
 
     if metadata.shape().dims() != spec.input.dims() {
         return Err(invalid(
-            OperationKind::Reshape,
+            operation,
             "reshape input metadata does not match the validated descriptor",
         ));
     }
@@ -201,14 +199,15 @@ impl<T: DType, D: Device> Execute<ReshapeSpec> for MetalBackendImpl<T, D> {
     ) -> Result<MetalStorage, BackendError> {
         let _ = self;
         let spec = request.operation.descriptor();
+        let operation = spec.operation();
         let input = bind_reshape(&request)?;
 
         let output = <Self as TensorOps<Self>>::reshape::<f32>(input, spec.output.dims())
-            .map_err(|error| kernel_error(OperationKind::Reshape, error))?;
+            .map_err(|error| kernel_error(operation, error))?;
 
         if output.shape() != spec.output.dims() {
             return Err(BackendError::Execution {
-                operation: OperationKind::Reshape,
+                operation,
                 message: "Metal reshape output disagrees with the validated descriptor".into(),
             });
         }
@@ -225,10 +224,11 @@ impl<T: DType, D: Device> Execute<MatMulSpec> for MetalBackendImpl<T, D> {
     ) -> Result<MetalStorage, BackendError> {
         let _ = self;
         let spec = request.operation.descriptor();
+        let operation = spec.operation();
         let (lhs, rhs) = bind_matmul(&request)?;
 
         let execution_error = |error: incin_core::prelude::Error| BackendError::Execution {
-            operation: OperationKind::MatMul,
+            operation,
             message: error.to_string().into(),
         };
         let lhs_transposed = if spec.transpose_lhs {
@@ -256,7 +256,7 @@ impl<T: DType, D: Device> Execute<MatMulSpec> for MetalBackendImpl<T, D> {
 
         if output.shape() != spec.output.dims() {
             return Err(BackendError::Execution {
-                operation: OperationKind::MatMul,
+                operation,
                 message: "Metal matmul output disagrees with the validated descriptor".into(),
             });
         }
@@ -308,10 +308,11 @@ impl<T: DType, D: Device> Execute<ReductionSpec> for MetalBackendImpl<T, D> {
     ) -> Result<MetalStorage, BackendError> {
         let _ = self;
         let spec = request.operation.descriptor();
+        let operation = spec.operation();
         let run = reduction_run(spec)?;
         let input = bind_single_operand(
             &request,
-            OperationKind::Reduction,
+            operation,
             "a reduction expects exactly one tensor input",
             "reduction input must use Metal device",
         )?;
@@ -360,11 +361,11 @@ impl<T: DType, D: Device> Execute<ReductionSpec> for MetalBackendImpl<T, D> {
                 }
             }
         }
-        .map_err(|error| kernel_error(OperationKind::Reduction, error))?;
+        .map_err(|error| kernel_error(operation, error))?;
 
         if output.shape() != spec.output.dims() {
             return Err(BackendError::Execution {
-                operation: OperationKind::Reduction,
+                operation,
                 message: "Metal reduction output disagrees with the validated descriptor".into(),
             });
         }

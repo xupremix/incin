@@ -1,0 +1,396 @@
+   Compiling bitflags v2.13.0
+   Compiling getrandom v0.4.3
+   Compiling socket2 v0.6.4
+   Compiling mio v1.2.1
+   Compiling zerocopy v0.8.31
+   Compiling serde v1.0.228
+   Compiling zerofrom v0.1.6
+   Compiling prost-derive v0.6.1
+   Compiling bytemuck v1.25.0
+   Compiling futures-util v0.3.32
+   Compiling prost-derive v0.14.4
+   Compiling ring v0.17.14
+   Compiling thiserror v2.0.18
+   Compiling serde_json v1.0.150
+   Compiling thiserror v1.0.69
+   Compiling parking_lot_core v0.9.12
+   Compiling yoke v0.8.1
+   Compiling tempfile v3.27.0
+   Compiling gpu-descriptor-types v0.2.0
+   Compiling spirv v0.3.0+sdk-1.3.268.0
+   Compiling gpu-alloc-types v0.3.1
+   Compiling getrandom v0.3.4
+   Compiling zerovec v0.11.5
+   Compiling zerotrie v0.2.3
+   Compiling gpu-descriptor v0.3.2
+   Compiling tokio v1.52.3
+   Compiling rand_core v0.9.3
+   Compiling gpu-alloc v0.6.2
+   Compiling parking_lot v0.12.5
+   Compiling wgpu-types v22.0.0
+   Compiling heapless v0.7.17
+   Compiling cobs v0.3.0
+   Compiling dirs-sys v0.5.0
+   Compiling serde_urlencoded v0.7.1
+   Compiling console v0.16.4
+   Compiling tinystr v0.8.2
+   Compiling potential_utf v0.1.4
+   Compiling safetensors v0.4.5
+   Compiling socks v0.3.4
+   Compiling icu_locale_core v2.1.1
+   Compiling icu_collections v2.1.1
+   Compiling naga v22.1.0
+   Compiling postcard v1.1.3
+   Compiling indicatif v0.18.6
+   Compiling prost v0.6.1
+   Compiling dirs v6.0.0
+   Compiling num_cpus v1.17.0
+   Compiling rustls-webpki v0.103.13
+   Compiling prost v0.14.4
+   Compiling clap_builder v4.6.0
+   Compiling prost-types v0.6.1
+   Compiling tinytemplate v1.2.1
+   Compiling is-terminal v0.4.17
+   Compiling icu_provider v2.1.1
+   Compiling half v2.7.1
+   Compiling ppv-lite86 v0.2.21
+   Compiling prost-types v0.14.4
+   Compiling ahash v0.8.12
+   Compiling icu_properties v2.1.2
+   Compiling icu_normalizer v2.1.1
+   Compiling rustls v0.23.41
+   Compiling hashbrown v0.14.5
+   Compiling digit-layout v0.3.1
+   Compiling rand_chacha v0.3.1
+   Compiling rand_chacha v0.9.0
+   Compiling ggml-quants v0.1.0
+   Compiling rand v0.8.6
+   Compiling rand v0.9.2
+   Compiling prost-build v0.6.1
+   Compiling ciborium-ll v0.2.2
+   Compiling trybuild v1.0.117
+   Compiling futures-executor v0.3.32
+   Compiling prost-build v0.14.4
+   Compiling futures v0.3.32
+   Compiling ciborium v0.2.2
+   Compiling idna_adapter v1.2.1
+   Compiling onnx-pb v0.1.4
+   Compiling rand_distr v0.4.3
+   Compiling idna v1.1.0
+   Compiling clap v4.6.1
+   Compiling criterion v0.5.1
+   Compiling url v2.5.8
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+   Compiling incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+   Compiling tokio-util v0.7.18
+   Compiling tower v0.5.3
+   Compiling tower-http v0.6.11
+   Compiling h2 v0.4.15
+   Compiling tokio-rustls v0.26.4
+   Compiling ureq v3.3.0
+   Compiling wgpu-hal v22.0.0
+   Compiling hyper v1.10.1
+   Compiling hyper-util v0.1.20
+   Compiling hyper-rustls v0.27.9
+   Compiling wgpu-core v22.1.0
+   Compiling reqwest v0.12.28
+   Compiling hf-hub v0.5.0
+   Compiling wgpu v22.1.0
+   Compiling incin-data v0.0.0 (/home/xupremix/Projects/incin/crates/incin-data)
+   Compiling incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+   Compiling incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 37.15s
+     Running unittests src/lib.rs (target/debug/deps/incin-3c59be5de512e59a)
+
+running 2 tests
+test tests::test_runtime_dtype_tensor_creation ... ok
+test tests::test_tensor_export ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/cargo-incin.rs (target/debug/deps/cargo_incin-299b997b7f733565)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/advanced_math_autograd_tests.rs (target/debug/deps/advanced_math_autograd_tests-fd26eb4370f5dca0)
+
+running 3 tests
+test test_autograd_tape_closures ... ok
+test test_inplace_operations ... ok
+test test_trigonometric_and_transcendental_ops ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/autograd_tests.rs (target/debug/deps/autograd_tests-908da3e33a6beb49)
+
+running 2 tests
+test test_backward_under_nan_checking_succeeds ... ok
+test test_simple_linear_regression ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/broadcast.rs (target/debug/deps/broadcast-d2ee609050b7669f)
+
+running 1 test
+test test_broadcast_success ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/data_tests.rs (target/debug/deps/data_tests-3074afc5587c85be)
+
+running 1 test
+test test_dataset ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/doctor.rs (target/debug/deps/doctor-cf69cdd43862fd6d)
+
+running 24 tests
+test a_build_with_no_backend_at_all_is_an_error ... ok
+test a_backend_that_is_both_compiled_and_present_says_nothing ... ok
+test a_compiled_backend_with_no_hardware_is_a_warning ... ok
+test a_healthy_machine_produces_no_findings_and_exits_zero ... ok
+test a_missing_toolchain_version_is_a_warning ... ok
+test a_machine_with_no_device_probes_nothing ... ok
+test a_directory_without_its_write_bit_reports_as_not_writable ... ok
+test a_probe_reports_the_registrys_reason_for_a_rejection ... ok
+test an_absent_isa_extension_is_a_note_about_the_scalar_path ... ok
+test an_absent_or_unset_cache_is_not_a_finding ... ok
+test an_unsupported_operation_is_reported_without_becoming_a_finding ... ok
+test an_unwritable_cache_is_a_warning_naming_its_path ... ok
+test findings_are_ordered_by_severity ... ok
+test inspecting_a_cache_path_does_not_create_it ... ok
+test the_argument_vocabulary_is_closed ... ok
+test probes_cover_the_devices_that_answered_and_no_others ... ok
+test the_json_carries_its_schema_version_and_a_fixed_key_set ... ok
+test the_reported_features_are_exactly_the_manifests ... ok
+test the_json_reports_every_probe_the_text_does ... ok
+test the_json_and_the_text_agree_about_what_was_found ... ok
+test the_text_rendering_is_stable ... ok
+test a_real_build_agrees_with_the_mock_about_whether_it_can_run ... ok
+test the_real_machine_produces_a_report ... ok
+test the_subcommand_renders_text_by_default_and_json_on_request ... ok
+
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+
+     Running tests/dp2_network.rs (target/debug/deps/dp2_network-cfe4e66582466245)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/error_contract.rs (target/debug/deps/error_contract-b7aa11d3ad53c587)
+
+running 2 tests
+test stable_facade_exposes_typed_bounded_failure_contract ... ok
+test tensor_operators_propagate_results_instead_of_panicking ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/facade_contract.rs (target/debug/deps/facade_contract-1a469a1fed22de62)
+
+running 1 test
+test stable_facade_consumer_contracts ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.77s
+
+     Running tests/fsdp.rs (target/debug/deps/fsdp-c4653bbe879bc0e7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/high_priority_ops_tests.rs (target/debug/deps/high_priority_ops_tests-3f659809ec5515a0)
+
+running 4 tests
+test test_selection_and_indexing ... ok
+test test_elementwise_math_ops ... ok
+test test_creation_factory_ops ... ok
+test test_matrix_and_reductions ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/hot_path_allocations.rs (target/debug/deps/hot_path_allocations-549ec5682522a109)
+
+running 4 tests
+test a_binary_elementwise_operation_stays_within_its_measured_allocation_count ... ok
+test a_unary_operation_stays_within_its_measured_allocation_count ... ok
+test a_higher_rank_operand_does_not_cost_more_metadata_than_a_rank_two_one ... ok
+test broadcasting_an_operand_costs_exactly_what_not_broadcasting_it_costs ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/layers.rs (target/debug/deps/layers-ededa728fbcfe13c)
+
+running 3 tests
+test test_tensor_mixed_shapes ... ok
+test test_linear_mixed_shapes ... ok
+test test_conv2d_mixed_shapes ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/macro_tests.rs (target/debug/deps/macro_tests-9966789f4db2e97b)
+
+running 3 tests
+test test_idx_macro ... ok
+test test_s_macro ... ok
+test test_module_macro ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/medium_priority_ops_tests.rs (target/debug/deps/medium_priority_ops_tests-d9cc043798f8da44)
+
+running 4 tests
+test test_spatial_and_norm_ops ... ok
+test test_asymmetric_scalars_and_extremes ... ok
+test test_comparisons_and_logical ... ok
+test test_fused_matmul_and_sdpa ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/named_layers_tests.rs (target/debug/deps/named_layers_tests-508bd54a298a11fc)
+
+running 2 tests
+test test_named_layers_derivation ... ok
+test test_sequential_named_layers ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running tests/nn_tests.rs (target/debug/deps/nn_tests-aa9b40f99095a694)
+
+running 10 tests
+test test_param ... ok
+test test_linear ... ok
+test test_sequential ... ok
+test test_sequential_state_dict_keys_are_flat_like_pytorch ... ok
+test test_seq_ty_matches_seq_value_type ... ok
+test test_train_mode_propagates_through_sequential_dropout ... ok
+test test_batch_norm2d ... ok
+test test_layer_norm ... ok
+test test_embedding ... ok
+test test_conv2d ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/optim_tests.rs (target/debug/deps/optim_tests-e180d2c5b2f4b1e5)
+
+running 8 tests
+test test_sgd ... ok
+test adam_step_overflow_preserves_parameters_and_state ... ok
+test test_adam ... ok
+test adam_step_rolls_back_parameters_state_and_counter_on_backend_failure ... ok
+test test_adamw ... ok
+test test_adam_optimizer_state_dict_checkpointing ... ok
+test malformed_adam_state_load_is_typed_and_transactional ... ok
+test test_adamw_optimizer_state_dict_checkpointing ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/parity_tests.rs (target/debug/deps/parity_tests-bceb6ec07dcc5611)
+
+running 12 tests
+test test_parity_relu ... ok
+test test_parity_matmul_2d ... ok
+test test_parity_add ... ok
+test test_parity_sigmoid ... ok
+test test_parity_gelu ... ok
+test test_parity_sum_dim ... ok
+test test_parity_gradient_add ... ok
+test test_parity_gradient_mul ... ok
+test test_parity_mse_loss ... ok
+test test_parity_softmax ... ok
+test test_parity_cross_entropy_loss ... ok
+test test_parity_layer_norm ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+
+     Running tests/plan_report.rs (target/debug/deps/plan_report-7644f9e9f1ff993a)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/pp2_network.rs (target/debug/deps/pp2_network-c3baad407f956ba7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/rendezvous.rs (target/debug/deps/rendezvous-b200bf2ebc316e90)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/serde_tests.rs (target/debug/deps/serde_tests-d13819eab1392bc5)
+
+running 2 tests
+test test_sequential_state_dict_flat_keys_and_round_trip ... ok
+test test_state_dict_extraction ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/tensor_ops.rs (target/debug/deps/tensor_ops-e94c18b6d002e4c7)
+
+running 25 tests
+test test_binary_add ... ok
+test test_binary_sub ... ok
+test test_binary_div ... ok
+test test_binary_mul ... ok
+test test_broadcast_scalar ... ok
+test test_broadcast_1d_to_2d ... ok
+test test_broadcast_trailing_dims ... ok
+test test_indexing_narrow ... ok
+test test_indexing_concat ... ok
+test test_loss_mse ... ok
+test test_indexing_stack ... ok
+test test_loss_cross_entropy ... ok
+test test_manipulation_reshape_flatten ... ok
+test test_manipulation_transpose_squeeze ... ok
+test test_reduction_max_min ... ok
+test test_reduction_mean ... ok
+test test_reduction_sum ... ok
+test test_unary_abs ... ok
+test test_unary_gelu ... ok
+test test_unary_misc ... ok
+test test_unary_relu ... ok
+test test_unary_swish ... ok
+test to_scalar_bool_handles_nonzero_non_unit_byte_without_ub ... ok
+test to_vec1_bool_handles_nonzero_non_unit_bytes_without_ub ... ok
+test test_unary_softmax ... ok
+
+test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/tp2_network.rs (target/debug/deps/tp2_network-5175102733fad892)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/trainer.rs (target/debug/deps/trainer-64c999c23d3f1a96)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/tune_cli.rs (target/debug/deps/tune_cli-051b6451f9212870)
+
+running 4 tests
+test tune_cli_renders_json_report ... ok
+test tune_cli_renders_text_report ... ok
+test tune_cli_supports_clear_flag ... ok
+test tune_cli_supports_offline_flag ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests incin
+
+running 2 tests
+test crates/incin/src/lib.rs - (line 36) - compile ... ok
+test crates/incin/src/lib.rs - (line 16) ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+all doctests ran in 0.86s; merged doctests compilation took 0.82s

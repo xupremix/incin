@@ -21,68 +21,105 @@ use core::fmt;
 /// This is the single operation vocabulary for the crate. It spans two levels
 /// of granularity on purpose:
 ///
-/// * the coarse *families* ([`Storage`](Self::Storage) through
-///   [`Normalization`](Self::Normalization)), which are the granularity dtype
-///   policy resolves at — a backend supports `Pointwise` for a dtype, not
-///   `Add` specifically;
-/// * the individual shape-resolving operations, which are the granularity a
-///   shape diagnostic needs.
+/// * coarse *families* ([`Storage`](Self::Storage) through
+///   [`Normalization`](Self::Normalization)), retained only for policy
+///   classification and legacy geometry diagnostics;
+/// * exact catalog identities, which are the only identities allowed to prove
+///   execution support.
 ///
-/// Keeping both in one enum is deliberate. `incin-backends` currently spells
-/// the coarse half as a private `OperationFamily`; `EXE-001` replaces that enum
-/// with this one, so the variants it needs are already here. Per decision
-/// `D-008`, ending with two parallel operation vocabularies would be worse than
-/// changing nothing.
-#[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum OperationKind {
-    /// Allocating or copying storage, independent of any compute.
-    Storage,
-    /// Filling a tensor with a constant.
-    Fill,
-    /// Sampling a tensor from a distribution.
-    Random,
-    /// Elementwise compute, unary or binary.
-    Pointwise,
-    /// Reduction along one or more axes.
-    Reduction,
-    /// Normalization over a set of axes.
-    Normalization,
-    /// Broadcasting two shapes to a common shape.
-    Broadcast,
-    /// Reinterpreting a shape with the same element count.
-    Reshape,
-    /// Collapsing a contiguous axis range into one axis.
-    Flatten,
-    /// Removing a length-1 axis.
-    Squeeze,
-    /// Inserting a length-1 axis.
-    Unsqueeze,
-    /// Reordering axes.
-    Permute,
-    /// Exchanging two axes.
-    Transpose,
-    /// Taking a strided sub-range of one or more axes.
-    Slice,
-    /// Joining tensors along an existing axis.
-    Concat,
-    /// Joining tensors along a new axis.
-    Stack,
-    /// Matrix multiplication, including its batched form.
-    MatMul,
-    /// One-dimensional convolution.
-    Conv1d,
-    /// Two-dimensional convolution.
-    Conv2d,
-    /// One-dimensional pooling.
-    Pool1d,
-    /// Two-dimensional pooling.
-    Pool2d,
-    /// Two-dimensional pooling to a caller-chosen output extent.
-    AdaptiveAvgPool2d,
-    /// Gathering rows of a table by index.
-    Embedding,
+/// Keeping both levels in one enum prevents parallel vocabularies, while
+/// [`is_exact`](Self::is_exact) prevents a family from being mistaken for a
+/// capability declaration.
+macro_rules! define_operation_kind {
+    ($(($variant:ident, $name:literal, $family:ident, $profile:ident, $attrs:ident, $min:expr, $max:expr, $legacy:literal),)*) => {
+        /// Exact identities generated from the canonical operation catalog.
+        #[non_exhaustive]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
+        pub enum OperationKind {
+            /// Allocating or copying storage, independent of any compute.
+            Storage,
+            /// Filling a tensor with a constant.
+            Fill,
+            /// Sampling a tensor from a distribution.
+            Random,
+            /// Elementwise compute, unary or binary.
+            Pointwise,
+            /// Reduction along one or more axes.
+            Reduction,
+            /// Normalization over a set of axes.
+            Normalization,
+            /// Broadcasting two shapes to a common shape.
+            Broadcast,
+            /// Reinterpreting a shape with the same element count.
+            Reshape,
+            /// Collapsing a contiguous axis range into one axis.
+            Flatten,
+            /// Removing a length-1 axis.
+            Squeeze,
+            /// Inserting a length-1 axis.
+            Unsqueeze,
+            /// Reordering axes.
+            Permute,
+            /// Exchanging two axes.
+            Transpose,
+            /// Taking a strided sub-range of one or more axes.
+            Slice,
+            /// Joining tensors along an existing axis.
+            Concat,
+            /// Joining tensors along a new axis.
+            Stack,
+            /// Matrix multiplication, including its batched form.
+            MatMul,
+            /// One-dimensional convolution.
+            Conv1d,
+            /// Two-dimensional convolution.
+            Conv2d,
+            /// One-dimensional pooling.
+            Pool1d,
+            /// Two-dimensional pooling.
+            Pool2d,
+            /// Two-dimensional pooling to a caller-chosen output extent.
+            AdaptiveAvgPool2d,
+            /// Gathering rows of a table by index.
+            Embedding,
+            $(
+                #[doc = concat!("Canonical semantic operation `", $name, "`.")]
+                $variant,
+            )*
+        }
+    };
 }
+
+incin_operation_catalog!(define_operation_kind);
+
+macro_rules! impl_catalog_operation_kind {
+    ($(($variant:ident, $name:literal, $family:ident, $profile:ident, $attrs:ident, $min:expr, $max:expr, $legacy:literal),)*) => {
+        impl OperationKind {
+            /// Whether this is an executable exact identity rather than a
+            /// descriptive family/legacy geometry identity.
+            #[must_use]
+            pub const fn is_exact(self) -> bool {
+                matches!(self, $(Self::$variant)|*)
+            }
+
+            const fn exact_family(self) -> Option<Self> {
+                match self {
+                    $(Self::$variant => Some(Self::$family),)*
+                    _ => None,
+                }
+            }
+
+            const fn exact_name(self) -> Option<&'static str> {
+                match self {
+                    $(Self::$variant => Some($name),)*
+                    _ => None,
+                }
+            }
+        }
+    };
+}
+
+incin_operation_catalog!(impl_catalog_operation_kind);
 
 impl OperationKind {
     /// The coarse family this operation resolves dtype policy at.
@@ -108,6 +145,9 @@ impl OperationKind {
     /// idempotent: `k.family().family() == k.family()`.
     #[must_use]
     pub const fn family(self) -> Self {
+        if let Some(family) = self.exact_family() {
+            return family;
+        }
         match self {
             Self::Storage
             | Self::Broadcast
@@ -132,12 +172,18 @@ impl OperationKind {
             | Self::Pool2d
             | Self::AdaptiveAvgPool2d => Self::Reduction,
             Self::Normalization => Self::Normalization,
+            // Exact variants returned above. This arm keeps the method
+            // forward-compatible with the non-exhaustive vocabulary.
+            _ => Self::Storage,
         }
     }
 
     /// The lowercase name used in diagnostics.
     #[must_use]
     pub const fn name(self) -> &'static str {
+        if let Some(name) = self.exact_name() {
+            return name;
+        }
         match self {
             Self::Storage => "storage",
             Self::Fill => "fill",
@@ -162,6 +208,7 @@ impl OperationKind {
             Self::Pool2d => "pool2d",
             Self::AdaptiveAvgPool2d => "adaptive_avg_pool2d",
             Self::Embedding => "embedding",
+            _ => "unknown_operation",
         }
     }
 }

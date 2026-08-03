@@ -1,0 +1,115 @@
+   Compiling once_cell v1.21.4
+   Compiling bytes v1.12.0
+   Compiling indexmap v2.14.0
+   Compiling serde_core v1.0.228
+   Compiling memchr v2.7.6
+    Checking hashbrown v0.14.5
+    Checking num-traits v0.2.19
+    Checking glob v0.3.3
+    Checking target-triple v1.0.0
+    Checking rustix v1.1.4
+    Checking fastrand v2.4.1
+    Checking incin-diagnostics v0.0.0 (/home/xupremix/Projects/incin/crates/incin-diagnostics)
+    Checking libc v0.2.186
+    Checking regex-syntax v0.8.11
+    Checking ciborium-io v0.2.2
+    Checking itertools v0.10.5
+    Checking cast v0.3.0
+   Compiling tempfile v3.27.0
+    Checking ciborium-ll v0.2.2
+    Checking trybuild v1.0.117
+    Checking same-file v1.0.6
+    Checking tinytemplate v1.2.1
+    Checking walkdir v2.5.0
+    Checking ciborium v0.2.2
+   Compiling prost-build v0.6.1
+    Checking is-terminal v0.4.17
+    Checking oorandom v11.1.5
+    Checking anes v0.1.6
+   Compiling prost v0.14.4
+    Checking unicode-ident v1.0.22
+    Checking hashbrown v0.17.1
+    Checking bytes v0.5.6
+    Checking proc-macro2 v1.0.106
+    Checking futures-util v0.3.32
+    Checking hashbrown v0.15.5
+    Checking rand_distr v0.4.3
+   Compiling petgraph v0.8.3
+    Checking incin-lsp v0.0.0 (/home/xupremix/Projects/incin/crates/incin-lsp)
+   Compiling prost-types v0.14.4
+    Checking prost v0.6.1
+    Checking quote v1.0.46
+    Checking xtask v0.0.0 (/home/xupremix/Projects/incin/xtask)
+    Checking regex-automata v0.4.14
+    Checking getrandom v0.2.17
+    Checking mio v1.2.1
+    Checking socket2 v0.6.4
+    Checking ring v0.17.14
+    Checking syn v2.0.118
+   Compiling onnx-pb v0.1.4
+    Checking criterion-plot v0.5.0
+    Checking rand_core v0.6.4
+    Checking parking_lot_core v0.9.12
+    Checking getrandom v0.3.4
+    Checking rand_chacha v0.3.1
+    Checking tokio v1.52.3
+    Checking parking_lot v0.12.5
+    Checking gpu-descriptor v0.3.2
+    Checking rand_core v0.9.3
+    Checking khronos-egl v6.0.0
+    Checking rand v0.8.6
+    Checking console v0.16.4
+    Checking rand_chacha v0.9.0
+    Checking socks v0.3.4
+    Checking naga v22.1.0
+    Checking dirs-sys v0.5.0
+    Checking indicatif v0.18.6
+    Checking rand v0.9.2
+    Checking dirs v6.0.0
+    Checking crossterm v0.29.0
+    Checking num_cpus v1.17.0
+    Checking regex v1.12.4
+    Checking fs2 v0.4.3
+   Compiling prost-build v0.14.4
+   Compiling serde v1.0.228
+   Compiling serde_json v1.0.150
+    Checking rustls-webpki v0.103.13
+    Checking criterion v0.5.1
+    Checking ratatui-crossterm v0.1.2
+    Checking rustls v0.23.41
+    Checking ratatui v0.30.2
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+    Checking futures-executor v0.3.32
+   Compiling safetensors v0.4.5
+    Checking futures v0.3.32
+   Compiling incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+    Checking tokio-util v0.7.18
+    Checking tower v0.5.3
+    Checking tower-http v0.6.11
+    Checking tokio-rustls v0.26.4
+    Checking ureq v3.3.0
+    Checking h2 v0.4.15
+    Checking wgpu-hal v22.0.0
+    Checking hyper v1.10.1
+    Checking wgpu-core v22.1.0
+    Checking hyper-util v0.1.20
+    Checking hyper-rustls v0.27.9
+    Checking reqwest v0.12.28
+    Checking hf-hub v0.5.0
+    Checking wgpu v22.1.0
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Checking incin-data v0.0.0 (/home/xupremix/Projects/incin/crates/incin-data)
+    Checking incin-telemetry v0.0.0 (/home/xupremix/Projects/incin/crates/incin-telemetry)
+    Checking incin-viz-plugin-api v0.0.0 (/home/xupremix/Projects/incin/crates/incin-viz-plugin-api)
+    Checking incin-viz v0.0.0 (/home/xupremix/Projects/incin/crates/incin-viz)
+    Checking incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+    Checking native_training_demo v0.0.0 (/home/xupremix/Projects/incin/crates/incin/examples/native_training_demo)
+    Checking tensors v0.0.0 (/home/xupremix/Projects/incin/crates/incin/examples/tensors)
+    Checking dataloader v0.0.0 (/home/xupremix/Projects/incin/crates/incin/examples/dataloader)
+    Checking backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin/examples/backends)
+    Checking named_dims_safety v0.0.0 (/home/xupremix/Projects/incin/crates/incin/examples/named_dims_safety)
+    Checking tui_graph_demo v0.0.0 (/home/xupremix/Projects/incin/crates/incin/examples/tui_graph_demo)
+    Checking matmul v0.0.0 (/home/xupremix/Projects/incin/crates/incin/examples/matmul)
+    Checking cnn v0.0.0 (/home/xupremix/Projects/incin/crates/incin/examples/cnn)
+    Checking named_tensors v0.0.0 (/home/xupremix/Projects/incin/crates/incin/examples/named_tensors)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 31.16s

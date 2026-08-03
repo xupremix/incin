@@ -14,7 +14,8 @@ use alloc::string::ToString;
 
 use incin_core::backend_authoring::{ReductionOps, TensorOps};
 use incin_core::exec::{
-    Conv2dSpec, Pool2dSpec, PoolOp, ReduceOp, ReductionSpec, TensorMeta, UnsupportedReason,
+    Conv2dSpec, OperationSpec, Pool2dSpec, PoolOp, ReduceOp, ReductionSpec, TensorMeta,
+    UnsupportedReason,
 };
 use incin_core::prelude::{Backend, BackendError, DType, Error, OperationKind};
 
@@ -85,7 +86,7 @@ pub(crate) fn conv2d_window(spec: &Conv2dSpec) -> Result<Conv2dWindow, BackendEr
         ),
     ] {
         if first != second {
-            return Err(invalid(OperationKind::Conv2d, reason));
+            return Err(invalid(spec.operation(), reason));
         }
     }
 
@@ -111,7 +112,7 @@ pub(crate) fn check_conv2d_operands(
 ) -> Result<(), BackendError> {
     if input.shape().dims() != [spec.n, spec.c_in, spec.h_in, spec.w_in] {
         return Err(invalid(
-            OperationKind::Conv2d,
+            spec.operation(),
             "conv2d input metadata does not match the validated descriptor",
         ));
     }
@@ -124,7 +125,7 @@ pub(crate) fn check_conv2d_operands(
         ]
     {
         return Err(invalid(
-            OperationKind::Conv2d,
+            spec.operation(),
             "conv2d weight metadata does not match the validated descriptor",
         ));
     }
@@ -132,7 +133,7 @@ pub(crate) fn check_conv2d_operands(
         && bias.shape().dims() != [spec.c_out]
     {
         return Err(invalid(
-            OperationKind::Conv2d,
+            spec.operation(),
             "conv2d bias metadata does not match the validated descriptor",
         ));
     }
@@ -167,7 +168,7 @@ pub(crate) struct Pool2dWindow {
 pub(crate) fn pool2d_window(spec: &Pool2dSpec) -> Result<Pool2dWindow, BackendError> {
     if spec.op == PoolOp::Average && spec.dilation != [1, 1] {
         return Err(invalid(
-            OperationKind::Pool2d,
+            spec.operation(),
             "average pooling has no dilated form; the routed kernel takes no dilation",
         ));
     }
@@ -188,7 +189,7 @@ pub(crate) fn check_pool2d_operand(
 ) -> Result<(), BackendError> {
     if input.shape().dims() != [spec.n, spec.channels, spec.h_in, spec.w_in] {
         return Err(invalid(
-            OperationKind::Pool2d,
+            spec.operation(),
             "pool2d input metadata does not match the validated descriptor",
         ));
     }
@@ -209,7 +210,7 @@ pub(crate) fn reduction_run(spec: &ReductionSpec) -> Result<Option<(usize, usize
     let last = axes.last().unwrap_or(first);
     if last < first {
         return Err(invalid(
-            OperationKind::Reduction,
+            spec.operation(),
             "reduction axis run is not ordered",
         ));
     }
@@ -310,7 +311,7 @@ pub(crate) fn check_reduction_operand(
         || region(&dims[end..]) != Some(spec.inner)
     {
         return Err(invalid(
-            OperationKind::Reduction,
+            spec.operation(),
             "reduction input metadata does not match the validated descriptor",
         ));
     }
@@ -347,7 +348,7 @@ mod tests {
         assert!(matches!(
             error,
             BackendError::InvalidInput {
-                operation: OperationKind::Conv2d,
+                operation: OperationKind::Conv2dExact,
                 reason: "conv2d strides differ per axis; the routed kernel takes one stride for both"
             }
         ));
@@ -438,7 +439,7 @@ mod tests {
         assert!(matches!(
             error,
             BackendError::InvalidInput {
-                operation: OperationKind::Pool2d,
+                operation: OperationKind::AvgPool2d,
                 reason: "average pooling has no dilated form; the routed kernel takes no dilation"
             }
         ));
@@ -511,7 +512,7 @@ mod tests {
         assert!(matches!(
             error,
             BackendError::InvalidInput {
-                operation: OperationKind::Reduction,
+                operation: OperationKind::SumDim,
                 ..
             }
         ));

@@ -1,0 +1,53 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.19s
+     Running unittests src/lib.rs (target/debug/deps/incin_core-9b3fc0dc847caf92)
+
+running 46 tests
+test exec::capability::tests::families_never_imply_exact_support ... ok
+test exec::catalog::tests::an_unbiased_estimate_rejects_a_single_element_domain ... ok
+test exec::catalog::tests::a_comparison_mask_keeps_the_operand_dtype ... ok
+test exec::capability::tests::rejection_identifies_the_first_unsatisfied_constraint ... ok
+test exec::catalog::tests::attribute_bearing_descriptor_round_trips_without_storage ... ok
+test exec::catalog::tests::batch_norm_state_is_rank_one_against_a_ranked_activation ... ok
+test exec::catalog::tests::conv1d_and_transposed_convolution_bias_use_the_same_role_contract ... ok
+test exec::catalog::tests::cross_entropy_logits_and_targets_have_separate_rank_contracts ... ok
+test exec::catalog::tests::convolution_bias_is_validated_by_role_not_by_the_activation_window ... ok
+test exec::catalog::tests::empty_domain_behaviour_splits_within_the_reduction_family ... ok
+test exec::catalog::tests::every_tensor_returning_row_declares_an_inference_source ... ok
+test exec::catalog::tests::embedding_indices_and_weight_have_separate_rank_contracts ... ok
+test exec::catalog::tests::every_typed_output_rule_is_fail_closed_or_exactly_inferred ... ok
+test exec::catalog::tests::index_producing_operations_reject_a_non_integer_index_dtype ... ok
+test exec::catalog::tests::inferred_metadata_cannot_be_fabricated ... ok
+test exec::catalog::tests::known_inputs_never_skip_output_shape_verification ... ok
+test exec::catalog::tests::linear_weight_and_bias_have_separate_rank_contracts ... ok
+test exec::catalog::tests::multi_output_shapes_and_counts_are_inferred_exactly ... ok
+test exec::catalog::tests::identities_and_names_occur_exactly_once ... ok
+test exec::catalog::tests::typed_attributes_fail_before_storage_access ... ok
+test exec::catalog::tests::unknown_metadata_stays_unknown ... ok
+test exec::catalog::tests::validation_rejects_wrong_arity_and_cross_device_inputs ... ok
+test exec::catalog::tests::zero_output_gradient_and_determinism_exceptions_override_their_family ... ok
+test exec::catalog::tests::topk_values_keep_the_input_dtype_while_indices_take_the_index_dtype ... ok
+test exec::conformance::tests::required_semantic_edges_are_present_once_or_more ... ok
+test exec::meta::tests::a_view_offset_weakens_but_never_strengthens_alignment ... ok
+test exec::meta::tests::contiguous_layout_is_derived_not_asserted ... ok
+test exec::catalog::tests::optimizer_gradient_and_state_are_validated_against_the_parameter ... ok
+test exec::meta::tests::rank_and_arithmetic_failures_remain_structured ... ok
+test exec::meta::tests::invalid_alignment_is_rejected ... ok
+test exec::catalog::tests::recurrent_and_empty_reduction_contracts_are_storage_free ... ok
+test exec::meta::tests::transposed_and_broadcast_views_are_strided ... ok
+test exec::meta::tests::zero_offset_preserves_the_allocation_alignment ... ok
+test exec::proof::tests::a_fully_typed_shape_proves_itself_statically ... ok
+test exec::proof::tests::a_named_axis_is_typed_but_not_statically_sized ... ok
+test exec::proof::tests::a_sealed_descriptor_still_reads_back_exactly ... ok
+test exec::proof::tests::an_array_shape_knows_its_rank_but_not_its_extents ... ok
+test exec::meta::tests::strided_span_and_offset_are_checked_against_capacity ... ok
+test exec::meta::tests::empty_views_may_sit_at_but_not_after_the_allocation_end ... ok
+test exec::proof::tests::an_unranked_shape_proves_nothing_before_it_exists ... ok
+test exec::proof::tests::one_runtime_axis_weakens_the_whole_shape ... ok
+test exec::proof::tests::the_proof_is_carried_not_recomputed ... ok
+test exec::spec::exact_identity_tests::attribute_polymorphic_descriptors_report_exact_identities ... ok
+test exec::proof::tests::meet_is_commutative_idempotent_and_topped_by_static ... ok
+test exec::proof::tests::meet_takes_the_weaker_operand ... ok
+test exec::catalog::tests::generated_semantics_document_covers_every_row ... ok
+
+test result: ok. 46 passed; 0 failed; 0 ignored; 0 measured; 51 filtered out; finished in 0.02s
+

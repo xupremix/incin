@@ -4,8 +4,8 @@ use incin_core::backend_authoring::{
     Execute, ExecutionRequest, ModuleOps, ReductionOps, StorageBackend, TensorOps,
 };
 use incin_core::exec::{
-    Capabilities, CapabilityQuery, Conv2dSpec, MatMulSpec, MathMode, Pool2dSpec, PoolOp, ReduceOp,
-    ReductionSpec, ReshapeSpec, SupportLevel, TensorMeta,
+    Capabilities, CapabilityQuery, Conv2dSpec, MatMulSpec, MathMode, OperationSpec, Pool2dSpec,
+    PoolOp, ReduceOp, ReductionSpec, ReshapeSpec, SupportLevel, TensorMeta,
 };
 use incin_core::prelude::{BackendError, DType, DTypeId, Device, DeviceKind, OperationKind};
 
@@ -76,36 +76,37 @@ fn supports_operand(
 fn bind_matmul<'a, T: DType, D: Device>(
     request: &'a ExecutionRequest<'_, MatMulSpec, CpuBackendImpl<T, D>>,
 ) -> Result<(&'a CpuStorage, &'a CpuStorage), BackendError> {
+    let spec = request.operation.descriptor();
+    let operation = spec.operation();
     let [lhs_handle, rhs_handle] = request.inputs else {
         return Err(invalid(
-            OperationKind::MatMul,
+            operation,
             "matmul expects exactly two tensor inputs",
         ));
     };
     let lhs = lhs_handle
         .downcast_ref::<CpuStorage>()
-        .ok_or_else(|| invalid(OperationKind::MatMul, "matmul input is not CPU storage"))?;
+        .ok_or_else(|| invalid(operation, "matmul input is not CPU storage"))?;
     let rhs = rhs_handle
         .downcast_ref::<CpuStorage>()
-        .ok_or_else(|| invalid(OperationKind::MatMul, "matmul input is not CPU storage"))?;
-    let spec = request.operation.descriptor();
+        .ok_or_else(|| invalid(operation, "matmul input is not CPU storage"))?;
 
     for metadata in [lhs.metadata(), rhs.metadata()] {
         if metadata.device().kind() != DeviceKind::Cpu || metadata.device().ordinal() != 0 {
             return Err(invalid(
-                OperationKind::MatMul,
+                operation,
                 "matmul inputs must use CPU device ordinal 0",
             ));
         }
         if metadata.dtype() != DTypeId::F32 {
             return Err(incin_core::exec::UnsupportedReason::DType {
-                operation: OperationKind::MatMul,
+                operation,
                 dtype: metadata.dtype(),
             }
             .into());
         }
         let query = CapabilityQuery {
-            operation: OperationKind::MatMul,
+            operation: spec.operation(),
             dtype: metadata.dtype(),
             layout: metadata.layout(),
             rank: metadata.shape().rank(),
@@ -127,7 +128,7 @@ fn bind_matmul<'a, T: DType, D: Device>(
         spec.lhs_batch_strides.strides(),
     ) {
         return Err(invalid(
-            OperationKind::MatMul,
+            operation,
             "matmul lhs metadata does not match the validated descriptor",
         ));
     }
@@ -141,7 +142,7 @@ fn bind_matmul<'a, T: DType, D: Device>(
         spec.rhs_batch_strides.strides(),
     ) {
         return Err(invalid(
-            OperationKind::MatMul,
+            operation,
             "matmul rhs metadata does not match the validated descriptor",
         ));
     }
@@ -158,6 +159,7 @@ impl<T: DType, D: Device> Execute<MatMulSpec> for CpuBackendImpl<T, D> {
     ) -> Result<CpuStorage, BackendError> {
         let _ = self;
         let spec = request.operation.descriptor();
+        let operation = spec.operation();
         let (lhs, rhs) = bind_matmul(&request)?;
 
         let lhs_transposed = if spec.transpose_lhs {
@@ -165,7 +167,7 @@ impl<T: DType, D: Device> Execute<MatMulSpec> for CpuBackendImpl<T, D> {
             Some(
                 lhs.transpose(rank - 2, rank - 1)
                     .map_err(|error| BackendError::Execution {
-                        operation: OperationKind::MatMul,
+                        operation,
                         message: error.to_string().into(),
                     })?,
             )
@@ -177,7 +179,7 @@ impl<T: DType, D: Device> Execute<MatMulSpec> for CpuBackendImpl<T, D> {
             Some(
                 rhs.transpose(rank - 2, rank - 1)
                     .map_err(|error| BackendError::Execution {
-                        operation: OperationKind::MatMul,
+                        operation,
                         message: error.to_string().into(),
                     })?,
             )
@@ -192,11 +194,11 @@ impl<T: DType, D: Device> Execute<MatMulSpec> for CpuBackendImpl<T, D> {
         } else {
             super::ops::matmul::batched_matmul_impl(lhs, rhs)
         }
-        .map_err(|error| kernel_error(OperationKind::MatMul, error))?;
+        .map_err(|error| kernel_error(operation, error))?;
 
         if output.shape().dims() != spec.output.dims() {
             return Err(BackendError::Execution {
-                operation: OperationKind::MatMul,
+                operation,
                 message: "CPU matmul output disagrees with the validated descriptor".into(),
             });
         }
@@ -215,26 +217,27 @@ impl<T: DType, D: Device> Execute<MatMulSpec> for CpuBackendImpl<T, D> {
 fn bind_reshape<'a, T: DType, D: Device>(
     request: &'a ExecutionRequest<'_, ReshapeSpec, CpuBackendImpl<T, D>>,
 ) -> Result<&'a CpuStorage, BackendError> {
+    let spec = request.operation.descriptor();
+    let operation = spec.operation();
     let [handle] = request.inputs else {
         return Err(invalid(
-            OperationKind::Reshape,
+            operation,
             "reshape expects exactly one tensor input",
         ));
     };
     let input = handle
         .downcast_ref::<CpuStorage>()
-        .ok_or_else(|| invalid(OperationKind::Reshape, "reshape input is not CPU storage"))?;
-    let spec = request.operation.descriptor();
+        .ok_or_else(|| invalid(operation, "reshape input is not CPU storage"))?;
     let metadata = input.metadata();
 
     if metadata.device().kind() != DeviceKind::Cpu || metadata.device().ordinal() != 0 {
         return Err(invalid(
-            OperationKind::Reshape,
+            operation,
             "reshape input must use CPU device ordinal 0",
         ));
     }
     let query = CapabilityQuery {
-        operation: OperationKind::Reshape,
+        operation: spec.operation(),
         dtype: metadata.dtype(),
         layout: metadata.layout(),
         rank: metadata.shape().rank(),
@@ -247,7 +250,7 @@ fn bind_reshape<'a, T: DType, D: Device>(
 
     if metadata.shape().dims() != spec.input.dims() {
         return Err(invalid(
-            OperationKind::Reshape,
+            operation,
             "reshape input metadata does not match the validated descriptor",
         ));
     }
@@ -264,17 +267,18 @@ impl<T: DType, D: Device> Execute<ReshapeSpec> for CpuBackendImpl<T, D> {
     ) -> Result<CpuStorage, BackendError> {
         let _ = self;
         let spec = request.operation.descriptor();
+        let operation = spec.operation();
         let input = bind_reshape(&request)?;
 
         // The legacy entry point, not `CpuStorage::reshape` directly: it is what
         // records the tape entry, so a descriptor-executed reshape is the same
         // graph node the typed frontend produces.
         let output = <Self as TensorOps<Self>>::reshape::<T>(input, spec.output.dims())
-            .map_err(|error| kernel_error(OperationKind::Reshape, error))?;
+            .map_err(|error| kernel_error(operation, error))?;
 
         if output.shape().dims() != spec.output.dims() {
             return Err(BackendError::Execution {
-                operation: OperationKind::Reshape,
+                operation,
                 message: "CPU reshape output disagrees with the validated descriptor".into(),
             });
         }
@@ -290,12 +294,14 @@ impl<T: DType, D: Device> Execute<ReshapeSpec> for CpuBackendImpl<T, D> {
 fn bind_conv2d<'a, T: DType, D: Device>(
     request: &'a ExecutionRequest<'_, Conv2dSpec, CpuBackendImpl<T, D>>,
 ) -> Result<(&'a CpuStorage, &'a CpuStorage, Option<&'a CpuStorage>), BackendError> {
+    let spec = request.operation.descriptor();
+    let operation = spec.operation();
     let (input_handle, weight_handle, bias_handle) = match request.inputs {
         [input, weight] => (input, weight, None),
         [input, weight, bias] => (input, weight, Some(bias)),
         _ => {
             return Err(invalid(
-                OperationKind::Conv2d,
+                operation,
                 "conv2d expects an input and a weight, and optionally a bias",
             ));
         }
@@ -303,30 +309,28 @@ fn bind_conv2d<'a, T: DType, D: Device>(
     let downcast = |handle: &'a incin_core::exec::TensorHandle<'_>| {
         handle
             .downcast_ref::<CpuStorage>()
-            .ok_or_else(|| invalid(OperationKind::Conv2d, "conv2d input is not CPU storage"))
+            .ok_or_else(|| invalid(operation, "conv2d input is not CPU storage"))
     };
     let input = downcast(input_handle)?;
     let weight = downcast(weight_handle)?;
     let bias = bias_handle.map(downcast).transpose()?;
-    let spec = request.operation.descriptor();
-
     for storage in [Some(input), Some(weight), bias].into_iter().flatten() {
         let metadata = storage.metadata();
         if metadata.device().kind() != DeviceKind::Cpu || metadata.device().ordinal() != 0 {
             return Err(invalid(
-                OperationKind::Conv2d,
+                operation,
                 "conv2d inputs must use CPU device ordinal 0",
             ));
         }
         if metadata.dtype() != DTypeId::F32 {
             return Err(incin_core::exec::UnsupportedReason::DType {
-                operation: OperationKind::Conv2d,
+                operation,
                 dtype: metadata.dtype(),
             }
             .into());
         }
         let query = CapabilityQuery {
-            operation: OperationKind::Conv2d,
+            operation: spec.operation(),
             dtype: metadata.dtype(),
             layout: metadata.layout(),
             // The registry's `Conv2d` rank window covers the activation, not the
@@ -360,6 +364,7 @@ impl<T: DType, D: Device> Execute<Conv2dSpec> for CpuBackendImpl<T, D> {
     ) -> Result<CpuStorage, BackendError> {
         let _ = self;
         let spec = request.operation.descriptor();
+        let operation = spec.operation();
         let window = conv2d_window(spec)?;
         let (input, weight, bias) = bind_conv2d(&request)?;
 
@@ -372,11 +377,11 @@ impl<T: DType, D: Device> Execute<Conv2dSpec> for CpuBackendImpl<T, D> {
             window.dilation,
             window.groups,
         )
-        .map_err(|error| kernel_error(OperationKind::Conv2d, error))?;
+        .map_err(|error| kernel_error(operation, error))?;
 
         if output.shape().dims() != spec.output.dims() {
             return Err(BackendError::Execution {
-                operation: OperationKind::Conv2d,
+                operation,
                 message: "CPU conv2d output disagrees with the validated descriptor".into(),
             });
         }
@@ -439,10 +444,11 @@ impl<T: DType, D: Device> Execute<ReductionSpec> for CpuBackendImpl<T, D> {
     ) -> Result<CpuStorage, BackendError> {
         let _ = self;
         let spec = request.operation.descriptor();
+        let operation = spec.operation();
         let run = reduction_run(spec)?;
         let input = bind_single_operand(
             &request,
-            OperationKind::Reduction,
+            operation,
             "a reduction expects exactly one tensor input",
             "reduction input must use CPU device ordinal 0",
         )?;
@@ -498,11 +504,11 @@ impl<T: DType, D: Device> Execute<ReductionSpec> for CpuBackendImpl<T, D> {
                 }
             }
         }
-        .map_err(|error| kernel_error(OperationKind::Reduction, error))?;
+        .map_err(|error| kernel_error(operation, error))?;
 
         if output.shape().dims() != spec.output.dims() {
             return Err(BackendError::Execution {
-                operation: OperationKind::Reduction,
+                operation,
                 message: "CPU reduction output disagrees with the validated descriptor".into(),
             });
         }
@@ -519,10 +525,11 @@ impl<T: DType, D: Device> Execute<Pool2dSpec> for CpuBackendImpl<T, D> {
     ) -> Result<CpuStorage, BackendError> {
         let _ = self;
         let spec = request.operation.descriptor();
+        let operation = spec.operation();
         let window = pool2d_window(spec)?;
         let input = bind_single_operand(
             &request,
-            OperationKind::Pool2d,
+            operation,
             "pool2d expects exactly one tensor input",
             "pool2d input must use CPU device ordinal 0",
         )?;
@@ -546,11 +553,11 @@ impl<T: DType, D: Device> Execute<Pool2dSpec> for CpuBackendImpl<T, D> {
                 window.padding,
             ),
         }
-        .map_err(|error| kernel_error(OperationKind::Pool2d, error))?;
+        .map_err(|error| kernel_error(operation, error))?;
 
         if output.shape().dims() != spec.output.dims() {
             return Err(BackendError::Execution {
-                operation: OperationKind::Pool2d,
+                operation,
                 message: "CPU pool2d output disagrees with the validated descriptor".into(),
             });
         }
@@ -609,10 +616,13 @@ mod tests {
             })
             .unwrap_err();
 
+        // The binder reports the exact catalog identity rather than the
+        // `MatMul` family, so a capability lookup keyed on this error resolves
+        // the same row the descriptor was validated against.
         assert!(matches!(
             error,
             BackendError::InvalidInput {
-                operation: OperationKind::MatMul,
+                operation: OperationKind::MatMulExact,
                 reason: "matmul inputs must use CPU device ordinal 0"
             }
         ));

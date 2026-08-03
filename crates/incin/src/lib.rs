@@ -215,11 +215,36 @@ pub mod experimental {
 /// Contracts and extension traits for backend authors.
 pub mod backend_authoring {
     pub use incin_core::backend_authoring::{
-        Backend, CapabilityRegistry, CreationOps, Execute, ExecutionContext, ExecutionRequest,
-        FloatOps, LossOps, LossScaling, ModuleOps, NumericOps, OperationSpec, OptimizerOps,
-        PrecisionPolicy, QuantizedOps, ReductionOps, StorageBackend, SupportsDType, TensorOps,
-        TransferTo, Validated,
+        Backend, CapabilityRegistry, CreationOps, Execute, ExecutionContext, ExecutionDescriptor,
+        ExecutionRequest, FloatOps, LossOps, LossScaling, ModuleOps, NumericOps, OperationSpec,
+        OptimizerOps, PrecisionPolicy, QuantizedOps, ReductionOps, StorageBackend, SupportsDType,
+        TensorOps, TransferTo, Validated,
     };
+
+    /// Canonical exact operation descriptors and typed attributes.
+    pub mod operations {
+        pub use incin_core::backend_authoring::operations::{
+            AdamAttributes, AdamWAttributes, AdaptivePool2dAttributes, AddmmAttributes,
+            ArangeAttributes, ArgsortAttributes, AttentionAttributes, AvgPool2dAttributes,
+            AxisAttributes, AxisVarianceAttributes, BatchNormAttributes, CanonicalOperation,
+            ChunkAttributes, ClampAttributes, Conv1dAttributes, Conv2dAttributes,
+            ConvTranspose2dAttributes, CreationAttributes, DTypeAttributes, Descriptor,
+            DescriptorError, DeviceAttributes, DiagonalAttributes, DistributionAttributes,
+            DropoutAttributes, DuplicateIndexRule, EpsilonAttributes, FlattenAttributes,
+            FullAttributes, GroupNormAttributes, IndexReductionAttributes, LayerNormAttributes,
+            LerpAttributes, LinearAttributes, LinspaceAttributes, LogicalTensorMeta,
+            LossAttributes, LossReduction, NarrowAttributes, NoAttributes, NormAttributes,
+            OPERATION_CATALOG, OperationCatalogEntry, PadAttributes, PixelShuffleAttributes,
+            Pool2dAttributes, QuantizationAttributes, RecurrentAttributes, RepeatAttributes,
+            ScalarAttributes, ScatterAttributes, SgdAttributes, ShapeAttributes, SliceAttributes,
+            SplitAttributes, TopKAttributes, TransposeAttributes, UnfoldAttributes,
+            ValidatedInvocation, VarianceAttributes, catalog_entry, op,
+        };
+        #[cfg(feature = "std")]
+        pub use incin_core::backend_authoring::operations::{
+            CapturedDescriptor, DescriptorCaptureError,
+        };
+    }
 }
 
 #[cfg(feature = "test-utils")]

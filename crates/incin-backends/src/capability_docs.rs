@@ -17,7 +17,7 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::fmt::Write as _;
 
-use incin_core::exec::CapabilityRule;
+use incin_core::exec::{CapabilityRule, OPERATION_CATALOG};
 use incin_core::prelude::{DeviceKind, MAX_RANK};
 
 use crate::capability::{CPU_CAPABILITIES, CUDA_CAPABILITIES, WGPU_CAPABILITIES};
@@ -67,23 +67,14 @@ run time.
 
 ";
 
-/// One row per operation, one column per device.
-///
-/// The cell is the element types, not a tick. All three backends register the
-/// same eleven operations, so a yes/no matrix is eleven rows of "yes" — it reads
-/// as parity when the backends are not at parity: CPU registers `reduction` for
-/// `f32` alone and CUDA registers it for every float. Whether an operation
-/// exists is the question this table looks like it answers; which dtypes it
-/// covers is the question a reader actually has.
+/// One catalog operation per row and one backend per column. The cell contains
+/// only dtypes established by that backend's executable declaration; a dash is
+/// an explicit absence, never a family-level inference.
 fn summary(devices: &[(DeviceKind, &[CapabilityRule])]) -> String {
-    let mut operations: Vec<_> = Vec::new();
-    for &(_, rules) in devices {
-        for rule in rules {
-            if !operations.contains(&rule.operation) {
-                operations.push(rule.operation);
-            }
-        }
-    }
+    // The catalog, not a union of backend tables, defines the rows. This makes
+    // absence visible and makes adding an operation without a support decision
+    // change the generated document immediately.
+    let mut operations: Vec<_> = OPERATION_CATALOG.iter().map(|row| row.operation).collect();
     operations.sort_unstable_by_key(|op| op.name());
 
     let mut out = String::from("## Element types by operation and backend\n\n| Operation |");
@@ -119,10 +110,7 @@ fn summary(devices: &[(DeviceKind, &[CapabilityRule])]) -> String {
         out.push('\n');
     }
     out.push_str(
-        "\nEvery backend registers the same eleven operations, so this table is \
-         about element types rather than about which operations exist. Layout, \
-         rank and training coverage are in the per-backend tables below, and \
-         differ between backends within one operation.\n\n",
+        "\nEvery stable semantic operation comes from the canonical catalog. A dash is an explicit unsupported or migration-blocked decision. Layout, rank and training coverage are in the per-backend tables below.\n\n",
     );
     out
 }
@@ -218,8 +206,8 @@ mod tests {
         )
     }
 
-    static HAS_MATMUL: &[CapabilityRule] = &[rule(OperationKind::MatMul, &[DTypeId::F32])];
-    static HAS_NEITHER: &[CapabilityRule] = &[rule(OperationKind::Reshape, &[DTypeId::F32])];
+    static HAS_MATMUL: &[CapabilityRule] = &[rule(OperationKind::MatMulExact, &[DTypeId::F32])];
+    static HAS_NEITHER: &[CapabilityRule] = &[rule(OperationKind::ReshapeExact, &[DTypeId::F32])];
 
     /// The real backends all register the same eleven operations, so the cell
     /// for an operation one backend lacks never renders against them. It is the
@@ -248,8 +236,8 @@ mod tests {
     #[test]
     fn repeated_registrations_are_unioned_rather_than_replaced() {
         static TWICE: &[CapabilityRule] = &[
-            rule(OperationKind::Reshape, &[DTypeId::F32]),
-            rule(OperationKind::Reshape, &[DTypeId::I64, DTypeId::F32]),
+            rule(OperationKind::ReshapeExact, &[DTypeId::F32]),
+            rule(OperationKind::ReshapeExact, &[DTypeId::I64, DTypeId::F32]),
         ];
         let table = summary(&[(DeviceKind::Cpu, TWICE)]);
         assert!(

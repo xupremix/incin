@@ -1,0 +1,11 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.13s
+     Running tests/generated_docs.rs (target/debug/deps/generated_docs-d8472c6adbd52572)
+
+running 4 tests
+test the_capability_document_matches_the_registrations ... ok
+test the_document_does_not_advertise_an_unregistered_operation ... ok
+test the_document_covers_every_registered_operation ... ok
+test no_public_example_is_excluded_from_compilation ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+

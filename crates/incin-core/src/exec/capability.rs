@@ -200,12 +200,10 @@ impl CapabilityRegistry {
         self.rules
     }
 
-    fn operation_matches(rule: &CapabilityRule, query: &CapabilityQuery, exact: bool) -> bool {
-        if exact {
-            rule.operation == query.operation
-        } else {
-            rule.operation == query.operation.family()
-        }
+    fn operation_matches(rule: &CapabilityRule, query: &CapabilityQuery) -> bool {
+        // Families classify work; they do not prove an exact implementation.
+        // A backend must register the precise semantic identity it executes.
+        rule.operation == query.operation
     }
 }
 
@@ -216,10 +214,6 @@ pub trait Capabilities {
 
 impl Capabilities for CapabilityRegistry {
     fn support(&self, query: &CapabilityQuery) -> SupportLevel {
-        let has_exact = self
-            .rules
-            .iter()
-            .any(|rule| rule.operation == query.operation);
         let mut operation = false;
         let mut dtype = false;
         let mut layout = false;
@@ -227,7 +221,7 @@ impl Capabilities for CapabilityRegistry {
         let mut training = false;
 
         for rule in self.rules {
-            if !Self::operation_matches(rule, query, has_exact) {
+            if !Self::operation_matches(rule, query) {
                 continue;
             }
             operation = true;
@@ -269,7 +263,7 @@ impl Capabilities for CapabilityRegistry {
             }
         } else if !rank {
             let Some(rule) = self.rules.iter().find(|rule| {
-                Self::operation_matches(rule, query, has_exact)
+                Self::operation_matches(rule, query)
                     && rule.dtypes.contains(&query.dtype)
                     && rule.layouts.contains(&query.layout)
             }) else {
@@ -339,7 +333,7 @@ mod tests {
     }
 
     #[test]
-    fn exact_registration_overrides_family_registration() {
+    fn families_never_imply_exact_support() {
         let registry = CapabilityRegistry::new(RULES);
         assert_eq!(
             registry.support(&query(OperationKind::Reduction)),
@@ -354,6 +348,12 @@ mod tests {
         assert!(matches!(
             registry.support(&training),
             SupportLevel::Unsupported(UnsupportedReason::Training { .. })
+        ));
+        assert!(matches!(
+            registry.support(&query(OperationKind::SumDim)),
+            SupportLevel::Unsupported(UnsupportedReason::Operation {
+                operation: OperationKind::SumDim
+            })
         ));
     }
 

@@ -8,11 +8,11 @@
 #![cfg(feature = "wgpu")]
 
 use incin_backends::wgpu::WgpuBackendImpl;
+use incin_core::backend_authoring::{Execute, ExecutionRequest, ModuleOps, TensorOps};
 use incin_core::exec::{
     Conv2dArgs, Conv2dRule, Conv2dSpec, ExecutionContext, MatMulRule, MatMulSpec, Pool2dRule,
     PoolOp, ReduceOp, ReduceRule, ReshapeRule, ReshapeSpec, ShapeRule, TensorHandle, Validated,
 };
-use incin_core::backend_authoring::{Execute, ExecutionRequest, ModuleOps, TensorOps};
 use incin_core::prelude::{
     Backend, BackendError, DTypeId, DeviceId, Dyn, Local, OperationKind, Shape, WgpuN,
 };
@@ -94,7 +94,7 @@ fn the_binder_requires_exactly_two_inputs() {
     assert!(matches!(
         error,
         BackendError::InvalidInput {
-            operation: OperationKind::MatMul,
+            operation: OperationKind::MatMulExact,
             reason: "matmul expects exactly two tensor inputs"
         }
     ));
@@ -116,7 +116,7 @@ fn the_binder_rejects_operands_that_disagree_with_the_descriptor() {
     assert!(matches!(
         error,
         BackendError::InvalidInput {
-            operation: OperationKind::MatMul,
+            operation: OperationKind::MatMulExact,
             reason: "matmul lhs metadata does not match the validated descriptor"
         }
     ));
@@ -155,7 +155,7 @@ fn the_binder_rejects_storage_belonging_to_another_backend() {
         assert!(matches!(
             error,
             BackendError::InvalidInput {
-                operation: OperationKind::MatMul,
+                operation: OperationKind::MatMulExact,
                 reason: "matmul input is not WGPU storage"
             }
         ));
@@ -220,7 +220,7 @@ fn the_reshape_binder_requires_exactly_one_input() {
     assert!(matches!(
         error,
         BackendError::InvalidInput {
-            operation: OperationKind::Reshape,
+            operation: OperationKind::ReshapeExact,
             reason: "reshape expects exactly one tensor input"
         }
     ));
@@ -238,7 +238,7 @@ fn the_reshape_binder_rejects_an_operand_that_disagrees_with_the_descriptor() {
     assert!(matches!(
         error,
         BackendError::InvalidInput {
-            operation: OperationKind::Reshape,
+            operation: OperationKind::ReshapeExact,
             reason: "reshape input metadata does not match the validated descriptor"
         }
     ));
@@ -325,7 +325,7 @@ fn the_conv2d_binder_rejects_a_weight_that_disagrees_with_the_descriptor() {
     assert!(matches!(
         error,
         BackendError::InvalidInput {
-            operation: OperationKind::Conv2d,
+            operation: OperationKind::Conv2dExact,
             reason: "conv2d weight metadata does not match the validated descriptor"
         }
     ));

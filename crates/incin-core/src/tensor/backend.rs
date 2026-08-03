@@ -106,7 +106,7 @@ pub trait StorageBackend<P: Placement = Local>: Sized {
 /// One validated descriptor invocation against checked tensor handles.
 pub struct ExecutionRequest<'a, O, B>
 where
-    O: OperationSpec,
+    O: crate::exec::spec::ExecutionDescriptor,
     B: StorageBackend,
 {
     pub operation: &'a Validated<O>,
@@ -117,7 +117,7 @@ where
 /// Executes one descriptor type. Absence of an implementation is a compile-time fact.
 pub trait Execute<O>: StorageBackend + Sized
 where
-    O: OperationSpec,
+    O: crate::exec::spec::ExecutionDescriptor,
 {
     type Output;
 

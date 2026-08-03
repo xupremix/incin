@@ -1,0 +1,40 @@
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+   Compiling incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.14s
+     Running unittests src/lib.rs (target/debug/deps/incin_core-9b3fc0dc847caf92)
+
+running 31 tests
+test exec::capability::tests::rejection_identifies_the_first_unsatisfied_constraint ... ok
+test exec::catalog::tests::every_typed_output_rule_is_fail_closed_or_exactly_inferred ... ok
+test exec::capability::tests::families_never_imply_exact_support ... ok
+test exec::catalog::tests::inferred_metadata_cannot_be_fabricated ... ok
+test exec::catalog::tests::attribute_bearing_descriptor_round_trips_without_storage ... ok
+test exec::catalog::tests::multi_output_shapes_and_counts_are_inferred_exactly ... ok
+test exec::catalog::tests::recurrent_and_empty_reduction_contracts_are_storage_free ... ok
+test exec::catalog::tests::typed_attributes_fail_before_storage_access ... ok
+test exec::catalog::tests::identities_and_names_occur_exactly_once ... ok
+test exec::catalog::tests::unknown_metadata_stays_unknown ... ok
+test exec::catalog::tests::validation_rejects_wrong_arity_and_cross_device_inputs ... ok
+test exec::conformance::tests::required_semantic_edges_are_present_once_or_more ... ok
+test exec::meta::tests::a_view_offset_weakens_but_never_strengthens_alignment ... ok
+test exec::meta::tests::contiguous_layout_is_derived_not_asserted ... ok
+test exec::meta::tests::empty_views_may_sit_at_but_not_after_the_allocation_end ... ok
+test exec::meta::tests::invalid_alignment_is_rejected ... ok
+test exec::meta::tests::rank_and_arithmetic_failures_remain_structured ... ok
+test exec::meta::tests::strided_span_and_offset_are_checked_against_capacity ... ok
+test exec::meta::tests::transposed_and_broadcast_views_are_strided ... ok
+test exec::meta::tests::zero_offset_preserves_the_allocation_alignment ... ok
+test exec::proof::tests::a_fully_typed_shape_proves_itself_statically ... ok
+test exec::proof::tests::a_named_axis_is_typed_but_not_statically_sized ... ok
+test exec::proof::tests::a_sealed_descriptor_still_reads_back_exactly ... ok
+test exec::proof::tests::an_array_shape_knows_its_rank_but_not_its_extents ... ok
+test exec::proof::tests::an_unranked_shape_proves_nothing_before_it_exists ... ok
+test exec::proof::tests::meet_is_commutative_idempotent_and_topped_by_static ... ok
+test exec::proof::tests::meet_takes_the_weaker_operand ... ok
+test exec::proof::tests::one_runtime_axis_weakens_the_whole_shape ... ok
+test exec::proof::tests::the_proof_is_carried_not_recomputed ... ok
+test exec::spec::exact_identity_tests::attribute_polymorphic_descriptors_report_exact_identities ... ok
+test exec::catalog::tests::generated_semantics_document_covers_every_row ... ok
+
+test result: ok. 31 passed; 0 failed; 0 ignored; 0 measured; 51 filtered out; finished in 0.01s
+

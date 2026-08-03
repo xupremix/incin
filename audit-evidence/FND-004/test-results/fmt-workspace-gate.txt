@@ -1,0 +1,293 @@
+Diff in /home/xupremix/Projects/incin/crates/incin-backends/src/dispatch_executor.rs:13:
+ 
+ use incin_core::backend_authoring::{Execute, ExecutionRequest};
+ use incin_core::exec::{
+-    Conv2dSpec, ExecutionContext, MatMulSpec, Pool2dSpec, ReductionSpec, ReshapeSpec,
+-    TensorHandle, TensorMeta,
++    Conv2dSpec, ExecutionContext, MatMulSpec, Pool2dSpec, ReductionSpec, ReshapeSpec, TensorHandle,
++    TensorMeta,
+ };
+ use incin_core::prelude::{BackendError, DType, Device, OperationKind, StorageBackend};
+ 
+Diff in /home/xupremix/Projects/incin/crates/incin-backends/src/external/candle/backend.rs:137:
+                     .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+                 Ok(bytemuck::cast_slice(&v).to_vec())
+             }
+-            other => Err(anyhow::anyhow!("Unsupported Candle dtype for to_bytes: {:?}", other).into()),
++            other => {
++                Err(anyhow::anyhow!("Unsupported Candle dtype for to_bytes: {:?}", other).into())
++            }
+         }
+     }
+ 
+Diff in /home/xupremix/Projects/incin/crates/incin-backends/src/external/candle/backend.rs:177:
+                 candle_core::Tensor::from_slice(&doubles, shape, &d)
+                     .map_err(|e: candle_core::Error| anyhow::anyhow!(e).into())
+             }
+-            candle_core::DType::U8 => {
+-                candle_core::Tensor::from_slice(bytes, shape, &d)
+-                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e).into())
+-            }
++            candle_core::DType::U8 => candle_core::Tensor::from_slice(bytes, shape, &d)
++                .map_err(|e: candle_core::Error| anyhow::anyhow!(e).into()),
+             candle_core::DType::U32 => {
+                 let uints: Vec<u32> = bytes
+                     .chunks_exact(4)
+Diff in /home/xupremix/Projects/incin/crates/incin-backends/src/external/candle/backend.rs:213:
+                 candle_core::Tensor::from_slice(&bf16s, shape, &d)
+                     .map_err(|e: candle_core::Error| anyhow::anyhow!(e).into())
+             }
+-            other => Err(anyhow::anyhow!("Unsupported Candle dtype for from_bytes: {:?}", other).into()),
++            other => {
++                Err(anyhow::anyhow!("Unsupported Candle dtype for from_bytes: {:?}", other).into())
++            }
+         }
+     }
+ }
+Diff in /home/xupremix/Projects/incin/crates/incin-backends/src/metal/executor.rs:79:
+     let spec = request.operation.descriptor();
+     let operation = spec.operation();
+     let [lhs_handle, rhs_handle] = request.inputs else {
+-        return Err(invalid(operation, "matmul expects exactly two tensor inputs"));
++        return Err(invalid(
++            operation,
++            "matmul expects exactly two tensor inputs",
++        ));
+     };
+     let lhs = lhs_handle
+         .downcast_ref::<MetalStorage>()
+Diff in /home/xupremix/Projects/incin/crates/incin-backends/src/metal/executor.rs:91:
+ 
+     for metadata in [lhs.metadata(), rhs.metadata()] {
+         if metadata.device().kind() != DeviceKind::Metal {
+-            return Err(invalid(
+-                operation,
+-                "matmul inputs must use Metal device",
+-            ));
++            return Err(invalid(operation, "matmul inputs must use Metal device"));
+         }
+         if metadata.dtype() != DTypeId::F32 {
+             return Err(incin_core::exec::UnsupportedReason::DType {
+Diff in /home/xupremix/Projects/incin/crates/incin-backends/src/metal/executor.rs:154:
+     let spec = request.operation.descriptor();
+     let operation = spec.operation();
+     let [handle] = request.inputs else {
+-        return Err(invalid(operation, "reshape expects exactly one tensor input"));
++        return Err(invalid(
++            operation,
++            "reshape expects exactly one tensor input",
++        ));
+     };
+     let input = handle
+         .downcast_ref::<MetalStorage>()
+Diff in /home/xupremix/Projects/incin/crates/incin-backends/src/metal/executor.rs:163:
+     let metadata = input.metadata();
+ 
+     if metadata.device().kind() != DeviceKind::Metal {
+-        return Err(invalid(
+-            operation,
+-            "reshape input must use Metal device",
+-        ));
++        return Err(invalid(operation, "reshape input must use Metal device"));
+     }
+     let query = CapabilityQuery {
+         operation: spec.operation(),
+Diff in /home/xupremix/Projects/incin/crates/incin-backends/src/simd.rs:14:
+     #[cfg(all(
+         not(target_feature = "avx512f"),
+         not(target_feature = "avx2"),
+-        any(target_feature = "sse2", target_feature = "sse4.1", target_feature = "neon")
++        any(
++            target_feature = "sse2",
++            target_feature = "sse4.1",
++            target_feature = "neon"
++        )
+     ))]
+     {
+         16
+Diff in /home/xupremix/Projects/incin/crates/incin-backends/src/simd.rs:42:
+     }
+     let vector_bytes = simd_vector_bytes();
+     let lanes = vector_bytes / elem_size;
+-    if lanes == 0 {
+-        1
+-    } else {
+-        lanes
+-    }
++    if lanes == 0 { 1 } else { lanes }
+ }
+ 
+Diff in /home/xupremix/Projects/incin/crates/incin-backends/src/wgpu/executor.rs:90:
+     let spec = request.operation.descriptor();
+     let operation = spec.operation();
+     let [lhs_handle, rhs_handle] = request.inputs else {
+-        return Err(invalid(operation, "matmul expects exactly two tensor inputs"));
++        return Err(invalid(
++            operation,
++            "matmul expects exactly two tensor inputs",
++        ));
+     };
+     let lhs = lhs_handle
+         .downcast_ref::<WgpuStorage>()
+Diff in /home/xupremix/Projects/incin/crates/incin-backends/src/wgpu/executor.rs:169:
+     let spec = request.operation.descriptor();
+     let operation = spec.operation();
+     let [handle] = request.inputs else {
+-        return Err(invalid(operation, "reshape expects exactly one tensor input"));
++        return Err(invalid(
++            operation,
++            "reshape expects exactly one tensor input",
++        ));
+     };
+     let input = handle
+         .downcast_ref::<WgpuStorage>()
+Diff in /home/xupremix/Projects/incin/crates/incin-backends/tests/dispatch_parity.rs:15:
+ 
+ use incin_backends::cpu::{CpuBackendImpl, CpuStorage};
+ use incin_backends::dispatch::{DispatchBackend, DispatchStorage};
+-use incin_core::exec::{
+-    Conv2dArgs, Conv2dRule, ExecutionContext, Pool2dRule, Pool2dSpec, PoolOp, ReduceOp, ReduceRule,
+-    ReductionSpec, ReshapeRule, ReshapeSpec, ShapeRule, TensorHandle, Validated,
+-};
+ use incin_core::backend_authoring::{
+     Backend, Execute, ExecutionRequest, LossOps, ModuleOps, QuantizedOps, ReductionOps,
+     StorageBackend,
+Diff in /home/xupremix/Projects/incin/crates/incin-backends/tests/dispatch_parity.rs:25:
++};
++use incin_core::exec::{
++    Conv2dArgs, Conv2dRule, ExecutionContext, Pool2dRule, Pool2dSpec, PoolOp, ReduceOp, ReduceRule,
++    ReductionSpec, ReshapeRule, ReshapeSpec, ShapeRule, TensorHandle, Validated,
+ };
+ use incin_core::prelude::*;
+ use incin_core::typenum::{U0, U1, U2, U3, U4, U6};
+Diff in /home/xupremix/Projects/incin/crates/incin-core/examples/model_inspect.rs:1:
+ extern crate incin_core as incin;
+ use incin_core::io::{GgufExporter, QuantScheme, inspect_file};
+-use incin_core::test_utils::DummyBackend;
+ use incin_core::prelude::*;
++use incin_core::test_utils::DummyBackend;
+ use std::path::Path;
+ 
+ fn main() -> Result<()> {
+Diff in /home/xupremix/Projects/incin/crates/incin-core/examples/onnx_export.rs:1:
+-use incin_core::test_utils::DummyBackend;
+ use incin_core::prelude::*;
+ use incin_core::prelude::{TracingBackend, tracing_mark_input, tracing_mark_output};
++use incin_core::test_utils::DummyBackend;
+ extern crate alloc;
+ use alloc::collections::BTreeMap;
+ use std::path::Path;
+Diff in /home/xupremix/Projects/incin/crates/incin-core/tests/builder_permutations.rs:1:
+ #![allow(unused_imports)]
+ extern crate incin_core as incin;
+ 
+-use incin_core::test_utils::DummyBackend;
+ use incin_core::prelude::*;
+ use incin_core::prelude::*;
++use incin_core::test_utils::DummyBackend;
+ use incin_macros::s;
+ 
+ /// B.
+Diff in /home/xupremix/Projects/incin/crates/incin-core/tests/checkpoint_reshard.rs:1:
+ #![cfg(feature = "std")]
+ 
+ use incin_backends::cpu::CpuBackendImpl;
++use incin_core::nn::Linear;
+ use incin_core::nn::save::{
+-    load_checkpoint_manifest, load_resharded_checkpoint, save_checkpoint,
+-    save_checkpoint_manifest, slice_bytes_for_rank, GlobalCheckpointManifest,
++    GlobalCheckpointManifest, load_checkpoint_manifest, load_resharded_checkpoint, save_checkpoint,
++    save_checkpoint_manifest, slice_bytes_for_rank,
+ };
+-use incin_core::nn::Linear;
+ use incin_core::prelude::*;
+ use tempfile::tempdir;
+ 
+Diff in /home/xupremix/Projects/incin/crates/incin-core/tests/concat_stack.rs:1:
+ extern crate incin_core as incin;
+ 
+ use incin_core::prelude::Cpu;
+-use incin_core::test_utils::DummyBackend;
+ use incin_core::prelude::*;
++use incin_core::test_utils::DummyBackend;
+ use incin_macros::s;
+ 
+ #[test]
+Diff in /home/xupremix/Projects/incin/crates/incin-core/tests/constructor_ranks.rs:1:
+ //! `SHP-007`: constructor arguments resolve through the same rank ceiling as
+ //! `Shape`; a typed shape must not become unconstructible at rank 6 or 8.
+ 
+-use incin_core::test_utils::DummyBackend;
+ use incin_core::prelude::{Cpu, Tensor};
++use incin_core::test_utils::DummyBackend;
+ use typenum::U1;
+ 
+ type Backend = DummyBackend<f32, Cpu>;
+Diff in /home/xupremix/Projects/incin/crates/incin-core/tests/fsdp.rs:2:
+ 
+ #![cfg(feature = "distributed")]
+ 
+-use incin_core::dist::fsdp::{
+-    FsdpError, FsdpParameterId, FsdpPlanBuilder, ZeROStage,
+-};
++use incin_core::dist::fsdp::{FsdpError, FsdpParameterId, FsdpPlanBuilder, ZeROStage};
+ use incin_core::prelude::DTypeId;
+ 
+ #[test]
+Diff in /home/xupremix/Projects/incin/crates/incin-core/tests/fsdp.rs:52:
+     let create_plan = |stage: ZeROStage| {
+         let mut builder = FsdpPlanBuilder::new(stage);
+         builder
+-            .push_dyn(FsdpParameterId::new(1).unwrap(), 100_000, DTypeId::F32, 0, 4)
++            .push_dyn(
++                FsdpParameterId::new(1).unwrap(),
++                100_000,
++                DTypeId::F32,
++                0,
++                4,
++            )
+             .unwrap();
+         builder.finish(4).unwrap()
+     };
+Diff in /home/xupremix/Projects/incin/crates/incin-core/tests/fsdp.rs:78:
+ #[test]
+ fn fsdp_builder_error_handling() {
+     // Reserved ID
+-    assert_eq!(
+-        FsdpParameterId::new(0),
+-        Err(FsdpError::ReservedParameterId)
+-    );
++    assert_eq!(FsdpParameterId::new(0), Err(FsdpError::ReservedParameterId));
+ 
+     // Duplicate parameter ID
+     let mut builder = FsdpPlanBuilder::new(ZeROStage::ZeRO3);
+Diff in /home/xupremix/Projects/incin/crates/incin-core/tests/model_stats.rs:4:
+ //! this test doubles as a check that the doc's illustrative numbers and the
+ //! real implementation actually agree.
+ extern crate incin_core as incin;
+-use incin_core::test_utils::DummyBackend;
+ use incin_core::prelude::*;
++use incin_core::test_utils::DummyBackend;
+ 
+ type TestBackend = DummyBackend<f32, Cpu>;
+ 
+Diff in /home/xupremix/Projects/incin/crates/incin-core/tests/nn_components.rs:1:
+ extern crate incin_core as incin;
+ 
+ use incin_core::prelude::Cpu;
+-use incin_core::test_utils::DummyBackend;
+ use incin_core::prelude::*;
++use incin_core::test_utils::DummyBackend;
+ use incin_macros::s;
+ 
+ #[test]
+Diff in /home/xupremix/Projects/incin/crates/incin-core/tests/reshape.rs:1:
+ extern crate incin_core as incin;
+ 
+ use incin_core::prelude::Cpu;
+-use incin_core::test_utils::DummyBackend;
+ use incin_core::prelude::*;
++use incin_core::test_utils::DummyBackend;
+ use incin_macros::s;
+ 
+ #[test]

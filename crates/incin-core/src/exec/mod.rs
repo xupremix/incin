@@ -43,6 +43,10 @@
 
 /// Backend-neutral capability queries and registry resolution.
 pub mod capability;
+/// Canonical exact-operation inventory and typed descriptor vocabulary.
+pub mod catalog;
+/// Backend-reusable storage-free semantic vectors.
+pub mod conformance;
 /// Backend-owning execution context foundation.
 pub mod context;
 /// Checked physical storage metadata shared by all backends.
@@ -66,6 +70,15 @@ pub use capability::{
     Capabilities, CapabilityQuery, CapabilityRegistry, CapabilityRule, ImplementationKind,
     SupportLevel, UnsupportedReason,
 };
+pub use catalog::{
+    CanonicalOperation, Descriptor, DescriptorError, LogicalTensorMeta, OPERATION_CATALOG,
+    OperationCatalogEntry, ValidatedInvocation, catalog_entry, op, operation_semantics_document,
+};
+#[cfg(feature = "std")]
+pub use catalog::{CapturedDescriptor, DescriptorCaptureError};
+pub use conformance::{
+    ConformanceClass, ConformanceVector, ExpectedDisposition, SEMANTIC_CONFORMANCE_VECTORS,
+};
 pub use context::ExecutionContext;
 pub use meta::{Alignment, LayoutClass, MetaError, TensorMeta};
 pub use policy::{
@@ -82,8 +95,8 @@ pub use rule::{
     ReduceRule, ReshapeRule, ShapeRule,
 };
 pub use spec::{
-    AxisMask, BinaryOp, BroadcastSpec, Conv2dSpec, DescriptorSchemaVersion, MatMulSpec,
-    OperationSpec, Pool2dSpec, PoolOp, ReduceOp, ReductionSpec, ReshapeSpec,
+    AxisMask, BinaryOp, BroadcastSpec, Conv2dSpec, DescriptorSchemaVersion, ExecutionDescriptor,
+    MatMulSpec, OperationSpec, Pool2dSpec, PoolOp, ReduceOp, ReductionSpec, ReshapeSpec,
 };
 pub use tape::{BackwardFn, GradientMap, Tape, TapeNode, TapeStorage, TensorId};
 

@@ -24,24 +24,188 @@ run time.
 
 | Operation | cpu | cuda | wgpu |
 |---|---|---|---|
-| `broadcast` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `q8_0` | `i64`, `bf16`, `f16`, `f32`, `f64` | `f32` |
+| `abs` | — | — | — |
+| `abs_diff` | — | — | — |
+| `acos` | — | — | — |
+| `acosh` | — | — | — |
+| `adam_step` | — | — | — |
+| `adamw_step` | — | — | — |
+| `adaptive_avg_pool2d` | — | — | — |
+| `add` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` |
+| `add_in_place` | — | — | — |
+| `add_scalar` | — | — | — |
+| `addmm` | — | — | — |
+| `arange` | — | — | — |
+| `argmax` | — | — | — |
+| `argmin` | — | — | — |
+| `argsort` | — | — | — |
+| `asin` | — | — | — |
+| `asinh` | — | — | — |
+| `atan` | — | — | — |
+| `atan2` | — | — | — |
+| `atanh` | — | — | — |
+| `avg_pool2d` | `f32` | `f32` | `f32` |
+| `backward` | — | — | — |
+| `batch_norm` | — | — | — |
+| `bce_with_logits_loss` | — | — | — |
+| `bmm` | — | — | — |
+| `broadcast_as` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `q8_0` | `i64`, `bf16`, `f16`, `f32`, `f64` | `f32` |
+| `broadcast_left` | — | — | — |
+| `ceil` | — | — | — |
+| `chunk` | — | — | — |
+| `clamp` | — | — | — |
+| `cmp_eq` | — | — | — |
+| `cmp_ge` | — | — | — |
+| `cmp_gt` | — | — | — |
+| `cmp_le` | — | — | — |
+| `cmp_lt` | — | — | — |
+| `cmp_ne` | — | — | — |
+| `concat` | — | — | — |
+| `conv1d` | — | — | — |
 | `conv2d` | `f32` | `f32` | `f32` |
-| `fill` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
+| `conv_transpose2d` | — | — | — |
+| `cos` | — | — | — |
+| `cosh` | — | — | — |
+| `cross_entropy_loss` | — | — | — |
+| `cumsum` | — | — | — |
+| `dequantize` | — | — | — |
+| `detach` | — | — | — |
+| `diag` | — | — | — |
+| `div` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` |
+| `div_in_place` | — | — | — |
+| `div_scalar` | — | — | — |
+| `dot` | — | — | — |
+| `dropout` | — | — | — |
+| `elu` | — | — | — |
+| `embedding` | — | — | — |
+| `erf` | — | — | — |
+| `exp` | — | — | — |
+| `fill_in_place` | — | — | — |
+| `flatten` | — | — | — |
+| `float_to_scalar` | — | — | — |
+| `float_to_vec1` | — | — | — |
+| `floor` | — | — | — |
+| `fmod` | — | — | — |
+| `frac` | — | — | — |
+| `full` | — | — | — |
+| `gather` | — | — | — |
+| `gelu` | — | — | — |
+| `group_norm` | — | — | — |
+| `index_select` | — | — | — |
+| `instance_norm` | — | — | — |
+| `int_to_scalar` | — | — | — |
+| `int_to_vec1` | — | — | — |
+| `l1_loss` | — | — | — |
+| `layer_norm` | — | — | — |
+| `lerp` | — | — | — |
+| `linear` | — | — | — |
+| `linspace` | — | — | — |
+| `log` | — | — | — |
+| `log10` | — | — | — |
+| `log2` | — | — | — |
+| `logical_and` | — | — | — |
+| `logical_not` | — | — | — |
+| `logical_or` | — | — | — |
+| `lstm` | — | — | — |
+| `masked_fill` | — | — | — |
 | `matmul` | `f32` | `f32` | `f32` |
-| `normalization` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` |
-| `pointwise` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` |
-| `pool2d` | `f32` | `f32` | `f32` |
-| `random` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
-| `reduction` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` |
+| `max_all` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` |
+| `max_dim` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` |
+| `max_keepdim` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` |
+| `max_pool2d` | `f32` | `f32` | `f32` |
+| `maximum` | — | — | — |
+| `mean_all` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` |
+| `mean_dim` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` |
+| `mean_keepdim` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` |
+| `min_all` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` |
+| `min_dim` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` |
+| `min_keepdim` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` |
+| `minimum` | — | — | — |
+| `mish` | — | — | — |
+| `mse_loss` | — | — | — |
+| `mul` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` |
+| `mul_in_place` | — | — | — |
+| `mul_scalar` | — | — | — |
+| `narrow` | — | — | — |
+| `neg` | — | — | — |
+| `norm` | — | — | — |
+| `ones` | — | — | — |
+| `outer` | — | — | — |
+| `pad` | — | — | — |
+| `pixel_shuffle` | — | — | — |
+| `powf` | — | — | — |
+| `prod_all` | `f32` | — | — |
+| `prod_dim` | `f32` | — | — |
+| `quantize` | — | — | — |
+| `quantized_matmul` | — | — | — |
+| `rand` | — | — | — |
+| `randn` | — | — | — |
+| `relu` | — | — | — |
+| `remainder` | — | — | — |
+| `repeat` | — | — | — |
+| `require_grad` | — | — | — |
 | `reshape` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `q8_0` | `i64`, `bf16`, `f16`, `f32`, `f64` | `f32` |
-| `storage` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `q8_0` | `i64`, `bf16`, `f16`, `f32`, `f64` | `f32` |
+| `rms_norm` | — | — | — |
+| `rnn` | — | — | — |
+| `round` | — | — | — |
+| `rsqrt` | — | — | — |
+| `sample` | — | — | — |
+| `scaled_dot_product_attention` | — | — | — |
+| `scatter` | — | — | — |
+| `sgd_step` | — | — | — |
+| `sigmoid` | — | — | — |
+| `sign` | — | — | — |
+| `sin` | — | — | — |
+| `sinh` | — | — | — |
+| `slice` | — | — | — |
+| `softmax` | — | — | — |
+| `split` | — | — | — |
+| `sqrt` | — | — | — |
+| `squeeze` | — | — | — |
+| `stack` | — | — | — |
+| `std_all` | — | — | — |
+| `std_dim` | — | — | — |
+| `std_keepdim` | — | — | — |
+| `step` | — | — | — |
+| `sub` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` |
+| `sub_in_place` | — | — | — |
+| `sub_scalar` | — | — | — |
+| `sum_all` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` |
+| `sum_dim` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` |
+| `sum_keepdim` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` |
+| `swish` | — | — | — |
+| `tan` | — | — | — |
+| `tanh` | — | — | — |
+| `tensor_from_bytes` | — | — | — |
+| `tensor_from_data` | — | — | — |
+| `tensor_to_bytes` | — | — | — |
+| `to_device` | — | — | — |
+| `to_dtype` | — | — | — |
+| `topk` | — | — | — |
+| `transpose` | — | — | — |
+| `tril` | — | — | — |
+| `triu` | — | — | — |
+| `trunc` | — | — | — |
+| `unfold` | — | — | — |
+| `unsqueeze` | — | — | — |
+| `var_all` | — | — | — |
+| `var_dim` | — | — | — |
+| `var_keepdim` | — | — | — |
+| `var_ones` | — | — | — |
+| `var_rand` | — | — | — |
+| `var_randn` | — | — | — |
+| `var_zeros` | — | — | — |
+| `where_cond` | — | — | — |
+| `zero_in_place` | — | — | — |
+| `zeros` | — | — | — |
 
-Every backend registers the same eleven operations, so this table is about element types rather than about which operations exist. Layout, rank and training coverage are in the per-backend tables below, and differ between backends within one operation.
+Every stable semantic operation comes from the canonical catalog. A dash is an explicit unsupported or migration-blocked decision. Layout, rank and training coverage are in the per-backend tables below.
 
 ## `cpu`
 
 | Operation | Element types | Layouts | Rank | Training | Implementation |
 |---|---|---|---|:--:|---|
+| `reshape` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `q8_0` | `strided` | any | no | composed |
 | `storage` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `q8_0` | `contiguous`, `strided` | any | no | native |
 | `fill` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | no | native |
 | `random` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | no | native |
@@ -57,6 +221,30 @@ Every backend registers the same eleven operations, so this table is about eleme
 | `matmul` | `f32` | `contiguous`, `strided` | 2+ | yes | native |
 | `conv2d` | `f32` | `contiguous` | 3–4 | yes | native |
 | `pool2d` | `f32` | `contiguous` | 3–4 | yes | native |
+| `add` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `sub` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `mul` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `div` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `broadcast_as` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `q8_0` | `contiguous`, `strided` | any | no | native |
+| `reshape` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `q8_0` | `contiguous` | any | no | native |
+| `matmul` | `f32` | `contiguous`, `strided` | 2+ | yes | native |
+| `sum_all` | `f32` | `contiguous`, `strided` | any | yes | native |
+| `mean_all` | `f32` | `contiguous`, `strided` | any | yes | native |
+| `max_all` | `f32` | `contiguous`, `strided` | any | yes | native |
+| `min_all` | `f32` | `contiguous`, `strided` | any | yes | native |
+| `prod_all` | `f32` | `contiguous`, `strided` | any | yes | native |
+| `sum_dim` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
+| `sum_keepdim` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
+| `mean_dim` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
+| `mean_keepdim` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
+| `max_dim` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
+| `max_keepdim` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
+| `min_dim` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
+| `min_keepdim` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
+| `prod_dim` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
+| `conv2d` | `f32` | `contiguous` | 3–4 | yes | native |
+| `max_pool2d` | `f32` | `contiguous` | 3–4 | yes | native |
+| `avg_pool2d` | `f32` | `contiguous` | 3–4 | yes | native |
 
 ## `cuda`
 
@@ -75,6 +263,28 @@ Every backend registers the same eleven operations, so this table is about eleme
 | `matmul` | `f32` | `contiguous` | 2+ | yes | native |
 | `conv2d` | `f32` | `contiguous` | 3–4 | yes | native |
 | `pool2d` | `f32` | `contiguous` | 3–4 | yes | native |
+| `add` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
+| `sub` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
+| `mul` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
+| `div` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
+| `broadcast_as` | `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | no | native |
+| `reshape` | `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | no | native |
+| `matmul` | `f32` | `contiguous` | 2+ | yes | native |
+| `sum_all` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
+| `mean_all` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
+| `max_all` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
+| `min_all` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
+| `sum_dim` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | 1+ | yes | native |
+| `sum_keepdim` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | 1+ | yes | native |
+| `mean_dim` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | 1+ | yes | native |
+| `mean_keepdim` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | 1+ | yes | native |
+| `max_dim` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | 1+ | yes | native |
+| `max_keepdim` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | 1+ | yes | native |
+| `min_dim` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | 1+ | yes | native |
+| `min_keepdim` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | 1+ | yes | native |
+| `conv2d` | `f32` | `contiguous` | 3–4 | yes | native |
+| `max_pool2d` | `f32` | `contiguous` | 3–4 | yes | native |
+| `avg_pool2d` | `f32` | `contiguous` | 3–4 | yes | native |
 
 ## `wgpu`
 
@@ -91,6 +301,28 @@ Every backend registers the same eleven operations, so this table is about eleme
 | `matmul` | `f32` | `contiguous` | 2+ | yes | native |
 | `conv2d` | `f32` | `contiguous` | 3–4 | yes | native |
 | `pool2d` | `f32` | `contiguous` | 3–4 | yes | native |
+| `add` | `f32` | `contiguous` | any | yes | native |
+| `sub` | `f32` | `contiguous` | any | yes | native |
+| `mul` | `f32` | `contiguous` | any | yes | native |
+| `div` | `f32` | `contiguous` | any | yes | native |
+| `broadcast_as` | `f32` | `contiguous` | any | no | native |
+| `reshape` | `f32` | `contiguous` | any | no | native |
+| `matmul` | `f32` | `contiguous` | 2+ | yes | native |
+| `sum_all` | `f32` | `contiguous` | any | yes | native |
+| `mean_all` | `f32` | `contiguous` | any | yes | native |
+| `max_all` | `f32` | `contiguous` | any | yes | native |
+| `min_all` | `f32` | `contiguous` | any | yes | native |
+| `sum_dim` | `f32` | `contiguous` | 1+ | yes | native |
+| `sum_keepdim` | `f32` | `contiguous` | 1+ | yes | native |
+| `mean_dim` | `f32` | `contiguous` | 1+ | yes | native |
+| `mean_keepdim` | `f32` | `contiguous` | 1+ | yes | native |
+| `max_dim` | `f32` | `contiguous` | 1+ | yes | native |
+| `max_keepdim` | `f32` | `contiguous` | 1+ | yes | native |
+| `min_dim` | `f32` | `contiguous` | 1+ | yes | native |
+| `min_keepdim` | `f32` | `contiguous` | 1+ | yes | native |
+| `conv2d` | `f32` | `contiguous` | 3–4 | yes | native |
+| `max_pool2d` | `f32` | `contiguous` | 3–4 | yes | native |
+| `avg_pool2d` | `f32` | `contiguous` | 3–4 | yes | native |
 
 ## Reading this
 

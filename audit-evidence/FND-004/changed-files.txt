@@ -1,0 +1,40 @@
+# FND-004 changed files
+
+Working tree relative to 2eb7fe7200b2bdfd713ef1c50419a182dc696e02 (FND-003).
+
+ M crates/incin-backends/src/capability.rs
+ M crates/incin-backends/src/capability_docs.rs
+ M crates/incin-backends/src/cpu/executor.rs
+ M crates/incin-backends/src/cuda/executor.rs
+ M crates/incin-backends/src/descriptor_bind.rs
+ M crates/incin-backends/src/metal/executor.rs
+ M crates/incin-backends/src/wgpu/executor.rs
+ M crates/incin-backends/tests/capability_matrix.rs
+ M crates/incin-backends/tests/cpu_executor.rs
+ M crates/incin-backends/tests/wgpu_executor.rs
+ M crates/incin-core/src/compiled/artifact.rs
+ M crates/incin-core/src/dist/mod.rs
+ M crates/incin-core/src/exec/capability.rs
+ M crates/incin-core/src/exec/mod.rs
+ M crates/incin-core/src/exec/spec.rs
+ M crates/incin-core/src/lib.rs
+ M crates/incin-core/src/nn/param.rs
+ M crates/incin-core/src/serialize.rs
+ M crates/incin-core/src/shapes/error.rs
+ M crates/incin-core/src/tensor/backend.rs
+ M crates/incin-core/src/tensor/dtype.rs
+ M crates/incin-core/src/tensor/mod.rs
+ M crates/incin-core/tests/compile_tests.rs
+ M crates/incin/src/lib.rs
+ M crates/incin/tests/consumer-fixtures/backend-authoring-pass/src/lib.rs
+ M docs/capabilities.md
+?? INCIN_FOUNDATION_FIRST_REMEDIATION_PROMPT.md
+?? audit-evidence/FND-004/
+?? crates/incin-core/src/exec/catalog.rs
+?? crates/incin-core/src/exec/conformance.rs
+?? crates/incin-core/src/operation_catalog.rs
+?? crates/incin-core/tests/compile_fail/canonical_descriptor_fields_are_private.rs
+?? crates/incin-core/tests/compile_fail/canonical_descriptor_fields_are_private.stderr
+?? crates/incin-core/tests/generated_operation_semantics.rs
+?? crates/incin-core/tests/operation_inventory.rs
+?? docs/OPERATION_SEMANTICS.md

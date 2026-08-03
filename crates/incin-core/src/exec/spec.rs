@@ -438,6 +438,13 @@ pub trait OperationSpec: Clone + fmt::Debug + Sealed {
     /// The operation this descriptor resolves.
     const KIND: OperationKind;
 
+    /// Exact semantic identity for errors, capability lookup, and capture.
+    /// Attribute-polymorphic geometry descriptors override this method.
+    #[must_use]
+    fn operation(&self) -> OperationKind {
+        Self::KIND
+    }
+
     /// The schema this descriptor's fields are frozen at.
     ///
     /// Defaulted to [`DescriptorSchemaVersion::CURRENT`] because descriptors
@@ -456,9 +463,18 @@ pub trait OperationSpec: Clone + fmt::Debug + Sealed {
     /// constructors rather than of the trait, and a caller holding a `&dyn`
     /// descriptor has no way to know which constructor produced it.
     fn output_elements(&self) -> Result<usize, ShapeError> {
-        self.output().checked_numel(Self::KIND)
+        self.output().checked_numel(self.operation())
     }
 }
+
+/// Descriptor types accepted by the execution contract.
+///
+/// Legacy geometry descriptors implement this through `OperationSpec`; exact
+/// catalog descriptors implement it directly. The validation wrapper remains
+/// the seal, so backend authors consume but cannot mint invocations.
+pub trait ExecutionDescriptor: Clone + fmt::Debug {}
+
+impl<O: OperationSpec> ExecutionDescriptor for O {}
 
 /// Reject an output that cannot be allocated or indexed.
 ///
@@ -619,6 +635,16 @@ impl Sealed for BroadcastSpec {}
 
 impl OperationSpec for BroadcastSpec {
     const KIND: OperationKind = Self::OP;
+
+    fn operation(&self) -> OperationKind {
+        match self.op {
+            None => OperationKind::BroadcastAs,
+            Some(BinaryOp::Add) => OperationKind::Add,
+            Some(BinaryOp::Sub) => OperationKind::Sub,
+            Some(BinaryOp::Mul) => OperationKind::Mul,
+            Some(BinaryOp::Div) => OperationKind::Div,
+        }
+    }
 
     fn output(&self) -> &ShapeBuf {
         &self.output
@@ -845,6 +871,10 @@ impl Sealed for MatMulSpec {}
 impl OperationSpec for MatMulSpec {
     const KIND: OperationKind = Self::OP;
 
+    fn operation(&self) -> OperationKind {
+        OperationKind::MatMulExact
+    }
+
     fn output(&self) -> &ShapeBuf {
         &self.output
     }
@@ -1056,6 +1086,31 @@ impl Sealed for ReductionSpec {}
 impl OperationSpec for ReductionSpec {
     const KIND: OperationKind = Self::OP;
 
+    fn operation(&self) -> OperationKind {
+        let input_rank = if self.keep_dims {
+            self.output.rank()
+        } else {
+            self.output.rank() + self.axes.count()
+        };
+        let all = self.axes.count() == input_rank;
+        match (self.op, all, self.keep_dims) {
+            (ReduceOp::Sum, true, _) => OperationKind::SumAll,
+            (ReduceOp::Mean, true, _) => OperationKind::MeanAll,
+            (ReduceOp::Max, true, _) => OperationKind::MaxAll,
+            (ReduceOp::Min, true, _) => OperationKind::MinAll,
+            (ReduceOp::Prod, true, _) => OperationKind::ProdAll,
+            (ReduceOp::Sum, false, false) => OperationKind::SumDim,
+            (ReduceOp::Sum, false, true) => OperationKind::SumKeepDim,
+            (ReduceOp::Mean, false, false) => OperationKind::MeanDim,
+            (ReduceOp::Mean, false, true) => OperationKind::MeanKeepDim,
+            (ReduceOp::Max, false, false) => OperationKind::MaxDim,
+            (ReduceOp::Max, false, true) => OperationKind::MaxKeepDim,
+            (ReduceOp::Min, false, false) => OperationKind::MinDim,
+            (ReduceOp::Min, false, true) => OperationKind::MinKeepDim,
+            (ReduceOp::Prod, false, _) => OperationKind::ProdDim,
+        }
+    }
+
     fn output(&self) -> &ShapeBuf {
         &self.output
     }
@@ -1199,6 +1254,10 @@ impl Sealed for Conv2dSpec {}
 impl OperationSpec for Conv2dSpec {
     const KIND: OperationKind = Self::OP;
 
+    fn operation(&self) -> OperationKind {
+        OperationKind::Conv2dExact
+    }
+
     fn output(&self) -> &ShapeBuf {
         &self.output
     }
@@ -1325,6 +1384,13 @@ impl Sealed for Pool2dSpec {}
 impl OperationSpec for Pool2dSpec {
     const KIND: OperationKind = Self::OP;
 
+    fn operation(&self) -> OperationKind {
+        match self.op {
+            PoolOp::Max => OperationKind::MaxPool2d,
+            PoolOp::Average => OperationKind::AvgPool2d,
+        }
+    }
+
     fn output(&self) -> &ShapeBuf {
         &self.output
     }
@@ -1396,7 +1462,64 @@ impl Sealed for ReshapeSpec {}
 impl OperationSpec for ReshapeSpec {
     const KIND: OperationKind = Self::OP;
 
+    fn operation(&self) -> OperationKind {
+        OperationKind::ReshapeExact
+    }
+
     fn output(&self) -> &ShapeBuf {
         &self.output
+    }
+}
+
+#[cfg(test)]
+mod exact_identity_tests {
+    use super::*;
+
+    #[test]
+    fn attribute_polymorphic_descriptors_report_exact_identities() {
+        let matrix = ShapeBuf::from_slice(&[2, 2]);
+        assert_eq!(
+            BroadcastSpec::contiguous(&matrix, &matrix, Some(BinaryOp::Add))
+                .unwrap()
+                .operation(),
+            OperationKind::Add
+        );
+        assert_eq!(
+            BroadcastSpec::contiguous(&matrix, &matrix, None)
+                .unwrap()
+                .operation(),
+            OperationKind::BroadcastAs
+        );
+        assert_eq!(
+            ReductionSpec::over_all(&matrix, false, ReduceOp::Mean)
+                .unwrap()
+                .operation(),
+            OperationKind::MeanAll
+        );
+        assert_eq!(
+            ReductionSpec::over_axes(&matrix, [1], true, ReduceOp::Sum)
+                .unwrap()
+                .operation(),
+            OperationKind::SumKeepDim
+        );
+        assert_eq!(
+            Pool2dSpec::new(
+                &ShapeBuf::from_slice(&[1, 1, 4, 4]),
+                [2, 2],
+                [2, 2],
+                [0, 0],
+                [1, 1],
+                PoolOp::Average,
+            )
+            .unwrap()
+            .operation(),
+            OperationKind::AvgPool2d
+        );
+        assert_eq!(
+            ReshapeSpec::new(&matrix, &ShapeBuf::from_slice(&[4]))
+                .unwrap()
+                .operation(),
+            OperationKind::ReshapeExact
+        );
     }
 }
