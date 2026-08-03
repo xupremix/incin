@@ -568,3 +568,228 @@ command: git diff --check
   exit: 0
   output: audit-evidence/FND-004/test-results/git-diff-check-gate.txt
 
+=== FND-004 acceptance gate (committed, suffix=committed) at 2026-08-03T11:23:18+02:00 ===
+commit: 93beef10b01ffba4f67d5ac08cb636922b8ff09c
+
+command: cargo fmt --all -- --check
+  stage: committed
+  cwd: /home/xupremix/Projects/incin
+  commit: 93beef10b01ffba4f67d5ac08cb636922b8ff09c
+  start: 2026-08-03T11:23:18+02:00
+  end: 2026-08-03T11:23:19+02:00
+  exit: 1
+  output: audit-evidence/FND-004/test-results/fmt-workspace-committed.txt
+
+command: cargo check -p incin-core --no-default-features
+  stage: committed
+  cwd: /home/xupremix/Projects/incin
+  commit: 93beef10b01ffba4f67d5ac08cb636922b8ff09c
+  start: 2026-08-03T11:23:19+02:00
+  end: 2026-08-03T11:23:21+02:00
+  exit: 0
+  output: audit-evidence/FND-004/test-results/check-core-no-default-committed.txt
+
+command: cargo check -p incin-core --no-default-features --features std
+  stage: committed
+  cwd: /home/xupremix/Projects/incin
+  commit: 93beef10b01ffba4f67d5ac08cb636922b8ff09c
+  start: 2026-08-03T11:23:21+02:00
+  end: 2026-08-03T11:23:24+02:00
+  exit: 0
+  output: audit-evidence/FND-004/test-results/check-core-std-committed.txt
+
+command: cargo check -p incin --no-default-features
+  stage: committed
+  cwd: /home/xupremix/Projects/incin
+  commit: 93beef10b01ffba4f67d5ac08cb636922b8ff09c
+  start: 2026-08-03T11:23:24+02:00
+  end: 2026-08-03T11:23:26+02:00
+  exit: 0
+  output: audit-evidence/FND-004/test-results/check-facade-no-default-committed.txt
+
+command: cargo check -p incin --no-default-features --features std
+  stage: committed
+  cwd: /home/xupremix/Projects/incin
+  commit: 93beef10b01ffba4f67d5ac08cb636922b8ff09c
+  start: 2026-08-03T11:23:26+02:00
+  end: 2026-08-03T11:23:29+02:00
+  exit: 0
+  output: audit-evidence/FND-004/test-results/check-facade-std-committed.txt
+
+command: cargo check -p incin --features cpu
+  stage: committed
+  cwd: /home/xupremix/Projects/incin
+  commit: 93beef10b01ffba4f67d5ac08cb636922b8ff09c
+  start: 2026-08-03T11:23:29+02:00
+  end: 2026-08-03T11:23:30+02:00
+  exit: 0
+  output: audit-evidence/FND-004/test-results/check-facade-cpu-committed.txt
+
+command: cargo check --workspace
+  stage: committed
+  cwd: /home/xupremix/Projects/incin
+  commit: 93beef10b01ffba4f67d5ac08cb636922b8ff09c
+  start: 2026-08-03T11:23:30+02:00
+  end: 2026-08-03T11:23:34+02:00
+  exit: 0
+  output: audit-evidence/FND-004/test-results/check-workspace-committed.txt
+
+command: cargo clippy --workspace --all-targets -- -D warnings
+  stage: committed
+  cwd: /home/xupremix/Projects/incin
+  commit: 93beef10b01ffba4f67d5ac08cb636922b8ff09c
+  start: 2026-08-03T11:23:34+02:00
+  end: 2026-08-03T11:23:35+02:00
+  exit: 0
+  output: audit-evidence/FND-004/test-results/clippy-workspace-committed.txt
+
+command: cargo test -p incin-core
+  stage: committed
+  cwd: /home/xupremix/Projects/incin
+  commit: 93beef10b01ffba4f67d5ac08cb636922b8ff09c
+  start: 2026-08-03T11:23:35+02:00
+  end: 2026-08-03T11:24:21+02:00
+  exit: 0
+  output: audit-evidence/FND-004/test-results/test-core-committed.txt
+
+command: cargo test -p incin-core --lib exec::
+  stage: committed
+  cwd: /home/xupremix/Projects/incin
+  commit: 93beef10b01ffba4f67d5ac08cb636922b8ff09c
+  start: 2026-08-03T11:24:21+02:00
+  end: 2026-08-03T11:24:22+02:00
+  exit: 0
+  output: audit-evidence/FND-004/test-results/test-core-exec-committed.txt
+
+command: cargo test -p incin-core --test generated_operation_semantics
+  stage: committed
+  cwd: /home/xupremix/Projects/incin
+  commit: 93beef10b01ffba4f67d5ac08cb636922b8ff09c
+  start: 2026-08-03T11:24:22+02:00
+  end: 2026-08-03T11:24:22+02:00
+  exit: 0
+  output: audit-evidence/FND-004/test-results/test-generated-semantics-committed.txt
+
+command: cargo test -p incin-core --test operation_inventory
+  stage: committed
+  cwd: /home/xupremix/Projects/incin
+  commit: 93beef10b01ffba4f67d5ac08cb636922b8ff09c
+  start: 2026-08-03T11:24:22+02:00
+  end: 2026-08-03T11:24:22+02:00
+  exit: 0
+  output: audit-evidence/FND-004/test-results/test-operation-inventory-committed.txt
+
+command: cargo test -p incin-core --test compile_tests
+  stage: committed
+  cwd: /home/xupremix/Projects/incin
+  commit: 93beef10b01ffba4f67d5ac08cb636922b8ff09c
+  start: 2026-08-03T11:24:22+02:00
+  end: 2026-08-03T11:24:33+02:00
+  exit: 0
+  output: audit-evidence/FND-004/test-results/test-compile-contracts-committed.txt
+
+command: cargo test -p incin-backends --features cpu
+  stage: committed
+  cwd: /home/xupremix/Projects/incin
+  commit: 93beef10b01ffba4f67d5ac08cb636922b8ff09c
+  start: 2026-08-03T11:24:33+02:00
+  end: 2026-08-03T11:24:38+02:00
+  exit: 0
+  output: audit-evidence/FND-004/test-results/test-backends-cpu-committed.txt
+
+command: cargo test -p incin-backends --features cpu --test capability_matrix
+  stage: committed
+  cwd: /home/xupremix/Projects/incin
+  commit: 93beef10b01ffba4f67d5ac08cb636922b8ff09c
+  start: 2026-08-03T11:24:38+02:00
+  end: 2026-08-03T11:24:38+02:00
+  exit: 0
+  output: audit-evidence/FND-004/test-results/test-capability-matrix-committed.txt
+
+command: cargo test -p incin-backends --test generated_docs
+  stage: committed
+  cwd: /home/xupremix/Projects/incin
+  commit: 93beef10b01ffba4f67d5ac08cb636922b8ff09c
+  start: 2026-08-03T11:24:38+02:00
+  end: 2026-08-03T11:24:39+02:00
+  exit: 0
+  output: audit-evidence/FND-004/test-results/test-generated-docs-committed.txt
+
+command: cargo test -p incin
+  stage: committed
+  cwd: /home/xupremix/Projects/incin
+  commit: 93beef10b01ffba4f67d5ac08cb636922b8ff09c
+  start: 2026-08-03T11:24:39+02:00
+  end: 2026-08-03T11:24:57+02:00
+  exit: 0
+  output: audit-evidence/FND-004/test-results/test-facade-committed.txt
+
+command: cargo test --workspace
+  stage: committed
+  cwd: /home/xupremix/Projects/incin
+  commit: 93beef10b01ffba4f67d5ac08cb636922b8ff09c
+  start: 2026-08-03T11:24:57+02:00
+  end: 2026-08-03T11:25:48+02:00
+  exit: 0
+  output: audit-evidence/FND-004/test-results/test-workspace-committed.txt
+
+command: cargo test --doc --workspace
+  stage: committed
+  cwd: /home/xupremix/Projects/incin
+  commit: 93beef10b01ffba4f67d5ac08cb636922b8ff09c
+  start: 2026-08-03T11:25:48+02:00
+  end: 2026-08-03T11:26:08+02:00
+  exit: 0
+  output: audit-evidence/FND-004/test-results/test-doc-workspace-committed.txt
+
+command: cargo check -p incin-backends --no-default-features --features cuda
+  stage: committed
+  cwd: /home/xupremix/Projects/incin
+  commit: 93beef10b01ffba4f67d5ac08cb636922b8ff09c
+  start: 2026-08-03T11:26:08+02:00
+  end: 2026-08-03T11:26:11+02:00
+  exit: 0
+  output: audit-evidence/FND-004/test-results/check-backend-cuda-committed.txt
+
+command: cargo check -p incin-backends --no-default-features --features wgpu
+  stage: committed
+  cwd: /home/xupremix/Projects/incin
+  commit: 93beef10b01ffba4f67d5ac08cb636922b8ff09c
+  start: 2026-08-03T11:26:11+02:00
+  end: 2026-08-03T11:26:14+02:00
+  exit: 0
+  output: audit-evidence/FND-004/test-results/check-backend-wgpu-committed.txt
+
+command: cargo check -p incin-backends --no-default-features --features metal
+  stage: committed
+  cwd: /home/xupremix/Projects/incin
+  commit: 93beef10b01ffba4f67d5ac08cb636922b8ff09c
+  start: 2026-08-03T11:26:14+02:00
+  end: 2026-08-03T11:26:17+02:00
+  exit: 0
+  output: audit-evidence/FND-004/test-results/check-backend-metal-committed.txt
+
+command: cargo check -p incin-backends --no-default-features --features external-candle
+  stage: committed
+  cwd: /home/xupremix/Projects/incin
+  commit: 93beef10b01ffba4f67d5ac08cb636922b8ff09c
+  start: 2026-08-03T11:26:17+02:00
+  end: 2026-08-03T11:26:19+02:00
+  exit: 0
+  output: audit-evidence/FND-004/test-results/check-backend-candle-committed.txt
+
+command: git diff --check
+  stage: committed
+  cwd: /home/xupremix/Projects/incin
+  commit: 93beef10b01ffba4f67d5ac08cb636922b8ff09c
+  start: 2026-08-03T11:26:19+02:00
+  end: 2026-08-03T11:26:19+02:00
+  exit: 0
+  output: audit-evidence/FND-004/test-results/git-diff-check-committed.txt
+
+command: RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps
+  stage: committed
+  commit: 93beef10b01ffba4f67d5ac08cb636922b8ff09c
+  exit: 0
+  output: audit-evidence/FND-004/test-results/rustdoc-committed.txt
+

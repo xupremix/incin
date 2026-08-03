@@ -51,8 +51,8 @@ FND-004 freezes semantics and descriptors. It does **not** migrate execution.
 - Broad legacy family capability rows (`Pointwise`, `Reduction`, `Reshape`,
   `MatMul`, `Conv2d`, `Pool2d`, `Storage`, `Fill`, `Random`, `Normalization`,
   `Broadcast`) remain registered for legacy callers. They can no longer make an
-  **exact** query supported — `an_exact_query_never_resolves_through_a_broad_family_row`
-  regression-tests that — but they are still present and FND-005 removes them.
+  **exact** query supported  -  `an_exact_query_never_resolves_through_a_broad_family_row`
+  regression-tests that  -  but they are still present and FND-005 removes them.
 
 ## Conformance vector coverage
 

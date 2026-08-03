@@ -82,7 +82,7 @@ Family fallback is removed from `CapabilityRegistry`: a rule matches only when
 | Every **unadvertised** layout returns the documented typed reason | `capability_matrix::an_unadvertised_exact_layout_returns_the_documented_typed_reason` |
 | No registration resolves through a fallback implementation | `capability_matrix::every_registration_generates_supported_boundary_cases_without_fallback` |
 | Every generated WGPU row matches real execution | `capability_matrix::every_generated_wgpu_row_matches_real_execution` |
-| CUDA rows (hardware) | `capability_matrix::every_generated_cuda_row_matches_real_execution_on_hardware` — `#[ignore]`, no device present |
+| CUDA rows (hardware) | `capability_matrix::every_generated_cuda_row_matches_real_execution_on_hardware`  -  `#[ignore]`, no device present |
 
 CPU strided support is **truthful**: `ReshapeExact` advertises `Contiguous`
 natively plus `Strided` as `ImplementationKind::Composed`, and `MatMulExact`

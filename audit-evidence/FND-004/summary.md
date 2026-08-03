@@ -1,6 +1,16 @@
-# FND-004 — Canonical operation semantics and descriptors
+# FND-004 - Canonical operation semantics and descriptors
 
 **Status: DONE**
+
+**Commit: `93beef10b01ffba4f67d5ac08cb636922b8ff09c`**
+(parent `2eb7fe7200b2bdfd713ef1c50419a182dc696e02`, FND-003)
+
+The acceptance gate was run twice: on the pre-commit worktree (`*-gate.txt`) and
+again on the commit above (`*-committed.txt`). Both reproduce **1348 passed, 0
+failed, 1 ignored**. `cargo public-api -p incin` reports 756 items on the
+committed hash, identical to the FND-003 baseline: FND-004 does not change the
+stable facade. `RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps`
+exits 0 on the committed hash.
 
 Freezes one canonical semantic identity per stable operation, gives each a
 concrete typed descriptor, and couples that identity to capability reporting and
@@ -40,24 +50,24 @@ which requires a CUDA device.
 
 ## What is now frozen
 
-1. **`crates/incin-core/src/operation_catalog.rs`** — the single declaration of
+1. **`crates/incin-core/src/operation_catalog.rs`**  -  the single declaration of
    174 exact operations. A macro-callback table consumed by the diagnostic
    identity, the descriptor generator, and the inventory. There is no second
    hand-maintained operation list.
-2. **`OperationKind::<Exact>`** — exact identities, distinct from broad
+2. **`OperationKind::<Exact>`**  -  exact identities, distinct from broad
    families. `is_exact()` separates them and a family is never a capability
    identity.
-3. **`Descriptor<O>`** — one concrete, non-interchangeable Rust type per
+3. **`Descriptor<O>`**  -  one concrete, non-interchangeable Rust type per
    operation, carrying a typed attribute schema (`Conv2dAttributes`,
    `LayerNormAttributes`, `AdamWAttributes`, ...) rather than a string map.
    Fields are private; a compile-fail fixture proves they cannot be forged.
-4. **`ValidatedInvocation<O>`** — opaque proof that input and output metadata
+4. **`ValidatedInvocation<O>`**  -  opaque proof that input and output metadata
    were validated without touching storage.
-5. **`CapturedDescriptor`** — storage-free serialization with identity and
+5. **`CapturedDescriptor`**  -  storage-free serialization with identity and
    schema outside the payload, so a wrong-type decode fails closed.
-6. **`operand_ranks`** — per-role rank contracts overriding the primary
+6. **`operand_ranks`**  -  per-role rank contracts overriding the primary
    operand's window.
-7. **Capability resolution** — exact-identity matching only; family fallback is
+7. **Capability resolution**  -  exact-identity matching only; family fallback is
    removed from `CapabilityRegistry`.
 
 ## Blockers resolved in this task
@@ -68,14 +78,14 @@ deleted, and several of them record failures.
 
 1. **Workspace tests failed.** Root cause was not what the earlier notes
    assumed. Strided reshape and matmul descriptor execution work correctly and
-   the CPU capability rows advertising them are truthful — both strided tests
+   the CPU capability rows advertising them are truthful  -  both strided tests
    pass. The real failures were assertions still expecting broad **family**
    identities after the executors began reporting **exact** ones. Fixed by
    correcting the assertions and, more importantly, by making WGPU and Metal
    report exact identities too, which they did not. No capability row was
    narrowed, because no unsupported claim was found.
 2. **Metal `E0425`.** No longer reproduces; the feature compiles. Compilation
-   only — no Metal hardware claim.
+   only  -  no Metal hardware claim.
 3. **Per-operation rank validation.** Replaced with per-operand roles. This was
    a live defect: a biased `Conv2dExact` could not validate at all.
 4. **Empty operation inventory.** `operation-surface-inventory.txt` was
@@ -98,4 +108,4 @@ on the committed hash, so the evidence is not tied to an unspecified diff.
 
 ## Next
 
-FND-005 — migrate CPU eager execution to this descriptor contract.
+FND-005  -  migrate CPU eager execution to this descriptor contract.

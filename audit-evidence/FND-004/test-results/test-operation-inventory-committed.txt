@@ -1,0 +1,11 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.12s
+     Running tests/operation_inventory.rs (target/debug/deps/operation_inventory-ea3fba80e2eda38f)
+
+running 4 tests
+test no_catalog_row_is_a_broad_family_identity ... ok
+test every_stable_operation_family_is_represented ... ok
+test operation_inventory_document_matches_the_catalog ... ok
+test every_legacy_operation_method_has_exactly_one_catalog_row ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
