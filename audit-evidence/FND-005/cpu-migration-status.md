@@ -4,7 +4,7 @@ Generated from `CPU_CAPABILITIES` and `incin_core::exec::OPERATION_CATALOG`; the
 
 The denominator is the number of operations that `Execute<Descriptor<O>>` can carry at all, not the whole catalog. An operation whose `ExecutionSite` is not backend-executable is listed separately with the reason: it is a gap in the execution trait rather than an unwritten executor, and counting it here would describe work that cannot be done without changing the contract first.
 
-**117 of 161 backend-executable operations migrated**, out of 174 catalog operations in total. The remaining 44 executable operations are still reachable only through the legacy operation-family traits.
+**121 of 161 backend-executable operations migrated**, out of 174 catalog operations in total. The remaining 40 executable operations are still reachable only through the legacy operation-family traits.
 
 ## Backend-executable operations
 
@@ -123,7 +123,7 @@ The denominator is the number of operations that `Execute<Descriptor<O>>` can ca
 | `float_to_vec1` | `HostReadback` | no | `TensorOps::float_to_vec1` |
 | `int_to_scalar` | `HostReadback` | no | `TensorOps::int_to_scalar` |
 | `int_to_vec1` | `HostReadback` | no | `TensorOps::int_to_vec1` |
-| `to_dtype` | `Kernel` | no | `TensorOps::tensor_to_dtype` |
+| `to_dtype` | `Kernel` | yes | `TensorOps::tensor_to_dtype` |
 | `sum_all` | `Kernel` | yes | `ReductionOps::sum_all` |
 | `mean_all` | `Kernel` | yes | `ReductionOps::mean_all` |
 | `max_all` | `Kernel` | yes | `ReductionOps::max_all` |
@@ -164,9 +164,9 @@ The denominator is the number of operations that `Execute<Descriptor<O>>` can ca
 | `dropout` | `Kernel` | no | `Dropout::forward` |
 | `rnn` | `Kernel` | no | `RNN::forward` |
 | `lstm` | `Kernel` | no | `LSTM::forward` |
-| `mse_loss` | `Kernel` | no | `LossOps::mse_loss` |
-| `l1_loss` | `Kernel` | no | `LossOps::l1_loss` |
-| `bce_with_logits_loss` | `Kernel` | no | `LossOps::bce_with_logits_loss` |
+| `mse_loss` | `Kernel` | yes | `LossOps::mse_loss` |
+| `l1_loss` | `Kernel` | yes | `LossOps::l1_loss` |
+| `bce_with_logits_loss` | `Kernel` | yes | `LossOps::bce_with_logits_loss` |
 | `cross_entropy_loss` | `Kernel` | no | `LossOps::cross_entropy_loss` |
 | `quantize` | `Kernel` | no | `QuantizedOps::quantize` |
 | `dequantize` | `Kernel` | no | `QuantizedOps::dequantize` |

@@ -7,13 +7,13 @@ use incin_backends::capability::{
 };
 use incin_backends::cpu::{CpuBackendImpl, CpuBuffer, CpuStorage};
 use incin_core::backend_authoring::{
-    Backend, CreationOps, FloatOps, ModuleOps, NumericOps, ReductionOps, TensorOps,
+    Backend, CreationOps, FloatOps, LossOps, ModuleOps, NumericOps, ReductionOps, TensorOps,
 };
 use incin_core::exec::{
     Capabilities, CapabilityQuery, DTypeRule, ImplementationKind, LayoutClass, MathMode,
     OPERATION_CATALOG, SupportLevel, UnsupportedReason,
 };
-use incin_core::prelude::{DType, DTypeId, DeviceId, DeviceKind, Dyn, OperationKind};
+use incin_core::prelude::{DType, DTypeId, DeviceId, DeviceKind, Dyn, OperationKind, Reduction};
 
 fn query(
     operation: OperationKind,
@@ -501,6 +501,10 @@ fn cpu_probe_shape(operation: OperationKind) -> &'static [usize] {
         OperationKind::ConvTranspose2d => &[1, 1, 2, 2],
         OperationKind::AdaptiveAvgPool2dExact => &[1, 1, 1, 1],
         OperationKind::LayerNorm => &[2, 2],
+        OperationKind::ToDType => &[2, 2],
+        // Probed with `Mean`, so the result is the scalar the reduction
+        // produces rather than the elementwise buffer feeding it.
+        OperationKind::MseLoss | OperationKind::L1Loss | OperationKind::BceWithLogitsLoss => &[],
         OperationKind::BatchNorm => &[1, 2, 2],
         _ => panic!("missing CPU expected shape for {operation}"),
     }
@@ -684,6 +688,24 @@ fn execute_cpu_probe(operation: OperationKind, layout: LayoutClass) -> CpuStorag
             let input = f32_storage(&[2, 2], &[1.0, 2.0, 3.0, 4.0]);
             let weight = f32_storage(&[2], &[1.0, 1.0]);
             B::layer_norm::<f32>(&input, &weight, None, 1e-5).unwrap()
+        }
+        OperationKind::ToDType => {
+            let input = transpose_if_requested(f32_storage(&[2, 2], &[1.0, 2.0, 3.0, 4.0]), layout);
+            B::tensor_to_dtype::<f32, f32>(&input, DTypeId::F32).unwrap()
+        }
+        OperationKind::MseLoss | OperationKind::L1Loss | OperationKind::BceWithLogitsLoss => {
+            let prediction =
+                transpose_if_requested(f32_storage(&[2, 2], &[0.5, 1.5, -0.5, 1.0]), layout);
+            let target = f32_storage(&[2, 2], &[1.0, 1.0, 0.0, 0.0]);
+            match operation {
+                OperationKind::MseLoss => {
+                    B::mse_loss::<f32>(&prediction, &target, Reduction::Mean).unwrap()
+                }
+                OperationKind::L1Loss => {
+                    B::l1_loss::<f32>(&prediction, &target, Reduction::Mean).unwrap()
+                }
+                _ => B::bce_with_logits_loss::<f32>(&prediction, &target, Reduction::Mean).unwrap(),
+            }
         }
         // Inference mode with running statistics, because that is the only mode
         // the CPU kernel implements and the only one the canonical executor
@@ -988,7 +1010,17 @@ fn every_advertised_cpu_dtype_executes_its_registered_operation() {
                 | OperationKind::AdaptiveAvgPool2dExact
                 | OperationKind::LayerNorm
                 | OperationKind::BatchNorm
+                | OperationKind::MseLoss
+                | OperationKind::L1Loss
+                | OperationKind::BceWithLogitsLoss
                 | OperationKind::TopK => execute_cpu_probe(rule.operation, LayoutClass::Contiguous),
+                // `to_dtype` is the one row whose result dtype is chosen by an
+                // attribute rather than inherited from the operand, so it is
+                // probed across every dtype it admits, converting each to f32.
+                OperationKind::ToDType => {
+                    let input = B::ones::<Dyn>(&[2, 2], dtype, &DeviceId::cpu()).unwrap();
+                    B::tensor_to_dtype::<Dyn, Dyn>(&input, DTypeId::F32).unwrap()
+                }
                 OperationKind::Relu
                 | OperationKind::Step
                 | OperationKind::Mish
@@ -1123,6 +1155,12 @@ fn every_advertised_cpu_dtype_executes_its_registered_operation() {
 fn expected_result_dtype(operation: OperationKind, operand: DTypeId) -> DTypeId {
     if operation == OperationKind::TopK {
         return operand;
+    }
+    // Not derived from the catalog, because the catalog cannot know it: the
+    // result dtype of a conversion is whatever the caller asked for. This
+    // mirrors the target the probes above pass.
+    if operation == OperationKind::ToDType {
+        return DTypeId::F32;
     }
     let entry = OPERATION_CATALOG
         .iter()

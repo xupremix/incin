@@ -47,7 +47,7 @@ run time.
 | `avg_pool2d` | `f32` | `f32` | `f32` |
 | `backward` | — | — | — |
 | `batch_norm` | `f32` | — | — |
-| `bce_with_logits_loss` | — | — | — |
+| `bce_with_logits_loss` | `f32` | — | — |
 | `bmm` | `f32` | — | — |
 | `broadcast_as` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `q8_0` | `i64`, `bf16`, `f16`, `f32`, `f64` | `f32` |
 | `broadcast_left` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
@@ -95,7 +95,7 @@ run time.
 | `instance_norm` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `int_to_scalar` | — | — | — |
 | `int_to_vec1` | — | — | — |
-| `l1_loss` | — | — | — |
+| `l1_loss` | `f32` | — | — |
 | `layer_norm` | `f32` | — | — |
 | `lerp` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `linear` | — | — | — |
@@ -122,7 +122,7 @@ run time.
 | `min_keepdim` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` |
 | `minimum` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `mish` | `bf16`, `f16`, `f32`, `f64` | — | — |
-| `mse_loss` | — | — | — |
+| `mse_loss` | `f32` | — | — |
 | `mul` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` |
 | `mul_in_place` | — | — | — |
 | `mul_scalar` | `bf16`, `f16`, `f32`, `f64` | — | — |
@@ -180,7 +180,7 @@ run time.
 | `tensor_from_data` | — | — | — |
 | `tensor_to_bytes` | — | — | — |
 | `to_device` | — | — | — |
-| `to_dtype` | — | — | — |
+| `to_dtype` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `topk` | `f32` | — | — |
 | `transpose` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `tril` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
@@ -330,6 +330,7 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `unfold` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 1+ | yes | native |
 | `pixel_shuffle` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 4 | yes | native |
 | `group_norm` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 2+ | yes | native |
+| `to_dtype` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
 | `flatten` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 1+ | yes | composed |
 | `squeeze` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 1+ | yes | composed |
 | `unsqueeze` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | composed |
@@ -340,6 +341,9 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `bmm` | `f32` | `contiguous`, `strided` | 3+ | yes | composed |
 | `addmm` | `f32` | `contiguous`, `strided` | 1+ | yes | composed |
 | `scaled_dot_product_attention` | `f32` | `contiguous`, `strided` | 2+ | yes | composed |
+| `mse_loss` | `f32` | `contiguous`, `strided` | any | yes | composed |
+| `l1_loss` | `f32` | `contiguous`, `strided` | any | yes | composed |
+| `bce_with_logits_loss` | `f32` | `contiguous`, `strided` | any | yes | composed |
 
 ## `cuda`
 

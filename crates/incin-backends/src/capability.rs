@@ -161,13 +161,30 @@ macro_rules! cpu_descriptor_operations {
                 SubScalar, DivScalar,
                 TransposeExact, Narrow, Triu, Tril, Diag,
                 ConcatExact, Gather, Scatter, IndexSelect, Repeat, Pad, Unfold,
-                PixelShuffle, GroupNorm
+                PixelShuffle, GroupNorm,
+                // `to_dtype` reads through the same stride-aware accessor and
+                // writes a fresh contiguous buffer, which is this group's shape
+                // exactly. Its target dtype is an attribute rather than an
+                // operand, so the row constrains what it reads and the executor
+                // constrains what it is asked to write.
+                ToDType
             ],
             composed_tensor = [
                 FlattenExact, SqueezeExact, UnsqueezeExact,
                 StackExact, SliceExact, InstanceNorm, BroadcastLeft
             ],
-            composed_matmul = [BatchedMatMul, Addmm, ScaledDotProductAttention]
+            composed_matmul = [BatchedMatMul, Addmm, ScaledDotProductAttention],
+            // The losses that `LossOps` supplies as real composed defaults
+            // rather than as stubs: each rewrites into `sub`, `mul`, `abs` and
+            // an all-reduce. They inherit the reduction group's f32-only claim
+            // because their `Mean` and `Sum` forms end in `mean_all`/`sum_all`,
+            // and the reduction mode is an attribute rather than part of the
+            // identity, so the row has to hold for the narrowest of the three.
+            //
+            // `cross_entropy_loss` is absent for the reason `embedding` is: its
+            // logits are float and its targets are class indices, and one row
+            // states one dtype set.
+            composed_reduction = [MseLoss, L1Loss, BceWithLogitsLoss]
         }
     };
 }
@@ -196,7 +213,8 @@ macro_rules! cuda_descriptor_operations {
             normalization = [],
             native_tensor = [],
             composed_tensor = [],
-            composed_matmul = []
+            composed_matmul = [],
+            composed_reduction = []
         }
     };
 }
@@ -221,7 +239,8 @@ macro_rules! wgpu_descriptor_operations {
             normalization = [],
             native_tensor = [],
             composed_tensor = [],
-            composed_matmul = []
+            composed_matmul = [],
+            composed_reduction = []
         }
     };
 }
@@ -245,7 +264,8 @@ macro_rules! metal_descriptor_operations {
             normalization = [],
             native_tensor = [],
             composed_tensor = [],
-            composed_matmul = []
+            composed_matmul = [],
+            composed_reduction = []
         }
     };
 }
@@ -279,7 +299,8 @@ macro_rules! descriptor_capability_rules {
         normalization = [$($normalization_op:ident),* $(,)?],
         native_tensor = [$($native_tensor_op:ident),* $(,)?],
         composed_tensor = [$($composed_tensor_op:ident),* $(,)?],
-        composed_matmul = [$($composed_matmul_op:ident),* $(,)?]
+        composed_matmul = [$($composed_matmul_op:ident),* $(,)?],
+        composed_reduction = [$($composed_reduction_op:ident),* $(,)?]
     ) => {
         &[
             $($legacy,)*
@@ -366,6 +387,16 @@ macro_rules! descriptor_capability_rules {
                 $matmul_layouts,
                 descriptor_min_rank(OperationKind::$composed_matmul_op),
                 descriptor_max_rank(OperationKind::$composed_matmul_op),
+                true,
+            ),)*
+            // Same relationship to the reduction rows: a loss that ends in an
+            // all-reduce cannot claim a dtype the all-reduce refuses.
+            $(composed_ranked(
+                OperationKind::$composed_reduction_op,
+                $reduction,
+                $reduction_layouts,
+                descriptor_min_rank(OperationKind::$composed_reduction_op),
+                descriptor_max_rank(OperationKind::$composed_reduction_op),
                 true,
             ),)*
         ]

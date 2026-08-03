@@ -13,13 +13,15 @@
 //! is the type.
 
 use incin_core::backend_authoring::{
-    Execute, ExecutionRequest, FloatOps, ModuleOps, ReductionOps, TensorOps,
+    Execute, ExecutionRequest, FloatOps, LossOps, ModuleOps, ReductionOps, TensorOps,
 };
-use incin_core::exec::catalog::{Descriptor, DuplicateIndexRule, op};
+use incin_core::exec::catalog::{Descriptor, DuplicateIndexRule, LossReduction, op};
 use incin_core::exec::{
     Capabilities, CapabilityQuery, MathMode, SupportLevel, TensorHandle, UnsupportedReason,
 };
-use incin_core::prelude::{BackendError, DType, DTypeId, Device, DeviceKind, OperationKind};
+use incin_core::prelude::{
+    BackendError, DType, DTypeId, Device, DeviceKind, OperationKind, Reduction,
+};
 
 use super::CpuBackendImpl;
 use super::storage::CpuStorage;
@@ -1547,6 +1549,79 @@ impl<T: DType, D: Device> Execute<Descriptor<op::ScaledDotProductAttention>>
     }
 }
 
+/// Reinterpret an operand's values under a different dtype.
+///
+/// The target dtype is an attribute rather than an operand, so the capability
+/// row constrains only what this reads. What it may be asked to write is
+/// constrained here: the CPU kernel refuses a quantized target, and a refusal
+/// that names the operation is more use than the kernel's untyped one.
+impl<T: DType, D: Device> Execute<Descriptor<op::ToDType>> for CpuBackendImpl<T, D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::ToDType>, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::ToDType;
+        let input = reduction_operand(self, request.inputs, operation)?;
+        let dtype = request.operation.descriptor().attributes().dtype;
+        if dtype == DTypeId::Q8_0 {
+            return Err(UnsupportedReason::DType { operation, dtype }.into());
+        }
+        // Both type parameters are phantom here: CPU storage carries its dtype
+        // in the buffer variant, and the kernel switches on the runtime value.
+        <Self as TensorOps<Self>>::tensor_to_dtype::<T, T>(input, dtype)
+            .map_err(|error| kernel_error(operation, error))
+    }
+}
+
+/// The losses `LossOps` supplies as composed defaults.
+///
+/// Each takes a prediction and a target of the same shape and reduces the
+/// elementwise result according to its attributes. They are grouped here rather
+/// than written out because the only thing that differs between them is the
+/// method name; the operand binding and the reduction mapping are identical,
+/// and three copies of that would be three places for it to drift.
+macro_rules! loss_executors {
+    ($(($operation:ident, $method:ident)),* $(,)?) => {$(
+        impl<T: DType, D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<T, D> {
+            type Output = CpuStorage;
+
+            fn execute(
+                &self,
+                request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
+            ) -> Result<CpuStorage, BackendError> {
+                let operation = OperationKind::$operation;
+                let (prediction, target) = binary_operands(self, request.inputs, operation)?;
+                let reduction = loss_reduction(
+                    request.operation.descriptor().attributes().reduction,
+                );
+                <Self as LossOps<Self>>::$method::<T>(prediction, target, reduction)
+                    .map_err(|error| kernel_error(operation, error))
+            }
+        }
+    )*};
+}
+
+/// Translate the descriptor's reduction mode into the loss trait's.
+///
+/// Two enums for one concept, because the catalog's vocabulary is deliberately
+/// independent of `nn`. The translation is total and exhaustive, so adding a
+/// mode to either enum is a compile error here rather than a silent default.
+fn loss_reduction(reduction: LossReduction) -> Reduction {
+    match reduction {
+        LossReduction::None => Reduction::None,
+        LossReduction::Mean => Reduction::Mean,
+        LossReduction::Sum => Reduction::Sum,
+    }
+}
+
+loss_executors![
+    (MseLoss, mse_loss),
+    (L1Loss, l1_loss),
+    (BceWithLogitsLoss, bce_with_logits_loss),
+];
+
 /// Prove, at compile time, that every identity `CPU_CAPABILITIES` advertises
 /// has an executor above.
 ///
@@ -1588,8 +1663,8 @@ mod tests {
     use crate::cpu::gradcheck::gradcheck;
     use crate::cpu::storage::CpuBuffer;
     use incin_core::exec::catalog::{
-        AxisAttributes, BatchNormAttributes, Conv1dAttributes, Conv2dAttributes,
-        LayerNormAttributes, NoAttributes, ShapeAttributes,
+        AxisAttributes, BatchNormAttributes, Conv1dAttributes, Conv2dAttributes, DTypeAttributes,
+        LayerNormAttributes, LossAttributes, NoAttributes, ShapeAttributes,
     };
     use incin_core::exec::{ExecutionContext, TensorHandle, dispatch};
     use incin_core::prelude::{Cpu, Local};
@@ -1976,6 +2051,105 @@ mod tests {
         )
         .expect("a biased conv2d executes");
         assert_eq!(output.shape.to_vec(), vec![1, 1, 2, 2]);
+    }
+
+    /// Each loss reduces to the value its own formula defines.
+    ///
+    /// Hand-computed rather than compared against the trait method, because
+    /// comparing an executor to the function it calls proves only that the call
+    /// happened. These check that the descriptor's reduction mode reached the
+    /// kernel and that the right kernel was picked: mse and l1 differ on this
+    /// input, so a swapped pair of arms in the macro would show up here.
+    #[test]
+    fn each_canonical_loss_computes_its_own_formula() {
+        let context = context();
+        let prediction = storage(&[1.0, 3.0], &[2]);
+        let target = storage(&[0.0, 0.0], &[2]);
+
+        // Squared error: (1 + 9) / 2 = 5. Absolute error: (1 + 3) / 2 = 2.
+        for (expected, run) in [
+            (
+                5.0,
+                dispatch::execute::<op::MseLoss, _>(
+                    &context,
+                    LossAttributes {
+                        reduction: LossReduction::Mean,
+                    },
+                    &[handle(&prediction), handle(&target)],
+                ),
+            ),
+            (
+                2.0,
+                dispatch::execute::<op::L1Loss, _>(
+                    &context,
+                    LossAttributes {
+                        reduction: LossReduction::Mean,
+                    },
+                    &[handle(&prediction), handle(&target)],
+                ),
+            ),
+        ] {
+            let output = run.expect("the loss executes");
+            assert!(
+                output.shape.is_empty(),
+                "a mean reduction produces a scalar"
+            );
+            assert!(
+                (output.get(&[]) - expected).abs() < 1e-6,
+                "expected {expected}, got {}",
+                output.get(&[])
+            );
+        }
+    }
+
+    /// The reduction mode is carried, not defaulted.
+    ///
+    /// `LossReduction::None` is the mode that changes the result's shape, so it
+    /// is the one that fails visibly if the attribute were dropped and the
+    /// trait's own default used instead.
+    #[test]
+    fn a_loss_with_no_reduction_keeps_the_elementwise_shape() {
+        let context = context();
+        let prediction = storage(&[1.0, 3.0], &[2]);
+        let target = storage(&[0.0, 0.0], &[2]);
+
+        let output = dispatch::execute::<op::MseLoss, _>(
+            &context,
+            LossAttributes {
+                reduction: LossReduction::None,
+            },
+            &[handle(&prediction), handle(&target)],
+        )
+        .expect("an unreduced loss executes");
+        assert_eq!(output.shape.to_vec(), vec![2]);
+        assert_eq!(output.get(&[0]), 1.0);
+        assert_eq!(output.get(&[1]), 9.0);
+    }
+
+    /// A conversion to a quantized dtype is refused by the executor.
+    ///
+    /// The capability row constrains what `to_dtype` reads, and the target is
+    /// an attribute rather than an operand, so nothing before the executor is
+    /// in a position to check it. The kernel does refuse, but with an untyped
+    /// error that does not name the operation.
+    #[test]
+    fn a_conversion_to_a_quantized_dtype_is_refused_by_name() {
+        let context = context();
+        let input = storage(&[1.0, 2.0], &[2]);
+
+        let error = dispatch::execute::<op::ToDType, _>(
+            &context,
+            DTypeAttributes {
+                dtype: DTypeId::Q8_0,
+            },
+            &[handle(&input)],
+        )
+        .expect_err("the CPU conversion kernel has no quantized target");
+        let message = format!("{error}");
+        assert!(
+            message.contains("to_dtype"),
+            "the refusal must name the operation: {message}"
+        );
     }
 
     /// One-dimensional convolution reaches its kernel through the canonical path.
