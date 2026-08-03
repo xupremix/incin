@@ -1,0 +1,10 @@
+warning: unused import: `cpu_descriptor_operations`
+  --> crates/incin-backends/src/capability.rs:96:16
+   |
+96 | pub(crate) use cpu_descriptor_operations;
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: `incin-backends` (lib) generated 1 warning (run `cargo fix --lib -p incin-backends` to apply 1 suggestion)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.15s

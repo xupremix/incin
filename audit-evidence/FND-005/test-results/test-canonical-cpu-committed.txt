@@ -1,0 +1,23 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.18s
+     Running tests/canonical_cpu.rs (target/debug/deps/canonical_cpu-ac419de844ee3d55)
+
+running 16 tests
+test support_for_reports_the_same_level_the_executor_enforces ... ok
+test an_out_of_range_reduction_axis_fails_before_execution ... ok
+test validation_runs_before_the_backend_is_reached ... ok
+test an_arity_violation_names_the_exact_operation ... ok
+test an_unregistered_operand_rank_is_refused_with_a_typed_reason ... ok
+test a_declared_bias_must_be_supplied ... ok
+test an_anisotropic_convolution_window_is_refused_rather_than_approximated ... ok
+test an_unadvertised_dtype_is_refused_before_execution ... ok
+test a_canonical_invocation_matches_the_legacy_operation_family_result ... ok
+test the_canonical_path_derives_output_metadata_from_the_inputs ... ok
+test matmul_and_the_shape_operations_match_the_legacy_path ... ok
+test the_capability_answer_and_the_execution_answer_agree ... ok
+test every_migrated_pointwise_operation_matches_its_legacy_counterpart ... ok
+test the_spatial_family_matches_its_legacy_counterpart ... ok
+test keepdim_and_plain_reductions_are_distinct_identities ... ok
+test every_advertised_reduction_matches_its_legacy_counterpart ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

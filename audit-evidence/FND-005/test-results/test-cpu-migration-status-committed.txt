@@ -1,0 +1,10 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.13s
+     Running tests/cpu_migration_status.rs (target/debug/deps/cpu_migration_status-621050e80fb5e253)
+
+running 3 tests
+test every_migrated_identity_is_a_catalog_operation ... ok
+test the_migration_is_recorded_as_incomplete ... ok
+test the_migration_status_document_matches_the_registrations ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

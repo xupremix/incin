@@ -1,0 +1,13 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.12s
+     Running tests/capability_matrix.rs (target/debug/deps/capability_matrix-8036e32732ce26dd)
+
+running 6 tests
+test unsupported_matrix_cells_return_the_documented_constraint ... ok
+test an_exact_query_never_resolves_through_a_broad_family_row ... ok
+test an_unadvertised_exact_layout_returns_the_documented_typed_reason ... ok
+test every_registration_generates_supported_boundary_cases_without_fallback ... ok
+test generated_cpu_rows_match_real_execution_and_output_metadata ... ok
+test every_advertised_cpu_dtype_executes_its_registered_operation ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
