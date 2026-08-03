@@ -43,6 +43,42 @@ fn migrated() -> BTreeSet<OperationKind> {
         .collect()
 }
 
+/// Why each still-unmigrated backend-executable operation has no executor.
+///
+/// Every entry here is a limit of the descriptor or capability contract rather
+/// than an unwritten function, and each was established by reading the
+/// declaration that blocks it rather than by trying and giving up. Two tests
+/// below hold this honest from both directions: an operation that is unmigrated
+/// and unlisted fails, and so does one that is listed and migrated.
+///
+/// The point is that "seven left" and "seven executors left to write" are very
+/// different claims, and only the first is true.
+fn blocking_reason(operation: OperationKind) -> Option<&'static str> {
+    Some(match operation {
+        OperationKind::TensorFromData | OperationKind::TensorFromBytes => {
+            "`CreationAttributes` carries a shape, a dtype and a device, and no payload. \
+             The values to allocate from live only in the caller's argument, so the \
+             descriptor cannot describe the request"
+        }
+        OperationKind::Sample => {
+            "`DistributionAttributes` names its distribution as a string and its \
+             parameters as bytes. Executing one needs a registry that maps that pair \
+             back to a sampler, and no such registry exists"
+        }
+        OperationKind::EmbeddingExact | OperationKind::CrossEntropyLoss => {
+            "the operands differ in dtype by construction, a float table or logits \
+             against integer indices, and one `CapabilityRule` states one dtype set"
+        }
+        OperationKind::Rnn | OperationKind::Lstm => {
+            "the descriptor carries no weights. Its operand arity admits an input and \
+             the recurrent states only, and `RecurrentAttributes` holds sizes and \
+             bias-presence flags, so the matrices the recurrence multiplies by cannot \
+             be named"
+        }
+        _ => return None,
+    })
+}
+
 fn document() -> String {
     let migrated = migrated();
     let total = OPERATION_CATALOG.len();
@@ -92,6 +128,25 @@ fn document() -> String {
                 "no"
             },
             row.legacy_source,
+        );
+    }
+
+    out.push_str(
+        "\n## Why the rest have no executor\n\nNone of these is an unwritten function. \
+         Each names a limit of the descriptor or capability contract that has to change \
+         before an executor for it could be written at all, so the remaining count and \
+         the remaining work are not the same number.\n\n",
+    );
+    out.push_str("| Operation | What blocks it |\n|---|---|\n");
+    for row in &executable {
+        if migrated.contains(&row.operation) {
+            continue;
+        }
+        let _ = writeln!(
+            out,
+            "| `{}` | {} |",
+            row.name,
+            blocking_reason(row.operation).unwrap_or("not recorded"),
         );
     }
 
@@ -180,6 +235,46 @@ fn no_migrated_operation_sits_at_a_non_executable_site() {
             row.name,
             row.site,
             row.site.blocking_reason().unwrap_or("no reason recorded"),
+        );
+    }
+}
+
+/// Every unmigrated backend-executable operation states what blocks it.
+///
+/// Without this, "unmigrated" collapses two different things: an executor
+/// nobody has written, and one nobody can write yet. The second is the whole
+/// remaining set, and a reader who could not tell them apart would plan work
+/// that cannot be started.
+#[test]
+fn every_unmigrated_executable_operation_records_what_blocks_it() {
+    let migrated = migrated();
+    for row in OPERATION_CATALOG {
+        if !row.site.is_backend_executable() || migrated.contains(&row.operation) {
+            continue;
+        }
+        assert!(
+            blocking_reason(row.operation).is_some(),
+            "{} is backend-executable and unmigrated, but nothing here says why. Either \
+             write its executor or record what stops you, so the remaining work stays \
+             countable",
+            row.name
+        );
+    }
+}
+
+/// A recorded reason must not outlive the thing it explains.
+///
+/// The obligation above only bites in one direction. This is the other: once an
+/// operation is migrated, its entry is a stale claim that the contract still
+/// blocks something it demonstrably does not, and stale claims in this file are
+/// exactly what it exists to prevent.
+#[test]
+fn no_migrated_operation_still_claims_to_be_blocked() {
+    for operation in migrated() {
+        assert!(
+            blocking_reason(operation).is_none(),
+            "{operation} has an executor, so the reason recorded for why it cannot have \
+             one is wrong. Delete it"
         );
     }
 }

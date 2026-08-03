@@ -172,6 +172,20 @@ The denominator is the number of operations that `Execute<Descriptor<O>>` can ca
 | `dequantize` | `Kernel` | yes | `QuantizedOps::dequantize` |
 | `quantized_matmul` | `Kernel` | yes | `QuantizedOps::quantized_matmul` |
 
+## Why the rest have no executor
+
+None of these is an unwritten function. Each names a limit of the descriptor or capability contract that has to change before an executor for it could be written at all, so the remaining count and the remaining work are not the same number.
+
+| Operation | What blocks it |
+|---|---|
+| `tensor_from_data` | `CreationAttributes` carries a shape, a dtype and a device, and no payload. The values to allocate from live only in the caller's argument, so the descriptor cannot describe the request |
+| `tensor_from_bytes` | `CreationAttributes` carries a shape, a dtype and a device, and no payload. The values to allocate from live only in the caller's argument, so the descriptor cannot describe the request |
+| `sample` | `DistributionAttributes` names its distribution as a string and its parameters as bytes. Executing one needs a registry that maps that pair back to a sampler, and no such registry exists |
+| `embedding` | the operands differ in dtype by construction, a float table or logits against integer indices, and one `CapabilityRule` states one dtype set |
+| `rnn` | the descriptor carries no weights. Its operand arity admits an input and the recurrent states only, and `RecurrentAttributes` holds sizes and bias-presence flags, so the matrices the recurrence multiplies by cannot be named |
+| `lstm` | the descriptor carries no weights. Its operand arity admits an input and the recurrent states only, and `RecurrentAttributes` holds sizes and bias-presence flags, so the matrices the recurrence multiplies by cannot be named |
+| `cross_entropy_loss` | the operands differ in dtype by construction, a float table or logits against integer indices, and one `CapabilityRule` states one dtype set |
+
 ## Operations the execution contract cannot carry
 
 These are not pending migrations. Each one needs a change to `Execute`/`ExecutionRequest` before an executor for it could be written, and until then the stable tensor surface reaches it through the legacy path by necessity rather than by omission.

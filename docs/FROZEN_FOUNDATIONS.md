@@ -35,7 +35,7 @@ treated as settled.
 
 | Surface | Why it still moves |
 |---|---|
-| The per-operation executor bodies in `cpu/canonical.rs` | 7 backend-executable operations still have no canonical executor. Each is additive |
+| The per-operation executor bodies in `cpu/canonical.rs` | 154 of 161 migrated. The last 7 are blocked on the contract rather than unwritten; `cpu-migration-status.md` states what blocks each |
 | The nine operation-family supertraits on `Backend` | Removing them is FND-005's completion condition. It is source-breaking for every backend |
 | The broad family capability rows | `Pointwise`, `Reduction`, `Reshape`, `MatMul`, `Conv2d`, `Pool2d`, `Storage`, `Fill`, `Random`, `Normalization`, `Broadcast` are deleted once nothing resolves through them |
 | `CapabilityRule`'s single dtype set | It describes an operation, but `dispatch::execute` applies it to each operand in turn. An operation whose operands differ in dtype by construction cannot be stated. This is what blocks `embedding` |
@@ -47,24 +47,32 @@ treated as settled.
 Each step is blocked by the one above it, and the reason is stated rather than
 implied.
 
-1. **Migrate the remaining 7 backend-executable operations.** Additive, and the
-   count is generated, so progress cannot be overstated. The order that costs
-   least is by rule shape: an operation joining an existing capability group is
-   one name in a list, and one that needs a new group is a new arm in every
-   consumer of the declaration.
-2. **Give `CapabilityRule` per-operand dtype and rank sets.** This unblocks
-   `embedding` and lets the convolution rows constrain their activation again
-   instead of stating the minimum their bias forces. It is a change to a frozen
-   foundation and should be done once, deliberately, rather than worked around
-   per operation.
-3. **Widen `Execute` to the sites it cannot reach**, or split them off into a
-   contract that can. Until then, thirteen operations are not pending
-   migrations, and counting them as such misstates the remaining work by 30%.
-4. **Remove the nine supertraits from `Backend`** and bound each stable tensor
+The migration is no longer the bottleneck. 154 of the 161 backend-executable
+operations have an executor, and every one of the remaining 7 is blocked by
+something in this file's second table rather than by nobody having written it.
+Steps 1 to 3 are those blockers; the generated status document names which one
+stops which operation.
+
+1. **Give `CapabilityRule` per-operand dtype and rank sets.** Two operations
+   wait on this directly, `embedding` and `cross_entropy_loss`, and it is also
+   why the convolution rows state the minimum rank their bias forces rather than
+   the one their activation needs. Doing it once is cheaper than the workaround
+   it keeps demanding.
+2. **Let a descriptor carry a payload and a weight set.** `tensor_from_data` and
+   `tensor_from_bytes` have values that live only in the caller's argument;
+   `rnn` and `lstm` have an operand arity that admits their states and not their
+   matrices. Both are the same shape of gap: the descriptor cannot name part of
+   the request.
+3. **Add a distribution registry**, mapping a name and a parameter buffer back
+   to a sampler, which is the whole of what `sample` needs.
+4. **Widen `Execute` to the sites it cannot reach**, or split them off into a
+   contract that can. Thirteen operations are not pending migrations at all,
+   and counting them as such overstates the remaining work by roughly 30%.
+5. **Remove the nine supertraits from `Backend`** and bound each stable tensor
    method by the capability it actually uses. This is the step that ends the
-   dual architecture, and it cannot start before step 1: a tensor method cannot
-   depend on a capability that does not exist yet.
-5. **Delete the broad family rows and the grouped `Execute<MatMulSpec>`
+   dual architecture. It is no longer blocked by migration coverage: everything
+   the stable surface reaches is migrated except the seven above.
+6. **Delete the broad family rows and the grouped `Execute<MatMulSpec>`
    adapters**, then delete the compatibility adapter in `cpu::canonical` and the
    `the_migration_is_recorded_as_incomplete` test, which is written to fail once
    the catalog is fully migrated so that the completion claim has to be a
