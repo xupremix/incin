@@ -344,3 +344,321 @@ fn support_for_reports_the_same_level_the_executor_enforces() {
         .expect("add supports a contiguous f32 matrix");
     assert_eq!(level, SupportLevel::Native);
 }
+
+/// Every reduction identity the CPU advertises, executed canonically and
+/// compared against the legacy family method the catalog names as its source.
+///
+/// A single parametrised test rather than fourteen: the property is uniform,
+/// and listing the pairs here makes a missing migration visible as a missing
+/// row rather than as an absent test file.
+#[test]
+fn every_advertised_reduction_matches_its_legacy_counterpart() {
+    use incin_core::backend_authoring::ReductionOps;
+    use incin_core::exec::catalog::AxisAttributes;
+
+    let context = context();
+    let input = f32_storage(vec![1.0, 5.0, 2.0, 4.0, 3.0, 6.0], vec![2, 3]);
+    let axis = 1;
+
+    let whole: [(&str, Vec<f64>, Vec<f64>); 5] = [
+        (
+            "sum_all",
+            values(
+                &dispatch::execute::<op::SumAll, _>(&context, NoAttributes, &[handle(&input)])
+                    .unwrap(),
+            ),
+            values(&<TestBackend as ReductionOps<TestBackend>>::sum_all::<f32>(&input).unwrap()),
+        ),
+        (
+            "mean_all",
+            values(
+                &dispatch::execute::<op::MeanAll, _>(&context, NoAttributes, &[handle(&input)])
+                    .unwrap(),
+            ),
+            values(&<TestBackend as ReductionOps<TestBackend>>::mean_all::<f32>(&input).unwrap()),
+        ),
+        (
+            "max_all",
+            values(
+                &dispatch::execute::<op::MaxAll, _>(&context, NoAttributes, &[handle(&input)])
+                    .unwrap(),
+            ),
+            values(&<TestBackend as ReductionOps<TestBackend>>::max_all::<f32>(&input).unwrap()),
+        ),
+        (
+            "min_all",
+            values(
+                &dispatch::execute::<op::MinAll, _>(&context, NoAttributes, &[handle(&input)])
+                    .unwrap(),
+            ),
+            values(&<TestBackend as ReductionOps<TestBackend>>::min_all::<f32>(&input).unwrap()),
+        ),
+        (
+            "prod_all",
+            values(
+                &dispatch::execute::<op::ProdAll, _>(&context, NoAttributes, &[handle(&input)])
+                    .unwrap(),
+            ),
+            values(&<TestBackend as ReductionOps<TestBackend>>::prod_all::<f32>(&input).unwrap()),
+        ),
+    ];
+    for (name, canonical, legacy) in whole {
+        assert_eq!(canonical, legacy, "{name} diverged from the legacy path");
+    }
+
+    let attributes = || AxisAttributes { axis };
+    let axial: [(&str, Vec<f64>, Vec<f64>, Vec<usize>, Vec<usize>); 9] = [
+        {
+            let c = dispatch::execute::<op::SumDim, _>(&context, attributes(), &[handle(&input)])
+                .unwrap();
+            let l =
+                <TestBackend as ReductionOps<TestBackend>>::sum_dim::<f32>(&input, axis).unwrap();
+            ("sum_dim", values(&c), values(&l), dims(&c), dims(&l))
+        },
+        {
+            let c = dispatch::execute::<op::MeanDim, _>(&context, attributes(), &[handle(&input)])
+                .unwrap();
+            let l =
+                <TestBackend as ReductionOps<TestBackend>>::mean_dim::<f32>(&input, axis).unwrap();
+            ("mean_dim", values(&c), values(&l), dims(&c), dims(&l))
+        },
+        {
+            let c = dispatch::execute::<op::MaxDim, _>(&context, attributes(), &[handle(&input)])
+                .unwrap();
+            let l =
+                <TestBackend as ReductionOps<TestBackend>>::max_dim::<f32>(&input, axis).unwrap();
+            ("max_dim", values(&c), values(&l), dims(&c), dims(&l))
+        },
+        {
+            let c = dispatch::execute::<op::MinDim, _>(&context, attributes(), &[handle(&input)])
+                .unwrap();
+            let l =
+                <TestBackend as ReductionOps<TestBackend>>::min_dim::<f32>(&input, axis).unwrap();
+            ("min_dim", values(&c), values(&l), dims(&c), dims(&l))
+        },
+        {
+            let c = dispatch::execute::<op::ProdDim, _>(&context, attributes(), &[handle(&input)])
+                .unwrap();
+            let l =
+                <TestBackend as ReductionOps<TestBackend>>::prod_dim::<f32>(&input, axis).unwrap();
+            ("prod_dim", values(&c), values(&l), dims(&c), dims(&l))
+        },
+        {
+            let c =
+                dispatch::execute::<op::SumKeepDim, _>(&context, attributes(), &[handle(&input)])
+                    .unwrap();
+            let l = <TestBackend as ReductionOps<TestBackend>>::sum_keepdim::<f32>(&input, axis)
+                .unwrap();
+            ("sum_keepdim", values(&c), values(&l), dims(&c), dims(&l))
+        },
+        {
+            let c =
+                dispatch::execute::<op::MeanKeepDim, _>(&context, attributes(), &[handle(&input)])
+                    .unwrap();
+            let l = <TestBackend as ReductionOps<TestBackend>>::mean_keepdim::<f32>(&input, axis)
+                .unwrap();
+            ("mean_keepdim", values(&c), values(&l), dims(&c), dims(&l))
+        },
+        {
+            let c =
+                dispatch::execute::<op::MaxKeepDim, _>(&context, attributes(), &[handle(&input)])
+                    .unwrap();
+            let l = <TestBackend as ReductionOps<TestBackend>>::max_keepdim::<f32>(&input, axis)
+                .unwrap();
+            ("max_keepdim", values(&c), values(&l), dims(&c), dims(&l))
+        },
+        {
+            let c =
+                dispatch::execute::<op::MinKeepDim, _>(&context, attributes(), &[handle(&input)])
+                    .unwrap();
+            let l = <TestBackend as ReductionOps<TestBackend>>::min_keepdim::<f32>(&input, axis)
+                .unwrap();
+            ("min_keepdim", values(&c), values(&l), dims(&c), dims(&l))
+        },
+    ];
+    for (name, canonical, legacy, canonical_dims, legacy_dims) in axial {
+        assert_eq!(canonical, legacy, "{name} diverged from the legacy path");
+        assert_eq!(canonical_dims, legacy_dims, "{name} output shape diverged");
+    }
+}
+
+/// A `keepdim` reduction must retain the reduced axis as a length-one
+/// dimension, and a plain one must drop it. The distinction is the only thing
+/// separating the two identities, so it is asserted rather than assumed.
+#[test]
+fn keepdim_and_plain_reductions_are_distinct_identities() {
+    use incin_core::exec::catalog::AxisAttributes;
+
+    let context = context();
+    let input = f32_storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
+
+    let dropped =
+        dispatch::execute::<op::SumDim, _>(&context, AxisAttributes { axis: 1 }, &[handle(&input)])
+            .unwrap();
+    let kept = dispatch::execute::<op::SumKeepDim, _>(
+        &context,
+        AxisAttributes { axis: 1 },
+        &[handle(&input)],
+    )
+    .unwrap();
+
+    assert_eq!(dims(&dropped), vec![2]);
+    assert_eq!(dims(&kept), vec![2, 1]);
+    assert_eq!(values(&dropped), values(&kept));
+}
+
+/// An axis outside the operand's rank is a contract failure, not a kernel
+/// failure. Catching it here proves the typed attribute is validated against
+/// the real operand before any reduction loop starts.
+#[test]
+fn an_out_of_range_reduction_axis_fails_before_execution() {
+    use incin_core::exec::catalog::AxisAttributes;
+
+    let context = context();
+    let input = f32_storage(vec![1.0, 2.0, 3.0, 4.0], vec![2, 2]);
+
+    let error =
+        dispatch::execute::<op::SumDim, _>(&context, AxisAttributes { axis: 7 }, &[handle(&input)])
+            .expect_err("axis 7 does not exist on a rank-two operand");
+    assert!(
+        matches!(error, CanonicalError::Descriptor(_)),
+        "expected a pre-launch contract failure, found {error:?}"
+    );
+}
+
+/// The spatial family, executed canonically and compared against the module
+/// methods the catalog names as their source.
+#[test]
+fn the_spatial_family_matches_its_legacy_counterpart() {
+    use incin_core::backend_authoring::ModuleOps;
+    use incin_core::exec::catalog::{AvgPool2dAttributes, Conv2dAttributes, Pool2dAttributes};
+
+    let context = context();
+    // One 4x4 image, one channel, and a 2x2 kernel: small enough to reason
+    // about, large enough that a stride or padding error changes the result.
+    let image = f32_storage(
+        (0..16).map(|value| value as f32).collect(),
+        vec![1, 1, 4, 4],
+    );
+    let weight = f32_storage(vec![1.0, 0.0, 0.0, -1.0], vec![1, 1, 2, 2]);
+
+    let convolved = dispatch::execute::<op::Conv2dExact, _>(
+        &context,
+        Conv2dAttributes {
+            stride: [1, 1],
+            padding: [0, 0],
+            dilation: [1, 1],
+            groups: 1,
+            has_bias: false,
+        },
+        &[handle(&image), handle(&weight)],
+    )
+    .expect("conv2d is a registered CPU capability");
+    let legacy_conv =
+        <TestBackend as ModuleOps<TestBackend>>::conv2d::<f32>(&image, &weight, None, 1, 0, 1, 1)
+            .unwrap();
+    assert_eq!(values(&convolved), values(&legacy_conv));
+    assert_eq!(dims(&convolved), dims(&legacy_conv));
+
+    let pooled = dispatch::execute::<op::MaxPool2d, _>(
+        &context,
+        Pool2dAttributes {
+            kernel: [2, 2],
+            stride: [2, 2],
+            padding: [0, 0],
+            dilation: [1, 1],
+        },
+        &[handle(&image)],
+    )
+    .expect("max_pool2d is a registered CPU capability");
+    let legacy_pool = <TestBackend as ModuleOps<TestBackend>>::max_pool2d::<f32>(
+        &image,
+        (2, 2),
+        (2, 2),
+        (0, 0),
+        (1, 1),
+    )
+    .unwrap();
+    assert_eq!(values(&pooled), values(&legacy_pool));
+
+    let averaged = dispatch::execute::<op::AvgPool2d, _>(
+        &context,
+        AvgPool2dAttributes {
+            kernel: [2, 2],
+            stride: [2, 2],
+            padding: [0, 0],
+        },
+        &[handle(&image)],
+    )
+    .expect("avg_pool2d is a registered CPU capability");
+    let legacy_average =
+        <TestBackend as ModuleOps<TestBackend>>::avg_pool2d::<f32>(&image, (2, 2), (2, 2), (0, 0))
+            .unwrap();
+    assert_eq!(values(&averaged), values(&legacy_average));
+}
+
+/// An anisotropic convolution window is a descriptor the CPU kernel behind
+/// this identity cannot execute. It must be refused explicitly rather than
+/// quietly run with one axis' extent applied to both.
+#[test]
+fn an_anisotropic_convolution_window_is_refused_rather_than_approximated() {
+    use incin_core::exec::catalog::Conv2dAttributes;
+
+    let context = context();
+    let image = f32_storage(
+        (0..16).map(|value| value as f32).collect(),
+        vec![1, 1, 4, 4],
+    );
+    let weight = f32_storage(vec![1.0, 0.0, 0.0, -1.0], vec![1, 1, 2, 2]);
+
+    let error = dispatch::execute::<op::Conv2dExact, _>(
+        &context,
+        Conv2dAttributes {
+            stride: [1, 2],
+            padding: [0, 0],
+            dilation: [1, 1],
+            groups: 1,
+            has_bias: false,
+        },
+        &[handle(&image), handle(&weight)],
+    )
+    .expect_err("a per-axis stride has no routed CPU kernel");
+    match error {
+        CanonicalError::Descriptor(_) => {}
+        CanonicalError::Backend(backend) => assert!(
+            backend.to_string().contains("stride"),
+            "the refusal must name the unsupported window axis, found {backend}"
+        ),
+    }
+}
+
+/// A convolution whose attributes declare a bias but whose operand list omits
+/// it is rejected by the contract, not by the kernel.
+#[test]
+fn a_declared_bias_must_be_supplied() {
+    use incin_core::exec::catalog::Conv2dAttributes;
+
+    let context = context();
+    let image = f32_storage(
+        (0..16).map(|value| value as f32).collect(),
+        vec![1, 1, 4, 4],
+    );
+    let weight = f32_storage(vec![1.0, 0.0, 0.0, -1.0], vec![1, 1, 2, 2]);
+
+    let error = dispatch::execute::<op::Conv2dExact, _>(
+        &context,
+        Conv2dAttributes {
+            stride: [1, 1],
+            padding: [0, 0],
+            dilation: [1, 1],
+            groups: 1,
+            has_bias: true,
+        },
+        &[handle(&image), handle(&weight)],
+    )
+    .expect_err("a declared bias with two operands is not a legal invocation");
+    assert!(
+        matches!(error, CanonicalError::Descriptor(_)),
+        "expected a pre-launch contract failure, found {error:?}"
+    );
+}

@@ -12,7 +12,7 @@
 //! could not identify which operation was actually refused. Here the identity
 //! is the type.
 
-use incin_core::backend_authoring::{Execute, ExecutionRequest};
+use incin_core::backend_authoring::{Execute, ExecutionRequest, ModuleOps, ReductionOps};
 use incin_core::exec::catalog::{Descriptor, op};
 use incin_core::exec::{
     Capabilities, CapabilityQuery, MathMode, SupportLevel, TensorHandle, UnsupportedReason,
@@ -171,3 +171,250 @@ impl<T: DType, D: Device> Execute<Descriptor<op::MatMulExact>> for CpuBackendImp
             .map_err(|error| kernel_error(operation, error))
     }
 }
+
+/// Bind the single operand a reduction consumes.
+fn reduction_operand<'a, T: DType, D: Device>(
+    backend: &CpuBackendImpl<T, D>,
+    inputs: &'a [TensorHandle<'a>],
+    operation: OperationKind,
+) -> Result<&'a CpuStorage, BackendError> {
+    let [input] = inputs else {
+        return Err(invalid(
+            operation,
+            "a reduction expects exactly one operand",
+        ));
+    };
+    let input = operand(input, operation)?;
+    admitted(backend, operation, input)?;
+    Ok(input)
+}
+
+// The reduction bodies still live on `ReductionOps`. Reaching them from here is
+// the migration's temporary compatibility adapter: it is private to this
+// module, it is the only remaining call into the legacy family from the
+// canonical path, and it is deleted when the reduction kernels move down here
+// the way the pointwise and view kernels already have. It is deliberately not
+// a source for anything new.
+
+/// Whole-tensor reductions, which take no attributes.
+macro_rules! reduce_all_executors {
+    ($(($operation:ident, $method:ident)),* $(,)?) => {$(
+        impl<T: DType, D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<T, D> {
+            type Output = CpuStorage;
+
+            fn execute(
+                &self,
+                request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
+            ) -> Result<CpuStorage, BackendError> {
+                let operation = OperationKind::$operation;
+                let input = reduction_operand(self, request.inputs, operation)?;
+                <Self as ReductionOps<Self>>::$method::<T>(input)
+                    .map_err(|error| kernel_error(operation, error))
+            }
+        }
+    )*};
+}
+
+reduce_all_executors![
+    (SumAll, sum_all),
+    (MeanAll, mean_all),
+    (MaxAll, max_all),
+    (MinAll, min_all),
+    (ProdAll, prod_all),
+];
+
+/// Single-axis reductions, which read the axis from their typed attributes.
+macro_rules! reduce_axis_executors {
+    ($(($operation:ident, $method:ident)),* $(,)?) => {$(
+        impl<T: DType, D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<T, D> {
+            type Output = CpuStorage;
+
+            fn execute(
+                &self,
+                request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
+            ) -> Result<CpuStorage, BackendError> {
+                let operation = OperationKind::$operation;
+                let input = reduction_operand(self, request.inputs, operation)?;
+                let axis = request.operation.descriptor().attributes().axis;
+                <Self as ReductionOps<Self>>::$method::<T>(input, axis)
+                    .map_err(|error| kernel_error(operation, error))
+            }
+        }
+    )*};
+}
+
+reduce_axis_executors![
+    (SumDim, sum_dim),
+    (MeanDim, mean_dim),
+    (MaxDim, max_dim),
+    (MinDim, min_dim),
+    (ProdDim, prod_dim),
+    (SumKeepDim, sum_keepdim),
+    (MeanKeepDim, mean_keepdim),
+    (MaxKeepDim, max_keepdim),
+    (MinKeepDim, min_keepdim),
+];
+
+/// Collapse a per-axis window to the single extent the routed CPU kernel takes.
+///
+/// The descriptor is more expressive than the kernel behind it: it carries one
+/// extent per spatial axis, while `ModuleOps::conv2d` takes one for both. An
+/// anisotropic window is therefore a real gap, and it is reported as one rather
+/// than silently using the first axis for both.
+fn isotropic(
+    operation: OperationKind,
+    [first, second]: [usize; 2],
+    reason: &'static str,
+) -> Result<usize, BackendError> {
+    if first == second {
+        Ok(first)
+    } else {
+        Err(invalid(operation, reason))
+    }
+}
+
+/// Two-dimensional convolution with an optional bias.
+impl<T: DType, D: Device> Execute<Descriptor<op::Conv2dExact>> for CpuBackendImpl<T, D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::Conv2dExact>, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::Conv2dExact;
+        let attributes = request.operation.descriptor().attributes();
+        // The bias operand's presence is part of the descriptor, so a mismatch
+        // between what the attributes declare and what the caller passed is
+        // caught by validation before this point. Destructuring here only
+        // recovers the storage.
+        let (activation, weight, bias) = match request.inputs {
+            [activation, weight] => (activation, weight, None),
+            [activation, weight, bias] => (activation, weight, Some(bias)),
+            _ => {
+                return Err(invalid(
+                    operation,
+                    "conv2d expects an activation, a weight and an optional bias",
+                ));
+            }
+        };
+        let activation = operand(activation, operation)?;
+        let weight = operand(weight, operation)?;
+        let bias = bias.map(|bias| operand(bias, operation)).transpose()?;
+        admitted(self, operation, activation)?;
+
+        let stride = isotropic(
+            operation,
+            attributes.stride,
+            "conv2d strides differ per axis; the routed kernel takes one stride for both",
+        )?;
+        let padding = isotropic(
+            operation,
+            attributes.padding,
+            "conv2d paddings differ per axis; the routed kernel takes one padding for both",
+        )?;
+        let dilation = isotropic(
+            operation,
+            attributes.dilation,
+            "conv2d dilations differ per axis; the routed kernel takes one dilation for both",
+        )?;
+
+        <Self as ModuleOps<Self>>::conv2d::<T>(
+            activation,
+            weight,
+            bias,
+            stride,
+            padding,
+            dilation,
+            attributes.groups,
+        )
+        .map_err(|error| kernel_error(operation, error))
+    }
+}
+
+/// Two-dimensional maximum pooling.
+impl<T: DType, D: Device> Execute<Descriptor<op::MaxPool2d>> for CpuBackendImpl<T, D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::MaxPool2d>, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::MaxPool2d;
+        let input = reduction_operand(self, request.inputs, operation)?;
+        let attributes = request.operation.descriptor().attributes();
+        let pair = |[height, width]: [usize; 2]| (height, width);
+
+        <Self as ModuleOps<Self>>::max_pool2d::<T>(
+            input,
+            pair(attributes.kernel),
+            pair(attributes.stride),
+            pair(attributes.padding),
+            pair(attributes.dilation),
+        )
+        .map_err(|error| kernel_error(operation, error))
+    }
+}
+
+/// Two-dimensional average pooling, which has no dilated form.
+impl<T: DType, D: Device> Execute<Descriptor<op::AvgPool2d>> for CpuBackendImpl<T, D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::AvgPool2d>, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::AvgPool2d;
+        let input = reduction_operand(self, request.inputs, operation)?;
+        let attributes = request.operation.descriptor().attributes();
+        let pair = |[height, width]: [usize; 2]| (height, width);
+
+        <Self as ModuleOps<Self>>::avg_pool2d::<T>(
+            input,
+            pair(attributes.kernel),
+            pair(attributes.stride),
+            pair(attributes.padding),
+        )
+        .map_err(|error| kernel_error(operation, error))
+    }
+}
+
+/// Prove, at compile time, that every identity `CPU_CAPABILITIES` advertises
+/// has an executor above.
+///
+/// This is the property the module doc claims, made mechanical. The same
+/// declaration that generates the capability rows generates these bounds, so
+/// adding a row without an implementation is a compile error rather than a
+/// support claim discovered at runtime by whoever believed it.
+macro_rules! assert_every_advertised_row_executes {
+    (
+        ;
+        pointwise = [$($pointwise:ident),* $(,)?],
+        broadcast = [$($broadcast:ident),* $(,)?],
+        reshape = [$($reshape:ident),* $(,)?],
+        reduction = [$($reduction:ident),* $(,)?],
+        spatial = [$($spatial:ident),* $(,)?],
+        matmul = [$($matmul:ident),* $(,)?]
+    ) => {
+        const _: () = {
+            const fn executes<O, B>()
+            where
+                O: incin_core::exec::CanonicalOperation,
+                B: Execute<Descriptor<O>>,
+            {
+            }
+
+            const fn assert_all<T: DType, D: Device>() {
+                $(executes::<op::$pointwise, CpuBackendImpl<T, D>>();)*
+                $(executes::<op::$broadcast, CpuBackendImpl<T, D>>();)*
+                $(executes::<op::$reshape, CpuBackendImpl<T, D>>();)*
+                $(executes::<op::$reduction, CpuBackendImpl<T, D>>();)*
+                $(executes::<op::$spatial, CpuBackendImpl<T, D>>();)*
+                $(executes::<op::$matmul, CpuBackendImpl<T, D>>();)*
+            }
+
+            assert_all::<f32, incin_core::prelude::Cpu>();
+        };
+    };
+}
+
+crate::capability::cpu_descriptor_operations!(assert_every_advertised_row_executes,);

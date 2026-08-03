@@ -67,11 +67,12 @@ const fn native_ranked(
     )
 }
 
-// Single declaration consumed by both capability generation below and the
-// grouped descriptor executors. Adding an identity here changes what execution
-// admits and what capability queries report in the same edit. FND-005 replaces
-// these grouped adapters with one `Execute<Descriptor<op::...>>` declaration
-// per row, but this declaration prevents drift during that migration.
+// Single declaration consumed by capability generation below, by the grouped
+// legacy descriptor executors, and by the canonical per-identity executors in
+// `cpu::canonical`. Adding an identity here changes what execution admits and
+// what capability queries report in the same edit, and the canonical module
+// turns the third consumer into a compile-time obligation: a row advertised
+// without an `Execute<Descriptor<op::...>>` implementation does not build.
 macro_rules! cpu_descriptor_operations {
     ($callback:ident, $($args:tt)*) => {
         $callback! {
@@ -89,6 +90,10 @@ macro_rules! cpu_descriptor_operations {
         }
     };
 }
+
+// Re-exported crate-internally so the CPU executor module can prove, at
+// compile time, that it implements every identity this declaration advertises.
+pub(crate) use cpu_descriptor_operations;
 
 macro_rules! cuda_descriptor_operations {
     ($callback:ident, $($args:tt)*) => {
