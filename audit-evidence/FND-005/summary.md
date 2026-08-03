@@ -5,7 +5,16 @@
 FND-005's completion condition is that stable CPU tensor methods no longer rely
 on the operation-family supertrait architecture. That condition is **not met**.
 What this task delivered is the execution architecture that condition depends
-on, plus the first 24 of 174 operations migrated onto it and verified.
+on, plus 117 of the 161 backend-executable operations migrated onto it and
+verified.
+
+The denominator is not 174. Thirteen catalog operations sit at an
+`ExecutionSite` the `Execute` trait cannot carry at all: they write through an
+operand, produce storage on another backend, or act on autograd state. Those
+are gaps in the execution contract rather than unwritten executors, and
+counting them alongside the rest would describe 30% more remaining work than
+exists. `ExecutionSite::blocking_reason` states which reason applies to each,
+and `cpu-migration-status.md` lists them in their own section.
 
 Nothing here should be read as "the CPU is done". The generated
 `cpu-migration-status.md` states the count, is derived from the registrations
@@ -18,6 +27,18 @@ rather than written by hand, and a test fails if it drifts.
 | `43fd02f` | `feat(fnd-005): establish the canonical CPU execution path` |
 | `b2088fa` | `feat(fnd-005): migrate the CPU reduction and spatial families` |
 | `2b0fb2d` | `test(fnd-005): verify canonical CPU gradients against finite differences and the legacy path` |
+| `e2a5119` | `docs(fnd-005): record the partial CPU migration and its acceptance evidence` |
+| `062bc8d` | `docs(fnd-005): archive acceptance gate evidence from the committed hash` |
+| `7243684` | `feat(fnd-005): migrate the CPU float operation family` |
+| `bea9523` | `feat(fnd-005): migrate the CPU tensor operation family` |
+| `967aecc` | `fix(fnd-005): report the composed tensor operations as composed` |
+| `b435ccb` | `feat(fnd-005): migrate the CPU shape, indexing and normalisation operations` |
+| `9dfef9e` | `refactor(fnd-005): group capability rows by rule shape rather than by trait` |
+| `4a04f63` | `feat(fnd-005): migrate the CPU index reductions and the scan` |
+| `ac01e0d` | `chore: move the long-form planning documents under docs/plan` |
+| `061d04f` | `feat(fnd-005): classify every catalog operation by execution site` |
+| `5cd0101` | `feat(fnd-005): migrate the CPU module family` |
+| `a247d73` | `docs: state which foundations are frozen and what comes next` |
 
 Parent: `c538539` (FND-004). No earlier commit was amended, squashed or
 recreated.
@@ -57,29 +78,50 @@ FND-005 requires of it is structural rather than conventional:
 | Capability output is generated from the implementations | PASS | one declaration feeds the rows, the legacy executors and the canonical executors |
 | Non-CPU backends preserve compilation without broadened claims | PASS | `test-results/check-backend-*.txt`; WGPU training rows are `f32` only |
 | **Stable CPU tensor methods no longer use the supertraits** | **NOT MET** | `Backend` still requires all nine; 850 references across 75 files |
-| **The whole stable CPU surface is migrated** | **NOT MET** | 24 of 174; `cpu-migration-status.md` |
+| **The whole stable CPU surface is migrated** | **NOT MET** | 117 of 161 backend-executable; `cpu-migration-status.md` |
 | Workspace suite passes | PASS | `test-results/test-workspace.txt` |
 | Workspace formatter clean | **BLOCKED** | pre-existing drift; see `known-limitations.md` |
 
 ## Migrated in this task
 
-24 exact identities, each with its own `Execute<Descriptor<op::X>>`:
+117 exact identities, each with its own `Execute<Descriptor<op::X>>`. The
+generated `cpu-migration-status.md` is the authoritative list; the families are:
 
-- pointwise binary: `add`, `sub`, `mul`, `div`
-- views: `reshape`, `broadcast_as`
-- matmul: `matmul`
-- reductions: `sum_all`, `mean_all`, `max_all`, `min_all`, `prod_all`,
-  `sum_dim`, `mean_dim`, `max_dim`, `min_dim`, `prod_dim`, `sum_keepdim`,
-  `mean_keepdim`, `max_keepdim`, `min_keepdim`
-- spatial: `conv2d`, `max_pool2d`, `avg_pool2d`
+- pointwise binary and the whole float unary set, including the scalar and
+  two-operand parametrised forms
+- views: `reshape`, `broadcast_as`, and the composed `flatten`, `squeeze`,
+  `unsqueeze`, `stack`, `slice`, `broadcast_left`
+- matmul, and the composed `bmm`, `addmm`, `scaled_dot_product_attention`
+- reductions, keep-dim reductions, the index reductions and `cumsum`,
+  `argsort`, `topk`
+- comparison, logical, selection and indexing operations
+- spatial: `conv2d`, `conv1d`, `conv_transpose2d`, `max_pool2d`, `avg_pool2d`,
+  `adaptive_avg_pool2d`
+- normalization: `softmax`, `layer_norm`, `batch_norm`, `group_norm`,
+  `instance_norm`
 
 For the pointwise, view and matmul families the kernel body was **moved** to a
 free function that both the canonical executor and the legacy trait method
 call, so there is one implementation rather than two that must agree. The
-reduction and spatial executors still reach the bodies through `ReductionOps`
-and `ModuleOps`; that is the migration's temporary compatibility adapter, it is
-private to `cpu::canonical`, and it is the only remaining call from the
-canonical path into the legacy families.
+reduction, spatial and module executors still reach the bodies through
+`ReductionOps`, `ModuleOps` and `TensorOps`; that is the migration's temporary
+compatibility adapter, it is private to `cpu::canonical`, and it is the only
+remaining call from the canonical path into the legacy families.
+
+Two identities are registered with a documented refusal rather than a
+permissive executor, and one is deliberately not registered at all:
+
+- **`batch_norm` refuses training mode.** The CPU kernel binds its momentum
+  argument to `_momentum`, computes no batch statistics and updates no running
+  statistics. A training call would return the inference result with nothing
+  marking it as substituted. It also refuses absent running statistics, for
+  which the kernel silently supplies a zero mean and a unit variance.
+- **The convolutions refuse an anisotropic window**, because the descriptor
+  carries one extent per spatial axis and the routed kernel takes one for both.
+- **`embedding` is not registered.** Its float table and integer index operands
+  need two dtype sets and a capability row states one. Widening the row to the
+  non-quantized set would claim f64 support the kernel answers by narrowing.
+  The declaration in `capability.rs` records this at the point of absence.
 
 ## Defects found and fixed
 
@@ -99,49 +141,91 @@ canonical path into the legacy families.
    both. The canonical executor refuses the mismatch explicitly rather than
    applying the first axis' extent to both.
 
+3. **`batch_norm`'s kernel is inference-only and nothing said so.** It binds
+   its momentum argument to `_momentum`, computes no batch statistics and
+   updates no running statistics, and substitutes a zero mean and a unit
+   variance for absent running statistics rather than failing. Every one of
+   those is a wrong answer that looks like a right one. The canonical executor
+   refuses both cases explicitly.
+
+4. **Four kernels return f32 storage whatever the operand held.** `conv1d`,
+   `conv_transpose2d`, `adaptive_avg_pool2d` and `embedding` are generic over
+   the element type at the signature and always build an f32 result buffer, so
+   an f64 operand is narrowed and returned mislabelled. Measured against the
+   real kernels, not read off the signatures. The executors now require every
+   operand to be f32, because `dispatch` resolves one capability row and the
+   executors query it for their primary operand only.
+
+5. **A capability row's rank bound is per-operand, and `conv2d`'s was not.**
+   `dispatch::execute` applies one row to every operand in turn, so a minimum
+   rank derived from the activation is also asserted against a rank-one bias.
+   `conv2d` advertised `3..=4` from the day it was migrated and was
+   undispatchable with a bias for that entire period, and no test noticed
+   because none passed one. The bound is now the minimum over all operands, the
+   primary operand's real bound is left to the descriptor's attribute contract
+   which runs first and can tell the operands apart, and
+   `a_convolution_with_a_bias_is_not_refused_by_its_own_rank_bound` is the
+   regression test.
+
 ## Test counts
 
 Reproduced from the committed revision only. No historical count is reused.
 
 | Suite | Result |
 |---|---|
-| `cargo test --workspace` | **1372 passed, 0 failed, 1 ignored** |
+| `cargo test --workspace` | **1401 passed, 0 failed, 1 ignored** |
 | `cargo test --doc --workspace` | 78 passed, 0 failed |
-| `cargo test -p incin-core` | 461 passed, 0 failed |
-| `cargo test -p incin-backends --features cpu` | 403 passed, 0 failed, 1 ignored |
+| `cargo test -p incin-core` | 465 passed, 0 failed |
+| `cargo test -p incin-backends --features cpu` | 430 passed, 0 failed, 1 ignored |
 | `cargo test -p incin` | 119 passed, 0 failed |
-| `cargo test -p incin-backends --features cpu --test canonical_cpu` | 16 passed, 0 failed |
+| `cargo test -p incin-backends --features cpu --test canonical_cpu` | 34 passed, 0 failed |
 
 The single ignored test is
 `every_generated_cuda_row_matches_real_execution_on_hardware`, which requires a
 CUDA device.
 
-FND-004 recorded 1348. The 24 added here are the 16 canonical CPU conformance
-tests, the 5 gradient tests in `cpu::canonical::tests`, and the 3
-migration-status tests.
+`cargo public-api -p incin` reports **1159 items**, byte-identical to
+`test-results/public-api.txt` archived at `2b0fb2d`. The whole migration is
+additive behind `backend_authoring` and the feature-gated tiers, and the stable
+facade has not moved.
 
-`cargo public-api -p incin` reports **756 items, unchanged** from the FND-003 and
-FND-004 baseline.
+An earlier revision of this file recorded that figure as 756 items. That was
+wrong at the time it was written: the archived snapshot it cited has 1159, and
+the two were never compared. It is corrected here rather than quietly dropped,
+because a number nobody checked is the failure mode this evidence directory
+exists to prevent.
 
 ## What remains for FND-005
 
-Sequenced, with the dependency that makes the order necessary:
+Sequenced, with the dependency that makes the order necessary. `docs/FROZEN_FOUNDATIONS.md`
+carries the same list alongside what must not change while it is worked
+through.
 
-1. **Migrate the remaining 150 operations onto `Execute<Descriptor<op::X>>`**,
-   moving each kernel body down as the pointwise family already did. Until the
-   whole surface is migrated, step 2 cannot start, because a tensor method
-   cannot depend on a capability that does not exist.
-2. **Remove the nine operation-family supertraits from `Backend`** and give
+1. **Migrate the remaining 44 backend-executable operations onto
+   `Execute<Descriptor<op::X>>`**, moving each kernel body down as the
+   pointwise family already did. Until the whole surface is migrated, step 3
+   cannot start, because a tensor method cannot depend on a capability that
+   does not exist.
+2. **Give `CapabilityRule` per-operand dtype and rank sets.** This is what
+   blocks `embedding`, and it is also what forced the convolution rows to state
+   the minimum rank their bias needs rather than the one their activation
+   needs. Doing it once is cheaper than working around it per operation.
+3. **Remove the nine operation-family supertraits from `Backend`** and give
    each stable tensor method a bound naming only the capability it uses. This
    is source-breaking for every backend implementation and changes the `incin`
    facade; it is the step that actually ends the dual architecture.
-3. **Delete the broad family capability rows** (`Pointwise`, `Reduction`,
+4. **Delete the broad family capability rows** (`Pointwise`, `Reduction`,
    `Reshape`, `MatMul`, `Conv2d`, `Pool2d`, `Storage`, `Fill`, `Random`,
    `Normalization`, `Broadcast`) and the grouped `Execute<MatMulSpec>` adapters.
-4. **Delete the compatibility adapter** in `cpu::canonical` and the
+5. **Delete the compatibility adapter** in `cpu::canonical` and the
    `the_migration_is_recorded_as_incomplete` test, which is written to fail once
    the catalog is fully migrated so the completion claim must be a deliberate
    edit.
+
+Separately, and not a precondition for the above: the thirteen operations at a
+non-executable `ExecutionSite` need `Execute` widened or a second contract that
+can carry them. They are excluded from the denominator above rather than
+counted as pending, because they are not work of the same kind.
 
 ## Commands
 
