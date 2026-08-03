@@ -10,7 +10,7 @@ You are continuing remediation of the Incin Rust workspace from the current repo
   - commit subject: `refactor(core): finalize backend_authoring facade migration and trait visibility`
 - Read these files before editing:
   1. `AGENTS.md`
-  2. `INCIN_CODEBASE_TRUTH_AUDIT_AND_IMPLEMENTATION_SPEC.md`
+  2. `docs/plan/remediation/codebase-truth-audit.md`
   3. `audit-evidence/API-001/summary.md`
   4. `audit-evidence/API-001/api-before.txt`
 - Follow `AGENTS.md`. When `graphify-out/graph.json` exists, use `graphify query`, `graphify path`, or `graphify explain` before broad source browsing. If the `graphify` executable is unavailable, record that fact in evidence and continue with source inspection; do not pretend it ran.

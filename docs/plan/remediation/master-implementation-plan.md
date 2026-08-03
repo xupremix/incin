@@ -3769,7 +3769,7 @@ Repository baseline:
 - The supplied audit baseline was eb3633525ea74e56f7a6b2d5c5b57dc74a5d9b8d.
 
 Read completely before changing code:
-1. INCIN_0_1_TO_1_0_MASTER_IMPLEMENTATION_PLAN.md
+1. docs/plan/remediation/master-implementation-plan.md
 2. PROPOSALS.md
 3. docs/plan/ledger.toml
 4. crates/incin-core/src/compiled/*
@@ -3838,7 +3838,7 @@ Baseline:
 - Work in a dedicated Git worktree and branch.
 
 Read first:
-- INCIN_0_1_TO_1_0_MASTER_IMPLEMENTATION_PLAN.md sections relevant to this task
+- docs/plan/remediation/master-implementation-plan.md sections relevant to this task
 - docs/plan/compiler-program/DECISIONS.md
 - docs/plan/compiler-program/STATUS.md
 - task specification
