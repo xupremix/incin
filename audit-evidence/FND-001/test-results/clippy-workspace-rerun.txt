@@ -1,0 +1,13 @@
+    Checking backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin/examples/backends)
+    Checking incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+    Checking native_training_demo v0.0.0 (/home/xupremix/Projects/incin/crates/incin/examples/native_training_demo)
+    Checking matmul v0.0.0 (/home/xupremix/Projects/incin/crates/incin/examples/matmul)
+    Checking incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+    Checking tui_graph_demo v0.0.0 (/home/xupremix/Projects/incin/crates/incin/examples/tui_graph_demo)
+    Checking dataloader v0.0.0 (/home/xupremix/Projects/incin/crates/incin/examples/dataloader)
+    Checking named_dims_safety v0.0.0 (/home/xupremix/Projects/incin/crates/incin/examples/named_dims_safety)
+    Checking cnn v0.0.0 (/home/xupremix/Projects/incin/crates/incin/examples/cnn)
+    Checking named_tensors v0.0.0 (/home/xupremix/Projects/incin/crates/incin/examples/named_tensors)
+    Checking incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.84s

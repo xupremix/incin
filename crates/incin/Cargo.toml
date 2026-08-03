@@ -46,8 +46,8 @@ external-candle = ["std", "incin-backends/external-candle"]
 
 # Enables CUDA launch autotuning.
 autotune = ["cuda", "incin-backends/autotune"]
-# Enables the automatic `Trainer` at `incin::train`. Preview tier: useful and
-# tested, but the interface may change without a migration path.
+# Enables the preview trainer at `incin::experimental::training`. The
+# interface may change without a migration path.
 train = ["std"]
 # Enables typed meshes, static/runtime tensor placements, and distributed
 # lowering proofs. Transports remain separate opt-in backend features.
@@ -111,3 +111,7 @@ required-features = ["cpu"]
 [[example]]
 name = "rnn_sequence_prediction"
 required-features = ["cpu"]
+
+[[example]]
+name = "native_resnet"
+required-features = ["backend-authoring", "cpu"]

@@ -2,7 +2,7 @@
 
 #![cfg(feature = "train")]
 
-use incin::train::{Machine, Trainer};
+use incin::experimental::training::{Machine, Trainer};
 use incin_core::prelude::{DeviceId, DeviceKind, DeviceSet};
 
 struct MockCpuMachine;
@@ -54,7 +54,7 @@ fn plan_explain_json_renders_valid_json() {
 
 #[test]
 fn plan_report_runner_executes_with_cli_flags() {
-    let (text_out, text_code) = incin::plan_report::run_with_machine(
+    let (text_out, text_code) = incin::experimental::training::plan_report::run_with_machine(
         &[
             "--devices".to_string(),
             "cpu".to_string(),
@@ -67,7 +67,7 @@ fn plan_report_runner_executes_with_cli_flags() {
     assert!(text_out.contains("Execution Plan:"));
     assert!(text_out.contains("Epochs: 10"));
 
-    let (json_out, json_code) = incin::plan_report::run_with_machine(
+    let (json_out, json_code) = incin::experimental::training::plan_report::run_with_machine(
         &[
             "--json".to_string(),
             "--devices".to_string(),

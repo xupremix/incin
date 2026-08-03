@@ -262,8 +262,8 @@ fn main() -> io::Result<()> {
     if subcommand == "plan" {
         #[cfg(feature = "train")]
         {
-            let (rendered, code) = incin::plan_report::run(&cargo_args);
-            if code == incin::plan_report::EXIT_USAGE {
+            let (rendered, code) = incin::experimental::training::plan_report::run(&cargo_args);
+            if code == incin::experimental::training::plan_report::EXIT_USAGE {
                 eprint!("{rendered}");
             } else {
                 print!("{rendered}");
@@ -281,8 +281,8 @@ fn main() -> io::Result<()> {
     }
 
     if subcommand == "tune" {
-        let (rendered, code) = incin::tune_report::run(&cargo_args);
-        if code == incin::tune_report::EXIT_USAGE {
+        let (rendered, code) = incin::experimental::tuning_report::run(&cargo_args);
+        if code == incin::experimental::tuning_report::EXIT_USAGE {
             eprint!("{rendered}");
         } else {
             print!("{rendered}");

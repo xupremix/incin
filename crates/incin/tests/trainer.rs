@@ -12,8 +12,8 @@
 
 #![cfg(all(feature = "train", feature = "cpu"))]
 
+use incin::experimental::training::{Machine, Plan, TrainError, Trainer};
 use incin::prelude::*;
-use incin::train::{Machine, Plan, TrainError, Trainer};
 
 type Backend = incin::DefaultBackend;
 

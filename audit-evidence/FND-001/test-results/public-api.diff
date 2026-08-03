@@ -1,0 +1,284 @@
+--- audit-evidence/FND-001/test-results/public-api-before.api	2026-08-03 05:00:28.943169112 +0200
++++ audit-evidence/FND-001/test-results/public-api-after.api	2026-08-03 05:00:28.946169065 +0200
+@@ -2,38 +2,54 @@
+ pub use incin::Adam
+ pub use incin::AdamW
+ pub use incin::Backend
++pub use incin::BoolDType
+ pub use incin::ConstShape
+ pub use incin::ConstantLR
+ pub use incin::CosineAnnealingLR
+ pub use incin::Cpu
+ pub use incin::DType
+ pub use incin::DTypeId
++pub use incin::Device
+ pub use incin::DeviceId
++pub use incin::DeviceKind
++pub use incin::DevicePreference
++pub use incin::DeviceSet
++pub use incin::DeviceSetError
+ pub use incin::Dyn
+ pub use incin::DynShape
+ pub use incin::Error
++pub use incin::FloatDType
+ pub use incin::Grad
+ pub use incin::Gradients
+ pub use incin::IncinBackend
++pub use incin::IntDType
+ pub use incin::LRScheduler
+ pub use incin::LinearLR
+ pub use incin::Module
+ pub use incin::NoGrad
+ pub use incin::Optimizer
+ pub use incin::PartialDynShape
++pub use incin::PlainDType
++pub use incin::Q8_0
++pub use incin::QuantDType
++pub use incin::RequiresGrad
+ pub use incin::Result
+ pub use incin::SGD
+ pub use incin::Shape
+ pub use incin::StateDict
+ pub use incin::StepLR
++pub use incin::TensorElement
++pub use incin::bf16
+ pub use incin::dim
+-pub use incin::import_model
+-pub use incin::mesh
+-pub use incin::model
++pub use incin::f16
+ pub use incin::module
+ pub use incin::typenum
+ pub mod incin::data
+-pub use incin::data::<<incin_data::*>>
++pub use incin::data::Collate
++pub use incin::data::DataLoader
++pub use incin::data::Dataset
++pub use incin::data::Downloader
++pub use incin::data::vision
+ pub mod incin::doctor
+ pub enum incin::doctor::CacheState
+ pub incin::doctor::CacheState::Absent
+@@ -890,16 +906,100 @@
+ pub fn incin::doctor::cache_state(&std::path::Path) -> incin::doctor::CacheState
+ pub fn incin::doctor::run(&[alloc::string::String]) -> (alloc::string::String, i32)
+ pub mod incin::experimental
++pub use incin::experimental::import_model
++pub use incin::experimental::mesh
++pub use incin::experimental::model
++pub use incin::experimental::parallel
++pub use incin::experimental::placement
++pub mod incin::experimental::tuning_report
++pub const incin::experimental::tuning_report::EXIT_OK: i32
++pub const incin::experimental::tuning_report::EXIT_USAGE: i32
++pub fn incin::experimental::tuning_report::run(&[alloc::string::String]) -> (alloc::string::String, i32)
+ pub mod incin::hub
+-pub use incin::hub::<<incin_data::hub::*>>
++pub use incin::hub::HubApi
++pub use incin::hub::HubRepo
++pub use incin::hub::download
++pub use incin::hub::from_pretrained
+ pub mod incin::macros
+ pub use incin::macros::idx
+-pub use incin::macros::mesh
+ pub use incin::macros::s
+ pub mod incin::metrics
+-pub use incin::metrics::<<incin_core::metrics::*>>
++pub use incin::metrics::Accuracy
++pub use incin::metrics::ConfusionMatrix
++pub use incin::metrics::F1Score
++pub use incin::metrics::MSE
++pub use incin::metrics::Metric
++pub use incin::metrics::Precision
++pub use incin::metrics::Recall
+ pub mod incin::nn
+-pub use incin::nn::<<incin_core::nn::*>>
++pub use incin::nn::AdaptiveAvgPool2d
++pub use incin::nn::AvgPool2d
++pub use incin::nn::BCEWithLogitsLoss
++pub use incin::nn::BCEWithLogitsShape
++pub use incin::nn::BatchNorm2d
++pub use incin::nn::BatchNormShape
++pub use incin::nn::Buffer
++pub use incin::nn::ComputeStats
++pub use incin::nn::Conv1d
++pub use incin::nn::Conv1dShape
++pub use incin::nn::Conv2d
++pub use incin::nn::Conv2dShape
++pub use incin::nn::CrossEntropyLoss
++pub use incin::nn::CrossEntropyReductionShape
++pub use incin::nn::CrossEntropyShape
++pub use incin::nn::Dropout
++pub use incin::nn::ELU
++pub use incin::nn::Embedding
++pub use incin::nn::EmbeddingShape
++pub use incin::nn::False
++pub use incin::nn::Flatten
++pub use incin::nn::GELU
++pub use incin::nn::Init
++pub use incin::nn::L1Loss
++pub use incin::nn::L1ReductionShape
++pub use incin::nn::L1Shape
++pub use incin::nn::LSTM
++pub use incin::nn::LSTMCell
++pub use incin::nn::LayerNode
++pub use incin::nn::LayerNorm
++pub use incin::nn::LayerNormShape
++pub use incin::nn::LayerStats
++pub use incin::nn::Linear
++pub use incin::nn::LinearShape
++pub use incin::nn::LstmShape
++pub use incin::nn::MSELoss
++pub use incin::nn::MSEShape
++pub use incin::nn::MaxPool2d
++pub use incin::nn::Mean
++pub use incin::nn::Mish
++pub use incin::nn::ModelStats
++pub use incin::nn::Module
++pub use incin::nn::NamedLayers
++pub use incin::nn::NoneReduction
++pub use incin::nn::OptionalField
++pub use incin::nn::Param
++pub use incin::nn::Parameters
++pub use incin::nn::RMSNorm
++pub use incin::nn::RMSNormShape
++pub use incin::nn::RNN
++pub use incin::nn::RNNCell
++pub use incin::nn::ReLU
++pub use incin::nn::Reduction
++pub use incin::nn::ReductionMode
++pub use incin::nn::RnnShape
++pub use incin::nn::Sequential
++pub use incin::nn::Sigmoid
++pub use incin::nn::Softmax
++pub use incin::nn::StateDict
++pub use incin::nn::Sum
++pub use incin::nn::Swish
++pub use incin::nn::Tanh
++pub use incin::nn::ToDevice
++pub use incin::nn::TrainMode
++pub use incin::nn::True
++pub use incin::nn::format_layer_summary
++pub use incin::nn::format_layer_summary_with_stats
++pub use incin::nn::sum_stats
+ pub mod incin::optim
+ pub use incin::optim::Adam
+ pub use incin::optim::AdamW
+@@ -917,9 +1017,8 @@
+ pub use incin::prelude::AdamW
+ pub use incin::prelude::AvgPool2d
+ pub use incin::prelude::BCEWithLogitsLoss
+-pub use incin::prelude::BTreeMap
+ pub use incin::prelude::Backend
+-pub use incin::prelude::ComputeStats
++pub use incin::prelude::BoolDType
+ pub use incin::prelude::ConfusionMatrix
+ pub use incin::prelude::ConstDType
+ pub use incin::prelude::ConstDevice
+@@ -933,6 +1032,9 @@
+ pub use incin::prelude::Device
+ pub use incin::prelude::DeviceId
+ pub use incin::prelude::DeviceKind
++pub use incin::prelude::DevicePreference
++pub use incin::prelude::DeviceSet
++pub use incin::prelude::DeviceSetError
+ pub use incin::prelude::Dim
+ pub use incin::prelude::Dropout
+ pub use incin::prelude::Dyn
+@@ -941,6 +1043,7 @@
+ pub use incin::prelude::Error
+ pub use incin::prelude::F1Score
+ pub use incin::prelude::Flatten
++pub use incin::prelude::FloatDType
+ pub use incin::prelude::Format
+ pub use incin::prelude::GELU
+ pub use incin::prelude::Grad
+@@ -949,12 +1052,12 @@
+ pub use incin::prelude::IncinBackend
+ pub use incin::prelude::InferDim
+ pub use incin::prelude::Init
++pub use incin::prelude::IntDType
+ pub use incin::prelude::L1Loss
+ pub use incin::prelude::LRScheduler
+ pub use incin::prelude::LSTM
+ pub use incin::prelude::LSTMCell
+ pub use incin::prelude::LayerNode
+-pub use incin::prelude::LayerStats
+ pub use incin::prelude::LinearLR
+ pub use incin::prelude::MSE
+ pub use incin::prelude::MSELoss
+@@ -962,7 +1065,6 @@
+ pub use incin::prelude::Mean
+ pub use incin::prelude::Metric
+ pub use incin::prelude::ModelExt
+-pub use incin::prelude::ModelStats
+ pub use incin::prelude::Module
+ pub use incin::prelude::NamedDyn
+ pub use incin::prelude::NamedLayers
+@@ -971,11 +1073,15 @@
+ pub use incin::prelude::Optimizer
+ pub use incin::prelude::Parameters
+ pub use incin::prelude::PartialDynShape
++pub use incin::prelude::PlainDType
+ pub use incin::prelude::Precision
++pub use incin::prelude::Q8_0
++pub use incin::prelude::QuantDType
+ pub use incin::prelude::RMSNorm
+ pub use incin::prelude::ReLU
+ pub use incin::prelude::Recall
+ pub use incin::prelude::Reduction
++pub use incin::prelude::RequiresGrad
+ pub use incin::prelude::Result
+ pub use incin::prelude::SGD
+ pub use incin::prelude::SeqTy
+@@ -987,29 +1093,21 @@
+ pub use incin::prelude::SpanShape
+ pub use incin::prelude::StateDict
+ pub use incin::prelude::StepLR
+-pub use incin::prelude::String
+-pub use incin::prelude::SupportsDType
+ pub use incin::prelude::Swish
+ pub use incin::prelude::TailShape
+ pub use incin::prelude::Tanh
++pub use incin::prelude::TensorElement
+ pub use incin::prelude::ToDevice
+ pub use incin::prelude::TrainMode
+-pub use incin::prelude::TransferTo
+-pub use incin::prelude::Vec
+ pub use incin::prelude::axes
++pub use incin::prelude::bf16
+ pub use incin::prelude::dim
+ pub use incin::prelude::einsum
+-pub use incin::prelude::format
++pub use incin::prelude::f16
+ pub use incin::prelude::idx
+-pub use incin::prelude::import_model
+-pub use incin::prelude::mesh
+-pub use incin::prelude::model
+ pub use incin::prelude::module
+-pub use incin::prelude::parallel
+-pub use incin::prelude::placement
+ pub use incin::prelude::s
+ pub use incin::prelude::seq
+-pub use incin::prelude::sum_stats
+ pub use incin::prelude::typenum
+ pub type incin::prelude::BatchNorm2d<C, B> = incin_core::nn::batch_norm::BatchNorm2d<C, B>
+ pub type incin::prelude::Conv1d<S, B> = incin_core::nn::conv1d::Conv1d<S, B>
+@@ -1024,11 +1122,12 @@
+ pub type incin::prelude::RNNCell<S, B> = incin_core::nn::rnn::RNNCell<S, B>
+ pub type incin::prelude::Tensor<S, B, K, G, P> = incin_core::tensor::base::Tensor<S, B, K, G, P>
+ pub mod incin::transforms
+-pub use incin::transforms::<<incin_data::transforms::*>>
+-pub mod incin::tune_report
+-pub const incin::tune_report::EXIT_OK: i32
+-pub const incin::tune_report::EXIT_USAGE: i32
+-pub fn incin::tune_report::run(&[alloc::string::String]) -> (alloc::string::String, i32)
++pub use incin::transforms::CenterCrop
++pub use incin::transforms::Compose
++pub use incin::transforms::Normalize
++pub use incin::transforms::RandomHorizontalFlip
++pub use incin::transforms::Scale
++pub use incin::transforms::Transform
+ pub type incin::AvgPool2d<K, S, P, D> = incin_core::nn::avg_pool2d::AvgPool2d<K, S, P, D>
+ pub type incin::BatchNorm2d<C, B> = incin_core::nn::batch_norm::BatchNorm2d<C, B>
+ pub type incin::Conv1d<S, B> = incin_core::nn::conv1d::Conv1d<S, B>

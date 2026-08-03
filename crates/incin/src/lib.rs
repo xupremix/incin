@@ -6,7 +6,7 @@
 //!
 //! * **Compile-time Shape Verification**: Write tensor operations with `Tensor<s![Batch, Channels, Height, Width], Backend>` and let the compiler guarantee that shapes align for operations like `matmul`, `conv2d`, `concat`, etc.
 //! * **Backend Agnostic**: CPU is enabled by default; native CUDA and WGPU are explicit opt-ins. The third-party Candle adapter is available through the `external-candle` feature under `external::candle`.
-//! * **Macro-driven Ergonomics**: Powerful macros like `s![]` for shape definitions, `idx![]` for expressive slicing and reshaping, and `model![]` for generating fully typed Rust structs directly from ONNX files.
+//! * **Macro-driven Ergonomics**: Stable macros such as `s![]` define shapes and `idx![]` express slicing and reshaping. Partial ONNX expansion is available separately as `experimental::model!`.
 //! * **Zero-Cost Abstractions**: The static shape information (`typenum`) exists entirely in the type system and evaporates at runtime, introducing zero overhead to the underlying backend operations.
 //!
 //! ## Quick Start
@@ -74,60 +74,175 @@
 //! invented.
 extern crate alloc;
 
-pub use incin_core::prelude::{
-    Backend, ConstShape, Cpu, DType, DTypeId, DeviceId, Dyn, DynShape, Error, Grad, Gradients,
-    Module, NoGrad, PartialDynShape, Result, Shape, StateDict,
-};
-pub use incin_core::optim::{
-    Adam, AdamW, ConstantLR, LRScheduler, LinearLR, Optimizer, SGD,
-};
+pub use incin_backends::IncinBackend;
+pub use incin_core::optim::{Adam, AdamW, ConstantLR, LRScheduler, LinearLR, Optimizer, SGD};
 #[cfg(feature = "std")]
 pub use incin_core::optim::{CosineAnnealingLR, StepLR};
-pub use incin_backends::IncinBackend;
+pub use incin_core::prelude::{
+    Backend, BoolDType, ConstShape, Cpu, DType, DTypeId, Device, DeviceId, DeviceKind,
+    DevicePreference, DeviceSet, DeviceSetError, Dyn, DynShape, Error, FloatDType, Grad, Gradients,
+    IntDType, Module, NoGrad, PartialDynShape, PlainDType, Q8_0, QuantDType, RequiresGrad, Result,
+    Shape, StateDict, TensorElement, bf16, f16,
+};
 
 #[cfg(feature = "cuda")]
 pub use incin_core::prelude::{Cuda, CudaN};
-#[cfg(feature = "wgpu")]
-pub use incin_core::prelude::{Wgpu, WgpuN};
 #[cfg(feature = "metal")]
 pub use incin_core::prelude::{Metal, MetalN};
+#[cfg(feature = "wgpu")]
+pub use incin_core::prelude::{Wgpu, WgpuN};
 
 pub use incin_core::dim;
-pub use incin_macros::{import_model, mesh, model, module};
+pub use incin_macros::module;
+
+/// Implementation details used by exported procedural macros.
+///
+/// This module is public solely because macro expansion occurs in the
+/// consumer crate. Its contents are not part of the stable end-user facade.
+#[doc(hidden)]
+pub mod __macro_support {
+    pub use alloc::{collections::BTreeMap, format, string::String, vec::Vec};
+    pub use incin_core::backend_authoring::{SupportsDType, TransferTo};
+    pub use incin_core::nn::{
+        AutorefComputeStats, AutorefComputeStatsFallback, AutorefNamedLayers,
+        AutorefNamedLayersFallback, AutorefParameters, AutorefParametersFallback, AutorefShapeInfo,
+        AutorefShapeInfoFallback, AutorefStateDict, AutorefStateDictFallback, AutorefTrainMode,
+        AutorefTrainModeFallback, ComputeStats, LayerStats,
+    };
+}
 
 /// Unstable APIs that carry no compatibility guarantee.
 pub mod experimental {
+    /// Partial, fail-closed model import macros.
+    pub use incin_macros::{import_model, model};
+    /// Experimental distributed declaration macros.
+    pub use incin_macros::{mesh, parallel, placement};
+
     #[cfg(feature = "compiled")]
     /// Structural compiled-execution prototype. It does not execute graphs yet.
     pub use incin_core::experimental::compiled;
+
+    #[cfg(feature = "autotune")]
+    /// Preview tuning configuration and inspection types.
+    pub mod tuning {
+        pub use incin_backends::tuning::{
+            AlignmentClass, AutotunePolicy, CacheLimits, CacheRecovery, CompilerFingerprint,
+            DTypePolicyId, DeviceFingerprint, KernelSignature, PersistentTuningCache, RankClass,
+            SelectionSource, TuningContext, TuningEnvironmentFingerprint, TuningExplain,
+            TuningProvenance, TuningScope, TuningSelection,
+        };
+    }
+
+    #[cfg(feature = "distributed")]
+    /// Experimental distributed planning and placement contracts.
+    pub mod distributed {
+        /// Typed logical mesh declarations and runtime binding contracts.
+        pub mod mesh {
+            pub use incin_core::dist::mesh::{
+                AXIS_COUNT, BindError, CollectiveGroups, Data, DeviceIdentity, DeviceMesh,
+                LinkClass, MeshAxis, MeshId, MeshSpec, Pipeline, ProcessLayout, TensorParallel,
+                TopologyFingerprint, TopologyProbe, TransportVersion, ValidMesh,
+            };
+        }
+
+        #[cfg(feature = "distributed-nccl")]
+        pub use incin_backends::dist::{
+            BootstrapRole, NcclBuffer, NcclEvent, NcclTopology, NcclTransport, NcclTransportError,
+            TwoRankBootstrapConfig,
+        };
+        pub use incin_core::dist::{
+            ActivationCheckpoint, AgreedPlan, CollectiveDType, CollectiveDescriptor,
+            CollectiveError, CollectiveKind, CollectivePlan, CollectivePlanBuilder,
+            CollectiveReductionDType, CollectiveTag, CommunicationEvidence, CompletePlacement,
+            ConstPlacement, ContextError, ContextFailure, DataParallelDType, DataParallelError,
+            DataParallelPlan, DataParallelPlanBuilder, DistributedContext,
+            DistributedContextHandle, DistributedContextState, DistributedError,
+            DistributedIdentity, DistributedInputs, DistributedRule, ElementwisePlacement,
+            FsdpError, FsdpMemoryReport, FsdpParameterDescriptor, FsdpParameterId, FsdpPlan,
+            FsdpPlanBuilder, GPipe, GradientDescriptor, GradientId, GroupId, HybridPlanDType,
+            HybridPlanError, HybridPlanReport, HybridPlanner, HybridWorkload,
+            LOCAL_CUDA_DEVICE_ENV, LegalTransition, Local, Max, Mean, MemoryLimit, Min,
+            OneForwardOneBackward, ParallelOptions, ParallelStrategy, ParallelStrategyKind,
+            Partial, PartialReduction, PipelineAction, PipelineBoundaryId, PipelineClock,
+            PipelineDType, PipelineError, PipelinePhase, PipelinePlan, PipelinePlanBuilder,
+            PipelineSchedule, PipelineScheduleDescriptor, PipelineStage, PipelineTransfer,
+            PipelineTransferDescriptor, Placement, PlacementAxis, PlacementBuf, PlacementKind,
+            PlacementOn, PlacementTransition, PlacementTransitionRule, PlanError, PlanObjective,
+            PlanSummary, PlannedCollectiveTransition, PlanningCollectiveKind, Prod, RANK_ENV,
+            RENDEZVOUS_ADDR_ENV, RENDEZVOUS_TIMEOUT_MS_ENV, RUN_ID_ENV, ReduceShardedAxis,
+            RejectedStrategy, Replicated, RunId, SequenceToken, ShardDivisible, ShardEvidence,
+            ShardRemainderPolicy, Sharded, StaticParallelOptions, StaticPipelineSchedule,
+            StaticTwoRank, StrategyCandidate, StrategyRejection, StrategySet, StreamId, Sum,
+            TWO_RANK_WORLD, TensorParallelCollective, TensorParallelDType,
+            TensorParallelDescriptor, TensorParallelDimension, TensorParallelError,
+            TensorParallelId, TensorParallelPlan, TensorParallelPlanBuilder, TwoRankDataParallel,
+            TwoRankPipeline, TwoRankPlanningTopology, TwoRankTensorParallel, TwoWayShard,
+            ValidatedDistributed, WORLD_SIZE_ENV, WorkloadField, ZeROStage, preflight,
+            validate_collective_dtype, validate_collective_reduction, validate_data_parallel_dtype,
+            validate_hybrid_plan_dtype, validate_microbatches, validate_pipeline_dtype,
+            validate_pipeline_stage, validate_shard, validate_tensor_parallel_dtype,
+            validate_transition, validate_two_way_extent,
+        };
+        #[cfg(feature = "std")]
+        pub use incin_core::dist::{
+            DynRendezvousConfig, RankLaunch, RendezvousEndpoint, StaticRendezvousConfig,
+            TwoRankLaunchPlan,
+        };
+    }
+
+    #[cfg(feature = "train")]
+    /// Preview training planner and trainer.
+    pub mod training {
+        pub use crate::train::{
+            Decision, FitOutcome, HostMachine, Machine, Plan, TrainError, Trainer, TrainerBuilder,
+        };
+
+        /// Preview training-plan report renderer.
+        pub mod plan_report {
+            pub use crate::plan_report::{EXIT_OK, EXIT_USAGE, run, run_with_machine};
+        }
+    }
+
+    #[cfg(feature = "std")]
+    /// Preview tuning-report renderer used by the CLI.
+    pub mod tuning_report {
+        pub use crate::tune_report::{EXIT_OK, EXIT_USAGE, run};
+    }
 }
 
 #[cfg(feature = "backend-authoring")]
 /// Contracts and extension traits for backend authors.
 pub mod backend_authoring {
-    pub use incin_core::backend_authoring::*;
-}
-
-#[cfg(feature = "autotune")]
-/// Preview tuning configuration, inspection, context, and fingerprint types.
-pub mod tuning {
-    pub use incin_backends::tuning::{
-        AlignmentClass, AutotunePolicy, CacheLimits, CacheRecovery, CompilerFingerprint,
-        DeviceFingerprint, DTypePolicyId, KernelSignature, PersistentTuningCache, RankClass,
-        SelectionSource, TuningContext, TuningEnvironmentFingerprint, TuningExplain,
-        TuningProvenance, TuningScope, TuningSelection,
+    pub use incin_core::backend_authoring::{
+        Backend, CapabilityRegistry, CreationOps, Execute, ExecutionContext, ExecutionRequest,
+        FloatOps, LossOps, LossScaling, ModuleOps, NumericOps, OperationSpec, OptimizerOps,
+        PrecisionPolicy, QuantizedOps, ReductionOps, StorageBackend, SupportsDType, TensorOps,
+        TransferTo, Validated,
     };
 }
 
 #[cfg(feature = "test-utils")]
 /// Test utilities and test backend implementations.
 pub mod test_utils {
-    pub use incin_core::test_utils::*;
+    pub use incin_core::test_utils::DummyBackend;
 }
 
 /// Neural network modules, activation functions, layers, and building blocks.
 pub mod nn {
-    pub use incin_core::nn::*;
+    pub use incin_core::nn::{
+        AdaptiveAvgPool2d, AvgPool2d, BCEWithLogitsLoss, BCEWithLogitsShape, BatchNorm2d,
+        BatchNormShape, Buffer, ComputeStats, Conv1d, Conv1dShape, Conv2d, Conv2dShape,
+        CrossEntropyLoss, CrossEntropyReductionShape, CrossEntropyShape, Dropout, ELU, Embedding,
+        EmbeddingShape, False, Flatten, GELU, Init, L1Loss, L1ReductionShape, L1Shape, LSTM,
+        LSTMCell, LayerNode, LayerNorm, LayerNormShape, LayerStats, Linear, LinearShape, LstmShape,
+        MSELoss, MSEShape, MaxPool2d, Mean, Mish, ModelStats, Module, NamedLayers, NoneReduction,
+        OptionalField, Param, Parameters, RMSNorm, RMSNormShape, RNN, RNNCell, ReLU, Reduction,
+        ReductionMode, RnnShape, Sequential, Sigmoid, Softmax, StateDict, Sum, Swish, Tanh,
+        ToDevice, TrainMode, True, format_layer_summary, format_layer_summary_with_stats,
+        sum_stats,
+    };
+    #[cfg(feature = "distributed")]
+    pub use incin_core::nn::{TwoWayColumnLinearShape, TwoWayRowLinearShape};
 }
 
 /// Optimization algorithms, loss functions, and learning rate schedulers.
@@ -141,33 +256,27 @@ pub mod optim {
 
 /// Evaluation metrics (Accuracy, Precision, Recall, F1Score, MSE, ConfusionMatrix).
 pub mod metrics {
-    pub use incin_core::metrics::*;
-}
-
-/// Typed meshes, placement rules, and distributed tensor metadata.
-#[cfg(feature = "distributed")]
-pub mod dist {
-    #[cfg(feature = "distributed-nccl")]
-    pub use incin_backends::dist::{
-        BootstrapRole, NcclBuffer, NcclEvent, NcclTopology, NcclTransport, NcclTransportError,
-        TwoRankBootstrapConfig,
+    pub use incin_core::metrics::{
+        Accuracy, ConfusionMatrix, F1Score, MSE, Metric, Precision, Recall,
     };
-    pub use incin_core::dist::*;
 }
 
 /// Dataset abstractions and data loading utilities.
 pub mod data {
-    pub use incin_data::*;
+    pub use incin_data::vision;
+    pub use incin_data::{Collate, DataLoader, Dataset, Downloader};
 }
 
 /// Data transformations and augmentation pipeline.
 pub mod transforms {
-    pub use incin_data::transforms::*;
+    pub use incin_data::transforms::{
+        CenterCrop, Compose, Normalize, RandomHorizontalFlip, Scale, Transform,
+    };
 }
 
 /// HuggingFace Hub downloading & pretrained model loading utilities.
 pub mod hub {
-    pub use incin_data::hub::*;
+    pub use incin_data::hub::{HubApi, HubRepo, download, from_pretrained};
 }
 
 /// Typenum compile-time type-level integers.
@@ -195,16 +304,17 @@ pub type DefaultDevice = crate::prelude::Wgpu;
 pub type DefaultDevice = crate::prelude::Cuda;
 
 #[cfg(feature = "train")]
-pub mod plan_report;
+mod plan_report;
 #[cfg(feature = "cpu")]
 /// Default backend (CPU with f32). Equivalent to `IncinBackend<f32, Cpu>`.
 /// The automatic `Trainer` (`UX-001`). Preview tier, so it ships behind the
 /// non-default `train` feature.
 #[cfg(feature = "train")]
-pub mod train;
+mod train;
 #[cfg(feature = "std")]
-pub mod tune_report;
+mod tune_report;
 
+#[cfg(feature = "cpu")]
 pub type DefaultBackend = incin_backends::IncinBackend<f32, incin_core::prelude::Cpu>;
 
 // No `DefaultBackend` fallback when `cpu` is disabled: a `()` placeholder
@@ -320,41 +430,38 @@ pub mod macros {
     // invoked once, internally, by `incin-core` itself
     // (`incin_macros::impl_arg_into!()` in `tensor/arg_into.rs`) — no
     // end-user code calls it, and it has no documented public contract.
-    pub use incin_macros::{idx, mesh, s};
+    pub use incin_macros::{idx, s};
 }
 
 /// Prelude re-exporting high-frequency user types, macros, NN modules, and optimizers.
 pub mod prelude {
-    pub use incin_core::prelude::{
-        Backend, BTreeMap, ComputeStats, ConstDevice, ConstDType, ConstShape, Cpu, DType, DTypeId,
-        Device, DeviceId, DeviceKind, Dim, Dyn, DynShape, Ellipsis, Error, Grad, HeadShape,
-        InferDim, LayerStats, ModelStats, Module, NamedDyn, NoGrad, PartialDynShape, Result, SeqTy,
-        Shape, Slice, SpanShape, StateDict, String, SupportsDType, TailShape, TransferTo, Vec,
-        format,
-    };
-    pub use incin_core::nn::stats::{AutorefComputeStats, AutorefComputeStatsFallback, sum_stats};
     pub use super::Tensor;
+    pub use incin_core::prelude::{
+        Backend, BoolDType, ConstDType, ConstDevice, ConstShape, Cpu, DType, DTypeId, Device,
+        DeviceId, DeviceKind, DevicePreference, DeviceSet, DeviceSetError, Dim, Dyn, DynShape,
+        Ellipsis, Error, FloatDType, Grad, HeadShape, InferDim, IntDType, Module, NamedDyn, NoGrad,
+        PartialDynShape, PlainDType, Q8_0, QuantDType, RequiresGrad, Result, SeqTy, Shape, Slice,
+        SpanShape, StateDict, TailShape, TensorElement, bf16, f16,
+    };
 
     #[cfg(feature = "cuda")]
     pub use incin_core::prelude::{Cuda, CudaN};
-    #[cfg(feature = "wgpu")]
-    pub use incin_core::prelude::{Wgpu, WgpuN};
     #[cfg(feature = "metal")]
     pub use incin_core::prelude::{Metal, MetalN};
+    #[cfg(feature = "wgpu")]
+    pub use incin_core::prelude::{Wgpu, WgpuN};
 
-    pub use incin_backends::IncinBackend;
     #[cfg(feature = "cpu")]
     pub use super::DefaultBackend;
     #[cfg(any(feature = "cpu", feature = "wgpu", feature = "cuda"))]
     pub use super::DefaultDevice;
+    pub use incin_backends::IncinBackend;
 
     pub use incin_core::dim;
     pub use incin_core::seq;
     pub use incin_core::typenum;
 
-    pub use incin_macros::{
-        axes, einsum, idx, import_model, mesh, model, module, parallel, placement, s,
-    };
+    pub use incin_macros::{axes, einsum, idx, module, s};
 
     pub use super::{
         BatchNorm2d, Conv1d, Conv2d, Embedding, LayerNorm, Linear, Param, RNN, RNNCell,
@@ -371,9 +478,7 @@ pub mod prelude {
         },
         lstm::{LSTM, LSTMCell},
         max_pool2d::MaxPool2d,
-        module::{
-            LayerNode, NamedLayers, Parameters, Sequential, ToDevice, TrainMode,
-        },
+        module::{LayerNode, NamedLayers, Parameters, Sequential, ToDevice, TrainMode},
         rms_norm::RMSNorm,
     };
 
@@ -393,7 +498,6 @@ pub mod prelude {
     #[cfg(feature = "distributed")]
     pub use incin_core::dist::{Local, Placement, PlacementKind};
 }
-
 
 #[cfg(test)]
 /// Tests.

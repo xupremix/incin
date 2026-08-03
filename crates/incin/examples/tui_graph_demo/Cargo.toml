@@ -7,7 +7,7 @@ license.workspace = true
 publish = false
 
 [dependencies]
-incin = { path = "../..", version = "0.0.0" }
+incin = { path = "../..", version = "0.0.0", features = ["backend-authoring"] }
 incin-core = { path = "../../../incin-core", version = "0.0.0" }
 incin-backends = { path = "../../../incin-backends", version = "0.0.0", default-features = false, features = ["cpu", "wgpu"] }
 incin-telemetry = { path = "../../../incin-telemetry", version = "0.0.0" }

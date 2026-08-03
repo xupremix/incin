@@ -1,5 +1,5 @@
 error: conflicting attributes `#[parallel]` and `#[shard]` on the same field
- --> tests/parallel_attrs_compile_fail/conflicting_attrs.rs:8:5
+ --> tests/parallel_attrs_compile_fail/conflicting_attrs.rs:9:5
   |
-8 |     #[shard(mesh = MyMesh, axis = 0)]
+9 |     #[shard(mesh = MyMesh, axis = 0)]
   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

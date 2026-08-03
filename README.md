@@ -34,7 +34,7 @@ and third-party backends are opt-in. Enabling an accelerator does not change
 | `metal-mps` | no | Enables MPS and MPSGraph structured primitives for Apple Silicon. |
 | `external-candle` | no | Enables the external Candle backend at `incin::external::candle`. |
 | `autotune` | no | Enables CUDA launch autotuning. |
-| `train` | no | Enables the automatic `Trainer` at `incin::train`. Preview tier: useful and tested, but the interface may change without a migration path. |
+| `train` | no | Enables the preview `Trainer` at `incin::experimental::training`. The interface may change without a migration path. |
 | `distributed` | no | Enables typed meshes, static/runtime tensor placements, and distributed lowering proofs. Transports remain separate opt-in backend features. |
 | `distributed-reference` | no | Enables the deterministic in-process collective transport used by conformance tests and local distributed-plan development. |
 | `distributed-nccl` | no | Two-host process-per-rank CUDA transport and its TCP bootstrap. |

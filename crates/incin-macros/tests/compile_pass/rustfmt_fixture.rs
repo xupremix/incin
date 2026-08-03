@@ -4,6 +4,7 @@
 //! `invoking_the_macros_leaves_a_file_formattable` formats this and asserts the
 //! result is identical. If a macro's invocation form ever stops being
 //! parseable as Rust, rustfmt skips it and this stops being a fixed point.
+use ::incin::experimental::mesh;
 use ::incin::prelude::*;
 
 #[module]
@@ -24,5 +25,8 @@ fn main() {
     assert!(!model.parameters().is_empty());
 
     type FormattedMesh = mesh![dp = 2, tp = 2, pp = 1];
-    assert_eq!(<FormattedMesh as ::incin::dist::mesh::ValidMesh>::WORLD, 4);
+    assert_eq!(
+        <FormattedMesh as ::incin::experimental::distributed::mesh::ValidMesh>::WORLD,
+        4
+    );
 }

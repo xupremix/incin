@@ -34,9 +34,26 @@ pub mod shapes;
 pub(crate) mod tensor;
 pub use typenum;
 
+/// Implementation details used by procedural macros expanded inside this crate.
+#[doc(hidden)]
+pub mod __macro_support {
+    pub use crate::nn::{
+        AutorefComputeStats, AutorefComputeStatsFallback, AutorefNamedLayers,
+        AutorefNamedLayersFallback, AutorefParameters, AutorefParametersFallback, AutorefShapeInfo,
+        AutorefShapeInfoFallback, AutorefStateDict, AutorefStateDictFallback, AutorefTrainMode,
+        AutorefTrainModeFallback, ComputeStats, LayerStats,
+    };
+    pub use crate::tensor::backend::{SupportsDType, TransferTo};
+    pub use alloc::{collections::BTreeMap, format, string::String, vec::Vec};
+}
+
 /// Loss functions and reduction definitions.
 pub mod loss {
-    pub use crate::nn::loss::*;
+    pub use crate::nn::loss::{
+        BCEWithLogitsLoss, BCEWithLogitsShape, BceReductionShape, CrossEntropyLoss,
+        CrossEntropyReductionShape, CrossEntropyShape, L1Loss, L1ReductionShape, L1Shape, MSELoss,
+        MSEShape, Mean, MseReductionShape, NoneReduction, Reduction, ReductionMode, Sum,
+    };
 }
 
 /// Unstable APIs that carry no compatibility guarantee.
@@ -74,7 +91,7 @@ pub mod test_utils {
 
 /// Core prelude re-exporting common types, neural network modules, shapes, and backend traits.
 pub mod prelude {
-    pub use super::err::*;
+    pub use super::err::{BackendError, BackwardError, Error, NonFiniteSite, Result};
     pub use crate::SeqTy;
     pub use crate::graph::{Graph, OpType};
     pub use half::{bf16, f16};
@@ -115,8 +132,34 @@ pub mod prelude {
     pub use crate::tensor::ops::index::IndexSpec;
     pub use incin_macros::{idx, mesh, module, s};
 
-    pub use super::shapes::prelude::*;
-    pub use super::tensor::prelude::*;
+    pub use super::shapes::prelude::{
+        AdaptiveAvgPool2dShape, AppendDim, Axis, BroadcastDim, BroadcastShape, CheckedByteLen,
+        CheckedNumel, ConcatShape, ConstShape, ConvOutDim, Dim, DimIdx, DimensionConstraint,
+        DynShape, ElementCount, Ellipsis, EndsWith, FlatDim, HasChannels1D, HasChannels2D,
+        HeadShape, HeadShapeField, INLINE_RANK, InferDim, InlineOrHeap, MAX_RANK, NamedDyn, NotOne,
+        OperationKind, PartialDynShape, Pool2dShape, ProdDim, RankExpectation, ReplaceLastDim,
+        ReshapeShape, ReshapeTarget, SameCount, Scalar, Shape, ShapeBuf, ShapeError, Slice,
+        SliceIdx, SliceTarget, SpanShape, SpanShapeField, SpatialConv1d, SpatialConv2d, SpatialOut,
+        StackShape, StaticDim, StaticOrNamedDim, StrideBuf, TailShape, TailShapeField,
+        TryConcatShape, TryReshape, broadcast_dim_slices, checked_byte_len_from_dims,
+        checked_numel_from_dims, dim_from_size, field_from_dims, spatial_out_size,
+    };
+    #[cfg(feature = "distributed")]
+    pub use super::tensor::prelude::PlacedTensorError;
+    pub use super::tensor::prelude::{
+        ArgInto, Backend, BestDevice, BestDeviceAt, BoolDType, ConstDType, ConstDevice, Cpu, DType,
+        DTypeId, Device, DeviceId, DeviceKind, DevicePreference, DeviceSet, DeviceSetError, Dyn,
+        FloatDType, Grad, IntDType, MatMulShape, NoGrad, PlainDType, Q8_0, QuantDType,
+        RequiresGrad, StorageBackend, SupportsDType, Tensor, TensorArgs, TensorArgsData,
+        TensorElement, TracingBackend, TransferTo, extract_graph, tracing_mark_input,
+        tracing_mark_output,
+    };
+    #[cfg(feature = "cuda")]
+    pub use super::tensor::prelude::{Cuda, CudaN};
+    #[cfg(feature = "metal")]
+    pub use super::tensor::prelude::{Metal, MetalN};
+    #[cfg(feature = "wgpu")]
+    pub use super::tensor::prelude::{Wgpu, WgpuN};
     #[cfg(feature = "std")]
     pub use crate::io::{
         GgufExporter, GgufMetadata, MlxExporter, QuantScheme, ResourceLimits, inspect_file,
@@ -133,8 +176,6 @@ pub mod prelude {
     pub use crate::serialize::{Deserializer, Serializer};
     #[cfg(feature = "std")]
     pub use crate::serialize::{Format, ModelExt};
-    pub use crate::shapes::dim::Dim;
-    pub use crate::shapes::shape::{ConstShape, DynShape, PartialDynShape, Shape};
     pub use alloc::boxed::Box;
     pub use alloc::collections::BTreeMap;
     pub use alloc::format;

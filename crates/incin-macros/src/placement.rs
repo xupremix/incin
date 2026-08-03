@@ -98,25 +98,28 @@ impl Parse for PlacementInput {
 
 pub(crate) fn placement(input: TokenStream) -> TokenStream {
     let parsed = parse_macro_input!(input as PlacementInput);
-    let path = if parsed.internal {
-        quote! { crate:: }
+    let (placement_path, typenum_path) = if parsed.internal {
+        (quote! { crate::dist:: }, quote! { crate:: })
     } else {
-        quote! { ::incin_core:: }
+        (
+            quote! { ::incin::experimental::distributed:: },
+            quote! { ::incin:: },
+        )
     };
 
     match parsed.placement {
-        PlacementAst::Local => quote! { #path dist::Local },
-        PlacementAst::Replicated { mesh } => quote! { #path dist::Replicated<#mesh> },
+        PlacementAst::Local => quote! { #placement_path Local },
+        PlacementAst::Replicated { mesh } => quote! { #placement_path Replicated<#mesh> },
         PlacementAst::Sharded { axis, mesh } => {
             let axis_val: usize = axis.base10_parse().unwrap_or(0);
-            let axis_typenum = crate::shape::lit_to_typenum(axis_val, &path);
-            quote! { #path dist::Sharded<#mesh, #axis_typenum> }
+            let axis_typenum = crate::shape::lit_to_typenum(axis_val, &typenum_path);
+            quote! { #placement_path Sharded<#mesh, #axis_typenum> }
         }
         PlacementAst::Partial { reduction, mesh } => {
-            quote! { #path dist::Partial<#mesh, #path dist::#reduction> }
+            quote! { #placement_path Partial<#mesh, #placement_path #reduction> }
         }
         PlacementAst::PipelineStage { stage, mesh } => {
-            quote! { #path dist::PipelineStage<#mesh, #stage> }
+            quote! { #placement_path PipelineStage<#mesh, #stage> }
         }
     }
     .into()

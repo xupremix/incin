@@ -23,7 +23,7 @@
 #![cfg(feature = "distributed-nccl")]
 
 use incin::cuda::CudaBackendImpl;
-use incin::dist::{
+use incin::experimental::distributed::{
     ActivationCheckpoint, DistributedContext, GPipe, NcclTopology, NcclTransport,
     PipelineBoundaryId, PipelinePlanBuilder, PipelineTransfer, StreamId, TwoRankPipeline,
 };
@@ -44,7 +44,7 @@ fn pp2_static_and_dyn_match_single_device() {
     let timeout = context.timeout();
 
     let topology = NcclTopology::discover_context(&context).expect("discover two CUDA identities");
-    let mesh = incin::dist::mesh::DeviceMesh::<TwoRankPipeline>::bind(
+    let mesh = incin::experimental::distributed::mesh::DeviceMesh::<TwoRankPipeline>::bind(
         &[DeviceId::cuda(0), DeviceId::cuda(1)],
         &topology,
     )

@@ -1,5 +1,7 @@
 #![cfg(feature = "cpu")]
 
+use std::collections::BTreeMap;
+
 use incin::prelude::*;
 use incin::{Adam, AdamW, SGD};
 

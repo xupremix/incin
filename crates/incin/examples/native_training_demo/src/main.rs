@@ -6,6 +6,7 @@
 #[macro_use]
 extern crate alloc;
 
+use incin::backend_authoring::SupportsDType;
 use incin::prelude::*;
 use incin::prelude::{CrossEntropyLoss, Mean};
 use incin_backends::cpu::CpuBackendImpl;

@@ -5,9 +5,7 @@
 
 #![cfg(feature = "distributed-nccl")]
 
-use incin::dist::{
-    FsdpParameterId, FsdpPlanBuilder, ZeROStage,
-};
+use incin::experimental::distributed::{FsdpParameterId, FsdpPlanBuilder, ZeROStage};
 use incin::prelude::*;
 
 #[test]

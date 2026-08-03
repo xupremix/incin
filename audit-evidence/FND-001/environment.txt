@@ -1,0 +1,25 @@
+Task: FND-001
+Repository: /home/xupremix/Projects/incin
+Branch: develop
+Validation HEAD before task commit: 21ba8903d6e550f509a9e85639f3216821fb1265
+Host: x86_64-unknown-linux-gnu
+Kernel: Linux 7.0.0-28-generic x86_64
+rustc: 1.97.1 (8bab26f4f 2026-07-14)
+cargo: 1.97.1 (c980f4866 2026-06-30)
+cargo-public-api: 0.52.0
+cargo-semver-checks: 0.50.0
+Timezone: Europe/Rome
+
+Software-only feature matrix:
+- incin-core: no default features
+- incin-core: no default features + std
+- incin: no default features
+- incin: no default features + std
+- incin: default features (std + cpu)
+- incin: cpu
+- facade tiers: cpu + backend-authoring + test-utils + compiled + train + distributed + distributed-reference
+
+Hardware/platform exclusions:
+- cuda, distributed-nccl: require unavailable CUDA/NCCL hardware and libraries
+- metal, metal-mps: unavailable on Linux
+- wgpu runtime tests: no hardware claim is made by this software-only gate

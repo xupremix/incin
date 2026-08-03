@@ -1,5 +1,6 @@
 #[macro_use]
 extern crate alloc;
+use incin::backend_authoring::SupportsDType;
 use incin::prelude::*;
 use incin::{Linear, Module};
 use incin_backends::cpu::CpuBackendImpl;

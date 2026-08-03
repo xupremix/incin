@@ -5,6 +5,7 @@
 //! `incin::prelude::…`, so a caller who happened to have that name won, and
 //! the failure surfaced as `cannot find typenum in prelude` pointing at the
 //! caller's own macro invocation.
+use ::incin::experimental::mesh;
 use ::incin::prelude::*;
 
 /// The decoy that used to win.
@@ -45,7 +46,10 @@ fn main() {
     assert_eq!(view.dims().as_ref(), &[5, 20, 15]);
 
     type ShadowedMesh = mesh![dp = 2, tp = 2];
-    assert_eq!(<ShadowedMesh as ::incin::dist::mesh::ValidMesh>::WORLD, 4);
+    assert_eq!(
+        <ShadowedMesh as ::incin::experimental::distributed::mesh::ValidMesh>::WORLD,
+        4
+    );
 
     let m = Shadowed::<::incin::prelude::DefaultBackend> {
         fc: ::incin::prelude::Linear::build(()).unwrap(),

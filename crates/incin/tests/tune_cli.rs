@@ -1,10 +1,8 @@
 //! `UX-006`: `cargo incin tune` CLI autotune report and cache round-trip test.
 
-use incin::tune_report;
-
 #[test]
 fn tune_cli_renders_text_report() {
-    let (text, code) = tune_report::run(&[]);
+    let (text, code) = incin::experimental::tuning_report::run(&[]);
     assert_eq!(code, 0);
     assert!(text.contains("Autotune Cache Report:"));
     assert!(text.contains("Cache Directory:"));
@@ -13,7 +11,7 @@ fn tune_cli_renders_text_report() {
 
 #[test]
 fn tune_cli_renders_json_report() {
-    let (json_str, code) = tune_report::run(&["--json".to_string()]);
+    let (json_str, code) = incin::experimental::tuning_report::run(&["--json".to_string()]);
     assert_eq!(code, 0);
     let parsed: serde_json::Value =
         serde_json::from_str(&json_str).expect("tune --json output must be valid JSON");
@@ -24,7 +22,8 @@ fn tune_cli_renders_json_report() {
 
 #[test]
 fn tune_cli_supports_offline_flag() {
-    let (json_str, code) = tune_report::run(&["--json".to_string(), "--offline".to_string()]);
+    let (json_str, code) =
+        incin::experimental::tuning_report::run(&["--json".to_string(), "--offline".to_string()]);
     assert_eq!(code, 0);
     let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
     assert_eq!(parsed["offline"], true);
@@ -32,7 +31,7 @@ fn tune_cli_supports_offline_flag() {
 
 #[test]
 fn tune_cli_supports_clear_flag() {
-    let (text, code) = tune_report::run(&["--clear".to_string()]);
+    let (text, code) = incin::experimental::tuning_report::run(&["--clear".to_string()]);
     assert_eq!(code, 0);
     assert!(text.contains("Autotune cache cleared"));
 }

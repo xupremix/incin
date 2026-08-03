@@ -1,0 +1,139 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.24s
+     Running unittests src/lib.rs (target/debug/deps/incin_macros-cd82827a16bf86da)
+
+running 7 tests
+test onnx::tests::initializers_are_not_represented_by_zero_filled_parameters ... ok
+test onnx::tests::unknown_rank_remains_unknown_and_fails_static_expansion ... ok
+test onnx::tests::malformed_node_arity_is_rejected_before_codegen ... ok
+test onnx::tests::negative_dimension_is_a_precise_metadata_error ... ok
+test onnx::tests::unsupported_nodes_report_identity_operation_domain_and_opset ... ok
+test onnx::tests::if_and_loop_fail_during_expansion_with_complete_node_identity ... ok
+test onnx::tests::supported_expansion_has_no_weight_loading_claim_or_runtime_panic ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/axes_macro.rs (target/debug/deps/axes_macro-f889df01c7372ec7)
+
+running 2 tests
+test axes_expansion_test ... ok
+    Checking incin-macros-tests v0.0.0 (/home/xupremix/Projects/incin/target/tests/trybuild/incin-macros)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.17s
+
+
+test tests/axes_compile_fail/duplicate_axis.rs ... ok
+
+
+test axes_compile_fail_diagnostics ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.62s
+
+     Running tests/distributed_macro_suite.rs (target/debug/deps/distributed_macro_suite-35d8b81beaa72e3d)
+
+running 1 test
+test test_distributed_macro_suite_projections ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.41s
+
+     Running tests/distributed_main.rs (target/debug/deps/distributed_main-2c6c3474eba114d4)
+
+running 1 test
+test test_distributed_main_execution ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/einsum_macro.rs (target/debug/deps/einsum_macro-0122a5e2fc65830b)
+
+running 2 tests
+test test_einsum_macro_single_operand ... ok
+test test_einsum_macro_basic ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/macro_suite.rs (target/debug/deps/macro_suite-0736b83ebf5e25c3)
+
+running 4 tests
+test every_policy_category_is_covered ... ok
+test compile_fail_cases_fail_for_their_stated_reason ... ok
+test invoking_the_macros_leaves_a_file_formattable ... ok
+   Compiling incin-macros-tests v0.0.0 (/home/xupremix/Projects/incin/target/tests/trybuild/incin-macros)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.19s
+
+
+test tests/compile_pass/hygiene.rs [should pass] ... ok
+test tests/compile_pass/idx_grammar.rs [should pass] ... ok
+test tests/compile_pass/mesh_grammar.rs [should pass] ... ok
+test tests/compile_pass/module_arguments.rs [should pass] ... ok
+test tests/compile_pass/rename.rs [should pass] ... ok
+test tests/compile_pass/rustfmt_fixture.rs [should pass] ... ok
+test tests/compile_pass/s_grammar.rs [should pass] ... ok
+test tests/compile_fail/idx_rejects_a_qualified_named_dim.rs [should fail to compile] ... ok
+test tests/compile_fail/idx_rejects_an_open_ended_range.rs [should fail to compile] ... ok
+test tests/compile_fail/mesh_rejects_duplicate_axis.rs [should fail to compile] ... ok
+test tests/compile_fail/mesh_rejects_unknown_axis.rs [should fail to compile] ... ok
+test tests/compile_fail/mesh_rejects_zero_degree.rs [should fail to compile] ... ok
+test tests/compile_fail/module_rejects_a_non_struct.rs [should fail to compile] ... ok
+test tests/compile_fail/module_rejects_an_unknown_argument.rs [should fail to compile] ... ok
+test tests/compile_fail/s_rejects_a_non_path_dim.rs [should fail to compile] ... ok
+test tests/compile_fail/s_rejects_a_repeat_without_a_count.rs [should fail to compile] ... ok
+
+
+test compile_pass_and_compile_fail ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.26s
+
+     Running tests/mesh_macro.rs (target/debug/deps/mesh_macro-2771461a7f2d6729)
+
+running 1 test
+test test_mesh_macro_expansion ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/parallel_attrs.rs (target/debug/deps/parallel_attrs-25add0e686984438)
+
+running 2 tests
+test parallel_and_shard_field_attributes_pass ... ok
+    Checking incin-macros-tests v0.0.0 (/home/xupremix/Projects/incin/target/tests/trybuild/incin-macros)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.15s
+
+
+test tests/parallel_attrs_compile_fail/conflicting_attrs.rs ... ok
+
+
+test parallel_attrs_compile_fail_diagnostics ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.60s
+
+     Running tests/parallel_block.rs (target/debug/deps/parallel_block-8b354f2cea1bbc2a)
+
+running 2 tests
+test test_parallel_block_simple ... ok
+test test_parallel_block_with_mesh ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/placement_macro.rs (target/debug/deps/placement_macro-4446949e49024a4a)
+
+running 2 tests
+test placement_expansion_and_projections ... ok
+    Checking incin-macros-tests v0.0.0 (/home/xupremix/Projects/incin/target/tests/trybuild/incin-macros)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.15s
+
+
+test tests/placement_compile_fail/missing_on_mesh.rs ... ok
+
+
+test placement_compile_fail_diagnostics ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.58s
+
+   Doc-tests incin_macros
+
+running 4 tests
+test crates/incin-macros/src/lib.rs - s (line 61) ... ok
+test crates/incin-macros/src/lib.rs - s (line 71) ... ok
+test crates/incin-macros/src/lib.rs - module (line 171) ... ok
+test crates/incin-macros/src/lib.rs - idx (line 122) ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+all doctests ran in 0.86s; merged doctests compilation took 0.84s

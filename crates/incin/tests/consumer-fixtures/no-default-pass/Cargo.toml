@@ -1,0 +1,9 @@
+[package]
+name = "incin-facade-no-default-pass"
+version = "0.0.0"
+edition = "2024"
+
+[workspace]
+
+[dependencies]
+incin = { path = "../../..", default-features = false, features = ["std"] }

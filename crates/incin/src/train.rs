@@ -15,7 +15,7 @@
 //! no trainer at all, because the failure mode is a training run that finishes.
 //!
 //! ```rust
-//! # use incin::train::{Machine, Trainer};
+//! # use incin::experimental::training::{Machine, Trainer};
 //! # use incin::prelude::{DeviceKind, DeviceId, DeviceSet};
 //! # struct ThreeGpus;
 //! # impl Machine for ThreeGpus {

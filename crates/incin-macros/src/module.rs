@@ -193,9 +193,13 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
     } else {
         quote! { ::incin }
     };
+    let macro_support = if is_internal {
+        quote! { crate::__macro_support }
+    } else {
+        quote! { ::incin::__macro_support }
+    };
 
-    let format_mac = quote! { #k_crate::prelude::format! };
-    let _vec_ty = quote! { #k_crate::prelude::Vec };
+    let format_mac = quote! { #macro_support::format! };
 
     let backend_generic = input.generics.params.iter().find_map(|p| {
         if let syn::GenericParam::Type(t) = p {
@@ -279,27 +283,27 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
 
                     param_calls.push(quote! {
                         {
-                            use #k_crate::nn::module::{AutorefParameters, AutorefParametersFallback};
+                            use #macro_support::{AutorefParameters, AutorefParametersFallback};
                             (&&self.#fname).maybe_parameters(core::marker::PhantomData::<#b_ident>, &#format_mac("{}{}", prefix, #fname_str), map);
                         }
                     });
                     load_state_calls.push(quote! {
                         {
-                            use #k_crate::nn::module::{AutorefStateDict, AutorefStateDictFallback};
+                            use #macro_support::{AutorefStateDict, AutorefStateDictFallback};
                             (&mut &mut self.#fname).maybe_load_state_dict(core::marker::PhantomData::<#b_ident>, &#format_mac("{}{}.", prefix, #fname_str), tensors)?;
                         }
                     });
                     state_dict_calls.push(quote! {
                         {
-                            use #k_crate::nn::module::{AutorefStateDict, AutorefStateDictFallback};
+                            use #macro_support::{AutorefStateDict, AutorefStateDictFallback};
                             (&&self.#fname).maybe_state_dict(core::marker::PhantomData::<#b_ident>, &#format_mac("{}{}.", prefix, #fname_str), tensors);
                         }
                     });
                     named_layer_calls.push(quote! {
                         {
-                            use #k_crate::nn::module::{AutorefNamedLayers, AutorefNamedLayersFallback};
+                            use #macro_support::{AutorefNamedLayers, AutorefNamedLayersFallback};
                             let child_prefix = if prefix.is_empty() {
-                                #k_crate::prelude::String::from(#fname_str)
+                                #macro_support::String::from(#fname_str)
                             } else {
                                 #format_mac("{}.{}", prefix, #fname_str)
                             };
@@ -310,7 +314,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                     });
                     shape_info_calls.push(quote! {
                         {
-                            use #k_crate::nn::module::{AutorefShapeInfo, AutorefShapeInfoFallback};
+                            use #macro_support::{AutorefShapeInfo, AutorefShapeInfoFallback};
                             if let Some(sh) = (&&self.#fname).maybe_shape_info() {
                                 shape_parts.push(#format_mac("{}: {}", #fname_str, sh));
                             }
@@ -318,7 +322,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                     });
                     stats_calls.push(quote! {
                         {
-                            use #k_crate::nn::stats::{AutorefComputeStats, AutorefComputeStatsFallback};
+                            use #macro_support::{AutorefComputeStats, AutorefComputeStatsFallback};
                             if let Some(s) = (&&self.#fname).maybe_compute_stats(batch) {
                                 total += s;
                             }
@@ -326,7 +330,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                     });
                     train_mode_calls.push(quote! {
                         {
-                            use #k_crate::nn::module::{AutorefTrainMode, AutorefTrainModeFallback};
+                            use #macro_support::{AutorefTrainMode, AutorefTrainModeFallback};
                             (&mut &mut self.#fname).maybe_set_training(training);
                         }
                     });
@@ -366,27 +370,27 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
 
                     param_calls.push(quote! {
                         {
-                            use #k_crate::nn::module::{AutorefParameters, AutorefParametersFallback};
+                            use #macro_support::{AutorefParameters, AutorefParametersFallback};
                             (&&self.#idx).maybe_parameters(core::marker::PhantomData::<#b_ident>, &#format_mac("{}{}", prefix, #idx_str), map);
                         }
                     });
                     load_state_calls.push(quote! {
                         {
-                            use #k_crate::nn::module::{AutorefStateDict, AutorefStateDictFallback};
+                            use #macro_support::{AutorefStateDict, AutorefStateDictFallback};
                             (&mut &mut self.#idx).maybe_load_state_dict(core::marker::PhantomData::<#b_ident>, &#format_mac("{}{}.", prefix, #idx_str), tensors)?;
                         }
                     });
                     state_dict_calls.push(quote! {
                         {
-                            use #k_crate::nn::module::{AutorefStateDict, AutorefStateDictFallback};
+                            use #macro_support::{AutorefStateDict, AutorefStateDictFallback};
                             (&&self.#idx).maybe_state_dict(core::marker::PhantomData::<#b_ident>, &#format_mac("{}{}.", prefix, #idx_str), tensors);
                         }
                     });
                     named_layer_calls.push(quote! {
                         {
-                            use #k_crate::nn::module::{AutorefNamedLayers, AutorefNamedLayersFallback};
+                            use #macro_support::{AutorefNamedLayers, AutorefNamedLayersFallback};
                             let child_prefix = if prefix.is_empty() {
-                                #k_crate::prelude::String::from(#idx_str)
+                                #macro_support::String::from(#idx_str)
                             } else {
                                 #format_mac("{}.{}", prefix, #idx_str)
                             };
@@ -397,7 +401,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                     });
                     shape_info_calls.push(quote! {
                         {
-                            use #k_crate::nn::module::{AutorefShapeInfo, AutorefShapeInfoFallback};
+                            use #macro_support::{AutorefShapeInfo, AutorefShapeInfoFallback};
                             if let Some(sh) = (&&self.#idx).maybe_shape_info() {
                                 shape_parts.push(#format_mac("{}: {}", #idx_str, sh));
                             }
@@ -405,7 +409,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                     });
                     stats_calls.push(quote! {
                         {
-                            use #k_crate::nn::stats::{AutorefComputeStats, AutorefComputeStatsFallback};
+                            use #macro_support::{AutorefComputeStats, AutorefComputeStatsFallback};
                             if let Some(s) = (&&self.#idx).maybe_compute_stats(batch) {
                                 total += s;
                             }
@@ -413,7 +417,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                     });
                     train_mode_calls.push(quote! {
                         {
-                            use #k_crate::nn::module::{AutorefTrainMode, AutorefTrainModeFallback};
+                            use #macro_support::{AutorefTrainMode, AutorefTrainModeFallback};
                             (&mut &mut self.#idx).maybe_set_training(training);
                         }
                     });
@@ -439,7 +443,7 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
                     let ident = &t.ident;
                     if backend_generic.as_ref() == Some(ident) {
                         args.push(
-                            quote! { <#ident as #k_crate::prelude::TransferTo<__NewD>>::Output },
+                            quote! { <#ident as #macro_support::TransferTo<__NewD>>::Output },
                         );
                     } else if t.bounds.iter().any(|b| {
                         if let syn::TypeParamBound::Trait(tb) = b {
@@ -488,13 +492,13 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
         quote! {}
     } else {
         quote! {
-            impl #orig_impl_generics #k_crate::prelude::ComputeStats for #name #orig_ty_generics #orig_where_clause {
+            impl #orig_impl_generics #macro_support::ComputeStats for #name #orig_ty_generics #orig_where_clause {
                 /// Sums every field's parameter/MAC contribution for one
                 /// forward pass at `batch`. See `#[module(no_stats)]` for
                 /// how a leaf layer with its own known formula opts out of
                 /// this default instead.
-                fn compute_stats(&self, batch: u64) -> #k_crate::prelude::LayerStats {
-                    let mut total = #k_crate::prelude::LayerStats::default();
+                fn compute_stats(&self, batch: u64) -> #macro_support::LayerStats {
+                    let mut total = #macro_support::LayerStats::default();
                     #(#stats_calls)*
                     total
                 }
@@ -510,9 +514,9 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
         impl_generics_with_newd
             .make_where_clause()
             .predicates
-            .push(syn::parse_quote!(#b_ident: #k_crate::prelude::TransferTo<__NewD>));
+            .push(syn::parse_quote!(#b_ident: #macro_support::TransferTo<__NewD>));
         impl_generics_with_newd.make_where_clause().predicates.push(
-            syn::parse_quote!(<#b_ident as #k_crate::prelude::TransferTo<__NewD>>::Output: #k_crate::prelude::SupportsDType<<#b_ident as #k_crate::prelude::Backend>::FloatElem>),
+            syn::parse_quote!(<#b_ident as #macro_support::TransferTo<__NewD>>::Output: #macro_support::SupportsDType<<#b_ident as #k_crate::prelude::Backend>::FloatElem>),
         );
         let (impl_g, _, to_device_where_clause) = impl_generics_with_newd.split_for_impl();
         quote! {
@@ -534,8 +538,8 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
 
         impl #impl_generics #k_crate::prelude::Parameters<#b_ident> for #name #ty_generics #where_clause {
             /// Named parameters.
-            fn named_parameters(&self, prefix: &str, map: &mut #k_crate::prelude::BTreeMap<#k_crate::prelude::String, <#b_ident as #k_crate::prelude::Backend>::RawVar>) {
-                let prefix = if prefix.is_empty() { #k_crate::prelude::String::new() } else { #k_crate::prelude::format!("{}.", prefix) };
+            fn named_parameters(&self, prefix: &str, map: &mut #macro_support::BTreeMap<#macro_support::String, <#b_ident as #k_crate::prelude::Backend>::RawVar>) {
+                let prefix = if prefix.is_empty() { #macro_support::String::new() } else { #macro_support::format!("{}.", prefix) };
                 #(#param_calls)*
             }
         }
@@ -545,37 +549,37 @@ pub(crate) fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
             fn load_state_dict(
                 &mut self,
                 prefix: &str,
-                tensors: &#k_crate::prelude::BTreeMap<#k_crate::prelude::String, #k_crate::prelude::Tensor<#k_crate::prelude::Dyn, #b_ident>>,
+                tensors: &#macro_support::BTreeMap<#macro_support::String, #k_crate::prelude::Tensor<#k_crate::prelude::Dyn, #b_ident>>,
             ) -> #k_crate::prelude::Result<()> {
                 #(#load_state_calls)*
                 Ok(())
             }
 
             /// State dict.
-            fn state_dict(&self, prefix: &str, tensors: &mut #k_crate::prelude::BTreeMap<#k_crate::prelude::String, #k_crate::prelude::Tensor<#k_crate::prelude::Dyn, #b_ident>>) {
+            fn state_dict(&self, prefix: &str, tensors: &mut #macro_support::BTreeMap<#macro_support::String, #k_crate::prelude::Tensor<#k_crate::prelude::Dyn, #b_ident>>) {
                 #(#state_dict_calls)*
             }
         }
 
         impl #orig_impl_generics #k_crate::prelude::NamedLayers for #name #orig_ty_generics #orig_where_clause {
             /// Layer structure.
-            fn layer_structure(&self, prefix: &str) -> #k_crate::prelude::Vec<#k_crate::prelude::LayerNode> {
+            fn layer_structure(&self, prefix: &str) -> #macro_support::Vec<#k_crate::prelude::LayerNode> {
                 let node_name = if prefix.is_empty() {
-                    #k_crate::prelude::String::from(stringify!(#name))
+                    #macro_support::String::from(stringify!(#name))
                 } else {
-                    #k_crate::prelude::String::from(prefix)
+                    #macro_support::String::from(prefix)
                 };
 
-                let mut children: #k_crate::prelude::Vec<#k_crate::prelude::LayerNode> = #k_crate::prelude::Vec::new();
+                let mut children: #macro_support::Vec<#k_crate::prelude::LayerNode> = #macro_support::Vec::new();
                 #(#named_layer_calls)*
 
-                let mut shape_parts: #k_crate::prelude::Vec<#k_crate::prelude::String> = #k_crate::prelude::Vec::new();
+                let mut shape_parts: #macro_support::Vec<#macro_support::String> = #macro_support::Vec::new();
                 #(#shape_info_calls)*
                 let shape_info = shape_parts.join(", ");
 
-                #k_crate::prelude::Vec::from([#k_crate::prelude::LayerNode {
+                #macro_support::Vec::from([#k_crate::prelude::LayerNode {
                     name: node_name,
-                    type_name: #k_crate::prelude::String::from(stringify!(#name)),
+                    type_name: #macro_support::String::from(stringify!(#name)),
                     shape_info,
                     children,
                 }])

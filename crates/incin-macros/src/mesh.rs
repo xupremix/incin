@@ -130,8 +130,8 @@ pub(crate) fn mesh(input: TokenStream) -> TokenStream {
         (quote! { crate::dist::mesh:: }, quote! { crate:: })
     } else {
         (
-            quote! { ::incin_core::dist::mesh:: },
-            quote! { ::incin_core:: },
+            quote! { ::incin::experimental::distributed::mesh:: },
+            quote! { ::incin:: },
         )
     };
 

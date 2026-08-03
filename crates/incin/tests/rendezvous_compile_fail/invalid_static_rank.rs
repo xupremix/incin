@@ -1,4 +1,4 @@
-use incin::dist::{RunId, TwoRankDataParallel, TwoRankLaunchPlan};
+use incin::experimental::distributed::{RunId, TwoRankDataParallel, TwoRankLaunchPlan};
 use incin::typenum::U2;
 
 fn main() {

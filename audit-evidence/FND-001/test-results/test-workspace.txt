@@ -1,0 +1,88 @@
+   Compiling incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+   Compiling incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+   Compiling incin-data v0.0.0 (/home/xupremix/Projects/incin/crates/incin-data)
+   Compiling incin-telemetry v0.0.0 (/home/xupremix/Projects/incin/crates/incin-telemetry)
+   Compiling incin-viz-plugin-api v0.0.0 (/home/xupremix/Projects/incin/crates/incin-viz-plugin-api)
+   Compiling incin-viz v0.0.0 (/home/xupremix/Projects/incin/crates/incin-viz)
+   Compiling incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+   Compiling named_dims_safety v0.0.0 (/home/xupremix/Projects/incin/crates/incin/examples/named_dims_safety)
+   Compiling named_tensors v0.0.0 (/home/xupremix/Projects/incin/crates/incin/examples/named_tensors)
+   Compiling dataloader v0.0.0 (/home/xupremix/Projects/incin/crates/incin/examples/dataloader)
+   Compiling tui_graph_demo v0.0.0 (/home/xupremix/Projects/incin/crates/incin/examples/tui_graph_demo)
+   Compiling cnn v0.0.0 (/home/xupremix/Projects/incin/crates/incin/examples/cnn)
+error[E0405]: cannot find trait `SupportsDType` in this scope
+  --> crates/incin/examples/tui_graph_demo/src/bin/debug_layout.rs:26:8
+   |
+26 |     B: SupportsDType<B::FloatElem>,
+   |        ^^^^^^^^^^^^^ not found in this scope
+
+For more information about this error, try `rustc --explain E0405`.
+error[E0433]: cannot find type `BTreeMap` in this scope
+  --> crates/incin/tests/optim_tests.rs:66:21
+   |
+66 |     let mut state = BTreeMap::new();
+   |                     ^^^^^^^^ use of undeclared type `BTreeMap`
+   |
+help: consider importing this struct
+   |
+ 3 + use std::collections::BTreeMap;
+   |
+
+error[E0433]: cannot find type `BTreeMap` in this scope
+  --> crates/incin/tests/optim_tests.rs:91:21
+   |
+91 |     let mut state = BTreeMap::new();
+   |                     ^^^^^^^^ use of undeclared type `BTreeMap`
+   |
+help: consider importing this struct
+   |
+ 3 + use std::collections::BTreeMap;
+   |
+
+error: could not compile `tui_graph_demo` (bin "debug_layout" test) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+warning: unused import: `incin::experimental::tuning_report`
+ --> crates/incin/tests/tune_cli.rs:3:5
+  |
+3 | use incin::experimental::tuning_report;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+error[E0433]: cannot find module or crate `tune_report` in this scope
+ --> crates/incin/tests/tune_cli.rs:7:24
+  |
+7 |     let (text, code) = tune_report::run(&[]);
+  |                        ^^^^^^^^^^^ use of unresolved module or unlinked crate `tune_report`
+  |
+  = help: if you wanted to use a crate named `tune_report`, use `cargo add tune_report` to add it to your `Cargo.toml`
+
+For more information about this error, try `rustc --explain E0433`.
+error[E0433]: cannot find module or crate `tune_report` in this scope
+  --> crates/incin/tests/tune_cli.rs:16:28
+   |
+16 |     let (json_str, code) = tune_report::run(&["--json".to_string()]);
+   |                            ^^^^^^^^^^^ use of unresolved module or unlinked crate `tune_report`
+   |
+   = help: if you wanted to use a crate named `tune_report`, use `cargo add tune_report` to add it to your `Cargo.toml`
+
+error: could not compile `incin` (test "optim_tests") due to 2 previous errors
+error[E0433]: cannot find module or crate `tune_report` in this scope
+  --> crates/incin/tests/tune_cli.rs:27:28
+   |
+27 |     let (json_str, code) = tune_report::run(&["--json".to_string(), "--offline".to_string()]);
+   |                            ^^^^^^^^^^^ use of unresolved module or unlinked crate `tune_report`
+   |
+   = help: if you wanted to use a crate named `tune_report`, use `cargo add tune_report` to add it to your `Cargo.toml`
+
+error[E0433]: cannot find module or crate `tune_report` in this scope
+  --> crates/incin/tests/tune_cli.rs:35:24
+   |
+35 |     let (text, code) = tune_report::run(&["--clear".to_string()]);
+   |                        ^^^^^^^^^^^ use of unresolved module or unlinked crate `tune_report`
+   |
+   = help: if you wanted to use a crate named `tune_report`, use `cargo add tune_report` to add it to your `Cargo.toml`
+
+warning: `incin` (test "tune_cli") generated 1 warning
+error: could not compile `incin` (test "tune_cli") due to 4 previous errors; 1 warning emitted

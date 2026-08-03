@@ -1,0 +1,9 @@
+[package]
+name = "incin-facade-test-utils-absent"
+version = "0.0.0"
+edition = "2024"
+
+[workspace]
+
+[dependencies]
+incin = { path = "../../.." }

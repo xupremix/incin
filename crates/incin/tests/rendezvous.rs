@@ -10,7 +10,7 @@ use std::process::Command;
 use std::thread;
 use std::time::Duration;
 
-use incin::dist::{
+use incin::experimental::distributed::{
     ContextError, ContextFailure, DistributedContext, DistributedContextState, DynRendezvousConfig,
     RendezvousEndpoint, RunId, StaticRendezvousConfig, TwoRankDataParallel, TwoRankLaunchPlan,
 };

@@ -1,4 +1,4 @@
-use incin::dist::{RunId, StaticRendezvousConfig};
+use incin::experimental::distributed::{RunId, StaticRendezvousConfig};
 use incin::typenum::U1;
 
 fn main() {

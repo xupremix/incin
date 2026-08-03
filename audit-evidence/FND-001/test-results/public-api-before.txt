@@ -1,0 +1,1255 @@
+   Compiling proc-macro2 v1.0.106
+   Compiling unicode-ident v1.0.22
+   Compiling quote v1.0.46
+   Compiling libc v0.2.186
+    Checking cfg-if v1.0.4
+   Compiling anyhow v1.0.103
+    Checking stable_deref_trait v1.2.1
+    Checking bytes v1.12.0
+   Compiling either v1.15.0
+    Checking itoa v1.0.15
+   Compiling zerocopy v0.8.31
+    Checking pin-project-lite v0.2.16
+    Checking once_cell v1.21.4
+   Compiling autocfg v1.5.0
+    Checking futures-core v0.3.32
+    Checking memchr v2.7.6
+   Compiling serde_core v1.0.228
+   Compiling zmij v1.0.21
+    Checking futures-sink v0.3.32
+   Compiling rustix v1.1.4
+   Compiling getrandom v0.4.3
+   Compiling find-msvc-tools v0.1.9
+   Compiling bitflags v2.13.0
+   Compiling syn v1.0.109
+   Compiling shlex v2.0.1
+   Compiling linux-raw-sys v0.12.1
+   Compiling serde v1.0.228
+   Compiling serde_json v1.0.150
+   Compiling fastrand v2.4.1
+    Checking slab v0.4.12
+   Compiling cc v1.2.65
+   Compiling indexmap v1.9.3
+   Compiling itertools v0.8.2
+    Checking futures-channel v0.3.32
+   Compiling multimap v0.8.3
+    Checking writeable v0.6.3
+    Checking smallvec v1.15.2
+    Checking litemap v0.8.2
+   Compiling log v0.4.33
+    Checking http v1.4.2
+   Compiling itertools v0.14.0
+    Checking futures-io v0.3.32
+   Compiling hashbrown v0.12.3
+    Checking percent-encoding v2.3.2
+   Compiling icu_properties_data v2.1.2
+    Checking futures-task v0.3.32
+   Compiling crossbeam-utils v0.8.21
+   Compiling httparse v1.10.1
+    Checking zeroize v1.9.0
+   Compiling bytes v0.5.6
+   Compiling icu_normalizer_data v2.1.1
+    Checking rustls-pki-types v1.15.0
+   Compiling syn v2.0.118
+    Checking untrusted v0.9.0
+    Checking byteorder v1.5.0
+   Compiling fixedbitset v0.2.0
+   Compiling unicode-segmentation v1.13.3
+    Checking http-body v1.0.1
+    Checking tracing-core v0.1.36
+    Checking getrandom v0.2.17
+    Checking mio v1.2.1
+    Checking socket2 v0.6.4
+   Compiling which v3.1.1
+   Compiling equivalent v1.0.2
+   Compiling regex-syntax v0.8.11
+   Compiling hashbrown v0.17.1
+   Compiling prost-build v0.6.1
+   Compiling petgraph v0.5.1
+   Compiling heck v0.3.3
+   Compiling semver v1.0.28
+   Compiling thiserror v2.0.18
+   Compiling prettyplease v0.2.37
+   Compiling foldhash v0.1.5
+   Compiling rustls v0.23.41
+   Compiling rustc_version v0.4.1
+   Compiling hashbrown v0.15.5
+    Checking crossbeam-epoch v0.9.18
+    Checking tracing v0.1.44
+   Compiling ring v0.17.14
+    Checking try-lock v0.2.5
+    Checking base64 v0.22.1
+    Checking scopeguard v1.2.0
+   Compiling indexmap v2.14.0
+    Checking subtle v2.6.1
+   Compiling fixedbitset v0.5.7
+   Compiling version_check v0.9.5
+    Checking atomic-waker v1.1.2
+    Checking tower-service v0.3.3
+   Compiling getrandom v0.3.4
+   Compiling rayon-core v1.13.0
+    Checking fnv v1.0.7
+    Checking lock_api v0.4.14
+    Checking want v0.3.1
+   Compiling tempfile v3.27.0
+   Compiling ahash v0.8.12
+   Compiling heapless v0.7.17
+    Checking crossbeam-deque v0.8.6
+    Checking form_urlencoded v1.2.2
+   Compiling heck v0.5.0
+   Compiling crc32fast v1.5.0
+    Checking utf8_iter v1.0.4
+    Checking spin v0.9.8
+    Checking rand_core v0.6.4
+   Compiling petgraph v0.8.3
+    Checking hash32 v0.2.1
+    Checking webpki-roots v1.0.8
+   Compiling regex-automata v0.4.14
+    Checking sync_wrapper v1.0.2
+    Checking tower-layer v0.3.3
+    Checking adler2 v2.0.1
+    Checking ipnet v2.12.0
+   Compiling libm v0.2.15
+    Checking simd-adler32 v0.3.9
+   Compiling portable-atomic v1.13.1
+    Checking rand_core v0.9.3
+    Checking rayon v1.12.0
+    Checking miniz_oxide v0.8.9
+   Compiling num-traits v0.2.19
+    Checking unicode-width v0.2.2
+    Checking rustc-std-workspace-alloc v1.0.1
+    Checking option-ext v0.2.0
+    Checking ryu v1.0.20
+    Checking dirs-sys v0.5.0
+    Checking ureq-proto v0.6.0
+    Checking http-body-util v0.1.3
+    Checking socks v0.3.4
+    Checking console v0.16.4
+    Checking flate2 v1.1.9
+    Checking encoding_rs v0.8.35
+    Checking mime v0.3.17
+    Checking utf8-zero v0.8.1
+    Checking unit-prefix v0.5.2
+    Checking typenum v1.20.1
+    Checking dirs v6.0.0
+    Checking num_cpus v1.17.0
+    Checking fs2 v0.4.3
+    Checking incin-diagnostics v0.0.0 (/home/xupremix/Projects/incin/crates/incin-diagnostics)
+    Checking indicatif v0.18.6
+   Compiling prost-derive v0.6.1
+   Compiling regex v1.12.4
+   Compiling synstructure v0.13.2
+   Compiling prost v0.6.1
+   Compiling zerofrom-derive v0.1.6
+   Compiling yoke-derive v0.8.1
+   Compiling zerocopy-derive v0.8.31
+   Compiling serde_derive v1.0.228
+   Compiling zerovec-derive v0.11.2
+   Compiling displaydoc v0.2.5
+   Compiling tokio-macros v2.7.0
+   Compiling futures-macro v0.3.32
+   Compiling prost-derive v0.14.4
+   Compiling thiserror-impl v2.0.18
+   Compiling bytemuck_derive v1.10.2
+   Compiling prost-types v0.6.1
+    Checking tokio v1.52.3
+    Checking rustls-webpki v0.103.13
+    Checking futures-util v0.3.32
+    Checking zerofrom v0.1.6
+    Checking yoke v0.8.1
+    Checking bytemuck v1.25.0
+    Checking zerovec v0.11.5
+    Checking zerotrie v0.2.3
+    Checking cobs v0.3.0
+   Compiling prost v0.14.4
+   Compiling prost-types v0.14.4
+    Checking tinystr v0.8.2
+    Checking potential_utf v0.1.4
+   Compiling onnx-pb v0.1.4
+    Checking icu_collections v2.1.1
+    Checking icu_locale_core v2.1.1
+    Checking icu_provider v2.1.1
+   Compiling prost-build v0.14.4
+    Checking icu_normalizer v2.1.1
+    Checking icu_properties v2.1.2
+    Checking ppv-lite86 v0.2.21
+    Checking half v2.7.1
+    Checking digit-layout v0.3.1
+    Checking safetensors v0.4.5
+    Checking hashbrown v0.14.5
+    Checking serde_urlencoded v0.7.1
+    Checking ggml-quants v0.1.0
+    Checking rand_chacha v0.3.1
+    Checking rand_chacha v0.9.0
+    Checking rand v0.9.2
+    Checking futures-executor v0.3.32
+    Checking rand v0.8.6
+    Checking futures v0.3.32
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+   Compiling incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+    Checking postcard v1.1.3
+    Checking rand_distr v0.4.3
+    Checking idna_adapter v1.2.1
+    Checking idna v1.1.0
+    Checking ureq v3.3.0
+    Checking url v2.5.8
+    Checking tokio-util v0.7.18
+    Checking tokio-rustls v0.26.4
+    Checking tower v0.5.3
+    Checking tower-http v0.6.11
+    Checking h2 v0.4.15
+    Checking hyper v1.10.1
+    Checking hyper-util v0.1.20
+    Checking hyper-rustls v0.27.9
+    Checking reqwest v0.12.28
+    Checking hf-hub v0.5.0
+    Checking incin-data v0.0.0 (/home/xupremix/Projects/incin/crates/incin-data)
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+ Documenting incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 20.09s
+pub mod incin
+pub use incin::Adam
+pub use incin::AdamW
+pub use incin::Backend
+pub use incin::ConstShape
+pub use incin::ConstantLR
+pub use incin::CosineAnnealingLR
+pub use incin::Cpu
+pub use incin::DType
+pub use incin::DTypeId
+pub use incin::DeviceId
+pub use incin::Dyn
+pub use incin::DynShape
+pub use incin::Error
+pub use incin::Grad
+pub use incin::Gradients
+pub use incin::IncinBackend
+pub use incin::LRScheduler
+pub use incin::LinearLR
+pub use incin::Module
+pub use incin::NoGrad
+pub use incin::Optimizer
+pub use incin::PartialDynShape
+pub use incin::Result
+pub use incin::SGD
+pub use incin::Shape
+pub use incin::StateDict
+pub use incin::StepLR
+pub use incin::dim
+pub use incin::import_model
+pub use incin::mesh
+pub use incin::model
+pub use incin::module
+pub use incin::typenum
+pub mod incin::data
+pub use incin::data::<<incin_data::*>>
+pub mod incin::doctor
+pub enum incin::doctor::CacheState
+pub incin::doctor::CacheState::Absent
+pub incin::doctor::CacheState::NotCompiled
+pub incin::doctor::CacheState::NotWritable
+pub incin::doctor::CacheState::Unset
+pub incin::doctor::CacheState::Writable
+impl core::clone::Clone for incin::doctor::CacheState
+pub fn incin::doctor::CacheState::clone(&self) -> incin::doctor::CacheState
+impl core::cmp::Eq for incin::doctor::CacheState
+impl core::cmp::PartialEq for incin::doctor::CacheState
+pub fn incin::doctor::CacheState::eq(&self, &incin::doctor::CacheState) -> bool
+impl core::fmt::Debug for incin::doctor::CacheState
+pub fn incin::doctor::CacheState::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for incin::doctor::CacheState
+impl core::marker::StructuralPartialEq for incin::doctor::CacheState
+impl serde_core::ser::Serialize for incin::doctor::CacheState
+pub fn incin::doctor::CacheState::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for incin::doctor::CacheState
+impl core::marker::Send for incin::doctor::CacheState
+impl core::marker::Sync for incin::doctor::CacheState
+impl core::marker::Unpin for incin::doctor::CacheState
+impl core::marker::UnsafeUnpin for incin::doctor::CacheState
+impl core::panic::unwind_safe::RefUnwindSafe for incin::doctor::CacheState
+impl core::panic::unwind_safe::UnwindSafe for incin::doctor::CacheState
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<(), (), (), B>> for incin::doctor::CacheState where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::CacheState::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<(), (), (), B>
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<(), (), B, ()>> for incin::doctor::CacheState where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::CacheState::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<(), (), B, ()>
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<(), B, (), ()>> for incin::doctor::CacheState where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::CacheState::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<(), B, (), ()>
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<B, (), (), ()>> for incin::doctor::CacheState where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::CacheState::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<B, (), (), ()>
+impl<N> incin_core::shapes::reshape::SameCount<N> for incin::doctor::CacheState
+impl<Q, K> equivalent::Equivalent<K> for incin::doctor::CacheState where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn incin::doctor::CacheState::equivalent(&self, &K) -> bool
+impl<Q, K> hashbrown::Equivalent<K> for incin::doctor::CacheState where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn incin::doctor::CacheState::equivalent(&self, &K) -> bool
+impl<T, U> core::convert::Into<U> for incin::doctor::CacheState where U: core::convert::From<T>
+pub fn incin::doctor::CacheState::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for incin::doctor::CacheState where U: core::convert::Into<T>
+pub type incin::doctor::CacheState::Error = core::convert::Infallible
+pub fn incin::doctor::CacheState::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for incin::doctor::CacheState where U: core::convert::TryFrom<T>
+pub type incin::doctor::CacheState::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn incin::doctor::CacheState::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for incin::doctor::CacheState where T: core::clone::Clone
+pub type incin::doctor::CacheState::Owned = T
+pub fn incin::doctor::CacheState::clone_into(&self, &mut T)
+pub fn incin::doctor::CacheState::to_owned(&self) -> T
+impl<T> core::any::Any for incin::doctor::CacheState where T: 'static + ?core::marker::Sized
+pub fn incin::doctor::CacheState::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for incin::doctor::CacheState where T: ?core::marker::Sized
+pub fn incin::doctor::CacheState::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for incin::doctor::CacheState where T: ?core::marker::Sized
+pub fn incin::doctor::CacheState::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for incin::doctor::CacheState where T: core::clone::Clone
+pub unsafe fn incin::doctor::CacheState::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for incin::doctor::CacheState
+pub fn incin::doctor::CacheState::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for incin::doctor::CacheState
+pub type incin::doctor::CacheState::Init = T
+pub const incin::doctor::CacheState::ALIGN: usize
+pub unsafe fn incin::doctor::CacheState::deref<'a>(usize) -> &'a T
+pub unsafe fn incin::doctor::CacheState::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn incin::doctor::CacheState::drop(usize)
+pub unsafe fn incin::doctor::CacheState::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for incin::doctor::CacheState
+impl<T> tower_http::follow_redirect::policy::PolicyExt for incin::doctor::CacheState where T: ?core::marker::Sized
+pub fn incin::doctor::CacheState::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn incin::doctor::CacheState::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for incin::doctor::CacheState
+impl<T> tracing::instrument::WithSubscriber for incin::doctor::CacheState
+impl<T> typenum::type_operators::Same for incin::doctor::CacheState
+pub type incin::doctor::CacheState::Output = T
+impl<V, T> ppv_lite86::types::VZip<V> for incin::doctor::CacheState where V: ppv_lite86::types::MultiLane<T>
+pub fn incin::doctor::CacheState::vzip(self) -> V
+pub enum incin::doctor::Severity
+pub incin::doctor::Severity::Error
+pub incin::doctor::Severity::Note
+pub incin::doctor::Severity::Warning
+impl core::clone::Clone for incin::doctor::Severity
+pub fn incin::doctor::Severity::clone(&self) -> incin::doctor::Severity
+impl core::cmp::Eq for incin::doctor::Severity
+impl core::cmp::Ord for incin::doctor::Severity
+pub fn incin::doctor::Severity::cmp(&self, &incin::doctor::Severity) -> core::cmp::Ordering
+impl core::cmp::PartialEq for incin::doctor::Severity
+pub fn incin::doctor::Severity::eq(&self, &incin::doctor::Severity) -> bool
+impl core::cmp::PartialOrd for incin::doctor::Severity
+pub fn incin::doctor::Severity::partial_cmp(&self, &incin::doctor::Severity) -> core::option::Option<core::cmp::Ordering>
+impl core::fmt::Debug for incin::doctor::Severity
+pub fn incin::doctor::Severity::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for incin::doctor::Severity
+impl core::marker::StructuralPartialEq for incin::doctor::Severity
+impl serde_core::ser::Serialize for incin::doctor::Severity
+pub fn incin::doctor::Severity::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for incin::doctor::Severity
+impl core::marker::Send for incin::doctor::Severity
+impl core::marker::Sync for incin::doctor::Severity
+impl core::marker::Unpin for incin::doctor::Severity
+impl core::marker::UnsafeUnpin for incin::doctor::Severity
+impl core::panic::unwind_safe::RefUnwindSafe for incin::doctor::Severity
+impl core::panic::unwind_safe::UnwindSafe for incin::doctor::Severity
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<(), (), (), B>> for incin::doctor::Severity where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::Severity::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<(), (), (), B>
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<(), (), B, ()>> for incin::doctor::Severity where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::Severity::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<(), (), B, ()>
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<(), B, (), ()>> for incin::doctor::Severity where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::Severity::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<(), B, (), ()>
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<B, (), (), ()>> for incin::doctor::Severity where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::Severity::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<B, (), (), ()>
+impl<N> incin_core::shapes::reshape::SameCount<N> for incin::doctor::Severity
+impl<Q, K> equivalent::Comparable<K> for incin::doctor::Severity where Q: core::cmp::Ord + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn incin::doctor::Severity::compare(&self, &K) -> core::cmp::Ordering
+impl<Q, K> equivalent::Equivalent<K> for incin::doctor::Severity where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn incin::doctor::Severity::equivalent(&self, &K) -> bool
+impl<Q, K> hashbrown::Equivalent<K> for incin::doctor::Severity where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn incin::doctor::Severity::equivalent(&self, &K) -> bool
+impl<T, U> core::convert::Into<U> for incin::doctor::Severity where U: core::convert::From<T>
+pub fn incin::doctor::Severity::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for incin::doctor::Severity where U: core::convert::Into<T>
+pub type incin::doctor::Severity::Error = core::convert::Infallible
+pub fn incin::doctor::Severity::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for incin::doctor::Severity where U: core::convert::TryFrom<T>
+pub type incin::doctor::Severity::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn incin::doctor::Severity::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for incin::doctor::Severity where T: core::clone::Clone
+pub type incin::doctor::Severity::Owned = T
+pub fn incin::doctor::Severity::clone_into(&self, &mut T)
+pub fn incin::doctor::Severity::to_owned(&self) -> T
+impl<T> core::any::Any for incin::doctor::Severity where T: 'static + ?core::marker::Sized
+pub fn incin::doctor::Severity::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for incin::doctor::Severity where T: ?core::marker::Sized
+pub fn incin::doctor::Severity::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for incin::doctor::Severity where T: ?core::marker::Sized
+pub fn incin::doctor::Severity::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for incin::doctor::Severity where T: core::clone::Clone
+pub unsafe fn incin::doctor::Severity::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for incin::doctor::Severity
+pub fn incin::doctor::Severity::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for incin::doctor::Severity
+pub type incin::doctor::Severity::Init = T
+pub const incin::doctor::Severity::ALIGN: usize
+pub unsafe fn incin::doctor::Severity::deref<'a>(usize) -> &'a T
+pub unsafe fn incin::doctor::Severity::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn incin::doctor::Severity::drop(usize)
+pub unsafe fn incin::doctor::Severity::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for incin::doctor::Severity
+impl<T> tower_http::follow_redirect::policy::PolicyExt for incin::doctor::Severity where T: ?core::marker::Sized
+pub fn incin::doctor::Severity::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn incin::doctor::Severity::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for incin::doctor::Severity
+impl<T> tracing::instrument::WithSubscriber for incin::doctor::Severity
+impl<T> typenum::type_operators::Same for incin::doctor::Severity
+pub type incin::doctor::Severity::Output = T
+impl<V, T> ppv_lite86::types::VZip<V> for incin::doctor::Severity where V: ppv_lite86::types::MultiLane<T>
+pub fn incin::doctor::Severity::vzip(self) -> V
+pub struct incin::doctor::Cache
+pub incin::doctor::Cache::detail: core::option::Option<alloc::string::String>
+pub incin::doctor::Cache::name: alloc::string::String
+pub incin::doctor::Cache::path: core::option::Option<alloc::string::String>
+pub incin::doctor::Cache::state: incin::doctor::CacheState
+impl incin::doctor::Cache
+pub fn incin::doctor::Cache::new(&str, core::option::Option<std::path::PathBuf>, incin::doctor::CacheState) -> Self
+pub fn incin::doctor::Cache::with_detail(self, &str) -> Self
+impl core::clone::Clone for incin::doctor::Cache
+pub fn incin::doctor::Cache::clone(&self) -> incin::doctor::Cache
+impl core::cmp::Eq for incin::doctor::Cache
+impl core::cmp::PartialEq for incin::doctor::Cache
+pub fn incin::doctor::Cache::eq(&self, &incin::doctor::Cache) -> bool
+impl core::fmt::Debug for incin::doctor::Cache
+pub fn incin::doctor::Cache::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for incin::doctor::Cache
+impl serde_core::ser::Serialize for incin::doctor::Cache
+pub fn incin::doctor::Cache::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for incin::doctor::Cache
+impl core::marker::Send for incin::doctor::Cache
+impl core::marker::Sync for incin::doctor::Cache
+impl core::marker::Unpin for incin::doctor::Cache
+impl core::marker::UnsafeUnpin for incin::doctor::Cache
+impl core::panic::unwind_safe::RefUnwindSafe for incin::doctor::Cache
+impl core::panic::unwind_safe::UnwindSafe for incin::doctor::Cache
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<(), (), (), B>> for incin::doctor::Cache where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::Cache::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<(), (), (), B>
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<(), (), B, ()>> for incin::doctor::Cache where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::Cache::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<(), (), B, ()>
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<(), B, (), ()>> for incin::doctor::Cache where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::Cache::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<(), B, (), ()>
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<B, (), (), ()>> for incin::doctor::Cache where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::Cache::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<B, (), (), ()>
+impl<N> incin_core::shapes::reshape::SameCount<N> for incin::doctor::Cache
+impl<Q, K> equivalent::Equivalent<K> for incin::doctor::Cache where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn incin::doctor::Cache::equivalent(&self, &K) -> bool
+impl<Q, K> hashbrown::Equivalent<K> for incin::doctor::Cache where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn incin::doctor::Cache::equivalent(&self, &K) -> bool
+impl<T, U> core::convert::Into<U> for incin::doctor::Cache where U: core::convert::From<T>
+pub fn incin::doctor::Cache::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for incin::doctor::Cache where U: core::convert::Into<T>
+pub type incin::doctor::Cache::Error = core::convert::Infallible
+pub fn incin::doctor::Cache::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for incin::doctor::Cache where U: core::convert::TryFrom<T>
+pub type incin::doctor::Cache::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn incin::doctor::Cache::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for incin::doctor::Cache where T: core::clone::Clone
+pub type incin::doctor::Cache::Owned = T
+pub fn incin::doctor::Cache::clone_into(&self, &mut T)
+pub fn incin::doctor::Cache::to_owned(&self) -> T
+impl<T> core::any::Any for incin::doctor::Cache where T: 'static + ?core::marker::Sized
+pub fn incin::doctor::Cache::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for incin::doctor::Cache where T: ?core::marker::Sized
+pub fn incin::doctor::Cache::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for incin::doctor::Cache where T: ?core::marker::Sized
+pub fn incin::doctor::Cache::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for incin::doctor::Cache where T: core::clone::Clone
+pub unsafe fn incin::doctor::Cache::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for incin::doctor::Cache
+pub fn incin::doctor::Cache::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for incin::doctor::Cache
+pub type incin::doctor::Cache::Init = T
+pub const incin::doctor::Cache::ALIGN: usize
+pub unsafe fn incin::doctor::Cache::deref<'a>(usize) -> &'a T
+pub unsafe fn incin::doctor::Cache::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn incin::doctor::Cache::drop(usize)
+pub unsafe fn incin::doctor::Cache::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for incin::doctor::Cache
+impl<T> tower_http::follow_redirect::policy::PolicyExt for incin::doctor::Cache where T: ?core::marker::Sized
+pub fn incin::doctor::Cache::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn incin::doctor::Cache::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for incin::doctor::Cache
+impl<T> tracing::instrument::WithSubscriber for incin::doctor::Cache
+impl<T> typenum::type_operators::Same for incin::doctor::Cache
+pub type incin::doctor::Cache::Output = T
+impl<V, T> ppv_lite86::types::VZip<V> for incin::doctor::Cache where V: ppv_lite86::types::MultiLane<T>
+pub fn incin::doctor::Cache::vzip(self) -> V
+pub struct incin::doctor::DeviceReport
+pub incin::doctor::DeviceReport::available: bool
+pub incin::doctor::DeviceReport::compiled_in: bool
+pub incin::doctor::DeviceReport::kind: alloc::string::String
+pub incin::doctor::DeviceReport::ordinal: core::option::Option<usize>
+impl core::clone::Clone for incin::doctor::DeviceReport
+pub fn incin::doctor::DeviceReport::clone(&self) -> incin::doctor::DeviceReport
+impl core::cmp::Eq for incin::doctor::DeviceReport
+impl core::cmp::PartialEq for incin::doctor::DeviceReport
+pub fn incin::doctor::DeviceReport::eq(&self, &incin::doctor::DeviceReport) -> bool
+impl core::fmt::Debug for incin::doctor::DeviceReport
+pub fn incin::doctor::DeviceReport::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for incin::doctor::DeviceReport
+impl serde_core::ser::Serialize for incin::doctor::DeviceReport
+pub fn incin::doctor::DeviceReport::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for incin::doctor::DeviceReport
+impl core::marker::Send for incin::doctor::DeviceReport
+impl core::marker::Sync for incin::doctor::DeviceReport
+impl core::marker::Unpin for incin::doctor::DeviceReport
+impl core::marker::UnsafeUnpin for incin::doctor::DeviceReport
+impl core::panic::unwind_safe::RefUnwindSafe for incin::doctor::DeviceReport
+impl core::panic::unwind_safe::UnwindSafe for incin::doctor::DeviceReport
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<(), (), (), B>> for incin::doctor::DeviceReport where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::DeviceReport::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<(), (), (), B>
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<(), (), B, ()>> for incin::doctor::DeviceReport where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::DeviceReport::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<(), (), B, ()>
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<(), B, (), ()>> for incin::doctor::DeviceReport where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::DeviceReport::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<(), B, (), ()>
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<B, (), (), ()>> for incin::doctor::DeviceReport where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::DeviceReport::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<B, (), (), ()>
+impl<N> incin_core::shapes::reshape::SameCount<N> for incin::doctor::DeviceReport
+impl<Q, K> equivalent::Equivalent<K> for incin::doctor::DeviceReport where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn incin::doctor::DeviceReport::equivalent(&self, &K) -> bool
+impl<Q, K> hashbrown::Equivalent<K> for incin::doctor::DeviceReport where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn incin::doctor::DeviceReport::equivalent(&self, &K) -> bool
+impl<T, U> core::convert::Into<U> for incin::doctor::DeviceReport where U: core::convert::From<T>
+pub fn incin::doctor::DeviceReport::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for incin::doctor::DeviceReport where U: core::convert::Into<T>
+pub type incin::doctor::DeviceReport::Error = core::convert::Infallible
+pub fn incin::doctor::DeviceReport::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for incin::doctor::DeviceReport where U: core::convert::TryFrom<T>
+pub type incin::doctor::DeviceReport::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn incin::doctor::DeviceReport::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for incin::doctor::DeviceReport where T: core::clone::Clone
+pub type incin::doctor::DeviceReport::Owned = T
+pub fn incin::doctor::DeviceReport::clone_into(&self, &mut T)
+pub fn incin::doctor::DeviceReport::to_owned(&self) -> T
+impl<T> core::any::Any for incin::doctor::DeviceReport where T: 'static + ?core::marker::Sized
+pub fn incin::doctor::DeviceReport::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for incin::doctor::DeviceReport where T: ?core::marker::Sized
+pub fn incin::doctor::DeviceReport::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for incin::doctor::DeviceReport where T: ?core::marker::Sized
+pub fn incin::doctor::DeviceReport::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for incin::doctor::DeviceReport where T: core::clone::Clone
+pub unsafe fn incin::doctor::DeviceReport::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for incin::doctor::DeviceReport
+pub fn incin::doctor::DeviceReport::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for incin::doctor::DeviceReport
+pub type incin::doctor::DeviceReport::Init = T
+pub const incin::doctor::DeviceReport::ALIGN: usize
+pub unsafe fn incin::doctor::DeviceReport::deref<'a>(usize) -> &'a T
+pub unsafe fn incin::doctor::DeviceReport::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn incin::doctor::DeviceReport::drop(usize)
+pub unsafe fn incin::doctor::DeviceReport::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for incin::doctor::DeviceReport
+impl<T> tower_http::follow_redirect::policy::PolicyExt for incin::doctor::DeviceReport where T: ?core::marker::Sized
+pub fn incin::doctor::DeviceReport::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn incin::doctor::DeviceReport::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for incin::doctor::DeviceReport
+impl<T> tracing::instrument::WithSubscriber for incin::doctor::DeviceReport
+impl<T> typenum::type_operators::Same for incin::doctor::DeviceReport
+pub type incin::doctor::DeviceReport::Output = T
+impl<V, T> ppv_lite86::types::VZip<V> for incin::doctor::DeviceReport where V: ppv_lite86::types::MultiLane<T>
+pub fn incin::doctor::DeviceReport::vzip(self) -> V
+pub struct incin::doctor::Feature
+pub incin::doctor::Feature::enabled: bool
+pub incin::doctor::Feature::name: alloc::string::String
+impl incin::doctor::Feature
+pub fn incin::doctor::Feature::new(&str, bool) -> Self
+impl core::clone::Clone for incin::doctor::Feature
+pub fn incin::doctor::Feature::clone(&self) -> incin::doctor::Feature
+impl core::cmp::Eq for incin::doctor::Feature
+impl core::cmp::PartialEq for incin::doctor::Feature
+pub fn incin::doctor::Feature::eq(&self, &incin::doctor::Feature) -> bool
+impl core::fmt::Debug for incin::doctor::Feature
+pub fn incin::doctor::Feature::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for incin::doctor::Feature
+impl serde_core::ser::Serialize for incin::doctor::Feature
+pub fn incin::doctor::Feature::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for incin::doctor::Feature
+impl core::marker::Send for incin::doctor::Feature
+impl core::marker::Sync for incin::doctor::Feature
+impl core::marker::Unpin for incin::doctor::Feature
+impl core::marker::UnsafeUnpin for incin::doctor::Feature
+impl core::panic::unwind_safe::RefUnwindSafe for incin::doctor::Feature
+impl core::panic::unwind_safe::UnwindSafe for incin::doctor::Feature
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<(), (), (), B>> for incin::doctor::Feature where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::Feature::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<(), (), (), B>
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<(), (), B, ()>> for incin::doctor::Feature where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::Feature::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<(), (), B, ()>
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<(), B, (), ()>> for incin::doctor::Feature where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::Feature::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<(), B, (), ()>
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<B, (), (), ()>> for incin::doctor::Feature where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::Feature::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<B, (), (), ()>
+impl<N> incin_core::shapes::reshape::SameCount<N> for incin::doctor::Feature
+impl<Q, K> equivalent::Equivalent<K> for incin::doctor::Feature where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn incin::doctor::Feature::equivalent(&self, &K) -> bool
+impl<Q, K> hashbrown::Equivalent<K> for incin::doctor::Feature where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn incin::doctor::Feature::equivalent(&self, &K) -> bool
+impl<T, U> core::convert::Into<U> for incin::doctor::Feature where U: core::convert::From<T>
+pub fn incin::doctor::Feature::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for incin::doctor::Feature where U: core::convert::Into<T>
+pub type incin::doctor::Feature::Error = core::convert::Infallible
+pub fn incin::doctor::Feature::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for incin::doctor::Feature where U: core::convert::TryFrom<T>
+pub type incin::doctor::Feature::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn incin::doctor::Feature::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for incin::doctor::Feature where T: core::clone::Clone
+pub type incin::doctor::Feature::Owned = T
+pub fn incin::doctor::Feature::clone_into(&self, &mut T)
+pub fn incin::doctor::Feature::to_owned(&self) -> T
+impl<T> core::any::Any for incin::doctor::Feature where T: 'static + ?core::marker::Sized
+pub fn incin::doctor::Feature::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for incin::doctor::Feature where T: ?core::marker::Sized
+pub fn incin::doctor::Feature::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for incin::doctor::Feature where T: ?core::marker::Sized
+pub fn incin::doctor::Feature::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for incin::doctor::Feature where T: core::clone::Clone
+pub unsafe fn incin::doctor::Feature::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for incin::doctor::Feature
+pub fn incin::doctor::Feature::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for incin::doctor::Feature
+pub type incin::doctor::Feature::Init = T
+pub const incin::doctor::Feature::ALIGN: usize
+pub unsafe fn incin::doctor::Feature::deref<'a>(usize) -> &'a T
+pub unsafe fn incin::doctor::Feature::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn incin::doctor::Feature::drop(usize)
+pub unsafe fn incin::doctor::Feature::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for incin::doctor::Feature
+impl<T> tower_http::follow_redirect::policy::PolicyExt for incin::doctor::Feature where T: ?core::marker::Sized
+pub fn incin::doctor::Feature::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn incin::doctor::Feature::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for incin::doctor::Feature
+impl<T> tracing::instrument::WithSubscriber for incin::doctor::Feature
+impl<T> typenum::type_operators::Same for incin::doctor::Feature
+pub type incin::doctor::Feature::Output = T
+impl<V, T> ppv_lite86::types::VZip<V> for incin::doctor::Feature where V: ppv_lite86::types::MultiLane<T>
+pub fn incin::doctor::Feature::vzip(self) -> V
+pub struct incin::doctor::Finding
+pub incin::doctor::Finding::code: alloc::string::String
+pub incin::doctor::Finding::message: alloc::string::String
+pub incin::doctor::Finding::remedy: core::option::Option<alloc::string::String>
+pub incin::doctor::Finding::severity: incin::doctor::Severity
+impl core::clone::Clone for incin::doctor::Finding
+pub fn incin::doctor::Finding::clone(&self) -> incin::doctor::Finding
+impl core::cmp::Eq for incin::doctor::Finding
+impl core::cmp::PartialEq for incin::doctor::Finding
+pub fn incin::doctor::Finding::eq(&self, &incin::doctor::Finding) -> bool
+impl core::fmt::Debug for incin::doctor::Finding
+pub fn incin::doctor::Finding::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for incin::doctor::Finding
+impl serde_core::ser::Serialize for incin::doctor::Finding
+pub fn incin::doctor::Finding::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for incin::doctor::Finding
+impl core::marker::Send for incin::doctor::Finding
+impl core::marker::Sync for incin::doctor::Finding
+impl core::marker::Unpin for incin::doctor::Finding
+impl core::marker::UnsafeUnpin for incin::doctor::Finding
+impl core::panic::unwind_safe::RefUnwindSafe for incin::doctor::Finding
+impl core::panic::unwind_safe::UnwindSafe for incin::doctor::Finding
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<(), (), (), B>> for incin::doctor::Finding where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::Finding::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<(), (), (), B>
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<(), (), B, ()>> for incin::doctor::Finding where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::Finding::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<(), (), B, ()>
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<(), B, (), ()>> for incin::doctor::Finding where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::Finding::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<(), B, (), ()>
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<B, (), (), ()>> for incin::doctor::Finding where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::Finding::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<B, (), (), ()>
+impl<N> incin_core::shapes::reshape::SameCount<N> for incin::doctor::Finding
+impl<Q, K> equivalent::Equivalent<K> for incin::doctor::Finding where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn incin::doctor::Finding::equivalent(&self, &K) -> bool
+impl<Q, K> hashbrown::Equivalent<K> for incin::doctor::Finding where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn incin::doctor::Finding::equivalent(&self, &K) -> bool
+impl<T, U> core::convert::Into<U> for incin::doctor::Finding where U: core::convert::From<T>
+pub fn incin::doctor::Finding::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for incin::doctor::Finding where U: core::convert::Into<T>
+pub type incin::doctor::Finding::Error = core::convert::Infallible
+pub fn incin::doctor::Finding::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for incin::doctor::Finding where U: core::convert::TryFrom<T>
+pub type incin::doctor::Finding::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn incin::doctor::Finding::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for incin::doctor::Finding where T: core::clone::Clone
+pub type incin::doctor::Finding::Owned = T
+pub fn incin::doctor::Finding::clone_into(&self, &mut T)
+pub fn incin::doctor::Finding::to_owned(&self) -> T
+impl<T> core::any::Any for incin::doctor::Finding where T: 'static + ?core::marker::Sized
+pub fn incin::doctor::Finding::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for incin::doctor::Finding where T: ?core::marker::Sized
+pub fn incin::doctor::Finding::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for incin::doctor::Finding where T: ?core::marker::Sized
+pub fn incin::doctor::Finding::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for incin::doctor::Finding where T: core::clone::Clone
+pub unsafe fn incin::doctor::Finding::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for incin::doctor::Finding
+pub fn incin::doctor::Finding::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for incin::doctor::Finding
+pub type incin::doctor::Finding::Init = T
+pub const incin::doctor::Finding::ALIGN: usize
+pub unsafe fn incin::doctor::Finding::deref<'a>(usize) -> &'a T
+pub unsafe fn incin::doctor::Finding::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn incin::doctor::Finding::drop(usize)
+pub unsafe fn incin::doctor::Finding::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for incin::doctor::Finding
+impl<T> tower_http::follow_redirect::policy::PolicyExt for incin::doctor::Finding where T: ?core::marker::Sized
+pub fn incin::doctor::Finding::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn incin::doctor::Finding::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for incin::doctor::Finding
+impl<T> tracing::instrument::WithSubscriber for incin::doctor::Finding
+impl<T> typenum::type_operators::Same for incin::doctor::Finding
+pub type incin::doctor::Finding::Output = T
+impl<V, T> ppv_lite86::types::VZip<V> for incin::doctor::Finding where V: ppv_lite86::types::MultiLane<T>
+pub fn incin::doctor::Finding::vzip(self) -> V
+pub struct incin::doctor::HostMachine
+impl core::clone::Clone for incin::doctor::HostMachine
+pub fn incin::doctor::HostMachine::clone(&self) -> incin::doctor::HostMachine
+impl core::default::Default for incin::doctor::HostMachine
+pub fn incin::doctor::HostMachine::default() -> incin::doctor::HostMachine
+impl core::fmt::Debug for incin::doctor::HostMachine
+pub fn incin::doctor::HostMachine::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for incin::doctor::HostMachine
+impl incin::doctor::Host for incin::doctor::HostMachine
+pub fn incin::doctor::HostMachine::caches(&self) -> alloc::vec::Vec<incin::doctor::Cache>
+pub fn incin::doctor::HostMachine::compiled_in(&self, incin_core::tensor::device::DeviceKind) -> bool
+pub fn incin::doctor::HostMachine::cpu_isa(&self) -> alloc::vec::Vec<incin::doctor::IsaFeature>
+pub fn incin::doctor::HostMachine::features(&self) -> alloc::vec::Vec<incin::doctor::Feature>
+pub fn incin::doctor::HostMachine::incin_version(&self) -> alloc::string::String
+pub fn incin::doctor::HostMachine::probe(&self, incin_core::tensor::device::DeviceKind) -> core::option::Option<incin_core::tensor::device::DeviceId>
+pub fn incin::doctor::HostMachine::rustc_version(&self) -> core::option::Option<alloc::string::String>
+impl core::marker::Freeze for incin::doctor::HostMachine
+impl core::marker::Send for incin::doctor::HostMachine
+impl core::marker::Sync for incin::doctor::HostMachine
+impl core::marker::Unpin for incin::doctor::HostMachine
+impl core::marker::UnsafeUnpin for incin::doctor::HostMachine
+impl core::panic::unwind_safe::RefUnwindSafe for incin::doctor::HostMachine
+impl core::panic::unwind_safe::UnwindSafe for incin::doctor::HostMachine
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<(), (), (), B>> for incin::doctor::HostMachine where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::HostMachine::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<(), (), (), B>
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<(), (), B, ()>> for incin::doctor::HostMachine where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::HostMachine::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<(), (), B, ()>
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<(), B, (), ()>> for incin::doctor::HostMachine where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::HostMachine::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<(), B, (), ()>
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<B, (), (), ()>> for incin::doctor::HostMachine where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::HostMachine::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<B, (), (), ()>
+impl<N> incin_core::shapes::reshape::SameCount<N> for incin::doctor::HostMachine
+impl<T, U> core::convert::Into<U> for incin::doctor::HostMachine where U: core::convert::From<T>
+pub fn incin::doctor::HostMachine::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for incin::doctor::HostMachine where U: core::convert::Into<T>
+pub type incin::doctor::HostMachine::Error = core::convert::Infallible
+pub fn incin::doctor::HostMachine::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for incin::doctor::HostMachine where U: core::convert::TryFrom<T>
+pub type incin::doctor::HostMachine::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn incin::doctor::HostMachine::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for incin::doctor::HostMachine where T: core::clone::Clone
+pub type incin::doctor::HostMachine::Owned = T
+pub fn incin::doctor::HostMachine::clone_into(&self, &mut T)
+pub fn incin::doctor::HostMachine::to_owned(&self) -> T
+impl<T> core::any::Any for incin::doctor::HostMachine where T: 'static + ?core::marker::Sized
+pub fn incin::doctor::HostMachine::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for incin::doctor::HostMachine where T: ?core::marker::Sized
+pub fn incin::doctor::HostMachine::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for incin::doctor::HostMachine where T: ?core::marker::Sized
+pub fn incin::doctor::HostMachine::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for incin::doctor::HostMachine where T: core::clone::Clone
+pub unsafe fn incin::doctor::HostMachine::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for incin::doctor::HostMachine
+pub fn incin::doctor::HostMachine::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for incin::doctor::HostMachine
+pub type incin::doctor::HostMachine::Init = T
+pub const incin::doctor::HostMachine::ALIGN: usize
+pub unsafe fn incin::doctor::HostMachine::deref<'a>(usize) -> &'a T
+pub unsafe fn incin::doctor::HostMachine::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn incin::doctor::HostMachine::drop(usize)
+pub unsafe fn incin::doctor::HostMachine::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for incin::doctor::HostMachine
+impl<T> tower_http::follow_redirect::policy::PolicyExt for incin::doctor::HostMachine where T: ?core::marker::Sized
+pub fn incin::doctor::HostMachine::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn incin::doctor::HostMachine::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for incin::doctor::HostMachine
+impl<T> tracing::instrument::WithSubscriber for incin::doctor::HostMachine
+impl<T> typenum::type_operators::Same for incin::doctor::HostMachine
+pub type incin::doctor::HostMachine::Output = T
+impl<V, T> ppv_lite86::types::VZip<V> for incin::doctor::HostMachine where V: ppv_lite86::types::MultiLane<T>
+pub fn incin::doctor::HostMachine::vzip(self) -> V
+pub struct incin::doctor::IsaFeature
+pub incin::doctor::IsaFeature::available: bool
+pub incin::doctor::IsaFeature::name: alloc::string::String
+impl incin::doctor::IsaFeature
+pub fn incin::doctor::IsaFeature::new(&str, bool) -> Self
+impl core::clone::Clone for incin::doctor::IsaFeature
+pub fn incin::doctor::IsaFeature::clone(&self) -> incin::doctor::IsaFeature
+impl core::cmp::Eq for incin::doctor::IsaFeature
+impl core::cmp::PartialEq for incin::doctor::IsaFeature
+pub fn incin::doctor::IsaFeature::eq(&self, &incin::doctor::IsaFeature) -> bool
+impl core::fmt::Debug for incin::doctor::IsaFeature
+pub fn incin::doctor::IsaFeature::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for incin::doctor::IsaFeature
+impl serde_core::ser::Serialize for incin::doctor::IsaFeature
+pub fn incin::doctor::IsaFeature::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for incin::doctor::IsaFeature
+impl core::marker::Send for incin::doctor::IsaFeature
+impl core::marker::Sync for incin::doctor::IsaFeature
+impl core::marker::Unpin for incin::doctor::IsaFeature
+impl core::marker::UnsafeUnpin for incin::doctor::IsaFeature
+impl core::panic::unwind_safe::RefUnwindSafe for incin::doctor::IsaFeature
+impl core::panic::unwind_safe::UnwindSafe for incin::doctor::IsaFeature
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<(), (), (), B>> for incin::doctor::IsaFeature where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::IsaFeature::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<(), (), (), B>
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<(), (), B, ()>> for incin::doctor::IsaFeature where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::IsaFeature::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<(), (), B, ()>
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<(), B, (), ()>> for incin::doctor::IsaFeature where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::IsaFeature::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<(), B, (), ()>
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<B, (), (), ()>> for incin::doctor::IsaFeature where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::IsaFeature::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<B, (), (), ()>
+impl<N> incin_core::shapes::reshape::SameCount<N> for incin::doctor::IsaFeature
+impl<Q, K> equivalent::Equivalent<K> for incin::doctor::IsaFeature where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn incin::doctor::IsaFeature::equivalent(&self, &K) -> bool
+impl<Q, K> hashbrown::Equivalent<K> for incin::doctor::IsaFeature where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn incin::doctor::IsaFeature::equivalent(&self, &K) -> bool
+impl<T, U> core::convert::Into<U> for incin::doctor::IsaFeature where U: core::convert::From<T>
+pub fn incin::doctor::IsaFeature::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for incin::doctor::IsaFeature where U: core::convert::Into<T>
+pub type incin::doctor::IsaFeature::Error = core::convert::Infallible
+pub fn incin::doctor::IsaFeature::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for incin::doctor::IsaFeature where U: core::convert::TryFrom<T>
+pub type incin::doctor::IsaFeature::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn incin::doctor::IsaFeature::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for incin::doctor::IsaFeature where T: core::clone::Clone
+pub type incin::doctor::IsaFeature::Owned = T
+pub fn incin::doctor::IsaFeature::clone_into(&self, &mut T)
+pub fn incin::doctor::IsaFeature::to_owned(&self) -> T
+impl<T> core::any::Any for incin::doctor::IsaFeature where T: 'static + ?core::marker::Sized
+pub fn incin::doctor::IsaFeature::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for incin::doctor::IsaFeature where T: ?core::marker::Sized
+pub fn incin::doctor::IsaFeature::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for incin::doctor::IsaFeature where T: ?core::marker::Sized
+pub fn incin::doctor::IsaFeature::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for incin::doctor::IsaFeature where T: core::clone::Clone
+pub unsafe fn incin::doctor::IsaFeature::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for incin::doctor::IsaFeature
+pub fn incin::doctor::IsaFeature::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for incin::doctor::IsaFeature
+pub type incin::doctor::IsaFeature::Init = T
+pub const incin::doctor::IsaFeature::ALIGN: usize
+pub unsafe fn incin::doctor::IsaFeature::deref<'a>(usize) -> &'a T
+pub unsafe fn incin::doctor::IsaFeature::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn incin::doctor::IsaFeature::drop(usize)
+pub unsafe fn incin::doctor::IsaFeature::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for incin::doctor::IsaFeature
+impl<T> tower_http::follow_redirect::policy::PolicyExt for incin::doctor::IsaFeature where T: ?core::marker::Sized
+pub fn incin::doctor::IsaFeature::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn incin::doctor::IsaFeature::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for incin::doctor::IsaFeature
+impl<T> tracing::instrument::WithSubscriber for incin::doctor::IsaFeature
+impl<T> typenum::type_operators::Same for incin::doctor::IsaFeature
+pub type incin::doctor::IsaFeature::Output = T
+impl<V, T> ppv_lite86::types::VZip<V> for incin::doctor::IsaFeature where V: ppv_lite86::types::MultiLane<T>
+pub fn incin::doctor::IsaFeature::vzip(self) -> V
+pub struct incin::doctor::Probe
+pub incin::doctor::Probe::device: alloc::string::String
+pub incin::doctor::Probe::dtype: alloc::string::String
+pub incin::doctor::Probe::operation: alloc::string::String
+pub incin::doctor::Probe::rank: usize
+pub incin::doctor::Probe::reason: core::option::Option<alloc::string::String>
+pub incin::doctor::Probe::support: alloc::string::String
+pub incin::doctor::Probe::training: bool
+impl core::clone::Clone for incin::doctor::Probe
+pub fn incin::doctor::Probe::clone(&self) -> incin::doctor::Probe
+impl core::cmp::Eq for incin::doctor::Probe
+impl core::cmp::PartialEq for incin::doctor::Probe
+pub fn incin::doctor::Probe::eq(&self, &incin::doctor::Probe) -> bool
+impl core::fmt::Debug for incin::doctor::Probe
+pub fn incin::doctor::Probe::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for incin::doctor::Probe
+impl serde_core::ser::Serialize for incin::doctor::Probe
+pub fn incin::doctor::Probe::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for incin::doctor::Probe
+impl core::marker::Send for incin::doctor::Probe
+impl core::marker::Sync for incin::doctor::Probe
+impl core::marker::Unpin for incin::doctor::Probe
+impl core::marker::UnsafeUnpin for incin::doctor::Probe
+impl core::panic::unwind_safe::RefUnwindSafe for incin::doctor::Probe
+impl core::panic::unwind_safe::UnwindSafe for incin::doctor::Probe
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<(), (), (), B>> for incin::doctor::Probe where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::Probe::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<(), (), (), B>
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<(), (), B, ()>> for incin::doctor::Probe where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::Probe::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<(), (), B, ()>
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<(), B, (), ()>> for incin::doctor::Probe where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::Probe::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<(), B, (), ()>
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<B, (), (), ()>> for incin::doctor::Probe where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::Probe::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<B, (), (), ()>
+impl<N> incin_core::shapes::reshape::SameCount<N> for incin::doctor::Probe
+impl<Q, K> equivalent::Equivalent<K> for incin::doctor::Probe where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn incin::doctor::Probe::equivalent(&self, &K) -> bool
+impl<Q, K> hashbrown::Equivalent<K> for incin::doctor::Probe where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn incin::doctor::Probe::equivalent(&self, &K) -> bool
+impl<T, U> core::convert::Into<U> for incin::doctor::Probe where U: core::convert::From<T>
+pub fn incin::doctor::Probe::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for incin::doctor::Probe where U: core::convert::Into<T>
+pub type incin::doctor::Probe::Error = core::convert::Infallible
+pub fn incin::doctor::Probe::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for incin::doctor::Probe where U: core::convert::TryFrom<T>
+pub type incin::doctor::Probe::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn incin::doctor::Probe::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for incin::doctor::Probe where T: core::clone::Clone
+pub type incin::doctor::Probe::Owned = T
+pub fn incin::doctor::Probe::clone_into(&self, &mut T)
+pub fn incin::doctor::Probe::to_owned(&self) -> T
+impl<T> core::any::Any for incin::doctor::Probe where T: 'static + ?core::marker::Sized
+pub fn incin::doctor::Probe::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for incin::doctor::Probe where T: ?core::marker::Sized
+pub fn incin::doctor::Probe::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for incin::doctor::Probe where T: ?core::marker::Sized
+pub fn incin::doctor::Probe::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for incin::doctor::Probe where T: core::clone::Clone
+pub unsafe fn incin::doctor::Probe::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for incin::doctor::Probe
+pub fn incin::doctor::Probe::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for incin::doctor::Probe
+pub type incin::doctor::Probe::Init = T
+pub const incin::doctor::Probe::ALIGN: usize
+pub unsafe fn incin::doctor::Probe::deref<'a>(usize) -> &'a T
+pub unsafe fn incin::doctor::Probe::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn incin::doctor::Probe::drop(usize)
+pub unsafe fn incin::doctor::Probe::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for incin::doctor::Probe
+impl<T> tower_http::follow_redirect::policy::PolicyExt for incin::doctor::Probe where T: ?core::marker::Sized
+pub fn incin::doctor::Probe::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn incin::doctor::Probe::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for incin::doctor::Probe
+impl<T> tracing::instrument::WithSubscriber for incin::doctor::Probe
+impl<T> typenum::type_operators::Same for incin::doctor::Probe
+pub type incin::doctor::Probe::Output = T
+impl<V, T> ppv_lite86::types::VZip<V> for incin::doctor::Probe where V: ppv_lite86::types::MultiLane<T>
+pub fn incin::doctor::Probe::vzip(self) -> V
+pub struct incin::doctor::Report
+pub incin::doctor::Report::caches: alloc::vec::Vec<incin::doctor::Cache>
+pub incin::doctor::Report::cpu_isa: alloc::vec::Vec<incin::doctor::IsaFeature>
+pub incin::doctor::Report::devices: alloc::vec::Vec<incin::doctor::DeviceReport>
+pub incin::doctor::Report::features: alloc::vec::Vec<incin::doctor::Feature>
+pub incin::doctor::Report::findings: alloc::vec::Vec<incin::doctor::Finding>
+pub incin::doctor::Report::probes: alloc::vec::Vec<incin::doctor::Probe>
+pub incin::doctor::Report::schema_version: u32
+pub incin::doctor::Report::toolchain: incin::doctor::Toolchain
+impl incin::doctor::Report
+pub fn incin::doctor::Report::exit_code(&self) -> i32
+pub fn incin::doctor::Report::gather(&dyn incin::doctor::Host) -> Self
+pub fn incin::doctor::Report::to_json(&self) -> core::result::Result<alloc::string::String, serde_json::error::Error>
+pub fn incin::doctor::Report::to_text(&self) -> alloc::string::String
+impl core::clone::Clone for incin::doctor::Report
+pub fn incin::doctor::Report::clone(&self) -> incin::doctor::Report
+impl core::cmp::Eq for incin::doctor::Report
+impl core::cmp::PartialEq for incin::doctor::Report
+pub fn incin::doctor::Report::eq(&self, &incin::doctor::Report) -> bool
+impl core::fmt::Debug for incin::doctor::Report
+pub fn incin::doctor::Report::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for incin::doctor::Report
+impl serde_core::ser::Serialize for incin::doctor::Report
+pub fn incin::doctor::Report::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for incin::doctor::Report
+impl core::marker::Send for incin::doctor::Report
+impl core::marker::Sync for incin::doctor::Report
+impl core::marker::Unpin for incin::doctor::Report
+impl core::marker::UnsafeUnpin for incin::doctor::Report
+impl core::panic::unwind_safe::RefUnwindSafe for incin::doctor::Report
+impl core::panic::unwind_safe::UnwindSafe for incin::doctor::Report
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<(), (), (), B>> for incin::doctor::Report where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::Report::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<(), (), (), B>
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<(), (), B, ()>> for incin::doctor::Report where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::Report::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<(), (), B, ()>
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<(), B, (), ()>> for incin::doctor::Report where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::Report::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<(), B, (), ()>
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<B, (), (), ()>> for incin::doctor::Report where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::Report::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<B, (), (), ()>
+impl<N> incin_core::shapes::reshape::SameCount<N> for incin::doctor::Report
+impl<Q, K> equivalent::Equivalent<K> for incin::doctor::Report where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn incin::doctor::Report::equivalent(&self, &K) -> bool
+impl<Q, K> hashbrown::Equivalent<K> for incin::doctor::Report where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn incin::doctor::Report::equivalent(&self, &K) -> bool
+impl<T, U> core::convert::Into<U> for incin::doctor::Report where U: core::convert::From<T>
+pub fn incin::doctor::Report::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for incin::doctor::Report where U: core::convert::Into<T>
+pub type incin::doctor::Report::Error = core::convert::Infallible
+pub fn incin::doctor::Report::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for incin::doctor::Report where U: core::convert::TryFrom<T>
+pub type incin::doctor::Report::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn incin::doctor::Report::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for incin::doctor::Report where T: core::clone::Clone
+pub type incin::doctor::Report::Owned = T
+pub fn incin::doctor::Report::clone_into(&self, &mut T)
+pub fn incin::doctor::Report::to_owned(&self) -> T
+impl<T> core::any::Any for incin::doctor::Report where T: 'static + ?core::marker::Sized
+pub fn incin::doctor::Report::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for incin::doctor::Report where T: ?core::marker::Sized
+pub fn incin::doctor::Report::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for incin::doctor::Report where T: ?core::marker::Sized
+pub fn incin::doctor::Report::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for incin::doctor::Report where T: core::clone::Clone
+pub unsafe fn incin::doctor::Report::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for incin::doctor::Report
+pub fn incin::doctor::Report::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for incin::doctor::Report
+pub type incin::doctor::Report::Init = T
+pub const incin::doctor::Report::ALIGN: usize
+pub unsafe fn incin::doctor::Report::deref<'a>(usize) -> &'a T
+pub unsafe fn incin::doctor::Report::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn incin::doctor::Report::drop(usize)
+pub unsafe fn incin::doctor::Report::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for incin::doctor::Report
+impl<T> tower_http::follow_redirect::policy::PolicyExt for incin::doctor::Report where T: ?core::marker::Sized
+pub fn incin::doctor::Report::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn incin::doctor::Report::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for incin::doctor::Report
+impl<T> tracing::instrument::WithSubscriber for incin::doctor::Report
+impl<T> typenum::type_operators::Same for incin::doctor::Report
+pub type incin::doctor::Report::Output = T
+impl<V, T> ppv_lite86::types::VZip<V> for incin::doctor::Report where V: ppv_lite86::types::MultiLane<T>
+pub fn incin::doctor::Report::vzip(self) -> V
+pub struct incin::doctor::Toolchain
+pub incin::doctor::Toolchain::incin: alloc::string::String
+pub incin::doctor::Toolchain::rustc: core::option::Option<alloc::string::String>
+impl core::clone::Clone for incin::doctor::Toolchain
+pub fn incin::doctor::Toolchain::clone(&self) -> incin::doctor::Toolchain
+impl core::cmp::Eq for incin::doctor::Toolchain
+impl core::cmp::PartialEq for incin::doctor::Toolchain
+pub fn incin::doctor::Toolchain::eq(&self, &incin::doctor::Toolchain) -> bool
+impl core::fmt::Debug for incin::doctor::Toolchain
+pub fn incin::doctor::Toolchain::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for incin::doctor::Toolchain
+impl serde_core::ser::Serialize for incin::doctor::Toolchain
+pub fn incin::doctor::Toolchain::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for incin::doctor::Toolchain
+impl core::marker::Send for incin::doctor::Toolchain
+impl core::marker::Sync for incin::doctor::Toolchain
+impl core::marker::Unpin for incin::doctor::Toolchain
+impl core::marker::UnsafeUnpin for incin::doctor::Toolchain
+impl core::panic::unwind_safe::RefUnwindSafe for incin::doctor::Toolchain
+impl core::panic::unwind_safe::UnwindSafe for incin::doctor::Toolchain
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<(), (), (), B>> for incin::doctor::Toolchain where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::Toolchain::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<(), (), (), B>
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<(), (), B, ()>> for incin::doctor::Toolchain where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::Toolchain::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<(), (), B, ()>
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<(), B, (), ()>> for incin::doctor::Toolchain where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::Toolchain::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<(), B, (), ()>
+impl<A, B> incin_core::tensor::arg_into::ArgInto<incin_core::tensor::arg_into::TensorArgsData<B, (), (), ()>> for incin::doctor::Toolchain where A: incin_core::tensor::arg_into::ArgInto<B>, B: incin_core::tensor::arg_into::NotUnit
+pub fn incin::doctor::Toolchain::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<B, (), (), ()>
+impl<N> incin_core::shapes::reshape::SameCount<N> for incin::doctor::Toolchain
+impl<Q, K> equivalent::Equivalent<K> for incin::doctor::Toolchain where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn incin::doctor::Toolchain::equivalent(&self, &K) -> bool
+impl<Q, K> hashbrown::Equivalent<K> for incin::doctor::Toolchain where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn incin::doctor::Toolchain::equivalent(&self, &K) -> bool
+impl<T, U> core::convert::Into<U> for incin::doctor::Toolchain where U: core::convert::From<T>
+pub fn incin::doctor::Toolchain::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for incin::doctor::Toolchain where U: core::convert::Into<T>
+pub type incin::doctor::Toolchain::Error = core::convert::Infallible
+pub fn incin::doctor::Toolchain::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for incin::doctor::Toolchain where U: core::convert::TryFrom<T>
+pub type incin::doctor::Toolchain::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn incin::doctor::Toolchain::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for incin::doctor::Toolchain where T: core::clone::Clone
+pub type incin::doctor::Toolchain::Owned = T
+pub fn incin::doctor::Toolchain::clone_into(&self, &mut T)
+pub fn incin::doctor::Toolchain::to_owned(&self) -> T
+impl<T> core::any::Any for incin::doctor::Toolchain where T: 'static + ?core::marker::Sized
+pub fn incin::doctor::Toolchain::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for incin::doctor::Toolchain where T: ?core::marker::Sized
+pub fn incin::doctor::Toolchain::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for incin::doctor::Toolchain where T: ?core::marker::Sized
+pub fn incin::doctor::Toolchain::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for incin::doctor::Toolchain where T: core::clone::Clone
+pub unsafe fn incin::doctor::Toolchain::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for incin::doctor::Toolchain
+pub fn incin::doctor::Toolchain::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for incin::doctor::Toolchain
+pub type incin::doctor::Toolchain::Init = T
+pub const incin::doctor::Toolchain::ALIGN: usize
+pub unsafe fn incin::doctor::Toolchain::deref<'a>(usize) -> &'a T
+pub unsafe fn incin::doctor::Toolchain::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn incin::doctor::Toolchain::drop(usize)
+pub unsafe fn incin::doctor::Toolchain::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for incin::doctor::Toolchain
+impl<T> tower_http::follow_redirect::policy::PolicyExt for incin::doctor::Toolchain where T: ?core::marker::Sized
+pub fn incin::doctor::Toolchain::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn incin::doctor::Toolchain::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for incin::doctor::Toolchain
+impl<T> tracing::instrument::WithSubscriber for incin::doctor::Toolchain
+impl<T> typenum::type_operators::Same for incin::doctor::Toolchain
+pub type incin::doctor::Toolchain::Output = T
+impl<V, T> ppv_lite86::types::VZip<V> for incin::doctor::Toolchain where V: ppv_lite86::types::MultiLane<T>
+pub fn incin::doctor::Toolchain::vzip(self) -> V
+pub const incin::doctor::EXIT_FINDINGS: i32
+pub const incin::doctor::EXIT_OK: i32
+pub const incin::doctor::EXIT_USAGE: i32
+pub const incin::doctor::SCHEMA_VERSION: u32
+pub trait incin::doctor::Host
+pub fn incin::doctor::Host::caches(&self) -> alloc::vec::Vec<incin::doctor::Cache>
+pub fn incin::doctor::Host::compiled_in(&self, incin_core::tensor::device::DeviceKind) -> bool
+pub fn incin::doctor::Host::cpu_isa(&self) -> alloc::vec::Vec<incin::doctor::IsaFeature>
+pub fn incin::doctor::Host::features(&self) -> alloc::vec::Vec<incin::doctor::Feature>
+pub fn incin::doctor::Host::incin_version(&self) -> alloc::string::String
+pub fn incin::doctor::Host::probe(&self, incin_core::tensor::device::DeviceKind) -> core::option::Option<incin_core::tensor::device::DeviceId>
+pub fn incin::doctor::Host::rustc_version(&self) -> core::option::Option<alloc::string::String>
+impl incin::doctor::Host for incin::doctor::HostMachine
+pub fn incin::doctor::HostMachine::caches(&self) -> alloc::vec::Vec<incin::doctor::Cache>
+pub fn incin::doctor::HostMachine::compiled_in(&self, incin_core::tensor::device::DeviceKind) -> bool
+pub fn incin::doctor::HostMachine::cpu_isa(&self) -> alloc::vec::Vec<incin::doctor::IsaFeature>
+pub fn incin::doctor::HostMachine::features(&self) -> alloc::vec::Vec<incin::doctor::Feature>
+pub fn incin::doctor::HostMachine::incin_version(&self) -> alloc::string::String
+pub fn incin::doctor::HostMachine::probe(&self, incin_core::tensor::device::DeviceKind) -> core::option::Option<incin_core::tensor::device::DeviceId>
+pub fn incin::doctor::HostMachine::rustc_version(&self) -> core::option::Option<alloc::string::String>
+pub fn incin::doctor::cache_state(&std::path::Path) -> incin::doctor::CacheState
+pub fn incin::doctor::run(&[alloc::string::String]) -> (alloc::string::String, i32)
+pub mod incin::experimental
+pub mod incin::hub
+pub use incin::hub::<<incin_data::hub::*>>
+pub mod incin::macros
+pub use incin::macros::idx
+pub use incin::macros::mesh
+pub use incin::macros::s
+pub mod incin::metrics
+pub use incin::metrics::<<incin_core::metrics::*>>
+pub mod incin::nn
+pub use incin::nn::<<incin_core::nn::*>>
+pub mod incin::optim
+pub use incin::optim::Adam
+pub use incin::optim::AdamW
+pub use incin::optim::ConstantLR
+pub use incin::optim::CosineAnnealingLR
+pub use incin::optim::Gradients
+pub use incin::optim::LRScheduler
+pub use incin::optim::LinearLR
+pub use incin::optim::Optimizer
+pub use incin::optim::SGD
+pub use incin::optim::StepLR
+pub mod incin::prelude
+pub use incin::prelude::Accuracy
+pub use incin::prelude::Adam
+pub use incin::prelude::AdamW
+pub use incin::prelude::AvgPool2d
+pub use incin::prelude::BCEWithLogitsLoss
+pub use incin::prelude::BTreeMap
+pub use incin::prelude::Backend
+pub use incin::prelude::ComputeStats
+pub use incin::prelude::ConfusionMatrix
+pub use incin::prelude::ConstDType
+pub use incin::prelude::ConstDevice
+pub use incin::prelude::ConstShape
+pub use incin::prelude::ConstantLR
+pub use incin::prelude::CosineAnnealingLR
+pub use incin::prelude::Cpu
+pub use incin::prelude::CrossEntropyLoss
+pub use incin::prelude::DType
+pub use incin::prelude::DTypeId
+pub use incin::prelude::Device
+pub use incin::prelude::DeviceId
+pub use incin::prelude::DeviceKind
+pub use incin::prelude::Dim
+pub use incin::prelude::Dropout
+pub use incin::prelude::Dyn
+pub use incin::prelude::DynShape
+pub use incin::prelude::Ellipsis
+pub use incin::prelude::Error
+pub use incin::prelude::F1Score
+pub use incin::prelude::Flatten
+pub use incin::prelude::Format
+pub use incin::prelude::GELU
+pub use incin::prelude::Grad
+pub use incin::prelude::Gradients
+pub use incin::prelude::HeadShape
+pub use incin::prelude::IncinBackend
+pub use incin::prelude::InferDim
+pub use incin::prelude::Init
+pub use incin::prelude::L1Loss
+pub use incin::prelude::LRScheduler
+pub use incin::prelude::LSTM
+pub use incin::prelude::LSTMCell
+pub use incin::prelude::LayerNode
+pub use incin::prelude::LayerStats
+pub use incin::prelude::LinearLR
+pub use incin::prelude::MSE
+pub use incin::prelude::MSELoss
+pub use incin::prelude::MaxPool2d
+pub use incin::prelude::Mean
+pub use incin::prelude::Metric
+pub use incin::prelude::ModelExt
+pub use incin::prelude::ModelStats
+pub use incin::prelude::Module
+pub use incin::prelude::NamedDyn
+pub use incin::prelude::NamedLayers
+pub use incin::prelude::NoGrad
+pub use incin::prelude::NoneReduction
+pub use incin::prelude::Optimizer
+pub use incin::prelude::Parameters
+pub use incin::prelude::PartialDynShape
+pub use incin::prelude::Precision
+pub use incin::prelude::RMSNorm
+pub use incin::prelude::ReLU
+pub use incin::prelude::Recall
+pub use incin::prelude::Reduction
+pub use incin::prelude::Result
+pub use incin::prelude::SGD
+pub use incin::prelude::SeqTy
+pub use incin::prelude::Sequential
+pub use incin::prelude::Shape
+pub use incin::prelude::Sigmoid
+pub use incin::prelude::Slice
+pub use incin::prelude::Softmax
+pub use incin::prelude::SpanShape
+pub use incin::prelude::StateDict
+pub use incin::prelude::StepLR
+pub use incin::prelude::String
+pub use incin::prelude::SupportsDType
+pub use incin::prelude::Swish
+pub use incin::prelude::TailShape
+pub use incin::prelude::Tanh
+pub use incin::prelude::ToDevice
+pub use incin::prelude::TrainMode
+pub use incin::prelude::TransferTo
+pub use incin::prelude::Vec
+pub use incin::prelude::axes
+pub use incin::prelude::dim
+pub use incin::prelude::einsum
+pub use incin::prelude::format
+pub use incin::prelude::idx
+pub use incin::prelude::import_model
+pub use incin::prelude::mesh
+pub use incin::prelude::model
+pub use incin::prelude::module
+pub use incin::prelude::parallel
+pub use incin::prelude::placement
+pub use incin::prelude::s
+pub use incin::prelude::seq
+pub use incin::prelude::sum_stats
+pub use incin::prelude::typenum
+pub type incin::prelude::BatchNorm2d<C, B> = incin_core::nn::batch_norm::BatchNorm2d<C, B>
+pub type incin::prelude::Conv1d<S, B> = incin_core::nn::conv1d::Conv1d<S, B>
+pub type incin::prelude::Conv2d<S, B> = incin_core::nn::conv2d::Conv2d<S, B>
+pub type incin::prelude::DefaultBackend = incin_backends::IncinBackend<f32, incin_core::tensor::device::Cpu>
+pub type incin::prelude::DefaultDevice = incin_core::tensor::device::Cpu
+pub type incin::prelude::Embedding<S, B> = incin_core::nn::embedding::Embedding<S, B>
+pub type incin::prelude::LayerNorm<C, B> = incin_core::nn::layer_norm::LayerNorm<C, B>
+pub type incin::prelude::Linear<S, B> = incin_core::nn::linear::Linear<S, B>
+pub type incin::prelude::Param<T, B> = incin_core::nn::param::Param<T, B>
+pub type incin::prelude::RNN<S, B> = incin_core::nn::rnn::RNN<S, B>
+pub type incin::prelude::RNNCell<S, B> = incin_core::nn::rnn::RNNCell<S, B>
+pub type incin::prelude::Tensor<S, B, K, G, P> = incin_core::tensor::base::Tensor<S, B, K, G, P>
+pub mod incin::transforms
+pub use incin::transforms::<<incin_data::transforms::*>>
+pub mod incin::tune_report
+pub const incin::tune_report::EXIT_OK: i32
+pub const incin::tune_report::EXIT_USAGE: i32
+pub fn incin::tune_report::run(&[alloc::string::String]) -> (alloc::string::String, i32)
+pub type incin::AvgPool2d<K, S, P, D> = incin_core::nn::avg_pool2d::AvgPool2d<K, S, P, D>
+pub type incin::BatchNorm2d<C, B> = incin_core::nn::batch_norm::BatchNorm2d<C, B>
+pub type incin::Conv1d<S, B> = incin_core::nn::conv1d::Conv1d<S, B>
+pub type incin::Conv2d<S, B> = incin_core::nn::conv2d::Conv2d<S, B>
+pub type incin::DefaultBackend = incin_backends::IncinBackend<f32, incin_core::tensor::device::Cpu>
+pub type incin::DefaultDevice = incin_core::tensor::device::Cpu
+pub type incin::Embedding<S, B> = incin_core::nn::embedding::Embedding<S, B>
+pub type incin::LayerNorm<C, B> = incin_core::nn::layer_norm::LayerNorm<C, B>
+pub type incin::Linear<S, B> = incin_core::nn::linear::Linear<S, B>
+pub type incin::MaxPool2d<K, S, P, D> = incin_core::nn::max_pool2d::MaxPool2d<K, S, P, D>
+pub type incin::Param<T, B> = incin_core::nn::param::Param<T, B>
+pub type incin::RNN<S, B> = incin_core::nn::rnn::RNN<S, B>
+pub type incin::RNNCell<S, B> = incin_core::nn::rnn::RNNCell<S, B>
+pub type incin::Sequential<L1, L2> = incin_core::nn::module::Sequential<L1, L2>
+pub type incin::Tensor<S, B, K, G, P> = incin_core::tensor::base::Tensor<S, B, K, G, P>

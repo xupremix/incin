@@ -1,5 +1,5 @@
-use incin::dist::mesh::{Data, MeshSpec, Pipeline, TensorParallel};
-use incin::dist::{RunId, TwoRankLaunchPlan};
+use incin::experimental::distributed::mesh::{Data, MeshSpec, Pipeline, TensorParallel};
+use incin::experimental::distributed::{RunId, TwoRankLaunchPlan};
 use incin::typenum::{U1, U3};
 
 type ThreeRanks = MeshSpec<Data<U3>, TensorParallel<U1>, Pipeline<U1>>;
