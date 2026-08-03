@@ -46,7 +46,11 @@ fn migrated() -> BTreeSet<OperationKind> {
 fn document() -> String {
     let migrated = migrated();
     let total = OPERATION_CATALOG.len();
-    let done = OPERATION_CATALOG
+    let executable: Vec<_> = OPERATION_CATALOG
+        .iter()
+        .filter(|row| row.site.is_backend_executable())
+        .collect();
+    let done = executable
         .iter()
         .filter(|row| migrated.contains(&row.operation))
         .count();
@@ -58,25 +62,58 @@ fn document() -> String {
          by the compile-time proof in `cpu::canonical`, implements \
          `Execute<Descriptor<op::...>>` for it. It does not mean the operation is \
          unreachable through the legacy operation-family traits: those remain the path \
-         the stable tensor surface uses.\n\n",
+         the stable tensor surface uses.\n\nThe denominator is the number of operations \
+         that `Execute<Descriptor<O>>` can carry at all, not the whole catalog. An \
+         operation whose `ExecutionSite` is not backend-executable is listed separately \
+         with the reason: it is a gap in the execution trait rather than an unwritten \
+         executor, and counting it here would describe work that cannot be done without \
+         changing the contract first.\n\n",
     );
     let _ = writeln!(
         out,
-        "**{done} of {total} catalog operations migrated.** The remaining {} are still \
-         reachable only through the legacy operation-family traits.\n",
-        total - done
+        "**{done} of {} backend-executable operations migrated**, out of {total} catalog \
+         operations in total. The remaining {} executable operations are still reachable \
+         only through the legacy operation-family traits.\n",
+        executable.len(),
+        executable.len() - done
     );
-    out.push_str("| Operation | Migrated | Legacy source |\n|---|:--:|---|\n");
-    for row in OPERATION_CATALOG {
+
+    out.push_str("## Backend-executable operations\n\n");
+    out.push_str("| Operation | Site | Migrated | Legacy source |\n|---|---|:--:|---|\n");
+    for row in &executable {
         let _ = writeln!(
             out,
-            "| `{}` | {} | `{}` |",
+            "| `{}` | `{:?}` | {} | `{}` |",
             row.name,
+            row.site,
             if migrated.contains(&row.operation) {
                 "yes"
             } else {
                 "no"
             },
+            row.legacy_source,
+        );
+    }
+
+    out.push_str(
+        "\n## Operations the execution contract cannot carry\n\nThese are not pending \
+         migrations. Each one needs a change to `Execute`/`ExecutionRequest` before an \
+         executor for it could be written, and until then the stable tensor surface \
+         reaches it through the legacy path by necessity rather than by omission.\n\n",
+    );
+    out.push_str("| Operation | Site | Why | Legacy source |\n|---|---|---|---|\n");
+    for row in OPERATION_CATALOG
+        .iter()
+        .filter(|row| !row.site.is_backend_executable())
+    {
+        let _ = writeln!(
+            out,
+            "| `{}` | `{:?}` | {} | `{}` |",
+            row.name,
+            row.site,
+            row.site
+                .blocking_reason()
+                .expect("a non-executable site states its reason"),
             row.legacy_source,
         );
     }
@@ -123,21 +160,58 @@ fn every_migrated_identity_is_a_catalog_operation() {
     }
 }
 
+/// Nothing migrated may sit at a site the execution contract cannot carry.
+///
+/// A backend that advertises an exact identity has, by the compile-time proof
+/// in `cpu::canonical`, an `Execute<Descriptor<op::X>>` for it. If the catalog
+/// also says that operation's result cannot be carried by `Execute`, one of the
+/// two is lying, and the classification is the more likely of the pair to be
+/// wrong because it is the newer claim.
+#[test]
+fn no_migrated_operation_sits_at_a_non_executable_site() {
+    for row in OPERATION_CATALOG {
+        if !migrated().contains(&row.operation) {
+            continue;
+        }
+        assert!(
+            row.site.is_backend_executable(),
+            "{} is advertised and therefore has an executor, but the catalog classifies \
+             it as `{:?}`, which is documented as impossible to execute: {}",
+            row.name,
+            row.site,
+            row.site.blocking_reason().unwrap_or("no reason recorded"),
+        );
+    }
+}
+
 /// The migration is incomplete, and the evidence must keep saying so.
 ///
 /// This assertion is the opposite of the usual kind: it fails if the migrated
-/// set ever reaches the whole catalog while this test still exists. That is
-/// intentional. Whoever completes FND-005 has to come here and delete it, which
-/// forces the completion claim to be a deliberate edit rather than a number
-/// that quietly crossed a threshold nobody was watching.
+/// set ever covers every backend-executable operation while this test still
+/// exists. That is intentional. Whoever completes FND-005 has to come here and
+/// delete it, which forces the completion claim to be a deliberate edit rather
+/// than a number that quietly crossed a threshold nobody was watching.
+///
+/// The bound is the executable subset, not the whole catalog. Against the whole
+/// catalog this test could never fire, because thirteen operations cannot be
+/// migrated without first changing `Execute`, so it would have guarded nothing.
 #[test]
 fn the_migration_is_recorded_as_incomplete() {
-    let done = migrated().len();
-    let total = OPERATION_CATALOG.len();
+    let migrated = migrated();
+    let executable: Vec<_> = OPERATION_CATALOG
+        .iter()
+        .filter(|row| row.site.is_backend_executable())
+        .collect();
+    let done = executable
+        .iter()
+        .filter(|row| migrated.contains(&row.operation))
+        .count();
     assert!(
-        done < total,
-        "every catalog operation is now migrated ({done} of {total}); FND-005 is \
-         complete, so delete this test and update audit-evidence/FND-005/summary.md \
-         rather than leaving a stale partial claim in the tree"
+        done < executable.len(),
+        "every backend-executable operation is now migrated ({done} of {}); FND-005's \
+         migration step is complete, so delete this test and update \
+         audit-evidence/FND-005/summary.md rather than leaving a stale partial claim \
+         in the tree",
+        executable.len()
     );
 }

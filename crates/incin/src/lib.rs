@@ -240,6 +240,12 @@ pub mod backend_authoring {
             SplitAttributes, TopKAttributes, TransposeAttributes, UnfoldAttributes,
             ValidatedInvocation, VarianceAttributes, catalog_entry, op,
         };
+        // Mirrors the core tier exactly: the classification enums every field
+        // of the re-exported `OperationCatalogEntry` is typed as.
+        pub use incin_core::backend_authoring::operations::{
+            BroadcastingRule, DTypeRule, EmptyRule, ExecutionSite, GradientRule, LayoutRule,
+            NumericRule, OutputRule, SemanticProfile,
+        };
         #[cfg(feature = "std")]
         pub use incin_core::backend_authoring::operations::{
             CapturedDescriptor, DescriptorCaptureError,

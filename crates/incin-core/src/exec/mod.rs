@@ -80,8 +80,8 @@ pub use catalog::{
 // itself. Reading one of these fields off a public struct should not require
 // knowing which submodule its type was declared in.
 pub use catalog::{
-    BroadcastingRule, DTypeRule, EmptyRule, GradientRule, LayoutRule, NumericRule, OutputRule,
-    SemanticProfile,
+    BroadcastingRule, DTypeRule, EmptyRule, ExecutionSite, GradientRule, LayoutRule, NumericRule,
+    OutputRule, SemanticProfile,
 };
 #[cfg(feature = "std")]
 pub use catalog::{CapturedDescriptor, DescriptorCaptureError};

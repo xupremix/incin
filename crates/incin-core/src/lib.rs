@@ -106,6 +106,14 @@ pub mod backend_authoring {
             SplitAttributes, TopKAttributes, TransposeAttributes, UnfoldAttributes,
             ValidatedInvocation, VarianceAttributes, catalog_entry, op,
         };
+        // The enums that every classification field of `OperationCatalogEntry`
+        // is typed as. The entry is re-exported above, so without these a
+        // backend author can read `row.site` or `row.profile` but cannot write
+        // down the type of what they read, or match on it exhaustively.
+        pub use crate::exec::catalog::{
+            BroadcastingRule, DTypeRule, EmptyRule, ExecutionSite, GradientRule, LayoutRule,
+            NumericRule, OutputRule, SemanticProfile,
+        };
         #[cfg(feature = "std")]
         pub use crate::exec::catalog::{CapturedDescriptor, DescriptorCaptureError};
     }

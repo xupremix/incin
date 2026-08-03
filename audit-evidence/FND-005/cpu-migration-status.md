@@ -2,181 +2,192 @@
 
 Generated from `CPU_CAPABILITIES` and `incin_core::exec::OPERATION_CATALOG`; the Rust source is authoritative. "Migrated" means the CPU backend advertises the exact identity and therefore, by the compile-time proof in `cpu::canonical`, implements `Execute<Descriptor<op::...>>` for it. It does not mean the operation is unreachable through the legacy operation-family traits: those remain the path the stable tensor surface uses.
 
-**112 of 174 catalog operations migrated.** The remaining 62 are still reachable only through the legacy operation-family traits.
+The denominator is the number of operations that `Execute<Descriptor<O>>` can carry at all, not the whole catalog. An operation whose `ExecutionSite` is not backend-executable is listed separately with the reason: it is a gap in the execution trait rather than an unwritten executor, and counting it here would describe work that cannot be done without changing the contract first.
 
-| Operation | Migrated | Legacy source |
-|---|:--:|---|
-| `tensor_from_data` | no | `TensorArgsData` |
-| `tensor_from_bytes` | no | `Tensor::from_bytes` |
-| `tensor_to_bytes` | no | `Tensor::to_bytes` |
-| `zeros` | no | `CreationOps::zeros` |
-| `ones` | no | `CreationOps::ones` |
-| `rand` | no | `CreationOps::rand` |
-| `randn` | no | `CreationOps::randn` |
-| `var_zeros` | no | `CreationOps::var_zeros` |
-| `var_ones` | no | `CreationOps::var_ones` |
-| `var_rand` | no | `CreationOps::var_rand` |
-| `var_randn` | no | `CreationOps::var_randn` |
-| `full` | no | `CreationOps::full` |
-| `arange` | no | `CreationOps::arange` |
-| `linspace` | no | `CreationOps::linspace` |
-| `sample` | no | `Tensor::sample` |
-| `relu` | yes | `FloatOps::relu` |
-| `step` | yes | `FloatOps::step` |
-| `mish` | yes | `FloatOps::mish` |
-| `elu` | yes | `FloatOps::elu` |
-| `gelu` | yes | `FloatOps::gelu` |
-| `abs` | yes | `FloatOps::abs` |
-| `exp` | yes | `FloatOps::exp` |
-| `neg` | yes | `FloatOps::neg` |
-| `sqrt` | yes | `FloatOps::sqrt` |
-| `log` | yes | `FloatOps::log` |
-| `tanh` | yes | `FloatOps::tanh` |
-| `sigmoid` | yes | `FloatOps::sigmoid` |
-| `swish` | yes | `FloatOps::swish` |
-| `softmax` | yes | `FloatOps::softmax` |
-| `add_scalar` | yes | `FloatOps::add_scalar_float` |
-| `mul_scalar` | yes | `FloatOps::mul_scalar_float` |
-| `powf` | yes | `FloatOps::powf` |
-| `clamp` | yes | `FloatOps::clamp` |
-| `sign` | yes | `FloatOps::sign` |
-| `floor` | yes | `FloatOps::floor` |
-| `ceil` | yes | `FloatOps::ceil` |
-| `round` | yes | `FloatOps::round` |
-| `log2` | yes | `FloatOps::log2` |
-| `log10` | yes | `FloatOps::log10` |
-| `sin` | yes | `FloatOps::sin` |
-| `cos` | yes | `FloatOps::cos` |
-| `tan` | yes | `FloatOps::tan` |
-| `asin` | yes | `FloatOps::asin` |
-| `acos` | yes | `FloatOps::acos` |
-| `atan` | yes | `FloatOps::atan` |
-| `atan2` | yes | `FloatOps::atan2` |
-| `sinh` | yes | `FloatOps::sinh` |
-| `cosh` | yes | `FloatOps::cosh` |
-| `asinh` | yes | `FloatOps::asinh` |
-| `acosh` | yes | `FloatOps::acosh` |
-| `atanh` | yes | `FloatOps::atanh` |
-| `erf` | yes | `FloatOps::erf` |
-| `rsqrt` | yes | `FloatOps::rsqrt` |
-| `trunc` | yes | `FloatOps::trunc` |
-| `frac` | yes | `FloatOps::frac` |
-| `fmod` | yes | `FloatOps::fmod` |
-| `remainder` | yes | `FloatOps::remainder` |
-| `add` | yes | `NumericOps::add` |
-| `sub` | yes | `NumericOps::sub` |
-| `mul` | yes | `NumericOps::mul` |
-| `div` | yes | `NumericOps::div` |
-| `sub_scalar` | yes | `TensorOps::sub_scalar` |
-| `div_scalar` | yes | `TensorOps::div_scalar` |
-| `maximum` | yes | `TensorOps::maximum` |
-| `minimum` | yes | `TensorOps::minimum` |
-| `abs_diff` | yes | `TensorOps::abs_diff` |
-| `lerp` | yes | `TensorOps::lerp` |
-| `cmp_eq` | yes | `TensorOps::cmp_eq` |
-| `cmp_ne` | yes | `TensorOps::cmp_ne` |
-| `cmp_lt` | yes | `TensorOps::cmp_lt` |
-| `cmp_le` | yes | `TensorOps::cmp_le` |
-| `cmp_gt` | yes | `TensorOps::cmp_gt` |
-| `cmp_ge` | yes | `TensorOps::cmp_ge` |
-| `logical_and` | yes | `TensorOps::logical_and` |
-| `logical_or` | yes | `TensorOps::logical_or` |
-| `logical_not` | yes | `TensorOps::logical_not` |
-| `add_in_place` | no | `Tensor::add_` |
-| `sub_in_place` | no | `Tensor::sub_` |
-| `mul_in_place` | no | `Tensor::mul_` |
-| `div_in_place` | no | `Tensor::div_` |
-| `zero_in_place` | no | `Tensor::zero_` |
-| `fill_in_place` | no | `Tensor::fill_` |
-| `reshape` | yes | `TensorOps::reshape` |
-| `transpose` | yes | `TensorOps::transpose` |
-| `matmul` | yes | `TensorOps::matmul` |
-| `dot` | no | `Tensor::dot` |
-| `outer` | no | `Tensor::outer` |
-| `broadcast_as` | yes | `TensorOps::broadcast_as` |
-| `narrow` | yes | `TensorOps::narrow` |
-| `squeeze` | yes | `TensorOps::squeeze` |
-| `stack` | yes | `TensorOps::stack` |
-| `concat` | yes | `TensorOps::concat` |
-| `slice` | yes | `TensorOps::slice` |
-| `flatten` | yes | `TensorOps::flatten` |
-| `where_cond` | yes | `TensorOps::where_cond` |
-| `gather` | yes | `TensorOps::gather` |
-| `scatter` | yes | `TensorOps::scatter` |
-| `index_select` | yes | `TensorOps::index_select` |
-| `masked_fill` | yes | `TensorOps::masked_fill` |
-| `unsqueeze` | yes | `TensorOps::unsqueeze` |
-| `repeat` | yes | `TensorOps::repeat` |
-| `pad` | yes | `TensorOps::pad` |
-| `triu` | yes | `TensorOps::triu` |
-| `tril` | yes | `TensorOps::tril` |
-| `diag` | yes | `TensorOps::diag` |
-| `chunk` | no | `Tensor::chunk` |
-| `split` | no | `Tensor::split` |
-| `addmm` | yes | `TensorOps::addmm` |
-| `bmm` | yes | `TensorOps::bmm` |
-| `scaled_dot_product_attention` | yes | `TensorOps::scaled_dot_product_attention` |
-| `unfold` | yes | `TensorOps::unfold` |
-| `pixel_shuffle` | yes | `TensorOps::pixel_shuffle` |
-| `group_norm` | yes | `TensorOps::group_norm` |
-| `instance_norm` | yes | `TensorOps::instance_norm` |
-| `broadcast_left` | yes | `TensorOps::broadcast_left` |
-| `float_to_scalar` | no | `TensorOps::float_to_scalar` |
-| `float_to_vec1` | no | `TensorOps::float_to_vec1` |
-| `int_to_scalar` | no | `TensorOps::int_to_scalar` |
-| `int_to_vec1` | no | `TensorOps::int_to_vec1` |
-| `to_dtype` | no | `TensorOps::tensor_to_dtype` |
-| `to_device` | no | `TransferTo` |
-| `require_grad` | no | `Tensor::require_grad` |
-| `detach` | no | `Tensor::detach` |
-| `backward` | no | `Tensor::backward` |
-| `sum_all` | yes | `ReductionOps::sum_all` |
-| `mean_all` | yes | `ReductionOps::mean_all` |
-| `max_all` | yes | `ReductionOps::max_all` |
-| `min_all` | yes | `ReductionOps::min_all` |
-| `sum_dim` | yes | `ReductionOps::sum_dim` |
-| `sum_keepdim` | yes | `ReductionOps::sum_keepdim` |
-| `mean_dim` | yes | `ReductionOps::mean_dim` |
-| `mean_keepdim` | yes | `ReductionOps::mean_keepdim` |
-| `max_dim` | yes | `ReductionOps::max_dim` |
-| `max_keepdim` | yes | `ReductionOps::max_keepdim` |
-| `min_dim` | yes | `ReductionOps::min_dim` |
-| `min_keepdim` | yes | `ReductionOps::min_keepdim` |
-| `argmax` | yes | `ReductionOps::argmax` |
-| `argmin` | yes | `ReductionOps::argmin` |
-| `prod_all` | yes | `ReductionOps::prod_all` |
-| `prod_dim` | yes | `ReductionOps::prod_dim` |
-| `cumsum` | yes | `ReductionOps::cumsum` |
-| `topk` | yes | `ReductionOps::topk` |
-| `argsort` | yes | `ReductionOps::argsort` |
-| `norm` | no | `Tensor::norm` |
-| `var_all` | no | `Tensor::var_all` |
-| `var_dim` | no | `Tensor::var_dim` |
-| `var_keepdim` | no | `Tensor::var_keepdim` |
-| `std_all` | no | `Tensor::std_all` |
-| `std_dim` | no | `Tensor::std_dim` |
-| `std_keepdim` | no | `Tensor::std_keepdim` |
-| `layer_norm` | no | `ModuleOps::layer_norm` |
-| `batch_norm` | no | `ModuleOps::batch_norm` |
-| `embedding` | no | `ModuleOps::embedding` |
-| `conv1d` | no | `ModuleOps::conv1d` |
-| `conv2d` | yes | `ModuleOps::conv2d` |
-| `conv_transpose2d` | no | `ModuleOps::conv_transpose2d` |
-| `max_pool2d` | yes | `ModuleOps::max_pool2d` |
-| `avg_pool2d` | yes | `ModuleOps::avg_pool2d` |
-| `adaptive_avg_pool2d` | no | `ModuleOps::adaptive_avg_pool2d` |
-| `linear` | no | `Linear::forward` |
-| `rms_norm` | no | `RMSNorm::forward` |
-| `dropout` | no | `Dropout::forward` |
-| `rnn` | no | `RNN::forward` |
-| `lstm` | no | `LSTM::forward` |
-| `mse_loss` | no | `LossOps::mse_loss` |
-| `l1_loss` | no | `LossOps::l1_loss` |
-| `bce_with_logits_loss` | no | `LossOps::bce_with_logits_loss` |
-| `cross_entropy_loss` | no | `LossOps::cross_entropy_loss` |
-| `quantize` | no | `QuantizedOps::quantize` |
-| `dequantize` | no | `QuantizedOps::dequantize` |
-| `quantized_matmul` | no | `QuantizedOps::quantized_matmul` |
-| `sgd_step` | no | `SGD::step` |
-| `adam_step` | no | `Adam::step` |
-| `adamw_step` | no | `OptimizerOps::adamw_step` |
+**112 of 161 backend-executable operations migrated**, out of 174 catalog operations in total. The remaining 49 executable operations are still reachable only through the legacy operation-family traits.
+
+## Backend-executable operations
+
+| Operation | Site | Migrated | Legacy source |
+|---|---|:--:|---|
+| `tensor_from_data` | `Creation` | no | `TensorArgsData` |
+| `tensor_from_bytes` | `Creation` | no | `Tensor::from_bytes` |
+| `tensor_to_bytes` | `HostReadback` | no | `Tensor::to_bytes` |
+| `zeros` | `Creation` | no | `CreationOps::zeros` |
+| `ones` | `Creation` | no | `CreationOps::ones` |
+| `rand` | `Creation` | no | `CreationOps::rand` |
+| `randn` | `Creation` | no | `CreationOps::randn` |
+| `var_zeros` | `Creation` | no | `CreationOps::var_zeros` |
+| `var_ones` | `Creation` | no | `CreationOps::var_ones` |
+| `var_rand` | `Creation` | no | `CreationOps::var_rand` |
+| `var_randn` | `Creation` | no | `CreationOps::var_randn` |
+| `full` | `Creation` | no | `CreationOps::full` |
+| `arange` | `Creation` | no | `CreationOps::arange` |
+| `linspace` | `Creation` | no | `CreationOps::linspace` |
+| `sample` | `Creation` | no | `Tensor::sample` |
+| `relu` | `Kernel` | yes | `FloatOps::relu` |
+| `step` | `Kernel` | yes | `FloatOps::step` |
+| `mish` | `Kernel` | yes | `FloatOps::mish` |
+| `elu` | `Kernel` | yes | `FloatOps::elu` |
+| `gelu` | `Kernel` | yes | `FloatOps::gelu` |
+| `abs` | `Kernel` | yes | `FloatOps::abs` |
+| `exp` | `Kernel` | yes | `FloatOps::exp` |
+| `neg` | `Kernel` | yes | `FloatOps::neg` |
+| `sqrt` | `Kernel` | yes | `FloatOps::sqrt` |
+| `log` | `Kernel` | yes | `FloatOps::log` |
+| `tanh` | `Kernel` | yes | `FloatOps::tanh` |
+| `sigmoid` | `Kernel` | yes | `FloatOps::sigmoid` |
+| `swish` | `Kernel` | yes | `FloatOps::swish` |
+| `softmax` | `Kernel` | yes | `FloatOps::softmax` |
+| `add_scalar` | `Kernel` | yes | `FloatOps::add_scalar_float` |
+| `mul_scalar` | `Kernel` | yes | `FloatOps::mul_scalar_float` |
+| `powf` | `Kernel` | yes | `FloatOps::powf` |
+| `clamp` | `Kernel` | yes | `FloatOps::clamp` |
+| `sign` | `Kernel` | yes | `FloatOps::sign` |
+| `floor` | `Kernel` | yes | `FloatOps::floor` |
+| `ceil` | `Kernel` | yes | `FloatOps::ceil` |
+| `round` | `Kernel` | yes | `FloatOps::round` |
+| `log2` | `Kernel` | yes | `FloatOps::log2` |
+| `log10` | `Kernel` | yes | `FloatOps::log10` |
+| `sin` | `Kernel` | yes | `FloatOps::sin` |
+| `cos` | `Kernel` | yes | `FloatOps::cos` |
+| `tan` | `Kernel` | yes | `FloatOps::tan` |
+| `asin` | `Kernel` | yes | `FloatOps::asin` |
+| `acos` | `Kernel` | yes | `FloatOps::acos` |
+| `atan` | `Kernel` | yes | `FloatOps::atan` |
+| `atan2` | `Kernel` | yes | `FloatOps::atan2` |
+| `sinh` | `Kernel` | yes | `FloatOps::sinh` |
+| `cosh` | `Kernel` | yes | `FloatOps::cosh` |
+| `asinh` | `Kernel` | yes | `FloatOps::asinh` |
+| `acosh` | `Kernel` | yes | `FloatOps::acosh` |
+| `atanh` | `Kernel` | yes | `FloatOps::atanh` |
+| `erf` | `Kernel` | yes | `FloatOps::erf` |
+| `rsqrt` | `Kernel` | yes | `FloatOps::rsqrt` |
+| `trunc` | `Kernel` | yes | `FloatOps::trunc` |
+| `frac` | `Kernel` | yes | `FloatOps::frac` |
+| `fmod` | `Kernel` | yes | `FloatOps::fmod` |
+| `remainder` | `Kernel` | yes | `FloatOps::remainder` |
+| `add` | `Kernel` | yes | `NumericOps::add` |
+| `sub` | `Kernel` | yes | `NumericOps::sub` |
+| `mul` | `Kernel` | yes | `NumericOps::mul` |
+| `div` | `Kernel` | yes | `NumericOps::div` |
+| `sub_scalar` | `Kernel` | yes | `TensorOps::sub_scalar` |
+| `div_scalar` | `Kernel` | yes | `TensorOps::div_scalar` |
+| `maximum` | `Kernel` | yes | `TensorOps::maximum` |
+| `minimum` | `Kernel` | yes | `TensorOps::minimum` |
+| `abs_diff` | `Kernel` | yes | `TensorOps::abs_diff` |
+| `lerp` | `Kernel` | yes | `TensorOps::lerp` |
+| `cmp_eq` | `Kernel` | yes | `TensorOps::cmp_eq` |
+| `cmp_ne` | `Kernel` | yes | `TensorOps::cmp_ne` |
+| `cmp_lt` | `Kernel` | yes | `TensorOps::cmp_lt` |
+| `cmp_le` | `Kernel` | yes | `TensorOps::cmp_le` |
+| `cmp_gt` | `Kernel` | yes | `TensorOps::cmp_gt` |
+| `cmp_ge` | `Kernel` | yes | `TensorOps::cmp_ge` |
+| `logical_and` | `Kernel` | yes | `TensorOps::logical_and` |
+| `logical_or` | `Kernel` | yes | `TensorOps::logical_or` |
+| `logical_not` | `Kernel` | yes | `TensorOps::logical_not` |
+| `reshape` | `Kernel` | yes | `TensorOps::reshape` |
+| `transpose` | `Kernel` | yes | `TensorOps::transpose` |
+| `matmul` | `Kernel` | yes | `TensorOps::matmul` |
+| `dot` | `Kernel` | no | `Tensor::dot` |
+| `outer` | `Kernel` | no | `Tensor::outer` |
+| `broadcast_as` | `Kernel` | yes | `TensorOps::broadcast_as` |
+| `narrow` | `Kernel` | yes | `TensorOps::narrow` |
+| `squeeze` | `Kernel` | yes | `TensorOps::squeeze` |
+| `stack` | `Kernel` | yes | `TensorOps::stack` |
+| `concat` | `Kernel` | yes | `TensorOps::concat` |
+| `slice` | `Kernel` | yes | `TensorOps::slice` |
+| `flatten` | `Kernel` | yes | `TensorOps::flatten` |
+| `where_cond` | `Kernel` | yes | `TensorOps::where_cond` |
+| `gather` | `Kernel` | yes | `TensorOps::gather` |
+| `scatter` | `Kernel` | yes | `TensorOps::scatter` |
+| `index_select` | `Kernel` | yes | `TensorOps::index_select` |
+| `masked_fill` | `Kernel` | yes | `TensorOps::masked_fill` |
+| `unsqueeze` | `Kernel` | yes | `TensorOps::unsqueeze` |
+| `repeat` | `Kernel` | yes | `TensorOps::repeat` |
+| `pad` | `Kernel` | yes | `TensorOps::pad` |
+| `triu` | `Kernel` | yes | `TensorOps::triu` |
+| `tril` | `Kernel` | yes | `TensorOps::tril` |
+| `diag` | `Kernel` | yes | `TensorOps::diag` |
+| `chunk` | `Kernel` | no | `Tensor::chunk` |
+| `split` | `Kernel` | no | `Tensor::split` |
+| `addmm` | `Kernel` | yes | `TensorOps::addmm` |
+| `bmm` | `Kernel` | yes | `TensorOps::bmm` |
+| `scaled_dot_product_attention` | `Kernel` | yes | `TensorOps::scaled_dot_product_attention` |
+| `unfold` | `Kernel` | yes | `TensorOps::unfold` |
+| `pixel_shuffle` | `Kernel` | yes | `TensorOps::pixel_shuffle` |
+| `group_norm` | `Kernel` | yes | `TensorOps::group_norm` |
+| `instance_norm` | `Kernel` | yes | `TensorOps::instance_norm` |
+| `broadcast_left` | `Kernel` | yes | `TensorOps::broadcast_left` |
+| `float_to_scalar` | `HostReadback` | no | `TensorOps::float_to_scalar` |
+| `float_to_vec1` | `HostReadback` | no | `TensorOps::float_to_vec1` |
+| `int_to_scalar` | `HostReadback` | no | `TensorOps::int_to_scalar` |
+| `int_to_vec1` | `HostReadback` | no | `TensorOps::int_to_vec1` |
+| `to_dtype` | `Kernel` | no | `TensorOps::tensor_to_dtype` |
+| `sum_all` | `Kernel` | yes | `ReductionOps::sum_all` |
+| `mean_all` | `Kernel` | yes | `ReductionOps::mean_all` |
+| `max_all` | `Kernel` | yes | `ReductionOps::max_all` |
+| `min_all` | `Kernel` | yes | `ReductionOps::min_all` |
+| `sum_dim` | `Kernel` | yes | `ReductionOps::sum_dim` |
+| `sum_keepdim` | `Kernel` | yes | `ReductionOps::sum_keepdim` |
+| `mean_dim` | `Kernel` | yes | `ReductionOps::mean_dim` |
+| `mean_keepdim` | `Kernel` | yes | `ReductionOps::mean_keepdim` |
+| `max_dim` | `Kernel` | yes | `ReductionOps::max_dim` |
+| `max_keepdim` | `Kernel` | yes | `ReductionOps::max_keepdim` |
+| `min_dim` | `Kernel` | yes | `ReductionOps::min_dim` |
+| `min_keepdim` | `Kernel` | yes | `ReductionOps::min_keepdim` |
+| `argmax` | `Kernel` | yes | `ReductionOps::argmax` |
+| `argmin` | `Kernel` | yes | `ReductionOps::argmin` |
+| `prod_all` | `Kernel` | yes | `ReductionOps::prod_all` |
+| `prod_dim` | `Kernel` | yes | `ReductionOps::prod_dim` |
+| `cumsum` | `Kernel` | yes | `ReductionOps::cumsum` |
+| `topk` | `Kernel` | yes | `ReductionOps::topk` |
+| `argsort` | `Kernel` | yes | `ReductionOps::argsort` |
+| `norm` | `Kernel` | no | `Tensor::norm` |
+| `var_all` | `Kernel` | no | `Tensor::var_all` |
+| `var_dim` | `Kernel` | no | `Tensor::var_dim` |
+| `var_keepdim` | `Kernel` | no | `Tensor::var_keepdim` |
+| `std_all` | `Kernel` | no | `Tensor::std_all` |
+| `std_dim` | `Kernel` | no | `Tensor::std_dim` |
+| `std_keepdim` | `Kernel` | no | `Tensor::std_keepdim` |
+| `layer_norm` | `Kernel` | no | `ModuleOps::layer_norm` |
+| `batch_norm` | `Kernel` | no | `ModuleOps::batch_norm` |
+| `embedding` | `Kernel` | no | `ModuleOps::embedding` |
+| `conv1d` | `Kernel` | no | `ModuleOps::conv1d` |
+| `conv2d` | `Kernel` | yes | `ModuleOps::conv2d` |
+| `conv_transpose2d` | `Kernel` | no | `ModuleOps::conv_transpose2d` |
+| `max_pool2d` | `Kernel` | yes | `ModuleOps::max_pool2d` |
+| `avg_pool2d` | `Kernel` | yes | `ModuleOps::avg_pool2d` |
+| `adaptive_avg_pool2d` | `Kernel` | no | `ModuleOps::adaptive_avg_pool2d` |
+| `linear` | `Kernel` | no | `Linear::forward` |
+| `rms_norm` | `Kernel` | no | `RMSNorm::forward` |
+| `dropout` | `Kernel` | no | `Dropout::forward` |
+| `rnn` | `Kernel` | no | `RNN::forward` |
+| `lstm` | `Kernel` | no | `LSTM::forward` |
+| `mse_loss` | `Kernel` | no | `LossOps::mse_loss` |
+| `l1_loss` | `Kernel` | no | `LossOps::l1_loss` |
+| `bce_with_logits_loss` | `Kernel` | no | `LossOps::bce_with_logits_loss` |
+| `cross_entropy_loss` | `Kernel` | no | `LossOps::cross_entropy_loss` |
+| `quantize` | `Kernel` | no | `QuantizedOps::quantize` |
+| `dequantize` | `Kernel` | no | `QuantizedOps::dequantize` |
+| `quantized_matmul` | `Kernel` | no | `QuantizedOps::quantized_matmul` |
+
+## Operations the execution contract cannot carry
+
+These are not pending migrations. Each one needs a change to `Execute`/`ExecutionRequest` before an executor for it could be written, and until then the stable tensor surface reaches it through the legacy path by necessity rather than by omission.
+
+| Operation | Site | Why | Legacy source |
+|---|---|---|---|
+| `add_in_place` | `Mutation` | writes through an operand; execution borrows operands shared | `Tensor::add_` |
+| `sub_in_place` | `Mutation` | writes through an operand; execution borrows operands shared | `Tensor::sub_` |
+| `mul_in_place` | `Mutation` | writes through an operand; execution borrows operands shared | `Tensor::mul_` |
+| `div_in_place` | `Mutation` | writes through an operand; execution borrows operands shared | `Tensor::div_` |
+| `zero_in_place` | `Mutation` | writes through an operand; execution borrows operands shared | `Tensor::zero_` |
+| `fill_in_place` | `Mutation` | writes through an operand; execution borrows operands shared | `Tensor::fill_` |
+| `to_device` | `DeviceTransfer` | produces storage on another backend, which the executor cannot name | `TransferTo` |
+| `require_grad` | `GraphState` | acts on autograd state, not on an allocation | `Tensor::require_grad` |
+| `detach` | `GraphState` | acts on autograd state, not on an allocation | `Tensor::detach` |
+| `backward` | `GraphState` | acts on autograd state, not on an allocation | `Tensor::backward` |
+| `sgd_step` | `Mutation` | writes through an operand; execution borrows operands shared | `SGD::step` |
+| `adam_step` | `Mutation` | writes through an operand; execution borrows operands shared | `Adam::step` |
+| `adamw_step` | `Mutation` | writes through an operand; execution borrows operands shared | `OptimizerOps::adamw_step` |

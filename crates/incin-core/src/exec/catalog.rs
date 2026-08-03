@@ -119,6 +119,80 @@ pub enum LayoutRule {
     HostOnly,
 }
 
+/// Where an operation's result is produced, and therefore what shape of
+/// contract can carry it.
+///
+/// This says nothing about whether an operation is implemented. It says what
+/// kind of implementation is even possible, and it exists because the CPU
+/// migration's remainder used to be one number. One number implies every
+/// unmigrated operation is the same kind of missing work. It is not: most are a
+/// kernel nobody has routed yet, but thirteen of them cannot be an
+/// `Execute<Descriptor<O>>` implementation as that trait is currently written,
+/// so counting them beside a missing kernel describes a task that does not
+/// exist and hides one that does.
+///
+/// [`ExecutionSite::is_backend_executable`] is the predicate that separates the
+/// two. Every variant states its own reason rather than deferring to prose.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ExecutionSite {
+    /// Operands in, one allocation out. `Execute<Descriptor<O>>` expresses this
+    /// directly, so an unmigrated operation here is unfinished work rather than
+    /// an unfinished contract.
+    Kernel,
+    /// No operand: the result is built from the descriptor's attributes alone.
+    /// Still executable, because `dispatch::execute` accepts an empty operand
+    /// slice and `Execute::Output` is an associated type, so the variable forms
+    /// may return the backend's trainable-variable handle instead of storage.
+    Creation,
+    /// The result leaves the device as a host value rather than staying an
+    /// allocation. Executable for the same reason: `Output` is an associated
+    /// type and does not have to be storage.
+    HostReadback,
+    /// The operation writes through one of its operands instead of returning a
+    /// fresh result. Not executable: `ExecutionRequest::inputs` is a slice of
+    /// shared borrows, so an executor cannot reach a mutable operand at all.
+    Mutation,
+    /// The result is an allocation on a backend other than the one asked to run
+    /// the operation. Not executable: the destination backend is reachable
+    /// neither from `&self` nor from the descriptor, which names a `DeviceId`
+    /// and not a backend value.
+    DeviceTransfer,
+    /// The operation's effect is on autograd state rather than on an
+    /// allocation. Not executable, though for two different reasons:
+    /// `require_grad` and `detach` change the tensor wrapper's gradient marker
+    /// and make no backend call whatsoever, while `backward` is a real backend
+    /// call whose result is the gradient map for a whole tape rather than an
+    /// output derived from this descriptor's operands, so validating it against
+    /// operand metadata would prove nothing.
+    GraphState,
+}
+
+impl ExecutionSite {
+    /// Whether `Execute<Descriptor<O>>` on the executing backend can carry this
+    /// operation's result.
+    ///
+    /// A `false` here is a contract gap, not a backlog item. Closing one means
+    /// changing the execution trait, which is why they are counted separately
+    /// from operations that merely have not been migrated yet.
+    #[must_use]
+    pub const fn is_backend_executable(self) -> bool {
+        matches!(self, Self::Kernel | Self::Creation | Self::HostReadback)
+    }
+
+    /// Short reason a non-executable site cannot be reached, for reports.
+    #[must_use]
+    pub const fn blocking_reason(self) -> Option<&'static str> {
+        match self {
+            Self::Kernel | Self::Creation | Self::HostReadback => None,
+            Self::Mutation => Some("writes through an operand; execution borrows operands shared"),
+            Self::DeviceTransfer => {
+                Some("produces storage on another backend, which the executor cannot name")
+            }
+            Self::GraphState => Some("acts on autograd state, not on an allocation"),
+        }
+    }
+}
+
 /// One immutable row derived from the authoritative operation declaration.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OperationCatalogEntry {
@@ -142,6 +216,56 @@ pub struct OperationCatalogEntry {
     pub layout: LayoutRule,
     pub legacy_source: &'static str,
     pub capture_eligible: bool,
+    pub site: ExecutionSite,
+}
+
+/// Classify one operation by where its result is produced.
+///
+/// The default is [`ExecutionSite::Kernel`], which is the fail-closed answer: a
+/// newly declared operation is assumed to owe an executor. Being wrong that way
+/// leaves an unmigrated operation visible in the migration report; being wrong
+/// the other way would silently excuse it.
+const fn execution_site(operation: OperationKind) -> ExecutionSite {
+    match operation {
+        // Every one of these calls its backend method with `&mut`, either on a
+        // storage handle or on a `RawVar`, and returns nothing.
+        OperationKind::AddInPlace
+        | OperationKind::SubInPlace
+        | OperationKind::MulInPlace
+        | OperationKind::DivInPlace
+        | OperationKind::ZeroInPlace
+        | OperationKind::FillInPlace
+        | OperationKind::SgdStep
+        | OperationKind::AdamStep
+        | OperationKind::AdamWStep => ExecutionSite::Mutation,
+        OperationKind::ToDevice => ExecutionSite::DeviceTransfer,
+        OperationKind::RequireGrad | OperationKind::Detach | OperationKind::Backward => {
+            ExecutionSite::GraphState
+        }
+        // Declared by `OutputRule::HostValue` too; kept as an explicit list
+        // because the two answer different questions and a future host-value
+        // operation might well be executable.
+        OperationKind::TensorToBytes
+        | OperationKind::ToHostFloatScalar
+        | OperationKind::ToHostFloatVec
+        | OperationKind::ToHostIntScalar
+        | OperationKind::ToHostIntVec => ExecutionSite::HostReadback,
+        OperationKind::TensorFromData
+        | OperationKind::TensorFromBytes
+        | OperationKind::Zeros
+        | OperationKind::Ones
+        | OperationKind::UniformRandom
+        | OperationKind::NormalRandom
+        | OperationKind::VariableZeros
+        | OperationKind::VariableOnes
+        | OperationKind::VariableUniformRandom
+        | OperationKind::VariableNormalRandom
+        | OperationKind::Full
+        | OperationKind::Arange
+        | OperationKind::Linspace
+        | OperationKind::Sample => ExecutionSite::Creation,
+        _ => ExecutionSite::Kernel,
+    }
 }
 
 const fn profile_semantics(
@@ -528,6 +652,7 @@ const fn entry(
             operation,
             OperationKind::Sample | OperationKind::Backward
         ),
+        site: execution_site(operation),
     }
 }
 
@@ -3550,7 +3675,7 @@ pub fn catalog_entry(operation: OperationKind) -> Option<&'static OperationCatal
 pub fn operation_semantics_document() -> alloc::string::String {
     use core::fmt::Write as _;
     let mut out = alloc::string::String::from(
-        "# Canonical operation semantics\n\nThis file is generated from `incin_core::exec::OPERATION_CATALOG`; the Rust catalog is authoritative. Families classify operations and never imply backend support. `TypedContract` and `TypedInference` refer to the exact descriptor's typed attribute validator and checked inference branch; they do not permit a backend-specific default.\n\n| ID | Descriptor | Attributes | Input/output arity | Rank | Broadcast | Dtype/output | Empty/non-finite | Gradient | Deterministic | Layout | Legacy mapping |\n|---|---|---|---|---|---|---|---|---|:--:|---|---|\n",
+        "# Canonical operation semantics\n\nThis file is generated from `incin_core::exec::OPERATION_CATALOG`; the Rust catalog is authoritative. Families classify operations and never imply backend support. `TypedContract` and `TypedInference` refer to the exact descriptor's typed attribute validator and checked inference branch; they do not permit a backend-specific default. `Site` records where the result is produced and therefore whether `Execute<Descriptor<O>>` can carry it: `Kernel`, `Creation` and `HostReadback` can, while `Mutation`, `DeviceTransfer` and `GraphState` cannot be expressed by that trait as it currently stands.\n\n| ID | Descriptor | Attributes | Site | Input/output arity | Rank | Broadcast | Dtype/output | Empty/non-finite | Gradient | Deterministic | Layout | Legacy mapping |\n|---|---|---|---|---|---|---|---|---|---|:--:|---|---|\n",
     );
     for row in OPERATION_CATALOG {
         let max_arity = if *row.input_arity.end() == usize::MAX {
@@ -3565,10 +3690,11 @@ pub fn operation_semantics_document() -> alloc::string::String {
         };
         let _ = writeln!(
             out,
-            "| `{}` | `{}` | `{}` | {}-{} / {}-{} | {}-{} | `{:?}` | `{:?}` / `{:?}` | `{:?}` / `{:?}` | `{:?}` | {} | `{:?}` | `{}` |",
+            "| `{}` | `{}` | `{}` | `{:?}` | {}-{} / {}-{} | {}-{} | `{:?}` | `{:?}` / `{:?}` | `{:?}` / `{:?}` | `{:?}` | {} | `{:?}` | `{}` |",
             row.name,
             row.descriptor,
             row.attributes,
+            row.site,
             row.input_arity.start(),
             max_arity,
             row.output_arity.start(),
@@ -3607,6 +3733,116 @@ mod tests {
             );
             assert!(names.insert(row.name), "duplicate name {}", row.name);
             assert_eq!(row.operation.name(), row.name);
+        }
+    }
+
+    /// The execution site agrees with the arity and output rules that were
+    /// already in the catalog.
+    ///
+    /// The site is a second description of facts the catalog partly recorded
+    /// already, so it can be checked against them rather than merely asserted.
+    /// A creation operation is exactly one that takes no operand; a host
+    /// readback is exactly one whose output rule is `HostValue` and whose
+    /// tensor output count is zero. Where the two descriptions could drift,
+    /// this fails.
+    #[test]
+    fn the_execution_site_agrees_with_the_arity_and_output_rules() {
+        for row in OPERATION_CATALOG {
+            match row.site {
+                ExecutionSite::Creation => assert_eq!(
+                    (*row.input_arity.start(), *row.input_arity.end()),
+                    (0, 0),
+                    "{} is classified as a creation but accepts operands",
+                    row.name,
+                ),
+                ExecutionSite::HostReadback => {
+                    assert_eq!(
+                        row.output,
+                        OutputRule::HostValue,
+                        "{} is classified as a host readback but does not produce a host value",
+                        row.name,
+                    );
+                    assert_eq!(
+                        *row.output_arity.end(),
+                        0,
+                        "{} is classified as a host readback but returns a tensor",
+                        row.name,
+                    );
+                }
+                // The converse of the readback case: a host value must be
+                // classified as one, or the report would count it as a kernel
+                // that nobody has written.
+                ExecutionSite::Kernel => assert_ne!(
+                    row.output,
+                    OutputRule::HostValue,
+                    "{} produces a host value but is classified as a kernel",
+                    row.name,
+                ),
+                ExecutionSite::Mutation => assert!(
+                    matches!(
+                        row.profile,
+                        SemanticProfile::Mutation | SemanticProfile::Optimizer
+                    ),
+                    "{} is classified as a mutation but its profile is {:?}",
+                    row.name,
+                    row.profile,
+                ),
+                ExecutionSite::DeviceTransfer => assert!(
+                    !row.same_device,
+                    "{} moves between devices but is declared same-device",
+                    row.name,
+                ),
+                ExecutionSite::GraphState => assert_eq!(
+                    row.profile,
+                    SemanticProfile::Autograd,
+                    "{} is classified as graph state but its profile is not autograd",
+                    row.name,
+                ),
+            }
+
+            assert_eq!(
+                row.site.is_backend_executable(),
+                row.site.blocking_reason().is_none(),
+                "{} states a blocking reason inconsistent with its executability",
+                row.name,
+            );
+        }
+    }
+
+    /// Every mutating and autograd operation is classified as such.
+    ///
+    /// The classification defaults to `Kernel`, which is the fail-closed
+    /// direction for a new operation but the wrong answer for these two
+    /// profiles. Deriving the expectation from the profile rather than from a
+    /// second hand-written list means a newly declared in-place operation
+    /// fails here instead of being silently counted as an unwritten kernel.
+    #[test]
+    fn every_mutating_and_autograd_operation_is_classified_by_its_profile() {
+        for row in OPERATION_CATALOG {
+            match row.profile {
+                SemanticProfile::Mutation | SemanticProfile::Optimizer => assert_eq!(
+                    row.site,
+                    ExecutionSite::Mutation,
+                    "{} writes through an operand but is classified as {:?}",
+                    row.name,
+                    row.site,
+                ),
+                SemanticProfile::Autograd => assert_eq!(
+                    row.site,
+                    ExecutionSite::GraphState,
+                    "{} acts on autograd state but is classified as {:?}",
+                    row.name,
+                    row.site,
+                ),
+                SemanticProfile::Creation => assert_eq!(
+                    row.site,
+                    ExecutionSite::Creation,
+                    "{} creates storage from attributes but is classified as {:?}",
+                    row.name,
+                    row.site,
+                ),
+                _ => {}
+            }
         }
     }
 
