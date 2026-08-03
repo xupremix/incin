@@ -35,7 +35,7 @@ treated as settled.
 
 | Surface | Why it still moves |
 |---|---|
-| The per-operation executor bodies in `cpu/canonical.rs` | 26 backend-executable operations still have no canonical executor. Each is additive |
+| The per-operation executor bodies in `cpu/canonical.rs` | 24 backend-executable operations still have no canonical executor. Each is additive |
 | The nine operation-family supertraits on `Backend` | Removing them is FND-005's completion condition. It is source-breaking for every backend |
 | The broad family capability rows | `Pointwise`, `Reduction`, `Reshape`, `MatMul`, `Conv2d`, `Pool2d`, `Storage`, `Fill`, `Random`, `Normalization`, `Broadcast` are deleted once nothing resolves through them |
 | `CapabilityRule`'s single dtype set | It describes an operation, but `dispatch::execute` applies it to each operand in turn. An operation whose operands differ in dtype by construction cannot be stated. This is what blocks `embedding` |
@@ -47,7 +47,7 @@ treated as settled.
 Each step is blocked by the one above it, and the reason is stated rather than
 implied.
 
-1. **Migrate the remaining 26 backend-executable operations.** Additive, and the
+1. **Migrate the remaining 24 backend-executable operations.** Additive, and the
    count is generated, so progress cannot be overstated. The order that costs
    least is by rule shape: an operation joining an existing capability group is
    one name in a list, and one that needs a new group is a new arm in every

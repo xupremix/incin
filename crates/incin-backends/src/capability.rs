@@ -144,7 +144,10 @@ macro_rules! cpu_descriptor_operations {
             // recording. They are a different operation family and a different
             // trait method, which is precisely why the group is named for the
             // shape rather than for the family.
-            normalization = [Softmax, LayerNorm, BatchNorm],
+            // `rms_norm` scales by a root mean square without subtracting a
+            // mean, which is what separates it from `layer_norm`, but the row
+            // the two produce is identical.
+            normalization = [Softmax, LayerNorm, BatchNorm, RmsNorm],
             // `embedding` is the module-family operation deliberately absent
             // from every group above, and it is absent because of the contract
             // rather than because nobody wrote the executor. Its two operands
@@ -188,6 +191,11 @@ macro_rules! cpu_descriptor_operations {
                 // tensor one because that is what the reduce behind them holds.
                 Dot, Outer
             ],
+            // `linear` rewrites into a transpose and a matmul, so it inherits
+            // the matmul constraint. It is a group of its own rather than a
+            // name in the one above because the operations there carry no bias,
+            // and the rank bound has to admit the rank-one one this has.
+            composed_matmul_bias = [Linear],
             // The losses that `LossOps` supplies as real composed defaults
             // rather than as stubs: each rewrites into `sub`, `mul`, `abs` and
             // an all-reduce. They inherit the reduction group's f32-only claim
@@ -246,6 +254,7 @@ macro_rules! cuda_descriptor_operations {
             native_tensor = [],
             composed_tensor = [],
             composed_matmul = [],
+            composed_matmul_bias = [],
             quantizing = [],
             quantized = [],
             composed_reduction = []
@@ -274,6 +283,7 @@ macro_rules! wgpu_descriptor_operations {
             native_tensor = [],
             composed_tensor = [],
             composed_matmul = [],
+            composed_matmul_bias = [],
             quantizing = [],
             quantized = [],
             composed_reduction = []
@@ -301,6 +311,7 @@ macro_rules! metal_descriptor_operations {
             native_tensor = [],
             composed_tensor = [],
             composed_matmul = [],
+            composed_matmul_bias = [],
             quantizing = [],
             quantized = [],
             composed_reduction = []
@@ -340,6 +351,7 @@ macro_rules! descriptor_capability_rules {
         native_tensor = [$($native_tensor_op:ident),* $(,)?],
         composed_tensor = [$($composed_tensor_op:ident),* $(,)?],
         composed_matmul = [$($composed_matmul_op:ident),* $(,)?],
+        composed_matmul_bias = [$($composed_matmul_bias_op:ident),* $(,)?],
         quantizing = [$($quantizing_op:ident),* $(,)?],
         quantized = [$($quantized_op:ident),* $(,)?],
         composed_reduction = [$($composed_reduction_op:ident),* $(,)?]
@@ -431,6 +443,16 @@ macro_rules! descriptor_capability_rules {
                 descriptor_max_rank(OperationKind::$composed_matmul_op),
                 true,
             ),)*
+            // Same constraint as the product they wrap, with the rank bound
+            // widened to admit the rank-one bias that travels beside it.
+            $(composed_ranked(
+                OperationKind::$composed_matmul_bias_op,
+                $matmul,
+                $matmul_layouts,
+                descriptor_min_rank(OperationKind::$composed_matmul_bias_op),
+                descriptor_max_rank(OperationKind::$composed_matmul_bias_op),
+                true,
+            ),)*
             // The compression reads the float set its kernel accepts, which is
             // narrower than the elementwise one: it matches on the buffer
             // variant rather than converting.
@@ -504,7 +526,10 @@ const fn descriptor_min_rank(operation: OperationKind) -> usize {
         // weight and refuses a left operand with fewer than two axes.
         OperationKind::QuantizedMatMul => 2,
         OperationKind::BatchedMatMul => 3,
-        OperationKind::Softmax | OperationKind::LayerNorm => 1,
+        OperationKind::Softmax | OperationKind::LayerNorm | OperationKind::RmsNorm => 1,
+        // The weight is a matrix and the input has at least the feature axis,
+        // but the bias beside them is rank one and this row speaks for it too.
+        OperationKind::Linear => 1,
         // `BatchNormAttributes::validate` refuses an input without a channel
         // axis, but the weight, bias and running statistics are per-channel
         // vectors, so rank one is what this row has to admit.

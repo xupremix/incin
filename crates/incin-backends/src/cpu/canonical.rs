@@ -1599,6 +1599,84 @@ impl<T: DType, D: Device> Execute<Descriptor<op::GroupNorm>> for CpuBackendImpl<
     }
 }
 
+/// An affine layer: the operand against a transposed weight, plus a bias.
+///
+/// The transpose is the whole reason this is not just a matmul. `Linear` stores
+/// its weight as `[out, in]`, which is the layout every checkpoint format uses,
+/// and the product needs `[in, out]`. Doing it here rather than asking the
+/// caller to pre-transpose keeps the descriptor's operand order the same as the
+/// module's field order.
+impl<T: DType, D: Device> Execute<Descriptor<op::Linear>> for CpuBackendImpl<T, D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::Linear>, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::Linear;
+        let (input, weight, bias) = match request.inputs {
+            [input, weight] => (input, weight, None),
+            [input, weight, bias] => (input, weight, Some(bias)),
+            _ => {
+                return Err(invalid(
+                    operation,
+                    "linear expects an input, a weight and an optional bias",
+                ));
+            }
+        };
+        let training = records_gradients(request.context);
+        let input = operand(input, operation)?;
+        let weight = operand(weight, operation)?;
+        let bias = bias.map(|bias| operand(bias, operation)).transpose()?;
+        admitted(self, operation, input, training)?;
+        admitted(self, operation, weight, training)?;
+        let wrap = |error| kernel_error(operation, error);
+
+        let transposed = <Self as TensorOps<Self>>::transpose::<T>(weight, 0, 1).map_err(wrap)?;
+        let product =
+            crate::cpu::ops::shape_ops::matmul_storage(input, &transposed).map_err(wrap)?;
+        match bias {
+            None => Ok(product),
+            Some(bias) => {
+                admitted(self, operation, bias, training)?;
+                // The add broadcasts, which is what lets a `[out]` bias meet a
+                // `[.., out]` product without the caller reshaping it.
+                crate::cpu::ops::elementwise::add_storage(&product, bias).map_err(wrap)
+            }
+        }
+    }
+}
+
+/// Scale by the root mean square over the trailing axis, then by a weight.
+///
+/// No mean is subtracted, which is the whole difference from `layer_norm` and
+/// the reason this cannot be routed to it.
+impl<T: DType, D: Device> Execute<Descriptor<op::RmsNorm>> for CpuBackendImpl<T, D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::RmsNorm>, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::RmsNorm;
+        let training = records_gradients(request.context);
+        let (input, weight) = binary_operands(self, request.inputs, operation, training)?;
+        let epsilon = request.operation.descriptor().attributes().epsilon;
+        let wrap = |error| kernel_error(operation, error);
+
+        // The trailing axis, and the keep-dim reduction over it so the divisor
+        // broadcasts back against the operand.
+        let axis = input.shape.len().saturating_sub(1);
+        let squared = crate::cpu::ops::elementwise::mul_storage(input, input).map_err(wrap)?;
+        let mean = <Self as ReductionOps<Self>>::mean_keepdim::<T>(&squared, axis).map_err(wrap)?;
+        let guarded =
+            <Self as FloatOps<Self>>::add_scalar_float::<T>(&mean, epsilon).map_err(wrap)?;
+        let scale = <Self as FloatOps<Self>>::sqrt::<T>(&guarded).map_err(wrap)?;
+        let normalized = crate::cpu::ops::elementwise::div_storage(input, &scale).map_err(wrap)?;
+        crate::cpu::ops::elementwise::mul_storage(&normalized, weight).map_err(wrap)
+    }
+}
+
 /// Normalize each channel independently.
 impl<T: DType, D: Device> Execute<Descriptor<op::InstanceNorm>> for CpuBackendImpl<T, D> {
     type Output = CpuStorage;
@@ -2311,8 +2389,8 @@ mod tests {
     use incin_core::exec::GradMode;
     use incin_core::exec::catalog::{
         AxisAttributes, BatchNormAttributes, ChunkAttributes, Conv1dAttributes, Conv2dAttributes,
-        DTypeAttributes, LayerNormAttributes, LossAttributes, NoAttributes, NormAttributes,
-        QuantizationAttributes, ShapeAttributes, SplitAttributes,
+        DTypeAttributes, EpsilonAttributes, LayerNormAttributes, LinearAttributes, LossAttributes,
+        NoAttributes, NormAttributes, QuantizationAttributes, ShapeAttributes, SplitAttributes,
     };
     use incin_core::exec::{ExecutionContext, TensorHandle, dispatch};
     use incin_core::prelude::{Cpu, Local};
@@ -2783,6 +2861,73 @@ mod tests {
         assert_eq!(output.shape.to_vec(), vec![2]);
         assert_eq!(output.get(&[0]), 1.0);
         assert_eq!(output.get(&[1]), 9.0);
+    }
+
+    /// A linear layer transposes its weight before the product.
+    ///
+    /// The weight is stored as `[out, in]`, so a rectangular one is the only
+    /// shape that catches a missing transpose: with a square weight the product
+    /// would still have the right shape and only the values would be wrong,
+    /// which is the failure this asserts against.
+    #[test]
+    fn a_linear_layer_transposes_its_weight_and_adds_its_bias() {
+        let context = context();
+        // One sample of three features, into two outputs.
+        let input = storage(&[1.0, 2.0, 3.0], &[1, 3]);
+        let weight = storage(&[1.0, 0.0, 0.0, 0.0, 1.0, 0.0], &[2, 3]);
+        let bias = storage(&[10.0, 20.0], &[2]);
+
+        let plain = dispatch::execute::<op::Linear, _>(
+            &context,
+            LinearAttributes { has_bias: false },
+            &[handle(&input), handle(&weight)],
+        )
+        .expect("linear executes");
+        assert_eq!(plain.shape.to_vec(), vec![1, 2]);
+        // Row zero of the weight selects feature zero, row one selects feature
+        // one.
+        assert_eq!(plain.get(&[0, 0]), 1.0);
+        assert_eq!(plain.get(&[0, 1]), 2.0);
+
+        let biased = dispatch::execute::<op::Linear, _>(
+            &context,
+            LinearAttributes { has_bias: true },
+            &[handle(&input), handle(&weight), handle(&bias)],
+        )
+        .expect("a biased linear executes");
+        assert_eq!(biased.get(&[0, 0]), 11.0);
+        assert_eq!(biased.get(&[0, 1]), 22.0);
+    }
+
+    /// RMS norm divides by the root mean square and subtracts no mean.
+    ///
+    /// The input is deliberately not centred: its mean is two, so an
+    /// implementation that subtracted one would give a visibly different answer
+    /// rather than a slightly different one. Root mean square of [1, 2, 3] is
+    /// sqrt(14/3), so the first element lands at 1/sqrt(14/3).
+    #[test]
+    fn rms_norm_scales_by_the_root_mean_square_without_centring() {
+        let context = context();
+        let input = storage(&[1.0, 2.0, 3.0], &[1, 3]);
+        let weight = storage(&[1.0, 1.0, 1.0], &[3]);
+
+        let output = dispatch::execute::<op::RmsNorm, _>(
+            &context,
+            EpsilonAttributes { epsilon: 0.0 },
+            &[handle(&input), handle(&weight)],
+        )
+        .expect("rms_norm executes");
+        assert_eq!(output.shape.to_vec(), vec![1, 3]);
+
+        let root_mean_square = (14.0f64 / 3.0).sqrt();
+        for (index, original) in [1.0, 2.0, 3.0].into_iter().enumerate() {
+            let expected: f64 = original / root_mean_square;
+            let actual = output.get(&[0, index]);
+            assert!(
+                (actual - expected).abs() < 1e-6,
+                "element {index}: expected {expected}, got {actual}"
+            );
+        }
     }
 
     /// Compression and expansion round-trip within the error the block format

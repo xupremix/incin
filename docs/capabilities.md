@@ -98,7 +98,7 @@ run time.
 | `l1_loss` | `f32` | — | — |
 | `layer_norm` | `f32` | — | — |
 | `lerp` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
-| `linear` | — | — | — |
+| `linear` | `f32` | — | — |
 | `linspace` | — | — | — |
 | `log` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `log10` | `bf16`, `f16`, `f32`, `f64` | — | — |
@@ -145,7 +145,7 @@ run time.
 | `repeat` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `require_grad` | — | — | — |
 | `reshape` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `q8_0` | `i64`, `bf16`, `f16`, `f32`, `f64` | `f32` |
-| `rms_norm` | — | — | — |
+| `rms_norm` | `f32` | — | — |
 | `rnn` | — | — | — |
 | `round` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `rsqrt` | `bf16`, `f16`, `f32`, `f64` | — | — |
@@ -295,6 +295,7 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `softmax` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
 | `layer_norm` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
 | `batch_norm` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
+| `rms_norm` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
 | `argmax` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
 | `argmin` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
 | `argsort` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 1+ | yes | native |
@@ -345,6 +346,7 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `scaled_dot_product_attention` | `f32` | `contiguous`, `strided` | 2+ | yes | composed |
 | `dot` | `f32` | `contiguous`, `strided` | any | yes | composed |
 | `outer` | `f32` | `contiguous`, `strided` | any | yes | composed |
+| `linear` | `f32` | `contiguous`, `strided` | 1+ | yes | composed |
 | `quantize` | `f32` | `contiguous` | any | no | native |
 | `dequantize` | `q8_0` | `contiguous` | any | no | native |
 | `quantized_matmul` | `q8_0` | `contiguous` | 2+ | no | native |

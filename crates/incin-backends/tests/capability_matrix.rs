@@ -11,8 +11,8 @@ use incin_core::backend_authoring::{
     TensorOps,
 };
 use incin_core::exec::catalog::{
-    AxisVarianceAttributes, ChunkAttributes, NormAttributes, SplitAttributes, VarianceAttributes,
-    op,
+    AxisVarianceAttributes, ChunkAttributes, EpsilonAttributes, LinearAttributes, NormAttributes,
+    SplitAttributes, VarianceAttributes, op,
 };
 use incin_core::exec::{
     Capabilities, CapabilityQuery, DTypeRule, ExecutionContext, ImplementationKind, LayoutClass,
@@ -507,7 +507,7 @@ fn cpu_probe_shape(operation: OperationKind) -> &'static [usize] {
         OperationKind::Conv1dExact => &[1, 1, 2],
         OperationKind::ConvTranspose2d => &[1, 1, 2, 2],
         OperationKind::AdaptiveAvgPool2dExact => &[1, 1, 1, 1],
-        OperationKind::LayerNorm => &[2, 2],
+        OperationKind::LayerNorm | OperationKind::RmsNorm | OperationKind::Linear => &[2, 2],
         OperationKind::ToDType => &[2, 2],
         // Probed with `Mean`, so the result is the scalar the reduction
         // produces rather than the elementwise buffer feeding it.
@@ -706,6 +706,40 @@ fn execute_cpu_probe(operation: OperationKind, layout: LayoutClass) -> CpuStorag
             let input = f32_storage(&[2, 2], &[1.0, 2.0, 3.0, 4.0]);
             let weight = f32_storage(&[2], &[1.0, 1.0]);
             B::layer_norm::<f32>(&input, &weight, None, 1e-5).unwrap()
+        }
+        // Both dispatch, because neither composition exists on a backend
+        // trait: `Linear::forward` and `RMSNorm::forward` are module methods
+        // over typed tensors, and the executor is the first place either one
+        // exists over storage.
+        OperationKind::Linear | OperationKind::RmsNorm => {
+            let context = ExecutionContext::new(CpuBackendImpl::<f32, Cpu>::new());
+            // Square, so the strided case transposes without moving the
+            // trailing extent that both weights are sized against.
+            let input = transpose_if_requested(f32_storage(&[2, 2], &[1.0, 2.0, 3.0, 4.0]), layout);
+            let weight = f32_storage(&[2, 2], &[1.0, 0.0, 0.0, 1.0]);
+            let input_handle =
+                TensorHandle::from_storage::<CpuBackendImpl<f32, Cpu>, f32, Local>(&input);
+            let weight_handle =
+                TensorHandle::from_storage::<CpuBackendImpl<f32, Cpu>, f32, Local>(&weight);
+            if operation == OperationKind::Linear {
+                dispatch::execute::<op::Linear, _>(
+                    &context,
+                    LinearAttributes { has_bias: false },
+                    &[input_handle, weight_handle],
+                )
+                .unwrap()
+            } else {
+                // The weight is per-feature for this one, so it is rank one.
+                let scale = f32_storage(&[2], &[1.0, 1.0]);
+                let scale_handle =
+                    TensorHandle::from_storage::<CpuBackendImpl<f32, Cpu>, f32, Local>(&scale);
+                dispatch::execute::<op::RmsNorm, _>(
+                    &context,
+                    EpsilonAttributes { epsilon: 1e-5 },
+                    &[input_handle, scale_handle],
+                )
+                .unwrap()
+            }
         }
         OperationKind::ToDType => {
             let input = transpose_if_requested(f32_storage(&[2, 2], &[1.0, 2.0, 3.0, 4.0]), layout);
@@ -1149,6 +1183,8 @@ fn every_advertised_cpu_dtype_executes_its_registered_operation() {
                 | OperationKind::AvgPool2d
                 | OperationKind::AdaptiveAvgPool2dExact
                 | OperationKind::LayerNorm
+                | OperationKind::RmsNorm
+                | OperationKind::Linear
                 | OperationKind::BatchNorm
                 | OperationKind::MseLoss
                 | OperationKind::L1Loss
