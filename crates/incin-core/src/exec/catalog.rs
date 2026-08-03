@@ -3137,7 +3137,7 @@ fn verify_outputs<A: AttributeContract>(
 
 /// The exact rank contract for one operand role.
 ///
-/// `OperationCatalogEntry::accepted_ranks` describes the *primary* operand — the
+/// `OperationCatalogEntry::accepted_ranks` describes the *primary* operand, the
 /// activation, the value being reduced, the tensor being reshaped. Applying it
 /// to every input is wrong for any operation whose operands carry different
 /// contracts: a rank-one convolution bias is not a rank-four activation, and an
@@ -3485,7 +3485,7 @@ pub fn operation_semantics_document() -> alloc::string::String {
         };
         let _ = writeln!(
             out,
-            "| `{}` | `{}` | `{}` | {}–{} / {}–{} | {}–{} | `{:?}` | `{:?}` / `{:?}` | `{:?}` / `{:?}` | `{:?}` | {} | `{:?}` | `{}` |",
+            "| `{}` | `{}` | `{}` | {}-{} / {}-{} | {}-{} | `{:?}` | `{:?}` / `{:?}` | `{:?}` / `{:?}` | `{:?}` | {} | `{:?}` | `{}` |",
             row.name,
             row.descriptor,
             row.attributes,

@@ -281,9 +281,9 @@ fn render_inventory() -> String {
     for row in OPERATION_CATALOG {
         let arity = |range: &core::ops::RangeInclusive<usize>| {
             if *range.end() == usize::MAX {
-                format!("{}–many", range.start())
+                format!("{}-many", range.start())
             } else {
-                format!("{}–{}", range.start(), range.end())
+                format!("{}-{}", range.start(), range.end())
             }
         };
         let _ = writeln!(
