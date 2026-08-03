@@ -151,6 +151,8 @@ macro_rules! descriptor_capability_rules {
         reduction = $reduction:expr,
         spatial = $spatial:expr,
         matmul = $matmul:expr,
+        broadcast_training = $broadcast_training:expr,
+        reshape_training = $reshape_training:expr,
         pointwise_layouts = $pointwise_layouts:expr,
         broadcast_layouts = $broadcast_layouts:expr,
         reshape_layouts = $reshape_layouts:expr,
@@ -170,6 +172,13 @@ macro_rules! descriptor_capability_rules {
             $(native(OperationKind::$pointwise_op, $pointwise, $pointwise_layouts, true),)*
             $(native(OperationKind::$broadcast_op, $broadcast, $broadcast_layouts, false),)*
             $(native(OperationKind::$reshape_op, $reshape, $reshape_layouts, false),)*
+            // A view operation records a gradient, so it is usable while
+            // training over the dtypes a gradient exists for. Without these
+            // rows the exact identities are strictly narrower than the legacy
+            // family rows they replace, and a training reshape would stop
+            // resolving the moment those family rows are removed.
+            $(native(OperationKind::$broadcast_op, $broadcast_training, $broadcast_layouts, true),)*
+            $(native(OperationKind::$reshape_op, $reshape_training, $reshape_layouts, true),)*
             $(native_ranked(OperationKind::$matmul_op, $matmul, $matmul_layouts, 2, MAX_RANK, true),)*
             $(native_ranked(
                 OperationKind::$reduction_op,
@@ -222,6 +231,8 @@ pub static CPU_CAPABILITIES: &[CapabilityRule] = cpu_descriptor_operations!(
     reduction = F32_ONLY,
     spatial = F32_ONLY,
     matmul = F32_ONLY,
+    broadcast_training = FLOAT_DTYPES,
+    reshape_training = FLOAT_DTYPES,
     pointwise_layouts = CPU_LAYOUTS,
     broadcast_layouts = CPU_LAYOUTS,
     reshape_layouts = CONTIGUOUS,
@@ -317,6 +328,8 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
     reduction = FLOAT_DTYPES,
     spatial = F32_ONLY,
     matmul = F32_ONLY,
+    broadcast_training = FLOAT_DTYPES,
+    reshape_training = FLOAT_DTYPES,
     pointwise_layouts = CONTIGUOUS,
     broadcast_layouts = CONTIGUOUS,
     reshape_layouts = CONTIGUOUS,
@@ -397,6 +410,8 @@ pub static WGPU_CAPABILITIES: &[CapabilityRule] = wgpu_descriptor_operations!(
     reduction = F32_ONLY,
     spatial = F32_ONLY,
     matmul = F32_ONLY,
+    broadcast_training = F32_ONLY,
+    reshape_training = F32_ONLY,
     pointwise_layouts = CONTIGUOUS,
     broadcast_layouts = CONTIGUOUS,
     reshape_layouts = CONTIGUOUS,
@@ -478,6 +493,8 @@ pub static METAL_CAPABILITIES: &[CapabilityRule] = metal_descriptor_operations!(
     reduction = FLOAT_DTYPES,
     spatial = F32_ONLY,
     matmul = FLOAT_DTYPES,
+    broadcast_training = FLOAT_DTYPES,
+    reshape_training = FLOAT_DTYPES,
     pointwise_layouts = CONTIGUOUS,
     broadcast_layouts = CONTIGUOUS,
     reshape_layouts = CONTIGUOUS,

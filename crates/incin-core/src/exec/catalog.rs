@@ -2926,7 +2926,6 @@ fn verify_outputs<A: AttributeContract>(
     outputs: &[LogicalTensorMeta],
 ) -> Result<(), DescriptorError> {
     let first_dtype = inputs.first().and_then(|input| input.dtype);
-    let first_device = inputs.first().and_then(|input| input.device);
     let is_float = |dtype: DTypeId| {
         matches!(
             dtype,
@@ -3075,28 +3074,15 @@ fn verify_outputs<A: AttributeContract>(
     }
 
     for (index, output) in outputs.iter().enumerate() {
-        let expected_device = attributes.declared_device().or(first_device);
-        if output.device != expected_device {
+        let expected = expected_output(operation, row, attributes, inputs, index)?;
+        if output.device != expected.device {
             return Err(DescriptorError::MetadataMismatch {
                 operation,
                 output: index,
                 field: "device",
             });
         }
-
-        let expected_dtype = match operation {
-            OperationKind::WhereCond | OperationKind::EmbeddingExact => {
-                inputs.get(1).and_then(|input| input.dtype)
-            }
-            OperationKind::TopK if index == 0 => first_dtype,
-            OperationKind::ArgMax | OperationKind::ArgMin | OperationKind::Argsort => {
-                attributes.declared_dtype()
-            }
-            OperationKind::TopK => attributes.declared_dtype(),
-            OperationKind::QuantizedMatMul => Some(DTypeId::F32),
-            _ => attributes.declared_dtype().or(first_dtype),
-        };
-        if output.dtype != expected_dtype {
+        if output.dtype != expected.dtype {
             return Err(DescriptorError::MetadataMismatch {
                 operation,
                 output: index,
@@ -3104,7 +3090,7 @@ fn verify_outputs<A: AttributeContract>(
             });
         }
 
-        match inferred_shape(operation, row, attributes, inputs, index)? {
+        match expected.shape {
             Some(expected_shape) => {
                 if output.shape != expected_shape {
                     return Err(DescriptorError::MetadataMismatch {
@@ -3121,9 +3107,7 @@ fn verify_outputs<A: AttributeContract>(
             // legitimately yields no expectation and stays unknown; known
             // inputs must fail closed instead.
             None => {
-                let inputs_are_known =
-                    !inputs.is_empty() && inputs.iter().all(|input| input.shape.is_some());
-                if inputs_are_known {
+                if inputs_are_known(inputs) {
                     return Err(DescriptorError::MissingInference { operation });
                 }
             }
@@ -3133,6 +3117,85 @@ fn verify_outputs<A: AttributeContract>(
         }
     }
     Ok(())
+}
+
+fn inputs_are_known(inputs: &[LogicalTensorMeta]) -> bool {
+    !inputs.is_empty() && inputs.iter().all(|input| input.shape.is_some())
+}
+
+/// The output metadata the contract requires at `index`.
+///
+/// `shape` is `None` when no inference branch applies at all, and
+/// `Some(None)` when a branch applies but the inputs it reads are unknown.
+/// Verification and inference both read this one function, so an inferred
+/// output can never disagree with a verified one.
+struct ExpectedOutput {
+    device: Option<DeviceId>,
+    dtype: Option<DTypeId>,
+    shape: Option<Option<Vec<usize>>>,
+}
+
+fn expected_output<A: AttributeContract>(
+    operation: OperationKind,
+    row: &OperationCatalogEntry,
+    attributes: &A,
+    inputs: &[LogicalTensorMeta],
+    index: usize,
+) -> Result<ExpectedOutput, DescriptorError> {
+    let first_dtype = inputs.first().and_then(|input| input.dtype);
+    let first_device = inputs.first().and_then(|input| input.device);
+    let dtype = match operation {
+        OperationKind::WhereCond | OperationKind::EmbeddingExact => {
+            inputs.get(1).and_then(|input| input.dtype)
+        }
+        OperationKind::TopK if index == 0 => first_dtype,
+        OperationKind::ArgMax | OperationKind::ArgMin | OperationKind::Argsort => {
+            attributes.declared_dtype()
+        }
+        OperationKind::TopK => attributes.declared_dtype(),
+        OperationKind::QuantizedMatMul => Some(DTypeId::F32),
+        _ => attributes.declared_dtype().or(first_dtype),
+    };
+    Ok(ExpectedOutput {
+        device: attributes.declared_device().or(first_device),
+        dtype,
+        shape: inferred_shape(operation, row, attributes, inputs, index)?,
+    })
+}
+
+/// Derive the outputs an invocation must produce, instead of trusting a caller
+/// to state them.
+///
+/// This is the entry point execution uses. A caller that never supplies output
+/// metadata cannot fabricate it, so the "no output is invented" contract holds
+/// by construction rather than by a comparison the caller could satisfy with a
+/// lucky guess.
+fn infer_outputs<A: AttributeContract>(
+    operation: OperationKind,
+    row: &OperationCatalogEntry,
+    attributes: &A,
+    inputs: &[LogicalTensorMeta],
+) -> Result<Vec<LogicalTensorMeta>, DescriptorError> {
+    let count = attributes
+        .expected_output_count(inputs)
+        .unwrap_or(*row.output_arity.start());
+    let mut outputs = Vec::with_capacity(count);
+    for index in 0..count {
+        let expected = expected_output(operation, row, attributes, inputs, index)?;
+        let shape = match expected.shape {
+            Some(shape) => shape,
+            None if inputs_are_known(inputs) => {
+                return Err(DescriptorError::MissingInference { operation });
+            }
+            None => None,
+        };
+        outputs.push(LogicalTensorMeta {
+            shape,
+            dtype: expected.dtype,
+            device: expected.device,
+        });
+    }
+    Ok(outputs)
 }
 
 /// The exact rank contract for one operand role.
@@ -3442,6 +3505,23 @@ impl<O: CanonicalOperation> ValidatedInvocation<O> {
             validated: crate::exec::Validated::new(descriptor, proof),
             inputs,
         })
+    }
+
+    /// Validate an invocation whose outputs are derived rather than supplied.
+    ///
+    /// The execution path uses this form. `validate` exists for a caller that
+    /// already holds output metadata and needs it checked; here there is no
+    /// such caller, so there is nothing to check against and nothing to forge.
+    pub(crate) fn infer(
+        attributes: O::Attributes,
+        inputs: Vec<LogicalTensorMeta>,
+        proof: crate::exec::ProofLevel,
+    ) -> Result<Self, DescriptorError> {
+        let row = catalog_entry(O::ID)
+            .ok_or(DescriptorError::MissingCatalogEntry { operation: O::ID })?;
+        attributes.validate(O::ID, &inputs)?;
+        let outputs = infer_outputs(O::ID, row, &attributes, &inputs)?;
+        Self::validate(attributes, inputs, outputs, proof)
     }
 
     #[must_use]

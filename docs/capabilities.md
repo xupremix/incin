@@ -227,6 +227,8 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `div` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
 | `broadcast_as` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `q8_0` | `contiguous`, `strided` | any | no | native |
 | `reshape` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `q8_0` | `contiguous` | any | no | native |
+| `broadcast_as` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `reshape` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
 | `matmul` | `f32` | `contiguous`, `strided` | 2+ | yes | native |
 | `sum_all` | `f32` | `contiguous`, `strided` | any | yes | native |
 | `mean_all` | `f32` | `contiguous`, `strided` | any | yes | native |
@@ -269,6 +271,8 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `div` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
 | `broadcast_as` | `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | no | native |
 | `reshape` | `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | no | native |
+| `broadcast_as` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
+| `reshape` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
 | `matmul` | `f32` | `contiguous` | 2+ | yes | native |
 | `sum_all` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
 | `mean_all` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
@@ -307,6 +311,8 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `div` | `f32` | `contiguous` | any | yes | native |
 | `broadcast_as` | `f32` | `contiguous` | any | no | native |
 | `reshape` | `f32` | `contiguous` | any | no | native |
+| `broadcast_as` | `f32` | `contiguous` | any | yes | native |
+| `reshape` | `f32` | `contiguous` | any | yes | native |
 | `matmul` | `f32` | `contiguous` | 2+ | yes | native |
 | `sum_all` | `f32` | `contiguous` | any | yes | native |
 | `mean_all` | `f32` | `contiguous` | any | yes | native |

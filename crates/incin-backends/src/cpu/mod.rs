@@ -16,6 +16,7 @@
 pub use incin_core::backend_authoring::*;
 pub use incin_core::prelude::*;
 
+mod canonical;
 pub(crate) mod creation;
 mod executor;
 /// GPU dispatcher modules (CUDA/Metal) — internal only.

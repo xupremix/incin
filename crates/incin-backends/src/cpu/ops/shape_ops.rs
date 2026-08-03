@@ -20,24 +20,60 @@ use crate::cpu::ops::matmul::{batched_matmul_impl, matmul_impl};
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
 use crate::cpu::tape::{self, TapeEntry};
 
+// `reshape`, `broadcast_as` and `matmul` are free functions so that the
+// canonical `Execute<Descriptor<op::ReshapeExact>>` executors in
+// `cpu::canonical` and the legacy `TensorOps` methods below run the same body.
+// One implementation is the point: a descriptor path that re-derived the view
+// would be a second semantics to keep in agreement.
+
+/// Reshape a view and record the inverse for backward.
+pub(crate) fn reshape_storage(t: &CpuStorage, shape: &[usize]) -> Result<CpuStorage> {
+    let out = t.reshape(shape)?;
+
+    let original_shape = t.shape.to_vec();
+    let (t_id, out_id) = (t.id, out.id);
+    tape::push(TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            Ok(vec![grad_out.reshape(&original_shape)?])
+        }),
+    });
+    Ok(out)
+}
+
+/// Broadcast a view and record the reducing inverse for backward.
+pub(crate) fn broadcast_as_storage(t: &CpuStorage, shape: &[usize]) -> Result<CpuStorage> {
+    let out = t.broadcast_as(shape)?;
+
+    let original_shape = t.shape.to_vec();
+    let (t_id, out_id) = (t.id, out.id);
+    tape::push(TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            Ok(vec![tape::unbroadcast(grad_out, &original_shape)?])
+        }),
+    });
+    Ok(out)
+}
+
+/// Plain or batched matrix multiplication, chosen by operand rank.
+pub(crate) fn matmul_storage(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStorage> {
+    if lhs.shape.len() == 2 && rhs.shape.len() == 2 {
+        matmul_impl(lhs, rhs)
+    } else {
+        batched_matmul_impl(lhs, rhs)
+    }
+}
+
 impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
     /// `reshape`.
     fn reshape<K: DType>(
         t: &<Self as Backend>::Storage<K>,
         shape: &[usize],
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let out = t.reshape(shape)?;
-
-        let original_shape = t.shape.to_vec();
-        let (t_id, out_id) = (t.id, out.id);
-        tape::push(TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: Box::new(move |grad_out: &CpuStorage| {
-                Ok(vec![grad_out.reshape(&original_shape)?])
-            }),
-        });
-        Ok(out)
+        reshape_storage(t, shape)
     }
 
     /// `transpose`.
@@ -66,18 +102,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         t: &<Self as Backend>::Storage<K>,
         shape: &[usize],
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let out = t.broadcast_as(shape)?;
-
-        let original_shape = t.shape.to_vec();
-        let (t_id, out_id) = (t.id, out.id);
-        tape::push(TapeEntry {
-            output_id: out_id,
-            input_ids: vec![t_id],
-            backward: Box::new(move |grad_out: &CpuStorage| {
-                Ok(vec![tape::unbroadcast(grad_out, &original_shape)?])
-            }),
-        });
-        Ok(out)
+        broadcast_as_storage(t, shape)
     }
 
     /// `matmul`.
@@ -85,11 +110,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        if lhs.shape.len() == 2 && rhs.shape.len() == 2 {
-            matmul_impl(lhs, rhs)
-        } else {
-            batched_matmul_impl(lhs, rhs)
-        }
+        matmul_storage(lhs, rhs)
     }
 
     /// `narrow`.

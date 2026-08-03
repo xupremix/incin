@@ -238,28 +238,124 @@ fn erf_approx(x: f64) -> f64 {
     sign * y
 }
 
+// The four pointwise binary kernels below are free functions rather than trait
+// bodies because two entry points now need them: `NumericOps` for the legacy
+// tensor surface, and the canonical `Execute<Descriptor<op::Add>>` executor in
+// `cpu::canonical`. Keeping one body means the descriptor path cannot drift
+// from the path it is replacing, and when `NumericOps` is deleted these
+// functions stay exactly as they are.
+
+/// Broadcast elementwise addition, with its gradient recorded.
+pub(crate) fn add_storage(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStorage> {
+    let out_shape = crate::cpu::stride::broadcast_shape(&lhs.shape, &rhs.shape)?;
+    let out = elementwise_binary_numeric(BinaryOp::Add, lhs, rhs, &out_shape)?;
+
+    let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
+    let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
+    tape::push(TapeEntry {
+        output_id: out_id,
+        input_ids: vec![lhs_id, rhs_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            Ok(vec![
+                tape::unbroadcast(grad_out, &lhs_shape)?,
+                tape::unbroadcast(grad_out, &rhs_shape)?,
+            ])
+        }),
+    });
+    Ok(out)
+}
+
+/// Broadcast elementwise subtraction, with its gradient recorded.
+pub(crate) fn sub_storage(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStorage> {
+    let out_shape = crate::cpu::stride::broadcast_shape(&lhs.shape, &rhs.shape)?;
+    let out = elementwise_binary_numeric(BinaryOp::Sub, lhs, rhs, &out_shape)?;
+
+    let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
+    let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
+    tape::push(TapeEntry {
+        output_id: out_id,
+        input_ids: vec![lhs_id, rhs_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            Ok(vec![
+                tape::unbroadcast(grad_out, &lhs_shape)?,
+                tape::unbroadcast(&negate(grad_out), &rhs_shape)?,
+            ])
+        }),
+    });
+    Ok(out)
+}
+
+/// Broadcast elementwise multiplication, with its gradient recorded.
+pub(crate) fn mul_storage(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStorage> {
+    let out_shape = crate::cpu::stride::broadcast_shape(&lhs.shape, &rhs.shape)?;
+    let out = elementwise_binary_numeric(BinaryOp::Mul, lhs, rhs, &out_shape)?;
+
+    // Capture cloned copies of lhs/rhs's CpuStorage (cheap, Rc-backed)
+    // since the backward closure needs their VALUES, not just shapes.
+    let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
+    let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
+    let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
+    tape::push(TapeEntry {
+        output_id: out_id,
+        input_ids: vec![lhs_id, rhs_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            let grad_lhs =
+                elementwise_binary_numeric(BinaryOp::Mul, grad_out, &rhs_capture, &grad_out.shape)?;
+            let grad_rhs =
+                elementwise_binary_numeric(BinaryOp::Mul, grad_out, &lhs_capture, &grad_out.shape)?;
+            Ok(vec![
+                tape::unbroadcast(&grad_lhs, &lhs_shape)?,
+                tape::unbroadcast(&grad_rhs, &rhs_shape)?,
+            ])
+        }),
+    });
+    Ok(out)
+}
+
+/// Broadcast elementwise division, with its gradient recorded.
+pub(crate) fn div_storage(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStorage> {
+    let out_shape = crate::cpu::stride::broadcast_shape(&lhs.shape, &rhs.shape)?;
+    let out = elementwise_binary_numeric(BinaryOp::Div, lhs, rhs, &out_shape)?;
+
+    // Per Assumption A2 (RESEARCH.md): implemented for trait-completeness
+    // via the standard quotient rule (1/rhs, -lhs/rhs^2), each
+    // unbroadcast — best-effort correctness, not exercised by this
+    // phase's example/tests.
+    let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
+    let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
+    let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
+    tape::push(TapeEntry {
+        output_id: out_id,
+        input_ids: vec![lhs_id, rhs_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            // d(lhs/rhs)/dlhs = 1/rhs -> grad_lhs = grad_out / rhs
+            let grad_lhs =
+                elementwise_binary_numeric(BinaryOp::Div, grad_out, &rhs_capture, &grad_out.shape)?;
+            // d(lhs/rhs)/drhs = -lhs/rhs^2 -> grad_rhs = grad_out * (-lhs/rhs^2)
+            let grad_rhs = elementwise_binary_numeric(
+                BinaryOp::Mul,
+                grad_out,
+                &elementwise_binary(&lhs_capture, &rhs_capture, &grad_out.shape, |l, r| {
+                    -l / (r * r)
+                })?,
+                &grad_out.shape,
+            )?;
+            Ok(vec![
+                tape::unbroadcast(&grad_lhs, &lhs_shape)?,
+                tape::unbroadcast(&grad_rhs, &rhs_shape)?,
+            ])
+        }),
+    });
+    Ok(out)
+}
+
 impl<T: DType, D: Device> NumericOps<Self> for CpuBackendImpl<T, D> {
     /// `add`.
     fn add<K: DType>(
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let out_shape = crate::cpu::stride::broadcast_shape(&lhs.shape, &rhs.shape)?;
-        let out = elementwise_binary_numeric(BinaryOp::Add, lhs, rhs, &out_shape)?;
-
-        let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
-        let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
-        tape::push(TapeEntry {
-            output_id: out_id,
-            input_ids: vec![lhs_id, rhs_id],
-            backward: Box::new(move |grad_out: &CpuStorage| {
-                Ok(vec![
-                    tape::unbroadcast(grad_out, &lhs_shape)?,
-                    tape::unbroadcast(grad_out, &rhs_shape)?,
-                ])
-            }),
-        });
-        Ok(out)
+        add_storage(lhs, rhs)
     }
 
     /// `sub`.
@@ -267,22 +363,7 @@ impl<T: DType, D: Device> NumericOps<Self> for CpuBackendImpl<T, D> {
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let out_shape = crate::cpu::stride::broadcast_shape(&lhs.shape, &rhs.shape)?;
-        let out = elementwise_binary_numeric(BinaryOp::Sub, lhs, rhs, &out_shape)?;
-
-        let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
-        let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
-        tape::push(TapeEntry {
-            output_id: out_id,
-            input_ids: vec![lhs_id, rhs_id],
-            backward: Box::new(move |grad_out: &CpuStorage| {
-                Ok(vec![
-                    tape::unbroadcast(grad_out, &lhs_shape)?,
-                    tape::unbroadcast(&negate(grad_out), &rhs_shape)?,
-                ])
-            }),
-        });
-        Ok(out)
+        sub_storage(lhs, rhs)
     }
 
     /// `mul`.
@@ -290,37 +371,7 @@ impl<T: DType, D: Device> NumericOps<Self> for CpuBackendImpl<T, D> {
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let out_shape = crate::cpu::stride::broadcast_shape(&lhs.shape, &rhs.shape)?;
-        let out = elementwise_binary_numeric(BinaryOp::Mul, lhs, rhs, &out_shape)?;
-
-        // Capture cloned copies of lhs/rhs's CpuStorage (cheap, Rc-backed)
-        // since the backward closure needs their VALUES, not just shapes.
-        let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
-        let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
-        let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
-        tape::push(TapeEntry {
-            output_id: out_id,
-            input_ids: vec![lhs_id, rhs_id],
-            backward: Box::new(move |grad_out: &CpuStorage| {
-                let grad_lhs = elementwise_binary_numeric(
-                    BinaryOp::Mul,
-                    grad_out,
-                    &rhs_capture,
-                    &grad_out.shape,
-                )?;
-                let grad_rhs = elementwise_binary_numeric(
-                    BinaryOp::Mul,
-                    grad_out,
-                    &lhs_capture,
-                    &grad_out.shape,
-                )?;
-                Ok(vec![
-                    tape::unbroadcast(&grad_lhs, &lhs_shape)?,
-                    tape::unbroadcast(&grad_rhs, &rhs_shape)?,
-                ])
-            }),
-        });
-        Ok(out)
+        mul_storage(lhs, rhs)
     }
 
     /// `div`.
@@ -328,43 +379,7 @@ impl<T: DType, D: Device> NumericOps<Self> for CpuBackendImpl<T, D> {
         lhs: &<Self as Backend>::Storage<K>,
         rhs: &<Self as Backend>::Storage<K>,
     ) -> Result<<Self as Backend>::Storage<K>> {
-        let out_shape = crate::cpu::stride::broadcast_shape(&lhs.shape, &rhs.shape)?;
-        let out = elementwise_binary_numeric(BinaryOp::Div, lhs, rhs, &out_shape)?;
-
-        // Per Assumption A2 (RESEARCH.md): implemented for trait-completeness
-        // via the standard quotient rule (1/rhs, -lhs/rhs^2), each
-        // unbroadcast — best-effort correctness, not exercised by this
-        // phase's example/tests.
-        let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
-        let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
-        let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
-        tape::push(TapeEntry {
-            output_id: out_id,
-            input_ids: vec![lhs_id, rhs_id],
-            backward: Box::new(move |grad_out: &CpuStorage| {
-                // d(lhs/rhs)/dlhs = 1/rhs -> grad_lhs = grad_out / rhs
-                let grad_lhs = elementwise_binary_numeric(
-                    BinaryOp::Div,
-                    grad_out,
-                    &rhs_capture,
-                    &grad_out.shape,
-                )?;
-                // d(lhs/rhs)/drhs = -lhs/rhs^2 -> grad_rhs = grad_out * (-lhs/rhs^2)
-                let grad_rhs = elementwise_binary_numeric(
-                    BinaryOp::Mul,
-                    grad_out,
-                    &elementwise_binary(&lhs_capture, &rhs_capture, &grad_out.shape, |l, r| {
-                        -l / (r * r)
-                    })?,
-                    &grad_out.shape,
-                )?;
-                Ok(vec![
-                    tape::unbroadcast(&grad_lhs, &lhs_shape)?,
-                    tape::unbroadcast(&grad_rhs, &rhs_shape)?,
-                ])
-            }),
-        });
-        Ok(out)
+        div_storage(lhs, rhs)
     }
 }
 

@@ -1,4 +1,4 @@
-error[E0451]: fields `attributes`, `outputs` and `marker` of struct `Descriptor` are private
+error[E0451]: fields `attributes`, `outputs` and `marker` of struct `incin_core::exec::Descriptor` are private
  --> tests/compile_fail/canonical_descriptor_fields_are_private.rs:6:9
   |
 5 |     let _forged = Descriptor::<op::Add> {

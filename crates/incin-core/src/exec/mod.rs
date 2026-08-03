@@ -49,6 +49,8 @@ pub mod catalog;
 pub mod conformance;
 /// Backend-owning execution context foundation.
 pub mod context;
+/// The production path from a canonical operation to native execution.
+pub mod dispatch;
 /// Checked physical storage metadata shared by all backends.
 pub mod meta;
 /// Backend-neutral execution policy vocabulary.
@@ -80,6 +82,7 @@ pub use conformance::{
     ConformanceClass, ConformanceVector, ExpectedDisposition, SEMANTIC_CONFORMANCE_VECTORS,
 };
 pub use context::ExecutionContext;
+pub use dispatch::CanonicalError;
 pub use meta::{Alignment, LayoutClass, MetaError, TensorMeta};
 pub use policy::{
     AllocatorPolicy, Determinism, ExecutionPolicy, FallbackPolicy, GradMode, MathMode, NanPolicy,
