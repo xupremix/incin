@@ -418,3 +418,243 @@ macro_rules! assert_every_advertised_row_executes {
 }
 
 crate::capability::cpu_descriptor_operations!(assert_every_advertised_row_executes,);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cpu::gradcheck::gradcheck;
+    use crate::cpu::storage::CpuBuffer;
+    use incin_core::exec::catalog::{AxisAttributes, NoAttributes, ShapeAttributes};
+    use incin_core::exec::{ExecutionContext, TensorHandle, dispatch};
+    use incin_core::prelude::{Cpu, Local};
+
+    type TestBackend = CpuBackendImpl<f32, Cpu>;
+
+    fn storage(values: &[f32], shape: &[usize]) -> CpuStorage {
+        CpuStorage::try_from_contiguous(CpuBuffer::F32(values.to_vec()), shape.to_vec())
+            .expect("test storage must be well formed")
+    }
+
+    fn handle(storage: &CpuStorage) -> TensorHandle<'_> {
+        TensorHandle::from_storage::<TestBackend, f32, Local>(storage)
+    }
+
+    fn context() -> ExecutionContext<TestBackend> {
+        ExecutionContext::new(TestBackend::new())
+    }
+
+    /// Step size and tolerance, and why these values.
+    ///
+    /// Every function checked below is a polynomial of degree at most two in
+    /// its inputs, so a central difference has no truncation error and the only
+    /// error is f32 cancellation, of order `machine_epsilon * |f| / (eps *
+    /// |gradient|)`. That term *shrinks* as the step grows, which is why the
+    /// step is `1e-2` rather than the more usual `1e-4`: at `1e-4` the same
+    /// gradients came out ~1% off purely from cancellation, and loosening the
+    /// tolerance to absorb that would have hidden real errors of the same size.
+    ///
+    /// What this proves is bounded. `gradcheck` ignores any element whose
+    /// absolute difference is below `1e-3`, so this catches a gradient that is
+    /// structurally wrong — missing, misrouted, or wrongly scaled — and does
+    /// not resolve differences finer than that ceiling. The exact agreement
+    /// between the canonical and legacy paths is asserted separately, by
+    /// `canonical_and_legacy_gradients_are_identical`.
+    const GRADIENT_STEP: f64 = 1e-2;
+    const GRADIENT_TOLERANCE: f64 = 1e-3;
+
+    /// A gradient that flows through the canonical path must match a finite
+    /// difference of the same path.
+    ///
+    /// This is the property that makes the migration safe to depend on: the
+    /// descriptor executors reuse the legacy kernels' tape entries, and a
+    /// reuse that lost one would still produce the right forward value.
+    #[test]
+    fn canonical_pointwise_gradients_match_finite_differences() {
+        let context = context();
+        let lhs = storage(&[0.5, 1.5, -2.0, 3.0], &[4]);
+        let rhs = storage(&[2.0, -1.0, 0.5, 1.25], &[4]);
+
+        let error = gradcheck(
+            |inputs| {
+                let product = dispatch::execute::<op::Mul, _>(
+                    &context,
+                    NoAttributes,
+                    &[handle(&inputs[0]), handle(&inputs[1])],
+                )
+                .expect("mul executes");
+                dispatch::execute::<op::SumAll, _>(&context, NoAttributes, &[handle(&product)])
+                    .expect("sum_all executes")
+            },
+            &[lhs, rhs],
+            GRADIENT_STEP,
+        );
+        assert!(
+            error < GRADIENT_TOLERANCE,
+            "canonical mul gradient error {error} exceeds {GRADIENT_TOLERANCE}"
+        );
+    }
+
+    /// The same check across a view operation, whose backward rule is the
+    /// inverse view rather than an arithmetic rule.
+    #[test]
+    fn canonical_view_gradients_match_finite_differences() {
+        let context = context();
+        let input = storage(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], &[2, 3]);
+
+        let error = gradcheck(
+            |inputs| {
+                let reshaped = dispatch::execute::<op::ReshapeExact, _>(
+                    &context,
+                    ShapeAttributes { shape: vec![3, 2] },
+                    &[handle(&inputs[0])],
+                )
+                .expect("reshape executes");
+                let scaled = dispatch::execute::<op::Mul, _>(
+                    &context,
+                    NoAttributes,
+                    &[handle(&reshaped), handle(&reshaped)],
+                )
+                .expect("mul executes");
+                dispatch::execute::<op::MeanAll, _>(&context, NoAttributes, &[handle(&scaled)])
+                    .expect("mean_all executes")
+            },
+            &[input],
+            GRADIENT_STEP,
+        );
+        assert!(
+            error < GRADIENT_TOLERANCE,
+            "canonical reshape gradient error {error} exceeds {GRADIENT_TOLERANCE}"
+        );
+    }
+
+    /// A single-axis reduction's gradient, which must scatter back over the
+    /// reduced axis rather than over the whole tensor.
+    #[test]
+    fn canonical_axis_reduction_gradients_match_finite_differences() {
+        let context = context();
+        let input = storage(&[0.5, 1.5, -2.0, 3.0, 0.25, -0.75], &[2, 3]);
+
+        let error = gradcheck(
+            |inputs| {
+                let reduced = dispatch::execute::<op::SumDim, _>(
+                    &context,
+                    AxisAttributes { axis: 1 },
+                    &[handle(&inputs[0])],
+                )
+                .expect("sum_dim executes");
+                let squared = dispatch::execute::<op::Mul, _>(
+                    &context,
+                    NoAttributes,
+                    &[handle(&reduced), handle(&reduced)],
+                )
+                .expect("mul executes");
+                dispatch::execute::<op::SumAll, _>(&context, NoAttributes, &[handle(&squared)])
+                    .expect("sum_all executes")
+            },
+            &[input],
+            GRADIENT_STEP,
+        );
+        assert!(
+            error < GRADIENT_TOLERANCE,
+            "canonical sum_dim gradient error {error} exceeds {GRADIENT_TOLERANCE}"
+        );
+    }
+
+    /// Matrix multiplication, whose gradient routes each operand through a
+    /// different transposed product.
+    #[test]
+    fn canonical_matmul_gradients_match_finite_differences() {
+        let context = context();
+        let lhs = storage(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], &[2, 3]);
+        let rhs = storage(&[0.5, -1.0, 2.0, 0.25, -0.5, 1.5], &[3, 2]);
+
+        let error = gradcheck(
+            |inputs| {
+                let product = dispatch::execute::<op::MatMulExact, _>(
+                    &context,
+                    NoAttributes,
+                    &[handle(&inputs[0]), handle(&inputs[1])],
+                )
+                .expect("matmul executes");
+                dispatch::execute::<op::SumAll, _>(&context, NoAttributes, &[handle(&product)])
+                    .expect("sum_all executes")
+            },
+            &[lhs, rhs],
+            GRADIENT_STEP,
+        );
+        assert!(
+            error < GRADIENT_TOLERANCE,
+            "canonical matmul gradient error {error} exceeds {GRADIENT_TOLERANCE}"
+        );
+    }
+
+    /// The canonical and legacy paths must produce the *same* gradient, not
+    /// merely two gradients that each survive a finite-difference check.
+    ///
+    /// This is the assertion that makes the migration a migration. Because
+    /// both paths run the same kernel body and push the same tape entry, the
+    /// agreement is exact rather than approximate, so it is compared exactly:
+    /// a tolerance here would let a genuine divergence through.
+    #[test]
+    fn canonical_and_legacy_gradients_are_identical() {
+        use crate::cpu::tape;
+        use incin_core::backend_authoring::{NumericOps, ReductionOps};
+
+        let context = context();
+        let lhs = storage(&[0.5, 1.5, -2.0, 3.0], &[4]);
+        let rhs = storage(&[2.0, -1.0, 0.5, 1.25], &[4]);
+
+        let canonical_scalar = {
+            let product = dispatch::execute::<op::Mul, _>(
+                &context,
+                NoAttributes,
+                &[handle(&lhs), handle(&rhs)],
+            )
+            .expect("mul executes");
+            dispatch::execute::<op::SumAll, _>(&context, NoAttributes, &[handle(&product)])
+                .expect("sum_all executes")
+        };
+        let canonical = tape::backward(&canonical_scalar).expect("backward succeeds");
+        let canonical_lhs = canonical
+            .get(lhs.id)
+            .expect("lhs receives a gradient")
+            .clone();
+        let canonical_rhs = canonical
+            .get(rhs.id)
+            .expect("rhs receives a gradient")
+            .clone();
+
+        let legacy_scalar = {
+            let product = <TestBackend as NumericOps<TestBackend>>::mul::<f32>(&lhs, &rhs).unwrap();
+            <TestBackend as ReductionOps<TestBackend>>::sum_all::<f32>(&product).unwrap()
+        };
+        let legacy = tape::backward(&legacy_scalar).expect("backward succeeds");
+        let legacy_lhs = legacy.get(lhs.id).expect("lhs receives a gradient");
+        let legacy_rhs = legacy.get(rhs.id).expect("rhs receives a gradient");
+
+        for (index, (canonical, legacy)) in
+            [(&canonical_lhs, legacy_lhs), (&canonical_rhs, legacy_rhs)]
+                .into_iter()
+                .enumerate()
+        {
+            assert_eq!(
+                canonical.shape.to_vec(),
+                legacy.shape.to_vec(),
+                "operand {index} gradient shape diverged"
+            );
+            for flat in 0..canonical.shape.iter().product::<usize>() {
+                let mut multi = vec![0usize; canonical.shape.len()];
+                let mut remaining = flat;
+                for axis in (0..canonical.shape.len()).rev() {
+                    multi[axis] = remaining % canonical.shape[axis];
+                    remaining /= canonical.shape[axis];
+                }
+                assert_eq!(
+                    canonical.get(&multi),
+                    legacy.get(&multi),
+                    "operand {index} gradient diverged at {multi:?}"
+                );
+            }
+        }
+    }
+}
