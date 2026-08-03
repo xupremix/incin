@@ -4,7 +4,7 @@ Generated from `CPU_CAPABILITIES` and `incin_core::exec::OPERATION_CATALOG`; the
 
 The denominator is the number of operations that `Execute<Descriptor<O>>` can carry at all, not the whole catalog. An operation whose `ExecutionSite` is not backend-executable is listed separately with the reason: it is a gap in the execution trait rather than an unwritten executor, and counting it here would describe work that cannot be done without changing the contract first.
 
-**138 of 161 backend-executable operations migrated**, out of 174 catalog operations in total. The remaining 23 executable operations are still reachable only through the legacy operation-family traits.
+**145 of 161 backend-executable operations migrated**, out of 174 catalog operations in total. The remaining 16 executable operations are still reachable only through the legacy operation-family traits.
 
 ## Backend-executable operations
 
@@ -13,17 +13,17 @@ The denominator is the number of operations that `Execute<Descriptor<O>>` can ca
 | `tensor_from_data` | `Creation` | no | `TensorArgsData` |
 | `tensor_from_bytes` | `Creation` | no | `Tensor::from_bytes` |
 | `tensor_to_bytes` | `HostReadback` | no | `Tensor::to_bytes` |
-| `zeros` | `Creation` | no | `CreationOps::zeros` |
-| `ones` | `Creation` | no | `CreationOps::ones` |
-| `rand` | `Creation` | no | `CreationOps::rand` |
-| `randn` | `Creation` | no | `CreationOps::randn` |
+| `zeros` | `Creation` | yes | `CreationOps::zeros` |
+| `ones` | `Creation` | yes | `CreationOps::ones` |
+| `rand` | `Creation` | yes | `CreationOps::rand` |
+| `randn` | `Creation` | yes | `CreationOps::randn` |
 | `var_zeros` | `Creation` | no | `CreationOps::var_zeros` |
 | `var_ones` | `Creation` | no | `CreationOps::var_ones` |
 | `var_rand` | `Creation` | no | `CreationOps::var_rand` |
 | `var_randn` | `Creation` | no | `CreationOps::var_randn` |
-| `full` | `Creation` | no | `CreationOps::full` |
-| `arange` | `Creation` | no | `CreationOps::arange` |
-| `linspace` | `Creation` | no | `CreationOps::linspace` |
+| `full` | `Creation` | yes | `CreationOps::full` |
+| `arange` | `Creation` | yes | `CreationOps::arange` |
+| `linspace` | `Creation` | yes | `CreationOps::linspace` |
 | `sample` | `Creation` | no | `Tensor::sample` |
 | `relu` | `Kernel` | yes | `FloatOps::relu` |
 | `step` | `Kernel` | yes | `FloatOps::step` |

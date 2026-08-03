@@ -11,12 +11,14 @@ use incin_core::backend_authoring::{
     TensorOps,
 };
 use incin_core::exec::catalog::{
-    AxisVarianceAttributes, ChunkAttributes, DropoutAttributes, EpsilonAttributes,
-    LinearAttributes, NormAttributes, SplitAttributes, VarianceAttributes, op,
+    ArangeAttributes, AxisVarianceAttributes, ChunkAttributes, CreationAttributes,
+    DropoutAttributes, EpsilonAttributes, FullAttributes, LinearAttributes, LinspaceAttributes,
+    NormAttributes, SplitAttributes, VarianceAttributes, op,
 };
 use incin_core::exec::{
-    Capabilities, CapabilityQuery, DTypeRule, ExecutionContext, ImplementationKind, LayoutClass,
-    MathMode, OPERATION_CATALOG, SupportLevel, TensorHandle, UnsupportedReason, dispatch,
+    Capabilities, CapabilityQuery, DTypeRule, ExecutionContext, GradMode, ImplementationKind,
+    LayoutClass, MathMode, OPERATION_CATALOG, SupportLevel, TensorHandle, UnsupportedReason,
+    dispatch,
 };
 use incin_core::prelude::{
     Cpu, DType, DTypeId, DeviceId, DeviceKind, Dyn, Local, OperationKind, Q8_0, Reduction,
@@ -509,6 +511,13 @@ fn cpu_probe_shape(operation: OperationKind) -> &'static [usize] {
         OperationKind::AdaptiveAvgPool2dExact => &[1, 1, 1, 1],
         OperationKind::LayerNorm | OperationKind::RmsNorm | OperationKind::Linear => &[2, 2],
         OperationKind::Dropout => &[2, 2],
+        OperationKind::Zeros
+        | OperationKind::Ones
+        | OperationKind::UniformRandom
+        | OperationKind::NormalRandom
+        | OperationKind::Full => &[2, 2],
+        // The ranged fills are one-dimensional by definition.
+        OperationKind::Arange | OperationKind::Linspace => &[4],
         OperationKind::ToDType => &[2, 2],
         // Probed with `Mean`, so the result is the scalar the reduction
         // produces rather than the elementwise buffer feeding it.
@@ -579,6 +588,68 @@ fn cpu_float_probe(operation: OperationKind, input: &CpuStorage) -> CpuStorage {
         OperationKind::Fmod => B::fmod::<f32>(input, input).unwrap(),
         OperationKind::Remainder => B::remainder::<f32>(input, input).unwrap(),
         other => panic!("{other} is not a float-family operation"),
+    }
+}
+
+/// Dispatch one allocation of `dtype`.
+///
+/// Separate from the probe below because it is the only family with no operand
+/// to build, so it shares none of that function's setup, and because both the
+/// layout probe and the dtype probe need it.
+fn allocation_probe(operation: OperationKind, dtype: DTypeId) -> CpuStorage {
+    let context =
+        ExecutionContext::new(CpuBackendImpl::<f32, Cpu>::new()).with_grad_mode(GradMode::Disabled);
+    let shape = cpu_probe_shape(operation).to_vec();
+    let device = DeviceId::cpu();
+    let plain = CreationAttributes {
+        shape: shape.clone(),
+        dtype,
+        device,
+    };
+    match operation {
+        OperationKind::Zeros => dispatch::execute::<op::Zeros, _>(&context, plain, &[]).unwrap(),
+        OperationKind::Ones => dispatch::execute::<op::Ones, _>(&context, plain, &[]).unwrap(),
+        OperationKind::UniformRandom => {
+            dispatch::execute::<op::UniformRandom, _>(&context, plain, &[]).unwrap()
+        }
+        OperationKind::NormalRandom => {
+            dispatch::execute::<op::NormalRandom, _>(&context, plain, &[]).unwrap()
+        }
+        OperationKind::Full => dispatch::execute::<op::Full, _>(
+            &context,
+            FullAttributes {
+                shape,
+                dtype,
+                device,
+                value: 1.0,
+            },
+            &[],
+        )
+        .unwrap(),
+        OperationKind::Arange => dispatch::execute::<op::Arange, _>(
+            &context,
+            ArangeAttributes {
+                shape,
+                dtype,
+                device,
+                start: 0.0,
+                step: 1.0,
+            },
+            &[],
+        )
+        .unwrap(),
+        _ => dispatch::execute::<op::Linspace, _>(
+            &context,
+            LinspaceAttributes {
+                shape,
+                dtype,
+                device,
+                start: 0.0,
+                end: 3.0,
+            },
+            &[],
+        )
+        .unwrap(),
     }
 }
 
@@ -708,6 +779,16 @@ fn execute_cpu_probe(operation: OperationKind, layout: LayoutClass) -> CpuStorag
             let weight = f32_storage(&[2], &[1.0, 1.0]);
             B::layer_norm::<f32>(&input, &weight, None, 1e-5).unwrap()
         }
+        // Allocation. The layout argument is ignored on purpose: these have no
+        // operand to lay out, and a fresh allocation is contiguous whatever the
+        // row is being probed for.
+        OperationKind::Zeros
+        | OperationKind::Ones
+        | OperationKind::UniformRandom
+        | OperationKind::NormalRandom
+        | OperationKind::Full
+        | OperationKind::Arange
+        | OperationKind::Linspace => allocation_probe(operation, DTypeId::F32),
         // Probed in inference mode, where dropout is the identity. The
         // training path draws a random mask, and a probe that asserted a shape
         // and a dtype against a random result would be asserting the same two
@@ -1256,6 +1337,13 @@ fn every_advertised_cpu_dtype_executes_its_registered_operation() {
                     );
                     pieces.into_iter().next().unwrap()
                 }
+                OperationKind::Zeros
+                | OperationKind::Ones
+                | OperationKind::UniformRandom
+                | OperationKind::NormalRandom
+                | OperationKind::Full
+                | OperationKind::Arange
+                | OperationKind::Linspace => allocation_probe(rule.operation, dtype),
                 // Inference-mode dropout hands the operand straight back, so it
                 // is the one row here that has to answer for every float dtype
                 // the elementwise group advertises rather than for f32 alone.

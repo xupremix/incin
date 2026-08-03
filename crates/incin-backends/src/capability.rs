@@ -128,6 +128,14 @@ macro_rules! cpu_descriptor_operations {
             ],
             broadcast = [BroadcastAs],
             reshape = [ReshapeExact],
+            // Allocation. These take no operand, which is why they are the one
+            // group whose capability row is queried against the descriptor's
+            // inferred output rather than against an input: there is no input.
+            // Both groups are `training = false` because a fresh allocation
+            // records nothing on the tape; the `var_*` forms that do are not
+            // here, because they return a variable rather than storage.
+            filling = [Zeros, Ones, Full, Arange, Linspace],
+            sampling = [UniformRandom, NormalRandom],
             reduction = [
                 SumAll, MeanAll, MaxAll, MinAll, ProdAll,
                 SumDim, SumKeepDim, MeanDim, MeanKeepDim,
@@ -244,6 +252,8 @@ macro_rules! cuda_descriptor_operations {
             elementwise = [Add, Sub, Mul, Div],
             broadcast = [BroadcastAs],
             reshape = [ReshapeExact],
+            filling = [],
+            sampling = [],
             reduction = [
                 SumAll, MeanAll, MaxAll, MinAll,
                 SumDim, SumKeepDim, MeanDim, MeanKeepDim,
@@ -273,6 +283,8 @@ macro_rules! wgpu_descriptor_operations {
             elementwise = [Add, Sub, Mul, Div],
             broadcast = [BroadcastAs],
             reshape = [ReshapeExact],
+            filling = [],
+            sampling = [],
             reduction = [
                 SumAll, MeanAll, MaxAll, MinAll,
                 SumDim, SumKeepDim, MeanDim, MeanKeepDim,
@@ -302,6 +314,8 @@ macro_rules! metal_descriptor_operations {
             elementwise = [Add, Sub, Mul, Div],
             broadcast = [BroadcastAs],
             reshape = [ReshapeExact],
+            filling = [],
+            sampling = [],
             reduction = [
                 SumAll, MeanAll,
                 SumDim, SumKeepDim, MeanDim, MeanKeepDim
@@ -329,6 +343,8 @@ macro_rules! descriptor_capability_rules {
         broadcast = $broadcast:expr,
         reshape = $reshape:expr,
         reduction = $reduction:expr,
+        filling_dtypes = $filling_dtypes:expr,
+        sampling_dtypes = $sampling_dtypes:expr,
         spatial = $spatial:expr,
         matmul = $matmul:expr,
         normalization_dtypes = $normalization_dtypes:expr,
@@ -348,6 +364,8 @@ macro_rules! descriptor_capability_rules {
         elementwise = [$($elementwise_op:ident),* $(,)?],
         broadcast = [$($broadcast_op:ident),* $(,)?],
         reshape = [$($reshape_op:ident),* $(,)?],
+        filling = [$($filling_op:ident),* $(,)?],
+        sampling = [$($sampling_op:ident),* $(,)?],
         reduction = [$($reduction_op:ident),* $(,)?],
         spatial = [$($spatial_op:ident),* $(,)?],
         matmul = [$($matmul_op:ident),* $(,)?],
@@ -385,6 +403,10 @@ macro_rules! descriptor_capability_rules {
                 descriptor_max_rank(OperationKind::$matmul_op),
                 true,
             ),)*
+            // Allocation, which admits every rank the shape contract allows and
+            // is contiguous by construction.
+            $(native(OperationKind::$filling_op, $filling_dtypes, CONTIGUOUS, false),)*
+            $(native(OperationKind::$sampling_op, $sampling_dtypes, CONTIGUOUS, false),)*
             $(native_ranked(
                 OperationKind::$reduction_op,
                 $reduction,
@@ -615,6 +637,8 @@ pub static CPU_CAPABILITIES: &[CapabilityRule] = cpu_descriptor_operations!(
     broadcast = ALL_DTYPES,
     reshape = ALL_DTYPES,
     reduction = F32_ONLY,
+    filling_dtypes = NON_QUANTIZED,
+    sampling_dtypes = FLOAT_DTYPES,
     spatial = F32_ONLY,
     matmul = F32_ONLY,
     normalization_dtypes = F32_ONLY,
@@ -717,6 +741,8 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
     broadcast = CUDA_STORAGE_DTYPES,
     reshape = CUDA_STORAGE_DTYPES,
     reduction = FLOAT_DTYPES,
+    filling_dtypes = NON_QUANTIZED,
+    sampling_dtypes = FLOAT_DTYPES,
     spatial = F32_ONLY,
     matmul = F32_ONLY,
     normalization_dtypes = F32_ONLY,
@@ -804,6 +830,8 @@ pub static WGPU_CAPABILITIES: &[CapabilityRule] = wgpu_descriptor_operations!(
     broadcast = F32_ONLY,
     reshape = F32_ONLY,
     reduction = F32_ONLY,
+    filling_dtypes = NON_QUANTIZED,
+    sampling_dtypes = FLOAT_DTYPES,
     spatial = F32_ONLY,
     matmul = F32_ONLY,
     normalization_dtypes = F32_ONLY,
@@ -892,6 +920,8 @@ pub static METAL_CAPABILITIES: &[CapabilityRule] = metal_descriptor_operations!(
     broadcast = CUDA_STORAGE_DTYPES,
     reshape = CUDA_STORAGE_DTYPES,
     reduction = FLOAT_DTYPES,
+    filling_dtypes = NON_QUANTIZED,
+    sampling_dtypes = FLOAT_DTYPES,
     spatial = F32_ONLY,
     matmul = FLOAT_DTYPES,
     normalization_dtypes = F32_ONLY,

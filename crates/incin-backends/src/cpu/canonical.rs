@@ -126,6 +126,55 @@ pointwise_binary_executors![
     (Div, div_storage),
 ];
 
+/// Allocation, which has no operand to read anything from.
+///
+/// Every other executor here recovers its shape, dtype and device from the
+/// storage it was handed. These have none, so all three come from the
+/// attributes, and the descriptor has already checked that the shape is
+/// well formed and the dtype and device are declared rather than guessed.
+///
+/// They are also the reason `dispatch::execute` grew a capability query keyed
+/// on the descriptor's output: its per-operand loop runs zero times here, so
+/// without that these would have been the only path to a backend that skipped
+/// the registry entirely.
+macro_rules! allocating_executors {
+    ($(($operation:ident, $method:ident $(, $argument:ident)*)),* $(,)?) => {$(
+        impl<T: DType, D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<T, D> {
+            type Output = CpuStorage;
+
+            fn execute(
+                &self,
+                request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
+            ) -> Result<CpuStorage, BackendError> {
+                let operation = OperationKind::$operation;
+                if !request.inputs.is_empty() {
+                    return Err(invalid(operation, "an allocation takes no operand"));
+                }
+                let attributes = request.operation.descriptor().attributes();
+                <Self as CreationOps<Self>>::$method::<T>(
+                    $(attributes.$argument,)*
+                    &attributes.shape,
+                    attributes.dtype,
+                    &attributes.device,
+                )
+                .map_err(|error| kernel_error(operation, error))
+            }
+        }
+    )*};
+}
+
+// The scalar parameters come first in every one of these signatures, which is
+// why the macro takes them as a prefix rather than trying to place them.
+allocating_executors![
+    (Zeros, zeros),
+    (Ones, ones),
+    (UniformRandom, rand),
+    (NormalRandom, randn),
+    (Full, full, value),
+    (Arange, arange, start, step),
+    (Linspace, linspace, start, end),
+];
+
 /// Reshape to the descriptor's declared shape.
 impl<T: DType, D: Device> Execute<Descriptor<op::ReshapeExact>> for CpuBackendImpl<T, D> {
     type Output = CpuStorage;
@@ -2442,13 +2491,14 @@ mod tests {
     use crate::cpu::storage::CpuBuffer;
     use incin_core::exec::GradMode;
     use incin_core::exec::catalog::{
-        AxisAttributes, BatchNormAttributes, ChunkAttributes, Conv1dAttributes, Conv2dAttributes,
-        DTypeAttributes, DropoutAttributes, EpsilonAttributes, LayerNormAttributes,
-        LinearAttributes, LossAttributes, NoAttributes, NormAttributes, QuantizationAttributes,
-        ShapeAttributes, SplitAttributes,
+        ArangeAttributes, AxisAttributes, BatchNormAttributes, ChunkAttributes, Conv1dAttributes,
+        Conv2dAttributes, CreationAttributes, DTypeAttributes, DropoutAttributes,
+        EpsilonAttributes, LayerNormAttributes, LinearAttributes, LinspaceAttributes,
+        LossAttributes, NoAttributes, NormAttributes, QuantizationAttributes, ShapeAttributes,
+        SplitAttributes,
     };
     use incin_core::exec::{ExecutionContext, TensorHandle, dispatch};
-    use incin_core::prelude::{Cpu, Local};
+    use incin_core::prelude::{Cpu, DeviceId, Local};
 
     type TestBackend = CpuBackendImpl<f32, Cpu>;
 
@@ -2916,6 +2966,115 @@ mod tests {
         assert_eq!(output.shape.to_vec(), vec![2]);
         assert_eq!(output.get(&[0]), 1.0);
         assert_eq!(output.get(&[1]), 9.0);
+    }
+
+    /// An allocation is capability-checked even though it has no operand.
+    ///
+    /// This is the assertion the whole zero-operand branch in
+    /// `dispatch::execute` exists for. `rand` is advertised for the float
+    /// dtypes only, and a request for an integer one has to be refused by the
+    /// registry rather than reaching the kernel, which would happily produce
+    /// something. Before that branch existed the per-operand loop ran zero
+    /// times here and nothing was checked at all.
+    #[test]
+    fn an_allocation_is_refused_by_a_row_it_does_not_match() {
+        let context = inference_context();
+
+        let error = dispatch::execute::<op::UniformRandom, _>(
+            &context,
+            CreationAttributes {
+                shape: vec![2, 2],
+                dtype: DTypeId::I64,
+                device: DeviceId::cpu(),
+            },
+            &[],
+        )
+        .expect_err("a uniform draw over an integer dtype is not advertised");
+        let message = format!("{error}");
+        assert!(
+            message.to_lowercase().contains("dtype") || message.contains("I64"),
+            "the refusal must name the dtype the row does not carry: {message}"
+        );
+
+        // The same call over a dtype the row does carry still runs, so the test
+        // above is about the dtype rather than about allocation being broken.
+        dispatch::execute::<op::UniformRandom, _>(
+            &context,
+            CreationAttributes {
+                shape: vec![2, 2],
+                dtype: DTypeId::F32,
+                device: DeviceId::cpu(),
+            },
+            &[],
+        )
+        .expect("a uniform draw over f32 is advertised");
+    }
+
+    /// The ranged fills produce the values their attributes describe.
+    ///
+    /// `arange` and `linspace` differ only in whether the second parameter is a
+    /// step or an endpoint, which makes them the pair most easily confused in a
+    /// macro that passes both positionally.
+    #[test]
+    fn the_ranged_fills_read_their_parameters_in_the_right_order() {
+        let context = inference_context();
+        let shape = vec![4];
+        let device = DeviceId::cpu();
+
+        let stepped = dispatch::execute::<op::Arange, _>(
+            &context,
+            ArangeAttributes {
+                shape: shape.clone(),
+                dtype: DTypeId::F32,
+                device,
+                start: 10.0,
+                step: 2.0,
+            },
+            &[],
+        )
+        .expect("arange executes");
+        for (index, expected) in [10.0, 12.0, 14.0, 16.0].into_iter().enumerate() {
+            assert_eq!(stepped.get(&[index]), expected);
+        }
+
+        let spaced = dispatch::execute::<op::Linspace, _>(
+            &context,
+            LinspaceAttributes {
+                shape,
+                dtype: DTypeId::F32,
+                device,
+                start: 0.0,
+                end: 3.0,
+            },
+            &[],
+        )
+        .expect("linspace executes");
+        for (index, expected) in [0.0, 1.0, 2.0, 3.0].into_iter().enumerate() {
+            assert!(
+                (spaced.get(&[index]) - expected).abs() < 1e-6,
+                "element {index}: expected {expected}, got {}",
+                spaced.get(&[index])
+            );
+        }
+    }
+
+    /// An allocation refuses an operand rather than ignoring it.
+    #[test]
+    fn an_allocation_given_an_operand_is_refused() {
+        let context = inference_context();
+        let stray = storage(&[1.0], &[1]);
+
+        let error = dispatch::execute::<op::Zeros, _>(
+            &context,
+            CreationAttributes {
+                shape: vec![2],
+                dtype: DTypeId::F32,
+                device: DeviceId::cpu(),
+            },
+            &[handle(&stray)],
+        )
+        .expect_err("zeros reads nothing, so an operand is a malformed request");
+        assert!(format!("{error}").contains("zeros"));
     }
 
     /// Dropout keeps roughly the share it promises and scales what survives.

@@ -156,6 +156,35 @@ where
             context.math_mode(),
         )?;
     }
+    // An operation with no operands would otherwise run that loop zero times
+    // and reach the backend without a single capability query, which is the one
+    // way through here that skips the registry entirely. Every creation
+    // operation in the catalog has an operand arity of zero, so this is not a
+    // hypothetical gap: it is the whole creation family.
+    //
+    // What such an operation must be supported *for* is the allocation it was
+    // asked to produce, and the descriptor already carries that: the inferred
+    // output metadata names the dtype, the device and the rank. A fresh
+    // allocation is contiguous by construction, so the layout is not inferred
+    // from anything, it is a fact about what the backend is being told to make.
+    if inputs.is_empty() {
+        for output in invocation.descriptor().outputs() {
+            let (Some(dtype), Some(shape)) = (output.dtype, output.shape.as_deref()) else {
+                continue;
+            };
+            let query = CapabilityQuery {
+                operation: O::ID,
+                dtype,
+                layout: crate::exec::meta::LayoutClass::Contiguous,
+                rank: shape.len(),
+                training,
+                math_mode: context.math_mode(),
+            };
+            if let SupportLevel::Unsupported(reason) = context.backend().support(&query) {
+                return Err(reason.into());
+            }
+        }
+    }
 
     context
         .backend()
