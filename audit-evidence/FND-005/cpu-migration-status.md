@@ -4,7 +4,7 @@ Generated from `CPU_CAPABILITIES` and `incin_core::exec::OPERATION_CATALOG`; the
 
 The denominator is the number of operations that `Execute<Descriptor<O>>` can carry at all, not the whole catalog. An operation whose `ExecutionSite` is not backend-executable is listed separately with the reason: it is a gap in the execution trait rather than an unwritten executor, and counting it here would describe work that cannot be done without changing the contract first.
 
-**112 of 161 backend-executable operations migrated**, out of 174 catalog operations in total. The remaining 49 executable operations are still reachable only through the legacy operation-family traits.
+**117 of 161 backend-executable operations migrated**, out of 174 catalog operations in total. The remaining 44 executable operations are still reachable only through the legacy operation-family traits.
 
 ## Backend-executable operations
 
@@ -150,15 +150,15 @@ The denominator is the number of operations that `Execute<Descriptor<O>>` can ca
 | `std_all` | `Kernel` | no | `Tensor::std_all` |
 | `std_dim` | `Kernel` | no | `Tensor::std_dim` |
 | `std_keepdim` | `Kernel` | no | `Tensor::std_keepdim` |
-| `layer_norm` | `Kernel` | no | `ModuleOps::layer_norm` |
-| `batch_norm` | `Kernel` | no | `ModuleOps::batch_norm` |
+| `layer_norm` | `Kernel` | yes | `ModuleOps::layer_norm` |
+| `batch_norm` | `Kernel` | yes | `ModuleOps::batch_norm` |
 | `embedding` | `Kernel` | no | `ModuleOps::embedding` |
-| `conv1d` | `Kernel` | no | `ModuleOps::conv1d` |
+| `conv1d` | `Kernel` | yes | `ModuleOps::conv1d` |
 | `conv2d` | `Kernel` | yes | `ModuleOps::conv2d` |
-| `conv_transpose2d` | `Kernel` | no | `ModuleOps::conv_transpose2d` |
+| `conv_transpose2d` | `Kernel` | yes | `ModuleOps::conv_transpose2d` |
 | `max_pool2d` | `Kernel` | yes | `ModuleOps::max_pool2d` |
 | `avg_pool2d` | `Kernel` | yes | `ModuleOps::avg_pool2d` |
-| `adaptive_avg_pool2d` | `Kernel` | no | `ModuleOps::adaptive_avg_pool2d` |
+| `adaptive_avg_pool2d` | `Kernel` | yes | `ModuleOps::adaptive_avg_pool2d` |
 | `linear` | `Kernel` | no | `Linear::forward` |
 | `rms_norm` | `Kernel` | no | `RMSNorm::forward` |
 | `dropout` | `Kernel` | no | `Dropout::forward` |

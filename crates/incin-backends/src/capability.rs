@@ -132,9 +132,27 @@ macro_rules! cpu_descriptor_operations {
                 // correctly, and this group is the f32-only one.
                 TopK
             ],
-            spatial = [Conv2dExact, MaxPool2d, AvgPool2d],
+            spatial = [
+                Conv2dExact, Conv1dExact, ConvTranspose2d,
+                MaxPool2d, AvgPool2d, AdaptiveAvgPool2dExact
+            ],
             matmul = [MatMulExact],
-            softmax = [Softmax],
+            // `layer_norm` and `batch_norm` join `softmax` here because they
+            // share its rule shape exactly: f32-only, axis-bearing, gradient
+            // recording. They are a different operation family and a different
+            // trait method, which is precisely why the group is named for the
+            // shape rather than for the family.
+            normalization = [Softmax, LayerNorm, BatchNorm],
+            // `embedding` is the module-family operation deliberately absent
+            // from every group above, and it is absent because of the contract
+            // rather than because nobody wrote the executor. Its two operands
+            // have different dtypes by construction: a float table and an
+            // integer index. `dispatch::execute` resolves one capability row and
+            // applies it to each operand in turn, so the row would have to
+            // admit both dtype sets at once. Stating only f32 refuses every
+            // legal call, and widening it to the non-quantized set claims f64
+            // support the kernel answers by narrowing to f32. Per-operand dtype
+            // sets are the change that unblocks it.
             native_tensor = [
                 ArgMax, ArgMin, Argsort, Cumsum,
                 Maximum, Minimum, AbsDiff, Lerp, MaskedFill, WhereCond,
@@ -175,7 +193,7 @@ macro_rules! cuda_descriptor_operations {
             // No canonical executor was written for this backend beyond the
             // groups above, so it advertises none. An empty group is a truthful
             // claim; a copied one would not be.
-            softmax = [],
+            normalization = [],
             native_tensor = [],
             composed_tensor = [],
             composed_matmul = []
@@ -200,7 +218,7 @@ macro_rules! wgpu_descriptor_operations {
             // No canonical executor was written for this backend beyond the
             // groups above, so it advertises none. An empty group is a truthful
             // claim; a copied one would not be.
-            softmax = [],
+            normalization = [],
             native_tensor = [],
             composed_tensor = [],
             composed_matmul = []
@@ -224,7 +242,7 @@ macro_rules! metal_descriptor_operations {
             // No canonical executor was written for this backend beyond the
             // groups above, so it advertises none. An empty group is a truthful
             // claim; a copied one would not be.
-            softmax = [],
+            normalization = [],
             native_tensor = [],
             composed_tensor = [],
             composed_matmul = []
@@ -240,7 +258,7 @@ macro_rules! descriptor_capability_rules {
         reduction = $reduction:expr,
         spatial = $spatial:expr,
         matmul = $matmul:expr,
-        softmax_dtypes = $softmax_dtypes:expr,
+        normalization_dtypes = $normalization_dtypes:expr,
         broadcast_training = $broadcast_training:expr,
         reshape_training = $reshape_training:expr,
         elementwise_layouts = $elementwise_layouts:expr,
@@ -258,7 +276,7 @@ macro_rules! descriptor_capability_rules {
         reduction = [$($reduction_op:ident),* $(,)?],
         spatial = [$($spatial_op:ident),* $(,)?],
         matmul = [$($matmul_op:ident),* $(,)?],
-        softmax = [$($softmax_op:ident),* $(,)?],
+        normalization = [$($normalization_op:ident),* $(,)?],
         native_tensor = [$($native_tensor_op:ident),* $(,)?],
         composed_tensor = [$($composed_tensor_op:ident),* $(,)?],
         composed_matmul = [$($composed_matmul_op:ident),* $(,)?]
@@ -309,11 +327,11 @@ macro_rules! descriptor_capability_rules {
             // f32 and returns f32 storage, so advertising the half and double
             // types for it would be a claim execution does not honour.
             $(native_ranked(
-                OperationKind::$softmax_op,
-                $softmax_dtypes,
+                OperationKind::$normalization_op,
+                $normalization_dtypes,
                 $elementwise_layouts,
-                descriptor_min_rank(OperationKind::$softmax_op),
-                descriptor_max_rank(OperationKind::$softmax_op),
+                descriptor_min_rank(OperationKind::$normalization_op),
+                descriptor_max_rank(OperationKind::$normalization_op),
                 true,
             ),)*
             // The tensor family reads its operands through the stride-aware
@@ -354,14 +372,44 @@ macro_rules! descriptor_capability_rules {
     };
 }
 
+/// The lowest rank any *operand* of `operation` may have.
+///
+/// Not the lowest rank of its primary operand, which is the reading that looks
+/// right and is wrong. `dispatch::execute` resolves one capability row per
+/// operation and then applies it to every operand in turn, so a bound derived
+/// from the activation alone is also asserted against the bias. `conv2d` was
+/// written that way and consequently refused its own rank-one bias for the
+/// whole of its migration; `a_convolution_with_a_bias_is_not_refused_by_its_own_rank_bound`
+/// in `cpu::canonical` is the regression test for it.
+///
+/// Nothing is lost by taking the minimum here. The primary operand's real bound
+/// is enforced by the descriptor's `AttributeContract::validate`, which runs
+/// before any capability query and can see which operand is which. This table
+/// only has to avoid contradicting it.
 const fn descriptor_min_rank(operation: OperationKind) -> usize {
     match operation {
-        OperationKind::Conv2dExact | OperationKind::MaxPool2d | OperationKind::AvgPool2d => 3,
+        // Single-operand windows, so the activation's bound is the whole
+        // operation's bound.
+        OperationKind::MaxPool2d
+        | OperationKind::AvgPool2d
+        | OperationKind::AdaptiveAvgPool2dExact => 3,
+        // The convolutions want three or four axes from the activation and
+        // four or fewer from the weight, but each also takes an optional
+        // rank-one bias, and that is the minimum the row can state. The
+        // activation bound lives in `spatial_contract!` instead.
+        OperationKind::Conv1dExact
+        | OperationKind::Conv2dExact
+        | OperationKind::ConvTranspose2d => 1,
         // A product needs two axes; batching it needs a third to batch over.
-        // `softmax` needs one axis to normalize along.
+        // `softmax` needs one axis to normalize along, and `layer_norm`
+        // normalizes over a trailing suffix, so it needs one too.
         OperationKind::MatMulExact => 2,
         OperationKind::BatchedMatMul => 3,
-        OperationKind::Softmax => 1,
+        OperationKind::Softmax | OperationKind::LayerNorm => 1,
+        // `BatchNormAttributes::validate` refuses an input without a channel
+        // axis, but the weight, bias and running statistics are per-channel
+        // vectors, so rank one is what this row has to admit.
+        OperationKind::BatchNorm => 1,
         OperationKind::SumDim
         | OperationKind::SumKeepDim
         | OperationKind::MeanDim
@@ -397,7 +445,11 @@ const fn descriptor_min_rank(operation: OperationKind) -> usize {
         | OperationKind::Scatter
         | OperationKind::IndexSelect
         | OperationKind::Unfold => 1,
-        OperationKind::Addmm | OperationKind::ScaledDotProductAttention => 2,
+        // `addmm` broadcasts its addend against the product, so a per-column
+        // rank-one addend is a legal operand of a rank-two operation, and the
+        // same per-operand rule that governs the convolution biases applies.
+        OperationKind::Addmm => 1,
+        OperationKind::ScaledDotProductAttention => 2,
         // Matched to the descriptor, not to the kernel. `group_norm` needs a
         // channel axis and `instance_norm` needs the full [N, C, H, W] layout;
         // the CPU kernels accept less than that, but a row wider than what the
@@ -410,7 +462,14 @@ const fn descriptor_min_rank(operation: OperationKind) -> usize {
 
 const fn descriptor_max_rank(operation: OperationKind) -> usize {
     match operation {
-        OperationKind::Conv2dExact | OperationKind::MaxPool2d | OperationKind::AvgPool2d => 4,
+        OperationKind::Conv2dExact
+        | OperationKind::ConvTranspose2d
+        | OperationKind::MaxPool2d
+        | OperationKind::AvgPool2d
+        | OperationKind::AdaptiveAvgPool2dExact => 4,
+        // A one-dimensional convolution reads [N, C, L] or the unbatched [C, L];
+        // there is no fourth axis for it to interpret.
+        OperationKind::Conv1dExact => 3,
         // `DiagonalAttributes` refuses anything outside rank one or two, so a
         // wider row would advertise ranks the descriptor rejects before the
         // backend is ever reached.
@@ -430,7 +489,7 @@ pub static CPU_CAPABILITIES: &[CapabilityRule] = cpu_descriptor_operations!(
     reduction = F32_ONLY,
     spatial = F32_ONLY,
     matmul = F32_ONLY,
-    softmax_dtypes = F32_ONLY,
+    normalization_dtypes = F32_ONLY,
     broadcast_training = FLOAT_DTYPES,
     reshape_training = FLOAT_DTYPES,
     elementwise_layouts = CPU_LAYOUTS,
@@ -530,7 +589,7 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
     reduction = FLOAT_DTYPES,
     spatial = F32_ONLY,
     matmul = F32_ONLY,
-    softmax_dtypes = F32_ONLY,
+    normalization_dtypes = F32_ONLY,
     broadcast_training = FLOAT_DTYPES,
     reshape_training = FLOAT_DTYPES,
     elementwise_layouts = CONTIGUOUS,
@@ -615,7 +674,7 @@ pub static WGPU_CAPABILITIES: &[CapabilityRule] = wgpu_descriptor_operations!(
     reduction = F32_ONLY,
     spatial = F32_ONLY,
     matmul = F32_ONLY,
-    softmax_dtypes = F32_ONLY,
+    normalization_dtypes = F32_ONLY,
     broadcast_training = F32_ONLY,
     reshape_training = F32_ONLY,
     elementwise_layouts = CONTIGUOUS,
@@ -701,7 +760,7 @@ pub static METAL_CAPABILITIES: &[CapabilityRule] = metal_descriptor_operations!(
     reduction = FLOAT_DTYPES,
     spatial = F32_ONLY,
     matmul = FLOAT_DTYPES,
-    softmax_dtypes = F32_ONLY,
+    normalization_dtypes = F32_ONLY,
     broadcast_training = FLOAT_DTYPES,
     reshape_training = FLOAT_DTYPES,
     elementwise_layouts = CONTIGUOUS,

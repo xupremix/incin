@@ -393,6 +393,53 @@ fn isotropic(
     }
 }
 
+/// Refuse any operand the routed kernel would silently narrow.
+///
+/// `admitted` runs one capability query, so on a multi-operand operation it
+/// speaks for the operand it was handed and no other. That is enough where the
+/// operands share a dtype by construction, and not enough here: the convolution
+/// and pooling kernels below build their result buffer as f32 regardless of what
+/// the operand held, so an f64 weight would be accepted, narrowed, and returned
+/// labelled f64. Measured against the real kernels rather than inferred from
+/// their signatures, which are generic over the element type and suggest
+/// otherwise.
+///
+/// The `Option` operands are the descriptor's optional ones. Taking them here
+/// rather than at each call site keeps a bias from being the operand nobody
+/// remembered to check.
+fn f32_only(
+    operation: OperationKind,
+    operands: &[Option<&CpuStorage>],
+) -> Result<(), BackendError> {
+    for storage in operands.iter().flatten() {
+        let dtype = storage.metadata().dtype();
+        if dtype != DTypeId::F32 {
+            return Err(UnsupportedReason::DType { operation, dtype }.into());
+        }
+    }
+    Ok(())
+}
+
+/// Narrow a descriptor epsilon to the width the routed kernel accepts.
+///
+/// `LayerNormAttributes` and `BatchNormAttributes` carry an `f64`, while
+/// `ModuleOps::layer_norm` and `ModuleOps::batch_norm` take an `f32`. Almost
+/// every epsilon survives that, but one below `f32::MIN_POSITIVE` flushes to
+/// zero and turns a guarded division into an unguarded one, which shows up as a
+/// non-finite activation far from here. Refused rather than rounded.
+fn narrowed_epsilon(operation: OperationKind, epsilon: f64) -> Result<f32, BackendError> {
+    let narrowed = epsilon as f32;
+    if narrowed.is_finite() && narrowed > 0.0 {
+        Ok(narrowed)
+    } else {
+        Err(invalid(
+            operation,
+            "epsilon is not representable as a positive finite f32, and narrowing it would \
+             remove the guard it exists to provide",
+        ))
+    }
+}
+
 /// Two-dimensional convolution with an optional bias.
 impl<T: DType, D: Device> Execute<Descriptor<op::Conv2dExact>> for CpuBackendImpl<T, D> {
     type Output = CpuStorage;
@@ -495,6 +542,131 @@ impl<T: DType, D: Device> Execute<Descriptor<op::AvgPool2d>> for CpuBackendImpl<
             pair(attributes.padding),
         )
         .map_err(|error| kernel_error(operation, error))
+    }
+}
+
+/// One-dimensional convolution with an optional bias.
+impl<T: DType, D: Device> Execute<Descriptor<op::Conv1dExact>> for CpuBackendImpl<T, D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::Conv1dExact>, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::Conv1dExact;
+        let attributes = request.operation.descriptor().attributes();
+        let (activation, weight, bias) = match request.inputs {
+            [activation, weight] => (activation, weight, None),
+            [activation, weight, bias] => (activation, weight, Some(bias)),
+            _ => {
+                return Err(invalid(
+                    operation,
+                    "conv1d expects an activation, a weight and an optional bias",
+                ));
+            }
+        };
+        let activation = operand(activation, operation)?;
+        let weight = operand(weight, operation)?;
+        let bias = bias.map(|bias| operand(bias, operation)).transpose()?;
+        admitted(self, operation, activation)?;
+        f32_only(operation, &[Some(activation), Some(weight), bias])?;
+
+        // `Conv1dAttributes` already carries one extent per field, so unlike the
+        // two-dimensional forms there is nothing to collapse.
+        <Self as ModuleOps<Self>>::conv1d::<T>(
+            activation,
+            weight,
+            bias,
+            attributes.stride,
+            attributes.padding,
+            attributes.dilation,
+            attributes.groups,
+        )
+        .map_err(|error| kernel_error(operation, error))
+    }
+}
+
+/// Two-dimensional transposed convolution with an optional bias.
+impl<T: DType, D: Device> Execute<Descriptor<op::ConvTranspose2d>> for CpuBackendImpl<T, D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::ConvTranspose2d>, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::ConvTranspose2d;
+        let attributes = request.operation.descriptor().attributes();
+        let (activation, weight, bias) = match request.inputs {
+            [activation, weight] => (activation, weight, None),
+            [activation, weight, bias] => (activation, weight, Some(bias)),
+            _ => {
+                return Err(invalid(
+                    operation,
+                    "conv_transpose2d expects an activation, a weight and an optional bias",
+                ));
+            }
+        };
+        let activation = operand(activation, operation)?;
+        let weight = operand(weight, operation)?;
+        let bias = bias.map(|bias| operand(bias, operation)).transpose()?;
+        admitted(self, operation, activation)?;
+        f32_only(operation, &[Some(activation), Some(weight), bias])?;
+
+        // The same descriptor-to-kernel width gap the forward convolution has,
+        // with one more field: the transposed form also carries an output
+        // padding per axis and the kernel takes one for both.
+        let stride = isotropic(
+            operation,
+            attributes.stride,
+            "conv_transpose2d strides differ per axis; the routed kernel takes one stride for both",
+        )?;
+        let padding = isotropic(
+            operation,
+            attributes.padding,
+            "conv_transpose2d paddings differ per axis; the routed kernel takes one padding for \
+             both",
+        )?;
+        let output_padding = isotropic(
+            operation,
+            attributes.output_padding,
+            "conv_transpose2d output paddings differ per axis; the routed kernel takes one for \
+             both",
+        )?;
+        let dilation = isotropic(
+            operation,
+            attributes.dilation,
+            "conv_transpose2d dilations differ per axis; the routed kernel takes one dilation for \
+             both",
+        )?;
+
+        <Self as ModuleOps<Self>>::conv_transpose2d::<T>(
+            activation,
+            weight,
+            bias,
+            stride,
+            padding,
+            output_padding,
+            dilation,
+            attributes.groups,
+        )
+        .map_err(|error| kernel_error(operation, error))
+    }
+}
+
+/// Average pooling to a requested output extent rather than a requested window.
+impl<T: DType, D: Device> Execute<Descriptor<op::AdaptiveAvgPool2dExact>> for CpuBackendImpl<T, D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::AdaptiveAvgPool2dExact>, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::AdaptiveAvgPool2dExact;
+        let input = reduction_operand(self, request.inputs, operation)?;
+        f32_only(operation, &[Some(input)])?;
+        let [height, width] = request.operation.descriptor().attributes().output;
+        <Self as ModuleOps<Self>>::adaptive_avg_pool2d::<T>(input, (height, width))
+            .map_err(|error| kernel_error(operation, error))
     }
 }
 
@@ -641,6 +813,134 @@ impl<T: DType, D: Device> Execute<Descriptor<op::Softmax>> for CpuBackendImpl<T,
         let axis = request.operation.descriptor().attributes().axis;
         <Self as FloatOps<Self>>::softmax::<T>(input, axis)
             .map_err(|error| kernel_error(operation, error))
+    }
+}
+
+/// Normalize over the trailing axes the attributes name, then scale and shift.
+impl<T: DType, D: Device> Execute<Descriptor<op::LayerNorm>> for CpuBackendImpl<T, D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::LayerNorm>, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::LayerNorm;
+        let attributes = request.operation.descriptor().attributes();
+        let (input, weight, bias) = match request.inputs {
+            [input, weight] => (input, weight, None),
+            [input, weight, bias] => (input, weight, Some(bias)),
+            _ => {
+                return Err(invalid(
+                    operation,
+                    "layer norm expects an input, a weight and an optional bias",
+                ));
+            }
+        };
+        let input = operand(input, operation)?;
+        let weight = operand(weight, operation)?;
+        let bias = bias.map(|bias| operand(bias, operation)).transpose()?;
+        admitted(self, operation, input)?;
+        f32_only(operation, &[Some(input), Some(weight), bias])?;
+        let epsilon = narrowed_epsilon(operation, attributes.epsilon)?;
+
+        // `normalized_shape` is not passed on: the descriptor has already
+        // checked that it is the operand's trailing suffix and that the weight
+        // and bias match it, and the kernel derives the same split from the
+        // weight's own shape.
+        <Self as ModuleOps<Self>>::layer_norm::<T>(input, weight, bias, epsilon)
+            .map_err(|error| kernel_error(operation, error))
+    }
+}
+
+/// Normalize each channel by its running statistics, then scale and shift.
+///
+/// Inference only, and refused rather than approximated otherwise. See the
+/// refusal below.
+impl<T: DType, D: Device> Execute<Descriptor<op::BatchNorm>> for CpuBackendImpl<T, D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::BatchNorm>, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::BatchNorm;
+        let attributes = request.operation.descriptor().attributes();
+        // The CPU kernel never computes batch statistics and never updates the
+        // running ones; its momentum parameter is bound to `_momentum`. A
+        // training request routed to it would come back with the inference
+        // result and nothing to distinguish it from a correct one, and the
+        // running statistics the caller expects to have been updated would be
+        // unchanged. That is the one failure this executor exists to prevent,
+        // so it is a refusal and not a note in the documentation.
+        if attributes.training {
+            return Err(invalid(
+                operation,
+                "the CPU batch norm kernel evaluates inference mode only: it computes no batch \
+                 statistics and updates no running statistics, so a training request cannot be \
+                 answered correctly",
+            ));
+        }
+        let Some((input, optional)) = request.inputs.split_first() else {
+            return Err(invalid(
+                operation,
+                "batch norm expects at least the input operand",
+            ));
+        };
+        // The optional operands are positional, in the order the presence flags
+        // are declared: weight, bias, running mean, running variance. Only the
+        // present ones occupy a slot.
+        let mut remaining = optional.iter();
+        let mut next = |present: bool| present.then(|| remaining.next()).flatten();
+        let weight = next(attributes.has_weight);
+        let bias = next(attributes.has_bias);
+        let running_mean = next(attributes.has_running_mean);
+        let running_variance = next(attributes.has_running_variance);
+        if remaining.next().is_some() {
+            return Err(invalid(
+                operation,
+                "batch norm was given more operands than its presence flags account for",
+            ));
+        }
+        // Descriptor validation already pairs these with `training`, but the
+        // kernel substitutes a zero mean and a unit variance for an absent one
+        // instead of failing, so an executor that trusted the caller here would
+        // return a plausible wrong answer rather than an error.
+        let (Some(running_mean), Some(running_variance)) = (running_mean, running_variance) else {
+            return Err(invalid(
+                operation,
+                "inference batch norm needs a running mean and a running variance; without them \
+                 the kernel substitutes a zero mean and a unit variance",
+            ));
+        };
+
+        let input = operand(input, operation)?;
+        let weight = weight.map(|value| operand(value, operation)).transpose()?;
+        let bias = bias.map(|value| operand(value, operation)).transpose()?;
+        let running_mean = operand(running_mean, operation)?;
+        let running_variance = operand(running_variance, operation)?;
+        admitted(self, operation, input)?;
+        f32_only(
+            operation,
+            &[
+                Some(input),
+                weight,
+                bias,
+                Some(running_mean),
+                Some(running_variance),
+            ],
+        )?;
+        let epsilon = narrowed_epsilon(operation, attributes.epsilon)?;
+
+        <Self as ModuleOps<Self>>::batch_norm::<T>(
+            input,
+            weight,
+            bias,
+            Some(running_mean),
+            Some(running_variance),
+            epsilon,
+            attributes.momentum,
+        )
+        .map_err(|error| kernel_error(operation, error))
     }
 }
 
@@ -1287,7 +1587,10 @@ mod tests {
     use super::*;
     use crate::cpu::gradcheck::gradcheck;
     use crate::cpu::storage::CpuBuffer;
-    use incin_core::exec::catalog::{AxisAttributes, NoAttributes, ShapeAttributes};
+    use incin_core::exec::catalog::{
+        AxisAttributes, BatchNormAttributes, Conv1dAttributes, Conv2dAttributes,
+        LayerNormAttributes, NoAttributes, ShapeAttributes,
+    };
     use incin_core::exec::{ExecutionContext, TensorHandle, dispatch};
     use incin_core::prelude::{Cpu, Local};
 
@@ -1519,5 +1822,218 @@ mod tests {
                 );
             }
         }
+    }
+
+    fn batch_norm_attributes(training: bool, epsilon: f64) -> BatchNormAttributes {
+        BatchNormAttributes {
+            epsilon,
+            momentum: 0.1,
+            training,
+            has_weight: false,
+            has_bias: false,
+            has_running_mean: !training,
+            has_running_variance: !training,
+        }
+    }
+
+    /// A training batch norm must be refused, not answered in inference mode.
+    ///
+    /// This is the failure the executor was written to prevent. The kernel
+    /// behind it binds its momentum to `_momentum` and computes no batch
+    /// statistics, so the wrong answer here is not an error or a NaN but a
+    /// correctly shaped tensor of finite values that silently used the running
+    /// statistics, with the caller's running statistics left unchanged.
+    #[test]
+    fn a_training_batch_norm_is_refused_rather_than_evaluated_in_inference_mode() {
+        let context = context();
+        let input = storage(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], &[2, 3]);
+
+        let error = dispatch::execute::<op::BatchNorm, _>(
+            &context,
+            batch_norm_attributes(true, 1e-5),
+            &[handle(&input)],
+        )
+        .expect_err("a training batch norm has no correct answer on this backend");
+        let message = format!("{error}");
+        assert!(
+            message.contains("inference mode only"),
+            "the refusal must name the reason, not just fail: {message}"
+        );
+    }
+
+    /// The same call in inference mode, with running statistics, succeeds.
+    ///
+    /// Without this the test above would pass equally well if the executor
+    /// refused everything.
+    #[test]
+    fn an_inference_batch_norm_with_running_statistics_executes() {
+        let context = context();
+        let input = storage(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], &[2, 3]);
+        let running_mean = storage(&[0.0, 0.0, 0.0], &[3]);
+        let running_variance = storage(&[1.0, 1.0, 1.0], &[3]);
+
+        let output = dispatch::execute::<op::BatchNorm, _>(
+            &context,
+            batch_norm_attributes(false, 1e-5),
+            &[
+                handle(&input),
+                handle(&running_mean),
+                handle(&running_variance),
+            ],
+        )
+        .expect("an inference batch norm with running statistics executes");
+        assert_eq!(output.shape.to_vec(), vec![2, 3]);
+    }
+
+    /// An epsilon that survives descriptor validation but not the narrowing to
+    /// the kernel's `f32` is refused.
+    ///
+    /// `validate_epsilon` accepts any finite non-negative `f64`, so `1e-300` is
+    /// a legal descriptor. It narrows to exactly zero, which would leave the
+    /// division in the normalization unguarded, so the executor is the layer
+    /// that has to catch it.
+    #[test]
+    fn an_epsilon_that_flushes_to_zero_in_f32_is_refused() {
+        let context = context();
+        let input = storage(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], &[2, 3]);
+        let running_mean = storage(&[0.0, 0.0, 0.0], &[3]);
+        let running_variance = storage(&[1.0, 1.0, 1.0], &[3]);
+
+        let error = dispatch::execute::<op::BatchNorm, _>(
+            &context,
+            batch_norm_attributes(false, 1e-300),
+            &[
+                handle(&input),
+                handle(&running_mean),
+                handle(&running_variance),
+            ],
+        )
+        .expect_err("an epsilon that narrows to zero is not the epsilon that was asked for");
+        let message = format!("{error}");
+        assert!(
+            message.contains("positive finite f32"),
+            "the refusal must name the reason, not just fail: {message}"
+        );
+    }
+
+    /// Layer norm reaches its kernel through the canonical path.
+    #[test]
+    fn canonical_layer_norm_executes_and_normalizes_each_row() {
+        let context = context();
+        let input = storage(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], &[2, 3]);
+        let weight = storage(&[1.0, 1.0, 1.0], &[3]);
+
+        let output = dispatch::execute::<op::LayerNorm, _>(
+            &context,
+            LayerNormAttributes {
+                normalized_shape: vec![3],
+                epsilon: 1e-5,
+                has_bias: false,
+            },
+            &[handle(&input), handle(&weight)],
+        )
+        .expect("layer norm executes");
+        assert_eq!(output.shape.to_vec(), vec![2, 3]);
+        // Each row is [x-1, x, x+1] with unit spacing, so normalizing it leaves
+        // a zero mean and the same ordering. Checking the mean rather than the
+        // exact values keeps this a routing test rather than a second copy of
+        // the kernel's own numerical tests in `ops::norm`.
+        for row in 0..2 {
+            let mean: f64 = (0..3).map(|column| output.get(&[row, column])).sum::<f64>() / 3.0;
+            assert!(
+                mean.abs() < 1e-5,
+                "row {row} was not normalized: mean {mean}"
+            );
+        }
+    }
+
+    /// A convolution with a bias dispatches.
+    ///
+    /// The bias is rank one and the activation is rank four, and
+    /// `dispatch::execute` applies the operation's single capability row to
+    /// every operand in turn. A row whose minimum rank was set from the
+    /// activation alone therefore refuses its own bias, which is how this test
+    /// found `conv2d` advertising `3..=4` while being undispatchable with one.
+    /// It belongs here rather than beside the kernel tests because the property
+    /// it protects is the capability row's, not the kernel's.
+    #[test]
+    fn a_convolution_with_a_bias_is_not_refused_by_its_own_rank_bound() {
+        let context = context();
+        let activation = storage(&[1.0, 2.0, 3.0, 4.0], &[1, 1, 2, 2]);
+        let weight = storage(&[1.0], &[1, 1, 1, 1]);
+        let bias = storage(&[0.5], &[1]);
+
+        let output = dispatch::execute::<op::Conv2dExact, _>(
+            &context,
+            Conv2dAttributes {
+                stride: [1, 1],
+                padding: [0, 0],
+                dilation: [1, 1],
+                groups: 1,
+                has_bias: true,
+            },
+            &[handle(&activation), handle(&weight), handle(&bias)],
+        )
+        .expect("a biased conv2d executes");
+        assert_eq!(output.shape.to_vec(), vec![1, 1, 2, 2]);
+    }
+
+    /// One-dimensional convolution reaches its kernel through the canonical path.
+    #[test]
+    fn canonical_conv1d_executes_at_the_ranks_its_row_advertises() {
+        let context = context();
+        // [N, C, L] with a single input and output channel, so the result is a
+        // plain sliding sum over pairs.
+        let activation = storage(&[1.0, 2.0, 3.0, 4.0], &[1, 1, 4]);
+        let weight = storage(&[1.0, 1.0], &[1, 1, 2]);
+
+        let output = dispatch::execute::<op::Conv1dExact, _>(
+            &context,
+            Conv1dAttributes {
+                stride: 1,
+                padding: 0,
+                dilation: 1,
+                groups: 1,
+                has_bias: false,
+            },
+            &[handle(&activation), handle(&weight)],
+        )
+        .expect("conv1d executes");
+        assert_eq!(output.shape.to_vec(), vec![1, 1, 3]);
+        for (index, expected) in [3.0, 5.0, 7.0].into_iter().enumerate() {
+            assert_eq!(output.get(&[0, 0, index]), expected);
+        }
+    }
+
+    /// An operand the kernel would narrow to f32 is refused before it runs.
+    ///
+    /// The capability row for the spatial group is f32-only, but `admitted` is
+    /// asked about the activation alone, so without the explicit check a
+    /// double-precision weight would be accepted here, narrowed inside the
+    /// kernel, and returned in an f32 buffer.
+    #[test]
+    fn a_non_f32_convolution_operand_is_refused() {
+        let context = context();
+        let activation = storage(&[1.0, 2.0, 3.0, 4.0], &[1, 1, 4]);
+        let weight = CpuStorage::try_from_contiguous(CpuBuffer::F64(vec![1.0, 1.0]), vec![1, 1, 2])
+            .expect("test storage must be well formed");
+
+        let error = dispatch::execute::<op::Conv1dExact, _>(
+            &context,
+            Conv1dAttributes {
+                stride: 1,
+                padding: 0,
+                dilation: 1,
+                groups: 1,
+                has_bias: false,
+            },
+            &[handle(&activation), handle(&weight)],
+        )
+        .expect_err("an f64 weight is not a dtype this kernel honours");
+        let message = format!("{error}");
+        assert!(
+            message.to_lowercase().contains("dtype") || message.contains("F64"),
+            "the refusal must name the dtype: {message}"
+        );
     }
 }

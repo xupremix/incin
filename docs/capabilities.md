@@ -30,7 +30,7 @@ run time.
 | `acosh` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `adam_step` | — | — | — |
 | `adamw_step` | — | — | — |
-| `adaptive_avg_pool2d` | — | — | — |
+| `adaptive_avg_pool2d` | `f32` | — | — |
 | `add` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` |
 | `add_in_place` | — | — | — |
 | `add_scalar` | `bf16`, `f16`, `f32`, `f64` | — | — |
@@ -46,7 +46,7 @@ run time.
 | `atanh` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `avg_pool2d` | `f32` | `f32` | `f32` |
 | `backward` | — | — | — |
-| `batch_norm` | — | — | — |
+| `batch_norm` | `f32` | — | — |
 | `bce_with_logits_loss` | — | — | — |
 | `bmm` | `f32` | — | — |
 | `broadcast_as` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `q8_0` | `i64`, `bf16`, `f16`, `f32`, `f64` | `f32` |
@@ -61,9 +61,9 @@ run time.
 | `cmp_lt` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `cmp_ne` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `concat` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
-| `conv1d` | — | — | — |
+| `conv1d` | `f32` | — | — |
 | `conv2d` | `f32` | `f32` | `f32` |
-| `conv_transpose2d` | — | — | — |
+| `conv_transpose2d` | `f32` | — | — |
 | `cos` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `cosh` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `cross_entropy_loss` | — | — | — |
@@ -96,7 +96,7 @@ run time.
 | `int_to_scalar` | — | — | — |
 | `int_to_vec1` | — | — | — |
 | `l1_loss` | — | — | — |
-| `layer_norm` | — | — | — |
+| `layer_norm` | `f32` | — | — |
 | `lerp` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `linear` | — | — | — |
 | `linspace` | — | — | — |
@@ -286,10 +286,15 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `min_keepdim` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
 | `prod_dim` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
 | `topk` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
-| `conv2d` | `f32` | `contiguous` | 3–4 | yes | native |
+| `conv2d` | `f32` | `contiguous` | 1–4 | yes | native |
+| `conv1d` | `f32` | `contiguous` | 1–3 | yes | native |
+| `conv_transpose2d` | `f32` | `contiguous` | 1–4 | yes | native |
 | `max_pool2d` | `f32` | `contiguous` | 3–4 | yes | native |
 | `avg_pool2d` | `f32` | `contiguous` | 3–4 | yes | native |
+| `adaptive_avg_pool2d` | `f32` | `contiguous` | 3–4 | yes | native |
 | `softmax` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
+| `layer_norm` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
+| `batch_norm` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
 | `argmax` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
 | `argmin` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
 | `argsort` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 1+ | yes | native |
@@ -333,7 +338,7 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `instance_norm` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 4 | yes | composed |
 | `broadcast_left` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | composed |
 | `bmm` | `f32` | `contiguous`, `strided` | 3+ | yes | composed |
-| `addmm` | `f32` | `contiguous`, `strided` | 2+ | yes | composed |
+| `addmm` | `f32` | `contiguous`, `strided` | 1+ | yes | composed |
 | `scaled_dot_product_attention` | `f32` | `contiguous`, `strided` | 2+ | yes | composed |
 
 ## `cuda`
@@ -374,7 +379,7 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `max_keepdim` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | 1+ | yes | native |
 | `min_dim` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | 1+ | yes | native |
 | `min_keepdim` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | 1+ | yes | native |
-| `conv2d` | `f32` | `contiguous` | 3–4 | yes | native |
+| `conv2d` | `f32` | `contiguous` | 1–4 | yes | native |
 | `max_pool2d` | `f32` | `contiguous` | 3–4 | yes | native |
 | `avg_pool2d` | `f32` | `contiguous` | 3–4 | yes | native |
 
@@ -414,7 +419,7 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `max_keepdim` | `f32` | `contiguous` | 1+ | yes | native |
 | `min_dim` | `f32` | `contiguous` | 1+ | yes | native |
 | `min_keepdim` | `f32` | `contiguous` | 1+ | yes | native |
-| `conv2d` | `f32` | `contiguous` | 3–4 | yes | native |
+| `conv2d` | `f32` | `contiguous` | 1–4 | yes | native |
 | `max_pool2d` | `f32` | `contiguous` | 3–4 | yes | native |
 | `avg_pool2d` | `f32` | `contiguous` | 3–4 | yes | native |
 

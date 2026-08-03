@@ -497,6 +497,11 @@ fn cpu_probe_shape(operation: OperationKind) -> &'static [usize] {
         OperationKind::Conv2dExact => &[1, 1, 2, 2],
         OperationKind::Pool2d => &[1, 1, 1, 1],
         OperationKind::MaxPool2d | OperationKind::AvgPool2d => &[1, 1, 1, 1],
+        OperationKind::Conv1dExact => &[1, 1, 2],
+        OperationKind::ConvTranspose2d => &[1, 1, 2, 2],
+        OperationKind::AdaptiveAvgPool2dExact => &[1, 1, 1, 1],
+        OperationKind::LayerNorm => &[2, 2],
+        OperationKind::BatchNorm => &[1, 2, 2],
         _ => panic!("missing CPU expected shape for {operation}"),
     }
 }
@@ -660,6 +665,43 @@ fn execute_cpu_probe(operation: OperationKind, layout: LayoutClass) -> CpuStorag
         OperationKind::AvgPool2d => {
             let input = f32_storage(&[1, 1, 2, 2], &[1.0, 2.0, 3.0, 4.0]);
             B::avg_pool2d::<f32>(&input, (2, 2), (1, 1), (0, 0)).unwrap()
+        }
+        OperationKind::Conv1dExact => {
+            let input = f32_storage(&[1, 1, 2], &[1.0, 2.0]);
+            let weight = f32_storage(&[1, 1, 1], &[1.0]);
+            B::conv1d::<f32>(&input, &weight, None, 1, 0, 1, 1).unwrap()
+        }
+        OperationKind::ConvTranspose2d => {
+            let input = f32_storage(&[1, 1, 2, 2], &[1.0, 2.0, 3.0, 4.0]);
+            let weight = f32_storage(&[1, 1, 1, 1], &[1.0]);
+            B::conv_transpose2d::<f32>(&input, &weight, None, 1, 0, 0, 1, 1).unwrap()
+        }
+        OperationKind::AdaptiveAvgPool2dExact => {
+            let input = f32_storage(&[1, 1, 2, 2], &[1.0, 2.0, 3.0, 4.0]);
+            B::adaptive_avg_pool2d::<f32>(&input, (1, 1)).unwrap()
+        }
+        OperationKind::LayerNorm => {
+            let input = f32_storage(&[2, 2], &[1.0, 2.0, 3.0, 4.0]);
+            let weight = f32_storage(&[2], &[1.0, 1.0]);
+            B::layer_norm::<f32>(&input, &weight, None, 1e-5).unwrap()
+        }
+        // Inference mode with running statistics, because that is the only mode
+        // the CPU kernel implements and the only one the canonical executor
+        // admits. A probe in training mode would be probing a refusal.
+        OperationKind::BatchNorm => {
+            let input = f32_storage(&[1, 2, 2], &[1.0, 2.0, 3.0, 4.0]);
+            let running_mean = f32_storage(&[2], &[0.0, 0.0]);
+            let running_variance = f32_storage(&[2], &[1.0, 1.0]);
+            B::batch_norm::<f32>(
+                &input,
+                None,
+                None,
+                Some(&running_mean),
+                Some(&running_variance),
+                1e-5,
+                0.1,
+            )
+            .unwrap()
         }
         // The float family. Every operand is 1.0 because several of these have
         // restricted domains - `acosh` needs at least 1, `asin` at most 1 - and
@@ -939,8 +981,13 @@ fn every_advertised_cpu_dtype_executes_its_registered_operation() {
                 | OperationKind::MinKeepDim
                 | OperationKind::ProdDim
                 | OperationKind::Conv2dExact
+                | OperationKind::Conv1dExact
+                | OperationKind::ConvTranspose2d
                 | OperationKind::MaxPool2d
                 | OperationKind::AvgPool2d
+                | OperationKind::AdaptiveAvgPool2dExact
+                | OperationKind::LayerNorm
+                | OperationKind::BatchNorm
                 | OperationKind::TopK => execute_cpu_probe(rule.operation, LayoutClass::Contiguous),
                 OperationKind::Relu
                 | OperationKind::Step
