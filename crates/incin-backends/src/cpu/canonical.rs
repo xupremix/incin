@@ -455,7 +455,7 @@ mod tests {
     ///
     /// What this proves is bounded. `gradcheck` ignores any element whose
     /// absolute difference is below `1e-3`, so this catches a gradient that is
-    /// structurally wrong — missing, misrouted, or wrongly scaled — and does
+    /// structurally wrong - missing, misrouted, or wrongly scaled - and does
     /// not resolve differences finer than that ceiling. The exact agreement
     /// between the canonical and legacy paths is asserted separately, by
     /// `canonical_and_legacy_gradients_are_identical`.

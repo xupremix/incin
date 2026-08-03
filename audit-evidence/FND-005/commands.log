@@ -1,0 +1,422 @@
+# FND-005 command log
+
+stage: worktree-pre-commit
+commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+started: 2026-08-03T13:32:46+02:00
+
+command: cargo test --workspace
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:32:46+02:00
+  end: 2026-08-03T13:33:37+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/test-workspace.txt
+
+command: cargo test --doc --workspace
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:33:37+02:00
+  end: 2026-08-03T13:33:56+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/test-doc.txt
+
+command: cargo test -p incin-backends --features cpu --test canonical_cpu
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:33:56+02:00
+  end: 2026-08-03T13:33:57+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/test-canonical-cpu.txt
+
+command: cargo test -p incin-backends --features cpu --test cpu_migration_status
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:33:57+02:00
+  end: 2026-08-03T13:33:57+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/test-cpu-migration-status.txt
+
+command: cargo test -p incin-backends --features cpu --test capability_matrix
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:33:57+02:00
+  end: 2026-08-03T13:33:58+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/test-capability-matrix.txt
+
+command: cargo test -p incin-backends --test generated_docs
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:33:58+02:00
+  end: 2026-08-03T13:33:59+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/test-generated-docs.txt
+
+command: cargo test -p incin-core
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:33:59+02:00
+  end: 2026-08-03T13:34:42+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/test-core.txt
+
+command: cargo test -p incin-backends --features cpu
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:34:42+02:00
+  end: 2026-08-03T13:34:46+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/test-backends-cpu.txt
+
+command: cargo test -p incin
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:34:46+02:00
+  end: 2026-08-03T13:35:13+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/test-incin.txt
+
+command: cargo clippy --workspace --all-targets -- -D warnings
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:35:13+02:00
+  end: 2026-08-03T13:35:14+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/clippy.txt
+
+command: cargo fmt --all -- --check
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:35:14+02:00
+  end: 2026-08-03T13:35:15+02:00
+  exit: 1
+  output: audit-evidence/FND-005/test-results/fmt-workspace.txt
+
+command: cargo public-api -p incin
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:35:15+02:00
+  end: 2026-08-03T13:35:18+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/public-api.txt
+
+command: cargo check -p incin-core --no-default-features
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:35:18+02:00
+  end: 2026-08-03T13:35:18+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/check-core-nodefault.txt
+
+command: cargo check -p incin-core --no-default-features --features std
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:35:18+02:00
+  end: 2026-08-03T13:35:18+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/check-core-std.txt
+
+command: cargo check -p incin --no-default-features
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:35:18+02:00
+  end: 2026-08-03T13:35:19+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/check-incin-nodefault.txt
+
+command: cargo check -p incin --no-default-features --features std
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:35:19+02:00
+  end: 2026-08-03T13:35:19+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/check-incin-std.txt
+
+command: cargo check -p incin --no-default-features --features cpu
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:35:19+02:00
+  end: 2026-08-03T13:35:20+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/check-incin-cpu.txt
+
+command: cargo check --workspace
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:35:20+02:00
+  end: 2026-08-03T13:35:22+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/check-workspace.txt
+
+command: cargo check -p incin-backends --no-default-features --features cuda
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:35:22+02:00
+  end: 2026-08-03T13:35:22+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/check-backend-cuda.txt
+
+command: cargo check -p incin-backends --no-default-features --features wgpu
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:35:22+02:00
+  end: 2026-08-03T13:35:23+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/check-backend-wgpu.txt
+
+command: cargo check -p incin-backends --no-default-features --features metal
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:35:23+02:00
+  end: 2026-08-03T13:35:23+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/check-backend-metal.txt
+
+command: cargo check -p incin-backends --no-default-features --features external-candle
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:35:23+02:00
+  end: 2026-08-03T13:35:24+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/check-backend-candle.txt
+
+command: RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  exit: 0
+  output: audit-evidence/FND-005/test-results/rustdoc.txt
+
+# FND-005 command log
+
+stage: worktree-pre-commit
+commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+started: 2026-08-03T13:42:05+02:00
+
+command: cargo test --workspace
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:42:05+02:00
+  end: 2026-08-03T13:43:53+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/test-workspace.txt
+
+command: cargo test --doc --workspace
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:43:53+02:00
+  end: 2026-08-03T13:44:14+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/test-doc.txt
+
+command: cargo test -p incin-backends --features cpu --test canonical_cpu
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:44:14+02:00
+  end: 2026-08-03T13:44:16+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/test-canonical-cpu.txt
+
+command: cargo test -p incin-backends --features cpu --test cpu_migration_status
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:44:16+02:00
+  end: 2026-08-03T13:44:16+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/test-cpu-migration-status.txt
+
+command: cargo test -p incin-backends --features cpu --test capability_matrix
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:44:16+02:00
+  end: 2026-08-03T13:44:17+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/test-capability-matrix.txt
+
+command: cargo test -p incin-backends --test generated_docs
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:44:17+02:00
+  end: 2026-08-03T13:44:17+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/test-generated-docs.txt
+
+command: cargo test -p incin-core
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:44:17+02:00
+  end: 2026-08-03T13:45:00+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/test-core.txt
+
+command: cargo test -p incin-backends --features cpu
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:45:00+02:00
+  end: 2026-08-03T13:45:03+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/test-backends-cpu.txt
+
+command: cargo test -p incin
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:45:03+02:00
+  end: 2026-08-03T13:45:22+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/test-incin.txt
+
+command: cargo clippy --workspace --all-targets -- -D warnings
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:45:22+02:00
+  end: 2026-08-03T13:45:32+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/clippy.txt
+
+command: cargo fmt --all -- --check
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:45:32+02:00
+  end: 2026-08-03T13:45:33+02:00
+  exit: 1
+  output: audit-evidence/FND-005/test-results/fmt-workspace.txt
+
+command: cargo public-api -p incin
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:45:33+02:00
+  end: 2026-08-03T13:45:36+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/public-api.txt
+
+command: cargo check -p incin-core --no-default-features
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:45:36+02:00
+  end: 2026-08-03T13:45:36+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/check-core-nodefault.txt
+
+command: cargo check -p incin-core --no-default-features --features std
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:45:36+02:00
+  end: 2026-08-03T13:45:37+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/check-core-std.txt
+
+command: cargo check -p incin --no-default-features
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:45:37+02:00
+  end: 2026-08-03T13:45:37+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/check-incin-nodefault.txt
+
+command: cargo check -p incin --no-default-features --features std
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:45:37+02:00
+  end: 2026-08-03T13:45:37+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/check-incin-std.txt
+
+command: cargo check -p incin --no-default-features --features cpu
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:45:37+02:00
+  end: 2026-08-03T13:45:38+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/check-incin-cpu.txt
+
+command: cargo check --workspace
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:45:38+02:00
+  end: 2026-08-03T13:45:39+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/check-workspace.txt
+
+command: cargo check -p incin-backends --no-default-features --features cuda
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:45:39+02:00
+  end: 2026-08-03T13:45:40+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/check-backend-cuda.txt
+
+command: cargo check -p incin-backends --no-default-features --features wgpu
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:45:40+02:00
+  end: 2026-08-03T13:45:40+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/check-backend-wgpu.txt
+
+command: cargo check -p incin-backends --no-default-features --features metal
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:45:40+02:00
+  end: 2026-08-03T13:45:40+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/check-backend-metal.txt
+
+command: cargo check -p incin-backends --no-default-features --features external-candle
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  start: 2026-08-03T13:45:40+02:00
+  end: 2026-08-03T13:45:40+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/check-backend-candle.txt
+
+command: RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-pre-commit
+  commit: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+  exit: 0
+  output: audit-evidence/FND-005/test-results/rustdoc.txt
+

@@ -1,0 +1,21 @@
+# FND-005 environment
+
+Captured: 2026-08-03T13:30:34+02:00
+Host: Linux 7.0.0-28-generic x86_64 GNU/Linux
+
+rustc 1.97.1 (8bab26f4f 2026-07-14)
+binary: rustc
+commit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452
+commit-date: 2026-07-14
+host: x86_64-unknown-linux-gnu
+release: 1.97.1
+LLVM version: 22.1.6
+
+cargo 1.97.1 (c980f4866 2026-06-30)
+
+Commit at capture: 2b0fb2dc16b2532310b4748045a8be6f9970bbb9
+Branch: develop
+
+CUDA device present: no (no driver or device in this environment)
+Metal runtime present: no (Linux host)
+WGPU adapter: software adapter available
