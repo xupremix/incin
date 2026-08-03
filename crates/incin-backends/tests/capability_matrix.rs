@@ -9,11 +9,14 @@ use incin_backends::cpu::{CpuBackendImpl, CpuBuffer, CpuStorage};
 use incin_core::backend_authoring::{
     Backend, CreationOps, FloatOps, LossOps, ModuleOps, NumericOps, ReductionOps, TensorOps,
 };
+use incin_core::exec::catalog::{AxisVarianceAttributes, NormAttributes, VarianceAttributes, op};
 use incin_core::exec::{
-    Capabilities, CapabilityQuery, DTypeRule, ImplementationKind, LayoutClass, MathMode,
-    OPERATION_CATALOG, SupportLevel, UnsupportedReason,
+    Capabilities, CapabilityQuery, DTypeRule, ExecutionContext, ImplementationKind, LayoutClass,
+    MathMode, OPERATION_CATALOG, SupportLevel, TensorHandle, UnsupportedReason, dispatch,
 };
-use incin_core::prelude::{DType, DTypeId, DeviceId, DeviceKind, Dyn, OperationKind, Reduction};
+use incin_core::prelude::{
+    Cpu, DType, DTypeId, DeviceId, DeviceKind, Dyn, Local, OperationKind, Reduction,
+};
 
 fn query(
     operation: OperationKind,
@@ -505,6 +508,9 @@ fn cpu_probe_shape(operation: OperationKind) -> &'static [usize] {
         // Probed with `Mean`, so the result is the scalar the reduction
         // produces rather than the elementwise buffer feeding it.
         OperationKind::MseLoss | OperationKind::L1Loss | OperationKind::BceWithLogitsLoss => &[],
+        OperationKind::VarianceAll | OperationKind::StdAll | OperationKind::Norm => &[],
+        OperationKind::VarianceDim | OperationKind::StdDim => &[2],
+        OperationKind::VarianceKeepDim | OperationKind::StdKeepDim => &[2, 1],
         OperationKind::BatchNorm => &[1, 2, 2],
         _ => panic!("missing CPU expected shape for {operation}"),
     }
@@ -692,6 +698,53 @@ fn execute_cpu_probe(operation: OperationKind, layout: LayoutClass) -> CpuStorag
         OperationKind::ToDType => {
             let input = transpose_if_requested(f32_storage(&[2, 2], &[1.0, 2.0, 3.0, 4.0]), layout);
             B::tensor_to_dtype::<f32, f32>(&input, DTypeId::F32).unwrap()
+        }
+        // The variance family and the p-norm have no method on any backend
+        // trait: the composition exists in the canonical executor and in
+        // `Tensor::var_all`, and nowhere in between. Probing them therefore
+        // means dispatching them, which is the stronger check anyway because it
+        // exercises the row being probed rather than a function beside it.
+        OperationKind::VarianceAll
+        | OperationKind::VarianceDim
+        | OperationKind::VarianceKeepDim
+        | OperationKind::StdAll
+        | OperationKind::StdDim
+        | OperationKind::StdKeepDim
+        | OperationKind::Norm => {
+            let context = ExecutionContext::new(CpuBackendImpl::<f32, Cpu>::new());
+            let input = transpose_if_requested(f32_storage(&[2, 2], &[1.0, 2.0, 3.0, 4.0]), layout);
+            let handle = TensorHandle::from_storage::<CpuBackendImpl<f32, Cpu>, f32, Local>(&input);
+            let axis = AxisVarianceAttributes {
+                axis: 1,
+                unbiased: false,
+            };
+            let all = VarianceAttributes { unbiased: false };
+            match operation {
+                OperationKind::VarianceAll => {
+                    dispatch::execute::<op::VarianceAll, _>(&context, all, &[handle]).unwrap()
+                }
+                OperationKind::VarianceDim => {
+                    dispatch::execute::<op::VarianceDim, _>(&context, axis, &[handle]).unwrap()
+                }
+                OperationKind::VarianceKeepDim => {
+                    dispatch::execute::<op::VarianceKeepDim, _>(&context, axis, &[handle]).unwrap()
+                }
+                OperationKind::StdAll => {
+                    dispatch::execute::<op::StdAll, _>(&context, all, &[handle]).unwrap()
+                }
+                OperationKind::StdDim => {
+                    dispatch::execute::<op::StdDim, _>(&context, axis, &[handle]).unwrap()
+                }
+                OperationKind::StdKeepDim => {
+                    dispatch::execute::<op::StdKeepDim, _>(&context, axis, &[handle]).unwrap()
+                }
+                _ => dispatch::execute::<op::Norm, _>(
+                    &context,
+                    NormAttributes { order: 2.0 },
+                    &[handle],
+                )
+                .unwrap(),
+            }
         }
         OperationKind::MseLoss | OperationKind::L1Loss | OperationKind::BceWithLogitsLoss => {
             let prediction =
@@ -1013,6 +1066,13 @@ fn every_advertised_cpu_dtype_executes_its_registered_operation() {
                 | OperationKind::MseLoss
                 | OperationKind::L1Loss
                 | OperationKind::BceWithLogitsLoss
+                | OperationKind::VarianceAll
+                | OperationKind::VarianceDim
+                | OperationKind::VarianceKeepDim
+                | OperationKind::StdAll
+                | OperationKind::StdDim
+                | OperationKind::StdKeepDim
+                | OperationKind::Norm
                 | OperationKind::TopK => execute_cpu_probe(rule.operation, LayoutClass::Contiguous),
                 // `to_dtype` is the one row whose result dtype is chosen by an
                 // attribute rather than inherited from the operand, so it is

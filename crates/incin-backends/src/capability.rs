@@ -184,7 +184,17 @@ macro_rules! cpu_descriptor_operations {
             // `cross_entropy_loss` is absent for the reason `embedding` is: its
             // logits are float and its targets are class indices, and one row
             // states one dtype set.
-            composed_reduction = [MseLoss, L1Loss, BceWithLogitsLoss]
+            composed_reduction = [
+                MseLoss, L1Loss, BceWithLogitsLoss,
+                // Variance, standard deviation and the p-norm have no kernel of
+                // their own on any backend: each is a subtract, a square, a
+                // reduce and a scale over primitives already migrated above.
+                // Same rule shape as the losses, for the same reason: they end
+                // in an all-reduce or an axis reduce.
+                VarianceAll, VarianceDim, VarianceKeepDim,
+                StdAll, StdDim, StdKeepDim,
+                Norm
+            ]
         }
     };
 }

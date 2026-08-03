@@ -128,7 +128,7 @@ run time.
 | `mul_scalar` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `narrow` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `neg` | `bf16`, `f16`, `f32`, `f64` | — | — |
-| `norm` | — | — | — |
+| `norm` | `f32` | — | — |
 | `ones` | — | — | — |
 | `outer` | — | — | — |
 | `pad` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
@@ -163,9 +163,9 @@ run time.
 | `sqrt` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `squeeze` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `stack` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
-| `std_all` | — | — | — |
-| `std_dim` | — | — | — |
-| `std_keepdim` | — | — | — |
+| `std_all` | `f32` | — | — |
+| `std_dim` | `f32` | — | — |
+| `std_keepdim` | `f32` | — | — |
 | `step` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `sub` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` |
 | `sub_in_place` | — | — | — |
@@ -188,9 +188,9 @@ run time.
 | `trunc` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `unfold` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `unsqueeze` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
-| `var_all` | — | — | — |
-| `var_dim` | — | — | — |
-| `var_keepdim` | — | — | — |
+| `var_all` | `f32` | — | — |
+| `var_dim` | `f32` | — | — |
+| `var_keepdim` | `f32` | — | — |
 | `var_ones` | — | — | — |
 | `var_rand` | — | — | — |
 | `var_randn` | — | — | — |
@@ -344,6 +344,13 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `mse_loss` | `f32` | `contiguous`, `strided` | any | yes | composed |
 | `l1_loss` | `f32` | `contiguous`, `strided` | any | yes | composed |
 | `bce_with_logits_loss` | `f32` | `contiguous`, `strided` | any | yes | composed |
+| `var_all` | `f32` | `contiguous`, `strided` | any | yes | composed |
+| `var_dim` | `f32` | `contiguous`, `strided` | any | yes | composed |
+| `var_keepdim` | `f32` | `contiguous`, `strided` | any | yes | composed |
+| `std_all` | `f32` | `contiguous`, `strided` | any | yes | composed |
+| `std_dim` | `f32` | `contiguous`, `strided` | any | yes | composed |
+| `std_keepdim` | `f32` | `contiguous`, `strided` | any | yes | composed |
+| `norm` | `f32` | `contiguous`, `strided` | any | yes | composed |
 
 ## `cuda`
 

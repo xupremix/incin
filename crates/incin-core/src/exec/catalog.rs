@@ -2137,6 +2137,19 @@ impl AttributeContract for AxisVarianceAttributes {
             first_shape(inputs).and_then(|shape| shape.get(self.axis).copied()),
         )
     }
+    // Output inference reads the axis through this accessor, not through the
+    // field. Without it these attributes validate an axis and then decline to
+    // say what it was, so `var_dim`, `var_keepdim`, `std_dim` and `std_keepdim`
+    // fell to the fail-closed arm and reported `MissingInference` for every
+    // invocation, which made them undispatchable from the day they were
+    // declared. `the_axis_variance_operations_infer_their_output_shape` is the
+    // regression test.
+    fn axis(&self) -> Option<usize> {
+        Some(self.axis)
+    }
+    fn shape_transform(&self) -> Option<ShapeTransform<'_>> {
+        Some(ShapeTransform::Axis(self.axis))
+    }
 }
 impl AttributeContract for DropoutAttributes {
     fn validate(
@@ -4371,6 +4384,52 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    /// The axis-bearing variance operations infer an output shape.
+    ///
+    /// The test above proves `AxisVarianceAttributes` validates its axis. That
+    /// is a weaker property than it looks: the attributes validated the axis
+    /// through a borrowed `AxisAttributes` and then did not expose it, so
+    /// inference fell to the fail-closed arm and every invocation of these four
+    /// operations failed with `MissingInference`. Validation alone could never
+    /// have caught that, which is why this checks the derived shape instead.
+    #[test]
+    fn the_axis_variance_operations_infer_their_output_shape() {
+        let attributes = AxisVarianceAttributes {
+            axis: 1,
+            unbiased: false,
+        };
+        // Reducing axis one of [4, 3] drops it; the keep-dim forms collapse it
+        // to one instead.
+        ValidatedInvocation::<op::VarianceDim>::validate(
+            attributes.clone(),
+            vec![meta(&[4, 3])],
+            vec![meta(&[4])],
+            crate::exec::ProofLevel::Dynamic,
+        )
+        .expect("var_dim removes the reduced axis");
+        ValidatedInvocation::<op::StdDim>::validate(
+            attributes.clone(),
+            vec![meta(&[4, 3])],
+            vec![meta(&[4])],
+            crate::exec::ProofLevel::Dynamic,
+        )
+        .expect("std_dim removes the reduced axis");
+        ValidatedInvocation::<op::VarianceKeepDim>::validate(
+            attributes.clone(),
+            vec![meta(&[4, 3])],
+            vec![meta(&[4, 1])],
+            crate::exec::ProofLevel::Dynamic,
+        )
+        .expect("var_keepdim collapses the reduced axis to one");
+        ValidatedInvocation::<op::StdKeepDim>::validate(
+            attributes,
+            vec![meta(&[4, 3])],
+            vec![meta(&[4, 1])],
+            crate::exec::ProofLevel::Dynamic,
+        )
+        .expect("std_keepdim collapses the reduced axis to one");
     }
 
     /// A comparison returns a mask in the operand dtype, not a boolean tensor:

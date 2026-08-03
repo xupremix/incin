@@ -4,7 +4,7 @@ Generated from `CPU_CAPABILITIES` and `incin_core::exec::OPERATION_CATALOG`; the
 
 The denominator is the number of operations that `Execute<Descriptor<O>>` can carry at all, not the whole catalog. An operation whose `ExecutionSite` is not backend-executable is listed separately with the reason: it is a gap in the execution trait rather than an unwritten executor, and counting it here would describe work that cannot be done without changing the contract first.
 
-**121 of 161 backend-executable operations migrated**, out of 174 catalog operations in total. The remaining 40 executable operations are still reachable only through the legacy operation-family traits.
+**128 of 161 backend-executable operations migrated**, out of 174 catalog operations in total. The remaining 33 executable operations are still reachable only through the legacy operation-family traits.
 
 ## Backend-executable operations
 
@@ -143,13 +143,13 @@ The denominator is the number of operations that `Execute<Descriptor<O>>` can ca
 | `cumsum` | `Kernel` | yes | `ReductionOps::cumsum` |
 | `topk` | `Kernel` | yes | `ReductionOps::topk` |
 | `argsort` | `Kernel` | yes | `ReductionOps::argsort` |
-| `norm` | `Kernel` | no | `Tensor::norm` |
-| `var_all` | `Kernel` | no | `Tensor::var_all` |
-| `var_dim` | `Kernel` | no | `Tensor::var_dim` |
-| `var_keepdim` | `Kernel` | no | `Tensor::var_keepdim` |
-| `std_all` | `Kernel` | no | `Tensor::std_all` |
-| `std_dim` | `Kernel` | no | `Tensor::std_dim` |
-| `std_keepdim` | `Kernel` | no | `Tensor::std_keepdim` |
+| `norm` | `Kernel` | yes | `Tensor::norm` |
+| `var_all` | `Kernel` | yes | `Tensor::var_all` |
+| `var_dim` | `Kernel` | yes | `Tensor::var_dim` |
+| `var_keepdim` | `Kernel` | yes | `Tensor::var_keepdim` |
+| `std_all` | `Kernel` | yes | `Tensor::std_all` |
+| `std_dim` | `Kernel` | yes | `Tensor::std_dim` |
+| `std_keepdim` | `Kernel` | yes | `Tensor::std_keepdim` |
 | `layer_norm` | `Kernel` | yes | `ModuleOps::layer_norm` |
 | `batch_norm` | `Kernel` | yes | `ModuleOps::batch_norm` |
 | `embedding` | `Kernel` | no | `ModuleOps::embedding` |

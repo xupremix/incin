@@ -15,7 +15,9 @@
 use incin_core::backend_authoring::{
     Execute, ExecutionRequest, FloatOps, LossOps, ModuleOps, ReductionOps, TensorOps,
 };
-use incin_core::exec::catalog::{Descriptor, DuplicateIndexRule, LossReduction, op};
+use incin_core::exec::catalog::{
+    AxisVarianceAttributes, Descriptor, DuplicateIndexRule, LossReduction, VarianceAttributes, op,
+};
 use incin_core::exec::{
     Capabilities, CapabilityQuery, MathMode, SupportLevel, TensorHandle, UnsupportedReason,
 };
@@ -1575,6 +1577,225 @@ impl<T: DType, D: Device> Execute<Descriptor<op::ToDType>> for CpuBackendImpl<T,
     }
 }
 
+/// The reciprocal of the divisor a variance uses over `count` samples.
+///
+/// Returned as the factor rather than the divisor so the caller multiplies
+/// instead of dividing, which keeps the degenerate case expressible: an
+/// unbiased variance over one sample has no defined value, and the frontend has
+/// always answered zero there rather than a NaN. Reproducing that exactly
+/// matters more than improving on it, because the two paths must agree while
+/// both exist.
+fn variance_scale(count: usize, unbiased: bool) -> f64 {
+    let count = count as f64;
+    let divisor = if unbiased {
+        if count <= 1.0 { 0.0 } else { count - 1.0 }
+    } else {
+        count
+    };
+    if divisor > 0.0 { 1.0 / divisor } else { 0.0 }
+}
+
+/// The sum of squared deviations from `mean`, and the scaling that turns it
+/// into a variance.
+///
+/// `mean` is broadcast back against the operand, which is why it is passed in
+/// rather than computed here: the all-reduced form wants a scalar mean and the
+/// axis forms want a keep-dim mean, and only the caller knows which.
+fn squared_deviations(
+    input: &CpuStorage,
+    mean: &CpuStorage,
+    operation: OperationKind,
+) -> Result<CpuStorage, BackendError> {
+    let deviation = crate::cpu::ops::elementwise::sub_storage(input, mean)
+        .map_err(|error| kernel_error(operation, error))?;
+    crate::cpu::ops::elementwise::mul_storage(&deviation, &deviation)
+        .map_err(|error| kernel_error(operation, error))
+}
+
+/// Variance and standard deviation, over everything or along one axis.
+///
+/// Seven identities that are one composition each: subtract the mean, square,
+/// reduce, and scale. None of them has a kernel of its own on any backend, and
+/// the primitives they rewrite into are already migrated, so the executor is
+/// where the composition belongs rather than the frontend, which is the only
+/// place it exists today.
+///
+/// Every step pushes its own tape entry, so the gradient is correct by
+/// composition and no backward rule is written here.
+macro_rules! variance_executors {
+    ($(($operation:ident, $mean:ident, $reduce:ident, $finish:expr)),* $(,)?) => {$(
+        impl<T: DType, D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<T, D> {
+            type Output = CpuStorage;
+
+            fn execute(
+                &self,
+                request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
+            ) -> Result<CpuStorage, BackendError> {
+                let operation = OperationKind::$operation;
+                let input = reduction_operand(self, request.inputs, operation)?;
+                let attributes = request.operation.descriptor().attributes();
+                let (mean, count) = <Self as VarianceAxis<T, D>>::$mean(input, attributes)
+                    .map_err(|error| kernel_error(operation, error))?;
+                let squared = squared_deviations(input, &mean, operation)?;
+                let summed = <Self as VarianceAxis<T, D>>::$reduce(&squared, attributes)
+                    .map_err(|error| kernel_error(operation, error))?;
+                let scaled = <Self as FloatOps<Self>>::mul_scalar_float::<T>(
+                    &summed,
+                    variance_scale(count, attributes.unbiased),
+                )
+                .map_err(|error| kernel_error(operation, error))?;
+                let finish: fn(&CpuStorage) -> incin_core::prelude::Result<CpuStorage> = $finish;
+                finish(&scaled).map_err(|error| kernel_error(operation, error))
+            }
+        }
+    )*};
+}
+
+/// The half of a variance that differs between the all-reduced and axis forms.
+///
+/// A private helper trait rather than four more macro parameters, because the
+/// two forms differ in the *type* of their attributes as well as in which
+/// reduction they call, and a macro that papered over that would stop the
+/// compiler from checking either.
+trait VarianceAxis<T: DType, D: Device> {
+    fn mean_over_all(
+        input: &CpuStorage,
+        attributes: &VarianceAttributes,
+    ) -> incin_core::prelude::Result<(CpuStorage, usize)>;
+    fn sum_over_all(
+        input: &CpuStorage,
+        attributes: &VarianceAttributes,
+    ) -> incin_core::prelude::Result<CpuStorage>;
+    fn mean_along_axis(
+        input: &CpuStorage,
+        attributes: &AxisVarianceAttributes,
+    ) -> incin_core::prelude::Result<(CpuStorage, usize)>;
+    fn sum_along_axis(
+        input: &CpuStorage,
+        attributes: &AxisVarianceAttributes,
+    ) -> incin_core::prelude::Result<CpuStorage>;
+    fn sum_along_axis_keeping_it(
+        input: &CpuStorage,
+        attributes: &AxisVarianceAttributes,
+    ) -> incin_core::prelude::Result<CpuStorage>;
+}
+
+impl<T: DType, D: Device> VarianceAxis<T, D> for CpuBackendImpl<T, D> {
+    fn mean_over_all(
+        input: &CpuStorage,
+        _: &VarianceAttributes,
+    ) -> incin_core::prelude::Result<(CpuStorage, usize)> {
+        let count = input.shape.iter().product::<usize>();
+        Ok((<Self as ReductionOps<Self>>::mean_all::<T>(input)?, count))
+    }
+
+    fn sum_over_all(
+        input: &CpuStorage,
+        _: &VarianceAttributes,
+    ) -> incin_core::prelude::Result<CpuStorage> {
+        <Self as ReductionOps<Self>>::sum_all::<T>(input)
+    }
+
+    /// The mean keeps the axis so it broadcasts back against the operand, and
+    /// the count is that axis' extent rather than the whole element count.
+    fn mean_along_axis(
+        input: &CpuStorage,
+        attributes: &AxisVarianceAttributes,
+    ) -> incin_core::prelude::Result<(CpuStorage, usize)> {
+        let count = input.shape.get(attributes.axis).copied().unwrap_or(0);
+        Ok((
+            <Self as ReductionOps<Self>>::mean_keepdim::<T>(input, attributes.axis)?,
+            count,
+        ))
+    }
+
+    fn sum_along_axis(
+        input: &CpuStorage,
+        attributes: &AxisVarianceAttributes,
+    ) -> incin_core::prelude::Result<CpuStorage> {
+        <Self as ReductionOps<Self>>::sum_dim::<T>(input, attributes.axis)
+    }
+
+    fn sum_along_axis_keeping_it(
+        input: &CpuStorage,
+        attributes: &AxisVarianceAttributes,
+    ) -> incin_core::prelude::Result<CpuStorage> {
+        <Self as ReductionOps<Self>>::sum_keepdim::<T>(input, attributes.axis)
+    }
+}
+
+fn identity(storage: &CpuStorage) -> incin_core::prelude::Result<CpuStorage> {
+    Ok(storage.clone())
+}
+
+fn square_root<T: DType, D: Device>(
+    storage: &CpuStorage,
+) -> incin_core::prelude::Result<CpuStorage> {
+    <CpuBackendImpl<T, D> as FloatOps<CpuBackendImpl<T, D>>>::sqrt::<T>(storage)
+}
+
+variance_executors![
+    (VarianceAll, mean_over_all, sum_over_all, identity),
+    (VarianceDim, mean_along_axis, sum_along_axis, identity),
+    (
+        VarianceKeepDim,
+        mean_along_axis,
+        sum_along_axis_keeping_it,
+        identity
+    ),
+    (StdAll, mean_over_all, sum_over_all, square_root::<T, D>),
+    (StdDim, mean_along_axis, sum_along_axis, square_root::<T, D>),
+    (
+        StdKeepDim,
+        mean_along_axis,
+        sum_along_axis_keeping_it,
+        square_root::<T, D>
+    ),
+];
+
+/// The p-norm of every element, as a scalar.
+///
+/// The two common orders are special-cased the way the frontend special-cases
+/// them, and for the same reason: `p = 2` through the general path would raise
+/// each element to the power two and the sum to the power one half, which is
+/// two transcendental calls where a multiply and a square root do exactly the
+/// same thing more accurately.
+impl<T: DType, D: Device> Execute<Descriptor<op::Norm>> for CpuBackendImpl<T, D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::Norm>, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::Norm;
+        let input = reduction_operand(self, request.inputs, operation)?;
+        let order = request.operation.descriptor().attributes().order;
+        let wrap = |error| kernel_error(operation, error);
+
+        if (order - 1.0).abs() < NORM_ORDER_TOLERANCE {
+            let magnitude = <Self as FloatOps<Self>>::abs::<T>(input).map_err(wrap)?;
+            return <Self as ReductionOps<Self>>::sum_all::<T>(&magnitude).map_err(wrap);
+        }
+        if (order - 2.0).abs() < NORM_ORDER_TOLERANCE {
+            let squared = crate::cpu::ops::elementwise::mul_storage(input, input).map_err(wrap)?;
+            let summed = <Self as ReductionOps<Self>>::sum_all::<T>(&squared).map_err(wrap)?;
+            return <Self as FloatOps<Self>>::sqrt::<T>(&summed).map_err(wrap);
+        }
+        let magnitude = <Self as FloatOps<Self>>::abs::<T>(input).map_err(wrap)?;
+        let raised = <Self as FloatOps<Self>>::powf::<T>(&magnitude, order).map_err(wrap)?;
+        let summed = <Self as ReductionOps<Self>>::sum_all::<T>(&raised).map_err(wrap)?;
+        <Self as FloatOps<Self>>::powf::<T>(&summed, 1.0 / order).map_err(wrap)
+    }
+}
+
+/// How close an order has to be to one or two to take the exact path.
+///
+/// Copied from `Tensor::norm` rather than chosen here. The two paths must agree
+/// on which order they take while both exist, and a tolerance that differed
+/// would make them disagree only for orders in the gap between them, which is
+/// the hardest kind of divergence to find.
+const NORM_ORDER_TOLERANCE: f64 = 1e-6;
+
 /// The losses `LossOps` supplies as composed defaults.
 ///
 /// Each takes a prediction and a target of the same shape and reduces the
@@ -1664,7 +1885,7 @@ mod tests {
     use crate::cpu::storage::CpuBuffer;
     use incin_core::exec::catalog::{
         AxisAttributes, BatchNormAttributes, Conv1dAttributes, Conv2dAttributes, DTypeAttributes,
-        LayerNormAttributes, LossAttributes, NoAttributes, ShapeAttributes,
+        LayerNormAttributes, LossAttributes, NoAttributes, NormAttributes, ShapeAttributes,
     };
     use incin_core::exec::{ExecutionContext, TensorHandle, dispatch};
     use incin_core::prelude::{Cpu, Local};
@@ -2124,6 +2345,112 @@ mod tests {
         assert_eq!(output.shape.to_vec(), vec![2]);
         assert_eq!(output.get(&[0]), 1.0);
         assert_eq!(output.get(&[1]), 9.0);
+    }
+
+    /// The variance family computes the value its estimator defines.
+    ///
+    /// Hand-computed against [1, 2, 3, 4]: the mean is 2.5, the squared
+    /// deviations sum to 5, so the biased variance is 1.25 and the unbiased one
+    /// is 5/3. Checking both settings is the point: `unbiased` is the only
+    /// attribute these carry, and an executor that ignored it would still pass
+    /// a test that only ever asked for one.
+    #[test]
+    fn the_variance_estimators_differ_by_their_correction() {
+        let context = context();
+        let input = storage(&[1.0, 2.0, 3.0, 4.0], &[4]);
+
+        for (unbiased, expected) in [(false, 1.25), (true, 5.0 / 3.0)] {
+            let output = dispatch::execute::<op::VarianceAll, _>(
+                &context,
+                VarianceAttributes { unbiased },
+                &[handle(&input)],
+            )
+            .expect("var_all executes");
+            assert!(
+                (output.get(&[]) - expected).abs() < 1e-6,
+                "unbiased={unbiased}: expected {expected}, got {}",
+                output.get(&[])
+            );
+        }
+    }
+
+    /// The standard deviation is the square root of the variance, and the axis
+    /// forms differ from each other only in whether the axis survives.
+    #[test]
+    fn the_axis_variance_forms_reduce_the_axis_they_name() {
+        let context = context();
+        // Two rows of [1, 2, 3]: each has a biased variance of 2/3.
+        let input = storage(&[1.0, 2.0, 3.0, 1.0, 2.0, 3.0], &[2, 3]);
+        let attributes = AxisVarianceAttributes {
+            axis: 1,
+            unbiased: false,
+        };
+        let expected = 2.0 / 3.0;
+
+        let reduced = dispatch::execute::<op::VarianceDim, _>(
+            &context,
+            attributes.clone(),
+            &[handle(&input)],
+        )
+        .expect("var_dim executes");
+        assert_eq!(reduced.shape.to_vec(), vec![2]);
+        assert!((reduced.get(&[0]) - expected).abs() < 1e-6);
+
+        let kept = dispatch::execute::<op::VarianceKeepDim, _>(
+            &context,
+            attributes.clone(),
+            &[handle(&input)],
+        )
+        .expect("var_keepdim executes");
+        assert_eq!(kept.shape.to_vec(), vec![2, 1]);
+        assert!((kept.get(&[0, 0]) - expected).abs() < 1e-6);
+
+        let deviation = dispatch::execute::<op::StdDim, _>(&context, attributes, &[handle(&input)])
+            .expect("std_dim executes");
+        assert_eq!(deviation.shape.to_vec(), vec![2]);
+        assert!((deviation.get(&[0]) - expected.sqrt()).abs() < 1e-6);
+    }
+
+    /// Each norm order takes its own path and they agree where they meet.
+    ///
+    /// The executor special-cases orders one and two. Two is the interesting
+    /// one: the fast path multiplies and takes a square root while the general
+    /// path raises to a power twice, so a mistake in either shows up as a
+    /// disagreement at exactly this order.
+    #[test]
+    fn the_norm_orders_agree_where_the_fast_paths_meet_the_general_one() {
+        let context = context();
+        let input = storage(&[3.0, -4.0], &[2]);
+
+        let l1 = dispatch::execute::<op::Norm, _>(
+            &context,
+            NormAttributes { order: 1.0 },
+            &[handle(&input)],
+        )
+        .expect("the l1 norm executes");
+        assert!((l1.get(&[]) - 7.0).abs() < 1e-6, "got {}", l1.get(&[]));
+
+        let l2 = dispatch::execute::<op::Norm, _>(
+            &context,
+            NormAttributes { order: 2.0 },
+            &[handle(&input)],
+        )
+        .expect("the l2 norm executes");
+        assert!((l2.get(&[]) - 5.0).abs() < 1e-6, "got {}", l2.get(&[]));
+
+        // Just outside the tolerance, so this takes the general path and must
+        // still land next to the exact answer.
+        let near = dispatch::execute::<op::Norm, _>(
+            &context,
+            NormAttributes { order: 2.001 },
+            &[handle(&input)],
+        )
+        .expect("a general-order norm executes");
+        assert!(
+            (near.get(&[]) - 5.0).abs() < 1e-2,
+            "the general path diverged from the fast one: {}",
+            near.get(&[])
+        );
     }
 
     /// A conversion to a quantized dtype is refused by the executor.
