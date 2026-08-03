@@ -19,6 +19,7 @@ run. If one of these is wrong, the source is wrong. Never edit them by hand.
 
 | Document | Covers |
 |---|---|
+| [FROZEN_FOUNDATIONS.md](FROZEN_FOUNDATIONS.md) | the finished, load-bearing parts that should not be rewritten, what is still moving, and the next steps in dependency order. Read this first |
 | [API_DESIGN.md](API_DESIGN.md) | the stable facade, the tiers, and what may appear in each |
 | [ERROR_CONTRACT.md](ERROR_CONTRACT.md) | the typed failure categories and the panic policy |
 | [INVARIANT_TYPES.md](INVARIANT_TYPES.md) | every public type that carries an invariant, and how it is constructed |
