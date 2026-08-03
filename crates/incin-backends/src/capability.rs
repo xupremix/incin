@@ -171,9 +171,21 @@ macro_rules! cpu_descriptor_operations {
             ],
             composed_tensor = [
                 FlattenExact, SqueezeExact, UnsqueezeExact,
-                StackExact, SliceExact, InstanceNorm, BroadcastLeft
+                StackExact, SliceExact, InstanceNorm, BroadcastLeft,
+                // Both answer with a sequence of narrows along one axis. They
+                // are the first rows whose executor returns more than one
+                // storage, which the contract carries because `Execute` names
+                // its output as an associated type.
+                Chunk, Split
             ],
-            composed_matmul = [BatchedMatMul, Addmm, ScaledDotProductAttention],
+            composed_matmul = [
+                BatchedMatMul, Addmm, ScaledDotProductAttention,
+                // A dot is a multiply and an all-reduce; an outer product is
+                // two unsqueezes and a broadcast multiply. Neither has a kernel,
+                // and both inherit the matmul constraint rather than the wider
+                // tensor one because that is what the reduce behind them holds.
+                Dot, Outer
+            ],
             // The losses that `LossOps` supplies as real composed defaults
             // rather than as stubs: each rewrites into `sub`, `mul`, `abs` and
             // an all-reduce. They inherit the reduction group's f32-only claim

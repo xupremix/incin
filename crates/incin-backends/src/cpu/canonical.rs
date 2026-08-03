@@ -1577,6 +1577,142 @@ impl<T: DType, D: Device> Execute<Descriptor<op::ToDType>> for CpuBackendImpl<T,
     }
 }
 
+/// The scalar inner product of two operands of equal shape.
+///
+/// Composed rather than routed to a BLAS dot, because that is what the frontend
+/// does and the two must agree while both exist. `mul` broadcasts, but the
+/// descriptor has already required the operands to match, so no broadcast can
+/// occur here.
+impl<T: DType, D: Device> Execute<Descriptor<op::Dot>> for CpuBackendImpl<T, D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::Dot>, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::Dot;
+        let (lhs, rhs) = binary_operands(self, request.inputs, operation)?;
+        let product = crate::cpu::ops::elementwise::mul_storage(lhs, rhs)
+            .map_err(|error| kernel_error(operation, error))?;
+        <Self as ReductionOps<Self>>::sum_all::<T>(&product)
+            .map_err(|error| kernel_error(operation, error))
+    }
+}
+
+/// The outer product of two vectors, as a matrix.
+///
+/// Each operand grows an axis on the side the other one occupies, and the
+/// broadcast multiply fills the grid that leaves.
+impl<T: DType, D: Device> Execute<Descriptor<op::Outer>> for CpuBackendImpl<T, D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::Outer>, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::Outer;
+        let (lhs, rhs) = binary_operands(self, request.inputs, operation)?;
+        let wrap = |error| kernel_error(operation, error);
+        let column = <Self as TensorOps<Self>>::unsqueeze::<T>(lhs, 1).map_err(wrap)?;
+        let row = <Self as TensorOps<Self>>::unsqueeze::<T>(rhs, 0).map_err(wrap)?;
+        crate::cpu::ops::elementwise::mul_storage(&column, &row).map_err(wrap)
+    }
+}
+
+/// Divide an axis into consecutive pieces.
+///
+/// `chunk` names how many pieces it wants and `split` names how long each one
+/// should be; both answer with as many narrows as that implies, and both leave
+/// a shorter final piece when the axis does not divide evenly. The two differ
+/// only in how they derive the piece length from the axis, which is why the
+/// walk itself is written once.
+///
+/// The output is a `Vec`, which the execution contract carries because `Execute`
+/// names its output as an associated type rather than fixing it to one storage.
+fn consecutive_pieces<T: DType, D: Device>(
+    backend: &CpuBackendImpl<T, D>,
+    input: &CpuStorage,
+    axis: usize,
+    piece: usize,
+    operation: OperationKind,
+) -> Result<Vec<CpuStorage>, BackendError> {
+    let Some(&extent) = input.shape.get(axis) else {
+        return Err(invalid(
+            operation,
+            "the split axis is outside the operand rank",
+        ));
+    };
+    if piece == 0 {
+        return Err(invalid(
+            operation,
+            "a piece of length zero would never advance",
+        ));
+    }
+    let _ = backend;
+    let mut pieces = Vec::with_capacity(extent.div_ceil(piece));
+    let mut start = 0;
+    while start < extent {
+        let length = (extent - start).min(piece);
+        pieces.push(
+            <CpuBackendImpl<T, D> as TensorOps<CpuBackendImpl<T, D>>>::narrow::<T>(
+                input, axis, start, length,
+            )
+            .map_err(|error| kernel_error(operation, error))?,
+        );
+        start += length;
+    }
+    Ok(pieces)
+}
+
+impl<T: DType, D: Device> Execute<Descriptor<op::Chunk>> for CpuBackendImpl<T, D> {
+    type Output = Vec<CpuStorage>;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::Chunk>, Self>,
+    ) -> Result<Vec<CpuStorage>, BackendError> {
+        let operation = OperationKind::Chunk;
+        let input = reduction_operand(self, request.inputs, operation)?;
+        let attributes = request.operation.descriptor().attributes();
+        let Some(&extent) = input.shape.get(attributes.axis) else {
+            return Err(invalid(
+                operation,
+                "the chunk axis is outside the operand rank",
+            ));
+        };
+        if attributes.chunks == 0 {
+            return Err(invalid(
+                operation,
+                "a chunk count of zero divides into nothing",
+            ));
+        }
+        // Rounding up is what makes a request for more chunks than the axis can
+        // supply produce fewer pieces than asked for rather than empty ones.
+        let piece = extent.div_ceil(attributes.chunks);
+        consecutive_pieces(self, input, attributes.axis, piece, operation)
+    }
+}
+
+impl<T: DType, D: Device> Execute<Descriptor<op::Split>> for CpuBackendImpl<T, D> {
+    type Output = Vec<CpuStorage>;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::Split>, Self>,
+    ) -> Result<Vec<CpuStorage>, BackendError> {
+        let operation = OperationKind::Split;
+        let input = reduction_operand(self, request.inputs, operation)?;
+        let attributes = request.operation.descriptor().attributes();
+        consecutive_pieces(
+            self,
+            input,
+            attributes.axis,
+            attributes.split_size,
+            operation,
+        )
+    }
+}
+
 /// The reciprocal of the divisor a variance uses over `count` samples.
 ///
 /// Returned as the factor rather than the divisor so the caller multiplies
@@ -1884,8 +2020,9 @@ mod tests {
     use crate::cpu::gradcheck::gradcheck;
     use crate::cpu::storage::CpuBuffer;
     use incin_core::exec::catalog::{
-        AxisAttributes, BatchNormAttributes, Conv1dAttributes, Conv2dAttributes, DTypeAttributes,
-        LayerNormAttributes, LossAttributes, NoAttributes, NormAttributes, ShapeAttributes,
+        AxisAttributes, BatchNormAttributes, ChunkAttributes, Conv1dAttributes, Conv2dAttributes,
+        DTypeAttributes, LayerNormAttributes, LossAttributes, NoAttributes, NormAttributes,
+        ShapeAttributes, SplitAttributes,
     };
     use incin_core::exec::{ExecutionContext, TensorHandle, dispatch};
     use incin_core::prelude::{Cpu, Local};
@@ -2345,6 +2482,104 @@ mod tests {
         assert_eq!(output.shape.to_vec(), vec![2]);
         assert_eq!(output.get(&[0]), 1.0);
         assert_eq!(output.get(&[1]), 9.0);
+    }
+
+    /// A dot product contracts, an outer product expands.
+    ///
+    /// The two are checked together because they are the pair most easily
+    /// swapped: both take two vectors and multiply them, and only the shape of
+    /// the answer says which one ran.
+    #[test]
+    fn the_dot_and_outer_products_contract_and_expand() {
+        let context = context();
+        let lhs = storage(&[1.0, 2.0], &[2]);
+        let rhs = storage(&[3.0, 4.0], &[2]);
+
+        let inner =
+            dispatch::execute::<op::Dot, _>(&context, NoAttributes, &[handle(&lhs), handle(&rhs)])
+                .expect("dot executes");
+        assert!(inner.shape.is_empty(), "a dot product is a scalar");
+        assert_eq!(inner.get(&[]), 11.0);
+
+        let grid = dispatch::execute::<op::Outer, _>(
+            &context,
+            NoAttributes,
+            &[handle(&lhs), handle(&rhs)],
+        )
+        .expect("outer executes");
+        assert_eq!(grid.shape.to_vec(), vec![2, 2]);
+        for (row, left) in [1.0, 2.0].into_iter().enumerate() {
+            for (column, right) in [3.0, 4.0].into_iter().enumerate() {
+                assert_eq!(grid.get(&[row, column]), left * right);
+            }
+        }
+    }
+
+    /// An axis that does not divide evenly leaves a shorter final piece.
+    ///
+    /// This is the behaviour the frontend has, and the case a naive
+    /// implementation gets wrong by emitting a full-length final piece that
+    /// reads past the axis or an empty one that reads nothing. Five elements
+    /// into two chunks is three then two, and into pieces of two is two, two,
+    /// one.
+    #[test]
+    fn an_uneven_axis_leaves_a_shorter_final_piece() {
+        let context = context();
+        let input = storage(&[1.0, 2.0, 3.0, 4.0, 5.0], &[5]);
+
+        let chunks = dispatch::execute::<op::Chunk, _>(
+            &context,
+            ChunkAttributes { chunks: 2, axis: 0 },
+            &[handle(&input)],
+        )
+        .expect("chunk executes");
+        assert_eq!(
+            chunks
+                .iter()
+                .map(|piece| piece.shape.to_vec())
+                .collect::<Vec<_>>(),
+            vec![vec![3], vec![2]]
+        );
+        assert_eq!(chunks[1].get(&[0]), 4.0);
+
+        let pieces = dispatch::execute::<op::Split, _>(
+            &context,
+            SplitAttributes {
+                split_size: 2,
+                axis: 0,
+            },
+            &[handle(&input)],
+        )
+        .expect("split executes");
+        assert_eq!(
+            pieces
+                .iter()
+                .map(|piece| piece.shape.to_vec())
+                .collect::<Vec<_>>(),
+            vec![vec![2], vec![2], vec![1]]
+        );
+        assert_eq!(pieces[2].get(&[0]), 5.0);
+    }
+
+    /// Asking for more chunks than the axis can supply yields fewer, not empty
+    /// ones.
+    ///
+    /// Rounding the piece length up is what produces that, and it is the only
+    /// place the two split operations differ, so it is asserted rather than
+    /// left to follow from the arithmetic.
+    #[test]
+    fn chunking_beyond_the_axis_extent_produces_fewer_pieces_not_empty_ones() {
+        let context = context();
+        let input = storage(&[1.0, 2.0], &[2]);
+
+        let chunks = dispatch::execute::<op::Chunk, _>(
+            &context,
+            ChunkAttributes { chunks: 5, axis: 0 },
+            &[handle(&input)],
+        )
+        .expect("chunk executes");
+        assert_eq!(chunks.len(), 2, "a two-wide axis has at most two pieces");
+        assert!(chunks.iter().all(|piece| piece.shape.to_vec() == vec![1]));
     }
 
     /// The variance family computes the value its estimator defines.

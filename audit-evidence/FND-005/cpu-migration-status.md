@@ -4,7 +4,7 @@ Generated from `CPU_CAPABILITIES` and `incin_core::exec::OPERATION_CATALOG`; the
 
 The denominator is the number of operations that `Execute<Descriptor<O>>` can carry at all, not the whole catalog. An operation whose `ExecutionSite` is not backend-executable is listed separately with the reason: it is a gap in the execution trait rather than an unwritten executor, and counting it here would describe work that cannot be done without changing the contract first.
 
-**128 of 161 backend-executable operations migrated**, out of 174 catalog operations in total. The remaining 33 executable operations are still reachable only through the legacy operation-family traits.
+**132 of 161 backend-executable operations migrated**, out of 174 catalog operations in total. The remaining 29 executable operations are still reachable only through the legacy operation-family traits.
 
 ## Backend-executable operations
 
@@ -89,8 +89,8 @@ The denominator is the number of operations that `Execute<Descriptor<O>>` can ca
 | `reshape` | `Kernel` | yes | `TensorOps::reshape` |
 | `transpose` | `Kernel` | yes | `TensorOps::transpose` |
 | `matmul` | `Kernel` | yes | `TensorOps::matmul` |
-| `dot` | `Kernel` | no | `Tensor::dot` |
-| `outer` | `Kernel` | no | `Tensor::outer` |
+| `dot` | `Kernel` | yes | `Tensor::dot` |
+| `outer` | `Kernel` | yes | `Tensor::outer` |
 | `broadcast_as` | `Kernel` | yes | `TensorOps::broadcast_as` |
 | `narrow` | `Kernel` | yes | `TensorOps::narrow` |
 | `squeeze` | `Kernel` | yes | `TensorOps::squeeze` |
@@ -109,8 +109,8 @@ The denominator is the number of operations that `Execute<Descriptor<O>>` can ca
 | `triu` | `Kernel` | yes | `TensorOps::triu` |
 | `tril` | `Kernel` | yes | `TensorOps::tril` |
 | `diag` | `Kernel` | yes | `TensorOps::diag` |
-| `chunk` | `Kernel` | no | `Tensor::chunk` |
-| `split` | `Kernel` | no | `Tensor::split` |
+| `chunk` | `Kernel` | yes | `Tensor::chunk` |
+| `split` | `Kernel` | yes | `Tensor::split` |
 | `addmm` | `Kernel` | yes | `TensorOps::addmm` |
 | `bmm` | `Kernel` | yes | `TensorOps::bmm` |
 | `scaled_dot_product_attention` | `Kernel` | yes | `TensorOps::scaled_dot_product_attention` |

@@ -52,7 +52,7 @@ run time.
 | `broadcast_as` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `q8_0` | `i64`, `bf16`, `f16`, `f32`, `f64` | `f32` |
 | `broadcast_left` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `ceil` | `bf16`, `f16`, `f32`, `f64` | — | — |
-| `chunk` | — | — | — |
+| `chunk` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `clamp` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `cmp_eq` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `cmp_ge` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
@@ -74,7 +74,7 @@ run time.
 | `div` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` |
 | `div_in_place` | — | — | — |
 | `div_scalar` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
-| `dot` | — | — | — |
+| `dot` | `f32` | — | — |
 | `dropout` | — | — | — |
 | `elu` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `embedding` | — | — | — |
@@ -130,7 +130,7 @@ run time.
 | `neg` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `norm` | `f32` | — | — |
 | `ones` | — | — | — |
-| `outer` | — | — | — |
+| `outer` | `f32` | — | — |
 | `pad` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `pixel_shuffle` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `powf` | `bf16`, `f16`, `f32`, `f64` | — | — |
@@ -159,7 +159,7 @@ run time.
 | `sinh` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `slice` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `softmax` | `f32` | — | — |
-| `split` | — | — | — |
+| `split` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `sqrt` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `squeeze` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `stack` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
@@ -338,9 +338,13 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `slice` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | composed |
 | `instance_norm` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 4 | yes | composed |
 | `broadcast_left` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | composed |
+| `chunk` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | composed |
+| `split` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | composed |
 | `bmm` | `f32` | `contiguous`, `strided` | 3+ | yes | composed |
 | `addmm` | `f32` | `contiguous`, `strided` | 1+ | yes | composed |
 | `scaled_dot_product_attention` | `f32` | `contiguous`, `strided` | 2+ | yes | composed |
+| `dot` | `f32` | `contiguous`, `strided` | any | yes | composed |
+| `outer` | `f32` | `contiguous`, `strided` | any | yes | composed |
 | `mse_loss` | `f32` | `contiguous`, `strided` | any | yes | composed |
 | `l1_loss` | `f32` | `contiguous`, `strided` | any | yes | composed |
 | `bce_with_logits_loss` | `f32` | `contiguous`, `strided` | any | yes | composed |

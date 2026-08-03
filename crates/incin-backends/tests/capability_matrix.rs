@@ -9,7 +9,10 @@ use incin_backends::cpu::{CpuBackendImpl, CpuBuffer, CpuStorage};
 use incin_core::backend_authoring::{
     Backend, CreationOps, FloatOps, LossOps, ModuleOps, NumericOps, ReductionOps, TensorOps,
 };
-use incin_core::exec::catalog::{AxisVarianceAttributes, NormAttributes, VarianceAttributes, op};
+use incin_core::exec::catalog::{
+    AxisVarianceAttributes, ChunkAttributes, NormAttributes, SplitAttributes, VarianceAttributes,
+    op,
+};
 use incin_core::exec::{
     Capabilities, CapabilityQuery, DTypeRule, ExecutionContext, ImplementationKind, LayoutClass,
     MathMode, OPERATION_CATALOG, SupportLevel, TensorHandle, UnsupportedReason, dispatch,
@@ -509,6 +512,10 @@ fn cpu_probe_shape(operation: OperationKind) -> &'static [usize] {
         // produces rather than the elementwise buffer feeding it.
         OperationKind::MseLoss | OperationKind::L1Loss | OperationKind::BceWithLogitsLoss => &[],
         OperationKind::VarianceAll | OperationKind::StdAll | OperationKind::Norm => &[],
+        OperationKind::Dot => &[],
+        OperationKind::Outer => &[2, 2],
+        // The first piece of the two each probe asks for.
+        OperationKind::Chunk | OperationKind::Split => &[2, 1],
         OperationKind::VarianceDim | OperationKind::StdDim => &[2],
         OperationKind::VarianceKeepDim | OperationKind::StdKeepDim => &[2, 1],
         OperationKind::BatchNorm => &[1, 2, 2],
@@ -704,6 +711,55 @@ fn execute_cpu_probe(operation: OperationKind, layout: LayoutClass) -> CpuStorag
         // `Tensor::var_all`, and nowhere in between. Probing them therefore
         // means dispatching them, which is the stronger check anyway because it
         // exercises the row being probed rather than a function beside it.
+        // The sequence-returning rows. The probe checks the piece count and
+        // hands back the first piece, because its caller asserts against one
+        // storage.
+        OperationKind::Chunk | OperationKind::Split => {
+            let context = ExecutionContext::new(CpuBackendImpl::<f32, Cpu>::new());
+            let input = transpose_if_requested(f32_storage(&[2, 2], &[1.0, 2.0, 3.0, 4.0]), layout);
+            let handle = TensorHandle::from_storage::<CpuBackendImpl<f32, Cpu>, f32, Local>(&input);
+            let pieces = if operation == OperationKind::Chunk {
+                dispatch::execute::<op::Chunk, _>(
+                    &context,
+                    ChunkAttributes { chunks: 2, axis: 1 },
+                    &[handle],
+                )
+                .unwrap()
+            } else {
+                dispatch::execute::<op::Split, _>(
+                    &context,
+                    SplitAttributes {
+                        split_size: 1,
+                        axis: 1,
+                    },
+                    &[handle],
+                )
+                .unwrap()
+            };
+            assert_eq!(
+                pieces.len(),
+                2,
+                "{operation} over a two-wide axis produces two pieces"
+            );
+            pieces.into_iter().next().unwrap()
+        }
+        OperationKind::Dot | OperationKind::Outer => {
+            let lhs = transpose_if_requested(f32_storage(&[2, 2], &[1.0, 2.0, 3.0, 4.0]), layout);
+            let rhs = f32_storage(&[2, 2], &[1.0, 0.0, 0.0, 1.0]);
+            match operation {
+                OperationKind::Dot => {
+                    let product = B::mul::<f32>(&lhs, &rhs).unwrap();
+                    B::sum_all::<f32>(&product).unwrap()
+                }
+                // Two vectors rather than the matrices above: an outer product
+                // is defined on rank one.
+                _ => {
+                    let column = B::unsqueeze::<f32>(&f32_storage(&[2], &[1.0, 2.0]), 1).unwrap();
+                    let row = B::unsqueeze::<f32>(&f32_storage(&[2], &[3.0, 4.0]), 0).unwrap();
+                    B::mul::<f32>(&column, &row).unwrap()
+                }
+            }
+        }
         OperationKind::VarianceAll
         | OperationKind::VarianceDim
         | OperationKind::VarianceKeepDim
@@ -1073,7 +1129,44 @@ fn every_advertised_cpu_dtype_executes_its_registered_operation() {
                 | OperationKind::StdDim
                 | OperationKind::StdKeepDim
                 | OperationKind::Norm
+                | OperationKind::Dot
+                | OperationKind::Outer
                 | OperationKind::TopK => execute_cpu_probe(rule.operation, LayoutClass::Contiguous),
+                // `chunk` and `split` are the two rows whose executor returns a
+                // sequence. The probe asserts the piece count here, because the
+                // shared assertion below can only speak for one storage, and
+                // then hands back the first piece for it to check.
+                OperationKind::Chunk | OperationKind::Split => {
+                    let context = ExecutionContext::new(CpuBackendImpl::<f32, Cpu>::new());
+                    let input = B::ones::<Dyn>(&[2, 2], dtype, &DeviceId::cpu()).unwrap();
+                    let handle =
+                        TensorHandle::from_storage::<CpuBackendImpl<f32, Cpu>, Dyn, Local>(&input);
+                    let pieces = if rule.operation == OperationKind::Chunk {
+                        dispatch::execute::<op::Chunk, _>(
+                            &context,
+                            ChunkAttributes { chunks: 2, axis: 1 },
+                            &[handle],
+                        )
+                        .unwrap()
+                    } else {
+                        dispatch::execute::<op::Split, _>(
+                            &context,
+                            SplitAttributes {
+                                split_size: 1,
+                                axis: 1,
+                            },
+                            &[handle],
+                        )
+                        .unwrap()
+                    };
+                    assert_eq!(
+                        pieces.len(),
+                        2,
+                        "{} over a two-wide axis produces two pieces",
+                        rule.operation
+                    );
+                    pieces.into_iter().next().unwrap()
+                }
                 // `to_dtype` is the one row whose result dtype is chosen by an
                 // attribute rather than inherited from the operand, so it is
                 // probed across every dtype it admits, converting each to f32.
