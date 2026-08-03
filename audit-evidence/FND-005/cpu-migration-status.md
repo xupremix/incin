@@ -2,7 +2,7 @@
 
 Generated from `CPU_CAPABILITIES` and `incin_core::exec::OPERATION_CATALOG`; the Rust source is authoritative. "Migrated" means the CPU backend advertises the exact identity and therefore, by the compile-time proof in `cpu::canonical`, implements `Execute<Descriptor<op::...>>` for it. It does not mean the operation is unreachable through the legacy operation-family traits: those remain the path the stable tensor surface uses.
 
-**24 of 174 catalog operations migrated.** The remaining 150 are still reachable only through the legacy operation-family traits.
+**66 of 174 catalog operations migrated.** The remaining 108 are still reachable only through the legacy operation-family traits.
 
 | Operation | Migrated | Legacy source |
 |---|:--:|---|
@@ -21,48 +21,48 @@ Generated from `CPU_CAPABILITIES` and `incin_core::exec::OPERATION_CATALOG`; the
 | `arange` | no | `CreationOps::arange` |
 | `linspace` | no | `CreationOps::linspace` |
 | `sample` | no | `Tensor::sample` |
-| `relu` | no | `FloatOps::relu` |
-| `step` | no | `FloatOps::step` |
-| `mish` | no | `FloatOps::mish` |
-| `elu` | no | `FloatOps::elu` |
-| `gelu` | no | `FloatOps::gelu` |
-| `abs` | no | `FloatOps::abs` |
-| `exp` | no | `FloatOps::exp` |
-| `neg` | no | `FloatOps::neg` |
-| `sqrt` | no | `FloatOps::sqrt` |
-| `log` | no | `FloatOps::log` |
-| `tanh` | no | `FloatOps::tanh` |
-| `sigmoid` | no | `FloatOps::sigmoid` |
-| `swish` | no | `FloatOps::swish` |
-| `softmax` | no | `FloatOps::softmax` |
-| `add_scalar` | no | `FloatOps::add_scalar_float` |
-| `mul_scalar` | no | `FloatOps::mul_scalar_float` |
-| `powf` | no | `FloatOps::powf` |
-| `clamp` | no | `FloatOps::clamp` |
-| `sign` | no | `FloatOps::sign` |
-| `floor` | no | `FloatOps::floor` |
-| `ceil` | no | `FloatOps::ceil` |
-| `round` | no | `FloatOps::round` |
-| `log2` | no | `FloatOps::log2` |
-| `log10` | no | `FloatOps::log10` |
-| `sin` | no | `FloatOps::sin` |
-| `cos` | no | `FloatOps::cos` |
-| `tan` | no | `FloatOps::tan` |
-| `asin` | no | `FloatOps::asin` |
-| `acos` | no | `FloatOps::acos` |
-| `atan` | no | `FloatOps::atan` |
-| `atan2` | no | `FloatOps::atan2` |
-| `sinh` | no | `FloatOps::sinh` |
-| `cosh` | no | `FloatOps::cosh` |
-| `asinh` | no | `FloatOps::asinh` |
-| `acosh` | no | `FloatOps::acosh` |
-| `atanh` | no | `FloatOps::atanh` |
-| `erf` | no | `FloatOps::erf` |
-| `rsqrt` | no | `FloatOps::rsqrt` |
-| `trunc` | no | `FloatOps::trunc` |
-| `frac` | no | `FloatOps::frac` |
-| `fmod` | no | `FloatOps::fmod` |
-| `remainder` | no | `FloatOps::remainder` |
+| `relu` | yes | `FloatOps::relu` |
+| `step` | yes | `FloatOps::step` |
+| `mish` | yes | `FloatOps::mish` |
+| `elu` | yes | `FloatOps::elu` |
+| `gelu` | yes | `FloatOps::gelu` |
+| `abs` | yes | `FloatOps::abs` |
+| `exp` | yes | `FloatOps::exp` |
+| `neg` | yes | `FloatOps::neg` |
+| `sqrt` | yes | `FloatOps::sqrt` |
+| `log` | yes | `FloatOps::log` |
+| `tanh` | yes | `FloatOps::tanh` |
+| `sigmoid` | yes | `FloatOps::sigmoid` |
+| `swish` | yes | `FloatOps::swish` |
+| `softmax` | yes | `FloatOps::softmax` |
+| `add_scalar` | yes | `FloatOps::add_scalar_float` |
+| `mul_scalar` | yes | `FloatOps::mul_scalar_float` |
+| `powf` | yes | `FloatOps::powf` |
+| `clamp` | yes | `FloatOps::clamp` |
+| `sign` | yes | `FloatOps::sign` |
+| `floor` | yes | `FloatOps::floor` |
+| `ceil` | yes | `FloatOps::ceil` |
+| `round` | yes | `FloatOps::round` |
+| `log2` | yes | `FloatOps::log2` |
+| `log10` | yes | `FloatOps::log10` |
+| `sin` | yes | `FloatOps::sin` |
+| `cos` | yes | `FloatOps::cos` |
+| `tan` | yes | `FloatOps::tan` |
+| `asin` | yes | `FloatOps::asin` |
+| `acos` | yes | `FloatOps::acos` |
+| `atan` | yes | `FloatOps::atan` |
+| `atan2` | yes | `FloatOps::atan2` |
+| `sinh` | yes | `FloatOps::sinh` |
+| `cosh` | yes | `FloatOps::cosh` |
+| `asinh` | yes | `FloatOps::asinh` |
+| `acosh` | yes | `FloatOps::acosh` |
+| `atanh` | yes | `FloatOps::atanh` |
+| `erf` | yes | `FloatOps::erf` |
+| `rsqrt` | yes | `FloatOps::rsqrt` |
+| `trunc` | yes | `FloatOps::trunc` |
+| `frac` | yes | `FloatOps::frac` |
+| `fmod` | yes | `FloatOps::fmod` |
+| `remainder` | yes | `FloatOps::remainder` |
 | `add` | yes | `NumericOps::add` |
 | `sub` | yes | `NumericOps::sub` |
 | `mul` | yes | `NumericOps::mul` |

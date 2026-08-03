@@ -12,7 +12,7 @@
 //! could not identify which operation was actually refused. Here the identity
 //! is the type.
 
-use incin_core::backend_authoring::{Execute, ExecutionRequest, ModuleOps, ReductionOps};
+use incin_core::backend_authoring::{Execute, ExecutionRequest, FloatOps, ModuleOps, ReductionOps};
 use incin_core::exec::catalog::{Descriptor, op};
 use incin_core::exec::{
     Capabilities, CapabilityQuery, MathMode, SupportLevel, TensorHandle, UnsupportedReason,
@@ -378,6 +378,152 @@ impl<T: DType, D: Device> Execute<Descriptor<op::AvgPool2d>> for CpuBackendImpl<
     }
 }
 
+// The float family. Its kernel bodies still live on `FloatOps`, reached through
+// the same private compatibility adapter the reductions use: these are the
+// operations whose bodies move down next, and the macros below are shaped so
+// that moving one is a change to a single row.
+
+/// Unary elementwise float operations, which take no attributes.
+macro_rules! unary_float_executors {
+    ($(($operation:ident, $method:ident)),* $(,)?) => {$(
+        impl<T: DType, D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<T, D> {
+            type Output = CpuStorage;
+
+            fn execute(
+                &self,
+                request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
+            ) -> Result<CpuStorage, BackendError> {
+                let operation = OperationKind::$operation;
+                let input = reduction_operand(self, request.inputs, operation)?;
+                <Self as FloatOps<Self>>::$method::<T>(input)
+                    .map_err(|error| kernel_error(operation, error))
+            }
+        }
+    )*};
+}
+
+unary_float_executors![
+    (Relu, relu),
+    (Step, step),
+    (Mish, mish),
+    (Elu, elu),
+    (Gelu, gelu),
+    (Abs, abs),
+    (Exp, exp),
+    (Neg, neg),
+    (Sqrt, sqrt),
+    (Log, log),
+    (Tanh, tanh),
+    (Sigmoid, sigmoid),
+    (Swish, swish),
+    (Sign, sign),
+    (Floor, floor),
+    (Ceil, ceil),
+    (Round, round),
+    (Log2, log2),
+    (Log10, log10),
+    (Sin, sin),
+    (Cos, cos),
+    (Tan, tan),
+    (Asin, asin),
+    (Acos, acos),
+    (Atan, atan),
+    (Sinh, sinh),
+    (Cosh, cosh),
+    (Asinh, asinh),
+    (Acosh, acosh),
+    (Atanh, atanh),
+    (Erf, erf),
+    (Rsqrt, rsqrt),
+    (Trunc, trunc),
+    (Frac, frac),
+];
+
+/// Unary float operations parametrised by one scalar attribute.
+macro_rules! scalar_float_executors {
+    ($(($operation:ident, $method:ident)),* $(,)?) => {$(
+        impl<T: DType, D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<T, D> {
+            type Output = CpuStorage;
+
+            fn execute(
+                &self,
+                request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
+            ) -> Result<CpuStorage, BackendError> {
+                let operation = OperationKind::$operation;
+                let input = reduction_operand(self, request.inputs, operation)?;
+                let value = request.operation.descriptor().attributes().value;
+                <Self as FloatOps<Self>>::$method::<T>(input, value)
+                    .map_err(|error| kernel_error(operation, error))
+            }
+        }
+    )*};
+}
+
+scalar_float_executors![
+    (AddScalar, add_scalar_float),
+    (MulScalar, mul_scalar_float),
+    (Powf, powf),
+];
+
+/// Binary elementwise float operations over broadcast operands.
+macro_rules! binary_float_executors {
+    ($(($operation:ident, $method:ident)),* $(,)?) => {$(
+        impl<T: DType, D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<T, D> {
+            type Output = CpuStorage;
+
+            fn execute(
+                &self,
+                request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
+            ) -> Result<CpuStorage, BackendError> {
+                let operation = OperationKind::$operation;
+                let [lhs, rhs] = request.inputs else {
+                    return Err(invalid(operation, "operation expects exactly two operands"));
+                };
+                let lhs = operand(lhs, operation)?;
+                let rhs = operand(rhs, operation)?;
+                admitted(self, operation, lhs)?;
+                admitted(self, operation, rhs)?;
+                <Self as FloatOps<Self>>::$method::<T>(lhs, rhs)
+                    .map_err(|error| kernel_error(operation, error))
+            }
+        }
+    )*};
+}
+
+binary_float_executors![(Atan2, atan2), (Fmod, fmod), (Remainder, remainder),];
+
+/// Elementwise clamp, whose two bounds are a single typed attribute set.
+impl<T: DType, D: Device> Execute<Descriptor<op::Clamp>> for CpuBackendImpl<T, D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::Clamp>, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::Clamp;
+        let input = reduction_operand(self, request.inputs, operation)?;
+        let attributes = request.operation.descriptor().attributes();
+        <Self as FloatOps<Self>>::clamp::<T>(input, attributes.min, attributes.max)
+            .map_err(|error| kernel_error(operation, error))
+    }
+}
+
+/// Softmax along the axis its attributes name.
+impl<T: DType, D: Device> Execute<Descriptor<op::Softmax>> for CpuBackendImpl<T, D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::Softmax>, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::Softmax;
+        let input = reduction_operand(self, request.inputs, operation)?;
+        let axis = request.operation.descriptor().attributes().axis;
+        <Self as FloatOps<Self>>::softmax::<T>(input, axis)
+            .map_err(|error| kernel_error(operation, error))
+    }
+}
+
 /// Prove, at compile time, that every identity `CPU_CAPABILITIES` advertises
 /// has an executor above.
 ///
@@ -393,7 +539,12 @@ macro_rules! assert_every_advertised_row_executes {
         reshape = [$($reshape:ident),* $(,)?],
         reduction = [$($reduction:ident),* $(,)?],
         spatial = [$($spatial:ident),* $(,)?],
-        matmul = [$($matmul:ident),* $(,)?]
+        matmul = [$($matmul:ident),* $(,)?],
+        unary_float = [$($unary_float:ident),* $(,)?],
+        scalar_float = [$($scalar_float:ident),* $(,)?],
+        clamp = [$($clamp:ident),* $(,)?],
+        softmax = [$($softmax:ident),* $(,)?],
+        binary_float = [$($binary_float:ident),* $(,)?]
     ) => {
         const _: () = {
             const fn executes<O, B>()
@@ -410,6 +561,11 @@ macro_rules! assert_every_advertised_row_executes {
                 $(executes::<op::$reduction, CpuBackendImpl<T, D>>();)*
                 $(executes::<op::$spatial, CpuBackendImpl<T, D>>();)*
                 $(executes::<op::$matmul, CpuBackendImpl<T, D>>();)*
+                $(executes::<op::$unary_float, CpuBackendImpl<T, D>>();)*
+                $(executes::<op::$scalar_float, CpuBackendImpl<T, D>>();)*
+                $(executes::<op::$clamp, CpuBackendImpl<T, D>>();)*
+                $(executes::<op::$softmax, CpuBackendImpl<T, D>>();)*
+                $(executes::<op::$binary_float, CpuBackendImpl<T, D>>();)*
             }
 
             assert_all::<f32, incin_core::prelude::Cpu>();

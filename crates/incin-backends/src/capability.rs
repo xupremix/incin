@@ -86,7 +86,17 @@ macro_rules! cpu_descriptor_operations {
                 MaxDim, MaxKeepDim, MinDim, MinKeepDim, ProdDim
             ],
             spatial = [Conv2dExact, MaxPool2d, AvgPool2d],
-            matmul = [MatMulExact]
+            matmul = [MatMulExact],
+            unary_float = [
+                Relu, Step, Mish, Elu, Gelu, Abs, Exp, Neg, Sqrt, Log,
+                Tanh, Sigmoid, Swish, Sign, Floor, Ceil, Round, Log2, Log10,
+                Sin, Cos, Tan, Asin, Acos, Atan, Sinh, Cosh, Asinh, Acosh,
+                Atanh, Erf, Rsqrt, Trunc, Frac
+            ],
+            scalar_float = [AddScalar, MulScalar, Powf],
+            clamp = [Clamp],
+            softmax = [Softmax],
+            binary_float = [Atan2, Fmod, Remainder]
         }
     };
 }
@@ -108,7 +118,15 @@ macro_rules! cuda_descriptor_operations {
                 MaxDim, MaxKeepDim, MinDim, MinKeepDim
             ],
             spatial = [Conv2dExact, MaxPool2d, AvgPool2d],
-            matmul = [MatMulExact]
+            matmul = [MatMulExact],
+            // No canonical float executor was written for this backend, so it
+            // advertises none. An empty group is a truthful claim; a copied one
+            // would not be.
+            unary_float = [],
+            scalar_float = [],
+            clamp = [],
+            softmax = [],
+            binary_float = []
         }
     };
 }
@@ -126,7 +144,15 @@ macro_rules! wgpu_descriptor_operations {
                 MaxDim, MaxKeepDim, MinDim, MinKeepDim
             ],
             spatial = [Conv2dExact, MaxPool2d, AvgPool2d],
-            matmul = [MatMulExact]
+            matmul = [MatMulExact],
+            // No canonical float executor was written for this backend, so it
+            // advertises none. An empty group is a truthful claim; a copied one
+            // would not be.
+            unary_float = [],
+            scalar_float = [],
+            clamp = [],
+            softmax = [],
+            binary_float = []
         }
     };
 }
@@ -143,7 +169,15 @@ macro_rules! metal_descriptor_operations {
                 SumDim, SumKeepDim, MeanDim, MeanKeepDim
             ],
             spatial = [Conv2dExact, MaxPool2d, AvgPool2d],
-            matmul = [MatMulExact]
+            matmul = [MatMulExact],
+            // No canonical float executor was written for this backend, so it
+            // advertises none. An empty group is a truthful claim; a copied one
+            // would not be.
+            unary_float = [],
+            scalar_float = [],
+            clamp = [],
+            softmax = [],
+            binary_float = []
         }
     };
 }
@@ -156,6 +190,7 @@ macro_rules! descriptor_capability_rules {
         reduction = $reduction:expr,
         spatial = $spatial:expr,
         matmul = $matmul:expr,
+        softmax_dtypes = $softmax_dtypes:expr,
         broadcast_training = $broadcast_training:expr,
         reshape_training = $reshape_training:expr,
         pointwise_layouts = $pointwise_layouts:expr,
@@ -170,7 +205,12 @@ macro_rules! descriptor_capability_rules {
         reshape = [$($reshape_op:ident),* $(,)?],
         reduction = [$($reduction_op:ident),* $(,)?],
         spatial = [$($spatial_op:ident),* $(,)?],
-        matmul = [$($matmul_op:ident),* $(,)?]
+        matmul = [$($matmul_op:ident),* $(,)?],
+        unary_float = [$($unary_float_op:ident),* $(,)?],
+        scalar_float = [$($scalar_float_op:ident),* $(,)?],
+        clamp = [$($clamp_op:ident),* $(,)?],
+        softmax = [$($softmax_op:ident),* $(,)?],
+        binary_float = [$($binary_float_op:ident),* $(,)?]
     ) => {
         &[
             $($legacy,)*
@@ -201,6 +241,18 @@ macro_rules! descriptor_capability_rules {
                 descriptor_max_rank(OperationKind::$spatial_op),
                 true,
             ),)*
+            // The float family runs the same elementwise traversal as the
+            // pointwise binaries, so it inherits their dtype and layout sets
+            // rather than declaring a second, separately maintained pair.
+            $(native(OperationKind::$unary_float_op, $pointwise, $pointwise_layouts, true),)*
+            $(native(OperationKind::$scalar_float_op, $pointwise, $pointwise_layouts, true),)*
+            $(native(OperationKind::$clamp_op, $pointwise, $pointwise_layouts, true),)*
+            $(native(OperationKind::$binary_float_op, $pointwise, $pointwise_layouts, true),)*
+            // `softmax` normalizes along an axis, so it needs one, and it does
+            // not share the pointwise dtype set: the CPU kernel computes in f32
+            // and returns f32 storage, so advertising the half and double types
+            // for it would be a claim execution does not honour.
+            $(native_ranked(OperationKind::$softmax_op, $softmax_dtypes, $pointwise_layouts, 1, MAX_RANK, true),)*
         ]
     };
 }
@@ -236,6 +288,7 @@ pub static CPU_CAPABILITIES: &[CapabilityRule] = cpu_descriptor_operations!(
     reduction = F32_ONLY,
     spatial = F32_ONLY,
     matmul = F32_ONLY,
+    softmax_dtypes = F32_ONLY,
     broadcast_training = FLOAT_DTYPES,
     reshape_training = FLOAT_DTYPES,
     pointwise_layouts = CPU_LAYOUTS,
@@ -333,6 +386,7 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
     reduction = FLOAT_DTYPES,
     spatial = F32_ONLY,
     matmul = F32_ONLY,
+    softmax_dtypes = F32_ONLY,
     broadcast_training = FLOAT_DTYPES,
     reshape_training = FLOAT_DTYPES,
     pointwise_layouts = CONTIGUOUS,
@@ -415,6 +469,7 @@ pub static WGPU_CAPABILITIES: &[CapabilityRule] = wgpu_descriptor_operations!(
     reduction = F32_ONLY,
     spatial = F32_ONLY,
     matmul = F32_ONLY,
+    softmax_dtypes = F32_ONLY,
     broadcast_training = F32_ONLY,
     reshape_training = F32_ONLY,
     pointwise_layouts = CONTIGUOUS,
@@ -498,6 +553,7 @@ pub static METAL_CAPABILITIES: &[CapabilityRule] = metal_descriptor_operations!(
     reduction = FLOAT_DTYPES,
     spatial = F32_ONLY,
     matmul = FLOAT_DTYPES,
+    softmax_dtypes = F32_ONLY,
     broadcast_training = FLOAT_DTYPES,
     reshape_training = FLOAT_DTYPES,
     pointwise_layouts = CONTIGUOUS,

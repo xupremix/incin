@@ -24,26 +24,26 @@ run time.
 
 | Operation | cpu | cuda | wgpu |
 |---|---|---|---|
-| `abs` | — | — | — |
+| `abs` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `abs_diff` | — | — | — |
-| `acos` | — | — | — |
-| `acosh` | — | — | — |
+| `acos` | `bf16`, `f16`, `f32`, `f64` | — | — |
+| `acosh` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `adam_step` | — | — | — |
 | `adamw_step` | — | — | — |
 | `adaptive_avg_pool2d` | — | — | — |
 | `add` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` |
 | `add_in_place` | — | — | — |
-| `add_scalar` | — | — | — |
+| `add_scalar` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `addmm` | — | — | — |
 | `arange` | — | — | — |
 | `argmax` | — | — | — |
 | `argmin` | — | — | — |
 | `argsort` | — | — | — |
-| `asin` | — | — | — |
-| `asinh` | — | — | — |
-| `atan` | — | — | — |
-| `atan2` | — | — | — |
-| `atanh` | — | — | — |
+| `asin` | `bf16`, `f16`, `f32`, `f64` | — | — |
+| `asinh` | `bf16`, `f16`, `f32`, `f64` | — | — |
+| `atan` | `bf16`, `f16`, `f32`, `f64` | — | — |
+| `atan2` | `bf16`, `f16`, `f32`, `f64` | — | — |
+| `atanh` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `avg_pool2d` | `f32` | `f32` | `f32` |
 | `backward` | — | — | — |
 | `batch_norm` | — | — | — |
@@ -51,9 +51,9 @@ run time.
 | `bmm` | — | — | — |
 | `broadcast_as` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `q8_0` | `i64`, `bf16`, `f16`, `f32`, `f64` | `f32` |
 | `broadcast_left` | — | — | — |
-| `ceil` | — | — | — |
+| `ceil` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `chunk` | — | — | — |
-| `clamp` | — | — | — |
+| `clamp` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `cmp_eq` | — | — | — |
 | `cmp_ge` | — | — | — |
 | `cmp_gt` | — | — | — |
@@ -64,8 +64,8 @@ run time.
 | `conv1d` | — | — | — |
 | `conv2d` | `f32` | `f32` | `f32` |
 | `conv_transpose2d` | — | — | — |
-| `cos` | — | — | — |
-| `cosh` | — | — | — |
+| `cos` | `bf16`, `f16`, `f32`, `f64` | — | — |
+| `cosh` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `cross_entropy_loss` | — | — | — |
 | `cumsum` | — | — | — |
 | `dequantize` | — | — | — |
@@ -76,20 +76,20 @@ run time.
 | `div_scalar` | — | — | — |
 | `dot` | — | — | — |
 | `dropout` | — | — | — |
-| `elu` | — | — | — |
+| `elu` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `embedding` | — | — | — |
-| `erf` | — | — | — |
-| `exp` | — | — | — |
+| `erf` | `bf16`, `f16`, `f32`, `f64` | — | — |
+| `exp` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `fill_in_place` | — | — | — |
 | `flatten` | — | — | — |
 | `float_to_scalar` | — | — | — |
 | `float_to_vec1` | — | — | — |
-| `floor` | — | — | — |
-| `fmod` | — | — | — |
-| `frac` | — | — | — |
+| `floor` | `bf16`, `f16`, `f32`, `f64` | — | — |
+| `fmod` | `bf16`, `f16`, `f32`, `f64` | — | — |
+| `frac` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `full` | — | — | — |
 | `gather` | — | — | — |
-| `gelu` | — | — | — |
+| `gelu` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `group_norm` | — | — | — |
 | `index_select` | — | — | — |
 | `instance_norm` | — | — | — |
@@ -100,9 +100,9 @@ run time.
 | `lerp` | — | — | — |
 | `linear` | — | — | — |
 | `linspace` | — | — | — |
-| `log` | — | — | — |
-| `log10` | — | — | — |
-| `log2` | — | — | — |
+| `log` | `bf16`, `f16`, `f32`, `f64` | — | — |
+| `log10` | `bf16`, `f16`, `f32`, `f64` | — | — |
+| `log2` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `logical_and` | — | — | — |
 | `logical_not` | — | — | — |
 | `logical_or` | — | — | — |
@@ -121,61 +121,61 @@ run time.
 | `min_dim` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` |
 | `min_keepdim` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` |
 | `minimum` | — | — | — |
-| `mish` | — | — | — |
+| `mish` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `mse_loss` | — | — | — |
 | `mul` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` |
 | `mul_in_place` | — | — | — |
-| `mul_scalar` | — | — | — |
+| `mul_scalar` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `narrow` | — | — | — |
-| `neg` | — | — | — |
+| `neg` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `norm` | — | — | — |
 | `ones` | — | — | — |
 | `outer` | — | — | — |
 | `pad` | — | — | — |
 | `pixel_shuffle` | — | — | — |
-| `powf` | — | — | — |
+| `powf` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `prod_all` | `f32` | — | — |
 | `prod_dim` | `f32` | — | — |
 | `quantize` | — | — | — |
 | `quantized_matmul` | — | — | — |
 | `rand` | — | — | — |
 | `randn` | — | — | — |
-| `relu` | — | — | — |
-| `remainder` | — | — | — |
+| `relu` | `bf16`, `f16`, `f32`, `f64` | — | — |
+| `remainder` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `repeat` | — | — | — |
 | `require_grad` | — | — | — |
 | `reshape` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `q8_0` | `i64`, `bf16`, `f16`, `f32`, `f64` | `f32` |
 | `rms_norm` | — | — | — |
 | `rnn` | — | — | — |
-| `round` | — | — | — |
-| `rsqrt` | — | — | — |
+| `round` | `bf16`, `f16`, `f32`, `f64` | — | — |
+| `rsqrt` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `sample` | — | — | — |
 | `scaled_dot_product_attention` | — | — | — |
 | `scatter` | — | — | — |
 | `sgd_step` | — | — | — |
-| `sigmoid` | — | — | — |
-| `sign` | — | — | — |
-| `sin` | — | — | — |
-| `sinh` | — | — | — |
+| `sigmoid` | `bf16`, `f16`, `f32`, `f64` | — | — |
+| `sign` | `bf16`, `f16`, `f32`, `f64` | — | — |
+| `sin` | `bf16`, `f16`, `f32`, `f64` | — | — |
+| `sinh` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `slice` | — | — | — |
-| `softmax` | — | — | — |
+| `softmax` | `f32` | — | — |
 | `split` | — | — | — |
-| `sqrt` | — | — | — |
+| `sqrt` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `squeeze` | — | — | — |
 | `stack` | — | — | — |
 | `std_all` | — | — | — |
 | `std_dim` | — | — | — |
 | `std_keepdim` | — | — | — |
-| `step` | — | — | — |
+| `step` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `sub` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` |
 | `sub_in_place` | — | — | — |
 | `sub_scalar` | — | — | — |
 | `sum_all` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` |
 | `sum_dim` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` |
 | `sum_keepdim` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` |
-| `swish` | — | — | — |
-| `tan` | — | — | — |
-| `tanh` | — | — | — |
+| `swish` | `bf16`, `f16`, `f32`, `f64` | — | — |
+| `tan` | `bf16`, `f16`, `f32`, `f64` | — | — |
+| `tanh` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `tensor_from_bytes` | — | — | — |
 | `tensor_from_data` | — | — | — |
 | `tensor_to_bytes` | — | — | — |
@@ -185,7 +185,7 @@ run time.
 | `transpose` | — | — | — |
 | `tril` | — | — | — |
 | `triu` | — | — | — |
-| `trunc` | — | — | — |
+| `trunc` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `unfold` | — | — | — |
 | `unsqueeze` | — | — | — |
 | `var_all` | — | — | — |
@@ -247,6 +247,48 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `conv2d` | `f32` | `contiguous` | 3–4 | yes | native |
 | `max_pool2d` | `f32` | `contiguous` | 3–4 | yes | native |
 | `avg_pool2d` | `f32` | `contiguous` | 3–4 | yes | native |
+| `relu` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `step` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `mish` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `elu` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `gelu` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `abs` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `exp` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `neg` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `sqrt` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `log` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `tanh` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `sigmoid` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `swish` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `sign` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `floor` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `ceil` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `round` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `log2` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `log10` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `sin` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `cos` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `tan` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `asin` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `acos` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `atan` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `sinh` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `cosh` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `asinh` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `acosh` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `atanh` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `erf` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `rsqrt` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `trunc` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `frac` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `add_scalar` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `mul_scalar` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `powf` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `clamp` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `atan2` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `fmod` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `remainder` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `softmax` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
 
 ## `cuda`
 

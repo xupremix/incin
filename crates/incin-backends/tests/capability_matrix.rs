@@ -1,15 +1,17 @@
 #![cfg(feature = "cpu")]
 
+use std::collections::BTreeSet;
+
 use incin_backends::capability::{
     CPU_CAPABILITIES, CUDA_CAPABILITIES, WGPU_CAPABILITIES, registry, support,
 };
 use incin_backends::cpu::{CpuBackendImpl, CpuBuffer, CpuStorage};
 use incin_core::backend_authoring::{
-    Backend, CreationOps, ModuleOps, NumericOps, ReductionOps, TensorOps,
+    Backend, CreationOps, FloatOps, ModuleOps, NumericOps, ReductionOps, TensorOps,
 };
 use incin_core::exec::{
-    Capabilities, CapabilityQuery, ImplementationKind, LayoutClass, MathMode, SupportLevel,
-    UnsupportedReason,
+    Capabilities, CapabilityQuery, ImplementationKind, LayoutClass, MathMode, OPERATION_CATALOG,
+    SupportLevel, UnsupportedReason,
 };
 use incin_core::prelude::{DTypeId, DeviceId, DeviceKind, Dyn, OperationKind};
 
@@ -255,11 +257,108 @@ fn cpu_probe_shape(operation: OperationKind) -> &'static [usize] {
         OperationKind::Reshape => &[4],
         OperationKind::ReshapeExact => &[4],
         OperationKind::MatMulExact => &[2, 2],
+        // The float family runs elementwise over the probe matrix, so each of
+        // these preserves its operand's shape.
+        OperationKind::Relu
+        | OperationKind::Step
+        | OperationKind::Mish
+        | OperationKind::Elu
+        | OperationKind::Gelu
+        | OperationKind::Abs
+        | OperationKind::Exp
+        | OperationKind::Neg
+        | OperationKind::Sqrt
+        | OperationKind::Log
+        | OperationKind::Tanh
+        | OperationKind::Sigmoid
+        | OperationKind::Swish
+        | OperationKind::Sign
+        | OperationKind::Floor
+        | OperationKind::Ceil
+        | OperationKind::Round
+        | OperationKind::Log2
+        | OperationKind::Log10
+        | OperationKind::Sin
+        | OperationKind::Cos
+        | OperationKind::Tan
+        | OperationKind::Asin
+        | OperationKind::Acos
+        | OperationKind::Atan
+        | OperationKind::Sinh
+        | OperationKind::Cosh
+        | OperationKind::Asinh
+        | OperationKind::Acosh
+        | OperationKind::Atanh
+        | OperationKind::Erf
+        | OperationKind::Rsqrt
+        | OperationKind::Trunc
+        | OperationKind::Frac
+        | OperationKind::AddScalar
+        | OperationKind::MulScalar
+        | OperationKind::Powf
+        | OperationKind::Atan2
+        | OperationKind::Fmod
+        | OperationKind::Remainder
+        | OperationKind::Clamp
+        | OperationKind::Softmax => &[2, 2],
         OperationKind::Conv2d => &[1, 1, 2, 2],
         OperationKind::Conv2dExact => &[1, 1, 2, 2],
         OperationKind::Pool2d => &[1, 1, 1, 1],
         OperationKind::MaxPool2d | OperationKind::AvgPool2d => &[1, 1, 1, 1],
         _ => panic!("missing CPU expected shape for {operation}"),
+    }
+}
+
+/// Run one float-family operation over `input`.
+///
+/// Split out because the same dispatch is needed by both the layout probe and
+/// the dtype probe, and two copies of a 42-arm match would drift.
+fn cpu_float_probe(operation: OperationKind, input: &CpuStorage) -> CpuStorage {
+    type B = CpuBackendImpl;
+    match operation {
+        OperationKind::Relu => B::relu::<f32>(input).unwrap(),
+        OperationKind::Step => B::step::<f32>(input).unwrap(),
+        OperationKind::Mish => B::mish::<f32>(input).unwrap(),
+        OperationKind::Elu => B::elu::<f32>(input).unwrap(),
+        OperationKind::Gelu => B::gelu::<f32>(input).unwrap(),
+        OperationKind::Abs => B::abs::<f32>(input).unwrap(),
+        OperationKind::Exp => B::exp::<f32>(input).unwrap(),
+        OperationKind::Neg => B::neg::<f32>(input).unwrap(),
+        OperationKind::Sqrt => B::sqrt::<f32>(input).unwrap(),
+        OperationKind::Log => B::log::<f32>(input).unwrap(),
+        OperationKind::Tanh => B::tanh::<f32>(input).unwrap(),
+        OperationKind::Sigmoid => B::sigmoid::<f32>(input).unwrap(),
+        OperationKind::Swish => B::swish::<f32>(input).unwrap(),
+        OperationKind::Sign => B::sign::<f32>(input).unwrap(),
+        OperationKind::Floor => B::floor::<f32>(input).unwrap(),
+        OperationKind::Ceil => B::ceil::<f32>(input).unwrap(),
+        OperationKind::Round => B::round::<f32>(input).unwrap(),
+        OperationKind::Log2 => B::log2::<f32>(input).unwrap(),
+        OperationKind::Log10 => B::log10::<f32>(input).unwrap(),
+        OperationKind::Sin => B::sin::<f32>(input).unwrap(),
+        OperationKind::Cos => B::cos::<f32>(input).unwrap(),
+        OperationKind::Tan => B::tan::<f32>(input).unwrap(),
+        OperationKind::Asin => B::asin::<f32>(input).unwrap(),
+        OperationKind::Acos => B::acos::<f32>(input).unwrap(),
+        OperationKind::Atan => B::atan::<f32>(input).unwrap(),
+        OperationKind::Sinh => B::sinh::<f32>(input).unwrap(),
+        OperationKind::Cosh => B::cosh::<f32>(input).unwrap(),
+        OperationKind::Asinh => B::asinh::<f32>(input).unwrap(),
+        OperationKind::Acosh => B::acosh::<f32>(input).unwrap(),
+        OperationKind::Atanh => B::atanh::<f32>(input).unwrap(),
+        OperationKind::Erf => B::erf::<f32>(input).unwrap(),
+        OperationKind::Rsqrt => B::rsqrt::<f32>(input).unwrap(),
+        OperationKind::Trunc => B::trunc::<f32>(input).unwrap(),
+        OperationKind::Frac => B::frac::<f32>(input).unwrap(),
+        OperationKind::AddScalar => B::add_scalar_float::<f32>(input, 2.0).unwrap(),
+        OperationKind::MulScalar => B::mul_scalar_float::<f32>(input, 2.0).unwrap(),
+        OperationKind::Powf => B::powf::<f32>(input, 2.0).unwrap(),
+        OperationKind::Clamp => B::clamp::<f32>(input, 0.0, 1.0).unwrap(),
+        OperationKind::Softmax => B::softmax::<f32>(input, 1).unwrap(),
+        OperationKind::Atan2 => B::atan2::<f32>(input, input).unwrap(),
+        OperationKind::Fmod => B::fmod::<f32>(input, input).unwrap(),
+        OperationKind::Remainder => B::remainder::<f32>(input, input).unwrap(),
+        other => panic!("{other} is not a float-family operation"),
     }
 }
 
@@ -363,6 +462,56 @@ fn execute_cpu_probe(operation: OperationKind, layout: LayoutClass) -> CpuStorag
             let input = f32_storage(&[1, 1, 2, 2], &[1.0, 2.0, 3.0, 4.0]);
             B::avg_pool2d::<f32>(&input, (2, 2), (1, 1), (0, 0)).unwrap()
         }
+        // The float family. Every operand is 1.0 because several of these have
+        // restricted domains - `acosh` needs at least 1, `asin` at most 1 - and
+        // 1.0 is the one value inside all of them. The probe asserts shape,
+        // dtype and device rather than values, so a non-finite result from a
+        // domain edge would not make it pass falsely.
+        OperationKind::Relu
+        | OperationKind::Step
+        | OperationKind::Mish
+        | OperationKind::Elu
+        | OperationKind::Gelu
+        | OperationKind::Abs
+        | OperationKind::Exp
+        | OperationKind::Neg
+        | OperationKind::Sqrt
+        | OperationKind::Log
+        | OperationKind::Tanh
+        | OperationKind::Sigmoid
+        | OperationKind::Swish
+        | OperationKind::Sign
+        | OperationKind::Floor
+        | OperationKind::Ceil
+        | OperationKind::Round
+        | OperationKind::Log2
+        | OperationKind::Log10
+        | OperationKind::Sin
+        | OperationKind::Cos
+        | OperationKind::Tan
+        | OperationKind::Asin
+        | OperationKind::Acos
+        | OperationKind::Atan
+        | OperationKind::Sinh
+        | OperationKind::Cosh
+        | OperationKind::Asinh
+        | OperationKind::Acosh
+        | OperationKind::Atanh
+        | OperationKind::Erf
+        | OperationKind::Rsqrt
+        | OperationKind::Trunc
+        | OperationKind::Frac
+        | OperationKind::AddScalar
+        | OperationKind::MulScalar
+        | OperationKind::Powf
+        | OperationKind::Atan2
+        | OperationKind::Fmod
+        | OperationKind::Remainder
+        | OperationKind::Clamp
+        | OperationKind::Softmax => {
+            let input = transpose_if_requested(f32_storage(&[2, 2], &[1.0, 1.0, 1.0, 1.0]), layout);
+            cpu_float_probe(operation, &input)
+        }
         _ => panic!("missing CPU capability execution probe for {operation}"),
     }
 }
@@ -378,6 +527,60 @@ fn generated_cpu_rows_match_real_execution_and_output_metadata() {
             assert_eq!(output.dtype, DTypeId::F32);
             assert_eq!(output.device, DeviceId::cpu());
         }
+    }
+}
+
+/// The dtype probe's counterpart to [`cpu_float_probe`], over `Dyn` storage.
+///
+/// `Dyn` rather than `f32` because the dtype probe walks every advertised dtype
+/// and the storage handle is dtype-erased; the two helpers are otherwise the
+/// same dispatch.
+fn cpu_float_probe_dyn(operation: OperationKind, input: &CpuStorage) -> CpuStorage {
+    type B = CpuBackendImpl;
+    match operation {
+        OperationKind::Relu => B::relu::<Dyn>(input).unwrap(),
+        OperationKind::Step => B::step::<Dyn>(input).unwrap(),
+        OperationKind::Mish => B::mish::<Dyn>(input).unwrap(),
+        OperationKind::Elu => B::elu::<Dyn>(input).unwrap(),
+        OperationKind::Gelu => B::gelu::<Dyn>(input).unwrap(),
+        OperationKind::Abs => B::abs::<Dyn>(input).unwrap(),
+        OperationKind::Exp => B::exp::<Dyn>(input).unwrap(),
+        OperationKind::Neg => B::neg::<Dyn>(input).unwrap(),
+        OperationKind::Sqrt => B::sqrt::<Dyn>(input).unwrap(),
+        OperationKind::Log => B::log::<Dyn>(input).unwrap(),
+        OperationKind::Tanh => B::tanh::<Dyn>(input).unwrap(),
+        OperationKind::Sigmoid => B::sigmoid::<Dyn>(input).unwrap(),
+        OperationKind::Swish => B::swish::<Dyn>(input).unwrap(),
+        OperationKind::Sign => B::sign::<Dyn>(input).unwrap(),
+        OperationKind::Floor => B::floor::<Dyn>(input).unwrap(),
+        OperationKind::Ceil => B::ceil::<Dyn>(input).unwrap(),
+        OperationKind::Round => B::round::<Dyn>(input).unwrap(),
+        OperationKind::Log2 => B::log2::<Dyn>(input).unwrap(),
+        OperationKind::Log10 => B::log10::<Dyn>(input).unwrap(),
+        OperationKind::Sin => B::sin::<Dyn>(input).unwrap(),
+        OperationKind::Cos => B::cos::<Dyn>(input).unwrap(),
+        OperationKind::Tan => B::tan::<Dyn>(input).unwrap(),
+        OperationKind::Asin => B::asin::<Dyn>(input).unwrap(),
+        OperationKind::Acos => B::acos::<Dyn>(input).unwrap(),
+        OperationKind::Atan => B::atan::<Dyn>(input).unwrap(),
+        OperationKind::Sinh => B::sinh::<Dyn>(input).unwrap(),
+        OperationKind::Cosh => B::cosh::<Dyn>(input).unwrap(),
+        OperationKind::Asinh => B::asinh::<Dyn>(input).unwrap(),
+        OperationKind::Acosh => B::acosh::<Dyn>(input).unwrap(),
+        OperationKind::Atanh => B::atanh::<Dyn>(input).unwrap(),
+        OperationKind::Erf => B::erf::<Dyn>(input).unwrap(),
+        OperationKind::Rsqrt => B::rsqrt::<Dyn>(input).unwrap(),
+        OperationKind::Trunc => B::trunc::<Dyn>(input).unwrap(),
+        OperationKind::Frac => B::frac::<Dyn>(input).unwrap(),
+        OperationKind::AddScalar => B::add_scalar_float::<Dyn>(input, 2.0).unwrap(),
+        OperationKind::MulScalar => B::mul_scalar_float::<Dyn>(input, 2.0).unwrap(),
+        OperationKind::Powf => B::powf::<Dyn>(input, 2.0).unwrap(),
+        OperationKind::Clamp => B::clamp::<Dyn>(input, 0.0, 1.0).unwrap(),
+        OperationKind::Softmax => B::softmax::<Dyn>(input, 1).unwrap(),
+        OperationKind::Atan2 => B::atan2::<Dyn>(input, input).unwrap(),
+        OperationKind::Fmod => B::fmod::<Dyn>(input, input).unwrap(),
+        OperationKind::Remainder => B::remainder::<Dyn>(input, input).unwrap(),
+        other => panic!("{other} is not a float-family operation"),
     }
 }
 
@@ -485,6 +688,51 @@ fn every_advertised_cpu_dtype_executes_its_registered_operation() {
                 | OperationKind::MaxPool2d
                 | OperationKind::AvgPool2d => {
                     execute_cpu_probe(rule.operation, LayoutClass::Contiguous)
+                }
+                OperationKind::Relu
+                | OperationKind::Step
+                | OperationKind::Mish
+                | OperationKind::Elu
+                | OperationKind::Gelu
+                | OperationKind::Abs
+                | OperationKind::Exp
+                | OperationKind::Neg
+                | OperationKind::Sqrt
+                | OperationKind::Log
+                | OperationKind::Tanh
+                | OperationKind::Sigmoid
+                | OperationKind::Swish
+                | OperationKind::Sign
+                | OperationKind::Floor
+                | OperationKind::Ceil
+                | OperationKind::Round
+                | OperationKind::Log2
+                | OperationKind::Log10
+                | OperationKind::Sin
+                | OperationKind::Cos
+                | OperationKind::Tan
+                | OperationKind::Asin
+                | OperationKind::Acos
+                | OperationKind::Atan
+                | OperationKind::Sinh
+                | OperationKind::Cosh
+                | OperationKind::Asinh
+                | OperationKind::Acosh
+                | OperationKind::Atanh
+                | OperationKind::Erf
+                | OperationKind::Rsqrt
+                | OperationKind::Trunc
+                | OperationKind::Frac
+                | OperationKind::AddScalar
+                | OperationKind::MulScalar
+                | OperationKind::Powf
+                | OperationKind::Atan2
+                | OperationKind::Fmod
+                | OperationKind::Remainder
+                | OperationKind::Clamp
+                | OperationKind::Softmax => {
+                    let input = B::ones::<Dyn>(&[2, 2], dtype, &DeviceId::cpu()).unwrap();
+                    cpu_float_probe_dyn(rule.operation, &input)
                 }
                 _ => panic!("missing dtype conformance probe for {}", rule.operation),
             };
@@ -798,22 +1046,28 @@ fn an_unadvertised_exact_layout_returns_the_documented_typed_reason() {
 /// descriptor path never admitted.
 #[test]
 fn an_exact_query_never_resolves_through_a_broad_family_row() {
-    for (operation, family) in [
-        (OperationKind::Relu, OperationKind::Pointwise),
-        (OperationKind::Softmax, OperationKind::Normalization),
-        (OperationKind::Gather, OperationKind::Storage),
-        (OperationKind::Dot, OperationKind::Reduction),
-        (OperationKind::TransposeExact, OperationKind::Storage),
-    ] {
-        assert_eq!(operation.family(), family, "{operation} family drifted");
+    // The pairs are derived rather than listed. An earlier version named `relu`
+    // and `softmax`, and FND-005 migrated both, which silently turned two of
+    // the five cases into assertions about registered operations. Deriving them
+    // means the test keeps testing the thing it is named after as the migration
+    // proceeds, and fails loudly if it ever runs out of unmigrated examples.
+    let registered: BTreeSet<OperationKind> =
+        CPU_CAPABILITIES.iter().map(|rule| rule.operation).collect();
 
+    let mut checked = 0;
+    for row in OPERATION_CATALOG {
+        let operation = row.operation;
+        if registered.contains(&operation) {
+            continue;
+        }
+        let family = operation.family();
         let family_case = query(family, DTypeId::F32, LayoutClass::Contiguous, 2);
-        assert!(
-            registry(DeviceKind::Cpu)
-                .support(&family_case)
-                .is_device_local(),
-            "{family} must stay registered for this test to prove anything",
-        );
+        if !registry(DeviceKind::Cpu)
+            .support(&family_case)
+            .is_device_local()
+        {
+            continue;
+        }
 
         let exact_case = query(operation, DTypeId::F32, LayoutClass::Contiguous, 2);
         assert!(
@@ -824,5 +1078,13 @@ fn an_exact_query_never_resolves_through_a_broad_family_row() {
             ),
             "{operation} must not inherit support from its {family} family row",
         );
+        checked += 1;
     }
+
+    assert!(
+        checked > 0,
+        "no unmigrated operation has a registered family row, so this test proves \
+         nothing; either the migration is complete and the family rows should be \
+         gone, or the derivation above is wrong"
+    );
 }
