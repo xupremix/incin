@@ -1,0 +1,19 @@
+   Compiling incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+error: the following explicit lifetimes could be elided: 'a
+  --> crates/incin-macros/src/onnx.rs:30:14
+   |
+30 | fn opset_for<'a>(model: &'a ModelProto, domain: &str) -> Option<i64> {
+   |              ^^          ^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#needless_lifetimes
+   = note: `-D clippy::needless-lifetimes` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::needless_lifetimes)]`
+help: elide the lifetimes
+   |
+30 - fn opset_for<'a>(model: &'a ModelProto, domain: &str) -> Option<i64> {
+30 + fn opset_for(model: &ModelProto, domain: &str) -> Option<i64> {
+   |
+
+error: could not compile `incin-macros` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `incin-macros` (lib) due to 1 previous error

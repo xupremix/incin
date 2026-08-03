@@ -13,7 +13,8 @@ pub(crate) extern crate alloc;
 
 pub(crate) mod err;
 
-pub mod compiled;
+#[cfg(feature = "compiled")]
+mod compiled;
 pub mod dist;
 pub mod distributions;
 pub mod exec;
@@ -38,16 +39,19 @@ pub mod loss {
     pub use crate::nn::loss::*;
 }
 
-#[cfg(feature = "compiled")]
-/// Compiled graph and compiler execution preview types.
-pub mod compile {
-    pub use crate::compiled::{
-        AllocationPlanner, ArtifactHeader, ArtifactVersion, BufferSlot, CapturedGraph,
-        CapturedNode, CompileOptions, CompiledArtifact, CompiledPlan, ConstantFolder,
-        DynamicShapePolicy, FusedKernel, FusionBlocker, FusionCandidate, FusionPass, FusionPolicy,
-        LivenessInterval, LivenessMap, MemoryPlan, SavedTensorSet, ShapeBucket, ShapeGuard,
-        WeightPrepacker,
-    };
+/// Unstable APIs that carry no compatibility guarantee.
+pub mod experimental {
+    #[cfg(feature = "compiled")]
+    /// Structural compiled-execution prototype. It does not execute graphs yet.
+    pub mod compiled {
+        pub use crate::compiled::{
+            AllocationPlanner, ArtifactHeader, ArtifactVersion, BoundedPlanTuner, BufferSlot,
+            CapturedGraph, CapturedNode, CompileOptions, CompiledArtifact, CompiledPlan,
+            ConstantFolder, DynamicShapePolicy, FusedKernel, FusionBlocker, FusionCandidate,
+            FusionPass, FusionPolicy, LivenessInterval, LivenessMap, MemoryPlan, PlanTuningReport,
+            ReproducibilityManifest, SavedTensorSet, ShapeBucket, ShapeGuard, WeightPrepacker,
+        };
+    }
 }
 
 /// Extension traits and operation descriptor contracts for backend authors.
@@ -138,4 +142,3 @@ pub mod prelude {
     pub use alloc::vec::Vec;
     pub use typenum;
 }
-

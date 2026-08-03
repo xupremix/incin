@@ -1,6 +1,8 @@
 //! `UX-008`: Reproducibility manifest replay and incompatibility diffs test.
 
-use incin_core::compiled::ReproducibilityManifest;
+#![cfg(feature = "compiled")]
+
+use incin_core::experimental::compiled::ReproducibilityManifest;
 
 #[test]
 fn test_manifest_serialization_roundtrip() {

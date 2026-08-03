@@ -1,0 +1,170 @@
+    Blocking waiting for file lock on build directory
+   Compiling prost-build v0.6.1
+   Compiling prost-types v0.14.4
+   Compiling tokio v1.52.3
+   Compiling futures-util v0.3.32
+   Compiling darling_core v0.23.0
+   Compiling rand_chacha v0.3.1
+   Compiling kasuari v0.4.12
+   Compiling strum v0.28.0
+   Compiling naga v22.1.0
+   Compiling derive_more-impl v2.1.1
+   Compiling rand_chacha v0.9.0
+   Compiling ureq v3.3.0
+   Compiling ratatui-core v0.1.2
+   Compiling rand v0.8.6
+   Compiling rand v0.9.2
+   Compiling onnx-pb v0.1.4
+   Compiling clap v4.6.1
+   Compiling prost-build v0.14.4
+   Compiling derive_more v2.1.1
+   Compiling rand_distr v0.4.3
+   Compiling crossterm v0.29.0
+   Compiling criterion v0.5.1
+   Compiling incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+   Compiling futures-executor v0.3.32
+   Compiling futures v0.3.32
+   Compiling darling_macro v0.23.0
+   Compiling darling v0.23.0
+   Compiling instability v0.3.12
+   Compiling ratatui-widgets v0.3.2
+   Compiling ratatui-crossterm v0.1.2
+   Compiling tokio-util v0.7.18
+   Compiling tower v0.5.3
+   Compiling tokio-rustls v0.26.4
+   Compiling tower-http v0.6.11
+   Compiling h2 v0.4.15
+   Compiling ratatui-macros v0.7.2
+   Compiling ratatui v0.30.2
+   Compiling wgpu-hal v22.0.0
+   Compiling hyper v1.10.1
+   Compiling hyper-util v0.1.20
+   Compiling wgpu-core v22.1.0
+   Compiling hyper-rustls v0.27.9
+   Compiling reqwest v0.12.28
+   Compiling hf-hub v0.5.0
+   Compiling wgpu v22.1.0
+   Compiling incin-telemetry v0.0.0 (/home/xupremix/Projects/incin/crates/incin-telemetry)
+   Compiling incin-data v0.0.0 (/home/xupremix/Projects/incin/crates/incin-data)
+   Compiling incin-viz-plugin-api v0.0.0 (/home/xupremix/Projects/incin/crates/incin-viz-plugin-api)
+   Compiling incin-viz v0.0.0 (/home/xupremix/Projects/incin/crates/incin-viz)
+   Compiling incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+   Compiling incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 45.35s
+   Doc-tests incin
+
+running 2 tests
+test crates/incin/src/lib.rs - (line 36) - compile ... ok
+test crates/incin/src/lib.rs - (line 16) ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+all doctests ran in 0.97s; merged doctests compilation took 0.93s
+   Doc-tests incin_backends
+
+running 1 test
+test crates/incin-backends/src/detect.rs - detect::detect_device (line 25) ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+all doctests ran in 0.71s; merged doctests compilation took 0.60s
+   Doc-tests incin_core
+
+running 68 tests
+test crates/incin-core/src/dist/mesh.rs - dist::mesh (line 27) ... ok
+test crates/incin-core/src/dist/mesh.rs - dist::mesh::MeshSpec (line 78) ... ok
+test crates/incin-core/src/dist/mesh.rs - dist::mesh::ValidMesh (line 101) ... ok
+test crates/incin-core/src/nn/linear.rs - nn::linear::LinearShape (line 13) ... ok
+test crates/incin-core/src/nn/module.rs - nn::module::Module (line 473) ... ok
+test crates/incin-core/src/nn/conv2d.rs - nn::conv2d::Conv2d (line 18) ... ok
+test crates/incin-core/src/nn/param.rs - nn::param::Param (line 64) ... ok
+test crates/incin-core/src/nn/batch_norm.rs - nn::batch_norm::BatchNorm2d (line 53) ... ok
+test crates/incin-core/src/shapes/shape.rs - shapes::shape::ConstShape (line 235) ... ok
+test crates/incin-core/src/shapes/dim.rs - shapes::dim::dim (line 102) ... ok
+test crates/incin-core/src/nn/linear.rs - nn::linear::Linear (line 140) ... ok
+test crates/incin-core/src/tensor/auto_device.rs - tensor::auto_device::best_device (line 123) ... ok
+test crates/incin-core/src/nn/lstm.rs - nn::lstm::LSTMCell (line 42) ... ok
+test crates/incin-core/src/optim/mod.rs - optim::Adam (line 269) ... ok
+test crates/incin-core/src/nn/module.rs - nn::module::TrainMode (line 423) ... ok
+test crates/incin-core/src/nn/module.rs - nn::module::SeqTy (line 1034) ... ok
+test crates/incin-core/src/tensor/device.rs - tensor::device::DeviceSet (line 524) ... FAILED
+test crates/incin-core/src/optim/mod.rs - optim::SGD (line 26) ... ok
+test crates/incin-core/src/optim/mod.rs - optim::AdamW (line 80) ... ok
+test crates/incin-core/src/tensor/base.rs - tensor::base::Tensor (line 35) ... ok
+test crates/incin-core/src/nn/rnn.rs - nn::rnn::RNN (line 149) ... ok
+test crates/incin-core/src/tensor/base.rs - tensor::base::Tensor (line 46) ... ok
+test crates/incin-core/src/tensor/ops/binary.rs - tensor::ops::binary::Tensor<S,B,K,G>::mul (line 76) ... ok
+test crates/incin-core/src/tensor/ops/binary.rs - tensor::ops::binary::Tensor<S,B,K,G>::add (line 46) ... ok
+test crates/incin-core/src/tensor/ops/binary.rs - tensor::ops::binary::Tensor<S,B,K,G>::div (line 91) ... ok
+test crates/incin-core/src/tensor/ops/binary.rs - tensor::ops::binary::Tensor<S1,B,K,G>::broadcast_add (line 300) ... ok
+test crates/incin-core/src/tensor/ops/loss.rs - tensor::ops::loss::Tensor<S,B,K,G>::mse_loss (line 72) ... ok
+test crates/incin-core/src/tensor/ops/binary.rs - tensor::ops::binary::Tensor<S1,B,K,G>::broadcast_div (line 345) ... ok
+test crates/incin-core/src/tensor/ops/binary.rs - tensor::ops::binary::Tensor<S,B,K,G>::sub (line 61) ... ok
+test crates/incin-core/src/tensor/ops/binary.rs - tensor::ops::binary::Tensor<S1,B,K,G>::broadcast_sub (line 315) ... ok
+test crates/incin-core/src/tensor/ops/loss.rs - tensor::ops::loss::Tensor<S,B,K,G>::cross_entropy_loss (line 27) ... ok
+test crates/incin-core/src/tensor/ops/binary.rs - tensor::ops::binary::Tensor<S1,B,K,G>::broadcast_mul (line 330) ... ok
+test crates/incin-core/src/tensor/ops/manipulation.rs - tensor::ops::manipulation::Tensor<S,B,K,G>::reshape (line 194) ... ok
+test crates/incin-core/src/tensor/ops/manipulation.rs - tensor::ops::manipulation::Tensor<S,B,K,G>::flatten (line 525) ... ok
+test crates/incin-core/src/tensor/ops/manipulation.rs - tensor::ops::manipulation::Tensor<S,B,K,G>::reshape_idx (line 222) ... ok
+test crates/incin-core/src/tensor/ops/manipulation.rs - tensor::ops::manipulation::Tensor<S,B,K,G>::get (line 57) ... ok
+test crates/incin-core/src/tensor/ops/manipulation.rs - tensor::ops::manipulation::Tensor<S,B,K,G>::slice (line 43) ... ok
+test crates/incin-core/src/tensor/ops/manipulation.rs - tensor::ops::manipulation::Tensor<S,B,K,G>::transpose (line 494) ... ok
+test crates/incin-core/src/tensor/ops/manipulation.rs - tensor::ops::manipulation::Tensor<S,B,K,G>::try_squeeze (line 293) ... ok
+test crates/incin-core/src/tensor/ops/manipulation.rs - tensor::ops::manipulation::Tensor<S,B,K,G>::try_narrow (line 269) ... ok
+test crates/incin-core/src/tensor/ops/reduce.rs - tensor::ops::reduce::Tensor<S,B,K,G>::max_all (line 96) ... ok
+test crates/incin-core/src/tensor/ops/reduce.rs - tensor::ops::reduce::Tensor<S,B,K,G>::max_dim (line 180) ... ok
+test crates/incin-core/src/tensor/ops/reduce.rs - tensor::ops::reduce::Tensor<S,B,K,G>::mean_all (line 82) ... ok
+test crates/incin-core/src/tensor/ops/reduce.rs - tensor::ops::reduce::Tensor<S,B,K,G>::mean_dim (line 152) ... ok
+test crates/incin-core/src/tensor/ops/reduce.rs - tensor::ops::reduce::Tensor<S,B,K,G>::max_keepdim (line 194) ... ok
+test crates/incin-core/src/tensor/ops/reduce.rs - tensor::ops::reduce::Tensor<S,B,K,G>::min_all (line 110) ... ok
+test crates/incin-core/src/tensor/ops/reduce.rs - tensor::ops::reduce::Tensor<S,B,K,G>::mean_keepdim (line 166) ... ok
+test crates/incin-core/src/tensor/ops/reduce.rs - tensor::ops::reduce::Tensor<S,B,K,G>::min_dim (line 208) ... ok
+test crates/incin-core/src/tensor/ops/reduce.rs - tensor::ops::reduce::Tensor<S,B,K,G>::min_keepdim (line 222) ... ok
+test crates/incin-core/src/tensor/ops/reduce.rs - tensor::ops::reduce::Tensor<S,B,K,G>::sum_all (line 68) ... ok
+test crates/incin-core/src/tensor/ops/reduce.rs - tensor::ops::reduce::Tensor<S,B,K,G>::sum_dim (line 124) ... ok
+test crates/incin-core/src/tensor/ops/reduce.rs - tensor::ops::reduce::Tensor<S,B,K,G>::sum_keepdim (line 138) ... ok
+test crates/incin-core/src/tensor/ops/unary.rs - tensor::ops::unary::Tensor<S,B,K,G>::abs (line 90) ... ok
+test crates/incin-core/src/tensor/ops/unary.rs - tensor::ops::unary::Tensor<S,B,K,G>::add_scalar (line 387) ... ok
+test crates/incin-core/src/tensor/ops/unary.rs - tensor::ops::unary::Tensor<S,B,K,G>::elu (line 162) ... ok
+test crates/incin-core/src/tensor/ops/unary.rs - tensor::ops::unary::Tensor<S,B,K,G>::exp (line 240) ... ok
+test crates/incin-core/src/tensor/ops/unary.rs - tensor::ops::unary::Tensor<S,B,K,G>::log (line 320) ... ok
+test crates/incin-core/src/tensor/ops/unary.rs - tensor::ops::unary::Tensor<S,B,K,G>::gelu (line 119) ... ok
+test crates/incin-core/src/tensor/ops/unary.rs - tensor::ops::unary::Tensor<S,B,K,G>::mul_scalar (line 361) ... ok
+test crates/incin-core/src/tensor/ops/unary.rs - tensor::ops::unary::Tensor<S,B,K,G>::mish (line 148) ... ok
+test crates/incin-core/src/tensor/ops/unary.rs - tensor::ops::unary::Tensor<S,B,K,G>::neg (line 212) ... ok
+test crates/incin-core/src/tensor/ops/unary.rs - tensor::ops::unary::Tensor<S,B,K,G>::relu (line 105) ... ok
+test crates/incin-core/src/tensor/ops/unary.rs - tensor::ops::unary::Tensor<S,B,K,G>::sigmoid (line 348) ... ok
+test crates/incin-core/src/tensor/ops/unary.rs - tensor::ops::unary::Tensor<S,B,K,G>::sqrt (line 226) ... ok
+test crates/incin-core/src/tensor/ops/unary.rs - tensor::ops::unary::Tensor<S,B,K,G>::softmax (line 190) ... ok
+test crates/incin-core/src/tensor/ops/unary.rs - tensor::ops::unary::Tensor<S,B,K,G>::swish (line 177) ... ok
+test crates/incin-core/src/tensor/ops/unary.rs - tensor::ops::unary::Tensor<S,B,K,G>::step (line 133) ... ok
+test crates/incin-core/src/tensor/ops/unary.rs - tensor::ops::unary::Tensor<S,B,K,G>::tanh (line 334) ... ok
+
+failures:
+
+---- crates/incin-core/src/tensor/device.rs - tensor::device::DeviceSet (line 524) stdout ----
+error[E0432]: unresolved import `incin_core::prelude::DeviceSet`
+   --> crates/incin-core/src/tensor/device.rs:526:39
+    |
+526 | use incin_core::prelude::{DeviceKind, DeviceSet};
+    |                                       ^^^^^^^^^ no `DeviceSet` in `prelude`
+    |
+help: a similar name exists in the module
+    |
+526 - use incin_core::prelude::{DeviceKind, DeviceSet};
+526 + use incin_core::prelude::{DeviceKind, DeviceId};
+    |
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0432`.
+Couldn't compile the test.
+
+failures:
+    crates/incin-core/src/tensor/device.rs - tensor::device::DeviceSet (line 524)
+
+test result: FAILED. 67 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.32s
+
+all doctests ran in 13.44s; merged doctests compilation took 11.12s
+error: doctest failed, to rerun pass `-p incin-core --doc`

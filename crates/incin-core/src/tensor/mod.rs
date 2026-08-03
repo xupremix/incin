@@ -32,7 +32,9 @@ pub mod prelude {
     pub use super::base::{Dyn, Tensor};
     #[cfg(feature = "distributed")]
     pub use super::base::PlacedTensorError;
-    pub use super::device::{ConstDevice, Cpu, Device, DeviceId, DeviceKind};
+    pub use super::device::{
+        ConstDevice, Cpu, Device, DeviceId, DeviceKind, DevicePreference, DeviceSet, DeviceSetError,
+    };
     #[cfg(feature = "cuda")]
     pub use super::device::{Cuda, CudaN};
     #[cfg(feature = "wgpu")]

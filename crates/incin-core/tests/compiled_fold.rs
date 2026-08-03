@@ -1,10 +1,14 @@
-use incin_core::compiled::{CapturedGraph, ConstantFolder, ShapeBucket, WeightPrepacker};
+#![cfg(feature = "compiled")]
+
+use incin_core::experimental::compiled::{
+    CapturedGraph, ConstantFolder, ShapeBucket, WeightPrepacker,
+};
 use incin_core::graph::{Graph, OpType};
 use incin_core::prelude::DTypeId;
 use std::collections::BTreeMap;
 
 #[test]
-fn test_constant_folder_and_weight_prepacker_pass() {
+fn incomplete_compiled_passes_fail_closed() {
     let mut graph = Graph::new();
     let x = graph.add_value(vec![2, 4], DTypeId::F32, Some("x".into()));
     let y = graph.add_value(vec![4, 8], DTypeId::F32, Some("y".into()));
@@ -18,14 +22,22 @@ fn test_constant_folder_and_weight_prepacker_pass() {
     let captured = CapturedGraph::capture(&graph).expect("capture should succeed");
 
     let folder = ConstantFolder;
-    let (folded_graph, _folded_ids) = folder.fold(&captured).expect("folding should succeed");
-    assert_eq!(folded_graph.node_count(), 1);
+    let fold_error = folder
+        .fold(&captured)
+        .expect_err("folding is not implemented");
+    assert_eq!(
+        fold_error.to_string(),
+        "Operation 'compiled.constant_fold' is not supported by backend 'compiled-prototype'"
+    );
 
     let prepacker = WeightPrepacker;
-    let packed_graph = prepacker
-        .prepack(&folded_graph)
-        .expect("prepack should succeed");
-    assert_eq!(packed_graph.node_count(), 1);
+    let prepack_error = prepacker
+        .prepack(&captured)
+        .expect_err("prepacking is not implemented");
+    assert_eq!(
+        prepack_error.to_string(),
+        "Operation 'compiled.weight_prepack' is not supported by backend 'compiled-prototype'"
+    );
 }
 
 #[test]

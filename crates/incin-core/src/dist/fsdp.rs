@@ -197,12 +197,13 @@ impl FsdpPlan {
     /// Verify that persistent memory scales inversely with world size and transient memory is bounded.
     pub fn verify_memory_parity(&self) -> Result<(), FsdpError> {
         let report = self.memory_report();
-        if self.stage == ZeROStage::ZeRO3 && self.world_size > 1 {
-            if report.persistent_bytes >= report.unsharded_full_bytes {
-                return Err(FsdpError::ParityViolation {
-                    reason: "ZeRO-3 persistent bytes must be strictly less than full DP bytes",
-                });
-            }
+        if self.stage == ZeROStage::ZeRO3
+            && self.world_size > 1
+            && report.persistent_bytes >= report.unsharded_full_bytes
+        {
+            return Err(FsdpError::ParityViolation {
+                reason: "ZeRO-3 persistent bytes must be strictly less than full DP bytes",
+            });
         }
         Ok(())
     }

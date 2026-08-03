@@ -7,11 +7,48 @@
 
 ---
 
-## Status: ✅ COMPLETE
+## Status: INCOMPLETE
 
-**Verified Date:** 2026-08-02  
-**Final Commit Range:** 8f90364 → HEAD (develop)  
-**Test Run:** `cargo test --workspace` — **1,233 tests pass, 0 fail, exit 0**
+The completion claim below has not been reproduced from the inspected checkout. At
+`fa8d2030141b04bc7c0dfccb382bfa60647223cf`, the archived
+`cargo test --workspace` baseline exits 101 because two `trybuild` snapshots do
+not match diagnostics emitted by the current Rust toolchain. The public facade
+also still contains wildcard re-exports, so API-001 requires a new acceptance
+run before it can be called complete.
+
+### Current surviving wildcard exports
+
+Twelve wildcard declarations remain after FND-000 moved the compiled preview
+behind `experimental::compiled`:
+
+- `incin_core::loss`: `crate::nn::loss::*`
+- `incin_core::prelude`: `err::*`, `shapes::prelude::*`, and
+  `tensor::prelude::*`
+- `incin::backend_authoring`: `incin_core::backend_authoring::*`
+- `incin::test_utils`: `incin_core::test_utils::*`
+- `incin::nn`: `incin_core::nn::*`
+- `incin::metrics`: `incin_core::metrics::*`
+- `incin::dist`: `incin_core::dist::*`
+- `incin::data`: `incin_data::*`
+- `incin::transforms`: `incin_data::transforms::*`
+- `incin::hub`: `incin_data::hub::*`
+
+The current default preludes also expose backend/helper contracts that require
+FND-001 review, including `SupportsDType`, `TransferTo`, graph IR names, and
+autoref fallback machinery. No claim is made that the stable allow-list is
+finished.
+
+## Previous claim
+
+The following statement is retained verbatim as historical context; it is not a
+current verification result:
+
+> **Verified Date:** 2026-08-02
+> **Final Commit Range:** 8f90364 → HEAD (develop)
+> **Test Run:** `cargo test --workspace` — **1,233 tests pass, 0 fail, exit 0**
+
+Everything below this point records the previous completion claim and must not
+be treated as evidence for the current checkout.
 
 ---
 

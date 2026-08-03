@@ -67,21 +67,11 @@
 //!
 //! ## ONNX Import
 //!
-//! Incin can automatically generate a strongly-typed Rust struct representing an ONNX graph at compile time:
-//!
-//! ```rust,no_run
-//! use incin::prelude::*;
-//!
-//! // Reads the ONNX file at compile time, parses the graph, and generates
-//! // a struct `ResNet18` with all weights, biases, and a fully typed `forward` method.
-//! import_model!("resnet18.onnx", ResNet18);
-//!
-//! fn main() {
-//!     // The generated struct requires you to provide the parameters,
-//!     // typically loaded via safetensors or other deserializers.
-//!     // let model = ResNet18 { ... };
-//! }
-//! ```
+//! ONNX expansion is currently partial and fail-closed. Stateless graphs using
+//! the documented supported subset can produce typed eager code. Models with
+//! initializers, unknown rank, control flow, custom domains, or unsupported
+//! nodes are rejected during macro expansion; no weights or metadata are
+//! invented.
 extern crate alloc;
 
 pub use incin_core::prelude::{
@@ -105,10 +95,11 @@ pub use incin_core::prelude::{Metal, MetalN};
 pub use incin_core::dim;
 pub use incin_macros::{import_model, mesh, model, module};
 
-#[cfg(feature = "compiled")]
-/// Curated preview types for compiled execution.
-pub mod compile {
-    pub use incin_core::compile::*;
+/// Unstable APIs that carry no compatibility guarantee.
+pub mod experimental {
+    #[cfg(feature = "compiled")]
+    /// Structural compiled-execution prototype. It does not execute graphs yet.
+    pub use incin_core::experimental::compiled;
 }
 
 #[cfg(feature = "backend-authoring")]

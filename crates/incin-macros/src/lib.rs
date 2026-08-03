@@ -202,11 +202,11 @@ pub fn generate_shape_ops(input: TokenStream) -> TokenStream {
     shape_ops::generate_shape_ops(input)
 }
 
-/// Generates a fully-typed Rust struct directly from an `.onnx` or `.safetensors` model file.
+/// Expands a supported `.onnx` graph or imports `.safetensors` metadata.
 ///
-/// This is one of Incin's most powerful features. At compile time, it parses the `.onnx` file,
-/// determines the static shapes of all parameters (weights, biases, layer norms) and connections,
-/// and emits a complete Rust `struct` containing all the layers.
+/// ONNX support is intentionally partial and fail-closed. Initializers, unknown
+/// rank, control flow, custom domains, attributes, and unsupported nodes produce
+/// macro-expansion diagnostics instead of fabricated code or values.
 ///
 /// ## Examples
 ///
@@ -216,7 +216,7 @@ pub fn generate_shape_ops(input: TokenStream) -> TokenStream {
 /// ```text
 /// use incin::prelude::*;
 ///
-/// model!("resnet18.onnx", MyResNet);
+/// model!("stateless_supported_graph.onnx", MyModel);
 /// ```
 #[proc_macro]
 pub fn model(input: TokenStream) -> TokenStream {

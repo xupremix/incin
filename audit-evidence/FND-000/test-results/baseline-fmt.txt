@@ -1,0 +1,814 @@
+Diff in /home/xupremix/Projects/incin/crates/incin/examples/mnist_training.rs:45:
+             &device,
+         )
+         .unwrap();
+[31m-        let labels_raw =
+(B[m[31m-            <Backend as incin::prelude::Backend>::from_bytes::<f32>(labels_bytes, &[batch_size], DTypeId::F32, &device).unwrap();
+(B[m[32m+        let labels_raw = <Backend as incin::prelude::Backend>::from_bytes::<f32>(
+(B[m[32m+            labels_bytes,
+(B[m[32m+            &[batch_size],
+(B[m[32m+            DTypeId::F32,
+(B[m[32m+            &device,
+(B[m[32m+        )
+(B[m[32m+        .unwrap();
+(B[m 
+         (
+             Tensor::<Dyn, Backend>::from_raw(images_raw, vec![batch_size, 1, 28, 28]).unwrap(),
+Diff in /home/xupremix/Projects/incin/crates/incin/src/lib.rs:84:
+ //! ```
+ extern crate alloc;
+ 
+[32m+pub use incin_backends::IncinBackend;
+(B[m[32m+pub use incin_core::optim::{Adam, AdamW, ConstantLR, LRScheduler, LinearLR, Optimizer, SGD};
+(B[m[32m+#[cfg(feature = "std")]
+(B[m[32m+pub use incin_core::optim::{CosineAnnealingLR, StepLR};
+(B[m pub use incin_core::prelude::{
+     Backend, ConstShape, Cpu, DType, DTypeId, DeviceId, Dyn, DynShape, Error, Grad, Gradients,
+     Module, NoGrad, PartialDynShape, Result, Shape, StateDict,
+Diff in /home/xupremix/Projects/incin/crates/incin/src/lib.rs:90:
+ };
+[31m-pub use incin_core::optim::{
+(B[m[31m-    Adam, AdamW, ConstantLR, LRScheduler, LinearLR, Optimizer, SGD,
+(B[m[31m-};
+(B[m[31m-#[cfg(feature = "std")]
+(B[m[31m-pub use incin_core::optim::{CosineAnnealingLR, StepLR};
+(B[m[31m-pub use incin_backends::IncinBackend;
+(B[m 
+ #[cfg(feature = "cuda")]
+ pub use incin_core::prelude::{Cuda, CudaN};
+Diff in /home/xupremix/Projects/incin/crates/incin/src/lib.rs:100:
+[31m-#[cfg(feature = "wgpu")]
+(B[m[31m-pub use incin_core::prelude::{Wgpu, WgpuN};
+(B[m #[cfg(feature = "metal")]
+ pub use incin_core::prelude::{Metal, MetalN};
+[32m+#[cfg(feature = "wgpu")]
+(B[m[32m+pub use incin_core::prelude::{Wgpu, WgpuN};
+(B[m 
+ pub use incin_core::dim;
+ pub use incin_macros::{import_model, mesh, model, module};
+Diff in /home/xupremix/Projects/incin/crates/incin/src/lib.rs:122:
+ pub mod tuning {
+     pub use incin_backends::tuning::{
+         AlignmentClass, AutotunePolicy, CacheLimits, CacheRecovery, CompilerFingerprint,
+[31m-        DeviceFingerprint, DTypePolicyId, KernelSignature, PersistentTuningCache, RankClass,
+(B[m[32m+        DTypePolicyId, DeviceFingerprint, KernelSignature, PersistentTuningCache, RankClass,
+(B[m         SelectionSource, TuningContext, TuningEnvironmentFingerprint, TuningExplain,
+         TuningProvenance, TuningScope, TuningSelection,
+     };
+Diff in /home/xupremix/Projects/incin/crates/incin/src/lib.rs:334:
+ 
+ /// Prelude re-exporting high-frequency user types, macros, NN modules, and optimizers.
+ pub mod prelude {
+[32m+    pub use super::Tensor;
+(B[m[32m+    pub use incin_core::nn::stats::{AutorefComputeStats, AutorefComputeStatsFallback, sum_stats};
+(B[m     pub use incin_core::prelude::{
+[31m-        Backend, BTreeMap, ComputeStats, ConstDevice, ConstDType, ConstShape, Cpu, DType, DTypeId,
+(B[m[32m+        BTreeMap, Backend, ComputeStats, ConstDType, ConstDevice, ConstShape, Cpu, DType, DTypeId,
+(B[m         Device, DeviceId, DeviceKind, Dim, Dyn, DynShape, Ellipsis, Error, Grad, HeadShape,
+         InferDim, LayerStats, ModelStats, Module, NamedDyn, NoGrad, PartialDynShape, Result, SeqTy,
+         Shape, Slice, SpanShape, StateDict, String, SupportsDType, TailShape, TransferTo, Vec,
+Diff in /home/xupremix/Projects/incin/crates/incin/src/lib.rs:342:
+         format,
+     };
+[31m-    pub use incin_core::nn::stats::{AutorefComputeStats, AutorefComputeStatsFallback, sum_stats};
+(B[m[31m-    pub use super::Tensor;
+(B[m 
+     #[cfg(feature = "cuda")]
+     pub use incin_core::prelude::{Cuda, CudaN};
+Diff in /home/xupremix/Projects/incin/crates/incin/src/lib.rs:349:
+[31m-    #[cfg(feature = "wgpu")]
+(B[m[31m-    pub use incin_core::prelude::{Wgpu, WgpuN};
+(B[m     #[cfg(feature = "metal")]
+     pub use incin_core::prelude::{Metal, MetalN};
+[32m+    #[cfg(feature = "wgpu")]
+(B[m[32m+    pub use incin_core::prelude::{Wgpu, WgpuN};
+(B[m 
+[31m-    pub use incin_backends::IncinBackend;
+(B[m     #[cfg(feature = "cpu")]
+     pub use super::DefaultBackend;
+     #[cfg(any(feature = "cpu", feature = "wgpu", feature = "cuda"))]
+Diff in /home/xupremix/Projects/incin/crates/incin/src/lib.rs:358:
+     pub use super::DefaultDevice;
+[32m+    pub use incin_backends::IncinBackend;
+(B[m 
+     pub use incin_core::dim;
+     pub use incin_core::seq;
+Diff in /home/xupremix/Projects/incin/crates/incin/src/lib.rs:380:
+         },
+         lstm::{LSTM, LSTMCell},
+         max_pool2d::MaxPool2d,
+[31m-        module::{
+(B[m[31m-            LayerNode, NamedLayers, Parameters, Sequential, ToDevice, TrainMode,
+(B[m[31m-        },
+(B[m[32m+        module::{LayerNode, NamedLayers, Parameters, Sequential, ToDevice, TrainMode},
+(B[m         rms_norm::RMSNorm,
+     };
+ 
+Diff in /home/xupremix/Projects/incin/crates/incin/src/lib.rs:402:
+     #[cfg(feature = "distributed")]
+     pub use incin_core::dist::{Local, Placement, PlacementKind};
+ }
+[31m-
+(B[m 
+ #[cfg(test)]
+ /// Tests.
+Diff in /home/xupremix/Projects/incin/crates/incin/tests/fsdp.rs:5:
+ 
+ #![cfg(feature = "distributed-nccl")]
+ 
+[31m-use incin::dist::{
+(B[m[31m-    FsdpParameterId, FsdpPlanBuilder, ZeROStage,
+(B[m[31m-};
+(B[m[32m+use incin::dist::{FsdpParameterId, FsdpPlanBuilder, ZeROStage};
+(B[m use incin::prelude::*;
+ 
+ #[test]
+Diff in /home/xupremix/Projects/incin/crates/incin-backends/src/cpu/ops/conv.rs:40:
+ //! offset arithmetic (Pitfall 4). Only `groups == 1` is supported, matching
+ //! `CandleBackend::conv_transpose2d`'s own confirmed effective behavior.
+ 
+[32m+use incin_core::backend_authoring::{NumericOps, TensorOps};
+(B[m use incin_core::prelude::Error;
+ use incin_core::prelude::{BackwardError, OperationKind};
+[31m-use incin_core::backend_authoring::{NumericOps, TensorOps};
+(B[m use incin_core::prelude::{DType, Result};
+ 
+ use crate::cpu::CpuBackendImpl;
+Diff in /home/xupremix/Projects/incin/crates/incin-backends/src/cpu/ops/loss.rs:25:
+ //! exactly like `mse_loss`/`cross_entropy_loss` above.
+ 
+ use crate::cpu::CpuBackendImpl;
+[32m+use incin_core::backend_authoring::{Backend, FloatOps, LossOps, NumericOps, ReductionOps};
+(B[m use incin_core::prelude::Reduction;
+ use incin_core::prelude::*;
+[31m-use incin_core::backend_authoring::{Backend, FloatOps, LossOps, NumericOps, ReductionOps};
+(B[m use incin_core::prelude::{DType, Result};
+ 
+ use crate::cpu::storage::{CpuBuffer, CpuStorage};
+Diff in /home/xupremix/Projects/incin/crates/incin-backends/src/cpu/ops/quant.rs:1:
+ use crate::cpu::CpuBackendImpl;
+ use crate::cpu::storage::{BlockQ8_0, CpuBuffer, CpuStorage};
+[31m-use incin_core::prelude::*;
+(B[m use incin_core::backend_authoring::{Backend, QuantizedOps};
+[32m+use incin_core::prelude::*;
+(B[m use incin_core::prelude::{FloatDType, QuantDType};
+ 
+ extern crate alloc;
+Diff in /home/xupremix/Projects/incin/crates/incin-backends/src/cpu/ops/reduce.rs:44:
+ //!   silent `Ok(t.clone())` placeholder (T-01-15 mitigation).
+ 
+ use crate::cpu::CpuBackendImpl;
+[32m+use incin_core::backend_authoring::{Backend, ReductionOps};
+(B[m use incin_core::prelude::Error;
+ use incin_core::prelude::*;
+[31m-use incin_core::backend_authoring::{Backend, ReductionOps};
+(B[m use incin_core::prelude::{DType, Result};
+ 
+ use crate::cpu::ops::elementwise::increment_index;
+Diff in /home/xupremix/Projects/incin/crates/incin-backends/src/descriptor_bind.rs:12:
+ 
+ use alloc::string::ToString;
+ 
+[32m+use incin_core::backend_authoring::{ReductionOps, TensorOps};
+(B[m use incin_core::exec::{
+     Conv2dSpec, Pool2dSpec, PoolOp, ReduceOp, ReductionSpec, TensorMeta, UnsupportedReason,
+ };
+Diff in /home/xupremix/Projects/incin/crates/incin-backends/src/descriptor_bind.rs:18:
+[31m-use incin_core::backend_authoring::{ReductionOps, TensorOps};
+(B[m use incin_core::prelude::{Backend, BackendError, DType, Error, OperationKind};
+ 
+ /// Build an `InvalidInput` error for a descriptor binder.
+Diff in /home/xupremix/Projects/incin/crates/incin-backends/src/dispatch_executor.rs:13:
+ 
+ use incin_core::backend_authoring::{Execute, ExecutionRequest};
+ use incin_core::exec::{
+[31m-    Conv2dSpec, ExecutionContext, MatMulSpec, Pool2dSpec, ReductionSpec, ReshapeSpec,
+(B[m[31m-    TensorHandle, TensorMeta,
+(B[m[32m+    Conv2dSpec, ExecutionContext, MatMulSpec, Pool2dSpec, ReductionSpec, ReshapeSpec, TensorHandle,
+(B[m[32m+    TensorMeta,
+(B[m };
+ use incin_core::prelude::{BackendError, DType, Device, OperationKind, StorageBackend};
+ 
+Diff in /home/xupremix/Projects/incin/crates/incin-backends/src/external/candle/backend.rs:137:
+                     .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
+                 Ok(bytemuck::cast_slice(&v).to_vec())
+             }
+[31m-            other => Err(anyhow::anyhow!("Unsupported Candle dtype for to_bytes: {:?}", other).into()),
+(B[m[32m+            other => {
+(B[m[32m+                Err(anyhow::anyhow!("Unsupported Candle dtype for to_bytes: {:?}", other).into())
+(B[m[32m+            }
+(B[m         }
+     }
+ 
+Diff in /home/xupremix/Projects/incin/crates/incin-backends/src/external/candle/backend.rs:177:
+                 candle_core::Tensor::from_slice(&doubles, shape, &d)
+                     .map_err(|e: candle_core::Error| anyhow::anyhow!(e).into())
+             }
+[31m-            candle_core::DType::U8 => {
+(B[m[31m-                candle_core::Tensor::from_slice(bytes, shape, &d)
+(B[m[31m-                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e).into())
+(B[m[31m-            }
+(B[m[32m+            candle_core::DType::U8 => candle_core::Tensor::from_slice(bytes, shape, &d)
+(B[m[32m+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e).into()),
+(B[m             candle_core::DType::U32 => {
+                 let uints: Vec<u32> = bytes
+                     .chunks_exact(4)
+Diff in /home/xupremix/Projects/incin/crates/incin-backends/src/external/candle/backend.rs:213:
+                 candle_core::Tensor::from_slice(&bf16s, shape, &d)
+                     .map_err(|e: candle_core::Error| anyhow::anyhow!(e).into())
+             }
+[31m-            other => Err(anyhow::anyhow!("Unsupported Candle dtype for from_bytes: {:?}", other).into()),
+(B[m[32m+            other => {
+(B[m[32m+                Err(anyhow::anyhow!("Unsupported Candle dtype for from_bytes: {:?}", other).into())
+(B[m[32m+            }
+(B[m         }
+     }
+ }
+Diff in /home/xupremix/Projects/incin/crates/incin-backends/src/lib.rs:3:
+ #[macro_use]
+ extern crate alloc;
+ 
+[31m-
+(B[m pub mod backend_kind;
+ pub mod capability;
+ /// The generated support tables in `docs/capabilities.md` (`UX-013`).
+Diff in /home/xupremix/Projects/incin/crates/incin-backends/src/metal/backend.rs:2:
+ 
+ use core::marker::PhantomData;
+ 
+[31m-use incin_core::exec::TensorMeta;
+(B[m use incin_core::backend_authoring::*;
+[32m+use incin_core::exec::TensorMeta;
+(B[m use incin_core::prelude::*;
+ use incin_core::shapes::ShapeBuf;
+ 
+Diff in /home/xupremix/Projects/incin/crates/incin-backends/src/metal/executor.rs:1:
+ //! Descriptor execution for the Metal backend.
+ 
+[32m+use incin_core::backend_authoring::{ReductionOps, StorageBackend, TensorOps};
+(B[m use incin_core::exec::{
+     Capabilities, CapabilityQuery, MatMulSpec, MathMode, ReduceOp, ReductionSpec, ReshapeSpec,
+     SupportLevel, TensorMeta,
+Diff in /home/xupremix/Projects/incin/crates/incin-backends/src/metal/executor.rs:6:
+ };
+[31m-use incin_core::backend_authoring::{ReductionOps, StorageBackend, TensorOps};
+(B[m use incin_core::prelude::{
+     BackendError, DType, DTypeId, Device, DeviceKind, Execute, ExecutionRequest, OperationKind,
+ };
+Diff in /home/xupremix/Projects/incin/crates/incin-backends/src/simd.rs:14:
+     #[cfg(all(
+         not(target_feature = "avx512f"),
+         not(target_feature = "avx2"),
+[31m-        any(target_feature = "sse2", target_feature = "sse4.1", target_feature = "neon")
+(B[m[32m+        any(
+(B[m[32m+            target_feature = "sse2",
+(B[m[32m+            target_feature = "sse4.1",
+(B[m[32m+            target_feature = "neon"
+(B[m[32m+        )
+(B[m     ))]
+     {
+         16
+Diff in /home/xupremix/Projects/incin/crates/incin-backends/src/simd.rs:42:
+     }
+     let vector_bytes = simd_vector_bytes();
+     let lanes = vector_bytes / elem_size;
+[31m-    if lanes == 0 {
+(B[m[31m-        1
+(B[m[31m-    } else {
+(B[m[31m-        lanes
+(B[m[31m-    }
+(B[m[32m+    if lanes == 0 { 1 } else { lanes }
+(B[m }
+ 
+Diff in /home/xupremix/Projects/incin/crates/incin-backends/tests/capability_matrix.rs:4:
+     CPU_CAPABILITIES, CUDA_CAPABILITIES, WGPU_CAPABILITIES, registry, support,
+ };
+ use incin_backends::cpu::{CpuBackendImpl, CpuBuffer, CpuStorage};
+[32m+use incin_core::backend_authoring::{
+(B[m[32m+    Backend, CreationOps, ModuleOps, NumericOps, ReductionOps, TensorOps,
+(B[m[32m+};
+(B[m use incin_core::exec::{
+     Capabilities, CapabilityQuery, ImplementationKind, LayoutClass, MathMode, SupportLevel,
+     UnsupportedReason,
+Diff in /home/xupremix/Projects/incin/crates/incin-backends/tests/capability_matrix.rs:10:
+[31m-};
+(B[m[31m-use incin_core::backend_authoring::{
+(B[m[31m-    Backend, CreationOps, ModuleOps, NumericOps, ReductionOps, TensorOps,
+(B[m };
+ use incin_core::prelude::{DTypeId, DeviceId, DeviceKind, Dyn, OperationKind};
+ 
+Diff in /home/xupremix/Projects/incin/crates/incin-backends/tests/conformance.rs:20:
+ //! here wrote, joining the same contract through the same trait.
+ 
+ use incin_backends::external::conformance::{self, Outcome, Report, Subject, Tolerance};
+[32m+use incin_core::backend_authoring::{Execute, ExecutionRequest};
+(B[m use incin_core::exec::{
+     Alignment, Capabilities, CapabilityQuery, MatMulSpec, ReshapeSpec, SupportLevel, TensorMeta,
+     UnsupportedReason,
+Diff in /home/xupremix/Projects/incin/crates/incin-backends/tests/conformance.rs:26:
+ };
+[31m-use incin_core::backend_authoring::{Execute, ExecutionRequest};
+(B[m use incin_core::prelude::{
+     BackendError, Cpu, DType, DTypeId, DeviceId, OperationKind, ShapeBuf, StorageBackend, StrideBuf,
+ };
+Diff in /home/xupremix/Projects/incin/crates/incin-backends/tests/cpu_executor.rs:5:
+ use std::time::Instant;
+ 
+ use incin_backends::cpu::{CpuBackendImpl, CpuBuffer, CpuStorage};
+[32m+use incin_core::backend_authoring::{
+(B[m[32m+    Backend, Execute, ExecutionRequest, ModuleOps, StorageBackend, TensorOps,
+(B[m[32m+};
+(B[m use incin_core::exec::{
+     Alignment, Conv2dArgs, Conv2dRule, Conv2dSpec, ExecutionContext, MatMulRule, MatMulSpec,
+     Pool2dRule, Pool2dSpec, PoolOp, ReduceAllRule, ReduceKeepRule, ReduceOp, ReduceRule,
+Diff in /home/xupremix/Projects/incin/crates/incin-backends/tests/cpu_executor.rs:11:
+     ReductionSpec, ReshapeRule, ReshapeSpec, ShapeRule, TensorHandle, TensorMeta, Validated,
+[31m-};
+(B[m[31m-use incin_core::backend_authoring::{
+(B[m[31m-    Backend, Execute, ExecutionRequest, ModuleOps, StorageBackend, TensorOps,
+(B[m };
+ use incin_core::prelude::{
+     BackendError, Cpu, DType, DTypeId, DeviceId, Dyn, Local, OperationKind, Shape, ShapeBuf,
+Diff in /home/xupremix/Projects/incin/crates/incin-backends/tests/dispatch_parity.rs:15:
+ 
+ use incin_backends::cpu::{CpuBackendImpl, CpuStorage};
+ use incin_backends::dispatch::{DispatchBackend, DispatchStorage};
+[31m-use incin_core::exec::{
+(B[m[31m-    Conv2dArgs, Conv2dRule, ExecutionContext, Pool2dRule, Pool2dSpec, PoolOp, ReduceOp, ReduceRule,
+(B[m[31m-    ReductionSpec, ReshapeRule, ReshapeSpec, ShapeRule, TensorHandle, Validated,
+(B[m[31m-};
+(B[m use incin_core::backend_authoring::{
+     Backend, Execute, ExecutionRequest, LossOps, ModuleOps, QuantizedOps, ReductionOps,
+     StorageBackend,
+Diff in /home/xupremix/Projects/incin/crates/incin-backends/tests/dispatch_parity.rs:25:
+[32m+};
+(B[m[32m+use incin_core::exec::{
+(B[m[32m+    Conv2dArgs, Conv2dRule, ExecutionContext, Pool2dRule, Pool2dSpec, PoolOp, ReduceOp, ReduceRule,
+(B[m[32m+    ReductionSpec, ReshapeRule, ReshapeSpec, ShapeRule, TensorHandle, Validated,
+(B[m };
+ use incin_core::prelude::*;
+ use incin_core::typenum::{U0, U1, U2, U3, U4, U6};
+Diff in /home/xupremix/Projects/incin/crates/incin-backends/tests/tensor_meta.rs:4:
+ use std::sync::Arc;
+ 
+ use incin_backends::cpu::{CpuBackendImpl, CpuBuffer, CpuStorage};
+[31m-use incin_core::exec::{Alignment, LayoutClass, TensorMeta};
+(B[m use incin_core::backend_authoring::{Backend, TensorOps};
+[32m+use incin_core::exec::{Alignment, LayoutClass, TensorMeta};
+(B[m use incin_core::prelude::{DTypeId, DeviceId};
+ 
+ fn assert_metadata_storage<T>()
+Diff in /home/xupremix/Projects/incin/crates/incin-backends/tests/wgpu_executor.rs:8:
+ #![cfg(feature = "wgpu")]
+ 
+ use incin_backends::wgpu::WgpuBackendImpl;
+[32m+use incin_core::backend_authoring::{Execute, ExecutionRequest, ModuleOps, TensorOps};
+(B[m use incin_core::exec::{
+     Conv2dArgs, Conv2dRule, Conv2dSpec, ExecutionContext, MatMulRule, MatMulSpec, Pool2dRule,
+     PoolOp, ReduceOp, ReduceRule, ReshapeRule, ReshapeSpec, ShapeRule, TensorHandle, Validated,
+Diff in /home/xupremix/Projects/incin/crates/incin-backends/tests/wgpu_executor.rs:14:
+ };
+[31m-use incin_core::backend_authoring::{Execute, ExecutionRequest, ModuleOps, TensorOps};
+(B[m use incin_core::prelude::{
+     Backend, BackendError, DTypeId, DeviceId, Dyn, Local, OperationKind, Shape, WgpuN,
+ };
+Diff in /home/xupremix/Projects/incin/crates/incin-core/examples/model_inspect.rs:1:
+ extern crate incin_core as incin;
+ use incin_core::io::{GgufExporter, QuantScheme, inspect_file};
+[31m-use incin_core::test_utils::DummyBackend;
+(B[m use incin_core::prelude::*;
+[32m+use incin_core::test_utils::DummyBackend;
+(B[m use std::path::Path;
+ 
+ fn main() -> Result<()> {
+Diff in /home/xupremix/Projects/incin/crates/incin-core/examples/onnx_export.rs:1:
+[31m-use incin_core::test_utils::DummyBackend;
+(B[m use incin_core::prelude::*;
+ use incin_core::prelude::{TracingBackend, tracing_mark_input, tracing_mark_output};
+[32m+use incin_core::test_utils::DummyBackend;
+(B[m extern crate alloc;
+ use alloc::collections::BTreeMap;
+ use std::path::Path;
+Diff in /home/xupremix/Projects/incin/crates/incin-core/src/compiled/artifact.rs:164:
+             if node.id != i {
+                 return Err(Error::Msg(alloc::format!(
+                     "Artifact semantic failure: node at position {} has non-topological ID {}",
+[31m-                    i, node.id
+(B[m[32m+                    i,
+(B[m[32m+                    node.id
+(B[m                 )));
+             }
+         }
+Diff in /home/xupremix/Projects/incin/crates/incin-core/src/dist/mod.rs:51:
+     GradientDescriptor, GradientId, TwoRankDataParallel, validate_data_parallel_dtype,
+ };
+ #[cfg(feature = "distributed")]
+[32m+pub use fsdp::{
+(B[m[32m+    FsdpError, FsdpMemoryReport, FsdpParameterDescriptor, FsdpParameterId, FsdpPlan,
+(B[m[32m+    FsdpPlanBuilder, ZeROStage,
+(B[m[32m+};
+(B[m[32m+#[cfg(feature = "distributed")]
+(B[m pub use pipeline::{
+     ActivationCheckpoint, GPipe, OneForwardOneBackward, PipelineAction, PipelineBoundaryId,
+     PipelineClock, PipelineDType, PipelineError, PipelinePhase, PipelinePlan, PipelinePlanBuilder,
+Diff in /home/xupremix/Projects/incin/crates/incin-core/src/dist/mod.rs:86:
+     TensorParallelDimension, TensorParallelError, TensorParallelId, TensorParallelPlan,
+     TensorParallelPlanBuilder, TwoRankTensorParallel, TwoWayShard, validate_tensor_parallel_dtype,
+     validate_two_way_extent,
+[31m-};
+(B[m[31m-#[cfg(feature = "distributed")]
+(B[m[31m-pub use fsdp::{
+(B[m[31m-    FsdpError, FsdpMemoryReport, FsdpParameterDescriptor, FsdpParameterId, FsdpPlan,
+(B[m[31m-    FsdpPlanBuilder, ZeROStage,
+(B[m };
+ 
+Diff in /home/xupremix/Projects/incin/crates/incin-core/src/io/inspect.rs:26:
+ 
+ /// Inspects a `.safetensors`, `.gguf`, or `.onnx` file metadata with default resource limits.
+ pub fn inspect_file<P: AsRef<Path>>(path: P) -> Result<ModelInfo> {
+[31m-    inspect_file_with_limits(path, &crate::io::limits::ResourceLimits::inspection_defaults())
+(B[m[32m+    inspect_file_with_limits(
+(B[m[32m+        path,
+(B[m[32m+        &crate::io::limits::ResourceLimits::inspection_defaults(),
+(B[m[32m+    )
+(B[m }
+ 
+ /// Inspects a model file enforcing explicit resource limits.
+Diff in /home/xupremix/Projects/incin/crates/incin-core/src/lib.rs:138:
+     pub use alloc::vec::Vec;
+     pub use typenum;
+ }
+[31m-
+(B[m 
+Diff in /home/xupremix/Projects/incin/crates/incin-core/src/nn/param.rs:398:
+                     op: "Param::load_state_dict",
+                     expected: expected_dims.as_ref().to_vec(),
+                     got: loaded_dims,
+[31m-                    msg: alloc::format!(
+(B[m[31m-                        "Checkpoint parameter shape mismatch for key '{}'",
+(B[m[31m-                        prefix
+(B[m[31m-                    ),
+(B[m[32m+                    msg: alloc::format!("Checkpoint parameter shape mismatch for key '{}'", prefix),
+(B[m                 });
+             }
+             self.inner = B::var_from_tensor(&t.inner)?;
+Diff in /home/xupremix/Projects/incin/crates/incin-core/src/nn/param.rs:647:
+                     op: "Buffer::load_state_dict",
+                     expected: expected_dims.as_ref().to_vec(),
+                     got: loaded_dims,
+[31m-                    msg: alloc::format!(
+(B[m[31m-                        "Checkpoint buffer shape mismatch for key '{}'",
+(B[m[31m-                        prefix
+(B[m[31m-                    ),
+(B[m[32m+                    msg: alloc::format!("Checkpoint buffer shape mismatch for key '{}'", prefix),
+(B[m                 });
+             }
+             self.inner = B::var_from_tensor(&t.inner)?;
+Diff in /home/xupremix/Projects/incin/crates/incin-core/src/nn/save.rs:141:
+         if end_offset > bytes.len() {
+             return Err(Error::Msg(format!(
+                 "Byte slicing offset {}..{} out of buffer len {}",
+[31m-                global_offset, end_offset, bytes.len()
+(B[m[32m+                global_offset,
+(B[m[32m+                end_offset,
+(B[m[32m+                bytes.len()
+(B[m             )));
+         }
+         sliced_bytes.extend_from_slice(&bytes[global_offset..end_offset]);
+Diff in /home/xupremix/Projects/incin/crates/incin-core/src/nn/save.rs:373:
+             ))
+         })?;
+ 
+[31m-        let meta = manifest.tensors.get(&name).ok_or_else(|| {
+(B[m[31m-            Error::Msg(format!("Parameter {} missing from manifest", name))
+(B[m[31m-        })?;
+(B[m[32m+        let meta = manifest
+(B[m[32m+            .tensors
+(B[m[32m+            .get(&name)
+(B[m[32m+            .ok_or_else(|| Error::Msg(format!("Parameter {} missing from manifest", name)))?;
+(B[m 
+         let global_shape = st_view.shape().to_vec();
+         let target_shape = B::shape::<B::FloatElem>(current_param.inner());
+Diff in /home/xupremix/Projects/incin/crates/incin-core/src/nn/save.rs:386:
+             (bytes.to_vec(), global_shape)
+         } else {
+             let mut diff_axes = Vec::new();
+[31m-            for (idx, (&g_dim, &t_dim)) in global_shape.iter().zip(target_shape.iter()).enumerate() {
+(B[m[32m+            for (idx, (&g_dim, &t_dim)) in global_shape.iter().zip(target_shape.iter()).enumerate()
+(B[m[32m+            {
+(B[m                 if g_dim != t_dim {
+                     diff_axes.push(idx);
+                 }
+Diff in /home/xupremix/Projects/incin/crates/incin-core/src/nn/save.rs:408:
+                 )));
+             }
+ 
+[31m-            slice_bytes_for_rank(bytes, &global_shape, dtype_id, shard_axis, rank, target_world_size)?
+(B[m[32m+            slice_bytes_for_rank(
+(B[m[32m+                bytes,
+(B[m[32m+                &global_shape,
+(B[m[32m+                dtype_id,
+(B[m[32m+                shard_axis,
+(B[m[32m+                rank,
+(B[m[32m+                target_world_size,
+(B[m[32m+            )?
+(B[m         };
+ 
+         if final_shape != target_shape {
+Diff in /home/xupremix/Projects/incin/crates/incin-core/src/serialize.rs:225:
+             );
+         }
+ 
+[31m-        let bytes = postcard::to_stdvec(&map).map_err(|e| anyhow::anyhow!("Postcard serialization failed: {}", e))?;
+(B[m[32m+        let bytes = postcard::to_stdvec(&map)
+(B[m[32m+            .map_err(|e| anyhow::anyhow!("Postcard serialization failed: {}", e))?;
+(B[m         std::fs::write(self.path, bytes)?;
+         Ok(())
+     }
+Diff in /home/xupremix/Projects/incin/crates/incin-core/src/serialize.rs:270:
+         }
+ 
+         let raw_bytes = std::fs::read(self.path)?;
+[31m-        let map: BTreeMap<String, SerializedTensor> =
+(B[m[31m-            postcard::from_bytes(&raw_bytes).map_err(|e| anyhow::anyhow!("Postcard deserialization failed: {}", e))?;
+(B[m[32m+        let map: BTreeMap<String, SerializedTensor> = postcard::from_bytes(&raw_bytes)
+(B[m[32m+            .map_err(|e| anyhow::anyhow!("Postcard deserialization failed: {}", e))?;
+(B[m 
+         if map.len() > limits.max_tensor_count {
+             return Err(anyhow::anyhow!(
+Diff in /home/xupremix/Projects/incin/crates/incin-core/src/serialize.rs:283:
+ 
+         let mut state_dict = BTreeMap::new();
+         for (k, st) in map {
+[31m-            limits.check_shape(&st.shape).map_err(|e| anyhow::anyhow!("Invalid tensor shape: {}", e))?;
+(B[m[32m+            limits
+(B[m[32m+                .check_shape(&st.shape)
+(B[m[32m+                .map_err(|e| anyhow::anyhow!("Invalid tensor shape: {}", e))?;
+(B[m             let dtype = match st.dtype.as_str() {
+                 "F32" => DTypeId::F32,
+                 "F64" => DTypeId::F64,
+Diff in /home/xupremix/Projects/incin/crates/incin-core/src/shapes/shape.rs:137:
+ 
+     let mut total: usize = 1;
+     for &d in dims {
+[31m-        total = total
+(B[m[31m-            .checked_mul(d)
+(B[m[31m-            .ok_or(crate::shapes::error::ShapeError::ArithmeticOverflow {
+(B[m[31m-                operation: crate::shapes::error::OperationKind::Reshape,
+(B[m[31m-                expression: "shape product overflow",
+(B[m[31m-            })?;
+(B[m[32m+        total =
+(B[m[32m+            total
+(B[m[32m+                .checked_mul(d)
+(B[m[32m+                .ok_or(crate::shapes::error::ShapeError::ArithmeticOverflow {
+(B[m[32m+                    operation: crate::shapes::error::OperationKind::Reshape,
+(B[m[32m+                    expression: "shape product overflow",
+(B[m[32m+                })?;
+(B[m     }
+     Ok(CheckedNumel(total))
+ }
+Diff in /home/xupremix/Projects/incin/crates/incin-core/src/tensor/base.rs:895:
+         let out = <B as ModuleOps<B>>::conv2d::<f32>(&input, &weight, None, 1, 0, 3, 1).unwrap();
+         assert_eq!(out.len(), 4);
+ 
+[31m-        let pool_out = <B as ModuleOps<B>>::max_pool2d::<f32>(
+(B[m[31m-            &input,
+(B[m[31m-            (5, 5),
+(B[m[31m-            (1, 1),
+(B[m[31m-            (0, 0),
+(B[m[31m-            (3, 3),
+(B[m[31m-        )
+(B[m[31m-        .unwrap();
+(B[m[32m+        let pool_out =
+(B[m[32m+            <B as ModuleOps<B>>::max_pool2d::<f32>(&input, (5, 5), (1, 1), (0, 0), (3, 3)).unwrap();
+(B[m         assert_eq!(pool_out.len(), 4);
+     }
+ }
+Diff in /home/xupremix/Projects/incin/crates/incin-core/src/tensor/dtype.rs:254:
+     type Elem: TensorElement;
+ }
+ 
+[31m-impl PlainDType for f32 { type Elem = f32; }
+(B[m[31m-impl PlainDType for f64 { type Elem = f64; }
+(B[m[31m-impl PlainDType for u8 { type Elem = u8; }
+(B[m[31m-impl PlainDType for u32 { type Elem = u32; }
+(B[m[31m-impl PlainDType for i64 { type Elem = i64; }
+(B[m[31m-impl PlainDType for f16 { type Elem = f16; }
+(B[m[31m-impl PlainDType for bf16 { type Elem = bf16; }
+(B[m[32m+impl PlainDType for f32 {
+(B[m[32m+    type Elem = f32;
+(B[m[32m+}
+(B[m[32m+impl PlainDType for f64 {
+(B[m[32m+    type Elem = f64;
+(B[m[32m+}
+(B[m[32m+impl PlainDType for u8 {
+(B[m[32m+    type Elem = u8;
+(B[m[32m+}
+(B[m[32m+impl PlainDType for u32 {
+(B[m[32m+    type Elem = u32;
+(B[m[32m+}
+(B[m[32m+impl PlainDType for i64 {
+(B[m[32m+    type Elem = i64;
+(B[m[32m+}
+(B[m[32m+impl PlainDType for f16 {
+(B[m[32m+    type Elem = f16;
+(B[m[32m+}
+(B[m[32m+impl PlainDType for bf16 {
+(B[m[32m+    type Elem = bf16;
+(B[m[32m+}
+(B[m 
+ impl DType for Dyn {
+     /// The runtime-chosen dtype.
+Diff in /home/xupremix/Projects/incin/crates/incin-core/src/tensor/mod.rs:29:
+     pub use super::arg_into::{ArgInto, TensorArgsData};
+     pub use super::auto_device::{BestDevice, BestDeviceAt};
+     pub use super::backend::{Backend, StorageBackend, SupportsDType, TransferTo};
+[31m-    pub use super::base::{Dyn, Tensor};
+(B[m     #[cfg(feature = "distributed")]
+     pub use super::base::PlacedTensorError;
+[32m+    pub use super::base::{Dyn, Tensor};
+(B[m     pub use super::device::{ConstDevice, Cpu, Device, DeviceId, DeviceKind};
+     #[cfg(feature = "cuda")]
+     pub use super::device::{Cuda, CudaN};
+Diff in /home/xupremix/Projects/incin/crates/incin-core/src/tensor/mod.rs:38:
+[31m-    #[cfg(feature = "wgpu")]
+(B[m[31m-    pub use super::device::{Wgpu, WgpuN};
+(B[m     #[cfg(feature = "metal")]
+     pub use super::device::{Metal, MetalN};
+[32m+    #[cfg(feature = "wgpu")]
+(B[m[32m+    pub use super::device::{Wgpu, WgpuN};
+(B[m 
+     pub use super::dtype::{
+         BoolDType, ConstDType, DType, DTypeId, FloatDType, IntDType, PlainDType, Q8_0, QuantDType,
+Diff in /home/xupremix/Projects/incin/crates/incin-core/tests/builder_permutations.rs:1:
+ #![allow(unused_imports)]
+ extern crate incin_core as incin;
+ 
+[31m-use incin_core::test_utils::DummyBackend;
+(B[m use incin_core::prelude::*;
+ use incin_core::prelude::*;
+[32m+use incin_core::test_utils::DummyBackend;
+(B[m use incin_macros::s;
+ 
+ /// B.
+Diff in /home/xupremix/Projects/incin/crates/incin-core/tests/checkpoint_reshard.rs:1:
+ #![cfg(feature = "std")]
+ 
+ use incin_backends::cpu::CpuBackendImpl;
+[32m+use incin_core::nn::Linear;
+(B[m use incin_core::nn::save::{
+[31m-    load_checkpoint_manifest, load_resharded_checkpoint, save_checkpoint,
+(B[m[31m-    save_checkpoint_manifest, slice_bytes_for_rank, GlobalCheckpointManifest,
+(B[m[32m+    GlobalCheckpointManifest, load_checkpoint_manifest, load_resharded_checkpoint, save_checkpoint,
+(B[m[32m+    save_checkpoint_manifest, slice_bytes_for_rank,
+(B[m };
+[31m-use incin_core::nn::Linear;
+(B[m use incin_core::prelude::*;
+ use tempfile::tempdir;
+ 
+Diff in /home/xupremix/Projects/incin/crates/incin-core/tests/concat_stack.rs:1:
+ extern crate incin_core as incin;
+ 
+ use incin_core::prelude::Cpu;
+[31m-use incin_core::test_utils::DummyBackend;
+(B[m use incin_core::prelude::*;
+[32m+use incin_core::test_utils::DummyBackend;
+(B[m use incin_macros::s;
+ 
+ #[test]
+Diff in /home/xupremix/Projects/incin/crates/incin-core/tests/constructor_ranks.rs:1:
+ //! `SHP-007`: constructor arguments resolve through the same rank ceiling as
+ //! `Shape`; a typed shape must not become unconstructible at rank 6 or 8.
+ 
+[31m-use incin_core::test_utils::DummyBackend;
+(B[m use incin_core::prelude::{Cpu, Tensor};
+[32m+use incin_core::test_utils::DummyBackend;
+(B[m use typenum::U1;
+ 
+ type Backend = DummyBackend<f32, Cpu>;
+Diff in /home/xupremix/Projects/incin/crates/incin-core/tests/fsdp.rs:2:
+ 
+ #![cfg(feature = "distributed")]
+ 
+[31m-use incin_core::dist::fsdp::{
+(B[m[31m-    FsdpError, FsdpParameterId, FsdpPlanBuilder, ZeROStage,
+(B[m[31m-};
+(B[m[32m+use incin_core::dist::fsdp::{FsdpError, FsdpParameterId, FsdpPlanBuilder, ZeROStage};
+(B[m use incin_core::prelude::DTypeId;
+ 
+ #[test]
+Diff in /home/xupremix/Projects/incin/crates/incin-core/tests/fsdp.rs:52:
+     let create_plan = |stage: ZeROStage| {
+         let mut builder = FsdpPlanBuilder::new(stage);
+         builder
+[31m-            .push_dyn(FsdpParameterId::new(1).unwrap(), 100_000, DTypeId::F32, 0, 4)
+(B[m[32m+            .push_dyn(
+(B[m[32m+                FsdpParameterId::new(1).unwrap(),
+(B[m[32m+                100_000,
+(B[m[32m+                DTypeId::F32,
+(B[m[32m+                0,
+(B[m[32m+                4,
+(B[m[32m+            )
+(B[m             .unwrap();
+         builder.finish(4).unwrap()
+     };
+Diff in /home/xupremix/Projects/incin/crates/incin-core/tests/fsdp.rs:78:
+ #[test]
+ fn fsdp_builder_error_handling() {
+     // Reserved ID
+[31m-    assert_eq!(
+(B[m[31m-        FsdpParameterId::new(0),
+(B[m[31m-        Err(FsdpError::ReservedParameterId)
+(B[m[31m-    );
+(B[m[32m+    assert_eq!(FsdpParameterId::new(0), Err(FsdpError::ReservedParameterId));
+(B[m 
+     // Duplicate parameter ID
+     let mut builder = FsdpPlanBuilder::new(ZeROStage::ZeRO3);
+Diff in /home/xupremix/Projects/incin/crates/incin-core/tests/model_stats.rs:4:
+ //! this test doubles as a check that the doc's illustrative numbers and the
+ //! real implementation actually agree.
+ extern crate incin_core as incin;
+[31m-use incin_core::test_utils::DummyBackend;
+(B[m use incin_core::prelude::*;
+[32m+use incin_core::test_utils::DummyBackend;
+(B[m 
+ type TestBackend = DummyBackend<f32, Cpu>;
+ 
+Diff in /home/xupremix/Projects/incin/crates/incin-core/tests/named_dims.rs:5:
+ //! runtime `assert_eq!`.
+ 
+ extern crate incin_core as incin;
+[31m-use incin_core::test_utils::DummyBackend;
+(B[m use incin_core::prelude::*;
+[32m+use incin_core::test_utils::DummyBackend;
+(B[m use incin_macros::s;
+ 
+ incin_core::dim!(Batch, Feature);
+Diff in /home/xupremix/Projects/incin/crates/incin-core/tests/nn_components.rs:1:
+ extern crate incin_core as incin;
+ 
+ use incin_core::prelude::Cpu;
+[31m-use incin_core::test_utils::DummyBackend;
+(B[m use incin_core::prelude::*;
+[32m+use incin_core::test_utils::DummyBackend;
+(B[m use incin_macros::s;
+ 
+ #[test]
+Diff in /home/xupremix/Projects/incin/crates/incin-core/tests/reshape.rs:1:
+ extern crate incin_core as incin;
+ 
+ use incin_core::prelude::Cpu;
+[31m-use incin_core::test_utils::DummyBackend;
+(B[m use incin_core::prelude::*;
+[32m+use incin_core::test_utils::DummyBackend;
+(B[m use incin_macros::s;
+ 
+ #[test]
+Diff in /home/xupremix/Projects/incin/crates/incin-data/src/vision/mnist.rs:101:
+ 
+         let magic_val = u32::from_be_bytes(magic);
+         if magic_val != 2051 {
+[31m-            return Err(anyhow::anyhow!("Invalid IDX magic number for MNIST images: expected 2051, got {}", magic_val));
+(B[m[32m+            return Err(anyhow::anyhow!(
+(B[m[32m+                "Invalid IDX magic number for MNIST images: expected 2051, got {}",
+(B[m[32m+                magic_val
+(B[m[32m+            ));
+(B[m         }
+ 
+         let count = u32::from_be_bytes(count) as usize;
+Diff in /home/xupremix/Projects/incin/crates/incin-data/src/vision/mnist.rs:109:
+         let cols = u32::from_be_bytes(cols) as usize;
+ 
+         if count > 100_000 || rows > 1000 || cols > 1000 {
+[31m-            return Err(anyhow::anyhow!("MNIST image header parameters exceed safe resource limits: count={}, rows={}, cols={}", count, rows, cols));
+(B[m[32m+            return Err(anyhow::anyhow!(
+(B[m[32m+                "MNIST image header parameters exceed safe resource limits: count={}, rows={}, cols={}",
+(B[m[32m+                count,
+(B[m[32m+                rows,
+(B[m[32m+                cols
+(B[m[32m+            ));
+(B[m         }
+ 
+         let num_bytes = count
+Diff in /home/xupremix/Projects/incin/crates/incin-data/src/vision/mnist.rs:134:
+ 
+         let magic_val = u32::from_be_bytes(magic);
+         if magic_val != 2049 {
+[31m-            return Err(anyhow::anyhow!("Invalid IDX magic number for MNIST labels: expected 2049, got {}", magic_val));
+(B[m[32m+            return Err(anyhow::anyhow!(
+(B[m[32m+                "Invalid IDX magic number for MNIST labels: expected 2049, got {}",
+(B[m[32m+                magic_val
+(B[m[32m+            ));
+(B[m         }
+ 
+         let count = u32::from_be_bytes(count) as usize;
+Diff in /home/xupremix/Projects/incin/crates/incin-data/src/vision/mnist.rs:141:
+         if count > 100_000 {
+[31m-            return Err(anyhow::anyhow!("MNIST label count exceeds safe resource limit: count={}", count));
+(B[m[32m+            return Err(anyhow::anyhow!(
+(B[m[32m+                "MNIST label count exceeds safe resource limit: count={}",
+(B[m[32m+                count
+(B[m[32m+            ));
+(B[m         }
+ 
+         let mut data = vec![0u8; count];

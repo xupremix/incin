@@ -1,0 +1,3 @@
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Checking incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.56s

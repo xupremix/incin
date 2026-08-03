@@ -1,0 +1,11 @@
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+   Compiling incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.55s
+     Running tests/compiled_fold.rs (target/debug/deps/compiled_fold-1283e4a948f26f19)
+
+running 2 tests
+test test_shape_bucket_bounds ... ok
+test incomplete_compiled_passes_fail_closed ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

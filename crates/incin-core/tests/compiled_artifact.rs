@@ -1,4 +1,6 @@
-use incin_core::compiled::{
+#![cfg(feature = "compiled")]
+
+use incin_core::experimental::compiled::{
     ArtifactVersion, CapturedGraph, CompileOptions, CompiledArtifact, CompiledPlan,
 };
 use incin_core::graph::{Graph, OpType};

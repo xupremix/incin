@@ -1,4 +1,6 @@
-use incin_core::compiled::CapturedGraph;
+#![cfg(feature = "compiled")]
+
+use incin_core::experimental::compiled::CapturedGraph;
 use incin_core::graph::{Graph, OpType};
 use incin_core::prelude::DTypeId;
 use std::collections::BTreeMap;

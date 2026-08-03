@@ -1,4 +1,8 @@
-use incin_core::compiled::{AllocationPlanner, CapturedGraph, LivenessMap, SavedTensorSet};
+#![cfg(feature = "compiled")]
+
+use incin_core::experimental::compiled::{
+    AllocationPlanner, CapturedGraph, LivenessMap, SavedTensorSet,
+};
 use incin_core::graph::{Graph, OpType};
 use incin_core::prelude::DTypeId;
 use std::collections::BTreeMap;

@@ -1,0 +1,288 @@
+COMMAND: cargo fmt --all -- --check
+WORKING DIRECTORY: /home/xupremix/Projects/incin
+FEATURES/ENVIRONMENT: RUSTFLAGS=<unset> RUSTDOCFLAGS=<unset> TRYBUILD=<unset> INCIN_DOCS=<unset>
+START: 2026-08-03T03:52:47+02:00
+COMMIT: fa8d2030141b04bc7c0dfccb382bfa60647223cf
+FULL OUTPUT: audit-evidence/FND-000/test-results/baseline-fmt.txt
+END: 2026-08-03T03:52:48+02:00
+EXIT CODE: 1
+
+COMMAND: cargo check -p incin-core --no-default-features
+WORKING DIRECTORY: /home/xupremix/Projects/incin
+FEATURES/ENVIRONMENT: RUSTFLAGS=<unset> RUSTDOCFLAGS=<unset> TRYBUILD=<unset> INCIN_DOCS=<unset>
+START: 2026-08-03T03:52:48+02:00
+COMMIT: fa8d2030141b04bc7c0dfccb382bfa60647223cf
+FULL OUTPUT: audit-evidence/FND-000/test-results/baseline-check-core-no-default.txt
+END: 2026-08-03T03:53:03+02:00
+EXIT CODE: 0
+
+COMMAND: cargo check -p incin-core --no-default-features --features std
+WORKING DIRECTORY: /home/xupremix/Projects/incin
+FEATURES/ENVIRONMENT: RUSTFLAGS=<unset> RUSTDOCFLAGS=<unset> TRYBUILD=<unset> INCIN_DOCS=<unset>
+START: 2026-08-03T03:53:03+02:00
+COMMIT: fa8d2030141b04bc7c0dfccb382bfa60647223cf
+FULL OUTPUT: audit-evidence/FND-000/test-results/baseline-check-core-std.txt
+END: 2026-08-03T03:53:10+02:00
+EXIT CODE: 0
+
+COMMAND: cargo check -p incin --no-default-features
+WORKING DIRECTORY: /home/xupremix/Projects/incin
+FEATURES/ENVIRONMENT: RUSTFLAGS=<unset> RUSTDOCFLAGS=<unset> TRYBUILD=<unset> INCIN_DOCS=<unset>
+START: 2026-08-03T03:53:10+02:00
+COMMIT: fa8d2030141b04bc7c0dfccb382bfa60647223cf
+FULL OUTPUT: audit-evidence/FND-000/test-results/baseline-check-incin-no-default.txt
+END: 2026-08-03T03:53:27+02:00
+EXIT CODE: 0
+
+COMMAND: cargo check -p incin --no-default-features --features std
+WORKING DIRECTORY: /home/xupremix/Projects/incin
+FEATURES/ENVIRONMENT: RUSTFLAGS=<unset> RUSTDOCFLAGS=<unset> TRYBUILD=<unset> INCIN_DOCS=<unset>
+START: 2026-08-03T03:53:27+02:00
+COMMIT: fa8d2030141b04bc7c0dfccb382bfa60647223cf
+FULL OUTPUT: audit-evidence/FND-000/test-results/baseline-check-incin-std.txt
+END: 2026-08-03T03:53:33+02:00
+EXIT CODE: 0
+
+COMMAND: cargo check -p incin --features cpu
+WORKING DIRECTORY: /home/xupremix/Projects/incin
+FEATURES/ENVIRONMENT: RUSTFLAGS=<unset> RUSTDOCFLAGS=<unset> TRYBUILD=<unset> INCIN_DOCS=<unset>
+START: 2026-08-03T03:53:33+02:00
+COMMIT: fa8d2030141b04bc7c0dfccb382bfa60647223cf
+FULL OUTPUT: audit-evidence/FND-000/test-results/baseline-check-incin-cpu.txt
+END: 2026-08-03T03:53:35+02:00
+EXIT CODE: 0
+
+COMMAND: cargo test --workspace
+WORKING DIRECTORY: /home/xupremix/Projects/incin
+FEATURES/ENVIRONMENT: RUSTFLAGS=<unset> RUSTDOCFLAGS=<unset> TRYBUILD=<unset> INCIN_DOCS=<unset>
+START: 2026-08-03T03:53:54+02:00
+COMMIT: fa8d2030141b04bc7c0dfccb382bfa60647223cf
+FULL OUTPUT: audit-evidence/FND-000/test-results/baseline-test-workspace.txt
+END: 2026-08-03T03:58:29+02:00
+EXIT CODE: 101
+
+COMMAND: git rev-parse HEAD; git status --short; git log -5 --oneline --decorate; rustc --version --verbose; cargo --version
+WORKING DIRECTORY: /home/xupremix/Projects/incin
+FEATURES/ENVIRONMENT: RUSTFLAGS=<unset> RUSTDOCFLAGS=<unset> TRYBUILD=<unset> INCIN_DOCS=<unset>
+START: 2026-08-03T04:00:09+02:00
+COMMIT: fa8d2030141b04bc7c0dfccb382bfa60647223cf
+FULL OUTPUT: audit-evidence/FND-000/test-results/initial-repository.txt
+END: 2026-08-03T04:00:09+02:00
+EXIT CODE: 0
+
+COMMAND: command -v graphify; graphify --version; sed -n 1,18p graphify-out/GRAPH_REPORT.md; git rev-parse --short=8 HEAD
+WORKING DIRECTORY: /home/xupremix/Projects/incin
+FEATURES/ENVIRONMENT: RUSTFLAGS=<unset> RUSTDOCFLAGS=<unset> TRYBUILD=<unset> INCIN_DOCS=<unset>
+START: 2026-08-03T04:00:09+02:00
+COMMIT: fa8d2030141b04bc7c0dfccb382bfa60647223cf
+FULL OUTPUT: audit-evidence/FND-000/test-results/graphify-verification.txt
+END: 2026-08-03T04:00:09+02:00
+EXIT CODE: 0
+
+COMMAND: cargo clippy --workspace --all-targets -- -D warnings
+WORKING DIRECTORY: /home/xupremix/Projects/incin
+FEATURES/ENVIRONMENT: RUSTFLAGS=<unset> RUSTDOCFLAGS=<unset> TRYBUILD=<unset> INCIN_DOCS=<unset>
+START: 2026-08-03T04:00:09+02:00
+COMMIT: fa8d2030141b04bc7c0dfccb382bfa60647223cf
+FULL OUTPUT: audit-evidence/FND-000/test-results/baseline-clippy-workspace.txt
+END: 2026-08-03T04:00:36+02:00
+EXIT CODE: 101
+
+COMMAND: cargo test -p incin-macros
+WORKING DIRECTORY: /home/xupremix/Projects/incin
+FEATURES/ENVIRONMENT: RUSTFLAGS=<unset> RUSTDOCFLAGS=<unset> TRYBUILD=<unset> INCIN_DOCS=<unset>
+START: 2026-08-03T04:10:22+02:00
+COMMIT: fa8d2030141b04bc7c0dfccb382bfa60647223cf
+FULL OUTPUT: audit-evidence/FND-000/test-results/fnd000-test-onnx-macros.txt
+COMMAND: cargo test -p incin-core --features compiled --test compiled_fold
+WORKING DIRECTORY: /home/xupremix/Projects/incin
+FEATURES/ENVIRONMENT: RUSTFLAGS=<unset> RUSTDOCFLAGS=<unset> TRYBUILD=<unset> INCIN_DOCS=<unset>
+START: 2026-08-03T04:10:52+02:00
+COMMIT: fa8d2030141b04bc7c0dfccb382bfa60647223cf
+FULL OUTPUT: audit-evidence/FND-000/test-results/fnd000-test-compiled-containment.txt
+END: 2026-08-03T04:10:57+02:00
+EXIT CODE: 0
+
+COMMAND: cargo check -p incin --features cpu,compiled
+WORKING DIRECTORY: /home/xupremix/Projects/incin
+FEATURES/ENVIRONMENT: RUSTFLAGS=<unset> RUSTDOCFLAGS=<unset> TRYBUILD=<unset> INCIN_DOCS=<unset>
+START: 2026-08-03T04:10:57+02:00
+COMMIT: fa8d2030141b04bc7c0dfccb382bfa60647223cf
+FULL OUTPUT: audit-evidence/FND-000/test-results/fnd000-check-experimental-compiled.txt
+END: 2026-08-03T04:11:07+02:00
+EXIT CODE: 0
+
+COMMAND: cargo test -p incin --features cpu
+WORKING DIRECTORY: /home/xupremix/Projects/incin
+FEATURES/ENVIRONMENT: RUSTFLAGS=<unset> RUSTDOCFLAGS=<unset> TRYBUILD=<unset> INCIN_DOCS=<unset>
+START: 2026-08-03T04:11:07+02:00
+COMMIT: fa8d2030141b04bc7c0dfccb382bfa60647223cf
+FULL OUTPUT: audit-evidence/FND-000/test-results/fnd000-test-incin-cpu.txt
+END: 2026-08-03T04:11:41+02:00
+EXIT CODE: 101
+
+END: 2026-08-03T04:11:44+02:00
+EXIT CODE: 0
+
+COMMAND: cargo test -p incin --features cpu
+WORKING DIRECTORY: /home/xupremix/Projects/incin
+FEATURES/ENVIRONMENT: RUSTFLAGS=<unset> RUSTDOCFLAGS=<unset> TRYBUILD=<unset> INCIN_DOCS=<unset>
+START: 2026-08-03T04:12:20+02:00
+COMMIT: fa8d2030141b04bc7c0dfccb382bfa60647223cf
+FULL OUTPUT: audit-evidence/FND-000/test-results/fnd000-test-incin-cpu-rerun.txt
+END: 2026-08-03T04:12:35+02:00
+EXIT CODE: 0
+
+COMMAND: cargo test --workspace
+WORKING DIRECTORY: /home/xupremix/Projects/incin
+FEATURES/ENVIRONMENT: RUSTFLAGS=<unset> RUSTDOCFLAGS=<unset> TRYBUILD=<unset> INCIN_DOCS=<unset>
+START: 2026-08-03T04:12:44+02:00
+COMMIT: fa8d2030141b04bc7c0dfccb382bfa60647223cf
+FULL OUTPUT: audit-evidence/FND-000/test-results/fnd000-test-workspace-final.txt
+COMMAND: cargo test --doc --workspace
+WORKING DIRECTORY: /home/xupremix/Projects/incin
+FEATURES/ENVIRONMENT: RUSTFLAGS=<unset> RUSTDOCFLAGS=<unset> TRYBUILD=<unset> INCIN_DOCS=<unset>
+START: 2026-08-03T04:13:14+02:00
+COMMIT: fa8d2030141b04bc7c0dfccb382bfa60647223cf
+FULL OUTPUT: audit-evidence/FND-000/test-results/fnd000-doc-workspace.txt
+COMMAND: RUSTDOCFLAGS=-D warnings cargo doc --workspace --no-deps
+WORKING DIRECTORY: /home/xupremix/Projects/incin
+FEATURES/ENVIRONMENT: RUSTFLAGS=<unset> RUSTDOCFLAGS=<unset> TRYBUILD=<unset> INCIN_DOCS=<unset>
+START: 2026-08-03T04:13:45+02:00
+COMMIT: fa8d2030141b04bc7c0dfccb382bfa60647223cf
+FULL OUTPUT: audit-evidence/FND-000/test-results/fnd000-rustdoc-workspace.txt
+END: 2026-08-03T04:13:45+02:00
+EXIT CODE: 127
+
+COMMAND: cargo fmt --all -- --check
+WORKING DIRECTORY: /home/xupremix/Projects/incin
+FEATURES/ENVIRONMENT: RUSTFLAGS=<unset> RUSTDOCFLAGS=<unset> TRYBUILD=<unset> INCIN_DOCS=<unset>
+START: 2026-08-03T04:13:45+02:00
+COMMIT: fa8d2030141b04bc7c0dfccb382bfa60647223cf
+FULL OUTPUT: audit-evidence/FND-000/test-results/fnd000-fmt-final.txt
+END: 2026-08-03T04:13:48+02:00
+EXIT CODE: 1
+
+END: 2026-08-03T04:14:17+02:00
+EXIT CODE: 101
+
+END: 2026-08-03T04:16:05+02:00
+EXIT CODE: 101
+
+COMMAND: cargo test --workspace
+WORKING DIRECTORY: /home/xupremix/Projects/incin
+FEATURES/ENVIRONMENT: RUSTFLAGS=<unset> RUSTDOCFLAGS=<unset> TRYBUILD=<unset> INCIN_DOCS=<unset>
+START: 2026-08-03T04:16:19+02:00
+COMMIT: fa8d2030141b04bc7c0dfccb382bfa60647223cf
+FULL OUTPUT: audit-evidence/FND-000/test-results/fnd000-test-workspace-after-fixes.txt
+END: 2026-08-03T04:18:07+02:00
+EXIT CODE: 0
+
+COMMAND: RUSTDOCFLAGS=-Dwarnings cargo doc --workspace --no-deps
+WORKING DIRECTORY: /home/xupremix/Projects/incin
+FEATURES/ENVIRONMENT: RUSTFLAGS=<unset> RUSTDOCFLAGS=<unset> TRYBUILD=<unset> INCIN_DOCS=<unset>
+START: 2026-08-03T04:18:13+02:00
+COMMIT: fa8d2030141b04bc7c0dfccb382bfa60647223cf
+FULL OUTPUT: audit-evidence/FND-000/test-results/fnd000-rustdoc-workspace-rerun.txt
+END: 2026-08-03T04:18:21+02:00
+EXIT CODE: 101
+
+COMMAND: RUSTDOCFLAGS=-Dwarnings cargo doc --workspace --no-deps
+WORKING DIRECTORY: /home/xupremix/Projects/incin
+FEATURES/ENVIRONMENT: RUSTFLAGS=<unset> RUSTDOCFLAGS=<unset> TRYBUILD=<unset> INCIN_DOCS=<unset>
+START: 2026-08-03T04:18:32+02:00
+COMMIT: fa8d2030141b04bc7c0dfccb382bfa60647223cf
+FULL OUTPUT: audit-evidence/FND-000/test-results/fnd000-rustdoc-workspace-final.txt
+END: 2026-08-03T04:18:46+02:00
+EXIT CODE: 0
+
+COMMAND: graphify update .
+WORKING DIRECTORY: /home/xupremix/Projects/incin
+FEATURES/ENVIRONMENT: RUSTFLAGS=<unset> RUSTDOCFLAGS=<unset> TRYBUILD=<unset> INCIN_DOCS=<unset>
+START: 2026-08-03T04:18:54+02:00
+COMMIT: fa8d2030141b04bc7c0dfccb382bfa60647223cf
+FULL OUTPUT: audit-evidence/FND-000/test-results/graphify-update.txt
+END: 2026-08-03T04:19:10+02:00
+EXIT CODE: 0
+
+COMMAND: cargo clippy --workspace --all-targets -- -D warnings
+WORKING DIRECTORY: /home/xupremix/Projects/incin
+FEATURES/ENVIRONMENT: RUSTFLAGS=<unset> RUSTDOCFLAGS=<unset> TRYBUILD=<unset> INCIN_DOCS=<unset>
+START: 2026-08-03T04:19:47+02:00
+COMMIT: fa8d2030141b04bc7c0dfccb382bfa60647223cf
+FULL OUTPUT: audit-evidence/FND-000/test-results/fnd000-clippy-workspace-final.txt
+END: 2026-08-03T04:19:49+02:00
+EXIT CODE: 101
+
+COMMAND: cargo clippy --workspace --all-targets -- -D warnings
+WORKING DIRECTORY: /home/xupremix/Projects/incin
+FEATURES/ENVIRONMENT: RUSTFLAGS=<unset> RUSTDOCFLAGS=<unset> TRYBUILD=<unset> INCIN_DOCS=<unset>
+START: 2026-08-03T04:19:59+02:00
+COMMIT: fa8d2030141b04bc7c0dfccb382bfa60647223cf
+FULL OUTPUT: audit-evidence/FND-000/test-results/fnd000-clippy-workspace-rerun.txt
+END: 2026-08-03T04:20:06+02:00
+EXIT CODE: 101
+
+COMMAND: cargo clippy --workspace --all-targets -- -D warnings
+WORKING DIRECTORY: /home/xupremix/Projects/incin
+FEATURES/ENVIRONMENT: RUSTFLAGS=<unset> RUSTDOCFLAGS=<unset> TRYBUILD=<unset> INCIN_DOCS=<unset>
+START: 2026-08-03T04:20:20+02:00
+COMMIT: fa8d2030141b04bc7c0dfccb382bfa60647223cf
+FULL OUTPUT: audit-evidence/FND-000/test-results/fnd000-clippy-workspace-final-2.txt
+END: 2026-08-03T04:20:26+02:00
+EXIT CODE: 101
+
+COMMAND: cargo clippy --workspace --all-targets -- -D warnings
+WORKING DIRECTORY: /home/xupremix/Projects/incin
+FEATURES/ENVIRONMENT: RUSTFLAGS=<unset> RUSTDOCFLAGS=<unset> TRYBUILD=<unset> INCIN_DOCS=<unset>
+START: 2026-08-03T04:20:34+02:00
+COMMIT: fa8d2030141b04bc7c0dfccb382bfa60647223cf
+FULL OUTPUT: audit-evidence/FND-000/test-results/fnd000-clippy-workspace-final-3.txt
+END: 2026-08-03T04:20:45+02:00
+EXIT CODE: 101
+
+COMMAND: cargo clippy --workspace --all-targets -- -D warnings
+WORKING DIRECTORY: /home/xupremix/Projects/incin
+FEATURES/ENVIRONMENT: RUSTFLAGS=<unset> RUSTDOCFLAGS=<unset> TRYBUILD=<unset> INCIN_DOCS=<unset>
+START: 2026-08-03T04:21:09+02:00
+COMMIT: fa8d2030141b04bc7c0dfccb382bfa60647223cf
+FULL OUTPUT: audit-evidence/FND-000/test-results/fnd000-clippy-workspace-final-4.txt
+END: 2026-08-03T04:21:19+02:00
+EXIT CODE: 0
+
+COMMAND: cargo test -p incin-core
+WORKING DIRECTORY: /home/xupremix/Projects/incin
+FEATURES/ENVIRONMENT: RUSTFLAGS=<unset> RUSTDOCFLAGS=<unset> TRYBUILD=<unset> INCIN_DOCS=<unset>
+START: 2026-08-03T04:23:15+02:00
+COMMIT: fa8d2030141b04bc7c0dfccb382bfa60647223cf
+FULL OUTPUT: audit-evidence/FND-000/test-results/fnd000-test-core.txt
+END: 2026-08-03T04:24:08+02:00
+EXIT CODE: 0
+
+COMMAND: cargo test -p incin-backends --features cpu
+WORKING DIRECTORY: /home/xupremix/Projects/incin
+FEATURES/ENVIRONMENT: RUSTFLAGS=<unset> RUSTDOCFLAGS=<unset> TRYBUILD=<unset> INCIN_DOCS=<unset>
+START: 2026-08-03T04:24:13+02:00
+COMMIT: fa8d2030141b04bc7c0dfccb382bfa60647223cf
+FULL OUTPUT: audit-evidence/FND-000/test-results/fnd000-test-backends-cpu.txt
+END: 2026-08-03T04:24:29+02:00
+EXIT CODE: 0
+
+COMMAND: cargo test -p incin
+WORKING DIRECTORY: /home/xupremix/Projects/incin
+FEATURES/ENVIRONMENT: RUSTFLAGS=<unset> RUSTDOCFLAGS=<unset> TRYBUILD=<unset> INCIN_DOCS=<unset>
+START: 2026-08-03T04:29:37+02:00
+COMMIT: fa8d2030141b04bc7c0dfccb382bfa60647223cf
+FULL OUTPUT: audit-evidence/FND-000/test-results/fnd000-test-incin-final.txt
+END: 2026-08-03T04:29:51+02:00
+EXIT CODE: 0
+
+COMMAND: graphify update .
+WORKING DIRECTORY: /home/xupremix/Projects/incin
+FEATURES/ENVIRONMENT: RUSTFLAGS=<unset> RUSTDOCFLAGS=<unset> TRYBUILD=<unset> INCIN_DOCS=<unset>
+START: 2026-08-03T04:31:00+02:00
+COMMIT: fa8d2030141b04bc7c0dfccb382bfa60647223cf
+FULL OUTPUT: audit-evidence/FND-000/test-results/graphify-update-final.txt
+END: 2026-08-03T04:31:14+02:00
+EXIT CODE: 0
+

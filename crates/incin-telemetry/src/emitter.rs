@@ -148,19 +148,18 @@ impl Emitter {
     /// ([`crate::run_dir::generate_run_id`]); `Some(id)` reuses/creates the
     /// file at that exact id (e.g. to resume writing into a known run name).
     pub fn to_run_dir(name: Option<&str>) -> crate::err::Result<(Self, RunInfo)> {
-        if let Some(n) = name {
-            if n.is_empty()
+        if let Some(n) = name
+            && (n.is_empty()
                 || n.contains("..")
                 || n.contains('/')
                 || n.contains('\\')
                 || n.contains('\0')
-                || std::path::Path::new(n).is_absolute()
-            {
-                return Err(crate::err::Error::Msg(alloc::format!(
-                    "Invalid run name for telemetry run dir: '{}'",
-                    n
-                )));
-            }
+                || std::path::Path::new(n).is_absolute())
+        {
+            return Err(crate::err::Error::Msg(alloc::format!(
+                "Invalid run name for telemetry run dir: '{}'",
+                n
+            )));
         }
         let dir = crate::run_dir::default_run_dir()?;
         let run_id = name

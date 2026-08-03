@@ -1,0 +1,28 @@
+   Compiling incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+    Checking incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+error[E0614]: type `f64` cannot be dereferenced
+  --> crates/incin-core/src/tensor/backend.rs:26:38
+   |
+26 |             ScalarValue::Float(f) => *f,
+   |                                      ^^ can't be dereferenced
+
+error[E0614]: type `i64` cannot be dereferenced
+  --> crates/incin-core/src/tensor/backend.rs:27:36
+   |
+27 |             ScalarValue::Int(i) => *i as f64,
+   |                                    ^^ can't be dereferenced
+
+error[E0614]: type `f64` cannot be dereferenced
+  --> crates/incin-core/src/tensor/backend.rs:34:38
+   |
+34 |             ScalarValue::Float(f) => *f as i64,
+   |                                      ^^ can't be dereferenced
+
+error[E0614]: type `i64` cannot be dereferenced
+  --> crates/incin-core/src/tensor/backend.rs:35:36
+   |
+35 |             ScalarValue::Int(i) => *i,
+   |                                    ^^ can't be dereferenced
+
+For more information about this error, try `rustc --explain E0614`.
+error: could not compile `incin-core` (lib) due to 4 previous errors

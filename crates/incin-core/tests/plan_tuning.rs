@@ -1,8 +1,12 @@
 //! `DST-013`: Bounded plan tuning measured against single-device baseline test.
 
+#![cfg(feature = "compiled")]
+
 use std::collections::BTreeMap;
 
-use incin_core::compiled::{BoundedPlanTuner, CapturedGraph, CompileOptions, CompiledPlan};
+use incin_core::experimental::compiled::{
+    BoundedPlanTuner, CapturedGraph, CompileOptions, CompiledPlan,
+};
 use incin_core::graph::{Graph, OpType};
 use incin_core::prelude::DTypeId;
 

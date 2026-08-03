@@ -1,0 +1,48 @@
+   Compiling tempfile v3.27.0
+    Checking rand_distr v0.4.3
+   Compiling rustix v1.1.4
+    Checking serde_core v1.0.228
+    Checking unicode-ident v1.0.22
+    Checking bytes v0.5.6
+    Checking memchr v2.7.6
+ Documenting incin-lsp v0.0.0 (/home/xupremix/Projects/incin/crates/incin-lsp)
+ Documenting incin-diagnostics v0.0.0 (/home/xupremix/Projects/incin/crates/incin-diagnostics)
+ Documenting xtask v0.0.0 (/home/xupremix/Projects/incin/xtask)
+    Checking proc-macro2 v1.0.106
+   Compiling prost-build v0.6.1
+   Compiling prost-build v0.14.4
+    Checking prost v0.6.1
+    Checking quote v1.0.46
+    Checking syn v2.0.118
+   Compiling onnx-pb v0.1.4
+    Checking crossterm v0.29.0
+   Compiling incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+   Compiling incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+    Checking ratatui-crossterm v0.1.2
+    Checking ratatui v0.30.2
+    Checking serde v1.0.228
+    Checking serde_json v1.0.150
+    Checking safetensors v0.4.5
+ Documenting incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+ Documenting incin-macros v0.0.0 (/home/xupremix/Projects/incin/crates/incin-macros)
+error: unresolved link to `crate::prelude::Execute`
+  --> crates/incin-core/src/exec/mod.rs:40:20
+   |
+40 | //! [`Execute<O>`](crate::prelude::Execute) is now the descriptor consumer.
+   |                    ^^^^^^^^^^^^^^^^^^^^^^^ no item named `Execute` in module `prelude`
+   |
+   = note: `-D rustdoc::broken-intra-doc-links` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(rustdoc::broken_intra_doc_links)]`
+
+error: public documentation for `Output` links to private item `ContractsWith`
+   --> crates/incin-core/src/tensor/matmul.rs:177:30
+    |
+177 |     /// spelled as long as [`ContractsWith`] relates them.
+    |                              ^^^^^^^^^^^^^ this item is private
+    |
+    = note: this link will resolve properly if you pass `--document-private-items`
+    = note: `-D rustdoc::private-intra-doc-links` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(rustdoc::private_intra_doc_links)]`
+
+error: could not document `incin-core`
+warning: build failed, waiting for other jobs to finish...

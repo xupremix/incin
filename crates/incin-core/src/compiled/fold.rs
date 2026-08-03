@@ -5,7 +5,7 @@ use alloc::vec::Vec;
 
 use crate::compiled::capture::CapturedGraph;
 use crate::graph::ValueId;
-use crate::prelude::Result;
+use crate::prelude::{Error, Result};
 
 /// A bounded shape bucket for dynamic shape alignment.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
@@ -47,11 +47,13 @@ impl ShapeBucket {
 pub struct ConstantFolder;
 
 impl ConstantFolder {
-    /// Folds constant subgraphs in a [`CapturedGraph`], returning the optimized graph and folded value IDs.
+    /// Rejects constant folding until the pass performs a real transformation.
     pub fn fold(&self, graph: &CapturedGraph) -> Result<(CapturedGraph, BTreeSet<ValueId>)> {
-        let folded_values = BTreeSet::new();
-        // In a pure graph IR transformation, pass through nodes while identifying constant candidates
-        Ok((graph.clone(), folded_values))
+        let _ = graph;
+        Err(Error::UnsupportedBackendOperation {
+            op: "compiled.constant_fold",
+            backend: "compiled-prototype",
+        })
     }
 }
 
@@ -60,8 +62,12 @@ impl ConstantFolder {
 pub struct WeightPrepacker;
 
 impl WeightPrepacker {
-    /// Prepacks weight values in a [`CapturedGraph`].
+    /// Rejects weight prepacking until the pass performs a real transformation.
     pub fn prepack(&self, graph: &CapturedGraph) -> Result<CapturedGraph> {
-        Ok(graph.clone())
+        let _ = graph;
+        Err(Error::UnsupportedBackendOperation {
+            op: "compiled.weight_prepack",
+            backend: "compiled-prototype",
+        })
     }
 }

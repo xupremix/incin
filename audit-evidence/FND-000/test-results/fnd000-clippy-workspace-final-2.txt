@@ -1,0 +1,12 @@
+    Checking incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+error: manual implementation of `.is_multiple_of()`
+   --> crates/incin-core/src/nn/save.rs:110:27
+    |
+110 |     if world_size == 0 || global_dim % world_size != 0 {
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: replace with: `!global_dim.is_multiple_of(world_size)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#manual_is_multiple_of
+    = note: `-D clippy::manual-is-multiple-of` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::manual_is_multiple_of)]`
+
+error: could not compile `incin-core` (lib) due to 1 previous error

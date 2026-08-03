@@ -1,0 +1,21 @@
+/home/xupremix/.local/bin/graphify
+graphify 0.9.30
+# Graph Report - incin  (2026-07-31)
+
+## Corpus Check
+- 611 files · ~561,775 words
+- Verdict: corpus is large enough that graph structure adds value.
+
+## Summary
+- 9043 nodes · 22013 edges · 586 communities (491 shown, 95 thin omitted)
+- Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 284 edges (avg confidence: 0.8)
+- Token cost: 0 input · 0 output
+
+## Graph Freshness
+- Built from commit: `11518760`
+- Run `git rev-parse HEAD` and compare to check if the graph is stale.
+- Run `graphify update .` after code changes (no API cost).
+
+## Community Hubs (Navigation)
+- WgpuBackendImpl<T, D>
+fa8d2030

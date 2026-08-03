@@ -107,7 +107,7 @@ pub fn slice_bytes_for_rank(
         )));
     }
     let global_dim = global_shape[shard_axis];
-    if world_size == 0 || global_dim % world_size != 0 {
+    if world_size == 0 || !global_dim.is_multiple_of(world_size) {
         return Err(Error::Msg(format!(
             "Global dimension {} along axis {} not divisible by world size {}",
             global_dim, shard_axis, world_size

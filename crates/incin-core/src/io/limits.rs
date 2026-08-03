@@ -60,7 +60,7 @@ impl ResourceLimits {
             max_graph_nodes: 100_000,
             max_graph_edges: 500_000,
             max_nesting_depth: 64,
-            max_string_bytes: 1 * 1024 * 1024,
+            max_string_bytes: 1024 * 1024,
             max_archive_entries: 100_000,
             max_archive_expanded_bytes: 100 * 1024 * 1024 * 1024,
         }

@@ -1,0 +1,36 @@
+audit-evidence/API-001/summary.md
+audit-evidence/FND-000/changed-files.txt
+audit-evidence/FND-000/commands.log
+audit-evidence/FND-000/environment.txt
+audit-evidence/FND-000/known-limitations.md
+audit-evidence/FND-000/source-audit.md
+audit-evidence/FND-000/summary.md
+audit-evidence/FND-000/test-results/*
+audit-evidence/run-command.sh
+crates/incin-backends/src/tuning/cache.rs
+crates/incin-core/src/compiled/fold.rs
+crates/incin-core/src/dist/fsdp.rs
+crates/incin-core/src/exec/mod.rs
+crates/incin-core/src/io/limits.rs
+crates/incin-core/src/lib.rs
+crates/incin-core/src/nn/save.rs
+crates/incin-core/src/tensor/backend.rs
+crates/incin-core/src/tensor/matmul.rs
+crates/incin-core/src/tensor/mod.rs
+crates/incin-core/tests/compiled_alloc.rs
+crates/incin-core/tests/compiled_artifact.rs
+crates/incin-core/tests/compiled_capture.rs
+crates/incin-core/tests/compiled_fold.rs
+crates/incin-core/tests/compiled_fusion.rs
+crates/incin-core/tests/compiled_guards.rs
+crates/incin-core/tests/manifest_replay.rs
+crates/incin-core/tests/plan_tuning.rs
+crates/incin-macros/src/lib.rs
+crates/incin-macros/src/onnx.rs
+crates/incin-macros/tests/compile_fail/idx_rejects_a_qualified_named_dim.stderr
+crates/incin-macros/tests/compile_fail/idx_rejects_an_open_ended_range.stderr
+crates/incin-telemetry/src/emitter.rs
+crates/incin/examples/resnet_demo.rs (removed)
+crates/incin/src/lib.rs
+crates/incin/tests/onnx_import.rs (removed)
+docs/PROJECT_STATUS.md

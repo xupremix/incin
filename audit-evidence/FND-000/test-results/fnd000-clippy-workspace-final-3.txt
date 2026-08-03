@@ -1,0 +1,60 @@
+    Checking incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+    Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
+    Checking incin-data v0.0.0 (/home/xupremix/Projects/incin/crates/incin-data)
+    Checking incin-telemetry v0.0.0 (/home/xupremix/Projects/incin/crates/incin-telemetry)
+error: this `if` statement can be collapsed
+   --> crates/incin-telemetry/src/emitter.rs:151:9
+    |
+151 | /         if let Some(n) = name {
+152 | |             if n.is_empty()
+153 | |                 || n.contains("..")
+154 | |                 || n.contains('/')
+...   |
+164 | |         }
+    | |_________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#collapsible_if
+    = note: `-D clippy::collapsible-if` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::collapsible_if)]`
+help: collapse nested if block
+    |
+151 ~         if let Some(n) = name
+152 ~             && (n.is_empty()
+153 |                 || n.contains("..")
+...
+156 |                 || n.contains('\0')
+157 ~                 || std::path::Path::new(n).is_absolute())
+158 |             {
+...
+162 |                 )));
+163 ~             }
+    |
+
+error: could not compile `incin-telemetry` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `incin-telemetry` (lib test) due to 1 previous error
+error: this `if` statement can be collapsed
+   --> crates/incin-backends/src/tuning/cache.rs:731:5
+    |
+731 | /     if let Ok(metadata) = fs::metadata(path) {
+732 | |         if metadata.len() as usize > limits.max_bytes {
+733 | |             return quarantined_empty(
+734 | |                 path,
+...   |
+742 | |     }
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#collapsible_if
+    = note: `-D clippy::collapsible-if` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::collapsible_if)]`
+help: collapse nested if block
+    |
+731 ~     if let Ok(metadata) = fs::metadata(path)
+732 ~         && metadata.len() as usize > limits.max_bytes {
+733 |             return quarantined_empty(
+...
+740 |             );
+741 ~         }
+    |
+
+error: could not compile `incin-backends` (lib test) due to 1 previous error

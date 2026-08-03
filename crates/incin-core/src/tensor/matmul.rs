@@ -174,7 +174,7 @@ where
     /// `M` and `N` pass through from the operands that named them, so a runtime
     /// axis stays runtime and a sized one stays sized. The contraction axis
     /// does not appear, which is why the two sides may disagree about how it is
-    /// spelled as long as [`ContractsWith`] relates them.
+    /// spelled as long as the internal `ContractsWith` rule relates them.
     type Output = (M, N);
 
     #[inline(always)]

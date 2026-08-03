@@ -37,7 +37,7 @@
 //! a descriptor wrapped in `Validated` came from a typed operand whose frontend
 //! trait had already proved the operation legal.
 //!
-//! [`Execute<O>`](crate::prelude::Execute) is now the descriptor consumer.
+//! [`Execute<O>`](crate::backend_authoring::Execute) is now the descriptor consumer.
 //! Concrete backend migrations are staged through `EXE-007` and `EXE-008`, so
 //! the legacy operation families remain callable until `EXE-009` removes them.
 

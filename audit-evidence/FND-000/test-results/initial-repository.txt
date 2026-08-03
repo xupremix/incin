@@ -1,0 +1,19 @@
+fa8d2030141b04bc7c0dfccb382bfa60647223cf
+ D INCIN_0_1_TO_1_0_MASTER_IMPLEMENTATION_PLAN.md
+ D INCIN_0_1_TO_1_0_MASTER_IMPLEMENTATION_PLAN_SECURITY_AUDITED.md
+?? INCIN_FOUNDATION_FIRST_REMEDIATION_PROMPT.md
+?? audit-evidence/FND-000/
+?? audit-evidence/run-command.sh
+fa8d203 (HEAD -> develop, origin/develop, origin/HEAD) fix(api-001): harden facade; all 1233 workspace tests pass
+8f90364 refactor(core): finalize backend_authoring facade migration and trait visibility
+1264f7b feat(dist): implement FSDP/ZeRO prototype and memory parity contracts (DST-014)
+b60c7aa chore(governance): synchronize distributed CI and release tasks in ledger and PROPOSALS.md
+07dc140 (origin/master) feat(dist): implement global checkpoint manifest and cross-mesh resharding (DST-016)
+rustc 1.97.1 (8bab26f4f 2026-07-14)
+binary: rustc
+commit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452
+commit-date: 2026-07-14
+host: x86_64-unknown-linux-gnu
+release: 1.97.1
+LLVM version: 22.1.6
+cargo 1.97.1 (c980f4866 2026-06-30)

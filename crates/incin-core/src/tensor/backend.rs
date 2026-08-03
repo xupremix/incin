@@ -21,18 +21,18 @@ pub enum ScalarValue {
 
 impl ScalarValue {
     /// Reads the value as `f64`, casting from `Int` if needed.
-    pub fn to_f64(&self) -> f64 {
+    pub fn to_f64(self) -> f64 {
         match self {
-            ScalarValue::Float(f) => *f,
-            ScalarValue::Int(i) => *i as f64,
+            ScalarValue::Float(f) => f,
+            ScalarValue::Int(i) => i as f64,
         }
     }
 
     /// Reads the value as `i64`, truncating from `Float` if needed.
-    pub fn to_i64(&self) -> i64 {
+    pub fn to_i64(self) -> i64 {
         match self {
-            ScalarValue::Float(f) => *f as i64,
-            ScalarValue::Int(i) => *i,
+            ScalarValue::Float(f) => f as i64,
+            ScalarValue::Int(i) => i,
         }
     }
 }
