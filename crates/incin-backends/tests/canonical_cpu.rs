@@ -1754,3 +1754,153 @@ fn an_attention_mask_declaration_must_match_the_operand_count() {
         "unexpected refusal: {error}"
     );
 }
+
+/// The index-returning reductions compute what the legacy calls compute.
+///
+/// The index dtype in each descriptor is the one the CPU kernel actually
+/// produces, which is not the same integer for all four: `argmax` and `argmin`
+/// build `i64` and `argsort` builds `u32`. Writing the real dtype into the
+/// descriptor is what lets these route at all.
+#[test]
+fn the_index_returning_reductions_match_their_legacy_counterparts() {
+    use incin_core::backend_authoring::ReductionOps;
+    use incin_core::exec::catalog::{ArgsortAttributes, AxisAttributes, IndexReductionAttributes};
+
+    let context = context();
+    let input = f32_storage(vec![3.0, 1.0, 2.0, 4.0], vec![2, 2]);
+
+    let argmax = dispatch::execute::<op::ArgMax, _>(
+        &context,
+        IndexReductionAttributes {
+            axis: Some(1),
+            dtype: DTypeId::I64,
+        },
+        &[handle(&input)],
+    )
+    .expect("argmax routes");
+    assert_eq!(
+        values(&argmax),
+        values(
+            &<TestBackend as ReductionOps<TestBackend>>::argmax::<f32, i64>(&input, Some(1))
+                .unwrap()
+        )
+    );
+    // Pinned against a fixed answer as well as against the legacy path, so a
+    // migration that is wrong on both cannot pass: row zero peaks at column
+    // zero and row one at column one.
+    assert_eq!(values(&argmax), vec![0.0, 1.0]);
+
+    let argmin = dispatch::execute::<op::ArgMin, _>(
+        &context,
+        IndexReductionAttributes {
+            axis: Some(1),
+            dtype: DTypeId::I64,
+        },
+        &[handle(&input)],
+    )
+    .expect("argmin routes");
+    assert_eq!(values(&argmin), vec![1.0, 0.0]);
+
+    let argsort = dispatch::execute::<op::Argsort, _>(
+        &context,
+        ArgsortAttributes {
+            axis: 1,
+            descending: false,
+            index_dtype: DTypeId::U32,
+        },
+        &[handle(&input)],
+    )
+    .expect("argsort routes");
+    assert_eq!(values(&argsort), vec![1.0, 0.0, 0.0, 1.0]);
+
+    let cumsum =
+        dispatch::execute::<op::Cumsum, _>(&context, AxisAttributes { axis: 1 }, &[handle(&input)])
+            .expect("cumsum routes");
+    assert_eq!(
+        values(&cumsum),
+        values(&<TestBackend as ReductionOps<TestBackend>>::cumsum::<f32>(&input, 1).unwrap())
+    );
+    assert_eq!(values(&cumsum), vec![3.0, 4.0, 2.0, 6.0]);
+}
+
+/// `topk` is the first migrated identity that returns more than one tensor.
+///
+/// The pair is the descriptor's own account of the operation: output zero
+/// carries the operand dtype and output one carries the declared index dtype.
+#[test]
+fn topk_returns_both_of_the_tensors_its_descriptor_describes() {
+    use incin_core::backend_authoring::ReductionOps;
+    use incin_core::exec::catalog::TopKAttributes;
+
+    let context = context();
+    let input = f32_storage(vec![3.0, 1.0, 2.0, 4.0], vec![2, 2]);
+
+    let (selected, indices) = dispatch::execute::<op::TopK, _>(
+        &context,
+        TopKAttributes {
+            k: 1,
+            axis: 1,
+            largest: true,
+            index_dtype: DTypeId::U32,
+        },
+        &[handle(&input)],
+    )
+    .expect("topk routes");
+
+    let (legacy_values, legacy_indices) =
+        <TestBackend as ReductionOps<TestBackend>>::topk::<f32, u32>(&input, 1, 1, true).unwrap();
+    assert_eq!(values(&selected), values(&legacy_values));
+    assert_eq!(values(&indices), values(&legacy_indices));
+
+    assert_eq!(values(&selected), vec![3.0, 4.0]);
+    assert_eq!(values(&indices), vec![0.0, 1.0]);
+    assert_eq!(selected.dtype, DTypeId::F32);
+    assert_eq!(indices.dtype, DTypeId::U32);
+}
+
+/// An index dtype the kernel does not produce is refused, not relabelled.
+///
+/// `argmax` takes its index dtype as a type parameter and then ignores it,
+/// always building an `i64` buffer. Forwarding a descriptor that asked for
+/// `u32` would hand back `i64` storage wearing a `u32` label, which is the
+/// exact class of silent mislabelling the descriptor contract exists to stop.
+/// The refusal is what makes the canonical path fail closed where the legacy
+/// one does not.
+#[test]
+fn an_index_dtype_the_kernel_does_not_produce_is_refused() {
+    use incin_core::backend_authoring::ReductionOps;
+    use incin_core::exec::catalog::IndexReductionAttributes;
+
+    let context = context();
+    let input = f32_storage(vec![3.0, 1.0, 2.0, 4.0], vec![2, 2]);
+
+    let error = dispatch::execute::<op::ArgMax, _>(
+        &context,
+        IndexReductionAttributes {
+            axis: Some(1),
+            dtype: DTypeId::U32,
+        },
+        &[handle(&input)],
+    )
+    .expect_err("the CPU argmax kernel does not build u32 indices");
+    assert!(
+        matches!(
+            error,
+            CanonicalError::Backend(incin_core::prelude::BackendError::Unsupported {
+                reason: UnsupportedReason::DType {
+                    operation: OperationKind::ArgMax,
+                    dtype: DTypeId::U32,
+                },
+            })
+        ),
+        "unexpected refusal: {error}"
+    );
+
+    // The legacy path accepts the same request and answers with storage that
+    // is labelled i64 regardless. That is the behaviour being replaced, and it
+    // is asserted here so the difference is a recorded fact rather than a
+    // claim in a commit message.
+    let legacy = <TestBackend as ReductionOps<TestBackend>>::argmax::<f32, u32>(&input, Some(1))
+        .expect("the legacy path does not check the index dtype");
+    assert_eq!(legacy.dtype, DTypeId::I64);
+}

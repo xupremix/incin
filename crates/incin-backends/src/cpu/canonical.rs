@@ -257,6 +257,124 @@ reduce_axis_executors![
     (MinKeepDim, min_keepdim),
 ];
 
+/// Running sum along the axis its attributes name.
+///
+/// This is the one operation in the index-reduction neighbourhood that is
+/// dtype-honest: the CPU kernel accumulates in `f64` and converts back through
+/// the operand's own buffer, so the result carries the operand's dtype.
+impl<T: DType, D: Device> Execute<Descriptor<op::Cumsum>> for CpuBackendImpl<T, D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::Cumsum>, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::Cumsum;
+        let input = reduction_operand(self, request.inputs, operation)?;
+        let axis = request.operation.descriptor().attributes().axis;
+        <Self as ReductionOps<Self>>::cumsum::<T>(input, axis)
+            .map_err(|error| kernel_error(operation, error))
+    }
+}
+
+/// Reject an index dtype the CPU kernel does not actually produce.
+///
+/// The index-returning reductions take an index dtype as a type parameter and
+/// then ignore it: `argmax` and `argmin` always build an `i64` buffer, while
+/// `argsort` and `topk` always build a `u32` one. Forwarding a descriptor that
+/// asked for anything else would return storage labelled with a dtype it does
+/// not hold, which is the failure mode the descriptor contract exists to make
+/// impossible. The backend is not even self-consistent about which integer it
+/// picks, so the check names the produced dtype rather than a shared constant.
+fn produced_index_dtype(
+    operation: OperationKind,
+    declared: DTypeId,
+    produced: DTypeId,
+) -> Result<(), BackendError> {
+    if declared == produced {
+        return Ok(());
+    }
+    Err(BackendError::Unsupported {
+        reason: UnsupportedReason::DType {
+            operation,
+            dtype: declared,
+        },
+    })
+}
+
+/// Index of the extremum, either flattened or along one axis.
+macro_rules! index_reduction_executors {
+    ($(($operation:ident, $method:ident)),* $(,)?) => {$(
+        impl<T: DType, D: Device> Execute<Descriptor<op::$operation>> for CpuBackendImpl<T, D> {
+            type Output = CpuStorage;
+
+            fn execute(
+                &self,
+                request: ExecutionRequest<'_, Descriptor<op::$operation>, Self>,
+            ) -> Result<CpuStorage, BackendError> {
+                let operation = OperationKind::$operation;
+                let input = reduction_operand(self, request.inputs, operation)?;
+                let attributes = request.operation.descriptor().attributes();
+                produced_index_dtype(operation, attributes.dtype, DTypeId::I64)?;
+                <Self as ReductionOps<Self>>::$method::<T, T>(input, attributes.axis)
+                    .map_err(|error| kernel_error(operation, error))
+            }
+        }
+    )*};
+}
+
+index_reduction_executors![(ArgMax, argmax), (ArgMin, argmin)];
+
+/// Indices that would sort the operand along one axis.
+impl<T: DType, D: Device> Execute<Descriptor<op::Argsort>> for CpuBackendImpl<T, D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::Argsort>, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::Argsort;
+        let input = reduction_operand(self, request.inputs, operation)?;
+        let attributes = request.operation.descriptor().attributes();
+        produced_index_dtype(operation, attributes.index_dtype, DTypeId::U32)?;
+        <Self as ReductionOps<Self>>::argsort::<T, T>(input, attributes.axis, attributes.descending)
+            .map_err(|error| kernel_error(operation, error))
+    }
+}
+
+/// The `k` extreme elements along one axis, as a value and an index tensor.
+///
+/// This is the first migrated identity whose output is not a single storage
+/// handle. The catalog already describes it as two: the value tensor carries
+/// the operand dtype and the index tensor carries the declared index dtype, so
+/// returning a pair is what the descriptor was already promising.
+///
+/// Its capability row is f32 only, which is narrower than the operand dtypes
+/// the kernel accepts. That is deliberate. The kernel builds its value buffer
+/// as `f32` whatever the operand held, so for any other dtype it returns
+/// storage labelled with a dtype it does not hold. Advertising f32 alone makes
+/// the canonical path refuse what the legacy path silently mislabels.
+impl<T: DType, D: Device> Execute<Descriptor<op::TopK>> for CpuBackendImpl<T, D> {
+    type Output = (CpuStorage, CpuStorage);
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, Descriptor<op::TopK>, Self>,
+    ) -> Result<(CpuStorage, CpuStorage), BackendError> {
+        let operation = OperationKind::TopK;
+        let input = reduction_operand(self, request.inputs, operation)?;
+        let attributes = request.operation.descriptor().attributes();
+        produced_index_dtype(operation, attributes.index_dtype, DTypeId::U32)?;
+        <Self as ReductionOps<Self>>::topk::<T, T>(
+            input,
+            attributes.k,
+            attributes.axis,
+            attributes.largest,
+        )
+        .map_err(|error| kernel_error(operation, error))
+    }
+}
+
 /// Collapse a per-axis window to the single extent the routed CPU kernel takes.
 ///
 /// The descriptor is more expressive than the kernel behind it: it carries one

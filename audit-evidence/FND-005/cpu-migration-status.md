@@ -2,7 +2,7 @@
 
 Generated from `CPU_CAPABILITIES` and `incin_core::exec::OPERATION_CATALOG`; the Rust source is authoritative. "Migrated" means the CPU backend advertises the exact identity and therefore, by the compile-time proof in `cpu::canonical`, implements `Execute<Descriptor<op::...>>` for it. It does not mean the operation is unreachable through the legacy operation-family traits: those remain the path the stable tensor surface uses.
 
-**107 of 174 catalog operations migrated.** The remaining 67 are still reachable only through the legacy operation-family traits.
+**112 of 174 catalog operations migrated.** The remaining 62 are still reachable only through the legacy operation-family traits.
 
 | Operation | Migrated | Legacy source |
 |---|:--:|---|
@@ -142,13 +142,13 @@ Generated from `CPU_CAPABILITIES` and `incin_core::exec::OPERATION_CATALOG`; the
 | `max_keepdim` | yes | `ReductionOps::max_keepdim` |
 | `min_dim` | yes | `ReductionOps::min_dim` |
 | `min_keepdim` | yes | `ReductionOps::min_keepdim` |
-| `argmax` | no | `ReductionOps::argmax` |
-| `argmin` | no | `ReductionOps::argmin` |
+| `argmax` | yes | `ReductionOps::argmax` |
+| `argmin` | yes | `ReductionOps::argmin` |
 | `prod_all` | yes | `ReductionOps::prod_all` |
 | `prod_dim` | yes | `ReductionOps::prod_dim` |
-| `cumsum` | no | `ReductionOps::cumsum` |
-| `topk` | no | `ReductionOps::topk` |
-| `argsort` | no | `ReductionOps::argsort` |
+| `cumsum` | yes | `ReductionOps::cumsum` |
+| `topk` | yes | `ReductionOps::topk` |
+| `argsort` | yes | `ReductionOps::argsort` |
 | `norm` | no | `Tensor::norm` |
 | `var_all` | no | `Tensor::var_all` |
 | `var_dim` | no | `Tensor::var_dim` |

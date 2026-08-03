@@ -76,6 +76,13 @@ pub use catalog::{
     CanonicalOperation, Descriptor, DescriptorError, LogicalTensorMeta, OPERATION_CATALOG,
     OperationCatalogEntry, ValidatedInvocation, catalog_entry, op, operation_semantics_document,
 };
+// The classification fields of a catalog entry, re-exported beside the entry
+// itself. Reading one of these fields off a public struct should not require
+// knowing which submodule its type was declared in.
+pub use catalog::{
+    BroadcastingRule, DTypeRule, EmptyRule, GradientRule, LayoutRule, NumericRule, OutputRule,
+    SemanticProfile,
+};
 #[cfg(feature = "std")]
 pub use catalog::{CapturedDescriptor, DescriptorCaptureError};
 pub use conformance::{

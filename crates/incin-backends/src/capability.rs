@@ -125,12 +125,18 @@ macro_rules! cpu_descriptor_operations {
             reduction = [
                 SumAll, MeanAll, MaxAll, MinAll, ProdAll,
                 SumDim, SumKeepDim, MeanDim, MeanKeepDim,
-                MaxDim, MaxKeepDim, MinDim, MinKeepDim, ProdDim
+                MaxDim, MaxKeepDim, MinDim, MinKeepDim, ProdDim,
+                // `topk` is here rather than with the other index reductions
+                // because its value buffer is built as f32 whatever the operand
+                // held. f32 is the only operand dtype whose result it labels
+                // correctly, and this group is the f32-only one.
+                TopK
             ],
             spatial = [Conv2dExact, MaxPool2d, AvgPool2d],
             matmul = [MatMulExact],
             softmax = [Softmax],
             native_tensor = [
+                ArgMax, ArgMin, Argsort, Cumsum,
                 Maximum, Minimum, AbsDiff, Lerp, MaskedFill, WhereCond,
                 CmpEq, CmpNe, CmpLt, CmpLe, CmpGt, CmpGe,
                 LogicalAnd, LogicalOr, LogicalNot,
@@ -364,7 +370,13 @@ const fn descriptor_min_rank(operation: OperationKind) -> usize {
         | OperationKind::MaxKeepDim
         | OperationKind::MinDim
         | OperationKind::MinKeepDim
-        | OperationKind::ProdDim => 1,
+        | OperationKind::ProdDim
+        // An axis-bearing scan or ordering needs an axis to run along.
+        // `argmax` and `argmin` do not appear here: their axis is optional and
+        // the flattened form is defined for a scalar, so their minimum is zero.
+        | OperationKind::Cumsum
+        | OperationKind::Argsort
+        | OperationKind::TopK => 1,
         // A transpose needs two axes to swap; every other view here needs at
         // least the one axis its attributes name. `unsqueeze` is the exception
         // that keeps this table honest: it inserts an axis, so a scalar is a

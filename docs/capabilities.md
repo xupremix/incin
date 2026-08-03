@@ -36,9 +36,9 @@ run time.
 | `add_scalar` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `addmm` | `f32` | — | — |
 | `arange` | — | — | — |
-| `argmax` | — | — | — |
-| `argmin` | — | — | — |
-| `argsort` | — | — | — |
+| `argmax` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
+| `argmin` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
+| `argsort` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `asin` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `asinh` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `atan` | `bf16`, `f16`, `f32`, `f64` | — | — |
@@ -67,7 +67,7 @@ run time.
 | `cos` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `cosh` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `cross_entropy_loss` | — | — | — |
-| `cumsum` | — | — | — |
+| `cumsum` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `dequantize` | — | — | — |
 | `detach` | — | — | — |
 | `diag` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
@@ -181,7 +181,7 @@ run time.
 | `tensor_to_bytes` | — | — | — |
 | `to_device` | — | — | — |
 | `to_dtype` | — | — | — |
-| `topk` | — | — | — |
+| `topk` | `f32` | — | — |
 | `transpose` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `tril` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `triu` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
@@ -285,10 +285,15 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `min_dim` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
 | `min_keepdim` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
 | `prod_dim` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
+| `topk` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
 | `conv2d` | `f32` | `contiguous` | 3–4 | yes | native |
 | `max_pool2d` | `f32` | `contiguous` | 3–4 | yes | native |
 | `avg_pool2d` | `f32` | `contiguous` | 3–4 | yes | native |
 | `softmax` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
+| `argmax` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `argmin` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `argsort` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 1+ | yes | native |
+| `cumsum` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 1+ | yes | native |
 | `maximum` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
 | `minimum` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
 | `abs_diff` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |

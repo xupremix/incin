@@ -10,8 +10,8 @@ use incin_core::backend_authoring::{
     Backend, CreationOps, FloatOps, ModuleOps, NumericOps, ReductionOps, TensorOps,
 };
 use incin_core::exec::{
-    Capabilities, CapabilityQuery, ImplementationKind, LayoutClass, MathMode, OPERATION_CATALOG,
-    SupportLevel, UnsupportedReason,
+    Capabilities, CapabilityQuery, DTypeRule, ImplementationKind, LayoutClass, MathMode,
+    OPERATION_CATALOG, SupportLevel, UnsupportedReason,
 };
 use incin_core::prelude::{DType, DTypeId, DeviceId, DeviceKind, Dyn, OperationKind};
 
@@ -275,7 +275,11 @@ fn cpu_tensor_operand_shapes(operation: OperationKind) -> &'static [&'static [us
         | OperationKind::UnsqueezeExact
         | OperationKind::Triu
         | OperationKind::Tril
-        | OperationKind::Diag => &[&[2, 2]],
+        | OperationKind::Diag
+        | OperationKind::ArgMax
+        | OperationKind::ArgMin
+        | OperationKind::Argsort
+        | OperationKind::Cumsum => &[&[2, 2]],
         _ => panic!("missing CPU tensor operand shapes for {operation}"),
     }
 }
@@ -333,6 +337,10 @@ fn cpu_tensor_probe<K: DType>(operation: OperationKind, operands: &[&CpuStorage]
             B::scaled_dot_product_attention::<K>(first, operands[1], operands[2], None, None)
                 .unwrap()
         }
+        OperationKind::ArgMax => B::argmax::<K, K>(first, Some(1)).unwrap(),
+        OperationKind::ArgMin => B::argmin::<K, K>(first, Some(1)).unwrap(),
+        OperationKind::Argsort => B::argsort::<K, K>(first, 1, false).unwrap(),
+        OperationKind::Cumsum => B::cumsum::<K>(first, 1).unwrap(),
         _ => panic!("missing CPU tensor probe for {operation}"),
     }
 }
@@ -390,6 +398,12 @@ fn cpu_probe_shape(operation: OperationKind) -> &'static [usize] {
         | OperationKind::MeanKeepDim
         | OperationKind::MaxKeepDim
         | OperationKind::MinKeepDim => &[2, 1],
+        // The probe reduces a [2, 2] matrix along axis one. `argmax` and
+        // `argmin` drop that axis, `topk` narrows it to k, and `argsort` and
+        // `cumsum` keep the operand's shape.
+        OperationKind::ArgMax | OperationKind::ArgMin => &[2],
+        OperationKind::TopK => &[2, 1],
+        OperationKind::Argsort | OperationKind::Cumsum => &[2, 2],
         OperationKind::Normalization => &[1, 2],
         OperationKind::Broadcast => &[3, 2],
         OperationKind::BroadcastAs => &[3, 2],
@@ -605,6 +619,13 @@ fn execute_cpu_probe(operation: OperationKind, layout: LayoutClass) -> CpuStorag
                 _ => unreachable!(),
             }
         }
+        // Only the value tensor is probed here. The index tensor's dtype is not
+        // the operand dtype the row advertises, so it is checked where that
+        // distinction is made rather than folded into this shape probe.
+        OperationKind::TopK => {
+            let input = laid_out(&[2, 2], layout);
+            B::topk::<f32, u32>(&input, 1, 1, true).unwrap().0
+        }
         OperationKind::Normalization => {
             let input = f32_storage(&[1, 2], &[1.0, 3.0]);
             let weight = f32_storage(&[2], &[1.0, 1.0]);
@@ -730,7 +751,11 @@ fn execute_cpu_probe(operation: OperationKind, layout: LayoutClass) -> CpuStorag
         | OperationKind::InstanceNorm
         | OperationKind::BroadcastLeft
         | OperationKind::Addmm
-        | OperationKind::ScaledDotProductAttention => {
+        | OperationKind::ScaledDotProductAttention
+        | OperationKind::ArgMax
+        | OperationKind::ArgMin
+        | OperationKind::Argsort
+        | OperationKind::Cumsum => {
             let operands: Vec<CpuStorage> = cpu_tensor_operand_shapes(operation)
                 .iter()
                 .map(|shape| laid_out(shape, layout))
@@ -750,7 +775,10 @@ fn generated_cpu_rows_match_real_execution_and_output_metadata() {
             assert!(registry(DeviceKind::Cpu).support(&case).is_device_local());
             let output = execute_cpu_probe(rule.operation, layout);
             assert_eq!(&*output.shape, cpu_probe_shape(rule.operation));
-            assert_eq!(output.dtype, DTypeId::F32);
+            assert_eq!(
+                output.dtype,
+                expected_result_dtype(rule.operation, DTypeId::F32)
+            );
             assert_eq!(output.device, DeviceId::cpu());
         }
     }
@@ -912,9 +940,8 @@ fn every_advertised_cpu_dtype_executes_its_registered_operation() {
                 | OperationKind::ProdDim
                 | OperationKind::Conv2dExact
                 | OperationKind::MaxPool2d
-                | OperationKind::AvgPool2d => {
-                    execute_cpu_probe(rule.operation, LayoutClass::Contiguous)
-                }
+                | OperationKind::AvgPool2d
+                | OperationKind::TopK => execute_cpu_probe(rule.operation, LayoutClass::Contiguous),
                 OperationKind::Relu
                 | OperationKind::Step
                 | OperationKind::Mish
@@ -1000,7 +1027,11 @@ fn every_advertised_cpu_dtype_executes_its_registered_operation() {
                 | OperationKind::InstanceNorm
                 | OperationKind::BroadcastLeft
                 | OperationKind::Addmm
-                | OperationKind::ScaledDotProductAttention => {
+                | OperationKind::ScaledDotProductAttention
+                | OperationKind::ArgMax
+                | OperationKind::ArgMin
+                | OperationKind::Argsort
+                | OperationKind::Cumsum => {
                     let operands: Vec<CpuStorage> = cpu_tensor_operand_shapes(rule.operation)
                         .iter()
                         .map(|shape| B::ones::<Dyn>(shape, dtype, &DeviceId::cpu()).unwrap())
@@ -1010,9 +1041,68 @@ fn every_advertised_cpu_dtype_executes_its_registered_operation() {
                 }
                 _ => panic!("missing dtype conformance probe for {}", rule.operation),
             };
-            assert_eq!(output.dtype, dtype, "{} {dtype:?}", rule.operation);
+            assert_eq!(
+                output.dtype,
+                expected_result_dtype(rule.operation, dtype),
+                "{} {dtype:?}",
+                rule.operation
+            );
         }
     }
+}
+
+/// What dtype the first result must carry, given the operand dtype the row
+/// advertises.
+///
+/// A capability row's dtype set describes the *operand*, because that is what
+/// the query in `dispatch::admit` is built from. For most operations the result
+/// carries the same dtype, but an index-returning reduction does not, and the
+/// catalog already says so: `DTypeRule::IndexResult` is declared once per
+/// identity there. Reading it from the catalog rather than listing the
+/// exceptions here means a future index-returning operation is covered by this
+/// check the moment it is added to the catalog, instead of quietly asserting
+/// the wrong thing until someone notices.
+///
+/// `topk` is the exception the catalog rule cannot express on its own. It is
+/// declared `IndexResult` but returns two tensors, and only the second one is
+/// an index tensor; the first carries the operand dtype. The descriptor layer
+/// already makes exactly this distinction by output position, so this follows
+/// it rather than inventing a second answer.
+///
+/// The concrete index dtype is the one the CPU kernel produces, which is not
+/// uniform: `argmax` and `argmin` build `i64` buffers and `argsort` and `topk`
+/// build `u32` ones. That inconsistency is the backend's, and it is recorded
+/// rather than smoothed over.
+fn expected_result_dtype(operation: OperationKind, operand: DTypeId) -> DTypeId {
+    if operation == OperationKind::TopK {
+        return operand;
+    }
+    let entry = OPERATION_CATALOG
+        .iter()
+        .find(|entry| entry.operation == operation);
+    match entry.map(|entry| entry.dtype) {
+        Some(DTypeRule::IndexResult) => match operation {
+            OperationKind::ArgMax | OperationKind::ArgMin => DTypeId::I64,
+            _ => DTypeId::U32,
+        },
+        _ => operand,
+    }
+}
+
+/// The index half of `topk`, which the shared probes above do not reach.
+///
+/// `expected_result_dtype` answers for output zero, so without this the index
+/// tensor would be the one migrated result nothing asserts a dtype for. It is
+/// `u32` no matter what the caller's descriptor asked for, which is why the
+/// executor refuses any other declared index dtype.
+#[test]
+fn the_topk_index_tensor_carries_the_dtype_its_executor_admits() {
+    type B = CpuBackendImpl;
+    let input = f32_storage(&[2, 2], &[1.0, 2.0, 3.0, 4.0]);
+    let (values, indices) = B::topk::<f32, u32>(&input, 1, 1, true).unwrap();
+    assert_eq!(values.dtype, DTypeId::F32);
+    assert_eq!(indices.dtype, DTypeId::U32);
+    assert_eq!(&*indices.shape, &[2, 1]);
 }
 
 #[cfg(feature = "wgpu")]

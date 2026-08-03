@@ -9,8 +9,11 @@ FND-005 passes only when "stable CPU tensor methods no longer rely on the old
 monolithic operation supertrait architecture". They still do:
 
 - `Backend` still requires all nine operation-family supertraits.
-- 850 references to those traits remain across 75 files.
-- 24 of 174 catalog operations have a canonical CPU executor.
+- 1,064 references to those traits remain across 75 files. The count rose rather
+  than fell, because each new canonical executor still reaches its kernel
+  through the family trait it is replacing. The reference count only starts
+  falling once the kernel bodies move down, which is the step after this one.
+- 112 of 174 catalog operations have a canonical CPU executor.
 - The stable `Tensor` methods call the family traits, not `dispatch::execute`.
 
 The canonical path is real, exercised and verified, but it is a second path
@@ -37,9 +40,46 @@ separately and without tolerance, by `canonical_and_legacy_gradients_are_identic
 That assertion was mutation-tested: comparing the wrong operand's gradient makes
 it fail.
 
+## Operations whose legacy path mislabels its result dtype
+
+Three CPU kernels return storage carrying a dtype the caller did not ask for
+and is not told about. These were found by measuring every advertised dtype
+against the dtype of the storage that came back, not by reading the code.
+
+- `scaled_dot_product_attention` returns `f32` storage for a `u8`, `u32`,
+  `i64`, `bf16`, `f16` or `f64` operand, without an error.
+- `topk` builds its value buffer as `f32` whatever the operand held.
+- `argmax`, `argmin`, `argsort` and `topk` take an index dtype as a type
+  parameter and ignore it. `argmax` and `argmin` always build `i64`; `argsort`
+  and `topk` always build `u32`. The backend is not self-consistent about which
+  integer an index tensor uses.
+
+The canonical rows are narrowed to what each kernel labels correctly, so the
+canonical path refuses these requests rather than answering them wrongly. The
+legacy path still accepts them. `an_index_dtype_the_kernel_does_not_produce_is_refused`
+asserts both halves of that difference, so it is a recorded fact rather than a
+claim in a commit message.
+
+Narrowing a row is not a fix. The kernels still mislabel; the canonical path
+just no longer routes to them when they would.
+
+## Rank bounds are measured, then narrowed to the descriptor
+
+Every rank bound in `descriptor_min_rank` and `descriptor_max_rank` was first
+measured by executing the operation at ranks zero through four and recording
+the lowest and highest that succeeded. Where the descriptor's own validator is
+stricter than the kernel, the narrower bound is registered: `instance_norm`
+tolerates less than four axes in the kernel but `InstanceNormAttributes`
+requires exactly `[batch, channels, height, width]`, and a row wider than its
+own validator advertises requests that can never reach the backend.
+
+The reverse case, a kernel stricter than its descriptor, would be a real gap.
+None was found among the migrated identities, but the checks are per-operation
+and prove nothing about the ones not yet migrated.
+
 ## Conformance coverage
 
-The parity tests cover the 24 migrated identities against the legacy method the
+The parity tests cover the migrated identities against the legacy method the
 catalog names as each one's source. They are **parity** tests, not reference-vector
 tests: they prove the canonical path computes what the legacy path computes, not
 that the legacy path is numerically correct against an external oracle. The
