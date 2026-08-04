@@ -431,11 +431,66 @@ rather than overwriting when two output positions share a source. `index`
 itself gets no gradient, matching CPU, and is also required to be
 F32-physical for the same reason `index_select`'s is.
 
-`where_cond` remains unsupported on CUDA — like `gather`, CPU wires a real
-gradient for it, but it additionally broadcasts its two value operands to
-a common shape rather than requiring an exact match, and is the natural
-continuation of this pass, the last method needed to close CUDA's
-`TensorOps` gap entirely the way WGPU's already is.
+`where_cond` is real now too, closing CUDA's `TensorOps` gap entirely —
+matching WGPU's own milestone, method-for-method the same implementation.
+It broadcasts `mask`/`on_true`/`on_false` to a common shape via the
+already tape-wired `broadcast_as`, which is a real CUDA kernel (reused, not
+a host round-trip) — `crate::cpu::stride::broadcast_shape` computes that
+shape, the same resolver CPU's own `where_cond` and WGPU's port use — then
+selects elementwise via host readback. Its own backward routes each
+`grad_out` element to `grad_true`/`grad_false` by the mask while still in
+the broadcasted shape; unbroadcasting each back down to `on_true`'s/
+`on_false`'s own shape happens automatically as the tape walk continues
+into `broadcast_as`'s own backward for whichever operand was not already
+at the common shape. `mask` itself gets no gradient, matching CPU. All
+three operands required to be F32-physical, for the same reason
+`index_select`'s index is.
+
+## CUDA backend: `TensorOps` closed, same caveats as WGPU's own pass
+
+Every `TensorOps` method CUDA's trait impl originally declared unsupported
+— 33 methods, the same set WGPU started from — now has a real
+implementation, verified the way this whole CUDA pass has been throughout:
+`cargo check -p incin-backends --all-targets --no-default-features
+--features std,cpu,cuda` (CI's real command) passes, `cargo fmt --all --
+--check` is clean, and every new method has an `#[ignore = "requires CUDA
+hardware"] test using the same fixtures the equivalent CPU/WGPU tests use
+— but none of it has been confirmed correct by actually running on a GPU,
+because there is none in this environment. That is a materially weaker
+guarantee than WGPU's (a real, if software, adapter this environment can
+execute), stated explicitly rather than left implicit, and was the
+tradeoff accepted going in.
+
+Two strategies cover all 33, mirroring WGPU's own split: composition of
+already-implemented, already tape-wired CUDA kernels for `unsqueeze`,
+`addmm`, `bmm` and `scaled_dot_product_attention` (no new kernel-rendering
+code touched at all, since CUDA kernels are NVRTC-compiled at runtime from
+Rust templates that `cargo check` cannot verify beyond "the template string
+assembles"), and a host-round-trip pattern — download, compute in plain
+Rust, re-upload — for everything else, reusing the exact algorithms already
+proven correct on CPU and WGPU. Every host-round-trip op requires its
+operand(s) to be F32-physical, checked via a new `cuda_require_f32` guard,
+since unlike WGPU (always physically F32) CUDA storage genuinely varies by
+dtype (`CUDA_STORAGE_DTYPES`: I64/BF16/F16/F32/F64) and the existing
+`download_f32_host` helper this pass builds on assumes F32 unconditionally
+— that assumption already existed in CUDA's own `topk`/`argsort` (found,
+not introduced, by this pass, and filed separately) with no guard at all.
+This is a real, intentional scope reduction versus fully dtype-generic
+support, called out explicitly rather than left implicit; index/mask
+tensors in particular are required to be F32-physical too (integer
+positions encoded as floats), not real integer storage.
+
+CUDA's own `crate::cpu::stride::contiguous_strides`/
+`crate::cpu::stride::broadcast_shape`/`crate::cpu::storage::increment_index`
+reuse (all three already `pub(crate)`, so nothing new had to be exposed)
+meant less new indexing code than WGPU needed for the equivalent methods,
+which had no such crate-shared utility and derived its own
+`checked_flat_index`/`increment_multi_index` from scratch.
+
+`ReductionOps::cumsum` and `CreationOps::full`/`arange`/`linspace` remain
+unsupported on CUDA (WGPU's equivalent gaps, closed in the WGPU pass) and
+Metal's ~37-method gap is untouched by any of this — both are candidates
+for a further pass, all under the same hardware-unavailable caveat.
 
 The FND-004 evidence records 16 formatter-drifted files; the actual count at
 that commit was 22, and is 20 now. See `audit-evidence/FND-005/known-limitations.md`

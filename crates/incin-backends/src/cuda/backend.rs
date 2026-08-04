@@ -61,8 +61,71 @@ pub type CudaGrads = crate::cuda::tape::CudaGrads;
 
 impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
     // No CUDA kernels exist for these yet.
-    crate::unsupported::unsupported_tensor_ops! {
-        where_cond,
+    /// `where_cond`. Broadcasts `mask`/`on_true`/`on_false` to their common
+    /// shape via the already tape-wired `broadcast_as` (a real CUDA kernel,
+    /// reused rather than a host round-trip; `crate::cpu::stride::
+    /// broadcast_shape` computes the shape, the same resolver CPU's own
+    /// `where_cond` and WGPU's own port use), then selects elementwise via
+    /// host readback — matching WGPU's port method-for-method. Its own
+    /// backward routes each `grad_out` element to `grad_true`/`grad_false`
+    /// by the mask while still in the broadcasted shape; unbroadcasting
+    /// each back down to `on_true`'s/`on_false`'s own shape happens
+    /// automatically as the tape walk continues into `broadcast_as`'s own
+    /// backward for whichever operand was not already at the common shape.
+    /// `mask` itself gets no gradient, matching CPU. All three operands
+    /// required to be F32-physical, for the same reason `index_select`'s
+    /// index is.
+    fn where_cond<K: DType, KMask: DType>(
+        mask: &<Self as Backend>::Storage<KMask>,
+        on_true: &<Self as Backend>::Storage<K>,
+        on_false: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let out_shape = crate::cpu::stride::broadcast_shape(&on_true.shape, &on_false.shape)?;
+        let mask_b = <Self as TensorOps<Self>>::broadcast_as::<KMask>(mask, &out_shape)?;
+        let true_b = <Self as TensorOps<Self>>::broadcast_as::<K>(on_true, &out_shape)?;
+        let false_b = <Self as TensorOps<Self>>::broadcast_as::<K>(on_false, &out_shape)?;
+
+        cuda_require_f32(mask_b.buffer.dtype, "where_cond")?;
+        cuda_require_f32(true_b.buffer.dtype, "where_cond")?;
+        cuda_require_f32(false_b.buffer.dtype, "where_cond")?;
+        let mask_data = download_f32_host(&mask_b)?;
+        let true_data = download_f32_host(&true_b)?;
+        let false_data = download_f32_host(&false_b)?;
+        let out: Vec<f32> = mask_data
+            .iter()
+            .zip(true_data.iter())
+            .zip(false_data.iter())
+            .map(|((&m, &t), &f)| if m != 0.0 { t } else { f })
+            .collect();
+        let out_storage = upload_f32_from_host(&true_b.buffer, out_shape, out)?;
+
+        let mask_cap = mask_b.clone();
+        let (true_id, false_id, out_id) = (true_b.id, false_b.id, out_storage.id);
+        crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![true_id, false_id],
+            backward: Box::new(move |grad_out: &CudaStorage| {
+                let mask_data = download_f32_host(&mask_cap)?;
+                let grad_data = download_f32_host(grad_out)?;
+                let mut grad_true = Vec::with_capacity(grad_data.len());
+                let mut grad_false = Vec::with_capacity(grad_data.len());
+                for (&m, &g) in mask_data.iter().zip(grad_data.iter()) {
+                    if m != 0.0 {
+                        grad_true.push(g);
+                        grad_false.push(0.0);
+                    } else {
+                        grad_true.push(0.0);
+                        grad_false.push(g);
+                    }
+                }
+                let g_true =
+                    upload_f32_from_host(&grad_out.buffer, grad_out.shape.to_vec(), grad_true)?;
+                let g_false =
+                    upload_f32_from_host(&grad_out.buffer, grad_out.shape.to_vec(), grad_false)?;
+                Ok(vec![g_true, g_false])
+            }),
+        });
+        Ok(out_storage)
     }
 
     /// `gather`. Forward is the same host round-trip as `index_select`.
@@ -4083,5 +4146,50 @@ mod tests {
         let grads = crate::cuda::tape::backward(&out).unwrap();
         let g = grads.get(t.id).expect("t should have a gradient");
         assert_eq!(download_f32_host(g).unwrap(), vec![2.0, 1.0, 0.0]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn test_where_cond_same_shape() {
+        let mask = cuda_f32(&[4], vec![1.0, 0.0, 1.0, 0.0]);
+        let on_true = cuda_f32(&[4], vec![10.0, 20.0, 30.0, 40.0]);
+        let on_false = cuda_f32(&[4], vec![-1.0, -2.0, -3.0, -4.0]);
+        let out = <B as TensorOps<B>>::where_cond::<f32, f32>(&mask, &on_true, &on_false).unwrap();
+        assert_eq!(
+            download_f32_host(&out).unwrap(),
+            vec![10.0, -2.0, 30.0, -4.0]
+        );
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn test_where_cond_broadcasts_on_false_against_on_true() {
+        let mask = cuda_f32(&[2, 3], vec![1.0, 0.0, 1.0, 0.0, 1.0, 0.0]);
+        let on_true = cuda_f32(&[2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        let on_false = cuda_f32(&[2, 1], vec![-1.0, -2.0]);
+        let out = <B as TensorOps<B>>::where_cond::<f32, f32>(&mask, &on_true, &on_false).unwrap();
+        assert_eq!(out.shape, vec![2, 3]);
+        assert_eq!(
+            download_f32_host(&out).unwrap(),
+            vec![1.0, -1.0, 3.0, -2.0, 5.0, -2.0]
+        );
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn where_cond_backward_routes_grad_by_the_mask_and_unbroadcasts() {
+        let mask = cuda_f32(&[4], vec![1.0, 0.0, 1.0, 0.0]);
+        let on_true = cuda_f32(&[4], vec![1.0, 2.0, 3.0, 4.0]);
+        let on_false = cuda_f32(&[1], vec![9.0]);
+        let out = <B as TensorOps<B>>::where_cond::<f32, f32>(&mask, &on_true, &on_false).unwrap();
+        let grads = crate::cuda::tape::backward(&out).unwrap();
+        let g_true = grads
+            .get(on_true.id)
+            .expect("on_true should have a gradient");
+        let g_false = grads
+            .get(on_false.id)
+            .expect("on_false should have a gradient");
+        assert_eq!(download_f32_host(g_true).unwrap(), vec![1.0, 0.0, 1.0, 0.0]);
+        assert_eq!(download_f32_host(g_false).unwrap(), vec![2.0]);
     }
 }
