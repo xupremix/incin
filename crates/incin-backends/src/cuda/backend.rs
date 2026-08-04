@@ -62,7 +62,73 @@ pub type CudaGrads = crate::cuda::tape::CudaGrads;
 impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
     // No CUDA kernels exist for these yet.
     crate::unsupported::unsupported_tensor_ops! {
-        where_cond, gather,
+        where_cond,
+    }
+
+    /// `gather`. Forward is the same host round-trip as `index_select`.
+    /// Unlike `index_select`/`scatter`, CPU wires a real gradient for
+    /// `gather`, so this does too, matching WGPU's own port: its backward
+    /// is the matching scatter-add, routing each `grad_out` element back to
+    /// the position it was gathered from, accumulating with `+=` rather
+    /// than overwriting when two output positions share a source. `index`
+    /// itself gets no gradient, matching CPU. `index` is also required to
+    /// be F32-physical, for the same reason `index_select`'s is.
+    fn gather<K: DType, KInt: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        dim: usize,
+        index: &<Self as Backend>::Storage<KInt>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        cuda_require_f32(t.buffer.dtype, "gather")?;
+        cuda_require_f32(index.buffer.dtype, "gather")?;
+        let data = download_f32_host(t)?;
+        let index_data = download_f32_host(index)?;
+        let strides = crate::cpu::stride::contiguous_strides(&t.shape);
+        let out_shape = index.shape.to_vec();
+        let total = checked_numel(&out_shape)?;
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; out_shape.len()];
+        for &target in index_data.iter().take(total) {
+            let target_i = target as usize;
+            let mut src_flat = 0usize;
+            for (axis, &stride) in strides.iter().enumerate() {
+                let coord = if axis == dim { target_i } else { idx[axis] };
+                src_flat += coord * stride;
+            }
+            out.push(data[src_flat]);
+            if !out_shape.is_empty() {
+                crate::cpu::storage::increment_index(&mut idx, &out_shape);
+            }
+        }
+        let out_storage = upload_f32_from_host(&t.buffer, out_shape.clone(), out)?;
+
+        let t_shape = t.shape.to_vec();
+        let (t_id, out_id) = (t.id, out_storage.id);
+        crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id],
+            backward: Box::new(move |grad_out: &CudaStorage| {
+                let grad_out_data = download_f32_host(grad_out)?;
+                let t_total = checked_numel(&t_shape)?;
+                let mut grad_t_data = vec![0.0f32; t_total];
+                let index_total = checked_numel(&out_shape)?;
+                let mut idx = vec![0usize; out_shape.len()];
+                for i in 0..index_total {
+                    let target_i = index_data[i] as usize;
+                    let mut flat_dst = 0usize;
+                    for (axis, &stride) in strides.iter().enumerate() {
+                        let coord = if axis == dim { target_i } else { idx[axis] };
+                        flat_dst += coord * stride;
+                    }
+                    grad_t_data[flat_dst] += grad_out_data[i];
+                    if !out_shape.is_empty() {
+                        crate::cpu::storage::increment_index(&mut idx, &out_shape);
+                    }
+                }
+                upload_f32_from_host(&grad_out.buffer, t_shape.clone(), grad_t_data)
+                    .map(|s| vec![s])
+            }),
+        });
+        Ok(out_storage)
     }
 
     /// `scatter`. Same host round-trip as `index_select`, matching CPU's
@@ -3995,5 +4061,27 @@ mod tests {
             download_f32_host(&out).unwrap(),
             vec![8.0, 0.0, 0.0, 0.0, 9.0, 0.0]
         );
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn test_gather() {
+        let t = cuda_f32(&[3, 2], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        let index = cuda_f32(&[2, 1], vec![2.0, 0.0]);
+        let out = <B as TensorOps<B>>::gather::<f32, f32>(&t, 0, &index).unwrap();
+        assert_eq!(out.shape, vec![2, 1]);
+        assert_eq!(download_f32_host(&out).unwrap(), vec![5.0, 1.0]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn gather_backward_scatter_adds_to_every_position_that_was_read() {
+        let t = cuda_f32(&[3], vec![1.0, 2.0, 3.0]);
+        let index = cuda_f32(&[3], vec![0.0, 0.0, 1.0]);
+        let out = <B as TensorOps<B>>::gather::<f32, f32>(&t, 0, &index).unwrap();
+        assert_eq!(download_f32_host(&out).unwrap(), vec![1.0, 1.0, 2.0]);
+        let grads = crate::cuda::tape::backward(&out).unwrap();
+        let g = grads.get(t.id).expect("t should have a gradient");
+        assert_eq!(download_f32_host(g).unwrap(), vec![2.0, 1.0, 0.0]);
     }
 }

@@ -423,10 +423,19 @@ semantics (including silently ignoring an out-of-bounds destination
 rather than erroring) as WGPU's own port of this method. `index`/`src` are
 also required to be F32-physical, for the same reason `index_select`'s are.
 
-`gather` and `where_cond` remain unsupported on CUDA — both are CPU
-autograd-wired operations (`where_cond` additionally broadcasts its two
-value operands to a common shape), the same reason WGPU ported them last,
-and are the natural continuation of this pass.
+`gather` is real now too, with a real gradient this time — unlike
+everything else in this CUDA pass so far, matching WGPU's own port of this
+method. Its backward is the matching scatter-add: each `grad_out` element
+routes back to the position it was gathered from, accumulating with `+=`
+rather than overwriting when two output positions share a source. `index`
+itself gets no gradient, matching CPU, and is also required to be
+F32-physical for the same reason `index_select`'s is.
+
+`where_cond` remains unsupported on CUDA — like `gather`, CPU wires a real
+gradient for it, but it additionally broadcasts its two value operands to
+a common shape rather than requiring an exact match, and is the natural
+continuation of this pass, the last method needed to close CUDA's
+`TensorOps` gap entirely the way WGPU's already is.
 
 The FND-004 evidence records 16 formatter-drifted files; the actual count at
 that commit was 22, and is 20 now. See `audit-evidence/FND-005/known-limitations.md`
