@@ -399,8 +399,7 @@ fn test_where_cond_same_shape() {
     let mask = storage(vec![1.0, 0.0, 1.0, 0.0], vec![4]);
     let on_true = storage(vec![10.0, 20.0, 30.0, 40.0], vec![4]);
     let on_false = storage(vec![-1.0, -2.0, -3.0, -4.0], vec![4]);
-    let out =
-        <B as TensorOps<B>>::where_cond::<f32, f32>(&mask, &on_true, &on_false).unwrap();
+    let out = <B as TensorOps<B>>::where_cond::<f32, f32>(&mask, &on_true, &on_false).unwrap();
     assert_eq!(readback(&out), vec![10.0, -2.0, 30.0, -4.0]);
 }
 
@@ -410,8 +409,7 @@ fn test_where_cond_broadcasts_on_false_against_on_true() {
     let mask = storage(vec![1.0, 0.0, 1.0, 0.0, 1.0, 0.0], vec![2, 3]);
     let on_true = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
     let on_false = storage(vec![-1.0, -2.0], vec![2, 1]);
-    let out =
-        <B as TensorOps<B>>::where_cond::<f32, f32>(&mask, &on_true, &on_false).unwrap();
+    let out = <B as TensorOps<B>>::where_cond::<f32, f32>(&mask, &on_true, &on_false).unwrap();
     assert_eq!(out.shape, vec![2, 3]);
     assert_eq!(readback(&out), vec![1.0, -1.0, 3.0, -2.0, 5.0, -2.0]);
 }
@@ -423,10 +421,11 @@ fn where_cond_backward_routes_grad_by_the_mask_and_unbroadcasts() {
     // on_false is a single value broadcast across all 4 positions, so its
     // gradient must sum every position the mask routed to it.
     let on_false = storage(vec![9.0], vec![1]);
-    let out =
-        <B as TensorOps<B>>::where_cond::<f32, f32>(&mask, &on_true, &on_false).unwrap();
+    let out = <B as TensorOps<B>>::where_cond::<f32, f32>(&mask, &on_true, &on_false).unwrap();
     let grads = <B as Backend>::backward::<f32>(&out).unwrap();
-    let g_true = grads.get(on_true.id).expect("on_true should have a gradient");
+    let g_true = grads
+        .get(on_true.id)
+        .expect("on_true should have a gradient");
     let g_false = grads
         .get(on_false.id)
         .expect("on_false should have a gradient");
@@ -609,7 +608,10 @@ fn test_pad() {
 
 #[test]
 fn test_triu() {
-    let a = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0], vec![3, 3]);
+    let a = storage(
+        vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
+        vec![3, 3],
+    );
     let out = <B as TensorOps<B>>::triu::<f32>(&a, 0).unwrap();
     assert_eq!(
         readback(&out),
@@ -619,7 +621,10 @@ fn test_triu() {
 
 #[test]
 fn test_tril() {
-    let a = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0], vec![3, 3]);
+    let a = storage(
+        vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
+        vec![3, 3],
+    );
     let out = <B as TensorOps<B>>::tril::<f32>(&a, 0).unwrap();
     assert_eq!(
         readback(&out),
@@ -640,7 +645,10 @@ fn test_diag_builds_matrix_from_vector() {
 
 #[test]
 fn test_diag_extracts_from_matrix() {
-    let a = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0], vec![3, 3]);
+    let a = storage(
+        vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
+        vec![3, 3],
+    );
     let out = <B as TensorOps<B>>::diag::<f32>(&a, 0).unwrap();
     assert_eq!(out.shape, vec![3]);
     assert_eq!(readback(&out), vec![1.0, 5.0, 9.0]);
@@ -1813,11 +1821,7 @@ fn test_lerp() {
     let start = storage(vec![0.0, 10.0, 100.0], vec![3]);
     let end = storage(vec![10.0, 20.0, 200.0], vec![3]);
     let out = <B as TensorOps<B>>::lerp::<f32>(&start, &end, 0.25).unwrap();
-    assert!(vec_approx_eq(
-        &readback(&out),
-        &[2.5, 12.5, 125.0],
-        1e-4
-    ));
+    assert!(vec_approx_eq(&readback(&out), &[2.5, 12.5, 125.0], 1e-4));
 }
 
 #[test]
@@ -1885,8 +1889,16 @@ fn addmm_backward_matches_hand_computed_gradients() {
     let g_mat1 = grads.get(mat1.id).expect("mat1 should have a gradient");
     let g_mat2 = grads.get(mat2.id).expect("mat2 should have a gradient");
     assert!(vec_approx_eq(&readback(g_mat), &[0.5, 0.5, 0.5, 0.5], 1e-4));
-    assert!(vec_approx_eq(&readback(g_mat1), &[22.0, 30.0, 22.0, 30.0], 1e-4));
-    assert!(vec_approx_eq(&readback(g_mat2), &[8.0, 8.0, 12.0, 12.0], 1e-4));
+    assert!(vec_approx_eq(
+        &readback(g_mat1),
+        &[22.0, 30.0, 22.0, 30.0],
+        1e-4
+    ));
+    assert!(vec_approx_eq(
+        &readback(g_mat2),
+        &[8.0, 8.0, 12.0, 12.0],
+        1e-4
+    ));
 }
 
 #[test]

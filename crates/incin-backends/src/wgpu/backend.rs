@@ -803,10 +803,14 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackendImpl<T, D> {
                         grad_false.push(g);
                     }
                 }
-                let g_true =
-                    WgpuStorage::new(WgpuBuffer::try_from_slice(&grad_true)?, grad_out.shape.to_vec());
-                let g_false =
-                    WgpuStorage::new(WgpuBuffer::try_from_slice(&grad_false)?, grad_out.shape.to_vec());
+                let g_true = WgpuStorage::new(
+                    WgpuBuffer::try_from_slice(&grad_true)?,
+                    grad_out.shape.to_vec(),
+                );
+                let g_false = WgpuStorage::new(
+                    WgpuBuffer::try_from_slice(&grad_false)?,
+                    grad_out.shape.to_vec(),
+                );
                 Ok(vec![g_true, g_false])
             }),
         });
@@ -1031,7 +1035,9 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackendImpl<T, D> {
             let r_h = h_out % r;
             let r_w = w_out % r;
             let c_in = c_out * r_sq + r_h * r + r_w;
-            out.push(data[checked_flat_index(&[b, c_in, h_in, w_in], &t.shape, OperationKind::Reshape)?]);
+            out.push(
+                data[checked_flat_index(&[b, c_in, h_in, w_in], &t.shape, OperationKind::Reshape)?],
+            );
             increment_multi_index(&mut idx, &out_shape);
         }
         let buf = WgpuBuffer::try_from_slice(&out)?;
@@ -1390,7 +1396,9 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackendImpl<T, D> {
         binary_op::<T>(lhs, rhs, 14, "logical_or")
     }
     /// `logical_not`.
-    fn logical_not<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+    fn logical_not<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
         unary_op::<T>(t, 13)
     }
 

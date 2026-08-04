@@ -63,7 +63,62 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
     // No CUDA kernels exist for these yet.
     crate::unsupported::unsupported_tensor_ops! {
         where_cond, gather, scatter,
-        group_norm, instance_norm,
+    }
+
+    /// `group_norm`. CUDA storage is always contiguous, so a group (the
+    /// per-sample run of `channels/groups * spatial` elements — see the CPU
+    /// implementation's doc comment for why dividing the whole tensor by
+    /// `groups` is wrong above batch size 1) is a plain contiguous slice of
+    /// the host readback, needing no strided indexing at all — the same
+    /// simplification WGPU's own port of this method has. Not
+    /// autograd-wired, matching CPU.
+    fn group_norm<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        groups: usize,
+        eps: f64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        if groups == 0 {
+            return Err(Error::Msg("group_norm: groups must be non-zero".into()));
+        }
+        let channels = if t.shape.len() >= 2 { t.shape[1] } else { 1 };
+        if channels % groups != 0 {
+            return Err(Error::Msg(
+                "group_norm: channels must be divisible by groups".into(),
+            ));
+        }
+        cuda_require_f32(t.buffer.dtype, "group_norm")?;
+        let data = download_f32_host(t)?;
+        let total = data.len();
+        let (batch, spatial) = if t.shape.len() >= 2 {
+            (t.shape[0], t.shape[2..].iter().product::<usize>())
+        } else {
+            (1, total)
+        };
+        let group_size = channels / groups * spatial;
+        let mut out = vec![0.0f32; total];
+        for run in 0..batch * groups {
+            let start = run * group_size;
+            let slice = &data[start..start + group_size];
+            let sum: f64 = slice.iter().map(|&v| v as f64).sum();
+            let sq_sum: f64 = slice.iter().map(|&v| (v as f64) * (v as f64)).sum();
+            let mean = sum / group_size as f64;
+            let var = (sq_sum / group_size as f64 - mean * mean).max(0.0);
+            let inv_std = 1.0 / (var + eps).sqrt();
+            for (i, &value) in slice.iter().enumerate() {
+                out[start + i] = ((value as f64 - mean) * inv_std) as f32;
+            }
+        }
+        upload_f32_from_host(&t.buffer, t.shape.to_vec(), out)
+    }
+
+    /// `instance_norm`. `group_norm` with one group per channel, matching
+    /// CPU's and WGPU's own composition exactly.
+    fn instance_norm<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        eps: f64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let channels = if t.shape.len() >= 2 { t.shape[1] } else { 1 };
+        <Self as TensorOps<Self>>::group_norm::<K>(t, channels, eps)
     }
 
     /// `unfold`. Same host round-trip as `repeat`. Not autograd-wired,
@@ -452,7 +507,9 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
         })
     }
     /// `logical_not`.
-    fn logical_not<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+    fn logical_not<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
         cuda_unary_f32_elementwise("logical_not", t, |v| if v == 0.0 { 1.0 } else { 0.0 })
     }
 
@@ -3547,7 +3604,10 @@ mod tests {
     #[ignore = "requires CUDA hardware"]
     fn test_float_to_scalar() {
         let t = cuda_f32(&[1], vec![3.5]);
-        assert_eq!(<B as TensorOps<B>>::float_to_scalar::<f32>(&t).unwrap(), 3.5);
+        assert_eq!(
+            <B as TensorOps<B>>::float_to_scalar::<f32>(&t).unwrap(),
+            3.5
+        );
     }
 
     #[test]
@@ -3606,9 +3666,8 @@ mod tests {
         let q = cuda_f32(&[1, 2], vec![0.0, 0.0]);
         let k = cuda_f32(&[3, 2], vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0]);
         let v = cuda_f32(&[3, 2], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
-        let out =
-            <B as TensorOps<B>>::scaled_dot_product_attention::<f32>(&q, &k, &v, None, None)
-                .unwrap();
+        let out = <B as TensorOps<B>>::scaled_dot_product_attention::<f32>(&q, &k, &v, None, None)
+            .unwrap();
         assert_eq!(out.shape, vec![1, 2]);
         assert_eq!(download_f32_host(&out).unwrap(), vec![3.0, 4.0]);
     }
@@ -3828,5 +3887,60 @@ mod tests {
     fn pixel_shuffle_rejects_channels_not_divisible_by_upscale_squared() {
         let a = cuda_f32(&[1, 3, 1, 1], vec![1.0, 2.0, 3.0]);
         assert!(<B as TensorOps<B>>::pixel_shuffle::<f32>(&a, 2).is_err());
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    /// Same fixture as the CPU/WGPU backends' own
+    /// `group_norm_statistics_are_per_sample_not_across_the_batch`.
+    fn group_norm_statistics_are_per_sample_not_across_the_batch() {
+        let first: Vec<f32> = (0..8).map(|v| v as f32).collect();
+        let second: Vec<f32> = first.iter().map(|v| v + 100.0).collect();
+        let data = first.iter().copied().chain(second).collect::<Vec<f32>>();
+        let t = cuda_f32(&[2, 4, 1, 2], data);
+
+        let out = download_f32_host(&<B as TensorOps<B>>::group_norm::<f32>(&t, 2, 1e-5).unwrap())
+            .unwrap();
+
+        assert_eq!(out[..8], out[8..], "the two samples must normalize alike");
+        let inv_std = 1.0 / (1.25f64 + 1e-5).sqrt();
+        for (i, value) in [0.0f64, 1.0, 2.0, 3.0].iter().enumerate() {
+            let expected = ((value - 1.5) * inv_std) as f32;
+            assert!(
+                (out[i] - expected).abs() < 1e-5,
+                "element {i}: got {}, want {expected}",
+                out[i]
+            );
+        }
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn group_norm_rejects_zero_groups() {
+        let t = cuda_f32(&[1, 2, 2], vec![1.0, 2.0, 3.0, 4.0]);
+        assert!(<B as TensorOps<B>>::group_norm::<f32>(&t, 0, 1e-5).is_err());
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    /// Same fixture as the CPU/WGPU backends' own
+    /// `instance_norm_normalizes_each_channel_of_each_sample_alone`.
+    fn instance_norm_normalizes_each_channel_of_each_sample_alone() {
+        let t = cuda_f32(&[2, 2, 2], vec![1.0, 1.0, 5.0, 7.0, 2.0, 2.0, 9.0, 3.0]);
+
+        let out = download_f32_host(&<B as TensorOps<B>>::instance_norm::<f32>(&t, 1e-5).unwrap())
+            .unwrap();
+
+        for flat in [0, 1, 4, 5] {
+            assert!(
+                out[flat].abs() < 1e-5,
+                "constant channel at {flat} must normalize to zero, got {}",
+                out[flat]
+            );
+        }
+        assert!((out[2] + 1.0).abs() < 1e-3, "got {}", out[2]);
+        assert!((out[3] - 1.0).abs() < 1e-3, "got {}", out[3]);
+        assert!((out[6] - 1.0).abs() < 1e-3, "got {}", out[6]);
+        assert!((out[7] + 1.0).abs() < 1e-3, "got {}", out[7]);
     }
 }
