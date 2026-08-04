@@ -178,6 +178,93 @@ pub(crate) fn batch_norm_impl<T: DType, D: incin_core::prelude::Device, K: DType
 // Tests
 // ---------------------------------------------------------------------------
 
+/// Training-mode batch normalization: normalize by the statistics of the
+/// batch in front of it rather than by accumulated running ones.
+///
+/// This is the mode that makes a convolutional network train. Inference mode
+/// divides by statistics gathered earlier, which is a constant with respect to
+/// the input; training mode divides by statistics that are themselves
+/// functions of every element in the batch, and that dependency is most of
+/// what batch norm contributes to the gradient. `batch_norm_impl` above cannot
+/// express it: its signature takes running statistics and its `momentum` is
+/// bound to `_momentum`, so a training request routed there returned the
+/// inference answer with nothing to distinguish it from a correct one. The
+/// canonical executor refused it for exactly that reason.
+///
+/// Statistics are per channel, over the batch and every spatial position, so
+/// for `[N, C, H, W]` each channel reduces `N * H * W` elements to one mean
+/// and one variance. The variance is the population one, matching what the
+/// running statistics of the inference path hold.
+///
+/// The running statistics are *not* updated here, and cannot be: they arrive
+/// as shared references. Updating them is a mutation through an operand,
+/// which the execution contract does not currently carry. A caller that
+/// trains with this and then evaluates with inference mode is therefore
+/// reading whatever running statistics it supplied, unchanged.
+pub(crate) fn batch_norm_training_impl<T: DType, D: incin_core::prelude::Device, K: DType>(
+    t: &CpuStorage,
+    w: Option<&CpuStorage>,
+    b: Option<&CpuStorage>,
+    eps: f32,
+) -> Result<CpuStorage> {
+    /// `B`.
+    type B<T, D> = CpuBackendImpl<T, D>;
+
+    let rank = t.shape.len();
+    let channel_dim = if rank > 1 { 1 } else { 0 };
+    let num_channels = t.shape[channel_dim];
+
+    let mut bcast_shape = vec![1usize; rank];
+    bcast_shape[channel_dim] = num_channels;
+
+    // Every axis but the channel one is reduced away, keeping its position so
+    // the result broadcasts back against the input without a reshape.
+    let reduced_axes: Vec<usize> = (0..rank).filter(|axis| *axis != channel_dim).collect();
+    let count: usize = reduced_axes.iter().map(|&axis| t.shape[axis]).product();
+    if count == 0 {
+        return Err(incin_core::prelude::Error::Msg(
+            "batch_norm: training mode needs at least one element per channel".into(),
+        ));
+    }
+
+    let sum_over_reduced = |x: &CpuStorage| -> Result<CpuStorage> {
+        let mut acc = x.clone();
+        for &axis in &reduced_axes {
+            acc = crate::cpu::ops::reduce::sum_axis_keepdim(&acc, axis)?;
+        }
+        Ok(acc)
+    };
+
+    let inv_count = 1.0 / count as f64;
+    let total = sum_over_reduced(t)?;
+    let mean = <B<T, D> as FloatOps<B<T, D>>>::mul_scalar_float::<K>(&total, inv_count)?;
+    let centered = <B<T, D> as NumericOps<B<T, D>>>::sub::<K>(t, &mean)?;
+    let squared = <B<T, D> as NumericOps<B<T, D>>>::mul::<K>(&centered, &centered)?;
+    let squared_total = sum_over_reduced(&squared)?;
+    let variance =
+        <B<T, D> as FloatOps<B<T, D>>>::mul_scalar_float::<K>(&squared_total, inv_count)?;
+
+    let variance_eps =
+        <B<T, D> as FloatOps<B<T, D>>>::add_scalar_float::<K>(&variance, eps as f64)?;
+    let std = <B<T, D> as FloatOps<B<T, D>>>::sqrt::<K>(&variance_eps)?;
+    let normalized = <B<T, D> as NumericOps<B<T, D>>>::div::<K>(&centered, &std)?;
+
+    let scaled = match w {
+        Some(weight) => {
+            let weight = weight.reshape(&bcast_shape)?;
+            <B<T, D> as NumericOps<B<T, D>>>::mul::<K>(&normalized, &weight)?
+        }
+        None => normalized,
+    };
+    match b {
+        Some(bias) => {
+            let bias = bias.reshape(&bcast_shape)?;
+            <B<T, D> as NumericOps<B<T, D>>>::add::<K>(&scaled, &bias)
+        }
+        None => Ok(scaled),
+    }
+}
+
 #[cfg(test)]
 /// `tests`.
 mod tests {
@@ -628,92 +715,5 @@ mod tests {
             max_rel_err < 1e-2,
             "batch_norm gradcheck too high: {max_rel_err:.6}"
         );
-    }
-}
-
-/// Training-mode batch normalization: normalize by the statistics of the
-/// batch in front of it rather than by accumulated running ones.
-///
-/// This is the mode that makes a convolutional network train. Inference mode
-/// divides by statistics gathered earlier, which is a constant with respect to
-/// the input; training mode divides by statistics that are themselves
-/// functions of every element in the batch, and that dependency is most of
-/// what batch norm contributes to the gradient. `batch_norm_impl` above cannot
-/// express it: its signature takes running statistics and its `momentum` is
-/// bound to `_momentum`, so a training request routed there returned the
-/// inference answer with nothing to distinguish it from a correct one. The
-/// canonical executor refused it for exactly that reason.
-///
-/// Statistics are per channel, over the batch and every spatial position, so
-/// for `[N, C, H, W]` each channel reduces `N * H * W` elements to one mean
-/// and one variance. The variance is the population one, matching what the
-/// running statistics of the inference path hold.
-///
-/// The running statistics are *not* updated here, and cannot be: they arrive
-/// as shared references. Updating them is a mutation through an operand,
-/// which the execution contract does not currently carry. A caller that
-/// trains with this and then evaluates with inference mode is therefore
-/// reading whatever running statistics it supplied, unchanged.
-pub(crate) fn batch_norm_training_impl<T: DType, D: incin_core::prelude::Device, K: DType>(
-    t: &CpuStorage,
-    w: Option<&CpuStorage>,
-    b: Option<&CpuStorage>,
-    eps: f32,
-) -> Result<CpuStorage> {
-    /// `B`.
-    type B<T, D> = CpuBackendImpl<T, D>;
-
-    let rank = t.shape.len();
-    let channel_dim = if rank > 1 { 1 } else { 0 };
-    let num_channels = t.shape[channel_dim];
-
-    let mut bcast_shape = vec![1usize; rank];
-    bcast_shape[channel_dim] = num_channels;
-
-    // Every axis but the channel one is reduced away, keeping its position so
-    // the result broadcasts back against the input without a reshape.
-    let reduced_axes: Vec<usize> = (0..rank).filter(|axis| *axis != channel_dim).collect();
-    let count: usize = reduced_axes.iter().map(|&axis| t.shape[axis]).product();
-    if count == 0 {
-        return Err(incin_core::prelude::Error::Msg(
-            "batch_norm: training mode needs at least one element per channel".into(),
-        ));
-    }
-
-    let sum_over_reduced = |x: &CpuStorage| -> Result<CpuStorage> {
-        let mut acc = x.clone();
-        for &axis in &reduced_axes {
-            acc = crate::cpu::ops::reduce::sum_axis_keepdim(&acc, axis)?;
-        }
-        Ok(acc)
-    };
-
-    let inv_count = 1.0 / count as f64;
-    let total = sum_over_reduced(t)?;
-    let mean = <B<T, D> as FloatOps<B<T, D>>>::mul_scalar_float::<K>(&total, inv_count)?;
-    let centered = <B<T, D> as NumericOps<B<T, D>>>::sub::<K>(t, &mean)?;
-    let squared = <B<T, D> as NumericOps<B<T, D>>>::mul::<K>(&centered, &centered)?;
-    let squared_total = sum_over_reduced(&squared)?;
-    let variance =
-        <B<T, D> as FloatOps<B<T, D>>>::mul_scalar_float::<K>(&squared_total, inv_count)?;
-
-    let variance_eps =
-        <B<T, D> as FloatOps<B<T, D>>>::add_scalar_float::<K>(&variance, eps as f64)?;
-    let std = <B<T, D> as FloatOps<B<T, D>>>::sqrt::<K>(&variance_eps)?;
-    let normalized = <B<T, D> as NumericOps<B<T, D>>>::div::<K>(&centered, &std)?;
-
-    let scaled = match w {
-        Some(weight) => {
-            let weight = weight.reshape(&bcast_shape)?;
-            <B<T, D> as NumericOps<B<T, D>>>::mul::<K>(&normalized, &weight)?
-        }
-        None => normalized,
-    };
-    match b {
-        Some(bias) => {
-            let bias = bias.reshape(&bcast_shape)?;
-            <B<T, D> as NumericOps<B<T, D>>>::add::<K>(&scaled, &bias)
-        }
-        None => Ok(scaled),
     }
 }
