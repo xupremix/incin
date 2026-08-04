@@ -202,9 +202,16 @@ for presence (recorded for all three operands), not exact values: the
 composition reuses primitives whose own gradients are independently tested
 elsewhere in this file, and the same `gradcheck_wgpu`/matmul interaction
 filed as a follow-up above rules out using the shared numerical harness
-here too. WGPU's `TensorOps` gap is now `where_cond`, `gather`, `scatter`,
-`unfold`, `pixel_shuffle`, `group_norm` and `instance_norm` — 7 methods,
-down from the original 33.
+here too.
+
+`unfold` and `pixel_shuffle` are real now too, same host-readback pattern as
+`repeat`/`pad`/`triu`/`tril`/`diag` above, same no-autograd fidelity to CPU.
+Both keep CPU's own input validation (`unfold`'s window not exceeding the
+axis length, `pixel_shuffle`'s channel count dividing evenly by the upscale
+factor squared), reported as `BackendError::InvalidInput` rather than CPU's
+`Error::Msg` since that is the error type this call site's `Result` uses.
+WGPU's `TensorOps` gap is now `where_cond`, `gather`, `scatter`,
+`group_norm` and `instance_norm` — 5 methods, down from the original 33.
 
 The FND-004 evidence records 16 formatter-drifted files; the actual count at
 that commit was 22, and is 20 now. See `audit-evidence/FND-005/known-limitations.md`

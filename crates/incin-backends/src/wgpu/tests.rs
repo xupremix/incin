@@ -419,6 +419,39 @@ fn masked_fill_rejects_a_mismatched_mask_shape() {
 }
 
 #[test]
+fn test_unfold() {
+    let a = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0], vec![5]);
+    let out = <B as TensorOps<B>>::unfold::<f32>(&a, 0, 3, 1).unwrap();
+    assert_eq!(out.shape, vec![3, 3]);
+    assert_eq!(
+        readback(&out),
+        vec![1.0, 2.0, 3.0, 2.0, 3.0, 4.0, 3.0, 4.0, 5.0]
+    );
+}
+
+#[test]
+fn unfold_rejects_a_window_larger_than_the_dimension() {
+    let a = storage(vec![1.0, 2.0, 3.0], vec![3]);
+    assert!(<B as TensorOps<B>>::unfold::<f32>(&a, 0, 4, 1).is_err());
+}
+
+#[test]
+fn test_pixel_shuffle() {
+    // N=1, C=4, H=1, W=1, upscale_factor=2 -> N=1, C=1, H=2, W=2.
+    // Channel c_in maps to output position (r_h, r_w) = (c_in / 2, c_in % 2).
+    let a = storage(vec![1.0, 2.0, 3.0, 4.0], vec![1, 4, 1, 1]);
+    let out = <B as TensorOps<B>>::pixel_shuffle::<f32>(&a, 2).unwrap();
+    assert_eq!(out.shape, vec![1, 1, 2, 2]);
+    assert_eq!(readback(&out), vec![1.0, 2.0, 3.0, 4.0]);
+}
+
+#[test]
+fn pixel_shuffle_rejects_channels_not_divisible_by_upscale_squared() {
+    let a = storage(vec![1.0, 2.0, 3.0], vec![1, 3, 1, 1]);
+    assert!(<B as TensorOps<B>>::pixel_shuffle::<f32>(&a, 2).is_err());
+}
+
+#[test]
 fn test_repeat() {
     let a = storage(vec![1.0, 2.0, 3.0, 4.0], vec![2, 2]);
     let out = <B as TensorOps<B>>::repeat::<f32>(&a, &[2, 1]).unwrap();

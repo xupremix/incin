@@ -756,7 +756,83 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackendImpl<T, D> {
     // visible and makes the compiler name any operation added later.
     crate::unsupported::unsupported_tensor_ops! {
         where_cond, gather, scatter,
-        unfold, pixel_shuffle, group_norm, instance_norm,
+        group_norm, instance_norm,
+    }
+
+    /// `unfold`. Same host-readback/upload pattern as `repeat`. Not
+    /// autograd-wired, matching CPU.
+    fn unfold<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        dim: usize,
+        size: usize,
+        step: usize,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let dim_len = t.shape[dim];
+        if size > dim_len {
+            return Err(Error::Backend(BackendError::InvalidInput {
+                operation: OperationKind::Reshape,
+                reason: "unfold size cannot exceed dimension length",
+            }));
+        }
+        let data = t.buffer.to_vec::<f32>()?;
+        let n_windows = (dim_len - size) / step + 1;
+        let mut out_shape = t.shape.to_vec();
+        out_shape[dim] = n_windows;
+        out_shape.push(size);
+        let total = num_elements(&out_shape)?;
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; out_shape.len()];
+        for _ in 0..total {
+            let win_idx = idx[dim];
+            let offset_idx = idx[out_shape.len() - 1];
+            let mut src_idx = idx[..t.shape.len()].to_vec();
+            src_idx[dim] = win_idx * step + offset_idx;
+            out.push(data[checked_flat_index(&src_idx, &t.shape, OperationKind::Reshape)?]);
+            increment_multi_index(&mut idx, &out_shape);
+        }
+        let buf = WgpuBuffer::try_from_slice(&out)?;
+        Ok(WgpuStorage::new(buf, out_shape))
+    }
+
+    /// `pixel_shuffle`. Same host-readback/upload pattern as `repeat`. Not
+    /// autograd-wired, matching CPU.
+    fn pixel_shuffle<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        upscale_factor: usize,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        if t.shape.len() != 4 {
+            return Err(Error::Backend(BackendError::InvalidInput {
+                operation: OperationKind::Reshape,
+                reason: "pixel_shuffle expects a 4D tensor (N, C, H, W)",
+            }));
+        }
+        let (n, c, h, w) = (t.shape[0], t.shape[1], t.shape[2], t.shape[3]);
+        let r = upscale_factor;
+        let r_sq = r * r;
+        if c % r_sq != 0 {
+            return Err(Error::Backend(BackendError::InvalidInput {
+                operation: OperationKind::Reshape,
+                reason: "pixel_shuffle channels must be divisible by upscale_factor^2",
+            }));
+        }
+        let data = t.buffer.to_vec::<f32>()?;
+        let out_c = c / r_sq;
+        let out_shape = vec![n, out_c, h * r, w * r];
+        let total = num_elements(&out_shape)?;
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; 4];
+        for _ in 0..total {
+            let (b, c_out, h_out, w_out) = (idx[0], idx[1], idx[2], idx[3]);
+            let h_in = h_out / r;
+            let w_in = w_out / r;
+            let r_h = h_out % r;
+            let r_w = w_out % r;
+            let c_in = c_out * r_sq + r_h * r + r_w;
+            out.push(data[checked_flat_index(&[b, c_in, h_in, w_in], &t.shape, OperationKind::Reshape)?]);
+            increment_multi_index(&mut idx, &out_shape);
+        }
+        let buf = WgpuBuffer::try_from_slice(&out)?;
+        Ok(WgpuStorage::new(buf, out_shape))
     }
 
     /// `scaled_dot_product_attention`. Composed from the already tape-wired
