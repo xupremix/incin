@@ -63,7 +63,93 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
     // No CUDA kernels exist for these yet.
     crate::unsupported::unsupported_tensor_ops! {
         where_cond, gather, scatter,
-        unfold, pixel_shuffle, group_norm, instance_norm,
+        group_norm, instance_norm,
+    }
+
+    /// `unfold`. Same host round-trip as `repeat`. Not autograd-wired,
+    /// matching CPU.
+    fn unfold<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        dim: usize,
+        size: usize,
+        step: usize,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let dim_len = t.shape[dim];
+        if size > dim_len {
+            return Err(Error::Msg(
+                "unfold size cannot exceed dimension length".into(),
+            ));
+        }
+        cuda_require_f32(t.buffer.dtype, "unfold")?;
+        let data = download_f32_host(t)?;
+        let in_strides = crate::cpu::stride::contiguous_strides(&t.shape);
+        let n_windows = (dim_len - size) / step + 1;
+        let mut out_shape = t.shape.to_vec();
+        out_shape[dim] = n_windows;
+        out_shape.push(size);
+        let total = checked_numel(&out_shape)?;
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; out_shape.len()];
+        for _ in 0..total {
+            let win_idx = idx[dim];
+            let offset_idx = idx[out_shape.len() - 1];
+            let mut src_flat = 0usize;
+            for (axis, &stride) in in_strides.iter().enumerate() {
+                let coord = if axis == dim {
+                    win_idx * step + offset_idx
+                } else {
+                    idx[axis]
+                };
+                src_flat += coord * stride;
+            }
+            out.push(data[src_flat]);
+            crate::cpu::storage::increment_index(&mut idx, &out_shape);
+        }
+        upload_f32_from_host(&t.buffer, out_shape, out)
+    }
+
+    /// `pixel_shuffle`. Same host round-trip as `repeat`. Not
+    /// autograd-wired, matching CPU.
+    fn pixel_shuffle<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        upscale_factor: usize,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        if t.shape.len() != 4 {
+            return Err(Error::Msg(
+                "pixel_shuffle expects a 4D tensor (N, C, H, W)".into(),
+            ));
+        }
+        let (n, c, h, w) = (t.shape[0], t.shape[1], t.shape[2], t.shape[3]);
+        let r = upscale_factor;
+        let r_sq = r * r;
+        if c % r_sq != 0 {
+            return Err(Error::Msg(
+                "pixel_shuffle channels must be divisible by upscale_factor^2".into(),
+            ));
+        }
+        cuda_require_f32(t.buffer.dtype, "pixel_shuffle")?;
+        let data = download_f32_host(t)?;
+        let in_strides = crate::cpu::stride::contiguous_strides(&t.shape);
+        let out_c = c / r_sq;
+        let out_shape = vec![n, out_c, h * r, w * r];
+        let total = checked_numel(&out_shape)?;
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; 4];
+        for _ in 0..total {
+            let (b, c_out, h_out, w_out) = (idx[0], idx[1], idx[2], idx[3]);
+            let h_in = h_out / r;
+            let w_in = w_out / r;
+            let r_h = h_out % r;
+            let r_w = w_out % r;
+            let c_in = c_out * r_sq + r_h * r + r_w;
+            let src_flat = b * in_strides[0]
+                + c_in * in_strides[1]
+                + h_in * in_strides[2]
+                + w_in * in_strides[3];
+            out.push(data[src_flat]);
+            crate::cpu::storage::increment_index(&mut idx, &out_shape);
+        }
+        upload_f32_from_host(&t.buffer, out_shape, out)
     }
 
     /// `index_select`. No CUDA kernel: downloads both operands. `index`'s
@@ -3706,5 +3792,41 @@ mod tests {
         let a = cuda_f32(&[4], vec![1.0, 2.0, 3.0, 4.0]);
         let mask = cuda_f32(&[2], vec![1.0, 0.0]);
         assert!(<B as TensorOps<B>>::masked_fill::<f32, f32>(&a, &mask, -1.0).is_err());
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn test_unfold() {
+        let a = cuda_f32(&[5], vec![1.0, 2.0, 3.0, 4.0, 5.0]);
+        let out = <B as TensorOps<B>>::unfold::<f32>(&a, 0, 3, 1).unwrap();
+        assert_eq!(out.shape, vec![3, 3]);
+        assert_eq!(
+            download_f32_host(&out).unwrap(),
+            vec![1.0, 2.0, 3.0, 2.0, 3.0, 4.0, 3.0, 4.0, 5.0]
+        );
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn unfold_rejects_a_window_larger_than_the_dimension() {
+        let a = cuda_f32(&[3], vec![1.0, 2.0, 3.0]);
+        assert!(<B as TensorOps<B>>::unfold::<f32>(&a, 0, 4, 1).is_err());
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn test_pixel_shuffle() {
+        // N=1, C=4, H=1, W=1, upscale_factor=2 -> N=1, C=1, H=2, W=2.
+        let a = cuda_f32(&[1, 4, 1, 1], vec![1.0, 2.0, 3.0, 4.0]);
+        let out = <B as TensorOps<B>>::pixel_shuffle::<f32>(&a, 2).unwrap();
+        assert_eq!(out.shape, vec![1, 1, 2, 2]);
+        assert_eq!(download_f32_host(&out).unwrap(), vec![1.0, 2.0, 3.0, 4.0]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn pixel_shuffle_rejects_channels_not_divisible_by_upscale_squared() {
+        let a = cuda_f32(&[1, 3, 1, 1], vec![1.0, 2.0, 3.0]);
+        assert!(<B as TensorOps<B>>::pixel_shuffle::<f32>(&a, 2).is_err());
     }
 }

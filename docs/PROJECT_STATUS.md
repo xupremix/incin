@@ -405,9 +405,14 @@ implicit. `masked_fill` adds an explicit shape check between `t` and `mask`
 CPU's own version does not have, the same addition WGPU's port of this
 method made.
 
-`unfold`, `pixel_shuffle`, `gather`, `scatter`, `where_cond`, `group_norm`
-and `instance_norm` remain unsupported on CUDA and are the natural
-continuation of this pass.
+`unfold` and `pixel_shuffle` are real now too, same host round-trip,
+keeping CPU's own input validation (`unfold`'s window not exceeding the
+axis length, `pixel_shuffle`'s channel count dividing evenly by the
+upscale factor squared) — the same pair WGPU's own port of these two
+methods added.
+
+`gather`, `scatter`, `where_cond`, `group_norm` and `instance_norm` remain
+unsupported on CUDA and are the natural continuation of this pass.
 
 The FND-004 evidence records 16 formatter-drifted files; the actual count at
 that commit was 22, and is 20 now. See `audit-evidence/FND-005/known-limitations.md`
