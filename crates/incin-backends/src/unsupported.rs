@@ -109,6 +109,13 @@ pub(crate) use unsupported_creation_ops;
 
 /// Declares reductions a backend has no kernel for, grouped by whether they
 /// collapse the whole tensor or act along one axis.
+///
+/// CUDA and Metal both still invoke this; WGPU no longer does, now that
+/// every `ReductionOps` method has a real implementation. Same
+/// feature-gating artifact as `unsupported_creation_ops`/
+/// `unsupported_tensor_ops` above: provably unused only under feature
+/// combinations that build WGPU without CUDA or Metal.
+#[allow(unused_macros)]
 macro_rules! unsupported_reduction_ops {
     (all: $($all:ident),* $(,)?; dim: $($dim:ident),* $(,)?;) => {
         $(
@@ -129,6 +136,7 @@ macro_rules! unsupported_reduction_ops {
     };
 }
 
+#[allow(unused_imports)]
 pub(crate) use unsupported_reduction_ops;
 
 /// Declares shape, comparison, and indexing operations a backend has no kernel

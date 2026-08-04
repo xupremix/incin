@@ -1890,6 +1890,21 @@ fn addmm_backward_matches_hand_computed_gradients() {
 }
 
 #[test]
+fn test_cumsum() {
+    let a = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
+    let out = <B as ReductionOps<B>>::cumsum::<f32>(&a, 1).unwrap();
+    assert_eq!(out.shape, vec![2, 3]);
+    assert_eq!(readback(&out), vec![1.0, 3.0, 6.0, 4.0, 9.0, 15.0]);
+}
+
+#[test]
+fn cumsum_along_the_outer_axis_accumulates_down_each_column() {
+    let a = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![3, 2]);
+    let out = <B as ReductionOps<B>>::cumsum::<f32>(&a, 0).unwrap();
+    assert_eq!(readback(&out), vec![1.0, 2.0, 4.0, 6.0, 9.0, 12.0]);
+}
+
+#[test]
 fn test_prod_all() {
     let a = storage(vec![1.0, 2.0, 3.0, 4.0], vec![4]);
     let out = <B as ReductionOps<B>>::prod_all::<f32>(&a).unwrap();

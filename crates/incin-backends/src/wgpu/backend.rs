@@ -2184,10 +2184,35 @@ fn push_extremum_all_tape_entry(t: &WgpuStorage, out: &WgpuStorage, is_max: bool
 }
 
 impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackendImpl<T, D> {
-    // No prefix-scan shader exists yet.
-    crate::unsupported::unsupported_reduction_ops! {
-        all: ;
-        dim: cumsum;
+    /// `cumsum`. No shader for this — a prefix scan does not fit the
+    /// per-workgroup reduction shape `reduce.wgsl`/`reduce_dim.wgsl` compute
+    /// — so it uses the same host-readback/upload pattern as the structural
+    /// ops above, matching CPU's own per-row running-sum walk exactly. Not
+    /// autograd-wired, matching CPU.
+    fn cumsum<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        dim: usize,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let data = t.buffer.to_vec::<f32>()?;
+        let total = num_elements(&t.shape)?;
+        let dim_len = t.shape[dim];
+        let mut out = vec![0.0f32; total];
+        let mut idx = vec![0usize; t.shape.len()];
+        for _ in 0..total {
+            if idx[dim] == 0 {
+                let mut current = 0.0f32;
+                let mut step_idx = idx.clone();
+                for step in 0..dim_len {
+                    step_idx[dim] = step;
+                    let flat = checked_flat_index(&step_idx, &t.shape, OperationKind::Reduction)?;
+                    current += data[flat];
+                    out[flat] = current;
+                }
+            }
+            increment_multi_index(&mut idx, &t.shape);
+        }
+        let buf = WgpuBuffer::try_from_slice(&out)?;
+        Ok(WgpuStorage::new(buf, t.shape.to_vec()))
     }
 
     /// `prod_all`. Not autograd-wired, matching CPU.

@@ -268,11 +268,51 @@ feature combinations that build WGPU without either — CI's WGPU-only
 clippy job is exactly this case — which is a feature-gating artifact, not
 dead code.
 
-WGPU's remaining gap is `ReductionOps::cumsum` alone, which needs a genuine
-prefix-scan shader rather than a mode addition to the existing reduce
-kernels, and is being left for a dedicated pass along with CUDA and Metal's
-much larger (~37-method) gaps, which this environment cannot execute to
-verify (no CUDA/macOS hardware; compile-checked only).
+`cumsum` is real now too, closing WGPU's `ReductionOps` gap the same way
+`TensorOps`'s just closed: not with a shader (a prefix scan does not fit the
+per-workgroup reduction shape `reduce.wgsl`/`reduce_dim.wgsl` compute) but
+with the same host-readback/upload pattern as the structural ops, matching
+CPU's own per-row running-sum walk exactly. Not autograd-wired, matching
+CPU. This was the macro's last WGPU caller too, so
+`unsupported_reduction_ops` gets the same `#[allow(unused_macros)]`
+treatment as `unsupported_creation_ops`/`unsupported_tensor_ops` above, for
+the same reason.
+
+## WGPU backend: feature parity with CPU
+
+Every `TensorOps`, `ReductionOps` and `CreationOps` method WGPU's trait
+impls originally declared unsupported — 39 total across the three traits —
+now has a real implementation, each with forward-value tests and, where CPU
+itself wires a gradient, a gradient test verified by reverting the fix and
+confirming the predicted wrong value. Two strategies cover all 39: real
+WGSL kernels for elementwise/reduction-shaped operations that fit the
+existing shader dispatch machinery (comparisons, logical ops, `maximum`/
+`minimum`/`abs_diff`, `prod_all`/`prod_dim`), and host-readback-compute-
+upload for everything structural, index-based or statistical that doesn't
+(`repeat`/`pad`/`triu`/`tril`/`diag`/`unfold`/`pixel_shuffle`, `gather`/
+`scatter`/`index_select`/`masked_fill`/`where_cond`, `group_norm`/
+`instance_norm`, `cumsum`), the same pattern `zeros`/`ones`/`full`/`arange`/
+`linspace` already used for creation. `addmm`/`bmm`/
+`scaled_dot_product_attention` needed neither: pure composition of
+already-wired primitives, matching CPU's own compositions method for
+method.
+
+Two defects surfaced in the course of this: `prod_all` narrowing an f64
+product to f32 on CPU (same class as the matmul/extrema fixes earlier), and
+a second, independent capability gate — `wgpu_descriptor_operations!` in
+`capability.rs`, checked by the canonical `Execute<ReductionSpec>`
+descriptor path before ever calling the kernel — that a `TensorOps`/
+`ReductionOps`-level fix does not automatically satisfy. One follow-up was
+filed rather than fixed here: `gradcheck_wgpu`, this test file's own shared
+numerical-differentiation harness, gives wrong results specifically for
+ops built on `matmul`, even though `matmul`'s own analytic gradient is
+independently correct; `addmm` and `scaled_dot_product_attention`'s tests
+route around it.
+
+CUDA and Metal's much larger (~37-method) gaps are unaffected by any of
+this and are left for a dedicated pass — this environment cannot execute
+either to verify (no CUDA or macOS hardware; compile-checked only), which
+is why WGPU went first.
 
 The FND-004 evidence records 16 formatter-drifted files; the actual count at
 that commit was 22, and is 20 now. See `audit-evidence/FND-005/known-limitations.md`
