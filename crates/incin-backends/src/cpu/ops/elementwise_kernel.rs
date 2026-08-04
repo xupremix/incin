@@ -1880,6 +1880,13 @@ mod tests {
 
     #[cfg(all(feature = "std", target_arch = "x86_64"))]
     #[test]
+    // Sized to exceed SIMD_PARALLEL_CHUNK on purpose, which is also what puts it
+    // out of reach of the interpreter: miri needs hours for a single crossing.
+    // The soundness gate splits the two jobs rather than losing one of them -
+    // miri proves the aliasing rules on the small cases, and AddressSanitizer
+    // runs this one at native speed, where the chunk count is what matters.
+    // See tools/soundness.sh.
+    #[cfg_attr(miri, ignore)]
     fn parallel_vector_chunks_preserve_operations_and_tails() {
         if simd_lanes::<f32>() < 8 && !std::arch::is_x86_feature_detected!("avx2") {
             return;
@@ -2069,6 +2076,9 @@ mod tests {
     }
 
     #[test]
+    // 1025 * 257 elements clears PARALLEL_GRAIN deliberately. Same reasoning as
+    // parallel_vector_chunks_preserve_operations_and_tails above.
+    #[cfg_attr(miri, ignore)]
     fn parallel_dense_broadcast_projection_crosses_chunk_boundaries() {
         let rows = 1_025;
         let columns = 257;

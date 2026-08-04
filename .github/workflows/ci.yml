@@ -176,6 +176,45 @@ jobs:
     - name: incin, every feature combination
       run: cargo hack check -p incin --feature-powerset --all-targets --exclude-features nightly,candle
 
+  # Every job above proves the unsafe code compiles. None of them proves it is
+  # sound, and roughly 170 `unsafe` sites sit behind the CPU backend's SIMD
+  # kernels. Worse, most of those kernels are not merely unproven but
+  # unexecuted: `simd_lanes()` is a `const fn` over `target_feature`, so on a
+  # default x86_64 build every branch into the dense AVX2 path is const-false
+  # and eliminated. The `+avx2` leg inside the script is the only thing in this
+  # file that runs them at all.
+  soundness:
+    name: Miri and Sanitizers
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Cache Cargo modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-soundness-${{ hashFiles('**/Cargo.lock') }}
+
+    - uses: dtolnay/rust-toolchain@nightly
+      with:
+        components: miri, rust-src
+
+    - name: Install System Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y protobuf-compiler
+
+    # Split rather than run as `all` so a miri failure and a sanitizer failure
+    # are distinguishable from the job log without opening it.
+    - name: Miri
+      run: tools/soundness.sh miri
+
+    - name: AddressSanitizer and LeakSanitizer
+      run: tools/soundness.sh asan
+
   ledger:
     name: Execution Ledger Validation
     runs-on: ubuntu-latest
