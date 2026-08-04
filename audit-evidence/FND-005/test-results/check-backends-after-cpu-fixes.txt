@@ -1,0 +1,11 @@
+=== cargo check -p incin-backends --no-default-features --features std,cuda ===
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.15s
+=== cargo check -p incin-backends --no-default-features --features std,metal ===
+warning: `incin-backends` (lib) generated 135 warnings (run `cargo fix --lib -p incin-backends` to apply 129 suggestions)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.12s
+=== cargo check -p incin-backends --no-default-features --features std,wgpu ===
+warning: `incin-backends` (lib) generated 1 warning (run `cargo fix --lib -p incin-backends` to apply 1 suggestion)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.13s
+=== cargo check -p incin-backends --no-default-features --features std,external-candle ===
+warning: `incin-backends` (lib) generated 131 warnings (run `cargo fix --lib -p incin-backends` to apply 129 suggestions)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.14s
