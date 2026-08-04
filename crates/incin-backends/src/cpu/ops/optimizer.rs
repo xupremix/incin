@@ -5,9 +5,16 @@ use incin_core::prelude::{DType, Device, Result};
 impl<T: DType, D: Device> OptimizerOps<Self> for CpuBackendImpl<T, D> {
     /// Applies a fused AdamW optimization step on the backend.
     ///
-    /// This directly modifies the buffers (`var`, `m`, `v`) in place. If `fused`
-    /// is active, it dispatches to a single highly optimized kernel rather than
-    /// using standard primitive ops, dramatically increasing memory efficiency.
+    /// This directly modifies the buffers (`var`, `m`, `v`) in place, in a
+    /// single pass over them rather than through the dozen intermediate
+    /// tensors the composed form allocates.
+    ///
+    /// The fused pass is written against `f32` only. Every other dtype falls
+    /// back to [`OptimizerOps::adamw_step`]'s default body, which is composed
+    /// from `NumericOps`/`FloatOps` and so is already dtype-generic. The
+    /// fallback used to be an `UnsupportedBackendOperation` error, which made
+    /// an optimizer that works refuse an `f64` or `f16` parameter for no
+    /// reason other than that the fast path had not been written for it.
     fn adamw_step<K: DType>(
         _var: &mut <Self as Backend>::RawVar,
         _grad: &<Self as Backend>::Storage<K>,
@@ -69,9 +76,86 @@ impl<T: DType, D: Device> OptimizerOps<Self> for CpuBackendImpl<T, D> {
             return Ok(());
         }
 
-        Err(incin_core::prelude::Error::UnsupportedBackendOperation {
-            op: "adamw_step",
-            backend: "CpuBackendImpl",
-        })
+        incin_core::backend_authoring::adamw_step_composed::<Self, K>(
+            _var,
+            _grad,
+            _m,
+            _v,
+            _lr,
+            _beta1,
+            _beta2,
+            _eps,
+            _weight_decay,
+            _step,
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cpu::storage::CpuStorage;
+
+    type TestBackend = CpuBackendImpl<f32, incin_core::prelude::Cpu>;
+
+    fn storage(buffer: CpuBuffer, len: usize) -> CpuStorage {
+        CpuStorage::from_contiguous(buffer, vec![len])
+    }
+
+    fn step_once(var_buf: CpuBuffer, grad_buf: CpuBuffer, len: usize) -> Result<CpuStorage> {
+        let mut var = crate::cpu::var::var_from_tensor(&storage(var_buf, len))?;
+        let grad = storage(grad_buf, len);
+        let mut m = storage(CpuBuffer::F64(vec![0.0; len]), len);
+        let mut v = storage(CpuBuffer::F64(vec![0.0; len]), len);
+        if !matches!(&*grad.buffer, CpuBuffer::F64(_)) {
+            m = storage(CpuBuffer::F32(vec![0.0; len]), len);
+            v = storage(CpuBuffer::F32(vec![0.0; len]), len);
+        }
+        <TestBackend as OptimizerOps<TestBackend>>::adamw_step::<f32>(
+            &mut var, &grad, &mut m, &mut v, 0.1, 0.9, 0.999, 1e-8, 0.0, 1,
+        )?;
+        crate::cpu::var::var_as_tensor(&var)
+    }
+
+    /// The fused pass covers `f32` only, and used to report every other dtype
+    /// as an unsupported backend operation. An `f64` parameter is a valid
+    /// AdamW request, so it has to update rather than refuse.
+    #[test]
+    fn a_non_f32_parameter_updates_through_the_composed_path() {
+        let updated = step_once(
+            CpuBuffer::F64(vec![1.0, 2.0]),
+            CpuBuffer::F64(vec![0.5, -0.5]),
+            2,
+        )
+        .expect("f64 adamw must not be refused");
+
+        // The first step of AdamW moves each parameter by almost exactly the
+        // learning rate, signed by the gradient, whatever the gradient's size.
+        assert!((updated.get(&[0]) - 0.9).abs() < 1e-3, "{}", updated.get(&[0]));
+        assert!((updated.get(&[1]) - 2.1).abs() < 1e-3, "{}", updated.get(&[1]));
+    }
+
+    /// The fused and composed paths are two spellings of one update rule, so
+    /// they have to agree where they overlap. Without this, the `f32` path
+    /// could drift from the definition every other dtype follows.
+    #[test]
+    fn the_fused_f32_path_agrees_with_the_composed_one() {
+        let fused = step_once(
+            CpuBuffer::F32(vec![1.0, 2.0]),
+            CpuBuffer::F32(vec![0.5, -0.5]),
+            2,
+        )
+        .unwrap();
+        let composed = step_once(
+            CpuBuffer::F64(vec![1.0, 2.0]),
+            CpuBuffer::F64(vec![0.5, -0.5]),
+            2,
+        )
+        .unwrap();
+
+        for i in 0..2 {
+            let (a, b) = (fused.get(&[i]), composed.get(&[i]));
+            assert!((a - b).abs() < 1e-4, "element {i}: fused {a}, composed {b}");
+        }
     }
 }

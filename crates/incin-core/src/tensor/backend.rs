@@ -888,38 +888,73 @@ pub trait OptimizerOps<B: Backend> {
         weight_decay: f64,
         step: usize,
     ) -> Result<()> {
-        let mut t = B::var_as_tensor::<K>(var)?;
-        let t_step = step as f64;
-        let bias_correction1 = 1.0 - beta1.powf(t_step);
-        let bias_correction2 = 1.0 - beta2.powf(t_step);
-
-        if weight_decay > 0.0 {
-            let decay = B::mul_scalar_float::<K>(&t, weight_decay * lr)?;
-            t = B::sub::<K>(&t, &decay)?;
-        }
-
-        let term1_m = B::mul_scalar_float::<K>(m, beta1)?;
-        let term2_m = B::mul_scalar_float::<K>(grad, 1.0 - beta1)?;
-        let m_t = B::add::<K>(&term1_m, &term2_m)?;
-
-        let grad_sq = B::mul::<K>(grad, grad)?;
-        let term1_v = B::mul_scalar_float::<K>(v, beta2)?;
-        let term2_v = B::mul_scalar_float::<K>(&grad_sq, 1.0 - beta2)?;
-        let v_t = B::add::<K>(&term1_v, &term2_v)?;
-
-        *m = m_t.clone();
-        *v = v_t.clone();
-
-        let m_hat = B::mul_scalar_float::<K>(&m_t, 1.0 / bias_correction1)?;
-        let v_hat = B::mul_scalar_float::<K>(&v_t, 1.0 / bias_correction2)?;
-
-        let denom = B::add_scalar_float::<K>(&B::sqrt::<K>(&v_hat)?, eps)?;
-        let step_val = B::mul_scalar_float::<K>(&B::div::<K>(&m_hat, &denom)?, lr)?;
-
-        let updated = B::sub::<K>(&t, &step_val)?;
-        B::assign_var::<K>(var, &updated)?;
-        Ok(())
+        adamw_step_composed::<B, K>(
+            var,
+            grad,
+            m,
+            v,
+            lr,
+            beta1,
+            beta2,
+            eps,
+            weight_decay,
+            step,
+        )
     }
+}
+
+/// The composed AdamW update, as a free function so a backend that overrides
+/// [`OptimizerOps::adamw_step`] with a fused kernel can still reach it.
+///
+/// A fused kernel is normally written for one dtype. Without this, the
+/// override's only options for the dtypes it does not cover are to reimplement
+/// the composition or to refuse them, and Rust does not let an overriding impl
+/// call the trait default it replaced. The CPU backend's `f32` fast path
+/// delegates here for every other dtype.
+#[allow(clippy::too_many_arguments)]
+pub fn adamw_step_composed<B: Backend, K: DType>(
+    var: &mut B::RawVar,
+    grad: &B::Storage<K>,
+    m: &mut B::Storage<K>,
+    v: &mut B::Storage<K>,
+    lr: f64,
+    beta1: f64,
+    beta2: f64,
+    eps: f64,
+    weight_decay: f64,
+    step: usize,
+) -> Result<()> {
+    let mut t = B::var_as_tensor::<K>(var)?;
+    let t_step = step as f64;
+    let bias_correction1 = 1.0 - beta1.powf(t_step);
+    let bias_correction2 = 1.0 - beta2.powf(t_step);
+
+    if weight_decay > 0.0 {
+        let decay = B::mul_scalar_float::<K>(&t, weight_decay * lr)?;
+        t = B::sub::<K>(&t, &decay)?;
+    }
+
+    let term1_m = B::mul_scalar_float::<K>(m, beta1)?;
+    let term2_m = B::mul_scalar_float::<K>(grad, 1.0 - beta1)?;
+    let m_t = B::add::<K>(&term1_m, &term2_m)?;
+
+    let grad_sq = B::mul::<K>(grad, grad)?;
+    let term1_v = B::mul_scalar_float::<K>(v, beta2)?;
+    let term2_v = B::mul_scalar_float::<K>(&grad_sq, 1.0 - beta2)?;
+    let v_t = B::add::<K>(&term1_v, &term2_v)?;
+
+    *m = m_t.clone();
+    *v = v_t.clone();
+
+    let m_hat = B::mul_scalar_float::<K>(&m_t, 1.0 / bias_correction1)?;
+    let v_hat = B::mul_scalar_float::<K>(&v_t, 1.0 / bias_correction2)?;
+
+    let denom = B::add_scalar_float::<K>(&B::sqrt::<K>(&v_hat)?, eps)?;
+    let step_val = B::mul_scalar_float::<K>(&B::div::<K>(&m_hat, &denom)?, lr)?;
+
+    let updated = B::sub::<K>(&t, &step_val)?;
+    B::assign_var::<K>(var, &updated)?;
+    Ok(())
 }
 /// A minimal, allocation-free `Backend` implementation used only by unit
 /// tests elsewhere in this crate that need a concrete `Backend` type

@@ -84,7 +84,7 @@ pub mod backend_authoring {
     pub use crate::tensor::backend::{
         Backend, CreationOps, Execute, ExecutionRequest, FloatOps, LossOps, ModuleOps, NumericOps,
         OptimizerOps, QuantizedOps, ReductionOps, StorageBackend, SupportsDType, TensorOps,
-        TransferTo,
+        TransferTo, adamw_step_composed,
     };
 
     /// Exact operation markers, typed attributes, and storage-free metadata.
