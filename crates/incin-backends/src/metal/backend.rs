@@ -162,9 +162,60 @@ impl<T: DType, D: Device> Backend for MetalBackendImpl<T, D> {
 // ─── CreationOps ────────────────────────────────────────────────────────────
 
 impl<T: DType, D: Device> CreationOps<Self> for MetalBackendImpl<T, D> {
-    crate::unsupported::unsupported_creation_ops! {
-        fill: full;
-        sequence: arange, linspace;
+    /// `full`. Same host-fill-then-upload pattern `ones` above already
+    /// uses.
+    fn full<K: DType>(
+        val: f64,
+        shape: &[usize],
+        dtype: DTypeId,
+        device: &DeviceId,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        validate_metal(dtype, device, OperationKind::Fill, "full")?;
+        let shape_buf = incin_core::shapes::ShapeBuf::from_slice(shape);
+        let n = num_elements(shape)?;
+        let data: Vec<f32> = vec![val as f32; n];
+        let bytes: Vec<u8> = bytemuck::cast_slice(&data).to_vec();
+        let meta = TensorMeta::contiguous(shape_buf, dtype, *device, MetalStorage::alignment(), n)?;
+        MetalStorage::from_bytes(bytes, meta, MetalStorageMode::Shared, device.ordinal())
+    }
+    /// `arange`.
+    fn arange<K: DType>(
+        start: f64,
+        step: f64,
+        shape: &[usize],
+        dtype: DTypeId,
+        device: &DeviceId,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        validate_metal(dtype, device, OperationKind::Fill, "arange")?;
+        let shape_buf = incin_core::shapes::ShapeBuf::from_slice(shape);
+        let n = num_elements(shape)?;
+        let data: Vec<f32> = (0..n).map(|i| (start + (i as f64) * step) as f32).collect();
+        let bytes: Vec<u8> = bytemuck::cast_slice(&data).to_vec();
+        let meta = TensorMeta::contiguous(shape_buf, dtype, *device, MetalStorage::alignment(), n)?;
+        MetalStorage::from_bytes(bytes, meta, MetalStorageMode::Shared, device.ordinal())
+    }
+    /// `linspace`.
+    fn linspace<K: DType>(
+        start: f64,
+        end: f64,
+        shape: &[usize],
+        dtype: DTypeId,
+        device: &DeviceId,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        validate_metal(dtype, device, OperationKind::Fill, "linspace")?;
+        let shape_buf = incin_core::shapes::ShapeBuf::from_slice(shape);
+        let n = num_elements(shape)?;
+        let step = if n > 1 {
+            (end - start) / ((n - 1) as f64)
+        } else {
+            0.0
+        };
+        let data: Vec<f32> = (0..n)
+            .map(|i| if i == n - 1 { end } else { start + (i as f64) * step } as f32)
+            .collect();
+        let bytes: Vec<u8> = bytemuck::cast_slice(&data).to_vec();
+        let meta = TensorMeta::contiguous(shape_buf, dtype, *device, MetalStorage::alignment(), n)?;
+        MetalStorage::from_bytes(bytes, meta, MetalStorageMode::Shared, device.ordinal())
     }
 
     fn zeros<K: DType>(
@@ -440,6 +491,110 @@ fn upload_f32_metal(t: &MetalStorage, shape: Vec<usize>, data: Vec<f32>) -> Resu
         data.len(),
     )?;
     MetalStorage::from_bytes(out_bytes, meta, t.mode(), t.device_ordinal())
+}
+
+/// Shared implementation for `max_all`/`min_all`: reduces to a scalar and
+/// wires a gradient that routes `grad_out`'s value to only the winning
+/// element's original position, matching CPU's own `max_all`/`min_all`
+/// exactly (first-encountered winner under a strict `>`/`<` comparison).
+fn extremum_all_metal(t: &MetalStorage, is_max: bool) -> Result<MetalStorage> {
+    let data: &[f32] = bytemuck::cast_slice(t.as_bytes()?);
+    let mut best_val = if is_max {
+        f32::NEG_INFINITY
+    } else {
+        f32::INFINITY
+    };
+    let mut best_flat = 0usize;
+    for (flat, &v) in data.iter().enumerate() {
+        if (is_max && v > best_val) || (!is_max && v < best_val) {
+            best_val = v;
+            best_flat = flat;
+        }
+    }
+    let out = upload_f32_metal(t, vec![], vec![best_val])?;
+
+    let total = data.len();
+    let (t_id, out_id) = (t.id(), out.id());
+    crate::metal::tape::push(crate::metal::tape::TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &MetalStorage| {
+            let grad_data: &[f32] = bytemuck::cast_slice(grad_out.as_bytes()?);
+            let mut vals = vec![0.0f32; total];
+            vals[best_flat] = grad_data[0];
+            upload_f32_metal(grad_out, vec![total], vals).map(|s| vec![s])
+        }),
+    });
+    Ok(out)
+}
+
+/// Shared implementation for `max_dim`/`min_dim`/`max_keepdim`/`min_keepdim`:
+/// reduces along `dim`, recording each output position's winning source
+/// position, and wires a gradient that scatters `grad_out`'s value to only
+/// those recorded positions — matching CPU's own `max_axis_with_indices`/
+/// `scatter_axis_grad` exactly.
+fn extremum_dim_metal(
+    t: &MetalStorage,
+    dim: usize,
+    keepdim: bool,
+    is_max: bool,
+) -> Result<MetalStorage> {
+    let in_shape = t.metadata().shape().dims().to_vec();
+    let data: &[f32] = bytemuck::cast_slice(t.as_bytes()?);
+    let mut keep_shape = in_shape.clone();
+    keep_shape[dim] = 1;
+    let out_total = num_elements(&keep_shape)?;
+    let mut best_val = vec![
+        if is_max {
+            f32::NEG_INFINITY
+        } else {
+            f32::INFINITY
+        };
+        out_total
+    ];
+    let mut best_flat_src = vec![0usize; out_total];
+    let out_strides = crate::cpu::stride::contiguous_strides(&keep_shape);
+
+    let src_total = num_elements(&in_shape)?;
+    let mut idx = vec![0usize; in_shape.len()];
+    for (src_flat, &v) in data.iter().take(src_total).enumerate() {
+        let mut out_idx = idx.clone();
+        out_idx[dim] = 0;
+        let flat_out: usize = out_idx
+            .iter()
+            .zip(out_strides.iter())
+            .map(|(&i, &s)| i * s)
+            .sum();
+        if (is_max && v > best_val[flat_out]) || (!is_max && v < best_val[flat_out]) {
+            best_val[flat_out] = v;
+            best_flat_src[flat_out] = src_flat;
+        }
+        crate::cpu::storage::increment_index(&mut idx, &in_shape);
+    }
+
+    let out_shape = if keepdim {
+        keep_shape
+    } else {
+        let mut s = in_shape.clone();
+        s.remove(dim);
+        s
+    };
+    let out = upload_f32_metal(t, out_shape, best_val)?;
+
+    let (t_id, out_id) = (t.id(), out.id());
+    crate::metal::tape::push(crate::metal::tape::TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &MetalStorage| {
+            let grad_data: &[f32] = bytemuck::cast_slice(grad_out.as_bytes()?);
+            let mut vals = vec![0.0f32; src_total];
+            for (flat_out, &g) in grad_data.iter().enumerate().take(out_total) {
+                vals[best_flat_src[flat_out]] = g;
+            }
+            upload_f32_metal(grad_out, in_shape.clone(), vals).map(|s| vec![s])
+        }),
+    });
+    Ok(out)
 }
 
 fn sum_dim_impl(t: &MetalStorage, axis: usize, keepdim: bool) -> Result<MetalStorage> {
@@ -1128,12 +1283,121 @@ impl<T: DType, D: Device> FloatOps<Self> for MetalBackendImpl<T, D> {
 // ─── ReductionOps ───────────────────────────────────────────────────────────
 
 impl<T: DType, D: Device> ReductionOps<Self> for MetalBackendImpl<T, D> {
-    crate::unsupported::unsupported_reduction_ops! {
-        all: max_all, min_all, prod_all;
-        dim:
-            max_dim, min_dim,
-            max_keepdim, min_keepdim,
-            prod_dim, cumsum;
+    /// `max_all`. Same host round-trip as `sum_all` above, plus a real
+    /// gradient matching CPU's own: the winning element's flat position is
+    /// recorded and only that position receives `grad_out`'s value on the
+    /// way back, everything else zero.
+    fn max_all<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        extremum_all_metal(t, true)
+    }
+    /// `min_all`. Mirror of `max_all` with a strict `<` comparison.
+    fn min_all<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        extremum_all_metal(t, false)
+    }
+    /// `prod_all`. Same host round-trip as `sum_all`. Not autograd-wired,
+    /// matching CPU.
+    fn prod_all<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let data: &[f32] = bytemuck::cast_slice(t.as_bytes()?);
+        let product: f32 = data.iter().product();
+        upload_f32_metal(t, vec![], vec![product])
+    }
+
+    /// `max_dim`. Same host round-trip as `sum_dim`, plus the same
+    /// winning-position gradient routing as `max_all`.
+    fn max_dim<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        dim: usize,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        extremum_dim_metal(t, dim, false, true)
+    }
+    /// `min_dim`.
+    fn min_dim<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        dim: usize,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        extremum_dim_metal(t, dim, false, false)
+    }
+    /// `max_keepdim`.
+    fn max_keepdim<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        dim: usize,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        extremum_dim_metal(t, dim, true, true)
+    }
+    /// `min_keepdim`.
+    fn min_keepdim<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        dim: usize,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        extremum_dim_metal(t, dim, true, false)
+    }
+    /// `prod_dim`. Same host round-trip as `sum_dim`. Not autograd-wired,
+    /// matching CPU.
+    fn prod_dim<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        dim: usize,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let in_shape = t.metadata().shape().dims().to_vec();
+        let data: &[f32] = bytemuck::cast_slice(t.as_bytes()?);
+        let mut out_shape = in_shape.clone();
+        out_shape.remove(dim);
+        let mut keep_shape = in_shape.clone();
+        keep_shape[dim] = 1;
+        let out_total = num_elements(&keep_shape)?;
+        let mut prods = vec![1.0f32; out_total];
+        let out_strides = crate::cpu::stride::contiguous_strides(&keep_shape);
+        let src_total = num_elements(&in_shape)?;
+        let mut idx = vec![0usize; in_shape.len()];
+        for &value in data.iter().take(src_total) {
+            let mut out_idx = idx.clone();
+            out_idx[dim] = 0;
+            let flat_out: usize = out_idx
+                .iter()
+                .zip(out_strides.iter())
+                .map(|(&i, &s)| i * s)
+                .sum();
+            prods[flat_out] *= value;
+            crate::cpu::storage::increment_index(&mut idx, &in_shape);
+        }
+        upload_f32_metal(t, out_shape, prods)
+    }
+    /// `cumsum`. Same host round-trip as `sum_dim`. Not autograd-wired,
+    /// matching CPU.
+    fn cumsum<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        dim: usize,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let in_shape = t.metadata().shape().dims().to_vec();
+        let data: &[f32] = bytemuck::cast_slice(t.as_bytes()?);
+        let total = num_elements(&in_shape)?;
+        let dim_len = in_shape[dim];
+        let strides = crate::cpu::stride::contiguous_strides(&in_shape);
+        let mut out = vec![0.0f32; total];
+        let mut idx = vec![0usize; in_shape.len()];
+        for _ in 0..total {
+            if idx[dim] == 0 {
+                let mut current = 0.0f32;
+                let mut step_idx = idx.clone();
+                for step in 0..dim_len {
+                    step_idx[dim] = step;
+                    let flat: usize = step_idx
+                        .iter()
+                        .zip(strides.iter())
+                        .map(|(&i, &s)| i * s)
+                        .sum();
+                    current += data[flat];
+                    out[flat] = current;
+                }
+            }
+            crate::cpu::storage::increment_index(&mut idx, &in_shape);
+        }
+        upload_f32_metal(t, in_shape, out)
     }
 
     fn sum_dim<K: DType>(

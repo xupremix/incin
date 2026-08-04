@@ -610,11 +610,52 @@ unsupported — 37 methods — now has a real implementation, the same
 compile-only ceiling this entire Metal pass has operated under (no macOS
 here, no regular-CI compile check for Metal at all, and no working test
 file to extend — `tests/metal_parity.rs` is pre-existing broken, filed as
-a follow-up). `ReductionOps`/`CreationOps` gaps on Metal (whatever they
-turn out to be, not yet audited in this pass) remain, alongside the same
-caveat every commit in this whole three-backend pass has carried: none of
-WGPU's execution-verified rigor was possible here, only the WGPU/CUDA/CPU
-algorithms this pass reused already having been proven correct there.
+a follow-up).
+
+Metal's `ReductionOps`/`CreationOps` gaps turned out to be larger than
+WGPU's/CUDA's were: `max_all`/`min_all`/`prod_all`, `max_dim`/`min_dim`/
+`max_keepdim`/`min_keepdim`/`prod_dim`/`cumsum` (9 methods, not just
+`prod`/`cumsum`) and `full`/`arange`/`linspace` (3 methods, the same set
+WGPU/CUDA had). All 12 are real now too. `full`/`arange`/`linspace` are
+the same host-fill-then-upload pattern `ones` above already uses.
+`max_all`/`min_all`/`max_dim`/`min_dim`/`max_keepdim`/`min_keepdim` get a
+real gradient this time — two new shared helpers, `extremum_all_metal`/
+`extremum_dim_metal`, record each output position's winning source
+position and route `grad_out`'s value to only that position on the way
+back, matching CPU's own `max_axis_with_indices`/`scatter_axis_grad`
+exactly (first-encountered winner under a strict `>`/`<` comparison).
+`prod_all`/`prod_dim`/`cumsum` are not autograd-wired, matching CPU.
+
+Metal's canonical `Execute<ReductionSpec>` executor (`metal/executor.rs`)
+already routed `Max`/`Min`/`Prod` through these methods before this pass —
+unlike CPU/WGPU/CUDA, Metal's canonical reduction capability list
+(`metal_descriptor_operations!` in `capability.rs`) only ever declared
+`SumAll`/`MeanAll`/`SumDim`/`SumKeepDim`/`MeanDim`/`MeanKeepDim`, so
+`Max`/`Min`/`Prod` were already refused at that gate regardless of whether
+the underlying trait method existed. Left untouched here rather than
+added: unlike WGPU's `reduction = F32_ONLY` case, Metal's `reduction`
+group is declared `FLOAT_DTYPES`, and this pass's `max_all`/`min_all`/
+`prod_all`/etc are F32-only in practice
+(`bytemuck::cast_slice::<u8, f32>` unconditionally, the same assumption
+Metal's own pre-existing `sum_all`/`mean_all`/`sum_dim`/`mean_dim` already
+make under that same `FLOAT_DTYPES` claim) — whether that pre-existing
+claim is itself accurate for Sum/Mean was not investigated, being out of
+this pass's scope, but adding `Max`/`Min`/`Prod` to the same list would
+extend whatever gap already exists there rather than close it, so they
+stay off the canonical path and reachable only through the stable
+`Tensor` API, the same conservative call CUDA's `prod_all`/`prod_dim`
+capability question got.
+
+Every `TensorOps`, `ReductionOps` and `CreationOps` method all three GPU
+backends' trait impls originally declared unsupported now has a real
+implementation — WGPU (execution-verified), CUDA and Metal
+(compile-only-verified, no hardware in this environment for either) all
+reached this milestone in this session. The sections above carry the
+caveats and follow-ups (the `gradcheck_wgpu`/matmul harness issue, CUDA's
+`topk`/`argsort` F32 assumption, `tests/metal_parity.rs`'s broken imports)
+that distinguish "compiles and reuses proven algorithms" from "confirmed
+correct by execution," which only WGPU's portion of this work actually
+is.
 
 The FND-004 evidence records 16 formatter-drifted files; the actual count at
 that commit was 22, and is 20 now. See `audit-evidence/FND-005/known-limitations.md`
