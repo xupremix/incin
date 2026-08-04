@@ -64,10 +64,126 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
     crate::unsupported::unsupported_tensor_ops! {
         where_cond, gather, scatter, index_select, masked_fill,
         repeat, pad, triu, tril, diag,
-        cmp_eq, cmp_ne, cmp_lt, cmp_le, cmp_gt, cmp_ge,
-        logical_and, logical_or, logical_not,
-        sub_scalar, div_scalar, maximum, minimum, abs_diff, lerp,
         unfold, pixel_shuffle, group_norm, instance_norm,
+    }
+
+    /// `cmp_eq`. No CUDA kernel: downloads both F32 operands, compares
+    /// elementwise, re-uploads. Matches CPU's own encoding (1.0/0.0 in the
+    /// same dtype) and CPU's lack of a gradient for comparisons.
+    fn cmp_eq<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        cuda_binary_f32_elementwise("cmp_eq", lhs, rhs, |a, b| if a == b { 1.0 } else { 0.0 })
+    }
+    /// `cmp_ne`.
+    fn cmp_ne<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        cuda_binary_f32_elementwise("cmp_ne", lhs, rhs, |a, b| if a != b { 1.0 } else { 0.0 })
+    }
+    /// `cmp_lt`.
+    fn cmp_lt<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        cuda_binary_f32_elementwise("cmp_lt", lhs, rhs, |a, b| if a < b { 1.0 } else { 0.0 })
+    }
+    /// `cmp_le`.
+    fn cmp_le<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        cuda_binary_f32_elementwise("cmp_le", lhs, rhs, |a, b| if a <= b { 1.0 } else { 0.0 })
+    }
+    /// `cmp_gt`.
+    fn cmp_gt<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        cuda_binary_f32_elementwise("cmp_gt", lhs, rhs, |a, b| if a > b { 1.0 } else { 0.0 })
+    }
+    /// `cmp_ge`.
+    fn cmp_ge<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        cuda_binary_f32_elementwise("cmp_ge", lhs, rhs, |a, b| if a >= b { 1.0 } else { 0.0 })
+    }
+
+    /// `logical_and`. Same host round-trip, matching CPU's lack of a
+    /// gradient for logical ops.
+    fn logical_and<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        cuda_binary_f32_elementwise("logical_and", lhs, rhs, |a, b| {
+            if a != 0.0 && b != 0.0 { 1.0 } else { 0.0 }
+        })
+    }
+    /// `logical_or`.
+    fn logical_or<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        cuda_binary_f32_elementwise("logical_or", lhs, rhs, |a, b| {
+            if a != 0.0 || b != 0.0 { 1.0 } else { 0.0 }
+        })
+    }
+    /// `logical_not`.
+    fn logical_not<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+        cuda_unary_f32_elementwise("logical_not", t, |v| if v == 0.0 { 1.0 } else { 0.0 })
+    }
+
+    /// `sub_scalar`. Same host round-trip; not autograd-wired, matching
+    /// CPU's `TensorOps` scalar methods (as opposed to `FloatOps`'s
+    /// `add_scalar_float`/`mul_scalar_float`, which do carry a gradient).
+    fn sub_scalar<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        val: f64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        cuda_scalar_f32_elementwise("sub_scalar", t, val, |v, s| v - s)
+    }
+    /// `div_scalar`.
+    fn div_scalar<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        val: f64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        cuda_scalar_f32_elementwise("div_scalar", t, val, |v, s| v / s)
+    }
+
+    /// `maximum`. Same host round-trip; not autograd-wired, matching CPU.
+    fn maximum<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        cuda_binary_f32_elementwise("maximum", lhs, rhs, f32::max)
+    }
+    /// `minimum`.
+    fn minimum<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        cuda_binary_f32_elementwise("minimum", lhs, rhs, f32::min)
+    }
+    /// `abs_diff`.
+    fn abs_diff<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        cuda_binary_f32_elementwise("abs_diff", lhs, rhs, |a, b| (a - b).abs())
+    }
+
+    /// `lerp`. `start + weight * (end - start)`; not autograd-wired,
+    /// matching CPU.
+    fn lerp<K: DType>(
+        start: &<Self as Backend>::Storage<K>,
+        end: &<Self as Backend>::Storage<K>,
+        weight: f64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let weight = weight as f32;
+        cuda_binary_f32_elementwise("lerp", start, end, move |s, e| s + weight * (e - s))
     }
 
     /// `unsqueeze`. Metadata-only, like `reshape` (which it delegates to and
@@ -2159,6 +2275,64 @@ fn cuda_require_f32(dtype: DTypeId, op: &'static str) -> Result<()> {
     Ok(())
 }
 
+/// Shared host round-trip for a same-shape binary F32 elementwise op with no
+/// CUDA kernel: download both operands, apply `f` per element, re-upload.
+/// Not autograd-wired, matching CPU's own comparison/logical/extrema ops,
+/// none of which push a tape entry either.
+fn cuda_binary_f32_elementwise(
+    op: &'static str,
+    lhs: &CudaStorage,
+    rhs: &CudaStorage,
+    f: impl Fn(f32, f32) -> f32,
+) -> Result<CudaStorage> {
+    if lhs.shape != rhs.shape {
+        return Err(Error::ShapeMismatch {
+            op,
+            expected: lhs.shape.to_vec(),
+            got: rhs.shape.to_vec(),
+            msg: "shapes must match for elementwise op".to_string(),
+        });
+    }
+    cuda_require_f32(lhs.buffer.dtype, op)?;
+    cuda_require_f32(rhs.buffer.dtype, op)?;
+    let lhs_data = download_f32_host(lhs)?;
+    let rhs_data = download_f32_host(rhs)?;
+    let out: Vec<f32> = lhs_data
+        .iter()
+        .zip(rhs_data.iter())
+        .map(|(&a, &b)| f(a, b))
+        .collect();
+    upload_f32_from_host(&lhs.buffer, lhs.shape.to_vec(), out)
+}
+
+/// Shared host round-trip for a unary F32 elementwise op with no CUDA
+/// kernel. Not autograd-wired, matching CPU's `logical_not`.
+fn cuda_unary_f32_elementwise(
+    op: &'static str,
+    t: &CudaStorage,
+    f: impl Fn(f32) -> f32,
+) -> Result<CudaStorage> {
+    cuda_require_f32(t.buffer.dtype, op)?;
+    let data = download_f32_host(t)?;
+    let out: Vec<f32> = data.iter().map(|&v| f(v)).collect();
+    upload_f32_from_host(&t.buffer, t.shape.to_vec(), out)
+}
+
+/// Shared host round-trip for a scalar F32 elementwise op with no CUDA
+/// kernel. Not autograd-wired, matching CPU's `sub_scalar`/`div_scalar`.
+fn cuda_scalar_f32_elementwise(
+    op: &'static str,
+    t: &CudaStorage,
+    scalar: f64,
+    f: impl Fn(f32, f32) -> f32,
+) -> Result<CudaStorage> {
+    cuda_require_f32(t.buffer.dtype, op)?;
+    let data = download_f32_host(t)?;
+    let scalar = scalar as f32;
+    let out: Vec<f32> = data.iter().map(|&v| f(v, scalar)).collect();
+    upload_f32_from_host(&t.buffer, t.shape.to_vec(), out)
+}
+
 /// Downloads an F32 `CudaStorage`'s raw contents to a host `Vec<f32>`.
 fn download_f32_host(t: &CudaStorage) -> Result<Vec<f32>> {
     let bytes = t
@@ -3117,5 +3291,92 @@ mod tests {
                 .unwrap();
         assert_eq!(out.shape, vec![1, 2]);
         assert_eq!(download_f32_host(&out).unwrap(), vec![3.0, 4.0]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn test_cmp_lt() {
+        let a = cuda_f32(&[3], vec![1.0, 2.0, 3.0]);
+        let b = cuda_f32(&[3], vec![2.0, 2.0, 2.0]);
+        let out = <B as TensorOps<B>>::cmp_lt::<f32>(&a, &b).unwrap();
+        assert_eq!(download_f32_host(&out).unwrap(), vec![1.0, 0.0, 0.0]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn test_logical_and() {
+        let a = cuda_f32(&[4], vec![1.0, 1.0, 0.0, 0.0]);
+        let b = cuda_f32(&[4], vec![1.0, 0.0, 1.0, 0.0]);
+        let out = <B as TensorOps<B>>::logical_and::<f32>(&a, &b).unwrap();
+        assert_eq!(download_f32_host(&out).unwrap(), vec![1.0, 0.0, 0.0, 0.0]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn test_logical_not() {
+        let a = cuda_f32(&[4], vec![1.0, 0.0, 2.0, 0.0]);
+        let out = <B as TensorOps<B>>::logical_not::<f32>(&a).unwrap();
+        assert_eq!(download_f32_host(&out).unwrap(), vec![0.0, 1.0, 0.0, 1.0]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn test_sub_scalar() {
+        let a = cuda_f32(&[3], vec![10.0, 20.0, 30.0]);
+        let out = <B as TensorOps<B>>::sub_scalar::<f32>(&a, 5.0).unwrap();
+        assert_eq!(download_f32_host(&out).unwrap(), vec![5.0, 15.0, 25.0]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn test_div_scalar() {
+        let a = cuda_f32(&[3], vec![10.0, 20.0, 30.0]);
+        let out = <B as TensorOps<B>>::div_scalar::<f32>(&a, 5.0).unwrap();
+        assert_eq!(download_f32_host(&out).unwrap(), vec![2.0, 4.0, 6.0]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn test_maximum() {
+        let a = cuda_f32(&[3], vec![1.0, 5.0, 3.0]);
+        let b = cuda_f32(&[3], vec![4.0, 2.0, 3.0]);
+        let out = <B as TensorOps<B>>::maximum::<f32>(&a, &b).unwrap();
+        assert_eq!(download_f32_host(&out).unwrap(), vec![4.0, 5.0, 3.0]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn test_abs_diff() {
+        let a = cuda_f32(&[3], vec![1.0, 5.0, 3.0]);
+        let b = cuda_f32(&[3], vec![4.0, 2.0, 3.0]);
+        let out = <B as TensorOps<B>>::abs_diff::<f32>(&a, &b).unwrap();
+        assert_eq!(download_f32_host(&out).unwrap(), vec![3.0, 3.0, 0.0]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn test_lerp() {
+        let start = cuda_f32(&[3], vec![0.0, 10.0, 100.0]);
+        let end = cuda_f32(&[3], vec![10.0, 20.0, 200.0]);
+        let out = <B as TensorOps<B>>::lerp::<f32>(&start, &end, 0.25).unwrap();
+        let vals = download_f32_host(&out).unwrap();
+        for (got, want) in vals.iter().zip([2.5, 12.5, 125.0]) {
+            assert!((got - want).abs() < 1e-4, "got {got}, want {want}");
+        }
+    }
+
+    fn cuda_f64(shape: &[usize], values: Vec<f64>) -> CudaStorage {
+        cuda_from_bytes(shape, DTypeId::F64, 0, bytemuck::cast_slice(&values)).unwrap()
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn elementwise_ops_reject_a_non_f32_dtype() {
+        let a = cuda_f64(&[2], vec![1.0, 2.0]);
+        let b = cuda_f64(&[2], vec![1.0, 2.0]);
+        assert!(matches!(
+            <B as TensorOps<B>>::maximum::<f32>(&a, &b),
+            Err(Error::UnsupportedDType { .. })
+        ));
     }
 }

@@ -377,13 +377,22 @@ against a `Vec<f32>` directly, missing `.unwrap()`. Fixed as a prerequisite
 to verifying this pass's own changes via the same command, not as a
 correctness fix to anything this pass added.
 
-Comparisons, logical ops, `sub_scalar`/`div_scalar`, `maximum`/`minimum`/
-`abs_diff`/`lerp` and every structural/index op (`repeat`, `pad`, `triu`,
-`tril`, `diag`, `unfold`, `pixel_shuffle`, `gather`, `scatter`,
-`index_select`, `masked_fill`, `where_cond`, `group_norm`, `instance_norm`)
-remain unsupported on CUDA — they need genuine new host-round-trip code
-(download, compute, re-upload) rather than composition of what already
-exists, and are the natural continuation of this pass.
+Comparisons, logical ops, `sub_scalar`/`div_scalar` and `maximum`/`minimum`/
+`abs_diff`/`lerp` are real now too, via three small shared helpers
+(`cuda_binary_f32_elementwise`/`cuda_unary_f32_elementwise`/
+`cuda_scalar_f32_elementwise`) that each download the F32 operand(s),
+apply a closure per element, and re-upload — genuinely new host-round-trip
+code rather than composition, each one checking `cuda_require_f32` first so
+a non-F32 CUDA tensor errors instead of repeating the
+`download_f32_host`/`topk`/`argsort` bug. Same encoding, same lack of a
+gradient as CPU's own versions of each.
+
+Every structural/index op (`repeat`, `pad`, `triu`, `tril`, `diag`,
+`unfold`, `pixel_shuffle`, `gather`, `scatter`, `index_select`,
+`masked_fill`, `where_cond`, `group_norm`, `instance_norm`) remains
+unsupported on CUDA and is the natural continuation of this pass — the same
+host-round-trip strategy applies, just with per-position index math rather
+than a flat elementwise closure.
 
 The FND-004 evidence records 16 formatter-drifted files; the actual count at
 that commit was 22, and is 20 now. See `audit-evidence/FND-005/known-limitations.md`
