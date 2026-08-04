@@ -240,11 +240,39 @@ contribute rather than the later one clobbering the earlier one's gradient.
 the accumulation to a plain overwrite and confirming a new test — one whose
 index deliberately reads the same source position twice — catches it.
 
-WGPU's `TensorOps` gap is now `where_cond` alone — 1 method, down from the
-original 33. CPU's `where_cond` is autograd-wired like `gather`, but also
-broadcasts its two value operands to a common shape rather than requiring
-an exact match, which is more than this pass's read-transform-upload
-template covers on its own and is being left for a dedicated pass.
+`where_cond` is real now too, closing out WGPU's `TensorOps` gap entirely —
+33 methods down to zero. It broadcasts `mask`/`on_true`/`on_false` to a
+common shape via the already tape-wired `broadcast_as`, reusing
+`crate::cpu::stride::broadcast_shape` to compute that shape (the same
+resolver CPU's own `where_cond` uses; it is `pub(crate)`, so nothing new had
+to be exposed), then selects elementwise via host readback. Its own
+backward routes each `grad_out` element to `grad_true` or `grad_false` by
+the mask while still in the broadcasted shape; unbroadcasting each back down
+to `on_true`'s/`on_false`'s own shape is not this closure's job — it happens
+automatically as the tape walk continues into `broadcast_as`'s own backward
+for whichever operand was not already at the common shape, the same
+multi-hop composition `addmm`/`scaled_dot_product_attention` above rely on.
+`mask` itself gets no gradient, matching CPU. Mutation-tested by swapping
+the mask branches in the backward closure and confirming a gradient test —
+whose `on_false` is a broadcast scalar, so a real bug there would show up
+either as gradient routed to the wrong operand or as a wrong unbroadcast
+sum — catches it.
+
+With `where_cond` done, `unsupported_tensor_ops!` has no caller left in the
+WGPU backend and is removed from it entirely (CUDA and Metal still declare
+their own large lists through it). `unsupported_tensor_ops` and
+`unsupported_creation_ops` (removed from WGPU earlier in this pass) both
+needed `#[allow(unused_macros)]` on their `macro_rules!` and `pub(crate)
+use`: with only CUDA/Metal calling them, they are provably unused under
+feature combinations that build WGPU without either — CI's WGPU-only
+clippy job is exactly this case — which is a feature-gating artifact, not
+dead code.
+
+WGPU's remaining gap is `ReductionOps::cumsum` alone, which needs a genuine
+prefix-scan shader rather than a mode addition to the existing reduce
+kernels, and is being left for a dedicated pass along with CUDA and Metal's
+much larger (~37-method) gaps, which this environment cannot execute to
+verify (no CUDA/macOS hardware; compile-checked only).
 
 The FND-004 evidence records 16 formatter-drifted files; the actual count at
 that commit was 22, and is 20 now. See `audit-evidence/FND-005/known-limitations.md`

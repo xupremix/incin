@@ -395,6 +395,48 @@ fn scaled_dot_product_attention_records_gradients_for_all_three_operands() {
 }
 
 #[test]
+fn test_where_cond_same_shape() {
+    let mask = storage(vec![1.0, 0.0, 1.0, 0.0], vec![4]);
+    let on_true = storage(vec![10.0, 20.0, 30.0, 40.0], vec![4]);
+    let on_false = storage(vec![-1.0, -2.0, -3.0, -4.0], vec![4]);
+    let out =
+        <B as TensorOps<B>>::where_cond::<f32, f32>(&mask, &on_true, &on_false).unwrap();
+    assert_eq!(readback(&out), vec![10.0, -2.0, 30.0, -4.0]);
+}
+
+#[test]
+fn test_where_cond_broadcasts_on_false_against_on_true() {
+    // on_false is a scalar-per-row [2,1] broadcast against on_true's [2,3].
+    let mask = storage(vec![1.0, 0.0, 1.0, 0.0, 1.0, 0.0], vec![2, 3]);
+    let on_true = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
+    let on_false = storage(vec![-1.0, -2.0], vec![2, 1]);
+    let out =
+        <B as TensorOps<B>>::where_cond::<f32, f32>(&mask, &on_true, &on_false).unwrap();
+    assert_eq!(out.shape, vec![2, 3]);
+    assert_eq!(readback(&out), vec![1.0, -1.0, 3.0, -2.0, 5.0, -2.0]);
+}
+
+#[test]
+fn where_cond_backward_routes_grad_by_the_mask_and_unbroadcasts() {
+    let mask = storage(vec![1.0, 0.0, 1.0, 0.0], vec![4]);
+    let on_true = storage(vec![1.0, 2.0, 3.0, 4.0], vec![4]);
+    // on_false is a single value broadcast across all 4 positions, so its
+    // gradient must sum every position the mask routed to it.
+    let on_false = storage(vec![9.0], vec![1]);
+    let out =
+        <B as TensorOps<B>>::where_cond::<f32, f32>(&mask, &on_true, &on_false).unwrap();
+    let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+    let g_true = grads.get(on_true.id).expect("on_true should have a gradient");
+    let g_false = grads
+        .get(on_false.id)
+        .expect("on_false should have a gradient");
+    // ones_like seed: grad flows to on_true at mask positions 0 and 2, to
+    // on_false (summed over its two broadcast positions 1 and 3) otherwise.
+    assert_eq!(readback(g_true), vec![1.0, 0.0, 1.0, 0.0]);
+    assert_eq!(readback(g_false), vec![2.0]);
+}
+
+#[test]
 fn test_gather() {
     let t = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![3, 2]);
     let index = storage(vec![2.0, 0.0], vec![2, 1]);

@@ -148,6 +148,14 @@ pub(crate) use unsupported_reduction_ops;
 ///
 /// A name with no arm below is a compile error, so this cannot drift from the
 /// trait without someone noticing.
+///
+/// CUDA and Metal both still invoke this; WGPU no longer does, now that
+/// every `TensorOps` method has a real implementation. That makes the macro
+/// provably unused only under feature combinations that build WGPU without
+/// CUDA or Metal (e.g. CI's WGPU-only clippy job), a feature-gating artifact
+/// rather than dead code — see `unsupported_creation_ops`'s identical note
+/// above for the first time this happened.
+#[allow(unused_macros)]
 macro_rules! unsupported_tensor_ops {
     ($($op:ident),* $(,)?) => {
         $( $crate::unsupported::unsupported_tensor_ops!(@op $op); )*
@@ -362,6 +370,7 @@ macro_rules! unsupported_tensor_ops {
     };
 }
 
+#[allow(unused_imports)]
 pub(crate) use unsupported_tensor_ops;
 
 /// The error a declared gap reports, identical to the removed default body's.

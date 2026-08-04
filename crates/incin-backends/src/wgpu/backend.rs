@@ -751,11 +751,66 @@ pub(crate) fn log_softmax<T: DType, K: DType>(t: &WgpuStorage, dim: usize) -> Re
 // TensorOps  (reshape, transpose, matmul, narrow, flatten, squeeze, stack, concat, etc.)
 // ─────────────────────────────────────────────────────────────────────────────
 impl<T: DType, D: Device> TensorOps<Self> for WgpuBackendImpl<T, D> {
-    // No WGSL kernels exist for these yet. They were reachable before only
-    // because the trait answered for them; declaring them here keeps the gap
-    // visible and makes the compiler name any operation added later.
-    crate::unsupported::unsupported_tensor_ops! {
-        where_cond,
+    /// `where_cond`. Broadcasts `mask`/`on_true`/`on_false` to their common
+    /// shape via the already tape-wired `broadcast_as` (reusing
+    /// `crate::cpu::stride::broadcast_shape` to compute it, the same
+    /// resolver CPU's own `where_cond` uses), then selects elementwise via
+    /// host readback. Its own backward routes each `grad_out` element to
+    /// `grad_true` or `grad_false` by the same mask, in the *broadcasted*
+    /// shape; unbroadcasting each back down to `on_true`'s/`on_false`'s own
+    /// shape is not this closure's job; it happens automatically as the tape
+    /// walk continues into `broadcast_as`'s own backward for whichever of
+    /// `on_true`/`on_false` was not already at the common shape. `mask`
+    /// itself gets no gradient, matching CPU.
+    fn where_cond<K: DType, KMask: DType>(
+        mask: &<Self as Backend>::Storage<KMask>,
+        on_true: &<Self as Backend>::Storage<K>,
+        on_false: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let out_shape = crate::cpu::stride::broadcast_shape(&on_true.shape, &on_false.shape)?;
+        let mask_b = <Self as TensorOps<Self>>::broadcast_as::<KMask>(mask, &out_shape)?;
+        let true_b = <Self as TensorOps<Self>>::broadcast_as::<K>(on_true, &out_shape)?;
+        let false_b = <Self as TensorOps<Self>>::broadcast_as::<K>(on_false, &out_shape)?;
+
+        let mask_data = mask_b.buffer.to_vec::<f32>()?;
+        let true_data = true_b.buffer.to_vec::<f32>()?;
+        let false_data = false_b.buffer.to_vec::<f32>()?;
+        let out: Vec<f32> = mask_data
+            .iter()
+            .zip(true_data.iter())
+            .zip(false_data.iter())
+            .map(|((&m, &t), &f)| if m != 0.0 { t } else { f })
+            .collect();
+        let buf = WgpuBuffer::try_from_slice(&out)?;
+        let out_storage = WgpuStorage::new(buf, out_shape);
+
+        let mask_cap = mask_b.clone();
+        let (true_id, false_id, out_id) = (true_b.id, false_b.id, out_storage.id);
+        crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![true_id, false_id],
+            backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
+                let mask_data = mask_cap.buffer.to_vec::<f32>()?;
+                let grad_data = grad_out.buffer.to_vec::<f32>()?;
+                let mut grad_true = Vec::with_capacity(grad_data.len());
+                let mut grad_false = Vec::with_capacity(grad_data.len());
+                for (&m, &g) in mask_data.iter().zip(grad_data.iter()) {
+                    if m != 0.0 {
+                        grad_true.push(g);
+                        grad_false.push(0.0);
+                    } else {
+                        grad_true.push(0.0);
+                        grad_false.push(g);
+                    }
+                }
+                let g_true =
+                    WgpuStorage::new(WgpuBuffer::try_from_slice(&grad_true)?, grad_out.shape.to_vec());
+                let g_false =
+                    WgpuStorage::new(WgpuBuffer::try_from_slice(&grad_false)?, grad_out.shape.to_vec());
+                Ok(vec![g_true, g_false])
+            }),
+        });
+        Ok(out_storage)
     }
 
     /// `gather`. Forward is the same host-readback/upload pattern as
