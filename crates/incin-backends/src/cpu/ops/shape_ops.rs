@@ -2136,4 +2136,23 @@ mod tests {
         assert!((out[6] - 1.0).abs() < 1e-3, "got {}", out[6]);
         assert!((out[7] + 1.0).abs() < 1e-3, "got {}", out[7]);
     }
+    /// `scaled_dot_product_attention` is composed from `matmul`, `softmax` and
+    /// `add`, so the f32 result it used to return for every operand dtype was
+    /// the matmul mislabel showing through. Asserted here rather than only at
+    /// matmul because this is the composition a caller actually reaches.
+    #[test]
+    fn attention_keeps_the_operand_dtype() {
+        let operand =
+            || CpuStorage::from_contiguous(CpuBuffer::F64(vec![1.0, 0.0, 0.0, 1.0]), vec![2, 2]);
+        let out = TestBackend::scaled_dot_product_attention::<f64>(
+            &operand(),
+            &operand(),
+            &operand(),
+            None,
+            None,
+        )
+        .unwrap();
+        assert_eq!(out.dtype, incin_core::prelude::DTypeId::F64);
+        assert_eq!(out.shape, vec![2, 2]);
+    }
 }

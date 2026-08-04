@@ -221,7 +221,14 @@ fn fill_like(like: &CpuStorage, shape: &[usize], scalar_value: f64) -> Result<Cp
 /// output position (needed for backward's gradient-routing scatter).
 /// Ties: strict `>` (not `>=`) naturally picks first-encountered winner
 /// during forward iteration (Pitfall 3 mitigation, T-02-07).
-fn max_axis_with_indices(storage: &CpuStorage, axis: usize) -> (CpuStorage, Vec<usize>) {
+///
+/// The extremum keeps the operand's dtype. It used to be written into an
+/// `F32` buffer whatever was read, which made this the one reduction here
+/// that narrowed: `sum_axis_keepdim` beside it already converts through the
+/// operand's own buffer. `log_softmax` opens with `max_keepdim`, so `softmax`
+/// and through it `scaled_dot_product_attention` inherited the narrowing and
+/// answered in `f32` for every operand dtype.
+fn max_axis_with_indices(storage: &CpuStorage, axis: usize) -> Result<(CpuStorage, Vec<usize>)> {
     let mut out_shape = storage.shape.to_vec();
     out_shape[axis] = 1;
     let out_total: usize = crate::cpu::stride::validated_numel(&(out_shape));
@@ -241,16 +248,14 @@ fn max_axis_with_indices(storage: &CpuStorage, axis: usize) -> (CpuStorage, Vec<
         }
         increment_index(&mut idx, &storage.shape);
     }
-    let out = CpuStorage::from_contiguous(
-        CpuBuffer::F32(best_val.iter().map(|&v| v as f32).collect()),
-        out_shape,
-    );
-    (out, best_flat_src_idx)
+    let out = CpuStorage::from_contiguous(storage.buffer.from_f64_values(best_val)?, out_shape);
+    Ok((out, best_flat_src_idx))
 }
 
 /// Mirror of `max_axis_with_indices`, seeded with `f64::INFINITY` and a
-/// strict `<` comparison — same first-encountered-winner convention.
-fn min_axis_with_indices(storage: &CpuStorage, axis: usize) -> (CpuStorage, Vec<usize>) {
+/// strict `<` comparison — same first-encountered-winner convention, and the
+/// same dtype preservation.
+fn min_axis_with_indices(storage: &CpuStorage, axis: usize) -> Result<(CpuStorage, Vec<usize>)> {
     let mut out_shape = storage.shape.to_vec();
     out_shape[axis] = 1;
     let out_total: usize = crate::cpu::stride::validated_numel(&(out_shape));
@@ -270,11 +275,8 @@ fn min_axis_with_indices(storage: &CpuStorage, axis: usize) -> (CpuStorage, Vec<
         }
         increment_index(&mut idx, &storage.shape);
     }
-    let out = CpuStorage::from_contiguous(
-        CpuBuffer::F32(best_val.iter().map(|&v| v as f32).collect()),
-        out_shape,
-    );
-    (out, best_flat_src_idx)
+    let out = CpuStorage::from_contiguous(storage.buffer.from_f64_values(best_val)?, out_shape);
+    Ok((out, best_flat_src_idx))
 }
 
 /// Backward helper shared by `max_dim`/`min_dim`/`max_keepdim`/`min_keepdim`:
@@ -683,7 +685,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                 msg: format!("max_dim: axis {dim} out of range for shape {:?}", t.shape),
             });
         }
-        let (keepdim_out, winning_flat_src_idx) = max_axis_with_indices(t, dim);
+        let (keepdim_out, winning_flat_src_idx) = max_axis_with_indices(t, dim)?;
         let mut squeeze_shape = keepdim_out.shape.to_vec();
         squeeze_shape.remove(dim);
         let out = keepdim_out
@@ -723,7 +725,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                 ),
             });
         }
-        let (out, winning_flat_src_idx) = max_axis_with_indices(t, dim);
+        let (out, winning_flat_src_idx) = max_axis_with_indices(t, dim)?;
 
         let original_shape = t.shape.to_vec();
         let (t_id, out_id) = (t.id, out.id);
@@ -756,7 +758,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                 msg: format!("min_dim: axis {dim} out of range for shape {:?}", t.shape),
             });
         }
-        let (keepdim_out, winning_flat_src_idx) = min_axis_with_indices(t, dim);
+        let (keepdim_out, winning_flat_src_idx) = min_axis_with_indices(t, dim)?;
         let mut squeeze_shape = keepdim_out.shape.to_vec();
         squeeze_shape.remove(dim);
         let out = keepdim_out
@@ -797,7 +799,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                 ),
             });
         }
-        let (out, winning_flat_src_idx) = min_axis_with_indices(t, dim);
+        let (out, winning_flat_src_idx) = min_axis_with_indices(t, dim)?;
 
         let original_shape = t.shape.to_vec();
         let (t_id, out_id) = (t.id, out.id);
@@ -838,7 +840,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                         msg: format!("argmax: axis {d} out of range for shape {:?}", t.shape),
                     });
                 }
-                let (_, winning_flat_src_idx) = max_axis_with_indices(t, d);
+                let (_, winning_flat_src_idx) = max_axis_with_indices(t, d)?;
                 let mut out_shape = t.shape.to_vec();
                 out_shape[d] = 1;
                 // Convert each winning FLAT source index into its coordinate
@@ -900,7 +902,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                         msg: format!("argmin: axis {d} out of range for shape {:?}", t.shape),
                     });
                 }
-                let (_, winning_flat_src_idx) = min_axis_with_indices(t, d);
+                let (_, winning_flat_src_idx) = min_axis_with_indices(t, d)?;
                 let mut out_shape = t.shape.to_vec();
                 out_shape[d] = 1;
                 let idx_vals: Vec<i64> = winning_flat_src_idx

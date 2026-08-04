@@ -230,6 +230,31 @@ fn batched_gemm(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStorage> {
 
     let lhs_matrix = MatrixView::trailing(lhs);
     let rhs_matrix = MatrixView::trailing(rhs);
+    let mut out_shape = out_batch;
+    out_shape.extend_from_slice(&[m, n]);
+
+    // A widened operand keeps its dtype, by the same split as the unbatched
+    // path above: the `f32` kernels write `f32`, and anything else stays in
+    // `f64` until it is converted through the operand's own buffer.
+    if !writes_f32(lhs, rhs) {
+        let mut out_data = vec![0f64; total];
+        if tile != 0 {
+            for (index, out_tile) in out_data.chunks_mut(tile).enumerate() {
+                let lhs_base = batch.operands[0].physical_index(index, &batch.output_shape);
+                let rhs_base = batch.operands[1].physical_index(index, &batch.output_shape);
+                gemm_f64(
+                    m,
+                    lhs_k,
+                    n,
+                    lhs_matrix.at(lhs_base),
+                    rhs_matrix.at(rhs_base),
+                    out_tile,
+                );
+            }
+        }
+        return CpuStorage::try_from_contiguous(lhs.buffer.from_f64_values(out_data)?, out_shape);
+    }
+
     let mut out_data = vec![0f32; total];
     // `chunks_mut` requires a nonzero chunk size, and a zero-sized tile has
     // nothing to compute anyway: the output shape already carries the zero.
@@ -248,8 +273,6 @@ fn batched_gemm(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStorage> {
         }
     }
 
-    let mut out_shape = out_batch;
-    out_shape.extend_from_slice(&[m, n]);
     CpuStorage::try_from_contiguous(CpuBuffer::F32(out_data), out_shape)
 }
 
@@ -296,6 +319,18 @@ fn matmul_forward(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStorage> {
 
     let (m, k, n) = (lhs.shape[0], lhs.shape[1], rhs.shape[1]);
     let out_total = ShapeBuf::from_slice(&[m, n]).checked_numel(OperationKind::MatMul)?;
+    if !writes_f32(lhs, rhs) {
+        let mut out_data = vec![0f64; out_total];
+        gemm_f64(
+            m,
+            k,
+            n,
+            MatrixView::trailing(lhs),
+            MatrixView::trailing(rhs),
+            &mut out_data,
+        );
+        return CpuStorage::try_from_contiguous(lhs.buffer.from_f64_values(out_data)?, vec![m, n]);
+    }
     let mut out_data = vec![0f32; out_total];
     gemm(
         m,
@@ -480,6 +515,48 @@ fn simd_gemm(
     false
 }
 
+/// True when the product can be written straight into an `f32` buffer.
+///
+/// Every kernel `gemm` tries writes `f32`, which used to be what the result
+/// dtype became: two `f64` operands were read as `f64`, accumulated as `f64`,
+/// narrowed once at the end, and handed back labelled `f32`. `matmul` is
+/// composed into `scaled_dot_product_attention`, so that mislabel was the
+/// whole of why attention returned `f32` for every operand dtype.
+fn writes_f32(lhs: &CpuStorage, rhs: &CpuStorage) -> bool {
+    matches!(
+        (&*lhs.buffer, &*rhs.buffer),
+        (CpuBuffer::F32(_), CpuBuffer::F32(_))
+    )
+}
+
+/// The general branch of `scalar_gemm`, kept in `f64` rather than narrowed.
+///
+/// Only reached when at least one operand is not `f32`, so none of the `f32`
+/// kernels above is affected and the hot path is unchanged. The accumulation
+/// is the one `scalar_gemm` already performs for a widened operand; all that
+/// differs is that the result is not thrown away by a cast on the way out.
+fn gemm_f64(
+    m: usize,
+    k: usize,
+    n: usize,
+    lhs: MatrixView<'_>,
+    rhs: MatrixView<'_>,
+    out: &mut [f64],
+) {
+    debug_assert_eq!(out.len(), m * n);
+    crate::iteration::tile_2d::<64, 64>(m, n, |r0, r1, c0, c1| {
+        for row in r0..r1 {
+            for col in c0..c1 {
+                let mut acc = 0f64;
+                for depth in 0..k {
+                    acc += lhs.get(row, depth) * rhs.get(depth, col);
+                }
+                out[row * n + col] = acc;
+            }
+        }
+    });
+}
+
 /// The kernel every other one falls back to, and the only one that is always
 /// correct for every dtype and layout.
 ///
@@ -658,6 +735,7 @@ unsafe fn gemm_wasm(
 /// `tests`.
 mod tests {
     use super::*;
+    use incin_core::prelude::DTypeId;
 
     /// `matrix`.
     fn matrix(v: Vec<f32>, rows: usize, cols: usize) -> CpuStorage {
@@ -1197,15 +1275,47 @@ mod tests {
     /// row-streaming branch was chosen on stride alone and then bailed out on
     /// finding a buffer it could not read, leaving the zeroed output as the
     /// answer. Values, not just the shape, are asserted here.
+    ///
+    /// It then returned the right values wearing the wrong label, because
+    /// every kernel wrote `f32`. The dtype is asserted for the same reason the
+    /// values are: an operand's dtype surviving its own matmul is the property
+    /// `scaled_dot_product_attention` was silently losing.
     #[test]
-    fn a_contiguous_f64_matmul_computes_values_rather_than_zeros() {
+    fn a_contiguous_f64_matmul_computes_values_and_keeps_its_dtype() {
         let lhs = CpuStorage::from_contiguous(CpuBuffer::F64(vec![1.0, 2.0, 3.0, 4.0]), vec![2, 2]);
         let identity =
             CpuStorage::from_contiguous(CpuBuffer::F64(vec![1.0, 0.0, 0.0, 1.0]), vec![2, 2]);
 
         let out = matmul_impl(&lhs, &identity).unwrap();
         assert_eq!(out.shape, vec![2, 2]);
-        assert_eq!(f32_vec(&out), vec![1.0, 2.0, 3.0, 4.0]);
+        assert_eq!(out.dtype, DTypeId::F64);
+        assert_eq!(
+            (0..4)
+                .map(|i| out.get(&[i / 2, i % 2]))
+                .collect::<Vec<f64>>(),
+            vec![1.0, 2.0, 3.0, 4.0]
+        );
+    }
+
+    /// The batched path splits on dtype separately from the unbatched one, so
+    /// it is asserted separately rather than assumed to follow.
+    #[test]
+    fn a_batched_non_f32_matmul_keeps_its_dtype() {
+        let lhs = CpuStorage::from_contiguous(
+            CpuBuffer::F64(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]),
+            vec![2, 2, 2],
+        );
+        let rhs = CpuStorage::from_contiguous(
+            CpuBuffer::F64(vec![1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0]),
+            vec![2, 2, 2],
+        );
+
+        let out = batched_matmul_impl(&lhs, &rhs).unwrap();
+        assert_eq!(out.shape, vec![2, 2, 2]);
+        assert_eq!(out.dtype, DTypeId::F64);
+        // Both slices multiply by the identity, so the operand comes back.
+        assert_eq!(out.get(&[1, 1, 1]), 8.0);
+        assert_eq!(out.get(&[0, 1, 0]), 3.0);
     }
 
     /// A batched matmul records exactly one tape entry, whatever the batch
