@@ -586,8 +586,35 @@ all, the same simplification WGPU's and CUDA's own ports of this method
 have; `instance_norm` is `group_norm` with one group per channel. Not
 autograd-wired, matching CPU.
 
-`gather`, `scatter` and `where_cond` remain unsupported on Metal and are
-the natural continuation of this pass.
+`scatter` is real now too, same host round-trip, same fidelity to CPU's
+semantics (including silently ignoring an out-of-bounds destination rather
+than erroring) as every other backend's port of this method. `gather` is
+real now too, with a real gradient this time, matching every other
+backend's port: its backward is the matching scatter-add, routing each
+`grad_out` element back to the position it was gathered from, accumulating
+with `+=` rather than overwriting when two output positions share a
+source. `index` itself gets no gradient, matching CPU. `where_cond` is
+real now too, closing Metal's `TensorOps` gap entirely — the third backend
+to reach this milestone this session, after WGPU and CUDA. It broadcasts
+`mask`/`on_true`/`on_false` to a common shape via the already tape-wired
+`broadcast_as` (itself a `binary_op_metal` trick using a zeros tensor of
+the target shape, not a new host round-trip), then selects elementwise
+from `as_bytes()`. Its own backward routes each `grad_out` element to
+`grad_true`/`grad_false` by the mask while still in the broadcasted shape;
+unbroadcasting happens automatically as the tape walk continues into
+`broadcast_as`'s own backward. `mask` itself gets no gradient, matching
+CPU.
+
+Every `TensorOps` method Metal's trait impl originally declared
+unsupported — 37 methods — now has a real implementation, the same
+compile-only ceiling this entire Metal pass has operated under (no macOS
+here, no regular-CI compile check for Metal at all, and no working test
+file to extend — `tests/metal_parity.rs` is pre-existing broken, filed as
+a follow-up). `ReductionOps`/`CreationOps` gaps on Metal (whatever they
+turn out to be, not yet audited in this pass) remain, alongside the same
+caveat every commit in this whole three-backend pass has carried: none of
+WGPU's execution-verified rigor was possible here, only the WGPU/CUDA/CPU
+algorithms this pass reused already having been proven correct there.
 
 The FND-004 evidence records 16 formatter-drifted files; the actual count at
 that commit was 22, and is 20 now. See `audit-evidence/FND-005/known-limitations.md`

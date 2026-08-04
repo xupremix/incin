@@ -1289,8 +1289,168 @@ impl<T: DType, D: Device> ReductionOps<Self> for MetalBackendImpl<T, D> {
 // ─── TensorOps ──────────────────────────────────────────────────────────────
 
 impl<T: DType, D: Device> TensorOps<Self> for MetalBackendImpl<T, D> {
-    crate::unsupported::unsupported_tensor_ops! {
-        where_cond, gather, scatter,
+    /// `where_cond`. Broadcasts `mask`/`on_true`/`on_false` to their common
+    /// shape via the already tape-wired `broadcast_as` above (itself a
+    /// `binary_op_metal` trick — a zeros tensor of the target shape
+    /// combined via broadcasting — not a new host round-trip;
+    /// `crate::cpu::stride::broadcast_shape` computes that shape, the same
+    /// resolver CPU's own `where_cond` and every other backend's port use),
+    /// then selects elementwise from `as_bytes()`. Its own backward routes
+    /// each `grad_out` element to `grad_true`/`grad_false` by the mask
+    /// while still in the broadcasted shape; unbroadcasting each back down
+    /// to `on_true`'s/`on_false`'s own shape happens automatically as the
+    /// tape walk continues into `broadcast_as`'s own backward for whichever
+    /// operand was not already at the common shape. `mask` itself gets no
+    /// gradient, matching CPU.
+    fn where_cond<K: DType, KMask: DType>(
+        mask: &<Self as Backend>::Storage<KMask>,
+        on_true: &<Self as Backend>::Storage<K>,
+        on_false: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let out_shape = crate::cpu::stride::broadcast_shape(
+            on_true.metadata().shape().dims(),
+            on_false.metadata().shape().dims(),
+        )?;
+        let mask_b = <Self as TensorOps<Self>>::broadcast_as::<KMask>(mask, &out_shape)?;
+        let true_b = <Self as TensorOps<Self>>::broadcast_as::<K>(on_true, &out_shape)?;
+        let false_b = <Self as TensorOps<Self>>::broadcast_as::<K>(on_false, &out_shape)?;
+
+        let mask_data: &[f32] = bytemuck::cast_slice(mask_b.as_bytes()?);
+        let true_data: &[f32] = bytemuck::cast_slice(true_b.as_bytes()?);
+        let false_data: &[f32] = bytemuck::cast_slice(false_b.as_bytes()?);
+        let out: Vec<f32> = mask_data
+            .iter()
+            .zip(true_data.iter())
+            .zip(false_data.iter())
+            .map(|((&m, &t), &f)| if m != 0.0 { t } else { f })
+            .collect();
+        let out_storage = upload_f32_metal(&true_b, out_shape, out)?;
+
+        let mask_cap = mask_b.clone();
+        let (true_id, false_id, out_id) = (true_b.id(), false_b.id(), out_storage.id());
+        crate::metal::tape::push(crate::metal::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![true_id, false_id],
+            backward: Box::new(move |grad_out: &MetalStorage| {
+                let mask_data: &[f32] = bytemuck::cast_slice(mask_cap.as_bytes()?);
+                let grad_data: &[f32] = bytemuck::cast_slice(grad_out.as_bytes()?);
+                let mut grad_true = Vec::with_capacity(grad_data.len());
+                let mut grad_false = Vec::with_capacity(grad_data.len());
+                for (&m, &g) in mask_data.iter().zip(grad_data.iter()) {
+                    if m != 0.0 {
+                        grad_true.push(g);
+                        grad_false.push(0.0);
+                    } else {
+                        grad_true.push(0.0);
+                        grad_false.push(g);
+                    }
+                }
+                let grad_shape = grad_out.metadata().shape().dims().to_vec();
+                let g_true = upload_f32_metal(grad_out, grad_shape.clone(), grad_true)?;
+                let g_false = upload_f32_metal(grad_out, grad_shape, grad_false)?;
+                Ok(vec![g_true, g_false])
+            }),
+        });
+        Ok(out_storage)
+    }
+
+    /// `gather`. Forward is the same host round-trip as `index_select`.
+    /// Unlike `index_select`/`scatter`, CPU wires a real gradient for
+    /// `gather`, so this does too, matching every other backend's port:
+    /// its backward is the matching scatter-add, routing each `grad_out`
+    /// element back to the position it was gathered from, accumulating
+    /// with `+=` rather than overwriting when two output positions share a
+    /// source. `index` itself gets no gradient, matching CPU.
+    fn gather<K: DType, KInt: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        dim: usize,
+        index: &<Self as Backend>::Storage<KInt>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let in_shape = t.metadata().shape().dims().to_vec();
+        let data: &[f32] = bytemuck::cast_slice(t.as_bytes()?);
+        let index_shape = index.metadata().shape().dims().to_vec();
+        let index_data: Vec<f32> = bytemuck::cast_slice(index.as_bytes()?).to_vec();
+        let strides = crate::cpu::stride::contiguous_strides(&in_shape);
+        let out_shape = index_shape.clone();
+        let total = num_elements(&out_shape)?;
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; out_shape.len()];
+        for &target in index_data.iter().take(total) {
+            let target_i = target as usize;
+            let mut src_flat = 0usize;
+            for (axis, &stride) in strides.iter().enumerate() {
+                let coord = if axis == dim { target_i } else { idx[axis] };
+                src_flat += coord * stride;
+            }
+            out.push(data[src_flat]);
+            if !out_shape.is_empty() {
+                crate::cpu::storage::increment_index(&mut idx, &out_shape);
+            }
+        }
+        let out_storage = upload_f32_metal(t, out_shape.clone(), out)?;
+
+        let (t_id, out_id) = (t.id(), out_storage.id());
+        let t_shape = in_shape.clone();
+        crate::metal::tape::push(crate::metal::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id],
+            backward: Box::new(move |grad_out: &MetalStorage| {
+                let grad_out_data: &[f32] = bytemuck::cast_slice(grad_out.as_bytes()?);
+                let t_total = num_elements(&t_shape)?;
+                let mut grad_t_data = vec![0.0f32; t_total];
+                let index_total = num_elements(&out_shape)?;
+                let mut idx = vec![0usize; out_shape.len()];
+                for i in 0..index_total {
+                    let target_i = index_data[i] as usize;
+                    let mut flat_dst = 0usize;
+                    for (axis, &stride) in strides.iter().enumerate() {
+                        let coord = if axis == dim { target_i } else { idx[axis] };
+                        flat_dst += coord * stride;
+                    }
+                    grad_t_data[flat_dst] += grad_out_data[i];
+                    if !out_shape.is_empty() {
+                        crate::cpu::storage::increment_index(&mut idx, &out_shape);
+                    }
+                }
+                upload_f32_metal(grad_out, t_shape.clone(), grad_t_data).map(|s| vec![s])
+            }),
+        });
+        Ok(out_storage)
+    }
+
+    /// `scatter`. Same host round-trip as `index_select`, matching CPU's
+    /// semantics exactly, including silently ignoring an out-of-bounds
+    /// destination position rather than erroring. Not autograd-wired,
+    /// matching CPU.
+    fn scatter<K: DType, KInt: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        dim: usize,
+        index: &<Self as Backend>::Storage<KInt>,
+        src: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let in_shape = t.metadata().shape().dims().to_vec();
+        let mut out_data: Vec<f32> = bytemuck::cast_slice(t.as_bytes()?).to_vec();
+        let index_shape = index.metadata().shape().dims().to_vec();
+        let index_data: &[f32] = bytemuck::cast_slice(index.as_bytes()?);
+        let src_data: &[f32] = bytemuck::cast_slice(src.as_bytes()?);
+        let strides = crate::cpu::stride::contiguous_strides(&in_shape);
+        let index_total = num_elements(&index_shape)?;
+        let mut idx = vec![0usize; index_shape.len()];
+        for i in 0..index_total {
+            let target_i = index_data[i] as usize;
+            let mut flat_dest = 0usize;
+            for (axis, &stride) in strides.iter().enumerate() {
+                let coord = if axis == dim { target_i } else { idx[axis] };
+                flat_dest += coord * stride;
+            }
+            if flat_dest < out_data.len() {
+                out_data[flat_dest] = src_data[i];
+            }
+            if !index_shape.is_empty() {
+                crate::cpu::storage::increment_index(&mut idx, &index_shape);
+            }
+        }
+        upload_f32_metal(t, in_shape, out_data)
     }
 
     /// `group_norm`. Metal storage is always contiguous, so a group (the
