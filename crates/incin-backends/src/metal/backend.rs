@@ -1291,7 +1291,66 @@ impl<T: DType, D: Device> ReductionOps<Self> for MetalBackendImpl<T, D> {
 impl<T: DType, D: Device> TensorOps<Self> for MetalBackendImpl<T, D> {
     crate::unsupported::unsupported_tensor_ops! {
         where_cond, gather, scatter,
-        group_norm, instance_norm,
+    }
+
+    /// `group_norm`. Metal storage is always contiguous, so a group (the
+    /// per-sample run of `channels/groups * spatial` elements — see the CPU
+    /// implementation's doc comment for why dividing the whole tensor by
+    /// `groups` is wrong above batch size 1) is a plain contiguous slice of
+    /// `as_bytes()`'s output, needing no strided indexing at all — the same
+    /// simplification WGPU's and CUDA's own ports of this method have. Not
+    /// autograd-wired, matching CPU.
+    fn group_norm<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        groups: usize,
+        eps: f64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        if groups == 0 {
+            return Err(Error::Msg("group_norm: groups must be non-zero".into()));
+        }
+        let in_shape = t.metadata().shape().dims().to_vec();
+        let channels = if in_shape.len() >= 2 { in_shape[1] } else { 1 };
+        if channels % groups != 0 {
+            return Err(Error::Msg(
+                "group_norm: channels must be divisible by groups".into(),
+            ));
+        }
+        let data: &[f32] = bytemuck::cast_slice(t.as_bytes()?);
+        let total = data.len();
+        let (batch, spatial) = if in_shape.len() >= 2 {
+            (in_shape[0], in_shape[2..].iter().product::<usize>())
+        } else {
+            (1, total)
+        };
+        let group_size = channels / groups * spatial;
+        let mut out = vec![0.0f32; total];
+        for run in 0..batch * groups {
+            let start = run * group_size;
+            let slice = &data[start..start + group_size];
+            let sum: f64 = slice.iter().map(|&v| v as f64).sum();
+            let sq_sum: f64 = slice.iter().map(|&v| (v as f64) * (v as f64)).sum();
+            let mean = sum / group_size as f64;
+            let var = (sq_sum / group_size as f64 - mean * mean).max(0.0);
+            let inv_std = 1.0 / (var + eps).sqrt();
+            for (i, &value) in slice.iter().enumerate() {
+                out[start + i] = ((value as f64 - mean) * inv_std) as f32;
+            }
+        }
+        upload_f32_metal(t, in_shape, out)
+    }
+
+    /// `instance_norm`. `group_norm` with one group per channel, matching
+    /// every other backend's own composition exactly.
+    fn instance_norm<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        eps: f64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let channels = if t.metadata().shape().dims().len() >= 2 {
+            t.metadata().shape().dims()[1]
+        } else {
+            1
+        };
+        <Self as TensorOps<Self>>::group_norm::<K>(t, channels, eps)
     }
 
     /// `index_select`. Same host round-trip as `repeat`. Not

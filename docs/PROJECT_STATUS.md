@@ -580,8 +580,14 @@ too, same host round-trip. `masked_fill` adds an explicit shape check
 between `t` and `mask` CPU's own version does not have, the same addition
 every other backend's port of this method made.
 
-`gather`, `scatter`, `where_cond`, `group_norm` and `instance_norm` remain
-unsupported on Metal and are the natural continuation of this pass.
+`group_norm` and `instance_norm` are real now too. A group is a plain
+contiguous slice of `as_bytes()`'s output needing no strided indexing at
+all, the same simplification WGPU's and CUDA's own ports of this method
+have; `instance_norm` is `group_norm` with one group per channel. Not
+autograd-wired, matching CPU.
+
+`gather`, `scatter` and `where_cond` remain unsupported on Metal and are
+the natural continuation of this pass.
 
 The FND-004 evidence records 16 formatter-drifted files; the actual count at
 that commit was 22, and is 20 now. See `audit-evidence/FND-005/known-limitations.md`
