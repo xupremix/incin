@@ -226,11 +226,25 @@ sample_alone`) rather than deriving new expected values.
 CPU's semantics — including silently ignoring an out-of-bounds destination
 position rather than erroring. Unlike `where_cond`/`gather`, CPU's `scatter`
 is not autograd-wired, keeping it in scope for the same
-read-transform-upload template. WGPU's `TensorOps` gap is now `where_cond`
-and `gather` — 2 methods, down from the original 33. Both are CPU
-autograd-wired operations (`where_cond` additionally broadcasts its two
-value operands to a common shape) and are being left for a dedicated pass,
-as noted above.
+read-transform-upload template.
+
+`gather` is real now too, forward via the same host-readback pattern as
+`index_select`, but — unlike `index_select`, `scatter` and every other
+structural op ported in this pass — with a real gradient, because CPU wires
+one for `gather` specifically. Its backward is the matching scatter-add:
+each `grad_out` element routes back to the position it was gathered from,
+accumulating with `+=` (unlike plain `scatter`'s forward, which only ever
+overwrites) so two output positions reading the same source element both
+contribute rather than the later one clobbering the earlier one's gradient.
+`index` itself gets no gradient, matching CPU. Mutation-tested by changing
+the accumulation to a plain overwrite and confirming a new test — one whose
+index deliberately reads the same source position twice — catches it.
+
+WGPU's `TensorOps` gap is now `where_cond` alone — 1 method, down from the
+original 33. CPU's `where_cond` is autograd-wired like `gather`, but also
+broadcasts its two value operands to a common shape rather than requiring
+an exact match, which is more than this pass's read-transform-upload
+template covers on its own and is being left for a dedicated pass.
 
 The FND-004 evidence records 16 formatter-drifted files; the actual count at
 that commit was 22, and is 20 now. See `audit-evidence/FND-005/known-limitations.md`

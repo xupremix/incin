@@ -395,6 +395,32 @@ fn scaled_dot_product_attention_records_gradients_for_all_three_operands() {
 }
 
 #[test]
+fn test_gather() {
+    let t = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![3, 2]);
+    let index = storage(vec![2.0, 0.0], vec![2, 1]);
+    let out = <B as TensorOps<B>>::gather::<f32, f32>(&t, 0, &index).unwrap();
+    assert_eq!(out.shape, vec![2, 1]);
+    // Row 0's column 0 gathers t[2,0]=5 (index[0,0]=2), row 1's column 0
+    // gathers t[0,0]=1 (index[1,0]=0).
+    assert_eq!(readback(&out), vec![5.0, 1.0]);
+}
+
+#[test]
+fn gather_backward_scatter_adds_to_every_position_that_was_read() {
+    // index selects position 0 twice, so gather's backward must accumulate
+    // both contributions into grad_t[0] rather than overwrite.
+    let t = storage(vec![1.0, 2.0, 3.0], vec![3]);
+    let index = storage(vec![0.0, 0.0, 1.0], vec![3]);
+    let out = <B as TensorOps<B>>::gather::<f32, f32>(&t, 0, &index).unwrap();
+    assert_eq!(readback(&out), vec![1.0, 1.0, 2.0]);
+    let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+    let g = grads.get(t.id).expect("t should have a gradient");
+    // ones_like seed: grad_t[0] accumulates from both reads of position 0,
+    // grad_t[1] from the single read of position 1, grad_t[2] untouched.
+    assert_eq!(readback(g), vec![2.0, 1.0, 0.0]);
+}
+
+#[test]
 fn test_scatter() {
     let t = storage(vec![0.0, 0.0, 0.0, 0.0, 0.0, 0.0], vec![3, 2]);
     let index = storage(vec![2.0, 0.0], vec![2, 1]);

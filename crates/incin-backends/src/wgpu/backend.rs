@@ -755,7 +755,66 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackendImpl<T, D> {
     // because the trait answered for them; declaring them here keeps the gap
     // visible and makes the compiler name any operation added later.
     crate::unsupported::unsupported_tensor_ops! {
-        where_cond, gather,
+        where_cond,
+    }
+
+    /// `gather`. Forward is the same host-readback/upload pattern as
+    /// `index_select`. Unlike `index_select`, CPU wires a real gradient for
+    /// `gather`, so this does too: gathering is a linear selection, and its
+    /// backward is the matching "scatter-add" that routes each `grad_out`
+    /// element back to the position it was gathered from, accumulating with
+    /// `+=` rather than `=` when two output positions share a source
+    /// (unlike plain `scatter` above, which only ever writes, never
+    /// accumulates). `index` itself gets no gradient, matching CPU.
+    fn gather<K: DType, KInt: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        dim: usize,
+        index: &<Self as Backend>::Storage<KInt>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let data = t.buffer.to_vec::<f32>()?;
+        let index_data = index.buffer.to_vec::<f32>()?;
+        let out_shape = index.shape.to_vec();
+        let total = num_elements(&out_shape)?;
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; out_shape.len()];
+        for &target in index_data.iter().take(total) {
+            let target_i = target as usize;
+            let mut src_idx = idx.clone();
+            src_idx[dim] = target_i;
+            out.push(data[checked_flat_index(&src_idx, &t.shape, OperationKind::Reshape)?]);
+            if !out_shape.is_empty() {
+                increment_multi_index(&mut idx, &out_shape);
+            }
+        }
+        let buf = WgpuBuffer::try_from_slice(&out)?;
+        let out_storage = WgpuStorage::new(buf, out_shape.clone());
+
+        let t_shape = t.shape.to_vec();
+        let (t_id, out_id) = (t.id, out_storage.id);
+        crate::wgpu::tape::push(crate::wgpu::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id],
+            backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
+                let grad_out_data = grad_out.buffer.to_vec::<f32>()?;
+                let t_total = num_elements(&t_shape)?;
+                let mut grad_t_data = vec![0.0f32; t_total];
+                let index_total = num_elements(&out_shape)?;
+                let mut idx = vec![0usize; out_shape.len()];
+                for i in 0..index_total {
+                    let target_i = index_data[i] as usize;
+                    let mut src_idx = idx.clone();
+                    src_idx[dim] = target_i;
+                    let flat_dst = checked_flat_index(&src_idx, &t_shape, OperationKind::Reshape)?;
+                    grad_t_data[flat_dst] += grad_out_data[i];
+                    if !out_shape.is_empty() {
+                        increment_multi_index(&mut idx, &out_shape);
+                    }
+                }
+                let buf = WgpuBuffer::try_from_slice(&grad_t_data)?;
+                Ok(vec![WgpuStorage::new(buf, t_shape.clone())])
+            }),
+        });
+        Ok(out_storage)
     }
 
     /// `scatter`. Same host-readback/upload pattern as `repeat`, matching
