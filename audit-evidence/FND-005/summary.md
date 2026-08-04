@@ -118,11 +118,15 @@ remaining call from the canonical path into the legacy families.
 Two identities are registered with a documented refusal rather than a
 permissive executor, and one is deliberately not registered at all:
 
-- **`batch_norm` refuses training mode.** The CPU kernel binds its momentum
-  argument to `_momentum`, computes no batch statistics and updates no running
-  statistics. A training call would return the inference result with nothing
-  marking it as substituted. It also refuses absent running statistics, for
-  which the kernel silently supplies a zero mean and a unit variance.
+- **`batch_norm` used to refuse training mode**, because its only kernel binds
+  its momentum argument to `_momentum` and computes no batch statistics, so a
+  training call returned the inference result with nothing marking it as
+  substituted. A separate training kernel normalizes by the batch's own
+  per-channel statistics now, and the refusal is gone. Running statistics are
+  still not updated: they arrive as shared references, and mutating through an
+  operand is not something the execution contract carries. Inference mode still
+  refuses absent running statistics, for which the kernel silently supplies a
+  zero mean and a unit variance.
 - **The convolutions refuse an anisotropic window**, because the descriptor
   carries one extent per spatial axis and the routed kernel takes one for both.
 - **`embedding` is not registered.** Its float table and integer index operands
@@ -148,12 +152,14 @@ permissive executor, and one is deliberately not registered at all:
    both. The canonical executor refuses the mismatch explicitly rather than
    applying the first axis' extent to both.
 
-3. **`batch_norm`'s kernel is inference-only and nothing said so.** It binds
-   its momentum argument to `_momentum`, computes no batch statistics and
+3. **`batch_norm`'s only kernel was inference-only and nothing said so.** It
+   binds its momentum argument to `_momentum`, computes no batch statistics and
    updates no running statistics, and substitutes a zero mean and a unit
    variance for absent running statistics rather than failing. Every one of
    those is a wrong answer that looks like a right one. The canonical executor
-   refuses both cases explicitly.
+   refused both cases explicitly, and a training kernel has since replaced the
+   first refusal; absent running statistics in inference mode are still
+   refused.
 
 4. **Four kernels return f32 storage whatever the operand held.** `conv1d`,
    `conv_transpose2d`, `adaptive_avg_pool2d` and `embedding` are generic over

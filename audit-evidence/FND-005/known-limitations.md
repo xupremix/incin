@@ -9,11 +9,12 @@ FND-005 passes only when "stable CPU tensor methods no longer rely on the old
 monolithic operation supertrait architecture". They still do:
 
 - `Backend` still requires all nine operation-family supertraits.
-- 1,064 references to those traits remain across 75 files. The count rose rather
+- 1,035 references to those traits remain across 76 files. The count rose rather
   than fell, because each new canonical executor still reaches its kernel
   through the family trait it is replacing. The reference count only starts
   falling once the kernel bodies move down, which is the step after this one.
-- 112 of 174 catalog operations have a canonical CPU executor.
+- 154 of the 161 backend-executable catalog operations have a canonical CPU
+  executor, out of 174 operations in total.
 - The stable `Tensor` methods call the family traits, not `dispatch::execute`.
 
 The canonical path is real, exercised and verified, but it is a second path
@@ -40,28 +41,38 @@ separately and without tolerance, by `canonical_and_legacy_gradients_are_identic
 That assertion was mutation-tested: comparing the wrong operand's gradient makes
 it fail.
 
-## Operations whose legacy path mislabels its result dtype
+## Result dtype mislabelling, resolved
 
-Three CPU kernels return storage carrying a dtype the caller did not ask for
-and is not told about. These were found by measuring every advertised dtype
-against the dtype of the storage that came back, not by reading the code.
+This section recorded three CPU kernels that returned storage carrying a dtype
+the caller did not ask for and was not told about. They were found by measuring
+every advertised dtype against the dtype of the storage that came back, rather
+than by reading the code. All three are fixed, and the entry is kept because
+the shape of the defect is worth not reintroducing.
 
-- `scaled_dot_product_attention` returns `f32` storage for a `u8`, `u32`,
-  `i64`, `bf16`, `f16` or `f64` operand, without an error.
-- `topk` builds its value buffer as `f32` whatever the operand held.
-- `argmax`, `argmin`, `argsort` and `topk` take an index dtype as a type
-  parameter and ignore it. `argmax` and `argmin` always build `i64`; `argsort`
-  and `topk` always build `u32`. The backend is not self-consistent about which
-  integer an index tensor uses.
+- `scaled_dot_product_attention` returned `f32` for a `u8`, `u32`, `i64`,
+  `bf16`, `f16` or `f64` operand. It has no dtype handling of its own: it is
+  composed from `matmul` and `softmax`, and both narrowed. `matmul` wrote every
+  result into an f32 buffer even though its read path was already generic and
+  it already accumulated a widened operand in f64, and `max_axis_with_indices`
+  did the same, which reached `softmax` through `log_softmax`. Both convert
+  through the operand's own buffer now.
+- `topk` built its value buffer as `f32` whatever the operand held. It converts
+  through the operand's buffer too, which is what let its capability row stop
+  being narrower than its kernel.
+- `argmax`, `argmin`, `argsort` and `topk` took an index dtype as a type
+  parameter and ignored it, the first two always building `i64` and the other
+  two always `u32`. They build the dtype they were asked for, out of `u8`,
+  `u32` and `i64`, and check that the indices fit rather than truncating.
 
-The canonical rows are narrowed to what each kernel labels correctly, so the
-canonical path refuses these requests rather than answering them wrongly. The
-legacy path still accepts them. `an_index_dtype_the_kernel_does_not_produce_is_refused`
-asserts both halves of that difference, so it is a recorded fact rather than a
-claim in a commit message.
+The canonical rows had been narrowed to what each kernel labelled correctly, so
+the canonical path refused these requests rather than answering them wrongly.
+That was a containment measure and not a fix, and it is undone: the requests are
+forwarded now, and `an_index_reduction_produces_the_index_dtype_it_was_asked_for`
+asserts the produced dtype rather than the absence of an error.
 
-Narrowing a row is not a fix. The kernels still mislabel; the canonical path
-just no longer routes to them when they would.
+The index defect was worse than a mislabel. `Tensor::argmax` types its result
+`u32` while the kernel filled `i64`, so the frontend rejected the storage its
+own backend had just produced and the public method could not succeed at all.
 
 ## Rank bounds are measured, then narrowed to the descriptor
 
@@ -139,10 +150,9 @@ legacy adapters.
 
 ## Public API
 
-`cargo public-api -p incin` reports **756 items, identical to the FND-003 and
-FND-004 baseline**. FND-005 does not change the stable facade - which is another
-way of saying step 2 of the remaining work has not started, since ending the
-supertrait architecture necessarily changes it.
+`cargo public-api -p incin` reports **1,164 items**. FND-005 does not change the
+stable facade, which is another way of saying the step that ends the supertrait
+architecture has not started, since doing so necessarily changes it.
 
 `incin-core` gained `exec::dispatch` and `exec::CanonicalError`. `incin-core` is
 an internal `0.0.0` crate and is not a promised public extension surface, so this
