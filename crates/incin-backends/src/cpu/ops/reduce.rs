@@ -957,8 +957,8 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                 increment_index(&mut idx, &t.shape);
             }
         }
-        let out = CpuStorage::from_contiguous(CpuBuffer::F32(vec![prod as f32]), vec![]);
-        Ok(out)
+        let buffer = t.buffer.from_f64_values(vec![prod])?;
+        Ok(CpuStorage::from_contiguous(buffer, vec![]))
     }
 
     fn prod_dim<K: DType>(
@@ -1207,6 +1207,36 @@ mod tests {
         assert_eq!(g.shape, vec![2, 3]);
         // sum_all backward: every element receives grad_scalar = 1.0 (ones_like seed)
         assert_eq!(f32_vec(g), vec![1.0; 6]);
+    }
+
+    // --- prod_all / prod_dim ---
+
+    #[test]
+    /// `prod_all_on_2x3_returns_correct_scalar`.
+    fn prod_all_on_2x3_returns_correct_scalar() {
+        let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
+        let out = B::prod_all::<f32>(&t).unwrap();
+        assert_eq!(out.shape, Vec::<usize>::new());
+        assert_eq!(out.get(&[]), 720.0);
+    }
+
+    #[test]
+    /// `prod_all_keeps_the_operand_dtype`.
+    fn prod_all_keeps_the_operand_dtype() {
+        let t = CpuStorage::from_contiguous(CpuBuffer::F64(vec![1.0, 2.0, 3.0, 4.0]), vec![4]);
+        let out = CpuBackendImpl::<f64, incin_core::prelude::Cpu>::prod_all::<f64>(&t).unwrap();
+        assert_eq!(out.dtype, DTypeId::F64);
+        assert_eq!(out.get(&[]), 24.0);
+    }
+
+    #[test]
+    /// `prod_dim_multiplies_along_the_named_axis_only`.
+    fn prod_dim_multiplies_along_the_named_axis_only() {
+        let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
+        let out = B::prod_dim::<f32>(&t, 1).unwrap();
+        assert_eq!(out.shape, vec![2]);
+        assert_eq!(out.get(&[0]), 6.0); // 1*2*3
+        assert_eq!(out.get(&[1]), 120.0); // 4*5*6
     }
 
     // --- mean_all ---
