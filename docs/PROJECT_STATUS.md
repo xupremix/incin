@@ -395,9 +395,19 @@ nothing new had to be exposed) rather than re-deriving row-major indexing
 from scratch the way WGPU's `checked_flat_index`/`increment_multi_index`
 did — WGPU has no equivalent crate-shared utility to reuse, CUDA does.
 
-`unfold`, `pixel_shuffle`, `gather`, `scatter`, `index_select`,
-`masked_fill`, `where_cond`, `group_norm` and `instance_norm` remain
-unsupported on CUDA and are the natural continuation of this pass.
+`index_select` and `masked_fill` are real now too, same host round-trip.
+Unlike WGPU (always physically F32), CUDA storage genuinely varies by
+dtype, so `index`/`mask` here are additionally required to be F32-physical
+themselves (integer positions encoded as floats, the same convention WGPU
+uses throughout) — a real, intentional scope reduction versus a fully
+dtype-generic index tensor, called out explicitly rather than left
+implicit. `masked_fill` adds an explicit shape check between `t` and `mask`
+CPU's own version does not have, the same addition WGPU's port of this
+method made.
+
+`unfold`, `pixel_shuffle`, `gather`, `scatter`, `where_cond`, `group_norm`
+and `instance_norm` remain unsupported on CUDA and are the natural
+continuation of this pass.
 
 The FND-004 evidence records 16 formatter-drifted files; the actual count at
 that commit was 22, and is 20 now. See `audit-evidence/FND-005/known-limitations.md`

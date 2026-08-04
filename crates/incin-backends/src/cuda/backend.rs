@@ -62,8 +62,78 @@ pub type CudaGrads = crate::cuda::tape::CudaGrads;
 impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
     // No CUDA kernels exist for these yet.
     crate::unsupported::unsupported_tensor_ops! {
-        where_cond, gather, scatter, index_select, masked_fill,
+        where_cond, gather, scatter,
         unfold, pixel_shuffle, group_norm, instance_norm,
+    }
+
+    /// `index_select`. No CUDA kernel: downloads both operands. `index`'s
+    /// values are read back as F32 the same way the operand is — unlike
+    /// WGPU, CUDA storage does not always hold F32 physically, so this
+    /// requires the index tensor itself to also be an F32 `CudaStorage`
+    /// (integer positions encoded as floats, the same convention WGPU uses
+    /// throughout, exactly representable for any index small enough to
+    /// matter). A dtype-generic version that accepts a real integer index
+    /// tensor is future work. Not autograd-wired, matching CPU.
+    fn index_select<K: DType, KInt: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        dim: usize,
+        index: &<Self as Backend>::Storage<KInt>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        cuda_require_f32(t.buffer.dtype, "index_select")?;
+        cuda_require_f32(index.buffer.dtype, "index_select")?;
+        let data = download_f32_host(t)?;
+        let index_data = download_f32_host(index)?;
+        let in_strides = crate::cpu::stride::contiguous_strides(&t.shape);
+        let mut out_shape = t.shape.to_vec();
+        out_shape[dim] = index_data.len();
+        let total = checked_numel(&out_shape)?;
+        let mut out = Vec::with_capacity(total);
+        let mut out_idx = vec![0usize; out_shape.len()];
+        for _ in 0..total {
+            let selected = index_data[out_idx[dim]] as usize;
+            let mut src_flat = 0usize;
+            for (axis, &pos) in out_idx.iter().enumerate() {
+                let coord = if axis == dim { selected } else { pos };
+                src_flat += coord * in_strides[axis];
+            }
+            out.push(data[src_flat]);
+            if !out_shape.is_empty() {
+                crate::cpu::storage::increment_index(&mut out_idx, &out_shape);
+            }
+        }
+        upload_f32_from_host(&t.buffer, out_shape, out)
+    }
+
+    /// `masked_fill`. Same host round-trip as `index_select`; `mask` also
+    /// required to be F32-physical for the same reason. Not autograd-wired,
+    /// matching CPU. Unlike CPU's own version, checks `t`'s and `mask`'s
+    /// shapes match exactly rather than silently assuming it — CPU walks
+    /// `t`'s shape and indexes `mask` with it regardless, which produces
+    /// nonsense on a mismatch instead of an error.
+    fn masked_fill<K: DType, KMask: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        mask: &<Self as Backend>::Storage<KMask>,
+        value: f64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        if t.shape != mask.shape {
+            return Err(Error::ShapeMismatch {
+                op: "masked_fill",
+                expected: t.shape.to_vec(),
+                got: mask.shape.to_vec(),
+                msg: "mask must match the operand's shape exactly".to_string(),
+            });
+        }
+        cuda_require_f32(t.buffer.dtype, "masked_fill")?;
+        cuda_require_f32(mask.buffer.dtype, "masked_fill")?;
+        let data = download_f32_host(t)?;
+        let mask_data = download_f32_host(mask)?;
+        let value = value as f32;
+        let out: Vec<f32> = data
+            .iter()
+            .zip(mask_data.iter())
+            .map(|(&v, &m)| if m != 0.0 { value } else { v })
+            .collect();
+        upload_f32_from_host(&t.buffer, t.shape.to_vec(), out)
     }
 
     /// `repeat`. No CUDA kernel: downloads the F32 operand, repeats it with
@@ -3609,5 +3679,32 @@ mod tests {
         let out = <B as TensorOps<B>>::diag::<f32>(&a, 0).unwrap();
         assert_eq!(out.shape, vec![3]);
         assert_eq!(download_f32_host(&out).unwrap(), vec![1.0, 5.0, 9.0]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn test_index_select() {
+        let a = cuda_f32(&[3, 2], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        let index = cuda_f32(&[2], vec![2.0, 0.0]);
+        let out = <B as TensorOps<B>>::index_select::<f32, f32>(&a, 0, &index).unwrap();
+        assert_eq!(out.shape, vec![2, 2]);
+        assert_eq!(download_f32_host(&out).unwrap(), vec![5.0, 6.0, 1.0, 2.0]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn test_masked_fill() {
+        let a = cuda_f32(&[4], vec![1.0, 2.0, 3.0, 4.0]);
+        let mask = cuda_f32(&[4], vec![1.0, 0.0, 1.0, 0.0]);
+        let out = <B as TensorOps<B>>::masked_fill::<f32, f32>(&a, &mask, -1.0).unwrap();
+        assert_eq!(download_f32_host(&out).unwrap(), vec![-1.0, 2.0, -1.0, 4.0]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn masked_fill_rejects_a_mismatched_mask_shape() {
+        let a = cuda_f32(&[4], vec![1.0, 2.0, 3.0, 4.0]);
+        let mask = cuda_f32(&[2], vec![1.0, 0.0]);
+        assert!(<B as TensorOps<B>>::masked_fill::<f32, f32>(&a, &mask, -1.0).is_err());
     }
 }
