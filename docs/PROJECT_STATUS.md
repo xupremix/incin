@@ -521,9 +521,55 @@ descriptor system the same way it always was.
 
 Every `TensorOps`, `ReductionOps` and `CreationOps` method CUDA's trait
 impls originally declared unsupported — 39 methods, the same set WGPU
-closed — now has a real implementation. Metal's ~37-method gap is
-untouched by any of this and is a candidate for a further pass, under the
-same hardware-unavailable caveat this whole CUDA pass has operated under.
+closed — now has a real implementation.
+
+## Metal backend: a first pass, with even weaker verification than CUDA's
+
+Metal's ~37-method gap is next. This environment has no macOS, so the same
+"compile-only" ceiling CUDA operated under applies, but two things make
+Metal's verification bar weaker still: there is no compile-only check for
+Metal in the regular CI (`.github/workflows/ci.yml`) at all — only real
+hardware jobs in `hardware.yml`, which need a macOS runner — and Metal's
+one test file (`tests/metal_parity.rs`) fails to compile already, before
+this pass touched anything (missing `Execute`/`ExecutionRequest`/`FloatOps`/
+`NumericOps`/`ReductionOps` re-exports from `incin_core::prelude`; confirmed
+pre-existing via `git stash`), with no inline `#[cfg(test)] mod tests` in
+`metal/backend.rs` the way CUDA's file has one to extend. So this pass adds
+no tests at all for Metal — there is nothing working to extend, and fixing
+the prelude gap is a separate, broader question of what belongs in the
+public API rather than a fix this pass's scope covers. Verification here is
+`cargo check -p incin-backends --features metal --lib` (and the same
+cross-backend/`cargo fmt --all -- --check` passes every commit in this
+whole session has run) — compilation and formatting only, nothing else.
+
+The upside: Metal's own `add`/`sub`/`mul`/`mul_scalar_float`/`sum_dim`/
+`mean_dim` (already-shipped, not something this pass touches) turn out to
+already be implemented as a host round-trip over `MetalStorage::as_bytes`/
+`MetalStorage::from_bytes` (`binary_op_metal`/`unary_op_metal`/
+`scalar_op_metal`, all pre-existing in this file) rather than dispatched
+`.metal` shaders — unlike CUDA, which had to gain new host-round-trip
+helpers in this pass, and unlike WGPU, which runs everything through real
+shaders. `MetalStorage` itself is plain `Arc<Vec<u8>>` with no async
+device-to-host step at all (`as_bytes()` returns `&[u8]` directly), simpler
+than CUDA's `clone_dtoh`/`clone_htod` stream calls. So the first Metal batch
+— `unsqueeze` (delegates to the already tape-wired `reshape`), `cmp_eq`/
+`cmp_ne`/`cmp_lt`/`cmp_le`/`cmp_gt`/`cmp_ge`, `logical_and`/`logical_or`/
+`logical_not`, `sub_scalar`/`div_scalar`, `maximum`/`minimum`/`abs_diff`/
+`lerp`, `float_to_scalar`/`float_to_vec1`/`int_to_scalar`/`int_to_vec1`/
+`tensor_to_dtype`, and `addmm`/`bmm`/`scaled_dot_product_attention` (composed
+from already tape-wired `matmul`/`mul_scalar_float`/`add`/`transpose`/
+`softmax`, no new host round-trip) — needed no new elementwise helper code
+at all, just new closures passed to `binary_op_metal`/`unary_op_metal`.
+Unlike CUDA, nothing here needed an F32-only guard: `binary_op_metal`
+already reads storage as F32 via `bytemuck::cast_slice` unconditionally, an
+existing, pre-existing-in-this-file assumption this pass did not add and is
+not attempting to fix (out of scope, same reasoning as the CUDA
+`download_f32_host`/`topk`/`argsort` gap filed separately).
+
+`repeat`, `pad`, `triu`, `tril`, `diag`, `unfold`, `pixel_shuffle`,
+`gather`, `scatter`, `index_select`, `masked_fill`, `where_cond`,
+`group_norm` and `instance_norm` remain unsupported on Metal and are the
+natural continuation of this pass.
 
 The FND-004 evidence records 16 formatter-drifted files; the actual count at
 that commit was 22, and is 20 now. See `audit-evidence/FND-005/known-limitations.md`

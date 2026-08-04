@@ -1272,15 +1272,264 @@ impl<T: DType, D: Device> ReductionOps<Self> for MetalBackendImpl<T, D> {
 
 impl<T: DType, D: Device> TensorOps<Self> for MetalBackendImpl<T, D> {
     crate::unsupported::unsupported_tensor_ops! {
-        where_cond, gather, scatter, index_select, masked_fill, unsqueeze,
+        where_cond, gather, scatter, index_select, masked_fill,
         repeat, pad, triu, tril, diag,
-        cmp_eq, cmp_ne, cmp_lt, cmp_le, cmp_gt, cmp_ge,
-        logical_and, logical_or, logical_not,
-        sub_scalar, div_scalar, maximum, minimum, abs_diff, lerp,
-        addmm, bmm, scaled_dot_product_attention,
         unfold, pixel_shuffle, group_norm, instance_norm,
-        float_to_scalar, float_to_vec1, int_to_scalar, int_to_vec1,
-        tensor_to_dtype,
+    }
+
+    /// `unsqueeze`. Metadata-only, like `reshape` (which it delegates to and
+    /// so inherits gradient wiring from), matching every other backend's
+    /// own `unsqueeze`.
+    fn unsqueeze<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        dim: usize,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let mut target_shape = t.metadata().shape().dims().to_vec();
+        if dim <= target_shape.len() {
+            target_shape.insert(dim, 1);
+        } else {
+            target_shape.push(1);
+        }
+        <Self as TensorOps<Self>>::reshape::<K>(t, &target_shape)
+    }
+
+    /// `cmp_eq`. Metal's `add`/`sub`/`mul` above are already implemented as
+    /// a host round-trip over `as_bytes()`/`from_bytes()` (`binary_op_metal`,
+    /// this file) rather than a dispatched `.metal` shader, so this reuses
+    /// that same helper with a comparison closure instead of adding a new
+    /// one. Matches CPU's own encoding (1.0/0.0 in the same dtype) and lack
+    /// of a gradient for comparisons.
+    fn cmp_eq<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        binary_op_metal(lhs, rhs, "cmp_eq", |a, b| if a == b { 1.0 } else { 0.0 })
+    }
+    /// `cmp_ne`.
+    fn cmp_ne<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        binary_op_metal(lhs, rhs, "cmp_ne", |a, b| if a != b { 1.0 } else { 0.0 })
+    }
+    /// `cmp_lt`.
+    fn cmp_lt<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        binary_op_metal(lhs, rhs, "cmp_lt", |a, b| if a < b { 1.0 } else { 0.0 })
+    }
+    /// `cmp_le`.
+    fn cmp_le<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        binary_op_metal(lhs, rhs, "cmp_le", |a, b| if a <= b { 1.0 } else { 0.0 })
+    }
+    /// `cmp_gt`.
+    fn cmp_gt<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        binary_op_metal(lhs, rhs, "cmp_gt", |a, b| if a > b { 1.0 } else { 0.0 })
+    }
+    /// `cmp_ge`.
+    fn cmp_ge<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        binary_op_metal(lhs, rhs, "cmp_ge", |a, b| if a >= b { 1.0 } else { 0.0 })
+    }
+
+    /// `logical_and`. Same reuse of `binary_op_metal`; not autograd-wired,
+    /// matching CPU's lack of a gradient for logical ops.
+    fn logical_and<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        binary_op_metal(lhs, rhs, "logical_and", |a, b| {
+            if a != 0.0 && b != 0.0 { 1.0 } else { 0.0 }
+        })
+    }
+    /// `logical_or`.
+    fn logical_or<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        binary_op_metal(lhs, rhs, "logical_or", |a, b| {
+            if a != 0.0 || b != 0.0 { 1.0 } else { 0.0 }
+        })
+    }
+    /// `logical_not`. Reuses `unary_op_metal`, the unary counterpart of
+    /// `binary_op_metal`.
+    fn logical_not<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        unary_op_metal(t, |v| if v == 0.0 { 1.0 } else { 0.0 })
+    }
+
+    /// `sub_scalar`. Reuses `scalar_op_metal`, already used by
+    /// `mul_scalar_float` above; not autograd-wired, matching CPU's
+    /// `TensorOps` scalar methods (as opposed to `FloatOps`'s
+    /// `add_scalar_float`/`mul_scalar_float`, which do carry a gradient).
+    fn sub_scalar<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        val: f64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        scalar_op_metal(t, val, |v, s| v - s)
+    }
+    /// `div_scalar`.
+    fn div_scalar<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        val: f64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        scalar_op_metal(t, val, |v, s| v / s)
+    }
+
+    /// `maximum`. Not autograd-wired, matching CPU.
+    fn maximum<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        binary_op_metal(lhs, rhs, "maximum", f32::max)
+    }
+    /// `minimum`.
+    fn minimum<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        binary_op_metal(lhs, rhs, "minimum", f32::min)
+    }
+    /// `abs_diff`.
+    fn abs_diff<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        binary_op_metal(lhs, rhs, "abs_diff", |a, b| (a - b).abs())
+    }
+
+    /// `lerp`. `start + weight * (end - start)`; not autograd-wired,
+    /// matching CPU.
+    fn lerp<K: DType>(
+        start: &<Self as Backend>::Storage<K>,
+        end: &<Self as Backend>::Storage<K>,
+        weight: f64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let weight = weight as f32;
+        binary_op_metal(start, end, "lerp", move |s, e| s + weight * (e - s))
+    }
+
+    /// `float_to_scalar`. Metal storage is plain host-accessible bytes
+    /// (`MetalStorage::as_bytes`), so unlike CUDA/WGPU this needs no
+    /// download step at all.
+    fn float_to_scalar<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<f64> {
+        let numel = t.metadata().shape().dims().iter().product::<usize>();
+        if numel != 1 {
+            return Err(Error::Shape(ShapeError::InvalidParameter {
+                operation: OperationKind::Storage,
+                parameter: "float_to_scalar element count",
+                value: numel,
+            }));
+        }
+        let data: &[f32] = bytemuck::cast_slice(t.as_bytes()?);
+        Ok(f64::from(data[0]))
+    }
+    /// `float_to_vec1`.
+    fn float_to_vec1<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<Vec<f64>> {
+        let data: &[f32] = bytemuck::cast_slice(t.as_bytes()?);
+        Ok(data.iter().map(|&x| x as f64).collect())
+    }
+    /// `int_to_scalar`.
+    fn int_to_scalar<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<i64> {
+        let data: &[f32] = bytemuck::cast_slice(t.as_bytes()?);
+        let value = *data.first().ok_or(Error::InvalidByteLength {
+            expected: core::mem::size_of::<f32>(),
+            got: 0,
+        })?;
+        incin_core::prelude::convert_f64_to_i64(
+            "int_to_scalar",
+            t.metadata().dtype(),
+            f64::from(value),
+            incin_core::prelude::FloatToIntPolicy::Exact,
+        )
+    }
+    /// `int_to_vec1`.
+    fn int_to_vec1<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<Vec<i64>> {
+        let data: &[f32] = bytemuck::cast_slice(t.as_bytes()?);
+        data.iter()
+            .map(|&value| {
+                incin_core::prelude::convert_f64_to_i64(
+                    "int_to_vec1",
+                    t.metadata().dtype(),
+                    f64::from(value),
+                    incin_core::prelude::FloatToIntPolicy::Exact,
+                )
+            })
+            .collect()
+    }
+    /// `tensor_to_dtype`. Matches CPU's/WGPU's/CUDA's own passthrough for
+    /// this method.
+    fn tensor_to_dtype<K: DType, K2: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        _dtype: DTypeId,
+    ) -> Result<<Self as Backend>::Storage<K2>> {
+        let bytes = t.as_bytes()?.to_vec();
+        MetalStorage::from_bytes(bytes, t.metadata().clone(), t.mode(), t.device_ordinal())
+    }
+
+    /// `addmm`. `beta * mat + alpha * (mat1 @ mat2)`, composed from the
+    /// already tape-wired `matmul`/`mul_scalar_float`/`add`, matching every
+    /// other backend's own composition — no new host round-trip, just
+    /// reuse of already-implemented methods.
+    fn addmm<K: DType>(
+        mat: &<Self as Backend>::Storage<K>,
+        mat1: &<Self as Backend>::Storage<K>,
+        mat2: &<Self as Backend>::Storage<K>,
+        beta: f64,
+        alpha: f64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let mm = <Self as TensorOps<Self>>::matmul::<K>(mat1, mat2)?;
+        let mm_alpha = <Self as FloatOps<Self>>::mul_scalar_float::<K>(&mm, alpha)?;
+        let mat_beta = <Self as FloatOps<Self>>::mul_scalar_float::<K>(mat, beta)?;
+        <Self as NumericOps<Self>>::add::<K>(&mat_beta, &mm_alpha)
+    }
+    /// `bmm`. `matmul` already handles the batch dimensions, matching every
+    /// other backend.
+    fn bmm<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        <Self as TensorOps<Self>>::matmul::<K>(lhs, rhs)
+    }
+
+    /// `scaled_dot_product_attention`. Composed from the already tape-wired
+    /// `transpose`/`matmul`/`mul_scalar_float`/`add`/`softmax`, matching
+    /// every other backend's own composition, no new host round-trip.
+    fn scaled_dot_product_attention<K: DType>(
+        q: &<Self as Backend>::Storage<K>,
+        k: &<Self as Backend>::Storage<K>,
+        v: &<Self as Backend>::Storage<K>,
+        mask: Option<&<Self as Backend>::Storage<K>>,
+        scale: Option<f64>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let k_rank = k.metadata().shape().dims().len();
+        let k_t = if k_rank >= 2 {
+            <Self as TensorOps<Self>>::transpose::<K>(k, k_rank - 2, k_rank - 1)?
+        } else {
+            k.clone()
+        };
+        let scores = <Self as TensorOps<Self>>::matmul::<K>(q, &k_t)?;
+        let d_k = *q.metadata().shape().dims().last().unwrap_or(&1) as f64;
+        let s = scale.unwrap_or_else(|| 1.0 / d_k.sqrt());
+        let scaled_scores = <Self as FloatOps<Self>>::mul_scalar_float::<K>(&scores, s)?;
+        let masked_scores = if let Some(m) = mask {
+            <Self as NumericOps<Self>>::add::<K>(&scaled_scores, m)?
+        } else {
+            scaled_scores
+        };
+        let attn_dim = scores.metadata().shape().dims().len() - 1;
+        let attn = <Self as FloatOps<Self>>::softmax::<K>(&masked_scores, attn_dim)?;
+        <Self as TensorOps<Self>>::matmul::<K>(&attn, v)
     }
 
     fn matmul<K: DType>(
