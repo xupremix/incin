@@ -1709,9 +1709,57 @@ pub(crate) fn log_softmax<T: DType, K: DType>(t: &CudaStorage, dim: usize) -> Re
 
 impl<T: DType, D: Device> CreationOps<Self> for CudaBackendImpl<T, D> {
     // No kernel fills an arbitrary value or generates a sequence yet.
-    crate::unsupported::unsupported_creation_ops! {
-        fill: full;
-        sequence: arange, linspace;
+    /// `full`. Same host-fill-then-upload pattern `zeros`/`ones` above
+    /// already use — `cuda_from_f32` reinterprets a `Vec<f32>`'s bytes as
+    /// `dtype`'s native representation, so like those two this only
+    /// actually succeeds for `dtype == F32`; any other dtype fails the byte
+    /// length check inside `cuda_from_bytes` rather than misreading, the
+    /// same pre-existing behavior `zeros`/`ones`/`rand`/`randn` already
+    /// have (not something this pass changes).
+    fn full<K: DType>(
+        val: f64,
+        shape: &[usize],
+        dtype: DTypeId,
+        device: &DeviceId,
+    ) -> Result<CudaStorage> {
+        cuda_from_f32(
+            shape,
+            dtype,
+            device,
+            vec![val as f32; checked_numel(shape)?],
+            "full",
+        )
+    }
+    /// `arange`.
+    fn arange<K: DType>(
+        start: f64,
+        step: f64,
+        shape: &[usize],
+        dtype: DTypeId,
+        device: &DeviceId,
+    ) -> Result<CudaStorage> {
+        let n = checked_numel(shape)?;
+        let values: Vec<f32> = (0..n).map(|i| (start + (i as f64) * step) as f32).collect();
+        cuda_from_f32(shape, dtype, device, values, "arange")
+    }
+    /// `linspace`.
+    fn linspace<K: DType>(
+        start: f64,
+        end: f64,
+        shape: &[usize],
+        dtype: DTypeId,
+        device: &DeviceId,
+    ) -> Result<CudaStorage> {
+        let n = checked_numel(shape)?;
+        let step = if n > 1 {
+            (end - start) / ((n - 1) as f64)
+        } else {
+            0.0
+        };
+        let values: Vec<f32> = (0..n)
+            .map(|i| if i == n - 1 { end } else { start + (i as f64) * step } as f32)
+            .collect();
+        cuda_from_f32(shape, dtype, device, values, "linspace")
     }
 
     fn zeros<K: DType>(shape: &[usize], dtype: DTypeId, device: &DeviceId) -> Result<CudaStorage> {
@@ -1768,9 +1816,70 @@ impl<T: DType, D: Device> CreationOps<Self> for CudaBackendImpl<T, D> {
 }
 impl<T: DType, D: Device> ReductionOps<Self> for CudaBackendImpl<T, D> {
     // No product-reduction or prefix-scan kernel exists yet.
-    crate::unsupported::unsupported_reduction_ops! {
-        all: prod_all;
-        dim: prod_dim, cumsum;
+    /// `prod_all`. No CUDA kernel: not touching the real reduction
+    /// kernel-rendering machinery `sum_all`/`max_all`/etc below use, for
+    /// the same reason nothing else in this pass does — instead the same
+    /// host round-trip as everything else here. Not autograd-wired,
+    /// matching CPU.
+    fn prod_all<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
+        cuda_require_f32(t.buffer.dtype, "prod_all")?;
+        let data = download_f32_host(t)?;
+        let product: f32 = data.iter().product();
+        upload_f32_from_host(&t.buffer, vec![], vec![product])
+    }
+    /// `prod_dim`. Same host round-trip as `prod_all`.
+    fn prod_dim<K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
+        cuda_require_f32(t.buffer.dtype, "prod_dim")?;
+        let data = download_f32_host(t)?;
+        let mut out_shape = t.shape.to_vec();
+        out_shape.remove(dim);
+        let mut keep_shape = t.shape.to_vec();
+        keep_shape[dim] = 1;
+        let out_total = checked_numel(&keep_shape)?;
+        let mut prods = vec![1.0f32; out_total];
+        let out_strides = crate::cpu::stride::contiguous_strides(&keep_shape);
+        let src_total = checked_numel(&t.shape)?;
+        let mut idx = vec![0usize; t.shape.len()];
+        for &value in data.iter().take(src_total) {
+            let mut out_idx = idx.clone();
+            out_idx[dim] = 0;
+            let flat_out: usize = out_idx
+                .iter()
+                .zip(out_strides.iter())
+                .map(|(&i, &s)| i * s)
+                .sum();
+            prods[flat_out] *= value;
+            crate::cpu::storage::increment_index(&mut idx, &t.shape);
+        }
+        upload_f32_from_host(&t.buffer, out_shape, prods)
+    }
+    /// `cumsum`. Same host round-trip as `prod_all`.
+    fn cumsum<K: DType>(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
+        cuda_require_f32(t.buffer.dtype, "cumsum")?;
+        let data = download_f32_host(t)?;
+        let total = checked_numel(&t.shape)?;
+        let dim_len = t.shape[dim];
+        let strides = crate::cpu::stride::contiguous_strides(&t.shape);
+        let mut out = vec![0.0f32; total];
+        let mut idx = vec![0usize; t.shape.len()];
+        for _ in 0..total {
+            if idx[dim] == 0 {
+                let mut current = 0.0f32;
+                let mut step_idx = idx.clone();
+                for step in 0..dim_len {
+                    step_idx[dim] = step;
+                    let flat: usize = step_idx
+                        .iter()
+                        .zip(strides.iter())
+                        .map(|(&i, &s)| i * s)
+                        .sum();
+                    current += data[flat];
+                    out[flat] = current;
+                }
+            }
+            crate::cpu::storage::increment_index(&mut idx, &t.shape);
+        }
+        upload_f32_from_host(&t.buffer, t.shape.to_vec(), out)
     }
 
     fn sum_all<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
@@ -4191,5 +4300,69 @@ mod tests {
             .expect("on_false should have a gradient");
         assert_eq!(download_f32_host(g_true).unwrap(), vec![1.0, 0.0, 1.0, 0.0]);
         assert_eq!(download_f32_host(g_false).unwrap(), vec![2.0]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn test_full() {
+        let out =
+            <B as CreationOps<B>>::full::<f32>(3.5, &[2, 2], DTypeId::F32, &DeviceId::cuda(0))
+                .unwrap();
+        assert_eq!(download_f32_host(&out).unwrap(), vec![3.5, 3.5, 3.5, 3.5]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn test_arange() {
+        let out =
+            <B as CreationOps<B>>::arange::<f32>(1.0, 2.0, &[4], DTypeId::F32, &DeviceId::cuda(0))
+                .unwrap();
+        assert_eq!(download_f32_host(&out).unwrap(), vec![1.0, 3.0, 5.0, 7.0]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn test_linspace() {
+        let out = <B as CreationOps<B>>::linspace::<f32>(
+            0.0,
+            10.0,
+            &[5],
+            DTypeId::F32,
+            &DeviceId::cuda(0),
+        )
+        .unwrap();
+        assert_eq!(
+            download_f32_host(&out).unwrap(),
+            vec![0.0, 2.5, 5.0, 7.5, 10.0]
+        );
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn test_prod_all() {
+        let t = cuda_f32(&[4], vec![1.0, 2.0, 3.0, 4.0]);
+        let out = <B as ReductionOps<B>>::prod_all::<f32>(&t).unwrap();
+        assert_eq!(download_f32_host(&out).unwrap(), vec![24.0]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn test_prod_dim() {
+        let t = cuda_f32(&[2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        let out = <B as ReductionOps<B>>::prod_dim::<f32>(&t, 1).unwrap();
+        assert_eq!(out.shape, vec![2]);
+        assert_eq!(download_f32_host(&out).unwrap(), vec![6.0, 120.0]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn test_cumsum() {
+        let t = cuda_f32(&[2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        let out = <B as ReductionOps<B>>::cumsum::<f32>(&t, 1).unwrap();
+        assert_eq!(out.shape, vec![2, 3]);
+        assert_eq!(
+            download_f32_host(&out).unwrap(),
+            vec![1.0, 3.0, 6.0, 4.0, 9.0, 15.0]
+        );
     }
 }

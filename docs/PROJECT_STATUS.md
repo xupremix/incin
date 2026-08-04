@@ -487,10 +487,43 @@ meant less new indexing code than WGPU needed for the equivalent methods,
 which had no such crate-shared utility and derived its own
 `checked_flat_index`/`increment_multi_index` from scratch.
 
-`ReductionOps::cumsum` and `CreationOps::full`/`arange`/`linspace` remain
-unsupported on CUDA (WGPU's equivalent gaps, closed in the WGPU pass) and
-Metal's ~37-method gap is untouched by any of this — both are candidates
-for a further pass, all under the same hardware-unavailable caveat.
+`full`/`arange`/`linspace` are real now too, same host-fill-then-upload
+pattern `zeros`/`ones`/`rand`/`randn` already use — `cuda_from_f32`
+reinterprets a `Vec<f32>`'s bytes as `dtype`'s native representation, so
+like those four this only actually succeeds for `dtype == F32`; any other
+dtype fails the byte length check inside `cuda_from_bytes` rather than
+misreading, the same pre-existing behavior those four already have and not
+something this pass changes.
+
+`prod_all`, `prod_dim` and `cumsum` are real now too, the same
+host-round-trip pattern as everything else in this CUDA pass rather than
+touching the real reduction kernel-rendering machinery `sum_all`/`max_all`/
+etc use — the same reason nothing else in this pass touches CUDA's other
+real kernels either. Closing them at the `ReductionOps` trait level
+surfaced the identical second gate the WGPU pass found for the same two
+methods: the canonical `Execute<ReductionSpec>` descriptor path
+(`cuda/executor.rs`) already routes `ReduceOp::Prod` through
+`ReductionOps::prod_dim` and checks `cuda_descriptor_operations!`'s
+`reduction` capability list first. Unlike WGPU's fix, adding `ProdAll`/
+`ProdDim` to that list was not the right move here: WGPU's `reduction`
+group is declared `F32_ONLY` end to end, matching its F32-only `prod_all`/
+`prod_dim` exactly, but CUDA's `reduction` group is declared `FLOAT_DTYPES`
+(bf16/f16/f32/f64) because `SumAll`/`MaxAll`/etc are real multi-dtype
+kernels — adding `Prod` to that shared list would have made the capability
+table advertise bf16/f16/f64 support this F32-only implementation does not
+have. So `cumsum`/`prod_all`/`prod_dim` stay off CUDA's canonical
+capability list entirely (reverted after being added and caught by
+`the_capability_document_matches_the_registrations`), same as before this
+pass — genuinely usable through the stable `Tensor::prod_all`/`prod_dim`
+API, which is the legacy trait path most `Tensor` methods actually go
+through, but refused (correctly, not silently) by the newer canonical
+descriptor system the same way it always was.
+
+Every `TensorOps`, `ReductionOps` and `CreationOps` method CUDA's trait
+impls originally declared unsupported — 39 methods, the same set WGPU
+closed — now has a real implementation. Metal's ~37-method gap is
+untouched by any of this and is a candidate for a further pass, under the
+same hardware-unavailable caveat this whole CUDA pass has operated under.
 
 The FND-004 evidence records 16 formatter-drifted files; the actual count at
 that commit was 22, and is 20 now. See `audit-evidence/FND-005/known-limitations.md`
