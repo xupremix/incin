@@ -1542,6 +1542,75 @@ fn test_lerp() {
 }
 
 #[test]
+fn test_bmm() {
+    let a = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
+    let b = storage(vec![7.0, 8.0, 9.0, 10.0, 11.0, 12.0], vec![3, 2]);
+    let out = <B as TensorOps<B>>::bmm::<f32>(&a, &b).unwrap();
+    assert_eq!(out.shape, vec![2, 2]);
+    assert!(vec_approx_eq(
+        &readback(&out),
+        &[58.0, 64.0, 139.0, 154.0],
+        1e-4
+    ));
+}
+
+#[test]
+fn test_bmm_batched() {
+    // Two independent 2x2 @ 2x2 matmuls stacked on a batch axis.
+    let a = storage(vec![1.0, 0.0, 0.0, 1.0, 2.0, 0.0, 0.0, 2.0], vec![2, 2, 2]);
+    let b = storage(vec![3.0, 4.0, 5.0, 6.0, 1.0, 1.0, 1.0, 1.0], vec![2, 2, 2]);
+    let out = <B as TensorOps<B>>::bmm::<f32>(&a, &b).unwrap();
+    assert_eq!(out.shape, vec![2, 2, 2]);
+    assert!(vec_approx_eq(
+        &readback(&out),
+        &[3.0, 4.0, 5.0, 6.0, 2.0, 2.0, 2.0, 2.0],
+        1e-4
+    ));
+}
+
+#[test]
+fn test_addmm() {
+    let mat = storage(vec![1.0, 1.0, 1.0, 1.0], vec![2, 2]);
+    let mat1 = storage(vec![1.0, 0.0, 0.0, 1.0], vec![2, 2]); // identity
+    let mat2 = storage(vec![3.0, 4.0, 5.0, 6.0], vec![2, 2]);
+    // beta * mat + alpha * (mat1 @ mat2) = 2*[[1,1],[1,1]] + 3*[[3,4],[5,6]]
+    let out = <B as TensorOps<B>>::addmm::<f32>(&mat, &mat1, &mat2, 2.0, 3.0).unwrap();
+    assert!(vec_approx_eq(
+        &readback(&out),
+        &[11.0, 14.0, 17.0, 20.0],
+        1e-4
+    ));
+}
+
+#[test]
+/// Hand-computed rather than `gradcheck_wgpu`: `numerical_grad_wgpu` probes
+/// every element by re-running `op` and reading back only the *value*
+/// (never draining the tape those probing runs push to), and matmul's
+/// backward closure is sensitive to that leftover tape state in a way the
+/// other ops `gradcheck_wgpu` exercises are not — a pre-existing harness/tape
+/// interaction, not a defect in `addmm`'s composition. `matmul`'s own
+/// gradient is independently verified correct by
+/// `matmul_backward_matches_hand_computed_gradients` above, which calls
+/// `backward` directly with no repeated probing.
+fn addmm_backward_matches_hand_computed_gradients() {
+    let mat = storage(vec![0.5, -0.5, 1.0, 2.0], vec![2, 2]);
+    let mat1 = storage(vec![1.0, 2.0, 3.0, 4.0], vec![2, 2]);
+    let mat2 = storage(vec![5.0, 6.0, 7.0, 8.0], vec![2, 2]);
+    // out = beta*mat + alpha*(mat1 @ mat2), beta=0.5, alpha=2.0.
+    // d(sum(out))/d(mat) = beta * ones = [0.5, 0.5, 0.5, 0.5].
+    // d(sum(out))/d(mat1) = alpha * (ones @ mat2^T) = 2 * [11,15,11,15].
+    // d(sum(out))/d(mat2) = alpha * (mat1^T @ ones) = 2 * [4,4,6,6].
+    let out = <B as TensorOps<B>>::addmm::<f32>(&mat, &mat1, &mat2, 0.5, 2.0).unwrap();
+    let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+    let g_mat = grads.get(mat.id).expect("mat should have a gradient");
+    let g_mat1 = grads.get(mat1.id).expect("mat1 should have a gradient");
+    let g_mat2 = grads.get(mat2.id).expect("mat2 should have a gradient");
+    assert!(vec_approx_eq(&readback(g_mat), &[0.5, 0.5, 0.5, 0.5], 1e-4));
+    assert!(vec_approx_eq(&readback(g_mat1), &[22.0, 30.0, 22.0, 30.0], 1e-4));
+    assert!(vec_approx_eq(&readback(g_mat2), &[8.0, 8.0, 12.0, 12.0], 1e-4));
+}
+
+#[test]
 fn test_prod_all() {
     let a = storage(vec![1.0, 2.0, 3.0, 4.0], vec![4]);
     let out = <B as ReductionOps<B>>::prod_all::<f32>(&a).unwrap();

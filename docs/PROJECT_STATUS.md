@@ -145,6 +145,23 @@ came back silently mislabeled as f32. `prod_dim` already used
 `from_f64_values` correctly; only the all-elements variant had the bug, and
 neither had test coverage before this pass.
 
+`TensorOps::addmm`/`bmm` are real on WGPU now too, composed from the
+already-wired `matmul`/`mul_scalar_float`/`add` exactly as CPU's own `addmm`
+is, so gradients flow through all three operands rather than dead-ending on
+the tape. `bmm` is `matmul` outright, since `matmul` already batches. Neither
+is gated by the capability table (WGPU's canonical descriptor path has no
+`composed_matmul` executor at all, so this pair is reachable only through the
+legacy `TensorOps` trait). Adding a gradient test for `addmm` surfaced a
+pre-existing issue in the WGPU test file's own `gradcheck_wgpu` harness: it
+reports a wrong (too-large) numerical gradient specifically for ops built on
+`matmul`, even though `matmul`'s own analytic gradient is independently
+correct (verified directly against hand-derived values with no repeated
+probing). Every other op that harness exercises elsewhere in the file passes
+fine, so `addmm`'s test uses a direct hand-computed `backward` check instead
+of the shared harness; the harness issue itself is filed as a follow-up
+rather than fixed here, since it is pre-existing and outside this pass's
+scope.
+
 The FND-004 evidence records 16 formatter-drifted files; the actual count at
 that commit was 22, and is 20 now. See `audit-evidence/FND-005/known-limitations.md`
 for the correction. No drifted file is one either task changed.

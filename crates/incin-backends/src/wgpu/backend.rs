@@ -757,8 +757,32 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackendImpl<T, D> {
     crate::unsupported::unsupported_tensor_ops! {
         where_cond, gather, scatter, index_select, masked_fill,
         repeat, pad, triu, tril, diag,
-        addmm, bmm, scaled_dot_product_attention,
+        scaled_dot_product_attention,
         unfold, pixel_shuffle, group_norm, instance_norm,
+    }
+
+    /// `addmm`. `beta * mat + alpha * (mat1 @ mat2)`, composed from the
+    /// already tape-wired `matmul`/`mul_scalar_float`/`add`, matching CPU's
+    /// own composition — and so, like CPU, differentiable through all three
+    /// operands rather than a dead end on the tape.
+    fn addmm<K: DType>(
+        mat: &<Self as Backend>::Storage<K>,
+        mat1: &<Self as Backend>::Storage<K>,
+        mat2: &<Self as Backend>::Storage<K>,
+        beta: f64,
+        alpha: f64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let mm = <Self as TensorOps<Self>>::matmul::<K>(mat1, mat2)?;
+        let mm_alpha = <Self as FloatOps<Self>>::mul_scalar_float::<K>(&mm, alpha)?;
+        let mat_beta = <Self as FloatOps<Self>>::mul_scalar_float::<K>(mat, beta)?;
+        <Self as NumericOps<Self>>::add::<K>(&mat_beta, &mm_alpha)
+    }
+    /// `bmm`. `matmul` already handles the batch dimensions, matching CPU.
+    fn bmm<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        <Self as TensorOps<Self>>::matmul::<K>(lhs, rhs)
     }
 
     /// `unsqueeze`. Metadata-only, like `reshape` (which it delegates to and
