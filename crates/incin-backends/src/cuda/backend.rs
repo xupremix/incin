@@ -63,8 +63,172 @@ impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
     // No CUDA kernels exist for these yet.
     crate::unsupported::unsupported_tensor_ops! {
         where_cond, gather, scatter, index_select, masked_fill,
-        repeat, pad, triu, tril, diag,
         unfold, pixel_shuffle, group_norm, instance_norm,
+    }
+
+    /// `repeat`. No CUDA kernel: downloads the F32 operand, repeats it with
+    /// the same row-major walk CPU's own `repeat` uses (reusing
+    /// `crate::cpu::stride::contiguous_strides` and
+    /// `crate::cpu::storage::increment_index`, both `pub(crate)` already),
+    /// re-uploads. Not autograd-wired, matching CPU.
+    fn repeat<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        repeats: &[usize],
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        cuda_require_f32(t.buffer.dtype, "repeat")?;
+        let data = download_f32_host(t)?;
+        let in_strides = crate::cpu::stride::contiguous_strides(&t.shape);
+        let out_shape: Vec<usize> = t.shape.iter().zip(repeats).map(|(a, b)| a * b).collect();
+        let total = checked_numel(&out_shape)?;
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; out_shape.len()];
+        for _ in 0..total {
+            let src_flat: usize = idx
+                .iter()
+                .zip(t.shape.iter())
+                .zip(in_strides.iter())
+                .map(|((&s, &dim), &stride)| (s % dim) * stride)
+                .sum();
+            out.push(data[src_flat]);
+            if !out_shape.is_empty() {
+                crate::cpu::storage::increment_index(&mut idx, &out_shape);
+            }
+        }
+        upload_f32_from_host(&t.buffer, out_shape, out)
+    }
+
+    /// `pad`. Same host round-trip as `repeat`. Not autograd-wired,
+    /// matching CPU.
+    fn pad<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        padding: &[(usize, usize)],
+        val: f64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        cuda_require_f32(t.buffer.dtype, "pad")?;
+        let data = download_f32_host(t)?;
+        let in_strides = crate::cpu::stride::contiguous_strides(&t.shape);
+        let out_shape: Vec<usize> = t
+            .shape
+            .iter()
+            .zip(padding)
+            .map(|(&s, &(before, after))| s + before + after)
+            .collect();
+        let total = checked_numel(&out_shape)?;
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; out_shape.len()];
+        let val = val as f32;
+        for _ in 0..total {
+            let mut inside = true;
+            let mut src_flat = 0usize;
+            for (axis, &p) in idx.iter().enumerate() {
+                let (before, _) = padding[axis];
+                if p < before || p >= before + t.shape[axis] {
+                    inside = false;
+                    break;
+                }
+                src_flat += (p - before) * in_strides[axis];
+            }
+            out.push(if inside { data[src_flat] } else { val });
+            if !out_shape.is_empty() {
+                crate::cpu::storage::increment_index(&mut idx, &out_shape);
+            }
+        }
+        upload_f32_from_host(&t.buffer, out_shape, out)
+    }
+
+    /// `triu`. Same host round-trip as `repeat`. Not autograd-wired,
+    /// matching CPU.
+    fn triu<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        k: i64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        cuda_require_f32(t.buffer.dtype, "triu")?;
+        let data = download_f32_host(t)?;
+        let rank = t.shape.len();
+        let total = checked_numel(&t.shape)?;
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; rank];
+        for &value in data.iter().take(total) {
+            let (r, c) = if rank >= 2 {
+                (idx[rank - 2] as i64, idx[rank - 1] as i64)
+            } else {
+                (0, idx[0] as i64)
+            };
+            out.push(if c >= r + k { value } else { 0.0 });
+            if !t.shape.is_empty() {
+                crate::cpu::storage::increment_index(&mut idx, &t.shape);
+            }
+        }
+        upload_f32_from_host(&t.buffer, t.shape.to_vec(), out)
+    }
+
+    /// `tril`. Same host round-trip as `repeat`. Not autograd-wired,
+    /// matching CPU.
+    fn tril<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        k: i64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        cuda_require_f32(t.buffer.dtype, "tril")?;
+        let data = download_f32_host(t)?;
+        let rank = t.shape.len();
+        let total = checked_numel(&t.shape)?;
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; rank];
+        for &value in data.iter().take(total) {
+            let (r, c) = if rank >= 2 {
+                (idx[rank - 2] as i64, idx[rank - 1] as i64)
+            } else {
+                (0, idx[0] as i64)
+            };
+            out.push(if c <= r + k { value } else { 0.0 });
+            if !t.shape.is_empty() {
+                crate::cpu::storage::increment_index(&mut idx, &t.shape);
+            }
+        }
+        upload_f32_from_host(&t.buffer, t.shape.to_vec(), out)
+    }
+
+    /// `diag`. Same host round-trip as `repeat`, matching CPU's two cases: a
+    /// 1D operand builds a 2D matrix with that operand on its `k`-th
+    /// diagonal, an operand of rank 2+ extracts its `k`-th diagonal into a
+    /// 1D result. Not autograd-wired, matching CPU.
+    fn diag<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        k: i64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        cuda_require_f32(t.buffer.dtype, "diag")?;
+        let data = download_f32_host(t)?;
+        let rank = t.shape.len();
+        if rank == 1 {
+            let n = t.shape[0];
+            let k_abs = k.unsigned_abs() as usize;
+            let out_dim = n.checked_add(k_abs).ok_or(ShapeError::ArithmeticOverflow {
+                operation: OperationKind::Storage,
+                expression: "CUDA diagonal output dimension",
+            })?;
+            let out_total = checked_numel(&[out_dim, out_dim])?;
+            let mut out = vec![0.0f32; out_total];
+            for (i, &value) in data.iter().enumerate().take(n) {
+                let r = if k >= 0 { i } else { i + k_abs };
+                let c = if k >= 0 { i + k_abs } else { i };
+                if r < out_dim && c < out_dim {
+                    out[r * out_dim + c] = value;
+                }
+            }
+            upload_f32_from_host(&t.buffer, vec![out_dim, out_dim], out)
+        } else {
+            let r_len = t.shape[rank - 2];
+            let c_len = t.shape[rank - 1];
+            let mut diag_vals = Vec::new();
+            for r in 0..r_len {
+                let c = (r as i64 + k) as usize;
+                if c < c_len {
+                    diag_vals.push(data[r * c_len + c]);
+                }
+            }
+            let out_len = diag_vals.len();
+            upload_f32_from_host(&t.buffer, vec![out_len], diag_vals)
+        }
     }
 
     /// `cmp_eq`. No CUDA kernel: downloads both F32 operands, compares
@@ -3378,5 +3542,72 @@ mod tests {
             <B as TensorOps<B>>::maximum::<f32>(&a, &b),
             Err(Error::UnsupportedDType { .. })
         ));
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn test_repeat() {
+        let a = cuda_f32(&[2, 2], vec![1.0, 2.0, 3.0, 4.0]);
+        let out = <B as TensorOps<B>>::repeat::<f32>(&a, &[2, 1]).unwrap();
+        assert_eq!(out.shape, vec![4, 2]);
+        assert_eq!(
+            download_f32_host(&out).unwrap(),
+            vec![1.0, 2.0, 3.0, 4.0, 1.0, 2.0, 3.0, 4.0]
+        );
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn test_pad() {
+        let a = cuda_f32(&[2, 2], vec![1.0, 2.0, 3.0, 4.0]);
+        let out = <B as TensorOps<B>>::pad::<f32>(&a, &[(1, 0), (0, 1)], -1.0).unwrap();
+        assert_eq!(out.shape, vec![3, 3]);
+        assert_eq!(
+            download_f32_host(&out).unwrap(),
+            vec![-1.0, -1.0, -1.0, 1.0, 2.0, -1.0, 3.0, 4.0, -1.0]
+        );
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn test_triu() {
+        let a = cuda_f32(&[3, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]);
+        let out = <B as TensorOps<B>>::triu::<f32>(&a, 0).unwrap();
+        assert_eq!(
+            download_f32_host(&out).unwrap(),
+            vec![1.0, 2.0, 3.0, 0.0, 5.0, 6.0, 0.0, 0.0, 9.0]
+        );
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn test_tril() {
+        let a = cuda_f32(&[3, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]);
+        let out = <B as TensorOps<B>>::tril::<f32>(&a, 0).unwrap();
+        assert_eq!(
+            download_f32_host(&out).unwrap(),
+            vec![1.0, 0.0, 0.0, 4.0, 5.0, 0.0, 7.0, 8.0, 9.0]
+        );
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn test_diag_builds_matrix_from_vector() {
+        let a = cuda_f32(&[3], vec![1.0, 2.0, 3.0]);
+        let out = <B as TensorOps<B>>::diag::<f32>(&a, 0).unwrap();
+        assert_eq!(out.shape, vec![3, 3]);
+        assert_eq!(
+            download_f32_host(&out).unwrap(),
+            vec![1.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 3.0]
+        );
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn test_diag_extracts_from_matrix() {
+        let a = cuda_f32(&[3, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]);
+        let out = <B as TensorOps<B>>::diag::<f32>(&a, 0).unwrap();
+        assert_eq!(out.shape, vec![3]);
+        assert_eq!(download_f32_host(&out).unwrap(), vec![1.0, 5.0, 9.0]);
     }
 }

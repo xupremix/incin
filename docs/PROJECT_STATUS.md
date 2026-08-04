@@ -387,12 +387,17 @@ a non-F32 CUDA tensor errors instead of repeating the
 `download_f32_host`/`topk`/`argsort` bug. Same encoding, same lack of a
 gradient as CPU's own versions of each.
 
-Every structural/index op (`repeat`, `pad`, `triu`, `tril`, `diag`,
+`repeat`, `pad`, `triu`, `tril` and `diag` are real now too, same
+host-round-trip strategy with per-position index math instead of a flat
+elementwise closure, reusing `crate::cpu::stride::contiguous_strides` and
+`crate::cpu::storage::increment_index` (both already `pub(crate)`, so
+nothing new had to be exposed) rather than re-deriving row-major indexing
+from scratch the way WGPU's `checked_flat_index`/`increment_multi_index`
+did — WGPU has no equivalent crate-shared utility to reuse, CUDA does.
+
 `unfold`, `pixel_shuffle`, `gather`, `scatter`, `index_select`,
-`masked_fill`, `where_cond`, `group_norm`, `instance_norm`) remains
-unsupported on CUDA and is the natural continuation of this pass — the same
-host-round-trip strategy applies, just with per-position index math rather
-than a flat elementwise closure.
+`masked_fill`, `where_cond`, `group_norm` and `instance_norm` remain
+unsupported on CUDA and are the natural continuation of this pass.
 
 The FND-004 evidence records 16 formatter-drifted files; the actual count at
 that commit was 22, and is 20 now. See `audit-evidence/FND-005/known-limitations.md`
