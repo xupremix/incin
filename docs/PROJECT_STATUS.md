@@ -222,8 +222,15 @@ reuse the CPU backend's own fixtures (`group_norm_statistics_are_per_sample_
 not_across_the_batch`, `instance_norm_normalizes_each_channel_of_each_
 sample_alone`) rather than deriving new expected values.
 
-WGPU's `TensorOps` gap is now `where_cond`, `gather` and `scatter` — 3
-methods, down from the original 33.
+`scatter` is real now too, same host-readback pattern, same fidelity to
+CPU's semantics — including silently ignoring an out-of-bounds destination
+position rather than erroring. Unlike `where_cond`/`gather`, CPU's `scatter`
+is not autograd-wired, keeping it in scope for the same
+read-transform-upload template. WGPU's `TensorOps` gap is now `where_cond`
+and `gather` — 2 methods, down from the original 33. Both are CPU
+autograd-wired operations (`where_cond` additionally broadcasts its two
+value operands to a common shape) and are being left for a dedicated pass,
+as noted above.
 
 The FND-004 evidence records 16 formatter-drifted files; the actual count at
 that commit was 22, and is 20 now. See `audit-evidence/FND-005/known-limitations.md`

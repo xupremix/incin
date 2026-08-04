@@ -395,6 +395,18 @@ fn scaled_dot_product_attention_records_gradients_for_all_three_operands() {
 }
 
 #[test]
+fn test_scatter() {
+    let t = storage(vec![0.0, 0.0, 0.0, 0.0, 0.0, 0.0], vec![3, 2]);
+    let index = storage(vec![2.0, 0.0], vec![2, 1]);
+    let src = storage(vec![9.0, 8.0], vec![2, 1]);
+    let out = <B as TensorOps<B>>::scatter::<f32, f32>(&t, 0, &index, &src).unwrap();
+    assert_eq!(out.shape, vec![3, 2]);
+    // Row 0's column 0 gets src[1]=8 (index[1]=0), row 2's column 0 gets
+    // src[0]=9 (index[0]=2); every other position is untouched.
+    assert_eq!(readback(&out), vec![8.0, 0.0, 0.0, 0.0, 9.0, 0.0]);
+}
+
+#[test]
 fn test_index_select() {
     let a = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![3, 2]);
     let index = storage(vec![2.0, 0.0], vec![2]);

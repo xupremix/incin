@@ -755,7 +755,38 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackendImpl<T, D> {
     // because the trait answered for them; declaring them here keeps the gap
     // visible and makes the compiler name any operation added later.
     crate::unsupported::unsupported_tensor_ops! {
-        where_cond, gather, scatter,
+        where_cond, gather,
+    }
+
+    /// `scatter`. Same host-readback/upload pattern as `repeat`, matching
+    /// CPU's own semantics exactly, including silently ignoring an
+    /// out-of-bounds destination position rather than erroring. Not
+    /// autograd-wired, matching CPU.
+    fn scatter<K: DType, KInt: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        dim: usize,
+        index: &<Self as Backend>::Storage<KInt>,
+        src: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let mut out_data = t.buffer.to_vec::<f32>()?;
+        let index_data = index.buffer.to_vec::<f32>()?;
+        let src_data = src.buffer.to_vec::<f32>()?;
+        let index_total = num_elements(&index.shape)?;
+        let mut idx = vec![0usize; index.shape.len()];
+        for i in 0..index_total {
+            let target_i = index_data[i] as usize;
+            let mut dest_idx = idx.clone();
+            dest_idx[dim] = target_i;
+            let flat_dest = checked_flat_index(&dest_idx, &t.shape, OperationKind::Reshape)?;
+            if flat_dest < out_data.len() {
+                out_data[flat_dest] = src_data[i];
+            }
+            if !index.shape.is_empty() {
+                increment_multi_index(&mut idx, &index.shape);
+            }
+        }
+        let buf = WgpuBuffer::try_from_slice(&out_data)?;
+        Ok(WgpuStorage::new(buf, t.shape.to_vec()))
     }
 
     /// `group_norm`. WGPU storage is always contiguous, so a group (CPU's
