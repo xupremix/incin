@@ -1,6 +1,6 @@
-use incin_core::test_utils::DummyBackend;
 use incin_core::prelude::*;
 use incin_core::prelude::{TracingBackend, tracing_mark_input, tracing_mark_output};
+use incin_core::test_utils::DummyBackend;
 extern crate alloc;
 use alloc::collections::BTreeMap;
 use std::path::Path;

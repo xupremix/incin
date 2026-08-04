@@ -1858,49 +1858,63 @@ fn topk_returns_both_of_the_tensors_its_descriptor_describes() {
     assert_eq!(indices.dtype, DTypeId::U32);
 }
 
-/// An index dtype the kernel does not produce is refused, not relabelled.
+/// An index-returning reduction produces the index dtype it was asked for.
 ///
-/// `argmax` takes its index dtype as a type parameter and then ignores it,
-/// always building an `i64` buffer. Forwarding a descriptor that asked for
-/// `u32` would hand back `i64` storage wearing a `u32` label, which is the
-/// exact class of silent mislabelling the descriptor contract exists to stop.
-/// The refusal is what makes the canonical path fail closed where the legacy
-/// one does not.
+/// `argmax`, `argmin`, `argsort` and `topk` each take an index dtype as a type
+/// parameter. All four used to declare it and then ignore it, `argmax` and
+/// `argmin` always building `i64` and the other two always `u32`, so a request
+/// for anything else came back wearing a label its buffer did not hold. The
+/// canonical path worked around it by refusing every dtype but the hardcoded
+/// one, which narrowed the contract instead of meeting it.
+///
+/// Both paths honour the request now, and the storage dtype is asserted rather
+/// than the absence of an error, so a return to relabelling fails here.
 #[test]
-fn an_index_dtype_the_kernel_does_not_produce_is_refused() {
+fn an_index_reduction_produces_the_index_dtype_it_was_asked_for() {
     use incin_core::backend_authoring::ReductionOps;
     use incin_core::exec::catalog::IndexReductionAttributes;
 
     let context = context();
     let input = f32_storage(vec![3.0, 1.0, 2.0, 4.0], vec![2, 2]);
 
-    let error = dispatch::execute::<op::ArgMax, _>(
+    for dtype in [DTypeId::U8, DTypeId::U32, DTypeId::I64] {
+        let indices = dispatch::execute::<op::ArgMax, _>(
+            &context,
+            IndexReductionAttributes {
+                axis: Some(1),
+                dtype,
+            },
+            &[handle(&input)],
+        )
+        .unwrap_or_else(|error| panic!("argmax with {dtype:?} indices: {error}"));
+        assert_eq!(
+            indices.dtype, dtype,
+            "canonical argmax mislabelled {dtype:?}"
+        );
+        // Row 0 is [3, 1] and row 1 is [2, 4], so the winners sit at 0 and 1.
+        assert_eq!(values(&indices), vec![0.0, 1.0]);
+    }
+
+    // A float index dtype has no integer buffer to be built into. The
+    // descriptor rejects it before the backend is reached, which is the
+    // earlier of the two refusals and the one that names the reason.
+    let refused = dispatch::execute::<op::ArgMax, _>(
         &context,
         IndexReductionAttributes {
             axis: Some(1),
-            dtype: DTypeId::U32,
+            dtype: DTypeId::F32,
         },
         &[handle(&input)],
     )
-    .expect_err("the CPU argmax kernel does not build u32 indices");
+    .expect_err("a float index dtype is not an index dtype");
     assert!(
-        matches!(
-            error,
-            CanonicalError::Backend(incin_core::prelude::BackendError::Unsupported {
-                reason: UnsupportedReason::DType {
-                    operation: OperationKind::ArgMax,
-                    dtype: DTypeId::U32,
-                },
-            })
-        ),
-        "unexpected refusal: {error}"
+        refused.to_string().contains("integer dtype"),
+        "unexpected refusal: {refused}"
     );
 
-    // The legacy path accepts the same request and answers with storage that
-    // is labelled i64 regardless. That is the behaviour being replaced, and it
-    // is asserted here so the difference is a recorded fact rather than a
-    // claim in a commit message.
+    // The legacy path is the one the stable tensor surface still uses, so it
+    // has to agree rather than merely not error.
     let legacy = <TestBackend as ReductionOps<TestBackend>>::argmax::<f32, u32>(&input, Some(1))
-        .expect("the legacy path does not check the index dtype");
-    assert_eq!(legacy.dtype, DTypeId::I64);
+        .expect("the legacy path honours the index dtype");
+    assert_eq!(legacy.dtype, DTypeId::U32);
 }

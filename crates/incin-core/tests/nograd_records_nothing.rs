@@ -301,21 +301,28 @@ fn the_index_returning_reductions_record_nothing_even_on_grad_tensors() {
     assert_eq!(recorded(|| t.topk(2, 1, true).unwrap()), 0);
     assert_eq!(recorded(|| t.argsort(1, false).unwrap()), 0);
 
-    // `argmax` and `argmin` are asserted without unwrapping, and the reason is
-    // a defect this row did not introduce and does not fix: the CPU kernel
-    // fills an I64 buffer while `Tensor::argmax` types its result `u32`, so
-    // the frontend rejects the storage its own backend just produced and the
-    // public method cannot succeed at all. The kernel still runs before that
-    // check, which is what makes the tape count below meaningful rather than
-    // vacuous — the recording decision has already been taken by then.
-    assert!(
-        t.argmax(Some(1)).is_err(),
-        "argmax now succeeds: drop the workaround below and unwrap"
+    // These used to be asserted without unwrapping, because the CPU kernel
+    // filled an I64 buffer while `Tensor::argmax` types its result `u32`: the
+    // frontend rejected the storage its own backend had just produced, and the
+    // public method could not succeed at all. The kernel builds the index
+    // dtype it is asked for now, so the two agree and the results are
+    // unwrapped and checked.
+    assert_eq!(recorded(|| t.argmax(Some(1)).unwrap()), 0);
+    assert_eq!(recorded(|| t.argmax(None).unwrap()), 0);
+    assert_eq!(recorded(|| t.argmin(Some(1)).unwrap()), 0);
+    assert_eq!(recorded(|| t.argmin(None).unwrap()), 0);
+
+    // Row 0 is [1, 5, 3] and row 1 is [4, 2, 6], so the maxima sit at 1 and 2
+    // and the minima at 0 and 1. Asserting the values rather than only the
+    // tape count is what makes the unwrap above worth having.
+    assert_eq!(
+        t.argmax(Some(1)).unwrap().to_vec1::<u32>().unwrap(),
+        vec![1, 2]
     );
-    assert_eq!(recorded(|| t.argmax(Some(1))), 0);
-    assert_eq!(recorded(|| t.argmax(None)), 0);
-    assert_eq!(recorded(|| t.argmin(Some(1))), 0);
-    assert_eq!(recorded(|| t.argmin(None)), 0);
+    assert_eq!(
+        t.argmin(Some(1)).unwrap().to_vec1::<u32>().unwrap(),
+        vec![0, 1]
+    );
 }
 
 #[test]

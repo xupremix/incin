@@ -631,3 +631,81 @@ command: RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps
   exit: 0
   output: audit-evidence/FND-005/test-results/rustdoc-committed.txt
 
+
+# Continued migration session
+
+stage: worktree-post-commit
+commit: 3aac80832185b312200da126c9061a124cdf7ca9
+started: 2026-08-03T22:19:12+02:00
+
+command: cargo test --workspace
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-post-commit
+  commit: 3aac80832185b312200da126c9061a124cdf7ca9
+  at: 2026-08-03T22:19:12+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/test-workspace.txt
+
+command: cargo clippy --workspace --all-targets -- -D warnings
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-post-commit
+  commit: 3aac80832185b312200da126c9061a124cdf7ca9
+  at: 2026-08-03T22:19:12+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/clippy-workspace.txt
+
+command: cargo public-api -p incin
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-post-commit
+  commit: 3aac80832185b312200da126c9061a124cdf7ca9
+  at: 2026-08-03T22:19:12+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/public-api.txt
+
+command: cargo check -p incin-backends --features cuda
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-post-commit
+  commit: 3aac80832185b312200da126c9061a124cdf7ca9
+  at: 2026-08-03T22:19:12+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/check-backend-cuda.txt
+
+command: cargo check -p incin-backends --features wgpu
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-post-commit
+  commit: 3aac80832185b312200da126c9061a124cdf7ca9
+  at: 2026-08-03T22:19:12+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/check-backend-wgpu.txt
+
+command: cargo check -p incin-backends --features metal
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-post-commit
+  commit: 3aac80832185b312200da126c9061a124cdf7ca9
+  at: 2026-08-03T22:19:12+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/check-backend-metal.txt
+
+command: cargo check -p incin-backends --no-default-features --features external-candle
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-post-commit
+  commit: 3aac80832185b312200da126c9061a124cdf7ca9
+  at: 2026-08-03T22:19:12+02:00
+  exit: 0
+  output: audit-evidence/FND-005/test-results/check-backend-candle.txt
+
+command: INCIN_DOCS=overwrite cargo test -p incin-backends --test cpu_migration_status
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-post-commit
+  commit: 3aac80832185b312200da126c9061a124cdf7ca9
+  at: 2026-08-03T22:19:12+02:00
+  exit: 0
+  output: not captured; regeneration is asserted by the suite above
+
+command: INCIN_DOCS=overwrite cargo test --workspace --test generated_docs
+  cwd: /home/xupremix/Projects/incin
+  stage: worktree-post-commit
+  commit: 3aac80832185b312200da126c9061a124cdf7ca9
+  at: 2026-08-03T22:19:12+02:00
+  exit: 0
+  output: not captured; regeneration is asserted by the suite above

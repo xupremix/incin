@@ -51,6 +51,11 @@ pub use data_parallel::{
     GradientDescriptor, GradientId, TwoRankDataParallel, validate_data_parallel_dtype,
 };
 #[cfg(feature = "distributed")]
+pub use fsdp::{
+    FsdpError, FsdpMemoryReport, FsdpParameterDescriptor, FsdpParameterId, FsdpPlan,
+    FsdpPlanBuilder, ZeROStage,
+};
+#[cfg(feature = "distributed")]
 pub use pipeline::{
     ActivationCheckpoint, GPipe, OneForwardOneBackward, PipelineAction, PipelineBoundaryId,
     PipelineClock, PipelineDType, PipelineError, PipelinePhase, PipelinePlan, PipelinePlanBuilder,
@@ -86,9 +91,4 @@ pub use tensor_parallel::{
     TensorParallelDimension, TensorParallelError, TensorParallelId, TensorParallelPlan,
     TensorParallelPlanBuilder, TwoRankTensorParallel, TwoWayShard, validate_tensor_parallel_dtype,
     validate_two_way_extent,
-};
-#[cfg(feature = "distributed")]
-pub use fsdp::{
-    FsdpError, FsdpMemoryReport, FsdpParameterDescriptor, FsdpParameterId, FsdpPlan,
-    FsdpPlanBuilder, ZeROStage,
 };

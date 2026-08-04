@@ -14,7 +14,11 @@ pub const fn simd_vector_bytes() -> usize {
     #[cfg(all(
         not(target_feature = "avx512f"),
         not(target_feature = "avx2"),
-        any(target_feature = "sse2", target_feature = "sse4.1", target_feature = "neon")
+        any(
+            target_feature = "sse2",
+            target_feature = "sse4.1",
+            target_feature = "neon"
+        )
     ))]
     {
         16
@@ -42,9 +46,5 @@ pub const fn simd_lanes<T: Sized>() -> usize {
     }
     let vector_bytes = simd_vector_bytes();
     let lanes = vector_bytes / elem_size;
-    if lanes == 0 {
-        1
-    } else {
-        lanes
-    }
+    if lanes == 0 { 1 } else { lanes }
 }

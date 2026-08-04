@@ -83,6 +83,54 @@ fn unflatten_index(flat: usize, shape: &[usize]) -> Vec<usize> {
     idx
 }
 
+/// Builds an index buffer in the dtype the caller asked for.
+///
+/// `argmax`, `argmin`, `argsort` and `topk` each take an index dtype as a type
+/// parameter. All four used to declare it and then hardcode a buffer variant,
+/// `I64` for the first two and `U32` for the other two, so asking `argmax` for
+/// `u32` indices returned `i64` storage with nothing reporting the difference,
+/// and the backend contradicted itself about which integer an index tensor
+/// holds.
+///
+/// Indices are non-negative and bounded by the axis they index, so the only
+/// question a narrower dtype raises is whether they fit. They are checked
+/// rather than truncated: a silently wrapped index is the failure this
+/// function exists to remove, not one to reintroduce in a narrower type.
+fn index_buffer<KInt: DType>(op: &'static str, indices: &[i64]) -> Result<CpuBuffer> {
+    /// The requested dtype, resolved from the type parameter. `Field` is a
+    /// `PhantomData` for every compile-time dtype, so the default is the only
+    /// value it has. `Dyn` resolves to `F32` and is refused below, which is
+    /// correct: an index tensor is an integer one.
+    fn narrow<T: TryFrom<i64>>(
+        op: &'static str,
+        indices: &[i64],
+        dtype: DTypeId,
+    ) -> Result<Vec<T>> {
+        indices
+            .iter()
+            .map(|&index| {
+                T::try_from(index).map_err(|_| Error::UnsupportedDType {
+                    dtype,
+                    backend: "cpu",
+                    op,
+                })
+            })
+            .collect()
+    }
+
+    let dtype = KInt::to_incin(&Default::default());
+    match dtype {
+        DTypeId::I64 => Ok(CpuBuffer::I64(indices.to_vec())),
+        DTypeId::U32 => Ok(CpuBuffer::U32(narrow::<u32>(op, indices, dtype)?)),
+        DTypeId::U8 => Ok(CpuBuffer::U8(narrow::<u8>(op, indices, dtype)?)),
+        _ => Err(Error::UnsupportedDType {
+            dtype,
+            backend: "cpu",
+            op,
+        }),
+    }
+}
+
 /// Sum-reduce `storage` over `axis`, *keeping* that axis as size 1
 /// (e.g. `[4, 3]` over axis 0 → `[1, 3]`).
 pub(crate) fn sum_axis_keepdim(storage: &CpuStorage, axis: usize) -> Result<CpuStorage> {
@@ -803,8 +851,10 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                         multi[d] as i64
                     })
                     .collect();
-                let keepdim_out =
-                    CpuStorage::from_contiguous(CpuBuffer::I64(idx_vals), out_shape.to_vec());
+                let keepdim_out = CpuStorage::from_contiguous(
+                    index_buffer::<KInt>("argmax", &idx_vals)?,
+                    out_shape.to_vec(),
+                );
                 let mut squeeze_shape = keepdim_out.shape.to_vec();
                 squeeze_shape.remove(d);
                 Ok(keepdim_out
@@ -827,7 +877,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                     }
                 }
                 Ok(CpuStorage::from_contiguous(
-                    CpuBuffer::I64(vec![best_flat_idx]),
+                    index_buffer::<KInt>("argmax", &[best_flat_idx])?,
                     vec![],
                 ))
             }
@@ -860,8 +910,10 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                         multi[d] as i64
                     })
                     .collect();
-                let keepdim_out =
-                    CpuStorage::from_contiguous(CpuBuffer::I64(idx_vals), out_shape.to_vec());
+                let keepdim_out = CpuStorage::from_contiguous(
+                    index_buffer::<KInt>("argmin", &idx_vals)?,
+                    out_shape.to_vec(),
+                );
                 let mut squeeze_shape = keepdim_out.shape.to_vec();
                 squeeze_shape.remove(d);
                 Ok(keepdim_out
@@ -884,7 +936,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                     }
                 }
                 Ok(CpuStorage::from_contiguous(
-                    CpuBuffer::I64(vec![best_flat_idx]),
+                    index_buffer::<KInt>("argmin", &[best_flat_idx])?,
                     vec![],
                 ))
             }
@@ -989,8 +1041,12 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
         let n_slices = crate::cpu::stride::checked_numel(&base_shape)?;
 
         let out_len = crate::cpu::stride::checked_numel(&out_shape)?;
-        let mut out_vals = vec![0.0f32; out_len];
-        let mut out_indices = vec![0u32; out_len];
+        // The values keep the operand's dtype. Accumulating them as `f64` and
+        // converting through the operand's own buffer at the end is what makes
+        // that true: the buffer used to be built as `F32` whatever was read,
+        // so a `f64` or `f16` operand came back relabelled and narrowed.
+        let mut out_vals = vec![0.0f64; out_len];
+        let mut out_indices = vec![0i64; out_len];
 
         for i in 0..n_slices {
             let mut rem = i;
@@ -1005,9 +1061,9 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                 coords[dim] = j;
                 slice_vals.push((
                     t.get(&coords),
-                    u32::try_from(j).map_err(|_| ShapeError::ArithmeticOverflow {
+                    i64::try_from(j).map_err(|_| ShapeError::ArithmeticOverflow {
                         operation: OperationKind::Reduction,
-                        expression: "topk index does not fit u32",
+                        expression: "topk index does not fit i64",
                     })?,
                 ));
             }
@@ -1023,13 +1079,16 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
             for (j, &(val, idx)) in slice_vals.iter().enumerate().take(k) {
                 out_coords[dim] = j;
                 let flat = flatten_index(&out_coords, &out_shape);
-                out_vals[flat] = val as f32;
+                out_vals[flat] = val;
                 out_indices[flat] = idx;
             }
         }
         Ok((
-            CpuStorage::from_contiguous(CpuBuffer::F32(out_vals), out_shape.to_vec()),
-            CpuStorage::from_contiguous(CpuBuffer::U32(out_indices), out_shape.to_vec()),
+            CpuStorage::from_contiguous(t.buffer.from_f64_values(out_vals)?, out_shape.to_vec()),
+            CpuStorage::from_contiguous(
+                index_buffer::<KInt>("topk", &out_indices)?,
+                out_shape.to_vec(),
+            ),
         ))
     }
 
@@ -1051,7 +1110,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
         let mut base_shape = shape.clone();
         base_shape[dim] = 1;
         let n_slices = crate::cpu::stride::checked_numel(&base_shape)?;
-        let mut out = vec![0u32; crate::cpu::stride::checked_numel(&shape)?];
+        let mut out = vec![0i64; crate::cpu::stride::checked_numel(&shape)?];
 
         for i in 0..n_slices {
             let mut rem = i;
@@ -1066,9 +1125,9 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
                 coords[dim] = k;
                 slice_vals.push((
                     t.get(&coords),
-                    u32::try_from(k).map_err(|_| ShapeError::ArithmeticOverflow {
+                    i64::try_from(k).map_err(|_| ShapeError::ArithmeticOverflow {
                         operation: OperationKind::Reduction,
-                        expression: "argsort index does not fit u32",
+                        expression: "argsort index does not fit i64",
                     })?,
                 ));
             }
@@ -1086,7 +1145,7 @@ impl<T: DType, D: Device> ReductionOps<Self> for CpuBackendImpl<T, D> {
             }
         }
         Ok(CpuStorage::from_contiguous(
-            CpuBuffer::U32(out),
+            index_buffer::<KInt>("argsort", &out)?,
             shape.to_vec(),
         ))
     }

@@ -29,18 +29,18 @@ pub mod prelude {
     pub use super::arg_into::{ArgInto, TensorArgsData};
     pub use super::auto_device::{BestDevice, BestDeviceAt};
     pub use super::backend::{Backend, StorageBackend, SupportsDType, TransferTo};
-    pub use super::base::{Dyn, Tensor};
     #[cfg(feature = "distributed")]
     pub use super::base::PlacedTensorError;
+    pub use super::base::{Dyn, Tensor};
     pub use super::device::{
         ConstDevice, Cpu, Device, DeviceId, DeviceKind, DevicePreference, DeviceSet, DeviceSetError,
     };
     #[cfg(feature = "cuda")]
     pub use super::device::{Cuda, CudaN};
-    #[cfg(feature = "wgpu")]
-    pub use super::device::{Wgpu, WgpuN};
     #[cfg(feature = "metal")]
     pub use super::device::{Metal, MetalN};
+    #[cfg(feature = "wgpu")]
+    pub use super::device::{Wgpu, WgpuN};
 
     pub use super::dtype::{
         BoolDType, ConstDType, DType, DTypeId, FloatDType, IntDType, PlainDType, Q8_0, QuantDType,

@@ -346,9 +346,9 @@ fn cpu_tensor_probe<K: DType>(operation: OperationKind, operands: &[&CpuStorage]
             B::scaled_dot_product_attention::<K>(first, operands[1], operands[2], None, None)
                 .unwrap()
         }
-        OperationKind::ArgMax => B::argmax::<K, K>(first, Some(1)).unwrap(),
-        OperationKind::ArgMin => B::argmin::<K, K>(first, Some(1)).unwrap(),
-        OperationKind::Argsort => B::argsort::<K, K>(first, 1, false).unwrap(),
+        OperationKind::ArgMax => B::argmax::<K, i64>(first, Some(1)).unwrap(),
+        OperationKind::ArgMin => B::argmin::<K, i64>(first, Some(1)).unwrap(),
+        OperationKind::Argsort => B::argsort::<K, i64>(first, 1, false).unwrap(),
         OperationKind::Cumsum => B::cumsum::<K>(first, 1).unwrap(),
         _ => panic!("missing CPU tensor probe for {operation}"),
     }
@@ -1589,10 +1589,13 @@ fn expected_result_dtype(operation: OperationKind, operand: DTypeId) -> DTypeId 
         .iter()
         .find(|entry| entry.operation == operation);
     match entry.map(|entry| entry.dtype) {
-        Some(DTypeRule::IndexResult) => match operation {
-            OperationKind::ArgMax | OperationKind::ArgMin => DTypeId::I64,
-            _ => DTypeId::U32,
-        },
+        // An index result carries the index dtype the caller named, not the
+        // operand's. The kernels used to ignore that parameter and hardcode a
+        // buffer, `i64` for the extremum reductions and `u32` for the sorts,
+        // so this used to have to split by operation to describe the
+        // inconsistency. They honour it now, and every probe above asks for
+        // `i64`, so that is what every index result has to be.
+        Some(DTypeRule::IndexResult) => DTypeId::I64,
         _ => operand,
     }
 }
@@ -1600,17 +1603,32 @@ fn expected_result_dtype(operation: OperationKind, operand: DTypeId) -> DTypeId 
 /// The index half of `topk`, which the shared probes above do not reach.
 ///
 /// `expected_result_dtype` answers for output zero, so without this the index
-/// tensor would be the one migrated result nothing asserts a dtype for. It is
-/// `u32` no matter what the caller's descriptor asked for, which is why the
-/// executor refuses any other declared index dtype.
+/// tensor would be the one migrated result nothing asserts a dtype for. It
+/// used to be `u32` whatever the caller asked for; both halves now follow the
+/// request, the values keeping the operand dtype and the indices the declared
+/// index dtype, so both are asserted across the integer dtypes.
 #[test]
-fn the_topk_index_tensor_carries_the_dtype_its_executor_admits() {
+fn the_topk_outputs_carry_the_dtypes_the_caller_named() {
     type B = CpuBackendImpl;
     let input = f32_storage(&[2, 2], &[1.0, 2.0, 3.0, 4.0]);
+
     let (values, indices) = B::topk::<f32, u32>(&input, 1, 1, true).unwrap();
     assert_eq!(values.dtype, DTypeId::F32);
     assert_eq!(indices.dtype, DTypeId::U32);
     assert_eq!(&*indices.shape, &[2, 1]);
+
+    let (_, indices) = B::topk::<f32, i64>(&input, 1, 1, true).unwrap();
+    assert_eq!(indices.dtype, DTypeId::I64);
+    let (_, indices) = B::topk::<f32, u8>(&input, 1, 1, true).unwrap();
+    assert_eq!(indices.dtype, DTypeId::U8);
+
+    // The value half used to be built as `f32` regardless of the operand, so
+    // an `f64` operand came back relabelled and narrowed.
+    let wide =
+        CpuStorage::try_from_contiguous(CpuBuffer::F64(vec![1.0, 2.0, 3.0, 4.0]), vec![2, 2])
+            .unwrap();
+    let (values, _) = B::topk::<f64, i64>(&wide, 1, 1, true).unwrap();
+    assert_eq!(values.dtype, DTypeId::F64);
 }
 
 #[cfg(feature = "wgpu")]

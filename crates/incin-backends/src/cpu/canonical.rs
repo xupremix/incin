@@ -454,29 +454,39 @@ impl<T: DType, D: Device> Execute<Descriptor<op::Cumsum>> for CpuBackendImpl<T, 
     }
 }
 
-/// Reject an index dtype the CPU kernel does not actually produce.
+/// Call an index-returning reduction with the index dtype the descriptor asked
+/// for, rather than with whichever one the kernel used to hardcode.
 ///
-/// The index-returning reductions take an index dtype as a type parameter and
-/// then ignore it: `argmax` and `argmin` always build an `i64` buffer, while
-/// `argsort` and `topk` always build a `u32` one. Forwarding a descriptor that
-/// asked for anything else would return storage labelled with a dtype it does
-/// not hold, which is the failure mode the descriptor contract exists to make
-/// impossible. The backend is not even self-consistent about which integer it
-/// picks, so the check names the produced dtype rather than a shared constant.
-fn produced_index_dtype(
-    operation: OperationKind,
-    declared: DTypeId,
-    produced: DTypeId,
-) -> Result<(), BackendError> {
-    if declared == produced {
-        return Ok(());
-    }
-    Err(BackendError::Unsupported {
-        reason: UnsupportedReason::DType {
-            operation,
-            dtype: declared,
-        },
-    })
+/// The index dtype is a type parameter and the descriptor names it at runtime,
+/// so the two are bridged by a match. `u8`, `u32` and `i64` are the integer
+/// dtypes the backend has; anything else is refused with the operation
+/// attached, which is more use than the kernel's untyped refusal.
+///
+/// This used to be a `produced_index_dtype` check that compared the requested
+/// dtype against a constant the kernel was known to build, because the kernels
+/// declared the type parameter and then ignored it. They honour it now, so the
+/// canonical path forwards the request instead of narrowing it away.
+macro_rules! dispatch_index_dtype {
+    ($operation:expr, $dtype:expr, |$index:ident| $body:expr) => {{
+        let operation = $operation;
+        match $dtype {
+            DTypeId::U8 => {
+                type $index = u8;
+                $body
+            }
+            DTypeId::U32 => {
+                type $index = u32;
+                $body
+            }
+            DTypeId::I64 => {
+                type $index = i64;
+                $body
+            }
+            dtype => Err(BackendError::Unsupported {
+                reason: UnsupportedReason::DType { operation, dtype },
+            }),
+        }
+    }};
 }
 
 /// Index of the extremum, either flattened or along one axis.
@@ -492,9 +502,10 @@ macro_rules! index_reduction_executors {
                 let operation = OperationKind::$operation;
                 let input = reduction_operand(self, request.inputs, operation, records_gradients(request.context))?;
                 let attributes = request.operation.descriptor().attributes();
-                produced_index_dtype(operation, attributes.dtype, DTypeId::I64)?;
-                <Self as ReductionOps<Self>>::$method::<T, T>(input, attributes.axis)
-                    .map_err(|error| kernel_error(operation, error))
+                dispatch_index_dtype!(operation, attributes.dtype, |KIndex| {
+                    <Self as ReductionOps<Self>>::$method::<T, KIndex>(input, attributes.axis)
+                        .map_err(|error| kernel_error(operation, error))
+                })
             }
         }
     )*};
@@ -518,9 +529,14 @@ impl<T: DType, D: Device> Execute<Descriptor<op::Argsort>> for CpuBackendImpl<T,
             records_gradients(request.context),
         )?;
         let attributes = request.operation.descriptor().attributes();
-        produced_index_dtype(operation, attributes.index_dtype, DTypeId::U32)?;
-        <Self as ReductionOps<Self>>::argsort::<T, T>(input, attributes.axis, attributes.descending)
+        dispatch_index_dtype!(operation, attributes.index_dtype, |KIndex| {
+            <Self as ReductionOps<Self>>::argsort::<T, KIndex>(
+                input,
+                attributes.axis,
+                attributes.descending,
+            )
             .map_err(|error| kernel_error(operation, error))
+        })
     }
 }
 
@@ -531,11 +547,10 @@ impl<T: DType, D: Device> Execute<Descriptor<op::Argsort>> for CpuBackendImpl<T,
 /// the operand dtype and the index tensor carries the declared index dtype, so
 /// returning a pair is what the descriptor was already promising.
 ///
-/// Its capability row is f32 only, which is narrower than the operand dtypes
-/// the kernel accepts. That is deliberate. The kernel builds its value buffer
-/// as `f32` whatever the operand held, so for any other dtype it returns
-/// storage labelled with a dtype it does not hold. Advertising f32 alone makes
-/// the canonical path refuse what the legacy path silently mislabels.
+/// The value buffer used to be built as `f32` whatever the operand held, so
+/// the row was narrowed to f32 alone to stop the canonical path routing to a
+/// mislabel. The kernel converts through the operand's own buffer now, so the
+/// row no longer has to be narrower than the kernel.
 impl<T: DType, D: Device> Execute<Descriptor<op::TopK>> for CpuBackendImpl<T, D> {
     type Output = (CpuStorage, CpuStorage);
 
@@ -551,14 +566,15 @@ impl<T: DType, D: Device> Execute<Descriptor<op::TopK>> for CpuBackendImpl<T, D>
             records_gradients(request.context),
         )?;
         let attributes = request.operation.descriptor().attributes();
-        produced_index_dtype(operation, attributes.index_dtype, DTypeId::U32)?;
-        <Self as ReductionOps<Self>>::topk::<T, T>(
-            input,
-            attributes.k,
-            attributes.axis,
-            attributes.largest,
-        )
-        .map_err(|error| kernel_error(operation, error))
+        dispatch_index_dtype!(operation, attributes.index_dtype, |KIndex| {
+            <Self as ReductionOps<Self>>::topk::<T, KIndex>(
+                input,
+                attributes.k,
+                attributes.axis,
+                attributes.largest,
+            )
+            .map_err(|error| kernel_error(operation, error))
+        })
     }
 }
 

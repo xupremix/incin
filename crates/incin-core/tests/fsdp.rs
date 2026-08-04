@@ -2,9 +2,7 @@
 
 #![cfg(feature = "distributed")]
 
-use incin_core::dist::fsdp::{
-    FsdpError, FsdpParameterId, FsdpPlanBuilder, ZeROStage,
-};
+use incin_core::dist::fsdp::{FsdpError, FsdpParameterId, FsdpPlanBuilder, ZeROStage};
 use incin_core::prelude::DTypeId;
 
 #[test]
@@ -52,7 +50,13 @@ fn zero1_zero2_zero3_stage_comparison() {
     let create_plan = |stage: ZeROStage| {
         let mut builder = FsdpPlanBuilder::new(stage);
         builder
-            .push_dyn(FsdpParameterId::new(1).unwrap(), 100_000, DTypeId::F32, 0, 4)
+            .push_dyn(
+                FsdpParameterId::new(1).unwrap(),
+                100_000,
+                DTypeId::F32,
+                0,
+                4,
+            )
             .unwrap();
         builder.finish(4).unwrap()
     };
@@ -78,10 +82,7 @@ fn zero1_zero2_zero3_stage_comparison() {
 #[test]
 fn fsdp_builder_error_handling() {
     // Reserved ID
-    assert_eq!(
-        FsdpParameterId::new(0),
-        Err(FsdpError::ReservedParameterId)
-    );
+    assert_eq!(FsdpParameterId::new(0), Err(FsdpError::ReservedParameterId));
 
     // Duplicate parameter ID
     let mut builder = FsdpPlanBuilder::new(ZeROStage::ZeRO3);

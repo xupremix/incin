@@ -888,18 +888,7 @@ pub trait OptimizerOps<B: Backend> {
         weight_decay: f64,
         step: usize,
     ) -> Result<()> {
-        adamw_step_composed::<B, K>(
-            var,
-            grad,
-            m,
-            v,
-            lr,
-            beta1,
-            beta2,
-            eps,
-            weight_decay,
-            step,
-        )
+        adamw_step_composed::<B, K>(var, grad, m, v, lr, beta1, beta2, eps, weight_decay, step)
     }
 }
 

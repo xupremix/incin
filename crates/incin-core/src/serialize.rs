@@ -225,7 +225,8 @@ impl<'a> Serializer for PostcardSerializer<'a> {
             );
         }
 
-        let bytes = postcard::to_stdvec(&map).map_err(|e| anyhow::anyhow!("Postcard serialization failed: {}", e))?;
+        let bytes = postcard::to_stdvec(&map)
+            .map_err(|e| anyhow::anyhow!("Postcard serialization failed: {}", e))?;
         std::fs::write(self.path, bytes)?;
         Ok(())
     }
@@ -270,8 +271,8 @@ impl<'a> Deserializer for PostcardDeserializer<'a> {
         }
 
         let raw_bytes = std::fs::read(self.path)?;
-        let map: BTreeMap<String, SerializedTensor> =
-            postcard::from_bytes(&raw_bytes).map_err(|e| anyhow::anyhow!("Postcard deserialization failed: {}", e))?;
+        let map: BTreeMap<String, SerializedTensor> = postcard::from_bytes(&raw_bytes)
+            .map_err(|e| anyhow::anyhow!("Postcard deserialization failed: {}", e))?;
 
         if map.len() > limits.max_tensor_count {
             return Err(anyhow::anyhow!(
@@ -283,7 +284,9 @@ impl<'a> Deserializer for PostcardDeserializer<'a> {
 
         let mut state_dict = BTreeMap::new();
         for (k, st) in map {
-            limits.check_shape(&st.shape).map_err(|e| anyhow::anyhow!("Invalid tensor shape: {}", e))?;
+            limits
+                .check_shape(&st.shape)
+                .map_err(|e| anyhow::anyhow!("Invalid tensor shape: {}", e))?;
             let dtype = match st.dtype.as_str() {
                 "F32" => DTypeId::F32,
                 "F64" => DTypeId::F64,

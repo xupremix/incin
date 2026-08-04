@@ -131,8 +131,16 @@ mod tests {
 
         // The first step of AdamW moves each parameter by almost exactly the
         // learning rate, signed by the gradient, whatever the gradient's size.
-        assert!((updated.get(&[0]) - 0.9).abs() < 1e-3, "{}", updated.get(&[0]));
-        assert!((updated.get(&[1]) - 2.1).abs() < 1e-3, "{}", updated.get(&[1]));
+        assert!(
+            (updated.get(&[0]) - 0.9).abs() < 1e-3,
+            "{}",
+            updated.get(&[0])
+        );
+        assert!(
+            (updated.get(&[1]) - 2.1).abs() < 1e-3,
+            "{}",
+            updated.get(&[1])
+        );
     }
 
     /// The fused and composed paths are two spellings of one update rule, so

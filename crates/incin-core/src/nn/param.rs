@@ -398,10 +398,7 @@ impl<S: Shape + DynShape, B: Backend> StateDict<B> for Param<S, B> {
                     op: "Param::load_state_dict",
                     expected: expected_dims.as_ref().to_vec(),
                     got: loaded_dims,
-                    msg: alloc::format!(
-                        "Checkpoint parameter shape mismatch for key '{}'",
-                        prefix
-                    ),
+                    msg: alloc::format!("Checkpoint parameter shape mismatch for key '{}'", prefix),
                 });
             }
             self.inner = B::var_from_tensor(&t.inner)?;
@@ -647,10 +644,7 @@ impl<S: Shape + DynShape, B: Backend> StateDict<B> for Buffer<S, B> {
                     op: "Buffer::load_state_dict",
                     expected: expected_dims.as_ref().to_vec(),
                     got: loaded_dims,
-                    msg: alloc::format!(
-                        "Checkpoint buffer shape mismatch for key '{}'",
-                        prefix
-                    ),
+                    msg: alloc::format!("Checkpoint buffer shape mismatch for key '{}'", prefix),
                 });
             }
             self.inner = B::var_from_tensor(&t.inner)?;

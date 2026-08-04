@@ -1,6 +1,8 @@
+    Checking incin-core v0.0.0 (/home/xupremix/Projects/incin/crates/incin-core)
+    Checking incin-data v0.0.0 (/home/xupremix/Projects/incin/crates/incin-data)
     Checking incin-backends v0.0.0 (/home/xupremix/Projects/incin/crates/incin-backends)
  Documenting incin v0.0.0 (/home/xupremix/Projects/incin/crates/incin)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.13s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.12s
 pub mod incin
 pub use incin::Adam
 pub use incin::AdamW

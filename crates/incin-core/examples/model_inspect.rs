@@ -1,7 +1,7 @@
 extern crate incin_core as incin;
 use incin_core::io::{GgufExporter, QuantScheme, inspect_file};
-use incin_core::test_utils::DummyBackend;
 use incin_core::prelude::*;
+use incin_core::test_utils::DummyBackend;
 use std::path::Path;
 
 fn main() -> Result<()> {

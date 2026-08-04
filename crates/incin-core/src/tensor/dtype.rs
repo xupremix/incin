@@ -254,13 +254,27 @@ pub trait PlainDType: DType {
     type Elem: TensorElement;
 }
 
-impl PlainDType for f32 { type Elem = f32; }
-impl PlainDType for f64 { type Elem = f64; }
-impl PlainDType for u8 { type Elem = u8; }
-impl PlainDType for u32 { type Elem = u32; }
-impl PlainDType for i64 { type Elem = i64; }
-impl PlainDType for f16 { type Elem = f16; }
-impl PlainDType for bf16 { type Elem = bf16; }
+impl PlainDType for f32 {
+    type Elem = f32;
+}
+impl PlainDType for f64 {
+    type Elem = f64;
+}
+impl PlainDType for u8 {
+    type Elem = u8;
+}
+impl PlainDType for u32 {
+    type Elem = u32;
+}
+impl PlainDType for i64 {
+    type Elem = i64;
+}
+impl PlainDType for f16 {
+    type Elem = f16;
+}
+impl PlainDType for bf16 {
+    type Elem = bf16;
+}
 
 impl DType for Dyn {
     /// The runtime-chosen dtype.

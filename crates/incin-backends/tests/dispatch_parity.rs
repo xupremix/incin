@@ -15,13 +15,13 @@
 
 use incin_backends::cpu::{CpuBackendImpl, CpuStorage};
 use incin_backends::dispatch::{DispatchBackend, DispatchStorage};
-use incin_core::exec::{
-    Conv2dArgs, Conv2dRule, ExecutionContext, Pool2dRule, Pool2dSpec, PoolOp, ReduceOp, ReduceRule,
-    ReductionSpec, ReshapeRule, ReshapeSpec, ShapeRule, TensorHandle, Validated,
-};
 use incin_core::backend_authoring::{
     Backend, Execute, ExecutionRequest, LossOps, ModuleOps, QuantizedOps, ReductionOps,
     StorageBackend,
+};
+use incin_core::exec::{
+    Conv2dArgs, Conv2dRule, ExecutionContext, Pool2dRule, Pool2dSpec, PoolOp, ReduceOp, ReduceRule,
+    ReductionSpec, ReshapeRule, ReshapeSpec, ShapeRule, TensorHandle, Validated,
 };
 use incin_core::prelude::*;
 use incin_core::typenum::{U0, U1, U2, U3, U4, U6};

@@ -13,8 +13,8 @@
 
 use incin_core::backend_authoring::{Execute, ExecutionRequest};
 use incin_core::exec::{
-    Conv2dSpec, ExecutionContext, MatMulSpec, Pool2dSpec, ReductionSpec, ReshapeSpec,
-    TensorHandle, TensorMeta,
+    Conv2dSpec, ExecutionContext, MatMulSpec, Pool2dSpec, ReductionSpec, ReshapeSpec, TensorHandle,
+    TensorMeta,
 };
 use incin_core::prelude::{BackendError, DType, Device, OperationKind, StorageBackend};
 

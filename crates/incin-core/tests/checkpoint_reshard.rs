@@ -1,11 +1,11 @@
 #![cfg(feature = "std")]
 
 use incin_backends::cpu::CpuBackendImpl;
-use incin_core::nn::save::{
-    load_checkpoint_manifest, load_resharded_checkpoint, save_checkpoint,
-    save_checkpoint_manifest, slice_bytes_for_rank, GlobalCheckpointManifest,
-};
 use incin_core::nn::Linear;
+use incin_core::nn::save::{
+    GlobalCheckpointManifest, load_checkpoint_manifest, load_resharded_checkpoint, save_checkpoint,
+    save_checkpoint_manifest, slice_bytes_for_rank,
+};
 use incin_core::prelude::*;
 use tempfile::tempdir;
 

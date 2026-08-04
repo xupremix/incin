@@ -137,7 +137,9 @@ impl<T: incin_core::prelude::DType, D: incin_core::prelude::Device> incin_core::
                     .map_err(|e: candle_core::Error| anyhow::anyhow!(e))?;
                 Ok(bytemuck::cast_slice(&v).to_vec())
             }
-            other => Err(anyhow::anyhow!("Unsupported Candle dtype for to_bytes: {:?}", other).into()),
+            other => {
+                Err(anyhow::anyhow!("Unsupported Candle dtype for to_bytes: {:?}", other).into())
+            }
         }
     }
 
@@ -177,10 +179,8 @@ impl<T: incin_core::prelude::DType, D: incin_core::prelude::Device> incin_core::
                 candle_core::Tensor::from_slice(&doubles, shape, &d)
                     .map_err(|e: candle_core::Error| anyhow::anyhow!(e).into())
             }
-            candle_core::DType::U8 => {
-                candle_core::Tensor::from_slice(bytes, shape, &d)
-                    .map_err(|e: candle_core::Error| anyhow::anyhow!(e).into())
-            }
+            candle_core::DType::U8 => candle_core::Tensor::from_slice(bytes, shape, &d)
+                .map_err(|e: candle_core::Error| anyhow::anyhow!(e).into()),
             candle_core::DType::U32 => {
                 let uints: Vec<u32> = bytes
                     .chunks_exact(4)
@@ -213,7 +213,9 @@ impl<T: incin_core::prelude::DType, D: incin_core::prelude::Device> incin_core::
                 candle_core::Tensor::from_slice(&bf16s, shape, &d)
                     .map_err(|e: candle_core::Error| anyhow::anyhow!(e).into())
             }
-            other => Err(anyhow::anyhow!("Unsupported Candle dtype for from_bytes: {:?}", other).into()),
+            other => {
+                Err(anyhow::anyhow!("Unsupported Candle dtype for from_bytes: {:?}", other).into())
+            }
         }
     }
 }
