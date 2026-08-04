@@ -1391,19 +1391,41 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
         eps: f64,
     ) -> Result<<Self as Backend>::Storage<K>> {
         let total: usize = crate::cpu::stride::checked_numel(&(t.shape))?;
+        if groups == 0 {
+            return Err(Error::Msg("group_norm: groups must be non-zero".into()));
+        }
         let channels = if t.shape.len() >= 2 { t.shape[1] } else { 1 };
         if channels % groups != 0 {
             return Err(Error::Msg(
                 "group_norm: channels must be divisible by groups".into(),
             ));
         }
+        // Group normalization statistics are per sample, over one group of
+        // channels and all of that group's spatial positions. A tensor is
+        // `[batch, channels, spatial..]`, so a group occupies
+        // `channels / groups * spatial` elements and there are
+        // `batch * groups` of them, not `groups`. Dividing `total` by `groups`
+        // instead spans samples, which only agrees with the definition when
+        // batch is 1 and is silently wrong above it.
+        //
+        // Rank under 2 has no channel axis to split, so it is one group over
+        // the whole tensor, which is what `groups == 1` already forces.
+        let (batch, spatial) = if t.shape.len() >= 2 {
+            (t.shape[0], t.shape[2..].iter().product::<usize>())
+        } else {
+            (1, total)
+        };
+        // Flat index is `(n * channels + c) * spatial + s`, so a group is a
+        // contiguous run and run `n * groups + g` starts at `run * group_size`.
+        // That keeps the outputs in flat order and lets them be pushed in
+        // sequence, as `from_contiguous` below expects.
+        let group_size = channels / groups * spatial;
         let mut out = Vec::with_capacity(total);
-        let group_size = total / groups;
-        for g in 0..groups {
+        for run in 0..batch * groups {
             let mut sum = 0.0f64;
             let mut sq_sum = 0.0f64;
             for i in 0..group_size {
-                let flat_i = g * group_size + i;
+                let flat_i = run * group_size + i;
                 let multi_i = crate::cpu::ops::elementwise::flat_to_nd(flat_i, &t.shape);
                 let val = t.get(&multi_i);
                 sum += val;
@@ -1413,7 +1435,7 @@ impl<T: DType, D: Device> TensorOps<Self> for CpuBackendImpl<T, D> {
             let var = (sq_sum / group_size as f64 - mean * mean).max(0.0);
             let inv_std = 1.0 / (var + eps).sqrt();
             for i in 0..group_size {
-                let flat_i = g * group_size + i;
+                let flat_i = run * group_size + i;
                 let multi_i = crate::cpu::ops::elementwise::flat_to_nd(flat_i, &t.shape);
                 let norm_val = (t.get(&multi_i) - mean) * inv_std;
                 out.push(norm_val);
@@ -2055,5 +2077,63 @@ mod tests {
         let via_trait = TestBackend::broadcast_left::<f32>(&t, &[4]).unwrap();
         assert_eq!(via_trait.shape, direct.shape);
         assert_eq!(via_trait.strides, direct.strides);
+    }
+
+    /// Every pre-existing `group_norm` test used a batch of 1, which is the
+    /// one size at which grouping over the whole flattened buffer and grouping
+    /// per sample agree. Two samples are the smallest case that tells them
+    /// apart: sample 1 is sample 0 shifted by a constant, and normalization
+    /// removes a constant offset, so a per-sample result has to be identical
+    /// for both. Grouping across the batch cannot produce that.
+    #[test]
+    fn group_norm_statistics_are_per_sample_not_across_the_batch() {
+        let first: Vec<f32> = (0..8).map(|v| v as f32).collect();
+        let second: Vec<f32> = first.iter().map(|v| v + 100.0).collect();
+        let data = first.iter().copied().chain(second).collect::<Vec<f32>>();
+        let t = CpuStorage::from_contiguous(CpuBuffer::F32(data), vec![2, 4, 1, 2]);
+
+        let out = f32_vec(&TestBackend::group_norm::<f32>(&t, 2, 1e-5).unwrap());
+
+        assert_eq!(out[..8], out[8..], "the two samples must normalize alike");
+        // Group 0 of sample 0 is [0,1,2,3]: mean 1.5, population variance 1.25.
+        let inv_std = 1.0 / (1.25f64 + 1e-5).sqrt();
+        for (i, value) in [0.0f64, 1.0, 2.0, 3.0].iter().enumerate() {
+            let expected = ((value - 1.5) * inv_std) as f32;
+            assert!(
+                (out[i] - expected).abs() < 1e-5,
+                "element {i}: got {}, want {expected}",
+                out[i]
+            );
+        }
+    }
+
+    /// `instance_norm` is `group_norm` with one group per channel, so each
+    /// channel of each sample normalizes alone. A channel holding a single
+    /// repeated value therefore has zero variance and normalizes to zero,
+    /// whatever the other channels hold.
+    #[test]
+    fn instance_norm_normalizes_each_channel_of_each_sample_alone() {
+        let t = CpuStorage::from_contiguous(
+            CpuBuffer::F32(vec![
+                1.0, 1.0, 5.0, 7.0, // sample 0: channel 0 flat, channel 1 varies
+                2.0, 2.0, 9.0, 3.0, // sample 1: channel 0 flat, channel 1 varies
+            ]),
+            vec![2, 2, 2],
+        );
+
+        let out = f32_vec(&TestBackend::instance_norm::<f32>(&t, 1e-5).unwrap());
+
+        for flat in [0, 1, 4, 5] {
+            assert!(
+                out[flat].abs() < 1e-5,
+                "constant channel at {flat} must normalize to zero, got {}",
+                out[flat]
+            );
+        }
+        // A two-element channel normalizes to the symmetric pair -1, +1.
+        assert!((out[2] + 1.0).abs() < 1e-3, "got {}", out[2]);
+        assert!((out[3] - 1.0).abs() < 1e-3, "got {}", out[3]);
+        assert!((out[6] - 1.0).abs() < 1e-3, "got {}", out[6]);
+        assert!((out[7] + 1.0).abs() < 1e-3, "got {}", out[7]);
     }
 }
