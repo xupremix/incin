@@ -1,5 +1,7 @@
 // Binary elementwise operations: add, sub, mul, div
-// op_mode: 0=add, 1=sub, 2=mul, 3=div
+// op_mode: 0=add, 1=sub, 2=mul, 3=div, 4=gelu_grad, 5=elu_grad, 6=mish_grad,
+//          7=cmp_eq, 8=cmp_ne, 9=cmp_lt, 10=cmp_le, 11=cmp_gt, 12=cmp_ge,
+//          13=logical_and, 14=logical_or, 15=maximum, 16=minimum, 17=abs_diff
 
 @group(0) @binding(0) var<storage, read> lhs: array<f32>;
 @group(0) @binding(1) var<storage, read> rhs: array<f32>;
@@ -61,5 +63,27 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         out[idx] = elu_grad(lhs[idx], rhs[idx]);
     } else if op == 6u {
         out[idx] = mish_grad(lhs[idx], rhs[idx]);
+    } else if op == 7u {
+        out[idx] = select(0.0, 1.0, lhs[idx] == rhs[idx]);
+    } else if op == 8u {
+        out[idx] = select(0.0, 1.0, lhs[idx] != rhs[idx]);
+    } else if op == 9u {
+        out[idx] = select(0.0, 1.0, lhs[idx] < rhs[idx]);
+    } else if op == 10u {
+        out[idx] = select(0.0, 1.0, lhs[idx] <= rhs[idx]);
+    } else if op == 11u {
+        out[idx] = select(0.0, 1.0, lhs[idx] > rhs[idx]);
+    } else if op == 12u {
+        out[idx] = select(0.0, 1.0, lhs[idx] >= rhs[idx]);
+    } else if op == 13u {
+        out[idx] = select(0.0, 1.0, lhs[idx] != 0.0 && rhs[idx] != 0.0);
+    } else if op == 14u {
+        out[idx] = select(0.0, 1.0, lhs[idx] != 0.0 || rhs[idx] != 0.0);
+    } else if op == 15u {
+        out[idx] = max(lhs[idx], rhs[idx]);
+    } else if op == 16u {
+        out[idx] = min(lhs[idx], rhs[idx]);
+    } else if op == 17u {
+        out[idx] = abs(lhs[idx] - rhs[idx]);
     }
 }

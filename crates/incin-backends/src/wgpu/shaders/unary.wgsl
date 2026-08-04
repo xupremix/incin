@@ -1,5 +1,6 @@
 // Unary elementwise operations
-// op_mode: 0=relu, 1=gelu, 2=tanh, 3=sigmoid, 4=abs, 5=neg, 6=sqrt, 7=exp, 8=log, 9=swish
+// op_mode: 0=relu, 1=gelu, 2=tanh, 3=sigmoid, 4=abs, 5=neg, 6=sqrt, 7=exp, 8=log, 9=swish,
+//          10=step, 11=mish, 12=elu, 13=logical_not
 
 @group(0) @binding(0) var<storage, read> inp: array<f32>;
 @group(0) @binding(1) var<storage, read_write> out: array<f32>;
@@ -69,6 +70,9 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         // Mish = x * tanh(softplus(x))
         let sp = select(log(1.0 + exp(x)), x, x > 20.0);
         out[idx] = x * tanh(sp);
+    } else if op == 13u {
+        // Logical NOT
+        out[idx] = select(0.0, 1.0, x == 0.0);
     } else {
         // ELU (alpha = 1.0)
         if x > 0.0 {

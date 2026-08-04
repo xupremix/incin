@@ -102,9 +102,24 @@ arithmetic or gradient identity without a dequantization step, so those are
 boundaries rather than gaps.
 
 The three GPU backends are the open coverage gap rather than a correctness one.
-Each declares roughly 37 `TensorOps` methods unsupported, including every
-comparison, `where_cond`, `masked_fill`, `gather`, `scatter`, `index_select`
-and `scaled_dot_product_attention`, plus about half the elementwise catalog.
+CUDA and Metal each still declare roughly 37 `TensorOps` methods unsupported,
+including every comparison, `where_cond`, `masked_fill`, `gather`, `scatter`,
+`index_select` and `scaled_dot_product_attention`, plus about half the
+elementwise catalog. WGPU is the only GPU backend this environment can
+actually execute (a software adapter is available; CUDA and Metal have no
+hardware here and are compile-checked only), so it went first: comparisons
+(`cmp_eq`/`ne`/`lt`/`le`/`gt`/`ge`), `logical_and`/`or`/`not`, `sub_scalar`,
+`div_scalar`, `maximum`, `minimum`, `abs_diff`, `lerp` and `unsqueeze` are now
+real WGSL kernels with passing tests, bringing WGPU's `TensorOps` gap down
+from 33 to 17 methods. They match CPU's own semantics for these methods
+exactly, including CPU's pre-existing gap of not recording a tape entry for
+any of them except `unsqueeze` (which delegates to the already-wired
+`reshape`) — porting that gap forward is not a new regression, since CPU
+itself has no gradient through `maximum`/`minimum`/`abs_diff`/`lerp`/the
+comparisons/`sub_scalar`/`div_scalar` either. `where_cond`, `masked_fill`,
+`gather`, `scatter`, `index_select`, `scaled_dot_product_attention` and the
+remaining structural/normalization ops are still unsupported on WGPU and are
+the natural next slice.
 
 The FND-004 evidence records 16 formatter-drifted files; the actual count at
 that commit was 22, and is 20 now. See `audit-evidence/FND-005/known-limitations.md`

@@ -1,5 +1,5 @@
-// Scalar operations: add_scalar, mul_scalar
-// op_mode: 0=add_scalar, 1=mul_scalar
+// Scalar operations: add_scalar, mul_scalar, sub_scalar, div_scalar
+// op_mode: 0=add_scalar, 1=mul_scalar, 2=sub_scalar, 3=div_scalar
 
 @group(0) @binding(0) var<storage, read> inp: array<f32>;
 @group(0) @binding(1) var<storage, read_write> out: array<f32>;
@@ -19,7 +19,11 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     if op == 0u {
         out[idx] = inp[idx] + scalar;
-    } else {
+    } else if op == 1u {
         out[idx] = inp[idx] * scalar;
+    } else if op == 2u {
+        out[idx] = inp[idx] - scalar;
+    } else {
+        out[idx] = inp[idx] / scalar;
     }
 }

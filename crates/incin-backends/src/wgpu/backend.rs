@@ -709,13 +709,140 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackendImpl<T, D> {
     // because the trait answered for them; declaring them here keeps the gap
     // visible and makes the compiler name any operation added later.
     crate::unsupported::unsupported_tensor_ops! {
-        where_cond, gather, scatter, index_select, masked_fill, unsqueeze,
+        where_cond, gather, scatter, index_select, masked_fill,
         repeat, pad, triu, tril, diag,
-        cmp_eq, cmp_ne, cmp_lt, cmp_le, cmp_gt, cmp_ge,
-        logical_and, logical_or, logical_not,
-        sub_scalar, div_scalar, maximum, minimum, abs_diff, lerp,
         addmm, bmm, scaled_dot_product_attention,
         unfold, pixel_shuffle, group_norm, instance_norm,
+    }
+
+    /// `unsqueeze`. Metadata-only, like `reshape` (which it delegates to and
+    /// so inherits gradient wiring from): inserts a size-1 axis.
+    fn unsqueeze<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        dim: usize,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let mut target_shape = t.shape.to_vec();
+        if dim <= target_shape.len() {
+            target_shape.insert(dim, 1);
+        } else {
+            target_shape.push(1);
+        }
+        Self::reshape::<K>(t, &target_shape)
+    }
+
+    /// `cmp_eq`. Matches the CPU backend: same-dtype output encoding
+    /// true/false as 1.0/0.0, and (like CPU) not autograd-wired since the
+    /// output is not a differentiable function of the operands.
+    fn cmp_eq<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        binary_op::<T>(lhs, rhs, 7, "cmp_eq")
+    }
+    /// `cmp_ne`.
+    fn cmp_ne<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        binary_op::<T>(lhs, rhs, 8, "cmp_ne")
+    }
+    /// `cmp_lt`.
+    fn cmp_lt<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        binary_op::<T>(lhs, rhs, 9, "cmp_lt")
+    }
+    /// `cmp_le`.
+    fn cmp_le<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        binary_op::<T>(lhs, rhs, 10, "cmp_le")
+    }
+    /// `cmp_gt`.
+    fn cmp_gt<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        binary_op::<T>(lhs, rhs, 11, "cmp_gt")
+    }
+    /// `cmp_ge`.
+    fn cmp_ge<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        binary_op::<T>(lhs, rhs, 12, "cmp_ge")
+    }
+
+    /// `logical_and`. Not autograd-wired, matching CPU.
+    fn logical_and<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        binary_op::<T>(lhs, rhs, 13, "logical_and")
+    }
+    /// `logical_or`.
+    fn logical_or<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        binary_op::<T>(lhs, rhs, 14, "logical_or")
+    }
+    /// `logical_not`.
+    fn logical_not<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<<Self as Backend>::Storage<K>> {
+        unary_op::<T>(t, 13)
+    }
+
+    /// `sub_scalar`. Not autograd-wired: matches CPU, whose `TensorOps`
+    /// scalar/comparison methods (as opposed to `FloatOps`'s
+    /// `add_scalar_float`/`mul_scalar_float`) carry no backward closure.
+    fn sub_scalar<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        val: f64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        scalar_op::<T>(t, val, 2)
+    }
+    /// `div_scalar`.
+    fn div_scalar<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        val: f64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        scalar_op::<T>(t, val, 3)
+    }
+
+    /// `maximum`. Not autograd-wired, matching CPU.
+    fn maximum<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        binary_op::<T>(lhs, rhs, 15, "maximum")
+    }
+    /// `minimum`.
+    fn minimum<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        binary_op::<T>(lhs, rhs, 16, "minimum")
+    }
+    /// `abs_diff`.
+    fn abs_diff<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        binary_op::<T>(lhs, rhs, 17, "abs_diff")
+    }
+
+    /// `lerp`. `start + weight * (end - start)`, composed from existing
+    /// primitives; not autograd-wired, matching CPU.
+    fn lerp<K: DType>(
+        start: &<Self as Backend>::Storage<K>,
+        end: &<Self as Backend>::Storage<K>,
+        weight: f64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let diff = binary_op::<T>(end, start, 1, "lerp_diff")?;
+        let scaled = scalar_op::<T>(&diff, weight, 1)?;
+        binary_op::<T>(start, &scaled, 0, "lerp_add")
     }
 
     /// `matmul`.

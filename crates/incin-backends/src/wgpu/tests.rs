@@ -1417,3 +1417,148 @@ fn min_keepdim_backward_matches_finite_difference() {
         "min_keepdim gradcheck max abs diff too high: {max_abs_diff:.6}"
     );
 }
+
+// ── Comparisons, logical, extrema, lerp, unsqueeze ──────────────────────────
+
+#[test]
+fn test_cmp_eq() {
+    let a = storage(vec![1.0, 2.0, 3.0, 4.0], vec![4]);
+    let b = storage(vec![1.0, 0.0, 3.0, 0.0], vec![4]);
+    let out = <B as TensorOps<B>>::cmp_eq::<f32>(&a, &b).unwrap();
+    assert_eq!(readback(&out), vec![1.0, 0.0, 1.0, 0.0]);
+}
+
+#[test]
+fn test_cmp_ne() {
+    let a = storage(vec![1.0, 2.0, 3.0], vec![3]);
+    let b = storage(vec![1.0, 0.0, 5.0], vec![3]);
+    let out = <B as TensorOps<B>>::cmp_ne::<f32>(&a, &b).unwrap();
+    assert_eq!(readback(&out), vec![0.0, 1.0, 1.0]);
+}
+
+#[test]
+fn test_cmp_lt() {
+    let a = storage(vec![1.0, 2.0, 3.0], vec![3]);
+    let b = storage(vec![2.0, 2.0, 2.0], vec![3]);
+    let out = <B as TensorOps<B>>::cmp_lt::<f32>(&a, &b).unwrap();
+    assert_eq!(readback(&out), vec![1.0, 0.0, 0.0]);
+}
+
+#[test]
+fn test_cmp_le() {
+    let a = storage(vec![1.0, 2.0, 3.0], vec![3]);
+    let b = storage(vec![2.0, 2.0, 2.0], vec![3]);
+    let out = <B as TensorOps<B>>::cmp_le::<f32>(&a, &b).unwrap();
+    assert_eq!(readback(&out), vec![1.0, 1.0, 0.0]);
+}
+
+#[test]
+fn test_cmp_gt() {
+    let a = storage(vec![1.0, 2.0, 3.0], vec![3]);
+    let b = storage(vec![2.0, 2.0, 2.0], vec![3]);
+    let out = <B as TensorOps<B>>::cmp_gt::<f32>(&a, &b).unwrap();
+    assert_eq!(readback(&out), vec![0.0, 0.0, 1.0]);
+}
+
+#[test]
+fn test_cmp_ge() {
+    let a = storage(vec![1.0, 2.0, 3.0], vec![3]);
+    let b = storage(vec![2.0, 2.0, 2.0], vec![3]);
+    let out = <B as TensorOps<B>>::cmp_ge::<f32>(&a, &b).unwrap();
+    assert_eq!(readback(&out), vec![0.0, 1.0, 1.0]);
+}
+
+#[test]
+fn test_logical_and() {
+    let a = storage(vec![1.0, 1.0, 0.0, 0.0], vec![4]);
+    let b = storage(vec![1.0, 0.0, 1.0, 0.0], vec![4]);
+    let out = <B as TensorOps<B>>::logical_and::<f32>(&a, &b).unwrap();
+    assert_eq!(readback(&out), vec![1.0, 0.0, 0.0, 0.0]);
+}
+
+#[test]
+fn test_logical_or() {
+    let a = storage(vec![1.0, 1.0, 0.0, 0.0], vec![4]);
+    let b = storage(vec![1.0, 0.0, 1.0, 0.0], vec![4]);
+    let out = <B as TensorOps<B>>::logical_or::<f32>(&a, &b).unwrap();
+    assert_eq!(readback(&out), vec![1.0, 1.0, 1.0, 0.0]);
+}
+
+#[test]
+fn test_logical_not() {
+    let a = storage(vec![1.0, 0.0, 2.0, 0.0], vec![4]);
+    let out = <B as TensorOps<B>>::logical_not::<f32>(&a).unwrap();
+    assert_eq!(readback(&out), vec![0.0, 1.0, 0.0, 1.0]);
+}
+
+#[test]
+fn test_sub_scalar() {
+    let a = storage(vec![10.0, 20.0, 30.0], vec![3]);
+    let out = <B as TensorOps<B>>::sub_scalar::<f32>(&a, 5.0).unwrap();
+    assert_eq!(readback(&out), vec![5.0, 15.0, 25.0]);
+}
+
+#[test]
+fn test_div_scalar() {
+    let a = storage(vec![10.0, 20.0, 30.0], vec![3]);
+    let out = <B as TensorOps<B>>::div_scalar::<f32>(&a, 5.0).unwrap();
+    assert_eq!(readback(&out), vec![2.0, 4.0, 6.0]);
+}
+
+#[test]
+fn test_maximum() {
+    let a = storage(vec![1.0, 5.0, 3.0], vec![3]);
+    let b = storage(vec![4.0, 2.0, 3.0], vec![3]);
+    let out = <B as TensorOps<B>>::maximum::<f32>(&a, &b).unwrap();
+    assert_eq!(readback(&out), vec![4.0, 5.0, 3.0]);
+}
+
+#[test]
+fn test_minimum() {
+    let a = storage(vec![1.0, 5.0, 3.0], vec![3]);
+    let b = storage(vec![4.0, 2.0, 3.0], vec![3]);
+    let out = <B as TensorOps<B>>::minimum::<f32>(&a, &b).unwrap();
+    assert_eq!(readback(&out), vec![1.0, 2.0, 3.0]);
+}
+
+#[test]
+fn test_abs_diff() {
+    let a = storage(vec![1.0, 5.0, 3.0], vec![3]);
+    let b = storage(vec![4.0, 2.0, 3.0], vec![3]);
+    let out = <B as TensorOps<B>>::abs_diff::<f32>(&a, &b).unwrap();
+    assert_eq!(readback(&out), vec![3.0, 3.0, 0.0]);
+}
+
+#[test]
+fn test_lerp() {
+    let start = storage(vec![0.0, 10.0, 100.0], vec![3]);
+    let end = storage(vec![10.0, 20.0, 200.0], vec![3]);
+    let out = <B as TensorOps<B>>::lerp::<f32>(&start, &end, 0.25).unwrap();
+    assert!(vec_approx_eq(
+        &readback(&out),
+        &[2.5, 12.5, 125.0],
+        1e-4
+    ));
+}
+
+#[test]
+fn test_unsqueeze() {
+    let a = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
+    let out = <B as TensorOps<B>>::unsqueeze::<f32>(&a, 1).unwrap();
+    assert_eq!(out.shape, vec![2, 1, 3]);
+    assert_eq!(readback(&out), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+}
+
+#[test]
+fn unsqueeze_is_tape_tracked_through_reshapes_backward() {
+    let a = storage(vec![1.0, 2.0, 3.0, 4.0], vec![4]);
+    let op = |inputs: &[WgpuStorage]| -> WgpuStorage {
+        let out = <B as TensorOps<B>>::unsqueeze::<f32>(&inputs[0], 0).unwrap();
+        <B as ReductionOps<B>>::sum_all::<f32>(&out).unwrap()
+    };
+    let max_abs_diff = gradcheck_wgpu(op, &[a], 1e-3);
+    assert!(
+        max_abs_diff < 2e-3,
+        "unsqueeze gradcheck max abs diff too high: {max_abs_diff:.6}"
+    );
+}
