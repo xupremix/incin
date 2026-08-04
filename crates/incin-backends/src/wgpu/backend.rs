@@ -756,9 +756,174 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackendImpl<T, D> {
     // visible and makes the compiler name any operation added later.
     crate::unsupported::unsupported_tensor_ops! {
         where_cond, gather, scatter, index_select, masked_fill,
-        repeat, pad, triu, tril, diag,
         scaled_dot_product_attention,
         unfold, pixel_shuffle, group_norm, instance_norm,
+    }
+
+    /// `repeat`. WGPU storage has no shader for this yet, so it reads the
+    /// operand back to the host, repeats it with the same row-major walk
+    /// CPU's own `repeat` uses, and re-uploads — the same host-compute
+    /// pattern `full`/`arange`/`linspace` above already use. Not
+    /// autograd-wired, matching CPU.
+    fn repeat<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        repeats: &[usize],
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let data = t.buffer.to_vec::<f32>()?;
+        let out_shape: Vec<usize> = t.shape.iter().zip(repeats).map(|(a, b)| a * b).collect();
+        let total = num_elements(&out_shape)?;
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; out_shape.len()];
+        for _ in 0..total {
+            let src_idx: Vec<usize> = idx
+                .iter()
+                .zip(t.shape.iter())
+                .map(|(&s, &dim)| s % dim)
+                .collect();
+            out.push(data[checked_flat_index(&src_idx, &t.shape, OperationKind::Reshape)?]);
+            if !out_shape.is_empty() {
+                increment_multi_index(&mut idx, &out_shape);
+            }
+        }
+        let buf = WgpuBuffer::try_from_slice(&out)?;
+        Ok(WgpuStorage::new(buf, out_shape))
+    }
+
+    /// `pad`. Same host-readback/upload pattern as `repeat`. Not
+    /// autograd-wired, matching CPU.
+    fn pad<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        padding: &[(usize, usize)],
+        val: f64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let data = t.buffer.to_vec::<f32>()?;
+        let out_shape: Vec<usize> = t
+            .shape
+            .iter()
+            .zip(padding)
+            .map(|(&s, &(before, after))| s + before + after)
+            .collect();
+        let total = num_elements(&out_shape)?;
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; out_shape.len()];
+        for _ in 0..total {
+            let mut inside = true;
+            let mut src_idx = Vec::with_capacity(idx.len());
+            for (axis, &p) in idx.iter().enumerate() {
+                let (before, _) = padding[axis];
+                if p < before || p >= before + t.shape[axis] {
+                    inside = false;
+                    break;
+                }
+                src_idx.push(p - before);
+            }
+            out.push(if inside {
+                data[checked_flat_index(&src_idx, &t.shape, OperationKind::Reshape)?]
+            } else {
+                val as f32
+            });
+            if !out_shape.is_empty() {
+                increment_multi_index(&mut idx, &out_shape);
+            }
+        }
+        let buf = WgpuBuffer::try_from_slice(&out)?;
+        Ok(WgpuStorage::new(buf, out_shape))
+    }
+
+    /// `triu`. Same host-readback/upload pattern as `repeat`. Not
+    /// autograd-wired, matching CPU.
+    fn triu<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        k: i64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let data = t.buffer.to_vec::<f32>()?;
+        let rank = t.shape.len();
+        let total = num_elements(&t.shape)?;
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; rank];
+        for &value in data.iter().take(total) {
+            let (r, c) = if rank >= 2 {
+                (idx[rank - 2] as i64, idx[rank - 1] as i64)
+            } else {
+                (0, idx[0] as i64)
+            };
+            out.push(if c >= r + k { value } else { 0.0 });
+            if !t.shape.is_empty() {
+                increment_multi_index(&mut idx, &t.shape);
+            }
+        }
+        let buf = WgpuBuffer::try_from_slice(&out)?;
+        Ok(WgpuStorage::new(buf, t.shape.to_vec()))
+    }
+
+    /// `tril`. Same host-readback/upload pattern as `repeat`. Not
+    /// autograd-wired, matching CPU.
+    fn tril<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        k: i64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let data = t.buffer.to_vec::<f32>()?;
+        let rank = t.shape.len();
+        let total = num_elements(&t.shape)?;
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; rank];
+        for &value in data.iter().take(total) {
+            let (r, c) = if rank >= 2 {
+                (idx[rank - 2] as i64, idx[rank - 1] as i64)
+            } else {
+                (0, idx[0] as i64)
+            };
+            out.push(if c <= r + k { value } else { 0.0 });
+            if !t.shape.is_empty() {
+                increment_multi_index(&mut idx, &t.shape);
+            }
+        }
+        let buf = WgpuBuffer::try_from_slice(&out)?;
+        Ok(WgpuStorage::new(buf, t.shape.to_vec()))
+    }
+
+    /// `diag`. Same host-readback/upload pattern as `repeat`, matching CPU's
+    /// two cases: a 1D operand builds a 2D matrix with that operand on its
+    /// `k`-th diagonal, an operand of rank 2+ extracts its `k`-th diagonal
+    /// into a 1D result. Not autograd-wired, matching CPU.
+    fn diag<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        k: i64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let data = t.buffer.to_vec::<f32>()?;
+        let rank = t.shape.len();
+        if rank == 1 {
+            let n = t.shape[0];
+            let k_abs = k.unsigned_abs() as usize;
+            let out_dim = n.checked_add(k_abs).ok_or(ShapeError::ArithmeticOverflow {
+                operation: OperationKind::Storage,
+                expression: "WGPU diagonal output dimension",
+            })?;
+            let out_total = num_elements(&[out_dim, out_dim])?;
+            let mut out = vec![0.0f32; out_total];
+            for (i, &value) in data.iter().enumerate().take(n) {
+                let r = if k >= 0 { i } else { i + k_abs };
+                let c = if k >= 0 { i + k_abs } else { i };
+                if r < out_dim && c < out_dim {
+                    out[r * out_dim + c] = value;
+                }
+            }
+            let buf = WgpuBuffer::try_from_slice(&out)?;
+            Ok(WgpuStorage::new(buf, vec![out_dim, out_dim]))
+        } else {
+            let r_len = t.shape[rank - 2];
+            let c_len = t.shape[rank - 1];
+            let mut diag_vals = Vec::new();
+            for r in 0..r_len {
+                let c = (r as i64 + k) as usize;
+                if c < c_len {
+                    diag_vals.push(data[r * c_len + c]);
+                }
+            }
+            let out_len = diag_vals.len();
+            let buf = WgpuBuffer::try_from_slice(&diag_vals)?;
+            Ok(WgpuStorage::new(buf, vec![out_len]))
+        }
     }
 
     /// `addmm`. `beta * mat + alpha * (mat1 @ mat2)`, composed from the
@@ -1549,6 +1714,20 @@ fn checked_flat_index(
             })?;
     }
     Ok(flat)
+}
+
+/// Advances a row-major multi-index by one position (odometer increment),
+/// least-significant axis first. Mirrors the CPU backend's
+/// `cpu::storage::increment_index`; WGPU storage is always contiguous so the
+/// same row-major walk applies directly to a flat host-side readback.
+fn increment_multi_index(idx: &mut [usize], shape: &[usize]) {
+    for axis in (0..shape.len()).rev() {
+        idx[axis] += 1;
+        if idx[axis] < shape[axis] {
+            return;
+        }
+        idx[axis] = 0;
+    }
 }
 
 /// Backward for `max_dim`/`min_dim`: recomputes each output position's

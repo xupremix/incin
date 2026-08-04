@@ -162,6 +162,22 @@ of the shared harness; the harness issue itself is filed as a follow-up
 rather than fixed here, since it is pre-existing and outside this pass's
 scope.
 
+`repeat`, `pad`, `triu`, `tril` and `diag` are real on WGPU now too, via a
+different strategy than the elementwise/reduction shaders above: WGPU
+storage is always contiguous, so each reads its operand back to a host
+`Vec<f32>`, walks it with the same row-major odometer CPU's own
+implementations use (`increment_multi_index`, new in this pass, mirrors
+`cpu::storage::increment_index`), and re-uploads the result — the same
+host-compute-then-upload pattern `zeros`/`full`/`arange`/`linspace` already
+use, not a new strategy invented for these. None are gated by the capability
+table (none of these five appear in `wgpu_descriptor_operations!`'s lists at
+all, so there is no canonical-path check to update, unlike the
+`prod_all`/`prod_dim` case above). Not autograd-wired, matching CPU, whose
+own versions carry no backward closure either. WGPU's `TensorOps` gap is now
+`where_cond`, `gather`, `scatter`, `index_select`, `masked_fill`,
+`scaled_dot_product_attention`, `unfold`, `pixel_shuffle`, `group_norm` and
+`instance_norm` — 10 methods, down from the original 33.
+
 The FND-004 evidence records 16 formatter-drifted files; the actual count at
 that commit was 22, and is 20 now. See `audit-evidence/FND-005/known-limitations.md`
 for the correction. No drifted file is one either task changed.

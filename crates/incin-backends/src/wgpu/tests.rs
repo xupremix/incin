@@ -368,6 +368,64 @@ fn test_squeeze() {
 }
 
 #[test]
+fn test_repeat() {
+    let a = storage(vec![1.0, 2.0, 3.0, 4.0], vec![2, 2]);
+    let out = <B as TensorOps<B>>::repeat::<f32>(&a, &[2, 1]).unwrap();
+    assert_eq!(out.shape, vec![4, 2]);
+    assert_eq!(readback(&out), vec![1.0, 2.0, 3.0, 4.0, 1.0, 2.0, 3.0, 4.0]);
+}
+
+#[test]
+fn test_pad() {
+    let a = storage(vec![1.0, 2.0, 3.0, 4.0], vec![2, 2]);
+    let out = <B as TensorOps<B>>::pad::<f32>(&a, &[(1, 0), (0, 1)], -1.0).unwrap();
+    assert_eq!(out.shape, vec![3, 3]);
+    assert_eq!(
+        readback(&out),
+        vec![-1.0, -1.0, -1.0, 1.0, 2.0, -1.0, 3.0, 4.0, -1.0]
+    );
+}
+
+#[test]
+fn test_triu() {
+    let a = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0], vec![3, 3]);
+    let out = <B as TensorOps<B>>::triu::<f32>(&a, 0).unwrap();
+    assert_eq!(
+        readback(&out),
+        vec![1.0, 2.0, 3.0, 0.0, 5.0, 6.0, 0.0, 0.0, 9.0]
+    );
+}
+
+#[test]
+fn test_tril() {
+    let a = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0], vec![3, 3]);
+    let out = <B as TensorOps<B>>::tril::<f32>(&a, 0).unwrap();
+    assert_eq!(
+        readback(&out),
+        vec![1.0, 0.0, 0.0, 4.0, 5.0, 0.0, 7.0, 8.0, 9.0]
+    );
+}
+
+#[test]
+fn test_diag_builds_matrix_from_vector() {
+    let a = storage(vec![1.0, 2.0, 3.0], vec![3]);
+    let out = <B as TensorOps<B>>::diag::<f32>(&a, 0).unwrap();
+    assert_eq!(out.shape, vec![3, 3]);
+    assert_eq!(
+        readback(&out),
+        vec![1.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 3.0]
+    );
+}
+
+#[test]
+fn test_diag_extracts_from_matrix() {
+    let a = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0], vec![3, 3]);
+    let out = <B as TensorOps<B>>::diag::<f32>(&a, 0).unwrap();
+    assert_eq!(out.shape, vec![3]);
+    assert_eq!(readback(&out), vec![1.0, 5.0, 9.0]);
+}
+
+#[test]
 /// `test_narrow`.
 fn test_narrow() {
     // [[1,2,3],[4,5,6]] narrow dim=0, start=1, len=1 -> [[4,5,6]]
