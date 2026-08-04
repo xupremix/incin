@@ -677,29 +677,20 @@ impl<T: DType, D: Device> Execute<Descriptor<op::Conv2dExact>> for CpuBackendImp
             records_gradients(request.context),
         )?;
 
-        let stride = isotropic(
-            operation,
-            attributes.stride,
-            "conv2d strides differ per axis; the routed kernel takes one stride for both",
-        )?;
-        let padding = isotropic(
-            operation,
-            attributes.padding,
-            "conv2d paddings differ per axis; the routed kernel takes one padding for both",
-        )?;
-        let dilation = isotropic(
-            operation,
-            attributes.dilation,
-            "conv2d dilations differ per axis; the routed kernel takes one dilation for both",
-        )?;
-
-        <Self as ModuleOps<Self>>::conv2d::<T>(
+        // The descriptor's per-axis window is forwarded whole. It used to be
+        // collapsed to a single extent, and an anisotropic one refused,
+        // because `ModuleOps::conv2d` states one extent for both axes. The
+        // kernel behind that signature never needed them equal, so the pair
+        // goes straight to it rather than through the narrower spelling.
+        crate::cpu::ops::conv::conv2d_windowed_impl::<T, D, T>(
             activation,
             weight,
             bias,
-            stride,
-            padding,
-            dilation,
+            crate::cpu::ops::conv::Window2d {
+                stride: attributes.stride,
+                padding: attributes.padding,
+                dilation: attributes.dilation,
+            },
             attributes.groups,
         )
         .map_err(|error| kernel_error(operation, error))

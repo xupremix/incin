@@ -233,15 +233,42 @@ fn col2im_1d(
 // im2col_2d / col2im_2d
 // ---------------------------------------------------------------------------
 
+/// A convolution window, stated once per spatial axis.
+///
+/// `ModuleOps::conv2d` takes one extent for both axes, while the descriptor
+/// that routes to it carries one per axis. An anisotropic window was therefore
+/// refused outright rather than applying the first axis' extent to both, which
+/// was honest but left a real request unanswerable. Carrying the pair this far
+/// down is what makes it answerable, and the isotropic case is the degenerate
+/// one rather than a separate path.
+#[derive(Clone, Copy)]
+pub(crate) struct Window2d {
+    /// Row and column stride.
+    pub(crate) stride: [usize; 2],
+    /// Row and column zero padding, applied to both ends of each axis.
+    pub(crate) padding: [usize; 2],
+    /// Row and column spacing between kernel taps.
+    pub(crate) dilation: [usize; 2],
+}
+
+impl Window2d {
+    /// The same extent on both axes, which is all the legacy signature can say.
+    pub(crate) fn isotropic(stride: usize, padding: usize, dilation: usize) -> Self {
+        Self {
+            stride: [stride; 2],
+            padding: [padding; 2],
+            dilation: [dilation; 2],
+        }
+    }
+}
+
 /// 2D generalization of `im2col_1d`: gathers a `[B, Cin, H, W]` input into a
 /// `[B, H_out*W_out, Cin*Kh*Kw]` column matrix.
 fn im2col_2d(
     input: &CpuStorage,
     kernel_h: usize,
     kernel_w: usize,
-    stride: usize,
-    padding: usize,
-    dilation: usize,
+    window: Window2d,
 ) -> Result<CpuStorage> {
     let (b, cin, h, w) = (
         input.shape[0],
@@ -249,8 +276,20 @@ fn im2col_2d(
         input.shape[2],
         input.shape[3],
     );
-    let h_out = out_size(h, kernel_h, stride, padding, dilation)?;
-    let w_out = out_size(w, kernel_w, stride, padding, dilation)?;
+    let h_out = out_size(
+        h,
+        kernel_h,
+        window.stride[0],
+        window.padding[0],
+        window.dilation[0],
+    )?;
+    let w_out = out_size(
+        w,
+        kernel_w,
+        window.stride[1],
+        window.padding[1],
+        window.dilation[1],
+    )?;
 
     let spatial = ShapeBuf::from_slice(&[h_out, w_out]).checked_numel(OperationKind::Conv2d)?;
     let columns =
@@ -264,14 +303,19 @@ fn im2col_2d(
                 for ci in 0..cin {
                     for kh in 0..kernel_h {
                         for kw in 0..kernel_w {
-                            let src_h = oh * stride + kh * dilation;
-                            let src_w = ow * stride + kw * dilation;
-                            let val = if src_h >= padding
-                                && src_h - padding < h
-                                && src_w >= padding
-                                && src_w - padding < w
+                            let src_h = oh * window.stride[0] + kh * window.dilation[0];
+                            let src_w = ow * window.stride[1] + kw * window.dilation[1];
+                            let val = if src_h >= window.padding[0]
+                                && src_h - window.padding[0] < h
+                                && src_w >= window.padding[1]
+                                && src_w - window.padding[1] < w
                             {
-                                input.get(&[bi, ci, src_h - padding, src_w - padding])
+                                input.get(&[
+                                    bi,
+                                    ci,
+                                    src_h - window.padding[0],
+                                    src_w - window.padding[1],
+                                ])
                             } else {
                                 0.0
                             };
@@ -295,9 +339,7 @@ fn col2im_2d(
     input_shape: &[usize],
     kernel_h: usize,
     kernel_w: usize,
-    stride: usize,
-    padding: usize,
-    dilation: usize,
+    window: Window2d,
 ) -> Result<CpuStorage> {
     let (b, cin, h, w) = (
         input_shape[0],
@@ -305,8 +347,20 @@ fn col2im_2d(
         input_shape[2],
         input_shape[3],
     );
-    let h_out = out_size(h, kernel_h, stride, padding, dilation)?;
-    let w_out = out_size(w, kernel_w, stride, padding, dilation)?;
+    let h_out = out_size(
+        h,
+        kernel_h,
+        window.stride[0],
+        window.padding[0],
+        window.dilation[0],
+    )?;
+    let w_out = out_size(
+        w,
+        kernel_w,
+        window.stride[1],
+        window.padding[1],
+        window.dilation[1],
+    )?;
 
     let out_total = ShapeBuf::from_slice(input_shape).checked_numel(OperationKind::Conv2d)?;
     let mut out = vec![0.0f32; out_total];
@@ -319,15 +373,15 @@ fn col2im_2d(
                 for ci in 0..cin {
                     for kh in 0..kernel_h {
                         for kw in 0..kernel_w {
-                            let src_h = oh * stride + kh * dilation;
-                            let src_w = ow * stride + kw * dilation;
-                            if src_h >= padding
-                                && src_h - padding < h
-                                && src_w >= padding
-                                && src_w - padding < w
+                            let src_h = oh * window.stride[0] + kh * window.dilation[0];
+                            let src_w = ow * window.stride[1] + kw * window.dilation[1];
+                            if src_h >= window.padding[0]
+                                && src_h - window.padding[0] < h
+                                && src_w >= window.padding[1]
+                                && src_w - window.padding[1] < w
                             {
-                                let dst_h = src_h - padding;
-                                let dst_w = src_w - padding;
+                                let dst_h = src_h - window.padding[0];
+                                let dst_w = src_w - window.padding[1];
                                 let flat = bi * out_strides[0]
                                     + ci * out_strides[1]
                                     + dst_h * out_strides[2]
@@ -485,6 +539,9 @@ pub(crate) fn conv1d_impl<T: DType, D: incin_core::prelude::Device, K: DType>(
 
 /// `ModuleOps::conv2d`'s CpuBackendImpl implementation, mirroring
 /// `conv1d_impl`'s exact structure generalized to two spatial axes.
+///
+/// The legacy signature states one extent for both axes, so this is the
+/// isotropic case of [`conv2d_windowed_impl`] rather than a kernel of its own.
 pub(crate) fn conv2d_impl<T: DType, D: incin_core::prelude::Device, K: DType>(
     input: &CpuStorage,
     weight: &CpuStorage,
@@ -492,6 +549,29 @@ pub(crate) fn conv2d_impl<T: DType, D: incin_core::prelude::Device, K: DType>(
     stride: usize,
     padding: usize,
     dilation: usize,
+    groups: usize,
+) -> Result<CpuStorage> {
+    conv2d_windowed_impl::<T, D, K>(
+        input,
+        weight,
+        bias,
+        Window2d::isotropic(stride, padding, dilation),
+        groups,
+    )
+}
+
+/// `conv2d` with a window stated once per spatial axis.
+///
+/// The descriptor carries a stride, a padding and a dilation for each axis,
+/// and an anisotropic one used to be refused because the routed kernel took a
+/// single extent for both. Nothing about the algorithm needed them equal: the
+/// row and column extents are used in separate expressions throughout, and
+/// making them separate parameters is the whole of the change.
+pub(crate) fn conv2d_windowed_impl<T: DType, D: incin_core::prelude::Device, K: DType>(
+    input: &CpuStorage,
+    weight: &CpuStorage,
+    bias: Option<&CpuStorage>,
+    window: Window2d,
     groups: usize,
 ) -> Result<CpuStorage> {
     /// `B`.
@@ -522,8 +602,20 @@ pub(crate) fn conv2d_impl<T: DType, D: incin_core::prelude::Device, K: DType>(
         });
     }
     let cout_g = cout / groups;
-    let h_out = out_size(h, kh, stride, padding, dilation)?;
-    let w_out = out_size(w, kw, stride, padding, dilation)?;
+    let h_out = out_size(
+        h,
+        kh,
+        window.stride[0],
+        window.padding[0],
+        window.dilation[0],
+    )?;
+    let w_out = out_size(
+        w,
+        kw,
+        window.stride[1],
+        window.padding[1],
+        window.dilation[1],
+    )?;
     let spatial = ShapeBuf::from_slice(&[h_out, w_out]).checked_numel(OperationKind::Conv2d)?;
     let input_columns =
         ShapeBuf::from_slice(&[cin_g, kh, kw]).checked_numel(OperationKind::Conv2d)?;
@@ -532,7 +624,7 @@ pub(crate) fn conv2d_impl<T: DType, D: incin_core::prelude::Device, K: DType>(
     for g in 0..groups {
         let input_g = input.narrow(1, g * cin_g, cin_g)?;
         let weight_g = weight.narrow(0, g * cout_g, cout_g)?;
-        let cols = im2col_2d(&input_g, kh, kw, stride, padding, dilation)?;
+        let cols = im2col_2d(&input_g, kh, kw, window)?;
         let weight_mat = weight_g.reshape(&[cout_g, input_columns])?;
         let out_g = batched_matmul_impl(&cols, &transpose_last2(&weight_mat))?;
         group_outputs.push(out_g);
@@ -568,18 +660,10 @@ pub(crate) fn conv2d_impl<T: DType, D: incin_core::prelude::Device, K: DType>(
                 let weight_mat = weight_g.reshape(&[cout_g, input_columns])?;
 
                 let grad_cols = batched_matmul_impl(&grad_out_g, &weight_mat)?;
-                let grad_input_g = col2im_2d(
-                    &grad_cols,
-                    &[b, cin_g, h, w],
-                    kh,
-                    kw,
-                    stride,
-                    padding,
-                    dilation,
-                )?;
+                let grad_input_g = col2im_2d(&grad_cols, &[b, cin_g, h, w], kh, kw, window)?;
                 grad_input_groups.push(grad_input_g);
 
-                let cols = im2col_2d(&input_g, kh, kw, stride, padding, dilation)?;
+                let cols = im2col_2d(&input_g, kh, kw, window)?;
                 let grad_weight_mat = batched_matmul_impl(&transpose_last2(&grad_out_g), &cols)?;
                 let grad_weight_summed = sum_batch_dim(&grad_weight_mat)?;
                 let grad_weight_g = grad_weight_summed.reshape(&[cout_g, cin_g, kh, kw])?;
@@ -723,9 +807,7 @@ pub(crate) fn conv_transpose2d_impl<T: DType, D: incin_core::prelude::Device, K:
         &[b, cout, h_nat, w_nat],
         kh,
         kw,
-        stride,
-        padding,
-        dilation,
+        Window2d::isotropic(stride, padding, dilation),
     )?;
 
     let conv_out = if output_padding == 0 {
@@ -776,7 +858,12 @@ pub(crate) fn conv_transpose2d_impl<T: DType, D: incin_core::prelude::Device, K:
             // the SAME window geometry the forward fold used, then matmuls
             // against weight_mat (transposed relative to the forward's own
             // orientation) to recover grad_input.
-            let grad_out_cols = im2col_2d(&grad_out_nat, kh, kw, stride, padding, dilation)?;
+            let grad_out_cols = im2col_2d(
+                &grad_out_nat,
+                kh,
+                kw,
+                Window2d::isotropic(stride, padding, dilation),
+            )?;
             // grad_out_cols: [B, H*W, Cout*Kh*Kw] @ weight_mat^T: [Cout*Kh*Kw, Cin] -> [B, H*W, Cin]
             let weight_mat = weight_capture.reshape(&[cin, weight_columns])?;
             let grad_input_flat =

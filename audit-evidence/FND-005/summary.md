@@ -127,8 +127,11 @@ permissive executor, and one is deliberately not registered at all:
   operand is not something the execution contract carries. Inference mode still
   refuses absent running statistics, for which the kernel silently supplies a
   zero mean and a unit variance.
-- **The convolutions refuse an anisotropic window**, because the descriptor
-  carries one extent per spatial axis and the routed kernel takes one for both.
+- **`conv2d` accepts an anisotropic window.** It used to refuse one, because
+  the descriptor carries one extent per spatial axis and `ModuleOps::conv2d`
+  takes one for both. The kernel behind that signature never needed them equal,
+  so the pair is threaded down to it. `conv_transpose2d` still collapses its
+  window and still refuses an anisotropic one.
 - **`embedding` is not registered.** Its float table and integer index operands
   need two dtype sets and a capability row states one. Widening the row to the
   non-quantized set would claim f64 support the kernel answers by narrowing.
@@ -148,9 +151,10 @@ permissive executor, and one is deliberately not registered at all:
    non-training rows.
 
 2. **An anisotropic convolution window had no honest answer.** The descriptor
-   carries one extent per spatial axis; the routed CPU kernel takes one for
-   both. The canonical executor refuses the mismatch explicitly rather than
-   applying the first axis' extent to both.
+   carries one extent per spatial axis; `ModuleOps::conv2d` takes one for both.
+   The canonical executor refused the mismatch explicitly rather than applying
+   the first axis' extent to both. `conv2d` now carries the pair to its kernel
+   and computes it; `conv_transpose2d` still refuses.
 
 3. **`batch_norm`'s only kernel was inference-only and nothing said so.** It
    binds its momentum argument to `_momentum`, computes no batch statistics and

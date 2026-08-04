@@ -607,11 +607,19 @@ fn the_spatial_family_matches_its_legacy_counterpart() {
     assert_eq!(values(&averaged), values(&legacy_average));
 }
 
-/// An anisotropic convolution window is a descriptor the CPU kernel behind
-/// this identity cannot execute. It must be refused explicitly rather than
-/// quietly run with one axis' extent applied to both.
+/// An anisotropic convolution window computes with both axes' extents.
+///
+/// It used to be refused, because `ModuleOps::conv2d` states one extent for
+/// both axes and applying the first to both would have been a quiet wrong
+/// answer. The kernel behind that signature never needed them equal, so the
+/// descriptor's pair is forwarded whole now.
+///
+/// A stride of `[1, 2]` over a 4x4 input with a 2x2 kernel steps every row and
+/// every other column, giving a 3x2 output. The result is checked against the
+/// definition rather than against the isotropic case, which is the comparison
+/// that would have passed while the bug existed.
 #[test]
-fn an_anisotropic_convolution_window_is_refused_rather_than_approximated() {
+fn an_anisotropic_convolution_window_uses_both_axis_extents() {
     use incin_core::exec::catalog::Conv2dAttributes;
 
     let context = context();
@@ -619,9 +627,10 @@ fn an_anisotropic_convolution_window_is_refused_rather_than_approximated() {
         (0..16).map(|value| value as f32).collect(),
         vec![1, 1, 4, 4],
     );
+    // Picks out the top-left tap minus the bottom-right one of each window.
     let weight = f32_storage(vec![1.0, 0.0, 0.0, -1.0], vec![1, 1, 2, 2]);
 
-    let error = dispatch::execute::<op::Conv2dExact, _>(
+    let output = dispatch::execute::<op::Conv2dExact, _>(
         &context,
         Conv2dAttributes {
             stride: [1, 2],
@@ -632,14 +641,36 @@ fn an_anisotropic_convolution_window_is_refused_rather_than_approximated() {
         },
         &[handle(&image), handle(&weight)],
     )
-    .expect_err("a per-axis stride has no routed CPU kernel");
-    match error {
-        CanonicalError::Descriptor(_) => {}
-        CanonicalError::Backend(backend) => assert!(
-            backend.to_string().contains("stride"),
-            "the refusal must name the unsupported window axis, found {backend}"
-        ),
+    .expect("a per-axis stride is a window the kernel can take");
+
+    assert_eq!(output.shape.to_vec(), vec![1, 1, 3, 2]);
+    // Input is 0..16 row-major over 4x4, so element [r, c] is 4r + c. Every
+    // window contributes (4r + c) - (4(r+1) + c+1), which is -5 everywhere.
+    for row in 0..3 {
+        for column in 0..2 {
+            let value = output.get(&[0, 0, row, column]);
+            assert!(
+                (value + 5.0).abs() < 1e-5,
+                "[{row}, {column}] was {value}, expected -5"
+            );
+        }
     }
+
+    // The anisotropic result must not coincide with the isotropic one, or the
+    // assertions above would hold equally for a kernel that ignored one axis.
+    let isotropic = dispatch::execute::<op::Conv2dExact, _>(
+        &context,
+        Conv2dAttributes {
+            stride: [1, 1],
+            padding: [0, 0],
+            dilation: [1, 1],
+            groups: 1,
+            has_bias: false,
+        },
+        &[handle(&image), handle(&weight)],
+    )
+    .unwrap();
+    assert_ne!(output.shape.to_vec(), isotropic.shape.to_vec());
 }
 
 /// A convolution whose attributes declare a bias but whose operand list omits
