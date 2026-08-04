@@ -575,8 +575,12 @@ download step and building results through a new small
 `binary_op_metal`/`unary_op_metal`'s own `TensorMeta::contiguous` +
 `MetalStorage::from_bytes` construction. Not autograd-wired, matching CPU.
 
-`unfold`, `pixel_shuffle`, `gather`, `scatter`, `index_select`,
-`masked_fill`, `where_cond`, `group_norm` and `instance_norm` remain
+`unfold`, `pixel_shuffle`, `index_select` and `masked_fill` are real now
+too, same host round-trip. `masked_fill` adds an explicit shape check
+between `t` and `mask` CPU's own version does not have, the same addition
+every other backend's port of this method made.
+
+`gather`, `scatter`, `where_cond`, `group_norm` and `instance_norm` remain
 unsupported on Metal and are the natural continuation of this pass.
 
 The FND-004 evidence records 16 formatter-drifted files; the actual count at
