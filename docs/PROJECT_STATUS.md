@@ -310,9 +310,80 @@ independently correct; `addmm` and `scaled_dot_product_attention`'s tests
 route around it.
 
 CUDA and Metal's much larger (~37-method) gaps are unaffected by any of
-this and are left for a dedicated pass — this environment cannot execute
+this and are next, in a dedicated pass — this environment cannot execute
 either to verify (no CUDA or macOS hardware; compile-checked only), which
 is why WGPU went first.
+
+## CUDA backend: a first, compile-only-verified pass
+
+Unlike WGPU's WGSL shaders (interpreted at runtime by a real, if software,
+adapter this environment can execute), CUDA kernels are C++ rendered and
+compiled by NVRTC at runtime from Rust-side templates
+(`crates/incin-backends/src/kernel.rs`) — `cargo check` compiles the Rust
+glue around that machinery but does not compile, let alone run, the
+generated kernel source itself. Writing new CUDA kernel code here would be
+unverifiable beyond "the Rust that assembles the template string compiles,"
+a materially weaker guarantee than WGPU's software-adapter execution.
+Everything added in this first CUDA pass therefore either composes
+already-implemented CUDA kernels (no new kernel-rendering code touched) or
+reuses the CUDA backend's own pre-existing host-round-trip idiom (see
+`cuda_topk_host`/`cuda_argsort_host`, already in the codebase before this
+pass, whose own doc comment states plainly that a host download, host
+computation and re-upload is "what the 'true' GPU backend already does" for
+an operation with no kernel) — never new kernel source.
+
+`unsqueeze` delegates to the already-tape-wired `reshape`, matching every
+other backend's own `unsqueeze`. `addmm`, `bmm` and
+`scaled_dot_product_attention` compose already-implemented, already
+tape-wired kernels (`matmul`/`mul_scalar_float`/`add`/`transpose`/`softmax`)
+exactly like CPU's and WGPU's own compositions — no new kernel launches at
+all, only Rust-level reuse. `float_to_scalar`/`float_to_vec1`/
+`int_to_scalar`/`int_to_vec1`/`tensor_to_dtype` reuse the existing
+`download_f32_host` helper the same way `topk`/`argsort` already do,
+restricted to F32 via a new `cuda_require_f32` check.
+
+That restriction exists because of a real, pre-existing latent bug this
+pass found rather than introduced: `download_f32_host` assumes F32
+storage unconditionally, but CUDA storage supports five dtypes
+(`CUDA_STORAGE_DTYPES`: I64/BF16/F16/F32/F64), and `topk`/`argsort` call it
+with no dtype check at all — calling either on a non-F32 CUDA tensor would
+silently misread the bytes rather than error. That bug is filed as a
+separate follow-up rather than fixed here (fixing it changes two
+already-shipped ops' behavior, which is a different-shaped change than
+adding new ones); every new op this pass adds checks first instead of
+repeating the gap.
+
+Verification here is necessarily narrower than WGPU's: `cargo check -p
+incin-backends --all-targets --no-default-features --features
+std,cpu,cuda` (CI's real command) now passes, and `cargo test` with the
+same features compiles and runs everything not gated behind real hardware,
+which is everything this pass added — each new method has an `#[ignore =
+"requires CUDA hardware"]` test, matching the file's own established
+convention for exactly this situation, using the same fixtures and expected
+values as the equivalent CPU/WGPU tests. Running `--ignored` here fails
+with "unable to dynamically load libcuda.so," the same failure every
+pre-existing ignored CUDA test in this file already has, confirming the new
+tests are unverifiable for the same reason as the old ones rather than
+uniquely broken — but it means none of this pass's CUDA changes have been
+confirmed correct by execution, only by compilation and by the fact that
+the composed primitives and the host-round-trip pattern they reuse are
+each independently proven elsewhere (CPU, WGPU, or CUDA's own pre-existing
+`topk`/`argsort`).
+
+Along the way, `cargo check --all-targets` for CUDA was found not to
+compile at all before this pass touched anything — five pre-existing
+`assert_eq!` calls in `#[ignore]`d tests compared a `Result<Vec<f32>, _>`
+against a `Vec<f32>` directly, missing `.unwrap()`. Fixed as a prerequisite
+to verifying this pass's own changes via the same command, not as a
+correctness fix to anything this pass added.
+
+Comparisons, logical ops, `sub_scalar`/`div_scalar`, `maximum`/`minimum`/
+`abs_diff`/`lerp` and every structural/index op (`repeat`, `pad`, `triu`,
+`tril`, `diag`, `unfold`, `pixel_shuffle`, `gather`, `scatter`,
+`index_select`, `masked_fill`, `where_cond`, `group_norm`, `instance_norm`)
+remain unsupported on CUDA — they need genuine new host-round-trip code
+(download, compute, re-upload) rather than composition of what already
+exists, and are the natural continuation of this pass.
 
 The FND-004 evidence records 16 formatter-drifted files; the actual count at
 that commit was 22, and is 20 now. See `audit-evidence/FND-005/known-limitations.md`

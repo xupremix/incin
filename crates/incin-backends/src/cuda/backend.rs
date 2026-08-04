@@ -60,19 +60,151 @@ pub struct CudaVar {
 pub type CudaGrads = crate::cuda::tape::CudaGrads;
 
 impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
-    // No CUDA kernels exist for these yet. The four host-readback conversions
-    // and `tensor_to_dtype` are listed too: CUDA has no device-to-host path
-    // wired up here, and the trait default made that read as coverage.
+    // No CUDA kernels exist for these yet.
     crate::unsupported::unsupported_tensor_ops! {
-        where_cond, gather, scatter, index_select, masked_fill, unsqueeze,
+        where_cond, gather, scatter, index_select, masked_fill,
         repeat, pad, triu, tril, diag,
         cmp_eq, cmp_ne, cmp_lt, cmp_le, cmp_gt, cmp_ge,
         logical_and, logical_or, logical_not,
         sub_scalar, div_scalar, maximum, minimum, abs_diff, lerp,
-        addmm, bmm, scaled_dot_product_attention,
         unfold, pixel_shuffle, group_norm, instance_norm,
-        float_to_scalar, float_to_vec1, int_to_scalar, int_to_vec1,
-        tensor_to_dtype,
+    }
+
+    /// `unsqueeze`. Metadata-only, like `reshape` (which it delegates to and
+    /// so inherits gradient wiring from), matching CPU's/WGPU's own
+    /// `unsqueeze`.
+    fn unsqueeze<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        dim: usize,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let mut target_shape = t.shape.to_vec();
+        if dim <= target_shape.len() {
+            target_shape.insert(dim, 1);
+        } else {
+            target_shape.push(1);
+        }
+        <Self as TensorOps<Self>>::reshape::<K>(t, &target_shape)
+    }
+
+    /// `float_to_scalar`. Same host-readback CUDA's own `to_bytes`/
+    /// `topk`/`argsort` already use, restricted to F32 like those (a
+    /// dtype-generic version is a separate, larger piece of work tracked
+    /// apart from this pass — see `docs/PROJECT_STATUS.md`).
+    fn float_to_scalar<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<f64> {
+        let numel = checked_numel(&t.shape)?;
+        if numel != 1 {
+            return Err(Error::Shape(ShapeError::InvalidParameter {
+                operation: OperationKind::Storage,
+                parameter: "float_to_scalar element count",
+                value: numel,
+            }));
+        }
+        cuda_require_f32(t.buffer.dtype, "float_to_scalar")?;
+        let data = download_f32_host(t)?;
+        let value = data.first().copied().ok_or(Error::InternalInvariant {
+            operation: "cuda_float_to_scalar",
+            reason: "validated one-element storage read back no bytes",
+        })?;
+        Ok(f64::from(value))
+    }
+    /// `float_to_vec1`.
+    fn float_to_vec1<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<Vec<f64>> {
+        cuda_require_f32(t.buffer.dtype, "float_to_vec1")?;
+        let data = download_f32_host(t)?;
+        Ok(data.iter().map(|&x| x as f64).collect())
+    }
+    /// `int_to_scalar`.
+    fn int_to_scalar<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<i64> {
+        cuda_require_f32(t.buffer.dtype, "int_to_scalar")?;
+        let data = download_f32_host(t)?;
+        let value = data.first().copied().ok_or(Error::InvalidByteLength {
+            expected: core::mem::size_of::<f32>(),
+            got: 0,
+        })?;
+        incin_core::prelude::convert_f64_to_i64(
+            "int_to_scalar",
+            t.buffer.dtype,
+            f64::from(value),
+            incin_core::prelude::FloatToIntPolicy::Exact,
+        )
+    }
+    /// `int_to_vec1`.
+    fn int_to_vec1<K: DType>(t: &<Self as Backend>::Storage<K>) -> Result<Vec<i64>> {
+        cuda_require_f32(t.buffer.dtype, "int_to_vec1")?;
+        let data = download_f32_host(t)?;
+        data.into_iter()
+            .map(|value| {
+                incin_core::prelude::convert_f64_to_i64(
+                    "int_to_vec1",
+                    t.buffer.dtype,
+                    f64::from(value),
+                    incin_core::prelude::FloatToIntPolicy::Exact,
+                )
+            })
+            .collect()
+    }
+    /// `tensor_to_dtype`. Matches WGPU's own passthrough: both backends'
+    /// physical storage does not vary with the requested logical dtype in a
+    /// way this call needs to touch.
+    fn tensor_to_dtype<K: DType, K2: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        _dtype: DTypeId,
+    ) -> Result<<Self as Backend>::Storage<K2>> {
+        CudaStorage::try_new(t.buffer.clone(), t.shape.to_vec())
+    }
+
+    /// `addmm`. `beta * mat + alpha * (mat1 @ mat2)`, composed from the
+    /// already tape-wired `matmul`/`mul_scalar_float`/`add`, matching CPU's
+    /// and WGPU's own composition exactly — no new kernel, just reuse of
+    /// already-implemented ones.
+    fn addmm<K: DType>(
+        mat: &<Self as Backend>::Storage<K>,
+        mat1: &<Self as Backend>::Storage<K>,
+        mat2: &<Self as Backend>::Storage<K>,
+        beta: f64,
+        alpha: f64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let mm = <Self as TensorOps<Self>>::matmul::<K>(mat1, mat2)?;
+        let mm_alpha = <Self as FloatOps<Self>>::mul_scalar_float::<K>(&mm, alpha)?;
+        let mat_beta = <Self as FloatOps<Self>>::mul_scalar_float::<K>(mat, beta)?;
+        <Self as NumericOps<Self>>::add::<K>(&mat_beta, &mm_alpha)
+    }
+    /// `bmm`. `matmul` already handles the batch dimensions, matching CPU
+    /// and WGPU.
+    fn bmm<K: DType>(
+        lhs: &<Self as Backend>::Storage<K>,
+        rhs: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        <Self as TensorOps<Self>>::matmul::<K>(lhs, rhs)
+    }
+
+    /// `scaled_dot_product_attention`. Composed from the already tape-wired
+    /// `transpose`/`matmul`/`mul_scalar_float`/`add`/`softmax`, matching
+    /// CPU's and WGPU's own composition exactly, no new kernel.
+    fn scaled_dot_product_attention<K: DType>(
+        q: &<Self as Backend>::Storage<K>,
+        k: &<Self as Backend>::Storage<K>,
+        v: &<Self as Backend>::Storage<K>,
+        mask: Option<&<Self as Backend>::Storage<K>>,
+        scale: Option<f64>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let k_rank = k.shape.len();
+        let k_t = if k_rank >= 2 {
+            <Self as TensorOps<Self>>::transpose::<K>(k, k_rank - 2, k_rank - 1)?
+        } else {
+            k.clone()
+        };
+        let scores = <Self as TensorOps<Self>>::matmul::<K>(q, &k_t)?;
+        let d_k = *q.shape.last().unwrap_or(&1) as f64;
+        let s = scale.unwrap_or_else(|| 1.0 / d_k.sqrt());
+        let scaled_scores = <Self as FloatOps<Self>>::mul_scalar_float::<K>(&scores, s)?;
+        let masked_scores = if let Some(m) = mask {
+            <Self as NumericOps<Self>>::add::<K>(&scaled_scores, m)?
+        } else {
+            scaled_scores
+        };
+        let attn = <Self as FloatOps<Self>>::softmax::<K>(&masked_scores, scores.shape.len() - 1)?;
+        <Self as TensorOps<Self>>::matmul::<K>(&attn, v)
     }
 
     fn concat<K: DType>(
@@ -2007,6 +2139,26 @@ fn cuda_from_bytes(
     Ok(CudaStorage::new(Arc::new(buffer), shape.to_vec()))
 }
 
+/// Guards `download_f32_host`/`upload_f32_from_host` callers against the
+/// class of bug those two helpers cannot detect on their own: they assume
+/// F32 storage unconditionally, so calling them on any of CUDA's other
+/// storage dtypes (I64/BF16/F16/F64 — see `CUDA_STORAGE_DTYPES` in
+/// `capability.rs`) would silently reinterpret the wrong bytes rather than
+/// error. `topk`/`argsort` (this file, `cuda_topk_host`/`cuda_argsort_host`)
+/// have this exact gap already and are tracked separately; every new
+/// F32-only host-round-trip op added in this pass checks first instead of
+/// repeating it.
+fn cuda_require_f32(dtype: DTypeId, op: &'static str) -> Result<()> {
+    if dtype != DTypeId::F32 {
+        return Err(Error::UnsupportedDType {
+            dtype,
+            backend: "cuda",
+            op,
+        });
+    }
+    Ok(())
+}
+
 /// Downloads an F32 `CudaStorage`'s raw contents to a host `Vec<f32>`.
 fn download_f32_host(t: &CudaStorage) -> Result<Vec<f32>> {
     let bytes = t
@@ -2499,7 +2651,7 @@ mod tests {
         let w = cuda_f32(&[1, 1, 2], vec![1.0, 1.0]);
         let out = <B as ModuleOps<B>>::conv1d::<f32>(&t, &w, None, 1, 0, 1, 1).unwrap();
         assert_eq!(out.shape, vec![1, 1, 3]);
-        let vals = download_f32_host(&out);
+        let vals = download_f32_host(&out).unwrap();
         assert_eq!(vals, vec![3.0, 5.0, 7.0]);
     }
 
@@ -2535,7 +2687,7 @@ mod tests {
         let w = cuda_f32(&[1, 1, 2, 2], vec![1.0, 1.0, 1.0, 1.0]);
         let out = <B as ModuleOps<B>>::conv2d::<f32>(&t, &w, None, 1, 0, 1, 1).unwrap();
         assert_eq!(out.shape, vec![1, 1, 2, 2]);
-        let vals = download_f32_host(&out);
+        let vals = download_f32_host(&out).unwrap();
         assert_eq!(vals, vec![12.0, 16.0, 24.0, 28.0]);
     }
 
@@ -2546,7 +2698,7 @@ mod tests {
         let w = cuda_f32(&[1, 1, 1, 1], vec![1.0]);
         let bias = cuda_f32(&[1], vec![10.0]);
         let out = <B as ModuleOps<B>>::conv2d::<f32>(&t, &w, Some(&bias), 1, 0, 1, 1).unwrap();
-        let vals = download_f32_host(&out);
+        let vals = download_f32_host(&out).unwrap();
         assert_eq!(vals, vec![11.0, 12.0, 13.0, 14.0]);
     }
 
@@ -2574,7 +2726,7 @@ mod tests {
         let w = cuda_f32(&[2, 1, 1, 1], vec![2.0, 3.0]);
         let out = <B as ModuleOps<B>>::conv2d::<f32>(&t, &w, None, 1, 0, 1, 2).unwrap();
         assert_eq!(out.shape, vec![1, 2, 2, 2]);
-        let vals = download_f32_host(&out);
+        let vals = download_f32_host(&out).unwrap();
         assert_eq!(vals, vec![2.0, 4.0, 6.0, 8.0, 15.0, 18.0, 21.0, 24.0]);
     }
 
@@ -2770,7 +2922,7 @@ mod tests {
         let (vals, indices) = <B as ReductionOps<B>>::topk::<f32, u32>(&t, 2, 1, true).unwrap();
         assert_eq!(vals.shape, vec![2, 2]);
         assert_eq!(indices.shape, vec![2, 2]);
-        assert_eq!(download_f32_host(&vals), vec![5.0, 3.0, 6.0, 4.0]);
+        assert_eq!(download_f32_host(&vals).unwrap(), vec![5.0, 3.0, 6.0, 4.0]);
         let idx_bytes = indices
             .buffer
             .device
@@ -2875,5 +3027,95 @@ mod tests {
         )
         .unwrap();
         assert_eq!(var.storage.shape, vec![2]);
+    }
+
+    // The tests below cover the methods added in this pass: `unsqueeze`,
+    // the host-readback conversions, `addmm`/`bmm`/
+    // `scaled_dot_product_attention`. Same convention as everything above —
+    // `#[ignore]`d because there is no CUDA device in this environment, so
+    // only compilation is verified here; run with `--ignored` on real
+    // hardware. Fixtures and expected values are the same ones the CPU and
+    // WGPU backends' own tests for the identical methods use.
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn test_unsqueeze() {
+        let t = cuda_f32(&[2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        let out = <B as TensorOps<B>>::unsqueeze::<f32>(&t, 1).unwrap();
+        assert_eq!(out.shape, vec![2, 1, 3]);
+        assert_eq!(
+            download_f32_host(&out).unwrap(),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+        );
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn test_float_to_scalar() {
+        let t = cuda_f32(&[1], vec![3.5]);
+        assert_eq!(<B as TensorOps<B>>::float_to_scalar::<f32>(&t).unwrap(), 3.5);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn float_to_scalar_rejects_a_non_f32_dtype() {
+        let t = cuda_from_f32(&[1], DTypeId::F64, &DeviceId::cuda(0), vec![3.5], "test").unwrap();
+        assert!(matches!(
+            <B as TensorOps<B>>::float_to_scalar::<f32>(&t),
+            Err(Error::UnsupportedDType { .. })
+        ));
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn test_float_to_vec1() {
+        let t = cuda_f32(&[3], vec![1.0, 2.0, 3.0]);
+        assert_eq!(
+            <B as TensorOps<B>>::float_to_vec1::<f32>(&t).unwrap(),
+            vec![1.0, 2.0, 3.0]
+        );
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn test_addmm() {
+        let mat = cuda_f32(&[2, 2], vec![1.0, 1.0, 1.0, 1.0]);
+        let mat1 = cuda_f32(&[2, 2], vec![1.0, 0.0, 0.0, 1.0]); // identity
+        let mat2 = cuda_f32(&[2, 2], vec![3.0, 4.0, 5.0, 6.0]);
+        // beta * mat + alpha * (mat1 @ mat2) = 2*[[1,1],[1,1]] + 3*[[3,4],[5,6]]
+        let out = <B as TensorOps<B>>::addmm::<f32>(&mat, &mat1, &mat2, 2.0, 3.0).unwrap();
+        assert_eq!(
+            download_f32_host(&out).unwrap(),
+            vec![11.0, 14.0, 17.0, 20.0]
+        );
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn test_bmm() {
+        let a = cuda_f32(&[2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        let b = cuda_f32(&[3, 2], vec![7.0, 8.0, 9.0, 10.0, 11.0, 12.0]);
+        let out = <B as TensorOps<B>>::bmm::<f32>(&a, &b).unwrap();
+        assert_eq!(out.shape, vec![2, 2]);
+        assert_eq!(
+            download_f32_host(&out).unwrap(),
+            vec![58.0, 64.0, 139.0, 154.0]
+        );
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn test_scaled_dot_product_attention_uniform_when_query_is_zero() {
+        // Same fixture as the WGPU backend's own test for this method: q is
+        // all-zero, so softmax of an all-zero row is uniform, and the
+        // output is exactly the unweighted average of v's rows.
+        let q = cuda_f32(&[1, 2], vec![0.0, 0.0]);
+        let k = cuda_f32(&[3, 2], vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0]);
+        let v = cuda_f32(&[3, 2], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        let out =
+            <B as TensorOps<B>>::scaled_dot_product_attention::<f32>(&q, &k, &v, None, None)
+                .unwrap();
+        assert_eq!(out.shape, vec![1, 2]);
+        assert_eq!(download_f32_host(&out).unwrap(), vec![3.0, 4.0]);
     }
 }
