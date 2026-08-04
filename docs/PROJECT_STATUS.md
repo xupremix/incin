@@ -566,10 +566,18 @@ existing, pre-existing-in-this-file assumption this pass did not add and is
 not attempting to fix (out of scope, same reasoning as the CUDA
 `download_f32_host`/`topk`/`argsort` gap filed separately).
 
-`repeat`, `pad`, `triu`, `tril`, `diag`, `unfold`, `pixel_shuffle`,
-`gather`, `scatter`, `index_select`, `masked_fill`, `where_cond`,
-`group_norm` and `instance_norm` remain unsupported on Metal and are the
-natural continuation of this pass.
+`repeat`, `pad`, `triu`, `tril` and `diag` are real now too, same
+row-major-walk pattern as CUDA's own port of these five (reusing
+`crate::cpu::stride::contiguous_strides`/`crate::cpu::storage::
+increment_index`), reading directly from `MetalStorage::as_bytes` with no
+download step and building results through a new small
+`upload_f32_metal` helper factored out of the existing
+`binary_op_metal`/`unary_op_metal`'s own `TensorMeta::contiguous` +
+`MetalStorage::from_bytes` construction. Not autograd-wired, matching CPU.
+
+`unfold`, `pixel_shuffle`, `gather`, `scatter`, `index_select`,
+`masked_fill`, `where_cond`, `group_norm` and `instance_norm` remain
+unsupported on Metal and are the natural continuation of this pass.
 
 The FND-004 evidence records 16 formatter-drifted files; the actual count at
 that commit was 22, and is 20 now. See `audit-evidence/FND-005/known-limitations.md`

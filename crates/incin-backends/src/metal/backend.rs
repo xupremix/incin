@@ -424,6 +424,24 @@ fn scalar_op_metal(
     unary_op_metal(t, move |x| f(x, s_f32))
 }
 
+/// Builds a fresh contiguous F32 `MetalStorage` of `shape` from `data`,
+/// reusing `t`'s dtype/device/mode/ordinal — the same
+/// `TensorMeta::contiguous` + `MetalStorage::from_bytes` construction
+/// `binary_op_metal`/`unary_op_metal` above already use, factored out for
+/// the structural/index ops below, which build a fresh shape rather than
+/// reusing the input's.
+fn upload_f32_metal(t: &MetalStorage, shape: Vec<usize>, data: Vec<f32>) -> Result<MetalStorage> {
+    let out_bytes: Vec<u8> = bytemuck::cast_slice(&data).to_vec();
+    let meta = TensorMeta::contiguous(
+        ShapeBuf::from_slice(&shape),
+        t.metadata().dtype(),
+        t.device(),
+        MetalStorage::alignment(),
+        data.len(),
+    )?;
+    MetalStorage::from_bytes(out_bytes, meta, t.mode(), t.device_ordinal())
+}
+
 fn sum_dim_impl(t: &MetalStorage, axis: usize, keepdim: bool) -> Result<MetalStorage> {
     let dims = t.metadata().shape().dims();
     if axis >= dims.len() {
@@ -1273,8 +1291,170 @@ impl<T: DType, D: Device> ReductionOps<Self> for MetalBackendImpl<T, D> {
 impl<T: DType, D: Device> TensorOps<Self> for MetalBackendImpl<T, D> {
     crate::unsupported::unsupported_tensor_ops! {
         where_cond, gather, scatter, index_select, masked_fill,
-        repeat, pad, triu, tril, diag,
         unfold, pixel_shuffle, group_norm, instance_norm,
+    }
+
+    /// `repeat`. Metal storage is plain host bytes (`MetalStorage::as_bytes`),
+    /// so like the elementwise ops above this reads directly with no
+    /// download step, repeats with the same row-major walk CPU's own
+    /// `repeat` uses (reusing `crate::cpu::stride::contiguous_strides` and
+    /// `crate::cpu::storage::increment_index`, both already `pub(crate)`),
+    /// and builds the result via `upload_f32_metal`. Not autograd-wired,
+    /// matching CPU.
+    fn repeat<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        repeats: &[usize],
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let in_shape = t.metadata().shape().dims().to_vec();
+        let data: &[f32] = bytemuck::cast_slice(t.as_bytes()?);
+        let in_strides = crate::cpu::stride::contiguous_strides(&in_shape);
+        let out_shape: Vec<usize> = in_shape.iter().zip(repeats).map(|(a, b)| a * b).collect();
+        let total = num_elements(&out_shape)?;
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; out_shape.len()];
+        for _ in 0..total {
+            let src_flat: usize = idx
+                .iter()
+                .zip(in_shape.iter())
+                .zip(in_strides.iter())
+                .map(|((&s, &dim), &stride)| (s % dim) * stride)
+                .sum();
+            out.push(data[src_flat]);
+            if !out_shape.is_empty() {
+                crate::cpu::storage::increment_index(&mut idx, &out_shape);
+            }
+        }
+        upload_f32_metal(t, out_shape, out)
+    }
+
+    /// `pad`. Same pattern as `repeat`. Not autograd-wired, matching CPU.
+    fn pad<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        padding: &[(usize, usize)],
+        val: f64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let in_shape = t.metadata().shape().dims().to_vec();
+        let data: &[f32] = bytemuck::cast_slice(t.as_bytes()?);
+        let in_strides = crate::cpu::stride::contiguous_strides(&in_shape);
+        let out_shape: Vec<usize> = in_shape
+            .iter()
+            .zip(padding)
+            .map(|(&s, &(before, after))| s + before + after)
+            .collect();
+        let total = num_elements(&out_shape)?;
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; out_shape.len()];
+        let val = val as f32;
+        for _ in 0..total {
+            let mut inside = true;
+            let mut src_flat = 0usize;
+            for (axis, &p) in idx.iter().enumerate() {
+                let (before, _) = padding[axis];
+                if p < before || p >= before + in_shape[axis] {
+                    inside = false;
+                    break;
+                }
+                src_flat += (p - before) * in_strides[axis];
+            }
+            out.push(if inside { data[src_flat] } else { val });
+            if !out_shape.is_empty() {
+                crate::cpu::storage::increment_index(&mut idx, &out_shape);
+            }
+        }
+        upload_f32_metal(t, out_shape, out)
+    }
+
+    /// `triu`. Same pattern as `repeat`. Not autograd-wired, matching CPU.
+    fn triu<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        k: i64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let in_shape = t.metadata().shape().dims().to_vec();
+        let data: &[f32] = bytemuck::cast_slice(t.as_bytes()?);
+        let rank = in_shape.len();
+        let total = num_elements(&in_shape)?;
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; rank];
+        for &value in data.iter().take(total) {
+            let (r, c) = if rank >= 2 {
+                (idx[rank - 2] as i64, idx[rank - 1] as i64)
+            } else {
+                (0, idx[0] as i64)
+            };
+            out.push(if c >= r + k { value } else { 0.0 });
+            if !in_shape.is_empty() {
+                crate::cpu::storage::increment_index(&mut idx, &in_shape);
+            }
+        }
+        upload_f32_metal(t, in_shape, out)
+    }
+
+    /// `tril`. Same pattern as `repeat`. Not autograd-wired, matching CPU.
+    fn tril<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        k: i64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let in_shape = t.metadata().shape().dims().to_vec();
+        let data: &[f32] = bytemuck::cast_slice(t.as_bytes()?);
+        let rank = in_shape.len();
+        let total = num_elements(&in_shape)?;
+        let mut out = Vec::with_capacity(total);
+        let mut idx = vec![0usize; rank];
+        for &value in data.iter().take(total) {
+            let (r, c) = if rank >= 2 {
+                (idx[rank - 2] as i64, idx[rank - 1] as i64)
+            } else {
+                (0, idx[0] as i64)
+            };
+            out.push(if c <= r + k { value } else { 0.0 });
+            if !in_shape.is_empty() {
+                crate::cpu::storage::increment_index(&mut idx, &in_shape);
+            }
+        }
+        upload_f32_metal(t, in_shape, out)
+    }
+
+    /// `diag`. Same pattern as `repeat`, matching CPU's two cases: a 1D
+    /// operand builds a 2D matrix with that operand on its `k`-th diagonal,
+    /// an operand of rank 2+ extracts its `k`-th diagonal into a 1D result.
+    /// Not autograd-wired, matching CPU.
+    fn diag<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        k: i64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let in_shape = t.metadata().shape().dims().to_vec();
+        let data: &[f32] = bytemuck::cast_slice(t.as_bytes()?);
+        let rank = in_shape.len();
+        if rank == 1 {
+            let n = in_shape[0];
+            let k_abs = k.unsigned_abs() as usize;
+            let out_dim = n.checked_add(k_abs).ok_or(ShapeError::ArithmeticOverflow {
+                operation: OperationKind::Storage,
+                expression: "Metal diagonal output dimension",
+            })?;
+            let out_total = num_elements(&[out_dim, out_dim])?;
+            let mut out = vec![0.0f32; out_total];
+            for (i, &value) in data.iter().enumerate().take(n) {
+                let r = if k >= 0 { i } else { i + k_abs };
+                let c = if k >= 0 { i + k_abs } else { i };
+                if r < out_dim && c < out_dim {
+                    out[r * out_dim + c] = value;
+                }
+            }
+            upload_f32_metal(t, vec![out_dim, out_dim], out)
+        } else {
+            let r_len = in_shape[rank - 2];
+            let c_len = in_shape[rank - 1];
+            let mut diag_vals = Vec::new();
+            for r in 0..r_len {
+                let c = (r as i64 + k) as usize;
+                if c < c_len {
+                    diag_vals.push(data[r * c_len + c]);
+                }
+            }
+            let out_len = diag_vals.len();
+            upload_f32_metal(t, vec![out_len], diag_vals)
+        }
     }
 
     /// `unsqueeze`. Metadata-only, like `reshape` (which it delegates to and
