@@ -188,10 +188,23 @@ does. `where_cond`, `gather` and `scatter` remain unsupported: CPU's
 in this pass so far), and `where_cond` additionally broadcasts its two value
 operands to a common shape rather than requiring an exact match, so porting
 them faithfully is more than the same read-transform-upload template and is
-being left for a dedicated pass. WGPU's `TensorOps` gap is now `where_cond`,
-`gather`, `scatter`, `scaled_dot_product_attention`, `unfold`,
-`pixel_shuffle`, `group_norm` and `instance_norm` — 8 methods, down from the
-original 33.
+being left for a dedicated pass.
+
+`scaled_dot_product_attention` is real now too, composed from the already
+tape-wired `transpose`/`matmul`/`mul_scalar_float`/`add`/`softmax` exactly
+like CPU's own composition (same `1/sqrt(d_k)` default scale), so gradients
+flow through `q`/`k`/`v`/`mask` rather than dead-ending. Its forward value is
+tested with an all-zero query — `q@k^T` is then all-zero regardless of `k`
+or the scale, softmax of an all-zero row is uniform, and the output is
+exactly the unweighted average of `v`'s rows, which sidesteps hand-computing
+softmax's exponentials for the test fixture. Its gradient is checked only
+for presence (recorded for all three operands), not exact values: the
+composition reuses primitives whose own gradients are independently tested
+elsewhere in this file, and the same `gradcheck_wgpu`/matmul interaction
+filed as a follow-up above rules out using the shared numerical harness
+here too. WGPU's `TensorOps` gap is now `where_cond`, `gather`, `scatter`,
+`unfold`, `pixel_shuffle`, `group_norm` and `instance_norm` — 7 methods,
+down from the original 33.
 
 The FND-004 evidence records 16 formatter-drifted files; the actual count at
 that commit was 22, and is 20 now. See `audit-evidence/FND-005/known-limitations.md`

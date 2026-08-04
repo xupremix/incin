@@ -368,6 +368,33 @@ fn test_squeeze() {
 }
 
 #[test]
+fn test_scaled_dot_product_attention_uniform_when_query_is_zero() {
+    // q is all-zero, so q@k^T is all-zero regardless of k or the scale,
+    // softmax of an all-zero row is uniform, and the output is exactly the
+    // unweighted average of v's rows — avoids hand-computing exponentials.
+    let q = storage(vec![0.0, 0.0], vec![1, 2]);
+    let k = storage(vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0], vec![3, 2]);
+    let v = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![3, 2]);
+    let out =
+        <B as TensorOps<B>>::scaled_dot_product_attention::<f32>(&q, &k, &v, None, None).unwrap();
+    assert_eq!(out.shape, vec![1, 2]);
+    assert!(vec_approx_eq(&readback(&out), &[3.0, 4.0], 1e-4));
+}
+
+#[test]
+fn scaled_dot_product_attention_records_gradients_for_all_three_operands() {
+    let q = storage(vec![0.1, 0.2, 0.3, 0.4], vec![2, 2]);
+    let k = storage(vec![0.5, 0.6, 0.7, 0.8], vec![2, 2]);
+    let v = storage(vec![1.0, 2.0, 3.0, 4.0], vec![2, 2]);
+    let out =
+        <B as TensorOps<B>>::scaled_dot_product_attention::<f32>(&q, &k, &v, None, None).unwrap();
+    let grads = <B as Backend>::backward::<f32>(&out).unwrap();
+    assert!(grads.get(q.id).is_some(), "q should have a gradient");
+    assert!(grads.get(k.id).is_some(), "k should have a gradient");
+    assert!(grads.get(v.id).is_some(), "v should have a gradient");
+}
+
+#[test]
 fn test_index_select() {
     let a = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![3, 2]);
     let index = storage(vec![2.0, 0.0], vec![2]);

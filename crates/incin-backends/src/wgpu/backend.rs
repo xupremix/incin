@@ -756,8 +756,38 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackendImpl<T, D> {
     // visible and makes the compiler name any operation added later.
     crate::unsupported::unsupported_tensor_ops! {
         where_cond, gather, scatter,
-        scaled_dot_product_attention,
         unfold, pixel_shuffle, group_norm, instance_norm,
+    }
+
+    /// `scaled_dot_product_attention`. Composed from the already tape-wired
+    /// `transpose`/`matmul`/`mul_scalar_float`/`add`/`softmax`, matching
+    /// CPU's own composition exactly (down to the `1/sqrt(d_k)` default
+    /// scale), so gradients flow through `q`/`k`/`v`/`mask` the same way they
+    /// do on CPU rather than dead-ending on the tape.
+    fn scaled_dot_product_attention<K: DType>(
+        q: &<Self as Backend>::Storage<K>,
+        k: &<Self as Backend>::Storage<K>,
+        v: &<Self as Backend>::Storage<K>,
+        mask: Option<&<Self as Backend>::Storage<K>>,
+        scale: Option<f64>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let k_rank = k.shape.len();
+        let k_t = if k_rank >= 2 {
+            <Self as TensorOps<Self>>::transpose::<K>(k, k_rank - 2, k_rank - 1)?
+        } else {
+            k.clone()
+        };
+        let scores = <Self as TensorOps<Self>>::matmul::<K>(q, &k_t)?;
+        let d_k = *q.shape.last().unwrap_or(&1) as f64;
+        let s = scale.unwrap_or_else(|| 1.0 / d_k.sqrt());
+        let scaled_scores = <Self as FloatOps<Self>>::mul_scalar_float::<K>(&scores, s)?;
+        let masked_scores = if let Some(m) = mask {
+            <Self as NumericOps<Self>>::add::<K>(&scaled_scores, m)?
+        } else {
+            scaled_scores
+        };
+        let attn = <Self as FloatOps<Self>>::softmax::<K>(&masked_scores, scores.shape.len() - 1)?;
+        <Self as TensorOps<Self>>::matmul::<K>(&attn, v)
     }
 
     /// `index_select`. Same host-readback/upload pattern as `repeat`; `index`
