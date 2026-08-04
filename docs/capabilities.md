@@ -134,8 +134,8 @@ run time.
 | `pad` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `pixel_shuffle` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64` | — | — |
 | `powf` | `bf16`, `f16`, `f32`, `f64` | — | — |
-| `prod_all` | `f32` | — | — |
-| `prod_dim` | `f32` | — | — |
+| `prod_all` | `f32` | — | `f32` |
+| `prod_dim` | `f32` | — | `f32` |
 | `quantize` | `f32` | — | — |
 | `quantized_matmul` | `q8_0` | — | — |
 | `rand` | `bf16`, `f16`, `f32`, `f64` | — | — |
@@ -448,6 +448,7 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `mean_all` | `f32` | `contiguous` | any | yes | native |
 | `max_all` | `f32` | `contiguous` | any | yes | native |
 | `min_all` | `f32` | `contiguous` | any | yes | native |
+| `prod_all` | `f32` | `contiguous` | any | yes | native |
 | `sum_dim` | `f32` | `contiguous` | 1+ | yes | native |
 | `sum_keepdim` | `f32` | `contiguous` | 1+ | yes | native |
 | `mean_dim` | `f32` | `contiguous` | 1+ | yes | native |
@@ -456,6 +457,7 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `max_keepdim` | `f32` | `contiguous` | 1+ | yes | native |
 | `min_dim` | `f32` | `contiguous` | 1+ | yes | native |
 | `min_keepdim` | `f32` | `contiguous` | 1+ | yes | native |
+| `prod_dim` | `f32` | `contiguous` | 1+ | yes | native |
 | `conv2d` | `f32` | `contiguous` | 1–4 | yes | native |
 | `max_pool2d` | `f32` | `contiguous` | 3–4 | yes | native |
 | `avg_pool2d` | `f32` | `contiguous` | 3–4 | yes | native |

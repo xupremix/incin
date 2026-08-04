@@ -71,6 +71,13 @@ pub(crate) use unsupported_float_ops;
 ///
 /// `fill` takes a single value; `sequence` takes a pair (`start`/`step` for
 /// `arange`, `start`/`end` for `linspace`).
+///
+/// CUDA and Metal both still invoke this; WGPU no longer does, now that it
+/// has real kernels for `full`/`arange`/`linspace`. That makes the macro
+/// provably unused only under feature combinations that build WGPU without
+/// CUDA or Metal (e.g. CI's WGPU-only clippy job), which is a feature-gating
+/// artifact rather than dead code.
+#[allow(unused_macros)]
 macro_rules! unsupported_creation_ops {
     (fill: $($fill:ident),* $(,)?; sequence: $($sequence:ident),* $(,)?;) => {
         $(
@@ -97,6 +104,7 @@ macro_rules! unsupported_creation_ops {
     };
 }
 
+#[allow(unused_imports)]
 pub(crate) use unsupported_creation_ops;
 
 /// Declares reductions a backend has no kernel for, grouped by whether they

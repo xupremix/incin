@@ -305,9 +305,9 @@ macro_rules! wgpu_descriptor_operations {
             sampling = [],
             readback = [],
             reduction = [
-                SumAll, MeanAll, MaxAll, MinAll,
+                SumAll, MeanAll, MaxAll, MinAll, ProdAll,
                 SumDim, SumKeepDim, MeanDim, MeanKeepDim,
-                MaxDim, MaxKeepDim, MinDim, MinKeepDim
+                MaxDim, MaxKeepDim, MinDim, MinKeepDim, ProdDim
             ],
             spatial = [Conv2dExact, MaxPool2d, AvgPool2d],
             matmul = [MatMulExact],

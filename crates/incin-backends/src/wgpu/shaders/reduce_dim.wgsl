@@ -1,5 +1,5 @@
-// Single dimension reduction: sum_dim, mean_dim, max_dim, min_dim, argmax, argmin
-// op_mode: 0=sum, 1=mean, 2=max, 3=min, 4=argmax, 5=argmin
+// Single dimension reduction: sum_dim, mean_dim, max_dim, min_dim, argmax, argmin, prod_dim
+// op_mode: 0=sum, 1=mean, 2=max, 3=min, 4=argmax, 5=argmin, 6=product
 
 @group(0) @binding(0) var<storage, read> inp: array<f32>;
 @group(0) @binding(1) var<storage, read_write> out: array<f32>;
@@ -66,5 +66,11 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
             }
         }
         out[idx] = bitcast<f32>(best_k);
+    } else if op == 6u { // product
+        var acc = 1.0;
+        for (var k = 0u; k < dim_size; k = k + 1u) {
+            acc = acc * inp[base_offset + k * inner_stride];
+        }
+        out[idx] = acc;
     }
 }

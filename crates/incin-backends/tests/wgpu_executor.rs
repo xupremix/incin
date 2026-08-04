@@ -405,6 +405,7 @@ fn a_reduction_descriptor_routes_to_the_accumulation_it_names_on_gpu() {
         (ReduceOp::Mean, [2.0, 5.0]),
         (ReduceOp::Max, [3.0, 6.0]),
         (ReduceOp::Min, [1.0, 4.0]),
+        (ReduceOp::Prod, [6.0, 120.0]),
     ] {
         let validated =
             <ReduceRule<1> as ShapeRule<(U2, U3)>>::lower(&field::<(U2, U3)>(&[2, 3]), op)
@@ -414,27 +415,6 @@ fn a_reduction_descriptor_routes_to_the_accumulation_it_names_on_gpu() {
 
         assert_eq!(read(&output), expected.to_vec(), "{op} over axis 1");
     }
-}
-
-#[test]
-fn the_one_reduction_wgpu_has_no_shader_for_reports_unsupported_not_a_fault() {
-    // WGPU declares `prod_dim` unsupported where it implements `ReductionOps`.
-    // The registry cannot express "four of five accumulations", so the gap only
-    // surfaces at the kernel, and the executor's job is to report it as the same
-    // kind of answer a registry rejection would have been.
-    let input = storage(&[2, 3], &[1., 2., 3., 4., 5., 6.]);
-    let validated =
-        <ReduceRule<1> as ShapeRule<(U2, U3)>>::lower(&field::<(U2, U3)>(&[2, 3]), ReduceOp::Prod)
-            .expect("axis 1 is in range");
-
-    let Err(error) = execute_one(&validated, &input) else {
-        panic!("wgpu has no product shader, so this must not succeed");
-    };
-
-    assert!(
-        matches!(error, BackendError::Unsupported { .. }),
-        "a missing kernel is a capability answer, not an execution failure: {error:?}"
-    );
 }
 
 #[test]

@@ -1542,6 +1542,21 @@ fn test_lerp() {
 }
 
 #[test]
+fn test_prod_all() {
+    let a = storage(vec![1.0, 2.0, 3.0, 4.0], vec![4]);
+    let out = <B as ReductionOps<B>>::prod_all::<f32>(&a).unwrap();
+    assert_eq!(readback(&out), vec![24.0]);
+}
+
+#[test]
+fn test_prod_dim() {
+    let a = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
+    let out = <B as ReductionOps<B>>::prod_dim::<f32>(&a, 1).unwrap();
+    assert_eq!(out.shape, vec![2]);
+    assert_eq!(readback(&out), vec![6.0, 120.0]);
+}
+
+#[test]
 fn test_unsqueeze() {
     let a = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]);
     let out = <B as TensorOps<B>>::unsqueeze::<f32>(&a, 1).unwrap();

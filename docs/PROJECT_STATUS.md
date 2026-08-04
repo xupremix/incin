@@ -121,6 +121,30 @@ comparisons/`sub_scalar`/`div_scalar` either. `where_cond`, `masked_fill`,
 remaining structural/normalization ops are still unsupported on WGPU and are
 the natural next slice.
 
+`ReductionOps::prod_all`/`prod_dim` and `CreationOps::full`/`arange`/`linspace`
+are real now too: the reduce shaders gained a product mode alongside sum/max/min,
+and the three creation ops fill a host `Vec<f32>` the same way `zeros`/`ones`
+already did. `cumsum` is WGPU's only remaining `ReductionOps` gap (needs a
+genuine prefix-scan shader, not a mode addition to the existing reduce
+kernels). Closing `prod_all`/`prod_dim` at the `TensorOps`/`ReductionOps`
+trait level was not enough on its own: WGPU also has a second, independent
+gate — `crate::capability::support`, which the canonical
+`Execute<ReductionSpec>` descriptor path (`wgpu/executor.rs`) checks before
+ever calling the kernel. Its per-backend operation list lives in
+`wgpu_descriptor_operations!` in `capability.rs` and had its own hardcoded
+`ProdAll`/`ProdDim` omission, independent of the `unsupported_reduction_ops!`
+macro. A trait-level fix does not imply the descriptor path picked it up;
+both need checking. `docs/capabilities.md` is generated from this table
+(`INCIN_DOCS=overwrite cargo test -p incin-backends --test generated_docs`)
+and now lists `prod_all`/`prod_dim` as WGPU-native.
+
+`prod_all` on CPU had the same dtype-mislabeling defect as the matmul and
+extrema fixes below: it wrote its accumulator through a hardcoded
+`CpuBuffer::F32` instead of `from_f64_values`, so an f64 tensor's product
+came back silently mislabeled as f32. `prod_dim` already used
+`from_f64_values` correctly; only the all-elements variant had the bug, and
+neither had test coverage before this pass.
+
 The FND-004 evidence records 16 formatter-drifted files; the actual count at
 that commit was 22, and is 20 now. See `audit-evidence/FND-005/known-limitations.md`
 for the correction. No drifted file is one either task changed.

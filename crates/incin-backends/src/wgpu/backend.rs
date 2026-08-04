@@ -206,10 +206,56 @@ impl<T: DType, D: Device> Backend for WgpuBackendImpl<T, D> {
 // CreationOps
 // ─────────────────────────────────────────────────────────────────────────────
 impl<T: DType, D: Device> CreationOps<Self> for WgpuBackendImpl<T, D> {
-    // No shader fills an arbitrary value or generates a sequence yet.
-    crate::unsupported::unsupported_creation_ops! {
-        fill: full;
-        sequence: arange, linspace;
+    /// `full`. WGPU storage is always physically f32 (`zeros`/`ones` above
+    /// build a `Vec<f32>` regardless of the requested `dtype`, which
+    /// `validate_wgpu` restricts to what the dtype policy allows), so this
+    /// fills a host-side `Vec<f32>` and uploads it exactly like they do.
+    fn full<K: DType>(
+        val: f64,
+        shape: &[usize],
+        dtype: DTypeId,
+        device: &DeviceId,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        validate_wgpu(dtype, device, OperationKind::Fill, "full")?;
+        let n = num_elements(shape)?;
+        let data: Vec<f32> = vec![val as f32; n];
+        let buf = WgpuBuffer::try_from_slice(&data)?;
+        Ok(WgpuStorage::new(buf, shape.to_vec()))
+    }
+    /// `arange`.
+    fn arange<K: DType>(
+        start: f64,
+        step: f64,
+        shape: &[usize],
+        dtype: DTypeId,
+        device: &DeviceId,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        validate_wgpu(dtype, device, OperationKind::Fill, "arange")?;
+        let n = num_elements(shape)?;
+        let data: Vec<f32> = (0..n).map(|i| (start + (i as f64) * step) as f32).collect();
+        let buf = WgpuBuffer::try_from_slice(&data)?;
+        Ok(WgpuStorage::new(buf, shape.to_vec()))
+    }
+    /// `linspace`.
+    fn linspace<K: DType>(
+        start: f64,
+        end: f64,
+        shape: &[usize],
+        dtype: DTypeId,
+        device: &DeviceId,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        validate_wgpu(dtype, device, OperationKind::Fill, "linspace")?;
+        let n = num_elements(shape)?;
+        let step = if n > 1 {
+            (end - start) / ((n - 1) as f64)
+        } else {
+            0.0
+        };
+        let data: Vec<f32> = (0..n)
+            .map(|i| if i == n - 1 { end } else { start + (i as f64) * step } as f32)
+            .collect();
+        let buf = WgpuBuffer::try_from_slice(&data)?;
+        Ok(WgpuStorage::new(buf, shape.to_vec()))
     }
 
     /// `zeros`.
@@ -1406,12 +1452,13 @@ fn reduce_dim_to_storage(
     let inner_stride =
         ShapeBuf::from_slice(&shape[dim + 1..]).checked_numel(OperationKind::Reduction)?;
 
-    // mode mapping: CPU reduce_dim mode (0=sum, 1=max, 2=min) maps directly
-    // to my shader ops (0=sum, 2=max, 3=min).
+    // mode mapping: CPU reduce_dim mode (0=sum, 1=max, 2=min, 3=product) maps
+    // to my shader ops (0=sum, 2=max, 3=min, 6=product).
     let op_mode = match mode {
         0 => 0u32, // sum
         1 => 2u32, // max
         2 => 3u32, // min
+        3 => 6u32, // product
         _ => {
             return Err(Error::Backend(BackendError::InvalidInput {
                 operation: OperationKind::Reduction,
@@ -1569,10 +1616,24 @@ fn push_extremum_all_tape_entry(t: &WgpuStorage, out: &WgpuStorage, is_max: bool
 }
 
 impl<T: DType, D: Device> ReductionOps<Self> for WgpuBackendImpl<T, D> {
-    // No product-reduction or prefix-scan shader exists yet.
+    // No prefix-scan shader exists yet.
     crate::unsupported::unsupported_reduction_ops! {
-        all: prod_all;
-        dim: prod_dim, cumsum;
+        all: ;
+        dim: cumsum;
+    }
+
+    /// `prod_all`. Not autograd-wired, matching CPU.
+    fn prod_all<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        reduce_all_to_storage(t, 3)
+    }
+    /// `prod_dim`. Not autograd-wired, matching CPU.
+    fn prod_dim<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        dim: usize,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        reduce_dim_to_storage(t, dim, 3, false)
     }
 
     /// `sum_all`.

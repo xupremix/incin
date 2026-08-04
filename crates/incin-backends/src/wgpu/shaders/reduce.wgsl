@@ -3,7 +3,7 @@
 // The host then sums workgroup results or re-dispatches.
 //
 // params[0] = n_elements (total elements)
-// params[1] = reduce_mode: 0 = sum, 1 = max, 2 = min
+// params[1] = reduce_mode: 0 = sum, 1 = max, 2 = min, 3 = product
 
 @group(0) @binding(0) var<storage, read> inp: array<f32>;
 @group(0) @binding(1) var<storage, read_write> out: array<f32>;
@@ -30,6 +30,8 @@ fn main(
         val = -3.4028235e+38; // -FLT_MAX
     } else if mode == 2u {
         val = 3.4028235e+38;  // FLT_MAX
+    } else if mode == 3u {
+        val = 1.0; // product identity
     } else {
         val = 0.0;
     }
@@ -49,6 +51,8 @@ fn main(
                 shared_data[lid] = max(shared_data[lid], shared_data[lid + stride]);
             } else if mode == 2u {
                 shared_data[lid] = min(shared_data[lid], shared_data[lid + stride]);
+            } else if mode == 3u {
+                shared_data[lid] = shared_data[lid] * shared_data[lid + stride];
             } else {
                 shared_data[lid] = shared_data[lid] + shared_data[lid + stride];
             }
