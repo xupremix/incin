@@ -33,6 +33,36 @@ fn is_valid_scalar_type<E: 'static>() -> bool {
         || tid == core::any::TypeId::of::<half::bf16>()
 }
 
+/// Whether `E` is the exact Rust type the tensor's `dtype` stores.
+///
+/// The extraction below reads the tensor's bytes through a `*const E`, so
+/// agreeing on a byte *width* is not enough: `f32` and `u32` are both four
+/// bytes wide, and reading one as the other reinterprets the bit pattern
+/// instead of converting it. `1.0f32` extracted as `u32` returned
+/// `1065353216` rather than reporting a mismatch, which is a wrong answer
+/// with no error attached to it.
+///
+/// `bool` is deliberately absent. It is not a stored dtype at all; both
+/// callers handle it before reaching here, as a per-element truthy test
+/// rather than a reinterpret.
+///
+/// `Q8_0` is also absent, and matches nothing: a block-quantized element has
+/// no scalar Rust type to be read as without dequantizing first.
+fn scalar_type_matches_dtype<E: 'static>(dtype: crate::tensor::dtype::DTypeId) -> bool {
+    use crate::tensor::dtype::DTypeId;
+    let tid = core::any::TypeId::of::<E>();
+    match dtype {
+        DTypeId::U8 => tid == core::any::TypeId::of::<u8>(),
+        DTypeId::U32 => tid == core::any::TypeId::of::<u32>(),
+        DTypeId::I64 => tid == core::any::TypeId::of::<i64>(),
+        DTypeId::BF16 => tid == core::any::TypeId::of::<half::bf16>(),
+        DTypeId::F16 => tid == core::any::TypeId::of::<half::f16>(),
+        DTypeId::F32 => tid == core::any::TypeId::of::<f32>(),
+        DTypeId::F64 => tid == core::any::TypeId::of::<f64>(),
+        DTypeId::Q8_0 => false,
+    }
+}
+
 impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
     Tensor<S, B, K, G>
 {
@@ -414,6 +444,14 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             return Ok(unsafe { core::ptr::read_unaligned(&val as *const bool as *const E) });
         }
 
+        if !scalar_type_matches_dtype::<E>(dtype) {
+            return Err(crate::err::Error::Msg(alloc::format!(
+                "Type mismatch when converting to scalar. Tensor dtype {:?} cannot be extracted as {}: the bytes would be reinterpreted rather than converted",
+                dtype,
+                core::any::type_name::<E>()
+            )));
+        }
+
         let elem_size = core::mem::size_of::<E>();
         let expected_size = dtype.element_size();
         if bytes.len() != elem_size || elem_size != expected_size {
@@ -468,6 +506,14 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
                 out.push(unsafe { core::ptr::read_unaligned(&val as *const bool as *const E) });
             }
             return Ok(out);
+        }
+
+        if !scalar_type_matches_dtype::<E>(dtype) {
+            return Err(crate::err::Error::Msg(alloc::format!(
+                "Type mismatch when converting to vec. Tensor dtype {:?} cannot be extracted as {}: the bytes would be reinterpreted rather than converted",
+                dtype,
+                core::any::type_name::<E>()
+            )));
         }
 
         let elem_size = core::mem::size_of::<E>();
