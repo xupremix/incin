@@ -411,8 +411,22 @@ axis length, `pixel_shuffle`'s channel count dividing evenly by the
 upscale factor squared) — the same pair WGPU's own port of these two
 methods added.
 
-`gather`, `scatter`, `where_cond`, `group_norm` and `instance_norm` remain
-unsupported on CUDA and are the natural continuation of this pass.
+`group_norm` and `instance_norm` are real now too. CUDA storage is always
+contiguous, so a group is a plain contiguous slice of the host readback
+needing no strided indexing at all, the same simplification WGPU's own
+port of this method has; `instance_norm` is `group_norm` with one group
+per channel. Not autograd-wired, matching CPU. Tests reuse the same CPU/
+WGPU fixtures used everywhere else in this pass.
+
+`scatter` is real now too, same host round-trip, same fidelity to CPU's
+semantics (including silently ignoring an out-of-bounds destination
+rather than erroring) as WGPU's own port of this method. `index`/`src` are
+also required to be F32-physical, for the same reason `index_select`'s are.
+
+`gather` and `where_cond` remain unsupported on CUDA — both are CPU
+autograd-wired operations (`where_cond` additionally broadcasts its two
+value operands to a common shape), the same reason WGPU ported them last,
+and are the natural continuation of this pass.
 
 The FND-004 evidence records 16 formatter-drifted files; the actual count at
 that commit was 22, and is 20 now. See `audit-evidence/FND-005/known-limitations.md`

@@ -62,7 +62,44 @@ pub type CudaGrads = crate::cuda::tape::CudaGrads;
 impl<T: DType, D: Device> TensorOps<Self> for CudaBackendImpl<T, D> {
     // No CUDA kernels exist for these yet.
     crate::unsupported::unsupported_tensor_ops! {
-        where_cond, gather, scatter,
+        where_cond, gather,
+    }
+
+    /// `scatter`. Same host round-trip as `index_select`, matching CPU's
+    /// semantics exactly, including silently ignoring an out-of-bounds
+    /// destination position rather than erroring. `index`/`src` are also
+    /// required to be F32-physical, for the same reason `index_select`'s do.
+    /// Not autograd-wired, matching CPU.
+    fn scatter<K: DType, KInt: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        dim: usize,
+        index: &<Self as Backend>::Storage<KInt>,
+        src: &<Self as Backend>::Storage<K>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        cuda_require_f32(t.buffer.dtype, "scatter")?;
+        cuda_require_f32(index.buffer.dtype, "scatter")?;
+        cuda_require_f32(src.buffer.dtype, "scatter")?;
+        let mut out_data = download_f32_host(t)?;
+        let index_data = download_f32_host(index)?;
+        let src_data = download_f32_host(src)?;
+        let strides = crate::cpu::stride::contiguous_strides(&t.shape);
+        let index_total = checked_numel(&index.shape)?;
+        let mut idx = vec![0usize; index.shape.len()];
+        for i in 0..index_total {
+            let target_i = index_data[i] as usize;
+            let mut flat_dest = 0usize;
+            for (axis, &stride) in strides.iter().enumerate() {
+                let coord = if axis == dim { target_i } else { idx[axis] };
+                flat_dest += coord * stride;
+            }
+            if flat_dest < out_data.len() {
+                out_data[flat_dest] = src_data[i];
+            }
+            if !index.shape.is_empty() {
+                crate::cpu::storage::increment_index(&mut idx, &index.shape);
+            }
+        }
+        upload_f32_from_host(&t.buffer, t.shape.to_vec(), out_data)
     }
 
     /// `group_norm`. CUDA storage is always contiguous, so a group (the
@@ -3942,5 +3979,21 @@ mod tests {
         assert!((out[3] - 1.0).abs() < 1e-3, "got {}", out[3]);
         assert!((out[6] - 1.0).abs() < 1e-3, "got {}", out[6]);
         assert!((out[7] + 1.0).abs() < 1e-3, "got {}", out[7]);
+    }
+
+    #[test]
+    #[ignore = "requires CUDA hardware"]
+    fn test_scatter() {
+        let t = cuda_f32(&[3, 2], vec![0.0, 0.0, 0.0, 0.0, 0.0, 0.0]);
+        let index = cuda_f32(&[2, 1], vec![2.0, 0.0]);
+        let src = cuda_f32(&[2, 1], vec![9.0, 8.0]);
+        let out = <B as TensorOps<B>>::scatter::<f32, f32>(&t, 0, &index, &src).unwrap();
+        assert_eq!(out.shape, vec![3, 2]);
+        // Row 0's column 0 gets src[1]=8 (index[1]=0), row 2's column 0
+        // gets src[0]=9 (index[0]=2); every other position is untouched.
+        assert_eq!(
+            download_f32_host(&out).unwrap(),
+            vec![8.0, 0.0, 0.0, 0.0, 9.0, 0.0]
+        );
     }
 }
