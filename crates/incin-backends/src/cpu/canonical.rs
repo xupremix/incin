@@ -1108,21 +1108,6 @@ impl<T: DType, D: Device> Execute<Descriptor<op::BatchNorm>> for CpuBackendImpl<
     ) -> Result<CpuStorage, BackendError> {
         let operation = OperationKind::BatchNorm;
         let attributes = request.operation.descriptor().attributes();
-        // The CPU kernel never computes batch statistics and never updates the
-        // running ones; its momentum parameter is bound to `_momentum`. A
-        // training request routed to it would come back with the inference
-        // result and nothing to distinguish it from a correct one, and the
-        // running statistics the caller expects to have been updated would be
-        // unchanged. That is the one failure this executor exists to prevent,
-        // so it is a refusal and not a note in the documentation.
-        if attributes.training {
-            return Err(invalid(
-                operation,
-                "the CPU batch norm kernel evaluates inference mode only: it computes no batch \
-                 statistics and updates no running statistics, so a training request cannot be \
-                 answered correctly",
-            ));
-        }
         let Some((input, optional)) = request.inputs.split_first() else {
             return Err(invalid(
                 operation,
@@ -1144,6 +1129,25 @@ impl<T: DType, D: Device> Execute<Descriptor<op::BatchNorm>> for CpuBackendImpl<
                 "batch norm was given more operands than its presence flags account for",
             ));
         }
+        // Training mode normalizes by the batch's own statistics and takes no
+        // running ones. The two modes are separate kernels rather than a flag,
+        // because the inference one substitutes a zero mean and a unit
+        // variance for an absent operand instead of failing: an executor that
+        // routed a training request there would get a plausible wrong answer
+        // rather than an error, which is what this used to refuse outright.
+        if attributes.training {
+            let input = operand(input, operation)?;
+            let weight = weight.map(|value| operand(value, operation)).transpose()?;
+            let bias = bias.map(|value| operand(value, operation)).transpose()?;
+            admitted(self, operation, input, records_gradients(request.context))?;
+            f32_only(operation, &[Some(input), weight, bias])?;
+            let epsilon = narrowed_epsilon(operation, attributes.epsilon)?;
+            return crate::cpu::ops::norm::batch_norm_training_impl::<T, D, T>(
+                input, weight, bias, epsilon,
+            )
+            .map_err(|error| kernel_error(operation, error));
+        }
+
         // Descriptor validation already pairs these with `training`, but the
         // kernel substitutes a zero mean and a unit variance for an absent one
         // instead of failing, so an executor that trusted the caller here would
@@ -2867,28 +2871,76 @@ mod tests {
         }
     }
 
-    /// A training batch norm must be refused, not answered in inference mode.
+    /// A training batch norm normalizes by the batch's own statistics.
     ///
-    /// This is the failure the executor was written to prevent. The kernel
-    /// behind it binds its momentum to `_momentum` and computes no batch
-    /// statistics, so the wrong answer here is not an error or a NaN but a
-    /// correctly shaped tensor of finite values that silently used the running
-    /// statistics, with the caller's running statistics left unchanged.
+    /// It used to be refused, because the only kernel behind it bound its
+    /// momentum to `_momentum` and computed no batch statistics, so a training
+    /// request came back as a correctly shaped tensor of finite values that
+    /// had silently used the running ones. Refusing was right while that was
+    /// the only option; a separate training kernel is better than either.
+    ///
+    /// The statistics are per channel, so for `[2, 3]` each of the three
+    /// columns normalizes over its own two rows. A two-element population
+    /// normalizes to exactly -1 and +1 whatever the two values are, which is
+    /// what makes the expected result independent of the input here.
     #[test]
-    fn a_training_batch_norm_is_refused_rather_than_evaluated_in_inference_mode() {
+    fn a_training_batch_norm_normalizes_by_the_batch_statistics() {
         let context = context();
         let input = storage(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], &[2, 3]);
 
-        let error = dispatch::execute::<op::BatchNorm, _>(
+        let normalized = dispatch::execute::<op::BatchNorm, _>(
             &context,
             batch_norm_attributes(true, 1e-5),
             &[handle(&input)],
         )
-        .expect_err("a training batch norm has no correct answer on this backend");
-        let message = format!("{error}");
+        .expect("a training batch norm computes batch statistics");
+
+        assert_eq!(normalized.shape.to_vec(), vec![2, 3]);
+        for row in 0..2 {
+            for column in 0..3 {
+                let value = normalized.get(&[row, column]);
+                let expected = if row == 0 { -1.0 } else { 1.0 };
+                assert!(
+                    (value - expected).abs() < 1e-3,
+                    "[{row}, {column}] was {value}, expected {expected}"
+                );
+            }
+        }
+    }
+
+    /// Training and inference are different answers, not the same one reached
+    /// twice. Without this, a training mode that quietly fell through to the
+    /// inference kernel would pass the test above whenever the running
+    /// statistics happened to match the batch ones.
+    #[test]
+    fn training_and_inference_batch_norm_disagree() {
+        let context = context();
+        let input = storage(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], &[2, 3]);
+        let running_mean = storage(&[0.0, 0.0, 0.0], &[3]);
+        let running_variance = storage(&[1.0, 1.0, 1.0], &[3]);
+
+        let training = dispatch::execute::<op::BatchNorm, _>(
+            &context,
+            batch_norm_attributes(true, 1e-5),
+            &[handle(&input)],
+        )
+        .unwrap();
+        let inference = dispatch::execute::<op::BatchNorm, _>(
+            &context,
+            batch_norm_attributes(false, 1e-5),
+            &[
+                handle(&input),
+                handle(&running_mean),
+                handle(&running_variance),
+            ],
+        )
+        .unwrap();
+
         assert!(
-            message.contains("inference mode only"),
-            "the refusal must name the reason, not just fail: {message}"
+            (training.get(&[0, 0]) - inference.get(&[0, 0])).abs() > 1e-3,
+            "training {} and inference {} agree",
+            training.get(&[0, 0]),
+            inference.get(&[0, 0])
         );
     }
 
