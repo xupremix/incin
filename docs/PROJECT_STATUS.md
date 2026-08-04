@@ -210,8 +210,20 @@ Both keep CPU's own input validation (`unfold`'s window not exceeding the
 axis length, `pixel_shuffle`'s channel count dividing evenly by the upscale
 factor squared), reported as `BackendError::InvalidInput` rather than CPU's
 `Error::Msg` since that is the error type this call site's `Result` uses.
-WGPU's `TensorOps` gap is now `where_cond`, `gather`, `scatter`,
-`group_norm` and `instance_norm` — 5 methods, down from the original 33.
+`group_norm` and `instance_norm` are real now too, and simpler on WGPU than
+on CPU: WGPU storage is always contiguous, so a group (CPU's per-sample run
+of `channels/groups * spatial` elements — see the CPU implementation's doc
+comment for why dividing the whole tensor by `groups` is wrong above batch
+size 1, which is the same defect class this pass has fixed twice already)
+is a plain contiguous slice of the host readback, needing no strided
+indexing at all. `instance_norm` is `group_norm` with one group per channel,
+matching CPU's own composition. Not autograd-wired, matching CPU. Tests
+reuse the CPU backend's own fixtures (`group_norm_statistics_are_per_sample_
+not_across_the_batch`, `instance_norm_normalizes_each_channel_of_each_
+sample_alone`) rather than deriving new expected values.
+
+WGPU's `TensorOps` gap is now `where_cond`, `gather` and `scatter` — 3
+methods, down from the original 33.
 
 The FND-004 evidence records 16 formatter-drifted files; the actual count at
 that commit was 22, and is 20 now. See `audit-evidence/FND-005/known-limitations.md`

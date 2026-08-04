@@ -419,6 +419,63 @@ fn masked_fill_rejects_a_mismatched_mask_shape() {
 }
 
 #[test]
+/// Same fixture as the CPU backend's
+/// `group_norm_statistics_are_per_sample_not_across_the_batch`.
+fn group_norm_statistics_are_per_sample_not_across_the_batch() {
+    let first: Vec<f32> = (0..8).map(|v| v as f32).collect();
+    let second: Vec<f32> = first.iter().map(|v| v + 100.0).collect();
+    let data = first.iter().copied().chain(second).collect::<Vec<f32>>();
+    let t = storage(data, vec![2, 4, 1, 2]);
+
+    let out = readback(&<B as TensorOps<B>>::group_norm::<f32>(&t, 2, 1e-5).unwrap());
+
+    assert_eq!(out[..8], out[8..], "the two samples must normalize alike");
+    // Group 0 of sample 0 is [0,1,2,3]: mean 1.5, population variance 1.25.
+    let inv_std = 1.0 / (1.25f64 + 1e-5).sqrt();
+    for (i, value) in [0.0f64, 1.0, 2.0, 3.0].iter().enumerate() {
+        let expected = ((value - 1.5) * inv_std) as f32;
+        assert!(
+            (out[i] - expected).abs() < 1e-5,
+            "element {i}: got {}, want {expected}",
+            out[i]
+        );
+    }
+}
+
+#[test]
+/// Same fixture as the CPU backend's
+/// `instance_norm_normalizes_each_channel_of_each_sample_alone`.
+fn instance_norm_normalizes_each_channel_of_each_sample_alone() {
+    let t = storage(
+        vec![
+            1.0, 1.0, 5.0, 7.0, // sample 0: channel 0 flat, channel 1 varies
+            2.0, 2.0, 9.0, 3.0, // sample 1: channel 0 flat, channel 1 varies
+        ],
+        vec![2, 2, 2],
+    );
+
+    let out = readback(&<B as TensorOps<B>>::instance_norm::<f32>(&t, 1e-5).unwrap());
+
+    for flat in [0, 1, 4, 5] {
+        assert!(
+            out[flat].abs() < 1e-5,
+            "constant channel at {flat} must normalize to zero, got {}",
+            out[flat]
+        );
+    }
+    assert!((out[2] + 1.0).abs() < 1e-3, "got {}", out[2]);
+    assert!((out[3] - 1.0).abs() < 1e-3, "got {}", out[3]);
+    assert!((out[6] - 1.0).abs() < 1e-3, "got {}", out[6]);
+    assert!((out[7] + 1.0).abs() < 1e-3, "got {}", out[7]);
+}
+
+#[test]
+fn group_norm_rejects_zero_groups() {
+    let t = storage(vec![1.0, 2.0, 3.0, 4.0], vec![1, 2, 2]);
+    assert!(<B as TensorOps<B>>::group_norm::<f32>(&t, 0, 1e-5).is_err());
+}
+
+#[test]
 fn test_unfold() {
     let a = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0], vec![5]);
     let out = <B as TensorOps<B>>::unfold::<f32>(&a, 0, 3, 1).unwrap();

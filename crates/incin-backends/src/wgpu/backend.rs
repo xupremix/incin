@@ -756,7 +756,65 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackendImpl<T, D> {
     // visible and makes the compiler name any operation added later.
     crate::unsupported::unsupported_tensor_ops! {
         where_cond, gather, scatter,
-        group_norm, instance_norm,
+    }
+
+    /// `group_norm`. WGPU storage is always contiguous, so a group (CPU's
+    /// per-sample run of `channels/groups * spatial` elements, computed with
+    /// the same formula as `cpu::ops::shape_ops::group_norm` — see its doc
+    /// comment for why dividing the whole tensor by `groups` is wrong above
+    /// batch size 1) is a plain contiguous slice of the host readback,
+    /// needing no strided indexing at all. Not autograd-wired, matching CPU.
+    fn group_norm<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        groups: usize,
+        eps: f64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        if groups == 0 {
+            return Err(Error::Backend(BackendError::InvalidInput {
+                operation: OperationKind::Normalization,
+                reason: "group_norm: groups must be non-zero",
+            }));
+        }
+        let channels = if t.shape.len() >= 2 { t.shape[1] } else { 1 };
+        if channels % groups != 0 {
+            return Err(Error::Backend(BackendError::InvalidInput {
+                operation: OperationKind::Normalization,
+                reason: "group_norm: channels must be divisible by groups",
+            }));
+        }
+        let data = t.buffer.to_vec::<f32>()?;
+        let total = data.len();
+        let (batch, spatial) = if t.shape.len() >= 2 {
+            (t.shape[0], t.shape[2..].iter().product::<usize>())
+        } else {
+            (1, total)
+        };
+        let group_size = channels / groups * spatial;
+        let mut out = vec![0.0f32; total];
+        for run in 0..batch * groups {
+            let start = run * group_size;
+            let slice = &data[start..start + group_size];
+            let sum: f64 = slice.iter().map(|&v| v as f64).sum();
+            let sq_sum: f64 = slice.iter().map(|&v| (v as f64) * (v as f64)).sum();
+            let mean = sum / group_size as f64;
+            let var = (sq_sum / group_size as f64 - mean * mean).max(0.0);
+            let inv_std = 1.0 / (var + eps).sqrt();
+            for (i, &value) in slice.iter().enumerate() {
+                out[start + i] = ((value as f64 - mean) * inv_std) as f32;
+            }
+        }
+        let buf = WgpuBuffer::try_from_slice(&out)?;
+        Ok(WgpuStorage::new(buf, t.shape.to_vec()))
+    }
+
+    /// `instance_norm`. `group_norm` with one group per channel, matching
+    /// CPU's own composition exactly.
+    fn instance_norm<K: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        eps: f64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let channels = if t.shape.len() >= 2 { t.shape[1] } else { 1 };
+        <Self as TensorOps<Self>>::group_norm::<K>(t, channels, eps)
     }
 
     /// `unfold`. Same host-readback/upload pattern as `repeat`. Not
