@@ -755,9 +755,65 @@ impl<T: DType, D: Device> TensorOps<Self> for WgpuBackendImpl<T, D> {
     // because the trait answered for them; declaring them here keeps the gap
     // visible and makes the compiler name any operation added later.
     crate::unsupported::unsupported_tensor_ops! {
-        where_cond, gather, scatter, index_select, masked_fill,
+        where_cond, gather, scatter,
         scaled_dot_product_attention,
         unfold, pixel_shuffle, group_norm, instance_norm,
+    }
+
+    /// `index_select`. Same host-readback/upload pattern as `repeat`; `index`
+    /// is `WgpuStorage` regardless of `KInt` (WGPU has one physical storage
+    /// representation for every dtype), so its values are read back as f32
+    /// and truncated to a position like CPU's `index.get(&idx) as usize`
+    /// does. Not autograd-wired, matching CPU.
+    fn index_select<K: DType, KInt: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        dim: usize,
+        index: &<Self as Backend>::Storage<KInt>,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        let data = t.buffer.to_vec::<f32>()?;
+        let index_data = index.buffer.to_vec::<f32>()?;
+        let mut out_shape = t.shape.to_vec();
+        out_shape[dim] = index_data.len();
+        let total = num_elements(&out_shape)?;
+        let mut out = Vec::with_capacity(total);
+        let mut out_idx = vec![0usize; out_shape.len()];
+        for _ in 0..total {
+            let selected = index_data[out_idx[dim]] as usize;
+            let mut src_idx = out_idx.clone();
+            src_idx[dim] = selected;
+            out.push(data[checked_flat_index(&src_idx, &t.shape, OperationKind::Reshape)?]);
+            if !out_shape.is_empty() {
+                increment_multi_index(&mut out_idx, &out_shape);
+            }
+        }
+        let buf = WgpuBuffer::try_from_slice(&out)?;
+        Ok(WgpuStorage::new(buf, out_shape))
+    }
+
+    /// `masked_fill`. Same host-readback/upload pattern as `repeat`. Not
+    /// autograd-wired, matching CPU.
+    fn masked_fill<K: DType, KMask: DType>(
+        t: &<Self as Backend>::Storage<K>,
+        mask: &<Self as Backend>::Storage<KMask>,
+        value: f64,
+    ) -> Result<<Self as Backend>::Storage<K>> {
+        if t.shape != mask.shape {
+            return Err(Error::ShapeMismatch {
+                op: "masked_fill",
+                expected: t.shape.to_vec(),
+                got: mask.shape.to_vec(),
+                msg: "mask must match the operand's shape exactly".to_string(),
+            });
+        }
+        let data = t.buffer.to_vec::<f32>()?;
+        let mask_data = mask.buffer.to_vec::<f32>()?;
+        let out: Vec<f32> = data
+            .iter()
+            .zip(mask_data.iter())
+            .map(|(&v, &m)| if m != 0.0 { value as f32 } else { v })
+            .collect();
+        let buf = WgpuBuffer::try_from_slice(&out)?;
+        Ok(WgpuStorage::new(buf, t.shape.to_vec()))
     }
 
     /// `repeat`. WGPU storage has no shader for this yet, so it reads the

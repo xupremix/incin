@@ -173,10 +173,25 @@ use, not a new strategy invented for these. None are gated by the capability
 table (none of these five appear in `wgpu_descriptor_operations!`'s lists at
 all, so there is no canonical-path check to update, unlike the
 `prod_all`/`prod_dim` case above). Not autograd-wired, matching CPU, whose
-own versions carry no backward closure either. WGPU's `TensorOps` gap is now
-`where_cond`, `gather`, `scatter`, `index_select`, `masked_fill`,
-`scaled_dot_product_attention`, `unfold`, `pixel_shuffle`, `group_norm` and
-`instance_norm` — 10 methods, down from the original 33.
+own versions carry no backward closure either.
+
+`index_select` and `masked_fill` are real now too, same host-readback
+pattern, same no-autograd fidelity to CPU. `index`/`mask` are just
+`WgpuStorage` regardless of their `KInt`/`KMask` type parameter (WGPU has one
+physical representation for every dtype), so their values are read back as
+f32 the same way the operand is. `masked_fill` added an explicit shape check
+CPU's own version does not have — CPU silently walks the operand's shape and
+assumes the mask matches it, which produces nonsense on a mismatch rather
+than a clear error; WGPU's host-readback path can check this cheaply, so it
+does. `where_cond`, `gather` and `scatter` remain unsupported: CPU's
+`where_cond`/`gather` are actually autograd-wired (unlike everything ported
+in this pass so far), and `where_cond` additionally broadcasts its two value
+operands to a common shape rather than requiring an exact match, so porting
+them faithfully is more than the same read-transform-upload template and is
+being left for a dedicated pass. WGPU's `TensorOps` gap is now `where_cond`,
+`gather`, `scatter`, `scaled_dot_product_attention`, `unfold`,
+`pixel_shuffle`, `group_norm` and `instance_norm` — 8 methods, down from the
+original 33.
 
 The FND-004 evidence records 16 formatter-drifted files; the actual count at
 that commit was 22, and is 20 now. See `audit-evidence/FND-005/known-limitations.md`

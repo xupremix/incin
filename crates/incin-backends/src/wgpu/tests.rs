@@ -368,6 +368,30 @@ fn test_squeeze() {
 }
 
 #[test]
+fn test_index_select() {
+    let a = storage(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![3, 2]);
+    let index = storage(vec![2.0, 0.0], vec![2]);
+    let out = <B as TensorOps<B>>::index_select::<f32, f32>(&a, 0, &index).unwrap();
+    assert_eq!(out.shape, vec![2, 2]);
+    assert_eq!(readback(&out), vec![5.0, 6.0, 1.0, 2.0]);
+}
+
+#[test]
+fn test_masked_fill() {
+    let a = storage(vec![1.0, 2.0, 3.0, 4.0], vec![4]);
+    let mask = storage(vec![1.0, 0.0, 1.0, 0.0], vec![4]);
+    let out = <B as TensorOps<B>>::masked_fill::<f32, f32>(&a, &mask, -1.0).unwrap();
+    assert_eq!(readback(&out), vec![-1.0, 2.0, -1.0, 4.0]);
+}
+
+#[test]
+fn masked_fill_rejects_a_mismatched_mask_shape() {
+    let a = storage(vec![1.0, 2.0, 3.0, 4.0], vec![4]);
+    let mask = storage(vec![1.0, 0.0], vec![2]);
+    assert!(<B as TensorOps<B>>::masked_fill::<f32, f32>(&a, &mask, -1.0).is_err());
+}
+
+#[test]
 fn test_repeat() {
     let a = storage(vec![1.0, 2.0, 3.0, 4.0], vec![2, 2]);
     let out = <B as TensorOps<B>>::repeat::<f32>(&a, &[2, 1]).unwrap();
