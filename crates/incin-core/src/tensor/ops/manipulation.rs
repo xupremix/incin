@@ -340,13 +340,32 @@ impl<
     /// ```
     pub fn reshape_idx<T: crate::shapes::idx::ReshapeTarget<S>>(
         &self,
-    ) -> Result<Tensor<T::Output, B, K, G, P>> {
+    ) -> Result<Tensor<T::Output, B, K, G, P>>
+    where
+        B: Execute<
+                Descriptor<op::ReshapeExact>,
+                Output = <B as crate::tensor::backend::StorageBackend>::Storage<K>,
+            > + Capabilities,
+    {
         let in_shape_vec = self.shape_buf();
         let out_shape_vec = T::calculate_shape(in_shape_vec.as_ref())?;
-        let inner = self.under_grad_mode(|| B::reshape(&self.inner, &out_shape_vec))?;
-        Tensor::<S, B, K, G, P>::from_shape_buf_placed(
+        let output_shape = ShapeValue::<T::Output>::try_new(ShapeBuf::from_slice(&out_shape_vec))
+            .map_err(crate::prelude::Error::Shape)?;
+        let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = self.under_grad_mode(|| {
+            dispatch::execute_shaped::<op::ReshapeExact, B, T::Output>(
+                &context,
+                ShapeAttributes {
+                    shape: out_shape_vec.clone(),
+                },
+                &[input],
+                &output_shape,
+            )
+        })?;
+        Tensor::<T::Output, B, K, G, P>::from_shape_value_placed(
             inner,
-            shape_buf_from_dims::<T::Output>(OperationKind::Reshape, &out_shape_vec)?,
+            output_shape,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
@@ -473,9 +492,12 @@ impl<
     where
         S2: Shape + DynShape,
         S: crate::shapes::reshape::TryReshape<S2>,
+        B: Execute<
+                Descriptor<op::ReshapeExact>,
+                Output = <B as crate::tensor::backend::StorageBackend>::Storage<K>,
+            > + Capabilities,
     {
-        let new_shape_field = S2::init(args);
-        let new_dims = new_shape_field.clone();
+        let new_shape_field = S2::try_init(args).map_err(crate::prelude::Error::Shape)?;
 
         // Runtime boundaries checking
         let source_numel = S::checked_numel(
@@ -499,10 +521,23 @@ impl<
             });
         }
 
-        let inner = self.under_grad_mode(|| B::reshape(&self.inner, new_dims.as_ref()))?;
-        Tensor::<S, B, K, G, P>::from_shape_buf_placed(
+        let output_shape = ShapeValue::<S2>::try_new(new_shape_field.clone())
+            .map_err(crate::prelude::Error::Shape)?;
+        let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = self.under_grad_mode(|| {
+            dispatch::execute_shaped::<op::ReshapeExact, B, S2>(
+                &context,
+                ShapeAttributes {
+                    shape: new_shape_field.as_ref().to_vec(),
+                },
+                &[input],
+                &output_shape,
+            )
+        })?;
+        Tensor::<S2, B, K, G, P>::from_shape_value_placed(
             inner,
-            ShapeBuf::from_slice(new_shape_field.as_ref()),
+            output_shape,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
@@ -517,18 +552,34 @@ impl<
     ) -> Result<Tensor<S2, B, K, G, P>>
     where
         S: crate::shapes::broadcast::BroadcastShape<S2, Output = S2>,
+        B: Execute<
+                Descriptor<op::BroadcastAs>,
+                Output = <B as crate::tensor::backend::StorageBackend>::Storage<K>,
+            > + Capabilities,
     {
-        let new_shape_field = S2::init(args);
+        let new_shape_field = S2::try_init(args).map_err(crate::prelude::Error::Shape)?;
         let validated = <crate::exec::BroadcastRule as crate::exec::ShapeRule<(S, S2)>>::lower(
             &(self.shape_buf_value(), new_shape_field.clone()),
             None,
         )?;
         let new_shape_field = validated.descriptor().output.clone();
-        let new_dims = new_shape_field.clone();
-        let inner = self.under_grad_mode(|| B::broadcast_as(&self.inner, new_dims.as_ref()))?;
-        Tensor::<S, B, K, G, P>::from_shape_buf_placed(
+        let output_shape = ShapeValue::<S2>::try_new(new_shape_field.clone())
+            .map_err(crate::prelude::Error::Shape)?;
+        let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = self.under_grad_mode(|| {
+            dispatch::execute_shaped::<op::BroadcastAs, B, S2>(
+                &context,
+                ShapeAttributes {
+                    shape: new_shape_field.as_ref().to_vec(),
+                },
+                &[input],
+                &output_shape,
+            )
+        })?;
+        Tensor::<S2, B, K, G, P>::from_shape_value_placed(
             inner,
-            ShapeBuf::from_slice(new_shape_field.as_ref()),
+            output_shape,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
@@ -1341,6 +1392,10 @@ impl<
     pub fn expand<S2: Shape + DynShape>(&self, args: S2::Arg) -> Result<Tensor<S2, B, K, G>>
     where
         S: crate::shapes::broadcast::BroadcastShape<S2, Output = S2>,
+        B: Execute<
+                Descriptor<op::BroadcastAs>,
+                Output = <B as crate::tensor::backend::StorageBackend>::Storage<K>,
+            > + Capabilities,
     {
         self.broadcast_to::<S2>(args)
     }
