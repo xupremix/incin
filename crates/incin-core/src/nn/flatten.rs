@@ -1,43 +1,89 @@
-use crate::nn::Module;
+use crate::nn::{Module, Parameters};
 use crate::prelude::*;
+use crate::shapes::FlattenAt;
+use crate::shapes::idx::StaticCursor;
+use crate::shapes::idx::{Here, Next};
+use core::marker::PhantomData;
 
-#[derive(Debug, Clone)]
-#[incin_macros::module(internal)]
-/// Collapses dimensions `[START, END]` (inclusive) into a single dimension.
-///
-/// `START` and `END` are const-generic axis indices, while the sizes stored in
-/// the input shape remain type-level `Dim` values. The module therefore keeps
-/// the complete output shape in its `Module::Output` type.
-pub struct Flatten<const START: usize, const END: usize> {}
+/// Structural flatten module. Axis positions are selector types rather than
+/// const-generic rank-ladder parameters.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Flatten<Start, End>(PhantomData<fn() -> (Start, End)>);
 
-impl<const START: usize, const END: usize> Default for Flatten<START, END> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<const START: usize, const END: usize> Flatten<START, END> {
-    /// Creates a new instance with default (statically inferred) shape arguments.
+impl<Start, End> Flatten<Start, End> {
     pub fn new() -> Self {
-        Self {}
+        Self(PhantomData)
     }
 }
 
-impl<S, B, K, G, const START: usize, const END: usize> Module<Tensor<S, B, K, G>>
-    for Flatten<START, END>
+impl<Start, End, B: Backend> Parameters<B> for Flatten<Start, End> {
+    fn named_parameters(
+        &self,
+        _prefix: &str,
+        _map: &mut alloc::collections::BTreeMap<String, B::RawVar>,
+    ) {
+    }
+}
+
+impl<Start, End, B: Backend> crate::nn::StateDict<B> for Flatten<Start, End> {
+    fn load_state_dict(
+        &mut self,
+        _prefix: &str,
+        _tensors: &alloc::collections::BTreeMap<String, Tensor<Dyn, B>>,
+    ) -> Result<()> {
+        Ok(())
+    }
+
+    fn state_dict(
+        &self,
+        _prefix: &str,
+        _tensors: &mut alloc::collections::BTreeMap<String, Tensor<Dyn, B>>,
+    ) {
+    }
+}
+
+/// Runtime-rank models commonly flatten the image axes after a dynamic batch
+/// axis.  Keep that migration path on the same module type while the exact
+/// structural implementation above remains available for statically-known
+/// shapes.
+impl<B, K, G> Module<Tensor<Dyn, B, K, G>> for Flatten<Next<Here>, Next<Next<Here>>>
 where
-    S: Shape + crate::shapes::DynShape + crate::shapes::Flatten<START, END>,
-    B: Backend,
+    B: Backend
+        + crate::tensor::backend::TensorOps<B>
+        + crate::tensor::backend::FloatOps<B>
+        + crate::tensor::backend::NumericOps<B>,
     K: crate::tensor::dtype::DType,
     G: RequiresGrad,
 {
-    /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<S::Output, B, K, G>;
-    /// The error type returned if the forward pass fails.
+    type Output = Tensor<Dyn, B, K, G>;
     type Error = crate::prelude::Error;
 
-    /// Runs the forward pass of this module on the given input.
+    fn forward(&self, x: Tensor<Dyn, B, K, G>) -> Result<Self::Output> {
+        x.flatten_runtime(1, 3)
+    }
+}
+
+impl<S, B, K, G, Start, End> Module<Tensor<S, B, K, G>> for Flatten<Start, End>
+where
+    Start: StaticCursor,
+    End: StaticCursor,
+    S: Shape + DynShape + FlattenAt<Start, End>,
+    <S as FlattenAt<Start, End>>::Output: Shape + DynShape,
+    B: Backend
+        + crate::tensor::backend::TensorOps<B>
+        + crate::tensor::backend::FloatOps<B>
+        + crate::tensor::backend::NumericOps<B>
+        + crate::backend_authoring::Execute<
+            crate::backend_authoring::Descriptor<crate::backend_authoring::op::FlattenExact>,
+            Output = <B as crate::tensor::backend::StorageBackend>::Storage<K>,
+        > + crate::exec::Capabilities,
+    K: crate::tensor::dtype::DType,
+    G: RequiresGrad,
+{
+    type Output = Tensor<<S as FlattenAt<Start, End>>::Output, B, K, G>;
+    type Error = crate::prelude::Error;
+
     fn forward(&self, x: Tensor<S, B, K, G>) -> Result<Self::Output> {
-        x.flatten::<START, END>()
+        x.flatten::<Start, End>()
     }
 }

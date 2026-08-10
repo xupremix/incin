@@ -8,7 +8,9 @@ use crate::backend_authoring::{Descriptor, Execute};
 use crate::dist::Placement;
 use crate::dist::placement::Local;
 use crate::exec::Capabilities;
-use crate::exec::catalog::{NoAttributes, ScalarAttributes, ShapeAttributes, op};
+use crate::exec::catalog::{
+    FlattenAttributes, NoAttributes, ScalarAttributes, ShapeAttributes, TransposeAttributes, op,
+};
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
@@ -726,15 +728,34 @@ impl<
         R: StaticCursor,
         S: SwapAxes<L, R>,
         <S as SwapAxes<L, R>>::Output: Shape + DynShape,
+        B: Execute<
+                Descriptor<op::TransposeExact>,
+                Output = <B as crate::tensor::backend::StorageBackend>::Storage<K>,
+            > + Capabilities,
     {
         let axes = crate::shapes::idx::AxisSelector::new(&[L::INDEX, R::INDEX])
             .normalize(self.shape_buf().rank())?;
-        let inner = self.under_grad_mode(|| B::transpose(&self.inner, axes[0], axes[1]))?;
         let mut out_dims = self.shape_buf().as_ref().to_vec();
         out_dims.swap(axes[0], axes[1]);
-        Tensor::from_shape_buf(
+        let output_shape =
+            ShapeValue::<<S as SwapAxes<L, R>>::Output>::try_new(ShapeBuf::from_slice(&out_dims))
+                .map_err(crate::prelude::Error::Shape)?;
+        let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = self.under_grad_mode(|| {
+            dispatch::execute_shaped::<op::TransposeExact, B, <S as SwapAxes<L, R>>::Output>(
+                &context,
+                TransposeAttributes {
+                    first: axes[0],
+                    second: axes[1],
+                },
+                &[input],
+                &output_shape,
+            )
+        })?;
+        Tensor::<<S as SwapAxes<L, R>>::Output, B, K, G>::from_shape_value(
             inner,
-            ShapeBuf::from_slice(&out_dims),
+            output_shape,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
@@ -767,6 +788,10 @@ impl<
         <S as FlattenAt<Start, End>>::Output: Shape + DynShape,
         Start: StaticCursor,
         End: StaticCursor,
+        B: Execute<
+                Descriptor<op::FlattenExact>,
+                Output = <B as crate::tensor::backend::StorageBackend>::Storage<K>,
+            > + Capabilities,
     {
         let rank = self.shape_buf().rank();
         let axes =
@@ -781,7 +806,6 @@ impl<
                 },
             ));
         }
-        let inner = self.under_grad_mode(|| B::flatten(&self.inner, axes[0], axes[1]))?;
         let dims_buf = self.shape_buf();
         let in_dims = dims_buf.as_ref();
         let product = in_dims[axes[0]..=axes[1]]
@@ -795,9 +819,26 @@ impl<
         out_dims.extend_from_slice(&in_dims[..axes[0]]);
         out_dims.push(product);
         out_dims.extend_from_slice(&in_dims[axes[1] + 1..]);
-        Tensor::from_shape_buf(
-            inner,
+        let output_shape = ShapeValue::<<S as FlattenAt<Start, End>>::Output>::try_new(
             ShapeBuf::from_slice(&out_dims),
+        )
+        .map_err(crate::prelude::Error::Shape)?;
+        let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = self.under_grad_mode(|| {
+            dispatch::execute_shaped::<op::FlattenExact, B, <S as FlattenAt<Start, End>>::Output>(
+                &context,
+                crate::exec::catalog::FlattenAttributes {
+                    start_axis: axes[0],
+                    end_axis: axes[1],
+                },
+                &[input],
+                &output_shape,
+            )
+        })?;
+        Tensor::<<S as FlattenAt<Start, End>>::Output, B, K, G>::from_shape_value(
+            inner,
+            output_shape,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
@@ -890,16 +931,46 @@ impl<
         Axis: crate::shapes::idx::StaticCursor,
         S: crate::shapes::concat::ConcatShape<S2, Axis>,
         <S as crate::shapes::concat::ConcatShape<S2, Axis>>::Output: Shape,
+        B: Execute<
+                Descriptor<op::ConcatExact>,
+                Output = <B as crate::tensor::backend::StorageBackend>::Storage<K>,
+            > + Capabilities,
     {
         let dim = crate::shapes::idx::AxisSelector::new(&[Axis::INDEX])
             .normalize(self.shape_buf().rank())?[0];
-        let inner = self.under_grad_mode(|| B::concat(&[&self.inner, &other.inner], dim))?;
         let mut out_dims: Vec<usize> = self.shape_buf().as_ref().to_vec();
         let other_dims: Vec<usize> = other.shape_buf().as_ref().to_vec();
-        out_dims[dim] += other_dims[dim];
-        Tensor::from_shape_buf(
+        out_dims[dim] = out_dims[dim].checked_add(other_dims[dim]).ok_or(
+            crate::shapes::ShapeError::ArithmeticOverflow {
+                operation: OperationKind::Concat,
+                expression: "concat extent",
+            },
+        )?;
+        let output_shape =
+            ShapeValue::<<S as crate::shapes::concat::ConcatShape<S2, Axis>>::Output>::try_new(
+                ShapeBuf::from_slice(&out_dims),
+            )
+            .map_err(crate::prelude::Error::Shape)?;
+        let inputs = [
+            TensorHandle::from_storage::<B, K, Local>(&self.inner),
+            TensorHandle::from_storage::<B, K, Local>(&other.inner),
+        ];
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = self.under_grad_mode(|| {
+            dispatch::execute_shaped::<
+                op::ConcatExact,
+                B,
+                <S as crate::shapes::concat::ConcatShape<S2, Axis>>::Output,
+            >(
+                &context,
+                crate::exec::catalog::AxisAttributes { axis: dim },
+                &inputs,
+                &output_shape,
+            )
+        })?;
+        Tensor::from_shape_value(
             inner,
-            ShapeBuf::from_slice(&out_dims),
+            output_shape,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
@@ -987,15 +1058,40 @@ impl<
         Axis: crate::shapes::idx::StaticCursor,
         S: crate::shapes::stack::StackShape<Axis>,
         <S as crate::shapes::stack::StackShape<Axis>>::Output: Shape,
+        B: Execute<
+                Descriptor<op::StackExact>,
+                Output = <B as crate::tensor::backend::StorageBackend>::Storage<K>,
+            > + Capabilities,
     {
         let dim = crate::shapes::idx::AxisSelector::new(&[Axis::INDEX])
             .normalize(self.shape_buf().rank() + 1)?[0];
-        let inner = self.under_grad_mode(|| B::stack(&[&self.inner, &other.inner], dim))?;
         let mut out_dims: Vec<usize> = self.shape_buf().as_ref().to_vec();
         out_dims.insert(dim, 2);
-        Tensor::from_shape_buf(
+        let output_shape =
+            ShapeValue::<<S as crate::shapes::stack::StackShape<Axis>>::Output>::try_new(
+                ShapeBuf::from_slice(&out_dims),
+            )
+            .map_err(crate::prelude::Error::Shape)?;
+        let inputs = [
+            TensorHandle::from_storage::<B, K, Local>(&self.inner),
+            TensorHandle::from_storage::<B, K, Local>(&other.inner),
+        ];
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = self.under_grad_mode(|| {
+            dispatch::execute_shaped::<
+                op::StackExact,
+                B,
+                <S as crate::shapes::stack::StackShape<Axis>>::Output,
+            >(
+                &context,
+                crate::exec::catalog::AxisAttributes { axis: dim },
+                &inputs,
+                &output_shape,
+            )
+        })?;
+        Tensor::from_shape_value(
             inner,
-            ShapeBuf::from_slice(&out_dims),
+            output_shape,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
