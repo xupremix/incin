@@ -815,15 +815,35 @@ impl<
 
     /// Runtime-selector transpose. Selectors are normalized before any
     /// backend operation and the result intentionally carries only `Dyn`.
-    pub fn transpose_runtime(&self, left: isize, right: isize) -> Result<Tensor<Dyn, B, K, G>> {
+    pub fn transpose_runtime(&self, left: isize, right: isize) -> Result<Tensor<Dyn, B, K, G>>
+    where
+        B: Execute<
+                Descriptor<op::TransposeExact>,
+                Output = <B as crate::tensor::backend::StorageBackend>::Storage<K>,
+            > + Capabilities,
+    {
         let axes = crate::shapes::idx::AxisSelector::new(&[left, right])
             .normalize(self.shape_buf().rank())?;
-        let inner = self.under_grad_mode(|| B::transpose(&self.inner, axes[0], axes[1]))?;
         let mut out_dims = self.shape_buf().as_ref().to_vec();
         out_dims.swap(axes[0], axes[1]);
-        Tensor::from_shape_buf(
+        let output_shape = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&out_dims))
+            .map_err(crate::prelude::Error::Shape)?;
+        let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = self.under_grad_mode(|| {
+            dispatch::execute_shaped::<op::TransposeExact, B, Dyn>(
+                &context,
+                TransposeAttributes {
+                    first: axes[0],
+                    second: axes[1],
+                },
+                &[input],
+                &output_shape,
+            )
+        })?;
+        Tensor::from_shape_value(
             inner,
-            ShapeBuf::from_slice(&out_dims),
+            output_shape,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
@@ -897,7 +917,13 @@ impl<
     }
 
     /// Runtime flatten range with checked normalization and a dynamic output.
-    pub fn flatten_runtime(&self, start: usize, end: usize) -> Result<Tensor<Dyn, B, K, G>> {
+    pub fn flatten_runtime(&self, start: usize, end: usize) -> Result<Tensor<Dyn, B, K, G>>
+    where
+        B: Execute<
+                Descriptor<op::FlattenExact>,
+                Output = <B as crate::tensor::backend::StorageBackend>::Storage<K>,
+            > + Capabilities,
+    {
         let rank = self.shape_buf().rank();
         if start > end || end >= rank {
             return Err(crate::err::Error::Shape(
@@ -909,7 +935,6 @@ impl<
                 },
             ));
         }
-        let inner = self.under_grad_mode(|| B::flatten(&self.inner, start, end))?;
         let dims = self.shape_buf().as_ref();
         let product = dims[start..=end]
             .iter()
@@ -922,9 +947,24 @@ impl<
         out.extend_from_slice(&dims[..start]);
         out.push(product);
         out.extend_from_slice(&dims[end + 1..]);
-        Tensor::from_shape_buf(
+        let output_shape = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&out))
+            .map_err(crate::prelude::Error::Shape)?;
+        let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        let context = ExecutionContext::from_scope(B::default());
+        let inner = self.under_grad_mode(|| {
+            dispatch::execute_shaped::<op::FlattenExact, B, Dyn>(
+                &context,
+                FlattenAttributes {
+                    start_axis: start,
+                    end_axis: end,
+                },
+                &[input],
+                &output_shape,
+            )
+        })?;
+        Tensor::from_shape_value(
             inner,
-            ShapeBuf::from_slice(&out),
+            output_shape,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),

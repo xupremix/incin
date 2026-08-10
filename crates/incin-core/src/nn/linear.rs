@@ -1,7 +1,11 @@
+use crate::exec::catalog::{Descriptor, op};
 use crate::nn::module::Module;
 use crate::prelude::*;
 use crate::shapes::error::OperationKind;
-use crate::shapes::shape::field_from_dims;
+use crate::shapes::shape::shape_buf_from_dims;
+use crate::tensor::backend::Execute;
+
+type LinearMatMulSpec = Descriptor<op::MatMulExact>;
 
 /// A shape marker trait specifying the input and output features of a [`Linear`] layer.
 ///
@@ -38,7 +42,8 @@ pub trait LinearShape: Shape + DynShape {
     ) -> (usize, usize, Self::WeightArg, Self::BiasArg);
 }
 
-impl<InF: Dim, OutF: Dim> LinearShape for (InF, OutF) {
+/* legacy tuple LinearShape implementation removed: use DimCons/Nil */
+/*
     /// The number of input features (last dimension of the input tensor).
     type InF = InF;
     /// The number of output features (last dimension of the output tensor).
@@ -60,6 +65,38 @@ impl<InF: Dim, OutF: Dim> LinearShape for (InF, OutF) {
         let in_f = InF::from_arg(target.0.clone()).size();
         let out_f = OutF::from_arg(target.1.clone()).size();
         (in_f, out_f, (target.1.clone(), target.0), (target.1,))
+    }
+}
+*/
+
+impl<InF: Dim, OutF: Dim> LinearShape
+    for crate::shapes::shape::DimCons<
+        InF,
+        crate::shapes::shape::DimCons<OutF, crate::shapes::shape::Nil>,
+    >
+{
+    type InF = InF;
+    type OutF = OutF;
+    type WeightArg = (<OutF as Dim>::Arg, (<InF as Dim>::Arg, ()));
+    type BiasArg = (<OutF as Dim>::Arg, ());
+    type WeightShape = crate::shapes::shape::DimCons<
+        OutF,
+        crate::shapes::shape::DimCons<InF, crate::shapes::shape::Nil>,
+    >;
+    type BiasShape = crate::shapes::shape::DimCons<OutF, crate::shapes::shape::Nil>;
+
+    #[inline]
+    fn build_args(
+        target: (<Self::InF as Dim>::Arg, <Self::OutF as Dim>::Arg),
+    ) -> (usize, usize, Self::WeightArg, Self::BiasArg) {
+        let in_f = InF::from_arg(target.0.clone()).size();
+        let out_f = OutF::from_arg(target.1.clone()).size();
+        (
+            in_f,
+            out_f,
+            (target.1.clone(), (target.0, ())),
+            (target.1, ()),
+        )
     }
 }
 
@@ -101,7 +138,7 @@ pub trait TwoWayColumnLinearShape: LinearShape {
 }
 
 #[cfg(feature = "distributed")]
-impl<InF, OutF> TwoWayColumnLinearShape for (InF, OutF)
+impl<InF, OutF> TwoWayColumnLinearShape for DimCons<InF, DimCons<OutF, Nil>>
 where
     InF: Dim,
     OutF: Dim + crate::dist::ShardDivisible<typenum::U2>,
@@ -122,7 +159,7 @@ pub trait TwoWayRowLinearShape: LinearShape {
 }
 
 #[cfg(feature = "distributed")]
-impl<InF, OutF> TwoWayRowLinearShape for (InF, OutF)
+impl<InF, OutF> TwoWayRowLinearShape for DimCons<InF, DimCons<OutF, Nil>>
 where
     InF: Dim + crate::dist::ShardDivisible<typenum::U2>,
     OutF: Dim,
@@ -140,7 +177,7 @@ where
 /// ```rust
 /// # extern crate incin_core as incin;
 /// # fn main() -> incin::prelude::Result<()> {
-/// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
+/// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
 /// use incin::prelude::*;
 ///
 /// // A fully static linear layer: 512 inputs → 256 outputs
@@ -150,29 +187,147 @@ where
 /// let layer = Linear::<Dyn, DefaultBackend>::build((512, 256))?;
 /// # Ok(()) }
 /// ```
+/// A builder for constructing a [`Linear`] layer before target-based initialization.
+///
+/// Stores layer geometry ([`ShapeValue`]), weight initializer policy, and bias initializer policy.
+/// Contains no backend, device, or target type parameters.
+pub struct LinearBuilder<
+    S: LinearShape,
+    Bias: crate::nn::optional::OptionalField = crate::nn::optional::True,
+    Train: TrainState = Trainable,
+> {
+    pub shape: ShapeValue<S>,
+    pub weight_init: crate::nn::init::Init,
+    pub bias_init: crate::nn::init::Init,
+    pub _phantom: core::marker::PhantomData<(Bias, Train)>,
+}
+
+impl<S: LinearShape, Bias: crate::nn::optional::OptionalField, Train: TrainState>
+    LinearBuilder<S, Bias, Train>
+{
+    /// Returns a reference to the shape specification of this builder.
+    pub fn shape(&self) -> &ShapeValue<S> {
+        &self.shape
+    }
+
+    /// Returns the weight initializer policy.
+    pub fn weight_init_policy(&self) -> crate::nn::init::Init {
+        self.weight_init
+    }
+
+    /// Returns the bias initializer policy.
+    pub fn bias_init_policy(&self) -> crate::nn::init::Init {
+        self.bias_init
+    }
+
+    /// Disables bias on the linear layer.
+    pub fn no_bias(self) -> LinearBuilder<S, crate::nn::optional::False, Train> {
+        LinearBuilder {
+            shape: self.shape,
+            weight_init: self.weight_init,
+            bias_init: self.bias_init,
+            _phantom: core::marker::PhantomData,
+        }
+    }
+
+    /// Marks the created linear layer parameters as frozen (non-trainable).
+    pub fn frozen(self) -> LinearBuilder<S, Bias, Frozen> {
+        LinearBuilder {
+            shape: self.shape,
+            weight_init: self.weight_init,
+            bias_init: self.bias_init,
+            _phantom: core::marker::PhantomData,
+        }
+    }
+
+    /// Sets the weight initializer policy.
+    pub fn weight_init(mut self, init: crate::nn::init::Init) -> Self {
+        self.weight_init = init;
+        self
+    }
+
+    /// Sets the bias initializer policy.
+    pub fn bias_init(mut self, init: crate::nn::init::Init) -> Self {
+        self.bias_init = init;
+        self
+    }
+}
+
+/// Free constructor for a backend-independent [`LinearBuilder`].
+pub fn linear<S: LinearShape>(shape: ShapeValue<S>) -> LinearBuilder<S> {
+    LinearBuilder {
+        shape,
+        weight_init: crate::nn::init::kaiming_uniform(),
+        bias_init: crate::nn::init::kaiming_uniform(),
+        _phantom: core::marker::PhantomData,
+    }
+}
+
+/// A fully connected (dense) linear layer: `y = x @ Wᵀ + b`.
 #[derive(Debug, Clone)]
 #[incin_macros::module(internal, no_stats)]
 pub struct Linear<
     S: LinearShape,
     B: Backend,
     Bias: crate::nn::optional::OptionalField = crate::nn::optional::True,
+    K: DType = f32,
+    Train: TrainState = Trainable,
 > {
     /// The learnable weight matrix parameter.
-    pub weight: Param<S::WeightShape, B>,
+    pub weight: Param<S::WeightShape, B, K, Train>,
     /// The optional learnable bias vector parameter.
-    pub bias: Option<Param<S::BiasShape, B>>,
+    pub bias: Option<Param<S::BiasShape, B, K, Train>>,
     #[module(ignore)]
-    _phantom: core::marker::PhantomData<(S, B, Bias)>,
+    _phantom: core::marker::PhantomData<(S, B, Bias, K, Train)>,
 }
 
-impl<S: LinearShape, B: Backend, Bias: crate::nn::optional::OptionalField> ComputeStats
-    for Linear<S, B, Bias>
+impl<
+    S: LinearShape,
+    B: Backend,
+    Bias: crate::nn::optional::OptionalField,
+    K: DType,
+    Train: TrainState,
+> Linear<S, B, Bias, K, Train>
 {
-    /// `params` = weight elements + bias elements (if present). `macs` =
-    /// `in_features * out_features * batch` — `y = xWᵀ + b` needs one MAC
-    /// per (batch, in, out) triple. Unlike `Conv1d`/`Conv2d`, this needs no
-    /// external input-shape info: a `Linear` layer's weight shape *is* its
-    /// in/out feature count, so this is exact, not an approximation.
+    /// Constructs a Linear layer from weight and bias parameter parts.
+    pub fn from_raw_parts(
+        weight: Param<S::WeightShape, B, K, Train>,
+        bias: Option<Param<S::BiasShape, B, K, Train>>,
+    ) -> Self {
+        Self {
+            weight,
+            bias,
+            _phantom: core::marker::PhantomData,
+        }
+    }
+
+    /// Converts this layer's parameters to frozen typestate.
+    pub fn freeze(self) -> Linear<S, B, Bias, K, Frozen> {
+        Linear {
+            weight: self.weight.freeze(),
+            bias: self.bias.map(|b| b.freeze()),
+            _phantom: core::marker::PhantomData,
+        }
+    }
+
+    /// Converts this layer's parameters to trainable typestate.
+    pub fn unfreeze(self) -> Linear<S, B, Bias, K, Trainable> {
+        Linear {
+            weight: self.weight.unfreeze(),
+            bias: self.bias.map(|b| b.unfreeze()),
+            _phantom: core::marker::PhantomData,
+        }
+    }
+}
+
+impl<
+    S: LinearShape,
+    B: Backend,
+    Bias: crate::nn::optional::OptionalField,
+    K: DType,
+    Train: TrainState,
+> ComputeStats for Linear<S, B, Bias, K, Train>
+{
     fn compute_stats(&self, batch: u64) -> LayerStats {
         let dims = self.weight.shape_dims();
         let (out_f, in_f) = (
@@ -191,14 +346,16 @@ impl<S: LinearShape, B: Backend, Bias: crate::nn::optional::OptionalField> Compu
     }
 }
 
-// Implement `Module` for `Linear` when input shape is `(Batch, In)`.
-
-impl<S, B, Bias> Linear<S, B, Bias>
+impl<S, B, Bias, K: DType, Train: TrainState> Linear<S, B, Bias, K, Train>
 where
     S: LinearShape,
-    B: Backend + SupportsDType<B::FloatElem>,
+    B: Backend
+        + SupportsDType<K>
+        + crate::tensor::backend::CreationOps<B>
+        + crate::tensor::backend::FloatOps<B>
+        + crate::tensor::backend::NumericOps<B>,
     Bias: crate::nn::optional::OptionalField,
-    <B::FloatElem as DType>::Arg: Clone,
+    <K as DType>::Arg: Clone,
     <B::Device as Device>::Arg: Clone,
 {
     /// Builds the layer from its exact compressed argument tuple.
@@ -207,7 +364,7 @@ where
         A: crate::tensor::arg_into::LayerArgInto<(
                 <S::InF as Dim>::Arg,
                 <S::OutF as Dim>::Arg,
-                <B::FloatElem as DType>::Arg,
+                <K as DType>::Arg,
                 <B::Device as Device>::Arg,
                 <Bias as crate::nn::optional::OptionalField>::Arg,
             )>,
@@ -217,40 +374,56 @@ where
         Self::build_full(in_arg, out_arg, dtype, device, bias)
     }
 
-    pub(crate) fn build_full(
+    /// Builds the layer from every argument stated explicitly, in declaration order.
+    pub fn build_full(
         in_arg: <S::InF as Dim>::Arg,
         out_arg: <S::OutF as Dim>::Arg,
-        dtype: <B::FloatElem as DType>::Arg,
+        dtype: <K as DType>::Arg,
         device: <B::Device as Device>::Arg,
         bias_arg: <Bias as crate::nn::optional::OptionalField>::Arg,
     ) -> Result<Self> {
         let (in_f, _out_f, w_args, b_args) = S::build_args((in_arg, out_arg));
-        let init = crate::nn::init::Init::KaimingUniform {
-            fan_in: in_f,
-            a: f64::sqrt(5.0),
-        };
-        let weight = Param::<S::WeightShape, B>::new_init_raw(
-            crate::tensor::arg_into::TensorArgsData {
-                shape: w_args,
-                dtype: dtype.clone(),
-                device: device.clone(),
-                grad: (),
-            },
-            init,
+        let w_field = <S::WeightShape as Shape>::init(w_args);
+        let w_dims = w_field.clone();
+        let init = crate::nn::init::kaiming_uniform();
+        let context_w = crate::nn::init::InitContext::new(crate::nn::init::ParameterRole::Weight)
+            .with_fan(in_f, _out_f);
+        let plan_w = init.plan(context_w)?;
+        let raw_w = crate::nn::param::execute_plan_raw::<B, K>(
+            w_dims.as_ref(),
+            &K::init(dtype.clone()),
+            &<B::Device as Device>::init(device.clone()),
+            plan_w,
         )?;
+        let weight = Param::<S::WeightShape, B, K, Train>::from_parts_checked(
+            raw_w,
+            w_field,
+            K::init(dtype.clone()),
+            <B::Device as Device>::init(device.clone()),
+        )?;
+
         let bias = if Bias::init(bias_arg) {
-            Some(Param::<S::BiasShape, B>::new_init_raw(
-                crate::tensor::arg_into::TensorArgsData {
-                    shape: b_args,
-                    dtype,
-                    device,
-                    grad: (),
-                },
-                init,
+            let b_field = <S::BiasShape as Shape>::init(b_args);
+            let b_dims = b_field.clone();
+            let context_b = crate::nn::init::InitContext::new(crate::nn::init::ParameterRole::Bias)
+                .with_fan(in_f, _out_f);
+            let plan_b = init.plan(context_b)?;
+            let raw_b = crate::nn::param::execute_plan_raw::<B, K>(
+                b_dims.as_ref(),
+                &K::init(dtype.clone()),
+                &<B::Device as Device>::init(device.clone()),
+                plan_b,
+            )?;
+            Some(Param::<S::BiasShape, B, K, Train>::from_parts_checked(
+                raw_b,
+                b_field,
+                K::init(dtype),
+                <B::Device as Device>::init(device),
             )?)
         } else {
             None
         };
+
         Ok(Self {
             weight,
             bias,
@@ -259,85 +432,161 @@ where
     }
 }
 
-// In PyTorch, input is typically (*, InF) and weight is (OutF, InF).
-// In PyTorch, input is typically (*, InF) and weight is (OutF, InF).
-
-// Dynamic input
-impl<B: Backend> Module<Tensor<Dyn, B>> for Linear<Dyn, B, crate::nn::optional::True> {
-    /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<Dyn, B>;
-    /// The error type returned if the forward pass fails.
+impl<
+    B: Backend
+        + crate::tensor::backend::TensorOps<B>
+        + crate::tensor::backend::NumericOps<B>
+        + crate::tensor::backend::FloatOps<B>
+        + crate::tensor::backend::ReductionOps<B>
+        + Execute<LinearMatMulSpec>
+        + Execute<
+            Descriptor<op::TransposeExact>,
+            Output = <B as crate::tensor::backend::StorageBackend>::Storage<K>,
+        > + crate::exec::Capabilities
+        + Execute<Descriptor<op::Add>>,
+    K: DType,
+    Train: TrainState,
+    G: RequiresGrad,
+> Module<Tensor<Dyn, B, K, G>> for Linear<Dyn, B, crate::nn::optional::True, K, Train>
+where
+    G: GradJoin<Train::TensorGrad>,
+    JoinedGrad<G, Train::TensorGrad>: GradJoin<Train::TensorGrad>,
+    <B as Execute<LinearMatMulSpec>>::Output: Into<B::Storage<K>>,
+    <B as Execute<Descriptor<op::Add>>>::Output: Into<B::Storage<K>>,
+{
+    type Output = Tensor<Dyn, B, K, JoinedGrad<G, Train::TensorGrad>>;
     type Error = Error;
 
-    /// Runs the forward pass of this module on the given input.
-    fn forward(&self, x: Tensor<Dyn, B>) -> core::result::Result<Tensor<Dyn, B>, Error> {
-        let weight_t = self.weight.as_tensor()?.transpose::<0, 1>()?;
+    fn forward(&self, x: Tensor<Dyn, B, K, G>) -> core::result::Result<Self::Output, Error> {
+        let weight_t = self.weight.as_tensor()?.transpose_runtime(0, 1)?;
         let out = x.matmul(&weight_t)?;
-        out.add(&self.bias.as_ref().unwrap().as_tensor()?)
+        let bias_t = self.bias.as_ref().unwrap().as_tensor()?;
+        let out_final = out.broadcast_add::<Dyn, Train::TensorGrad>(&bias_t)?;
+        Tensor::from_shape_value(
+            out_final.inner,
+            out_final._shape,
+            out_final._dtype,
+            out_final._device,
+            out._grad,
+        )
     }
 }
 
-impl<B: Backend> Module<Tensor<Dyn, B>> for Linear<Dyn, B, crate::nn::optional::False> {
-    /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<Dyn, B>;
-    /// The error type returned if the forward pass fails.
+impl<
+    B: Backend
+        + crate::tensor::backend::TensorOps<B>
+        + crate::tensor::backend::NumericOps<B>
+        + crate::tensor::backend::FloatOps<B>
+        + crate::tensor::backend::ReductionOps<B>
+        + Execute<LinearMatMulSpec>
+        + Execute<
+            Descriptor<op::TransposeExact>,
+            Output = <B as crate::tensor::backend::StorageBackend>::Storage<K>,
+        > + crate::exec::Capabilities,
+    K: DType,
+    Train: TrainState,
+    G: RequiresGrad,
+> Module<Tensor<Dyn, B, K, G>> for Linear<Dyn, B, crate::nn::optional::False, K, Train>
+where
+    G: GradJoin<Train::TensorGrad>,
+    <B as Execute<LinearMatMulSpec>>::Output: Into<B::Storage<K>>,
+{
+    type Output = Tensor<Dyn, B, K, JoinedGrad<G, Train::TensorGrad>>;
     type Error = Error;
 
-    /// Runs the forward pass of this module on the given input.
-    fn forward(&self, x: Tensor<Dyn, B>) -> core::result::Result<Tensor<Dyn, B>, Error> {
-        let weight_t = self.weight.as_tensor()?.transpose::<0, 1>()?;
+    fn forward(&self, x: Tensor<Dyn, B, K, G>) -> core::result::Result<Self::Output, Error> {
+        let weight_t = self.weight.as_tensor()?.transpose_runtime(0, 1)?;
         x.matmul(&weight_t)
     }
 }
 
-impl<B: Backend> Module<Tensor<Dyn, B>> for Linear<Dyn, B, Dyn> {
-    /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<Dyn, B>;
-    /// The error type returned if the forward pass fails.
+impl<
+    B: Backend
+        + crate::tensor::backend::TensorOps<B>
+        + crate::tensor::backend::NumericOps<B>
+        + crate::tensor::backend::FloatOps<B>
+        + crate::tensor::backend::ReductionOps<B>
+        + Execute<LinearMatMulSpec>
+        + Execute<
+            Descriptor<op::TransposeExact>,
+            Output = <B as crate::tensor::backend::StorageBackend>::Storage<K>,
+        > + crate::exec::Capabilities
+        + Execute<Descriptor<op::Add>>,
+    K: DType,
+    Train: TrainState,
+> Module<Tensor<Dyn, B, K>> for Linear<Dyn, B, Dyn, K, Train>
+where
+    <B as Execute<LinearMatMulSpec>>::Output: Into<B::Storage<K>>,
+    <B as Execute<Descriptor<op::Add>>>::Output: Into<B::Storage<K>>,
+{
+    type Output = Tensor<Dyn, B, K>;
     type Error = Error;
 
-    /// Runs the forward pass of this module on the given input.
-    fn forward(&self, x: Tensor<Dyn, B>) -> core::result::Result<Tensor<Dyn, B>, Error> {
-        let weight_t = self.weight.as_tensor()?.transpose::<0, 1>()?;
+    fn forward(&self, x: Tensor<Dyn, B, K>) -> core::result::Result<Tensor<Dyn, B, K>, Error> {
+        let weight_t = self.weight.as_tensor()?.transpose_runtime(0, 1)?;
         let out = x.matmul(&weight_t)?;
         if let Some(b) = &self.bias {
-            out.add(&b.as_tensor()?)
+            let bias_t = b.as_tensor()?;
+            let out_final = out.broadcast_add(&bias_t)?;
+            Tensor::from_shape_value(
+                out_final.inner,
+                out_final._shape,
+                out_final._dtype,
+                out_final._device,
+                core::marker::PhantomData,
+            )
         } else {
-            Ok(out)
+            Tensor::from_shape_value(
+                out.inner,
+                out._shape,
+                out._dtype,
+                out._device,
+                core::marker::PhantomData,
+            )
         }
     }
 }
 
-// Statically typed input utilizing ReplaceLastDim
 impl<
     InF: Dim,
     OutF: Dim,
     InShape: Shape + DynShape + ReplaceLastDim<OutF> + crate::shapes::EndsWith<InF>,
-    B: Backend,
-> Module<Tensor<InShape, B>> for Linear<(InF, OutF), B, crate::nn::optional::True>
+    B: Backend
+        + crate::tensor::backend::TensorOps<B>
+        + crate::tensor::backend::NumericOps<B>
+        + crate::tensor::backend::FloatOps<B>
+        + crate::tensor::backend::ReductionOps<B>
+        + Execute<LinearMatMulSpec>
+        + Execute<
+            Descriptor<op::TransposeExact>,
+            Output = <B as crate::tensor::backend::StorageBackend>::Storage<K>,
+        > + crate::exec::Capabilities
+        + Execute<Descriptor<op::Add>>,
+    K: DType,
+    Train: TrainState,
+> Module<Tensor<InShape, B, K>>
+    for Linear<DimCons<InF, DimCons<OutF, Nil>>, B, crate::nn::optional::True, K, Train>
 where
     InShape::Output: DynShape,
+    <B as Execute<LinearMatMulSpec>>::Output: Into<B::Storage<K>>,
+    <B as Execute<Descriptor<op::Add>>>::Output: Into<B::Storage<K>>,
 {
-    /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<InShape::Output, B>;
-    /// The error type returned if the forward pass fails.
+    type Output = Tensor<InShape::Output, B, K>;
     type Error = Error;
 
-    /// Runs the forward pass of this module on the given input.
-    fn forward(&self, x: Tensor<InShape, B>) -> core::result::Result<Self::Output, Error> {
+    fn forward(&self, x: Tensor<InShape, B, K>) -> core::result::Result<Self::Output, Error> {
         let dtype = x._dtype.clone();
         let device = x._device.clone();
 
-        let mut dims = <InShape as Shape>::dims(x.shape_field()).into();
+        let mut dims = x.shape_buf().as_ref().to_vec();
         let last_idx = dims.len().saturating_sub(1);
         if last_idx < dims.len() {
-            let w_dims = <(OutF, InF) as Shape>::dims(self.weight.as_tensor()?.shape_field());
-            dims[last_idx] = w_dims[0];
+            dims[last_idx] = self.weight.shape_dims()[0];
         }
-        let shape = field_from_dims::<InShape::Output>(OperationKind::MatMul, &dims)?;
+        let shape = shape_buf_from_dims::<InShape::Output>(OperationKind::MatMul, &dims)?;
 
         let weight_dyn = self.weight.as_tensor()?.into_shape::<Dyn>()?;
-        let weight_t = weight_dyn.transpose::<0, 1>()?;
+        let weight_t = weight_dyn.transpose_runtime(0, 1)?;
         let x_dyn = x.into_shape::<Dyn>()?;
         let out_dyn = x_dyn.matmul(&weight_t)?;
 
@@ -363,31 +612,40 @@ impl<
     InF: Dim,
     OutF: Dim,
     InShape: Shape + DynShape + ReplaceLastDim<OutF> + crate::shapes::EndsWith<InF>,
-    B: Backend,
-> Module<Tensor<InShape, B>> for Linear<(InF, OutF), B, crate::nn::optional::False>
+    B: Backend
+        + crate::tensor::backend::TensorOps<B>
+        + crate::tensor::backend::NumericOps<B>
+        + crate::tensor::backend::FloatOps<B>
+        + crate::tensor::backend::ReductionOps<B>
+        + Execute<LinearMatMulSpec>
+        + Execute<
+            Descriptor<op::TransposeExact>,
+            Output = <B as crate::tensor::backend::StorageBackend>::Storage<K>,
+        > + crate::exec::Capabilities,
+    K: DType,
+    Train: TrainState,
+> Module<Tensor<InShape, B, K>>
+    for Linear<DimCons<InF, DimCons<OutF, Nil>>, B, crate::nn::optional::False, K, Train>
 where
     InShape::Output: DynShape,
+    <B as Execute<LinearMatMulSpec>>::Output: Into<B::Storage<K>>,
 {
-    /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<InShape::Output, B>;
-    /// The error type returned if the forward pass fails.
+    type Output = Tensor<InShape::Output, B, K>;
     type Error = Error;
 
-    /// Runs the forward pass of this module on the given input.
-    fn forward(&self, x: Tensor<InShape, B>) -> core::result::Result<Self::Output, Error> {
+    fn forward(&self, x: Tensor<InShape, B, K>) -> core::result::Result<Self::Output, Error> {
         let dtype = x._dtype.clone();
         let device = x._device.clone();
 
-        let mut dims = <InShape as Shape>::dims(x.shape_field()).into();
+        let mut dims = x.shape_buf().as_ref().to_vec();
         let last_idx = dims.len().saturating_sub(1);
         if last_idx < dims.len() {
-            let w_dims = <(OutF, InF) as Shape>::dims(self.weight.as_tensor()?.shape_field());
-            dims[last_idx] = w_dims[0];
+            dims[last_idx] = self.weight.shape_dims()[0];
         }
-        let shape = field_from_dims::<InShape::Output>(OperationKind::MatMul, &dims)?;
+        let shape = shape_buf_from_dims::<InShape::Output>(OperationKind::MatMul, &dims)?;
 
         let weight_dyn = self.weight.as_tensor()?.into_shape::<Dyn>()?;
-        let weight_t = weight_dyn.transpose::<0, 1>()?;
+        let weight_t = weight_dyn.transpose_runtime(0, 1)?;
         let x_dyn = x.into_shape::<Dyn>()?;
         let out_final = x_dyn.matmul(&weight_t)?;
 
@@ -405,31 +663,41 @@ impl<
     InF: Dim,
     OutF: Dim,
     InShape: Shape + DynShape + ReplaceLastDim<OutF> + crate::shapes::EndsWith<InF>,
-    B: Backend,
-> Module<Tensor<InShape, B>> for Linear<(InF, OutF), B, Dyn>
+    B: Backend
+        + crate::tensor::backend::TensorOps<B>
+        + crate::tensor::backend::NumericOps<B>
+        + crate::tensor::backend::FloatOps<B>
+        + crate::tensor::backend::ReductionOps<B>
+        + Execute<LinearMatMulSpec>
+        + Execute<
+            Descriptor<op::TransposeExact>,
+            Output = <B as crate::tensor::backend::StorageBackend>::Storage<K>,
+        > + crate::exec::Capabilities
+        + Execute<Descriptor<op::Add>>,
+    K: DType,
+    Train: TrainState,
+> Module<Tensor<InShape, B, K>> for Linear<DimCons<InF, DimCons<OutF, Nil>>, B, Dyn, K, Train>
 where
     InShape::Output: DynShape,
+    <B as Execute<LinearMatMulSpec>>::Output: Into<B::Storage<K>>,
+    <B as Execute<Descriptor<op::Add>>>::Output: Into<B::Storage<K>>,
 {
-    /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<InShape::Output, B>;
-    /// The error type returned if the forward pass fails.
+    type Output = Tensor<InShape::Output, B, K>;
     type Error = Error;
 
-    /// Runs the forward pass of this module on the given input.
-    fn forward(&self, x: Tensor<InShape, B>) -> core::result::Result<Self::Output, Error> {
+    fn forward(&self, x: Tensor<InShape, B, K>) -> core::result::Result<Self::Output, Error> {
         let dtype = x._dtype.clone();
         let device = x._device.clone();
 
-        let mut dims = <InShape as Shape>::dims(x.shape_field()).into();
+        let mut dims = x.shape_buf().as_ref().to_vec();
         let last_idx = dims.len().saturating_sub(1);
         if last_idx < dims.len() {
-            let w_dims = <(OutF, InF) as Shape>::dims(self.weight.as_tensor()?.shape_field());
-            dims[last_idx] = w_dims[0];
+            dims[last_idx] = self.weight.shape_dims()[0];
         }
-        let shape = field_from_dims::<InShape::Output>(OperationKind::MatMul, &dims)?;
+        let shape = shape_buf_from_dims::<InShape::Output>(OperationKind::MatMul, &dims)?;
 
         let weight_dyn = self.weight.as_tensor()?.into_shape::<Dyn>()?;
-        let weight_t = weight_dyn.transpose::<0, 1>()?;
+        let weight_t = weight_dyn.transpose_runtime(0, 1)?;
         let x_dyn = x.into_shape::<Dyn>()?;
         let out_dyn = x_dyn.matmul(&weight_t)?;
 
