@@ -1,42 +1,148 @@
-/// The core dimension trait, implemented by all types that can represent a single tensor axis.
-///
-/// A `Dim` is a type-level description of a single tensor dimension. It can be a compile-time
-/// constant dimension (e.g. `typenum::U128` for a static 128-element axis), or a runtime value
-/// (`usize` for a fully dynamic axis).
-///
-/// In practice, you rarely need to implement or use `Dim` directly. The `s![]` macro generates
-/// the correct implementations automatically. Custom symbolic dimensions can be created via `sym_dim!`.
+/// Semantic tri-state extent classification for a dimension.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum StaticExtent {
+    /// Extent is known only at runtime (e.g. dynamic batch or sequence length).
+    RuntimeUnknown,
+    /// Extent is statically known at compile-time to be `value`.
+    Value(usize),
+    /// Statically known to be invalid (e.g. overflow, underflow, or div-by-zero).
+    Invalid,
+}
+
+impl StaticExtent {
+    /// Validates whether a runtime `size` is consistent with this static extent.
+    #[inline(always)]
+    pub const fn validate_size(self, size: usize) -> bool {
+        match self {
+            StaticExtent::Value(val) => size == val,
+            StaticExtent::RuntimeUnknown => true,
+            StaticExtent::Invalid => false,
+        }
+    }
+}
+
 pub trait Dim: 'static + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + PartialEq {
+    /// The same semantic axis after a keep-dimension reduction.
+    type KeepDim: Dim;
     /// Whether this axis's *size* is fixed by the type rather than supplied at
     /// runtime.
-    ///
-    /// This is the per-axis input to
-    /// [`ProofLevel`](crate::exec::ProofLevel): a shape whose every axis is
-    /// statically sized carries a `Static` proof, and one axis that is not
-    /// weakens the whole shape to `Mixed`. Note that a *named* dimension
-    /// (`dim!(Batch)`) is `false` here — naming an axis makes it distinct in
-    /// the type system, which is why it can be checked at compile time, but its
-    /// size is still a runtime value.
-    ///
-    /// It defaults to `false` so that a `Dim` implemented outside this crate
-    /// claims no static proof it has not demonstrated. Claiming `true`
-    /// incorrectly would let a descriptor be built on a size the compiler never
-    /// checked.
-    const STATIC_SIZE: bool = false;
+    const STATIC_SIZE: bool = matches!(Self::STATIC, StaticExtent::Value(_));
+
+    /// Forces invalid type-level arithmetic to fail when the dimension is
+    /// consumed by a shape operation.  Keeping this on the dimension trait
+    /// lets symbolic expressions remain representable for diagnostics while
+    /// preventing them from being silently downgraded to runtime checks.
+    const STATIC_VALID: () = match Self::STATIC {
+        StaticExtent::Invalid => panic!("invalid static dimension expression"),
+        _ => (),
+    };
+
+    /// This axis's size, when the type fixes it.
+    const STATIC: StaticExtent = StaticExtent::RuntimeUnknown;
+
+    /// Returns the precise semantic static extent classification of this dimension.
+    #[inline]
+    fn static_extent(&self) -> StaticExtent {
+        Self::STATIC
+    }
 
     /// The user-facing constructor argument (e.g. `()` for compile-time-
     /// fixed dimensions, `usize` for runtime-sized ones).
     type Arg: Clone + Default + core::fmt::Debug;
     /// Returns this dimension's size.
     fn size(&self) -> usize;
-    /// Attempts to construct this dimension from a runtime `size`,
-    /// returning `None` if `size` doesn't match a compile-time-fixed value.
+    /// Attempts to construct this dimension from a runtime `size`, returning
+    /// `None` if `size` doesn't match a compile-time-fixed value.
     fn from_size(size: usize) -> Option<Self>;
     /// Constructs this dimension from its constructor argument.
     fn from_arg(arg: Self::Arg) -> Self;
     /// Returns the constructor argument that would reproduce this dimension.
     fn arg(&self) -> Self::Arg;
+
+    /// Resolves an argument at the Shape/ShapeBuf boundary without retaining a
+    /// dimension value. This is the canonical path used by structural shapes;
+    /// the older value constructors remain only for parameter adapters.
+    #[inline]
+    fn resolve_arg(arg: Self::Arg) -> Option<usize> {
+        Some(Self::from_arg(arg).size())
+    }
+
+    /// Validates a runtime axis value without constructing a second runtime
+    /// dimension representation.
+    #[inline]
+    fn validate_size(size: usize) -> bool {
+        Self::from_size(size).is_some()
+    }
 }
+
+/// Projects only genuinely concrete static extents into the arithmetic
+/// namespace.  In particular, a semantic named axis is static only when its
+/// extent is static too; `NamedDim<Tag, usize>` intentionally does not
+/// implement this trait.
+pub trait ConcreteStaticExtent: Dim {
+    /// The underlying typenum natural used by static arithmetic.
+    type Nat: typenum::Unsigned;
+}
+
+impl<T> ConcreteStaticExtent for T
+where
+    T: Dim + typenum::Unsigned,
+{
+    type Nat = T;
+}
+
+/// Semantic identity carried by a named axis.
+///
+/// Implementations are zero-sized tags. Runtime extent values and static
+/// extent knowledge belong to the `NamedDim<Tag, Extent>` extent parameter and
+/// to the validated `ShapeBuf`, never to the tag itself.
+pub trait AxisTag:
+    'static + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + PartialEq
+{
+    const NAME: &'static str;
+}
+
+/// Namespace marker used by a group of tags declared in one `dim!` call.
+/// The marker is type-level only and never stores an extent or a position.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub struct AxisSchema<Root>(core::marker::PhantomData<Root>);
+
+/// Stable semantic identity for a named axis.
+///
+/// `Id` is assigned within `Schema` by the declaration macro. It is an
+/// identity key, not a current structural position. Exact named lookup is
+/// deliberately not inferred from this trait alone; callers that cannot prove
+/// a unique structural match must resolve the name at runtime.
+pub trait AxisIdentity: AxisTag {
+    type Schema: 'static;
+    type Id: typenum::Unsigned;
+}
+
+/// Semantic proof boundary for comparing two dimensions statically or dynamically.
+pub trait DimCompatible<Rhs: Dim>: Dim {
+    const STATIC_ASSERT: () = match (Self::STATIC, Rhs::STATIC) {
+        (StaticExtent::Invalid, _) | (_, StaticExtent::Invalid) => {
+            panic!("Invalid static dimension expression");
+        }
+        (StaticExtent::Value(lhs), StaticExtent::Value(rhs)) => {
+            if lhs != rhs {
+                panic!("Statically incompatible dimensions");
+            }
+        }
+        _ => (),
+    };
+
+    /// Runtime compatibility check between two dimension instances.
+    fn check_compatible(&self, _rhs: &Rhs) -> Result<(), crate::shapes::error::ShapeError> {
+        let _ = Self::STATIC_ASSERT;
+        // Runtime extents are compared by ShapeBuf, where both values are
+        // available. A dimension specification cannot compare values it does
+        // not own.
+        Ok(())
+    }
+}
+
+impl<L: Dim, R: Dim> DimCompatible<R> for L {}
 
 /// A dimension whose *type* is not the literal `U1`.
 ///
@@ -56,18 +162,73 @@ pub trait Dim: 'static + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + Pa
 /// A `usize` axis is deliberately absent: it is not the type `U1`, but neither
 /// is it statically sized, and the mixed broadcast families relate it by their
 /// own rules.
-pub trait NotOne: Dim {}
+const fn broadcast_static(lhs: StaticExtent, rhs: StaticExtent) -> StaticExtent {
+    match (lhs, rhs) {
+        (StaticExtent::Invalid, _) | (_, StaticExtent::Invalid) => StaticExtent::Invalid,
+        (StaticExtent::Value(lhs), StaticExtent::Value(rhs)) => {
+            if lhs == rhs {
+                StaticExtent::Value(lhs)
+            } else if lhs == 1 {
+                StaticExtent::Value(rhs)
+            } else if rhs == 1 {
+                StaticExtent::Value(lhs)
+            } else {
+                StaticExtent::Invalid
+            }
+        }
+        (StaticExtent::Value(1), other) | (other, StaticExtent::Value(1)) => other,
+        (StaticExtent::Value(value), StaticExtent::RuntimeUnknown)
+        | (StaticExtent::RuntimeUnknown, StaticExtent::Value(value)) => {
+            if value == 1 {
+                StaticExtent::RuntimeUnknown
+            } else {
+                StaticExtent::Value(value)
+            }
+        }
+        _ => StaticExtent::RuntimeUnknown,
+    }
+}
 
-/// `UTerm` is typenum's zero.
-impl NotOne for UTerm {}
+/// Symbolic output extent for a broadcast pair.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+pub struct BroadcastExtent<L, R>(pub core::marker::PhantomData<(L, R)>);
 
-/// A nested `UInt` in the high bits means a value of 2 or more.
-impl<U, B, C> NotOne for UInt<UInt<U, B>, C> where UInt<UInt<U, B>, C>: Dim {}
+impl<L: Dim, R: Dim> Dim for BroadcastExtent<L, R> {
+    type KeepDim = typenum::U1;
+    const STATIC: StaticExtent = broadcast_static(L::STATIC, R::STATIC);
+    type Arg = usize;
+    fn size(&self) -> usize {
+        match Self::STATIC {
+            StaticExtent::Value(value) => value,
+            StaticExtent::RuntimeUnknown | StaticExtent::Invalid => 0,
+        }
+    }
+    fn from_size(size: usize) -> Option<Self> {
+        match Self::STATIC {
+            StaticExtent::Invalid => None,
+            StaticExtent::Value(value) => {
+                (value == size).then_some(Self(core::marker::PhantomData))
+            }
+            StaticExtent::RuntimeUnknown => Some(Self(core::marker::PhantomData)),
+        }
+    }
+    fn from_arg(arg: Self::Arg) -> Self {
+        Self::from_size(arg).expect("broadcast extent violates static compatibility")
+    }
+    fn arg(&self) -> Self::Arg {
+        self.size()
+    }
+    fn resolve_arg(arg: Self::Arg) -> Option<usize> {
+        match Self::STATIC {
+            StaticExtent::Invalid => None,
+            StaticExtent::Value(value) => (value == arg).then_some(value),
+            StaticExtent::RuntimeUnknown => Some(arg),
+        }
+    }
+}
 
 impl Dim for usize {
-    /// The canonical runtime axis: its size arrives with the data.
-    const STATIC_SIZE: bool = false;
-
+    type KeepDim = typenum::U1;
     /// A runtime dimension's argument is just its size.
     type Arg = Self;
 
@@ -76,20 +237,12 @@ impl Dim for usize {
     fn size(&self) -> usize {
         *self
     }
-    #[inline(always)]
-    /// Always succeeds — any `usize` is a valid runtime dimension.
     fn from_size(size: usize) -> Option<Self> {
         Some(size)
     }
-
-    #[inline(always)]
-    /// Identity.
     fn from_arg(arg: Self::Arg) -> Self {
         arg
     }
-
-    #[inline(always)]
-    /// Identity.
     fn arg(&self) -> Self::Arg {
         *self
     }
@@ -105,47 +258,43 @@ impl Dim for usize {
 #[macro_export]
 macro_rules! dim {
     ($( $(#[$meta:meta])* $name:ident ),+ $(,)?) => {
-        $(
-            $(#[$meta])*
-            #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
-            pub struct $name(pub usize);
+        $crate::__incin_dim_declare!(@first $( $(#[$meta])* $name ),+ );
+    };
+}
 
-            impl $crate::prelude::Dim for $name {
-                /// The wrapped runtime size.
-                type Arg = usize;
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __incin_dim_declare {
+    (@first $(#[$first_meta:meta])* $first:ident $(, $(#[$rest_meta:meta])* $rest:ident)* ) => {
+        $(#[$first_meta])*
+        #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        pub struct $first;
 
-                #[inline(always)]
-                /// The wrapped size.
-                fn size(&self) -> usize {
-                    self.0
-                }
+        impl $crate::shapes::AxisTag for $first {
+            const NAME: &'static str = stringify!($first);
+        }
+        impl $crate::shapes::AxisIdentity for $first {
+            type Schema = $crate::shapes::AxisSchema<$first>;
+            type Id = $crate::typenum::U0;
+        }
 
-                #[inline(always)]
-                /// Always succeeds — wraps any `usize`.
-                fn from_size(size: usize) -> Option<Self> {
-                    Some(Self(size))
-                }
+        $crate::__incin_dim_declare!(@rest $crate::shapes::AxisSchema<$first>; $crate::typenum::U1; $( $(#[$rest_meta])* $rest ),* );
+    };
+    (@rest $schema:ty; $id:ty; ) => {};
+    (@rest $schema:ty; $id:ty; $(#[$meta:meta])* $name:ident $(, $(#[$rest_meta:meta])* $rest:ident)* ) => {
+        $(#[$meta])*
+        #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        pub struct $name;
 
-                #[inline(always)]
-                /// Wraps `arg`.
-                fn from_arg(arg: Self::Arg) -> Self {
-                    Self(arg)
-                }
+        impl $crate::shapes::AxisTag for $name {
+            const NAME: &'static str = stringify!($name);
+        }
+        impl $crate::shapes::AxisIdentity for $name {
+            type Schema = $schema;
+            type Id = $id;
+        }
 
-                #[inline(always)]
-                /// Unwraps the size.
-                fn arg(&self) -> Self::Arg {
-                    self.0
-                }
-            }
-
-            impl $crate::prelude::StaticOrNamedDim for $name {}
-
-            // A name is a distinct type, never the type `U1`, so it may sit on
-            // the non-stretched side of a broadcast. Its runtime size may still
-            // be 1; that is a value, and nothing here claims otherwise.
-            impl $crate::prelude::NotOne for $name {}
-        )+
+        $crate::__incin_dim_declare!(@rest $schema; $crate::typenum::Sum<$id, $crate::typenum::U1>; $( $(#[$rest_meta])* $rest ),* );
     };
 }
 
@@ -157,73 +306,240 @@ macro_rules! sym_dim {
     };
 }
 
-#[macro_export]
-#[doc(hidden)]
-macro_rules! symbolic_dim {
-    ($($tokens:tt)*) => {
-        $crate::dim!($($tokens)*);
+/// A const-generic adapter for fixed extents that Stable Rust cannot expose as
+/// a proc-macro literal (for example `shape![const Model::WIDTH]`).
+///
+/// Raw literals use the macro's recursive typenum representation and therefore
+/// retain typenum arithmetic. `ConstDim` is intentionally only the semantic
+/// adapter for an unevaluated const path; it is not a finite literal catalogue
+/// and does not claim the same normalized arithmetic output types.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+pub struct ConstDim<const N: usize>;
+
+impl<const N: usize> Dim for ConstDim<N> {
+    type KeepDim = typenum::U1;
+    const STATIC: StaticExtent = StaticExtent::Value(N);
+    type Arg = ();
+
+    #[inline(always)]
+    fn size(&self) -> usize {
+        N
+    }
+    fn from_size(size: usize) -> Option<Self> {
+        (size == N).then_some(Self)
+    }
+    fn from_arg(_: Self::Arg) -> Self {
+        ConstDim
+    }
+    fn arg(&self) -> Self::Arg {}
+}
+
+macro_rules! static_op {
+    ($( $id1:ident $id2:ident )+) => {
+        $(
+            const fn $id1(lhs: StaticExtent, rhs: StaticExtent) -> StaticExtent {
+                match (lhs, rhs) {
+                    (StaticExtent::Invalid, _) | (_, StaticExtent::Invalid) => StaticExtent::Invalid,
+                    (StaticExtent::Value(lhs), StaticExtent::Value(rhs)) => match lhs.$id2(rhs) {
+                        Some(v) => StaticExtent::Value(v),
+                        None => StaticExtent::Invalid,
+                    },
+                    _ => StaticExtent::RuntimeUnknown,
+                }
+            }
+        )+
     };
 }
 
-/// A mathematical product of two Dimensions `A` and `B`.
-///
-/// Used internally to track the resulting size when two dimensions are flattened or multiplied.
-/// For example, after `t.reshape::<s![-1, A_times_B]>()`, the last dimension's type would be `ProdDim<A, B>`.
-/// It preserves static dimensionality information across such operations.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ProdDim<A, B>(usize, core::marker::PhantomData<(A, B)>);
+static_op! {
+    static_mul checked_mul
+    static_add checked_add
+    static_sub checked_sub
+}
 
-impl<A: Dim, B: Dim> Dim for ProdDim<A, B> {
-    /// A product is statically sized exactly when both factors are. This is
-    /// what keeps a `reshape` that folds two static axes together from
-    /// degrading the result's proof to `Mixed`.
-    const STATIC_SIZE: bool = A::STATIC_SIZE && B::STATIC_SIZE;
-
-    /// The already-checked product size. Multiplying the constituent runtime
-    /// arguments here would make this infallible trait an overflow boundary.
-    type Arg = usize;
-
-    #[inline(always)]
-    /// The precomputed product `A::size() * B::size()`.
-    fn size(&self) -> usize {
-        self.0
-    }
-
-    #[inline(always)]
-    /// Always succeeds — any `usize` product is accepted as-is (the
-    /// individual `A`/`B` factors are not recoverable from the product alone).
-    fn from_size(size: usize) -> Option<Self> {
-        Some(Self(size, core::marker::PhantomData))
-    }
-
-    #[inline(always)]
-    /// Stores an already-checked product size.
-    fn from_arg(arg: Self::Arg) -> Self {
-        Self(arg, core::marker::PhantomData)
-    }
-
-    #[inline(always)]
-    /// Returns the checked product size.
-    fn arg(&self) -> Self::Arg {
-        self.0
+const fn static_exact_div(lhs: StaticExtent, rhs: StaticExtent) -> StaticExtent {
+    match (lhs, rhs) {
+        (StaticExtent::Invalid, _)
+        | (_, StaticExtent::Invalid)
+        | (StaticExtent::Value(_), StaticExtent::Value(0)) => StaticExtent::Invalid,
+        (StaticExtent::Value(lhs), StaticExtent::Value(rhs)) => {
+            if lhs % rhs == 0 {
+                StaticExtent::Value(lhs / rhs)
+            } else {
+                StaticExtent::Invalid
+            }
+        }
+        _ => StaticExtent::RuntimeUnknown,
     }
 }
 
-impl<A: Dim + Default, B: Dim + Default> Default for ProdDim<A, B> {
-    fn default() -> Self {
-        let product = A::default()
-            .size()
-            .checked_mul(B::default().size())
-            .expect("static ProdDim factors must fit usize");
-        Self(product, core::marker::PhantomData)
+macro_rules! static_op_dim {
+    ( $name:ident $op:ident) => {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+        pub struct $name<A, B>(pub core::marker::PhantomData<(A, B)>);
+
+        impl<A: Dim, B: Dim> Dim for $name<A, B> {
+            type KeepDim = typenum::U1;
+            const STATIC: StaticExtent = $op(A::STATIC, B::STATIC);
+
+            type Arg = usize;
+
+            #[inline(always)]
+            fn size(&self) -> usize {
+                match Self::STATIC {
+                    StaticExtent::Value(value) => value,
+                    StaticExtent::RuntimeUnknown | StaticExtent::Invalid => 0,
+                }
+            }
+            fn from_size(size: usize) -> Option<Self> {
+                match Self::STATIC {
+                    StaticExtent::Invalid => None,
+                    StaticExtent::Value(v) => {
+                        (v == size).then_some(Self(core::marker::PhantomData))
+                    }
+                    StaticExtent::RuntimeUnknown => Some(Self(core::marker::PhantomData)),
+                }
+            }
+            fn from_arg(arg: Self::Arg) -> Self {
+                Self::from_size(arg).expect("invalid derived dimension")
+            }
+            fn arg(&self) -> Self::Arg {
+                Default::default()
+            }
+            fn resolve_arg(arg: Self::Arg) -> Option<usize> {
+                match Self::STATIC {
+                    StaticExtent::Invalid => None,
+                    StaticExtent::Value(value) => (value == arg).then_some(value),
+                    StaticExtent::RuntimeUnknown => Some(arg),
+                }
+            }
+        }
+    };
+}
+
+static_op_dim!( AddDim static_add );
+
+static_op_dim!( CheckedSubDim static_sub );
+
+static_op_dim!( ExactDivDim static_exact_div);
+
+/// A dimension that pairs a semantic tag with a dimension extent (e.g. `NamedDim<Channels, ConstDim<64>>`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+pub struct NamedDim<Tag, Extent> {
+    _tag: core::marker::PhantomData<(Tag, Extent)>,
+}
+
+impl<Tag, Extent> ConcreteStaticExtent for NamedDim<Tag, Extent>
+where
+    Tag: AxisTag,
+    Extent: ConcreteStaticExtent,
+{
+    type Nat = Extent::Nat;
+}
+
+impl<Tag: AxisTag, Extent: Dim> NamedDim<Tag, Extent> {
+    pub fn new(extent: Extent) -> Self {
+        let _ = extent;
+        Self {
+            _tag: core::marker::PhantomData,
+        }
+    }
+}
+
+impl<Tag: AxisTag, Extent: Dim> Dim for NamedDim<Tag, Extent> {
+    type KeepDim = NamedDim<Tag, typenum::U1>;
+    const STATIC: StaticExtent = Extent::STATIC;
+    type Arg = Extent::Arg;
+
+    #[inline(always)]
+    fn size(&self) -> usize {
+        match Self::STATIC {
+            StaticExtent::Value(value) => value,
+            StaticExtent::RuntimeUnknown | StaticExtent::Invalid => 0,
+        }
+    }
+    fn from_size(size: usize) -> Option<Self> {
+        Extent::from_size(size).map(|_| Self {
+            _tag: core::marker::PhantomData,
+        })
+    }
+    fn from_arg(arg: Self::Arg) -> Self {
+        let _ = Extent::from_arg(arg);
+        Self {
+            _tag: core::marker::PhantomData,
+        }
+    }
+    fn arg(&self) -> Self::Arg {
+        Default::default()
+    }
+    fn resolve_arg(arg: Self::Arg) -> Option<usize> {
+        Extent::resolve_arg(arg)
+    }
+}
+
+/// A checked product of two dimension specifications `A` and `B`.
+///
+/// Used internally to track the resulting size when two dimensions are flattened or multiplied.
+/// Runtime values are supplied through the surrounding `ShapeBuf`; this type
+/// carries only the symbolic product contract.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+pub struct MulDim<A, B>(pub core::marker::PhantomData<(A, B)>);
+
+impl<A: Dim, B: Dim> Dim for MulDim<A, B> {
+    type KeepDim = typenum::U1;
+    /// The product of the factors' extents, checked. An overflowing product
+    /// answers `None` rather than a wrapped constant: a wrong extent baked into
+    /// a kernel is worse than no extent at all.
+    const STATIC: StaticExtent = match (A::STATIC, B::STATIC) {
+        (StaticExtent::Value(a), StaticExtent::Value(b)) => match a.checked_mul(b) {
+            Some(value) => StaticExtent::Value(value),
+            None => StaticExtent::Invalid,
+        },
+        (StaticExtent::Invalid, _) | (_, StaticExtent::Invalid) => StaticExtent::Invalid,
+        _ => StaticExtent::RuntimeUnknown,
+    };
+
+    type Arg = usize;
+
+    #[inline(always)]
+    fn size(&self) -> usize {
+        match Self::STATIC {
+            StaticExtent::Value(value) => value,
+            StaticExtent::RuntimeUnknown | StaticExtent::Invalid => 0,
+        }
+    }
+    fn from_size(size: usize) -> Option<Self> {
+        match Self::STATIC {
+            StaticExtent::Invalid => None,
+            StaticExtent::Value(value) => {
+                (value == size).then_some(Self(core::marker::PhantomData))
+            }
+            StaticExtent::RuntimeUnknown => Some(Self(core::marker::PhantomData)),
+        }
+    }
+    fn from_arg(arg: Self::Arg) -> Self {
+        Self::from_size(arg).expect("invalid product dimension")
+    }
+    fn arg(&self) -> Self::Arg {
+        Default::default()
+    }
+    fn resolve_arg(arg: Self::Arg) -> Option<usize> {
+        match Self::STATIC {
+            StaticExtent::Invalid => None,
+            StaticExtent::Value(value) => (value == arg).then_some(value),
+            StaticExtent::RuntimeUnknown => Some(arg),
+        }
     }
 }
 
 use typenum::{Bit, UInt, UTerm, Unsigned};
 
+use crate::exec::ProofLevel::Static;
+
 impl Dim for UTerm {
-    /// Fixed by the type: `UTerm` is typenum's zero and denotes size 0.
-    const STATIC_SIZE: bool = true;
+    type KeepDim = typenum::U1;
+    /// Zero, which is a real extent and not a missing one.
+    const STATIC: StaticExtent = StaticExtent::Value(0);
 
     /// No argument needed — `UTerm` (typenum's zero) is always size 0.
     type Arg = ();
@@ -233,21 +549,12 @@ impl Dim for UTerm {
     fn size(&self) -> usize {
         0
     }
-
-    #[inline(always)]
-    /// Succeeds only for `size == 0`.
     fn from_size(size: usize) -> Option<Self> {
-        if size == 0 { Some(UTerm) } else { None }
+        (size == 0).then_some(UTerm)
     }
-
-    #[inline(always)]
-    /// No-op: `UTerm` has only one value.
     fn from_arg(_: Self::Arg) -> Self {
         UTerm
     }
-
-    #[inline(always)]
-    /// No-op.
     fn arg(&self) -> Self::Arg {}
 }
 
@@ -266,8 +573,9 @@ where
         + PartialEq
         + 'static,
 {
-    /// Fixed by the type: the size is the `typenum` value itself.
-    const STATIC_SIZE: bool = true;
+    type KeepDim = typenum::U1;
+    /// The `typenum` value, which is where every static extent comes from.
+    const STATIC: StaticExtent = StaticExtent::Value(<Self as Unsigned>::USIZE);
 
     /// No argument needed — the size is fixed by the `typenum` type itself.
     type Arg = ();
@@ -277,24 +585,11 @@ where
     fn size(&self) -> usize {
         Self::USIZE
     }
-
-    #[inline(always)]
-    /// Succeeds only when `size` matches this exact compile-time value.
     fn from_size(size: usize) -> Option<Self> {
-        if size == Self::USIZE {
-            Some(Default::default())
-        } else {
-            None
-        }
+        (size == Self::USIZE).then_some(Default::default())
     }
-
-    #[inline(always)]
-    /// No-op: the value is fixed by the type, not the argument.
     fn from_arg(_: Self::Arg) -> Self {
         Default::default()
     }
-
-    #[inline(always)]
-    /// No-op.
     fn arg(&self) -> Self::Arg {}
 }

@@ -1,20 +1,40 @@
 use crate::prelude::{Dim, Dyn};
+use crate::shapes::ShapeBuf;
+use crate::shapes::broadcast::ReverseShape;
+use crate::shapes::idx::{FromEnd, Here, Next};
 use alloc::vec::Vec;
 use core::fmt::Debug;
-use core::ops::{Index, IndexMut};
-use typenum::Unsigned;
+use core::ops::{Add, Sub};
+use typenum::{U1, Unsigned};
+
+/// Forward structural cursors.  Keeping reverse cursors out of the recursive
+/// `FromEnd` adapters prevents the trait solver from exploring an infinite
+/// reverse-of-reverse candidate chain.
+#[doc(hidden)]
+pub trait ForwardCursor {}
+impl ForwardCursor for Here {}
+impl<I: ForwardCursor> ForwardCursor for Next<I> {}
 
 /// The fundamental trait for all tensor shape types.
 ///
 /// A `Shape` encodes the rank (number of dimensions) and, optionally, the static size of each
 /// dimension into the type system. The three primary implementors are:
 ///
-/// * **Tuple of `Dim` types** (e.g., `(U2, U3)`) — Fully static. All dimension sizes are known at compile time.
-/// * **`Dyn`** — Fully dynamic. Shape is determined at runtime.
-/// * **Tuples mixing `usize` and `typenum`** — Partially static (e.g., `(U3, usize)`).
+/// * **`DimCons`/`Nil`** (e.g., `s![2, 3]`) — Fully static or mixed.
+/// * **`Dyn`** — Fully dynamic. Shape and rank are determined at runtime.
+/// * **`Ranked<R>`** — Runtime extents with a typenum-known rank.
 ///
 /// In practice, shapes are most often constructed via the `s![]` macro.
 pub trait Shape: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
+    /// Compile-time validity gate for exact structural shape expressions.
+    ///
+    /// The default is intentionally permissive for dynamic and legacy input
+    /// adapters.  `DimCons` recursively specializes it so canonical
+    /// structural operations reject invalid static extent arithmetic.
+    const STATIC_VALID: () = ();
+    /// Compile-time rank when this shape representation preserves it.
+    /// `None` denotes a runtime-rank shape such as [`Dyn`].
+    const RANK: Option<usize> = None;
     /// How much of this shape the compiler settled, as opposed to the runtime.
     ///
     /// This is the shape-level lift of `Dim::STATIC_SIZE`: rank and every
@@ -30,53 +50,635 @@ pub trait Shape: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
     /// no proof it has not shown.
     const PROOF: crate::exec::ProofLevel = crate::exec::ProofLevel::Dynamic;
 
+    /// This shape's element count, when the type alone settles it.
+    ///
+    /// The same trick as [`PROOF`](Shape::PROOF), for the same reason. A
+    /// backend's `execute_shaped<S>` is generic over `S: Shape`. Restating the
+    /// count here as an `Option` lets any
+    /// `S` be asked, and because `S` is a type parameter the answer is a
+    /// constant: `if let Some(n) = S::STATIC_NUMEL` collapses to one arm at
+    /// monomorphization rather than branching at run time.
+    ///
+    /// `None` is the honest default. A shape with any runtime axis has no
+    /// element count until its field exists, and one implemented outside this
+    /// crate is credited with nothing it has not shown — the same rule `PROOF`
+    /// follows.
+    const STATIC_NUMEL: Option<usize> = None;
+
     /// The user-facing constructor argument type (e.g. a tuple of
     /// `usize`/`typenum` values, or `Vec<usize>` for `Dyn`).
     type Arg;
-    /// The runtime-stored representation of this shape inside a
-    /// `Tensor` (produced from `Arg` via `init`).
-    type Field: Debug + Clone + Send + Sync;
-    /// A fixed-size or `Vec`-backed collection of this shape's
-    /// per-dimension sizes, as returned by `Shape::dims`.
-    type Dims: Debug
-        + Clone
-        + Default
-        + Eq
-        + PartialEq
-        + Send
-        + Sync
-        + IntoIterator<Item = usize>
-        + Into<Vec<usize>>
-        + Index<usize, Output = usize>
-        + IndexMut<usize>
-        + AsRef<[usize]>;
-    /// Converts a user-facing `Arg` into the stored `Field` representation.
-    fn init(arg: Self::Arg) -> Self::Field;
-    /// Attempts to construct this shape's `Field` from raw runtime
+    /// Converts a user-facing `Arg` into canonical runtime dimensions.
+    fn init(arg: Self::Arg) -> ShapeBuf;
+    /// Attempts to construct canonical runtime dimensions from raw dimensions.
     /// dimensions, returning `None` if `dims` doesn't match `Self`
     /// (e.g. wrong rank, or a statically-fixed dimension that disagrees).
-    fn from_dyn(dims: &[usize]) -> Option<Self::Field>;
-    /// Returns every runtime dimension represented by `field`.
-    ///
-    /// This belongs to `Shape`, rather than the legacy `DynShape` extension,
-    /// because safe tensor construction must be able to validate storage for
-    /// every type accepted by `Tensor<S, ..>`.
-    fn dims(field: &Self::Field) -> Self::Dims;
+    fn from_dyn(dims: &[usize]) -> Option<ShapeBuf>;
+    /// Resolves constructor input into the canonical runtime dimension
+    /// storage.  New shape-aware code should use this boundary instead of
+    /// retaining a shape-specific field beyond construction.
+    #[inline]
+    fn resolve(arg: Self::Arg) -> core::result::Result<ShapeBuf, crate::shapes::error::ShapeError> {
+        let dims = Self::init(arg);
+        Self::validate_dims(dims.as_ref())?;
+        Ok(dims)
+    }
+
+    /// Validates raw runtime dimensions against this shape's static contract.
+    #[inline]
+    fn validate_dims(dims: &[usize]) -> core::result::Result<(), crate::shapes::error::ShapeError> {
+        if Self::from_dyn(dims).is_some() {
+            Ok(())
+        } else {
+            Err(crate::shapes::error::ShapeError::TargetShapeRejected {
+                operation: crate::shapes::error::OperationKind::Storage,
+                rank: dims.len(),
+            })
+        }
+    }
 }
 
-/// The highest tuple rank every shape rule is implemented for.
-///
-/// Single-sourced from `incin_macros::max_rank!()`. A proc-macro crate cannot
-/// export a `const`, so the number lives there and is re-exported here;
-/// duplicating it would reintroduce exactly the per-rule drift `SHP-006`
-/// removes.
-///
-/// A rule that *adds* an axis (`AppendDim`, `StackShape`) correctly stops one
-/// rank below this, because its `Output` is bounded by `Shape` and no tuple
-/// above `MAX_RANK` implements `Shape`.
-pub const MAX_RANK: usize = incin_macros::max_rank!();
+impl<const N: usize> Shape for [usize; N] {
+    const RANK: Option<usize> = Some(N);
+    const PROOF: crate::exec::ProofLevel = crate::exec::ProofLevel::Mixed;
+    const STATIC_NUMEL: Option<usize> = if N == 0 { Some(1) } else { None };
+    type Arg = [usize; N];
+    #[inline(always)]
+    fn init(arg: Self::Arg) -> ShapeBuf {
+        crate::shapes::ShapeBuf::from_slice(&arg)
+    }
 
-/// Rebuild a typed shape field from computed dimensions, reporting instead of
+    #[inline(always)]
+    fn from_dyn(dims: &[usize]) -> Option<ShapeBuf> {
+        (dims.len() == N).then(|| crate::shapes::ShapeBuf::from_slice(dims))
+    }
+}
+
+impl<const N: usize> DynShape for [usize; N] {
+    #[inline(always)]
+    fn rank(_: &ShapeBuf) -> usize {
+        N
+    }
+}
+
+impl<const N: usize> PartialDynShape for [usize; N] {
+    const RANK: usize = N;
+}
+
+/// Terminator node for canonical recursive fixed-rank shapes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+pub struct Nil;
+
+impl Shape for Nil {
+    const RANK: Option<usize> = Some(0);
+    const PROOF: crate::exec::ProofLevel = crate::exec::ProofLevel::Static;
+    const STATIC_NUMEL: Option<usize> = Some(1);
+    type Arg = ();
+    #[inline(always)]
+    fn init(_: Self::Arg) -> ShapeBuf {
+        crate::shapes::ShapeBuf::scalar()
+    }
+
+    #[inline(always)]
+    fn from_dyn(dims: &[usize]) -> Option<ShapeBuf> {
+        if dims.is_empty() {
+            Some(crate::shapes::ShapeBuf::scalar())
+        } else {
+            None
+        }
+    }
+}
+
+/// Cons-cell node for canonical recursive fixed-rank shapes (`DimCons<Head, Tail>`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+pub struct DimCons<H, T> {
+    pub head: H,
+    pub tail: T,
+}
+
+impl<H: Dim, T: Shape> Shape for DimCons<H, T> {
+    const STATIC_VALID: () = {
+        let _ = H::STATIC_VALID;
+        let _ = T::STATIC_VALID;
+    };
+    const RANK: Option<usize> = match T::RANK {
+        Some(rank) => Some(rank + 1),
+        None => None,
+    };
+    const PROOF: crate::exec::ProofLevel = match (H::STATIC_SIZE, T::PROOF) {
+        (true, crate::exec::ProofLevel::Static) => crate::exec::ProofLevel::Static,
+        _ => crate::exec::ProofLevel::Mixed,
+    };
+
+    const STATIC_NUMEL: Option<usize> = match (H::STATIC, T::STATIC_NUMEL) {
+        (crate::shapes::StaticExtent::Value(h), Some(t)) => h.checked_mul(t),
+        _ => None,
+    };
+
+    type Arg = (H::Arg, T::Arg);
+    #[inline(always)]
+    fn init(arg: Self::Arg) -> ShapeBuf {
+        let head_size = H::resolve_arg(arg.0).expect("shape argument violates dimension contract");
+        let tail_dims = T::init(arg.1);
+        let mut buf = crate::shapes::ShapeBuf::from_slice(&[head_size]);
+        for &d in tail_dims.as_ref() {
+            buf.push(d);
+        }
+        buf
+    }
+
+    #[inline(always)]
+    fn from_dyn(dims: &[usize]) -> Option<ShapeBuf> {
+        if dims.is_empty() {
+            return None;
+        }
+        if !H::validate_size(dims[0]) {
+            return None;
+        }
+        let _tail_dims = T::from_dyn(&dims[1..])?;
+        Some(crate::shapes::ShapeBuf::from_slice(dims))
+    }
+}
+
+impl DynShape for Nil {
+    fn rank(_: &ShapeBuf) -> usize {
+        0
+    }
+}
+
+impl PartialDynShape for Nil {
+    const RANK: usize = 0;
+}
+
+impl<H: Dim, T: Shape + PartialDynShape> PartialDynShape for DimCons<H, T> {
+    const RANK: usize = 1 + <T as PartialDynShape>::RANK;
+}
+
+impl<H: Dim, T: Shape + DynShape + PartialDynShape> DynShape for DimCons<H, T> {
+    fn rank(_: &ShapeBuf) -> usize {
+        1 + <T as PartialDynShape>::RANK
+    }
+}
+
+/// Prepends a dimension to a structural shape.
+pub trait PrependDim<D: Dim>: Shape {
+    type Output: Shape;
+}
+
+impl<D: Dim> PrependDim<D> for Nil {
+    type Output = DimCons<D, Nil>;
+}
+
+impl<D: Dim, H: Dim, T: Shape> PrependDim<D> for DimCons<H, T> {
+    type Output = DimCons<D, DimCons<H, T>>;
+}
+
+impl<D: Dim> AppendDim<D> for Nil {
+    type Output = DimCons<D, Nil>;
+}
+
+impl<D: Dim, H: Dim, T: Shape> AppendDim<D> for DimCons<H, T>
+where
+    T: AppendDim<D>,
+{
+    type Output = DimCons<H, <T as AppendDim<D>>::Output>;
+}
+
+/// Concatenates two structural shapes.
+pub trait StructuralConcatShape<Rhs: Shape>: Shape {
+    type Output: Shape;
+}
+
+impl<Rhs: Shape> StructuralConcatShape<Rhs> for Nil {
+    type Output = Rhs;
+}
+
+impl<H: Dim, T: Shape, Rhs: Shape> StructuralConcatShape<Rhs> for DimCons<H, T>
+where
+    T: StructuralConcatShape<Rhs>,
+{
+    type Output = DimCons<H, <T as StructuralConcatShape<Rhs>>::Output>;
+}
+
+/// Accesses the dimension at structural cursor `Cursor`.
+pub trait At<Cursor>: Shape {
+    type Output: Dim;
+}
+
+impl<H: Dim, T: Shape> At<crate::shapes::idx::Here> for DimCons<H, T> {
+    type Output = H;
+}
+
+impl<H: Dim, T: Shape, SubCursor> At<crate::shapes::idx::Next<SubCursor>> for DimCons<H, T>
+where
+    T: At<SubCursor>,
+{
+    type Output = <T as At<SubCursor>>::Output;
+}
+
+pub trait AtFromEnd<Cursor>: Shape {
+    type Output: Dim;
+}
+
+impl<H: Dim, T: Shape, Cursor: ForwardCursor> AtFromEnd<Cursor> for DimCons<H, T>
+where
+    DimCons<H, T>: ReverseShape,
+    <DimCons<H, T> as ReverseShape>::Output: At<Cursor>,
+{
+    type Output = <<DimCons<H, T> as ReverseShape>::Output as At<Cursor>>::Output;
+}
+
+/// Removes the dimension at structural cursor `Cursor`.
+pub trait RemoveAt<Cursor>: Shape {
+    type Output: Shape;
+}
+
+impl<H: Dim, T: Shape> RemoveAt<crate::shapes::idx::Here> for DimCons<H, T> {
+    type Output = T;
+}
+
+impl<H: Dim, T: Shape, SubCursor> RemoveAt<crate::shapes::idx::Next<SubCursor>> for DimCons<H, T>
+where
+    T: RemoveAt<SubCursor>,
+{
+    type Output = DimCons<H, <T as RemoveAt<SubCursor>>::Output>;
+}
+
+impl RemoveAt<crate::shapes::idx::Here> for Dyn {
+    type Output = Dyn;
+}
+
+impl<SubCursor> RemoveAt<crate::shapes::idx::Next<SubCursor>> for Dyn {
+    type Output = Dyn;
+}
+
+pub trait RemoveFromEnd<Cursor>: Shape {
+    type Output: Shape;
+}
+
+impl<H: Dim, T: Shape, Cursor: ForwardCursor> RemoveFromEnd<Cursor> for DimCons<H, T>
+where
+    DimCons<H, T>: ReverseShape,
+    <DimCons<H, T> as ReverseShape>::Output: RemoveAt<Cursor>,
+    <<DimCons<H, T> as ReverseShape>::Output as RemoveAt<Cursor>>::Output: ReverseShape,
+{
+    type Output =
+        <<<DimCons<H, T> as ReverseShape>::Output as RemoveAt<Cursor>>::Output as ReverseShape>::Output;
+}
+
+/// Replaces the dimension at structural cursor `Cursor` with `NewDim`.
+pub trait ReplaceAt<Cursor, NewDim: Dim>: Shape {
+    type Output: Shape;
+}
+
+impl<H: Dim, T: Shape, NewDim: Dim> ReplaceAt<crate::shapes::idx::Here, NewDim> for DimCons<H, T> {
+    type Output = DimCons<NewDim, T>;
+}
+
+impl<H: Dim, T: Shape, SubCursor, NewDim: Dim>
+    ReplaceAt<crate::shapes::idx::Next<SubCursor>, NewDim> for DimCons<H, T>
+where
+    T: ReplaceAt<SubCursor, NewDim>,
+{
+    type Output = DimCons<H, <T as ReplaceAt<SubCursor, NewDim>>::Output>;
+}
+
+pub trait ReplaceFromEnd<Cursor, NewDim: Dim>: Shape {
+    type Output: Shape;
+}
+
+impl<H: Dim, T: Shape, Cursor: ForwardCursor, NewDim: Dim> ReplaceFromEnd<Cursor, NewDim>
+    for DimCons<H, T>
+where
+    DimCons<H, T>: ReverseShape,
+    <DimCons<H, T> as ReverseShape>::Output: ReplaceAt<Cursor, NewDim>,
+    <<DimCons<H, T> as ReverseShape>::Output as ReplaceAt<Cursor, NewDim>>::Output: ReverseShape,
+{
+    type Output =
+        <<<DimCons<H, T> as ReverseShape>::Output as ReplaceAt<Cursor, NewDim>>::Output as ReverseShape>::Output;
+}
+
+/// Inserts `NewDim` before structural cursor `Cursor`.
+pub trait InsertAt<Cursor, NewDim: Dim>: Shape {
+    type Output: Shape;
+}
+
+impl<NewDim: Dim> InsertAt<crate::shapes::idx::Here, NewDim> for Nil {
+    type Output = DimCons<NewDim, Nil>;
+}
+
+impl<H: Dim, T: Shape, NewDim: Dim> InsertAt<crate::shapes::idx::Here, NewDim> for DimCons<H, T> {
+    type Output = DimCons<NewDim, DimCons<H, T>>;
+}
+
+impl<H: Dim, T: Shape, SubCursor, NewDim: Dim> InsertAt<crate::shapes::idx::Next<SubCursor>, NewDim>
+    for DimCons<H, T>
+where
+    T: InsertAt<SubCursor, NewDim>,
+{
+    type Output = DimCons<H, <T as InsertAt<SubCursor, NewDim>>::Output>;
+}
+
+/// Swaps two dimensions in a structural shape.
+///
+/// This is deliberately expressed in terms of the generic cursor operations
+/// above.  It therefore works for arbitrary structural ranks without a
+/// generated rank ladder, and moves each complete dimension type (including
+/// any semantic name metadata) rather than reconstructing it from a size.
+pub trait SwapAt<Left, Right>: Shape {
+    type Output: Shape;
+}
+
+impl<H: Dim, T: Shape> SwapAt<Here, Here> for DimCons<H, T> {
+    type Output = DimCons<H, T>;
+}
+
+impl<H: Dim, T: Shape, R, RD> SwapAt<Here, Next<R>> for DimCons<H, T>
+where
+    T: At<R, Output = RD> + ReplaceAt<R, H>,
+    RD: Dim,
+{
+    type Output = DimCons<RD, <T as ReplaceAt<R, H>>::Output>;
+}
+
+impl<H: Dim, T: Shape, L, LD> SwapAt<Next<L>, Here> for DimCons<H, T>
+where
+    T: At<L, Output = LD> + ReplaceAt<L, H>,
+    LD: Dim,
+{
+    type Output = DimCons<LD, <T as ReplaceAt<L, H>>::Output>;
+}
+
+impl<H: Dim, T: Shape, L, R> SwapAt<Next<L>, Next<R>> for DimCons<H, T>
+where
+    T: SwapAt<L, R>,
+{
+    type Output = DimCons<H, <T as SwapAt<L, R>>::Output>;
+}
+
+// Reverse selectors are part of the same structural operation, rather than
+// a competing public dispatch trait.  Keeping these implementations on
+// `SwapAt` lets the selector-facing layer have one non-overlapping blanket
+// implementation for every `StaticCursor`.
+impl<S, L, R> SwapAt<crate::shapes::idx::FromEnd<L>, R> for S
+where
+    L: ForwardCursor,
+    R: ForwardCursor,
+    S: SwapFromEnd<crate::shapes::idx::FromEnd<L>, R>,
+{
+    type Output = <S as SwapFromEnd<crate::shapes::idx::FromEnd<L>, R>>::Output;
+}
+
+impl<S, L, R> SwapAt<crate::shapes::idx::FromEnd<L>, crate::shapes::idx::FromEnd<R>> for S
+where
+    L: ForwardCursor,
+    R: ForwardCursor,
+    S: SwapFromEnd<crate::shapes::idx::FromEnd<L>, crate::shapes::idx::FromEnd<R>>,
+{
+    type Output =
+        <S as SwapFromEnd<crate::shapes::idx::FromEnd<L>, crate::shapes::idx::FromEnd<R>>>::Output;
+}
+
+impl<S, R> SwapAt<Here, crate::shapes::idx::FromEnd<R>> for S
+where
+    R: ForwardCursor,
+    S: SwapFromEnd<Here, crate::shapes::idx::FromEnd<R>>,
+{
+    type Output = <S as SwapFromEnd<Here, crate::shapes::idx::FromEnd<R>>>::Output;
+}
+
+impl<S, L, R> SwapAt<Next<L>, crate::shapes::idx::FromEnd<R>> for S
+where
+    L: ForwardCursor,
+    R: ForwardCursor,
+    S: SwapFromEnd<Next<L>, crate::shapes::idx::FromEnd<R>>,
+{
+    type Output = <S as SwapFromEnd<Next<L>, crate::shapes::idx::FromEnd<R>>>::Output;
+}
+
+pub trait SwapFromEnd<Left, Right>: Shape {
+    type Output: Shape;
+}
+
+impl<S, L, R> SwapFromEnd<FromEnd<L>, R> for S
+where
+    R: ForwardCursor,
+    S: ReverseShape,
+    <S as ReverseShape>::Output: SwapFromEnd<L, FromEnd<R>>,
+    <<S as ReverseShape>::Output as SwapFromEnd<L, FromEnd<R>>>::Output: ReverseShape,
+{
+    type Output =
+        <<<S as ReverseShape>::Output as SwapFromEnd<L, FromEnd<R>>>::Output as ReverseShape>::Output;
+}
+
+impl<S, L, R> SwapFromEnd<FromEnd<L>, FromEnd<R>> for S
+where
+    L: ForwardCursor,
+    R: ForwardCursor,
+    S: ReverseShape,
+    <S as ReverseShape>::Output: SwapAt<L, R>,
+    <<S as ReverseShape>::Output as SwapAt<L, R>>::Output: ReverseShape,
+{
+    type Output = <<<S as ReverseShape>::Output as SwapAt<L, R>>::Output as ReverseShape>::Output;
+}
+
+impl<S, R> SwapFromEnd<Here, FromEnd<R>> for S
+where
+    S: ReverseShape,
+    <S as ReverseShape>::Output: SwapFromEnd<FromEnd<Here>, R>,
+    <<S as ReverseShape>::Output as SwapFromEnd<FromEnd<Here>, R>>::Output: ReverseShape,
+{
+    type Output =
+        <<<S as ReverseShape>::Output as SwapFromEnd<FromEnd<Here>, R>>::Output as ReverseShape>::Output;
+}
+
+impl<S, L, R> SwapFromEnd<Next<L>, FromEnd<R>> for S
+where
+    S: ReverseShape,
+    <S as ReverseShape>::Output: SwapFromEnd<FromEnd<Next<L>>, R>,
+    <<S as ReverseShape>::Output as SwapFromEnd<FromEnd<Next<L>>, R>>::Output: ReverseShape,
+{
+    type Output =
+        <<<S as ReverseShape>::Output as SwapFromEnd<FromEnd<Next<L>>, R>>::Output as ReverseShape>::Output;
+}
+
+/// Multiplies all dimensions in a structural shape into a single product dimension.
+pub trait ProductDims: Shape {
+    type Output: Dim;
+}
+
+/// Collapses an inclusive structural cursor range into one extent.
+///
+/// The recursion consumes the selected prefix and then rebuilds the untouched
+/// suffix, so this operation has no rank-specific implementations.
+pub trait FlattenAt<Start, End>: Shape {
+    type Output: Shape;
+}
+
+#[doc(hidden)]
+pub trait FlattenPrefix<End>: Shape {
+    type Product: Dim;
+    type Suffix: Shape;
+}
+
+impl<H: Dim, T: Shape> FlattenPrefix<crate::shapes::idx::Here> for DimCons<H, T> {
+    type Product = H;
+    type Suffix = T;
+}
+
+impl<H: Dim, T: Shape, End> FlattenPrefix<crate::shapes::idx::Next<End>> for DimCons<H, T>
+where
+    T: FlattenPrefix<End>,
+    <T as FlattenPrefix<End>>::Product: Dim,
+{
+    type Product = crate::shapes::dim::MulDim<H, <T as FlattenPrefix<End>>::Product>;
+    type Suffix = <T as FlattenPrefix<End>>::Suffix;
+}
+
+impl<End, S: Shape> FlattenAt<crate::shapes::idx::Here, End> for S
+where
+    S: FlattenPrefix<End>,
+{
+    type Output = DimCons<<S as FlattenPrefix<End>>::Product, <S as FlattenPrefix<End>>::Suffix>;
+}
+
+impl<H: Dim, T: Shape, Start, End>
+    FlattenAt<crate::shapes::idx::Next<Start>, crate::shapes::idx::Next<End>> for DimCons<H, T>
+where
+    T: FlattenAt<Start, End>,
+{
+    type Output = DimCons<H, <T as FlattenAt<Start, End>>::Output>;
+}
+
+impl ProductDims for Nil {
+    type Output = typenum::U1;
+}
+
+impl<H: Dim, T: Shape> ProductDims for DimCons<H, T>
+where
+    T: ProductDims,
+{
+    type Output = crate::shapes::dim::MulDim<H, <T as ProductDims>::Output>;
+}
+
+/// Structural suffix decomposition for the last 2 dimensions.
+pub trait SplitLast2: Shape {
+    type Prefix: Shape;
+    type Penultimate: Dim;
+    type Last: Dim;
+}
+
+impl<D1: Dim, D2: Dim> SplitLast2 for DimCons<D1, DimCons<D2, Nil>> {
+    type Prefix = Nil;
+    type Penultimate = D1;
+    type Last = D2;
+}
+
+impl<H: Dim, T: Shape> SplitLast2 for DimCons<H, T>
+where
+    T: SplitLast2,
+{
+    type Prefix = DimCons<H, <T as SplitLast2>::Prefix>;
+    type Penultimate = <T as SplitLast2>::Penultimate;
+    type Last = <T as SplitLast2>::Last;
+}
+
+/// Structural suffix decomposition for the last 3 dimensions.
+pub trait SplitLast3: Shape {
+    type Prefix: Shape;
+    type ThirdLast: Dim;
+    type SecondLast: Dim;
+    type Last: Dim;
+}
+
+impl<D1: Dim, D2: Dim, D3: Dim> SplitLast3 for DimCons<D1, DimCons<D2, DimCons<D3, Nil>>> {
+    type Prefix = Nil;
+    type ThirdLast = D1;
+    type SecondLast = D2;
+    type Last = D3;
+}
+
+impl<H: Dim, T: Shape> SplitLast3 for DimCons<H, T>
+where
+    T: SplitLast3,
+{
+    type Prefix = DimCons<H, <T as SplitLast3>::Prefix>;
+    type ThirdLast = <T as SplitLast3>::ThirdLast;
+    type SecondLast = <T as SplitLast3>::SecondLast;
+    type Last = <T as SplitLast3>::Last;
+}
+
+/// Generic known-rank runtime shape. The rank is a typenum fact, so rank
+/// arithmetic remains in the type system without a generated const-generic
+/// rank ladder.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Ranked<R: Unsigned + core::fmt::Debug + Eq + Send + Sync + 'static>(
+    core::marker::PhantomData<R>,
+);
+
+/// Rank-preserving transformation for generic known-rank shapes.
+pub trait PreserveRank {
+    type Output: Shape;
+}
+
+impl<R> PreserveRank for Ranked<R>
+where
+    R: Unsigned + core::fmt::Debug + Eq + Send + Sync + 'static,
+{
+    type Output = Ranked<R>;
+}
+
+/// Generic known-rank reduction/axis removal.
+pub trait RemoveOneRank {
+    type Output: Shape;
+}
+
+impl<R, ROut> RemoveOneRank for Ranked<R>
+where
+    R: Unsigned + Sub<U1, Output = ROut> + core::fmt::Debug + Eq + Send + Sync + 'static,
+    ROut: Unsigned + core::fmt::Debug + Eq + Send + Sync + 'static,
+{
+    type Output = Ranked<ROut>;
+}
+
+/// Generic known-rank insertion/stacking.
+pub trait AddOneRank {
+    type Output: Shape;
+}
+
+impl<R, ROut> AddOneRank for Ranked<R>
+where
+    R: Unsigned + Add<U1, Output = ROut> + core::fmt::Debug + Eq + Send + Sync + 'static,
+    ROut: Unsigned + core::fmt::Debug + Eq + Send + Sync + 'static,
+{
+    type Output = Ranked<ROut>;
+}
+
+impl<R: Unsigned + core::fmt::Debug + Eq + Send + Sync + 'static> Shape for Ranked<R> {
+    const RANK: Option<usize> = Some(R::USIZE);
+    const PROOF: crate::exec::ProofLevel = crate::exec::ProofLevel::Mixed;
+    const STATIC_NUMEL: Option<usize> = if R::USIZE == 0 { Some(1) } else { None };
+    type Arg = crate::shapes::ShapeBuf;
+    fn init(arg: Self::Arg) -> ShapeBuf {
+        arg
+    }
+
+    fn from_dyn(dims: &[usize]) -> Option<ShapeBuf> {
+        (dims.len() == R::USIZE).then(|| crate::shapes::ShapeBuf::from_slice(dims))
+    }
+}
+
+impl<R: Unsigned + core::fmt::Debug + Eq + Send + Sync + 'static> PartialDynShape for Ranked<R> {
+    const RANK: usize = R::USIZE;
+}
+
+impl<R: Unsigned + core::fmt::Debug + Eq + Send + Sync + 'static> DynShape for Ranked<R> {
+    fn rank(_: &ShapeBuf) -> usize {
+        R::USIZE
+    }
+}
+
+/// Rebuild a typed shape buffer from computed dimensions, reporting instead of
 /// panicking.
 ///
 /// This is the checked replacement for the `from_dyn(&dims).unwrap()` chain
@@ -90,10 +692,10 @@ pub const MAX_RANK: usize = incin_macros::max_rank!();
 /// [`DimensionMismatch`](crate::shapes::error::ShapeError::DimensionMismatch)
 /// naming the offending axis. Use this where the shape is only available
 /// generically.
-pub fn field_from_dims<S: Shape>(
+pub fn shape_buf_from_dims<S: Shape>(
     operation: crate::shapes::error::OperationKind,
     dims: &[usize],
-) -> Result<S::Field, crate::shapes::error::ShapeError> {
+) -> Result<ShapeBuf, crate::shapes::error::ShapeError> {
     S::from_dyn(dims).ok_or(crate::shapes::error::ShapeError::TargetShapeRejected {
         operation,
         rank: dims.len(),
@@ -147,7 +749,7 @@ impl CheckedByteLen {
     pub fn from_dims(
         operation: crate::shapes::error::OperationKind,
         dims: &[usize],
-        dtype: crate::tensor::dtype::DTypeId,
+        dtype: crate::tensor::dtype::DTypeDescriptor,
         limits: &crate::io::limits::ResourceLimits,
     ) -> Result<Self, crate::shapes::error::ShapeError> {
         let numel = CheckedNumel::from_dims(operation, dims, limits)?;
@@ -178,7 +780,7 @@ pub fn checked_numel_from_dims(
 /// Safely computes byte allocation length using dtype block metrics and limits (`SEC-011`).
 pub fn checked_byte_len_from_dims(
     dims: &[usize],
-    dtype: crate::tensor::dtype::DTypeId,
+    dtype: crate::tensor::dtype::DTypeDescriptor,
     limits: &crate::io::limits::ResourceLimits,
 ) -> Result<CheckedByteLen, crate::shapes::error::ShapeError> {
     CheckedByteLen::from_dims(
@@ -196,21 +798,167 @@ pub fn checked_byte_len_from_dims(
 /// the shape at runtime (e.g., computing strides) require a `DynShape` bound.
 pub trait DynShape: Shape {
     /// Returns the number of dimensions.
-    fn rank(shape: &Self::Field) -> usize;
+    fn rank(shape: &ShapeBuf) -> usize;
     /// Returns the total element count (product of all dimension sizes) after
     /// checking for arithmetic overflow.
     fn checked_numel(
-        shape: &Self::Field,
+        shape: &ShapeBuf,
         operation: crate::shapes::error::OperationKind,
     ) -> Result<usize, crate::shapes::error::ShapeError> {
-        crate::shapes::ShapeBuf::from_slice(Self::dims(shape).as_ref()).checked_numel(operation)
+        shape.checked_numel(operation)
     }
 
     /// Returns the total element count for shape metadata that has already
     /// crossed a checked tensor-construction boundary.
-    fn numel(shape: &Self::Field) -> usize {
+    fn numel(shape: &ShapeBuf) -> usize {
         Self::checked_numel(shape, crate::shapes::error::OperationKind::Storage)
             .expect("validated tensor shape must have a representable element count")
+    }
+}
+
+/// The single authoritative relationship between type-level shape information
+/// (`S`) and runtime extents.
+///
+/// Runtime dimensions are stored only in [`ShapeBuf`]. The type parameter
+/// carries compile-time knowledge; it is not a second runtime representation.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ShapeValue<S: Shape> {
+    dims: crate::shapes::ShapeBuf,
+    marker: core::marker::PhantomData<fn() -> S>,
+}
+
+impl<S: Shape> ShapeValue<S> {
+    /// Constructs a validated relationship between `S` and runtime dimensions.
+    #[inline]
+    pub fn try_new(dims: ShapeBuf) -> Result<Self, crate::shapes::error::ShapeError> {
+        S::validate_dims(dims.as_ref())?;
+        Ok(Self::new(dims))
+    }
+
+    /// Constructs a ShapeValue after an internal caller has already validated
+    /// the dimensions through a shape rule or tensor construction boundary.
+    #[inline]
+    pub(crate) fn new(dims: ShapeBuf) -> Self {
+        Self {
+            dims,
+            marker: core::marker::PhantomData,
+        }
+    }
+
+    /// Builds the canonical runtime shape value from already validated
+    /// dimensions.  Operation rules use this when their output shape is
+    /// computed structurally and therefore starts directly from canonical
+    /// runtime dimensions rather than a constructor adapter.
+    #[inline]
+    pub(crate) fn from_shape_buf(dims: crate::shapes::ShapeBuf) -> Self {
+        Self {
+            dims,
+            marker: core::marker::PhantomData,
+        }
+    }
+
+    #[inline]
+    pub fn shape_buf(&self) -> &crate::shapes::ShapeBuf {
+        &self.dims
+    }
+
+    #[inline]
+    pub fn dims(&self) -> Vec<usize> {
+        self.dims.as_ref().to_vec()
+    }
+
+    #[inline]
+    pub fn proof_level(&self) -> crate::exec::ProofLevel {
+        S::PROOF
+    }
+
+    #[inline]
+    pub fn checked_numel(
+        &self,
+        op: crate::shapes::error::OperationKind,
+        limits: &crate::io::limits::ResourceLimits,
+    ) -> Result<CheckedNumel, crate::shapes::error::ShapeError> {
+        CheckedNumel::from_dims(op, &self.dims(), limits)
+    }
+}
+
+/// Resolution specification for shape parameters.
+pub trait ShapeSpec {
+    /// The shape type the resulting tensor carries.
+    type Shape: Shape + DynShape;
+
+    /// Resolves to the single authoritative `ShapeValue<Self::Shape>`.
+    fn resolve(self) -> Result<ShapeValue<Self::Shape>, crate::err::Error>;
+}
+
+/// Unvalidated shape constructor input produced by the `shape!` macro.
+///
+/// This is deliberately a specification, not a `ShapeValue`: dimensions are
+/// checked only when [`ShapeSpec::resolve`] joins them to the canonical
+/// `ShapeBuf` representation.
+#[derive(Debug, Clone)]
+pub struct ShapeArgs<S: Shape + DynShape> {
+    args: S::Arg,
+    marker: core::marker::PhantomData<fn() -> S>,
+}
+
+impl<S: Shape + DynShape> ShapeArgs<S> {
+    /// Creates constructor input without claiming that its runtime values
+    /// satisfy the type-level shape specification.
+    #[inline]
+    pub fn new(args: S::Arg) -> Self {
+        Self {
+            args,
+            marker: core::marker::PhantomData,
+        }
+    }
+}
+
+impl<S: Shape + DynShape> ShapeSpec for ShapeArgs<S> {
+    type Shape = S;
+
+    fn resolve(self) -> Result<ShapeValue<S>, crate::err::Error> {
+        S::resolve(self.args)
+            .map(ShapeValue::from_shape_buf)
+            .map_err(crate::err::Error::Shape)
+    }
+}
+
+impl<S: Shape + DynShape> ShapeSpec for ShapeValue<S> {
+    type Shape = S;
+
+    fn resolve(self) -> Result<ShapeValue<S>, crate::err::Error> {
+        Ok(self)
+    }
+}
+
+impl<const N: usize> ShapeSpec for [usize; N]
+where
+    [usize; N]: Shape + DynShape,
+{
+    type Shape = [usize; N];
+
+    fn resolve(self) -> Result<ShapeValue<Self::Shape>, crate::err::Error> {
+        ShapeValue::try_new(crate::shapes::ShapeBuf::from_slice(&self))
+            .map_err(crate::err::Error::Shape)
+    }
+}
+
+impl ShapeSpec for Vec<usize> {
+    type Shape = Dyn;
+
+    fn resolve(self) -> Result<ShapeValue<Dyn>, crate::err::Error> {
+        ShapeValue::try_new(crate::shapes::ShapeBuf::from_slice(&self))
+            .map_err(crate::err::Error::Shape)
+    }
+}
+
+impl ShapeSpec for &[usize] {
+    type Shape = Dyn;
+
+    fn resolve(self) -> Result<ShapeValue<Dyn>, crate::err::Error> {
+        ShapeValue::try_new(crate::shapes::ShapeBuf::from_slice(self))
+            .map_err(crate::err::Error::Shape)
     }
 }
 
@@ -256,6 +1004,50 @@ impl<D: Dim> EndsWith<D> for Dyn {}
 impl<D: Dim> HasChannels1D<D> for Dyn {}
 impl<D: Dim> HasChannels2D<D> for Dyn {}
 
+impl<NewDim: Dim> ReplaceLastDim<NewDim> for Nil {
+    type Output = Nil;
+}
+pub trait ReplaceLastTail<NewDim: Dim>: Shape {
+    type Output: Shape;
+}
+impl<NewDim: Dim> ReplaceLastTail<NewDim> for Nil {
+    type Output = DimCons<NewDim, Nil>;
+}
+impl<H: Dim, NewDim: Dim> ReplaceLastTail<NewDim> for DimCons<H, Nil> {
+    type Output = DimCons<NewDim, Nil>;
+}
+impl<H: Dim, H2: Dim, T: Shape, NewDim: Dim> ReplaceLastTail<NewDim> for DimCons<H, DimCons<H2, T>>
+where
+    DimCons<H2, T>: ReplaceLastTail<NewDim>,
+{
+    type Output = DimCons<H, <DimCons<H2, T> as ReplaceLastTail<NewDim>>::Output>;
+}
+impl<H: Dim, T: Shape, NewDim: Dim> ReplaceLastDim<NewDim> for DimCons<H, T>
+where
+    T: ReplaceLastTail<NewDim>,
+{
+    type Output = DimCons<H, <T as ReplaceLastTail<NewDim>>::Output>;
+}
+
+impl<D: Dim> EndsWith<D> for DimCons<D, Nil> {}
+impl<H: Dim, H2: Dim, T: Shape, D: Dim> EndsWith<D> for DimCons<H, DimCons<H2, T>> where
+    DimCons<H2, T>: EndsWith<D>
+{
+}
+
+impl<H: Dim, T: Shape, D: Dim> HasChannels1D<D> for DimCons<H, T> where
+    DimCons<H, T>: AtFromEnd<crate::shapes::idx::Next<crate::shapes::idx::Here>, Output = D>
+{
+}
+
+impl<H: Dim, T: Shape, D: Dim> HasChannels2D<D> for DimCons<H, T> where
+    DimCons<H, T>: AtFromEnd<
+            crate::shapes::idx::Next<crate::shapes::idx::Next<crate::shapes::idx::Here>>,
+            Output = D,
+        >
+{
+}
+
 /// A `DynShape` whose rank is additionally known at compile time (as
 /// opposed to `Dyn`, whose rank is runtime-only).
 pub trait PartialDynShape: DynShape {
@@ -263,31 +1055,11 @@ pub trait PartialDynShape: DynShape {
     const RANK: usize;
 }
 
-/// A fully static shape whose total number of elements and dimension sizes are available as compile-time constants.
-///
-/// This is implemented for all shapes built exclusively from `typenum` types (e.g., `(U2, U3, U4)`).
-/// The key property is that `NUMEL` and `DIMS` are `const`, enabling the compiler to verify
-/// that operations (like reshape) are element-count-preserving without any runtime checks.
-///
-/// ## Example
-/// ```rust
-/// # extern crate incin_core as incin;
-/// use incin_core::prelude::{ConstShape, s};
-/// type MyShape = s![2, 3, 4];
-/// assert_eq!(<MyShape as ConstShape>::NUMEL, 24);
-/// ```
-pub trait ConstShape: Shape<Field: Default> {
-    // const RANK: usize; // impl PartialDynShape for it and DynShape
-    /// The compile-time-known total element count.
-    const NUMEL: usize;
-    /// The compile-time-known per-dimension sizes.
-    const DIMS: <Self as Shape>::Dims;
-}
-
 ///
 /// --- Dyn ---
 ///
 impl Shape for Dyn {
+    const RANK: Option<usize> = None;
     /// Not even the rank is known until the shape exists, which is the whole
     /// point of `Dyn`. Stated rather than inherited from the default so that
     /// changing the default cannot silently upgrade it.
@@ -295,27 +1067,21 @@ impl Shape for Dyn {
 
     /// The user-facing constructor argument type for this concrete shape.
     type Arg = Vec<usize>;
-    /// The runtime-stored representation for this concrete shape.
-    type Field = Vec<usize>;
-    /// The per-dimension-sizes collection type for this concrete shape.
-    type Dims = Vec<usize>;
-    /// Converts a user-facing `Arg` into the stored `Field` representation.
-    fn init(arg: Self::Arg) -> Self::Field {
-        arg
+    /// Runtime values for this shape are held in `ShapeBuf`.
+    /// Converts a user-facing argument into canonical `ShapeBuf` storage.
+    fn init(arg: Self::Arg) -> ShapeBuf {
+        arg.into_iter().collect()
     }
-    /// Attempts to construct this shape's `Field` from raw runtime dimensions.
-    fn from_dyn(dims: &[usize]) -> Option<Self::Field> {
-        Some(dims.to_vec())
-    }
-    fn dims(shape: &Self::Field) -> Self::Dims {
-        shape.clone()
+    /// Attempts to validate raw runtime dimensions against this shape.
+    fn from_dyn(dims: &[usize]) -> Option<ShapeBuf> {
+        Some(crate::shapes::ShapeBuf::from_slice(dims))
     }
 }
 
 impl DynShape for Dyn {
     #[inline(always)]
     /// Returns the number of dimensions.
-    fn rank(shape: &Self::Field) -> usize {
+    fn rank(shape: &ShapeBuf) -> usize {
         shape.len()
     }
 }
@@ -325,120 +1091,53 @@ impl<D: Dim> AppendDim<D> for Dyn {
     type Output = Dyn;
 }
 
-macro_rules! impl_shape_for_tuple {
-    ($n:expr $(, $name:ident $idx:tt)* $(,)?) => {
-        impl< $($name: Dim,)* > Shape for ( $($name,)*) {
-            /// A tuple fixes its rank, so the only question is the axes: all
-            /// statically sized means `Static`, otherwise `Mixed`. One `Shape`
-            /// impl covers `(U2, U3)` and `(U2, usize)` alike, which is why
-            /// this is folded from the axes rather than written per rank.
-            const PROOF: $crate::exec::ProofLevel =
-                $crate::exec::ProofLevel::of_ranked(true $(&& $name::STATIC_SIZE)*);
-
-            /// The user-facing constructor argument type for this concrete shape.
-            type Arg = ($(<$name as Dim>::Arg,)*);
-            /// The runtime-stored representation for this concrete shape.
-            type Field = Self;
-            /// The per-dimension-sizes collection type for this concrete shape.
-            type Dims = [usize; ($n)];
-            /// Converts a user-facing `Arg` into the stored `Field` representation.
-            fn init(arg: Self::Arg) -> Self::Field {
-                ($(Dim::from_arg(arg.$idx),)*)
-            }
-            /// Attempts to construct this shape's `Field` from raw runtime dimensions.
-            fn from_dyn(dims: &[usize]) -> Option<Self::Field> {
-                if dims.len() != $n {
-                    return None;
-                }
-                Some(($(
-                    $name::from_size(dims[$idx])?,
-                )*))
-            }
-            fn dims(shape: &Self::Field) -> Self::Dims {
-                [$(shape.$idx.size()),*]
-            }
+/// Fold per-axis static extents into a shape's static element count.
+///
+/// `None` from any axis, or an overflowing product, makes the whole answer
+/// `None`. The multiplication is checked for the same reason
+/// [`checked_numel`](crate::prelude::CheckedNumel) is: a wrapped element count
+/// undersizes an allocation, and one baked into a kernel as a constant would do
+/// so with no runtime check left to catch it.
+#[must_use]
+pub const fn fold_static_numel(extents: &[Option<usize>]) -> Option<usize> {
+    let mut product: usize = 1;
+    let mut index = 0;
+    while index < extents.len() {
+        match extents[index] {
+            Some(extent) => match product.checked_mul(extent) {
+                Some(next) => product = next,
+                None => return None,
+            },
+            None => return None,
         }
-        impl< $($name: Dim,)* > PartialDynShape for ( $($name,)*) {
-            /// The compile-time-known number of dimensions.
-            const RANK: usize = $n;
-        }
-        impl< $($name: Dim,)* > DynShape for ( $($name,)*) {
-            #[inline(always)]
-            /// Returns the number of dimensions.
-            fn rank(_: &Self::Field) -> usize {
-                ($n)
-            }
-
-        }
-
-        impl<$($name: Unsigned + Dim, )*> ConstShape for ($($name, )*) {
-            /// The compile-time total element count.
-            const NUMEL: usize = $($name::USIZE * )* 1;
-            /// The compile-time per-dimension sizes.
-            const DIMS: Self::Dims = [$($name::USIZE),*];
-        }
-
-        impl Shape for [usize; ($n)] {
-            /// Rank comes from the array length; every size is a runtime
-            /// `usize`. That is `Mixed` by definition, including at rank 0,
-            /// where the claim is vacuous but costs nothing to keep uniform.
-            const PROOF: $crate::exec::ProofLevel = $crate::exec::ProofLevel::Mixed;
-
-            /// The user-facing constructor argument type for this concrete shape.
-            type Arg = Self;
-            /// The runtime-stored representation for this concrete shape.
-            type Field = Self;
-            /// The per-dimension-sizes collection type for this concrete shape.
-            type Dims = Self;
-            /// Converts a user-facing `Arg` into the stored `Field` representation.
-            fn init(arg: Self::Arg) -> Self::Field {
-                arg
-            }
-            /// Attempts to construct this shape's `Field` from raw runtime dimensions.
-            fn from_dyn(dims: &[usize]) -> Option<Self::Field> {
-                dims.try_into().ok()
-            }
-            fn dims(shape: &Self::Field) -> Self::Dims {
-                *shape
-            }
-        }
-        impl DynShape for [usize; ($n)] {
-            #[inline(always)]
-            /// Returns the number of dimensions.
-            fn rank(_: &Self::Field) -> usize {
-                ($n)
-            }
-
-        }
-        impl PartialDynShape for [usize; ($n)] {
-            /// The compile-time-known number of dimensions.
-            const RANK: usize = ($n);
-        }
-        impl EndsWith<usize> for [usize; ($n)] {}
-        impl HasChannels1D<usize> for [usize; ($n)] {}
-        impl HasChannels2D<usize> for [usize; ($n)] {}
-    };
+        index += 1;
+    }
+    Some(product)
 }
 
 impl Shape for () {
+    const RANK: Option<usize> = Some(0);
     /// A scalar has no axis that could be dynamic, so everything about it is
     /// known at compile time.
     const PROOF: crate::exec::ProofLevel = crate::exec::ProofLevel::Static;
 
+    /// One element, not zero: a scalar holds a value, it is not empty.
+    const STATIC_NUMEL: Option<usize> = Some(1);
+
     /// The user-facing constructor argument type for this concrete shape.
     type Arg = ();
-    /// The runtime-stored representation for this concrete shape.
-    type Field = ();
-    /// The per-dimension-sizes collection type for this concrete shape.
-    type Dims = [usize; 0];
-    /// Converts a user-facing `Arg` into the stored `Field` representation.
-    fn init(_: Self::Arg) {}
-    /// Attempts to construct this shape's `Field` from raw runtime dimensions.
-    fn from_dyn(dims: &[usize]) -> Option<Self::Field> {
-        if dims.is_empty() { Some(()) } else { None }
+    /// Runtime values for this shape are held in `ShapeBuf`.
+    /// Converts a user-facing argument into canonical `ShapeBuf` storage.
+    fn init(_: Self::Arg) -> ShapeBuf {
+        crate::shapes::ShapeBuf::scalar()
     }
-    fn dims(_: &Self::Field) -> Self::Dims {
-        []
+    /// Attempts to validate raw runtime dimensions against this shape.
+    fn from_dyn(dims: &[usize]) -> Option<ShapeBuf> {
+        if dims.is_empty() {
+            Some(crate::shapes::ShapeBuf::scalar())
+        } else {
+            None
+        }
     }
 }
 
@@ -449,66 +1148,16 @@ impl PartialDynShape for () {
 
 impl<D: Dim> AppendDim<D> for () {
     /// `Self`'s dimensions with `D` appended at the end.
-    type Output = (D,);
-}
-
-impl ConstShape for () {
-    /// The compile-time total element count.
-    const NUMEL: usize = 1;
-    /// The compile-time per-dimension sizes.
-    const DIMS: <Self as Shape>::Dims = [];
+    type Output = DimCons<D, Nil>;
 }
 
 impl DynShape for () {
     #[inline(always)]
     /// Returns the number of dimensions.
-    fn rank(_: &Self::Field) -> usize {
+    fn rank(_: &ShapeBuf) -> usize {
         0
     }
 }
-
-// Rank ladder: rank-preserving, so it reaches `MAX_RANK` itself.
-incin_macros::rank_sweep!(ranked_pairs => impl_shape_for_tuple);
-
-macro_rules! impl_append_dim_for_tuple {
-    ($($name:ident),*) => {
-        impl< $($name: Dim,)* Append: Dim > AppendDim<Append> for ( $($name,)*) {
-            /// `Self`'s dimensions with `Append` appended at the end.
-            type Output = ( $($name,)* Append);
-        }
-    };
-}
-
-// `AppendDim`'s `Output` is rank N+1 and is bounded by `Shape`, so its input
-// ceiling is one below `MAX_RANK` — at `MAX_RANK` the output tuple would have
-// no `Shape` impl. This is a real ceiling, not a gap.
-incin_macros::rank_sweep!(names => impl_append_dim_for_tuple, max = 7);
-// Note: Rust standard library only implements traits (Debug, Eq, etc.) for tuples up to size 12.
-// We cap at rank 8 — appending to a 7-dim tuple yields rank 8, the maximum.
-
-macro_rules! impl_replace_last_dim_for_tuple {
-    // Variadic, replacing twelve hand-written arms. The last four described
-    // tuples of rank 9 through 12 — ranks at which no tuple implements `Shape`
-    // at all, so those impls could never be selected. `ReplaceLastDim` is
-    // rank-preserving, so its ceiling is `MAX_RANK` exactly.
-    ($($n:ident),+) => { impl_replace_last_dim_for_tuple!(@split [] $($n),+); };
-    (@split [$($acc:ident)*] $last:ident) => {
-        impl<$($acc: Dim,)* $last: Dim, NewDim: Dim> ReplaceLastDim<NewDim>
-            for ($($acc,)* $last,)
-        {
-            /// `Self`'s dimensions with the last one replaced by `NewDim`.
-            type Output = ($($acc,)* NewDim,);
-        }
-    };
-    (@split [$($acc:ident)*] $head:ident, $($rest:ident),+) => {
-        impl_replace_last_dim_for_tuple!(@split [$($acc)* $head] $($rest),+);
-    };
-}
-
-// Rank-preserving. This family used to run to rank 12, four above `Shape`'s
-// ceiling: those impls could never be selected, because no tuple above rank 8
-// implements `Shape` in the first place.
-incin_macros::rank_sweep!(names => impl_replace_last_dim_for_tuple);
 
 impl<NewDim: Dim> ReplaceLastDim<NewDim> for Dyn {
     /// `Self`'s dimensions with the last one replaced by `NewDim`.
@@ -518,27 +1167,25 @@ impl<NewDim: Dim> ReplaceLastDim<NewDim> for Dyn {
 impl<D: Dim> Shape for Vec<D> {
     /// The user-facing constructor argument type for this concrete shape.
     type Arg = Self;
-    /// The runtime-stored representation for this concrete shape.
-    type Field = Self;
-    /// The per-dimension-sizes collection type for this concrete shape.
-    type Dims = Vec<usize>;
-    /// Converts a user-facing `Arg` into the stored `Field` representation.
-    fn init(arg: Self::Arg) -> Self::Field {
-        arg
+    /// Runtime values for this shape are held in `ShapeBuf`.
+    /// Converts a user-facing argument into canonical `ShapeBuf` storage.
+    fn init(arg: Self::Arg) -> ShapeBuf {
+        crate::shapes::ShapeBuf::from_iter(arg.into_iter().map(|d| d.size()))
     }
-    /// Attempts to construct this shape's `Field` from raw runtime dimensions.
-    fn from_dyn(dims: &[usize]) -> Option<Self::Field> {
-        dims.iter().map(|&d| D::from_size(d)).collect()
-    }
-    fn dims(shape: &Self::Field) -> Self::Dims {
-        shape.iter().map(|d| d.size()).collect()
+    /// Attempts to validate raw runtime dimensions against this shape.
+    fn from_dyn(dims: &[usize]) -> Option<ShapeBuf> {
+        if dims.iter().all(|&d| D::validate_size(d)) {
+            Some(crate::shapes::ShapeBuf::from_slice(dims))
+        } else {
+            None
+        }
     }
 }
 
 impl<D: Dim> DynShape for Vec<D> {
     #[inline(always)]
     /// Returns the number of dimensions.
-    fn rank(shape: &Self::Field) -> usize {
+    fn rank(shape: &ShapeBuf) -> usize {
         shape.len()
     }
 }
@@ -551,40 +1198,44 @@ mod tests {
     use super::*;
     use crate::io::limits::ResourceLimits;
     use crate::shapes::error::{OperationKind, ShapeError};
-    use crate::tensor::dtype::DTypeId;
+    use crate::tensor::dtype::{
+        ConstDType, DTypeDescriptor, DTypeId, DTypeKey, DTypeKind, Q8_0, StorageEncoding,
+    };
 
     #[test]
     fn test_scalar_shape() {
-        assert_eq!(<() as DynShape>::rank(&()), 0);
-        assert_eq!(<() as DynShape>::numel(&()), 1);
+        let scalar = ShapeBuf::scalar();
+        assert_eq!(<() as DynShape>::rank(&scalar), 0);
+        assert_eq!(<() as DynShape>::numel(&scalar), 1);
         let empty_dims: [usize; 0] = [];
-        assert_eq!(<() as Shape>::dims(&()), empty_dims);
-        assert_eq!(<() as DynShape>::rank(&()), 0);
-        assert_eq!(<() as ConstShape>::DIMS, empty_dims);
+        assert_eq!(scalar, empty_dims);
+        assert_eq!(<() as DynShape>::rank(&scalar), 0);
     }
 
     #[test]
     fn test_dyn_shape() {
-        let d = vec![2, 3, 4];
+        let d = ShapeBuf::from_slice(&[2, 3, 4]);
         assert_eq!(<Dyn as DynShape>::rank(&d), 3);
         assert_eq!(<Dyn as DynShape>::numel(&d), 24);
-        assert_eq!(<Dyn as Shape>::dims(&d), vec![2, 3, 4]);
+        let dims = d;
+        assert_eq!(dims.as_ref(), &[2, 3, 4]);
     }
 
     #[test]
     fn test_array_shape() {
         let shape: [usize; 3] = [2, 3, 4];
-        assert_eq!(<[usize; 3] as DynShape>::rank(&shape), 3);
-        assert_eq!(<[usize; 3] as DynShape>::numel(&shape), 24);
-        assert_eq!(<[usize; 3] as Shape>::dims(&shape), [2, 3, 4]);
+        let field = ShapeBuf::from_slice(&shape);
+        assert_eq!(<[usize; 3] as DynShape>::rank(&field), 3);
+        assert_eq!(<[usize; 3] as DynShape>::numel(&field), 24);
+        assert_eq!(field.dims(), &[2, 3, 4]);
         assert_eq!(<[usize; 3] as PartialDynShape>::RANK, 3);
     }
 
     #[test]
-    fn dyn_is_a_freely_constructible_zero_sized_marker() {
-        let marker: Dyn = Dyn;
+    fn dyn_is_zero_sized() {
+        assert_eq!(core::mem::size_of::<Dyn>(), 0);
+        let marker = Dyn::marker();
         assert_eq!(core::mem::size_of_val(&marker), 0);
-        assert_eq!(marker, Dyn);
     }
 
     #[test]
@@ -611,11 +1262,41 @@ mod tests {
             0
         );
         assert_eq!(
-            CheckedByteLen::from_dims(OperationKind::Storage, &[2, 3], DTypeId::F32, &limits)
-                .unwrap()
-                .get(),
+            CheckedByteLen::from_dims(
+                OperationKind::Storage,
+                &[2, 3],
+                <f32 as ConstDType>::DESCRIPTOR,
+                &limits
+            )
+            .unwrap()
+            .get(),
             24
         );
+        // Q8_0 block descriptor test (32 elements = 34 bytes)
+        assert_eq!(
+            CheckedByteLen::from_dims(
+                OperationKind::Storage,
+                &[64],
+                <Q8_0 as ConstDType>::DESCRIPTOR,
+                &limits
+            )
+            .unwrap()
+            .get(),
+            68
+        );
+        // Custom block descriptor test (16 elements = 20 bytes)
+        let custom_block_desc = DTypeDescriptor::new(
+            DTypeKey::new("custom", "test_block", 1),
+            DTypeKind::Quantized,
+            StorageEncoding::block(16, 20, 2),
+        );
+        assert_eq!(
+            CheckedByteLen::from_dims(OperationKind::Storage, &[32], custom_block_desc, &limits)
+                .unwrap()
+                .get(),
+            40
+        );
+
         assert!(matches!(
             CheckedNumel::from_dims(OperationKind::Storage, &[usize::MAX, 2], &limits),
             Err(ShapeError::ArithmeticOverflow { .. })
@@ -640,68 +1321,13 @@ mod tests {
         limits.max_dimension = u64::MAX;
         limits.max_tensor_bytes = 23;
         assert!(matches!(
-            CheckedByteLen::from_dims(OperationKind::Storage, &[2, 3], DTypeId::F32, &limits),
+            CheckedByteLen::from_dims(
+                OperationKind::Storage,
+                &[2, 3],
+                <f32 as ConstDType>::DESCRIPTOR,
+                &limits
+            ),
             Err(ShapeError::ArithmeticOverflow { .. })
         ));
     }
 }
-
-macro_rules! impl_ends_with_for_tuple {
-    // Variadic, so one arm covers every rank the sweep asks for. This used to
-    // be six hand-written arms, which is why `EndsWith` capped at rank 6 while
-    // `Shape` reached 8: the ceiling was the arm count, not a property of the
-    // rule. `EndsWith` is rank-preserving and has no reason to cap below
-    // `MAX_RANK`.
-    ($($n:ident),+) => { impl_ends_with_for_tuple!(@split [] $($n),+); };
-    // Peel one name at a time into the accumulator until only the last
-    // remains; `macro_rules!` cannot match "all but the final token" directly.
-    (@split [$($acc:ident)*] $last:ident) => {
-        // The trailing comma is required: at rank 1 the accumulator is empty and
-        // `($last)` is a parenthesized type, not a 1-tuple.
-        impl<$($acc: Dim,)* $last: Dim> EndsWith<$last> for ($($acc,)* $last,) {}
-    };
-    (@split [$($acc:ident)*] $head:ident, $($rest:ident),+) => {
-        impl_ends_with_for_tuple!(@split [$($acc)* $head] $($rest),+);
-    };
-}
-
-// Rank-preserving marker.
-incin_macros::rank_sweep!(names => impl_ends_with_for_tuple);
-
-macro_rules! impl_has_channels_1d_for_tuple {
-    // Channels sit at the second-to-last axis: `[.., C, L]`. The rule is
-    // rank-preserving and cares only about the last two axes, so it holds for
-    // every rank from 2 up. It used to be a single arm covering rank 3 alone —
-    // so `(C, L)` itself, which the trait's own documentation names as valid,
-    // did not implement it.
-    ($($n:ident),+) => { impl_has_channels_1d_for_tuple!(@split [] $($n),+); };
-    // The two-element arm must precede the recursive one, or the recursion
-    // consumes the pair it is meant to terminate on.
-    (@split [$($acc:ident)*] $c:ident, $l:ident) => {
-        impl<$($acc: Dim,)* $c: Dim, $l: Dim> HasChannels1D<$c> for ($($acc,)* $c, $l,) {}
-    };
-    (@split [$($acc:ident)*] $head:ident, $($rest:ident),+) => {
-        impl_has_channels_1d_for_tuple!(@split [$($acc)* $head] $($rest),+);
-    };
-}
-
-// Conv1d/BatchNorm1d: (.., Channels, Length), from rank 2 to the ceiling.
-incin_macros::rank_sweep!(names => impl_has_channels_1d_for_tuple, min = 2);
-
-macro_rules! impl_has_channels_2d_for_tuple {
-    // Channels sit at the third-to-last axis: `[.., C, H, W]`. As with the 1D
-    // form this held for exactly one rank, so `(C, H, W)` did not implement it.
-    ($($n:ident),+) => { impl_has_channels_2d_for_tuple!(@split [] $($n),+); };
-    (@split [$($acc:ident)*] $c:ident, $h:ident, $w:ident) => {
-        impl<$($acc: Dim,)* $c: Dim, $h: Dim, $w: Dim> HasChannels2D<$c>
-            for ($($acc,)* $c, $h, $w,)
-        {
-        }
-    };
-    (@split [$($acc:ident)*] $head:ident, $($rest:ident),+) => {
-        impl_has_channels_2d_for_tuple!(@split [$($acc)* $head] $($rest),+);
-    };
-}
-
-// Conv2d/BatchNorm2d: (.., Channels, Height, Width), from rank 3 to the ceiling.
-incin_macros::rank_sweep!(names => impl_has_channels_2d_for_tuple, min = 3);

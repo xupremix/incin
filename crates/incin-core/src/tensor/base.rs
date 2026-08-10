@@ -1,16 +1,25 @@
 use crate::dist::{Local, Placement, PlacementKind};
 use crate::prelude::{
-    ArgInto, Backend, ConstDType, DType, DTypeId, Device, DeviceId, DynShape, Error, Grad, NoGrad,
-    RequiresGrad, Result, Shape, SupportsDType, TensorArgs, TransferTo,
+    ArgInto, Backend, BuiltinDType, ConstDType, DType, DTypeDescriptor, DTypeId, Device, DeviceId,
+    DynShape, Error, Grad, NoGrad, RequiresGrad, Result, Shape, ShapeBuf, ShapeValue,
+    SupportsDType, TensorArgs, TransferTo,
 };
+use crate::tensor::dtype::PlainDType;
 use alloc::string::ToString;
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 /// A marker used as `Shape`, `DType`, `Device`, or their runtime-chosen
 /// variant across `Tensor`'s type parameters, deferring that choice from
 /// compile time to runtime (e.g. `Tensor<Dyn, B>` has a shape resolved at
 /// construction rather than baked into the type).
-pub struct Dyn;
+pub struct Dyn(());
+
+impl Dyn {
+    #[inline]
+    pub(crate) const fn marker() -> Self {
+        Self(())
+    }
+}
 
 /// The core `Tensor` type representing an n-dimensional array.
 ///
@@ -34,7 +43,7 @@ pub struct Dyn;
 /// Creating and inspecting statically shaped tensors:
 /// ```rust
 /// # extern crate incin_core as incin;
-/// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
+/// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
 /// use incin::prelude::*;
 /// // Compile-time 3D tensor of shape [2, 5, 10]
 /// let t = Tensor::<s![2, 5, 10], DefaultBackend>::zeros(()).unwrap();
@@ -45,7 +54,7 @@ pub struct Dyn;
 /// Using dynamically shaped tensors:
 /// ```rust
 /// # extern crate incin_core as incin;
-/// # type DefaultBackend = incin_core::test_utils::DummyBackend<f32, incin_core::prelude::Cpu>;
+/// # type DefaultBackend = incin_core::test_utils::DummyBackend<incin_core::prelude::Cpu>;
 /// use incin::prelude::*;
 /// // Shape determined at runtime
 /// let dyn_t = Tensor::<Dyn, DefaultBackend>::ones(vec![32, 64]).unwrap();
@@ -55,13 +64,13 @@ pub struct Dyn;
 pub struct Tensor<
     S: Shape,
     B: Backend,
-    K: DType = <B as Backend>::FloatElem,
+    K: DType = f32,
     G: RequiresGrad = Grad,
     P: Placement = Local,
 > {
     pub(crate) inner: B::Storage<K>,
     /// Global logical shape. Backend storage carries this rank's local shape.
-    pub(crate) _shape: S::Field,
+    pub(crate) _shape: ShapeValue<S>,
     pub(crate) _dtype: K::Field,
     pub(crate) _device: <B::Device as Device>::Field,
     pub(crate) _grad: G::Field,
@@ -89,10 +98,14 @@ enum ConstructionWitness {
 #[non_exhaustive]
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 pub enum PlacedTensorError {
+    /// Reconstructing the validated logical shape at a placement boundary
+    /// failed its frontend proof.
+    #[error("invalid tensor shape at placement boundary: {0}")]
+    Shape(alloc::string::String),
     /// The tensor's static/dynamic global shape disagrees with the proof.
     #[error("tensor global shape {tensor:?} does not match distributed proof {proof:?}")]
     GlobalShape {
-        /// Shape represented by `S::Field`.
+        /// Shape represented by canonical `ShapeBuf` dimensions.
         tensor: alloc::vec::Vec<usize>,
         /// Shape carried by the sealed proof.
         proof: alloc::vec::Vec<usize>,
@@ -127,9 +140,9 @@ pub enum PlacedTensorError {
     #[error("tensor dtype {expected:?} does not match rank-local storage {got:?}")]
     DType {
         /// Dtype selected statically or through `Dyn`.
-        expected: DTypeId,
+        expected: DTypeDescriptor,
         /// Dtype reported by storage.
-        got: DTypeId,
+        got: DTypeDescriptor,
     },
     /// Physical storage is attached to the wrong runtime device.
     #[error("tensor device {expected:?} does not match rank-local storage {got:?}")]
@@ -195,9 +208,52 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Tensor<S, B,
     }
 
     #[inline]
-    /// Returns the static/dynamic global-shape field representation.
-    pub fn shape_field(&self) -> &S::Field {
-        &self._shape
+    /// Returns the authoritative runtime logical shape buffer.
+    pub fn shape_buf(&self) -> &crate::shapes::ShapeBuf {
+        self._shape.shape_buf()
+    }
+
+    /// Rebuilds tensor metadata after a checked operation while retaining the
+    /// tensor's placement marker and runtime placement field.
+    pub(crate) fn from_shape_value_placed<T: Shape>(
+        inner: B::Storage<K>,
+        shape: ShapeValue<T>,
+        dtype: K::Field,
+        device: <B::Device as Device>::Field,
+        grad: G::Field,
+        placement: P::Field,
+    ) -> Result<Tensor<T, B, K, G, P>> {
+        Ok(Tensor {
+            inner,
+            _shape: shape,
+            _dtype: dtype,
+            _device: device,
+            _grad: grad,
+            _placement: placement,
+        })
+    }
+
+    pub(crate) fn from_shape_buf_placed<T: Shape>(
+        inner: B::Storage<K>,
+        dims: ShapeBuf,
+        dtype: K::Field,
+        device: <B::Device as Device>::Field,
+        grad: G::Field,
+        placement: P::Field,
+    ) -> Result<Tensor<T, B, K, G, P>> {
+        T::validate_dims(dims.as_ref()).map_err(crate::err::Error::Shape)?;
+        Self::from_shape_value_placed(
+            inner,
+            ShapeValue::from_shape_buf(dims),
+            dtype,
+            device,
+            grad,
+            placement,
+        )
+    }
+
+    pub(crate) fn shape_buf_value(&self) -> ShapeBuf {
+        self._shape.shape_buf().clone()
     }
 
     #[inline]
@@ -226,10 +282,26 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Tensor<S, B,
         B::shape(&self.inner)
     }
 
-    /// Returns the Incin data type variant.
+    /// Returns the logical descriptor for this tensor's dtype.
+    ///
+    /// Works for all dtypes including custom third-party non-builtin dtypes.
     #[must_use]
-    pub fn dtype(&self) -> DTypeId {
-        K::to_incin(&self._dtype)
+    pub fn dtype(&self) -> crate::tensor::dtype::DTypeDescriptor {
+        K::descriptor(&self._dtype)
+    }
+
+    /// Returns the `DTypeId` if this tensor's dtype is a built-in Incin dtype,
+    /// or `None` for custom third-party dtypes.
+    #[must_use]
+    pub fn builtin_dtype_id(&self) -> Option<DTypeId> {
+        K::descriptor(&self._dtype).builtin_id()
+    }
+
+    /// Alias for [`dtype`](Self::dtype).
+    #[must_use]
+    #[deprecated(note = "Use `.dtype()` instead")]
+    pub fn dtype_descriptor(&self) -> crate::tensor::dtype::DTypeDescriptor {
+        self.dtype()
     }
 
     /// Returns the physical device on which this rank-local storage resides.
@@ -251,7 +323,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Tensor<S, B,
     #[cfg(feature = "distributed")]
     pub fn try_from_distributed_storage<O>(
         inner: B::Storage<K>,
-        global_shape: S::Field,
+        global_shape: ShapeBuf,
         dtype: K::Field,
         device: <B::Device as Device>::Field,
         grad: G::Field,
@@ -262,7 +334,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Tensor<S, B,
         O: crate::exec::OperationSpec,
         B: SupportsDType<K>,
     {
-        let tensor_global = S::dims(&global_shape).as_ref().to_vec();
+        let tensor_global = global_shape.as_ref().to_vec();
         let proof_global = proof.global_shape().dims().to_vec();
         if tensor_global != proof_global {
             return Err(PlacedTensorError::GlobalShape {
@@ -322,7 +394,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Tensor<S, B,
 
         Ok(Self {
             inner,
-            _shape: global_shape,
+            _shape: ShapeValue::new(global_shape),
             _dtype: dtype,
             _device: device,
             _grad: grad,
@@ -352,9 +424,10 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Tensor<S, B,
                 proof: proof.transition(),
             });
         }
+        let shape = self.shape_buf_value();
         Tensor::<S, B, K, G, To>::try_from_distributed_storage(
             inner,
-            self._shape,
+            shape,
             self._dtype,
             self._device,
             self._grad,
@@ -388,9 +461,10 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G, Dyn> {
                 proof: proof.transition(),
             });
         }
+        let shape = self.shape_buf_value();
         Self::try_from_distributed_storage(
             inner,
-            self._shape,
+            shape,
             self._dtype,
             self._device,
             self._grad,
@@ -446,11 +520,49 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G, Local> 
     /// Joins component parts after this module has witnessed their invariants.
     fn from_parts_witnessed(
         inner: B::Storage<K>,
-        shape: S::Field,
+        shape: ShapeBuf,
         dtype: K::Field,
         device: <B::Device as Device>::Field,
         grad: G::Field,
         _witness: ConstructionWitness,
+    ) -> Self {
+        Self {
+            inner,
+            _shape: ShapeValue::new(shape),
+            _dtype: dtype,
+            _device: device,
+            _grad: grad,
+            _placement: core::marker::PhantomData,
+        }
+    }
+
+    /// Reuses a validated logical shape without reconstructing a legacy
+    /// representation.  This is the internal path for shape-preserving
+    /// operations; `from_parts` remains the checked constructor for caller
+    /// supplied shape arguments.
+    pub(crate) fn from_shape_value(
+        inner: B::Storage<K>,
+        shape: ShapeValue<S>,
+        dtype: K::Field,
+        device: <B::Device as Device>::Field,
+        grad: G::Field,
+    ) -> Result<Self> {
+        Ok(Self {
+            inner,
+            _shape: shape,
+            _dtype: dtype,
+            _device: device,
+            _grad: grad,
+            _placement: core::marker::PhantomData,
+        })
+    }
+
+    pub(crate) fn from_shape_value_unchecked(
+        inner: B::Storage<K>,
+        shape: ShapeValue<S>,
+        dtype: K::Field,
+        device: <B::Device as Device>::Field,
+        grad: G::Field,
     ) -> Self {
         Self {
             inner,
@@ -462,15 +574,26 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G, Local> 
         }
     }
 
-    /// Creates a tensor from parts, checking that storage shape matches expected shape.
-    pub fn try_from_storage(
+    pub(crate) fn from_shape_buf(
         inner: B::Storage<K>,
-        shape: S::Field,
+        dims: ShapeBuf,
         dtype: K::Field,
         device: <B::Device as Device>::Field,
         grad: G::Field,
     ) -> Result<Self> {
-        let expected = S::dims(&shape).as_ref().to_vec();
+        S::validate_dims(dims.as_ref()).map_err(crate::err::Error::Shape)?;
+        Self::from_shape_value(inner, ShapeValue::from_shape_buf(dims), dtype, device, grad)
+    }
+
+    /// Creates a tensor from parts, checking that storage shape matches expected shape.
+    pub fn try_from_storage(
+        inner: B::Storage<K>,
+        shape: ShapeBuf,
+        dtype: K::Field,
+        device: <B::Device as Device>::Field,
+        grad: G::Field,
+    ) -> Result<Self> {
+        let expected = shape.as_ref().to_vec();
         let got = B::shape(&inner);
         if expected != got {
             return Err(Error::ShapeMismatch {
@@ -480,7 +603,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G, Local> 
                 msg: "Runtime shape doesn't match expected static/dynamic shape".to_string(),
             });
         }
-        let expected_dtype = K::to_incin(&dtype);
+        let expected_dtype = K::descriptor(&dtype);
         if let Some(got) = B::storage_dtype(&inner)
             && expected_dtype != got
         {
@@ -510,7 +633,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G, Local> 
 
     pub(crate) fn from_parts(
         inner: B::Storage<K>,
-        shape: S::Field,
+        shape: ShapeBuf,
         dtype: K::Field,
         device: <B::Device as Device>::Field,
         grad: G::Field,
@@ -519,7 +642,12 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G, Local> 
     }
 }
 
-impl<S: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G>
+impl<
+    S: Shape + DynShape,
+    B: Backend + crate::tensor::backend::CreationOps<B> + crate::tensor::backend::FloatOps<B>,
+    K: DType,
+    G: RequiresGrad,
+> Tensor<S, B, K, G>
 where
     (S, K, B::Device, G): TensorArgs<S, K, B::Device, G>,
     B: SupportsDType<K>,
@@ -530,7 +658,7 @@ where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
     {
         let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg());
-        let dims: S::Dims = S::dims(&_shape);
+        let dims = _shape.clone();
         let device = B::Device::to_incin(&_device)?;
         let dtype = B::resolve_dtype(&_dtype, &device)?;
         let inner = B::zeros(dims.as_ref(), dtype, &device)?;
@@ -543,7 +671,7 @@ where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
     {
         let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg());
-        let dims = S::dims(&_shape);
+        let dims = _shape.clone();
         let device = B::Device::to_incin(&_device)?;
         let dtype = B::resolve_dtype(&_dtype, &device)?;
         let inner = B::ones(dims.as_ref(), dtype, &device)?;
@@ -551,18 +679,22 @@ where
     }
 
     /// Creates a tensor from a slice whose element type fixes its static dtype.
-    pub fn from_slice<A>(data: &[K::Elem], args: A) -> Result<Self>
+    ///
+    /// Requires a [`PlainDType`]: dtypes with an actual Rust scalar element per
+    /// logical value. Block-quantized dtypes (e.g. `Q8_0`) are rejected at
+    /// compile time since they have no plain scalar slice representation.
+    pub fn from_slice<A>(data: &[<K as PlainDType>::Elem], args: A) -> Result<Self>
     where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
-        K: ConstDType,
+        K: PlainDType + BuiltinDType,
     {
         let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg());
-        let dims = S::dims(&_shape);
+        let dims = _shape.clone();
         let device = B::Device::to_incin(&_device)?;
         let dtype = B::resolve_dtype(&_dtype, &device)?;
         let byte_len = core::mem::size_of_val(data);
         let bytes = unsafe { core::slice::from_raw_parts(data.as_ptr().cast::<u8>(), byte_len) };
-        let inner = B::from_bytes(bytes, dims.as_ref(), dtype, &device)?;
+        let inner = B::from_bytes::<K>(bytes, dims.as_ref(), dtype, &device)?;
         Self::from_parts(inner, _shape, _dtype, _device, _grad)
     }
 
@@ -572,7 +704,7 @@ where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
     {
         let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg());
-        let dims = S::dims(&_shape);
+        let dims = _shape.clone();
         let device = B::Device::to_incin(&_device)?;
         let dtype = B::resolve_dtype(&_dtype, &device)?;
         let inner = B::from_bytes(bytes, dims.as_ref(), dtype, &device)?;
@@ -585,7 +717,7 @@ where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
     {
         let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg());
-        let dims = S::dims(&_shape);
+        let dims = _shape.clone();
         let device = B::Device::to_incin(&_device)?;
         let dtype = B::resolve_dtype(&_dtype, &device)?;
         let inner = B::rand(dims.as_ref(), dtype, &device)?;
@@ -598,7 +730,7 @@ where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
     {
         let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg());
-        let dims = S::dims(&_shape);
+        let dims = _shape.clone();
         let device = B::Device::to_incin(&_device)?;
         let dtype = B::resolve_dtype(&_dtype, &device)?;
         let inner = B::randn(dims.as_ref(), dtype, &device)?;
@@ -611,7 +743,7 @@ where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
     {
         let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg());
-        let dims = S::dims(&_shape);
+        let dims = _shape.clone();
         let device = B::Device::to_incin(&_device)?;
         let dtype = B::resolve_dtype(&_dtype, &device)?;
         let scalar_f64 = val.into().to_f64();
@@ -629,7 +761,7 @@ where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
     {
         let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg());
-        let dims = S::dims(&_shape);
+        let dims = _shape.clone();
         let device = B::Device::to_incin(&_device)?;
         let dtype = B::resolve_dtype(&_dtype, &device)?;
         let s_f64 = start.into().to_f64();
@@ -648,7 +780,7 @@ where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
     {
         let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg());
-        let dims = S::dims(&_shape);
+        let dims = _shape.clone();
         let device = B::Device::to_incin(&_device)?;
         let dtype = B::resolve_dtype(&_dtype, &device)?;
         let s_f64 = start.into().to_f64();
@@ -657,12 +789,10 @@ where
         Self::from_parts(inner, _shape, _dtype, _device, _grad)
     }
 
-    /// Samples a tensor of shape `shape` from a probability distribution `dist`.
     pub fn sample<D: crate::distributions::Distribution<K>, A>(dist: &D, args: A) -> Result<Self>
     where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
         B: SupportsDType<K>,
-        B: Backend<FloatElem = K>,
     {
         let (_shape, _dtype, _device, _grad) = <(S, K, B::Device, G)>::construct(args.into_arg());
         dist.sample::<S, B, G>(_shape, &_device)
@@ -684,19 +814,19 @@ impl<S: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad, P: Placement>
     #[inline]
     /// Returns the number of dimensions (rank) of the tensor.
     pub fn rank(&self) -> usize {
-        S::rank(&self._shape)
+        self._shape.shape_buf().rank()
     }
 
     #[inline]
     /// Returns the total number of elements in the tensor.
     pub fn numel(&self) -> usize {
-        S::numel(&self._shape)
+        self._shape.shape_buf().numel().unwrap_or(0)
     }
 
     #[inline]
     /// Returns the dimensions of the tensor as a slice or container.
-    pub fn dims(&self) -> S::Dims {
-        S::dims(&self._shape)
+    pub fn dims(&self) -> crate::shapes::ShapeBuf {
+        self._shape.shape_buf().clone()
     }
 }
 
@@ -736,7 +866,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G> {
         <B as TransferTo<D2>>::Output: SupportsDType<K>,
     {
         let new_inner = B::transfer_storage(&self.inner, &self._dtype, _device)?;
-        Tensor::from_parts(
+        Tensor::from_shape_value(
             new_inner,
             self._shape.clone(),
             self._dtype.clone(),
@@ -749,7 +879,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G> {
 impl<S1: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad> Tensor<S1, B, K, G> {
     /// Converts this tensor to a new static shape S2.
     pub fn into_shape<S2: Shape + DynShape>(self) -> Result<Tensor<S2, B, K, G>> {
-        let dims = S1::dims(&self._shape);
+        let dims = self._shape.shape_buf();
         let s2_shape = S2::from_dyn(dims.as_ref()).ok_or_else(|| {
             crate::err::Error::Msg(alloc::format!(
                 "into_shape failed: cannot parse {:?} into {}",
@@ -762,26 +892,25 @@ impl<S1: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad> Tensor<S1, B, 
 
     /// Converts this tensor to a dynamically-shaped `Tensor<Dyn>`.
     pub fn into_dyn(self) -> Tensor<crate::prelude::Dyn, B, K, G> {
-        let dims = S1::dims(&self._shape);
+        let dims = self._shape.shape_buf();
         // `Dyn`'s field *is* the dimension vector, so there is nothing to
         // re-parse and nothing that can fail — the old
         // `Dyn::from_dyn(..).unwrap()` was asserting `Some(dims.to_vec())` is
         // `Some`. Building it directly makes that structural rather than
         // assumed, and is the last of the 39 sites `SHP-004` removes.
-        let s2_shape: <crate::prelude::Dyn as Shape>::Field = dims.as_ref().to_vec();
-        Tensor::from_parts_witnessed(
+        let s2_shape = crate::shapes::ShapeBuf::from_slice(dims.as_ref());
+        Tensor::from_shape_value_unchecked(
             self.inner,
-            s2_shape,
+            ShapeValue::new(s2_shape),
             self._dtype,
             self._device,
             self._grad,
-            ConstructionWitness::MetadataPreserved,
         )
     }
 
     /// Copies and converts this tensor to a new static shape S2.
     pub fn to_shape<S2: Shape + DynShape>(&self) -> Result<Tensor<S2, B, K, G>> {
-        let dims = S1::dims(&self._shape);
+        let dims = self._shape.shape_buf();
         let s2_shape = S2::from_dyn(dims.as_ref()).ok_or_else(|| {
             crate::err::Error::Msg(alloc::format!(
                 "to_shape failed: cannot parse {:?} into {}",
@@ -799,16 +928,28 @@ impl<S1: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad> Tensor<S1, B, 
     }
 }
 
-impl<S: Shape, B: Backend, K: DType> Tensor<S, B, K, NoGrad> {
-    /// Marks this tensor to require gradient tracking.
-    pub fn require_grad(self) -> Tensor<S, B, K, Grad> {
-        Tensor::from_parts_witnessed(
+impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G> {
+    /// Converts this tensor into a `Grad` tensor for autograd graph participation.
+    pub fn into_grad(self) -> Tensor<S, B, K, Grad> {
+        Tensor::from_shape_value_unchecked(
             self.inner,
             self._shape,
             self._dtype,
             self._device,
             core::marker::PhantomData,
-            ConstructionWitness::MetadataPreserved,
+        )
+    }
+}
+
+impl<S: Shape, B: Backend, K: DType> Tensor<S, B, K, NoGrad> {
+    /// Marks this tensor to require gradient tracking.
+    pub fn require_grad(self) -> Tensor<S, B, K, Grad> {
+        Tensor::from_shape_value_unchecked(
+            self.inner,
+            self._shape,
+            self._dtype,
+            self._device,
+            core::marker::PhantomData,
         )
     }
 }
@@ -816,28 +957,73 @@ impl<S: Shape, B: Backend, K: DType> Tensor<S, B, K, NoGrad> {
 impl<S: Shape, B: Backend, K: DType> Tensor<S, B, K, Grad> {
     /// Detaches this tensor from autodiff tape tracking, returning a NoGrad tensor.
     pub fn detach(self) -> Tensor<S, B, K, NoGrad> {
-        Tensor::from_parts_witnessed(
+        Tensor::from_shape_value_unchecked(
             self.inner,
             self._shape,
             self._dtype,
             self._device,
             core::marker::PhantomData,
-            ConstructionWitness::MetadataPreserved,
         )
     }
 }
 
-impl<S: crate::prelude::Shape, B: crate::prelude::Backend, K: DType, G: RequiresGrad, P: Placement>
-    core::fmt::Display for Tensor<S, B, K, G, P>
+impl<
+    S: crate::prelude::Shape,
+    B: crate::prelude::Backend + crate::tensor::backend::TensorOps<B>,
+    K: DType,
+    G: RequiresGrad,
+    P: Placement,
+> core::fmt::Display for Tensor<S, B, K, G, P>
 {
-    /// Delegates to the backend's own display formatting of its storage.
+    /// Renders values the way PyTorch's `print(tensor)` does: the backend's
+    /// bracketed, right-aligned value grid (`Backend::format_tensor_display`)
+    /// wrapped in `tensor(...)`, with nested-bracket rows indented to stay
+    /// aligned under the first `[` the way PyTorch's own wrapped output is.
+    ///
+    /// `dtype=`/`device=`/`requires_grad=` are appended only when they
+    /// differ from what a reader would otherwise assume: `f32`
+    /// (`DTypeId::default()`), `cpu:0` (`DeviceId::cpu()`), and — not
+    /// requiring gradients. That last one is the mirror image of PyTorch's
+    /// own rule for the literal reason that `G` defaults to
+    /// [`Grad`](crate::prelude::Grad) here rather than `NoGrad`: printing
+    /// `requires_grad=True` whenever `G::requires_grad` is true still means
+    /// "printed exactly when true", it is just true far more often in a
+    /// tensor whose default already tracks gradients.
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{}", B::format_tensor_display(&self.inner))
+        let prefix = "tensor(";
+        let body = B::format_tensor_display(&self.inner);
+        f.write_str(prefix)?;
+        for (i, line) in body.lines().enumerate() {
+            if i > 0 {
+                writeln!(f)?;
+                write!(f, "{:1$}", "", prefix.chars().count())?;
+            }
+            f.write_str(line)?;
+        }
+
+        let dtype = self.dtype();
+        if dtype != <f32 as ConstDType>::DESCRIPTOR {
+            write!(f, ", dtype={}", dtype.name())?;
+        }
+        if let Ok(device) = <B::Device as Device>::to_incin(&self._device)
+            && device != DeviceId::cpu()
+        {
+            write!(f, ", device={}:{}", device.kind().name(), device.ordinal())?;
+        }
+        if G::requires_grad(&self._grad) {
+            f.write_str(", requires_grad=True")?;
+        }
+        f.write_str(")")
     }
 }
 
-impl<S: crate::prelude::Shape, B: crate::prelude::Backend, K: DType, G: RequiresGrad, P: Placement>
-    core::fmt::Debug for Tensor<S, B, K, G, P>
+impl<
+    S: crate::prelude::Shape,
+    B: crate::prelude::Backend + crate::tensor::backend::TensorOps<B>,
+    K: DType,
+    G: RequiresGrad,
+    P: Placement,
+> core::fmt::Debug for Tensor<S, B, K, G, P>
 {
     /// Prints the backend type name, runtime shape, and the backend's own
     /// debug rendering of its storage.
@@ -846,7 +1032,7 @@ impl<S: crate::prelude::Shape, B: crate::prelude::Backend, K: DType, G: Requires
             f,
             "Tensor({}, global_shape={:?}, local_shape={:?}, placement={:?}, rank={})\n{}",
             core::any::type_name::<B>(),
-            S::dims(&self._shape).as_ref(),
+            self._shape.shape_buf().as_ref(),
             B::shape(&self.inner),
             self.placement(),
             self.rank_index(),
@@ -863,7 +1049,7 @@ mod tests {
 
     #[test]
     fn test_tensor_creation() {
-        let t: Tensor<Dyn, crate::tensor::backend::dummy::DummyBackend<f32, crate::prelude::Cpu>> =
+        let t: Tensor<Dyn, crate::tensor::backend::dummy::DummyBackend<crate::prelude::Cpu>> =
             Tensor::zeros(vec![2, 3]).unwrap();
         assert_eq!(t.rank(), 2);
         assert_eq!(t.numel(), 6);
@@ -872,7 +1058,7 @@ mod tests {
 
     #[test]
     fn test_tensor_ones() {
-        let t: Tensor<Dyn, crate::tensor::backend::dummy::DummyBackend<f32, crate::prelude::Cpu>> =
+        let t: Tensor<Dyn, crate::tensor::backend::dummy::DummyBackend<crate::prelude::Cpu>> =
             Tensor::ones(vec![4]).unwrap();
         assert_eq!(t.rank(), 1);
         assert_eq!(t.numel(), 4);
@@ -886,12 +1072,14 @@ mod tests {
     /// debug builds (or silently wrap in release).
     fn dummy_backend_conv_pool_shape_math_never_panics_on_tiny_input_large_kernel() {
         use crate::backend_authoring::{Backend, ModuleOps};
-        type B = crate::tensor::backend::dummy::DummyBackend<f32, crate::prelude::Cpu>;
+        type B = crate::tensor::backend::dummy::DummyBackend<crate::prelude::Cpu>;
 
         // 1x1x2x2 input, a 5x5 kernel with dilation 3: `dilation*(kernel-1)+1`
         // = 3*4+1 = 13, far larger than `input + 2*padding` = 2 + 0 = 2.
-        let input: <B as Backend>::Storage<f32> = alloc::vec![1, 1, 2, 2];
-        let weight: <B as Backend>::Storage<f32> = alloc::vec![1, 1, 5, 5];
+        let input: <B as crate::tensor::backend::StorageBackend>::Storage<f32> =
+            alloc::vec![1, 1, 2, 2];
+        let weight: <B as crate::tensor::backend::StorageBackend>::Storage<f32> =
+            alloc::vec![1, 1, 5, 5];
         let out = <B as ModuleOps<B>>::conv2d::<f32>(&input, &weight, None, 1, 0, 3, 1).unwrap();
         assert_eq!(out.len(), 4);
 

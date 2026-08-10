@@ -17,7 +17,7 @@
 //! use incin::prelude::*;
 //!
 //! // Create a backend alias for convenience
-//! type Backend = IncinBackend<f32, Cpu>;
+//! type Backend = IncinBackend<Cpu>;
 //!
 //! // Create a statically shaped tensor: (Batch=2, Channels=3, Height=224, Width=224)
 //! let x = Tensor::<s![2, 3, 224, 224], Backend>::zeros(()).unwrap();
@@ -36,7 +36,7 @@
 //! ```rust,no_run
 //! use incin::prelude::*;
 //!
-//! type Backend = IncinBackend<f32, Cpu>;
+//! type Backend = IncinBackend<Cpu>;
 //!
 //! #[module]
 //! pub struct MLP {
@@ -79,11 +79,12 @@ pub use incin_core::optim::{Adam, AdamW, ConstantLR, LRScheduler, LinearLR, Opti
 #[cfg(feature = "std")]
 pub use incin_core::optim::{CosineAnnealingLR, StepLR};
 pub use incin_core::prelude::{
-    Backend, BackendError, BackwardError, BoolDType, ConstShape, ConversionFailure, Cpu, DType,
-    DTypeId, Device, DeviceId, DeviceKind, DevicePreference, DeviceSet, DeviceSetError, Dyn,
-    DynShape, Error, ErrorMessage, FloatDType, FloatToIntPolicy, Grad, Gradients, IntDType, Module,
-    NoGrad, NonFiniteSite, PartialDynShape, PlainDType, Q8_0, QuantDType, RequiresGrad, Result,
-    Shape, StateDict, TensorElement, bf16, convert_f64_to_i64, f16,
+    Backend, BackendError, BackwardError, BoolDType, BuiltinDType, ConstDType, ConversionFailure,
+    Cpu, DType, DTypeDescriptor, DTypeId, DTypeKey, DTypeKind, Device, DeviceId, DeviceKind,
+    DevicePreference, DeviceSet, DeviceSetError, Dyn, DynShape, Error, ErrorMessage, FloatDType,
+    FloatToIntPolicy, Grad, Gradients, IntDType, Module, NoGrad, NonFiniteSite, PartialDynShape,
+    PlainDType, Q8_0, QuantDType, RequiresGrad, Result, Shape, StateDict, StorageEncoding,
+    TensorElement, bf16, convert_f64_to_i64, f16,
 };
 
 #[cfg(feature = "cuda")]
@@ -217,8 +218,8 @@ pub mod backend_authoring {
     pub use incin_core::backend_authoring::{
         Backend, CapabilityRegistry, CreationOps, Execute, ExecutionContext, ExecutionDescriptor,
         ExecutionRequest, FloatOps, LossOps, LossScaling, ModuleOps, NumericOps, OperationSpec,
-        OptimizerOps, PrecisionPolicy, QuantizedOps, ReductionOps, StorageBackend, SupportsDType,
-        TensorOps, TransferTo, Validated,
+        OptimizerOps, PrecisionSpec, QuantizedOps, ReductionOps, RuntimePrecisionPolicy,
+        StorageBackend, SupportsDType, TensorOps, TransferTo, Validated,
     };
 
     /// Canonical exact operation descriptors and typed attributes.
@@ -272,8 +273,8 @@ pub mod nn {
         MSELoss, MSEShape, MaxPool2d, Mean, Mish, ModelStats, Module, NamedLayers, NoneReduction,
         OptionalField, Param, Parameters, RMSNorm, RMSNormShape, RNN, RNNCell, ReLU, Reduction,
         ReductionMode, RnnShape, Sequential, Sigmoid, Softmax, StateDict, Sum, Swish, Tanh,
-        ToDevice, TrainMode, True, format_layer_summary, format_layer_summary_with_stats,
-        sum_stats,
+        ToDevice, TrainMode, True, batch_norm2d, conv1d, conv2d, embedding, format_layer_summary,
+        format_layer_summary_with_stats, layer_norm, linear, lstm, rms_norm, rnn, sum_stats,
     };
     #[cfg(feature = "distributed")]
     pub use incin_core::nn::{TwoWayColumnLinearShape, TwoWayRowLinearShape};
@@ -349,7 +350,7 @@ mod train;
 mod tune_report;
 
 #[cfg(feature = "cpu")]
-pub type DefaultBackend = incin_backends::IncinBackend<f32, incin_core::prelude::Cpu>;
+pub type DefaultBackend = incin_backends::IncinBackend<incin_core::prelude::Cpu>;
 
 // No `DefaultBackend` fallback when `cpu` is disabled: a `()` placeholder
 // (the previous approach) doesn't implement `Backend`, so every type alias
@@ -365,7 +366,7 @@ pub type DefaultBackend = incin_backends::IncinBackend<f32, incin_core::prelude:
 pub type Tensor<
     S,
     B = DefaultBackend,
-    K = <B as incin_core::prelude::Backend>::FloatElem,
+    K = f32,
     G = incin_core::prelude::Grad,
     P = incin_core::dist::Local,
 > = incin_core::prelude::Tensor<S, B, K, G, P>;
@@ -375,7 +376,7 @@ pub type Tensor<
 pub type Tensor<
     S,
     B, // User must specify backend if Cpu is disabled
-    K = <B as incin_core::prelude::Backend>::FloatElem,
+    K = f32,
     G = incin_core::prelude::Grad,
     P = incin_core::dist::Local,
 > = incin_core::prelude::Tensor<S, B, K, G, P>;
@@ -464,20 +465,27 @@ pub mod macros {
     // invoked once, internally, by `incin-core` itself
     // (`incin_macros::impl_arg_into!()` in `tensor/arg_into.rs`) — no
     // end-user code calls it, and it has no documented public contract.
-    pub use incin_macros::{idx, s};
+    pub use incin_macros::{idx, s, shape, tensor};
 }
 
 /// Prelude re-exporting high-frequency user types, macros, NN modules, and optimizers.
 pub mod prelude {
     pub use super::Tensor;
     pub use incin_core::prelude::{
-        Backend, BackendError, BackwardError, BoolDType, ConstDType, ConstDevice, ConstShape,
-        ConversionFailure, Cpu, DType, DTypeId, Device, DeviceId, DeviceKind, DevicePreference,
-        DeviceSet, DeviceSetError, Dim, Dyn, DynShape, Ellipsis, Error, ErrorMessage, FloatDType,
-        FloatToIntPolicy, Grad, HeadShape, InferDim, IntDType, Module, NamedDyn, NoGrad,
-        NonFiniteSite, PartialDynShape, PlainDType, Q8_0, QuantDType, RequiresGrad, Result, SeqTy,
-        Shape, Slice, SpanShape, StateDict, TailShape, TensorElement, bf16, convert_f64_to_i64,
-        f16,
+        AxisIdentity, AxisSchema, Backend, BackendError, BackwardError, BoolDType, BuiltinDType,
+        ConstDType, ConstDevice, ConversionFailure, Cpu, DType, DTypeDescriptor, DTypeId, DTypeKey,
+        DTypeKind, Device, DeviceId, DeviceKind, DevicePreference, DeviceSet, DeviceSetError, Dim,
+        DimCons, Dyn, DynShape, Ellipsis, Error, ErrorMessage, FloatDType, FloatToIntPolicy, Grad,
+        Here, InferDim, IntDType, MatMulShape, Module, NamedDim, Next, Nil, NoGrad, NonFiniteSite,
+        PartialDynShape, PlainDType, Q8_0, QuantDType, Ranked, RequiresGrad, Result, SeqTy, Shape,
+        ShapeArgs, ShapeSpec, ShapeValue, Slice, StateDict, StorageEncoding, TensorElement, bf16,
+        convert_f64_to_i64, f16,
+    };
+
+    pub use incin_core::prelude::{
+        AppendDim, At, Axis, AxisSelector, AxisSet, BroadcastDim, BroadcastExtent, BroadcastShape,
+        ConcatShape, ConcreteStaticExtent, FromEnd, ReduceAt, ReduceKeepAt, RemoveAt, ReplaceAt,
+        ReshapeShape, SameCount, Scalar, StackShape, StructuralConcatShape, SwapAt, TryReshape,
     };
 
     #[cfg(feature = "cuda")]
@@ -493,11 +501,25 @@ pub mod prelude {
     pub use super::DefaultDevice;
     pub use incin_backends::IncinBackend;
 
+    // **Experimental** (`target-api`): device values as allocation targets.
+    // These are extension traits, so they only resolve when in scope — which
+    // is the whole reason they are in the prelude rather than left to a
+    // module path. See `docs/plan/UX-ARCHITECTURE-HANDOFF.md`.
+    #[cfg(feature = "target-api")]
+    pub use incin_backends::nn_target::InitOnTarget;
+    #[cfg(all(feature = "target-api", feature = "external-candle"))]
+    pub use incin_backends::target::Candle;
+    #[cfg(feature = "target-api")]
+    pub use incin_backends::target::{
+        DtypeTarget, EngineSpec, GeneratedFill, LinearInit, Native, PrecisionSpec, Target,
+        TargetExt, TensorData, TensorTarget, precision,
+    };
+
     pub use incin_core::dim;
     pub use incin_core::seq;
     pub use incin_core::typenum;
 
-    pub use incin_macros::{axes, einsum, idx, module, s};
+    pub use incin_macros::{idx, module, s, shape, tensor};
 
     pub use super::{
         BatchNorm2d, Conv1d, Conv2d, Embedding, LayerNorm, Linear, Param, RNN, RNNCell,
@@ -545,7 +567,7 @@ mod tests {
     /// Runtime dtype creation keeps the dtype tag in a `Dyn` tensor.
     fn test_runtime_dtype_tensor_creation() {
         let t = Tensor::<Dyn, DefaultBackend, Dyn>::ones((std::vec![2, 2], DTypeId::F64)).unwrap();
-        assert_eq!(t.dtype(), DTypeId::F64);
+        assert_eq!(t.dtype(), DTypeId::F64.descriptor());
     }
 
     #[test]

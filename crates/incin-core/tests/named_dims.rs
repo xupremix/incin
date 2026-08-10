@@ -1,266 +1,123 @@
-//! Compile-pass proofs for `docs/growth/03-named-dimensions.md` Task 03.1's
-//! name-preservation audit. Each test's real assertion is the *type
-//! ascription* on the result binding — if the op didn't preserve/compute
-//! the named dim the way claimed, the file fails to compile, not just the
-//! runtime `assert_eq!`.
+//! Semantic named-axis checks for the canonical structural shape engine.
 
 extern crate incin_core as incin;
+
 use incin_core::prelude::*;
-use incin_core::test_utils::DummyBackend;
+use incin_core::shapes::SwapAt;
+use incin_core::shapes::reshape::{ElementCount, ReshapeShape};
 use incin_macros::s;
+use typenum::Unsigned;
 
-incin_core::dim!(Batch, Feature);
+incin_core::dim!(Batch, Channels, Height, Width, Features);
 
-type TestBackend = DummyBackend<f32, Cpu>;
+trait Same<T> {}
+impl<T> Same<T> for T {}
 
-#[test]
-fn transpose_swaps_and_preserves_both_named_dims() {
-    let t: Tensor<s![Batch, Feature], TestBackend> = Tensor::zeros((4usize, 8usize)).unwrap();
-    // Would fail to compile if `transpose` didn't produce exactly `(Feature, Batch)`.
-    let transposed: Tensor<s![Feature, Batch], TestBackend> = t.transpose::<0, 1>().unwrap();
-    let dims: Vec<usize> = transposed.dims().into();
-    assert_eq!(dims, vec![8, 4]);
+fn assert_same<A, B>()
+where
+    A: Same<B>,
+{
 }
 
 #[test]
-fn sum_dim_over_a_named_axis_preserves_the_other_named_axis() {
-    let t: Tensor<s![Batch, Feature], TestBackend> = Tensor::zeros((4usize, 8usize)).unwrap();
-    // `ReduceDim` is bounded only by `Dim` (no `StaticDim`/`Unsigned`), so
-    // reducing away the `Batch` axis while keeping `Feature` typed compiles.
-    let summed: Tensor<s![Feature], TestBackend> = t.sum_dim::<0>().unwrap();
-    let dims: Vec<usize> = summed.dims().into();
-    assert_eq!(dims, vec![8]);
+fn named_runtime_axes_are_stored_in_shape_buf() {
+    type S = s![Batch, Channels, 224, 224];
+    let field = S::from_dyn(&[2, 3, 224, 224]).unwrap();
+    assert_eq!(field.as_ref(), &[2, 3, 224, 224]);
 }
 
-/// Regression test for a real bug found while writing this audit: `concat`
-/// used to build its output shape `Field` via `Default::default()` instead
-/// of the operands' real dims, which is invisible for pure-typenum shapes
-/// (a zero-sized `PhantomData` either way) but silently zeroed any
-/// runtime-carrying dimension — including a `symbolic_dim!` name, whose
-/// `Default` is `Self(0)`. Without the fix this test's `dims` would read
-/// `[0, 12]`, not `[2, 12]`: the type-level assertion below would still
-/// compile (the *name* `Batch` was never lost), but the tensor would
-/// silently lie about its own runtime batch size.
 #[test]
-fn concat_along_a_literal_axis_preserves_a_named_dim_on_the_other_axis() {
-    let a: Tensor<s![Batch, 4], TestBackend> = Tensor::zeros((2usize, ())).unwrap();
-    let b: Tensor<s![Batch, 8], TestBackend> = Tensor::zeros((2usize, ())).unwrap();
-    // `ConcatShape`'s non-concatenated-axis position is bounded only by
-    // `Dim`, so `Batch` survives into the joined output's type.
-    let joined: Tensor<s![Batch, 12], TestBackend> =
-        a.concat::<s![Batch, 8], typenum::U1>(&b).unwrap();
-    let dims: Vec<usize> = joined.dims().into();
-    assert_eq!(dims, vec![2, 12]);
+fn named_tags_are_zero_sized_semantic_metadata() {
+    assert_eq!(<Batch as AxisTag>::NAME, "Batch");
+    assert_eq!(core::mem::size_of::<Batch>(), 0);
+    assert_eq!(core::mem::size_of::<NamedDim<Batch, usize>>(), 0);
 }
 
-/// Same bug class, same fix, on `stack` (which inserts a new size-2 axis
-/// rather than summing along an existing one) — without the fix this
-/// would read `[0, 2, 8]`, not `[4, 2, 8]`.
 #[test]
-fn stack_preserves_a_named_dim_and_inserts_the_new_axis_at_the_right_position() {
-    let a: Tensor<s![Batch, Feature], TestBackend> = Tensor::zeros((4usize, 8usize)).unwrap();
-    let b: Tensor<s![Batch, Feature], TestBackend> = Tensor::zeros((4usize, 8usize)).unwrap();
-    let stacked: Tensor<s![Batch, 2, Feature], TestBackend> = a.stack::<typenum::U1>(&b).unwrap();
-    let dims: Vec<usize> = stacked.dims().into();
-    assert_eq!(dims, vec![4, 2, 8]);
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// matmul: previously entirely unsupported for named dims (a hard `E0599`,
-// per `docs/growth/03-named-dimensions.md`'s original audit). `MatMulShape`
-// now accepts named dims via the dedicated `MatMulDim` marker (see
-// `tensor/matmul.rs` — kept separate from `StaticDim` deliberately, to
-// avoid also silently exposing `BroadcastShape`/`conv2d`, which share
-// `StaticDim` and have an *unaudited* instance of the exact same
-// `Default::default()` bug fixed below for matmul).
-// ─────────────────────────────────────────────────────────────────────────
-
-/// Plain 2D matmul with a named `M` dimension: `(Batch, 4) x (4, 8) ->
-/// (Batch, 8)`. Without the `output_shape` fix this would compile (the
-/// *type* `Batch` is never lost) but report `dims() == [0, 8]`, not `[3,
-/// 8]` — the same silent-zeroing bug class as `concat`/`stack`.
-#[test]
-fn matmul_2d_with_named_m_dim_preserves_it_with_correct_runtime_value() {
-    let a: Tensor<s![Batch, 4], TestBackend> = Tensor::zeros((3usize, ())).unwrap();
-    let b: Tensor<s![4, 8], TestBackend> = Tensor::zeros(()).unwrap();
-    let out: Tensor<s![Batch, 8], TestBackend> = a.matmul(&b).unwrap();
-    let dims: Vec<usize> = out.dims().into();
-    assert_eq!(dims, vec![3, 8]);
-}
-
-/// Batched matmul, named batch dim shared by both operands (the "both have
-/// the same batch" `impl_batched_matmul!` variant).
-#[test]
-fn matmul_batched_with_named_batch_dim_on_both_operands() {
-    let a: Tensor<s![Batch, 3, 4], TestBackend> = Tensor::zeros((2usize, (), ())).unwrap();
-    let b: Tensor<s![Batch, 4, 5], TestBackend> = Tensor::zeros((2usize, (), ())).unwrap();
-    let out: Tensor<s![Batch, 3, 5], TestBackend> = a.matmul(&b).unwrap();
-    let dims: Vec<usize> = out.dims().into();
-    assert_eq!(dims, vec![2, 3, 5]);
-}
-
-/// Batched matmul, named batch dim only on `lhs` (the "lhs has batch"
-/// `impl_batched_matmul!` variant) — `rhs` is a plain, unbatched 2D weight.
-#[test]
-fn matmul_batched_with_named_batch_dim_only_on_lhs() {
-    let a: Tensor<s![Batch, 3, 4], TestBackend> = Tensor::zeros((2usize, (), ())).unwrap();
-    let b: Tensor<s![4, 5], TestBackend> = Tensor::zeros(()).unwrap();
-    let out: Tensor<s![Batch, 3, 5], TestBackend> = a.matmul(&b).unwrap();
-    let dims: Vec<usize> = out.dims().into();
-    assert_eq!(dims, vec![2, 3, 5]);
-}
-
-/// Batched matmul, named batch dim only on `rhs` (the "rhs has batch"
-/// `impl_batched_matmul!` variant) — this is the variant with the
-/// self/rhs field-access mixup caught and fixed while writing this test.
-#[test]
-fn matmul_batched_with_named_batch_dim_only_on_rhs() {
-    let a: Tensor<s![3, 4], TestBackend> = Tensor::zeros(()).unwrap();
-    let b: Tensor<s![Batch, 4, 5], TestBackend> = Tensor::zeros((2usize, (), ())).unwrap();
-    let out: Tensor<s![Batch, 3, 5], TestBackend> = a.matmul(&b).unwrap();
-    let dims: Vec<usize> = out.dims().into();
-    assert_eq!(dims, vec![2, 3, 5]);
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// broadcast (`+`/`-`/`*`/`/`, `.broadcast_add()`): previously entirely
-// unsupported for named dims — `BroadcastShape` was `StaticDim`-only, and a
-// named dim is neither `StaticDim` nor `usize`. Every impl in
-// `shapes/broadcast.rs` (~60 of them) now routes through a shared
-// `broadcast_dims` helper bounded by the same `StaticOrNamedDim` marker
-// introduced for matmul, fixing the identical `Default::default()` bug
-// found there along the way.
-// ─────────────────────────────────────────────────────────────────────────
-
-/// The operator overload, not just the strict `.add()` — this is the exact
-/// case flagged as unsupported in the original audit.
-#[test]
-fn plus_operator_works_between_two_identically_named_dim_tensors() {
-    let a: Tensor<s![Batch, Feature], TestBackend> = Tensor::zeros((3usize, 5usize)).unwrap();
-    let b: Tensor<s![Batch, Feature], TestBackend> = Tensor::zeros((3usize, 5usize)).unwrap();
-    let sum: Tensor<s![Batch, Feature], TestBackend> = (&a + &b).unwrap();
-    let dims: Vec<usize> = sum.dims().into();
-    assert_eq!(dims, vec![3, 5]);
-}
-
-/// Rank-mismatch ("prepend") broadcasting with a named dim on the longer
-/// side: `(Feature,) broadcast (Batch, Feature) -> (Batch, Feature)`, using
-/// `.broadcast_add()` directly (the method the `+` operator delegates to).
-#[test]
-fn broadcast_add_prepends_a_named_leading_dim_and_preserves_it() {
-    let bias: Tensor<s![Feature], TestBackend> = Tensor::zeros((5usize,)).unwrap();
-    let x: Tensor<s![Batch, Feature], TestBackend> = Tensor::zeros((3usize, 5usize)).unwrap();
-    let out: Tensor<s![Batch, Feature], TestBackend> = x.broadcast_add(&bias).unwrap();
-    let dims: Vec<usize> = out.dims().into();
-    assert_eq!(dims, vec![3, 5]);
-}
-
-/// A `usize` leading axis alongside a named tail dim, both operands the
-/// same shape — exercises the `impl_broadcast_usize_same_rank!` family.
-#[test]
-fn broadcast_add_with_usize_leading_axis_and_named_tail_dim() {
-    let a: Tensor<s![dyn, Feature], TestBackend> = Tensor::zeros((3usize, 5usize)).unwrap();
-    let b: Tensor<s![dyn, Feature], TestBackend> = Tensor::zeros((3usize, 5usize)).unwrap();
-    let out: Tensor<s![dyn, Feature], TestBackend> = a.broadcast_add(&b).unwrap();
-    let dims: Vec<usize> = out.dims().into();
-    assert_eq!(dims, vec![3, 5]);
-}
-
-/// A `symbolic_dim!` name does not guarantee the *same runtime value* on
-/// both operands the way a `typenum` dim does (two different `Batch`
-/// instances can legitimately hold different numbers) — `checked_
-/// broadcast_dim` is the actual safety net for that case, and this proves
-/// it still fires: two `Batch`-typed axes with disagreeing real sizes,
-/// neither equal to 1, must be rejected rather than silently produce a wrong
-/// shape (which `Default::default()` would have done before this fix).
-///
-/// `SHP-004` converted the guard from an `assert!` to a `Result` per decision
-/// `D-013`, so this asserts the returned error rather than a panic — and can
-/// now check *which* axis disagreed, which the panic message never carried in
-/// a machine-readable form.
-#[test]
-fn broadcast_add_rejects_disagreeing_same_named_type_dims() {
-    let a: Tensor<s![Batch, Feature], TestBackend> = Tensor::zeros((3usize, 5usize)).unwrap();
-    let b: Tensor<s![Batch, Feature], TestBackend> = Tensor::zeros((4usize, 5usize)).unwrap();
-
-    let err = a.broadcast_add(&b).unwrap_err();
-    let Error::Shape(shape_err) = err else {
-        panic!("expected a shape error, got {err}");
-    };
+fn named_tags_have_schema_local_identity_ids() {
+    assert_eq!(<Batch as AxisIdentity>::Id::USIZE, 0);
+    assert_eq!(<Channels as AxisIdentity>::Id::USIZE, 1);
+    assert_eq!(<Height as AxisIdentity>::Id::USIZE, 2);
+    assert_eq!(<Width as AxisIdentity>::Id::USIZE, 3);
     assert_eq!(
-        shape_err,
-        ShapeError::DimensionMismatch {
-            operation: OperationKind::Broadcast,
-            axis: Axis::Index(0),
-            lhs: 3,
-            rhs: 4,
-            constraint: DimensionConstraint::Broadcastable,
-        }
-    );
-    assert_eq!(
-        shape_err.to_string(),
-        "broadcast: axis 0 mismatch: 3 vs 4, which must be equal, or one of them 1"
+        core::any::TypeId::of::<<Batch as AxisIdentity>::Schema>(),
+        core::any::TypeId::of::<<Channels as AxisIdentity>::Schema>()
     );
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// Pooling / conv: `Pool2dShape` already bounded batch/channel on plain
-// `Dim` (not `StaticDim`) and already used real values there — verified
-// working, not fixed. `SpatialConv1d`/`SpatialConv2d` (`shapes/spatial.rs`)
-// and `KernelConv2dShape` (`tensor/conv2d.rs`) *did* have the
-// `Default::default()` bug on their batch/`COut` positions, both fixed.
-// ─────────────────────────────────────────────────────────────────────────
-
-incin_core::dim!(Channel);
-
-/// `Pool2dShape` needed no fix — confirms it, rather than assumes it.
 #[test]
-fn max_pool2d_preserves_named_batch_and_channel_dims() {
-    let t: Tensor<s![Batch, Channel, 8, 8], TestBackend> = Tensor::zeros((2usize, 3usize)).unwrap();
-    let pooled: Tensor<s![Batch, Channel, 4, 4], TestBackend> = t
-        .max_pool2d::<typenum::U2, typenum::U2, typenum::U0, typenum::U1>()
-        .unwrap();
-    let dims: Vec<usize> = pooled.dims().into();
-    assert_eq!(dims, vec![2, 3, 4, 4]);
+fn transpose_preserves_the_complete_named_axis_type() {
+    type S = s![Batch, Channels, Height, Width];
+    type T = <S as SwapAt<Here, Next<Next<Next<Here>>>>>::Output;
+    type Expected = s![Width, Channels, Height, Batch];
+    assert_same::<T, Expected>();
 }
 
-/// Regression test for the real bug found in `KernelConv2dShape`
-/// (`tensor/conv2d.rs`): its batch position (`B: Dim + Default`, generic —
-/// unlike `COut`/`CIn`/`H`/`W`, which are all `StaticDim`/typenum) built its
-/// output field via `Default::default()`. Without the fix this would read
-/// `dims() == [0, 4, 6, 6]`, not `[2, 4, 6, 6]`.
 #[test]
-fn tensor_conv2d_preserves_a_named_batch_dim() {
-    let x: Tensor<s![Batch, 3, 8, 8], TestBackend> = Tensor::zeros((2usize,)).unwrap();
-    let weight: Tensor<s![4, 3, 3, 3], TestBackend> = Tensor::zeros(()).unwrap();
-    let out: Tensor<s![Batch, 4, 6, 6], TestBackend> = x
-        .conv2d::<typenum::U1, typenum::U0, _>(&weight, None)
-        .unwrap();
-    let dims: Vec<usize> = out.dims().into();
-    assert_eq!(dims, vec![2, 4, 6, 6]);
+fn named_broadcast_output_is_a_symbolic_checked_extent() {
+    type L = s![Channels];
+    type R = s![Channels];
+    type Out = <L as BroadcastShape<R>>::Output;
+    type Expected =
+        DimCons<BroadcastExtent<NamedDim<Channels, usize>, NamedDim<Channels, usize>>, Nil>;
+    assert_same::<Out, Expected>();
 }
 
-/// Regression test for the analogous fix in `SpatialConv2d`
-/// (`shapes/spatial.rs`'s `impl_conv2d_shape!` macro), exercised through the
-/// *actual* `nn::Conv2d` layer (not the raw `Tensor::conv2d` op above — a
-/// different trait, same bug, same fix) on a real backend, so this checks
-/// genuine forward-pass output, not just shape metadata. Without the fix,
-/// `.dims()` would read `[0, 5, 6, 6]`, not `[2, 5, 6, 6]`.
 #[test]
-fn nn_conv2d_layer_preserves_a_named_batch_dim() {
-    type ConvShape = (
-        typenum::U5, // COut
-        typenum::U3, // CIn
-        typenum::U3, // K
-        typenum::U1, // S
-        typenum::U0, // P
-        typenum::U1, // D
-    );
-    let conv = Conv2d::<ConvShape, incin_backends::cpu::CpuBackendImpl>::build(()).unwrap();
-    let x: Tensor<s![Batch, 3, 8, 8], incin_backends::cpu::CpuBackendImpl> =
-        Tensor::zeros((2usize,)).unwrap();
-    let out: Tensor<s![Batch, 5, 6, 6], incin_backends::cpu::CpuBackendImpl> =
-        conv.forward(x).unwrap();
-    let dims: Vec<usize> = out.dims().into();
-    assert_eq!(dims, vec![2, 5, 6, 6]);
+fn keepdim_rebinds_a_named_axis_to_static_one() {
+    type S = s![Batch, Channels, 224, 224];
+    type Out = <S as ReduceKeepAt<Next<Here>>>::Output;
+    type Expected = DimCons<
+        NamedDim<Batch, usize>,
+        DimCons<
+            NamedDim<Channels, typenum::U1>,
+            DimCons<typenum::U224, DimCons<typenum::U224, Nil>>,
+        >,
+    >;
+    assert_same::<Out, Expected>();
+}
+
+#[test]
+fn named_static_extents_are_distinct_semantic_axes() {
+    type S = s![Batch: 25, Features: 25];
+    type Out = <S as SwapAt<Here, Next<Here>>>::Output;
+    type Expected = s![Features: 25, Batch: 25];
+
+    assert_same::<Out, Expected>();
+    let dims = <Out as Shape>::from_dyn(&[25, 25]).unwrap();
+    assert_eq!(dims.as_ref(), &[25, 25]);
+}
+
+#[test]
+fn named_static_keepdim_rebinds_only_extent() {
+    type S = s![Batch: 25, Channels: 64];
+    type Out = <S as ReduceKeepAt<Next<Here>>>::Output;
+    type Expected = s![Batch: 25, Channels: 1];
+
+    assert_same::<Out, Expected>();
+}
+
+#[test]
+fn named_runtime_keepdim_rebinds_runtime_extent_to_one() {
+    type S = s![Batch: dyn, Channels: dyn];
+    type Out = <S as ReduceKeepAt<Next<Here>>>::Output;
+    type Expected = s![Batch: dyn, Channels: 1];
+
+    assert_same::<Out, Expected>();
+}
+
+#[test]
+fn concrete_static_named_extents_participate_in_element_count_arithmetic() {
+    type Source = s![Batch: 2, Channels: 3];
+    type Target = s![Height: 1, Width: 6];
+
+    fn assert_reshape<S, T>()
+    where
+        S: Shape + ElementCount + ReshapeShape<T>,
+        T: Shape + ElementCount,
+    {
+    }
+
+    assert_reshape::<Source, Target>();
+    assert_eq!(<Source as ElementCount>::Count::to_usize(), 6);
 }
