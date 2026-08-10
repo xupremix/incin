@@ -159,8 +159,8 @@ impl<
     where
         Tag: crate::shapes::AxisTag,
         S: DynShape + crate::shapes::idx::NamedAxisLookup<Tag>,
-        B: Execute<ReductionSpec>,
-        <B as Execute<ReductionSpec>>::Output: Into<B::Storage<K>>,
+        B: Execute<Descriptor<op::SumDim>> + crate::exec::Capabilities,
+        <B as Execute<Descriptor<op::SumDim>>>::Output: Into<B::Storage<K>>,
     {
         let axis = selector.resolve::<S>()?;
         let validated = ReductionSpec::new(
@@ -169,7 +169,7 @@ impl<
             false,
             crate::exec::spec::ReduceOp::Sum,
         )?;
-        self.execute_named_reduction(validated)
+        self.execute_named_reduction::<op::SumDim>(validated)
     }
 
     /// Named-axis sum retaining the selected axis as a runtime length-one
@@ -181,8 +181,8 @@ impl<
     where
         Tag: crate::shapes::AxisTag,
         S: DynShape + crate::shapes::idx::NamedAxisLookup<Tag>,
-        B: Execute<ReductionSpec>,
-        <B as Execute<ReductionSpec>>::Output: Into<B::Storage<K>>,
+        B: Execute<Descriptor<op::SumKeepDim>> + crate::exec::Capabilities,
+        <B as Execute<Descriptor<op::SumKeepDim>>>::Output: Into<B::Storage<K>>,
     {
         let axis = selector.resolve::<S>()?;
         let validated = ReductionSpec::new(
@@ -191,31 +191,48 @@ impl<
             true,
             crate::exec::spec::ReduceOp::Sum,
         )?;
-        self.execute_named_reduction(validated)
+        self.execute_named_reduction::<op::SumKeepDim>(validated)
     }
 
-    fn execute_named_reduction(
+    fn execute_named_reduction<O>(
         &self,
         validated: ReductionSpec,
     ) -> Result<Tensor<crate::prelude::Dyn, B, K, G, P>>
     where
-        B: Execute<ReductionSpec>,
-        <B as Execute<ReductionSpec>>::Output: Into<B::Storage<K>>,
+        O: crate::exec::catalog::CanonicalOperation<
+                Attributes = crate::exec::catalog::AxisAttributes,
+            >,
+        B: Execute<Descriptor<O>> + crate::exec::Capabilities,
+        <B as Execute<Descriptor<O>>>::Output: Into<B::Storage<K>>,
     {
+        let axis = validated
+            .axes
+            .axes()
+            .next()
+            .ok_or(crate::err::Error::Shape(
+                crate::shapes::error::ShapeError::InvalidAxis {
+                    axis: 0,
+                    rank: self.shape_buf().len(),
+                },
+            ))?;
+        let output_shape =
+            crate::shapes::ShapeValue::<crate::prelude::Dyn>::try_new(validated.output.clone())
+                .map_err(crate::prelude::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = ExecutionContext::from_scope(B::default());
         let inner = self
             .under_grad_mode(|| {
-                B::default().execute_shaped::<S>(crate::tensor::backend::ExecutionRequest {
-                    operation: &Validated::new(validated.clone(), S::PROOF),
-                    inputs: &[input],
-                    context: &context,
-                })
+                crate::exec::dispatch::execute_shaped::<O, B, crate::prelude::Dyn>(
+                    &context,
+                    crate::exec::catalog::AxisAttributes { axis },
+                    &[input],
+                    &output_shape,
+                )
             })?
             .into();
         Tensor::<crate::prelude::Dyn, B, K, G, P>::from_shape_buf_placed(
             inner,
-            validated.output.clone(),
+            output_shape.shape_buf().clone(),
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
