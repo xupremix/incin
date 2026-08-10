@@ -34,7 +34,8 @@ impl<
         + TensorOps<B>
         + ReductionOps<B>
         + Execute<Descriptor<op::Add>>
-        + Execute<Descriptor<op::Relu>>,
+        + Execute<Descriptor<op::Relu>>
+        + Execute<Descriptor<op::TransposeExact>>,
 > SimpleMlp<B>
 where
     B: SupportsDType<f32>,
@@ -43,6 +44,7 @@ where
     B: Execute<Descriptor<op::MatMulExact>>,
     <B as Execute<Descriptor<op::MatMulExact>>>::Output: Into<B::Storage<f32>>,
     <B as Execute<Descriptor<op::Relu>>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<Descriptor<op::TransposeExact>>>::Output: Into<B::Storage<f32>>,
 {
     /// New.
     pub fn new() -> Result<Self> {

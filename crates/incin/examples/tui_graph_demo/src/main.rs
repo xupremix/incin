@@ -41,6 +41,8 @@ impl<
 where
     B: SupportsDType<f32>,
     B::Device: ConstDevice,
+    B: Execute<Descriptor<op::TransposeExact>>,
+    <B as Execute<Descriptor<op::TransposeExact>>>::Output: Into<B::Storage<f32>>,
     <B as Execute<Descriptor<op::Add>>>::Output: Into<B::Storage<f32>>,
     B: Execute<Descriptor<op::MatMulExact>>,
     <B as Execute<Descriptor<op::MatMulExact>>>::Output: Into<B::Storage<f32>>,

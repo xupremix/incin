@@ -344,8 +344,8 @@ impl<
     where
         B: Execute<
                 Descriptor<op::ReshapeExact>,
-                Output = <B as crate::tensor::backend::StorageBackend>::Storage<K>,
             > + Capabilities,
+        <B as Execute<Descriptor<op::ReshapeExact>>>::Output: Into<B::Storage<K>>,
     {
         let in_shape_vec = self.shape_buf();
         let out_shape_vec = T::calculate_shape(in_shape_vec.as_ref())?;
@@ -362,7 +362,7 @@ impl<
                 &[input],
                 &output_shape,
             )
-        })?;
+        })?.into();
         Tensor::<T::Output, B, K, G, P>::from_shape_value_placed(
             inner,
             output_shape,
@@ -494,8 +494,8 @@ impl<
         S: crate::shapes::reshape::TryReshape<S2>,
         B: Execute<
                 Descriptor<op::ReshapeExact>,
-                Output = <B as crate::tensor::backend::StorageBackend>::Storage<K>,
             > + Capabilities,
+        <B as Execute<Descriptor<op::ReshapeExact>>>::Output: Into<B::Storage<K>>,
     {
         let new_shape_field = S2::try_init(args).map_err(crate::prelude::Error::Shape)?;
 
@@ -534,7 +534,7 @@ impl<
                 &[input],
                 &output_shape,
             )
-        })?;
+        })?.into();
         Tensor::<S2, B, K, G, P>::from_shape_value_placed(
             inner,
             output_shape,
@@ -781,8 +781,8 @@ impl<
         <S as SwapAxes<L, R>>::Output: Shape + DynShape,
         B: Execute<
                 Descriptor<op::TransposeExact>,
-                Output = <B as crate::tensor::backend::StorageBackend>::Storage<K>,
             > + Capabilities,
+        <B as Execute<Descriptor<op::TransposeExact>>>::Output: Into<B::Storage<K>>,
     {
         let axes = crate::shapes::idx::AxisSelector::new(&[L::INDEX, R::INDEX])
             .normalize(self.shape_buf().rank())?;
@@ -803,7 +803,7 @@ impl<
                 &[input],
                 &output_shape,
             )
-        })?;
+        })?.into();
         Tensor::<<S as SwapAxes<L, R>>::Output, B, K, G>::from_shape_value(
             inner,
             output_shape,
@@ -819,8 +819,8 @@ impl<
     where
         B: Execute<
                 Descriptor<op::TransposeExact>,
-                Output = <B as crate::tensor::backend::StorageBackend>::Storage<K>,
             > + Capabilities,
+        <B as Execute<Descriptor<op::TransposeExact>>>::Output: Into<B::Storage<K>>,
     {
         let axes = crate::shapes::idx::AxisSelector::new(&[left, right])
             .normalize(self.shape_buf().rank())?;
@@ -840,7 +840,7 @@ impl<
                 &[input],
                 &output_shape,
             )
-        })?;
+        })?.into();
         Tensor::from_shape_value(
             inner,
             output_shape,

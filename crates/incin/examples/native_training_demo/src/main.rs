@@ -71,6 +71,8 @@ impl<
         + TensorOps<B>
         + ModuleOps<B>
         + ReductionOps<B>
+        + Execute<Descriptor<op::TransposeExact>>
+        + Execute<Descriptor<op::ReshapeExact>>
         + incin_core::tensor::backend::Execute<Descriptor<op::MatMulExact>>
         + Execute<Descriptor<op::Add>>
         + Execute<Descriptor<op::Relu>>,
@@ -79,6 +81,8 @@ where
     <B as Execute<Descriptor<op::Add>>>::Output: Into<B::Storage<f32>>,
     <B as Execute<Descriptor<op::Relu>>>::Output: Into<B::Storage<f32>>,
     <B as Execute<Descriptor<op::MatMulExact>>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<Descriptor<op::TransposeExact>>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<Descriptor<op::ReshapeExact>>>::Output: Into<B::Storage<f32>>,
 {
     pub fn forward(&self, x: Tensor<Dyn, B>) -> Result<Tensor<Dyn, B>> {
         let x = self.conv1.forward(x)?;
@@ -146,11 +150,15 @@ where
         + SupportsDType<u32>
         + Execute<Descriptor<op::MatMulExact>>
         + Execute<Descriptor<op::Add>>
-        + Execute<Descriptor<op::Relu>>,
+        + Execute<Descriptor<op::Relu>>
+        + Execute<Descriptor<op::TransposeExact>>
+        + Execute<Descriptor<op::ReshapeExact>>,
     B::Device: ConstDevice,
     <B as Execute<Descriptor<op::Add>>>::Output: Into<B::Storage<f32>>,
     <B as Execute<Descriptor<op::Relu>>>::Output: Into<B::Storage<f32>>,
     <B as Execute<Descriptor<op::MatMulExact>>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<Descriptor<op::TransposeExact>>>::Output: Into<B::Storage<f32>>,
+    <B as Execute<Descriptor<op::ReshapeExact>>>::Output: Into<B::Storage<f32>>,
 {
     let in_channels = 1;
     let conv_out_channels = 4;
